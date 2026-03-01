@@ -26,6 +26,7 @@ public static class ServiceNames
     public const string MyFitnessPalConnector = "myfitnesspal-connector";
     public const string TidepoolConnector = "tidepool-connector";
     public const string HomeAssistantConnector = "home-assistant-connector";
+    public const string TandemSourceConnector = "tandemsource-connector";
 
     /// <summary>
     /// Aspire parameter names. Resolved by the AppHost via AddParameter and

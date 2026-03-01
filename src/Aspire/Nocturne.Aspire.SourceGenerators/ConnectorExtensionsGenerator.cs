@@ -348,7 +348,7 @@ namespace Nocturne.Aspire.SourceGenerators
             {
                 // Python Connector Generation
                 // Resolve path relative to AppHost directory
-                // Assumes ScriptPath is something like "../../Connectors/Nocturne.Connectors.TConnectSync"
+                // Assumes ScriptPath is relative to the AppHost directory
                 sb.AppendLine($"            var scriptPath = Path.Combine(builder.AppHostDirectory, \"{connector.ScriptPath!.Replace("\\", "\\\\")}\");");
                 sb.AppendLine("            var connector = builder");
                 sb.AppendLine(

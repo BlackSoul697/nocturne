@@ -61,9 +61,9 @@ public static class DataSources
     public const string TidepoolConnector = "tidepool-connector";
 
     /// <summary>
-    /// Data fetched from Tandem Source via the TConnectSync connector.
+    /// Data fetched from Tandem Source via the native Tandem Source connector.
     /// </summary>
-    public const string TConnectSyncConnector = "tconnectsync-connector";
+    public const string TandemSourceConnector = "tandemsource-connector";
 
     /// <summary>
     /// Data from xDrip+ Android app.
@@ -200,7 +200,8 @@ public static class DataSources
                 or NightscoutConnector
                 or TidepoolConnector
                 or TConnectSyncConnector
-                or HomeAssistantConnector;
+                or HomeAssistantConnector
+                or TandemSourceConnector;
     }
 
     /// <summary>
@@ -243,6 +244,7 @@ public static class DataSources
             TidepoolConnector,
             TConnectSyncConnector,
             HomeAssistantConnector,
+            TandemSourceConnector,
             XDrip,
             Spike,
             ManualEntry,
