@@ -26,6 +26,7 @@
   import CreateInviteCard from "$lib/components/members/CreateInviteCard.svelte";
   import PendingInvitesList from "$lib/components/members/PendingInvitesList.svelte";
   import MemberCard from "$lib/components/members/MemberCard.svelte";
+  import GuestLinksSection from "$lib/components/members/GuestLinksSection.svelte";
 
   const effectivePermissions: string[] = $derived(
     (page.data as any).effectivePermissions ?? [],
@@ -262,6 +263,9 @@
       {/if}
     </div>
   {/if}
+
+  <!-- Temporary Guest Links -->
+  <GuestLinksSection />
 
   {#if !canInvite && !canManageMembers}
     <Card.Root>
