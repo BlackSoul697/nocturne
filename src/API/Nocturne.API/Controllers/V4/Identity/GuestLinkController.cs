@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.RateLimiting;
 using OpenApi.Remote.Attributes;
 using Nocturne.API.Extensions;
 using Nocturne.API.Middleware.Handlers;
@@ -123,6 +124,7 @@ public class GuestLinkController : ControllerBase
     /// </summary>
     [HttpPost("activate")]
     [AllowAnonymous]
+    [EnableRateLimiting("guest-activate")]
     [ProducesResponseType(typeof(ActivateGuestLinkResponse), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ActivateGuestLinkResponse), StatusCodes.Status400BadRequest)]
     public async Task<IActionResult> ActivateGuestLink(

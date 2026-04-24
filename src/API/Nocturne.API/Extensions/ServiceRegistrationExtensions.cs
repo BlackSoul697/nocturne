@@ -306,6 +306,21 @@ public static class ServiceRegistrationExtensions
                     )
             );
 
+            // Guest link activation: 5 attempts per IP per 10 minutes.
+            options.AddPolicy(
+                "guest-activate",
+                context =>
+                    RateLimitPartition.GetFixedWindowLimiter(
+                        partitionKey: context.Connection.RemoteIpAddress?.ToString() ?? "unknown",
+                        factory: _ => new FixedWindowRateLimiterOptions
+                        {
+                            PermitLimit = 5,
+                            Window = TimeSpan.FromMinutes(10),
+                            QueueLimit = 0,
+                        }
+                    )
+            );
+
             options.OnRejected = async (context, ct) =>
             {
                 context.HttpContext.Response.StatusCode = StatusCodes.Status429TooManyRequests;
