@@ -37,6 +37,7 @@ using Nocturne.Connectors.HomeAssistant.WriteBack;
 using Nocturne.Connectors.Nightscout.Services.WriteBack;
 using Nocturne.Core.Constants;
 using Nocturne.Core.Contracts.CoachMarks;
+using Nocturne.Core.Contracts.Auth;
 using Nocturne.Core.Contracts.Alerts;
 using Nocturne.Core.Contracts.Analytics;
 using Nocturne.Core.Contracts.Connectors;
@@ -178,6 +179,7 @@ public static class ServiceRegistrationExtensions
         services.AddScoped<IOAuthTokenService, OAuthTokenService>();
         services.AddScoped<IOAuthDeviceCodeService, OAuthDeviceCodeService>();
         services.AddScoped<IMemberInviteService, MemberInviteService>();
+        services.AddScoped<IGuestLinkService, GuestLinkService>();
         services.AddSingleton<IOAuthTokenRevocationCache, OAuthTokenRevocationCache>();
         services.AddHostedService<OAuthCodeCleanupService>();
 
@@ -211,6 +213,8 @@ public static class ServiceRegistrationExtensions
 
         // Auth handlers (executed in priority order, lowest first)
         services.AddSingleton<IAuthHandler, SessionCookieHandler>(); // Priority 50
+        services.AddSingleton<IAuthHandler, GuestSessionHandler>(); // Priority 52
+        services.AddSingleton<GuestSessionHandler>(); // For direct cookie-setting use
         services.AddSingleton<IAuthHandler, InstanceKeyHandler>(); // Priority 55
         services.AddSingleton<IAuthHandler, OidcTokenHandler>(); // Priority 100
         services.AddSingleton<IAuthHandler, OAuthAccessTokenHandler>(); // Priority 150

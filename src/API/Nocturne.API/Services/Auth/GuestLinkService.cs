@@ -33,16 +33,13 @@ public class GuestLinkService : IGuestLinkService
 
     private readonly NocturneDbContext _dbContext;
     private readonly ILogger<GuestLinkService> _logger;
-    private readonly string _baseUrl;
 
     public GuestLinkService(
         NocturneDbContext dbContext,
-        ILogger<GuestLinkService> logger,
-        string baseUrl)
+        ILogger<GuestLinkService> logger)
     {
         _dbContext = dbContext;
         _logger = logger;
-        _baseUrl = baseUrl.TrimEnd('/');
     }
 
     /// <inheritdoc />
@@ -50,6 +47,7 @@ public class GuestLinkService : IGuestLinkService
         Guid dataOwnerSubjectId,
         Guid createdBySubjectId,
         string label,
+        string baseUrl,
         IEnumerable<string>? scopes = null,
         CancellationToken ct = default)
     {
@@ -93,7 +91,7 @@ public class GuestLinkService : IGuestLinkService
 
         var info = MapToInfo(entity);
         var formatted = FormatCode(code);
-        var fullUrl = $"{_baseUrl}/guest/{formatted}";
+        var fullUrl = $"{baseUrl.TrimEnd('/')}/guest/{formatted}";
 
         _logger.LogInformation(
             "Guest link created for data owner {DataOwnerSubjectId} by {CreatedBySubjectId}, expires {ExpiresAt}",

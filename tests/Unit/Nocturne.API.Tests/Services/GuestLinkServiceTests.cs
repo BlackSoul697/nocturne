@@ -38,14 +38,13 @@ public class GuestLinkServiceTests : IDisposable
 
         _service = new GuestLinkService(
             _dbContext,
-            NullLogger<GuestLinkService>.Instance,
-            "https://example.com");
+            NullLogger<GuestLinkService>.Instance);
     }
 
     [Fact]
     public async Task CreateGuestLink_ReturnsCodeAndInfo()
     {
-        var result = await _service.CreateGuestLinkAsync(_dataOwnerId, _creatorId, "Test Link");
+        var result = await _service.CreateGuestLinkAsync(_dataOwnerId, _creatorId, "Test Link", "https://example.com");
 
         result.Code.Should().MatchRegex(@"^[A-Z2-9]{3}-[A-Z2-9]{4}$");
         result.FullUrl.Should().StartWith("https://example.com/guest/");
@@ -57,7 +56,7 @@ public class GuestLinkServiceTests : IDisposable
     [Fact]
     public async Task CreateGuestLink_StoresHashNotPlaintext()
     {
-        var result = await _service.CreateGuestLinkAsync(_dataOwnerId, _creatorId, "Hash Test");
+        var result = await _service.CreateGuestLinkAsync(_dataOwnerId, _creatorId, "Hash Test", "https://example.com");
 
         var grant = await _dbContext.OAuthGrants
             .IgnoreQueryFilters()
@@ -76,7 +75,7 @@ public class GuestLinkServiceTests : IDisposable
     public async Task CreateGuestLink_RejectsWriteScopes()
     {
         var act = () => _service.CreateGuestLinkAsync(
-            _dataOwnerId, _creatorId, "Bad Scopes",
+            _dataOwnerId, _creatorId, "Bad Scopes", "https://example.com",
             [OAuthScopes.EntriesReadWrite]);
 
         await act.Should().ThrowAsync<ArgumentException>()
@@ -88,10 +87,10 @@ public class GuestLinkServiceTests : IDisposable
     {
         for (var i = 0; i < 5; i++)
         {
-            await _service.CreateGuestLinkAsync(_dataOwnerId, _creatorId, $"Link {i}");
+            await _service.CreateGuestLinkAsync(_dataOwnerId, _creatorId, $"Link {i}", "https://example.com");
         }
 
-        var act = () => _service.CreateGuestLinkAsync(_dataOwnerId, _creatorId, "Link 6");
+        var act = () => _service.CreateGuestLinkAsync(_dataOwnerId, _creatorId, "Link 6", "https://example.com");
 
         await act.Should().ThrowAsync<InvalidOperationException>()
             .WithMessage("*Maximum*5*");
@@ -100,7 +99,7 @@ public class GuestLinkServiceTests : IDisposable
     [Fact]
     public async Task CreateGuestLink_DefaultScopes_AreReadOnly()
     {
-        var result = await _service.CreateGuestLinkAsync(_dataOwnerId, _creatorId, "Defaults");
+        var result = await _service.CreateGuestLinkAsync(_dataOwnerId, _creatorId, "Defaults", "https://example.com");
 
         result.Info.Scopes.Should().Contain(OAuthScopes.HealthRead);
         result.Info.Scopes.Should().Contain(OAuthScopes.ProfileRead);
@@ -111,7 +110,7 @@ public class GuestLinkServiceTests : IDisposable
     [Fact]
     public async Task ActivateAsync_ValidCode_ReturnsSession()
     {
-        var created = await _service.CreateGuestLinkAsync(_dataOwnerId, _creatorId, "Activate Me");
+        var created = await _service.CreateGuestLinkAsync(_dataOwnerId, _creatorId, "Activate Me", "https://example.com");
 
         var result = await _service.ActivateAsync(created.Code, "1.2.3.4", "TestAgent");
 
@@ -124,7 +123,7 @@ public class GuestLinkServiceTests : IDisposable
     [Fact]
     public async Task ActivateAsync_AlreadyActivated_Fails()
     {
-        var created = await _service.CreateGuestLinkAsync(_dataOwnerId, _creatorId, "One-Time");
+        var created = await _service.CreateGuestLinkAsync(_dataOwnerId, _creatorId, "One-Time", "https://example.com");
         await _service.ActivateAsync(created.Code, "1.2.3.4", "Agent1");
 
         var result = await _service.ActivateAsync(created.Code, "5.6.7.8", "Agent2");
@@ -145,7 +144,7 @@ public class GuestLinkServiceTests : IDisposable
     [Fact]
     public async Task ActivateAsync_RecordsIpAndUserAgent()
     {
-        var created = await _service.CreateGuestLinkAsync(_dataOwnerId, _creatorId, "IP Test");
+        var created = await _service.CreateGuestLinkAsync(_dataOwnerId, _creatorId, "IP Test", "https://example.com");
         await _service.ActivateAsync(created.Code, "10.0.0.1", "Mozilla/5.0");
 
         var grant = await _dbContext.OAuthGrants
@@ -160,7 +159,7 @@ public class GuestLinkServiceTests : IDisposable
     [Fact]
     public async Task ValidateSessionAsync_ActiveGrant_ReturnsInfo()
     {
-        var created = await _service.CreateGuestLinkAsync(_dataOwnerId, _creatorId, "Session Test");
+        var created = await _service.CreateGuestLinkAsync(_dataOwnerId, _creatorId, "Session Test", "https://example.com");
         await _service.ActivateAsync(created.Code, "1.2.3.4", "Agent");
 
         var session = await _service.ValidateSessionAsync(created.Info.Id);
@@ -174,7 +173,7 @@ public class GuestLinkServiceTests : IDisposable
     [Fact]
     public async Task ValidateSessionAsync_RevokedGrant_ReturnsNull()
     {
-        var created = await _service.CreateGuestLinkAsync(_dataOwnerId, _creatorId, "Revoke Test");
+        var created = await _service.CreateGuestLinkAsync(_dataOwnerId, _creatorId, "Revoke Test", "https://example.com");
         await _service.ActivateAsync(created.Code, "1.2.3.4", "Agent");
         await _service.RevokeAsync(created.Info.Id, _dataOwnerId);
 
@@ -186,7 +185,7 @@ public class GuestLinkServiceTests : IDisposable
     [Fact]
     public async Task RevokeAsync_SetsRevokedAt()
     {
-        var created = await _service.CreateGuestLinkAsync(_dataOwnerId, _creatorId, "To Revoke");
+        var created = await _service.CreateGuestLinkAsync(_dataOwnerId, _creatorId, "To Revoke", "https://example.com");
 
         var result = await _service.RevokeAsync(created.Info.Id, _dataOwnerId);
 
@@ -201,7 +200,7 @@ public class GuestLinkServiceTests : IDisposable
     [Fact]
     public async Task RevokeAsync_DifferentSubject_Fails()
     {
-        var created = await _service.CreateGuestLinkAsync(_dataOwnerId, _creatorId, "Not Yours");
+        var created = await _service.CreateGuestLinkAsync(_dataOwnerId, _creatorId, "Not Yours", "https://example.com");
         var strangerId = Guid.CreateVersion7();
 
         var result = await _service.RevokeAsync(created.Info.Id, strangerId);
@@ -217,7 +216,7 @@ public class GuestLinkServiceTests : IDisposable
     [Fact]
     public async Task RevokeAsync_Creator_CanRevoke()
     {
-        var created = await _service.CreateGuestLinkAsync(_dataOwnerId, _creatorId, "Creator Revoke");
+        var created = await _service.CreateGuestLinkAsync(_dataOwnerId, _creatorId, "Creator Revoke", "https://example.com");
 
         var result = await _service.RevokeAsync(created.Info.Id, _creatorId);
 

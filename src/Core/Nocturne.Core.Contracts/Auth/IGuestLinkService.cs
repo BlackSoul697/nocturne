@@ -11,6 +11,7 @@ public interface IGuestLinkService
         Guid dataOwnerSubjectId,
         Guid createdBySubjectId,
         string label,
+        string baseUrl,
         IEnumerable<string>? scopes = null,
         CancellationToken ct = default);
 
