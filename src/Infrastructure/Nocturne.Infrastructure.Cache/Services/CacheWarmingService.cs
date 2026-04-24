@@ -1,5 +1,6 @@
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
+using Nocturne.Core.Contracts.Entries;
 using Nocturne.Core.Contracts.Repositories;
 using Nocturne.Infrastructure.Cache.Abstractions;
 using Nocturne.Infrastructure.Cache.Configuration;
@@ -39,7 +40,7 @@ public interface ICacheWarmingService
 public class CacheWarmingService : ICacheWarmingService
 {
     private readonly ICacheService _cacheService;
-    private readonly IEntryRepository _entries;
+    private readonly IEntryStore _store;
     private readonly ITreatmentRepository _treatments;
     private readonly IProfileRepository _profiles;
     private readonly ISettingsRepository _settings;
@@ -48,7 +49,7 @@ public class CacheWarmingService : ICacheWarmingService
 
     public CacheWarmingService(
         ICacheService cacheService,
-        IEntryRepository entries,
+        IEntryStore store,
         ITreatmentRepository treatments,
         IProfileRepository profiles,
         ISettingsRepository settings,
@@ -57,7 +58,7 @@ public class CacheWarmingService : ICacheWarmingService
     )
     {
         _cacheService = cacheService;
-        _entries = entries;
+        _store = store;
         _treatments = treatments;
         _profiles = profiles;
         _settings = settings;
@@ -170,7 +171,7 @@ public class CacheWarmingService : ICacheWarmingService
 
             if (!existsInCache)
             {
-                var currentEntry = await _entries.GetCurrentEntryAsync(cancellationToken);
+                var currentEntry = await _store.GetCurrentAsync(cancellationToken);
                 if (currentEntry != null)
                 {
                     await _cacheService.SetAsync(
@@ -209,11 +210,9 @@ public class CacheWarmingService : ICacheWarmingService
 
                 if (!existsInCache)
                 {
-                    var entries = await _entries.GetEntriesAsync(
-                        count: hours,
-                        type: type,
-                        cancellationToken: cancellationToken
-                    );
+                    var entries = await _store.QueryAsync(
+                        new EntryQuery { Type = type, Count = hours },
+                        cancellationToken);
 
                     if (entries.Any())
                     {

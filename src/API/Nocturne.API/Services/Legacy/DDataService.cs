@@ -1,5 +1,6 @@
 using System.Reflection;
 using System.Text.Json;
+using Nocturne.Core.Contracts.Entries;
 using Nocturne.Core.Contracts.Legacy;
 using Nocturne.Core.Models;
 using Nocturne.Core.Contracts.Repositories;
@@ -14,7 +15,7 @@ namespace Nocturne.API.Services.Legacy;
 /// <seealso cref="IDDataService"/>
 public class DDataService : IDDataService
 {
-    private readonly IEntryRepository _entries;
+    private readonly IEntryStore _store;
     private readonly ITreatmentRepository _treatments;
     private readonly IProfileRepository _profiles;
     private readonly IDeviceStatusRepository _deviceStatuses;
@@ -36,7 +37,7 @@ public class DDataService : IDDataService
     private const double MMOL_TO_MGDL = 18.0182;
 
     public DDataService(
-        IEntryRepository entries,
+        IEntryStore store,
         ITreatmentRepository treatments,
         IProfileRepository profiles,
         IDeviceStatusRepository deviceStatuses,
@@ -44,7 +45,7 @@ public class DDataService : IDDataService
         IActivityRepository activities,
         ILogger<DDataService> logger)
     {
-        _entries = entries;
+        _store = store;
         _treatments = treatments;
         _profiles = profiles;
         _deviceStatuses = deviceStatuses;
@@ -613,12 +614,9 @@ public class DDataService : IDDataService
         try
         {
             // Load SGV entries with type filter - reduced count to prevent memory issues
-            var sgvs = await _entries.GetEntriesAsync(
-                type: "sgv",
-                count: 1000,
-                skip: 0,
-                cancellationToken: cancellationToken
-            );
+            var sgvs = await _store.QueryAsync(
+                new EntryQuery { Type = "sgv", Count = 1000 },
+                cancellationToken);
             ddata.Sgvs = sgvs.ToList();
         }
         catch (Exception ex)
@@ -659,12 +657,9 @@ public class DDataService : IDDataService
         try
         {
             // Load MBG entries with type filter - reduced count to prevent memory issues
-            var mbgs = await _entries.GetEntriesAsync(
-                type: "mbg",
-                count: 1000,
-                skip: 0,
-                cancellationToken: cancellationToken
-            );
+            var mbgs = await _store.QueryAsync(
+                new EntryQuery { Type = "mbg", Count = 1000 },
+                cancellationToken);
             ddata.Mbgs = mbgs.ToList();
         }
         catch (Exception ex)
@@ -683,12 +678,9 @@ public class DDataService : IDDataService
         try
         {
             // Load calibration entries with type filter - reduced count to prevent memory issues
-            var cals = await _entries.GetEntriesAsync(
-                type: "cal",
-                count: 1000,
-                skip: 0,
-                cancellationToken: cancellationToken
-            );
+            var cals = await _store.QueryAsync(
+                new EntryQuery { Type = "cal", Count = 1000 },
+                cancellationToken);
             ddata.Cals = cals.ToList();
         }
         catch (Exception ex)

@@ -1,5 +1,6 @@
 using Nocturne.API.Controllers.V4;
 using Nocturne.API.Controllers.V4.Analytics;
+using Nocturne.Core.Contracts.Entries;
 using Nocturne.Core.Contracts.Repositories;
 using Nocturne.Core.Contracts.V4.Repositories;
 using Nocturne.Core.Oref;
@@ -16,20 +17,20 @@ namespace Nocturne.API.Services.Glucose;
 /// <seealso cref="IOrefService"/>
 public class PredictionService : IPredictionService
 {
-    private readonly IEntryRepository _entries;
+    private readonly IEntryStore _store;
     private readonly ITreatmentRepository _treatments;
     private readonly IProfileRepository _profiles;
     private readonly IPatientInsulinRepository _insulins;
     private readonly ILogger<PredictionService> _logger;
 
     public PredictionService(
-        IEntryRepository entries,
+        IEntryStore store,
         ITreatmentRepository treatments,
         IProfileRepository profiles,
         IPatientInsulinRepository insulins,
         ILogger<PredictionService> logger)
     {
-        _entries = entries;
+        _store = store;
         _treatments = treatments;
         _profiles = profiles;
         _insulins = insulins;
@@ -55,10 +56,8 @@ public class PredictionService : IPredictionService
         }
 
         // Fetch recent glucose readings (last 10 entries for delta calculation)
-        var glucoseEntries = await _entries.GetEntriesAsync(
-            type: "sgv",
-            count: 10,
-            skip: 0,
+        var glucoseEntries = await _store.QueryAsync(
+            new EntryQuery { Type = "sgv", Count = 10 },
             cancellationToken);
 
         if (!glucoseEntries.Any())
@@ -256,7 +255,7 @@ public class PredictionService : IPredictionService
         CancellationToken cancellationToken)
     {
         // Get current entry
-        var currentEntry = await _entries.GetCurrentEntryAsync(cancellationToken);
+        var currentEntry = await _store.GetCurrentAsync(cancellationToken);
 
         if (currentEntry?.Sgv == null)
         {

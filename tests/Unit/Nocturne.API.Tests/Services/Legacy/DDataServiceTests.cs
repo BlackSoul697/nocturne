@@ -1,6 +1,7 @@
 using Microsoft.Extensions.Logging;
 using Moq;
 using Nocturne.API.Services.Legacy;
+using Nocturne.Core.Contracts.Entries;
 using Nocturne.Core.Contracts.Legacy;
 using Nocturne.Core.Models;
 using Nocturne.Core.Contracts.Repositories;
@@ -14,7 +15,7 @@ namespace Nocturne.API.Tests.Services.Legacy;
 [Parity("ddata.test.js")]
 public class DDataServiceTests
 {
-    private readonly Mock<IEntryRepository> _mockEntryRepository;
+    private readonly Mock<IEntryStore> _mockEntryStore;
     private readonly Mock<ITreatmentRepository> _mockTreatmentRepository;
     private readonly Mock<IProfileRepository> _mockProfileRepository;
     private readonly Mock<IDeviceStatusRepository> _mockDeviceStatusRepository;
@@ -25,7 +26,7 @@ public class DDataServiceTests
 
     public DDataServiceTests()
     {
-        _mockEntryRepository = new Mock<IEntryRepository>();
+        _mockEntryStore = new Mock<IEntryStore>();
         _mockTreatmentRepository = new Mock<ITreatmentRepository>();
         _mockProfileRepository = new Mock<IProfileRepository>();
         _mockDeviceStatusRepository = new Mock<IDeviceStatusRepository>();
@@ -33,7 +34,7 @@ public class DDataServiceTests
         _mockActivityRepository = new Mock<IActivityRepository>();
         _mockLogger = new Mock<ILogger<DDataService>>();
         _ddataService = new DDataService(
-            _mockEntryRepository.Object,
+            _mockEntryStore.Object,
             _mockTreatmentRepository.Object,
             _mockProfileRepository.Object,
             _mockDeviceStatusRepository.Object,
@@ -46,12 +47,10 @@ public class DDataServiceTests
     [Fact]
     public async Task GetCurrentDDataAsync_ShouldReturnDDataStructure()
     { // Arrange
-        _mockEntryRepository
+        _mockEntryStore
             .Setup(x =>
-                x.GetEntriesAsync(
-                    It.IsAny<string>(),
-                    It.IsAny<int>(),
-                    It.IsAny<int>(),
+                x.QueryAsync(
+                    It.IsAny<EntryQuery>(),
                     It.IsAny<CancellationToken>()
                 )
             )
