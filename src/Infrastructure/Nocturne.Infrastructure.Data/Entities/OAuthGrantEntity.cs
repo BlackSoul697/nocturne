@@ -9,7 +9,7 @@ namespace Nocturne.Infrastructure.Data.Entities;
 /// User-to-user shares (followers/caregivers) use the same table with grant_type = follower.
 /// </summary>
 [Table("oauth_grants")]
-public class OAuthGrantEntity : ITenantScoped
+public class OAuthGrantEntity : ITenantScoped, IAuditable
 {
     /// <summary>
     /// Primary key - UUID Version 7
@@ -95,6 +95,7 @@ public class OAuthGrantEntity : ITenantScoped
     /// SHA-256 hash of the plaintext token (for direct grants only).
     /// Used to look up grants by token without storing the plaintext.
     /// </summary>
+    [AuditRedacted]
     [MaxLength(128)]
     [Column("token_hash")]
     public string? TokenHash { get; set; }
@@ -137,4 +138,7 @@ public static class OAuthGrantTypes
 
     /// <summary>Direct token grant (API key style, no OAuth client).</summary>
     public const string Direct = OAuthScopes.GrantTypeDirect;
+
+    /// <summary>Guest grant: temporary read-only access link.</summary>
+    public const string Guest = OAuthScopes.GrantTypeGuest;
 }

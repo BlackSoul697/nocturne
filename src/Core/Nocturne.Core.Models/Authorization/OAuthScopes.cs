@@ -17,6 +17,8 @@ public static class OAuthScopes
     public const string GrantTypeFollower = "follower";
     /// <summary>Direct grant: programmatic API token without an OAuth client.</summary>
     public const string GrantTypeDirect = "direct";
+    /// <summary>Guest grant: temporary read-only access via short-lived code, no account required.</summary>
+    public const string GrantTypeGuest = "guest";
 
     // Core health data scopes
 

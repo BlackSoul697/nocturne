@@ -274,5 +274,10 @@ public enum AuthType
     /// <summary>
     /// Instance key (infrastructure service authentication)
     /// </summary>
-    InstanceKey
+    InstanceKey,
+
+    /// <summary>
+    /// Guest session (temporary read-only access via guest code)
+    /// </summary>
+    Guest
 }

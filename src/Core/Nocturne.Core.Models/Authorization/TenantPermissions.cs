@@ -50,6 +50,8 @@ public static class TenantPermissions
     public const string TenantSettings = "tenant.settings";
     /// <summary>Permission to manage sharing and follower grants.</summary>
     public const string SharingManage = "sharing.manage";
+    /// <summary>Permission to create temporary guest access links.</summary>
+    public const string SharingGuest = "sharing.guest";
     /// <summary>Superuser permission that satisfies all other permissions.</summary>
     public const string Superuser = "*";
 
@@ -71,6 +73,7 @@ public static class TenantPermissions
         MembersManage,
         TenantSettings,
         SharingManage,
+        SharingGuest,
     ];
 
     /// <summary>
@@ -97,7 +100,7 @@ public static class TenantPermissions
             EntriesReadWrite, TreatmentsReadWrite, DeviceStatusReadWrite,
             ProfileReadWrite, NotificationsReadWrite, ReportsRead,
             HealthRead, IdentityRead,
-            MembersInvite, MembersManage, TenantSettings, RolesManage, SharingManage,
+            MembersInvite, MembersManage, TenantSettings, RolesManage, SharingManage, SharingGuest,
         ],
         [SeedRoles.Caretaker] =
         [
