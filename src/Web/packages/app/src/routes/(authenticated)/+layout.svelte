@@ -13,6 +13,7 @@
   import { browser } from "$app/environment";
   import * as Card from "$lib/components/ui/card";
   import AlertBanner from "$lib/components/alerts/AlertBanner.svelte";
+  import GuestBanner from "$lib/components/layout/GuestBanner.svelte";
   import { CoachMarkProvider } from "@nocturne/coach";
   import "@nocturne/coach/theme.css";
   import "../../styles/coach-theme-overrides.css";
@@ -176,9 +177,12 @@
 <CoachMarkProvider adapter={coachMarkAdapter} {sequences}>
   <CoachParamHandler />
   <Sidebar.Provider>
-    <AppSidebar user={data.user} tenantCount={data.tenantCount} effectivePermissions={data.effectivePermissions} isPlatformAdmin={data.isPlatformAdmin} />
+    <AppSidebar user={data.user} tenantCount={data.tenantCount} effectivePermissions={data.effectivePermissions} isPlatformAdmin={data.isPlatformAdmin} isGuestSession={data.isGuestSession} />
     <MobileHeader />
     <Sidebar.Inset>
+      {#if data.isGuestSession && data.guestExpiresAt}
+        <GuestBanner expiresAt={data.guestExpiresAt} />
+      {/if}
       <AlertBanner />
       <main class="flex-1 overflow-auto">
         <svelte:boundary>
