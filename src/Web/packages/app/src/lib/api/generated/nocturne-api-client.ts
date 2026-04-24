@@ -17388,6 +17388,267 @@ export class WebhookSettingsClient {
     }
 }
 
+export class AuditClient {
+    private http: { fetch(url: RequestInfo, init?: RequestInit): Promise<Response> };
+    private baseUrl: string;
+    protected jsonParseReviver: ((key: string, value: any) => any) | undefined = undefined;
+
+    constructor(baseUrl?: string, http?: { fetch(url: RequestInfo, init?: RequestInit): Promise<Response> }) {
+        this.http = http ? http : window as any;
+        this.baseUrl = baseUrl ?? "";
+    }
+
+    /**
+     * Query mutation audit log entries for the current tenant.
+     * @param from (optional) 
+     * @param to (optional) 
+     * @param limit (optional) 
+     * @param offset (optional) 
+     * @param sort (optional) 
+     * @param subjectId (optional) 
+     * @param entityType (optional) 
+     * @param action (optional) 
+     * @param entityId (optional) 
+     */
+    getMutationAuditLog(from?: Date | undefined, to?: Date | undefined, limit?: number | undefined, offset?: number | undefined, sort?: string | undefined, subjectId?: string | null | undefined, entityType?: string | null | undefined, action?: string | null | undefined, entityId?: string | null | undefined, signal?: AbortSignal): Promise<PaginatedResponseOfMutationAuditDto> {
+        let url_ = this.baseUrl + "/api/v4/audit/mutations?";
+        if (from === null)
+            throw new globalThis.Error("The parameter 'from' cannot be null.");
+        else if (from !== undefined)
+            url_ += "from=" + encodeURIComponent(from ? "" + from.toISOString() : "") + "&";
+        if (to === null)
+            throw new globalThis.Error("The parameter 'to' cannot be null.");
+        else if (to !== undefined)
+            url_ += "to=" + encodeURIComponent(to ? "" + to.toISOString() : "") + "&";
+        if (limit === null)
+            throw new globalThis.Error("The parameter 'limit' cannot be null.");
+        else if (limit !== undefined)
+            url_ += "limit=" + encodeURIComponent("" + limit) + "&";
+        if (offset === null)
+            throw new globalThis.Error("The parameter 'offset' cannot be null.");
+        else if (offset !== undefined)
+            url_ += "offset=" + encodeURIComponent("" + offset) + "&";
+        if (sort === null)
+            throw new globalThis.Error("The parameter 'sort' cannot be null.");
+        else if (sort !== undefined)
+            url_ += "sort=" + encodeURIComponent("" + sort) + "&";
+        if (subjectId !== undefined && subjectId !== null)
+            url_ += "subjectId=" + encodeURIComponent("" + subjectId) + "&";
+        if (entityType !== undefined && entityType !== null)
+            url_ += "entityType=" + encodeURIComponent("" + entityType) + "&";
+        if (action !== undefined && action !== null)
+            url_ += "action=" + encodeURIComponent("" + action) + "&";
+        if (entityId !== undefined && entityId !== null)
+            url_ += "entityId=" + encodeURIComponent("" + entityId) + "&";
+        url_ = url_.replace(/[?&]$/, "");
+
+        let options_: RequestInit = {
+            method: "GET",
+            signal,
+            headers: {
+                "Accept": "application/json"
+            }
+        };
+
+        return this.http.fetch(url_, options_).then((_response: Response) => {
+            return this.processGetMutationAuditLog(_response);
+        });
+    }
+
+    protected processGetMutationAuditLog(response: Response): Promise<PaginatedResponseOfMutationAuditDto> {
+        const status = response.status;
+        let _headers: any = {}; if (response.headers && response.headers.forEach) { response.headers.forEach((v: any, k: any) => _headers[k] = v); };
+        if (status === 200) {
+            return response.text().then((_responseText) => {
+            let result200: any = null;
+            result200 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver) as PaginatedResponseOfMutationAuditDto;
+            return result200;
+            });
+        } else if (status === 403) {
+            return response.text().then((_responseText) => {
+            let result403: any = null;
+            result403 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver) as ProblemDetails;
+            return throwException("A server side error occurred.", status, _responseText, _headers, result403);
+            });
+        } else if (status !== 200 && status !== 204) {
+            return response.text().then((_responseText) => {
+            return throwException("An unexpected server error occurred.", status, _responseText, _headers);
+            });
+        }
+        return Promise.resolve<PaginatedResponseOfMutationAuditDto>(null as any);
+    }
+
+    /**
+     * Query read access audit log entries for the current tenant.
+     * @param from (optional) 
+     * @param to (optional) 
+     * @param limit (optional) 
+     * @param offset (optional) 
+     * @param sort (optional) 
+     * @param subjectId (optional) 
+     * @param entityType (optional) 
+     * @param endpoint (optional) 
+     * @param statusCode (optional) 
+     */
+    getReadAccessAuditLog(from?: Date | undefined, to?: Date | undefined, limit?: number | undefined, offset?: number | undefined, sort?: string | undefined, subjectId?: string | null | undefined, entityType?: string | null | undefined, endpoint?: string | null | undefined, statusCode?: number | null | undefined, signal?: AbortSignal): Promise<PaginatedResponseOfReadAccessAuditDto> {
+        let url_ = this.baseUrl + "/api/v4/audit/reads?";
+        if (from === null)
+            throw new globalThis.Error("The parameter 'from' cannot be null.");
+        else if (from !== undefined)
+            url_ += "from=" + encodeURIComponent(from ? "" + from.toISOString() : "") + "&";
+        if (to === null)
+            throw new globalThis.Error("The parameter 'to' cannot be null.");
+        else if (to !== undefined)
+            url_ += "to=" + encodeURIComponent(to ? "" + to.toISOString() : "") + "&";
+        if (limit === null)
+            throw new globalThis.Error("The parameter 'limit' cannot be null.");
+        else if (limit !== undefined)
+            url_ += "limit=" + encodeURIComponent("" + limit) + "&";
+        if (offset === null)
+            throw new globalThis.Error("The parameter 'offset' cannot be null.");
+        else if (offset !== undefined)
+            url_ += "offset=" + encodeURIComponent("" + offset) + "&";
+        if (sort === null)
+            throw new globalThis.Error("The parameter 'sort' cannot be null.");
+        else if (sort !== undefined)
+            url_ += "sort=" + encodeURIComponent("" + sort) + "&";
+        if (subjectId !== undefined && subjectId !== null)
+            url_ += "subjectId=" + encodeURIComponent("" + subjectId) + "&";
+        if (entityType !== undefined && entityType !== null)
+            url_ += "entityType=" + encodeURIComponent("" + entityType) + "&";
+        if (endpoint !== undefined && endpoint !== null)
+            url_ += "endpoint=" + encodeURIComponent("" + endpoint) + "&";
+        if (statusCode !== undefined && statusCode !== null)
+            url_ += "statusCode=" + encodeURIComponent("" + statusCode) + "&";
+        url_ = url_.replace(/[?&]$/, "");
+
+        let options_: RequestInit = {
+            method: "GET",
+            signal,
+            headers: {
+                "Accept": "application/json"
+            }
+        };
+
+        return this.http.fetch(url_, options_).then((_response: Response) => {
+            return this.processGetReadAccessAuditLog(_response);
+        });
+    }
+
+    protected processGetReadAccessAuditLog(response: Response): Promise<PaginatedResponseOfReadAccessAuditDto> {
+        const status = response.status;
+        let _headers: any = {}; if (response.headers && response.headers.forEach) { response.headers.forEach((v: any, k: any) => _headers[k] = v); };
+        if (status === 200) {
+            return response.text().then((_responseText) => {
+            let result200: any = null;
+            result200 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver) as PaginatedResponseOfReadAccessAuditDto;
+            return result200;
+            });
+        } else if (status === 403) {
+            return response.text().then((_responseText) => {
+            let result403: any = null;
+            result403 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver) as ProblemDetails;
+            return throwException("A server side error occurred.", status, _responseText, _headers, result403);
+            });
+        } else if (status !== 200 && status !== 204) {
+            return response.text().then((_responseText) => {
+            return throwException("An unexpected server error occurred.", status, _responseText, _headers);
+            });
+        }
+        return Promise.resolve<PaginatedResponseOfReadAccessAuditDto>(null as any);
+    }
+
+    /**
+     * Get the audit configuration for the current tenant.
+     */
+    getAuditConfig(signal?: AbortSignal): Promise<AuditConfigDto> {
+        let url_ = this.baseUrl + "/api/v4/audit/config";
+        url_ = url_.replace(/[?&]$/, "");
+
+        let options_: RequestInit = {
+            method: "GET",
+            signal,
+            headers: {
+                "Accept": "application/json"
+            }
+        };
+
+        return this.http.fetch(url_, options_).then((_response: Response) => {
+            return this.processGetAuditConfig(_response);
+        });
+    }
+
+    protected processGetAuditConfig(response: Response): Promise<AuditConfigDto> {
+        const status = response.status;
+        let _headers: any = {}; if (response.headers && response.headers.forEach) { response.headers.forEach((v: any, k: any) => _headers[k] = v); };
+        if (status === 200) {
+            return response.text().then((_responseText) => {
+            let result200: any = null;
+            result200 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver) as AuditConfigDto;
+            return result200;
+            });
+        } else if (status === 403) {
+            return response.text().then((_responseText) => {
+            let result403: any = null;
+            result403 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver) as ProblemDetails;
+            return throwException("A server side error occurred.", status, _responseText, _headers, result403);
+            });
+        } else if (status !== 200 && status !== 204) {
+            return response.text().then((_responseText) => {
+            return throwException("An unexpected server error occurred.", status, _responseText, _headers);
+            });
+        }
+        return Promise.resolve<AuditConfigDto>(null as any);
+    }
+
+    /**
+     * Create or update the audit configuration for the current tenant.
+     */
+    updateAuditConfig(request: AuditConfigDto, signal?: AbortSignal): Promise<AuditConfigDto> {
+        let url_ = this.baseUrl + "/api/v4/audit/config";
+        url_ = url_.replace(/[?&]$/, "");
+
+        const content_ = JSON.stringify(request);
+
+        let options_: RequestInit = {
+            body: content_,
+            method: "PUT",
+            signal,
+            headers: {
+                "Content-Type": "application/json",
+                "Accept": "application/json"
+            }
+        };
+
+        return this.http.fetch(url_, options_).then((_response: Response) => {
+            return this.processUpdateAuditConfig(_response);
+        });
+    }
+
+    protected processUpdateAuditConfig(response: Response): Promise<AuditConfigDto> {
+        const status = response.status;
+        let _headers: any = {}; if (response.headers && response.headers.forEach) { response.headers.forEach((v: any, k: any) => _headers[k] = v); };
+        if (status === 200) {
+            return response.text().then((_responseText) => {
+            let result200: any = null;
+            result200 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver) as AuditConfigDto;
+            return result200;
+            });
+        } else if (status === 403) {
+            return response.text().then((_responseText) => {
+            let result403: any = null;
+            result403 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver) as ProblemDetails;
+            return throwException("A server side error occurred.", status, _responseText, _headers, result403);
+            });
+        } else if (status !== 200 && status !== 204) {
+            return response.text().then((_responseText) => {
+            return throwException("An unexpected server error occurred.", status, _responseText, _headers);
+            });
+        }
+        return Promise.resolve<AuditConfigDto>(null as any);
+    }
+}
+
 export class AnalyticsClient {
     private http: { fetch(url: RequestInfo, init?: RequestInit): Promise<Response> };
     private baseUrl: string;
@@ -27083,6 +27344,52 @@ export interface WebhookTestResult {
 export interface WebhookTestRequest {
     urls?: string[];
     secret?: string | undefined;
+}
+
+export interface PaginatedResponseOfMutationAuditDto {
+    data?: MutationAuditDto[];
+    pagination?: PaginationInfo;
+}
+
+export interface MutationAuditDto {
+    id?: string;
+    createdAt?: Date;
+    entityType?: string;
+    entityId?: string;
+    action?: string;
+    changes?: string | undefined;
+    subjectId?: string | undefined;
+    subjectName?: string | undefined;
+    authType?: string | undefined;
+    ipAddress?: string | undefined;
+    endpoint?: string | undefined;
+    reason?: string | undefined;
+}
+
+export interface PaginatedResponseOfReadAccessAuditDto {
+    data?: ReadAccessAuditDto[];
+    pagination?: PaginationInfo;
+}
+
+export interface ReadAccessAuditDto {
+    id?: string;
+    createdAt?: Date;
+    endpoint?: string;
+    entityType?: string | undefined;
+    recordCount?: number | undefined;
+    statusCode?: number;
+    queryParameters?: string | undefined;
+    subjectId?: string | undefined;
+    subjectName?: string | undefined;
+    authType?: string | undefined;
+    ipAddress?: string | undefined;
+    apiSecretHashPrefix?: string | undefined;
+}
+
+export interface AuditConfigDto {
+    readAuditEnabled?: boolean;
+    readAuditRetentionDays?: number | undefined;
+    mutationAuditRetentionDays?: number | undefined;
 }
 
 export interface PerformanceMetrics {

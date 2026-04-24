@@ -86,6 +86,13 @@
         { key: "sharing.manage", label: "Manage Sharing" },
       ],
     },
+    {
+      name: "Audit",
+      permissions: [
+        { key: "audit.read", label: "View Audit Logs", impliedBy: "audit.manage" },
+        { key: "audit.manage", label: "Manage Audit Settings" },
+      ],
+    },
   ];
 
   let { selected = $bindable<string[]>([]) }: { selected: string[] } =

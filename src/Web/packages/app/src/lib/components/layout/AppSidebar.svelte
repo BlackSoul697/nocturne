@@ -47,6 +47,7 @@
     HeartPulse,
     ListChecks,
     Shield,
+    ScrollText,
     Eye,
     Users,
   } from "lucide-svelte";
@@ -69,6 +70,11 @@
 
   const canManageRoles = $derived(
     effectivePermissions.includes("roles.manage") ||
+      effectivePermissions.includes("*"),
+  );
+  const canViewAudit = $derived(
+    effectivePermissions.includes("audit.read") ||
+      effectivePermissions.includes("audit.manage") ||
       effectivePermissions.includes("*"),
   );
   const sidebar = Sidebar.useSidebar();
@@ -338,6 +344,9 @@
         { title: "Members", href: "/settings/members", icon: Users },
         ...(canManageRoles
           ? [{ title: "Roles", href: "/settings/roles", icon: Shield }]
+          : []),
+        ...(canViewAudit
+          ? [{ title: "Audit Log", href: "/settings/audit", icon: ScrollText }]
           : []),
         {
           title: "Support & Community",

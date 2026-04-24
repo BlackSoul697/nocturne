@@ -3,6 +3,7 @@ using System;
 using System.Collections.Generic;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Nocturne.Infrastructure.Data;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
@@ -12,9 +13,11 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace Nocturne.Infrastructure.Data.Migrations
 {
     [DbContext(typeof(NocturneDbContext))]
-    partial class NocturneDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260424090928_AddSubjectNameToAuditLogs")]
+    partial class AddSubjectNameToAuditLogs
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -2948,19 +2951,6 @@ namespace Nocturne.Infrastructure.Data.Migrations
                         .HasColumnType("uuid")
                         .HasColumnName("id");
 
-                    b.Property<DateTime?>("ActivatedAt")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("activated_at");
-
-                    b.Property<string>("ActivatedIp")
-                        .HasMaxLength(45)
-                        .HasColumnType("character varying(45)")
-                        .HasColumnName("activated_ip");
-
-                    b.Property<string>("ActivatedUserAgent")
-                        .HasColumnType("text")
-                        .HasColumnName("activated_user_agent");
-
                     b.Property<Guid?>("ClientEntityId")
                         .HasColumnType("uuid")
                         .HasColumnName("client_id");
@@ -2970,14 +2960,6 @@ namespace Nocturne.Infrastructure.Data.Migrations
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("created_at")
                         .HasDefaultValueSql("CURRENT_TIMESTAMP");
-
-                    b.Property<Guid?>("CreatedBySubjectId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("created_by_subject_id");
-
-                    b.Property<DateTime?>("ExpiresAt")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("expires_at");
 
                     b.Property<string>("GrantType")
                         .IsRequired()
@@ -3005,11 +2987,6 @@ namespace Nocturne.Infrastructure.Data.Migrations
                         .HasColumnType("text")
                         .HasColumnName("last_used_user_agent");
 
-                    b.Property<string>("LegacySecretHash")
-                        .HasMaxLength(128)
-                        .HasColumnType("character varying(128)")
-                        .HasColumnName("legacy_secret_hash");
-
                     b.Property<DateTime?>("RevokedAt")
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("revoked_at");
@@ -3036,8 +3013,6 @@ namespace Nocturne.Infrastructure.Data.Migrations
 
                     b.HasIndex("ClientEntityId")
                         .HasDatabaseName("ix_oauth_grants_client_id");
-
-                    b.HasIndex("CreatedBySubjectId");
 
                     b.HasIndex("RevokedAt")
                         .HasDatabaseName("ix_oauth_grants_revoked_at")
@@ -4283,6 +4258,11 @@ namespace Nocturne.Infrastructure.Data.Migrations
                         .HasColumnType("boolean")
                         .HasColumnName("allow_access_requests");
 
+                    b.Property<string>("ApiSecretHash")
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)")
+                        .HasColumnName("api_secret_hash");
+
                     b.Property<string>("DisplayName")
                         .IsRequired()
                         .HasMaxLength(256)
@@ -4391,11 +4371,6 @@ namespace Nocturne.Infrastructure.Data.Migrations
                         .HasColumnType("uuid")
                         .HasColumnName("tenant_id");
 
-                    b.Property<string>("Username")
-                        .HasMaxLength(50)
-                        .HasColumnType("character varying(50)")
-                        .HasColumnName("username");
-
                     b.HasKey("Id");
 
                     b.HasIndex("CreatedFromInviteId");
@@ -4407,11 +4382,6 @@ namespace Nocturne.Infrastructure.Data.Migrations
                         .IsUnique()
                         .HasDatabaseName("ix_tenant_members_tenant_subject")
                         .HasFilter("revoked_at IS NULL");
-
-                    b.HasIndex("TenantId", "Username")
-                        .IsUnique()
-                        .HasDatabaseName("ix_tenant_members_tenant_username")
-                        .HasFilter("username IS NOT NULL AND revoked_at IS NULL");
 
                     b.ToTable("tenant_members");
                 });
@@ -7762,11 +7732,6 @@ namespace Nocturne.Infrastructure.Data.Migrations
                         .HasForeignKey("ClientEntityId")
                         .OnDelete(DeleteBehavior.Cascade);
 
-                    b.HasOne("Nocturne.Infrastructure.Data.Entities.SubjectEntity", "CreatedBy")
-                        .WithMany()
-                        .HasForeignKey("CreatedBySubjectId")
-                        .OnDelete(DeleteBehavior.SetNull);
-
                     b.HasOne("Nocturne.Infrastructure.Data.Entities.SubjectEntity", "Subject")
                         .WithMany()
                         .HasForeignKey("SubjectId")
@@ -7780,8 +7745,6 @@ namespace Nocturne.Infrastructure.Data.Migrations
                         .IsRequired();
 
                     b.Navigation("Client");
-
-                    b.Navigation("CreatedBy");
 
                     b.Navigation("Subject");
                 });

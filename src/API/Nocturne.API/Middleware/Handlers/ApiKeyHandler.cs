@@ -115,6 +115,15 @@ public class ApiKeyHandler : IAuthHandler
             }
         }
 
+        // Store hash prefix for read-access audit logging (distinguishes API key readers)
+        var hashSource = grant.TokenHash ?? grant.LegacySecretHash;
+        if (hashSource is { Length: > 0 })
+        {
+            context.Items["ApiSecretHashPrefix"] = hashSource.Length >= 8
+                ? hashSource[..8]
+                : hashSource;
+        }
+
         _logger.LogDebug("API key authentication successful for grant {GrantId}, subject {SubjectId}",
             grant.Id, grant.SubjectId);
 

@@ -9,6 +9,7 @@ using Nocturne.Core.Contracts.Repositories;
 using Nocturne.Core.Contracts.Storage;
 using Nocturne.Infrastructure.Data.Abstractions;
 using Nocturne.Infrastructure.Data.Configuration;
+using Nocturne.Core.Contracts.Audit;
 using Nocturne.Infrastructure.Data.Interceptors;
 using Nocturne.Infrastructure.Data.Repositories;
 using Nocturne.Infrastructure.Data.Services;
@@ -49,6 +50,9 @@ public static class ServiceCollectionExtensions
         // Register interceptors as singletons so caches are shared across all DbContext instances.
         services.TryAddSingleton<TenantConnectionInterceptor>();
         services.TryAddSingleton<MutationAuditInterceptor>();
+
+        // Audit config cache (singleton — uses IDbContextFactory internally)
+        services.TryAddSingleton<ITenantAuditConfigCache, TenantAuditConfigCache>();
 
         // Register NpgsqlDataSource as a singleton - this manages the connection pool
         var dataSourceBuilder = new Npgsql.NpgsqlDataSourceBuilder(

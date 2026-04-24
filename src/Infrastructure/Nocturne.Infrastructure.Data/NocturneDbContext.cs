@@ -498,6 +498,16 @@ public class NocturneDbContext : DbContext
     public DbSet<CoachMarkStateEntity> CoachMarkStates { get; set; }
 
     /// <summary>
+    /// Gets or sets the ReadAccessLog table for HIPAA read-access audit logging
+    /// </summary>
+    public DbSet<ReadAccessLogEntity> ReadAccessLog { get; set; }
+
+    /// <summary>
+    /// Gets or sets the TenantAuditConfig table for per-tenant audit configuration
+    /// </summary>
+    public DbSet<TenantAuditConfigEntity> TenantAuditConfig { get; set; }
+
+    /// <summary>
     /// Configure the database model and relationships
     /// </summary>
     /// <param name="modelBuilder">The model builder to configure</param>
@@ -1958,6 +1968,14 @@ public class NocturneDbContext : DbContext
             .Entity<MutationAuditLogEntity>()
             .Property(a => a.Id)
             .HasValueGenerator<GuidV7ValueGenerator>();
+        modelBuilder
+            .Entity<ReadAccessLogEntity>()
+            .Property(a => a.Id)
+            .HasValueGenerator<GuidV7ValueGenerator>();
+        modelBuilder
+            .Entity<TenantAuditConfigEntity>()
+            .Property(a => a.Id)
+            .HasValueGenerator<GuidV7ValueGenerator>();
 
         // Tracker entity UUID generators
         modelBuilder
@@ -2556,6 +2574,37 @@ public class NocturneDbContext : DbContext
 
             entity.HasIndex(e => new { e.TenantId, e.CreatedAt })
                 .HasDatabaseName("ix_mutation_audit_log_created");
+        });
+
+        // Configure Read Access Log entity defaults and indexes
+        modelBuilder.Entity<ReadAccessLogEntity>(entity =>
+        {
+            entity.Property(e => e.CreatedAt).HasDefaultValueSql("CURRENT_TIMESTAMP");
+
+            entity.HasIndex(e => new { e.TenantId, e.SubjectId, e.CreatedAt })
+                .HasDatabaseName("ix_read_access_log_subject");
+
+            entity.HasIndex(e => new { e.TenantId, e.EntityType, e.CreatedAt })
+                .HasDatabaseName("ix_read_access_log_entity_type");
+
+            entity.HasIndex(e => new { e.TenantId, e.CreatedAt })
+                .HasDatabaseName("ix_read_access_log_created");
+
+            entity.HasIndex(e => e.CorrelationId)
+                .HasDatabaseName("ix_read_access_log_correlation")
+                .HasFilter("correlation_id IS NOT NULL");
+        });
+
+        // Configure Tenant Audit Config entity defaults and indexes
+        modelBuilder.Entity<TenantAuditConfigEntity>(entity =>
+        {
+            entity.Property(e => e.ReadAuditEnabled).HasDefaultValue(false);
+            entity.Property(e => e.SysCreatedAt).HasDefaultValueSql("CURRENT_TIMESTAMP");
+            entity.Property(e => e.SysUpdatedAt).HasDefaultValueSql("CURRENT_TIMESTAMP");
+
+            entity.HasIndex(e => e.TenantId)
+                .IsUnique()
+                .HasDatabaseName("ix_tenant_audit_config_tenant_id");
         });
 
         // Configure LinkedRecordEntity defaults
