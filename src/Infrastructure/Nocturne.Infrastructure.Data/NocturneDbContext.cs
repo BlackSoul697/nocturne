@@ -2611,6 +2611,13 @@ public class NocturneDbContext : DbContext
                 .HasForeignKey(e => e.SubjectId)
                 .OnDelete(DeleteBehavior.Cascade);
 
+            entity
+                .HasOne(e => e.CreatedBy)
+                .WithMany()
+                .HasForeignKey(e => e.CreatedBySubjectId)
+                .OnDelete(DeleteBehavior.SetNull)
+                .IsRequired(false);
+
         });
 
         // Configure OAuth Refresh Token entity

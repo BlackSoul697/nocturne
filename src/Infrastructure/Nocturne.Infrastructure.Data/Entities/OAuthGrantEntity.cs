@@ -92,6 +92,39 @@ public class OAuthGrantEntity : ITenantScoped, IAuditable
     public DateTime? RevokedAt { get; set; }
 
     /// <summary>
+    /// When this grant expires. Only used for guest grants (creation + 48h).
+    /// </summary>
+    [Column("expires_at")]
+    public DateTime? ExpiresAt { get; set; }
+
+    /// <summary>
+    /// When a guest grant was first activated (code redeemed).
+    /// Null means the code hasn't been used yet.
+    /// </summary>
+    [Column("activated_at")]
+    public DateTime? ActivatedAt { get; set; }
+
+    /// <summary>
+    /// IP address of the request that activated this guest grant.
+    /// </summary>
+    [MaxLength(45)]
+    [Column("activated_ip")]
+    public string? ActivatedIp { get; set; }
+
+    /// <summary>
+    /// User-Agent of the request that activated this guest grant.
+    /// </summary>
+    [Column("activated_user_agent")]
+    public string? ActivatedUserAgent { get; set; }
+
+    /// <summary>
+    /// Subject ID of the member who created this grant (for guest grants created by
+    /// a family member on behalf of the data owner).
+    /// </summary>
+    [Column("created_by_subject_id")]
+    public Guid? CreatedBySubjectId { get; set; }
+
+    /// <summary>
     /// SHA-256 hash of the plaintext token (for direct grants only).
     /// Used to look up grants by token without storing the plaintext.
     /// </summary>
@@ -117,6 +150,11 @@ public class OAuthGrantEntity : ITenantScoped, IAuditable
     /// The subject (user) who approved this grant
     /// </summary>
     public SubjectEntity? Subject { get; set; }
+
+    /// <summary>
+    /// The member who created this grant (may differ from Subject for guest grants).
+    /// </summary>
+    public SubjectEntity? CreatedBy { get; set; }
 
     /// <summary>
     /// Refresh tokens issued under this grant
