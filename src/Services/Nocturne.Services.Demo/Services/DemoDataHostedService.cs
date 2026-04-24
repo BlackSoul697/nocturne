@@ -141,13 +141,13 @@ public class DemoDataHostedService : BackgroundService
 
         using var scope = _serviceProvider.CreateScope();
         SetAuditContext(scope.ServiceProvider);
-        var entryRepository = scope.ServiceProvider.GetRequiredService<IEntryRepository>();
+        var sensorGlucoseRepository = scope.ServiceProvider.GetRequiredService<ISensorGlucoseRepository>();
         var treatmentRepository = scope.ServiceProvider.GetRequiredService<ITreatmentRepository>();
         var entryService = scope.ServiceProvider.GetRequiredService<IDemoEntryService>();
         var treatmentService = scope.ServiceProvider.GetRequiredService<IDemoTreatmentService>();
 
         // Clear existing demo data
-        var entriesDeleted = await entryRepository.DeleteEntriesByDataSourceAsync(
+        var entriesDeleted = await sensorGlucoseRepository.DeleteBySourceAsync(
             DataSources.DemoService,
             cancellationToken
         );
@@ -157,7 +157,7 @@ public class DemoDataHostedService : BackgroundService
         );
 
         _logger.LogInformation(
-            "Cleared {Entries} demo entries and {Treatments} demo treatments",
+            "Cleared {Entries} demo sensor glucose records and {Treatments} demo treatments",
             entriesDeleted,
             treatmentsDeleted
         );
