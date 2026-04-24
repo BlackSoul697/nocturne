@@ -109,8 +109,8 @@ public class SetupControllerTests : IDisposable
         var tenantId = Guid.CreateVersion7();
         _tenantService.Setup(s => s.ValidateSlugAsync("fresh", It.IsAny<CancellationToken>()))
             .ReturnsAsync(new SlugValidationResult(true));
-        _tenantService.Setup(s => s.CreateWithoutOwnerAsync("fresh", "Fresh Instance", null, It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new TenantCreatedDto(tenantId, "fresh", "Fresh Instance", true, DateTime.UtcNow, "api-secret-123"));
+        _tenantService.Setup(s => s.CreateWithoutOwnerAsync("fresh", "Fresh Instance", It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new TenantCreatedDto(tenantId, "fresh", "Fresh Instance", true, DateTime.UtcNow));
 
         // Act
         var result = await _controller.CreateTenant(

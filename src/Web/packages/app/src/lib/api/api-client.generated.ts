@@ -9,7 +9,6 @@ import {
   AlertRulesClient,
   AlertsClient,
   AnalyticsClient,
-  ApiSecretClient,
   ApsSnapshotClient,
   AvatarClient,
   BackfillClient,
@@ -104,7 +103,6 @@ export class ApiClient {
   public readonly alertRules: AlertRulesClient;
   public readonly alerts: AlertsClient;
   public readonly analytics: AnalyticsClient;
-  public readonly apiSecret: ApiSecretClient;
   public readonly apsSnapshot: ApsSnapshotClient;
   public readonly avatar: AvatarClient;
   public readonly backfill: BackfillClient;
@@ -199,7 +197,6 @@ export class ApiClient {
     this.alertRules = new AlertRulesClient(apiBaseUrl, http);
     this.alerts = new AlertsClient(apiBaseUrl, http);
     this.analytics = new AnalyticsClient(apiBaseUrl, http);
-    this.apiSecret = new ApiSecretClient(apiBaseUrl, http);
     this.apsSnapshot = new ApsSnapshotClient(apiBaseUrl, http);
     this.avatar = new AvatarClient(apiBaseUrl, http);
     this.backfill = new BackfillClient(apiBaseUrl, http);

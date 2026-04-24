@@ -704,6 +704,48 @@ export class SetupClient {
     }
 
     /**
+     * Check whether a username is available for the owner account.
+     * @param username (optional) 
+     */
+    validateUsername(username?: string | undefined, signal?: AbortSignal): Promise<SlugValidationResult> {
+        let url_ = this.baseUrl + "/api/v4/setup/validate-username?";
+        if (username === null)
+            throw new globalThis.Error("The parameter 'username' cannot be null.");
+        else if (username !== undefined)
+            url_ += "username=" + encodeURIComponent("" + username) + "&";
+        url_ = url_.replace(/[?&]$/, "");
+
+        let options_: RequestInit = {
+            method: "GET",
+            signal,
+            headers: {
+                "Accept": "application/json"
+            }
+        };
+
+        return this.http.fetch(url_, options_).then((_response: Response) => {
+            return this.processValidateUsername(_response);
+        });
+    }
+
+    protected processValidateUsername(response: Response): Promise<SlugValidationResult> {
+        const status = response.status;
+        let _headers: any = {}; if (response.headers && response.headers.forEach) { response.headers.forEach((v: any, k: any) => _headers[k] = v); };
+        if (status === 200) {
+            return response.text().then((_responseText) => {
+            let result200: any = null;
+            result200 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver) as SlugValidationResult;
+            return result200;
+            });
+        } else if (status !== 200 && status !== 204) {
+            return response.text().then((_responseText) => {
+            return throwException("An unexpected server error occurred.", status, _responseText, _headers);
+            });
+        }
+        return Promise.resolve<SlugValidationResult>(null as any);
+    }
+
+    /**
      * Generate passkey registration options for the first owner account.
     Guard: exactly one tenant must exist with zero non-system members.
      */
@@ -7422,109 +7464,6 @@ export class UserPreferencesClient {
             });
         }
         return Promise.resolve<UserPreferencesResponse>(null as any);
-    }
-}
-
-export class ApiSecretClient {
-    private http: { fetch(url: RequestInfo, init?: RequestInit): Promise<Response> };
-    private baseUrl: string;
-    protected jsonParseReviver: ((key: string, value: any) => any) | undefined = undefined;
-
-    constructor(baseUrl?: string, http?: { fetch(url: RequestInfo, init?: RequestInit): Promise<Response> }) {
-        this.http = http ? http : window as any;
-        this.baseUrl = baseUrl ?? "";
-    }
-
-    getStatus(signal?: AbortSignal): Promise<ApiSecretStatusResponse> {
-        let url_ = this.baseUrl + "/api/v4/me/tenant/api-secret/status";
-        url_ = url_.replace(/[?&]$/, "");
-
-        let options_: RequestInit = {
-            method: "GET",
-            signal,
-            headers: {
-                "Accept": "application/json"
-            }
-        };
-
-        return this.http.fetch(url_, options_).then((_response: Response) => {
-            return this.processGetStatus(_response);
-        });
-    }
-
-    protected processGetStatus(response: Response): Promise<ApiSecretStatusResponse> {
-        const status = response.status;
-        let _headers: any = {}; if (response.headers && response.headers.forEach) { response.headers.forEach((v: any, k: any) => _headers[k] = v); };
-        if (status === 200) {
-            return response.text().then((_responseText) => {
-            let result200: any = null;
-            result200 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver) as ApiSecretStatusResponse;
-            return result200;
-            });
-        } else if (status === 401) {
-            return response.text().then((_responseText) => {
-            let result401: any = null;
-            result401 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver) as ProblemDetails;
-            return throwException("A server side error occurred.", status, _responseText, _headers, result401);
-            });
-        } else if (status === 403) {
-            return response.text().then((_responseText) => {
-            let result403: any = null;
-            result403 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver) as ProblemDetails;
-            return throwException("A server side error occurred.", status, _responseText, _headers, result403);
-            });
-        } else if (status !== 200 && status !== 204) {
-            return response.text().then((_responseText) => {
-            return throwException("An unexpected server error occurred.", status, _responseText, _headers);
-            });
-        }
-        return Promise.resolve<ApiSecretStatusResponse>(null as any);
-    }
-
-    regenerate(signal?: AbortSignal): Promise<ApiSecretRegeneratedResponse> {
-        let url_ = this.baseUrl + "/api/v4/me/tenant/api-secret/regenerate";
-        url_ = url_.replace(/[?&]$/, "");
-
-        let options_: RequestInit = {
-            method: "POST",
-            signal,
-            headers: {
-                "Accept": "application/json"
-            }
-        };
-
-        return this.http.fetch(url_, options_).then((_response: Response) => {
-            return this.processRegenerate(_response);
-        });
-    }
-
-    protected processRegenerate(response: Response): Promise<ApiSecretRegeneratedResponse> {
-        const status = response.status;
-        let _headers: any = {}; if (response.headers && response.headers.forEach) { response.headers.forEach((v: any, k: any) => _headers[k] = v); };
-        if (status === 200) {
-            return response.text().then((_responseText) => {
-            let result200: any = null;
-            result200 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver) as ApiSecretRegeneratedResponse;
-            return result200;
-            });
-        } else if (status === 401) {
-            return response.text().then((_responseText) => {
-            let result401: any = null;
-            result401 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver) as ProblemDetails;
-            return throwException("A server side error occurred.", status, _responseText, _headers, result401);
-            });
-        } else if (status === 403) {
-            return response.text().then((_responseText) => {
-            let result403: any = null;
-            result403 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver) as ProblemDetails;
-            return throwException("A server side error occurred.", status, _responseText, _headers, result403);
-            });
-        } else if (status !== 200 && status !== 204) {
-            return response.text().then((_responseText) => {
-            return throwException("An unexpected server error occurred.", status, _responseText, _headers);
-            });
-        }
-        return Promise.resolve<ApiSecretRegeneratedResponse>(null as any);
     }
 }
 
@@ -23174,7 +23113,6 @@ export interface TenantCreatedDto {
     displayName?: string;
     isActive?: boolean;
     sysCreatedAt?: Date;
-    apiSecret?: string;
 }
 
 export interface CreatePlatformTenantRequest {
@@ -23190,12 +23128,16 @@ export interface TransitionStatusDto {
 
 export interface SetupTenantResponse {
     tenantId?: string;
-    apiSecret?: string;
 }
 
 export interface SetupTenantRequest {
     slug?: string;
     displayName?: string;
+}
+
+export interface SlugValidationResult {
+    isValid?: boolean;
+    message?: string | undefined;
 }
 
 export interface SetupOwnerOptionsResponse {
@@ -25114,14 +25056,6 @@ export interface UpdateUserPreferencesRequest {
     preferredLanguage?: string | undefined;
 }
 
-export interface ApiSecretStatusResponse {
-    hasSecret?: boolean;
-}
-
-export interface ApiSecretRegeneratedResponse {
-    apiSecret?: string;
-}
-
 /** Proxy configuration DTO */
 export interface ProxyConfigurationDto {
     nightscoutUrl?: string;
@@ -25560,7 +25494,6 @@ export interface TenantMemberRoleDto {
 export interface CreateTenantRequest {
     slug?: string;
     displayName?: string;
-    apiSecret?: string | undefined;
 }
 
 export interface UpdateTenantRequest {
@@ -26233,12 +26166,6 @@ export interface SetMemberLimitTo24HoursRequest {
 export interface CreateMyTenantRequest {
     slug?: string;
     displayName?: string;
-    apiSecret?: string | undefined;
-}
-
-export interface SlugValidationResult {
-    isValid?: boolean;
-    message?: string | undefined;
 }
 
 export interface TenantRoleDto {
@@ -26684,7 +26611,6 @@ export interface TenantEntityDto {
     id?: string;
     slug?: string;
     displayName?: string;
-    apiSecretHash?: string | undefined;
     isActive?: boolean;
     lastReadingAt?: Date | undefined;
     timezone?: string;
@@ -28456,6 +28382,9 @@ export interface DirectGrantDto {
     scopes?: string[];
     createdAt?: Date;
     lastUsedAt?: Date | undefined;
+    /** True when this grant was created from a migrated Nightscout API secret
+rather than as a scoped noc_ token. */
+    isLegacy?: boolean;
 }
 
 /** OAuth 2.0 token response (RFC 6749 Section 5.1) */

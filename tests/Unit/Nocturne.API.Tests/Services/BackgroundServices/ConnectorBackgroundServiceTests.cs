@@ -110,7 +110,6 @@ public class ConnectorBackgroundServiceTests
                 Id TEXT PRIMARY KEY,
                 slug TEXT NOT NULL,
                 display_name TEXT NOT NULL,
-                api_secret_hash TEXT,
                 is_active INTEGER NOT NULL DEFAULT 1,
                 is_default INTEGER NOT NULL DEFAULT 0,
                 last_reading_at TEXT,

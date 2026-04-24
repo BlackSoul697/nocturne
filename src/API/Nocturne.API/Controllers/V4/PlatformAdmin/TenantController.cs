@@ -66,8 +66,8 @@ public class TenantController : ControllerBase
     {
         var authContext = HttpContext.Items["AuthContext"] as AuthContext;
         var tenant = authContext?.SubjectId is { } creatorId
-            ? await _tenantService.CreateAsync(request.Slug, request.DisplayName, creatorId, request.ApiSecret, ct)
-            : await _tenantService.CreateWithoutOwnerAsync(request.Slug, request.DisplayName, request.ApiSecret, ct);
+            ? await _tenantService.CreateAsync(request.Slug, request.DisplayName, creatorId, ct)
+            : await _tenantService.CreateWithoutOwnerAsync(request.Slug, request.DisplayName, ct);
         return CreatedAtAction(nameof(GetById), new { id = tenant.Id }, tenant);
     }
 
@@ -234,7 +234,7 @@ public class TenantController : ControllerBase
     }
 }
 
-public record CreateTenantRequest(string Slug, string DisplayName, string? ApiSecret = null);
+public record CreateTenantRequest(string Slug, string DisplayName);
 public record UpdateTenantRequest(string DisplayName, bool IsActive, bool? AllowAccessRequests = null);
 public record AddMemberRequest(Guid SubjectId, List<Guid> RoleIds, List<string>? DirectPermissions = null);
 

@@ -252,9 +252,9 @@ public enum AuthType
     LegacyAccessToken,
 
     /// <summary>
-    /// API secret (SHA1 hash)
+    /// API key (resolved via DirectGrant lookup by SHA-256 or legacy SHA-1 hash)
     /// </summary>
-    ApiSecret,
+    ApiKey,
 
     /// <summary>
     /// Session cookie

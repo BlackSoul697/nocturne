@@ -1072,11 +1072,9 @@ msgstr "Unnamed Schedule"
 #: src/lib/components/alerts/SchedulesTab.svelte
 #: src/lib/components/dashboard/glucose-chart/dialogs/DeliveryInspectionDialog.svelte
 #: src/lib/components/dashboard/glucose-chart/dialogs/DeliveryInspectionDialog.svelte
-#: src/routes/(authenticated)/settings/admin/tenants/+page.svelte
 #: src/routes/(authenticated)/settings/alerts/setup/+page.svelte
 #: src/routes/(authenticated)/settings/integrations/discord/+page.svelte
 #: src/routes/(authenticated)/settings/profile/+page.svelte
-#: src/routes/(authenticated)/tenants/+page.svelte
 msgid "Default"
 msgstr "Default"
 
@@ -1533,6 +1531,7 @@ msgstr "Your browser does not support passkeys. Use an authenticator app, a reco
 #: src/lib/components/auth/LoginForm.svelte
 #: src/lib/components/auth/PasskeyRegistrationForm.svelte
 #: src/routes/(unauthenticated)/auth/recovery/+page.svelte
+#: src/routes/(unauthenticated)/setup/steps/AccountCreation.svelte
 msgid "<0/> Waiting for passkey..."
 msgstr "<0/> Waiting for passkey..."
 
@@ -1573,6 +1572,7 @@ msgstr "Use a recovery code"
 #: src/lib/components/auth/LoginForm.svelte
 #: src/lib/components/auth/PasskeyRegistrationForm.svelte
 #: src/routes/(unauthenticated)/auth/recovery/+page.svelte
+#: src/routes/(unauthenticated)/setup/steps/AccountCreation.svelte
 msgid "Username"
 msgstr "Username"
 
@@ -1623,15 +1623,18 @@ msgstr "<0/> Continue with {0}"
 #: src/routes/(authenticated)/settings/integrations/discord/+page.svelte
 #: src/routes/(authenticated)/tenants/+page.svelte
 #: src/routes/(unauthenticated)/auth/recovery/+page.svelte
+#: src/routes/(unauthenticated)/setup/steps/AccountCreation.svelte
 msgid "Display name"
 msgstr "Display name"
 
 #: src/lib/components/auth/PasskeyRegistrationForm.svelte
 #: src/routes/(unauthenticated)/auth/recovery/+page.svelte
+#: src/routes/(unauthenticated)/setup/steps/AccountCreation.svelte
 msgid "Your name"
 msgstr "Your name"
 
 #: src/lib/components/auth/PasskeyRegistrationForm.svelte
+#: src/routes/(unauthenticated)/setup/steps/AccountCreation.svelte
 msgid "This is how you will appear to others."
 msgstr "This is how you will appear to others."
 
@@ -1640,6 +1643,7 @@ msgid "A unique identifier for your account."
 msgstr "A unique identifier for your account."
 
 #: src/lib/components/auth/PasskeyRegistrationForm.svelte
+#: src/routes/(unauthenticated)/setup/steps/AccountCreation.svelte
 msgid "<0/> Create account with passkey"
 msgstr "<0/> Create account with passkey"
 
@@ -2877,10 +2881,12 @@ msgid "<0/> Set up {0}"
 msgstr "<0/> Set up {0}"
 
 #: src/lib/components/connectors/UploaderSetupDialog.svelte
+#: src/lib/components/connectors/UploaderSetupView.svelte
 msgid "Connection Details"
 msgstr "Connection Details"
 
 #: src/lib/components/connectors/UploaderSetupDialog.svelte
+#: src/lib/components/connectors/UploaderSetupView.svelte
 #: src/routes/(authenticated)/compatibility/+page.svelte
 msgid "Nocturne URL"
 msgstr "Nocturne URL"
@@ -2924,7 +2930,6 @@ msgstr "Glucose"
 #: src/lib/components/entries/BGCheckSection.svelte
 #: src/lib/components/treatments/TreatmentsDataTable.svelte
 #: src/routes/(authenticated)/reports/day-in-review/+page.svelte
-#: src/routes/(authenticated)/settings/admin/tenants/+page.svelte
 msgid "Type"
 msgstr "Type"
 
@@ -3646,6 +3651,8 @@ msgstr "Finish setting up"
 #: src/lib/components/dashboard/SetupCard.svelte
 #: src/lib/components/meal-matching/MealMatchReviewDialog.svelte
 #: src/lib/components/meals/MealSuggestionRow.svelte
+#: src/routes/(authenticated)/settings/admin/tenants/+page.svelte
+#: src/routes/(authenticated)/tenants/+page.svelte
 msgid "Dismiss"
 msgstr "Dismiss"
 
@@ -4113,6 +4120,7 @@ msgstr "Setup"
 #: src/lib/components/layout/AppSidebar.svelte
 #: src/lib/components/layout/UserMenu.svelte
 #: src/routes/(authenticated)/settings/account/+page.svelte
+#: src/routes/(unauthenticated)/setup/+page@.svelte
 msgid "Account"
 msgstr "Account"
 
@@ -4133,6 +4141,7 @@ msgstr "Therapy"
 #: src/lib/components/dashboard/OnboardingProgress.svelte
 #: src/lib/components/layout/AppSidebar.svelte
 #: src/routes/(authenticated)/settings/alerts/+page.svelte
+#: src/routes/(unauthenticated)/setup/steps/Finish.svelte
 msgid "Alerts"
 msgstr "Alerts"
 
@@ -4500,7 +4509,6 @@ msgstr "No devices added yet. Add your first device to get started."
 
 #: src/lib/components/patient/PatientDeviceManager.svelte
 #: src/lib/components/patient/PatientInsulinManager.svelte
-#: src/routes/(authenticated)/tenants/+page.svelte
 msgid "Current"
 msgstr "Current"
 
@@ -9501,14 +9509,17 @@ msgid "<0/> Activities"
 msgstr "<0/> Activities"
 
 #: src/routes/(authenticated)/tenants/+page.svelte
+#: src/routes/(unauthenticated)/setup/steps/TenantIdentity.svelte
 msgid "Slug must be at least 3 characters"
 msgstr "Slug must be at least 3 characters"
 
 #: src/routes/(authenticated)/tenants/+page.svelte
+#: src/routes/(unauthenticated)/setup/steps/TenantIdentity.svelte
 msgid "Invalid slug"
 msgstr "Invalid slug"
 
 #: src/routes/(authenticated)/tenants/+page.svelte
+#: src/routes/(unauthenticated)/setup/steps/TenantIdentity.svelte
 msgid "Could not validate slug"
 msgstr "Could not validate slug"
 
@@ -9516,50 +9527,42 @@ msgstr "Could not validate slug"
 msgid "Failed to create tenant. Please try again."
 msgstr "Failed to create tenant. Please try again."
 
-#: src/routes/(authenticated)/tenants/+page.svelte
-msgid "Manage and switch between your Nocturne instances"
-msgstr "Manage and switch between your Nocturne instances"
+#~ msgid "Manage and switch between your Nocturne instances"
+#~ msgstr "Manage and switch between your Nocturne instances"
 
 #: src/routes/(authenticated)/tenants/+page.svelte
 msgid "Failed to load tenants"
 msgstr "Failed to load tenants"
 
-#: src/routes/(authenticated)/tenants/+page.svelte
-msgid "Multitenancy not configured"
-msgstr "Multitenancy not configured"
+#~ msgid "Multitenancy not configured"
+#~ msgstr "Multitenancy not configured"
 
-#: src/routes/(authenticated)/tenants/+page.svelte
-msgid ""
-"A base domain must be configured to enable URL-based tenant switching\n"
-"and tenant creation."
-msgstr ""
-"A base domain must be configured to enable URL-based tenant switching\n"
-"and tenant creation."
+#~ msgid ""
+#~ "A base domain must be configured to enable URL-based tenant switching\n"
+#~ "and tenant creation."
+#~ msgstr ""
+#~ "A base domain must be configured to enable URL-based tenant switching\n"
+#~ "and tenant creation."
 
-#: src/routes/(authenticated)/tenants/+page.svelte
-msgid "Tenant creation managed externally"
-msgstr "Tenant creation managed externally"
+#~ msgid "Tenant creation managed externally"
+#~ msgstr "Tenant creation managed externally"
 
-#: src/routes/(authenticated)/tenants/+page.svelte
-msgid ""
-"New tenants are managed by your service provider. Contact your\n"
-"administrator to request a new instance."
-msgstr ""
-"New tenants are managed by your service provider. Contact your\n"
-"administrator to request a new instance."
+#~ msgid ""
+#~ "New tenants are managed by your service provider. Contact your\n"
+#~ "administrator to request a new instance."
+#~ msgstr ""
+#~ "New tenants are managed by your service provider. Contact your\n"
+#~ "administrator to request a new instance."
 
 #: src/routes/(authenticated)/tenants/+page.svelte
 msgid "You are not a member of any tenants."
 msgstr "You are not a member of any tenants."
 
-#: src/routes/(authenticated)/tenants/+page.svelte
-msgid "<0/> Current"
-msgstr "<0/> Current"
+#~ msgid "<0/> Current"
+#~ msgstr "<0/> Current"
 
-#: src/routes/(authenticated)/tenants/+page.svelte
-#: src/routes/(authenticated)/tenants/+page.svelte
-msgid "<0/> Switch"
-msgstr "<0/> Switch"
+#~ msgid "<0/> Switch"
+#~ msgstr "<0/> Switch"
 
 #: src/routes/(authenticated)/tenants/+page.svelte
 msgid "<0/> Create new tenant"
@@ -9569,15 +9572,15 @@ msgstr "<0/> Create new tenant"
 msgid "Create new tenant"
 msgstr "Create new tenant"
 
-#: src/routes/(authenticated)/tenants/+page.svelte
-msgid "Set up a new Nocturne instance with its own subdomain"
-msgstr "Set up a new Nocturne instance with its own subdomain"
+#~ msgid "Set up a new Nocturne instance with its own subdomain"
+#~ msgstr "Set up a new Nocturne instance with its own subdomain"
+
+#~ msgid "Subdomain"
+#~ msgstr "Subdomain"
 
 #: src/routes/(authenticated)/tenants/+page.svelte
-msgid "Subdomain"
-msgstr "Subdomain"
-
-#: src/routes/(authenticated)/tenants/+page.svelte
+#: src/routes/(unauthenticated)/setup/steps/AccountCreation.svelte
+#: src/routes/(unauthenticated)/setup/steps/TenantIdentity.svelte
 msgid "Checking availability..."
 msgstr "Checking availability..."
 
@@ -9622,6 +9625,7 @@ msgstr "Choose how you'd like to set up Nocturne."
 msgid "← Back"
 msgstr "← Back"
 
+#: src/lib/components/connectors/UploaderSetupView.svelte
 #: src/lib/components/connectors/UploaderSetupView.svelte
 #: src/routes/(unauthenticated)/setup/+page.svelte
 msgid "Continue to Dashboard"
@@ -14451,17 +14455,15 @@ msgstr "Use these endpoints to configure uploaders manually"
 msgid "Base URL"
 msgstr "Base URL"
 
-#: src/routes/(authenticated)/settings/connectors/+page.svelte
-msgid "Entries Endpoint"
-msgstr "Entries Endpoint"
+#~ msgid "Entries Endpoint"
+#~ msgstr "Entries Endpoint"
 
-#: src/routes/(authenticated)/settings/connectors/+page.svelte
-msgid ""
-"Most uploaders use the Nightscout API format. Use your API secret\n"
-"for authentication via the <0/> header or embed it in the URL."
-msgstr ""
-"Most uploaders use the Nightscout API format. Use your API secret\n"
-"for authentication via the <0/> header or embed it in the URL."
+#~ msgid ""
+#~ "Most uploaders use the Nightscout API format. Use your API secret\n"
+#~ "for authentication via the <0/> header or embed it in the URL."
+#~ msgstr ""
+#~ "Most uploaders use the Nightscout API format. Use your API secret\n"
+#~ "for authentication via the <0/> header or embed it in the URL."
 
 #: src/routes/(authenticated)/settings/connectors/+page.svelte
 msgid "<0/> Data Maintenance"
@@ -15617,15 +15619,20 @@ msgid "{0} is now connected. You can return to your device."
 msgstr "{0} is now connected. You can return to your device."
 
 #: src/lib/components/connectors/UploaderSetupView.svelte
+#: src/lib/components/connectors/UploaderSetupView.svelte
 msgid "Receiving Data"
 msgstr "Receiving Data"
 
 #. placeholder {0}: app ? getUploaderName(app) : ''
 #. placeholder {1}: ds.entriesLast24h ?? 0
+#. placeholder {0}: app ? getUploaderName(app) : ''
+#. placeholder {1}: ds.entriesLast24h ?? 0
+#: src/lib/components/connectors/UploaderSetupView.svelte
 #: src/lib/components/connectors/UploaderSetupView.svelte
 msgid "{0} is sending data. {1} entries in the last 24 hours."
 msgstr "{0} is sending data. {1} entries in the last 24 hours."
 
+#: src/lib/components/connectors/UploaderSetupView.svelte
 #: src/lib/components/connectors/UploaderSetupView.svelte
 msgid "Waiting for data"
 msgstr "Waiting for data"
@@ -15969,6 +15976,7 @@ msgid "Error code: <0/>"
 msgstr "Error code: <0/>"
 
 #: src/routes/(unauthenticated)/setup/account/+page.svelte
+#: src/routes/(unauthenticated)/setup/steps/AccountCreation.svelte
 msgid "Failed to create account."
 msgstr "Failed to create account."
 
@@ -15977,6 +15985,7 @@ msgid "Create Account - Setup - Nocturne"
 msgstr "Create Account - Setup - Nocturne"
 
 #: src/routes/(unauthenticated)/setup/account/+page.svelte
+#: src/routes/(unauthenticated)/setup/steps/AccountCreation.svelte
 msgid "Account Created"
 msgstr "Account Created"
 
@@ -15989,6 +15998,7 @@ msgstr ""
 "continuing."
 
 #: src/routes/(unauthenticated)/setup/account/+page.svelte
+#: src/routes/(unauthenticated)/setup/steps/AccountCreation.svelte
 msgid "Continue Setup"
 msgstr "Continue Setup"
 
@@ -16436,11 +16446,12 @@ msgstr "Failed to load tenant details."
 msgid "Manage the current tenant's details and members"
 msgstr "Manage the current tenant's details and members"
 
-#: src/routes/(authenticated)/settings/admin/tenants/+page.svelte
-msgid "Standard"
-msgstr "Standard"
+#~ msgid "Standard"
+#~ msgstr "Standard"
 
 #: src/routes/(authenticated)/settings/admin/tenants/+page.svelte
+#: src/routes/(authenticated)/tenants/+page.svelte
+#: src/routes/(unauthenticated)/setup/steps/TenantIdentity.svelte
 msgid "Slug"
 msgstr "Slug"
 
@@ -16952,8 +16963,11 @@ msgstr "Get Started - Nocturne"
 msgid "nocturne"
 msgstr "nocturne"
 
+#. placeholder {0}: setupStepIndex + 1
+#. placeholder {1}: SETUP_STEPS.length
 #. placeholder {0}: stepIndex + 1
 #. placeholder {1}: steps.length
+#: src/routes/(unauthenticated)/setup/+page@.svelte
 #: src/routes/(unauthenticated)/setup/+page@.svelte
 msgid "Step {0} of {1}"
 msgstr "Step {0} of {1}"
@@ -16962,8 +16976,11 @@ msgstr "Step {0} of {1}"
 msgid "Save & exit"
 msgstr "Save & exit"
 
+#. placeholder {0}: String(setupStepIndex + 1).padStart(2, "0")
+#. placeholder {1}: String( SETUP_STEPS.length ).padStart(2, "0")
 #. placeholder {0}: String(stepIndex + 1).padStart(2, "0")
 #. placeholder {1}: String( steps.length ).padStart(2, "0")
+#: src/routes/(unauthenticated)/setup/+page@.svelte
 #: src/routes/(unauthenticated)/setup/+page@.svelte
 msgid "Step {0} / {1}"
 msgstr "Step {0} / {1}"
@@ -16985,6 +17002,7 @@ msgid "Enter Nocturne <0/>"
 msgstr "Enter Nocturne <0/>"
 
 #: src/routes/(unauthenticated)/setup/+page@.svelte
+#: src/routes/(unauthenticated)/setup/steps/TenantIdentity.svelte
 msgid "Continue <0/>"
 msgstr "Continue <0/>"
 
@@ -17116,13 +17134,11 @@ msgstr "Invite a caretaker"
 msgid "Add follower access with one link"
 msgstr "Add follower access with one link"
 
-#: src/routes/(unauthenticated)/setup/steps/Finish.svelte
-msgid "Quiet hours"
-msgstr "Quiet hours"
+#~ msgid "Quiet hours"
+#~ msgstr "Quiet hours"
 
-#: src/routes/(unauthenticated)/setup/steps/Finish.svelte
-msgid "Silence low-priority alerts overnight"
-msgstr "Silence low-priority alerts overnight"
+#~ msgid "Silence low-priority alerts overnight"
+#~ msgstr "Silence low-priority alerts overnight"
 
 #: src/routes/(unauthenticated)/setup/steps/Finish.svelte
 msgid "Your first report"
@@ -17516,3 +17532,168 @@ msgstr "Change avatar"
 #: src/lib/components/account/UserProfileCard.svelte
 msgid "Remove avatar"
 msgstr "Remove avatar"
+
+#: src/lib/components/connectors/UploaderSetupDialog.svelte
+#: src/lib/components/connectors/UploaderSetupView.svelte
+msgid "Failed to generate API key. You can create one manually in Settings."
+msgstr "Failed to generate API key. You can create one manually in Settings."
+
+#: src/lib/components/connectors/UploaderSetupDialog.svelte
+#: src/lib/components/connectors/UploaderSetupView.svelte
+msgid "API Key"
+msgstr "API Key"
+
+#: src/lib/components/connectors/UploaderSetupDialog.svelte
+#: src/lib/components/connectors/UploaderSetupView.svelte
+msgid "<0/> Generating API key..."
+msgstr "<0/> Generating API key..."
+
+#: src/lib/components/connectors/UploaderSetupDialog.svelte
+#: src/lib/components/connectors/UploaderSetupView.svelte
+msgid "Copy this now. It cannot be shown again."
+msgstr "Copy this now. It cannot be shown again."
+
+#. placeholder {0}: app ? getUploaderName(app) : 'your app'
+#: src/lib/components/connectors/UploaderSetupView.svelte
+msgid "Enter these values in {0}'s Nightscout settings."
+msgstr "Enter these values in {0}'s Nightscout settings."
+
+#. placeholder {0}: app ? getUploaderName(app) : 'your app'
+#: src/lib/components/connectors/UploaderSetupView.svelte
+msgid "Configure {0} with the details above, then this page will update when data arrives."
+msgstr "Configure {0} with the details above, then this page will update when data arrives."
+
+#: src/routes/(authenticated)/tenants/+page.svelte
+msgid "Manage your Nocturne instances"
+msgstr "Manage your Nocturne instances"
+
+#: src/routes/(authenticated)/settings/admin/tenants/+page.svelte
+#: src/routes/(authenticated)/tenants/+page.svelte
+msgid "Multitenancy enabled"
+msgstr "Multitenancy enabled"
+
+#: src/routes/(authenticated)/settings/admin/tenants/+page.svelte
+#: src/routes/(authenticated)/tenants/+page.svelte
+msgid "All app sessions have been invalidated. Reconfigure your apps to use <0/>."
+msgstr "All app sessions have been invalidated. Reconfigure your apps to use <0/>."
+
+#: src/routes/(authenticated)/tenants/+page.svelte
+msgid "Set up a new Nocturne instance"
+msgstr "Set up a new Nocturne instance"
+
+#: src/routes/(unauthenticated)/setup/+page@.svelte
+msgid "Name your instance"
+msgstr "Name your instance"
+
+#: src/routes/(unauthenticated)/setup/+page@.svelte
+msgid "Instance"
+msgstr "Instance"
+
+#: src/routes/(unauthenticated)/setup/+page@.svelte
+msgid "Create your account"
+msgstr "Create your account"
+
+#: src/routes/(unauthenticated)/setup/steps/AccountCreation.svelte
+msgid "Username must be at least 3 characters"
+msgstr "Username must be at least 3 characters"
+
+#: src/routes/(unauthenticated)/setup/steps/AccountCreation.svelte
+msgid "Invalid username"
+msgstr "Invalid username"
+
+#: src/routes/(unauthenticated)/setup/steps/AccountCreation.svelte
+msgid "Could not validate username"
+msgstr "Could not validate username"
+
+#: src/routes/(unauthenticated)/setup/steps/AccountCreation.svelte
+msgid "Failed to start OIDC login."
+msgstr "Failed to start OIDC login."
+
+#: src/routes/(unauthenticated)/setup/steps/AccountCreation.svelte
+msgid "Create your <0>account</0>."
+msgstr "Create your <0>account</0>."
+
+#: src/routes/(unauthenticated)/setup/steps/AccountCreation.svelte
+msgid ""
+"Set up the owner account for your Nocturne instance. You will be the\n"
+"administrator."
+msgstr ""
+"Set up the owner account for your Nocturne instance. You will be the\n"
+"administrator."
+
+#: src/routes/(unauthenticated)/setup/steps/AccountCreation.svelte
+msgid "Save your recovery codes before continuing."
+msgstr "Save your recovery codes before continuing."
+
+#: src/routes/(unauthenticated)/setup/steps/AccountCreation.svelte
+#: src/routes/(unauthenticated)/setup/steps/TenantIdentity.svelte
+msgid "<0/> Available"
+msgstr "<0/> Available"
+
+#: src/routes/(unauthenticated)/setup/steps/AccountCreation.svelte
+msgid "3-32 characters: letters, numbers, dots, underscores, and hyphens."
+msgstr "3-32 characters: letters, numbers, dots, underscores, and hyphens."
+
+#: src/routes/(unauthenticated)/setup/steps/Finish.svelte
+msgid "Set up alerts"
+msgstr "Set up alerts"
+
+#: src/routes/(unauthenticated)/setup/steps/Finish.svelte
+msgid "Connect another source"
+msgstr "Connect another source"
+
+#: src/routes/(unauthenticated)/setup/steps/Finish.svelte
+msgid "Add another device or service"
+msgstr "Add another device or service"
+
+#: src/routes/(unauthenticated)/setup/steps/TenantIdentity.svelte
+msgid "Failed to create tenant."
+msgstr "Failed to create tenant."
+
+#: src/routes/(unauthenticated)/setup/steps/TenantIdentity.svelte
+msgid "Name your <0>instance</0> ."
+msgstr "Name your <0>instance</0> ."
+
+#: src/routes/(unauthenticated)/setup/steps/TenantIdentity.svelte
+msgid ""
+"Choose a slug and display name for your Nocturne instance. The slug is a\n"
+"short, URL-friendly identifier that cannot be changed later."
+msgstr ""
+"Choose a slug and display name for your Nocturne instance. The slug is a\n"
+"short, URL-friendly identifier that cannot be changed later."
+
+#: src/routes/(unauthenticated)/setup/steps/TenantIdentity.svelte
+msgid "Lowercase letters, numbers, and hyphens. At least 3 characters."
+msgstr "Lowercase letters, numbers, and hyphens. At least 3 characters."
+
+#: src/routes/(unauthenticated)/setup/steps/TenantIdentity.svelte
+msgid "Instance name"
+msgstr "Instance name"
+
+#: src/routes/(unauthenticated)/setup/steps/TenantIdentity.svelte
+msgid "My Nocturne"
+msgstr "My Nocturne"
+
+#: src/routes/(unauthenticated)/setup/steps/TenantIdentity.svelte
+msgid "A friendly name shown in the UI. You can change this anytime."
+msgstr "A friendly name shown in the UI. You can change this anytime."
+
+#: src/routes/(unauthenticated)/setup/steps/TenantIdentity.svelte
+msgid "<0/> Creating instance..."
+msgstr "<0/> Creating instance..."
+
+#: src/lib/components/settings/ApiTokens.svelte
+msgid "Legacy — rotate to per-device key"
+msgstr "Legacy — rotate to per-device key"
+
+#: src/routes/(authenticated)/settings/connectors/+page.svelte
+msgid ""
+"Create an API key below to authenticate uploaders. Each key is\n"
+"scoped to specific permissions and can be revoked independently."
+msgstr ""
+"Create an API key below to authenticate uploaders. Each key is\n"
+"scoped to specific permissions and can be revoked independently."
+
+#: src/routes/(authenticated)/settings/connectors/+page.svelte
+msgid "<0/> Create API key"
+msgstr "<0/> Create API key"

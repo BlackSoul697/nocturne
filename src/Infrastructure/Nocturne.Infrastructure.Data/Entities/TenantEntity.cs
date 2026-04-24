@@ -31,13 +31,6 @@ public class TenantEntity
     public string DisplayName { get; set; } = string.Empty;
 
     /// <summary>
-    /// Per-tenant API secret hash (SHA1, Nightscout-compatible)
-    /// </summary>
-    [Column("api_secret_hash")]
-    [MaxLength(128)]
-    public string? ApiSecretHash { get; set; }
-
-    /// <summary>
     /// Whether this tenant is active. Inactive tenants return 403.
     /// </summary>
     [Column("is_active")]

@@ -467,6 +467,38 @@
         "x-remote-type": "command"
       }
     },
+    "/api/v4/setup/validate-username": {
+      "get": {
+        "tags": [
+          "Setup"
+        ],
+        "summary": "Check whether a username is available for the owner account.",
+        "operationId": "Setup_ValidateUsername",
+        "parameters": [
+          {
+            "name": "username",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            },
+            "x-position": 1
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SlugValidationResult"
+                }
+              }
+            }
+          }
+        },
+        "x-remote-type": "query"
+      }
+    },
     "/api/v4/setup/owner/options": {
       "post": {
         "tags": [
@@ -6956,91 +6988,6 @@
           }
         },
         "x-remote-type": "command"
-      }
-    },
-    "/api/v4/me/tenant/api-secret/status": {
-      "get": {
-        "tags": [
-          "Api Secret"
-        ],
-        "operationId": "ApiSecret_GetStatus",
-        "responses": {
-          "200": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiSecretStatusResponse"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            }
-          },
-          "403": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            }
-          }
-        },
-        "x-remote-type": "query"
-      }
-    },
-    "/api/v4/me/tenant/api-secret/regenerate": {
-      "post": {
-        "tags": [
-          "Api Secret"
-        ],
-        "operationId": "ApiSecret_Regenerate",
-        "responses": {
-          "200": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiSecretRegeneratedResponse"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            }
-          },
-          "403": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            }
-          }
-        },
-        "x-remote-type": "command",
-        "x-remote-invalidates": [
-          "GetStatus"
-        ]
       }
     },
     "/api/v4/compatibility/config": {
@@ -21632,9 +21579,6 @@
           "sysCreatedAt": {
             "type": "string",
             "format": "date-time"
-          },
-          "apiSecret": {
-            "type": "string"
           }
         }
       },
@@ -21674,9 +21618,6 @@
           "tenantId": {
             "type": "string",
             "format": "guid"
-          },
-          "apiSecret": {
-            "type": "string"
           }
         }
       },
@@ -21689,6 +21630,19 @@
           },
           "displayName": {
             "type": "string"
+          }
+        }
+      },
+      "SlugValidationResult": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "isValid": {
+            "type": "boolean"
+          },
+          "message": {
+            "type": "string",
+            "nullable": true
           }
         }
       },
@@ -27884,24 +27838,6 @@
           }
         }
       },
-      "ApiSecretStatusResponse": {
-        "type": "object",
-        "additionalProperties": false,
-        "properties": {
-          "hasSecret": {
-            "type": "boolean"
-          }
-        }
-      },
-      "ApiSecretRegeneratedResponse": {
-        "type": "object",
-        "additionalProperties": false,
-        "properties": {
-          "apiSecret": {
-            "type": "string"
-          }
-        }
-      },
       "ProxyConfigurationDto": {
         "type": "object",
         "description": "Proxy configuration DTO",
@@ -29188,10 +29124,6 @@
           },
           "displayName": {
             "type": "string"
-          },
-          "apiSecret": {
-            "type": "string",
-            "nullable": true
           }
         }
       },
@@ -31369,23 +31301,6 @@
           },
           "displayName": {
             "type": "string"
-          },
-          "apiSecret": {
-            "type": "string",
-            "nullable": true
-          }
-        }
-      },
-      "SlugValidationResult": {
-        "type": "object",
-        "additionalProperties": false,
-        "properties": {
-          "isValid": {
-            "type": "boolean"
-          },
-          "message": {
-            "type": "string",
-            "nullable": true
           }
         }
       },
@@ -32757,10 +32672,6 @@
           },
           "displayName": {
             "type": "string"
-          },
-          "apiSecretHash": {
-            "type": "string",
-            "nullable": true
           },
           "isActive": {
             "type": "boolean"
@@ -38563,6 +38474,10 @@
             "type": "string",
             "format": "date-time",
             "nullable": true
+          },
+          "isLegacy": {
+            "type": "boolean",
+            "description": "True when this grant was created from a migrated Nightscout API secret\nrather than as a scoped noc_ token."
           }
         }
       },

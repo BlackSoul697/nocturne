@@ -69,7 +69,7 @@ public class MyTenantsController : ControllerBase
             return Problem(detail: validation.Message, statusCode: 400, title: "Bad Request");
 
         var tenant = await _tenantService.CreateAsync(
-            request.Slug, request.DisplayName, authContext.SubjectId.Value, request.ApiSecret, ct);
+            request.Slug, request.DisplayName, authContext.SubjectId.Value, ct);
 
         return Created($"/api/v4/me/tenants", tenant);
     }
@@ -90,4 +90,4 @@ public class MyTenantsController : ControllerBase
     }
 }
 
-public record CreateMyTenantRequest(string Slug, string DisplayName, string? ApiSecret = null);
+public record CreateMyTenantRequest(string Slug, string DisplayName);

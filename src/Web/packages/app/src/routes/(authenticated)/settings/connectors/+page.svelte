@@ -39,6 +39,7 @@
     Wrench,
     ChevronRight,
     Loader2,
+    KeyRound,
   } from "lucide-svelte";
   import SettingsPageSkeleton from "$lib/components/settings/SettingsPageSkeleton.svelte";
   import DataSourceRow from "$lib/components/settings/DataSourceRow.svelte";
@@ -47,7 +48,6 @@
   import ApiTokens from "$lib/components/settings/ApiTokens.svelte";
   import DeduplicationDialog from "$lib/components/connectors/DeduplicationDialog.svelte";
   import AppLogo from "$lib/components/ui/AppLogo.svelte";
-  import ApiSecretSection from "$lib/components/connectors/ApiSecretSection.svelte";
   import UploaderSetupDialog from "$lib/components/connectors/UploaderSetupDialog.svelte";
   import ConnectorDetailsDialog from "$lib/components/connectors/ConnectorDetailsDialog.svelte";
   import ManualSyncDialog, { type BatchSyncResult } from "$lib/components/connectors/ManualSyncDialog.svelte";
@@ -508,61 +508,44 @@
           </CardDescription>
         </CardHeader>
         <CardContent class="space-y-4">
-          <div class="grid gap-4 sm:grid-cols-2">
-            <div class="space-y-2">
-              <span class="text-sm font-medium">Base URL</span>
-              <div class="flex gap-2">
-                <code
-                  class="flex-1 px-3 py-2 rounded-md bg-muted text-sm font-mono truncate"
-                >
-                  {window.location.origin}
-                </code>
-                <Button
-                  variant="outline"
-                  size="icon"
-                  onclick={() => copyToClipboard(window.location.origin, "baseUrl")}
-                >
-                  {#if copiedField === "baseUrl"}
-                    <Check class="h-4 w-4 text-green-500" />
-                  {:else}
-                    <Copy class="h-4 w-4" />
-                  {/if}
-                </Button>
-              </div>
-            </div>
-            <div class="space-y-2">
-              <span class="text-sm font-medium">Entries Endpoint</span>
-              <div class="flex gap-2">
-                <code
-                  class="flex-1 px-3 py-2 rounded-md bg-muted text-sm font-mono truncate"
-                >
-                  {`${window.location.origin}/api/v1/entries`}
-                </code>
-                <Button
-                  variant="outline"
-                  size="icon"
-                  onclick={() => copyToClipboard(`${window.location.origin}/api/v1/entries`, "entries")}
-                >
-                  {#if copiedField === "entries"}
-                    <Check class="h-4 w-4 text-green-500" />
-                  {:else}
-                    <Copy class="h-4 w-4" />
-                  {/if}
-                </Button>
-              </div>
+          <div class="space-y-2">
+            <span class="text-sm font-medium">Base URL</span>
+            <div class="flex gap-2">
+              <code
+                class="flex-1 px-3 py-2 rounded-md bg-muted text-sm font-mono truncate"
+              >
+                {window.location.origin}
+              </code>
+              <Button
+                variant="outline"
+                size="icon"
+                onclick={() => copyToClipboard(window.location.origin, "baseUrl")}
+              >
+                {#if copiedField === "baseUrl"}
+                  <Check class="h-4 w-4 text-green-500" />
+                {:else}
+                  <Copy class="h-4 w-4" />
+                {/if}
+              </Button>
             </div>
           </div>
           <Separator />
           <p class="text-sm text-muted-foreground">
-            Most uploaders use the Nightscout API format. Use your API secret
-            for authentication via the <code class="text-xs">api-secret</code>
-            header or embed it in the URL.
+            Create an API key below to authenticate uploaders. Each key is
+            scoped to specific permissions and can be revoked independently.
           </p>
+          <Button
+            variant="outline"
+            onclick={() => {
+              document.getElementById("api-tokens-section")?.scrollIntoView({ behavior: "smooth" });
+            }}
+          >
+            <KeyRound class="mr-1.5 h-4 w-4" />
+            Create API key
+          </Button>
         </CardContent>
       </Card>
     {/if}
-
-    <ApiSecretSection />
 
     <!-- Data Maintenance -->
     <Card>
@@ -644,7 +627,9 @@
     <ConnectedApps />
 
     <!-- API Tokens Section -->
-    <ApiTokens />
+    <div id="api-tokens-section">
+      <ApiTokens />
+    </div>
   {/if}
 </div>
 

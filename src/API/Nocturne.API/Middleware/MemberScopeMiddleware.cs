@@ -66,11 +66,31 @@ public class MemberScopeMiddleware
             return;
         }
 
-        // ApiSecret and InstanceKey auth grant superuser on the resolved tenant — no membership lookup needed
-        if (authContext.AuthType is AuthType.ApiSecret or AuthType.InstanceKey)
+        // InstanceKey: infrastructure auth, always superuser — no membership lookup needed
+        if (authContext.AuthType is AuthType.InstanceKey)
         {
             var superuserScopes = new HashSet<string> { "*" };
             context.Items["GrantedScopes"] = (IReadOnlySet<string>)superuserScopes;
+
+            var permissionTrie = new PermissionTrie();
+            permissionTrie.Add(["*"]);
+            context.Items["PermissionTrie"] = permissionTrie;
+
+            await _next(context);
+            return;
+        }
+
+        // ApiKey: use the grant's actual scopes, skip membership lookup
+        if (authContext.AuthType is AuthType.ApiKey)
+        {
+            var grantedScopes = OAuthScopes.Normalize(authContext.Scopes);
+            context.Items["GrantedScopes"] = grantedScopes;
+
+            var permissions = ScopeTranslator.ToPermissions(grantedScopes);
+            var permissionTrie = new PermissionTrie();
+            permissionTrie.Add(permissions);
+            context.Items["PermissionTrie"] = permissionTrie;
+
             await _next(context);
             return;
         }

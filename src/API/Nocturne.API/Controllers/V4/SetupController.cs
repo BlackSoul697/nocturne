@@ -109,7 +109,7 @@ public partial class SetupController : ControllerBase
         var result = await _tenantService.CreateWithoutOwnerAsync(
             request.Slug, request.DisplayName, ct: ct);
 
-        return Ok(new SetupTenantResponse(result.Id, result.ApiSecret));
+        return Ok(new SetupTenantResponse(result.Id));
     }
 
     /// <summary>
@@ -586,7 +586,7 @@ public record ValidateSlugRequest(string Slug);
 
 public record SetupTenantRequest(string Slug, string DisplayName);
 
-public record SetupTenantResponse(Guid TenantId, string ApiSecret);
+public record SetupTenantResponse(Guid TenantId);
 
 public class SetupOwnerOptionsRequest
 {

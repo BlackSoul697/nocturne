@@ -7,7 +7,7 @@ export { updateStatus } from './coachMarks.generated.remote';
 // './deviceCatalogs.generated.remote' - all exports collide, import directly
 // './insulinCatalogs.generated.remote' - all exports collide, import directly
 export { getTenants, getTransitionStatus } from './platforms.generated.remote';
-export { ownerOptions, ownerComplete, ownerOidc } from './setups.generated.remote';
+export { validateUsername, ownerOptions, ownerComplete, ownerOidc } from './setups.generated.remote';
 // './bolusCalculations.generated.remote' - all exports collide, import directly
 // './bolus.generated.remote' - all exports collide, import directly
 export * from './foods.generated.remote';
@@ -22,7 +22,6 @@ export { getConfigManaged, enable, disable, testExisting, testUnsaved } from './
 // './clockFaces.generated.remote' - all exports collide, import directly
 export * from './profiles.generated.remote';
 export * from './userPreferences.generated.remote';
-export { regenerate } from './apiSecrets.generated.remote';
 export * from './services.generated.remote';
 export * from './systems.generated.remote';
 export * from './accessRequests.generated.remote';

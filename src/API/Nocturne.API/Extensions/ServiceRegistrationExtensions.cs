@@ -221,7 +221,7 @@ public static class ServiceRegistrationExtensions
         services.AddSingleton<IAuthHandler, DirectGrantTokenHandler>(); // Priority 150
         services.AddSingleton<IAuthHandler, LegacyJwtHandler>(); // Priority 200
         services.AddSingleton<IAuthHandler, AccessTokenHandler>(); // Priority 300
-        services.AddSingleton<IAuthHandler, ApiSecretHandler>(); // Priority 400
+        services.AddSingleton<IAuthHandler, ApiKeyHandler>(); // Priority 400
 
         // OIDC provider discovery HTTP client
         services.AddHttpClient(

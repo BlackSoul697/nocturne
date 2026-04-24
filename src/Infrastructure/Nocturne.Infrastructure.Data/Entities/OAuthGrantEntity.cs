@@ -134,6 +134,15 @@ public class OAuthGrantEntity : ITenantScoped, IAuditable
     public string? TokenHash { get; set; }
 
     /// <summary>
+    /// SHA-1 hex hash of a legacy Nightscout API secret.
+    /// Only populated for migration-seeded grants to enable zero-friction backward compatibility.
+    /// </summary>
+    [Column("legacy_secret_hash")]
+    [MaxLength(128)]
+    [AuditRedacted]
+    public string? LegacySecretHash { get; set; }
+
+    /// <summary>
     /// Whether this grant has been revoked
     /// </summary>
     [NotMapped]

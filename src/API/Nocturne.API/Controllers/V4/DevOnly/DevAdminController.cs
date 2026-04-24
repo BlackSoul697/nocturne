@@ -129,7 +129,6 @@ public class DevAdminController : ControllerBase
                     Id = tenant.Id,
                     Slug = tenant.Slug,
                     DisplayName = tenant.DisplayName,
-                    ApiSecretHash = tenant.ApiSecretHash,
                     IsActive = tenant.IsActive,
                     LastReadingAt = tenant.LastReadingAt,
                     Timezone = tenant.Timezone,
@@ -363,7 +362,6 @@ public class DevAdminController : ControllerBase
                         // Update scalar properties in-place
                         existingTenant.Slug = td.Slug;
                         existingTenant.DisplayName = td.DisplayName;
-                        existingTenant.ApiSecretHash = td.ApiSecretHash;
                         existingTenant.IsActive = td.IsActive;
                         existingTenant.LastReadingAt = td.LastReadingAt;
                         existingTenant.Timezone = td.Timezone;
@@ -379,7 +377,6 @@ public class DevAdminController : ControllerBase
                             Id = td.Id,
                             Slug = td.Slug,
                             DisplayName = td.DisplayName,
-                            ApiSecretHash = td.ApiSecretHash,
                             IsActive = td.IsActive,
                             LastReadingAt = td.LastReadingAt,
                             Timezone = td.Timezone,
