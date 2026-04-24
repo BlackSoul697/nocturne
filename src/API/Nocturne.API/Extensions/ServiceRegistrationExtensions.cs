@@ -369,7 +369,7 @@ public static class ServiceRegistrationExtensions
                 sp.GetService<ILogger<CompositeDataEventSink<Treatment>>>()));
         services.AddScoped<IWriteSideEffects, WriteSideEffectsService>();
         services.AddScoped<IEntryService, EntryService>();
-        services.AddScoped<IEntryStore, Nocturne.API.Services.Entries.DualPathEntryStore>();
+        services.AddScoped<IEntryStore, Nocturne.API.Services.Entries.EntryReadService>();
         services.AddScoped<IEntryCache, Nocturne.API.Services.Entries.EntryCacheAdapter>();
         services.AddScoped<SignalREntryEventSink>();
         services.AddScoped<IDataEventSink<Entry>>(sp =>
