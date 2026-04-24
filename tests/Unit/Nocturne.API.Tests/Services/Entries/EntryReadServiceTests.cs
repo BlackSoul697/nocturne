@@ -135,22 +135,57 @@ public class EntryReadServiceTests
 
     [Fact]
     [Trait("Category", "Unit")]
-    public async Task QueryAsync_RespectsCountAndSkip()
+    public async Task QueryAsync_SingleType_PushesLimitAndOffsetToRepo()
     {
-        // Implementation fetches count+skip (3) from repo, then applies skip/take in memory
-        var entries = Enumerable.Range(0, 3)
+        // Single-type queries push limit/offset directly to the database
+        var entries = Enumerable.Range(0, 2)
             .Select(i => MakeSg(Now.AddMinutes(-i), 100 + i))
             .ToArray();
 
         _sgRepo.Setup(r => r.GetAsync(
                 It.IsAny<DateTime?>(), It.IsAny<DateTime?>(), It.IsAny<string?>(), It.IsAny<string?>(),
-                3, 0, true, false, It.IsAny<CancellationToken>()))
+                2, 1, true, false, It.IsAny<CancellationToken>()))
             .ReturnsAsync(entries);
 
         var result = await _sut.QueryAsync(new EntryQuery { Type = "sgv", Count = 2, Skip = 1 });
 
-        // Skip 1, take 2 from the 3 returned
         Assert.Equal(2, result.Count);
+        // Verify the repo was called with limit=count, offset=skip (not count+skip, 0)
+        _sgRepo.Verify(r => r.GetAsync(
+            It.IsAny<DateTime?>(), It.IsAny<DateTime?>(), It.IsAny<string?>(), It.IsAny<string?>(),
+            2, 1, true, false, It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+    [Fact]
+    [Trait("Category", "Unit")]
+    public async Task QueryAsync_AllTypes_OverFetchesForMergePagination()
+    {
+        // Multi-type merge still needs count+skip from each repo
+        var sg = MakeSg(Now, 120);
+        var mg = MakeMg(Now.AddMinutes(-1), 150);
+        var cal = MakeCal(Now.AddMinutes(-2));
+
+        _sgRepo.Setup(r => r.GetAsync(
+                It.IsAny<DateTime?>(), It.IsAny<DateTime?>(), It.IsAny<string?>(), It.IsAny<string?>(),
+                3, 0, true, false, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new[] { sg });
+        _mgRepo.Setup(r => r.GetAsync(
+                It.IsAny<DateTime?>(), It.IsAny<DateTime?>(), It.IsAny<string?>(), It.IsAny<string?>(),
+                3, 0, true, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new[] { mg });
+        _calRepo.Setup(r => r.GetAsync(
+                It.IsAny<DateTime?>(), It.IsAny<DateTime?>(), It.IsAny<string?>(), It.IsAny<string?>(),
+                3, 0, true, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new[] { cal });
+
+        var result = await _sut.QueryAsync(new EntryQuery { Type = null, Count = 2, Skip = 1 });
+
+        // Skip 1, take 2 from the merged 3
+        Assert.Equal(2, result.Count);
+        // Verify repos were called with fetchCount = count+skip = 3, offset = 0
+        _sgRepo.Verify(r => r.GetAsync(
+            It.IsAny<DateTime?>(), It.IsAny<DateTime?>(), It.IsAny<string?>(), It.IsAny<string?>(),
+            3, 0, true, false, It.IsAny<CancellationToken>()), Times.Once);
     }
 
     #endregion
@@ -164,7 +199,7 @@ public class EntryReadServiceTests
         var sg = MakeSg(Now, 120);
         _sgRepo.Setup(r => r.GetAsync(
                 It.IsAny<DateTime?>(), It.IsAny<DateTime?>(), It.IsAny<string?>(), It.IsAny<string?>(),
-                1, 0, true, false, It.IsAny<CancellationToken>()))
+                It.IsAny<int>(), 0, true, false, It.IsAny<CancellationToken>()))
             .ReturnsAsync(new[] { sg });
 
         var result = await _sut.GetCurrentAsync();
@@ -180,7 +215,7 @@ public class EntryReadServiceTests
     {
         _sgRepo.Setup(r => r.GetAsync(
                 It.IsAny<DateTime?>(), It.IsAny<DateTime?>(), It.IsAny<string?>(), It.IsAny<string?>(),
-                1, 0, true, false, It.IsAny<CancellationToken>()))
+                It.IsAny<int>(), 0, true, false, It.IsAny<CancellationToken>()))
             .ReturnsAsync(Enumerable.Empty<SensorGlucose>());
 
         var result = await _sut.GetCurrentAsync();
@@ -319,6 +354,72 @@ public class EntryReadServiceTests
 
     #endregion
 
+    #region QueryAsync — demo mode filtering
+
+    [Fact]
+    [Trait("Category", "Unit")]
+    public async Task QueryAsync_DemoDisabled_ExcludesDemoSourcedEntries()
+    {
+        // Default setup has demo mode disabled
+        var realSg = MakeSg(Now, 120, dataSource: "xdrip");
+        var demoSg = MakeSg(Now.AddMinutes(-1), 100, dataSource: "demo-service");
+
+        _sgRepo.Setup(r => r.GetAsync(
+                It.IsAny<DateTime?>(), It.IsAny<DateTime?>(), It.IsAny<string?>(), It.IsAny<string?>(),
+                It.IsAny<int>(), It.IsAny<int>(), It.IsAny<bool>(), It.IsAny<bool>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new[] { realSg, demoSg });
+
+        var result = await _sut.QueryAsync(new EntryQuery { Type = "sgv", Count = 10 });
+
+        Assert.Single(result);
+        Assert.Equal(120, result[0].Sgv);
+    }
+
+    [Fact]
+    [Trait("Category", "Unit")]
+    public async Task QueryAsync_DemoEnabled_ReturnsOnlyDemoEntries()
+    {
+        _demoMode.Setup(d => d.IsEnabled).Returns(true);
+        var sut = new EntryReadService(
+            _sgRepo.Object, _mgRepo.Object, _calRepo.Object,
+            _demoMode.Object, Mock.Of<ILogger<EntryReadService>>());
+
+        var demoSg = MakeSg(Now, 100, dataSource: "demo-service");
+
+        _sgRepo.Setup(r => r.GetAsync(
+                It.IsAny<DateTime?>(), It.IsAny<DateTime?>(), It.IsAny<string?>(), "demo-service",
+                It.IsAny<int>(), It.IsAny<int>(), It.IsAny<bool>(), It.IsAny<bool>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new[] { demoSg });
+
+        var result = await sut.QueryAsync(new EntryQuery { Type = "sgv", Count = 10 });
+
+        Assert.Single(result);
+        // Verify source=demo-service was passed to the repo
+        _sgRepo.Verify(r => r.GetAsync(
+            It.IsAny<DateTime?>(), It.IsAny<DateTime?>(), It.IsAny<string?>(), "demo-service",
+            It.IsAny<int>(), It.IsAny<int>(), It.IsAny<bool>(), It.IsAny<bool>(), It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+    [Fact]
+    [Trait("Category", "Unit")]
+    public async Task GetCurrentAsync_DemoDisabled_SkipsDemoEntries()
+    {
+        var demoSg = MakeSg(Now, 100, dataSource: "demo-service");
+        var realSg = MakeSg(Now.AddMinutes(-1), 120, dataSource: "xdrip");
+
+        _sgRepo.Setup(r => r.GetAsync(
+                It.IsAny<DateTime?>(), It.IsAny<DateTime?>(), It.IsAny<string?>(), It.IsAny<string?>(),
+                It.IsAny<int>(), It.IsAny<int>(), true, false, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new[] { demoSg, realSg });
+
+        var result = await _sut.GetCurrentAsync();
+
+        Assert.NotNull(result);
+        Assert.Equal(120, result.Sgv);
+    }
+
+    #endregion
+
     #region QueryAsync — DateString filter
 
     [Fact]
@@ -365,13 +466,14 @@ public class EntryReadServiceTests
 
     #region Helpers
 
-    private static SensorGlucose MakeSg(DateTime ts, double mgdl, Guid? id = null, string? legacyId = null) => new()
+    private static SensorGlucose MakeSg(DateTime ts, double mgdl, Guid? id = null, string? legacyId = null, string? dataSource = null) => new()
     {
         Id = id ?? Guid.NewGuid(),
         Timestamp = ts,
         Mgdl = mgdl,
         Device = "test-device",
         LegacyId = legacyId,
+        DataSource = dataSource,
         CreatedAt = ts,
         ModifiedAt = ts,
     };

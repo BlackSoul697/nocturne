@@ -40,15 +40,15 @@ public class EntryReadService : IEntryStore
     public async Task<IReadOnlyList<Entry>> QueryAsync(EntryQuery query, CancellationToken ct = default)
     {
         var descending = !query.ReverseResults;
-        var source = ResolveDemoSource();
+        var (source, excludeDemo) = ResolveDemoFilter();
         var (from, to) = ResolveTimeRange(query);
 
         return query.Type switch
         {
-            "sgv" => await QuerySgvAsync(from, to, source, query.Count, query.Skip, descending, ct),
-            "mbg" => await QueryMbgAsync(from, to, source, query.Count, query.Skip, descending, ct),
-            "cal" => await QueryCalAsync(from, to, source, query.Count, query.Skip, descending, ct),
-            null or "" => await QueryAllTypesAsync(from, to, source, query.Count, query.Skip, descending, ct),
+            "sgv" => await QuerySgvAsync(from, to, source, excludeDemo, query.Count, query.Skip, descending, ct),
+            "mbg" => await QueryMbgAsync(from, to, source, excludeDemo, query.Count, query.Skip, descending, ct),
+            "cal" => await QueryCalAsync(from, to, source, excludeDemo, query.Count, query.Skip, descending, ct),
+            null or "" => await QueryAllTypesAsync(from, to, source, excludeDemo, query.Count, query.Skip, descending, ct),
             _ => [],
         };
     }
@@ -56,12 +56,17 @@ public class EntryReadService : IEntryStore
     /// <inheritdoc />
     public async Task<Entry?> GetCurrentAsync(CancellationToken ct = default)
     {
-        var source = ResolveDemoSource();
+        var (source, excludeDemo) = ResolveDemoFilter();
+
+        // When excluding demo data, over-fetch to account for filtered-out demo rows
+        var fetchLimit = excludeDemo ? 10 : 1;
         var results = await _sgRepo.GetAsync(
             from: null, to: null, device: null, source: source,
-            limit: 1, offset: 0, descending: true, nativeOnly: false, ct: ct);
+            limit: fetchLimit, offset: 0, descending: true, nativeOnly: false, ct: ct);
 
-        var sg = results.FirstOrDefault();
+        var sg = excludeDemo
+            ? results.FirstOrDefault(r => !DataSources.IsEphemeral(r.DataSource))
+            : results.FirstOrDefault();
         return sg is null ? null : EntryProjection.FromSensorGlucose(sg);
     }
 
@@ -94,30 +99,37 @@ public class EntryReadService : IEntryStore
     #region Private — Query helpers
 
     private async Task<IReadOnlyList<Entry>> QuerySgvAsync(
-        DateTime? from, DateTime? to, string? source, int count, int skip, bool descending, CancellationToken ct)
+        DateTime? from, DateTime? to, string? source, bool excludeDemo,
+        int count, int skip, bool descending, CancellationToken ct)
     {
-        var results = await _sgRepo.GetAsync(from, to, device: null, source, count + skip, 0, descending, false, ct);
-        return results.Skip(skip).Take(count).Select(EntryProjection.FromSensorGlucose).ToList();
+        // Single-type query: push limit/offset directly to the database
+        var results = await _sgRepo.GetAsync(from, to, device: null, source, count, skip, descending, false, ct);
+        return ExcludeDemoIfNeeded(results, excludeDemo).Select(EntryProjection.FromSensorGlucose).ToList();
     }
 
     private async Task<IReadOnlyList<Entry>> QueryMbgAsync(
-        DateTime? from, DateTime? to, string? source, int count, int skip, bool descending, CancellationToken ct)
+        DateTime? from, DateTime? to, string? source, bool excludeDemo,
+        int count, int skip, bool descending, CancellationToken ct)
     {
-        var results = await _mgRepo.GetAsync(from, to, device: null, source, count + skip, 0, descending, ct);
-        return results.Skip(skip).Take(count).Select(EntryProjection.FromMeterGlucose).ToList();
+        // Single-type query: push limit/offset directly to the database
+        var results = await _mgRepo.GetAsync(from, to, device: null, source, count, skip, descending, ct);
+        return ExcludeDemoIfNeeded(results, excludeDemo).Select(EntryProjection.FromMeterGlucose).ToList();
     }
 
     private async Task<IReadOnlyList<Entry>> QueryCalAsync(
-        DateTime? from, DateTime? to, string? source, int count, int skip, bool descending, CancellationToken ct)
+        DateTime? from, DateTime? to, string? source, bool excludeDemo,
+        int count, int skip, bool descending, CancellationToken ct)
     {
-        var results = await _calRepo.GetAsync(from, to, device: null, source, count + skip, 0, descending, ct);
-        return results.Skip(skip).Take(count).Select(EntryProjection.FromCalibration).ToList();
+        // Single-type query: push limit/offset directly to the database
+        var results = await _calRepo.GetAsync(from, to, device: null, source, count, skip, descending, ct);
+        return ExcludeDemoIfNeeded(results, excludeDemo).Select(EntryProjection.FromCalibration).ToList();
     }
 
     private async Task<IReadOnlyList<Entry>> QueryAllTypesAsync(
-        DateTime? from, DateTime? to, string? source, int count, int skip, bool descending, CancellationToken ct)
+        DateTime? from, DateTime? to, string? source, bool excludeDemo,
+        int count, int skip, bool descending, CancellationToken ct)
     {
-        // Fetch count+skip from each repo to ensure correct merge pagination
+        // Multi-type merge requires over-fetching because we interleave across repos before paginating
         var fetchCount = count + skip;
 
         // Sequential to avoid DbContext thread-safety issues with scoped lifetime
@@ -125,9 +137,9 @@ public class EntryReadService : IEntryStore
         var mgResults = await _mgRepo.GetAsync(from, to, device: null, source, fetchCount, 0, descending, ct);
         var calResults = await _calRepo.GetAsync(from, to, device: null, source, fetchCount, 0, descending, ct);
 
-        var entries = sgResults.Select(EntryProjection.FromSensorGlucose)
-            .Concat(mgResults.Select(EntryProjection.FromMeterGlucose))
-            .Concat(calResults.Select(EntryProjection.FromCalibration));
+        var entries = ExcludeDemoIfNeeded(sgResults, excludeDemo).Select(EntryProjection.FromSensorGlucose)
+            .Concat(ExcludeDemoIfNeeded(mgResults, excludeDemo).Select(EntryProjection.FromMeterGlucose))
+            .Concat(ExcludeDemoIfNeeded(calResults, excludeDemo).Select(EntryProjection.FromCalibration));
 
         var sorted = descending
             ? entries.OrderByDescending(e => e.Mills)
@@ -210,9 +222,35 @@ public class EntryReadService : IEntryStore
 
     #region Private — Filter resolution
 
-    private string? ResolveDemoSource()
+    /// <summary>
+    /// Resolves the demo mode source filter. When demo mode is enabled, returns the demo source
+    /// to positively filter for demo data. When disabled, returns <c>null</c> (no source filter)
+    /// and sets <c>excludeDemo</c> to <c>true</c> so callers post-filter demo records out.
+    /// </summary>
+    /// <remarks>
+    /// The V4 repositories only support exact-match source filtering, not negation.
+    /// The old <see cref="DualPathEntryStore"/> used a MongoDB <c>$ne</c> operator to exclude
+    /// demo data; since the V4 path lacks that, we post-filter instead.
+    /// </remarks>
+    private (string? Source, bool ExcludeDemo) ResolveDemoFilter()
     {
-        return _demoMode.IsEnabled ? DataSources.DemoService : null;
+        if (_demoMode.IsEnabled)
+            return (DataSources.DemoService, false);
+
+        // Demo mode off: no source filter, but exclude demo rows after fetch
+        return (null, true);
+    }
+
+    /// <summary>
+    /// Filters out ephemeral (demo/test) records when <paramref name="exclude"/> is <c>true</c>.
+    /// Returns the sequence unchanged when filtering is not needed.
+    /// </summary>
+    private static IEnumerable<T> ExcludeDemoIfNeeded<T>(IEnumerable<T> results, bool exclude)
+        where T : Core.Models.V4.IV4Record
+    {
+        return exclude
+            ? results.Where(r => !DataSources.IsEphemeral(r.DataSource))
+            : results;
     }
 
     private static (DateTime? From, DateTime? To) ResolveTimeRange(EntryQuery query)
@@ -227,7 +265,9 @@ public class EntryReadService : IEntryStore
         if (toMills.HasValue)
             to = DateTimeOffset.FromUnixTimeMilliseconds(toMills.Value).UtcDateTime;
 
-        // Parse DateString if provided (overrides find-based range)
+        // DateString takes priority over Find-based time range. Both cannot be combined because
+        // the V4 repos accept a single from/to window. The old DualPathEntryStore passed both
+        // to GetEntriesWithAdvancedFilterAsync which applied them sequentially (DateString won).
         if (query.DateString is not null && DateTime.TryParse(query.DateString, out var parsedDate))
         {
             from = parsedDate.ToUniversalTime();
