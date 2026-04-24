@@ -9,7 +9,6 @@ namespace Nocturne.API.Services.Entries;
 /// <summary>
 /// Read-only <see cref="IEntryStore"/> that queries V4 repositories exclusively and projects
 /// results into legacy <see cref="Entry"/> shape via <see cref="EntryProjection"/>.
-/// Replaces <see cref="DualPathEntryStore"/> once the legacy entries table is dropped.
 /// </summary>
 public class EntryReadService : IEntryStore
 {
@@ -228,9 +227,8 @@ public class EntryReadService : IEntryStore
     /// and sets <c>excludeDemo</c> to <c>true</c> so callers post-filter demo records out.
     /// </summary>
     /// <remarks>
-    /// The V4 repositories only support exact-match source filtering, not negation.
-    /// The old <see cref="DualPathEntryStore"/> used a MongoDB <c>$ne</c> operator to exclude
-    /// demo data; since the V4 path lacks that, we post-filter instead.
+    /// The V4 repositories only support exact-match source filtering, not negation,
+    /// so we post-filter demo records out instead.
     /// </remarks>
     private (string? Source, bool ExcludeDemo) ResolveDemoFilter()
     {
@@ -266,8 +264,7 @@ public class EntryReadService : IEntryStore
             to = DateTimeOffset.FromUnixTimeMilliseconds(toMills.Value).UtcDateTime;
 
         // DateString takes priority over Find-based time range. Both cannot be combined because
-        // the V4 repos accept a single from/to window. The old DualPathEntryStore passed both
-        // to GetEntriesWithAdvancedFilterAsync which applied them sequentially (DateString won).
+        // the V4 repos accept a single from/to window; DateString wins when both are present.
         if (query.DateString is not null && DateTime.TryParse(query.DateString, out var parsedDate))
         {
             from = parsedDate.ToUniversalTime();

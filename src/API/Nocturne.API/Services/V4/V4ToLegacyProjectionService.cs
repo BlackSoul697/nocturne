@@ -24,7 +24,6 @@ namespace Nocturne.API.Services.V4;
 /// </remarks>
 /// <seealso cref="IV4ToLegacyProjectionService"/>
 /// <seealso cref="DecompositionPipeline"/>
-/// <seealso cref="DualPathEntryStore"/>
 /// <seealso cref="DualPathTreatmentStore"/>
 public class V4ToLegacyProjectionService : IV4ToLegacyProjectionService
 {
