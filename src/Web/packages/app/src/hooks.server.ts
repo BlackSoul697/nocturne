@@ -1,4 +1,4 @@
-import { error as httpError, type Handle } from "@sveltejs/kit";
+import { type Handle } from "@sveltejs/kit";
 import { randomUUID } from "$lib/utils";
 import type { HandleServerError } from "@sveltejs/kit";
 import { env } from "$env/dynamic/private";
