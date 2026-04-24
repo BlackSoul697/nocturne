@@ -92,13 +92,14 @@ public class GuestLinkService : IGuestLinkService
         await _dbContext.SaveChangesAsync(ct);
 
         var info = MapToInfo(entity);
-        var fullUrl = $"{_baseUrl}/guest/{code}";
+        var formatted = FormatCode(code);
+        var fullUrl = $"{_baseUrl}/guest/{formatted}";
 
         _logger.LogInformation(
             "Guest link created for data owner {DataOwnerSubjectId} by {CreatedBySubjectId}, expires {ExpiresAt}",
             dataOwnerSubjectId, createdBySubjectId, entity.ExpiresAt);
 
-        return new GuestLinkCreationResult(FormatCode(code), fullUrl, info);
+        return new GuestLinkCreationResult(formatted, fullUrl, info);
     }
 
     /// <inheritdoc />
@@ -148,6 +149,7 @@ public class GuestLinkService : IGuestLinkService
         var now = DateTime.UtcNow;
 
         var grant = await _dbContext.OAuthGrants
+            .AsNoTracking()
             .FirstOrDefaultAsync(g =>
                 g.Id == grantId
                 && g.GrantType == OAuthGrantTypes.Guest

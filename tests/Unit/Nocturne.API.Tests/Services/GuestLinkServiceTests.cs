@@ -214,5 +214,20 @@ public class GuestLinkServiceTests : IDisposable
         grant.RevokedAt.Should().BeNull();
     }
 
+    [Fact]
+    public async Task RevokeAsync_Creator_CanRevoke()
+    {
+        var created = await _service.CreateGuestLinkAsync(_dataOwnerId, _creatorId, "Creator Revoke");
+
+        var result = await _service.RevokeAsync(created.Info.Id, _creatorId);
+
+        result.Should().BeTrue();
+
+        var grant = await _dbContext.OAuthGrants
+            .IgnoreQueryFilters()
+            .FirstAsync(g => g.Id == created.Info.Id);
+        grant.RevokedAt.Should().NotBeNull();
+    }
+
     public void Dispose() => _dbContext.Dispose();
 }
