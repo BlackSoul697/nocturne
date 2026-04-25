@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Mvc;
 using Nocturne.API.Attributes;
+using Nocturne.Core.Contracts.Entries;
 using Nocturne.Core.Contracts.Repositories;
 
 namespace Nocturne.API.Controllers.V1;
@@ -8,7 +9,7 @@ namespace Nocturne.API.Controllers.V1;
 /// Count controller that provides 1:1 compatibility with Nightscout count endpoints.
 /// Implements the /api/v1/count/* endpoints from the legacy JavaScript implementation.
 /// </summary>
-/// <seealso cref="IEntryRepository"/>
+/// <seealso cref="IEntryStore"/>
 /// <seealso cref="ITreatmentRepository"/>
 /// <seealso cref="IDeviceStatusRepository"/>
 /// <seealso cref="IProfileRepository"/>
@@ -18,7 +19,7 @@ namespace Nocturne.API.Controllers.V1;
 [Route("api/v1/[controller]")]
 public class CountController : ControllerBase
 {
-    private readonly IEntryRepository _entryRepository;
+    private readonly IEntryStore _entryStore;
     private readonly ITreatmentRepository _treatmentRepository;
     private readonly IDeviceStatusRepository _deviceStatusRepository;
     private readonly IProfileRepository _profileRepository;
@@ -29,7 +30,7 @@ public class CountController : ControllerBase
     /// <summary>
     /// Initializes a new instance of <see cref="CountController"/>.
     /// </summary>
-    /// <param name="entryRepository">Repository for glucose entry records.</param>
+    /// <param name="entryStore">Store for glucose entry records.</param>
     /// <param name="treatmentRepository">Repository for treatment records.</param>
     /// <param name="deviceStatusRepository">Repository for device status records.</param>
     /// <param name="profileRepository">Repository for profile records.</param>
@@ -37,7 +38,7 @@ public class CountController : ControllerBase
     /// <param name="activityRepository">Repository for activity records.</param>
     /// <param name="logger">Logger instance.</param>
     public CountController(
-        IEntryRepository entryRepository,
+        IEntryStore entryStore,
         ITreatmentRepository treatmentRepository,
         IDeviceStatusRepository deviceStatusRepository,
         IProfileRepository profileRepository,
@@ -46,7 +47,7 @@ public class CountController : ControllerBase
         ILogger<CountController> logger
     )
     {
-        _entryRepository = entryRepository;
+        _entryStore = entryStore;
         _treatmentRepository = treatmentRepository;
         _deviceStatusRepository = deviceStatusRepository;
         _profileRepository = profileRepository;
@@ -80,7 +81,7 @@ public class CountController : ControllerBase
 
         try
         {
-            var count = await _entryRepository.CountEntriesAsync(find, type, cancellationToken);
+            var count = await _entryStore.CountAsync(find, type, cancellationToken);
 
             _logger.LogDebug("Found {Count} entries matching criteria", count);
             return Ok(new CountResponse { Count = count });
@@ -287,7 +288,7 @@ public class CountController : ControllerBase
             switch (storage.ToLowerInvariant())
             {
                 case "entries":
-                    count = await _entryRepository.CountEntriesAsync(
+                    count = await _entryStore.CountAsync(
                         find,
                         type,
                         cancellationToken
