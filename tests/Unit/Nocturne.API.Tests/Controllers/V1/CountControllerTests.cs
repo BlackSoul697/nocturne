@@ -6,6 +6,7 @@ using Moq;
 using Nocturne.API.Controllers.V1;
 using Nocturne.Core.Contracts.Entries;
 using Nocturne.Core.Contracts.Repositories;
+using Nocturne.Core.Contracts.Treatments;
 using Xunit;
 
 namespace Nocturne.API.Tests.Controllers.V1;
@@ -17,7 +18,7 @@ namespace Nocturne.API.Tests.Controllers.V1;
 public class CountControllerTests
 {
     private readonly Mock<IEntryStore> _mockEntryStore;
-    private readonly Mock<ITreatmentRepository> _mockTreatmentRepository;
+    private readonly Mock<ITreatmentStore> _mockTreatmentStore;
     private readonly Mock<IDeviceStatusRepository> _mockDeviceStatusRepository;
     private readonly Mock<IProfileRepository> _mockProfileRepository;
     private readonly Mock<IFoodRepository> _mockFoodRepository;
@@ -28,7 +29,7 @@ public class CountControllerTests
     public CountControllerTests()
     {
         _mockEntryStore = new Mock<IEntryStore>();
-        _mockTreatmentRepository = new Mock<ITreatmentRepository>();
+        _mockTreatmentStore = new Mock<ITreatmentStore>();
         _mockDeviceStatusRepository = new Mock<IDeviceStatusRepository>();
         _mockProfileRepository = new Mock<IProfileRepository>();
         _mockFoodRepository = new Mock<IFoodRepository>();
@@ -37,7 +38,7 @@ public class CountControllerTests
 
         _controller = new CountController(
             _mockEntryStore.Object,
-            _mockTreatmentRepository.Object,
+            _mockTreatmentStore.Object,
             _mockDeviceStatusRepository.Object,
             _mockProfileRepository.Object,
             _mockFoodRepository.Object,

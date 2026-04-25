@@ -2,6 +2,7 @@ using Microsoft.AspNetCore.Mvc;
 using Nocturne.API.Attributes;
 using Nocturne.Core.Contracts.Entries;
 using Nocturne.Core.Contracts.Repositories;
+using Nocturne.Core.Contracts.Treatments;
 
 namespace Nocturne.API.Controllers.V1;
 
@@ -10,7 +11,7 @@ namespace Nocturne.API.Controllers.V1;
 /// Implements the /api/v1/count/* endpoints from the legacy JavaScript implementation.
 /// </summary>
 /// <seealso cref="IEntryStore"/>
-/// <seealso cref="ITreatmentRepository"/>
+/// <seealso cref="ITreatmentStore"/>
 /// <seealso cref="IDeviceStatusRepository"/>
 /// <seealso cref="IProfileRepository"/>
 /// <seealso cref="IFoodRepository"/>
@@ -20,7 +21,7 @@ namespace Nocturne.API.Controllers.V1;
 public class CountController : ControllerBase
 {
     private readonly IEntryStore _entryStore;
-    private readonly ITreatmentRepository _treatmentRepository;
+    private readonly ITreatmentStore _treatmentStore;
     private readonly IDeviceStatusRepository _deviceStatusRepository;
     private readonly IProfileRepository _profileRepository;
     private readonly IFoodRepository _foodRepository;
@@ -31,7 +32,7 @@ public class CountController : ControllerBase
     /// Initializes a new instance of <see cref="CountController"/>.
     /// </summary>
     /// <param name="entryStore">Store for glucose entry records.</param>
-    /// <param name="treatmentRepository">Repository for treatment records.</param>
+    /// <param name="treatmentStore">Store for treatment records.</param>
     /// <param name="deviceStatusRepository">Repository for device status records.</param>
     /// <param name="profileRepository">Repository for profile records.</param>
     /// <param name="foodRepository">Repository for food records.</param>
@@ -39,7 +40,7 @@ public class CountController : ControllerBase
     /// <param name="logger">Logger instance.</param>
     public CountController(
         IEntryStore entryStore,
-        ITreatmentRepository treatmentRepository,
+        ITreatmentStore treatmentStore,
         IDeviceStatusRepository deviceStatusRepository,
         IProfileRepository profileRepository,
         IFoodRepository foodRepository,
@@ -48,7 +49,7 @@ public class CountController : ControllerBase
     )
     {
         _entryStore = entryStore;
-        _treatmentRepository = treatmentRepository;
+        _treatmentStore = treatmentStore;
         _deviceStatusRepository = deviceStatusRepository;
         _profileRepository = profileRepository;
         _foodRepository = foodRepository;
@@ -128,7 +129,7 @@ public class CountController : ControllerBase
 
         try
         {
-            var count = await _treatmentRepository.CountTreatmentsAsync(find, cancellationToken);
+            var count = await _treatmentStore.CountAsync(find, cancellationToken);
 
             _logger.LogDebug("Found {Count} treatments matching criteria", count);
             return Ok(new CountResponse { Count = count });
@@ -295,7 +296,7 @@ public class CountController : ControllerBase
                     );
                     break;
                 case "treatments":
-                    count = await _treatmentRepository.CountTreatmentsAsync(find, cancellationToken);
+                    count = await _treatmentStore.CountAsync(find, cancellationToken);
                     break;
                 case "devicestatus":
                     count = await _deviceStatusRepository.CountDeviceStatusAsync(
