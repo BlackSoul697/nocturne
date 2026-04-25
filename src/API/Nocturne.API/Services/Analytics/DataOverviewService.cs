@@ -125,11 +125,6 @@ public class DataOverviewService : IDataOverviewService
             )
         );
 
-        // Legacy tables
-        minMaxResults.Add(
-            await GetMinMaxMills(_context.Entries.Select(e => (long?)e.Mills), cancellationToken)
-        );
-
         // Collect data sources from tables that have DataSource
         var allDataSources = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
@@ -192,15 +187,6 @@ public class DataOverviewService : IDataOverviewService
             )
         )
             allDataSources.Add(ds);
-        // Legacy Entries
-        foreach (
-            var ds in await GetDistinctDataSources(
-                _context.Entries.Where(e => e.DataSource != null).Select(e => e.DataSource!),
-                cancellationToken
-            )
-        )
-            allDataSources.Add(ds);
-
         // Derive year range from all min/max mills
         long? globalMin = null;
         long? globalMax = null;
@@ -413,33 +399,8 @@ public class DataOverviewService : IDataOverviewService
             );
         }
 
-        // Legacy Entries: type "sgv" -> "Glucose", type "mbg" -> "ManualBG"
-        await CollectCountsFromMillsTable(
-            "Glucose",
-            _context
-                .Entries.Where(e => e.Mills >= startMills && e.Mills < endMills && e.Type == "sgv")
-                .Where(e => !hasFilter || dataSources!.Contains(e.DataSource!))
-                .Select(e => e.Mills),
-            dayMap,
-            tz,
-            cancellationToken
-        );
-
-        await CollectCountsFromMillsTable(
-            "ManualBG",
-            _context
-                .Entries.Where(e => e.Mills >= startMills && e.Mills < endMills && e.Type == "mbg")
-                .Where(e => !hasFilter || dataSources!.Contains(e.DataSource!))
-                .Select(e => e.Mills),
-            dayMap,
-            tz,
-            cancellationToken
-        );
-
-        // Glucose averages (SensorGlucose + MeterGlucose + legacy Entries)
+        // Glucose averages (SensorGlucose + MeterGlucose)
         await CollectGlucoseAverages(
-            startMills,
-            endMills,
             startUtc,
             endUtc,
             dataSources,
@@ -451,8 +412,6 @@ public class DataOverviewService : IDataOverviewService
 
         // Insulin totals (Bolus from Boluses table + Basal from algorithm boluses & TempBasals)
         await CollectInsulinTotals(
-            startMills,
-            endMills,
             startUtc,
             endUtc,
             dataSources,
@@ -464,8 +423,6 @@ public class DataOverviewService : IDataOverviewService
 
         // Carb totals
         await CollectCarbTotals(
-            startMills,
-            endMills,
             startUtc,
             endUtc,
             dataSources,
@@ -519,8 +476,6 @@ public class DataOverviewService : IDataOverviewService
         var localNextYearStart = new DateTime(year + 1, 1, 1, 0, 0, 0, DateTimeKind.Unspecified);
         var startUtc = TimeZoneInfo.ConvertTimeToUtc(localYearStart, tz);
         var endUtc = TimeZoneInfo.ConvertTimeToUtc(localNextYearStart, tz);
-        var startMills = new DateTimeOffset(startUtc, TimeSpan.Zero).ToUnixTimeMilliseconds();
-        var endMills = new DateTimeOffset(endUtc, TimeSpan.Zero).ToUnixTimeMilliseconds();
 
         // Hoist LinkedRecord subqueries — IQueryable construction is free
         var npSensorGlucoseIds = _context
@@ -544,14 +499,7 @@ public class DataOverviewService : IDataOverviewService
             return local.Month;
         }
 
-        int MillsToMonth(long mills)
-        {
-            var utc = DateTimeOffset.FromUnixTimeMilliseconds(mills);
-            var local = TimeZoneInfo.ConvertTime(utc, tz);
-            return local.Month;
-        }
-
-        // --- Query all glucose readings for the entire year (4 queries total) ---
+        // --- Query all glucose readings for the entire year (2 queries total) ---
         // Each source is queried independently so one failure doesn't prevent the others.
         var allGlucoseByMonth = new Dictionary<int, List<double>>();
 
@@ -608,68 +556,6 @@ public class DataOverviewService : IDataOverviewService
         catch (Exception ex)
         {
             _logger.LogWarning(ex, "Failed to collect MeterGlucose for GRI year {Year}", year);
-        }
-
-        // Legacy Entries (type=sgv)
-        try
-        {
-            var legacySgvValues = await _context
-                .Entries.Where(e =>
-                    e.Mills >= startMills && e.Mills < endMills && e.Type == "sgv" && e.Mgdl > 0
-                )
-                .Where(e => !hasFilter || dataSources!.Contains(e.DataSource!))
-                .Select(e => new { e.Mills, e.Mgdl })
-                .ToListAsync(cancellationToken);
-
-            foreach (var v in legacySgvValues)
-            {
-                var m = MillsToMonth(v.Mills);
-                if (!allGlucoseByMonth.TryGetValue(m, out var list))
-                {
-                    list = new List<double>();
-                    allGlucoseByMonth[m] = list;
-                }
-                list.Add(v.Mgdl);
-            }
-        }
-        catch (Exception ex)
-        {
-            _logger.LogWarning(
-                ex,
-                "Failed to collect legacy SGV entries for GRI year {Year}",
-                year
-            );
-        }
-
-        // Legacy Entries (type=mbg)
-        try
-        {
-            var legacyMbgValues = await _context
-                .Entries.Where(e =>
-                    e.Mills >= startMills && e.Mills < endMills && e.Type == "mbg" && e.Mgdl > 0
-                )
-                .Where(e => !hasFilter || dataSources!.Contains(e.DataSource!))
-                .Select(e => new { e.Mills, e.Mgdl })
-                .ToListAsync(cancellationToken);
-
-            foreach (var v in legacyMbgValues)
-            {
-                var m = MillsToMonth(v.Mills);
-                if (!allGlucoseByMonth.TryGetValue(m, out var list))
-                {
-                    list = new List<double>();
-                    allGlucoseByMonth[m] = list;
-                }
-                list.Add(v.Mgdl);
-            }
-        }
-        catch (Exception ex)
-        {
-            _logger.LogWarning(
-                ex,
-                "Failed to collect legacy MBG entries for GRI year {Year}",
-                year
-            );
         }
 
         // --- Query all insulin data for the entire year (3 queries total) ---
@@ -988,12 +874,10 @@ public class DataOverviewService : IDataOverviewService
     }
 
     /// <summary>
-    /// Collects glucose averages from SensorGlucose, MeterGlucose, and legacy Entries (type=sgv/mbg).
+    /// Collects glucose averages from SensorGlucose and MeterGlucose.
     /// Each source is queried independently so one failure doesn't prevent the others.
     /// </summary>
     private async Task CollectGlucoseAverages(
-        long startMills,
-        long endMills,
         DateTime startUtc,
         DateTime endUtc,
         string[]? dataSources,
@@ -1047,50 +931,6 @@ public class DataOverviewService : IDataOverviewService
             _logger.LogWarning(ex, "Failed to collect glucose averages from MeterGlucose");
         }
 
-        // Legacy Entries (type=sgv) - legacy entity still uses Mills
-        try
-        {
-            var legacySgv = await _context
-                .Entries.Where(e =>
-                    e.Mills >= startMills && e.Mills < endMills && e.Type == "sgv" && e.Mgdl > 0
-                )
-                .Where(e => !hasFilter || dataSources!.Contains(e.DataSource!))
-                .Select(e => new { e.Mills, e.Mgdl })
-                .ToListAsync(cancellationToken);
-
-            allReadings.AddRange(
-                legacySgv.Select(r =>
-                    (DateTimeOffset.FromUnixTimeMilliseconds(r.Mills).UtcDateTime, r.Mgdl)
-                )
-            );
-        }
-        catch (Exception ex)
-        {
-            _logger.LogWarning(ex, "Failed to collect glucose averages from Entries (sgv)");
-        }
-
-        // Legacy Entries (type=mbg) - legacy entity still uses Mills
-        try
-        {
-            var legacyMbg = await _context
-                .Entries.Where(e =>
-                    e.Mills >= startMills && e.Mills < endMills && e.Type == "mbg" && e.Mgdl > 0
-                )
-                .Where(e => !hasFilter || dataSources!.Contains(e.DataSource!))
-                .Select(e => new { e.Mills, e.Mgdl })
-                .ToListAsync(cancellationToken);
-
-            allReadings.AddRange(
-                legacyMbg.Select(r =>
-                    (DateTimeOffset.FromUnixTimeMilliseconds(r.Mills).UtcDateTime, r.Mgdl)
-                )
-            );
-        }
-        catch (Exception ex)
-        {
-            _logger.LogWarning(ex, "Failed to collect glucose averages from Entries (mbg)");
-        }
-
         if (allReadings.Count == 0)
         {
             _logger.LogDebug(
@@ -1135,8 +975,6 @@ public class DataOverviewService : IDataOverviewService
     /// algorithm boluses + TempBasals tables (basal insulin delivery).
     /// </summary>
     private async Task CollectInsulinTotals(
-        long startMills,
-        long endMills,
         DateTime startUtc,
         DateTime endUtc,
         string[]? dataSources,
@@ -1296,8 +1134,6 @@ public class DataOverviewService : IDataOverviewService
     /// Collects total carbs consumed per day from the CarbIntakes table.
     /// </summary>
     private async Task CollectCarbTotals(
-        long startMills,
-        long endMills,
         DateTime startUtc,
         DateTime endUtc,
         string[]? dataSources,
