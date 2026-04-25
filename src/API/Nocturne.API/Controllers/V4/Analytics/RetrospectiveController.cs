@@ -6,7 +6,6 @@ using Nocturne.Core.Contracts.Devices;
 using Nocturne.Core.Contracts.Treatments;
 using Nocturne.Core.Contracts.Glucose;
 using Nocturne.Core.Models;
-using Nocturne.Core.Contracts.Repositories;
 namespace Nocturne.API.Controllers.V4.Analytics;
 /// <summary>
 /// Controller providing retrospective (day-in-review) diabetes data.
@@ -40,7 +39,6 @@ public class RetrospectiveController : ControllerBase
     private readonly ITreatmentService _treatmentService;
     private readonly IDeviceStatusService _deviceStatusService;
     private readonly IProfileService _profileService;
-    private readonly IEntryRepository _entryRepository;
     private readonly ILogger<RetrospectiveController> _logger;
     public RetrospectiveController(
         IIobService iobService,
@@ -49,7 +47,6 @@ public class RetrospectiveController : ControllerBase
         ITreatmentService treatmentService,
         IDeviceStatusService deviceStatusService,
         IProfileService profileService,
-        IEntryRepository entryRepository,
         ILogger<RetrospectiveController> logger
     )
     {
@@ -59,7 +56,6 @@ public class RetrospectiveController : ControllerBase
         _treatmentService = treatmentService;
         _deviceStatusService = deviceStatusService;
         _profileService = profileService;
-        _entryRepository = entryRepository;
         _logger = logger;
     }
     /// <summary>
@@ -93,11 +89,13 @@ public class RetrospectiveController : ControllerBase
             var fromMills = time - (30 * 60 * 1000); // 30 minutes before
             var toMills = time + (5 * 60 * 1000);    // 5 minutes after
             var findQuery = $"{{\"mills\":{{\"$gte\":{fromMills},\"$lte\":{toMills}}}}}";
-            var entries = await _entryRepository.GetEntriesWithAdvancedFilterAsync(
+            var entries = await _entryService.GetEntriesWithAdvancedFilterAsync(
                 type: "sgv",
                 count: 50,
                 skip: 0,
                 findQuery: findQuery,
+                dateString: null,
+                reverseResults: false,
                 cancellationToken: cancellationToken
             );
             var entryList = entries?.ToList() ?? new List<Entry>();

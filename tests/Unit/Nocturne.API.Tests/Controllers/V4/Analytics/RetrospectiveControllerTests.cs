@@ -1,0 +1,126 @@
+using FluentAssertions;
+using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.Logging;
+using Moq;
+using Nocturne.API.Controllers.V4.Analytics;
+using Nocturne.API.Services.Treatments;
+using Nocturne.Core.Contracts.Devices;
+using Nocturne.Core.Contracts.Glucose;
+using Nocturne.Core.Contracts.Profiles;
+using Nocturne.Core.Contracts.Treatments;
+using Nocturne.Core.Models;
+using Nocturne.Core.Models.V4;
+using Xunit;
+
+namespace Nocturne.API.Tests.Controllers.V4.Analytics;
+
+[Trait("Category", "Unit")]
+public class RetrospectiveControllerTests
+{
+    private readonly Mock<IIobService> _iobServiceMock = new();
+    private readonly Mock<ICobService> _cobServiceMock = new();
+    private readonly Mock<IEntryService> _entryServiceMock = new();
+    private readonly Mock<ITreatmentService> _treatmentServiceMock = new();
+    private readonly Mock<IDeviceStatusService> _deviceStatusServiceMock = new();
+    private readonly Mock<IProfileService> _profileServiceMock = new();
+    private readonly Mock<ILogger<RetrospectiveController>> _loggerMock = new();
+
+    private RetrospectiveController CreateController()
+    {
+        var controller = new RetrospectiveController(
+            _iobServiceMock.Object,
+            _cobServiceMock.Object,
+            _entryServiceMock.Object,
+            _treatmentServiceMock.Object,
+            _deviceStatusServiceMock.Object,
+            _profileServiceMock.Object,
+            _loggerMock.Object);
+
+        controller.ControllerContext = new ControllerContext
+        {
+            HttpContext = new DefaultHttpContext()
+        };
+
+        return controller;
+    }
+
+    [Fact]
+    public async Task GetRetrospectiveData_CallsEntryServiceWithAdvancedFilter()
+    {
+        // Arrange
+        var time = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+
+        _entryServiceMock
+            .Setup(s => s.GetEntriesWithAdvancedFilterAsync(
+                It.IsAny<string?>(),
+                It.IsAny<int>(),
+                It.IsAny<int>(),
+                It.IsAny<string?>(),
+                It.IsAny<string?>(),
+                It.IsAny<bool>(),
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new List<Entry>());
+
+        _treatmentServiceMock
+            .Setup(s => s.GetTreatmentsAsync(
+                It.IsAny<int>(),
+                It.IsAny<int>(),
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new List<Treatment>());
+
+        _deviceStatusServiceMock
+            .Setup(s => s.GetDeviceStatusAsync(
+                It.IsAny<string?>(),
+                It.IsAny<int?>(),
+                It.IsAny<int?>(),
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new List<DeviceStatus>());
+
+        _iobServiceMock
+            .Setup(s => s.CalculateTotal(
+                It.IsAny<List<Treatment>>(),
+                It.IsAny<List<DeviceStatus>>(),
+                It.IsAny<IProfileService?>(),
+                It.IsAny<long?>(),
+                It.IsAny<string?>(),
+                It.IsAny<List<TempBasal>?>()))
+            .Returns(new IobResult());
+
+        _cobServiceMock
+            .Setup(s => s.CobTotal(
+                It.IsAny<List<Treatment>>(),
+                It.IsAny<List<DeviceStatus>>(),
+                It.IsAny<IProfileService?>(),
+                It.IsAny<long?>(),
+                It.IsAny<string?>()))
+            .Returns(new CobResult());
+
+        _profileServiceMock
+            .Setup(s => s.GetBasalRate(It.IsAny<long>()))
+            .Returns(0.8);
+
+        var controller = CreateController();
+
+        // Act
+        var result = await controller.GetRetrospectiveData(time);
+
+        // Assert
+        result.Result.Should().BeOfType<OkObjectResult>();
+
+        var fromMills = time - (30 * 60 * 1000);
+        var toMills = time + (5 * 60 * 1000);
+        var expectedFind = $"{{\"mills\":{{\"$gte\":{fromMills},\"$lte\":{toMills}}}}}";
+
+        _entryServiceMock.Verify(
+            s => s.GetEntriesWithAdvancedFilterAsync(
+                "sgv",
+                50,
+                0,
+                expectedFind,
+                null,
+                false,
+                It.IsAny<CancellationToken>()),
+            Times.Once);
+    }
+}
