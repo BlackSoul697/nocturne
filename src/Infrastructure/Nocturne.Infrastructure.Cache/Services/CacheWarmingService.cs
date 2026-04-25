@@ -2,6 +2,7 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Nocturne.Core.Contracts.Entries;
 using Nocturne.Core.Contracts.Repositories;
+using Nocturne.Core.Contracts.Treatments;
 using Nocturne.Infrastructure.Cache.Abstractions;
 using Nocturne.Infrastructure.Cache.Configuration;
 using Nocturne.Infrastructure.Cache.Constants;
@@ -41,7 +42,7 @@ public class CacheWarmingService : ICacheWarmingService
 {
     private readonly ICacheService _cacheService;
     private readonly IEntryStore _store;
-    private readonly ITreatmentRepository _treatments;
+    private readonly ITreatmentService _treatments;
     private readonly IProfileRepository _profiles;
     private readonly ISettingsRepository _settings;
     private readonly CacheConfiguration _config;
@@ -50,7 +51,7 @@ public class CacheWarmingService : ICacheWarmingService
     public CacheWarmingService(
         ICacheService cacheService,
         IEntryStore store,
-        ITreatmentRepository treatments,
+        ITreatmentService treatments,
         IProfileRepository profiles,
         ISettingsRepository settings,
         IOptions<CacheConfiguration> config,
@@ -254,6 +255,7 @@ public class CacheWarmingService : ICacheWarmingService
                 {
                     var treatments = await _treatments.GetTreatmentsAsync(
                         count: 20,
+                        skip: 0,
                         cancellationToken: cancellationToken
                     );
 

@@ -2,6 +2,7 @@ using Nocturne.API.Controllers.V4;
 using Nocturne.API.Controllers.V4.Analytics;
 using Nocturne.Core.Contracts.Entries;
 using Nocturne.Core.Contracts.Repositories;
+using Nocturne.Core.Contracts.Treatments;
 using Nocturne.Core.Contracts.V4.Repositories;
 using Nocturne.Core.Oref;
 using OrefModels = Nocturne.Core.Oref.Models;
@@ -18,14 +19,14 @@ namespace Nocturne.API.Services.Glucose;
 public class PredictionService : IPredictionService
 {
     private readonly IEntryStore _store;
-    private readonly ITreatmentRepository _treatments;
+    private readonly ITreatmentService _treatments;
     private readonly IProfileRepository _profiles;
     private readonly IPatientInsulinRepository _insulins;
     private readonly ILogger<PredictionService> _logger;
 
     public PredictionService(
         IEntryStore store,
-        ITreatmentRepository treatments,
+        ITreatmentService treatments,
         IProfileRepository profiles,
         IPatientInsulinRepository insulins,
         ILogger<PredictionService> logger)

@@ -2,8 +2,9 @@ using System.Reflection;
 using System.Text.Json;
 using Nocturne.Core.Contracts.Entries;
 using Nocturne.Core.Contracts.Legacy;
-using Nocturne.Core.Models;
 using Nocturne.Core.Contracts.Repositories;
+using Nocturne.Core.Contracts.Treatments;
+using Nocturne.Core.Models;
 
 namespace Nocturne.API.Services.Legacy;
 
@@ -16,7 +17,7 @@ namespace Nocturne.API.Services.Legacy;
 public class DDataService : IDDataService
 {
     private readonly IEntryStore _store;
-    private readonly ITreatmentRepository _treatments;
+    private readonly ITreatmentService _treatments;
     private readonly IProfileRepository _profiles;
     private readonly IDeviceStatusRepository _deviceStatuses;
     private readonly IFoodRepository _food;
@@ -38,7 +39,7 @@ public class DDataService : IDDataService
 
     public DDataService(
         IEntryStore store,
-        ITreatmentRepository treatments,
+        ITreatmentService treatments,
         IProfileRepository profiles,
         IDeviceStatusRepository deviceStatuses,
         IFoodRepository food,

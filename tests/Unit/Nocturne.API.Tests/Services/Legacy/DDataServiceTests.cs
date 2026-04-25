@@ -3,6 +3,7 @@ using Moq;
 using Nocturne.API.Services.Legacy;
 using Nocturne.Core.Contracts.Entries;
 using Nocturne.Core.Contracts.Legacy;
+using Nocturne.Core.Contracts.Treatments;
 using Nocturne.Core.Models;
 using Nocturne.Core.Contracts.Repositories;
 using Xunit;
@@ -16,7 +17,7 @@ namespace Nocturne.API.Tests.Services.Legacy;
 public class DDataServiceTests
 {
     private readonly Mock<IEntryStore> _mockEntryStore;
-    private readonly Mock<ITreatmentRepository> _mockTreatmentRepository;
+    private readonly Mock<ITreatmentService> _mockTreatmentService;
     private readonly Mock<IProfileRepository> _mockProfileRepository;
     private readonly Mock<IDeviceStatusRepository> _mockDeviceStatusRepository;
     private readonly Mock<IFoodRepository> _mockFoodRepository;
@@ -27,7 +28,7 @@ public class DDataServiceTests
     public DDataServiceTests()
     {
         _mockEntryStore = new Mock<IEntryStore>();
-        _mockTreatmentRepository = new Mock<ITreatmentRepository>();
+        _mockTreatmentService = new Mock<ITreatmentService>();
         _mockProfileRepository = new Mock<IProfileRepository>();
         _mockDeviceStatusRepository = new Mock<IDeviceStatusRepository>();
         _mockFoodRepository = new Mock<IFoodRepository>();
@@ -35,7 +36,7 @@ public class DDataServiceTests
         _mockLogger = new Mock<ILogger<DDataService>>();
         _ddataService = new DDataService(
             _mockEntryStore.Object,
-            _mockTreatmentRepository.Object,
+            _mockTreatmentService.Object,
             _mockProfileRepository.Object,
             _mockDeviceStatusRepository.Object,
             _mockFoodRepository.Object,
@@ -55,7 +56,7 @@ public class DDataServiceTests
                 )
             )
             .ReturnsAsync(Array.Empty<Entry>());
-        _mockTreatmentRepository
+        _mockTreatmentService
             .Setup(x =>
                 x.GetTreatmentsAsync(
                     It.IsAny<int>(),

@@ -3,7 +3,6 @@ using Microsoft.Extensions.Logging;
 using Nocturne.Connectors.Core.Services;
 using Nocturne.Core.Constants;
 using Nocturne.Core.Contracts.Connectors;
-using Nocturne.Core.Contracts.Repositories;
 using Nocturne.Core.Contracts.V4.Repositories;
 using Nocturne.Core.Models;
 using Nocturne.Core.Models.Services;
@@ -23,7 +22,6 @@ public class DataSourceService : IDataSourceService
     private readonly ISensorGlucoseRepository _sensorGlucose;
     private readonly IMeterGlucoseRepository _meterGlucose;
     private readonly ICalibrationRepository _calibrations;
-    private readonly ITreatmentRepository _treatments;
     private readonly ILogger<DataSourceService> _logger;
 
     public DataSourceService(
@@ -31,7 +29,6 @@ public class DataSourceService : IDataSourceService
         ISensorGlucoseRepository sensorGlucose,
         IMeterGlucoseRepository meterGlucose,
         ICalibrationRepository calibrations,
-        ITreatmentRepository treatments,
         ILogger<DataSourceService> logger
     )
     {
@@ -39,7 +36,6 @@ public class DataSourceService : IDataSourceService
         _sensorGlucose = sensorGlucose;
         _meterGlucose = meterGlucose;
         _calibrations = calibrations;
-        _treatments = treatments;
         _logger = logger;
     }
 
@@ -845,11 +841,19 @@ public class DataSourceService : IDataSourceService
                 cancellationToken
             );
 
-            // Delete treatments by data source
-            var treatmentsDeleted = await _treatments.DeleteTreatmentsByDataSourceAsync(
-                DataSources.DemoService,
-                cancellationToken
-            );
+            // Delete legacy treatments by data source
+            var treatmentsDeleted = await _context
+                .Treatments.Where(t => t.DataSource == DataSources.DemoService)
+                .ExecuteDeleteAsync(cancellationToken);
+
+            // Delete V4 treatment records by data source
+            treatmentsDeleted += await _context.Boluses.Where(b => b.DataSource == DataSources.DemoService).ExecuteDeleteAsync(cancellationToken);
+            treatmentsDeleted += await _context.CarbIntakes.Where(c => c.DataSource == DataSources.DemoService).ExecuteDeleteAsync(cancellationToken);
+            treatmentsDeleted += await _context.BGChecks.Where(b => b.DataSource == DataSources.DemoService).ExecuteDeleteAsync(cancellationToken);
+            treatmentsDeleted += await _context.Notes.Where(n => n.DataSource == DataSources.DemoService).ExecuteDeleteAsync(cancellationToken);
+            treatmentsDeleted += await _context.DeviceEvents.Where(de => de.DataSource == DataSources.DemoService).ExecuteDeleteAsync(cancellationToken);
+            treatmentsDeleted += await _context.BolusCalculations.Where(bc => bc.DataSource == DataSources.DemoService).ExecuteDeleteAsync(cancellationToken);
+            treatmentsDeleted += await _context.StateSpans.Where(s => s.Source == DataSources.DemoService).ExecuteDeleteAsync(cancellationToken);
 
             // Delete device status - demo data uses the demo-service device
             var deviceStatusDeleted = await _context
