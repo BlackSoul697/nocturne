@@ -11,6 +11,8 @@ using Nocturne.Core.Models;
 using Nocturne.Core.Models.V4;
 using Xunit;
 
+using V4Models = Nocturne.Core.Models.V4;
+
 namespace Nocturne.API.Tests.Services.Treatments;
 
 [Parity("api.treatments.test.js")]
@@ -117,6 +119,36 @@ public class TreatmentServiceTests
         var result = await _treatmentService.DeleteTreatmentsAsync("q", CancellationToken.None);
         result.Should().Be(0);
         _mockCache.Verify(x => x.InvalidateAsync(It.IsAny<CancellationToken>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task PatchTreatmentAsync_WhenExists_AppliesPatchAndDecomposes()
+    {
+        var existing = new Treatment { Id = "t1", Mills = 1000, EventType = "Note", Notes = "old" };
+        _mockStore.Setup(x => x.GetByIdAsync("t1", It.IsAny<CancellationToken>())).ReturnsAsync(existing);
+        _mockDecomposer.Setup(x => x.DecomposeAsync(It.IsAny<Treatment>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new DecompositionResult());
+
+        var patchJson = JsonSerializer.Deserialize<JsonElement>("{\"notes\":\"updated\"}");
+        var result = await _treatmentService.PatchTreatmentAsync("t1", patchJson, CancellationToken.None);
+
+        result.Should().NotBeNull();
+        result!.Notes.Should().Be("updated");
+        _mockDecomposer.Verify(x => x.DecomposeAsync(It.IsAny<Treatment>(), It.IsAny<CancellationToken>()), Times.Once);
+        _mockCache.Verify(x => x.InvalidateAsync(It.IsAny<CancellationToken>()), Times.Once);
+        _mockEvents.Verify(x => x.OnUpdatedAsync(It.IsAny<Treatment>(), It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+    [Fact]
+    public async Task PatchTreatmentAsync_WhenNotFound_ReturnsNull()
+    {
+        _mockStore.Setup(x => x.GetByIdAsync("x", It.IsAny<CancellationToken>())).ReturnsAsync((Treatment?)null);
+
+        var patchJson = JsonSerializer.Deserialize<JsonElement>("{\"notes\":\"updated\"}");
+        var result = await _treatmentService.PatchTreatmentAsync("x", patchJson, CancellationToken.None);
+
+        result.Should().BeNull();
+        _mockDecomposer.Verify(x => x.DecomposeAsync(It.IsAny<Treatment>(), It.IsAny<CancellationToken>()), Times.Never);
     }
 
     #region Insulin Context Auto-Population

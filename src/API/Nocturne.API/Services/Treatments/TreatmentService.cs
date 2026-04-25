@@ -194,14 +194,7 @@ public class TreatmentService : ITreatmentService
 
     private static void ApplyJsonPatch(Treatment treatment, JsonElement patchData)
     {
-        foreach (var property in patchData.EnumerateObject())
-        {
-            // Merge each top-level property from the patch into the treatment via JSON
-            // roundtrip: serialize the treatment, overlay the patch, deserialize back.
-            // For simplicity, use reflection-free approach: re-serialize with patch overlay.
-        }
-
-        // JSON merge-patch: serialize existing, merge patch on top, deserialize back
+        // JSON merge-patch: serialize existing, overlay patch properties, deserialize back
         var existingJson = JsonSerializer.Serialize(treatment);
         using var existingDoc = JsonDocument.Parse(existingJson);
 
@@ -215,18 +208,16 @@ public class TreatmentService : ITreatmentService
         var patched = JsonSerializer.Deserialize<Treatment>(mergedJson);
         if (patched == null) return;
 
-        // Copy patched values back to the existing treatment object
-        // Use JSON roundtrip to populate all properties
+        // Copy patched values back to the existing treatment in-place
         var props = typeof(Treatment).GetProperties(System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Instance);
         foreach (var prop in props)
         {
             if (!prop.CanWrite) continue;
             try
             {
-                var value = prop.GetValue(patched);
-                prop.SetValue(treatment, value);
+                prop.SetValue(treatment, prop.GetValue(patched));
             }
-            catch { /* skip read-only computed properties */ }
+            catch { /* skip computed properties that throw on set */ }
         }
     }
 

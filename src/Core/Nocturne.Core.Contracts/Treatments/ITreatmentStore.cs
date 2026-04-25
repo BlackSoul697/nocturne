@@ -3,15 +3,12 @@ using Nocturne.Core.Models;
 namespace Nocturne.Core.Contracts.Treatments;
 
 /// <summary>
-/// Driven port for treatment persistence. Abstracts dual-path storage
-/// (legacy treatments table + V4 granular tables) behind a single interface.
-/// The adapter handles write routing for operations that need dual-path awareness
-/// (create, update, delete), plus read-time merging, decomposition, and projection.
-/// Pure pass-through writes (patch, bulk delete) go directly to <see cref="Nocturne.Core.Contracts.Repositories.ITreatmentRepository"/>.
+/// Driven port for treatment persistence backed by V4 granular tables.
+/// Reads are projected from V4 repositories into the legacy Treatment shape.
+/// Writes are routed through the decomposition pipeline.
 /// </summary>
 /// <seealso cref="ITreatmentCache"/>
 /// <seealso cref="TreatmentQuery"/>
-/// <seealso cref="Nocturne.Core.Contracts.Repositories.ITreatmentRepository"/>
 public interface ITreatmentStore
 {
     /// <summary>

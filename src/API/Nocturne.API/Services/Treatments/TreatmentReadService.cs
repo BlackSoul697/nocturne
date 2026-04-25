@@ -201,13 +201,10 @@ public class TreatmentReadService : ITreatmentStore
         if (carbIntake != null)
         {
             // CarbIntake paired into a Meal Bolus gets the Bolus's ID as the projected Treatment.Id.
-            // Search by the CarbIntake's ID won't match — find by correlation or by paired bolus ID.
             if (carbIntake.CorrelationId.HasValue)
             {
-                var pairedBolus = (await _bolusRepo.GetAsync(
-                    from: null, to: null, device: null, source: null,
-                    limit: 1, offset: 0, descending: true, nativeOnly: false, ct: ct))
-                    .FirstOrDefault(b => b.CorrelationId == carbIntake.CorrelationId);
+                var pairedBoluses = await _bolusRepo.GetByCorrelationIdAsync(carbIntake.CorrelationId.Value, ct);
+                var pairedBolus = pairedBoluses.FirstOrDefault();
                 if (pairedBolus != null)
                     return await FindProjectedTreatmentAsync(pairedBolus.Mills, pairedBolus.Id.ToString(), ct);
             }
@@ -249,10 +246,8 @@ public class TreatmentReadService : ITreatmentStore
         {
             if (carbIntake.CorrelationId.HasValue)
             {
-                var pairedBolus = (await _bolusRepo.GetAsync(
-                    from: null, to: null, device: null, source: null,
-                    limit: 1, offset: 0, descending: true, nativeOnly: false, ct: ct))
-                    .FirstOrDefault(b => b.CorrelationId == carbIntake.CorrelationId);
+                var pairedBoluses = await _bolusRepo.GetByCorrelationIdAsync(carbIntake.CorrelationId.Value, ct);
+                var pairedBolus = pairedBoluses.FirstOrDefault();
                 if (pairedBolus != null)
                     return await FindProjectedTreatmentAsync(pairedBolus.Mills, pairedBolus.Id.ToString(), ct);
             }
