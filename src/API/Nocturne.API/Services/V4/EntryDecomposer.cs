@@ -167,6 +167,52 @@ public class EntryDecomposer : IEntryDecomposer, IDecomposer<Entry>
         return deleted;
     }
 
+    /// <inheritdoc />
+    public async Task<long> BulkDeleteAsync(string? find, CancellationToken ct = default)
+    {
+        var (fromMills, toMills) = Core.Models.Entries.EntryDomainLogic.ParseTimeRangeFromFind(find);
+
+        // NIGHTSCOUT-COMPAT: ParseTimeRangeFromFind extracts $gte/$lte from any field, not just
+        // time fields. A query like {"sgv":{"$gte":180}} would parse from=180 (nonsensical as a
+        // timestamp). Reject values below year 2000 in millis as clearly not time bounds.
+        const long MinPlausibleMills = 946684800000L; // 2000-01-01T00:00:00Z
+        if (fromMills.HasValue && fromMills.Value < MinPlausibleMills)
+            fromMills = null;
+        if (toMills.HasValue && toMills.Value < MinPlausibleMills)
+            toMills = null;
+
+        // NIGHTSCOUT-COMPAT: Legacy Nightscout allowed arbitrary MongoDB find queries for
+        // bulk delete (e.g. {"sgv":{"$gte":180}}). After V4 migration we only support
+        // time-range filters. If the caller passed a non-empty find query but we couldn't
+        // extract any time bounds, refuse to delete — otherwise we'd wipe all records.
+        // Null/empty find intentionally deletes everything (matches "delete all" semantics).
+        var hasFind = !string.IsNullOrEmpty(find) && find != "{}";
+        var hasTimeBounds = fromMills.HasValue || toMills.HasValue;
+
+        if (hasFind && !hasTimeBounds)
+        {
+            _logger.LogWarning("BulkDelete refused: find query has no parseable time range, would delete all records. find={Find}", find);
+            return 0;
+        }
+
+        DateTime? from = fromMills.HasValue
+            ? DateTimeOffset.FromUnixTimeMilliseconds(fromMills.Value).UtcDateTime
+            : null;
+        DateTime? to = toMills.HasValue
+            ? DateTimeOffset.FromUnixTimeMilliseconds(toMills.Value).UtcDateTime
+            : null;
+
+        var sgDeleted = await _sensorGlucoseRepository.DeleteByTimeRangeAsync(from, to, ct);
+        var mgDeleted = await _meterGlucoseRepository.DeleteByTimeRangeAsync(from, to, ct);
+        var calDeleted = await _calibrationRepository.DeleteByTimeRangeAsync(from, to, ct);
+
+        var total = (long)sgDeleted + mgDeleted + calDeleted;
+        _logger.LogInformation("BulkDelete: removed {Total} v4 records (sg={Sg}, mg={Mg}, cal={Cal}) for find={Find}",
+            total, sgDeleted, mgDeleted, calDeleted, find);
+
+        return total;
+    }
+
     /// <summary>Maps a legacy <see cref="Entry"/> of type <c>sgv</c> to a <see cref="SensorGlucose"/> model.</summary>
     /// <param name="entry">The legacy entry to map.</param>
     /// <param name="correlationId">Optional correlation identifier linking records created in the same decomposition pass.</param>
