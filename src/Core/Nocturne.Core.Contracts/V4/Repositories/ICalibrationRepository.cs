@@ -93,4 +93,13 @@ public interface ICalibrationRepository : IV4Repository<Calibration>
     /// <param name="ct">Cancellation token.</param>
     /// <returns>Number of records deleted.</returns>
     Task<int> DeleteBySourceAsync(string source, CancellationToken ct = default);
+
+    /// <summary>
+    /// Delete all records within the given time range.
+    /// </summary>
+    /// <param name="from">Inclusive start, or <c>null</c> for no lower bound.</param>
+    /// <param name="to">Exclusive end, or <c>null</c> for no upper bound.</param>
+    /// <param name="ct">Cancellation token.</param>
+    /// <returns>Number of records deleted.</returns>
+    Task<int> DeleteByTimeRangeAsync(DateTime? from, DateTime? to, CancellationToken ct = default);
 }
