@@ -61,40 +61,6 @@ public class ObjectIdCompatibilityTests
     }
 
     // ========================================================================
-    // EntryMapper — should unwrap before storing OriginalId
-    // ========================================================================
-
-    [Fact]
-    public void EntryMapper_PreservesOriginalIdFromWrappedObjectId()
-    {
-        var entry = new Entry
-        {
-            Id = "ObjectId(59dabbb7c7d5afdddbc992f4)",
-            Sgv = 120,
-            Mills = 1507507102681
-        };
-
-        var entity = EntryMapper.ToEntity(entry);
-
-        entity.OriginalId.Should().Be("59dabbb7c7d5afdddbc992f4");
-    }
-
-    [Fact]
-    public void EntryMapper_PreservesOriginalIdFromBareObjectId()
-    {
-        var entry = new Entry
-        {
-            Id = "59dabbb7c7d5afdddbc992f4",
-            Sgv = 120,
-            Mills = 1507507102681
-        };
-
-        var entity = EntryMapper.ToEntity(entry);
-
-        entity.OriginalId.Should().Be("59dabbb7c7d5afdddbc992f4");
-    }
-
-    // ========================================================================
     // TreatmentMapper — should unwrap before storing OriginalId
     // ========================================================================
 

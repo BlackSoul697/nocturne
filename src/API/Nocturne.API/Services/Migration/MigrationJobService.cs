@@ -458,7 +458,6 @@ internal class MigrationJob
         // Build the list of collections to migrate
         var allCollections = new (string name, Func<HttpClient, NocturneDbContext, CancellationToken, Task> migrate)[]
         {
-            ("entries", MigrateEntriesViaApiAsync),
             ("treatments", MigrateTreatmentsViaApiAsync),
             ("devicestatus", MigrateDeviceStatusViaApiAsync),
             ("profile", MigrateProfilesViaApiAsync),
@@ -559,87 +558,6 @@ internal class MigrationJob
             DocumentsFailed = failed,
             IsComplete = isComplete,
         };
-    }
-
-    private async Task MigrateEntriesViaApiAsync(
-        HttpClient httpClient,
-        NocturneDbContext dbContext,
-        CancellationToken ct
-    )
-    {
-        _currentOperation = "Migrating entries";
-        var collectionName = "entries";
-        var knownTotal = _collectionProgress.TryGetValue(collectionName, out var existing) ? existing.TotalDocuments : 0;
-
-        var totalMigrated = 0L;
-        var totalFailed = 0L;
-
-        try
-        {
-            var response = await httpClient.GetAsync("/api/v1/entries.json?count=10000", ct);
-            if (!response.IsSuccessStatusCode)
-            {
-                _logger.LogError("Failed to fetch entries: {StatusCode}", response.StatusCode);
-                return;
-            }
-
-            var content = await response.Content.ReadAsStringAsync(ct);
-            var entries = System.Text.Json.JsonSerializer.Deserialize<Entry[]>(content) ?? [];
-
-            // If count endpoint wasn't available, use the fetched array length
-            if (knownTotal == 0) knownTotal = entries.Length;
-            UpdateCollectionProgress(collectionName, knownTotal, 0, 0, false);
-            UpdateOverallProgress();
-
-            foreach (var entry in entries)
-            {
-                ct.ThrowIfCancellationRequested();
-
-                try
-                {
-                    var mills = entry.Mills;
-
-                    var exists = await dbContext.Entries.AnyAsync(
-                        e => e.Mills == mills && e.Sgv == entry.Sgv,
-                        ct
-                    );
-
-                    if (!exists)
-                    {
-                        dbContext.Entries.Add(
-                            new Infrastructure.Data.Entities.EntryEntity
-                            {
-                                Id = Guid.CreateVersion7(),
-                                Type = entry.Type ?? "sgv",
-                                Sgv = entry.Sgv,
-                                Mgdl = entry.Mgdl,
-                                Direction = entry.Direction,
-                                Device = entry.Device,
-                                Mills = mills,
-                                DataSource = DataSources.MongoDbImport,
-                            }
-                        );
-                    }
-                    totalMigrated++;
-                    UpdateCollectionProgress(collectionName, knownTotal, totalMigrated, totalFailed, false);
-                    UpdateOverallProgress();
-                }
-                catch
-                {
-                    totalFailed++;
-                }
-            }
-
-            await dbContext.SaveChangesAsync(ct);
-            UpdateCollectionProgress(collectionName, knownTotal, totalMigrated, totalFailed, true);
-            UpdateOverallProgress();
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Error migrating entries via API");
-        }
-
-        _logger.LogInformation("Migrated {Count} entries via API", totalMigrated);
     }
 
     private async Task MigrateTreatmentsViaApiAsync(
@@ -1170,9 +1088,6 @@ internal class MigrationJob
     {
         switch (collectionName)
         {
-            case "entries":
-                await TransformEntryAsync(doc, dbContext, ct);
-                break;
             case "treatments":
                 await TransformTreatmentAsync(doc, dbContext, ct);
                 break;
@@ -1192,47 +1107,6 @@ internal class MigrationJob
                 _logger.LogDebug("Skipping unsupported collection: {Collection}", collectionName);
                 break;
         }
-    }
-
-    private async Task TransformEntryAsync(
-        BsonDocument doc,
-        NocturneDbContext dbContext,
-        CancellationToken ct
-    )
-    {
-        var mills =
-            doc.Contains("date") ? doc["date"].ToInt64()
-            : doc.Contains("mills") ? doc["mills"].ToInt64()
-            : DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
-
-        double? sgv = doc.Contains("sgv") ? doc["sgv"].ToDouble() : null;
-
-        // Check for duplicates
-        var originalId = doc.Contains("_id") ? doc["_id"].AsObjectId.ToString() : null;
-        var exists = await dbContext.Entries.AnyAsync(
-            e =>
-                (originalId != null && e.OriginalId == originalId)
-                || (e.Mills == mills && e.Sgv == sgv),
-            ct
-        );
-
-        if (exists)
-            return;
-
-        var entity = new Infrastructure.Data.Entities.EntryEntity
-        {
-            Id = Guid.CreateVersion7(),
-            OriginalId = originalId,
-            Type = doc.Contains("type") ? doc["type"].AsString : "sgv",
-            Sgv = sgv,
-            Mgdl = sgv ?? 0,
-            Direction = doc.Contains("direction") ? doc["direction"].AsString : null,
-            Device = doc.Contains("device") ? doc["device"].AsString : null,
-            Mills = mills,
-            DataSource = DataSources.MongoDbImport,
-        };
-
-        dbContext.Entries.Add(entity);
     }
 
     private async Task TransformTreatmentAsync(

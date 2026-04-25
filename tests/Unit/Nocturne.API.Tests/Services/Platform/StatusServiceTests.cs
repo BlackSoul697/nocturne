@@ -734,13 +734,12 @@ public class StatusServiceTests
 
         var baseMills = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
 
-        context.Entries.Add(
-            new EntryEntity
+        context.SensorGlucose.Add(
+            new Nocturne.Infrastructure.Data.Entities.V4.SensorGlucoseEntity
             {
                 Id = Guid.CreateVersion7(),
-                Mills = baseMills,
+                Timestamp = DateTimeOffset.FromUnixTimeMilliseconds(baseMills).UtcDateTime,
                 Mgdl = 100,
-                Type = "sgv",
                 SysUpdatedAt = now.AddMinutes(-5),
             }
         );

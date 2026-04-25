@@ -70,7 +70,6 @@ public class AuthenticationTestFactory : WebApplicationFactory<Nocturne.API.Prog
         {
             // Remove database-related services that cause issues in tests
             RemoveService<ICacheService>(services);
-            RemoveService<IEntryRepository>(services);
             RemoveService<ITreatmentRepository>(services);
             RemoveService<IProfileRepository>(services);
             RemoveService<IDeviceStatusRepository>(services);
@@ -147,12 +146,6 @@ public class AuthenticationTestFactory : WebApplicationFactory<Nocturne.API.Prog
             services.AddSingleton(mockCacheService.Object);
 
             // Mock repository port interfaces
-            var mockEntryRepository = new Mock<IEntryRepository>();
-            mockEntryRepository
-                .Setup(x => x.GetCurrentEntryAsync(It.IsAny<CancellationToken>()))
-                .ReturnsAsync((Core.Models.Entry?)null);
-            services.AddSingleton(mockEntryRepository.Object);
-
             services.AddSingleton(new Mock<ITreatmentRepository>().Object);
             services.AddSingleton(new Mock<IProfileRepository>().Object);
             services.AddSingleton(new Mock<IDeviceStatusRepository>().Object);

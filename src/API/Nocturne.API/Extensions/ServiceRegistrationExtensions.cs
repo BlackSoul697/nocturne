@@ -533,8 +533,6 @@ public static class ServiceRegistrationExtensions
         );
         services.AddScoped<IDecompositionPipeline, DecompositionPipeline>();
 
-        services.AddScoped<V4BackfillService>();
-
         return services;
     }
 

@@ -197,11 +197,10 @@ public class DataOverviewServiceTests : IDisposable
     [Trait("Category", "Unit")]
     public async Task GetAvailableYearsAsync_LegacyEntriesIncluded()
     {
-        _dbContext.Entries.Add(new EntryEntity
+        _dbContext.SensorGlucose.Add(new SensorGlucoseEntity
         {
             Id = Guid.NewGuid(),
-            Mills = June15_2023_Noon,
-            Type = "sgv",
+            Timestamp = DateTimeOffset.FromUnixTimeMilliseconds(June15_2023_Noon).UtcDateTime,
             Mgdl = 150.0,
             DataSource = "nightscout"
         });
@@ -544,11 +543,10 @@ public class DataOverviewServiceTests : IDisposable
     [Trait("Category", "Unit")]
     public async Task GetDailySummaryAsync_LegacyEntrySgv_CountedAsGlucose()
     {
-        _dbContext.Entries.Add(new EntryEntity
+        _dbContext.SensorGlucose.Add(new SensorGlucoseEntity
         {
             Id = Guid.NewGuid(),
-            Mills = June15_2024_Noon,
-            Type = "sgv",
+            Timestamp = DateTimeOffset.FromUnixTimeMilliseconds(June15_2024_Noon).UtcDateTime,
             Mgdl = 140.0,
             DataSource = "nightscout"
         });
@@ -566,11 +564,10 @@ public class DataOverviewServiceTests : IDisposable
     [Trait("Category", "Unit")]
     public async Task GetDailySummaryAsync_LegacyEntryMbg_CountedAsManualBGAndContributesToAverage()
     {
-        _dbContext.Entries.Add(new EntryEntity
+        _dbContext.SensorGlucose.Add(new SensorGlucoseEntity
         {
             Id = Guid.NewGuid(),
-            Mills = June15_2024_Noon,
-            Type = "mbg",
+            Timestamp = DateTimeOffset.FromUnixTimeMilliseconds(June15_2024_Noon).UtcDateTime,
             Mgdl = 160.0,
             DataSource = "nightscout"
         });
@@ -580,8 +577,8 @@ public class DataOverviewServiceTests : IDisposable
 
         result.Days.Should().ContainSingle();
         var day = result.Days[0];
-        day.Counts["ManualBG"].Should().Be(1);
-        // mbg entries contribute to glucose average
+        // Former mbg entries now come through as SensorGlucose
+        day.Counts["Glucose"].Should().Be(1);
         day.AverageGlucoseMgdl.Should().Be(160.0);
     }
 
@@ -596,11 +593,10 @@ public class DataOverviewServiceTests : IDisposable
             Mgdl = 100.0,
             DataSource = "dexcom"
         });
-        _dbContext.Entries.Add(new EntryEntity
+        _dbContext.SensorGlucose.Add(new SensorGlucoseEntity
         {
             Id = Guid.NewGuid(),
-            Mills = June15_2024_Noon + 300000,
-            Type = "sgv",
+            Timestamp = DateTimeOffset.FromUnixTimeMilliseconds(June15_2024_Noon + 300000).UtcDateTime,
             Mgdl = 200.0,
             DataSource = "nightscout"
         });
@@ -806,19 +802,17 @@ public class DataOverviewServiceTests : IDisposable
     [Trait("Category", "Unit")]
     public async Task GetDailySummaryAsync_LegacyEntriesFilteredByDataSource()
     {
-        _dbContext.Entries.Add(new EntryEntity
+        _dbContext.SensorGlucose.Add(new SensorGlucoseEntity
         {
             Id = Guid.NewGuid(),
-            Mills = June15_2024_Noon,
-            Type = "sgv",
+            Timestamp = DateTimeOffset.FromUnixTimeMilliseconds(June15_2024_Noon).UtcDateTime,
             Mgdl = 120.0,
             DataSource = "nightscout"
         });
-        _dbContext.Entries.Add(new EntryEntity
+        _dbContext.SensorGlucose.Add(new SensorGlucoseEntity
         {
             Id = Guid.NewGuid(),
-            Mills = June15_2024_Noon + 300000,
-            Type = "sgv",
+            Timestamp = DateTimeOffset.FromUnixTimeMilliseconds(June15_2024_Noon + 300000).UtcDateTime,
             Mgdl = 180.0,
             DataSource = "dexcom"
         });

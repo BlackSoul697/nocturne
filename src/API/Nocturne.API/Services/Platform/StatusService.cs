@@ -507,7 +507,7 @@ public class StatusService : IStatusService
 
         // Each query gets its own short-lived DbContext via the factory so they can
         // run concurrently — a single DbContext is not thread-safe.
-        var entriesTask = LastModifiedAsync(ctx => ctx.Entries.AsNoTracking()
+        var entriesTask = LastModifiedAsync(ctx => ctx.SensorGlucose.AsNoTracking()
             .OrderByDescending(e => e.SysUpdatedAt)
             .Select(e => (DateTime?)e.SysUpdatedAt)
             .FirstOrDefaultAsync());

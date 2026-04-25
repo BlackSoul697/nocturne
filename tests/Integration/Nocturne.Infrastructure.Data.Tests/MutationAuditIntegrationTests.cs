@@ -8,7 +8,7 @@ namespace Nocturne.Infrastructure.Data.Tests.Integration;
 
 /// <summary>
 /// Integration tests verifying the mutation audit log end-to-end with a real
-/// PostgreSQL database. Uses EntryEntity as the test subject since it
+/// PostgreSQL database. Uses TreatmentEntity as the test subject since it
 /// implements both IAuditable and ISoftDeletable.
 /// </summary>
 [Trait("Category", "Integration")]
@@ -71,22 +71,22 @@ public class MutationAuditIntegrationTests : IAsyncLifetime
         var context = scope.ServiceProvider.GetRequiredService<NocturneDbContext>();
         context.TenantId = _tenantId;
 
-        var entry = CreateTestEntry();
-        context.Entries.Add(entry);
+        var treatment = CreateTestTreatment();
+        context.Treatments.Add(treatment);
 
         // Act
         await context.SaveChangesAsync();
 
         // Assert
         var auditRecords = await context.MutationAuditLog
-            .Where(a => a.EntityId == entry.Id)
+            .Where(a => a.EntityId == treatment.Id)
             .ToListAsync();
 
         auditRecords.Should().ContainSingle();
         var audit = auditRecords[0];
         audit.Action.Should().Be("create");
-        audit.EntityType.Should().Be("Entry");
-        audit.EntityId.Should().Be(entry.Id);
+        audit.EntityType.Should().Be("Treatment");
+        audit.EntityId.Should().Be(treatment.Id);
         audit.ChangesJson.Should().BeNull();
         audit.TenantId.Should().Be(_tenantId);
     }
@@ -99,18 +99,18 @@ public class MutationAuditIntegrationTests : IAsyncLifetime
         var context = scope.ServiceProvider.GetRequiredService<NocturneDbContext>();
         context.TenantId = _tenantId;
 
-        var entry = CreateTestEntry();
-        entry.Mgdl = 120.0;
-        context.Entries.Add(entry);
+        var treatment = CreateTestTreatment();
+        treatment.Insulin = 2.5;
+        context.Treatments.Add(treatment);
         await context.SaveChangesAsync();
 
-        // Act — modify a field
-        entry.Mgdl = 150.0;
+        // Act -- modify a field
+        treatment.Insulin = 5.0;
         await context.SaveChangesAsync();
 
         // Assert
         var auditRecords = await context.MutationAuditLog
-            .Where(a => a.EntityId == entry.Id)
+            .Where(a => a.EntityId == treatment.Id)
             .OrderBy(a => a.CreatedAt)
             .ToListAsync();
 
@@ -123,9 +123,9 @@ public class MutationAuditIntegrationTests : IAsyncLifetime
         // Verify the changes JSON contains the old/new values
         var changesDoc = JsonDocument.Parse(updateAudit.ChangesJson!);
         var root = changesDoc.RootElement;
-        root.TryGetProperty("Mgdl", out var mgdlChange).Should().BeTrue();
-        mgdlChange.GetProperty("old").GetDouble().Should().Be(120.0);
-        mgdlChange.GetProperty("new").GetDouble().Should().Be(150.0);
+        root.TryGetProperty("Insulin", out var insulinChange).Should().BeTrue();
+        insulinChange.GetProperty("old").GetDouble().Should().Be(2.5);
+        insulinChange.GetProperty("new").GetDouble().Should().Be(5.0);
     }
 
     [Fact]
@@ -136,19 +136,19 @@ public class MutationAuditIntegrationTests : IAsyncLifetime
         var context = scope.ServiceProvider.GetRequiredService<NocturneDbContext>();
         context.TenantId = _tenantId;
 
-        var entry = CreateTestEntry();
-        entry.Mgdl = 130.0;
-        entry.Device = "test-device-soft-delete";
-        context.Entries.Add(entry);
+        var treatment = CreateTestTreatment();
+        treatment.Insulin = 3.0;
+        treatment.Notes = "test-treatment-soft-delete";
+        context.Treatments.Add(treatment);
         await context.SaveChangesAsync();
 
-        // Act — soft delete by setting DeletedAt
-        entry.DeletedAt = DateTime.UtcNow;
+        // Act -- soft delete by setting DeletedAt
+        treatment.DeletedAt = DateTime.UtcNow;
         await context.SaveChangesAsync();
 
         // Assert
         var auditRecords = await context.MutationAuditLog
-            .Where(a => a.EntityId == entry.Id)
+            .Where(a => a.EntityId == treatment.Id)
             .OrderBy(a => a.CreatedAt)
             .ToListAsync();
 
@@ -161,8 +161,8 @@ public class MutationAuditIntegrationTests : IAsyncLifetime
         // The changes should be a full snapshot of the entity
         var snapshot = JsonDocument.Parse(deleteAudit.ChangesJson!);
         var root = snapshot.RootElement;
-        root.TryGetProperty("Mgdl", out var mgdlProp).Should().BeTrue();
-        mgdlProp.GetDouble().Should().Be(130.0);
+        root.TryGetProperty("Insulin", out var insulinProp).Should().BeTrue();
+        insulinProp.GetDouble().Should().Be(3.0);
     }
 
     [Fact]
@@ -173,56 +173,56 @@ public class MutationAuditIntegrationTests : IAsyncLifetime
         var context = scope.ServiceProvider.GetRequiredService<NocturneDbContext>();
         context.TenantId = _tenantId;
 
-        var entry = CreateTestEntry();
+        var treatment = CreateTestTreatment();
 
-        // Act — save inside a transaction, then roll back
+        // Act -- save inside a transaction, then roll back
         await using var transaction = await context.Database.BeginTransactionAsync();
 
-        context.Entries.Add(entry);
+        context.Treatments.Add(treatment);
         await context.SaveChangesAsync();
 
         // Verify both exist within the transaction
-        var entryExists = await context.Entries.AnyAsync(e => e.Id == entry.Id);
-        var auditExists = await context.MutationAuditLog.AnyAsync(a => a.EntityId == entry.Id);
-        entryExists.Should().BeTrue();
+        var treatmentExists = await context.Treatments.AnyAsync(t => t.Id == treatment.Id);
+        var auditExists = await context.MutationAuditLog.AnyAsync(a => a.EntityId == treatment.Id);
+        treatmentExists.Should().BeTrue();
         auditExists.Should().BeTrue();
 
         await transaction.RollbackAsync();
 
-        // Assert — use a fresh context to avoid stale cache
+        // Assert -- use a fresh context to avoid stale cache
         using var verifyScope = _serviceProvider.CreateScope();
         var verifyContext = verifyScope.ServiceProvider.GetRequiredService<NocturneDbContext>();
         verifyContext.TenantId = _tenantId;
 
-        var entryAfterRollback = await verifyContext.Entries.AnyAsync(e => e.Id == entry.Id);
-        var auditAfterRollback = await verifyContext.MutationAuditLog.AnyAsync(a => a.EntityId == entry.Id);
+        var treatmentAfterRollback = await verifyContext.Treatments.AnyAsync(t => t.Id == treatment.Id);
+        var auditAfterRollback = await verifyContext.MutationAuditLog.AnyAsync(a => a.EntityId == treatment.Id);
 
-        entryAfterRollback.Should().BeFalse();
+        treatmentAfterRollback.Should().BeFalse();
         auditAfterRollback.Should().BeFalse();
     }
 
     [Fact]
     public async Task NullAuditContext_ProducesAuditRecordWithNullActorFields()
     {
-        // Arrange — no AuditContext set, no HttpContext
+        // Arrange -- no AuditContext set, no HttpContext
         using var scope = _serviceProvider.CreateScope();
         var context = scope.ServiceProvider.GetRequiredService<NocturneDbContext>();
         context.TenantId = _tenantId;
         // Explicitly ensure no audit context is set
         context.AuditContext = null;
 
-        var entry = CreateTestEntry();
-        context.Entries.Add(entry);
+        var treatment = CreateTestTreatment();
+        context.Treatments.Add(treatment);
 
         // Act
         await context.SaveChangesAsync();
 
         // Assert
         var audit = await context.MutationAuditLog
-            .SingleAsync(a => a.EntityId == entry.Id);
+            .SingleAsync(a => a.EntityId == treatment.Id);
 
         audit.Action.Should().Be("create");
-        audit.EntityType.Should().Be("Entry");
+        audit.EntityType.Should().Be("Treatment");
         audit.SubjectId.Should().BeNull();
         audit.AuthType.Should().BeNull();
         audit.IpAddress.Should().BeNull();
@@ -240,15 +240,15 @@ public class MutationAuditIntegrationTests : IAsyncLifetime
         context.TenantId = _tenantId;
         context.AuditContext = SystemAuditContext.ForService("test:integration");
 
-        var entry = CreateTestEntry();
-        context.Entries.Add(entry);
+        var treatment = CreateTestTreatment();
+        context.Treatments.Add(treatment);
 
         // Act
         await context.SaveChangesAsync();
 
         // Assert
         var audit = await context.MutationAuditLog
-            .SingleAsync(a => a.EntityId == entry.Id);
+            .SingleAsync(a => a.EntityId == treatment.Id);
 
         audit.AuthType.Should().Be("system");
         audit.Endpoint.Should().Be("test:integration");
@@ -259,18 +259,15 @@ public class MutationAuditIntegrationTests : IAsyncLifetime
         audit.TokenId.Should().BeNull();
     }
 
-    private EntryEntity CreateTestEntry()
+    private TreatmentEntity CreateTestTreatment()
     {
         var now = DateTimeOffset.UtcNow;
-        return new EntryEntity
+        return new TreatmentEntity
         {
             Id = Guid.CreateVersion7(),
             Mills = now.ToUnixTimeMilliseconds(),
-            DateString = now.ToString("yyyy-MM-ddTHH:mm:ss.fffZ"),
-            Mgdl = 120.0,
-            Type = "sgv",
-            Device = "test-device",
-            IsCalibration = false
+            EventType = "BG Check",
+            Notes = "test-treatment",
         };
     }
 }

@@ -37,11 +37,6 @@ public class NocturneDbContext : DbContext
     public IAuditContext? AuditContext { get; set; }
 
     /// <summary>
-    /// Gets or sets the Entries table for glucose entries
-    /// </summary>
-    public DbSet<EntryEntity> Entries { get; set; }
-
-    /// <summary>
     /// Gets or sets the Treatments table for diabetes treatments
     /// </summary>
     public DbSet<TreatmentEntity> Treatments { get; set; }
@@ -545,39 +540,6 @@ public class NocturneDbContext : DbContext
 
     private static void ConfigureIndexes(ModelBuilder modelBuilder)
     {
-        // Entries indexes - optimized for common queries
-        modelBuilder
-            .Entity<EntryEntity>()
-            .HasIndex(e => e.Mills)
-            .HasDatabaseName("ix_entries_mills")
-            .IsDescending(); // Most recent first
-
-        modelBuilder.Entity<EntryEntity>().HasIndex(e => e.Type).HasDatabaseName("ix_entries_type");
-
-        modelBuilder
-            .Entity<EntryEntity>()
-            .HasIndex(e => new { e.Type, e.Mills })
-            .HasDatabaseName("ix_entries_type_timestamp")
-            .IsDescending(false, true); // Type asc, Mills desc
-
-        // Composite index for duplicate detection
-        modelBuilder
-            .Entity<EntryEntity>()
-            .HasIndex(e => new
-            {
-                e.Device,
-                e.Type,
-                e.Sgv,
-                e.Mills,
-            })
-            .HasDatabaseName("ix_entries_duplicate_detection");
-
-        modelBuilder
-            .Entity<EntryEntity>()
-            .HasIndex(e => e.DeletedAt)
-            .HasDatabaseName("ix_entries_deleted_at")
-            .HasFilter("deleted_at IS NOT NULL");
-
         // Treatments indexes - optimized for common queries
         modelBuilder
             .Entity<TreatmentEntity>()
@@ -621,11 +583,6 @@ public class NocturneDbContext : DbContext
             .IsDescending(false, true); // Device asc, Mills desc
 
         // System tracking indexes for maintenance operations
-        modelBuilder
-            .Entity<EntryEntity>()
-            .HasIndex(e => e.SysCreatedAt)
-            .HasDatabaseName("ix_entries_sys_created_at");
-
         modelBuilder
             .Entity<TreatmentEntity>()
             .HasIndex(t => t.SysCreatedAt)
@@ -1888,10 +1845,6 @@ public class NocturneDbContext : DbContext
 
         // Configure UUID Version 7 value generators for all entity primary keys
         modelBuilder
-            .Entity<EntryEntity>()
-            .Property(e => e.Id)
-            .HasValueGenerator<GuidV7ValueGenerator>();
-        modelBuilder
             .Entity<TreatmentEntity>()
             .Property(t => t.Id)
             .HasValueGenerator<GuidV7ValueGenerator>();
@@ -2277,12 +2230,6 @@ public class NocturneDbContext : DbContext
 
         // Configure automatic timestamp updates
         modelBuilder
-            .Entity<EntryEntity>()
-            .Property(e => e.SysUpdatedAt)
-            .HasDefaultValueSql("CURRENT_TIMESTAMP")
-            .ValueGeneratedOnAddOrUpdate();
-
-        modelBuilder
             .Entity<TreatmentEntity>()
             .Property(t => t.SysUpdatedAt)
             .HasDefaultValueSql("CURRENT_TIMESTAMP")
@@ -2351,17 +2298,10 @@ public class NocturneDbContext : DbContext
             .HasDefaultValueSql("CURRENT_TIMESTAMP")
             .ValueGeneratedOnAddOrUpdate();
 
-        // Configure JSON column defaults and constraints
-        modelBuilder.Entity<EntryEntity>().Property(e => e.ScaledJson).HasDefaultValue("null");
-
-        modelBuilder.Entity<EntryEntity>().Property(e => e.MetaJson).HasDefaultValue("{}");
-
         // TreatmentEntity BolusCalcJson and ProfileJson defaults are now configured
         // in TreatmentEntityConfiguration.ConfigureOwnedTypes()
 
         // Configure required fields and defaults
-        modelBuilder.Entity<EntryEntity>().Property(e => e.Type).HasDefaultValue("sgv");
-
         modelBuilder.Entity<FoodEntity>().Property(f => f.Type).HasDefaultValue("food");
 
         modelBuilder
@@ -3040,15 +2980,7 @@ public class NocturneDbContext : DbContext
                 }
             }
 
-            if (entry.Entity is EntryEntity entryEntity)
-            {
-                if (entry.State == EntityState.Added)
-                {
-                    entryEntity.SysCreatedAt = utcNow;
-                }
-                entryEntity.SysUpdatedAt = utcNow;
-            }
-            else if (entry.Entity is TreatmentEntity treatmentEntity)
+            if (entry.Entity is TreatmentEntity treatmentEntity)
             {
                 if (entry.State == EntityState.Added)
                 {

@@ -9,7 +9,6 @@ namespace Nocturne.Core.Contracts.Entries;
 /// </summary>
 /// <seealso cref="IEntryCache"/>
 /// <seealso cref="EntryQuery"/>
-/// <seealso cref="Nocturne.Core.Contracts.Repositories.IEntryRepository"/>
 public interface IEntryStore
 {
     /// <summary>
