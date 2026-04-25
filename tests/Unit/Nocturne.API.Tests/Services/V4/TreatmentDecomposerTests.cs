@@ -1800,9 +1800,9 @@ public class TreatmentDecomposerTests : IDisposable
         // Act
         var result = await _decomposer.DecomposeAsync(treatment);
 
-        // Assert
-        result.CreatedRecords.Should().HaveCount(1);
-        var deviceEvent = result.CreatedRecords[0].Should().BeOfType<V4Models.DeviceEvent>().Subject;
+        // Assert — DeviceEvent + Note (because Notes is non-empty)
+        result.CreatedRecords.Should().HaveCount(2);
+        var deviceEvent = result.CreatedRecords.OfType<V4Models.DeviceEvent>().Single();
         deviceEvent.LegacyId.Should().Be(treatment.Id);
         deviceEvent.Mills.Should().Be(1700000000000);
         deviceEvent.EventType.Should().Be(expectedType);
@@ -1811,6 +1811,10 @@ public class TreatmentDecomposerTests : IDisposable
         deviceEvent.DataSource.Should().Be("manual");
         deviceEvent.UtcOffset.Should().Be(-300);
         deviceEvent.CorrelationId.Should().Be(result.CorrelationId);
+
+        var note = result.CreatedRecords.OfType<V4Models.Note>().Single();
+        note.Text.Should().Be("Test device event");
+        note.CorrelationId.Should().Be(result.CorrelationId);
     }
 
     [Fact]
@@ -1825,22 +1829,24 @@ public class TreatmentDecomposerTests : IDisposable
             Notes = "Right arm"
         };
 
-        // Act - first call creates
+        // Act - first call creates DeviceEvent + Note (because Notes is non-empty)
         var firstResult = await _decomposer.DecomposeAsync(treatment);
-        firstResult.CreatedRecords.Should().HaveCount(1);
+        firstResult.CreatedRecords.Should().HaveCount(2);
+        firstResult.CreatedRecords.OfType<V4Models.DeviceEvent>().Should().HaveCount(1);
+        firstResult.CreatedRecords.OfType<V4Models.Note>().Should().HaveCount(1);
         firstResult.UpdatedRecords.Should().BeEmpty();
 
         // Modify notes
         treatment.Notes = "Left arm";
 
-        // Act - second call should update
+        // Act - second call should update both
         var secondResult = await _decomposer.DecomposeAsync(treatment);
 
-        // Assert
+        // Assert — both DeviceEvent and Note updated
         secondResult.CreatedRecords.Should().BeEmpty();
-        secondResult.UpdatedRecords.Should().HaveCount(1);
+        secondResult.UpdatedRecords.Should().HaveCount(2);
 
-        var updated = secondResult.UpdatedRecords[0].Should().BeOfType<V4Models.DeviceEvent>().Subject;
+        var updated = secondResult.UpdatedRecords.OfType<V4Models.DeviceEvent>().Single();
         updated.LegacyId.Should().Be("idempotent-site-change");
         updated.Notes.Should().Be("Left arm");
     }

@@ -214,6 +214,13 @@ public class TreatmentDecomposer : ITreatmentDecomposer, IDecomposer<Treatment>
             produceCarbIntake = true;
         }
 
+        // Produce a Note record for any treatment with non-empty Notes,
+        // unless we're already producing a Note (avoids duplicate).
+        if (!produceNote && !string.IsNullOrWhiteSpace(treatment.Notes))
+        {
+            produceNote = true;
+        }
+
         // Handle StateSpan delegation
         if (delegateToStateSpan)
         {
