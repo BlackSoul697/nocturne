@@ -13,7 +13,7 @@ public interface ITreatmentStore
 {
     /// <summary>
     /// Queries treatments using the specified <see cref="TreatmentQuery"/> parameters,
-    /// merging legacy and V4-projected treatments behind the scenes.
+    /// projecting V4 records into the legacy Treatment shape.
     /// </summary>
     /// <param name="query">The <see cref="TreatmentQuery"/> filter and pagination parameters.</param>
     /// <param name="ct">Cancellation token.</param>

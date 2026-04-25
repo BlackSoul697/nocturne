@@ -14,7 +14,7 @@ namespace Nocturne.API.Controllers.V3;
 /// Implements the /api/v3/treatments endpoints with pagination, field selection, sorting, and advanced filtering.
 /// </summary>
 /// <seealso cref="ITreatmentService"/>
-/// <seealso cref="ITreatmentRepository"/>
+/// <seealso cref="ITreatmentStore"/>
 /// <seealso cref="Treatment"/>
 /// <seealso cref="BaseV3Controller{T}"/>
 [ApiController]
