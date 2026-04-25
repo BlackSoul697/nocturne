@@ -21,7 +21,7 @@ using Nocturne.API.OpenApi;
 using Nocturne.Core.Constants;
 using Nocturne.Core.Models.Configuration;
 using Nocturne.Infrastructure.Cache.Extensions;
-using Nocturne.Core.Contracts.Repositories;
+using Nocturne.Core.Contracts.Entries;
 using Nocturne.Infrastructure.Data;
 using Nocturne.Infrastructure.Data.Extensions;
 using Nocturne.Infrastructure.Data.Interceptors;
@@ -373,7 +373,7 @@ app.MapOpenApi();
 // Add root endpoint to serve a basic info page
 app.MapGet(
     "/",
-    async (IEntryRepository entryRepository) =>
+    async (IEntryStore entryStore) =>
     {
         // Check database connection by fetching the latest entry
         string databaseStatus = "unknown";
@@ -381,7 +381,7 @@ app.MapGet(
 
         try
         {
-            var entry = await entryRepository.GetCurrentEntryAsync();
+            var entry = await entryStore.GetCurrentAsync();
 
             if (entry != null)
             {
