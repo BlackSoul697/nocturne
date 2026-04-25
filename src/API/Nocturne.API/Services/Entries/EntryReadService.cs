@@ -95,6 +95,29 @@ public class EntryReadService : IEntryStore
         };
     }
 
+    /// <inheritdoc />
+    public async Task<long> CountAsync(string? find = null, string? type = null, CancellationToken ct = default)
+    {
+        var (from, to) = ResolveTimeRange(new EntryQuery { Find = find });
+
+        return type switch
+        {
+            "sgv" => await _sgRepo.CountAsync(from, to, ct),
+            "mbg" => await _mgRepo.CountAsync(from, to, ct),
+            "cal" => await _calRepo.CountAsync(from, to, ct),
+            null or "" => await CountAllTypesAsync(from, to, ct),
+            _ => 0,
+        };
+    }
+
+    private async Task<long> CountAllTypesAsync(DateTime? from, DateTime? to, CancellationToken ct)
+    {
+        var sgCount = await _sgRepo.CountAsync(from, to, ct);
+        var mgCount = await _mgRepo.CountAsync(from, to, ct);
+        var calCount = await _calRepo.CountAsync(from, to, ct);
+        return sgCount + mgCount + calCount;
+    }
+
     #region Private — Query helpers
 
     private async Task<IReadOnlyList<Entry>> QuerySgvAsync(
