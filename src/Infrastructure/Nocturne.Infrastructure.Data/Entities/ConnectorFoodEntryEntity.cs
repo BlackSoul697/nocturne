@@ -144,8 +144,4 @@ public class ConnectorFoodEntryEntity : ITenantScoped
     /// </summary>
     public FoodEntity? Food { get; set; }
 
-    /// <summary>
-    /// Navigation property to matched treatment
-    /// </summary>
-    public TreatmentEntity? MatchedTreatment { get; set; }
 }

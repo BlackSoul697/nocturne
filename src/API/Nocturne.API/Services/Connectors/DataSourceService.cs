@@ -565,12 +565,6 @@ public class DataSourceService : IDataSourceService
             .LongCountAsync(cancellationToken);
         if (deviceStatusCount > 0) counts["DeviceStatus"] = deviceStatusCount;
 
-        // Legacy treatments that haven't been migrated to V4 tables
-        var legacyTreatmentsCount = await _context
-            .Treatments.Where(t => t.DataSource == deviceId)
-            .LongCountAsync(cancellationToken);
-        if (legacyTreatmentsCount > 0) counts["Treatments"] = legacyTreatmentsCount;
-
         return new ConnectorDataSummary
         {
             ConnectorId = connectorId,
@@ -614,9 +608,6 @@ public class DataSourceService : IDataSourceService
             var meterGlucoseDeleted = await _meterGlucose.DeleteBySourceAsync(deviceId, cancellationToken);
             var calibrationsDeleted = await _calibrations.DeleteBySourceAsync(deviceId, cancellationToken);
 
-            var legacyTreatmentsDeleted = await _context
-                .Treatments.Where(t => t.DataSource == deviceId)
-                .ExecuteDeleteAsync(cancellationToken);
             var bolusesDeleted = await _context
                 .Boluses.Where(b => b.DataSource == deviceId)
                 .ExecuteDeleteAsync(cancellationToken);
@@ -655,7 +646,6 @@ public class DataSourceService : IDataSourceService
             if (bgChecksDeleted > 0) deletedCounts["ManualBG"] = deletedCounts.GetValueOrDefault("ManualBG") + bgChecksDeleted;
             if (notesDeleted > 0) deletedCounts["Notes"] = notesDeleted;
             if (deviceEventsDeleted > 0) deletedCounts["DeviceEvents"] = deviceEventsDeleted;
-            if (legacyTreatmentsDeleted > 0) deletedCounts["Treatments"] = legacyTreatmentsDeleted;
             if (deviceStatusDeleted > 0) deletedCounts["DeviceStatus"] = deviceStatusDeleted;
             if (stateSpansDeleted > 0) deletedCounts["StateSpans"] = stateSpansDeleted;
 
@@ -746,11 +736,6 @@ public class DataSourceService : IDataSourceService
             // We match on both Device and DataSource to cover both cases.
             var deviceId = source.DeviceId;
 
-            // Delete legacy treatments matching EnteredBy (uploaders) OR DataSource (connectors)
-            var treatmentsDeleted = await _context
-                .Treatments.Where(t => t.EnteredBy == deviceId || t.DataSource == deviceId)
-                .ExecuteDeleteAsync(cancellationToken);
-
             // Delete V4 glucose tables by DataSource
             var sensorGlucoseDeleted = await _sensorGlucose.DeleteBySourceAsync(deviceId, cancellationToken);
             var meterGlucoseDeleted = await _meterGlucose.DeleteBySourceAsync(deviceId, cancellationToken);
@@ -787,7 +772,6 @@ public class DataSourceService : IDataSourceService
             var glucoseDeleted = (long)sensorGlucoseDeleted + calibrationsDeleted;
             if (glucoseDeleted > 0) deletedCounts["Glucose"] = glucoseDeleted;
             if (meterGlucoseDeleted > 0) deletedCounts["ManualBG"] = meterGlucoseDeleted;
-            if (treatmentsDeleted > 0) deletedCounts["Treatments"] = treatmentsDeleted;
             if (bolusesDeleted > 0) deletedCounts["Boluses"] = bolusesDeleted;
             if (carbIntakesDeleted > 0) deletedCounts["CarbIntake"] = carbIntakesDeleted;
             if (bgChecksDeleted > 0) deletedCounts["ManualBG"] = deletedCounts.GetValueOrDefault("ManualBG") + bgChecksDeleted;
@@ -841,13 +825,8 @@ public class DataSourceService : IDataSourceService
                 cancellationToken
             );
 
-            // Delete legacy treatments by data source
-            var treatmentsDeleted = await _context
-                .Treatments.Where(t => t.DataSource == DataSources.DemoService)
-                .ExecuteDeleteAsync(cancellationToken);
-
             // Delete V4 treatment records by data source
-            treatmentsDeleted += await _context.Boluses.Where(b => b.DataSource == DataSources.DemoService).ExecuteDeleteAsync(cancellationToken);
+            var treatmentsDeleted = await _context.Boluses.Where(b => b.DataSource == DataSources.DemoService).ExecuteDeleteAsync(cancellationToken);
             treatmentsDeleted += await _context.CarbIntakes.Where(c => c.DataSource == DataSources.DemoService).ExecuteDeleteAsync(cancellationToken);
             treatmentsDeleted += await _context.BGChecks.Where(b => b.DataSource == DataSources.DemoService).ExecuteDeleteAsync(cancellationToken);
             treatmentsDeleted += await _context.Notes.Where(n => n.DataSource == DataSources.DemoService).ExecuteDeleteAsync(cancellationToken);
@@ -909,19 +888,6 @@ public class DataSourceService : IDataSourceService
                 Last24H = g.Count(sg => sg.Timestamp >= oneDayAgoDate),
                 Latest = g.Max(sg => (DateTime?)sg.Timestamp),
                 Oldest = g.Min(sg => (DateTime?)sg.Timestamp),
-            })
-            .FirstOrDefaultAsync(cancellationToken);
-
-        // Query treatment stats
-        var treatmentStats = await _context
-            .Treatments.Where(t => t.DataSource == dataSource || t.EnteredBy == dataSource)
-            .GroupBy(_ => 1)
-            .Select(g => new
-            {
-                TotalTreatments = g.LongCount(),
-                TreatmentsLast24Hours = g.Count(t => t.Mills >= oneDayAgo),
-                LastTreatmentMills = g.Max(t => (long?)t.Mills),
-                FirstTreatmentMills = g.Min(t => (long?)t.Mills),
             })
             .FirstOrDefaultAsync(cancellationToken);
 
@@ -1017,14 +983,6 @@ public class DataSourceService : IDataSourceService
         if (deviceEventsTotal > 0) { typeBreakdown["DeviceEvents"] = deviceEventsTotal; typeBreakdown24h["DeviceEvents"] = deviceEvents24h; }
         if ((stateSpanStats?.TotalStateSpans ?? 0) > 0) { typeBreakdown["StateSpans"] = stateSpanStats!.TotalStateSpans; typeBreakdown24h["StateSpans"] = stateSpanStats.StateSpansLast24Hours; }
         if (deviceStatusTotal > 0) { typeBreakdown["DeviceStatus"] = deviceStatusTotal; typeBreakdown24h["DeviceStatus"] = deviceStatus24h; }
-        if ((treatmentStats?.TotalTreatments ?? 0) > 0) { typeBreakdown["Treatments"] = treatmentStats!.TotalTreatments; typeBreakdown24h["Treatments"] = treatmentStats.TreatmentsLast24Hours; }
-
-        var lastTreatmentTime = treatmentStats?.LastTreatmentMills.HasValue == true
-            ? DateTimeOffset.FromUnixTimeMilliseconds(treatmentStats.LastTreatmentMills.Value).UtcDateTime
-            : (DateTime?)null;
-        var firstTreatmentTime = treatmentStats?.FirstTreatmentMills.HasValue == true
-            ? DateTimeOffset.FromUnixTimeMilliseconds(treatmentStats.FirstTreatmentMills.Value).UtcDateTime
-            : (DateTime?)null;
 
         return new DataSourceStats(
             dataSource,
@@ -1032,10 +990,10 @@ public class DataSourceService : IDataSourceService
             sgStats?.Last24H ?? 0,
             sgStats?.Latest,
             sgStats?.Oldest,
-            treatmentStats?.TotalTreatments ?? 0,
-            treatmentStats?.TreatmentsLast24Hours ?? 0,
-            lastTreatmentTime,
-            firstTreatmentTime,
+            0,
+            0,
+            null,
+            null,
             stateSpanStats?.TotalStateSpans ?? 0,
             stateSpanStats?.StateSpansLast24Hours ?? 0,
             stateSpanStats?.LastStateSpanTime,

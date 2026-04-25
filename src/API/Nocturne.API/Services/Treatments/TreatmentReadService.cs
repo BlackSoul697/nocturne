@@ -11,7 +11,6 @@ namespace Nocturne.API.Services.Treatments;
 /// <summary>
 /// V4-only <see cref="ITreatmentStore"/> that reads all treatments from V4 repositories
 /// via the projection service and routes writes through the decomposer.
-/// Replaces <see cref="DualPathTreatmentStore"/> once the legacy treatments table is dropped.
 /// </summary>
 public class TreatmentReadService : ITreatmentStore
 {

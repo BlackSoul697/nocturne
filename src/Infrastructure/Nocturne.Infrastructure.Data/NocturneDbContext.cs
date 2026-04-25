@@ -37,11 +37,6 @@ public class NocturneDbContext : DbContext
     public IAuditContext? AuditContext { get; set; }
 
     /// <summary>
-    /// Gets or sets the Treatments table for diabetes treatments
-    /// </summary>
-    public DbSet<TreatmentEntity> Treatments { get; set; }
-
-    /// <summary>
     /// Gets or sets the DeviceStatuses table for device status information
     /// </summary>
     public DbSet<DeviceStatusEntity> DeviceStatuses { get; set; }
@@ -540,30 +535,6 @@ public class NocturneDbContext : DbContext
 
     private static void ConfigureIndexes(ModelBuilder modelBuilder)
     {
-        // Treatments indexes - optimized for common queries
-        modelBuilder
-            .Entity<TreatmentEntity>()
-            .HasIndex(t => t.Mills)
-            .HasDatabaseName("ix_treatments_mills")
-            .IsDescending(); // Most recent first
-
-        modelBuilder
-            .Entity<TreatmentEntity>()
-            .HasIndex(t => t.EventType)
-            .HasDatabaseName("ix_treatments_event_type");
-
-        modelBuilder
-            .Entity<TreatmentEntity>()
-            .HasIndex(t => t.DeletedAt)
-            .HasDatabaseName("ix_treatments_deleted_at")
-            .HasFilter("deleted_at IS NOT NULL");
-
-        modelBuilder
-            .Entity<TreatmentEntity>()
-            .HasIndex(t => new { t.EventType, t.Mills })
-            .HasDatabaseName("ix_treatments_event_type_timestamp")
-            .IsDescending(false, true); // EventType asc, Mills desc
-
         // DeviceStatus indexes
         modelBuilder
             .Entity<DeviceStatusEntity>()
@@ -583,11 +554,6 @@ public class NocturneDbContext : DbContext
             .IsDescending(false, true); // Device asc, Mills desc
 
         // System tracking indexes for maintenance operations
-        modelBuilder
-            .Entity<TreatmentEntity>()
-            .HasIndex(t => t.SysCreatedAt)
-            .HasDatabaseName("ix_treatments_sys_created_at");
-
         modelBuilder
             .Entity<DeviceStatusEntity>()
             .HasIndex(d => d.SysCreatedAt)
@@ -1840,14 +1806,7 @@ public class NocturneDbContext : DbContext
 
     private static void ConfigureEntities(ModelBuilder modelBuilder)
     {
-        // Configure TreatmentEntity owned types (column mappings for grouped fields)
-        TreatmentEntityConfiguration.ConfigureOwnedTypes(modelBuilder);
-
         // Configure UUID Version 7 value generators for all entity primary keys
-        modelBuilder
-            .Entity<TreatmentEntity>()
-            .Property(t => t.Id)
-            .HasValueGenerator<GuidV7ValueGenerator>();
         modelBuilder
             .Entity<DeviceStatusEntity>()
             .Property(d => d.Id)
@@ -2066,20 +2025,6 @@ public class NocturneDbContext : DbContext
             .HasForeignKey(e => e.FoodId)
             .OnDelete(DeleteBehavior.SetNull);
 
-        modelBuilder
-            .Entity<ConnectorFoodEntryEntity>()
-            .HasOne(e => e.MatchedTreatment)
-            .WithMany()
-            .HasForeignKey(e => e.MatchedTreatmentId)
-            .OnDelete(DeleteBehavior.SetNull);
-
-        // Treatment → DecompositionBatch cascade (delete Treatment → batch → all V4 siblings)
-        modelBuilder.Entity<DecompositionBatchEntity>()
-            .HasOne<TreatmentEntity>()
-            .WithMany()
-            .HasForeignKey(e => e.SourceTreatmentId)
-            .OnDelete(DeleteBehavior.Cascade);
-
         // V4 entity foreign key relationships
         modelBuilder
             .Entity<BolusEntity>()
@@ -2230,12 +2175,6 @@ public class NocturneDbContext : DbContext
 
         // Configure automatic timestamp updates
         modelBuilder
-            .Entity<TreatmentEntity>()
-            .Property(t => t.SysUpdatedAt)
-            .HasDefaultValueSql("CURRENT_TIMESTAMP")
-            .ValueGeneratedOnAddOrUpdate();
-
-        modelBuilder
             .Entity<DeviceStatusEntity>()
             .Property(d => d.SysUpdatedAt)
             .HasDefaultValueSql("CURRENT_TIMESTAMP")
@@ -2297,9 +2236,6 @@ public class NocturneDbContext : DbContext
             .Property(h => h.SysUpdatedAt)
             .HasDefaultValueSql("CURRENT_TIMESTAMP")
             .ValueGeneratedOnAddOrUpdate();
-
-        // TreatmentEntity BolusCalcJson and ProfileJson defaults are now configured
-        // in TreatmentEntityConfiguration.ConfigureOwnedTypes()
 
         // Configure required fields and defaults
         modelBuilder.Entity<FoodEntity>().Property(f => f.Type).HasDefaultValue("food");
@@ -2980,15 +2916,7 @@ public class NocturneDbContext : DbContext
                 }
             }
 
-            if (entry.Entity is TreatmentEntity treatmentEntity)
-            {
-                if (entry.State == EntityState.Added)
-                {
-                    treatmentEntity.SysCreatedAt = utcNow;
-                }
-                treatmentEntity.SysUpdatedAt = utcNow;
-            }
-            else if (entry.Entity is DeviceStatusEntity deviceStatusEntity)
+            if (entry.Entity is DeviceStatusEntity deviceStatusEntity)
             {
                 if (entry.State == EntityState.Added)
                 {

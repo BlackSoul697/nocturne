@@ -560,85 +560,16 @@ internal class MigrationJob
         };
     }
 
-    private async Task MigrateTreatmentsViaApiAsync(
+    private Task MigrateTreatmentsViaApiAsync(
         HttpClient httpClient,
         NocturneDbContext dbContext,
         CancellationToken ct
     )
     {
-        _currentOperation = "Migrating treatments";
-        var collectionName = "treatments";
-        var knownTotal = _collectionProgress.TryGetValue(collectionName, out var existing) ? existing.TotalDocuments : 0;
-
-        var totalMigrated = 0L;
-        var totalFailed = 0L;
-
-        try
-        {
-            var response = await httpClient.GetAsync("/api/v1/treatments.json?count=10000", ct);
-            if (!response.IsSuccessStatusCode)
-            {
-                _logger.LogError("Failed to fetch treatments: {StatusCode}", response.StatusCode);
-                return;
-            }
-
-            var content = await response.Content.ReadAsStringAsync(ct);
-            var treatments =
-                System.Text.Json.JsonSerializer.Deserialize<Treatment[]>(content) ?? [];
-
-            if (knownTotal == 0) knownTotal = treatments.Length;
-            UpdateCollectionProgress(collectionName, knownTotal, 0, 0, false);
-            UpdateOverallProgress();
-
-            foreach (var treatment in treatments)
-            {
-                ct.ThrowIfCancellationRequested();
-
-                try
-                {
-                    var mills = treatment.CalculatedMills;
-
-                    var exists = await dbContext.Treatments.AnyAsync(
-                        t => t.Mills == mills && t.EventType == treatment.EventType,
-                        ct
-                    );
-
-                    if (!exists)
-                    {
-                        dbContext.Treatments.Add(
-                            new Infrastructure.Data.Entities.TreatmentEntity
-                            {
-                                Id = Guid.CreateVersion7(),
-                                EventType = treatment.EventType,
-                                Insulin = treatment.Insulin,
-                                Carbs = treatment.Carbs,
-                                Notes = treatment.Notes,
-                                Duration = treatment.Duration,
-                                Mills = mills,
-                                DataSource = DataSources.MongoDbImport,
-                            }
-                        );
-                    }
-                    totalMigrated++;
-                    UpdateCollectionProgress(collectionName, knownTotal, totalMigrated, totalFailed, false);
-                    UpdateOverallProgress();
-                }
-                catch
-                {
-                    totalFailed++;
-                }
-            }
-
-            await dbContext.SaveChangesAsync(ct);
-            UpdateCollectionProgress(collectionName, knownTotal, totalMigrated, totalFailed, true);
-            UpdateOverallProgress();
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Error migrating treatments via API");
-        }
-
-        _logger.LogInformation("Migrated {Count} treatments via API", totalMigrated);
+        // Legacy treatments table has been dropped; treatment migration is a no-op.
+        // Treatments are now stored exclusively in V4 granular tables.
+        _logger.LogInformation("Skipping legacy treatments migration (table dropped)");
+        return Task.CompletedTask;
     }
 
     private async Task MigrateDeviceStatusViaApiAsync(
@@ -1109,47 +1040,14 @@ internal class MigrationJob
         }
     }
 
-    private async Task TransformTreatmentAsync(
+    private Task TransformTreatmentAsync(
         BsonDocument doc,
         NocturneDbContext dbContext,
         CancellationToken ct
     )
     {
-        var mills =
-            doc.Contains("mills") ? doc["mills"].ToInt64()
-            : doc.Contains("created_at")
-            && DateTime.TryParse(doc["created_at"].AsString, out var createdAt)
-                ? new DateTimeOffset(createdAt).ToUnixTimeMilliseconds()
-            : DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
-
-        var eventType = doc.Contains("eventType") ? doc["eventType"].AsString : "Note";
-
-        // Check for duplicates
-        var originalId = doc.Contains("_id") ? doc["_id"].AsObjectId.ToString() : null;
-        var exists = await dbContext.Treatments.AnyAsync(
-            t =>
-                (originalId != null && t.OriginalId == originalId)
-                || (t.Mills == mills && t.EventType == eventType),
-            ct
-        );
-
-        if (exists)
-            return;
-
-        var entity = new Infrastructure.Data.Entities.TreatmentEntity
-        {
-            Id = Guid.CreateVersion7(),
-            OriginalId = originalId,
-            EventType = eventType,
-            Insulin = doc.Contains("insulin") ? doc["insulin"].ToDouble() : null,
-            Carbs = doc.Contains("carbs") ? doc["carbs"].ToDouble() : null,
-            Notes = doc.Contains("notes") ? doc["notes"].AsString : null,
-            Duration = doc.Contains("duration") ? doc["duration"].ToDouble() : null,
-            Mills = mills,
-            DataSource = DataSources.MongoDbImport,
-        };
-
-        dbContext.Treatments.Add(entity);
+        // Legacy treatments table has been dropped; BSON treatment import is a no-op.
+        return Task.CompletedTask;
     }
 
     private async Task TransformDeviceStatusAsync(

@@ -182,14 +182,8 @@ public class Program
                 using var scope = sp.CreateScope();
                 var sensorGlucoseRepository =
                     scope.ServiceProvider.GetRequiredService<ISensorGlucoseRepository>();
-                var treatmentRepository =
-                    scope.ServiceProvider.GetRequiredService<ITreatmentRepository>();
 
                 var entriesDeleted = await sensorGlucoseRepository.DeleteBySourceAsync(
-                    DataSources.DemoService,
-                    ct
-                );
-                var treatmentsDeleted = await treatmentRepository.DeleteTreatmentsByDataSourceAsync(
                     DataSources.DemoService,
                     ct
                 );
@@ -199,7 +193,6 @@ public class Program
                     {
                         message = "Demo data cleared",
                         entriesDeleted,
-                        treatmentsDeleted,
                         timestamp = DateTime.UtcNow,
                     }
                 );

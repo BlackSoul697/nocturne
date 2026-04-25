@@ -744,14 +744,13 @@ public class StatusServiceTests
             }
         );
 
-        context.Treatments.Add(
-            new TreatmentEntity
+        context.Boluses.Add(
+            new Nocturne.Infrastructure.Data.Entities.V4.BolusEntity
             {
                 Id = Guid.CreateVersion7(),
-                Mills = baseMills,
-                EventType = "bolus",
-                Insulin = 1.5,
-                SysUpdatedAt = now.AddMinutes(-10),
+                Timestamp = DateTimeOffset.FromUnixTimeMilliseconds(baseMills).UtcDateTime,
+                Insulin = 2.5,
+                SysUpdatedAt = now.AddMinutes(-3),
             }
         );
 

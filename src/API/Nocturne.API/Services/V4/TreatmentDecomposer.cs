@@ -99,24 +99,12 @@ public class TreatmentDecomposer : ITreatmentDecomposer, IDecomposer<Treatment>
     /// <inheritdoc />
     public async Task<V4Models.DecompositionResult> DecomposeAsync(Treatment treatment, CancellationToken ct = default)
     {
-        // Look up the Treatment entity's Guid PK via OriginalId for the cascade chain
-        Guid? sourceTreatmentId = null;
-        if (treatment.Id != null)
-        {
-            sourceTreatmentId = await _dbContext.Treatments
-                .Where(t => t.OriginalId == treatment.Id)
-                .Select(t => t.Id)
-                .FirstOrDefaultAsync(ct);
-            if (sourceTreatmentId == Guid.Empty)
-                sourceTreatmentId = null;
-        }
-
         var batch = new DecompositionBatchEntity
         {
             TenantId = _dbContext.TenantId,
             Source = "treatment_decomposer",
             SourceRecordId = treatment.Id,
-            SourceTreatmentId = sourceTreatmentId,
+            SourceTreatmentId = null,
             CreatedAt = DateTime.UtcNow,
         };
         _dbContext.DecompositionBatches.Add(batch);

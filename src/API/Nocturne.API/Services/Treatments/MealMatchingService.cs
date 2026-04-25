@@ -3,7 +3,6 @@ using Nocturne.Core.Contracts.Connectors;
 using Nocturne.Core.Contracts.Treatments;
 using Nocturne.Core.Models;
 using Nocturne.Core.Models.Configuration;
-using Nocturne.Infrastructure.Data.Repositories;
 
 namespace Nocturne.API.Services.Treatments;
 
@@ -16,7 +15,7 @@ namespace Nocturne.API.Services.Treatments;
 public class MealMatchingService : IMealMatchingService
 {
     private readonly IConnectorFoodEntryRepository _foodEntryRepository;
-    private readonly TreatmentRepository _treatmentRepository;
+    private readonly ITreatmentStore _treatmentStore;
     private readonly ITreatmentFoodService _treatmentFoodService;
     private readonly IInAppNotificationService _notificationService;
     private readonly IMyFitnessPalMatchingSettingsService _settingsService;
@@ -24,14 +23,14 @@ public class MealMatchingService : IMealMatchingService
 
     public MealMatchingService(
         IConnectorFoodEntryRepository foodEntryRepository,
-        TreatmentRepository treatmentRepository,
+        ITreatmentStore treatmentStore,
         ITreatmentFoodService treatmentFoodService,
         IInAppNotificationService notificationService,
         IMyFitnessPalMatchingSettingsService settingsService,
         ILogger<MealMatchingService> logger)
     {
         _foodEntryRepository = foodEntryRepository;
-        _treatmentRepository = treatmentRepository;
+        _treatmentStore = treatmentStore;
         _treatmentFoodService = treatmentFoodService;
         _notificationService = notificationService;
         _settingsService = settingsService;
@@ -70,7 +69,7 @@ public class MealMatchingService : IMealMatchingService
             return;
         }
 
-        var treatment = await _treatmentRepository.GetTreatmentByIdAsync(treatmentId.ToString(), ct);
+        var treatment = await _treatmentStore.GetByIdAsync(treatmentId.ToString(), ct);
         if (treatment == null)
         {
             _logger.LogWarning("Treatment {TreatmentId} not found", treatmentId);
@@ -169,10 +168,11 @@ public class MealMatchingService : IMealMatchingService
         // Expand the search window for treatments to account for matching window
         var treatmentsFrom = from - timeWindow;
         var treatmentsTo = to + timeWindow;
-        var treatments = await _treatmentRepository.GetMealTreatmentsInTimeRangeAsync(
-            treatmentsFrom,
-            treatmentsTo,
-            ct);
+        var treatments = await _treatmentStore.QueryAsync(new TreatmentQuery
+        {
+            Find = $"date[$gte]={treatmentsFrom.ToUnixTimeMilliseconds()}&date[$lte]={treatmentsTo.ToUnixTimeMilliseconds()}",
+            Count = 1000,
+        }, ct);
 
         var results = new List<SuggestedMealMatchResult>();
 
@@ -219,10 +219,13 @@ public class MealMatchingService : IMealMatchingService
         CancellationToken ct)
     {
         var timeWindow = TimeSpan.FromMinutes(settings.MatchTimeWindowMinutes);
-        var treatments = await _treatmentRepository.GetMealTreatmentsInTimeRangeAsync(
-            entry.ConsumedAt - timeWindow,
-            entry.ConsumedAt + timeWindow,
-            ct);
+        var from = entry.ConsumedAt - timeWindow;
+        var to = entry.ConsumedAt + timeWindow;
+        var treatments = await _treatmentStore.QueryAsync(new TreatmentQuery
+        {
+            Find = $"date[$gte]={from.ToUnixTimeMilliseconds()}&date[$lte]={to.ToUnixTimeMilliseconds()}",
+            Count = 1000,
+        }, ct);
 
         var bestMatch = FindBestMatch(entry, treatments, settings);
         if (bestMatch != null)

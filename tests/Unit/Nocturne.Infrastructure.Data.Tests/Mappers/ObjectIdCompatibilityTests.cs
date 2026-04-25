@@ -1,7 +1,5 @@
 using FluentAssertions;
-using Nocturne.Core.Models;
 using Nocturne.Infrastructure.Data.Common;
-using Nocturne.Infrastructure.Data.Mappers;
 using Xunit;
 
 namespace Nocturne.Infrastructure.Data.Tests.Mappers;
@@ -60,37 +58,4 @@ public class ObjectIdCompatibilityTests
         MongoIdUtils.UnwrapObjectId(guid).Should().Be(guid);
     }
 
-    // ========================================================================
-    // TreatmentMapper — should unwrap before storing OriginalId
-    // ========================================================================
-
-    [Fact]
-    public void TreatmentMapper_PreservesOriginalIdFromWrappedObjectId()
-    {
-        var treatment = new Treatment
-        {
-            Id = "ObjectId(59daddd0c7d5afdddbc99331)",
-            EventType = "Temp Basal",
-            CreatedAt = "2017-10-08T22:21:55-04:00"
-        };
-
-        var entity = TreatmentMapper.ToEntity(treatment);
-
-        entity.OriginalId.Should().Be("59daddd0c7d5afdddbc99331");
-    }
-
-    [Fact]
-    public void TreatmentMapper_PreservesOriginalIdFromBareObjectId()
-    {
-        var treatment = new Treatment
-        {
-            Id = "59daddd0c7d5afdddbc99331",
-            EventType = "Temp Basal",
-            CreatedAt = "2017-10-08T22:21:55-04:00"
-        };
-
-        var entity = TreatmentMapper.ToEntity(treatment);
-
-        entity.OriginalId.Should().Be("59daddd0c7d5afdddbc99331");
-    }
 }
