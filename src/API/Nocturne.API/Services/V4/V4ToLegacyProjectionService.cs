@@ -6,6 +6,7 @@ using Nocturne.Core.Contracts.Treatments;
 using Nocturne.Core.Contracts.V4.Repositories;
 using Nocturne.Core.Models;
 using Nocturne.Core.Models.V4;
+using Nocturne.Infrastructure.Data.Mappers;
 
 namespace Nocturne.API.Services.V4;
 
@@ -33,6 +34,8 @@ public class V4ToLegacyProjectionService : IV4ToLegacyProjectionService
     private readonly IBGCheckRepository _bgCheckRepository;
     private readonly INoteRepository _noteRepository;
     private readonly IDeviceEventRepository _deviceEventRepository;
+    private readonly ITempBasalRepository _tempBasalRepository;
+    private readonly IBolusCalculationRepository _bolusCalculationRepository;
     private readonly ITreatmentFoodService _treatmentFoodService;
     private readonly ILogger<V4ToLegacyProjectionService> _logger;
 
@@ -52,17 +55,6 @@ public class V4ToLegacyProjectionService : IV4ToLegacyProjectionService
             [DeviceEventType.TransmitterSensorInsert] = TreatmentTypes.TransmitterSensorInsert,
         };
 
-    /// <summary>
-    /// Initializes a new instance of <see cref="V4ToLegacyProjectionService"/>.
-    /// </summary>
-    /// <param name="sensorGlucoseRepository">Repository for V4 sensor glucose records projected back to SGV entries.</param>
-    /// <param name="bolusRepository">Repository for V4 bolus records projected back to bolus treatments.</param>
-    /// <param name="carbIntakeRepository">Repository for V4 carb intake records projected back to carb treatments.</param>
-    /// <param name="bgCheckRepository">Repository for V4 blood glucose check records projected back to BG check treatments.</param>
-    /// <param name="noteRepository">Repository for V4 note records projected back to note treatments.</param>
-    /// <param name="deviceEventRepository">Repository for V4 device event records projected back to device event treatments.</param>
-    /// <param name="treatmentFoodService">Service for resolving food data attached to projected carb intake treatments.</param>
-    /// <param name="logger">The logger instance.</param>
     public V4ToLegacyProjectionService(
         ISensorGlucoseRepository sensorGlucoseRepository,
         IBolusRepository bolusRepository,
@@ -70,6 +62,8 @@ public class V4ToLegacyProjectionService : IV4ToLegacyProjectionService
         IBGCheckRepository bgCheckRepository,
         INoteRepository noteRepository,
         IDeviceEventRepository deviceEventRepository,
+        ITempBasalRepository tempBasalRepository,
+        IBolusCalculationRepository bolusCalculationRepository,
         ITreatmentFoodService treatmentFoodService,
         ILogger<V4ToLegacyProjectionService> logger
     )
@@ -80,6 +74,8 @@ public class V4ToLegacyProjectionService : IV4ToLegacyProjectionService
         _bgCheckRepository = bgCheckRepository;
         _noteRepository = noteRepository;
         _deviceEventRepository = deviceEventRepository;
+        _tempBasalRepository = tempBasalRepository;
+        _bolusCalculationRepository = bolusCalculationRepository;
         _treatmentFoodService = treatmentFoodService;
         _logger = logger;
     }
@@ -157,6 +153,7 @@ public class V4ToLegacyProjectionService : IV4ToLegacyProjectionService
         long? fromMills,
         long? toMills,
         int limit,
+        bool nativeOnly = true,
         CancellationToken ct = default
     )
     {
@@ -172,7 +169,7 @@ public class V4ToLegacyProjectionService : IV4ToLegacyProjectionService
                 limit: limit,
                 offset: 0,
                 descending: true,
-                nativeOnly: true,
+                nativeOnly: nativeOnly,
                 ct: ct
             )
         )).ToList();
@@ -186,7 +183,7 @@ public class V4ToLegacyProjectionService : IV4ToLegacyProjectionService
                 limit: limit,
                 offset: 0,
                 descending: true,
-                nativeOnly: true,
+                nativeOnly: nativeOnly,
                 ct: ct
             )
         )).ToList();
@@ -200,7 +197,7 @@ public class V4ToLegacyProjectionService : IV4ToLegacyProjectionService
                 limit: limit,
                 offset: 0,
                 descending: true,
-                nativeOnly: true,
+                nativeOnly: nativeOnly,
                 ct: ct
             )
         )).ToList();
@@ -214,7 +211,7 @@ public class V4ToLegacyProjectionService : IV4ToLegacyProjectionService
                 limit: limit,
                 offset: 0,
                 descending: true,
-                nativeOnly: true,
+                nativeOnly: nativeOnly,
                 ct: ct
             )
         )).ToList();
@@ -228,10 +225,40 @@ public class V4ToLegacyProjectionService : IV4ToLegacyProjectionService
                 limit: limit,
                 offset: 0,
                 descending: true,
-                nativeOnly: true,
+                nativeOnly: nativeOnly,
                 ct: ct
             )
         )).ToList();
+
+        var tempBasals = (await FetchSafe(() =>
+            _tempBasalRepository.GetAsync(
+                from: MillsToDateTime(fromMills),
+                to: MillsToDateTime(toMills),
+                device: null,
+                source: null,
+                limit: limit,
+                offset: 0,
+                descending: true,
+                ct: ct
+            )
+        )).ToList();
+        if (nativeOnly)
+            tempBasals = tempBasals.Where(r => r.LegacyId == null).ToList();
+
+        var bolusCalcs = (await FetchSafe(() =>
+            _bolusCalculationRepository.GetAsync(
+                from: MillsToDateTime(fromMills),
+                to: MillsToDateTime(toMills),
+                device: null,
+                source: null,
+                limit: limit,
+                offset: 0,
+                descending: true,
+                ct: ct
+            )
+        )).ToList();
+        if (nativeOnly)
+            bolusCalcs = bolusCalcs.Where(r => r.LegacyId == null).ToList();
 
         // Load food breakdown entries for all carb intakes to populate legacy fields
         var carbIds = carbs.Select(c => c.Id).ToList();
@@ -327,6 +354,14 @@ public class V4ToLegacyProjectionService : IV4ToLegacyProjectionService
         // --- DeviceEvent → Treatment ---
         foreach (var deviceEvent in deviceEvents)
             treatments.Add(ProjectDeviceEvent(deviceEvent));
+
+        // --- TempBasal → Treatment ---
+        foreach (var tempBasal in tempBasals)
+            treatments.Add(TempBasalToTreatmentMapper.ToTreatment(tempBasal));
+
+        // --- BolusCalculation → Treatment ---
+        foreach (var bolusCalc in bolusCalcs)
+            treatments.Add(ProjectBolusCalculation(bolusCalc));
 
         return treatments.OrderByDescending(t => t.Mills).Take(limit);
     }
@@ -474,6 +509,32 @@ public class V4ToLegacyProjectionService : IV4ToLegacyProjectionService
             SyncIdentifier = deviceEvent.SyncIdentifier,
         };
     }
+
+    private static Treatment ProjectBolusCalculation(BolusCalculation bc) =>
+        new()
+        {
+            Id = bc.Id.ToString(),
+            EventType = "Bolus Wizard",
+            Mills = bc.Mills,
+            BloodGlucoseInput = bc.BloodGlucoseInput,
+            BloodGlucoseInputSource = bc.BloodGlucoseInputSource,
+            Carbs = bc.CarbInput,
+            InsulinOnBoard = bc.InsulinOnBoard,
+            InsulinRecommendationForCorrection = bc.InsulinRecommendation,
+            CR = bc.CarbRatio,
+            CalculationType = bc.CalculationType.HasValue
+                ? (Nocturne.Core.Models.CalculationType)(int)bc.CalculationType.Value
+                : null,
+            InsulinRecommendationForCarbs = bc.InsulinRecommendationForCarbs,
+            InsulinProgrammed = bc.InsulinProgrammed,
+            EnteredInsulin = bc.EnteredInsulin,
+            SplitNow = bc.SplitNow,
+            SplitExt = bc.SplitExt,
+            PreBolus = bc.PreBolus,
+            EnteredBy = bc.Device,
+            DataSource = bc.DataSource,
+            SyncIdentifier = null,
+        };
 
     private async Task<IEnumerable<T>> FetchSafe<T>(Func<Task<IEnumerable<T>>> fetchFunc)
     {

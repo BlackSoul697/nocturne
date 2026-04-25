@@ -236,7 +236,7 @@ public class DualPathTreatmentStore : ITreatmentStore
             device: null, source: null, limit: count, offset: 0, descending: true, ct: ct);
 
         var projectedTreatments = await _projection.GetProjectedTreatmentsAsync(
-            fromMills, toMills, count, ct);
+            fromMills, toMills, count, nativeOnly: true, ct: ct);
 
         var tempBasalTreatments = TempBasalToTreatmentMapper.ToTreatments(tempBasals).ToList();
 

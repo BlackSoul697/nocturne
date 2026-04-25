@@ -41,6 +41,7 @@ public interface IV4ToLegacyProjectionService
         long? fromMills,
         long? toMills,
         int limit,
+        bool nativeOnly = true,
         CancellationToken ct = default
     );
 }
