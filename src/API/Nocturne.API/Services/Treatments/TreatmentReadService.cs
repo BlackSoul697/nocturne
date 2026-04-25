@@ -86,14 +86,10 @@ public class TreatmentReadService : ITreatmentStore
     public async Task<IReadOnlyList<Treatment>> GetModifiedSinceAsync(
         long lastModifiedMills, int limit, CancellationToken ct = default)
     {
-        // Query all V4 repos and project — use a generous time window going forward from the cutoff
-        var projected = await _projection.GetProjectedTreatmentsAsync(
-            fromMills: lastModifiedMills, toMills: null, limit: limit, nativeOnly: false, ct: ct);
+        var projected = await _projection.GetProjectedTreatmentsModifiedSinceAsync(
+            lastModifiedMills, limit, ct);
 
-        return projected
-            .OrderBy(t => t.SrvModified ?? t.Mills)
-            .Take(limit)
-            .ToList();
+        return projected.ToList();
     }
 
     /// <inheritdoc />
@@ -174,55 +170,47 @@ public class TreatmentReadService : ITreatmentStore
 
     private async Task<Treatment?> GetByGuidAsync(Guid id, CancellationToken ct)
     {
-        // Search across all V4 repos by ID
+        var idStr = id.ToString();
+
+        // Search across all V4 repos by ID, project at that timestamp with a
+        // reasonable limit, and find the projected treatment that contains this ID.
         var bolus = await _bolusRepo.GetByIdAsync(id, ct);
         if (bolus != null)
-        {
-            // Project back through the projection service for a single record
-            var projected = await _projection.GetProjectedTreatmentsAsync(
-                bolus.Mills, bolus.Mills, 1, nativeOnly: false, ct: ct);
-            return projected.FirstOrDefault(t => t.Id == id.ToString());
-        }
+            return await FindProjectedTreatmentAsync(bolus.Mills, idStr, ct);
 
         var carbIntake = await _carbIntakeRepo.GetByIdAsync(id, ct);
         if (carbIntake != null)
         {
-            var projected = await _projection.GetProjectedTreatmentsAsync(
-                carbIntake.Mills, carbIntake.Mills, 1, nativeOnly: false, ct: ct);
-            return projected.FirstOrDefault(t => t.Id == id.ToString());
+            // CarbIntake paired into a Meal Bolus gets the Bolus's ID as the projected Treatment.Id.
+            // Search by the CarbIntake's ID won't match — find by correlation or by paired bolus ID.
+            if (carbIntake.CorrelationId.HasValue)
+            {
+                var pairedBolus = (await _bolusRepo.GetAsync(
+                    from: null, to: null, device: null, source: null,
+                    limit: 1, offset: 0, descending: true, nativeOnly: false, ct: ct))
+                    .FirstOrDefault(b => b.CorrelationId == carbIntake.CorrelationId);
+                if (pairedBolus != null)
+                    return await FindProjectedTreatmentAsync(pairedBolus.Mills, pairedBolus.Id.ToString(), ct);
+            }
+            // Unpaired carb correction: the projected Treatment.Id is the CarbIntake's ID
+            return await FindProjectedTreatmentAsync(carbIntake.Mills, idStr, ct);
         }
 
         var bgCheck = await _bgCheckRepo.GetByIdAsync(id, ct);
         if (bgCheck != null)
-        {
-            var projected = await _projection.GetProjectedTreatmentsAsync(
-                bgCheck.Mills, bgCheck.Mills, 1, nativeOnly: false, ct: ct);
-            return projected.FirstOrDefault(t => t.Id == id.ToString());
-        }
+            return await FindProjectedTreatmentAsync(bgCheck.Mills, idStr, ct);
 
         var note = await _noteRepo.GetByIdAsync(id, ct);
         if (note != null)
-        {
-            var projected = await _projection.GetProjectedTreatmentsAsync(
-                note.Mills, note.Mills, 1, nativeOnly: false, ct: ct);
-            return projected.FirstOrDefault(t => t.Id == id.ToString());
-        }
+            return await FindProjectedTreatmentAsync(note.Mills, idStr, ct);
 
         var deviceEvent = await _deviceEventRepo.GetByIdAsync(id, ct);
         if (deviceEvent != null)
-        {
-            var projected = await _projection.GetProjectedTreatmentsAsync(
-                deviceEvent.Mills, deviceEvent.Mills, 1, nativeOnly: false, ct: ct);
-            return projected.FirstOrDefault(t => t.Id == id.ToString());
-        }
+            return await FindProjectedTreatmentAsync(deviceEvent.Mills, idStr, ct);
 
         var bolusCalc = await _bolusCalcRepo.GetByIdAsync(id, ct);
         if (bolusCalc != null)
-        {
-            var projected = await _projection.GetProjectedTreatmentsAsync(
-                bolusCalc.Mills, bolusCalc.Mills, 1, nativeOnly: false, ct: ct);
-            return projected.FirstOrDefault(t => t.Id == id.ToString());
-        }
+            return await FindProjectedTreatmentAsync(bolusCalc.Mills, idStr, ct);
 
         var tempBasal = await _tempBasalRepo.GetByIdAsync(id, ct);
         if (tempBasal != null)
@@ -235,57 +223,52 @@ public class TreatmentReadService : ITreatmentStore
     {
         var bolus = await _bolusRepo.GetByLegacyIdAsync(legacyId, ct);
         if (bolus != null)
-        {
-            var projected = await _projection.GetProjectedTreatmentsAsync(
-                bolus.Mills, bolus.Mills, 10, nativeOnly: false, ct: ct);
-            return projected.FirstOrDefault(t => t.Id == bolus.Id.ToString());
-        }
+            return await FindProjectedTreatmentAsync(bolus.Mills, bolus.Id.ToString(), ct);
 
         var carbIntake = await _carbIntakeRepo.GetByLegacyIdAsync(legacyId, ct);
         if (carbIntake != null)
         {
-            var projected = await _projection.GetProjectedTreatmentsAsync(
-                carbIntake.Mills, carbIntake.Mills, 10, nativeOnly: false, ct: ct);
-            return projected.FirstOrDefault(t => t.Id == carbIntake.Id.ToString());
+            if (carbIntake.CorrelationId.HasValue)
+            {
+                var pairedBolus = (await _bolusRepo.GetAsync(
+                    from: null, to: null, device: null, source: null,
+                    limit: 1, offset: 0, descending: true, nativeOnly: false, ct: ct))
+                    .FirstOrDefault(b => b.CorrelationId == carbIntake.CorrelationId);
+                if (pairedBolus != null)
+                    return await FindProjectedTreatmentAsync(pairedBolus.Mills, pairedBolus.Id.ToString(), ct);
+            }
+            return await FindProjectedTreatmentAsync(carbIntake.Mills, carbIntake.Id.ToString(), ct);
         }
 
         var bgCheck = await _bgCheckRepo.GetByLegacyIdAsync(legacyId, ct);
         if (bgCheck != null)
-        {
-            var projected = await _projection.GetProjectedTreatmentsAsync(
-                bgCheck.Mills, bgCheck.Mills, 10, nativeOnly: false, ct: ct);
-            return projected.FirstOrDefault(t => t.Id == bgCheck.Id.ToString());
-        }
+            return await FindProjectedTreatmentAsync(bgCheck.Mills, bgCheck.Id.ToString(), ct);
 
         var noteRecord = await _noteRepo.GetByLegacyIdAsync(legacyId, ct);
         if (noteRecord != null)
-        {
-            var projected = await _projection.GetProjectedTreatmentsAsync(
-                noteRecord.Mills, noteRecord.Mills, 10, nativeOnly: false, ct: ct);
-            return projected.FirstOrDefault(t => t.Id == noteRecord.Id.ToString());
-        }
+            return await FindProjectedTreatmentAsync(noteRecord.Mills, noteRecord.Id.ToString(), ct);
 
         var deviceEvent = await _deviceEventRepo.GetByLegacyIdAsync(legacyId, ct);
         if (deviceEvent != null)
-        {
-            var projected = await _projection.GetProjectedTreatmentsAsync(
-                deviceEvent.Mills, deviceEvent.Mills, 10, nativeOnly: false, ct: ct);
-            return projected.FirstOrDefault(t => t.Id == deviceEvent.Id.ToString());
-        }
+            return await FindProjectedTreatmentAsync(deviceEvent.Mills, deviceEvent.Id.ToString(), ct);
 
         var bolusCalc = await _bolusCalcRepo.GetByLegacyIdAsync(legacyId, ct);
         if (bolusCalc != null)
-        {
-            var projected = await _projection.GetProjectedTreatmentsAsync(
-                bolusCalc.Mills, bolusCalc.Mills, 10, nativeOnly: false, ct: ct);
-            return projected.FirstOrDefault(t => t.Id == bolusCalc.Id.ToString());
-        }
+            return await FindProjectedTreatmentAsync(bolusCalc.Mills, bolusCalc.Id.ToString(), ct);
 
         var tempBasal = await _tempBasalRepo.GetByLegacyIdAsync(legacyId, ct);
         if (tempBasal != null)
             return TempBasalToTreatmentMapper.ToTreatment(tempBasal);
 
         return null;
+    }
+
+    private async Task<Treatment?> FindProjectedTreatmentAsync(
+        long mills, string treatmentId, CancellationToken ct)
+    {
+        var projected = await _projection.GetProjectedTreatmentsAsync(
+            mills, mills, 100, nativeOnly: false, ct: ct);
+        return projected.FirstOrDefault(t => t.Id == treatmentId);
     }
 
     #endregion

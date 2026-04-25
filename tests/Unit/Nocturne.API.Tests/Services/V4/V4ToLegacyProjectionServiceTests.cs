@@ -8,6 +8,7 @@ using Nocturne.Core.Contracts.Treatments;
 using Nocturne.Core.Contracts.V4.Repositories;
 using Nocturne.Core.Models;
 using Nocturne.Core.Models.V4;
+using Nocturne.Tests.Shared.Infrastructure;
 using Xunit;
 
 namespace Nocturne.API.Tests.Services.V4;
@@ -86,6 +87,8 @@ public class V4ToLegacyProjectionServiceTests
                 It.IsAny<CancellationToken>()))
             .ReturnsAsync(Enumerable.Empty<BolusCalculation>());
 
+        var dbContext = TestDbContextFactory.CreateInMemoryContext();
+
         _service = new V4ToLegacyProjectionService(
             _sensorGlucoseRepo.Object,
             _bolusRepo.Object,
@@ -96,6 +99,7 @@ public class V4ToLegacyProjectionServiceTests
             _tempBasalRepo.Object,
             _bolusCalcRepo.Object,
             _treatmentFoodService.Object,
+            dbContext,
             NullLogger<V4ToLegacyProjectionService>.Instance
         );
     }

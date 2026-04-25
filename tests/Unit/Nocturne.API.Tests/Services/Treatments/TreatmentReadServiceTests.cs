@@ -112,7 +112,7 @@ public class TreatmentReadServiceTests
 
         _bolusRepo.Setup(r => r.GetByIdAsync(id, It.IsAny<CancellationToken>())).ReturnsAsync(bolus);
         _projection
-            .Setup(p => p.GetProjectedTreatmentsAsync(1000, 1000, 1, false, It.IsAny<CancellationToken>()))
+            .Setup(p => p.GetProjectedTreatmentsAsync(1000, 1000, 100, false, It.IsAny<CancellationToken>()))
             .ReturnsAsync(projected);
 
         var result = await _service.GetByIdAsync(id.ToString());
@@ -131,7 +131,7 @@ public class TreatmentReadServiceTests
 
         _bolusRepo.Setup(r => r.GetByLegacyIdAsync(legacyId, It.IsAny<CancellationToken>())).ReturnsAsync(bolus);
         _projection
-            .Setup(p => p.GetProjectedTreatmentsAsync(1000, 1000, 10, false, It.IsAny<CancellationToken>()))
+            .Setup(p => p.GetProjectedTreatmentsAsync(1000, 1000, 100, false, It.IsAny<CancellationToken>()))
             .ReturnsAsync(projected);
 
         var result = await _service.GetByIdAsync(legacyId);
