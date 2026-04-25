@@ -6,6 +6,7 @@ using Nocturne.Core.Contracts.Legacy;
 using Nocturne.Core.Contracts.Platform;
 using Nocturne.Core.Contracts.Glucose;
 using Nocturne.Core.Contracts.Repositories;
+using Nocturne.Core.Contracts.Treatments;
 using Xunit;
 using TimePatternQuery = Nocturne.Core.Contracts.Legacy.TimePatternQuery;
 
@@ -18,7 +19,7 @@ namespace Nocturne.API.Tests.Services.Platform;
 public class TimeQueryServiceTests
 {
     private readonly Mock<IEntryService> _mockEntryService;
-    private readonly Mock<ITreatmentRepository> _mockTreatmentRepository;
+    private readonly Mock<ITreatmentService> _mockTreatmentService;
     private readonly Mock<IDeviceStatusRepository> _mockDeviceStatusRepository;
     private readonly Mock<IBraceExpansionService> _mockBraceExpansionService;
     private readonly Mock<ILogger<TimeQueryService>> _mockLogger;
@@ -27,14 +28,14 @@ public class TimeQueryServiceTests
     public TimeQueryServiceTests()
     {
         _mockEntryService = new Mock<IEntryService>();
-        _mockTreatmentRepository = new Mock<ITreatmentRepository>();
+        _mockTreatmentService = new Mock<ITreatmentService>();
         _mockDeviceStatusRepository = new Mock<IDeviceStatusRepository>();
         _mockBraceExpansionService = new Mock<IBraceExpansionService>();
         _mockLogger = new Mock<ILogger<TimeQueryService>>();
 
         _timeQueryService = new TimeQueryService(
             _mockEntryService.Object,
-            _mockTreatmentRepository.Object,
+            _mockTreatmentService.Object,
             _mockDeviceStatusRepository.Object,
             _mockBraceExpansionService.Object,
             _mockLogger.Object
@@ -242,7 +243,7 @@ public class TimeQueryServiceTests
             )
             .ReturnsAsync(new List<Entry>());
 
-        _mockTreatmentRepository
+        _mockTreatmentService
             .Setup(x =>
                 x.GetTreatmentsWithAdvancedFilterAsync(
                     It.IsAny<int>(),
@@ -285,7 +286,7 @@ public class TimeQueryServiceTests
                 );
                 break;
             case "treatments":
-                _mockTreatmentRepository.Verify(
+                _mockTreatmentService.Verify(
                     x =>
                         x.GetTreatmentsWithAdvancedFilterAsync(
                             It.IsAny<int>(),
@@ -672,7 +673,7 @@ public class TimeQueryServiceTests
             )
             .ReturnsAsync(new List<Entry>());
 
-        _mockTreatmentRepository
+        _mockTreatmentService
             .Setup(x =>
                 x.GetTreatmentsWithAdvancedFilterAsync(
                     It.IsAny<int>(),
@@ -715,7 +716,7 @@ public class TimeQueryServiceTests
                 );
                 break;
             case "treatments":
-                _mockTreatmentRepository.Verify(
+                _mockTreatmentService.Verify(
                     x =>
                         x.GetTreatmentsWithAdvancedFilterAsync(
                             It.IsAny<int>(),
@@ -1459,7 +1460,7 @@ public class TimeQueryServiceTests
             .Setup(x => x.PrepareTimePatterns(prefix, regex, field))
             .Returns(expectedPatterns);
 
-        _mockTreatmentRepository
+        _mockTreatmentService
             .Setup(x =>
                 x.GetTreatmentsWithAdvancedFilterAsync(
                     It.IsAny<int>(),
@@ -1475,7 +1476,7 @@ public class TimeQueryServiceTests
         await _timeQueryService.ExecuteSliceQueryAsync(storage, field, type, prefix, regex);
 
         // Assert
-        _mockTreatmentRepository.Verify(
+        _mockTreatmentService.Verify(
             x =>
                 x.GetTreatmentsWithAdvancedFilterAsync(
                     It.IsAny<int>(),

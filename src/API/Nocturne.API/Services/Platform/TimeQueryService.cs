@@ -2,6 +2,7 @@ using System.Text.Json;
 using Nocturne.Core.Contracts.Glucose;
 using Nocturne.Core.Contracts.Legacy;
 using Nocturne.Core.Contracts.Platform;
+using Nocturne.Core.Contracts.Treatments;
 using Nocturne.Core.Models;
 using Nocturne.Core.Contracts.Repositories;
 
@@ -19,14 +20,14 @@ public class TimeQueryService : ITimeQueryService
     private static readonly string[] OperatorSuffixes = ["_gte", "_lte", "_gt", "_lt", "_ne", "_regex", "_in", "_nin"];
 
     private readonly IEntryService _entries;
-    private readonly ITreatmentRepository _treatments;
+    private readonly ITreatmentService _treatments;
     private readonly IDeviceStatusRepository _deviceStatuses;
     private readonly IBraceExpansionService _braceExpansionService;
     private readonly ILogger<TimeQueryService> _logger;
 
     public TimeQueryService(
         IEntryService entries,
-        ITreatmentRepository treatments,
+        ITreatmentService treatments,
         IDeviceStatusRepository deviceStatuses,
         IBraceExpansionService braceExpansionService,
         ILogger<TimeQueryService> logger
@@ -170,6 +171,7 @@ public class TimeQueryService : ITimeQueryService
                     count: 1000,
                     skip: 0,
                     findQuery: findQuery,
+                    reverseResults: false,
                     cancellationToken: cancellationToken
                 )
             ).Select(t => ConvertTreatmentToEntry(t)),
@@ -259,6 +261,7 @@ public class TimeQueryService : ITimeQueryService
                     count: 1000,
                     skip: 0,
                     findQuery: findQuery,
+                    reverseResults: false,
                     cancellationToken: cancellationToken
                 )
             ).Select(t => ConvertTreatmentToEntry(t)),
