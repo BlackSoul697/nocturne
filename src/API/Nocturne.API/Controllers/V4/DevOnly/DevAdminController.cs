@@ -656,7 +656,9 @@ public class DevAdminController : ControllerBase
         {
             await SetTenantGuc(tenant.Id, ct);
 
-            var entryCount = await _db.Entries.LongCountAsync(ct);
+            var entryCount = (long)await _db.SensorGlucose.CountAsync(ct)
+                + await _db.MeterGlucose.CountAsync(ct)
+                + await _db.Calibrations.CountAsync(ct);
             var treatmentCount = await _db.Treatments.LongCountAsync(ct);
             var deviceStatusCount = await _db.DeviceStatuses.LongCountAsync(ct);
             var profileCount = await _db.Profiles.CountAsync(ct);
@@ -673,9 +675,9 @@ public class DevAdminController : ControllerBase
                     c.LastErrorMessage))
                 .ToListAsync(ct);
 
-            var latestEntry = await _db.Entries
-                .OrderByDescending(e => e.SysCreatedAt)
-                .Select(e => (DateTime?)e.SysCreatedAt)
+            var latestEntry = await _db.SensorGlucose
+                .OrderByDescending(e => e.Timestamp)
+                .Select(e => (DateTime?)e.Timestamp)
                 .FirstOrDefaultAsync(ct);
 
             summaries.Add(new DevTenantSummaryDto(
