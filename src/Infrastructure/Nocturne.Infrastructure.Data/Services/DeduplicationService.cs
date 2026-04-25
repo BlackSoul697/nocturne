@@ -913,19 +913,18 @@ public class DeduplicationService : IDeduplicationService
         var recordsLinked = 0;
         var duplicateGroups = 0;
 
-        // Scan V4 glucose tables and combine
-        var sgRecords = await _context.SensorGlucose
-            .Select(e => new { e.Id, Mills = new DateTimeOffset(e.Timestamp, TimeSpan.Zero).ToUnixTimeMilliseconds(), Glucose = e.Mgdl, Type = "sgv", e.DataSource })
+        // Step 1: Materialize from DB with just the fields we need
+        var sgRaw = await _context.SensorGlucose
+            .Select(e => new { e.Id, e.Timestamp, Glucose = e.Mgdl, e.DataSource })
+            .ToListAsync(cancellationToken);
+        var mgRaw = await _context.MeterGlucose
+            .Select(e => new { e.Id, e.Timestamp, Glucose = e.Mgdl, e.DataSource })
             .ToListAsync(cancellationToken);
 
-        var mgRecords = await _context.MeterGlucose
-            .Select(e => new { e.Id, Mills = new DateTimeOffset(e.Timestamp, TimeSpan.Zero).ToUnixTimeMilliseconds(), Glucose = e.Mgdl, Type = "mbg", e.DataSource })
-            .ToListAsync(cancellationToken);
-
-        var allRecords = sgRecords
-            .Select(r => (r.Id, r.Mills, r.Glucose, r.Type, r.DataSource))
-            .Concat(mgRecords.Select(r => (r.Id, r.Mills, r.Glucose, r.Type, r.DataSource)))
-            .OrderBy(r => r.Mills)
+        // Step 2: Compute mills in memory and combine
+        var allRecords = sgRaw.Select(e => (e.Id, Mills: new DateTimeOffset(e.Timestamp, TimeSpan.Zero).ToUnixTimeMilliseconds(), e.Glucose, Type: "sgv", e.DataSource))
+            .Concat(mgRaw.Select(e => (e.Id, Mills: new DateTimeOffset(e.Timestamp, TimeSpan.Zero).ToUnixTimeMilliseconds(), e.Glucose, Type: "mbg", e.DataSource)))
+            .OrderBy(e => e.Mills)
             .ToList();
 
         var groupedByTime = new Dictionary<long, List<(Guid Id, double Glucose, string Type, string? DataSource)>>();

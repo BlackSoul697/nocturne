@@ -77,9 +77,9 @@ public static class EntryDomainLogic
                     if (op.Value.ValueKind != JsonValueKind.Number)
                         continue;
 
-                    if (op.Name == "$gte" && op.Value.TryGetInt64(out var gte))
+                    if ((op.Name == "$gte" || op.Name == "$gt") && op.Value.TryGetInt64(out var gte))
                         from = gte;
-                    else if (op.Name == "$lte" && op.Value.TryGetInt64(out var lte))
+                    else if ((op.Name == "$lte" || op.Name == "$lt") && op.Value.TryGetInt64(out var lte))
                         to = lte;
                 }
             }
