@@ -65,4 +65,11 @@ public interface ITreatmentStore
     /// <param name="ct">Cancellation token.</param>
     /// <returns><c>true</c> if the treatment was deleted; <c>false</c> if not found.</returns>
     Task<bool> DeleteAsync(string id, CancellationToken ct = default);
+
+    /// <summary>
+    /// Counts treatments matching the optional find filter, summing across all V4 treatment repositories.
+    /// </summary>
+    /// <param name="find">Optional Nightscout-compatible find query for time range filtering.</param>
+    /// <param name="ct">Cancellation token.</param>
+    Task<long> CountAsync(string? find = null, CancellationToken ct = default);
 }

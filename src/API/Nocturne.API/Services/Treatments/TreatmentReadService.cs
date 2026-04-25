@@ -166,6 +166,25 @@ public class TreatmentReadService : ITreatmentStore
         return deleted > 0;
     }
 
+    /// <inheritdoc />
+    public async Task<long> CountAsync(string? find = null, CancellationToken ct = default)
+    {
+        var (fromMills, toMills) = ParseTimeRangeFromFind(find);
+        var from = fromMills.HasValue ? DateTimeOffset.FromUnixTimeMilliseconds(fromMills.Value).UtcDateTime : (DateTime?)null;
+        var to = toMills.HasValue ? DateTimeOffset.FromUnixTimeMilliseconds(toMills.Value).UtcDateTime : (DateTime?)null;
+
+        var bolusCount = await _bolusRepo.CountAsync(from, to, ct);
+        var carbCount = await _carbIntakeRepo.CountAsync(from, to, ct);
+        var bgCheckCount = await _bgCheckRepo.CountAsync(from, to, ct);
+        var noteCount = await _noteRepo.CountAsync(from, to, ct);
+        var deviceEventCount = await _deviceEventRepo.CountAsync(from, to, ct);
+        var tempBasalCount = await _tempBasalRepo.CountAsync(from, to, ct);
+        var bolusCalcCount = await _bolusCalcRepo.CountAsync(from, to, ct);
+
+        return bolusCount + carbCount + bgCheckCount + noteCount
+             + deviceEventCount + tempBasalCount + bolusCalcCount;
+    }
+
     #region Private — GetById helpers
 
     private async Task<Treatment?> GetByGuidAsync(Guid id, CancellationToken ct)

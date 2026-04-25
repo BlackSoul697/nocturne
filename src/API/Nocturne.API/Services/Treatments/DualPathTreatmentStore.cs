@@ -224,6 +224,11 @@ public class DualPathTreatmentStore : ITreatmentStore
         return await _treatmentRepository.DeleteTreatmentAsync(id, ct);
     }
 
+    public Task<long> CountAsync(string? find = null, CancellationToken ct = default)
+    {
+        throw new NotSupportedException("CountAsync is not supported on DualPathTreatmentStore. Use TreatmentReadService.");
+    }
+
     private async Task<IReadOnlyList<Treatment>> MergeWithTempBasalsAsync(
         IEnumerable<Treatment> treatments, string? findQuery, int count, int skip,
         CancellationToken ct)
