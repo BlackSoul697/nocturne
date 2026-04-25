@@ -919,4 +919,102 @@ public class TreatmentDecomposer : ITreatmentDecomposer, IDecomposer<Treatment>
 
         return deleted;
     }
+
+    /// <inheritdoc />
+    public async Task<long> BulkDeleteAsync(string? find, CancellationToken ct = default)
+    {
+        var (fromMills, toMills) = Core.Models.Entries.EntryDomainLogic.ParseTimeRangeFromFind(find);
+
+        // NIGHTSCOUT-COMPAT: Reject implausible timestamps (same guard as EntryDecomposer)
+        const long MinPlausibleMills = 946684800000L; // 2000-01-01T00:00:00Z
+        if (fromMills.HasValue && fromMills.Value < MinPlausibleMills)
+            fromMills = null;
+        if (toMills.HasValue && toMills.Value < MinPlausibleMills)
+            toMills = null;
+
+        var hasFind = !string.IsNullOrEmpty(find) && find != "{}";
+        var hasTimeBounds = fromMills.HasValue || toMills.HasValue;
+
+        if (hasFind && !hasTimeBounds)
+        {
+            _logger.LogWarning("BulkDelete refused: find query has no parseable time range. find={Find}", find);
+            return 0;
+        }
+
+        DateTime? from = fromMills.HasValue
+            ? DateTimeOffset.FromUnixTimeMilliseconds(fromMills.Value).UtcDateTime
+            : null;
+        DateTime? to = toMills.HasValue
+            ? DateTimeOffset.FromUnixTimeMilliseconds(toMills.Value).UtcDateTime
+            : null;
+
+        long total = 0;
+        total += await DeleteEntitiesByTimeRange(_dbContext.Boluses, from, to, ct);
+        total += await DeleteEntitiesByTimeRange(_dbContext.CarbIntakes, from, to, ct);
+        total += await DeleteEntitiesByTimeRange(_dbContext.BGChecks, from, to, ct);
+        total += await DeleteEntitiesByTimeRange(_dbContext.Notes, from, to, ct);
+        total += await DeleteEntitiesByTimeRange(_dbContext.DeviceEvents, from, to, ct);
+        total += await DeleteEntitiesByTimeRange(_dbContext.BolusCalculations, from, to, ct);
+        total += await DeleteEntitiesByTimeRange(_dbContext.TempBasals, from, to, ct);
+
+        _logger.LogInformation("BulkDelete: removed {Total} v4 treatment records for find={Find}", total, find);
+        return total;
+    }
+
+    private static async Task<int> DeleteEntitiesByTimeRange<T>(
+        Microsoft.EntityFrameworkCore.DbSet<T> dbSet, DateTime? from, DateTime? to, CancellationToken ct)
+        where T : class
+    {
+        var query = dbSet.AsQueryable();
+
+        // All V4 entity types have a Timestamp column (point-in-time) or StartTimestamp (span-based).
+        // Use the dynamic interface approach: filter via the entity's timestamp property.
+        if (from.HasValue || to.HasValue)
+        {
+            // Use ExecuteDeleteAsync with raw filtering — entities all have Timestamp or StartTimestamp
+            // mapped as the primary time column. We filter through the queryable.
+            if (typeof(T).GetProperty("Timestamp") != null)
+            {
+                var param = System.Linq.Expressions.Expression.Parameter(typeof(T), "e");
+                var timestampProp = System.Linq.Expressions.Expression.Property(param, "Timestamp");
+
+                if (from.HasValue)
+                {
+                    var fromExpr = System.Linq.Expressions.Expression.Constant(from.Value, typeof(DateTime));
+                    var gte = System.Linq.Expressions.Expression.GreaterThanOrEqual(timestampProp, fromExpr);
+                    var lambda = System.Linq.Expressions.Expression.Lambda<Func<T, bool>>(gte, param);
+                    query = query.Where(lambda);
+                }
+                if (to.HasValue)
+                {
+                    var toExpr = System.Linq.Expressions.Expression.Constant(to.Value, typeof(DateTime));
+                    var lte = System.Linq.Expressions.Expression.LessThanOrEqual(timestampProp, toExpr);
+                    var lambda = System.Linq.Expressions.Expression.Lambda<Func<T, bool>>(lte, param);
+                    query = query.Where(lambda);
+                }
+            }
+            else if (typeof(T).GetProperty("StartTimestamp") != null)
+            {
+                var param = System.Linq.Expressions.Expression.Parameter(typeof(T), "e");
+                var timestampProp = System.Linq.Expressions.Expression.Property(param, "StartTimestamp");
+
+                if (from.HasValue)
+                {
+                    var fromExpr = System.Linq.Expressions.Expression.Constant(from.Value, typeof(DateTime));
+                    var gte = System.Linq.Expressions.Expression.GreaterThanOrEqual(timestampProp, fromExpr);
+                    var lambda = System.Linq.Expressions.Expression.Lambda<Func<T, bool>>(gte, param);
+                    query = query.Where(lambda);
+                }
+                if (to.HasValue)
+                {
+                    var toExpr = System.Linq.Expressions.Expression.Constant(to.Value, typeof(DateTime));
+                    var lte = System.Linq.Expressions.Expression.LessThanOrEqual(timestampProp, toExpr);
+                    var lambda = System.Linq.Expressions.Expression.Lambda<Func<T, bool>>(lte, param);
+                    query = query.Where(lambda);
+                }
+            }
+        }
+
+        return await query.ExecuteDeleteAsync(ct);
+    }
 }
