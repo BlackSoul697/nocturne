@@ -81,35 +81,8 @@ public class DeduplicationService : IDeduplicationService
             return Guid.CreateVersion7();
         }
 
-        // For entries, check glucose value matching
-        if (recordType == RecordType.Entry && criteria.GlucoseValue.HasValue)
-        {
-            var canonicalIds = potentialMatches.Select(m => m.CanonicalId).Distinct().ToList();
-
-            foreach (var canonicalId in canonicalIds)
-            {
-                var recordIds = potentialMatches
-                    .Where(m => m.CanonicalId == canonicalId)
-                    .Select(m => m.RecordId)
-                    .ToList();
-
-                var entries = await _context.Entries
-                    .Where(e => recordIds.Contains(e.Id))
-                    .ToListAsync(cancellationToken);
-
-                foreach (var entry in entries)
-                {
-                    var entryGlucose = entry.Sgv ?? entry.Mgdl;
-                    if (Math.Abs(entryGlucose - criteria.GlucoseValue.Value) <= criteria.GlucoseTolerance)
-                    {
-                        // Match found based on glucose value
-                        return canonicalId;
-                    }
-                }
-            }
-        }
         // For treatments, check event type and relevant values
-        else if (recordType == RecordType.Treatment && !string.IsNullOrEmpty(criteria.EventType))
+        if (recordType == RecordType.Treatment && !string.IsNullOrEmpty(criteria.EventType))
         {
             var canonicalIds = potentialMatches.Select(m => m.CanonicalId).Distinct().ToList();
 
@@ -463,7 +436,6 @@ public class DeduplicationService : IDeduplicationService
             "carbintake" => await _context.CarbIntakes.AnyAsync(c => c.Id == recordId, ct),
             "sensorglucose" => await _context.SensorGlucose.AnyAsync(s => s.Id == recordId, ct),
             "tempbasal" => await _context.TempBasals.AnyAsync(t => t.Id == recordId, ct),
-            "entry" => await _context.Entries.AnyAsync(e => e.Id == recordId, ct),
             "treatment" => await _context.Treatments.AnyAsync(t => t.Id == recordId, ct),
             "bgcheck" => await _context.BGChecks.AnyAsync(b => b.Id == recordId, ct),
             "deviceevent" => await _context.DeviceEvents.AnyAsync(d => d.Id == recordId, ct),
@@ -523,36 +495,6 @@ public class DeduplicationService : IDeduplicationService
             IsPrimary = entity.IsPrimary,
             CreatedAt = entity.SysCreatedAt
         };
-    }
-
-    /// <inheritdoc />
-    public async Task<Entry?> GetUnifiedEntryAsync(
-        Guid canonicalId,
-        CancellationToken cancellationToken = default)
-    {
-        var linkedRecords = await _context.LinkedRecords
-            .Where(lr => lr.CanonicalId == canonicalId && lr.RecordType == "entry")
-            .OrderBy(lr => lr.SourceTimestamp)
-            .ToListAsync(cancellationToken);
-
-        if (linkedRecords.Count == 0)
-            return null;
-
-        var recordIds = linkedRecords.Select(lr => lr.RecordId).ToList();
-        var entries = await _context.Entries
-            .Where(e => recordIds.Contains(e.Id))
-            .ToListAsync(cancellationToken);
-
-        if (entries.Count == 0)
-            return null;
-
-        // Sort by timestamp to get primary first
-        var sortedEntries = entries
-            .OrderBy(e => e.Mills)
-            .Select(EntryMapper.ToDomainModel)
-            .ToList();
-
-        return MergeEntries(sortedEntries, canonicalId);
     }
 
     /// <inheritdoc />
@@ -624,10 +566,10 @@ public class DeduplicationService : IDeduplicationService
 
         try
         {
-            var entryCount = await _context.Entries.CountAsync(cancellationToken);
             var treatmentCount = await _context.Treatments.CountAsync(cancellationToken);
             var stateSpanCount = await _context.StateSpans.CountAsync(cancellationToken);
             var sensorGlucoseCount = await _context.SensorGlucose.CountAsync(cancellationToken);
+            var meterGlucoseCount = await _context.MeterGlucose.CountAsync(cancellationToken);
             var bolusCount = await _context.Boluses.CountAsync(cancellationToken);
             var carbIntakeCount = await _context.CarbIntakes.CountAsync(cancellationToken);
             var bgCheckCount = await _context.BGChecks.CountAsync(cancellationToken);
@@ -635,8 +577,8 @@ public class DeduplicationService : IDeduplicationService
             var noteCount = await _context.Notes.CountAsync(cancellationToken);
             var bolusCalcCount = await _context.BolusCalculations.CountAsync(cancellationToken);
             var tempBasalCount = await _context.TempBasals.CountAsync(cancellationToken);
-            var totalRecords = entryCount + treatmentCount + stateSpanCount
-                + sensorGlucoseCount + bolusCount + carbIntakeCount + bgCheckCount
+            var totalRecords = treatmentCount + stateSpanCount
+                + sensorGlucoseCount + meterGlucoseCount + bolusCount + carbIntakeCount + bgCheckCount
                 + deviceEventCount + noteCount + bolusCalcCount + tempBasalCount;
 
             var processed = 0;
@@ -971,25 +913,33 @@ public class DeduplicationService : IDeduplicationService
         var recordsLinked = 0;
         var duplicateGroups = 0;
 
-        // Group entries by time windows and similar values
-        var entries = await _context.Entries
-            .OrderBy(e => e.Mills)
-            .Select(e => new { e.Id, e.Mills, e.Sgv, e.Mgdl, e.Type, e.DataSource })
+        // Scan V4 glucose tables and combine
+        var sgRecords = await _context.SensorGlucose
+            .Select(e => new { e.Id, Mills = new DateTimeOffset(e.Timestamp, TimeSpan.Zero).ToUnixTimeMilliseconds(), Glucose = e.Mgdl, Type = "sgv", e.DataSource })
             .ToListAsync(cancellationToken);
 
-        var groupedByTime = new Dictionary<long, List<(Guid Id, double Glucose, string? Type, string? DataSource)>>();
+        var mgRecords = await _context.MeterGlucose
+            .Select(e => new { e.Id, Mills = new DateTimeOffset(e.Timestamp, TimeSpan.Zero).ToUnixTimeMilliseconds(), Glucose = e.Mgdl, Type = "mbg", e.DataSource })
+            .ToListAsync(cancellationToken);
 
-        foreach (var entry in entries)
+        var allRecords = sgRecords
+            .Select(r => (r.Id, r.Mills, r.Glucose, r.Type, r.DataSource))
+            .Concat(mgRecords.Select(r => (r.Id, r.Mills, r.Glucose, r.Type, r.DataSource)))
+            .OrderBy(r => r.Mills)
+            .ToList();
+
+        var groupedByTime = new Dictionary<long, List<(Guid Id, double Glucose, string Type, string? DataSource)>>();
+
+        foreach (var record in allRecords)
         {
             cancellationToken.ThrowIfCancellationRequested();
 
-            var windowKey = entry.Mills / MatchingWindowMillis;
-            var glucose = entry.Sgv ?? entry.Mgdl;
+            var windowKey = record.Mills / MatchingWindowMillis;
 
             if (!groupedByTime.ContainsKey(windowKey))
                 groupedByTime[windowKey] = new();
 
-            groupedByTime[windowKey].Add((entry.Id, glucose, entry.Type, entry.DataSource));
+            groupedByTime[windowKey].Add((record.Id, record.Glucose, record.Type, record.DataSource));
         }
 
         // Process each time window
@@ -999,7 +949,7 @@ public class DeduplicationService : IDeduplicationService
 
             // Group by similar glucose values within the window
             var glucoseGroups = windowEntries
-                .GroupBy(e => Math.Round(e.Glucose / 5) * 5) // Group within ±5 mg/dL
+                .GroupBy(e => Math.Round(e.Glucose / 5) * 5) // Group within +/-5 mg/dL
                 .Where(g => g.Count() > 0);
 
             foreach (var glucoseGroup in glucoseGroups)
@@ -1016,16 +966,18 @@ public class DeduplicationService : IDeduplicationService
 
                 foreach (var entry in groupEntries)
                 {
+                    var recordType = entry.Type == "sgv" ? "sensorglucose" : "meterglucose";
+
                     // Check if already linked
                     var existing = await _context.LinkedRecords
-                        .AnyAsync(lr => lr.RecordType == "entry" && lr.RecordId == entry.Id, cancellationToken);
+                        .AnyAsync(lr => lr.RecordType == recordType && lr.RecordId == entry.Id, cancellationToken);
 
                     if (!existing)
                     {
                         var linkedRecord = new LinkedRecordEntity
                         {
                             CanonicalId = canonicalId,
-                            RecordType = "entry",
+                            RecordType = recordType,
                             RecordId = entry.Id,
                             SourceTimestamp = windowKey * MatchingWindowMillis,
                             DataSource = entry.DataSource ?? "unknown",
@@ -1992,70 +1944,6 @@ public class DeduplicationService : IDeduplicationService
 
         await _context.SaveChangesAsync(cancellationToken);
         return (processed, groupsCreated, recordsLinked, duplicateGroups);
-    }
-
-    private static Entry MergeEntries(List<Entry> entries, Guid canonicalId)
-    {
-        if (entries.Count == 0)
-            throw new ArgumentException("Cannot merge empty list of entries");
-
-        var primary = entries[0];
-        var merged = new Entry
-        {
-            Id = primary.Id,
-            Mills = primary.Mills,
-            DateString = primary.DateString,
-            Mgdl = primary.Mgdl,
-            Mmol = primary.Mmol,
-            Sgv = primary.Sgv,
-            Direction = primary.Direction,
-            Trend = primary.Trend,
-            TrendRate = primary.TrendRate,
-            Type = primary.Type,
-            Device = primary.Device,
-            Notes = primary.Notes,
-            Delta = primary.Delta,
-            Scaled = primary.Scaled,
-            Noise = primary.Noise,
-            Filtered = primary.Filtered,
-            Unfiltered = primary.Unfiltered,
-            Rssi = primary.Rssi,
-            Slope = primary.Slope,
-            Intercept = primary.Intercept,
-            Scale = primary.Scale,
-            DataSource = primary.DataSource,
-            Meta = primary.Meta != null ? new Dictionary<string, object>(primary.Meta) : new(),
-            CanonicalId = canonicalId,
-            Sources = entries.Select(e => e.DataSource).Where(s => s != null).Distinct().ToArray()!
-        };
-
-        // Enrich with data from other sources
-        foreach (var entry in entries.Skip(1))
-        {
-            merged.Direction ??= entry.Direction;
-            merged.Trend ??= entry.Trend;
-            merged.TrendRate ??= entry.TrendRate;
-            merged.Delta ??= entry.Delta;
-            merged.Noise ??= entry.Noise;
-            merged.Filtered ??= entry.Filtered;
-            merged.Unfiltered ??= entry.Unfiltered;
-            merged.Rssi ??= entry.Rssi;
-            merged.Slope ??= entry.Slope;
-            merged.Intercept ??= entry.Intercept;
-            merged.Scale ??= entry.Scale;
-            merged.Notes ??= entry.Notes;
-
-            // Merge metadata
-            if (entry.Meta != null)
-            {
-                foreach (var kvp in entry.Meta)
-                {
-                    merged.Meta.TryAdd(kvp.Key, kvp.Value);
-                }
-            }
-        }
-
-        return merged;
     }
 
     private static Treatment MergeTreatments(List<Treatment> treatments, Guid canonicalId)
