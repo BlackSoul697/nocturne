@@ -476,8 +476,10 @@ public class ServicesController : ControllerBase
                     cancellationToken
                 );
 
-            DateTime? treatmentTimestamp = null;
-            DateTime? oldestTreatmentTimestamp = null;
+            var treatmentTimestamp = await _dataSourceService.GetLatestTreatmentTimestampBySourceAsync(
+                dataSource, cancellationToken);
+            var oldestTreatmentTimestamp = await _dataSourceService.GetOldestTreatmentTimestampBySourceAsync(
+                dataSource, cancellationToken);
 
             // Get connector health/state
             var connectorStatuses = await _connectorHealthService.GetConnectorStatusesAsync(

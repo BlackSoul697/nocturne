@@ -985,16 +985,21 @@ public class DataSourceService : IDataSourceService
         if ((stateSpanStats?.TotalStateSpans ?? 0) > 0) { typeBreakdown["StateSpans"] = stateSpanStats!.TotalStateSpans; typeBreakdown24h["StateSpans"] = stateSpanStats.StateSpansLast24Hours; }
         if (deviceStatusTotal > 0) { typeBreakdown["DeviceStatus"] = deviceStatusTotal; typeBreakdown24h["DeviceStatus"] = deviceStatus24h; }
 
+        var totalTreatments = bolusesTotal + carbIntakesTotal + bolusCalcsTotal + notesTotal + deviceEventsTotal;
+        var treatments24h = boluses24h + carbIntakes24h + bolusCalcs24h + notes24h + deviceEvents24h;
+        var lastTreatmentTime = await GetLatestTreatmentTimestampBySourceAsync(dataSource, cancellationToken);
+        var firstTreatmentTime = await GetOldestTreatmentTimestampBySourceAsync(dataSource, cancellationToken);
+
         return new DataSourceStats(
             dataSource,
             sgStats?.Total ?? 0,
             sgStats?.Last24H ?? 0,
             sgStats?.Latest,
             sgStats?.Oldest,
-            0,
-            0,
-            null,
-            null,
+            totalTreatments,
+            treatments24h,
+            lastTreatmentTime,
+            firstTreatmentTime,
             stateSpanStats?.TotalStateSpans ?? 0,
             stateSpanStats?.StateSpansLast24Hours ?? 0,
             stateSpanStats?.LastStateSpanTime,
@@ -1036,6 +1041,40 @@ public class DataSourceService : IDataSourceService
             .Select(t => t!.Value)
             .DefaultIfEmpty()
             .Min() is var min && min == default ? null : min;
+    }
+
+    /// <inheritdoc />
+    public async Task<DateTime?> GetLatestTreatmentTimestampBySourceAsync(
+        string dataSource, CancellationToken cancellationToken = default)
+    {
+        var timestamps = new[]
+        {
+            await _context.Boluses.AsNoTracking().Where(b => b.DataSource == dataSource).OrderByDescending(b => b.Timestamp).Select(b => (DateTime?)b.Timestamp).FirstOrDefaultAsync(cancellationToken),
+            await _context.CarbIntakes.AsNoTracking().Where(c => c.DataSource == dataSource).OrderByDescending(c => c.Timestamp).Select(c => (DateTime?)c.Timestamp).FirstOrDefaultAsync(cancellationToken),
+            await _context.BGChecks.AsNoTracking().Where(b => b.DataSource == dataSource).OrderByDescending(b => b.Timestamp).Select(b => (DateTime?)b.Timestamp).FirstOrDefaultAsync(cancellationToken),
+            await _context.Notes.AsNoTracking().Where(n => n.DataSource == dataSource).OrderByDescending(n => n.Timestamp).Select(n => (DateTime?)n.Timestamp).FirstOrDefaultAsync(cancellationToken),
+            await _context.DeviceEvents.AsNoTracking().Where(d => d.DataSource == dataSource).OrderByDescending(d => d.Timestamp).Select(d => (DateTime?)d.Timestamp).FirstOrDefaultAsync(cancellationToken),
+            await _context.TempBasals.AsNoTracking().Where(t => t.DataSource == dataSource).OrderByDescending(t => t.StartTimestamp).Select(t => (DateTime?)t.StartTimestamp).FirstOrDefaultAsync(cancellationToken),
+            await _context.BolusCalculations.AsNoTracking().Where(b => b.DataSource == dataSource).OrderByDescending(b => b.Timestamp).Select(b => (DateTime?)b.Timestamp).FirstOrDefaultAsync(cancellationToken),
+        };
+        return timestamps.Where(t => t.HasValue).Select(t => t!.Value).DefaultIfEmpty().Max() is var max && max == default ? null : max;
+    }
+
+    /// <inheritdoc />
+    public async Task<DateTime?> GetOldestTreatmentTimestampBySourceAsync(
+        string dataSource, CancellationToken cancellationToken = default)
+    {
+        var timestamps = new[]
+        {
+            await _context.Boluses.AsNoTracking().Where(b => b.DataSource == dataSource).OrderBy(b => b.Timestamp).Select(b => (DateTime?)b.Timestamp).FirstOrDefaultAsync(cancellationToken),
+            await _context.CarbIntakes.AsNoTracking().Where(c => c.DataSource == dataSource).OrderBy(c => c.Timestamp).Select(c => (DateTime?)c.Timestamp).FirstOrDefaultAsync(cancellationToken),
+            await _context.BGChecks.AsNoTracking().Where(b => b.DataSource == dataSource).OrderBy(b => b.Timestamp).Select(b => (DateTime?)b.Timestamp).FirstOrDefaultAsync(cancellationToken),
+            await _context.Notes.AsNoTracking().Where(n => n.DataSource == dataSource).OrderBy(n => n.Timestamp).Select(n => (DateTime?)n.Timestamp).FirstOrDefaultAsync(cancellationToken),
+            await _context.DeviceEvents.AsNoTracking().Where(d => d.DataSource == dataSource).OrderBy(d => d.Timestamp).Select(d => (DateTime?)d.Timestamp).FirstOrDefaultAsync(cancellationToken),
+            await _context.TempBasals.AsNoTracking().Where(t => t.DataSource == dataSource).OrderBy(t => t.StartTimestamp).Select(t => (DateTime?)t.StartTimestamp).FirstOrDefaultAsync(cancellationToken),
+            await _context.BolusCalculations.AsNoTracking().Where(b => b.DataSource == dataSource).OrderBy(b => b.Timestamp).Select(b => (DateTime?)b.Timestamp).FirstOrDefaultAsync(cancellationToken),
+        };
+        return timestamps.Where(t => t.HasValue).Select(t => t!.Value).DefaultIfEmpty().Min() is var min && min == default ? null : min;
     }
 
     /// <inheritdoc />

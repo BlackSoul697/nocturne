@@ -143,6 +143,22 @@ public interface IDataSourceService
     );
 
     /// <summary>
+    /// Get the latest treatment timestamp across all V4 treatment tables for a given data source.
+    /// </summary>
+    Task<DateTime?> GetLatestTreatmentTimestampBySourceAsync(
+        string dataSource,
+        CancellationToken cancellationToken = default
+    );
+
+    /// <summary>
+    /// Get the oldest treatment timestamp across all V4 treatment tables for a given data source.
+    /// </summary>
+    Task<DateTime?> GetOldestTreatmentTimestampBySourceAsync(
+        string dataSource,
+        CancellationToken cancellationToken = default
+    );
+
+    /// <summary>
     /// Delete all glucose data (sensor glucose, meter glucose, calibrations) for a given data source.
     /// </summary>
     /// <param name="dataSource">The data source identifier.</param>
