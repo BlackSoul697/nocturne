@@ -357,7 +357,7 @@ public static class ServiceRegistrationExtensions
 
         // Core domain services
         services.AddScoped<ITreatmentService, TreatmentService>();
-        services.AddScoped<ITreatmentStore, Nocturne.API.Services.Treatments.DualPathTreatmentStore>();
+        services.AddScoped<ITreatmentStore, Nocturne.API.Services.Treatments.TreatmentReadService>();
         services.AddScoped<ITreatmentCache, Nocturne.API.Services.Treatments.TreatmentCacheAdapter>();
         services.AddScoped<SignalRTreatmentEventSink>();
         services.AddScoped<IDataEventSink<Treatment>>(sp =>
