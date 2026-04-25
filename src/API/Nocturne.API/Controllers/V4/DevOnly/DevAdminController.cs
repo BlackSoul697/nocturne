@@ -659,7 +659,13 @@ public class DevAdminController : ControllerBase
             var entryCount = (long)await _db.SensorGlucose.CountAsync(ct)
                 + await _db.MeterGlucose.CountAsync(ct)
                 + await _db.Calibrations.CountAsync(ct);
-            var treatmentCount = await _db.Treatments.LongCountAsync(ct);
+            var treatmentCount = (long)await _db.Boluses.CountAsync(ct)
+                + await _db.CarbIntakes.CountAsync(ct)
+                + await _db.BGChecks.CountAsync(ct)
+                + await _db.Notes.CountAsync(ct)
+                + await _db.DeviceEvents.CountAsync(ct)
+                + await _db.TempBasals.CountAsync(ct)
+                + await _db.BolusCalculations.CountAsync(ct);
             var deviceStatusCount = await _db.DeviceStatuses.LongCountAsync(ct);
             var profileCount = await _db.Profiles.CountAsync(ct);
             var memberCount = await _db.TenantMembers

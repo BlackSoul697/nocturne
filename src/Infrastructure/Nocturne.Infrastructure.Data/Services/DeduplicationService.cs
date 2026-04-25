@@ -81,48 +81,8 @@ public class DeduplicationService : IDeduplicationService
             return Guid.CreateVersion7();
         }
 
-        // For treatments, check event type and relevant values
-        if (recordType == RecordType.Treatment && !string.IsNullOrEmpty(criteria.EventType))
-        {
-            var canonicalIds = potentialMatches.Select(m => m.CanonicalId).Distinct().ToList();
-
-            foreach (var canonicalId in canonicalIds)
-            {
-                var recordIds = potentialMatches
-                    .Where(m => m.CanonicalId == canonicalId)
-                    .Select(m => m.RecordId)
-                    .ToList();
-
-                var treatments = await _context.Treatments
-                    .Where(t => recordIds.Contains(t.Id))
-                    .ToListAsync(cancellationToken);
-
-                foreach (var treatment in treatments)
-                {
-                    if (!string.Equals(treatment.EventType, criteria.EventType, StringComparison.OrdinalIgnoreCase))
-                        continue;
-
-                    // Check insulin if relevant
-                    if (criteria.Insulin.HasValue && treatment.Insulin.HasValue)
-                    {
-                        if (Math.Abs(treatment.Insulin.Value - criteria.Insulin.Value) > criteria.InsulinTolerance)
-                            continue;
-                    }
-
-                    // Check carbs if relevant
-                    if (criteria.Carbs.HasValue && treatment.Carbs.HasValue)
-                    {
-                        if (Math.Abs(treatment.Carbs.Value - criteria.Carbs.Value) > criteria.CarbsTolerance)
-                            continue;
-                    }
-
-                    // Match found
-                    return canonicalId;
-                }
-            }
-        }
         // For state spans, check category and state
-        else if (recordType == RecordType.StateSpan && criteria.Category.HasValue)
+        if (recordType == RecordType.StateSpan && criteria.Category.HasValue)
         {
             var canonicalIds = potentialMatches.Select(m => m.CanonicalId).Distinct().ToList();
             var categoryStr = criteria.Category.Value.ToString();
@@ -436,7 +396,6 @@ public class DeduplicationService : IDeduplicationService
             "carbintake" => await _context.CarbIntakes.AnyAsync(c => c.Id == recordId, ct),
             "sensorglucose" => await _context.SensorGlucose.AnyAsync(s => s.Id == recordId, ct),
             "tempbasal" => await _context.TempBasals.AnyAsync(t => t.Id == recordId, ct),
-            "treatment" => await _context.Treatments.AnyAsync(t => t.Id == recordId, ct),
             "bgcheck" => await _context.BGChecks.AnyAsync(b => b.Id == recordId, ct),
             "deviceevent" => await _context.DeviceEvents.AnyAsync(d => d.Id == recordId, ct),
             "note" => await _context.Notes.AnyAsync(n => n.Id == recordId, ct),
@@ -498,33 +457,11 @@ public class DeduplicationService : IDeduplicationService
     }
 
     /// <inheritdoc />
-    public async Task<Treatment?> GetUnifiedTreatmentAsync(
+    public Task<Treatment?> GetUnifiedTreatmentAsync(
         Guid canonicalId,
         CancellationToken cancellationToken = default)
     {
-        var linkedRecords = await _context.LinkedRecords
-            .Where(lr => lr.CanonicalId == canonicalId && lr.RecordType == "treatment")
-            .OrderBy(lr => lr.SourceTimestamp)
-            .ToListAsync(cancellationToken);
-
-        if (linkedRecords.Count == 0)
-            return null;
-
-        var recordIds = linkedRecords.Select(lr => lr.RecordId).ToList();
-        var treatments = await _context.Treatments
-            .Where(t => recordIds.Contains(t.Id))
-            .ToListAsync(cancellationToken);
-
-        if (treatments.Count == 0)
-            return null;
-
-        // Sort by timestamp to get primary first
-        var sortedTreatments = treatments
-            .OrderBy(t => t.Mills)
-            .Select(TreatmentMapper.ToDomainModel)
-            .ToList();
-
-        return MergeTreatments(sortedTreatments, canonicalId);
+        return Task.FromResult<Treatment?>(null);
     }
 
     /// <inheritdoc />
@@ -566,7 +503,7 @@ public class DeduplicationService : IDeduplicationService
 
         try
         {
-            var treatmentCount = await _context.Treatments.CountAsync(cancellationToken);
+            var treatmentCount = 0;
             var stateSpanCount = await _context.StateSpans.CountAsync(cancellationToken);
             var sensorGlucoseCount = await _context.SensorGlucose.CountAsync(cancellationToken);
             var meterGlucoseCount = await _context.MeterGlucose.CountAsync(cancellationToken);
@@ -601,22 +538,6 @@ public class DeduplicationService : IDeduplicationService
             groupsCreated += entryResult.groups;
             recordsLinked += entryResult.linked;
             duplicateGroups += entryResult.duplicates;
-
-            // Process treatments
-            progress?.Report(new DeduplicationProgress
-            {
-                TotalRecords = totalRecords,
-                ProcessedRecords = processed,
-                GroupsFound = groupsCreated,
-                RecordsLinked = recordsLinked,
-                CurrentPhase = "Treatments"
-            });
-
-            var treatmentResult = await DeduplicateTreatmentsAsync(progress, totalRecords, processed, cancellationToken);
-            processed += treatmentResult.processed;
-            groupsCreated += treatmentResult.groups;
-            recordsLinked += treatmentResult.linked;
-            duplicateGroups += treatmentResult.duplicates;
 
             // Process state spans
             progress?.Report(new DeduplicationProgress
@@ -776,7 +697,7 @@ public class DeduplicationService : IDeduplicationService
                 DuplicateGroupsFound = duplicateGroups,
                 Duration = stopwatch.Elapsed,
                 EntriesProcessed = entryResult.processed,
-                TreatmentsProcessed = treatmentResult.processed,
+                TreatmentsProcessed = 0,
                 StateSpansProcessed = stateSpanResult.processed,
                 SensorGlucoseProcessed = sensorGlucoseResult.processed,
                 BolusesProcessed = bolusResult.processed,
@@ -1008,128 +929,6 @@ public class DeduplicationService : IDeduplicationService
         return (processed, groupsCreated, recordsLinked, duplicateGroups);
     }
 
-    private async Task<(int processed, int groups, int linked, int duplicates)> DeduplicateTreatmentsAsync(
-        IProgress<DeduplicationProgress>? progress,
-        int totalRecords,
-        int startOffset,
-        CancellationToken cancellationToken)
-    {
-        const int batchSize = 500;
-        var processed = 0;
-        var groupsCreated = 0;
-        var recordsLinked = 0;
-        var duplicateGroups = 0;
-
-        var treatments = await _context.Treatments
-            .OrderBy(t => t.Mills)
-            .Select(t => new { t.Id, t.Mills, t.EventType, t.Insulin, t.Carbs, Rate = t.Basal.Rate, t.DataSource })
-            .ToListAsync(cancellationToken);
-
-        var groupedByTime = new Dictionary<long, List<(Guid Id, string? EventType, double? Insulin, double? Carbs, double? Rate, string? DataSource)>>();
-
-        foreach (var treatment in treatments)
-        {
-            var windowKey = treatment.Mills / MatchingWindowMillis;
-
-            if (!groupedByTime.ContainsKey(windowKey))
-                groupedByTime[windowKey] = new();
-
-            groupedByTime[windowKey].Add((treatment.Id, treatment.EventType, treatment.Insulin, treatment.Carbs, treatment.Rate, treatment.DataSource));
-        }
-
-        foreach (var (windowKey, windowTreatments) in groupedByTime)
-        {
-            cancellationToken.ThrowIfCancellationRequested();
-
-            // Group by event type within the window, but treat basal-related types as a single group
-            var eventTypeGroups = windowTreatments
-                .GroupBy(t => GetDeduplicationGroupKey(t.EventType))
-                .Where(g => g.Count() > 0);
-
-            foreach (var eventGroup in eventTypeGroups)
-            {
-                // Check if this is a basal-related group
-                var isBasalGroup = eventGroup.Key == "__basal_group__";
-
-                // Further group by similar values
-                // For basal-related types, we only use Rate (not Insulin, since Insulin is calculated from Rate*Duration)
-                // For other types, we use Insulin and Carbs
-                var valueGroups = eventGroup
-                    .GroupBy(t =>
-                    {
-                        if (isBasalGroup)
-                        {
-                            // For basals, only group by rate (ignore calculated Insulin)
-                            var rateKey = t.Rate.HasValue ? Math.Round(t.Rate.Value * 20) / 20 : 0; // ±0.05 u/hr
-                            return (0.0, 0.0, rateKey);
-                        }
-                        else
-                        {
-                            // For non-basals, group by insulin and carbs
-                            var insulinKey = t.Insulin.HasValue ? Math.Round(t.Insulin.Value * 20) / 20 : 0; // ±0.05 units
-                            var carbsKey = t.Carbs.HasValue ? Math.Round(t.Carbs.Value) : 0; // ±1g
-                            return (insulinKey, carbsKey, 0.0);
-                        }
-                    });
-
-                foreach (var valueGroup in valueGroups)
-                {
-                    // Sort by priority so higher priority types (e.g., Temp Basal) come first
-                    var groupTreatments = valueGroup
-                        .OrderByDescending(t => GetBasalTypePriority(t.EventType))
-                        .ThenBy(t => t.Id) // Stable sort for non-basal types
-                        .ToList();
-
-                    if (groupTreatments.Count > 1)
-                    {
-                        duplicateGroups++;
-                    }
-
-                    var canonicalId = Guid.CreateVersion7();
-                    groupsCreated++;
-
-                    foreach (var treatment in groupTreatments)
-                    {
-                        var existing = await _context.LinkedRecords
-                            .AnyAsync(lr => lr.RecordType == "treatment" && lr.RecordId == treatment.Id, cancellationToken);
-
-                        if (!existing)
-                        {
-                            var linkedRecord = new LinkedRecordEntity
-                            {
-                                CanonicalId = canonicalId,
-                                RecordType = "treatment",
-                                RecordId = treatment.Id,
-                                SourceTimestamp = windowKey * MatchingWindowMillis,
-                                DataSource = treatment.DataSource ?? "unknown",
-                                IsPrimary = treatment == groupTreatments.First()
-                            };
-                            _context.LinkedRecords.Add(linkedRecord);
-                            recordsLinked++;
-                        }
-
-                        processed++;
-                    }
-
-                    if (processed % batchSize == 0)
-                    {
-                        await _context.SaveChangesAsync(cancellationToken);
-                        progress?.Report(new DeduplicationProgress
-                        {
-                            TotalRecords = totalRecords,
-                            ProcessedRecords = startOffset + processed,
-                            GroupsFound = groupsCreated,
-                            RecordsLinked = recordsLinked,
-                            CurrentPhase = "Treatments"
-                        });
-                    }
-                }
-            }
-        }
-
-        await _context.SaveChangesAsync(cancellationToken);
-        return (processed, groupsCreated, recordsLinked, duplicateGroups);
-    }
 
     private async Task<(int processed, int groups, int linked, int duplicates)> DeduplicateStateSpansAsync(
         IProgress<DeduplicationProgress>? progress,
@@ -2067,20 +1866,6 @@ public class DeduplicationService : IDeduplicationService
 
     /// <summary>
     /// Gets the deduplication group key for an event type.
-    /// Basal-related types are grouped together under a common key.
-    /// </summary>
-    private static string GetDeduplicationGroupKey(string? eventType)
-    {
-        if (string.IsNullOrEmpty(eventType))
-            return "unknown";
-
-        // Group all basal-related types together
-        if (BasalRelatedTypes.Contains(eventType))
-            return "__basal_group__";
-
-        return eventType;
-    }
-
     /// <summary>
     /// Gets the priority for a basal-related type.
     /// Higher values indicate higher priority (preferred when deduplicating).
