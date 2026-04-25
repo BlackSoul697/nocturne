@@ -14,7 +14,6 @@ using Nocturne.Core.Models.Authorization;
 using Nocturne.Infrastructure.Cache.Abstractions;
 using Nocturne.Infrastructure.Cache.Configuration;
 using Nocturne.Infrastructure.Data;
-using Nocturne.Core.Contracts.Repositories;
 using Nocturne.Core.Contracts.V4;
 using Nocturne.Tests.Shared.Infrastructure;
 using Nocturne.Tests.Shared.Mocks;
@@ -29,7 +28,6 @@ public class CacheIntegrationTests
 {
     private readonly Mock<IEntryStore> _mockEntryStore;
     private readonly Mock<IEntryDecomposer> _mockEntryDecomposer;
-    private readonly Mock<IEntryRepository> _mockEntryRepository;
     private readonly Mock<IEntryCache> _mockEntryCache;
     private readonly Mock<IDataEventSink<Entry>> _mockEntryEvents;
     private readonly Mock<ICacheService> _mockCacheService;
@@ -42,7 +40,6 @@ public class CacheIntegrationTests
     {
         _mockEntryStore = new Mock<IEntryStore>();
         _mockEntryDecomposer = new Mock<IEntryDecomposer>();
-        _mockEntryRepository = new Mock<IEntryRepository>();
         _mockEntryCache = new Mock<IEntryCache>();
         _mockEntryEvents = new Mock<IDataEventSink<Entry>>();
         _mockCacheService = new Mock<ICacheService>();
@@ -77,7 +74,6 @@ public class CacheIntegrationTests
         var entryService = new EntryService(
             _mockEntryStore.Object,
             _mockEntryDecomposer.Object,
-            _mockEntryRepository.Object,
             _mockEntryCache.Object,
             _mockEntryEvents.Object,
             _mockEntryLogger.Object
@@ -134,7 +130,6 @@ public class CacheIntegrationTests
         var entryService = new EntryService(
             _mockEntryStore.Object,
             _mockEntryDecomposer.Object,
-            _mockEntryRepository.Object,
             _mockEntryCache.Object,
             _mockEntryEvents.Object,
             _mockEntryLogger.Object
@@ -179,7 +174,6 @@ public class CacheIntegrationTests
         var entryService = new EntryService(
             _mockEntryStore.Object,
             _mockEntryDecomposer.Object,
-            _mockEntryRepository.Object,
             _mockEntryCache.Object,
             _mockEntryEvents.Object,
             _mockEntryLogger.Object

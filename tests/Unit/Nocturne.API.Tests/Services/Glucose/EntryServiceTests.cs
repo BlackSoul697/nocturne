@@ -4,7 +4,6 @@ using Nocturne.API.Services.Glucose;
 using Nocturne.Core.Contracts.Glucose;
 using Nocturne.Core.Contracts.Entries;
 using Nocturne.Core.Contracts.Events;
-using Nocturne.Core.Contracts.Repositories;
 using Nocturne.Core.Contracts.V4;
 using Nocturne.Core.Models;
 using Nocturne.Core.Models.V4;
@@ -20,7 +19,6 @@ public class EntryServiceTests
 {
     private readonly Mock<IEntryStore> _store = new();
     private readonly Mock<IEntryDecomposer> _decomposer = new();
-    private readonly Mock<IEntryRepository> _repository = new();
     private readonly Mock<IEntryCache> _cache = new();
     private readonly Mock<IDataEventSink<Entry>> _events = new();
     private readonly EntryService _sut;
@@ -34,7 +32,6 @@ public class EntryServiceTests
         _sut = new EntryService(
             _store.Object,
             _decomposer.Object,
-            _repository.Object,
             _cache.Object,
             _events.Object,
             Mock.Of<ILogger<EntryService>>());
@@ -597,8 +594,8 @@ public class EntryServiceTests
         // Arrange
         var find = "{\"type\":\"sgv\"}";
 
-        _repository
-            .Setup(x => x.BulkDeleteEntriesAsync(find, It.IsAny<CancellationToken>()))
+        _decomposer
+            .Setup(x => x.BulkDeleteAsync(find, It.IsAny<CancellationToken>()))
             .ReturnsAsync(5L);
 
         // Act
@@ -606,7 +603,7 @@ public class EntryServiceTests
 
         // Assert
         Assert.Equal(5, result);
-        _repository.Verify(x => x.BulkDeleteEntriesAsync(find, It.IsAny<CancellationToken>()), Times.Once);
+        _decomposer.Verify(x => x.BulkDeleteAsync(find, It.IsAny<CancellationToken>()), Times.Once);
         // Cache invalidation is handled by the EventSink, not the service
         _cache.Verify(x => x.InvalidateAsync(It.IsAny<CancellationToken>()), Times.Never);
         _events.Verify(
@@ -622,8 +619,8 @@ public class EntryServiceTests
         // Arrange
         var find = "{\"type\":\"nonexistent\"}";
 
-        _repository
-            .Setup(x => x.BulkDeleteEntriesAsync(find, It.IsAny<CancellationToken>()))
+        _decomposer
+            .Setup(x => x.BulkDeleteAsync(find, It.IsAny<CancellationToken>()))
             .ReturnsAsync(0L);
 
         // Act
@@ -640,11 +637,11 @@ public class EntryServiceTests
 
     [Fact]
     [Trait("Category", "Unit")]
-    public async Task DeleteEntriesAsync_WithNullFind_DefaultsToEmptyQuery()
+    public async Task DeleteEntriesAsync_WithNullFind_PassesNullToDecomposer()
     {
         // Arrange
-        _repository
-            .Setup(x => x.BulkDeleteEntriesAsync("{}", It.IsAny<CancellationToken>()))
+        _decomposer
+            .Setup(x => x.BulkDeleteAsync(null, It.IsAny<CancellationToken>()))
             .ReturnsAsync(3L);
 
         // Act
@@ -652,7 +649,7 @@ public class EntryServiceTests
 
         // Assert
         Assert.Equal(3, result);
-        _repository.Verify(x => x.BulkDeleteEntriesAsync("{}", It.IsAny<CancellationToken>()), Times.Once);
+        _decomposer.Verify(x => x.BulkDeleteAsync(null, It.IsAny<CancellationToken>()), Times.Once);
     }
 
     #endregion

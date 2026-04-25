@@ -1,7 +1,6 @@
 using Nocturne.Core.Contracts.Glucose;
 using Nocturne.Core.Contracts.Entries;
 using Nocturne.Core.Contracts.Events;
-using Nocturne.Core.Contracts.Repositories;
 using Nocturne.Core.Contracts.V4;
 using Nocturne.Core.Models;
 
@@ -25,7 +24,6 @@ public class EntryService : IEntryService
 
     private readonly IEntryStore _store;
     private readonly IEntryDecomposer _decomposer;
-    private readonly IEntryRepository _repository;
     private readonly IEntryCache _cache;
     private readonly IDataEventSink<Entry> _events;
     private readonly ILogger<EntryService> _logger;
@@ -35,21 +33,18 @@ public class EntryService : IEntryService
     /// </summary>
     /// <param name="store">The entry store for query operations.</param>
     /// <param name="decomposer">The entry decomposer for writing to V4 tables.</param>
-    /// <param name="repository">The legacy entry repository, retained only for bulk delete operations.</param>
     /// <param name="cache">The entry cache for read-through caching.</param>
     /// <param name="events">The event sink for broadcasting create/update/delete events.</param>
     /// <param name="logger">The logger instance.</param>
     public EntryService(
         IEntryStore store,
         IEntryDecomposer decomposer,
-        IEntryRepository repository,
         IEntryCache cache,
         IDataEventSink<Entry> events,
         ILogger<EntryService> logger)
     {
         _store = store;
         _decomposer = decomposer;
-        _repository = repository;
         _cache = cache;
         _events = events;
         _logger = logger;
@@ -246,7 +241,7 @@ public class EntryService : IEntryService
         string? find = null,
         CancellationToken cancellationToken = default)
     {
-        var deletedCount = await _repository.BulkDeleteEntriesAsync(find ?? "{}", cancellationToken);
+        var deletedCount = await _decomposer.BulkDeleteAsync(find, cancellationToken);
 
         await _events.OnBulkDeletedAsync(deletedCount, cancellationToken);
 
