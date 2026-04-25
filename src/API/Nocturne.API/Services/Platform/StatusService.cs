@@ -514,13 +514,17 @@ public class StatusService : IStatusService
 
         var treatmentsTask = LastModifiedAsync(async ctx =>
         {
-            var bolus = await ctx.Boluses.AsNoTracking()
-                .OrderByDescending(b => b.SysUpdatedAt).Select(b => (DateTime?)b.SysUpdatedAt).FirstOrDefaultAsync();
-            var carb = await ctx.CarbIntakes.AsNoTracking()
-                .OrderByDescending(c => c.SysUpdatedAt).Select(c => (DateTime?)c.SysUpdatedAt).FirstOrDefaultAsync();
-            var note = await ctx.Notes.AsNoTracking()
-                .OrderByDescending(n => n.SysUpdatedAt).Select(n => (DateTime?)n.SysUpdatedAt).FirstOrDefaultAsync();
-            return new[] { bolus, carb, note }.Where(d => d.HasValue).Max();
+            var timestamps = new[]
+            {
+                await ctx.Boluses.AsNoTracking().OrderByDescending(b => b.SysUpdatedAt).Select(b => (DateTime?)b.SysUpdatedAt).FirstOrDefaultAsync(),
+                await ctx.CarbIntakes.AsNoTracking().OrderByDescending(c => c.SysUpdatedAt).Select(c => (DateTime?)c.SysUpdatedAt).FirstOrDefaultAsync(),
+                await ctx.BGChecks.AsNoTracking().OrderByDescending(b => b.SysUpdatedAt).Select(b => (DateTime?)b.SysUpdatedAt).FirstOrDefaultAsync(),
+                await ctx.Notes.AsNoTracking().OrderByDescending(n => n.SysUpdatedAt).Select(n => (DateTime?)n.SysUpdatedAt).FirstOrDefaultAsync(),
+                await ctx.DeviceEvents.AsNoTracking().OrderByDescending(d => d.SysUpdatedAt).Select(d => (DateTime?)d.SysUpdatedAt).FirstOrDefaultAsync(),
+                await ctx.TempBasals.AsNoTracking().OrderByDescending(t => t.SysUpdatedAt).Select(t => (DateTime?)t.SysUpdatedAt).FirstOrDefaultAsync(),
+                await ctx.BolusCalculations.AsNoTracking().OrderByDescending(b => b.SysUpdatedAt).Select(b => (DateTime?)b.SysUpdatedAt).FirstOrDefaultAsync(),
+            };
+            return timestamps.Where(d => d.HasValue).Max();
         });
 
         var profileTask = LastModifiedAsync(ctx => ctx.Profiles.AsNoTracking()

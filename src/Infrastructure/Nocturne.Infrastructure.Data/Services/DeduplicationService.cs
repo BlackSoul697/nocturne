@@ -457,14 +457,6 @@ public class DeduplicationService : IDeduplicationService
     }
 
     /// <inheritdoc />
-    public Task<Treatment?> GetUnifiedTreatmentAsync(
-        Guid canonicalId,
-        CancellationToken cancellationToken = default)
-    {
-        return Task.FromResult<Treatment?>(null);
-    }
-
-    /// <inheritdoc />
     public async Task<StateSpan?> GetUnifiedStateSpanAsync(
         Guid canonicalId,
         CancellationToken cancellationToken = default)
@@ -1865,7 +1857,6 @@ public class DeduplicationService : IDeduplicationService
     }
 
     /// <summary>
-    /// Gets the deduplication group key for an event type.
     /// <summary>
     /// Gets the priority for a basal-related type.
     /// Higher values indicate higher priority (preferred when deduplicating).

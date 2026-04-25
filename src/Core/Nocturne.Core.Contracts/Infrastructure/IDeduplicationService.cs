@@ -63,16 +63,6 @@ public interface IDeduplicationService
         CancellationToken cancellationToken = default);
 
     /// <summary>
-    /// Get the unified/merged view for a canonical group of treatments
-    /// </summary>
-    /// <param name="canonicalId">The canonical group ID</param>
-    /// <param name="cancellationToken">Cancellation token</param>
-    /// <returns>A merged treatment with data from all sources</returns>
-    Task<Treatment?> GetUnifiedTreatmentAsync(
-        Guid canonicalId,
-        CancellationToken cancellationToken = default);
-
-    /// <summary>
     /// Get the unified/merged view for a canonical group of state spans
     /// </summary>
     /// <param name="canonicalId">The canonical group ID</param>

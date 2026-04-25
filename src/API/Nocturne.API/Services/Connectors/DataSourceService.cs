@@ -832,6 +832,7 @@ public class DataSourceService : IDataSourceService
             treatmentsDeleted += await _context.Notes.Where(n => n.DataSource == DataSources.DemoService).ExecuteDeleteAsync(cancellationToken);
             treatmentsDeleted += await _context.DeviceEvents.Where(de => de.DataSource == DataSources.DemoService).ExecuteDeleteAsync(cancellationToken);
             treatmentsDeleted += await _context.BolusCalculations.Where(bc => bc.DataSource == DataSources.DemoService).ExecuteDeleteAsync(cancellationToken);
+            treatmentsDeleted += await _context.TempBasals.Where(t => t.DataSource == DataSources.DemoService).ExecuteDeleteAsync(cancellationToken);
             treatmentsDeleted += await _context.StateSpans.Where(s => s.Source == DataSources.DemoService).ExecuteDeleteAsync(cancellationToken);
 
             // Delete device status - demo data uses the demo-service device

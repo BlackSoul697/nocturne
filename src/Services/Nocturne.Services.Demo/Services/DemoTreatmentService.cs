@@ -69,6 +69,7 @@ public class DemoTreatmentService : IDemoTreatmentService
         count += await _dbContext.Notes.Where(n => n.DataSource == DataSources.DemoService).ExecuteDeleteAsync(cancellationToken);
         count += await _dbContext.DeviceEvents.Where(de => de.DataSource == DataSources.DemoService).ExecuteDeleteAsync(cancellationToken);
         count += await _dbContext.BolusCalculations.Where(bc => bc.DataSource == DataSources.DemoService).ExecuteDeleteAsync(cancellationToken);
+        count += await _dbContext.TempBasals.Where(t => t.DataSource == DataSources.DemoService).ExecuteDeleteAsync(cancellationToken);
         count += await _dbContext.StateSpans.Where(s => s.Source == DataSources.DemoService).ExecuteDeleteAsync(cancellationToken);
 
         _logger.LogInformation("Deleted {Count} demo treatment records from V4 tables", count);
