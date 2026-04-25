@@ -129,7 +129,6 @@ public class MealMatchingService : IMealMatchingService
         await _foodEntryRepository.UpdateStatusAsync(
             foodEntryId,
             ConnectorFoodEntryStatus.Matched,
-            treatmentId,
             ct);
 
         _logger.LogInformation(
@@ -143,7 +142,6 @@ public class MealMatchingService : IMealMatchingService
         await _foodEntryRepository.UpdateStatusAsync(
             foodEntryId,
             ConnectorFoodEntryStatus.Standalone,
-            null,
             ct);
 
         _logger.LogInformation("Dismissed meal match for food entry {FoodEntryId}", foodEntryId);

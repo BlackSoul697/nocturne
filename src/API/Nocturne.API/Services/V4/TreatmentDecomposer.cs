@@ -104,7 +104,6 @@ public class TreatmentDecomposer : ITreatmentDecomposer, IDecomposer<Treatment>
             TenantId = _dbContext.TenantId,
             Source = "treatment_decomposer",
             SourceRecordId = treatment.Id,
-            SourceTreatmentId = null,
             CreatedAt = DateTime.UtcNow,
         };
         _dbContext.DecompositionBatches.Add(batch);

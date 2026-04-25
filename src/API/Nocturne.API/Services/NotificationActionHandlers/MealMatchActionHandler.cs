@@ -46,7 +46,6 @@ public class MealMatchActionHandler(
                     await foodEntryRepository.UpdateStatusAsync(
                         foodEntryId,
                         ConnectorFoodEntryStatus.Standalone,
-                        null,
                         cancellationToken);
                 }
                 var dismissNotificationService = serviceProvider.GetRequiredService<IInAppNotificationService>();
