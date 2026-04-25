@@ -172,7 +172,7 @@ public class EntryDecomposer : IEntryDecomposer, IDecomposer<Entry>
     {
         var (fromMills, toMills) = Core.Models.Entries.EntryDomainLogic.ParseTimeRangeFromFind(find);
 
-        // NIGHTSCOUT-COMPAT: ParseTimeRangeFromFind extracts $gte/$lte from any field, not just
+        // ParseTimeRangeFromFind extracts $gte/$lte from any field, not just
         // time fields. A query like {"sgv":{"$gte":180}} would parse from=180 (nonsensical as a
         // timestamp). Reject values below year 2000 in millis as clearly not time bounds.
         const long MinPlausibleMills = 946684800000L; // 2000-01-01T00:00:00Z

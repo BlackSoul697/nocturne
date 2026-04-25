@@ -925,7 +925,8 @@ public class TreatmentDecomposer : ITreatmentDecomposer, IDecomposer<Treatment>
     {
         var (fromMills, toMills) = Core.Models.Entries.EntryDomainLogic.ParseTimeRangeFromFind(find);
 
-        // NIGHTSCOUT-COMPAT: Reject implausible timestamps (same guard as EntryDecomposer)
+        // Reject implausible timestamps that clearly aren't time bounds
+        // (e.g. {"carbs":{"$gte":45}} would parse from=45)
         const long MinPlausibleMills = 946684800000L; // 2000-01-01T00:00:00Z
         if (fromMills.HasValue && fromMills.Value < MinPlausibleMills)
             fromMills = null;
