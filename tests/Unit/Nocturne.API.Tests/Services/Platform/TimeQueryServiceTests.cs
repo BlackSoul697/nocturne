@@ -4,6 +4,7 @@ using Moq;
 using Nocturne.API.Services.Platform;
 using Nocturne.Core.Contracts.Legacy;
 using Nocturne.Core.Contracts.Platform;
+using Nocturne.Core.Contracts.Glucose;
 using Nocturne.Core.Contracts.Repositories;
 using Xunit;
 using TimePatternQuery = Nocturne.Core.Contracts.Legacy.TimePatternQuery;
@@ -16,7 +17,7 @@ namespace Nocturne.API.Tests.Services.Platform;
 /// </summary>
 public class TimeQueryServiceTests
 {
-    private readonly Mock<IEntryRepository> _mockEntryRepository;
+    private readonly Mock<IEntryService> _mockEntryService;
     private readonly Mock<ITreatmentRepository> _mockTreatmentRepository;
     private readonly Mock<IDeviceStatusRepository> _mockDeviceStatusRepository;
     private readonly Mock<IBraceExpansionService> _mockBraceExpansionService;
@@ -25,14 +26,14 @@ public class TimeQueryServiceTests
 
     public TimeQueryServiceTests()
     {
-        _mockEntryRepository = new Mock<IEntryRepository>();
+        _mockEntryService = new Mock<IEntryService>();
         _mockTreatmentRepository = new Mock<ITreatmentRepository>();
         _mockDeviceStatusRepository = new Mock<IDeviceStatusRepository>();
         _mockBraceExpansionService = new Mock<IBraceExpansionService>();
         _mockLogger = new Mock<ILogger<TimeQueryService>>();
 
         _timeQueryService = new TimeQueryService(
-            _mockEntryRepository.Object,
+            _mockEntryService.Object,
             _mockTreatmentRepository.Object,
             _mockDeviceStatusRepository.Object,
             _mockBraceExpansionService.Object,
@@ -73,15 +74,12 @@ public class TimeQueryServiceTests
             new Entry { Id = "1", Type = "sgv" },
             new Entry { Id = "2", Type = "sgv" },
         };
-        _mockEntryRepository
+        _mockEntryService
             .Setup(x =>
                 x.GetEntriesWithAdvancedFilterAsync(
                     It.IsAny<string>(),
                     It.IsAny<int>(),
                     It.IsAny<int>(),
-                    It.IsAny<string>(),
-                    It.IsAny<string>(),
-                    It.IsAny<bool>(),
                     It.IsAny<CancellationToken>()
                 )
             )
@@ -98,15 +96,12 @@ public class TimeQueryServiceTests
         // Assert
         result.Should().NotBeNull();
         result.Should().HaveCount(2);
-        _mockEntryRepository.Verify(
+        _mockEntryService.Verify(
             x =>
                 x.GetEntriesWithAdvancedFilterAsync(
                     It.IsAny<string>(),
                     It.IsAny<int>(),
                     It.IsAny<int>(),
-                    It.IsAny<string>(),
-                    It.IsAny<string>(),
-                    It.IsAny<bool>(),
                     It.IsAny<CancellationToken>()
                 ),
             Times.Once
@@ -135,15 +130,12 @@ public class TimeQueryServiceTests
             .Setup(x => x.PrepareTimePatterns(prefix, regex, fieldName))
             .Returns(expectedPatterns);
 
-        _mockEntryRepository
+        _mockEntryService
             .Setup(x =>
                 x.GetEntriesWithAdvancedFilterAsync(
-                    It.IsAny<string?>(),
+                    It.IsAny<string>(),
                     It.IsAny<int>(),
                     It.IsAny<int>(),
-                    It.IsAny<string?>(),
-                    It.IsAny<string?>(),
-                    It.IsAny<bool>(),
                     It.IsAny<CancellationToken>()
                 )
             )
@@ -153,15 +145,12 @@ public class TimeQueryServiceTests
         await _timeQueryService.ExecuteTimeQueryAsync(prefix, regex, "entries", fieldName);
 
         // Assert
-        _mockEntryRepository.Verify(
+        _mockEntryService.Verify(
             x =>
                 x.GetEntriesWithAdvancedFilterAsync(
-                    It.IsAny<string?>(),
+                    It.IsAny<string>(),
                     It.IsAny<int>(),
                     It.IsAny<int>(),
-                    It.IsAny<string?>(),
-                    It.IsAny<string?>(),
-                    It.IsAny<bool>(),
                     It.IsAny<CancellationToken>()
                 ),
             Times.Once
@@ -189,15 +178,12 @@ public class TimeQueryServiceTests
             .Setup(x => x.PrepareTimePatterns(prefix, regex, fieldName))
             .Returns(expectedPatterns);
 
-        _mockEntryRepository
+        _mockEntryService
             .Setup(x =>
                 x.GetEntriesWithAdvancedFilterAsync(
-                    It.IsAny<string?>(),
+                    It.IsAny<string>(),
                     It.IsAny<int>(),
                     It.IsAny<int>(),
-                    It.IsAny<string?>(),
-                    It.IsAny<string?>(),
-                    It.IsAny<bool>(),
                     It.IsAny<CancellationToken>()
                 )
             )
@@ -207,15 +193,12 @@ public class TimeQueryServiceTests
         await _timeQueryService.ExecuteTimeQueryAsync(prefix, regex, "entries", fieldName);
 
         // Assert
-        _mockEntryRepository.Verify(
+        _mockEntryService.Verify(
             x =>
                 x.GetEntriesWithAdvancedFilterAsync(
-                    It.IsAny<string?>(),
+                    It.IsAny<string>(),
                     It.IsAny<int>(),
                     It.IsAny<int>(),
-                    It.IsAny<string?>(),
-                    It.IsAny<string?>(),
-                    It.IsAny<bool>(),
                     It.IsAny<CancellationToken>()
                 ),
             Times.Once
@@ -248,15 +231,12 @@ public class TimeQueryServiceTests
             .Setup(x => x.PrepareTimePatterns(prefix, regex, fieldName))
             .Returns(expectedPatterns);
 
-        _mockEntryRepository
+        _mockEntryService
             .Setup(x =>
                 x.GetEntriesWithAdvancedFilterAsync(
-                    It.IsAny<string?>(),
+                    It.IsAny<string>(),
                     It.IsAny<int>(),
                     It.IsAny<int>(),
-                    It.IsAny<string?>(),
-                    It.IsAny<string?>(),
-                    It.IsAny<bool>(),
                     It.IsAny<CancellationToken>()
                 )
             )
@@ -293,15 +273,12 @@ public class TimeQueryServiceTests
         switch (storageType.ToLowerInvariant())
         {
             case "entries":
-                _mockEntryRepository.Verify(
+                _mockEntryService.Verify(
                     x =>
                         x.GetEntriesWithAdvancedFilterAsync(
-                            It.IsAny<string?>(),
+                            It.IsAny<string>(),
                             It.IsAny<int>(),
                             It.IsAny<int>(),
-                            It.IsAny<string?>(),
-                            It.IsAny<string?>(),
-                            It.IsAny<bool>(),
                             It.IsAny<CancellationToken>()
                         ),
                     Times.Once
@@ -392,15 +369,12 @@ public class TimeQueryServiceTests
             .Setup(x => x.PrepareTimePatterns(prefix, regex, fieldName))
             .Returns(expectedPatterns);
 
-        _mockEntryRepository
+        _mockEntryService
             .Setup(x =>
                 x.GetEntriesWithAdvancedFilterAsync(
-                    It.IsAny<string?>(),
+                    It.IsAny<string>(),
                     It.IsAny<int>(),
                     It.IsAny<int>(),
-                    It.IsAny<string?>(),
-                    It.IsAny<string?>(),
-                    It.IsAny<bool>(),
                     It.IsAny<CancellationToken>()
                 )
             )
@@ -416,15 +390,12 @@ public class TimeQueryServiceTests
         );
 
         // Assert
-        _mockEntryRepository.Verify(
+        _mockEntryService.Verify(
             x =>
                 x.GetEntriesWithAdvancedFilterAsync(
-                    It.IsAny<string?>(),
+                    It.IsAny<string>(),
                     It.IsAny<int>(),
                     It.IsAny<int>(),
-                    It.IsAny<string?>(),
-                    It.IsAny<string?>(),
-                    It.IsAny<bool>(),
                     It.IsAny<CancellationToken>()
                 ),
             Times.Once
@@ -452,15 +423,12 @@ public class TimeQueryServiceTests
             .Setup(x => x.PrepareTimePatterns(prefix, regex, fieldName))
             .Returns(expectedPatterns);
 
-        _mockEntryRepository
+        _mockEntryService
             .Setup(x =>
                 x.GetEntriesWithAdvancedFilterAsync(
-                    It.IsAny<string?>(),
+                    It.IsAny<string>(),
                     It.IsAny<int>(),
                     It.IsAny<int>(),
-                    It.IsAny<string?>(),
-                    It.IsAny<string?>(),
-                    It.IsAny<bool>(),
                     It.IsAny<CancellationToken>()
                 )
             )
@@ -497,15 +465,12 @@ public class TimeQueryServiceTests
             .Setup(x => x.PrepareTimePatterns(prefix, regex, fieldName))
             .Returns(expectedPatterns);
 
-        _mockEntryRepository
+        _mockEntryService
             .Setup(x =>
                 x.GetEntriesWithAdvancedFilterAsync(
-                    It.IsAny<string?>(),
+                    It.IsAny<string>(),
                     It.IsAny<int>(),
                     It.IsAny<int>(),
-                    It.IsAny<string?>(),
-                    It.IsAny<string?>(),
-                    It.IsAny<bool>(),
                     It.IsAny<CancellationToken>()
                 )
             )
@@ -548,15 +513,12 @@ public class TimeQueryServiceTests
             .Setup(x => x.PrepareTimePatterns(prefix, regex, field))
             .Returns(expectedPatterns);
 
-        _mockEntryRepository
+        _mockEntryService
             .Setup(x =>
                 x.GetEntriesWithAdvancedFilterAsync(
-                    It.IsAny<string?>(),
+                    It.IsAny<string>(),
                     It.IsAny<int>(),
                     It.IsAny<int>(),
-                    It.IsAny<string?>(),
-                    It.IsAny<string?>(),
-                    It.IsAny<bool>(),
                     It.IsAny<CancellationToken>()
                 )
             )
@@ -595,15 +557,12 @@ public class TimeQueryServiceTests
             .Setup(x => x.PrepareTimePatterns(prefix, regex, field))
             .Returns(expectedPatterns);
 
-        _mockEntryRepository
+        _mockEntryService
             .Setup(x =>
                 x.GetEntriesWithAdvancedFilterAsync(
-                    It.IsAny<string?>(),
+                    It.IsAny<string>(),
                     It.IsAny<int>(),
                     It.IsAny<int>(),
-                    It.IsAny<string?>(),
-                    It.IsAny<string?>(),
-                    It.IsAny<bool>(),
                     It.IsAny<CancellationToken>()
                 )
             )
@@ -613,15 +572,12 @@ public class TimeQueryServiceTests
         await _timeQueryService.ExecuteSliceQueryAsync(storage, field, type, prefix, regex);
 
         // Assert
-        _mockEntryRepository.Verify(
+        _mockEntryService.Verify(
             x =>
                 x.GetEntriesWithAdvancedFilterAsync(
-                    It.IsAny<string?>(),
+                    It.IsAny<string>(),
                     It.IsAny<int>(),
                     It.IsAny<int>(),
-                    It.IsAny<string?>(),
-                    It.IsAny<string?>(),
-                    It.IsAny<bool>(),
                     It.IsAny<CancellationToken>()
                 ),
             Times.Once
@@ -651,15 +607,12 @@ public class TimeQueryServiceTests
             .Setup(x => x.PrepareTimePatterns(prefix, regex, field))
             .Returns(expectedPatterns);
 
-        _mockEntryRepository
+        _mockEntryService
             .Setup(x =>
                 x.GetEntriesWithAdvancedFilterAsync(
-                    It.IsAny<string?>(),
+                    It.IsAny<string>(),
                     It.IsAny<int>(),
                     It.IsAny<int>(),
-                    It.IsAny<string?>(),
-                    It.IsAny<string?>(),
-                    It.IsAny<bool>(),
                     It.IsAny<CancellationToken>()
                 )
             )
@@ -669,15 +622,12 @@ public class TimeQueryServiceTests
         await _timeQueryService.ExecuteSliceQueryAsync(storage, field, type, prefix, regex);
 
         // Assert
-        _mockEntryRepository.Verify(
+        _mockEntryService.Verify(
             x =>
                 x.GetEntriesWithAdvancedFilterAsync(
-                    It.IsAny<string?>(),
+                    It.IsAny<string>(),
                     It.IsAny<int>(),
                     It.IsAny<int>(),
-                    It.IsAny<string?>(),
-                    It.IsAny<string?>(),
-                    It.IsAny<bool>(),
                     It.IsAny<CancellationToken>()
                 ),
             Times.Once
@@ -711,15 +661,12 @@ public class TimeQueryServiceTests
             .Setup(x => x.PrepareTimePatterns(prefix, regex, field))
             .Returns(expectedPatterns);
 
-        _mockEntryRepository
+        _mockEntryService
             .Setup(x =>
                 x.GetEntriesWithAdvancedFilterAsync(
-                    It.IsAny<string?>(),
+                    It.IsAny<string>(),
                     It.IsAny<int>(),
                     It.IsAny<int>(),
-                    It.IsAny<string?>(),
-                    It.IsAny<string?>(),
-                    It.IsAny<bool>(),
                     It.IsAny<CancellationToken>()
                 )
             )
@@ -756,15 +703,12 @@ public class TimeQueryServiceTests
         switch (storageType.ToLowerInvariant())
         {
             case "entries":
-                _mockEntryRepository.Verify(
+                _mockEntryService.Verify(
                     x =>
                         x.GetEntriesWithAdvancedFilterAsync(
-                            It.IsAny<string?>(),
+                            It.IsAny<string>(),
                             It.IsAny<int>(),
                             It.IsAny<int>(),
-                            It.IsAny<string?>(),
-                            It.IsAny<string?>(),
-                            It.IsAny<bool>(),
                             It.IsAny<CancellationToken>()
                         ),
                     Times.Once
@@ -1117,15 +1061,12 @@ public class TimeQueryServiceTests
             .Setup(x => x.PrepareTimePatterns(prefix, regex, fieldName))
             .Returns(expectedPatterns);
 
-        _mockEntryRepository
+        _mockEntryService
             .Setup(x =>
                 x.GetEntriesWithAdvancedFilterAsync(
-                    It.IsAny<string?>(),
+                    It.IsAny<string>(),
                     It.IsAny<int>(),
                     It.IsAny<int>(),
-                    It.IsAny<string?>(),
-                    It.IsAny<string?>(),
-                    It.IsAny<bool>(),
                     It.IsAny<CancellationToken>()
                 )
             )
@@ -1141,15 +1082,12 @@ public class TimeQueryServiceTests
         );
 
         // Assert
-        _mockEntryRepository.Verify(
+        _mockEntryService.Verify(
             x =>
                 x.GetEntriesWithAdvancedFilterAsync(
-                    It.IsAny<string?>(),
+                    It.IsAny<string>(),
                     It.IsAny<int>(),
                     It.IsAny<int>(),
-                    It.IsAny<string?>(),
-                    It.IsAny<string?>(),
-                    It.IsAny<bool>(),
                     It.IsAny<CancellationToken>()
                 ),
             Times.Once
@@ -1188,15 +1126,12 @@ public class TimeQueryServiceTests
             .Setup(x => x.PrepareTimePatterns(prefix, regex, fieldName))
             .Returns(expectedPatterns);
 
-        _mockEntryRepository
+        _mockEntryService
             .Setup(x =>
                 x.GetEntriesWithAdvancedFilterAsync(
-                    It.IsAny<string?>(),
+                    It.IsAny<string>(),
                     It.IsAny<int>(),
                     It.IsAny<int>(),
-                    It.IsAny<string?>(),
-                    It.IsAny<string?>(),
-                    It.IsAny<bool>(),
                     It.IsAny<CancellationToken>()
                 )
             )
@@ -1212,15 +1147,12 @@ public class TimeQueryServiceTests
         );
 
         // Assert
-        _mockEntryRepository.Verify(
+        _mockEntryService.Verify(
             x =>
                 x.GetEntriesWithAdvancedFilterAsync(
-                    It.IsAny<string?>(),
+                    It.IsAny<string>(),
                     It.IsAny<int>(),
                     It.IsAny<int>(),
-                    It.IsAny<string?>(),
-                    It.IsAny<string?>(),
-                    It.IsAny<bool>(),
                     It.IsAny<CancellationToken>()
                 ),
             Times.Once
@@ -1255,15 +1187,12 @@ public class TimeQueryServiceTests
             .Setup(x => x.PrepareTimePatterns(prefix, regex, fieldName))
             .Returns(expectedPatterns);
 
-        _mockEntryRepository
+        _mockEntryService
             .Setup(x =>
                 x.GetEntriesWithAdvancedFilterAsync(
-                    It.IsAny<string?>(),
+                    It.IsAny<string>(),
                     It.IsAny<int>(),
                     It.IsAny<int>(),
-                    It.IsAny<string?>(),
-                    It.IsAny<string?>(),
-                    It.IsAny<bool>(),
                     It.IsAny<CancellationToken>()
                 )
             )
@@ -1279,15 +1208,12 @@ public class TimeQueryServiceTests
         );
 
         // Assert
-        _mockEntryRepository.Verify(
+        _mockEntryService.Verify(
             x =>
                 x.GetEntriesWithAdvancedFilterAsync(
-                    It.IsAny<string?>(),
+                    It.IsAny<string>(),
                     It.IsAny<int>(),
                     It.IsAny<int>(),
-                    It.IsAny<string?>(),
-                    It.IsAny<string?>(),
-                    It.IsAny<bool>(),
                     It.IsAny<CancellationToken>()
                 ),
             Times.Once
@@ -1319,15 +1245,12 @@ public class TimeQueryServiceTests
             .Setup(x => x.PrepareTimePatterns(prefix, regex, fieldName))
             .Returns(expectedPatterns);
 
-        _mockEntryRepository
+        _mockEntryService
             .Setup(x =>
                 x.GetEntriesWithAdvancedFilterAsync(
-                    It.IsAny<string?>(),
+                    It.IsAny<string>(),
                     It.IsAny<int>(),
                     It.IsAny<int>(),
-                    It.IsAny<string?>(),
-                    It.IsAny<string?>(),
-                    It.IsAny<bool>(),
                     It.IsAny<CancellationToken>()
                 )
             )
@@ -1337,15 +1260,12 @@ public class TimeQueryServiceTests
         await _timeQueryService.ExecuteTimeQueryAsync(prefix, regex, "entries", fieldName);
 
         // Assert
-        _mockEntryRepository.Verify(
+        _mockEntryService.Verify(
             x =>
                 x.GetEntriesWithAdvancedFilterAsync(
-                    It.IsAny<string?>(),
+                    It.IsAny<string>(),
                     It.IsAny<int>(),
                     It.IsAny<int>(),
-                    It.IsAny<string?>(),
-                    It.IsAny<string?>(),
-                    It.IsAny<bool>(),
                     It.IsAny<CancellationToken>()
                 ),
             Times.Once
@@ -1374,15 +1294,12 @@ public class TimeQueryServiceTests
             .Setup(x => x.PrepareTimePatterns(prefix, regex, fieldName))
             .Returns(expectedPatterns);
 
-        _mockEntryRepository
+        _mockEntryService
             .Setup(x =>
                 x.GetEntriesWithAdvancedFilterAsync(
-                    It.IsAny<string?>(),
+                    It.IsAny<string>(),
                     It.IsAny<int>(),
                     It.IsAny<int>(),
-                    It.IsAny<string?>(),
-                    It.IsAny<string?>(),
-                    It.IsAny<bool>(),
                     cancellationToken
                 )
             )
@@ -1399,15 +1316,12 @@ public class TimeQueryServiceTests
         );
 
         // Assert
-        _mockEntryRepository.Verify(
+        _mockEntryService.Verify(
             x =>
                 x.GetEntriesWithAdvancedFilterAsync(
-                    It.IsAny<string?>(),
+                    It.IsAny<string>(),
                     It.IsAny<int>(),
                     It.IsAny<int>(),
-                    It.IsAny<string?>(),
-                    It.IsAny<string?>(),
-                    It.IsAny<bool>(),
                     cancellationToken
                 ),
             Times.Once
@@ -1438,15 +1352,12 @@ public class TimeQueryServiceTests
             .Setup(x => x.PrepareTimePatterns(prefix, regex, field))
             .Returns(expectedPatterns);
 
-        _mockEntryRepository
+        _mockEntryService
             .Setup(x =>
                 x.GetEntriesWithAdvancedFilterAsync(
-                    It.IsAny<string?>(),
+                    It.IsAny<string>(),
                     It.IsAny<int>(),
                     It.IsAny<int>(),
-                    It.IsAny<string?>(),
-                    It.IsAny<string?>(),
-                    It.IsAny<bool>(),
                     cancellationToken
                 )
             )
@@ -1464,15 +1375,12 @@ public class TimeQueryServiceTests
         );
 
         // Assert
-        _mockEntryRepository.Verify(
+        _mockEntryService.Verify(
             x =>
                 x.GetEntriesWithAdvancedFilterAsync(
-                    It.IsAny<string?>(),
+                    It.IsAny<string>(),
                     It.IsAny<int>(),
                     It.IsAny<int>(),
-                    It.IsAny<string?>(),
-                    It.IsAny<string?>(),
-                    It.IsAny<bool>(),
                     cancellationToken
                 ),
             Times.Once
@@ -1501,15 +1409,12 @@ public class TimeQueryServiceTests
             .Setup(x => x.PrepareTimePatterns(prefix, regex, fieldName))
             .Returns(expectedPatterns);
 
-        _mockEntryRepository
+        _mockEntryService
             .Setup(x =>
                 x.GetEntriesWithAdvancedFilterAsync(
-                    It.IsAny<string?>(),
+                    It.IsAny<string>(),
                     It.IsAny<int>(),
                     It.IsAny<int>(),
-                    It.IsAny<string?>(),
-                    It.IsAny<string?>(),
-                    It.IsAny<bool>(),
                     It.IsAny<CancellationToken>()
                 )
             )
@@ -1519,15 +1424,12 @@ public class TimeQueryServiceTests
         await _timeQueryService.ExecuteTimeQueryAsync(prefix, regex, storageType, fieldName);
 
         // Assert
-        _mockEntryRepository.Verify(
+        _mockEntryService.Verify(
             x =>
                 x.GetEntriesWithAdvancedFilterAsync(
-                    It.IsAny<string?>(),
+                    It.IsAny<string>(),
                     It.IsAny<int>(),
                     It.IsAny<int>(),
-                    It.IsAny<string?>(),
-                    It.IsAny<string?>(),
-                    It.IsAny<bool>(),
                     It.IsAny<CancellationToken>()
                 ),
             Times.Once
@@ -1619,15 +1521,12 @@ public class TimeQueryServiceTests
             .Setup(x => x.PrepareTimePatterns(prefix, regex, fieldName))
             .Returns(expectedPatterns);
 
-        _mockEntryRepository
+        _mockEntryService
             .Setup(x =>
                 x.GetEntriesWithAdvancedFilterAsync(
-                    It.IsAny<string?>(),
+                    It.IsAny<string>(),
                     It.IsAny<int>(),
                     It.IsAny<int>(),
-                    It.IsAny<string?>(),
-                    It.IsAny<string?>(),
-                    It.IsAny<bool>(),
                     It.IsAny<CancellationToken>()
                 )
             )
@@ -1643,15 +1542,12 @@ public class TimeQueryServiceTests
         );
 
         // Assert
-        _mockEntryRepository.Verify(
+        _mockEntryService.Verify(
             x =>
                 x.GetEntriesWithAdvancedFilterAsync(
-                    It.IsAny<string?>(),
+                    It.IsAny<string>(),
                     It.IsAny<int>(),
                     It.IsAny<int>(),
-                    It.IsAny<string?>(),
-                    It.IsAny<string?>(),
-                    It.IsAny<bool>(),
                     It.IsAny<CancellationToken>()
                 ),
             Times.Once
@@ -1689,15 +1585,12 @@ public class TimeQueryServiceTests
             .Setup(x => x.PrepareTimePatterns(prefix, regex, field))
             .Returns(expectedPatterns);
 
-        _mockEntryRepository
+        _mockEntryService
             .Setup(x =>
                 x.GetEntriesWithAdvancedFilterAsync(
-                    It.IsAny<string?>(),
+                    It.IsAny<string>(),
                     It.IsAny<int>(),
                     It.IsAny<int>(),
-                    It.IsAny<string?>(),
-                    It.IsAny<string?>(),
-                    It.IsAny<bool>(),
                     It.IsAny<CancellationToken>()
                 )
             )
@@ -1714,15 +1607,12 @@ public class TimeQueryServiceTests
         );
 
         // Assert
-        _mockEntryRepository.Verify(
+        _mockEntryService.Verify(
             x =>
                 x.GetEntriesWithAdvancedFilterAsync(
-                    It.IsAny<string?>(),
+                    It.IsAny<string>(),
                     It.IsAny<int>(),
                     It.IsAny<int>(),
-                    It.IsAny<string?>(),
-                    It.IsAny<string?>(),
-                    It.IsAny<bool>(),
                     It.IsAny<CancellationToken>()
                 ),
             Times.Once
@@ -1762,15 +1652,12 @@ public class TimeQueryServiceTests
             .Setup(x => x.PrepareTimePatterns(prefix, regex, fieldName))
             .Returns(expectedPatterns);
 
-        _mockEntryRepository
+        _mockEntryService
             .Setup(x =>
                 x.GetEntriesWithAdvancedFilterAsync(
-                    It.IsAny<string?>(),
+                    It.IsAny<string>(),
                     It.IsAny<int>(),
                     It.IsAny<int>(),
-                    It.IsAny<string?>(),
-                    It.IsAny<string?>(),
-                    It.IsAny<bool>(),
                     It.IsAny<CancellationToken>()
                 )
             )
@@ -1786,15 +1673,12 @@ public class TimeQueryServiceTests
         );
 
         // Assert
-        _mockEntryRepository.Verify(
+        _mockEntryService.Verify(
             x =>
                 x.GetEntriesWithAdvancedFilterAsync(
-                    It.IsAny<string?>(),
+                    It.IsAny<string>(),
                     It.IsAny<int>(),
                     It.IsAny<int>(),
-                    It.IsAny<string?>(),
-                    It.IsAny<string?>(),
-                    It.IsAny<bool>(),
                     It.IsAny<CancellationToken>()
                 ),
             Times.Once
@@ -1829,15 +1713,12 @@ public class TimeQueryServiceTests
             .Setup(x => x.PrepareTimePatterns(prefix, regex, fieldName))
             .Returns(expectedPatterns);
 
-        _mockEntryRepository
+        _mockEntryService
             .Setup(x =>
                 x.GetEntriesWithAdvancedFilterAsync(
-                    It.IsAny<string?>(),
+                    It.IsAny<string>(),
                     It.IsAny<int>(),
                     It.IsAny<int>(),
-                    It.IsAny<string?>(),
-                    It.IsAny<string?>(),
-                    It.IsAny<bool>(),
                     It.IsAny<CancellationToken>()
                 )
             )
@@ -1853,15 +1734,12 @@ public class TimeQueryServiceTests
         );
 
         // Assert
-        _mockEntryRepository.Verify(
+        _mockEntryService.Verify(
             x =>
                 x.GetEntriesWithAdvancedFilterAsync(
-                    It.IsAny<string?>(),
+                    It.IsAny<string>(),
                     It.IsAny<int>(),
                     It.IsAny<int>(),
-                    It.IsAny<string?>(),
-                    It.IsAny<string?>(),
-                    It.IsAny<bool>(),
                     It.IsAny<CancellationToken>()
                 ),
             Times.Once
@@ -1896,15 +1774,12 @@ public class TimeQueryServiceTests
             .Setup(x => x.PrepareTimePatterns(prefix, regex, fieldName))
             .Returns(expectedPatterns);
 
-        _mockEntryRepository
+        _mockEntryService
             .Setup(x =>
                 x.GetEntriesWithAdvancedFilterAsync(
-                    It.IsAny<string?>(),
+                    It.IsAny<string>(),
                     It.IsAny<int>(),
                     It.IsAny<int>(),
-                    It.IsAny<string?>(),
-                    It.IsAny<string?>(),
-                    It.IsAny<bool>(),
                     It.IsAny<CancellationToken>()
                 )
             )
@@ -1920,15 +1795,12 @@ public class TimeQueryServiceTests
         );
 
         // Assert
-        _mockEntryRepository.Verify(
+        _mockEntryService.Verify(
             x =>
                 x.GetEntriesWithAdvancedFilterAsync(
-                    It.IsAny<string?>(),
+                    It.IsAny<string>(),
                     It.IsAny<int>(),
                     It.IsAny<int>(),
-                    It.IsAny<string?>(),
-                    It.IsAny<string?>(),
-                    It.IsAny<bool>(),
                     It.IsAny<CancellationToken>()
                 ),
             Times.Once
@@ -1964,15 +1836,12 @@ public class TimeQueryServiceTests
             .Setup(x => x.PrepareTimePatterns(prefix, regex, fieldName))
             .Returns(expectedPatterns);
 
-        _mockEntryRepository
+        _mockEntryService
             .Setup(x =>
                 x.GetEntriesWithAdvancedFilterAsync(
-                    It.IsAny<string?>(),
+                    It.IsAny<string>(),
                     It.IsAny<int>(),
                     It.IsAny<int>(),
-                    It.IsAny<string?>(),
-                    It.IsAny<string?>(),
-                    It.IsAny<bool>(),
                     It.IsAny<CancellationToken>()
                 )
             )
@@ -1988,15 +1857,12 @@ public class TimeQueryServiceTests
         );
 
         // Assert
-        _mockEntryRepository.Verify(
+        _mockEntryService.Verify(
             x =>
                 x.GetEntriesWithAdvancedFilterAsync(
-                    It.IsAny<string?>(),
+                    It.IsAny<string>(),
                     It.IsAny<int>(),
                     It.IsAny<int>(),
-                    It.IsAny<string?>(),
-                    It.IsAny<string?>(),
-                    It.IsAny<bool>(),
                     It.IsAny<CancellationToken>()
                 ),
             Times.Once
