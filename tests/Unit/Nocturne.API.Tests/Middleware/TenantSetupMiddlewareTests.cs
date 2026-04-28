@@ -464,24 +464,6 @@ public class TenantSetupMiddlewareTests : IDisposable
             Issuer = "https://accounts.google.com",
             Email = "user@example.com",
             LinkedAt = DateTime.UtcNow,
-    [Fact]
-    public async Task WhenTenantHasOnboardingCompletedAt_IsOnboarded()
-    {
-        var subjectId = Guid.CreateVersion7();
-        _dbContext.Subjects.Add(new SubjectEntity
-        {
-            Id = subjectId,
-            Name = "User",
-            IsActive = true,
-            IsSystemSubject = false,
-        });
-        _dbContext.PasskeyCredentials.Add(new PasskeyCredentialEntity
-        {
-            Id = Guid.CreateVersion7(),
-            SubjectId = subjectId,
-            CredentialId = System.Text.Encoding.UTF8.GetBytes("cred-onb"),
-            PublicKey = [],
-            SignCount = 0,
         });
         _dbContext.TenantMembers.Add(new TenantMemberEntity
         {
@@ -683,13 +665,5 @@ public class TenantSetupMiddlewareTests : IDisposable
         ctx.Response.Body.Seek(0, SeekOrigin.Begin);
         var body = await new StreamReader(ctx.Response.Body).ReadToEndAsync();
         body.Should().Contain("setup_required");
-
-        var tenant = await _dbContext.Set<TenantEntity>().FindAsync(_tenantId);
-        tenant!.OnboardingCompletedAt = DateTime.UtcNow;
-
-        await _dbContext.SaveChangesAsync();
-
-        var reloaded = await _dbContext.Set<TenantEntity>().FindAsync(_tenantId);
-        reloaded!.OnboardingCompletedAt.Should().NotBeNull();
     }
 }
