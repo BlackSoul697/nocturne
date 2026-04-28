@@ -25,6 +25,7 @@ public static class SensorGlucoseMapper
             App = model.App,
             DataSource = model.DataSource,
             CorrelationId = model.CorrelationId,
+            PatientDeviceId = model.PatientDeviceId,
             LegacyId = model.LegacyId,
             SysCreatedAt = DateTime.UtcNow,
             SysUpdatedAt = DateTime.UtcNow,
@@ -60,6 +61,7 @@ public static class SensorGlucoseMapper
             App = entity.App,
             DataSource = entity.DataSource,
             CorrelationId = entity.CorrelationId,
+            PatientDeviceId = entity.PatientDeviceId,
             LegacyId = entity.LegacyId,
             CreatedAt = entity.SysCreatedAt,
             ModifiedAt = entity.SysUpdatedAt,
@@ -92,6 +94,7 @@ public static class SensorGlucoseMapper
         entity.App = model.App;
         entity.DataSource = model.DataSource;
         entity.CorrelationId = model.CorrelationId;
+        entity.PatientDeviceId = model.PatientDeviceId;
         entity.LegacyId = model.LegacyId;
         entity.SysUpdatedAt = DateTime.UtcNow;
         entity.Mgdl = model.Mgdl;

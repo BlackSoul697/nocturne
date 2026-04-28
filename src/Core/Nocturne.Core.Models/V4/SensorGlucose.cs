@@ -63,6 +63,11 @@ public class SensorGlucose : IV4Record
     public Guid? CorrelationId { get; set; }
 
     /// <summary>
+    /// FK to the patient's registered CGM device (null if not yet resolved)
+    /// </summary>
+    public Guid? PatientDeviceId { get; set; }
+
+    /// <summary>
     /// Original v1/v3 record ID for migration traceability
     /// </summary>
     public string? LegacyId { get; set; }

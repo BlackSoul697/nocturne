@@ -64,6 +64,12 @@ public class SensorGlucoseEntity : ITenantScoped, IAuditable
     public Guid? CorrelationId { get; set; }
 
     /// <summary>
+    /// FK to the patient's registered device record (resolved at ingest time)
+    /// </summary>
+    [Column("patient_device_id")]
+    public Guid? PatientDeviceId { get; set; }
+
+    /// <summary>
     /// Original v1/v3 record ID for migration traceability
     /// </summary>
     [Column("legacy_id")]
