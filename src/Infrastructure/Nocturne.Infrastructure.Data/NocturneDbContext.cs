@@ -1266,6 +1266,19 @@ public class NocturneDbContext : DbContext
             .HasIndex(e => e.CorrelationId)
             .HasDatabaseName("ix_sensor_glucose_correlation_id");
 
+        modelBuilder
+            .Entity<SensorGlucoseEntity>()
+            .HasOne<PatientDeviceEntity>()
+            .WithMany()
+            .HasForeignKey(e => e.PatientDeviceId)
+            .OnDelete(DeleteBehavior.SetNull);
+
+        modelBuilder
+            .Entity<SensorGlucoseEntity>()
+            .HasIndex(e => e.PatientDeviceId)
+            .HasDatabaseName("ix_sensor_glucose_patient_device_id")
+            .HasFilter("patient_device_id IS NOT NULL");
+
         // MeterGlucose indexes
         modelBuilder
             .Entity<MeterGlucoseEntity>()
