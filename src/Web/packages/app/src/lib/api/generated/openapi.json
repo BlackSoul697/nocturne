@@ -20695,7 +20695,7 @@
         }
       }
     },
-    "/api/v4/oidc/providers": {
+    "/api/auth/oidc/providers": {
       "get": {
         "tags": [
           "Oidc"
@@ -20719,7 +20719,7 @@
         }
       }
     },
-    "/api/v4/oidc/login": {
+    "/api/auth/oidc/login": {
       "get": {
         "tags": [
           "Oidc"
@@ -20766,7 +20766,7 @@
         }
       }
     },
-    "/api/v4/oidc/callback": {
+    "/api/auth/oidc/callback": {
       "get": {
         "tags": [
           "Oidc"
@@ -20833,7 +20833,7 @@
         }
       }
     },
-    "/api/v4/oidc/link": {
+    "/api/auth/oidc/link": {
       "get": {
         "tags": [
           "Oidc"
@@ -20887,7 +20887,7 @@
         }
       }
     },
-    "/api/v4/oidc/link/callback": {
+    "/api/auth/oidc/link/callback": {
       "get": {
         "tags": [
           "Oidc"
@@ -20949,7 +20949,7 @@
         }
       }
     },
-    "/api/v4/oidc/link/identities": {
+    "/api/auth/oidc/link/identities": {
       "get": {
         "tags": [
           "Oidc"
@@ -20981,7 +20981,7 @@
         "x-remote-type": "query"
       }
     },
-    "/api/v4/oidc/link/identities/{identityId}": {
+    "/api/auth/oidc/link/identities/{identityId}": {
       "delete": {
         "tags": [
           "Oidc"
@@ -21040,7 +21040,7 @@
         "x-remote-type": "command"
       }
     },
-    "/api/v4/oidc/refresh": {
+    "/api/auth/oidc/refresh": {
       "post": {
         "tags": [
           "Oidc"
@@ -21072,7 +21072,7 @@
         }
       }
     },
-    "/api/v4/oidc/logout": {
+    "/api/auth/oidc/logout": {
       "post": {
         "tags": [
           "Oidc"
@@ -21108,7 +21108,7 @@
         "x-remote-type": "command"
       }
     },
-    "/api/v4/oidc/userinfo": {
+    "/api/auth/oidc/userinfo": {
       "get": {
         "tags": [
           "Oidc"
@@ -21139,7 +21139,7 @@
         }
       }
     },
-    "/api/v4/oidc/session": {
+    "/api/auth/oidc/session": {
       "get": {
         "tags": [
           "Oidc"
@@ -34117,6 +34117,11 @@
             "format": "guid",
             "nullable": true
           },
+          "patientDeviceId": {
+            "type": "string",
+            "format": "guid",
+            "nullable": true
+          },
           "legacyId": {
             "type": "string",
             "nullable": true
@@ -40029,9 +40034,12 @@
         "type": "object",
         "additionalProperties": false,
         "properties": {
-          "cgmUsePercent": {
-            "type": "number",
-            "format": "double",
+          "cgmDeviceNames": {
+            "type": "string",
+            "nullable": true
+          },
+          "pumpDeviceNames": {
+            "type": "string",
             "nullable": true
           },
           "pumpUsePercent": {

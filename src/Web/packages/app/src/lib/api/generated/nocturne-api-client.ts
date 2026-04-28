@@ -22320,7 +22320,7 @@ export class OidcClient {
      * @return List of enabled OIDC providers.
      */
     getProviders(signal?: AbortSignal): Promise<OidcProviderInfo[]> {
-        let url_ = this.baseUrl + "/api/v4/oidc/providers";
+        let url_ = this.baseUrl + "/api/auth/oidc/providers";
         url_ = url_.replace(/[?&]$/, "");
 
         let options_: RequestInit = {
@@ -22360,7 +22360,7 @@ export class OidcClient {
      * @param returnUrl (optional) URL to return to after login
      */
     login(provider?: string | null | undefined, returnUrl?: string | null | undefined, signal?: AbortSignal): Promise<void> {
-        let url_ = this.baseUrl + "/api/v4/oidc/login?";
+        let url_ = this.baseUrl + "/api/auth/oidc/login?";
         if (provider !== undefined && provider !== null)
             url_ += "provider=" + encodeURIComponent("" + provider) + "&";
         if (returnUrl !== undefined && returnUrl !== null)
@@ -22409,7 +22409,7 @@ export class OidcClient {
      * @param error_description (optional) Error description from provider.
      */
     callback(code?: string | null | undefined, state?: string | null | undefined, error?: string | null | undefined, error_description?: string | null | undefined, signal?: AbortSignal): Promise<void> {
-        let url_ = this.baseUrl + "/api/v4/oidc/callback?";
+        let url_ = this.baseUrl + "/api/auth/oidc/callback?";
         if (code !== undefined && code !== null)
             url_ += "code=" + encodeURIComponent("" + code) + "&";
         if (state !== undefined && state !== null)
@@ -22461,7 +22461,7 @@ export class OidcClient {
      * @param returnUrl (optional) 
      */
     link(provider?: string | undefined, returnUrl?: string | null | undefined, signal?: AbortSignal): Promise<void> {
-        let url_ = this.baseUrl + "/api/v4/oidc/link?";
+        let url_ = this.baseUrl + "/api/auth/oidc/link?";
         if (provider === null)
             throw new globalThis.Error("The parameter 'provider' cannot be null.");
         else if (provider !== undefined)
@@ -22519,7 +22519,7 @@ export class OidcClient {
      * @param error_description (optional) 
      */
     linkCallback(code?: string | null | undefined, state?: string | null | undefined, error?: string | null | undefined, error_description?: string | null | undefined, signal?: AbortSignal): Promise<void> {
-        let url_ = this.baseUrl + "/api/v4/oidc/link/callback?";
+        let url_ = this.baseUrl + "/api/auth/oidc/link/callback?";
         if (code !== undefined && code !== null)
             url_ += "code=" + encodeURIComponent("" + code) + "&";
         if (state !== undefined && state !== null)
@@ -22567,7 +22567,7 @@ export class OidcClient {
      * List OIDC identities linked to the currently-authenticated subject.
      */
     getLinkedIdentities(signal?: AbortSignal): Promise<LinkedOidcIdentitiesResponse> {
-        let url_ = this.baseUrl + "/api/v4/oidc/link/identities";
+        let url_ = this.baseUrl + "/api/auth/oidc/link/identities";
         url_ = url_.replace(/[?&]$/, "");
 
         let options_: RequestInit = {
@@ -22613,7 +22613,7 @@ export class OidcClient {
      * @return Identity unlinked successfully.
      */
     unlinkIdentity(identityId: string, signal?: AbortSignal): Promise<void> {
-        let url_ = this.baseUrl + "/api/v4/oidc/link/identities/{identityId}";
+        let url_ = this.baseUrl + "/api/auth/oidc/link/identities/{identityId}";
         if (identityId === undefined || identityId === null)
             throw new globalThis.Error("The parameter 'identityId' must be defined.");
         url_ = url_.replace("{identityId}", encodeURIComponent("" + identityId));
@@ -22670,7 +22670,7 @@ export class OidcClient {
      * @return Tokens refreshed successfully.
      */
     refresh(signal?: AbortSignal): Promise<OidcTokenResponse> {
-        let url_ = this.baseUrl + "/api/v4/oidc/refresh";
+        let url_ = this.baseUrl + "/api/auth/oidc/refresh";
         url_ = url_.replace(/[?&]$/, "");
 
         let options_: RequestInit = {
@@ -22715,7 +22715,7 @@ export class OidcClient {
      * @return Logout successful.
      */
     logout(providerId?: string | null | undefined, signal?: AbortSignal): Promise<LogoutResponse> {
-        let url_ = this.baseUrl + "/api/v4/oidc/logout?";
+        let url_ = this.baseUrl + "/api/auth/oidc/logout?";
         if (providerId !== undefined && providerId !== null)
             url_ += "providerId=" + encodeURIComponent("" + providerId) + "&";
         url_ = url_.replace(/[?&]$/, "");
@@ -22755,7 +22755,7 @@ export class OidcClient {
      * @return User information retrieved.
      */
     getUserInfo(signal?: AbortSignal): Promise<OidcUserInfo> {
-        let url_ = this.baseUrl + "/api/v4/oidc/userinfo";
+        let url_ = this.baseUrl + "/api/auth/oidc/userinfo";
         url_ = url_.replace(/[?&]$/, "");
 
         let options_: RequestInit = {
@@ -22799,7 +22799,7 @@ export class OidcClient {
      * @return Session information (always returns 200).
      */
     getSession(signal?: AbortSignal): Promise<SessionInfo> {
-        let url_ = this.baseUrl + "/api/v4/oidc/session";
+        let url_ = this.baseUrl + "/api/auth/oidc/session";
         url_ = url_.replace(/[?&]$/, "");
 
         let options_: RequestInit = {
@@ -27754,6 +27754,7 @@ export interface SensorGlucose {
     app?: string | undefined;
     dataSource?: string | undefined;
     correlationId?: string | undefined;
+    patientDeviceId?: string | undefined;
     legacyId?: string | undefined;
     createdAt?: Date;
     modifiedAt?: Date;
@@ -29568,7 +29569,8 @@ export interface HourlyBasalPercentileData {
 }
 
 export interface AidSystemMetrics {
-    cgmUsePercent?: number | undefined;
+    cgmDeviceNames?: string | undefined;
+    pumpDeviceNames?: string | undefined;
     pumpUsePercent?: number | undefined;
     aidActivePercent?: number | undefined;
     cgmActivePercent?: number | undefined;

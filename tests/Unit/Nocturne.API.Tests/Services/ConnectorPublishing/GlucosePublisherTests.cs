@@ -134,7 +134,7 @@ public class GlucosePublisherTests
         _mockSensorGlucoseRepository
             .Setup(r => r.BulkCreateAsync(It.IsAny<IEnumerable<SensorGlucose>>(), It.IsAny<CancellationToken>()))
             .Callback<IEnumerable<SensorGlucose>, CancellationToken>((records, _) => captured = records.ToList())
-            .Returns(Task.CompletedTask);
+            .ReturnsAsync(Enumerable.Empty<SensorGlucose>());
 
         var records = new List<SensorGlucose>
         {
@@ -159,7 +159,7 @@ public class GlucosePublisherTests
         _mockSensorGlucoseRepository
             .Setup(r => r.BulkCreateAsync(It.IsAny<IEnumerable<SensorGlucose>>(), It.IsAny<CancellationToken>()))
             .Callback<IEnumerable<SensorGlucose>, CancellationToken>((records, _) => captured = records.ToList())
-            .Returns(Task.CompletedTask);
+            .ReturnsAsync(Enumerable.Empty<SensorGlucose>());
 
         var records = new List<SensorGlucose>
         {
@@ -195,7 +195,7 @@ public class GlucosePublisherTests
         _mockSensorGlucoseRepository
             .Setup(r => r.BulkCreateAsync(It.IsAny<IEnumerable<SensorGlucose>>(), It.IsAny<CancellationToken>()))
             .Callback<IEnumerable<SensorGlucose>, CancellationToken>((records, _) => captured = records.ToList())
-            .Returns(Task.CompletedTask);
+            .ReturnsAsync(Enumerable.Empty<SensorGlucose>());
 
         var records = new List<SensorGlucose>
         {
@@ -230,7 +230,7 @@ public class GlucosePublisherTests
         _mockSensorGlucoseRepository
             .Setup(r => r.BulkCreateAsync(It.IsAny<IEnumerable<SensorGlucose>>(), It.IsAny<CancellationToken>()))
             .Callback<IEnumerable<SensorGlucose>, CancellationToken>((records, _) => captured = records.ToList())
-            .Returns(Task.CompletedTask);
+            .ReturnsAsync(Enumerable.Empty<SensorGlucose>());
 
         var records = new List<SensorGlucose>
         {
@@ -267,7 +267,7 @@ public class GlucosePublisherTests
         _mockSensorGlucoseRepository
             .Setup(r => r.BulkCreateAsync(It.IsAny<IEnumerable<SensorGlucose>>(), It.IsAny<CancellationToken>()))
             .Callback<IEnumerable<SensorGlucose>, CancellationToken>((records, _) => captured = records.ToList())
-            .Returns(Task.CompletedTask);
+            .ReturnsAsync(Enumerable.Empty<SensorGlucose>());
 
         var records = new List<SensorGlucose>
         {
@@ -303,7 +303,7 @@ public class GlucosePublisherTests
         _mockSensorGlucoseRepository
             .Setup(r => r.BulkCreateAsync(It.IsAny<IEnumerable<SensorGlucose>>(), It.IsAny<CancellationToken>()))
             .Callback<IEnumerable<SensorGlucose>, CancellationToken>((records, _) => captured = records.ToList())
-            .Returns(Task.CompletedTask);
+            .ReturnsAsync(Enumerable.Empty<SensorGlucose>());
 
         var records = new List<SensorGlucose>
         {
@@ -338,7 +338,7 @@ public class GlucosePublisherTests
         _mockSensorGlucoseRepository
             .Setup(r => r.BulkCreateAsync(It.IsAny<IEnumerable<SensorGlucose>>(), It.IsAny<CancellationToken>()))
             .Callback<IEnumerable<SensorGlucose>, CancellationToken>((records, _) => captured = records.ToList())
-            .Returns(Task.CompletedTask);
+            .ReturnsAsync(Enumerable.Empty<SensorGlucose>());
 
         var records = new List<SensorGlucose>
         {
@@ -360,7 +360,7 @@ public class GlucosePublisherTests
 
         _mockSensorGlucoseRepository
             .Setup(r => r.BulkCreateAsync(It.IsAny<IEnumerable<SensorGlucose>>(), It.IsAny<CancellationToken>()))
-            .Returns(Task.CompletedTask);
+            .ReturnsAsync(Enumerable.Empty<SensorGlucose>());
 
         var records = new List<SensorGlucose>
         {
