@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Nocturne.Core.Constants;
 using Nocturne.Core.Contracts.Analytics;
 using Nocturne.Core.Contracts.Profiles;
 using Nocturne.Core.Contracts.Profiles.Resolvers;
@@ -1235,18 +1236,75 @@ public class StatisticsController : ControllerBase
                 e.EventType == DeviceEventType.SiteChange
             );
 
-            // Calculate CGM metrics using existing statistics service
-            double? cgmUsePercent = null;
+            // Resolve CGM device names
+            var cgmDevices = devices.Where(d => d.DeviceCategory == DeviceCategory.CGM).ToList();
+            var cgmDeviceNames = cgmDevices.Count > 0
+                ? string.Join(", ", cgmDevices
+                    .Select(d => d.CatalogId != null ? DeviceCatalog.GetById(d.CatalogId)?.Name : null)
+                    .Where(n => n != null)
+                    .DefaultIfEmpty(cgmDevices.First().Model ?? cgmDevices.First().Manufacturer))
+                : null;
+
+            // Resolve pump device names
+            var pumpDeviceNames = deviceSegments.Count > 0
+                ? string.Join(", ", devices
+                    .Where(d => d.DeviceCategory == DeviceCategory.InsulinPump)
+                    .Select(d => d.CatalogId != null ? DeviceCatalog.GetById(d.CatalogId)?.Name : null)
+                    .Where(n => n != null)
+                    .Distinct())
+                : null;
+
+            // Calculate per-device CGM active time
             double? cgmActivePercent = null;
             if (glucose.Count > 0)
             {
-                var analytics = _statisticsService.AnalyzeGlucoseData(
-                    glucose,
-                    Enumerable.Empty<Bolus>(),
-                    Enumerable.Empty<CarbIntake>()
-                );
-                cgmUsePercent = analytics.DataQuality.CgmActivePercent;
-                cgmActivePercent = analytics.DataQuality.DataCompleteness;
+                if (cgmDevices.Count > 0)
+                {
+                    double totalExpected = 0;
+                    double totalActual = 0;
+
+                    foreach (var cgm in cgmDevices)
+                    {
+                        var catalogEntry = cgm.CatalogId != null ? DeviceCatalog.GetById(cgm.CatalogId) : null;
+                        var interval = catalogEntry?.Cgm?.UpdateIntervalMinutes ?? 5;
+                        var deviceStart = cgm.StartDate.HasValue
+                            ? DateTime.SpecifyKind(cgm.StartDate.Value.ToDateTime(TimeOnly.MinValue), DateTimeKind.Utc)
+                            : startDt;
+                        var deviceEnd = cgm.EndDate.HasValue
+                            ? DateTime.SpecifyKind(cgm.EndDate.Value.ToDateTime(new TimeOnly(23, 59, 59)), DateTimeKind.Utc)
+                            : endDt;
+                        var windowStart = deviceStart > startDt ? deviceStart : startDt;
+                        var windowEnd = deviceEnd < endDt ? deviceEnd : endDt;
+                        var windowMinutes = (windowEnd - windowStart).TotalMinutes;
+
+                        if (windowMinutes <= 0) continue;
+
+                        totalExpected += windowMinutes / interval;
+                        totalActual += glucose.Count(r => r.PatientDeviceId == cgm.Id);
+                    }
+
+                    // Count unattributed readings with fallback interval
+                    var unattributed = glucose.Count(r => r.PatientDeviceId == null);
+                    if (unattributed > 0 && cgmDevices.Count == 0)
+                    {
+                        var fallbackSource = glucose.FirstOrDefault(r => r.PatientDeviceId == null)?.DataSource;
+                        var fallbackInterval = DataSources.GetDefaultUpdateIntervalMinutes(fallbackSource);
+                        totalExpected += (endDt - startDt).TotalMinutes / fallbackInterval;
+                        totalActual += unattributed;
+                    }
+
+                    cgmActivePercent = totalExpected > 0
+                        ? Math.Min(Math.Round(totalActual / totalExpected * 100.0, 1), 100.0)
+                        : null;
+                }
+                else
+                {
+                    // No device registered — use AnalyzeGlucoseData with defaults
+                    var analytics = _statisticsService.AnalyzeGlucoseData(
+                        glucose, Enumerable.Empty<Bolus>(), Enumerable.Empty<CarbIntake>(),
+                        startDate: startDt, endDate: endDt);
+                    cgmActivePercent = analytics.DataQuality.CgmActivePercent;
+                }
             }
 
             // Get target range from target range schedule repository
@@ -1279,7 +1337,8 @@ public class StatisticsController : ControllerBase
                 apsSnapshots,
                 tempBasals,
                 siteChangeCount,
-                cgmUsePercent,
+                cgmDeviceNames,
+                pumpDeviceNames,
                 cgmActivePercent,
                 targetLow,
                 targetHigh,
