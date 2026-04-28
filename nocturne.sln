@@ -146,6 +146,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "NightscoutFoundation.Noctur
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Nocturne.Connectors.NocturneRemote", "src\Connectors\Nocturne.Connectors.NocturneRemote\Nocturne.Connectors.NocturneRemote.csproj", "{0FCE3414-12EE-4743-AFAE-C3A272893B11}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Nocturne.Core.Constants.Tests", "tests\Unit\Nocturne.Core.Constants.Tests\Nocturne.Core.Constants.Tests.csproj", "{042C9FAF-C2A2-4FD6-AFC1-7CFD96B022BF}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -660,6 +662,18 @@ Global
 		{0FCE3414-12EE-4743-AFAE-C3A272893B11}.Release|x64.Build.0 = Release|Any CPU
 		{0FCE3414-12EE-4743-AFAE-C3A272893B11}.Release|x86.ActiveCfg = Release|Any CPU
 		{0FCE3414-12EE-4743-AFAE-C3A272893B11}.Release|x86.Build.0 = Release|Any CPU
+		{042C9FAF-C2A2-4FD6-AFC1-7CFD96B022BF}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{042C9FAF-C2A2-4FD6-AFC1-7CFD96B022BF}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{042C9FAF-C2A2-4FD6-AFC1-7CFD96B022BF}.Debug|x64.ActiveCfg = Debug|Any CPU
+		{042C9FAF-C2A2-4FD6-AFC1-7CFD96B022BF}.Debug|x64.Build.0 = Debug|Any CPU
+		{042C9FAF-C2A2-4FD6-AFC1-7CFD96B022BF}.Debug|x86.ActiveCfg = Debug|Any CPU
+		{042C9FAF-C2A2-4FD6-AFC1-7CFD96B022BF}.Debug|x86.Build.0 = Debug|Any CPU
+		{042C9FAF-C2A2-4FD6-AFC1-7CFD96B022BF}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{042C9FAF-C2A2-4FD6-AFC1-7CFD96B022BF}.Release|Any CPU.Build.0 = Release|Any CPU
+		{042C9FAF-C2A2-4FD6-AFC1-7CFD96B022BF}.Release|x64.ActiveCfg = Release|Any CPU
+		{042C9FAF-C2A2-4FD6-AFC1-7CFD96B022BF}.Release|x64.Build.0 = Release|Any CPU
+		{042C9FAF-C2A2-4FD6-AFC1-7CFD96B022BF}.Release|x86.ActiveCfg = Release|Any CPU
+		{042C9FAF-C2A2-4FD6-AFC1-7CFD96B022BF}.Release|x86.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
@@ -721,5 +735,6 @@ Global
 		{15AD23A6-2AE8-6CCD-98A8-B9F72FE1F2E0} = {DEFF1846-EDA4-2FF5-6B67-8F8E44E83984}
 		{4E7462A7-89D6-44FD-8B40-4DE8BDD12543} = {15AD23A6-2AE8-6CCD-98A8-B9F72FE1F2E0}
 		{0FCE3414-12EE-4743-AFAE-C3A272893B11} = {237CDB4C-E7C4-795B-969A-4CCB7C8B335B}
+		{042C9FAF-C2A2-4FD6-AFC1-7CFD96B022BF} = {F25A9213-C080-46DC-93A8-09D96E2C55A1}
 	EndGlobalSection
 EndGlobal
