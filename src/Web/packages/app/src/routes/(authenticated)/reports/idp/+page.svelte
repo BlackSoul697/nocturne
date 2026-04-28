@@ -287,20 +287,20 @@
       <CardContent>
         <div class="grid grid-cols-2 gap-4 text-sm">
           <div>
-            <div class="text-muted-foreground">CGM Use</div>
-            <div class="font-semibold text-lg">{aidMetrics?.cgmUsePercent != null ? `${Math.round(aidMetrics.cgmUsePercent)}%` : '--'}</div>
+            <div class="text-muted-foreground">CGM</div>
+            <div class="font-semibold text-lg">{aidMetrics?.cgmDeviceNames ?? '--'}</div>
           </div>
           <div>
-            <div class="text-muted-foreground">Pump Use</div>
-            <div class="font-semibold text-lg">{aidMetrics?.pumpUsePercent != null ? `${Math.round(aidMetrics.pumpUsePercent)}%` : '--'}</div>
-          </div>
-          <div>
-            <div class="text-muted-foreground">AID Active</div>
-            <div class="font-semibold text-lg">{aidMetrics?.aidActivePercent != null ? `${Math.round(aidMetrics.aidActivePercent)}%` : '--'}</div>
+            <div class="text-muted-foreground">Pump</div>
+            <div class="font-semibold text-lg">{aidMetrics?.pumpDeviceNames ?? '--'}</div>
           </div>
           <div>
             <div class="text-muted-foreground">CGM Active</div>
             <div class="font-semibold text-lg">{aidMetrics?.cgmActivePercent != null ? `${Math.round(aidMetrics.cgmActivePercent)}%` : '--'}</div>
+          </div>
+          <div>
+            <div class="text-muted-foreground">AID Active</div>
+            <div class="font-semibold text-lg">{aidMetrics?.aidActivePercent != null ? `${Math.round(aidMetrics.aidActivePercent)}%` : '--'}</div>
           </div>
           <div>
             <div class="text-muted-foreground">Target</div>
