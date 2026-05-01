@@ -26,7 +26,17 @@ public class LoopalyzerServiceTests
                 It.IsAny<string?>(), It.IsAny<string?>(), It.IsAny<bool>(),
                 It.IsAny<CancellationToken>()) == Task.FromResult<IEnumerable<Entry>>(Array.Empty<Entry>()));
 
-        var timeline = Mock.Of<ITherapyTimelineResolver>();
+        var snapshot = new TherapySnapshot(
+            dia: 5.0, peakMinutes: 75, carbsPerHour: 30,
+            timezone: TimeZoneInfo.Utc, ccpPercentage: null, ccpTimeshiftMs: 0,
+            sensitivityEntries: null, carbRatioEntries: null, basalEntries: null);
+        var timelineMock = new Mock<ITherapyTimelineResolver>();
+        timelineMock.Setup(t => t.GetSnapshotAtAsync(It.IsAny<long>(), It.IsAny<string?>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(snapshot);
+        timelineMock.Setup(t => t.BuildAsync(It.IsAny<long>(), It.IsAny<long>(), It.IsAny<string?>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync((long fromMills, long toMills, string? _, CancellationToken _) =>
+                new TherapyTimeline(new[] { new TherapySegment(fromMills, toMills, snapshot) }));
+        var timeline = timelineMock.Object;
         var tempBasals = Mock.Of<ITempBasalRepository>(r =>
             r.GetAsync(
                 It.IsAny<DateTime?>(), It.IsAny<DateTime?>(), It.IsAny<string?>(), It.IsAny<string?>(),
@@ -37,15 +47,22 @@ public class LoopalyzerServiceTests
                 It.IsAny<DateTime?>(), It.IsAny<DateTime?>(), It.IsAny<string?>(), It.IsAny<string?>(),
                 It.IsAny<int>(), It.IsAny<int>(), It.IsAny<bool>(),
                 It.IsAny<CancellationToken>()) == Task.FromResult<IEnumerable<ApsSnapshot>>(Array.Empty<ApsSnapshot>()));
-        var treatments = Mock.Of<ITreatmentService>();
-        var iob = Mock.Of<IIobService>();
-        var cob = Mock.Of<ICobService>();
+        var treatments = Mock.Of<ITreatmentService>(t =>
+            t.GetTreatmentsWithAdvancedFilterAsync(It.IsAny<int>(), It.IsAny<int>(), It.IsAny<string?>(), It.IsAny<bool>(), It.IsAny<CancellationToken>())
+                == Task.FromResult<IEnumerable<Treatment>>(Array.Empty<Treatment>()));
+        var iob = Mock.Of<IIobService>(i =>
+            i.FromTreatments(It.IsAny<IReadOnlyList<Treatment>>(), It.IsAny<long>(), It.IsAny<TherapySnapshot>())
+                == new IobResult { Iob = 0, Activity = 0 });
+        var cob = Mock.Of<ICobService>(c =>
+            c.CobTotal(It.IsAny<IReadOnlyList<Treatment>>(), It.IsAny<long>(), It.IsAny<TherapySnapshot>(), It.IsAny<DeviceCobSnapshot?>(), It.IsAny<long>())
+                == new CobResult { Cob = 0 });
         var activeProfile = Mock.Of<IActiveProfileResolver>();
         var basal = Mock.Of<IBasalScheduleRepository>();
         var sensitivity = Mock.Of<ISensitivityScheduleRepository>();
         var carbRatio = Mock.Of<ICarbRatioScheduleRepository>();
+        var targetRange = Mock.Of<ITargetRangeResolver>();
         return new LoopalyzerService(options, service, timeline, tempBasals, apsRepo, treatments, iob, cob,
-            activeProfile, basal, sensitivity, carbRatio);
+            activeProfile, basal, sensitivity, carbRatio, targetRange);
     }
 
     [Fact]
@@ -97,6 +114,9 @@ public class LoopalyzerServiceTests
             new LoopalyzerRequest { From = "2026-01-01", To = "2026-01-14" },
             CancellationToken.None);
 
-        response.Days.Should().BeEmpty();
+        response.Days.Should().HaveCount(14);
+        response.Timezone.Should().Be(TimeZoneInfo.Utc.Id);
+        response.Days.Select(d => d.Date).Should().BeInAscendingOrder();
+        response.Days[0].Sgv.Should().HaveCount(288);
     }
 }

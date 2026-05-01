@@ -26,6 +26,7 @@ public sealed class LoopalyzerService : ILoopalyzerService
     private readonly IBasalScheduleRepository _basalRepo;
     private readonly ISensitivityScheduleRepository _sensitivityRepo;
     private readonly ICarbRatioScheduleRepository _carbRatioRepo;
+    private readonly ITargetRangeResolver _targetRangeResolver;
 
     public LoopalyzerService(
         IOptions<LoopalyzerOptions> options,
@@ -39,7 +40,8 @@ public sealed class LoopalyzerService : ILoopalyzerService
         IActiveProfileResolver activeProfileResolver,
         IBasalScheduleRepository basalRepo,
         ISensitivityScheduleRepository sensitivityRepo,
-        ICarbRatioScheduleRepository carbRatioRepo)
+        ICarbRatioScheduleRepository carbRatioRepo,
+        ITargetRangeResolver targetRangeResolver)
     {
         _options = options.Value;
         _entryService = entryService;
@@ -53,6 +55,7 @@ public sealed class LoopalyzerService : ILoopalyzerService
         _basalRepo = basalRepo;
         _sensitivityRepo = sensitivityRepo;
         _carbRatioRepo = carbRatioRepo;
+        _targetRangeResolver = targetRangeResolver;
     }
 
     /// <summary>
@@ -290,24 +293,92 @@ public sealed class LoopalyzerService : ILoopalyzerService
             new DateTimeOffset(toUtc, TimeSpan.Zero).ToUnixTimeMilliseconds());
     }
 
-    public Task<LoopalyzerResponse> GetDataAsync(LoopalyzerRequest request, CancellationToken ct)
+    public async Task<LoopalyzerResponse> GetDataAsync(LoopalyzerRequest request, CancellationToken ct)
     {
-        var (_, _) = ParseAndValidateRange(request);
+        var (from, to) = ParseAndValidateRange(request);
 
-        // Phase-1 stub: subsequent tasks fill in per-day binning, profiles, and DIA resolution.
-        var response = new LoopalyzerResponse(
-            Days: Array.Empty<LoopalyzerDay>(),
-            Profiles: Array.Empty<LoopalyzerProfile>(),
-            Timezone: "UTC",
-            MostRecentDia: null,
-            MostRecentBgLow: null,
-            MostRecentBgHigh: null
+        // Resolve timezone from the snapshot at the most-recent point in the range.
+        var nowMills = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+        var (_, toMills) = LocalDayWindowMillsUtc(to, TimeZoneInfo.Utc); // tentative window in UTC for snapshot lookup
+        var anchorMills = Math.Min(toMills - 1, nowMills);
+        var anchorSnapshot = await _therapyTimeline.GetSnapshotAtAsync(anchorMills, ct: ct);
+        var tz = anchorSnapshot.Timezone ?? TimeZoneInfo.Utc;
+
+        // Recompute the to-window using the resolved tz (DST edge cases).
+        var (_, toMillsLocal) = LocalDayWindowMillsUtc(to, tz);
+        var bgLow = await _targetRangeResolver.GetLowBGTargetAsync(Math.Min(toMillsLocal - 1, nowMills), ct: ct);
+        var bgHigh = await _targetRangeResolver.GetHighBGTargetAsync(Math.Min(toMillsLocal - 1, nowMills), ct: ct);
+
+        var profiles = await CollectProfilesAsync(from, to, tz, ct);
+
+        var days = new List<LoopalyzerDay>();
+        var isSingleDay = from == to;
+        for (var d = from; d <= to; d = d.AddDays(1))
+        {
+            ct.ThrowIfCancellationRequested();
+            days.Add(await BuildDayAsync(d, tz, isSingleDay, ct));
+        }
+
+        return new LoopalyzerResponse(
+            Days: days,
+            Profiles: profiles,
+            Timezone: tz.Id,
+            MostRecentDia: anchorSnapshot.Dia,
+            MostRecentBgLow: bgLow,
+            MostRecentBgHigh: bgHigh
         );
-        return Task.FromResult(response);
     }
 
-    public Task<LoopalyzerAvailability> GetAvailabilityAsync(CancellationToken ct)
-        => Task.FromResult(new LoopalyzerAvailability(HasApsData: false, LatestApsAt: null));
+    private async Task<LoopalyzerDay> BuildDayAsync(DateOnly day, TimeZoneInfo tz, bool singleDay, CancellationToken ct)
+    {
+        var ctx = await LoadDayContextAsync(day, tz, ct);
+        var sgv = await BinSgvsAsync(day, tz, ct);
+        var scheduledBasal = LoopalyzerBinning.BinScheduledBasal(day, tz,
+            mills => ctx.Timeline.SnapshotAt(mills).BasalRateAt(mills));
+        var tempBasal = await BinTempBasalAsync(day, tz, ct);
+        var iob = BinIob(day, tz, ctx);
+        var cob = BinCob(day, tz, ctx);
+
+        var meals = LoopalyzerMarkers.Meals(ctx.Treatments, day, tz);
+        var boluses = singleDay ? LoopalyzerMarkers.Boluses(ctx.Treatments, day, tz) : Array.Empty<LoopalyzerBolus>();
+        var siteChanges = singleDay ? LoopalyzerMarkers.SiteChanges(ctx.Treatments, day, tz) : Array.Empty<LoopalyzerSiteEvent>();
+        var sensorChanges = singleDay ? LoopalyzerMarkers.SensorChanges(ctx.Treatments, day, tz) : Array.Empty<LoopalyzerSiteEvent>();
+        var predictions = singleDay ? LoopalyzerPredictions.Predictions(ctx.ApsSnapshots, day, tz) : Array.Empty<LoopalyzerPrediction>();
+        var apsBands = singleDay ? LoopalyzerPredictions.Bands(ctx.ApsSnapshots, day, tz) : Array.Empty<LoopalyzerApsBand>();
+
+        var anchor = LocalDayWindowMillsUtc(day, tz).FromMills;
+        var dia = ctx.Timeline.SnapshotAt(anchor).Dia;
+
+        return new LoopalyzerDay(
+            Date: day.ToString("yyyy-MM-dd"),
+            Sgv: sgv,
+            ScheduledBasal: scheduledBasal,
+            TempBasal: tempBasal,
+            Iob: iob.Bins,
+            Cob: cob,
+            Meals: meals,
+            Boluses: boluses,
+            SiteChanges: siteChanges,
+            SensorChanges: sensorChanges,
+            Predictions: predictions,
+            ApsBands: apsBands,
+            Dia: dia,
+            HasApsData: iob.HasApsData
+        );
+    }
+
+    public async Task<LoopalyzerAvailability> GetAvailabilityAsync(CancellationToken ct)
+    {
+        var nowUtc = DateTime.UtcNow;
+        var since = nowUtc.AddDays(-30);
+        var snapshots = await _apsRepo.GetAsync(
+            from: since, to: nowUtc, device: null, source: null,
+            limit: 1, offset: 0, descending: true, ct: ct);
+        var latest = snapshots.FirstOrDefault();
+        return new LoopalyzerAvailability(
+            HasApsData: latest != null,
+            LatestApsAt: latest != null ? new DateTimeOffset(latest.Timestamp, TimeSpan.Zero) : null);
+    }
 
     private (DateOnly From, DateOnly To) ParseAndValidateRange(LoopalyzerRequest request)
     {
