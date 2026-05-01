@@ -5,6 +5,7 @@ using Moq;
 using Nocturne.API.Services.Loopalyzer;
 using Nocturne.Core.Contracts.Glucose;
 using Nocturne.Core.Contracts.Profiles.Resolvers;
+using Nocturne.Core.Contracts.Treatments;
 using Nocturne.Core.Contracts.V4.Repositories;
 using Nocturne.Core.Models;
 using Nocturne.Core.Models.Loopalyzer;
@@ -30,7 +31,14 @@ public class LoopalyzerServiceTests
                 It.IsAny<DateTime?>(), It.IsAny<DateTime?>(), It.IsAny<string?>(), It.IsAny<string?>(),
                 It.IsAny<int>(), It.IsAny<int>(), It.IsAny<bool>(),
                 It.IsAny<CancellationToken>()) == Task.FromResult<IEnumerable<TempBasal>>(Array.Empty<TempBasal>()));
-        return new LoopalyzerService(options, service, timeline, tempBasals);
+        var apsRepo = Mock.Of<IApsSnapshotRepository>(r =>
+            r.GetAsync(
+                It.IsAny<DateTime?>(), It.IsAny<DateTime?>(), It.IsAny<string?>(), It.IsAny<string?>(),
+                It.IsAny<int>(), It.IsAny<int>(), It.IsAny<bool>(),
+                It.IsAny<CancellationToken>()) == Task.FromResult<IEnumerable<ApsSnapshot>>(Array.Empty<ApsSnapshot>()));
+        var treatments = Mock.Of<ITreatmentService>();
+        var iob = Mock.Of<IIobService>();
+        return new LoopalyzerService(options, service, timeline, tempBasals, apsRepo, treatments, iob);
     }
 
     [Fact]

@@ -80,6 +80,26 @@ internal static class LoopalyzerBinning
     /// temp is running. Suspended temps surface as their literal <see cref="TempBasal.Rate"/>
     /// (typically 0).
     /// </summary>
+    /// <summary>
+    /// Iterate the 5-minute bins of <paramref name="day"/> in patient TZ, calling
+    /// <paramref name="resolve"/> with the bin midpoint UTC mills. Returns an array
+    /// of resolved values; bins where <paramref name="resolve"/> returns <c>null</c>
+    /// remain <c>null</c>.
+    /// </summary>
+    public static double?[] BinByMidpoint(DateOnly day, TimeZoneInfo tz, Func<long, double?> resolve)
+    {
+        var bins = new double?[BinsPerDay];
+        var localMidnight = new DateTime(day.Year, day.Month, day.Day, 0, 0, 0, DateTimeKind.Unspecified);
+        for (var i = 0; i < BinsPerDay; i++)
+        {
+            var localMidpoint = localMidnight.AddMinutes(i * MinutesPerBin + (MinutesPerBin / 2.0));
+            var utc = TimeZoneInfo.ConvertTimeToUtc(localMidpoint, tz);
+            var mills = new DateTimeOffset(utc, TimeSpan.Zero).ToUnixTimeMilliseconds();
+            bins[i] = resolve(mills);
+        }
+        return bins;
+    }
+
     public static double?[] BinTempBasal(IEnumerable<TempBasal> tempBasals, DateOnly day, TimeZoneInfo tz)
     {
         var bins = new double?[BinsPerDay];
