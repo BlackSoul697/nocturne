@@ -4,6 +4,7 @@ using Microsoft.Extensions.Options;
 using Moq;
 using Nocturne.API.Services.Loopalyzer;
 using Nocturne.Core.Contracts.Glucose;
+using Nocturne.API.Services.Treatments;
 using Nocturne.Core.Contracts.Profiles.Resolvers;
 using Nocturne.Core.Contracts.Treatments;
 using Nocturne.Core.Contracts.V4.Repositories;
@@ -38,7 +39,8 @@ public class LoopalyzerServiceTests
                 It.IsAny<CancellationToken>()) == Task.FromResult<IEnumerable<ApsSnapshot>>(Array.Empty<ApsSnapshot>()));
         var treatments = Mock.Of<ITreatmentService>();
         var iob = Mock.Of<IIobService>();
-        return new LoopalyzerService(options, service, timeline, tempBasals, apsRepo, treatments, iob);
+        var cob = Mock.Of<ICobService>();
+        return new LoopalyzerService(options, service, timeline, tempBasals, apsRepo, treatments, iob, cob);
     }
 
     [Fact]

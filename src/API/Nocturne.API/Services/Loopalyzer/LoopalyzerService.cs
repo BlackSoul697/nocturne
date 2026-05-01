@@ -3,6 +3,7 @@ using Microsoft.Extensions.Options;
 using Nocturne.Core.Contracts.Glucose;
 using Nocturne.Core.Contracts.Loopalyzer;
 using Nocturne.Core.Contracts.Profiles.Resolvers;
+using Nocturne.API.Services.Treatments;
 using Nocturne.Core.Contracts.Treatments;
 using Nocturne.Core.Contracts.V4.Repositories;
 using Nocturne.Core.Models;
@@ -20,6 +21,7 @@ public sealed class LoopalyzerService : ILoopalyzerService
     private readonly IApsSnapshotRepository _apsRepo;
     private readonly ITreatmentService _treatmentService;
     private readonly IIobService _iobService;
+    private readonly ICobService _cobService;
 
     public LoopalyzerService(
         IOptions<LoopalyzerOptions> options,
@@ -28,7 +30,8 @@ public sealed class LoopalyzerService : ILoopalyzerService
         ITempBasalRepository tempBasalRepo,
         IApsSnapshotRepository apsRepo,
         ITreatmentService treatmentService,
-        IIobService iobService)
+        IIobService iobService,
+        ICobService cobService)
     {
         _options = options.Value;
         _entryService = entryService;
@@ -37,6 +40,7 @@ public sealed class LoopalyzerService : ILoopalyzerService
         _apsRepo = apsRepo;
         _treatmentService = treatmentService;
         _iobService = iobService;
+        _cobService = cobService;
     }
 
     /// <summary>
@@ -92,6 +96,47 @@ public sealed class LoopalyzerService : ILoopalyzerService
 
         BinInterpolator.Interpolate(bins, _options.RisingInterpolationGap, _options.FallingInterpolationGap, _options.InterpolationRatio);
         return new IobBinResult(bins, hasApsData);
+    }
+
+    /// <summary>
+    /// Bin COB for a single day with the same APS-first / treatments-fallback pattern as IOB.
+    /// </summary>
+    internal async Task<double?[]> BinCobAsync(DateOnly day, TimeZoneInfo tz, CancellationToken ct)
+    {
+        var (fromMills, toMills) = LocalDayWindowMillsUtc(day, tz);
+        var apsToleranceMs = (long)TimeSpan.FromMinutes(5).TotalMilliseconds;
+
+        var apsSnapshots = (await _apsRepo.GetAsync(
+            from: DateTimeOffset.FromUnixTimeMilliseconds(fromMills - (long)TimeSpan.FromMinutes(5).TotalMilliseconds).UtcDateTime,
+            to: DateTimeOffset.FromUnixTimeMilliseconds(toMills).UtcDateTime,
+            device: null, source: null,
+            limit: MaxRecordsPerDay, offset: 0, descending: false, ct: ct))
+            .Where(s => s.Cob.HasValue)
+            .OrderBy(s => s.Timestamp)
+            .ToList();
+
+        var treatStartMills = fromMills - (long)TimeSpan.FromHours(8).TotalMilliseconds;
+        var treatments = (await _treatmentService.GetTreatmentsAsync(count: MaxRecordsPerDay, skip: 0, cancellationToken: ct))
+            ?.Where(t => t.Mills >= treatStartMills && t.Mills <= toMills)
+            .ToList()
+            ?? new List<Treatment>();
+
+        var timeline = await _therapyTimeline.BuildAsync(treatStartMills, toMills, ct: ct);
+
+        var bins = LoopalyzerBinning.BinByMidpoint(day, tz, mills =>
+        {
+            var aps = NearestAps(apsSnapshots, mills, apsToleranceMs);
+            if (aps?.Cob is double cob)
+                return cob;
+
+            var snapshot = timeline.SnapshotAt(mills);
+            var nowMills = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+            var cobResult = _cobService.CobTotal(treatments, mills, snapshot, deviceCob: null, nowMills);
+            return cobResult.Cob > 0 ? cobResult.Cob : (double?)null;
+        });
+
+        BinInterpolator.Interpolate(bins, _options.RisingInterpolationGap, _options.FallingInterpolationGap, _options.InterpolationRatio);
+        return bins;
     }
 
     private static ApsSnapshot? NearestAps(IReadOnlyList<ApsSnapshot> sortedAsc, long mills, long toleranceMs)
