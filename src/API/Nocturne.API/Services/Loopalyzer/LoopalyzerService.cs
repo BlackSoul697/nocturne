@@ -1,9 +1,11 @@
 using System.ComponentModel.DataAnnotations;
+using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Options;
+using Nocturne.API.Services.Treatments;
 using Nocturne.Core.Contracts.Glucose;
 using Nocturne.Core.Contracts.Loopalyzer;
+using Nocturne.Core.Contracts.Multitenancy;
 using Nocturne.Core.Contracts.Profiles.Resolvers;
-using Nocturne.API.Services.Treatments;
 using Nocturne.Core.Contracts.Treatments;
 using Nocturne.Core.Contracts.V4.Repositories;
 using Nocturne.Core.Models;
@@ -27,6 +29,8 @@ public sealed class LoopalyzerService : ILoopalyzerService
     private readonly ISensitivityScheduleRepository _sensitivityRepo;
     private readonly ICarbRatioScheduleRepository _carbRatioRepo;
     private readonly ITargetRangeResolver _targetRangeResolver;
+    private readonly IMemoryCache _cache;
+    private readonly ITenantAccessor _tenantAccessor;
 
     public LoopalyzerService(
         IOptions<LoopalyzerOptions> options,
@@ -41,7 +45,9 @@ public sealed class LoopalyzerService : ILoopalyzerService
         IBasalScheduleRepository basalRepo,
         ISensitivityScheduleRepository sensitivityRepo,
         ICarbRatioScheduleRepository carbRatioRepo,
-        ITargetRangeResolver targetRangeResolver)
+        ITargetRangeResolver targetRangeResolver,
+        IMemoryCache cache,
+        ITenantAccessor tenantAccessor)
     {
         _options = options.Value;
         _entryService = entryService;
@@ -56,6 +62,23 @@ public sealed class LoopalyzerService : ILoopalyzerService
         _sensitivityRepo = sensitivityRepo;
         _carbRatioRepo = carbRatioRepo;
         _targetRangeResolver = targetRangeResolver;
+        _cache = cache;
+        _tenantAccessor = tenantAccessor;
+    }
+
+    private const string CacheKeyVersion = "v1";
+
+    private async Task<LoopalyzerDay> GetOrBuildDayAsync(DateOnly day, TimeZoneInfo tz, bool singleDay, CancellationToken ct)
+    {
+        var key = $"loopalyzer:{_tenantAccessor.TenantId}:{day:yyyy-MM-dd}:{(singleDay ? "single" : "multi")}:{CacheKeyVersion}";
+        var todayLocal = DateOnly.FromDateTime(TimeZoneInfo.ConvertTime(DateTimeOffset.UtcNow, tz).DateTime);
+        var ttl = day == todayLocal ? _options.TodayCacheTtl : _options.PastDayCacheTtl;
+
+        return (await _cache.GetOrCreateAsync(key, async entry =>
+        {
+            entry.AbsoluteExpirationRelativeToNow = ttl;
+            return await BuildDayAsync(day, tz, singleDay, ct);
+        }))!;
     }
 
     /// <summary>
@@ -316,7 +339,7 @@ public sealed class LoopalyzerService : ILoopalyzerService
         for (var d = from; d <= to; d = d.AddDays(1))
         {
             ct.ThrowIfCancellationRequested();
-            days.Add(await BuildDayAsync(d, tz, isSingleDay, ct));
+            days.Add(await GetOrBuildDayAsync(d, tz, isSingleDay, ct));
         }
 
         return new LoopalyzerResponse(

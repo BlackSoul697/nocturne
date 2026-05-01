@@ -1,10 +1,12 @@
 using System.ComponentModel.DataAnnotations;
 using FluentAssertions;
+using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Options;
 using Moq;
 using Nocturne.API.Services.Loopalyzer;
-using Nocturne.Core.Contracts.Glucose;
 using Nocturne.API.Services.Treatments;
+using Nocturne.Core.Contracts.Glucose;
+using Nocturne.Core.Contracts.Multitenancy;
 using Nocturne.Core.Contracts.Profiles.Resolvers;
 using Nocturne.Core.Contracts.Treatments;
 using Nocturne.Core.Contracts.V4.Repositories;
@@ -61,8 +63,10 @@ public class LoopalyzerServiceTests
         var sensitivity = Mock.Of<ISensitivityScheduleRepository>();
         var carbRatio = Mock.Of<ICarbRatioScheduleRepository>();
         var targetRange = Mock.Of<ITargetRangeResolver>();
+        var cache = new MemoryCache(new MemoryCacheOptions());
+        var tenant = Mock.Of<ITenantAccessor>(t => t.TenantId == Guid.NewGuid());
         return new LoopalyzerService(options, service, timeline, tempBasals, apsRepo, treatments, iob, cob,
-            activeProfile, basal, sensitivity, carbRatio, targetRange);
+            activeProfile, basal, sensitivity, carbRatio, targetRange, cache, tenant);
     }
 
     [Fact]
@@ -103,6 +107,31 @@ public class LoopalyzerServiceTests
             CancellationToken.None);
 
         await act.Should().ThrowAsync<ValidationException>();
+    }
+
+    [Fact]
+    public async Task GetData_CachesPerDay_BetweenCalls()
+    {
+        // Spy on entry service to count calls (one per day per fetch).
+        var entryMock = new Mock<IEntryService>();
+        entryMock.Setup(s => s.GetEntriesWithAdvancedFilterAsync(
+                It.IsAny<string?>(), It.IsAny<int>(), It.IsAny<int>(),
+                It.IsAny<string?>(), It.IsAny<string?>(), It.IsAny<bool>(),
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync(Array.Empty<Entry>());
+
+        var sut = CreateService(entryService: entryMock.Object);
+
+        // 3-day range, called twice — second call should hit the cache.
+        await sut.GetDataAsync(new LoopalyzerRequest { From = "2026-01-01", To = "2026-01-03" }, CancellationToken.None);
+        await sut.GetDataAsync(new LoopalyzerRequest { From = "2026-01-01", To = "2026-01-03" }, CancellationToken.None);
+
+        // Without cache: 6 calls (3 days × 2 invocations). With cache: 3 calls (only first batch).
+        entryMock.Verify(s => s.GetEntriesWithAdvancedFilterAsync(
+            It.IsAny<string?>(), It.IsAny<int>(), It.IsAny<int>(),
+            It.IsAny<string?>(), It.IsAny<string?>(), It.IsAny<bool>(),
+            It.IsAny<CancellationToken>()),
+            Times.Exactly(3));
     }
 
     [Fact]
