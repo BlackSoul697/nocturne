@@ -23,6 +23,7 @@ using Nocturne.API.Services.Glucose;
 using Nocturne.API.Services.Health;
 using Nocturne.API.Services.Identity;
 using Nocturne.API.Services.Legacy;
+using Nocturne.API.Services.Loopalyzer;
 using Nocturne.API.Services.Monitoring;
 using Nocturne.API.Services.NotificationActionHandlers;
 using Nocturne.API.Services.Notifications;
@@ -140,6 +141,11 @@ public static class ServiceRegistrationExtensions
         // GitHub issue creation
         services.Configure<GitHubIssueOptions>(configuration.GetSection("GitHub"));
         services.AddSingleton<GitHubIssueService>();
+
+        // Loopalyzer
+        services.Configure<LoopalyzerOptions>(
+            configuration.GetSection(LoopalyzerOptions.SectionName)
+        );
 
         return services;
     }
