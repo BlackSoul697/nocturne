@@ -50,88 +50,89 @@ public sealed class LoopalyzerService : ILoopalyzerService
     internal sealed record IobBinResult(double?[] Bins, bool HasApsData);
 
     /// <summary>
-    /// Bin IOB for a single day. ApsSnapshot.IOB takes precedence per tick; falls back
-    /// to per-tick treatment IOB calculation. Short null gaps are interpolated.
+    /// Per-day fetched inputs shared by IOB, COB, predictions, and APS-band derivations.
+    /// Loaded once via <see cref="LoadDayContextAsync"/>; the binning methods below are
+    /// pure transforms over this struct.
     /// </summary>
-    internal async Task<IobBinResult> BinIobAsync(DateOnly day, TimeZoneInfo tz, CancellationToken ct)
+    internal sealed record DayContext(
+        IReadOnlyList<ApsSnapshot> ApsSnapshots,
+        IReadOnlyList<Treatment> Treatments,
+        TherapyTimeline Timeline);
+
+    /// <summary>
+    /// Fetch APS snapshots, treatments (date-ranged with 8h prior lookback), and the therapy
+    /// timeline for a patient-local day. The fetch windows include a ±5min APS tolerance so
+    /// snapshots straddling midnight aren't lost.
+    /// </summary>
+    internal async Task<DayContext> LoadDayContextAsync(DateOnly day, TimeZoneInfo tz, CancellationToken ct)
     {
         var (fromMills, toMills) = LocalDayWindowMillsUtc(day, tz);
-        var apsToleranceMs = (long)TimeSpan.FromMinutes(5).TotalMilliseconds;
+        var apsTolMs = (long)TimeSpan.FromMinutes(5).TotalMilliseconds;
+        var lookbackMs = (long)TimeSpan.FromHours(IobLookbackHours).TotalMilliseconds;
 
-        // APS snapshots within the day plus a small forward tolerance.
-        var apsSnapshots = (await _apsRepo.GetAsync(
-            from: DateTimeOffset.FromUnixTimeMilliseconds(fromMills - (long)TimeSpan.FromMinutes(5).TotalMilliseconds).UtcDateTime,
-            to: DateTimeOffset.FromUnixTimeMilliseconds(toMills).UtcDateTime,
+        var aps = (await _apsRepo.GetAsync(
+            from: DateTimeOffset.FromUnixTimeMilliseconds(fromMills - apsTolMs).UtcDateTime,
+            to: DateTimeOffset.FromUnixTimeMilliseconds(toMills + apsTolMs).UtcDateTime,
             device: null, source: null,
             limit: MaxRecordsPerDay, offset: 0, descending: false, ct: ct))
-            .Where(s => s.Iob.HasValue)
             .OrderBy(s => s.Timestamp)
             .ToList();
 
-        // Treatments with 8h prior padding so IOB at 00:00 has lookback.
-        var treatStartUtc = DateTimeOffset.FromUnixTimeMilliseconds(fromMills - (long)TimeSpan.FromHours(8).TotalMilliseconds).UtcDateTime;
-        var treatEndUtc = DateTimeOffset.FromUnixTimeMilliseconds(toMills).UtcDateTime;
-        var treatments = (await _treatmentService.GetTreatmentsAsync(count: MaxRecordsPerDay, skip: 0, cancellationToken: ct))
-            ?.Where(t => t.Mills >= new DateTimeOffset(treatStartUtc, TimeSpan.Zero).ToUnixTimeMilliseconds()
-                      && t.Mills <= new DateTimeOffset(treatEndUtc, TimeSpan.Zero).ToUnixTimeMilliseconds())
-            .ToList()
+        var findQuery = $"{{\"mills\":{{\"$gte\":{fromMills - lookbackMs},\"$lte\":{toMills}}}}}";
+        var treatments = (await _treatmentService.GetTreatmentsWithAdvancedFilterAsync(
+            count: MaxRecordsPerDay,
+            skip: 0,
+            findQuery: findQuery,
+            reverseResults: true, // ascending by mills
+            cancellationToken: ct))
+            ?.ToList()
             ?? new List<Treatment>();
 
-        var timeline = await _therapyTimeline.BuildAsync(fromMills - (long)TimeSpan.FromHours(8).TotalMilliseconds, toMills, ct: ct);
-        var hasApsData = false;
+        var timeline = await _therapyTimeline.BuildAsync(fromMills - lookbackMs, toMills, ct: ct);
+        return new DayContext(aps, treatments, timeline);
+    }
+
+    /// <summary>
+    /// Bin IOB for a single day. ApsSnapshot.IOB takes precedence per tick; falls back
+    /// to per-tick treatment IOB calculation. Short null gaps are interpolated.
+    /// </summary>
+    internal IobBinResult BinIob(DateOnly day, TimeZoneInfo tz, DayContext ctx)
+    {
+        var apsToleranceMs = (long)TimeSpan.FromMinutes(5).TotalMilliseconds;
+        var iobSnapshots = ctx.ApsSnapshots.Where(s => s.Iob.HasValue).ToList();
 
         var bins = LoopalyzerBinning.BinByMidpoint(day, tz, mills =>
         {
-            var aps = NearestAps(apsSnapshots, mills, apsToleranceMs);
+            var aps = NearestAps(iobSnapshots, mills, apsToleranceMs);
             if (aps?.Iob is double iob)
-            {
-                hasApsData = true;
                 return iob;
-            }
 
-            var snapshot = timeline.SnapshotAt(mills);
-            var iobResult = _iobService.FromTreatments(treatments, mills, snapshot);
+            var snapshot = ctx.Timeline.SnapshotAt(mills);
+            var iobResult = _iobService.FromTreatments(ctx.Treatments, mills, snapshot);
             return iobResult.Iob > 0 ? iobResult.Iob : (double?)null;
         });
 
         BinInterpolator.Interpolate(bins, _options.RisingInterpolationGap, _options.FallingInterpolationGap, _options.InterpolationRatio);
-        return new IobBinResult(bins, hasApsData);
+        return new IobBinResult(bins, iobSnapshots.Count > 0);
     }
 
     /// <summary>
     /// Bin COB for a single day with the same APS-first / treatments-fallback pattern as IOB.
     /// </summary>
-    internal async Task<double?[]> BinCobAsync(DateOnly day, TimeZoneInfo tz, CancellationToken ct)
+    internal double?[] BinCob(DateOnly day, TimeZoneInfo tz, DayContext ctx)
     {
-        var (fromMills, toMills) = LocalDayWindowMillsUtc(day, tz);
         var apsToleranceMs = (long)TimeSpan.FromMinutes(5).TotalMilliseconds;
-
-        var apsSnapshots = (await _apsRepo.GetAsync(
-            from: DateTimeOffset.FromUnixTimeMilliseconds(fromMills - (long)TimeSpan.FromMinutes(5).TotalMilliseconds).UtcDateTime,
-            to: DateTimeOffset.FromUnixTimeMilliseconds(toMills).UtcDateTime,
-            device: null, source: null,
-            limit: MaxRecordsPerDay, offset: 0, descending: false, ct: ct))
-            .Where(s => s.Cob.HasValue)
-            .OrderBy(s => s.Timestamp)
-            .ToList();
-
-        var treatStartMills = fromMills - (long)TimeSpan.FromHours(8).TotalMilliseconds;
-        var treatments = (await _treatmentService.GetTreatmentsAsync(count: MaxRecordsPerDay, skip: 0, cancellationToken: ct))
-            ?.Where(t => t.Mills >= treatStartMills && t.Mills <= toMills)
-            .ToList()
-            ?? new List<Treatment>();
-
-        var timeline = await _therapyTimeline.BuildAsync(treatStartMills, toMills, ct: ct);
+        var cobSnapshots = ctx.ApsSnapshots.Where(s => s.Cob.HasValue).ToList();
+        var nowMills = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
 
         var bins = LoopalyzerBinning.BinByMidpoint(day, tz, mills =>
         {
-            var aps = NearestAps(apsSnapshots, mills, apsToleranceMs);
+            var aps = NearestAps(cobSnapshots, mills, apsToleranceMs);
             if (aps?.Cob is double cob)
                 return cob;
 
-            var snapshot = timeline.SnapshotAt(mills);
-            var nowMills = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
-            var cobResult = _cobService.CobTotal(treatments, mills, snapshot, deviceCob: null, nowMills);
+            var snapshot = ctx.Timeline.SnapshotAt(mills);
+            var cobResult = _cobService.CobTotal(ctx.Treatments, mills, snapshot, deviceCob: null, nowMills);
             return cobResult.Cob > 0 ? cobResult.Cob : (double?)null;
         });
 
@@ -161,6 +162,7 @@ public sealed class LoopalyzerService : ILoopalyzerService
 
     private const int MaxTempLookbackHours = 24;
     private const int MaxRecordsPerDay = 5000;
+    private const int IobLookbackHours = 8;
 
     /// <summary>
     /// Bin temp basal deliveries for the local day. The fetch window is widened backward by
