@@ -2,6 +2,7 @@ using System.ComponentModel.DataAnnotations;
 using Microsoft.Extensions.Options;
 using Nocturne.Core.Contracts.Glucose;
 using Nocturne.Core.Contracts.Loopalyzer;
+using Nocturne.Core.Contracts.Profiles.Resolvers;
 using Nocturne.Core.Models.Loopalyzer;
 
 namespace Nocturne.API.Services.Loopalyzer;
@@ -10,11 +11,28 @@ public sealed class LoopalyzerService : ILoopalyzerService
 {
     private readonly LoopalyzerOptions _options;
     private readonly IEntryService _entryService;
+    private readonly ITherapyTimelineResolver _therapyTimeline;
 
-    public LoopalyzerService(IOptions<LoopalyzerOptions> options, IEntryService entryService)
+    public LoopalyzerService(
+        IOptions<LoopalyzerOptions> options,
+        IEntryService entryService,
+        ITherapyTimelineResolver therapyTimeline)
     {
         _options = options.Value;
         _entryService = entryService;
+        _therapyTimeline = therapyTimeline;
+    }
+
+    /// <summary>
+    /// Build the scheduled-basal bin array for a single patient-local day. The therapy timeline
+    /// is built once for the local-day window so profile boundaries inside the day are honored
+    /// without per-tick repository hits.
+    /// </summary>
+    internal async Task<double[]> BinScheduledBasalAsync(DateOnly day, TimeZoneInfo tz, CancellationToken ct)
+    {
+        var (fromMills, toMills) = LocalDayWindowMillsUtc(day, tz);
+        var timeline = await _therapyTimeline.BuildAsync(fromMills, toMills, ct: ct);
+        return LoopalyzerBinning.BinScheduledBasal(day, tz, mills => timeline.SnapshotAt(mills).BasalRateAt(mills));
     }
 
     /// <summary>

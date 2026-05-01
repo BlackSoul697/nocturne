@@ -100,6 +100,45 @@ public class LoopalyzerBinningTests
     }
 
     [Fact]
+    public void BinScheduledBasal_FillsAllBinsWithConstantRate()
+    {
+        var bins = LoopalyzerBinning.BinScheduledBasal(Day, Utc, _ => 0.85);
+
+        bins.Should().HaveCount(288);
+        bins.Should().OnlyContain(b => b == 0.85);
+    }
+
+    [Fact]
+    public void BinScheduledBasal_SwitchesAtScheduleBoundary()
+    {
+        // 06:00 local switch: bins 0..71 = A, bins 72..287 = B.
+        var sixAmUtc = new DateTimeOffset(new DateTime(2026, 5, 1, 6, 0, 0, DateTimeKind.Utc)).ToUnixTimeMilliseconds();
+        var bins = LoopalyzerBinning.BinScheduledBasal(Day, Utc, mills => mills < sixAmUtc ? 0.5 : 1.0);
+
+        bins[71].Should().Be(0.5);
+        bins[72].Should().Be(1.0);
+        bins[0].Should().Be(0.5);
+        bins[287].Should().Be(1.0);
+    }
+
+    [Fact]
+    public void BinScheduledBasal_CallsResolverWithBinMidpoint()
+    {
+        var captured = new List<long>();
+        LoopalyzerBinning.BinScheduledBasal(Day, Utc, mills =>
+        {
+            captured.Add(mills);
+            return 1.0;
+        });
+
+        // Bin 0 midpoint is 02:30 (i*5 + 2.5 = 2.5 minutes), bin 1 midpoint 7:30, etc.
+        var midnight = new DateTimeOffset(new DateTime(2026, 5, 1, 0, 0, 0, DateTimeKind.Utc)).ToUnixTimeMilliseconds();
+        captured.Should().HaveCount(288);
+        (captured[0] - midnight).Should().Be(150_000); // 2.5min
+        (captured[1] - captured[0]).Should().Be(300_000); // 5min
+    }
+
+    [Fact]
     public void BinSgvs_RespectsTimeZone()
     {
         // UTC 04:00 == NY 00:00 EDT (UTC-4 in May).
