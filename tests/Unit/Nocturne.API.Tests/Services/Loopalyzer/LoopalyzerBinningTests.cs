@@ -1,6 +1,7 @@
 using FluentAssertions;
 using Nocturne.API.Services.Loopalyzer;
 using Nocturne.Core.Models;
+using Nocturne.Core.Models.V4;
 using Xunit;
 
 namespace Nocturne.API.Tests.Services.Loopalyzer;
@@ -136,6 +137,62 @@ public class LoopalyzerBinningTests
         captured.Should().HaveCount(288);
         (captured[0] - midnight).Should().Be(150_000); // 2.5min
         (captured[1] - captured[0]).Should().Be(300_000); // 5min
+    }
+
+    private static TempBasal Temp(DateTime startUtc, double rate, double durationMinutes)
+        => new()
+        {
+            StartTimestamp = DateTime.SpecifyKind(startUtc, DateTimeKind.Utc),
+            EndTimestamp = DateTime.SpecifyKind(startUtc.AddMinutes(durationMinutes), DateTimeKind.Utc),
+            Rate = rate,
+        };
+
+    [Fact]
+    public void BinTempBasal_ReturnsAllNulls_WhenNoTemps()
+    {
+        var bins = LoopalyzerBinning.BinTempBasal(Array.Empty<TempBasal>(), Day, Utc);
+
+        bins.Should().HaveCount(288);
+        bins.Should().OnlyContain(b => b == null);
+    }
+
+    [Fact]
+    public void BinTempBasal_FillsActiveBins()
+    {
+        // 30-min temp at 08:00 UTC -> bins 96..101 (6 bins).
+        var temp = Temp(new DateTime(2026, 5, 1, 8, 0, 0), 1.5, 30);
+
+        var bins = LoopalyzerBinning.BinTempBasal(new[] { temp }, Day, Utc);
+
+        bins[95].Should().BeNull();
+        bins[96].Should().Be(1.5);
+        bins[101].Should().Be(1.5);
+        bins[102].Should().BeNull();
+    }
+
+    [Fact]
+    public void BinTempBasal_MostRecentTempWins_OnOverlap()
+    {
+        var older = Temp(new DateTime(2026, 5, 1, 8, 0, 0), 1.0, 60);
+        var newer = Temp(new DateTime(2026, 5, 1, 8, 30, 0), 2.0, 30);
+
+        var bins = LoopalyzerBinning.BinTempBasal(new[] { older, newer }, Day, Utc);
+
+        bins[96].Should().Be(1.0);   // 08:02:30 — only older active
+        bins[102].Should().Be(2.0);  // 08:32:30 — newer wins
+    }
+
+    [Fact]
+    public void BinTempBasal_HandlesTempStartedYesterday()
+    {
+        // Temp started 23:30 prior day, runs 90 min into today (until 01:00).
+        var temp = Temp(new DateTime(2026, 4, 30, 23, 30, 0), 0.0, 90);
+
+        var bins = LoopalyzerBinning.BinTempBasal(new[] { temp }, Day, Utc);
+
+        bins[0].Should().Be(0.0);
+        bins[11].Should().Be(0.0);   // 00:57:30
+        bins[12].Should().BeNull();  // 01:02:30
     }
 
     [Fact]

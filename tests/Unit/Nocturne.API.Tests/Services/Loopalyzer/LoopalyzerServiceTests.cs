@@ -5,8 +5,10 @@ using Moq;
 using Nocturne.API.Services.Loopalyzer;
 using Nocturne.Core.Contracts.Glucose;
 using Nocturne.Core.Contracts.Profiles.Resolvers;
+using Nocturne.Core.Contracts.V4.Repositories;
 using Nocturne.Core.Models;
 using Nocturne.Core.Models.Loopalyzer;
+using Nocturne.Core.Models.V4;
 using Xunit;
 
 namespace Nocturne.API.Tests.Services.Loopalyzer;
@@ -21,8 +23,14 @@ public class LoopalyzerServiceTests
                 It.IsAny<string?>(), It.IsAny<int>(), It.IsAny<int>(),
                 It.IsAny<string?>(), It.IsAny<string?>(), It.IsAny<bool>(),
                 It.IsAny<CancellationToken>()) == Task.FromResult<IEnumerable<Entry>>(Array.Empty<Entry>()));
+
         var timeline = Mock.Of<ITherapyTimelineResolver>();
-        return new LoopalyzerService(options, service, timeline);
+        var tempBasals = Mock.Of<ITempBasalRepository>(r =>
+            r.GetAsync(
+                It.IsAny<DateTime?>(), It.IsAny<DateTime?>(), It.IsAny<string?>(), It.IsAny<string?>(),
+                It.IsAny<int>(), It.IsAny<int>(), It.IsAny<bool>(),
+                It.IsAny<CancellationToken>()) == Task.FromResult<IEnumerable<TempBasal>>(Array.Empty<TempBasal>()));
+        return new LoopalyzerService(options, service, timeline, tempBasals);
     }
 
     [Fact]

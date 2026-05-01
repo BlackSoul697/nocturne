@@ -3,6 +3,7 @@ using Microsoft.Extensions.Options;
 using Nocturne.Core.Contracts.Glucose;
 using Nocturne.Core.Contracts.Loopalyzer;
 using Nocturne.Core.Contracts.Profiles.Resolvers;
+using Nocturne.Core.Contracts.V4.Repositories;
 using Nocturne.Core.Models.Loopalyzer;
 
 namespace Nocturne.API.Services.Loopalyzer;
@@ -12,16 +13,46 @@ public sealed class LoopalyzerService : ILoopalyzerService
     private readonly LoopalyzerOptions _options;
     private readonly IEntryService _entryService;
     private readonly ITherapyTimelineResolver _therapyTimeline;
+    private readonly ITempBasalRepository _tempBasalRepo;
 
     public LoopalyzerService(
         IOptions<LoopalyzerOptions> options,
         IEntryService entryService,
-        ITherapyTimelineResolver therapyTimeline)
+        ITherapyTimelineResolver therapyTimeline,
+        ITempBasalRepository tempBasalRepo)
     {
         _options = options.Value;
         _entryService = entryService;
         _therapyTimeline = therapyTimeline;
+        _tempBasalRepo = tempBasalRepo;
     }
+
+    /// <summary>
+    /// Bin temp basal deliveries for the local day. The fetch window is widened backward by
+    /// <see cref="MaxTempLookbackHours"/> to catch temps that started the prior day and are
+    /// still running into <paramref name="day"/>.
+    /// </summary>
+    internal async Task<double?[]> BinTempBasalAsync(DateOnly day, TimeZoneInfo tz, CancellationToken ct)
+    {
+        var (fromMills, toMills) = LocalDayWindowMillsUtc(day, tz);
+        var lookback = TimeSpan.FromHours(MaxTempLookbackHours).TotalMilliseconds;
+        var fetchFromUtc = DateTimeOffset.FromUnixTimeMilliseconds(fromMills - (long)lookback).UtcDateTime;
+        var fetchToUtc = DateTimeOffset.FromUnixTimeMilliseconds(toMills).UtcDateTime;
+
+        var temps = await _tempBasalRepo.GetAsync(
+            from: fetchFromUtc,
+            to: fetchToUtc,
+            device: null,
+            source: null,
+            limit: 5000,
+            offset: 0,
+            descending: false,
+            ct: ct);
+
+        return LoopalyzerBinning.BinTempBasal(temps, day, tz);
+    }
+
+    private const int MaxTempLookbackHours = 24;
 
     /// <summary>
     /// Build the scheduled-basal bin array for a single patient-local day. The therapy timeline

@@ -1,4 +1,5 @@
 using Nocturne.Core.Models;
+using Nocturne.Core.Models.V4;
 
 namespace Nocturne.API.Services.Loopalyzer;
 
@@ -68,6 +69,42 @@ internal static class LoopalyzerBinning
             var utc = TimeZoneInfo.ConvertTimeToUtc(localMidpoint, tz);
             var mills = new DateTimeOffset(utc, TimeSpan.Zero).ToUnixTimeMilliseconds();
             bins[i] = resolve(mills);
+        }
+
+        return bins;
+    }
+
+    /// <summary>
+    /// Bin actively-running temp basals across the day. A bin's value is the rate of the
+    /// most-recently-started temp basal active at the bin midpoint, or <c>null</c> when no
+    /// temp is running. Suspended temps surface as their literal <see cref="TempBasal.Rate"/>
+    /// (typically 0).
+    /// </summary>
+    public static double?[] BinTempBasal(IEnumerable<TempBasal> tempBasals, DateOnly day, TimeZoneInfo tz)
+    {
+        var bins = new double?[BinsPerDay];
+        var localMidnight = new DateTime(day.Year, day.Month, day.Day, 0, 0, 0, DateTimeKind.Unspecified);
+
+        // Sort newest-first so the most recent active temp wins per tick.
+        var ordered = tempBasals.OrderByDescending(tb => tb.StartMills).ToList();
+
+        for (var i = 0; i < BinsPerDay; i++)
+        {
+            var localMidpoint = localMidnight.AddMinutes(i * MinutesPerBin + (MinutesPerBin / 2.0));
+            var utc = TimeZoneInfo.ConvertTimeToUtc(localMidpoint, tz);
+            var mills = new DateTimeOffset(utc, TimeSpan.Zero).ToUnixTimeMilliseconds();
+
+            foreach (var tb in ordered)
+            {
+                if (tb.StartMills > mills)
+                    continue;
+                var endMills = tb.EndMills ?? long.MaxValue;
+                if (mills < endMills)
+                {
+                    bins[i] = tb.Rate;
+                    break;
+                }
+            }
         }
 
         return bins;
