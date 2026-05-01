@@ -51,6 +51,7 @@ using Nocturne.Core.Contracts.Glucose;
 using Nocturne.Core.Contracts.Health;
 using Nocturne.Core.Contracts.Identity;
 using Nocturne.Core.Contracts.Legacy;
+using Nocturne.Core.Contracts.Loopalyzer;
 using Nocturne.Core.Contracts.Monitoring;
 using Nocturne.Core.Contracts.Multitenancy;
 using Nocturne.Core.Contracts.Notifications;
@@ -146,6 +147,7 @@ public static class ServiceRegistrationExtensions
         services.Configure<LoopalyzerOptions>(
             configuration.GetSection(LoopalyzerOptions.SectionName)
         );
+        services.AddScoped<ILoopalyzerService, LoopalyzerService>();
 
         return services;
     }

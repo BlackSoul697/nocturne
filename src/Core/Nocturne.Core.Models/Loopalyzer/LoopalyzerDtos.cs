@@ -1,6 +1,6 @@
 using System.ComponentModel.DataAnnotations;
 
-namespace Nocturne.API.Services.Loopalyzer;
+namespace Nocturne.Core.Models.Loopalyzer;
 
 public sealed record LoopalyzerRequest
 {
