@@ -40,7 +40,12 @@ public class LoopalyzerServiceTests
         var treatments = Mock.Of<ITreatmentService>();
         var iob = Mock.Of<IIobService>();
         var cob = Mock.Of<ICobService>();
-        return new LoopalyzerService(options, service, timeline, tempBasals, apsRepo, treatments, iob, cob);
+        var activeProfile = Mock.Of<IActiveProfileResolver>();
+        var basal = Mock.Of<IBasalScheduleRepository>();
+        var sensitivity = Mock.Of<ISensitivityScheduleRepository>();
+        var carbRatio = Mock.Of<ICarbRatioScheduleRepository>();
+        return new LoopalyzerService(options, service, timeline, tempBasals, apsRepo, treatments, iob, cob,
+            activeProfile, basal, sensitivity, carbRatio);
     }
 
     [Fact]

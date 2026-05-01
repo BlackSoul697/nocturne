@@ -22,6 +22,10 @@ public sealed class LoopalyzerService : ILoopalyzerService
     private readonly ITreatmentService _treatmentService;
     private readonly IIobService _iobService;
     private readonly ICobService _cobService;
+    private readonly IActiveProfileResolver _activeProfileResolver;
+    private readonly IBasalScheduleRepository _basalRepo;
+    private readonly ISensitivityScheduleRepository _sensitivityRepo;
+    private readonly ICarbRatioScheduleRepository _carbRatioRepo;
 
     public LoopalyzerService(
         IOptions<LoopalyzerOptions> options,
@@ -31,7 +35,11 @@ public sealed class LoopalyzerService : ILoopalyzerService
         IApsSnapshotRepository apsRepo,
         ITreatmentService treatmentService,
         IIobService iobService,
-        ICobService cobService)
+        ICobService cobService,
+        IActiveProfileResolver activeProfileResolver,
+        IBasalScheduleRepository basalRepo,
+        ISensitivityScheduleRepository sensitivityRepo,
+        ICarbRatioScheduleRepository carbRatioRepo)
     {
         _options = options.Value;
         _entryService = entryService;
@@ -41,6 +49,53 @@ public sealed class LoopalyzerService : ILoopalyzerService
         _treatmentService = treatmentService;
         _iobService = iobService;
         _cobService = cobService;
+        _activeProfileResolver = activeProfileResolver;
+        _basalRepo = basalRepo;
+        _sensitivityRepo = sensitivityRepo;
+        _carbRatioRepo = carbRatioRepo;
+    }
+
+    /// <summary>
+    /// Enumerate unique therapy profiles active across the requested range. Each
+    /// segment of the underlying <see cref="TherapyTimeline"/> contributes one
+    /// <see cref="LoopalyzerProfile"/> entry with its DIA, schedules, and validity window.
+    /// </summary>
+    internal async Task<IReadOnlyList<LoopalyzerProfile>> CollectProfilesAsync(
+        DateOnly from, DateOnly to, TimeZoneInfo tz, CancellationToken ct)
+    {
+        var (fromMills, _) = LocalDayWindowMillsUtc(from, tz);
+        var (_, toMills) = LocalDayWindowMillsUtc(to, tz);
+        var timeline = await _therapyTimeline.BuildAsync(fromMills, toMills, ct: ct);
+
+        var list = new List<LoopalyzerProfile>(timeline.Segments.Count);
+        foreach (var seg in timeline.Segments)
+        {
+            var anchor = seg.StartMills;
+            var anchorDt = DateTimeOffset.FromUnixTimeMilliseconds(anchor).UtcDateTime;
+            var name = await _activeProfileResolver.GetActiveProfileNameAsync(anchor, ct) ?? "Default";
+
+            var basal = await _basalRepo.GetActiveAtAsync(name, anchorDt, ct);
+            var sens = await _sensitivityRepo.GetActiveAtAsync(name, anchorDt, ct);
+            var cr = await _carbRatioRepo.GetActiveAtAsync(name, anchorDt, ct);
+
+            list.Add(new LoopalyzerProfile(
+                Name: name,
+                ValidFrom: DateTimeOffset.FromUnixTimeMilliseconds(seg.StartMills).UtcDateTime.ToString("O"),
+                ValidTo: seg.EndMills < long.MaxValue
+                    ? DateTimeOffset.FromUnixTimeMilliseconds(seg.EndMills).UtcDateTime.ToString("O")
+                    : null,
+                Dia: seg.Snapshot.Dia,
+                Basal: basal?.Entries.Select(e => new LoopalyzerScheduleEntry(e.Time, e.Value)).ToList()
+                       ?? new List<LoopalyzerScheduleEntry>(),
+                Sensitivity: sens?.Entries.Select(e => new LoopalyzerScheduleEntry(e.Time, e.Value)).ToList()
+                             ?? new List<LoopalyzerScheduleEntry>(),
+                CarbRatio: cr?.Entries.Select(e => new LoopalyzerScheduleEntry(e.Time, e.Value)).ToList()
+                           ?? new List<LoopalyzerScheduleEntry>(),
+                BgLow: null,
+                BgHigh: null
+            ));
+        }
+        return list;
     }
 
     /// <summary>
