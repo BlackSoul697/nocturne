@@ -1,7 +1,10 @@
 using System.ComponentModel.DataAnnotations;
 using FluentAssertions;
 using Microsoft.Extensions.Options;
+using Moq;
 using Nocturne.API.Services.Loopalyzer;
+using Nocturne.Core.Contracts.Glucose;
+using Nocturne.Core.Models;
 using Nocturne.Core.Models.Loopalyzer;
 using Xunit;
 
@@ -9,10 +12,15 @@ namespace Nocturne.API.Tests.Services.Loopalyzer;
 
 public class LoopalyzerServiceTests
 {
-    private static LoopalyzerService CreateService(int maxDays = 14)
+    private static LoopalyzerService CreateService(int maxDays = 14, IEntryService? entryService = null)
     {
         var options = Options.Create(new LoopalyzerOptions { MaxRangeDays = maxDays });
-        return new LoopalyzerService(options);
+        var service = entryService ?? Mock.Of<IEntryService>(s =>
+            s.GetEntriesWithAdvancedFilterAsync(
+                It.IsAny<string?>(), It.IsAny<int>(), It.IsAny<int>(),
+                It.IsAny<string?>(), It.IsAny<string?>(), It.IsAny<bool>(),
+                It.IsAny<CancellationToken>()) == Task.FromResult<IEnumerable<Entry>>(Array.Empty<Entry>()));
+        return new LoopalyzerService(options, service);
     }
 
     [Fact]

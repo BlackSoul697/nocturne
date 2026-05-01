@@ -1,5 +1,6 @@
 using System.ComponentModel.DataAnnotations;
 using Microsoft.Extensions.Options;
+using Nocturne.Core.Contracts.Glucose;
 using Nocturne.Core.Contracts.Loopalyzer;
 using Nocturne.Core.Models.Loopalyzer;
 
@@ -8,10 +9,46 @@ namespace Nocturne.API.Services.Loopalyzer;
 public sealed class LoopalyzerService : ILoopalyzerService
 {
     private readonly LoopalyzerOptions _options;
+    private readonly IEntryService _entryService;
 
-    public LoopalyzerService(IOptions<LoopalyzerOptions> options)
+    public LoopalyzerService(IOptions<LoopalyzerOptions> options, IEntryService entryService)
     {
         _options = options.Value;
+        _entryService = entryService;
+    }
+
+    /// <summary>
+    /// Bin SGV entries for a single patient-local day into 288 5-minute slots.
+    /// </summary>
+    internal async Task<double?[]> BinSgvsAsync(DateOnly day, TimeZoneInfo tz, CancellationToken ct)
+    {
+        var (fromMills, toMills) = LocalDayWindowMillsUtc(day, tz);
+        var findQuery = $"{{\"mills\":{{\"$gte\":{fromMills},\"$lt\":{toMills}}}}}";
+        var entries = await _entryService.GetEntriesWithAdvancedFilterAsync(
+            type: "sgv",
+            count: 5000,
+            skip: 0,
+            findQuery: findQuery,
+            dateString: null,
+            reverseResults: false,
+            cancellationToken: ct);
+
+        return LoopalyzerBinning.BinSgvs(entries, day, tz);
+    }
+
+    /// <summary>
+    /// Returns the UTC instants that bracket a patient-local day. A 25-hour DST fall-back
+    /// day yields a 25-hour UTC window; a 23-hour spring-forward day yields a 23-hour window.
+    /// </summary>
+    internal static (long FromMills, long ToMills) LocalDayWindowMillsUtc(DateOnly day, TimeZoneInfo tz)
+    {
+        var localStart = new DateTime(day.Year, day.Month, day.Day, 0, 0, 0, DateTimeKind.Unspecified);
+        var localEnd = localStart.AddDays(1);
+        var fromUtc = TimeZoneInfo.ConvertTimeToUtc(localStart, tz);
+        var toUtc = TimeZoneInfo.ConvertTimeToUtc(localEnd, tz);
+        return (
+            new DateTimeOffset(fromUtc, TimeSpan.Zero).ToUnixTimeMilliseconds(),
+            new DateTimeOffset(toUtc, TimeSpan.Zero).ToUnixTimeMilliseconds());
     }
 
     public Task<LoopalyzerResponse> GetDataAsync(LoopalyzerRequest request, CancellationToken ct)
