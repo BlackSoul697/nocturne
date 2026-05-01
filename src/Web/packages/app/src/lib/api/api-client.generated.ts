@@ -5,6 +5,7 @@
 import {
   AccessRequestClient,
   ActivityClient,
+  ActogramClient,
   AlertCustomSoundsClient,
   AlertInvitesClient,
   AlertRulesClient,
@@ -46,6 +47,7 @@ import {
   HeartRateClient,
   InsulinCatalogClient,
   LinkedPlatformsClient,
+  LoopalyzerClient,
   MealMatchingClient,
   MemberInviteClient,
   MetadataClient,
@@ -101,6 +103,7 @@ export class ApiClient {
   public readonly baseUrl: string;
   public readonly accessRequest: AccessRequestClient;
   public readonly activity: ActivityClient;
+  public readonly actogram: ActogramClient;
   public readonly alertCustomSounds: AlertCustomSoundsClient;
   public readonly alertInvites: AlertInvitesClient;
   public readonly alertRules: AlertRulesClient;
@@ -142,6 +145,7 @@ export class ApiClient {
   public readonly heartRate: HeartRateClient;
   public readonly insulinCatalog: InsulinCatalogClient;
   public readonly linkedPlatforms: LinkedPlatformsClient;
+  public readonly loopalyzer: LoopalyzerClient;
   public readonly mealMatching: MealMatchingClient;
   public readonly memberInvite: MemberInviteClient;
   public readonly metadata: MetadataClient;
@@ -197,6 +201,7 @@ export class ApiClient {
 
     this.accessRequest = new AccessRequestClient(apiBaseUrl, http);
     this.activity = new ActivityClient(apiBaseUrl, http);
+    this.actogram = new ActogramClient(apiBaseUrl, http);
     this.alertCustomSounds = new AlertCustomSoundsClient(apiBaseUrl, http);
     this.alertInvites = new AlertInvitesClient(apiBaseUrl, http);
     this.alertRules = new AlertRulesClient(apiBaseUrl, http);
@@ -238,6 +243,7 @@ export class ApiClient {
     this.heartRate = new HeartRateClient(apiBaseUrl, http);
     this.insulinCatalog = new InsulinCatalogClient(apiBaseUrl, http);
     this.linkedPlatforms = new LinkedPlatformsClient(apiBaseUrl, http);
+    this.loopalyzer = new LoopalyzerClient(apiBaseUrl, http);
     this.mealMatching = new MealMatchingClient(apiBaseUrl, http);
     this.memberInvite = new MemberInviteClient(apiBaseUrl, http);
     this.metadata = new MetadataClient(apiBaseUrl, http);

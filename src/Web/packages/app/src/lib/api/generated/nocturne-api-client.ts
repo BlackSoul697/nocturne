@@ -18483,6 +18483,75 @@ export class AuditClient {
     }
 }
 
+export class ActogramClient {
+    private http: { fetch(url: RequestInfo, init?: RequestInit): Promise<Response> };
+    private baseUrl: string;
+    protected jsonParseReviver: ((key: string, value: any) => any) | undefined = undefined;
+
+    constructor(baseUrl?: string, http?: { fetch(url: RequestInfo, init?: RequestInit): Promise<Response> }) {
+        this.http = http ? http : window as any;
+        this.baseUrl = baseUrl ?? "";
+    }
+
+    /**
+     * Get actogram report data for a time window.
+     * @param startTime (optional) Start of the window as Unix milliseconds (inclusive).
+     * @param endTime (optional) End of the window as Unix milliseconds (exclusive).
+                Must be greater than startTime.
+     */
+    getActogram(startTime?: number | undefined, endTime?: number | undefined, signal?: AbortSignal): Promise<ActogramReportData> {
+        let url_ = this.baseUrl + "/api/v4/Actogram?";
+        if (startTime === null)
+            throw new globalThis.Error("The parameter 'startTime' cannot be null.");
+        else if (startTime !== undefined)
+            url_ += "startTime=" + encodeURIComponent("" + startTime) + "&";
+        if (endTime === null)
+            throw new globalThis.Error("The parameter 'endTime' cannot be null.");
+        else if (endTime !== undefined)
+            url_ += "endTime=" + encodeURIComponent("" + endTime) + "&";
+        url_ = url_.replace(/[?&]$/, "");
+
+        let options_: RequestInit = {
+            method: "GET",
+            signal,
+            headers: {
+                "Accept": "application/json"
+            }
+        };
+
+        return this.http.fetch(url_, options_).then((_response: Response) => {
+            return this.processGetActogram(_response);
+        });
+    }
+
+    protected processGetActogram(response: Response): Promise<ActogramReportData> {
+        const status = response.status;
+        let _headers: any = {}; if (response.headers && response.headers.forEach) { response.headers.forEach((v: any, k: any) => _headers[k] = v); };
+        if (status === 200) {
+            return response.text().then((_responseText) => {
+            let result200: any = null;
+            result200 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver) as ActogramReportData;
+            return result200;
+            });
+        } else if (status === 400) {
+            return response.text().then((_responseText) => {
+            let result400: any = null;
+            result400 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver) as ProblemDetails;
+            return throwException("A server side error occurred.", status, _responseText, _headers, result400);
+            });
+        } else if (status === 500) {
+            return response.text().then((_responseText) => {
+            return throwException("A server side error occurred.", status, _responseText, _headers);
+            });
+        } else if (status !== 200 && status !== 204) {
+            return response.text().then((_responseText) => {
+            return throwException("An unexpected server error occurred.", status, _responseText, _headers);
+            });
+        }
+        return Promise.resolve<ActogramReportData>(null as any);
+    }
+}
+
 export class AnalyticsClient {
     private http: { fetch(url: RequestInfo, init?: RequestInit): Promise<Response> };
     private baseUrl: string;
@@ -19131,6 +19200,108 @@ export class DataOverviewClient {
             });
         }
         return Promise.resolve<GriTimelineResponse>(null as any);
+    }
+}
+
+export class LoopalyzerClient {
+    private http: { fetch(url: RequestInfo, init?: RequestInit): Promise<Response> };
+    private baseUrl: string;
+    protected jsonParseReviver: ((key: string, value: any) => any) | undefined = undefined;
+
+    constructor(baseUrl?: string, http?: { fetch(url: RequestInfo, init?: RequestInit): Promise<Response> }) {
+        this.http = http ? http : window as any;
+        this.baseUrl = baseUrl ?? "";
+    }
+
+    /**
+     * Get Loopalyzer report data for a date range (max 14 days).
+     * @param from (optional) 
+     * @param to (optional) 
+     */
+    getData(from?: string | undefined, to?: string | undefined, signal?: AbortSignal): Promise<LoopalyzerResponse> {
+        let url_ = this.baseUrl + "/api/v4/Loopalyzer?";
+        if (from === null)
+            throw new globalThis.Error("The parameter 'from' cannot be null.");
+        else if (from !== undefined)
+            url_ += "from=" + encodeURIComponent("" + from) + "&";
+        if (to === null)
+            throw new globalThis.Error("The parameter 'to' cannot be null.");
+        else if (to !== undefined)
+            url_ += "to=" + encodeURIComponent("" + to) + "&";
+        url_ = url_.replace(/[?&]$/, "");
+
+        let options_: RequestInit = {
+            method: "GET",
+            signal,
+            headers: {
+                "Accept": "application/json"
+            }
+        };
+
+        return this.http.fetch(url_, options_).then((_response: Response) => {
+            return this.processGetData(_response);
+        });
+    }
+
+    protected processGetData(response: Response): Promise<LoopalyzerResponse> {
+        const status = response.status;
+        let _headers: any = {}; if (response.headers && response.headers.forEach) { response.headers.forEach((v: any, k: any) => _headers[k] = v); };
+        if (status === 200) {
+            return response.text().then((_responseText) => {
+            let result200: any = null;
+            result200 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver) as LoopalyzerResponse;
+            return result200;
+            });
+        } else if (status === 400) {
+            return response.text().then((_responseText) => {
+            let result400: any = null;
+            result400 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver) as ProblemDetails;
+            return throwException("A server side error occurred.", status, _responseText, _headers, result400);
+            });
+        } else if (status !== 200 && status !== 204) {
+            return response.text().then((_responseText) => {
+            return throwException("An unexpected server error occurred.", status, _responseText, _headers);
+            });
+        }
+        return Promise.resolve<LoopalyzerResponse>(null as any);
+    }
+
+    /**
+     * Whether this tenant has any APS data in the last 30 days. Used to gate the
+    Loopalyzer entry in the reports menu.
+     */
+    getAvailability(signal?: AbortSignal): Promise<LoopalyzerAvailability> {
+        let url_ = this.baseUrl + "/api/v4/Loopalyzer/availability";
+        url_ = url_.replace(/[?&]$/, "");
+
+        let options_: RequestInit = {
+            method: "GET",
+            signal,
+            headers: {
+                "Accept": "application/json"
+            }
+        };
+
+        return this.http.fetch(url_, options_).then((_response: Response) => {
+            return this.processGetAvailability(_response);
+        });
+    }
+
+    protected processGetAvailability(response: Response): Promise<LoopalyzerAvailability> {
+        const status = response.status;
+        let _headers: any = {}; if (response.headers && response.headers.forEach) { response.headers.forEach((v: any, k: any) => _headers[k] = v); };
+        if (status === 200) {
+            return response.text().then((_responseText) => {
+            let result200: any = null;
+            result200 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver) as LoopalyzerAvailability;
+            return result200;
+            });
+        } else if (status !== 200 && status !== 204) {
+            return response.text().then((_responseText) => {
+            return throwException("An unexpected server error occurred.", status, _responseText, _headers);
+            });
+        }
+        return Promise.resolve<LoopalyzerAvailability>(null as any);
     }
 }
 
@@ -28675,6 +28846,45 @@ export interface AuditConfigDto {
     mutationAuditRetentionDays?: number | undefined;
 }
 
+export interface ActogramReportData {
+    glucose?: GlucosePointDto[];
+    thresholds?: ChartThresholdsDto;
+    heartRates?: HeartRatePointDto[];
+    stepCounts?: StepBubbleDto[];
+    sleepSpans?: ActogramSleepSpan[];
+}
+
+export interface GlucosePointDto {
+    time?: number;
+    sgv?: number;
+    direction?: string | undefined;
+    dataSource?: string | undefined;
+}
+
+export interface ChartThresholdsDto {
+    low?: number;
+    high?: number;
+    veryLow?: number;
+    veryHigh?: number;
+    glucoseYMax?: number;
+}
+
+export interface HeartRatePointDto {
+    time?: number;
+    bpm?: number;
+}
+
+export interface StepBubbleDto {
+    time?: number;
+    steps?: number;
+}
+
+export interface ActogramSleepSpan {
+    startMills?: number;
+    endMills?: number;
+    state?: string;
+}
+
 export interface PerformanceMetrics {
     averageResponseTime?: number;
     totalRequests?: number;
@@ -28823,21 +29033,6 @@ export enum ChartColor {
     Primary = "primary",
 }
 
-export interface GlucosePointDto {
-    time?: number;
-    sgv?: number;
-    direction?: string | undefined;
-    dataSource?: string | undefined;
-}
-
-export interface ChartThresholdsDto {
-    low?: number;
-    high?: number;
-    veryLow?: number;
-    veryHigh?: number;
-    glucoseYMax?: number;
-}
-
 export interface BolusMarkerDto {
     time?: number;
     insulin?: number;
@@ -28923,16 +29118,6 @@ export interface TrackerMarkerDto {
     color?: ChartColor;
 }
 
-export interface HeartRatePointDto {
-    time?: number;
-    bpm?: number;
-}
-
-export interface StepBubbleDto {
-    time?: number;
-    steps?: number;
-}
-
 export interface DataOverviewYearsResponse {
     years?: number[];
     availableDataSources?: string[];
@@ -28994,6 +29179,84 @@ export enum GlycomicRiskInterpretation {
     Suboptimal = "Suboptimal",
     Poor = "Poor",
     Unknown = "Unknown",
+}
+
+export interface LoopalyzerResponse {
+    days?: LoopalyzerDay[];
+    profiles?: LoopalyzerProfile[];
+    timezone?: string;
+    mostRecentDia?: number | undefined;
+    mostRecentBgLow?: number | undefined;
+    mostRecentBgHigh?: number | undefined;
+}
+
+export interface LoopalyzerDay {
+    date?: string;
+    sgv?: (number | undefined)[];
+    scheduledBasal?: number[];
+    tempBasal?: (number | undefined)[];
+    iob?: (number | undefined)[];
+    cob?: (number | undefined)[];
+    meals?: LoopalyzerMeal[];
+    boluses?: LoopalyzerBolus[];
+    siteChanges?: LoopalyzerSiteEvent[];
+    sensorChanges?: LoopalyzerSiteEvent[];
+    predictions?: LoopalyzerPrediction[];
+    apsBands?: LoopalyzerApsBand[];
+    dia?: number;
+    hasApsData?: boolean;
+}
+
+export interface LoopalyzerMeal {
+    minute?: number;
+    carbs?: number;
+    eventType?: string;
+}
+
+export interface LoopalyzerBolus {
+    minute?: number;
+    units?: number;
+}
+
+export interface LoopalyzerSiteEvent {
+    minute?: number;
+    note?: string | undefined;
+}
+
+export interface LoopalyzerPrediction {
+    minute?: number;
+    iob?: number[] | undefined;
+    zt?: number[] | undefined;
+    cob?: number[] | undefined;
+    uam?: number[] | undefined;
+}
+
+export interface LoopalyzerApsBand {
+    startMinute?: number;
+    endMinute?: number;
+    mode?: string;
+}
+
+export interface LoopalyzerProfile {
+    name?: string;
+    validFrom?: string;
+    validTo?: string | undefined;
+    dia?: number;
+    basal?: LoopalyzerScheduleEntry[];
+    sensitivity?: LoopalyzerScheduleEntry[];
+    carbRatio?: LoopalyzerScheduleEntry[];
+    bgLow?: number | undefined;
+    bgHigh?: number | undefined;
+}
+
+export interface LoopalyzerScheduleEntry {
+    time?: string;
+    value?: number;
+}
+
+export interface LoopalyzerAvailability {
+    hasApsData?: boolean;
+    latestApsAt?: Date | undefined;
 }
 
 /** Response containing glucose predictions. */

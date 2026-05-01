@@ -17287,6 +17287,63 @@
         ]
       }
     },
+    "/api/v4/Actogram": {
+      "get": {
+        "tags": [
+          "Actogram"
+        ],
+        "summary": "Get actogram report data for a time window.",
+        "operationId": "Actogram_GetActogram",
+        "parameters": [
+          {
+            "name": "startTime",
+            "in": "query",
+            "description": "Start of the window as Unix milliseconds (inclusive).",
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            },
+            "x-position": 1
+          },
+          {
+            "name": "endTime",
+            "in": "query",
+            "description": "End of the window as Unix milliseconds (exclusive).\n            Must be greater than startTime.",
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            },
+            "x-position": 2
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ActogramReportData"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": ""
+          }
+        },
+        "x-remote-type": "query"
+      }
+    },
     "/api/v4/Analytics/status": {
       "get": {
         "tags": [
@@ -17737,6 +17794,78 @@
         },
         "x-remote-type": "query",
         "x-client-property": "dataOverview"
+      }
+    },
+    "/api/v4/Loopalyzer": {
+      "get": {
+        "tags": [
+          "Loopalyzer"
+        ],
+        "summary": "Get Loopalyzer report data for a date range (max 14 days).",
+        "operationId": "Loopalyzer_GetData",
+        "parameters": [
+          {
+            "name": "from",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            },
+            "x-position": 1
+          },
+          {
+            "name": "to",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            },
+            "x-position": 2
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LoopalyzerResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        },
+        "x-remote-type": "query"
+      }
+    },
+    "/api/v4/Loopalyzer/availability": {
+      "get": {
+        "tags": [
+          "Loopalyzer"
+        ],
+        "summary": "Whether this tenant has any APS data in the last 30 days. Used to gate the\nLoopalyzer entry in the reports menu.",
+        "operationId": "Loopalyzer_GetAvailability",
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LoopalyzerAvailability"
+                }
+              }
+            }
+          }
+        },
+        "x-remote-type": "query"
       }
     },
     "/api/v4/predictions": {
@@ -36652,6 +36781,132 @@
           }
         }
       },
+      "ActogramReportData": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "glucose": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/GlucosePointDto"
+            }
+          },
+          "thresholds": {
+            "$ref": "#/components/schemas/ChartThresholdsDto"
+          },
+          "heartRates": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/HeartRatePointDto"
+            }
+          },
+          "stepCounts": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/StepBubbleDto"
+            }
+          },
+          "sleepSpans": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ActogramSleepSpan"
+            }
+          }
+        }
+      },
+      "GlucosePointDto": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "time": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "sgv": {
+            "type": "number",
+            "format": "double"
+          },
+          "direction": {
+            "type": "string",
+            "nullable": true
+          },
+          "dataSource": {
+            "type": "string",
+            "nullable": true
+          }
+        }
+      },
+      "ChartThresholdsDto": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "low": {
+            "type": "number",
+            "format": "double"
+          },
+          "high": {
+            "type": "number",
+            "format": "double"
+          },
+          "veryLow": {
+            "type": "number",
+            "format": "double"
+          },
+          "veryHigh": {
+            "type": "number",
+            "format": "double"
+          },
+          "glucoseYMax": {
+            "type": "number",
+            "format": "double"
+          }
+        }
+      },
+      "HeartRatePointDto": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "time": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "bpm": {
+            "type": "integer",
+            "format": "int32"
+          }
+        }
+      },
+      "StepBubbleDto": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "time": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "steps": {
+            "type": "integer",
+            "format": "int32"
+          }
+        }
+      },
+      "ActogramSleepSpan": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "startMills": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "endMills": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "state": {
+            "type": "string"
+          }
+        }
+      },
       "PerformanceMetrics": {
         "type": "object",
         "additionalProperties": false,
@@ -37127,54 +37382,6 @@
           "primary"
         ]
       },
-      "GlucosePointDto": {
-        "type": "object",
-        "additionalProperties": false,
-        "properties": {
-          "time": {
-            "type": "integer",
-            "format": "int64"
-          },
-          "sgv": {
-            "type": "number",
-            "format": "double"
-          },
-          "direction": {
-            "type": "string",
-            "nullable": true
-          },
-          "dataSource": {
-            "type": "string",
-            "nullable": true
-          }
-        }
-      },
-      "ChartThresholdsDto": {
-        "type": "object",
-        "additionalProperties": false,
-        "properties": {
-          "low": {
-            "type": "number",
-            "format": "double"
-          },
-          "high": {
-            "type": "number",
-            "format": "double"
-          },
-          "veryLow": {
-            "type": "number",
-            "format": "double"
-          },
-          "veryHigh": {
-            "type": "number",
-            "format": "double"
-          },
-          "glucoseYMax": {
-            "type": "number",
-            "format": "double"
-          }
-        }
-      },
       "BolusMarkerDto": {
         "type": "object",
         "additionalProperties": false,
@@ -37428,34 +37635,6 @@
           }
         }
       },
-      "HeartRatePointDto": {
-        "type": "object",
-        "additionalProperties": false,
-        "properties": {
-          "time": {
-            "type": "integer",
-            "format": "int64"
-          },
-          "bpm": {
-            "type": "integer",
-            "format": "int32"
-          }
-        }
-      },
-      "StepBubbleDto": {
-        "type": "object",
-        "additionalProperties": false,
-        "properties": {
-          "time": {
-            "type": "integer",
-            "format": "int64"
-          },
-          "steps": {
-            "type": "integer",
-            "format": "int32"
-          }
-        }
-      },
       "DataOverviewYearsResponse": {
         "type": "object",
         "additionalProperties": false,
@@ -37659,6 +37838,312 @@
           "Poor",
           "Unknown"
         ]
+      },
+      "LoopalyzerResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "days": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/LoopalyzerDay"
+            }
+          },
+          "profiles": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/LoopalyzerProfile"
+            }
+          },
+          "timezone": {
+            "type": "string"
+          },
+          "mostRecentDia": {
+            "type": "number",
+            "format": "double",
+            "nullable": true
+          },
+          "mostRecentBgLow": {
+            "type": "number",
+            "format": "double",
+            "nullable": true
+          },
+          "mostRecentBgHigh": {
+            "type": "number",
+            "format": "double",
+            "nullable": true
+          }
+        }
+      },
+      "LoopalyzerDay": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "date": {
+            "type": "string"
+          },
+          "sgv": {
+            "type": "array",
+            "items": {
+              "type": "number",
+              "format": "double",
+              "nullable": true
+            }
+          },
+          "scheduledBasal": {
+            "type": "array",
+            "items": {
+              "type": "number",
+              "format": "double"
+            }
+          },
+          "tempBasal": {
+            "type": "array",
+            "items": {
+              "type": "number",
+              "format": "double",
+              "nullable": true
+            }
+          },
+          "iob": {
+            "type": "array",
+            "items": {
+              "type": "number",
+              "format": "double",
+              "nullable": true
+            }
+          },
+          "cob": {
+            "type": "array",
+            "items": {
+              "type": "number",
+              "format": "double",
+              "nullable": true
+            }
+          },
+          "meals": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/LoopalyzerMeal"
+            }
+          },
+          "boluses": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/LoopalyzerBolus"
+            }
+          },
+          "siteChanges": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/LoopalyzerSiteEvent"
+            }
+          },
+          "sensorChanges": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/LoopalyzerSiteEvent"
+            }
+          },
+          "predictions": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/LoopalyzerPrediction"
+            }
+          },
+          "apsBands": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/LoopalyzerApsBand"
+            }
+          },
+          "dia": {
+            "type": "number",
+            "format": "double"
+          },
+          "hasApsData": {
+            "type": "boolean"
+          }
+        }
+      },
+      "LoopalyzerMeal": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "minute": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "carbs": {
+            "type": "number",
+            "format": "double"
+          },
+          "eventType": {
+            "type": "string"
+          }
+        }
+      },
+      "LoopalyzerBolus": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "minute": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "units": {
+            "type": "number",
+            "format": "double"
+          }
+        }
+      },
+      "LoopalyzerSiteEvent": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "minute": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "note": {
+            "type": "string",
+            "nullable": true
+          }
+        }
+      },
+      "LoopalyzerPrediction": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "minute": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "iob": {
+            "type": "array",
+            "nullable": true,
+            "items": {
+              "type": "number",
+              "format": "double"
+            }
+          },
+          "zt": {
+            "type": "array",
+            "nullable": true,
+            "items": {
+              "type": "number",
+              "format": "double"
+            }
+          },
+          "cob": {
+            "type": "array",
+            "nullable": true,
+            "items": {
+              "type": "number",
+              "format": "double"
+            }
+          },
+          "uam": {
+            "type": "array",
+            "nullable": true,
+            "items": {
+              "type": "number",
+              "format": "double"
+            }
+          }
+        }
+      },
+      "LoopalyzerApsBand": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "startMinute": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "endMinute": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "mode": {
+            "type": "string"
+          }
+        }
+      },
+      "LoopalyzerProfile": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "validFrom": {
+            "type": "string"
+          },
+          "validTo": {
+            "type": "string",
+            "nullable": true
+          },
+          "dia": {
+            "type": "number",
+            "format": "double"
+          },
+          "basal": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/LoopalyzerScheduleEntry"
+            }
+          },
+          "sensitivity": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/LoopalyzerScheduleEntry"
+            }
+          },
+          "carbRatio": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/LoopalyzerScheduleEntry"
+            }
+          },
+          "bgLow": {
+            "type": "number",
+            "format": "double",
+            "nullable": true
+          },
+          "bgHigh": {
+            "type": "number",
+            "format": "double",
+            "nullable": true
+          }
+        }
+      },
+      "LoopalyzerScheduleEntry": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "time": {
+            "type": "string"
+          },
+          "value": {
+            "type": "number",
+            "format": "double"
+          }
+        }
+      },
+      "LoopalyzerAvailability": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "hasApsData": {
+            "type": "boolean"
+          },
+          "latestApsAt": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          }
+        }
       },
       "GlucosePredictionResponse": {
         "type": "object",
