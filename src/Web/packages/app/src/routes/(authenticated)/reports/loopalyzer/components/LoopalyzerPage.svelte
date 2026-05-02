@@ -39,25 +39,56 @@
     { errorTitle: 'Error loading Loopalyzer' },
   );
 
+  type ViewMode = 'average' | 'spaghetti';
+
   let data = $derived<LoopalyzerResponse | null>(dataResource.current ?? null);
   let rawDays = $derived<ReadonlyArray<LoopalyzerDay>>(data?.days ?? []);
   let isMultiDay = $derived(rawDays.length > 1);
-  let viewMode = $derived(params.viewMode === 'spaghetti' ? 'spaghetti' : 'average');
+  let viewMode = $derived<ViewMode>(params.viewMode === 'spaghetti' ? 'spaghetti' : 'average');
   let timeShift = $derived(params.timeShift === 1);
+  let tsWindow = $derived(decodeTimeWindow(params.tsWindow));
 
   let shiftConfig = $derived<ShiftConfig>({
-    window: decodeTimeWindow(params.tsWindow),
+    window: tsWindow,
     minCarbs: params.tsMinCarbs ?? 10,
     eventTypes: decodeEventTypes(params.tsEventTypes),
   });
 
   let shifted = $derived(
-    timeShift && isMultiDay ? applyShift(rawDays, shiftConfig) : { days: [...rawDays], avgMealMinute: null, shiftBins: rawDays.map(() => 0) },
+    timeShift && isMultiDay
+      ? applyShift(rawDays, shiftConfig)
+      : { days: rawDays, avgMealMinute: null, shiftBins: rawDays.map(() => 0) },
   );
   let workingDays = $derived(shifted.days);
 
-  // Today's date in patient-local zone (defaulting to last day in range when timezone unknown).
-  let todayDate = $derived(workingDays.at(-1)?.date ?? null);
+  // Patient's actual calendar today (in their tz). Spaghetti highlight uses this
+  // only when it actually appears in the selected range.
+  let actualTodayDate = $derived.by(() => {
+    const tz = data?.timezone;
+    if (!tz) return null;
+    try {
+      // 'en-CA' yields YYYY-MM-DD.
+      return new Intl.DateTimeFormat('en-CA', { timeZone: tz }).format(new Date());
+    } catch {
+      return null;
+    }
+  });
+  let todayDate = $derived(
+    actualTodayDate != null && rawDays.some((d) => d.date === actualTodayDate)
+      ? actualTodayDate
+      : null,
+  );
+
+  // Multi-day "schedule" semantics: take the day whose ISO date string is largest.
+  // We pull from rawDays — schedule is profile-bound and unaffected by meal time-shift.
+  let mostRecentDay = $derived.by<LoopalyzerDay | null>(() => {
+    if (rawDays.length === 0) return null;
+    let best = rawDays[0];
+    for (let i = 1; i < rawDays.length; i++) {
+      if ((rawDays[i].date ?? '') > (best.date ?? '')) best = rawDays[i];
+    }
+    return best;
+  });
 
   function lanePerDay<T>(getter: (d: LoopalyzerDay) => ReadonlyArray<T | null> | undefined): { date: string; bins: (T | null)[] }[] {
     return workingDays.map((d) => ({
@@ -83,17 +114,16 @@
 
   // Scheduled basal in multi-day uses most recent day's schedule (Grill 9c).
   let scheduledBasal = $derived.by<number[]>(() => {
-    const last = workingDays.at(-1)?.scheduledBasal;
-    if (!last) return new Array(BIN_COUNT).fill(0);
-    if (last.length === BIN_COUNT) return [...last];
+    const src = mostRecentDay?.scheduledBasal;
+    if (!src) return new Array(BIN_COUNT).fill(0);
+    if (src.length === BIN_COUNT) return [...src];
     const out = new Array(BIN_COUNT).fill(0);
-    for (let i = 0; i < Math.min(last.length, BIN_COUNT); i++) out[i] = last[i] ?? 0;
+    for (let i = 0; i < Math.min(src.length, BIN_COUNT); i++) out[i] = src[i] ?? 0;
     return out;
   });
-  let tempBasal = $derived.by<(number | null)[]>(() => {
-    const last = workingDays.at(-1)?.tempBasal;
-    return ensureLength(last ?? [], BIN_COUNT);
-  });
+  let tempBasal = $derived.by<(number | null)[]>(() =>
+    ensureLength(mostRecentDay?.tempBasal ?? [], BIN_COUNT),
+  );
 
   // Single-day overlays (only meaningful when range = 1).
   let singleDay = $derived(rawDays.length === 1 ? rawDays[0] : null);
@@ -145,12 +175,12 @@
       rangeDays={rawDays.length}
       {isMultiDay}
       timezone={data?.timezone ?? 'UTC'}
-      viewMode={viewMode as 'average' | 'spaghetti'}
+      {viewMode}
       onViewModeChange={setViewMode}
       timeShift={timeShift}
       onTimeShiftChange={setTimeShift}
-      tsWindowStart={formatMin(decodeTimeWindow(params.tsWindow).startMin)}
-      tsWindowEnd={formatMin(decodeTimeWindow(params.tsWindow).endMin)}
+      tsWindowStart={formatMin(tsWindow.startMin)}
+      tsWindowEnd={formatMin(tsWindow.endMin)}
       tsMinCarbs={params.tsMinCarbs ?? 10}
       onTimeShiftSettingsChange={setTimeShiftSettings}
       showPredictions={params.predictions === 1}
@@ -166,7 +196,7 @@
       <BgLane
         aggregate={bgAggregate}
         days={bgDays.map((d) => ({ date: d.date, sgv: d.bins }))}
-        viewMode={viewMode as 'average' | 'spaghetti'}
+        {viewMode}
         {todayDate}
         bgLow={data?.mostRecentBgLow ?? null}
         bgHigh={data?.mostRecentBgHigh ?? null}
@@ -181,13 +211,13 @@
       <IobLane
         aggregate={iobAggregate}
         days={iobDays}
-        viewMode={viewMode as 'average' | 'spaghetti'}
+        {viewMode}
         {todayDate}
       />
       <CobLane
         aggregate={cobAggregate}
         days={cobDays}
-        viewMode={viewMode as 'average' | 'spaghetti'}
+        {viewMode}
         {todayDate}
         showXAxis
       />
