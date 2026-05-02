@@ -18,14 +18,14 @@
 </script>
 
 <div class="flex w-full items-stretch border-b border-border last:border-b-0">
-  <div class="flex w-12 shrink-0 items-start justify-end pt-1 pr-2 text-xs font-medium text-muted-foreground">
+  <div class="flex w-8 sm:w-12 shrink-0 items-start justify-end pt-1 pr-1 sm:pr-2 text-[10px] sm:text-xs font-medium text-muted-foreground">
     {title}
   </div>
   <div class="relative flex-1" style="height: {height}px;" class:pb-5={showXAxis}>
     {@render chart()}
   </div>
   {#if rightGutter}
-    <div class="flex w-12 shrink-0 items-start pl-2 pt-1 text-xs text-muted-foreground">
+    <div class="flex w-8 sm:w-12 shrink-0 items-start pl-1 sm:pl-2 pt-1 text-[10px] sm:text-xs text-muted-foreground">
       {@render rightGutter()}
     </div>
   {/if}
