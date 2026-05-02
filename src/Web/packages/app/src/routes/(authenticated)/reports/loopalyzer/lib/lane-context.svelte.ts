@@ -1,4 +1,5 @@
-import { getContext, setContext } from 'svelte';
+import { getContext, onMount, setContext } from 'svelte';
+import { browser } from '$app/environment';
 
 /** Number of 5-minute bins in a 24h day. */
 export const BIN_COUNT = 288;
@@ -50,4 +51,37 @@ export function getLaneContext(): LaneContextState {
   const ctx = getContext<LaneContextState | undefined>(KEY);
   if (!ctx) throw new Error('LaneContext not set; wrap lanes in <LoopalyzerPage />');
   return ctx;
+}
+
+/**
+ * Resolve a set of CSS custom properties into literal color strings, keeping
+ * them in sync with theme changes via a MutationObserver on the documentElement.
+ *
+ * Why: layerchart's canvas mode passes stroke/fill straight into
+ * `CanvasRenderingContext2D.strokeStyle`/`fillStyle`, which does not parse the
+ * `var(--x)` syntax. We need the computed value, not the cascade reference.
+ */
+export function useThemeColors<K extends string>(varNames: readonly K[]): Record<K, string> {
+  const colors = $state({} as Record<K, string>);
+  for (const name of varNames) colors[name] = '';
+
+  const refresh = () => {
+    if (!browser) return;
+    const styles = getComputedStyle(document.documentElement);
+    for (const name of varNames) {
+      colors[name] = styles.getPropertyValue(name).trim() || colors[name];
+    }
+  };
+
+  onMount(() => {
+    refresh();
+    const observer = new MutationObserver(refresh);
+    observer.observe(document.documentElement, {
+      attributes: true,
+      attributeFilter: ['class', 'data-theme', 'style'],
+    });
+    return () => observer.disconnect();
+  });
+
+  return colors;
 }

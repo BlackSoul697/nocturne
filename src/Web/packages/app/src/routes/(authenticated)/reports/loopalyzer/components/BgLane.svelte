@@ -8,6 +8,7 @@
     X_DOMAIN,
     X_TICKS,
     formatXTick,
+    useThemeColors,
   } from '../lib/lane-context.svelte';
   import type { LaneAggregate } from '../lib/aggregate';
   import type {
@@ -88,6 +89,15 @@
     })),
   );
 
+  const colors = useThemeColors([
+    '--chart-1',
+    '--chart-2',
+    '--chart-3',
+    '--chart-4',
+    '--chart-5',
+    '--muted-foreground',
+  ]);
+
   type PredSeries = { startMinute: number; key: 'iob' | 'zt' | 'cob' | 'uam'; color: string; points: BinPoint[] };
   function predToSeries(p: LoopalyzerPrediction): PredSeries[] {
     const start = p.minute ?? 0;
@@ -100,10 +110,10 @@
       return { startMinute: start, key, color, points };
     };
     return [
-      make(p.iob, 'iob', 'var(--chart-1)'),
-      make(p.zt, 'zt', 'var(--chart-5)'),
-      make(p.cob, 'cob', 'var(--chart-3)'),
-      make(p.uam, 'uam', 'var(--chart-4)'),
+      make(p.iob, 'iob', colors['--chart-1']),
+      make(p.zt, 'zt', colors['--chart-5']),
+      make(p.cob, 'cob', colors['--chart-3']),
+      make(p.uam, 'uam', colors['--chart-4']),
     ].filter((s): s is PredSeries => s != null);
   }
   let predictionSeries = $derived(predictions.flatMap(predToSeries));
@@ -122,11 +132,11 @@
     >
       {#if hasTargetBand}
         <Rect
-          x={0}
-          width={1440}
+          x0={0}
+          x1={1440}
           y0={bgLow ?? 70}
           y1={bgHigh ?? 180}
-          fill="var(--chart-2)"
+          fill={colors['--chart-2']}
           fillOpacity={0.12}
         />
       {/if}
@@ -155,7 +165,7 @@
           y0={(d: BandPoint) => d.p10 ?? 0}
           y1={(d: BandPoint) => d.p90 ?? 0}
           defined={(d: BandPoint) => d.p10 != null && d.p90 != null}
-          fill="var(--chart-1)"
+          fill={colors['--chart-1']}
           fillOpacity={0.18}
           line={false}
         />
@@ -164,7 +174,7 @@
           x={(d: BinPoint) => d.minute}
           y={(d: BinPoint) => d.value ?? 0}
           defined={(d: BinPoint) => d.value != null}
-          stroke="var(--chart-1)"
+          stroke={colors['--chart-1']}
           strokeWidth={2}
         />
       {:else}
@@ -174,7 +184,7 @@
             x={(d: BinPoint) => d.minute}
             y={(d: BinPoint) => d.value ?? 0}
             defined={(d: BinPoint) => d.value != null}
-            stroke="var(--chart-1)"
+            stroke={colors['--chart-1']}
             strokeWidth={series.isToday ? 1.75 : 1}
             strokeOpacity={series.isToday ? 0.9 : 0.22}
           />
@@ -193,25 +203,25 @@
         />
       {/each}
 
-      {#each meals as m, i (i)}
-        <Rule x={m.minute ?? 0} stroke="var(--chart-3)" strokeWidth={1} strokeOpacity={0.7} />
+      {#each meals as m (m.minute)}
+        <Rule x={m.minute ?? 0} stroke={colors['--chart-3']} strokeWidth={1} strokeOpacity={0.7} />
       {/each}
-      {#each boluses as b, i (i)}
-        <Rule x={b.minute ?? 0} stroke="var(--chart-1)" strokeWidth={1} strokeOpacity={0.7} />
+      {#each boluses as b (b.minute)}
+        <Rule x={b.minute ?? 0} stroke={colors['--chart-1']} strokeWidth={1} strokeOpacity={0.7} />
       {/each}
-      {#each siteChanges as s, i (i)}
+      {#each siteChanges as s (s.minute)}
         <Rule
           x={s.minute ?? 0}
-          stroke="var(--muted-foreground)"
+          stroke={colors['--muted-foreground']}
           strokeWidth={1}
           strokeOpacity={0.5}
           dashArray={[2, 2]}
         />
       {/each}
-      {#each sensorChanges as s, i (i)}
+      {#each sensorChanges as s (s.minute)}
         <Rule
           x={s.minute ?? 0}
-          stroke="var(--muted-foreground)"
+          stroke={colors['--muted-foreground']}
           strokeWidth={1}
           strokeOpacity={0.5}
           dashArray={[2, 2]}

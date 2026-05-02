@@ -3,7 +3,9 @@
   import { scaleLinear } from 'd3-scale';
   import { curveStepAfter } from 'd3-shape';
   import LaneFrame from './LaneFrame.svelte';
-  import { BIN_COUNT, BIN_MINUTES, X_DOMAIN, X_TICKS, formatXTick } from '../lib/lane-context.svelte';
+  import { BIN_COUNT, BIN_MINUTES, X_DOMAIN, X_TICKS, formatXTick, useThemeColors } from '../lib/lane-context.svelte';
+
+  const colors = useThemeColors(['--iob-basal']);
 
   type Props = {
     /** 288-bin scheduled basal in U/h. From the most-recent profile (multi-day) or the day's actual schedule (single-day). */
@@ -55,7 +57,7 @@
         x={(d: StepPoint) => d.minute}
         y={(d: StepPoint) => d.rate}
         curve={curveStepAfter}
-        stroke="var(--iob-basal)"
+        stroke={colors['--iob-basal']}
         strokeWidth={1.5}
       />
     </Chart>

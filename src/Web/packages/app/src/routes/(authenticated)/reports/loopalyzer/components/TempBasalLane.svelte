@@ -3,7 +3,9 @@
   import { scaleLinear } from 'd3-scale';
   import { curveStepAfter } from 'd3-shape';
   import LaneFrame from './LaneFrame.svelte';
-  import { BIN_COUNT, BIN_MINUTES, X_DOMAIN, X_TICKS, formatXTick } from '../lib/lane-context.svelte';
+  import { BIN_COUNT, BIN_MINUTES, X_DOMAIN, X_TICKS, formatXTick, useThemeColors } from '../lib/lane-context.svelte';
+
+  const colors = useThemeColors(['--iob-temporary', '--muted-foreground']);
 
   type Props = {
     /** 288-bin actual delivered basal (temp where active, null where no temp). */
@@ -70,7 +72,7 @@
         x={(d: SchedPoint) => d.minute}
         y={(d: SchedPoint) => d.rate}
         curve={curveStepAfter}
-        stroke="var(--muted-foreground)"
+        stroke={colors['--muted-foreground']}
         strokeWidth={1}
         strokeOpacity={0.35}
       />
@@ -80,7 +82,7 @@
         y={(d: TempPoint) => d.rate ?? 0}
         defined={(d: TempPoint) => d.rate != null}
         curve={curveStepAfter}
-        stroke="var(--iob-temporary)"
+        stroke={colors['--iob-temporary']}
         strokeWidth={1.5}
       />
     </Chart>
