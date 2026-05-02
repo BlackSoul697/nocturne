@@ -3,6 +3,7 @@
   import { scaleLinear } from 'd3-scale';
   import { curveStepAfter } from 'd3-shape';
   import LaneFrame from './LaneFrame.svelte';
+  import MealAlignmentBand from './MealAlignmentBand.svelte';
   import { BIN_COUNT, BIN_MINUTES, X_DOMAIN, X_TICKS, formatXTick, useThemeColors } from '../lib/lane-context.svelte';
 
   const colors = useThemeColors(['--iob-temporary', '--muted-foreground']);
@@ -50,6 +51,8 @@
       yScale={scaleLinear()}
       padding={{ top: 4, right: 6, bottom: showXAxis ? 18 : 4, left: 28 }}
     >
+      <MealAlignmentBand />
+
       <Axis
         placement="left"
         ticks={[0, yMax / 2, yMax]}

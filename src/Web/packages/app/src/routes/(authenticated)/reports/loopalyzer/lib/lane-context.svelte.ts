@@ -53,6 +53,11 @@ export function getLaneContext(): LaneContextState {
   return ctx;
 }
 
+/** Like {@link getLaneContext} but returns null instead of throwing. */
+export function tryGetLaneContext(): LaneContextState | null {
+  return getContext<LaneContextState | undefined>(KEY) ?? null;
+}
+
 /**
  * Resolve a set of CSS custom properties into literal color strings, keeping
  * them in sync with theme changes via a MutationObserver on the documentElement.

@@ -2,6 +2,7 @@
   import { Chart, Spline, Area, Rect, Axis, Rule } from 'layerchart/canvas';
   import { scaleLinear } from 'd3-scale';
   import LaneFrame from './LaneFrame.svelte';
+  import MealAlignmentBand from './MealAlignmentBand.svelte';
   import {
     BIN_COUNT,
     BIN_MINUTES,
@@ -140,6 +141,7 @@
           fillOpacity={0.12}
         />
       {/if}
+      <MealAlignmentBand />
 
       <Axis
         placement="left"
