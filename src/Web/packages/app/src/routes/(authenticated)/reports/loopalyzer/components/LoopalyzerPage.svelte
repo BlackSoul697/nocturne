@@ -133,6 +133,14 @@
   let siteChanges = $derived(singleDay?.siteChanges ?? []);
   let sensorChanges = $derived(singleDay?.sensorChanges ?? []);
 
+  /**
+   * The report adds value only when at least one day in the range has APS data.
+   * Without it the lanes still render, but the IOB/COB curves degrade to the
+   * pure-treatments fallback and predictions/APS bands disappear — surface a
+   * clearer empty state instead of silently showing a flat report.
+   */
+  let hasAnyApsData = $derived(rawDays.some((d) => d.hasApsData));
+
   // Drive the meal-alignment band via lane context.
   $effect(() => {
     laneCtx.alignMinute = timeShift && isMultiDay ? shifted.avgMealMinute : null;
@@ -169,7 +177,17 @@
   }
 </script>
 
-{#if dataResource.current}
+{#if dataResource.current && rawDays.length > 0 && !hasAnyApsData}
+  <div class="p-4">
+    <div class="rounded-md border border-dashed bg-card p-8 text-center text-muted-foreground">
+      <p class="text-base font-medium">Not enough data</p>
+      <p class="mt-1 text-sm">
+        Loopalyzer requires APS data (Loop / Trio / AAPS / iAPS). No closed-loop
+        snapshots were found in the selected range.
+      </p>
+    </div>
+  </div>
+{:else if dataResource.current}
   <div class="space-y-4 p-4">
     <LoopalyzerHeader
       rangeDays={rawDays.length}

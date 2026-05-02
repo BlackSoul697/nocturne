@@ -17,6 +17,7 @@ import {
   Sunrise,
   Syringe,
   Utensils,
+  Activity,
 } from "lucide-svelte";
 import SiteChangeIcon from "$lib/components/icons/SiteChangeIcon.svelte";
 
@@ -30,6 +31,12 @@ export interface ReportItem {
   href: string;
   icon: IconComponent;
   status: "available" | "coming-soon";
+  /**
+   * When set, the report is only surfaced for tenants that have APS data
+   * (Loop / Trio / AAPS / iAPS). Sidebar/overview consumers can call
+   * `getSidebarReportItems({ hasApsData })` to gate visibility.
+   */
+  requiresApsData?: boolean;
 }
 
 export interface ReportCategory {
@@ -220,6 +227,14 @@ export const reportCategories: ReportCategory[] = [
         status: "available",
       },
       {
+        title: "Loopalyzer",
+        description: "How your closed loop is behaving across days",
+        href: "/reports/loopalyzer",
+        icon: Activity,
+        status: "available",
+        requiresApsData: true,
+      },
+      {
         title: "Battery",
         description: "Pump battery trends and longevity",
         href: "/reports/battery",
@@ -230,15 +245,25 @@ export const reportCategories: ReportCategory[] = [
   },
 ];
 
-/** Flat list of all available report items for sidebar navigation. */
-export function getSidebarReportItems(): {
+/**
+ * Flat list of all available report items for sidebar navigation.
+ *
+ * Pass `hasApsData: false` to omit reports flagged with `requiresApsData`.
+ * Defaults to including everything so an undecided availability check
+ * doesn't make reports flicker in/out during the initial paint.
+ */
+export function getSidebarReportItems(
+  opts: { hasApsData?: boolean } = {},
+): {
   title: string;
   href: string;
   icon: IconComponent;
 }[] {
+  const { hasApsData = true } = opts;
   return reportCategories
     .flatMap((c) => c.reports)
     .filter((r) => r.status === "available")
+    .filter((r) => !r.requiresApsData || hasApsData)
     .map((r) => ({
       title: r.sidebarTitle ?? r.title,
       href: r.href,

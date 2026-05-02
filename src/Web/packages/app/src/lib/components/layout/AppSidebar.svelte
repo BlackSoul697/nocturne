@@ -45,6 +45,7 @@
     Users,
   } from "lucide-svelte";
   import { getSidebarReportItems } from "$lib/navigation/report-navigation";
+  import { getAvailability as getLoopalyzerAvailability } from "$lib/api/generated/loopalyzers.generated.remote";
   import type { AuthUser } from "$lib/stores/auth-store.svelte";
 
   interface Props {
@@ -158,6 +159,22 @@
     }
   });
 
+  // Loopalyzer is only meaningful for tenants with APS (Loop/Trio/AAPS/iAPS) data.
+  // Default to true so the entry doesn't flicker out during the initial paint;
+  // we only hide it once the availability check returns a definitive `false`.
+  let hasApsData = $state(true);
+  $effect(() => {
+    if (!user || !browser) return;
+    getLoopalyzerAvailability()
+      .then((result) => {
+        hasApsData = result?.hasApsData ?? false;
+      })
+      .catch(() => {
+        // On error, leave the menu entry visible — the report itself will
+        // surface a clearer "not enough data" message if the user opens it.
+      });
+  });
+
   type NavItem = {
     title: string;
     href?: string;
@@ -194,7 +211,7 @@
       icon: BarChart3,
       children: [
         { title: "Overview", href: "/reports", icon: PieChart, strict: true },
-        ...getSidebarReportItems(),
+        ...getSidebarReportItems({ hasApsData }),
       ],
     },
     {
