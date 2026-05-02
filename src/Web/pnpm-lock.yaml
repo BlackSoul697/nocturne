@@ -202,8 +202,8 @@ importers:
         specifier: ^20.5.3
         version: 20.5.3
       layerchart:
-        specifier: 2.0.0-next.43
-        version: 2.0.0-next.43(svelte@5.50.0)
+        specifier: 2.0.0-next.62
+        version: 2.0.0-next.62(@sveltejs/kit@2.50.2(@opentelemetry/api@1.9.0)(@sveltejs/vite-plugin-svelte@5.1.1(svelte@5.50.0)(vite@6.4.1(@types/node@25.2.2)(jiti@2.6.1)(lightningcss@1.30.2)(tsx@4.20.6)(yaml@2.8.2)))(svelte@5.50.0)(typescript@5.9.3)(vite@6.4.1(@types/node@25.2.2)(jiti@2.6.1)(lightningcss@1.30.2)(tsx@4.20.6)(yaml@2.8.2)))(svelte@5.50.0)(zod@4.3.6)
       mode-watcher:
         specifier: ^1.1.0
         version: 1.1.0(svelte@5.50.0)
@@ -671,9 +671,15 @@ packages:
   '@dagrejs/dagre@1.1.8':
     resolution: {integrity: sha512-5SEDlndt4W/LaVzPYJW+bSmSEZc9EzTf8rJ20WCKvjS5EAZAN0b+x0Yww7VMT4R3Wootkg+X9bUfUxazYw6Blw==}
 
+  '@dagrejs/dagre@2.0.4':
+    resolution: {integrity: sha512-J6vCWTNpicHF4zFlZG1cS5DkGzMr9941gddYkakjrg3ZNev4bbqEgLHFTWiFrcJm7UCRu7olO3K6IRDd9gSGhA==}
+
   '@dagrejs/graphlib@2.2.4':
     resolution: {integrity: sha512-mepCf/e9+SKYy1d02/UkvSy6+6MoyXhVxP8lLDfA7BPE1X1d4dR0sZznmbM8/XVJ1GPM+Svnx7Xj6ZweByWUkw==}
     engines: {node: '>17.0.0'}
+
+  '@dagrejs/graphlib@3.0.4':
+    resolution: {integrity: sha512-HxZ7fCvAwTLCWCO0WjDkzAFQze8LdC6iOpKbetDKHIuDfIgMlIzYzqZ4nxwLlclQX+3ZVeZ1K2OuaOE2WWcyOg==}
 
   '@discordjs/builders@1.13.1':
     resolution: {integrity: sha512-cOU0UDHc3lp/5nKByDxkmRiNZBpdp0kx55aarbiAfakfKJHlxv/yFW1zmIqCAmwH5CRlrH9iMFKJMpvW4DPB+w==}
@@ -1141,14 +1147,26 @@ packages:
   '@layerstack/svelte-actions@1.0.1-next.14':
     resolution: {integrity: sha512-MPBmVaB+GfNHvBkg5nJkPG18smoXKvsvJRpsdWnrUBfca+TieZLoaEzNxDH+9LG11dIXP9gghsXt1mUqbbyAsA==}
 
+  '@layerstack/svelte-actions@1.0.1-next.18':
+    resolution: {integrity: sha512-gxPzCnJ1c9LTfWtRqLUzefCx+k59ZpxDUQ2XB+LokveZQPe7IDSOwHaBOEMlaGoGrtwc3Ft8dSZq+2WT2o9u/g==}
+
   '@layerstack/svelte-state@0.1.0-next.19':
     resolution: {integrity: sha512-yCYoQAIbeP8y1xmOB/r0+UundgP4JFnpNURgMki+26TotzoqrZ5oLpHvhPSVm60ks+buR3ebDBTeUFdHzxwzQQ==}
+
+  '@layerstack/svelte-state@0.1.0-next.23':
+    resolution: {integrity: sha512-7O4umv+gXwFfs3/vjzFWYHNXGwYnnjBapWJ5Y+9u99F4eVk6rh4ocNwqkqQNkpMZ5tUJBlRTWjPE1So6+hEzIg==}
 
   '@layerstack/tailwind@2.0.0-next.17':
     resolution: {integrity: sha512-ZSn6ouqpnzB6DKzSKLVwrUBOQsrzpDA/By2/ba9ApxgTGnaD1nyqNwrvmZ+kswdAwB4YnrGEAE4VZkKrB2+DaQ==}
 
+  '@layerstack/tailwind@2.0.0-next.21':
+    resolution: {integrity: sha512-Qgp2EpmEHmjtura8MQzWicR6ztBRSsRvddakFtx9ShrLMz6jWzd6bCMVVRu44Q3ZOrtXmSu4QxjCZWu1ytvuPg==}
+
   '@layerstack/utils@2.0.0-next.14':
     resolution: {integrity: sha512-1I2CS0Cwgs53W35qVg1eBdYhB/CiPvL3s0XE61b8jWkTHxgjBF65yYNgXjW74kv7WI7GsJcWMNBufPd0rnu9kA==}
+
+  '@layerstack/utils@2.0.0-next.18':
+    resolution: {integrity: sha512-EYILHpfBRYMMEahajInu9C2AXQom5IcAEdtCeucD3QIl/fdDgRbtzn6/8QW9ewumfyNZetdUvitOksmI1+gZYQ==}
 
   '@lucide/svelte@0.555.0':
     resolution: {integrity: sha512-aqTOMjBjf/HNwrhggRdb83T0QslZdpJTyTwr/chtXTGw7u4Hcu4zQb/5uA+csF0KKawKWVnsNI1MdHEHeEXTcQ==}
@@ -4310,6 +4328,11 @@ packages:
     peerDependencies:
       svelte: ^5.37.0
 
+  layerchart@2.0.0-next.62:
+    resolution: {integrity: sha512-u4qG7FHudcWfxxA8Pei9G3lTuWxJaAhojQc5aKLDykQAvdns+T1fWmMjgwZVkjXBpLZn+BEklM6PGclWVGldqg==}
+    peerDependencies:
+      svelte: ^5.37.0
+
   levn@0.4.1:
     resolution: {integrity: sha512-+bT2uH4E5LGE7h/n3evcS/sQlJXCpIp6ym8OWJ5eV6+67Dsql/LaaT7qJBAt2rzfoa/5QBGBhxDix1dMt2kQKQ==}
     engines: {node: '>= 0.8.0'}
@@ -6181,7 +6204,13 @@ snapshots:
     dependencies:
       '@dagrejs/graphlib': 2.2.4
 
+  '@dagrejs/dagre@2.0.4':
+    dependencies:
+      '@dagrejs/graphlib': 3.0.4
+
   '@dagrejs/graphlib@2.2.4': {}
+
+  '@dagrejs/graphlib@3.0.4': {}
 
   '@discordjs/builders@1.13.1':
     dependencies:
@@ -6535,9 +6564,19 @@ snapshots:
       '@layerstack/utils': 2.0.0-next.14
       d3-scale: 4.0.2
 
+  '@layerstack/svelte-actions@1.0.1-next.18':
+    dependencies:
+      '@floating-ui/dom': 1.7.5
+      '@layerstack/utils': 2.0.0-next.18
+      d3-scale: 4.0.2
+
   '@layerstack/svelte-state@0.1.0-next.19':
     dependencies:
       '@layerstack/utils': 2.0.0-next.14
+
+  '@layerstack/svelte-state@0.1.0-next.23':
+    dependencies:
+      '@layerstack/utils': 2.0.0-next.18
 
   '@layerstack/tailwind@2.0.0-next.17':
     dependencies:
@@ -6547,12 +6586,25 @@ snapshots:
       lodash-es: 4.17.22
       tailwind-merge: 3.4.0
 
+  '@layerstack/tailwind@2.0.0-next.21':
+    dependencies:
+      '@layerstack/utils': 2.0.0-next.18
+      clsx: 2.1.1
+      d3-array: 3.2.4
+      tailwind-merge: 3.4.0
+
   '@layerstack/utils@2.0.0-next.14':
     dependencies:
       d3-array: 3.2.4
       d3-time: 3.1.0
       d3-time-format: 4.1.0
       lodash-es: 4.17.22
+
+  '@layerstack/utils@2.0.0-next.18':
+    dependencies:
+      d3-array: 3.2.4
+      d3-time: 3.1.0
+      d3-time-format: 4.1.0
 
   '@lucide/svelte@0.555.0(svelte@5.45.2)':
     dependencies:
@@ -10221,6 +10273,42 @@ snapshots:
       memoize: 10.2.0
       runed: 0.31.1(svelte@5.50.0)
       svelte: 5.50.0
+
+  layerchart@2.0.0-next.62(@sveltejs/kit@2.50.2(@opentelemetry/api@1.9.0)(@sveltejs/vite-plugin-svelte@5.1.1(svelte@5.50.0)(vite@6.4.1(@types/node@25.2.2)(jiti@2.6.1)(lightningcss@1.30.2)(tsx@4.20.6)(yaml@2.8.2)))(svelte@5.50.0)(typescript@5.9.3)(vite@6.4.1(@types/node@25.2.2)(jiti@2.6.1)(lightningcss@1.30.2)(tsx@4.20.6)(yaml@2.8.2)))(svelte@5.50.0)(zod@4.3.6):
+    dependencies:
+      '@dagrejs/dagre': 2.0.4
+      '@layerstack/svelte-actions': 1.0.1-next.18
+      '@layerstack/svelte-state': 0.1.0-next.23
+      '@layerstack/tailwind': 2.0.0-next.21
+      '@layerstack/utils': 2.0.0-next.18
+      '@types/d3-contour': 3.0.6
+      d3-array: 3.2.4
+      d3-chord: 3.0.1
+      d3-color: 3.1.0
+      d3-contour: 4.0.2
+      d3-delaunay: 6.0.4
+      d3-dsv: 3.0.1
+      d3-force: 3.0.0
+      d3-geo: 3.1.1
+      d3-geo-voronoi: 2.1.0
+      d3-hierarchy: 3.1.2
+      d3-interpolate: 3.0.1
+      d3-interpolate-path: 2.3.0
+      d3-path: 3.1.0
+      d3-quadtree: 3.0.1
+      d3-random: 3.0.1
+      d3-sankey: 0.12.3
+      d3-scale: 4.0.2
+      d3-scale-chromatic: 3.1.0
+      d3-shape: 3.2.0
+      d3-tile: 1.0.0
+      d3-time: 3.1.0
+      memoize: 10.2.0
+      runed: 0.37.1(@sveltejs/kit@2.50.2(@opentelemetry/api@1.9.0)(@sveltejs/vite-plugin-svelte@5.1.1(svelte@5.50.0)(vite@6.4.1(@types/node@25.2.2)(jiti@2.6.1)(lightningcss@1.30.2)(tsx@4.20.6)(yaml@2.8.2)))(svelte@5.50.0)(typescript@5.9.3)(vite@6.4.1(@types/node@25.2.2)(jiti@2.6.1)(lightningcss@1.30.2)(tsx@4.20.6)(yaml@2.8.2)))(svelte@5.50.0)(zod@4.3.6)
+      svelte: 5.50.0
+    transitivePeerDependencies:
+      - '@sveltejs/kit'
+      - zod
 
   levn@0.4.1:
     dependencies:
