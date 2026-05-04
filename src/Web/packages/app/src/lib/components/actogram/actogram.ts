@@ -36,6 +36,33 @@ export interface ActogramRowContext<T extends ActogramPoint = ActogramPoint> {
 	day: Date;
 }
 
+export interface ActogramTooltipData {
+	time: Date;
+	bgPoint?: RowDataPoint<GlucosePoint>;
+	dataPoint?: RowDataPoint<ActogramPoint>;
+}
+
+export function findNearestPoint<T extends ActogramPoint>(
+	points: RowDataPoint<T>[],
+	hoursFromStart: number,
+	maxDistanceHours = 2,
+): RowDataPoint<T> | undefined {
+	if (points.length === 0) return undefined;
+
+	let nearest: RowDataPoint<T> | undefined;
+	let minDist = Infinity;
+
+	for (const p of points) {
+		const dist = Math.abs(p.hoursFromStart - hoursFromStart);
+		if (dist < minDist) {
+			minDist = dist;
+			nearest = p;
+		}
+	}
+
+	return minDist <= maxDistanceHours ? nearest : undefined;
+}
+
 function slicePoints<T extends ActogramPoint>(data: T[], days: Date[]): { day: Date; data: RowDataPoint<T>[] }[] {
 	const rows = days.map((day) => ({
 		day,

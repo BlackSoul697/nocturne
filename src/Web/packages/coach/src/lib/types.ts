@@ -11,6 +11,7 @@ export interface MarkState {
 export interface CoachMarkAdapter {
   fetchAll: () => Promise<MarkState[]>;
   update: (key: string, status: MarkStatus) => Promise<void>;
+  deleteAll?: () => Promise<void>;
 }
 
 export interface CoachMarkStep {

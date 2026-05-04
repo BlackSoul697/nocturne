@@ -17,16 +17,19 @@
     Loader2,
     CheckCircle,
     AlertTriangle,
+    Eye,
+    ArrowLeft,
+    Copy,
   } from "lucide-svelte";
-  import { createIssue, getFallbackUrl } from "$lib/api/support.remote";
-  import { page } from "$app/stores";
+  import { createIssue, createOperatorIssue, getFallbackUrl } from "$lib/api/support.remote";
 
   interface Props {
     open: boolean;
     template: string;
+    useOperatorSupport?: boolean;
   }
 
-  let { open = $bindable(false), template = "bug" }: Props = $props();
+  let { open = $bindable(false), template = "bug", useOperatorSupport = false }: Props = $props();
 
   const templateConfigs: Record<
     string,
@@ -72,11 +75,12 @@
   let includeSettings = $state(false);
 
   // UI state
-  let formState = $state<"idle" | "submitting" | "success" | "error">("idle");
+  let formState = $state<"idle" | "preview" | "submitting" | "success" | "error">("idle");
   let issueUrl = $state("");
   let issueNumber = $state(0);
   let isDragging = $state(false);
   let fileInput = $state<HTMLInputElement | null>(null);
+  let previewCopied = $state(false);
 
   const config = $derived(templateConfigs[template] ?? templateConfigs.bug);
 
@@ -196,13 +200,84 @@
     }
   }
 
+  function generatePreviewMarkdown(): string {
+    const lines: string[] = [];
+
+    lines.push(`# ${title}`);
+    lines.push("");
+    lines.push("## Description");
+    lines.push("");
+    lines.push(description);
+
+    if (template === "bug") {
+      if (stepsToReproduce.trim()) {
+        lines.push("");
+        lines.push("## Steps to Reproduce");
+        lines.push("");
+        lines.push(stepsToReproduce);
+      }
+      if (expectedBehavior.trim()) {
+        lines.push("");
+        lines.push("## Expected Behavior");
+        lines.push("");
+        lines.push(expectedBehavior);
+      }
+      if (actualBehavior.trim()) {
+        lines.push("");
+        lines.push("## Actual Behavior");
+        lines.push("");
+        lines.push(actualBehavior);
+      }
+    }
+
+    if (template === "data-issue") {
+      if (cgmSource.trim()) {
+        lines.push("");
+        lines.push(`**CGM Source:** ${cgmSource}`);
+      }
+      if (timeRange.trim()) {
+        lines.push("");
+        lines.push(`**Time Range:** ${timeRange}`);
+      }
+    }
+
+    if (images.length > 0) {
+      lines.push("");
+      lines.push(`**Screenshots:** ${images.length} attached`);
+    }
+
+    lines.push("");
+    lines.push("<details>");
+    lines.push("<summary>Diagnostic Info</summary>");
+    lines.push("");
+    lines.push("```json");
+    lines.push(diagnosticInfo);
+    lines.push("```");
+    lines.push("");
+    lines.push("</details>");
+
+    return lines.join("\n");
+  }
+
+  async function copyPreview() {
+    try {
+      await navigator.clipboard.writeText(generatePreviewMarkdown());
+      previewCopied = true;
+      setTimeout(() => {
+        previewCopied = false;
+      }, 2000);
+    } catch {
+      // Clipboard API may not be available
+    }
+  }
+
   async function handleSubmit() {
     if (!isValid || formState === "submitting") return;
 
     formState = "submitting";
 
     try {
-      const result = await createIssue({
+      const params = {
         template,
         title,
         description,
@@ -213,11 +288,17 @@
         timeRange: template === "data-issue" ? timeRange || undefined : undefined,
         diagnosticInfo,
         images,
-      });
+      };
 
-      issueUrl = result.issueUrl;
-      issueNumber = result.issueNumber;
-      formState = "success";
+      if (useOperatorSupport) {
+        await createOperatorIssue(params);
+        formState = "success";
+      } else {
+        const result = await createIssue(params);
+        issueUrl = result.issueUrl;
+        issueNumber = result.issueNumber;
+        formState = "success";
+      }
     } catch {
       formState = "error";
       // Open fallback URL
@@ -258,16 +339,22 @@
     {#if formState === "success"}
       <div class="flex flex-col items-center gap-4 py-8">
         <CheckCircle class="h-12 w-12 text-green-500" />
-        <h3 class="text-lg font-semibold">Issue Created!</h3>
-        <p class="text-sm text-muted-foreground text-center">
-          Your issue #{issueNumber} has been created successfully.
-        </p>
-        <a href={issueUrl} target="_blank" rel="noopener noreferrer">
-          <Button variant="outline" class="gap-2">
-            <ExternalLink class="h-4 w-4" />
-            View on GitHub
-          </Button>
-        </a>
+        <h3 class="text-lg font-semibold">Issue Submitted!</h3>
+        {#if useOperatorSupport}
+          <p class="text-sm text-muted-foreground text-center">
+            Your issue has been submitted to the support team.
+          </p>
+        {:else}
+          <p class="text-sm text-muted-foreground text-center">
+            Your issue #{issueNumber} has been created successfully.
+          </p>
+          <a href={issueUrl} target="_blank" rel="noopener noreferrer">
+            <Button variant="outline" class="gap-2">
+              <ExternalLink class="h-4 w-4" />
+              View on GitHub
+            </Button>
+          </a>
+        {/if}
         <Button variant="ghost" onclick={handleClose}>Close</Button>
       </div>
     {:else if formState === "error"}
@@ -280,7 +367,7 @@
         </p>
         <Button variant="ghost" onclick={handleClose}>Close</Button>
       </div>
-    {:else}
+    {:else if formState === "idle"}
       <div class="flex-1 overflow-y-auto space-y-4 pr-1">
         <!-- Title -->
         <div class="space-y-2">
@@ -399,7 +486,7 @@
 
           {#if imagePreviews.length > 0}
             <div class="flex gap-2 flex-wrap">
-              {#each imagePreviews as preview, i}
+              {#each imagePreviews as preview, i (preview)}
                 <div class="relative group">
                   <img
                     src={preview}
@@ -476,8 +563,117 @@
       <Dialog.Footer class="pt-4 border-t mt-4">
         <Button variant="outline" onclick={handleClose}>Cancel</Button>
         <Button
+          onclick={() => { formState = "preview"; }}
+          disabled={!isValid}
+        >
+          <Eye class="h-4 w-4 mr-2" />
+          Preview Issue
+        </Button>
+      </Dialog.Footer>
+    {:else if formState === "preview" || formState === "submitting"}
+      <div class="flex-1 overflow-y-auto space-y-4 pr-1">
+        <div class="space-y-1">
+          <p class="text-xs font-medium text-muted-foreground uppercase tracking-wide">Title</p>
+          <h3 class="text-lg font-semibold">{title}</h3>
+        </div>
+
+        <Separator />
+
+        <div class="space-y-1">
+          <p class="text-xs font-medium text-muted-foreground uppercase tracking-wide">Description</p>
+          <p class="text-sm whitespace-pre-wrap">{description}</p>
+        </div>
+
+        {#if template === "bug"}
+          {#if stepsToReproduce.trim()}
+            <Separator />
+            <div class="space-y-1">
+              <p class="text-xs font-medium text-muted-foreground uppercase tracking-wide">Steps to Reproduce</p>
+              <p class="text-sm whitespace-pre-wrap">{stepsToReproduce}</p>
+            </div>
+          {/if}
+
+          {#if expectedBehavior.trim() || actualBehavior.trim()}
+            <Separator />
+            <div class="grid grid-cols-2 gap-4">
+              {#if expectedBehavior.trim()}
+                <div class="space-y-1">
+                  <p class="text-xs font-medium text-muted-foreground uppercase tracking-wide">Expected Behavior</p>
+                  <p class="text-sm whitespace-pre-wrap">{expectedBehavior}</p>
+                </div>
+              {/if}
+              {#if actualBehavior.trim()}
+                <div class="space-y-1">
+                  <p class="text-xs font-medium text-muted-foreground uppercase tracking-wide">Actual Behavior</p>
+                  <p class="text-sm whitespace-pre-wrap">{actualBehavior}</p>
+                </div>
+              {/if}
+            </div>
+          {/if}
+        {/if}
+
+        {#if template === "data-issue" && (cgmSource.trim() || timeRange.trim())}
+          <Separator />
+          <div class="grid grid-cols-2 gap-4">
+            {#if cgmSource.trim()}
+              <div class="space-y-1">
+                <p class="text-xs font-medium text-muted-foreground uppercase tracking-wide">CGM Source</p>
+                <p class="text-sm">{cgmSource}</p>
+              </div>
+            {/if}
+            {#if timeRange.trim()}
+              <div class="space-y-1">
+                <p class="text-xs font-medium text-muted-foreground uppercase tracking-wide">Time Range</p>
+                <p class="text-sm">{timeRange}</p>
+              </div>
+            {/if}
+          </div>
+        {/if}
+
+        {#if imagePreviews.length > 0}
+          <Separator />
+          <div class="space-y-1">
+            <p class="text-xs font-medium text-muted-foreground uppercase tracking-wide">Screenshots ({images.length})</p>
+            <div class="flex gap-2 flex-wrap">
+              {#each imagePreviews as preview, i (preview)}
+                <img
+                  src={preview}
+                  alt="Screenshot {i + 1}"
+                  class="h-20 w-20 object-cover rounded-md border"
+                />
+              {/each}
+            </div>
+          </div>
+        {/if}
+
+        <Separator />
+
+        <details class="group">
+          <summary class="text-xs font-medium text-muted-foreground uppercase tracking-wide cursor-pointer select-none hover:text-foreground transition-colors">
+            Diagnostic Info
+          </summary>
+          <pre class="mt-2 text-xs bg-muted rounded-md p-3 overflow-x-auto">{diagnosticInfo}</pre>
+        </details>
+      </div>
+
+      <Dialog.Footer class="pt-4 border-t mt-4">
+        <Button variant="outline" onclick={() => { formState = "idle"; }}>
+          <ArrowLeft class="h-4 w-4 mr-2" />
+          Back
+        </Button>
+        <div class="flex-1"></div>
+        <Button variant="outline" onclick={copyPreview}>
+          {#if previewCopied}
+            <CheckCircle class="h-4 w-4 mr-2" />
+            Copied
+          {:else}
+            <Copy class="h-4 w-4 mr-2" />
+            Copy
+          {/if}
+        </Button>
+        <Button
           onclick={handleSubmit}
-          disabled={!isValid || formState === "submitting"}
+          disabled={formState === "submitting"}
         >
           {#if formState === "submitting"}
             <Loader2 class="h-4 w-4 mr-2 animate-spin" />

@@ -38,6 +38,18 @@ public record FallbackUrlResponse
     public string Url { get; init; } = "";
 }
 
+public class SupportConfigResponse
+{
+    public SupportChannelConfig? AccountBilling { get; set; }
+}
+
+public class SupportChannelConfig
+{
+    public string Mode { get; set; } = "";
+    public string Url { get; set; } = "";
+    public string? Label { get; set; }
+}
+
 public class GitHubIssueService(
     IHttpClientFactory httpClientFactory,
     IOptions<GitHubIssueOptions> options,

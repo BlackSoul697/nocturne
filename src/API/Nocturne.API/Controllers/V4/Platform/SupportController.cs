@@ -2,6 +2,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.Extensions.Options;
+using Nocturne.API.Configuration;
 using Nocturne.API.Services;
 using OpenApi.Remote.Attributes;
 
@@ -13,6 +14,7 @@ namespace Nocturne.API.Controllers.V4.Platform;
 public class SupportController(
     GitHubIssueService githubService,
     IOptions<GitHubIssueOptions> options,
+    IOptions<OperatorConfiguration> operatorOptions,
     ILogger<SupportController> logger) : ControllerBase
 {
     private static readonly HashSet<string> ValidTemplates = ["bug", "feature", "data-issue", "account"];
@@ -153,5 +155,30 @@ public class SupportController(
 
         var url = $"https://github.com/{opts.Owner}/{opts.Repo}/issues/new?title={Uri.EscapeDataString(title)}&body={Uri.EscapeDataString(body)}&labels={Uri.EscapeDataString(label)}";
         return Ok(new FallbackUrlResponse { Url = url });
+    }
+
+    /// <summary>
+    /// Returns operator support configuration for the frontend.
+    /// When no operator is configured, accountBilling is null and the default GitHub flow applies.
+    /// </summary>
+    [HttpGet("config")]
+    [RemoteQuery]
+    [ProducesResponseType(typeof(SupportConfigResponse), StatusCodes.Status200OK)]
+    public ActionResult<SupportConfigResponse> GetSupportConfig()
+    {
+        var config = operatorOptions.Value;
+        var ab = config.Support.AccountBilling;
+
+        return Ok(new SupportConfigResponse
+        {
+            AccountBilling = ab is not null && !string.IsNullOrWhiteSpace(ab.Url)
+                ? new SupportChannelConfig
+                {
+                    Mode = ab.Mode == OperatorSupportMode.Redirect ? "redirect" : "api",
+                    Url = ab.Url,
+                    Label = ab.Label ?? (config.Name is not null ? $"Contact {config.Name}" : null),
+                }
+                : null,
+        });
     }
 }

@@ -106,8 +106,15 @@ public class SiteSecurityMiddleware
         // Authentication and authorization endpoints must remain accessible
         if (path.StartsWith("/api/v4/auth/") ||
             path.StartsWith("/api/auth/oidc/") ||
+            path.StartsWith("/api/oauth/") ||
             path.StartsWith("/api/v4/oauth/") ||
             path.StartsWith("/api/v4/local/"))
+        {
+            return true;
+        }
+
+        // Well-known discovery endpoints (OIDC, OAuth metadata)
+        if (path.StartsWith("/.well-known/"))
         {
             return true;
         }

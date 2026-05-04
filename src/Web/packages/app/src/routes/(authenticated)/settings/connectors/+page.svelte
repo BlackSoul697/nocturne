@@ -92,6 +92,10 @@
   // Realtime sync progress from WebSocket
   const realtimeStore = getRealtimeStore();
   let syncProgressByConnector = $derived(realtimeStore.syncProgressByConnector);
+  let activeSyncProgress = $derived.by(() => {
+    const entries = Object.values(syncProgressByConnector);
+    return entries.find((p) => p.phase === "Syncing") ?? entries.at(-1) ?? null;
+  });
 
   $effect(() => {
     const progress = syncProgressByConnector;
@@ -102,6 +106,11 @@
       loadConnectorStatuses();
     }
   });
+
+  // API token create dialog (triggered from uploader setup)
+  let apiTokenCreateOpen = $state(false);
+  let apiTokenPrefillLabel = $state("");
+  let apiTokenPrefillScopes = $state<string[]>([]);
 
   // Deduplication state
   let showDeduplicationDialog = $state(false);
@@ -370,12 +379,17 @@
 
 <div class="container mx-auto max-w-4xl p-6 space-y-6">
   <!-- Header -->
-  <div class="flex items-center justify-between">
-    <div>
-      <h1 class="text-2xl font-bold tracking-tight">Connectors & Connected Apps</h1>
-      <p class="text-muted-foreground">
-        Manage data sources, set up new connections, and control app access
-      </p>
+  <div class="flex items-start justify-between">
+    <div class="flex items-center gap-3">
+      <div class="flex h-12 w-12 items-center justify-center rounded-xl bg-primary/10">
+        <Wifi class="h-6 w-6 text-primary" />
+      </div>
+      <div>
+        <h1 class="text-2xl font-bold tracking-tight">Connectors & Connected Apps</h1>
+        <p class="text-muted-foreground">
+          Manage data sources, set up new connections, and control app access
+        </p>
+      </div>
     </div>
     <Button variant="outline" size="sm" onclick={refreshAll} class="gap-2">
       <RefreshCw
@@ -537,6 +551,9 @@
           <Button
             variant="outline"
             onclick={() => {
+              apiTokenPrefillLabel = "";
+              apiTokenPrefillScopes = ["health.readwrite"];
+              apiTokenCreateOpen = true;
               document.getElementById("api-tokens-section")?.scrollIntoView({ behavior: "smooth" });
             }}
           >
@@ -628,13 +645,25 @@
 
     <!-- API Tokens Section -->
     <div id="api-tokens-section">
-      <ApiTokens />
+      <ApiTokens
+        bind:createOpen={apiTokenCreateOpen}
+        prefillLabel={apiTokenPrefillLabel}
+        prefillScopes={apiTokenPrefillScopes}
+      />
     </div>
   {/if}
 </div>
 
 <!-- Setup Instructions Dialog -->
-<UploaderSetupDialog bind:open={showSetupDialog} {selectedUploader} />
+<UploaderSetupDialog
+  bind:open={showSetupDialog}
+  {selectedUploader}
+  onRequestApiKey={(label, scopes) => {
+    apiTokenPrefillLabel = label;
+    apiTokenPrefillScopes = scopes;
+    apiTokenCreateOpen = true;
+  }}
+/>
 
 <!-- Demo Data Management Dialog -->
 <DemoDataSection bind:open={showDemoDataDialog} onDeleteComplete={loadServices} />
@@ -646,7 +675,7 @@
   onDeleteComplete={loadServices}
 />
 
-<ManualSyncDialog bind:open={showManualSyncDialog} {isManualSyncing} {manualSyncResult} />
+<ManualSyncDialog bind:open={showManualSyncDialog} {isManualSyncing} {manualSyncResult} syncProgress={isManualSyncing ? activeSyncProgress : null} />
 
 <!-- Connector Details Dialog -->
 <ConnectorDetailsDialog bind:open={showConnectorDialog} {selectedConnector} {selectedConnectorCapabilities} onSyncComplete={loadConnectorStatuses} />

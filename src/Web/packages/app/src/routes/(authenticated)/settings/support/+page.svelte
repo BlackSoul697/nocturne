@@ -30,10 +30,14 @@
     Lightbulb,
     Database,
     CreditCard,
+    GraduationCap,
   } from "lucide-svelte";
   import { getServicesOverview } from "$api";
-  import type { ServicesOverview } from "$api";
+  import type { ServicesOverview, SupportConfigResponse } from "$api";
+  import { getSupportConfig } from "$lib/api/support.remote";
   import IssueCreatorDialog from "$lib/components/support/IssueCreatorDialog.svelte";
+  import { getCoachMarkContext } from "@nocturne/coach";
+  import { toast } from "svelte-sonner";
 
   let includeDeviceInfo = $state(true);
   let includeRecentLogs = $state(true);
@@ -47,8 +51,27 @@
   let apiBaseUrl = $state<string | null>(null);
 
   const servicesOverviewQuery = $derived(getServicesOverview());
+  const supportConfigQuery = $derived(getSupportConfig());
 
   const services = $derived(servicesOverviewQuery.current as ServicesOverview | undefined);
+  const supportConfig = $derived(supportConfigQuery.current as SupportConfigResponse | undefined);
+
+  let useOperatorSupport = $state(false);
+
+  const coachCtx = getCoachMarkContext();
+  let resettingTutorials = $state(false);
+
+  async function resetTutorials() {
+    resettingTutorials = true;
+    try {
+      await coachCtx.resetAll();
+      toast.success("Tutorials reset — they'll appear as you navigate the app");
+    } catch {
+      toast.error("Failed to reset tutorials");
+    } finally {
+      resettingTutorials = false;
+    }
+  }
 
   $effect(() => {
     if (services?.apiEndpoint) {
@@ -153,6 +176,8 @@
 
   function handleSupportAction(template: string) {
     selectedTemplate = template;
+    useOperatorSupport =
+      template === "account" && supportConfig?.accountBilling?.mode === "api";
     dialogOpen = true;
   }
 </script>
@@ -163,11 +188,16 @@
 
 <div class="container mx-auto max-w-4xl p-6 space-y-6">
   <!-- Header -->
-  <div>
-    <h1 class="text-2xl font-bold tracking-tight">Support & Community</h1>
-    <p class="text-muted-foreground">
-      Get help, connect with the community, and share feedback
-    </p>
+  <div class="flex items-center gap-3">
+    <div class="flex h-12 w-12 items-center justify-center rounded-xl bg-primary/10">
+      <HeartHandshake class="h-6 w-6 text-primary" />
+    </div>
+    <div>
+      <h1 class="text-2xl font-bold tracking-tight">Support & Community</h1>
+      <p class="text-muted-foreground">
+        Get help, connect with the community, and share feedback
+      </p>
+    </div>
   </div>
 
   <!-- Community Links -->
@@ -223,20 +253,39 @@
     <CardContent class="space-y-4">
       <div class="grid gap-4 sm:grid-cols-2">
         {#each supportOptions as option}
-          <button
-            class="flex flex-col items-center text-center p-4 rounded-lg border hover:border-primary/50 hover:bg-accent/50 transition-colors"
-            onclick={() => handleSupportAction(option.template)}
-          >
-            <div
-              class="flex h-12 w-12 items-center justify-center rounded-full bg-primary/10 mb-3"
+          {#if option.template === "account" && supportConfig?.accountBilling?.mode === "redirect"}
+            <a
+              href={supportConfig.accountBilling.url}
+              target="_blank"
+              rel="noopener noreferrer"
+              class="flex flex-col items-center text-center p-4 rounded-lg border hover:border-primary/50 hover:bg-accent/50 transition-colors"
             >
-              <option.icon class="h-6 w-6 text-primary" />
-            </div>
-            <span class="font-medium">{option.name}</span>
-            <p class="text-sm text-muted-foreground mt-1">
-              {option.description}
-            </p>
-          </button>
+              <div
+                class="flex h-12 w-12 items-center justify-center rounded-full bg-primary/10 mb-3"
+              >
+                <ExternalLink class="h-6 w-6 text-primary" />
+              </div>
+              <span class="font-medium">{supportConfig.accountBilling.label ?? option.name}</span>
+              <p class="text-sm text-muted-foreground mt-1">
+                {option.description}
+              </p>
+            </a>
+          {:else}
+            <button
+              class="flex flex-col items-center text-center p-4 rounded-lg border hover:border-primary/50 hover:bg-accent/50 transition-colors"
+              onclick={() => handleSupportAction(option.template)}
+            >
+              <div
+                class="flex h-12 w-12 items-center justify-center rounded-full bg-primary/10 mb-3"
+              >
+                <option.icon class="h-6 w-6 text-primary" />
+              </div>
+              <span class="font-medium">{option.name}</span>
+              <p class="text-sm text-muted-foreground mt-1">
+                {option.description}
+              </p>
+            </button>
+          {/if}
         {/each}
       </div>
 
@@ -252,6 +301,36 @@
             <ExternalLink class="h-3 w-3" />
           </Button>
         </a>
+      </div>
+    </CardContent>
+  </Card>
+
+  <!-- Tutorials -->
+  <Card>
+    <CardHeader>
+      <CardTitle class="flex items-center gap-2">
+        <GraduationCap class="h-5 w-5" />
+        Tutorials
+      </CardTitle>
+      <CardDescription>Guided walkthroughs to help you learn the app</CardDescription>
+    </CardHeader>
+    <CardContent>
+      <div class="flex items-center justify-between">
+        <div class="space-y-0.5">
+          <p class="text-sm font-medium">Show all tutorials again</p>
+          <p class="text-sm text-muted-foreground">
+            Reset all guided walkthroughs so they appear as you navigate
+          </p>
+        </div>
+        <Button
+          variant="outline"
+          class="gap-2"
+          onclick={resetTutorials}
+          disabled={resettingTutorials}
+        >
+          <GraduationCap class="h-4 w-4" />
+          {resettingTutorials ? "Resetting..." : "Reset Tutorials"}
+        </Button>
       </div>
     </CardContent>
   </Card>
@@ -406,4 +485,4 @@
   </Card>
 </div>
 
-<IssueCreatorDialog bind:open={dialogOpen} template={selectedTemplate} />
+<IssueCreatorDialog bind:open={dialogOpen} template={selectedTemplate} {useOperatorSupport} />

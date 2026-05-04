@@ -8,7 +8,8 @@
   import { getUploaderName, getUploaderDescription } from "$lib/utils/uploader-labels";
   import { getActiveDataSources } from "$api/generated/services.generated.remote";
   import { create as createGrant } from "$lib/api/generated/directGrants.generated.remote";
-  import { getDeviceInfo, approveDevice, denyDevice } from "$routes/(authenticated)/oauth/oauth.remote";
+  import { getDeviceInfo } from "$routes/(authenticated)/oauth/oauth.remote";
+  import { deviceApprove } from "$api/generated/oAuths.generated.remote";
   import { getOAuthScopeDescription } from "$lib/constants/oauth-scopes";
   import * as Card from "$lib/components/ui/card";
   import { Button } from "$lib/components/ui/button";
@@ -144,7 +145,7 @@
     if (!deviceInfo) return;
     deviceApproveLoading = true;
     try {
-      await approveDevice({ userCode: deviceInfo.userCode });
+      await deviceApprove({ user_code: deviceInfo.userCode, approved: true });
       deviceApproved = true;
       startPolling();
     } catch {
@@ -158,7 +159,7 @@
     if (!deviceInfo) return;
     deviceApproveLoading = true;
     try {
-      await denyDevice({ userCode: deviceInfo.userCode });
+      await deviceApprove({ user_code: deviceInfo.userCode, approved: false });
       deviceDenied = true;
     } catch {
       deviceLookupError = "Failed to deny the request.";

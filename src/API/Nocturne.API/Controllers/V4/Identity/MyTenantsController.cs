@@ -3,7 +3,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Options;
 using OpenApi.Remote.Attributes;
 using Nocturne.API.Authorization;
-using Nocturne.API.Multitenancy;
+using Nocturne.API.Configuration;
 using Nocturne.Core.Contracts.Multitenancy;
 using Nocturne.Core.Models.Authorization;
 
@@ -25,11 +25,11 @@ namespace Nocturne.API.Controllers.V4.Identity;
 public class MyTenantsController : ControllerBase
 {
     private readonly ITenantService _tenantService;
-    private readonly MultitenancyConfiguration _config;
+    private readonly OperatorConfiguration _config;
 
     public MyTenantsController(
         ITenantService tenantService,
-        IOptions<MultitenancyConfiguration> config)
+        IOptions<OperatorConfiguration> config)
     {
         _tenantService = tenantService;
         _config = config.Value;

@@ -186,6 +186,7 @@ builder.Services.AddOpenApiDocument(config =>
     });
 
     config.OperationProcessors.Add(new RemoteFunctionOperationProcessor());
+    config.OperationProcessors.Add(new ConsumesContentTypeOperationProcessor());
     config.OperationProcessors.Add(new ControllerNameTagOperationProcessor());
     config.OperationProcessors.Add(new SummaryToDescriptionOperationProcessor());
 
@@ -214,6 +215,7 @@ builder.Services.AddOpenApi("nocturne", options =>
     options.AddDocumentTransformer<TagDescriptionDocumentTransformer>();
     options.AddDocumentTransformer<SecuritySchemeDocumentTransformer>();
     options.AddDocumentTransformer<DiagramDescriptionDocumentTransformer>();
+    options.AddDocumentTransformer<ScalarExtensionsDocumentTransformer>();
 });
 
 builder.Services.AddOpenApi("nightscout", options =>
@@ -235,6 +237,7 @@ builder.Services.AddOpenApi("nightscout", options =>
     options.AddDocumentTransformer<TagDescriptionDocumentTransformer>();
     options.AddDocumentTransformer<SecuritySchemeDocumentTransformer>();
     options.AddDocumentTransformer<DiagramDescriptionDocumentTransformer>();
+    options.AddDocumentTransformer<ScalarExtensionsDocumentTransformer>();
 });
 
 // ── Service registration (grouped by concern) ──────────────────────────
@@ -395,6 +398,9 @@ app.MapScalarApiReference(options =>
 {
     options.WithTheme(ScalarTheme.Mars);
     options.WithOpenApiRoutePattern("/openapi/{documentName}.json");
+    options.AddDocument("nocturne", "Nocturne API", isDefault: true);
+    options.AddDocument("nightscout", "Nightscout API");
+    options.AddHeadContent(MermaidLazyLoader.HeadContent);
 });
 
 // Add root endpoint to serve a basic info page
@@ -590,6 +596,7 @@ internal class NSwagStartup
             });
 
             config.OperationProcessors.Add(new RemoteFunctionOperationProcessor());
+            config.OperationProcessors.Add(new ConsumesContentTypeOperationProcessor());
             config.OperationProcessors.Add(new ControllerNameTagOperationProcessor());
         });
     }

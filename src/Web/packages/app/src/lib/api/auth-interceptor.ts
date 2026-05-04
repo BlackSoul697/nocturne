@@ -11,13 +11,27 @@ import { browser } from "$app/environment";
  */
 class AuthInterceptorState {
   private isRedirecting = false;
+  private _isGuestSession = false;
+
+  /**
+   * Mark the current session as a guest session.
+   * Guest sessions should not redirect to login on 401 — the guest has
+   * limited scopes and some endpoints are expected to reject access.
+   */
+  setGuestSession(isGuest: boolean): void {
+    this._isGuestSession = isGuest;
+  }
+
+  get isGuestSession(): boolean {
+    return this._isGuestSession;
+  }
 
   /**
    * Redirect to login page with return URL
    */
   redirectToLogin(): void {
-    if (this.isRedirecting) {
-      return; // Prevent multiple redirects
+    if (this.isRedirecting || this._isGuestSession) {
+      return;
     }
 
     if (!browser) {
@@ -40,6 +54,7 @@ class AuthInterceptorState {
    */
   reset(): void {
     this.isRedirecting = false;
+    this._isGuestSession = false;
   }
 }
 

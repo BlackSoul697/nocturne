@@ -7,6 +7,7 @@ using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Moq;
+using Nocturne.API.Configuration;
 using Nocturne.API.Controllers.V4;
 using Nocturne.Core.Contracts.Auth;
 using Nocturne.Core.Contracts.Multitenancy;
@@ -81,7 +82,7 @@ public class SetupControllerTests : IDisposable
             dbFactory.Object,
             oidcOptions,
             _oidcAuthService.Object,
-            Options.Create(new Nocturne.API.Multitenancy.MultitenancyConfiguration()),
+            Options.Create(new OperatorConfiguration()),
             new Mock<IHttpClientFactory>().Object,
             new Mock<ILogger<SetupController>>().Object);
 

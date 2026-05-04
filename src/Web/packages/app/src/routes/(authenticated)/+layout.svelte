@@ -2,6 +2,7 @@
   import { createRealtimeStore } from "$lib/stores/realtime-store.svelte";
   import { createSettingsStore } from "$lib/stores/settings-store.svelte";
   import { createAuthStore } from "$lib/stores/auth-store.svelte";
+  import { authInterceptorState } from "$lib/api/auth-interceptor";
   import { onMount, onDestroy } from "svelte";
   import * as Sidebar from "$lib/components/ui/sidebar";
   import { AppSidebar, MobileHeader } from "$lib/components/layout";
@@ -13,6 +14,7 @@
   import { browser } from "$app/environment";
   import * as Card from "$lib/components/ui/card";
   import AlertBanner from "$lib/components/alerts/AlertBanner.svelte";
+  import FiringToast from "$lib/components/alerts/FiringToast.svelte";
   import GuestBanner from "$lib/components/layout/GuestBanner.svelte";
   import { CommandPalette } from "$lib/components/command-palette";
   import { CoachMarkProvider } from "@nocturne/coach";
@@ -39,6 +41,12 @@
 
   const realtimeStore = createRealtimeStore(config);
   createAuthStore(); // Initialize auth store in context
+
+  // Suppress the auth interceptor's login redirect for guest and public
+  // sessions — these have limited scopes so some endpoints return 401/403.
+  $effect(() => {
+    authInterceptorState.setGuestSession(data.isGuestSession || !data.isAuthenticated);
+  });
 
   // Create settings store in context for the entire app
   // This makes feature settings available on all pages including the main dashboard
@@ -196,6 +204,7 @@
         <GuestBanner expiresAt={data.guestExpiresAt} />
       {/if}
       <AlertBanner />
+      <FiringToast />
       <main class="flex-1 overflow-auto">
         <svelte:boundary>
           {@render children()}

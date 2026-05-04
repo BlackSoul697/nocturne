@@ -4,9 +4,9 @@
   import * as Card from "$lib/components/ui/card";
   import * as Dialog from "$lib/components/ui/dialog";
   import { Badge } from "$lib/components/ui/badge";
-  import { Checkbox } from "$lib/components/ui/checkbox";
   import { Input } from "$lib/components/ui/input";
   import { Label } from "$lib/components/ui/label";
+  import TokenScopeSelector from "./TokenScopeSelector.svelte";
   import {
     KeyRound,
     Plus,
@@ -24,17 +24,20 @@
     revoke as revokeGrant,
   } from "$lib/api/generated/directGrants.generated.remote";
   import type { DirectGrantDto } from "$api";
-  import {
-    getOAuthScopeDescription,
-    OAUTH_AVAILABLE_SCOPES,
-  } from "$lib/constants/oauth-scopes";
 
   // ============================================================================
-  // Constants
+  // Props
   // ============================================================================
 
-  /** Available scopes for API tokens. */
-  const availableScopes = OAUTH_AVAILABLE_SCOPES;
+  let {
+    createOpen = $bindable(false),
+    prefillLabel = "",
+    prefillScopes = [] as string[],
+  }: {
+    createOpen?: boolean;
+    prefillLabel?: string;
+    prefillScopes?: string[];
+  } = $props();
 
   // ============================================================================
   // State
@@ -48,7 +51,7 @@
   // Create token flow
   let showCreateDialog = $state(false);
   let newTokenLabel = $state("");
-  let newTokenScopes = $state<Record<string, boolean>>({});
+  let newTokenScopes = $state<string[]>([]);
   let isCreating = $state(false);
   let createdToken = $state<string | null>(null);
   let copiedToken = $state(false);
@@ -58,11 +61,17 @@
   let showRevokeDialog = $state(false);
   let revokeTarget = $state<DirectGrantDto | null>(null);
 
-  const selectedScopeList = $derived(
-    Object.entries(newTokenScopes)
-      .filter(([, v]) => v)
-      .map(([k]) => k),
-  );
+  // Consume external createOpen signal (one-shot: open, prefill, then reset)
+  $effect(() => {
+    if (createOpen) {
+      newTokenLabel = prefillLabel;
+      newTokenScopes = [...prefillScopes];
+      createdToken = null;
+      copiedToken = false;
+      showCreateDialog = true;
+      createOpen = false;
+    }
+  });
 
   // ============================================================================
   // Data fetching
@@ -87,7 +96,7 @@
 
   function openCreateDialog() {
     newTokenLabel = "";
-    newTokenScopes = {};
+    newTokenScopes = [];
     createdToken = null;
     copiedToken = false;
     showCreateDialog = true;
@@ -100,7 +109,7 @@
     try {
       const data = await createGrant({
         label: newTokenLabel,
-        scopes: selectedScopeList,
+        scopes: newTokenScopes,
       });
       createdToken = data.token ?? null;
       await loadGrants();
@@ -126,7 +135,7 @@
     createdToken = null;
     copiedToken = false;
     newTokenLabel = "";
-    newTokenScopes = {};
+    newTokenScopes = [];
   }
 
   // ============================================================================
@@ -290,7 +299,7 @@
 
 <!-- Create Token Dialog -->
 <Dialog.Root bind:open={showCreateDialog}>
-  <Dialog.Content class="max-w-md">
+  <Dialog.Content class="max-w-lg">
     {#if createdToken}
       <!-- Token created - show the value -->
       <Dialog.Header>
@@ -349,38 +358,15 @@
         </div>
 
         <div class="space-y-3">
-          <Label>Scopes</Label>
-          <div class="grid gap-2 max-h-64 overflow-y-auto pr-1">
-            {#each availableScopes as scope}
-              <div class="flex items-center gap-2">
-                <Checkbox
-                  id="token-scope-{scope}"
-                  checked={newTokenScopes[scope] ?? false}
-                  onCheckedChange={(checked) => {
-                    newTokenScopes[scope] = checked === true;
-                  }}
-                />
-                <label
-                  for="token-scope-{scope}"
-                  class="text-sm cursor-pointer select-none flex-1"
-                >
-                  <span class="font-mono text-xs text-muted-foreground">
-                    {scope}
-                  </span>
-                  <span class="text-muted-foreground ml-1">
-                    — {getOAuthScopeDescription(scope)}
-                  </span>
-                </label>
-              </div>
-            {/each}
-          </div>
+          <Label>Permissions</Label>
+          <TokenScopeSelector bind:selected={newTokenScopes} />
         </div>
       </div>
       <Dialog.Footer>
         <Button variant="outline" onclick={closeCreateDialog}>Cancel</Button>
         <Button
           disabled={!newTokenLabel.trim() ||
-            selectedScopeList.length === 0 ||
+            newTokenScopes.length === 0 ||
             isCreating}
           onclick={handleCreateToken}
         >

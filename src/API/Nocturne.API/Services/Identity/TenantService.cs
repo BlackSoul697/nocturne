@@ -4,7 +4,7 @@ using System.Text.RegularExpressions;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Options;
-using Nocturne.API.Multitenancy;
+using Nocturne.API.Configuration;
 using Nocturne.API.Services.Auth;
 using Nocturne.Connectors.Core.Utilities;
 using Nocturne.Core.Contracts.Multitenancy;
@@ -30,7 +30,7 @@ public partial class TenantService : ITenantService
 {
     private readonly IDbContextFactory<NocturneDbContext> _factory;
     private readonly IMemoryCache _cache;
-    private readonly MultitenancyConfiguration _config;
+    private readonly OperatorConfiguration _config;
     private readonly IHttpClientFactory _httpClientFactory;
     private readonly ITenantRoleService _roleService;
     private readonly ILogger<TenantService> _logger;
@@ -68,14 +68,14 @@ public partial class TenantService : ITenantService
     /// </summary>
     /// <param name="factory">Factory for creating short-lived <see cref="NocturneDbContext"/> instances.</param>
     /// <param name="cache">In-memory cache for caching resolved tenant contexts by slug.</param>
-    /// <param name="config">Multitenancy configuration (mode, base domain, etc.).</param>
+    /// <param name="config">Operator configuration (self-service creation, webhooks, etc.).</param>
     /// <param name="httpClientFactory">HTTP client factory for external tenant validation calls if needed.</param>
     /// <param name="roleService">Role service for seeding default roles on new tenant creation.</param>
     /// <param name="logger">The logger instance.</param>
     public TenantService(
         IDbContextFactory<NocturneDbContext> factory,
         IMemoryCache cache,
-        IOptions<MultitenancyConfiguration> config,
+        IOptions<OperatorConfiguration> config,
         IHttpClientFactory httpClientFactory,
         ITenantRoleService roleService,
         ILogger<TenantService> logger)

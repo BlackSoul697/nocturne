@@ -17,7 +17,8 @@
     X,
   } from "lucide-svelte";
   import { buildXdripDeepLink, buildConnectPageUrl } from "$lib/utils/xdrip-links";
-  import { getDeviceInfo, approveDevice, denyDevice } from "$routes/(authenticated)/oauth/oauth.remote";
+  import { getDeviceInfo } from "$routes/(authenticated)/oauth/oauth.remote";
+  import { deviceApprove } from "$api/generated/oAuths.generated.remote";
   import { getOAuthScopeDescription } from "$lib/constants/oauth-scopes";
 
   interface Props {
@@ -153,7 +154,7 @@
     if (!deviceInfo) return;
     deviceApproveLoading = true;
     try {
-      await approveDevice({ userCode: deviceInfo.userCode });
+      await deviceApprove({ user_code: deviceInfo.userCode, approved: true });
       deviceApproved = true;
       startPolling();
     } catch {
@@ -167,7 +168,7 @@
     if (!deviceInfo) return;
     deviceApproveLoading = true;
     try {
-      await denyDevice({ userCode: deviceInfo.userCode });
+      await deviceApprove({ user_code: deviceInfo.userCode, approved: false });
       deviceDenied = true;
     } catch {
       deviceLookupError = "Failed to deny the request.";

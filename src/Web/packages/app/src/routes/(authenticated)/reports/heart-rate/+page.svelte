@@ -15,15 +15,19 @@
   import { requireDateParamsContext } from "$lib/hooks/date-params.svelte";
   import { contextResource } from "$lib/hooks/resource-context.svelte";
 
+  const VISIBLE_DAYS = 14;
+  const PADDING_DAYS = 14;
+  const MS_PER_DAY = 24 * 60 * 60 * 1000;
+
   const reportsParams = requireDateParamsContext(14);
 
   const dateRangeMillis = $derived({
     from: new Date(
       reportsParams.dateRangeInput.from ?? new Date().toISOString()
-    ).getTime(),
+    ).getTime() - PADDING_DAYS * MS_PER_DAY,
     to: new Date(
       reportsParams.dateRangeInput.to ?? new Date().toISOString()
-    ).getTime(),
+    ).getTime() + PADDING_DAYS * MS_PER_DAY,
   });
 
   const actogramResource = contextResource(
@@ -202,7 +206,14 @@
           {days}
           {thresholds}
           rowHeight={48}
+          visibleCount={VISIBLE_DAYS}
+          initialOffset={PADDING_DAYS}
         >
+          {#snippet tooltipValue({ point })}
+            {@const bpm = (point as { mills: number; bpm: number }).bpm ?? 0}
+            <span class="text-muted-foreground">Heart Rate</span>
+            <span class="ml-auto font-mono font-medium tabular-nums">{bpm} bpm</span>
+          {/snippet}
           {#snippet row(ctx: ActogramRowContext)}
             {#each ctx.data as { point, hoursFromStart, isExtended }}
               {@const bpm = (point as { mills: number; bpm: number }).bpm ?? 0}

@@ -192,12 +192,17 @@
       </Card.Content>
     </Card.Root>
   {:else}
-    <div class="flex items-center justify-between gap-4">
-      <div class="space-y-1">
-        <h1 class="text-2xl font-bold tracking-tight">Roles</h1>
-        <p class="text-muted-foreground">
-          Manage roles and their permissions for this tenant
-        </p>
+    <div class="flex items-start justify-between gap-4">
+      <div class="flex items-center gap-3">
+        <div class="flex h-12 w-12 items-center justify-center rounded-xl bg-primary/10">
+          <Shield class="h-6 w-6 text-primary" />
+        </div>
+        <div>
+          <h1 class="text-2xl font-bold tracking-tight">Roles</h1>
+          <p class="text-muted-foreground">
+            Manage roles and their permissions for this tenant
+          </p>
+        </div>
       </div>
       <Button onclick={() => (isCreateOpen = true)}>
         <Plus class="mr-1.5 h-4 w-4" />

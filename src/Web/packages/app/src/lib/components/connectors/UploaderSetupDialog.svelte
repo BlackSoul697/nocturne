@@ -10,7 +10,6 @@
     Smartphone,
     Cloud,
     Monitor,
-    AlertTriangle,
   } from "lucide-svelte";
   import Apple from "lucide-svelte/icons/apple";
   import TabletSmartphone from "lucide-svelte/icons/tablet-smartphone";
@@ -20,34 +19,28 @@
     UploaderSetupResponse,
   } from "$lib/api/generated/nocturne-api-client";
   import { getUploaderSetup } from "$api/generated/services.generated.remote";
-  import { create as createGrant } from "$lib/api/generated/directGrants.generated.remote";
+  import { KeyRound } from "lucide-svelte";
   import { getUploaderName } from "$lib/utils/uploader-labels";
 
-  let { open = $bindable(false), selectedUploader = null } = $props<{
+  let {
+    open = $bindable(false),
+    selectedUploader = null,
+    onRequestApiKey,
+  }: {
     open: boolean;
     selectedUploader: UploaderApp | null;
-  }>();
+    onRequestApiKey?: (label: string, scopes: string[]) => void;
+  } = $props();
 
   let uploaderSetup = $state<UploaderSetupResponse | null>(null);
   let copiedField = $state<string | null>(null);
-  let apiToken = $state<string | null>(null);
-  let apiTokenLoading = $state(false);
-  let apiTokenError = $state<string | null>(null);
-  let apiTokenGenerated = $state(false);
   let lastUploaderId = $state<string | null>(null);
 
   // Watch for changes and fetch setup info
   $effect(() => {
     if (open && selectedUploader?.id) {
-      const uploaderChanged = selectedUploader.id !== lastUploaderId;
       lastUploaderId = selectedUploader.id;
-
       uploaderSetup = null;
-      if (uploaderChanged) {
-        apiToken = null;
-        apiTokenError = null;
-        apiTokenGenerated = false;
-      }
       loadSetup(selectedUploader.id);
     }
   });
@@ -57,30 +50,14 @@
   async function loadSetup(uploaderId: string) {
     try {
       uploaderSetup = await getUploaderSetup(uploaderId);
-      if (!hasOAuthFlow) {
-        await generateApiToken();
-      }
     } catch (e) {
       console.error("Failed to load setup instructions", e);
     }
   }
 
-  async function generateApiToken() {
-    if (!selectedUploader || apiToken || apiTokenGenerated || apiTokenLoading) return;
-    apiTokenLoading = true;
-    apiTokenError = null;
-    try {
-      const result = await createGrant({
-        label: getUploaderName(selectedUploader),
-        scopes: ["health.readwrite"],
-      });
-      apiToken = result.token ?? null;
-      apiTokenGenerated = true;
-    } catch {
-      apiTokenError = "Failed to generate API key. You can create one manually in Settings.";
-    } finally {
-      apiTokenLoading = false;
-    }
+  function handleRequestApiKey() {
+    if (!selectedUploader) return;
+    onRequestApiKey?.(getUploaderName(selectedUploader), ["health.readwrite"]);
   }
 
   async function copyToClipboard(text: string, field: string) {
@@ -159,41 +136,15 @@
           {#if !hasOAuthFlow}
           <div class="space-y-2">
             <span class="text-sm text-muted-foreground">API Key</span>
-            {#if apiTokenLoading}
-              <div class="flex items-center gap-2 rounded-md bg-muted px-3 py-2 text-sm text-muted-foreground">
-                <Loader2 class="h-4 w-4 animate-spin" />
-                Generating API key...
-              </div>
-            {:else if apiToken}
-              <div class="flex gap-2">
-                <code class="flex-1 px-3 py-2 rounded-md bg-muted text-sm font-mono break-all">
-                  {apiToken}
-                </code>
-                <Button
-                  variant="outline"
-                  size="icon"
-                  onclick={() => apiToken && copyToClipboard(apiToken, "dialogToken")}
-                >
-                  {#if copiedField === "dialogToken"}
-                    <Check class="h-4 w-4 text-green-500" />
-                  {:else}
-                    <Copy class="h-4 w-4" />
-                  {/if}
-                </Button>
-              </div>
-              <p class="text-xs text-muted-foreground">
-                Copy this now. It cannot be shown again.
+            <div>
+              <Button variant="outline" size="sm" onclick={handleRequestApiKey}>
+                <KeyRound class="mr-1.5 h-4 w-4" />
+                Generate API key
+              </Button>
+              <p class="text-xs text-muted-foreground mt-1.5">
+                Creates an API token pre-configured for {selectedUploader?.name ?? "this app"}
               </p>
-            {:else if apiTokenGenerated}
-              <div class="rounded-md bg-muted px-3 py-2 text-sm text-muted-foreground">
-                API key has already been generated. You can manage API keys in Settings.
-              </div>
-            {:else if apiTokenError}
-              <div class="flex items-start gap-2 rounded-md border border-destructive/20 bg-destructive/5 p-3">
-                <AlertTriangle class="mt-0.5 h-4 w-4 shrink-0 text-destructive" />
-                <p class="text-sm text-destructive">{apiTokenError}</p>
-              </div>
-            {/if}
+            </div>
           </div>
           {/if}
 

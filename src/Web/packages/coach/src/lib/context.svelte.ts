@@ -187,6 +187,17 @@ export class CoachMarkContext {
     this.scheduleSelection();
   }
 
+  async resetAll(): Promise<void> {
+    if (this.adapter.deleteAll) {
+      await this.adapter.deleteAll();
+    }
+    this._states = new Map();
+    this._activeSelection = null;
+    this._forcedSequence = null;
+    this._quietUntilNavigation = false;
+    this.scheduleSelection();
+  }
+
   private activateNextForcedStep(): void {
     if (!this._forcedSequence) return;
 

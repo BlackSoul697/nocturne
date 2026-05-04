@@ -151,11 +151,13 @@
 
 <div class="container mx-auto max-w-4xl p-6 space-y-6">
   <div class="flex items-center gap-3">
-    <ScrollText class="h-6 w-6 text-muted-foreground" />
+    <div class="flex h-12 w-12 items-center justify-center rounded-xl bg-primary/10">
+      <ScrollText class="h-6 w-6 text-primary" />
+    </div>
     <div>
-      <h2 class="text-2xl font-bold tracking-tight">Audit Log</h2>
-      <p class="text-sm text-muted-foreground">
-        View data changes and access history for compliance.
+      <h1 class="text-2xl font-bold tracking-tight">Audit Log</h1>
+      <p class="text-muted-foreground">
+        View data changes and access history for compliance
       </p>
     </div>
   </div>

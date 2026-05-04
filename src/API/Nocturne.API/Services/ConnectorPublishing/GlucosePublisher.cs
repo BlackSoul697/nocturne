@@ -96,16 +96,23 @@ internal sealed class GlucosePublisher : IGlucosePublisher
         string source,
         CancellationToken cancellationToken = default)
     {
-        // TODO: Filter by source to support multi-connector catch-up. Currently returns global latest.
-        var entry = await _entryService.GetCurrentEntryAsync(cancellationToken);
-        if (entry == null)
-            return null;
+        var sgTimestamp = await _sensorGlucoseRepository.GetLatestTimestampAsync(source, cancellationToken);
+        if (sgTimestamp.HasValue)
+            return sgTimestamp.Value;
 
-        if (entry.Date != default)
-            return entry.Date;
+        // Entry has no source column — only fall back for nightscout-connector.
+        if (source == DataSources.NightscoutConnector)
+        {
+            var entry = await _entryService.GetCurrentEntryAsync(cancellationToken);
+            if (entry == null)
+                return null;
 
-        if (entry.Mills > 0)
-            return DateTimeOffset.FromUnixTimeMilliseconds(entry.Mills).UtcDateTime;
+            if (entry.Date != default)
+                return entry.Date;
+
+            if (entry.Mills > 0)
+                return DateTimeOffset.FromUnixTimeMilliseconds(entry.Mills).UtcDateTime;
+        }
 
         return null;
     }

@@ -119,11 +119,16 @@
 </svelte:head>
 
 <div class="container mx-auto max-w-4xl p-6 space-y-6" {@attach coachmark({ key: "onboarding.sharing", title: "Share with a caretaker", description: "Create an invite link to give a parent, partner, or clinician read-only access to your glucose data.", completedWhen: () => sharingConfigured })}>
-  <div class="space-y-1">
-    <h1 class="text-2xl font-bold tracking-tight">Members</h1>
-    <p class="text-muted-foreground">
-      Manage members, invites, and access to your data
-    </p>
+  <div class="flex items-center gap-3">
+    <div class="flex h-12 w-12 items-center justify-center rounded-xl bg-primary/10">
+      <Users class="h-6 w-6 text-primary" />
+    </div>
+    <div>
+      <h1 class="text-2xl font-bold tracking-tight">Members</h1>
+      <p class="text-muted-foreground">
+        Manage members, invites, and access to your data
+      </p>
+    </div>
   </div>
 
   {#if errorMessage}

@@ -1,5 +1,12 @@
 import { describe, it, expect } from 'vitest';
-import { sliceIntoRows, sliceBgIntoRows, type ActogramPoint, type GlucosePoint } from './actogram';
+import {
+	sliceIntoRows,
+	sliceBgIntoRows,
+	findNearestPoint,
+	type ActogramPoint,
+	type GlucosePoint,
+	type RowDataPoint,
+} from './actogram';
 
 describe('sliceIntoRows', () => {
 	const days = [
@@ -48,6 +55,35 @@ describe('sliceIntoRows', () => {
 		const rows = sliceIntoRows(data, days);
 		const apr21Row = rows.find((r) => r.day.getTime() === days[1].getTime());
 		expect(apr21Row?.data.some((d) => d.hoursFromStart === 0 && !d.isExtended)).toBe(true);
+	});
+});
+
+describe('findNearestPoint', () => {
+	const points: RowDataPoint<ActogramPoint>[] = [
+		{ point: { mills: 100 }, hoursFromStart: 2, isExtended: false },
+		{ point: { mills: 200 }, hoursFromStart: 5, isExtended: false },
+		{ point: { mills: 300 }, hoursFromStart: 10, isExtended: false },
+	];
+
+	it('returns the nearest point by hoursFromStart', () => {
+		const result = findNearestPoint(points, 4.5);
+		expect(result?.point.mills).toBe(200);
+	});
+
+	it('returns undefined for empty array', () => {
+		expect(findNearestPoint([], 5)).toBeUndefined();
+	});
+
+	it('returns undefined when nearest point is beyond maxDistanceHours', () => {
+		expect(findNearestPoint(points, 30, 1)).toBeUndefined();
+	});
+
+	it('returns nearest even in extended window', () => {
+		const extended: RowDataPoint<ActogramPoint>[] = [
+			{ point: { mills: 400 }, hoursFromStart: 26, isExtended: true },
+		];
+		const result = findNearestPoint(extended, 25.5);
+		expect(result?.point.mills).toBe(400);
 	});
 });
 
