@@ -1,7 +1,6 @@
 using System.ComponentModel.DataAnnotations;
 using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Options;
-using Nocturne.API.Services.Treatments;
 using Nocturne.Core.Contracts.Glucose;
 using Nocturne.Core.Contracts.Loopalyzer;
 using Nocturne.Core.Contracts.Multitenancy;
@@ -21,9 +20,11 @@ public sealed class LoopalyzerService : ILoopalyzerService
     private readonly ITherapyTimelineResolver _therapyTimeline;
     private readonly ITempBasalRepository _tempBasalRepo;
     private readonly IApsSnapshotRepository _apsRepo;
-    private readonly ITreatmentService _treatmentService;
-    private readonly IIobService _iobService;
-    private readonly ICobService _cobService;
+    private readonly IIobCalculator _iobCalculator;
+    private readonly ICobCalculator _cobCalculator;
+    private readonly IBolusRepository _bolusRepo;
+    private readonly ICarbIntakeRepository _carbIntakeRepo;
+    private readonly IDeviceEventRepository _deviceEventRepo;
     private readonly IActiveProfileResolver _activeProfileResolver;
     private readonly IBasalScheduleRepository _basalRepo;
     private readonly ISensitivityScheduleRepository _sensitivityRepo;
@@ -38,9 +39,11 @@ public sealed class LoopalyzerService : ILoopalyzerService
         ITherapyTimelineResolver therapyTimeline,
         ITempBasalRepository tempBasalRepo,
         IApsSnapshotRepository apsRepo,
-        ITreatmentService treatmentService,
-        IIobService iobService,
-        ICobService cobService,
+        IIobCalculator iobCalculator,
+        ICobCalculator cobCalculator,
+        IBolusRepository bolusRepo,
+        ICarbIntakeRepository carbIntakeRepo,
+        IDeviceEventRepository deviceEventRepo,
         IActiveProfileResolver activeProfileResolver,
         IBasalScheduleRepository basalRepo,
         ISensitivityScheduleRepository sensitivityRepo,
@@ -54,9 +57,11 @@ public sealed class LoopalyzerService : ILoopalyzerService
         _therapyTimeline = therapyTimeline;
         _tempBasalRepo = tempBasalRepo;
         _apsRepo = apsRepo;
-        _treatmentService = treatmentService;
-        _iobService = iobService;
-        _cobService = cobService;
+        _iobCalculator = iobCalculator;
+        _cobCalculator = cobCalculator;
+        _bolusRepo = bolusRepo;
+        _carbIntakeRepo = carbIntakeRepo;
+        _deviceEventRepo = deviceEventRepo;
         _activeProfileResolver = activeProfileResolver;
         _basalRepo = basalRepo;
         _sensitivityRepo = sensitivityRepo;
@@ -137,19 +142,20 @@ public sealed class LoopalyzerService : ILoopalyzerService
     /// </summary>
     internal sealed record DayContext(
         IReadOnlyList<ApsSnapshot> ApsSnapshots,
-        IReadOnlyList<Treatment> Treatments,
-        TherapyTimeline Timeline);
+        TherapyTimeline Timeline,
+        List<Bolus> Boluses,
+        List<CarbIntake> CarbIntakes,
+        List<DeviceEvent> DeviceEvents);
 
-    /// <summary>
-    /// Fetch APS snapshots, treatments (date-ranged with 8h prior lookback), and the therapy
-    /// timeline for a patient-local day. The fetch windows include a ±5min APS tolerance so
-    /// snapshots straddling midnight aren't lost.
-    /// </summary>
     internal async Task<DayContext> LoadDayContextAsync(DateOnly day, TimeZoneInfo tz, CancellationToken ct)
     {
         var (fromMills, toMills) = LocalDayWindowMillsUtc(day, tz);
         var apsTolMs = (long)TimeSpan.FromMinutes(5).TotalMilliseconds;
         var lookbackMs = (long)TimeSpan.FromHours(IobLookbackHours).TotalMilliseconds;
+
+        var fetchFromUtc = DateTimeOffset.FromUnixTimeMilliseconds(fromMills - lookbackMs).UtcDateTime;
+        var fetchToUtc = DateTimeOffset.FromUnixTimeMilliseconds(toMills).UtcDateTime;
+        var dayFromUtc = DateTimeOffset.FromUnixTimeMilliseconds(fromMills).UtcDateTime;
 
         var aps = (await _apsRepo.GetAsync(
             from: DateTimeOffset.FromUnixTimeMilliseconds(fromMills - apsTolMs).UtcDateTime,
@@ -159,18 +165,26 @@ public sealed class LoopalyzerService : ILoopalyzerService
             .OrderBy(s => s.Timestamp)
             .ToList();
 
-        var findQuery = $"{{\"mills\":{{\"$gte\":{fromMills - lookbackMs},\"$lte\":{toMills}}}}}";
-        var treatments = (await _treatmentService.GetTreatmentsWithAdvancedFilterAsync(
-            count: MaxRecordsPerDay,
-            skip: 0,
-            findQuery: findQuery,
-            reverseResults: true, // ascending by mills
-            cancellationToken: ct))
-            ?.ToList()
-            ?? new List<Treatment>();
+        var boluses = (await _bolusRepo.GetAsync(
+            from: fetchFromUtc, to: fetchToUtc,
+            device: null, source: null,
+            limit: MaxRecordsPerDay, offset: 0, descending: false, ct: ct))
+            .ToList();
+
+        var carbIntakes = (await _carbIntakeRepo.GetAsync(
+            from: fetchFromUtc, to: fetchToUtc,
+            device: null, source: null,
+            limit: MaxRecordsPerDay, offset: 0, descending: false, ct: ct))
+            .ToList();
+
+        var deviceEvents = (await _deviceEventRepo.GetAsync(
+            from: dayFromUtc, to: fetchToUtc,
+            device: null, source: null,
+            limit: MaxRecordsPerDay, offset: 0, descending: false, ct: ct))
+            .ToList();
 
         var timeline = await _therapyTimeline.BuildAsync(fromMills - lookbackMs, toMills, ct: ct);
-        return new DayContext(aps, treatments, timeline);
+        return new DayContext(aps, timeline, boluses, carbIntakes, deviceEvents);
     }
 
     /// <summary>
@@ -188,8 +202,7 @@ public sealed class LoopalyzerService : ILoopalyzerService
             if (aps?.Iob is double iob)
                 return iob;
 
-            var snapshot = ctx.Timeline.SnapshotAt(mills);
-            var iobResult = _iobService.FromTreatments(ctx.Treatments, mills, snapshot);
+            var iobResult = _iobCalculator.FromBoluses(ctx.Boluses, mills);
             return iobResult.Iob > 0 ? iobResult.Iob : (double?)null;
         });
 
@@ -204,7 +217,6 @@ public sealed class LoopalyzerService : ILoopalyzerService
     {
         var apsToleranceMs = (long)TimeSpan.FromMinutes(5).TotalMilliseconds;
         var cobSnapshots = ctx.ApsSnapshots.Where(s => s.Cob.HasValue).ToList();
-        var nowMills = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
 
         var bins = LoopalyzerBinning.BinByMidpoint(day, tz, mills =>
         {
@@ -212,8 +224,7 @@ public sealed class LoopalyzerService : ILoopalyzerService
             if (aps?.Cob is double cob)
                 return cob;
 
-            var snapshot = ctx.Timeline.SnapshotAt(mills);
-            var cobResult = _cobService.CobTotal(ctx.Treatments, mills, snapshot, deviceCob: null, nowMills);
+            var cobResult = _cobCalculator.FromCarbIntakes(ctx.CarbIntakes, ctx.Boluses, null, mills);
             return cobResult.Cob > 0 ? cobResult.Cob : (double?)null;
         });
 
@@ -362,10 +373,10 @@ public sealed class LoopalyzerService : ILoopalyzerService
         var iob = BinIob(day, tz, ctx);
         var cob = BinCob(day, tz, ctx);
 
-        var meals = LoopalyzerMarkers.Meals(ctx.Treatments, day, tz);
-        var boluses = singleDay ? LoopalyzerMarkers.Boluses(ctx.Treatments, day, tz) : Array.Empty<LoopalyzerBolus>();
-        var siteChanges = singleDay ? LoopalyzerMarkers.SiteChanges(ctx.Treatments, day, tz) : Array.Empty<LoopalyzerSiteEvent>();
-        var sensorChanges = singleDay ? LoopalyzerMarkers.SensorChanges(ctx.Treatments, day, tz) : Array.Empty<LoopalyzerSiteEvent>();
+        var meals = LoopalyzerMarkers.Meals(ctx.CarbIntakes, day, tz);
+        var boluses = singleDay ? LoopalyzerMarkers.Boluses(ctx.Boluses, day, tz) : Array.Empty<LoopalyzerBolus>();
+        var siteChanges = singleDay ? LoopalyzerMarkers.SiteChanges(ctx.DeviceEvents, day, tz) : Array.Empty<LoopalyzerSiteEvent>();
+        var sensorChanges = singleDay ? LoopalyzerMarkers.SensorChanges(ctx.DeviceEvents, day, tz) : Array.Empty<LoopalyzerSiteEvent>();
         var predictions = singleDay ? LoopalyzerPredictions.Predictions(ctx.ApsSnapshots, day, tz) : Array.Empty<LoopalyzerPrediction>();
         var apsBands = singleDay ? LoopalyzerPredictions.Bands(ctx.ApsSnapshots, day, tz) : Array.Empty<LoopalyzerApsBand>();
 

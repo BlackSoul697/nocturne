@@ -1,6 +1,7 @@
 using FluentAssertions;
 using Nocturne.API.Services.Loopalyzer;
 using Nocturne.Core.Models;
+using Nocturne.Core.Models.V4;
 using Xunit;
 
 namespace Nocturne.API.Tests.Services.Loopalyzer;
@@ -10,61 +11,74 @@ public class LoopalyzerMarkersTests
     private static readonly TimeZoneInfo Utc = TimeZoneInfo.Utc;
     private static readonly DateOnly Day = new(2026, 5, 1);
 
-    private static Treatment Tx(DateTime utc, string? eventType = null, double? carbs = null, double? insulin = null, string? notes = null)
-        => new()
-        {
-            Mills = new DateTimeOffset(DateTime.SpecifyKind(utc, DateTimeKind.Utc), TimeSpan.Zero).ToUnixTimeMilliseconds(),
-            EventType = eventType,
-            Carbs = carbs,
-            Insulin = insulin,
-            Notes = notes,
-        };
+    private static CarbIntake Carb(DateTime utc, double carbs) => new()
+    {
+        Timestamp = DateTime.SpecifyKind(utc, DateTimeKind.Utc),
+        Carbs = carbs,
+    };
+
+    private static Bolus Bol(DateTime utc, double insulin) => new()
+    {
+        Timestamp = DateTime.SpecifyKind(utc, DateTimeKind.Utc),
+        Insulin = insulin,
+    };
+
+    private static DeviceEvent Dev(DateTime utc, DeviceEventType eventType, string? notes = null) => new()
+    {
+        Timestamp = DateTime.SpecifyKind(utc, DateTimeKind.Utc),
+        EventType = eventType,
+        Notes = notes,
+    };
 
     [Fact]
-    public void Meals_IncludesAllCarbBearingTreatments()
+    public void Meals_IncludesAllCarbIntakes()
     {
-        var treatments = new[]
+        var carbs = new[]
         {
-            Tx(new DateTime(2026, 5, 1, 8, 0, 0), eventType: "Meal Bolus", carbs: 30, insulin: 3),
-            Tx(new DateTime(2026, 5, 1, 12, 0, 0), eventType: "Snack", carbs: 15),
-            Tx(new DateTime(2026, 5, 1, 14, 0, 0), eventType: "Correction Bolus", insulin: 1.5),  // no carbs
+            Carb(new DateTime(2026, 5, 1, 8, 0, 0), 30),
+            Carb(new DateTime(2026, 5, 1, 12, 0, 0), 15),
         };
 
-        var meals = LoopalyzerMarkers.Meals(treatments, Day, Utc);
+        var meals = LoopalyzerMarkers.Meals(carbs, Day, Utc);
 
         meals.Should().HaveCount(2);
         meals[0].Minute.Should().Be(480);
         meals[0].Carbs.Should().Be(30);
-        meals[0].EventType.Should().Be("Meal Bolus");
     }
 
     [Fact]
-    public void Boluses_IncludesAllInsulinBearingTreatments()
+    public void Meals_ExcludesZeroCarbs()
     {
-        var treatments = new[]
-        {
-            Tx(new DateTime(2026, 5, 1, 8, 0, 0), insulin: 3),
-            Tx(new DateTime(2026, 5, 1, 12, 0, 0), insulin: 0),
-            Tx(new DateTime(2026, 5, 1, 14, 0, 0), carbs: 20),
-        };
-
-        var boluses = LoopalyzerMarkers.Boluses(treatments, Day, Utc);
-
-        boluses.Should().HaveCount(1);
-        boluses[0].Units.Should().Be(3);
+        var carbs = new[] { Carb(new DateTime(2026, 5, 1, 8, 0, 0), 0) };
+        LoopalyzerMarkers.Meals(carbs, Day, Utc).Should().BeEmpty();
     }
 
     [Fact]
-    public void SiteChanges_FiltersByEventType()
+    public void Boluses_IncludesAllInsulinBoluses()
     {
-        var treatments = new[]
+        var boluses = new[]
         {
-            Tx(new DateTime(2026, 5, 1, 7, 30, 0), eventType: "Site Change", notes: "left arm"),
-            Tx(new DateTime(2026, 5, 1, 8, 0, 0), eventType: "Sensor Change"),
+            Bol(new DateTime(2026, 5, 1, 8, 0, 0), 3),
+            Bol(new DateTime(2026, 5, 1, 12, 0, 0), 0),
         };
 
-        var sites = LoopalyzerMarkers.SiteChanges(treatments, Day, Utc);
-        var sensors = LoopalyzerMarkers.SensorChanges(treatments, Day, Utc);
+        var result = LoopalyzerMarkers.Boluses(boluses, Day, Utc);
+
+        result.Should().HaveCount(1);
+        result[0].Units.Should().Be(3);
+    }
+
+    [Fact]
+    public void SiteAndSensorChanges_FilterByEventType()
+    {
+        var events = new[]
+        {
+            Dev(new DateTime(2026, 5, 1, 7, 30, 0), DeviceEventType.SiteChange, "left arm"),
+            Dev(new DateTime(2026, 5, 1, 8, 0, 0), DeviceEventType.SensorChange),
+        };
+
+        var sites = LoopalyzerMarkers.SiteChanges(events, Day, Utc);
+        var sensors = LoopalyzerMarkers.SensorChanges(events, Day, Utc);
 
         sites.Should().HaveCount(1);
         sites[0].Note.Should().Be("left arm");
@@ -72,14 +86,14 @@ public class LoopalyzerMarkersTests
     }
 
     [Fact]
-    public void Markers_ExcludeTreatmentsOutsideDay()
+    public void Markers_ExcludeEventsOutsideDay()
     {
-        var treatments = new[]
+        var carbs = new[]
         {
-            Tx(new DateTime(2026, 4, 30, 23, 30, 0), eventType: "Meal", carbs: 30),
-            Tx(new DateTime(2026, 5, 2, 0, 30, 0), eventType: "Meal", carbs: 40),
+            Carb(new DateTime(2026, 4, 30, 23, 30, 0), 30),
+            Carb(new DateTime(2026, 5, 2, 0, 30, 0), 40),
         };
 
-        LoopalyzerMarkers.Meals(treatments, Day, Utc).Should().BeEmpty();
+        LoopalyzerMarkers.Meals(carbs, Day, Utc).Should().BeEmpty();
     }
 }

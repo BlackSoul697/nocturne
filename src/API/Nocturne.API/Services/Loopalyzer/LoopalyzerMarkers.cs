@@ -1,67 +1,50 @@
 using Nocturne.Core.Models;
 using Nocturne.Core.Models.Loopalyzer;
+using Nocturne.Core.Models.V4;
 
 namespace Nocturne.API.Services.Loopalyzer;
 
-/// <summary>
-/// Pure helpers that project <see cref="Treatment"/> records into the marker
-/// collections carried by <see cref="LoopalyzerDay"/>.
-/// </summary>
 internal static class LoopalyzerMarkers
 {
-    private const string SiteChange = "Site Change";
-    private const string SensorChange = "Sensor Change";
-
-    /// <summary>
-    /// Carb-bearing treatments converted to <see cref="LoopalyzerMeal"/>. Frontends
-    /// filter by event-type per Grill 7; backend returns the full set.
-    /// </summary>
-    public static IReadOnlyList<LoopalyzerMeal> Meals(IEnumerable<Treatment> treatments, DateOnly day, TimeZoneInfo tz)
+    public static IReadOnlyList<LoopalyzerMeal> Meals(IEnumerable<CarbIntake> carbIntakes, DateOnly day, TimeZoneInfo tz)
     {
         var list = new List<LoopalyzerMeal>();
-        foreach (var t in treatments)
+        foreach (var c in carbIntakes)
         {
-            if (!(t.Carbs is > 0))
-                continue;
-            if (!TryLocalMinute(t.Mills, day, tz, out var minute))
-                continue;
-            list.Add(new LoopalyzerMeal(minute, t.Carbs!.Value, t.EventType ?? string.Empty));
+            if (c.Carbs <= 0) continue;
+            if (!TryLocalMinute(c.Mills, day, tz, out var minute)) continue;
+            list.Add(new LoopalyzerMeal(minute, c.Carbs, string.Empty));
         }
         return list;
     }
 
-    /// <summary>Insulin-bearing treatments converted to <see cref="LoopalyzerBolus"/>.</summary>
-    public static IReadOnlyList<LoopalyzerBolus> Boluses(IEnumerable<Treatment> treatments, DateOnly day, TimeZoneInfo tz)
+    public static IReadOnlyList<LoopalyzerBolus> Boluses(IEnumerable<Bolus> boluses, DateOnly day, TimeZoneInfo tz)
     {
         var list = new List<LoopalyzerBolus>();
-        foreach (var t in treatments)
+        foreach (var b in boluses)
         {
-            if (!(t.Insulin is > 0))
-                continue;
-            if (!TryLocalMinute(t.Mills, day, tz, out var minute))
-                continue;
-            list.Add(new LoopalyzerBolus(minute, t.Insulin!.Value));
+            if (b.Insulin <= 0) continue;
+            if (!TryLocalMinute(b.Mills, day, tz, out var minute)) continue;
+            list.Add(new LoopalyzerBolus(minute, b.Insulin));
         }
         return list;
     }
 
-    public static IReadOnlyList<LoopalyzerSiteEvent> SiteChanges(IEnumerable<Treatment> treatments, DateOnly day, TimeZoneInfo tz)
-        => SiteEventsByType(treatments, day, tz, SiteChange);
+    public static IReadOnlyList<LoopalyzerSiteEvent> SiteChanges(IEnumerable<DeviceEvent> events, DateOnly day, TimeZoneInfo tz)
+        => FilterDeviceEvents(events, day, tz, DeviceEventType.SiteChange);
 
-    public static IReadOnlyList<LoopalyzerSiteEvent> SensorChanges(IEnumerable<Treatment> treatments, DateOnly day, TimeZoneInfo tz)
-        => SiteEventsByType(treatments, day, tz, SensorChange);
+    public static IReadOnlyList<LoopalyzerSiteEvent> SensorChanges(IEnumerable<DeviceEvent> events, DateOnly day, TimeZoneInfo tz)
+        => FilterDeviceEvents(events, day, tz, DeviceEventType.SensorChange);
 
-    private static IReadOnlyList<LoopalyzerSiteEvent> SiteEventsByType(
-        IEnumerable<Treatment> treatments, DateOnly day, TimeZoneInfo tz, string eventType)
+    private static IReadOnlyList<LoopalyzerSiteEvent> FilterDeviceEvents(
+        IEnumerable<DeviceEvent> events, DateOnly day, TimeZoneInfo tz, DeviceEventType eventType)
     {
         var list = new List<LoopalyzerSiteEvent>();
-        foreach (var t in treatments)
+        foreach (var e in events)
         {
-            if (!string.Equals(t.EventType, eventType, StringComparison.OrdinalIgnoreCase))
-                continue;
-            if (!TryLocalMinute(t.Mills, day, tz, out var minute))
-                continue;
-            list.Add(new LoopalyzerSiteEvent(minute, t.Notes));
+            if (e.EventType != eventType) continue;
+            if (!TryLocalMinute(e.Mills, day, tz, out var minute)) continue;
+            list.Add(new LoopalyzerSiteEvent(minute, e.Notes));
         }
         return list;
     }

@@ -4,7 +4,6 @@ using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Options;
 using Moq;
 using Nocturne.API.Services.Loopalyzer;
-using Nocturne.API.Services.Treatments;
 using Nocturne.Core.Contracts.Glucose;
 using Nocturne.Core.Contracts.Multitenancy;
 using Nocturne.Core.Contracts.Profiles.Resolvers;
@@ -49,15 +48,24 @@ public class LoopalyzerServiceTests
                 It.IsAny<DateTime?>(), It.IsAny<DateTime?>(), It.IsAny<string?>(), It.IsAny<string?>(),
                 It.IsAny<int>(), It.IsAny<int>(), It.IsAny<bool>(),
                 It.IsAny<CancellationToken>()) == Task.FromResult<IEnumerable<ApsSnapshot>>(Array.Empty<ApsSnapshot>()));
-        var treatments = Mock.Of<ITreatmentService>(t =>
-            t.GetTreatmentsWithAdvancedFilterAsync(It.IsAny<int>(), It.IsAny<int>(), It.IsAny<string?>(), It.IsAny<bool>(), It.IsAny<CancellationToken>())
-                == Task.FromResult<IEnumerable<Treatment>>(Array.Empty<Treatment>()));
-        var iob = Mock.Of<IIobService>(i =>
-            i.FromTreatments(It.IsAny<IReadOnlyList<Treatment>>(), It.IsAny<long>(), It.IsAny<TherapySnapshot>())
+        var iobCalc = Mock.Of<IIobCalculator>(i =>
+            i.FromBoluses(It.IsAny<List<Bolus>>(), It.IsAny<long?>())
                 == new IobResult { Iob = 0, Activity = 0 });
-        var cob = Mock.Of<ICobService>(c =>
-            c.CobTotal(It.IsAny<IReadOnlyList<Treatment>>(), It.IsAny<long>(), It.IsAny<TherapySnapshot>(), It.IsAny<DeviceCobSnapshot?>(), It.IsAny<long>())
+        var cobCalc = Mock.Of<ICobCalculator>(c =>
+            c.FromCarbIntakes(It.IsAny<List<CarbIntake>>(), It.IsAny<List<Bolus>?>(), It.IsAny<List<TempBasal>?>(), It.IsAny<long?>())
                 == new CobResult { Cob = 0 });
+        var bolusRepo = Mock.Of<IBolusRepository>(r =>
+            r.GetAsync(It.IsAny<DateTime?>(), It.IsAny<DateTime?>(), It.IsAny<string?>(), It.IsAny<string?>(),
+                It.IsAny<int>(), It.IsAny<int>(), It.IsAny<bool>(), It.IsAny<bool>(), It.IsAny<BolusKind?>(),
+                It.IsAny<CancellationToken>()) == Task.FromResult<IEnumerable<Bolus>>(Array.Empty<Bolus>()));
+        var carbIntakeRepo = Mock.Of<ICarbIntakeRepository>(r =>
+            r.GetAsync(It.IsAny<DateTime?>(), It.IsAny<DateTime?>(), It.IsAny<string?>(), It.IsAny<string?>(),
+                It.IsAny<int>(), It.IsAny<int>(), It.IsAny<bool>(), It.IsAny<bool>(),
+                It.IsAny<CancellationToken>()) == Task.FromResult<IEnumerable<CarbIntake>>(Array.Empty<CarbIntake>()));
+        var deviceEventRepo = Mock.Of<IDeviceEventRepository>(r =>
+            r.GetAsync(It.IsAny<DateTime?>(), It.IsAny<DateTime?>(), It.IsAny<string?>(), It.IsAny<string?>(),
+                It.IsAny<int>(), It.IsAny<int>(), It.IsAny<bool>(), It.IsAny<bool>(),
+                It.IsAny<CancellationToken>()) == Task.FromResult<IEnumerable<DeviceEvent>>(Array.Empty<DeviceEvent>()));
         var activeProfile = Mock.Of<IActiveProfileResolver>();
         var basal = Mock.Of<IBasalScheduleRepository>();
         var sensitivity = Mock.Of<ISensitivityScheduleRepository>();
@@ -65,7 +73,8 @@ public class LoopalyzerServiceTests
         var targetRange = Mock.Of<ITargetRangeResolver>();
         var cache = new MemoryCache(new MemoryCacheOptions());
         var tenant = Mock.Of<ITenantAccessor>(t => t.TenantId == Guid.NewGuid());
-        return new LoopalyzerService(options, service, timeline, tempBasals, apsRepo, treatments, iob, cob,
+        return new LoopalyzerService(options, service, timeline, tempBasals, apsRepo,
+            iobCalc, cobCalc, bolusRepo, carbIntakeRepo, deviceEventRepo,
             activeProfile, basal, sensitivity, carbRatio, targetRange, cache, tenant);
     }
 
