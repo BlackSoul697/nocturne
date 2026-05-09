@@ -204,7 +204,7 @@ No authorization required
 
 <a id="statespansgetactivities"></a>
 # **StateSpansGetActivities**
-> List&lt;StateSpan&gt; StateSpansGetActivities (DateTimeOffset? from = null, DateTimeOffset? to = null)
+> PaginatedResponseOfStateSpan StateSpansGetActivities (DateTimeOffset? from = null, DateTimeOffset? to = null, int? limit = null, int? offset = null, string? sort = null)
 
 Get all activity state spans (sleep, exercise, illness, travel)
 
@@ -231,11 +231,14 @@ namespace Example
             var apiInstance = new StateSpansApi(httpClient, config, httpClientHandler);
             var from = DateTimeOffset.Parse("2013-10-20T19:20:30+01:00");  // DateTimeOffset? |  (optional) 
             var to = DateTimeOffset.Parse("2013-10-20T19:20:30+01:00");  // DateTimeOffset? |  (optional) 
+            var limit = 100;  // int? |  (optional)  (default to 100)
+            var offset = 0;  // int? |  (optional)  (default to 0)
+            var sort = "\"timestamp_desc\"";  // string? |  (optional)  (default to "timestamp_desc")
 
             try
             {
                 // Get all activity state spans (sleep, exercise, illness, travel)
-                List<StateSpan> result = apiInstance.StateSpansGetActivities(from, to);
+                PaginatedResponseOfStateSpan result = apiInstance.StateSpansGetActivities(from, to, limit, offset, sort);
                 Debug.WriteLine(result);
             }
             catch (ApiException  e)
@@ -256,7 +259,7 @@ This returns an ApiResponse object which contains the response data, status code
 try
 {
     // Get all activity state spans (sleep, exercise, illness, travel)
-    ApiResponse<List<StateSpan>> response = apiInstance.StateSpansGetActivitiesWithHttpInfo(from, to);
+    ApiResponse<PaginatedResponseOfStateSpan> response = apiInstance.StateSpansGetActivitiesWithHttpInfo(from, to, limit, offset, sort);
     Debug.Write("Status Code: " + response.StatusCode);
     Debug.Write("Response Headers: " + response.Headers);
     Debug.Write("Response Body: " + response.Data);
@@ -275,10 +278,13 @@ catch (ApiException e)
 |------|------|-------------|-------|
 | **from** | **DateTimeOffset?** |  | [optional]  |
 | **to** | **DateTimeOffset?** |  | [optional]  |
+| **limit** | **int?** |  | [optional] [default to 100] |
+| **offset** | **int?** |  | [optional] [default to 0] |
+| **sort** | **string?** |  | [optional] [default to &quot;timestamp_desc&quot;] |
 
 ### Return type
 
-[**List&lt;StateSpan&gt;**](StateSpan.md)
+[**PaginatedResponseOfStateSpan**](PaginatedResponseOfStateSpan.md)
 
 ### Authorization
 
@@ -294,12 +300,13 @@ No authorization required
 | Status code | Description | Response headers |
 |-------------|-------------|------------------|
 | **200** |  |  -  |
+| **400** |  |  -  |
 
 [[Back to top]](#) [[Back to API list]](../README.md#documentation-for-api-endpoints) [[Back to Model list]](../README.md#documentation-for-models) [[Back to README]](../README.md)
 
 <a id="statespansgetconnectivity"></a>
 # **StateSpansGetConnectivity**
-> List&lt;StateSpan&gt; StateSpansGetConnectivity (DateTimeOffset? from = null, DateTimeOffset? to = null)
+> PaginatedResponseOfStateSpan StateSpansGetConnectivity (DateTimeOffset? from = null, DateTimeOffset? to = null, int? limit = null, int? offset = null, string? sort = null)
 
 Get connectivity state spans
 
@@ -326,11 +333,14 @@ namespace Example
             var apiInstance = new StateSpansApi(httpClient, config, httpClientHandler);
             var from = DateTimeOffset.Parse("2013-10-20T19:20:30+01:00");  // DateTimeOffset? |  (optional) 
             var to = DateTimeOffset.Parse("2013-10-20T19:20:30+01:00");  // DateTimeOffset? |  (optional) 
+            var limit = 100;  // int? |  (optional)  (default to 100)
+            var offset = 0;  // int? |  (optional)  (default to 0)
+            var sort = "\"timestamp_desc\"";  // string? |  (optional)  (default to "timestamp_desc")
 
             try
             {
                 // Get connectivity state spans
-                List<StateSpan> result = apiInstance.StateSpansGetConnectivity(from, to);
+                PaginatedResponseOfStateSpan result = apiInstance.StateSpansGetConnectivity(from, to, limit, offset, sort);
                 Debug.WriteLine(result);
             }
             catch (ApiException  e)
@@ -351,7 +361,7 @@ This returns an ApiResponse object which contains the response data, status code
 try
 {
     // Get connectivity state spans
-    ApiResponse<List<StateSpan>> response = apiInstance.StateSpansGetConnectivityWithHttpInfo(from, to);
+    ApiResponse<PaginatedResponseOfStateSpan> response = apiInstance.StateSpansGetConnectivityWithHttpInfo(from, to, limit, offset, sort);
     Debug.Write("Status Code: " + response.StatusCode);
     Debug.Write("Response Headers: " + response.Headers);
     Debug.Write("Response Body: " + response.Data);
@@ -370,10 +380,13 @@ catch (ApiException e)
 |------|------|-------------|-------|
 | **from** | **DateTimeOffset?** |  | [optional]  |
 | **to** | **DateTimeOffset?** |  | [optional]  |
+| **limit** | **int?** |  | [optional] [default to 100] |
+| **offset** | **int?** |  | [optional] [default to 0] |
+| **sort** | **string?** |  | [optional] [default to &quot;timestamp_desc&quot;] |
 
 ### Return type
 
-[**List&lt;StateSpan&gt;**](StateSpan.md)
+[**PaginatedResponseOfStateSpan**](PaginatedResponseOfStateSpan.md)
 
 ### Authorization
 
@@ -389,12 +402,13 @@ No authorization required
 | Status code | Description | Response headers |
 |-------------|-------------|------------------|
 | **200** |  |  -  |
+| **400** |  |  -  |
 
 [[Back to top]](#) [[Back to API list]](../README.md#documentation-for-api-endpoints) [[Back to Model list]](../README.md#documentation-for-models) [[Back to README]](../README.md)
 
 <a id="statespansgetexercise"></a>
 # **StateSpansGetExercise**
-> List&lt;StateSpan&gt; StateSpansGetExercise (DateTimeOffset? from = null, DateTimeOffset? to = null)
+> PaginatedResponseOfStateSpan StateSpansGetExercise (DateTimeOffset? from = null, DateTimeOffset? to = null, int? limit = null, int? offset = null, string? sort = null)
 
 Get exercise state spans (user-annotated activity periods)
 
@@ -421,11 +435,14 @@ namespace Example
             var apiInstance = new StateSpansApi(httpClient, config, httpClientHandler);
             var from = DateTimeOffset.Parse("2013-10-20T19:20:30+01:00");  // DateTimeOffset? |  (optional) 
             var to = DateTimeOffset.Parse("2013-10-20T19:20:30+01:00");  // DateTimeOffset? |  (optional) 
+            var limit = 100;  // int? |  (optional)  (default to 100)
+            var offset = 0;  // int? |  (optional)  (default to 0)
+            var sort = "\"timestamp_desc\"";  // string? |  (optional)  (default to "timestamp_desc")
 
             try
             {
                 // Get exercise state spans (user-annotated activity periods)
-                List<StateSpan> result = apiInstance.StateSpansGetExercise(from, to);
+                PaginatedResponseOfStateSpan result = apiInstance.StateSpansGetExercise(from, to, limit, offset, sort);
                 Debug.WriteLine(result);
             }
             catch (ApiException  e)
@@ -446,7 +463,7 @@ This returns an ApiResponse object which contains the response data, status code
 try
 {
     // Get exercise state spans (user-annotated activity periods)
-    ApiResponse<List<StateSpan>> response = apiInstance.StateSpansGetExerciseWithHttpInfo(from, to);
+    ApiResponse<PaginatedResponseOfStateSpan> response = apiInstance.StateSpansGetExerciseWithHttpInfo(from, to, limit, offset, sort);
     Debug.Write("Status Code: " + response.StatusCode);
     Debug.Write("Response Headers: " + response.Headers);
     Debug.Write("Response Body: " + response.Data);
@@ -465,10 +482,13 @@ catch (ApiException e)
 |------|------|-------------|-------|
 | **from** | **DateTimeOffset?** |  | [optional]  |
 | **to** | **DateTimeOffset?** |  | [optional]  |
+| **limit** | **int?** |  | [optional] [default to 100] |
+| **offset** | **int?** |  | [optional] [default to 0] |
+| **sort** | **string?** |  | [optional] [default to &quot;timestamp_desc&quot;] |
 
 ### Return type
 
-[**List&lt;StateSpan&gt;**](StateSpan.md)
+[**PaginatedResponseOfStateSpan**](PaginatedResponseOfStateSpan.md)
 
 ### Authorization
 
@@ -484,12 +504,13 @@ No authorization required
 | Status code | Description | Response headers |
 |-------------|-------------|------------------|
 | **200** |  |  -  |
+| **400** |  |  -  |
 
 [[Back to top]](#) [[Back to API list]](../README.md#documentation-for-api-endpoints) [[Back to Model list]](../README.md#documentation-for-models) [[Back to README]](../README.md)
 
 <a id="statespansgetillness"></a>
 # **StateSpansGetIllness**
-> List&lt;StateSpan&gt; StateSpansGetIllness (DateTimeOffset? from = null, DateTimeOffset? to = null)
+> PaginatedResponseOfStateSpan StateSpansGetIllness (DateTimeOffset? from = null, DateTimeOffset? to = null, int? limit = null, int? offset = null, string? sort = null)
 
 Get illness state spans (user-annotated illness periods)
 
@@ -516,11 +537,14 @@ namespace Example
             var apiInstance = new StateSpansApi(httpClient, config, httpClientHandler);
             var from = DateTimeOffset.Parse("2013-10-20T19:20:30+01:00");  // DateTimeOffset? |  (optional) 
             var to = DateTimeOffset.Parse("2013-10-20T19:20:30+01:00");  // DateTimeOffset? |  (optional) 
+            var limit = 100;  // int? |  (optional)  (default to 100)
+            var offset = 0;  // int? |  (optional)  (default to 0)
+            var sort = "\"timestamp_desc\"";  // string? |  (optional)  (default to "timestamp_desc")
 
             try
             {
                 // Get illness state spans (user-annotated illness periods)
-                List<StateSpan> result = apiInstance.StateSpansGetIllness(from, to);
+                PaginatedResponseOfStateSpan result = apiInstance.StateSpansGetIllness(from, to, limit, offset, sort);
                 Debug.WriteLine(result);
             }
             catch (ApiException  e)
@@ -541,7 +565,7 @@ This returns an ApiResponse object which contains the response data, status code
 try
 {
     // Get illness state spans (user-annotated illness periods)
-    ApiResponse<List<StateSpan>> response = apiInstance.StateSpansGetIllnessWithHttpInfo(from, to);
+    ApiResponse<PaginatedResponseOfStateSpan> response = apiInstance.StateSpansGetIllnessWithHttpInfo(from, to, limit, offset, sort);
     Debug.Write("Status Code: " + response.StatusCode);
     Debug.Write("Response Headers: " + response.Headers);
     Debug.Write("Response Body: " + response.Data);
@@ -560,10 +584,13 @@ catch (ApiException e)
 |------|------|-------------|-------|
 | **from** | **DateTimeOffset?** |  | [optional]  |
 | **to** | **DateTimeOffset?** |  | [optional]  |
+| **limit** | **int?** |  | [optional] [default to 100] |
+| **offset** | **int?** |  | [optional] [default to 0] |
+| **sort** | **string?** |  | [optional] [default to &quot;timestamp_desc&quot;] |
 
 ### Return type
 
-[**List&lt;StateSpan&gt;**](StateSpan.md)
+[**PaginatedResponseOfStateSpan**](PaginatedResponseOfStateSpan.md)
 
 ### Authorization
 
@@ -579,12 +606,13 @@ No authorization required
 | Status code | Description | Response headers |
 |-------------|-------------|------------------|
 | **200** |  |  -  |
+| **400** |  |  -  |
 
 [[Back to top]](#) [[Back to API list]](../README.md#documentation-for-api-endpoints) [[Back to Model list]](../README.md#documentation-for-models) [[Back to README]](../README.md)
 
 <a id="statespansgetoverrides"></a>
 # **StateSpansGetOverrides**
-> List&lt;StateSpan&gt; StateSpansGetOverrides (DateTimeOffset? from = null, DateTimeOffset? to = null)
+> PaginatedResponseOfStateSpan StateSpansGetOverrides (DateTimeOffset? from = null, DateTimeOffset? to = null, int? limit = null, int? offset = null, string? sort = null)
 
 Get override state spans
 
@@ -611,11 +639,14 @@ namespace Example
             var apiInstance = new StateSpansApi(httpClient, config, httpClientHandler);
             var from = DateTimeOffset.Parse("2013-10-20T19:20:30+01:00");  // DateTimeOffset? |  (optional) 
             var to = DateTimeOffset.Parse("2013-10-20T19:20:30+01:00");  // DateTimeOffset? |  (optional) 
+            var limit = 100;  // int? |  (optional)  (default to 100)
+            var offset = 0;  // int? |  (optional)  (default to 0)
+            var sort = "\"timestamp_desc\"";  // string? |  (optional)  (default to "timestamp_desc")
 
             try
             {
                 // Get override state spans
-                List<StateSpan> result = apiInstance.StateSpansGetOverrides(from, to);
+                PaginatedResponseOfStateSpan result = apiInstance.StateSpansGetOverrides(from, to, limit, offset, sort);
                 Debug.WriteLine(result);
             }
             catch (ApiException  e)
@@ -636,7 +667,7 @@ This returns an ApiResponse object which contains the response data, status code
 try
 {
     // Get override state spans
-    ApiResponse<List<StateSpan>> response = apiInstance.StateSpansGetOverridesWithHttpInfo(from, to);
+    ApiResponse<PaginatedResponseOfStateSpan> response = apiInstance.StateSpansGetOverridesWithHttpInfo(from, to, limit, offset, sort);
     Debug.Write("Status Code: " + response.StatusCode);
     Debug.Write("Response Headers: " + response.Headers);
     Debug.Write("Response Body: " + response.Data);
@@ -655,10 +686,13 @@ catch (ApiException e)
 |------|------|-------------|-------|
 | **from** | **DateTimeOffset?** |  | [optional]  |
 | **to** | **DateTimeOffset?** |  | [optional]  |
+| **limit** | **int?** |  | [optional] [default to 100] |
+| **offset** | **int?** |  | [optional] [default to 0] |
+| **sort** | **string?** |  | [optional] [default to &quot;timestamp_desc&quot;] |
 
 ### Return type
 
-[**List&lt;StateSpan&gt;**](StateSpan.md)
+[**PaginatedResponseOfStateSpan**](PaginatedResponseOfStateSpan.md)
 
 ### Authorization
 
@@ -674,12 +708,13 @@ No authorization required
 | Status code | Description | Response headers |
 |-------------|-------------|------------------|
 | **200** |  |  -  |
+| **400** |  |  -  |
 
 [[Back to top]](#) [[Back to API list]](../README.md#documentation-for-api-endpoints) [[Back to Model list]](../README.md#documentation-for-models) [[Back to README]](../README.md)
 
 <a id="statespansgetprofiles"></a>
 # **StateSpansGetProfiles**
-> List&lt;StateSpan&gt; StateSpansGetProfiles (DateTimeOffset? from = null, DateTimeOffset? to = null)
+> PaginatedResponseOfStateSpan StateSpansGetProfiles (DateTimeOffset? from = null, DateTimeOffset? to = null, int? limit = null, int? offset = null, string? sort = null)
 
 Get profile state spans
 
@@ -706,11 +741,14 @@ namespace Example
             var apiInstance = new StateSpansApi(httpClient, config, httpClientHandler);
             var from = DateTimeOffset.Parse("2013-10-20T19:20:30+01:00");  // DateTimeOffset? |  (optional) 
             var to = DateTimeOffset.Parse("2013-10-20T19:20:30+01:00");  // DateTimeOffset? |  (optional) 
+            var limit = 100;  // int? |  (optional)  (default to 100)
+            var offset = 0;  // int? |  (optional)  (default to 0)
+            var sort = "\"timestamp_desc\"";  // string? |  (optional)  (default to "timestamp_desc")
 
             try
             {
                 // Get profile state spans
-                List<StateSpan> result = apiInstance.StateSpansGetProfiles(from, to);
+                PaginatedResponseOfStateSpan result = apiInstance.StateSpansGetProfiles(from, to, limit, offset, sort);
                 Debug.WriteLine(result);
             }
             catch (ApiException  e)
@@ -731,7 +769,7 @@ This returns an ApiResponse object which contains the response data, status code
 try
 {
     // Get profile state spans
-    ApiResponse<List<StateSpan>> response = apiInstance.StateSpansGetProfilesWithHttpInfo(from, to);
+    ApiResponse<PaginatedResponseOfStateSpan> response = apiInstance.StateSpansGetProfilesWithHttpInfo(from, to, limit, offset, sort);
     Debug.Write("Status Code: " + response.StatusCode);
     Debug.Write("Response Headers: " + response.Headers);
     Debug.Write("Response Body: " + response.Data);
@@ -750,10 +788,13 @@ catch (ApiException e)
 |------|------|-------------|-------|
 | **from** | **DateTimeOffset?** |  | [optional]  |
 | **to** | **DateTimeOffset?** |  | [optional]  |
+| **limit** | **int?** |  | [optional] [default to 100] |
+| **offset** | **int?** |  | [optional] [default to 0] |
+| **sort** | **string?** |  | [optional] [default to &quot;timestamp_desc&quot;] |
 
 ### Return type
 
-[**List&lt;StateSpan&gt;**](StateSpan.md)
+[**PaginatedResponseOfStateSpan**](PaginatedResponseOfStateSpan.md)
 
 ### Authorization
 
@@ -769,12 +810,13 @@ No authorization required
 | Status code | Description | Response headers |
 |-------------|-------------|------------------|
 | **200** |  |  -  |
+| **400** |  |  -  |
 
 [[Back to top]](#) [[Back to API list]](../README.md#documentation-for-api-endpoints) [[Back to Model list]](../README.md#documentation-for-models) [[Back to README]](../README.md)
 
 <a id="statespansgetpumpmodes"></a>
 # **StateSpansGetPumpModes**
-> List&lt;StateSpan&gt; StateSpansGetPumpModes (DateTimeOffset? from = null, DateTimeOffset? to = null)
+> PaginatedResponseOfStateSpan StateSpansGetPumpModes (DateTimeOffset? from = null, DateTimeOffset? to = null, int? limit = null, int? offset = null, string? sort = null)
 
 Get pump mode state spans
 
@@ -801,11 +843,14 @@ namespace Example
             var apiInstance = new StateSpansApi(httpClient, config, httpClientHandler);
             var from = DateTimeOffset.Parse("2013-10-20T19:20:30+01:00");  // DateTimeOffset? |  (optional) 
             var to = DateTimeOffset.Parse("2013-10-20T19:20:30+01:00");  // DateTimeOffset? |  (optional) 
+            var limit = 100;  // int? |  (optional)  (default to 100)
+            var offset = 0;  // int? |  (optional)  (default to 0)
+            var sort = "\"timestamp_desc\"";  // string? |  (optional)  (default to "timestamp_desc")
 
             try
             {
                 // Get pump mode state spans
-                List<StateSpan> result = apiInstance.StateSpansGetPumpModes(from, to);
+                PaginatedResponseOfStateSpan result = apiInstance.StateSpansGetPumpModes(from, to, limit, offset, sort);
                 Debug.WriteLine(result);
             }
             catch (ApiException  e)
@@ -826,7 +871,7 @@ This returns an ApiResponse object which contains the response data, status code
 try
 {
     // Get pump mode state spans
-    ApiResponse<List<StateSpan>> response = apiInstance.StateSpansGetPumpModesWithHttpInfo(from, to);
+    ApiResponse<PaginatedResponseOfStateSpan> response = apiInstance.StateSpansGetPumpModesWithHttpInfo(from, to, limit, offset, sort);
     Debug.Write("Status Code: " + response.StatusCode);
     Debug.Write("Response Headers: " + response.Headers);
     Debug.Write("Response Body: " + response.Data);
@@ -845,10 +890,13 @@ catch (ApiException e)
 |------|------|-------------|-------|
 | **from** | **DateTimeOffset?** |  | [optional]  |
 | **to** | **DateTimeOffset?** |  | [optional]  |
+| **limit** | **int?** |  | [optional] [default to 100] |
+| **offset** | **int?** |  | [optional] [default to 0] |
+| **sort** | **string?** |  | [optional] [default to &quot;timestamp_desc&quot;] |
 
 ### Return type
 
-[**List&lt;StateSpan&gt;**](StateSpan.md)
+[**PaginatedResponseOfStateSpan**](PaginatedResponseOfStateSpan.md)
 
 ### Authorization
 
@@ -864,12 +912,13 @@ No authorization required
 | Status code | Description | Response headers |
 |-------------|-------------|------------------|
 | **200** |  |  -  |
+| **400** |  |  -  |
 
 [[Back to top]](#) [[Back to API list]](../README.md#documentation-for-api-endpoints) [[Back to Model list]](../README.md#documentation-for-models) [[Back to README]](../README.md)
 
 <a id="statespansgetsleep"></a>
 # **StateSpansGetSleep**
-> List&lt;StateSpan&gt; StateSpansGetSleep (DateTimeOffset? from = null, DateTimeOffset? to = null)
+> PaginatedResponseOfStateSpan StateSpansGetSleep (DateTimeOffset? from = null, DateTimeOffset? to = null, int? limit = null, int? offset = null, string? sort = null)
 
 Get sleep state spans (user-annotated sleep periods)
 
@@ -896,11 +945,14 @@ namespace Example
             var apiInstance = new StateSpansApi(httpClient, config, httpClientHandler);
             var from = DateTimeOffset.Parse("2013-10-20T19:20:30+01:00");  // DateTimeOffset? |  (optional) 
             var to = DateTimeOffset.Parse("2013-10-20T19:20:30+01:00");  // DateTimeOffset? |  (optional) 
+            var limit = 100;  // int? |  (optional)  (default to 100)
+            var offset = 0;  // int? |  (optional)  (default to 0)
+            var sort = "\"timestamp_desc\"";  // string? |  (optional)  (default to "timestamp_desc")
 
             try
             {
                 // Get sleep state spans (user-annotated sleep periods)
-                List<StateSpan> result = apiInstance.StateSpansGetSleep(from, to);
+                PaginatedResponseOfStateSpan result = apiInstance.StateSpansGetSleep(from, to, limit, offset, sort);
                 Debug.WriteLine(result);
             }
             catch (ApiException  e)
@@ -921,7 +973,7 @@ This returns an ApiResponse object which contains the response data, status code
 try
 {
     // Get sleep state spans (user-annotated sleep periods)
-    ApiResponse<List<StateSpan>> response = apiInstance.StateSpansGetSleepWithHttpInfo(from, to);
+    ApiResponse<PaginatedResponseOfStateSpan> response = apiInstance.StateSpansGetSleepWithHttpInfo(from, to, limit, offset, sort);
     Debug.Write("Status Code: " + response.StatusCode);
     Debug.Write("Response Headers: " + response.Headers);
     Debug.Write("Response Body: " + response.Data);
@@ -940,10 +992,13 @@ catch (ApiException e)
 |------|------|-------------|-------|
 | **from** | **DateTimeOffset?** |  | [optional]  |
 | **to** | **DateTimeOffset?** |  | [optional]  |
+| **limit** | **int?** |  | [optional] [default to 100] |
+| **offset** | **int?** |  | [optional] [default to 0] |
+| **sort** | **string?** |  | [optional] [default to &quot;timestamp_desc&quot;] |
 
 ### Return type
 
-[**List&lt;StateSpan&gt;**](StateSpan.md)
+[**PaginatedResponseOfStateSpan**](PaginatedResponseOfStateSpan.md)
 
 ### Authorization
 
@@ -959,6 +1014,7 @@ No authorization required
 | Status code | Description | Response headers |
 |-------------|-------------|------------------|
 | **200** |  |  -  |
+| **400** |  |  -  |
 
 [[Back to top]](#) [[Back to API list]](../README.md#documentation-for-api-endpoints) [[Back to Model list]](../README.md#documentation-for-models) [[Back to README]](../README.md)
 
@@ -1057,7 +1113,7 @@ No authorization required
 
 <a id="statespansgetstatespans"></a>
 # **StateSpansGetStateSpans**
-> List&lt;StateSpan&gt; StateSpansGetStateSpans (StateSpansGetStateSpansCategoryParameter? category = null, string? state = null, DateTimeOffset? from = null, DateTimeOffset? to = null, string? source = null, bool? active = null, int? count = null, int? skip = null)
+> PaginatedResponseOfStateSpan StateSpansGetStateSpans (StateSpansGetStateSpansCategoryParameter? category = null, string? state = null, DateTimeOffset? from = null, DateTimeOffset? to = null, string? source = null, bool? active = null, int? limit = null, int? offset = null, string? sort = null)
 
 Query all state spans with optional filtering
 
@@ -1088,13 +1144,14 @@ namespace Example
             var to = DateTimeOffset.Parse("2013-10-20T19:20:30+01:00");  // DateTimeOffset? |  (optional) 
             var source = "source_example";  // string? |  (optional) 
             var active = true;  // bool? |  (optional) 
-            var count = 100;  // int? |  (optional)  (default to 100)
-            var skip = 0;  // int? |  (optional)  (default to 0)
+            var limit = 100;  // int? |  (optional)  (default to 100)
+            var offset = 0;  // int? |  (optional)  (default to 0)
+            var sort = "\"timestamp_desc\"";  // string? |  (optional)  (default to "timestamp_desc")
 
             try
             {
                 // Query all state spans with optional filtering
-                List<StateSpan> result = apiInstance.StateSpansGetStateSpans(category, state, from, to, source, active, count, skip);
+                PaginatedResponseOfStateSpan result = apiInstance.StateSpansGetStateSpans(category, state, from, to, source, active, limit, offset, sort);
                 Debug.WriteLine(result);
             }
             catch (ApiException  e)
@@ -1115,7 +1172,7 @@ This returns an ApiResponse object which contains the response data, status code
 try
 {
     // Query all state spans with optional filtering
-    ApiResponse<List<StateSpan>> response = apiInstance.StateSpansGetStateSpansWithHttpInfo(category, state, from, to, source, active, count, skip);
+    ApiResponse<PaginatedResponseOfStateSpan> response = apiInstance.StateSpansGetStateSpansWithHttpInfo(category, state, from, to, source, active, limit, offset, sort);
     Debug.Write("Status Code: " + response.StatusCode);
     Debug.Write("Response Headers: " + response.Headers);
     Debug.Write("Response Body: " + response.Data);
@@ -1138,12 +1195,13 @@ catch (ApiException e)
 | **to** | **DateTimeOffset?** |  | [optional]  |
 | **source** | **string?** |  | [optional]  |
 | **active** | **bool?** |  | [optional]  |
-| **count** | **int?** |  | [optional] [default to 100] |
-| **skip** | **int?** |  | [optional] [default to 0] |
+| **limit** | **int?** |  | [optional] [default to 100] |
+| **offset** | **int?** |  | [optional] [default to 0] |
+| **sort** | **string?** |  | [optional] [default to &quot;timestamp_desc&quot;] |
 
 ### Return type
 
-[**List&lt;StateSpan&gt;**](StateSpan.md)
+[**PaginatedResponseOfStateSpan**](PaginatedResponseOfStateSpan.md)
 
 ### Authorization
 
@@ -1159,12 +1217,13 @@ No authorization required
 | Status code | Description | Response headers |
 |-------------|-------------|------------------|
 | **200** |  |  -  |
+| **400** |  |  -  |
 
 [[Back to top]](#) [[Back to API list]](../README.md#documentation-for-api-endpoints) [[Back to Model list]](../README.md#documentation-for-models) [[Back to README]](../README.md)
 
 <a id="statespansgettemporarytargets"></a>
 # **StateSpansGetTemporaryTargets**
-> List&lt;StateSpan&gt; StateSpansGetTemporaryTargets (DateTimeOffset? from = null, DateTimeOffset? to = null)
+> PaginatedResponseOfStateSpan StateSpansGetTemporaryTargets (DateTimeOffset? from = null, DateTimeOffset? to = null, int? limit = null, int? offset = null, string? sort = null)
 
 Get temporary target state spans (AAPS temporary glucose targets)
 
@@ -1191,11 +1250,14 @@ namespace Example
             var apiInstance = new StateSpansApi(httpClient, config, httpClientHandler);
             var from = DateTimeOffset.Parse("2013-10-20T19:20:30+01:00");  // DateTimeOffset? |  (optional) 
             var to = DateTimeOffset.Parse("2013-10-20T19:20:30+01:00");  // DateTimeOffset? |  (optional) 
+            var limit = 100;  // int? |  (optional)  (default to 100)
+            var offset = 0;  // int? |  (optional)  (default to 0)
+            var sort = "\"timestamp_desc\"";  // string? |  (optional)  (default to "timestamp_desc")
 
             try
             {
                 // Get temporary target state spans (AAPS temporary glucose targets)
-                List<StateSpan> result = apiInstance.StateSpansGetTemporaryTargets(from, to);
+                PaginatedResponseOfStateSpan result = apiInstance.StateSpansGetTemporaryTargets(from, to, limit, offset, sort);
                 Debug.WriteLine(result);
             }
             catch (ApiException  e)
@@ -1216,7 +1278,7 @@ This returns an ApiResponse object which contains the response data, status code
 try
 {
     // Get temporary target state spans (AAPS temporary glucose targets)
-    ApiResponse<List<StateSpan>> response = apiInstance.StateSpansGetTemporaryTargetsWithHttpInfo(from, to);
+    ApiResponse<PaginatedResponseOfStateSpan> response = apiInstance.StateSpansGetTemporaryTargetsWithHttpInfo(from, to, limit, offset, sort);
     Debug.Write("Status Code: " + response.StatusCode);
     Debug.Write("Response Headers: " + response.Headers);
     Debug.Write("Response Body: " + response.Data);
@@ -1235,10 +1297,13 @@ catch (ApiException e)
 |------|------|-------------|-------|
 | **from** | **DateTimeOffset?** |  | [optional]  |
 | **to** | **DateTimeOffset?** |  | [optional]  |
+| **limit** | **int?** |  | [optional] [default to 100] |
+| **offset** | **int?** |  | [optional] [default to 0] |
+| **sort** | **string?** |  | [optional] [default to &quot;timestamp_desc&quot;] |
 
 ### Return type
 
-[**List&lt;StateSpan&gt;**](StateSpan.md)
+[**PaginatedResponseOfStateSpan**](PaginatedResponseOfStateSpan.md)
 
 ### Authorization
 
@@ -1254,12 +1319,13 @@ No authorization required
 | Status code | Description | Response headers |
 |-------------|-------------|------------------|
 | **200** |  |  -  |
+| **400** |  |  -  |
 
 [[Back to top]](#) [[Back to API list]](../README.md#documentation-for-api-endpoints) [[Back to Model list]](../README.md#documentation-for-models) [[Back to README]](../README.md)
 
 <a id="statespansgettravel"></a>
 # **StateSpansGetTravel**
-> List&lt;StateSpan&gt; StateSpansGetTravel (DateTimeOffset? from = null, DateTimeOffset? to = null)
+> PaginatedResponseOfStateSpan StateSpansGetTravel (DateTimeOffset? from = null, DateTimeOffset? to = null, int? limit = null, int? offset = null, string? sort = null)
 
 Get travel state spans (user-annotated travel/timezone change periods)
 
@@ -1286,11 +1352,14 @@ namespace Example
             var apiInstance = new StateSpansApi(httpClient, config, httpClientHandler);
             var from = DateTimeOffset.Parse("2013-10-20T19:20:30+01:00");  // DateTimeOffset? |  (optional) 
             var to = DateTimeOffset.Parse("2013-10-20T19:20:30+01:00");  // DateTimeOffset? |  (optional) 
+            var limit = 100;  // int? |  (optional)  (default to 100)
+            var offset = 0;  // int? |  (optional)  (default to 0)
+            var sort = "\"timestamp_desc\"";  // string? |  (optional)  (default to "timestamp_desc")
 
             try
             {
                 // Get travel state spans (user-annotated travel/timezone change periods)
-                List<StateSpan> result = apiInstance.StateSpansGetTravel(from, to);
+                PaginatedResponseOfStateSpan result = apiInstance.StateSpansGetTravel(from, to, limit, offset, sort);
                 Debug.WriteLine(result);
             }
             catch (ApiException  e)
@@ -1311,7 +1380,7 @@ This returns an ApiResponse object which contains the response data, status code
 try
 {
     // Get travel state spans (user-annotated travel/timezone change periods)
-    ApiResponse<List<StateSpan>> response = apiInstance.StateSpansGetTravelWithHttpInfo(from, to);
+    ApiResponse<PaginatedResponseOfStateSpan> response = apiInstance.StateSpansGetTravelWithHttpInfo(from, to, limit, offset, sort);
     Debug.Write("Status Code: " + response.StatusCode);
     Debug.Write("Response Headers: " + response.Headers);
     Debug.Write("Response Body: " + response.Data);
@@ -1330,10 +1399,13 @@ catch (ApiException e)
 |------|------|-------------|-------|
 | **from** | **DateTimeOffset?** |  | [optional]  |
 | **to** | **DateTimeOffset?** |  | [optional]  |
+| **limit** | **int?** |  | [optional] [default to 100] |
+| **offset** | **int?** |  | [optional] [default to 0] |
+| **sort** | **string?** |  | [optional] [default to &quot;timestamp_desc&quot;] |
 
 ### Return type
 
-[**List&lt;StateSpan&gt;**](StateSpan.md)
+[**PaginatedResponseOfStateSpan**](PaginatedResponseOfStateSpan.md)
 
 ### Authorization
 
@@ -1349,6 +1421,7 @@ No authorization required
 | Status code | Description | Response headers |
 |-------------|-------------|------------------|
 | **200** |  |  -  |
+| **400** |  |  -  |
 
 [[Back to top]](#) [[Back to API list]](../README.md#documentation-for-api-endpoints) [[Back to Model list]](../README.md#documentation-for-models) [[Back to README]](../README.md)
 

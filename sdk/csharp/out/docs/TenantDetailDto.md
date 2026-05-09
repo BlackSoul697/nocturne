@@ -8,7 +8,6 @@ Name | Type | Description | Notes
 **Slug** | **string** |  | [optional] 
 **DisplayName** | **string** |  | [optional] 
 **IsActive** | **bool** |  | [optional] 
-**IsDefault** | **bool** |  | [optional] 
 **SysCreatedAt** | **DateTimeOffset** |  | [optional] 
 **Members** | [**List&lt;TenantMemberDto&gt;**](TenantMemberDto.md) |  | [optional] 
 

@@ -37,12 +37,10 @@ namespace NightscoutFoundation.Nocturne.Model
         /// </summary>
         /// <param name="slug">slug.</param>
         /// <param name="displayName">displayName.</param>
-        /// <param name="apiSecret">apiSecret.</param>
-        public CreateTenantRequest(string slug = default, string displayName = default, string apiSecret = default)
+        public CreateTenantRequest(string slug = default, string displayName = default)
         {
             this.Slug = slug;
             this.DisplayName = displayName;
-            this.ApiSecret = apiSecret;
         }
 
         /// <summary>
@@ -58,12 +56,6 @@ namespace NightscoutFoundation.Nocturne.Model
         public string DisplayName { get; set; }
 
         /// <summary>
-        /// Gets or Sets ApiSecret
-        /// </summary>
-        [DataMember(Name = "apiSecret", EmitDefaultValue = true)]
-        public string ApiSecret { get; set; }
-
-        /// <summary>
         /// Returns the string presentation of the object
         /// </summary>
         /// <returns>String presentation of the object</returns>
@@ -73,7 +65,6 @@ namespace NightscoutFoundation.Nocturne.Model
             sb.Append("class CreateTenantRequest {\n");
             sb.Append("  Slug: ").Append(Slug).Append("\n");
             sb.Append("  DisplayName: ").Append(DisplayName).Append("\n");
-            sb.Append("  ApiSecret: ").Append(ApiSecret).Append("\n");
             sb.Append("}\n");
             return sb.ToString();
         }

@@ -312,6 +312,7 @@ public class TreatmentDecomposer : ITreatmentDecomposer, IDecomposer<Treatment>
         var model = MapToBolus(treatment, result.CorrelationId);
         model.DeviceId = await _deviceService.ResolveAsync(
             V4Models.DeviceCategory.InsulinPump, treatment.PumpType, treatment.PumpSerial, treatment.Mills, ct);
+        model.PatientDeviceId = await _deviceService.ResolvePatientDeviceAsync(model.DeviceId, treatment.Mills, ct);
 
         if (existing != null)
         {
@@ -339,6 +340,7 @@ public class TreatmentDecomposer : ITreatmentDecomposer, IDecomposer<Treatment>
         model.Automatic = true;
         model.DeviceId = await _deviceService.ResolveAsync(
             V4Models.DeviceCategory.InsulinPump, treatment.PumpType, treatment.PumpSerial, treatment.Mills, ct);
+        model.PatientDeviceId = await _deviceService.ResolvePatientDeviceAsync(model.DeviceId, treatment.Mills, ct);
 
         if (existing != null)
         {
@@ -447,6 +449,9 @@ public class TreatmentDecomposer : ITreatmentDecomposer, IDecomposer<Treatment>
             : null;
 
         var model = MapToDeviceEvent(treatment, result.CorrelationId, deviceEventType);
+        model.DeviceId = await _deviceService.ResolveAsync(
+            V4Models.DeviceCategory.InsulinPump, treatment.PumpType, treatment.PumpSerial, treatment.Mills, ct);
+        model.PatientDeviceId = await _deviceService.ResolvePatientDeviceAsync(model.DeviceId, treatment.Mills, ct);
 
         if (existing != null)
         {
@@ -495,6 +500,7 @@ public class TreatmentDecomposer : ITreatmentDecomposer, IDecomposer<Treatment>
         var model = MapToTempBasal(treatment, result.CorrelationId);
         model.DeviceId = await _deviceService.ResolveAsync(
             V4Models.DeviceCategory.InsulinPump, treatment.PumpType, treatment.PumpSerial, treatment.Mills, ct);
+        model.PatientDeviceId = await _deviceService.ResolvePatientDeviceAsync(model.DeviceId, treatment.Mills, ct);
 
         if (existing != null)
         {
@@ -929,6 +935,285 @@ public class TreatmentDecomposer : ITreatmentDecomposer, IDecomposer<Treatment>
     }
 
     #endregion
+
+    /// <inheritdoc />
+    public async Task<V4Models.DecompositionResult> DecomposeBatchAsync(
+        IReadOnlyList<Treatment> treatments, CancellationToken ct = default)
+    {
+        if (treatments.Count == 0)
+            return new V4Models.DecompositionResult();
+
+        var batch = new DecompositionBatchEntity
+        {
+            TenantId = _dbContext.TenantId,
+            Source = "treatment_decomposer_batch",
+            SourceRecordId = null,
+            CreatedAt = DateTime.UtcNow,
+        };
+        _dbContext.DecompositionBatches.Add(batch);
+        await _dbContext.SaveChangesAsync(ct);
+
+        var result = new V4Models.DecompositionResult { CorrelationId = batch.Id };
+
+        // Typed collection lists for bulk insert
+        var bolusList = new List<V4Models.Bolus>();
+        var carbList = new List<V4Models.CarbIntake>();
+        var bgCheckList = new List<V4Models.BGCheck>();
+        var noteList = new List<V4Models.Note>();
+        var bolusCalcList = new List<V4Models.BolusCalculation>();
+        var deviceEventList = new List<V4Models.DeviceEvent>();
+        var tempBasalList = new List<V4Models.TempBasal>();
+
+        // State span treatments are upserted individually (idempotent semantics)
+        var stateSpanTreatments = new List<(Treatment Treatment, bool IsProfileSwitch, bool IsOverride, bool IsTemporaryTarget)>();
+
+        // Track treatments that produce both bolus AND bolusCalculation for post-insert linking
+        var bolusCalcLinkTreatmentIds = new HashSet<string>();
+
+        foreach (var treatment in treatments)
+        {
+            var eventType = treatment.EventType?.Trim();
+            var hasInsulin = treatment.Insulin is > 0;
+            var hasCarbs = treatment.Carbs is > 0;
+
+            // Classification flags (same logic as DecomposeAsync)
+            var produceBolus = false;
+            var produceCarbIntake = false;
+            var produceBGCheck = false;
+            var produceNote = false;
+            var produceBolusCalc = false;
+            var produceDeviceEvent = false;
+            var delegateToStateSpan = false;
+            var isProfileSwitch = false;
+            var isOverride = false;
+            var isTemporaryTarget = false;
+            var isAnnouncement = false;
+            DeviceEventType parsedDeviceEventType = default;
+
+            if (IsTempBasal(eventType))
+            {
+                delegateToStateSpan = true;
+            }
+            else if (string.Equals(eventType, "Profile Switch", StringComparison.OrdinalIgnoreCase))
+            {
+                isProfileSwitch = true;
+                delegateToStateSpan = true;
+            }
+            else if (string.Equals(eventType, "Temporary Override", StringComparison.OrdinalIgnoreCase))
+            {
+                isOverride = true;
+                delegateToStateSpan = true;
+            }
+            else if (string.Equals(eventType, "Temporary Target", StringComparison.OrdinalIgnoreCase)
+                  || string.Equals(eventType, "Temporary Target Cancel", StringComparison.OrdinalIgnoreCase))
+            {
+                isTemporaryTarget = true;
+                delegateToStateSpan = true;
+            }
+            else if (eventType != null && TreatmentTypes.DeviceEventTypeMap.TryGetValue(eventType, out parsedDeviceEventType))
+            {
+                produceDeviceEvent = true;
+            }
+            else if (string.Equals(eventType, "Meal Bolus", StringComparison.OrdinalIgnoreCase)
+                  || string.Equals(eventType, "Snack Bolus", StringComparison.OrdinalIgnoreCase))
+            {
+                produceBolus = true;
+                produceCarbIntake = true;
+            }
+            else if (string.Equals(eventType, "Correction Bolus", StringComparison.OrdinalIgnoreCase))
+            {
+                produceBolus = true;
+            }
+            else if (string.Equals(eventType, "Carb Correction", StringComparison.OrdinalIgnoreCase))
+            {
+                produceCarbIntake = true;
+            }
+            else if (string.Equals(eventType, "BG Check", StringComparison.OrdinalIgnoreCase))
+            {
+                produceBGCheck = true;
+            }
+            else if (string.Equals(eventType, "Announcement", StringComparison.OrdinalIgnoreCase))
+            {
+                produceNote = true;
+                isAnnouncement = true;
+            }
+            else if (string.Equals(eventType, "Note", StringComparison.OrdinalIgnoreCase))
+            {
+                produceNote = true;
+            }
+            else if (string.Equals(eventType, "Bolus Wizard", StringComparison.OrdinalIgnoreCase))
+            {
+                produceBolusCalc = true;
+                if (hasInsulin)
+                    produceBolus = true;
+            }
+
+            // Override rule: both insulin and carbs → always produce both
+            if (hasInsulin && hasCarbs)
+            {
+                produceBolus = true;
+                produceCarbIntake = true;
+            }
+
+            // Note for any treatment with non-empty Notes (unless already producing a Note)
+            if (!produceNote && !string.IsNullOrWhiteSpace(treatment.Notes))
+                produceNote = true;
+
+            // Collect state span treatments for individual upsert
+            if (delegateToStateSpan)
+            {
+                // TempBasal treatments can also be bulk-inserted
+                if (!isProfileSwitch && !isOverride && !isTemporaryTarget)
+                {
+                    var tempBasal = MapToTempBasal(treatment, batch.Id);
+                    tempBasal.DeviceId = await _deviceService.ResolveAsync(
+                        V4Models.DeviceCategory.InsulinPump, treatment.PumpType, treatment.PumpSerial, treatment.Mills, ct);
+                    tempBasal.PatientDeviceId = await _deviceService.ResolvePatientDeviceAsync(tempBasal.DeviceId, treatment.Mills, ct);
+                    tempBasalList.Add(tempBasal);
+                }
+                else
+                {
+                    stateSpanTreatments.Add((treatment, isProfileSwitch, isOverride, isTemporaryTarget));
+                }
+            }
+
+            if (produceBolus)
+            {
+                var isAlgorithmBolus = (treatment.IsBasalInsulin == true && treatment.Insulin > 0)
+                    || (string.Equals(treatment.EventType, "Correction Bolus", StringComparison.OrdinalIgnoreCase) && IsAapsUpload(treatment));
+
+                var model = MapToBolus(treatment, batch.Id);
+
+                if (isAlgorithmBolus)
+                {
+                    model.Kind = V4Models.BolusKind.Algorithm;
+                    model.Automatic = true;
+                }
+
+                model.DeviceId = await _deviceService.ResolveAsync(
+                    V4Models.DeviceCategory.InsulinPump, treatment.PumpType, treatment.PumpSerial, treatment.Mills, ct);
+                model.PatientDeviceId = await _deviceService.ResolvePatientDeviceAsync(model.DeviceId, treatment.Mills, ct);
+                bolusList.Add(model);
+            }
+
+            if (produceCarbIntake)
+                carbList.Add(MapToCarbIntake(treatment, batch.Id));
+
+            if (produceBGCheck)
+                bgCheckList.Add(MapToBGCheck(treatment, batch.Id));
+
+            if (produceNote)
+                noteList.Add(MapToNote(treatment, batch.Id, isAnnouncement));
+
+            if (produceBolusCalc)
+                bolusCalcList.Add(MapToBolusCalculation(treatment, batch.Id));
+
+            if (produceDeviceEvent)
+            {
+                var model = MapToDeviceEvent(treatment, batch.Id, parsedDeviceEventType);
+                model.DeviceId = await _deviceService.ResolveAsync(
+                    V4Models.DeviceCategory.InsulinPump, treatment.PumpType, treatment.PumpSerial, treatment.Mills, ct);
+                model.PatientDeviceId = await _deviceService.ResolvePatientDeviceAsync(model.DeviceId, treatment.Mills, ct);
+                deviceEventList.Add(model);
+            }
+
+            // Track for post-insert linking
+            if (produceBolus && produceBolusCalc && treatment.Id != null)
+                bolusCalcLinkTreatmentIds.Add(treatment.Id);
+
+            // Log unrecognized treatments
+            if (!produceBolus && !produceCarbIntake && !produceBGCheck
+                && !produceNote && !produceBolusCalc && !produceDeviceEvent && !delegateToStateSpan)
+            {
+                _logger.LogWarning(
+                    "Unknown event type '{EventType}' for treatment {Id} with no insulin/carbs, skipping decomposition",
+                    treatment.EventType, treatment.Id);
+            }
+        }
+
+        // Bulk-insert all typed lists
+        if (bolusList.Count > 0)
+        {
+            var created = await _bolusRepository.BulkCreateAsync(bolusList, ct);
+            result.CreatedRecords.AddRange(created);
+        }
+
+        if (carbList.Count > 0)
+        {
+            var created = await _carbIntakeRepository.BulkCreateAsync(carbList, ct);
+            result.CreatedRecords.AddRange(created);
+        }
+
+        if (bgCheckList.Count > 0)
+        {
+            var created = await _bgCheckRepository.BulkCreateAsync(bgCheckList, ct);
+            result.CreatedRecords.AddRange(created);
+        }
+
+        if (noteList.Count > 0)
+        {
+            var created = await _noteRepository.BulkCreateAsync(noteList, ct);
+            result.CreatedRecords.AddRange(created);
+        }
+
+        if (bolusCalcList.Count > 0)
+        {
+            var created = await _bolusCalculationRepository.BulkCreateAsync(bolusCalcList, ct);
+            result.CreatedRecords.AddRange(created);
+        }
+
+        if (deviceEventList.Count > 0)
+        {
+            var created = await _deviceEventRepository.BulkCreateAsync(deviceEventList, ct);
+            result.CreatedRecords.AddRange(created);
+        }
+
+        if (tempBasalList.Count > 0)
+        {
+            var created = await _tempBasalRepository.BulkCreateAsync(tempBasalList, ct);
+            result.CreatedRecords.AddRange(created);
+        }
+
+        // Upsert state spans individually (ProfileSwitch, Override, TemporaryTarget)
+        foreach (var (treatment, isPs, isOv, isTt) in stateSpanTreatments)
+        {
+            // Use a temporary result to collect records from helper methods
+            var spanResult = new V4Models.DecompositionResult { CorrelationId = batch.Id };
+
+            if (isPs)
+                await DecomposeProfileSwitchAsync(treatment, spanResult, ct);
+            else if (isOv)
+                await DecomposeOverrideAsync(treatment, spanResult, ct);
+            else if (isTt)
+                await DecomposeTemporaryTargetAsync(treatment, spanResult, ct);
+
+            result.CreatedRecords.AddRange(spanResult.CreatedRecords);
+            result.UpdatedRecords.AddRange(spanResult.UpdatedRecords);
+        }
+
+        // Post-insert linking: Bolus → BolusCalculation by matching LegacyId
+        if (bolusCalcLinkTreatmentIds.Count > 0)
+        {
+            var persistedBoluses = result.CreatedRecords.OfType<V4Models.Bolus>()
+                .Where(b => b.LegacyId != null && bolusCalcLinkTreatmentIds.Contains(b.LegacyId))
+                .ToList();
+            var persistedCalcs = result.CreatedRecords.OfType<V4Models.BolusCalculation>()
+                .Where(c => c.LegacyId != null && bolusCalcLinkTreatmentIds.Contains(c.LegacyId))
+                .ToDictionary(c => c.LegacyId!);
+
+            foreach (var bolus in persistedBoluses)
+            {
+                if (persistedCalcs.TryGetValue(bolus.LegacyId!, out var calc)
+                    && bolus.BolusCalculationId != calc.Id)
+                {
+                    bolus.BolusCalculationId = calc.Id;
+                    await _bolusRepository.UpdateAsync(bolus.Id, bolus, ct);
+                }
+            }
+        }
+
+        return result;
+    }
 
     /// <inheritdoc />
     public async Task<int> DeleteByLegacyIdAsync(string legacyId, CancellationToken ct = default)

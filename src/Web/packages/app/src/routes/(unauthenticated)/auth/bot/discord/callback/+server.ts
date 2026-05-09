@@ -95,6 +95,7 @@ export const GET: RequestHandler = async ({ url, fetch }) => {
 	}
 	const apiClient = createServerApiClient(apiBaseUrl, fetch, {
 		hashedInstanceKey: getHashedInstanceKey(),
+		extraHeaders: { "X-Forwarded-Proto": "https" },
 	});
 
 	const pendingResponse = await apiClient.chatIdentityDirectory.createPending({

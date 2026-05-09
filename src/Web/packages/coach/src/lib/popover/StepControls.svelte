@@ -5,6 +5,7 @@
     action,
     onback,
     onnext,
+    oncomplete,
     ondismiss,
   }: {
     currentStep: number;
@@ -12,6 +13,7 @@
     action?: { label: string; href: string } | undefined;
     onback: () => void;
     onnext: () => void;
+    oncomplete: () => void;
     ondismiss: () => void;
   } = $props();
 
@@ -30,13 +32,13 @@
     {/if}
 
     {#if isLast && action}
-      <a href={action.href} class="coach-btn coach-btn--primary" onclick={ondismiss}
+      <a href={action.href} class="coach-btn coach-btn--primary" onclick={oncomplete}
         >{action.label}</a
       >
     {:else if !isLast}
       <button type="button" class="coach-btn coach-btn--primary" onclick={onnext}>Next</button>
     {:else}
-      <button type="button" class="coach-btn coach-btn--primary" onclick={ondismiss}>Got it</button>
+      <button type="button" class="coach-btn coach-btn--primary" onclick={oncomplete}>Got it</button>
     {/if}
   </div>
 </div>

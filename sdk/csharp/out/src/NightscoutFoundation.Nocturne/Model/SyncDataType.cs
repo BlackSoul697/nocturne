@@ -45,64 +45,76 @@ namespace NightscoutFoundation.Nocturne.Model
         ManualBG = 2,
 
         /// <summary>
+        /// Enum Calibrations for value: Calibrations
+        /// </summary>
+        [EnumMember(Value = "Calibrations")]
+        Calibrations = 3,
+
+        /// <summary>
         /// Enum Boluses for value: Boluses
         /// </summary>
         [EnumMember(Value = "Boluses")]
-        Boluses = 3,
+        Boluses = 4,
 
         /// <summary>
         /// Enum CarbIntake for value: CarbIntake
         /// </summary>
         [EnumMember(Value = "CarbIntake")]
-        CarbIntake = 4,
+        CarbIntake = 5,
+
+        /// <summary>
+        /// Enum BGChecks for value: BGChecks
+        /// </summary>
+        [EnumMember(Value = "BGChecks")]
+        BGChecks = 6,
 
         /// <summary>
         /// Enum BolusCalculations for value: BolusCalculations
         /// </summary>
         [EnumMember(Value = "BolusCalculations")]
-        BolusCalculations = 5,
+        BolusCalculations = 7,
 
         /// <summary>
         /// Enum Notes for value: Notes
         /// </summary>
         [EnumMember(Value = "Notes")]
-        Notes = 6,
+        Notes = 8,
 
         /// <summary>
         /// Enum DeviceEvents for value: DeviceEvents
         /// </summary>
         [EnumMember(Value = "DeviceEvents")]
-        DeviceEvents = 7,
+        DeviceEvents = 9,
 
         /// <summary>
         /// Enum StateSpans for value: StateSpans
         /// </summary>
         [EnumMember(Value = "StateSpans")]
-        StateSpans = 8,
+        StateSpans = 10,
 
         /// <summary>
         /// Enum Profiles for value: Profiles
         /// </summary>
         [EnumMember(Value = "Profiles")]
-        Profiles = 9,
+        Profiles = 11,
 
         /// <summary>
         /// Enum DeviceStatus for value: DeviceStatus
         /// </summary>
         [EnumMember(Value = "DeviceStatus")]
-        DeviceStatus = 10,
+        DeviceStatus = 12,
 
         /// <summary>
         /// Enum Activity for value: Activity
         /// </summary>
         [EnumMember(Value = "Activity")]
-        Activity = 11,
+        Activity = 13,
 
         /// <summary>
         /// Enum Food for value: Food
         /// </summary>
         [EnumMember(Value = "Food")]
-        Food = 12
+        Food = 14
     }
 
 }

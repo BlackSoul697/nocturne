@@ -8,6 +8,7 @@ All URIs are relative to *http://localhost*
 | [**NutritionCreateCarbIntake**](NutritionApi.md#nutritioncreatecarbintake) | **POST** /api/v4/nutrition/carbs | Create a new carb intake |
 | [**NutritionCreateMeal**](NutritionApi.md#nutritioncreatemeal) | **POST** /api/v4/nutrition/meals | Atomically create a correlated Bolus + CarbIntake for a meal event. Both records share a single CorrelationId and are persisted within a single transaction. When an existing row matches on (DataSource, SyncIdentifier), the idempotent upsert applies and the response returns 200 instead of 201. |
 | [**NutritionDeleteCarbIntake**](NutritionApi.md#nutritiondeletecarbintake) | **DELETE** /api/v4/nutrition/carbs/{id} | Delete a carb intake |
+| [**NutritionDeleteCarbIntakeBySyncIdentifier**](NutritionApi.md#nutritiondeletecarbintakebysyncidentifier) | **DELETE** /api/v4/nutrition/carbs/by-sync-id | Delete a carb intake by its external sync identifier (dataSource + syncIdentifier pair). |
 | [**NutritionDeleteCarbIntakeFood**](NutritionApi.md#nutritiondeletecarbintakefood) | **DELETE** /api/v4/nutrition/carbs/{id}/foods/{foodEntryId} | Remove a food breakdown entry. |
 | [**NutritionGetCarbIntakeById**](NutritionApi.md#nutritiongetcarbintakebyid) | **GET** /api/v4/nutrition/carbs/{id} | Get a carb intake by ID |
 | [**NutritionGetCarbIntakeFoods**](NutritionApi.md#nutritiongetcarbintakefoods) | **GET** /api/v4/nutrition/carbs/{id}/foods | Get food breakdown for a carb intake record. |
@@ -388,6 +389,99 @@ No authorization required
 | Status code | Description | Response headers |
 |-------------|-------------|------------------|
 | **204** |  |  -  |
+| **404** |  |  -  |
+
+[[Back to top]](#) [[Back to API list]](../README.md#documentation-for-api-endpoints) [[Back to Model list]](../README.md#documentation-for-models) [[Back to README]](../README.md)
+
+<a id="nutritiondeletecarbintakebysyncidentifier"></a>
+# **NutritionDeleteCarbIntakeBySyncIdentifier**
+> void NutritionDeleteCarbIntakeBySyncIdentifier (string? dataSource = null, string? syncIdentifier = null)
+
+Delete a carb intake by its external sync identifier (dataSource + syncIdentifier pair).
+
+### Example
+```csharp
+using System.Collections.Generic;
+using System.Diagnostics;
+using System.Net.Http;
+using NightscoutFoundation.Nocturne.Api;
+using NightscoutFoundation.Nocturne.Client;
+using NightscoutFoundation.Nocturne.Model;
+
+namespace Example
+{
+    public class NutritionDeleteCarbIntakeBySyncIdentifierExample
+    {
+        public static void Main()
+        {
+            Configuration config = new Configuration();
+            config.BasePath = "http://localhost";
+            // create instances of HttpClient, HttpClientHandler to be reused later with different Api classes
+            HttpClient httpClient = new HttpClient();
+            HttpClientHandler httpClientHandler = new HttpClientHandler();
+            var apiInstance = new NutritionApi(httpClient, config, httpClientHandler);
+            var dataSource = "dataSource_example";  // string? |  (optional) 
+            var syncIdentifier = "syncIdentifier_example";  // string? |  (optional) 
+
+            try
+            {
+                // Delete a carb intake by its external sync identifier (dataSource + syncIdentifier pair).
+                apiInstance.NutritionDeleteCarbIntakeBySyncIdentifier(dataSource, syncIdentifier);
+            }
+            catch (ApiException  e)
+            {
+                Debug.Print("Exception when calling NutritionApi.NutritionDeleteCarbIntakeBySyncIdentifier: " + e.Message);
+                Debug.Print("Status Code: " + e.ErrorCode);
+                Debug.Print(e.StackTrace);
+            }
+        }
+    }
+}
+```
+
+#### Using the NutritionDeleteCarbIntakeBySyncIdentifierWithHttpInfo variant
+This returns an ApiResponse object which contains the response data, status code and headers.
+
+```csharp
+try
+{
+    // Delete a carb intake by its external sync identifier (dataSource + syncIdentifier pair).
+    apiInstance.NutritionDeleteCarbIntakeBySyncIdentifierWithHttpInfo(dataSource, syncIdentifier);
+}
+catch (ApiException e)
+{
+    Debug.Print("Exception when calling NutritionApi.NutritionDeleteCarbIntakeBySyncIdentifierWithHttpInfo: " + e.Message);
+    Debug.Print("Status Code: " + e.ErrorCode);
+    Debug.Print(e.StackTrace);
+}
+```
+
+### Parameters
+
+| Name | Type | Description | Notes |
+|------|------|-------------|-------|
+| **dataSource** | **string?** |  | [optional]  |
+| **syncIdentifier** | **string?** |  | [optional]  |
+
+### Return type
+
+void (empty response body)
+
+### Authorization
+
+No authorization required
+
+### HTTP request headers
+
+ - **Content-Type**: Not defined
+ - **Accept**: application/json
+
+
+### HTTP response details
+| Status code | Description | Response headers |
+|-------------|-------------|------------------|
+| **204** |  |  -  |
+| **400** |  |  -  |
 | **404** |  |  -  |
 
 [[Back to top]](#) [[Back to API list]](../README.md#documentation-for-api-endpoints) [[Back to Model list]](../README.md#documentation-for-models) [[Back to README]](../README.md)

@@ -69,8 +69,11 @@ namespace NightscoutFoundation.Nocturne.Api
         /// <exception cref="NightscoutFoundation.Nocturne.Client.ApiException">Thrown when fails to make API call</exception>
         /// <param name="from"> (optional)</param>
         /// <param name="to"> (optional)</param>
-        /// <returns>List&lt;StateSpan&gt;</returns>
-        List<StateSpan> StateSpansGetActivities(DateTimeOffset? from = default, DateTimeOffset? to = default);
+        /// <param name="limit"> (optional, default to 100)</param>
+        /// <param name="offset"> (optional, default to 0)</param>
+        /// <param name="sort"> (optional, default to &quot;timestamp_desc&quot;)</param>
+        /// <returns>PaginatedResponseOfStateSpan</returns>
+        PaginatedResponseOfStateSpan StateSpansGetActivities(DateTimeOffset? from = default, DateTimeOffset? to = default, int? limit = default, int? offset = default, string? sort = default);
 
         /// <summary>
         /// Get all activity state spans (sleep, exercise, illness, travel)
@@ -81,16 +84,22 @@ namespace NightscoutFoundation.Nocturne.Api
         /// <exception cref="NightscoutFoundation.Nocturne.Client.ApiException">Thrown when fails to make API call</exception>
         /// <param name="from"> (optional)</param>
         /// <param name="to"> (optional)</param>
-        /// <returns>ApiResponse of List&lt;StateSpan&gt;</returns>
-        ApiResponse<List<StateSpan>> StateSpansGetActivitiesWithHttpInfo(DateTimeOffset? from = default, DateTimeOffset? to = default);
+        /// <param name="limit"> (optional, default to 100)</param>
+        /// <param name="offset"> (optional, default to 0)</param>
+        /// <param name="sort"> (optional, default to &quot;timestamp_desc&quot;)</param>
+        /// <returns>ApiResponse of PaginatedResponseOfStateSpan</returns>
+        ApiResponse<PaginatedResponseOfStateSpan> StateSpansGetActivitiesWithHttpInfo(DateTimeOffset? from = default, DateTimeOffset? to = default, int? limit = default, int? offset = default, string? sort = default);
         /// <summary>
         /// Get connectivity state spans
         /// </summary>
         /// <exception cref="NightscoutFoundation.Nocturne.Client.ApiException">Thrown when fails to make API call</exception>
         /// <param name="from"> (optional)</param>
         /// <param name="to"> (optional)</param>
-        /// <returns>List&lt;StateSpan&gt;</returns>
-        List<StateSpan> StateSpansGetConnectivity(DateTimeOffset? from = default, DateTimeOffset? to = default);
+        /// <param name="limit"> (optional, default to 100)</param>
+        /// <param name="offset"> (optional, default to 0)</param>
+        /// <param name="sort"> (optional, default to &quot;timestamp_desc&quot;)</param>
+        /// <returns>PaginatedResponseOfStateSpan</returns>
+        PaginatedResponseOfStateSpan StateSpansGetConnectivity(DateTimeOffset? from = default, DateTimeOffset? to = default, int? limit = default, int? offset = default, string? sort = default);
 
         /// <summary>
         /// Get connectivity state spans
@@ -101,16 +110,22 @@ namespace NightscoutFoundation.Nocturne.Api
         /// <exception cref="NightscoutFoundation.Nocturne.Client.ApiException">Thrown when fails to make API call</exception>
         /// <param name="from"> (optional)</param>
         /// <param name="to"> (optional)</param>
-        /// <returns>ApiResponse of List&lt;StateSpan&gt;</returns>
-        ApiResponse<List<StateSpan>> StateSpansGetConnectivityWithHttpInfo(DateTimeOffset? from = default, DateTimeOffset? to = default);
+        /// <param name="limit"> (optional, default to 100)</param>
+        /// <param name="offset"> (optional, default to 0)</param>
+        /// <param name="sort"> (optional, default to &quot;timestamp_desc&quot;)</param>
+        /// <returns>ApiResponse of PaginatedResponseOfStateSpan</returns>
+        ApiResponse<PaginatedResponseOfStateSpan> StateSpansGetConnectivityWithHttpInfo(DateTimeOffset? from = default, DateTimeOffset? to = default, int? limit = default, int? offset = default, string? sort = default);
         /// <summary>
         /// Get exercise state spans (user-annotated activity periods)
         /// </summary>
         /// <exception cref="NightscoutFoundation.Nocturne.Client.ApiException">Thrown when fails to make API call</exception>
         /// <param name="from"> (optional)</param>
         /// <param name="to"> (optional)</param>
-        /// <returns>List&lt;StateSpan&gt;</returns>
-        List<StateSpan> StateSpansGetExercise(DateTimeOffset? from = default, DateTimeOffset? to = default);
+        /// <param name="limit"> (optional, default to 100)</param>
+        /// <param name="offset"> (optional, default to 0)</param>
+        /// <param name="sort"> (optional, default to &quot;timestamp_desc&quot;)</param>
+        /// <returns>PaginatedResponseOfStateSpan</returns>
+        PaginatedResponseOfStateSpan StateSpansGetExercise(DateTimeOffset? from = default, DateTimeOffset? to = default, int? limit = default, int? offset = default, string? sort = default);
 
         /// <summary>
         /// Get exercise state spans (user-annotated activity periods)
@@ -121,16 +136,22 @@ namespace NightscoutFoundation.Nocturne.Api
         /// <exception cref="NightscoutFoundation.Nocturne.Client.ApiException">Thrown when fails to make API call</exception>
         /// <param name="from"> (optional)</param>
         /// <param name="to"> (optional)</param>
-        /// <returns>ApiResponse of List&lt;StateSpan&gt;</returns>
-        ApiResponse<List<StateSpan>> StateSpansGetExerciseWithHttpInfo(DateTimeOffset? from = default, DateTimeOffset? to = default);
+        /// <param name="limit"> (optional, default to 100)</param>
+        /// <param name="offset"> (optional, default to 0)</param>
+        /// <param name="sort"> (optional, default to &quot;timestamp_desc&quot;)</param>
+        /// <returns>ApiResponse of PaginatedResponseOfStateSpan</returns>
+        ApiResponse<PaginatedResponseOfStateSpan> StateSpansGetExerciseWithHttpInfo(DateTimeOffset? from = default, DateTimeOffset? to = default, int? limit = default, int? offset = default, string? sort = default);
         /// <summary>
         /// Get illness state spans (user-annotated illness periods)
         /// </summary>
         /// <exception cref="NightscoutFoundation.Nocturne.Client.ApiException">Thrown when fails to make API call</exception>
         /// <param name="from"> (optional)</param>
         /// <param name="to"> (optional)</param>
-        /// <returns>List&lt;StateSpan&gt;</returns>
-        List<StateSpan> StateSpansGetIllness(DateTimeOffset? from = default, DateTimeOffset? to = default);
+        /// <param name="limit"> (optional, default to 100)</param>
+        /// <param name="offset"> (optional, default to 0)</param>
+        /// <param name="sort"> (optional, default to &quot;timestamp_desc&quot;)</param>
+        /// <returns>PaginatedResponseOfStateSpan</returns>
+        PaginatedResponseOfStateSpan StateSpansGetIllness(DateTimeOffset? from = default, DateTimeOffset? to = default, int? limit = default, int? offset = default, string? sort = default);
 
         /// <summary>
         /// Get illness state spans (user-annotated illness periods)
@@ -141,16 +162,22 @@ namespace NightscoutFoundation.Nocturne.Api
         /// <exception cref="NightscoutFoundation.Nocturne.Client.ApiException">Thrown when fails to make API call</exception>
         /// <param name="from"> (optional)</param>
         /// <param name="to"> (optional)</param>
-        /// <returns>ApiResponse of List&lt;StateSpan&gt;</returns>
-        ApiResponse<List<StateSpan>> StateSpansGetIllnessWithHttpInfo(DateTimeOffset? from = default, DateTimeOffset? to = default);
+        /// <param name="limit"> (optional, default to 100)</param>
+        /// <param name="offset"> (optional, default to 0)</param>
+        /// <param name="sort"> (optional, default to &quot;timestamp_desc&quot;)</param>
+        /// <returns>ApiResponse of PaginatedResponseOfStateSpan</returns>
+        ApiResponse<PaginatedResponseOfStateSpan> StateSpansGetIllnessWithHttpInfo(DateTimeOffset? from = default, DateTimeOffset? to = default, int? limit = default, int? offset = default, string? sort = default);
         /// <summary>
         /// Get override state spans
         /// </summary>
         /// <exception cref="NightscoutFoundation.Nocturne.Client.ApiException">Thrown when fails to make API call</exception>
         /// <param name="from"> (optional)</param>
         /// <param name="to"> (optional)</param>
-        /// <returns>List&lt;StateSpan&gt;</returns>
-        List<StateSpan> StateSpansGetOverrides(DateTimeOffset? from = default, DateTimeOffset? to = default);
+        /// <param name="limit"> (optional, default to 100)</param>
+        /// <param name="offset"> (optional, default to 0)</param>
+        /// <param name="sort"> (optional, default to &quot;timestamp_desc&quot;)</param>
+        /// <returns>PaginatedResponseOfStateSpan</returns>
+        PaginatedResponseOfStateSpan StateSpansGetOverrides(DateTimeOffset? from = default, DateTimeOffset? to = default, int? limit = default, int? offset = default, string? sort = default);
 
         /// <summary>
         /// Get override state spans
@@ -161,16 +188,22 @@ namespace NightscoutFoundation.Nocturne.Api
         /// <exception cref="NightscoutFoundation.Nocturne.Client.ApiException">Thrown when fails to make API call</exception>
         /// <param name="from"> (optional)</param>
         /// <param name="to"> (optional)</param>
-        /// <returns>ApiResponse of List&lt;StateSpan&gt;</returns>
-        ApiResponse<List<StateSpan>> StateSpansGetOverridesWithHttpInfo(DateTimeOffset? from = default, DateTimeOffset? to = default);
+        /// <param name="limit"> (optional, default to 100)</param>
+        /// <param name="offset"> (optional, default to 0)</param>
+        /// <param name="sort"> (optional, default to &quot;timestamp_desc&quot;)</param>
+        /// <returns>ApiResponse of PaginatedResponseOfStateSpan</returns>
+        ApiResponse<PaginatedResponseOfStateSpan> StateSpansGetOverridesWithHttpInfo(DateTimeOffset? from = default, DateTimeOffset? to = default, int? limit = default, int? offset = default, string? sort = default);
         /// <summary>
         /// Get profile state spans
         /// </summary>
         /// <exception cref="NightscoutFoundation.Nocturne.Client.ApiException">Thrown when fails to make API call</exception>
         /// <param name="from"> (optional)</param>
         /// <param name="to"> (optional)</param>
-        /// <returns>List&lt;StateSpan&gt;</returns>
-        List<StateSpan> StateSpansGetProfiles(DateTimeOffset? from = default, DateTimeOffset? to = default);
+        /// <param name="limit"> (optional, default to 100)</param>
+        /// <param name="offset"> (optional, default to 0)</param>
+        /// <param name="sort"> (optional, default to &quot;timestamp_desc&quot;)</param>
+        /// <returns>PaginatedResponseOfStateSpan</returns>
+        PaginatedResponseOfStateSpan StateSpansGetProfiles(DateTimeOffset? from = default, DateTimeOffset? to = default, int? limit = default, int? offset = default, string? sort = default);
 
         /// <summary>
         /// Get profile state spans
@@ -181,16 +214,22 @@ namespace NightscoutFoundation.Nocturne.Api
         /// <exception cref="NightscoutFoundation.Nocturne.Client.ApiException">Thrown when fails to make API call</exception>
         /// <param name="from"> (optional)</param>
         /// <param name="to"> (optional)</param>
-        /// <returns>ApiResponse of List&lt;StateSpan&gt;</returns>
-        ApiResponse<List<StateSpan>> StateSpansGetProfilesWithHttpInfo(DateTimeOffset? from = default, DateTimeOffset? to = default);
+        /// <param name="limit"> (optional, default to 100)</param>
+        /// <param name="offset"> (optional, default to 0)</param>
+        /// <param name="sort"> (optional, default to &quot;timestamp_desc&quot;)</param>
+        /// <returns>ApiResponse of PaginatedResponseOfStateSpan</returns>
+        ApiResponse<PaginatedResponseOfStateSpan> StateSpansGetProfilesWithHttpInfo(DateTimeOffset? from = default, DateTimeOffset? to = default, int? limit = default, int? offset = default, string? sort = default);
         /// <summary>
         /// Get pump mode state spans
         /// </summary>
         /// <exception cref="NightscoutFoundation.Nocturne.Client.ApiException">Thrown when fails to make API call</exception>
         /// <param name="from"> (optional)</param>
         /// <param name="to"> (optional)</param>
-        /// <returns>List&lt;StateSpan&gt;</returns>
-        List<StateSpan> StateSpansGetPumpModes(DateTimeOffset? from = default, DateTimeOffset? to = default);
+        /// <param name="limit"> (optional, default to 100)</param>
+        /// <param name="offset"> (optional, default to 0)</param>
+        /// <param name="sort"> (optional, default to &quot;timestamp_desc&quot;)</param>
+        /// <returns>PaginatedResponseOfStateSpan</returns>
+        PaginatedResponseOfStateSpan StateSpansGetPumpModes(DateTimeOffset? from = default, DateTimeOffset? to = default, int? limit = default, int? offset = default, string? sort = default);
 
         /// <summary>
         /// Get pump mode state spans
@@ -201,16 +240,22 @@ namespace NightscoutFoundation.Nocturne.Api
         /// <exception cref="NightscoutFoundation.Nocturne.Client.ApiException">Thrown when fails to make API call</exception>
         /// <param name="from"> (optional)</param>
         /// <param name="to"> (optional)</param>
-        /// <returns>ApiResponse of List&lt;StateSpan&gt;</returns>
-        ApiResponse<List<StateSpan>> StateSpansGetPumpModesWithHttpInfo(DateTimeOffset? from = default, DateTimeOffset? to = default);
+        /// <param name="limit"> (optional, default to 100)</param>
+        /// <param name="offset"> (optional, default to 0)</param>
+        /// <param name="sort"> (optional, default to &quot;timestamp_desc&quot;)</param>
+        /// <returns>ApiResponse of PaginatedResponseOfStateSpan</returns>
+        ApiResponse<PaginatedResponseOfStateSpan> StateSpansGetPumpModesWithHttpInfo(DateTimeOffset? from = default, DateTimeOffset? to = default, int? limit = default, int? offset = default, string? sort = default);
         /// <summary>
         /// Get sleep state spans (user-annotated sleep periods)
         /// </summary>
         /// <exception cref="NightscoutFoundation.Nocturne.Client.ApiException">Thrown when fails to make API call</exception>
         /// <param name="from"> (optional)</param>
         /// <param name="to"> (optional)</param>
-        /// <returns>List&lt;StateSpan&gt;</returns>
-        List<StateSpan> StateSpansGetSleep(DateTimeOffset? from = default, DateTimeOffset? to = default);
+        /// <param name="limit"> (optional, default to 100)</param>
+        /// <param name="offset"> (optional, default to 0)</param>
+        /// <param name="sort"> (optional, default to &quot;timestamp_desc&quot;)</param>
+        /// <returns>PaginatedResponseOfStateSpan</returns>
+        PaginatedResponseOfStateSpan StateSpansGetSleep(DateTimeOffset? from = default, DateTimeOffset? to = default, int? limit = default, int? offset = default, string? sort = default);
 
         /// <summary>
         /// Get sleep state spans (user-annotated sleep periods)
@@ -221,8 +266,11 @@ namespace NightscoutFoundation.Nocturne.Api
         /// <exception cref="NightscoutFoundation.Nocturne.Client.ApiException">Thrown when fails to make API call</exception>
         /// <param name="from"> (optional)</param>
         /// <param name="to"> (optional)</param>
-        /// <returns>ApiResponse of List&lt;StateSpan&gt;</returns>
-        ApiResponse<List<StateSpan>> StateSpansGetSleepWithHttpInfo(DateTimeOffset? from = default, DateTimeOffset? to = default);
+        /// <param name="limit"> (optional, default to 100)</param>
+        /// <param name="offset"> (optional, default to 0)</param>
+        /// <param name="sort"> (optional, default to &quot;timestamp_desc&quot;)</param>
+        /// <returns>ApiResponse of PaginatedResponseOfStateSpan</returns>
+        ApiResponse<PaginatedResponseOfStateSpan> StateSpansGetSleepWithHttpInfo(DateTimeOffset? from = default, DateTimeOffset? to = default, int? limit = default, int? offset = default, string? sort = default);
         /// <summary>
         /// Get a specific state span by ID
         /// </summary>
@@ -251,10 +299,11 @@ namespace NightscoutFoundation.Nocturne.Api
         /// <param name="to"> (optional)</param>
         /// <param name="source"> (optional)</param>
         /// <param name="active"> (optional)</param>
-        /// <param name="count"> (optional, default to 100)</param>
-        /// <param name="skip"> (optional, default to 0)</param>
-        /// <returns>List&lt;StateSpan&gt;</returns>
-        List<StateSpan> StateSpansGetStateSpans(StateSpansGetStateSpansCategoryParameter? category = default, string? state = default, DateTimeOffset? from = default, DateTimeOffset? to = default, string? source = default, bool? active = default, int? count = default, int? skip = default);
+        /// <param name="limit"> (optional, default to 100)</param>
+        /// <param name="offset"> (optional, default to 0)</param>
+        /// <param name="sort"> (optional, default to &quot;timestamp_desc&quot;)</param>
+        /// <returns>PaginatedResponseOfStateSpan</returns>
+        PaginatedResponseOfStateSpan StateSpansGetStateSpans(StateSpansGetStateSpansCategoryParameter? category = default, string? state = default, DateTimeOffset? from = default, DateTimeOffset? to = default, string? source = default, bool? active = default, int? limit = default, int? offset = default, string? sort = default);
 
         /// <summary>
         /// Query all state spans with optional filtering
@@ -269,18 +318,22 @@ namespace NightscoutFoundation.Nocturne.Api
         /// <param name="to"> (optional)</param>
         /// <param name="source"> (optional)</param>
         /// <param name="active"> (optional)</param>
-        /// <param name="count"> (optional, default to 100)</param>
-        /// <param name="skip"> (optional, default to 0)</param>
-        /// <returns>ApiResponse of List&lt;StateSpan&gt;</returns>
-        ApiResponse<List<StateSpan>> StateSpansGetStateSpansWithHttpInfo(StateSpansGetStateSpansCategoryParameter? category = default, string? state = default, DateTimeOffset? from = default, DateTimeOffset? to = default, string? source = default, bool? active = default, int? count = default, int? skip = default);
+        /// <param name="limit"> (optional, default to 100)</param>
+        /// <param name="offset"> (optional, default to 0)</param>
+        /// <param name="sort"> (optional, default to &quot;timestamp_desc&quot;)</param>
+        /// <returns>ApiResponse of PaginatedResponseOfStateSpan</returns>
+        ApiResponse<PaginatedResponseOfStateSpan> StateSpansGetStateSpansWithHttpInfo(StateSpansGetStateSpansCategoryParameter? category = default, string? state = default, DateTimeOffset? from = default, DateTimeOffset? to = default, string? source = default, bool? active = default, int? limit = default, int? offset = default, string? sort = default);
         /// <summary>
         /// Get temporary target state spans (AAPS temporary glucose targets)
         /// </summary>
         /// <exception cref="NightscoutFoundation.Nocturne.Client.ApiException">Thrown when fails to make API call</exception>
         /// <param name="from"> (optional)</param>
         /// <param name="to"> (optional)</param>
-        /// <returns>List&lt;StateSpan&gt;</returns>
-        List<StateSpan> StateSpansGetTemporaryTargets(DateTimeOffset? from = default, DateTimeOffset? to = default);
+        /// <param name="limit"> (optional, default to 100)</param>
+        /// <param name="offset"> (optional, default to 0)</param>
+        /// <param name="sort"> (optional, default to &quot;timestamp_desc&quot;)</param>
+        /// <returns>PaginatedResponseOfStateSpan</returns>
+        PaginatedResponseOfStateSpan StateSpansGetTemporaryTargets(DateTimeOffset? from = default, DateTimeOffset? to = default, int? limit = default, int? offset = default, string? sort = default);
 
         /// <summary>
         /// Get temporary target state spans (AAPS temporary glucose targets)
@@ -291,16 +344,22 @@ namespace NightscoutFoundation.Nocturne.Api
         /// <exception cref="NightscoutFoundation.Nocturne.Client.ApiException">Thrown when fails to make API call</exception>
         /// <param name="from"> (optional)</param>
         /// <param name="to"> (optional)</param>
-        /// <returns>ApiResponse of List&lt;StateSpan&gt;</returns>
-        ApiResponse<List<StateSpan>> StateSpansGetTemporaryTargetsWithHttpInfo(DateTimeOffset? from = default, DateTimeOffset? to = default);
+        /// <param name="limit"> (optional, default to 100)</param>
+        /// <param name="offset"> (optional, default to 0)</param>
+        /// <param name="sort"> (optional, default to &quot;timestamp_desc&quot;)</param>
+        /// <returns>ApiResponse of PaginatedResponseOfStateSpan</returns>
+        ApiResponse<PaginatedResponseOfStateSpan> StateSpansGetTemporaryTargetsWithHttpInfo(DateTimeOffset? from = default, DateTimeOffset? to = default, int? limit = default, int? offset = default, string? sort = default);
         /// <summary>
         /// Get travel state spans (user-annotated travel/timezone change periods)
         /// </summary>
         /// <exception cref="NightscoutFoundation.Nocturne.Client.ApiException">Thrown when fails to make API call</exception>
         /// <param name="from"> (optional)</param>
         /// <param name="to"> (optional)</param>
-        /// <returns>List&lt;StateSpan&gt;</returns>
-        List<StateSpan> StateSpansGetTravel(DateTimeOffset? from = default, DateTimeOffset? to = default);
+        /// <param name="limit"> (optional, default to 100)</param>
+        /// <param name="offset"> (optional, default to 0)</param>
+        /// <param name="sort"> (optional, default to &quot;timestamp_desc&quot;)</param>
+        /// <returns>PaginatedResponseOfStateSpan</returns>
+        PaginatedResponseOfStateSpan StateSpansGetTravel(DateTimeOffset? from = default, DateTimeOffset? to = default, int? limit = default, int? offset = default, string? sort = default);
 
         /// <summary>
         /// Get travel state spans (user-annotated travel/timezone change periods)
@@ -311,8 +370,11 @@ namespace NightscoutFoundation.Nocturne.Api
         /// <exception cref="NightscoutFoundation.Nocturne.Client.ApiException">Thrown when fails to make API call</exception>
         /// <param name="from"> (optional)</param>
         /// <param name="to"> (optional)</param>
-        /// <returns>ApiResponse of List&lt;StateSpan&gt;</returns>
-        ApiResponse<List<StateSpan>> StateSpansGetTravelWithHttpInfo(DateTimeOffset? from = default, DateTimeOffset? to = default);
+        /// <param name="limit"> (optional, default to 100)</param>
+        /// <param name="offset"> (optional, default to 0)</param>
+        /// <param name="sort"> (optional, default to &quot;timestamp_desc&quot;)</param>
+        /// <returns>ApiResponse of PaginatedResponseOfStateSpan</returns>
+        ApiResponse<PaginatedResponseOfStateSpan> StateSpansGetTravelWithHttpInfo(DateTimeOffset? from = default, DateTimeOffset? to = default, int? limit = default, int? offset = default, string? sort = default);
         /// <summary>
         /// Update an existing state span
         /// </summary>
@@ -397,9 +459,12 @@ namespace NightscoutFoundation.Nocturne.Api
         /// <exception cref="NightscoutFoundation.Nocturne.Client.ApiException">Thrown when fails to make API call</exception>
         /// <param name="from"> (optional)</param>
         /// <param name="to"> (optional)</param>
+        /// <param name="limit"> (optional, default to 100)</param>
+        /// <param name="offset"> (optional, default to 0)</param>
+        /// <param name="sort"> (optional, default to &quot;timestamp_desc&quot;)</param>
         /// <param name="cancellationToken">Cancellation Token to cancel the request.</param>
-        /// <returns>Task of List&lt;StateSpan&gt;</returns>
-        System.Threading.Tasks.Task<List<StateSpan>> StateSpansGetActivitiesAsync(DateTimeOffset? from = default, DateTimeOffset? to = default, System.Threading.CancellationToken cancellationToken = default);
+        /// <returns>Task of PaginatedResponseOfStateSpan</returns>
+        System.Threading.Tasks.Task<PaginatedResponseOfStateSpan> StateSpansGetActivitiesAsync(DateTimeOffset? from = default, DateTimeOffset? to = default, int? limit = default, int? offset = default, string? sort = default, System.Threading.CancellationToken cancellationToken = default);
 
         /// <summary>
         /// Get all activity state spans (sleep, exercise, illness, travel)
@@ -410,9 +475,12 @@ namespace NightscoutFoundation.Nocturne.Api
         /// <exception cref="NightscoutFoundation.Nocturne.Client.ApiException">Thrown when fails to make API call</exception>
         /// <param name="from"> (optional)</param>
         /// <param name="to"> (optional)</param>
+        /// <param name="limit"> (optional, default to 100)</param>
+        /// <param name="offset"> (optional, default to 0)</param>
+        /// <param name="sort"> (optional, default to &quot;timestamp_desc&quot;)</param>
         /// <param name="cancellationToken">Cancellation Token to cancel the request.</param>
-        /// <returns>Task of ApiResponse (List&lt;StateSpan&gt;)</returns>
-        System.Threading.Tasks.Task<ApiResponse<List<StateSpan>>> StateSpansGetActivitiesWithHttpInfoAsync(DateTimeOffset? from = default, DateTimeOffset? to = default, System.Threading.CancellationToken cancellationToken = default);
+        /// <returns>Task of ApiResponse (PaginatedResponseOfStateSpan)</returns>
+        System.Threading.Tasks.Task<ApiResponse<PaginatedResponseOfStateSpan>> StateSpansGetActivitiesWithHttpInfoAsync(DateTimeOffset? from = default, DateTimeOffset? to = default, int? limit = default, int? offset = default, string? sort = default, System.Threading.CancellationToken cancellationToken = default);
         /// <summary>
         /// Get connectivity state spans
         /// </summary>
@@ -422,9 +490,12 @@ namespace NightscoutFoundation.Nocturne.Api
         /// <exception cref="NightscoutFoundation.Nocturne.Client.ApiException">Thrown when fails to make API call</exception>
         /// <param name="from"> (optional)</param>
         /// <param name="to"> (optional)</param>
+        /// <param name="limit"> (optional, default to 100)</param>
+        /// <param name="offset"> (optional, default to 0)</param>
+        /// <param name="sort"> (optional, default to &quot;timestamp_desc&quot;)</param>
         /// <param name="cancellationToken">Cancellation Token to cancel the request.</param>
-        /// <returns>Task of List&lt;StateSpan&gt;</returns>
-        System.Threading.Tasks.Task<List<StateSpan>> StateSpansGetConnectivityAsync(DateTimeOffset? from = default, DateTimeOffset? to = default, System.Threading.CancellationToken cancellationToken = default);
+        /// <returns>Task of PaginatedResponseOfStateSpan</returns>
+        System.Threading.Tasks.Task<PaginatedResponseOfStateSpan> StateSpansGetConnectivityAsync(DateTimeOffset? from = default, DateTimeOffset? to = default, int? limit = default, int? offset = default, string? sort = default, System.Threading.CancellationToken cancellationToken = default);
 
         /// <summary>
         /// Get connectivity state spans
@@ -435,9 +506,12 @@ namespace NightscoutFoundation.Nocturne.Api
         /// <exception cref="NightscoutFoundation.Nocturne.Client.ApiException">Thrown when fails to make API call</exception>
         /// <param name="from"> (optional)</param>
         /// <param name="to"> (optional)</param>
+        /// <param name="limit"> (optional, default to 100)</param>
+        /// <param name="offset"> (optional, default to 0)</param>
+        /// <param name="sort"> (optional, default to &quot;timestamp_desc&quot;)</param>
         /// <param name="cancellationToken">Cancellation Token to cancel the request.</param>
-        /// <returns>Task of ApiResponse (List&lt;StateSpan&gt;)</returns>
-        System.Threading.Tasks.Task<ApiResponse<List<StateSpan>>> StateSpansGetConnectivityWithHttpInfoAsync(DateTimeOffset? from = default, DateTimeOffset? to = default, System.Threading.CancellationToken cancellationToken = default);
+        /// <returns>Task of ApiResponse (PaginatedResponseOfStateSpan)</returns>
+        System.Threading.Tasks.Task<ApiResponse<PaginatedResponseOfStateSpan>> StateSpansGetConnectivityWithHttpInfoAsync(DateTimeOffset? from = default, DateTimeOffset? to = default, int? limit = default, int? offset = default, string? sort = default, System.Threading.CancellationToken cancellationToken = default);
         /// <summary>
         /// Get exercise state spans (user-annotated activity periods)
         /// </summary>
@@ -447,9 +521,12 @@ namespace NightscoutFoundation.Nocturne.Api
         /// <exception cref="NightscoutFoundation.Nocturne.Client.ApiException">Thrown when fails to make API call</exception>
         /// <param name="from"> (optional)</param>
         /// <param name="to"> (optional)</param>
+        /// <param name="limit"> (optional, default to 100)</param>
+        /// <param name="offset"> (optional, default to 0)</param>
+        /// <param name="sort"> (optional, default to &quot;timestamp_desc&quot;)</param>
         /// <param name="cancellationToken">Cancellation Token to cancel the request.</param>
-        /// <returns>Task of List&lt;StateSpan&gt;</returns>
-        System.Threading.Tasks.Task<List<StateSpan>> StateSpansGetExerciseAsync(DateTimeOffset? from = default, DateTimeOffset? to = default, System.Threading.CancellationToken cancellationToken = default);
+        /// <returns>Task of PaginatedResponseOfStateSpan</returns>
+        System.Threading.Tasks.Task<PaginatedResponseOfStateSpan> StateSpansGetExerciseAsync(DateTimeOffset? from = default, DateTimeOffset? to = default, int? limit = default, int? offset = default, string? sort = default, System.Threading.CancellationToken cancellationToken = default);
 
         /// <summary>
         /// Get exercise state spans (user-annotated activity periods)
@@ -460,9 +537,12 @@ namespace NightscoutFoundation.Nocturne.Api
         /// <exception cref="NightscoutFoundation.Nocturne.Client.ApiException">Thrown when fails to make API call</exception>
         /// <param name="from"> (optional)</param>
         /// <param name="to"> (optional)</param>
+        /// <param name="limit"> (optional, default to 100)</param>
+        /// <param name="offset"> (optional, default to 0)</param>
+        /// <param name="sort"> (optional, default to &quot;timestamp_desc&quot;)</param>
         /// <param name="cancellationToken">Cancellation Token to cancel the request.</param>
-        /// <returns>Task of ApiResponse (List&lt;StateSpan&gt;)</returns>
-        System.Threading.Tasks.Task<ApiResponse<List<StateSpan>>> StateSpansGetExerciseWithHttpInfoAsync(DateTimeOffset? from = default, DateTimeOffset? to = default, System.Threading.CancellationToken cancellationToken = default);
+        /// <returns>Task of ApiResponse (PaginatedResponseOfStateSpan)</returns>
+        System.Threading.Tasks.Task<ApiResponse<PaginatedResponseOfStateSpan>> StateSpansGetExerciseWithHttpInfoAsync(DateTimeOffset? from = default, DateTimeOffset? to = default, int? limit = default, int? offset = default, string? sort = default, System.Threading.CancellationToken cancellationToken = default);
         /// <summary>
         /// Get illness state spans (user-annotated illness periods)
         /// </summary>
@@ -472,9 +552,12 @@ namespace NightscoutFoundation.Nocturne.Api
         /// <exception cref="NightscoutFoundation.Nocturne.Client.ApiException">Thrown when fails to make API call</exception>
         /// <param name="from"> (optional)</param>
         /// <param name="to"> (optional)</param>
+        /// <param name="limit"> (optional, default to 100)</param>
+        /// <param name="offset"> (optional, default to 0)</param>
+        /// <param name="sort"> (optional, default to &quot;timestamp_desc&quot;)</param>
         /// <param name="cancellationToken">Cancellation Token to cancel the request.</param>
-        /// <returns>Task of List&lt;StateSpan&gt;</returns>
-        System.Threading.Tasks.Task<List<StateSpan>> StateSpansGetIllnessAsync(DateTimeOffset? from = default, DateTimeOffset? to = default, System.Threading.CancellationToken cancellationToken = default);
+        /// <returns>Task of PaginatedResponseOfStateSpan</returns>
+        System.Threading.Tasks.Task<PaginatedResponseOfStateSpan> StateSpansGetIllnessAsync(DateTimeOffset? from = default, DateTimeOffset? to = default, int? limit = default, int? offset = default, string? sort = default, System.Threading.CancellationToken cancellationToken = default);
 
         /// <summary>
         /// Get illness state spans (user-annotated illness periods)
@@ -485,9 +568,12 @@ namespace NightscoutFoundation.Nocturne.Api
         /// <exception cref="NightscoutFoundation.Nocturne.Client.ApiException">Thrown when fails to make API call</exception>
         /// <param name="from"> (optional)</param>
         /// <param name="to"> (optional)</param>
+        /// <param name="limit"> (optional, default to 100)</param>
+        /// <param name="offset"> (optional, default to 0)</param>
+        /// <param name="sort"> (optional, default to &quot;timestamp_desc&quot;)</param>
         /// <param name="cancellationToken">Cancellation Token to cancel the request.</param>
-        /// <returns>Task of ApiResponse (List&lt;StateSpan&gt;)</returns>
-        System.Threading.Tasks.Task<ApiResponse<List<StateSpan>>> StateSpansGetIllnessWithHttpInfoAsync(DateTimeOffset? from = default, DateTimeOffset? to = default, System.Threading.CancellationToken cancellationToken = default);
+        /// <returns>Task of ApiResponse (PaginatedResponseOfStateSpan)</returns>
+        System.Threading.Tasks.Task<ApiResponse<PaginatedResponseOfStateSpan>> StateSpansGetIllnessWithHttpInfoAsync(DateTimeOffset? from = default, DateTimeOffset? to = default, int? limit = default, int? offset = default, string? sort = default, System.Threading.CancellationToken cancellationToken = default);
         /// <summary>
         /// Get override state spans
         /// </summary>
@@ -497,9 +583,12 @@ namespace NightscoutFoundation.Nocturne.Api
         /// <exception cref="NightscoutFoundation.Nocturne.Client.ApiException">Thrown when fails to make API call</exception>
         /// <param name="from"> (optional)</param>
         /// <param name="to"> (optional)</param>
+        /// <param name="limit"> (optional, default to 100)</param>
+        /// <param name="offset"> (optional, default to 0)</param>
+        /// <param name="sort"> (optional, default to &quot;timestamp_desc&quot;)</param>
         /// <param name="cancellationToken">Cancellation Token to cancel the request.</param>
-        /// <returns>Task of List&lt;StateSpan&gt;</returns>
-        System.Threading.Tasks.Task<List<StateSpan>> StateSpansGetOverridesAsync(DateTimeOffset? from = default, DateTimeOffset? to = default, System.Threading.CancellationToken cancellationToken = default);
+        /// <returns>Task of PaginatedResponseOfStateSpan</returns>
+        System.Threading.Tasks.Task<PaginatedResponseOfStateSpan> StateSpansGetOverridesAsync(DateTimeOffset? from = default, DateTimeOffset? to = default, int? limit = default, int? offset = default, string? sort = default, System.Threading.CancellationToken cancellationToken = default);
 
         /// <summary>
         /// Get override state spans
@@ -510,9 +599,12 @@ namespace NightscoutFoundation.Nocturne.Api
         /// <exception cref="NightscoutFoundation.Nocturne.Client.ApiException">Thrown when fails to make API call</exception>
         /// <param name="from"> (optional)</param>
         /// <param name="to"> (optional)</param>
+        /// <param name="limit"> (optional, default to 100)</param>
+        /// <param name="offset"> (optional, default to 0)</param>
+        /// <param name="sort"> (optional, default to &quot;timestamp_desc&quot;)</param>
         /// <param name="cancellationToken">Cancellation Token to cancel the request.</param>
-        /// <returns>Task of ApiResponse (List&lt;StateSpan&gt;)</returns>
-        System.Threading.Tasks.Task<ApiResponse<List<StateSpan>>> StateSpansGetOverridesWithHttpInfoAsync(DateTimeOffset? from = default, DateTimeOffset? to = default, System.Threading.CancellationToken cancellationToken = default);
+        /// <returns>Task of ApiResponse (PaginatedResponseOfStateSpan)</returns>
+        System.Threading.Tasks.Task<ApiResponse<PaginatedResponseOfStateSpan>> StateSpansGetOverridesWithHttpInfoAsync(DateTimeOffset? from = default, DateTimeOffset? to = default, int? limit = default, int? offset = default, string? sort = default, System.Threading.CancellationToken cancellationToken = default);
         /// <summary>
         /// Get profile state spans
         /// </summary>
@@ -522,9 +614,12 @@ namespace NightscoutFoundation.Nocturne.Api
         /// <exception cref="NightscoutFoundation.Nocturne.Client.ApiException">Thrown when fails to make API call</exception>
         /// <param name="from"> (optional)</param>
         /// <param name="to"> (optional)</param>
+        /// <param name="limit"> (optional, default to 100)</param>
+        /// <param name="offset"> (optional, default to 0)</param>
+        /// <param name="sort"> (optional, default to &quot;timestamp_desc&quot;)</param>
         /// <param name="cancellationToken">Cancellation Token to cancel the request.</param>
-        /// <returns>Task of List&lt;StateSpan&gt;</returns>
-        System.Threading.Tasks.Task<List<StateSpan>> StateSpansGetProfilesAsync(DateTimeOffset? from = default, DateTimeOffset? to = default, System.Threading.CancellationToken cancellationToken = default);
+        /// <returns>Task of PaginatedResponseOfStateSpan</returns>
+        System.Threading.Tasks.Task<PaginatedResponseOfStateSpan> StateSpansGetProfilesAsync(DateTimeOffset? from = default, DateTimeOffset? to = default, int? limit = default, int? offset = default, string? sort = default, System.Threading.CancellationToken cancellationToken = default);
 
         /// <summary>
         /// Get profile state spans
@@ -535,9 +630,12 @@ namespace NightscoutFoundation.Nocturne.Api
         /// <exception cref="NightscoutFoundation.Nocturne.Client.ApiException">Thrown when fails to make API call</exception>
         /// <param name="from"> (optional)</param>
         /// <param name="to"> (optional)</param>
+        /// <param name="limit"> (optional, default to 100)</param>
+        /// <param name="offset"> (optional, default to 0)</param>
+        /// <param name="sort"> (optional, default to &quot;timestamp_desc&quot;)</param>
         /// <param name="cancellationToken">Cancellation Token to cancel the request.</param>
-        /// <returns>Task of ApiResponse (List&lt;StateSpan&gt;)</returns>
-        System.Threading.Tasks.Task<ApiResponse<List<StateSpan>>> StateSpansGetProfilesWithHttpInfoAsync(DateTimeOffset? from = default, DateTimeOffset? to = default, System.Threading.CancellationToken cancellationToken = default);
+        /// <returns>Task of ApiResponse (PaginatedResponseOfStateSpan)</returns>
+        System.Threading.Tasks.Task<ApiResponse<PaginatedResponseOfStateSpan>> StateSpansGetProfilesWithHttpInfoAsync(DateTimeOffset? from = default, DateTimeOffset? to = default, int? limit = default, int? offset = default, string? sort = default, System.Threading.CancellationToken cancellationToken = default);
         /// <summary>
         /// Get pump mode state spans
         /// </summary>
@@ -547,9 +645,12 @@ namespace NightscoutFoundation.Nocturne.Api
         /// <exception cref="NightscoutFoundation.Nocturne.Client.ApiException">Thrown when fails to make API call</exception>
         /// <param name="from"> (optional)</param>
         /// <param name="to"> (optional)</param>
+        /// <param name="limit"> (optional, default to 100)</param>
+        /// <param name="offset"> (optional, default to 0)</param>
+        /// <param name="sort"> (optional, default to &quot;timestamp_desc&quot;)</param>
         /// <param name="cancellationToken">Cancellation Token to cancel the request.</param>
-        /// <returns>Task of List&lt;StateSpan&gt;</returns>
-        System.Threading.Tasks.Task<List<StateSpan>> StateSpansGetPumpModesAsync(DateTimeOffset? from = default, DateTimeOffset? to = default, System.Threading.CancellationToken cancellationToken = default);
+        /// <returns>Task of PaginatedResponseOfStateSpan</returns>
+        System.Threading.Tasks.Task<PaginatedResponseOfStateSpan> StateSpansGetPumpModesAsync(DateTimeOffset? from = default, DateTimeOffset? to = default, int? limit = default, int? offset = default, string? sort = default, System.Threading.CancellationToken cancellationToken = default);
 
         /// <summary>
         /// Get pump mode state spans
@@ -560,9 +661,12 @@ namespace NightscoutFoundation.Nocturne.Api
         /// <exception cref="NightscoutFoundation.Nocturne.Client.ApiException">Thrown when fails to make API call</exception>
         /// <param name="from"> (optional)</param>
         /// <param name="to"> (optional)</param>
+        /// <param name="limit"> (optional, default to 100)</param>
+        /// <param name="offset"> (optional, default to 0)</param>
+        /// <param name="sort"> (optional, default to &quot;timestamp_desc&quot;)</param>
         /// <param name="cancellationToken">Cancellation Token to cancel the request.</param>
-        /// <returns>Task of ApiResponse (List&lt;StateSpan&gt;)</returns>
-        System.Threading.Tasks.Task<ApiResponse<List<StateSpan>>> StateSpansGetPumpModesWithHttpInfoAsync(DateTimeOffset? from = default, DateTimeOffset? to = default, System.Threading.CancellationToken cancellationToken = default);
+        /// <returns>Task of ApiResponse (PaginatedResponseOfStateSpan)</returns>
+        System.Threading.Tasks.Task<ApiResponse<PaginatedResponseOfStateSpan>> StateSpansGetPumpModesWithHttpInfoAsync(DateTimeOffset? from = default, DateTimeOffset? to = default, int? limit = default, int? offset = default, string? sort = default, System.Threading.CancellationToken cancellationToken = default);
         /// <summary>
         /// Get sleep state spans (user-annotated sleep periods)
         /// </summary>
@@ -572,9 +676,12 @@ namespace NightscoutFoundation.Nocturne.Api
         /// <exception cref="NightscoutFoundation.Nocturne.Client.ApiException">Thrown when fails to make API call</exception>
         /// <param name="from"> (optional)</param>
         /// <param name="to"> (optional)</param>
+        /// <param name="limit"> (optional, default to 100)</param>
+        /// <param name="offset"> (optional, default to 0)</param>
+        /// <param name="sort"> (optional, default to &quot;timestamp_desc&quot;)</param>
         /// <param name="cancellationToken">Cancellation Token to cancel the request.</param>
-        /// <returns>Task of List&lt;StateSpan&gt;</returns>
-        System.Threading.Tasks.Task<List<StateSpan>> StateSpansGetSleepAsync(DateTimeOffset? from = default, DateTimeOffset? to = default, System.Threading.CancellationToken cancellationToken = default);
+        /// <returns>Task of PaginatedResponseOfStateSpan</returns>
+        System.Threading.Tasks.Task<PaginatedResponseOfStateSpan> StateSpansGetSleepAsync(DateTimeOffset? from = default, DateTimeOffset? to = default, int? limit = default, int? offset = default, string? sort = default, System.Threading.CancellationToken cancellationToken = default);
 
         /// <summary>
         /// Get sleep state spans (user-annotated sleep periods)
@@ -585,9 +692,12 @@ namespace NightscoutFoundation.Nocturne.Api
         /// <exception cref="NightscoutFoundation.Nocturne.Client.ApiException">Thrown when fails to make API call</exception>
         /// <param name="from"> (optional)</param>
         /// <param name="to"> (optional)</param>
+        /// <param name="limit"> (optional, default to 100)</param>
+        /// <param name="offset"> (optional, default to 0)</param>
+        /// <param name="sort"> (optional, default to &quot;timestamp_desc&quot;)</param>
         /// <param name="cancellationToken">Cancellation Token to cancel the request.</param>
-        /// <returns>Task of ApiResponse (List&lt;StateSpan&gt;)</returns>
-        System.Threading.Tasks.Task<ApiResponse<List<StateSpan>>> StateSpansGetSleepWithHttpInfoAsync(DateTimeOffset? from = default, DateTimeOffset? to = default, System.Threading.CancellationToken cancellationToken = default);
+        /// <returns>Task of ApiResponse (PaginatedResponseOfStateSpan)</returns>
+        System.Threading.Tasks.Task<ApiResponse<PaginatedResponseOfStateSpan>> StateSpansGetSleepWithHttpInfoAsync(DateTimeOffset? from = default, DateTimeOffset? to = default, int? limit = default, int? offset = default, string? sort = default, System.Threading.CancellationToken cancellationToken = default);
         /// <summary>
         /// Get a specific state span by ID
         /// </summary>
@@ -624,11 +734,12 @@ namespace NightscoutFoundation.Nocturne.Api
         /// <param name="to"> (optional)</param>
         /// <param name="source"> (optional)</param>
         /// <param name="active"> (optional)</param>
-        /// <param name="count"> (optional, default to 100)</param>
-        /// <param name="skip"> (optional, default to 0)</param>
+        /// <param name="limit"> (optional, default to 100)</param>
+        /// <param name="offset"> (optional, default to 0)</param>
+        /// <param name="sort"> (optional, default to &quot;timestamp_desc&quot;)</param>
         /// <param name="cancellationToken">Cancellation Token to cancel the request.</param>
-        /// <returns>Task of List&lt;StateSpan&gt;</returns>
-        System.Threading.Tasks.Task<List<StateSpan>> StateSpansGetStateSpansAsync(StateSpansGetStateSpansCategoryParameter? category = default, string? state = default, DateTimeOffset? from = default, DateTimeOffset? to = default, string? source = default, bool? active = default, int? count = default, int? skip = default, System.Threading.CancellationToken cancellationToken = default);
+        /// <returns>Task of PaginatedResponseOfStateSpan</returns>
+        System.Threading.Tasks.Task<PaginatedResponseOfStateSpan> StateSpansGetStateSpansAsync(StateSpansGetStateSpansCategoryParameter? category = default, string? state = default, DateTimeOffset? from = default, DateTimeOffset? to = default, string? source = default, bool? active = default, int? limit = default, int? offset = default, string? sort = default, System.Threading.CancellationToken cancellationToken = default);
 
         /// <summary>
         /// Query all state spans with optional filtering
@@ -643,11 +754,12 @@ namespace NightscoutFoundation.Nocturne.Api
         /// <param name="to"> (optional)</param>
         /// <param name="source"> (optional)</param>
         /// <param name="active"> (optional)</param>
-        /// <param name="count"> (optional, default to 100)</param>
-        /// <param name="skip"> (optional, default to 0)</param>
+        /// <param name="limit"> (optional, default to 100)</param>
+        /// <param name="offset"> (optional, default to 0)</param>
+        /// <param name="sort"> (optional, default to &quot;timestamp_desc&quot;)</param>
         /// <param name="cancellationToken">Cancellation Token to cancel the request.</param>
-        /// <returns>Task of ApiResponse (List&lt;StateSpan&gt;)</returns>
-        System.Threading.Tasks.Task<ApiResponse<List<StateSpan>>> StateSpansGetStateSpansWithHttpInfoAsync(StateSpansGetStateSpansCategoryParameter? category = default, string? state = default, DateTimeOffset? from = default, DateTimeOffset? to = default, string? source = default, bool? active = default, int? count = default, int? skip = default, System.Threading.CancellationToken cancellationToken = default);
+        /// <returns>Task of ApiResponse (PaginatedResponseOfStateSpan)</returns>
+        System.Threading.Tasks.Task<ApiResponse<PaginatedResponseOfStateSpan>> StateSpansGetStateSpansWithHttpInfoAsync(StateSpansGetStateSpansCategoryParameter? category = default, string? state = default, DateTimeOffset? from = default, DateTimeOffset? to = default, string? source = default, bool? active = default, int? limit = default, int? offset = default, string? sort = default, System.Threading.CancellationToken cancellationToken = default);
         /// <summary>
         /// Get temporary target state spans (AAPS temporary glucose targets)
         /// </summary>
@@ -657,9 +769,12 @@ namespace NightscoutFoundation.Nocturne.Api
         /// <exception cref="NightscoutFoundation.Nocturne.Client.ApiException">Thrown when fails to make API call</exception>
         /// <param name="from"> (optional)</param>
         /// <param name="to"> (optional)</param>
+        /// <param name="limit"> (optional, default to 100)</param>
+        /// <param name="offset"> (optional, default to 0)</param>
+        /// <param name="sort"> (optional, default to &quot;timestamp_desc&quot;)</param>
         /// <param name="cancellationToken">Cancellation Token to cancel the request.</param>
-        /// <returns>Task of List&lt;StateSpan&gt;</returns>
-        System.Threading.Tasks.Task<List<StateSpan>> StateSpansGetTemporaryTargetsAsync(DateTimeOffset? from = default, DateTimeOffset? to = default, System.Threading.CancellationToken cancellationToken = default);
+        /// <returns>Task of PaginatedResponseOfStateSpan</returns>
+        System.Threading.Tasks.Task<PaginatedResponseOfStateSpan> StateSpansGetTemporaryTargetsAsync(DateTimeOffset? from = default, DateTimeOffset? to = default, int? limit = default, int? offset = default, string? sort = default, System.Threading.CancellationToken cancellationToken = default);
 
         /// <summary>
         /// Get temporary target state spans (AAPS temporary glucose targets)
@@ -670,9 +785,12 @@ namespace NightscoutFoundation.Nocturne.Api
         /// <exception cref="NightscoutFoundation.Nocturne.Client.ApiException">Thrown when fails to make API call</exception>
         /// <param name="from"> (optional)</param>
         /// <param name="to"> (optional)</param>
+        /// <param name="limit"> (optional, default to 100)</param>
+        /// <param name="offset"> (optional, default to 0)</param>
+        /// <param name="sort"> (optional, default to &quot;timestamp_desc&quot;)</param>
         /// <param name="cancellationToken">Cancellation Token to cancel the request.</param>
-        /// <returns>Task of ApiResponse (List&lt;StateSpan&gt;)</returns>
-        System.Threading.Tasks.Task<ApiResponse<List<StateSpan>>> StateSpansGetTemporaryTargetsWithHttpInfoAsync(DateTimeOffset? from = default, DateTimeOffset? to = default, System.Threading.CancellationToken cancellationToken = default);
+        /// <returns>Task of ApiResponse (PaginatedResponseOfStateSpan)</returns>
+        System.Threading.Tasks.Task<ApiResponse<PaginatedResponseOfStateSpan>> StateSpansGetTemporaryTargetsWithHttpInfoAsync(DateTimeOffset? from = default, DateTimeOffset? to = default, int? limit = default, int? offset = default, string? sort = default, System.Threading.CancellationToken cancellationToken = default);
         /// <summary>
         /// Get travel state spans (user-annotated travel/timezone change periods)
         /// </summary>
@@ -682,9 +800,12 @@ namespace NightscoutFoundation.Nocturne.Api
         /// <exception cref="NightscoutFoundation.Nocturne.Client.ApiException">Thrown when fails to make API call</exception>
         /// <param name="from"> (optional)</param>
         /// <param name="to"> (optional)</param>
+        /// <param name="limit"> (optional, default to 100)</param>
+        /// <param name="offset"> (optional, default to 0)</param>
+        /// <param name="sort"> (optional, default to &quot;timestamp_desc&quot;)</param>
         /// <param name="cancellationToken">Cancellation Token to cancel the request.</param>
-        /// <returns>Task of List&lt;StateSpan&gt;</returns>
-        System.Threading.Tasks.Task<List<StateSpan>> StateSpansGetTravelAsync(DateTimeOffset? from = default, DateTimeOffset? to = default, System.Threading.CancellationToken cancellationToken = default);
+        /// <returns>Task of PaginatedResponseOfStateSpan</returns>
+        System.Threading.Tasks.Task<PaginatedResponseOfStateSpan> StateSpansGetTravelAsync(DateTimeOffset? from = default, DateTimeOffset? to = default, int? limit = default, int? offset = default, string? sort = default, System.Threading.CancellationToken cancellationToken = default);
 
         /// <summary>
         /// Get travel state spans (user-annotated travel/timezone change periods)
@@ -695,9 +816,12 @@ namespace NightscoutFoundation.Nocturne.Api
         /// <exception cref="NightscoutFoundation.Nocturne.Client.ApiException">Thrown when fails to make API call</exception>
         /// <param name="from"> (optional)</param>
         /// <param name="to"> (optional)</param>
+        /// <param name="limit"> (optional, default to 100)</param>
+        /// <param name="offset"> (optional, default to 0)</param>
+        /// <param name="sort"> (optional, default to &quot;timestamp_desc&quot;)</param>
         /// <param name="cancellationToken">Cancellation Token to cancel the request.</param>
-        /// <returns>Task of ApiResponse (List&lt;StateSpan&gt;)</returns>
-        System.Threading.Tasks.Task<ApiResponse<List<StateSpan>>> StateSpansGetTravelWithHttpInfoAsync(DateTimeOffset? from = default, DateTimeOffset? to = default, System.Threading.CancellationToken cancellationToken = default);
+        /// <returns>Task of ApiResponse (PaginatedResponseOfStateSpan)</returns>
+        System.Threading.Tasks.Task<ApiResponse<PaginatedResponseOfStateSpan>> StateSpansGetTravelWithHttpInfoAsync(DateTimeOffset? from = default, DateTimeOffset? to = default, int? limit = default, int? offset = default, string? sort = default, System.Threading.CancellationToken cancellationToken = default);
         /// <summary>
         /// Update an existing state span
         /// </summary>
@@ -1170,10 +1294,13 @@ namespace NightscoutFoundation.Nocturne.Api
         /// <exception cref="NightscoutFoundation.Nocturne.Client.ApiException">Thrown when fails to make API call</exception>
         /// <param name="from"> (optional)</param>
         /// <param name="to"> (optional)</param>
-        /// <returns>List&lt;StateSpan&gt;</returns>
-        public List<StateSpan> StateSpansGetActivities(DateTimeOffset? from = default, DateTimeOffset? to = default)
+        /// <param name="limit"> (optional, default to 100)</param>
+        /// <param name="offset"> (optional, default to 0)</param>
+        /// <param name="sort"> (optional, default to &quot;timestamp_desc&quot;)</param>
+        /// <returns>PaginatedResponseOfStateSpan</returns>
+        public PaginatedResponseOfStateSpan StateSpansGetActivities(DateTimeOffset? from = default, DateTimeOffset? to = default, int? limit = default, int? offset = default, string? sort = default)
         {
-            NightscoutFoundation.Nocturne.Client.ApiResponse<List<StateSpan>> localVarResponse = StateSpansGetActivitiesWithHttpInfo(from, to);
+            NightscoutFoundation.Nocturne.Client.ApiResponse<PaginatedResponseOfStateSpan> localVarResponse = StateSpansGetActivitiesWithHttpInfo(from, to, limit, offset, sort);
             return localVarResponse.Data;
         }
 
@@ -1183,8 +1310,11 @@ namespace NightscoutFoundation.Nocturne.Api
         /// <exception cref="NightscoutFoundation.Nocturne.Client.ApiException">Thrown when fails to make API call</exception>
         /// <param name="from"> (optional)</param>
         /// <param name="to"> (optional)</param>
-        /// <returns>ApiResponse of List&lt;StateSpan&gt;</returns>
-        public NightscoutFoundation.Nocturne.Client.ApiResponse<List<StateSpan>> StateSpansGetActivitiesWithHttpInfo(DateTimeOffset? from = default, DateTimeOffset? to = default)
+        /// <param name="limit"> (optional, default to 100)</param>
+        /// <param name="offset"> (optional, default to 0)</param>
+        /// <param name="sort"> (optional, default to &quot;timestamp_desc&quot;)</param>
+        /// <returns>ApiResponse of PaginatedResponseOfStateSpan</returns>
+        public NightscoutFoundation.Nocturne.Client.ApiResponse<PaginatedResponseOfStateSpan> StateSpansGetActivitiesWithHttpInfo(DateTimeOffset? from = default, DateTimeOffset? to = default, int? limit = default, int? offset = default, string? sort = default)
         {
             NightscoutFoundation.Nocturne.Client.RequestOptions localVarRequestOptions = new NightscoutFoundation.Nocturne.Client.RequestOptions();
 
@@ -1210,10 +1340,22 @@ namespace NightscoutFoundation.Nocturne.Api
             {
                 localVarRequestOptions.QueryParameters.Add(NightscoutFoundation.Nocturne.Client.ClientUtils.ParameterToMultiMap("", "to", to));
             }
+            if (limit != null)
+            {
+                localVarRequestOptions.QueryParameters.Add(NightscoutFoundation.Nocturne.Client.ClientUtils.ParameterToMultiMap("", "limit", limit));
+            }
+            if (offset != null)
+            {
+                localVarRequestOptions.QueryParameters.Add(NightscoutFoundation.Nocturne.Client.ClientUtils.ParameterToMultiMap("", "offset", offset));
+            }
+            if (sort != null)
+            {
+                localVarRequestOptions.QueryParameters.Add(NightscoutFoundation.Nocturne.Client.ClientUtils.ParameterToMultiMap("", "sort", sort));
+            }
 
 
             // make the HTTP request
-            var localVarResponse = this.Client.Get<List<StateSpan>>("/api/v4/state-spans/activities", localVarRequestOptions, this.Configuration);
+            var localVarResponse = this.Client.Get<PaginatedResponseOfStateSpan>("/api/v4/state-spans/activities", localVarRequestOptions, this.Configuration);
 
             if (this.ExceptionFactory != null)
             {
@@ -1230,11 +1372,14 @@ namespace NightscoutFoundation.Nocturne.Api
         /// <exception cref="NightscoutFoundation.Nocturne.Client.ApiException">Thrown when fails to make API call</exception>
         /// <param name="from"> (optional)</param>
         /// <param name="to"> (optional)</param>
+        /// <param name="limit"> (optional, default to 100)</param>
+        /// <param name="offset"> (optional, default to 0)</param>
+        /// <param name="sort"> (optional, default to &quot;timestamp_desc&quot;)</param>
         /// <param name="cancellationToken">Cancellation Token to cancel the request.</param>
-        /// <returns>Task of List&lt;StateSpan&gt;</returns>
-        public async System.Threading.Tasks.Task<List<StateSpan>> StateSpansGetActivitiesAsync(DateTimeOffset? from = default, DateTimeOffset? to = default, System.Threading.CancellationToken cancellationToken = default)
+        /// <returns>Task of PaginatedResponseOfStateSpan</returns>
+        public async System.Threading.Tasks.Task<PaginatedResponseOfStateSpan> StateSpansGetActivitiesAsync(DateTimeOffset? from = default, DateTimeOffset? to = default, int? limit = default, int? offset = default, string? sort = default, System.Threading.CancellationToken cancellationToken = default)
         {
-            NightscoutFoundation.Nocturne.Client.ApiResponse<List<StateSpan>> localVarResponse = await StateSpansGetActivitiesWithHttpInfoAsync(from, to, cancellationToken).ConfigureAwait(false);
+            NightscoutFoundation.Nocturne.Client.ApiResponse<PaginatedResponseOfStateSpan> localVarResponse = await StateSpansGetActivitiesWithHttpInfoAsync(from, to, limit, offset, sort, cancellationToken).ConfigureAwait(false);
             return localVarResponse.Data;
         }
 
@@ -1244,9 +1389,12 @@ namespace NightscoutFoundation.Nocturne.Api
         /// <exception cref="NightscoutFoundation.Nocturne.Client.ApiException">Thrown when fails to make API call</exception>
         /// <param name="from"> (optional)</param>
         /// <param name="to"> (optional)</param>
+        /// <param name="limit"> (optional, default to 100)</param>
+        /// <param name="offset"> (optional, default to 0)</param>
+        /// <param name="sort"> (optional, default to &quot;timestamp_desc&quot;)</param>
         /// <param name="cancellationToken">Cancellation Token to cancel the request.</param>
-        /// <returns>Task of ApiResponse (List&lt;StateSpan&gt;)</returns>
-        public async System.Threading.Tasks.Task<NightscoutFoundation.Nocturne.Client.ApiResponse<List<StateSpan>>> StateSpansGetActivitiesWithHttpInfoAsync(DateTimeOffset? from = default, DateTimeOffset? to = default, System.Threading.CancellationToken cancellationToken = default)
+        /// <returns>Task of ApiResponse (PaginatedResponseOfStateSpan)</returns>
+        public async System.Threading.Tasks.Task<NightscoutFoundation.Nocturne.Client.ApiResponse<PaginatedResponseOfStateSpan>> StateSpansGetActivitiesWithHttpInfoAsync(DateTimeOffset? from = default, DateTimeOffset? to = default, int? limit = default, int? offset = default, string? sort = default, System.Threading.CancellationToken cancellationToken = default)
         {
 
             NightscoutFoundation.Nocturne.Client.RequestOptions localVarRequestOptions = new NightscoutFoundation.Nocturne.Client.RequestOptions();
@@ -1274,11 +1422,23 @@ namespace NightscoutFoundation.Nocturne.Api
             {
                 localVarRequestOptions.QueryParameters.Add(NightscoutFoundation.Nocturne.Client.ClientUtils.ParameterToMultiMap("", "to", to));
             }
+            if (limit != null)
+            {
+                localVarRequestOptions.QueryParameters.Add(NightscoutFoundation.Nocturne.Client.ClientUtils.ParameterToMultiMap("", "limit", limit));
+            }
+            if (offset != null)
+            {
+                localVarRequestOptions.QueryParameters.Add(NightscoutFoundation.Nocturne.Client.ClientUtils.ParameterToMultiMap("", "offset", offset));
+            }
+            if (sort != null)
+            {
+                localVarRequestOptions.QueryParameters.Add(NightscoutFoundation.Nocturne.Client.ClientUtils.ParameterToMultiMap("", "sort", sort));
+            }
 
 
             // make the HTTP request
 
-            var localVarResponse = await this.AsynchronousClient.GetAsync<List<StateSpan>>("/api/v4/state-spans/activities", localVarRequestOptions, this.Configuration, cancellationToken).ConfigureAwait(false);
+            var localVarResponse = await this.AsynchronousClient.GetAsync<PaginatedResponseOfStateSpan>("/api/v4/state-spans/activities", localVarRequestOptions, this.Configuration, cancellationToken).ConfigureAwait(false);
 
             if (this.ExceptionFactory != null)
             {
@@ -1295,10 +1455,13 @@ namespace NightscoutFoundation.Nocturne.Api
         /// <exception cref="NightscoutFoundation.Nocturne.Client.ApiException">Thrown when fails to make API call</exception>
         /// <param name="from"> (optional)</param>
         /// <param name="to"> (optional)</param>
-        /// <returns>List&lt;StateSpan&gt;</returns>
-        public List<StateSpan> StateSpansGetConnectivity(DateTimeOffset? from = default, DateTimeOffset? to = default)
+        /// <param name="limit"> (optional, default to 100)</param>
+        /// <param name="offset"> (optional, default to 0)</param>
+        /// <param name="sort"> (optional, default to &quot;timestamp_desc&quot;)</param>
+        /// <returns>PaginatedResponseOfStateSpan</returns>
+        public PaginatedResponseOfStateSpan StateSpansGetConnectivity(DateTimeOffset? from = default, DateTimeOffset? to = default, int? limit = default, int? offset = default, string? sort = default)
         {
-            NightscoutFoundation.Nocturne.Client.ApiResponse<List<StateSpan>> localVarResponse = StateSpansGetConnectivityWithHttpInfo(from, to);
+            NightscoutFoundation.Nocturne.Client.ApiResponse<PaginatedResponseOfStateSpan> localVarResponse = StateSpansGetConnectivityWithHttpInfo(from, to, limit, offset, sort);
             return localVarResponse.Data;
         }
 
@@ -1308,8 +1471,11 @@ namespace NightscoutFoundation.Nocturne.Api
         /// <exception cref="NightscoutFoundation.Nocturne.Client.ApiException">Thrown when fails to make API call</exception>
         /// <param name="from"> (optional)</param>
         /// <param name="to"> (optional)</param>
-        /// <returns>ApiResponse of List&lt;StateSpan&gt;</returns>
-        public NightscoutFoundation.Nocturne.Client.ApiResponse<List<StateSpan>> StateSpansGetConnectivityWithHttpInfo(DateTimeOffset? from = default, DateTimeOffset? to = default)
+        /// <param name="limit"> (optional, default to 100)</param>
+        /// <param name="offset"> (optional, default to 0)</param>
+        /// <param name="sort"> (optional, default to &quot;timestamp_desc&quot;)</param>
+        /// <returns>ApiResponse of PaginatedResponseOfStateSpan</returns>
+        public NightscoutFoundation.Nocturne.Client.ApiResponse<PaginatedResponseOfStateSpan> StateSpansGetConnectivityWithHttpInfo(DateTimeOffset? from = default, DateTimeOffset? to = default, int? limit = default, int? offset = default, string? sort = default)
         {
             NightscoutFoundation.Nocturne.Client.RequestOptions localVarRequestOptions = new NightscoutFoundation.Nocturne.Client.RequestOptions();
 
@@ -1335,10 +1501,22 @@ namespace NightscoutFoundation.Nocturne.Api
             {
                 localVarRequestOptions.QueryParameters.Add(NightscoutFoundation.Nocturne.Client.ClientUtils.ParameterToMultiMap("", "to", to));
             }
+            if (limit != null)
+            {
+                localVarRequestOptions.QueryParameters.Add(NightscoutFoundation.Nocturne.Client.ClientUtils.ParameterToMultiMap("", "limit", limit));
+            }
+            if (offset != null)
+            {
+                localVarRequestOptions.QueryParameters.Add(NightscoutFoundation.Nocturne.Client.ClientUtils.ParameterToMultiMap("", "offset", offset));
+            }
+            if (sort != null)
+            {
+                localVarRequestOptions.QueryParameters.Add(NightscoutFoundation.Nocturne.Client.ClientUtils.ParameterToMultiMap("", "sort", sort));
+            }
 
 
             // make the HTTP request
-            var localVarResponse = this.Client.Get<List<StateSpan>>("/api/v4/state-spans/connectivity", localVarRequestOptions, this.Configuration);
+            var localVarResponse = this.Client.Get<PaginatedResponseOfStateSpan>("/api/v4/state-spans/connectivity", localVarRequestOptions, this.Configuration);
 
             if (this.ExceptionFactory != null)
             {
@@ -1355,11 +1533,14 @@ namespace NightscoutFoundation.Nocturne.Api
         /// <exception cref="NightscoutFoundation.Nocturne.Client.ApiException">Thrown when fails to make API call</exception>
         /// <param name="from"> (optional)</param>
         /// <param name="to"> (optional)</param>
+        /// <param name="limit"> (optional, default to 100)</param>
+        /// <param name="offset"> (optional, default to 0)</param>
+        /// <param name="sort"> (optional, default to &quot;timestamp_desc&quot;)</param>
         /// <param name="cancellationToken">Cancellation Token to cancel the request.</param>
-        /// <returns>Task of List&lt;StateSpan&gt;</returns>
-        public async System.Threading.Tasks.Task<List<StateSpan>> StateSpansGetConnectivityAsync(DateTimeOffset? from = default, DateTimeOffset? to = default, System.Threading.CancellationToken cancellationToken = default)
+        /// <returns>Task of PaginatedResponseOfStateSpan</returns>
+        public async System.Threading.Tasks.Task<PaginatedResponseOfStateSpan> StateSpansGetConnectivityAsync(DateTimeOffset? from = default, DateTimeOffset? to = default, int? limit = default, int? offset = default, string? sort = default, System.Threading.CancellationToken cancellationToken = default)
         {
-            NightscoutFoundation.Nocturne.Client.ApiResponse<List<StateSpan>> localVarResponse = await StateSpansGetConnectivityWithHttpInfoAsync(from, to, cancellationToken).ConfigureAwait(false);
+            NightscoutFoundation.Nocturne.Client.ApiResponse<PaginatedResponseOfStateSpan> localVarResponse = await StateSpansGetConnectivityWithHttpInfoAsync(from, to, limit, offset, sort, cancellationToken).ConfigureAwait(false);
             return localVarResponse.Data;
         }
 
@@ -1369,9 +1550,12 @@ namespace NightscoutFoundation.Nocturne.Api
         /// <exception cref="NightscoutFoundation.Nocturne.Client.ApiException">Thrown when fails to make API call</exception>
         /// <param name="from"> (optional)</param>
         /// <param name="to"> (optional)</param>
+        /// <param name="limit"> (optional, default to 100)</param>
+        /// <param name="offset"> (optional, default to 0)</param>
+        /// <param name="sort"> (optional, default to &quot;timestamp_desc&quot;)</param>
         /// <param name="cancellationToken">Cancellation Token to cancel the request.</param>
-        /// <returns>Task of ApiResponse (List&lt;StateSpan&gt;)</returns>
-        public async System.Threading.Tasks.Task<NightscoutFoundation.Nocturne.Client.ApiResponse<List<StateSpan>>> StateSpansGetConnectivityWithHttpInfoAsync(DateTimeOffset? from = default, DateTimeOffset? to = default, System.Threading.CancellationToken cancellationToken = default)
+        /// <returns>Task of ApiResponse (PaginatedResponseOfStateSpan)</returns>
+        public async System.Threading.Tasks.Task<NightscoutFoundation.Nocturne.Client.ApiResponse<PaginatedResponseOfStateSpan>> StateSpansGetConnectivityWithHttpInfoAsync(DateTimeOffset? from = default, DateTimeOffset? to = default, int? limit = default, int? offset = default, string? sort = default, System.Threading.CancellationToken cancellationToken = default)
         {
 
             NightscoutFoundation.Nocturne.Client.RequestOptions localVarRequestOptions = new NightscoutFoundation.Nocturne.Client.RequestOptions();
@@ -1399,11 +1583,23 @@ namespace NightscoutFoundation.Nocturne.Api
             {
                 localVarRequestOptions.QueryParameters.Add(NightscoutFoundation.Nocturne.Client.ClientUtils.ParameterToMultiMap("", "to", to));
             }
+            if (limit != null)
+            {
+                localVarRequestOptions.QueryParameters.Add(NightscoutFoundation.Nocturne.Client.ClientUtils.ParameterToMultiMap("", "limit", limit));
+            }
+            if (offset != null)
+            {
+                localVarRequestOptions.QueryParameters.Add(NightscoutFoundation.Nocturne.Client.ClientUtils.ParameterToMultiMap("", "offset", offset));
+            }
+            if (sort != null)
+            {
+                localVarRequestOptions.QueryParameters.Add(NightscoutFoundation.Nocturne.Client.ClientUtils.ParameterToMultiMap("", "sort", sort));
+            }
 
 
             // make the HTTP request
 
-            var localVarResponse = await this.AsynchronousClient.GetAsync<List<StateSpan>>("/api/v4/state-spans/connectivity", localVarRequestOptions, this.Configuration, cancellationToken).ConfigureAwait(false);
+            var localVarResponse = await this.AsynchronousClient.GetAsync<PaginatedResponseOfStateSpan>("/api/v4/state-spans/connectivity", localVarRequestOptions, this.Configuration, cancellationToken).ConfigureAwait(false);
 
             if (this.ExceptionFactory != null)
             {
@@ -1420,10 +1616,13 @@ namespace NightscoutFoundation.Nocturne.Api
         /// <exception cref="NightscoutFoundation.Nocturne.Client.ApiException">Thrown when fails to make API call</exception>
         /// <param name="from"> (optional)</param>
         /// <param name="to"> (optional)</param>
-        /// <returns>List&lt;StateSpan&gt;</returns>
-        public List<StateSpan> StateSpansGetExercise(DateTimeOffset? from = default, DateTimeOffset? to = default)
+        /// <param name="limit"> (optional, default to 100)</param>
+        /// <param name="offset"> (optional, default to 0)</param>
+        /// <param name="sort"> (optional, default to &quot;timestamp_desc&quot;)</param>
+        /// <returns>PaginatedResponseOfStateSpan</returns>
+        public PaginatedResponseOfStateSpan StateSpansGetExercise(DateTimeOffset? from = default, DateTimeOffset? to = default, int? limit = default, int? offset = default, string? sort = default)
         {
-            NightscoutFoundation.Nocturne.Client.ApiResponse<List<StateSpan>> localVarResponse = StateSpansGetExerciseWithHttpInfo(from, to);
+            NightscoutFoundation.Nocturne.Client.ApiResponse<PaginatedResponseOfStateSpan> localVarResponse = StateSpansGetExerciseWithHttpInfo(from, to, limit, offset, sort);
             return localVarResponse.Data;
         }
 
@@ -1433,8 +1632,11 @@ namespace NightscoutFoundation.Nocturne.Api
         /// <exception cref="NightscoutFoundation.Nocturne.Client.ApiException">Thrown when fails to make API call</exception>
         /// <param name="from"> (optional)</param>
         /// <param name="to"> (optional)</param>
-        /// <returns>ApiResponse of List&lt;StateSpan&gt;</returns>
-        public NightscoutFoundation.Nocturne.Client.ApiResponse<List<StateSpan>> StateSpansGetExerciseWithHttpInfo(DateTimeOffset? from = default, DateTimeOffset? to = default)
+        /// <param name="limit"> (optional, default to 100)</param>
+        /// <param name="offset"> (optional, default to 0)</param>
+        /// <param name="sort"> (optional, default to &quot;timestamp_desc&quot;)</param>
+        /// <returns>ApiResponse of PaginatedResponseOfStateSpan</returns>
+        public NightscoutFoundation.Nocturne.Client.ApiResponse<PaginatedResponseOfStateSpan> StateSpansGetExerciseWithHttpInfo(DateTimeOffset? from = default, DateTimeOffset? to = default, int? limit = default, int? offset = default, string? sort = default)
         {
             NightscoutFoundation.Nocturne.Client.RequestOptions localVarRequestOptions = new NightscoutFoundation.Nocturne.Client.RequestOptions();
 
@@ -1460,10 +1662,22 @@ namespace NightscoutFoundation.Nocturne.Api
             {
                 localVarRequestOptions.QueryParameters.Add(NightscoutFoundation.Nocturne.Client.ClientUtils.ParameterToMultiMap("", "to", to));
             }
+            if (limit != null)
+            {
+                localVarRequestOptions.QueryParameters.Add(NightscoutFoundation.Nocturne.Client.ClientUtils.ParameterToMultiMap("", "limit", limit));
+            }
+            if (offset != null)
+            {
+                localVarRequestOptions.QueryParameters.Add(NightscoutFoundation.Nocturne.Client.ClientUtils.ParameterToMultiMap("", "offset", offset));
+            }
+            if (sort != null)
+            {
+                localVarRequestOptions.QueryParameters.Add(NightscoutFoundation.Nocturne.Client.ClientUtils.ParameterToMultiMap("", "sort", sort));
+            }
 
 
             // make the HTTP request
-            var localVarResponse = this.Client.Get<List<StateSpan>>("/api/v4/state-spans/exercise", localVarRequestOptions, this.Configuration);
+            var localVarResponse = this.Client.Get<PaginatedResponseOfStateSpan>("/api/v4/state-spans/exercise", localVarRequestOptions, this.Configuration);
 
             if (this.ExceptionFactory != null)
             {
@@ -1480,11 +1694,14 @@ namespace NightscoutFoundation.Nocturne.Api
         /// <exception cref="NightscoutFoundation.Nocturne.Client.ApiException">Thrown when fails to make API call</exception>
         /// <param name="from"> (optional)</param>
         /// <param name="to"> (optional)</param>
+        /// <param name="limit"> (optional, default to 100)</param>
+        /// <param name="offset"> (optional, default to 0)</param>
+        /// <param name="sort"> (optional, default to &quot;timestamp_desc&quot;)</param>
         /// <param name="cancellationToken">Cancellation Token to cancel the request.</param>
-        /// <returns>Task of List&lt;StateSpan&gt;</returns>
-        public async System.Threading.Tasks.Task<List<StateSpan>> StateSpansGetExerciseAsync(DateTimeOffset? from = default, DateTimeOffset? to = default, System.Threading.CancellationToken cancellationToken = default)
+        /// <returns>Task of PaginatedResponseOfStateSpan</returns>
+        public async System.Threading.Tasks.Task<PaginatedResponseOfStateSpan> StateSpansGetExerciseAsync(DateTimeOffset? from = default, DateTimeOffset? to = default, int? limit = default, int? offset = default, string? sort = default, System.Threading.CancellationToken cancellationToken = default)
         {
-            NightscoutFoundation.Nocturne.Client.ApiResponse<List<StateSpan>> localVarResponse = await StateSpansGetExerciseWithHttpInfoAsync(from, to, cancellationToken).ConfigureAwait(false);
+            NightscoutFoundation.Nocturne.Client.ApiResponse<PaginatedResponseOfStateSpan> localVarResponse = await StateSpansGetExerciseWithHttpInfoAsync(from, to, limit, offset, sort, cancellationToken).ConfigureAwait(false);
             return localVarResponse.Data;
         }
 
@@ -1494,9 +1711,12 @@ namespace NightscoutFoundation.Nocturne.Api
         /// <exception cref="NightscoutFoundation.Nocturne.Client.ApiException">Thrown when fails to make API call</exception>
         /// <param name="from"> (optional)</param>
         /// <param name="to"> (optional)</param>
+        /// <param name="limit"> (optional, default to 100)</param>
+        /// <param name="offset"> (optional, default to 0)</param>
+        /// <param name="sort"> (optional, default to &quot;timestamp_desc&quot;)</param>
         /// <param name="cancellationToken">Cancellation Token to cancel the request.</param>
-        /// <returns>Task of ApiResponse (List&lt;StateSpan&gt;)</returns>
-        public async System.Threading.Tasks.Task<NightscoutFoundation.Nocturne.Client.ApiResponse<List<StateSpan>>> StateSpansGetExerciseWithHttpInfoAsync(DateTimeOffset? from = default, DateTimeOffset? to = default, System.Threading.CancellationToken cancellationToken = default)
+        /// <returns>Task of ApiResponse (PaginatedResponseOfStateSpan)</returns>
+        public async System.Threading.Tasks.Task<NightscoutFoundation.Nocturne.Client.ApiResponse<PaginatedResponseOfStateSpan>> StateSpansGetExerciseWithHttpInfoAsync(DateTimeOffset? from = default, DateTimeOffset? to = default, int? limit = default, int? offset = default, string? sort = default, System.Threading.CancellationToken cancellationToken = default)
         {
 
             NightscoutFoundation.Nocturne.Client.RequestOptions localVarRequestOptions = new NightscoutFoundation.Nocturne.Client.RequestOptions();
@@ -1524,11 +1744,23 @@ namespace NightscoutFoundation.Nocturne.Api
             {
                 localVarRequestOptions.QueryParameters.Add(NightscoutFoundation.Nocturne.Client.ClientUtils.ParameterToMultiMap("", "to", to));
             }
+            if (limit != null)
+            {
+                localVarRequestOptions.QueryParameters.Add(NightscoutFoundation.Nocturne.Client.ClientUtils.ParameterToMultiMap("", "limit", limit));
+            }
+            if (offset != null)
+            {
+                localVarRequestOptions.QueryParameters.Add(NightscoutFoundation.Nocturne.Client.ClientUtils.ParameterToMultiMap("", "offset", offset));
+            }
+            if (sort != null)
+            {
+                localVarRequestOptions.QueryParameters.Add(NightscoutFoundation.Nocturne.Client.ClientUtils.ParameterToMultiMap("", "sort", sort));
+            }
 
 
             // make the HTTP request
 
-            var localVarResponse = await this.AsynchronousClient.GetAsync<List<StateSpan>>("/api/v4/state-spans/exercise", localVarRequestOptions, this.Configuration, cancellationToken).ConfigureAwait(false);
+            var localVarResponse = await this.AsynchronousClient.GetAsync<PaginatedResponseOfStateSpan>("/api/v4/state-spans/exercise", localVarRequestOptions, this.Configuration, cancellationToken).ConfigureAwait(false);
 
             if (this.ExceptionFactory != null)
             {
@@ -1545,10 +1777,13 @@ namespace NightscoutFoundation.Nocturne.Api
         /// <exception cref="NightscoutFoundation.Nocturne.Client.ApiException">Thrown when fails to make API call</exception>
         /// <param name="from"> (optional)</param>
         /// <param name="to"> (optional)</param>
-        /// <returns>List&lt;StateSpan&gt;</returns>
-        public List<StateSpan> StateSpansGetIllness(DateTimeOffset? from = default, DateTimeOffset? to = default)
+        /// <param name="limit"> (optional, default to 100)</param>
+        /// <param name="offset"> (optional, default to 0)</param>
+        /// <param name="sort"> (optional, default to &quot;timestamp_desc&quot;)</param>
+        /// <returns>PaginatedResponseOfStateSpan</returns>
+        public PaginatedResponseOfStateSpan StateSpansGetIllness(DateTimeOffset? from = default, DateTimeOffset? to = default, int? limit = default, int? offset = default, string? sort = default)
         {
-            NightscoutFoundation.Nocturne.Client.ApiResponse<List<StateSpan>> localVarResponse = StateSpansGetIllnessWithHttpInfo(from, to);
+            NightscoutFoundation.Nocturne.Client.ApiResponse<PaginatedResponseOfStateSpan> localVarResponse = StateSpansGetIllnessWithHttpInfo(from, to, limit, offset, sort);
             return localVarResponse.Data;
         }
 
@@ -1558,8 +1793,11 @@ namespace NightscoutFoundation.Nocturne.Api
         /// <exception cref="NightscoutFoundation.Nocturne.Client.ApiException">Thrown when fails to make API call</exception>
         /// <param name="from"> (optional)</param>
         /// <param name="to"> (optional)</param>
-        /// <returns>ApiResponse of List&lt;StateSpan&gt;</returns>
-        public NightscoutFoundation.Nocturne.Client.ApiResponse<List<StateSpan>> StateSpansGetIllnessWithHttpInfo(DateTimeOffset? from = default, DateTimeOffset? to = default)
+        /// <param name="limit"> (optional, default to 100)</param>
+        /// <param name="offset"> (optional, default to 0)</param>
+        /// <param name="sort"> (optional, default to &quot;timestamp_desc&quot;)</param>
+        /// <returns>ApiResponse of PaginatedResponseOfStateSpan</returns>
+        public NightscoutFoundation.Nocturne.Client.ApiResponse<PaginatedResponseOfStateSpan> StateSpansGetIllnessWithHttpInfo(DateTimeOffset? from = default, DateTimeOffset? to = default, int? limit = default, int? offset = default, string? sort = default)
         {
             NightscoutFoundation.Nocturne.Client.RequestOptions localVarRequestOptions = new NightscoutFoundation.Nocturne.Client.RequestOptions();
 
@@ -1585,10 +1823,22 @@ namespace NightscoutFoundation.Nocturne.Api
             {
                 localVarRequestOptions.QueryParameters.Add(NightscoutFoundation.Nocturne.Client.ClientUtils.ParameterToMultiMap("", "to", to));
             }
+            if (limit != null)
+            {
+                localVarRequestOptions.QueryParameters.Add(NightscoutFoundation.Nocturne.Client.ClientUtils.ParameterToMultiMap("", "limit", limit));
+            }
+            if (offset != null)
+            {
+                localVarRequestOptions.QueryParameters.Add(NightscoutFoundation.Nocturne.Client.ClientUtils.ParameterToMultiMap("", "offset", offset));
+            }
+            if (sort != null)
+            {
+                localVarRequestOptions.QueryParameters.Add(NightscoutFoundation.Nocturne.Client.ClientUtils.ParameterToMultiMap("", "sort", sort));
+            }
 
 
             // make the HTTP request
-            var localVarResponse = this.Client.Get<List<StateSpan>>("/api/v4/state-spans/illness", localVarRequestOptions, this.Configuration);
+            var localVarResponse = this.Client.Get<PaginatedResponseOfStateSpan>("/api/v4/state-spans/illness", localVarRequestOptions, this.Configuration);
 
             if (this.ExceptionFactory != null)
             {
@@ -1605,11 +1855,14 @@ namespace NightscoutFoundation.Nocturne.Api
         /// <exception cref="NightscoutFoundation.Nocturne.Client.ApiException">Thrown when fails to make API call</exception>
         /// <param name="from"> (optional)</param>
         /// <param name="to"> (optional)</param>
+        /// <param name="limit"> (optional, default to 100)</param>
+        /// <param name="offset"> (optional, default to 0)</param>
+        /// <param name="sort"> (optional, default to &quot;timestamp_desc&quot;)</param>
         /// <param name="cancellationToken">Cancellation Token to cancel the request.</param>
-        /// <returns>Task of List&lt;StateSpan&gt;</returns>
-        public async System.Threading.Tasks.Task<List<StateSpan>> StateSpansGetIllnessAsync(DateTimeOffset? from = default, DateTimeOffset? to = default, System.Threading.CancellationToken cancellationToken = default)
+        /// <returns>Task of PaginatedResponseOfStateSpan</returns>
+        public async System.Threading.Tasks.Task<PaginatedResponseOfStateSpan> StateSpansGetIllnessAsync(DateTimeOffset? from = default, DateTimeOffset? to = default, int? limit = default, int? offset = default, string? sort = default, System.Threading.CancellationToken cancellationToken = default)
         {
-            NightscoutFoundation.Nocturne.Client.ApiResponse<List<StateSpan>> localVarResponse = await StateSpansGetIllnessWithHttpInfoAsync(from, to, cancellationToken).ConfigureAwait(false);
+            NightscoutFoundation.Nocturne.Client.ApiResponse<PaginatedResponseOfStateSpan> localVarResponse = await StateSpansGetIllnessWithHttpInfoAsync(from, to, limit, offset, sort, cancellationToken).ConfigureAwait(false);
             return localVarResponse.Data;
         }
 
@@ -1619,9 +1872,12 @@ namespace NightscoutFoundation.Nocturne.Api
         /// <exception cref="NightscoutFoundation.Nocturne.Client.ApiException">Thrown when fails to make API call</exception>
         /// <param name="from"> (optional)</param>
         /// <param name="to"> (optional)</param>
+        /// <param name="limit"> (optional, default to 100)</param>
+        /// <param name="offset"> (optional, default to 0)</param>
+        /// <param name="sort"> (optional, default to &quot;timestamp_desc&quot;)</param>
         /// <param name="cancellationToken">Cancellation Token to cancel the request.</param>
-        /// <returns>Task of ApiResponse (List&lt;StateSpan&gt;)</returns>
-        public async System.Threading.Tasks.Task<NightscoutFoundation.Nocturne.Client.ApiResponse<List<StateSpan>>> StateSpansGetIllnessWithHttpInfoAsync(DateTimeOffset? from = default, DateTimeOffset? to = default, System.Threading.CancellationToken cancellationToken = default)
+        /// <returns>Task of ApiResponse (PaginatedResponseOfStateSpan)</returns>
+        public async System.Threading.Tasks.Task<NightscoutFoundation.Nocturne.Client.ApiResponse<PaginatedResponseOfStateSpan>> StateSpansGetIllnessWithHttpInfoAsync(DateTimeOffset? from = default, DateTimeOffset? to = default, int? limit = default, int? offset = default, string? sort = default, System.Threading.CancellationToken cancellationToken = default)
         {
 
             NightscoutFoundation.Nocturne.Client.RequestOptions localVarRequestOptions = new NightscoutFoundation.Nocturne.Client.RequestOptions();
@@ -1649,11 +1905,23 @@ namespace NightscoutFoundation.Nocturne.Api
             {
                 localVarRequestOptions.QueryParameters.Add(NightscoutFoundation.Nocturne.Client.ClientUtils.ParameterToMultiMap("", "to", to));
             }
+            if (limit != null)
+            {
+                localVarRequestOptions.QueryParameters.Add(NightscoutFoundation.Nocturne.Client.ClientUtils.ParameterToMultiMap("", "limit", limit));
+            }
+            if (offset != null)
+            {
+                localVarRequestOptions.QueryParameters.Add(NightscoutFoundation.Nocturne.Client.ClientUtils.ParameterToMultiMap("", "offset", offset));
+            }
+            if (sort != null)
+            {
+                localVarRequestOptions.QueryParameters.Add(NightscoutFoundation.Nocturne.Client.ClientUtils.ParameterToMultiMap("", "sort", sort));
+            }
 
 
             // make the HTTP request
 
-            var localVarResponse = await this.AsynchronousClient.GetAsync<List<StateSpan>>("/api/v4/state-spans/illness", localVarRequestOptions, this.Configuration, cancellationToken).ConfigureAwait(false);
+            var localVarResponse = await this.AsynchronousClient.GetAsync<PaginatedResponseOfStateSpan>("/api/v4/state-spans/illness", localVarRequestOptions, this.Configuration, cancellationToken).ConfigureAwait(false);
 
             if (this.ExceptionFactory != null)
             {
@@ -1670,10 +1938,13 @@ namespace NightscoutFoundation.Nocturne.Api
         /// <exception cref="NightscoutFoundation.Nocturne.Client.ApiException">Thrown when fails to make API call</exception>
         /// <param name="from"> (optional)</param>
         /// <param name="to"> (optional)</param>
-        /// <returns>List&lt;StateSpan&gt;</returns>
-        public List<StateSpan> StateSpansGetOverrides(DateTimeOffset? from = default, DateTimeOffset? to = default)
+        /// <param name="limit"> (optional, default to 100)</param>
+        /// <param name="offset"> (optional, default to 0)</param>
+        /// <param name="sort"> (optional, default to &quot;timestamp_desc&quot;)</param>
+        /// <returns>PaginatedResponseOfStateSpan</returns>
+        public PaginatedResponseOfStateSpan StateSpansGetOverrides(DateTimeOffset? from = default, DateTimeOffset? to = default, int? limit = default, int? offset = default, string? sort = default)
         {
-            NightscoutFoundation.Nocturne.Client.ApiResponse<List<StateSpan>> localVarResponse = StateSpansGetOverridesWithHttpInfo(from, to);
+            NightscoutFoundation.Nocturne.Client.ApiResponse<PaginatedResponseOfStateSpan> localVarResponse = StateSpansGetOverridesWithHttpInfo(from, to, limit, offset, sort);
             return localVarResponse.Data;
         }
 
@@ -1683,8 +1954,11 @@ namespace NightscoutFoundation.Nocturne.Api
         /// <exception cref="NightscoutFoundation.Nocturne.Client.ApiException">Thrown when fails to make API call</exception>
         /// <param name="from"> (optional)</param>
         /// <param name="to"> (optional)</param>
-        /// <returns>ApiResponse of List&lt;StateSpan&gt;</returns>
-        public NightscoutFoundation.Nocturne.Client.ApiResponse<List<StateSpan>> StateSpansGetOverridesWithHttpInfo(DateTimeOffset? from = default, DateTimeOffset? to = default)
+        /// <param name="limit"> (optional, default to 100)</param>
+        /// <param name="offset"> (optional, default to 0)</param>
+        /// <param name="sort"> (optional, default to &quot;timestamp_desc&quot;)</param>
+        /// <returns>ApiResponse of PaginatedResponseOfStateSpan</returns>
+        public NightscoutFoundation.Nocturne.Client.ApiResponse<PaginatedResponseOfStateSpan> StateSpansGetOverridesWithHttpInfo(DateTimeOffset? from = default, DateTimeOffset? to = default, int? limit = default, int? offset = default, string? sort = default)
         {
             NightscoutFoundation.Nocturne.Client.RequestOptions localVarRequestOptions = new NightscoutFoundation.Nocturne.Client.RequestOptions();
 
@@ -1710,10 +1984,22 @@ namespace NightscoutFoundation.Nocturne.Api
             {
                 localVarRequestOptions.QueryParameters.Add(NightscoutFoundation.Nocturne.Client.ClientUtils.ParameterToMultiMap("", "to", to));
             }
+            if (limit != null)
+            {
+                localVarRequestOptions.QueryParameters.Add(NightscoutFoundation.Nocturne.Client.ClientUtils.ParameterToMultiMap("", "limit", limit));
+            }
+            if (offset != null)
+            {
+                localVarRequestOptions.QueryParameters.Add(NightscoutFoundation.Nocturne.Client.ClientUtils.ParameterToMultiMap("", "offset", offset));
+            }
+            if (sort != null)
+            {
+                localVarRequestOptions.QueryParameters.Add(NightscoutFoundation.Nocturne.Client.ClientUtils.ParameterToMultiMap("", "sort", sort));
+            }
 
 
             // make the HTTP request
-            var localVarResponse = this.Client.Get<List<StateSpan>>("/api/v4/state-spans/overrides", localVarRequestOptions, this.Configuration);
+            var localVarResponse = this.Client.Get<PaginatedResponseOfStateSpan>("/api/v4/state-spans/overrides", localVarRequestOptions, this.Configuration);
 
             if (this.ExceptionFactory != null)
             {
@@ -1730,11 +2016,14 @@ namespace NightscoutFoundation.Nocturne.Api
         /// <exception cref="NightscoutFoundation.Nocturne.Client.ApiException">Thrown when fails to make API call</exception>
         /// <param name="from"> (optional)</param>
         /// <param name="to"> (optional)</param>
+        /// <param name="limit"> (optional, default to 100)</param>
+        /// <param name="offset"> (optional, default to 0)</param>
+        /// <param name="sort"> (optional, default to &quot;timestamp_desc&quot;)</param>
         /// <param name="cancellationToken">Cancellation Token to cancel the request.</param>
-        /// <returns>Task of List&lt;StateSpan&gt;</returns>
-        public async System.Threading.Tasks.Task<List<StateSpan>> StateSpansGetOverridesAsync(DateTimeOffset? from = default, DateTimeOffset? to = default, System.Threading.CancellationToken cancellationToken = default)
+        /// <returns>Task of PaginatedResponseOfStateSpan</returns>
+        public async System.Threading.Tasks.Task<PaginatedResponseOfStateSpan> StateSpansGetOverridesAsync(DateTimeOffset? from = default, DateTimeOffset? to = default, int? limit = default, int? offset = default, string? sort = default, System.Threading.CancellationToken cancellationToken = default)
         {
-            NightscoutFoundation.Nocturne.Client.ApiResponse<List<StateSpan>> localVarResponse = await StateSpansGetOverridesWithHttpInfoAsync(from, to, cancellationToken).ConfigureAwait(false);
+            NightscoutFoundation.Nocturne.Client.ApiResponse<PaginatedResponseOfStateSpan> localVarResponse = await StateSpansGetOverridesWithHttpInfoAsync(from, to, limit, offset, sort, cancellationToken).ConfigureAwait(false);
             return localVarResponse.Data;
         }
 
@@ -1744,9 +2033,12 @@ namespace NightscoutFoundation.Nocturne.Api
         /// <exception cref="NightscoutFoundation.Nocturne.Client.ApiException">Thrown when fails to make API call</exception>
         /// <param name="from"> (optional)</param>
         /// <param name="to"> (optional)</param>
+        /// <param name="limit"> (optional, default to 100)</param>
+        /// <param name="offset"> (optional, default to 0)</param>
+        /// <param name="sort"> (optional, default to &quot;timestamp_desc&quot;)</param>
         /// <param name="cancellationToken">Cancellation Token to cancel the request.</param>
-        /// <returns>Task of ApiResponse (List&lt;StateSpan&gt;)</returns>
-        public async System.Threading.Tasks.Task<NightscoutFoundation.Nocturne.Client.ApiResponse<List<StateSpan>>> StateSpansGetOverridesWithHttpInfoAsync(DateTimeOffset? from = default, DateTimeOffset? to = default, System.Threading.CancellationToken cancellationToken = default)
+        /// <returns>Task of ApiResponse (PaginatedResponseOfStateSpan)</returns>
+        public async System.Threading.Tasks.Task<NightscoutFoundation.Nocturne.Client.ApiResponse<PaginatedResponseOfStateSpan>> StateSpansGetOverridesWithHttpInfoAsync(DateTimeOffset? from = default, DateTimeOffset? to = default, int? limit = default, int? offset = default, string? sort = default, System.Threading.CancellationToken cancellationToken = default)
         {
 
             NightscoutFoundation.Nocturne.Client.RequestOptions localVarRequestOptions = new NightscoutFoundation.Nocturne.Client.RequestOptions();
@@ -1774,11 +2066,23 @@ namespace NightscoutFoundation.Nocturne.Api
             {
                 localVarRequestOptions.QueryParameters.Add(NightscoutFoundation.Nocturne.Client.ClientUtils.ParameterToMultiMap("", "to", to));
             }
+            if (limit != null)
+            {
+                localVarRequestOptions.QueryParameters.Add(NightscoutFoundation.Nocturne.Client.ClientUtils.ParameterToMultiMap("", "limit", limit));
+            }
+            if (offset != null)
+            {
+                localVarRequestOptions.QueryParameters.Add(NightscoutFoundation.Nocturne.Client.ClientUtils.ParameterToMultiMap("", "offset", offset));
+            }
+            if (sort != null)
+            {
+                localVarRequestOptions.QueryParameters.Add(NightscoutFoundation.Nocturne.Client.ClientUtils.ParameterToMultiMap("", "sort", sort));
+            }
 
 
             // make the HTTP request
 
-            var localVarResponse = await this.AsynchronousClient.GetAsync<List<StateSpan>>("/api/v4/state-spans/overrides", localVarRequestOptions, this.Configuration, cancellationToken).ConfigureAwait(false);
+            var localVarResponse = await this.AsynchronousClient.GetAsync<PaginatedResponseOfStateSpan>("/api/v4/state-spans/overrides", localVarRequestOptions, this.Configuration, cancellationToken).ConfigureAwait(false);
 
             if (this.ExceptionFactory != null)
             {
@@ -1795,10 +2099,13 @@ namespace NightscoutFoundation.Nocturne.Api
         /// <exception cref="NightscoutFoundation.Nocturne.Client.ApiException">Thrown when fails to make API call</exception>
         /// <param name="from"> (optional)</param>
         /// <param name="to"> (optional)</param>
-        /// <returns>List&lt;StateSpan&gt;</returns>
-        public List<StateSpan> StateSpansGetProfiles(DateTimeOffset? from = default, DateTimeOffset? to = default)
+        /// <param name="limit"> (optional, default to 100)</param>
+        /// <param name="offset"> (optional, default to 0)</param>
+        /// <param name="sort"> (optional, default to &quot;timestamp_desc&quot;)</param>
+        /// <returns>PaginatedResponseOfStateSpan</returns>
+        public PaginatedResponseOfStateSpan StateSpansGetProfiles(DateTimeOffset? from = default, DateTimeOffset? to = default, int? limit = default, int? offset = default, string? sort = default)
         {
-            NightscoutFoundation.Nocturne.Client.ApiResponse<List<StateSpan>> localVarResponse = StateSpansGetProfilesWithHttpInfo(from, to);
+            NightscoutFoundation.Nocturne.Client.ApiResponse<PaginatedResponseOfStateSpan> localVarResponse = StateSpansGetProfilesWithHttpInfo(from, to, limit, offset, sort);
             return localVarResponse.Data;
         }
 
@@ -1808,8 +2115,11 @@ namespace NightscoutFoundation.Nocturne.Api
         /// <exception cref="NightscoutFoundation.Nocturne.Client.ApiException">Thrown when fails to make API call</exception>
         /// <param name="from"> (optional)</param>
         /// <param name="to"> (optional)</param>
-        /// <returns>ApiResponse of List&lt;StateSpan&gt;</returns>
-        public NightscoutFoundation.Nocturne.Client.ApiResponse<List<StateSpan>> StateSpansGetProfilesWithHttpInfo(DateTimeOffset? from = default, DateTimeOffset? to = default)
+        /// <param name="limit"> (optional, default to 100)</param>
+        /// <param name="offset"> (optional, default to 0)</param>
+        /// <param name="sort"> (optional, default to &quot;timestamp_desc&quot;)</param>
+        /// <returns>ApiResponse of PaginatedResponseOfStateSpan</returns>
+        public NightscoutFoundation.Nocturne.Client.ApiResponse<PaginatedResponseOfStateSpan> StateSpansGetProfilesWithHttpInfo(DateTimeOffset? from = default, DateTimeOffset? to = default, int? limit = default, int? offset = default, string? sort = default)
         {
             NightscoutFoundation.Nocturne.Client.RequestOptions localVarRequestOptions = new NightscoutFoundation.Nocturne.Client.RequestOptions();
 
@@ -1835,10 +2145,22 @@ namespace NightscoutFoundation.Nocturne.Api
             {
                 localVarRequestOptions.QueryParameters.Add(NightscoutFoundation.Nocturne.Client.ClientUtils.ParameterToMultiMap("", "to", to));
             }
+            if (limit != null)
+            {
+                localVarRequestOptions.QueryParameters.Add(NightscoutFoundation.Nocturne.Client.ClientUtils.ParameterToMultiMap("", "limit", limit));
+            }
+            if (offset != null)
+            {
+                localVarRequestOptions.QueryParameters.Add(NightscoutFoundation.Nocturne.Client.ClientUtils.ParameterToMultiMap("", "offset", offset));
+            }
+            if (sort != null)
+            {
+                localVarRequestOptions.QueryParameters.Add(NightscoutFoundation.Nocturne.Client.ClientUtils.ParameterToMultiMap("", "sort", sort));
+            }
 
 
             // make the HTTP request
-            var localVarResponse = this.Client.Get<List<StateSpan>>("/api/v4/state-spans/profiles", localVarRequestOptions, this.Configuration);
+            var localVarResponse = this.Client.Get<PaginatedResponseOfStateSpan>("/api/v4/state-spans/profiles", localVarRequestOptions, this.Configuration);
 
             if (this.ExceptionFactory != null)
             {
@@ -1855,11 +2177,14 @@ namespace NightscoutFoundation.Nocturne.Api
         /// <exception cref="NightscoutFoundation.Nocturne.Client.ApiException">Thrown when fails to make API call</exception>
         /// <param name="from"> (optional)</param>
         /// <param name="to"> (optional)</param>
+        /// <param name="limit"> (optional, default to 100)</param>
+        /// <param name="offset"> (optional, default to 0)</param>
+        /// <param name="sort"> (optional, default to &quot;timestamp_desc&quot;)</param>
         /// <param name="cancellationToken">Cancellation Token to cancel the request.</param>
-        /// <returns>Task of List&lt;StateSpan&gt;</returns>
-        public async System.Threading.Tasks.Task<List<StateSpan>> StateSpansGetProfilesAsync(DateTimeOffset? from = default, DateTimeOffset? to = default, System.Threading.CancellationToken cancellationToken = default)
+        /// <returns>Task of PaginatedResponseOfStateSpan</returns>
+        public async System.Threading.Tasks.Task<PaginatedResponseOfStateSpan> StateSpansGetProfilesAsync(DateTimeOffset? from = default, DateTimeOffset? to = default, int? limit = default, int? offset = default, string? sort = default, System.Threading.CancellationToken cancellationToken = default)
         {
-            NightscoutFoundation.Nocturne.Client.ApiResponse<List<StateSpan>> localVarResponse = await StateSpansGetProfilesWithHttpInfoAsync(from, to, cancellationToken).ConfigureAwait(false);
+            NightscoutFoundation.Nocturne.Client.ApiResponse<PaginatedResponseOfStateSpan> localVarResponse = await StateSpansGetProfilesWithHttpInfoAsync(from, to, limit, offset, sort, cancellationToken).ConfigureAwait(false);
             return localVarResponse.Data;
         }
 
@@ -1869,9 +2194,12 @@ namespace NightscoutFoundation.Nocturne.Api
         /// <exception cref="NightscoutFoundation.Nocturne.Client.ApiException">Thrown when fails to make API call</exception>
         /// <param name="from"> (optional)</param>
         /// <param name="to"> (optional)</param>
+        /// <param name="limit"> (optional, default to 100)</param>
+        /// <param name="offset"> (optional, default to 0)</param>
+        /// <param name="sort"> (optional, default to &quot;timestamp_desc&quot;)</param>
         /// <param name="cancellationToken">Cancellation Token to cancel the request.</param>
-        /// <returns>Task of ApiResponse (List&lt;StateSpan&gt;)</returns>
-        public async System.Threading.Tasks.Task<NightscoutFoundation.Nocturne.Client.ApiResponse<List<StateSpan>>> StateSpansGetProfilesWithHttpInfoAsync(DateTimeOffset? from = default, DateTimeOffset? to = default, System.Threading.CancellationToken cancellationToken = default)
+        /// <returns>Task of ApiResponse (PaginatedResponseOfStateSpan)</returns>
+        public async System.Threading.Tasks.Task<NightscoutFoundation.Nocturne.Client.ApiResponse<PaginatedResponseOfStateSpan>> StateSpansGetProfilesWithHttpInfoAsync(DateTimeOffset? from = default, DateTimeOffset? to = default, int? limit = default, int? offset = default, string? sort = default, System.Threading.CancellationToken cancellationToken = default)
         {
 
             NightscoutFoundation.Nocturne.Client.RequestOptions localVarRequestOptions = new NightscoutFoundation.Nocturne.Client.RequestOptions();
@@ -1899,11 +2227,23 @@ namespace NightscoutFoundation.Nocturne.Api
             {
                 localVarRequestOptions.QueryParameters.Add(NightscoutFoundation.Nocturne.Client.ClientUtils.ParameterToMultiMap("", "to", to));
             }
+            if (limit != null)
+            {
+                localVarRequestOptions.QueryParameters.Add(NightscoutFoundation.Nocturne.Client.ClientUtils.ParameterToMultiMap("", "limit", limit));
+            }
+            if (offset != null)
+            {
+                localVarRequestOptions.QueryParameters.Add(NightscoutFoundation.Nocturne.Client.ClientUtils.ParameterToMultiMap("", "offset", offset));
+            }
+            if (sort != null)
+            {
+                localVarRequestOptions.QueryParameters.Add(NightscoutFoundation.Nocturne.Client.ClientUtils.ParameterToMultiMap("", "sort", sort));
+            }
 
 
             // make the HTTP request
 
-            var localVarResponse = await this.AsynchronousClient.GetAsync<List<StateSpan>>("/api/v4/state-spans/profiles", localVarRequestOptions, this.Configuration, cancellationToken).ConfigureAwait(false);
+            var localVarResponse = await this.AsynchronousClient.GetAsync<PaginatedResponseOfStateSpan>("/api/v4/state-spans/profiles", localVarRequestOptions, this.Configuration, cancellationToken).ConfigureAwait(false);
 
             if (this.ExceptionFactory != null)
             {
@@ -1920,10 +2260,13 @@ namespace NightscoutFoundation.Nocturne.Api
         /// <exception cref="NightscoutFoundation.Nocturne.Client.ApiException">Thrown when fails to make API call</exception>
         /// <param name="from"> (optional)</param>
         /// <param name="to"> (optional)</param>
-        /// <returns>List&lt;StateSpan&gt;</returns>
-        public List<StateSpan> StateSpansGetPumpModes(DateTimeOffset? from = default, DateTimeOffset? to = default)
+        /// <param name="limit"> (optional, default to 100)</param>
+        /// <param name="offset"> (optional, default to 0)</param>
+        /// <param name="sort"> (optional, default to &quot;timestamp_desc&quot;)</param>
+        /// <returns>PaginatedResponseOfStateSpan</returns>
+        public PaginatedResponseOfStateSpan StateSpansGetPumpModes(DateTimeOffset? from = default, DateTimeOffset? to = default, int? limit = default, int? offset = default, string? sort = default)
         {
-            NightscoutFoundation.Nocturne.Client.ApiResponse<List<StateSpan>> localVarResponse = StateSpansGetPumpModesWithHttpInfo(from, to);
+            NightscoutFoundation.Nocturne.Client.ApiResponse<PaginatedResponseOfStateSpan> localVarResponse = StateSpansGetPumpModesWithHttpInfo(from, to, limit, offset, sort);
             return localVarResponse.Data;
         }
 
@@ -1933,8 +2276,11 @@ namespace NightscoutFoundation.Nocturne.Api
         /// <exception cref="NightscoutFoundation.Nocturne.Client.ApiException">Thrown when fails to make API call</exception>
         /// <param name="from"> (optional)</param>
         /// <param name="to"> (optional)</param>
-        /// <returns>ApiResponse of List&lt;StateSpan&gt;</returns>
-        public NightscoutFoundation.Nocturne.Client.ApiResponse<List<StateSpan>> StateSpansGetPumpModesWithHttpInfo(DateTimeOffset? from = default, DateTimeOffset? to = default)
+        /// <param name="limit"> (optional, default to 100)</param>
+        /// <param name="offset"> (optional, default to 0)</param>
+        /// <param name="sort"> (optional, default to &quot;timestamp_desc&quot;)</param>
+        /// <returns>ApiResponse of PaginatedResponseOfStateSpan</returns>
+        public NightscoutFoundation.Nocturne.Client.ApiResponse<PaginatedResponseOfStateSpan> StateSpansGetPumpModesWithHttpInfo(DateTimeOffset? from = default, DateTimeOffset? to = default, int? limit = default, int? offset = default, string? sort = default)
         {
             NightscoutFoundation.Nocturne.Client.RequestOptions localVarRequestOptions = new NightscoutFoundation.Nocturne.Client.RequestOptions();
 
@@ -1960,10 +2306,22 @@ namespace NightscoutFoundation.Nocturne.Api
             {
                 localVarRequestOptions.QueryParameters.Add(NightscoutFoundation.Nocturne.Client.ClientUtils.ParameterToMultiMap("", "to", to));
             }
+            if (limit != null)
+            {
+                localVarRequestOptions.QueryParameters.Add(NightscoutFoundation.Nocturne.Client.ClientUtils.ParameterToMultiMap("", "limit", limit));
+            }
+            if (offset != null)
+            {
+                localVarRequestOptions.QueryParameters.Add(NightscoutFoundation.Nocturne.Client.ClientUtils.ParameterToMultiMap("", "offset", offset));
+            }
+            if (sort != null)
+            {
+                localVarRequestOptions.QueryParameters.Add(NightscoutFoundation.Nocturne.Client.ClientUtils.ParameterToMultiMap("", "sort", sort));
+            }
 
 
             // make the HTTP request
-            var localVarResponse = this.Client.Get<List<StateSpan>>("/api/v4/state-spans/pump-modes", localVarRequestOptions, this.Configuration);
+            var localVarResponse = this.Client.Get<PaginatedResponseOfStateSpan>("/api/v4/state-spans/pump-modes", localVarRequestOptions, this.Configuration);
 
             if (this.ExceptionFactory != null)
             {
@@ -1980,11 +2338,14 @@ namespace NightscoutFoundation.Nocturne.Api
         /// <exception cref="NightscoutFoundation.Nocturne.Client.ApiException">Thrown when fails to make API call</exception>
         /// <param name="from"> (optional)</param>
         /// <param name="to"> (optional)</param>
+        /// <param name="limit"> (optional, default to 100)</param>
+        /// <param name="offset"> (optional, default to 0)</param>
+        /// <param name="sort"> (optional, default to &quot;timestamp_desc&quot;)</param>
         /// <param name="cancellationToken">Cancellation Token to cancel the request.</param>
-        /// <returns>Task of List&lt;StateSpan&gt;</returns>
-        public async System.Threading.Tasks.Task<List<StateSpan>> StateSpansGetPumpModesAsync(DateTimeOffset? from = default, DateTimeOffset? to = default, System.Threading.CancellationToken cancellationToken = default)
+        /// <returns>Task of PaginatedResponseOfStateSpan</returns>
+        public async System.Threading.Tasks.Task<PaginatedResponseOfStateSpan> StateSpansGetPumpModesAsync(DateTimeOffset? from = default, DateTimeOffset? to = default, int? limit = default, int? offset = default, string? sort = default, System.Threading.CancellationToken cancellationToken = default)
         {
-            NightscoutFoundation.Nocturne.Client.ApiResponse<List<StateSpan>> localVarResponse = await StateSpansGetPumpModesWithHttpInfoAsync(from, to, cancellationToken).ConfigureAwait(false);
+            NightscoutFoundation.Nocturne.Client.ApiResponse<PaginatedResponseOfStateSpan> localVarResponse = await StateSpansGetPumpModesWithHttpInfoAsync(from, to, limit, offset, sort, cancellationToken).ConfigureAwait(false);
             return localVarResponse.Data;
         }
 
@@ -1994,9 +2355,12 @@ namespace NightscoutFoundation.Nocturne.Api
         /// <exception cref="NightscoutFoundation.Nocturne.Client.ApiException">Thrown when fails to make API call</exception>
         /// <param name="from"> (optional)</param>
         /// <param name="to"> (optional)</param>
+        /// <param name="limit"> (optional, default to 100)</param>
+        /// <param name="offset"> (optional, default to 0)</param>
+        /// <param name="sort"> (optional, default to &quot;timestamp_desc&quot;)</param>
         /// <param name="cancellationToken">Cancellation Token to cancel the request.</param>
-        /// <returns>Task of ApiResponse (List&lt;StateSpan&gt;)</returns>
-        public async System.Threading.Tasks.Task<NightscoutFoundation.Nocturne.Client.ApiResponse<List<StateSpan>>> StateSpansGetPumpModesWithHttpInfoAsync(DateTimeOffset? from = default, DateTimeOffset? to = default, System.Threading.CancellationToken cancellationToken = default)
+        /// <returns>Task of ApiResponse (PaginatedResponseOfStateSpan)</returns>
+        public async System.Threading.Tasks.Task<NightscoutFoundation.Nocturne.Client.ApiResponse<PaginatedResponseOfStateSpan>> StateSpansGetPumpModesWithHttpInfoAsync(DateTimeOffset? from = default, DateTimeOffset? to = default, int? limit = default, int? offset = default, string? sort = default, System.Threading.CancellationToken cancellationToken = default)
         {
 
             NightscoutFoundation.Nocturne.Client.RequestOptions localVarRequestOptions = new NightscoutFoundation.Nocturne.Client.RequestOptions();
@@ -2024,11 +2388,23 @@ namespace NightscoutFoundation.Nocturne.Api
             {
                 localVarRequestOptions.QueryParameters.Add(NightscoutFoundation.Nocturne.Client.ClientUtils.ParameterToMultiMap("", "to", to));
             }
+            if (limit != null)
+            {
+                localVarRequestOptions.QueryParameters.Add(NightscoutFoundation.Nocturne.Client.ClientUtils.ParameterToMultiMap("", "limit", limit));
+            }
+            if (offset != null)
+            {
+                localVarRequestOptions.QueryParameters.Add(NightscoutFoundation.Nocturne.Client.ClientUtils.ParameterToMultiMap("", "offset", offset));
+            }
+            if (sort != null)
+            {
+                localVarRequestOptions.QueryParameters.Add(NightscoutFoundation.Nocturne.Client.ClientUtils.ParameterToMultiMap("", "sort", sort));
+            }
 
 
             // make the HTTP request
 
-            var localVarResponse = await this.AsynchronousClient.GetAsync<List<StateSpan>>("/api/v4/state-spans/pump-modes", localVarRequestOptions, this.Configuration, cancellationToken).ConfigureAwait(false);
+            var localVarResponse = await this.AsynchronousClient.GetAsync<PaginatedResponseOfStateSpan>("/api/v4/state-spans/pump-modes", localVarRequestOptions, this.Configuration, cancellationToken).ConfigureAwait(false);
 
             if (this.ExceptionFactory != null)
             {
@@ -2045,10 +2421,13 @@ namespace NightscoutFoundation.Nocturne.Api
         /// <exception cref="NightscoutFoundation.Nocturne.Client.ApiException">Thrown when fails to make API call</exception>
         /// <param name="from"> (optional)</param>
         /// <param name="to"> (optional)</param>
-        /// <returns>List&lt;StateSpan&gt;</returns>
-        public List<StateSpan> StateSpansGetSleep(DateTimeOffset? from = default, DateTimeOffset? to = default)
+        /// <param name="limit"> (optional, default to 100)</param>
+        /// <param name="offset"> (optional, default to 0)</param>
+        /// <param name="sort"> (optional, default to &quot;timestamp_desc&quot;)</param>
+        /// <returns>PaginatedResponseOfStateSpan</returns>
+        public PaginatedResponseOfStateSpan StateSpansGetSleep(DateTimeOffset? from = default, DateTimeOffset? to = default, int? limit = default, int? offset = default, string? sort = default)
         {
-            NightscoutFoundation.Nocturne.Client.ApiResponse<List<StateSpan>> localVarResponse = StateSpansGetSleepWithHttpInfo(from, to);
+            NightscoutFoundation.Nocturne.Client.ApiResponse<PaginatedResponseOfStateSpan> localVarResponse = StateSpansGetSleepWithHttpInfo(from, to, limit, offset, sort);
             return localVarResponse.Data;
         }
 
@@ -2058,8 +2437,11 @@ namespace NightscoutFoundation.Nocturne.Api
         /// <exception cref="NightscoutFoundation.Nocturne.Client.ApiException">Thrown when fails to make API call</exception>
         /// <param name="from"> (optional)</param>
         /// <param name="to"> (optional)</param>
-        /// <returns>ApiResponse of List&lt;StateSpan&gt;</returns>
-        public NightscoutFoundation.Nocturne.Client.ApiResponse<List<StateSpan>> StateSpansGetSleepWithHttpInfo(DateTimeOffset? from = default, DateTimeOffset? to = default)
+        /// <param name="limit"> (optional, default to 100)</param>
+        /// <param name="offset"> (optional, default to 0)</param>
+        /// <param name="sort"> (optional, default to &quot;timestamp_desc&quot;)</param>
+        /// <returns>ApiResponse of PaginatedResponseOfStateSpan</returns>
+        public NightscoutFoundation.Nocturne.Client.ApiResponse<PaginatedResponseOfStateSpan> StateSpansGetSleepWithHttpInfo(DateTimeOffset? from = default, DateTimeOffset? to = default, int? limit = default, int? offset = default, string? sort = default)
         {
             NightscoutFoundation.Nocturne.Client.RequestOptions localVarRequestOptions = new NightscoutFoundation.Nocturne.Client.RequestOptions();
 
@@ -2085,10 +2467,22 @@ namespace NightscoutFoundation.Nocturne.Api
             {
                 localVarRequestOptions.QueryParameters.Add(NightscoutFoundation.Nocturne.Client.ClientUtils.ParameterToMultiMap("", "to", to));
             }
+            if (limit != null)
+            {
+                localVarRequestOptions.QueryParameters.Add(NightscoutFoundation.Nocturne.Client.ClientUtils.ParameterToMultiMap("", "limit", limit));
+            }
+            if (offset != null)
+            {
+                localVarRequestOptions.QueryParameters.Add(NightscoutFoundation.Nocturne.Client.ClientUtils.ParameterToMultiMap("", "offset", offset));
+            }
+            if (sort != null)
+            {
+                localVarRequestOptions.QueryParameters.Add(NightscoutFoundation.Nocturne.Client.ClientUtils.ParameterToMultiMap("", "sort", sort));
+            }
 
 
             // make the HTTP request
-            var localVarResponse = this.Client.Get<List<StateSpan>>("/api/v4/state-spans/sleep", localVarRequestOptions, this.Configuration);
+            var localVarResponse = this.Client.Get<PaginatedResponseOfStateSpan>("/api/v4/state-spans/sleep", localVarRequestOptions, this.Configuration);
 
             if (this.ExceptionFactory != null)
             {
@@ -2105,11 +2499,14 @@ namespace NightscoutFoundation.Nocturne.Api
         /// <exception cref="NightscoutFoundation.Nocturne.Client.ApiException">Thrown when fails to make API call</exception>
         /// <param name="from"> (optional)</param>
         /// <param name="to"> (optional)</param>
+        /// <param name="limit"> (optional, default to 100)</param>
+        /// <param name="offset"> (optional, default to 0)</param>
+        /// <param name="sort"> (optional, default to &quot;timestamp_desc&quot;)</param>
         /// <param name="cancellationToken">Cancellation Token to cancel the request.</param>
-        /// <returns>Task of List&lt;StateSpan&gt;</returns>
-        public async System.Threading.Tasks.Task<List<StateSpan>> StateSpansGetSleepAsync(DateTimeOffset? from = default, DateTimeOffset? to = default, System.Threading.CancellationToken cancellationToken = default)
+        /// <returns>Task of PaginatedResponseOfStateSpan</returns>
+        public async System.Threading.Tasks.Task<PaginatedResponseOfStateSpan> StateSpansGetSleepAsync(DateTimeOffset? from = default, DateTimeOffset? to = default, int? limit = default, int? offset = default, string? sort = default, System.Threading.CancellationToken cancellationToken = default)
         {
-            NightscoutFoundation.Nocturne.Client.ApiResponse<List<StateSpan>> localVarResponse = await StateSpansGetSleepWithHttpInfoAsync(from, to, cancellationToken).ConfigureAwait(false);
+            NightscoutFoundation.Nocturne.Client.ApiResponse<PaginatedResponseOfStateSpan> localVarResponse = await StateSpansGetSleepWithHttpInfoAsync(from, to, limit, offset, sort, cancellationToken).ConfigureAwait(false);
             return localVarResponse.Data;
         }
 
@@ -2119,9 +2516,12 @@ namespace NightscoutFoundation.Nocturne.Api
         /// <exception cref="NightscoutFoundation.Nocturne.Client.ApiException">Thrown when fails to make API call</exception>
         /// <param name="from"> (optional)</param>
         /// <param name="to"> (optional)</param>
+        /// <param name="limit"> (optional, default to 100)</param>
+        /// <param name="offset"> (optional, default to 0)</param>
+        /// <param name="sort"> (optional, default to &quot;timestamp_desc&quot;)</param>
         /// <param name="cancellationToken">Cancellation Token to cancel the request.</param>
-        /// <returns>Task of ApiResponse (List&lt;StateSpan&gt;)</returns>
-        public async System.Threading.Tasks.Task<NightscoutFoundation.Nocturne.Client.ApiResponse<List<StateSpan>>> StateSpansGetSleepWithHttpInfoAsync(DateTimeOffset? from = default, DateTimeOffset? to = default, System.Threading.CancellationToken cancellationToken = default)
+        /// <returns>Task of ApiResponse (PaginatedResponseOfStateSpan)</returns>
+        public async System.Threading.Tasks.Task<NightscoutFoundation.Nocturne.Client.ApiResponse<PaginatedResponseOfStateSpan>> StateSpansGetSleepWithHttpInfoAsync(DateTimeOffset? from = default, DateTimeOffset? to = default, int? limit = default, int? offset = default, string? sort = default, System.Threading.CancellationToken cancellationToken = default)
         {
 
             NightscoutFoundation.Nocturne.Client.RequestOptions localVarRequestOptions = new NightscoutFoundation.Nocturne.Client.RequestOptions();
@@ -2149,11 +2549,23 @@ namespace NightscoutFoundation.Nocturne.Api
             {
                 localVarRequestOptions.QueryParameters.Add(NightscoutFoundation.Nocturne.Client.ClientUtils.ParameterToMultiMap("", "to", to));
             }
+            if (limit != null)
+            {
+                localVarRequestOptions.QueryParameters.Add(NightscoutFoundation.Nocturne.Client.ClientUtils.ParameterToMultiMap("", "limit", limit));
+            }
+            if (offset != null)
+            {
+                localVarRequestOptions.QueryParameters.Add(NightscoutFoundation.Nocturne.Client.ClientUtils.ParameterToMultiMap("", "offset", offset));
+            }
+            if (sort != null)
+            {
+                localVarRequestOptions.QueryParameters.Add(NightscoutFoundation.Nocturne.Client.ClientUtils.ParameterToMultiMap("", "sort", sort));
+            }
 
 
             // make the HTTP request
 
-            var localVarResponse = await this.AsynchronousClient.GetAsync<List<StateSpan>>("/api/v4/state-spans/sleep", localVarRequestOptions, this.Configuration, cancellationToken).ConfigureAwait(false);
+            var localVarResponse = await this.AsynchronousClient.GetAsync<PaginatedResponseOfStateSpan>("/api/v4/state-spans/sleep", localVarRequestOptions, this.Configuration, cancellationToken).ConfigureAwait(false);
 
             if (this.ExceptionFactory != null)
             {
@@ -2289,12 +2701,13 @@ namespace NightscoutFoundation.Nocturne.Api
         /// <param name="to"> (optional)</param>
         /// <param name="source"> (optional)</param>
         /// <param name="active"> (optional)</param>
-        /// <param name="count"> (optional, default to 100)</param>
-        /// <param name="skip"> (optional, default to 0)</param>
-        /// <returns>List&lt;StateSpan&gt;</returns>
-        public List<StateSpan> StateSpansGetStateSpans(StateSpansGetStateSpansCategoryParameter? category = default, string? state = default, DateTimeOffset? from = default, DateTimeOffset? to = default, string? source = default, bool? active = default, int? count = default, int? skip = default)
+        /// <param name="limit"> (optional, default to 100)</param>
+        /// <param name="offset"> (optional, default to 0)</param>
+        /// <param name="sort"> (optional, default to &quot;timestamp_desc&quot;)</param>
+        /// <returns>PaginatedResponseOfStateSpan</returns>
+        public PaginatedResponseOfStateSpan StateSpansGetStateSpans(StateSpansGetStateSpansCategoryParameter? category = default, string? state = default, DateTimeOffset? from = default, DateTimeOffset? to = default, string? source = default, bool? active = default, int? limit = default, int? offset = default, string? sort = default)
         {
-            NightscoutFoundation.Nocturne.Client.ApiResponse<List<StateSpan>> localVarResponse = StateSpansGetStateSpansWithHttpInfo(category, state, from, to, source, active, count, skip);
+            NightscoutFoundation.Nocturne.Client.ApiResponse<PaginatedResponseOfStateSpan> localVarResponse = StateSpansGetStateSpansWithHttpInfo(category, state, from, to, source, active, limit, offset, sort);
             return localVarResponse.Data;
         }
 
@@ -2308,10 +2721,11 @@ namespace NightscoutFoundation.Nocturne.Api
         /// <param name="to"> (optional)</param>
         /// <param name="source"> (optional)</param>
         /// <param name="active"> (optional)</param>
-        /// <param name="count"> (optional, default to 100)</param>
-        /// <param name="skip"> (optional, default to 0)</param>
-        /// <returns>ApiResponse of List&lt;StateSpan&gt;</returns>
-        public NightscoutFoundation.Nocturne.Client.ApiResponse<List<StateSpan>> StateSpansGetStateSpansWithHttpInfo(StateSpansGetStateSpansCategoryParameter? category = default, string? state = default, DateTimeOffset? from = default, DateTimeOffset? to = default, string? source = default, bool? active = default, int? count = default, int? skip = default)
+        /// <param name="limit"> (optional, default to 100)</param>
+        /// <param name="offset"> (optional, default to 0)</param>
+        /// <param name="sort"> (optional, default to &quot;timestamp_desc&quot;)</param>
+        /// <returns>ApiResponse of PaginatedResponseOfStateSpan</returns>
+        public NightscoutFoundation.Nocturne.Client.ApiResponse<PaginatedResponseOfStateSpan> StateSpansGetStateSpansWithHttpInfo(StateSpansGetStateSpansCategoryParameter? category = default, string? state = default, DateTimeOffset? from = default, DateTimeOffset? to = default, string? source = default, bool? active = default, int? limit = default, int? offset = default, string? sort = default)
         {
             NightscoutFoundation.Nocturne.Client.RequestOptions localVarRequestOptions = new NightscoutFoundation.Nocturne.Client.RequestOptions();
 
@@ -2353,18 +2767,22 @@ namespace NightscoutFoundation.Nocturne.Api
             {
                 localVarRequestOptions.QueryParameters.Add(NightscoutFoundation.Nocturne.Client.ClientUtils.ParameterToMultiMap("", "active", active));
             }
-            if (count != null)
+            if (limit != null)
             {
-                localVarRequestOptions.QueryParameters.Add(NightscoutFoundation.Nocturne.Client.ClientUtils.ParameterToMultiMap("", "count", count));
+                localVarRequestOptions.QueryParameters.Add(NightscoutFoundation.Nocturne.Client.ClientUtils.ParameterToMultiMap("", "limit", limit));
             }
-            if (skip != null)
+            if (offset != null)
             {
-                localVarRequestOptions.QueryParameters.Add(NightscoutFoundation.Nocturne.Client.ClientUtils.ParameterToMultiMap("", "skip", skip));
+                localVarRequestOptions.QueryParameters.Add(NightscoutFoundation.Nocturne.Client.ClientUtils.ParameterToMultiMap("", "offset", offset));
+            }
+            if (sort != null)
+            {
+                localVarRequestOptions.QueryParameters.Add(NightscoutFoundation.Nocturne.Client.ClientUtils.ParameterToMultiMap("", "sort", sort));
             }
 
 
             // make the HTTP request
-            var localVarResponse = this.Client.Get<List<StateSpan>>("/api/v4/state-spans", localVarRequestOptions, this.Configuration);
+            var localVarResponse = this.Client.Get<PaginatedResponseOfStateSpan>("/api/v4/state-spans", localVarRequestOptions, this.Configuration);
 
             if (this.ExceptionFactory != null)
             {
@@ -2385,13 +2803,14 @@ namespace NightscoutFoundation.Nocturne.Api
         /// <param name="to"> (optional)</param>
         /// <param name="source"> (optional)</param>
         /// <param name="active"> (optional)</param>
-        /// <param name="count"> (optional, default to 100)</param>
-        /// <param name="skip"> (optional, default to 0)</param>
+        /// <param name="limit"> (optional, default to 100)</param>
+        /// <param name="offset"> (optional, default to 0)</param>
+        /// <param name="sort"> (optional, default to &quot;timestamp_desc&quot;)</param>
         /// <param name="cancellationToken">Cancellation Token to cancel the request.</param>
-        /// <returns>Task of List&lt;StateSpan&gt;</returns>
-        public async System.Threading.Tasks.Task<List<StateSpan>> StateSpansGetStateSpansAsync(StateSpansGetStateSpansCategoryParameter? category = default, string? state = default, DateTimeOffset? from = default, DateTimeOffset? to = default, string? source = default, bool? active = default, int? count = default, int? skip = default, System.Threading.CancellationToken cancellationToken = default)
+        /// <returns>Task of PaginatedResponseOfStateSpan</returns>
+        public async System.Threading.Tasks.Task<PaginatedResponseOfStateSpan> StateSpansGetStateSpansAsync(StateSpansGetStateSpansCategoryParameter? category = default, string? state = default, DateTimeOffset? from = default, DateTimeOffset? to = default, string? source = default, bool? active = default, int? limit = default, int? offset = default, string? sort = default, System.Threading.CancellationToken cancellationToken = default)
         {
-            NightscoutFoundation.Nocturne.Client.ApiResponse<List<StateSpan>> localVarResponse = await StateSpansGetStateSpansWithHttpInfoAsync(category, state, from, to, source, active, count, skip, cancellationToken).ConfigureAwait(false);
+            NightscoutFoundation.Nocturne.Client.ApiResponse<PaginatedResponseOfStateSpan> localVarResponse = await StateSpansGetStateSpansWithHttpInfoAsync(category, state, from, to, source, active, limit, offset, sort, cancellationToken).ConfigureAwait(false);
             return localVarResponse.Data;
         }
 
@@ -2405,11 +2824,12 @@ namespace NightscoutFoundation.Nocturne.Api
         /// <param name="to"> (optional)</param>
         /// <param name="source"> (optional)</param>
         /// <param name="active"> (optional)</param>
-        /// <param name="count"> (optional, default to 100)</param>
-        /// <param name="skip"> (optional, default to 0)</param>
+        /// <param name="limit"> (optional, default to 100)</param>
+        /// <param name="offset"> (optional, default to 0)</param>
+        /// <param name="sort"> (optional, default to &quot;timestamp_desc&quot;)</param>
         /// <param name="cancellationToken">Cancellation Token to cancel the request.</param>
-        /// <returns>Task of ApiResponse (List&lt;StateSpan&gt;)</returns>
-        public async System.Threading.Tasks.Task<NightscoutFoundation.Nocturne.Client.ApiResponse<List<StateSpan>>> StateSpansGetStateSpansWithHttpInfoAsync(StateSpansGetStateSpansCategoryParameter? category = default, string? state = default, DateTimeOffset? from = default, DateTimeOffset? to = default, string? source = default, bool? active = default, int? count = default, int? skip = default, System.Threading.CancellationToken cancellationToken = default)
+        /// <returns>Task of ApiResponse (PaginatedResponseOfStateSpan)</returns>
+        public async System.Threading.Tasks.Task<NightscoutFoundation.Nocturne.Client.ApiResponse<PaginatedResponseOfStateSpan>> StateSpansGetStateSpansWithHttpInfoAsync(StateSpansGetStateSpansCategoryParameter? category = default, string? state = default, DateTimeOffset? from = default, DateTimeOffset? to = default, string? source = default, bool? active = default, int? limit = default, int? offset = default, string? sort = default, System.Threading.CancellationToken cancellationToken = default)
         {
 
             NightscoutFoundation.Nocturne.Client.RequestOptions localVarRequestOptions = new NightscoutFoundation.Nocturne.Client.RequestOptions();
@@ -2453,19 +2873,23 @@ namespace NightscoutFoundation.Nocturne.Api
             {
                 localVarRequestOptions.QueryParameters.Add(NightscoutFoundation.Nocturne.Client.ClientUtils.ParameterToMultiMap("", "active", active));
             }
-            if (count != null)
+            if (limit != null)
             {
-                localVarRequestOptions.QueryParameters.Add(NightscoutFoundation.Nocturne.Client.ClientUtils.ParameterToMultiMap("", "count", count));
+                localVarRequestOptions.QueryParameters.Add(NightscoutFoundation.Nocturne.Client.ClientUtils.ParameterToMultiMap("", "limit", limit));
             }
-            if (skip != null)
+            if (offset != null)
             {
-                localVarRequestOptions.QueryParameters.Add(NightscoutFoundation.Nocturne.Client.ClientUtils.ParameterToMultiMap("", "skip", skip));
+                localVarRequestOptions.QueryParameters.Add(NightscoutFoundation.Nocturne.Client.ClientUtils.ParameterToMultiMap("", "offset", offset));
+            }
+            if (sort != null)
+            {
+                localVarRequestOptions.QueryParameters.Add(NightscoutFoundation.Nocturne.Client.ClientUtils.ParameterToMultiMap("", "sort", sort));
             }
 
 
             // make the HTTP request
 
-            var localVarResponse = await this.AsynchronousClient.GetAsync<List<StateSpan>>("/api/v4/state-spans", localVarRequestOptions, this.Configuration, cancellationToken).ConfigureAwait(false);
+            var localVarResponse = await this.AsynchronousClient.GetAsync<PaginatedResponseOfStateSpan>("/api/v4/state-spans", localVarRequestOptions, this.Configuration, cancellationToken).ConfigureAwait(false);
 
             if (this.ExceptionFactory != null)
             {
@@ -2482,10 +2906,13 @@ namespace NightscoutFoundation.Nocturne.Api
         /// <exception cref="NightscoutFoundation.Nocturne.Client.ApiException">Thrown when fails to make API call</exception>
         /// <param name="from"> (optional)</param>
         /// <param name="to"> (optional)</param>
-        /// <returns>List&lt;StateSpan&gt;</returns>
-        public List<StateSpan> StateSpansGetTemporaryTargets(DateTimeOffset? from = default, DateTimeOffset? to = default)
+        /// <param name="limit"> (optional, default to 100)</param>
+        /// <param name="offset"> (optional, default to 0)</param>
+        /// <param name="sort"> (optional, default to &quot;timestamp_desc&quot;)</param>
+        /// <returns>PaginatedResponseOfStateSpan</returns>
+        public PaginatedResponseOfStateSpan StateSpansGetTemporaryTargets(DateTimeOffset? from = default, DateTimeOffset? to = default, int? limit = default, int? offset = default, string? sort = default)
         {
-            NightscoutFoundation.Nocturne.Client.ApiResponse<List<StateSpan>> localVarResponse = StateSpansGetTemporaryTargetsWithHttpInfo(from, to);
+            NightscoutFoundation.Nocturne.Client.ApiResponse<PaginatedResponseOfStateSpan> localVarResponse = StateSpansGetTemporaryTargetsWithHttpInfo(from, to, limit, offset, sort);
             return localVarResponse.Data;
         }
 
@@ -2495,8 +2922,11 @@ namespace NightscoutFoundation.Nocturne.Api
         /// <exception cref="NightscoutFoundation.Nocturne.Client.ApiException">Thrown when fails to make API call</exception>
         /// <param name="from"> (optional)</param>
         /// <param name="to"> (optional)</param>
-        /// <returns>ApiResponse of List&lt;StateSpan&gt;</returns>
-        public NightscoutFoundation.Nocturne.Client.ApiResponse<List<StateSpan>> StateSpansGetTemporaryTargetsWithHttpInfo(DateTimeOffset? from = default, DateTimeOffset? to = default)
+        /// <param name="limit"> (optional, default to 100)</param>
+        /// <param name="offset"> (optional, default to 0)</param>
+        /// <param name="sort"> (optional, default to &quot;timestamp_desc&quot;)</param>
+        /// <returns>ApiResponse of PaginatedResponseOfStateSpan</returns>
+        public NightscoutFoundation.Nocturne.Client.ApiResponse<PaginatedResponseOfStateSpan> StateSpansGetTemporaryTargetsWithHttpInfo(DateTimeOffset? from = default, DateTimeOffset? to = default, int? limit = default, int? offset = default, string? sort = default)
         {
             NightscoutFoundation.Nocturne.Client.RequestOptions localVarRequestOptions = new NightscoutFoundation.Nocturne.Client.RequestOptions();
 
@@ -2522,10 +2952,22 @@ namespace NightscoutFoundation.Nocturne.Api
             {
                 localVarRequestOptions.QueryParameters.Add(NightscoutFoundation.Nocturne.Client.ClientUtils.ParameterToMultiMap("", "to", to));
             }
+            if (limit != null)
+            {
+                localVarRequestOptions.QueryParameters.Add(NightscoutFoundation.Nocturne.Client.ClientUtils.ParameterToMultiMap("", "limit", limit));
+            }
+            if (offset != null)
+            {
+                localVarRequestOptions.QueryParameters.Add(NightscoutFoundation.Nocturne.Client.ClientUtils.ParameterToMultiMap("", "offset", offset));
+            }
+            if (sort != null)
+            {
+                localVarRequestOptions.QueryParameters.Add(NightscoutFoundation.Nocturne.Client.ClientUtils.ParameterToMultiMap("", "sort", sort));
+            }
 
 
             // make the HTTP request
-            var localVarResponse = this.Client.Get<List<StateSpan>>("/api/v4/state-spans/temporary-targets", localVarRequestOptions, this.Configuration);
+            var localVarResponse = this.Client.Get<PaginatedResponseOfStateSpan>("/api/v4/state-spans/temporary-targets", localVarRequestOptions, this.Configuration);
 
             if (this.ExceptionFactory != null)
             {
@@ -2542,11 +2984,14 @@ namespace NightscoutFoundation.Nocturne.Api
         /// <exception cref="NightscoutFoundation.Nocturne.Client.ApiException">Thrown when fails to make API call</exception>
         /// <param name="from"> (optional)</param>
         /// <param name="to"> (optional)</param>
+        /// <param name="limit"> (optional, default to 100)</param>
+        /// <param name="offset"> (optional, default to 0)</param>
+        /// <param name="sort"> (optional, default to &quot;timestamp_desc&quot;)</param>
         /// <param name="cancellationToken">Cancellation Token to cancel the request.</param>
-        /// <returns>Task of List&lt;StateSpan&gt;</returns>
-        public async System.Threading.Tasks.Task<List<StateSpan>> StateSpansGetTemporaryTargetsAsync(DateTimeOffset? from = default, DateTimeOffset? to = default, System.Threading.CancellationToken cancellationToken = default)
+        /// <returns>Task of PaginatedResponseOfStateSpan</returns>
+        public async System.Threading.Tasks.Task<PaginatedResponseOfStateSpan> StateSpansGetTemporaryTargetsAsync(DateTimeOffset? from = default, DateTimeOffset? to = default, int? limit = default, int? offset = default, string? sort = default, System.Threading.CancellationToken cancellationToken = default)
         {
-            NightscoutFoundation.Nocturne.Client.ApiResponse<List<StateSpan>> localVarResponse = await StateSpansGetTemporaryTargetsWithHttpInfoAsync(from, to, cancellationToken).ConfigureAwait(false);
+            NightscoutFoundation.Nocturne.Client.ApiResponse<PaginatedResponseOfStateSpan> localVarResponse = await StateSpansGetTemporaryTargetsWithHttpInfoAsync(from, to, limit, offset, sort, cancellationToken).ConfigureAwait(false);
             return localVarResponse.Data;
         }
 
@@ -2556,9 +3001,12 @@ namespace NightscoutFoundation.Nocturne.Api
         /// <exception cref="NightscoutFoundation.Nocturne.Client.ApiException">Thrown when fails to make API call</exception>
         /// <param name="from"> (optional)</param>
         /// <param name="to"> (optional)</param>
+        /// <param name="limit"> (optional, default to 100)</param>
+        /// <param name="offset"> (optional, default to 0)</param>
+        /// <param name="sort"> (optional, default to &quot;timestamp_desc&quot;)</param>
         /// <param name="cancellationToken">Cancellation Token to cancel the request.</param>
-        /// <returns>Task of ApiResponse (List&lt;StateSpan&gt;)</returns>
-        public async System.Threading.Tasks.Task<NightscoutFoundation.Nocturne.Client.ApiResponse<List<StateSpan>>> StateSpansGetTemporaryTargetsWithHttpInfoAsync(DateTimeOffset? from = default, DateTimeOffset? to = default, System.Threading.CancellationToken cancellationToken = default)
+        /// <returns>Task of ApiResponse (PaginatedResponseOfStateSpan)</returns>
+        public async System.Threading.Tasks.Task<NightscoutFoundation.Nocturne.Client.ApiResponse<PaginatedResponseOfStateSpan>> StateSpansGetTemporaryTargetsWithHttpInfoAsync(DateTimeOffset? from = default, DateTimeOffset? to = default, int? limit = default, int? offset = default, string? sort = default, System.Threading.CancellationToken cancellationToken = default)
         {
 
             NightscoutFoundation.Nocturne.Client.RequestOptions localVarRequestOptions = new NightscoutFoundation.Nocturne.Client.RequestOptions();
@@ -2586,11 +3034,23 @@ namespace NightscoutFoundation.Nocturne.Api
             {
                 localVarRequestOptions.QueryParameters.Add(NightscoutFoundation.Nocturne.Client.ClientUtils.ParameterToMultiMap("", "to", to));
             }
+            if (limit != null)
+            {
+                localVarRequestOptions.QueryParameters.Add(NightscoutFoundation.Nocturne.Client.ClientUtils.ParameterToMultiMap("", "limit", limit));
+            }
+            if (offset != null)
+            {
+                localVarRequestOptions.QueryParameters.Add(NightscoutFoundation.Nocturne.Client.ClientUtils.ParameterToMultiMap("", "offset", offset));
+            }
+            if (sort != null)
+            {
+                localVarRequestOptions.QueryParameters.Add(NightscoutFoundation.Nocturne.Client.ClientUtils.ParameterToMultiMap("", "sort", sort));
+            }
 
 
             // make the HTTP request
 
-            var localVarResponse = await this.AsynchronousClient.GetAsync<List<StateSpan>>("/api/v4/state-spans/temporary-targets", localVarRequestOptions, this.Configuration, cancellationToken).ConfigureAwait(false);
+            var localVarResponse = await this.AsynchronousClient.GetAsync<PaginatedResponseOfStateSpan>("/api/v4/state-spans/temporary-targets", localVarRequestOptions, this.Configuration, cancellationToken).ConfigureAwait(false);
 
             if (this.ExceptionFactory != null)
             {
@@ -2607,10 +3067,13 @@ namespace NightscoutFoundation.Nocturne.Api
         /// <exception cref="NightscoutFoundation.Nocturne.Client.ApiException">Thrown when fails to make API call</exception>
         /// <param name="from"> (optional)</param>
         /// <param name="to"> (optional)</param>
-        /// <returns>List&lt;StateSpan&gt;</returns>
-        public List<StateSpan> StateSpansGetTravel(DateTimeOffset? from = default, DateTimeOffset? to = default)
+        /// <param name="limit"> (optional, default to 100)</param>
+        /// <param name="offset"> (optional, default to 0)</param>
+        /// <param name="sort"> (optional, default to &quot;timestamp_desc&quot;)</param>
+        /// <returns>PaginatedResponseOfStateSpan</returns>
+        public PaginatedResponseOfStateSpan StateSpansGetTravel(DateTimeOffset? from = default, DateTimeOffset? to = default, int? limit = default, int? offset = default, string? sort = default)
         {
-            NightscoutFoundation.Nocturne.Client.ApiResponse<List<StateSpan>> localVarResponse = StateSpansGetTravelWithHttpInfo(from, to);
+            NightscoutFoundation.Nocturne.Client.ApiResponse<PaginatedResponseOfStateSpan> localVarResponse = StateSpansGetTravelWithHttpInfo(from, to, limit, offset, sort);
             return localVarResponse.Data;
         }
 
@@ -2620,8 +3083,11 @@ namespace NightscoutFoundation.Nocturne.Api
         /// <exception cref="NightscoutFoundation.Nocturne.Client.ApiException">Thrown when fails to make API call</exception>
         /// <param name="from"> (optional)</param>
         /// <param name="to"> (optional)</param>
-        /// <returns>ApiResponse of List&lt;StateSpan&gt;</returns>
-        public NightscoutFoundation.Nocturne.Client.ApiResponse<List<StateSpan>> StateSpansGetTravelWithHttpInfo(DateTimeOffset? from = default, DateTimeOffset? to = default)
+        /// <param name="limit"> (optional, default to 100)</param>
+        /// <param name="offset"> (optional, default to 0)</param>
+        /// <param name="sort"> (optional, default to &quot;timestamp_desc&quot;)</param>
+        /// <returns>ApiResponse of PaginatedResponseOfStateSpan</returns>
+        public NightscoutFoundation.Nocturne.Client.ApiResponse<PaginatedResponseOfStateSpan> StateSpansGetTravelWithHttpInfo(DateTimeOffset? from = default, DateTimeOffset? to = default, int? limit = default, int? offset = default, string? sort = default)
         {
             NightscoutFoundation.Nocturne.Client.RequestOptions localVarRequestOptions = new NightscoutFoundation.Nocturne.Client.RequestOptions();
 
@@ -2647,10 +3113,22 @@ namespace NightscoutFoundation.Nocturne.Api
             {
                 localVarRequestOptions.QueryParameters.Add(NightscoutFoundation.Nocturne.Client.ClientUtils.ParameterToMultiMap("", "to", to));
             }
+            if (limit != null)
+            {
+                localVarRequestOptions.QueryParameters.Add(NightscoutFoundation.Nocturne.Client.ClientUtils.ParameterToMultiMap("", "limit", limit));
+            }
+            if (offset != null)
+            {
+                localVarRequestOptions.QueryParameters.Add(NightscoutFoundation.Nocturne.Client.ClientUtils.ParameterToMultiMap("", "offset", offset));
+            }
+            if (sort != null)
+            {
+                localVarRequestOptions.QueryParameters.Add(NightscoutFoundation.Nocturne.Client.ClientUtils.ParameterToMultiMap("", "sort", sort));
+            }
 
 
             // make the HTTP request
-            var localVarResponse = this.Client.Get<List<StateSpan>>("/api/v4/state-spans/travel", localVarRequestOptions, this.Configuration);
+            var localVarResponse = this.Client.Get<PaginatedResponseOfStateSpan>("/api/v4/state-spans/travel", localVarRequestOptions, this.Configuration);
 
             if (this.ExceptionFactory != null)
             {
@@ -2667,11 +3145,14 @@ namespace NightscoutFoundation.Nocturne.Api
         /// <exception cref="NightscoutFoundation.Nocturne.Client.ApiException">Thrown when fails to make API call</exception>
         /// <param name="from"> (optional)</param>
         /// <param name="to"> (optional)</param>
+        /// <param name="limit"> (optional, default to 100)</param>
+        /// <param name="offset"> (optional, default to 0)</param>
+        /// <param name="sort"> (optional, default to &quot;timestamp_desc&quot;)</param>
         /// <param name="cancellationToken">Cancellation Token to cancel the request.</param>
-        /// <returns>Task of List&lt;StateSpan&gt;</returns>
-        public async System.Threading.Tasks.Task<List<StateSpan>> StateSpansGetTravelAsync(DateTimeOffset? from = default, DateTimeOffset? to = default, System.Threading.CancellationToken cancellationToken = default)
+        /// <returns>Task of PaginatedResponseOfStateSpan</returns>
+        public async System.Threading.Tasks.Task<PaginatedResponseOfStateSpan> StateSpansGetTravelAsync(DateTimeOffset? from = default, DateTimeOffset? to = default, int? limit = default, int? offset = default, string? sort = default, System.Threading.CancellationToken cancellationToken = default)
         {
-            NightscoutFoundation.Nocturne.Client.ApiResponse<List<StateSpan>> localVarResponse = await StateSpansGetTravelWithHttpInfoAsync(from, to, cancellationToken).ConfigureAwait(false);
+            NightscoutFoundation.Nocturne.Client.ApiResponse<PaginatedResponseOfStateSpan> localVarResponse = await StateSpansGetTravelWithHttpInfoAsync(from, to, limit, offset, sort, cancellationToken).ConfigureAwait(false);
             return localVarResponse.Data;
         }
 
@@ -2681,9 +3162,12 @@ namespace NightscoutFoundation.Nocturne.Api
         /// <exception cref="NightscoutFoundation.Nocturne.Client.ApiException">Thrown when fails to make API call</exception>
         /// <param name="from"> (optional)</param>
         /// <param name="to"> (optional)</param>
+        /// <param name="limit"> (optional, default to 100)</param>
+        /// <param name="offset"> (optional, default to 0)</param>
+        /// <param name="sort"> (optional, default to &quot;timestamp_desc&quot;)</param>
         /// <param name="cancellationToken">Cancellation Token to cancel the request.</param>
-        /// <returns>Task of ApiResponse (List&lt;StateSpan&gt;)</returns>
-        public async System.Threading.Tasks.Task<NightscoutFoundation.Nocturne.Client.ApiResponse<List<StateSpan>>> StateSpansGetTravelWithHttpInfoAsync(DateTimeOffset? from = default, DateTimeOffset? to = default, System.Threading.CancellationToken cancellationToken = default)
+        /// <returns>Task of ApiResponse (PaginatedResponseOfStateSpan)</returns>
+        public async System.Threading.Tasks.Task<NightscoutFoundation.Nocturne.Client.ApiResponse<PaginatedResponseOfStateSpan>> StateSpansGetTravelWithHttpInfoAsync(DateTimeOffset? from = default, DateTimeOffset? to = default, int? limit = default, int? offset = default, string? sort = default, System.Threading.CancellationToken cancellationToken = default)
         {
 
             NightscoutFoundation.Nocturne.Client.RequestOptions localVarRequestOptions = new NightscoutFoundation.Nocturne.Client.RequestOptions();
@@ -2711,11 +3195,23 @@ namespace NightscoutFoundation.Nocturne.Api
             {
                 localVarRequestOptions.QueryParameters.Add(NightscoutFoundation.Nocturne.Client.ClientUtils.ParameterToMultiMap("", "to", to));
             }
+            if (limit != null)
+            {
+                localVarRequestOptions.QueryParameters.Add(NightscoutFoundation.Nocturne.Client.ClientUtils.ParameterToMultiMap("", "limit", limit));
+            }
+            if (offset != null)
+            {
+                localVarRequestOptions.QueryParameters.Add(NightscoutFoundation.Nocturne.Client.ClientUtils.ParameterToMultiMap("", "offset", offset));
+            }
+            if (sort != null)
+            {
+                localVarRequestOptions.QueryParameters.Add(NightscoutFoundation.Nocturne.Client.ClientUtils.ParameterToMultiMap("", "sort", sort));
+            }
 
 
             // make the HTTP request
 
-            var localVarResponse = await this.AsynchronousClient.GetAsync<List<StateSpan>>("/api/v4/state-spans/travel", localVarRequestOptions, this.Configuration, cancellationToken).ConfigureAwait(false);
+            var localVarResponse = await this.AsynchronousClient.GetAsync<PaginatedResponseOfStateSpan>("/api/v4/state-spans/travel", localVarRequestOptions, this.Configuration, cancellationToken).ConfigureAwait(false);
 
             if (this.ExceptionFactory != null)
             {

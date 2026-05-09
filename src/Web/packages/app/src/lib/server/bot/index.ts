@@ -48,6 +48,7 @@ export function getBot(): Bot {
 			if (apiBaseUrl) {
 				const heartbeatClient = createServerApiClient(apiBaseUrl, fetch, {
 					hashedInstanceKey: getHashedInstanceKey(),
+					extraHeaders: { "X-Forwarded-Proto": "https" },
 				});
 
 				const sendHeartbeat = () => {

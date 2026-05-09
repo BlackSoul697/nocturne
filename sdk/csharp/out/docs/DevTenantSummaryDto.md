@@ -8,7 +8,6 @@ Name | Type | Description | Notes
 **Slug** | **string** |  | [optional] 
 **DisplayName** | **string** |  | [optional] 
 **IsActive** | **bool** |  | [optional] 
-**IsDefault** | **bool** |  | [optional] 
 **Timezone** | **string** |  | [optional] 
 **CreatedAt** | **DateTimeOffset** |  | [optional] 
 **Entries** | **long** |  | [optional] 

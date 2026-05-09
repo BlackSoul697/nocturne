@@ -25,6 +25,8 @@ Name | Type | Description | Notes
 **BasalDeliverySpans** | [**List&lt;BasalDeliverySpanDto&gt;**](BasalDeliverySpanDto.md) |  | [optional] 
 **SystemEventMarkers** | [**List&lt;SystemEventMarkerDto&gt;**](SystemEventMarkerDto.md) |  | [optional] 
 **TrackerMarkers** | [**List&lt;TrackerMarkerDto&gt;**](TrackerMarkerDto.md) |  | [optional] 
+**HeartRateSeries** | [**List&lt;HeartRatePointDto&gt;**](HeartRatePointDto.md) |  | [optional] 
+**StepSeries** | [**List&lt;StepBubbleDto&gt;**](StepBubbleDto.md) |  | [optional] 
 
 [[Back to Model list]](../README.md#documentation-for-models) [[Back to API list]](../README.md#documentation-for-api-endpoints) [[Back to README]](../README.md)
 

@@ -456,7 +456,7 @@ namespace NightscoutFoundation.Nocturne.Api
         /// Gets comprehensive statistics for multiple time periods (1, 3, 7, 30, and 90 days). Fetches sensor glucose, bolus, carb, and temp-basal data from the database for each period, computes GlucoseAnalytics, TreatmentSummary, and InsulinDeliveryStatistics, and caches the result for 5 minutes.
         /// </summary>
         /// <remarks>
-        /// When no TempBasal or algorithm bolus records are found but a profile is loaded, the method falls back to computing scheduled basal from the active IProfileService schedule. GMI reliability is assessed per-period using context-appropriate recommended-day minimums (e.g., 1-day periods cannot require 14 days of data).
+        /// When no TempBasal or algorithm bolus records are found but a profile is loaded, the method falls back to computing scheduled basal from the active profile schedule via IBasalRateResolver. GMI reliability is assessed per-period using context-appropriate recommended-day minimums (e.g., 1-day periods cannot require 14 days of data).
         /// </remarks>
         /// <exception cref="NightscoutFoundation.Nocturne.Client.ApiException">Thrown when fails to make API call</exception>
         /// <returns>MultiPeriodStatistics</returns>
@@ -466,7 +466,7 @@ namespace NightscoutFoundation.Nocturne.Api
         /// Gets comprehensive statistics for multiple time periods (1, 3, 7, 30, and 90 days). Fetches sensor glucose, bolus, carb, and temp-basal data from the database for each period, computes GlucoseAnalytics, TreatmentSummary, and InsulinDeliveryStatistics, and caches the result for 5 minutes.
         /// </summary>
         /// <remarks>
-        /// When no TempBasal or algorithm bolus records are found but a profile is loaded, the method falls back to computing scheduled basal from the active IProfileService schedule. GMI reliability is assessed per-period using context-appropriate recommended-day minimums (e.g., 1-day periods cannot require 14 days of data).
+        /// When no TempBasal or algorithm bolus records are found but a profile is loaded, the method falls back to computing scheduled basal from the active profile schedule via IBasalRateResolver. GMI reliability is assessed per-period using context-appropriate recommended-day minimums (e.g., 1-day periods cannot require 14 days of data).
         /// </remarks>
         /// <exception cref="NightscoutFoundation.Nocturne.Client.ApiException">Thrown when fails to make API call</exception>
         /// <returns>ApiResponse of MultiPeriodStatistics</returns>
@@ -1075,7 +1075,7 @@ namespace NightscoutFoundation.Nocturne.Api
         /// Gets comprehensive statistics for multiple time periods (1, 3, 7, 30, and 90 days). Fetches sensor glucose, bolus, carb, and temp-basal data from the database for each period, computes GlucoseAnalytics, TreatmentSummary, and InsulinDeliveryStatistics, and caches the result for 5 minutes.
         /// </summary>
         /// <remarks>
-        /// When no TempBasal or algorithm bolus records are found but a profile is loaded, the method falls back to computing scheduled basal from the active IProfileService schedule. GMI reliability is assessed per-period using context-appropriate recommended-day minimums (e.g., 1-day periods cannot require 14 days of data).
+        /// When no TempBasal or algorithm bolus records are found but a profile is loaded, the method falls back to computing scheduled basal from the active profile schedule via IBasalRateResolver. GMI reliability is assessed per-period using context-appropriate recommended-day minimums (e.g., 1-day periods cannot require 14 days of data).
         /// </remarks>
         /// <exception cref="NightscoutFoundation.Nocturne.Client.ApiException">Thrown when fails to make API call</exception>
         /// <param name="cancellationToken">Cancellation Token to cancel the request.</param>
@@ -1086,7 +1086,7 @@ namespace NightscoutFoundation.Nocturne.Api
         /// Gets comprehensive statistics for multiple time periods (1, 3, 7, 30, and 90 days). Fetches sensor glucose, bolus, carb, and temp-basal data from the database for each period, computes GlucoseAnalytics, TreatmentSummary, and InsulinDeliveryStatistics, and caches the result for 5 minutes.
         /// </summary>
         /// <remarks>
-        /// When no TempBasal or algorithm bolus records are found but a profile is loaded, the method falls back to computing scheduled basal from the active IProfileService schedule. GMI reliability is assessed per-period using context-appropriate recommended-day minimums (e.g., 1-day periods cannot require 14 days of data).
+        /// When no TempBasal or algorithm bolus records are found but a profile is loaded, the method falls back to computing scheduled basal from the active profile schedule via IBasalRateResolver. GMI reliability is assessed per-period using context-appropriate recommended-day minimums (e.g., 1-day periods cannot require 14 days of data).
         /// </remarks>
         /// <exception cref="NightscoutFoundation.Nocturne.Client.ApiException">Thrown when fails to make API call</exception>
         /// <param name="cancellationToken">Cancellation Token to cancel the request.</param>
@@ -4048,7 +4048,7 @@ namespace NightscoutFoundation.Nocturne.Api
         }
 
         /// <summary>
-        /// Gets comprehensive statistics for multiple time periods (1, 3, 7, 30, and 90 days). Fetches sensor glucose, bolus, carb, and temp-basal data from the database for each period, computes GlucoseAnalytics, TreatmentSummary, and InsulinDeliveryStatistics, and caches the result for 5 minutes. When no TempBasal or algorithm bolus records are found but a profile is loaded, the method falls back to computing scheduled basal from the active IProfileService schedule. GMI reliability is assessed per-period using context-appropriate recommended-day minimums (e.g., 1-day periods cannot require 14 days of data).
+        /// Gets comprehensive statistics for multiple time periods (1, 3, 7, 30, and 90 days). Fetches sensor glucose, bolus, carb, and temp-basal data from the database for each period, computes GlucoseAnalytics, TreatmentSummary, and InsulinDeliveryStatistics, and caches the result for 5 minutes. When no TempBasal or algorithm bolus records are found but a profile is loaded, the method falls back to computing scheduled basal from the active profile schedule via IBasalRateResolver. GMI reliability is assessed per-period using context-appropriate recommended-day minimums (e.g., 1-day periods cannot require 14 days of data).
         /// </summary>
         /// <exception cref="NightscoutFoundation.Nocturne.Client.ApiException">Thrown when fails to make API call</exception>
         /// <returns>MultiPeriodStatistics</returns>
@@ -4059,7 +4059,7 @@ namespace NightscoutFoundation.Nocturne.Api
         }
 
         /// <summary>
-        /// Gets comprehensive statistics for multiple time periods (1, 3, 7, 30, and 90 days). Fetches sensor glucose, bolus, carb, and temp-basal data from the database for each period, computes GlucoseAnalytics, TreatmentSummary, and InsulinDeliveryStatistics, and caches the result for 5 minutes. When no TempBasal or algorithm bolus records are found but a profile is loaded, the method falls back to computing scheduled basal from the active IProfileService schedule. GMI reliability is assessed per-period using context-appropriate recommended-day minimums (e.g., 1-day periods cannot require 14 days of data).
+        /// Gets comprehensive statistics for multiple time periods (1, 3, 7, 30, and 90 days). Fetches sensor glucose, bolus, carb, and temp-basal data from the database for each period, computes GlucoseAnalytics, TreatmentSummary, and InsulinDeliveryStatistics, and caches the result for 5 minutes. When no TempBasal or algorithm bolus records are found but a profile is loaded, the method falls back to computing scheduled basal from the active profile schedule via IBasalRateResolver. GMI reliability is assessed per-period using context-appropriate recommended-day minimums (e.g., 1-day periods cannot require 14 days of data).
         /// </summary>
         /// <exception cref="NightscoutFoundation.Nocturne.Client.ApiException">Thrown when fails to make API call</exception>
         /// <returns>ApiResponse of MultiPeriodStatistics</returns>
@@ -4096,7 +4096,7 @@ namespace NightscoutFoundation.Nocturne.Api
         }
 
         /// <summary>
-        /// Gets comprehensive statistics for multiple time periods (1, 3, 7, 30, and 90 days). Fetches sensor glucose, bolus, carb, and temp-basal data from the database for each period, computes GlucoseAnalytics, TreatmentSummary, and InsulinDeliveryStatistics, and caches the result for 5 minutes. When no TempBasal or algorithm bolus records are found but a profile is loaded, the method falls back to computing scheduled basal from the active IProfileService schedule. GMI reliability is assessed per-period using context-appropriate recommended-day minimums (e.g., 1-day periods cannot require 14 days of data).
+        /// Gets comprehensive statistics for multiple time periods (1, 3, 7, 30, and 90 days). Fetches sensor glucose, bolus, carb, and temp-basal data from the database for each period, computes GlucoseAnalytics, TreatmentSummary, and InsulinDeliveryStatistics, and caches the result for 5 minutes. When no TempBasal or algorithm bolus records are found but a profile is loaded, the method falls back to computing scheduled basal from the active profile schedule via IBasalRateResolver. GMI reliability is assessed per-period using context-appropriate recommended-day minimums (e.g., 1-day periods cannot require 14 days of data).
         /// </summary>
         /// <exception cref="NightscoutFoundation.Nocturne.Client.ApiException">Thrown when fails to make API call</exception>
         /// <param name="cancellationToken">Cancellation Token to cancel the request.</param>
@@ -4108,7 +4108,7 @@ namespace NightscoutFoundation.Nocturne.Api
         }
 
         /// <summary>
-        /// Gets comprehensive statistics for multiple time periods (1, 3, 7, 30, and 90 days). Fetches sensor glucose, bolus, carb, and temp-basal data from the database for each period, computes GlucoseAnalytics, TreatmentSummary, and InsulinDeliveryStatistics, and caches the result for 5 minutes. When no TempBasal or algorithm bolus records are found but a profile is loaded, the method falls back to computing scheduled basal from the active IProfileService schedule. GMI reliability is assessed per-period using context-appropriate recommended-day minimums (e.g., 1-day periods cannot require 14 days of data).
+        /// Gets comprehensive statistics for multiple time periods (1, 3, 7, 30, and 90 days). Fetches sensor glucose, bolus, carb, and temp-basal data from the database for each period, computes GlucoseAnalytics, TreatmentSummary, and InsulinDeliveryStatistics, and caches the result for 5 minutes. When no TempBasal or algorithm bolus records are found but a profile is loaded, the method falls back to computing scheduled basal from the active profile schedule via IBasalRateResolver. GMI reliability is assessed per-period using context-appropriate recommended-day minimums (e.g., 1-day periods cannot require 14 days of data).
         /// </summary>
         /// <exception cref="NightscoutFoundation.Nocturne.Client.ApiException">Thrown when fails to make API call</exception>
         /// <param name="cancellationToken">Cancellation Token to cancel the request.</param>

@@ -17,6 +17,9 @@ Name | Type | Description | Notes
 **Filtered** | **double?** | Raw filtered sensor value (scaled ADC) | [optional] 
 **Unfiltered** | **double?** | Raw unfiltered sensor value (scaled ADC) | [optional] 
 **Delta** | **double?** | Glucose delta in mg/dL over the last 5 minutes | [optional] 
+**GlucoseProcessing** | **string** | Whether this glucose value is smoothed or unsmoothed. Accepted values: \&quot;Smoothed\&quot;, \&quot;Unsmoothed\&quot;. Case-insensitive. Null for unknown. | [optional] 
+**SmoothedMgdl** | **double?** | Smoothed glucose value in mg/dL, when known. | [optional] 
+**UnsmoothedMgdl** | **double?** | Unsmoothed (raw) glucose value in mg/dL, when known. | [optional] 
 
 [[Back to Model list]](../README.md#documentation-for-models) [[Back to API list]](../README.md#documentation-for-api-endpoints) [[Back to README]](../README.md)
 

@@ -272,7 +272,9 @@ export class CoachMarkContext {
     this._states = newMap;
 
     // Fire and forget — optimistic
-    this.adapter.update(key, status).catch(() => {});
+    this.adapter.update(key, status).catch((err) => {
+      console.error(`[coach] Failed to persist status update for "${key}" to "${status}":`, err);
+    });
   }
 
   private scheduleSelection(): void {

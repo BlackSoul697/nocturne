@@ -53,7 +53,10 @@ namespace NightscoutFoundation.Nocturne.Model
         /// <param name="filtered">Raw filtered sensor value (scaled ADC).</param>
         /// <param name="unfiltered">Raw unfiltered sensor value (scaled ADC).</param>
         /// <param name="delta">Glucose delta in mg/dL over the last 5 minutes.</param>
-        public UpsertSensorGlucoseRequest(DateTimeOffset timestamp = default, int? utcOffset = default, string device = default, string app = default, string dataSource = default, double mgdl = default, GlucoseDirection? direction = default, double? trendRate = default, int? noise = default, double? filtered = default, double? unfiltered = default, double? delta = default)
+        /// <param name="glucoseProcessing">Whether this glucose value is smoothed or unsmoothed. Accepted values: \&quot;Smoothed\&quot;, \&quot;Unsmoothed\&quot;. Case-insensitive. Null for unknown..</param>
+        /// <param name="smoothedMgdl">Smoothed glucose value in mg/dL, when known..</param>
+        /// <param name="unsmoothedMgdl">Unsmoothed (raw) glucose value in mg/dL, when known..</param>
+        public UpsertSensorGlucoseRequest(DateTimeOffset timestamp = default, int? utcOffset = default, string device = default, string app = default, string dataSource = default, double mgdl = default, GlucoseDirection? direction = default, double? trendRate = default, int? noise = default, double? filtered = default, double? unfiltered = default, double? delta = default, string glucoseProcessing = default, double? smoothedMgdl = default, double? unsmoothedMgdl = default)
         {
             this.Timestamp = timestamp;
             this.UtcOffset = utcOffset;
@@ -67,6 +70,9 @@ namespace NightscoutFoundation.Nocturne.Model
             this.Filtered = filtered;
             this.Unfiltered = unfiltered;
             this.Delta = delta;
+            this.GlucoseProcessing = glucoseProcessing;
+            this.SmoothedMgdl = smoothedMgdl;
+            this.UnsmoothedMgdl = unsmoothedMgdl;
         }
 
         /// <summary>
@@ -147,6 +153,27 @@ namespace NightscoutFoundation.Nocturne.Model
         public double? Delta { get; set; }
 
         /// <summary>
+        /// Whether this glucose value is smoothed or unsmoothed. Accepted values: \&quot;Smoothed\&quot;, \&quot;Unsmoothed\&quot;. Case-insensitive. Null for unknown.
+        /// </summary>
+        /// <value>Whether this glucose value is smoothed or unsmoothed. Accepted values: \&quot;Smoothed\&quot;, \&quot;Unsmoothed\&quot;. Case-insensitive. Null for unknown.</value>
+        [DataMember(Name = "glucoseProcessing", EmitDefaultValue = true)]
+        public string GlucoseProcessing { get; set; }
+
+        /// <summary>
+        /// Smoothed glucose value in mg/dL, when known.
+        /// </summary>
+        /// <value>Smoothed glucose value in mg/dL, when known.</value>
+        [DataMember(Name = "smoothedMgdl", EmitDefaultValue = true)]
+        public double? SmoothedMgdl { get; set; }
+
+        /// <summary>
+        /// Unsmoothed (raw) glucose value in mg/dL, when known.
+        /// </summary>
+        /// <value>Unsmoothed (raw) glucose value in mg/dL, when known.</value>
+        [DataMember(Name = "unsmoothedMgdl", EmitDefaultValue = true)]
+        public double? UnsmoothedMgdl { get; set; }
+
+        /// <summary>
         /// Returns the string presentation of the object
         /// </summary>
         /// <returns>String presentation of the object</returns>
@@ -166,6 +193,9 @@ namespace NightscoutFoundation.Nocturne.Model
             sb.Append("  Filtered: ").Append(Filtered).Append("\n");
             sb.Append("  Unfiltered: ").Append(Unfiltered).Append("\n");
             sb.Append("  Delta: ").Append(Delta).Append("\n");
+            sb.Append("  GlucoseProcessing: ").Append(GlucoseProcessing).Append("\n");
+            sb.Append("  SmoothedMgdl: ").Append(SmoothedMgdl).Append("\n");
+            sb.Append("  UnsmoothedMgdl: ").Append(UnsmoothedMgdl).Append("\n");
             sb.Append("}\n");
             return sb.ToString();
         }

@@ -28,14 +28,14 @@ namespace NightscoutFoundation.Nocturne.Api
     {
         #region Synchronous Operations
         /// <summary>
-        /// 
+        /// Gets the webhook notification settings for the current tenant.
         /// </summary>
         /// <exception cref="NightscoutFoundation.Nocturne.Client.ApiException">Thrown when fails to make API call</exception>
         /// <returns>WebhookNotificationSettings</returns>
         WebhookNotificationSettings WebhookSettingsGetWebhookSettings();
 
         /// <summary>
-        /// 
+        /// Gets the webhook notification settings for the current tenant.
         /// </summary>
         /// <remarks>
         /// 
@@ -44,7 +44,7 @@ namespace NightscoutFoundation.Nocturne.Api
         /// <returns>ApiResponse of WebhookNotificationSettings</returns>
         ApiResponse<WebhookNotificationSettings> WebhookSettingsGetWebhookSettingsWithHttpInfo();
         /// <summary>
-        /// 
+        /// Saves webhook notification settings.
         /// </summary>
         /// <exception cref="NightscoutFoundation.Nocturne.Client.ApiException">Thrown when fails to make API call</exception>
         /// <param name="webhookNotificationSettings"></param>
@@ -52,7 +52,7 @@ namespace NightscoutFoundation.Nocturne.Api
         WebhookNotificationSettings WebhookSettingsSaveWebhookSettings(WebhookNotificationSettings webhookNotificationSettings);
 
         /// <summary>
-        /// 
+        /// Saves webhook notification settings.
         /// </summary>
         /// <remarks>
         /// 
@@ -62,7 +62,7 @@ namespace NightscoutFoundation.Nocturne.Api
         /// <returns>ApiResponse of WebhookNotificationSettings</returns>
         ApiResponse<WebhookNotificationSettings> WebhookSettingsSaveWebhookSettingsWithHttpInfo(WebhookNotificationSettings webhookNotificationSettings);
         /// <summary>
-        /// 
+        /// Tests webhook settings by sending test payloads to configured URLs.
         /// </summary>
         /// <exception cref="NightscoutFoundation.Nocturne.Client.ApiException">Thrown when fails to make API call</exception>
         /// <param name="webhookTestRequest"></param>
@@ -70,7 +70,7 @@ namespace NightscoutFoundation.Nocturne.Api
         WebhookTestResult WebhookSettingsTestWebhookSettings(WebhookTestRequest webhookTestRequest);
 
         /// <summary>
-        /// 
+        /// Tests webhook settings by sending test payloads to configured URLs.
         /// </summary>
         /// <remarks>
         /// 
@@ -89,7 +89,7 @@ namespace NightscoutFoundation.Nocturne.Api
     {
         #region Asynchronous Operations
         /// <summary>
-        /// 
+        /// Gets the webhook notification settings for the current tenant.
         /// </summary>
         /// <remarks>
         /// 
@@ -100,7 +100,7 @@ namespace NightscoutFoundation.Nocturne.Api
         System.Threading.Tasks.Task<WebhookNotificationSettings> WebhookSettingsGetWebhookSettingsAsync(System.Threading.CancellationToken cancellationToken = default);
 
         /// <summary>
-        /// 
+        /// Gets the webhook notification settings for the current tenant.
         /// </summary>
         /// <remarks>
         /// 
@@ -110,7 +110,7 @@ namespace NightscoutFoundation.Nocturne.Api
         /// <returns>Task of ApiResponse (WebhookNotificationSettings)</returns>
         System.Threading.Tasks.Task<ApiResponse<WebhookNotificationSettings>> WebhookSettingsGetWebhookSettingsWithHttpInfoAsync(System.Threading.CancellationToken cancellationToken = default);
         /// <summary>
-        /// 
+        /// Saves webhook notification settings.
         /// </summary>
         /// <remarks>
         /// 
@@ -122,7 +122,7 @@ namespace NightscoutFoundation.Nocturne.Api
         System.Threading.Tasks.Task<WebhookNotificationSettings> WebhookSettingsSaveWebhookSettingsAsync(WebhookNotificationSettings webhookNotificationSettings, System.Threading.CancellationToken cancellationToken = default);
 
         /// <summary>
-        /// 
+        /// Saves webhook notification settings.
         /// </summary>
         /// <remarks>
         /// 
@@ -133,7 +133,7 @@ namespace NightscoutFoundation.Nocturne.Api
         /// <returns>Task of ApiResponse (WebhookNotificationSettings)</returns>
         System.Threading.Tasks.Task<ApiResponse<WebhookNotificationSettings>> WebhookSettingsSaveWebhookSettingsWithHttpInfoAsync(WebhookNotificationSettings webhookNotificationSettings, System.Threading.CancellationToken cancellationToken = default);
         /// <summary>
-        /// 
+        /// Tests webhook settings by sending test payloads to configured URLs.
         /// </summary>
         /// <remarks>
         /// 
@@ -145,7 +145,7 @@ namespace NightscoutFoundation.Nocturne.Api
         System.Threading.Tasks.Task<WebhookTestResult> WebhookSettingsTestWebhookSettingsAsync(WebhookTestRequest webhookTestRequest, System.Threading.CancellationToken cancellationToken = default);
 
         /// <summary>
-        /// 
+        /// Tests webhook settings by sending test payloads to configured URLs.
         /// </summary>
         /// <remarks>
         /// 
@@ -369,7 +369,7 @@ namespace NightscoutFoundation.Nocturne.Api
         }
 
         /// <summary>
-        ///  
+        /// Gets the webhook notification settings for the current tenant. 
         /// </summary>
         /// <exception cref="NightscoutFoundation.Nocturne.Client.ApiException">Thrown when fails to make API call</exception>
         /// <returns>WebhookNotificationSettings</returns>
@@ -380,7 +380,7 @@ namespace NightscoutFoundation.Nocturne.Api
         }
 
         /// <summary>
-        ///  
+        /// Gets the webhook notification settings for the current tenant. 
         /// </summary>
         /// <exception cref="NightscoutFoundation.Nocturne.Client.ApiException">Thrown when fails to make API call</exception>
         /// <returns>ApiResponse of WebhookNotificationSettings</returns>
@@ -417,7 +417,7 @@ namespace NightscoutFoundation.Nocturne.Api
         }
 
         /// <summary>
-        ///  
+        /// Gets the webhook notification settings for the current tenant. 
         /// </summary>
         /// <exception cref="NightscoutFoundation.Nocturne.Client.ApiException">Thrown when fails to make API call</exception>
         /// <param name="cancellationToken">Cancellation Token to cancel the request.</param>
@@ -429,7 +429,7 @@ namespace NightscoutFoundation.Nocturne.Api
         }
 
         /// <summary>
-        ///  
+        /// Gets the webhook notification settings for the current tenant. 
         /// </summary>
         /// <exception cref="NightscoutFoundation.Nocturne.Client.ApiException">Thrown when fails to make API call</exception>
         /// <param name="cancellationToken">Cancellation Token to cancel the request.</param>
@@ -470,7 +470,7 @@ namespace NightscoutFoundation.Nocturne.Api
         }
 
         /// <summary>
-        ///  
+        /// Saves webhook notification settings. 
         /// </summary>
         /// <exception cref="NightscoutFoundation.Nocturne.Client.ApiException">Thrown when fails to make API call</exception>
         /// <param name="webhookNotificationSettings"></param>
@@ -482,7 +482,7 @@ namespace NightscoutFoundation.Nocturne.Api
         }
 
         /// <summary>
-        ///  
+        /// Saves webhook notification settings. 
         /// </summary>
         /// <exception cref="NightscoutFoundation.Nocturne.Client.ApiException">Thrown when fails to make API call</exception>
         /// <param name="webhookNotificationSettings"></param>
@@ -526,7 +526,7 @@ namespace NightscoutFoundation.Nocturne.Api
         }
 
         /// <summary>
-        ///  
+        /// Saves webhook notification settings. 
         /// </summary>
         /// <exception cref="NightscoutFoundation.Nocturne.Client.ApiException">Thrown when fails to make API call</exception>
         /// <param name="webhookNotificationSettings"></param>
@@ -539,7 +539,7 @@ namespace NightscoutFoundation.Nocturne.Api
         }
 
         /// <summary>
-        ///  
+        /// Saves webhook notification settings. 
         /// </summary>
         /// <exception cref="NightscoutFoundation.Nocturne.Client.ApiException">Thrown when fails to make API call</exception>
         /// <param name="webhookNotificationSettings"></param>
@@ -587,7 +587,7 @@ namespace NightscoutFoundation.Nocturne.Api
         }
 
         /// <summary>
-        ///  
+        /// Tests webhook settings by sending test payloads to configured URLs. 
         /// </summary>
         /// <exception cref="NightscoutFoundation.Nocturne.Client.ApiException">Thrown when fails to make API call</exception>
         /// <param name="webhookTestRequest"></param>
@@ -599,7 +599,7 @@ namespace NightscoutFoundation.Nocturne.Api
         }
 
         /// <summary>
-        ///  
+        /// Tests webhook settings by sending test payloads to configured URLs. 
         /// </summary>
         /// <exception cref="NightscoutFoundation.Nocturne.Client.ApiException">Thrown when fails to make API call</exception>
         /// <param name="webhookTestRequest"></param>
@@ -643,7 +643,7 @@ namespace NightscoutFoundation.Nocturne.Api
         }
 
         /// <summary>
-        ///  
+        /// Tests webhook settings by sending test payloads to configured URLs. 
         /// </summary>
         /// <exception cref="NightscoutFoundation.Nocturne.Client.ApiException">Thrown when fails to make API call</exception>
         /// <param name="webhookTestRequest"></param>
@@ -656,7 +656,7 @@ namespace NightscoutFoundation.Nocturne.Api
         }
 
         /// <summary>
-        ///  
+        /// Tests webhook settings by sending test payloads to configured URLs. 
         /// </summary>
         /// <exception cref="NightscoutFoundation.Nocturne.Client.ApiException">Thrown when fails to make API call</exception>
         /// <param name="webhookTestRequest"></param>

@@ -141,6 +141,12 @@ Class | Method | HTTP request | Description
 *AccessRequestApi* | [**AccessRequestApprove**](docs/AccessRequestApi.md#accessrequestapprove) | **POST** /api/v4/admin/access-requests/{subjectId}/approve | 
 *AccessRequestApi* | [**AccessRequestDeny**](docs/AccessRequestApi.md#accessrequestdeny) | **POST** /api/v4/admin/access-requests/{subjectId}/deny | 
 *AccessRequestApi* | [**AccessRequestGetPendingRequests**](docs/AccessRequestApi.md#accessrequestgetpendingrequests) | **GET** /api/v4/admin/access-requests | 
+*ActivityApi* | [**ActivityCreateActivities**](docs/ActivityApi.md#activitycreateactivities) | **POST** /api/v4/Activity | Create one or more activity records
+*ActivityApi* | [**ActivityDeleteActivity**](docs/ActivityApi.md#activitydeleteactivity) | **DELETE** /api/v4/Activity/{id} | Delete an activity record by ID
+*ActivityApi* | [**ActivityGetActivities**](docs/ActivityApi.md#activitygetactivities) | **GET** /api/v4/Activity | Get activity records with pagination
+*ActivityApi* | [**ActivityGetActivity**](docs/ActivityApi.md#activitygetactivity) | **GET** /api/v4/Activity/{id} | Get a specific activity record by ID
+*ActivityApi* | [**ActivityUpdateActivity**](docs/ActivityApi.md#activityupdateactivity) | **PUT** /api/v4/Activity/{id} | Update an existing activity record
+*ActogramApi* | [**ActogramGetActogram**](docs/ActogramApi.md#actogramgetactogram) | **GET** /api/v4/Actogram | Get actogram report data for a time window.
 *AlertCustomSoundsApi* | [**AlertCustomSoundsDeleteSound**](docs/AlertCustomSoundsApi.md#alertcustomsoundsdeletesound) | **DELETE** /api/v4/alert-sounds/{id} | Delete a custom sound.
 *AlertCustomSoundsApi* | [**AlertCustomSoundsGetSounds**](docs/AlertCustomSoundsApi.md#alertcustomsoundsgetsounds) | **GET** /api/v4/alert-sounds | List all custom sounds for the current tenant (metadata only, no audio data).
 *AlertCustomSoundsApi* | [**AlertCustomSoundsStreamSound**](docs/AlertCustomSoundsApi.md#alertcustomsoundsstreamsound) | **GET** /api/v4/alert-sounds/{id}/stream | Stream the raw audio bytes for a custom sound.
@@ -170,16 +176,20 @@ Class | Method | HTTP request | Description
 *AnalyticsApi* | [**AnalyticsGetUsageStatistics**](docs/AnalyticsApi.md#analyticsgetusagestatistics) | **GET** /api/v4/Analytics/metrics/usage | Gets current usage statistics such as endpoint hit counts and feature usage.
 *AnalyticsApi* | [**AnalyticsTrackCustomEvent**](docs/AnalyticsApi.md#analyticstrackcustomevent) | **POST** /api/v4/Analytics/events | Tracks a custom AnalyticsEvent. Useful for integration testing or manually recording discrete events. Returns 400 Bad Request if analytics collection is disabled.
 *AnalyticsApi* | [**AnalyticsUpdateAnalyticsConfig**](docs/AnalyticsApi.md#analyticsupdateanalyticsconfig) | **PUT** /api/v4/Analytics/config | Updates analytics collection configuration.
-*ApiSecretApi* | [**ApiSecretGetStatus**](docs/ApiSecretApi.md#apisecretgetstatus) | **GET** /api/v4/me/tenant/api-secret/status | 
-*ApiSecretApi* | [**ApiSecretRegenerate**](docs/ApiSecretApi.md#apisecretregenerate) | **POST** /api/v4/me/tenant/api-secret/regenerate | 
 *ApsSnapshotApi* | [**ApsSnapshotGetAll**](docs/ApsSnapshotApi.md#apssnapshotgetall) | **GET** /api/v4/device-status/aps | Lists records with pagination, optional date range, device, and source filtering.
 *ApsSnapshotApi* | [**ApsSnapshotGetById**](docs/ApsSnapshotApi.md#apssnapshotgetbyid) | **GET** /api/v4/device-status/aps/{id} | Retrieves a single record by its unique identifier.
+*AuditApi* | [**AuditGetAuditConfig**](docs/AuditApi.md#auditgetauditconfig) | **GET** /api/v4/audit/config | Get the audit configuration for the current tenant.
+*AuditApi* | [**AuditGetMutationAuditLog**](docs/AuditApi.md#auditgetmutationauditlog) | **GET** /api/v4/audit/mutations | Query mutation audit log entries for the current tenant.
+*AuditApi* | [**AuditGetReadAccessAuditLog**](docs/AuditApi.md#auditgetreadaccessauditlog) | **GET** /api/v4/audit/reads | Query read access audit log entries for the current tenant.
+*AuditApi* | [**AuditUpdateAuditConfig**](docs/AuditApi.md#auditupdateauditconfig) | **PUT** /api/v4/audit/config | Create or update the audit configuration for the current tenant.
+*AvatarApi* | [**AvatarDelete**](docs/AvatarApi.md#avatardelete) | **DELETE** /api/v4/me/avatar | Delete the current subject's avatar.
+*AvatarApi* | [**AvatarGet**](docs/AvatarApi.md#avatarget) | **GET** /api/v4/me/avatar | Serve the current subject's avatar image.
+*AvatarApi* | [**AvatarUpload**](docs/AvatarApi.md#avatarupload) | **POST** /api/v4/me/avatar | Upload or replace the current subject's avatar. Image is resized to 256x256 WebP.
 *BGCheckApi* | [**BGCheckCreate**](docs/BGCheckApi.md#bgcheckcreate) | **POST** /api/v4/observations/bg-checks | Creates a new record and returns it with a `Location` header pointing to the created resource.
 *BGCheckApi* | [**BGCheckDelete**](docs/BGCheckApi.md#bgcheckdelete) | **DELETE** /api/v4/observations/bg-checks/{id} | Deletes a record by ID.
 *BGCheckApi* | [**BGCheckGetAll**](docs/BGCheckApi.md#bgcheckgetall) | **GET** /api/v4/observations/bg-checks | Lists records with pagination, optional date range, device, and source filtering.
 *BGCheckApi* | [**BGCheckGetById**](docs/BGCheckApi.md#bgcheckgetbyid) | **GET** /api/v4/observations/bg-checks/{id} | Retrieves a single record by its unique identifier.
 *BGCheckApi* | [**BGCheckUpdate**](docs/BGCheckApi.md#bgcheckupdate) | **PUT** /api/v4/observations/bg-checks/{id} | Updates an existing record by ID and returns the updated record.
-*BackfillApi* | [**BackfillTriggerBackfill**](docs/BackfillApi.md#backfilltriggerbackfill) | **POST** /api/v4/admin/backfill | Triggers a backfill operation to reprocess all legacy entries and treatments into V4 granular tables. Only one backfill may run at a time; concurrent calls return 409 Conflict.
 *BatteryApi* | [**BatteryGetBatteryReadings**](docs/BatteryApi.md#batterygetbatteryreadings) | **GET** /api/v4/Battery/readings | Get battery readings for a device over a time period
 *BatteryApi* | [**BatteryGetBatteryStatistics**](docs/BatteryApi.md#batterygetbatterystatistics) | **GET** /api/v4/Battery/statistics | Get battery statistics for a device or all devices
 *BatteryApi* | [**BatteryGetChargeCycles**](docs/BatteryApi.md#batterygetchargecycles) | **GET** /api/v4/Battery/cycles | Get charge cycle history for a device
@@ -193,6 +203,7 @@ Class | Method | HTTP request | Description
 *BodyWeightApi* | [**BodyWeightUpdateBodyWeight**](docs/BodyWeightApi.md#bodyweightupdatebodyweight) | **PUT** /api/v4/body-weight/{id} | Update an existing body weight record
 *BolusApi* | [**BolusCreate**](docs/BolusApi.md#boluscreate) | **POST** /api/v4/insulin/boluses | Creates a new record and returns it with a `Location` header pointing to the created resource.
 *BolusApi* | [**BolusDelete**](docs/BolusApi.md#bolusdelete) | **DELETE** /api/v4/insulin/boluses/{id} | Deletes a record by ID.
+*BolusApi* | [**BolusDeleteBySyncIdentifier**](docs/BolusApi.md#bolusdeletebysyncidentifier) | **DELETE** /api/v4/insulin/boluses/by-sync-id | Delete a bolus by its external sync identifier (dataSource + syncIdentifier pair).
 *BolusApi* | [**BolusGetAll**](docs/BolusApi.md#bolusgetall) | **GET** /api/v4/insulin/boluses | 
 *BolusApi* | [**BolusGetById**](docs/BolusApi.md#bolusgetbyid) | **GET** /api/v4/insulin/boluses/{id} | Retrieves a single record by its unique identifier.
 *BolusApi* | [**BolusUpdate**](docs/BolusApi.md#bolusupdate) | **PUT** /api/v4/insulin/boluses/{id} | Updates an existing record by ID and returns the updated record.
@@ -222,6 +233,9 @@ Class | Method | HTTP request | Description
 *ClockFacesApi* | [**ClockFacesGetById**](docs/ClockFacesApi.md#clockfacesgetbyid) | **GET** /api/v4/clockfaces/{id} | Get a clock face configuration by ID (public, no authentication required)
 *ClockFacesApi* | [**ClockFacesList**](docs/ClockFacesApi.md#clockfaceslist) | **GET** /api/v4/clockfaces | List all clock faces for the current user
 *ClockFacesApi* | [**ClockFacesUpdate**](docs/ClockFacesApi.md#clockfacesupdate) | **PUT** /api/v4/clockfaces/{id} | Update an existing clock face (owner only)
+*CoachMarkApi* | [**CoachMarkDeleteAll**](docs/CoachMarkApi.md#coachmarkdeleteall) | **DELETE** /api/v4/coach-marks | Delete all coach mark states for the current user, resetting all tutorials.
+*CoachMarkApi* | [**CoachMarkGetAll**](docs/CoachMarkApi.md#coachmarkgetall) | **GET** /api/v4/coach-marks | Get all coach mark states for the current user.
+*CoachMarkApi* | [**CoachMarkUpdateStatus**](docs/CoachMarkApi.md#coachmarkupdatestatus) | **PATCH** /api/v4/coach-marks/{key} | Update a coach mark's status.
 *CompatibilityApi* | [**CompatibilityGetAnalyses**](docs/CompatibilityApi.md#compatibilitygetanalyses) | **GET** /api/v4/compatibility/analyses | Get list of analyses with filtering and pagination
 *CompatibilityApi* | [**CompatibilityGetAnalysisDetail**](docs/CompatibilityApi.md#compatibilitygetanalysisdetail) | **GET** /api/v4/compatibility/analyses/{id} | Get detailed analysis by ID
 *CompatibilityApi* | [**CompatibilityGetConfiguration**](docs/CompatibilityApi.md#compatibilitygetconfiguration) | **GET** /api/v4/compatibility/config | Get current proxy configuration
@@ -261,8 +275,8 @@ Class | Method | HTTP request | Description
 *DeduplicationApi* | [**DeduplicationGetStateSpanLinkedRecords**](docs/DeduplicationApi.md#deduplicationgetstatespanlinkedrecords) | **GET** /api/v4/admin/deduplication/state-spans/{stateSpanId}/sources | 
 *DeduplicationApi* | [**DeduplicationGetTreatmentLinkedRecords**](docs/DeduplicationApi.md#deduplicationgettreatmentlinkedrecords) | **GET** /api/v4/admin/deduplication/treatments/{treatmentId}/sources | 
 *DeduplicationApi* | [**DeduplicationStartDeduplicationJob**](docs/DeduplicationApi.md#deduplicationstartdeduplicationjob) | **POST** /api/v4/admin/deduplication/run | 
-*DevAdminApi* | [**DevAdminCreateTenant**](docs/DevAdminApi.md#devadmincreatetenant) | **POST** /api/v4/dev-only/admin/tenants | Create a new tenant without authentication (dev-only). Used by the Aspire dashboard \"Create Tenant\" command. Copies all non-system memberships from the default tenant so that existing passkeys work immediately on the new tenant.
-*DevAdminApi* | [**DevAdminDeleteTenant**](docs/DevAdminApi.md#devadmindeletetenant) | **DELETE** /api/v4/dev-only/admin/tenants/{id} | Delete a tenant and all associated data without authentication (dev-only). For the default tenant, this performs a reset: deletes and recreates it with the same slug, display name, and default flag, then copies memberships.
+*DevAdminApi* | [**DevAdminCreateTenant**](docs/DevAdminApi.md#devadmincreatetenant) | **POST** /api/v4/dev-only/admin/tenants | Create a new tenant without authentication (dev-only). Used by the Aspire dashboard \"Create Tenant\" command.
+*DevAdminApi* | [**DevAdminDeleteTenant**](docs/DevAdminApi.md#devadmindeletetenant) | **DELETE** /api/v4/dev-only/admin/tenants/{id} | Delete a tenant and all associated data without authentication (dev-only).
 *DevAdminApi* | [**DevAdminExportSnapshot**](docs/DevAdminApi.md#devadminexportsnapshot) | **GET** /api/v4/dev-only/admin/snapshot | Export a full snapshot of all tenants and their identity/config data. Secrets are decrypted to plaintext for portability.
 *DevAdminApi* | [**DevAdminImportScopedSnapshot**](docs/DevAdminApi.md#devadminimportscopedsnapshot) | **POST** /api/v4/dev-only/admin/tenants/{id}/import-snapshot | Import snapshot data for a single tenant, matched by slug in the provided snapshot. Upserts referenced subjects and passkeys without affecting other tenants.
 *DevAdminApi* | [**DevAdminImportSnapshot**](docs/DevAdminApi.md#devadminimportsnapshot) | **POST** /api/v4/dev-only/admin/snapshot | Import a snapshot, replacing all identity/config data. Wraps the entire operation in a transaction.
@@ -277,6 +291,7 @@ Class | Method | HTTP request | Description
 *DeviceCatalogApi* | [**DeviceCatalogGetCatalogByCategory**](docs/DeviceCatalogApi.md#devicecataloggetcatalogbycategory) | **GET** /api/v4/devices/catalog/{category} | Get device models filtered by category.
 *DeviceEventApi* | [**DeviceEventCreate**](docs/DeviceEventApi.md#deviceeventcreate) | **POST** /api/v4/observations/device-events | Creates a new record and returns it with a `Location` header pointing to the created resource.
 *DeviceEventApi* | [**DeviceEventDelete**](docs/DeviceEventApi.md#deviceeventdelete) | **DELETE** /api/v4/observations/device-events/{id} | Deletes a record by ID.
+*DeviceEventApi* | [**DeviceEventDeleteBySyncIdentifier**](docs/DeviceEventApi.md#deviceeventdeletebysyncidentifier) | **DELETE** /api/v4/observations/device-events/by-sync-id | Delete a device event by its external sync identifier (dataSource + syncIdentifier pair).
 *DeviceEventApi* | [**DeviceEventGetAll**](docs/DeviceEventApi.md#deviceeventgetall) | **GET** /api/v4/observations/device-events | Lists records with pagination, optional date range, device, and source filtering.
 *DeviceEventApi* | [**DeviceEventGetById**](docs/DeviceEventApi.md#deviceeventgetbyid) | **GET** /api/v4/observations/device-events/{id} | Retrieves a single record by its unique identifier.
 *DeviceEventApi* | [**DeviceEventUpdate**](docs/DeviceEventApi.md#deviceeventupdate) | **PUT** /api/v4/observations/device-events/{id} | Updates an existing record by ID and returns the updated record.
@@ -296,12 +311,19 @@ Class | Method | HTTP request | Description
 *FoodsApi* | [**FoodsGetRecentFoods**](docs/FoodsApi.md#foodsgetrecentfoods) | **GET** /api/v4/foods/recent | Get recently used foods (excluding favorites).
 *FoodsApi* | [**FoodsRemoveFavorite**](docs/FoodsApi.md#foodsremovefavorite) | **DELETE** /api/v4/foods/{foodId}/favorite | Remove a food from favorites.
 *FoodsApi* | [**FoodsUpdateFood**](docs/FoodsApi.md#foodsupdatefood) | **PUT** /api/v4/foods/{foodId} | Update an existing food record by ID.
+*GlucoseProcessingSettingsApi* | [**GlucoseProcessingSettingsGetPreference**](docs/GlucoseProcessingSettingsApi.md#glucoseprocessingsettingsgetpreference) | **GET** /api/v4/settings/glucose-processing/preference | 
+*GlucoseProcessingSettingsApi* | [**GlucoseProcessingSettingsGetSourceDefaults**](docs/GlucoseProcessingSettingsApi.md#glucoseprocessingsettingsgetsourcedefaults) | **GET** /api/v4/settings/glucose-processing/source-defaults | 
+*GlucoseProcessingSettingsApi* | [**GlucoseProcessingSettingsSetPreference**](docs/GlucoseProcessingSettingsApi.md#glucoseprocessingsettingssetpreference) | **PUT** /api/v4/settings/glucose-processing/preference | 
+*GlucoseProcessingSettingsApi* | [**GlucoseProcessingSettingsSetSourceDefaults**](docs/GlucoseProcessingSettingsApi.md#glucoseprocessingsettingssetsourcedefaults) | **PUT** /api/v4/settings/glucose-processing/source-defaults | 
+*GuestLinkApi* | [**GuestLinkActivateGuestLink**](docs/GuestLinkApi.md#guestlinkactivateguestlink) | **POST** /api/v4/guest-links/activate | Activate a guest link by code and receive a session cookie.
+*GuestLinkApi* | [**GuestLinkCreateGuestLink**](docs/GuestLinkApi.md#guestlinkcreateguestlink) | **POST** /api/v4/guest-links | Create a new guest link for temporary read-only data sharing.
+*GuestLinkApi* | [**GuestLinkGetGuestLinks**](docs/GuestLinkApi.md#guestlinkgetguestlinks) | **GET** /api/v4/guest-links | List guest links for the current user's effective subject.
+*GuestLinkApi* | [**GuestLinkRevokeGuestLink**](docs/GuestLinkApi.md#guestlinkrevokeguestlink) | **DELETE** /api/v4/guest-links/{grantId} | Revoke an active guest link.
 *HeartRateApi* | [**HeartRateCreateHeartRates**](docs/HeartRateApi.md#heartratecreateheartrates) | **POST** /api/v4/HeartRate | Create one or more heart rate records
 *HeartRateApi* | [**HeartRateDeleteHeartRate**](docs/HeartRateApi.md#heartratedeleteheartrate) | **DELETE** /api/v4/HeartRate/{id} | Delete a heart rate record by ID
 *HeartRateApi* | [**HeartRateGetHeartRate**](docs/HeartRateApi.md#heartrategetheartrate) | **GET** /api/v4/HeartRate/{id} | Get a specific heart rate record by ID
-*HeartRateApi* | [**HeartRateGetHeartRates**](docs/HeartRateApi.md#heartrategetheartrates) | **GET** /api/v4/HeartRate | Get heart rate records with optional pagination
+*HeartRateApi* | [**HeartRateGetHeartRates**](docs/HeartRateApi.md#heartrategetheartrates) | **GET** /api/v4/HeartRate | Get heart rate records with optional pagination and date filtering
 *HeartRateApi* | [**HeartRateUpdateHeartRate**](docs/HeartRateApi.md#heartrateupdateheartrate) | **PUT** /api/v4/HeartRate/{id} | Update an existing heart rate record
-*HomeAssistantWebhookApi* | [**HomeAssistantWebhookReceiveWebhook**](docs/HomeAssistantWebhookApi.md#homeassistantwebhookreceivewebhook) | **POST** /api/v4/connectors/home-assistant/webhook/{secret} | Receives a webhook from Home Assistant with entity state updates and creates corresponding glucose entries.
 *InsulinCatalogApi* | [**InsulinCatalogGetCatalog**](docs/InsulinCatalogApi.md#insulincataloggetcatalog) | **GET** /api/v4/insulins/catalog | Get all known insulin formulations.
 *InsulinCatalogApi* | [**InsulinCatalogGetCatalogByCategory**](docs/InsulinCatalogApi.md#insulincataloggetcatalogbycategory) | **GET** /api/v4/insulins/catalog/{category} | Get insulin formulations filtered by category.
 *LinkedPlatformsApi* | [**LinkedPlatformsGetLinkedPlatforms**](docs/LinkedPlatformsApi.md#linkedplatformsgetlinkedplatforms) | **GET** /api/v4/chat-identity/linked-platforms | 
@@ -339,6 +361,7 @@ Class | Method | HTTP request | Description
 *NightscoutTransitionApi* | [**NightscoutTransitionGetTransitionStatus**](docs/NightscoutTransitionApi.md#nightscouttransitiongettransitionstatus) | **GET** /api/v4/nightscout-transition/status | Get the current Nightscout transition status including migration progress, write-back health, and disconnect readiness recommendation.
 *NoteApi* | [**NoteCreate**](docs/NoteApi.md#notecreate) | **POST** /api/v4/observations/notes | Creates a new record and returns it with a `Location` header pointing to the created resource.
 *NoteApi* | [**NoteDelete**](docs/NoteApi.md#notedelete) | **DELETE** /api/v4/observations/notes/{id} | Deletes a record by ID.
+*NoteApi* | [**NoteDeleteBySyncIdentifier**](docs/NoteApi.md#notedeletebysyncidentifier) | **DELETE** /api/v4/observations/notes/by-sync-id | Delete a note by its external sync identifier (dataSource + syncIdentifier pair).
 *NoteApi* | [**NoteGetAll**](docs/NoteApi.md#notegetall) | **GET** /api/v4/observations/notes | Lists records with pagination, optional date range, device, and source filtering.
 *NoteApi* | [**NoteGetById**](docs/NoteApi.md#notegetbyid) | **GET** /api/v4/observations/notes/{id} | Retrieves a single record by its unique identifier.
 *NoteApi* | [**NoteUpdate**](docs/NoteApi.md#noteupdate) | **PUT** /api/v4/observations/notes/{id} | Updates an existing record by ID and returns the updated record.
@@ -350,6 +373,7 @@ Class | Method | HTTP request | Description
 *NutritionApi* | [**NutritionCreateCarbIntake**](docs/NutritionApi.md#nutritioncreatecarbintake) | **POST** /api/v4/nutrition/carbs | Create a new carb intake
 *NutritionApi* | [**NutritionCreateMeal**](docs/NutritionApi.md#nutritioncreatemeal) | **POST** /api/v4/nutrition/meals | Atomically create a correlated Bolus + CarbIntake for a meal event. Both records share a single CorrelationId and are persisted within a single transaction. When an existing row matches on (DataSource, SyncIdentifier), the idempotent upsert applies and the response returns 200 instead of 201.
 *NutritionApi* | [**NutritionDeleteCarbIntake**](docs/NutritionApi.md#nutritiondeletecarbintake) | **DELETE** /api/v4/nutrition/carbs/{id} | Delete a carb intake
+*NutritionApi* | [**NutritionDeleteCarbIntakeBySyncIdentifier**](docs/NutritionApi.md#nutritiondeletecarbintakebysyncidentifier) | **DELETE** /api/v4/nutrition/carbs/by-sync-id | Delete a carb intake by its external sync identifier (dataSource + syncIdentifier pair).
 *NutritionApi* | [**NutritionDeleteCarbIntakeFood**](docs/NutritionApi.md#nutritiondeletecarbintakefood) | **DELETE** /api/v4/nutrition/carbs/{id}/foods/{foodEntryId} | Remove a food breakdown entry.
 *NutritionApi* | [**NutritionGetCarbIntakeById**](docs/NutritionApi.md#nutritiongetcarbintakebyid) | **GET** /api/v4/nutrition/carbs/{id} | Get a carb intake by ID
 *NutritionApi* | [**NutritionGetCarbIntakeFoods**](docs/NutritionApi.md#nutritiongetcarbintakefoods) | **GET** /api/v4/nutrition/carbs/{id}/foods | Get food breakdown for a carb intake record.
@@ -357,17 +381,6 @@ Class | Method | HTTP request | Description
 *NutritionApi* | [**NutritionGetMeals**](docs/NutritionApi.md#nutritiongetmeals) | **GET** /api/v4/nutrition/meals | Get meal events grouped by CorrelationId. Each event carries its own carb intakes, correlated boluses, food attribution rows, and aggregated totals. Carb intakes with a null CorrelationId become single-member events on their own (they are NOT collapsed together).
 *NutritionApi* | [**NutritionUpdateCarbIntake**](docs/NutritionApi.md#nutritionupdatecarbintake) | **PUT** /api/v4/nutrition/carbs/{id} | Update an existing carb intake
 *NutritionApi* | [**NutritionUpdateCarbIntakeFood**](docs/NutritionApi.md#nutritionupdatecarbintakefood) | **PUT** /api/v4/nutrition/carbs/{id}/foods/{foodEntryId} | Update a food breakdown entry.
-*OidcApi* | [**OidcCallback**](docs/OidcApi.md#oidccallback) | **GET** /api/v4/oidc/callback | Handle OIDC callback from provider. Exchanges authorization code for tokens and creates session.
-*OidcApi* | [**OidcGetLinkedIdentities**](docs/OidcApi.md#oidcgetlinkedidentities) | **GET** /api/v4/oidc/link/identities | List OIDC identities linked to the currently-authenticated subject.
-*OidcApi* | [**OidcGetProviders**](docs/OidcApi.md#oidcgetproviders) | **GET** /api/v4/oidc/providers | Get available OIDC providers for login.
-*OidcApi* | [**OidcGetSession**](docs/OidcApi.md#oidcgetsession) | **GET** /api/v4/oidc/session | Get current session information including authentication status, roles, and permissions.
-*OidcApi* | [**OidcGetUserInfo**](docs/OidcApi.md#oidcgetuserinfo) | **GET** /api/v4/oidc/userinfo | Get current user information.
-*OidcApi* | [**OidcLink**](docs/OidcApi.md#oidclink) | **GET** /api/v4/oidc/link | Initiate the OIDC link flow. Redirects an already-authenticated caller to the OIDC provider's authorization endpoint so they can attach the external identity to their current account.
-*OidcApi* | [**OidcLinkCallback**](docs/OidcApi.md#oidclinkcallback) | **GET** /api/v4/oidc/link/callback | Handle the OIDC link callback. Verifies the authorization code against the IdP, then attaches the external identity to the currently-authenticated subject. Does NOT issue new session cookies.
-*OidcApi* | [**OidcLogin**](docs/OidcApi.md#oidclogin) | **GET** /api/v4/oidc/login | Initiate OIDC login flow Redirects to the OIDC provider's authorization endpoint
-*OidcApi* | [**OidcLogout**](docs/OidcApi.md#oidclogout) | **POST** /api/v4/oidc/logout | Logout and revoke the session.
-*OidcApi* | [**OidcRefresh**](docs/OidcApi.md#oidcrefresh) | **POST** /api/v4/oidc/refresh | Refresh the session tokens. Uses the refresh token to get a new access token.
-*OidcApi* | [**OidcUnlinkIdentity**](docs/OidcApi.md#oidcunlinkidentity) | **DELETE** /api/v4/oidc/link/identities/{identityId} | Unlink an OIDC identity from the currently-authenticated subject. Blocked if this would leave the subject with zero primary auth factors.
 *OidcProviderAdminApi* | [**OidcProviderAdminCreate**](docs/OidcProviderAdminApi.md#oidcprovideradmincreate) | **POST** /api/v4/admin/oidc-providers | 
 *OidcProviderAdminApi* | [**OidcProviderAdminDelete**](docs/OidcProviderAdminApi.md#oidcprovideradmindelete) | **DELETE** /api/v4/admin/oidc-providers/{id} | 
 *OidcProviderAdminApi* | [**OidcProviderAdminDisable**](docs/OidcProviderAdminApi.md#oidcprovideradmindisable) | **POST** /api/v4/admin/oidc-providers/{id}/disable | 
@@ -388,6 +401,9 @@ Class | Method | HTTP request | Description
 *PatientRecordApi* | [**PatientRecordUpdateDevice**](docs/PatientRecordApi.md#patientrecordupdatedevice) | **PUT** /api/v4/patient-record/devices/{id} | Update a patient device
 *PatientRecordApi* | [**PatientRecordUpdateInsulin**](docs/PatientRecordApi.md#patientrecordupdateinsulin) | **PUT** /api/v4/patient-record/insulins/{id} | Update a patient insulin
 *PatientRecordApi* | [**PatientRecordUpdatePatientRecord**](docs/PatientRecordApi.md#patientrecordupdatepatientrecord) | **PUT** /api/v4/patient-record | Update the patient record
+*PlatformApi* | [**PlatformCreateTenant**](docs/PlatformApi.md#platformcreatetenant) | **POST** /api/v4/platform/tenants | Creates a new tenant with the authenticated subject as owner. Requires OperatorConfiguration.AllowSelfServiceCreation to be enabled.
+*PlatformApi* | [**PlatformGetTenants**](docs/PlatformApi.md#platformgettenants) | **GET** /api/v4/platform/tenants | Returns all tenants the authenticated subject is a member of.
+*PlatformApi* | [**PlatformGetTransitionStatus**](docs/PlatformApi.md#platformgettransitionstatus) | **GET** /api/v4/platform/transition-status | Returns the current multitenancy configuration status. Used by the frontend to display subdomain URLs and transition notices.
 *PredictionApi* | [**PredictionGetPredictions**](docs/PredictionApi.md#predictiongetpredictions) | **GET** /api/v4/predictions | Get glucose predictions based on current data. Returns predicted glucose values for the next 4 hours in 5-minute intervals.
 *PredictionApi* | [**PredictionGetStatus**](docs/PredictionApi.md#predictiongetstatus) | **GET** /api/v4/predictions/status | Check the status of the prediction service.
 *ProcessingApi* | [**ProcessingGetProcessingStatus**](docs/ProcessingApi.md#processinggetprocessingstatus) | **GET** /api/v4/processing/status/{correlationId} | 
@@ -406,6 +422,7 @@ Class | Method | HTTP request | Description
 *ProfileApi* | [**ProfileGetBasalSchedulesByName**](docs/ProfileApi.md#profilegetbasalschedulesbyname) | **GET** /api/v4/profile/basal/{profileName} | Get basal schedules by profile name
 *ProfileApi* | [**ProfileGetCarbRatioScheduleById**](docs/ProfileApi.md#profilegetcarbratioschedulebyid) | **GET** /api/v4/profile/carb-ratio/by-id/{id} | Get a carb ratio schedule by ID
 *ProfileApi* | [**ProfileGetCarbRatioSchedulesByName**](docs/ProfileApi.md#profilegetcarbratioschedulesbyname) | **GET** /api/v4/profile/carb-ratio/{profileName} | Get carb ratio schedules by profile name
+*ProfileApi* | [**ProfileGetProfileRecords**](docs/ProfileApi.md#profilegetprofilerecords) | **GET** /api/v4/profile/records | Get legacy Nightscout-shaped profile records projected from V4 schedule data. Intended for connector consumption where the caller needs the monolithic Profile shape (store with basal/carbratio/sens/target arrays).
 *ProfileApi* | [**ProfileGetProfileSummary**](docs/ProfileApi.md#profilegetprofilesummary) | **GET** /api/v4/profile/summary | Get a consolidated summary of all profile data across all profile names. Optionally provide a date range to include schedule change detection info.
 *ProfileApi* | [**ProfileGetSensitivityScheduleById**](docs/ProfileApi.md#profilegetsensitivityschedulebyid) | **GET** /api/v4/profile/sensitivity/by-id/{id} | Get a sensitivity schedule by ID
 *ProfileApi* | [**ProfileGetSensitivitySchedulesByName**](docs/ProfileApi.md#profilegetsensitivityschedulesbyname) | **GET** /api/v4/profile/sensitivity/{profileName} | Get sensitivity schedules by profile name
@@ -428,12 +445,12 @@ Class | Method | HTTP request | Description
 *RoleApi* | [**RoleDeleteRole**](docs/RoleApi.md#roledeleterole) | **DELETE** /api/v4/roles/{id} | Delete a role.
 *RoleApi* | [**RoleGetRoles**](docs/RoleApi.md#rolegetroles) | **GET** /api/v4/roles | List roles for the current tenant.
 *RoleApi* | [**RoleUpdateRole**](docs/RoleApi.md#roleupdaterole) | **PUT** /api/v4/roles/{id} | Update a role.
-*SensorGlucoseApi* | [**SensorGlucoseCreate**](docs/SensorGlucoseApi.md#sensorglucosecreate) | **POST** /api/v4/glucose/sensor | Creates a new record and returns it with a `Location` header pointing to the created resource.
+*SensorGlucoseApi* | [**SensorGlucoseCreate**](docs/SensorGlucoseApi.md#sensorglucosecreate) | **POST** /api/v4/glucose/sensor | 
 *SensorGlucoseApi* | [**SensorGlucoseCreateSensorGlucoseBulk**](docs/SensorGlucoseApi.md#sensorglucosecreatesensorglucosebulk) | **POST** /api/v4/glucose/sensor/bulk | Create multiple sensor glucose readings in bulk (max 1000).
 *SensorGlucoseApi* | [**SensorGlucoseDelete**](docs/SensorGlucoseApi.md#sensorglucosedelete) | **DELETE** /api/v4/glucose/sensor/{id} | Deletes a record by ID.
 *SensorGlucoseApi* | [**SensorGlucoseGetAll**](docs/SensorGlucoseApi.md#sensorglucosegetall) | **GET** /api/v4/glucose/sensor | 
 *SensorGlucoseApi* | [**SensorGlucoseGetById**](docs/SensorGlucoseApi.md#sensorglucosegetbyid) | **GET** /api/v4/glucose/sensor/{id} | Retrieves a single record by its unique identifier.
-*SensorGlucoseApi* | [**SensorGlucoseUpdate**](docs/SensorGlucoseApi.md#sensorglucoseupdate) | **PUT** /api/v4/glucose/sensor/{id} | Updates an existing record by ID and returns the updated record.
+*SensorGlucoseApi* | [**SensorGlucoseUpdate**](docs/SensorGlucoseApi.md#sensorglucoseupdate) | **PUT** /api/v4/glucose/sensor/{id} | 
 *ServicesApi* | [**ServicesDeleteConnectorData**](docs/ServicesApi.md#servicesdeleteconnectordata) | **DELETE** /api/v4/services/connectors/{id}/data | Delete all data from a specific connector. WARNING: This is a destructive operation that cannot be undone.
 *ServicesApi* | [**ServicesDeleteDataSourceData**](docs/ServicesApi.md#servicesdeletedatasourcedata) | **DELETE** /api/v4/services/data-sources/{id} | Delete all data from a specific data source. WARNING: This is a destructive operation that cannot be undone.
 *ServicesApi* | [**ServicesDeleteDemoData**](docs/ServicesApi.md#servicesdeletedemodata) | **DELETE** /api/v4/services/data-sources/demo | Delete all demo data. This operation is safe as demo data can be easily regenerated.
@@ -448,6 +465,12 @@ Class | Method | HTTP request | Description
 *ServicesApi* | [**ServicesGetUploaderApps**](docs/ServicesApi.md#servicesgetuploaderapps) | **GET** /api/v4/services/uploaders | Get uploader apps that can push data to Nocturne with setup instructions.
 *ServicesApi* | [**ServicesGetUploaderSetup**](docs/ServicesApi.md#servicesgetuploadersetup) | **GET** /api/v4/services/uploaders/{appId}/setup | Get setup instructions for a specific uploader app.
 *ServicesApi* | [**ServicesTriggerConnectorSync**](docs/ServicesApi.md#servicestriggerconnectorsync) | **POST** /api/v4/services/connectors/{id}/sync | Trigger a manual sync for a specific connector.
+*SetupApi* | [**SetupCreateTenant**](docs/SetupApi.md#setupcreatetenant) | **POST** /api/v4/setup/tenant | Create the first tenant on a fresh install. Only succeeds when zero tenants exist.
+*SetupApi* | [**SetupOidcCallback**](docs/SetupApi.md#setupoidccallback) | **GET** /api/v4/setup/oidc/callback | OIDC callback for setup owner creation. Called by the OIDC provider after authentication. Links the identity, issues session cookies, and redirects to /setup.
+*SetupApi* | [**SetupOwnerComplete**](docs/SetupApi.md#setupownercomplete) | **POST** /api/v4/setup/owner/complete | Complete passkey registration for the first owner account. Verifies attestation, generates recovery codes, issues a full JWT session.
+*SetupApi* | [**SetupOwnerOidc**](docs/SetupApi.md#setupowneroidc) | **POST** /api/v4/setup/owner/oidc | Initiate OIDC-based owner creation. Creates the subject and owner role, then redirects to the OIDC provider to link an identity.
+*SetupApi* | [**SetupOwnerOptions**](docs/SetupApi.md#setupowneroptions) | **POST** /api/v4/setup/owner/options | Generate passkey registration options for the first owner account. Guard: exactly one tenant must exist with zero non-system members.
+*SetupApi* | [**SetupValidateUsername**](docs/SetupApi.md#setupvalidateusername) | **GET** /api/v4/setup/validate-username | Check whether a username is available for the owner account.
 *StateSpansApi* | [**StateSpansCreateStateSpan**](docs/StateSpansApi.md#statespanscreatestatespan) | **POST** /api/v4/state-spans | Create a new state span (manual entry)
 *StateSpansApi* | [**StateSpansDeleteStateSpan**](docs/StateSpansApi.md#statespansdeletestatespan) | **DELETE** /api/v4/state-spans/{id} | Delete a state span
 *StateSpansApi* | [**StateSpansGetActivities**](docs/StateSpansApi.md#statespansgetactivities) | **GET** /api/v4/state-spans/activities | Get all activity state spans (sleep, exercise, illness, travel)
@@ -495,10 +518,13 @@ Class | Method | HTTP request | Description
 *StepCountApi* | [**StepCountCreateStepCounts**](docs/StepCountApi.md#stepcountcreatestepcounts) | **POST** /api/v4/StepCount | Create one or more step count records
 *StepCountApi* | [**StepCountDeleteStepCount**](docs/StepCountApi.md#stepcountdeletestepcount) | **DELETE** /api/v4/StepCount/{id} | Delete a step count record by ID
 *StepCountApi* | [**StepCountGetStepCount**](docs/StepCountApi.md#stepcountgetstepcount) | **GET** /api/v4/StepCount/{id} | Get a specific step count record by ID
-*StepCountApi* | [**StepCountGetStepCounts**](docs/StepCountApi.md#stepcountgetstepcounts) | **GET** /api/v4/StepCount | Get step count records with optional pagination
+*StepCountApi* | [**StepCountGetStepCounts**](docs/StepCountApi.md#stepcountgetstepcounts) | **GET** /api/v4/StepCount | Get step count records with optional pagination and date filtering
 *StepCountApi* | [**StepCountUpdateStepCount**](docs/StepCountApi.md#stepcountupdatestepcount) | **PUT** /api/v4/StepCount/{id} | Update an existing step count record
 *SubjectAdminApi* | [**SubjectAdminSetPlatformAdmin**](docs/SubjectAdminApi.md#subjectadminsetplatformadmin) | **PUT** /api/v4/admin/subjects/{id}/platform-admin | Grant or revoke platform admin for a subject. Blocks self-demotion if the caller is the last platform admin.
 *SummaryApi* | [**SummaryGetSummary**](docs/SummaryApi.md#summarygetsummary) | **GET** /api/v4/summary | Get widget-friendly summary data including current glucose, IOB, COB, trackers, and alarm state.
+*SupportApi* | [**SupportCreateIssue**](docs/SupportApi.md#supportcreateissue) | **POST** /api/v4/support/issues | 
+*SupportApi* | [**SupportGetFallbackUrl**](docs/SupportApi.md#supportgetfallbackurl) | **GET** /api/v4/support/issues/fallback-url | Returns a pre-filled GitHub new-issue URL for fallback when the API is unavailable.
+*SupportApi* | [**SupportGetSupportConfig**](docs/SupportApi.md#supportgetsupportconfig) | **GET** /api/v4/support/config | Returns operator support configuration for the frontend. When no operator is configured, accountBilling is null and the default GitHub flow applies.
 *SystemApi* | [**SystemGetChannelStatuses**](docs/SystemApi.md#systemgetchannelstatuses) | **GET** /api/v4/system/channels | 
 *SystemApi* | [**SystemHeartbeat**](docs/SystemApi.md#systemheartbeat) | **POST** /api/v4/system/heartbeat | 
 *SystemEventsApi* | [**SystemEventsCreateSystemEvent**](docs/SystemEventsApi.md#systemeventscreatesystemevent) | **POST** /api/v4/system-events | Create a new system event (manual entry or import).
@@ -506,14 +532,18 @@ Class | Method | HTTP request | Description
 *SystemEventsApi* | [**SystemEventsGetSystemEvent**](docs/SystemEventsApi.md#systemeventsgetsystemevent) | **GET** /api/v4/system-events/{id} | Get a specific system event by ID.
 *SystemEventsApi* | [**SystemEventsGetSystemEvents**](docs/SystemEventsApi.md#systemeventsgetsystemevents) | **GET** /api/v4/system-events | Query system events with optional filtering.
 *TenantApi* | [**TenantAddMember**](docs/TenantApi.md#tenantaddmember) | **POST** /api/v4/admin/tenants/{id}/members | 
+*TenantApi* | [**TenantAttachOidcIdentity**](docs/TenantApi.md#tenantattachoidcidentity) | **POST** /api/v4/admin/tenants/{id}/members/{subjectId}/credentials/oidc | Attaches an OIDC identity to a member subject.
 *TenantApi* | [**TenantCreate**](docs/TenantApi.md#tenantcreate) | **POST** /api/v4/admin/tenants | 
 *TenantApi* | [**TenantCreateInvite**](docs/TenantApi.md#tenantcreateinvite) | **POST** /api/v4/admin/tenants/{id}/invites | 
 *TenantApi* | [**TenantDelete**](docs/TenantApi.md#tenantdelete) | **DELETE** /api/v4/admin/tenants/{id} | 
 *TenantApi* | [**TenantGetAll**](docs/TenantApi.md#tenantgetall) | **GET** /api/v4/admin/tenants | 
 *TenantApi* | [**TenantGetById**](docs/TenantApi.md#tenantgetbyid) | **GET** /api/v4/admin/tenants/{id} | 
+*TenantApi* | [**TenantGetMemberCredentials**](docs/TenantApi.md#tenantgetmembercredentials) | **GET** /api/v4/admin/tenants/{id}/members/{subjectId}/credentials | Lists passkey credentials and OIDC identities for a member subject.
 *TenantApi* | [**TenantListInvites**](docs/TenantApi.md#tenantlistinvites) | **GET** /api/v4/admin/tenants/{id}/invites | 
 *TenantApi* | [**TenantProvision**](docs/TenantApi.md#tenantprovision) | **POST** /api/v4/admin/tenants/provision | 
 *TenantApi* | [**TenantRemoveMember**](docs/TenantApi.md#tenantremovemember) | **DELETE** /api/v4/admin/tenants/{id}/members/{subjectId} | 
+*TenantApi* | [**TenantRemoveOidcIdentity**](docs/TenantApi.md#tenantremoveoidcidentity) | **DELETE** /api/v4/admin/tenants/{id}/members/{subjectId}/credentials/oidc/{identityId} | Removes an OIDC identity from a member subject.
+*TenantApi* | [**TenantRemovePasskeyCredential**](docs/TenantApi.md#tenantremovepasskeycredential) | **DELETE** /api/v4/admin/tenants/{id}/members/{subjectId}/credentials/passkey/{credentialId} | Removes a passkey credential from a member subject.
 *TenantApi* | [**TenantRevokeInvite**](docs/TenantApi.md#tenantrevokeinvite) | **DELETE** /api/v4/admin/tenants/{id}/invites/{inviteId} | 
 *TenantApi* | [**TenantUpdate**](docs/TenantApi.md#tenantupdate) | **PUT** /api/v4/admin/tenants/{id} | 
 *TrackerAlertsApi* | [**TrackerAlertsGetAvailableSounds**](docs/TrackerAlertsApi.md#trackeralertsgetavailablesounds) | **GET** /api/v4/trackers/alerts/sounds | Get available alert sounds
@@ -534,12 +564,6 @@ Class | Method | HTTP request | Description
 *TrackersApi* | [**TrackersGetUpcomingInstances**](docs/TrackersApi.md#trackersgetupcominginstances) | **GET** /api/v4/trackers/instances/upcoming | Get upcoming tracker expirations for calendar
 *TrackersApi* | [**TrackersStartInstance**](docs/TrackersApi.md#trackersstartinstance) | **POST** /api/v4/trackers/instances | Start a new tracker instance
 *TrackersApi* | [**TrackersUpdateDefinition**](docs/TrackersApi.md#trackersupdatedefinition) | **PUT** /api/v4/trackers/definitions/{id} | Update a tracker definition
-*TreatmentsApi* | [**TreatmentsCreateTreatment**](docs/TreatmentsApi.md#treatmentscreatetreatment) | **POST** /api/v4/treatments | Create a treatment with tracker integration. If the treatment's event type matches a tracker's trigger event types, the tracker instance will be automatically started/restarted.
-*TreatmentsApi* | [**TreatmentsCreateTreatments**](docs/TreatmentsApi.md#treatmentscreatetreatments) | **POST** /api/v4/treatments/bulk | Create multiple treatments with tracker integration.
-*TreatmentsApi* | [**TreatmentsDeleteTreatment**](docs/TreatmentsApi.md#treatmentsdeletetreatment) | **DELETE** /api/v4/treatments/{id} | Delete a treatment by ID
-*TreatmentsApi* | [**TreatmentsGetTreatment**](docs/TreatmentsApi.md#treatmentsgettreatment) | **GET** /api/v4/treatments/{id} | Get a specific treatment by ID
-*TreatmentsApi* | [**TreatmentsGetTreatments**](docs/TreatmentsApi.md#treatmentsgettreatments) | **GET** /api/v4/treatments | Get treatments with optional filtering and pagination. Unlike V1-V3 endpoints, this does NOT include StateSpan-derived basal data. For basal delivery, query /api/v4/state-spans?category=BasalDelivery instead.
-*TreatmentsApi* | [**TreatmentsUpdateTreatment**](docs/TreatmentsApi.md#treatmentsupdatetreatment) | **PUT** /api/v4/treatments/{id} | Update an existing treatment by ID
 *UISettingsApi* | [**UISettingsAddOrUpdateAlarmProfile**](docs/UISettingsApi.md#uisettingsaddorupdatealarmprofile) | **POST** /api/v4/ui-settings/notifications/alarms/profiles | Save a specific alarm profile.
 *UISettingsApi* | [**UISettingsDeleteAlarmProfile**](docs/UISettingsApi.md#uisettingsdeletealarmprofile) | **DELETE** /api/v4/ui-settings/notifications/alarms/profiles/{profileId} | Delete an alarm profile by ID.
 *UISettingsApi* | [**UISettingsGetAlarmConfiguration**](docs/UISettingsApi.md#uisettingsgetalarmconfiguration) | **GET** /api/v4/ui-settings/notifications/alarms | Get alarm profiles configuration (xDrip+-style).
@@ -552,9 +576,9 @@ Class | Method | HTTP request | Description
 *UploaderSnapshotApi* | [**UploaderSnapshotGetById**](docs/UploaderSnapshotApi.md#uploadersnapshotgetbyid) | **GET** /api/v4/device-status/uploader/{id} | Retrieves a single record by its unique identifier.
 *UserPreferencesApi* | [**UserPreferencesGetPreferences**](docs/UserPreferencesApi.md#userpreferencesgetpreferences) | **GET** /api/v4/user/preferences | Get the current user's preferences
 *UserPreferencesApi* | [**UserPreferencesUpdatePreferences**](docs/UserPreferencesApi.md#userpreferencesupdatepreferences) | **PATCH** /api/v4/user/preferences | Update the current user's preferences
-*WebhookSettingsApi* | [**WebhookSettingsGetWebhookSettings**](docs/WebhookSettingsApi.md#webhooksettingsgetwebhooksettings) | **GET** /api/v4/ui-settings/notifications/webhooks | 
-*WebhookSettingsApi* | [**WebhookSettingsSaveWebhookSettings**](docs/WebhookSettingsApi.md#webhooksettingssavewebhooksettings) | **PUT** /api/v4/ui-settings/notifications/webhooks | 
-*WebhookSettingsApi* | [**WebhookSettingsTestWebhookSettings**](docs/WebhookSettingsApi.md#webhooksettingstestwebhooksettings) | **POST** /api/v4/ui-settings/notifications/webhooks/test | 
+*WebhookSettingsApi* | [**WebhookSettingsGetWebhookSettings**](docs/WebhookSettingsApi.md#webhooksettingsgetwebhooksettings) | **GET** /api/v4/ui-settings/notifications/webhooks | Gets the webhook notification settings for the current tenant.
+*WebhookSettingsApi* | [**WebhookSettingsSaveWebhookSettings**](docs/WebhookSettingsApi.md#webhooksettingssavewebhooksettings) | **PUT** /api/v4/ui-settings/notifications/webhooks | Saves webhook notification settings.
+*WebhookSettingsApi* | [**WebhookSettingsTestWebhookSettings**](docs/WebhookSettingsApi.md#webhooksettingstestwebhooksettings) | **POST** /api/v4/ui-settings/notifications/webhooks/test | Tests webhook settings by sending test payloads to configured URLs.
 
 
 <a id="documentation-for-models"></a>
@@ -566,9 +590,15 @@ Class | Method | HTTP request | Description
  - [Model.AccessRequestDto](docs/AccessRequestDto.md)
  - [Model.AckTrackerRequest](docs/AckTrackerRequest.md)
  - [Model.AcknowledgeRequest](docs/AcknowledgeRequest.md)
+ - [Model.ActivateGuestLinkRequest](docs/ActivateGuestLinkRequest.md)
+ - [Model.ActivateGuestLinkResponse](docs/ActivateGuestLinkResponse.md)
  - [Model.ActiveExcursionResponse](docs/ActiveExcursionResponse.md)
  - [Model.ActiveInstanceResponse](docs/ActiveInstanceResponse.md)
+ - [Model.Activity](docs/Activity.md)
+ - [Model.ActogramReportData](docs/ActogramReportData.md)
+ - [Model.ActogramSleepSpan](docs/ActogramSleepSpan.md)
  - [Model.AddMemberRequest](docs/AddMemberRequest.md)
+ - [Model.AdminAttachOidcRequest](docs/AdminAttachOidcRequest.md)
  - [Model.AidAlgorithm](docs/AidAlgorithm.md)
  - [Model.AidSegmentMetrics](docs/AidSegmentMetrics.md)
  - [Model.AidSystemMetrics](docs/AidSystemMetrics.md)
@@ -600,17 +630,16 @@ Class | Method | HTTP request | Description
  - [Model.AnalyticsCollectionConfig](docs/AnalyticsCollectionConfig.md)
  - [Model.AnalyticsEvent](docs/AnalyticsEvent.md)
  - [Model.ApiEndpointInfo](docs/ApiEndpointInfo.md)
- - [Model.ApiSecretRegeneratedResponse](docs/ApiSecretRegeneratedResponse.md)
- - [Model.ApiSecretStatusResponse](docs/ApiSecretStatusResponse.md)
  - [Model.ApplyPresetRequest](docs/ApplyPresetRequest.md)
  - [Model.ApproveAccessRequestRequest](docs/ApproveAccessRequestRequest.md)
  - [Model.ApsSnapshot](docs/ApsSnapshot.md)
+ - [Model.AuditConfigDto](docs/AuditConfigDto.md)
  - [Model.AutosensSettings](docs/AutosensSettings.md)
  - [Model.AvailableConnector](docs/AvailableConnector.md)
  - [Model.AvailableService](docs/AvailableService.md)
+ - [Model.AvatarUploadResponse](docs/AvatarUploadResponse.md)
  - [Model.AveragedStats](docs/AveragedStats.md)
  - [Model.BGCheck](docs/BGCheck.md)
- - [Model.BackfillResult](docs/BackfillResult.md)
  - [Model.BasalAnalysisResponse](docs/BasalAnalysisResponse.md)
  - [Model.BasalData](docs/BasalData.md)
  - [Model.BasalDataPoint](docs/BasalDataPoint.md)
@@ -669,6 +698,7 @@ Class | Method | HTTP request | Description
  - [Model.ClockFacePublicDto](docs/ClockFacePublicDto.md)
  - [Model.ClockRow](docs/ClockRow.md)
  - [Model.ClockSettings](docs/ClockSettings.md)
+ - [Model.CoachMarkState](docs/CoachMarkState.md)
  - [Model.CobData](docs/CobData.md)
  - [Model.CollectionProgress](docs/CollectionProgress.md)
  - [Model.CompatibilityGetAnalysesOverallMatchParameter](docs/CompatibilityGetAnalysesOverallMatchParameter.md)
@@ -707,6 +737,8 @@ Class | Method | HTTP request | Description
  - [Model.CreateCarbIntakeRequest](docs/CreateCarbIntakeRequest.md)
  - [Model.CreateClockFaceRequest](docs/CreateClockFaceRequest.md)
  - [Model.CreateDirectLinkRequest](docs/CreateDirectLinkRequest.md)
+ - [Model.CreateGuestLinkRequest](docs/CreateGuestLinkRequest.md)
+ - [Model.CreateIssueResponse](docs/CreateIssueResponse.md)
  - [Model.CreateMealRequest](docs/CreateMealRequest.md)
  - [Model.CreateMealResponse](docs/CreateMealResponse.md)
  - [Model.CreateMemberInviteRequest](docs/CreateMemberInviteRequest.md)
@@ -715,6 +747,7 @@ Class | Method | HTTP request | Description
  - [Model.CreateNotificationThresholdRequest](docs/CreateNotificationThresholdRequest.md)
  - [Model.CreateOidcProviderRequest](docs/CreateOidcProviderRequest.md)
  - [Model.CreatePendingLinkRequest](docs/CreatePendingLinkRequest.md)
+ - [Model.CreatePlatformTenantRequest](docs/CreatePlatformTenantRequest.md)
  - [Model.CreateRoleRequest](docs/CreateRoleRequest.md)
  - [Model.CreateStateSpanRequest](docs/CreateStateSpanRequest.md)
  - [Model.CreateSystemEventRequest](docs/CreateSystemEventRequest.md)
@@ -782,6 +815,7 @@ Class | Method | HTTP request | Description
  - [Model.ExtendedGlucoseAnalytics](docs/ExtendedGlucoseAnalytics.md)
  - [Model.ExtendedGlucoseAnalyticsRequest](docs/ExtendedGlucoseAnalyticsRequest.md)
  - [Model.ExtendedTimeInRangePercentages](docs/ExtendedTimeInRangePercentages.md)
+ - [Model.FallbackUrlResponse](docs/FallbackUrlResponse.md)
  - [Model.FeatureSettings](docs/FeatureSettings.md)
  - [Model.Food](docs/Food.md)
  - [Model.FoodAttributionCount](docs/FoodAttributionCount.md)
@@ -800,6 +834,10 @@ Class | Method | HTTP request | Description
  - [Model.GlucosePercentiles](docs/GlucosePercentiles.md)
  - [Model.GlucosePointDto](docs/GlucosePointDto.md)
  - [Model.GlucosePredictionResponse](docs/GlucosePredictionResponse.md)
+ - [Model.GlucoseProcessing](docs/GlucoseProcessing.md)
+ - [Model.GlucoseProcessingPreferenceResponse](docs/GlucoseProcessingPreferenceResponse.md)
+ - [Model.GlucoseProcessingSourceDefault](docs/GlucoseProcessingSourceDefault.md)
+ - [Model.GlucoseProcessingSourceDefaultsResponse](docs/GlucoseProcessingSourceDefaultsResponse.md)
  - [Model.GlucoseTrend](docs/GlucoseTrend.md)
  - [Model.GlucoseType](docs/GlucoseType.md)
  - [Model.GlucoseUnit](docs/GlucoseUnit.md)
@@ -810,10 +848,13 @@ Class | Method | HTTP request | Description
  - [Model.GlycomicRiskInterpretation](docs/GlycomicRiskInterpretation.md)
  - [Model.GriTimelinePeriod](docs/GriTimelinePeriod.md)
  - [Model.GriTimelineResponse](docs/GriTimelineResponse.md)
+ - [Model.GuestLinkCreationResult](docs/GuestLinkCreationResult.md)
+ - [Model.GuestLinkInfo](docs/GuestLinkInfo.md)
+ - [Model.GuestLinkStatus](docs/GuestLinkStatus.md)
  - [Model.HeartRate](docs/HeartRate.md)
+ - [Model.HeartRatePointDto](docs/HeartRatePointDto.md)
  - [Model.HeartbeatRequest](docs/HeartbeatRequest.md)
  - [Model.HistoryExcursionResponse](docs/HistoryExcursionResponse.md)
- - [Model.HomeAssistantStateResponse](docs/HomeAssistantStateResponse.md)
  - [Model.HourlyBasalPercentileData](docs/HourlyBasalPercentileData.md)
  - [Model.HyperglycemiaAnalysis](docs/HyperglycemiaAnalysis.md)
  - [Model.HyperglycemiaEpisode](docs/HyperglycemiaEpisode.md)
@@ -829,13 +870,10 @@ Class | Method | HTTP request | Description
  - [Model.InviteUsageInfo](docs/InviteUsageInfo.md)
  - [Model.IobData](docs/IobData.md)
  - [Model.JsonDocument](docs/JsonDocument.md)
- - [Model.LinkedOidcIdentitiesResponse](docs/LinkedOidcIdentitiesResponse.md)
- - [Model.LinkedOidcIdentityDto](docs/LinkedOidcIdentityDto.md)
  - [Model.LinkedPlatformsResponse](docs/LinkedPlatformsResponse.md)
  - [Model.LinkedRecord](docs/LinkedRecord.md)
  - [Model.LinkedRecordsResponse](docs/LinkedRecordsResponse.md)
  - [Model.LocalizedInsight](docs/LocalizedInsight.md)
- - [Model.LogoutResponse](docs/LogoutResponse.md)
  - [Model.LoopOverridePreset](docs/LoopOverridePreset.md)
  - [Model.LoopProfileSettings](docs/LoopProfileSettings.md)
  - [Model.LoopSettings](docs/LoopSettings.md)
@@ -855,6 +893,7 @@ Class | Method | HTTP request | Description
  - [Model.MigrationSourceDto](docs/MigrationSourceDto.md)
  - [Model.MigrationStatusInfo](docs/MigrationStatusInfo.md)
  - [Model.MultiPeriodStatistics](docs/MultiPeriodStatistics.md)
+ - [Model.MutationAuditDto](docs/MutationAuditDto.md)
  - [Model.MyFitnessPalMatchingSettings](docs/MyFitnessPalMatchingSettings.md)
  - [Model.NightDetectionResult](docs/NightDetectionResult.md)
  - [Model.NightscoutTransitionStatus](docs/NightscoutTransitionStatus.md)
@@ -867,12 +906,11 @@ Class | Method | HTTP request | Description
  - [Model.NotificationUrgency](docs/NotificationUrgency.md)
  - [Model.OAuthClientEntityDto](docs/OAuthClientEntityDto.md)
  - [Model.OidcDiscoveryDocument](docs/OidcDiscoveryDocument.md)
- - [Model.OidcProviderInfo](docs/OidcProviderInfo.md)
+ - [Model.OidcIdentityDto](docs/OidcIdentityDto.md)
  - [Model.OidcProviderResponse](docs/OidcProviderResponse.md)
  - [Model.OidcProviderTestResult](docs/OidcProviderTestResult.md)
- - [Model.OidcTokenResponse](docs/OidcTokenResponse.md)
- - [Model.OidcUserInfo](docs/OidcUserInfo.md)
  - [Model.OverallAverages](docs/OverallAverages.md)
+ - [Model.PaginatedResponseOfActivity](docs/PaginatedResponseOfActivity.md)
  - [Model.PaginatedResponseOfApsSnapshot](docs/PaginatedResponseOfApsSnapshot.md)
  - [Model.PaginatedResponseOfBGCheck](docs/PaginatedResponseOfBGCheck.md)
  - [Model.PaginatedResponseOfBolus](docs/PaginatedResponseOfBolus.md)
@@ -881,12 +919,17 @@ Class | Method | HTTP request | Description
  - [Model.PaginatedResponseOfCarbIntake](docs/PaginatedResponseOfCarbIntake.md)
  - [Model.PaginatedResponseOfDeviceEvent](docs/PaginatedResponseOfDeviceEvent.md)
  - [Model.PaginatedResponseOfMeterGlucose](docs/PaginatedResponseOfMeterGlucose.md)
+ - [Model.PaginatedResponseOfMutationAuditDto](docs/PaginatedResponseOfMutationAuditDto.md)
  - [Model.PaginatedResponseOfNote](docs/PaginatedResponseOfNote.md)
+ - [Model.PaginatedResponseOfProfile](docs/PaginatedResponseOfProfile.md)
  - [Model.PaginatedResponseOfPumpSnapshot](docs/PaginatedResponseOfPumpSnapshot.md)
+ - [Model.PaginatedResponseOfReadAccessAuditDto](docs/PaginatedResponseOfReadAccessAuditDto.md)
  - [Model.PaginatedResponseOfSensorGlucose](docs/PaginatedResponseOfSensorGlucose.md)
+ - [Model.PaginatedResponseOfStateSpan](docs/PaginatedResponseOfStateSpan.md)
  - [Model.PaginatedResponseOfTherapySettings](docs/PaginatedResponseOfTherapySettings.md)
  - [Model.PaginatedResponseOfUploaderSnapshot](docs/PaginatedResponseOfUploaderSnapshot.md)
  - [Model.PaginationInfo](docs/PaginationInfo.md)
+ - [Model.PasskeyCredentialDto](docs/PasskeyCredentialDto.md)
  - [Model.PasskeyCredentialEntityDto](docs/PasskeyCredentialEntityDto.md)
  - [Model.PatientDevice](docs/PatientDevice.md)
  - [Model.PatientInsulin](docs/PatientInsulin.md)
@@ -907,6 +950,8 @@ Class | Method | HTTP request | Description
  - [Model.ProcessableDocumentBase](docs/ProcessableDocumentBase.md)
  - [Model.ProcessingStatus](docs/ProcessingStatus.md)
  - [Model.ProcessingStatusResponse](docs/ProcessingStatusResponse.md)
+ - [Model.Profile](docs/Profile.md)
+ - [Model.ProfileData](docs/ProfileData.md)
  - [Model.ProfileSummary](docs/ProfileSummary.md)
  - [Model.ProvisionCredentialData](docs/ProvisionCredentialData.md)
  - [Model.ProvisionOidcIdentityData](docs/ProvisionOidcIdentityData.md)
@@ -916,6 +961,7 @@ Class | Method | HTTP request | Description
  - [Model.PumpSnapshot](docs/PumpSnapshot.md)
  - [Model.PushoverChannelConfig](docs/PushoverChannelConfig.md)
  - [Model.QuickPickFood](docs/QuickPickFood.md)
+ - [Model.ReadAccessAuditDto](docs/ReadAccessAuditDto.md)
  - [Model.RecordType](docs/RecordType.md)
  - [Model.ResolutionConditions](docs/ResolutionConditions.md)
  - [Model.ResponseMatchType](docs/ResponseMatchType.md)
@@ -933,12 +979,21 @@ Class | Method | HTTP request | Description
  - [Model.SensorGlucose](docs/SensorGlucose.md)
  - [Model.ServicesOverview](docs/ServicesOverview.md)
  - [Model.ServicesSettings](docs/ServicesSettings.md)
- - [Model.SessionInfo](docs/SessionInfo.md)
  - [Model.SetActiveRequest](docs/SetActiveRequest.md)
+ - [Model.SetGlucoseProcessingPreferenceRequest](docs/SetGlucoseProcessingPreferenceRequest.md)
+ - [Model.SetGlucoseProcessingSourceDefaultsRequest](docs/SetGlucoseProcessingSourceDefaultsRequest.md)
  - [Model.SetMemberLimitTo24HoursRequest](docs/SetMemberLimitTo24HoursRequest.md)
  - [Model.SetMemberPermissionsRequest](docs/SetMemberPermissionsRequest.md)
  - [Model.SetMemberRolesRequest](docs/SetMemberRolesRequest.md)
  - [Model.SetPlatformAdminRequest](docs/SetPlatformAdminRequest.md)
+ - [Model.SetupOwnerCompleteRequest](docs/SetupOwnerCompleteRequest.md)
+ - [Model.SetupOwnerCompleteResponse](docs/SetupOwnerCompleteResponse.md)
+ - [Model.SetupOwnerOidcRequest](docs/SetupOwnerOidcRequest.md)
+ - [Model.SetupOwnerOidcResponse](docs/SetupOwnerOidcResponse.md)
+ - [Model.SetupOwnerOptionsRequest](docs/SetupOwnerOptionsRequest.md)
+ - [Model.SetupOwnerOptionsResponse](docs/SetupOwnerOptionsResponse.md)
+ - [Model.SetupTenantRequest](docs/SetupTenantRequest.md)
+ - [Model.SetupTenantResponse](docs/SetupTenantResponse.md)
  - [Model.SiteChangeImpactAnalysis](docs/SiteChangeImpactAnalysis.md)
  - [Model.SiteChangeImpactDataPoint](docs/SiteChangeImpactDataPoint.md)
  - [Model.SiteChangeImpactRequest](docs/SiteChangeImpactRequest.md)
@@ -954,9 +1009,13 @@ Class | Method | HTTP request | Description
  - [Model.StateSpansGetStateSpansCategoryParameter](docs/StateSpansGetStateSpansCategoryParameter.md)
  - [Model.StatisticReliability](docs/StatisticReliability.md)
  - [Model.StatusResponse](docs/StatusResponse.md)
+ - [Model.StepBubbleDto](docs/StepBubbleDto.md)
  - [Model.StepCount](docs/StepCount.md)
+ - [Model.SubjectCredentialsDto](docs/SubjectCredentialsDto.md)
  - [Model.SubjectEntityDto](docs/SubjectEntityDto.md)
  - [Model.SuggestedMealMatch](docs/SuggestedMealMatch.md)
+ - [Model.SupportChannelConfig](docs/SupportChannelConfig.md)
+ - [Model.SupportConfigResponse](docs/SupportConfigResponse.md)
  - [Model.SyncDataType](docs/SyncDataType.md)
  - [Model.SyncRequest](docs/SyncRequest.md)
  - [Model.SyncResult](docs/SyncResult.md)
@@ -997,6 +1056,7 @@ Class | Method | HTTP request | Description
  - [Model.TimeOfDayAnalysis](docs/TimeOfDayAnalysis.md)
  - [Model.TimeRange](docs/TimeRange.md)
  - [Model.TimeSeriesPoint](docs/TimeSeriesPoint.md)
+ - [Model.TimeValue](docs/TimeValue.md)
  - [Model.TrackerAlertDto](docs/TrackerAlertDto.md)
  - [Model.TrackerCategory](docs/TrackerCategory.md)
  - [Model.TrackerDefinitionDto](docs/TrackerDefinitionDto.md)
@@ -1007,6 +1067,7 @@ Class | Method | HTTP request | Description
  - [Model.TrackerPresetDto](docs/TrackerPresetDto.md)
  - [Model.TrackerVisibility](docs/TrackerVisibility.md)
  - [Model.TrackersGetDefinitionsCategoryParameter](docs/TrackersGetDefinitionsCategoryParameter.md)
+ - [Model.TransitionStatusDto](docs/TransitionStatusDto.md)
  - [Model.Treatment](docs/Treatment.md)
  - [Model.TreatmentFood](docs/TreatmentFood.md)
  - [Model.TreatmentFoodBreakdown](docs/TreatmentFoodBreakdown.md)
@@ -1022,6 +1083,7 @@ Class | Method | HTTP request | Description
  - [Model.UpdateCarbIntakeRequest](docs/UpdateCarbIntakeRequest.md)
  - [Model.UpdateChatIdentityLinkRequest](docs/UpdateChatIdentityLinkRequest.md)
  - [Model.UpdateClockFaceRequest](docs/UpdateClockFaceRequest.md)
+ - [Model.UpdateCoachMarkRequest](docs/UpdateCoachMarkRequest.md)
  - [Model.UpdateOidcProviderRequest](docs/UpdateOidcProviderRequest.md)
  - [Model.UpdateRoleRequest](docs/UpdateRoleRequest.md)
  - [Model.UpdateStateSpanRequest](docs/UpdateStateSpanRequest.md)
@@ -1033,6 +1095,7 @@ Class | Method | HTTP request | Description
  - [Model.UploaderPlatform](docs/UploaderPlatform.md)
  - [Model.UploaderSetupResponse](docs/UploaderSetupResponse.md)
  - [Model.UploaderSnapshot](docs/UploaderSnapshot.md)
+ - [Model.UpsertActivityRequest](docs/UpsertActivityRequest.md)
  - [Model.UpsertBGCheckRequest](docs/UpsertBGCheckRequest.md)
  - [Model.UpsertBolusCalculationRequest](docs/UpsertBolusCalculationRequest.md)
  - [Model.UpsertCalibrationRequest](docs/UpsertCalibrationRequest.md)

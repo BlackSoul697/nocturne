@@ -8,6 +8,7 @@ import {
   ActogramClient,
   AlertCustomSoundsClient,
   AlertInvitesClient,
+  AlertReplayClient,
   AlertRulesClient,
   AlertsClient,
   AnalyticsClient,
@@ -32,6 +33,7 @@ import {
   ConnectorFoodEntriesClient,
   ConnectorStatusClient,
   CorrelationClient,
+  CurrentTherapyStateClient,
   DataOverviewClient,
   DebugClient,
   DeduplicationClient,
@@ -86,6 +88,7 @@ import {
   SystemClient,
   SystemEventsClient,
   TenantClient,
+  TenantAlertSettingsClient,
   TotpClient,
   TrackerAlertsClient,
   TrackersClient,
@@ -106,6 +109,7 @@ export class ApiClient {
   public readonly actogram: ActogramClient;
   public readonly alertCustomSounds: AlertCustomSoundsClient;
   public readonly alertInvites: AlertInvitesClient;
+  public readonly alertReplay: AlertReplayClient;
   public readonly alertRules: AlertRulesClient;
   public readonly alerts: AlertsClient;
   public readonly analytics: AnalyticsClient;
@@ -130,6 +134,7 @@ export class ApiClient {
   public readonly connectorFoodEntries: ConnectorFoodEntriesClient;
   public readonly connectorStatus: ConnectorStatusClient;
   public readonly correlation: CorrelationClient;
+  public readonly currentTherapyState: CurrentTherapyStateClient;
   public readonly dataOverview: DataOverviewClient;
   public readonly debug: DebugClient;
   public readonly deduplication: DeduplicationClient;
@@ -184,6 +189,7 @@ export class ApiClient {
   public readonly system: SystemClient;
   public readonly systemEvents: SystemEventsClient;
   public readonly tenant: TenantClient;
+  public readonly tenantAlertSettings: TenantAlertSettingsClient;
   public readonly totp: TotpClient;
   public readonly trackerAlerts: TrackerAlertsClient;
   public readonly trackers: TrackersClient;
@@ -204,6 +210,7 @@ export class ApiClient {
     this.actogram = new ActogramClient(apiBaseUrl, http);
     this.alertCustomSounds = new AlertCustomSoundsClient(apiBaseUrl, http);
     this.alertInvites = new AlertInvitesClient(apiBaseUrl, http);
+    this.alertReplay = new AlertReplayClient(apiBaseUrl, http);
     this.alertRules = new AlertRulesClient(apiBaseUrl, http);
     this.alerts = new AlertsClient(apiBaseUrl, http);
     this.analytics = new AnalyticsClient(apiBaseUrl, http);
@@ -228,6 +235,7 @@ export class ApiClient {
     this.connectorFoodEntries = new ConnectorFoodEntriesClient(apiBaseUrl, http);
     this.connectorStatus = new ConnectorStatusClient(apiBaseUrl, http);
     this.correlation = new CorrelationClient(apiBaseUrl, http);
+    this.currentTherapyState = new CurrentTherapyStateClient(apiBaseUrl, http);
     this.dataOverview = new DataOverviewClient(apiBaseUrl, http);
     this.debug = new DebugClient(apiBaseUrl, http);
     this.deduplication = new DeduplicationClient(apiBaseUrl, http);
@@ -282,6 +290,7 @@ export class ApiClient {
     this.system = new SystemClient(apiBaseUrl, http);
     this.systemEvents = new SystemEventsClient(apiBaseUrl, http);
     this.tenant = new TenantClient(apiBaseUrl, http);
+    this.tenantAlertSettings = new TenantAlertSettingsClient(apiBaseUrl, http);
     this.totp = new TotpClient(apiBaseUrl, http);
     this.trackerAlerts = new TrackerAlertsClient(apiBaseUrl, http);
     this.trackers = new TrackersClient(apiBaseUrl, http);

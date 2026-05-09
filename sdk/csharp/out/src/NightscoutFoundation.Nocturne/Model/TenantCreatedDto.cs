@@ -39,18 +39,14 @@ namespace NightscoutFoundation.Nocturne.Model
         /// <param name="slug">slug.</param>
         /// <param name="displayName">displayName.</param>
         /// <param name="isActive">isActive.</param>
-        /// <param name="isDefault">isDefault.</param>
         /// <param name="sysCreatedAt">sysCreatedAt.</param>
-        /// <param name="apiSecret">apiSecret.</param>
-        public TenantCreatedDto(string id = default, string slug = default, string displayName = default, bool isActive = default, bool isDefault = default, DateTimeOffset sysCreatedAt = default, string apiSecret = default)
+        public TenantCreatedDto(string id = default, string slug = default, string displayName = default, bool isActive = default, DateTimeOffset sysCreatedAt = default)
         {
             this.Id = id;
             this.Slug = slug;
             this.DisplayName = displayName;
             this.IsActive = isActive;
-            this.IsDefault = isDefault;
             this.SysCreatedAt = sysCreatedAt;
-            this.ApiSecret = apiSecret;
         }
 
         /// <summary>
@@ -78,22 +74,10 @@ namespace NightscoutFoundation.Nocturne.Model
         public bool IsActive { get; set; }
 
         /// <summary>
-        /// Gets or Sets IsDefault
-        /// </summary>
-        [DataMember(Name = "isDefault", EmitDefaultValue = true)]
-        public bool IsDefault { get; set; }
-
-        /// <summary>
         /// Gets or Sets SysCreatedAt
         /// </summary>
         [DataMember(Name = "sysCreatedAt", EmitDefaultValue = false)]
         public DateTimeOffset SysCreatedAt { get; set; }
-
-        /// <summary>
-        /// Gets or Sets ApiSecret
-        /// </summary>
-        [DataMember(Name = "apiSecret", EmitDefaultValue = false)]
-        public string ApiSecret { get; set; }
 
         /// <summary>
         /// Returns the string presentation of the object
@@ -107,9 +91,7 @@ namespace NightscoutFoundation.Nocturne.Model
             sb.Append("  Slug: ").Append(Slug).Append("\n");
             sb.Append("  DisplayName: ").Append(DisplayName).Append("\n");
             sb.Append("  IsActive: ").Append(IsActive).Append("\n");
-            sb.Append("  IsDefault: ").Append(IsDefault).Append("\n");
             sb.Append("  SysCreatedAt: ").Append(SysCreatedAt).Append("\n");
-            sb.Append("  ApiSecret: ").Append(ApiSecret).Append("\n");
             sb.Append("}\n");
             return sb.ToString();
         }

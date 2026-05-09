@@ -48,6 +48,28 @@ namespace NightscoutFoundation.Nocturne.Api
         /// <returns>ApiResponse of Object(void)</returns>
         ApiResponse<Object> TenantAddMemberWithHttpInfo(string id, AddMemberRequest addMemberRequest);
         /// <summary>
+        /// Attaches an OIDC identity to a member subject.
+        /// </summary>
+        /// <exception cref="NightscoutFoundation.Nocturne.Client.ApiException">Thrown when fails to make API call</exception>
+        /// <param name="id"></param>
+        /// <param name="subjectId"></param>
+        /// <param name="adminAttachOidcRequest"></param>
+        /// <returns></returns>
+        void TenantAttachOidcIdentity(string id, string subjectId, AdminAttachOidcRequest adminAttachOidcRequest);
+
+        /// <summary>
+        /// Attaches an OIDC identity to a member subject.
+        /// </summary>
+        /// <remarks>
+        /// 
+        /// </remarks>
+        /// <exception cref="NightscoutFoundation.Nocturne.Client.ApiException">Thrown when fails to make API call</exception>
+        /// <param name="id"></param>
+        /// <param name="subjectId"></param>
+        /// <param name="adminAttachOidcRequest"></param>
+        /// <returns>ApiResponse of Object(void)</returns>
+        ApiResponse<Object> TenantAttachOidcIdentityWithHttpInfo(string id, string subjectId, AdminAttachOidcRequest adminAttachOidcRequest);
+        /// <summary>
         /// 
         /// </summary>
         /// <exception cref="NightscoutFoundation.Nocturne.Client.ApiException">Thrown when fails to make API call</exception>
@@ -138,6 +160,26 @@ namespace NightscoutFoundation.Nocturne.Api
         /// <returns>ApiResponse of TenantDetailDto</returns>
         ApiResponse<TenantDetailDto> TenantGetByIdWithHttpInfo(string id);
         /// <summary>
+        /// Lists passkey credentials and OIDC identities for a member subject.
+        /// </summary>
+        /// <exception cref="NightscoutFoundation.Nocturne.Client.ApiException">Thrown when fails to make API call</exception>
+        /// <param name="id"></param>
+        /// <param name="subjectId"></param>
+        /// <returns>SubjectCredentialsDto</returns>
+        SubjectCredentialsDto TenantGetMemberCredentials(string id, string subjectId);
+
+        /// <summary>
+        /// Lists passkey credentials and OIDC identities for a member subject.
+        /// </summary>
+        /// <remarks>
+        /// 
+        /// </remarks>
+        /// <exception cref="NightscoutFoundation.Nocturne.Client.ApiException">Thrown when fails to make API call</exception>
+        /// <param name="id"></param>
+        /// <param name="subjectId"></param>
+        /// <returns>ApiResponse of SubjectCredentialsDto</returns>
+        ApiResponse<SubjectCredentialsDto> TenantGetMemberCredentialsWithHttpInfo(string id, string subjectId);
+        /// <summary>
         /// 
         /// </summary>
         /// <exception cref="NightscoutFoundation.Nocturne.Client.ApiException">Thrown when fails to make API call</exception>
@@ -193,6 +235,50 @@ namespace NightscoutFoundation.Nocturne.Api
         /// <param name="subjectId"></param>
         /// <returns>ApiResponse of Object(void)</returns>
         ApiResponse<Object> TenantRemoveMemberWithHttpInfo(string id, string subjectId);
+        /// <summary>
+        /// Removes an OIDC identity from a member subject.
+        /// </summary>
+        /// <exception cref="NightscoutFoundation.Nocturne.Client.ApiException">Thrown when fails to make API call</exception>
+        /// <param name="id"></param>
+        /// <param name="subjectId"></param>
+        /// <param name="identityId"></param>
+        /// <returns></returns>
+        void TenantRemoveOidcIdentity(string id, string subjectId, string identityId);
+
+        /// <summary>
+        /// Removes an OIDC identity from a member subject.
+        /// </summary>
+        /// <remarks>
+        /// 
+        /// </remarks>
+        /// <exception cref="NightscoutFoundation.Nocturne.Client.ApiException">Thrown when fails to make API call</exception>
+        /// <param name="id"></param>
+        /// <param name="subjectId"></param>
+        /// <param name="identityId"></param>
+        /// <returns>ApiResponse of Object(void)</returns>
+        ApiResponse<Object> TenantRemoveOidcIdentityWithHttpInfo(string id, string subjectId, string identityId);
+        /// <summary>
+        /// Removes a passkey credential from a member subject.
+        /// </summary>
+        /// <exception cref="NightscoutFoundation.Nocturne.Client.ApiException">Thrown when fails to make API call</exception>
+        /// <param name="id"></param>
+        /// <param name="subjectId"></param>
+        /// <param name="credentialId"></param>
+        /// <returns></returns>
+        void TenantRemovePasskeyCredential(string id, string subjectId, string credentialId);
+
+        /// <summary>
+        /// Removes a passkey credential from a member subject.
+        /// </summary>
+        /// <remarks>
+        /// 
+        /// </remarks>
+        /// <exception cref="NightscoutFoundation.Nocturne.Client.ApiException">Thrown when fails to make API call</exception>
+        /// <param name="id"></param>
+        /// <param name="subjectId"></param>
+        /// <param name="credentialId"></param>
+        /// <returns>ApiResponse of Object(void)</returns>
+        ApiResponse<Object> TenantRemovePasskeyCredentialWithHttpInfo(string id, string subjectId, string credentialId);
         /// <summary>
         /// 
         /// </summary>
@@ -267,6 +353,33 @@ namespace NightscoutFoundation.Nocturne.Api
         /// <param name="cancellationToken">Cancellation Token to cancel the request.</param>
         /// <returns>Task of ApiResponse</returns>
         System.Threading.Tasks.Task<ApiResponse<Object>> TenantAddMemberWithHttpInfoAsync(string id, AddMemberRequest addMemberRequest, System.Threading.CancellationToken cancellationToken = default);
+        /// <summary>
+        /// Attaches an OIDC identity to a member subject.
+        /// </summary>
+        /// <remarks>
+        /// 
+        /// </remarks>
+        /// <exception cref="NightscoutFoundation.Nocturne.Client.ApiException">Thrown when fails to make API call</exception>
+        /// <param name="id"></param>
+        /// <param name="subjectId"></param>
+        /// <param name="adminAttachOidcRequest"></param>
+        /// <param name="cancellationToken">Cancellation Token to cancel the request.</param>
+        /// <returns>Task of void</returns>
+        System.Threading.Tasks.Task TenantAttachOidcIdentityAsync(string id, string subjectId, AdminAttachOidcRequest adminAttachOidcRequest, System.Threading.CancellationToken cancellationToken = default);
+
+        /// <summary>
+        /// Attaches an OIDC identity to a member subject.
+        /// </summary>
+        /// <remarks>
+        /// 
+        /// </remarks>
+        /// <exception cref="NightscoutFoundation.Nocturne.Client.ApiException">Thrown when fails to make API call</exception>
+        /// <param name="id"></param>
+        /// <param name="subjectId"></param>
+        /// <param name="adminAttachOidcRequest"></param>
+        /// <param name="cancellationToken">Cancellation Token to cancel the request.</param>
+        /// <returns>Task of ApiResponse</returns>
+        System.Threading.Tasks.Task<ApiResponse<Object>> TenantAttachOidcIdentityWithHttpInfoAsync(string id, string subjectId, AdminAttachOidcRequest adminAttachOidcRequest, System.Threading.CancellationToken cancellationToken = default);
         /// <summary>
         /// 
         /// </summary>
@@ -383,6 +496,31 @@ namespace NightscoutFoundation.Nocturne.Api
         /// <returns>Task of ApiResponse (TenantDetailDto)</returns>
         System.Threading.Tasks.Task<ApiResponse<TenantDetailDto>> TenantGetByIdWithHttpInfoAsync(string id, System.Threading.CancellationToken cancellationToken = default);
         /// <summary>
+        /// Lists passkey credentials and OIDC identities for a member subject.
+        /// </summary>
+        /// <remarks>
+        /// 
+        /// </remarks>
+        /// <exception cref="NightscoutFoundation.Nocturne.Client.ApiException">Thrown when fails to make API call</exception>
+        /// <param name="id"></param>
+        /// <param name="subjectId"></param>
+        /// <param name="cancellationToken">Cancellation Token to cancel the request.</param>
+        /// <returns>Task of SubjectCredentialsDto</returns>
+        System.Threading.Tasks.Task<SubjectCredentialsDto> TenantGetMemberCredentialsAsync(string id, string subjectId, System.Threading.CancellationToken cancellationToken = default);
+
+        /// <summary>
+        /// Lists passkey credentials and OIDC identities for a member subject.
+        /// </summary>
+        /// <remarks>
+        /// 
+        /// </remarks>
+        /// <exception cref="NightscoutFoundation.Nocturne.Client.ApiException">Thrown when fails to make API call</exception>
+        /// <param name="id"></param>
+        /// <param name="subjectId"></param>
+        /// <param name="cancellationToken">Cancellation Token to cancel the request.</param>
+        /// <returns>Task of ApiResponse (SubjectCredentialsDto)</returns>
+        System.Threading.Tasks.Task<ApiResponse<SubjectCredentialsDto>> TenantGetMemberCredentialsWithHttpInfoAsync(string id, string subjectId, System.Threading.CancellationToken cancellationToken = default);
+        /// <summary>
         /// 
         /// </summary>
         /// <remarks>
@@ -453,6 +591,60 @@ namespace NightscoutFoundation.Nocturne.Api
         /// <param name="cancellationToken">Cancellation Token to cancel the request.</param>
         /// <returns>Task of ApiResponse</returns>
         System.Threading.Tasks.Task<ApiResponse<Object>> TenantRemoveMemberWithHttpInfoAsync(string id, string subjectId, System.Threading.CancellationToken cancellationToken = default);
+        /// <summary>
+        /// Removes an OIDC identity from a member subject.
+        /// </summary>
+        /// <remarks>
+        /// 
+        /// </remarks>
+        /// <exception cref="NightscoutFoundation.Nocturne.Client.ApiException">Thrown when fails to make API call</exception>
+        /// <param name="id"></param>
+        /// <param name="subjectId"></param>
+        /// <param name="identityId"></param>
+        /// <param name="cancellationToken">Cancellation Token to cancel the request.</param>
+        /// <returns>Task of void</returns>
+        System.Threading.Tasks.Task TenantRemoveOidcIdentityAsync(string id, string subjectId, string identityId, System.Threading.CancellationToken cancellationToken = default);
+
+        /// <summary>
+        /// Removes an OIDC identity from a member subject.
+        /// </summary>
+        /// <remarks>
+        /// 
+        /// </remarks>
+        /// <exception cref="NightscoutFoundation.Nocturne.Client.ApiException">Thrown when fails to make API call</exception>
+        /// <param name="id"></param>
+        /// <param name="subjectId"></param>
+        /// <param name="identityId"></param>
+        /// <param name="cancellationToken">Cancellation Token to cancel the request.</param>
+        /// <returns>Task of ApiResponse</returns>
+        System.Threading.Tasks.Task<ApiResponse<Object>> TenantRemoveOidcIdentityWithHttpInfoAsync(string id, string subjectId, string identityId, System.Threading.CancellationToken cancellationToken = default);
+        /// <summary>
+        /// Removes a passkey credential from a member subject.
+        /// </summary>
+        /// <remarks>
+        /// 
+        /// </remarks>
+        /// <exception cref="NightscoutFoundation.Nocturne.Client.ApiException">Thrown when fails to make API call</exception>
+        /// <param name="id"></param>
+        /// <param name="subjectId"></param>
+        /// <param name="credentialId"></param>
+        /// <param name="cancellationToken">Cancellation Token to cancel the request.</param>
+        /// <returns>Task of void</returns>
+        System.Threading.Tasks.Task TenantRemovePasskeyCredentialAsync(string id, string subjectId, string credentialId, System.Threading.CancellationToken cancellationToken = default);
+
+        /// <summary>
+        /// Removes a passkey credential from a member subject.
+        /// </summary>
+        /// <remarks>
+        /// 
+        /// </remarks>
+        /// <exception cref="NightscoutFoundation.Nocturne.Client.ApiException">Thrown when fails to make API call</exception>
+        /// <param name="id"></param>
+        /// <param name="subjectId"></param>
+        /// <param name="credentialId"></param>
+        /// <param name="cancellationToken">Cancellation Token to cancel the request.</param>
+        /// <returns>Task of ApiResponse</returns>
+        System.Threading.Tasks.Task<ApiResponse<Object>> TenantRemovePasskeyCredentialWithHttpInfoAsync(string id, string subjectId, string credentialId, System.Threading.CancellationToken cancellationToken = default);
         /// <summary>
         /// 
         /// </summary>
@@ -839,6 +1031,149 @@ namespace NightscoutFoundation.Nocturne.Api
             if (this.ExceptionFactory != null)
             {
                 Exception _exception = this.ExceptionFactory("TenantAddMember", localVarResponse);
+                if (_exception != null) throw _exception;
+            }
+
+            return localVarResponse;
+        }
+
+        /// <summary>
+        /// Attaches an OIDC identity to a member subject. 
+        /// </summary>
+        /// <exception cref="NightscoutFoundation.Nocturne.Client.ApiException">Thrown when fails to make API call</exception>
+        /// <param name="id"></param>
+        /// <param name="subjectId"></param>
+        /// <param name="adminAttachOidcRequest"></param>
+        /// <returns></returns>
+        public void TenantAttachOidcIdentity(string id, string subjectId, AdminAttachOidcRequest adminAttachOidcRequest)
+        {
+            TenantAttachOidcIdentityWithHttpInfo(id, subjectId, adminAttachOidcRequest);
+        }
+
+        /// <summary>
+        /// Attaches an OIDC identity to a member subject. 
+        /// </summary>
+        /// <exception cref="NightscoutFoundation.Nocturne.Client.ApiException">Thrown when fails to make API call</exception>
+        /// <param name="id"></param>
+        /// <param name="subjectId"></param>
+        /// <param name="adminAttachOidcRequest"></param>
+        /// <returns>ApiResponse of Object(void)</returns>
+        public NightscoutFoundation.Nocturne.Client.ApiResponse<Object> TenantAttachOidcIdentityWithHttpInfo(string id, string subjectId, AdminAttachOidcRequest adminAttachOidcRequest)
+        {
+            // verify the required parameter 'id' is set
+            if (id == null)
+                throw new NightscoutFoundation.Nocturne.Client.ApiException(400, "Missing required parameter 'id' when calling TenantApi->TenantAttachOidcIdentity");
+
+            // verify the required parameter 'subjectId' is set
+            if (subjectId == null)
+                throw new NightscoutFoundation.Nocturne.Client.ApiException(400, "Missing required parameter 'subjectId' when calling TenantApi->TenantAttachOidcIdentity");
+
+            // verify the required parameter 'adminAttachOidcRequest' is set
+            if (adminAttachOidcRequest == null)
+                throw new NightscoutFoundation.Nocturne.Client.ApiException(400, "Missing required parameter 'adminAttachOidcRequest' when calling TenantApi->TenantAttachOidcIdentity");
+
+            NightscoutFoundation.Nocturne.Client.RequestOptions localVarRequestOptions = new NightscoutFoundation.Nocturne.Client.RequestOptions();
+
+            string[] _contentTypes = new string[] {
+                "application/json"
+            };
+
+            // to determine the Accept header
+            string[] _accepts = new string[] {
+                "application/json"
+            };
+
+            var localVarContentType = NightscoutFoundation.Nocturne.Client.ClientUtils.SelectHeaderContentType(_contentTypes);
+            if (localVarContentType != null) localVarRequestOptions.HeaderParameters.Add("Content-Type", localVarContentType);
+
+            var localVarAccept = NightscoutFoundation.Nocturne.Client.ClientUtils.SelectHeaderAccept(_accepts);
+            if (localVarAccept != null) localVarRequestOptions.HeaderParameters.Add("Accept", localVarAccept);
+
+            localVarRequestOptions.PathParameters.Add("id", NightscoutFoundation.Nocturne.Client.ClientUtils.ParameterToString(id)); // path parameter
+            localVarRequestOptions.PathParameters.Add("subjectId", NightscoutFoundation.Nocturne.Client.ClientUtils.ParameterToString(subjectId)); // path parameter
+            localVarRequestOptions.Data = adminAttachOidcRequest;
+
+
+            // make the HTTP request
+            var localVarResponse = this.Client.Post<Object>("/api/v4/admin/tenants/{id}/members/{subjectId}/credentials/oidc", localVarRequestOptions, this.Configuration);
+
+            if (this.ExceptionFactory != null)
+            {
+                Exception _exception = this.ExceptionFactory("TenantAttachOidcIdentity", localVarResponse);
+                if (_exception != null) throw _exception;
+            }
+
+            return localVarResponse;
+        }
+
+        /// <summary>
+        /// Attaches an OIDC identity to a member subject. 
+        /// </summary>
+        /// <exception cref="NightscoutFoundation.Nocturne.Client.ApiException">Thrown when fails to make API call</exception>
+        /// <param name="id"></param>
+        /// <param name="subjectId"></param>
+        /// <param name="adminAttachOidcRequest"></param>
+        /// <param name="cancellationToken">Cancellation Token to cancel the request.</param>
+        /// <returns>Task of void</returns>
+        public async System.Threading.Tasks.Task TenantAttachOidcIdentityAsync(string id, string subjectId, AdminAttachOidcRequest adminAttachOidcRequest, System.Threading.CancellationToken cancellationToken = default)
+        {
+            await TenantAttachOidcIdentityWithHttpInfoAsync(id, subjectId, adminAttachOidcRequest, cancellationToken).ConfigureAwait(false);
+        }
+
+        /// <summary>
+        /// Attaches an OIDC identity to a member subject. 
+        /// </summary>
+        /// <exception cref="NightscoutFoundation.Nocturne.Client.ApiException">Thrown when fails to make API call</exception>
+        /// <param name="id"></param>
+        /// <param name="subjectId"></param>
+        /// <param name="adminAttachOidcRequest"></param>
+        /// <param name="cancellationToken">Cancellation Token to cancel the request.</param>
+        /// <returns>Task of ApiResponse</returns>
+        public async System.Threading.Tasks.Task<NightscoutFoundation.Nocturne.Client.ApiResponse<Object>> TenantAttachOidcIdentityWithHttpInfoAsync(string id, string subjectId, AdminAttachOidcRequest adminAttachOidcRequest, System.Threading.CancellationToken cancellationToken = default)
+        {
+            // verify the required parameter 'id' is set
+            if (id == null)
+                throw new NightscoutFoundation.Nocturne.Client.ApiException(400, "Missing required parameter 'id' when calling TenantApi->TenantAttachOidcIdentity");
+
+            // verify the required parameter 'subjectId' is set
+            if (subjectId == null)
+                throw new NightscoutFoundation.Nocturne.Client.ApiException(400, "Missing required parameter 'subjectId' when calling TenantApi->TenantAttachOidcIdentity");
+
+            // verify the required parameter 'adminAttachOidcRequest' is set
+            if (adminAttachOidcRequest == null)
+                throw new NightscoutFoundation.Nocturne.Client.ApiException(400, "Missing required parameter 'adminAttachOidcRequest' when calling TenantApi->TenantAttachOidcIdentity");
+
+
+            NightscoutFoundation.Nocturne.Client.RequestOptions localVarRequestOptions = new NightscoutFoundation.Nocturne.Client.RequestOptions();
+
+            string[] _contentTypes = new string[] {
+                "application/json"
+            };
+
+            // to determine the Accept header
+            string[] _accepts = new string[] {
+                "application/json"
+            };
+
+
+            var localVarContentType = NightscoutFoundation.Nocturne.Client.ClientUtils.SelectHeaderContentType(_contentTypes);
+            if (localVarContentType != null) localVarRequestOptions.HeaderParameters.Add("Content-Type", localVarContentType);
+
+            var localVarAccept = NightscoutFoundation.Nocturne.Client.ClientUtils.SelectHeaderAccept(_accepts);
+            if (localVarAccept != null) localVarRequestOptions.HeaderParameters.Add("Accept", localVarAccept);
+
+            localVarRequestOptions.PathParameters.Add("id", NightscoutFoundation.Nocturne.Client.ClientUtils.ParameterToString(id)); // path parameter
+            localVarRequestOptions.PathParameters.Add("subjectId", NightscoutFoundation.Nocturne.Client.ClientUtils.ParameterToString(subjectId)); // path parameter
+            localVarRequestOptions.Data = adminAttachOidcRequest;
+
+
+            // make the HTTP request
+
+            var localVarResponse = await this.AsynchronousClient.PostAsync<Object>("/api/v4/admin/tenants/{id}/members/{subjectId}/credentials/oidc", localVarRequestOptions, this.Configuration, cancellationToken).ConfigureAwait(false);
+
+            if (this.ExceptionFactory != null)
+            {
+                Exception _exception = this.ExceptionFactory("TenantAttachOidcIdentity", localVarResponse);
                 if (_exception != null) throw _exception;
             }
 
@@ -1423,6 +1758,135 @@ namespace NightscoutFoundation.Nocturne.Api
         }
 
         /// <summary>
+        /// Lists passkey credentials and OIDC identities for a member subject. 
+        /// </summary>
+        /// <exception cref="NightscoutFoundation.Nocturne.Client.ApiException">Thrown when fails to make API call</exception>
+        /// <param name="id"></param>
+        /// <param name="subjectId"></param>
+        /// <returns>SubjectCredentialsDto</returns>
+        public SubjectCredentialsDto TenantGetMemberCredentials(string id, string subjectId)
+        {
+            NightscoutFoundation.Nocturne.Client.ApiResponse<SubjectCredentialsDto> localVarResponse = TenantGetMemberCredentialsWithHttpInfo(id, subjectId);
+            return localVarResponse.Data;
+        }
+
+        /// <summary>
+        /// Lists passkey credentials and OIDC identities for a member subject. 
+        /// </summary>
+        /// <exception cref="NightscoutFoundation.Nocturne.Client.ApiException">Thrown when fails to make API call</exception>
+        /// <param name="id"></param>
+        /// <param name="subjectId"></param>
+        /// <returns>ApiResponse of SubjectCredentialsDto</returns>
+        public NightscoutFoundation.Nocturne.Client.ApiResponse<SubjectCredentialsDto> TenantGetMemberCredentialsWithHttpInfo(string id, string subjectId)
+        {
+            // verify the required parameter 'id' is set
+            if (id == null)
+                throw new NightscoutFoundation.Nocturne.Client.ApiException(400, "Missing required parameter 'id' when calling TenantApi->TenantGetMemberCredentials");
+
+            // verify the required parameter 'subjectId' is set
+            if (subjectId == null)
+                throw new NightscoutFoundation.Nocturne.Client.ApiException(400, "Missing required parameter 'subjectId' when calling TenantApi->TenantGetMemberCredentials");
+
+            NightscoutFoundation.Nocturne.Client.RequestOptions localVarRequestOptions = new NightscoutFoundation.Nocturne.Client.RequestOptions();
+
+            string[] _contentTypes = new string[] {
+            };
+
+            // to determine the Accept header
+            string[] _accepts = new string[] {
+                "application/json"
+            };
+
+            var localVarContentType = NightscoutFoundation.Nocturne.Client.ClientUtils.SelectHeaderContentType(_contentTypes);
+            if (localVarContentType != null) localVarRequestOptions.HeaderParameters.Add("Content-Type", localVarContentType);
+
+            var localVarAccept = NightscoutFoundation.Nocturne.Client.ClientUtils.SelectHeaderAccept(_accepts);
+            if (localVarAccept != null) localVarRequestOptions.HeaderParameters.Add("Accept", localVarAccept);
+
+            localVarRequestOptions.PathParameters.Add("id", NightscoutFoundation.Nocturne.Client.ClientUtils.ParameterToString(id)); // path parameter
+            localVarRequestOptions.PathParameters.Add("subjectId", NightscoutFoundation.Nocturne.Client.ClientUtils.ParameterToString(subjectId)); // path parameter
+
+
+            // make the HTTP request
+            var localVarResponse = this.Client.Get<SubjectCredentialsDto>("/api/v4/admin/tenants/{id}/members/{subjectId}/credentials", localVarRequestOptions, this.Configuration);
+
+            if (this.ExceptionFactory != null)
+            {
+                Exception _exception = this.ExceptionFactory("TenantGetMemberCredentials", localVarResponse);
+                if (_exception != null) throw _exception;
+            }
+
+            return localVarResponse;
+        }
+
+        /// <summary>
+        /// Lists passkey credentials and OIDC identities for a member subject. 
+        /// </summary>
+        /// <exception cref="NightscoutFoundation.Nocturne.Client.ApiException">Thrown when fails to make API call</exception>
+        /// <param name="id"></param>
+        /// <param name="subjectId"></param>
+        /// <param name="cancellationToken">Cancellation Token to cancel the request.</param>
+        /// <returns>Task of SubjectCredentialsDto</returns>
+        public async System.Threading.Tasks.Task<SubjectCredentialsDto> TenantGetMemberCredentialsAsync(string id, string subjectId, System.Threading.CancellationToken cancellationToken = default)
+        {
+            NightscoutFoundation.Nocturne.Client.ApiResponse<SubjectCredentialsDto> localVarResponse = await TenantGetMemberCredentialsWithHttpInfoAsync(id, subjectId, cancellationToken).ConfigureAwait(false);
+            return localVarResponse.Data;
+        }
+
+        /// <summary>
+        /// Lists passkey credentials and OIDC identities for a member subject. 
+        /// </summary>
+        /// <exception cref="NightscoutFoundation.Nocturne.Client.ApiException">Thrown when fails to make API call</exception>
+        /// <param name="id"></param>
+        /// <param name="subjectId"></param>
+        /// <param name="cancellationToken">Cancellation Token to cancel the request.</param>
+        /// <returns>Task of ApiResponse (SubjectCredentialsDto)</returns>
+        public async System.Threading.Tasks.Task<NightscoutFoundation.Nocturne.Client.ApiResponse<SubjectCredentialsDto>> TenantGetMemberCredentialsWithHttpInfoAsync(string id, string subjectId, System.Threading.CancellationToken cancellationToken = default)
+        {
+            // verify the required parameter 'id' is set
+            if (id == null)
+                throw new NightscoutFoundation.Nocturne.Client.ApiException(400, "Missing required parameter 'id' when calling TenantApi->TenantGetMemberCredentials");
+
+            // verify the required parameter 'subjectId' is set
+            if (subjectId == null)
+                throw new NightscoutFoundation.Nocturne.Client.ApiException(400, "Missing required parameter 'subjectId' when calling TenantApi->TenantGetMemberCredentials");
+
+
+            NightscoutFoundation.Nocturne.Client.RequestOptions localVarRequestOptions = new NightscoutFoundation.Nocturne.Client.RequestOptions();
+
+            string[] _contentTypes = new string[] {
+            };
+
+            // to determine the Accept header
+            string[] _accepts = new string[] {
+                "application/json"
+            };
+
+
+            var localVarContentType = NightscoutFoundation.Nocturne.Client.ClientUtils.SelectHeaderContentType(_contentTypes);
+            if (localVarContentType != null) localVarRequestOptions.HeaderParameters.Add("Content-Type", localVarContentType);
+
+            var localVarAccept = NightscoutFoundation.Nocturne.Client.ClientUtils.SelectHeaderAccept(_accepts);
+            if (localVarAccept != null) localVarRequestOptions.HeaderParameters.Add("Accept", localVarAccept);
+
+            localVarRequestOptions.PathParameters.Add("id", NightscoutFoundation.Nocturne.Client.ClientUtils.ParameterToString(id)); // path parameter
+            localVarRequestOptions.PathParameters.Add("subjectId", NightscoutFoundation.Nocturne.Client.ClientUtils.ParameterToString(subjectId)); // path parameter
+
+
+            // make the HTTP request
+
+            var localVarResponse = await this.AsynchronousClient.GetAsync<SubjectCredentialsDto>("/api/v4/admin/tenants/{id}/members/{subjectId}/credentials", localVarRequestOptions, this.Configuration, cancellationToken).ConfigureAwait(false);
+
+            if (this.ExceptionFactory != null)
+            {
+                Exception _exception = this.ExceptionFactory("TenantGetMemberCredentials", localVarResponse);
+                if (_exception != null) throw _exception;
+            }
+
+            return localVarResponse;
+        }
+
+        /// <summary>
         ///  
         /// </summary>
         /// <exception cref="NightscoutFoundation.Nocturne.Client.ApiException">Thrown when fails to make API call</exception>
@@ -1775,6 +2239,288 @@ namespace NightscoutFoundation.Nocturne.Api
             if (this.ExceptionFactory != null)
             {
                 Exception _exception = this.ExceptionFactory("TenantRemoveMember", localVarResponse);
+                if (_exception != null) throw _exception;
+            }
+
+            return localVarResponse;
+        }
+
+        /// <summary>
+        /// Removes an OIDC identity from a member subject. 
+        /// </summary>
+        /// <exception cref="NightscoutFoundation.Nocturne.Client.ApiException">Thrown when fails to make API call</exception>
+        /// <param name="id"></param>
+        /// <param name="subjectId"></param>
+        /// <param name="identityId"></param>
+        /// <returns></returns>
+        public void TenantRemoveOidcIdentity(string id, string subjectId, string identityId)
+        {
+            TenantRemoveOidcIdentityWithHttpInfo(id, subjectId, identityId);
+        }
+
+        /// <summary>
+        /// Removes an OIDC identity from a member subject. 
+        /// </summary>
+        /// <exception cref="NightscoutFoundation.Nocturne.Client.ApiException">Thrown when fails to make API call</exception>
+        /// <param name="id"></param>
+        /// <param name="subjectId"></param>
+        /// <param name="identityId"></param>
+        /// <returns>ApiResponse of Object(void)</returns>
+        public NightscoutFoundation.Nocturne.Client.ApiResponse<Object> TenantRemoveOidcIdentityWithHttpInfo(string id, string subjectId, string identityId)
+        {
+            // verify the required parameter 'id' is set
+            if (id == null)
+                throw new NightscoutFoundation.Nocturne.Client.ApiException(400, "Missing required parameter 'id' when calling TenantApi->TenantRemoveOidcIdentity");
+
+            // verify the required parameter 'subjectId' is set
+            if (subjectId == null)
+                throw new NightscoutFoundation.Nocturne.Client.ApiException(400, "Missing required parameter 'subjectId' when calling TenantApi->TenantRemoveOidcIdentity");
+
+            // verify the required parameter 'identityId' is set
+            if (identityId == null)
+                throw new NightscoutFoundation.Nocturne.Client.ApiException(400, "Missing required parameter 'identityId' when calling TenantApi->TenantRemoveOidcIdentity");
+
+            NightscoutFoundation.Nocturne.Client.RequestOptions localVarRequestOptions = new NightscoutFoundation.Nocturne.Client.RequestOptions();
+
+            string[] _contentTypes = new string[] {
+            };
+
+            // to determine the Accept header
+            string[] _accepts = new string[] {
+                "application/json"
+            };
+
+            var localVarContentType = NightscoutFoundation.Nocturne.Client.ClientUtils.SelectHeaderContentType(_contentTypes);
+            if (localVarContentType != null) localVarRequestOptions.HeaderParameters.Add("Content-Type", localVarContentType);
+
+            var localVarAccept = NightscoutFoundation.Nocturne.Client.ClientUtils.SelectHeaderAccept(_accepts);
+            if (localVarAccept != null) localVarRequestOptions.HeaderParameters.Add("Accept", localVarAccept);
+
+            localVarRequestOptions.PathParameters.Add("id", NightscoutFoundation.Nocturne.Client.ClientUtils.ParameterToString(id)); // path parameter
+            localVarRequestOptions.PathParameters.Add("subjectId", NightscoutFoundation.Nocturne.Client.ClientUtils.ParameterToString(subjectId)); // path parameter
+            localVarRequestOptions.PathParameters.Add("identityId", NightscoutFoundation.Nocturne.Client.ClientUtils.ParameterToString(identityId)); // path parameter
+
+
+            // make the HTTP request
+            var localVarResponse = this.Client.Delete<Object>("/api/v4/admin/tenants/{id}/members/{subjectId}/credentials/oidc/{identityId}", localVarRequestOptions, this.Configuration);
+
+            if (this.ExceptionFactory != null)
+            {
+                Exception _exception = this.ExceptionFactory("TenantRemoveOidcIdentity", localVarResponse);
+                if (_exception != null) throw _exception;
+            }
+
+            return localVarResponse;
+        }
+
+        /// <summary>
+        /// Removes an OIDC identity from a member subject. 
+        /// </summary>
+        /// <exception cref="NightscoutFoundation.Nocturne.Client.ApiException">Thrown when fails to make API call</exception>
+        /// <param name="id"></param>
+        /// <param name="subjectId"></param>
+        /// <param name="identityId"></param>
+        /// <param name="cancellationToken">Cancellation Token to cancel the request.</param>
+        /// <returns>Task of void</returns>
+        public async System.Threading.Tasks.Task TenantRemoveOidcIdentityAsync(string id, string subjectId, string identityId, System.Threading.CancellationToken cancellationToken = default)
+        {
+            await TenantRemoveOidcIdentityWithHttpInfoAsync(id, subjectId, identityId, cancellationToken).ConfigureAwait(false);
+        }
+
+        /// <summary>
+        /// Removes an OIDC identity from a member subject. 
+        /// </summary>
+        /// <exception cref="NightscoutFoundation.Nocturne.Client.ApiException">Thrown when fails to make API call</exception>
+        /// <param name="id"></param>
+        /// <param name="subjectId"></param>
+        /// <param name="identityId"></param>
+        /// <param name="cancellationToken">Cancellation Token to cancel the request.</param>
+        /// <returns>Task of ApiResponse</returns>
+        public async System.Threading.Tasks.Task<NightscoutFoundation.Nocturne.Client.ApiResponse<Object>> TenantRemoveOidcIdentityWithHttpInfoAsync(string id, string subjectId, string identityId, System.Threading.CancellationToken cancellationToken = default)
+        {
+            // verify the required parameter 'id' is set
+            if (id == null)
+                throw new NightscoutFoundation.Nocturne.Client.ApiException(400, "Missing required parameter 'id' when calling TenantApi->TenantRemoveOidcIdentity");
+
+            // verify the required parameter 'subjectId' is set
+            if (subjectId == null)
+                throw new NightscoutFoundation.Nocturne.Client.ApiException(400, "Missing required parameter 'subjectId' when calling TenantApi->TenantRemoveOidcIdentity");
+
+            // verify the required parameter 'identityId' is set
+            if (identityId == null)
+                throw new NightscoutFoundation.Nocturne.Client.ApiException(400, "Missing required parameter 'identityId' when calling TenantApi->TenantRemoveOidcIdentity");
+
+
+            NightscoutFoundation.Nocturne.Client.RequestOptions localVarRequestOptions = new NightscoutFoundation.Nocturne.Client.RequestOptions();
+
+            string[] _contentTypes = new string[] {
+            };
+
+            // to determine the Accept header
+            string[] _accepts = new string[] {
+                "application/json"
+            };
+
+
+            var localVarContentType = NightscoutFoundation.Nocturne.Client.ClientUtils.SelectHeaderContentType(_contentTypes);
+            if (localVarContentType != null) localVarRequestOptions.HeaderParameters.Add("Content-Type", localVarContentType);
+
+            var localVarAccept = NightscoutFoundation.Nocturne.Client.ClientUtils.SelectHeaderAccept(_accepts);
+            if (localVarAccept != null) localVarRequestOptions.HeaderParameters.Add("Accept", localVarAccept);
+
+            localVarRequestOptions.PathParameters.Add("id", NightscoutFoundation.Nocturne.Client.ClientUtils.ParameterToString(id)); // path parameter
+            localVarRequestOptions.PathParameters.Add("subjectId", NightscoutFoundation.Nocturne.Client.ClientUtils.ParameterToString(subjectId)); // path parameter
+            localVarRequestOptions.PathParameters.Add("identityId", NightscoutFoundation.Nocturne.Client.ClientUtils.ParameterToString(identityId)); // path parameter
+
+
+            // make the HTTP request
+
+            var localVarResponse = await this.AsynchronousClient.DeleteAsync<Object>("/api/v4/admin/tenants/{id}/members/{subjectId}/credentials/oidc/{identityId}", localVarRequestOptions, this.Configuration, cancellationToken).ConfigureAwait(false);
+
+            if (this.ExceptionFactory != null)
+            {
+                Exception _exception = this.ExceptionFactory("TenantRemoveOidcIdentity", localVarResponse);
+                if (_exception != null) throw _exception;
+            }
+
+            return localVarResponse;
+        }
+
+        /// <summary>
+        /// Removes a passkey credential from a member subject. 
+        /// </summary>
+        /// <exception cref="NightscoutFoundation.Nocturne.Client.ApiException">Thrown when fails to make API call</exception>
+        /// <param name="id"></param>
+        /// <param name="subjectId"></param>
+        /// <param name="credentialId"></param>
+        /// <returns></returns>
+        public void TenantRemovePasskeyCredential(string id, string subjectId, string credentialId)
+        {
+            TenantRemovePasskeyCredentialWithHttpInfo(id, subjectId, credentialId);
+        }
+
+        /// <summary>
+        /// Removes a passkey credential from a member subject. 
+        /// </summary>
+        /// <exception cref="NightscoutFoundation.Nocturne.Client.ApiException">Thrown when fails to make API call</exception>
+        /// <param name="id"></param>
+        /// <param name="subjectId"></param>
+        /// <param name="credentialId"></param>
+        /// <returns>ApiResponse of Object(void)</returns>
+        public NightscoutFoundation.Nocturne.Client.ApiResponse<Object> TenantRemovePasskeyCredentialWithHttpInfo(string id, string subjectId, string credentialId)
+        {
+            // verify the required parameter 'id' is set
+            if (id == null)
+                throw new NightscoutFoundation.Nocturne.Client.ApiException(400, "Missing required parameter 'id' when calling TenantApi->TenantRemovePasskeyCredential");
+
+            // verify the required parameter 'subjectId' is set
+            if (subjectId == null)
+                throw new NightscoutFoundation.Nocturne.Client.ApiException(400, "Missing required parameter 'subjectId' when calling TenantApi->TenantRemovePasskeyCredential");
+
+            // verify the required parameter 'credentialId' is set
+            if (credentialId == null)
+                throw new NightscoutFoundation.Nocturne.Client.ApiException(400, "Missing required parameter 'credentialId' when calling TenantApi->TenantRemovePasskeyCredential");
+
+            NightscoutFoundation.Nocturne.Client.RequestOptions localVarRequestOptions = new NightscoutFoundation.Nocturne.Client.RequestOptions();
+
+            string[] _contentTypes = new string[] {
+            };
+
+            // to determine the Accept header
+            string[] _accepts = new string[] {
+                "application/json"
+            };
+
+            var localVarContentType = NightscoutFoundation.Nocturne.Client.ClientUtils.SelectHeaderContentType(_contentTypes);
+            if (localVarContentType != null) localVarRequestOptions.HeaderParameters.Add("Content-Type", localVarContentType);
+
+            var localVarAccept = NightscoutFoundation.Nocturne.Client.ClientUtils.SelectHeaderAccept(_accepts);
+            if (localVarAccept != null) localVarRequestOptions.HeaderParameters.Add("Accept", localVarAccept);
+
+            localVarRequestOptions.PathParameters.Add("id", NightscoutFoundation.Nocturne.Client.ClientUtils.ParameterToString(id)); // path parameter
+            localVarRequestOptions.PathParameters.Add("subjectId", NightscoutFoundation.Nocturne.Client.ClientUtils.ParameterToString(subjectId)); // path parameter
+            localVarRequestOptions.PathParameters.Add("credentialId", NightscoutFoundation.Nocturne.Client.ClientUtils.ParameterToString(credentialId)); // path parameter
+
+
+            // make the HTTP request
+            var localVarResponse = this.Client.Delete<Object>("/api/v4/admin/tenants/{id}/members/{subjectId}/credentials/passkey/{credentialId}", localVarRequestOptions, this.Configuration);
+
+            if (this.ExceptionFactory != null)
+            {
+                Exception _exception = this.ExceptionFactory("TenantRemovePasskeyCredential", localVarResponse);
+                if (_exception != null) throw _exception;
+            }
+
+            return localVarResponse;
+        }
+
+        /// <summary>
+        /// Removes a passkey credential from a member subject. 
+        /// </summary>
+        /// <exception cref="NightscoutFoundation.Nocturne.Client.ApiException">Thrown when fails to make API call</exception>
+        /// <param name="id"></param>
+        /// <param name="subjectId"></param>
+        /// <param name="credentialId"></param>
+        /// <param name="cancellationToken">Cancellation Token to cancel the request.</param>
+        /// <returns>Task of void</returns>
+        public async System.Threading.Tasks.Task TenantRemovePasskeyCredentialAsync(string id, string subjectId, string credentialId, System.Threading.CancellationToken cancellationToken = default)
+        {
+            await TenantRemovePasskeyCredentialWithHttpInfoAsync(id, subjectId, credentialId, cancellationToken).ConfigureAwait(false);
+        }
+
+        /// <summary>
+        /// Removes a passkey credential from a member subject. 
+        /// </summary>
+        /// <exception cref="NightscoutFoundation.Nocturne.Client.ApiException">Thrown when fails to make API call</exception>
+        /// <param name="id"></param>
+        /// <param name="subjectId"></param>
+        /// <param name="credentialId"></param>
+        /// <param name="cancellationToken">Cancellation Token to cancel the request.</param>
+        /// <returns>Task of ApiResponse</returns>
+        public async System.Threading.Tasks.Task<NightscoutFoundation.Nocturne.Client.ApiResponse<Object>> TenantRemovePasskeyCredentialWithHttpInfoAsync(string id, string subjectId, string credentialId, System.Threading.CancellationToken cancellationToken = default)
+        {
+            // verify the required parameter 'id' is set
+            if (id == null)
+                throw new NightscoutFoundation.Nocturne.Client.ApiException(400, "Missing required parameter 'id' when calling TenantApi->TenantRemovePasskeyCredential");
+
+            // verify the required parameter 'subjectId' is set
+            if (subjectId == null)
+                throw new NightscoutFoundation.Nocturne.Client.ApiException(400, "Missing required parameter 'subjectId' when calling TenantApi->TenantRemovePasskeyCredential");
+
+            // verify the required parameter 'credentialId' is set
+            if (credentialId == null)
+                throw new NightscoutFoundation.Nocturne.Client.ApiException(400, "Missing required parameter 'credentialId' when calling TenantApi->TenantRemovePasskeyCredential");
+
+
+            NightscoutFoundation.Nocturne.Client.RequestOptions localVarRequestOptions = new NightscoutFoundation.Nocturne.Client.RequestOptions();
+
+            string[] _contentTypes = new string[] {
+            };
+
+            // to determine the Accept header
+            string[] _accepts = new string[] {
+                "application/json"
+            };
+
+
+            var localVarContentType = NightscoutFoundation.Nocturne.Client.ClientUtils.SelectHeaderContentType(_contentTypes);
+            if (localVarContentType != null) localVarRequestOptions.HeaderParameters.Add("Content-Type", localVarContentType);
+
+            var localVarAccept = NightscoutFoundation.Nocturne.Client.ClientUtils.SelectHeaderAccept(_accepts);
+            if (localVarAccept != null) localVarRequestOptions.HeaderParameters.Add("Accept", localVarAccept);
+
+            localVarRequestOptions.PathParameters.Add("id", NightscoutFoundation.Nocturne.Client.ClientUtils.ParameterToString(id)); // path parameter
+            localVarRequestOptions.PathParameters.Add("subjectId", NightscoutFoundation.Nocturne.Client.ClientUtils.ParameterToString(subjectId)); // path parameter
+            localVarRequestOptions.PathParameters.Add("credentialId", NightscoutFoundation.Nocturne.Client.ClientUtils.ParameterToString(credentialId)); // path parameter
+
+
+            // make the HTTP request
+
+            var localVarResponse = await this.AsynchronousClient.DeleteAsync<Object>("/api/v4/admin/tenants/{id}/members/{subjectId}/credentials/passkey/{credentialId}", localVarRequestOptions, this.Configuration, cancellationToken).ConfigureAwait(false);
+
+            if (this.ExceptionFactory != null)
+            {
+                Exception _exception = this.ExceptionFactory("TenantRemovePasskeyCredential", localVarResponse);
                 if (_exception != null) throw _exception;
             }
 

@@ -75,6 +75,28 @@ public class PumpSnapshotRepository : IPumpSnapshotRepository
         return entity is null ? null : PumpSnapshotMapper.ToDomainModel(entity);
     }
 
+    /// <inheritdoc />
+    public async Task<PumpSnapshot?> GetLatestBeforeAsync(DateTime timestamp, CancellationToken ct = default)
+    {
+        var entity = await _context.PumpSnapshots
+            .AsNoTracking()
+            .Where(e => e.Timestamp < timestamp)
+            .OrderByDescending(e => e.Timestamp)
+            .FirstOrDefaultAsync(ct);
+        return entity is null ? null : PumpSnapshotMapper.ToDomainModel(entity);
+    }
+
+    /// <inheritdoc />
+    public async Task<PumpSnapshot?> GetLatestAsync(DateTime? asOf, CancellationToken ct = default)
+    {
+        var query = _context.PumpSnapshots.AsNoTracking();
+        if (asOf.HasValue) query = query.Where(e => e.Timestamp <= asOf.Value);
+        var entity = await query
+            .OrderByDescending(e => e.Timestamp)
+            .FirstOrDefaultAsync(ct);
+        return entity is null ? null : PumpSnapshotMapper.ToDomainModel(entity);
+    }
+
     /// <summary>
     /// Creates a new pump snapshot record.
     /// </summary>
@@ -164,5 +186,54 @@ public class PumpSnapshotRepository : IPumpSnapshotRepository
         return await _context.PumpSnapshots
             .Where(e => e.LegacyId == legacyId)
             .ExecuteDeleteAsync(ct);
+    }
+
+    /// <inheritdoc />
+    public async Task<IEnumerable<PumpSnapshot>> BulkCreateAsync(
+        IEnumerable<PumpSnapshot> records,
+        CancellationToken ct = default)
+    {
+        var entities = records.Select(PumpSnapshotMapper.ToEntity).ToList();
+        if (entities.Count == 0)
+            return [];
+
+        // Batch-level dedup: keep first occurrence per LegacyId
+        entities = entities
+            .GroupBy(e => e.LegacyId ?? e.Id.ToString())
+            .Select(g => g.First())
+            .ToList();
+
+        // DB-level dedup: filter out records whose LegacyId already exists
+        var legacyIds = entities
+            .Where(e => !string.IsNullOrEmpty(e.LegacyId))
+            .Select(e => e.LegacyId!)
+            .ToHashSet();
+
+        if (legacyIds.Count > 0)
+        {
+            var existingIds = await _context
+                .PumpSnapshots.AsNoTracking()
+                .Where(e => legacyIds.Contains(e.LegacyId!))
+                .Select(e => e.LegacyId)
+                .ToListAsync(ct);
+
+            var existingSet = existingIds.ToHashSet();
+            entities = entities
+                .Where(e => string.IsNullOrEmpty(e.LegacyId) || !existingSet.Contains(e.LegacyId))
+                .ToList();
+        }
+
+        if (entities.Count == 0)
+            return [];
+
+        const int batchSize = 500;
+        foreach (var batch in entities.Chunk(batchSize))
+        {
+            _context.PumpSnapshots.AddRange(batch);
+            await _context.SaveChangesAsync(ct);
+            _context.ChangeTracker.Clear();
+        }
+
+        return entities.Select(PumpSnapshotMapper.ToDomainModel);
     }
 }

@@ -6,6 +6,7 @@ All URIs are relative to *http://localhost*
 |--------|--------------|-------------|
 | [**BolusCreate**](BolusApi.md#boluscreate) | **POST** /api/v4/insulin/boluses | Creates a new record and returns it with a &#x60;Location&#x60; header pointing to the created resource. |
 | [**BolusDelete**](BolusApi.md#bolusdelete) | **DELETE** /api/v4/insulin/boluses/{id} | Deletes a record by ID. |
+| [**BolusDeleteBySyncIdentifier**](BolusApi.md#bolusdeletebysyncidentifier) | **DELETE** /api/v4/insulin/boluses/by-sync-id | Delete a bolus by its external sync identifier (dataSource + syncIdentifier pair). |
 | [**BolusGetAll**](BolusApi.md#bolusgetall) | **GET** /api/v4/insulin/boluses |  |
 | [**BolusGetById**](BolusApi.md#bolusgetbyid) | **GET** /api/v4/insulin/boluses/{id} | Retrieves a single record by its unique identifier. |
 | [**BolusUpdate**](BolusApi.md#bolusupdate) | **PUT** /api/v4/insulin/boluses/{id} | Updates an existing record by ID and returns the updated record. |
@@ -194,6 +195,99 @@ No authorization required
 | Status code | Description | Response headers |
 |-------------|-------------|------------------|
 | **204** |  |  -  |
+| **404** |  |  -  |
+
+[[Back to top]](#) [[Back to API list]](../README.md#documentation-for-api-endpoints) [[Back to Model list]](../README.md#documentation-for-models) [[Back to README]](../README.md)
+
+<a id="bolusdeletebysyncidentifier"></a>
+# **BolusDeleteBySyncIdentifier**
+> void BolusDeleteBySyncIdentifier (string? dataSource = null, string? syncIdentifier = null)
+
+Delete a bolus by its external sync identifier (dataSource + syncIdentifier pair).
+
+### Example
+```csharp
+using System.Collections.Generic;
+using System.Diagnostics;
+using System.Net.Http;
+using NightscoutFoundation.Nocturne.Api;
+using NightscoutFoundation.Nocturne.Client;
+using NightscoutFoundation.Nocturne.Model;
+
+namespace Example
+{
+    public class BolusDeleteBySyncIdentifierExample
+    {
+        public static void Main()
+        {
+            Configuration config = new Configuration();
+            config.BasePath = "http://localhost";
+            // create instances of HttpClient, HttpClientHandler to be reused later with different Api classes
+            HttpClient httpClient = new HttpClient();
+            HttpClientHandler httpClientHandler = new HttpClientHandler();
+            var apiInstance = new BolusApi(httpClient, config, httpClientHandler);
+            var dataSource = "dataSource_example";  // string? |  (optional) 
+            var syncIdentifier = "syncIdentifier_example";  // string? |  (optional) 
+
+            try
+            {
+                // Delete a bolus by its external sync identifier (dataSource + syncIdentifier pair).
+                apiInstance.BolusDeleteBySyncIdentifier(dataSource, syncIdentifier);
+            }
+            catch (ApiException  e)
+            {
+                Debug.Print("Exception when calling BolusApi.BolusDeleteBySyncIdentifier: " + e.Message);
+                Debug.Print("Status Code: " + e.ErrorCode);
+                Debug.Print(e.StackTrace);
+            }
+        }
+    }
+}
+```
+
+#### Using the BolusDeleteBySyncIdentifierWithHttpInfo variant
+This returns an ApiResponse object which contains the response data, status code and headers.
+
+```csharp
+try
+{
+    // Delete a bolus by its external sync identifier (dataSource + syncIdentifier pair).
+    apiInstance.BolusDeleteBySyncIdentifierWithHttpInfo(dataSource, syncIdentifier);
+}
+catch (ApiException e)
+{
+    Debug.Print("Exception when calling BolusApi.BolusDeleteBySyncIdentifierWithHttpInfo: " + e.Message);
+    Debug.Print("Status Code: " + e.ErrorCode);
+    Debug.Print(e.StackTrace);
+}
+```
+
+### Parameters
+
+| Name | Type | Description | Notes |
+|------|------|-------------|-------|
+| **dataSource** | **string?** |  | [optional]  |
+| **syncIdentifier** | **string?** |  | [optional]  |
+
+### Return type
+
+void (empty response body)
+
+### Authorization
+
+No authorization required
+
+### HTTP request headers
+
+ - **Content-Type**: Not defined
+ - **Accept**: application/json
+
+
+### HTTP response details
+| Status code | Description | Response headers |
+|-------------|-------------|------------------|
+| **204** |  |  -  |
+| **400** |  |  -  |
 | **404** |  |  -  |
 
 [[Back to top]](#) [[Back to API list]](../README.md#documentation-for-api-endpoints) [[Back to Model list]](../README.md#documentation-for-models) [[Back to README]](../README.md)

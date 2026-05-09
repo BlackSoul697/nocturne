@@ -127,6 +127,9 @@
   function handleDismiss() {
     if (activeKey) ctx.dismiss(activeKey);
   }
+  function handleComplete() {
+    if (activeKey) ctx.complete(activeKey);
+  }
   function handleBack() {
     if (currentLocalStep > 0) currentLocalStep--;
   }
@@ -177,6 +180,7 @@
       action={currentRegistration.action}
       onback={handleBack}
       onnext={handleNext}
+      oncomplete={handleComplete}
       ondismiss={handleDismiss}
     />
   </div>

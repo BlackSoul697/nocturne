@@ -2187,7 +2187,7 @@ No authorization required
 
 Gets comprehensive statistics for multiple time periods (1, 3, 7, 30, and 90 days). Fetches sensor glucose, bolus, carb, and temp-basal data from the database for each period, computes GlucoseAnalytics, TreatmentSummary, and InsulinDeliveryStatistics, and caches the result for 5 minutes.
 
-When no TempBasal or algorithm bolus records are found but a profile is loaded, the method falls back to computing scheduled basal from the active IProfileService schedule. GMI reliability is assessed per-period using context-appropriate recommended-day minimums (e.g., 1-day periods cannot require 14 days of data).
+When no TempBasal or algorithm bolus records are found but a profile is loaded, the method falls back to computing scheduled basal from the active profile schedule via IBasalRateResolver. GMI reliability is assessed per-period using context-appropriate recommended-day minimums (e.g., 1-day periods cannot require 14 days of data).
 
 ### Example
 ```csharp

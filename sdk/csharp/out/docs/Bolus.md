@@ -24,6 +24,7 @@ Name | Type | Description | Notes
 **Duration** | **double?** |  | [optional] 
 **SyncIdentifier** | **string** |  | [optional] 
 **InsulinType** | **string** |  | [optional] 
+**InsulinContext** | [**TreatmentInsulinContext**](TreatmentInsulinContext.md) |  | [optional] 
 **Unabsorbed** | **double?** |  | [optional] 
 **DeviceId** | **string** |  | [optional] 
 **PumpRecordId** | **string** |  | [optional] 

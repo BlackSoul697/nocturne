@@ -39,7 +39,6 @@ namespace NightscoutFoundation.Nocturne.Model
         /// <param name="slug">slug.</param>
         /// <param name="displayName">displayName.</param>
         /// <param name="isActive">isActive.</param>
-        /// <param name="isDefault">isDefault.</param>
         /// <param name="timezone">timezone.</param>
         /// <param name="createdAt">createdAt.</param>
         /// <param name="entries">entries.</param>
@@ -49,13 +48,12 @@ namespace NightscoutFoundation.Nocturne.Model
         /// <param name="members">members.</param>
         /// <param name="latestEntry">latestEntry.</param>
         /// <param name="connectors">connectors.</param>
-        public DevTenantSummaryDto(string id = default, string slug = default, string displayName = default, bool isActive = default, bool isDefault = default, string timezone = default, DateTimeOffset createdAt = default, long entries = default, long treatments = default, long deviceStatuses = default, int profiles = default, int members = default, DateTimeOffset? latestEntry = default, List<DevConnectorSummaryDto> connectors = default)
+        public DevTenantSummaryDto(string id = default, string slug = default, string displayName = default, bool isActive = default, string timezone = default, DateTimeOffset createdAt = default, long entries = default, long treatments = default, long deviceStatuses = default, int profiles = default, int members = default, DateTimeOffset? latestEntry = default, List<DevConnectorSummaryDto> connectors = default)
         {
             this.Id = id;
             this.Slug = slug;
             this.DisplayName = displayName;
             this.IsActive = isActive;
-            this.IsDefault = isDefault;
             this.Timezone = timezone;
             this.CreatedAt = createdAt;
             this.Entries = entries;
@@ -90,12 +88,6 @@ namespace NightscoutFoundation.Nocturne.Model
         /// </summary>
         [DataMember(Name = "isActive", EmitDefaultValue = true)]
         public bool IsActive { get; set; }
-
-        /// <summary>
-        /// Gets or Sets IsDefault
-        /// </summary>
-        [DataMember(Name = "isDefault", EmitDefaultValue = true)]
-        public bool IsDefault { get; set; }
 
         /// <summary>
         /// Gets or Sets Timezone
@@ -163,7 +155,6 @@ namespace NightscoutFoundation.Nocturne.Model
             sb.Append("  Slug: ").Append(Slug).Append("\n");
             sb.Append("  DisplayName: ").Append(DisplayName).Append("\n");
             sb.Append("  IsActive: ").Append(IsActive).Append("\n");
-            sb.Append("  IsDefault: ").Append(IsDefault).Append("\n");
             sb.Append("  Timezone: ").Append(Timezone).Append("\n");
             sb.Append("  CreatedAt: ").Append(CreatedAt).Append("\n");
             sb.Append("  Entries: ").Append(Entries).Append("\n");

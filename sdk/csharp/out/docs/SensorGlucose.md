@@ -12,6 +12,7 @@ Name | Type | Description | Notes
 **App** | **string** |  | [optional] 
 **DataSource** | **string** |  | [optional] 
 **CorrelationId** | **string** |  | [optional] 
+**PatientDeviceId** | **string** |  | [optional] 
 **LegacyId** | **string** |  | [optional] 
 **CreatedAt** | **DateTimeOffset** |  | [optional] 
 **ModifiedAt** | **DateTimeOffset** |  | [optional] 
@@ -24,6 +25,11 @@ Name | Type | Description | Notes
 **Filtered** | **double?** |  | [optional] 
 **Unfiltered** | **double?** |  | [optional] 
 **Delta** | **double?** |  | [optional] 
+**GlucoseProcessing** | **GlucoseProcessing** |  | [optional] 
+**SmoothedMgdl** | **double?** |  | [optional] 
+**SmoothedMmol** | **double?** |  | [optional] 
+**UnsmoothedMgdl** | **double?** |  | [optional] 
+**UnsmoothedMmol** | **double?** |  | [optional] 
 **AdditionalProperties** | **Dictionary&lt;string, Object&gt;** |  | [optional] 
 
 [[Back to Model list]](../README.md#documentation-for-models) [[Back to API list]](../README.md#documentation-for-api-endpoints) [[Back to README]](../README.md)

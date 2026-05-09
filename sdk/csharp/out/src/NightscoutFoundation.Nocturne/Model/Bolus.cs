@@ -67,13 +67,14 @@ namespace NightscoutFoundation.Nocturne.Model
         /// <param name="duration">duration.</param>
         /// <param name="syncIdentifier">syncIdentifier.</param>
         /// <param name="insulinType">insulinType.</param>
+        /// <param name="insulinContext">insulinContext.</param>
         /// <param name="unabsorbed">unabsorbed.</param>
         /// <param name="deviceId">deviceId.</param>
         /// <param name="pumpRecordId">pumpRecordId.</param>
         /// <param name="bolusCalculationId">bolusCalculationId.</param>
         /// <param name="apsSnapshotId">apsSnapshotId.</param>
         /// <param name="additionalProperties">additionalProperties.</param>
-        public Bolus(string id = default, DateTimeOffset timestamp = default, long mills = default, int? utcOffset = default, string device = default, string app = default, string dataSource = default, string correlationId = default, string legacyId = default, DateTimeOffset createdAt = default, DateTimeOffset modifiedAt = default, double insulin = default, double? programmed = default, double? delivered = default, BolusType? bolusType = default, bool automatic = default, BolusKind? kind = default, double? duration = default, string syncIdentifier = default, string insulinType = default, double? unabsorbed = default, string deviceId = default, string pumpRecordId = default, string bolusCalculationId = default, string apsSnapshotId = default, Dictionary<string, Object> additionalProperties = default)
+        public Bolus(string id = default, DateTimeOffset timestamp = default, long mills = default, int? utcOffset = default, string device = default, string app = default, string dataSource = default, string correlationId = default, string legacyId = default, DateTimeOffset createdAt = default, DateTimeOffset modifiedAt = default, double insulin = default, double? programmed = default, double? delivered = default, BolusType? bolusType = default, bool automatic = default, BolusKind? kind = default, double? duration = default, string syncIdentifier = default, string insulinType = default, TreatmentInsulinContext insulinContext = default, double? unabsorbed = default, string deviceId = default, string pumpRecordId = default, string bolusCalculationId = default, string apsSnapshotId = default, Dictionary<string, Object> additionalProperties = default)
         {
             this.Id = id;
             this.Timestamp = timestamp;
@@ -95,6 +96,7 @@ namespace NightscoutFoundation.Nocturne.Model
             this.Duration = duration;
             this.SyncIdentifier = syncIdentifier;
             this.InsulinType = insulinType;
+            this.InsulinContext = insulinContext;
             this.Unabsorbed = unabsorbed;
             this.DeviceId = deviceId;
             this.PumpRecordId = pumpRecordId;
@@ -212,6 +214,12 @@ namespace NightscoutFoundation.Nocturne.Model
         public string InsulinType { get; set; }
 
         /// <summary>
+        /// Gets or Sets InsulinContext
+        /// </summary>
+        [DataMember(Name = "insulinContext", EmitDefaultValue = true)]
+        public TreatmentInsulinContext InsulinContext { get; set; }
+
+        /// <summary>
         /// Gets or Sets Unabsorbed
         /// </summary>
         [DataMember(Name = "unabsorbed", EmitDefaultValue = true)]
@@ -275,6 +283,7 @@ namespace NightscoutFoundation.Nocturne.Model
             sb.Append("  Duration: ").Append(Duration).Append("\n");
             sb.Append("  SyncIdentifier: ").Append(SyncIdentifier).Append("\n");
             sb.Append("  InsulinType: ").Append(InsulinType).Append("\n");
+            sb.Append("  InsulinContext: ").Append(InsulinContext).Append("\n");
             sb.Append("  Unabsorbed: ").Append(Unabsorbed).Append("\n");
             sb.Append("  DeviceId: ").Append(DeviceId).Append("\n");
             sb.Append("  PumpRecordId: ").Append(PumpRecordId).Append("\n");

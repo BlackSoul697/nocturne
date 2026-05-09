@@ -4,15 +4,15 @@ All URIs are relative to *http://localhost*
 
 | Method | HTTP request | Description |
 |--------|--------------|-------------|
-| [**WebhookSettingsGetWebhookSettings**](WebhookSettingsApi.md#webhooksettingsgetwebhooksettings) | **GET** /api/v4/ui-settings/notifications/webhooks |  |
-| [**WebhookSettingsSaveWebhookSettings**](WebhookSettingsApi.md#webhooksettingssavewebhooksettings) | **PUT** /api/v4/ui-settings/notifications/webhooks |  |
-| [**WebhookSettingsTestWebhookSettings**](WebhookSettingsApi.md#webhooksettingstestwebhooksettings) | **POST** /api/v4/ui-settings/notifications/webhooks/test |  |
+| [**WebhookSettingsGetWebhookSettings**](WebhookSettingsApi.md#webhooksettingsgetwebhooksettings) | **GET** /api/v4/ui-settings/notifications/webhooks | Gets the webhook notification settings for the current tenant. |
+| [**WebhookSettingsSaveWebhookSettings**](WebhookSettingsApi.md#webhooksettingssavewebhooksettings) | **PUT** /api/v4/ui-settings/notifications/webhooks | Saves webhook notification settings. |
+| [**WebhookSettingsTestWebhookSettings**](WebhookSettingsApi.md#webhooksettingstestwebhooksettings) | **POST** /api/v4/ui-settings/notifications/webhooks/test | Tests webhook settings by sending test payloads to configured URLs. |
 
 <a id="webhooksettingsgetwebhooksettings"></a>
 # **WebhookSettingsGetWebhookSettings**
 > WebhookNotificationSettings WebhookSettingsGetWebhookSettings ()
 
-
+Gets the webhook notification settings for the current tenant.
 
 ### Example
 ```csharp
@@ -38,6 +38,7 @@ namespace Example
 
             try
             {
+                // Gets the webhook notification settings for the current tenant.
                 WebhookNotificationSettings result = apiInstance.WebhookSettingsGetWebhookSettings();
                 Debug.WriteLine(result);
             }
@@ -58,6 +59,7 @@ This returns an ApiResponse object which contains the response data, status code
 ```csharp
 try
 {
+    // Gets the webhook notification settings for the current tenant.
     ApiResponse<WebhookNotificationSettings> response = apiInstance.WebhookSettingsGetWebhookSettingsWithHttpInfo();
     Debug.Write("Status Code: " + response.StatusCode);
     Debug.Write("Response Headers: " + response.Headers);
@@ -99,7 +101,7 @@ No authorization required
 # **WebhookSettingsSaveWebhookSettings**
 > WebhookNotificationSettings WebhookSettingsSaveWebhookSettings (WebhookNotificationSettings webhookNotificationSettings)
 
-
+Saves webhook notification settings.
 
 ### Example
 ```csharp
@@ -126,6 +128,7 @@ namespace Example
 
             try
             {
+                // Saves webhook notification settings.
                 WebhookNotificationSettings result = apiInstance.WebhookSettingsSaveWebhookSettings(webhookNotificationSettings);
                 Debug.WriteLine(result);
             }
@@ -146,6 +149,7 @@ This returns an ApiResponse object which contains the response data, status code
 ```csharp
 try
 {
+    // Saves webhook notification settings.
     ApiResponse<WebhookNotificationSettings> response = apiInstance.WebhookSettingsSaveWebhookSettingsWithHttpInfo(webhookNotificationSettings);
     Debug.Write("Status Code: " + response.StatusCode);
     Debug.Write("Response Headers: " + response.Headers);
@@ -192,7 +196,7 @@ No authorization required
 # **WebhookSettingsTestWebhookSettings**
 > WebhookTestResult WebhookSettingsTestWebhookSettings (WebhookTestRequest webhookTestRequest)
 
-
+Tests webhook settings by sending test payloads to configured URLs.
 
 ### Example
 ```csharp
@@ -219,6 +223,7 @@ namespace Example
 
             try
             {
+                // Tests webhook settings by sending test payloads to configured URLs.
                 WebhookTestResult result = apiInstance.WebhookSettingsTestWebhookSettings(webhookTestRequest);
                 Debug.WriteLine(result);
             }
@@ -239,6 +244,7 @@ This returns an ApiResponse object which contains the response data, status code
 ```csharp
 try
 {
+    // Tests webhook settings by sending test payloads to configured URLs.
     ApiResponse<WebhookTestResult> response = apiInstance.WebhookSettingsTestWebhookSettingsWithHttpInfo(webhookTestRequest);
     Debug.Write("Status Code: " + response.StatusCode);
     Debug.Write("Response Headers: " + response.Headers);

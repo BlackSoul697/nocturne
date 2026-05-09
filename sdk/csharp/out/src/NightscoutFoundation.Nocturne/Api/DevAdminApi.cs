@@ -28,7 +28,7 @@ namespace NightscoutFoundation.Nocturne.Api
     {
         #region Synchronous Operations
         /// <summary>
-        /// Create a new tenant without authentication (dev-only). Used by the Aspire dashboard \&quot;Create Tenant\&quot; command. Copies all non-system memberships from the default tenant so that existing passkeys work immediately on the new tenant.
+        /// Create a new tenant without authentication (dev-only). Used by the Aspire dashboard \&quot;Create Tenant\&quot; command.
         /// </summary>
         /// <exception cref="NightscoutFoundation.Nocturne.Client.ApiException">Thrown when fails to make API call</exception>
         /// <param name="devCreateTenantRequest"></param>
@@ -36,7 +36,7 @@ namespace NightscoutFoundation.Nocturne.Api
         TenantCreatedDto DevAdminCreateTenant(DevCreateTenantRequest devCreateTenantRequest);
 
         /// <summary>
-        /// Create a new tenant without authentication (dev-only). Used by the Aspire dashboard \&quot;Create Tenant\&quot; command. Copies all non-system memberships from the default tenant so that existing passkeys work immediately on the new tenant.
+        /// Create a new tenant without authentication (dev-only). Used by the Aspire dashboard \&quot;Create Tenant\&quot; command.
         /// </summary>
         /// <remarks>
         /// 
@@ -46,7 +46,7 @@ namespace NightscoutFoundation.Nocturne.Api
         /// <returns>ApiResponse of TenantCreatedDto</returns>
         ApiResponse<TenantCreatedDto> DevAdminCreateTenantWithHttpInfo(DevCreateTenantRequest devCreateTenantRequest);
         /// <summary>
-        /// Delete a tenant and all associated data without authentication (dev-only). For the default tenant, this performs a reset: deletes and recreates it with the same slug, display name, and default flag, then copies memberships.
+        /// Delete a tenant and all associated data without authentication (dev-only).
         /// </summary>
         /// <exception cref="NightscoutFoundation.Nocturne.Client.ApiException">Thrown when fails to make API call</exception>
         /// <param name="id"></param>
@@ -54,7 +54,7 @@ namespace NightscoutFoundation.Nocturne.Api
         FileParameter DevAdminDeleteTenant(string id);
 
         /// <summary>
-        /// Delete a tenant and all associated data without authentication (dev-only). For the default tenant, this performs a reset: deletes and recreates it with the same slug, display name, and default flag, then copies memberships.
+        /// Delete a tenant and all associated data without authentication (dev-only).
         /// </summary>
         /// <remarks>
         /// 
@@ -159,7 +159,7 @@ namespace NightscoutFoundation.Nocturne.Api
     {
         #region Asynchronous Operations
         /// <summary>
-        /// Create a new tenant without authentication (dev-only). Used by the Aspire dashboard \&quot;Create Tenant\&quot; command. Copies all non-system memberships from the default tenant so that existing passkeys work immediately on the new tenant.
+        /// Create a new tenant without authentication (dev-only). Used by the Aspire dashboard \&quot;Create Tenant\&quot; command.
         /// </summary>
         /// <remarks>
         /// 
@@ -171,7 +171,7 @@ namespace NightscoutFoundation.Nocturne.Api
         System.Threading.Tasks.Task<TenantCreatedDto> DevAdminCreateTenantAsync(DevCreateTenantRequest devCreateTenantRequest, System.Threading.CancellationToken cancellationToken = default);
 
         /// <summary>
-        /// Create a new tenant without authentication (dev-only). Used by the Aspire dashboard \&quot;Create Tenant\&quot; command. Copies all non-system memberships from the default tenant so that existing passkeys work immediately on the new tenant.
+        /// Create a new tenant without authentication (dev-only). Used by the Aspire dashboard \&quot;Create Tenant\&quot; command.
         /// </summary>
         /// <remarks>
         /// 
@@ -182,7 +182,7 @@ namespace NightscoutFoundation.Nocturne.Api
         /// <returns>Task of ApiResponse (TenantCreatedDto)</returns>
         System.Threading.Tasks.Task<ApiResponse<TenantCreatedDto>> DevAdminCreateTenantWithHttpInfoAsync(DevCreateTenantRequest devCreateTenantRequest, System.Threading.CancellationToken cancellationToken = default);
         /// <summary>
-        /// Delete a tenant and all associated data without authentication (dev-only). For the default tenant, this performs a reset: deletes and recreates it with the same slug, display name, and default flag, then copies memberships.
+        /// Delete a tenant and all associated data without authentication (dev-only).
         /// </summary>
         /// <remarks>
         /// 
@@ -194,7 +194,7 @@ namespace NightscoutFoundation.Nocturne.Api
         System.Threading.Tasks.Task<FileParameter> DevAdminDeleteTenantAsync(string id, System.Threading.CancellationToken cancellationToken = default);
 
         /// <summary>
-        /// Delete a tenant and all associated data without authentication (dev-only). For the default tenant, this performs a reset: deletes and recreates it with the same slug, display name, and default flag, then copies memberships.
+        /// Delete a tenant and all associated data without authentication (dev-only).
         /// </summary>
         /// <remarks>
         /// 
@@ -529,7 +529,7 @@ namespace NightscoutFoundation.Nocturne.Api
         }
 
         /// <summary>
-        /// Create a new tenant without authentication (dev-only). Used by the Aspire dashboard \&quot;Create Tenant\&quot; command. Copies all non-system memberships from the default tenant so that existing passkeys work immediately on the new tenant. 
+        /// Create a new tenant without authentication (dev-only). Used by the Aspire dashboard \&quot;Create Tenant\&quot; command. 
         /// </summary>
         /// <exception cref="NightscoutFoundation.Nocturne.Client.ApiException">Thrown when fails to make API call</exception>
         /// <param name="devCreateTenantRequest"></param>
@@ -541,7 +541,7 @@ namespace NightscoutFoundation.Nocturne.Api
         }
 
         /// <summary>
-        /// Create a new tenant without authentication (dev-only). Used by the Aspire dashboard \&quot;Create Tenant\&quot; command. Copies all non-system memberships from the default tenant so that existing passkeys work immediately on the new tenant. 
+        /// Create a new tenant without authentication (dev-only). Used by the Aspire dashboard \&quot;Create Tenant\&quot; command. 
         /// </summary>
         /// <exception cref="NightscoutFoundation.Nocturne.Client.ApiException">Thrown when fails to make API call</exception>
         /// <param name="devCreateTenantRequest"></param>
@@ -585,7 +585,7 @@ namespace NightscoutFoundation.Nocturne.Api
         }
 
         /// <summary>
-        /// Create a new tenant without authentication (dev-only). Used by the Aspire dashboard \&quot;Create Tenant\&quot; command. Copies all non-system memberships from the default tenant so that existing passkeys work immediately on the new tenant. 
+        /// Create a new tenant without authentication (dev-only). Used by the Aspire dashboard \&quot;Create Tenant\&quot; command. 
         /// </summary>
         /// <exception cref="NightscoutFoundation.Nocturne.Client.ApiException">Thrown when fails to make API call</exception>
         /// <param name="devCreateTenantRequest"></param>
@@ -598,7 +598,7 @@ namespace NightscoutFoundation.Nocturne.Api
         }
 
         /// <summary>
-        /// Create a new tenant without authentication (dev-only). Used by the Aspire dashboard \&quot;Create Tenant\&quot; command. Copies all non-system memberships from the default tenant so that existing passkeys work immediately on the new tenant. 
+        /// Create a new tenant without authentication (dev-only). Used by the Aspire dashboard \&quot;Create Tenant\&quot; command. 
         /// </summary>
         /// <exception cref="NightscoutFoundation.Nocturne.Client.ApiException">Thrown when fails to make API call</exception>
         /// <param name="devCreateTenantRequest"></param>
@@ -646,7 +646,7 @@ namespace NightscoutFoundation.Nocturne.Api
         }
 
         /// <summary>
-        /// Delete a tenant and all associated data without authentication (dev-only). For the default tenant, this performs a reset: deletes and recreates it with the same slug, display name, and default flag, then copies memberships. 
+        /// Delete a tenant and all associated data without authentication (dev-only). 
         /// </summary>
         /// <exception cref="NightscoutFoundation.Nocturne.Client.ApiException">Thrown when fails to make API call</exception>
         /// <param name="id"></param>
@@ -658,7 +658,7 @@ namespace NightscoutFoundation.Nocturne.Api
         }
 
         /// <summary>
-        /// Delete a tenant and all associated data without authentication (dev-only). For the default tenant, this performs a reset: deletes and recreates it with the same slug, display name, and default flag, then copies memberships. 
+        /// Delete a tenant and all associated data without authentication (dev-only). 
         /// </summary>
         /// <exception cref="NightscoutFoundation.Nocturne.Client.ApiException">Thrown when fails to make API call</exception>
         /// <param name="id"></param>
@@ -701,7 +701,7 @@ namespace NightscoutFoundation.Nocturne.Api
         }
 
         /// <summary>
-        /// Delete a tenant and all associated data without authentication (dev-only). For the default tenant, this performs a reset: deletes and recreates it with the same slug, display name, and default flag, then copies memberships. 
+        /// Delete a tenant and all associated data without authentication (dev-only). 
         /// </summary>
         /// <exception cref="NightscoutFoundation.Nocturne.Client.ApiException">Thrown when fails to make API call</exception>
         /// <param name="id"></param>
@@ -714,7 +714,7 @@ namespace NightscoutFoundation.Nocturne.Api
         }
 
         /// <summary>
-        /// Delete a tenant and all associated data without authentication (dev-only). For the default tenant, this performs a reset: deletes and recreates it with the same slug, display name, and default flag, then copies memberships. 
+        /// Delete a tenant and all associated data without authentication (dev-only). 
         /// </summary>
         /// <exception cref="NightscoutFoundation.Nocturne.Client.ApiException">Thrown when fails to make API call</exception>
         /// <param name="id"></param>

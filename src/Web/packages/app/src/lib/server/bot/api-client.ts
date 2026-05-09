@@ -124,7 +124,7 @@ export function buildScopedBotApiClient(
 
   const scopedApiClient = createServerApiClient(apiBaseUrl, fetchFn, {
     hashedInstanceKey: getHashedInstanceKey(),
-    extraHeaders: { "X-Forwarded-Host": hostHeader },
+    extraHeaders: { "X-Forwarded-Host": hostHeader, "X-Forwarded-Proto": "https" },
   });
 
   return buildBotApiClient(scopedApiClient);

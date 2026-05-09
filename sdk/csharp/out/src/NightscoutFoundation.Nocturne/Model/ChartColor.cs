@@ -237,28 +237,40 @@ namespace NightscoutFoundation.Nocturne.Model
         TrackerCustom = 34,
 
         /// <summary>
+        /// Enum HeartRate for value: heart-rate
+        /// </summary>
+        [EnumMember(Value = "heart-rate")]
+        HeartRate = 35,
+
+        /// <summary>
+        /// Enum Steps for value: steps
+        /// </summary>
+        [EnumMember(Value = "steps")]
+        Steps = 36,
+
+        /// <summary>
         /// Enum Chart1 for value: chart-1
         /// </summary>
         [EnumMember(Value = "chart-1")]
-        Chart1 = 35,
+        Chart1 = 37,
 
         /// <summary>
         /// Enum Chart2 for value: chart-2
         /// </summary>
         [EnumMember(Value = "chart-2")]
-        Chart2 = 36,
+        Chart2 = 38,
 
         /// <summary>
         /// Enum MutedForeground for value: muted-foreground
         /// </summary>
         [EnumMember(Value = "muted-foreground")]
-        MutedForeground = 37,
+        MutedForeground = 39,
 
         /// <summary>
         /// Enum Primary for value: primary
         /// </summary>
         [EnumMember(Value = "primary")]
-        Primary = 38
+        Primary = 40
     }
 
 }

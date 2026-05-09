@@ -165,4 +165,66 @@ public class UploaderSnapshotRepository : IUploaderSnapshotRepository
             .Where(e => e.LegacyId == legacyId)
             .ExecuteDeleteAsync(ct);
     }
+
+    /// <inheritdoc />
+    public async Task<UploaderSnapshot?> GetLatestAsync(DateTime? asOf, CancellationToken ct = default)
+    {
+        var query = _context.UploaderSnapshots.AsNoTracking();
+        if (asOf.HasValue) query = query.Where(e => e.Timestamp <= asOf.Value);
+        var entity = await query
+            .OrderBy(e => e.Battery == null)        // false (has battery) before true (null) — nulls last
+            .ThenBy(e => e.Battery)                 // lowest battery first
+            .ThenByDescending(e => e.Timestamp)     // tie-break: most recent
+            .FirstOrDefaultAsync(ct);
+        return entity is null ? null : UploaderSnapshotMapper.ToDomainModel(entity);
+    }
+
+    /// <inheritdoc />
+    public async Task<IEnumerable<UploaderSnapshot>> BulkCreateAsync(
+        IEnumerable<UploaderSnapshot> records,
+        CancellationToken ct = default)
+    {
+        var entities = records.Select(UploaderSnapshotMapper.ToEntity).ToList();
+        if (entities.Count == 0)
+            return [];
+
+        // Batch-level dedup: keep first occurrence per LegacyId
+        entities = entities
+            .GroupBy(e => e.LegacyId ?? e.Id.ToString())
+            .Select(g => g.First())
+            .ToList();
+
+        // DB-level dedup: filter out records whose LegacyId already exists
+        var legacyIds = entities
+            .Where(e => !string.IsNullOrEmpty(e.LegacyId))
+            .Select(e => e.LegacyId!)
+            .ToHashSet();
+
+        if (legacyIds.Count > 0)
+        {
+            var existingIds = await _context
+                .UploaderSnapshots.AsNoTracking()
+                .Where(e => legacyIds.Contains(e.LegacyId!))
+                .Select(e => e.LegacyId)
+                .ToListAsync(ct);
+
+            var existingSet = existingIds.ToHashSet();
+            entities = entities
+                .Where(e => string.IsNullOrEmpty(e.LegacyId) || !existingSet.Contains(e.LegacyId))
+                .ToList();
+        }
+
+        if (entities.Count == 0)
+            return [];
+
+        const int batchSize = 500;
+        foreach (var batch in entities.Chunk(batchSize))
+        {
+            _context.UploaderSnapshots.AddRange(batch);
+            await _context.SaveChangesAsync(ct);
+            _context.ChangeTracker.Clear();
+        }
+
+        return entities.Select(UploaderSnapshotMapper.ToDomainModel);
+    }
 }

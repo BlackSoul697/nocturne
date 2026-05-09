@@ -12,9 +12,9 @@
   import { Switch } from "$lib/components/ui/switch";
   import { Label } from "$lib/components/ui/label";
   import { Textarea } from "$lib/components/ui/textarea";
+  import GithubIcon from "$lib/components/icons/GithubIcon.svelte";
   import {
     HeartHandshake,
-    Github,
     MessageCircle,
     FileText,
     Bug,
@@ -32,7 +32,7 @@
     CreditCard,
     GraduationCap,
   } from "lucide-svelte";
-  import { getServicesOverview } from "$api";
+  import { getServicesOverview } from "$api/generated/services.generated.remote";
   import type { ServicesOverview, SupportConfigResponse } from "$api";
   import { getSupportConfig } from "$lib/api/support.remote";
   import IssueCreatorDialog from "$lib/components/support/IssueCreatorDialog.svelte";
@@ -50,8 +50,8 @@
 
   let apiBaseUrl = $state<string | null>(null);
 
-  const servicesOverviewQuery = $derived(getServicesOverview());
-  const supportConfigQuery = $derived(getSupportConfig());
+  const servicesOverviewQuery = getServicesOverview();
+  const supportConfigQuery = getSupportConfig();
 
   const services = $derived(servicesOverviewQuery.current as ServicesOverview | undefined);
   const supportConfig = $derived(supportConfigQuery.current as SupportConfigResponse | undefined);
@@ -83,7 +83,7 @@
     {
       name: "GitHub Repository",
       description: "Source code, issues, and feature requests",
-      icon: Github,
+      icon: GithubIcon,
       href: "https://github.com/nightscout/nocturne",
       badge: "Open Source",
     },
@@ -466,7 +466,7 @@
           rel="noopener noreferrer"
         >
           <Button variant="ghost" size="sm" class="gap-2">
-            <Github class="h-4 w-4" />
+            <GithubIcon class="h-4 w-4" />
             Star on GitHub
           </Button>
         </a>

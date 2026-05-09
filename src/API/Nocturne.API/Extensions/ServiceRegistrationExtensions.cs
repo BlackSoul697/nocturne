@@ -98,8 +98,6 @@ public static class ServiceRegistrationExtensions
         services.AddScoped<IDDataService, DDataService>();
         services.AddScoped<IPropertiesService, PropertiesService>();
         services.AddScoped<ISummaryService, SummaryService>();
-        services.AddScoped<IIobService, IobService>();
-
         // Prediction service — configurable via Predictions:Source (None, DeviceStatus, OrefWasm)
         var predictionSource = configuration.GetValue<PredictionSource>(
             "Predictions:Source",
@@ -123,7 +121,8 @@ public static class ServiceRegistrationExtensions
                 break;
         }
 
-        services.AddScoped<ICobService, CobService>();
+        services.AddScoped<IIobCalculator, IobCalculator>();
+        services.AddScoped<ICobCalculator, CobCalculator>();
         services.AddScoped<IAr2Service, Ar2Service>();
         services.AddScoped<IBolusWizardService, BolusWizardService>();
 
@@ -435,6 +434,7 @@ public static class ServiceRegistrationExtensions
         services.AddScoped<IProfileWriteService, ProfileWriteService>();
         services.AddScoped<IActiveProfileResolver, ActiveProfileResolver>();
         services.AddScoped<IBasalRateResolver, BasalRateResolver>();
+        services.AddScoped<IBasalSegmentService, BasalSegmentService>();
         services.AddScoped<ISensitivityResolver, SensitivityResolver>();
         services.AddScoped<ICarbRatioResolver, CarbRatioResolver>();
         services.AddScoped<ITargetRangeResolver, TargetRangeResolver>();
@@ -492,7 +492,6 @@ public static class ServiceRegistrationExtensions
         // Chart data pipeline stages (order matters!)
         services.AddScoped<ProfileLoadStage>();
         services.AddScoped<DataFetchStage>();
-        services.AddScoped<TreatmentAdapterStage>();
         services.AddScoped<IobCobComputeStage>();
         services.AddScoped<DtoMappingStage>();
 
@@ -500,7 +499,6 @@ public static class ServiceRegistrationExtensions
         {
             sp.GetRequiredService<ProfileLoadStage>(),
             sp.GetRequiredService<DataFetchStage>(),
-            sp.GetRequiredService<TreatmentAdapterStage>(),
             sp.GetRequiredService<IobCobComputeStage>(),
             sp.GetRequiredService<DtoMappingStage>(),
         });
@@ -637,6 +635,7 @@ public static class ServiceRegistrationExtensions
         // Notification action handlers (scoped -- they may depend on scoped services)
         services.AddScoped<INotificationActionHandler, MealMatchActionHandler>();
         services.AddScoped<INotificationActionHandler, TrackerSuggestionActionHandler>();
+        services.AddScoped<INotificationActionHandler, AlertActionHandler>();
 
         return services;
     }
@@ -662,25 +661,35 @@ public static class ServiceRegistrationExtensions
         // Webhook infrastructure (reused by new alert engine)
         services.AddScoped<WebhookRequestSender>();
 
-        // Condition evaluators
-        services.AddSingleton<IConditionEvaluator, ThresholdEvaluator>();
-        services.AddSingleton<IConditionEvaluator, RateOfChangeEvaluator>();
-        services.AddSingleton<IConditionEvaluator, SignalLossEvaluator>();
-        services.AddSingleton<IConditionEvaluator, CompositeEvaluator>();
-        services.AddSingleton<ConditionEvaluatorRegistry>();
+        // Condition evaluators. Scoped because SustainedEvaluator depends on the scoped
+        // IConditionTimerStore (DbContext-backed); the registry is also scoped because it captures
+        // IEnumerable<IConditionEvaluator>.
+        services.AddAlertEvaluators();
+        services.AddScoped<ConditionEvaluatorRegistry>();
+
+        // Sustained-condition timer store
+        services.AddScoped<IConditionTimerStore, ConditionTimerRepository>();
 
         // Excursion tracker
         services.AddScoped<IExcursionTracker, ExcursionTracker>();
 
         // Alert engine core
         services.AddScoped<IAlertRepository, AlertRepository>();
-        services.AddScoped<IEscalationAdvancer, EscalationAdvancer>();
+        services.Configure<AlertEvaluationOptions>(
+            configuration.GetSection(AlertEvaluationOptions.SectionName));
+        // Bundles the enricher's data-source dependencies; resolved positionally from DI.
+        services.AddScoped<SensorContextEnricherDependencies>();
+        services.AddScoped<ISensorContextEnricher, SensorContextEnricher>();
         services.AddScoped<IAlertOrchestrator, AlertOrchestrator>();
         services.AddScoped<IAlertDeliveryService, AlertDeliveryService>();
         services.AddScoped<IAlertAcknowledgementService, AlertAcknowledgementService>();
+        services.AddScoped<IExcursionResolutionHandler, ExcursionResolutionHandler>();
+        services.AddScoped<IAlertReferenceService, AlertReferenceService>();
+        services.AddScoped<IAlertReplayService, AlertReplayService>();
 
         // Delivery providers
         services.AddScoped<Nocturne.API.Services.Alerts.Providers.WebPushProvider>();
+        services.AddScoped<Nocturne.API.Services.Alerts.Providers.InAppProvider>();
         services.AddScoped<Nocturne.API.Services.Alerts.Providers.WebhookProvider>();
         services.AddScoped<Nocturne.API.Services.Alerts.Providers.ChatBotProvider>();
         services.AddHttpClient("ChatBot");
@@ -730,6 +739,48 @@ public static class ServiceRegistrationExtensions
         services.AddHttpClient("DemoServiceHealth");
         services.AddHostedService<DemoServiceHealthMonitor>();
 
+        return services;
+    }
+
+    /// <summary>
+    /// Registers every <see cref="IConditionEvaluator"/> implementation that the
+    /// <see cref="ConditionEvaluatorRegistry"/> resolves at runtime. Extracted from
+    /// <see cref="AddAlertingAndMonitoring"/> so production wiring and the registry
+    /// coverage tests can share the same single source of truth — adding a new
+    /// evaluator here automatically updates both.
+    /// </summary>
+    public static IServiceCollection AddAlertEvaluators(this IServiceCollection services)
+    {
+        services.AddScoped<IConditionEvaluator, ThresholdEvaluator>();
+        services.AddScoped<IConditionEvaluator, RateOfChangeEvaluator>();
+        services.AddScoped<IConditionEvaluator, StalenessEvaluator>();
+        services.AddScoped<IConditionEvaluator, CompositeEvaluator>();
+        services.AddScoped<IConditionEvaluator, NotEvaluator>();
+        services.AddScoped<IConditionEvaluator, SustainedEvaluator>();
+        services.AddScoped<IConditionEvaluator, PredictedEvaluator>();
+        services.AddScoped<IConditionEvaluator, TrendEvaluator>();
+        services.AddScoped<IConditionEvaluator, TimeOfDayEvaluator>();
+        services.AddScoped<IConditionEvaluator, IobEvaluator>();
+        services.AddScoped<IConditionEvaluator, CobEvaluator>();
+        services.AddScoped<IConditionEvaluator, ReservoirEvaluator>();
+        services.AddScoped<IConditionEvaluator, SiteAgeEvaluator>();
+        services.AddScoped<IConditionEvaluator, SensorAgeEvaluator>();
+        services.AddScoped<IConditionEvaluator, AlertStateEvaluator>();
+        services.AddScoped<IConditionEvaluator, LoopStaleEvaluator>();
+        services.AddScoped<IConditionEvaluator, LoopEnactionStaleEvaluator>();
+        services.AddScoped<IConditionEvaluator, PumpSuspendedEvaluator>();
+        services.AddScoped<IConditionEvaluator, PumpBatteryEvaluator>();
+        services.AddScoped<IConditionEvaluator, TempBasalEvaluator>();
+        services.AddScoped<IConditionEvaluator, UploaderBatteryEvaluator>();
+        services.AddScoped<IConditionEvaluator, OverrideActiveEvaluator>();
+        services.AddScoped<IConditionEvaluator, SensitivityRatioEvaluator>();
+        services.AddScoped<IConditionEvaluator, DoNotDisturbEvaluator>();
+        services.AddScoped<IConditionEvaluator, GlucoseBucketEvaluator>();
+        services.AddScoped<IConditionEvaluator, TimeSinceLastCarbEvaluator>();
+        services.AddScoped<IConditionEvaluator, TimeSinceLastBolusEvaluator>();
+        services.AddScoped<IConditionEvaluator, DayOfWeekEvaluator>();
+        services.AddScoped<IConditionEvaluator, PumpStateEvaluator>();
+        services.AddScoped<IConditionEvaluator, StateSpanActiveEvaluator>();
         return services;
     }
 

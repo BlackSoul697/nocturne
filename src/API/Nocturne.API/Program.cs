@@ -19,6 +19,7 @@ using Nocturne.API.Multitenancy;
 using OpenApi.Remote.Processors;
 using Nocturne.API.OpenApi;
 using Scalar.AspNetCore;
+using Nocturne.Aspire.Scalar;
 using Nocturne.Core.Constants;
 using Nocturne.Core.Models.Configuration;
 using Nocturne.Infrastructure.Cache.Extensions;
@@ -215,6 +216,7 @@ builder.Services.AddOpenApi("nocturne", options =>
     options.AddDocumentTransformer<TagDescriptionDocumentTransformer>();
     options.AddDocumentTransformer<SecuritySchemeDocumentTransformer>();
     options.AddDocumentTransformer<DiagramDescriptionDocumentTransformer>();
+    options.AddDocumentTransformer<ScalarExtensionsDocumentTransformer>();
 });
 
 builder.Services.AddOpenApi("nightscout", options =>
@@ -236,6 +238,7 @@ builder.Services.AddOpenApi("nightscout", options =>
     options.AddDocumentTransformer<TagDescriptionDocumentTransformer>();
     options.AddDocumentTransformer<SecuritySchemeDocumentTransformer>();
     options.AddDocumentTransformer<DiagramDescriptionDocumentTransformer>();
+    options.AddDocumentTransformer<ScalarExtensionsDocumentTransformer>();
 });
 
 // ── Service registration (grouped by concern) ──────────────────────────
@@ -305,7 +308,7 @@ builder.Services.Configure<ForwardedHeadersOptions>(options =>
                              | ForwardedHeaders.XForwardedProto
                              | ForwardedHeaders.XForwardedHost;
     // Trust any proxy — the API is only reachable through the gateway.
-    options.KnownNetworks.Clear();
+    options.KnownIPNetworks.Clear();
     options.KnownProxies.Clear();
 });
 
@@ -318,6 +321,11 @@ app.UseResponseCaching();
 app.UseCors();
 app.UseStaticFiles();
 app.UseForwardedHeaders();
+
+// Reject or redirect HTTP to HTTPS. Runs after UseForwardedHeaders (needs
+// X-Forwarded-Proto) but before routing, tenant resolution, and auth to
+// prevent WebAuthn failures and setup state corruption from insecure access.
+app.UseMiddleware<HttpsRequirementMiddleware>();
 
 // Strip .json suffixes before routing so /api/v1/treatments.json matches
 // the TreatmentsController route /api/v1/treatments. Must run before
@@ -398,6 +406,7 @@ app.MapScalarApiReference(options =>
     options.WithOpenApiRoutePattern("/openapi/{documentName}.json");
     options.AddDocument("nocturne", "Nocturne API", isDefault: true);
     options.AddDocument("nightscout", "Nightscout API");
+    options.AddHeadContent(MermaidLazyLoader.HeadContent);
 });
 
 // Add root endpoint to serve a basic info page

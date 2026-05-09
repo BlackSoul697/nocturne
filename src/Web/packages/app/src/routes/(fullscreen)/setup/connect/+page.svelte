@@ -1,5 +1,4 @@
 <script lang="ts">
-  import { onMount } from "svelte";
   import { goto } from "$app/navigation";
   import {
     getUploaderApps,
@@ -10,9 +9,8 @@
   import type {
     UploaderApp,
     UploaderSetupResponse,
-    DataSourceInfo,
-    AvailableConnector,
     SyncResult,
+    AvailableConnector,
   } from "$lib/api/generated/nocturne-api-client";
   import { markSetupComplete } from "../setup.remote";
   import ConnectorSetup from "$lib/components/connectors/ConnectorSetup.svelte";
@@ -31,44 +29,11 @@
   let selectedApp = $state<UploaderApp | null>(null);
   let setupResponse = $state<UploaderSetupResponse | null>(null);
 
-  // ── Data state ────────────────────────────────────────────────────
+  // ── Data ──────────────────────────────────────────────────────────
 
-  let uploaderApps = $state<UploaderApp[]>([]);
-  let connectors = $state<AvailableConnector[]>([]);
-  let dataSources = $state<DataSourceInfo[]>([]);
-  let isLoading = $state(true);
-  let loadError = $state<string | null>(null);
-
-  // ── Load data ─────────────────────────────────────────────────────
-
-  onMount(async () => {
-    await loadData();
-  });
-
-  async function loadData() {
-    isLoading = true;
-    loadError = null;
-
-    try {
-      const [apps, sources, overview] = await Promise.all([
-        getUploaderApps(),
-        getActiveDataSources().catch(() => [] as DataSourceInfo[]),
-        getServicesOverview(),
-      ]);
-
-      uploaderApps = apps ?? [];
-      dataSources = sources ?? [];
-
-      // Filter out "nightscout" connector (handled on the triage page)
-      connectors = (overview?.availableConnectors ?? []).filter(
-        (c) => c.id?.toLowerCase() !== "nightscout",
-      );
-    } catch (e) {
-      loadError = e instanceof Error ? e.message : "Failed to load data sources";
-    } finally {
-      isLoading = false;
-    }
-  }
+  const uploaderAppsQuery = getUploaderApps();
+  const dataSourcesQuery = getActiveDataSources();
+  const overviewQuery = getServicesOverview();
 
   // ── Select a connector ────────────────────────────────────────────
 
@@ -94,8 +59,8 @@
     viewState = "uploader";
 
     try {
-      const result = await getUploaderSetup(app.id!);
-      setupResponse = result;
+      const result = app.id ? await getUploaderSetup(app.id) : null;
+      setupResponse = result ?? null;
     } catch {
       setupResponse = null;
     }
@@ -126,19 +91,53 @@
 
 <div class="container mx-auto max-w-2xl p-6 space-y-6">
   {#if viewState === "selection"}
-    <DataSourceSelectionView
-      {connectors}
-      {uploaderApps}
-      {dataSources}
-      {isLoading}
-      {loadError}
-      onSelectConnector={(id) => {
-        const connector = connectors.find((c) => c.id === id);
-        if (connector) selectConnector(connector);
-      }}
-      onSelectUploader={selectApp}
-      onSkip={handleSkip}
-    />
+    <svelte:boundary>
+      {#snippet pending()}
+        <DataSourceSelectionView
+          connectors={[]}
+          uploaderApps={[]}
+          dataSources={[]}
+          isLoading={true}
+          loadError={null}
+          onSelectConnector={() => {}}
+          onSelectUploader={() => {}}
+          onSkip={handleSkip}
+        />
+      {/snippet}
+      {#snippet failed(error)}
+        <DataSourceSelectionView
+          connectors={[]}
+          uploaderApps={[]}
+          dataSources={[]}
+          isLoading={false}
+          loadError={error instanceof Error ? error.message : "Failed to load data sources"}
+          onSelectConnector={() => {}}
+          onSelectUploader={() => {}}
+          onSkip={handleSkip}
+        />
+      {/snippet}
+
+      {@const uploaderApps = (await uploaderAppsQuery) ?? []}
+      {@const dataSources = (await dataSourcesQuery) ?? []}
+      {@const overview = await overviewQuery}
+      {@const connectors = ((overview?.availableConnectors ?? []) as AvailableConnector[]).filter(
+        (c) => c.id?.toLowerCase() !== "nightscout"
+      )}
+
+      <DataSourceSelectionView
+        {connectors}
+        {uploaderApps}
+        {dataSources}
+        isLoading={false}
+        loadError={null}
+        onSelectConnector={(id) => {
+          const connector = connectors.find((c) => c.id === id);
+          if (connector) selectConnector(connector);
+        }}
+        onSelectUploader={selectApp}
+        onSkip={handleSkip}
+      />
+    </svelte:boundary>
 
   {:else if viewState === "connector"}
     <div class="space-y-4">

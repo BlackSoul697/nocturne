@@ -57,9 +57,8 @@ namespace NightscoutFoundation.Nocturne.Model
         /// <param name="servings">servings.</param>
         /// <param name="servingDescription">servingDescription.</param>
         /// <param name="status">status.</param>
-        /// <param name="matchedTreatmentId">matchedTreatmentId.</param>
         /// <param name="resolvedAt">resolvedAt.</param>
-        public ConnectorFoodEntry(string id = default, string connectorSource = default, string externalEntryId = default, string externalFoodId = default, string foodId = default, Food food = default, DateTimeOffset consumedAt = default, DateTimeOffset? loggedAt = default, string mealName = default, decimal carbs = default, decimal protein = default, decimal fat = default, decimal energy = default, decimal servings = default, string servingDescription = default, ConnectorFoodEntryStatus? status = default, string matchedTreatmentId = default, DateTimeOffset? resolvedAt = default)
+        public ConnectorFoodEntry(string id = default, string connectorSource = default, string externalEntryId = default, string externalFoodId = default, string foodId = default, Food food = default, DateTimeOffset consumedAt = default, DateTimeOffset? loggedAt = default, string mealName = default, decimal carbs = default, decimal protein = default, decimal fat = default, decimal energy = default, decimal servings = default, string servingDescription = default, ConnectorFoodEntryStatus? status = default, DateTimeOffset? resolvedAt = default)
         {
             this.Id = id;
             this.ConnectorSource = connectorSource;
@@ -77,7 +76,6 @@ namespace NightscoutFoundation.Nocturne.Model
             this.Servings = servings;
             this.ServingDescription = servingDescription;
             this.Status = status;
-            this.MatchedTreatmentId = matchedTreatmentId;
             this.ResolvedAt = resolvedAt;
         }
 
@@ -172,12 +170,6 @@ namespace NightscoutFoundation.Nocturne.Model
         public string ServingDescription { get; set; }
 
         /// <summary>
-        /// Gets or Sets MatchedTreatmentId
-        /// </summary>
-        [DataMember(Name = "matchedTreatmentId", EmitDefaultValue = true)]
-        public string MatchedTreatmentId { get; set; }
-
-        /// <summary>
         /// Gets or Sets ResolvedAt
         /// </summary>
         [DataMember(Name = "resolvedAt", EmitDefaultValue = true)]
@@ -207,7 +199,6 @@ namespace NightscoutFoundation.Nocturne.Model
             sb.Append("  Servings: ").Append(Servings).Append("\n");
             sb.Append("  ServingDescription: ").Append(ServingDescription).Append("\n");
             sb.Append("  Status: ").Append(Status).Append("\n");
-            sb.Append("  MatchedTreatmentId: ").Append(MatchedTreatmentId).Append("\n");
             sb.Append("  ResolvedAt: ").Append(ResolvedAt).Append("\n");
             sb.Append("}\n");
             return sb.ToString();

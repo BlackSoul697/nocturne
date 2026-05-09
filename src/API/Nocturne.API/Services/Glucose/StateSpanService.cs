@@ -57,6 +57,10 @@ public class StateSpanService : IStateSpanService
     }
 
     /// <inheritdoc />
+    public Task<PumpModeState?> GetCurrentPumpModeAsync(CancellationToken cancellationToken = default)
+        => _repository.GetCurrentPumpModeAsync(cancellationToken);
+
+    /// <inheritdoc />
     public async Task<int> CountStateSpansAsync(
         StateSpanCategory? category = null,
         string? state = null,
@@ -113,6 +117,16 @@ public class StateSpanService : IStateSpanService
             id, stateSpan.Category);
 
         return await _repository.UpdateStateSpanAsync(id, stateSpan, cancellationToken);
+    }
+
+    /// <inheritdoc />
+    public async Task<StateSpan?> GetActiveAtAsync(
+        StateSpanCategory category,
+        string? state,
+        DateTime at,
+        CancellationToken cancellationToken = default)
+    {
+        return await _repository.GetActiveAtAsync(category, state, at, cancellationToken);
     }
 
     #region Activity Compatibility Methods

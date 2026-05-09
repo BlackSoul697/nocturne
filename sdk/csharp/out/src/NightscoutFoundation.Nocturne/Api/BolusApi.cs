@@ -70,6 +70,26 @@ namespace NightscoutFoundation.Nocturne.Api
         /// <returns>ApiResponse of Object(void)</returns>
         ApiResponse<Object> BolusDeleteWithHttpInfo(string id);
         /// <summary>
+        /// Delete a bolus by its external sync identifier (dataSource + syncIdentifier pair).
+        /// </summary>
+        /// <exception cref="NightscoutFoundation.Nocturne.Client.ApiException">Thrown when fails to make API call</exception>
+        /// <param name="dataSource"> (optional)</param>
+        /// <param name="syncIdentifier"> (optional)</param>
+        /// <returns></returns>
+        void BolusDeleteBySyncIdentifier(string? dataSource = default, string? syncIdentifier = default);
+
+        /// <summary>
+        /// Delete a bolus by its external sync identifier (dataSource + syncIdentifier pair).
+        /// </summary>
+        /// <remarks>
+        /// 
+        /// </remarks>
+        /// <exception cref="NightscoutFoundation.Nocturne.Client.ApiException">Thrown when fails to make API call</exception>
+        /// <param name="dataSource"> (optional)</param>
+        /// <param name="syncIdentifier"> (optional)</param>
+        /// <returns>ApiResponse of Object(void)</returns>
+        ApiResponse<Object> BolusDeleteBySyncIdentifierWithHttpInfo(string? dataSource = default, string? syncIdentifier = default);
+        /// <summary>
         /// 
         /// </summary>
         /// <remarks>
@@ -201,6 +221,31 @@ namespace NightscoutFoundation.Nocturne.Api
         /// <param name="cancellationToken">Cancellation Token to cancel the request.</param>
         /// <returns>Task of ApiResponse</returns>
         System.Threading.Tasks.Task<ApiResponse<Object>> BolusDeleteWithHttpInfoAsync(string id, System.Threading.CancellationToken cancellationToken = default);
+        /// <summary>
+        /// Delete a bolus by its external sync identifier (dataSource + syncIdentifier pair).
+        /// </summary>
+        /// <remarks>
+        /// 
+        /// </remarks>
+        /// <exception cref="NightscoutFoundation.Nocturne.Client.ApiException">Thrown when fails to make API call</exception>
+        /// <param name="dataSource"> (optional)</param>
+        /// <param name="syncIdentifier"> (optional)</param>
+        /// <param name="cancellationToken">Cancellation Token to cancel the request.</param>
+        /// <returns>Task of void</returns>
+        System.Threading.Tasks.Task BolusDeleteBySyncIdentifierAsync(string? dataSource = default, string? syncIdentifier = default, System.Threading.CancellationToken cancellationToken = default);
+
+        /// <summary>
+        /// Delete a bolus by its external sync identifier (dataSource + syncIdentifier pair).
+        /// </summary>
+        /// <remarks>
+        /// 
+        /// </remarks>
+        /// <exception cref="NightscoutFoundation.Nocturne.Client.ApiException">Thrown when fails to make API call</exception>
+        /// <param name="dataSource"> (optional)</param>
+        /// <param name="syncIdentifier"> (optional)</param>
+        /// <param name="cancellationToken">Cancellation Token to cancel the request.</param>
+        /// <returns>Task of ApiResponse</returns>
+        System.Threading.Tasks.Task<ApiResponse<Object>> BolusDeleteBySyncIdentifierWithHttpInfoAsync(string? dataSource = default, string? syncIdentifier = default, System.Threading.CancellationToken cancellationToken = default);
         /// <summary>
         /// 
         /// </summary>
@@ -721,6 +766,129 @@ namespace NightscoutFoundation.Nocturne.Api
             if (this.ExceptionFactory != null)
             {
                 Exception _exception = this.ExceptionFactory("BolusDelete", localVarResponse);
+                if (_exception != null) throw _exception;
+            }
+
+            return localVarResponse;
+        }
+
+        /// <summary>
+        /// Delete a bolus by its external sync identifier (dataSource + syncIdentifier pair). 
+        /// </summary>
+        /// <exception cref="NightscoutFoundation.Nocturne.Client.ApiException">Thrown when fails to make API call</exception>
+        /// <param name="dataSource"> (optional)</param>
+        /// <param name="syncIdentifier"> (optional)</param>
+        /// <returns></returns>
+        public void BolusDeleteBySyncIdentifier(string? dataSource = default, string? syncIdentifier = default)
+        {
+            BolusDeleteBySyncIdentifierWithHttpInfo(dataSource, syncIdentifier);
+        }
+
+        /// <summary>
+        /// Delete a bolus by its external sync identifier (dataSource + syncIdentifier pair). 
+        /// </summary>
+        /// <exception cref="NightscoutFoundation.Nocturne.Client.ApiException">Thrown when fails to make API call</exception>
+        /// <param name="dataSource"> (optional)</param>
+        /// <param name="syncIdentifier"> (optional)</param>
+        /// <returns>ApiResponse of Object(void)</returns>
+        public NightscoutFoundation.Nocturne.Client.ApiResponse<Object> BolusDeleteBySyncIdentifierWithHttpInfo(string? dataSource = default, string? syncIdentifier = default)
+        {
+            NightscoutFoundation.Nocturne.Client.RequestOptions localVarRequestOptions = new NightscoutFoundation.Nocturne.Client.RequestOptions();
+
+            string[] _contentTypes = new string[] {
+            };
+
+            // to determine the Accept header
+            string[] _accepts = new string[] {
+                "application/json"
+            };
+
+            var localVarContentType = NightscoutFoundation.Nocturne.Client.ClientUtils.SelectHeaderContentType(_contentTypes);
+            if (localVarContentType != null) localVarRequestOptions.HeaderParameters.Add("Content-Type", localVarContentType);
+
+            var localVarAccept = NightscoutFoundation.Nocturne.Client.ClientUtils.SelectHeaderAccept(_accepts);
+            if (localVarAccept != null) localVarRequestOptions.HeaderParameters.Add("Accept", localVarAccept);
+
+            if (dataSource != null)
+            {
+                localVarRequestOptions.QueryParameters.Add(NightscoutFoundation.Nocturne.Client.ClientUtils.ParameterToMultiMap("", "dataSource", dataSource));
+            }
+            if (syncIdentifier != null)
+            {
+                localVarRequestOptions.QueryParameters.Add(NightscoutFoundation.Nocturne.Client.ClientUtils.ParameterToMultiMap("", "syncIdentifier", syncIdentifier));
+            }
+
+
+            // make the HTTP request
+            var localVarResponse = this.Client.Delete<Object>("/api/v4/insulin/boluses/by-sync-id", localVarRequestOptions, this.Configuration);
+
+            if (this.ExceptionFactory != null)
+            {
+                Exception _exception = this.ExceptionFactory("BolusDeleteBySyncIdentifier", localVarResponse);
+                if (_exception != null) throw _exception;
+            }
+
+            return localVarResponse;
+        }
+
+        /// <summary>
+        /// Delete a bolus by its external sync identifier (dataSource + syncIdentifier pair). 
+        /// </summary>
+        /// <exception cref="NightscoutFoundation.Nocturne.Client.ApiException">Thrown when fails to make API call</exception>
+        /// <param name="dataSource"> (optional)</param>
+        /// <param name="syncIdentifier"> (optional)</param>
+        /// <param name="cancellationToken">Cancellation Token to cancel the request.</param>
+        /// <returns>Task of void</returns>
+        public async System.Threading.Tasks.Task BolusDeleteBySyncIdentifierAsync(string? dataSource = default, string? syncIdentifier = default, System.Threading.CancellationToken cancellationToken = default)
+        {
+            await BolusDeleteBySyncIdentifierWithHttpInfoAsync(dataSource, syncIdentifier, cancellationToken).ConfigureAwait(false);
+        }
+
+        /// <summary>
+        /// Delete a bolus by its external sync identifier (dataSource + syncIdentifier pair). 
+        /// </summary>
+        /// <exception cref="NightscoutFoundation.Nocturne.Client.ApiException">Thrown when fails to make API call</exception>
+        /// <param name="dataSource"> (optional)</param>
+        /// <param name="syncIdentifier"> (optional)</param>
+        /// <param name="cancellationToken">Cancellation Token to cancel the request.</param>
+        /// <returns>Task of ApiResponse</returns>
+        public async System.Threading.Tasks.Task<NightscoutFoundation.Nocturne.Client.ApiResponse<Object>> BolusDeleteBySyncIdentifierWithHttpInfoAsync(string? dataSource = default, string? syncIdentifier = default, System.Threading.CancellationToken cancellationToken = default)
+        {
+
+            NightscoutFoundation.Nocturne.Client.RequestOptions localVarRequestOptions = new NightscoutFoundation.Nocturne.Client.RequestOptions();
+
+            string[] _contentTypes = new string[] {
+            };
+
+            // to determine the Accept header
+            string[] _accepts = new string[] {
+                "application/json"
+            };
+
+
+            var localVarContentType = NightscoutFoundation.Nocturne.Client.ClientUtils.SelectHeaderContentType(_contentTypes);
+            if (localVarContentType != null) localVarRequestOptions.HeaderParameters.Add("Content-Type", localVarContentType);
+
+            var localVarAccept = NightscoutFoundation.Nocturne.Client.ClientUtils.SelectHeaderAccept(_accepts);
+            if (localVarAccept != null) localVarRequestOptions.HeaderParameters.Add("Accept", localVarAccept);
+
+            if (dataSource != null)
+            {
+                localVarRequestOptions.QueryParameters.Add(NightscoutFoundation.Nocturne.Client.ClientUtils.ParameterToMultiMap("", "dataSource", dataSource));
+            }
+            if (syncIdentifier != null)
+            {
+                localVarRequestOptions.QueryParameters.Add(NightscoutFoundation.Nocturne.Client.ClientUtils.ParameterToMultiMap("", "syncIdentifier", syncIdentifier));
+            }
+
+
+            // make the HTTP request
+
+            var localVarResponse = await this.AsynchronousClient.DeleteAsync<Object>("/api/v4/insulin/boluses/by-sync-id", localVarRequestOptions, this.Configuration, cancellationToken).ConfigureAwait(false);
+
+            if (this.ExceptionFactory != null)
+            {
+                Exception _exception = this.ExceptionFactory("BolusDeleteBySyncIdentifier", localVarResponse);
                 if (_exception != null) throw _exception;
             }
 

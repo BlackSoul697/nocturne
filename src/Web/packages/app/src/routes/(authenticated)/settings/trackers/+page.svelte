@@ -31,7 +31,7 @@
     Loader2,
     Activity,
   } from "lucide-svelte";
-  import { tick, onMount } from "svelte";
+  import { tick } from "svelte";
   import { goto } from "$app/navigation";
   import { getAuthStore } from "$lib/stores/auth-store.svelte";
   import * as trackersRemote from "$api/generated/trackers.generated.remote";
@@ -53,13 +53,27 @@
 
   // State
   let activeTab = $state("active");
-  let loading = $state(true);
-  let error = $state<string | null>(null);
 
-  let definitions = $state<TrackerDefinitionDto[]>([]);
-  let activeInstances = $state<TrackerInstanceDto[]>([]);
-  let historyInstances = $state<TrackerInstanceDto[]>([]);
-  let presets = $state<TrackerPresetDto[]>([]);
+  const definitionsQuery = trackersRemote.getDefinitions(undefined);
+  const activeInstancesQuery = trackersRemote.getActiveInstances();
+  const historyInstancesQuery = trackersRemote.getInstanceHistory(undefined);
+  const presetsQuery = trackersRemote.getPresets();
+
+  // Mirrors via `.current` for event handlers (which run outside the boundary's
+  // template scope and can't see {@const} bindings).
+  const definitions = $derived<TrackerDefinitionDto[]>(definitionsQuery.current ?? []);
+  const activeInstances = $derived<TrackerInstanceDto[]>(activeInstancesQuery.current ?? []);
+  const historyInstances = $derived<TrackerInstanceDto[]>(historyInstancesQuery.current ?? []);
+  const presets = $derived<TrackerPresetDto[]>(presetsQuery.current ?? []);
+
+  async function loadData() {
+    await Promise.all([
+      definitionsQuery.refresh(),
+      activeInstancesQuery.refresh(),
+      historyInstancesQuery.refresh(),
+      presetsQuery.refresh(),
+    ]);
+  }
 
   // Dialog state
   let isDefinitionDialogOpen = $state(false);
@@ -187,33 +201,6 @@
     [TrackerCategory.Cannula]: "text-pink-500",
     [TrackerCategory.Battery]: "text-yellow-500",
   };
-
-  // Load data
-  async function loadData() {
-    loading = true;
-    error = null;
-    try {
-      const [defs, active, history, prsts] = await Promise.all([
-        trackersRemote.getDefinitions(undefined),
-        trackersRemote.getActiveInstances(),
-        trackersRemote.getInstanceHistory(undefined),
-        trackersRemote.getPresets(),
-      ]);
-      definitions = defs || [];
-      activeInstances = active || [];
-      historyInstances = history || [];
-      presets = prsts || [];
-    } catch (err) {
-      console.error("Failed to load tracker data:", err);
-      error = "Failed to load tracker data";
-    } finally {
-      loading = false;
-    }
-  }
-
-  onMount(() => {
-    loadData();
-  });
 
   // Format age
   function formatAge(hours: number): string {
@@ -470,19 +457,31 @@
     </div>
   </div>
 
-  {#if loading}
-    <div class="flex items-center justify-center py-12">
-      <Loader2 class="h-8 w-8 animate-spin text-muted-foreground" />
-    </div>
-  {:else if error}
-    <Card class="border-destructive">
-      <CardContent class="py-6 text-center">
-        <AlertTriangle class="h-8 w-8 text-destructive mx-auto mb-2" />
-        <p class="text-destructive">{error}</p>
-        <Button variant="outline" class="mt-4" onclick={loadData}>Retry</Button>
-      </CardContent>
-    </Card>
-  {:else}
+  <svelte:boundary>
+    {#snippet pending()}
+      <div class="flex items-center justify-center py-12">
+        <Loader2 class="h-8 w-8 animate-spin text-muted-foreground" />
+      </div>
+    {/snippet}
+    {#snippet failed(error, reset)}
+      <Card class="border-destructive">
+        <CardContent class="py-6 text-center">
+          <AlertTriangle class="h-8 w-8 text-destructive mx-auto mb-2" />
+          <p class="text-destructive">
+            {error instanceof Error ? error.message : "Failed to load tracker data"}
+          </p>
+          <Button variant="outline" class="mt-4" onclick={reset}>Retry</Button>
+        </CardContent>
+      </Card>
+    {/snippet}
+
+    {@const _await = await Promise.all([
+      definitionsQuery,
+      activeInstancesQuery,
+      historyInstancesQuery,
+      presetsQuery,
+    ])}
+
     <Tabs.Root bind:value={activeTab} class="space-y-6">
       <Tabs.List class="grid w-full grid-cols-4">
         <Tabs.Trigger value="active" class="gap-2">
@@ -548,7 +547,7 @@
         {openDeletePresetDialog}
       />
     </Tabs.Root>
-  {/if}
+  </svelte:boundary>
 </div>
 
 

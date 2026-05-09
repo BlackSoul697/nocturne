@@ -4,7 +4,8 @@
 
 Name | Type | Description | Notes
 ------------ | ------------- | ------------- | -------------
-**CgmUsePercent** | **double?** |  | [optional] 
+**CgmDeviceNames** | **string** |  | [optional] 
+**PumpDeviceNames** | **string** |  | [optional] 
 **PumpUsePercent** | **double?** |  | [optional] 
 **AidActivePercent** | **double?** |  | [optional] 
 **CgmActivePercent** | **double?** |  | [optional] 

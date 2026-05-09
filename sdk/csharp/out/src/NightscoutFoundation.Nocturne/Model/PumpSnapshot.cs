@@ -57,8 +57,10 @@ namespace NightscoutFoundation.Nocturne.Model
         /// <param name="pumpStatus">pumpStatus.</param>
         /// <param name="clock">clock.</param>
         /// <param name="deviceId">deviceId.</param>
+        /// <param name="iob">iob.</param>
+        /// <param name="bolusIob">bolusIob.</param>
         /// <param name="additionalProperties">additionalProperties.</param>
-        public PumpSnapshot(string id = default, DateTimeOffset timestamp = default, long mills = default, int? utcOffset = default, string device = default, string app = default, string dataSource = default, string correlationId = default, string legacyId = default, DateTimeOffset createdAt = default, DateTimeOffset modifiedAt = default, string manufacturer = default, string model = default, double? reservoir = default, string reservoirDisplay = default, int? batteryPercent = default, double? batteryVoltage = default, bool? bolusing = default, bool? suspended = default, string pumpStatus = default, string clock = default, string deviceId = default, Dictionary<string, Object> additionalProperties = default)
+        public PumpSnapshot(string id = default, DateTimeOffset timestamp = default, long mills = default, int? utcOffset = default, string device = default, string app = default, string dataSource = default, string correlationId = default, string legacyId = default, DateTimeOffset createdAt = default, DateTimeOffset modifiedAt = default, string manufacturer = default, string model = default, double? reservoir = default, string reservoirDisplay = default, int? batteryPercent = default, double? batteryVoltage = default, bool? bolusing = default, bool? suspended = default, string pumpStatus = default, string clock = default, string deviceId = default, double? iob = default, double? bolusIob = default, Dictionary<string, Object> additionalProperties = default)
         {
             this.Id = id;
             this.Timestamp = timestamp;
@@ -82,6 +84,8 @@ namespace NightscoutFoundation.Nocturne.Model
             this.PumpStatus = pumpStatus;
             this.Clock = clock;
             this.DeviceId = deviceId;
+            this.Iob = iob;
+            this.BolusIob = bolusIob;
             this.AdditionalProperties = additionalProperties;
         }
 
@@ -218,6 +222,18 @@ namespace NightscoutFoundation.Nocturne.Model
         public string DeviceId { get; set; }
 
         /// <summary>
+        /// Gets or Sets Iob
+        /// </summary>
+        [DataMember(Name = "iob", EmitDefaultValue = true)]
+        public double? Iob { get; set; }
+
+        /// <summary>
+        /// Gets or Sets BolusIob
+        /// </summary>
+        [DataMember(Name = "bolusIob", EmitDefaultValue = true)]
+        public double? BolusIob { get; set; }
+
+        /// <summary>
         /// Gets or Sets AdditionalProperties
         /// </summary>
         [DataMember(Name = "additionalProperties", EmitDefaultValue = true)]
@@ -253,6 +269,8 @@ namespace NightscoutFoundation.Nocturne.Model
             sb.Append("  PumpStatus: ").Append(PumpStatus).Append("\n");
             sb.Append("  Clock: ").Append(Clock).Append("\n");
             sb.Append("  DeviceId: ").Append(DeviceId).Append("\n");
+            sb.Append("  Iob: ").Append(Iob).Append("\n");
+            sb.Append("  BolusIob: ").Append(BolusIob).Append("\n");
             sb.Append("  AdditionalProperties: ").Append(AdditionalProperties).Append("\n");
             sb.Append("}\n");
             return sb.ToString();

@@ -5,14 +5,18 @@ All URIs are relative to *http://localhost*
 | Method | HTTP request | Description |
 |--------|--------------|-------------|
 | [**TenantAddMember**](TenantApi.md#tenantaddmember) | **POST** /api/v4/admin/tenants/{id}/members |  |
+| [**TenantAttachOidcIdentity**](TenantApi.md#tenantattachoidcidentity) | **POST** /api/v4/admin/tenants/{id}/members/{subjectId}/credentials/oidc | Attaches an OIDC identity to a member subject. |
 | [**TenantCreate**](TenantApi.md#tenantcreate) | **POST** /api/v4/admin/tenants |  |
 | [**TenantCreateInvite**](TenantApi.md#tenantcreateinvite) | **POST** /api/v4/admin/tenants/{id}/invites |  |
 | [**TenantDelete**](TenantApi.md#tenantdelete) | **DELETE** /api/v4/admin/tenants/{id} |  |
 | [**TenantGetAll**](TenantApi.md#tenantgetall) | **GET** /api/v4/admin/tenants |  |
 | [**TenantGetById**](TenantApi.md#tenantgetbyid) | **GET** /api/v4/admin/tenants/{id} |  |
+| [**TenantGetMemberCredentials**](TenantApi.md#tenantgetmembercredentials) | **GET** /api/v4/admin/tenants/{id}/members/{subjectId}/credentials | Lists passkey credentials and OIDC identities for a member subject. |
 | [**TenantListInvites**](TenantApi.md#tenantlistinvites) | **GET** /api/v4/admin/tenants/{id}/invites |  |
 | [**TenantProvision**](TenantApi.md#tenantprovision) | **POST** /api/v4/admin/tenants/provision |  |
 | [**TenantRemoveMember**](TenantApi.md#tenantremovemember) | **DELETE** /api/v4/admin/tenants/{id}/members/{subjectId} |  |
+| [**TenantRemoveOidcIdentity**](TenantApi.md#tenantremoveoidcidentity) | **DELETE** /api/v4/admin/tenants/{id}/members/{subjectId}/credentials/oidc/{identityId} | Removes an OIDC identity from a member subject. |
+| [**TenantRemovePasskeyCredential**](TenantApi.md#tenantremovepasskeycredential) | **DELETE** /api/v4/admin/tenants/{id}/members/{subjectId}/credentials/passkey/{credentialId} | Removes a passkey credential from a member subject. |
 | [**TenantRevokeInvite**](TenantApi.md#tenantrevokeinvite) | **DELETE** /api/v4/admin/tenants/{id}/invites/{inviteId} |  |
 | [**TenantUpdate**](TenantApi.md#tenantupdate) | **PUT** /api/v4/admin/tenants/{id} |  |
 
@@ -83,6 +87,100 @@ catch (ApiException e)
 |------|------|-------------|-------|
 | **id** | **string** |  |  |
 | **addMemberRequest** | [**AddMemberRequest**](AddMemberRequest.md) |  |  |
+
+### Return type
+
+void (empty response body)
+
+### Authorization
+
+No authorization required
+
+### HTTP request headers
+
+ - **Content-Type**: application/json
+ - **Accept**: application/json
+
+
+### HTTP response details
+| Status code | Description | Response headers |
+|-------------|-------------|------------------|
+| **204** |  |  -  |
+| **403** |  |  -  |
+
+[[Back to top]](#) [[Back to API list]](../README.md#documentation-for-api-endpoints) [[Back to Model list]](../README.md#documentation-for-models) [[Back to README]](../README.md)
+
+<a id="tenantattachoidcidentity"></a>
+# **TenantAttachOidcIdentity**
+> void TenantAttachOidcIdentity (string id, string subjectId, AdminAttachOidcRequest adminAttachOidcRequest)
+
+Attaches an OIDC identity to a member subject.
+
+### Example
+```csharp
+using System.Collections.Generic;
+using System.Diagnostics;
+using System.Net.Http;
+using NightscoutFoundation.Nocturne.Api;
+using NightscoutFoundation.Nocturne.Client;
+using NightscoutFoundation.Nocturne.Model;
+
+namespace Example
+{
+    public class TenantAttachOidcIdentityExample
+    {
+        public static void Main()
+        {
+            Configuration config = new Configuration();
+            config.BasePath = "http://localhost";
+            // create instances of HttpClient, HttpClientHandler to be reused later with different Api classes
+            HttpClient httpClient = new HttpClient();
+            HttpClientHandler httpClientHandler = new HttpClientHandler();
+            var apiInstance = new TenantApi(httpClient, config, httpClientHandler);
+            var id = "id_example";  // string | 
+            var subjectId = "subjectId_example";  // string | 
+            var adminAttachOidcRequest = new AdminAttachOidcRequest(); // AdminAttachOidcRequest | 
+
+            try
+            {
+                // Attaches an OIDC identity to a member subject.
+                apiInstance.TenantAttachOidcIdentity(id, subjectId, adminAttachOidcRequest);
+            }
+            catch (ApiException  e)
+            {
+                Debug.Print("Exception when calling TenantApi.TenantAttachOidcIdentity: " + e.Message);
+                Debug.Print("Status Code: " + e.ErrorCode);
+                Debug.Print(e.StackTrace);
+            }
+        }
+    }
+}
+```
+
+#### Using the TenantAttachOidcIdentityWithHttpInfo variant
+This returns an ApiResponse object which contains the response data, status code and headers.
+
+```csharp
+try
+{
+    // Attaches an OIDC identity to a member subject.
+    apiInstance.TenantAttachOidcIdentityWithHttpInfo(id, subjectId, adminAttachOidcRequest);
+}
+catch (ApiException e)
+{
+    Debug.Print("Exception when calling TenantApi.TenantAttachOidcIdentityWithHttpInfo: " + e.Message);
+    Debug.Print("Status Code: " + e.ErrorCode);
+    Debug.Print(e.StackTrace);
+}
+```
+
+### Parameters
+
+| Name | Type | Description | Notes |
+|------|------|-------------|-------|
+| **id** | **string** |  |  |
+| **subjectId** | **string** |  |  |
+| **adminAttachOidcRequest** | [**AdminAttachOidcRequest**](AdminAttachOidcRequest.md) |  |  |
 
 ### Return type
 
@@ -557,6 +655,102 @@ No authorization required
 
 [[Back to top]](#) [[Back to API list]](../README.md#documentation-for-api-endpoints) [[Back to Model list]](../README.md#documentation-for-models) [[Back to README]](../README.md)
 
+<a id="tenantgetmembercredentials"></a>
+# **TenantGetMemberCredentials**
+> SubjectCredentialsDto TenantGetMemberCredentials (string id, string subjectId)
+
+Lists passkey credentials and OIDC identities for a member subject.
+
+### Example
+```csharp
+using System.Collections.Generic;
+using System.Diagnostics;
+using System.Net.Http;
+using NightscoutFoundation.Nocturne.Api;
+using NightscoutFoundation.Nocturne.Client;
+using NightscoutFoundation.Nocturne.Model;
+
+namespace Example
+{
+    public class TenantGetMemberCredentialsExample
+    {
+        public static void Main()
+        {
+            Configuration config = new Configuration();
+            config.BasePath = "http://localhost";
+            // create instances of HttpClient, HttpClientHandler to be reused later with different Api classes
+            HttpClient httpClient = new HttpClient();
+            HttpClientHandler httpClientHandler = new HttpClientHandler();
+            var apiInstance = new TenantApi(httpClient, config, httpClientHandler);
+            var id = "id_example";  // string | 
+            var subjectId = "subjectId_example";  // string | 
+
+            try
+            {
+                // Lists passkey credentials and OIDC identities for a member subject.
+                SubjectCredentialsDto result = apiInstance.TenantGetMemberCredentials(id, subjectId);
+                Debug.WriteLine(result);
+            }
+            catch (ApiException  e)
+            {
+                Debug.Print("Exception when calling TenantApi.TenantGetMemberCredentials: " + e.Message);
+                Debug.Print("Status Code: " + e.ErrorCode);
+                Debug.Print(e.StackTrace);
+            }
+        }
+    }
+}
+```
+
+#### Using the TenantGetMemberCredentialsWithHttpInfo variant
+This returns an ApiResponse object which contains the response data, status code and headers.
+
+```csharp
+try
+{
+    // Lists passkey credentials and OIDC identities for a member subject.
+    ApiResponse<SubjectCredentialsDto> response = apiInstance.TenantGetMemberCredentialsWithHttpInfo(id, subjectId);
+    Debug.Write("Status Code: " + response.StatusCode);
+    Debug.Write("Response Headers: " + response.Headers);
+    Debug.Write("Response Body: " + response.Data);
+}
+catch (ApiException e)
+{
+    Debug.Print("Exception when calling TenantApi.TenantGetMemberCredentialsWithHttpInfo: " + e.Message);
+    Debug.Print("Status Code: " + e.ErrorCode);
+    Debug.Print(e.StackTrace);
+}
+```
+
+### Parameters
+
+| Name | Type | Description | Notes |
+|------|------|-------------|-------|
+| **id** | **string** |  |  |
+| **subjectId** | **string** |  |  |
+
+### Return type
+
+[**SubjectCredentialsDto**](SubjectCredentialsDto.md)
+
+### Authorization
+
+No authorization required
+
+### HTTP request headers
+
+ - **Content-Type**: Not defined
+ - **Accept**: application/json
+
+
+### HTTP response details
+| Status code | Description | Response headers |
+|-------------|-------------|------------------|
+| **200** |  |  -  |
+| **403** |  |  -  |
+
+[[Back to top]](#) [[Back to API list]](../README.md#documentation-for-api-endpoints) [[Back to Model list]](../README.md#documentation-for-models) [[Back to README]](../README.md)
+
 <a id="tenantlistinvites"></a>
 # **TenantListInvites**
 > List&lt;MemberInviteInfo&gt; TenantListInvites (string id)
@@ -808,6 +1002,194 @@ catch (ApiException e)
 |------|------|-------------|-------|
 | **id** | **string** |  |  |
 | **subjectId** | **string** |  |  |
+
+### Return type
+
+void (empty response body)
+
+### Authorization
+
+No authorization required
+
+### HTTP request headers
+
+ - **Content-Type**: Not defined
+ - **Accept**: application/json
+
+
+### HTTP response details
+| Status code | Description | Response headers |
+|-------------|-------------|------------------|
+| **204** |  |  -  |
+| **403** |  |  -  |
+
+[[Back to top]](#) [[Back to API list]](../README.md#documentation-for-api-endpoints) [[Back to Model list]](../README.md#documentation-for-models) [[Back to README]](../README.md)
+
+<a id="tenantremoveoidcidentity"></a>
+# **TenantRemoveOidcIdentity**
+> void TenantRemoveOidcIdentity (string id, string subjectId, string identityId)
+
+Removes an OIDC identity from a member subject.
+
+### Example
+```csharp
+using System.Collections.Generic;
+using System.Diagnostics;
+using System.Net.Http;
+using NightscoutFoundation.Nocturne.Api;
+using NightscoutFoundation.Nocturne.Client;
+using NightscoutFoundation.Nocturne.Model;
+
+namespace Example
+{
+    public class TenantRemoveOidcIdentityExample
+    {
+        public static void Main()
+        {
+            Configuration config = new Configuration();
+            config.BasePath = "http://localhost";
+            // create instances of HttpClient, HttpClientHandler to be reused later with different Api classes
+            HttpClient httpClient = new HttpClient();
+            HttpClientHandler httpClientHandler = new HttpClientHandler();
+            var apiInstance = new TenantApi(httpClient, config, httpClientHandler);
+            var id = "id_example";  // string | 
+            var subjectId = "subjectId_example";  // string | 
+            var identityId = "identityId_example";  // string | 
+
+            try
+            {
+                // Removes an OIDC identity from a member subject.
+                apiInstance.TenantRemoveOidcIdentity(id, subjectId, identityId);
+            }
+            catch (ApiException  e)
+            {
+                Debug.Print("Exception when calling TenantApi.TenantRemoveOidcIdentity: " + e.Message);
+                Debug.Print("Status Code: " + e.ErrorCode);
+                Debug.Print(e.StackTrace);
+            }
+        }
+    }
+}
+```
+
+#### Using the TenantRemoveOidcIdentityWithHttpInfo variant
+This returns an ApiResponse object which contains the response data, status code and headers.
+
+```csharp
+try
+{
+    // Removes an OIDC identity from a member subject.
+    apiInstance.TenantRemoveOidcIdentityWithHttpInfo(id, subjectId, identityId);
+}
+catch (ApiException e)
+{
+    Debug.Print("Exception when calling TenantApi.TenantRemoveOidcIdentityWithHttpInfo: " + e.Message);
+    Debug.Print("Status Code: " + e.ErrorCode);
+    Debug.Print(e.StackTrace);
+}
+```
+
+### Parameters
+
+| Name | Type | Description | Notes |
+|------|------|-------------|-------|
+| **id** | **string** |  |  |
+| **subjectId** | **string** |  |  |
+| **identityId** | **string** |  |  |
+
+### Return type
+
+void (empty response body)
+
+### Authorization
+
+No authorization required
+
+### HTTP request headers
+
+ - **Content-Type**: Not defined
+ - **Accept**: application/json
+
+
+### HTTP response details
+| Status code | Description | Response headers |
+|-------------|-------------|------------------|
+| **204** |  |  -  |
+| **403** |  |  -  |
+
+[[Back to top]](#) [[Back to API list]](../README.md#documentation-for-api-endpoints) [[Back to Model list]](../README.md#documentation-for-models) [[Back to README]](../README.md)
+
+<a id="tenantremovepasskeycredential"></a>
+# **TenantRemovePasskeyCredential**
+> void TenantRemovePasskeyCredential (string id, string subjectId, string credentialId)
+
+Removes a passkey credential from a member subject.
+
+### Example
+```csharp
+using System.Collections.Generic;
+using System.Diagnostics;
+using System.Net.Http;
+using NightscoutFoundation.Nocturne.Api;
+using NightscoutFoundation.Nocturne.Client;
+using NightscoutFoundation.Nocturne.Model;
+
+namespace Example
+{
+    public class TenantRemovePasskeyCredentialExample
+    {
+        public static void Main()
+        {
+            Configuration config = new Configuration();
+            config.BasePath = "http://localhost";
+            // create instances of HttpClient, HttpClientHandler to be reused later with different Api classes
+            HttpClient httpClient = new HttpClient();
+            HttpClientHandler httpClientHandler = new HttpClientHandler();
+            var apiInstance = new TenantApi(httpClient, config, httpClientHandler);
+            var id = "id_example";  // string | 
+            var subjectId = "subjectId_example";  // string | 
+            var credentialId = "credentialId_example";  // string | 
+
+            try
+            {
+                // Removes a passkey credential from a member subject.
+                apiInstance.TenantRemovePasskeyCredential(id, subjectId, credentialId);
+            }
+            catch (ApiException  e)
+            {
+                Debug.Print("Exception when calling TenantApi.TenantRemovePasskeyCredential: " + e.Message);
+                Debug.Print("Status Code: " + e.ErrorCode);
+                Debug.Print(e.StackTrace);
+            }
+        }
+    }
+}
+```
+
+#### Using the TenantRemovePasskeyCredentialWithHttpInfo variant
+This returns an ApiResponse object which contains the response data, status code and headers.
+
+```csharp
+try
+{
+    // Removes a passkey credential from a member subject.
+    apiInstance.TenantRemovePasskeyCredentialWithHttpInfo(id, subjectId, credentialId);
+}
+catch (ApiException e)
+{
+    Debug.Print("Exception when calling TenantApi.TenantRemovePasskeyCredentialWithHttpInfo: " + e.Message);
+    Debug.Print("Status Code: " + e.ErrorCode);
+    Debug.Print(e.StackTrace);
+}
+```
+
+### Parameters
+
+| Name | Type | Description | Notes |
+|------|------|-------------|-------|
+| **id** | **string** |  |  |
+| **subjectId** | **string** |  |  |
+| **credentialId** | **string** |  |  |
 
 ### Return type
 

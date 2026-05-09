@@ -77,32 +77,121 @@ public class GlookoSensorGlucoseMapper
         return results;
     }
 
+    /// <summary>
+    /// Maps V3 BG meter series (bgHigh, bgNormal, bgLow) to BGCheck records.
+    /// Values use the same encoding as CGM: Y is in display units, Value is mg/dL × 100.
+    /// </summary>
+    public IEnumerable<BGCheck> TransformV3ToBGChecks(GlookoV3GraphResponse graphData, string? meterUnits)
+    {
+        var results = new List<BGCheck>();
+        if (graphData?.Series == null) return results;
+
+        var series = graphData.Series;
+        var allBg = (series.BgHigh ?? [])
+            .Concat(series.BgNormal ?? [])
+            .Concat(series.BgLow ?? [])
+            .OrderBy(p => p.X);
+
+        foreach (var reading in allBg)
+        {
+            var timestamp = _timeMapper.GetCorrectedGlookoTime(reading.X);
+            var mgdl = reading.Value / 100.0;
+            if (mgdl <= 0) continue;
+
+            var legacyId = !string.IsNullOrEmpty(reading.Id)
+                ? $"glooko_v3_bg_{reading.Id}"
+                : $"glooko_v3_bg_{reading.X}";
+
+            var now = DateTime.UtcNow;
+            results.Add(new BGCheck
+            {
+                Id = Guid.CreateVersion7(),
+                Timestamp = timestamp,
+                LegacyId = legacyId,
+                Device = _connectorSource,
+                DataSource = _connectorSource,
+                Glucose = mgdl,
+                Units = GlucoseUnit.MgDl,
+                GlucoseType = GlucoseType.Finger,
+                CreatedAt = now,
+                ModifiedAt = now
+            });
+        }
+
+        _logger.LogInformation(
+            "[{ConnectorSource}] Transformed {Count} BG checks from v3 data",
+            _connectorSource, results.Count);
+
+        return results;
+    }
+
+    /// <summary>
+    /// Maps V2 meter readings to BGCheck records (finger stick / manual blood glucose).
+    /// Values are always mg/dL × 100 from Glooko, regardless of account meter units.
+    /// </summary>
+    public IEnumerable<BGCheck> TransformBatchDataToBGChecks(GlookoBatchData batchData)
+    {
+        var results = new List<BGCheck>();
+        if (batchData?.MeterReadings == null) return results;
+
+        foreach (var reading in batchData.MeterReadings)
+        {
+            var bgCheck = ParseBGCheck(reading);
+            if (bgCheck != null) results.Add(bgCheck);
+        }
+
+        return results;
+    }
+
+    // ── Parsing helpers ─────────────────────────────────────────────────
+
+    /// <summary>
+    /// Parses and timezone-corrects a Glooko V2 timestamp string.
+    /// Returns null if the timestamp is missing or unparseable.
+    /// </summary>
+    private DateTime? ParseV2Timestamp(string? timestamp)
+    {
+        if (string.IsNullOrWhiteSpace(timestamp))
+            return null;
+
+        if (!DateTime.TryParse(timestamp, out var parsedDate))
+        {
+            _logger.LogWarning("Failed to parse Glooko timestamp: '{Timestamp}'", timestamp);
+            return null;
+        }
+
+        var date = parsedDate.ToUniversalTime();
+        if (_config.TimezoneOffset != 0)
+            date = date.AddHours(-_config.TimezoneOffset);
+
+        return date;
+    }
+
     private SensorGlucose? ParseSensorGlucose(GlookoCgmReading reading)
     {
         try
         {
-            if (string.IsNullOrWhiteSpace(reading.Timestamp) || reading.Value <= 0)
-                return null;
+            if (reading.Value <= 0 || reading.SoftDeleted == true) return null;
 
-            if (!DateTime.TryParse(reading.Timestamp, out var parsedDate))
-            {
-                _logger.LogWarning("Failed to parse Glooko timestamp: '{Timestamp}'", reading.Timestamp);
-                return null;
-            }
+            var date = ParseV2Timestamp(reading.Timestamp);
+            if (date == null) return null;
 
-            var date = parsedDate.ToUniversalTime();
-            if (_config.TimezoneOffset != 0)
-                date = date.AddHours(-_config.TimezoneOffset);
+            // Glooko V2 CGM values are mg/dL × 100 (integer encoding for 2-decimal precision)
+            var mgdl = reading.Value / 100.0;
+
+            var legacyId = !string.IsNullOrEmpty(reading.Guid)
+                ? $"glooko_cgm_{reading.Guid}"
+                : $"glooko_{date.Value.Ticks}";
 
             var now = DateTime.UtcNow;
             return new SensorGlucose
             {
                 Id = Guid.CreateVersion7(),
-                Timestamp = date,
-                LegacyId = $"glooko_{date.Ticks}",
+                Timestamp = date.Value,
+                LegacyId = legacyId,
                 Device = _connectorSource,
                 DataSource = _connectorSource,
-                Mgdl = reading.Value,
+                Mgdl = mgdl,
                 Direction = ParseTrendToDirection(reading.Trend),
                 CreatedAt = now,
                 ModifiedAt = now
@@ -111,6 +200,44 @@ public class GlookoSensorGlucoseMapper
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error parsing Glooko CGM reading");
+            return null;
+        }
+    }
+
+    private BGCheck? ParseBGCheck(GlookoMeterReading reading)
+    {
+        try
+        {
+            if (reading.Value <= 0 || reading.SoftDeleted == true) return null;
+
+            var date = ParseV2Timestamp(reading.Timestamp);
+            if (date == null) return null;
+
+            // Glooko meter values are mg/dL × 100 (integer encoding for 2-decimal precision)
+            var mgdl = reading.Value / 100.0;
+
+            var legacyId = !string.IsNullOrEmpty(reading.Guid)
+                ? $"glooko_meter_{reading.Guid}"
+                : $"glooko_meter_{date.Value.Ticks}";
+
+            var now = DateTime.UtcNow;
+            return new BGCheck
+            {
+                Id = Guid.CreateVersion7(),
+                Timestamp = date.Value,
+                LegacyId = legacyId,
+                Device = _connectorSource,
+                DataSource = _connectorSource,
+                Glucose = mgdl,
+                Units = GlucoseUnit.MgDl,
+                GlucoseType = GlucoseType.Finger,
+                CreatedAt = now,
+                ModifiedAt = now
+            };
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error parsing Glooko meter reading");
             return null;
         }
     }

@@ -280,6 +280,26 @@ namespace NightscoutFoundation.Nocturne.Api
         /// <returns>ApiResponse of List&lt;CarbRatioSchedule&gt;</returns>
         ApiResponse<List<CarbRatioSchedule>> ProfileGetCarbRatioSchedulesByNameWithHttpInfo(string profileName);
         /// <summary>
+        /// Get legacy Nightscout-shaped profile records projected from V4 schedule data. Intended for connector consumption where the caller needs the monolithic Profile shape (store with basal/carbratio/sens/target arrays).
+        /// </summary>
+        /// <exception cref="NightscoutFoundation.Nocturne.Client.ApiException">Thrown when fails to make API call</exception>
+        /// <param name="limit"> (optional, default to 100)</param>
+        /// <param name="offset"> (optional, default to 0)</param>
+        /// <returns>PaginatedResponseOfProfile</returns>
+        PaginatedResponseOfProfile ProfileGetProfileRecords(int? limit = default, int? offset = default);
+
+        /// <summary>
+        /// Get legacy Nightscout-shaped profile records projected from V4 schedule data. Intended for connector consumption where the caller needs the monolithic Profile shape (store with basal/carbratio/sens/target arrays).
+        /// </summary>
+        /// <remarks>
+        /// 
+        /// </remarks>
+        /// <exception cref="NightscoutFoundation.Nocturne.Client.ApiException">Thrown when fails to make API call</exception>
+        /// <param name="limit"> (optional, default to 100)</param>
+        /// <param name="offset"> (optional, default to 0)</param>
+        /// <returns>ApiResponse of PaginatedResponseOfProfile</returns>
+        ApiResponse<PaginatedResponseOfProfile> ProfileGetProfileRecordsWithHttpInfo(int? limit = default, int? offset = default);
+        /// <summary>
         /// Get a consolidated summary of all profile data across all profile names. Optionally provide a date range to include schedule change detection info.
         /// </summary>
         /// <exception cref="NightscoutFoundation.Nocturne.Client.ApiException">Thrown when fails to make API call</exception>
@@ -868,6 +888,31 @@ namespace NightscoutFoundation.Nocturne.Api
         /// <param name="cancellationToken">Cancellation Token to cancel the request.</param>
         /// <returns>Task of ApiResponse (List&lt;CarbRatioSchedule&gt;)</returns>
         System.Threading.Tasks.Task<ApiResponse<List<CarbRatioSchedule>>> ProfileGetCarbRatioSchedulesByNameWithHttpInfoAsync(string profileName, System.Threading.CancellationToken cancellationToken = default);
+        /// <summary>
+        /// Get legacy Nightscout-shaped profile records projected from V4 schedule data. Intended for connector consumption where the caller needs the monolithic Profile shape (store with basal/carbratio/sens/target arrays).
+        /// </summary>
+        /// <remarks>
+        /// 
+        /// </remarks>
+        /// <exception cref="NightscoutFoundation.Nocturne.Client.ApiException">Thrown when fails to make API call</exception>
+        /// <param name="limit"> (optional, default to 100)</param>
+        /// <param name="offset"> (optional, default to 0)</param>
+        /// <param name="cancellationToken">Cancellation Token to cancel the request.</param>
+        /// <returns>Task of PaginatedResponseOfProfile</returns>
+        System.Threading.Tasks.Task<PaginatedResponseOfProfile> ProfileGetProfileRecordsAsync(int? limit = default, int? offset = default, System.Threading.CancellationToken cancellationToken = default);
+
+        /// <summary>
+        /// Get legacy Nightscout-shaped profile records projected from V4 schedule data. Intended for connector consumption where the caller needs the monolithic Profile shape (store with basal/carbratio/sens/target arrays).
+        /// </summary>
+        /// <remarks>
+        /// 
+        /// </remarks>
+        /// <exception cref="NightscoutFoundation.Nocturne.Client.ApiException">Thrown when fails to make API call</exception>
+        /// <param name="limit"> (optional, default to 100)</param>
+        /// <param name="offset"> (optional, default to 0)</param>
+        /// <param name="cancellationToken">Cancellation Token to cancel the request.</param>
+        /// <returns>Task of ApiResponse (PaginatedResponseOfProfile)</returns>
+        System.Threading.Tasks.Task<ApiResponse<PaginatedResponseOfProfile>> ProfileGetProfileRecordsWithHttpInfoAsync(int? limit = default, int? offset = default, System.Threading.CancellationToken cancellationToken = default);
         /// <summary>
         /// Get a consolidated summary of all profile data across all profile names. Optionally provide a date range to include schedule change detection info.
         /// </summary>
@@ -3008,6 +3053,131 @@ namespace NightscoutFoundation.Nocturne.Api
             if (this.ExceptionFactory != null)
             {
                 Exception _exception = this.ExceptionFactory("ProfileGetCarbRatioSchedulesByName", localVarResponse);
+                if (_exception != null) throw _exception;
+            }
+
+            return localVarResponse;
+        }
+
+        /// <summary>
+        /// Get legacy Nightscout-shaped profile records projected from V4 schedule data. Intended for connector consumption where the caller needs the monolithic Profile shape (store with basal/carbratio/sens/target arrays). 
+        /// </summary>
+        /// <exception cref="NightscoutFoundation.Nocturne.Client.ApiException">Thrown when fails to make API call</exception>
+        /// <param name="limit"> (optional, default to 100)</param>
+        /// <param name="offset"> (optional, default to 0)</param>
+        /// <returns>PaginatedResponseOfProfile</returns>
+        public PaginatedResponseOfProfile ProfileGetProfileRecords(int? limit = default, int? offset = default)
+        {
+            NightscoutFoundation.Nocturne.Client.ApiResponse<PaginatedResponseOfProfile> localVarResponse = ProfileGetProfileRecordsWithHttpInfo(limit, offset);
+            return localVarResponse.Data;
+        }
+
+        /// <summary>
+        /// Get legacy Nightscout-shaped profile records projected from V4 schedule data. Intended for connector consumption where the caller needs the monolithic Profile shape (store with basal/carbratio/sens/target arrays). 
+        /// </summary>
+        /// <exception cref="NightscoutFoundation.Nocturne.Client.ApiException">Thrown when fails to make API call</exception>
+        /// <param name="limit"> (optional, default to 100)</param>
+        /// <param name="offset"> (optional, default to 0)</param>
+        /// <returns>ApiResponse of PaginatedResponseOfProfile</returns>
+        public NightscoutFoundation.Nocturne.Client.ApiResponse<PaginatedResponseOfProfile> ProfileGetProfileRecordsWithHttpInfo(int? limit = default, int? offset = default)
+        {
+            NightscoutFoundation.Nocturne.Client.RequestOptions localVarRequestOptions = new NightscoutFoundation.Nocturne.Client.RequestOptions();
+
+            string[] _contentTypes = new string[] {
+            };
+
+            // to determine the Accept header
+            string[] _accepts = new string[] {
+                "application/json"
+            };
+
+            var localVarContentType = NightscoutFoundation.Nocturne.Client.ClientUtils.SelectHeaderContentType(_contentTypes);
+            if (localVarContentType != null) localVarRequestOptions.HeaderParameters.Add("Content-Type", localVarContentType);
+
+            var localVarAccept = NightscoutFoundation.Nocturne.Client.ClientUtils.SelectHeaderAccept(_accepts);
+            if (localVarAccept != null) localVarRequestOptions.HeaderParameters.Add("Accept", localVarAccept);
+
+            if (limit != null)
+            {
+                localVarRequestOptions.QueryParameters.Add(NightscoutFoundation.Nocturne.Client.ClientUtils.ParameterToMultiMap("", "limit", limit));
+            }
+            if (offset != null)
+            {
+                localVarRequestOptions.QueryParameters.Add(NightscoutFoundation.Nocturne.Client.ClientUtils.ParameterToMultiMap("", "offset", offset));
+            }
+
+
+            // make the HTTP request
+            var localVarResponse = this.Client.Get<PaginatedResponseOfProfile>("/api/v4/profile/records", localVarRequestOptions, this.Configuration);
+
+            if (this.ExceptionFactory != null)
+            {
+                Exception _exception = this.ExceptionFactory("ProfileGetProfileRecords", localVarResponse);
+                if (_exception != null) throw _exception;
+            }
+
+            return localVarResponse;
+        }
+
+        /// <summary>
+        /// Get legacy Nightscout-shaped profile records projected from V4 schedule data. Intended for connector consumption where the caller needs the monolithic Profile shape (store with basal/carbratio/sens/target arrays). 
+        /// </summary>
+        /// <exception cref="NightscoutFoundation.Nocturne.Client.ApiException">Thrown when fails to make API call</exception>
+        /// <param name="limit"> (optional, default to 100)</param>
+        /// <param name="offset"> (optional, default to 0)</param>
+        /// <param name="cancellationToken">Cancellation Token to cancel the request.</param>
+        /// <returns>Task of PaginatedResponseOfProfile</returns>
+        public async System.Threading.Tasks.Task<PaginatedResponseOfProfile> ProfileGetProfileRecordsAsync(int? limit = default, int? offset = default, System.Threading.CancellationToken cancellationToken = default)
+        {
+            NightscoutFoundation.Nocturne.Client.ApiResponse<PaginatedResponseOfProfile> localVarResponse = await ProfileGetProfileRecordsWithHttpInfoAsync(limit, offset, cancellationToken).ConfigureAwait(false);
+            return localVarResponse.Data;
+        }
+
+        /// <summary>
+        /// Get legacy Nightscout-shaped profile records projected from V4 schedule data. Intended for connector consumption where the caller needs the monolithic Profile shape (store with basal/carbratio/sens/target arrays). 
+        /// </summary>
+        /// <exception cref="NightscoutFoundation.Nocturne.Client.ApiException">Thrown when fails to make API call</exception>
+        /// <param name="limit"> (optional, default to 100)</param>
+        /// <param name="offset"> (optional, default to 0)</param>
+        /// <param name="cancellationToken">Cancellation Token to cancel the request.</param>
+        /// <returns>Task of ApiResponse (PaginatedResponseOfProfile)</returns>
+        public async System.Threading.Tasks.Task<NightscoutFoundation.Nocturne.Client.ApiResponse<PaginatedResponseOfProfile>> ProfileGetProfileRecordsWithHttpInfoAsync(int? limit = default, int? offset = default, System.Threading.CancellationToken cancellationToken = default)
+        {
+
+            NightscoutFoundation.Nocturne.Client.RequestOptions localVarRequestOptions = new NightscoutFoundation.Nocturne.Client.RequestOptions();
+
+            string[] _contentTypes = new string[] {
+            };
+
+            // to determine the Accept header
+            string[] _accepts = new string[] {
+                "application/json"
+            };
+
+
+            var localVarContentType = NightscoutFoundation.Nocturne.Client.ClientUtils.SelectHeaderContentType(_contentTypes);
+            if (localVarContentType != null) localVarRequestOptions.HeaderParameters.Add("Content-Type", localVarContentType);
+
+            var localVarAccept = NightscoutFoundation.Nocturne.Client.ClientUtils.SelectHeaderAccept(_accepts);
+            if (localVarAccept != null) localVarRequestOptions.HeaderParameters.Add("Accept", localVarAccept);
+
+            if (limit != null)
+            {
+                localVarRequestOptions.QueryParameters.Add(NightscoutFoundation.Nocturne.Client.ClientUtils.ParameterToMultiMap("", "limit", limit));
+            }
+            if (offset != null)
+            {
+                localVarRequestOptions.QueryParameters.Add(NightscoutFoundation.Nocturne.Client.ClientUtils.ParameterToMultiMap("", "offset", offset));
+            }
+
+
+            // make the HTTP request
+
+            var localVarResponse = await this.AsynchronousClient.GetAsync<PaginatedResponseOfProfile>("/api/v4/profile/records", localVarRequestOptions, this.Configuration, cancellationToken).ConfigureAwait(false);
+
+            if (this.ExceptionFactory != null)
+            {
+                Exception _exception = this.ExceptionFactory("ProfileGetProfileRecords", localVarResponse);
                 if (_exception != null) throw _exception;
             }
 

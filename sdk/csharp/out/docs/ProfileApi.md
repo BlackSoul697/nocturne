@@ -18,6 +18,7 @@ All URIs are relative to *http://localhost*
 | [**ProfileGetBasalSchedulesByName**](ProfileApi.md#profilegetbasalschedulesbyname) | **GET** /api/v4/profile/basal/{profileName} | Get basal schedules by profile name |
 | [**ProfileGetCarbRatioScheduleById**](ProfileApi.md#profilegetcarbratioschedulebyid) | **GET** /api/v4/profile/carb-ratio/by-id/{id} | Get a carb ratio schedule by ID |
 | [**ProfileGetCarbRatioSchedulesByName**](ProfileApi.md#profilegetcarbratioschedulesbyname) | **GET** /api/v4/profile/carb-ratio/{profileName} | Get carb ratio schedules by profile name |
+| [**ProfileGetProfileRecords**](ProfileApi.md#profilegetprofilerecords) | **GET** /api/v4/profile/records | Get legacy Nightscout-shaped profile records projected from V4 schedule data. Intended for connector consumption where the caller needs the monolithic Profile shape (store with basal/carbratio/sens/target arrays). |
 | [**ProfileGetProfileSummary**](ProfileApi.md#profilegetprofilesummary) | **GET** /api/v4/profile/summary | Get a consolidated summary of all profile data across all profile names. Optionally provide a date range to include schedule change detection info. |
 | [**ProfileGetSensitivityScheduleById**](ProfileApi.md#profilegetsensitivityschedulebyid) | **GET** /api/v4/profile/sensitivity/by-id/{id} | Get a sensitivity schedule by ID |
 | [**ProfileGetSensitivitySchedulesByName**](ProfileApi.md#profilegetsensitivityschedulesbyname) | **GET** /api/v4/profile/sensitivity/{profileName} | Get sensitivity schedules by profile name |
@@ -1308,6 +1309,101 @@ catch (ApiException e)
 ### Return type
 
 [**List&lt;CarbRatioSchedule&gt;**](CarbRatioSchedule.md)
+
+### Authorization
+
+No authorization required
+
+### HTTP request headers
+
+ - **Content-Type**: Not defined
+ - **Accept**: application/json
+
+
+### HTTP response details
+| Status code | Description | Response headers |
+|-------------|-------------|------------------|
+| **200** |  |  -  |
+
+[[Back to top]](#) [[Back to API list]](../README.md#documentation-for-api-endpoints) [[Back to Model list]](../README.md#documentation-for-models) [[Back to README]](../README.md)
+
+<a id="profilegetprofilerecords"></a>
+# **ProfileGetProfileRecords**
+> PaginatedResponseOfProfile ProfileGetProfileRecords (int? limit = null, int? offset = null)
+
+Get legacy Nightscout-shaped profile records projected from V4 schedule data. Intended for connector consumption where the caller needs the monolithic Profile shape (store with basal/carbratio/sens/target arrays).
+
+### Example
+```csharp
+using System.Collections.Generic;
+using System.Diagnostics;
+using System.Net.Http;
+using NightscoutFoundation.Nocturne.Api;
+using NightscoutFoundation.Nocturne.Client;
+using NightscoutFoundation.Nocturne.Model;
+
+namespace Example
+{
+    public class ProfileGetProfileRecordsExample
+    {
+        public static void Main()
+        {
+            Configuration config = new Configuration();
+            config.BasePath = "http://localhost";
+            // create instances of HttpClient, HttpClientHandler to be reused later with different Api classes
+            HttpClient httpClient = new HttpClient();
+            HttpClientHandler httpClientHandler = new HttpClientHandler();
+            var apiInstance = new ProfileApi(httpClient, config, httpClientHandler);
+            var limit = 100;  // int? |  (optional)  (default to 100)
+            var offset = 0;  // int? |  (optional)  (default to 0)
+
+            try
+            {
+                // Get legacy Nightscout-shaped profile records projected from V4 schedule data. Intended for connector consumption where the caller needs the monolithic Profile shape (store with basal/carbratio/sens/target arrays).
+                PaginatedResponseOfProfile result = apiInstance.ProfileGetProfileRecords(limit, offset);
+                Debug.WriteLine(result);
+            }
+            catch (ApiException  e)
+            {
+                Debug.Print("Exception when calling ProfileApi.ProfileGetProfileRecords: " + e.Message);
+                Debug.Print("Status Code: " + e.ErrorCode);
+                Debug.Print(e.StackTrace);
+            }
+        }
+    }
+}
+```
+
+#### Using the ProfileGetProfileRecordsWithHttpInfo variant
+This returns an ApiResponse object which contains the response data, status code and headers.
+
+```csharp
+try
+{
+    // Get legacy Nightscout-shaped profile records projected from V4 schedule data. Intended for connector consumption where the caller needs the monolithic Profile shape (store with basal/carbratio/sens/target arrays).
+    ApiResponse<PaginatedResponseOfProfile> response = apiInstance.ProfileGetProfileRecordsWithHttpInfo(limit, offset);
+    Debug.Write("Status Code: " + response.StatusCode);
+    Debug.Write("Response Headers: " + response.Headers);
+    Debug.Write("Response Body: " + response.Data);
+}
+catch (ApiException e)
+{
+    Debug.Print("Exception when calling ProfileApi.ProfileGetProfileRecordsWithHttpInfo: " + e.Message);
+    Debug.Print("Status Code: " + e.ErrorCode);
+    Debug.Print(e.StackTrace);
+}
+```
+
+### Parameters
+
+| Name | Type | Description | Notes |
+|------|------|-------------|-------|
+| **limit** | **int?** |  | [optional] [default to 100] |
+| **offset** | **int?** |  | [optional] [default to 0] |
+
+### Return type
+
+[**PaginatedResponseOfProfile**](PaginatedResponseOfProfile.md)
 
 ### Authorization
 

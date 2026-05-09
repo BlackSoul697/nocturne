@@ -22,8 +22,8 @@ namespace Nocturne.API.Services.Treatments;
 /// <seealso cref="ITreatmentService"/>
 /// <seealso cref="ITreatmentStore"/>
 /// <seealso cref="ITreatmentDecomposer"/>
-/// <seealso cref="IobService"/>
-/// <seealso cref="CobService"/>
+/// <seealso cref="IobCalculator"/>
+/// <seealso cref="CobCalculator"/>
 public class TreatmentService : ITreatmentService
 {
     private readonly ITreatmentStore _store;
@@ -126,6 +126,13 @@ public class TreatmentService : ITreatmentService
         };
 
         return await _store.QueryAsync(query, cancellationToken);
+    }
+
+    /// <inheritdoc />
+    public async Task<IReadOnlyList<Treatment>> GetTreatmentsByRangeAsync(
+        long fromMills, long toMills, CancellationToken cancellationToken = default)
+    {
+        return await _store.GetByRangeAsync(fromMills, toMills, cancellationToken);
     }
 
     /// <inheritdoc />

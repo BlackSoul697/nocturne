@@ -4,20 +4,18 @@ All URIs are relative to *http://localhost*
 
 | Method | HTTP request | Description |
 |--------|--------------|-------------|
-| [**SensorGlucoseCreate**](SensorGlucoseApi.md#sensorglucosecreate) | **POST** /api/v4/glucose/sensor | Creates a new record and returns it with a &#x60;Location&#x60; header pointing to the created resource. |
+| [**SensorGlucoseCreate**](SensorGlucoseApi.md#sensorglucosecreate) | **POST** /api/v4/glucose/sensor |  |
 | [**SensorGlucoseCreateSensorGlucoseBulk**](SensorGlucoseApi.md#sensorglucosecreatesensorglucosebulk) | **POST** /api/v4/glucose/sensor/bulk | Create multiple sensor glucose readings in bulk (max 1000). |
 | [**SensorGlucoseDelete**](SensorGlucoseApi.md#sensorglucosedelete) | **DELETE** /api/v4/glucose/sensor/{id} | Deletes a record by ID. |
 | [**SensorGlucoseGetAll**](SensorGlucoseApi.md#sensorglucosegetall) | **GET** /api/v4/glucose/sensor |  |
 | [**SensorGlucoseGetById**](SensorGlucoseApi.md#sensorglucosegetbyid) | **GET** /api/v4/glucose/sensor/{id} | Retrieves a single record by its unique identifier. |
-| [**SensorGlucoseUpdate**](SensorGlucoseApi.md#sensorglucoseupdate) | **PUT** /api/v4/glucose/sensor/{id} | Updates an existing record by ID and returns the updated record. |
+| [**SensorGlucoseUpdate**](SensorGlucoseApi.md#sensorglucoseupdate) | **PUT** /api/v4/glucose/sensor/{id} |  |
 
 <a id="sensorglucosecreate"></a>
 # **SensorGlucoseCreate**
 > SensorGlucose SensorGlucoseCreate (UpsertSensorGlucoseRequest upsertSensorGlucoseRequest)
 
-Creates a new record and returns it with a `Location` header pointing to the created resource.
 
-`Timestamp` must be set on the mapped model; requests that resolve to a default timestamp are rejected with `400 Bad Request`.              On success, responds with `201 Created` and a `Location` header containing the URL of the newly created record.
 
 ### Example
 ```csharp
@@ -40,11 +38,10 @@ namespace Example
             HttpClient httpClient = new HttpClient();
             HttpClientHandler httpClientHandler = new HttpClientHandler();
             var apiInstance = new SensorGlucoseApi(httpClient, config, httpClientHandler);
-            var upsertSensorGlucoseRequest = new UpsertSensorGlucoseRequest(); // UpsertSensorGlucoseRequest | The data used to create the record.
+            var upsertSensorGlucoseRequest = new UpsertSensorGlucoseRequest(); // UpsertSensorGlucoseRequest | 
 
             try
             {
-                // Creates a new record and returns it with a `Location` header pointing to the created resource.
                 SensorGlucose result = apiInstance.SensorGlucoseCreate(upsertSensorGlucoseRequest);
                 Debug.WriteLine(result);
             }
@@ -65,7 +62,6 @@ This returns an ApiResponse object which contains the response data, status code
 ```csharp
 try
 {
-    // Creates a new record and returns it with a `Location` header pointing to the created resource.
     ApiResponse<SensorGlucose> response = apiInstance.SensorGlucoseCreateWithHttpInfo(upsertSensorGlucoseRequest);
     Debug.Write("Status Code: " + response.StatusCode);
     Debug.Write("Response Headers: " + response.Headers);
@@ -83,7 +79,7 @@ catch (ApiException e)
 
 | Name | Type | Description | Notes |
 |------|------|-------------|-------|
-| **upsertSensorGlucoseRequest** | [**UpsertSensorGlucoseRequest**](UpsertSensorGlucoseRequest.md) | The data used to create the record. |  |
+| **upsertSensorGlucoseRequest** | [**UpsertSensorGlucoseRequest**](UpsertSensorGlucoseRequest.md) |  |  |
 
 ### Return type
 
@@ -497,9 +493,7 @@ No authorization required
 # **SensorGlucoseUpdate**
 > SensorGlucose SensorGlucoseUpdate (string id, UpsertSensorGlucoseRequest upsertSensorGlucoseRequest)
 
-Updates an existing record by ID and returns the updated record.
 
-Returns `404 Not Found` if no record with the given id exists.              `Timestamp` must be set on the mapped model; requests that resolve to a default timestamp are rejected with `400 Bad Request`.
 
 ### Example
 ```csharp
@@ -522,12 +516,11 @@ namespace Example
             HttpClient httpClient = new HttpClient();
             HttpClientHandler httpClientHandler = new HttpClientHandler();
             var apiInstance = new SensorGlucoseApi(httpClient, config, httpClientHandler);
-            var id = "id_example";  // string | The unique identifier of the record to update.
-            var upsertSensorGlucoseRequest = new UpsertSensorGlucoseRequest(); // UpsertSensorGlucoseRequest | The data to apply to the existing record.
+            var id = "id_example";  // string | 
+            var upsertSensorGlucoseRequest = new UpsertSensorGlucoseRequest(); // UpsertSensorGlucoseRequest | 
 
             try
             {
-                // Updates an existing record by ID and returns the updated record.
                 SensorGlucose result = apiInstance.SensorGlucoseUpdate(id, upsertSensorGlucoseRequest);
                 Debug.WriteLine(result);
             }
@@ -548,7 +541,6 @@ This returns an ApiResponse object which contains the response data, status code
 ```csharp
 try
 {
-    // Updates an existing record by ID and returns the updated record.
     ApiResponse<SensorGlucose> response = apiInstance.SensorGlucoseUpdateWithHttpInfo(id, upsertSensorGlucoseRequest);
     Debug.Write("Status Code: " + response.StatusCode);
     Debug.Write("Response Headers: " + response.Headers);
@@ -566,8 +558,8 @@ catch (ApiException e)
 
 | Name | Type | Description | Notes |
 |------|------|-------------|-------|
-| **id** | **string** | The unique identifier of the record to update. |  |
-| **upsertSensorGlucoseRequest** | [**UpsertSensorGlucoseRequest**](UpsertSensorGlucoseRequest.md) | The data to apply to the existing record. |  |
+| **id** | **string** |  |  |
+| **upsertSensorGlucoseRequest** | [**UpsertSensorGlucoseRequest**](UpsertSensorGlucoseRequest.md) |  |  |
 
 ### Return type
 

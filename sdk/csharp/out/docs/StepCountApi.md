@@ -7,7 +7,7 @@ All URIs are relative to *http://localhost*
 | [**StepCountCreateStepCounts**](StepCountApi.md#stepcountcreatestepcounts) | **POST** /api/v4/StepCount | Create one or more step count records |
 | [**StepCountDeleteStepCount**](StepCountApi.md#stepcountdeletestepcount) | **DELETE** /api/v4/StepCount/{id} | Delete a step count record by ID |
 | [**StepCountGetStepCount**](StepCountApi.md#stepcountgetstepcount) | **GET** /api/v4/StepCount/{id} | Get a specific step count record by ID |
-| [**StepCountGetStepCounts**](StepCountApi.md#stepcountgetstepcounts) | **GET** /api/v4/StepCount | Get step count records with optional pagination |
+| [**StepCountGetStepCounts**](StepCountApi.md#stepcountgetstepcounts) | **GET** /api/v4/StepCount | Get step count records with optional pagination and date filtering |
 | [**StepCountUpdateStepCount**](StepCountApi.md#stepcountupdatestepcount) | **PUT** /api/v4/StepCount/{id} | Update an existing step count record |
 
 <a id="stepcountcreatestepcounts"></a>
@@ -293,9 +293,9 @@ No authorization required
 
 <a id="stepcountgetstepcounts"></a>
 # **StepCountGetStepCounts**
-> List&lt;StepCount&gt; StepCountGetStepCounts (int? count = null, int? skip = null)
+> List&lt;StepCount&gt; StepCountGetStepCounts (int? count = null, int? skip = null, DateTimeOffset? from = null, DateTimeOffset? to = null)
 
-Get step count records with optional pagination
+Get step count records with optional pagination and date filtering
 
 ### Example
 ```csharp
@@ -318,13 +318,15 @@ namespace Example
             HttpClient httpClient = new HttpClient();
             HttpClientHandler httpClientHandler = new HttpClientHandler();
             var apiInstance = new StepCountApi(httpClient, config, httpClientHandler);
-            var count = 10;  // int? | Maximum number of records to return (default: 10) (optional)  (default to 10)
-            var skip = 0;  // int? | Number of records to skip for pagination (default: 0) (optional)  (default to 0)
+            var count = 10;  // int? | Maximum number of records to return (default: 10, ignored when from/to are specified) (optional)  (default to 10)
+            var skip = 0;  // int? | Number of records to skip for pagination (default: 0, ignored when from/to are specified) (optional)  (default to 0)
+            var from = DateTimeOffset.Parse("2013-10-20T19:20:30+01:00");  // DateTimeOffset? | Start of date range (inclusive). When specified with 'to', returns all records in range. (optional) 
+            var to = DateTimeOffset.Parse("2013-10-20T19:20:30+01:00");  // DateTimeOffset? | End of date range (exclusive). When specified with 'from', returns all records in range. (optional) 
 
             try
             {
-                // Get step count records with optional pagination
-                List<StepCount> result = apiInstance.StepCountGetStepCounts(count, skip);
+                // Get step count records with optional pagination and date filtering
+                List<StepCount> result = apiInstance.StepCountGetStepCounts(count, skip, from, to);
                 Debug.WriteLine(result);
             }
             catch (ApiException  e)
@@ -344,8 +346,8 @@ This returns an ApiResponse object which contains the response data, status code
 ```csharp
 try
 {
-    // Get step count records with optional pagination
-    ApiResponse<List<StepCount>> response = apiInstance.StepCountGetStepCountsWithHttpInfo(count, skip);
+    // Get step count records with optional pagination and date filtering
+    ApiResponse<List<StepCount>> response = apiInstance.StepCountGetStepCountsWithHttpInfo(count, skip, from, to);
     Debug.Write("Status Code: " + response.StatusCode);
     Debug.Write("Response Headers: " + response.Headers);
     Debug.Write("Response Body: " + response.Data);
@@ -362,8 +364,10 @@ catch (ApiException e)
 
 | Name | Type | Description | Notes |
 |------|------|-------------|-------|
-| **count** | **int?** | Maximum number of records to return (default: 10) | [optional] [default to 10] |
-| **skip** | **int?** | Number of records to skip for pagination (default: 0) | [optional] [default to 0] |
+| **count** | **int?** | Maximum number of records to return (default: 10, ignored when from/to are specified) | [optional] [default to 10] |
+| **skip** | **int?** | Number of records to skip for pagination (default: 0, ignored when from/to are specified) | [optional] [default to 0] |
+| **from** | **DateTimeOffset?** | Start of date range (inclusive). When specified with &#39;to&#39;, returns all records in range. | [optional]  |
+| **to** | **DateTimeOffset?** | End of date range (exclusive). When specified with &#39;from&#39;, returns all records in range. | [optional]  |
 
 ### Return type
 
@@ -382,7 +386,7 @@ No authorization required
 ### HTTP response details
 | Status code | Description | Response headers |
 |-------------|-------------|------------------|
-| **200** | List of step count records ordered by most recent first |  -  |
+| **200** | List of step count records |  -  |
 | **500** |  |  -  |
 
 [[Back to top]](#) [[Back to API list]](../README.md#documentation-for-api-endpoints) [[Back to Model list]](../README.md#documentation-for-models) [[Back to README]](../README.md)

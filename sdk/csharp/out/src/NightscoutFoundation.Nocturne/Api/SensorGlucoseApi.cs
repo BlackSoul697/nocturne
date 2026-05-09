@@ -28,24 +28,21 @@ namespace NightscoutFoundation.Nocturne.Api
     {
         #region Synchronous Operations
         /// <summary>
-        /// Creates a new record and returns it with a &#x60;Location&#x60; header pointing to the created resource.
+        /// 
         /// </summary>
-        /// <remarks>
-        /// &#x60;Timestamp&#x60; must be set on the mapped model; requests that resolve to a default timestamp are rejected with &#x60;400 Bad Request&#x60;.              On success, responds with &#x60;201 Created&#x60; and a &#x60;Location&#x60; header containing the URL of the newly created record.
-        /// </remarks>
         /// <exception cref="NightscoutFoundation.Nocturne.Client.ApiException">Thrown when fails to make API call</exception>
-        /// <param name="upsertSensorGlucoseRequest">The data used to create the record.</param>
+        /// <param name="upsertSensorGlucoseRequest"></param>
         /// <returns>SensorGlucose</returns>
         SensorGlucose SensorGlucoseCreate(UpsertSensorGlucoseRequest upsertSensorGlucoseRequest);
 
         /// <summary>
-        /// Creates a new record and returns it with a &#x60;Location&#x60; header pointing to the created resource.
+        /// 
         /// </summary>
         /// <remarks>
-        /// &#x60;Timestamp&#x60; must be set on the mapped model; requests that resolve to a default timestamp are rejected with &#x60;400 Bad Request&#x60;.              On success, responds with &#x60;201 Created&#x60; and a &#x60;Location&#x60; header containing the URL of the newly created record.
+        /// 
         /// </remarks>
         /// <exception cref="NightscoutFoundation.Nocturne.Client.ApiException">Thrown when fails to make API call</exception>
-        /// <param name="upsertSensorGlucoseRequest">The data used to create the record.</param>
+        /// <param name="upsertSensorGlucoseRequest"></param>
         /// <returns>ApiResponse of SensorGlucose</returns>
         ApiResponse<SensorGlucose> SensorGlucoseCreateWithHttpInfo(UpsertSensorGlucoseRequest upsertSensorGlucoseRequest);
         /// <summary>
@@ -139,26 +136,23 @@ namespace NightscoutFoundation.Nocturne.Api
         /// <returns>ApiResponse of SensorGlucose</returns>
         ApiResponse<SensorGlucose> SensorGlucoseGetByIdWithHttpInfo(string id);
         /// <summary>
-        /// Updates an existing record by ID and returns the updated record.
+        /// 
         /// </summary>
-        /// <remarks>
-        /// Returns &#x60;404 Not Found&#x60; if no record with the given id exists.              &#x60;Timestamp&#x60; must be set on the mapped model; requests that resolve to a default timestamp are rejected with &#x60;400 Bad Request&#x60;.
-        /// </remarks>
         /// <exception cref="NightscoutFoundation.Nocturne.Client.ApiException">Thrown when fails to make API call</exception>
-        /// <param name="id">The unique identifier of the record to update.</param>
-        /// <param name="upsertSensorGlucoseRequest">The data to apply to the existing record.</param>
+        /// <param name="id"></param>
+        /// <param name="upsertSensorGlucoseRequest"></param>
         /// <returns>SensorGlucose</returns>
         SensorGlucose SensorGlucoseUpdate(string id, UpsertSensorGlucoseRequest upsertSensorGlucoseRequest);
 
         /// <summary>
-        /// Updates an existing record by ID and returns the updated record.
+        /// 
         /// </summary>
         /// <remarks>
-        /// Returns &#x60;404 Not Found&#x60; if no record with the given id exists.              &#x60;Timestamp&#x60; must be set on the mapped model; requests that resolve to a default timestamp are rejected with &#x60;400 Bad Request&#x60;.
+        /// 
         /// </remarks>
         /// <exception cref="NightscoutFoundation.Nocturne.Client.ApiException">Thrown when fails to make API call</exception>
-        /// <param name="id">The unique identifier of the record to update.</param>
-        /// <param name="upsertSensorGlucoseRequest">The data to apply to the existing record.</param>
+        /// <param name="id"></param>
+        /// <param name="upsertSensorGlucoseRequest"></param>
         /// <returns>ApiResponse of SensorGlucose</returns>
         ApiResponse<SensorGlucose> SensorGlucoseUpdateWithHttpInfo(string id, UpsertSensorGlucoseRequest upsertSensorGlucoseRequest);
         #endregion Synchronous Operations
@@ -171,25 +165,25 @@ namespace NightscoutFoundation.Nocturne.Api
     {
         #region Asynchronous Operations
         /// <summary>
-        /// Creates a new record and returns it with a &#x60;Location&#x60; header pointing to the created resource.
+        /// 
         /// </summary>
         /// <remarks>
-        /// &#x60;Timestamp&#x60; must be set on the mapped model; requests that resolve to a default timestamp are rejected with &#x60;400 Bad Request&#x60;.              On success, responds with &#x60;201 Created&#x60; and a &#x60;Location&#x60; header containing the URL of the newly created record.
+        /// 
         /// </remarks>
         /// <exception cref="NightscoutFoundation.Nocturne.Client.ApiException">Thrown when fails to make API call</exception>
-        /// <param name="upsertSensorGlucoseRequest">The data used to create the record.</param>
+        /// <param name="upsertSensorGlucoseRequest"></param>
         /// <param name="cancellationToken">Cancellation Token to cancel the request.</param>
         /// <returns>Task of SensorGlucose</returns>
         System.Threading.Tasks.Task<SensorGlucose> SensorGlucoseCreateAsync(UpsertSensorGlucoseRequest upsertSensorGlucoseRequest, System.Threading.CancellationToken cancellationToken = default);
 
         /// <summary>
-        /// Creates a new record and returns it with a &#x60;Location&#x60; header pointing to the created resource.
+        /// 
         /// </summary>
         /// <remarks>
-        /// &#x60;Timestamp&#x60; must be set on the mapped model; requests that resolve to a default timestamp are rejected with &#x60;400 Bad Request&#x60;.              On success, responds with &#x60;201 Created&#x60; and a &#x60;Location&#x60; header containing the URL of the newly created record.
+        /// 
         /// </remarks>
         /// <exception cref="NightscoutFoundation.Nocturne.Client.ApiException">Thrown when fails to make API call</exception>
-        /// <param name="upsertSensorGlucoseRequest">The data used to create the record.</param>
+        /// <param name="upsertSensorGlucoseRequest"></param>
         /// <param name="cancellationToken">Cancellation Token to cancel the request.</param>
         /// <returns>Task of ApiResponse (SensorGlucose)</returns>
         System.Threading.Tasks.Task<ApiResponse<SensorGlucose>> SensorGlucoseCreateWithHttpInfoAsync(UpsertSensorGlucoseRequest upsertSensorGlucoseRequest, System.Threading.CancellationToken cancellationToken = default);
@@ -298,27 +292,27 @@ namespace NightscoutFoundation.Nocturne.Api
         /// <returns>Task of ApiResponse (SensorGlucose)</returns>
         System.Threading.Tasks.Task<ApiResponse<SensorGlucose>> SensorGlucoseGetByIdWithHttpInfoAsync(string id, System.Threading.CancellationToken cancellationToken = default);
         /// <summary>
-        /// Updates an existing record by ID and returns the updated record.
+        /// 
         /// </summary>
         /// <remarks>
-        /// Returns &#x60;404 Not Found&#x60; if no record with the given id exists.              &#x60;Timestamp&#x60; must be set on the mapped model; requests that resolve to a default timestamp are rejected with &#x60;400 Bad Request&#x60;.
+        /// 
         /// </remarks>
         /// <exception cref="NightscoutFoundation.Nocturne.Client.ApiException">Thrown when fails to make API call</exception>
-        /// <param name="id">The unique identifier of the record to update.</param>
-        /// <param name="upsertSensorGlucoseRequest">The data to apply to the existing record.</param>
+        /// <param name="id"></param>
+        /// <param name="upsertSensorGlucoseRequest"></param>
         /// <param name="cancellationToken">Cancellation Token to cancel the request.</param>
         /// <returns>Task of SensorGlucose</returns>
         System.Threading.Tasks.Task<SensorGlucose> SensorGlucoseUpdateAsync(string id, UpsertSensorGlucoseRequest upsertSensorGlucoseRequest, System.Threading.CancellationToken cancellationToken = default);
 
         /// <summary>
-        /// Updates an existing record by ID and returns the updated record.
+        /// 
         /// </summary>
         /// <remarks>
-        /// Returns &#x60;404 Not Found&#x60; if no record with the given id exists.              &#x60;Timestamp&#x60; must be set on the mapped model; requests that resolve to a default timestamp are rejected with &#x60;400 Bad Request&#x60;.
+        /// 
         /// </remarks>
         /// <exception cref="NightscoutFoundation.Nocturne.Client.ApiException">Thrown when fails to make API call</exception>
-        /// <param name="id">The unique identifier of the record to update.</param>
-        /// <param name="upsertSensorGlucoseRequest">The data to apply to the existing record.</param>
+        /// <param name="id"></param>
+        /// <param name="upsertSensorGlucoseRequest"></param>
         /// <param name="cancellationToken">Cancellation Token to cancel the request.</param>
         /// <returns>Task of ApiResponse (SensorGlucose)</returns>
         System.Threading.Tasks.Task<ApiResponse<SensorGlucose>> SensorGlucoseUpdateWithHttpInfoAsync(string id, UpsertSensorGlucoseRequest upsertSensorGlucoseRequest, System.Threading.CancellationToken cancellationToken = default);
@@ -536,10 +530,10 @@ namespace NightscoutFoundation.Nocturne.Api
         }
 
         /// <summary>
-        /// Creates a new record and returns it with a &#x60;Location&#x60; header pointing to the created resource. &#x60;Timestamp&#x60; must be set on the mapped model; requests that resolve to a default timestamp are rejected with &#x60;400 Bad Request&#x60;.              On success, responds with &#x60;201 Created&#x60; and a &#x60;Location&#x60; header containing the URL of the newly created record.
+        ///  
         /// </summary>
         /// <exception cref="NightscoutFoundation.Nocturne.Client.ApiException">Thrown when fails to make API call</exception>
-        /// <param name="upsertSensorGlucoseRequest">The data used to create the record.</param>
+        /// <param name="upsertSensorGlucoseRequest"></param>
         /// <returns>SensorGlucose</returns>
         public SensorGlucose SensorGlucoseCreate(UpsertSensorGlucoseRequest upsertSensorGlucoseRequest)
         {
@@ -548,10 +542,10 @@ namespace NightscoutFoundation.Nocturne.Api
         }
 
         /// <summary>
-        /// Creates a new record and returns it with a &#x60;Location&#x60; header pointing to the created resource. &#x60;Timestamp&#x60; must be set on the mapped model; requests that resolve to a default timestamp are rejected with &#x60;400 Bad Request&#x60;.              On success, responds with &#x60;201 Created&#x60; and a &#x60;Location&#x60; header containing the URL of the newly created record.
+        ///  
         /// </summary>
         /// <exception cref="NightscoutFoundation.Nocturne.Client.ApiException">Thrown when fails to make API call</exception>
-        /// <param name="upsertSensorGlucoseRequest">The data used to create the record.</param>
+        /// <param name="upsertSensorGlucoseRequest"></param>
         /// <returns>ApiResponse of SensorGlucose</returns>
         public NightscoutFoundation.Nocturne.Client.ApiResponse<SensorGlucose> SensorGlucoseCreateWithHttpInfo(UpsertSensorGlucoseRequest upsertSensorGlucoseRequest)
         {
@@ -592,10 +586,10 @@ namespace NightscoutFoundation.Nocturne.Api
         }
 
         /// <summary>
-        /// Creates a new record and returns it with a &#x60;Location&#x60; header pointing to the created resource. &#x60;Timestamp&#x60; must be set on the mapped model; requests that resolve to a default timestamp are rejected with &#x60;400 Bad Request&#x60;.              On success, responds with &#x60;201 Created&#x60; and a &#x60;Location&#x60; header containing the URL of the newly created record.
+        ///  
         /// </summary>
         /// <exception cref="NightscoutFoundation.Nocturne.Client.ApiException">Thrown when fails to make API call</exception>
-        /// <param name="upsertSensorGlucoseRequest">The data used to create the record.</param>
+        /// <param name="upsertSensorGlucoseRequest"></param>
         /// <param name="cancellationToken">Cancellation Token to cancel the request.</param>
         /// <returns>Task of SensorGlucose</returns>
         public async System.Threading.Tasks.Task<SensorGlucose> SensorGlucoseCreateAsync(UpsertSensorGlucoseRequest upsertSensorGlucoseRequest, System.Threading.CancellationToken cancellationToken = default)
@@ -605,10 +599,10 @@ namespace NightscoutFoundation.Nocturne.Api
         }
 
         /// <summary>
-        /// Creates a new record and returns it with a &#x60;Location&#x60; header pointing to the created resource. &#x60;Timestamp&#x60; must be set on the mapped model; requests that resolve to a default timestamp are rejected with &#x60;400 Bad Request&#x60;.              On success, responds with &#x60;201 Created&#x60; and a &#x60;Location&#x60; header containing the URL of the newly created record.
+        ///  
         /// </summary>
         /// <exception cref="NightscoutFoundation.Nocturne.Client.ApiException">Thrown when fails to make API call</exception>
-        /// <param name="upsertSensorGlucoseRequest">The data used to create the record.</param>
+        /// <param name="upsertSensorGlucoseRequest"></param>
         /// <param name="cancellationToken">Cancellation Token to cancel the request.</param>
         /// <returns>Task of ApiResponse (SensorGlucose)</returns>
         public async System.Threading.Tasks.Task<NightscoutFoundation.Nocturne.Client.ApiResponse<SensorGlucose>> SensorGlucoseCreateWithHttpInfoAsync(UpsertSensorGlucoseRequest upsertSensorGlucoseRequest, System.Threading.CancellationToken cancellationToken = default)
@@ -1183,11 +1177,11 @@ namespace NightscoutFoundation.Nocturne.Api
         }
 
         /// <summary>
-        /// Updates an existing record by ID and returns the updated record. Returns &#x60;404 Not Found&#x60; if no record with the given id exists.              &#x60;Timestamp&#x60; must be set on the mapped model; requests that resolve to a default timestamp are rejected with &#x60;400 Bad Request&#x60;.
+        ///  
         /// </summary>
         /// <exception cref="NightscoutFoundation.Nocturne.Client.ApiException">Thrown when fails to make API call</exception>
-        /// <param name="id">The unique identifier of the record to update.</param>
-        /// <param name="upsertSensorGlucoseRequest">The data to apply to the existing record.</param>
+        /// <param name="id"></param>
+        /// <param name="upsertSensorGlucoseRequest"></param>
         /// <returns>SensorGlucose</returns>
         public SensorGlucose SensorGlucoseUpdate(string id, UpsertSensorGlucoseRequest upsertSensorGlucoseRequest)
         {
@@ -1196,11 +1190,11 @@ namespace NightscoutFoundation.Nocturne.Api
         }
 
         /// <summary>
-        /// Updates an existing record by ID and returns the updated record. Returns &#x60;404 Not Found&#x60; if no record with the given id exists.              &#x60;Timestamp&#x60; must be set on the mapped model; requests that resolve to a default timestamp are rejected with &#x60;400 Bad Request&#x60;.
+        ///  
         /// </summary>
         /// <exception cref="NightscoutFoundation.Nocturne.Client.ApiException">Thrown when fails to make API call</exception>
-        /// <param name="id">The unique identifier of the record to update.</param>
-        /// <param name="upsertSensorGlucoseRequest">The data to apply to the existing record.</param>
+        /// <param name="id"></param>
+        /// <param name="upsertSensorGlucoseRequest"></param>
         /// <returns>ApiResponse of SensorGlucose</returns>
         public NightscoutFoundation.Nocturne.Client.ApiResponse<SensorGlucose> SensorGlucoseUpdateWithHttpInfo(string id, UpsertSensorGlucoseRequest upsertSensorGlucoseRequest)
         {
@@ -1246,11 +1240,11 @@ namespace NightscoutFoundation.Nocturne.Api
         }
 
         /// <summary>
-        /// Updates an existing record by ID and returns the updated record. Returns &#x60;404 Not Found&#x60; if no record with the given id exists.              &#x60;Timestamp&#x60; must be set on the mapped model; requests that resolve to a default timestamp are rejected with &#x60;400 Bad Request&#x60;.
+        ///  
         /// </summary>
         /// <exception cref="NightscoutFoundation.Nocturne.Client.ApiException">Thrown when fails to make API call</exception>
-        /// <param name="id">The unique identifier of the record to update.</param>
-        /// <param name="upsertSensorGlucoseRequest">The data to apply to the existing record.</param>
+        /// <param name="id"></param>
+        /// <param name="upsertSensorGlucoseRequest"></param>
         /// <param name="cancellationToken">Cancellation Token to cancel the request.</param>
         /// <returns>Task of SensorGlucose</returns>
         public async System.Threading.Tasks.Task<SensorGlucose> SensorGlucoseUpdateAsync(string id, UpsertSensorGlucoseRequest upsertSensorGlucoseRequest, System.Threading.CancellationToken cancellationToken = default)
@@ -1260,11 +1254,11 @@ namespace NightscoutFoundation.Nocturne.Api
         }
 
         /// <summary>
-        /// Updates an existing record by ID and returns the updated record. Returns &#x60;404 Not Found&#x60; if no record with the given id exists.              &#x60;Timestamp&#x60; must be set on the mapped model; requests that resolve to a default timestamp are rejected with &#x60;400 Bad Request&#x60;.
+        ///  
         /// </summary>
         /// <exception cref="NightscoutFoundation.Nocturne.Client.ApiException">Thrown when fails to make API call</exception>
-        /// <param name="id">The unique identifier of the record to update.</param>
-        /// <param name="upsertSensorGlucoseRequest">The data to apply to the existing record.</param>
+        /// <param name="id"></param>
+        /// <param name="upsertSensorGlucoseRequest"></param>
         /// <param name="cancellationToken">Cancellation Token to cancel the request.</param>
         /// <returns>Task of ApiResponse (SensorGlucose)</returns>
         public async System.Threading.Tasks.Task<NightscoutFoundation.Nocturne.Client.ApiResponse<SensorGlucose>> SensorGlucoseUpdateWithHttpInfoAsync(string id, UpsertSensorGlucoseRequest upsertSensorGlucoseRequest, System.Threading.CancellationToken cancellationToken = default)

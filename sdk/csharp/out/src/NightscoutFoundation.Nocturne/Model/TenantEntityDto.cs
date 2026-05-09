@@ -38,23 +38,19 @@ namespace NightscoutFoundation.Nocturne.Model
         /// <param name="id">id.</param>
         /// <param name="slug">slug.</param>
         /// <param name="displayName">displayName.</param>
-        /// <param name="apiSecretHash">apiSecretHash.</param>
         /// <param name="isActive">isActive.</param>
-        /// <param name="isDefault">isDefault.</param>
         /// <param name="lastReadingAt">lastReadingAt.</param>
         /// <param name="timezone">timezone.</param>
         /// <param name="subjectName">subjectName.</param>
         /// <param name="allowAccessRequests">allowAccessRequests.</param>
         /// <param name="sysCreatedAt">sysCreatedAt.</param>
         /// <param name="sysUpdatedAt">sysUpdatedAt.</param>
-        public TenantEntityDto(string id = default, string slug = default, string displayName = default, string apiSecretHash = default, bool isActive = default, bool isDefault = default, DateTimeOffset? lastReadingAt = default, string timezone = default, string subjectName = default, bool allowAccessRequests = default, DateTimeOffset sysCreatedAt = default, DateTimeOffset sysUpdatedAt = default)
+        public TenantEntityDto(string id = default, string slug = default, string displayName = default, bool isActive = default, DateTimeOffset? lastReadingAt = default, string timezone = default, string subjectName = default, bool allowAccessRequests = default, DateTimeOffset sysCreatedAt = default, DateTimeOffset sysUpdatedAt = default)
         {
             this.Id = id;
             this.Slug = slug;
             this.DisplayName = displayName;
-            this.ApiSecretHash = apiSecretHash;
             this.IsActive = isActive;
-            this.IsDefault = isDefault;
             this.LastReadingAt = lastReadingAt;
             this.Timezone = timezone;
             this.SubjectName = subjectName;
@@ -82,22 +78,10 @@ namespace NightscoutFoundation.Nocturne.Model
         public string DisplayName { get; set; }
 
         /// <summary>
-        /// Gets or Sets ApiSecretHash
-        /// </summary>
-        [DataMember(Name = "apiSecretHash", EmitDefaultValue = true)]
-        public string ApiSecretHash { get; set; }
-
-        /// <summary>
         /// Gets or Sets IsActive
         /// </summary>
         [DataMember(Name = "isActive", EmitDefaultValue = true)]
         public bool IsActive { get; set; }
-
-        /// <summary>
-        /// Gets or Sets IsDefault
-        /// </summary>
-        [DataMember(Name = "isDefault", EmitDefaultValue = true)]
-        public bool IsDefault { get; set; }
 
         /// <summary>
         /// Gets or Sets LastReadingAt
@@ -146,9 +130,7 @@ namespace NightscoutFoundation.Nocturne.Model
             sb.Append("  Id: ").Append(Id).Append("\n");
             sb.Append("  Slug: ").Append(Slug).Append("\n");
             sb.Append("  DisplayName: ").Append(DisplayName).Append("\n");
-            sb.Append("  ApiSecretHash: ").Append(ApiSecretHash).Append("\n");
             sb.Append("  IsActive: ").Append(IsActive).Append("\n");
-            sb.Append("  IsDefault: ").Append(IsDefault).Append("\n");
             sb.Append("  LastReadingAt: ").Append(LastReadingAt).Append("\n");
             sb.Append("  Timezone: ").Append(Timezone).Append("\n");
             sb.Append("  SubjectName: ").Append(SubjectName).Append("\n");

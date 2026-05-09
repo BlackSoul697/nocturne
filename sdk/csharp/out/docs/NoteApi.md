@@ -6,6 +6,7 @@ All URIs are relative to *http://localhost*
 |--------|--------------|-------------|
 | [**NoteCreate**](NoteApi.md#notecreate) | **POST** /api/v4/observations/notes | Creates a new record and returns it with a &#x60;Location&#x60; header pointing to the created resource. |
 | [**NoteDelete**](NoteApi.md#notedelete) | **DELETE** /api/v4/observations/notes/{id} | Deletes a record by ID. |
+| [**NoteDeleteBySyncIdentifier**](NoteApi.md#notedeletebysyncidentifier) | **DELETE** /api/v4/observations/notes/by-sync-id | Delete a note by its external sync identifier (dataSource + syncIdentifier pair). |
 | [**NoteGetAll**](NoteApi.md#notegetall) | **GET** /api/v4/observations/notes | Lists records with pagination, optional date range, device, and source filtering. |
 | [**NoteGetById**](NoteApi.md#notegetbyid) | **GET** /api/v4/observations/notes/{id} | Retrieves a single record by its unique identifier. |
 | [**NoteUpdate**](NoteApi.md#noteupdate) | **PUT** /api/v4/observations/notes/{id} | Updates an existing record by ID and returns the updated record. |
@@ -194,6 +195,99 @@ No authorization required
 | Status code | Description | Response headers |
 |-------------|-------------|------------------|
 | **204** |  |  -  |
+| **404** |  |  -  |
+
+[[Back to top]](#) [[Back to API list]](../README.md#documentation-for-api-endpoints) [[Back to Model list]](../README.md#documentation-for-models) [[Back to README]](../README.md)
+
+<a id="notedeletebysyncidentifier"></a>
+# **NoteDeleteBySyncIdentifier**
+> void NoteDeleteBySyncIdentifier (string? dataSource = null, string? syncIdentifier = null)
+
+Delete a note by its external sync identifier (dataSource + syncIdentifier pair).
+
+### Example
+```csharp
+using System.Collections.Generic;
+using System.Diagnostics;
+using System.Net.Http;
+using NightscoutFoundation.Nocturne.Api;
+using NightscoutFoundation.Nocturne.Client;
+using NightscoutFoundation.Nocturne.Model;
+
+namespace Example
+{
+    public class NoteDeleteBySyncIdentifierExample
+    {
+        public static void Main()
+        {
+            Configuration config = new Configuration();
+            config.BasePath = "http://localhost";
+            // create instances of HttpClient, HttpClientHandler to be reused later with different Api classes
+            HttpClient httpClient = new HttpClient();
+            HttpClientHandler httpClientHandler = new HttpClientHandler();
+            var apiInstance = new NoteApi(httpClient, config, httpClientHandler);
+            var dataSource = "dataSource_example";  // string? |  (optional) 
+            var syncIdentifier = "syncIdentifier_example";  // string? |  (optional) 
+
+            try
+            {
+                // Delete a note by its external sync identifier (dataSource + syncIdentifier pair).
+                apiInstance.NoteDeleteBySyncIdentifier(dataSource, syncIdentifier);
+            }
+            catch (ApiException  e)
+            {
+                Debug.Print("Exception when calling NoteApi.NoteDeleteBySyncIdentifier: " + e.Message);
+                Debug.Print("Status Code: " + e.ErrorCode);
+                Debug.Print(e.StackTrace);
+            }
+        }
+    }
+}
+```
+
+#### Using the NoteDeleteBySyncIdentifierWithHttpInfo variant
+This returns an ApiResponse object which contains the response data, status code and headers.
+
+```csharp
+try
+{
+    // Delete a note by its external sync identifier (dataSource + syncIdentifier pair).
+    apiInstance.NoteDeleteBySyncIdentifierWithHttpInfo(dataSource, syncIdentifier);
+}
+catch (ApiException e)
+{
+    Debug.Print("Exception when calling NoteApi.NoteDeleteBySyncIdentifierWithHttpInfo: " + e.Message);
+    Debug.Print("Status Code: " + e.ErrorCode);
+    Debug.Print(e.StackTrace);
+}
+```
+
+### Parameters
+
+| Name | Type | Description | Notes |
+|------|------|-------------|-------|
+| **dataSource** | **string?** |  | [optional]  |
+| **syncIdentifier** | **string?** |  | [optional]  |
+
+### Return type
+
+void (empty response body)
+
+### Authorization
+
+No authorization required
+
+### HTTP request headers
+
+ - **Content-Type**: Not defined
+ - **Accept**: application/json
+
+
+### HTTP response details
+| Status code | Description | Response headers |
+|-------------|-------------|------------------|
+| **204** |  |  -  |
+| **400** |  |  -  |
 | **404** |  |  -  |
 
 [[Back to top]](#) [[Back to API list]](../README.md#documentation-for-api-endpoints) [[Back to Model list]](../README.md#documentation-for-models) [[Back to README]](../README.md)

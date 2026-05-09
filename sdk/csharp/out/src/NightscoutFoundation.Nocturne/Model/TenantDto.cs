@@ -39,15 +39,13 @@ namespace NightscoutFoundation.Nocturne.Model
         /// <param name="slug">slug.</param>
         /// <param name="displayName">displayName.</param>
         /// <param name="isActive">isActive.</param>
-        /// <param name="isDefault">isDefault.</param>
         /// <param name="sysCreatedAt">sysCreatedAt.</param>
-        public TenantDto(string id = default, string slug = default, string displayName = default, bool isActive = default, bool isDefault = default, DateTimeOffset sysCreatedAt = default)
+        public TenantDto(string id = default, string slug = default, string displayName = default, bool isActive = default, DateTimeOffset sysCreatedAt = default)
         {
             this.Id = id;
             this.Slug = slug;
             this.DisplayName = displayName;
             this.IsActive = isActive;
-            this.IsDefault = isDefault;
             this.SysCreatedAt = sysCreatedAt;
         }
 
@@ -76,12 +74,6 @@ namespace NightscoutFoundation.Nocturne.Model
         public bool IsActive { get; set; }
 
         /// <summary>
-        /// Gets or Sets IsDefault
-        /// </summary>
-        [DataMember(Name = "isDefault", EmitDefaultValue = true)]
-        public bool IsDefault { get; set; }
-
-        /// <summary>
         /// Gets or Sets SysCreatedAt
         /// </summary>
         [DataMember(Name = "sysCreatedAt", EmitDefaultValue = false)]
@@ -99,7 +91,6 @@ namespace NightscoutFoundation.Nocturne.Model
             sb.Append("  Slug: ").Append(Slug).Append("\n");
             sb.Append("  DisplayName: ").Append(DisplayName).Append("\n");
             sb.Append("  IsActive: ").Append(IsActive).Append("\n");
-            sb.Append("  IsDefault: ").Append(IsDefault).Append("\n");
             sb.Append("  SysCreatedAt: ").Append(SysCreatedAt).Append("\n");
             sb.Append("}\n");
             return sb.ToString();

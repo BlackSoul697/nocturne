@@ -4,8 +4,8 @@ All URIs are relative to *http://localhost*
 
 | Method | HTTP request | Description |
 |--------|--------------|-------------|
-| [**DevAdminCreateTenant**](DevAdminApi.md#devadmincreatetenant) | **POST** /api/v4/dev-only/admin/tenants | Create a new tenant without authentication (dev-only). Used by the Aspire dashboard \&quot;Create Tenant\&quot; command. Copies all non-system memberships from the default tenant so that existing passkeys work immediately on the new tenant. |
-| [**DevAdminDeleteTenant**](DevAdminApi.md#devadmindeletetenant) | **DELETE** /api/v4/dev-only/admin/tenants/{id} | Delete a tenant and all associated data without authentication (dev-only). For the default tenant, this performs a reset: deletes and recreates it with the same slug, display name, and default flag, then copies memberships. |
+| [**DevAdminCreateTenant**](DevAdminApi.md#devadmincreatetenant) | **POST** /api/v4/dev-only/admin/tenants | Create a new tenant without authentication (dev-only). Used by the Aspire dashboard \&quot;Create Tenant\&quot; command. |
+| [**DevAdminDeleteTenant**](DevAdminApi.md#devadmindeletetenant) | **DELETE** /api/v4/dev-only/admin/tenants/{id} | Delete a tenant and all associated data without authentication (dev-only). |
 | [**DevAdminExportSnapshot**](DevAdminApi.md#devadminexportsnapshot) | **GET** /api/v4/dev-only/admin/snapshot | Export a full snapshot of all tenants and their identity/config data. Secrets are decrypted to plaintext for portability. |
 | [**DevAdminImportScopedSnapshot**](DevAdminApi.md#devadminimportscopedsnapshot) | **POST** /api/v4/dev-only/admin/tenants/{id}/import-snapshot | Import snapshot data for a single tenant, matched by slug in the provided snapshot. Upserts referenced subjects and passkeys without affecting other tenants. |
 | [**DevAdminImportSnapshot**](DevAdminApi.md#devadminimportsnapshot) | **POST** /api/v4/dev-only/admin/snapshot | Import a snapshot, replacing all identity/config data. Wraps the entire operation in a transaction. |
@@ -16,7 +16,7 @@ All URIs are relative to *http://localhost*
 # **DevAdminCreateTenant**
 > TenantCreatedDto DevAdminCreateTenant (DevCreateTenantRequest devCreateTenantRequest)
 
-Create a new tenant without authentication (dev-only). Used by the Aspire dashboard \"Create Tenant\" command. Copies all non-system memberships from the default tenant so that existing passkeys work immediately on the new tenant.
+Create a new tenant without authentication (dev-only). Used by the Aspire dashboard \"Create Tenant\" command.
 
 ### Example
 ```csharp
@@ -43,7 +43,7 @@ namespace Example
 
             try
             {
-                // Create a new tenant without authentication (dev-only). Used by the Aspire dashboard \"Create Tenant\" command. Copies all non-system memberships from the default tenant so that existing passkeys work immediately on the new tenant.
+                // Create a new tenant without authentication (dev-only). Used by the Aspire dashboard \"Create Tenant\" command.
                 TenantCreatedDto result = apiInstance.DevAdminCreateTenant(devCreateTenantRequest);
                 Debug.WriteLine(result);
             }
@@ -64,7 +64,7 @@ This returns an ApiResponse object which contains the response data, status code
 ```csharp
 try
 {
-    // Create a new tenant without authentication (dev-only). Used by the Aspire dashboard \"Create Tenant\" command. Copies all non-system memberships from the default tenant so that existing passkeys work immediately on the new tenant.
+    // Create a new tenant without authentication (dev-only). Used by the Aspire dashboard \"Create Tenant\" command.
     ApiResponse<TenantCreatedDto> response = apiInstance.DevAdminCreateTenantWithHttpInfo(devCreateTenantRequest);
     Debug.Write("Status Code: " + response.StatusCode);
     Debug.Write("Response Headers: " + response.Headers);
@@ -109,7 +109,7 @@ No authorization required
 # **DevAdminDeleteTenant**
 > FileParameter DevAdminDeleteTenant (string id)
 
-Delete a tenant and all associated data without authentication (dev-only). For the default tenant, this performs a reset: deletes and recreates it with the same slug, display name, and default flag, then copies memberships.
+Delete a tenant and all associated data without authentication (dev-only).
 
 ### Example
 ```csharp
@@ -136,7 +136,7 @@ namespace Example
 
             try
             {
-                // Delete a tenant and all associated data without authentication (dev-only). For the default tenant, this performs a reset: deletes and recreates it with the same slug, display name, and default flag, then copies memberships.
+                // Delete a tenant and all associated data without authentication (dev-only).
                 FileParameter result = apiInstance.DevAdminDeleteTenant(id);
                 Debug.WriteLine(result);
             }
@@ -157,7 +157,7 @@ This returns an ApiResponse object which contains the response data, status code
 ```csharp
 try
 {
-    // Delete a tenant and all associated data without authentication (dev-only). For the default tenant, this performs a reset: deletes and recreates it with the same slug, display name, and default flag, then copies memberships.
+    // Delete a tenant and all associated data without authentication (dev-only).
     ApiResponse<FileParameter> response = apiInstance.DevAdminDeleteTenantWithHttpInfo(id);
     Debug.Write("Status Code: " + response.StatusCode);
     Debug.Write("Response Headers: " + response.Headers);

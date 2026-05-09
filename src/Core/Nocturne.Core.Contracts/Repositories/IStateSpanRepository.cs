@@ -119,6 +119,31 @@ public interface IStateSpanRepository
         CancellationToken cancellationToken = default);
 
     /// <summary>
+    /// Returns the current pump operational mode, derived from the most recently started
+    /// open-ended <see cref="StateSpanCategory.PumpMode"/> span.
+    /// </summary>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>The active <see cref="PumpModeState"/>, or <c>null</c> if no open pump-mode span exists or its state is unrecognized.</returns>
+    Task<PumpModeState?> GetCurrentPumpModeAsync(CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Returns the <see cref="StateSpan"/> of <paramref name="category"/> that contains
+    /// <paramref name="at"/> (<c>StartTimestamp &lt;= at &lt; EndTimestamp</c>),
+    /// optionally filtered by <paramref name="state"/>. When multiple spans overlap the
+    /// instant, the one with the most recent <c>StartTimestamp</c> wins. Returns
+    /// <c>null</c> if no span is active.
+    /// </summary>
+    /// <param name="category">The category to filter by.</param>
+    /// <param name="state">Optional <c>State</c> filter; <c>null</c> matches any state.</param>
+    /// <param name="at">The instant to evaluate.</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    Task<StateSpan?> GetActiveAtAsync(
+        StateSpanCategory category,
+        string? state,
+        DateTime at,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>
     /// Returns all state spans in the specified category within an optional time range.
     /// </summary>
     /// <param name="category">The <see cref="StateSpanCategory"/> to filter by.</param>

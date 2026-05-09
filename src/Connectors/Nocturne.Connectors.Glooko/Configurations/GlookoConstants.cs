@@ -50,15 +50,18 @@ public static class GlookoConstants
     // -- API paths ------------------------------------------------------------
 
     public const string SignInPath = "/api/v2/users/sign_in";
+    public const string V3SignInPath = "/api/v3/users/sign_in";
     public const string FoodsPath = "/api/v2/foods";
     public const string ScheduledBasalsPath = "/api/v2/pumps/scheduled_basals";
     public const string NormalBolusesPath = "/api/v2/pumps/normal_boluses";
     public const string CgmReadingsPath = "/api/v2/cgm/readings";
+    public const string MeterReadingsPath = "/api/v2/readings";
     public const string SuspendBasalsPath = "/api/v2/pumps/suspend_basals";
     public const string TemporaryBasalsPath = "/api/v2/pumps/temporary_basals";
     public const string V3UsersPath = "/api/v3/session/users";
     public const string V3GraphDataPath = "/api/v3/graph/data";
     public const string V3DeviceSettingsPath = "/api/v3/devices_and_settings";
+    public const string V3HistoriesPath = "/api/v3/users/summary/histories";
 
     // -- V3 graph series ------------------------------------------------------
 
@@ -68,9 +71,11 @@ public static class GlookoConstants
     public static readonly string[] V3GraphSeries =
     [
         "automaticBolus", "deliveredBolus", "injectionBolus",
+        "gkInsulinBasal", "gkInsulinBolus",
         "pumpAlarm", "reservoirChange", "setSiteChange",
         "carbAll", "scheduledBasal", "temporaryBasal",
         "suspendBasal", "lgsPlgs", "profileChange",
+        "bgHigh", "bgNormal", "bgLow",
     ];
 
     /// <summary>

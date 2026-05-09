@@ -6,6 +6,7 @@ All URIs are relative to *http://localhost*
 |--------|--------------|-------------|
 | [**DeviceEventCreate**](DeviceEventApi.md#deviceeventcreate) | **POST** /api/v4/observations/device-events | Creates a new record and returns it with a &#x60;Location&#x60; header pointing to the created resource. |
 | [**DeviceEventDelete**](DeviceEventApi.md#deviceeventdelete) | **DELETE** /api/v4/observations/device-events/{id} | Deletes a record by ID. |
+| [**DeviceEventDeleteBySyncIdentifier**](DeviceEventApi.md#deviceeventdeletebysyncidentifier) | **DELETE** /api/v4/observations/device-events/by-sync-id | Delete a device event by its external sync identifier (dataSource + syncIdentifier pair). |
 | [**DeviceEventGetAll**](DeviceEventApi.md#deviceeventgetall) | **GET** /api/v4/observations/device-events | Lists records with pagination, optional date range, device, and source filtering. |
 | [**DeviceEventGetById**](DeviceEventApi.md#deviceeventgetbyid) | **GET** /api/v4/observations/device-events/{id} | Retrieves a single record by its unique identifier. |
 | [**DeviceEventUpdate**](DeviceEventApi.md#deviceeventupdate) | **PUT** /api/v4/observations/device-events/{id} | Updates an existing record by ID and returns the updated record. |
@@ -194,6 +195,99 @@ No authorization required
 | Status code | Description | Response headers |
 |-------------|-------------|------------------|
 | **204** |  |  -  |
+| **404** |  |  -  |
+
+[[Back to top]](#) [[Back to API list]](../README.md#documentation-for-api-endpoints) [[Back to Model list]](../README.md#documentation-for-models) [[Back to README]](../README.md)
+
+<a id="deviceeventdeletebysyncidentifier"></a>
+# **DeviceEventDeleteBySyncIdentifier**
+> void DeviceEventDeleteBySyncIdentifier (string? dataSource = null, string? syncIdentifier = null)
+
+Delete a device event by its external sync identifier (dataSource + syncIdentifier pair).
+
+### Example
+```csharp
+using System.Collections.Generic;
+using System.Diagnostics;
+using System.Net.Http;
+using NightscoutFoundation.Nocturne.Api;
+using NightscoutFoundation.Nocturne.Client;
+using NightscoutFoundation.Nocturne.Model;
+
+namespace Example
+{
+    public class DeviceEventDeleteBySyncIdentifierExample
+    {
+        public static void Main()
+        {
+            Configuration config = new Configuration();
+            config.BasePath = "http://localhost";
+            // create instances of HttpClient, HttpClientHandler to be reused later with different Api classes
+            HttpClient httpClient = new HttpClient();
+            HttpClientHandler httpClientHandler = new HttpClientHandler();
+            var apiInstance = new DeviceEventApi(httpClient, config, httpClientHandler);
+            var dataSource = "dataSource_example";  // string? |  (optional) 
+            var syncIdentifier = "syncIdentifier_example";  // string? |  (optional) 
+
+            try
+            {
+                // Delete a device event by its external sync identifier (dataSource + syncIdentifier pair).
+                apiInstance.DeviceEventDeleteBySyncIdentifier(dataSource, syncIdentifier);
+            }
+            catch (ApiException  e)
+            {
+                Debug.Print("Exception when calling DeviceEventApi.DeviceEventDeleteBySyncIdentifier: " + e.Message);
+                Debug.Print("Status Code: " + e.ErrorCode);
+                Debug.Print(e.StackTrace);
+            }
+        }
+    }
+}
+```
+
+#### Using the DeviceEventDeleteBySyncIdentifierWithHttpInfo variant
+This returns an ApiResponse object which contains the response data, status code and headers.
+
+```csharp
+try
+{
+    // Delete a device event by its external sync identifier (dataSource + syncIdentifier pair).
+    apiInstance.DeviceEventDeleteBySyncIdentifierWithHttpInfo(dataSource, syncIdentifier);
+}
+catch (ApiException e)
+{
+    Debug.Print("Exception when calling DeviceEventApi.DeviceEventDeleteBySyncIdentifierWithHttpInfo: " + e.Message);
+    Debug.Print("Status Code: " + e.ErrorCode);
+    Debug.Print(e.StackTrace);
+}
+```
+
+### Parameters
+
+| Name | Type | Description | Notes |
+|------|------|-------------|-------|
+| **dataSource** | **string?** |  | [optional]  |
+| **syncIdentifier** | **string?** |  | [optional]  |
+
+### Return type
+
+void (empty response body)
+
+### Authorization
+
+No authorization required
+
+### HTTP request headers
+
+ - **Content-Type**: Not defined
+ - **Accept**: application/json
+
+
+### HTTP response details
+| Status code | Description | Response headers |
+|-------------|-------------|------------------|
+| **204** |  |  -  |
+| **400** |  |  -  |
 | **404** |  |  -  |
 
 [[Back to top]](#) [[Back to API list]](../README.md#documentation-for-api-endpoints) [[Back to Model list]](../README.md#documentation-for-models) [[Back to README]](../README.md)

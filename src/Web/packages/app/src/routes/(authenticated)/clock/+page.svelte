@@ -10,7 +10,6 @@
     Loader2,
   } from "lucide-svelte";
   import { toast } from "svelte-sonner";
-  import { onMount } from "svelte";
   import {
     list as listClockFaces,
     create as createClockFace,
@@ -18,54 +17,14 @@
     remove as removeClockFace,
   } from "$api/generated/clockFaces.generated.remote";
   import ClockFaceRenderer from "$lib/components/clock/ClockFaceRenderer.svelte";
-  import type { ClockFaceListItem, ClockFaceConfig } from "$lib/api";
+  import type { ClockFaceConfig } from "$lib/api";
 
-  // Extended type with config for preview
-  interface ClockFaceWithConfig extends ClockFaceListItem {
-    config?: ClockFaceConfig | null;
-    configLoading?: boolean;
-  }
+  const clockFacesQuery = listClockFaces();
 
-  let clockFaces = $state<ClockFaceWithConfig[]>([]);
-  let loading = $state(true);
   let creating = $state(false);
   let deleting = $state(false);
   let deleteDialogOpen = $state(false);
   let clockFaceToDelete = $state<{ id: string; name: string } | null>(null);
-
-  // Load clock faces from API
-  onMount(async () => {
-    try {
-      const faces = await listClockFaces();
-      // Initialize with loading state for configs
-      clockFaces = faces.map((face) => ({ ...face, configLoading: true }));
-      loading = false;
-
-      // Fetch configs for each clock face in parallel
-      await Promise.all(
-        faces.map(async (face) => {
-          if (!face.id) return;
-          try {
-            const fullFace = await getClockFaceById(face.id);
-            clockFaces = clockFaces.map((f) =>
-              f.id === face.id
-                ? { ...f, config: fullFace.config, configLoading: false }
-                : f
-            );
-          } catch (err) {
-            console.error(`Failed to load config for ${face.id}:`, err);
-            clockFaces = clockFaces.map((f) =>
-              f.id === face.id ? { ...f, configLoading: false } : f
-            );
-          }
-        })
-      );
-    } catch (err) {
-      console.error("Failed to load clock faces:", err);
-      toast.error("Failed to load clock faces");
-      loading = false;
-    }
-  });
 
   function createDefaultConfig(): ClockFaceConfig {
     return {
@@ -159,7 +118,7 @@
     deleting = true;
     try {
       await removeClockFace(clockFaceToDelete.id);
-      clockFaces = clockFaces.filter((f) => f.id !== clockFaceToDelete!.id);
+      await clockFacesQuery.refresh();
       toast.success("Clock face deleted");
       deleteDialogOpen = false;
       clockFaceToDelete = null;
@@ -195,58 +154,82 @@
       </Button>
     </div>
 
-    {#if loading}
-      <div class="flex items-center justify-center py-12">
-        <ClockIcon class="size-8 animate-pulse text-muted-foreground" />
-      </div>
-    {:else if clockFaces.length === 0}
-      <!-- Empty State -->
-      <Card.Root class="border-dashed">
-        <Card.Content class="flex flex-col items-center justify-center py-12">
-          <div class="mb-4 rounded-full bg-muted p-4">
-            <ClockIcon class="size-8 text-muted-foreground" />
-          </div>
-          <h3 class="mb-2 text-lg font-semibold">No clock faces yet</h3>
-          <p class="mb-6 max-w-sm text-center text-muted-foreground">
-            Create your first custom clock face to display your glucose data
-            exactly how you want it.
-          </p>
-          <Button onclick={handleCreate} disabled={creating} class="gap-2">
-            {#if creating}
-              <Loader2 class="size-4 animate-spin" />
-            {:else}
-              <Plus class="size-4" />
-            {/if}
-            Create Clock Face
-          </Button>
-        </Card.Content>
-      </Card.Root>
-    {:else}
-      <!-- Clock Face Grid -->
-      <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-        {#each clockFaces as face (face.id)}
-          <Card.Root
-            class="group cursor-pointer transition-all hover:-translate-y-1 hover:shadow-lg"
-          >
-            <!-- Preview Area -->
-            <div class="h-32 overflow-hidden">
-              {#if face.configLoading}
-                <div class="flex h-full items-center justify-center bg-neutral-950">
-                  <Loader2 class="size-6 animate-spin text-muted-foreground" />
-                </div>
-              {:else if face.config}
-                <ClockFaceRenderer
-                  config={face.config}
-                  scale={0.4}
-                  showCharts={false}
-                  class="h-full w-full"
-                />
-              {:else}
-                <div class="flex h-full items-center justify-center bg-neutral-950">
-                  <ClockIcon class="size-6 text-muted-foreground" />
-                </div>
-              {/if}
+    <svelte:boundary>
+      {#snippet pending()}
+        <div class="flex items-center justify-center py-12">
+          <ClockIcon class="size-8 animate-pulse text-muted-foreground" />
+        </div>
+      {/snippet}
+      {#snippet failed(error, reset)}
+        <Card.Root class="border-destructive">
+          <Card.Content class="py-8 text-center space-y-3">
+            <p class="text-destructive">
+              {error instanceof Error ? error.message : "Failed to load clock faces"}
+            </p>
+            <Button variant="outline" onclick={reset}>Retry</Button>
+          </Card.Content>
+        </Card.Root>
+      {/snippet}
+
+      {@const clockFaces = (await clockFacesQuery) ?? []}
+
+      {#if clockFaces.length === 0}
+        <!-- Empty State -->
+        <Card.Root class="border-dashed">
+          <Card.Content class="flex flex-col items-center justify-center py-12">
+            <div class="mb-4 rounded-full bg-muted p-4">
+              <ClockIcon class="size-8 text-muted-foreground" />
             </div>
+            <h3 class="mb-2 text-lg font-semibold">No clock faces yet</h3>
+            <p class="mb-6 max-w-sm text-center text-muted-foreground">
+              Create your first custom clock face to display your glucose data
+              exactly how you want it.
+            </p>
+            <Button onclick={handleCreate} disabled={creating} class="gap-2">
+              {#if creating}
+                <Loader2 class="size-4 animate-spin" />
+              {:else}
+                <Plus class="size-4" />
+              {/if}
+              Create Clock Face
+            </Button>
+          </Card.Content>
+        </Card.Root>
+      {:else}
+        <!-- Clock Face Grid -->
+        <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          {#each clockFaces as face (face.id)}
+            <Card.Root
+              class="group cursor-pointer transition-all hover:-translate-y-1 hover:shadow-lg"
+            >
+              <!-- Preview Area -->
+              <div class="h-32 overflow-hidden">
+                <svelte:boundary>
+                  {#snippet pending()}
+                    <div class="flex h-full items-center justify-center bg-neutral-950">
+                      <Loader2 class="size-6 animate-spin text-muted-foreground" />
+                    </div>
+                  {/snippet}
+                  {#snippet failed()}
+                    <div class="flex h-full items-center justify-center bg-neutral-950">
+                      <ClockIcon class="size-6 text-muted-foreground" />
+                    </div>
+                  {/snippet}
+                  {@const fullFace = face.id ? await getClockFaceById(face.id) : null}
+                  {#if fullFace?.config}
+                    <ClockFaceRenderer
+                      config={fullFace.config}
+                      scale={0.4}
+                      showCharts={false}
+                      class="h-full w-full"
+                    />
+                  {:else}
+                    <div class="flex h-full items-center justify-center bg-neutral-950">
+                      <ClockIcon class="size-6 text-muted-foreground" />
+                    </div>
+                  {/if}
+                </svelte:boundary>
+              </div>
 
             <Card.Content class="p-4">
               <div class="flex items-start justify-between">
@@ -291,10 +274,11 @@
                 </Button>
               </div>
             </Card.Content>
-          </Card.Root>
-        {/each}
-      </div>
-    {/if}
+            </Card.Root>
+          {/each}
+        </div>
+      {/if}
+    </svelte:boundary>
   </div>
 </div>
 

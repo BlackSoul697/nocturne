@@ -35,7 +35,8 @@ namespace NightscoutFoundation.Nocturne.Model
         /// <summary>
         /// Initializes a new instance of the <see cref="AidSystemMetrics" /> class.
         /// </summary>
-        /// <param name="cgmUsePercent">cgmUsePercent.</param>
+        /// <param name="cgmDeviceNames">cgmDeviceNames.</param>
+        /// <param name="pumpDeviceNames">pumpDeviceNames.</param>
         /// <param name="pumpUsePercent">pumpUsePercent.</param>
         /// <param name="aidActivePercent">aidActivePercent.</param>
         /// <param name="cgmActivePercent">cgmActivePercent.</param>
@@ -43,9 +44,10 @@ namespace NightscoutFoundation.Nocturne.Model
         /// <param name="targetHigh">targetHigh.</param>
         /// <param name="siteChangeCount">siteChangeCount.</param>
         /// <param name="segments">segments.</param>
-        public AidSystemMetrics(double? cgmUsePercent = default, double? pumpUsePercent = default, double? aidActivePercent = default, double? cgmActivePercent = default, double? targetLow = default, double? targetHigh = default, int? siteChangeCount = default, List<AidTimeSegment> segments = default)
+        public AidSystemMetrics(string cgmDeviceNames = default, string pumpDeviceNames = default, double? pumpUsePercent = default, double? aidActivePercent = default, double? cgmActivePercent = default, double? targetLow = default, double? targetHigh = default, int? siteChangeCount = default, List<AidTimeSegment> segments = default)
         {
-            this.CgmUsePercent = cgmUsePercent;
+            this.CgmDeviceNames = cgmDeviceNames;
+            this.PumpDeviceNames = pumpDeviceNames;
             this.PumpUsePercent = pumpUsePercent;
             this.AidActivePercent = aidActivePercent;
             this.CgmActivePercent = cgmActivePercent;
@@ -56,10 +58,16 @@ namespace NightscoutFoundation.Nocturne.Model
         }
 
         /// <summary>
-        /// Gets or Sets CgmUsePercent
+        /// Gets or Sets CgmDeviceNames
         /// </summary>
-        [DataMember(Name = "cgmUsePercent", EmitDefaultValue = true)]
-        public double? CgmUsePercent { get; set; }
+        [DataMember(Name = "cgmDeviceNames", EmitDefaultValue = true)]
+        public string CgmDeviceNames { get; set; }
+
+        /// <summary>
+        /// Gets or Sets PumpDeviceNames
+        /// </summary>
+        [DataMember(Name = "pumpDeviceNames", EmitDefaultValue = true)]
+        public string PumpDeviceNames { get; set; }
 
         /// <summary>
         /// Gets or Sets PumpUsePercent
@@ -111,7 +119,8 @@ namespace NightscoutFoundation.Nocturne.Model
         {
             StringBuilder sb = new StringBuilder();
             sb.Append("class AidSystemMetrics {\n");
-            sb.Append("  CgmUsePercent: ").Append(CgmUsePercent).Append("\n");
+            sb.Append("  CgmDeviceNames: ").Append(CgmDeviceNames).Append("\n");
+            sb.Append("  PumpDeviceNames: ").Append(PumpDeviceNames).Append("\n");
             sb.Append("  PumpUsePercent: ").Append(PumpUsePercent).Append("\n");
             sb.Append("  AidActivePercent: ").Append(AidActivePercent).Append("\n");
             sb.Append("  CgmActivePercent: ").Append(CgmActivePercent).Append("\n");

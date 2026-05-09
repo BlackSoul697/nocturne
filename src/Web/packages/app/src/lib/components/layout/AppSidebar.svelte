@@ -7,6 +7,7 @@
   import * as Select from "$lib/components/ui/select";
   import SidebarGlucoseWidget from "./SidebarGlucoseWidget.svelte";
   import SidebarNotifications from "./SidebarNotifications.svelte";
+  import SidebarDndToggle from "$lib/components/alerts/SidebarDndToggle.svelte";
   import UserMenu from "./UserMenu.svelte";
   import LanguageSelector from "$lib/components/LanguageSelector.svelte";
   import { updateLanguagePreference } from "$api/user-preferences.remote";
@@ -25,6 +26,7 @@
     Apple,
     Utensils,
     Bell,
+    BellOff,
     HeartHandshake,
     Plug,
     Calendar,
@@ -43,6 +45,9 @@
     ScrollText,
     Eye,
     Users,
+    PlayCircle,
+    History as HistoryIcon,
+    SlidersHorizontal,
   } from "lucide-svelte";
   import { getSidebarReportItems } from "$lib/navigation/report-navigation";
   import { getAvailability as getLoopalyzerAvailability } from "$lib/api/generated/loopalyzers.generated.remote";
@@ -73,6 +78,13 @@
       effectivePermissions.includes("*"),
   );
   const sidebar = Sidebar.useSidebar();
+
+  // Defer localStorage check to after hydration so SSR and client initial render
+  // both produce the same DOM (avoids hydration mismatch from conditional rendering).
+  let langPrefKnown = $state(false);
+  $effect(() => {
+    langPrefKnown = hasLanguagePreference();
+  });
 
   // Tenant switcher state
   interface TenantTarget {
@@ -256,6 +268,16 @@
 
     items.push(
     {
+      title: "Alerts",
+      icon: Bell,
+      children: [
+        { title: "Rules", href: "/alerts", icon: Bell, strict: true },
+        { title: "Simulator", href: "/alerts/simulator", icon: PlayCircle },
+        { title: "Do Not Disturb", href: "/alerts/dnd", icon: BellOff },
+        { title: "History", href: "/alerts/history", icon: HistoryIcon },
+      ],
+    },
+    {
       title: "Dev Tools",
       icon: Terminal,
       children: [
@@ -290,7 +312,6 @@
           href: "/settings/data-quality",
           icon: ShieldCheck,
         },
-        { title: "Alerts", href: "/settings/alerts", icon: Bell },
         {
           title: "Notifications & Trackers",
           href: "/settings/trackers",
@@ -464,13 +485,17 @@
                   <Sidebar.MenuSub>
                     {#each item.children as child}
                       <Sidebar.MenuSubItem>
-                        <Sidebar.MenuSubButton
-                          href={child.href}
-                          isActive={isActive(child)}
-                        >
-                          <child.icon class="h-4 w-4" />
-                          <span>{child.title}</span>
-                        </Sidebar.MenuSubButton>
+                        {#if child.href === "/alerts/dnd"}
+                          <SidebarDndToggle />
+                        {:else}
+                          <Sidebar.MenuSubButton
+                            href={child.href}
+                            isActive={isActive(child)}
+                          >
+                            <child.icon class="h-4 w-4" />
+                            <span>{child.title}</span>
+                          </Sidebar.MenuSubButton>
+                        {/if}
                       </Sidebar.MenuSubItem>
                     {/each}
                   </Sidebar.MenuSub>
@@ -499,7 +524,7 @@
 
   <Sidebar.Footer class="p-2">
     <Sidebar.Menu>
-      {#if !hasLanguagePreference()}
+      {#if !langPrefKnown}
         <Sidebar.MenuItem class="group-data-[collapsible=icon]:hidden">
           <LanguageSelector
             onLanguageChange={user

@@ -20,12 +20,13 @@ namespace Nocturne.API.Tests.Controllers.V4.Analytics;
 [Trait("Category", "Unit")]
 public class RetrospectiveControllerTests
 {
-    private readonly Mock<IIobService> _iobServiceMock = new();
-    private readonly Mock<ICobService> _cobServiceMock = new();
+    private readonly Mock<IIobCalculator> _iobCalculatorMock = new();
+    private readonly Mock<ICobCalculator> _cobCalculatorMock = new();
     private readonly Mock<IEntryService> _entryServiceMock = new();
-    private readonly Mock<ITreatmentService> _treatmentServiceMock = new();
+    private readonly Mock<IBolusRepository> _bolusRepoMock = new();
+    private readonly Mock<ICarbIntakeRepository> _carbIntakeRepoMock = new();
+    private readonly Mock<ITempBasalRepository> _tempBasalRepoMock = new();
     private readonly Mock<IBasalRateResolver> _basalRateResolverMock = new();
-    private readonly Mock<ITherapyTimelineResolver> _therapyTimelineResolverMock = new();
     private readonly Mock<ILogger<RetrospectiveController>> _loggerMock = new();
 
     private static DeviceStatusProjectionService CreateProjectionService()
@@ -42,13 +43,14 @@ public class RetrospectiveControllerTests
     private RetrospectiveController CreateController()
     {
         var controller = new RetrospectiveController(
-            _iobServiceMock.Object,
-            _cobServiceMock.Object,
+            _iobCalculatorMock.Object,
+            _cobCalculatorMock.Object,
             _entryServiceMock.Object,
-            _treatmentServiceMock.Object,
+            _bolusRepoMock.Object,
+            _carbIntakeRepoMock.Object,
+            _tempBasalRepoMock.Object,
             CreateProjectionService(),
             _basalRateResolverMock.Object,
-            _therapyTimelineResolverMock.Object,
             _loggerMock.Object);
 
         controller.ControllerContext = new ControllerContext
@@ -76,44 +78,48 @@ public class RetrospectiveControllerTests
                 It.IsAny<CancellationToken>()))
             .ReturnsAsync(new List<Entry>());
 
-        _treatmentServiceMock
-            .Setup(s => s.GetTreatmentsAsync(
-                It.IsAny<int>(),
-                It.IsAny<int>(),
+        _bolusRepoMock
+            .Setup(s => s.GetAsync(
+                It.IsAny<DateTime?>(), It.IsAny<DateTime?>(),
+                It.IsAny<string?>(), It.IsAny<string?>(),
+                It.IsAny<int>(), It.IsAny<int>(), It.IsAny<bool>(),
+                It.IsAny<bool>(), It.IsAny<BolusKind?>(),
                 It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new List<Treatment>());
+            .ReturnsAsync(new List<Bolus>());
 
-        _iobServiceMock
+        _tempBasalRepoMock
+            .Setup(s => s.GetAsync(
+                It.IsAny<DateTime?>(), It.IsAny<DateTime?>(),
+                It.IsAny<string?>(), It.IsAny<string?>(),
+                It.IsAny<int>(), It.IsAny<int>(), It.IsAny<bool>(),
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new List<TempBasal>());
+
+        _carbIntakeRepoMock
+            .Setup(s => s.GetAsync(
+                It.IsAny<DateTime?>(), It.IsAny<DateTime?>(),
+                It.IsAny<string?>(), It.IsAny<string?>(),
+                It.IsAny<int>(), It.IsAny<int>(), It.IsAny<bool>(),
+                It.IsAny<bool>(),
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new List<CarbIntake>());
+
+        _iobCalculatorMock
             .Setup(s => s.CalculateTotalAsync(
-                It.IsAny<List<Treatment>>(),
-                It.IsAny<long?>(),
-                It.IsAny<string?>(),
+                It.IsAny<List<Bolus>>(),
                 It.IsAny<List<TempBasal>?>(),
+                It.IsAny<long?>(),
                 It.IsAny<CancellationToken>()))
             .ReturnsAsync(new IobResult());
 
-        _cobServiceMock
-            .Setup(s => s.CobTotal(
-                It.IsAny<IReadOnlyList<Treatment>>(),
-                It.IsAny<long>(),
-                It.IsAny<TherapySnapshot>(),
-                It.IsAny<DeviceCobSnapshot?>(),
-                It.IsAny<long>()))
-            .Returns(new CobResult());
-
-        _therapyTimelineResolverMock
-            .Setup(s => s.GetSnapshotAtAsync(It.IsAny<long>(), It.IsAny<string?>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new TherapySnapshot(
-                dia: 3.0,
-                peakMinutes: 75,
-                carbsPerHour: 30.0,
-                timezone: null,
-                ccpPercentage: null,
-                ccpTimeshiftMs: 0,
-                sensitivityEntries: null,
-                carbRatioEntries: null,
-                basalEntries: null
-            ));
+        _cobCalculatorMock
+            .Setup(s => s.CalculateTotalAsync(
+                It.IsAny<List<CarbIntake>>(),
+                It.IsAny<List<Bolus>?>(),
+                It.IsAny<List<TempBasal>?>(),
+                It.IsAny<long?>(),
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new CobResult());
 
         _basalRateResolverMock
             .Setup(s => s.GetBasalRateAsync(It.IsAny<long>(), It.IsAny<string?>(), It.IsAny<CancellationToken>()))

@@ -82,25 +82,29 @@ namespace NightscoutFoundation.Nocturne.Api
         /// <returns>ApiResponse of HeartRate</returns>
         ApiResponse<HeartRate> HeartRateGetHeartRateWithHttpInfo(string id);
         /// <summary>
-        /// Get heart rate records with optional pagination
+        /// Get heart rate records with optional pagination and date filtering
         /// </summary>
         /// <exception cref="NightscoutFoundation.Nocturne.Client.ApiException">Thrown when fails to make API call</exception>
-        /// <param name="count">Maximum number of records to return (default: 10) (optional, default to 10)</param>
-        /// <param name="skip">Number of records to skip for pagination (default: 0) (optional, default to 0)</param>
+        /// <param name="count">Maximum number of records to return (default: 10, ignored when from/to are specified) (optional, default to 10)</param>
+        /// <param name="skip">Number of records to skip for pagination (default: 0, ignored when from/to are specified) (optional, default to 0)</param>
+        /// <param name="from">Start of date range (inclusive). When specified with &#39;to&#39;, returns all records in range. (optional)</param>
+        /// <param name="to">End of date range (exclusive). When specified with &#39;from&#39;, returns all records in range. (optional)</param>
         /// <returns>List&lt;HeartRate&gt;</returns>
-        List<HeartRate> HeartRateGetHeartRates(int? count = default, int? skip = default);
+        List<HeartRate> HeartRateGetHeartRates(int? count = default, int? skip = default, DateTimeOffset? from = default, DateTimeOffset? to = default);
 
         /// <summary>
-        /// Get heart rate records with optional pagination
+        /// Get heart rate records with optional pagination and date filtering
         /// </summary>
         /// <remarks>
         /// 
         /// </remarks>
         /// <exception cref="NightscoutFoundation.Nocturne.Client.ApiException">Thrown when fails to make API call</exception>
-        /// <param name="count">Maximum number of records to return (default: 10) (optional, default to 10)</param>
-        /// <param name="skip">Number of records to skip for pagination (default: 0) (optional, default to 0)</param>
+        /// <param name="count">Maximum number of records to return (default: 10, ignored when from/to are specified) (optional, default to 10)</param>
+        /// <param name="skip">Number of records to skip for pagination (default: 0, ignored when from/to are specified) (optional, default to 0)</param>
+        /// <param name="from">Start of date range (inclusive). When specified with &#39;to&#39;, returns all records in range. (optional)</param>
+        /// <param name="to">End of date range (exclusive). When specified with &#39;from&#39;, returns all records in range. (optional)</param>
         /// <returns>ApiResponse of List&lt;HeartRate&gt;</returns>
-        ApiResponse<List<HeartRate>> HeartRateGetHeartRatesWithHttpInfo(int? count = default, int? skip = default);
+        ApiResponse<List<HeartRate>> HeartRateGetHeartRatesWithHttpInfo(int? count = default, int? skip = default, DateTimeOffset? from = default, DateTimeOffset? to = default);
         /// <summary>
         /// Update an existing heart rate record
         /// </summary>
@@ -200,30 +204,34 @@ namespace NightscoutFoundation.Nocturne.Api
         /// <returns>Task of ApiResponse (HeartRate)</returns>
         System.Threading.Tasks.Task<ApiResponse<HeartRate>> HeartRateGetHeartRateWithHttpInfoAsync(string id, System.Threading.CancellationToken cancellationToken = default);
         /// <summary>
-        /// Get heart rate records with optional pagination
+        /// Get heart rate records with optional pagination and date filtering
         /// </summary>
         /// <remarks>
         /// 
         /// </remarks>
         /// <exception cref="NightscoutFoundation.Nocturne.Client.ApiException">Thrown when fails to make API call</exception>
-        /// <param name="count">Maximum number of records to return (default: 10) (optional, default to 10)</param>
-        /// <param name="skip">Number of records to skip for pagination (default: 0) (optional, default to 0)</param>
+        /// <param name="count">Maximum number of records to return (default: 10, ignored when from/to are specified) (optional, default to 10)</param>
+        /// <param name="skip">Number of records to skip for pagination (default: 0, ignored when from/to are specified) (optional, default to 0)</param>
+        /// <param name="from">Start of date range (inclusive). When specified with &#39;to&#39;, returns all records in range. (optional)</param>
+        /// <param name="to">End of date range (exclusive). When specified with &#39;from&#39;, returns all records in range. (optional)</param>
         /// <param name="cancellationToken">Cancellation Token to cancel the request.</param>
         /// <returns>Task of List&lt;HeartRate&gt;</returns>
-        System.Threading.Tasks.Task<List<HeartRate>> HeartRateGetHeartRatesAsync(int? count = default, int? skip = default, System.Threading.CancellationToken cancellationToken = default);
+        System.Threading.Tasks.Task<List<HeartRate>> HeartRateGetHeartRatesAsync(int? count = default, int? skip = default, DateTimeOffset? from = default, DateTimeOffset? to = default, System.Threading.CancellationToken cancellationToken = default);
 
         /// <summary>
-        /// Get heart rate records with optional pagination
+        /// Get heart rate records with optional pagination and date filtering
         /// </summary>
         /// <remarks>
         /// 
         /// </remarks>
         /// <exception cref="NightscoutFoundation.Nocturne.Client.ApiException">Thrown when fails to make API call</exception>
-        /// <param name="count">Maximum number of records to return (default: 10) (optional, default to 10)</param>
-        /// <param name="skip">Number of records to skip for pagination (default: 0) (optional, default to 0)</param>
+        /// <param name="count">Maximum number of records to return (default: 10, ignored when from/to are specified) (optional, default to 10)</param>
+        /// <param name="skip">Number of records to skip for pagination (default: 0, ignored when from/to are specified) (optional, default to 0)</param>
+        /// <param name="from">Start of date range (inclusive). When specified with &#39;to&#39;, returns all records in range. (optional)</param>
+        /// <param name="to">End of date range (exclusive). When specified with &#39;from&#39;, returns all records in range. (optional)</param>
         /// <param name="cancellationToken">Cancellation Token to cancel the request.</param>
         /// <returns>Task of ApiResponse (List&lt;HeartRate&gt;)</returns>
-        System.Threading.Tasks.Task<ApiResponse<List<HeartRate>>> HeartRateGetHeartRatesWithHttpInfoAsync(int? count = default, int? skip = default, System.Threading.CancellationToken cancellationToken = default);
+        System.Threading.Tasks.Task<ApiResponse<List<HeartRate>>> HeartRateGetHeartRatesWithHttpInfoAsync(int? count = default, int? skip = default, DateTimeOffset? from = default, DateTimeOffset? to = default, System.Threading.CancellationToken cancellationToken = default);
         /// <summary>
         /// Update an existing heart rate record
         /// </summary>
@@ -808,26 +816,30 @@ namespace NightscoutFoundation.Nocturne.Api
         }
 
         /// <summary>
-        /// Get heart rate records with optional pagination 
+        /// Get heart rate records with optional pagination and date filtering 
         /// </summary>
         /// <exception cref="NightscoutFoundation.Nocturne.Client.ApiException">Thrown when fails to make API call</exception>
-        /// <param name="count">Maximum number of records to return (default: 10) (optional, default to 10)</param>
-        /// <param name="skip">Number of records to skip for pagination (default: 0) (optional, default to 0)</param>
+        /// <param name="count">Maximum number of records to return (default: 10, ignored when from/to are specified) (optional, default to 10)</param>
+        /// <param name="skip">Number of records to skip for pagination (default: 0, ignored when from/to are specified) (optional, default to 0)</param>
+        /// <param name="from">Start of date range (inclusive). When specified with &#39;to&#39;, returns all records in range. (optional)</param>
+        /// <param name="to">End of date range (exclusive). When specified with &#39;from&#39;, returns all records in range. (optional)</param>
         /// <returns>List&lt;HeartRate&gt;</returns>
-        public List<HeartRate> HeartRateGetHeartRates(int? count = default, int? skip = default)
+        public List<HeartRate> HeartRateGetHeartRates(int? count = default, int? skip = default, DateTimeOffset? from = default, DateTimeOffset? to = default)
         {
-            NightscoutFoundation.Nocturne.Client.ApiResponse<List<HeartRate>> localVarResponse = HeartRateGetHeartRatesWithHttpInfo(count, skip);
+            NightscoutFoundation.Nocturne.Client.ApiResponse<List<HeartRate>> localVarResponse = HeartRateGetHeartRatesWithHttpInfo(count, skip, from, to);
             return localVarResponse.Data;
         }
 
         /// <summary>
-        /// Get heart rate records with optional pagination 
+        /// Get heart rate records with optional pagination and date filtering 
         /// </summary>
         /// <exception cref="NightscoutFoundation.Nocturne.Client.ApiException">Thrown when fails to make API call</exception>
-        /// <param name="count">Maximum number of records to return (default: 10) (optional, default to 10)</param>
-        /// <param name="skip">Number of records to skip for pagination (default: 0) (optional, default to 0)</param>
+        /// <param name="count">Maximum number of records to return (default: 10, ignored when from/to are specified) (optional, default to 10)</param>
+        /// <param name="skip">Number of records to skip for pagination (default: 0, ignored when from/to are specified) (optional, default to 0)</param>
+        /// <param name="from">Start of date range (inclusive). When specified with &#39;to&#39;, returns all records in range. (optional)</param>
+        /// <param name="to">End of date range (exclusive). When specified with &#39;from&#39;, returns all records in range. (optional)</param>
         /// <returns>ApiResponse of List&lt;HeartRate&gt;</returns>
-        public NightscoutFoundation.Nocturne.Client.ApiResponse<List<HeartRate>> HeartRateGetHeartRatesWithHttpInfo(int? count = default, int? skip = default)
+        public NightscoutFoundation.Nocturne.Client.ApiResponse<List<HeartRate>> HeartRateGetHeartRatesWithHttpInfo(int? count = default, int? skip = default, DateTimeOffset? from = default, DateTimeOffset? to = default)
         {
             NightscoutFoundation.Nocturne.Client.RequestOptions localVarRequestOptions = new NightscoutFoundation.Nocturne.Client.RequestOptions();
 
@@ -852,6 +864,14 @@ namespace NightscoutFoundation.Nocturne.Api
             if (skip != null)
             {
                 localVarRequestOptions.QueryParameters.Add(NightscoutFoundation.Nocturne.Client.ClientUtils.ParameterToMultiMap("", "skip", skip));
+            }
+            if (from != null)
+            {
+                localVarRequestOptions.QueryParameters.Add(NightscoutFoundation.Nocturne.Client.ClientUtils.ParameterToMultiMap("", "from", from));
+            }
+            if (to != null)
+            {
+                localVarRequestOptions.QueryParameters.Add(NightscoutFoundation.Nocturne.Client.ClientUtils.ParameterToMultiMap("", "to", to));
             }
 
 
@@ -868,28 +888,32 @@ namespace NightscoutFoundation.Nocturne.Api
         }
 
         /// <summary>
-        /// Get heart rate records with optional pagination 
+        /// Get heart rate records with optional pagination and date filtering 
         /// </summary>
         /// <exception cref="NightscoutFoundation.Nocturne.Client.ApiException">Thrown when fails to make API call</exception>
-        /// <param name="count">Maximum number of records to return (default: 10) (optional, default to 10)</param>
-        /// <param name="skip">Number of records to skip for pagination (default: 0) (optional, default to 0)</param>
+        /// <param name="count">Maximum number of records to return (default: 10, ignored when from/to are specified) (optional, default to 10)</param>
+        /// <param name="skip">Number of records to skip for pagination (default: 0, ignored when from/to are specified) (optional, default to 0)</param>
+        /// <param name="from">Start of date range (inclusive). When specified with &#39;to&#39;, returns all records in range. (optional)</param>
+        /// <param name="to">End of date range (exclusive). When specified with &#39;from&#39;, returns all records in range. (optional)</param>
         /// <param name="cancellationToken">Cancellation Token to cancel the request.</param>
         /// <returns>Task of List&lt;HeartRate&gt;</returns>
-        public async System.Threading.Tasks.Task<List<HeartRate>> HeartRateGetHeartRatesAsync(int? count = default, int? skip = default, System.Threading.CancellationToken cancellationToken = default)
+        public async System.Threading.Tasks.Task<List<HeartRate>> HeartRateGetHeartRatesAsync(int? count = default, int? skip = default, DateTimeOffset? from = default, DateTimeOffset? to = default, System.Threading.CancellationToken cancellationToken = default)
         {
-            NightscoutFoundation.Nocturne.Client.ApiResponse<List<HeartRate>> localVarResponse = await HeartRateGetHeartRatesWithHttpInfoAsync(count, skip, cancellationToken).ConfigureAwait(false);
+            NightscoutFoundation.Nocturne.Client.ApiResponse<List<HeartRate>> localVarResponse = await HeartRateGetHeartRatesWithHttpInfoAsync(count, skip, from, to, cancellationToken).ConfigureAwait(false);
             return localVarResponse.Data;
         }
 
         /// <summary>
-        /// Get heart rate records with optional pagination 
+        /// Get heart rate records with optional pagination and date filtering 
         /// </summary>
         /// <exception cref="NightscoutFoundation.Nocturne.Client.ApiException">Thrown when fails to make API call</exception>
-        /// <param name="count">Maximum number of records to return (default: 10) (optional, default to 10)</param>
-        /// <param name="skip">Number of records to skip for pagination (default: 0) (optional, default to 0)</param>
+        /// <param name="count">Maximum number of records to return (default: 10, ignored when from/to are specified) (optional, default to 10)</param>
+        /// <param name="skip">Number of records to skip for pagination (default: 0, ignored when from/to are specified) (optional, default to 0)</param>
+        /// <param name="from">Start of date range (inclusive). When specified with &#39;to&#39;, returns all records in range. (optional)</param>
+        /// <param name="to">End of date range (exclusive). When specified with &#39;from&#39;, returns all records in range. (optional)</param>
         /// <param name="cancellationToken">Cancellation Token to cancel the request.</param>
         /// <returns>Task of ApiResponse (List&lt;HeartRate&gt;)</returns>
-        public async System.Threading.Tasks.Task<NightscoutFoundation.Nocturne.Client.ApiResponse<List<HeartRate>>> HeartRateGetHeartRatesWithHttpInfoAsync(int? count = default, int? skip = default, System.Threading.CancellationToken cancellationToken = default)
+        public async System.Threading.Tasks.Task<NightscoutFoundation.Nocturne.Client.ApiResponse<List<HeartRate>>> HeartRateGetHeartRatesWithHttpInfoAsync(int? count = default, int? skip = default, DateTimeOffset? from = default, DateTimeOffset? to = default, System.Threading.CancellationToken cancellationToken = default)
         {
 
             NightscoutFoundation.Nocturne.Client.RequestOptions localVarRequestOptions = new NightscoutFoundation.Nocturne.Client.RequestOptions();
@@ -916,6 +940,14 @@ namespace NightscoutFoundation.Nocturne.Api
             if (skip != null)
             {
                 localVarRequestOptions.QueryParameters.Add(NightscoutFoundation.Nocturne.Client.ClientUtils.ParameterToMultiMap("", "skip", skip));
+            }
+            if (from != null)
+            {
+                localVarRequestOptions.QueryParameters.Add(NightscoutFoundation.Nocturne.Client.ClientUtils.ParameterToMultiMap("", "from", from));
+            }
+            if (to != null)
+            {
+                localVarRequestOptions.QueryParameters.Add(NightscoutFoundation.Nocturne.Client.ClientUtils.ParameterToMultiMap("", "to", to));
             }
 
 

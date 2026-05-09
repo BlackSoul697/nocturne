@@ -75,8 +75,10 @@ namespace NightscoutFoundation.Nocturne.Model
         /// <param name="predictedUamJson">predictedUamJson.</param>
         /// <param name="predictedStartTimestamp">predictedStartTimestamp.</param>
         /// <param name="predictedStartMills">predictedStartMills.</param>
+        /// <param name="loopJson">loopJson.</param>
+        /// <param name="aidVersion">aidVersion.</param>
         /// <param name="additionalProperties">additionalProperties.</param>
-        public ApsSnapshot(string id = default, DateTimeOffset timestamp = default, long mills = default, int? utcOffset = default, string device = default, string app = default, string dataSource = default, string correlationId = default, string legacyId = default, DateTimeOffset createdAt = default, DateTimeOffset modifiedAt = default, AidAlgorithm? aidAlgorithm = default, double? iob = default, double? basalIob = default, double? bolusIob = default, double? cob = default, double? currentBg = default, double? eventualBg = default, double? targetBg = default, double? recommendedBolus = default, double? sensitivityRatio = default, bool enacted = default, double? enactedRate = default, int? enactedDuration = default, double? enactedBolusVolume = default, string suggestedJson = default, string enactedJson = default, string predictedDefaultJson = default, string predictedIobJson = default, string predictedZtJson = default, string predictedCobJson = default, string predictedUamJson = default, DateTimeOffset? predictedStartTimestamp = default, long? predictedStartMills = default, Dictionary<string, Object> additionalProperties = default)
+        public ApsSnapshot(string id = default, DateTimeOffset timestamp = default, long mills = default, int? utcOffset = default, string device = default, string app = default, string dataSource = default, string correlationId = default, string legacyId = default, DateTimeOffset createdAt = default, DateTimeOffset modifiedAt = default, AidAlgorithm? aidAlgorithm = default, double? iob = default, double? basalIob = default, double? bolusIob = default, double? cob = default, double? currentBg = default, double? eventualBg = default, double? targetBg = default, double? recommendedBolus = default, double? sensitivityRatio = default, bool enacted = default, double? enactedRate = default, int? enactedDuration = default, double? enactedBolusVolume = default, string suggestedJson = default, string enactedJson = default, string predictedDefaultJson = default, string predictedIobJson = default, string predictedZtJson = default, string predictedCobJson = default, string predictedUamJson = default, DateTimeOffset? predictedStartTimestamp = default, long? predictedStartMills = default, string loopJson = default, string aidVersion = default, Dictionary<string, Object> additionalProperties = default)
         {
             this.Id = id;
             this.Timestamp = timestamp;
@@ -112,6 +114,8 @@ namespace NightscoutFoundation.Nocturne.Model
             this.PredictedUamJson = predictedUamJson;
             this.PredictedStartTimestamp = predictedStartTimestamp;
             this.PredictedStartMills = predictedStartMills;
+            this.LoopJson = loopJson;
+            this.AidVersion = aidVersion;
             this.AdditionalProperties = additionalProperties;
         }
 
@@ -314,6 +318,18 @@ namespace NightscoutFoundation.Nocturne.Model
         public long? PredictedStartMills { get; set; }
 
         /// <summary>
+        /// Gets or Sets LoopJson
+        /// </summary>
+        [DataMember(Name = "loopJson", EmitDefaultValue = true)]
+        public string LoopJson { get; set; }
+
+        /// <summary>
+        /// Gets or Sets AidVersion
+        /// </summary>
+        [DataMember(Name = "aidVersion", EmitDefaultValue = true)]
+        public string AidVersion { get; set; }
+
+        /// <summary>
         /// Gets or Sets AdditionalProperties
         /// </summary>
         [DataMember(Name = "additionalProperties", EmitDefaultValue = true)]
@@ -361,6 +377,8 @@ namespace NightscoutFoundation.Nocturne.Model
             sb.Append("  PredictedUamJson: ").Append(PredictedUamJson).Append("\n");
             sb.Append("  PredictedStartTimestamp: ").Append(PredictedStartTimestamp).Append("\n");
             sb.Append("  PredictedStartMills: ").Append(PredictedStartMills).Append("\n");
+            sb.Append("  LoopJson: ").Append(LoopJson).Append("\n");
+            sb.Append("  AidVersion: ").Append(AidVersion).Append("\n");
             sb.Append("  AdditionalProperties: ").Append(AdditionalProperties).Append("\n");
             sb.Append("}\n");
             return sb.ToString();

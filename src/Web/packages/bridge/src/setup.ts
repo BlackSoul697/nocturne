@@ -65,74 +65,32 @@ export async function setupBridge(
   httpServer: HttpServer,
   userConfig: Partial<BridgeConfig>
 ): Promise<BridgeInstance> {
-  try {
-    logger.info('Setting up WebSocket Bridge...');
+  logger.info('Setting up WebSocket Bridge...');
 
-    const config = buildConfig(userConfig);
+  const config = buildConfig(userConfig);
 
-    logger.info(`SignalR DataHub URL: ${config.signalr.hubUrl}`);
-    if (config.signalr.alarmHubUrl) {
-      logger.info(`SignalR AlarmHub URL: ${config.signalr.alarmHubUrl}`);
-    }
-    if (config.signalr.configHubUrl) {
-      logger.info(`SignalR ConfigHub URL: ${config.signalr.configHubUrl}`);
-    }
+  logger.info(`SignalR DataHub URL: ${config.signalr.hubUrl}`);
+  if (config.signalr.alarmHubUrl) {
+    logger.info(`SignalR AlarmHub URL: ${config.signalr.alarmHubUrl}`);
+  }
+  if (config.signalr.configHubUrl) {
+    logger.info(`SignalR ConfigHub URL: ${config.signalr.configHubUrl}`);
+  }
 
-    const socketIOServer = new SocketIOServer(
-      httpServer,
-      config.socketio,
-      config.baseDomain,
-    );
+  // Start the Socket.IO server eagerly — it doesn't need tenant info to
+  // accept browser connections.  Tenant room assignment uses the Host
+  // header, not the pre-discovered slug list (the list is only needed for
+  // the apex-domain single-tenant fallback).
+  const socketIOServer = new SocketIOServer(
+    httpServer,
+    config.socketio,
+    config.baseDomain,
+  );
 
-    await socketIOServer.start();
-    logger.info('Socket.IO server started');
+  await socketIOServer.start();
+  logger.info('Socket.IO server started');
 
-    // Multi-tenant mode: discover tenants, create per-tenant SignalR connections
-    if (config.baseDomain) {
-      logger.info(`Multi-tenant mode enabled (baseDomain: ${config.baseDomain})`);
-
-      const instanceKeyHash = createHash('sha1')
-        .update(config.instanceKey)
-        .digest('hex')
-        .toLowerCase();
-
-      // Extract the API base URL from the hub URL (strip /hubs/data)
-      const apiBaseUrl = config.signalr.hubUrl.replace(/\/hubs\/\w+$/, '');
-      const tenantSlugs = await discoverTenants(apiBaseUrl, instanceKeyHash);
-
-      const clients: SignalRClient[] = [];
-
-      for (const slug of tenantSlugs) {
-        const client = createTenantClient(
-          socketIOServer,
-          config,
-          slug,
-          config.baseDomain,
-        );
-        clients.push(client);
-
-        await client.connect();
-        logger.info(`SignalR client connected for tenant: ${slug}`);
-      }
-
-      logger.info(`WebSocket Bridge setup completed (${clients.length} tenant connections)`);
-
-      return {
-        io: socketIOServer.getIO()!,
-        disconnect: async () => {
-          for (const client of clients) {
-            await client.disconnect();
-          }
-          await socketIOServer.stop();
-        },
-        isConnected: () => clients.some((c) => c.isConnected()),
-        getStats: () => ({
-          ...socketIOServer.getStats(),
-          signalrConnected: clients.some((c) => c.isConnected()),
-        }),
-      };
-    }
-
+  if (!config.baseDomain) {
     // Single-tenant mode (backward compatible): one SignalR connection, no tenant scoping
     const messageTranslator = new MessageTranslator(socketIOServer);
     const signalRClient = new SignalRClient(messageTranslator, {
@@ -147,7 +105,6 @@ export async function setupBridge(
 
     await signalRClient.connect();
     logger.info('SignalR client connected');
-
     logger.info('WebSocket Bridge setup completed successfully');
 
     return {
@@ -162,8 +119,73 @@ export async function setupBridge(
         signalrConnected: signalRClient.isConnected(),
       }),
     };
-  } catch (error) {
-    logger.error('Failed to setup WebSocket Bridge:', error);
-    throw error;
   }
+
+  // Multi-tenant mode: discover tenants and connect SignalR clients in the
+  // background so a slow or temporarily-unavailable API doesn't prevent the
+  // Socket.IO server from accepting browser connections.
+  logger.info(`Multi-tenant mode enabled (baseDomain: ${config.baseDomain})`);
+
+  const instanceKeyHash = createHash('sha1')
+    .update(config.instanceKey)
+    .digest('hex')
+    .toLowerCase();
+
+  const apiBaseUrl = config.signalr.hubUrl.replace(/\/hubs\/\w+$/, '');
+  const clients: SignalRClient[] = [];
+  let cancelled = false;
+
+  const connectWithRetry = async () => {
+    let delay = config.signalr.reconnectDelay;
+    const maxDelay = config.signalr.maxReconnectDelay;
+
+    while (!cancelled) {
+      try {
+        const tenantSlugs = await discoverTenants(apiBaseUrl, instanceKeyHash);
+        socketIOServer.setTenantSlugs(tenantSlugs);
+
+        for (const slug of tenantSlugs) {
+          if (cancelled) return;
+          const client = createTenantClient(socketIOServer, config, slug, config.baseDomain!);
+          clients.push(client);
+          await client.connect();
+          logger.info(`SignalR client connected for tenant: ${slug}`);
+        }
+
+        logger.info(`WebSocket Bridge setup completed (${clients.length} tenant connections)`);
+        return;
+      } catch (error) {
+        // Clean up any partially-connected clients before retrying
+        for (const client of clients) {
+          try { await client.disconnect(); } catch { /* ignore cleanup errors */ }
+        }
+        clients.length = 0;
+
+        if (cancelled) return;
+        const message = error instanceof Error ? error.message : String(error);
+        logger.warn(`Bridge setup attempt failed, retrying in ${delay}ms: ${message}`);
+        await new Promise((resolve) => setTimeout(resolve, delay));
+        delay = Math.min(delay * 2, maxDelay);
+      }
+    }
+  };
+
+  // Fire-and-forget — don't block the HTTP server from starting
+  connectWithRetry();
+
+  return {
+    io: socketIOServer.getIO()!,
+    disconnect: async () => {
+      cancelled = true;
+      for (const client of clients) {
+        await client.disconnect();
+      }
+      await socketIOServer.stop();
+    },
+    isConnected: () => clients.some((c) => c.isConnected()),
+    getStats: () => ({
+      ...socketIOServer.getStats(),
+      signalrConnected: clients.some((c) => c.isConnected()),
+    }),
+  };
 }

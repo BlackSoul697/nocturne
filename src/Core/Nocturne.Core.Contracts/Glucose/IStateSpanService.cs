@@ -46,6 +46,12 @@ public interface IStateSpanService
         CancellationToken cancellationToken = default);
 
     /// <summary>
+    /// Returns the current pump operational mode, derived from the most recently started
+    /// open-ended <see cref="StateSpanCategory.PumpMode"/> span.
+    /// </summary>
+    Task<PumpModeState?> GetCurrentPumpModeAsync(CancellationToken cancellationToken = default);
+
+    /// <summary>
     /// Count state spans matching the specified filters
     /// </summary>
     /// <param name="category">Optional category filter</param>
@@ -105,6 +111,22 @@ public interface IStateSpanService
     Task<StateSpan?> UpdateStateSpanAsync(
         string id,
         StateSpan stateSpan,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Returns the <see cref="StateSpan"/> of <paramref name="category"/> that contains
+    /// <paramref name="at"/> (<c>StartTimestamp &lt;= at &lt; EndTimestamp</c>),
+    /// optionally filtered by <paramref name="state"/>. Latest <c>StartTimestamp</c> wins
+    /// on overlap; returns <c>null</c> if no span is active.
+    /// </summary>
+    /// <param name="category">The category to filter by.</param>
+    /// <param name="state">Optional <c>State</c> filter; <c>null</c> matches any state.</param>
+    /// <param name="at">The instant to evaluate.</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    Task<StateSpan?> GetActiveAtAsync(
+        StateSpanCategory category,
+        string? state,
+        DateTime at,
         CancellationToken cancellationToken = default);
 
     #region Activity Compatibility Methods

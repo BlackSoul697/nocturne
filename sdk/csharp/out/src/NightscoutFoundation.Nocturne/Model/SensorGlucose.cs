@@ -44,6 +44,12 @@ namespace NightscoutFoundation.Nocturne.Model
         /// </summary>
         [DataMember(Name = "trend", EmitDefaultValue = true)]
         public GlucoseTrend? Trend { get; set; }
+
+        /// <summary>
+        /// Gets or Sets GlucoseProcessing
+        /// </summary>
+        [DataMember(Name = "glucoseProcessing", EmitDefaultValue = true)]
+        public GlucoseProcessing? GlucoseProcessing { get; set; }
         /// <summary>
         /// Initializes a new instance of the <see cref="SensorGlucose" /> class.
         /// </summary>
@@ -55,6 +61,7 @@ namespace NightscoutFoundation.Nocturne.Model
         /// <param name="app">app.</param>
         /// <param name="dataSource">dataSource.</param>
         /// <param name="correlationId">correlationId.</param>
+        /// <param name="patientDeviceId">patientDeviceId.</param>
         /// <param name="legacyId">legacyId.</param>
         /// <param name="createdAt">createdAt.</param>
         /// <param name="modifiedAt">modifiedAt.</param>
@@ -67,8 +74,13 @@ namespace NightscoutFoundation.Nocturne.Model
         /// <param name="filtered">filtered.</param>
         /// <param name="unfiltered">unfiltered.</param>
         /// <param name="delta">delta.</param>
+        /// <param name="glucoseProcessing">glucoseProcessing.</param>
+        /// <param name="smoothedMgdl">smoothedMgdl.</param>
+        /// <param name="smoothedMmol">smoothedMmol.</param>
+        /// <param name="unsmoothedMgdl">unsmoothedMgdl.</param>
+        /// <param name="unsmoothedMmol">unsmoothedMmol.</param>
         /// <param name="additionalProperties">additionalProperties.</param>
-        public SensorGlucose(string id = default, DateTimeOffset timestamp = default, long mills = default, int? utcOffset = default, string device = default, string app = default, string dataSource = default, string correlationId = default, string legacyId = default, DateTimeOffset createdAt = default, DateTimeOffset modifiedAt = default, double mgdl = default, double mmol = default, GlucoseDirection? direction = default, GlucoseTrend? trend = default, double? trendRate = default, int? noise = default, double? filtered = default, double? unfiltered = default, double? delta = default, Dictionary<string, Object> additionalProperties = default)
+        public SensorGlucose(string id = default, DateTimeOffset timestamp = default, long mills = default, int? utcOffset = default, string device = default, string app = default, string dataSource = default, string correlationId = default, string patientDeviceId = default, string legacyId = default, DateTimeOffset createdAt = default, DateTimeOffset modifiedAt = default, double mgdl = default, double mmol = default, GlucoseDirection? direction = default, GlucoseTrend? trend = default, double? trendRate = default, int? noise = default, double? filtered = default, double? unfiltered = default, double? delta = default, GlucoseProcessing? glucoseProcessing = default, double? smoothedMgdl = default, double? smoothedMmol = default, double? unsmoothedMgdl = default, double? unsmoothedMmol = default, Dictionary<string, Object> additionalProperties = default)
         {
             this.Id = id;
             this.Timestamp = timestamp;
@@ -78,6 +90,7 @@ namespace NightscoutFoundation.Nocturne.Model
             this.App = app;
             this.DataSource = dataSource;
             this.CorrelationId = correlationId;
+            this.PatientDeviceId = patientDeviceId;
             this.LegacyId = legacyId;
             this.CreatedAt = createdAt;
             this.ModifiedAt = modifiedAt;
@@ -90,6 +103,11 @@ namespace NightscoutFoundation.Nocturne.Model
             this.Filtered = filtered;
             this.Unfiltered = unfiltered;
             this.Delta = delta;
+            this.GlucoseProcessing = glucoseProcessing;
+            this.SmoothedMgdl = smoothedMgdl;
+            this.SmoothedMmol = smoothedMmol;
+            this.UnsmoothedMgdl = unsmoothedMgdl;
+            this.UnsmoothedMmol = unsmoothedMmol;
             this.AdditionalProperties = additionalProperties;
         }
 
@@ -140,6 +158,12 @@ namespace NightscoutFoundation.Nocturne.Model
         /// </summary>
         [DataMember(Name = "correlationId", EmitDefaultValue = true)]
         public string CorrelationId { get; set; }
+
+        /// <summary>
+        /// Gets or Sets PatientDeviceId
+        /// </summary>
+        [DataMember(Name = "patientDeviceId", EmitDefaultValue = true)]
+        public string PatientDeviceId { get; set; }
 
         /// <summary>
         /// Gets or Sets LegacyId
@@ -202,6 +226,30 @@ namespace NightscoutFoundation.Nocturne.Model
         public double? Delta { get; set; }
 
         /// <summary>
+        /// Gets or Sets SmoothedMgdl
+        /// </summary>
+        [DataMember(Name = "smoothedMgdl", EmitDefaultValue = true)]
+        public double? SmoothedMgdl { get; set; }
+
+        /// <summary>
+        /// Gets or Sets SmoothedMmol
+        /// </summary>
+        [DataMember(Name = "smoothedMmol", EmitDefaultValue = true)]
+        public double? SmoothedMmol { get; set; }
+
+        /// <summary>
+        /// Gets or Sets UnsmoothedMgdl
+        /// </summary>
+        [DataMember(Name = "unsmoothedMgdl", EmitDefaultValue = true)]
+        public double? UnsmoothedMgdl { get; set; }
+
+        /// <summary>
+        /// Gets or Sets UnsmoothedMmol
+        /// </summary>
+        [DataMember(Name = "unsmoothedMmol", EmitDefaultValue = true)]
+        public double? UnsmoothedMmol { get; set; }
+
+        /// <summary>
         /// Gets or Sets AdditionalProperties
         /// </summary>
         [DataMember(Name = "additionalProperties", EmitDefaultValue = true)]
@@ -223,6 +271,7 @@ namespace NightscoutFoundation.Nocturne.Model
             sb.Append("  App: ").Append(App).Append("\n");
             sb.Append("  DataSource: ").Append(DataSource).Append("\n");
             sb.Append("  CorrelationId: ").Append(CorrelationId).Append("\n");
+            sb.Append("  PatientDeviceId: ").Append(PatientDeviceId).Append("\n");
             sb.Append("  LegacyId: ").Append(LegacyId).Append("\n");
             sb.Append("  CreatedAt: ").Append(CreatedAt).Append("\n");
             sb.Append("  ModifiedAt: ").Append(ModifiedAt).Append("\n");
@@ -235,6 +284,11 @@ namespace NightscoutFoundation.Nocturne.Model
             sb.Append("  Filtered: ").Append(Filtered).Append("\n");
             sb.Append("  Unfiltered: ").Append(Unfiltered).Append("\n");
             sb.Append("  Delta: ").Append(Delta).Append("\n");
+            sb.Append("  GlucoseProcessing: ").Append(GlucoseProcessing).Append("\n");
+            sb.Append("  SmoothedMgdl: ").Append(SmoothedMgdl).Append("\n");
+            sb.Append("  SmoothedMmol: ").Append(SmoothedMmol).Append("\n");
+            sb.Append("  UnsmoothedMgdl: ").Append(UnsmoothedMgdl).Append("\n");
+            sb.Append("  UnsmoothedMmol: ").Append(UnsmoothedMmol).Append("\n");
             sb.Append("  AdditionalProperties: ").Append(AdditionalProperties).Append("\n");
             sb.Append("}\n");
             return sb.ToString();

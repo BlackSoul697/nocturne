@@ -56,7 +56,9 @@ namespace NightscoutFoundation.Nocturne.Model
         /// <param name="basalDeliverySpans">basalDeliverySpans.</param>
         /// <param name="systemEventMarkers">systemEventMarkers.</param>
         /// <param name="trackerMarkers">trackerMarkers.</param>
-        public DashboardChartData(List<TimeSeriesPoint> iobSeries = default, List<TimeSeriesPoint> cobSeries = default, List<BasalPoint> basalSeries = default, double defaultBasalRate = default, double maxBasalRate = default, double maxIob = default, double maxCob = default, List<GlucosePointDto> glucoseData = default, ChartThresholdsDto thresholds = default, List<BolusMarkerDto> bolusMarkers = default, List<CarbMarkerDto> carbMarkers = default, List<DeviceEventMarkerDto> deviceEventMarkers = default, List<BgCheckMarkerDto> bgCheckMarkers = default, List<ChartStateSpanDto> pumpModeSpans = default, List<ChartStateSpanDto> profileSpans = default, List<ChartStateSpanDto> overrideSpans = default, List<ChartStateSpanDto> activitySpans = default, List<ChartStateSpanDto> tempBasalSpans = default, List<BasalDeliverySpanDto> basalDeliverySpans = default, List<SystemEventMarkerDto> systemEventMarkers = default, List<TrackerMarkerDto> trackerMarkers = default)
+        /// <param name="heartRateSeries">heartRateSeries.</param>
+        /// <param name="stepSeries">stepSeries.</param>
+        public DashboardChartData(List<TimeSeriesPoint> iobSeries = default, List<TimeSeriesPoint> cobSeries = default, List<BasalPoint> basalSeries = default, double defaultBasalRate = default, double maxBasalRate = default, double maxIob = default, double maxCob = default, List<GlucosePointDto> glucoseData = default, ChartThresholdsDto thresholds = default, List<BolusMarkerDto> bolusMarkers = default, List<CarbMarkerDto> carbMarkers = default, List<DeviceEventMarkerDto> deviceEventMarkers = default, List<BgCheckMarkerDto> bgCheckMarkers = default, List<ChartStateSpanDto> pumpModeSpans = default, List<ChartStateSpanDto> profileSpans = default, List<ChartStateSpanDto> overrideSpans = default, List<ChartStateSpanDto> activitySpans = default, List<ChartStateSpanDto> tempBasalSpans = default, List<BasalDeliverySpanDto> basalDeliverySpans = default, List<SystemEventMarkerDto> systemEventMarkers = default, List<TrackerMarkerDto> trackerMarkers = default, List<HeartRatePointDto> heartRateSeries = default, List<StepBubbleDto> stepSeries = default)
         {
             this.IobSeries = iobSeries;
             this.CobSeries = cobSeries;
@@ -79,6 +81,8 @@ namespace NightscoutFoundation.Nocturne.Model
             this.BasalDeliverySpans = basalDeliverySpans;
             this.SystemEventMarkers = systemEventMarkers;
             this.TrackerMarkers = trackerMarkers;
+            this.HeartRateSeries = heartRateSeries;
+            this.StepSeries = stepSeries;
         }
 
         /// <summary>
@@ -208,6 +212,18 @@ namespace NightscoutFoundation.Nocturne.Model
         public List<TrackerMarkerDto> TrackerMarkers { get; set; }
 
         /// <summary>
+        /// Gets or Sets HeartRateSeries
+        /// </summary>
+        [DataMember(Name = "heartRateSeries", EmitDefaultValue = false)]
+        public List<HeartRatePointDto> HeartRateSeries { get; set; }
+
+        /// <summary>
+        /// Gets or Sets StepSeries
+        /// </summary>
+        [DataMember(Name = "stepSeries", EmitDefaultValue = false)]
+        public List<StepBubbleDto> StepSeries { get; set; }
+
+        /// <summary>
         /// Returns the string presentation of the object
         /// </summary>
         /// <returns>String presentation of the object</returns>
@@ -236,6 +252,8 @@ namespace NightscoutFoundation.Nocturne.Model
             sb.Append("  BasalDeliverySpans: ").Append(BasalDeliverySpans).Append("\n");
             sb.Append("  SystemEventMarkers: ").Append(SystemEventMarkers).Append("\n");
             sb.Append("  TrackerMarkers: ").Append(TrackerMarkers).Append("\n");
+            sb.Append("  HeartRateSeries: ").Append(HeartRateSeries).Append("\n");
+            sb.Append("  StepSeries: ").Append(StepSeries).Append("\n");
             sb.Append("}\n");
             return sb.ToString();
         }

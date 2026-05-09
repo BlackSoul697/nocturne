@@ -30,15 +30,12 @@
   } from "$api";
 
   import * as Collapsible from "$lib/components/ui/collapsible";
-  import { onMount, untrack } from "svelte";
+  import { untrack } from "svelte";
 
   // Get the realtime store for reactive tracker data
   const realtimeStore = getRealtimeStore();
 
-  // State
-  let loading = $state(true);
-  let error = $state<string | null>(null);
-  let historyInstances = $state<TrackerInstanceDto[]>([]);
+  const historyQuery = trackersRemote.getInstanceHistory(undefined);
 
   // Use active tracker notifications from realtime store
   const trackerNotifications = $derived(realtimeStore.trackerNotifications);
@@ -69,26 +66,6 @@
     [CompletionReason.Cancelled]: "Cancelled",
     [CompletionReason.Missed]: "Missed",
   };
-
-  // Load data
-  async function loadData() {
-    loading = true;
-    error = null;
-    try {
-      const history = await trackersRemote.getInstanceHistory(undefined);
-      historyInstances = history || [];
-    } catch (err) {
-      console.error("Failed to load notification data:", err);
-      error = "Failed to load notification data";
-    } finally {
-      loading = false;
-    }
-  }
-
-  // Initial load on mount (not in $effect to avoid unnecessary re-runs)
-  onMount(() => {
-    loadData();
-  });
 
   // Format age
   function formatAge(hours: number): string {
@@ -165,11 +142,11 @@
     }
   }
 
-  // Group history by date
-  const groupedHistory = $derived.by(() => {
+  function groupHistoryByDate(
+    instances: TrackerInstanceDto[]
+  ): Record<string, TrackerInstanceDto[]> {
     const groups: Record<string, TrackerInstanceDto[]> = {};
-
-    for (const instance of historyInstances) {
+    for (const instance of instances) {
       const date = new Date(
         instance.completedAt ?? instance.startedAt ?? new Date()
       );
@@ -179,40 +156,26 @@
         month: "long",
         day: "numeric",
       });
-
-      if (!groups[key]) {
-        groups[key] = [];
-      }
+      if (!groups[key]) groups[key] = [];
       groups[key].push(instance);
     }
-
     return groups;
-  });
+  }
 
   // Collapsible state for history groups
   let expandedGroups = $state<Record<string, boolean>>({});
 
-  // Initialize all groups - first one expanded, rest collapsed
-  // Use $effect.pre with untrack to avoid read/write cycle
-  $effect.pre(() => {
-    const keys = Object.keys(groupedHistory);
-    if (keys.length === 0) return;
-
-    // Check if we've already initialized any groups from this set
-    const hasAnyExpanded = untrack(() =>
-      Object.keys(expandedGroups).some((k) => keys.includes(k))
-    );
-    if (hasAnyExpanded) return;
-
-    // Initialize without creating reactive dependencies on expandedGroups
+  function ensureGroupsInitialized(keys: string[]) {
     untrack(() => {
+      const alreadyInitialized = keys.some(
+        (k) => expandedGroups[k] !== undefined
+      );
+      if (alreadyInitialized) return;
       for (let i = 0; i < keys.length; i++) {
-        if (expandedGroups[keys[i]] === undefined) {
-          expandedGroups[keys[i]] = i === 0; // First group expanded
-        }
+        expandedGroups[keys[i]] = i === 0;
       }
     });
-  });
+  }
 
   // Helper to toggle group
   function toggleGroup(date: string) {
@@ -255,20 +218,7 @@
     </div>
   </div>
 
-  {#if loading}
-    <div class="flex items-center justify-center py-12">
-      <Loader2 class="h-8 w-8 animate-spin text-muted-foreground" />
-    </div>
-  {:else if error}
-    <Card class="border-destructive">
-      <CardContent class="py-6 text-center">
-        <AlertTriangle class="h-8 w-8 text-destructive mx-auto mb-2" />
-        <p class="text-destructive">{error}</p>
-        <Button variant="outline" class="mt-4" onclick={loadData}>Retry</Button>
-      </CardContent>
-    </Card>
-  {:else}
-    <div class="space-y-6">
+  <div class="space-y-6">
       <!-- Tracker Notifications Section -->
       <Card>
         <CardHeader class="flex flex-row items-center justify-between">
@@ -357,15 +307,35 @@
           </CardDescription>
         </CardHeader>
         <CardContent>
-          {#if historyInstances.length === 0}
-            <div class="text-center py-8 text-muted-foreground">
-              <History class="h-12 w-12 mx-auto mb-3 opacity-50" />
-              <p>No history yet</p>
-              <p class="text-sm">Completed trackers will appear here</p>
-            </div>
-          {:else}
-            <div class="space-y-4">
-              {#each Object.entries(groupedHistory) as [date, instances]}
+          <svelte:boundary>
+            {#snippet pending()}
+              <div class="flex items-center justify-center py-12">
+                <Loader2 class="h-8 w-8 animate-spin text-muted-foreground" />
+              </div>
+            {/snippet}
+            {#snippet failed(error, reset)}
+              <div class="py-6 text-center">
+                <AlertTriangle class="h-8 w-8 text-destructive mx-auto mb-2" />
+                <p class="text-destructive">
+                  {error instanceof Error ? error.message : "Failed to load notification data"}
+                </p>
+                <Button variant="outline" class="mt-4" onclick={reset}>Retry</Button>
+              </div>
+            {/snippet}
+
+            {@const historyInstances = (await historyQuery) ?? []}
+            {@const groupedHistory = groupHistoryByDate(historyInstances)}
+            {@const _ = ensureGroupsInitialized(Object.keys(groupedHistory))}
+
+            {#if historyInstances.length === 0}
+              <div class="text-center py-8 text-muted-foreground">
+                <History class="h-12 w-12 mx-auto mb-3 opacity-50" />
+                <p>No history yet</p>
+                <p class="text-sm">Completed trackers will appear here</p>
+              </div>
+            {:else}
+              <div class="space-y-4">
+                {#each Object.entries(groupedHistory) as [date, instances]}
                 <Collapsible.Root
                   open={isExpanded(date)}
                   onOpenChange={() => toggleGroup(date)}
@@ -421,10 +391,10 @@
                   </Collapsible.Content>
                 </Collapsible.Root>
               {/each}
-            </div>
-          {/if}
+              </div>
+            {/if}
+          </svelte:boundary>
         </CardContent>
       </Card>
     </div>
-  {/if}
 </div>
