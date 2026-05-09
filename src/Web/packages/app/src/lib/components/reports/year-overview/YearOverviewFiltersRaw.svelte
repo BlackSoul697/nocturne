@@ -28,7 +28,7 @@
             }}
             disabled={availableDataSources.length === 0}
           >
-            <Select.Trigger class="w-[200px]">
+            <Select.Trigger class="w-full sm:w-[200px]">
               <span class="truncate">
                 {selectedDataSources.length === 0
                   ? "All Data Sources"

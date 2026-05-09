@@ -39,6 +39,14 @@
 
   let chartHeight = $state(0);
   let chartWidth = $state(0);
+  let containerWidth = $state(0);
+
+  const responsivePadding = $derived({
+    left: containerWidth < 480 ? 28 : padding.left,
+    right: containerWidth < 480 ? 12 : padding.right,
+    top: padding.top,
+    bottom: padding.bottom,
+  });
 
   const layout = $derived(
     computeTrackLayout(
@@ -90,7 +98,7 @@
   setGlucoseChartContext(ctx);
 </script>
 
-<div class="{heightClass} w-full @container">
+<div class="{heightClass} w-full @container" bind:clientWidth={containerWidth}>
   <Chart
     data={engine.glucoseData}
     x={(d) => d.time}
@@ -98,7 +106,7 @@
     xScale={scaleTime()}
     xDomain={[chartXDomain.from, chartXDomain.to]}
     yDomain={[0, engine.glucoseYMax]}
-    {padding}
+    padding={responsivePadding}
     tooltip={{ mode: "quadtree-x" }}
   >
     {#snippet children({ context })}

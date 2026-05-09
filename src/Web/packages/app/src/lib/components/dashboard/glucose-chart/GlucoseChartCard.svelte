@@ -328,7 +328,7 @@
   <CardContent class="p-1 @md:p-2">
     <ZoomIndicator {isZoomed} brushXDomain={brushDomain} onResetZoom={resetZoom} />
 
-    <div class={heightClass ?? "h-80 @md:h-[450px]"}>
+    <div class={heightClass ?? "h-64 sm:h-80 @md:h-[450px]"}>
       <GlucoseChartShell
         {engine}
         {inspection}

@@ -104,7 +104,7 @@
     {/if}
 
     <!-- Main Content -->
-    <main class="relative px-6 py-6">
+    <main class="relative px-3 py-4 sm:px-6 sm:py-6">
         {#if useResourceGuard}
             <ResourceGuard
                 loading={resourceCtx.loading}

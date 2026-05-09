@@ -277,7 +277,7 @@
 
                 <!-- Center: TIR Chart -->
                 <div
-                  class="flex justify-center h-96"
+                  class="flex justify-center h-64 sm:h-96"
                   in:scale={{
                     start: 0.9,
                     duration: 600,

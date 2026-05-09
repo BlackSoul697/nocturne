@@ -68,6 +68,7 @@
 
   // Track brush context for handle labels
   let brushContext = $state<BrushContextValue | undefined>(undefined);
+  let containerWidth = $state(0);
 
   // Whether we have an active selection (zoomed in)
   const hasSelection = $derived(
@@ -152,7 +153,7 @@
 
   <!-- Mini chart -->
   {#if expanded}
-    <div class="h-[80px] px-2 pb-2">
+    <div class="h-[80px] px-2 pb-2" bind:clientWidth={containerWidth}>
       <Chart
         {data}
         x={(d: GlucosePoint) => d.time}
@@ -161,7 +162,7 @@
         xDomain={[fullXDomain[0], fullXDomain[1]]}
         yScale={scaleLinear()}
         {yDomain}
-        padding={{ left: 48, bottom: 20, top: 4, right: 48 }}
+        padding={{ left: containerWidth < 480 ? 28 : 48, bottom: 20, top: 4, right: containerWidth < 480 ? 12 : 48 }}
       >
         {#snippet children()}
           <Svg>

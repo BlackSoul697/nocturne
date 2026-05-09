@@ -49,7 +49,7 @@
       </div>
       {#if definitions.length > 0}
         <Select.Root type="single">
-          <Select.Trigger class="w-[200px]">
+          <Select.Trigger class="w-full sm:w-[200px]">
             <Plus class="h-4 w-4 mr-2" />
             Start Tracker
           </Select.Trigger>
