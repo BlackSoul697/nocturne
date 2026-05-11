@@ -66,6 +66,7 @@ public class TenantResolutionMiddleware
         "/api/v4/admin/demo/",
         "/api/v4/admin/platform-settings",
         "/api/v4/admin/tenants",
+        "/api/v4/me/tenants",
         "/api/v4/dev-only/",
         "/api/v4/platform/",
         "/api/v4/setup/",
