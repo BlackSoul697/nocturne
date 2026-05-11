@@ -277,7 +277,22 @@ const siteSecurityHandle: Handle = async ({ event, resolve }) => {
       // Tenant not found (404) — either no tenant for this subdomain,
       // or apex domain with no tenants set up yet.
       if (status === 404) {
-        // If a marketing site is configured, redirect there (SaaS apex landing)
+        const apexHost = getOriginalHost(event.request);
+
+        if (event.locals.isAuthenticated) {
+          // Apex domain, authenticated — serve the platform dashboard.
+          // If already on a platform route, let it render. Otherwise redirect.
+          const platformPrefixes = ["/roster", "/attention", "/trends", "/activity", "/care-plans"];
+          const onPlatformRoute = platformPrefixes.some(p => pathname.startsWith(p));
+
+          event.locals.isPlatformView = true;
+          if (apexHost) event.locals.apexHost = apexHost;
+
+          if (onPlatformRoute) return resolve(event);
+          return new Response(null, { status: 303, headers: { Location: "/roster" } });
+        }
+
+        // Unauthenticated — existing behaviour.
         const marketingUrl = env.MARKETING_URL;
         if (marketingUrl) {
           return new Response(null, {
@@ -285,14 +300,7 @@ const siteSecurityHandle: Handle = async ({ event, resolve }) => {
             headers: { Location: marketingUrl },
           });
         }
-
-        // No marketing site — this is likely a self-hosted install.
-        // Check if this is an apex domain request (no tenant subdomain).
-        // If so, redirect to setup so the user can create their first tenant.
-        return new Response(null, {
-          status: 303,
-          headers: { Location: "/setup" },
-        });
+        return new Response(null, { status: 303, headers: { Location: "/setup" } });
       }
     }
     console.error("Failed to check site security settings:", error);
