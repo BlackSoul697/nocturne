@@ -2,7 +2,6 @@
   import { page } from "$app/state";
   import type { LayoutData } from "../$types";
   import type { RosterItem } from "$lib/components/platform/types";
-  import { STATUS_COLOR, dirArrow } from "$lib/components/platform/types";
   import AggregateStrip from "$lib/components/platform/AggregateStrip.svelte";
   import AlertBanner from "$lib/components/platform/AlertBanner.svelte";
   import AttentionRail from "$lib/components/platform/AttentionRail.svelte";
