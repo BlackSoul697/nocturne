@@ -1,12 +1,13 @@
 <script lang="ts">
   import { page } from "$app/state";
   import type { LayoutData } from "../$types";
-  import type { RosterItem } from "$lib/components/platform/types";
+  import { dirArrow, type RosterItem } from "$lib/components/platform/types";
   import AggregateStrip from "$lib/components/platform/AggregateStrip.svelte";
   import AlertBanner from "$lib/components/platform/AlertBanner.svelte";
   import AttentionRail from "$lib/components/platform/AttentionRail.svelte";
   import RosterToolbar from "$lib/components/platform/RosterToolbar.svelte";
   import TenantCard from "$lib/components/platform/TenantCard.svelte";
+  import TenantListRow from "$lib/components/platform/TenantListRow.svelte";
 
   // Data flows from parent layout load
   const data = $derived($page.data as LayoutData);
@@ -143,5 +144,22 @@
     </div>
   {/if}
 
-  <!-- List and kanban layouts added in Tasks 11–12 -->
+  <!-- List layout -->
+  {#if layout === "list"}
+    <div>
+      <!-- Header -->
+      <div
+        class="grid px-4 py-2 text-xs font-medium text-muted-foreground border-b border-border"
+        style="grid-template-columns: 8px 1fr 64px 32px 80px 1fr 60px 48px"
+      >
+        <span></span><span>Tenant</span><span>BG</span><span>Δ</span>
+        <span>3 hr</span><span>Subdomain</span><span>TIR</span><span>Last</span>
+      </div>
+      {#each sorted as item (item.id)}
+        <TenantListRow {item} onopen={openTenant} />
+      {/each}
+    </div>
+  {/if}
+
+  <!-- Kanban layout added in Task 12 -->
 </div>
