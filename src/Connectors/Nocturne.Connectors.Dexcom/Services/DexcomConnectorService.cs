@@ -122,7 +122,12 @@ public class DexcomConnectorService : BaseConnectorService<DexcomConnectorConfig
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error during Dexcom sync");
+            _logger.LogError(
+                ex,
+                "{ConnectorSource} sync failed with {ExceptionType}: {Message}",
+                ConnectorSource,
+                ex.GetType().Name,
+                ex.Message);
             result.Success = false;
             result.Errors.Add($"Sync error: {ex.Message}");
         }

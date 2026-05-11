@@ -120,7 +120,12 @@ public class TidepoolConnectorService : BaseConnectorService<TidepoolConnectorCo
             {
                 result.Success = false;
                 result.Errors.Add($"Failed to sync Glucose: {ex.Message}");
-                _logger.LogError(ex, "Failed to sync Glucose for {Connector}", ConnectorSource);
+                _logger.LogError(
+                    ex,
+                    "{ConnectorSource} Glucose sync failed with {ExceptionType}: {Message}",
+                    ConnectorSource,
+                    ex.GetType().Name,
+                    ex.Message);
             }
         }
 
@@ -179,7 +184,12 @@ public class TidepoolConnectorService : BaseConnectorService<TidepoolConnectorCo
             {
                 result.Success = false;
                 result.Errors.Add($"Failed to sync Treatments: {ex.Message}");
-                _logger.LogError(ex, "Failed to sync Treatments for {Connector}", ConnectorSource);
+                _logger.LogError(
+                    ex,
+                    "{ConnectorSource} Treatments sync failed with {ExceptionType}: {Message}",
+                    ConnectorSource,
+                    ex.GetType().Name,
+                    ex.Message);
             }
         }
 

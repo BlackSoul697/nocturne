@@ -166,7 +166,15 @@ public class AuthenticationMiddleware
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error during authentication");
+            var attemptedTenantId = (context.Items["TenantContext"] as TenantContext)?.TenantId;
+            _logger.LogError(
+                ex,
+                "Authentication pipeline threw {ExceptionType} for {Method} {Path} (tenant {TenantId}): {Message}",
+                ex.GetType().Name,
+                context.Request.Method,
+                context.Request.Path.Value,
+                attemptedTenantId,
+                ex.Message);
             SetUnauthenticated(context);
         }
 

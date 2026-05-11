@@ -1,32 +1,26 @@
 {
   "format": 1,
   "restore": {
-    "C:\\Users\\rhysg\\Documents\\Github\\nocturne\\sdk\\csharp\\out\\src\\NightscoutFoundation.Nocturne\\NightscoutFoundation.Nocturne.csproj": {}
+    "/Users/james/repos/nocturne/sdk/csharp/out/src/NightscoutFoundation.Nocturne/NightscoutFoundation.Nocturne.csproj": {}
   },
   "projects": {
-    "C:\\Users\\rhysg\\Documents\\Github\\nocturne\\sdk\\csharp\\out\\src\\NightscoutFoundation.Nocturne\\NightscoutFoundation.Nocturne.csproj": {
+    "/Users/james/repos/nocturne/sdk/csharp/out/src/NightscoutFoundation.Nocturne/NightscoutFoundation.Nocturne.csproj": {
       "version": "0.1.0",
       "restore": {
-        "projectUniqueName": "C:\\Users\\rhysg\\Documents\\Github\\nocturne\\sdk\\csharp\\out\\src\\NightscoutFoundation.Nocturne\\NightscoutFoundation.Nocturne.csproj",
+        "projectUniqueName": "/Users/james/repos/nocturne/sdk/csharp/out/src/NightscoutFoundation.Nocturne/NightscoutFoundation.Nocturne.csproj",
         "projectName": "NightscoutFoundation.Nocturne",
-        "projectPath": "C:\\Users\\rhysg\\Documents\\Github\\nocturne\\sdk\\csharp\\out\\src\\NightscoutFoundation.Nocturne\\NightscoutFoundation.Nocturne.csproj",
-        "packagesPath": "C:\\Users\\rhysg\\.nuget\\packages\\",
-        "outputPath": "C:\\Users\\rhysg\\Documents\\Github\\nocturne\\sdk\\csharp\\out\\src\\NightscoutFoundation.Nocturne\\obj\\",
+        "projectPath": "/Users/james/repos/nocturne/sdk/csharp/out/src/NightscoutFoundation.Nocturne/NightscoutFoundation.Nocturne.csproj",
+        "packagesPath": "/Users/james/.nuget/packages/",
+        "outputPath": "/Users/james/repos/nocturne/sdk/csharp/out/src/NightscoutFoundation.Nocturne/obj/",
         "projectStyle": "PackageReference",
-        "fallbackFolders": [
-          "C:\\Program Files (x86)\\Microsoft Visual Studio\\Shared\\NuGetPackages"
-        ],
         "configFilePaths": [
-          "C:\\Users\\rhysg\\AppData\\Roaming\\NuGet\\NuGet.Config",
-          "C:\\Program Files (x86)\\NuGet\\Config\\Microsoft.VisualStudio.FallbackLocation.config",
-          "C:\\Program Files (x86)\\NuGet\\Config\\Microsoft.VisualStudio.Offline.config"
+          "/Users/james/.nuget/NuGet/NuGet.Config"
         ],
         "originalTargetFrameworks": [
           "net8.0"
         ],
         "sources": {
-          "C:\\Program Files (x86)\\Microsoft SDKs\\NuGetPackages\\": {},
-          "C:\\Program Files\\dotnet\\library-packs": {},
+          "/opt/homebrew/Cellar/dotnet/10.0.103/libexec/library-packs": {},
           "https://api.nuget.org/v3/index.json": {}
         },
         "frameworks": {
@@ -45,7 +39,7 @@
           "auditLevel": "low",
           "auditMode": "direct"
         },
-        "SdkAnalysisLevel": "10.0.200"
+        "SdkAnalysisLevel": "10.0.100"
       },
       "frameworks": {
         "net8.0": {
@@ -75,12 +69,22 @@
           ],
           "assetTargetFallback": true,
           "warn": true,
+          "downloadDependencies": [
+            {
+              "name": "Microsoft.AspNetCore.App.Ref",
+              "version": "[8.0.24, 8.0.24]"
+            },
+            {
+              "name": "Microsoft.NETCore.App.Ref",
+              "version": "[8.0.24, 8.0.24]"
+            }
+          ],
           "frameworkReferences": {
             "Microsoft.NETCore.App": {
               "privateAssets": "all"
             }
           },
-          "runtimeIdentifierGraphPath": "C:\\Program Files\\dotnet\\sdk\\10.0.203/PortableRuntimeIdentifierGraph.json"
+          "runtimeIdentifierGraphPath": "/opt/homebrew/Cellar/dotnet/10.0.103/libexec/sdk/10.0.103/PortableRuntimeIdentifierGraph.json"
         }
       }
     }

@@ -346,7 +346,12 @@ public class GlookoConnectorService : BaseConnectorService<GlookoConnectorConfig
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error during Glooko batch sync");
+            _logger.LogError(
+                ex,
+                "{ConnectorSource} batch sync failed with {ExceptionType}: {Message}",
+                ConnectorSource,
+                ex.GetType().Name,
+                ex.Message);
             result.Success = false;
             result.Message = "Sync failed with exception";
             result.Errors.Add(ex.Message);

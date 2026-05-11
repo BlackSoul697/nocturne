@@ -201,7 +201,7 @@ public class MyLifeConnectorService(
                     }
                     else
                     {
-                        _logger.LogInformation(
+                        _logger.LogDebug(
                             "Synced {Count} SensorGlucose records",
                             sgList.Count
                         );
@@ -245,7 +245,7 @@ public class MyLifeConnectorService(
                     );
                     if (success)
                     {
-                        _logger.LogInformation(
+                        _logger.LogDebug(
                             "Synced {Count} Bolus records",
                             records.Boluses.Count
                         );
@@ -268,7 +268,7 @@ public class MyLifeConnectorService(
                     );
                     if (success)
                     {
-                        _logger.LogInformation(
+                        _logger.LogDebug(
                             "Synced {Count} CarbIntake records",
                             records.CarbIntakes.Count
                         );
@@ -291,7 +291,7 @@ public class MyLifeConnectorService(
                     );
                     if (success)
                     {
-                        _logger.LogInformation(
+                        _logger.LogDebug(
                             "Synced {Count} BGCheck records",
                             records.BGChecks.Count
                         );
@@ -314,7 +314,7 @@ public class MyLifeConnectorService(
                     );
                     if (success)
                     {
-                        _logger.LogInformation(
+                        _logger.LogDebug(
                             "Synced {Count} BolusCalculation records",
                             records.BolusCalculations.Count
                         );
@@ -337,7 +337,7 @@ public class MyLifeConnectorService(
                     );
                     if (success)
                     {
-                        _logger.LogInformation("Synced {Count} Note records", records.Notes.Count);
+                        _logger.LogDebug("Synced {Count} Note records from {ConnectorSource}", records.Notes.Count, ConnectorSource);
                         result.ItemsSynced[SyncDataType.Notes] = records.Notes.Count;
                     }
                     else
@@ -357,7 +357,7 @@ public class MyLifeConnectorService(
                     );
                     if (success)
                     {
-                        _logger.LogInformation(
+                        _logger.LogDebug(
                             "Synced {Count} DeviceEvent records",
                             records.DeviceEvents.Count
                         );
@@ -386,7 +386,7 @@ public class MyLifeConnectorService(
                     );
                     if (success)
                     {
-                        _logger.LogInformation(
+                        _logger.LogDebug(
                             "Synced {Count} TempBasal records",
                             tempBasalList.Count
                         );
@@ -415,7 +415,7 @@ public class MyLifeConnectorService(
                     );
                     if (success)
                     {
-                        _logger.LogInformation(
+                        _logger.LogDebug(
                             "Synced {Count} Profile records from pump settings",
                             profileList.Count
                         );
@@ -431,12 +431,31 @@ public class MyLifeConnectorService(
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error during sync");
+            _logger.LogError(
+                ex,
+                "{ConnectorSource} sync failed with {ExceptionType}: {Message} (items synced before failure: {ItemCount})",
+                ConnectorSource,
+                ex.GetType().Name,
+                ex.Message,
+                result.ItemsSynced.Values.Sum());
             result.Success = false;
             result.Errors.Add($"Sync error: {ex.Message}");
         }
 
         result.EndTime = DateTimeOffset.UtcNow;
+
+        var totalItems = result.ItemsSynced.Values.Sum();
+        if (totalItems > 0 || !result.Success)
+        {
+            _logger.LogInformation(
+                "{ConnectorSource} sync cycle completed: {ItemCount} items across {TypeCount} data types, success={Success}, duration={DurationMs}ms",
+                ConnectorSource,
+                totalItems,
+                result.ItemsSynced.Count,
+                result.Success,
+                (long)(result.EndTime - result.StartTime).TotalMilliseconds);
+        }
+
         return result;
     }
 

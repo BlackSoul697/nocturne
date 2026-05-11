@@ -185,7 +185,12 @@ public class LibreConnectorService(
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error during LibreLinkUp sync");
+            _logger.LogError(
+                ex,
+                "{ConnectorSource} sync failed with {ExceptionType}: {Message}",
+                ConnectorSource,
+                ex.GetType().Name,
+                ex.Message);
             result.Success = false;
             result.Errors.Add($"Sync error: {ex.Message}");
         }
