@@ -12,14 +12,15 @@ const LIVE_PAGES = ["/roster", "/attention"];
 
 export const load: LayoutServerLoad = async (event) => {
   if (!event.locals.isPlatformView) {
-    redirect(303, "/dashboard");
+    throw redirect(303, "/dashboard");
   }
 
   if (!event.locals.isAuthenticated || !event.locals.user) {
-    redirect(303, `/auth/login?returnUrl=${encodeURIComponent(event.url.pathname)}`);
+    throw redirect(303, `/auth/login?returnUrl=${encodeURIComponent(event.url.pathname)}`);
   }
 
-  const apiBaseUrl = getApiBaseUrl()!;
+  const apiBaseUrl = getApiBaseUrl();
+  if (!apiBaseUrl) throw new Error("NOCTURNE_API_URL is not configured");
   const isLivePage = LIVE_PAGES.some((p) => event.url.pathname.startsWith(p));
 
   const tenants = event.locals.isPlatformAdmin
@@ -32,7 +33,7 @@ export const load: LayoutServerLoad = async (event) => {
       apexHost: event.locals.apexHost ?? "",
       isPlatformAdmin: event.locals.isPlatformAdmin,
       tenants: tenants ?? [],
-      snapshots: [] as Array<{ tenant: TenantDto; readings: SensorGlucose[] }>,
+      snapshots: [],
     };
   }
 
