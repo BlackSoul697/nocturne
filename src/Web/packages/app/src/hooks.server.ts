@@ -66,6 +66,9 @@ function getEffectiveHost(request: Request, cookies: { get(name: string): string
 /** Route prefixes that bypass requireAuthentication enforcement. */
 const PUBLIC_PREFIXES = ["/auth", "/api", "/setup", "/clock", "/invite", "/terms", "/privacy", "/guest"] as const;
 
+/** Route prefixes that belong to the /(platform) apex-domain dashboard. */
+const PLATFORM_ROUTE_PREFIXES = ["/roster", "/attention", "/trends", "/activity", "/care-plans"] as const;
+
 function isPublicRoute(pathname: string): boolean {
   return (
     pathname === "/" ||
@@ -277,13 +280,14 @@ const siteSecurityHandle: Handle = async ({ event, resolve }) => {
       // Tenant not found (404) — either no tenant for this subdomain,
       // or apex domain with no tenants set up yet.
       if (status === 404) {
+        // Use raw apex host — not getEffectiveHost, which would prepend a setup-tenant
+        // slug. apexHost must be the real apex domain for constructing per-tenant URLs.
         const apexHost = getOriginalHost(event.request);
 
         if (event.locals.isAuthenticated) {
           // Apex domain, authenticated — serve the platform dashboard.
           // If already on a platform route, let it render. Otherwise redirect.
-          const platformPrefixes = ["/roster", "/attention", "/trends", "/activity", "/care-plans"];
-          const onPlatformRoute = platformPrefixes.some(p => pathname.startsWith(p));
+          const onPlatformRoute = PLATFORM_ROUTE_PREFIXES.some(p => pathname.startsWith(p));
 
           event.locals.isPlatformView = true;
           if (apexHost) event.locals.apexHost = apexHost;
