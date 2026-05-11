@@ -8,8 +8,11 @@ using Microsoft.Extensions.Diagnostics.HealthChecks;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.ServiceDiscovery;
 using OpenTelemetry;
+using OpenTelemetry.Logs;
 using OpenTelemetry.Metrics;
+using OpenTelemetry.Resources;
 using OpenTelemetry.Trace;
+using System.Reflection;
 
 namespace Microsoft.Extensions.Hosting;
 
@@ -75,6 +78,7 @@ public static class Extensions
 
         builder
             .Services.AddOpenTelemetry()
+            .ConfigureResource(resource => resource.AddNocturneResourceAttributes(builder))
             .WithMetrics(metrics =>
             {
                 metrics
@@ -117,6 +121,34 @@ public static class Extensions
         //}
 
         return builder;
+    }
+
+    /// <summary>
+    /// Adds Nocturne-wide resource attributes (service.namespace, service.version,
+    /// deployment.environment) so that every emitted log/metric/trace carries
+    /// consistent identifying metadata. service.name is left to Aspire / OTEL_SERVICE_NAME.
+    /// </summary>
+    private static ResourceBuilder AddNocturneResourceAttributes(
+        this ResourceBuilder resource,
+        IHostApplicationBuilder builder
+    )
+    {
+        var version = Assembly.GetEntryAssembly()?
+            .GetCustomAttribute<AssemblyInformationalVersionAttribute>()?
+            .InformationalVersion
+            ?? Assembly.GetEntryAssembly()?.GetName().Version?.ToString()
+            ?? "unknown";
+
+        // Strip any "+gitsha" suffix
+        var plusIndex = version.IndexOf('+');
+        if (plusIndex > 0) version = version[..plusIndex];
+
+        return resource.AddAttributes(new KeyValuePair<string, object>[]
+        {
+            new("service.namespace", "nocturne"),
+            new("service.version", version),
+            new("deployment.environment", builder.Environment.EnvironmentName.ToLowerInvariant()),
+        });
     }
 
     public static IHostApplicationBuilder AddDefaultHealthChecks(

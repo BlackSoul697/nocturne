@@ -361,6 +361,10 @@ app.UseMiddleware<TenantSetupMiddleware>();
 // Add Nightscout authentication middleware
 app.UseMiddleware<AuthenticationMiddleware>();
 
+// Enrich logger scope with resolved tenant/subject/request metadata so all
+// downstream log lines (and OTel log records) carry consistent identifiers.
+app.UseMiddleware<LogContextEnrichmentMiddleware>();
+
 // Add member scope middleware (resolves membership role and restricts scopes)
 app.UseMiddleware<MemberScopeMiddleware>();
 
