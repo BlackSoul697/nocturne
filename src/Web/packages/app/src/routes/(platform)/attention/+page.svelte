@@ -53,6 +53,7 @@
         ageMin,
         sparklinePoints,
         status,
+        // STUB-BACKEND: TIR — GET /api/v4/platform/roster-snapshots
         tir: { veryLow: 0, low: 0, inRange: 0, high: 0, veryHigh: 0 },
       };
     })
