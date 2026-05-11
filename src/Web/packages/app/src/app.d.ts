@@ -63,6 +63,16 @@ declare global {
 			 */
 			isPlatformAdmin: boolean;
 			/**
+			 * Set when the request is on the apex domain with no tenant resolved.
+			 * Used by /(platform) routes to verify they are being served correctly.
+			 */
+			isPlatformView?: boolean;
+			/**
+			 * The apex hostname (e.g. "nocturne.health") as seen by the client.
+			 * Used in the platform sidebar and to construct per-tenant hosts.
+			 */
+			apexHost?: string;
+			/**
 			 * Whether the current session is a guest link session (read-only, no subjectId)
 			 */
 			isGuestSession?: boolean;
