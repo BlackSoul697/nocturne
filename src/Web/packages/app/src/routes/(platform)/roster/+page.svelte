@@ -161,5 +161,43 @@
     </div>
   {/if}
 
-  <!-- Kanban layout added in Task 12 -->
+  <!-- Kanban layout -->
+  {#if layout === "kanban"}
+    {@const columns = [
+      { key: "very-low",  label: "Very low",  color: "var(--glucose-very-low)" },
+      { key: "low",       label: "Low",        color: "var(--glucose-low)" },
+      { key: "tight",     label: "Tight",      color: "var(--glucose-tight-range)" },
+      { key: "in-range",  label: "In range",   color: "var(--glucose-in-range)" },
+      { key: "high",      label: "High",       color: "var(--glucose-high)" },
+      { key: "very-high", label: "Very high",  color: "var(--glucose-very-high)" },
+      { key: "stale",     label: "Stale",      color: "var(--muted-foreground)" },
+      { key: "no-data",   label: "No data",    color: "var(--muted-foreground)" },
+    ] as const}
+    <div class="flex gap-3 overflow-x-auto p-4 items-start">
+      {#each columns as col}
+        {@const colItems = sorted.filter((i) => i.status === col.key)}
+        {#if colItems.length > 0}
+          <div class="flex w-44 shrink-0 flex-col gap-1.5">
+            <div class="flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
+              <span class="size-2 rounded-full" style="background:{col.color}"></span>
+              {col.label} · {colItems.length}
+            </div>
+            {#each colItems as item (item.id)}
+              <button
+                class="rounded-lg border bg-card p-2.5 text-left text-xs hover:shadow-sm transition-all"
+                style="border-color:{col.color}"
+                onclick={() => openTenant(item)}
+              >
+                <div class="font-medium text-sm">{item.displayName}</div>
+                <div class="font-bold tabular-nums mt-1" style="color:{col.color}">
+                  {item.mgdl ?? "—"} {dirArrow(item.delta)}
+                </div>
+                <div class="text-muted-foreground mt-0.5 font-mono truncate">{item.slug}</div>
+              </button>
+            {/each}
+          </div>
+        {/if}
+      {/each}
+    </div>
+  {/if}
 </div>
