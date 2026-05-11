@@ -1,3 +1,5 @@
+import type { SensorGlucose, TenantDto } from "$lib/api/generated/nocturne-api-client";
+
 // Derived shape the roster page passes to cards.
 // Built from TenantDto + SensorGlucose[] in the page's $derived.
 export interface RosterItem {
@@ -54,4 +56,71 @@ export function ageStr(min: number | null): string {
   if (min < 1)     return "now";
   if (min < 60)    return `${min}m`;
   return `${Math.floor(min / 60)}h ${min % 60}m`;
+}
+
+// Shape of a single tenant's snapshot from the layout server load
+export interface TenantSnapshot {
+  tenant: TenantDto;
+  readings: SensorGlucose[];
+}
+
+/**
+ * Derives RosterItem[] from raw tenant snapshots.
+ *
+ * STUB-BACKEND: Glucose thresholds are hardcoded here (55/70/140/180/250 mg/dL).
+ * When GET /api/v4/platform/roster-snapshots is implemented, it should return
+ * per-tenant thresholds alongside readings so status is derived server-side
+ * or using tenant-specific values.
+ */
+export function deriveRosterItems(snapshots: TenantSnapshot[]): RosterItem[] {
+  return snapshots.map((s) => {
+    const readings = s.readings ?? [];
+    const latest = readings[0];
+    const prev = readings[1];
+
+    const mgdl = latest?.mgdl ?? null;
+    const prevMgdl = prev?.mgdl ?? null;
+    const delta = mgdl != null && prevMgdl != null ? Math.round(mgdl - prevMgdl) : null;
+
+    const now = Date.now();
+    const latestTs = latest?.timestamp ? new Date(latest.timestamp).getTime() : null;
+    const ageMin = latestTs != null ? Math.floor((now - latestTs) / 60000) : null;
+
+    let status: RosterItem["status"] = "no-data";
+    if (mgdl == null) {
+      status = "no-data";
+    } else if (ageMin != null && ageMin > 25) {
+      status = "stale";
+    } else if (mgdl < 55) {
+      status = "very-low";
+    } else if (mgdl < 70) {
+      status = "low";
+    } else if (mgdl <= 140) {
+      status = "tight";
+    } else if (mgdl <= 180) {
+      status = "in-range";
+    } else if (mgdl <= 250) {
+      status = "high";
+    } else {
+      status = "very-high";
+    }
+
+    const sparklinePoints = readings
+      .slice(0, 36)
+      .map((r) => r.mgdl ?? 0)
+      .reverse();
+
+    return {
+      id: s.tenant.id ?? "",
+      slug: s.tenant.slug ?? "",
+      displayName: s.tenant.displayName ?? s.tenant.slug ?? "",
+      mgdl,
+      delta,
+      ageMin,
+      sparklinePoints,
+      status,
+      // STUB-BACKEND: TIR — GET /api/v4/platform/roster-snapshots
+      tir: { veryLow: 0, low: 0, inRange: 0, high: 0, veryHigh: 0 },
+    };
+  });
 }

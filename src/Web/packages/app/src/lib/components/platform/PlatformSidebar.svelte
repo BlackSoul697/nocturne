@@ -1,7 +1,7 @@
 <script lang="ts">
   import { page } from "$app/state";
   import { Activity, Bell, BookOpen, TrendingUp, Users } from "lucide-svelte";
-  import type { AuthUser } from "../../../../app.d";
+  import type { AuthUser } from "$lib/stores/auth-store.svelte";
 
   interface Props {
     user: AuthUser;

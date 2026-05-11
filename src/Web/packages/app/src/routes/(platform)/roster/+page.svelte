@@ -1,7 +1,7 @@
 <script lang="ts">
   import { page } from "$app/state";
   import type { LayoutData } from "../$types";
-  import { dirArrow, type RosterItem } from "$lib/components/platform/types";
+  import { deriveRosterItems, dirArrow, type RosterItem } from "$lib/components/platform/types";
   import AggregateStrip from "$lib/components/platform/AggregateStrip.svelte";
   import AlertBanner from "$lib/components/platform/AlertBanner.svelte";
   import AttentionRail from "$lib/components/platform/AttentionRail.svelte";
@@ -16,60 +16,7 @@
   let density = $state<"compact" | "standard" | "preview">("standard");
   let sortMode = $state<"name" | "attention" | "tir">("name");
 
-  // Derive RosterItem[] from raw snapshots. Readings are newest-first from the server.
-  const items = $derived.by<RosterItem[]>(() =>
-    data.snapshots.map((s) => {
-      const readings = s.readings ?? [];
-      const latest = readings[0];
-      const prev = readings[1];
-
-      const mgdl = latest?.mgdl ?? null;
-      const prevMgdl = prev?.mgdl ?? null;
-      const delta = mgdl != null && prevMgdl != null ? Math.round(mgdl - prevMgdl) : null;
-
-      const now = Date.now();
-      const latestTs = latest?.timestamp ? new Date(latest.timestamp).getTime() : null;
-      const ageMin = latestTs != null ? Math.floor((now - latestTs) / 60000) : null;
-
-      let status: RosterItem["status"] = "no-data";
-      if (mgdl == null) {
-        status = "no-data";
-      } else if (ageMin != null && ageMin > 25) {
-        status = "stale";
-      } else if (mgdl < 55) {
-        status = "very-low";
-      } else if (mgdl < 70) {
-        status = "low";
-      } else if (mgdl <= 140) {
-        status = "tight";
-      } else if (mgdl <= 180) {
-        status = "in-range";
-      } else if (mgdl <= 250) {
-        status = "high";
-      } else {
-        status = "very-high";
-      }
-
-      // Reverse so oldest-first for the sparkline
-      const sparklinePoints = readings
-        .slice(0, 36)
-        .map((r) => r.mgdl ?? 0)
-        .reverse();
-
-      return {
-        id: s.tenant.id ?? "",
-        slug: s.tenant.slug ?? "",
-        displayName: s.tenant.displayName ?? s.tenant.slug ?? "",
-        mgdl,
-        delta,
-        ageMin,
-        sparklinePoints,
-        status,
-        // STUB-BACKEND: TIR — GET /api/v4/platform/roster-snapshots
-        tir: { veryLow: 0, low: 0, inRange: 0, high: 0, veryHigh: 0 },
-      };
-    })
-  );
+  const items = $derived.by<RosterItem[]>(() => deriveRosterItems(data.snapshots));
 
   const sorted = $derived.by(() => {
     const arr = [...items];

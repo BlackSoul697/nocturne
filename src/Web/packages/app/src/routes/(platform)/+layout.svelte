@@ -3,6 +3,7 @@
   import { page } from "$app/state";
   import { onMount } from "svelte";
   import PlatformSidebar from "$lib/components/platform/PlatformSidebar.svelte";
+  import { deriveRosterItems } from "$lib/components/platform/types";
   import type { LayoutData } from "./$types";
 
   let { data, children }: { data: LayoutData; children: import("svelte").Snippet } = $props();
@@ -10,13 +11,9 @@
   const LIVE_PAGES = ["/roster", "/attention"];
   const POLL_INTERVAL_MS = 60_000;
 
+  const rosterItems = $derived(deriveRosterItems(data.snapshots));
   const attentionCount = $derived(
-    data.snapshots.filter((s) => {
-      const latest = s.readings[0];
-      if (!latest) return false;
-      const mgdl = latest.mgdl ?? 0;
-      return mgdl > 0 && (mgdl < 70 || mgdl > 180);
-    }).length,
+    rosterItems.filter((i) => ["very-low", "very-high", "low", "high"].includes(i.status)).length,
   );
 
   onMount(() => {
