@@ -82,6 +82,19 @@ public class TrackerSuggestionService : ITrackerSuggestionService
 
         foreach (var definition in cannulaDefinitions)
         {
+            // Skip definitions where auto-trigger handles this event type
+            if (!string.IsNullOrEmpty(definition.TriggerEventTypes))
+            {
+                var triggerTypes = ParseTriggerEventTypes(definition.TriggerEventTypes);
+                if (triggerTypes.Any(t => string.Equals(t, treatment.EventType, StringComparison.OrdinalIgnoreCase)))
+                {
+                    _logger.LogDebug(
+                        "Skipping suggestion for {TrackerName} — auto-trigger handles this event type",
+                        definition.Name);
+                    continue;
+                }
+            }
+
             // Check if we already have a recent suggestion for this tracker
             if (await HasRecentSuggestionAsync(userId, definition.Id, cancellationToken))
             {
@@ -538,6 +551,21 @@ public class TrackerSuggestionService : ITrackerSuggestionService
                 "Failed to broadcast notification created event for {NotificationId}",
                 dto.Id
             );
+        }
+    }
+
+    private static List<string> ParseTriggerEventTypes(string? json)
+    {
+        if (string.IsNullOrEmpty(json))
+            return [];
+
+        try
+        {
+            return JsonSerializer.Deserialize<List<string>>(json) ?? [];
+        }
+        catch
+        {
+            return [];
         }
     }
 
