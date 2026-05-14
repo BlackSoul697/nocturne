@@ -9,7 +9,7 @@
   } from "$lib/components/ui/card";
   import { Badge } from "$lib/components/ui/badge";
   import { Button } from "$lib/components/ui/button";
-  import { Settings2, Plus, Play, Pencil, Trash2 } from "lucide-svelte";
+  import { Settings2, Plus, Play, Pencil, Trash2, LayoutTemplate } from "lucide-svelte";
   import { TrackerCategoryIcon } from "$lib/components/icons";
   import { cn } from "$lib/utils";
   import { TrackerCategory, type TrackerDefinitionDto } from "$api";
@@ -19,6 +19,7 @@
     categoryLabels,
     categoryColors,
     openNewDefinition,
+    openTemplateDialog,
     openStartDialog,
     openEditDefinition,
     openDeleteDefinitionDialog,
@@ -27,6 +28,7 @@
     categoryLabels: Record<TrackerCategory, string>;
     categoryColors: Record<TrackerCategory, string>;
     openNewDefinition: () => void;
+    openTemplateDialog: () => void;
     openStartDialog: (def: TrackerDefinitionDto) => void;
     openEditDefinition: (def: TrackerDefinitionDto) => void;
     openDeleteDefinitionDialog: (id: string) => void;
@@ -42,10 +44,16 @@
           Reusable tracker templates with notification thresholds
         </CardDescription>
       </div>
-      <Button onclick={openNewDefinition}>
-        <Plus class="h-4 w-4 mr-2" />
-        New Definition
-      </Button>
+      <div class="flex items-center gap-2">
+        <Button variant="outline" onclick={openTemplateDialog}>
+          <LayoutTemplate class="h-4 w-4 mr-2" />
+          From Template
+        </Button>
+        <Button onclick={openNewDefinition}>
+          <Plus class="h-4 w-4 mr-2" />
+          New Definition
+        </Button>
+      </div>
     </CardHeader>
     <CardContent>
       {#if definitions.length === 0}

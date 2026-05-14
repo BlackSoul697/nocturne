@@ -22,6 +22,7 @@
   import TrackerDefinitionsTab from "$lib/components/trackers/TrackerDefinitionsTab.svelte";
   import TrackerPresetsTab from "$lib/components/trackers/TrackerPresetsTab.svelte";
   import TrackerEditorDialog from "$lib/components/trackers/TrackerEditorDialog.svelte";
+  import TrackerTemplateDialog from "$lib/components/trackers/TrackerTemplateDialog.svelte";
   import {
     Timer,
     AlertTriangle,
@@ -30,6 +31,7 @@
     Bookmark,
     Loader2,
     Activity,
+    LayoutTemplate,
   } from "lucide-svelte";
   import { tick } from "svelte";
   import { goto } from "$app/navigation";
@@ -74,6 +76,9 @@
       presetsQuery.refresh(),
     ]);
   }
+
+  // Template dialog state
+  let isTemplateDialogOpen = $state(false);
 
   // Dialog state
   let isDefinitionDialogOpen = $state(false);
@@ -482,6 +487,29 @@
       presetsQuery,
     ])}
 
+    {#if definitions.length === 0 && activeInstances.length === 0 && historyInstances.length === 0}
+      <Card class="border-dashed">
+        <CardContent class="flex flex-col items-center justify-center py-12 text-center">
+          <div class="flex h-14 w-14 items-center justify-center rounded-xl bg-primary/10 mb-4">
+            <LayoutTemplate class="h-7 w-7 text-primary" />
+          </div>
+          <h2 class="text-lg font-semibold mb-1">Set up trackers for your devices</h2>
+          <p class="text-sm text-muted-foreground max-w-sm mb-6">
+            Get started quickly with templates based on your connected devices, or create a custom tracker definition from scratch.
+          </p>
+          <div class="flex items-center gap-3">
+            <Button onclick={() => { if (requireAuth()) isTemplateDialogOpen = true; }}>
+              <LayoutTemplate class="h-4 w-4 mr-2" />
+              Browse Templates
+            </Button>
+            <Button variant="outline" onclick={openNewDefinition}>
+              Create Custom
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
+    {/if}
+
     <Tabs.Root bind:value={activeTab} class="space-y-6">
       <Tabs.List class="grid w-full grid-cols-4">
         <Tabs.Trigger value="active" class="gap-2">
@@ -533,6 +561,7 @@
         {categoryLabels}
         {categoryColors}
         {openNewDefinition}
+        openTemplateDialog={() => { if (requireAuth()) isTemplateDialogOpen = true; }}
         {openStartDialog}
         {openEditDefinition}
         {openDeleteDefinitionDialog}
@@ -551,6 +580,13 @@
 </div>
 
 
+
+<!-- Template Dialog -->
+<TrackerTemplateDialog
+  bind:open={isTemplateDialogOpen}
+  onClose={() => {}}
+  onApplied={loadData}
+/>
 
 <!-- Definition Dialog -->
 <!-- Tracker Editor Dialog -->
