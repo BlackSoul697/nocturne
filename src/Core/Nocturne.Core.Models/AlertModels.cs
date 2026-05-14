@@ -668,3 +668,37 @@ public record AlertPayload
     /// </summary>
     public required Alerts.AlertRuleSeverity Severity { get; init; }
 }
+
+/// <summary>Tracker age comparison. Hours since the active instance started.</summary>
+/// <param name="DefinitionId">Tracker definition to match.</param>
+/// <param name="Operator">Comparison operator.</param>
+/// <param name="Hours">Hours threshold to compare against.</param>
+public record TrackerAgeCondition(
+    [property: JsonPropertyName("definition_id")] Guid DefinitionId,
+    string Operator,
+    decimal Hours);
+
+/// <summary>Tracker remaining comparison. Hours until the active instance's lifespan expires.</summary>
+/// <param name="DefinitionId">Tracker definition to match.</param>
+/// <param name="Operator">Comparison operator.</param>
+/// <param name="Hours">Hours threshold to compare against.</param>
+public record TrackerRemainingCondition(
+    [property: JsonPropertyName("definition_id")] Guid DefinitionId,
+    string Operator,
+    decimal Hours);
+
+/// <summary>Tracker active check. Whether an active instance exists for the definition.</summary>
+/// <param name="DefinitionId">Tracker definition to match.</param>
+/// <param name="ExpectedActive">Expected active state.</param>
+public record TrackerActiveCondition(
+    [property: JsonPropertyName("definition_id")] Guid DefinitionId,
+    [property: JsonPropertyName("expected_active")] bool ExpectedActive);
+
+/// <summary>Tracker time-until-scheduled comparison. Hours until/since ScheduledAt (positive = future, negative = past due).</summary>
+/// <param name="DefinitionId">Tracker definition to match.</param>
+/// <param name="Operator">Comparison operator.</param>
+/// <param name="Hours">Hours threshold to compare against.</param>
+public record TrackerTimeUntilScheduledCondition(
+    [property: JsonPropertyName("definition_id")] Guid DefinitionId,
+    string Operator,
+    decimal Hours);

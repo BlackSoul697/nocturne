@@ -807,6 +807,10 @@ public static class ServiceRegistrationExtensions
         services.AddScoped<IConditionEvaluator, DayOfWeekEvaluator>();
         services.AddScoped<IConditionEvaluator, PumpStateEvaluator>();
         services.AddScoped<IConditionEvaluator, StateSpanActiveEvaluator>();
+        services.AddScoped<IConditionEvaluator, TrackerAgeEvaluator>();
+        services.AddScoped<IConditionEvaluator, TrackerRemainingEvaluator>();
+        services.AddScoped<IConditionEvaluator, TrackerActiveEvaluator>();
+        services.AddScoped<IConditionEvaluator, TrackerTimeUntilScheduledEvaluator>();
         return services;
     }
 
