@@ -50,6 +50,7 @@
     if (key) {
       // Overlay just appeared — push sentinel if we haven't already
       if (!historyEntryPushed) {
+        dismissedByUI = false; // reset stale flag from any previous cycle
         history.pushState({ ...history.state, __coachMark: true }, "");
         historyEntryPushed = true;
       }
@@ -72,8 +73,12 @@
       return () => {
         window.removeEventListener("popstate", onPopState);
 
-        // Cleanup: if the overlay is disappearing and we still have a
-        // sentinel entry, remove it.
+        // If transitioning directly to another coach mark (activeKey went
+        // from truthy A to truthy B), keep the sentinel entry — the new
+        // effect run will reuse it via the historyEntryPushed guard.
+        if (ctx.activeKey) return;
+
+        // Cleanup: overlay is disappearing, remove the sentinel entry.
         if (historyEntryPushed) {
           historyEntryPushed = false;
           if (navigationFlag.navigating) {
