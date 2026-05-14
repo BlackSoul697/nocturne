@@ -135,6 +135,7 @@ public class AlertRulesController : ControllerBase
             ClientConfiguration = request.ClientConfiguration is not null
                 ? JsonSerializer.Serialize(request.ClientConfiguration)
                 : "{}",
+            SourceTemplate = request.SourceTemplate,
             CreatedAt = DateTime.UtcNow,
             UpdatedAt = DateTime.UtcNow,
         };
@@ -210,6 +211,7 @@ public class AlertRulesController : ControllerBase
         rule.ClientConfiguration = request.ClientConfiguration is not null
             ? JsonSerializer.Serialize(request.ClientConfiguration)
             : "{}";
+        rule.SourceTemplate = request.SourceTemplate;
         rule.UpdatedAt = DateTime.UtcNow;
 
         if (request.Channels is not null)
@@ -415,6 +417,7 @@ public class AlertRulesController : ControllerBase
             ? null
             : DeserializeJson(entity.AutoResolveParams),
         ClientConfiguration = DeserializeJson(entity.ClientConfiguration),
+        SourceTemplate = entity.SourceTemplate,
         Channels = entity.Channels
             .OrderBy(c => c.SortOrder)
             .Select(c => new AlertRuleChannelResponse
@@ -555,6 +558,11 @@ public class AlertRuleResponse
     public bool AutoResolveEnabled { get; set; }
     public object? AutoResolveParams { get; set; }
     public object ClientConfiguration { get; set; } = new { };
+    /// <summary>
+    /// JSON metadata stamped by the tracker template system when the rule was created from a
+    /// <c>TrackerDefinition</c>. Null for manually-created rules.
+    /// </summary>
+    public string? SourceTemplate { get; set; }
     /// <summary>Flat list of delivery channels. Dispatched in parallel when the rule fires.</summary>
     public List<AlertRuleChannelResponse> Channels { get; set; } = [];
 }
@@ -581,6 +589,11 @@ public class CreateAlertRuleRequest
     public bool AutoResolveEnabled { get; set; }
     public object? AutoResolveParams { get; set; }
     public object? ClientConfiguration { get; set; }
+    /// <summary>
+    /// JSON metadata linking this rule to a <c>TrackerDefinition</c>. Set by the template
+    /// system; null for manually-created rules.
+    /// </summary>
+    public string? SourceTemplate { get; set; }
     public List<CreateAlertRuleChannelRequest>? Channels { get; set; }
 }
 
@@ -597,6 +610,11 @@ public class UpdateAlertRuleRequest
     public bool AutoResolveEnabled { get; set; }
     public object? AutoResolveParams { get; set; }
     public object? ClientConfiguration { get; set; }
+    /// <summary>
+    /// JSON metadata linking this rule to a <c>TrackerDefinition</c>. Set by the template
+    /// system; null for manually-created rules.
+    /// </summary>
+    public string? SourceTemplate { get; set; }
     public List<CreateAlertRuleChannelRequest>? Channels { get; set; }
 }
 
