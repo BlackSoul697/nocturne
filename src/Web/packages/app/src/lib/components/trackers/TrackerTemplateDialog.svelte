@@ -4,11 +4,15 @@
   import { Label } from "$lib/components/ui/label";
   import { Checkbox } from "$lib/components/ui/checkbox";
   import { DurationInput } from "$lib/components/ui/duration-input";
-  import { TrackerCategoryIcon } from "$lib/components/icons";
   import { cn } from "$lib/utils";
   import {
-    TrackerCategory,
+    type AvailableTemplate,
+    type TemplateResult,
   } from "$api";
+  import {
+    getTemplates,
+    applyTemplate,
+  } from "$lib/api/generated/trackerTemplates.generated.remote";
   import {
     ChevronRight,
     ChevronLeft,
@@ -16,23 +20,24 @@
     Loader2,
     LayoutTemplate,
     AlertCircle,
+    Activity,
+    Radio,
+    Package,
+    Syringe,
+    FlaskRound,
+    Cable,
+    Droplets,
   } from "lucide-svelte";
 
-  // TODO: Replace with generated types once the API client is regenerated.
-  // These mirror the DTOs from TrackerTemplateController.
-  interface TrackerTemplate {
-    id: string;
-    name: string;
-    category: TrackerCategory;
-    lifespanHours: number | null;
-    isHardCutoff: boolean;
-    description: string | null;
-  }
-
-  interface AppliedTemplate {
-    definitionId: string;
-    definitionName: string;
-  }
+  const ICONS: Record<string, typeof Package> = {
+    activity: Activity,
+    radio: Radio,
+    package: Package,
+    syringe: Syringe,
+    "flask-round": FlaskRound,
+    cable: Cable,
+    droplets: Droplets,
+  };
 
   type Step = "select" | "configure" | "result";
 
@@ -52,23 +57,23 @@
   let step = $state<Step>("select");
 
   // Fetched templates
-  let templates = $state<TrackerTemplate[]>([]);
+  let templates = $state<AvailableTemplate[]>([]);
   let isLoading = $state(false);
   let fetchError = $state<string | null>(null);
 
-  // Selection state — map of template id to whether it's selected
+  // Selection state — map of consumableCatalogId to whether it's selected
   let selected = $state<Record<string, boolean>>({});
 
-  // Lifespan overrides — map of template id to custom lifespan
+  // Lifespan overrides — map of consumableCatalogId to custom lifespan
   let lifespanOverrides = $state<Record<string, number | undefined>>({});
 
   // Apply state
   let isApplying = $state(false);
   let applyError = $state<string | null>(null);
-  let appliedResults = $state<AppliedTemplate[]>([]);
+  let appliedResults = $state<TemplateResult[]>([]);
 
   const selectedTemplates = $derived(
-    templates.filter((t) => selected[t.id])
+    templates.filter((t) => selected[t.consumableCatalogId!])
   );
 
   const hasSelection = $derived(selectedTemplates.length > 0);
@@ -89,10 +94,7 @@
     isLoading = true;
     fetchError = null;
     try {
-      // TODO: Wire up to generated remote function once API client is regenerated.
-      // templates = await trackersRemote.getTemplates();
-      // For now, this will be replaced by the actual API call.
-      throw new Error("API client not yet generated — templates endpoint not available");
+      templates = await getTemplates();
     } catch (err) {
       fetchError = err instanceof Error ? err.message : "Failed to load templates";
       templates = [];
@@ -120,21 +122,14 @@
     appliedResults = [];
 
     try {
-      const results: AppliedTemplate[] = [];
+      const results: TemplateResult[] = [];
 
       for (const template of selectedTemplates) {
-        // TODO: Wire up to generated remote function once API client is regenerated.
-        // const result = await trackersRemote.applyTemplate({
-        //   templateId: template.id,
-        //   lifespanHoursOverride: lifespanOverrides[template.id] ?? undefined,
-        // });
-        // results.push({
-        //   definitionId: result.definitionId,
-        //   definitionName: result.definitionName,
-        // });
-
-        // Placeholder — will be replaced by actual API call
-        throw new Error("API client not yet generated — apply endpoint not available");
+        const result = await applyTemplate({
+          consumableCatalogId: template.consumableCatalogId,
+          lifespanHoursOverride: lifespanOverrides[template.consumableCatalogId!],
+        });
+        results.push(result);
       }
 
       appliedResults = results;
@@ -151,18 +146,6 @@
     open = false;
     onClose();
   }
-
-  // Category labels for display
-  const categoryLabels: Record<TrackerCategory, string> = {
-    [TrackerCategory.Consumable]: "Consumable",
-    [TrackerCategory.Reservoir]: "Reservoir",
-    [TrackerCategory.Appointment]: "Appointment",
-    [TrackerCategory.Reminder]: "Reminder",
-    [TrackerCategory.Custom]: "Custom",
-    [TrackerCategory.Sensor]: "Sensor",
-    [TrackerCategory.Cannula]: "Cannula",
-    [TrackerCategory.Battery]: "Battery",
-  };
 
   function formatLifespan(hours: number): string {
     if (hours < 24) return `${hours}h`;
@@ -220,31 +203,33 @@
           </div>
         {:else}
           <div class="space-y-2">
-            {#each templates as template (template.id)}
-              {@const category = template.category}
+            {#each templates as template (template.consumableCatalogId)}
+              {@const Glyph = ICONS[template.icon ?? 'package']}
               <button
                 type="button"
                 class={cn(
                   "flex w-full items-center gap-3 rounded-lg border p-3 text-left transition-colors",
-                  selected[template.id]
+                  selected[template.consumableCatalogId!]
                     ? "border-primary bg-primary/5"
                     : "hover:bg-muted/50"
                 )}
-                onclick={() => toggleTemplate(template.id)}
+                onclick={() => toggleTemplate(template.consumableCatalogId!)}
               >
                 <Checkbox
-                  checked={selected[template.id] ?? false}
-                  onCheckedChange={() => toggleTemplate(template.id)}
+                  checked={selected[template.consumableCatalogId!] ?? false}
+                  onCheckedChange={() => toggleTemplate(template.consumableCatalogId!)}
                 />
                 <div class="p-1.5 rounded-md bg-muted">
-                  <TrackerCategoryIcon {category} class="h-4 w-4" />
+                  <Glyph class="h-4 w-4" />
                 </div>
                 <div class="flex-1 min-w-0">
                   <div class="font-medium text-sm">{template.name}</div>
                   <div class="text-xs text-muted-foreground">
-                    {categoryLabels[category]}
-                    {#if template.lifespanHours}
-                      · {formatLifespan(template.lifespanHours)}
+                    {#if template.deviceName}
+                      {template.deviceName}
+                    {/if}
+                    {#if template.defaultLifespanHours}
+                      {#if template.deviceName} · {/if}{formatLifespan(template.defaultLifespanHours)}
                     {/if}
                     {#if template.isHardCutoff}
                       · Fixed
@@ -259,32 +244,34 @@
       {:else if step === "configure"}
         <!-- Step 2: Lifespan configuration -->
         <div class="space-y-4">
-          {#each selectedTemplates as template (template.id)}
-            {@const category = template.category}
+          {#each selectedTemplates as template (template.consumableCatalogId)}
+            {@const Glyph = ICONS[template.icon ?? 'package']}
             <div class="rounded-lg border p-4 space-y-3">
               <div class="flex items-center gap-3">
                 <div class="p-1.5 rounded-md bg-muted">
-                  <TrackerCategoryIcon {category} class="h-4 w-4" />
+                  <Glyph class="h-4 w-4" />
                 </div>
                 <div>
                   <div class="font-medium text-sm">{template.name}</div>
-                  <div class="text-xs text-muted-foreground">
-                    {categoryLabels[category]}
-                  </div>
+                  {#if template.deviceName}
+                    <div class="text-xs text-muted-foreground">
+                      {template.deviceName}
+                    </div>
+                  {/if}
                 </div>
               </div>
 
               {#if template.isHardCutoff}
                 <div class="text-xs text-muted-foreground bg-muted/50 rounded-md px-3 py-2">
-                  Fixed lifespan of {formatLifespan(template.lifespanHours!)} (cannot be changed)
+                  Fixed lifespan of {formatLifespan(template.defaultLifespanHours!)} (cannot be changed)
                 </div>
-              {:else if template.lifespanHours}
+              {:else if template.defaultLifespanHours}
                 <div class="space-y-2">
                   <Label class="text-xs">
-                    Lifespan (default: {formatLifespan(template.lifespanHours)})
+                    Lifespan (default: {formatLifespan(template.defaultLifespanHours)})
                   </Label>
                   <DurationInput
-                    bind:value={lifespanOverrides[template.id]}
+                    bind:value={lifespanOverrides[template.consumableCatalogId!]}
                     placeholder="Leave blank for default"
                   />
                 </div>
@@ -302,15 +289,15 @@
       {:else}
         <!-- Step 3: Results -->
         <div class="space-y-3">
-          {#each appliedResults as result (result.definitionId)}
+          {#each appliedResults as result (result.trackerDefinitionId)}
             <div class="flex items-center gap-3 rounded-lg border p-3">
               <div class="flex h-8 w-8 items-center justify-center rounded-full bg-green-500/10">
                 <Check class="h-4 w-4 text-green-600" />
               </div>
               <div>
-                <div class="font-medium text-sm">{result.definitionName}</div>
+                <div class="font-medium text-sm">{result.trackerDefinitionId}</div>
                 <div class="text-xs text-muted-foreground">
-                  Tracker definition created
+                  Tracker and alarm rules created
                 </div>
               </div>
             </div>
