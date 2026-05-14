@@ -33,7 +33,65 @@
   import { Bell, Plus, AlertTriangle, Check, Loader2 } from "lucide-svelte";
 
   import AlertRuleRow from "$lib/components/alerts/AlertRuleRow.svelte";
+  import AlertRuleGroup from "$lib/components/alerts/AlertRuleGroup.svelte";
   import ArmedStatusStrip from "$lib/components/alerts/ArmedStatusStrip.svelte";
+
+  interface SourceTemplate {
+    trackerDefinitionId?: string;
+  }
+
+  /** Parse sourceTemplate JSON, returning null on failure. */
+  function parseSourceTemplate(raw: string | null | undefined): SourceTemplate | null {
+    if (!raw) return null;
+    try {
+      return JSON.parse(raw) as SourceTemplate;
+    } catch {
+      return null;
+    }
+  }
+
+  interface RuleGroup {
+    trackerDefinitionId: string;
+    label: string;
+    rules: AlertRuleResponse[];
+  }
+
+  /**
+   * Partition rules into tracker-sourced groups and ungrouped rules.
+   * Rules sharing the same trackerDefinitionId are collapsed into a group.
+   */
+  function partitionRules(rules: AlertRuleResponse[]): {
+    groups: RuleGroup[];
+    ungrouped: AlertRuleResponse[];
+  } {
+    const groupMap = new Map<string, RuleGroup>();
+    const ungrouped: AlertRuleResponse[] = [];
+
+    for (const rule of rules) {
+      // sourceTemplate is present on the API response but not yet in the
+      // generated NSwag types — access defensively via indexer.
+      const raw = (rule as Record<string, unknown>).sourceTemplate as string | undefined;
+      const tpl = parseSourceTemplate(raw);
+
+      if (tpl?.trackerDefinitionId) {
+        const id = tpl.trackerDefinitionId;
+        let group = groupMap.get(id);
+        if (!group) {
+          group = {
+            trackerDefinitionId: id,
+            label: rule.name?.replace(/\s*\((?:warning|urgent)\)\s*$/i, "").trim() ?? "Tracker alerts",
+            rules: [],
+          };
+          groupMap.set(id, group);
+        }
+        group.rules.push(rule);
+      } else {
+        ungrouped.push(rule);
+      }
+    }
+
+    return { groups: [...groupMap.values()], ungrouped };
+  }
 
   // ---- Queries ----
   const rulesQuery = getRules();
@@ -179,6 +237,7 @@
     {@const enabledCount = rules.filter((r) => r.isEnabled).length}
     {@const totalCount = rules.length}
     {@const armedState = deriveArmedState(dnd, activeAlerts)}
+    {@const { groups, ungrouped } = partitionRules(rules)}
     {@const ruleNamesById = new Map(
       rules.map((r) => [r.id ?? "", r.name ?? "(unnamed)"]),
     )}
@@ -280,7 +339,21 @@
           </div>
         {:else}
           <div class="space-y-2">
-            {#each rules as rule (rule.id)}
+            {#each groups as group (group.trackerDefinitionId)}
+              <AlertRuleGroup
+                label={group.label}
+                rules={group.rules}
+                {togglingRuleId}
+                {deletingRuleId}
+                {testingRuleId}
+                onToggleEnabled={(id) => handleToggleRule(id)}
+                onEdit={(rule) => editRule(rule)}
+                onDelete={(id) => handleDeleteRule(id)}
+                onTestFire={(id) => handleTestFire(id)}
+                resolveAlertName={(id) => ruleNamesById.get(id)}
+              />
+            {/each}
+            {#each ungrouped as rule (rule.id)}
               <AlertRuleRow
                 {rule}
                 isToggling={togglingRuleId === rule.id}
