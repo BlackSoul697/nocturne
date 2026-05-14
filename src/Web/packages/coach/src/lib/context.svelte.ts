@@ -1,6 +1,7 @@
 import { getContext, setContext, untrack } from "svelte";
 import type {
   CoachMarkAdapter,
+  DismissOptions,
   MarkRegistration,
   MarkState,
   MarkStatus,
@@ -94,7 +95,7 @@ export class CoachMarkContext {
     this._activeSelection = { key, step };
   }
 
-  dismiss(key: string): void {
+  dismiss(key: string, options?: DismissOptions): void {
     if (this._forcedSequence) {
       // Dismissing any step in a forced sequence dismisses ALL remaining unseen/seen steps
       const seq = this.sequences[this._forcedSequence];
@@ -108,6 +109,7 @@ export class CoachMarkContext {
       }
       this._activeSelection = null;
       this.onForcedSequenceComplete();
+      if (options?.quiet) this._quietUntilNavigation = true;
       return;
     }
 
@@ -130,7 +132,11 @@ export class CoachMarkContext {
     }
 
     this._activeSelection = null;
-    this.scheduleSelection();
+    if (options?.quiet) {
+      this._quietUntilNavigation = true;
+    } else {
+      this.scheduleSelection();
+    }
   }
 
   complete(key: string): void {
