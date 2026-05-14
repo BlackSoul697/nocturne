@@ -26,14 +26,16 @@
   const ctx = createCoachMarkContext(adapter, sequences, settleDelay, seenDwellMs);
   setCoachMarkContextRef(ctx);
 
-  let navigatingAway = $state(false);
+  // Shared mutable flag so Popover can read AND reset after consuming.
+  // Not $state — Popover reads it imperatively in effect cleanup, not reactively.
+  const navigationFlag = { navigating: false };
 
   // Let the consuming app wire in its router's beforeNavigate hook.
   // The callback sets a flag so Popover uses replaceState instead of
   // history.back() when cleaning up the sentinel entry during navigation.
   if (onBeforeNavigate) {
     onBeforeNavigate(() => {
-      navigatingAway = true;
+      navigationFlag.navigating = true;
     });
   }
 
@@ -50,4 +52,4 @@
 </script>
 
 {@render children()}
-<Popover {navigatingAway} />
+<Popover {navigationFlag} />

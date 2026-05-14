@@ -18,7 +18,7 @@
   let dwellTimer: ReturnType<typeof setTimeout> | null = null;
   let cleanupAutoUpdate: (() => void) | null = null;
 
-  let { navigatingAway = false }: { navigatingAway?: boolean } = $props();
+  let { navigationFlag = { navigating: false } }: { navigationFlag?: { navigating: boolean } } = $props();
 
   let historyEntryPushed = false;
   let dismissedByUI = false;
@@ -50,7 +50,7 @@
     if (key) {
       // Overlay just appeared — push sentinel if we haven't already
       if (!historyEntryPushed) {
-        history.pushState({ __coachMark: true }, "");
+        history.pushState({ ...history.state, __coachMark: true }, "");
         historyEntryPushed = true;
       }
 
@@ -64,7 +64,7 @@
 
         // The user pressed back. Dismiss with quiet so no follow-on sequence appears.
         historyEntryPushed = false;
-        if (activeKey) ctx.dismiss(activeKey, { quiet: true });
+        if (key) ctx.dismiss(key, { quiet: true });
       }
 
       window.addEventListener("popstate", onPopState);
@@ -76,10 +76,11 @@
         // sentinel entry, remove it.
         if (historyEntryPushed) {
           historyEntryPushed = false;
-          if (navigatingAway) {
+          if (navigationFlag.navigating) {
             // SvelteKit is navigating — don't call history.back() which
             // would fight the router. Replace the current state to strip
             // our marker (the router's pushState has already happened).
+            navigationFlag.navigating = false;
             const cleaned = { ...history.state };
             delete cleaned.__coachMark;
             history.replaceState(cleaned, "");
