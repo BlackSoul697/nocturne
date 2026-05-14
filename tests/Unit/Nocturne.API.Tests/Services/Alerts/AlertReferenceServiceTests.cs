@@ -49,7 +49,9 @@ public class AlertReferenceServiceTests
             NullLogger<AlertReferenceService>.Instance);
     }
 
-    private async Task<Guid> SeedRuleAsync(AlertConditionType type, object conditionPayload)
+    private async Task<Guid> SeedRuleAsync(
+        AlertConditionType type, object conditionPayload,
+        string name = "Test", bool isEnabled = true)
     {
         await using var db = new NocturneDbContext(_options) { TenantId = _tenantId };
         var id = Guid.NewGuid();
@@ -57,11 +59,11 @@ public class AlertReferenceServiceTests
         {
             Id = id,
             TenantId = _tenantId,
-            Name = "Test",
+            Name = name,
             ConditionType = type,
             ConditionParams = JsonSerializer.Serialize(conditionPayload, JsonOptions),
             ClientConfiguration = "{}",
-            IsEnabled = true,
+            IsEnabled = isEnabled,
             CreatedAt = DateTime.UtcNow,
             UpdatedAt = DateTime.UtcNow,
         });
@@ -109,6 +111,84 @@ public class AlertReferenceServiceTests
         await SeedRuleAsync(AlertConditionType.Threshold, new ThresholdCondition("above", 200m));
 
         var refs = await _sut.FindReferencingRulesAsync(target, CancellationToken.None);
+
+        refs.Should().BeEmpty();
+    }
+
+    // ---- FindRulesReferencingTrackerAsync ----
+
+    [Fact]
+    public async Task FindTrackerRefs_TrackerAgeWithMatchingDefinition_ReturnsRule()
+    {
+        var definitionId = Guid.NewGuid();
+        var ruleId = await SeedRuleAsync(AlertConditionType.TrackerAge,
+            new TrackerAgeCondition(definitionId, ">=", 72m), name: "Pump site age");
+
+        var refs = await _sut.FindRulesReferencingTrackerAsync(definitionId, CancellationToken.None);
+
+        refs.Should().HaveCount(1);
+        refs[0].Id.Should().Be(ruleId);
+        refs[0].Name.Should().Be("Pump site age");
+    }
+
+    [Fact]
+    public async Task FindTrackerRefs_DifferentDefinitionId_ReturnsEmpty()
+    {
+        var definitionId = Guid.NewGuid();
+        var otherDefinitionId = Guid.NewGuid();
+        await SeedRuleAsync(AlertConditionType.TrackerAge,
+            new TrackerAgeCondition(otherDefinitionId, ">=", 72m));
+
+        var refs = await _sut.FindRulesReferencingTrackerAsync(definitionId, CancellationToken.None);
+
+        refs.Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task FindTrackerRefs_NoTrackerConditions_ReturnsEmpty()
+    {
+        var definitionId = Guid.NewGuid();
+        await SeedRuleAsync(AlertConditionType.Threshold,
+            new ThresholdCondition("below", 70m));
+
+        var refs = await _sut.FindRulesReferencingTrackerAsync(definitionId, CancellationToken.None);
+
+        refs.Should().BeEmpty();
+    }
+
+    [Theory]
+    [InlineData(nameof(AlertConditionType.TrackerRemaining))]
+    [InlineData(nameof(AlertConditionType.TrackerActive))]
+    [InlineData(nameof(AlertConditionType.TrackerTimeUntilScheduled))]
+    public async Task FindTrackerRefs_AllTrackerConditionTypes_Detected(string conditionTypeName)
+    {
+        var definitionId = Guid.NewGuid();
+        var conditionType = Enum.Parse<AlertConditionType>(conditionTypeName);
+
+        object payload = conditionType switch
+        {
+            AlertConditionType.TrackerRemaining => new TrackerRemainingCondition(definitionId, "<=", 4m),
+            AlertConditionType.TrackerActive => new TrackerActiveCondition(definitionId, true),
+            AlertConditionType.TrackerTimeUntilScheduled => new TrackerTimeUntilScheduledCondition(definitionId, "<=", 2m),
+            _ => throw new ArgumentException(),
+        };
+
+        var ruleId = await SeedRuleAsync(conditionType, payload);
+
+        var refs = await _sut.FindRulesReferencingTrackerAsync(definitionId, CancellationToken.None);
+
+        refs.Should().HaveCount(1);
+        refs[0].Id.Should().Be(ruleId);
+    }
+
+    [Fact]
+    public async Task FindTrackerRefs_DisabledRule_NotReturned()
+    {
+        var definitionId = Guid.NewGuid();
+        await SeedRuleAsync(AlertConditionType.TrackerAge,
+            new TrackerAgeCondition(definitionId, ">=", 72m), isEnabled: false);
+
+        var refs = await _sut.FindRulesReferencingTrackerAsync(definitionId, CancellationToken.None);
 
         refs.Should().BeEmpty();
     }

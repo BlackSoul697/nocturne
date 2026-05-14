@@ -37,6 +37,15 @@ public interface IAlertReferenceService
     /// generated server-side, so create is cycle-safe by construction).</param>
     /// <param name="proposedRoot">The root <see cref="ConditionNode"/> being saved.</param>
     Task<bool> DetectCycleAsync(Guid? ruleId, ConditionNode proposedRoot, CancellationToken ct);
+
+    /// <summary>
+    /// Returns the IDs and names of every enabled rule whose condition tree references
+    /// <paramref name="definitionId"/> via a tracker condition node (tracker_age,
+    /// tracker_remaining, tracker_active, tracker_time_until_scheduled). Used by the
+    /// tracker definition DELETE endpoint to refuse deletion with a 409.
+    /// </summary>
+    Task<IReadOnlyList<(Guid Id, string Name)>> FindRulesReferencingTrackerAsync(
+        Guid definitionId, CancellationToken ct);
 }
 
 internal sealed class AlertReferenceService(
@@ -98,6 +107,23 @@ internal sealed class AlertReferenceService(
         }
 
         return false;
+    }
+
+    public async Task<IReadOnlyList<(Guid Id, string Name)>> FindRulesReferencingTrackerAsync(
+        Guid definitionId, CancellationToken ct)
+    {
+        var rules = await LoadTenantRulesWithNamesAsync(ct);
+        var referencing = new List<(Guid, string)>();
+
+        foreach (var (id, name, conditionType, conditionParams) in rules)
+        {
+            if (TrackerConditionReferences(conditionType, conditionParams, definitionId))
+            {
+                referencing.Add((id, name));
+            }
+        }
+
+        return referencing;
     }
 
     private async Task<IReadOnlyList<(Guid Id, ConditionNode? Root)>> LoadTenantRulesAsync(CancellationToken ct)
@@ -182,6 +208,148 @@ internal sealed class AlertReferenceService(
         if (node.Sustained is { Child: { } sustainedChild })
         {
             foreach (var id in ExtractAlertStateRefs(sustainedChild)) yield return id;
+        }
+    }
+
+    // ---- Tracker definition reference scanning ----
+
+    private static readonly HashSet<AlertConditionType> TrackerConditionTypes =
+    [
+        AlertConditionType.TrackerAge,
+        AlertConditionType.TrackerRemaining,
+        AlertConditionType.TrackerActive,
+        AlertConditionType.TrackerTimeUntilScheduled,
+    ];
+
+    private static readonly HashSet<string> TrackerConditionTypeStrings =
+    [
+        "tracker_age", "tracker_remaining", "tracker_active", "tracker_time_until_scheduled",
+    ];
+
+    private async Task<IReadOnlyList<(Guid Id, string Name, AlertConditionType ConditionType, string ConditionParams)>>
+        LoadTenantRulesWithNamesAsync(CancellationToken ct)
+    {
+        if (!tenantAccessor.IsResolved)
+        {
+            throw new InvalidOperationException(
+                "AlertReferenceService requires a resolved tenant context.");
+        }
+
+        await using var db = await contextFactory.CreateDbContextAsync(ct);
+        db.TenantId = tenantAccessor.TenantId;
+
+        var rows = await db.AlertRules
+            .AsNoTracking()
+            .Where(r => r.IsEnabled)
+            .Select(r => new { r.Id, r.Name, r.ConditionType, r.ConditionParams })
+            .ToListAsync(ct);
+
+        return rows.Select(r => (r.Id, r.Name, r.ConditionType, r.ConditionParams)).ToList();
+    }
+
+    /// <summary>
+    /// Checks whether a rule's condition params contain a tracker condition referencing the
+    /// given <paramref name="targetDefinitionId"/>. For leaf tracker conditions, deserializes
+    /// the typed record. For structural nodes (composite, not, sustained), walks the raw JSON
+    /// because <see cref="ConditionNode"/> does not carry tracker-specific payload fields.
+    /// </summary>
+    private bool TrackerConditionReferences(
+        AlertConditionType conditionType, string conditionParams, Guid targetDefinitionId)
+    {
+        if (TrackerConditionTypes.Contains(conditionType))
+        {
+            return TryExtractTrackerDefinitionId(conditionType, conditionParams) == targetDefinitionId;
+        }
+
+        // Structural nodes can nest tracker conditions. ConditionNode doesn't have tracker
+        // payload fields, so deserialized composite trees lose definition_id. Walk raw JSON.
+        if (conditionType is AlertConditionType.Composite
+            or AlertConditionType.Not
+            or AlertConditionType.Sustained)
+        {
+            return JsonTreeReferencesTracker(conditionParams, targetDefinitionId);
+        }
+
+        return false;
+    }
+
+    /// <summary>
+    /// Walks a raw JSON condition tree looking for any node whose <c>type</c> is a tracker
+    /// condition and whose <c>definition_id</c> matches <paramref name="targetDefinitionId"/>.
+    /// </summary>
+    private bool JsonTreeReferencesTracker(string json, Guid targetDefinitionId)
+    {
+        try
+        {
+            using var doc = JsonDocument.Parse(json);
+            return JsonElementReferencesTracker(doc.RootElement, targetDefinitionId);
+        }
+        catch (JsonException ex)
+        {
+            logger.LogWarning(ex, "Failed to parse condition JSON for tracker reference walk");
+            return false;
+        }
+    }
+
+    private static bool JsonElementReferencesTracker(JsonElement element, Guid targetDefinitionId)
+    {
+        if (element.ValueKind != JsonValueKind.Object) return false;
+
+        if (element.TryGetProperty("type", out var typeProp) &&
+            typeProp.ValueKind == JsonValueKind.String &&
+            TrackerConditionTypeStrings.Contains(typeProp.GetString()!))
+        {
+            if (element.TryGetProperty("definition_id", out var defIdProp) &&
+                defIdProp.ValueKind == JsonValueKind.String &&
+                Guid.TryParse(defIdProp.GetString(), out var defId) &&
+                defId == targetDefinitionId)
+            {
+                return true;
+            }
+        }
+
+        // Walk composite children.
+        if (element.TryGetProperty("conditions", out var conditions) &&
+            conditions.ValueKind == JsonValueKind.Array)
+        {
+            foreach (var child in conditions.EnumerateArray())
+            {
+                if (JsonElementReferencesTracker(child, targetDefinitionId))
+                    return true;
+            }
+        }
+
+        // Walk not/sustained child.
+        if (element.TryGetProperty("child", out var child2) &&
+            JsonElementReferencesTracker(child2, targetDefinitionId))
+        {
+            return true;
+        }
+
+        return false;
+    }
+
+    private Guid? TryExtractTrackerDefinitionId(AlertConditionType type, string conditionParams)
+    {
+        try
+        {
+            return type switch
+            {
+                AlertConditionType.TrackerAge =>
+                    JsonSerializer.Deserialize<TrackerAgeCondition>(conditionParams, EvaluatorJson.Options)?.DefinitionId,
+                AlertConditionType.TrackerRemaining =>
+                    JsonSerializer.Deserialize<TrackerRemainingCondition>(conditionParams, EvaluatorJson.Options)?.DefinitionId,
+                AlertConditionType.TrackerActive =>
+                    JsonSerializer.Deserialize<TrackerActiveCondition>(conditionParams, EvaluatorJson.Options)?.DefinitionId,
+                AlertConditionType.TrackerTimeUntilScheduled =>
+                    JsonSerializer.Deserialize<TrackerTimeUntilScheduledCondition>(conditionParams, EvaluatorJson.Options)?.DefinitionId,
+                _ => null,
+            };
+        }
+        catch (JsonException ex)
+        {
+            logger.LogWarning(ex, "Failed to deserialize tracker condition params for reference walk");
+            return null;
         }
     }
 }

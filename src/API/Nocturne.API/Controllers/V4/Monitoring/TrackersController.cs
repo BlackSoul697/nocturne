@@ -4,6 +4,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using OpenApi.Remote.Attributes;
 using Nocturne.API.Extensions;
+using Nocturne.API.Services.Alerts;
 using Nocturne.Core.Models;
 using Nocturne.Infrastructure.Data.Entities;
 using Nocturne.Infrastructure.Data.Abstractions;
@@ -23,6 +24,7 @@ public class TrackersController : ControllerBase
 {
     private readonly ITrackerRepository _repository;
     private readonly ISignalRBroadcastService _broadcast;
+    private readonly IAlertReferenceService _referenceService;
     private readonly ILogger<TrackersController> _logger;
 
     /// <summary>
@@ -30,15 +32,18 @@ public class TrackersController : ControllerBase
     /// </summary>
     /// <param name="repository">Repository for tracker definition and log persistence.</param>
     /// <param name="broadcast">Service for broadcasting real-time tracker updates via SignalR.</param>
+    /// <param name="referenceService">Cross-rule reference scanner for deletion guards.</param>
     /// <param name="logger">Logger instance.</param>
     public TrackersController(
         ITrackerRepository repository,
         ISignalRBroadcastService broadcast,
+        IAlertReferenceService referenceService,
         ILogger<TrackersController> logger
     )
     {
         _repository = repository;
         _broadcast = broadcast;
+        _referenceService = referenceService;
         _logger = logger;
     }
 
@@ -267,17 +272,29 @@ public class TrackersController : ControllerBase
     }
 
     /// <summary>
-    /// Delete a tracker definition
+    /// Delete a tracker definition. Returns 409 if alarm rules reference it.
     /// </summary>
     [HttpDelete("definitions/{id:guid}")]
     [Authorize]
     [RemoteCommand(Invalidates = ["GetDefinitions"])]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(typeof(ReferencingRulesResponse), StatusCodes.Status409Conflict)]
     public async Task<ActionResult> DeleteDefinition(Guid id)
     {
         var existing = await _repository.GetDefinitionByIdAsync(id, HttpContext.RequestAborted);
         if (existing == null)
             return NotFound();
+
+        // Refuse to delete a tracker definition that alarm rules reference via tracker
+        // conditions. The caller must update or delete those rules first.
+        var referencing = await _referenceService.FindRulesReferencingTrackerAsync(
+            id, HttpContext.RequestAborted);
+        if (referencing.Count > 0)
+        {
+            return Conflict(new ReferencingRulesResponse(
+                referencing.Select(r => r.Id).ToList()));
+        }
 
         await _repository.DeleteDefinitionAsync(id, HttpContext.RequestAborted);
 
