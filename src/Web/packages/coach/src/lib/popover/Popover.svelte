@@ -18,6 +18,11 @@
   let dwellTimer: ReturnType<typeof setTimeout> | null = null;
   let cleanupAutoUpdate: (() => void) | null = null;
 
+  let { navigatingAway = false }: { navigatingAway?: boolean } = $props();
+
+  let historyEntryPushed = false;
+  let dismissedByUI = false;
+
   const SPOTLIGHT_PADDING = 8;
 
   let spotlightClipPath = $state("");
@@ -34,6 +39,57 @@
       startDwellTimer();
     } else {
       cancelDwellTimer();
+    }
+  });
+
+  // History management for back-button dismissal.
+  // Push a sentinel entry when the overlay appears; pop it when it disappears.
+  $effect(() => {
+    const key = activeKey;
+
+    if (key) {
+      // Overlay just appeared — push sentinel if we haven't already
+      if (!historyEntryPushed) {
+        history.pushState({ __coachMark: true }, "");
+        historyEntryPushed = true;
+      }
+
+      function onPopState() {
+        // Guard: if the UI already dismissed (Escape/backdrop/button),
+        // this popstate is just the history.back() cleanup — ignore it.
+        if (dismissedByUI) {
+          dismissedByUI = false;
+          return;
+        }
+
+        // The user pressed back. Dismiss with quiet so no follow-on sequence appears.
+        historyEntryPushed = false;
+        if (activeKey) ctx.dismiss(activeKey, { quiet: true });
+      }
+
+      window.addEventListener("popstate", onPopState);
+
+      return () => {
+        window.removeEventListener("popstate", onPopState);
+
+        // Cleanup: if the overlay is disappearing and we still have a
+        // sentinel entry, remove it.
+        if (historyEntryPushed) {
+          historyEntryPushed = false;
+          if (navigatingAway) {
+            // SvelteKit is navigating — don't call history.back() which
+            // would fight the router. Replace the current state to strip
+            // our marker (the router's pushState has already happened).
+            const cleaned = { ...history.state };
+            delete cleaned.__coachMark;
+            history.replaceState(cleaned, "");
+          } else {
+            // Natural dismiss (Escape, backdrop, "Got it") — pop our entry.
+            dismissedByUI = true;
+            history.back();
+          }
+        }
+      };
     }
   });
 
