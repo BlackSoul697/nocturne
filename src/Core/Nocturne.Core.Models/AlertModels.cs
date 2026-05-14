@@ -198,6 +198,12 @@ public record SensorContext
     /// </summary>
     public IReadOnlyDictionary<(StateSpanCategory Category, string? State), StateSpanSnapshot> ActiveStateSpans { get; init; }
         = new Dictionary<(StateSpanCategory, string?), StateSpanSnapshot>();
+
+    /// <summary>
+    /// Tracker definition snapshots for alarm evaluation. Includes all definitions
+    /// for the tenant (active and inactive) so TrackerActive(false) evaluates correctly.
+    /// </summary>
+    public IReadOnlyList<TrackerSnapshot>? TrackerSnapshots { get; init; }
 }
 
 /// <summary>
