@@ -158,11 +158,11 @@ public class DataFetchStageTests
             .ReturnsAsync(Array.Empty<SystemEvent>());
 
         _mockTrackerRepo
-            .Setup(r => r.GetAllDefinitionsAsync(It.IsAny<CancellationToken>()))
+            .Setup(r => r.GetDefinitionsAsync(It.IsAny<CancellationToken>()))
             .ReturnsAsync(new List<TrackerDefinitionEntity>());
 
         _mockTrackerRepo
-            .Setup(r => r.GetActiveInstancesAsync(It.IsAny<string?>(), It.IsAny<CancellationToken>()))
+            .Setup(r => r.GetActiveInstancesAsync(It.IsAny<CancellationToken>()))
             .ReturnsAsync(Array.Empty<TrackerInstanceEntity>());
 
         _mockHeartRateService

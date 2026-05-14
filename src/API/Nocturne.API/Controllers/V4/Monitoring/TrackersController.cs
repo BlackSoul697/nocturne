@@ -45,28 +45,6 @@ public class TrackersController : ControllerBase
     #region Helpers
 
     /// <summary>
-    /// Check if current user can view a tracker based on visibility settings
-    /// </summary>
-    private bool CanViewTracker(TrackerDefinitionEntity tracker)
-    {
-        // Admins can see everything
-        if (HttpContext.IsAdmin())
-            return true;
-
-        // Public trackers visible to everyone
-        if (tracker.Visibility == TrackerVisibility.Public)
-            return true;
-
-        // Private trackers only visible to owner
-        var currentUserId = HttpContext.GetSubjectIdString();
-        if (tracker.Visibility == TrackerVisibility.Private && tracker.UserId == currentUserId)
-            return true;
-
-        // TODO: RoleRestricted visibility check
-        return false;
-    }
-
-    /// <summary>
     /// Validate notification thresholds for a definition
     /// </summary>
     private static string? ValidateThresholds(
@@ -100,8 +78,7 @@ public class TrackersController : ControllerBase
     #region Definitions
 
     /// <summary>
-    /// Get all tracker definitions. Returns public trackers for unauthenticated users,
-    /// or all visible trackers for authenticated users.
+    /// Get all tracker definitions. Tenant-scoped via RLS.
     /// </summary>
     [HttpGet("definitions")]
     [AllowAnonymous]
@@ -111,32 +88,21 @@ public class TrackersController : ControllerBase
         [FromQuery] TrackerCategory? category = null
     )
     {
-        var userId = HttpContext.GetSubjectIdString();
-        var isAuthenticated = HttpContext.IsAuthenticated();
-
         List<TrackerDefinitionEntity> definitions;
 
-        if (isAuthenticated && userId != null)
+        if (category.HasValue)
         {
-            // Authenticated: get user's trackers
-            definitions = category.HasValue
-                ? await _repository.GetDefinitionsByCategoryAsync(
-                    userId,
-                    category.Value,
-                    HttpContext.RequestAborted
-                )
-                : await _repository.GetDefinitionsForUserAsync(userId, HttpContext.RequestAborted);
+            definitions = await _repository.GetDefinitionsByCategoryAsync(
+                category.Value,
+                HttpContext.RequestAborted
+            );
         }
         else
         {
-            // Unauthenticated: get all definitions and filter to public only
-            definitions = await _repository.GetAllDefinitionsAsync(HttpContext.RequestAborted);
+            definitions = await _repository.GetDefinitionsAsync(HttpContext.RequestAborted);
         }
 
-        // Filter by visibility
-        var visible = definitions.Where(CanViewTracker).ToArray();
-
-        return Ok(visible.Select(TrackerDefinitionDto.FromEntity).ToArray());
+        return Ok(definitions.Select(TrackerDefinitionDto.FromEntity).ToArray());
     }
 
     /// <summary>
@@ -153,9 +119,6 @@ public class TrackersController : ControllerBase
         if (definition == null)
             return NotFound();
 
-        if (!CanViewTracker(definition))
-            return Forbid();
-
         return Ok(TrackerDefinitionDto.FromEntity(definition));
     }
 
@@ -170,8 +133,6 @@ public class TrackersController : ControllerBase
         [FromBody] CreateTrackerDefinitionRequest request
     )
     {
-        var userId = HttpContext.GetSubjectIdString()!;
-
         // Validate thresholds
         var validationError = ValidateThresholds(
             request.NotificationThresholds,
@@ -186,7 +147,6 @@ public class TrackersController : ControllerBase
 
         var entity = new TrackerDefinitionEntity
         {
-            UserId = userId,
             Name = request.Name,
             Description = request.Description,
             Category = request.Category,
@@ -214,14 +174,6 @@ public class TrackersController : ControllerBase
                         Hours = threshold.Hours,
                         Description = threshold.Description,
                         DisplayOrder = threshold.DisplayOrder,
-                        // Alert configuration
-                        PushEnabled = threshold.PushEnabled,
-                        AudioEnabled = threshold.AudioEnabled,
-                        AudioSound = threshold.AudioSound,
-                        VibrateEnabled = threshold.VibrateEnabled,
-                        RepeatIntervalMins = threshold.RepeatIntervalMins,
-                        MaxRepeats = threshold.MaxRepeats,
-                        RespectQuietHours = threshold.RespectQuietHours,
                     }
                 );
             }
@@ -229,11 +181,7 @@ public class TrackersController : ControllerBase
 
         var created = await _repository.CreateDefinitionAsync(entity, HttpContext.RequestAborted);
 
-        _logger.LogInformation(
-            "Created tracker definition {Id} for user {UserId}",
-            created.Id,
-            userId
-        );
+        _logger.LogInformation("Created tracker definition {Id}", created.Id);
 
         return CreatedAtAction(
             nameof(GetDefinition),
@@ -257,10 +205,6 @@ public class TrackersController : ControllerBase
         var existing = await _repository.GetDefinitionByIdAsync(id, HttpContext.RequestAborted);
         if (existing == null)
             return NotFound();
-
-        var userId = HttpContext.GetSubjectIdString()!;
-        if (existing.UserId != userId && !HttpContext.IsAdmin())
-            return Forbid();
 
         // Validate thresholds if being updated
         var mode = request.Mode ?? existing.Mode;
@@ -307,14 +251,6 @@ public class TrackersController : ControllerBase
                         Hours = t.Hours,
                         Description = t.Description,
                         DisplayOrder = t.DisplayOrder,
-                        // Alert configuration
-                        PushEnabled = t.PushEnabled,
-                        AudioEnabled = t.AudioEnabled,
-                        AudioSound = t.AudioSound,
-                        VibrateEnabled = t.VibrateEnabled,
-                        RepeatIntervalMins = t.RepeatIntervalMins,
-                        MaxRepeats = t.MaxRepeats,
-                        RespectQuietHours = t.RespectQuietHours,
                     })
                     .ToList(),
                 HttpContext.RequestAborted
@@ -343,10 +279,6 @@ public class TrackersController : ControllerBase
         if (existing == null)
             return NotFound();
 
-        var userId = HttpContext.GetSubjectIdString()!;
-        if (existing.UserId != userId && !HttpContext.IsAdmin())
-            return Forbid();
-
         await _repository.DeleteDefinitionAsync(id, HttpContext.RequestAborted);
 
         _logger.LogInformation("Deleted tracker definition {Id}", id);
@@ -367,9 +299,7 @@ public class TrackersController : ControllerBase
     [ProducesResponseType(typeof(TrackerInstanceDto[]), StatusCodes.Status200OK)]
     public async Task<ActionResult<TrackerInstanceDto[]>> GetActiveInstances()
     {
-        var userId = HttpContext.GetSubjectIdString();
         var instances = await _repository.GetActiveInstancesAsync(
-            userId,
             HttpContext.RequestAborted
         );
 
@@ -387,9 +317,7 @@ public class TrackersController : ControllerBase
         [FromQuery] int limit = 100
     )
     {
-        var userId = HttpContext.GetSubjectIdString()!;
         var instances = await _repository.GetCompletedInstancesAsync(
-            userId,
             limit,
             HttpContext.RequestAborted
         );
@@ -409,12 +337,10 @@ public class TrackersController : ControllerBase
         [FromQuery] DateTime? to = null
     )
     {
-        var userId = HttpContext.GetSubjectIdString();
         var fromDate = from ?? DateTime.UtcNow;
         var toDate = to ?? DateTime.UtcNow.AddDays(30);
 
         var instances = await _repository.GetUpcomingInstancesAsync(
-            userId,
             fromDate,
             toDate,
             HttpContext.RequestAborted
@@ -434,18 +360,13 @@ public class TrackersController : ControllerBase
         [FromBody] StartTrackerInstanceRequest request
     )
     {
-        var userId = HttpContext.GetSubjectIdString()!;
-
-        // Verify definition exists and belongs to user
+        // Verify definition exists
         var definition = await _repository.GetDefinitionByIdAsync(
             request.DefinitionId,
             HttpContext.RequestAborted
         );
         if (definition == null)
             return NotFound("Definition not found");
-
-        if (definition.UserId != userId && !HttpContext.IsAdmin())
-            return Forbid();
 
         // Validate mode-specific requirements
         if (definition.Mode == TrackerMode.Event && !request.ScheduledAt.HasValue)
@@ -455,7 +376,6 @@ public class TrackersController : ControllerBase
 
         var instance = await _repository.StartInstanceAsync(
             request.DefinitionId,
-            userId,
             request.StartNotes,
             request.StartTreatmentId,
             request.StartedAt,
@@ -494,10 +414,6 @@ public class TrackersController : ControllerBase
         if (existing == null)
             return NotFound();
 
-        var userId = HttpContext.GetSubjectIdString()!;
-        if (existing.UserId != userId && !HttpContext.IsAdmin())
-            return Forbid();
-
         if (existing.CompletedAt != null)
             return Problem(detail: "Instance already completed", statusCode: 400, title: "Bad Request");
 
@@ -526,41 +442,6 @@ public class TrackersController : ControllerBase
     }
 
     /// <summary>
-    /// Acknowledge/snooze a tracker notification
-    /// </summary>
-    [HttpPost("instances/{id:guid}/ack")]
-    [Authorize]
-    [RemoteCommand(Invalidates = ["GetActiveInstances"])]
-    [ProducesResponseType(StatusCodes.Status204NoContent)]
-    public async Task<ActionResult> AckInstance(Guid id, [FromBody] AckTrackerRequest request)
-    {
-        var existing = await _repository.GetInstanceByIdAsync(id, HttpContext.RequestAborted);
-        if (existing == null)
-            return NotFound();
-
-        var userId = HttpContext.GetSubjectIdString()!;
-        if (existing.UserId != userId && !HttpContext.IsAdmin())
-            return Forbid();
-
-        await _repository.AckInstanceAsync(id, request.SnoozeMins, HttpContext.RequestAborted);
-
-        // Broadcast ack if global
-        if (request.Global)
-        {
-            var updated = await _repository.GetInstanceByIdAsync(id, HttpContext.RequestAborted);
-            if (updated != null)
-            {
-                await _broadcast.BroadcastTrackerUpdateAsync(
-                    "ack",
-                    TrackerInstanceDto.FromEntity(updated)
-                );
-            }
-        }
-
-        return NoContent();
-    }
-
-    /// <summary>
     /// Delete a tracker instance
     /// </summary>
     [HttpDelete("instances/{id:guid}")]
@@ -572,10 +453,6 @@ public class TrackersController : ControllerBase
         var existing = await _repository.GetInstanceByIdAsync(id, HttpContext.RequestAborted);
         if (existing == null)
             return NotFound();
-
-        var userId = HttpContext.GetSubjectIdString()!;
-        if (existing.UserId != userId && !HttpContext.IsAdmin())
-            return Forbid();
 
         // Broadcast before deleting to get the definition name
         var dto = TrackerInstanceDto.FromEntity(existing);
@@ -592,7 +469,7 @@ public class TrackersController : ControllerBase
     #region Presets
 
     /// <summary>
-    /// Get all presets for the current user
+    /// Get all presets for the current tenant
     /// </summary>
     [HttpGet("presets")]
     [Authorize]
@@ -600,8 +477,7 @@ public class TrackersController : ControllerBase
     [ProducesResponseType(typeof(TrackerPresetDto[]), StatusCodes.Status200OK)]
     public async Task<ActionResult<TrackerPresetDto[]>> GetPresets()
     {
-        var userId = HttpContext.GetSubjectIdString()!;
-        var presets = await _repository.GetPresetsForUserAsync(userId, HttpContext.RequestAborted);
+        var presets = await _repository.GetPresetsAsync(HttpContext.RequestAborted);
 
         return Ok(presets.Select(TrackerPresetDto.FromEntity).ToArray());
     }
@@ -619,16 +495,13 @@ public class TrackersController : ControllerBase
     {
         var userId = HttpContext.GetSubjectIdString()!;
 
-        // Verify definition exists and belongs to user
+        // Verify definition exists
         var definition = await _repository.GetDefinitionByIdAsync(
             request.DefinitionId,
             HttpContext.RequestAborted
         );
         if (definition == null)
             return NotFound("Definition not found");
-
-        if (definition.UserId != userId && !HttpContext.IsAdmin())
-            return Forbid();
 
         var entity = new TrackerPresetEntity
         {
@@ -640,7 +513,7 @@ public class TrackersController : ControllerBase
 
         var created = await _repository.CreatePresetAsync(entity, HttpContext.RequestAborted);
 
-        _logger.LogInformation("Created tracker preset {Id} for user {UserId}", created.Id, userId);
+        _logger.LogInformation("Created tracker preset {Id}", created.Id);
 
         return Created(
             $"/api/v4/trackers/presets/{created.Id}",
@@ -660,11 +533,8 @@ public class TrackersController : ControllerBase
         [FromBody] ApplyPresetRequest? request = null
     )
     {
-        var userId = HttpContext.GetSubjectIdString()!;
-
         var instance = await _repository.ApplyPresetAsync(
             id,
-            userId,
             request?.OverrideNotes,
             HttpContext.RequestAborted
         );
@@ -694,10 +564,6 @@ public class TrackersController : ControllerBase
         if (existing == null)
             return NotFound();
 
-        var userId = HttpContext.GetSubjectIdString()!;
-        if (existing.UserId != userId && !HttpContext.IsAdmin())
-            return Forbid();
-
         await _repository.DeletePresetAsync(id, HttpContext.RequestAborted);
 
         return NoContent();
@@ -716,15 +582,6 @@ public class NotificationThresholdDto
     public string? Description { get; set; }
     public int DisplayOrder { get; set; }
 
-    // Alert configuration
-    public bool PushEnabled { get; set; }
-    public bool AudioEnabled { get; set; }
-    public string? AudioSound { get; set; }
-    public bool VibrateEnabled { get; set; }
-    public int RepeatIntervalMins { get; set; }
-    public int MaxRepeats { get; set; }
-    public bool RespectQuietHours { get; set; }
-
     public static NotificationThresholdDto FromEntity(TrackerNotificationThresholdEntity entity) =>
         new()
         {
@@ -733,14 +590,6 @@ public class NotificationThresholdDto
             Hours = entity.Hours,
             Description = entity.Description,
             DisplayOrder = entity.DisplayOrder,
-            // Alert configuration
-            PushEnabled = entity.PushEnabled,
-            AudioEnabled = entity.AudioEnabled,
-            AudioSound = entity.AudioSound,
-            VibrateEnabled = entity.VibrateEnabled,
-            RepeatIntervalMins = entity.RepeatIntervalMins,
-            MaxRepeats = entity.MaxRepeats,
-            RespectQuietHours = entity.RespectQuietHours,
         };
 }
 
@@ -833,8 +682,6 @@ public class TrackerInstanceDto
     public CompletionReason? CompletionReason { get; set; }
     public double AgeHours { get; set; }
     public bool IsActive { get; set; }
-    public DateTime? LastAckedAt { get; set; }
-    public int? AckSnoozeMins { get; set; }
 
     public static TrackerInstanceDto FromEntity(TrackerInstanceEntity entity) =>
         new()
@@ -853,8 +700,6 @@ public class TrackerInstanceDto
             CompletionReason = entity.CompletionReason,
             AgeHours = entity.AgeHours,
             IsActive = entity.IsActive,
-            LastAckedAt = entity.LastAckedAt,
-            AckSnoozeMins = entity.AckSnoozeMins,
         };
 }
 
@@ -970,15 +815,6 @@ public class CreateNotificationThresholdRequest
     public int Hours { get; set; }
     public string? Description { get; set; }
     public int DisplayOrder { get; set; }
-
-    // Alert configuration (optional, defaults to disabled)
-    public bool PushEnabled { get; set; }
-    public bool AudioEnabled { get; set; }
-    public string? AudioSound { get; set; }
-    public bool VibrateEnabled { get; set; }
-    public int RepeatIntervalMins { get; set; }
-    public int MaxRepeats { get; set; } = 3;
-    public bool RespectQuietHours { get; set; } = true;
 }
 
 public class StartTrackerInstanceRequest
@@ -1010,12 +846,6 @@ public class CompleteTrackerInstanceRequest
     /// Optional custom completion time for backdating. Defaults to now if not provided.
     /// </summary>
     public DateTime? CompletedAt { get; set; }
-}
-
-public class AckTrackerRequest
-{
-    public int SnoozeMins { get; set; } = 30;
-    public bool Global { get; set; } = false;
 }
 
 public class CreateTrackerPresetRequest

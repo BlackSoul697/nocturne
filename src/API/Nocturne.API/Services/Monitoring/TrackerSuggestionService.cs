@@ -70,7 +70,6 @@ public class TrackerSuggestionService : ITrackerSuggestionService
 
         // Get all Cannula-category tracker definitions for this user
         var cannulaDefinitions = await _trackerRepository.GetDefinitionsByCategoryAsync(
-            userId,
             TrackerCategory.Cannula,
             cancellationToken
         );
@@ -140,7 +139,6 @@ public class TrackerSuggestionService : ITrackerSuggestionService
 
         // Get all Sensor-category tracker definitions for this user
         var sensorDefinitions = await _trackerRepository.GetDefinitionsByCategoryAsync(
-            userId,
             TrackerCategory.Sensor,
             cancellationToken
         );
@@ -305,7 +303,6 @@ public class TrackerSuggestionService : ITrackerSuggestionService
         // Start a new instance
         var newInstance = await _trackerRepository.StartInstanceAsync(
             definitionId,
-            userId,
             startNotes: "Started via tracker suggestion",
             cancellationToken: cancellationToken
         );

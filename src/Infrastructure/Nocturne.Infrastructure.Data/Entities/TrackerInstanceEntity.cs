@@ -24,13 +24,6 @@ public class TrackerInstanceEntity : ITenantScoped
     public Guid Id { get; set; }
 
     /// <summary>
-    /// User identifier this instance belongs to
-    /// </summary>
-    [Column("user_id")]
-    [MaxLength(255)]
-    public string UserId { get; set; } = string.Empty;
-
-    /// <summary>
     /// Foreign key to TrackerDefinition
     /// </summary>
     [Column("definition_id")]
@@ -87,18 +80,6 @@ public class TrackerInstanceEntity : ITenantScoped
     /// </summary>
     [Column("completion_reason")]
     public CompletionReason? CompletionReason { get; set; }
-
-    /// <summary>
-    /// When the notification was last acknowledged
-    /// </summary>
-    [Column("last_acked_at")]
-    public DateTime? LastAckedAt { get; set; }
-
-    /// <summary>
-    /// Snooze duration in minutes (from last ack)
-    /// </summary>
-    [Column("ack_snooze_mins")]
-    public int? AckSnoozeMins { get; set; }
 
     /// <summary>
     /// Navigation property to definition

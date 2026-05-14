@@ -1,6 +1,5 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
-using Nocturne.API.Extensions;
 using Nocturne.API.Services.Monitoring;
 using Nocturne.Core.Models;
 
@@ -19,22 +18,10 @@ public class TrackerAlertsController : ControllerBase
     private readonly ITrackerAlertService _alertService;
     private readonly ILogger<TrackerAlertsController> _logger;
 
-    // Available alert sounds (could be moved to config or database)
-    private static readonly string[] AvailableSounds =
-    [
-        "chime",
-        "alert",
-        "urgent",
-        "gentle",
-        "notification",
-        "beep",
-        "tone"
-    ];
-
     /// <summary>
     /// Initializes a new instance of <see cref="TrackerAlertsController"/>.
     /// </summary>
-    /// <param name="alertService">Service for querying and acknowledging tracker alerts.</param>
+    /// <param name="alertService">Service for querying tracker alerts.</param>
     /// <param name="logger">Logger instance.</param>
     public TrackerAlertsController(
         ITrackerAlertService alertService,
@@ -49,8 +36,7 @@ public class TrackerAlertsController : ControllerBase
     [ProducesResponseType(typeof(TrackerAlertDto[]), 200)]
     public async Task<ActionResult<TrackerAlertDto[]>> GetPendingAlerts()
     {
-        var userId = HttpContext.GetSubjectIdString()!;
-        var alerts = await _alertService.GetPendingAlertsAsync(userId, HttpContext.RequestAborted);
+        var alerts = await _alertService.GetPendingAlertsAsync(HttpContext.RequestAborted);
 
         return Ok(alerts.Select(a => new TrackerAlertDto
         {
@@ -60,22 +46,7 @@ public class TrackerAlertsController : ControllerBase
             TrackerName = a.TrackerName,
             Urgency = a.Urgency,
             Message = a.Message,
-            PushEnabled = a.Config.PushEnabled,
-            AudioEnabled = a.Config.AudioEnabled,
-            AudioSound = a.Config.AudioSound,
-            VibrateEnabled = a.Config.VibrateEnabled,
         }).ToArray());
-    }
-
-    /// <summary>
-    /// Get available alert sounds
-    /// </summary>
-    /// <returns>List of available sound preset names</returns>
-    [HttpGet("sounds")]
-    [ProducesResponseType(typeof(string[]), 200)]
-    public ActionResult<string[]> GetAvailableSounds()
-    {
-        return Ok(AvailableSounds);
     }
 }
 
@@ -90,8 +61,4 @@ public class TrackerAlertDto
     public string TrackerName { get; set; } = string.Empty;
     public NotificationUrgency Urgency { get; set; }
     public string Message { get; set; } = string.Empty;
-    public bool PushEnabled { get; set; }
-    public bool AudioEnabled { get; set; }
-    public string? AudioSound { get; set; }
-    public bool VibrateEnabled { get; set; }
 }

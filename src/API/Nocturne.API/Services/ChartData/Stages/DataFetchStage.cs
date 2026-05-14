@@ -202,9 +202,8 @@ internal sealed class DataFetchStage(
         );
 
         // Tracker data
-        var trackerDefs = await trackerRepository.GetAllDefinitionsAsync(cancellationToken);
+        var trackerDefs = await trackerRepository.GetDefinitionsAsync(cancellationToken);
         var trackerInstances = await trackerRepository.GetActiveInstancesAsync(
-            userId: null,
             cancellationToken: cancellationToken
         );
 

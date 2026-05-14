@@ -832,7 +832,7 @@ public class ChartDataServiceTests
             var definition = new TrackerDefinitionEntity
             {
                 Id = defId,
-                UserId = "user1",
+
                 Name = "CGM Sensor",
                 Category = TrackerCategory.Sensor,
                 Icon = "activity",
@@ -849,7 +849,7 @@ public class ChartDataServiceTests
             {
                 Id = Guid.NewGuid(),
                 DefinitionId = defId,
-                UserId = "user1",
+
                 StartedAt = startedAtDateTime, // expires at startTime + 24h
                 Definition = definition,
             };
@@ -874,7 +874,7 @@ public class ChartDataServiceTests
             var definition = new TrackerDefinitionEntity
             {
                 Id = defId,
-                UserId = "user1",
+
                 Name = "Doctor Appointment",
                 Category = TrackerCategory.Appointment,
                 Icon = "calendar",
@@ -892,7 +892,7 @@ public class ChartDataServiceTests
             {
                 Id = Guid.NewGuid(),
                 DefinitionId = defId,
-                UserId = "user1",
+
                 StartedAt = DateTime.UtcNow.AddDays(-7),
                 ScheduledAt = scheduledTime,
                 Definition = definition,
@@ -935,7 +935,7 @@ public class ChartDataServiceTests
             {
                 Id = Guid.NewGuid(),
                 DefinitionId = defId,
-                UserId = "user1",
+
                 StartedAt = DateTime.UtcNow,
                 ScheduledAt = scheduledTime,
                 Definition = new TrackerDefinitionEntity
@@ -981,7 +981,7 @@ public class ChartDataServiceTests
             {
                 Id = Guid.NewGuid(),
                 DefinitionId = defId,
-                UserId = "user1",
+
                 StartedAt = DateTime.UtcNow,
                 Definition = definition,
             };
@@ -1015,7 +1015,7 @@ public class ChartDataServiceTests
             {
                 Id = Guid.NewGuid(),
                 DefinitionId = defId,
-                UserId = "user1",
+
                 StartedAt = DateTime.UtcNow,
                 ScheduledAt = DateTimeOffset
                     .FromUnixTimeMilliseconds(TestMills + (18L * 60 * 60 * 1000))
@@ -1026,7 +1026,7 @@ public class ChartDataServiceTests
             {
                 Id = Guid.NewGuid(),
                 DefinitionId = defId,
-                UserId = "user1",
+
                 StartedAt = DateTime.UtcNow,
                 ScheduledAt = DateTimeOffset
                     .FromUnixTimeMilliseconds(TestMills + (6L * 60 * 60 * 1000))

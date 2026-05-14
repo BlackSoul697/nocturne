@@ -18,7 +18,6 @@ public interface ITrackerTriggerService
     /// </summary>
     Task ProcessTreatmentAsync(
         Treatment treatment,
-        string? userId,
         CancellationToken cancellationToken = default
     );
 
@@ -27,7 +26,6 @@ public interface ITrackerTriggerService
     /// </summary>
     Task ProcessTreatmentsAsync(
         IEnumerable<Treatment> treatments,
-        string? userId,
         CancellationToken cancellationToken = default
     );
 }
@@ -57,43 +55,36 @@ public class TrackerTriggerService : ITrackerTriggerService
 
     public async Task ProcessTreatmentAsync(
         Treatment treatment,
-        string? userId,
         CancellationToken cancellationToken = default
     )
     {
-        if (string.IsNullOrEmpty(treatment.EventType) || string.IsNullOrEmpty(userId))
+        if (string.IsNullOrEmpty(treatment.EventType))
             return;
 
-        await ProcessTreatmentInternalAsync(treatment, userId, cancellationToken);
+        await ProcessTreatmentInternalAsync(treatment, cancellationToken);
     }
 
     public async Task ProcessTreatmentsAsync(
         IEnumerable<Treatment> treatments,
-        string? userId,
         CancellationToken cancellationToken = default
     )
     {
-        if (string.IsNullOrEmpty(userId))
-            return;
-
         foreach (var treatment in treatments)
         {
             if (!string.IsNullOrEmpty(treatment.EventType))
             {
-                await ProcessTreatmentInternalAsync(treatment, userId, cancellationToken);
+                await ProcessTreatmentInternalAsync(treatment, cancellationToken);
             }
         }
     }
 
     private async Task ProcessTreatmentInternalAsync(
         Treatment treatment,
-        string userId,
         CancellationToken cancellationToken
     )
     {
-        // Get all definitions for this user that might be triggered
-        var definitions = await _trackerRepository.GetDefinitionsForUserAsync(
-            userId,
+        // Get all definitions for this tenant
+        var definitions = await _trackerRepository.GetDefinitionsAsync(
             cancellationToken
         );
 
@@ -150,7 +141,6 @@ public class TrackerTriggerService : ITrackerTriggerService
 
             var newInstance = await _trackerRepository.StartInstanceAsync(
                 definition.Id,
-                userId,
                 startNotes: null,
                 startTreatmentId: treatment.Id,
                 startedAt: startedAt,

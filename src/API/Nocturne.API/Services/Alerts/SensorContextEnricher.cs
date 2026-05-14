@@ -152,6 +152,15 @@ internal sealed class SensorContextEnricher : ISensorContextEnricher
             enriched = enriched with { TrendBucket = DeriveTrendBucket(baseContext.TrendRate) };
         }
 
+        if (needs.NeedsTrackerState)
+        {
+            var snapshots = isReplay
+                ? await _deps.TrackerRepository.GetTrackerSnapshotsAsOfAsync(
+                    new DateTimeOffset(DateTime.SpecifyKind(now, DateTimeKind.Utc)), ct)
+                : await _deps.TrackerRepository.GetTrackerSnapshotsAsync(ct);
+            enriched = enriched with { TrackerSnapshots = snapshots };
+        }
+
         if (needs.NeedsActiveAlerts)
         {
             // Live: pull the canonical snapshot from the alert repo. Replay: the walker

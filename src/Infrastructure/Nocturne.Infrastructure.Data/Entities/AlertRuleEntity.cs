@@ -110,6 +110,13 @@ public class AlertRuleEntity : ITenantScoped, IAuditable
     [Column("updated_at")]
     public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
 
+    /// <summary>
+    /// JSON metadata stamped by template scaffolding. Contains template name, tracker definition ID,
+    /// and consumable catalog ID for rules created via the template system.
+    /// </summary>
+    [Column("source_template", TypeName = "jsonb")]
+    public string? SourceTemplate { get; set; }
+
     // Navigation
 
     /// <summary>

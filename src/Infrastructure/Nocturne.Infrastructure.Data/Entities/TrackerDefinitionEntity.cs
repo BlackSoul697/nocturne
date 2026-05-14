@@ -24,13 +24,6 @@ public class TrackerDefinitionEntity : ITenantScoped
     public Guid Id { get; set; }
 
     /// <summary>
-    /// User identifier this definition belongs to
-    /// </summary>
-    [Column("user_id")]
-    [MaxLength(255)]
-    public string UserId { get; set; } = string.Empty;
-
-    /// <summary>
     /// Human-readable name (e.g., "G7 Sensor", "Steel Cannula")
     /// </summary>
     [Column("name")]

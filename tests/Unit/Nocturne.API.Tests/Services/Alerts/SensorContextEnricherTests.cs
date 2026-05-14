@@ -16,6 +16,7 @@ using Nocturne.Core.Contracts.Treatments;
 using Nocturne.Core.Contracts.V4.Repositories;
 using Nocturne.Core.Models;
 using Nocturne.Core.Models.Alerts;
+using Nocturne.Infrastructure.Data.Abstractions;
 using Nocturne.Core.Models.V4;
 using Xunit;
 
@@ -39,6 +40,7 @@ public class SensorContextEnricherTests
     private readonly Mock<ITargetRangeScheduleRepository> _targetRangeScheduleRepository = new();
     private readonly Mock<IActiveProfileResolver> _activeProfileResolver = new();
     private readonly Mock<ITherapySettingsResolver> _therapySettingsResolver = new();
+    private readonly Mock<ITrackerRepository> _trackerRepository = new();
     private readonly Mock<IPredictionService> _predictionService = new();
     private readonly FakeTimeProvider _timeProvider = new(new DateTimeOffset(2026, 3, 22, 12, 0, 0, TimeSpan.Zero));
     private readonly Guid _tenantId = Guid.NewGuid();
@@ -476,7 +478,8 @@ public class SensorContextEnricherTests
             _targetRangeScheduleRepository.Object,
             _activeProfileResolver.Object,
             _therapySettingsResolver.Object,
-            Options.Create(new AlertEvaluationOptions()));
+            Options.Create(new AlertEvaluationOptions()),
+            _trackerRepository.Object);
         var enricher2 = new SensorContextEnricher(
             deps2,
             new ServiceCollection().BuildServiceProvider(),
@@ -651,7 +654,8 @@ public class SensorContextEnricherTests
             _targetRangeScheduleRepository.Object,
             _activeProfileResolver.Object,
             _therapySettingsResolver.Object,
-            Options.Create(options ?? new AlertEvaluationOptions()));
+            Options.Create(options ?? new AlertEvaluationOptions()),
+            _trackerRepository.Object);
 
         return new SensorContextEnricher(
             deps,

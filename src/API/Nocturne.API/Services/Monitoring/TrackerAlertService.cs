@@ -13,21 +13,7 @@ public record TrackerAlert(
     Guid ThresholdId,
     string TrackerName,
     NotificationUrgency Urgency,
-    string Message,
-    TrackerAlertConfig Config
-);
-
-/// <summary>
-/// Notification delivery configuration for a tracker alert threshold (push, audio, vibration, repeat settings).
-/// </summary>
-public record TrackerAlertConfig(
-    bool PushEnabled,
-    bool AudioEnabled,
-    string? AudioSound,
-    bool VibrateEnabled,
-    int RepeatIntervalMins,
-    int MaxRepeats,
-    bool RespectQuietHours
+    string Message
 );
 
 /// <summary>
@@ -38,12 +24,12 @@ public interface ITrackerAlertService
     /// <summary>
     /// Evaluate all active tracker instances and generate pending alerts
     /// </summary>
-    Task<List<TrackerAlert>> EvaluateActiveTrackersAsync(string userId, CancellationToken ct = default);
+    Task<List<TrackerAlert>> EvaluateActiveTrackersAsync(CancellationToken ct = default);
 
     /// <summary>
-    /// Get pending (not yet displayed/sent) tracker alerts for a user
+    /// Get pending (not yet displayed/sent) tracker alerts
     /// </summary>
-    Task<List<TrackerAlert>> GetPendingAlertsAsync(string userId, CancellationToken ct = default);
+    Task<List<TrackerAlert>> GetPendingAlertsAsync(CancellationToken ct = default);
 }
 
 public class TrackerAlertService : ITrackerAlertService
@@ -60,12 +46,12 @@ public class TrackerAlertService : ITrackerAlertService
     }
 
     /// <inheritdoc />
-    public async Task<List<TrackerAlert>> EvaluateActiveTrackersAsync(string userId, CancellationToken ct = default)
+    public async Task<List<TrackerAlert>> EvaluateActiveTrackersAsync(CancellationToken ct = default)
     {
         var alerts = new List<TrackerAlert>();
 
-        // Get all active tracker instances for the user
-        var instances = await _repository.GetActiveInstancesAsync(userId, ct);
+        // Get all active tracker instances for the tenant
+        var instances = await _repository.GetActiveInstancesAsync(ct);
 
         foreach (var instance in instances)
         {
@@ -91,11 +77,9 @@ public class TrackerAlertService : ITrackerAlertService
     }
 
     /// <inheritdoc />
-    public async Task<List<TrackerAlert>> GetPendingAlertsAsync(string userId, CancellationToken ct = default)
+    public async Task<List<TrackerAlert>> GetPendingAlertsAsync(CancellationToken ct = default)
     {
-        // Evaluate all active trackers
-        // TODO: Re-add quiet hours filtering when new alert engine is implemented
-        return await EvaluateActiveTrackersAsync(userId, ct);
+        return await EvaluateActiveTrackersAsync(ct);
     }
 
     /// <summary>
@@ -155,22 +139,6 @@ public class TrackerAlertService : ITrackerAlertService
             return null; // Not yet at threshold
         }
 
-        // Check if snoozed
-        if (IsSnoozed(instance))
-        {
-            _logger.LogDebug(
-                "Tracker instance {InstanceId} is snoozed until {SnoozeEnd}",
-                instance.Id,
-                instance.LastAckedAt!.Value.AddMinutes(instance.AckSnoozeMins ?? 0));
-            return null;
-        }
-
-        // Check if any alert features are enabled
-        if (!threshold.PushEnabled && !threshold.AudioEnabled && !threshold.VibrateEnabled)
-        {
-            return null; // No alert actions configured
-        }
-
         // Generate the alert message
         var message = threshold.Description
             ?? GenerateDefaultMessage(definition, threshold, instance);
@@ -181,16 +149,7 @@ public class TrackerAlertService : ITrackerAlertService
             ThresholdId: threshold.Id,
             TrackerName: definition.Name,
             Urgency: threshold.Urgency,
-            Message: message,
-            Config: new TrackerAlertConfig(
-                PushEnabled: threshold.PushEnabled,
-                AudioEnabled: threshold.AudioEnabled,
-                AudioSound: threshold.AudioSound,
-                VibrateEnabled: threshold.VibrateEnabled,
-                RepeatIntervalMins: threshold.RepeatIntervalMins,
-                MaxRepeats: threshold.MaxRepeats,
-                RespectQuietHours: threshold.RespectQuietHours
-            )
+            Message: message
         );
     }
 
@@ -212,20 +171,6 @@ public class TrackerAlertService : ITrackerAlertService
         }
 
         return $"{definition.Name} has been active for {threshold.Hours} hours";
-    }
-
-    /// <summary>
-    /// Check if an instance is currently snoozed
-    /// </summary>
-    private static bool IsSnoozed(TrackerInstanceEntity instance)
-    {
-        if (!instance.LastAckedAt.HasValue || !instance.AckSnoozeMins.HasValue)
-        {
-            return false;
-        }
-
-        var snoozeEnd = instance.LastAckedAt.Value.AddMinutes(instance.AckSnoozeMins.Value);
-        return DateTime.UtcNow < snoozeEnd;
     }
 
 }

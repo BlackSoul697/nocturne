@@ -65,7 +65,8 @@ public class AlertReplayServiceLeafLogTests
             new Mock<Nocturne.Core.Contracts.V4.Repositories.ITargetRangeScheduleRepository>().Object,
             new Mock<Nocturne.Core.Contracts.Profiles.Resolvers.IActiveProfileResolver>().Object,
             new Mock<Nocturne.Core.Contracts.Profiles.Resolvers.ITherapySettingsResolver>().Object,
-            Options.Create(new AlertEvaluationOptions()));
+            Options.Create(new AlertEvaluationOptions()),
+            new Mock<Nocturne.Infrastructure.Data.Abstractions.ITrackerRepository>().Object);
         var enricher = new SensorContextEnricher(
             enricherDeps,
             new ServiceCollection().BuildServiceProvider(),

@@ -855,17 +855,7 @@ public class NocturneDbContext : DbContext
             .HasIndex(d => d.CreatedAt)
             .HasDatabaseName("ix_data_source_metadata_created_at");
 
-        // Tracker Definitions indexes - optimized for user queries
-        modelBuilder
-            .Entity<TrackerDefinitionEntity>()
-            .HasIndex(d => d.UserId)
-            .HasDatabaseName("ix_tracker_definitions_user_id");
-
-        modelBuilder
-            .Entity<TrackerDefinitionEntity>()
-            .HasIndex(d => new { d.UserId, d.Category })
-            .HasDatabaseName("ix_tracker_definitions_user_category");
-
+        // Tracker Definitions indexes
         modelBuilder
             .Entity<TrackerDefinitionEntity>()
             .HasIndex(d => d.IsFavorite)
@@ -879,11 +869,6 @@ public class NocturneDbContext : DbContext
         // Tracker Instances indexes - optimized for active and history queries
         modelBuilder
             .Entity<TrackerInstanceEntity>()
-            .HasIndex(i => i.UserId)
-            .HasDatabaseName("ix_tracker_instances_user_id");
-
-        modelBuilder
-            .Entity<TrackerInstanceEntity>()
             .HasIndex(i => i.DefinitionId)
             .HasDatabaseName("ix_tracker_instances_definition_id");
 
@@ -892,11 +877,6 @@ public class NocturneDbContext : DbContext
             .HasIndex(i => i.CompletedAt)
             .HasDatabaseName("ix_tracker_instances_completed_at")
             .HasFilter("completed_at IS NULL"); // Partial index for active instances
-
-        modelBuilder
-            .Entity<TrackerInstanceEntity>()
-            .HasIndex(i => new { i.UserId, i.CompletedAt })
-            .HasDatabaseName("ix_tracker_instances_user_completed");
 
         modelBuilder
             .Entity<TrackerInstanceEntity>()
