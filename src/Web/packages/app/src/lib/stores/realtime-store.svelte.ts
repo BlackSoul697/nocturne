@@ -38,7 +38,20 @@ export interface DeviceStatus {
   uploader?: Record<string, any>;
   [key: string]: any;
 }
-import { NotificationUrgency } from "$lib/api";
+
+/**
+ * Nightscout v1/v2 profile shape used for pills (COB, IOB, basal rate, etc.).
+ * The generated client no longer exports this type; define it locally.
+ */
+export interface Profile {
+  _id?: string;
+  defaultProfile?: string;
+  mills?: number;
+  startDate?: string;
+  units?: string;
+  store?: Record<string, any>;
+  [key: string]: any;
+}
 import {
   mergeEntryRecords,
   type EntryRecord,
@@ -192,45 +205,6 @@ export class RealtimeStore {
       this.profile,
       { units: "mg/dL" }
     );
-  });
-
-  /** Active tracker notifications (warn level and above) */
-  trackerNotifications = $derived.by(() => {
-    return this.trackerInstances
-      .map((instance) => {
-        const def = this.trackerDefinitions.find((d) => d.id === instance.definitionId);
-        if (!def || !def.notificationThresholds) return null;
-
-        // Compute age dynamically from startedAt and current time
-        // This ensures notifications update in real-time as time passes
-        const age = instance.startedAt
-          ? (this.now - new Date(instance.startedAt).getTime()) / (1000 * 60 * 60)
-          : instance.ageHours ?? 0;
-
-        if (!age || age <= 0) return null;
-
-        // Determine level from notificationThresholds
-        let level: Lowercase<NotificationUrgency> | null = null;
-
-        // Sort thresholds by hours descending to find the highest triggered level
-        const sortedThresholds = [...def.notificationThresholds].sort(
-          (a, b) => (b.hours ?? 0) - (a.hours ?? 0)
-        );
-
-        for (const threshold of sortedThresholds) {
-          if (threshold.hours && age >= threshold.hours) {
-            const urgency = threshold.urgency;
-            if (urgency === NotificationUrgency.Urgent) { level = "urgent"; break; }
-            if (urgency === NotificationUrgency.Hazard) { level = "hazard"; break; }
-            if (urgency === NotificationUrgency.Warn) { level = "warn"; break; }
-            if (urgency === NotificationUrgency.Info) { level = "info"; break; }
-          }
-        }
-
-        if (!level || level === "info") return null;
-        return { ...instance, level, ageHours: age };
-      })
-      .filter((n): n is TrackerInstanceDto & { level: "warn" | "hazard" | "urgent"; ageHours: number } => n !== null);
   });
 
   constructor(config: WebSocketConfig) {
@@ -613,7 +587,6 @@ export class RealtimeStore {
         break;
 
       case "update":
-      case "ack":
         // Update existing instance
         const updateIndex = this.trackerInstances.findIndex((i) => i.id === instance.id);
         if (updateIndex !== -1) {
