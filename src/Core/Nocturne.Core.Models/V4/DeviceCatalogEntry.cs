@@ -37,4 +37,10 @@ public record DeviceCatalogEntry
     /// Null for non-CGM devices.
     /// </summary>
     public CgmProperties? Cgm { get; init; }
+
+    /// <summary>
+    /// Pump-specific properties (form factor, reservoir capacity).
+    /// Null for non-pump devices.
+    /// </summary>
+    public PumpProperties? Pump { get; init; }
 }

@@ -26,15 +26,15 @@ public static class DeviceCatalog
         new() { Id = "custom-cgm", Name = "Custom CGM", Manufacturer = "Custom", Category = DeviceCategory.CGM },
 
         // Pumps
-        new() { Id = "omnipod-5",        Name = "Omnipod 5",     Manufacturer = "Insulet",    Category = DeviceCategory.InsulinPump },
-        new() { Id = "omnipod-dash",     Name = "Omnipod DASH",  Manufacturer = "Insulet",    Category = DeviceCategory.InsulinPump },
-        new() { Id = "tandem-tslim-x2",  Name = "t:slim X2",    Manufacturer = "Tandem",     Category = DeviceCategory.InsulinPump },
-        new() { Id = "tandem-mobi",      Name = "t:slim Mobi",   Manufacturer = "Tandem",     Category = DeviceCategory.InsulinPump },
-        new() { Id = "medtronic-780g",   Name = "MiniMed 780G",  Manufacturer = "Medtronic",  Category = DeviceCategory.InsulinPump },
-        new() { Id = "medtronic-770g",   Name = "MiniMed 770G",  Manufacturer = "Medtronic",  Category = DeviceCategory.InsulinPump },
-        new() { Id = "ypsopump",         Name = "YpsoPump",      Manufacturer = "Ypsomed",    Category = DeviceCategory.InsulinPump },
-        new() { Id = "dana-i",           Name = "Dana-i",        Manufacturer = "SOOIL",      Category = DeviceCategory.InsulinPump },
-        new() { Id = "dana-rs",          Name = "Dana RS",       Manufacturer = "SOOIL",      Category = DeviceCategory.InsulinPump },
+        new() { Id = "omnipod-5",        Name = "Omnipod 5",     Manufacturer = "Insulet",    Category = DeviceCategory.InsulinPump, Pump = new() { FormFactor = PumpFormFactor.Patch, ReservoirCapacityUnits = 200 } },
+        new() { Id = "omnipod-dash",     Name = "Omnipod DASH",  Manufacturer = "Insulet",    Category = DeviceCategory.InsulinPump, Pump = new() { FormFactor = PumpFormFactor.Patch, ReservoirCapacityUnits = 200 } },
+        new() { Id = "tandem-tslim-x2",  Name = "t:slim X2",    Manufacturer = "Tandem",     Category = DeviceCategory.InsulinPump, Pump = new() { FormFactor = PumpFormFactor.Tubed, ReservoirCapacityUnits = 300 } },
+        new() { Id = "tandem-mobi",      Name = "t:slim Mobi",   Manufacturer = "Tandem",     Category = DeviceCategory.InsulinPump, Pump = new() { FormFactor = PumpFormFactor.Tubed, ReservoirCapacityUnits = 300 } },
+        new() { Id = "medtronic-780g",   Name = "MiniMed 780G",  Manufacturer = "Medtronic",  Category = DeviceCategory.InsulinPump, Pump = new() { FormFactor = PumpFormFactor.Tubed, ReservoirCapacityUnits = 300 } },
+        new() { Id = "medtronic-770g",   Name = "MiniMed 770G",  Manufacturer = "Medtronic",  Category = DeviceCategory.InsulinPump, Pump = new() { FormFactor = PumpFormFactor.Tubed, ReservoirCapacityUnits = 300 } },
+        new() { Id = "ypsopump",         Name = "YpsoPump",      Manufacturer = "Ypsomed",    Category = DeviceCategory.InsulinPump, Pump = new() { FormFactor = PumpFormFactor.Tubed, ReservoirCapacityUnits = 160 } },
+        new() { Id = "dana-i",           Name = "Dana-i",        Manufacturer = "SOOIL",      Category = DeviceCategory.InsulinPump, Pump = new() { FormFactor = PumpFormFactor.Tubed, ReservoirCapacityUnits = 300 } },
+        new() { Id = "dana-rs",          Name = "Dana RS",       Manufacturer = "SOOIL",      Category = DeviceCategory.InsulinPump, Pump = new() { FormFactor = PumpFormFactor.Tubed, ReservoirCapacityUnits = 300 } },
         new() { Id = "custom-pump",      Name = "Custom Pump",   Manufacturer = "Custom",     Category = DeviceCategory.InsulinPump },
     ];
 

@@ -91,4 +91,40 @@ public class DeviceCatalogTests
         var entries = DeviceCatalog.GetAll();
         entries.Select(e => e.Id).Should().OnlyHaveUniqueItems();
     }
+
+    [Fact]
+    public void Omnipod5_HasPatchFormFactor()
+    {
+        var entry = DeviceCatalog.GetById("omnipod-5");
+        entry.Should().NotBeNull();
+        entry!.Pump.Should().NotBeNull();
+        entry.Pump!.FormFactor.Should().Be(PumpFormFactor.Patch);
+        entry.Pump.ReservoirCapacityUnits.Should().Be(200);
+    }
+
+    [Fact]
+    public void TslimX2_HasTubedFormFactor()
+    {
+        var entry = DeviceCatalog.GetById("tandem-tslim-x2");
+        entry.Should().NotBeNull();
+        entry!.Pump.Should().NotBeNull();
+        entry.Pump!.FormFactor.Should().Be(PumpFormFactor.Tubed);
+        entry.Pump.ReservoirCapacityUnits.Should().Be(300);
+    }
+
+    [Fact]
+    public void CgmEntries_HaveNoPumpProperties()
+    {
+        var entry = DeviceCatalog.GetById("dexcom-g7");
+        entry.Should().NotBeNull();
+        entry!.Pump.Should().BeNull();
+    }
+
+    [Fact]
+    public void CustomPump_HasNoPumpProperties()
+    {
+        var entry = DeviceCatalog.GetById("custom-pump");
+        entry.Should().NotBeNull();
+        entry!.Pump.Should().BeNull();
+    }
 }
