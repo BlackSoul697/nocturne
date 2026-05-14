@@ -53,6 +53,30 @@ public class ConsumableCatalogTests
     }
 
     [Fact]
+    public void GetForDevice_Omnipod5_ReturnsPodAndInsulin()
+    {
+        var device = DeviceCatalog.GetById("omnipod-5")!;
+        var consumables = ConsumableCatalog.GetForDevice(device);
+        consumables.Select(c => c.Id).Should().Contain("pod");
+        consumables.Select(c => c.Id).Should().Contain("insulin-in-use");
+        consumables.Select(c => c.Id).Should().NotContain("infusion-set");
+        consumables.Select(c => c.Id).Should().NotContain("insulin-tubing");
+        consumables.Select(c => c.Id).Should().NotContain("reservoir");
+    }
+
+    [Fact]
+    public void GetForDevice_TslimX2_ReturnsTubedConsumables()
+    {
+        var device = DeviceCatalog.GetById("tandem-tslim-x2")!;
+        var consumables = ConsumableCatalog.GetForDevice(device);
+        consumables.Select(c => c.Id).Should().Contain("infusion-set");
+        consumables.Select(c => c.Id).Should().Contain("reservoir");
+        consumables.Select(c => c.Id).Should().Contain("insulin-tubing");
+        consumables.Select(c => c.Id).Should().Contain("insulin-in-use");
+        consumables.Select(c => c.Id).Should().NotContain("pod");
+    }
+
+    [Fact]
     public void GetById_NonExistent_ReturnsNull()
     {
         ConsumableCatalog.GetById("does-not-exist").Should().BeNull();

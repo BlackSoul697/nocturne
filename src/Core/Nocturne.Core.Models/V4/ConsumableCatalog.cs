@@ -9,10 +9,10 @@ public static class ConsumableCatalog
     [
         new() { Id = "sensor",         Name = "Sensor",            ConsumableType = ConsumableType.Sensor,        DefaultLifespanHours = null, IsHardCutoff = true,  ApplicableDeviceCategory = DeviceCategory.CGM,         DefaultTrackerCategory = TrackerCategory.Sensor,     DefaultIcon = "activity" },
         new() { Id = "transmitter",    Name = "Transmitter",       ConsumableType = ConsumableType.Transmitter,   DefaultLifespanHours = null, IsHardCutoff = true,  ApplicableDeviceCategory = DeviceCategory.CGM,         DefaultTrackerCategory = TrackerCategory.Battery,    DefaultIcon = "radio" },
-        new() { Id = "pod",            Name = "Pod",               ConsumableType = ConsumableType.Pod,           DefaultLifespanHours = 80,   IsHardCutoff = true,  ApplicableDeviceCategory = DeviceCategory.InsulinPump, DefaultTrackerCategory = TrackerCategory.Cannula,    DefaultIcon = "package" },
-        new() { Id = "infusion-set",   Name = "Infusion Set",      ConsumableType = ConsumableType.InfusionSet,   DefaultLifespanHours = 72,   IsHardCutoff = false, ApplicableDeviceCategory = DeviceCategory.InsulinPump, DefaultTrackerCategory = TrackerCategory.Cannula,    DefaultIcon = "syringe" },
-        new() { Id = "reservoir",      Name = "Reservoir",         ConsumableType = ConsumableType.Reservoir,     DefaultLifespanHours = null, IsHardCutoff = false, ApplicableDeviceCategory = DeviceCategory.InsulinPump, DefaultTrackerCategory = TrackerCategory.Reservoir,  DefaultIcon = "flask-round" },
-        new() { Id = "insulin-tubing", Name = "Insulin Tubing",    ConsumableType = ConsumableType.InsulinTubing, DefaultLifespanHours = 72,   IsHardCutoff = false, ApplicableDeviceCategory = DeviceCategory.InsulinPump, DefaultTrackerCategory = TrackerCategory.Consumable, DefaultIcon = "cable" },
+        new() { Id = "pod",            Name = "Pod",               ConsumableType = ConsumableType.Pod,           DefaultLifespanHours = 80,   IsHardCutoff = true,  ApplicableDeviceCategory = DeviceCategory.InsulinPump, ApplicablePumpFormFactor = PumpFormFactor.Patch, DefaultTrackerCategory = TrackerCategory.Cannula,    DefaultIcon = "package" },
+        new() { Id = "infusion-set",   Name = "Infusion Set",      ConsumableType = ConsumableType.InfusionSet,   DefaultLifespanHours = 72,   IsHardCutoff = false, ApplicableDeviceCategory = DeviceCategory.InsulinPump, ApplicablePumpFormFactor = PumpFormFactor.Tubed, DefaultTrackerCategory = TrackerCategory.Cannula,    DefaultIcon = "syringe" },
+        new() { Id = "reservoir",      Name = "Reservoir",         ConsumableType = ConsumableType.Reservoir,     DefaultLifespanHours = null, IsHardCutoff = false, ApplicableDeviceCategory = DeviceCategory.InsulinPump, ApplicablePumpFormFactor = PumpFormFactor.Tubed, DefaultTrackerCategory = TrackerCategory.Reservoir,  DefaultIcon = "flask-round" },
+        new() { Id = "insulin-tubing", Name = "Insulin Tubing",    ConsumableType = ConsumableType.InsulinTubing, DefaultLifespanHours = 72,   IsHardCutoff = false, ApplicableDeviceCategory = DeviceCategory.InsulinPump, ApplicablePumpFormFactor = PumpFormFactor.Tubed, DefaultTrackerCategory = TrackerCategory.Consumable, DefaultIcon = "cable" },
         new() { Id = "insulin-in-use", Name = "Insulin (In Use)",  ConsumableType = ConsumableType.InsulinInUse,  DefaultLifespanHours = 672,  IsHardCutoff = false, ApplicableDeviceCategory = null,                       DefaultTrackerCategory = TrackerCategory.Consumable, DefaultIcon = "droplets" },
     ];
 
@@ -29,8 +29,8 @@ public static class ConsumableCatalog
     /// <see cref="CgmProperties.HasSeparateTransmitter"/>.
     /// </summary>
     /// <remarks>
-    /// Pump form factor filtering (patch vs tubed) will be added once PumpProperties
-    /// is available on DeviceCatalogEntry.
+    /// Pump consumables are filtered by <see cref="PumpFormFactor"/>: pods for patch pumps,
+    /// infusion sets / reservoirs / tubing for tubed pumps.
     /// </remarks>
     public static IReadOnlyList<ConsumableCatalogEntry> GetForDevice(DeviceCatalogEntry device) =>
         _entries.Where(e => AppliesToDevice(e, device)).ToList();
@@ -49,8 +49,9 @@ public static class ConsumableCatalog
         if (entry.ConsumableType == ConsumableType.Transmitter)
             return device.Cgm?.HasSeparateTransmitter == true;
 
-        // TODO: Filter pump consumables by PumpProperties.FormFactor once available
-        // Pod → Patch only, InfusionSet/Reservoir/InsulinTubing → Tubed only
+        // Pump-specific: filter by form factor
+        if (entry.ApplicablePumpFormFactor is not null)
+            return device.Pump?.FormFactor == entry.ApplicablePumpFormFactor;
 
         return true;
     }

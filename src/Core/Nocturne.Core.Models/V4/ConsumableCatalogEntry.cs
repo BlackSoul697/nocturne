@@ -23,6 +23,9 @@ public record ConsumableCatalogEntry
     /// <summary>Device category this consumable applies to. Null for universal items.</summary>
     public DeviceCategory? ApplicableDeviceCategory { get; init; }
 
+    /// <summary>Pump form factor filter. Null if applicable to all form factors.</summary>
+    public PumpFormFactor? ApplicablePumpFormFactor { get; init; }
+
     /// <summary>Default tracker category when generating a tracker definition.</summary>
     public required TrackerCategory DefaultTrackerCategory { get; init; }
 
