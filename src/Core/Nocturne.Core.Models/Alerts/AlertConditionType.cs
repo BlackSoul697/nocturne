@@ -134,4 +134,20 @@ public enum AlertConditionType
     /// <summary>Generic state-span-active leaf for non-pump-mode categories (Override, Sleep, Exercise, ...).</summary>
     [EnumMember(Value = "state_span_active"), JsonStringEnumMemberName("state_span_active")]
     StateSpanActive,
+
+    /// <summary>Hours since a tracker instance started (Duration mode).</summary>
+    [EnumMember(Value = "tracker_age"), JsonStringEnumMemberName("tracker_age")]
+    TrackerAge,
+
+    /// <summary>Hours until a tracker instance's expected expiry (Duration mode).</summary>
+    [EnumMember(Value = "tracker_remaining"), JsonStringEnumMemberName("tracker_remaining")]
+    TrackerRemaining,
+
+    /// <summary>Whether an active tracker instance exists for a definition.</summary>
+    [EnumMember(Value = "tracker_active"), JsonStringEnumMemberName("tracker_active")]
+    TrackerActive,
+
+    /// <summary>Hours until/since a tracker's ScheduledAt (Event mode; negative = past due).</summary>
+    [EnumMember(Value = "tracker_time_until_scheduled"), JsonStringEnumMemberName("tracker_time_until_scheduled")]
+    TrackerTimeUntilScheduled,
 }
