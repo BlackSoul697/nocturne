@@ -12,6 +12,7 @@
   import type { AlarmVisualSettings } from "$lib/types/alarm-profile";
   import type { TitleFaviconSettings } from "$lib/stores/serverSettings";
   import { browser } from "$app/environment";
+  import { beforeNavigate } from "$app/navigation";
   import * as Card from "$lib/components/ui/card";
   import { Button } from "$lib/components/ui/button";
   import AlertBanner from "$lib/components/alerts/AlertBanner.svelte";
@@ -194,7 +195,7 @@
   });
 </script>
 
-<CoachMarkProvider adapter={coachMarkAdapter} {sequences}>
+<CoachMarkProvider adapter={coachMarkAdapter} {sequences} onBeforeNavigate={beforeNavigate}>
   <CoachParamHandler />
   <Sidebar.Provider>
     <AppSidebar user={data.user} tenantCount={data.tenantCount} effectivePermissions={data.effectivePermissions} isPlatformAdmin={data.isPlatformAdmin} isGuestSession={data.isGuestSession} />
