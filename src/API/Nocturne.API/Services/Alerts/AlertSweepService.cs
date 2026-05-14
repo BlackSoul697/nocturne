@@ -80,6 +80,15 @@ public class AlertSweepService : BackgroundService
 
             try
             {
+                await EvaluateTrackerConditionsAsync(ct);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error evaluating tracker conditions");
+            }
+
+            try
+            {
                 await EvaluateAutoResolveAsync(ct);
             }
             catch (Exception ex)
@@ -204,6 +213,57 @@ public class AlertSweepService : BackgroundService
                 {
                     _logger.LogError(ex, "Error evaluating signal loss for rule {RuleId}", rule.Id);
                 }
+            }
+        }
+    }
+
+    /// <summary>
+    /// Evaluate tracker condition rules: tracker_age, tracker_remaining, tracker_active,
+    /// and tracker_time_until_scheduled are time-based conditions that don't depend on
+    /// glucose readings, so they must be swept periodically. Identifies tenants with
+    /// tracker rules and runs the full orchestrator for each.
+    /// </summary>
+    private async Task EvaluateTrackerConditionsAsync(CancellationToken ct)
+    {
+        using var lookupScope = _serviceProvider.CreateScope();
+        var repository = lookupScope.ServiceProvider.GetRequiredService<IAlertRepository>();
+
+        var trackerRules = await repository.GetEnabledTrackerConditionRulesAsync(ct);
+        if (trackerRules.Count == 0) return;
+
+        var rulesByTenant = trackerRules.GroupBy(r => r.TenantId);
+
+        foreach (var tenantGroup in rulesByTenant)
+        {
+            var tenantId = tenantGroup.Key;
+
+            var tenantContext = await repository.GetTenantAlertContextAsync(tenantId, ct);
+            if (tenantContext is null || !tenantContext.IsActive) continue;
+
+            try
+            {
+                using var tenantScope = _serviceProvider.CreateScope();
+                var tenantAccessor = tenantScope.ServiceProvider.GetRequiredService<ITenantAccessor>();
+                tenantAccessor.SetTenant(new TenantContext(
+                    tenantContext.TenantId,
+                    tenantContext.Slug ?? string.Empty,
+                    tenantContext.DisplayName ?? string.Empty,
+                    true));
+
+                var orchestrator = tenantScope.ServiceProvider.GetRequiredService<IAlertOrchestrator>();
+                var context = new SensorContext
+                {
+                    LatestValue = null,
+                    LatestTimestamp = tenantContext.LastReadingAt,
+                    TrendRate = null,
+                    LastReadingAt = tenantContext.LastReadingAt ?? DateTime.MinValue,
+                };
+
+                await orchestrator.EvaluateAsync(context, ct);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error evaluating tracker conditions for tenant {TenantId}", tenantId);
             }
         }
     }

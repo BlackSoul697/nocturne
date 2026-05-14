@@ -348,6 +348,46 @@ public class AlertRepository : IAlertRepository
             .ToListAsync(ct);
     }
 
+    private static readonly AlertConditionType[] TrackerConditionTypes =
+    [
+        AlertConditionType.TrackerAge,
+        AlertConditionType.TrackerRemaining,
+        AlertConditionType.TrackerActive,
+        AlertConditionType.TrackerTimeUntilScheduled,
+    ];
+
+    private static readonly string[] TrackerConditionTypeStrings =
+    [
+        "tracker_age",
+        "tracker_remaining",
+        "tracker_active",
+        "tracker_time_until_scheduled",
+    ];
+
+    /// <summary>
+    /// Gets all enabled rules that contain tracker conditions, either as their top-level
+    /// condition type or embedded within composite condition JSON.
+    /// </summary>
+    /// <param name="ct">The cancellation token.</param>
+    /// <returns>A collection of tracker condition rule snapshots.</returns>
+    public virtual async Task<IReadOnlyList<AlertRuleSnapshot>> GetEnabledTrackerConditionRulesAsync(
+        CancellationToken ct)
+    {
+        await using var context = await _contextFactory.CreateDbContextAsync(ct);
+
+        return await context.AlertRules
+            .AsNoTracking()
+            .IgnoreQueryFilters()
+            .Where(r => r.IsEnabled
+                && (TrackerConditionTypes.Contains(r.ConditionType)
+                    || TrackerConditionTypeStrings.Any(s => r.ConditionParams.Contains(s))))
+            .Select(r => new AlertRuleSnapshot(
+                r.Id, r.TenantId, r.Name, r.ConditionType,
+                r.ConditionParams, r.Severity, r.ClientConfiguration, r.SortOrder,
+                r.AutoResolveEnabled, r.AutoResolveParams, r.AllowThroughDnd))
+            .ToListAsync(ct);
+    }
+
     /// <summary>
     /// Gets the most recent glucose trend rate for a specific tenant.
     /// </summary>

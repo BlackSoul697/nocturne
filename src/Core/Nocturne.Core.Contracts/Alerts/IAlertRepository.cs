@@ -134,6 +134,15 @@ public interface IAlertRepository
     Task<IReadOnlyList<SignalLossRuleSnapshot>> GetEnabledSignalLossRulesAsync(CancellationToken ct);
 
     /// <summary>
+    /// Returns all enabled rules that contain tracker conditions (tracker_age, tracker_remaining,
+    /// tracker_active, tracker_time_until_scheduled) across all tenants. Used by background
+    /// services to trigger periodic re-evaluation for tenants with time-based tracker alerts.
+    /// </summary>
+    /// <param name="ct">Cancellation token.</param>
+    /// <returns>A read-only list of enabled tracker condition rule snapshots.</returns>
+    Task<IReadOnlyList<AlertRuleSnapshot>> GetEnabledTrackerConditionRulesAsync(CancellationToken ct);
+
+    /// <summary>
     /// Returns the latest glucose trend rate (mg/dL per minute) for the tenant,
     /// used by rate-of-change alert conditions.
     /// </summary>
