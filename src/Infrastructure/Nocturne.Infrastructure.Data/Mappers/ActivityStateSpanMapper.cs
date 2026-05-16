@@ -126,9 +126,6 @@ public static class ActivityStateSpanMapper
 
         var lowerType = activityType.ToLowerInvariant();
 
-        if (SleepTypes.Any(t => lowerType.Contains(t)))
-            return StateSpanCategory.Sleep;
-
         if (IllnessTypes.Any(t => lowerType.Contains(t)))
             return StateSpanCategory.Illness;
 

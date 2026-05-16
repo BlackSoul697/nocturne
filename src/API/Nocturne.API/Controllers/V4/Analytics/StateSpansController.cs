@@ -187,29 +187,6 @@ public class StateSpansController : ControllerBase
     }
 
     /// <summary>
-    /// Get sleep state spans (user-annotated sleep periods)
-    /// </summary>
-    [HttpGet("sleep")]
-    [ProducesResponseType(typeof(PaginatedResponse<StateSpan>), StatusCodes.Status200OK)]
-    [ProducesResponseType(StatusCodes.Status400BadRequest)]
-    public async Task<ActionResult<PaginatedResponse<StateSpan>>> GetSleep(
-        [FromQuery] DateTime? from = null,
-        [FromQuery] DateTime? to = null,
-        [FromQuery] int limit = 100,
-        [FromQuery] int offset = 0,
-        [FromQuery] string sort = "timestamp_desc",
-        CancellationToken cancellationToken = default)
-    {
-        if (sort is not "timestamp_desc" and not "timestamp_asc")
-            return Problem(detail: $"Invalid sort value '{sort}'. Must be 'timestamp_asc' or 'timestamp_desc'.", statusCode: 400, title: "Bad Request");
-
-        var descending = sort == "timestamp_desc";
-        var data = await _stateSpanService.GetStateSpansAsync(StateSpanCategory.Sleep, from: from, to: to, count: limit, skip: offset, descending: descending, cancellationToken: cancellationToken);
-        var total = await _stateSpanService.CountStateSpansAsync(StateSpanCategory.Sleep, from: from, to: to, cancellationToken: cancellationToken);
-        return Ok(new PaginatedResponse<StateSpan> { Data = data, Pagination = new PaginationInfo(limit, offset, total) });
-    }
-
-    /// <summary>
     /// Get exercise state spans (user-annotated activity periods)
     /// </summary>
     [HttpGet("exercise")]
@@ -296,7 +273,7 @@ public class StateSpansController : ControllerBase
             return Problem(detail: $"Invalid sort value '{sort}'. Must be 'timestamp_asc' or 'timestamp_desc'.", statusCode: 400, title: "Bad Request");
 
         var descending = sort == "timestamp_desc";
-        var activityCategories = new[] { StateSpanCategory.Sleep, StateSpanCategory.Exercise, StateSpanCategory.Illness, StateSpanCategory.Travel };
+        var activityCategories = new[] { StateSpanCategory.Exercise, StateSpanCategory.Illness, StateSpanCategory.Travel };
         var allSpans = new List<StateSpan>();
         var total = 0;
 

@@ -113,11 +113,11 @@ public class StateSpanRepositoryTests : IDisposable
     [Fact]
     public async Task UpsertStateSpanAsync_NonExclusiveCategory_DoesNotSupersede()
     {
-        // Arrange - Sleep is not an exclusive category
+        // Arrange - Exercise is not an exclusive category
         var existingSpan = new StateSpan
         {
-            Category = StateSpanCategory.Sleep,
-            State = "Sleeping",
+            Category = StateSpanCategory.Exercise,
+            State = "Running",
             StartTimestamp = new DateTime(2026, 1, 1, 22, 0, 0, DateTimeKind.Utc),
             EndTimestamp = null,
             Source = "manual",
@@ -128,7 +128,7 @@ public class StateSpanRepositoryTests : IDisposable
         // Act - insert another sleep span
         var newSpan = new StateSpan
         {
-            Category = StateSpanCategory.Sleep,
+            Category = StateSpanCategory.Exercise,
             State = "Sleeping",
             StartTimestamp = new DateTime(2026, 1, 2, 22, 0, 0, DateTimeKind.Utc),
             EndTimestamp = null,
@@ -139,7 +139,7 @@ public class StateSpanRepositoryTests : IDisposable
 
         // Assert - both should remain open
         var allSpans = (await _repository.GetStateSpansAsync(
-            category: StateSpanCategory.Sleep)).ToList();
+            category: StateSpanCategory.Exercise)).ToList();
 
         allSpans.Should().HaveCount(2);
         allSpans.Should().AllSatisfy(s => s.EndTimestamp.Should().BeNull());
@@ -356,11 +356,11 @@ public class StateSpanRepositoryTests : IDisposable
         var start = new DateTime(2026, 4, 30, 9, 0, 0, DateTimeKind.Utc);
         var end = new DateTime(2026, 4, 30, 14, 0, 0, DateTimeKind.Utc);
         _context.StateSpans.Add(SpanEntity(
-            _context.TenantId, StateSpanCategory.Sleep, "Sleeping", start, end));
+            _context.TenantId, StateSpanCategory.Exercise, "Sleeping", start, end));
         await _context.SaveChangesAsync();
 
         var result = await _repository.GetActiveAtAsync(
-            StateSpanCategory.Sleep,
+            StateSpanCategory.Exercise,
             state: null,
             at: new DateTime(2026, 4, 30, 12, 0, 0, DateTimeKind.Utc),
             CancellationToken.None);
@@ -373,17 +373,17 @@ public class StateSpanRepositoryTests : IDisposable
     public async Task GetActiveAtAsync_returns_null_when_none_active()
     {
         _context.StateSpans.Add(SpanEntity(
-            _context.TenantId, StateSpanCategory.Sleep, "Sleeping",
+            _context.TenantId, StateSpanCategory.Exercise, "Sleeping",
             new DateTime(2026, 4, 30, 6, 0, 0, DateTimeKind.Utc),
             new DateTime(2026, 4, 30, 7, 0, 0, DateTimeKind.Utc)));
         _context.StateSpans.Add(SpanEntity(
-            _context.TenantId, StateSpanCategory.Sleep, "Sleeping",
+            _context.TenantId, StateSpanCategory.Exercise, "Sleeping",
             new DateTime(2026, 4, 30, 14, 0, 0, DateTimeKind.Utc),
             new DateTime(2026, 4, 30, 15, 0, 0, DateTimeKind.Utc)));
         await _context.SaveChangesAsync();
 
         var result = await _repository.GetActiveAtAsync(
-            StateSpanCategory.Sleep,
+            StateSpanCategory.Exercise,
             state: null,
             at: new DateTime(2026, 4, 30, 12, 0, 0, DateTimeKind.Utc),
             CancellationToken.None);
@@ -395,17 +395,17 @@ public class StateSpanRepositoryTests : IDisposable
     public async Task GetActiveAtAsync_picks_latest_start_when_overlapping()
     {
         _context.StateSpans.Add(SpanEntity(
-            _context.TenantId, StateSpanCategory.Sleep, "A",
+            _context.TenantId, StateSpanCategory.Exercise, "A",
             new DateTime(2026, 4, 30, 9, 0, 0, DateTimeKind.Utc),
             new DateTime(2026, 4, 30, 14, 0, 0, DateTimeKind.Utc)));
         _context.StateSpans.Add(SpanEntity(
-            _context.TenantId, StateSpanCategory.Sleep, "B",
+            _context.TenantId, StateSpanCategory.Exercise, "B",
             new DateTime(2026, 4, 30, 11, 0, 0, DateTimeKind.Utc),
             new DateTime(2026, 4, 30, 13, 0, 0, DateTimeKind.Utc)));
         await _context.SaveChangesAsync();
 
         var result = await _repository.GetActiveAtAsync(
-            StateSpanCategory.Sleep,
+            StateSpanCategory.Exercise,
             state: null,
             at: new DateTime(2026, 4, 30, 12, 0, 0, DateTimeKind.Utc),
             CancellationToken.None);
@@ -418,15 +418,15 @@ public class StateSpanRepositoryTests : IDisposable
     {
         var at = new DateTime(2026, 4, 30, 12, 0, 0, DateTimeKind.Utc);
         _context.StateSpans.Add(SpanEntity(
-            _context.TenantId, StateSpanCategory.Sleep, "A",
+            _context.TenantId, StateSpanCategory.Exercise, "A",
             new DateTime(2026, 4, 30, 9, 0, 0, DateTimeKind.Utc),
             new DateTime(2026, 4, 30, 14, 0, 0, DateTimeKind.Utc)));
         await _context.SaveChangesAsync();
 
         var matching = await _repository.GetActiveAtAsync(
-            StateSpanCategory.Sleep, state: "A", at, CancellationToken.None);
+            StateSpanCategory.Exercise, state: "A", at, CancellationToken.None);
         var nonMatching = await _repository.GetActiveAtAsync(
-            StateSpanCategory.Sleep, state: "B", at, CancellationToken.None);
+            StateSpanCategory.Exercise, state: "B", at, CancellationToken.None);
 
         matching.Should().NotBeNull();
         nonMatching.Should().BeNull();
@@ -437,13 +437,13 @@ public class StateSpanRepositoryTests : IDisposable
     {
         var end = new DateTime(2026, 4, 30, 12, 0, 0, DateTimeKind.Utc);
         _context.StateSpans.Add(SpanEntity(
-            _context.TenantId, StateSpanCategory.Sleep, "A",
+            _context.TenantId, StateSpanCategory.Exercise, "A",
             new DateTime(2026, 4, 30, 9, 0, 0, DateTimeKind.Utc),
             end));
         await _context.SaveChangesAsync();
 
         var result = await _repository.GetActiveAtAsync(
-            StateSpanCategory.Sleep, state: null, at: end, CancellationToken.None);
+            StateSpanCategory.Exercise, state: null, at: end, CancellationToken.None);
 
         result.Should().BeNull();
     }

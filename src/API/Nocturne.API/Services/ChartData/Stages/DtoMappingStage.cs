@@ -53,8 +53,6 @@ internal sealed class DtoMappingStage(ITreatmentFoodService treatmentFoodService
             : [];
 
         var activitySpans = new List<ChartStateSpanDto>();
-        if (context.StateSpans.TryGetValue(StateSpanCategory.Sleep, out var sleepRaw))
-            activitySpans.AddRange(MapStateSpans(sleepRaw, StateSpanCategory.Sleep));
         if (context.StateSpans.TryGetValue(StateSpanCategory.Exercise, out var exerciseRaw))
             activitySpans.AddRange(MapStateSpans(exerciseRaw, StateSpanCategory.Exercise));
         if (context.StateSpans.TryGetValue(StateSpanCategory.Illness, out var illnessRaw))
@@ -130,8 +128,7 @@ internal sealed class DtoMappingStage(ITreatmentFoodService treatmentFoodService
                     StateSpanCategory.PumpMode => ChartColorMapper.FromPumpMode(span.State ?? ""),
                     StateSpanCategory.Override => ChartColorMapper.FromOverride(span.State ?? ""),
                     StateSpanCategory.Profile => ChartColor.Profile,
-                    StateSpanCategory.Sleep
-                    or StateSpanCategory.Exercise
+                    StateSpanCategory.Exercise
                     or StateSpanCategory.Illness
                     or StateSpanCategory.Travel => ChartColorMapper.FromActivity(category),
                     _ => ChartColor.MutedForeground,

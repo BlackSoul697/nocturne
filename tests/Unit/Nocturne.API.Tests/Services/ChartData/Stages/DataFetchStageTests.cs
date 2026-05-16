@@ -131,7 +131,6 @@ public class DataFetchStageTests
             [StateSpanCategory.PumpMode] = [],
             [StateSpanCategory.Profile] = [],
             [StateSpanCategory.Override] = [],
-            [StateSpanCategory.Sleep] = [],
             [StateSpanCategory.Exercise] = [],
             [StateSpanCategory.Illness] = [],
             [StateSpanCategory.Travel] = [],
@@ -206,11 +205,10 @@ public class DataFetchStageTests
         result.TrackerInstances.Should().NotBeNull();
         result.StateSpans.Should().NotBeNull();
 
-        // Assert — all 7 state span categories are present in the result
+        // Assert — all 6 state span categories are present in the result
         result.StateSpans.Should().ContainKey(StateSpanCategory.PumpMode);
         result.StateSpans.Should().ContainKey(StateSpanCategory.Profile);
         result.StateSpans.Should().ContainKey(StateSpanCategory.Override);
-        result.StateSpans.Should().ContainKey(StateSpanCategory.Sleep);
         result.StateSpans.Should().ContainKey(StateSpanCategory.Exercise);
         result.StateSpans.Should().ContainKey(StateSpanCategory.Illness);
         result.StateSpans.Should().ContainKey(StateSpanCategory.Travel);

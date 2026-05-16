@@ -176,7 +176,6 @@ internal sealed class DataFetchStage(
             StateSpanCategory.PumpMode,
             StateSpanCategory.Profile,
             StateSpanCategory.Override,
-            StateSpanCategory.Sleep,
             StateSpanCategory.Exercise,
             StateSpanCategory.Illness,
             StateSpanCategory.Travel,
