@@ -72,7 +72,7 @@ public class DashboardChartData
     /// <summary>Override spans from <see cref="StateSpan"/> records with <see cref="StateSpanCategory.Override"/>.</summary>
     public List<ChartStateSpanDto> OverrideSpans { get; set; } = new();
 
-    /// <summary>Activity spans (sleep, exercise, illness, travel) from <see cref="StateSpan"/> records.</summary>
+    /// <summary>Activity spans (exercise, illness, travel, sleep sessions) merged from state spans and sleep data.</summary>
     public List<ChartStateSpanDto> ActivitySpans { get; set; } = new();
 
     /// <summary>Temporary basal spans from legacy <see cref="Treatment"/> temp basal records.</summary>

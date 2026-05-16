@@ -18,8 +18,9 @@ namespace Nocturne.API.Services.ChartData.Stages;
 /// Base markers (offset == 0) have their label updated from the associated food names.
 /// </para>
 /// <para>
-/// Activity state spans from Sleep, Exercise, Illness, and Travel categories are merged into
-/// a single <see cref="ChartDataContext.ActivitySpans"/> list so they share one chart layer.
+/// Activity state spans from Exercise, Illness, and Travel categories plus sleep sessions
+/// are merged into a single <see cref="ChartDataContext.ActivitySpans"/> list so they share
+/// one chart layer.
 /// </para>
 /// <para>
 /// Color assignment for state spans is performed by <see cref="Helpers.ChartColorMapper"/>
@@ -59,6 +60,9 @@ internal sealed class DtoMappingStage(ITreatmentFoodService treatmentFoodService
             activitySpans.AddRange(MapStateSpans(illnessRaw, StateSpanCategory.Illness));
         if (context.StateSpans.TryGetValue(StateSpanCategory.Travel, out var travelRaw))
             activitySpans.AddRange(MapStateSpans(travelRaw, StateSpanCategory.Travel));
+
+        // Project sleep sessions into activity spans
+        activitySpans.AddRange(MapSleepSessions(context.SleepSessions));
 
         var basalDeliverySpans = ChartDataService.MapBasalDeliverySpans(context.TempBasalList.ToList());
         var tempBasalSpans = ChartDataService.MapTempBasalSpans(context.TempBasalList.ToList());
@@ -134,6 +138,28 @@ internal sealed class DtoMappingStage(ITreatmentFoodService treatmentFoodService
                     _ => ChartColor.MutedForeground,
                 },
                 Metadata = span.Metadata,
+            })
+            .ToList();
+    }
+
+    /// <summary>
+    /// Projects sleep sessions into activity-span DTOs so they appear on the chart's activity layer.
+    /// Each session becomes one span coloured with <see cref="ChartColor.ActivitySleep"/>.
+    /// </summary>
+    private static List<ChartStateSpanDto> MapSleepSessions(IEnumerable<SleepSession> sessions)
+    {
+        return sessions
+            .Select(s => new ChartStateSpanDto
+            {
+                Id = s.Id ?? "",
+                // Sleep is no longer a StateSpanCategory; use Exercise as the closest
+                // activity-layer stand-in. The Color and State carry the real semantics.
+                Category = StateSpanCategory.Exercise,
+                State = $"Sleep ({s.Type})",
+                StartMills = s.StartMills,
+                EndMills = s.EndMills,
+                Color = ChartColor.ActivitySleep,
+                Metadata = s.Metadata,
             })
             .ToList();
     }

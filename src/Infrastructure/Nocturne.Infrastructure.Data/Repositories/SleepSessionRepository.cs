@@ -99,17 +99,17 @@ public class SleepSessionRepository : ISleepSessionRepository
     public async Task<SleepSession?> UpdateSessionAsync(Guid id, SleepSession session, CancellationToken cancellationToken = default)
     {
         await using var ctx = await _contextFactory.CreateAsync(cancellationToken);
-        var existing = await ctx.SleepSessions
-            .Include(s => s.Stages)
-            .Include(s => s.BiometricSamples)
-            .FirstOrDefaultAsync(s => s.Id == id, cancellationToken);
-
-        if (existing is null)
-            return null;
-
         var strategy = ctx.Database.CreateExecutionStrategy();
         return await strategy.ExecuteAsync(async () =>
         {
+            var existing = await ctx.SleepSessions
+                .Include(s => s.Stages)
+                .Include(s => s.BiometricSamples)
+                .FirstOrDefaultAsync(s => s.Id == id, cancellationToken);
+
+            if (existing is null)
+                return null;
+
             await using var tx = await ctx.Database.BeginTransactionAsync(cancellationToken);
 
             // Remove old entity and children, then insert updated version preserving the original ID

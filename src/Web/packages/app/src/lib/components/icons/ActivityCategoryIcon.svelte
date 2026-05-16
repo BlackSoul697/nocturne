@@ -1,6 +1,5 @@
 <script lang="ts">
   import { StateSpanCategory } from "$lib/api";
-  import SleepModeIcon from "./SleepModeIcon.svelte";
   import ExerciseModeIcon from "./ExerciseModeIcon.svelte";
   import ThermometerIcon from "lucide-svelte/icons/thermometer";
   import PlaneIcon from "lucide-svelte/icons/plane";
@@ -23,9 +22,7 @@
   }: Props = $props();
 </script>
 
-{#if category === StateSpanCategory.Sleep}
-  <SleepModeIcon class={className} {size} {strokeWidth} {color} />
-{:else if category === StateSpanCategory.Exercise}
+{#if category === StateSpanCategory.Exercise}
   <ExerciseModeIcon class={className} {size} {strokeWidth} {color} />
 {:else if category === StateSpanCategory.Illness}
   <ThermometerIcon class={className} {size} stroke-width={strokeWidth} {color} />

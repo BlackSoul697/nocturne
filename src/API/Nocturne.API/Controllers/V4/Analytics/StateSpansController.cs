@@ -9,14 +9,14 @@ namespace Nocturne.API.Controllers.V4.Analytics;
 
 /// <summary>
 /// Controller for managing time-ranged system states such as pump modes, connectivity periods,
-/// temporary targets, overrides, and user-annotated activity periods (sleep, exercise, illness, travel).
+/// temporary targets, overrides, and user-annotated activity periods (exercise, illness, travel).
 /// </summary>
 /// <remarks>
 /// <see cref="StateSpan"/> records are created automatically by connector-based ingest pipelines
 /// but can also be created and updated manually via this API.
 ///
 /// Convenience sub-routes (<c>/pump-modes</c>, <c>/connectivity</c>, <c>/overrides</c>,
-/// <c>/temporary-targets</c>, <c>/profiles</c>, <c>/sleep</c>, <c>/exercise</c>,
+/// <c>/temporary-targets</c>, <c>/profiles</c>, <c>/exercise</c>,
 /// <c>/illness</c>, <c>/travel</c>, <c>/activities</c>) are thin wrappers that pre-filter
 /// <see cref="IStateSpanService.GetStateSpansAsync"/> by <see cref="StateSpanCategory"/>.
 ///
@@ -256,7 +256,7 @@ public class StateSpansController : ControllerBase
     }
 
     /// <summary>
-    /// Get all activity state spans (sleep, exercise, illness, travel)
+    /// Get all activity state spans (exercise, illness, travel)
     /// </summary>
     [HttpGet("activities")]
     [ProducesResponseType(typeof(PaginatedResponse<StateSpan>), StatusCodes.Status200OK)]

@@ -8,6 +8,7 @@ using Nocturne.Core.Models;
 using Nocturne.Core.Models.V4;
 using Nocturne.Core.Contracts.Health;
 using Nocturne.Core.Contracts.Repositories;
+using Nocturne.Core.Contracts.Sleep;
 using Nocturne.Infrastructure.Data.Abstractions;
 using Nocturne.Infrastructure.Data.Entities;
 using Nocturne.Infrastructure.Data.Repositories.V4;
@@ -34,6 +35,7 @@ public class DataFetchStageTests
     private readonly Mock<IBasalInjectionRepository> _mockBasalInjectionRepo = new();
     private readonly Mock<IHeartRateService> _mockHeartRateService = new();
     private readonly Mock<IStepCountService> _mockStepCountService = new();
+    private readonly Mock<ISleepService> _mockSleepService = new();
     private readonly DataFetchStage _stage;
 
     public DataFetchStageTests()
@@ -57,7 +59,8 @@ public class DataFetchStageTests
             _mockBasalInjectionRepo.Object,
             NullLogger<DataFetchStage>.Instance,
             _mockHeartRateService.Object,
-            _mockStepCountService.Object
+            _mockStepCountService.Object,
+            _mockSleepService.Object
         );
     }
 
@@ -173,6 +176,14 @@ public class DataFetchStageTests
             .Setup(s => s.GetStepCountsByDateRangeAsync(
                 It.IsAny<DateTime>(), It.IsAny<DateTime>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(Array.Empty<StepCount>());
+
+        _mockSleepService
+            .Setup(s => s.GetSessionsAsync(
+                It.IsAny<DateTime?>(), It.IsAny<DateTime?>(),
+                It.IsAny<SleepSessionType?>(), It.IsAny<SleepSource?>(),
+                It.IsAny<int>(), It.IsAny<int>(), It.IsAny<bool>(),
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync(Array.Empty<SleepSession>());
 
     }
 

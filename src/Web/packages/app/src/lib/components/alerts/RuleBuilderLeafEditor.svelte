@@ -88,7 +88,6 @@
     [StateSpanCategory.PumpConnectivity]: "Pump connectivity",
     [StateSpanCategory.Override]: "Override",
     [StateSpanCategory.Profile]: "Profile",
-    [StateSpanCategory.Sleep]: "Sleep",
     [StateSpanCategory.Exercise]: "Exercise",
     [StateSpanCategory.Illness]: "Illness",
     [StateSpanCategory.Travel]: "Travel",
