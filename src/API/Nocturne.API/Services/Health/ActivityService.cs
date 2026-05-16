@@ -247,7 +247,16 @@ public class ActivityService : IActivityService
                     var created = await _sleepService.UpsertSessionAsync(session, cancellationToken);
                     results.Add(ActivityStateSpanMapper.SleepSessionToActivity(created));
                 }
-                catch (Exception ex)
+                catch (OperationCanceledException) { throw; }
+                catch (InvalidOperationException ex)
+                {
+                    _logger.LogError(
+                        ex,
+                        "Failed to create sleep session from activity {Id}",
+                        sleepActivity.Id
+                    );
+                }
+                catch (ArgumentException ex)
                 {
                     _logger.LogError(
                         ex,

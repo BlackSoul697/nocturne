@@ -153,16 +153,28 @@ public class SleepSessionRepository : ISleepSessionRepository
         var query = ctx.SleepSessions.AsNoTracking();
 
         if (from.HasValue)
-            query = query.Where(e => e.EndTime >= from.Value);
+        {
+            var fromValue = from.Value;
+            query = query.Where(e => e.EndTime >= fromValue);
+        }
 
         if (to.HasValue)
-            query = query.Where(e => e.StartTime <= to.Value);
+        {
+            var toValue = to.Value;
+            query = query.Where(e => e.StartTime <= toValue);
+        }
 
         if (type.HasValue)
-            query = query.Where(e => e.Type == type.Value.ToString());
+        {
+            var typeValue = type.Value.ToString();
+            query = query.Where(e => e.Type == typeValue);
+        }
 
         if (source.HasValue)
-            query = query.Where(e => e.Source == source.Value.ToString());
+        {
+            var sourceValue = source.Value.ToString();
+            query = query.Where(e => e.Source == sourceValue);
+        }
 
         return query;
     }
