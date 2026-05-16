@@ -311,6 +311,62 @@ public class SleepSessionRepositoryTests : IDisposable
         count.Should().Be(1);
     }
 
+    // --- UpdateSessionAsync ---
+
+    [Fact]
+    public async Task UpdateSessionAsync_returns_updated_values()
+    {
+        var entity = CreateEntity(TenantA,
+            new DateTime(2026, 1, 1, 22, 0, 0, DateTimeKind.Utc),
+            new DateTime(2026, 1, 2, 6, 0, 0, DateTimeKind.Utc),
+            source: "Fitbit");
+
+        entity.SleepScore = 75;
+
+        await SeedAsync(entity);
+
+        var updated = new SleepSession
+        {
+            StartTime = new DateTime(2026, 1, 1, 21, 30, 0, DateTimeKind.Utc),
+            EndTime = new DateTime(2026, 1, 2, 7, 0, 0, DateTimeKind.Utc),
+            Type = SleepSessionType.Overnight,
+            DetectionMethod = SleepDetectionMethod.Auto,
+            Source = SleepSource.Fitbit,
+            DurationMs = 34_200_000,
+            TotalSleepMs = 30_000_000,
+            SleepScore = 90,
+        };
+
+        var result = await _repository.UpdateSessionAsync(entity.Id, updated);
+
+        result.Should().NotBeNull();
+        result!.Id.Should().Be(entity.Id.ToString());
+        result.SleepScore.Should().Be(90);
+        result.StartTime.Should().Be(new DateTime(2026, 1, 1, 21, 30, 0, DateTimeKind.Utc));
+        result.EndTime.Should().Be(new DateTime(2026, 1, 2, 7, 0, 0, DateTimeKind.Utc));
+
+        var count = await _repository.CountSessionsAsync();
+        count.Should().Be(1);
+    }
+
+    [Fact]
+    public async Task UpdateSessionAsync_returns_null_when_not_found()
+    {
+        var session = new SleepSession
+        {
+            StartTime = new DateTime(2026, 1, 1, 22, 0, 0, DateTimeKind.Utc),
+            EndTime = new DateTime(2026, 1, 2, 6, 0, 0, DateTimeKind.Utc),
+            Type = SleepSessionType.Overnight,
+            DetectionMethod = SleepDetectionMethod.Auto,
+            Source = SleepSource.Fitbit,
+            DurationMs = 28_800_000,
+        };
+
+        var result = await _repository.UpdateSessionAsync(Guid.CreateVersion7(), session);
+
+        result.Should().BeNull();
+    }
+
     // --- DeleteSessionAsync ---
 
     [Fact]

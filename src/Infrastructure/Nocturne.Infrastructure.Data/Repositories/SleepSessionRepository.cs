@@ -63,30 +63,36 @@ public class SleepSessionRepository : ISleepSessionRepository
     public async Task<SleepSession> UpsertSessionAsync(SleepSession session, CancellationToken cancellationToken = default)
     {
         await using var ctx = await _contextFactory.CreateAsync(cancellationToken);
-        var entity = SleepSessionMapper.ToEntity(session, ctx.TenantId);
-
-        // Dedup by Source + OriginalId
-        if (!string.IsNullOrEmpty(entity.OriginalId))
+        var strategy = ctx.Database.CreateExecutionStrategy();
+        return await strategy.ExecuteAsync(async () =>
         {
-            var existing = await ctx.SleepSessions
-                .Include(s => s.Stages)
-                .Include(s => s.BiometricSamples)
-                .FirstOrDefaultAsync(
-                    s => s.Source == entity.Source && s.OriginalId == entity.OriginalId,
-                    cancellationToken);
+            await using var tx = await ctx.Database.BeginTransactionAsync(cancellationToken);
+            var entity = SleepSessionMapper.ToEntity(session, ctx.TenantId);
 
-            if (existing is not null)
+            // Dedup by Source + OriginalId
+            if (!string.IsNullOrEmpty(entity.OriginalId))
             {
-                ctx.SleepBiometricSamples.RemoveRange(existing.BiometricSamples);
-                ctx.SleepStages.RemoveRange(existing.Stages);
-                ctx.SleepSessions.Remove(existing);
-                await ctx.SaveChangesAsync(cancellationToken);
-            }
-        }
+                var existing = await ctx.SleepSessions
+                    .Include(s => s.Stages)
+                    .Include(s => s.BiometricSamples)
+                    .FirstOrDefaultAsync(
+                        s => s.Source == entity.Source && s.OriginalId == entity.OriginalId,
+                        cancellationToken);
 
-        ctx.SleepSessions.Add(entity);
-        await ctx.SaveChangesAsync(cancellationToken);
-        return SleepSessionMapper.ToDomainModel(entity, includeChildren: true);
+                if (existing is not null)
+                {
+                    ctx.SleepBiometricSamples.RemoveRange(existing.BiometricSamples);
+                    ctx.SleepStages.RemoveRange(existing.Stages);
+                    ctx.SleepSessions.Remove(existing);
+                    await ctx.SaveChangesAsync(cancellationToken);
+                }
+            }
+
+            ctx.SleepSessions.Add(entity);
+            await ctx.SaveChangesAsync(cancellationToken);
+            await tx.CommitAsync(cancellationToken);
+            return SleepSessionMapper.ToDomainModel(entity, includeChildren: true);
+        });
     }
 
     /// <inheritdoc />
@@ -101,17 +107,24 @@ public class SleepSessionRepository : ISleepSessionRepository
         if (existing is null)
             return null;
 
-        // Remove old entity and children, then insert updated version preserving the original ID
-        ctx.SleepBiometricSamples.RemoveRange(existing.BiometricSamples);
-        ctx.SleepStages.RemoveRange(existing.Stages);
-        ctx.SleepSessions.Remove(existing);
-        await ctx.SaveChangesAsync(cancellationToken);
+        var strategy = ctx.Database.CreateExecutionStrategy();
+        return await strategy.ExecuteAsync(async () =>
+        {
+            await using var tx = await ctx.Database.BeginTransactionAsync(cancellationToken);
 
-        session.Id = id.ToString();
-        var entity = SleepSessionMapper.ToEntity(session, ctx.TenantId);
-        ctx.SleepSessions.Add(entity);
-        await ctx.SaveChangesAsync(cancellationToken);
-        return SleepSessionMapper.ToDomainModel(entity, includeChildren: true);
+            // Remove old entity and children, then insert updated version preserving the original ID
+            ctx.SleepBiometricSamples.RemoveRange(existing.BiometricSamples);
+            ctx.SleepStages.RemoveRange(existing.Stages);
+            ctx.SleepSessions.Remove(existing);
+            await ctx.SaveChangesAsync(cancellationToken);
+
+            var entity = SleepSessionMapper.ToEntity(session, ctx.TenantId);
+            entity.Id = id;
+            ctx.SleepSessions.Add(entity);
+            await ctx.SaveChangesAsync(cancellationToken);
+            await tx.CommitAsync(cancellationToken);
+            return SleepSessionMapper.ToDomainModel(entity, includeChildren: true);
+        });
     }
 
     /// <inheritdoc />
@@ -137,7 +150,7 @@ public class SleepSessionRepository : ISleepSessionRepository
         NocturneDbContext ctx, DateTime? from, DateTime? to,
         SleepSessionType? type, SleepSource? source)
     {
-        var query = ctx.SleepSessions.AsNoTracking().AsQueryable();
+        var query = ctx.SleepSessions.AsNoTracking();
 
         if (from.HasValue)
             query = query.Where(e => e.EndTime >= from.Value);

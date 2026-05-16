@@ -94,7 +94,7 @@ public static class SleepSessionMapper
     {
         var session = new SleepSession
         {
-            Id = entity.OriginalId ?? entity.Id.ToString(),
+            Id = entity.Id.ToString(),
             StartTime = entity.StartTime,
             EndTime = entity.EndTime,
             Timezone = entity.Timezone,
@@ -175,7 +175,7 @@ public static class SleepSessionMapper
         {
             return JsonSerializer.Deserialize<Dictionary<string, object>>(json);
         }
-        catch
+        catch (JsonException)
         {
             return null;
         }
@@ -193,17 +193,10 @@ public static class SleepSessionMapper
             return guidId;
 
         // Hash the ID to get a deterministic GUID
-        try
-        {
-            using var sha1 = System.Security.Cryptography.SHA1.Create();
-            var hashBytes = sha1.ComputeHash(System.Text.Encoding.UTF8.GetBytes(id));
-            var guidBytes = new byte[16];
-            Array.Copy(hashBytes, guidBytes, 16);
-            return new Guid(guidBytes);
-        }
-        catch
-        {
-            return Guid.CreateVersion7();
-        }
+        using var sha1 = System.Security.Cryptography.SHA1.Create();
+        var hashBytes = sha1.ComputeHash(System.Text.Encoding.UTF8.GetBytes(id));
+        var guidBytes = new byte[16];
+        Array.Copy(hashBytes, guidBytes, 16);
+        return new Guid(guidBytes);
     }
 }
