@@ -1,4 +1,4 @@
-import adapter from '@sveltejs/adapter-node';
+import adapter from '@sveltejs/adapter-cloudflare';
 import { vitePreprocess } from '@sveltejs/vite-plugin-svelte';
 import { mdsvex } from 'mdsvex';
 import { remarkVars } from '@nocturne/cms/remark/vars';
@@ -8,13 +8,9 @@ const config = {
   preprocess: [vitePreprocess(), mdsvex({ extensions: ['.svx'], remarkPlugins: [remarkVars] })],
   extensions: ['.svelte', '.svx'],
   kit: {
-    adapter: adapter({
-      out: 'build',
-      precompress: true,
-    }),
+    adapter: adapter(),
     prerender: {
       handleHttpError: ({ path, message }) => {
-        // /setup lives in the main app, not the portal — ignore during prerendering
         if (path === '/setup') return;
         throw new Error(message);
       },
