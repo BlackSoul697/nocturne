@@ -3,9 +3,11 @@ using Nocturne.Core.Contracts.Health;
 using Nocturne.Core.Contracts.Legacy;
 using Nocturne.Core.Contracts.Glucose;
 using Nocturne.Core.Contracts.Events;
+using Nocturne.Core.Contracts.Sleep;
 using Nocturne.Core.Contracts.V4;
 using Nocturne.Core.Models;
 using Nocturne.API.Services.Realtime;
+using Nocturne.Infrastructure.Data.Mappers;
 
 namespace Nocturne.API.Services.Health;
 
@@ -24,6 +26,7 @@ namespace Nocturne.API.Services.Health;
 public class ActivityService : IActivityService
 {
     private readonly IStateSpanService _stateSpanService;
+    private readonly ISleepService _sleepService;
     private readonly IDocumentProcessingService _documentProcessingService;
     private readonly ISignalRBroadcastService _signalRBroadcastService;
     private readonly IDataEventSink<Activity> _events;
@@ -35,17 +38,9 @@ public class ActivityService : IActivityService
     /// <summary>
     /// Initializes a new instance of <see cref="ActivityService"/>.
     /// </summary>
-    /// <param name="stateSpanService">Service for persisting regular activities as <see cref="StateSpan"/> records.</param>
-    /// <param name="documentProcessingService">Service for HTML sanitization of activity fields.</param>
-    /// <param name="signalRBroadcastService">Service for broadcasting real-time updates to connected clients.</param>
-    /// <param name="events">The event sink for broadcasting create/update/delete events.</param>
-    /// <param name="activityDecomposer">Decomposes sensor data activities into heart rate and step count records.</param>
-    /// <param name="heartRateService">Service for reading and resolving heart rate records as activities.</param>
-    /// <param name="stepCountService">Service for reading and resolving step count records as activities.</param>
-    /// <param name="logger">The logger instance.</param>
-    /// <exception cref="ArgumentNullException">Thrown when any required parameter is <see langword="null"/>.</exception>
     public ActivityService(
         IStateSpanService stateSpanService,
+        ISleepService sleepService,
         IDocumentProcessingService documentProcessingService,
         ISignalRBroadcastService signalRBroadcastService,
         IDataEventSink<Activity> events,
@@ -57,6 +52,8 @@ public class ActivityService : IActivityService
     {
         _stateSpanService =
             stateSpanService ?? throw new ArgumentNullException(nameof(stateSpanService));
+        _sleepService =
+            sleepService ?? throw new ArgumentNullException(nameof(sleepService));
         _documentProcessingService =
             documentProcessingService
             ?? throw new ArgumentNullException(nameof(documentProcessingService));
@@ -97,7 +94,7 @@ public class ActivityService : IActivityService
             // Over-fetch from each source so we can merge and re-paginate
             var fetchCount = actualCount + actualSkip;
 
-            // Source 1: Regular activities from StateSpans
+            // Source 1: Regular activities from StateSpans (exercise, illness, travel — no longer sleep)
             var stateSpanActivities = await _stateSpanService.GetActivitiesAsync(
                 type: find,
                 count: fetchCount,
@@ -121,10 +118,20 @@ public class ActivityService : IActivityService
             );
             var stepCountActivities = stepCounts.Select(ActivityDecomposer.StepCountToActivity);
 
+            // Source 4: Sleep sessions projected back to Activity format
+            var sleepSessions = await _sleepService.GetSessionsAsync(
+                limit: fetchCount,
+                offset: 0,
+                descending: true,
+                cancellationToken: cancellationToken
+            );
+            var sleepActivities = sleepSessions.Select(ActivityStateSpanMapper.SleepSessionToActivity);
+
             // Merge all sources, sort by Mills descending, apply pagination
             var merged = stateSpanActivities
                 .Concat(heartRateActivities)
                 .Concat(stepCountActivities)
+                .Concat(sleepActivities)
                 .OrderByDescending(a => a.Mills)
                 .Skip(actualSkip)
                 .Take(actualCount)
@@ -153,6 +160,14 @@ public class ActivityService : IActivityService
             var activity = await _stateSpanService.GetActivityByIdAsync(id, cancellationToken);
             if (activity != null)
                 return activity;
+
+            // Try sleep session
+            if (Guid.TryParse(id, out var sleepGuid))
+            {
+                var sleepSession = await _sleepService.GetSessionByIdAsync(sleepGuid, cancellationToken);
+                if (sleepSession != null)
+                    return ActivityStateSpanMapper.SleepSessionToActivity(sleepSession);
+            }
 
             // Try heart rate
             var heartRate = await _heartRateService.GetHeartRateByIdAsync(id, cancellationToken);
@@ -188,14 +203,17 @@ public class ActivityService : IActivityService
             var processedActivities = _documentProcessingService.ProcessDocuments(activityList);
             var processedList = processedActivities.ToList();
 
-            // Separate sensor data (heart rate, step count) from regular activities
+            // Separate sensor data, sleep activities, and regular activities
             var regularActivities = new List<Activity>();
             var sensorDataActivities = new List<Activity>();
+            var sleepActivities = new List<Activity>();
 
             foreach (var activity in processedList)
             {
                 if (_activityDecomposer.IsSensorData(activity))
                     sensorDataActivities.Add(activity);
+                else if (ActivityStateSpanMapper.IsSleepType(activity.Type))
+                    sleepActivities.Add(activity);
                 else
                     regularActivities.Add(activity);
             }
@@ -216,6 +234,25 @@ public class ActivityService : IActivityService
                         ex,
                         "Failed to decompose sensor data activity {Id}",
                         sensorActivity.Id
+                    );
+                }
+            }
+
+            // Route sleep-type activities to the dedicated sleep_sessions table
+            foreach (var sleepActivity in sleepActivities)
+            {
+                try
+                {
+                    var session = ActivityStateSpanMapper.ToSleepSession(sleepActivity);
+                    var created = await _sleepService.UpsertSessionAsync(session, cancellationToken);
+                    results.Add(ActivityStateSpanMapper.SleepSessionToActivity(created));
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogError(
+                        ex,
+                        "Failed to create sleep session from activity {Id}",
+                        sleepActivity.Id
                     );
                 }
             }
@@ -318,6 +355,22 @@ public class ActivityService : IActivityService
                 );
             }
 
+            // Try deleting from sleep sessions
+            if (Guid.TryParse(id, out var sleepGuid))
+            {
+                var sleepDeleted = await _sleepService.DeleteSessionAsync(sleepGuid, cancellationToken);
+                if (sleepDeleted)
+                {
+                    await _signalRBroadcastService.BroadcastStorageDeleteAsync(
+                        "activity",
+                        new { collection = "activity", id }
+                    );
+                    await _events.OnDeletedAsync(null, cancellationToken);
+                    _logger.LogDebug("Successfully deleted sleep session for activity ID: {Id}", id);
+                    return true;
+                }
+            }
+
             var deleted = await _stateSpanService.DeleteActivityAsync(id, cancellationToken);
 
             if (deleted)
@@ -392,11 +445,16 @@ public class ActivityService : IActivityService
                 cancellationToken: cancellationToken
             );
 
-            await Task.WhenAll(stateSpanTask, heartRateTask, stepCountTask);
+            var sleepCountTask = _sleepService.CountSessionsAsync(
+                cancellationToken: cancellationToken
+            );
+
+            await Task.WhenAll(stateSpanTask, heartRateTask, stepCountTask, sleepCountTask);
 
             var total = stateSpanTask.Result.Count()
                 + heartRateTask.Result.Count()
-                + stepCountTask.Result.Count();
+                + stepCountTask.Result.Count()
+                + sleepCountTask.Result;
 
             _logger.LogDebug("Counted {Total} activity records", total);
             return total;

@@ -5,6 +5,7 @@ using Nocturne.Core.Contracts.Health;
 using Nocturne.Core.Contracts.Legacy;
 using Nocturne.Core.Contracts.Glucose;
 using Nocturne.Core.Contracts.Events;
+using Nocturne.Core.Contracts.Sleep;
 using Nocturne.Core.Contracts.V4;
 using Nocturne.Core.Models;
 using Xunit;
@@ -18,6 +19,7 @@ namespace Nocturne.API.Tests.Services.Health;
 public class ActivityServiceTests
 {
     private readonly Mock<IStateSpanService> _mockStateSpanService;
+    private readonly Mock<ISleepService> _mockSleepService;
     private readonly Mock<IDocumentProcessingService> _mockDocumentProcessingService;
     private readonly Mock<ISignalRBroadcastService> _mockSignalRBroadcastService;
     private readonly Mock<IActivityDecomposer> _mockActivityDecomposer;
@@ -29,6 +31,7 @@ public class ActivityServiceTests
     public ActivityServiceTests()
     {
         _mockStateSpanService = new Mock<IStateSpanService>();
+        _mockSleepService = new Mock<ISleepService>();
         _mockDocumentProcessingService = new Mock<IDocumentProcessingService>();
         _mockSignalRBroadcastService = new Mock<ISignalRBroadcastService>();
         _mockActivityDecomposer = new Mock<IActivityDecomposer>();
@@ -36,16 +39,28 @@ public class ActivityServiceTests
         _mockStepCountService = new Mock<IStepCountService>();
         _mockLogger = new Mock<ILogger<ActivityService>>();
 
-        // Default: return empty lists for heart rate and step count
+        // Default: return empty lists for heart rate, step count, and sleep
         _mockHeartRateService
             .Setup(s => s.GetHeartRatesAsync(It.IsAny<int>(), It.IsAny<int>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(Enumerable.Empty<HeartRate>());
         _mockStepCountService
             .Setup(s => s.GetStepCountsAsync(It.IsAny<int>(), It.IsAny<int>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(Enumerable.Empty<StepCount>());
+        _mockSleepService
+            .Setup(s => s.GetSessionsAsync(
+                It.IsAny<DateTime?>(), It.IsAny<DateTime?>(), It.IsAny<SleepSessionType?>(),
+                It.IsAny<SleepSource?>(), It.IsAny<int>(), It.IsAny<int>(), It.IsAny<bool>(),
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync(Enumerable.Empty<SleepSession>());
+        _mockSleepService
+            .Setup(s => s.CountSessionsAsync(
+                It.IsAny<DateTime?>(), It.IsAny<DateTime?>(), It.IsAny<SleepSessionType?>(),
+                It.IsAny<SleepSource?>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(0);
 
         _activityService = new ActivityService(
             _mockStateSpanService.Object,
+            _mockSleepService.Object,
             _mockDocumentProcessingService.Object,
             _mockSignalRBroadcastService.Object,
             Mock.Of<IDataEventSink<Activity>>(),
@@ -589,6 +604,7 @@ public class ActivityServiceTests
         Assert.Throws<ArgumentNullException>(() =>
             new ActivityService(
                 null!,
+                _mockSleepService.Object,
                 _mockDocumentProcessingService.Object,
                 _mockSignalRBroadcastService.Object,
                 Mock.Of<IDataEventSink<Activity>>(),
@@ -608,6 +624,7 @@ public class ActivityServiceTests
         Assert.Throws<ArgumentNullException>(() =>
             new ActivityService(
                 _mockStateSpanService.Object,
+                _mockSleepService.Object,
                 null!,
                 _mockSignalRBroadcastService.Object,
                 Mock.Of<IDataEventSink<Activity>>(),
@@ -627,6 +644,7 @@ public class ActivityServiceTests
         Assert.Throws<ArgumentNullException>(() =>
             new ActivityService(
                 _mockStateSpanService.Object,
+                _mockSleepService.Object,
                 _mockDocumentProcessingService.Object,
                 null!,
                 Mock.Of<IDataEventSink<Activity>>(),
@@ -645,6 +663,7 @@ public class ActivityServiceTests
         Assert.Throws<ArgumentNullException>(() =>
             new ActivityService(
                 _mockStateSpanService.Object,
+                _mockSleepService.Object,
                 _mockDocumentProcessingService.Object,
                 _mockSignalRBroadcastService.Object,
                 Mock.Of<IDataEventSink<Activity>>(),
@@ -663,6 +682,7 @@ public class ActivityServiceTests
         Assert.Throws<ArgumentNullException>(() =>
             new ActivityService(
                 _mockStateSpanService.Object,
+                _mockSleepService.Object,
                 _mockDocumentProcessingService.Object,
                 _mockSignalRBroadcastService.Object,
                 Mock.Of<IDataEventSink<Activity>>(),
@@ -681,6 +701,7 @@ public class ActivityServiceTests
         Assert.Throws<ArgumentNullException>(() =>
             new ActivityService(
                 _mockStateSpanService.Object,
+                _mockSleepService.Object,
                 _mockDocumentProcessingService.Object,
                 _mockSignalRBroadcastService.Object,
                 Mock.Of<IDataEventSink<Activity>>(),
@@ -700,6 +721,7 @@ public class ActivityServiceTests
         Assert.Throws<ArgumentNullException>(() =>
             new ActivityService(
                 _mockStateSpanService.Object,
+                _mockSleepService.Object,
                 _mockDocumentProcessingService.Object,
                 _mockSignalRBroadcastService.Object,
                 Mock.Of<IDataEventSink<Activity>>(),
