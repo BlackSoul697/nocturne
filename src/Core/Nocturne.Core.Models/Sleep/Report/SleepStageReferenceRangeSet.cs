@@ -4,14 +4,14 @@ namespace Nocturne.Core.Models.Sleep.Report;
 
 public class SleepStageReferenceRangeSet
 {
-    public double DeepMin { get; set; }
-    public double DeepMax { get; set; }
-    public double RemMin { get; set; }
-    public double RemMax { get; set; }
-    public double LightMin { get; set; }
-    public double LightMax { get; set; }
-    public double AwakeMin { get; set; }
-    public double AwakeMax { get; set; }
+    public double DeepMin { get; init; }
+    public double DeepMax { get; init; }
+    public double RemMin { get; init; }
+    public double RemMax { get; init; }
+    public double LightMin { get; init; }
+    public double LightMax { get; init; }
+    public double AwakeMin { get; init; }
+    public double AwakeMax { get; init; }
 
     public static readonly SleepStageReferenceRangeSet Default = new()
     {

@@ -11,9 +11,11 @@ public class SleepReportCalculatorTests
 {
     // ── Helpers ───────────────────────────────────────────────────────────
 
+    private static readonly DateTime _sessionStart = new(2026, 5, 16, 23, 0, 0, DateTimeKind.Utc);
+
     private static SleepSession MakeSession(DateTime? start = null)
     {
-        var s = start ?? new DateTime(2026, 5, 16, 23, 0, 0, DateTimeKind.Utc);
+        var s = start ?? _sessionStart;
         return new SleepSession { StartTime = s, EndTime = s.AddHours(8) };
     }
 
@@ -204,12 +206,13 @@ public class SleepReportCalculatorTests
     public void ComputeDawnPhenomenon_ComputesDeltaAndRate_ForPositiveRise()
     {
         var session = MakeSession();
+        // Glucose rises across the window: first=98, last=140
         var glucose = new[]
         {
-            MakeGlucose(session.EndTime.AddMinutes(-115), 105),
-            MakeGlucose(session.EndTime.AddMinutes(-110), 98),   // trough
+            MakeGlucose(session.EndTime.AddMinutes(-115), 98),   // first (trough)
+            MakeGlucose(session.EndTime.AddMinutes(-90),  105),
             MakeGlucose(session.EndTime.AddMinutes(-60),  115),
-            MakeGlucose(session.EndTime.AddMinutes(-10),  140),  // peak
+            MakeGlucose(session.EndTime.AddMinutes(-10),  140),  // last (peak)
         };
 
         var result = API.Services.Sleep.SleepReportCalculator.ComputeDawnPhenomenon(session, glucose);
@@ -217,7 +220,7 @@ public class SleepReportCalculatorTests
         result.Should().NotBeNull();
         result!.TroughBg.Should().Be(98);
         result.PeakBg.Should().Be(140);
-        result.DeltaBg.Should().Be(42);
+        result.DeltaBg.Should().Be(42); // last - first = 140 - 98
         result.RateOfClimbPerHour.Should().BePositive();
     }
 
@@ -225,12 +228,13 @@ public class SleepReportCalculatorTests
     public void ComputeDawnPhenomenon_ReportsNegativeDelta_WhenGlucoseDeclining()
     {
         var session = MakeSession();
+        // Glucose declines across the window: first=145, last=98
         var glucose = new[]
         {
-            MakeGlucose(session.EndTime.AddMinutes(-115), 145), // peak (earlier)
+            MakeGlucose(session.EndTime.AddMinutes(-115), 145), // first (peak)
             MakeGlucose(session.EndTime.AddMinutes(-90),  130),
             MakeGlucose(session.EndTime.AddMinutes(-45),  110),
-            MakeGlucose(session.EndTime.AddMinutes(-10),  98),  // trough (later)
+            MakeGlucose(session.EndTime.AddMinutes(-10),  98),  // last (trough)
         };
 
         var result = API.Services.Sleep.SleepReportCalculator.ComputeDawnPhenomenon(session, glucose);
@@ -314,8 +318,19 @@ public class SleepReportCalculatorTests
             DeepMinutes = 90, RemMinutes = 100, LightMinutes = 230, AwakeMinutes = 20, TotalMinutes = 440,
         };
         var (score, source) = API.Services.Sleep.SleepReportCalculator.ResolveScore(session, hypoCount: 0, breakdown);
-        score.Should().BeInRange(0, 100);
+        score.Should().NotBeNull();
+        score!.Value.Should().BeInRange(0, 100);
         source.Should().Be(SleepScoreSource.Computed);
+    }
+
+    [Fact]
+    public void ResolveScore_ReturnsNull_WhenNoStageData()
+    {
+        var session = new SleepSession { SleepScore = null };
+        var breakdown = new SleepStageBreakdown { TotalMinutes = 0 };
+        var (score, source) = API.Services.Sleep.SleepReportCalculator.ResolveScore(session, hypoCount: 0, breakdown);
+        score.Should().BeNull();
+        source.Should().BeNull();
     }
 
     // ── Night Summary ─────────────────────────────────────────────────────
@@ -357,7 +372,43 @@ public class SleepReportCalculatorTests
 
         result.ScoreSource.Should().Be(SleepScoreSource.Computed);
         result.SleepScore.Should().NotBeNull();
-        result.SleepScore.Should().BeInRange(0, 100);
+        result.SleepScore!.Value.Should().BeInRange(1, 100); // computed from real stage data
+    }
+
+    [Fact]
+    public void ComputeNightSummary_NullsScoreAndSource_WhenNoStageData()
+    {
+        var session = new SleepSession
+        {
+            Id         = Guid.NewGuid().ToString(),
+            StartTime  = _sessionStart,
+            EndTime    = _sessionStart.AddHours(8),
+            SleepScore = null,
+            // All stage summary fields null, no Stages collection → TotalMinutes == 0
+        };
+
+        var result = API.Services.Sleep.SleepReportCalculator.ComputeNightSummary(session, []);
+
+        result.SleepScore.Should().BeNull();
+        result.ScoreSource.Should().BeNull();
+    }
+
+    [Fact]
+    public void ComputeNightSummary_PopulatesLowestBg_FromAllReadings()
+    {
+        var session = MakeSession();
+        session.Id = Guid.NewGuid().ToString();
+        var readings = new[]
+        {
+            MakeGlucose(session.StartTime.AddMinutes(30), 90),
+            MakeGlucose(session.StartTime.AddMinutes(60), 110),
+            MakeGlucose(session.StartTime.AddMinutes(90), 75),  // lowest
+        };
+
+        var result = API.Services.Sleep.SleepReportCalculator.ComputeNightSummary(session, readings);
+
+        // LowestBg should be the session minimum, not constrained to hypo events
+        result.LowestBg.Should().Be(75);
     }
 
     // ── Deduplication ─────────────────────────────────────────────────────
@@ -423,5 +474,21 @@ public class SleepReportCalculatorTests
         var result = API.Services.Sleep.SleepReportCalculator.ComputeTrendsSummary(nights);
 
         result.Last7dVsPrior7d.ScoreDelta.Should().BeApproximately(20, 0.01);
+    }
+
+    [Fact]
+    public void ComputeTrendsSummary_Computes7dVsPrior7dDawnRiseDelta()
+    {
+        // 14 nights: first 7 dawnRise=10, last 7 dawnRise=25 → delta = +15
+        var nights = Enumerable.Range(0, 14).Select(i => new SleepNightSummary
+        {
+            DawnRiseDeltaMg = i < 7 ? 10 : 25,
+            SleepMinutes    = 440,
+            HypoCount       = 0,
+        }).ToArray();
+
+        var result = API.Services.Sleep.SleepReportCalculator.ComputeTrendsSummary(nights);
+
+        result.Last7dVsPrior7d.DawnRiseDelta.Should().BeApproximately(15, 0.01);
     }
 }

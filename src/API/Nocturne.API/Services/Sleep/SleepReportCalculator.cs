@@ -73,8 +73,11 @@ internal static class SleepReportCalculator
     internal static SleepOvernightTir? ComputeOvernightTir(
         SleepSession session, IEnumerable<SensorGlucose> allGlucose)
     {
+        var asleepAt = session.SleepLatencyMs.HasValue
+            ? session.StartTime.AddMilliseconds(session.SleepLatencyMs.Value)
+            : session.StartTime;
         var readings = allGlucose
-            .Where(g => g.Timestamp >= session.StartTime && g.Timestamp <= session.EndTime)
+            .Where(g => g.Timestamp >= asleepAt && g.Timestamp <= session.EndTime)
             .ToList();
 
         if (readings.Count == 0) return null;
@@ -111,8 +114,11 @@ internal static class SleepReportCalculator
         IEnumerable<SensorGlucose> allGlucose,
         IEnumerable<SleepStageInterval> stages)
     {
+        var asleepAt = session.SleepLatencyMs.HasValue
+            ? session.StartTime.AddMilliseconds(session.SleepLatencyMs.Value)
+            : session.StartTime;
         var readings = allGlucose
-            .Where(g => g.Timestamp >= session.StartTime && g.Timestamp <= session.EndTime)
+            .Where(g => g.Timestamp >= asleepAt && g.Timestamp <= session.EndTime)
             .OrderBy(g => g.Timestamp)
             .ToList();
 
@@ -182,11 +188,11 @@ internal static class SleepReportCalculator
 
         var trough = (int)Math.Round(troughReading.Mgdl);
         var peak   = (int)Math.Round(peakReading.Mgdl);
-        var absDelta = peak - trough;
 
-        var hours = Math.Abs((peakReading.Timestamp - troughReading.Timestamp).TotalHours);
-        var signedDelta = peakReading.Timestamp >= troughReading.Timestamp ? absDelta : -absDelta;
-        var rate  = hours > 0 ? signedDelta / hours : 0.0;
+        // Use the net change from first to last reading for direction (positive = rising into wake).
+        var signedDelta  = (int)Math.Round(readings.Last().Mgdl - readings.First().Mgdl);
+        var windowHours  = (readings.Last().Timestamp - readings.First().Timestamp).TotalHours;
+        var rate         = windowHours > 0 ? signedDelta / windowHours : 0.0;
 
         return new SleepDawnPhenomenon
         {
@@ -243,14 +249,14 @@ internal static class SleepReportCalculator
 
     // ── Score Resolution ──────────────────────────────────────────────────
 
-    internal static (int Score, SleepScoreSource Source) ResolveScore(
+    internal static (int? Score, SleepScoreSource? Source) ResolveScore(
         SleepSession session, int hypoCount, SleepStageBreakdown breakdown)
     {
         if (session.SleepScore.HasValue)
             return (session.SleepScore.Value, SleepScoreSource.Device);
 
         var total = (double)breakdown.TotalMinutes;
-        if (total == 0) return (0, SleepScoreSource.Computed);
+        if (total == 0) return (null, null);
 
         var efficiency = (breakdown.DeepMinutes + breakdown.RemMinutes + breakdown.LightMinutes) / total;
         var deepFrac   = breakdown.DeepMinutes  / total;
@@ -259,7 +265,7 @@ internal static class SleepReportCalculator
         var raw        = 40 + efficiency * 25 + deepFrac * 90 + remFrac * 35 - disruption;
         var score      = (int)Math.Round(Math.Clamp(raw, 0, 100));
 
-        return (score, SleepScoreSource.Computed);
+        return ((int?)score, (SleepScoreSource?)SleepScoreSource.Computed);
     }
 
     // ── Night Summary ─────────────────────────────────────────────────────
@@ -272,7 +278,11 @@ internal static class SleepReportCalculator
         var hypos     = ComputeHypoEvents(session, glucose, session.Stages ?? []);
         var tir       = ComputeOvernightTir(session, glucose);
         var dawn      = ComputeDawnPhenomenon(session, glucose);
-        var (score, scoreSource) = ResolveScore(session, hypos.Count, breakdown);
+        var (finalScore, scoreSource) = ResolveScore(session, hypos.Count, breakdown);
+
+        var sessionReadings = glucose
+            .Where(g => g.Timestamp >= session.StartTime && g.Timestamp <= session.EndTime)
+            .ToList();
 
         _ = Guid.TryParse(session.Id, out var sessionId);
 
@@ -288,11 +298,13 @@ internal static class SleepReportCalculator
             RemMinutes      = breakdown.RemMinutes,
             LightMinutes    = breakdown.LightMinutes,
             AwakeMinutes    = breakdown.AwakeMinutes,
-            SleepScore      = score == 0 && session.SleepScore == null ? null : score,
+            SleepScore      = finalScore,
             ScoreSource     = scoreSource,
             OvernightTirPct = tir?.InRangePct,
             HypoCount       = hypos.Count,
-            LowestBg        = hypos.Count > 0 ? hypos.Min(h => h.LowestBg) : null,
+            LowestBg        = sessionReadings.Count > 0
+                                  ? (int)Math.Round(sessionReadings.Min(g => g.Mgdl))
+                                  : null,
             DawnRiseDeltaMg = dawn?.DeltaBg,
             HrvMeanMs       = session.AvgHrv,
         };
@@ -348,6 +360,12 @@ internal static class SleepReportCalculator
         var p7Tir   = MeanTir(prior7);
         var l7Deep  = last7.Any()  ? last7.Average(n => n.DeepMinutes)  : (double?)null;
         var p7Deep  = prior7.Any() ? prior7.Average(n => n.DeepMinutes) : (double?)null;
+        var l7Dawn  = last7.Any(n => n.DawnRiseDeltaMg.HasValue)
+                          ? last7.Where(n => n.DawnRiseDeltaMg.HasValue).Average(n => (double)n.DawnRiseDeltaMg!.Value)
+                          : (double?)null;
+        var p7Dawn  = prior7.Any(n => n.DawnRiseDeltaMg.HasValue)
+                          ? prior7.Where(n => n.DawnRiseDeltaMg.HasValue).Average(n => (double)n.DawnRiseDeltaMg!.Value)
+                          : (double?)null;
 
         return new SleepTrendsSummary
         {
@@ -370,7 +388,7 @@ internal static class SleepReportCalculator
                 ScoreDelta       = l7Score.HasValue && p7Score.HasValue ? l7Score - p7Score : null,
                 TirDelta         = l7Tir.HasValue   && p7Tir.HasValue   ? l7Tir   - p7Tir   : null,
                 DeepMinutesDelta = l7Deep.HasValue  && p7Deep.HasValue  ? l7Deep  - p7Deep  : null,
-                DawnRiseDelta    = null,
+                DawnRiseDelta    = l7Dawn.HasValue && p7Dawn.HasValue ? l7Dawn - p7Dawn : null,
             },
         };
     }

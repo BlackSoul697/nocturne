@@ -428,6 +428,7 @@ public static class ServiceRegistrationExtensions
         });
         services.AddScoped<IStateSpanService, StateSpanService>();
         services.AddScoped<ISleepService, SleepService>();
+        services.AddScoped<ISleepReportService, SleepReportService>();
         services.AddScoped<DeviceStatusProjectionService>();
         services.AddScoped<IDataEventSink<DeviceStatus>>(sp =>
         {
