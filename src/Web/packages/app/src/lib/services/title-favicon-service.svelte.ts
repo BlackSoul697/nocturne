@@ -166,7 +166,7 @@ export class TitleFaviconService {
     this.flashInterval = setInterval(() => {
       this.isFlashOn = !this.isFlashOn;
       this.applyFlashState();
-    }, visualSettings.flashIntervalMs || 500);
+    }, visualSettings.flashIntervalMs || 2000);
 
     // Apply initial flash state
     this.applyFlashState();
