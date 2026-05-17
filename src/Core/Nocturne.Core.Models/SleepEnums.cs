@@ -9,6 +9,11 @@ namespace Nocturne.Core.Models;
 public enum SleepStageType
 {
     /// <summary>
+    /// Stage is not known (e.g. hypo nadir falls outside any recorded stage interval)
+    /// </summary>
+    Unknown = 0,
+
+    /// <summary>
     /// User is in bed (aggregate state, no specific stage)
     /// </summary>
     InBed,
