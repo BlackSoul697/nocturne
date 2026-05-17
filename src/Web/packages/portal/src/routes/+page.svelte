@@ -91,12 +91,12 @@
             <span class="inline-flex items-center gap-2 font-mono text-[11px] tracking-[0.16em] uppercase text-[oklch(0.7_0.01_261)]">
                 <span class="eyebrow-dot size-1.5 rounded-full shrink-0 bg-glucose-in-range"></span>The new Nightscout API
             </span>
-            <h1 class="flex flex-col items-center text-[clamp(2.5rem,7vw,4.8rem)] font-bold leading-[1.06] tracking-[-0.025em] text-[oklch(0.97_0.005_261)] m-0 [text-shadow:0_2px_40px_oklch(0_0_0_/_60%)]">
+            <h1 class="flex flex-col items-center text-[clamp(2.5rem,7vw,4.8rem)] font-bold leading-[1.06] tracking-[-0.025em] text-[oklch(0.97_0.005_261)] m-0 [text-shadow:0_2px_8px_oklch(0_0_0_/_70%),0_4px_40px_oklch(0_0_0_/_80%)]">
                 <span>Every reading.</span>
-                <span><em class="text-glucose-in-range">Every</em> source.</span>
+                <span><em class="text-glucose-low">Every</em> source.</span>
                 <span>One dashboard.</span>
             </h1>
-            <p class="text-[1.05rem] leading-[1.65] text-[oklch(0.74_0.015_261)] max-w-[540px] m-0 [text-shadow:0_1px_20px_oklch(0_0_0_/_50%)]">
+            <p class="text-[1.05rem] leading-[1.65] text-[oklch(0.92_0.01_261)] max-w-[540px] m-0 [text-shadow:0_1px_3px_oklch(0_0_0_/_85%),0_2px_24px_oklch(0_0_0_/_70%)]">
                 Nocturne pulls every CGM, pump, and tracker you use into a single
                 self-hosted dashboard. Fast, multitenant, real-time, and built by
                 the diabetes community.

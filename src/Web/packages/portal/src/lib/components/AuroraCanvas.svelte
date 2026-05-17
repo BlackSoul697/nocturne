@@ -23,8 +23,8 @@ uniform float u_t;
 uniform float u_intensity;
 
 const vec3 C_VLOW  = vec3(0.835, 0.149, 0.192);
-const vec3 C_LOW   = vec3(0.851, 0.455, 0.255);
-const vec3 C_IN    = vec3(0.165, 0.608, 0.608);
+const vec3 C_LOW   = vec3(0.165, 0.608, 0.608);
+const vec3 C_IN    = vec3(0.851, 0.455, 0.255);
 const vec3 C_TIGHT = vec3(0.298, 0.722, 0.420);
 const vec3 C_HIGH  = vec3(0.357, 0.435, 0.902);
 const vec3 C_BG    = vec3(0.039, 0.047, 0.071);
