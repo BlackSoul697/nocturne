@@ -108,4 +108,78 @@ public class SleepReportCalculatorTests
         result.VeryHighPct.Should().BeApproximately(100.0 / 6, 0.01);
         result.MeanBg.Should().Be((int)Math.Round((50 + 65 + 120 + 120 + 200 + 260) / 6.0));
     }
+
+    // ── Hypo Events ───────────────────────────────────────────────────────
+
+    [Fact]
+    public void ComputeHypoEvents_ReturnsEmpty_WhenNoLowReadings()
+    {
+        var session = MakeSession();
+        var glucose = new[] { MakeGlucose(session.StartTime.AddMinutes(10), 85) };
+        var result = API.Services.Sleep.SleepReportCalculator.ComputeHypoEvents(session, glucose, []);
+        result.Should().BeEmpty();
+    }
+
+    [Fact]
+    public void ComputeHypoEvents_DetectsContiguousRun_AndTagsSeverity()
+    {
+        var session = MakeSession();
+        var t0 = session.StartTime.AddMinutes(60);
+        var glucose = new[]
+        {
+            MakeGlucose(t0,                65),  // low
+            MakeGlucose(t0.AddMinutes(5),  62),  // low (nadir)
+            MakeGlucose(t0.AddMinutes(10), 68),  // still low
+            MakeGlucose(t0.AddMinutes(15), 75),  // recovered
+        };
+
+        var result = API.Services.Sleep.SleepReportCalculator.ComputeHypoEvents(session, glucose, []);
+
+        result.Should().HaveCount(1);
+        result[0].LowestBg.Should().Be(62);
+        result[0].Severity.Should().Be(SleepHypoSeverity.Low);
+        result[0].DurationMinutes.Should().Be(10);
+        result[0].Stage.Should().Be(SleepStageType.Unknown);
+    }
+
+    [Fact]
+    public void ComputeHypoEvents_MarksVeryLow_WhenBelowFiftyFour()
+    {
+        var session = MakeSession();
+        var t0 = session.StartTime.AddMinutes(120);
+        var glucose = new[]
+        {
+            MakeGlucose(t0,               50),
+            MakeGlucose(t0.AddMinutes(5), 71),
+        };
+
+        var result = API.Services.Sleep.SleepReportCalculator.ComputeHypoEvents(session, glucose, []);
+
+        result[0].Severity.Should().Be(SleepHypoSeverity.VeryLow);
+    }
+
+    [Fact]
+    public void ComputeHypoEvents_TagsStage_FromStageIntervals()
+    {
+        var session = MakeSession();
+        var t0 = session.StartTime.AddMinutes(90);
+        var glucose = new[]
+        {
+            MakeGlucose(t0,               65),
+            MakeGlucose(t0.AddMinutes(5), 71),
+        };
+        var stages = new[]
+        {
+            new SleepStageInterval
+            {
+                StartTime = session.StartTime.AddMinutes(60),
+                EndTime   = session.StartTime.AddMinutes(120),
+                Stage     = SleepStageType.Deep,
+            },
+        };
+
+        var result = API.Services.Sleep.SleepReportCalculator.ComputeHypoEvents(session, glucose, stages);
+
+        result[0].Stage.Should().Be(SleepStageType.Deep);
+    }
 }

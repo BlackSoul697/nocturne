@@ -102,4 +102,64 @@ internal static class SleepReportCalculator
             MeanBg      = (int)Math.Round(sum / n),
         };
     }
+
+    // ── Hypo Events ───────────────────────────────────────────────────────
+
+    internal static IReadOnlyList<SleepHypoEvent> ComputeHypoEvents(
+        SleepSession session,
+        IEnumerable<SensorGlucose> allGlucose,
+        IEnumerable<SleepStageInterval> stages)
+    {
+        var readings = allGlucose
+            .Where(g => g.Timestamp >= session.StartTime && g.Timestamp <= session.EndTime)
+            .OrderBy(g => g.Timestamp)
+            .ToList();
+
+        var stageList = stages.ToList();
+        var events    = new List<SleepHypoEvent>();
+        SensorGlucose? runStart = null;
+        SensorGlucose? nadir    = null;
+        SensorGlucose? prev     = null;
+
+        foreach (var g in readings)
+        {
+            if (g.Mgdl < ApplicationConstants.ClinicalThresholds.Low)
+            {
+                runStart ??= g;
+                if (nadir == null || g.Mgdl < nadir.Mgdl) nadir = g;
+            }
+            else if (runStart != null && nadir != null && prev != null)
+            {
+                events.Add(BuildHypoEvent(runStart, prev, nadir, stageList));
+                runStart = nadir = null;
+            }
+            prev = g;
+        }
+
+        if (runStart != null && nadir != null && prev != null)
+            events.Add(BuildHypoEvent(runStart, prev, nadir, stageList));
+
+        return events;
+    }
+
+    private static SleepHypoEvent BuildHypoEvent(
+        SensorGlucose start, SensorGlucose end, SensorGlucose nadir,
+        IEnumerable<SleepStageInterval> stages)
+    {
+        var stage = stages.FirstOrDefault(s =>
+            s.StartTime <= nadir.Timestamp && s.EndTime >= nadir.Timestamp)?.Stage
+            ?? SleepStageType.Unknown;
+
+        return new SleepHypoEvent
+        {
+            StartAt         = start.Timestamp,
+            EndAt           = end.Timestamp,
+            DurationMinutes = (int)(end.Timestamp - start.Timestamp).TotalMinutes,
+            LowestBg        = (int)Math.Round(nadir.Mgdl),
+            Stage           = stage,
+            Severity        = nadir.Mgdl <= ApplicationConstants.ClinicalThresholds.VeryLow
+                                ? SleepHypoSeverity.VeryLow
+                                : SleepHypoSeverity.Low,
+        };
+    }
 }
