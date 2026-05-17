@@ -342,6 +342,24 @@ public class SleepReportCalculatorTests
         result.LowestBg.Should().BeNull();
     }
 
+    [Fact]
+    public void ComputeNightSummary_ComputesScore_WhenDeviceScoreAbsent()
+    {
+        var session = MakeSession();
+        session.Id           = Guid.NewGuid().ToString();
+        session.DeepSleepMs  = 90  * 60_000L;
+        session.RemSleepMs   = 100 * 60_000L;
+        session.LightSleepMs = 220 * 60_000L;
+        session.TotalAwakeMs = 30  * 60_000L;
+        session.SleepScore   = null;
+
+        var result = API.Services.Sleep.SleepReportCalculator.ComputeNightSummary(session, []);
+
+        result.ScoreSource.Should().Be(SleepScoreSource.Computed);
+        result.SleepScore.Should().NotBeNull();
+        result.SleepScore.Should().BeInRange(0, 100);
+    }
+
     // ── Deduplication ─────────────────────────────────────────────────────
 
     [Fact]

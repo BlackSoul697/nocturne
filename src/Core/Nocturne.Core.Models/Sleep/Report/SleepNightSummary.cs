@@ -24,4 +24,6 @@ public class SleepNightSummary
     public int? LowestBg { get; set; }
     /// <summary>Dawn rise delta (mg/dL). Null if insufficient pre-wake CGM data.</summary>
     public int? DawnRiseDeltaMg { get; set; }
+    /// <summary>Mean HRV during sleep in milliseconds. Null if not reported by the source device.</summary>
+    public double? HrvMeanMs { get; set; }
 }

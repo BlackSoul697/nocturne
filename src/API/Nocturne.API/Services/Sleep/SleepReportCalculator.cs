@@ -13,6 +13,7 @@ internal static class SleepReportCalculator
 {
     private static readonly TimeSpan GlucoseStalenessLimit = TimeSpan.FromMinutes(15);
     private static readonly TimeSpan DawnWindowSize        = TimeSpan.FromHours(2);
+    private static readonly TimeSpan PostSleepWindow       = TimeSpan.FromMinutes(5);
     private const int DawnMinReadings = 4;
 
     private static readonly SleepSource[] SourcePriority =
@@ -235,7 +236,7 @@ internal static class SleepReportCalculator
                 DurationMinutes = (int)(interval.EndTime - interval.StartTime).TotalMinutes,
                 BgAtStart       = bg,
                 IsPreSleep      = interval.EndTime <= sleepOnset,
-                IsPostSleep     = interval.StartTime >= session.EndTime.AddMinutes(-5),
+                IsPostSleep     = interval.StartTime >= session.EndTime - PostSleepWindow,
             };
         }).ToList();
     }
@@ -293,6 +294,7 @@ internal static class SleepReportCalculator
             HypoCount       = hypos.Count,
             LowestBg        = hypos.Count > 0 ? hypos.Min(h => h.LowestBg) : null,
             DawnRiseDeltaMg = dawn?.DeltaBg,
+            HrvMeanMs       = session.AvgHrv,
         };
     }
 
@@ -305,7 +307,11 @@ internal static class SleepReportCalculator
             .GroupBy(s => s.StartTime.Date)
             .Select(g => g
                 .OrderByDescending(s => s.TotalSleepMs)
-                .ThenBy(s => Array.IndexOf(SourcePriority, s.Source))
+                .ThenBy(s =>
+                {
+                    var idx = Array.IndexOf(SourcePriority, s.Source);
+                    return idx == -1 ? int.MaxValue : idx;
+                })
                 .First())
             .OrderBy(s => s.StartTime)
             .ToList();
@@ -353,6 +359,9 @@ internal static class SleepReportCalculator
             MeanRemPct        = totalSleep > 0 ? totalRem  * 100.0 / totalSleep : 0,
             MeanDawnRiseMg    = nights.Any(n => n.DawnRiseDeltaMg.HasValue)
                                   ? nights.Where(n => n.DawnRiseDeltaMg.HasValue).Average(n => (double)n.DawnRiseDeltaMg!.Value)
+                                  : null,
+            MeanHrvMs         = nights.Any(n => n.HrvMeanMs.HasValue)
+                                  ? nights.Where(n => n.HrvMeanMs.HasValue).Average(n => n.HrvMeanMs!.Value)
                                   : null,
             TotalHypoCount    = nights.Sum(n => n.HypoCount),
             NightsWithHypoPct = nights.Count > 0 ? nights.Count(n => n.HypoCount > 0) * 100.0 / nights.Count : 0,
