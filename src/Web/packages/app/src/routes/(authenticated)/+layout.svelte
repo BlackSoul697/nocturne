@@ -187,7 +187,7 @@
           const alarmVisual: AlarmVisualSettings = {
             screenFlash: true,
             flashColor: "",
-            flashIntervalMs: 2000,
+            flashIntervalMs: 1000,
             persistentBanner: true,
             wakeScreen: true,
             showEmergencyContacts: false,
