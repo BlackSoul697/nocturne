@@ -317,4 +317,55 @@ public class SleepReportCalculatorTests
         score.Should().BeInRange(0, 100);
         source.Should().Be(SleepScoreSource.Computed);
     }
+
+    // ── Night Summary ─────────────────────────────────────────────────────
+
+    [Fact]
+    public void ComputeNightSummary_PopulatesFields()
+    {
+        var sessionId = Guid.NewGuid();
+        var session = MakeSession();
+        session.Id           = sessionId.ToString();
+        session.DeepSleepMs  = 90  * 60_000L;
+        session.RemSleepMs   = 100 * 60_000L;
+        session.LightSleepMs = 220 * 60_000L;
+        session.TotalAwakeMs = 30  * 60_000L;
+        session.SleepScore   = 75;
+
+        var result = API.Services.Sleep.SleepReportCalculator.ComputeNightSummary(session, []);
+
+        result.SessionId.Should().Be(sessionId);
+        result.SleepScore.Should().Be(75);
+        result.ScoreSource.Should().Be(SleepScoreSource.Device);
+        result.DeepMinutes.Should().Be(90);
+        result.HypoCount.Should().Be(0);
+        result.LowestBg.Should().BeNull();
+    }
+
+    // ── Deduplication ─────────────────────────────────────────────────────
+
+    [Fact]
+    public void DeduplicateToOnePerNight_PicksLongestSession()
+    {
+        var night   = new DateTime(2026, 5, 16, 23, 0, 0, DateTimeKind.Utc);
+        var shorter = new SleepSession { StartTime = night, EndTime = night.AddHours(6), TotalSleepMs = 6 * 3_600_000L, Source = SleepSource.Samsung };
+        var longer  = new SleepSession { StartTime = night, EndTime = night.AddHours(8), TotalSleepMs = 8 * 3_600_000L, Source = SleepSource.Oura };
+
+        var result = API.Services.Sleep.SleepReportCalculator.DeduplicateToOnePerNight([shorter, longer]);
+
+        result.Should().HaveCount(1);
+        result[0].Source.Should().Be(SleepSource.Oura);
+    }
+
+    [Fact]
+    public void DeduplicateToOnePerNight_TieBreaksBySourcePriority()
+    {
+        var night   = new DateTime(2026, 5, 16, 23, 0, 0, DateTimeKind.Utc);
+        var oura    = new SleepSession { StartTime = night, EndTime = night.AddHours(8), TotalSleepMs = 8 * 3_600_000L, Source = SleepSource.Oura };
+        var samsung = new SleepSession { StartTime = night, EndTime = night.AddHours(8), TotalSleepMs = 8 * 3_600_000L, Source = SleepSource.Samsung };
+
+        var result = API.Services.Sleep.SleepReportCalculator.DeduplicateToOnePerNight([samsung, oura]);
+
+        result[0].Source.Should().Be(SleepSource.Oura);
+    }
 }

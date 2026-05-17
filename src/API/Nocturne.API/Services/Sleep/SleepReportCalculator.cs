@@ -260,4 +260,54 @@ internal static class SleepReportCalculator
 
         return (score, SleepScoreSource.Computed);
     }
+
+    // ── Night Summary ─────────────────────────────────────────────────────
+
+    internal static SleepNightSummary ComputeNightSummary(
+        SleepSession session, IEnumerable<SensorGlucose> sessionGlucose)
+    {
+        var glucose   = sessionGlucose.ToList();
+        var breakdown = ComputeStageBreakdown(session);
+        var hypos     = ComputeHypoEvents(session, glucose, session.Stages ?? []);
+        var tir       = ComputeOvernightTir(session, glucose);
+        var dawn      = ComputeDawnPhenomenon(session, glucose);
+        var (score, scoreSource) = ResolveScore(session, hypos.Count, breakdown);
+
+        _ = Guid.TryParse(session.Id, out var sessionId);
+
+        return new SleepNightSummary
+        {
+            SessionId       = sessionId,
+            Date            = session.StartTime.ToString("MMM d"),
+            Weekday         = session.StartTime.DayOfWeek.ToString()[..3],
+            InBedAt         = session.StartTime,
+            WakeAt          = session.EndTime,
+            SleepMinutes    = breakdown.DeepMinutes + breakdown.RemMinutes + breakdown.LightMinutes,
+            DeepMinutes     = breakdown.DeepMinutes,
+            RemMinutes      = breakdown.RemMinutes,
+            LightMinutes    = breakdown.LightMinutes,
+            AwakeMinutes    = breakdown.AwakeMinutes,
+            SleepScore      = score == 0 && session.SleepScore == null ? null : score,
+            ScoreSource     = scoreSource,
+            OvernightTirPct = tir?.InRangePct,
+            HypoCount       = hypos.Count,
+            LowestBg        = hypos.Count > 0 ? hypos.Min(h => h.LowestBg) : null,
+            DawnRiseDeltaMg = dawn?.DeltaBg,
+        };
+    }
+
+    // ── Deduplication ─────────────────────────────────────────────────────
+
+    internal static IReadOnlyList<SleepSession> DeduplicateToOnePerNight(
+        IEnumerable<SleepSession> sessions)
+    {
+        return sessions
+            .GroupBy(s => s.StartTime.Date)
+            .Select(g => g
+                .OrderByDescending(s => s.TotalSleepMs)
+                .ThenBy(s => Array.IndexOf(SourcePriority, s.Source))
+                .First())
+            .OrderBy(s => s.StartTime)
+            .ToList();
+    }
 }
