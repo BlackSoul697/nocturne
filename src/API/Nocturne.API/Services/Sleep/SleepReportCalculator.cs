@@ -162,4 +162,39 @@ internal static class SleepReportCalculator
                                 : SleepHypoSeverity.Low,
         };
     }
+
+    // ── Dawn Phenomenon ───────────────────────────────────────────────────
+
+    internal static SleepDawnPhenomenon? ComputeDawnPhenomenon(
+        SleepSession session, IEnumerable<SensorGlucose> allGlucose)
+    {
+        var windowStart = session.EndTime - DawnWindowSize;
+        var readings = allGlucose
+            .Where(g => g.Timestamp >= windowStart && g.Timestamp <= session.EndTime)
+            .OrderBy(g => g.Timestamp)
+            .ToList();
+
+        if (readings.Count < DawnMinReadings) return null;
+
+        var troughReading = readings.MinBy(g => g.Mgdl)!;
+        var peakReading   = readings.MaxBy(g => g.Mgdl)!;
+
+        var trough = (int)Math.Round(troughReading.Mgdl);
+        var peak   = (int)Math.Round(peakReading.Mgdl);
+        var absDelta = peak - trough;
+
+        var hours = Math.Abs((peakReading.Timestamp - troughReading.Timestamp).TotalHours);
+        var signedDelta = peakReading.Timestamp >= troughReading.Timestamp ? absDelta : -absDelta;
+        var rate  = hours > 0 ? signedDelta / hours : 0.0;
+
+        return new SleepDawnPhenomenon
+        {
+            WindowStart        = windowStart,
+            WindowEnd          = session.EndTime,
+            TroughBg           = trough,
+            PeakBg             = peak,
+            DeltaBg            = signedDelta,
+            RateOfClimbPerHour = rate,
+        };
+    }
 }

@@ -182,4 +182,61 @@ public class SleepReportCalculatorTests
 
         result[0].Stage.Should().Be(SleepStageType.Deep);
     }
+
+    // ── Dawn Phenomenon ───────────────────────────────────────────────────
+
+    [Fact]
+    public void ComputeDawnPhenomenon_ReturnsNull_WhenFewerThanFourReadings()
+    {
+        var session = MakeSession();
+        var glucose = new[]
+        {
+            MakeGlucose(session.EndTime.AddMinutes(-90), 100),
+            MakeGlucose(session.EndTime.AddMinutes(-60), 110),
+        };
+
+        var result = API.Services.Sleep.SleepReportCalculator.ComputeDawnPhenomenon(session, glucose);
+
+        result.Should().BeNull();
+    }
+
+    [Fact]
+    public void ComputeDawnPhenomenon_ComputesDeltaAndRate_ForPositiveRise()
+    {
+        var session = MakeSession();
+        var glucose = new[]
+        {
+            MakeGlucose(session.EndTime.AddMinutes(-115), 105),
+            MakeGlucose(session.EndTime.AddMinutes(-110), 98),   // trough
+            MakeGlucose(session.EndTime.AddMinutes(-60),  115),
+            MakeGlucose(session.EndTime.AddMinutes(-10),  140),  // peak
+        };
+
+        var result = API.Services.Sleep.SleepReportCalculator.ComputeDawnPhenomenon(session, glucose);
+
+        result.Should().NotBeNull();
+        result!.TroughBg.Should().Be(98);
+        result.PeakBg.Should().Be(140);
+        result.DeltaBg.Should().Be(42);
+        result.RateOfClimbPerHour.Should().BePositive();
+    }
+
+    [Fact]
+    public void ComputeDawnPhenomenon_ReportsNegativeDelta_WhenGlucoseDeclining()
+    {
+        var session = MakeSession();
+        var glucose = new[]
+        {
+            MakeGlucose(session.EndTime.AddMinutes(-115), 145), // peak (earlier)
+            MakeGlucose(session.EndTime.AddMinutes(-90),  130),
+            MakeGlucose(session.EndTime.AddMinutes(-45),  110),
+            MakeGlucose(session.EndTime.AddMinutes(-10),  98),  // trough (later)
+        };
+
+        var result = API.Services.Sleep.SleepReportCalculator.ComputeDawnPhenomenon(session, glucose);
+
+        result.Should().NotBeNull();
+        result!.DeltaBg.Should().BeNegative();
+        result.RateOfClimbPerHour.Should().BeNegative();
+    }
 }
