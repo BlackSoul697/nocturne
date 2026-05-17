@@ -66,4 +66,40 @@ internal static class SleepReportCalculator
             AwakePct = total > 0 ? awake * 100.0 / total : 0,
         };
     }
+
+    // ── Overnight TIR ─────────────────────────────────────────────────────
+
+    internal static SleepOvernightTir? ComputeOvernightTir(
+        SleepSession session, IEnumerable<SensorGlucose> allGlucose)
+    {
+        var readings = allGlucose
+            .Where(g => g.Timestamp >= session.StartTime && g.Timestamp <= session.EndTime)
+            .ToList();
+
+        if (readings.Count == 0) return null;
+
+        int veryLow = 0, low = 0, inRange = 0, high = 0, veryHigh = 0;
+        double sum = 0;
+
+        foreach (var g in readings)
+        {
+            sum += g.Mgdl;
+            if      (g.Mgdl <= ApplicationConstants.ClinicalThresholds.VeryLow)  veryLow++;
+            else if (g.Mgdl <= ApplicationConstants.ClinicalThresholds.Low)       low++;
+            else if (g.Mgdl <= ApplicationConstants.ClinicalThresholds.High)      inRange++;
+            else if (g.Mgdl <= ApplicationConstants.ClinicalThresholds.VeryHigh)  high++;
+            else                                                                   veryHigh++;
+        }
+
+        var n = (double)readings.Count;
+        return new SleepOvernightTir
+        {
+            VeryLowPct  = veryLow  / n * 100,
+            LowPct      = low      / n * 100,
+            InRangePct  = inRange  / n * 100,
+            HighPct     = high     / n * 100,
+            VeryHighPct = veryHigh / n * 100,
+            MeanBg      = (int)Math.Round(sum / n),
+        };
+    }
 }

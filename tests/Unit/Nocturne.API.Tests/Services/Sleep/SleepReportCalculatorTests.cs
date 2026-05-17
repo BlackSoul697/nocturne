@@ -73,4 +73,39 @@ public class SleepReportCalculatorTests
         result.AwakeMinutes.Should().Be(0);
         result.TotalMinutes.Should().Be(180);
     }
+
+    // ── Overnight TIR ─────────────────────────────────────────────────────
+
+    [Fact]
+    public void ComputeOvernightTir_ReturnsNull_WhenNoGlucoseData()
+    {
+        var session = MakeSession();
+        var result = API.Services.Sleep.SleepReportCalculator.ComputeOvernightTir(session, []);
+        result.Should().BeNull();
+    }
+
+    [Fact]
+    public void ComputeOvernightTir_ComputesRanges_UsingClinicalThresholds()
+    {
+        var session = MakeSession();
+        var readings = new[]
+        {
+            MakeGlucose(session.StartTime.AddMinutes(10), 50),   // very low
+            MakeGlucose(session.StartTime.AddMinutes(20), 65),   // low
+            MakeGlucose(session.StartTime.AddMinutes(30), 120),  // in range
+            MakeGlucose(session.StartTime.AddMinutes(40), 120),  // in range
+            MakeGlucose(session.StartTime.AddMinutes(50), 200),  // high
+            MakeGlucose(session.StartTime.AddMinutes(60), 260),  // very high
+        };
+
+        var result = API.Services.Sleep.SleepReportCalculator.ComputeOvernightTir(session, readings);
+
+        result.Should().NotBeNull();
+        result!.VeryLowPct.Should().BeApproximately(100.0 / 6, 0.01);
+        result.LowPct.Should().BeApproximately(100.0 / 6, 0.01);
+        result.InRangePct.Should().BeApproximately(200.0 / 6, 0.01);
+        result.HighPct.Should().BeApproximately(100.0 / 6, 0.01);
+        result.VeryHighPct.Should().BeApproximately(100.0 / 6, 0.01);
+        result.MeanBg.Should().Be((int)Math.Round((50 + 65 + 120 + 120 + 200 + 260) / 6.0));
+    }
 }
