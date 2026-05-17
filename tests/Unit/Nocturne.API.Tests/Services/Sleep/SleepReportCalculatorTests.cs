@@ -239,4 +239,82 @@ public class SleepReportCalculatorTests
         result!.DeltaBg.Should().BeNegative();
         result.RateOfClimbPerHour.Should().BeNegative();
     }
+
+    // ── Wake Events ───────────────────────────────────────────────────────
+
+    [Fact]
+    public void ComputeWakeEvents_ExtractsAwakeIntervals()
+    {
+        var session = MakeSession();
+        var stages = new[]
+        {
+            new SleepStageInterval { StartTime = session.StartTime,                EndTime = session.StartTime.AddMinutes(20),  Stage = SleepStageType.Awake },
+            new SleepStageInterval { StartTime = session.StartTime.AddMinutes(20), EndTime = session.StartTime.AddMinutes(100), Stage = SleepStageType.Deep  },
+            new SleepStageInterval { StartTime = session.StartTime.AddMinutes(100),EndTime = session.StartTime.AddMinutes(110), Stage = SleepStageType.Awake },
+        };
+
+        var result = API.Services.Sleep.SleepReportCalculator.ComputeWakeEvents(session, stages, []);
+
+        result.Should().HaveCount(2);
+        result[0].DurationMinutes.Should().Be(20);
+        result[0].IsPreSleep.Should().BeTrue();
+        result[1].DurationMinutes.Should().Be(10);
+        result[1].IsPreSleep.Should().BeFalse();
+    }
+
+    [Fact]
+    public void ComputeWakeEvents_AttachesNearestGlucose_WhenWithinFifteenMinutes()
+    {
+        var session = MakeSession();
+        var wakeStart = session.StartTime.AddMinutes(100);
+        var stages = new[]
+        {
+            new SleepStageInterval { StartTime = wakeStart, EndTime = wakeStart.AddMinutes(10), Stage = SleepStageType.Awake },
+        };
+        var glucose = new[] { MakeGlucose(wakeStart.AddMinutes(3), 88) };
+
+        var result = API.Services.Sleep.SleepReportCalculator.ComputeWakeEvents(session, stages, glucose);
+
+        result[0].BgAtStart.Should().Be(88);
+    }
+
+    [Fact]
+    public void ComputeWakeEvents_NullsBg_WhenNearestGlucoseExceedsFifteenMinutes()
+    {
+        var session = MakeSession();
+        var wakeStart = session.StartTime.AddMinutes(100);
+        var stages = new[]
+        {
+            new SleepStageInterval { StartTime = wakeStart, EndTime = wakeStart.AddMinutes(10), Stage = SleepStageType.Awake },
+        };
+        var glucose = new[] { MakeGlucose(wakeStart.AddMinutes(20), 88) };
+
+        var result = API.Services.Sleep.SleepReportCalculator.ComputeWakeEvents(session, stages, glucose);
+
+        result[0].BgAtStart.Should().BeNull();
+    }
+
+    // ── Score Resolution ──────────────────────────────────────────────────
+
+    [Fact]
+    public void ResolveScore_UsesDeviceScore_WhenPresent()
+    {
+        var session = new SleepSession { SleepScore = 82 };
+        var (score, source) = API.Services.Sleep.SleepReportCalculator.ResolveScore(session, 0, new SleepStageBreakdown());
+        score.Should().Be(82);
+        source.Should().Be(SleepScoreSource.Device);
+    }
+
+    [Fact]
+    public void ResolveScore_ComputesFallback_WhenScoreNull()
+    {
+        var session = new SleepSession { SleepScore = null };
+        var breakdown = new SleepStageBreakdown
+        {
+            DeepMinutes = 90, RemMinutes = 100, LightMinutes = 230, AwakeMinutes = 20, TotalMinutes = 440,
+        };
+        var (score, source) = API.Services.Sleep.SleepReportCalculator.ResolveScore(session, hypoCount: 0, breakdown);
+        score.Should().BeInRange(0, 100);
+        source.Should().Be(SleepScoreSource.Computed);
+    }
 }

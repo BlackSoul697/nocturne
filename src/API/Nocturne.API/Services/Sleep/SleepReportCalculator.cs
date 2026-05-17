@@ -197,4 +197,67 @@ internal static class SleepReportCalculator
             RateOfClimbPerHour = rate,
         };
     }
+
+    // ── Wake Events ───────────────────────────────────────────────────────
+
+    internal static IReadOnlyList<SleepWakeEvent> ComputeWakeEvents(
+        SleepSession session,
+        IEnumerable<SleepStageInterval> stages,
+        IEnumerable<SensorGlucose> allGlucose)
+    {
+        var awakeIntervals = stages
+            .Where(s => s.Stage is SleepStageType.Awake or SleepStageType.AwakeInBed)
+            .OrderBy(s => s.StartTime)
+            .ToList();
+
+        var glucose = allGlucose
+            .Where(g => g.Timestamp >= session.StartTime && g.Timestamp <= session.EndTime)
+            .OrderBy(g => g.Timestamp)
+            .ToList();
+
+        var sleepOnset = session.SleepLatencyMs.HasValue
+            ? session.StartTime.AddMilliseconds(session.SleepLatencyMs.Value)
+            : stages.Where(s => s.Stage is not SleepStageType.Awake and not SleepStageType.AwakeInBed)
+                    .MinBy(s => s.StartTime)?.StartTime ?? session.StartTime;
+
+        return awakeIntervals.Select(interval =>
+        {
+            var nearest = glucose.MinBy(g => Math.Abs((g.Timestamp - interval.StartTime).TotalSeconds));
+
+            var bg = nearest != null
+                && Math.Abs((nearest.Timestamp - interval.StartTime).TotalMinutes) <= GlucoseStalenessLimit.TotalMinutes
+                ? (int?)Math.Round(nearest.Mgdl) : null;
+
+            return new SleepWakeEvent
+            {
+                StartAt         = interval.StartTime,
+                EndAt           = interval.EndTime,
+                DurationMinutes = (int)(interval.EndTime - interval.StartTime).TotalMinutes,
+                BgAtStart       = bg,
+                IsPreSleep      = interval.EndTime <= sleepOnset,
+                IsPostSleep     = interval.StartTime >= session.EndTime.AddMinutes(-5),
+            };
+        }).ToList();
+    }
+
+    // ── Score Resolution ──────────────────────────────────────────────────
+
+    internal static (int Score, SleepScoreSource Source) ResolveScore(
+        SleepSession session, int hypoCount, SleepStageBreakdown breakdown)
+    {
+        if (session.SleepScore.HasValue)
+            return (session.SleepScore.Value, SleepScoreSource.Device);
+
+        var total = (double)breakdown.TotalMinutes;
+        if (total == 0) return (0, SleepScoreSource.Computed);
+
+        var efficiency = (breakdown.DeepMinutes + breakdown.RemMinutes + breakdown.LightMinutes) / total;
+        var deepFrac   = breakdown.DeepMinutes  / total;
+        var remFrac    = breakdown.RemMinutes   / total;
+        var disruption = Math.Min(20, breakdown.AwakeMinutes * 0.6 + hypoCount * 4);
+        var raw        = 40 + efficiency * 25 + deepFrac * 90 + remFrac * 35 - disruption;
+        var score      = (int)Math.Round(Math.Clamp(raw, 0, 100));
+
+        return (score, SleepScoreSource.Computed);
+    }
 }
