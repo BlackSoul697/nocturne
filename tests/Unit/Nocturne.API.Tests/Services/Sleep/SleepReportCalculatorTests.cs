@@ -368,4 +368,42 @@ public class SleepReportCalculatorTests
 
         result[0].Source.Should().Be(SleepSource.Oura);
     }
+
+    // ── Trends Summary ────────────────────────────────────────────────────
+
+    [Fact]
+    public void ComputeTrendsSummary_ComputesMeans()
+    {
+        var nights = new[]
+        {
+            new SleepNightSummary { SleepScore = 70, OvernightTirPct = 80, DeepMinutes = 90, SleepMinutes = 440, HypoCount = 0 },
+            new SleepNightSummary { SleepScore = 80, OvernightTirPct = 90, DeepMinutes = 110, SleepMinutes = 460, HypoCount = 1 },
+        };
+
+        var result = API.Services.Sleep.SleepReportCalculator.ComputeTrendsSummary(nights);
+
+        result.NightCount.Should().Be(2);
+        result.MeanScore.Should().BeApproximately(75, 0.01);
+        result.MeanTirPct.Should().BeApproximately(85, 0.01);
+        result.TotalHypoCount.Should().Be(1);
+        result.NightsWithHypoPct.Should().BeApproximately(50, 0.01);
+    }
+
+    [Fact]
+    public void ComputeTrendsSummary_Computes7dVsPrior7dDeltas()
+    {
+        // 14 nights: first 7 score=60, last 7 score=80 → delta = +20
+        var nights = Enumerable.Range(0, 14).Select(i => new SleepNightSummary
+        {
+            SleepScore      = i < 7 ? 60 : 80,
+            OvernightTirPct = 85,
+            DeepMinutes     = 90,
+            SleepMinutes    = 440,
+            HypoCount       = 0,
+        }).ToArray();
+
+        var result = API.Services.Sleep.SleepReportCalculator.ComputeTrendsSummary(nights);
+
+        result.Last7dVsPrior7d.ScoreDelta.Should().BeApproximately(20, 0.01);
+    }
 }

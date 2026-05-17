@@ -310,4 +310,59 @@ internal static class SleepReportCalculator
             .OrderBy(s => s.StartTime)
             .ToList();
     }
+
+    // ── Trends Summary ────────────────────────────────────────────────────
+
+    internal static SleepTrendsSummary ComputeTrendsSummary(IReadOnlyList<SleepNightSummary> nights)
+    {
+        if (nights.Count == 0) return new SleepTrendsSummary();
+
+        var scored     = nights.Where(n => n.SleepScore.HasValue).ToList();
+        var tirNights  = nights.Where(n => n.OvernightTirPct.HasValue).ToList();
+        var totalSleep = nights.Sum(n => n.SleepMinutes);
+        var totalDeep  = nights.Sum(n => n.DeepMinutes);
+        var totalRem   = nights.Sum(n => n.RemMinutes);
+
+        var last7  = nights.TakeLast(7).ToList();
+        var prior7 = nights.TakeLast(14).Take(7).ToList();
+
+        static double? MeanScore(IList<SleepNightSummary> ns) =>
+            ns.Any(n => n.SleepScore.HasValue)
+                ? ns.Where(n => n.SleepScore.HasValue).Average(n => (double)n.SleepScore!.Value)
+                : null;
+
+        static double? MeanTir(IList<SleepNightSummary> ns) =>
+            ns.Any(n => n.OvernightTirPct.HasValue)
+                ? ns.Where(n => n.OvernightTirPct.HasValue).Average(n => n.OvernightTirPct!.Value)
+                : null;
+
+        var l7Score = MeanScore(last7);
+        var p7Score = MeanScore(prior7);
+        var l7Tir   = MeanTir(last7);
+        var p7Tir   = MeanTir(prior7);
+        var l7Deep  = last7.Any()  ? last7.Average(n => n.DeepMinutes)  : (double?)null;
+        var p7Deep  = prior7.Any() ? prior7.Average(n => n.DeepMinutes) : (double?)null;
+
+        return new SleepTrendsSummary
+        {
+            NightCount        = nights.Count,
+            MeanScore         = scored.Count   > 0 ? scored.Average(n => (double)n.SleepScore!.Value) : null,
+            MeanTirPct        = tirNights.Count > 0 ? tirNights.Average(n => n.OvernightTirPct!.Value) : null,
+            MeanAsleepMinutes = nights.Average(n => n.SleepMinutes),
+            MeanDeepPct       = totalSleep > 0 ? totalDeep * 100.0 / totalSleep : 0,
+            MeanRemPct        = totalSleep > 0 ? totalRem  * 100.0 / totalSleep : 0,
+            MeanDawnRiseMg    = nights.Any(n => n.DawnRiseDeltaMg.HasValue)
+                                  ? nights.Where(n => n.DawnRiseDeltaMg.HasValue).Average(n => (double)n.DawnRiseDeltaMg!.Value)
+                                  : null,
+            TotalHypoCount    = nights.Sum(n => n.HypoCount),
+            NightsWithHypoPct = nights.Count > 0 ? nights.Count(n => n.HypoCount > 0) * 100.0 / nights.Count : 0,
+            Last7dVsPrior7d = new SleepTrendsDelta
+            {
+                ScoreDelta       = l7Score.HasValue && p7Score.HasValue ? l7Score - p7Score : null,
+                TirDelta         = l7Tir.HasValue   && p7Tir.HasValue   ? l7Tir   - p7Tir   : null,
+                DeepMinutesDelta = l7Deep.HasValue  && p7Deep.HasValue  ? l7Deep  - p7Deep  : null,
+                DawnRiseDelta    = null,
+            },
+        };
+    }
 }
