@@ -30036,6 +30036,8 @@ export interface StatusResponse {
     authorized?: any | undefined;
     runtimeState?: string | undefined;
     head?: string | undefined;
+    isDemo?: boolean | undefined;
+    nextResetAt?: Date | undefined;
 }
 
 export interface CreateIssueResponse {

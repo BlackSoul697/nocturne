@@ -29,6 +29,10 @@
 {{- printf "%s-bootstrap" (include "nocturne.fullname" .) | trunc 63 | trimSuffix "-" -}}
 {{- end -}}
 
+{{- define "nocturne.demo.fullname" -}}
+{{- printf "%s-demo" (include "nocturne.fullname" .) | trunc 63 | trimSuffix "-" -}}
+{{- end -}}
+
 {{- define "nocturne.chart" -}}
 {{- printf "%s-%s" .Chart.Name .Chart.Version | replace "+" "_" | trunc 63 | trimSuffix "-" -}}
 {{- end -}}
@@ -56,6 +60,11 @@ app.kubernetes.io/component: api
 {{- define "nocturne.web.selectorLabels" -}}
 {{ include "nocturne.selectorLabels" . }}
 app.kubernetes.io/component: web
+{{- end -}}
+
+{{- define "nocturne.demo.selectorLabels" -}}
+{{ include "nocturne.selectorLabels" . }}
+app.kubernetes.io/component: demo
 {{- end -}}
 
 {{- define "nocturne.serviceAccountName" -}}
@@ -101,6 +110,17 @@ back to `<registry>/<repository>:<tag>`.
 {{- printf "%s/%s@%s" .Values.bootstrap.image.registry .Values.bootstrap.image.repository .Values.bootstrap.image.digest -}}
 {{- else -}}
 {{- printf "%s/%s:%s" .Values.bootstrap.image.registry .Values.bootstrap.image.repository .Values.bootstrap.image.tag -}}
+{{- end -}}
+{{- end -}}
+
+{{- define "nocturne.demo.image" -}}
+{{- $reg := .Values.image.registry -}}
+{{- $repo := .Values.demo.image.repository -}}
+{{- if .Values.demo.image.digest -}}
+{{- printf "%s/%s@%s" $reg $repo .Values.demo.image.digest -}}
+{{- else -}}
+{{- $tag := default .Chart.AppVersion .Values.demo.image.tag -}}
+{{- printf "%s/%s:%s" $reg $repo $tag -}}
 {{- end -}}
 {{- end -}}
 

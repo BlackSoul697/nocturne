@@ -17,6 +17,7 @@
   import { Button } from "$lib/components/ui/button";
   import AlertBanner from "$lib/components/alerts/AlertBanner.svelte";
   import FiringToast from "$lib/components/alerts/FiringToast.svelte";
+  import DemoBanner from "$lib/components/layout/DemoBanner.svelte";
   import GuestBanner from "$lib/components/layout/GuestBanner.svelte";
   import MembershipRequestAutoSubmit from "$lib/components/members/MembershipRequestAutoSubmit.svelte";
   import { CommandPalette } from "$lib/components/command-palette";
@@ -209,6 +210,9 @@
     <AppSidebar user={data.user} tenantCount={data.tenantCount} effectivePermissions={data.effectivePermissions} isPlatformAdmin={data.isPlatformAdmin} isGuestSession={data.isGuestSession} />
     <MobileHeader />
     <Sidebar.Inset>
+      {#if data.isDemo}
+        <DemoBanner nextResetAt={data.nextResetAt} />
+      {/if}
       {#if data.isGuestSession && data.guestExpiresAt}
         <GuestBanner expiresAt={data.guestExpiresAt} />
       {/if}

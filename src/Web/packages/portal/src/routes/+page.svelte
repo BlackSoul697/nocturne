@@ -5,12 +5,12 @@
     import AuroraCanvas from "$lib/components/AuroraCanvas.svelte";
     import AuroraPool from "$lib/components/AuroraPool.svelte";
     import FeaturePillars from "$lib/components/features/FeaturePillars.svelte";
-    import { getCommunityData } from "$lib/data/portal.remote";
+    import { getCommunityData } from "$lib/data/portal";
 
     let textBlockEl: HTMLElement | null = $state(null);
 
     let communityData = $state<Awaited<ReturnType<typeof getCommunityData>> | null>(null);
-    getCommunityData({})
+    getCommunityData()
         .then((d) => (communityData = d))
         .catch(() => {});
 

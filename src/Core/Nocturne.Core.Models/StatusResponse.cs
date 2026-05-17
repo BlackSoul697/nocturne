@@ -107,4 +107,18 @@ public class StatusResponse
     /// </summary>
     [JsonPropertyName("head")]
     public string? Head { get; set; }
+
+    /// <summary>
+    /// Whether this tenant is a demo instance.
+    /// </summary>
+    [JsonPropertyName("isDemo")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public bool? IsDemo { get; set; }
+
+    /// <summary>
+    /// When demo data will next be reset (null if disabled or not a demo).
+    /// </summary>
+    [JsonPropertyName("nextResetAt")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public DateTime? NextResetAt { get; set; }
 }

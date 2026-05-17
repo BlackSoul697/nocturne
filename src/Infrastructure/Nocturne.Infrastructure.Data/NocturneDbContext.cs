@@ -527,6 +527,8 @@ public class NocturneDbContext : DbContext
     /// </summary>
     public DbSet<TenantDataRetentionConfigEntity> TenantDataRetentionConfig { get; set; }
 
+    public DbSet<TenantDemoConfigEntity> TenantDemoConfigs => Set<TenantDemoConfigEntity>();
+
     /// <summary>
     /// Configure the database model and relationships
     /// </summary>

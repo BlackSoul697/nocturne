@@ -126,6 +126,31 @@ public class StatusService : IStatusService
             settings["runtimeState"] = "demo";
         }
 
+        // Populate demo fields if this tenant is a demo instance
+        bool? isDemo = null;
+        DateTime? nextResetAt = null;
+
+        if (_demoModeService.IsEnabled)
+        {
+            var tenantId = _tenantAccessor.Context?.TenantId;
+            if (tenantId.HasValue)
+            {
+                await using var ctx = await _dbContextFactory.CreateDbContextAsync();
+                var tenant = await ctx.Tenants
+                    .AsNoTracking()
+                    .Include(t => t.DemoConfig)
+                    .Where(t => t.Id == tenantId.Value)
+                    .Select(t => new { t.IsDemo, NextResetAt = t.DemoConfig != null ? t.DemoConfig.NextResetAt : null })
+                    .FirstOrDefaultAsync();
+
+                if (tenant is { IsDemo: true })
+                {
+                    isDemo = true;
+                    nextResetAt = tenant.NextResetAt;
+                }
+            }
+        }
+
         var response = new StatusResponse
         {
             Status = "ok",
@@ -140,6 +165,8 @@ public class StatusService : IStatusService
             ExtendedSettings = GetExtendedSettings(),
             Authorized = null, // Nightscout returns null for unauthenticated requests
             RuntimeState = _demoModeService.IsEnabled ? "demo" : "loaded",
+            IsDemo = isDemo,
+            NextResetAt = nextResetAt,
         };
 
         _logger.LogDebug(

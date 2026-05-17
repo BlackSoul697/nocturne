@@ -1,4 +1,4 @@
-import adapter from '@sveltejs/adapter-cloudflare';
+import adapter from '@sveltejs/adapter-static';
 import { vitePreprocess } from '@sveltejs/vite-plugin-svelte';
 import { mdsvex } from 'mdsvex';
 import { remarkVars } from '@nocturne/cms/remark/vars';
@@ -8,15 +8,19 @@ const config = {
   preprocess: [vitePreprocess(), mdsvex({ extensions: ['.svx'], remarkPlugins: [remarkVars] })],
   extensions: ['.svelte', '.svx'],
   kit: {
-    adapter: adapter(),
+    adapter: adapter({
+      pages: 'build',
+      assets: 'build',
+      fallback: '404.html',
+    }),
+    paths: {
+      base: process.env.BASE_PATH ?? '',
+    },
     prerender: {
       handleHttpError: ({ path, message }) => {
         if (path === '/setup') return;
         throw new Error(message);
       },
-    },
-    experimental: {
-      remoteFunctions: true,
     },
   },
   compilerOptions: {

@@ -302,36 +302,11 @@ class Program
 
         if (includeDemoService)
         {
-            var demoService = builder.AddDemoService<Projects.Nocturne_Services_Demo>(
+            builder.AddDemoService<Projects.Nocturne_Services_Demo>(
                 api,
                 managedDatabase,
                 options => { }
             );
-
-            if (demoService != null)
-            {
-                if (
-                    managedDatabase != null
-                    && postgresServer != null
-                    && postgresAppPassword != null
-                    && postgresMigratorPassword != null
-                )
-                {
-                    demoService.WithNocturneDatabase(
-                        postgresServer,
-                        dbName,
-                        postgresAppPassword,
-                        postgresMigratorPassword
-                    );
-                }
-                else if (remoteAppConnectionString != null && remoteMigratorConnectionString != null)
-                {
-                    demoService.WithNocturneRemoteDatabase(
-                        remoteAppConnectionString,
-                        remoteMigratorConnectionString
-                    );
-                }
-            }
         }
 
         // ------------------------------------------------------------------

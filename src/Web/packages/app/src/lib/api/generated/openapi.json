@@ -34808,6 +34808,15 @@
           "head": {
             "type": "string",
             "nullable": true
+          },
+          "isDemo": {
+            "type": "boolean",
+            "nullable": true
+          },
+          "nextResetAt": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
           }
         }
       },

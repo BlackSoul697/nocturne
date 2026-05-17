@@ -4085,6 +4085,43 @@ namespace Nocturne.Infrastructure.Data.Migrations
                     b.ToTable("tenant_data_retention_config");
                 });
 
+            modelBuilder.Entity("Nocturne.Infrastructure.Data.Entities.TenantDemoConfigEntity", b =>
+                {
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("tenant_id");
+
+                    b.Property<string>("AccessMode")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)")
+                        .HasColumnName("access_mode");
+
+                    b.Property<int>("BackfillDays")
+                        .HasColumnType("integer")
+                        .HasColumnName("backfill_days");
+
+                    b.Property<int>("IntervalMinutes")
+                        .HasColumnType("integer")
+                        .HasColumnName("interval_minutes");
+
+                    b.Property<DateTime?>("LastResetAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("last_reset_at");
+
+                    b.Property<DateTime?>("NextResetAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("next_reset_at");
+
+                    b.Property<int>("ResetIntervalMinutes")
+                        .HasColumnType("integer")
+                        .HasColumnName("reset_interval_minutes");
+
+                    b.HasKey("TenantId");
+
+                    b.ToTable("tenant_demo_config");
+                });
+
             modelBuilder.Entity("Nocturne.Infrastructure.Data.Entities.TenantEntity", b =>
                 {
                     b.Property<Guid>("Id")
@@ -4105,6 +4142,10 @@ namespace Nocturne.Infrastructure.Data.Migrations
                     b.Property<bool>("IsActive")
                         .HasColumnType("boolean")
                         .HasColumnName("is_active");
+
+                    b.Property<bool>("IsDemo")
+                        .HasColumnType("boolean")
+                        .HasColumnName("is_demo");
 
                     b.Property<DateTime?>("LastReadingAt")
                         .HasColumnType("timestamp with time zone")
@@ -7975,6 +8016,17 @@ namespace Nocturne.Infrastructure.Data.Migrations
                         .HasForeignKey("TenantId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
+                });
+
+            modelBuilder.Entity("Nocturne.Infrastructure.Data.Entities.TenantDemoConfigEntity", b =>
+                {
+                    b.HasOne("Nocturne.Infrastructure.Data.Entities.TenantEntity", "Tenant")
+                        .WithMany()
+                        .HasForeignKey("TenantId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Tenant");
                 });
 
             modelBuilder.Entity("Nocturne.Infrastructure.Data.Entities.TenantMemberEntity", b =>

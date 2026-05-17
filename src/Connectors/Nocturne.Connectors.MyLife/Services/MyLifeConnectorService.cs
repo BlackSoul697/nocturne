@@ -1,5 +1,4 @@
 using Microsoft.Extensions.Logging;
-using Microsoft.Extensions.Options;
 using Nocturne.Connectors.Core.Interfaces;
 using Nocturne.Connectors.Core.Models;
 using Nocturne.Connectors.Core.Services;
@@ -8,6 +7,7 @@ using Nocturne.Connectors.MyLife.Mappers;
 using Nocturne.Connectors.MyLife.Mappers.Constants;
 using Nocturne.Connectors.MyLife.Models;
 using Nocturne.Core.Constants;
+using Nocturne.Core.Contracts.Multitenancy;
 using Nocturne.Core.Models;
 using Nocturne.Core.Models.V4;
 
@@ -20,16 +20,16 @@ namespace Nocturne.Connectors.MyLife.Services;
 /// </summary>
 public class MyLifeConnectorService(
     HttpClient httpClient,
-    IOptions<MyLifeConnectorConfiguration> config,
+    IConnectorServerResolver<MyLifeConnectorConfiguration> serverResolver,
     ILogger<MyLifeConnectorService> logger,
     MyLifeAuthTokenProvider tokenProvider,
     MyLifeEventProcessor eventProcessor,
-    MyLifeSessionStore sessionStore,
+    IMyLifeSessionCache sessionCache,
+    ITenantAccessor tenantAccessor,
     MyLifeSyncService syncService,
     IConnectorPublisher? publisher = null
-) : BaseConnectorService<MyLifeConnectorConfiguration>(httpClient, logger, publisher)
+) : BaseConnectorService<MyLifeConnectorConfiguration>(httpClient, serverResolver, logger, publisher)
 {
-    private readonly MyLifeConnectorConfiguration _config = config.Value;
 
     public override string ServiceName => "MyLife";
     protected override string ConnectorSource => DataSources.MyLifeConnector;
@@ -50,18 +50,11 @@ public class MyLifeConnectorService(
     public override bool IsHealthy =>
         FailedRequestCount < MaxFailedRequestsBeforeUnhealthy && !tokenProvider.IsTokenExpired;
 
-    public override async Task<bool> AuthenticateAsync()
+    public override Task<bool> AuthenticateAsync()
     {
-        var token = await tokenProvider.GetValidTokenAsync();
-        if (string.IsNullOrWhiteSpace(token))
-        {
-            sessionStore.Clear();
-            TrackFailedRequest("Token missing");
-            return false;
-        }
-
+        // Auth happens per-tenant inside PerformSyncInternalAsync where config is available
         TrackSuccessfulRequest();
-        return true;
+        return Task.FromResult(true);
     }
 
     /// <summary>
@@ -79,17 +72,19 @@ public class MyLifeConnectorService(
     public async Task<IEnumerable<Profile>> FetchPumpSettingsProfileAsync(
         CancellationToken cancellationToken)
     {
-        if (string.IsNullOrWhiteSpace(sessionStore.ServiceUrl)
-            || string.IsNullOrWhiteSpace(sessionStore.AuthToken)
-            || string.IsNullOrWhiteSpace(sessionStore.PatientId))
+        var session = sessionCache.Get(tenantAccessor.TenantId);
+        if (session == null
+            || string.IsNullOrWhiteSpace(session.ServiceUrl)
+            || string.IsNullOrWhiteSpace(session.AuthToken)
+            || string.IsNullOrWhiteSpace(session.PatientId))
         {
             return [];
         }
 
         var readouts = await syncService.FetchPumpSettingsAsync(
-            sessionStore.ServiceUrl,
-            sessionStore.AuthToken,
-            sessionStore.PatientId,
+            session.ServiceUrl,
+            session.AuthToken,
+            session.PatientId,
             cancellationToken
         );
 
@@ -119,9 +114,11 @@ public class MyLifeConnectorService(
         try
         {
             // Validate session
-            if (string.IsNullOrWhiteSpace(sessionStore.ServiceUrl)
-                || string.IsNullOrWhiteSpace(sessionStore.AuthToken)
-                || string.IsNullOrWhiteSpace(sessionStore.PatientId))
+            var session = sessionCache.Get(tenantAccessor.TenantId);
+            if (session == null
+                || string.IsNullOrWhiteSpace(session.ServiceUrl)
+                || string.IsNullOrWhiteSpace(session.AuthToken)
+                || string.IsNullOrWhiteSpace(session.PatientId))
             {
                 result.Success = false;
                 result.Errors.Add("MyLife session not established");
@@ -160,9 +157,9 @@ public class MyLifeConnectorService(
 
             // Stream month by month
             await foreach (var batch in syncService.FetchEventsPerMonthAsync(
-                sessionStore.ServiceUrl,
-                sessionStore.AuthToken,
-                sessionStore.PatientId,
+                session.ServiceUrl,
+                session.AuthToken,
+                session.PatientId,
                 overallSince,
                 until,
                 cancellationToken))

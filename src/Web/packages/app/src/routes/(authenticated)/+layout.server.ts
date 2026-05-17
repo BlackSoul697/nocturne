@@ -49,10 +49,23 @@ export const load: LayoutServerLoad = async ({ locals, cookies, url }) => {
     !locals.requireAuthentication ||
     hasGlucoseReadPermission(locals.effectivePermissions ?? []);
 
+  // Fetch demo status for the banner (non-blocking — default to non-demo on failure)
+  let isDemo = false;
+  let nextResetAt: string | null = null;
+  try {
+    const status = await locals.apiClient.status.getStatus();
+    isDemo = status.isDemo ?? false;
+    nextResetAt = status.nextResetAt ? status.nextResetAt.toISOString() : null;
+  } catch {
+    // Swallow — demo banner is non-critical
+  }
+
   return {
     user: locals.user ?? null,
     isGuestSession: locals.isGuestSession ?? false,
     guestExpiresAt: locals.guestExpiresAt ?? null,
     canViewRealtimeData,
+    isDemo,
+    nextResetAt,
   };
 };

@@ -24,13 +24,14 @@ public class TidepoolConnectorService : BaseConnectorService<TidepoolConnectorCo
 
     public TidepoolConnectorService(
         HttpClient httpClient,
+        IConnectorServerResolver<TidepoolConnectorConfiguration> serverResolver,
         ILogger<TidepoolConnectorService> logger,
         IRetryDelayStrategy retryDelayStrategy,
         IRateLimitingStrategy rateLimitingStrategy,
         TidepoolAuthTokenProvider tokenProvider,
         IConnectorPublisher? publisher = null
     )
-        : base(httpClient, logger, publisher)
+        : base(httpClient, serverResolver, logger, publisher)
     {
         _retryDelayStrategy =
             retryDelayStrategy ?? throw new ArgumentNullException(nameof(retryDelayStrategy));
@@ -51,23 +52,11 @@ public class TidepoolConnectorService : BaseConnectorService<TidepoolConnectorCo
         SyncDataType.CarbIntake
     ];
 
-    public override async Task<bool> AuthenticateAsync()
+    public override Task<bool> AuthenticateAsync()
     {
-        var token = await _tokenProvider.GetValidTokenAsync();
-        if (token == null)
-        {
-            TrackFailedRequest("Failed to get valid Tidepool session token");
-            return false;
-        }
-
-        if (string.IsNullOrEmpty(_tokenProvider.UserId))
-        {
-            TrackFailedRequest("Tidepool user ID not available after authentication");
-            return false;
-        }
-
+        // Auth happens per-tenant inside PerformSyncInternalAsync where config is available
         TrackSuccessfulRequest();
-        return true;
+        return Task.FromResult(true);
     }
 
     protected override async Task<SyncResult> PerformSyncInternalAsync(
@@ -90,6 +79,7 @@ public class TidepoolConnectorService : BaseConnectorService<TidepoolConnectorCo
             try
             {
                 var bgValues = await FetchDataAsync<TidepoolBgValue[]>(
+                    config,
                     $"{TidepoolConstants.DataTypes.Cbg},{TidepoolConstants.DataTypes.Smbg}",
                     request.From, request.To);
 
@@ -130,8 +120,8 @@ public class TidepoolConnectorService : BaseConnectorService<TidepoolConnectorCo
         {
             try
             {
-                var bolusTask = FetchDataAsync<TidepoolBolus[]>(TidepoolConstants.DataTypes.Bolus, request.From, request.To);
-                var foodTask = FetchDataAsync<TidepoolFood[]>(TidepoolConstants.DataTypes.Food, request.From, request.To);
+                var bolusTask = FetchDataAsync<TidepoolBolus[]>(config, TidepoolConstants.DataTypes.Bolus, request.From, request.To);
+                var foodTask = FetchDataAsync<TidepoolFood[]>(config, TidepoolConstants.DataTypes.Food, request.From, request.To);
                 await Task.WhenAll(bolusTask, foodTask);
 
                 var boluses = await bolusTask;
@@ -191,10 +181,13 @@ public class TidepoolConnectorService : BaseConnectorService<TidepoolConnectorCo
     ///     Fetches typed data from the Tidepool API data endpoint.
     /// </summary>
     private async Task<T?> FetchDataAsync<T>(
+        TidepoolConnectorConfiguration config,
         string dataType, DateTime? startDate = null, DateTime? endDate = null) where T : class
     {
-        var token = await _tokenProvider.GetValidTokenAsync();
-        if (string.IsNullOrEmpty(token) || string.IsNullOrEmpty(_tokenProvider.UserId))
+        var token = await _tokenProvider.GetValidTokenAsync(config);
+        var cached = await _tokenProvider.GetCachedSessionAsync();
+        var userId = cached?.Metadata?.GetValueOrDefault("UserId");
+        if (string.IsNullOrEmpty(token) || string.IsNullOrEmpty(userId))
         {
             _logger.LogWarning(
                 "[{ConnectorSource}] Cannot fetch data: missing token or user ID",
@@ -205,30 +198,35 @@ public class TidepoolConnectorService : BaseConnectorService<TidepoolConnectorCo
         await _rateLimitingStrategy.ApplyDelayAsync(0);
 
         return await ExecuteWithRetryAsync(
-            async () => await FetchDataCoreAsync<T>(token, dataType, startDate, endDate),
+            async () => await FetchDataCoreAsync<T>(config, token, userId, dataType, startDate, endDate),
             _retryDelayStrategy,
             async () =>
             {
                 _tokenProvider.InvalidateToken();
-                var newToken = await _tokenProvider.GetValidTokenAsync();
+                var newToken = await _tokenProvider.GetValidTokenAsync(config);
                 if (string.IsNullOrEmpty(newToken)) return false;
                 token = newToken;
-                return true;
+                // Re-read userId from refreshed cache
+                var refreshedSession = await _tokenProvider.GetCachedSessionAsync();
+                userId = refreshedSession?.Metadata?.GetValueOrDefault("UserId");
+                return !string.IsNullOrEmpty(userId);
             },
             operationName: $"FetchTidepoolData({dataType})"
         );
     }
 
     private async Task<T?> FetchDataCoreAsync<T>(
-        string token, string dataType, DateTime? startDate, DateTime? endDate) where T : class
+        TidepoolConnectorConfiguration config,
+        string token, string userId, string dataType, DateTime? startDate, DateTime? endDate) where T : class
     {
-        var userId = _tokenProvider.UserId;
         var url = $"/data/{userId}?type={dataType}";
 
         if (startDate.HasValue)
             url += $"&startDate={startDate.Value.ToUniversalTime():o}";
         if (endDate.HasValue)
             url += $"&endDate={endDate.Value.ToUniversalTime():o}";
+
+        url = _serverResolver.BuildUrl(config, url);
 
         var headers = new Dictionary<string, string>
         {

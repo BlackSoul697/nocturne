@@ -218,6 +218,29 @@ observability:
       # upstream Nocturne exposes a /metrics endpoint.
       enabled: false
 
+demo:
+  enabled: false
+  image:
+    repository: nightscout/nocturne/nocturne-demo
+    tag: ""              # defaults to .Chart.AppVersion
+    digest: ""           # see api.image.digest for semantics
+  containerPort: 8080
+  backfillDays: 90
+  intervalMinutes: 5
+  resetIntervalMinutes: 0
+  accessMode: open
+  resources:
+    requests:
+      cpu: 50m
+      memory: 128Mi
+    limits:
+      cpu: 200m
+      memory: 256Mi
+  podAnnotations: {}
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
+
 serviceAccount:
   create: true
   name: ""

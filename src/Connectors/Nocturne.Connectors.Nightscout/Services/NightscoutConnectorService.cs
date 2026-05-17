@@ -15,22 +15,29 @@ public class NightscoutConnectorServiceBase<TConfig> : BaseConnectorService<TCon
 {
     private readonly IRetryDelayStrategy _retryDelayStrategy;
     private readonly IRateLimitingStrategy _rateLimitingStrategy;
-    private readonly TConfig _config;
+
+    // Starts as the startup defaults (from IConnectorRegistration); replaced with the
+    // per-tenant config when AuthenticateWithConfigAsync runs at the start of a sync.
+    // Per-instance, no concurrency: connectors are resolved into a fresh DI scope per
+    // tenant sync, and SyncDataAsync is not invoked concurrently on the same instance.
+    private TConfig _currentConfig;
     private string? _apiSecretHash;
+    private string? _resolvedBaseUrl;
 
     public NightscoutConnectorServiceBase(
         HttpClient httpClient,
+        IConnectorServerResolver<TConfig> serverResolver,
         ILogger logger,
         IRetryDelayStrategy retryDelayStrategy,
         IRateLimitingStrategy rateLimitingStrategy,
-        TConfig config,
+        IConnectorRegistration<TConfig> registration,
         IConnectorPublisher? publisher = null
     )
-        : base(httpClient, logger, publisher)
+        : base(httpClient, serverResolver, logger, publisher)
     {
         _retryDelayStrategy = retryDelayStrategy ?? throw new ArgumentNullException(nameof(retryDelayStrategy));
         _rateLimitingStrategy = rateLimitingStrategy ?? throw new ArgumentNullException(nameof(rateLimitingStrategy));
-        _config = config ?? throw new ArgumentNullException(nameof(config));
+        _currentConfig = registration?.Defaults ?? throw new ArgumentNullException(nameof(registration));
     }
 
     protected override string ConnectorSource => DataSources.NightscoutConnector;
@@ -53,9 +60,18 @@ public class NightscoutConnectorServiceBase<TConfig> : BaseConnectorService<TCon
 
     public override async Task<bool> AuthenticateAsync()
     {
-        EnsureBaseAddress();
+        // Legacy no-config overload; uses whatever config the service was last primed
+        // with (startup defaults until AuthenticateWithConfigAsync replaces it).
+        // Per-tenant sync uses AuthenticateWithConfigAsync instead.
+        return await AuthenticateWithConfigAsync(_currentConfig);
+    }
 
-        if (string.IsNullOrEmpty(_config.ApiSecret))
+    private async Task<bool> AuthenticateWithConfigAsync(TConfig config)
+    {
+        _currentConfig = config;
+        _resolvedBaseUrl = ResolveBaseUrl(config.Url);
+
+        if (string.IsNullOrEmpty(config.ApiSecret))
         {
             _logger.LogError(
                 "[{ConnectorSource}] API secret is not configured",
@@ -64,17 +80,18 @@ public class NightscoutConnectorServiceBase<TConfig> : BaseConnectorService<TCon
             return false;
         }
 
-        _apiSecretHash = ComputeApiSecretHash(_config.ApiSecret);
+        _apiSecretHash = ComputeApiSecretHash(config.ApiSecret);
 
         _logger.LogDebug(
             "[{ConnectorSource}] Authenticating with Nightscout at {Url}",
             ConnectorSource,
-            _httpClient.BaseAddress);
+            _resolvedBaseUrl);
 
         try
         {
             var headers = GetAuthHeaders();
-            var response = await GetWithHeadersAsync("/api/v1/entries.json?count=1", headers);
+            var response = await GetWithHeadersAsync(
+                $"{_resolvedBaseUrl}/api/v1/entries.json?count=1", headers);
 
             if (!response.IsSuccessStatusCode)
             {
@@ -86,7 +103,7 @@ public class NightscoutConnectorServiceBase<TConfig> : BaseConnectorService<TCon
                     _logger.LogError(
                         "[{ConnectorSource}] Nightscout instance at {Url} is behind a WAF (e.g. Cloudflare) that is blocking API requests",
                         ConnectorSource,
-                        _httpClient.BaseAddress);
+                        _resolvedBaseUrl);
                     TrackFailedRequest(
                         "Your Nightscout instance is behind a firewall (e.g. Cloudflare) that is blocking Nocturne from syncing. " +
                         "Please add a WAF bypass rule for API paths (e.g. /api/*) or allowlist the Nocturne server IP.");
@@ -114,7 +131,7 @@ public class NightscoutConnectorServiceBase<TConfig> : BaseConnectorService<TCon
             _logger.LogError(ex,
                 "[{ConnectorSource}] Failed to connect to Nightscout instance at {Url}",
                 ConnectorSource,
-                _httpClient.BaseAddress);
+                _resolvedBaseUrl);
             return false;
         }
     }
@@ -125,7 +142,7 @@ public class NightscoutConnectorServiceBase<TConfig> : BaseConnectorService<TCon
         CancellationToken cancellationToken,
         ISyncProgressReporter? progressReporter = null)
     {
-        if (!await AuthenticateAsync())
+        if (!await AuthenticateWithConfigAsync(config))
         {
             return new SyncResult
             {
@@ -375,7 +392,7 @@ public class NightscoutConnectorServiceBase<TConfig> : BaseConnectorService<TCon
             allEntries.AddRange(entries);
 
             // If we got fewer than MaxCount, we've fetched everything in this range
-            if (entries.Length < _config.MaxCount)
+            if (entries.Length < _currentConfig.MaxCount)
                 break;
 
             // Find the oldest entry's date and paginate backwards
@@ -431,7 +448,7 @@ public class NightscoutConnectorServiceBase<TConfig> : BaseConnectorService<TCon
 
             allTreatments.AddRange(treatments);
 
-            if (treatments.Length < _config.MaxCount)
+            if (treatments.Length < _currentConfig.MaxCount)
                 break;
 
             // Find the oldest treatment's created_at and paginate backwards.
@@ -506,7 +523,7 @@ public class NightscoutConnectorServiceBase<TConfig> : BaseConnectorService<TCon
 
             allStatuses.AddRange(statuses);
 
-            if (statuses.Length < _config.MaxCount)
+            if (statuses.Length < _currentConfig.MaxCount)
                 break;
 
             var oldestDate = statuses
@@ -543,7 +560,7 @@ public class NightscoutConnectorServiceBase<TConfig> : BaseConnectorService<TCon
     private async Task<IEnumerable<Food>> FetchFoodAsync()
     {
         var foods = await FetchDataAsync<Food[]>(
-            $"/api/v1/food.json?count={_config.MaxCount}",
+            $"/api/v1/food.json?count={_currentConfig.MaxCount}",
             "FetchFood");
 
         if (foods == null || foods.Length == 0)
@@ -579,7 +596,7 @@ public class NightscoutConnectorServiceBase<TConfig> : BaseConnectorService<TCon
 
             allActivities.AddRange(activities);
 
-            if (activities.Length < _config.MaxCount)
+            if (activities.Length < _currentConfig.MaxCount)
                 break;
 
             var oldestDate = activities
@@ -626,7 +643,8 @@ public class NightscoutConnectorServiceBase<TConfig> : BaseConnectorService<TCon
     private async Task<T?> FetchDataCoreAsync<T>(string url) where T : class
     {
         var headers = GetAuthHeaders();
-        var response = await GetWithHeadersAsync(url, headers);
+        var absoluteUrl = _resolvedBaseUrl != null ? $"{_resolvedBaseUrl}{url}" : url;
+        var response = await GetWithHeadersAsync(absoluteUrl, headers);
 
         if (!response.IsSuccessStatusCode)
         {
@@ -642,7 +660,7 @@ public class NightscoutConnectorServiceBase<TConfig> : BaseConnectorService<TCon
 
     private string BuildEntriesUrl(DateTime? from, DateTime? to)
     {
-        var url = $"/api/v1/entries.json?count={_config.MaxCount}";
+        var url = $"/api/v1/entries.json?count={_currentConfig.MaxCount}";
 
         if (from.HasValue)
         {
@@ -661,7 +679,7 @@ public class NightscoutConnectorServiceBase<TConfig> : BaseConnectorService<TCon
 
     private string BuildTreatmentsUrl(DateTime? from, DateTime? to)
     {
-        var url = $"/api/v1/treatments.json?count={_config.MaxCount}";
+        var url = $"/api/v1/treatments.json?count={_currentConfig.MaxCount}";
 
         if (from.HasValue)
             url += $"&find[created_at][$gte]={from.Value.ToUniversalTime():o}";
@@ -674,7 +692,7 @@ public class NightscoutConnectorServiceBase<TConfig> : BaseConnectorService<TCon
 
     private string BuildDeviceStatusUrl(DateTime? from, DateTime? to)
     {
-        var url = $"/api/v1/devicestatus.json?count={_config.MaxCount}";
+        var url = $"/api/v1/devicestatus.json?count={_currentConfig.MaxCount}";
 
         if (from.HasValue)
             url += $"&find[created_at][$gte]={from.Value.ToUniversalTime():o}";
@@ -687,7 +705,7 @@ public class NightscoutConnectorServiceBase<TConfig> : BaseConnectorService<TCon
 
     private string BuildActivityUrl(DateTime? from, DateTime? to)
     {
-        var url = $"/api/v1/activity.json?count={_config.MaxCount}";
+        var url = $"/api/v1/activity.json?count={_currentConfig.MaxCount}";
 
         if (from.HasValue)
             url += $"&find[created_at][$gte]={from.Value.ToUniversalTime():o}";
@@ -698,26 +716,23 @@ public class NightscoutConnectorServiceBase<TConfig> : BaseConnectorService<TCon
         return url;
     }
 
-    private void EnsureBaseAddress()
+    private static string ResolveBaseUrl(string configUrl)
     {
-        if (_httpClient.BaseAddress != null)
-            return;
-
-        if (string.IsNullOrEmpty(_config.Url))
+        if (string.IsNullOrEmpty(configUrl))
             throw new InvalidOperationException("Nightscout URL is not configured");
 
-        var url = _config.Url.StartsWith("http", StringComparison.OrdinalIgnoreCase)
-            ? _config.Url
-            : $"https://{_config.Url}";
+        var url = configUrl.StartsWith("http", StringComparison.OrdinalIgnoreCase)
+            ? configUrl
+            : $"https://{configUrl}";
 
-        _httpClient.BaseAddress = new Uri(url);
+        return url.TrimEnd('/');
     }
 
     private Dictionary<string, string> GetAuthHeaders()
     {
         return new Dictionary<string, string>
         {
-            ["api-secret"] = _apiSecretHash ?? ComputeApiSecretHash(_config.ApiSecret)
+            ["api-secret"] = _apiSecretHash ?? ComputeApiSecretHash(_currentConfig.ApiSecret)
         };
     }
 
@@ -767,10 +782,11 @@ public class NightscoutConnectorService : NightscoutConnectorServiceBase<Nightsc
 {
     public NightscoutConnectorService(
         HttpClient httpClient,
+        IConnectorServerResolver<NightscoutConnectorConfiguration> serverResolver,
         ILogger<NightscoutConnectorService> logger,
         IRetryDelayStrategy retryDelayStrategy,
         IRateLimitingStrategy rateLimitingStrategy,
-        NightscoutConnectorConfiguration config,
+        IConnectorRegistration<NightscoutConnectorConfiguration> registration,
         IConnectorPublisher? publisher = null
-    ) : base(httpClient, logger, retryDelayStrategy, rateLimitingStrategy, config, publisher) { }
+    ) : base(httpClient, serverResolver, logger, retryDelayStrategy, rateLimitingStrategy, registration, publisher) { }
 }

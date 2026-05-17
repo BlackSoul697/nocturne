@@ -1,7 +1,4 @@
-import { query } from "$app/server";
 import { z } from "zod";
-
-const emptySchema = z.object({});
 
 // GitHub API configuration
 const GITHUB_OWNER = "nightscout";
@@ -83,19 +80,19 @@ export interface RoadmapMilestone extends GitHubMilestone {
   progress: number;
 }
 
+const headers: HeadersInit = {
+  Accept: "application/vnd.github+json",
+  "X-GitHub-Api-Version": "2022-11-28",
+  "User-Agent": "Nocturne-Portal",
+};
+
 // Fetch milestones from GitHub
-export const getRoadmapData = query(emptySchema, async () => {
+export async function getRoadmapData(): Promise<RoadmapMilestone[]> {
   const cacheKey = "roadmap-data";
   const cached = getCached<RoadmapMilestone[]>(cacheKey);
   if (cached) {
     return cached;
   }
-
-  const headers: HeadersInit = {
-    Accept: "application/vnd.github+json",
-    "X-GitHub-Api-Version": "2022-11-28",
-    "User-Agent": "Nocturne-Portal",
-  };
 
   // Fetch all milestones (open and closed)
   const milestonesResponse = await fetch(
@@ -139,7 +136,7 @@ export const getRoadmapData = query(emptySchema, async () => {
 
   setCache(cacheKey, roadmapMilestones);
   return roadmapMilestones;
-});
+}
 
 // Changelog types
 const githubReleaseSchema = z.object({
@@ -171,24 +168,15 @@ const githubRepoSchema = z.object({
 
 export type GitHubContributor = z.infer<typeof githubContributorSchema>;
 
-const changelogInputSchema = z.object({
-  page: z.number().optional().default(1),
-  per_page: z.number().optional().default(30),
-});
-
 // Fetch releases from GitHub
-export const getChangelog = query(changelogInputSchema, async ({ page, per_page }) => {
+export async function getChangelog(options?: { page?: number; per_page?: number }): Promise<ChangelogRelease[]> {
+  const page = options?.page ?? 1;
+  const per_page = options?.per_page ?? 30;
   const cacheKey = `changelog-page-${page}-${per_page}`;
   const cached = getCached<ChangelogRelease[]>(cacheKey);
   if (cached) {
     return cached;
   }
-
-  const headers: HeadersInit = {
-    Accept: "application/vnd.github+json",
-    "X-GitHub-Api-Version": "2022-11-28",
-    "User-Agent": "Nocturne-Portal",
-  };
 
   const response = await fetch(
     `${GITHUB_API_BASE}/repos/${GITHUB_OWNER}/${GITHUB_REPO}/releases?per_page=${per_page}&page=${page}`,
@@ -207,10 +195,15 @@ export const getChangelog = query(changelogInputSchema, async ({ page, per_page 
 
   setCache(cacheKey, published);
   return published;
-});
+}
 
 // Fetch community data (repo stats, contributors, latest release)
-export const getCommunityData = query(emptySchema, async () => {
+export async function getCommunityData(): Promise<{
+  stars: number;
+  forks: number;
+  contributors: GitHubContributor[];
+  latestRelease: string | null;
+}> {
   const cacheKey = "community-data";
   const cached = getCached<{
     stars: number;
@@ -221,12 +214,6 @@ export const getCommunityData = query(emptySchema, async () => {
   if (cached) {
     return cached;
   }
-
-  const headers: HeadersInit = {
-    Accept: "application/vnd.github+json",
-    "X-GitHub-Api-Version": "2022-11-28",
-    "User-Agent": "Nocturne-Portal",
-  };
 
   const [repoResponse, contributorsResponse, releasesResponse] =
     await Promise.all([
@@ -273,4 +260,4 @@ export const getCommunityData = query(emptySchema, async () => {
 
   setCache(cacheKey, result);
   return result;
-});
+}
