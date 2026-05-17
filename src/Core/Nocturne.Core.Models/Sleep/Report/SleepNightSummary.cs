@@ -1,5 +1,3 @@
-using Nocturne.Core.Models;
-
 namespace Nocturne.Core.Models.Sleep.Report;
 
 /// <summary>Per-night summary for the 30-night trends views.</summary>

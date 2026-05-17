@@ -3,6 +3,9 @@ using Nocturne.Core.Models.Sleep.Report;
 
 namespace Nocturne.Core.Contracts.Sleep;
 
+/// <summary>
+/// Domain service for building sleep reports from session and CGM data.
+/// </summary>
 public interface ISleepReportService
 {
     /// <summary>
