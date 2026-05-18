@@ -4,6 +4,10 @@ on:
   push:
     branches: [main]
 
+concurrency:
+  group: regenerate-api-client
+  cancel-in-progress: true
+
 env:
   DOTNET_VERSION: "10.0.x"
   NODE_VERSION: "24"
@@ -85,5 +89,9 @@ jobs:
             exit 0
           fi
           git commit -m "chore: regenerate API client [skip ci]"
-          git pull --rebase origin main
+          if ! git pull --rebase -X ours origin main; then
+            git checkout --ours -- src/Web/packages/app/src/lib/api/generated
+            git add src/Web/packages/app/src/lib/api/generated
+            git rebase --continue
+          fi
           git push
