@@ -69,14 +69,15 @@ internal sealed class IobCobComputeStage(
         var intervalMinutes = context.IntervalMinutes;
         var defaultBasalRate = context.DefaultBasalRate;
 
-        // Build once — reused by both IOB/COB and basal series to avoid per-tick resolver round-trips.
+        // Build once, then thread through both IOB/COB and the basal series so the resolver
+        // is hit a single time per chart-data request.
         var timeline = await therapyTimelineResolver.BuildAsync(startTime, endTime + 1, ct: cancellationToken);
 
         var (iobSeries, cobSeries, maxIob, maxCob) = BuildIobCobSeries(
             bolusList, carbIntakeList, startTime, endTime, intervalMinutes, tempBasalList, timeline, cancellationToken
         );
 
-        var basalSeries = await basalSeriesBuilder.BuildAsync(tempBasalList, startTime, endTime, defaultBasalRate, cancellationToken);
+        var basalSeries = await basalSeriesBuilder.BuildAsync(tempBasalList, startTime, endTime, defaultBasalRate, timeline, cancellationToken);
 
         var maxBasalRate = Math.Max(
             defaultBasalRate * 2.5,

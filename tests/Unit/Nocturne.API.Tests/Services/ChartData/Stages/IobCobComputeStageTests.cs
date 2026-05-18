@@ -34,8 +34,9 @@ public class IobCobComputeStageTests
                 It.IsAny<long>(),
                 It.IsAny<long>(),
                 It.IsAny<double>(),
+                It.IsAny<TherapyTimeline>(),
                 It.IsAny<CancellationToken>()))
-            .ReturnsAsync((List<TempBasal> _, long start, long _, double rate, CancellationToken _) =>
+            .ReturnsAsync((List<TempBasal> _, long start, long _, double rate, TherapyTimeline _, CancellationToken _) =>
                 new List<BasalPoint>
                 {
                     new()
