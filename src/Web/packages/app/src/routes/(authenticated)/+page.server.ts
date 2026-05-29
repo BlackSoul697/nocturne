@@ -5,6 +5,11 @@ import { transformChartData, type TransformedChartData } from '$lib/utils/chart-
 const INITIAL_HOURS = 6;
 // Total hours to fetch (matches GLUCOSE_CHART_FETCH_HOURS)
 const TOTAL_HOURS = 48;
+// Server-side timeout for chart data fetches so a slow/hung API can't hold the
+// SSR response (and therefore the browser) open indefinitely. The catch blocks
+// below degrade gracefully to null on timeout. Composes with the request's own
+// abort signal via the API client factory's AbortSignal.any merge.
+const CHART_FETCH_TIMEOUT_MS = 10000;
 
 export const load: PageServerLoad = async ({ locals }) => {
 	const { apiClient } = locals;
@@ -20,7 +25,12 @@ export const load: PageServerLoad = async ({ locals }) => {
 	// Fetch initial recent data immediately (blocking)
 	let initialChartData: TransformedChartData | null = null;
 	try {
-		const data = await apiClient.chartData.getDashboardChartData(initialStartTime, endTime, 5);
+		const data = await apiClient.chartData.getDashboardChartData(
+			initialStartTime,
+			endTime,
+			5,
+			AbortSignal.timeout(CHART_FETCH_TIMEOUT_MS),
+		);
 		initialChartData = transformChartData(data);
 	} catch (err) {
 		console.error('Error loading initial chart data:', err);
@@ -32,7 +42,8 @@ export const load: PageServerLoad = async ({ locals }) => {
 			const data = await apiClient.chartData.getDashboardChartData(
 				fullStartTime,
 				initialStartTime,
-				5
+				5,
+				AbortSignal.timeout(CHART_FETCH_TIMEOUT_MS),
 			);
 			return transformChartData(data);
 		} catch (err) {

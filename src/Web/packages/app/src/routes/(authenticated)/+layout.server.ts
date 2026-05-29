@@ -53,7 +53,7 @@ export const load: LayoutServerLoad = async ({ locals, cookies, url }) => {
   let isDemo = false;
   let nextResetAt: string | null = null;
   try {
-    const status = await locals.apiClient.status.getStatus();
+    const status = await locals.apiClient.status.getStatus(AbortSignal.timeout(5000));
     isDemo = status.isDemo ?? false;
     nextResetAt = status.nextResetAt ? status.nextResetAt.toISOString() : null;
   } catch {

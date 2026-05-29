@@ -12,6 +12,10 @@ import {
 import { sequence } from "@sveltejs/kit/hooks";
 import type { AuthUser } from "./app.d";
 import { AUTH_COOKIE_NAMES } from "$lib/config/auth-cookies";
+import {
+  STATIC_ASSET_PREFIXES,
+  shouldRedirectToLogin,
+} from "$lib/server/public-routes";
 // WUCHALE-DISABLED: wuchale temporarily disabled
 // import { runWithLocale, loadLocales } from 'wuchale/load-utils/server';
 // import * as main from '../../../locales/main.loader.server.svelte.js'
@@ -19,9 +23,6 @@ import { AUTH_COOKIE_NAMES } from "$lib/config/auth-cookies";
 // import { locales } from '../../../locales/data.js'
 import supportedLocales from '../../../supportedLocales.json';
 import { LANGUAGE_COOKIE_NAME } from "$lib/stores/appearance-store.svelte";
-
-/** Static asset paths that bypass all middleware. */
-const STATIC_ASSET_PREFIXES = ["/_app", "/assets", "/favicon.ico"] as const;
 
 /**
  * Get the original client-facing host from the request.
@@ -63,16 +64,8 @@ function getEffectiveHost(request: Request, cookies: { get(name: string): string
   return host;
 }
 
-/** Route prefixes that bypass requireAuthentication enforcement. */
-const PUBLIC_PREFIXES = ["/auth", "/api", "/setup", "/clock", "/invite", "/terms", "/privacy", "/guest"] as const;
-
-function isPublicRoute(pathname: string): boolean {
-  return (
-    pathname === "/" ||
-    PUBLIC_PREFIXES.some((p) => pathname.startsWith(p)) ||
-    STATIC_ASSET_PREFIXES.some((p) => pathname.startsWith(p))
-  );
-}
+/** Server-side timeout for the site-security status probe. */
+const SITE_SECURITY_PROBE_TIMEOUT_MS = 5000;
 
 // WUCHALE-DISABLED: wuchale temporarily disabled — locale catalogs not loaded at startup
 
@@ -230,22 +223,16 @@ const siteSecurityHandle: Handle = async ({ event, resolve }) => {
         extraHeaders: probeHeaders,
       });
 
-      const status = await apiClient.status.getStatus();
+      // Bound the probe so a hung backend can't block the entire request
+      // (which would leave the browser spinning forever). On timeout the call
+      // rejects and we fall through to the fail-closed catch below.
+      const status = await apiClient.status.getStatus(
+        AbortSignal.timeout(SITE_SECURITY_PROBE_TIMEOUT_MS),
+      );
       const requireAuth = status?.settings?.["requireAuthentication"] === true;
 
       event.locals.requireAuthentication = requireAuth;
       event.locals.siteSecurityChecked = true;
-    }
-
-    // Only enforce requireAuthentication on non-public routes
-    if (!isPublicRoute(pathname) && event.locals.requireAuthentication && !event.locals.isAuthenticated) {
-      const returnUrl = encodeURIComponent(pathname + event.url.search);
-      return new Response(null, {
-        status: 303,
-        headers: {
-          Location: `/auth/login?returnUrl=${returnUrl}`,
-        },
-      });
     }
   } catch (error) {
     if (error && typeof error === "object" && "status" in error) {
@@ -296,6 +283,30 @@ const siteSecurityHandle: Handle = async ({ event, resolve }) => {
       }
     }
     console.error("Failed to check site security settings:", error);
+
+    // Fail closed: if we can't determine the site's auth requirement (probe
+    // errored or timed out), assume authentication is required. This is the
+    // privacy-preserving default — better to over-gate than to silently serve
+    // a protected dashboard to an unauthenticated visitor. The backend still
+    // enforces authorization per-endpoint (RLS) as the real security boundary.
+    event.locals.requireAuthentication = true;
+  }
+
+  // Enforce requireAuthentication on non-public routes. This runs after the
+  // try/catch so it fires on both the probe-success path and the fail-closed
+  // path above; keeping it inside the try would skip enforcement whenever the
+  // probe threw.
+  const loginRedirect = shouldRedirectToLogin({
+    pathname,
+    search: event.url.search,
+    requireAuthentication: event.locals.requireAuthentication,
+    isAuthenticated: event.locals.isAuthenticated,
+  });
+  if (loginRedirect) {
+    return new Response(null, {
+      status: 303,
+      headers: { Location: loginRedirect },
+    });
   }
 
   return resolve(event);
