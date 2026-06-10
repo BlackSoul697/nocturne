@@ -297,15 +297,13 @@ internal sealed class AlertReferenceService(
 
         if (element.TryGetProperty("type", out var typeProp) &&
             typeProp.ValueKind == JsonValueKind.String &&
-            TrackerConditionTypeStrings.Contains(typeProp.GetString()!))
+            TrackerConditionTypeStrings.Contains(typeProp.GetString()!) &&
+            element.TryGetProperty("definition_id", out var defIdProp) &&
+            defIdProp.ValueKind == JsonValueKind.String &&
+            Guid.TryParse(defIdProp.GetString(), out var defId) &&
+            defId == targetDefinitionId)
         {
-            if (element.TryGetProperty("definition_id", out var defIdProp) &&
-                defIdProp.ValueKind == JsonValueKind.String &&
-                Guid.TryParse(defIdProp.GetString(), out var defId) &&
-                defId == targetDefinitionId)
-            {
-                return true;
-            }
+            return true;
         }
 
         // Walk composite children.
