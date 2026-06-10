@@ -1,3 +1,4 @@
+using System.Linq;
 using System.Text.Json;
 using Microsoft.Extensions.DependencyInjection;
 using Nocturne.API.Services.Alerts.Evaluators;
@@ -233,10 +234,8 @@ public class AlertSweepService : BackgroundService
 
         var rulesByTenant = trackerRules.GroupBy(r => r.TenantId);
 
-        foreach (var tenantGroup in rulesByTenant)
+        foreach (var tenantId in rulesByTenant.Select(g => g.Key))
         {
-            var tenantId = tenantGroup.Key;
-
             var tenantContext = await repository.GetTenantAlertContextAsync(tenantId, ct);
             if (tenantContext is null || !tenantContext.IsActive) continue;
 
