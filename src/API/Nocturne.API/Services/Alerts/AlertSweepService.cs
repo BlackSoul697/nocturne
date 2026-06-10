@@ -261,7 +261,15 @@ public class AlertSweepService : BackgroundService
 
                 await orchestrator.EvaluateAsync(context, ct);
             }
-            catch (Exception ex)
+            catch (Exception ex) when (
+                !(ex is OperationCanceledException && ct.IsCancellationRequested) &&
+                ex is not OutOfMemoryException &&
+                ex is not StackOverflowException &&
+                ex is not AccessViolationException &&
+                ex is not AppDomainUnloadedException &&
+                ex is not BadImageFormatException &&
+                ex is not CannotUnloadAppDomainException &&
+                ex is not InvalidProgramException)
             {
                 _logger.LogError(ex, "Error evaluating tracker conditions for tenant {TenantId}", tenantId);
             }
