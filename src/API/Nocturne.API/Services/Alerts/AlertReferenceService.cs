@@ -1,4 +1,5 @@
 using System.Text.Json;
+using System.Linq;
 using Microsoft.EntityFrameworkCore;
 using Nocturne.API.Services.Alerts.Evaluators;
 using Nocturne.Core.Contracts.Multitenancy;
@@ -310,10 +311,9 @@ internal sealed class AlertReferenceService(
         if (element.TryGetProperty("conditions", out var conditions) &&
             conditions.ValueKind == JsonValueKind.Array)
         {
-            foreach (var child in conditions.EnumerateArray())
+            if (conditions.EnumerateArray().Any(child => JsonElementReferencesTracker(child, targetDefinitionId)))
             {
-                if (JsonElementReferencesTracker(child, targetDefinitionId))
-                    return true;
+                return true;
             }
         }
 

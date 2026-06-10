@@ -83,7 +83,7 @@ public class AlertSweepService : BackgroundService
             {
                 await EvaluateTrackerConditionsAsync(ct);
             }
-            catch (Exception ex)
+            catch (Exception ex) when (ex is not OperationCanceledException)
             {
                 _logger.LogError(ex, "Error evaluating tracker conditions");
             }

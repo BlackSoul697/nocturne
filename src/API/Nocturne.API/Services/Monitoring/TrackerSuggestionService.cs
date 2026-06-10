@@ -563,7 +563,11 @@ public class TrackerSuggestionService : ITrackerSuggestionService
         {
             return JsonSerializer.Deserialize<List<string>>(json) ?? [];
         }
-        catch
+        catch (JsonException)
+        {
+            return [];
+        }
+        catch (NotSupportedException)
         {
             return [];
         }
@@ -578,7 +582,11 @@ public class TrackerSuggestionService : ITrackerSuggestionService
         {
             return JsonSerializer.Deserialize<Dictionary<string, object>>(json);
         }
-        catch
+        catch (JsonException)
+        {
+            return null;
+        }
+        catch (NotSupportedException)
         {
             return null;
         }

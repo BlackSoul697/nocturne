@@ -1,3 +1,4 @@
+using System.Linq;
 using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 using Nocturne.Core.Contracts.Monitoring;
@@ -50,23 +51,17 @@ public class TrackerTemplateService : ITrackerTemplateService
 
         var templates = new Dictionary<string, AvailableTemplate>();
 
-        foreach (var device in currentDevices)
+        foreach (var device in currentDevices.Where(d => d.CatalogId is not null))
         {
-            if (device.CatalogId is null)
-                continue;
-
             var catalogEntry = DeviceCatalog.GetById(device.CatalogId);
             if (catalogEntry is null)
                 continue;
 
             var consumables = ConsumableCatalog.GetForDevice(catalogEntry);
 
-            foreach (var consumable in consumables)
+            foreach (var consumable in consumables.Where(c => c.ApplicableDeviceCategory is not null))
             {
-                // Skip universal consumables here; they're added below
-                if (consumable.ApplicableDeviceCategory is null)
-                    continue;
-
+                // Skip duplicates
                 if (templates.ContainsKey(consumable.Id))
                     continue;
 
