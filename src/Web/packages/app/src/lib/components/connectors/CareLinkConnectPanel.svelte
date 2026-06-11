@@ -19,7 +19,11 @@
   import { Button } from "$lib/components/ui/button";
   import { Textarea } from "$lib/components/ui/textarea";
   import { Label } from "$lib/components/ui/label";
-  import { CheckCircle2, Copy, ExternalLink, KeyRound, Monitor } from "lucide-svelte";
+  import { CheckCircle2, Copy, Download, ExternalLink, KeyRound, Monitor } from "lucide-svelte";
+
+  // Stable rolling release that always holds the current installers (see desktop-release.yml).
+  const DESKTOP_DOWNLOAD_URL =
+    "https://github.com/nightscout/nocturne/releases/tag/companion-latest";
 
   // The custom-scheme URL the user must copy from the redirect (matches the server-side parser).
   const REDIRECT_PREFIX = "com.medtronic.carepartner:/sso";
@@ -186,6 +190,15 @@
           The desktop app opens the CareLink sign-in in its own window and captures the code
           automatically — no developer tools needed. Generate a link code and paste it into the app.
         </p>
+        <a
+          href={DESKTOP_DOWNLOAD_URL}
+          target="_blank"
+          rel="noopener noreferrer"
+          class="inline-flex items-center gap-1 text-xs font-medium text-primary hover:underline"
+        >
+          <Download class="h-3.5 w-3.5" />
+          Download the desktop app
+        </a>
         {#if !desktopLinkCode}
           <Button variant="outline" size="sm" onclick={generateDesktopLinkCode} disabled={busy}>
             {busy ? "Generating…" : "Generate link code"}

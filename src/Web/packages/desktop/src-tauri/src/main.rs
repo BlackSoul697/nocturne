@@ -253,6 +253,8 @@ fn cancel_login(app: tauri::AppHandle) {
 
 fn main() {
     tauri::Builder::default()
+        .plugin(tauri_plugin_updater::Builder::new().build())
+        .plugin(tauri_plugin_process::init())
         .manage(SessionState::default())
         .on_window_event(|window, event| {
             // Let the frontend leave its "waiting for sign-in" state if the user closes the
