@@ -50,3 +50,28 @@ export const complete = command(CareLinkConnectCompleteRequestSchema, async (req
     throw error(500, message ?? 'Failed to complete');
   }
 });
+
+/** Mints a short-lived link code for the desktop companion app. The code carries the server URL
+plus a tenant-pinned bearer token scoped to this controller, so the app can drive
+start/complete for the user's tenant without a second login. The app intercepts
+the com.medtronic.carepartner:/sso redirect in its own webview, removing the
+manual code-paste step of the browser flow. */
+export const desktopToken = command(async () => {
+  const apiClient = getRequestEvent().locals.apiClient;
+  try {
+    const result = await apiClient.careLinkConnect.desktopToken();
+    return result;
+  } catch (err) {
+    const status = (err as any)?.status;
+    if (status === 401) { throw error(401, 'Unauthorized'); }
+    if (status === 403) throw error(403, (err as any)?.message ?? (err as any)?.detail ?? 'Forbidden');
+    console.error('Error in careLinkConnect.desktopToken:', err);
+    const e = err as any;
+    const body = e?.body ?? e?.response;
+    const errors = body?.errors ?? e?.errors;
+    const flat = errors ? Object.entries(errors).map(([, v]: [string, any]) => Array.isArray(v) ? v.join(', ') : v).join('; ') : undefined;
+    const message = flat ?? body?.message ?? body?.title ?? body?.detail ?? e?.message ?? e?.title ?? e?.detail;
+    if (status === 400 || status === 409) throw error(status, message ?? 'Request rejected');
+    throw error(500, message ?? 'Failed to desktop token');
+  }
+});

@@ -7,6 +7,7 @@
   import {
     start as startCareLinkConnect,
     complete as completeCareLinkConnect,
+    desktopToken as mintDesktopLinkCode,
   } from "$lib/api/generated/careLinkConnects.generated.remote";
   import {
     Card,
@@ -18,7 +19,7 @@
   import { Button } from "$lib/components/ui/button";
   import { Textarea } from "$lib/components/ui/textarea";
   import { Label } from "$lib/components/ui/label";
-  import { CheckCircle2, ExternalLink, KeyRound } from "lucide-svelte";
+  import { CheckCircle2, Copy, ExternalLink, KeyRound, Monitor } from "lucide-svelte";
 
   // The custom-scheme URL the user must copy from the redirect (matches the server-side parser).
   const REDIRECT_PREFIX = "com.medtronic.carepartner:/sso";
@@ -104,6 +105,34 @@
     codeInput = "";
     error = null;
   }
+
+  // Desktop-app handoff: a short-lived link code the user pastes into the companion app,
+  // which then runs the CareLink sign-in in its own window and captures the code itself.
+  let desktopLinkCode = $state<string | null>(null);
+  let desktopExpiresMinutes = $state(10);
+  let desktopCopied = $state(false);
+
+  async function generateDesktopLinkCode() {
+    busy = true;
+    error = null;
+    desktopCopied = false;
+    try {
+      const res = await mintDesktopLinkCode();
+      desktopLinkCode = res.linkCode ?? null;
+      desktopExpiresMinutes = Math.max(1, Math.round((res.expiresInSeconds ?? 600) / 60));
+    } catch (e) {
+      error = e instanceof Error ? e.message : "Could not create a link code.";
+    } finally {
+      busy = false;
+    }
+  }
+
+  async function copyDesktopLinkCode() {
+    if (!desktopLinkCode) return;
+    await navigator.clipboard.writeText(desktopLinkCode);
+    desktopCopied = true;
+    setTimeout(() => (desktopCopied = false), 2000);
+  }
 </script>
 
 <Card>
@@ -147,6 +176,33 @@
         <ExternalLink class="h-4 w-4 mr-2" />
         {busy ? "Opening…" : "Connect CareLink"}
       </Button>
+
+      <div class="rounded-md border p-3 space-y-2">
+        <p class="flex items-center gap-2 text-sm font-medium">
+          <Monitor class="h-4 w-4" />
+          Using the Nocturne desktop app?
+        </p>
+        <p class="text-xs text-muted-foreground">
+          The desktop app opens the CareLink sign-in in its own window and captures the code
+          automatically — no developer tools needed. Generate a link code and paste it into the app.
+        </p>
+        {#if !desktopLinkCode}
+          <Button variant="outline" size="sm" onclick={generateDesktopLinkCode} disabled={busy}>
+            {busy ? "Generating…" : "Generate link code"}
+          </Button>
+        {:else}
+          <div class="rounded bg-muted px-2 py-1 font-mono text-xs break-all">{desktopLinkCode}</div>
+          <div class="flex items-center gap-2">
+            <Button variant="outline" size="sm" onclick={copyDesktopLinkCode}>
+              <Copy class="h-3.5 w-3.5 mr-1" />
+              {desktopCopied ? "Copied" : "Copy"}
+            </Button>
+            <span class="text-xs text-muted-foreground">
+              Expires in {desktopExpiresMinutes} minutes.
+            </span>
+          </div>
+        {/if}
+      </div>
     {/if}
 
     {#if phase === "awaiting-code"}

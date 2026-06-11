@@ -3,7 +3,9 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Caching.Memory;
 using OpenApi.Remote.Attributes;
+using Nocturne.API.Extensions;
 using Nocturne.Connectors.CareLink.Services;
+using Nocturne.Core.Contracts.Auth;
 using Nocturne.Core.Contracts.Connectors;
 using Nocturne.Core.Contracts.Multitenancy;
 
@@ -24,9 +26,19 @@ public partial class CareLinkConnectController : ControllerBase
     private const string ConnectorName = "CareLink";
     private static readonly TimeSpan FlowTtl = TimeSpan.FromMinutes(10);
 
+    /// <summary>
+    /// Scope carried by a desktop link token. Deliberately outside the OAuth scope vocabulary:
+    /// MemberScopeMiddleware intersects member permissions with token scopes, so the resulting
+    /// PermissionTrie is empty and every permission-gated endpoint denies the token — it only
+    /// authenticates plain <c>[Authorize]</c> endpoints such as this controller's.
+    /// </summary>
+    private const string DesktopTokenScope = "connectors:carelink:connect";
+    private static readonly TimeSpan DesktopTokenLifetime = TimeSpan.FromMinutes(10);
+
     private readonly IConnectorConfigurationService _configService;
     private readonly IMemoryCache _cache;
     private readonly ITenantAccessor _tenantAccessor;
+    private readonly IJwtService _jwtService;
     private readonly ILoggerFactory _loggerFactory;
     private readonly ILogger<CareLinkConnectController> _logger;
 
@@ -34,12 +46,14 @@ public partial class CareLinkConnectController : ControllerBase
         IConnectorConfigurationService configService,
         IMemoryCache cache,
         ITenantAccessor tenantAccessor,
+        IJwtService jwtService,
         ILoggerFactory loggerFactory,
         ILogger<CareLinkConnectController> logger)
     {
         _configService = configService;
         _cache = cache;
         _tenantAccessor = tenantAccessor;
+        _jwtService = jwtService;
         _loggerFactory = loggerFactory;
         _logger = logger;
     }
@@ -146,6 +160,53 @@ public partial class CareLinkConnectController : ControllerBase
         });
     }
 
+    /// <summary>
+    /// Mints a short-lived link code for the desktop companion app. The code carries the server URL
+    /// plus a tenant-pinned bearer token scoped to this controller, so the app can drive
+    /// <c>start</c>/<c>complete</c> for the user's tenant without a second login. The app intercepts
+    /// the <c>com.medtronic.carepartner:/sso</c> redirect in its own webview, removing the
+    /// manual code-paste step of the browser flow.
+    /// </summary>
+    [HttpPost("desktop-token")]
+    [RemoteCommand]
+    [ProducesResponseType(typeof(CareLinkDesktopTokenResponse), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    public ActionResult<CareLinkDesktopTokenResponse> DesktopToken()
+    {
+        var auth = HttpContext.GetAuthContext();
+        var tenantId = _tenantAccessor.Context?.TenantId;
+        if (auth is not { IsAuthenticated: true, SubjectId: not null } || tenantId is null)
+            return Unauthorized();
+
+        var token = _jwtService.GenerateAccessToken(
+            new SubjectInfo
+            {
+                Id = auth.SubjectId.Value,
+                Name = auth.SubjectName ?? string.Empty,
+                Email = auth.Email,
+            },
+            permissions: [],
+            roles: [],
+            scopes: [DesktopTokenScope],
+            tenantId: tenantId,
+            lifetime: DesktopTokenLifetime);
+
+        var host = Request.Headers["X-Forwarded-Host"].FirstOrDefault() ?? Request.Host.Value;
+        var forwardedProto = Request.Headers["X-Forwarded-Proto"].FirstOrDefault();
+        var scheme = forwardedProto is "http" or "https" ? forwardedProto : Request.Scheme;
+        var serverUrl = $"{scheme}://{host}";
+
+        _logger.LogInformation(
+            "CareLink desktop link code minted for tenant {Tenant} by subject {Subject}",
+            tenantId, auth.SubjectId);
+
+        return Ok(new CareLinkDesktopTokenResponse
+        {
+            LinkCode = $"nocturne-connect://link?server={Uri.EscapeDataString(serverUrl)}&token={Uri.EscapeDataString(token)}",
+            ExpiresInSeconds = (int)DesktopTokenLifetime.TotalSeconds,
+        });
+    }
+
     private static string ExtractCode(string input)
     {
         var match = CodeRegex().Match(input);
@@ -184,4 +245,17 @@ public class CareLinkConnectCompleteResponse
     public bool Success { get; set; }
     public string? Username { get; set; }
     public string? Country { get; set; }
+}
+
+/// <summary>A link code for the desktop companion app.</summary>
+public class CareLinkDesktopTokenResponse
+{
+    /// <summary>
+    /// <c>nocturne-connect://link?server=…&amp;token=…</c> — pasted into the desktop app (or later
+    /// opened as a deep link). Carries the server base URL and a short-lived bearer token.
+    /// </summary>
+    public string LinkCode { get; set; } = string.Empty;
+
+    /// <summary>Seconds until the embedded token expires.</summary>
+    public int ExpiresInSeconds { get; set; }
 }
