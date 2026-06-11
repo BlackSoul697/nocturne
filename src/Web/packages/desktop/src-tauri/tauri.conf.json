@@ -40,7 +40,7 @@
       "endpoints": [
         "https://github.com/nightscout/nocturne/releases/download/companion-latest/latest.json"
       ],
-      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IEUyQUM4NEEyQ0M4MjcxRDcKUldUWGNZTE1vb1NzNHJCTVdwdVE1MzBRMmd5VTFZUTNVczEza3JyRkQxOXJWcmcrMlpwSlc5a0YK"
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDk1N0YyQUU2RUY1NTUzOTAKUldTUVUxWHY1aXAvbFlDMWtnRlZGaFFIOVBkSkRQK1JmWmUyKytBeEFPUXgyYThaWG1vbU5SODkK"
     }
   }
 }
