@@ -3,13 +3,24 @@
   import { listen } from "@tauri-apps/api/event";
   import { onMount } from "svelte";
   import {
+    Card,
+    CardContent,
+    CardDescription,
+    CardHeader,
+    CardTitle,
+  } from "@nocturne/ui/ui/card";
+  import { Button } from "@nocturne/ui/ui/button";
+  import { Textarea } from "@nocturne/ui/ui/textarea";
+  import { Label } from "@nocturne/ui/ui/label";
+  import { Alert, AlertDescription } from "@nocturne/ui/ui/alert";
+  import {
     CheckCircle2,
     KeyRound,
     Link2,
     Loader2,
     Monitor,
     RotateCcw,
-  } from "lucide-svelte";
+  } from "@lucide/svelte";
 
   type CommandError = { status?: number | null; message: string };
   type LinkInfo = { serverUrl: string };
@@ -125,135 +136,128 @@
 
 <main class="mx-auto flex min-h-screen max-w-md flex-col gap-6 p-6">
   <header class="flex items-center gap-3">
-    <Monitor class="h-6 w-6 text-sky-400" />
+    <Monitor class="text-primary h-6 w-6" />
     <div>
       <h1 class="text-lg font-semibold">Nocturne Companion</h1>
-      <p class="text-sm text-zinc-400">Connect CareLink to your Nocturne site</p>
+      <p class="text-muted-foreground text-sm">Connect CareLink to your Nocturne site</p>
     </div>
   </header>
 
   {#if error}
-    <p class="rounded-md border border-red-900 bg-red-950 px-3 py-2 text-sm text-red-300">
-      {error}
-    </p>
+    <Alert variant="destructive">
+      <AlertDescription>{error}</AlertDescription>
+    </Alert>
   {/if}
 
   {#if phase === "link"}
-    <section class="space-y-3">
-      <h2 class="flex items-center gap-2 text-sm font-medium">
-        <Link2 class="h-4 w-4" /> Link your Nocturne site
-      </h2>
-      <p class="text-sm text-zinc-400">
-        In Nocturne, open <span class="text-zinc-200">Connectors → CareLink</span> and choose
-        <span class="text-zinc-200">Generate link code</span>, then paste it here. The code is
-        valid for 10 minutes.
-      </p>
-      <textarea
-        bind:value={linkCodeInput}
-        rows={3}
-        placeholder="nocturne-connect://link?server=…&token=…"
-        class="w-full rounded-md border border-zinc-800 bg-zinc-900 px-3 py-2 font-mono text-xs text-zinc-100 placeholder:text-zinc-600 focus:border-sky-600 focus:outline-none"
-        disabled={busy}
-      ></textarea>
-      <button
-        onclick={linkServer}
-        disabled={busy || !linkCodeInput.trim()}
-        class="rounded-md bg-sky-600 px-4 py-2 text-sm font-medium text-white hover:bg-sky-500 disabled:opacity-50"
-      >
-        {busy ? "Linking…" : "Link"}
-      </button>
-    </section>
+    <Card>
+      <CardHeader>
+        <CardTitle class="flex items-center gap-2">
+          <Link2 class="h-4 w-4" /> Link your Nocturne site
+        </CardTitle>
+        <CardDescription>
+          In Nocturne, open Connectors → CareLink and choose “Generate link code”, then paste it
+          here. The code is valid for 10 minutes.
+        </CardDescription>
+      </CardHeader>
+      <CardContent class="space-y-3">
+        <Label for="link-code">Link code</Label>
+        <Textarea
+          id="link-code"
+          bind:value={linkCodeInput}
+          rows={3}
+          class="font-mono text-xs break-all"
+          placeholder="nocturne-connect://link?server=…&token=…"
+          disabled={busy}
+        />
+        <Button onclick={linkServer} disabled={busy || !linkCodeInput.trim()}>
+          {busy ? "Linking…" : "Link"}
+        </Button>
+      </CardContent>
+    </Card>
   {/if}
 
   {#if phase === "ready"}
-    <section class="space-y-4">
-      <p class="text-sm text-zinc-400">
-        Linked to <span class="font-mono text-zinc-200">{serverUrl}</span>
-      </p>
-      <div class="space-y-2">
-        <h2 class="flex items-center gap-2 text-sm font-medium">
+    <Card>
+      <CardHeader>
+        <CardTitle class="flex items-center gap-2">
           <KeyRound class="h-4 w-4" /> Connect your CareLink account
-        </h2>
-        <p class="text-sm text-zinc-400">
+        </CardTitle>
+        <CardDescription>
           A CareLink sign-in window will open. Sign in and solve the captcha there — this app
           captures the result automatically. Your password never leaves Medtronic's page.
+        </CardDescription>
+      </CardHeader>
+      <CardContent class="space-y-4">
+        <p class="text-muted-foreground text-sm">
+          Linked to <span class="text-foreground font-mono">{serverUrl}</span>
         </p>
-        <div class="flex gap-2">
-          <button
-            onclick={() => (region = "EU")}
-            disabled={busy}
-            class="rounded-md border px-3 py-1.5 text-sm {region === 'EU'
-              ? 'border-sky-600 bg-sky-600 text-white'
-              : 'border-zinc-700 text-zinc-300 hover:border-zinc-500'}"
-          >
-            EU / Outside-US
-          </button>
-          <button
-            onclick={() => (region = "US")}
-            disabled={busy}
-            class="rounded-md border px-3 py-1.5 text-sm {region === 'US'
-              ? 'border-sky-600 bg-sky-600 text-white'
-              : 'border-zinc-700 text-zinc-300 hover:border-zinc-500'}"
-          >
-            US
-          </button>
+        <div class="space-y-2">
+          <Label>Region</Label>
+          <div class="flex gap-2">
+            <Button
+              variant={region === "EU" ? "default" : "outline"}
+              size="sm"
+              onclick={() => (region = "EU")}
+              disabled={busy}>EU / Outside-US</Button
+            >
+            <Button
+              variant={region === "US" ? "default" : "outline"}
+              size="sm"
+              onclick={() => (region = "US")}
+              disabled={busy}>US</Button
+            >
+          </div>
+          <p class="text-muted-foreground text-xs">
+            Australia, NZ, Europe and most of the world use EU. Choose US only for a US CareLink
+            account.
+          </p>
         </div>
-        <p class="text-xs text-zinc-500">
-          Australia, NZ, Europe and most of the world use EU. Choose US only for a US CareLink
-          account.
-        </p>
-      </div>
-      <div class="flex items-center gap-3">
-        <button
-          onclick={startConnect}
-          disabled={busy}
-          class="rounded-md bg-sky-600 px-4 py-2 text-sm font-medium text-white hover:bg-sky-500 disabled:opacity-50"
-        >
-          {busy ? "Starting…" : "Connect CareLink"}
-        </button>
-        <button onclick={startOver} class="text-sm text-zinc-400 hover:text-zinc-200">
-          Use a different site
-        </button>
-      </div>
-    </section>
+        <div class="flex items-center gap-2">
+          <Button onclick={startConnect} disabled={busy}>
+            {busy ? "Starting…" : "Connect CareLink"}
+          </Button>
+          <Button variant="ghost" size="sm" onclick={startOver}>Use a different site</Button>
+        </div>
+      </CardContent>
+    </Card>
   {/if}
 
   {#if phase === "signing-in" || phase === "completing"}
-    <section class="flex flex-col items-center gap-3 py-8 text-center">
-      <Loader2 class="h-6 w-6 animate-spin text-sky-400" />
-      {#if phase === "signing-in"}
-        <p class="text-sm text-zinc-300">Waiting for you to sign in to CareLink…</p>
-        <p class="text-xs text-zinc-500">
-          Finish signing in (and the captcha) in the CareLink window. The code is captured
-          automatically when Medtronic redirects.
-        </p>
-        <button onclick={cancelSignIn} class="text-sm text-zinc-400 hover:text-zinc-200">
-          Cancel
-        </button>
-      {:else}
-        <p class="text-sm text-zinc-300">Code captured — finishing the connection…</p>
-      {/if}
-    </section>
+    <Card>
+      <CardContent class="flex flex-col items-center gap-3 py-8 text-center">
+        <Loader2 class="text-primary h-6 w-6 animate-spin" />
+        {#if phase === "signing-in"}
+          <p class="text-sm">Waiting for you to sign in to CareLink…</p>
+          <p class="text-muted-foreground text-xs">
+            Finish signing in (and the captcha) in the CareLink window. The code is captured
+            automatically when Medtronic redirects.
+          </p>
+          <Button variant="ghost" size="sm" onclick={cancelSignIn}>Cancel</Button>
+        {:else}
+          <p class="text-sm">Code captured — finishing the connection…</p>
+        {/if}
+      </CardContent>
+    </Card>
   {/if}
 
   {#if phase === "done"}
-    <section class="space-y-4">
-      <div class="flex items-start gap-2">
-        <CheckCircle2 class="h-5 w-5 shrink-0 text-green-500" />
-        <div class="text-sm">
-          <p class="font-medium">CareLink connected.</p>
-          <p class="text-zinc-400">
-            {connectedUsername ? `Signed in as ${connectedUsername}. ` : ""}Nocturne stored the
-            refresh token and will sync automatically. You can close this app.
-          </p>
+    <Card>
+      <CardContent class="space-y-4 pt-6">
+        <div class="flex items-start gap-2">
+          <CheckCircle2 class="mt-0.5 h-5 w-5 shrink-0 text-green-600" />
+          <div class="text-sm">
+            <p class="font-medium">CareLink connected.</p>
+            <p class="text-muted-foreground">
+              {connectedUsername ? `Signed in as ${connectedUsername}. ` : ""}Nocturne stored the
+              refresh token and will sync automatically. You can close this app.
+            </p>
+          </div>
         </div>
-      </div>
-      <button
-        onclick={startOver}
-        class="flex items-center gap-2 rounded-md border border-zinc-700 px-3 py-1.5 text-sm text-zinc-300 hover:border-zinc-500"
-      >
-        <RotateCcw class="h-3.5 w-3.5" /> Connect another account
-      </button>
-    </section>
+        <Button variant="outline" size="sm" onclick={startOver}>
+          <RotateCcw class="mr-1 h-3.5 w-3.5" /> Connect another account
+        </Button>
+      </CardContent>
+    </Card>
   {/if}
 </main>
