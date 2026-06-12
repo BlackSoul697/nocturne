@@ -1,0 +1,108 @@
+//! Wall-clock leaves: time_of_day, day_of_week, time_since_last_carb/bolus.
+
+use chrono::{DateTime, Datelike, NaiveTime, Utc};
+use chrono_tz::Tz;
+
+use super::Env;
+use crate::compare::total_minutes;
+use crate::model::{DayOfWeekPayload, TimeOfDayPayload, TimeSincePayload};
+
+/// `TimeOnly.TryParseExact(s, "HH:mm")`: exactly two digits each, 00-23 /
+/// 00-59, nothing else.
+fn parse_hh_mm(s: &str) -> Option<NaiveTime> {
+    let b = s.as_bytes();
+    if b.len() != 5 || b[2] != b':' {
+        return None;
+    }
+    let digit = |c: u8| -> Option<u32> { (c as char).to_digit(10) };
+    let hh = digit(b[0])? * 10 + digit(b[1])?;
+    let mm = digit(b[3])? * 10 + digit(b[4])?;
+    NaiveTime::from_hms_opt(hh, mm, 0)
+}
+
+fn find_tz(id: &str) -> Option<Tz> {
+    id.parse::<Tz>().ok()
+}
+
+fn local_now(now: DateTime<Utc>, tz: Option<Tz>) -> chrono::NaiveDateTime {
+    match tz {
+        Some(tz) => now.with_timezone(&tz).naive_local(),
+        None => now.naive_utc(),
+    }
+}
+
+/// Half-open `[from, to)` window in the resolved timezone; `from > to` wraps
+/// midnight. Resolution: an explicit per-rule timezone wins and fails closed
+/// when unknown; a missing per-rule tz falls back to the tenant tz (unknown
+/// tenant tz swallows to UTC); both absent → UTC.
+pub(super) fn time_of_day(p: &TimeOfDayPayload, env: &Env) -> bool {
+    let (Some(from), Some(to)) = (
+        p.from.as_deref().and_then(parse_hh_mm),
+        p.to.as_deref().and_then(parse_hh_mm),
+    ) else {
+        return false;
+    };
+
+    let tz = match p.timezone.as_deref() {
+        Some(tz_id) if !tz_id.is_empty() => match find_tz(tz_id) {
+            Some(tz) => Some(tz),
+            None => return false,
+        },
+        _ => match env.ctx.tenant_time_zone_id.as_deref() {
+            Some(tenant_tz) if !tenant_tz.is_empty() => find_tz(tenant_tz),
+            _ => None,
+        },
+    };
+
+    let local = local_now(env.now, tz);
+    // TimeOnly.FromDateTime keeps sub-minute precision; corpus instants are
+    // whole seconds, so second precision suffices.
+    let current = local.time();
+
+    if from <= to {
+        current >= from && current < to
+    } else {
+        current >= from || current < to
+    }
+}
+
+/// Local `now.DayOfWeek ∈ days` in the tenant timezone (unknown/missing → UTC).
+/// Day values follow `System.DayOfWeek`: 0 = Sunday … 6 = Saturday; integers
+/// outside that range simply never match.
+pub(super) fn day_of_week(p: &DayOfWeekPayload, env: &Env) -> bool {
+    let Some(days) = &p.days else {
+        return false;
+    };
+    if days.is_empty() {
+        return false;
+    }
+    let tz = env
+        .ctx
+        .tenant_time_zone_id
+        .as_deref()
+        .filter(|id| !id.is_empty())
+        .and_then(find_tz);
+    let local = local_now(env.now, tz);
+    let today = i64::from(local.weekday().num_days_from_sunday());
+    days.contains(&today)
+}
+
+/// `TimeSinceComparator.Apply`: elapsed minutes in f64; a missing anchor is
+/// +∞ (so `>`/`>=` fire on cold start — deliberately opposite to loop_stale).
+/// Operator ordinals: 0 `>`, 1 `>=`, 2 `<`, 3 `<=`, 4 `==`; anything else
+/// fails closed.
+pub(super) fn time_since(p: &TimeSincePayload, anchor: Option<DateTime<Utc>>, env: &Env) -> bool {
+    let elapsed = match anchor {
+        Some(anchor) => total_minutes(env.now - anchor),
+        None => f64::INFINITY,
+    };
+    let threshold = f64::from(p.minutes);
+    match p.operator {
+        0 => elapsed > threshold,
+        1 => elapsed >= threshold,
+        2 => elapsed < threshold,
+        3 => elapsed <= threshold,
+        4 => elapsed == threshold,
+        _ => false,
+    }
+}
