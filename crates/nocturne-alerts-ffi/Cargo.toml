@@ -1,0 +1,21 @@
+[package]
+name = "nocturne-alerts-ffi"
+version = "0.1.0"
+edition = "2024"
+description = "C ABI (JSON-in/JSON-out) wrapper around nocturne-alerts-core for .NET / Kotlin hosts"
+license = "AGPL-3.0-only"
+publish = false
+
+[lib]
+name = "nocturne_alerts"
+# rlib is included so the crate's own test targets can link against it; the
+# shipped artifacts are the cdylib (nocturne_alerts.dll / libnocturne_alerts.so)
+# and the staticlib.
+crate-type = ["cdylib", "staticlib", "rlib"]
+
+[dependencies]
+nocturne-alerts-core = { path = "../nocturne-alerts-core" }
+serde = { version = "1", features = ["derive"] }
+serde_json = { version = "1", features = ["arbitrary_precision", "preserve_order"] }
+chrono = { version = "0.4", default-features = false, features = ["std", "serde"] }
+uuid = { version = "1", features = ["serde"] }
