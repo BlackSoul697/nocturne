@@ -90,6 +90,13 @@ internal sealed class AlertReplayService(
             .OrderBy(r => r.Timestamp)
             .ToList();
 
+        // TODO(alerts-engine-seam): replay still evaluates through the managed
+        // ConditionEvaluatorRegistry directly rather than IAlertEvaluationEngine. The seam
+        // contract assumes engine-owned persistence, while replay needs a replay-local
+        // in-memory timer store and a fake clock per pass — wiring the rust path here means
+        // threading that state through per-tick envelopes like the parity tests do. Replay
+        // is read-only and its semantics are pinned by the golden corpus
+        // (tests/Parity/AlertEngineCorpus), so it stays managed until the cutover phase.
         var fakeTime = new ReplayTimeProvider();
         var timerStore = new InMemoryConditionTimerStore();
         await using var replayServices = BuildReplayServices(timerStore, fakeTime);
