@@ -3,7 +3,8 @@
 //! C ABI wrapper around [`nocturne_alerts_core`]: JSON-in/JSON-out, UTF-8,
 //! NUL-terminated. The envelope schema is documented in this crate's
 //! `README.md` and is the contract consumed by the .NET bindings
-//! (`Nocturne.Core.Alerts.Native`) and future Kotlin bindings.
+//! (`Nocturne.Core.Alerts.Native`) and, behind the `uniffi` cargo feature,
+//! the UniFFI-generated Kotlin bindings ([`uniffi_api`]).
 //!
 //! Boundary guarantees:
 //! - every entrypoint catches panics and returns an error envelope
@@ -14,6 +15,12 @@
 //!   [`nocturne_alerts_free_string`] exactly once.
 
 mod envelope;
+
+#[cfg(feature = "uniffi")]
+mod uniffi_api;
+
+#[cfg(feature = "uniffi")]
+uniffi::setup_scaffolding!("nocturne_alerts");
 
 #[cfg(test)]
 mod tests;
@@ -59,10 +66,12 @@ fn panic_message(payload: &Box<dyn Any + Send>) -> &str {
     }
 }
 
-/// Runs `f` at the FFI boundary: panics and `Err`s become error envelopes,
-/// `Ok` values are serialized. Always returns a caller-owned C string.
-fn boundary(f: impl FnOnce() -> Result<serde_json::Value, String>) -> *mut c_char {
-    let out = match catch_unwind(AssertUnwindSafe(f)) {
+/// Runs `f` inside a panic guard and renders the outcome as a JSON envelope
+/// string: `Ok` values are serialized, `Err`s and panics become the
+/// `ok: false` error envelope. Shared by the C ABI and the UniFFI surface so
+/// both expose identical envelope semantics.
+fn envelope_string(f: impl FnOnce() -> Result<serde_json::Value, String>) -> String {
+    match catch_unwind(AssertUnwindSafe(f)) {
         Ok(Ok(value)) => serde_json::to_string(&value)
             .unwrap_or_else(|e| error_json(&format!("response serialization failed: {e}"))),
         Ok(Err(message)) => error_json(&message),
@@ -70,8 +79,13 @@ fn boundary(f: impl FnOnce() -> Result<serde_json::Value, String>) -> *mut c_cha
             "panic in alert engine: {}",
             panic_message(&payload)
         )),
-    };
-    into_c_string(out)
+    }
+}
+
+/// Runs `f` at the FFI boundary: panics and `Err`s become error envelopes,
+/// `Ok` values are serialized. Always returns a caller-owned C string.
+fn boundary(f: impl FnOnce() -> Result<serde_json::Value, String>) -> *mut c_char {
+    into_c_string(envelope_string(f))
 }
 
 /// Reads a caller-supplied C string as UTF-8.

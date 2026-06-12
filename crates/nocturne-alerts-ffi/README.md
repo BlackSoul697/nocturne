@@ -3,8 +3,9 @@
 C ABI wrapper around [`nocturne-alerts-core`](../nocturne-alerts-core): the
 alert evaluation engine exposed as JSON-in/JSON-out functions for non-Rust
 hosts. The .NET bindings live in `src/Core/Nocturne.Core.Alerts.Native/`
-(`AlertsInterop` + `RustAlertEngine`); Kotlin bindings (Phase 4) consume the
-same contract.
+(`AlertsInterop` + `RustAlertEngine`); the Kotlin bindings (Prelude, Android)
+are generated with UniFFI behind the optional `uniffi` cargo feature (see
+["Kotlin (UniFFI)"](#kotlin-uniffi)) and consume the same contract.
 
 ```bash
 # from crates/
@@ -225,6 +226,70 @@ Container nodes whose payload/child is missing are leaves (the normative
 path has an empty type segment (`composite[2].`). Pruning timers to the
 `paths` set is always safe — it is a superset of every path a timer can be
 keyed under for that tree.
+
+## Kotlin (UniFFI)
+
+The optional `uniffi` cargo feature adds a [UniFFI](https://mozilla.github.io/uniffi-rs/)
+proc-macro surface (`src/uniffi_api.rs`) for the Android app (Prelude). It is
+**off by default** — the plain C ABI build used by the backend never gains the
+uniffi dependency. uniffi is pinned exactly (`=0.31.1`): the generated Kotlin
+bindings and the compiled library must come from the same uniffi version.
+
+The Kotlin surface is deliberately JSON-in/JSON-out — the **same envelope
+documented above is the contract for both consumers** (no parallel typed
+surface that could drift). Four functions, delegating to the exact same
+internal handlers as the C ABI, with the same panic guard (panics and unusable
+requests come back as the `ok: false` envelope, never as an exception):
+
+```kotlin
+package uniffi.nocturne_alerts
+
+fun evaluate(requestJson: String): String      // nocturne_alerts_evaluate
+fun evaluateNode(requestJson: String): String  // nocturne_alerts_evaluate_node
+fun leafPaths(requestJson: String): String     // nocturne_alerts_leaf_paths
+fun version(): String                          // plain version string, not JSON
+```
+
+Memory is managed by the generated bindings (no `free` counterpart needed).
+The bindings use JNA (`net.java.dev.jna`) and load the library named
+`nocturne_alerts` (`libnocturne_alerts.so` in the APK's `jniLibs`).
+
+### Generating the bindings
+
+The crate ships the standard in-crate `uniffi-bindgen` binary (gated on the
+`bindgen` feature, which implies `uniffi` + `uniffi/cli`). Library mode reads
+the UniFFI metadata out of the compiled artifact, so build first:
+
+```bash
+# from crates/
+cargo build -p nocturne-alerts-ffi --features uniffi
+cargo run -p nocturne-alerts-ffi --features bindgen --bin uniffi-bindgen -- \
+  generate --library target/debug/libnocturne_alerts.so \
+  --language kotlin --out-dir target/uniffi/kotlin
+# (on Windows the library is target/debug/nocturne_alerts.dll)
+# -> target/uniffi/kotlin/uniffi/nocturne_alerts/nocturne_alerts.kt
+```
+
+Generated bindings are build outputs — do not commit them; Prelude's CI
+regenerates them from the same library it ships. The default Kotlin package is
+`uniffi.nocturne_alerts`; override it with a `uniffi.toml`
+(`[bindings.kotlin] package_name = "…"`) if Prelude needs a different
+namespace.
+
+### Android (.so) builds — Prelude CI
+
+The Android shared objects are cross-compiled in Prelude's CI with
+[`cargo-ndk`](https://github.com/bbqsrc/cargo-ndk) (requires the Android NDK;
+run from `crates/`):
+
+```bash
+cargo ndk -t arm64-v8a -t armeabi-v7a -t x86_64 -o jniLibs build --release \
+  -p nocturne-alerts-ffi --features uniffi
+```
+
+CI must generate the Kotlin bindings from the **same build** (same crate
+revision, same uniffi version) as the `.so` files it packages — the bindings
+checksum the API at load time and refuse a mismatched library.
 
 ## Versioning
 

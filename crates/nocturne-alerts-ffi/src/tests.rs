@@ -82,10 +82,41 @@ fn corpus_dir() -> PathBuf {
         .expect("corpus directory exists")
 }
 
-/// Drives one scenario through `nocturne_alerts_evaluate`, threading the
-/// timers/tracker state envelopes between ticks exactly as a host would, and
-/// returns the assembled expected-file Value.
-fn run_scenario_via_ffi(scenario: &ScenarioFile) -> Value {
+/// Lists every corpus scenario file (excluding the `.expected.json`
+/// snapshots), sorted for determinism.
+fn scenario_paths() -> Vec<PathBuf> {
+    let mut paths: Vec<PathBuf> = fs::read_dir(corpus_dir())
+        .expect("read corpus dir")
+        .map(|e| e.expect("dir entry").path())
+        .filter(|p| {
+            p.extension().is_some_and(|ext| ext == "json")
+                && !p
+                    .file_name()
+                    .is_some_and(|n| n.to_string_lossy().ends_with(".expected.json"))
+        })
+        .collect();
+    paths.sort();
+    paths
+}
+
+fn load_scenario(path: &PathBuf) -> (ScenarioFile, Value) {
+    let scenario: ScenarioFile =
+        serde_json::from_str(&fs::read_to_string(path).expect("read scenario"))
+            .unwrap_or_else(|e| panic!("parse {}: {e}", path.display()));
+    let expected_path = path.with_file_name(format!(
+        "{}.expected.json",
+        path.file_stem().unwrap().to_string_lossy()
+    ));
+    let expected: Value =
+        serde_json::from_str(&fs::read_to_string(&expected_path).expect("read expected"))
+            .expect("parse expected");
+    (scenario, expected)
+}
+
+/// Drives one scenario through an evaluate-envelope function (C ABI or
+/// UniFFI), threading the timers/tracker state envelopes between ticks exactly
+/// as a host would, and returns the assembled expected-file Value.
+fn run_scenario(scenario: &ScenarioFile, evaluate: impl Fn(&Value) -> Value) -> Value {
     // Per-rule persisted state, plus the shared next-excursion ordinal.
     let mut timers: Map<String, Value> = Map::new(); // rule id -> timers object
     let mut trackers: Map<String, Value> = Map::new(); // rule id -> tracker object
@@ -146,20 +177,10 @@ fn run_scenario_via_ffi(scenario: &ScenarioFile) -> Value {
     })
 }
 
-#[test]
-fn corpus_round_trips_through_c_abi() {
-    let dir = corpus_dir();
-    let mut scenario_paths: Vec<PathBuf> = fs::read_dir(&dir)
-        .expect("read corpus dir")
-        .map(|e| e.expect("dir entry").path())
-        .filter(|p| {
-            p.extension().is_some_and(|ext| ext == "json")
-                && !p
-                    .file_name()
-                    .is_some_and(|n| n.to_string_lossy().ends_with(".expected.json"))
-        })
-        .collect();
-    scenario_paths.sort();
+/// Runs the full corpus through an evaluate-envelope function and pins every
+/// scenario against its committed `.expected.json` snapshot.
+fn assert_corpus_round_trips(evaluate: impl Fn(&Value) -> Value) {
+    let scenario_paths = scenario_paths();
     assert!(
         scenario_paths.len() >= 100,
         "expected >= 100 corpus scenarios, found {}",
@@ -168,18 +189,8 @@ fn corpus_round_trips_through_c_abi() {
 
     let mut failed: Vec<String> = Vec::new();
     for path in &scenario_paths {
-        let scenario: ScenarioFile =
-            serde_json::from_str(&fs::read_to_string(path).expect("read scenario"))
-                .unwrap_or_else(|e| panic!("parse {}: {e}", path.display()));
-        let expected_path = path.with_file_name(format!(
-            "{}.expected.json",
-            path.file_stem().unwrap().to_string_lossy()
-        ));
-        let expected: Value =
-            serde_json::from_str(&fs::read_to_string(&expected_path).expect("read expected"))
-                .expect("parse expected");
-
-        let actual = run_scenario_via_ffi(&scenario);
+        let (scenario, expected) = load_scenario(path);
+        let actual = run_scenario(&scenario, &evaluate);
         if actual != expected {
             failed.push(format!(
                 "scenario {}: FFI output differs from expected snapshot",
@@ -194,6 +205,11 @@ fn corpus_round_trips_through_c_abi() {
         scenario_paths.len(),
         failed.join("\n")
     );
+}
+
+#[test]
+fn corpus_round_trips_through_c_abi() {
+    assert_corpus_round_trips(evaluate);
 }
 
 #[test]
@@ -589,4 +605,92 @@ fn leaf_paths_rejects_malformed_node() {
         &call_json(nocturne_alerts_leaf_paths, r#"{ "type": 5 }"#),
         "malformed condition node",
     );
+}
+
+// ---------------------------------------------------------------------------
+// UniFFI surface (feature-gated): the Kotlin-facing functions must expose the
+// exact same envelope contract as the C ABI.
+// ---------------------------------------------------------------------------
+
+#[cfg(feature = "uniffi")]
+mod uniffi_surface {
+    use super::{assert_error, load_scenario, run_scenario, scenario_paths};
+    use crate::uniffi_api;
+    use serde_json::{Value, json};
+
+    fn evaluate(request: &Value) -> Value {
+        serde_json::from_str(&uniffi_api::evaluate(request.to_string()))
+            .expect("uniffi evaluate returned valid JSON")
+    }
+
+    #[test]
+    fn version_matches_crate_version() {
+        assert_eq!(uniffi_api::version(), env!("CARGO_PKG_VERSION"));
+    }
+
+    #[test]
+    fn corpus_scenario_round_trips_through_uniffi_surface() {
+        // One full scenario threaded tick-by-tick through the uniffi-exported
+        // `evaluate`, pinned against the committed snapshot — same driver as
+        // the C ABI corpus test. (The full corpus already runs through the C
+        // ABI in this build; both paths share one envelope implementation.)
+        let paths = scenario_paths();
+        let (scenario, expected) = load_scenario(paths.first().expect("corpus is non-empty"));
+        let actual = run_scenario(&scenario, evaluate);
+        assert_eq!(
+            actual, expected,
+            "scenario {}: uniffi output differs from expected snapshot",
+            scenario.name
+        );
+    }
+
+    #[test]
+    fn evaluate_node_shares_the_envelope_contract() {
+        let response: Value = serde_json::from_str(&uniffi_api::evaluate_node(
+            json!({
+                "schema_version": 1,
+                "rule_id": "00000000-0000-0000-0000-000000000001",
+                "node": { "type": "threshold", "threshold": { "direction": "below", "value": 70 } },
+                "root": "snooze",
+                "context": { "latest_value": 60, "latest_timestamp": "2026-01-05T12:00:00Z" },
+                "now": "2026-01-05T12:00:00Z",
+            })
+            .to_string(),
+        ))
+        .expect("valid JSON");
+        assert_eq!(response["ok"], Value::Bool(true));
+        assert_eq!(response["value"], Value::Bool(true));
+    }
+
+    #[test]
+    fn leaf_paths_shares_the_envelope_contract() {
+        let response: Value = serde_json::from_str(&uniffi_api::leaf_paths(
+            json!({
+                "root": "auto_resolve",
+                "node": { "type": "threshold", "threshold": { "direction": "above", "value": 180 } }
+            })
+            .to_string(),
+        ))
+        .expect("valid JSON");
+        assert_eq!(response["ok"], Value::Bool(true));
+        assert_eq!(
+            response["leaves"],
+            json!([{ "leaf_id": 0, "path": "auto_resolve" }])
+        );
+    }
+
+    #[test]
+    fn errors_come_back_as_envelopes_not_exceptions() {
+        let malformed: Value =
+            serde_json::from_str(&uniffi_api::evaluate("{ nope".to_string())).expect("valid JSON");
+        assert_error(&malformed, "invalid request envelope");
+
+        let bad_schema = evaluate(&json!({
+            "schema_version": 2,
+            "rule": { "id": "00000000-0000-0000-0000-000000000001", "condition_type": "threshold" },
+            "context": {},
+            "now": "2026-01-05T12:00:00Z",
+        }));
+        assert_error(&bad_schema, "unsupported schema_version 2");
+    }
 }
