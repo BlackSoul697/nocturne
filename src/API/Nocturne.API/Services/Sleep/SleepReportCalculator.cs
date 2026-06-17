@@ -1,4 +1,3 @@
-using Nocturne.Core.Constants;
 using Nocturne.Core.Models;
 using Nocturne.Core.Models.Sleep.Report;
 using Nocturne.Core.Models.V4;
@@ -71,7 +70,7 @@ internal static class SleepReportCalculator
     // ── Overnight TIR ─────────────────────────────────────────────────────
 
     internal static SleepOvernightTir? ComputeOvernightTir(
-        SleepSession session, IEnumerable<SensorGlucose> allGlucose)
+        SleepSession session, IEnumerable<SensorGlucose> allGlucose, GlycemicThresholds thresholds)
     {
         var asleepAt = session.SleepLatencyMs.HasValue
             ? session.StartTime.AddMilliseconds(session.SleepLatencyMs.Value)
@@ -88,10 +87,10 @@ internal static class SleepReportCalculator
         foreach (var g in readings)
         {
             sum += g.Mgdl;
-            if      (g.Mgdl <= ApplicationConstants.ClinicalThresholds.VeryLow)  veryLow++;
-            else if (g.Mgdl <= ApplicationConstants.ClinicalThresholds.Low)       low++;
-            else if (g.Mgdl <= ApplicationConstants.ClinicalThresholds.High)      inRange++;
-            else if (g.Mgdl <= ApplicationConstants.ClinicalThresholds.VeryHigh)  high++;
+            if      (g.Mgdl <= thresholds.VeryLow)  veryLow++;
+            else if (g.Mgdl <= thresholds.Low)      low++;
+            else if (g.Mgdl <= thresholds.High)     inRange++;
+            else if (g.Mgdl <= thresholds.VeryHigh) high++;
             else                                                                   veryHigh++;
         }
 
@@ -112,7 +111,8 @@ internal static class SleepReportCalculator
     internal static IReadOnlyList<SleepHypoEvent> ComputeHypoEvents(
         SleepSession session,
         IEnumerable<SensorGlucose> allGlucose,
-        IEnumerable<SleepStageInterval> stages)
+        IEnumerable<SleepStageInterval> stages,
+        GlycemicThresholds thresholds)
     {
         var asleepAt = session.SleepLatencyMs.HasValue
             ? session.StartTime.AddMilliseconds(session.SleepLatencyMs.Value)
@@ -130,28 +130,28 @@ internal static class SleepReportCalculator
 
         foreach (var g in readings)
         {
-            if (g.Mgdl < ApplicationConstants.ClinicalThresholds.Low)
+            if (g.Mgdl < thresholds.Low)
             {
                 runStart ??= g;
                 if (nadir == null || g.Mgdl < nadir.Mgdl) nadir = g;
             }
             else if (runStart != null && nadir != null && prev != null)
             {
-                events.Add(BuildHypoEvent(runStart, prev, nadir, stageList));
+                events.Add(BuildHypoEvent(runStart, prev, nadir, stageList, thresholds));
                 runStart = nadir = null;
             }
             prev = g;
         }
 
         if (runStart != null && nadir != null && prev != null)
-            events.Add(BuildHypoEvent(runStart, prev, nadir, stageList));
+            events.Add(BuildHypoEvent(runStart, prev, nadir, stageList, thresholds));
 
         return events;
     }
 
     private static SleepHypoEvent BuildHypoEvent(
         SensorGlucose start, SensorGlucose end, SensorGlucose nadir,
-        IEnumerable<SleepStageInterval> stages)
+        IEnumerable<SleepStageInterval> stages, GlycemicThresholds thresholds)
     {
         var stage = stages.FirstOrDefault(s =>
             s.StartTime <= nadir.Timestamp && s.EndTime >= nadir.Timestamp)?.Stage
@@ -164,7 +164,7 @@ internal static class SleepReportCalculator
             DurationMinutes = (int)(end.Timestamp - start.Timestamp).TotalMinutes,
             LowestBg        = (int)Math.Round(nadir.Mgdl),
             Stage           = stage,
-            Severity        = nadir.Mgdl <= ApplicationConstants.ClinicalThresholds.VeryLow
+            Severity        = nadir.Mgdl <= thresholds.VeryLow
                                 ? SleepHypoSeverity.VeryLow
                                 : SleepHypoSeverity.Low,
         };
@@ -271,12 +271,12 @@ internal static class SleepReportCalculator
     // ── Night Summary ─────────────────────────────────────────────────────
 
     internal static SleepNightSummary ComputeNightSummary(
-        SleepSession session, IEnumerable<SensorGlucose> sessionGlucose)
+        SleepSession session, IEnumerable<SensorGlucose> sessionGlucose, GlycemicThresholds thresholds)
     {
         var glucose   = sessionGlucose.ToList();
         var breakdown = ComputeStageBreakdown(session);
-        var hypos     = ComputeHypoEvents(session, glucose, session.Stages ?? []);
-        var tir       = ComputeOvernightTir(session, glucose);
+        var hypos     = ComputeHypoEvents(session, glucose, session.Stages ?? [], thresholds);
+        var tir       = ComputeOvernightTir(session, glucose, thresholds);
         var dawn      = ComputeDawnPhenomenon(session, glucose);
         var (finalScore, scoreSource) = ResolveScore(session, hypos.Count, breakdown);
 

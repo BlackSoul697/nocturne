@@ -2,7 +2,7 @@ namespace Nocturne.Core.Models.Sleep.Report;
 
 /// <summary>
 /// Time-in-range breakdown for the overnight sleep window,
-/// computed using ClinicalThresholds (54/70/180/250 mg/dL).
+/// computed using GlycemicThresholds (default 54/70/180/250 mg/dL).
 /// </summary>
 public class SleepOvernightTir
 {

@@ -1,3 +1,4 @@
+using System.Text.Json;
 using Nocturne.Core.Models;
 
 namespace Nocturne.Infrastructure.Data.Mappers;
@@ -109,8 +110,30 @@ public static class ActivityStateSpanMapper
             Mills = session.StartMills,
             Type = session.Type == SleepSessionType.Nap ? "nap" : "sleep",
             Duration = durationMinutes,
-            EnteredBy = session.SourceApp ?? "nocturne",
+            Description = MetadataString(session, "description"),
+            Notes = MetadataString(session, "notes"),
+            Name = MetadataString(session, "name"),
+            EnteredBy = MetadataString(session, "enteredBy") ?? session.SourceApp ?? "nocturne",
             CreatedAt = session.CreatedAt?.ToString("o"),
+        };
+    }
+
+    /// <summary>
+    /// Reads a string field stashed in <see cref="SleepSession.Metadata"/> by
+    /// <see cref="BuildSleepMetadata"/>. Tolerates the value arriving either as a
+    /// raw string (pre-persist) or a <see cref="JsonElement"/> (after a DB round-trip).
+    /// </summary>
+    private static string? MetadataString(SleepSession session, string key)
+    {
+        if (session.Metadata is null || !session.Metadata.TryGetValue(key, out var value))
+            return null;
+
+        return value switch
+        {
+            string s => s,
+            JsonElement { ValueKind: JsonValueKind.String } e => e.GetString(),
+            null => null,
+            _ => value.ToString(),
         };
     }
 

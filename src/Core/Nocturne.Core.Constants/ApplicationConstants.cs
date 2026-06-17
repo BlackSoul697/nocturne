@@ -560,23 +560,4 @@ public static class ApplicationConstants
             public const string LegacyApiV3 = "{**catch-all}";
         }
     }
-
-    /// <summary>
-    /// Standard ADA clinical glucose thresholds used as universal defaults for
-    /// statistics computations when user-configured targets are not provided.
-    /// </summary>
-    public static class ClinicalThresholds
-    {
-        /// <summary>Glucose level (mg/dL) at or below which readings are classified as very low (severe hypoglycemia).</summary>
-        public const int VeryLow = 54;
-
-        /// <summary>Glucose level (mg/dL) at or below which readings are classified as low (hypoglycemia onset).</summary>
-        public const int Low = 70;
-
-        /// <summary>Glucose level (mg/dL) at or above which readings are classified as high (hyperglycemia onset).</summary>
-        public const int High = 180;
-
-        /// <summary>Glucose level (mg/dL) at or above which readings are classified as very high.</summary>
-        public const int VeryHigh = 250;
-    }
 }

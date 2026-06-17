@@ -49,10 +49,11 @@ public class SleepReportService : ISleepReportService
             afterId:        null,
             ct:             ct);
 
+        var thresholds = new GlycemicThresholds();
         var stages    = session.Stages ?? [];
         var breakdown = SleepReportCalculator.ComputeStageBreakdown(session);
-        var tir       = SleepReportCalculator.ComputeOvernightTir(session, glucoseReadings);
-        var hypos     = SleepReportCalculator.ComputeHypoEvents(session, glucoseReadings, stages);
+        var tir       = SleepReportCalculator.ComputeOvernightTir(session, glucoseReadings, thresholds);
+        var hypos     = SleepReportCalculator.ComputeHypoEvents(session, glucoseReadings, stages, thresholds);
         var dawn      = SleepReportCalculator.ComputeDawnPhenomenon(session, glucoseReadings);
         var wakeEvents = SleepReportCalculator.ComputeWakeEvents(session, stages, glucoseReadings);
         var (score, scoreSource) = SleepReportCalculator.ResolveScore(session, hypos.Count, breakdown);
@@ -110,7 +111,18 @@ public class SleepReportService : ISleepReportService
             afterId:        null,
             ct:             ct);
 
-        var nights  = sessions.Select(s => SleepReportCalculator.ComputeNightSummary(s, allGlucose)).ToList();
+        // Slice the (date-range-bounded) glucose set per night so each night's
+        // computation scans only its own window, not every reading in the range.
+        var thresholds = new GlycemicThresholds();
+        var nights = sessions
+            .Select(s =>
+            {
+                var nightGlucose = allGlucose
+                    .Where(g => g.Timestamp >= s.StartTime && g.Timestamp <= s.EndTime)
+                    .ToList();
+                return SleepReportCalculator.ComputeNightSummary(s, nightGlucose, thresholds);
+            })
+            .ToList();
         var summary = SleepReportCalculator.ComputeTrendsSummary(nights);
 
         return new SleepTrendsReport

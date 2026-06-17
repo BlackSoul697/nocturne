@@ -13,6 +13,8 @@ public class SleepReportCalculatorTests
 
     private static readonly DateTime _sessionStart = new(2026, 5, 16, 23, 0, 0, DateTimeKind.Utc);
 
+    private static readonly GlycemicThresholds _thresholds = new();
+
     private static SleepSession MakeSession(DateTime? start = null)
     {
         var s = start ?? _sessionStart;
@@ -82,7 +84,7 @@ public class SleepReportCalculatorTests
     public void ComputeOvernightTir_ReturnsNull_WhenNoGlucoseData()
     {
         var session = MakeSession();
-        var result = API.Services.Sleep.SleepReportCalculator.ComputeOvernightTir(session, []);
+        var result = API.Services.Sleep.SleepReportCalculator.ComputeOvernightTir(session, [], _thresholds);
         result.Should().BeNull();
     }
 
@@ -100,7 +102,7 @@ public class SleepReportCalculatorTests
             MakeGlucose(session.StartTime.AddMinutes(60), 260),  // very high
         };
 
-        var result = API.Services.Sleep.SleepReportCalculator.ComputeOvernightTir(session, readings);
+        var result = API.Services.Sleep.SleepReportCalculator.ComputeOvernightTir(session, readings, _thresholds);
 
         result.Should().NotBeNull();
         result!.VeryLowPct.Should().BeApproximately(100.0 / 6, 0.01);
@@ -118,7 +120,7 @@ public class SleepReportCalculatorTests
     {
         var session = MakeSession();
         var glucose = new[] { MakeGlucose(session.StartTime.AddMinutes(10), 85) };
-        var result = API.Services.Sleep.SleepReportCalculator.ComputeHypoEvents(session, glucose, []);
+        var result = API.Services.Sleep.SleepReportCalculator.ComputeHypoEvents(session, glucose, [], _thresholds);
         result.Should().BeEmpty();
     }
 
@@ -135,7 +137,7 @@ public class SleepReportCalculatorTests
             MakeGlucose(t0.AddMinutes(15), 75),  // recovered
         };
 
-        var result = API.Services.Sleep.SleepReportCalculator.ComputeHypoEvents(session, glucose, []);
+        var result = API.Services.Sleep.SleepReportCalculator.ComputeHypoEvents(session, glucose, [], _thresholds);
 
         result.Should().HaveCount(1);
         result[0].LowestBg.Should().Be(62);
@@ -155,7 +157,7 @@ public class SleepReportCalculatorTests
             MakeGlucose(t0.AddMinutes(5), 71),
         };
 
-        var result = API.Services.Sleep.SleepReportCalculator.ComputeHypoEvents(session, glucose, []);
+        var result = API.Services.Sleep.SleepReportCalculator.ComputeHypoEvents(session, glucose, [], _thresholds);
 
         result[0].Severity.Should().Be(SleepHypoSeverity.VeryLow);
     }
@@ -180,7 +182,7 @@ public class SleepReportCalculatorTests
             },
         };
 
-        var result = API.Services.Sleep.SleepReportCalculator.ComputeHypoEvents(session, glucose, stages);
+        var result = API.Services.Sleep.SleepReportCalculator.ComputeHypoEvents(session, glucose, stages, _thresholds);
 
         result[0].Stage.Should().Be(SleepStageType.Deep);
     }
@@ -347,7 +349,7 @@ public class SleepReportCalculatorTests
         session.TotalAwakeMs = 30  * 60_000L;
         session.SleepScore   = 75;
 
-        var result = API.Services.Sleep.SleepReportCalculator.ComputeNightSummary(session, []);
+        var result = API.Services.Sleep.SleepReportCalculator.ComputeNightSummary(session, [], _thresholds);
 
         result.SessionId.Should().Be(sessionId);
         result.SleepScore.Should().Be(75);
@@ -368,7 +370,7 @@ public class SleepReportCalculatorTests
         session.TotalAwakeMs = 30  * 60_000L;
         session.SleepScore   = null;
 
-        var result = API.Services.Sleep.SleepReportCalculator.ComputeNightSummary(session, []);
+        var result = API.Services.Sleep.SleepReportCalculator.ComputeNightSummary(session, [], _thresholds);
 
         result.ScoreSource.Should().Be(SleepScoreSource.Computed);
         result.SleepScore.Should().NotBeNull();
@@ -387,7 +389,7 @@ public class SleepReportCalculatorTests
             // All stage summary fields null, no Stages collection → TotalMinutes == 0
         };
 
-        var result = API.Services.Sleep.SleepReportCalculator.ComputeNightSummary(session, []);
+        var result = API.Services.Sleep.SleepReportCalculator.ComputeNightSummary(session, [], _thresholds);
 
         result.SleepScore.Should().BeNull();
         result.ScoreSource.Should().BeNull();
@@ -405,7 +407,7 @@ public class SleepReportCalculatorTests
             MakeGlucose(session.StartTime.AddMinutes(90), 75),  // lowest
         };
 
-        var result = API.Services.Sleep.SleepReportCalculator.ComputeNightSummary(session, readings);
+        var result = API.Services.Sleep.SleepReportCalculator.ComputeNightSummary(session, readings, _thresholds);
 
         // LowestBg should be the session minimum, not constrained to hypo events
         result.LowestBg.Should().Be(75);

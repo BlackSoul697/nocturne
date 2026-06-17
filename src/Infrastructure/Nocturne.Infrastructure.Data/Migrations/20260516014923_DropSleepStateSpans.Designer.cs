@@ -13,8 +13,8 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace Nocturne.Infrastructure.Data.Migrations
 {
     [DbContext(typeof(NocturneDbContext))]
-    [Migration("20260516014923_MigrateSleepStateSpansToSleepSessions")]
-    partial class MigrateSleepStateSpansToSleepSessions
+    [Migration("20260516014923_DropSleepStateSpans")]
+    partial class DropSleepStateSpans
     {
         /// <inheritdoc />
         protected override void BuildTargetModel(ModelBuilder modelBuilder)

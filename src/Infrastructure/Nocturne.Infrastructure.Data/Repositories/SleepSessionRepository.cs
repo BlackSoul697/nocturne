@@ -69,7 +69,9 @@ public class SleepSessionRepository : ISleepSessionRepository
             await using var tx = await ctx.Database.BeginTransactionAsync(cancellationToken);
             var entity = SleepSessionMapper.ToEntity(session, ctx.TenantId);
 
-            // Dedup by Source + OriginalId
+            // Dedup by Source + OriginalId. When a prior sync of the same source
+            // record exists, replace its contents in place: keep its primary key
+            // so re-syncs don't churn the session id (and any reference to it).
             if (!string.IsNullOrEmpty(entity.OriginalId))
             {
                 var existing = await ctx.SleepSessions
@@ -81,6 +83,7 @@ public class SleepSessionRepository : ISleepSessionRepository
 
                 if (existing is not null)
                 {
+                    entity.Id = existing.Id;
                     ctx.SleepBiometricSamples.RemoveRange(existing.BiometricSamples);
                     ctx.SleepStages.RemoveRange(existing.Stages);
                     ctx.SleepSessions.Remove(existing);

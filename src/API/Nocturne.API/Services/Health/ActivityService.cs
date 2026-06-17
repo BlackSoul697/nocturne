@@ -118,14 +118,20 @@ public class ActivityService : IActivityService
             );
             var stepCountActivities = stepCounts.Select(ActivityDecomposer.StepCountToActivity);
 
-            // Source 4: Sleep sessions projected back to Activity format
-            var sleepSessions = await _sleepService.GetSessionsAsync(
-                limit: fetchCount,
-                offset: 0,
-                descending: true,
-                cancellationToken: cancellationToken
-            );
-            var sleepActivities = sleepSessions.Select(ActivityStateSpanMapper.SleepSessionToActivity);
+            // Source 4: Sleep sessions projected back to Activity format.
+            // Sleep used to be a StateSpan filtered by `find`; honour that filter here
+            // so a request scoped to another type (e.g. exercise) doesn't pull in sleep.
+            var sleepActivities = Enumerable.Empty<Activity>();
+            if (string.IsNullOrEmpty(find) || ActivityStateSpanMapper.IsSleepType(find))
+            {
+                var sleepSessions = await _sleepService.GetSessionsAsync(
+                    limit: fetchCount,
+                    offset: 0,
+                    descending: true,
+                    cancellationToken: cancellationToken
+                );
+                sleepActivities = sleepSessions.Select(ActivityStateSpanMapper.SleepSessionToActivity);
+            }
 
             // Merge all sources, sort by Mills descending, apply pagination
             var merged = stateSpanActivities
@@ -248,16 +254,11 @@ public class ActivityService : IActivityService
                     results.Add(ActivityStateSpanMapper.SleepSessionToActivity(created));
                 }
                 catch (OperationCanceledException) { throw; }
-                catch (InvalidOperationException ex)
+                catch (Exception ex)
                 {
-                    _logger.LogError(
-                        ex,
-                        "Failed to create sleep session from activity {Id}",
-                        sleepActivity.Id
-                    );
-                }
-                catch (ArgumentException ex)
-                {
+                    // Mirror the sensor-data branch: log and skip the failed record
+                    // rather than failing the whole batch. Covers the rare upsert
+                    // unique-constraint conflict (concurrent sync of the same record).
                     _logger.LogError(
                         ex,
                         "Failed to create sleep session from activity {Id}",
