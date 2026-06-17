@@ -30,6 +30,7 @@ public class GlookoConnectorService : BaseConnectorService<GlookoConnectorConfig
     private readonly IRetryDelayStrategy _retryDelayStrategy;
     private readonly GlookoAuthTokenProvider _tokenProvider;
     private readonly ITimezoneTimelineService? _timezoneTimelineService;
+    private readonly IConnectorSyncCursorStore? _cursorStore;
     private readonly ILogger<GlookoConnectorService> _glookoLogger;
 
     public GlookoConnectorService(
@@ -41,7 +42,8 @@ public class GlookoConnectorService : BaseConnectorService<GlookoConnectorConfig
         GlookoAuthTokenProvider tokenProvider,
         IConnectorPublisher? publisher = null,
         IMealMatchingService? mealMatchingService = null,
-        ITimezoneTimelineService? timezoneTimelineService = null
+        ITimezoneTimelineService? timezoneTimelineService = null,
+        IConnectorSyncCursorStore? cursorStore = null
     )
         : base(httpClient, serverResolver, logger, publisher)
     {
@@ -51,6 +53,7 @@ public class GlookoConnectorService : BaseConnectorService<GlookoConnectorConfig
         _rateLimitingStrategy = rateLimitingStrategy ?? throw new ArgumentNullException(nameof(rateLimitingStrategy));
         _tokenProvider = tokenProvider ?? throw new ArgumentNullException(nameof(tokenProvider));
         _timezoneTimelineService = timezoneTimelineService;
+        _cursorStore = cursorStore;
         _glookoLogger = logger;
     }
 
@@ -83,6 +86,7 @@ public class GlookoConnectorService : BaseConnectorService<GlookoConnectorConfig
     private GlookoStateSpanMapper? _stateSpanMapper;
     private GlookoTempBasalMapper? _tempBasalMapper;
     private GlookoSystemEventMapper? _systemEventMapper;
+    private GlookoPumpEventMapper? _pumpEventMapper;
     private GlookoProfileMapper? _profileMapper;
 
     private void InitializeMappers(GlookoConnectorConfiguration config)
@@ -94,6 +98,7 @@ public class GlookoConnectorService : BaseConnectorService<GlookoConnectorConfig
         _stateSpanMapper = new GlookoStateSpanMapper(ConnectorSource, _timeMapper, _glookoLogger);
         _tempBasalMapper = new GlookoTempBasalMapper(ConnectorSource, _timeMapper, _glookoLogger);
         _systemEventMapper = new GlookoSystemEventMapper(ConnectorSource, _timeMapper, _glookoLogger);
+        _pumpEventMapper = new GlookoPumpEventMapper(ConnectorSource, _timeMapper, _glookoLogger);
         _profileMapper = new GlookoProfileMapper(ConnectorSource, _glookoLogger);
     }
 
@@ -315,43 +320,52 @@ public class GlookoConnectorService : BaseConnectorService<GlookoConnectorConfig
                 : _timeMapper.ToGlookoTime(DateTime.UtcNow.AddMonths(-6)).AddDays(-1);
             var to = _timeMapper.ToGlookoTime(DateTime.UtcNow).AddDays(1);
 
-            var chunks = DateChunker.Chunk(from, to, TimeSpan.FromDays(14)).ToList();
-
-            _logger.LogInformation(
-                "[{ConnectorSource}] Syncing {From:yyyy-MM-dd} to {To:yyyy-MM-dd} in {ChunkCount} chunk(s)",
-                ConnectorSource, from, to, chunks.Count);
-
-            for (var i = 0; i < chunks.Count; i++)
+            if (config.UseSsv2Sync)
             {
-                var (chunkFrom, chunkTo) = chunks[i];
-
-                await ReportMessageAsync(progressReporter, SyncMessageType.FetchingData,
-                    new()
-                    {
-                        ["from"] = chunkFrom.ToString("MMM dd"),
-                        ["to"] = chunkTo.ToString("MMM dd"),
-                        ["chunk"] = $"{i + 1}/{chunks.Count}",
-                    },
-                    cancellationToken);
-
-                var chunkSuccess = _syncConfig!.UseV3Api
-                    ? await FetchAndMapViaV3Async(chunkFrom, chunkTo, activeTypes, result, config, cancellationToken)
-                    : await FetchAndMapViaV2Async(chunkFrom, chunkTo, activeTypes, result, config, cancellationToken);
-
-                if (!chunkSuccess)
-                {
-                    _logger.LogWarning(
-                        "[{ConnectorSource}] Chunk {Chunk}/{Total} ({From:yyyy-MM-dd} to {To:yyyy-MM-dd}) failed, stopping sync",
-                        ConnectorSource, i + 1, chunks.Count, chunkFrom, chunkTo);
-                    result.Success = false;
-                    result.Message = "Sync failed during data fetch";
-                    result.Errors.Add($"Chunk {i + 1}/{chunks.Count} failed ({chunkFrom:yyyy-MM-dd} to {chunkTo:yyyy-MM-dd})");
-                    break;
-                }
+                // Explicit-range mode (reset/backfill, signalled by a sync window) bypasses stored cursors
+                // and re-scans from the beginning; normal background syncs resume incrementally from them.
+                await FetchAndMapViaSsv2Async(from, !request.To.HasValue, activeTypes, result, config, cancellationToken);
+            }
+            else
+            {
+                var chunks = DateChunker.Chunk(from, to, TimeSpan.FromDays(14)).ToList();
 
                 _logger.LogInformation(
-                    "[{ConnectorSource}] Completed chunk {Chunk}/{Total} ({From:yyyy-MM-dd} to {To:yyyy-MM-dd})",
-                    ConnectorSource, i + 1, chunks.Count, chunkFrom, chunkTo);
+                    "[{ConnectorSource}] Syncing {From:yyyy-MM-dd} to {To:yyyy-MM-dd} in {ChunkCount} chunk(s)",
+                    ConnectorSource, from, to, chunks.Count);
+
+                for (var i = 0; i < chunks.Count; i++)
+                {
+                    var (chunkFrom, chunkTo) = chunks[i];
+
+                    await ReportMessageAsync(progressReporter, SyncMessageType.FetchingData,
+                        new()
+                        {
+                            ["from"] = chunkFrom.ToString("MMM dd"),
+                            ["to"] = chunkTo.ToString("MMM dd"),
+                            ["chunk"] = $"{i + 1}/{chunks.Count}",
+                        },
+                        cancellationToken);
+
+                    var chunkSuccess = _syncConfig!.UseV3Api
+                        ? await FetchAndMapViaV3Async(chunkFrom, chunkTo, activeTypes, result, config, cancellationToken)
+                        : await FetchAndMapViaV2Async(chunkFrom, chunkTo, activeTypes, result, config, cancellationToken);
+
+                    if (!chunkSuccess)
+                    {
+                        _logger.LogWarning(
+                            "[{ConnectorSource}] Chunk {Chunk}/{Total} ({From:yyyy-MM-dd} to {To:yyyy-MM-dd}) failed, stopping sync",
+                            ConnectorSource, i + 1, chunks.Count, chunkFrom, chunkTo);
+                        result.Success = false;
+                        result.Message = "Sync failed during data fetch";
+                        result.Errors.Add($"Chunk {i + 1}/{chunks.Count} failed ({chunkFrom:yyyy-MM-dd} to {chunkTo:yyyy-MM-dd})");
+                        break;
+                    }
+
+                    _logger.LogInformation(
+                        "[{ConnectorSource}] Completed chunk {Chunk}/{Total} ({From:yyyy-MM-dd} to {To:yyyy-MM-dd})",
+                        ConnectorSource, i + 1, chunks.Count, chunkFrom, chunkTo);
+                }
             }
 
             // Profiles (V3 device settings — used in both modes, no V2 equivalent)
@@ -423,6 +437,22 @@ public class GlookoConnectorService : BaseConnectorService<GlookoConnectorConfig
         var batchData = await FetchBatchDataAsync(fromDate, toDate);
         if (batchData == null) return false;
 
+        await MapAndPublishV2BatchAsync(batchData, activeTypes, result, config, cancellationToken);
+        return true;
+    }
+
+    /// <summary>
+    ///     Maps and publishes a populated <see cref="GlookoBatchData"/> (glucose, manual BG, treatments,
+    ///     foods, state spans, temp basals). Shared by the date-windowed V2 path and the SSV2 cursor path,
+    ///     which differ only in how the batch is fetched.
+    /// </summary>
+    private async Task MapAndPublishV2BatchAsync(
+        GlookoBatchData batchData,
+        HashSet<SyncDataType> activeTypes,
+        SyncResult result,
+        GlookoConnectorConfiguration config,
+        CancellationToken cancellationToken)
+    {
         // 1. Glucose
         var sensorGlucose = _sensorGlucoseMapper.TransformBatchDataToSensorGlucose(batchData).ToList();
         await PublishRecordTypeAsync(result, SyncDataType.Glucose, activeTypes,
@@ -467,8 +497,6 @@ public class GlookoConnectorService : BaseConnectorService<GlookoConnectorConfig
             if (tempBasals.Count > 0 && await PublishTempBasalDataAsync(tempBasals, config, cancellationToken))
                 result.ItemsSynced[SyncDataType.TempBasals] = tempBasals.Count;
         }
-
-        return true;
     }
 
     // ── V3 fetch + map ──────────────────────────────────────────────────
@@ -823,6 +851,152 @@ public class GlookoConnectorService : BaseConnectorService<GlookoConnectorConfig
             _logger.LogWarning(ex, "[{ConnectorSource}] Failed to fetch V2 foods for metadata enrichment", ConnectorSource);
             return null;
         }
+    }
+
+    // ── SSV2 granular sync ──────────────────────────────────────────────
+
+    /// <summary>
+    ///     Fetches every record of an SSV2 resource via cursor pagination, returning the raw records for the
+    ///     caller to map. In incremental mode the scan resumes from (and persists) the stored per-resource
+    ///     cursor so only server-side updates since the last sync are pulled; in explicit-range mode (the
+    ///     reset/backfill path, signalled by a non-null sync window) the stored cursor is bypassed and the
+    ///     scan runs from the beginning, leaving the incremental cursor untouched.
+    /// </summary>
+    /// <param name="resource">SSV2 resource path (e.g. <c>/api/v2/cgm/egvs</c>).</param>
+    /// <param name="selectRecords">Projects a deserialized page to its record array.</param>
+    /// <param name="incremental">When true, resume from and persist the stored cursor.</param>
+    /// <param name="startDate">Optional clinical-time floor (fake-UTC). Required by egvs; omitted otherwise.</param>
+    private async Task<List<TRecord>> FetchSsv2Async<TPage, TRecord>(
+        string resource,
+        Func<TPage, TRecord[]?> selectRecords,
+        bool incremental,
+        DateTime? startDate)
+        where TPage : GlookoSsv2Page
+    {
+        EnsureAuthenticatedAndGetCode();
+
+        var stored = incremental && _cursorStore != null
+            ? await _cursorStore.GetAsync(ServiceName, resource)
+            : null;
+
+        var lastUpdatedAt = stored?.LastUpdatedAt ?? GlookoConstants.Ssv2InitialLastUpdatedAt;
+        var lastGuid = stored?.LastGuid ?? GlookoConstants.Ssv2InitialLastGuid;
+
+        var all = new List<TRecord>();
+
+        for (var page = 0; page < GlookoConstants.Ssv2MaxPages; page++)
+        {
+            var url = ConstructSsv2Url(resource, startDate, lastUpdatedAt, lastGuid);
+            var result = await FetchFromGlookoEndpointWithRetry(url);
+            if (!result.HasValue) break;
+
+            var pageData = JsonSerializer.Deserialize<TPage>(result.Value.GetRawText());
+            var batch = pageData == null ? null : selectRecords(pageData);
+
+            if (batch is { Length: > 0 })
+                all.AddRange(batch);
+
+            // Stop on the last page, an empty page, or a cursor that fails to advance (loop guard).
+            if (pageData == null || pageData.LastPage || batch is not { Length: > 0 })
+                break;
+            if (pageData.LastUpdatedAt == lastUpdatedAt && pageData.LastGuid == lastGuid)
+            {
+                _logger.LogWarning("[{ConnectorSource}] SSV2 {Resource} cursor did not advance; stopping pagination",
+                    ConnectorSource, resource);
+                break;
+            }
+
+            lastUpdatedAt = pageData.LastUpdatedAt ?? lastUpdatedAt;
+            lastGuid = pageData.LastGuid ?? lastGuid;
+        }
+
+        // Persist the advanced cursor only for incremental scans, and only when it actually moved.
+        if (incremental && _cursorStore != null
+            && (lastUpdatedAt != stored?.LastUpdatedAt || lastGuid != stored?.LastGuid))
+            await _cursorStore.SetAsync(ServiceName, resource, new ConnectorSyncCursor(lastUpdatedAt, lastGuid));
+
+        _logger.LogInformation("[{ConnectorSource}] SSV2 {Resource} fetched {Count} records (incremental={Incremental})",
+            ConnectorSource, resource, all.Count, incremental);
+        return all;
+    }
+
+    /// <summary>
+    ///     Fetches the granular <c>cgm/egvs</c> stream and maps it to SensorGlucose.
+    /// </summary>
+    public async Task<List<SensorGlucose>> FetchSsv2EgvsAsync(bool incremental, DateTime startDate)
+    {
+        var egvs = await FetchSsv2Async<GlookoEgvPage, GlookoEgv>(
+            GlookoConstants.Ssv2EgvsPath, p => p.Egvs, incremental, startDate);
+        return _sensorGlucoseMapper!.TransformEgvsToSensorGlucose(egvs).ToList();
+    }
+
+    /// <summary>
+    ///     SSV2 sync pass: glucose from the granular egvs feed, and boluses / carbs / manual BG / state
+    ///     spans / temp basals via the same v2 batch mappers but fetched incrementally by cursor. In
+    ///     incremental mode each resource omits <c>startDate</c> and relies solely on its stored cursor;
+    ///     a backfill passes the clinical floor and bypasses the cursor.
+    /// </summary>
+    private async Task FetchAndMapViaSsv2Async(
+        DateTime from,
+        bool incremental,
+        HashSet<SyncDataType> activeTypes,
+        SyncResult result,
+        GlookoConnectorConfiguration config,
+        CancellationToken cancellationToken)
+    {
+        if (activeTypes.Contains(SyncDataType.Glucose))
+        {
+            // egvs requires a clinical startDate; the cursor drives incrementality beyond it.
+            var egvGlucose = await FetchSsv2EgvsAsync(incremental, from);
+            await PublishRecordTypeAsync(result, SyncDataType.Glucose, activeTypes,
+                egvGlucose, PublishSensorGlucoseDataAsync, config, cancellationToken);
+            UpdateLastEntryTime(result, SyncDataType.Glucose, egvGlucose);
+        }
+
+        DateTime? batchStart = incremental ? null : from;
+
+        var batchData = new GlookoBatchData
+        {
+            NormalBoluses = (await FetchSsv2Async<GlookoNormalBolusPage, GlookoBolus>(
+                GlookoConstants.NormalBolusesPath, p => p.NormalBoluses, incremental, batchStart)).ToArray(),
+            ScheduledBasals = (await FetchSsv2Async<GlookoScheduledBasalPage, GlookoBasal>(
+                GlookoConstants.ScheduledBasalsPath, p => p.ScheduledBasals, incremental, batchStart)).ToArray(),
+            TempBasals = (await FetchSsv2Async<GlookoTemporaryBasalPage, GlookoTempBasal>(
+                GlookoConstants.TemporaryBasalsPath, p => p.TemporaryBasals, incremental, batchStart)).ToArray(),
+            SuspendBasals = (await FetchSsv2Async<GlookoSuspendBasalPage, GlookoSuspendBasal>(
+                GlookoConstants.SuspendBasalsPath, p => p.SuspendBasals, incremental, batchStart)).ToArray(),
+            MeterReadings = (await FetchSsv2Async<GlookoMeterReadingPage, GlookoMeterReading>(
+                GlookoConstants.MeterReadingsPath, p => p.Readings, incremental, batchStart)).ToArray(),
+            Foods = (await FetchSsv2Async<GlookoFoodPage, GlookoFood>(
+                GlookoConstants.FoodsPath, p => p.Foods, incremental, batchStart)).ToArray(),
+        };
+
+        await MapAndPublishV2BatchAsync(batchData, activeTypes, result, config, cancellationToken);
+
+        // Device events — granular pumps/events feed (reservoir/site/cannula changes, etc.). Net-new for
+        // SSV2; the windowed path derives these from the v3 graph series instead.
+        if (activeTypes.Contains(SyncDataType.DeviceEvents))
+        {
+            var pumpEvents = await FetchSsv2Async<GlookoPumpEventPage, GlookoPumpEvent>(
+                GlookoConstants.Ssv2PumpEventsPath, p => p.Events, incremental, batchStart);
+            var deviceEvents = _pumpEventMapper!.TransformPumpEventsToDeviceEvents(pumpEvents);
+            await PublishRecordTypeAsync(result, SyncDataType.DeviceEvents, activeTypes,
+                deviceEvents, PublishDeviceEventDataAsync, config, cancellationToken);
+        }
+    }
+
+    private static string ConstructSsv2Url(string resource, DateTime? startDate, string lastUpdatedAt, string lastGuid)
+    {
+        // sendSoftDeleted=false: tombstones aren't ingested yet, so don't page through them.
+        var url = $"{resource}?lastUpdatedAt={lastUpdatedAt}"
+                + $"&lastGuid={lastGuid}"
+                + $"&limit={GlookoConstants.Ssv2PageSize}"
+                + "&sendSoftDeleted=false&allDevicesFlag=true";
+
+        if (startDate.HasValue)
+            url += $"&startDate={startDate.Value:yyyy-MM-ddTHH:mm:ss.fffZ}";
+
+        return url;
     }
 
     private string? _meterUnits;

@@ -56,6 +56,7 @@ public enum ConnectorPropertyKey
     // Glooko-specific
     UseV3Api,
     V3IncludeCgmBackfill,
+    UseSsv2Sync,
 
     // MyLife-specific
     ServiceUrl,

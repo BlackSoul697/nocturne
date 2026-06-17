@@ -63,6 +63,39 @@ public static class GlookoConstants
     public const string V3DeviceSettingsPath = "/api/v3/devices_and_settings";
     public const string V3HistoriesPath = "/api/v3/users/summary/histories";
 
+    // -- SSV2 sync (mobile-app granular sync) ---------------------------------
+
+    /// <summary>
+    ///     Granular per-reading CGM stream consumed by the Glooko mobile app, paginated by cursor.
+    ///     One resource in the broader SSV2 sync protocol (<c>com.glooko.serversync</c>).
+    /// </summary>
+    public const string Ssv2EgvsPath = "/api/v2/cgm/egvs";
+
+    /// <summary>
+    ///     Granular pump device-event stream (reservoir/site/cannula changes, prime, suspend/resume, etc.).
+    /// </summary>
+    public const string Ssv2PumpEventsPath = "/api/v2/pumps/events";
+
+    /// <summary>
+    ///     Sentinel <c>lastGuid</c> that starts an SSV2 cursor scan from the beginning.
+    /// </summary>
+    public const string Ssv2InitialLastGuid = "00000000-0000-0000-0000-000000000000";
+
+    /// <summary>
+    ///     Sentinel <c>lastUpdatedAt</c> (Unix epoch) that starts an SSV2 cursor scan from the beginning.
+    /// </summary>
+    public const string Ssv2InitialLastUpdatedAt = "1970-01-01T00:00:00.000Z";
+
+    /// <summary>
+    ///     Records requested per SSV2 page. The app uses a few hundred; this bounds memory per call.
+    /// </summary>
+    public const int Ssv2PageSize = 500;
+
+    /// <summary>
+    ///     Hard cap on SSV2 pages per resource per sync, so a non-advancing cursor can never loop forever.
+    /// </summary>
+    public const int Ssv2MaxPages = 1000;
+
     // -- V3 graph series ------------------------------------------------------
 
     /// <summary>

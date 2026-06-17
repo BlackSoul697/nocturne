@@ -71,4 +71,15 @@ public class GlookoConnectorConfiguration : BaseConnectorConfiguration
     /// </summary>
     [ConnectorProperty(ConnectorPropertyKey.V3IncludeCgmBackfill, DefaultValue = "false")]
     public bool V3IncludeCgmBackfill { get; set; } = false;
+
+    /// <summary>
+    ///     Source glucose from the Glooko mobile app's granular SSV2 sync endpoint
+    ///     (<c>/api/v2/cgm/egvs</c>) instead of the web graph/batch flow. The egvs feed is the
+    ///     raw per-reading CGM stream (trend, system vs display time) the app itself consumes,
+    ///     paginated by cursor. Experimental and currently glucose-only — when enabled, glucose
+    ///     comes from egvs while all other data types continue via the v2/v3 path selected by
+    ///     <see cref="UseV3Api"/>.
+    /// </summary>
+    [ConnectorProperty(ConnectorPropertyKey.UseSsv2Sync, DefaultValue = "false")]
+    public bool UseSsv2Sync { get; set; } = false;
 }

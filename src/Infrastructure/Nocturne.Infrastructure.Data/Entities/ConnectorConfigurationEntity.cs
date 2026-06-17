@@ -108,4 +108,12 @@ public class ConnectorConfigurationEntity : ITenantScoped
     /// </summary>
     [Column("is_healthy")]
     public bool IsHealthy { get; set; } = true;
+
+    /// <summary>
+    /// Per-resource incremental-sync cursors as a JSON object keyed by resource name
+    /// (e.g. <c>{"cgm/egvs":{"lastUpdatedAt":"...","lastGuid":"..."}}</c>). Connector runtime state,
+    /// written after each successful sync; null until a connector runs its first cursor-based sync.
+    /// </summary>
+    [Column("sync_cursors", TypeName = "jsonb")]
+    public string? SyncCursorsJson { get; set; }
 }
