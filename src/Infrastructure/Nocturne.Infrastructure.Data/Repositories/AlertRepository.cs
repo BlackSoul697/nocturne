@@ -348,9 +348,6 @@ public class AlertRepository : IAlertRepository
             .AsNoTracking()
             .Where(s => s.TenantId == tenantId)
             .Select(s => new TenantAlertSettingsSnapshot(
-                s.DndManualActive,
-                s.DndManualUntil,
-                s.DndManualStartedAt,
                 s.DndScheduleEnabled,
                 s.DndScheduleStart,
                 s.DndScheduleEnd))

@@ -196,9 +196,9 @@ internal sealed class SensorContextEnricher : ISensorContextEnricher
 
             var settings = await _deps.Alerts.GetTenantAlertSettingsAsync(tenantId, ct);
             // No row yet means DND has never been configured for this tenant — treat as off.
-            // Legacy manual/scheduled DND is tenant-wide, i.e. == scope=all, until the manual
-            // path is migrated to a window (ADR 0004 D5.5); scheduled DND stays here.
-            var legacy = settings?.Resolve(now, enriched.TenantTimeZoneId);
+            // Scheduled DND is tenant-wide, i.e. == scope=all (manual DND is a scope=all window,
+            // resolved below); this projects the active scheduled window if any (ADR 0004 D5).
+            var scheduled = settings?.Resolve(now, enriched.TenantTimeZoneId);
 
             // Scoped DND windows: resolve each uncleared window active-at-now into its scope.
             var windows = await _deps.Alerts.GetUnclearedDndWindowsAsync(tenantId, ct);
@@ -208,19 +208,19 @@ internal sealed class SensorContextEnricher : ISensorContextEnricher
                 if (w.IsActiveAt(now))
                     activeScopes.Add(w.Scope);
             }
-            if (legacy is not null)
+            if (scheduled is not null)
                 activeScopes.Add(DndScope.All);
 
             // ActiveDoNotDisturb drives the do_not_disturb condition leaf and the tenant-wide
             // notion of DND, so it is non-null exactly when `all` is active — lows/highs windows
-            // feed ActiveDndScopes (the gate) only. Anchor for_minutes on the legacy projection
-            // when present, else on the earliest active all-window.
+            // feed ActiveDndScopes (the gate) only. Anchor for_minutes on the scheduled projection
+            // when present, else on the earliest active all-window (manual mute).
             DoNotDisturbSnapshot? dnd = null;
             if (activeScopes.Contains(DndScope.All))
             {
-                if (legacy is not null)
+                if (scheduled is not null)
                 {
-                    dnd = new DoNotDisturbSnapshot(legacy.StartedAt, legacy.Source);
+                    dnd = new DoNotDisturbSnapshot(scheduled.StartedAt, scheduled.Source);
                 }
                 else
                 {

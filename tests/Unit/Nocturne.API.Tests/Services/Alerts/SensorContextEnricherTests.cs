@@ -674,18 +674,16 @@ public class SensorContextEnricherTests
     }
 
     [Fact]
-    public async Task LegacyManualDnd_contributesAllScope()
+    public async Task ScheduledDnd_contributesAllScope_andTripsActiveDnd()
     {
-        var now = _timeProvider.GetUtcNow().UtcDateTime;
+        // FakeTimeProvider is 2026-03-22 12:00 UTC; a 00:00–23:00 schedule (UTC fallback, no tz)
+        // is active, so scheduled DND is tenant-wide == scope=all.
         _alertRepository
             .Setup(r => r.GetTenantAlertSettingsAsync(_tenantId, It.IsAny<CancellationToken>()))
             .ReturnsAsync(new TenantAlertSettingsSnapshot(
-                DndManualActive: true,
-                DndManualUntil: null,
-                DndManualStartedAt: now.AddMinutes(-10),
-                DndScheduleEnabled: false,
-                DndScheduleStart: null,
-                DndScheduleEnd: null));
+                DndScheduleEnabled: true,
+                DndScheduleStart: new TimeOnly(0, 0),
+                DndScheduleEnd: new TimeOnly(23, 0)));
 
         var enricher = BuildEnricher();
         var rule = MakeRule(AlertConditionType.Threshold, """{"direction":"below","value":70}""");
@@ -694,7 +692,7 @@ public class SensorContextEnricherTests
 
         enriched.ActiveDndScopes.Should().Contain(DndScope.All);
         enriched.ActiveDoNotDisturb.Should().NotBeNull();
-        enriched.ActiveDoNotDisturb!.Source.Should().Be("manual");
+        enriched.ActiveDoNotDisturb!.Source.Should().Be("scheduled");
     }
 
     private static string TryResolve(string ianaId, string windowsId)
