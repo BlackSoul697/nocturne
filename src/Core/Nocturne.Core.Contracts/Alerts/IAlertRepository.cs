@@ -137,6 +137,17 @@ public interface IAlertRepository
     Task<IReadOnlyList<DndWindowSnapshot>> GetUnclearedDndWindowsAsync(Guid tenantId, CancellationToken ct);
 
     /// <summary>
+    /// Returns every DND window for the tenant received by <paramref name="asOfReceiptUtc"/>
+    /// (<c>created_at &lt;= asOfReceiptUtc</c>), <b>including cleared/expired ones</b>, for replay
+    /// (ADR 0004 D5). Replay resolves each window with
+    /// <see cref="DndWindowSnapshot.WasActiveAt"/> (receipt-gated) per tick, so cleared windows'
+    /// <c>cleared_at</c> still matters. Every <see cref="DateTime"/> is normalised to
+    /// <see cref="DateTimeKind.Utc"/>.
+    /// </summary>
+    Task<IReadOnlyList<DndWindowSnapshot>> GetDndWindowsAsOfAsync(
+        Guid tenantId, DateTime asOfReceiptUtc, CancellationToken ct);
+
+    /// <summary>
     /// Marks an alert instance as suppressed at fire time without dispatching deliveries.
     /// Writes <paramref name="reason"/> to <c>alert_instances.suppression_reason</c> so Replay
     /// and History can display "would have fired but suppressed" rows. Currently the only

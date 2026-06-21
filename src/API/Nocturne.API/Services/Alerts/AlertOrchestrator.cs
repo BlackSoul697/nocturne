@@ -149,21 +149,20 @@ internal sealed class AlertOrchestrator(
             Severity = rule.Severity,
         };
 
-        // DND suppression: when the tenant is in Do Not Disturb, non-Critical rules without
-        // an explicit "allow through DND" opt-in still get a history row written (so Replay
-        // can show "would have fired but you were in DND"), but the dispatch is skipped.
-        // Critical rules implicitly bypass DND regardless of the per-rule flag.
-        var suppressedByDnd =
-            context.ActiveDoNotDisturb is not null
-            && rule.Severity != AlertRuleSeverity.Critical
-            && !rule.AllowThroughDnd;
+        // Scoped DND suppression (ADR 0004): when an active DND scope covers this rule's class,
+        // a non-Critical rule without an explicit "allow through DND" opt-in still gets a history
+        // row written (so Replay can show "would have fired but you were in DND"), but the
+        // dispatch is skipped. Critical rules implicitly bypass DND regardless of the per-rule
+        // flag. The suppressing scope is recorded on the instance (dnd:lows/highs/all).
+        var suppressingScope = DndSuppressionGate.SuppressingScope(rule, context.ActiveDndScopes);
 
-        if (suppressedByDnd)
+        if (suppressingScope is { } scope)
         {
-            await repository.MarkInstanceSuppressedAsync(tenantId, instance.Id, "dnd", ct);
+            await repository.MarkInstanceSuppressedAsync(
+                tenantId, instance.Id, DndSuppressionGate.SuppressionReason(scope), ct);
             logger.LogInformation(
-                "Alert instance {InstanceId} for rule {RuleName} suppressed by DND ({Source})",
-                instance.Id, rule.Name, context.ActiveDoNotDisturb!.Source);
+                "Alert instance {InstanceId} for rule {RuleName} suppressed by DND (scope {Scope})",
+                instance.Id, rule.Name, scope);
         }
         else
         {
@@ -182,7 +181,7 @@ internal sealed class AlertOrchestrator(
         // Skipped when the instance was suppressed by DND: there was no dispatch, so there is
         // no alert_dispatch event to "follow up" with an ack, and emitting an alert_acknowledged
         // for a suppressed alert would race the suppression history row.
-        if (rule.Severity == AlertRuleSeverity.Info && !suppressedByDnd)
+        if (rule.Severity == AlertRuleSeverity.Info && suppressingScope is null)
         {
             await acknowledgementService.AcknowledgeExcursionAsync(
                 tenantId, excursionId, "system:auto-ack-on-trigger", broadcast: false, ct);

@@ -65,4 +65,16 @@ public static class DndSuppressionGate
     /// <summary>True when the rule's delivery is silenced by one of the active scopes.</summary>
     public static bool IsSuppressed(AlertRuleSnapshot rule, IReadOnlySet<DndScope> activeScopes) =>
         SuppressingScope(rule, activeScopes) is not null;
+
+    /// <summary>
+    /// The value stamped on <c>alert_instances.suppression_reason</c> when
+    /// <paramref name="scope"/> silenced a rule: <c>dnd:lows</c> / <c>dnd:highs</c> /
+    /// <c>dnd:all</c> (the contract is per-instance, scope-tagged — the excursion still fires).
+    /// </summary>
+    public static string SuppressionReason(DndScope scope) => scope switch
+    {
+        DndScope.Lows => "dnd:lows",
+        DndScope.Highs => "dnd:highs",
+        _ => "dnd:all",
+    };
 }

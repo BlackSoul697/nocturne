@@ -49,6 +49,11 @@ public class AlertReplayServiceLeafLogTests
     {
         _tenantAccessor.Setup(t => t.TenantId).Returns(_tenantId);
 
+        // The repo never returns null; default the DND-window fetch to empty (no DND).
+        _alertRepository
+            .Setup(r => r.GetDndWindowsAsOfAsync(It.IsAny<Guid>(), It.IsAny<DateTime>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(Array.Empty<DndWindowSnapshot>());
+
         var enricherDeps = new SensorContextEnricherDependencies(
             _iobCalculator.Object,
             _cobCalculator.Object,

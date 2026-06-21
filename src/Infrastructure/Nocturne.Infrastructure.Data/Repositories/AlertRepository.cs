@@ -385,6 +385,32 @@ public class AlertRepository : IAlertRepository
             .ToList();
     }
 
+    /// <inheritdoc/>
+    public virtual async Task<IReadOnlyList<DndWindowSnapshot>> GetDndWindowsAsOfAsync(
+        Guid tenantId, DateTime asOfReceiptUtc, CancellationToken ct)
+    {
+        await using var context = await _contextFactory.CreateDbContextAsync(ct);
+        context.TenantId = tenantId;
+
+        // Replay needs cleared windows too (WasActiveAt reads cleared_at), so unlike the live
+        // path this does not filter cleared_at. Bound by receipt (created_at <= asOf); the
+        // per-tick WasActiveAt re-applies the tighter created_at <= tick gate.
+        var rows = await context.DndWindows
+            .AsNoTracking()
+            .Where(w => w.TenantId == tenantId && w.CreatedAt <= asOfReceiptUtc)
+            .Select(w => new { w.Scope, w.StartedAt, w.EndsAt, w.ClearedAt, w.CreatedAt })
+            .ToListAsync(ct);
+
+        return rows
+            .Select(w => new DndWindowSnapshot(
+                w.Scope,
+                DateTime.SpecifyKind(w.StartedAt, DateTimeKind.Utc),
+                w.EndsAt is { } ends ? DateTime.SpecifyKind(ends, DateTimeKind.Utc) : null,
+                w.ClearedAt is { } cleared ? DateTime.SpecifyKind(cleared, DateTimeKind.Utc) : null,
+                DateTime.SpecifyKind(w.CreatedAt, DateTimeKind.Utc)))
+            .ToList();
+    }
+
     /// <summary>
     /// Gets all enabled rules for signal loss detection.
     /// </summary>
