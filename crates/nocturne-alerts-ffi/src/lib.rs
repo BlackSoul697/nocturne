@@ -141,6 +141,23 @@ pub unsafe extern "C" fn nocturne_alerts_evaluate_node(request_json: *const c_ch
     })
 }
 
+/// Derives a rule's scope class (`low | high | composite | undirected`) for
+/// scoped Do Not Disturb from its `condition_type` + `condition_params`.
+/// Request/response envelopes are documented in `README.md`. An unclassifiable
+/// rule comes back as `undirected` (not an error); free the result with
+/// [`nocturne_alerts_free_string`].
+///
+/// # Safety
+/// `request_json` must be null or a NUL-terminated string valid for reads for
+/// the duration of the call.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn nocturne_alerts_classify(request_json: *const c_char) -> *mut c_char {
+    boundary(|| {
+        let input = unsafe { read_utf8(request_json, "request") }?;
+        envelope::classify_envelope(input)
+    })
+}
+
 /// Enumerates the canonical condition paths and leaf ids of a condition tree
 /// (for timer-pruning hosts). Input/output shapes are documented in
 /// `README.md`. Free the result with [`nocturne_alerts_free_string`].

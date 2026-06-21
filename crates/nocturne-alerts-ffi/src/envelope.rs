@@ -12,6 +12,7 @@ use serde::Deserialize;
 use serde_json::{Map, Value, json};
 use uuid::Uuid;
 
+use nocturne_alerts_core::classify::classify;
 use nocturne_alerts_core::context::SensorContext;
 use nocturne_alerts_core::engine::{EngineState, Rule, RuleOutcome, evaluate_rule};
 use nocturne_alerts_core::eval::{Env, eval_node};
@@ -361,6 +362,47 @@ pub fn evaluate_node_envelope(request_json: &str) -> Result<Value, String> {
         "value": value,
         "timers": Value::Object(timers_obj),
         "timer_ops": ops.iter().map(timer_op_json).collect::<Vec<_>>(),
+    }))
+}
+
+// ---------------------------------------------------------------------------
+// Classify
+// ---------------------------------------------------------------------------
+
+/// Request for `nocturne_alerts_classify`: a rule's root `condition_type` plus
+/// its payload-only `condition_params` (exactly as stored in
+/// `alert_rules.condition_params`). Mirrors `WireRule`'s discriminator + payload
+/// pair, without the per-rule driver fields classification never reads.
+#[derive(Deserialize)]
+struct ClassifyRequest {
+    schema_version: i64,
+    condition_type: String,
+    #[serde(default)]
+    condition_params: Value,
+}
+
+/// Derives a rule's scope class (`low | high | composite | undirected`) for
+/// scoped Do Not Disturb (ADR 0004). Unlike `evaluate`, an unknown
+/// `condition_type` or malformed `condition_params` is **not** an envelope
+/// error: the crate's `classify` silent-fails to `undirected` (all-only), the
+/// safe default that never lets a scoped mute silence an unclassifiable rule.
+/// Only a structurally malformed *envelope* is an error.
+pub fn classify_envelope(request_json: &str) -> Result<Value, String> {
+    let req: ClassifyRequest =
+        serde_json::from_str(request_json).map_err(|e| format!("invalid request envelope: {e}"))?;
+    if req.schema_version != SCHEMA_VERSION {
+        return Err(format!(
+            "unsupported schema_version {} (expected {SCHEMA_VERSION})",
+            req.schema_version
+        ));
+    }
+
+    let class = classify(&req.condition_type, &req.condition_params);
+
+    Ok(json!({
+        "schema_version": SCHEMA_VERSION,
+        "ok": true,
+        "scope_class": class.wire(),
     }))
 }
 

@@ -746,6 +746,10 @@ public static class ServiceRegistrationExtensions
         services.AddScoped<IExcursionResolutionHandler, ExcursionResolutionHandler>();
         services.AddScoped<IAlertReferenceService, AlertReferenceService>();
         services.AddScoped<IAlertReplayService, AlertReplayService>();
+        // Scope-class classification (scoped Do Not Disturb, ADR 0004): stateless over
+        // the static native engine, so a singleton. Backfilled once at startup.
+        services.AddSingleton<IRuleScopeClassifier, RuleScopeClassifier>();
+        services.AddHostedService<RuleScopeClassBackfillService>();
 
         // Delivery providers
         services.AddScoped<Nocturne.API.Services.Alerts.Providers.WebPushProvider>();

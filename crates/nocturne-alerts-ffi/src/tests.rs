@@ -10,8 +10,8 @@ use std::path::PathBuf;
 use serde_json::{Map, Value, json};
 
 use crate::{
-    boundary, nocturne_alerts_evaluate, nocturne_alerts_evaluate_node, nocturne_alerts_free_string,
-    nocturne_alerts_leaf_paths, nocturne_alerts_version,
+    boundary, nocturne_alerts_classify, nocturne_alerts_evaluate, nocturne_alerts_evaluate_node,
+    nocturne_alerts_free_string, nocturne_alerts_leaf_paths, nocturne_alerts_version,
 };
 
 /// Calls an FFI function with `input`, copies the result into a Rust string
@@ -605,6 +605,103 @@ fn leaf_paths_rejects_malformed_node() {
         &call_json(nocturne_alerts_leaf_paths, r#"{ "type": 5 }"#),
         "malformed condition node",
     );
+}
+
+// ---------------------------------------------------------------------------
+// Classify (scoped Do Not Disturb scope class — ADR 0004)
+// ---------------------------------------------------------------------------
+
+fn classify(request: &Value) -> Value {
+    call_json(nocturne_alerts_classify, &request.to_string())
+}
+
+fn classify_scope(condition_type: &str, condition_params: Value) -> String {
+    let response = classify(&json!({
+        "schema_version": 1,
+        "condition_type": condition_type,
+        "condition_params": condition_params,
+    }));
+    assert_eq!(response["schema_version"], json!(1));
+    assert_eq!(response["ok"], Value::Bool(true), "error: {}", response["error"]);
+    response["scope_class"]
+        .as_str()
+        .expect("scope_class present")
+        .to_string()
+}
+
+#[test]
+fn classify_threshold_below_is_low() {
+    assert_eq!(classify_scope("threshold", json!({ "direction": "below", "value": 70 })), "low");
+}
+
+#[test]
+fn classify_threshold_above_is_high() {
+    assert_eq!(classify_scope("threshold", json!({ "direction": "above", "value": 250 })), "high");
+}
+
+#[test]
+fn classify_composite_mixed_directions_is_composite() {
+    // Children are full nodes (carry their own `type` + payload), exactly the
+    // stored composite shape.
+    let params = json!({
+        "operator": "or",
+        "conditions": [
+            { "type": "threshold", "threshold": { "direction": "below", "value": 70 } },
+            { "type": "threshold", "threshold": { "direction": "above", "value": 250 } }
+        ]
+    });
+    assert_eq!(classify_scope("composite", params), "composite");
+}
+
+#[test]
+fn classify_signal_loss_is_undirected() {
+    assert_eq!(classify_scope("signal_loss", json!({ "timeout_minutes": 20 })), "undirected");
+}
+
+#[test]
+fn classify_silent_fails_unknown_type_to_undirected() {
+    // Unlike evaluate, an unknown condition_type is NOT an envelope error — the
+    // crate's classify is the all-only safe default.
+    assert_eq!(classify_scope("teleport", json!({})), "undirected");
+}
+
+#[test]
+fn classify_defaults_missing_params_to_undirected() {
+    let response = classify(&json!({
+        "schema_version": 1,
+        "condition_type": "threshold",
+    }));
+    assert_eq!(response["ok"], Value::Bool(true));
+    assert_eq!(response["scope_class"], json!("undirected"));
+}
+
+#[test]
+fn classify_rejects_null_pointer() {
+    let response: Value = unsafe {
+        let ptr = nocturne_alerts_classify(std::ptr::null());
+        let out = CStr::from_ptr(ptr).to_str().unwrap().to_string();
+        nocturne_alerts_free_string(ptr);
+        serde_json::from_str(&out).unwrap()
+    };
+    assert_error(&response, "null");
+}
+
+#[test]
+fn classify_rejects_malformed_json() {
+    assert_error(
+        &call_json(nocturne_alerts_classify, "{ this is not json"),
+        "invalid request envelope",
+    );
+}
+
+#[test]
+fn classify_rejects_wrong_schema_version() {
+    let request = json!({
+        "schema_version": 2,
+        "condition_type": "threshold",
+        "condition_params": { "direction": "below", "value": 70 },
+    });
+    assert_error(&classify(&request), "unsupported schema_version 2");
 }
 
 // ---------------------------------------------------------------------------

@@ -112,6 +112,14 @@ public static partial class AlertsInterop
     [LibraryImport(LibraryName, EntryPoint = "nocturne_alerts_leaf_paths", StringMarshalling = StringMarshalling.Utf8)]
     private static partial IntPtr LeafPathsNative(string conditionNodeJson);
 
+    /// <summary>
+    /// Derives a rule's scope class (low/high/composite/undirected) for scoped Do
+    /// Not Disturb. Request/response are the JSON envelopes documented in
+    /// crates/nocturne-alerts-ffi/README.md. Must be freed with FreeString.
+    /// </summary>
+    [LibraryImport(LibraryName, EntryPoint = "nocturne_alerts_classify", StringMarshalling = StringMarshalling.Utf8)]
+    private static partial IntPtr ClassifyNative(string requestJson);
+
     #endregion
 
     #region Managed wrappers
@@ -127,6 +135,9 @@ public static partial class AlertsInterop
 
     /// <summary>Raw leaf-paths call: condition node JSON in, response envelope JSON out.</summary>
     public static string LeafPaths(string conditionNodeJson) => ConsumeString(LeafPathsNative(conditionNodeJson), "{}");
+
+    /// <summary>Raw classify call: request envelope JSON in, response envelope JSON out.</summary>
+    public static string Classify(string requestJson) => ConsumeString(ClassifyNative(requestJson), "{}");
 
     private static string ConsumeString(IntPtr ptr, string fallback)
     {

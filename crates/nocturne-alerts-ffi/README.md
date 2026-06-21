@@ -23,6 +23,7 @@ char* nocturne_alerts_version(void);
 char* nocturne_alerts_evaluate(const char* request_json);
 char* nocturne_alerts_evaluate_node(const char* request_json);
 char* nocturne_alerts_leaf_paths(const char* condition_node_json);
+char* nocturne_alerts_classify(const char* request_json);
 void  nocturne_alerts_free_string(char* ptr);
 ```
 
@@ -226,6 +227,38 @@ Container nodes whose payload/child is missing are leaves (the normative
 path has an empty type segment (`composite[2].`). Pruning timers to the
 `paths` set is always safe — it is a superset of every path a timer can be
 keyed under for that tree.
+
+## Classify (`nocturne_alerts_classify`)
+
+Derives a rule's **scope class** for scoped Do Not Disturb (ADR 0004) from its
+root `condition_type` + payload-only `condition_params` (exactly the
+`alert_rules.condition_params` shape). The .NET host computes and stores this on
+rule create/update (`RuleScopeClassifier`) and backfills existing rules once at
+startup; a scoped `lows`/`highs` mute then silences a rule only when its class
+matches.
+
+Request:
+
+```jsonc
+{
+  "schema_version": 1,
+  "condition_type": "threshold",
+  "condition_params": { "direction": "below", "value": 70 }
+}
+```
+
+Response:
+
+```jsonc
+{ "schema_version": 1, "ok": true, "scope_class": "low" }
+```
+
+`scope_class` is one of `low | high | composite | undirected`. Unlike
+`evaluate`, an **unknown `condition_type` or malformed `condition_params` is not
+an error** — `classify` silent-fails to `undirected` (all-only), the safe
+default that never lets a scoped mute silence an unclassifiable rule. Only a
+structurally malformed *envelope* (bad JSON, wrong `schema_version`) comes back
+as the error envelope.
 
 ## Kotlin (UniFFI)
 

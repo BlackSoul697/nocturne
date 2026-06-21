@@ -105,6 +105,7 @@ public class AlertRulesControllerTenantScopingTests
             factory,
             Mock.Of<IAlertReferenceService>(),
             Mock.Of<IAlertDeliveryService>(),
+            Mock.Of<IRuleScopeClassifier>(),
             Mock.Of<ILogger<AlertRulesController>>());
     }
 

@@ -152,6 +152,32 @@ public static class RustAlertEngine
         return response;
     }
 
+    /// <summary>
+    /// Derives a rule's scope class (<c>low | high | composite | undirected</c>)
+    /// for scoped Do Not Disturb from its condition type + params. Returns the
+    /// wire string; the host maps it onto its <c>RuleScopeClass</c> enum. An
+    /// unclassifiable rule comes back as <c>"undirected"</c> (the engine's
+    /// all-only safe default), not an error.
+    /// </summary>
+    /// <exception cref="RustAlertEngineException">
+    /// The engine rejected the request (<c>ok: false</c>, e.g. a malformed
+    /// envelope) or returned an unparseable response.
+    /// </exception>
+    public static string Classify(RustClassifyRequest request)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+
+        var requestJson = JsonSerializer.Serialize(request, AlertEnvelopeJson.Options);
+        var responseJson = AlertsInterop.Classify(requestJson);
+        var response = Deserialize<RustClassifyResponse>(responseJson, "classify");
+
+        if (!response.Ok)
+            throw new RustAlertEngineException($"Rust alert engine rejected the classify request: {response.Error ?? "(no error message)"}");
+        if (response.ScopeClass is null)
+            throw new RustAlertEngineException("Rust alert engine returned ok without a scope_class");
+        return response.ScopeClass;
+    }
+
     private static T Deserialize<T>(string responseJson, string operation)
     {
         try

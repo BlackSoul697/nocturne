@@ -279,3 +279,45 @@ public sealed record RustLeafPathsResponse
 public sealed record RustLeafPath(
     [property: JsonPropertyName("leaf_id")] int LeafId,
     [property: JsonPropertyName("path")] string Path);
+
+/// <summary>
+/// Request envelope for <c>nocturne_alerts_classify</c>: a rule's root condition
+/// type plus its payload-only <c>condition_params</c> (the
+/// <c>alert_rules.condition_params</c> shape), from which the engine derives the
+/// scope class for scoped Do Not Disturb (ADR 0004).
+/// </summary>
+public sealed record RustClassifyRequest
+{
+    [JsonPropertyName("schema_version")]
+    public int SchemaVersion { get; init; } = 1;
+
+    /// <summary>Wire-format condition type discriminator (e.g. <c>"threshold"</c>).</summary>
+    [JsonPropertyName("condition_type")]
+    public required string ConditionType { get; init; }
+
+    /// <summary>
+    /// The kind-specific payload object exactly as stored in
+    /// <c>alert_rules.condition_params</c> (JSON null allowed).
+    /// </summary>
+    [JsonPropertyName("condition_params")]
+    public required JsonElement ConditionParams { get; init; }
+}
+
+/// <summary>Response envelope for <c>nocturne_alerts_classify</c>.</summary>
+public sealed record RustClassifyResponse
+{
+    [JsonPropertyName("schema_version")]
+    public int SchemaVersion { get; init; }
+
+    public bool Ok { get; init; }
+
+    /// <summary>Error message when <see cref="Ok"/> is false.</summary>
+    public string? Error { get; init; }
+
+    /// <summary>
+    /// Scope class wire form: <c>low | high | composite | undirected</c>. An
+    /// unclassifiable rule comes back as <c>undirected</c> (not an error).
+    /// </summary>
+    [JsonPropertyName("scope_class")]
+    public string? ScopeClass { get; init; }
+}
