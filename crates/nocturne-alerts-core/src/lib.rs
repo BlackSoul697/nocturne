@@ -9,6 +9,7 @@
 //! persistence — timer and tracker state live in caller-owned in-memory
 //! stores ([`sustained::TimerStore`], [`excursion::ExcursionTracker`]).
 
+pub mod classify;
 pub mod compare;
 pub mod context;
 pub mod engine;
