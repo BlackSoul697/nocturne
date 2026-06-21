@@ -3047,11 +3047,11 @@ public class NocturneDbContext : DbContext, IDataProtectionKeyContext
             entity.Property(e => e.Scope).HasConversion(
                 new Converters.EnumMemberValueConverter<Core.Models.Alerts.DndScope>());
             entity.Property(e => e.CreatedAt).HasDefaultValueSql("CURRENT_TIMESTAMP");
-            // Scope-keyed lookups for the gate/supersede. The right optimisation is a
-            // partial index over active windows (WHERE cleared_at IS NULL), added with
-            // the resolver queries (D3/D5) via a tool-generated migration so the model
-            // snapshot stays consistent — not hand-edited here.
-            entity.HasIndex(e => new { e.TenantId, e.Scope });
+            // Scope-keyed lookups for the gate/supersede only ever read uncleared windows,
+            // so a partial index over active windows (WHERE cleared_at IS NULL) keeps the
+            // cleared/expired audit history out of the hot path (ADR 0004 D5).
+            entity.HasIndex(e => new { e.TenantId, e.Scope })
+                .HasFilter("cleared_at IS NULL");
         });
 
         // PasskeyCredentialEntity

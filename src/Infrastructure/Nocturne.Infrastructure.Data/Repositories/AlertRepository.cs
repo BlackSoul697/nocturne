@@ -359,6 +359,32 @@ public class AlertRepository : IAlertRepository
         return row ?? TenantAlertSettingsSnapshot.Empty;
     }
 
+    /// <inheritdoc/>
+    public virtual async Task<IReadOnlyList<DndWindowSnapshot>> GetUnclearedDndWindowsAsync(
+        Guid tenantId, CancellationToken ct)
+    {
+        await using var context = await _contextFactory.CreateDbContextAsync(ct);
+        context.TenantId = tenantId;
+
+        // Project the raw columns first, then map in memory: DateTime.SpecifyKind isn't SQL-
+        // translatable, and Npgsql can read a `timestamp` column back as Unspecified, which
+        // would compare wrongly against the Utc `now` in DndWindowSnapshot's naive comparison.
+        var rows = await context.DndWindows
+            .AsNoTracking()
+            .Where(w => w.TenantId == tenantId && w.ClearedAt == null)
+            .Select(w => new { w.Scope, w.StartedAt, w.EndsAt, w.CreatedAt })
+            .ToListAsync(ct);
+
+        return rows
+            .Select(w => new DndWindowSnapshot(
+                w.Scope,
+                DateTime.SpecifyKind(w.StartedAt, DateTimeKind.Utc),
+                w.EndsAt is { } ends ? DateTime.SpecifyKind(ends, DateTimeKind.Utc) : null,
+                ClearedAt: null,
+                DateTime.SpecifyKind(w.CreatedAt, DateTimeKind.Utc)))
+            .ToList();
+    }
+
     /// <summary>
     /// Gets all enabled rules for signal loss detection.
     /// </summary>
