@@ -8,7 +8,8 @@ namespace Nocturne.Core.Models;
 /// <seealso cref="AlertRule"/>
 public record AlertRuleSnapshot(Guid Id, Guid TenantId, string Name, AlertConditionType ConditionType,
     string ConditionParams, AlertRuleSeverity Severity, string ClientConfiguration, int SortOrder,
-    bool AutoResolveEnabled, string? AutoResolveParams, bool AllowThroughDnd = false);
+    bool AutoResolveEnabled, string? AutoResolveParams, bool AllowThroughDnd = false,
+    RuleScopeClass ScopeClass = RuleScopeClass.Undirected);
 
 /// <summary>
 /// Immutable snapshot of a single delivery channel attached to an <see cref="AlertRule"/>.
