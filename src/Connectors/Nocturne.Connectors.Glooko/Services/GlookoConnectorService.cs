@@ -996,6 +996,30 @@ public class GlookoConnectorService : BaseConnectorService<GlookoConnectorConfig
 
         await MapAndPublishV2BatchAsync(batchData, activeTypes, result, config, cancellationToken);
 
+        // Pen injections — manual insulin logged via pen: injection_boluses → Bolus, injection_basals →
+        // BasalInjection. The v3 path covers these via its gkInsulin* series; the windowed v2 batch path
+        // does not. Critical for MDI users, who have no pump bolus/basal data at all.
+        if (activeTypes.Contains(SyncDataType.Boluses) || activeTypes.Contains(SyncDataType.BasalInjections))
+        {
+            var injectionBoluses = await FetchSsv2SafelyAsync(
+                GlookoConstants.Ssv2InjectionBolusesPath,
+                () => FetchSsv2Async<GlookoInjectionBolusPage, GlookoInjectionInsulin>(
+                    GlookoConstants.Ssv2InjectionBolusesPath, p => p.InjectionBoluses, incremental, batchStart),
+                new List<GlookoInjectionInsulin>());
+            var injectionBasals = await FetchSsv2SafelyAsync(
+                GlookoConstants.Ssv2InjectionBasalsPath,
+                () => FetchSsv2Async<GlookoInjectionBasalPage, GlookoInjectionInsulin>(
+                    GlookoConstants.Ssv2InjectionBasalsPath, p => p.InjectionBasals, incremental, batchStart),
+                new List<GlookoInjectionInsulin>());
+
+            var (penBasals, penBoluses) = _v4TreatmentMapper!.MapSsv2InjectionInsulin(injectionBasals, injectionBoluses);
+
+            await PublishRecordTypeAsync(result, SyncDataType.Boluses, activeTypes,
+                penBoluses, PublishBolusDataAsync, config, cancellationToken);
+            await PublishRecordTypeAsync(result, SyncDataType.BasalInjections, activeTypes,
+                penBasals, PublishBasalInjectionDataAsync, config, cancellationToken);
+        }
+
         // Device events — granular pumps/events feed (reservoir/site/cannula changes, etc.). Net-new for
         // SSV2; the windowed path derives these from the v3 graph series instead.
         if (activeTypes.Contains(SyncDataType.DeviceEvents))

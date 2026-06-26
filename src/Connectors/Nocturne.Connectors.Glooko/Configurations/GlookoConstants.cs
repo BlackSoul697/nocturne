@@ -77,6 +77,18 @@ public static class GlookoConstants
     public const string Ssv2PumpEventsPath = "/api/v2/pumps/events";
 
     /// <summary>
+    ///     Manual pen-injected boluses (rapid/short-acting). SSV2 counterpart to the v3 graph's
+    ///     <c>gkInsulinBolus</c> series — the only insulin source for MDI (pen) users.
+    /// </summary>
+    public const string Ssv2InjectionBolusesPath = "/api/v2/pumps/injection_boluses";
+
+    /// <summary>
+    ///     Manual pen-injected basal (long/ultra-long-acting). SSV2 counterpart to the v3 graph's
+    ///     <c>gkInsulinBasal</c> series.
+    /// </summary>
+    public const string Ssv2InjectionBasalsPath = "/api/v2/pumps/injection_basals";
+
+    /// <summary>
     ///     Sentinel <c>lastGuid</c> that starts an SSV2 cursor scan from the beginning.
     /// </summary>
     public const string Ssv2InitialLastGuid = "00000000-0000-0000-0000-000000000000";

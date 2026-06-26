@@ -122,3 +122,37 @@ public class GlookoEgv
 
     [JsonPropertyName("softDeleted")] public bool SoftDeleted { get; set; }
 }
+
+/// <summary>A page of <c>/api/v2/pumps/injection_boluses</c> (manual pen-injected boluses).</summary>
+public class GlookoInjectionBolusPage : GlookoSsv2Page
+{
+    [JsonPropertyName("injectionBoluses")] public GlookoInjectionInsulin[]? InjectionBoluses { get; set; }
+}
+
+/// <summary>A page of <c>/api/v2/pumps/injection_basals</c> (manual pen-injected long-acting basal).</summary>
+public class GlookoInjectionBasalPage : GlookoSsv2Page
+{
+    [JsonPropertyName("injectionBasals")] public GlookoInjectionInsulin[]? InjectionBasals { get; set; }
+}
+
+/// <summary>
+///     A manual pen injection (bolus or basal) from the SSV2 <c>pumps/injection_*</c> feeds. Shares the
+///     pump-object envelope (<c>pumpTimestamp</c>/<c>guid</c>/<c>softDeleted</c>) with <see cref="GlookoBolus"/>
+///     — both extend the app's GKPumpObject; <see cref="Name"/> is the insulin product name (e.g.
+///     "Tresiba®U100"), resolved against the insulin catalog for DIA/peak. The SSV2 counterpart to the
+///     v3 graph's <c>gkInsulinBolus</c>/<c>gkInsulinBasal</c> series.
+/// </summary>
+public class GlookoInjectionInsulin
+{
+    [JsonPropertyName("pumpTimestamp")] public string PumpTimestamp { get; set; } = string.Empty;
+
+    [JsonPropertyName("timestamp")] public string Timestamp { get; set; } = string.Empty;
+
+    [JsonPropertyName("insulinDelivered")] public double InsulinDelivered { get; set; }
+
+    [JsonPropertyName("name")] public string? Name { get; set; }
+
+    [JsonPropertyName("guid")] public string? Guid { get; set; }
+
+    [JsonPropertyName("softDeleted")] public bool SoftDeleted { get; set; }
+}
