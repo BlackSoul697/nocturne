@@ -460,6 +460,8 @@ public class ConnectorExecutionService(
             ),
             tokenProvider,
             null // IConnectorPublisher
+            // No IConnectorSyncCursorStore: the CLI has no NocturneDbContext, so SSV2 cursors are not
+            // persisted here — each run scans from scratch. Fine for a dev/diagnostic tool.
         );
         return new ConnectorServiceWrapper<GlookoConnectorConfiguration>(service);
     }

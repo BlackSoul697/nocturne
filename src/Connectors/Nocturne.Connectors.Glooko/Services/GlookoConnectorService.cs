@@ -879,8 +879,10 @@ public class GlookoConnectorService : BaseConnectorService<GlookoConnectorConfig
             ? await _cursorStore.GetAsync(ServiceName, resource)
             : null;
 
-        var lastUpdatedAt = stored?.LastUpdatedAt ?? GlookoConstants.Ssv2InitialLastUpdatedAt;
-        var lastGuid = stored?.LastGuid ?? GlookoConstants.Ssv2InitialLastGuid;
+        var initialUpdatedAt = stored?.LastUpdatedAt ?? GlookoConstants.Ssv2InitialLastUpdatedAt;
+        var initialGuid = stored?.LastGuid ?? GlookoConstants.Ssv2InitialLastGuid;
+        var lastUpdatedAt = initialUpdatedAt;
+        var lastGuid = initialGuid;
 
         var all = new List<TRecord>();
 
@@ -896,23 +898,33 @@ public class GlookoConnectorService : BaseConnectorService<GlookoConnectorConfig
             if (batch is { Length: > 0 })
                 all.AddRange(batch);
 
-            // Stop on the last page, an empty page, or a cursor that fails to advance (loop guard).
-            if (pageData == null || pageData.LastPage || batch is not { Length: > 0 })
+            // Stop on a null/empty page.
+            if (pageData == null || batch is not { Length: > 0 })
                 break;
-            if (pageData.LastUpdatedAt == lastUpdatedAt && pageData.LastGuid == lastGuid)
+
+            // Advance to this page's resume watermark *before* the last-page check, so the final page's
+            // cursor is captured too — otherwise the next incremental sync re-fetches that page.
+            var prevUpdatedAt = lastUpdatedAt;
+            var prevGuid = lastGuid;
+            lastUpdatedAt = pageData.LastUpdatedAt ?? lastUpdatedAt;
+            lastGuid = pageData.LastGuid ?? lastGuid;
+
+            if (pageData.LastPage)
+                break;
+
+            // Loop guard: a non-last page that fails to move the cursor would otherwise spin forever.
+            if (lastUpdatedAt == prevUpdatedAt && lastGuid == prevGuid)
             {
                 _logger.LogWarning("[{ConnectorSource}] SSV2 {Resource} cursor did not advance; stopping pagination",
                     ConnectorSource, resource);
                 break;
             }
-
-            lastUpdatedAt = pageData.LastUpdatedAt ?? lastUpdatedAt;
-            lastGuid = pageData.LastGuid ?? lastGuid;
         }
 
-        // Persist the advanced cursor only for incremental scans, and only when it actually moved.
+        // Persist only for incremental scans, and only when the cursor actually advanced from where this
+        // run started (so a no-op pass never rewrites the stored watermark or the epoch default).
         if (incremental && _cursorStore != null
-            && (lastUpdatedAt != stored?.LastUpdatedAt || lastGuid != stored?.LastGuid))
+            && (lastUpdatedAt != initialUpdatedAt || lastGuid != initialGuid))
             await _cursorStore.SetAsync(ServiceName, resource, new ConnectorSyncCursor(lastUpdatedAt, lastGuid));
 
         _logger.LogInformation("[{ConnectorSource}] SSV2 {Resource} fetched {Count} records (incremental={Incremental})",
@@ -923,7 +935,7 @@ public class GlookoConnectorService : BaseConnectorService<GlookoConnectorConfig
     /// <summary>
     ///     Fetches the granular <c>cgm/egvs</c> stream and maps it to SensorGlucose.
     /// </summary>
-    public async Task<List<SensorGlucose>> FetchSsv2EgvsAsync(bool incremental, DateTime startDate)
+    public async Task<List<SensorGlucose>> FetchSsv2EgvsAsync(bool incremental, DateTime? startDate)
     {
         var egvs = await FetchSsv2Async<GlookoEgvPage, GlookoEgv>(
             GlookoConstants.Ssv2EgvsPath, p => p.Egvs, incremental, startDate);
@@ -935,6 +947,9 @@ public class GlookoConnectorService : BaseConnectorService<GlookoConnectorConfig
     ///     spans / temp basals via the same v2 batch mappers but fetched incrementally by cursor. In
     ///     incremental mode each resource omits <c>startDate</c> and relies solely on its stored cursor;
     ///     a backfill passes the clinical floor and bypasses the cursor.
+    ///     Each resource is fetched in isolation: if one feed fails (network, server error, malformed
+    ///     page) it is logged and skipped so the rest of the pass still imports, mirroring the
+    ///     per-endpoint resilience of the windowed batch path.
     /// </summary>
     private async Task FetchAndMapViaSsv2Async(
         DateTime from,
@@ -944,31 +959,39 @@ public class GlookoConnectorService : BaseConnectorService<GlookoConnectorConfig
         GlookoConnectorConfiguration config,
         CancellationToken cancellationToken)
     {
+        // Incremental syncs resume purely from each resource's stored cursor; an explicit-range backfill
+        // passes the clinical floor. (egvs ignores startDate server-side — its cursor is authoritative —
+        // but it is kept consistent with the other resources rather than special-cased.)
+        DateTime? batchStart = incremental ? null : from;
+
         if (activeTypes.Contains(SyncDataType.Glucose))
         {
-            // egvs requires a clinical startDate; the cursor drives incrementality beyond it.
-            var egvGlucose = await FetchSsv2EgvsAsync(incremental, from);
-            await PublishRecordTypeAsync(result, SyncDataType.Glucose, activeTypes,
-                egvGlucose, PublishSensorGlucoseDataAsync, config, cancellationToken);
-            UpdateLastEntryTime(result, SyncDataType.Glucose, egvGlucose);
+            var egvGlucose = await FetchSsv2SafelyAsync(
+                GlookoConstants.Ssv2EgvsPath,
+                () => FetchSsv2EgvsAsync(incremental, batchStart),
+                new List<SensorGlucose>());
+            if (egvGlucose.Count > 0)
+            {
+                await PublishRecordTypeAsync(result, SyncDataType.Glucose, activeTypes,
+                    egvGlucose, PublishSensorGlucoseDataAsync, config, cancellationToken);
+                UpdateLastEntryTime(result, SyncDataType.Glucose, egvGlucose);
+            }
         }
-
-        DateTime? batchStart = incremental ? null : from;
 
         var batchData = new GlookoBatchData
         {
-            NormalBoluses = (await FetchSsv2Async<GlookoNormalBolusPage, GlookoBolus>(
-                GlookoConstants.NormalBolusesPath, p => p.NormalBoluses, incremental, batchStart)).ToArray(),
-            ScheduledBasals = (await FetchSsv2Async<GlookoScheduledBasalPage, GlookoBasal>(
-                GlookoConstants.ScheduledBasalsPath, p => p.ScheduledBasals, incremental, batchStart)).ToArray(),
-            TempBasals = (await FetchSsv2Async<GlookoTemporaryBasalPage, GlookoTempBasal>(
-                GlookoConstants.TemporaryBasalsPath, p => p.TemporaryBasals, incremental, batchStart)).ToArray(),
-            SuspendBasals = (await FetchSsv2Async<GlookoSuspendBasalPage, GlookoSuspendBasal>(
-                GlookoConstants.SuspendBasalsPath, p => p.SuspendBasals, incremental, batchStart)).ToArray(),
-            MeterReadings = (await FetchSsv2Async<GlookoMeterReadingPage, GlookoMeterReading>(
-                GlookoConstants.MeterReadingsPath, p => p.Readings, incremental, batchStart)).ToArray(),
-            Foods = (await FetchSsv2Async<GlookoFoodPage, GlookoFood>(
-                GlookoConstants.FoodsPath, p => p.Foods, incremental, batchStart)).ToArray(),
+            NormalBoluses = await FetchSsv2BatchResourceAsync<GlookoNormalBolusPage, GlookoBolus>(
+                GlookoConstants.NormalBolusesPath, p => p.NormalBoluses, incremental, batchStart),
+            ScheduledBasals = await FetchSsv2BatchResourceAsync<GlookoScheduledBasalPage, GlookoBasal>(
+                GlookoConstants.ScheduledBasalsPath, p => p.ScheduledBasals, incremental, batchStart),
+            TempBasals = await FetchSsv2BatchResourceAsync<GlookoTemporaryBasalPage, GlookoTempBasal>(
+                GlookoConstants.TemporaryBasalsPath, p => p.TemporaryBasals, incremental, batchStart),
+            SuspendBasals = await FetchSsv2BatchResourceAsync<GlookoSuspendBasalPage, GlookoSuspendBasal>(
+                GlookoConstants.SuspendBasalsPath, p => p.SuspendBasals, incremental, batchStart),
+            MeterReadings = await FetchSsv2BatchResourceAsync<GlookoMeterReadingPage, GlookoMeterReading>(
+                GlookoConstants.MeterReadingsPath, p => p.Readings, incremental, batchStart),
+            Foods = await FetchSsv2BatchResourceAsync<GlookoFoodPage, GlookoFood>(
+                GlookoConstants.FoodsPath, p => p.Foods, incremental, batchStart),
         };
 
         await MapAndPublishV2BatchAsync(batchData, activeTypes, result, config, cancellationToken);
@@ -977,17 +1000,56 @@ public class GlookoConnectorService : BaseConnectorService<GlookoConnectorConfig
         // SSV2; the windowed path derives these from the v3 graph series instead.
         if (activeTypes.Contains(SyncDataType.DeviceEvents))
         {
-            var pumpEvents = await FetchSsv2Async<GlookoPumpEventPage, GlookoPumpEvent>(
-                GlookoConstants.Ssv2PumpEventsPath, p => p.Events, incremental, batchStart);
+            var pumpEvents = await FetchSsv2SafelyAsync(
+                GlookoConstants.Ssv2PumpEventsPath,
+                () => FetchSsv2Async<GlookoPumpEventPage, GlookoPumpEvent>(
+                    GlookoConstants.Ssv2PumpEventsPath, p => p.Events, incremental, batchStart),
+                new List<GlookoPumpEvent>());
             var deviceEvents = _pumpEventMapper!.TransformPumpEventsToDeviceEvents(pumpEvents);
             await PublishRecordTypeAsync(result, SyncDataType.DeviceEvents, activeTypes,
                 deviceEvents, PublishDeviceEventDataAsync, config, cancellationToken);
         }
     }
 
+    /// <summary>
+    ///     Fetches one SSV2 batch resource and returns its records as an array, or an empty array if the
+    ///     fetch fails (logged and skipped — see <see cref="FetchSsv2SafelyAsync{T}"/>).
+    /// </summary>
+    private Task<TRecord[]> FetchSsv2BatchResourceAsync<TPage, TRecord>(
+        string resource, Func<TPage, TRecord[]?> selectRecords, bool incremental, DateTime? startDate)
+        where TPage : GlookoSsv2Page
+        => FetchSsv2SafelyAsync(
+            resource,
+            async () => (await FetchSsv2Async<TPage, TRecord>(resource, selectRecords, incremental, startDate)).ToArray(),
+            Array.Empty<TRecord>());
+
+    /// <summary>
+    ///     Runs an SSV2 fetch and returns its result, or — if it throws — logs a warning and returns
+    ///     <paramref name="fallback"/> so one failing feed degrades to "no records this pass" instead of
+    ///     aborting the whole sync. Mirrors the per-endpoint resilience of the windowed batch path.
+    /// </summary>
+    private async Task<T> FetchSsv2SafelyAsync<T>(string resource, Func<Task<T>> fetch, T fallback)
+    {
+        try
+        {
+            return await fetch();
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex,
+                "[{ConnectorSource}] SSV2 fetch for {Resource} failed; skipping it and continuing with the rest of the sync",
+                ConnectorSource, resource);
+            return fallback;
+        }
+    }
+
     private static string ConstructSsv2Url(string resource, DateTime? startDate, string lastUpdatedAt, string lastGuid)
     {
-        // sendSoftDeleted=false: tombstones aren't ingested yet, so don't page through them.
+        // sendSoftDeleted=false by design: downstream deletion propagation isn't built, so we neither
+        // page through tombstones nor act on them. Consequence (same as the windowed path): a record
+        // deleted at the source *after* it was already ingested is never removed here. Flipping this to
+        // true is only safe once tombstone ingest + downstream soft-delete exists — tracked as a
+        // separate SSV2 follow-up.
         var url = $"{resource}?lastUpdatedAt={lastUpdatedAt}"
                 + $"&lastGuid={lastGuid}"
                 + $"&limit={GlookoConstants.Ssv2PageSize}"
