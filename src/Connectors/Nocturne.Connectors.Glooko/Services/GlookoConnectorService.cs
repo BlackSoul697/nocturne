@@ -1020,18 +1020,49 @@ public class GlookoConnectorService : BaseConnectorService<GlookoConnectorConfig
                 penBasals, PublishBasalInjectionDataAsync, config, cancellationToken);
         }
 
-        // Device events — granular pumps/events feed (reservoir/site/cannula changes, etc.). Net-new for
-        // SSV2; the windowed path derives these from the v3 graph series instead.
+        // Standalone carbs — app-logged carb entries not tied to a bolus (v3 carbAll equivalent),
+        // additional to the carbs derived from bolus.carbsInput + foods in MapAndPublishV2BatchAsync
+        // (hence the additive ItemsSynced update rather than an overwrite).
+        if (activeTypes.Contains(SyncDataType.CarbIntake))
+        {
+            var carbsEvents = await FetchSsv2SafelyAsync(
+                GlookoConstants.Ssv2CarbsEventsPath,
+                () => FetchSsv2Async<GlookoCarbsEventPage, GlookoSsv2CarbsEvent>(
+                    GlookoConstants.Ssv2CarbsEventsPath, p => p.CarbsEvents, incremental, batchStart),
+                new List<GlookoSsv2CarbsEvent>());
+            var standaloneCarbs = _v4TreatmentMapper!.MapSsv2CarbsEvents(carbsEvents);
+            if (standaloneCarbs.Count > 0 && await PublishCarbIntakeDataAsync(standaloneCarbs, config, cancellationToken))
+                result.ItemsSynced[SyncDataType.CarbIntake] =
+                    result.ItemsSynced.GetValueOrDefault(SyncDataType.CarbIntake) + standaloneCarbs.Count;
+        }
+
+        // Device events — granular pumps/events feed (reservoir/site/cannula changes) plus pump alarms
+        // (→ system events). Net-new for SSV2 vs the windowed batch path; the v3 path derives both from
+        // its graph series. Both are reported under the DeviceEvents count, matching the v3 path.
         if (activeTypes.Contains(SyncDataType.DeviceEvents))
         {
+            var deviceEventCount = 0;
+
             var pumpEvents = await FetchSsv2SafelyAsync(
                 GlookoConstants.Ssv2PumpEventsPath,
                 () => FetchSsv2Async<GlookoPumpEventPage, GlookoPumpEvent>(
                     GlookoConstants.Ssv2PumpEventsPath, p => p.Events, incremental, batchStart),
                 new List<GlookoPumpEvent>());
             var deviceEvents = _pumpEventMapper!.TransformPumpEventsToDeviceEvents(pumpEvents);
-            await PublishRecordTypeAsync(result, SyncDataType.DeviceEvents, activeTypes,
-                deviceEvents, PublishDeviceEventDataAsync, config, cancellationToken);
+            if (deviceEvents.Count > 0 && await PublishDeviceEventDataAsync(deviceEvents, config, cancellationToken))
+                deviceEventCount += deviceEvents.Count;
+
+            var alarms = await FetchSsv2SafelyAsync(
+                GlookoConstants.Ssv2AlarmsPath,
+                () => FetchSsv2Async<GlookoSsv2AlarmPage, GlookoSsv2Alarm>(
+                    GlookoConstants.Ssv2AlarmsPath, p => p.Alarms, incremental, batchStart),
+                new List<GlookoSsv2Alarm>());
+            var systemEvents = _systemEventMapper!.TransformSsv2AlarmsToSystemEvents(alarms);
+            if (systemEvents.Count > 0 && await PublishSystemEventDataAsync(systemEvents, config, cancellationToken))
+                deviceEventCount += systemEvents.Count;
+
+            if (deviceEventCount > 0)
+                result.ItemsSynced[SyncDataType.DeviceEvents] = deviceEventCount;
         }
     }
 

@@ -156,3 +156,53 @@ public class GlookoInjectionInsulin
 
     [JsonPropertyName("softDeleted")] public bool SoftDeleted { get; set; }
 }
+
+/// <summary>A page of <c>/api/v2/pumps/alarms</c> (pump alarms → system events).</summary>
+public class GlookoSsv2AlarmPage : GlookoSsv2Page
+{
+    [JsonPropertyName("alarms")] public GlookoSsv2Alarm[]? Alarms { get; set; }
+}
+
+/// <summary>
+///     A pump alarm from the SSV2 <c>pumps/alarms</c> feed. Unlike the other (camelCase) pump feeds,
+///     these are raw snake_case Mongo documents: <see cref="Value"/> is the alarm code (e.g.
+///     "raw_occlusion") and <see cref="AlarmSeverity"/> the severity ("hazard"/"warning"/...). The SSV2
+///     counterpart to the v3 graph's <c>pumpAlarm</c> series.
+/// </summary>
+public class GlookoSsv2Alarm
+{
+    [JsonPropertyName("pump_timestamp")] public string? PumpTimestamp { get; set; }
+
+    [JsonPropertyName("value")] public string? Value { get; set; }
+
+    [JsonPropertyName("alarm_severity")] public string? AlarmSeverity { get; set; }
+
+    [JsonPropertyName("alarm_type")] public string? AlarmType { get; set; }
+
+    [JsonPropertyName("guid")] public string? Guid { get; set; }
+
+    [JsonPropertyName("soft_deleted")] public bool SoftDeleted { get; set; }
+}
+
+/// <summary>A page of <c>/api/v2/cgm/carbs_events</c> (standalone app-logged carbs → CarbIntake).</summary>
+public class GlookoCarbsEventPage : GlookoSsv2Page
+{
+    [JsonPropertyName("carbsEvents")] public GlookoSsv2CarbsEvent[]? CarbsEvents { get; set; }
+}
+
+/// <summary>
+///     A standalone carb entry logged in the Glooko/CGM app, not attached to a bolus. <see cref="CgmCarbs"/>
+///     is the carb amount in grams. The SSV2 counterpart to the v3 graph's <c>carbAll</c> series.
+/// </summary>
+public class GlookoSsv2CarbsEvent
+{
+    [JsonPropertyName("timestamp")] public string? Timestamp { get; set; }
+
+    [JsonPropertyName("eventTime")] public string? EventTime { get; set; }
+
+    [JsonPropertyName("cgmCarbs")] public double CgmCarbs { get; set; }
+
+    [JsonPropertyName("guid")] public string? Guid { get; set; }
+
+    [JsonPropertyName("softDeleted")] public bool SoftDeleted { get; set; }
+}

@@ -945,6 +945,55 @@ public class GlookoV4TreatmentMapper(string connectorSource, GlookoTimeMapper ti
     }
 
     /// <summary>
+    /// Maps the SSV2 <c>cgm/carbs_events</c> feed (standalone app-logged carbs, not attached to a bolus)
+    /// to <see cref="CarbIntake"/> records — the SSV2 counterpart to the v3 graph's <c>carbAll</c> series.
+    /// Keyed on the stable Glooko guid (raw-timestamp hash fallback); skips soft-deleted and non-positive
+    /// entries.
+    /// </summary>
+    public List<CarbIntake> MapSsv2CarbsEvents(IReadOnlyList<GlookoSsv2CarbsEvent> carbsEvents)
+    {
+        var carbs = new List<CarbIntake>();
+
+        foreach (var evt in carbsEvents)
+        {
+            try
+            {
+                if (evt.SoftDeleted || evt.CgmCarbs <= 0) continue;
+
+                var rawTimestamp = _timeMapper.GetRawGlookoDate(evt.Timestamp ?? string.Empty, evt.EventTime);
+                var correctedTimestamp = _timeMapper.GetCorrectedGlookoTime(rawTimestamp);
+                var now = DateTime.UtcNow;
+
+                var legacyId = !string.IsNullOrEmpty(evt.Guid)
+                    ? $"glooko_carbs_event_{evt.Guid}"
+                    : GenerateLegacyId("ssv2_carbs_event", rawTimestamp, $"carbs:{evt.CgmCarbs}");
+
+                carbs.Add(new CarbIntake
+                {
+                    Id = Guid.CreateVersion7(),
+                    Timestamp = correctedTimestamp,
+                    LegacyId = legacyId,
+                    SyncIdentifier = legacyId,
+                    Device = _connectorSource,
+                    DataSource = _connectorSource,
+                    Carbs = evt.CgmCarbs,
+                    CreatedAt = now,
+                    ModifiedAt = now
+                });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "[{ConnectorSource}] Error mapping SSV2 carbs event", _connectorSource);
+            }
+        }
+
+        _logger.LogInformation(
+            "[{ConnectorSource}] Transformed {Count} carb intakes from SSV2 carbs events", _connectorSource, carbs.Count);
+
+        return carbs;
+    }
+
+    /// <summary>
     /// Resolves a Glooko insulin name (e.g., "Tresiba®U100", "Admelog®") to a
     /// <see cref="TreatmentInsulinContext"/> by fuzzy-matching against the <see cref="InsulinCatalog"/>.
     /// Falls back to a generic context with the raw name if no match is found.

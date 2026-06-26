@@ -89,6 +89,19 @@ public static class GlookoConstants
     public const string Ssv2InjectionBasalsPath = "/api/v2/pumps/injection_basals";
 
     /// <summary>
+    ///     Pump alarms (occlusion, empty reservoir, etc.). SSV2 counterpart to the v3 graph's
+    ///     <c>pumpAlarm</c> series. Note: records are snake_case Mongo documents, unlike the other
+    ///     camelCase pump feeds.
+    /// </summary>
+    public const string Ssv2AlarmsPath = "/api/v2/pumps/alarms";
+
+    /// <summary>
+    ///     Standalone carb entries logged in the Glooko/CGM app (not tied to a bolus). SSV2 counterpart
+    ///     to the v3 graph's <c>carbAll</c> series.
+    /// </summary>
+    public const string Ssv2CarbsEventsPath = "/api/v2/cgm/carbs_events";
+
+    /// <summary>
     ///     Sentinel <c>lastGuid</c> that starts an SSV2 cursor scan from the beginning.
     /// </summary>
     public const string Ssv2InitialLastGuid = "00000000-0000-0000-0000-000000000000";
