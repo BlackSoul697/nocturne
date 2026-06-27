@@ -27,6 +27,9 @@ internal sealed class MetadataPublisher : IMetadataPublisher
     private readonly IStateSpanService _stateSpanService;
     private readonly ISystemEventRepository _systemEventRepository;
     private readonly INoteRepository _noteRepository;
+    private readonly IBodyWeightService _bodyWeightService;
+    private readonly IStepCountService _stepCountService;
+    private readonly IHeartRateService _heartRateService;
     private readonly ILogger<MetadataPublisher> _logger;
 
     public MetadataPublisher(
@@ -37,6 +40,9 @@ internal sealed class MetadataPublisher : IMetadataPublisher
         IStateSpanService stateSpanService,
         ISystemEventRepository systemEventRepository,
         INoteRepository noteRepository,
+        IBodyWeightService bodyWeightService,
+        IStepCountService stepCountService,
+        IHeartRateService heartRateService,
         ILogger<MetadataPublisher> logger)
     {
         _profileWriteService = profileWriteService ?? throw new ArgumentNullException(nameof(profileWriteService));
@@ -46,6 +52,9 @@ internal sealed class MetadataPublisher : IMetadataPublisher
         _stateSpanService = stateSpanService ?? throw new ArgumentNullException(nameof(stateSpanService));
         _systemEventRepository = systemEventRepository ?? throw new ArgumentNullException(nameof(systemEventRepository));
         _noteRepository = noteRepository ?? throw new ArgumentNullException(nameof(noteRepository));
+        _bodyWeightService = bodyWeightService ?? throw new ArgumentNullException(nameof(bodyWeightService));
+        _stepCountService = stepCountService ?? throw new ArgumentNullException(nameof(stepCountService));
+        _heartRateService = heartRateService ?? throw new ArgumentNullException(nameof(heartRateService));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
     }
 
@@ -180,6 +189,115 @@ internal sealed class MetadataPublisher : IMetadataPublisher
         catch (Exception ex)
         {
             _logger.LogError(ex, "Failed to publish Note records for {Source}", source);
+            return false;
+        }
+    }
+
+    public async Task<bool> PublishBodyWeightsAsync(
+        IEnumerable<BodyWeight> records,
+        string source,
+        CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            var list = records.ToList();
+            if (list.Count == 0) return true;
+
+            var toCreate = new List<BodyWeight>();
+            foreach (var record in list)
+            {
+                // Upsert on the connector's deterministic Id so re-syncs update the same row.
+                var existing = record.Id != null
+                    ? await _bodyWeightService.GetBodyWeightByIdAsync(record.Id, cancellationToken)
+                    : null;
+                if (existing != null)
+                    await _bodyWeightService.UpdateBodyWeightAsync(record.Id!, record, cancellationToken);
+                else
+                    toCreate.Add(record);
+            }
+
+            if (toCreate.Count > 0)
+                await _bodyWeightService.CreateBodyWeightsAsync(toCreate, cancellationToken);
+
+            _logger.LogDebug("Published {Count} BodyWeight records for {Source}", list.Count, source);
+            return true;
+        }
+        catch (OperationCanceledException) { throw; }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to publish BodyWeight records for {Source}", source);
+            return false;
+        }
+    }
+
+    public async Task<bool> PublishStepCountsAsync(
+        IEnumerable<StepCount> records,
+        string source,
+        CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            var list = records.ToList();
+            if (list.Count == 0) return true;
+
+            var toCreate = new List<StepCount>();
+            foreach (var record in list)
+            {
+                var existing = record.Id != null
+                    ? await _stepCountService.GetStepCountByIdAsync(record.Id, cancellationToken)
+                    : null;
+                if (existing != null)
+                    await _stepCountService.UpdateStepCountAsync(record.Id!, record, cancellationToken);
+                else
+                    toCreate.Add(record);
+            }
+
+            if (toCreate.Count > 0)
+                await _stepCountService.CreateStepCountsAsync(toCreate, cancellationToken);
+
+            _logger.LogDebug("Published {Count} StepCount records for {Source}", list.Count, source);
+            return true;
+        }
+        catch (OperationCanceledException) { throw; }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to publish StepCount records for {Source}", source);
+            return false;
+        }
+    }
+
+    public async Task<bool> PublishHeartRatesAsync(
+        IEnumerable<HeartRate> records,
+        string source,
+        CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            var list = records.ToList();
+            if (list.Count == 0) return true;
+
+            var toCreate = new List<HeartRate>();
+            foreach (var record in list)
+            {
+                var existing = record.Id != null
+                    ? await _heartRateService.GetHeartRateByIdAsync(record.Id, cancellationToken)
+                    : null;
+                if (existing != null)
+                    await _heartRateService.UpdateHeartRateAsync(record.Id!, record, cancellationToken);
+                else
+                    toCreate.Add(record);
+            }
+
+            if (toCreate.Count > 0)
+                await _heartRateService.CreateHeartRatesAsync(toCreate, cancellationToken);
+
+            _logger.LogDebug("Published {Count} HeartRate records for {Source}", list.Count, source);
+            return true;
+        }
+        catch (OperationCanceledException) { throw; }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to publish HeartRate records for {Source}", source);
             return false;
         }
     }
