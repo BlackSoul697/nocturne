@@ -90,6 +90,7 @@ public class GlookoConnectorService : BaseConnectorService<GlookoConnectorConfig
     private GlookoProfileMapper? _profileMapper;
     private GlookoNoteMapper? _noteMapper;
     private GlookoActivityMapper? _activityMapper;
+    private GlookoSettingsProfileMapper? _settingsProfileMapper;
 
     private void InitializeMappers(GlookoConnectorConfiguration config)
     {
@@ -104,6 +105,7 @@ public class GlookoConnectorService : BaseConnectorService<GlookoConnectorConfig
         _profileMapper = new GlookoProfileMapper(ConnectorSource, _glookoLogger);
         _noteMapper = new GlookoNoteMapper(ConnectorSource, _timeMapper, _glookoLogger);
         _activityMapper = new GlookoActivityMapper(ConnectorSource, _timeMapper, _glookoLogger);
+        _settingsProfileMapper = new GlookoSettingsProfileMapper(ConnectorSource, _glookoLogger);
     }
 
     // ── Authentication ──────────────────────────────────────────────────
@@ -417,11 +419,13 @@ public class GlookoConnectorService : BaseConnectorService<GlookoConnectorConfig
                 }
             }
 
-            // Profiles (V3 device settings — used in both modes, no V2 equivalent)
+            // Profiles. The SSV2 path sources these natively from pumps/settings inside
+            // FetchAndMapViaSsv2Async; the v2/v3 windowed paths use this v3 devices_and_settings call (no
+            // v2 equivalent). Guarded so SSV2 syncs don't also make the v3 call.
             await ReportMessageAsync(progressReporter, SyncMessageType.ProcessingDataType,
                 new() { ["dataType"] = SyncDataType.Profiles.ToString() }, cancellationToken);
 
-            if (activeTypes.Contains(SyncDataType.Profiles))
+            if (!config.UseSsv2Sync && activeTypes.Contains(SyncDataType.Profiles))
             {
                 try
                 {
@@ -1202,6 +1206,27 @@ public class GlookoConnectorService : BaseConnectorService<GlookoConnectorConfig
 
             if (deviceEventCount > 0)
                 result.ItemsSynced[SyncDataType.DeviceEvents] = deviceEventCount;
+        }
+
+        // Profiles — SSV2-native source from pumps/settings (basal/bolus programs), replacing the v3
+        // devices_and_settings call the windowed paths use. The current snapshot becomes one Nocturne
+        // Profile. Unlike the v3 mapper there are no profile state spans here: pumps/settings exposes only
+        // the current program set, not a historical active-profile timeline.
+        if (activeTypes.Contains(SyncDataType.Profiles))
+        {
+            var settings = await FetchSsv2SafelyAsync(
+                GlookoConstants.Ssv2PumpSettingsPath,
+                () => FetchSsv2Async<GlookoSsv2PumpSettingsPage, GlookoSsv2PumpSettings>(
+                    GlookoConstants.Ssv2PumpSettingsPath, p => p.Settings, incremental, batchStart),
+                new List<GlookoSsv2PumpSettings>());
+
+            var profile = _settingsProfileMapper!.TransformSettingsToProfile(settings);
+            if (profile != null
+                && await PublishProfileDataAsync(new List<Profile> { profile }, config, cancellationToken))
+            {
+                result.ItemsSynced[SyncDataType.Profiles] = 1;
+                _logger.LogInformation("[{ConnectorSource}] Published profile from SSV2 pump settings", ConnectorSource);
+            }
         }
     }
 

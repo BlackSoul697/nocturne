@@ -355,3 +355,107 @@ public class GlookoExtendedBolus
 
     [JsonPropertyName("softDeleted")] public bool SoftDeleted { get; set; }
 }
+
+/// <summary>A page of <c>/api/v2/pumps/settings</c> (pump basal/bolus program snapshots → Profiles).</summary>
+public class GlookoSsv2PumpSettingsPage : GlookoSsv2Page
+{
+    [JsonPropertyName("settings")] public GlookoSsv2PumpSettings[]? Settings { get; set; }
+}
+
+/// <summary>
+///     A pump-settings snapshot from the SSV2 <c>pumps/settings</c> feed — raw snake_case Mongo documents
+///     (like <see cref="GlookoSsv2Alarm"/>), carrying the basal/bolus programs the pump knows about. The
+///     SSV2-native source for Nocturne Profiles, replacing the v3 <c>devices_and_settings</c> call.
+///     <see cref="ActiveInsulinTime"/> is DIA in seconds; segment times are seconds-of-day; ISF/target
+///     glucose values are mg/dL × 100 (see the individual segment models).
+/// </summary>
+public class GlookoSsv2PumpSettings
+{
+    [JsonPropertyName("pump_timestamp")] public string? PumpTimestamp { get; set; }
+
+    [JsonPropertyName("pump_guid")] public string? PumpGuid { get; set; }
+
+    [JsonPropertyName("guid")] public string? Guid { get; set; }
+
+    [JsonPropertyName("soft_deleted")] public bool SoftDeleted { get; set; }
+
+    /// <summary>DIA in seconds (e.g. 10800 = 3h). Divide by 3600 for the Nocturne <c>dia</c> (hours).</summary>
+    [JsonPropertyName("active_insulin_time")] public double ActiveInsulinTime { get; set; }
+
+    [JsonPropertyName("basal_settings")] public GlookoSsv2BasalSettings[]? BasalSettings { get; set; }
+
+    [JsonPropertyName("bolus_settings")] public GlookoSsv2BolusSettings[]? BolusSettings { get; set; }
+}
+
+/// <summary>A single basal program from <c>pumps/settings</c>. <see cref="IsCurrent"/> flags the active one.</summary>
+public class GlookoSsv2BasalSettings
+{
+    [JsonPropertyName("is_current")] public bool IsCurrent { get; set; }
+
+    [JsonPropertyName("profile_id")] public string? ProfileId { get; set; }
+
+    [JsonPropertyName("profile_name")] public string? ProfileName { get; set; }
+
+    [JsonPropertyName("segments")] public GlookoSsv2BasalSegment[]? Segments { get; set; }
+}
+
+/// <summary>A single bolus program from <c>pumps/settings</c> (ISF / ICR / target-BG segment sets).</summary>
+public class GlookoSsv2BolusSettings
+{
+    [JsonPropertyName("current")] public bool Current { get; set; }
+
+    [JsonPropertyName("profile_id")] public string? ProfileId { get; set; }
+
+    [JsonPropertyName("profile_name")] public string? ProfileName { get; set; }
+
+    [JsonPropertyName("insulin_to_carb_ratio_segments")]
+    public GlookoSsv2CarbRatioSegment[]? InsulinToCarbRatioSegments { get; set; }
+
+    [JsonPropertyName("isf_segments")] public GlookoSsv2IsfSegment[]? IsfSegments { get; set; }
+
+    [JsonPropertyName("target_bg_segments")] public GlookoSsv2TargetBgSegment[]? TargetBgSegments { get; set; }
+}
+
+/// <summary>
+///     Shared segment time window. <see cref="Start"/>/<see cref="End"/> are seconds-of-day (0..86399);
+///     <see cref="SegmentId"/> orders the segments within a program.
+/// </summary>
+public abstract class GlookoSsv2Segment
+{
+    [JsonPropertyName("start")] public int Start { get; set; }
+
+    [JsonPropertyName("end")] public int End { get; set; }
+
+    [JsonPropertyName("segment_id")] public string? SegmentId { get; set; }
+}
+
+/// <summary>A basal-rate segment. <see cref="Rate"/> is U/hr.</summary>
+public class GlookoSsv2BasalSegment : GlookoSsv2Segment
+{
+    [JsonPropertyName("rate")] public double Rate { get; set; }
+}
+
+/// <summary>A carb-ratio segment. <see cref="InsulinToCarbsRatio"/> is g/U.</summary>
+public class GlookoSsv2CarbRatioSegment : GlookoSsv2Segment
+{
+    [JsonPropertyName("insulin_to_carbs_ratio")] public double InsulinToCarbsRatio { get; set; }
+}
+
+/// <summary>An insulin-sensitivity segment. <see cref="InsulinSensitivityFactor"/> is mg/dL per U × 100.</summary>
+public class GlookoSsv2IsfSegment : GlookoSsv2Segment
+{
+    [JsonPropertyName("insulin_sensitivity_factor")] public double InsulinSensitivityFactor { get; set; }
+}
+
+/// <summary>
+///     A target-BG segment. <see cref="TargetBg"/>/<see cref="TargetBgLow"/>/<see cref="TargetBgHigh"/> are
+///     mg/dL × 100; low/high may be null, in which case the single <see cref="TargetBg"/> is used for both.
+/// </summary>
+public class GlookoSsv2TargetBgSegment : GlookoSsv2Segment
+{
+    [JsonPropertyName("target_bg")] public double? TargetBg { get; set; }
+
+    [JsonPropertyName("target_bg_low")] public double? TargetBgLow { get; set; }
+
+    [JsonPropertyName("target_bg_high")] public double? TargetBgHigh { get; set; }
+}
