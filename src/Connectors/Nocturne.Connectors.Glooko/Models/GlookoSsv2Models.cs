@@ -518,3 +518,132 @@ public class GlookoSsv2DeviceProperties
 
     [JsonPropertyName("cgmModel")] public string? CgmModel { get; set; }
 }
+
+// ── Health / biometric SSV2 feeds → BodyWeight / StepCount / HeartRate ──────────
+
+/// <summary>A page of <c>/api/v2/weights</c> (manual + HealthKit weight entries → BodyWeight).</summary>
+public class GlookoWeightPage : GlookoSsv2Page
+{
+    [JsonPropertyName("weights")] public GlookoSsv2Weight[]? Weights { get; set; }
+}
+
+/// <summary>
+///     A weight entry from the SSV2 <c>weights</c> feed (manual / HealthKit). <see cref="Value"/> is in
+///     <b>grams</b> (e.g. 86700 = 86.7 kg) regardless of <see cref="WeightUnit"/>, which only names the
+///     account's display unit. The third-party counterpart is <see cref="GlookoSsv2ValidicWeight"/>, which
+///     carries kilograms directly. → <see cref="Nocturne.Core.Models.BodyWeight"/>.
+/// </summary>
+public class GlookoSsv2Weight
+{
+    [JsonPropertyName("timestamp")] public string? Timestamp { get; set; }
+
+    /// <summary>Weight in <b>grams</b> (integer-ish encoding, e.g. 86700 = 86.7 kg).</summary>
+    [JsonPropertyName("value")] public double Value { get; set; }
+
+    /// <summary>The account's display unit (e.g. "kg"); informational only — <see cref="Value"/> is always grams.</summary>
+    [JsonPropertyName("weightUnit")] public string? WeightUnit { get; set; }
+
+    [JsonPropertyName("manual")] public bool Manual { get; set; }
+
+    [JsonPropertyName("source")] public string? Source { get; set; }
+
+    [JsonPropertyName("externalId")] public string? ExternalId { get; set; }
+
+    [JsonPropertyName("guid")] public string? Guid { get; set; }
+
+    [JsonPropertyName("softDeleted")] public bool SoftDeleted { get; set; }
+}
+
+/// <summary>A page of <c>/api/v2/validic/weights</c> (third-party / Validic weight entries → BodyWeight).</summary>
+public class GlookoValidicWeightPage : GlookoSsv2Page
+{
+    [JsonPropertyName("weights")] public GlookoSsv2ValidicWeight[]? Weights { get; set; }
+}
+
+/// <summary>
+///     A weight entry from the SSV2 <c>validic/weights</c> feed (third-party integrations: Fitbit, etc.).
+///     Unlike <see cref="GlookoSsv2Weight"/>, <see cref="Weight"/> is already in <b>kilograms</b> (e.g. 68),
+///     and <see cref="Bmi"/>/<see cref="Height"/> may be present. → <see cref="Nocturne.Core.Models.BodyWeight"/>.
+/// </summary>
+public class GlookoSsv2ValidicWeight
+{
+    [JsonPropertyName("timestamp")] public string? Timestamp { get; set; }
+
+    [JsonPropertyName("utcOffset")] public string? UtcOffset { get; set; }
+
+    [JsonPropertyName("source")] public string? Source { get; set; }
+
+    /// <summary>Weight in <b>kilograms</b> (e.g. 68).</summary>
+    [JsonPropertyName("weight")] public double? Weight { get; set; }
+
+    [JsonPropertyName("height")] public double? Height { get; set; }
+
+    [JsonPropertyName("bmi")] public double? Bmi { get; set; }
+
+    [JsonPropertyName("guid")] public string? Guid { get; set; }
+
+    [JsonPropertyName("softDeleted")] public bool SoftDeleted { get; set; }
+}
+
+/// <summary>A page of <c>/api/v2/validic/routines</c> (daily activity summary → StepCount).</summary>
+public class GlookoRoutinePage : GlookoSsv2Page
+{
+    [JsonPropertyName("routines")] public GlookoSsv2Routine[]? Routines { get; set; }
+}
+
+/// <summary>
+///     A daily activity-summary record from the SSV2 <c>validic/routines</c> feed. <see cref="Steps"/> is the
+///     day's total step count (a fractional double, e.g. 6717.716, rounded on mapping). The daily-steps source
+///     for Nocturne <see cref="Nocturne.Core.Models.StepCount"/> (per-workout steps also appear in
+///     <c>validic/fitnesses</c> but are not ingested here to avoid double-counting the daily total).
+/// </summary>
+public class GlookoSsv2Routine
+{
+    [JsonPropertyName("timestamp")] public string? Timestamp { get; set; }
+
+    [JsonPropertyName("utcOffset")] public string? UtcOffset { get; set; }
+
+    [JsonPropertyName("source")] public string? Source { get; set; }
+
+    /// <summary>The day's total step count (fractional double; rounded to an int on mapping).</summary>
+    [JsonPropertyName("steps")] public double? Steps { get; set; }
+
+    [JsonPropertyName("distance")] public double? Distance { get; set; }
+
+    [JsonPropertyName("floors")] public double? Floors { get; set; }
+
+    [JsonPropertyName("calories")] public double? Calories { get; set; }
+
+    [JsonPropertyName("guid")] public string? Guid { get; set; }
+
+    [JsonPropertyName("softDeleted")] public bool SoftDeleted { get; set; }
+}
+
+/// <summary>A page of <c>/api/v2/validic/biometric_measurements</c> (biometric panel → HeartRate).</summary>
+public class GlookoBiometricMeasurementPage : GlookoSsv2Page
+{
+    [JsonPropertyName("biometricMeasurements")] public GlookoSsv2BiometricMeasurement[]? BiometricMeasurements { get; set; }
+}
+
+/// <summary>
+///     A biometric-panel record from the SSV2 <c>validic/biometric_measurements</c> feed — third-party
+///     (Validic) lab/vitals data: cholesterol, blood pressure, SpO2, etc. The only heart-rate field Glooko
+///     exposes anywhere is <see cref="RestingHeartrate"/> (a resting BPM, present only when the integration
+///     supplies it); Glooko has no continuous/time-series HR stream. Records without it are skipped. →
+///     <see cref="Nocturne.Core.Models.HeartRate"/>.
+/// </summary>
+public class GlookoSsv2BiometricMeasurement
+{
+    [JsonPropertyName("timestamp")] public string? Timestamp { get; set; }
+
+    [JsonPropertyName("utcOffset")] public string? UtcOffset { get; set; }
+
+    [JsonPropertyName("source")] public string? Source { get; set; }
+
+    /// <summary>Resting heart rate in BPM, if the third-party integration reports it; otherwise null.</summary>
+    [JsonPropertyName("restingHeartrate")] public double? RestingHeartrate { get; set; }
+
+    [JsonPropertyName("guid")] public string? Guid { get; set; }
+
+    [JsonPropertyName("softDeleted")] public bool SoftDeleted { get; set; }
+}

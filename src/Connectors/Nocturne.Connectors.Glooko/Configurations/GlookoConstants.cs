@@ -151,6 +151,38 @@ public static class GlookoConstants
     public const string Ssv2CgmDevicesPath = "/api/v2/cgm_devices";
 
     /// <summary>
+    ///     Manual + HealthKit body-weight entries → BodyWeight. <c>value</c> is in grams. The third-party
+    ///     counterpart is <see cref="Ssv2ValidicWeightsPath"/> (kilograms).
+    /// </summary>
+    public const string Ssv2WeightsPath = "/api/v2/weights";
+
+    /// <summary>
+    ///     Third-party (Validic) body-weight entries → BodyWeight. <c>weight</c> is already in kilograms and
+    ///     <c>bmi</c> may be present, unlike the manual/HealthKit <see cref="Ssv2WeightsPath"/> feed (grams).
+    /// </summary>
+    public const string Ssv2ValidicWeightsPath = "/api/v2/validic/weights";
+
+    /// <summary>
+    ///     Daily third-party (Validic) activity summary → StepCount. <c>steps</c> is the day's total step
+    ///     count. (Per-workout steps also appear in <see cref="Ssv2ValidicFitnessesPath"/> but are not
+    ///     ingested, to avoid double-counting the daily total.)
+    /// </summary>
+    public const string Ssv2RoutinesPath = "/api/v2/validic/routines";
+
+    /// <summary>
+    ///     Third-party (Validic) workouts. Carries per-workout steps but <b>no</b> heart rate; not currently
+    ///     ingested (steps come from <see cref="Ssv2RoutinesPath"/>). Kept as a documented path for reference.
+    /// </summary>
+    public const string Ssv2ValidicFitnessesPath = "/api/v2/validic/fitnesses";
+
+    /// <summary>
+    ///     Third-party (Validic) biometric panel (cholesterol, blood pressure, SpO2, resting heart rate, …).
+    ///     The only heart-rate-bearing SSV2 source: the <c>restingHeartrate</c> field → HeartRate. Glooko has
+    ///     no continuous/time-series HR stream.
+    /// </summary>
+    public const string Ssv2BiometricMeasurementsPath = "/api/v2/validic/biometric_measurements";
+
+    /// <summary>
     ///     Sentinel <c>lastGuid</c> that starts an SSV2 cursor scan from the beginning.
     /// </summary>
     public const string Ssv2InitialLastGuid = "00000000-0000-0000-0000-000000000000";

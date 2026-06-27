@@ -91,6 +91,9 @@ public class GlookoConnectorService : BaseConnectorService<GlookoConnectorConfig
     private GlookoProfileMapper? _profileMapper;
     private GlookoNoteMapper? _noteMapper;
     private GlookoActivityMapper? _activityMapper;
+    private GlookoBodyWeightMapper? _bodyWeightMapper;
+    private GlookoStepCountMapper? _stepCountMapper;
+    private GlookoHeartRateMapper? _heartRateMapper;
     private GlookoSettingsProfileMapper? _settingsProfileMapper;
 
     private void InitializeMappers(GlookoConnectorConfiguration config)
@@ -107,6 +110,9 @@ public class GlookoConnectorService : BaseConnectorService<GlookoConnectorConfig
         _profileMapper = new GlookoProfileMapper(ConnectorSource, _glookoLogger);
         _noteMapper = new GlookoNoteMapper(ConnectorSource, _timeMapper, _glookoLogger);
         _activityMapper = new GlookoActivityMapper(ConnectorSource, _timeMapper, _glookoLogger);
+        _bodyWeightMapper = new GlookoBodyWeightMapper(ConnectorSource, _timeMapper, _glookoLogger);
+        _stepCountMapper = new GlookoStepCountMapper(ConnectorSource, _timeMapper, _glookoLogger);
+        _heartRateMapper = new GlookoHeartRateMapper(ConnectorSource, _timeMapper, _glookoLogger);
         _settingsProfileMapper = new GlookoSettingsProfileMapper(ConnectorSource, _glookoLogger);
     }
 
@@ -1179,6 +1185,50 @@ public class GlookoConnectorService : BaseConnectorService<GlookoConnectorConfig
             var exerciseEventActivities = _activityMapper!.MapSsv2ExerciseEvents(rawExerciseEvents);
             await PublishRecordTypeAsync(result, SyncDataType.Activity, activeTypes,
                 exerciseEventActivities, PublishActivityDataAsync, config, cancellationToken);
+
+            // Biometric/health series — body weight, daily step counts, and resting heart rate. These map to
+            // the Core BodyWeight/StepCount/HeartRate models (not V4), upserted by deterministic Id via the
+            // Metadata publisher. Gated under Activity (the closest existing biometric gate; there is no
+            // SyncDataType for weight/steps/HR). Not routed through PublishRecordTypeAsync — its count is
+            // keyed by SyncDataType, and these would otherwise inflate the Activity count.
+
+            // Body weight — two sources: manual/HealthKit (grams) + third-party/Validic (kilograms).
+            var weights = await FetchSsv2SafelyAsync(
+                GlookoConstants.Ssv2WeightsPath,
+                () => FetchSsv2Async<GlookoWeightPage, GlookoSsv2Weight>(
+                    GlookoConstants.Ssv2WeightsPath, p => p.Weights, incremental, batchStart),
+                new List<GlookoSsv2Weight>());
+            var validicWeights = await FetchSsv2SafelyAsync(
+                GlookoConstants.Ssv2ValidicWeightsPath,
+                () => FetchSsv2Async<GlookoValidicWeightPage, GlookoSsv2ValidicWeight>(
+                    GlookoConstants.Ssv2ValidicWeightsPath, p => p.Weights, incremental, batchStart),
+                new List<GlookoSsv2ValidicWeight>());
+
+            var bodyWeights = _bodyWeightMapper!.MapSsv2Weights(weights);
+            bodyWeights.AddRange(_bodyWeightMapper.MapSsv2ValidicWeights(validicWeights));
+            if (bodyWeights.Count > 0)
+                await PublishBodyWeightDataAsync(bodyWeights, config, cancellationToken);
+
+            // Daily step counts — validic/routines (per-day total).
+            var routines = await FetchSsv2SafelyAsync(
+                GlookoConstants.Ssv2RoutinesPath,
+                () => FetchSsv2Async<GlookoRoutinePage, GlookoSsv2Routine>(
+                    GlookoConstants.Ssv2RoutinesPath, p => p.Routines, incremental, batchStart),
+                new List<GlookoSsv2Routine>());
+            var stepCounts = _stepCountMapper!.MapSsv2Routines(routines);
+            if (stepCounts.Count > 0)
+                await PublishStepCountDataAsync(stepCounts, config, cancellationToken);
+
+            // Resting heart rate — the only HR-bearing SSV2 source (validic/biometric_measurements);
+            // most records carry other vitals and no HR, so the mapper skips those.
+            var biometrics = await FetchSsv2SafelyAsync(
+                GlookoConstants.Ssv2BiometricMeasurementsPath,
+                () => FetchSsv2Async<GlookoBiometricMeasurementPage, GlookoSsv2BiometricMeasurement>(
+                    GlookoConstants.Ssv2BiometricMeasurementsPath, p => p.BiometricMeasurements, incremental, batchStart),
+                new List<GlookoSsv2BiometricMeasurement>());
+            var heartRates = _heartRateMapper!.MapSsv2BiometricMeasurements(biometrics);
+            if (heartRates.Count > 0)
+                await PublishHeartRateDataAsync(heartRates, config, cancellationToken);
         }
 
         // Device events — granular pumps/events feed (reservoir/site/cannula changes) plus pump alarms
