@@ -945,6 +945,102 @@ public class GlookoV4TreatmentMapper(string connectorSource, GlookoTimeMapper ti
     }
 
     /// <summary>
+    /// Maps the SSV2 <c>cgm/insulin_events</c> feed — app-logged insulin doses for CGM-only/MDI users who
+    /// log doses in the app rather than via a pump. <c>insulin_type</c> selects the target: "fast_acting"/
+    /// "rapid" → rapid <see cref="Bolus"/>; "long_acting"/"intermediate"/"basal" → long-acting
+    /// <see cref="BasalInjection"/>; an unknown/missing type defaults to Bolus. The DIA/peak context is
+    /// resolved by category (no product name is supplied by this feed). Uses <c>display_time</c> (falling
+    /// back to <c>event_time</c>), keyed on the stable Glooko guid (raw-timestamp hash fallback);
+    /// soft-delete aware and skips non-positive doses.
+    /// </summary>
+    public (List<BasalInjection> basalInjections, List<Bolus> boluses) MapSsv2InsulinEvents(
+        IReadOnlyList<GlookoSsv2InsulinEvent> insulinEvents)
+    {
+        var basalInjections = new List<BasalInjection>();
+        var boluses = new List<Bolus>();
+
+        foreach (var evt in insulinEvents)
+        {
+            try
+            {
+                if (evt.SoftDeleted || evt.Insulin <= 0) continue;
+
+                // display_time wins over event_time: GetRawGlookoDate prefers its second arg when present.
+                var rawTimestamp = _timeMapper.GetRawGlookoDate(evt.EventTime ?? string.Empty, evt.DisplayTime);
+                var correctedTimestamp = _timeMapper.GetCorrectedGlookoTime(rawTimestamp);
+                var now = DateTime.UtcNow;
+
+                var isBasal = IsLongActingInsulinType(evt.InsulinType);
+
+                if (isBasal)
+                {
+                    var legacyId = !string.IsNullOrEmpty(evt.Guid)
+                        ? $"glooko_insulin_event_basal_{evt.Guid}"
+                        : GenerateLegacyId("ssv2_insulin_event_basal", rawTimestamp, $"units:{evt.Insulin}");
+
+                    basalInjections.Add(new BasalInjection
+                    {
+                        Id = Guid.CreateVersion7(),
+                        Timestamp = correctedTimestamp,
+                        LegacyId = legacyId,
+                        SyncIdentifier = legacyId,
+                        Device = _connectorSource,
+                        DataSource = _connectorSource,
+                        Units = evt.Insulin,
+                        InsulinContext = ResolveInsulinContext(null, InsulinCategory.LongActing, InsulinCategory.UltraLongActing),
+                        CreatedAt = now,
+                        ModifiedAt = now
+                    });
+                }
+                else
+                {
+                    var legacyId = !string.IsNullOrEmpty(evt.Guid)
+                        ? $"glooko_insulin_event_bolus_{evt.Guid}"
+                        : GenerateLegacyId("ssv2_insulin_event_bolus", rawTimestamp, $"units:{evt.Insulin}");
+
+                    boluses.Add(new Bolus
+                    {
+                        Id = Guid.CreateVersion7(),
+                        Timestamp = correctedTimestamp,
+                        LegacyId = legacyId,
+                        SyncIdentifier = legacyId,
+                        Device = _connectorSource,
+                        DataSource = _connectorSource,
+                        Insulin = evt.Insulin,
+                        BolusType = V4BolusType.Normal,
+                        Automatic = false,
+                        InsulinContext = ResolveInsulinContext(null, InsulinCategory.RapidActing, InsulinCategory.ShortActing),
+                        CreatedAt = now,
+                        ModifiedAt = now
+                    });
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "[{ConnectorSource}] Error mapping SSV2 insulin event", _connectorSource);
+            }
+        }
+
+        _logger.LogInformation(
+            "[{ConnectorSource}] Transformed {BasalCount} basal injections and {BolusCount} boluses from SSV2 insulin events",
+            _connectorSource, basalInjections.Count, boluses.Count);
+
+        return (basalInjections, boluses);
+    }
+
+    /// <summary>
+    /// Classifies a Glooko <c>insulin_type</c> as long-acting (→ BasalInjection) vs rapid (→ Bolus).
+    /// "long_acting"/"intermediate"/"basal" → true; "fast_acting"/"rapid" and any unknown/missing value
+    /// → false (default to Bolus, the safer assumption for app-logged MDI doses).
+    /// </summary>
+    private static bool IsLongActingInsulinType(string? insulinType) =>
+        (insulinType ?? string.Empty).Trim().ToLowerInvariant() switch
+        {
+            "long_acting" or "intermediate" or "basal" => true,
+            _ => false,
+        };
+
+    /// <summary>
     /// Maps the SSV2 <c>cgm/carbs_events</c> feed (standalone app-logged carbs, not attached to a bolus)
     /// to <see cref="CarbIntake"/> records — the SSV2 counterpart to the v3 graph's <c>carbAll</c> series.
     /// Keyed on the stable Glooko guid (raw-timestamp hash fallback); skips soft-deleted and non-positive
