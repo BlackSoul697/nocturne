@@ -108,6 +108,18 @@ public static class GlookoConstants
     public const string Ssv2ExtendedBolusesPath = "/api/v2/pumps/extended_boluses";
 
     /// <summary>
+    ///     The patient's pump hardware inventory (brand/model/serial per pump ever used). Maps to
+    ///     PatientDevice (InsulinPump), distinct from the per-event pumps/* feeds.
+    /// </summary>
+    public const string Ssv2PumpsPath = "/api/v2/pumps";
+
+    /// <summary>
+    ///     The patient's CGM hardware inventory (brand/model/serial per sensor system). Maps to
+    ///     PatientDevice (CGM).
+    /// </summary>
+    public const string Ssv2CgmDevicesPath = "/api/v2/cgm_devices";
+
+    /// <summary>
     ///     Sentinel <c>lastGuid</c> that starts an SSV2 cursor scan from the beginning.
     /// </summary>
     public const string Ssv2InitialLastGuid = "00000000-0000-0000-0000-000000000000";

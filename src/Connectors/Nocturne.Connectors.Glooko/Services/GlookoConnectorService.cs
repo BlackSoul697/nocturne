@@ -87,6 +87,7 @@ public class GlookoConnectorService : BaseConnectorService<GlookoConnectorConfig
     private GlookoTempBasalMapper? _tempBasalMapper;
     private GlookoSystemEventMapper? _systemEventMapper;
     private GlookoPumpEventMapper? _pumpEventMapper;
+    private GlookoDeviceMapper? _deviceMapper;
     private GlookoProfileMapper? _profileMapper;
 
     private void InitializeMappers(GlookoConnectorConfiguration config)
@@ -99,6 +100,7 @@ public class GlookoConnectorService : BaseConnectorService<GlookoConnectorConfig
         _tempBasalMapper = new GlookoTempBasalMapper(ConnectorSource, _timeMapper, _glookoLogger);
         _systemEventMapper = new GlookoSystemEventMapper(ConnectorSource, _timeMapper, _glookoLogger);
         _pumpEventMapper = new GlookoPumpEventMapper(ConnectorSource, _timeMapper, _glookoLogger);
+        _deviceMapper = new GlookoDeviceMapper(ConnectorSource, _timeMapper, _glookoLogger);
         _profileMapper = new GlookoProfileMapper(ConnectorSource, _glookoLogger);
     }
 
@@ -1141,6 +1143,30 @@ public class GlookoConnectorService : BaseConnectorService<GlookoConnectorConfig
 
             if (deviceEventCount > 0)
                 result.ItemsSynced[SyncDataType.DeviceEvents] = deviceEventCount;
+
+            // Patient hardware inventory — the pumps / cgm_devices feeds map to PatientDevice (the user's
+            // declared pump + CGM). Gated under DeviceEvents as the closest existing always-relevant device
+            // gate (there is no SyncDataType for hardware inventory). The records are fetched and mapped so
+            // the mapping is exercised, BUT there is no publish path: IDevicePublisher exposes only
+            // device-status / device-event methods, not a PatientDevice upsert. Until a publisher method
+            // exists (see GlookoDeviceMapper), the mapped devices are logged, not persisted.
+            var pumpDevices = await FetchSsv2SafelyAsync(
+                GlookoConstants.Ssv2PumpsPath,
+                () => FetchSsv2Async<GlookoPumpDevicePage, GlookoSsv2Device>(
+                    GlookoConstants.Ssv2PumpsPath, p => p.Pumps, incremental, batchStart),
+                new List<GlookoSsv2Device>());
+            var cgmDevices = await FetchSsv2SafelyAsync(
+                GlookoConstants.Ssv2CgmDevicesPath,
+                () => FetchSsv2Async<GlookoCgmDevicePage, GlookoSsv2Device>(
+                    GlookoConstants.Ssv2CgmDevicesPath, p => p.CgmDevices, incremental, batchStart),
+                new List<GlookoSsv2Device>());
+
+            var patientDevices = _deviceMapper!.TransformPumpsToPatientDevices(pumpDevices);
+            patientDevices.AddRange(_deviceMapper.TransformCgmDevicesToPatientDevices(cgmDevices));
+            if (patientDevices.Count > 0)
+                _logger.LogInformation(
+                    "[{ConnectorSource}] Mapped {Count} patient devices from SSV2 pumps/cgm_devices; not published (no IDevicePublisher PatientDevice path)",
+                    ConnectorSource, patientDevices.Count);
         }
     }
 

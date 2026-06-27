@@ -207,6 +207,63 @@ public class GlookoSsv2CarbsEvent
     [JsonPropertyName("softDeleted")] public bool SoftDeleted { get; set; }
 }
 
+/// <summary>A page of <c>/api/v2/pumps</c> (the patient's pump hardware inventory → PatientDevice).</summary>
+public class GlookoPumpDevicePage : GlookoSsv2Page
+{
+    [JsonPropertyName("pumps")] public GlookoSsv2Device[]? Pumps { get; set; }
+}
+
+/// <summary>A page of <c>/api/v2/cgm_devices</c> (the patient's CGM hardware inventory → PatientDevice).</summary>
+public class GlookoCgmDevicePage : GlookoSsv2Page
+{
+    [JsonPropertyName("cgmDevices")] public GlookoSsv2Device[]? CgmDevices { get; set; }
+}
+
+/// <summary>
+///     A single piece of patient hardware from the SSV2 <c>pumps</c> or <c>cgm_devices</c> feed. The two
+///     feeds share an identical record shape — only the human-readable model lives under a feed-specific
+///     <see cref="GlookoSsv2DeviceProperties"/> key (<c>pumpModel</c> vs <c>cgmModel</c>) — so one model
+///     covers both; the device category is decided by which feed the record came from, not by its fields.
+/// </summary>
+public class GlookoSsv2Device
+{
+    [JsonPropertyName("brand")] public string? Brand { get; set; }
+
+    [JsonPropertyName("model")] public string? Model { get; set; }
+
+    [JsonPropertyName("serialNumber")] public string? SerialNumber { get; set; }
+
+    [JsonPropertyName("guid")] public string? Guid { get; set; }
+
+    [JsonPropertyName("properties")] public GlookoSsv2DeviceProperties? Properties { get; set; }
+
+    /// <summary>Glooko's reference device id (e.g. <c>CAMDIAB_CAMAPS_FX</c>); a coarse catalog hint.</summary>
+    [JsonPropertyName("referenceDeviceId")] public string? ReferenceDeviceId { get; set; }
+
+    /// <summary>Most recent time this device uploaded data (fake-UTC, like every Glooko timestamp).</summary>
+    [JsonPropertyName("lastSyncTimestamp")] public string? LastSyncTimestamp { get; set; }
+
+    /// <summary>True while this device is the actively-uploading one of its kind for the account.</summary>
+    [JsonPropertyName("activelyUploaded")] public bool ActivelyUploaded { get; set; }
+
+    [JsonPropertyName("hidden")] public bool Hidden { get; set; }
+
+    [JsonPropertyName("softDeleted")] public bool SoftDeleted { get; set; }
+}
+
+/// <summary>
+///     The feed-specific <c>properties</c> sub-object: the pump feed carries <see cref="PumpModel"/>, the
+///     CGM feed <see cref="CgmModel"/>. Both are the precise human-readable model name (e.g.
+///     "mylife YpsoPump", "Dexcom G6"), preferred over the record-level <c>model</c> which is the brand's
+///     product line (e.g. "CamAPS FX").
+/// </summary>
+public class GlookoSsv2DeviceProperties
+{
+    [JsonPropertyName("pumpModel")] public string? PumpModel { get; set; }
+
+    [JsonPropertyName("cgmModel")] public string? CgmModel { get; set; }
+}
+
 /// <summary>A page of <c>/api/v2/pumps/extended_boluses</c> (square/dual-wave boluses).</summary>
 public class GlookoExtendedBolusPage : GlookoSsv2Page
 {
