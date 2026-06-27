@@ -207,6 +207,117 @@ public class GlookoSsv2CarbsEvent
     [JsonPropertyName("softDeleted")] public bool SoftDeleted { get; set; }
 }
 
+/// <summary>A page of <c>/api/v2/cgm/insulin_events</c> (app-logged MDI insulin doses → Bolus/BasalInjection).</summary>
+public class GlookoInsulinEventPage : GlookoSsv2Page
+{
+    [JsonPropertyName("insulinEvents")] public GlookoSsv2InsulinEvent[]? InsulinEvents { get; set; }
+}
+
+/// <summary>
+///     An app-logged insulin dose from the SSV2 <c>cgm/insulin_events</c> feed — for CGM-only/MDI users
+///     who log doses in the app rather than via a pump. Raw snake_case Mongo document. <see cref="Insulin"/>
+///     is units; <see cref="InsulinType"/> ("fast_acting" → rapid Bolus, "long_acting"/"intermediate" →
+///     long-acting BasalInjection) selects the target. Uses <see cref="DisplayTime"/> (falling back to
+///     <see cref="EventTime"/>).
+/// </summary>
+public class GlookoSsv2InsulinEvent
+{
+    [JsonPropertyName("insulin")] public double Insulin { get; set; }
+
+    [JsonPropertyName("insulin_type")] public string? InsulinType { get; set; }
+
+    [JsonPropertyName("display_time")] public string? DisplayTime { get; set; }
+
+    [JsonPropertyName("event_time")] public string? EventTime { get; set; }
+
+    [JsonPropertyName("guid")] public string? Guid { get; set; }
+
+    [JsonPropertyName("soft_deleted")] public bool SoftDeleted { get; set; }
+
+    [JsonPropertyName("insulin_pen_guid")] public string? InsulinPenGuid { get; set; }
+}
+
+/// <summary>A page of <c>/api/v2/notes</c> (app-logged free-text notes → Note).</summary>
+public class GlookoNotePage : GlookoSsv2Page
+{
+    [JsonPropertyName("notes")] public GlookoSsv2Note[]? Notes { get; set; }
+}
+
+/// <summary>
+///     A free-text note logged in the Glooko app, mapped to <see cref="Nocturne.Core.Models.V4.Note"/>.
+///     camelCase. <see cref="Value"/> is the note text, <see cref="Timestamp"/> the time.
+/// </summary>
+public class GlookoSsv2Note
+{
+    [JsonPropertyName("timestamp")] public string? Timestamp { get; set; }
+
+    [JsonPropertyName("value")] public string? Value { get; set; }
+
+    [JsonPropertyName("guid")] public string? Guid { get; set; }
+
+    [JsonPropertyName("softDeleted")] public bool SoftDeleted { get; set; }
+
+    [JsonPropertyName("manuallyEnteredText")] public bool ManuallyEnteredText { get; set; }
+}
+
+/// <summary>A page of <c>/api/v2/exercises</c> (app-logged exercises → Activity).</summary>
+public class GlookoExercisePage : GlookoSsv2Page
+{
+    [JsonPropertyName("exercises")] public GlookoSsv2Exercise[]? Exercises { get; set; }
+}
+
+/// <summary>
+///     An app-logged exercise from the SSV2 <c>exercises</c> feed → <see cref="Nocturne.Core.Models.Activity"/>.
+///     camelCase. <see cref="Duration"/> is in <b>seconds</b> (normalized to minutes on mapping);
+///     <see cref="Intensity"/> is numeric (0–100); <see cref="Name"/> is the activity name.
+/// </summary>
+public class GlookoSsv2Exercise
+{
+    [JsonPropertyName("name")] public string? Name { get; set; }
+
+    [JsonPropertyName("timestamp")] public string? Timestamp { get; set; }
+
+    [JsonPropertyName("intensity")] public double? Intensity { get; set; }
+
+    /// <summary>Duration in <b>seconds</b> (e.g. 3600 = 1h).</summary>
+    [JsonPropertyName("duration")] public double Duration { get; set; }
+
+    [JsonPropertyName("caloriesBurned")] public double? CaloriesBurned { get; set; }
+
+    [JsonPropertyName("guid")] public string? Guid { get; set; }
+
+    [JsonPropertyName("softDeleted")] public bool SoftDeleted { get; set; }
+}
+
+/// <summary>A page of <c>/api/v2/cgm/exercise_events</c> (a second app-logged exercise source → Activity).</summary>
+public class GlookoExerciseEventPage : GlookoSsv2Page
+{
+    [JsonPropertyName("exerciseEvents")] public GlookoSsv2ExerciseEvent[]? ExerciseEvents { get; set; }
+}
+
+/// <summary>
+///     A second app-logged exercise source from the SSV2 <c>cgm/exercise_events</c> feed →
+///     <see cref="Nocturne.Core.Models.Activity"/>. Raw snake_case Mongo document. <see cref="Duration"/>
+///     is in <b>minutes</b> (e.g. 30) — unlike <see cref="GlookoSsv2Exercise"/> which is seconds; both
+///     normalize to minutes on mapping. <see cref="Intensity"/> is a string ("light"/"moderate"/"vigorous").
+///     Uses <see cref="DisplayTime"/> (falling back to <see cref="EventTime"/>).
+/// </summary>
+public class GlookoSsv2ExerciseEvent
+{
+    [JsonPropertyName("display_time")] public string? DisplayTime { get; set; }
+
+    [JsonPropertyName("event_time")] public string? EventTime { get; set; }
+
+    /// <summary>Duration in <b>minutes</b> (e.g. 30).</summary>
+    [JsonPropertyName("duration")] public double Duration { get; set; }
+
+    [JsonPropertyName("intensity")] public string? Intensity { get; set; }
+
+    [JsonPropertyName("guid")] public string? Guid { get; set; }
+
+    [JsonPropertyName("soft_deleted")] public bool SoftDeleted { get; set; }
+}
+
 /// <summary>A page of <c>/api/v2/pumps/extended_boluses</c> (square/dual-wave boluses).</summary>
 public class GlookoExtendedBolusPage : GlookoSsv2Page
 {

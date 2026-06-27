@@ -88,6 +88,8 @@ public class GlookoConnectorService : BaseConnectorService<GlookoConnectorConfig
     private GlookoSystemEventMapper? _systemEventMapper;
     private GlookoPumpEventMapper? _pumpEventMapper;
     private GlookoProfileMapper? _profileMapper;
+    private GlookoNoteMapper? _noteMapper;
+    private GlookoActivityMapper? _activityMapper;
 
     private void InitializeMappers(GlookoConnectorConfiguration config)
     {
@@ -100,6 +102,8 @@ public class GlookoConnectorService : BaseConnectorService<GlookoConnectorConfig
         _systemEventMapper = new GlookoSystemEventMapper(ConnectorSource, _timeMapper, _glookoLogger);
         _pumpEventMapper = new GlookoPumpEventMapper(ConnectorSource, _timeMapper, _glookoLogger);
         _profileMapper = new GlookoProfileMapper(ConnectorSource, _glookoLogger);
+        _noteMapper = new GlookoNoteMapper(ConnectorSource, _timeMapper, _glookoLogger);
+        _activityMapper = new GlookoActivityMapper(ConnectorSource, _timeMapper, _glookoLogger);
     }
 
     // ── Authentication ──────────────────────────────────────────────────
@@ -1085,6 +1089,26 @@ public class GlookoConnectorService : BaseConnectorService<GlookoConnectorConfig
                 penBasals, PublishBasalInjectionDataAsync, config, cancellationToken);
         }
 
+        // App-logged insulin doses — cgm/insulin_events: doses logged in the app by CGM-only/MDI users,
+        // not pump-delivered. "fast_acting" → rapid Bolus, "long_acting"/"intermediate" → BasalInjection.
+        // Distinct from the pen-injection feeds above (which carry a product name); this feed has none, so
+        // DIA/peak is resolved by category.
+        if (activeTypes.Contains(SyncDataType.Boluses) || activeTypes.Contains(SyncDataType.BasalInjections))
+        {
+            var insulinEvents = await FetchSsv2SafelyAsync(
+                GlookoConstants.Ssv2InsulinEventsPath,
+                () => FetchSsv2Async<GlookoInsulinEventPage, GlookoSsv2InsulinEvent>(
+                    GlookoConstants.Ssv2InsulinEventsPath, p => p.InsulinEvents, incremental, batchStart),
+                new List<GlookoSsv2InsulinEvent>());
+
+            var (eventBasals, eventBoluses) = _v4TreatmentMapper!.MapSsv2InsulinEvents(insulinEvents);
+
+            await PublishRecordTypeAsync(result, SyncDataType.Boluses, activeTypes,
+                eventBoluses, PublishBolusDataAsync, config, cancellationToken);
+            await PublishRecordTypeAsync(result, SyncDataType.BasalInjections, activeTypes,
+                eventBasals, PublishBasalInjectionDataAsync, config, cancellationToken);
+        }
+
         // Extended/dual-wave boluses — square (all-extended) or dual (immediate + extended) deliveries
         // with a duration. Net-new vs the windowed path and the v3 graph (no extended-bolus series).
         if (activeTypes.Contains(SyncDataType.Boluses))
@@ -1112,6 +1136,43 @@ public class GlookoConnectorService : BaseConnectorService<GlookoConnectorConfig
             var standaloneCarbs = _v4TreatmentMapper!.MapSsv2CarbsEvents(carbsEvents);
             await PublishRecordTypeAsync(result, SyncDataType.CarbIntake, activeTypes,
                 standaloneCarbs, PublishCarbIntakeDataAsync, config, cancellationToken);
+        }
+
+        // Notes — app-logged free-text notes (camelCase /api/v2/notes) → Note.
+        if (activeTypes.Contains(SyncDataType.Notes))
+        {
+            var rawNotes = await FetchSsv2SafelyAsync(
+                GlookoConstants.Ssv2NotesPath,
+                () => FetchSsv2Async<GlookoNotePage, GlookoSsv2Note>(
+                    GlookoConstants.Ssv2NotesPath, p => p.Notes, incremental, batchStart),
+                new List<GlookoSsv2Note>());
+            var notes = _noteMapper!.MapSsv2Notes(rawNotes);
+            await PublishRecordTypeAsync(result, SyncDataType.Notes, activeTypes,
+                notes, PublishNoteDataAsync, config, cancellationToken);
+        }
+
+        // Activities — two app-logged exercise sources mapped to Activity: exercises (seconds duration,
+        // numeric intensity) and cgm/exercise_events (minutes duration, string intensity). Both normalize
+        // to minutes. PublishRecordTypeAsync accumulates the count across the two sources.
+        if (activeTypes.Contains(SyncDataType.Activity))
+        {
+            var rawExercises = await FetchSsv2SafelyAsync(
+                GlookoConstants.Ssv2ExercisesPath,
+                () => FetchSsv2Async<GlookoExercisePage, GlookoSsv2Exercise>(
+                    GlookoConstants.Ssv2ExercisesPath, p => p.Exercises, incremental, batchStart),
+                new List<GlookoSsv2Exercise>());
+            var exerciseActivities = _activityMapper!.MapSsv2Exercises(rawExercises);
+            await PublishRecordTypeAsync(result, SyncDataType.Activity, activeTypes,
+                exerciseActivities, PublishActivityDataAsync, config, cancellationToken);
+
+            var rawExerciseEvents = await FetchSsv2SafelyAsync(
+                GlookoConstants.Ssv2ExerciseEventsPath,
+                () => FetchSsv2Async<GlookoExerciseEventPage, GlookoSsv2ExerciseEvent>(
+                    GlookoConstants.Ssv2ExerciseEventsPath, p => p.ExerciseEvents, incremental, batchStart),
+                new List<GlookoSsv2ExerciseEvent>());
+            var exerciseEventActivities = _activityMapper!.MapSsv2ExerciseEvents(rawExerciseEvents);
+            await PublishRecordTypeAsync(result, SyncDataType.Activity, activeTypes,
+                exerciseEventActivities, PublishActivityDataAsync, config, cancellationToken);
         }
 
         // Device events — granular pumps/events feed (reservoir/site/cannula changes) plus pump alarms

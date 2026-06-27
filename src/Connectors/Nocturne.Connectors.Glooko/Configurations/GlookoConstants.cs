@@ -108,6 +108,29 @@ public static class GlookoConstants
     public const string Ssv2ExtendedBolusesPath = "/api/v2/pumps/extended_boluses";
 
     /// <summary>
+    ///     App-logged insulin doses for CGM-only/MDI users (logged in the app, not pump-delivered).
+    ///     "fast_acting" → rapid Bolus; "long_acting"/"intermediate" → BasalInjection. Records are
+    ///     snake_case Mongo documents.
+    /// </summary>
+    public const string Ssv2InsulinEventsPath = "/api/v2/cgm/insulin_events";
+
+    /// <summary>
+    ///     App-logged free-text notes (camelCase) → Note.
+    /// </summary>
+    public const string Ssv2NotesPath = "/api/v2/notes";
+
+    /// <summary>
+    ///     App-logged exercises (camelCase) → Activity. Duration is in seconds.
+    /// </summary>
+    public const string Ssv2ExercisesPath = "/api/v2/exercises";
+
+    /// <summary>
+    ///     A second app-logged exercise source (snake_case Mongo) → Activity. Duration is in minutes and
+    ///     intensity is a string, unlike <see cref="Ssv2ExercisesPath"/>.
+    /// </summary>
+    public const string Ssv2ExerciseEventsPath = "/api/v2/cgm/exercise_events";
+
+    /// <summary>
     ///     Sentinel <c>lastGuid</c> that starts an SSV2 cursor scan from the beginning.
     /// </summary>
     public const string Ssv2InitialLastGuid = "00000000-0000-0000-0000-000000000000";
