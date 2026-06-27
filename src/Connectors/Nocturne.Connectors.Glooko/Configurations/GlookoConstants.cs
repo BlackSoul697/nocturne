@@ -102,6 +102,12 @@ public static class GlookoConstants
     public const string Ssv2CarbsEventsPath = "/api/v2/cgm/carbs_events";
 
     /// <summary>
+    ///     Extended/square-wave and dual-wave boluses (an initial portion plus a portion delivered over a
+    ///     duration). Net-new vs the windowed path and the v3 graph (which has no extended-bolus series).
+    /// </summary>
+    public const string Ssv2ExtendedBolusesPath = "/api/v2/pumps/extended_boluses";
+
+    /// <summary>
     ///     Sentinel <c>lastGuid</c> that starts an SSV2 cursor scan from the beginning.
     /// </summary>
     public const string Ssv2InitialLastGuid = "00000000-0000-0000-0000-000000000000";

@@ -1020,9 +1020,23 @@ public class GlookoConnectorService : BaseConnectorService<GlookoConnectorConfig
                 penBasals, PublishBasalInjectionDataAsync, config, cancellationToken);
         }
 
+        // Extended/dual-wave boluses — square (all-extended) or dual (immediate + extended) deliveries
+        // with a duration. Net-new vs the windowed path and the v3 graph (no extended-bolus series).
+        if (activeTypes.Contains(SyncDataType.Boluses))
+        {
+            var extended = await FetchSsv2SafelyAsync(
+                GlookoConstants.Ssv2ExtendedBolusesPath,
+                () => FetchSsv2Async<GlookoExtendedBolusPage, GlookoExtendedBolus>(
+                    GlookoConstants.Ssv2ExtendedBolusesPath, p => p.ExtendedBoluses, incremental, batchStart),
+                new List<GlookoExtendedBolus>());
+            var extendedBoluses = _v4TreatmentMapper!.MapSsv2ExtendedBoluses(extended);
+            await PublishRecordTypeAsync(result, SyncDataType.Boluses, activeTypes,
+                extendedBoluses, PublishBolusDataAsync, config, cancellationToken);
+        }
+
         // Standalone carbs — app-logged carb entries not tied to a bolus (v3 carbAll equivalent),
         // additional to the carbs derived from bolus.carbsInput + foods in MapAndPublishV2BatchAsync
-        // (hence the additive ItemsSynced update rather than an overwrite).
+        // (PublishRecordTypeAsync accumulates the count).
         if (activeTypes.Contains(SyncDataType.CarbIntake))
         {
             var carbsEvents = await FetchSsv2SafelyAsync(
@@ -1031,9 +1045,8 @@ public class GlookoConnectorService : BaseConnectorService<GlookoConnectorConfig
                     GlookoConstants.Ssv2CarbsEventsPath, p => p.CarbsEvents, incremental, batchStart),
                 new List<GlookoSsv2CarbsEvent>());
             var standaloneCarbs = _v4TreatmentMapper!.MapSsv2CarbsEvents(carbsEvents);
-            if (standaloneCarbs.Count > 0 && await PublishCarbIntakeDataAsync(standaloneCarbs, config, cancellationToken))
-                result.ItemsSynced[SyncDataType.CarbIntake] =
-                    result.ItemsSynced.GetValueOrDefault(SyncDataType.CarbIntake) + standaloneCarbs.Count;
+            await PublishRecordTypeAsync(result, SyncDataType.CarbIntake, activeTypes,
+                standaloneCarbs, PublishCarbIntakeDataAsync, config, cancellationToken);
         }
 
         // Device events — granular pumps/events feed (reservoir/site/cannula changes) plus pump alarms

@@ -994,6 +994,66 @@ public class GlookoV4TreatmentMapper(string connectorSource, GlookoTimeMapper ti
     }
 
     /// <summary>
+    /// Maps the SSV2 <c>pumps/extended_boluses</c> feed to <see cref="Bolus"/> records. An extended bolus
+    /// has an immediate portion (<c>initialDelivery</c>) plus a portion delivered over a duration
+    /// (<c>extendedDelivery</c> across <c>extendedBolusDuration</c>): both present → Dual, otherwise Square.
+    /// Net-new — the v3 graph has no extended-bolus series. Keyed on the stable Glooko guid (raw-timestamp
+    /// hash fallback); soft-delete aware. (Carbs on an extended meal bolus are not decomposed here yet.)
+    /// </summary>
+    public List<Bolus> MapSsv2ExtendedBoluses(IReadOnlyList<GlookoExtendedBolus> extendedBoluses)
+    {
+        var boluses = new List<Bolus>();
+
+        foreach (var eb in extendedBoluses)
+        {
+            try
+            {
+                if (eb.SoftDeleted) continue;
+
+                var initial = eb.InitialDelivery ?? 0;
+                var extended = eb.ExtendedDelivery ?? 0;
+                var total = eb.InsulinDelivered > 0 ? eb.InsulinDelivered : initial + extended;
+                if (total <= 0) continue;
+
+                var rawTimestamp = _timeMapper.GetRawGlookoDate(eb.Timestamp, eb.PumpTimestamp);
+                var correctedTimestamp = _timeMapper.GetCorrectedGlookoTime(rawTimestamp);
+                var now = DateTime.UtcNow;
+
+                var bolusType = initial > 0 && extended > 0 ? V4BolusType.Dual : V4BolusType.Square;
+
+                var legacyId = !string.IsNullOrEmpty(eb.Guid)
+                    ? $"glooko_extended_bolus_{eb.Guid}"
+                    : GenerateLegacyId("ssv2_extended_bolus", rawTimestamp, $"insulin:{total}");
+
+                boluses.Add(new Bolus
+                {
+                    Id = Guid.CreateVersion7(),
+                    Timestamp = correctedTimestamp,
+                    LegacyId = legacyId,
+                    SyncIdentifier = legacyId,
+                    Device = _connectorSource,
+                    DataSource = _connectorSource,
+                    Insulin = total,
+                    BolusType = bolusType,
+                    Duration = eb.ExtendedBolusDuration > 0 ? eb.ExtendedBolusDuration : null,
+                    Automatic = false,
+                    CreatedAt = now,
+                    ModifiedAt = now
+                });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "[{ConnectorSource}] Error mapping SSV2 extended bolus", _connectorSource);
+            }
+        }
+
+        _logger.LogInformation(
+            "[{ConnectorSource}] Transformed {Count} extended boluses from SSV2 data", _connectorSource, boluses.Count);
+
+        return boluses;
+    }
+
+    /// <summary>
     /// Resolves a Glooko insulin name (e.g., "Tresiba®U100", "Admelog®") to a
     /// <see cref="TreatmentInsulinContext"/> by fuzzy-matching against the <see cref="InsulinCatalog"/>.
     /// Falls back to a generic context with the raw name if no match is found.

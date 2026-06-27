@@ -206,3 +206,41 @@ public class GlookoSsv2CarbsEvent
 
     [JsonPropertyName("softDeleted")] public bool SoftDeleted { get; set; }
 }
+
+/// <summary>A page of <c>/api/v2/pumps/extended_boluses</c> (square/dual-wave boluses).</summary>
+public class GlookoExtendedBolusPage : GlookoSsv2Page
+{
+    [JsonPropertyName("extendedBoluses")] public GlookoExtendedBolus[]? ExtendedBoluses { get; set; }
+}
+
+/// <summary>
+///     An extended (square) or dual-wave bolus from the SSV2 <c>pumps/extended_boluses</c> feed. Shares
+///     the GKBolus/GKPumpObject envelope with <see cref="GlookoBolus"/> plus the extended-delivery fields:
+///     <see cref="InitialDelivery"/> (immediate units) + <see cref="ExtendedDelivery"/> (units over
+///     <see cref="ExtendedBolusDuration"/>). Net-new — the v3 graph has no extended-bolus series.
+/// </summary>
+public class GlookoExtendedBolus
+{
+    [JsonPropertyName("pumpTimestamp")] public string PumpTimestamp { get; set; } = string.Empty;
+
+    [JsonPropertyName("timestamp")] public string Timestamp { get; set; } = string.Empty;
+
+    [JsonPropertyName("insulinDelivered")] public double InsulinDelivered { get; set; }
+
+    [JsonPropertyName("initialDelivery")] public double? InitialDelivery { get; set; }
+
+    [JsonPropertyName("extendedDelivery")] public double? ExtendedDelivery { get; set; }
+
+    /// <summary>
+    ///     Duration of the extended portion. Assumed minutes (matching <c>Bolus.Duration</c>) — unverified,
+    ///     as the feed is empty on the available test account; confirm against a pump that delivers
+    ///     extended boluses (the alternative Glooko convention is seconds).
+    /// </summary>
+    [JsonPropertyName("extendedBolusDuration")] public double ExtendedBolusDuration { get; set; }
+
+    [JsonPropertyName("carbsInput")] public double CarbsInput { get; set; }
+
+    [JsonPropertyName("guid")] public string? Guid { get; set; }
+
+    [JsonPropertyName("softDeleted")] public bool SoftDeleted { get; set; }
+}
