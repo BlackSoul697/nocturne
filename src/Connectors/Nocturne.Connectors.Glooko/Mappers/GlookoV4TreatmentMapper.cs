@@ -1056,8 +1056,10 @@ public class GlookoV4TreatmentMapper(string connectorSource, GlookoTimeMapper ti
             {
                 if (evt.SoftDeleted || evt.CgmCarbs <= 0) continue;
 
+                // GetRawGlookoDate prefers its 2nd arg, so pass DisplayTime there to prefer it,
+                // falling back to EventTime then the legacy timestamp field.
                 var rawTimestamp = _timeMapper.GetRawGlookoDate(
-                    evt.DisplayTime ?? evt.EventTime ?? string.Empty, evt.Timestamp);
+                    evt.EventTime ?? evt.Timestamp ?? string.Empty, evt.DisplayTime);
                 var correctedTimestamp = _timeMapper.GetCorrectedGlookoTime(rawTimestamp);
                 var now = DateTime.UtcNow;
 

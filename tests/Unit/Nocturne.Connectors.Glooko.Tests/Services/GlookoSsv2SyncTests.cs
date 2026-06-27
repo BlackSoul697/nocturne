@@ -97,6 +97,34 @@ public class GlookoSsv2SyncTests
             "resources after the failing one must still be fetched");
     }
 
+    // Regression guard for the SupportedDataTypes gap: Notes/Activity (and the health feeds gated
+    // under Activity) were absent from SupportedDataTypes, so activeTypes could never contain them and
+    // the feeds were unreachable dead code. These assert the feeds are actually fetched when requested.
+
+    [Fact]
+    public async Task Ssv2_NotesRequest_FetchesNotesFeed()
+    {
+        var handler = new RoutingHandler(_ => Json("{\"lastPage\":true}"));
+        var service = BuildService(handler, new FakeCursorStore(), CapturePublisher(new List<SensorGlucose>()));
+
+        await service.SyncDataAsync(new SyncRequest { DataTypes = [SyncDataType.Notes] }, Config(), CancellationToken.None);
+
+        handler.RequestedPaths.Should().Contain(p => p.Contains("/api/v2/notes"),
+            "Notes must be reachable (it must be in SupportedDataTypes)");
+    }
+
+    [Fact]
+    public async Task Ssv2_ActivityRequest_FetchesExerciseAndStepFeeds()
+    {
+        var handler = new RoutingHandler(_ => Json("{\"lastPage\":true}"));
+        var service = BuildService(handler, new FakeCursorStore(), CapturePublisher(new List<SensorGlucose>()));
+
+        await service.SyncDataAsync(new SyncRequest { DataTypes = [SyncDataType.Activity] }, Config(), CancellationToken.None);
+
+        handler.RequestedPaths.Should().Contain(p => p.Contains("/api/v2/exercises"));
+        handler.RequestedPaths.Should().Contain(p => p.Contains("/api/v2/validic/routines"));
+    }
+
     // ── Helpers ─────────────────────────────────────────────────────────
 
     private static SyncRequest GlucoseRequest() => new() { DataTypes = [SyncDataType.Glucose] };

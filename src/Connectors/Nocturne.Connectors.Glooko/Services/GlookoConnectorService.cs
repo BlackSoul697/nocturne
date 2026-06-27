@@ -70,7 +70,9 @@ public class GlookoConnectorService : BaseConnectorService<GlookoConnectorConfig
         SyncDataType.StateSpans,
         SyncDataType.TempBasals,
         SyncDataType.DeviceEvents,
-        SyncDataType.Profiles
+        SyncDataType.Profiles,
+        SyncDataType.Notes,
+        SyncDataType.Activity
     ];
 
     // ── Per-sync state (populated in PerformSyncInternalAsync) ─────────

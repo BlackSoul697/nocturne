@@ -23,12 +23,16 @@ namespace Nocturne.Connectors.Glooko.Configurations;
     DefaultStaleThresholdMinutes = 360,
     SupportedDataTypes = [
         SyncDataType.Glucose,
+        SyncDataType.ManualBG,
         SyncDataType.Boluses,
         SyncDataType.BasalInjections,
         SyncDataType.CarbIntake,
         SyncDataType.StateSpans,
+        SyncDataType.TempBasals,
         SyncDataType.DeviceEvents,
-        SyncDataType.Profiles
+        SyncDataType.Profiles,
+        SyncDataType.Notes,
+        SyncDataType.Activity
     ]
 )]
 public class GlookoConnectorConfiguration : BaseConnectorConfiguration
