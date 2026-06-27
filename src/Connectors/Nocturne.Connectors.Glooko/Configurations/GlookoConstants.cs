@@ -108,6 +108,14 @@ public static class GlookoConstants
     public const string Ssv2ExtendedBolusesPath = "/api/v2/pumps/extended_boluses";
 
     /// <summary>
+    ///     Pump basal/bolus program snapshots → Nocturne Profiles. The SSV2-native profile source that lets
+    ///     the SSV2 path stop calling the v3 <c>devices_and_settings</c> endpoint. Records are snake_case
+    ///     Mongo documents (like <c>pumps/alarms</c>); segment times are seconds-of-day and ISF/target glucose
+    ///     values are mg/dL × 100.
+    /// </summary>
+    public const string Ssv2PumpSettingsPath = "/api/v2/pumps/settings";
+
+    /// <summary>
     ///     Sentinel <c>lastGuid</c> that starts an SSV2 cursor scan from the beginning.
     /// </summary>
     public const string Ssv2InitialLastGuid = "00000000-0000-0000-0000-000000000000";
