@@ -1210,11 +1210,9 @@ public class GlookoConnectorService : BaseConnectorService<GlookoConnectorConfig
                 result.ItemsSynced[SyncDataType.DeviceEvents] = deviceEventCount;
 
             // Patient hardware inventory — the pumps / cgm_devices feeds map to PatientDevice (the user's
-            // declared pump + CGM). Gated under DeviceEvents as the closest existing always-relevant device
-            // gate (there is no SyncDataType for hardware inventory). The records are fetched and mapped so
-            // the mapping is exercised, BUT there is no publish path: IDevicePublisher exposes only
-            // device-status / device-event methods, not a PatientDevice upsert. Until a publisher method
-            // exists (see GlookoDeviceMapper), the mapped devices are logged, not persisted.
+            // pump + CGM). Gated under DeviceEvents as the closest existing device gate (there is no
+            // SyncDataType for hardware inventory). Upserted via IDevicePublisher.PublishPatientDevicesAsync
+            // keyed on the mapper's deterministic Id, so re-syncs update in place.
             var pumpDevices = await FetchSsv2SafelyAsync(
                 GlookoConstants.Ssv2PumpsPath,
                 () => FetchSsv2Async<GlookoPumpDevicePage, GlookoSsv2Device>(
@@ -1228,10 +1226,8 @@ public class GlookoConnectorService : BaseConnectorService<GlookoConnectorConfig
 
             var patientDevices = _deviceMapper!.TransformPumpsToPatientDevices(pumpDevices);
             patientDevices.AddRange(_deviceMapper.TransformCgmDevicesToPatientDevices(cgmDevices));
-            if (patientDevices.Count > 0)
-                _logger.LogInformation(
-                    "[{ConnectorSource}] Mapped {Count} patient devices from SSV2 pumps/cgm_devices; not published (no IDevicePublisher PatientDevice path)",
-                    ConnectorSource, patientDevices.Count);
+            if (patientDevices.Count > 0 && _connectorPublisher is { IsAvailable: true })
+                await _connectorPublisher.Device.PublishPatientDevicesAsync(patientDevices, ConnectorSource, cancellationToken);
         }
 
         // Profiles — SSV2-native source from pumps/settings (basal/bolus programs), replacing the v3

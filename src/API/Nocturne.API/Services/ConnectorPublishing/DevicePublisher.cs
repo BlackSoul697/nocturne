@@ -19,6 +19,7 @@ internal sealed class DevicePublisher : IDevicePublisher
     private readonly IDeviceEventRepository _deviceEventRepository;
     private readonly IAuditContext _auditContext;
     private readonly IApsSnapshotRepository _apsSnapshotRepository;
+    private readonly IPatientDeviceRepository _patientDeviceRepository;
     private readonly ILogger<DevicePublisher> _logger;
 
     public DevicePublisher(
@@ -26,13 +27,49 @@ internal sealed class DevicePublisher : IDevicePublisher
         IDeviceEventRepository deviceEventRepository,
         IAuditContext auditContext,
         IApsSnapshotRepository apsSnapshotRepository,
+        IPatientDeviceRepository patientDeviceRepository,
         ILogger<DevicePublisher> logger)
     {
         _decomposer = decomposer ?? throw new ArgumentNullException(nameof(decomposer));
         _deviceEventRepository = deviceEventRepository ?? throw new ArgumentNullException(nameof(deviceEventRepository));
         _auditContext = auditContext;
         _apsSnapshotRepository = apsSnapshotRepository ?? throw new ArgumentNullException(nameof(apsSnapshotRepository));
+        _patientDeviceRepository = patientDeviceRepository ?? throw new ArgumentNullException(nameof(patientDeviceRepository));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+    }
+
+    public async Task<bool> PublishPatientDevicesAsync(
+        IEnumerable<PatientDevice> devices,
+        string source,
+        CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            var list = devices.ToList();
+            if (list.Count == 0) return true;
+
+            using (SystemAuditScope.Push(_auditContext))
+            {
+                foreach (var device in list)
+                {
+                    // Upsert on the connector's deterministic Id so re-syncs update the same row.
+                    var existing = await _patientDeviceRepository.GetByIdAsync(device.Id, cancellationToken);
+                    if (existing != null)
+                        await _patientDeviceRepository.UpdateAsync(device.Id, device, cancellationToken);
+                    else
+                        await _patientDeviceRepository.CreateAsync(device, cancellationToken);
+                }
+            }
+
+            _logger.LogDebug("Published {Count} PatientDevice records for {Source}", list.Count, source);
+            return true;
+        }
+        catch (OperationCanceledException) { throw; }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to publish PatientDevice records for {Source}", source);
+            return false;
+        }
     }
 
     public async Task<bool> PublishDeviceStatusAsync(

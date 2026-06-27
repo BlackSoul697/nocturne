@@ -196,11 +196,14 @@ public class GlookoCarbsEventPage : GlookoSsv2Page
 /// </summary>
 public class GlookoSsv2CarbsEvent
 {
-    [JsonPropertyName("timestamp")] public string? Timestamp { get; set; }
+    [JsonPropertyName("displayTime")] public string? DisplayTime { get; set; }
 
     [JsonPropertyName("eventTime")] public string? EventTime { get; set; }
 
-    [JsonPropertyName("cgmCarbs")] public double CgmCarbs { get; set; }
+    [JsonPropertyName("timestamp")] public string? Timestamp { get; set; }
+
+    // Wire field is "carbs" (camelCase feed), grams. (Property kept as CgmCarbs for back-compat.)
+    [JsonPropertyName("carbs")] public double CgmCarbs { get; set; }
 
     [JsonPropertyName("guid")] public string? Guid { get; set; }
 

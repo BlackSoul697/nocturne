@@ -1056,7 +1056,8 @@ public class GlookoV4TreatmentMapper(string connectorSource, GlookoTimeMapper ti
             {
                 if (evt.SoftDeleted || evt.CgmCarbs <= 0) continue;
 
-                var rawTimestamp = _timeMapper.GetRawGlookoDate(evt.Timestamp ?? string.Empty, evt.EventTime);
+                var rawTimestamp = _timeMapper.GetRawGlookoDate(
+                    evt.DisplayTime ?? evt.EventTime ?? string.Empty, evt.Timestamp);
                 var correctedTimestamp = _timeMapper.GetCorrectedGlookoTime(rawTimestamp);
                 var now = DateTime.UtcNow;
 
