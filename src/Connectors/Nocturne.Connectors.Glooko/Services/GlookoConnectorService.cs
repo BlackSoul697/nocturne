@@ -271,6 +271,51 @@ public class GlookoConnectorService : BaseConnectorService<GlookoConnectorConfig
              + "&locale=en&insulinTooltips=false&filterBgReadings=false&splitByDay=false";
     }
 
+    /// <summary>
+    ///     Builds a v3 graph/data URL requesting ONLY the pump-mode series. Pump operating-mode spans
+    ///     (auto/manual/sleep/exercise/...) have no SSV2 equivalent — verified against the decompiled app,
+    ///     which only exposes aggregate mode percentages, never per-interval spans — so the SSV2 sync path
+    ///     keeps this one slim v3 call for the mode timeline (a fraction of the full graph payload).
+    /// </summary>
+    private string ConstructV3PumpModeUrl(DateTime startDate, DateTime endDate)
+    {
+        var patientCode = _userData?.GlookoCode;
+        var seriesParams = string.Join("&", GlookoConstants.V3PumpModeSeries.Select(s => $"series[]={s}"));
+
+        return $"{GlookoConstants.V3GraphDataPath}?patient={patientCode}"
+             + $"&startDate={startDate:yyyy-MM-ddTHH:mm:ss.fffZ}"
+             + $"&endDate={endDate:yyyy-MM-ddTHH:mm:ss.fffZ}"
+             + $"&{seriesParams}"
+             + "&locale=en&insulinTooltips=false&filterBgReadings=false&splitByDay=false";
+    }
+
+    /// <summary>
+    ///     Fetches ONLY the v3 pump-mode series (see <see cref="ConstructV3PumpModeUrl"/>). Returns null on
+    ///     any failure — including a 403 from a stale patient code — so a mode-fetch problem degrades to
+    ///     "no mode spans this pass" rather than failing the SSV2 sync.
+    /// </summary>
+    private async Task<GlookoV3GraphResponse?> FetchV3PumpModeGraphAsync(DateTime startDate, DateTime endDate)
+    {
+        try
+        {
+            var patientCode = EnsureAuthenticatedAndGetCode();
+            if (patientCode == null) return null;
+
+            var url = ConstructV3PumpModeUrl(startDate, endDate);
+            var result = await FetchFromGlookoEndpointWithRetry(url);
+            if (!result.HasValue) return null;
+
+            return JsonSerializer.Deserialize<GlookoV3GraphResponse>(result.Value.GetRawText());
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex,
+                "[{ConnectorSource}] Failed to fetch v3 pump-mode series; mode state spans skipped this pass",
+                ConnectorSource);
+            return null;
+        }
+    }
+
     // ── Sync orchestration ──────────────────────────────────────────────
 
     protected override async Task<SyncResult> PerformSyncInternalAsync(
@@ -995,6 +1040,26 @@ public class GlookoConnectorService : BaseConnectorService<GlookoConnectorConfig
         };
 
         await MapAndPublishV2BatchAsync(batchData, activeTypes, result, config, cancellationToken);
+
+        // Pump-mode state spans (auto/manual/sleep/exercise/...) — the ONE thing with no SSV2 source
+        // (confirmed by reverse-engineering the app: only aggregate mode % is exposed, never per-interval
+        // spans). Keep a single slim v3 graph/data call requesting ONLY the pump-mode series, fed into the
+        // existing mapper. Windowed to a few recent days on incremental syncs (modes don't change
+        // retroactively; dedup absorbs overlap), full range on backfill. Additional to the basal-derived
+        // state spans from MapAndPublishV2BatchAsync; degrades to none on failure.
+        if (activeTypes.Contains(SyncDataType.StateSpans))
+        {
+            var modeTo = _timeMapper!.ToGlookoTime(DateTime.UtcNow).AddDays(1);
+            var modeFrom = incremental ? modeTo.AddDays(-3) : from;
+            var modeData = await FetchV3PumpModeGraphAsync(modeFrom, modeTo);
+            if (modeData != null)
+            {
+                var modeSpans = _stateSpanMapper!.TransformV3PumpModeToStateSpans(modeData);
+                if (modeSpans.Count > 0 && await PublishStateSpanDataAsync(modeSpans, config, cancellationToken))
+                    result.ItemsSynced[SyncDataType.StateSpans] =
+                        result.ItemsSynced.GetValueOrDefault(SyncDataType.StateSpans) + modeSpans.Count;
+            }
+        }
 
         // Pen injections — manual insulin logged via pen: injection_boluses → Bolus, injection_basals →
         // BasalInjection. The v3 path covers these via its gkInsulin* series; the windowed v2 batch path
