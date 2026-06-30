@@ -24,6 +24,7 @@ char* nocturne_alerts_evaluate(const char* request_json);
 char* nocturne_alerts_evaluate_node(const char* request_json);
 char* nocturne_alerts_leaf_paths(const char* condition_node_json);
 char* nocturne_alerts_classify(const char* request_json);
+char* nocturne_alerts_describe(const char* request_json);
 void  nocturne_alerts_free_string(char* ptr);
 ```
 
@@ -260,6 +261,72 @@ default that never lets a scoped mute silence an unclassifiable rule. Only a
 structurally malformed *envelope* (bad JSON, wrong `schema_version`) comes back
 as the error envelope.
 
+## Describe (`nocturne_alerts_describe`)
+
+Decodes a rule's opaque condition tree into a **structured, leaf-id-tagged
+description** for a host that renders *condition readouts* — a per-condition
+view of whether each leaf is met and how close it is (Prelude, ADR 0007). It is
+**static**: no `SensorContext`, no `now`, no truth. The host pairs the
+description with each tick's `evaluate` `result.leaves[]` (truth, by `leaf_id`)
+and observed values from its own context; the engine just hands back the
+decoded operands and the tree shape, so the host never parses the opaque
+`condition_params` itself.
+
+Input is the rule's `condition_type` + `condition_params` (the same split shape
+`classify` takes):
+
+```jsonc
+{
+  "schema_version": 1,
+  "condition_type": "composite",
+  "condition_params": {
+    "operator": "and",
+    "conditions": [
+      { "type": "threshold", "threshold": { "direction": "below", "value": 80 } },
+      { "type": "sustained", "sustained": {
+          "minutes": 15,
+          "child": { "type": "iob", "iob": { "operator": "<", "value": 1 } } } }
+    ]
+  }
+}
+```
+
+Response — a recursive `tree`:
+
+```jsonc
+{
+  "schema_version": 1,
+  "ok": true,
+  "tree": {
+    "type": "composite",
+    "operator": "and",                       // and | or (null if unset)
+    "conditions": [
+      { "leaf_id": 0, "type": "threshold", "kind": "threshold",
+        "params": { "direction": "below", "value": 80 } },
+      { "type": "sustained", "minutes": 15,  // container: no leaf_id, carries duration
+        "child": { "leaf_id": 1, "type": "iob", "kind": "iob",
+                   "params": { "operator": "<", "value": 1 } } }
+    ]
+  }
+}
+```
+
+- **Containers** (`composite`, `not`, `sustained`) carry structure only —
+  `operator` / `minutes` / nested `conditions`/`child` — and **no `leaf_id`**.
+- **Leaves** carry `leaf_id`, the verbatim `type`, the resolved canonical
+  `kind` (or `null` for an unknown/`null` slot), and decoded `params`.
+- **Leaf ids match `evaluate` exactly.** The walk is the same pre-order
+  `collect_leaves` over the same reconstituted node, so a malformed container
+  (missing `child`/`conditions`) collapses to a single leaf and a JSON-`null`
+  composite slot is a typeless leaf — identical to the force-eval log.
+- **Operands are decoded for rendering:** enum ordinals become wire names
+  (`days: [0, 6]` → `["Sunday", "Saturday"]`); decimal operands round-trip
+  **exactly** (the crate's `serde_json` uses `arbitrary_precision`).
+- Like `evaluate`, an **unknown `condition_type`** (or a malformed envelope /
+  wrong `schema_version`) is an error envelope. A malformed *payload* is not —
+  it collapses to a single best-effort leaf with default operands, mirroring
+  the engine's silent-fail.
+
 ## Kotlin (UniFFI)
 
 The optional `uniffi` cargo feature adds a [UniFFI](https://mozilla.github.io/uniffi-rs/)
@@ -270,7 +337,7 @@ bindings and the compiled library must come from the same uniffi version.
 
 The Kotlin surface is deliberately JSON-in/JSON-out — the **same envelope
 documented above is the contract for both consumers** (no parallel typed
-surface that could drift). Four functions, delegating to the exact same
+surface that could drift). Five functions, delegating to the exact same
 internal handlers as the C ABI, with the same panic guard (panics and unusable
 requests come back as the `ok: false` envelope, never as an exception):
 
@@ -280,6 +347,7 @@ package uniffi.nocturne_alerts
 fun evaluate(requestJson: String): String      // nocturne_alerts_evaluate
 fun evaluateNode(requestJson: String): String  // nocturne_alerts_evaluate_node
 fun leafPaths(requestJson: String): String     // nocturne_alerts_leaf_paths
+fun describe(requestJson: String): String      // nocturne_alerts_describe
 fun version(): String                          // plain version string, not JSON
 ```
 

@@ -32,6 +32,14 @@ pub fn leaf_paths(request_json: String) -> String {
     envelope_string(|| envelope::leaf_paths(&request_json))
 }
 
+/// Decodes a rule's condition tree into a structured, leaf-id-tagged
+/// description for condition readouts (Kotlin counterpart of
+/// `nocturne_alerts_describe`).
+#[uniffi::export]
+pub fn describe(request_json: String) -> String {
+    envelope_string(|| envelope::describe(&request_json))
+}
+
 /// Returns the crate version as a plain (non-JSON) string, exactly like
 /// `nocturne_alerts_version`.
 #[uniffi::export]

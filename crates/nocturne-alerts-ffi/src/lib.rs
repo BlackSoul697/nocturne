@@ -175,6 +175,25 @@ pub unsafe extern "C" fn nocturne_alerts_leaf_paths(
     })
 }
 
+/// Decodes a rule's condition tree into a structured, leaf-id-tagged
+/// description for host-rendered condition readouts (ADR 0007). Static: no
+/// `SensorContext`, no clock — the host pairs in truth (`evaluate`'s
+/// `result.leaves[]`) and observed values itself. Input is the rule's
+/// `condition_type` + `condition_params` (the split shape `classify` takes);
+/// output is documented in `README.md`. Free the result with
+/// [`nocturne_alerts_free_string`].
+///
+/// # Safety
+/// `request_json` must be null or a NUL-terminated string valid for reads for
+/// the duration of the call.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn nocturne_alerts_describe(request_json: *const c_char) -> *mut c_char {
+    boundary(|| {
+        let input = unsafe { read_utf8(request_json, "request") }?;
+        envelope::describe(input)
+    })
+}
+
 /// Frees a string returned by any other `nocturne_alerts_*` function.
 /// Passing null is a no-op. Each pointer must be freed exactly once.
 ///

@@ -10,8 +10,9 @@ use std::path::PathBuf;
 use serde_json::{Map, Value, json};
 
 use crate::{
-    boundary, nocturne_alerts_classify, nocturne_alerts_evaluate, nocturne_alerts_evaluate_node,
-    nocturne_alerts_free_string, nocturne_alerts_leaf_paths, nocturne_alerts_version,
+    boundary, nocturne_alerts_classify, nocturne_alerts_describe, nocturne_alerts_evaluate,
+    nocturne_alerts_evaluate_node, nocturne_alerts_free_string, nocturne_alerts_leaf_paths,
+    nocturne_alerts_version,
 };
 
 /// Calls an FFI function with `input`, copies the result into a Rust string
@@ -705,6 +706,342 @@ fn classify_rejects_wrong_schema_version() {
 }
 
 // ---------------------------------------------------------------------------
+// Describe (condition readouts — ADR 0007): decode a rule's tree into a
+// structured, leaf-id-tagged description. Static — no context, no truth.
+// ---------------------------------------------------------------------------
+
+fn describe(request: &Value) -> Value {
+    call_json(nocturne_alerts_describe, &request.to_string())
+}
+
+fn describe_rule(condition_type: &str, condition_params: Value) -> Value {
+    let response = describe(&json!({
+        "schema_version": 1,
+        "condition_type": condition_type,
+        "condition_params": condition_params,
+    }));
+    assert_eq!(response["schema_version"], json!(1));
+    assert_eq!(response["ok"], Value::Bool(true), "error: {}", response["error"]);
+    response["tree"].clone()
+}
+
+#[test]
+fn describe_threshold_leaf_carries_kind_and_operands() {
+    let tree = describe_rule("threshold", json!({ "direction": "below", "value": 70 }));
+    assert_eq!(tree["leaf_id"], json!(0));
+    assert_eq!(tree["type"], json!("threshold"));
+    assert_eq!(tree["kind"], json!("threshold"));
+    assert_eq!(tree["params"]["direction"], json!("below"));
+    // arbitrary_precision keeps the operand exact (no float round trip).
+    assert_eq!(tree["params"]["value"], json!(70));
+}
+
+#[test]
+fn describe_decimal_operand_is_exact() {
+    // Build the params from a literal so the number keeps its exact form
+    // (f64 would drop the trailing zero / round a long decimal); the operand
+    // must survive describe verbatim.
+    let params: Value = serde_json::from_str(r#"{ "operator": "<", "value": 1.250 }"#).unwrap();
+    let tree = describe_rule("iob", params);
+    assert_eq!(tree["kind"], json!("iob"));
+    assert_eq!(tree["params"]["operator"], json!("<"));
+    assert_eq!(tree["params"]["value"].to_string(), "1.250");
+}
+
+#[test]
+fn describe_composite_preserves_structure_and_sustained_minutes() {
+    let params = json!({
+        "operator": "and",
+        "conditions": [
+            { "type": "threshold", "threshold": { "direction": "below", "value": 80 } },
+            {
+                "type": "sustained",
+                "sustained": {
+                    "minutes": 15,
+                    "child": { "type": "iob", "iob": { "operator": "<", "value": 1 } }
+                }
+            }
+        ]
+    });
+    let tree = describe_rule("composite", params);
+    assert_eq!(tree["type"], json!("composite"));
+    assert_eq!(tree["operator"], json!("and"));
+    let conds = tree["conditions"].as_array().expect("conditions array");
+    assert_eq!(conds.len(), 2);
+
+    // Leaf 0: the bare threshold.
+    assert_eq!(conds[0]["leaf_id"], json!(0));
+    assert_eq!(conds[0]["kind"], json!("threshold"));
+
+    // The sustained wrapper is a container (no leaf id) carrying its duration;
+    // its child leaf takes id 1.
+    assert_eq!(conds[1]["type"], json!("sustained"));
+    assert_eq!(conds[1]["minutes"], json!(15));
+    assert!(conds[1].get("leaf_id").is_none(), "sustained container has no leaf id");
+    assert_eq!(conds[1]["child"]["leaf_id"], json!(1));
+    assert_eq!(conds[1]["child"]["kind"], json!("iob"));
+}
+
+#[test]
+fn describe_leaf_ids_align_with_evaluate_force_eval_log() {
+    // The whole point of `describe`: its leaf ids must match `evaluate`'s
+    // force-eval `leaves[]` so a host can join the two by `leaf_id`.
+    let condition_params = json!({
+        "operator": "and",
+        "conditions": [
+            { "type": "threshold", "threshold": { "direction": "below", "value": 80 } },
+            {
+                "type": "sustained",
+                "sustained": {
+                    "minutes": 15,
+                    "child": { "type": "iob", "iob": { "operator": "<", "value": 1 } }
+                }
+            }
+        ]
+    });
+
+    let described = describe_rule("composite", condition_params.clone());
+    let mut described_ids = vec![
+        described["conditions"][0]["leaf_id"].as_i64().unwrap(),
+        described["conditions"][1]["child"]["leaf_id"].as_i64().unwrap(),
+    ];
+    described_ids.sort();
+
+    let evaluated = evaluate(&json!({
+        "schema_version": 1,
+        "rule": {
+            "id": "00000000-0000-0000-0000-0000000000aa",
+            "condition_type": "composite",
+            "condition_params": condition_params,
+        },
+        "context": {},
+        "now": "2026-01-05T12:00:00Z",
+    }));
+    assert_eq!(evaluated["ok"], Value::Bool(true), "error: {}", evaluated["error"]);
+    let mut evaluated_ids: Vec<i64> = evaluated["result"]["leaves"]
+        .as_array()
+        .expect("leaves array")
+        .iter()
+        .map(|l| l["leaf_id"].as_i64().unwrap())
+        .collect();
+    evaluated_ids.sort();
+
+    assert_eq!(described_ids, vec![0, 1]);
+    assert_eq!(described_ids, evaluated_ids);
+}
+
+#[test]
+fn describe_signal_loss_is_a_leaf_with_its_timeout() {
+    // signal_loss has no leaves in evaluate (the rule is skipped), but the host
+    // still needs to render its watchdog — describe exposes it as a leaf.
+    let tree = describe_rule("signal_loss", json!({ "timeout_minutes": 20 }));
+    assert_eq!(tree["leaf_id"], json!(0));
+    assert_eq!(tree["kind"], json!("signal_loss"));
+    assert_eq!(tree["params"]["timeout_minutes"], json!(20));
+}
+
+#[test]
+fn describe_decodes_enum_ordinal_operands_to_names() {
+    let tree = describe_rule("day_of_week", json!({ "days": [0, 6] }));
+    assert_eq!(tree["kind"], json!("day_of_week"));
+    assert_eq!(tree["params"]["days"], json!(["Sunday", "Saturday"]));
+}
+
+#[test]
+fn describe_malformed_container_collapses_to_a_single_leaf() {
+    // A composite whose `conditions` is not an array fails to parse: the engine
+    // force-evaluates it as one (false) leaf, and describe matches — one leaf,
+    // kind composite, no children.
+    let tree = describe_rule("composite", json!({ "operator": "and", "conditions": "nope" }));
+    assert_eq!(tree["leaf_id"], json!(0));
+    assert_eq!(tree["kind"], json!("composite"));
+    assert!(tree.get("conditions").is_none(), "malformed composite is a leaf, not a container");
+}
+
+#[test]
+fn describe_null_composite_slot_is_a_typeless_leaf() {
+    let params = json!({
+        "operator": "or",
+        "conditions": [
+            { "type": "threshold", "threshold": { "direction": "below", "value": 70 } },
+            null
+        ]
+    });
+    let tree = describe_rule("composite", params);
+    let conds = tree["conditions"].as_array().unwrap();
+    assert_eq!(conds[0]["leaf_id"], json!(0));
+    assert_eq!(conds[1]["leaf_id"], json!(1));
+    assert_eq!(conds[1]["type"], Value::Null);
+    assert_eq!(conds[1]["kind"], Value::Null);
+}
+
+#[test]
+fn describe_rejects_unknown_condition_type() {
+    assert_error(
+        &describe(&json!({ "schema_version": 1, "condition_type": "teleport", "condition_params": {} })),
+        "unknown condition_type 'teleport'",
+    );
+}
+
+#[test]
+fn describe_rejects_wrong_schema_version() {
+    assert_error(
+        &describe(&json!({ "schema_version": 2, "condition_type": "threshold" })),
+        "unsupported schema_version 2",
+    );
+}
+
+#[test]
+fn describe_rejects_null_pointer() {
+    let response: Value = unsafe {
+        let ptr = nocturne_alerts_describe(std::ptr::null());
+        let out = CStr::from_ptr(ptr).to_str().unwrap().to_string();
+        nocturne_alerts_free_string(ptr);
+        serde_json::from_str(&out).unwrap()
+    };
+    assert_error(&response, "null");
+}
+
+#[test]
+fn describe_not_unwraps_to_its_child() {
+    let tree = describe_rule(
+        "not",
+        json!({ "child": { "type": "threshold", "threshold": { "direction": "above", "value": 250 } } }),
+    );
+    assert_eq!(tree["type"], json!("not"));
+    assert!(tree.get("leaf_id").is_none(), "not is a container, not a leaf");
+    assert_eq!(tree["child"]["leaf_id"], json!(0));
+    assert_eq!(tree["child"]["kind"], json!("threshold"));
+}
+
+#[test]
+fn describe_not_without_a_child_collapses_to_a_leaf() {
+    let tree = describe_rule("not", json!({}));
+    assert_eq!(tree["leaf_id"], json!(0));
+    assert_eq!(tree["kind"], json!("not"));
+}
+
+#[test]
+fn describe_noncanonical_typed_leaf_uses_default_operands_like_the_evaluator() {
+    // A leaf whose `type` is the PascalCase enum-name (not the wire string) is
+    // evaluated with constructor defaults (eval/mod.rs gate); describe must
+    // surface the SAME defaults, not the authored operands, so the readout
+    // agrees with the leaf's truth.
+    let params = json!({
+        "operator": "or",
+        "conditions": [
+            { "type": "RateOfChange", "rate_of_change": { "direction": "falling", "rate": 2 } }
+        ]
+    });
+    let leaf = describe_rule("composite", params)["conditions"][0].clone();
+    assert_eq!(leaf["kind"], json!("rate_of_change"));
+    assert_eq!(leaf["params"]["direction"], Value::Null, "authored operand must be ignored");
+    assert_eq!(leaf["params"]["rate"], json!(0), "defaults surface, like the evaluator");
+}
+
+#[test]
+fn describe_canonical_typed_leaf_keeps_its_operands() {
+    // Same operands under the canonical wire `type` ARE kept (contrast above).
+    let params = json!({
+        "operator": "or",
+        "conditions": [
+            { "type": "rate_of_change", "rate_of_change": { "direction": "falling", "rate": 2 } }
+        ]
+    });
+    let leaf = describe_rule("composite", params)["conditions"][0].clone();
+    assert_eq!(leaf["params"]["direction"], json!("falling"));
+    assert_eq!(leaf["params"]["rate"], json!(2));
+}
+
+#[test]
+fn describe_nested_composite_preorder_ids_align_with_evaluate() {
+    let condition_params = json!({
+        "operator": "and",
+        "conditions": [
+            { "type": "threshold", "threshold": { "direction": "below", "value": 80 } },
+            {
+                "type": "composite",
+                "composite": {
+                    "operator": "or",
+                    "conditions": [
+                        { "type": "iob", "iob": { "operator": "<", "value": 1 } },
+                        { "type": "cob", "cob": { "operator": ">", "value": 20 } }
+                    ]
+                }
+            }
+        ]
+    });
+    let tree = describe_rule("composite", condition_params.clone());
+    // Pre-order, depth-first: threshold = 0, then the nested composite's
+    // iob = 1, cob = 2.
+    assert_eq!(tree["conditions"][0]["leaf_id"], json!(0));
+    let nested = &tree["conditions"][1];
+    assert_eq!(nested["type"], json!("composite"));
+    assert_eq!(nested["conditions"][0]["leaf_id"], json!(1));
+    assert_eq!(nested["conditions"][1]["leaf_id"], json!(2));
+
+    let evaluated = evaluate(&json!({
+        "schema_version": 1,
+        "rule": {
+            "id": "00000000-0000-0000-0000-0000000000bb",
+            "condition_type": "composite",
+            "condition_params": condition_params,
+        },
+        "context": {},
+        "now": "2026-01-05T12:00:00Z",
+    }));
+    let ids: Vec<i64> = evaluated["result"]["leaves"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|l| l["leaf_id"].as_i64().unwrap())
+        .collect();
+    assert_eq!(ids, vec![0, 1, 2]);
+}
+
+#[test]
+fn describe_decodes_remaining_enum_ordinal_operands() {
+    assert_eq!(
+        describe_rule("temp_basal", json!({ "metric": 1, "operator": ">", "value": 150 }))["params"]["metric"],
+        json!("percent_of_scheduled")
+    );
+    assert_eq!(
+        describe_rule("time_since_last_bolus", json!({ "operator": 2, "minutes": 30 }))["params"]["operator"],
+        json!("<")
+    );
+    assert_eq!(
+        describe_rule("glucose_bucket", json!({ "buckets": [0, 5] }))["params"]["buckets"],
+        json!(["very_low", "very_high"])
+    );
+    assert_eq!(
+        describe_rule("pump_state", json!({ "mode": 5, "is_active": true }))["params"]["mode"],
+        json!("Sleep")
+    );
+    assert_eq!(
+        describe_rule("state_span_active", json!({ "category": 4, "is_active": true }))["params"]["category"],
+        json!("Sleep")
+    );
+    // An out-of-range ordinal surfaces verbatim as a number (the engine accepts
+    // raw integers).
+    assert_eq!(
+        describe_rule("pump_state", json!({ "mode": 99, "is_active": true }))["params"]["mode"],
+        json!(99)
+    );
+}
+
+#[test]
+fn describe_alert_state_carries_uuid_and_null_for_minutes() {
+    let tree = describe_rule(
+        "alert_state",
+        json!({ "alert_id": "00000000-0000-0000-0000-0000000000cc", "state": "firing" }),
+    );
+    assert_eq!(tree["kind"], json!("alert_state"));
+    assert_eq!(tree["params"]["alert_id"], json!("00000000-0000-0000-0000-0000000000cc"));
+    assert_eq!(tree["params"]["state"], json!("firing"));
+    assert_eq!(tree["params"]["for_minutes"], Value::Null);
+}
+
+// ---------------------------------------------------------------------------
 // UniFFI surface (feature-gated): the Kotlin-facing functions must expose the
 // exact same envelope contract as the C ABI.
 // ---------------------------------------------------------------------------
@@ -774,6 +1111,22 @@ mod uniffi_surface {
             response["leaves"],
             json!([{ "leaf_id": 0, "path": "auto_resolve" }])
         );
+    }
+
+    #[test]
+    fn describe_shares_the_envelope_contract() {
+        let response: Value = serde_json::from_str(&uniffi_api::describe(
+            json!({
+                "schema_version": 1,
+                "condition_type": "threshold",
+                "condition_params": { "direction": "below", "value": 70 }
+            })
+            .to_string(),
+        ))
+        .expect("valid JSON");
+        assert_eq!(response["ok"], Value::Bool(true));
+        assert_eq!(response["tree"]["leaf_id"], json!(0));
+        assert_eq!(response["tree"]["kind"], json!("threshold"));
     }
 
     #[test]
