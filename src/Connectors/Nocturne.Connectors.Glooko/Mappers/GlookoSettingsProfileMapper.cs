@@ -124,11 +124,11 @@ public class GlookoSettingsProfileMapper
         var timestamp = ParseTimestamp(settings.PumpTimestamp) ?? DateTime.UtcNow;
         var mills = new DateTimeOffset(timestamp, TimeSpan.Zero).ToUnixTimeMilliseconds();
 
-        // Guid-stable id so repeated syncs of the same snapshot upsert rather than duplicate. Falls back to
-        // the timestamp when the record has no guid (mirrors the v3 mapper's timestamp-based id).
-        var id = !string.IsNullOrWhiteSpace(settings.Guid)
-            ? $"glooko_settings_{settings.Guid}"
-            : $"glooko_settings_{mills}";
+        // Use the v3 GlookoProfileMapper's exact id scheme (glooko_{mills}, keyed on the snapshot's pump
+        // timestamp — both mappers derive mills the same way). This makes the current profile upsert the
+        // SAME Profile row whether it came from the v3 devices_and_settings path or the SSV2 pumps/settings
+        // path, instead of creating a parallel/duplicate profile when UseSsv2Sync is toggled.
+        var id = $"glooko_{mills}";
 
         return new Profile
         {

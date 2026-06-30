@@ -133,7 +133,10 @@ public class GlookoSettingsProfileMapperTests
 
         var profile = _mapper.TransformSettingsToProfile([notCurrent, current]);
 
-        profile!.Id.Should().Be("glooko_settings_current");
+        // Id uses the v3-compatible glooko_{mills} scheme; picking the "current" record is proven by the
+        // ActiveProg store/default below and the 2025-01-01 StartDate (not the stale 2025-09-09 record).
+        profile!.Id.Should().Be($"glooko_{profile.Mills}");
+        profile.StartDate.Should().StartWith("2025-01-01");
         profile.Store.Should().ContainKey("ActiveProg");
         profile.DefaultProfile.Should().Be("ActiveProg");
     }
@@ -146,7 +149,8 @@ public class GlookoSettingsProfileMapperTests
 
         var profile = _mapper.TransformSettingsToProfile([older, newer]);
 
-        profile!.Id.Should().Be("glooko_settings_newer");
+        profile!.Id.Should().Be($"glooko_{profile.Mills}");
+        profile.StartDate.Should().StartWith("2025-09-09", "the latest-by-timestamp record is selected");
     }
 
     [Fact]
@@ -171,12 +175,14 @@ public class GlookoSettingsProfileMapperTests
     }
 
     [Fact]
-    public void TransformSettingsToProfile_GuidStableId()
+    public void TransformSettingsToProfile_StableId_MatchesV3Scheme()
     {
         var first = _mapper.TransformSettingsToProfile([Sample()]);
         var second = _mapper.TransformSettingsToProfile([Sample()]);
 
-        first!.Id.Should().Be("glooko_settings_f6b48506-0000-0000-0000-000000000000");
+        // glooko_{mills} (same scheme as the v3 GlookoProfileMapper) so a v3↔SSV2 path switch upserts the
+        // same Profile row rather than duplicating; deterministic across repeated syncs of one snapshot.
+        first!.Id.Should().Be($"glooko_{first.Mills}").And.NotContain("settings");
         first.Id.Should().Be(second!.Id);
     }
 
