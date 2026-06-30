@@ -783,6 +783,32 @@ fn describe_composite_preserves_structure_and_sustained_minutes() {
 }
 
 #[test]
+fn describe_emits_paths_that_match_timer_keys() {
+    // Every node carries its canonical path; a sustained node's path equals the
+    // key the engine stores its timer under (`condition_timers.path`), so the
+    // host joins a duration node straight to its persisted first-true instant.
+    let params = json!({
+        "operator": "and",
+        "conditions": [
+            { "type": "threshold", "threshold": { "direction": "below", "value": 80 } },
+            {
+                "type": "sustained",
+                "sustained": {
+                    "minutes": 15,
+                    "child": { "type": "iob", "iob": { "operator": "<", "value": 1 } }
+                }
+            }
+        ]
+    });
+    let tree = describe_rule("composite", params);
+    assert_eq!(tree["path"], json!("composite"));
+    assert_eq!(tree["conditions"][0]["path"], json!("composite[0].threshold"));
+    let sustained = &tree["conditions"][1];
+    assert_eq!(sustained["path"], json!("composite[1].sustained"));
+    assert_eq!(sustained["child"]["path"], json!("composite[1].sustained[0].iob"));
+}
+
+#[test]
 fn describe_leaf_ids_align_with_evaluate_force_eval_log() {
     // The whole point of `describe`: its leaf ids must match `evaluate`'s
     // force-eval `leaves[]` so a host can join the two by `leaf_id`.

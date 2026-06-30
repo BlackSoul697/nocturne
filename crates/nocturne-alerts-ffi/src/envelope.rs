@@ -556,8 +556,12 @@ pub fn describe(request_json: &str) -> Result<Value, String> {
     };
     let full_node = Node::from_rule(kind, payload);
 
+    // Root path is the kind's wire name — the same root the engine keys timers
+    // and leaf paths under, so a host joins a sustained node's `path` straight
+    // to its persisted timer (`condition_timers.path`).
+    let root_path = kind.wire().to_string();
     let mut next_leaf_id = 0;
-    let tree = describe_node(Some(&full_node), &mut next_leaf_id);
+    let tree = describe_node(Some(&full_node), root_path, &mut next_leaf_id);
 
     Ok(json!({
         "schema_version": SCHEMA_VERSION,
@@ -572,11 +576,11 @@ pub fn describe(request_json: &str) -> Result<Value, String> {
 /// child/conditions list is missing — is a leaf and takes the next id. A
 /// JSON-null composite slot is a typeless leaf, exactly as the engine
 /// force-evaluates it to `false`.
-fn describe_node(node: Option<&Node>, next_leaf_id: &mut i32) -> Value {
+fn describe_node(node: Option<&Node>, path: String, next_leaf_id: &mut i32) -> Value {
     let Some(node) = node else {
         let id = *next_leaf_id;
         *next_leaf_id += 1;
-        return leaf_value(id, Value::Null, Value::Null, Value::Null);
+        return leaf_value(id, path, Value::Null, Value::Null, Value::Null);
     };
     let lower = node.type_str.as_deref().map(str::to_lowercase);
     match lower.as_deref() {
@@ -586,10 +590,16 @@ fn describe_node(node: Option<&Node>, next_leaf_id: &mut i32) -> Value {
             {
                 let conditions: Vec<Value> = children
                     .iter()
-                    .map(|c| describe_node(c.as_ref(), next_leaf_id))
+                    .enumerate()
+                    .map(|(i, c)| {
+                        let cp =
+                            child_path(&path, i, c.as_ref().and_then(|n| n.type_str.as_deref()));
+                        describe_node(c.as_ref(), cp, next_leaf_id)
+                    })
                     .collect();
                 return json!({
                     "type": "composite",
+                    "path": path,
                     "operator": opt_str(&p.operator),
                     "conditions": conditions,
                 });
@@ -599,9 +609,11 @@ fn describe_node(node: Option<&Node>, next_leaf_id: &mut i32) -> Value {
             if let Some(Payload::Not(p)) = node.payload("not")
                 && let Some(child) = &p.child
             {
+                let cp = child_path(&path, 0, child.type_str.as_deref());
                 return json!({
                     "type": "not",
-                    "child": describe_node(Some(child), next_leaf_id),
+                    "path": path,
+                    "child": describe_node(Some(child), cp, next_leaf_id),
                 });
             }
         }
@@ -609,10 +621,12 @@ fn describe_node(node: Option<&Node>, next_leaf_id: &mut i32) -> Value {
             if let Some(Payload::Sustained(p)) = node.payload("sustained")
                 && let Some(child) = &p.child
             {
+                let cp = child_path(&path, 0, child.type_str.as_deref());
                 return json!({
                     "type": "sustained",
+                    "path": path,
                     "minutes": p.minutes,
-                    "child": describe_node(Some(child), next_leaf_id),
+                    "child": describe_node(Some(child), cp, next_leaf_id),
                 });
             }
         }
@@ -643,14 +657,14 @@ fn describe_node(node: Option<&Node>, next_leaf_id: &mut i32) -> Value {
                 Some(p) => payload_json(p),
                 None => payload_json(&default_payload(k)),
             };
-            leaf_value(id, type_value, Value::String(k.wire().to_string()), params)
+            leaf_value(id, path, type_value, Value::String(k.wire().to_string()), params)
         }
-        None => leaf_value(id, type_value, Value::Null, Value::Null),
+        None => leaf_value(id, path, type_value, Value::Null, Value::Null),
     }
 }
 
-fn leaf_value(leaf_id: i32, type_value: Value, kind: Value, params: Value) -> Value {
-    json!({ "leaf_id": leaf_id, "type": type_value, "kind": kind, "params": params })
+fn leaf_value(leaf_id: i32, path: String, type_value: Value, kind: Value, params: Value) -> Value {
+    json!({ "leaf_id": leaf_id, "path": path, "type": type_value, "kind": kind, "params": params })
 }
 
 fn opt_str(s: &Option<String>) -> Value {

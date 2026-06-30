@@ -299,18 +299,25 @@ Response — a recursive `tree`:
   "ok": true,
   "tree": {
     "type": "composite",
+    "path": "composite",
     "operator": "and",                       // and | or (null if unset)
     "conditions": [
-      { "leaf_id": 0, "type": "threshold", "kind": "threshold",
+      { "leaf_id": 0, "path": "composite[0].threshold",
+        "type": "threshold", "kind": "threshold",
         "params": { "direction": "below", "value": 80 } },
-      { "type": "sustained", "minutes": 15,  // container: no leaf_id, carries duration
-        "child": { "leaf_id": 1, "type": "iob", "kind": "iob",
+      { "type": "sustained", "path": "composite[1].sustained", "minutes": 15,
+        "child": { "leaf_id": 1, "path": "composite[1].sustained[0].iob",
+                   "type": "iob", "kind": "iob",
                    "params": { "operator": "<", "value": 1 } } }
     ]
   }
 }
 ```
 
+- Every node carries its canonical `path` (the same form `leaf_paths` emits). A
+  `sustained` node's `path` equals the key the engine stores its timer under
+  (`condition_timers.path`), so a host joins a duration node straight to its
+  persisted first-true instant for a "11 of 15 min" countdown.
 - **Containers** (`composite`, `not`, `sustained`) carry structure only —
   `operator` / `minutes` / nested `conditions`/`child` — and **no `leaf_id`**.
 - **Leaves** carry `leaf_id`, the verbatim `type`, the resolved canonical
