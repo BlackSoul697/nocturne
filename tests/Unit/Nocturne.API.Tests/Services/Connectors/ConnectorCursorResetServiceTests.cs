@@ -3,6 +3,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using Moq;
 using Nocturne.API.Services.Connectors;
+using Nocturne.Connectors.Core.Interfaces;
 using Nocturne.Connectors.Core.Models;
 using Nocturne.Core.Contracts.Multitenancy;
 using Nocturne.Infrastructure.Data;
@@ -69,8 +70,8 @@ public class ConnectorCursorResetServiceTests
         var captured = new List<(string ConnectorId, SyncRequest Request)>();
         var syncService = new Mock<IConnectorSyncService>();
         syncService
-            .Setup(s => s.TriggerSyncAsync(It.IsAny<string>(), It.IsAny<SyncRequest>(), It.IsAny<CancellationToken>()))
-            .Callback<string, SyncRequest, CancellationToken>((id, r, _) => captured.Add((id, r)))
+            .Setup(s => s.TriggerSyncAsync(It.IsAny<string>(), It.IsAny<SyncRequest>(), It.IsAny<CancellationToken>(), It.IsAny<ISyncProgressReporter?>()))
+            .Callback<string, SyncRequest, CancellationToken, ISyncProgressReporter?>((id, r, _, _) => captured.Add((id, r)))
             .ReturnsAsync(new SyncResult { Success = true });
 
         TenantContext? setContext = null;
@@ -117,7 +118,7 @@ public class ConnectorCursorResetServiceTests
 
         result.Should().BeNull();
         syncService.Verify(
-            s => s.TriggerSyncAsync(It.IsAny<string>(), It.IsAny<SyncRequest>(), It.IsAny<CancellationToken>()),
+            s => s.TriggerSyncAsync(It.IsAny<string>(), It.IsAny<SyncRequest>(), It.IsAny<CancellationToken>(), It.IsAny<ISyncProgressReporter?>()),
             Times.Never);
     }
 
@@ -127,10 +128,10 @@ public class ConnectorCursorResetServiceTests
         var db = CreateDb();
         var syncService = new Mock<IConnectorSyncService>();
         syncService
-            .Setup(s => s.TriggerSyncAsync("nightscout", It.IsAny<SyncRequest>(), It.IsAny<CancellationToken>()))
+            .Setup(s => s.TriggerSyncAsync("nightscout", It.IsAny<SyncRequest>(), It.IsAny<CancellationToken>(), It.IsAny<ISyncProgressReporter?>()))
             .ReturnsAsync(new SyncResult { Success = true, Message = "ok" });
         syncService
-            .Setup(s => s.TriggerSyncAsync("dexcom", It.IsAny<SyncRequest>(), It.IsAny<CancellationToken>()))
+            .Setup(s => s.TriggerSyncAsync("dexcom", It.IsAny<SyncRequest>(), It.IsAny<CancellationToken>(), It.IsAny<ISyncProgressReporter?>()))
             .ThrowsAsync(new InvalidOperationException("nope"));
 
         var service = new ConnectorCursorResetService(

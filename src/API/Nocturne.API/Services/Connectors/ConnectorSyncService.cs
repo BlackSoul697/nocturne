@@ -1,5 +1,6 @@
 using Nocturne.Connectors.Core.Interfaces;
 using Nocturne.Connectors.Core.Models;
+using Nocturne.Connectors.Core.Services;
 using Nocturne.Core.Contracts.Multitenancy;
 
 namespace Nocturne.API.Services.Connectors;
@@ -16,11 +17,16 @@ public interface IConnectorSyncService
     /// <param name="connectorId">The connector identifier (e.g., <c>"dexcom"</c>, <c>"nightscout"</c>).</param>
     /// <param name="request">The sync request parameters such as date range and data types.</param>
     /// <param name="ct">Cancellation token.</param>
+    /// <param name="additionalProgressReporter">
+    /// Optional extra reporter that receives every progress event alongside the SignalR stream —
+    /// used by background sync jobs to record the latest progress into their pollable status.
+    /// </param>
     /// <returns>A <see cref="SyncResult"/> indicating success or failure with a status message.</returns>
     Task<SyncResult> TriggerSyncAsync(
         string connectorId,
         SyncRequest request,
-        CancellationToken ct
+        CancellationToken ct,
+        ISyncProgressReporter? additionalProgressReporter = null
     );
 }
 
@@ -65,7 +71,8 @@ public class ConnectorSyncService : IConnectorSyncService
     public async Task<SyncResult> TriggerSyncAsync(
         string connectorId,
         SyncRequest request,
-        CancellationToken ct
+        CancellationToken ct,
+        ISyncProgressReporter? additionalProgressReporter = null
     )
     {
         _logger.LogInformation("Manual sync triggered for connector {ConnectorId}", connectorId);
@@ -96,7 +103,12 @@ public class ConnectorSyncService : IConnectorSyncService
                 };
             }
 
-            var result = await executor.ExecuteSyncAsync(scope.ServiceProvider, request, ct, _progressReporter);
+            var progressReporter = additionalProgressReporter is null
+                ? _progressReporter
+                : new CompositeSyncProgressReporter(
+                    [_progressReporter, additionalProgressReporter], _logger);
+
+            var result = await executor.ExecuteSyncAsync(scope.ServiceProvider, request, ct, progressReporter);
 
             _logger.LogInformation(
                 "Manual sync for {ConnectorId} completed: Success={Success}, Message={Message}",

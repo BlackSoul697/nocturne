@@ -1,5 +1,6 @@
 using System.Collections.Concurrent;
 using System.Text.Json.Serialization;
+using Nocturne.Connectors.Core.Interfaces;
 using Nocturne.Connectors.Core.Models;
 using Nocturne.Core.Contracts.Multitenancy;
 
@@ -244,9 +245,18 @@ internal sealed class ConnectorSyncJob
                 scope.ServiceProvider.GetRequiredService<ITenantAccessor>().SetTenant(_tenant);
                 var syncService = scope.ServiceProvider.GetRequiredService<IConnectorSyncService>();
 
+                // Tee every progress event into this connector's snapshot so pollers see live
+                // fetch progress (window position, running counts) without needing the SignalR
+                // stream — e.g. after a page reload mid-job.
+                var recorder = new ProgressRecorder(progress =>
+                {
+                    if (_connectors.TryGetValue(connectorId, out var current))
+                        _connectors[connectorId] = current with { LatestProgress = progress };
+                });
+
                 // TriggerSyncAsync converts connector failures into a failed SyncResult rather than
                 // throwing, so one bad connector doesn't abort the rest of the job.
-                var result = await syncService.TriggerSyncAsync(connectorId, _request, ct);
+                var result = await syncService.TriggerSyncAsync(connectorId, _request, ct, recorder);
 
                 _connectors[connectorId] = new ConnectorSyncJobConnectorProgress
                 {
@@ -258,6 +268,7 @@ internal sealed class ConnectorSyncJob
                     CompletedAt = DateTime.UtcNow,
                     Message = result.Message,
                     Result = result,
+                    LatestProgress = _connectors[connectorId].LatestProgress,
                 };
             }
 
@@ -299,6 +310,26 @@ internal sealed class ConnectorSyncJob
                     or ConnectorSyncJobConnectorState.Failed),
             Connectors = connectors,
         };
+    }
+
+    /// <summary>
+    /// Minimal <see cref="ISyncProgressReporter"/> that hands each event to a callback. Passed as
+    /// the additional reporter on the sync so the job can snapshot progress for polling.
+    /// </summary>
+    private sealed class ProgressRecorder : ISyncProgressReporter
+    {
+        private readonly Action<SyncProgressEvent> _onProgress;
+
+        public ProgressRecorder(Action<SyncProgressEvent> onProgress)
+        {
+            _onProgress = onProgress;
+        }
+
+        public Task ReportProgressAsync(SyncProgressEvent progress, CancellationToken ct = default)
+        {
+            _onProgress(progress);
+            return Task.CompletedTask;
+        }
     }
 }
 
@@ -352,6 +383,12 @@ public record ConnectorSyncJobConnectorProgress
 
     /// <summary>The full sync result, once the connector has completed.</summary>
     public SyncResult? Result { get; init; }
+
+    /// <summary>
+    /// The most recent progress event reported by the connector's sync — running per-data-type
+    /// counts and the date-window position for a progress bar. Null until the sync first reports.
+    /// </summary>
+    public SyncProgressEvent? LatestProgress { get; init; }
 }
 
 /// <summary>A pollable snapshot of a manual connector sync job's progress.</summary>

@@ -3,6 +3,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
 using Moq;
 using Nocturne.API.Services.Connectors;
+using Nocturne.Connectors.Core.Interfaces;
 using Nocturne.Connectors.Core.Models;
 using Nocturne.Core.Contracts.Multitenancy;
 using Xunit;
@@ -71,7 +72,7 @@ public class ConnectorSyncJobServiceTests
         var syncService = new Mock<IConnectorSyncService>();
         // Never completes, so the status we read is the seeded one.
         syncService.Setup(s => s.TriggerSyncAsync(
-                It.IsAny<string>(), It.IsAny<SyncRequest>(), It.IsAny<CancellationToken>()))
+                It.IsAny<string>(), It.IsAny<SyncRequest>(), It.IsAny<CancellationToken>(), It.IsAny<ISyncProgressReporter?>()))
             .Returns(new TaskCompletionSource<SyncResult>().Task);
 
         var service = BuildService(syncService.Object);
@@ -94,10 +95,10 @@ public class ConnectorSyncJobServiceTests
         var tenantsSet = new List<TenantContext>();
         var syncService = new Mock<IConnectorSyncService>();
         syncService.Setup(s => s.TriggerSyncAsync(
-                "nightscout", It.IsAny<SyncRequest>(), It.IsAny<CancellationToken>()))
+                "nightscout", It.IsAny<SyncRequest>(), It.IsAny<CancellationToken>(), It.IsAny<ISyncProgressReporter?>()))
             .ReturnsAsync(new SyncResult { Success = true, Message = "ok" });
         syncService.Setup(s => s.TriggerSyncAsync(
-                "dexcom", It.IsAny<SyncRequest>(), It.IsAny<CancellationToken>()))
+                "dexcom", It.IsAny<SyncRequest>(), It.IsAny<CancellationToken>(), It.IsAny<ISyncProgressReporter?>()))
             .ReturnsAsync(new SyncResult { Success = false, Message = "nope" });
 
         var service = BuildService(syncService.Object, tenantsSet);
@@ -121,7 +122,7 @@ public class ConnectorSyncJobServiceTests
     {
         var syncService = new Mock<IConnectorSyncService>();
         syncService.Setup(s => s.TriggerSyncAsync(
-                It.IsAny<string>(), It.IsAny<SyncRequest>(), It.IsAny<CancellationToken>()))
+                It.IsAny<string>(), It.IsAny<SyncRequest>(), It.IsAny<CancellationToken>(), It.IsAny<ISyncProgressReporter?>()))
             .Returns(new TaskCompletionSource<SyncResult>().Task);
 
         var service = BuildService(syncService.Object);
@@ -137,7 +138,7 @@ public class ConnectorSyncJobServiceTests
     {
         var syncService = new Mock<IConnectorSyncService>();
         syncService.Setup(s => s.TriggerSyncAsync(
-                It.IsAny<string>(), It.IsAny<SyncRequest>(), It.IsAny<CancellationToken>()))
+                It.IsAny<string>(), It.IsAny<SyncRequest>(), It.IsAny<CancellationToken>(), It.IsAny<ISyncProgressReporter?>()))
             .Returns(new TaskCompletionSource<SyncResult>().Task);
 
         var service = BuildService(syncService.Object);
@@ -154,7 +155,7 @@ public class ConnectorSyncJobServiceTests
     {
         var syncService = new Mock<IConnectorSyncService>();
         syncService.Setup(s => s.TriggerSyncAsync(
-                It.IsAny<string>(), It.IsAny<SyncRequest>(), It.IsAny<CancellationToken>()))
+                It.IsAny<string>(), It.IsAny<SyncRequest>(), It.IsAny<CancellationToken>(), It.IsAny<ISyncProgressReporter?>()))
             .Returns(new TaskCompletionSource<SyncResult>().Task);
 
         var service = BuildService(syncService.Object);
@@ -170,8 +171,8 @@ public class ConnectorSyncJobServiceTests
     {
         var syncService = new Mock<IConnectorSyncService>();
         syncService.Setup(s => s.TriggerSyncAsync(
-                It.IsAny<string>(), It.IsAny<SyncRequest>(), It.IsAny<CancellationToken>()))
-            .Returns<string, SyncRequest, CancellationToken>(async (_, _, ct) =>
+                It.IsAny<string>(), It.IsAny<SyncRequest>(), It.IsAny<CancellationToken>(), It.IsAny<ISyncProgressReporter?>()))
+            .Returns<string, SyncRequest, CancellationToken, ISyncProgressReporter?>(async (_, _, ct, _) =>
             {
                 await Task.Delay(Timeout.Infinite, ct);
                 return new SyncResult { Success = true };
@@ -191,7 +192,7 @@ public class ConnectorSyncJobServiceTests
     {
         var syncService = new Mock<IConnectorSyncService>();
         syncService.Setup(s => s.TriggerSyncAsync(
-                It.IsAny<string>(), It.IsAny<SyncRequest>(), It.IsAny<CancellationToken>()))
+                It.IsAny<string>(), It.IsAny<SyncRequest>(), It.IsAny<CancellationToken>(), It.IsAny<ISyncProgressReporter?>()))
             .Returns(new TaskCompletionSource<SyncResult>().Task);
 
         var service = BuildService(syncService.Object);

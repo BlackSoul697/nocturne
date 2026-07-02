@@ -7,6 +7,7 @@ const MESSAGE_TEMPLATES: Record<SyncMessageType, string> = {
 	FetchingDataType: "Fetching {dataType}...",
 	ProcessingDataType: "Processing {dataType}...",
 	PublishingDataType: "Publishing {count} {dataType} records...",
+	FetchProgress: "Fetched {count} {dataType} records so far...",
 	SyncComplete: "Sync complete",
 	SyncFailed: "Sync failed",
 };

@@ -10,6 +10,7 @@ public enum SyncMessageType
     FetchingDataType,
     ProcessingDataType,
     PublishingDataType,
+    FetchProgress,
     SyncComplete,
     SyncFailed
 }

@@ -7,6 +7,7 @@ using Moq;
 using Nocturne.API.Controllers.V4.Platform;
 using Nocturne.API.Multitenancy;
 using Nocturne.API.Services.Connectors;
+using Nocturne.Connectors.Core.Interfaces;
 using Nocturne.Connectors.Core.Models;
 using Nocturne.Core.Contracts.Connectors;
 using Nocturne.Core.Contracts.Multitenancy;
@@ -39,8 +40,8 @@ public class ServicesControllerResetCursorTests
         SyncRequest? captured = null;
         var syncService = new Mock<IConnectorSyncService>();
         syncService
-            .Setup(s => s.TriggerSyncAsync("nightscout", It.IsAny<SyncRequest>(), It.IsAny<CancellationToken>()))
-            .Callback<string, SyncRequest, CancellationToken>((_, r, _) => captured = r)
+            .Setup(s => s.TriggerSyncAsync("nightscout", It.IsAny<SyncRequest>(), It.IsAny<CancellationToken>(), It.IsAny<ISyncProgressReporter?>()))
+            .Callback<string, SyncRequest, CancellationToken, ISyncProgressReporter?>((_, r, _, _) => captured = r)
             .ReturnsAsync(new SyncResult { Success = true });
 
         var from = new DateTime(2025, 12, 27, 0, 0, 0, DateTimeKind.Utc);
@@ -65,8 +66,8 @@ public class ServicesControllerResetCursorTests
         SyncRequest? captured = null;
         var syncService = new Mock<IConnectorSyncService>();
         syncService
-            .Setup(s => s.TriggerSyncAsync(It.IsAny<string>(), It.IsAny<SyncRequest>(), It.IsAny<CancellationToken>()))
-            .Callback<string, SyncRequest, CancellationToken>((_, r, _) => captured = r)
+            .Setup(s => s.TriggerSyncAsync(It.IsAny<string>(), It.IsAny<SyncRequest>(), It.IsAny<CancellationToken>(), It.IsAny<ISyncProgressReporter?>()))
+            .Callback<string, SyncRequest, CancellationToken, ISyncProgressReporter?>((_, r, _, _) => captured = r)
             .ReturnsAsync(new SyncResult { Success = true });
 
         var controller = CreateController(syncService.Object);

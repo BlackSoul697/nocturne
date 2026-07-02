@@ -91,6 +91,7 @@ export type SyncMessageType =
   | "FetchingDataType"
   | "ProcessingDataType"
   | "PublishingDataType"
+  | "FetchProgress"
   | "SyncComplete"
   | "SyncFailed";
 
@@ -106,6 +107,12 @@ export interface SyncProgressEvent {
   timestamp: string;
   messageType: SyncMessageType | null;
   messageParams: Record<string, string> | null;
+  /** Lower bound of the date window being fetched; null for full-history imports. */
+  windowStart: string | null;
+  /** Upper bound of the date window being fetched. */
+  windowEnd: string | null;
+  /** Backwards-moving pagination cursor between windowEnd and windowStart. */
+  currentPosition: string | null;
 }
 
 // WebSocket client statistics

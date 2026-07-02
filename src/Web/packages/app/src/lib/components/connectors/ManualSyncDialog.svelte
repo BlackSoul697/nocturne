@@ -1,11 +1,16 @@
 <script lang="ts">
   import * as Dialog from "$lib/components/ui/dialog";
   import { Button } from "$lib/components/ui/button";
+  import { Progress } from "$lib/components/ui/progress";
   import { Loader2, Download, CheckCircle, AlertCircle, Circle } from "lucide-svelte";
   import type { SyncProgressEvent } from "$lib/websocket/types";
-  import type { ConnectorSyncJobStatus } from "$lib/api/generated/nocturne-api-client";
+  import type {
+    ConnectorSyncJobStatus,
+    SyncProgressEvent as JobSyncProgress,
+  } from "$lib/api/generated/nocturne-api-client";
   import { ConnectorSyncJobConnectorState } from "$lib/api/generated/nocturne-api-client";
   import { formatSyncMessage } from "$lib/utils/sync-messages";
+  import { getDataTypeLabel } from "$lib/utils/data-type-labels";
   import { tick } from "svelte";
 
   export interface BatchSyncResult {
@@ -67,6 +72,31 @@
       logEntries = [];
     }
   });
+
+  /**
+   * Fraction (0-100) of the fetch window already covered, from the backwards-moving pagination
+   * cursor. Null when the window has no lower bound (full-history import) or no cursor yet.
+   */
+  function fetchProgressPercent(progress: JobSyncProgress | null | undefined): number | null {
+    if (!progress?.windowStart || !progress?.windowEnd || !progress?.currentPosition) return null;
+    const start = new Date(progress.windowStart).getTime();
+    const end = new Date(progress.windowEnd).getTime();
+    const position = new Date(progress.currentPosition).getTime();
+    if (!Number.isFinite(start) || !Number.isFinite(end) || end <= start) return null;
+    return Math.round(Math.min(1, Math.max(0, (end - position) / (end - start))) * 100);
+  }
+
+  function totalItemsSoFar(progress: JobSyncProgress | null | undefined): number {
+    return Object.values(progress?.itemsSyncedSoFar ?? {}).reduce<number>(
+      (sum, count) => sum + (typeof count === "number" ? count : 0),
+      0,
+    );
+  }
+
+  function currentDataTypeLabel(progress: JobSyncProgress | null | undefined): string | null {
+    const raw = progress?.messageParams?.["dataType"] ?? progress?.currentDataType ?? null;
+    return raw ? getDataTypeLabel(String(raw)) : null;
+  }
 </script>
 
 <Dialog.Root bind:open>
@@ -95,20 +125,46 @@
               {/if}
             </p>
           </div>
-          {#if jobStatus?.connectors && jobStatus.connectors.length > 1}
-            <div class="space-y-1">
+          {#if jobStatus?.connectors && jobStatus.connectors.length > 0}
+            <div class="space-y-2">
               {#each jobStatus.connectors as connector (connector.connectorId)}
-                <div class="flex items-center gap-2 text-sm">
-                  {#if connector.state === ConnectorSyncJobConnectorState.Running}
-                    <Loader2 class="h-3.5 w-3.5 animate-spin text-primary" />
-                  {:else if connector.state === ConnectorSyncJobConnectorState.Succeeded}
-                    <CheckCircle class="h-3.5 w-3.5 text-green-600 dark:text-green-400" />
-                  {:else if connector.state === ConnectorSyncJobConnectorState.Failed}
-                    <AlertCircle class="h-3.5 w-3.5 text-red-600 dark:text-red-400" />
-                  {:else}
-                    <Circle class="h-3.5 w-3.5 text-muted-foreground" />
+                {@const isRunning = connector.state === ConnectorSyncJobConnectorState.Running}
+                {@const percent = isRunning ? fetchProgressPercent(connector.latestProgress) : null}
+                {@const items = isRunning ? totalItemsSoFar(connector.latestProgress) : 0}
+                {@const dataTypeLabel = isRunning ? currentDataTypeLabel(connector.latestProgress) : null}
+                <div class="space-y-1">
+                  <div class="flex items-center gap-2 text-sm">
+                    {#if isRunning}
+                      <Loader2 class="h-3.5 w-3.5 animate-spin text-primary" />
+                    {:else if connector.state === ConnectorSyncJobConnectorState.Succeeded}
+                      <CheckCircle class="h-3.5 w-3.5 text-green-600 dark:text-green-400" />
+                    {:else if connector.state === ConnectorSyncJobConnectorState.Failed}
+                      <AlertCircle class="h-3.5 w-3.5 text-red-600 dark:text-red-400" />
+                    {:else}
+                      <Circle class="h-3.5 w-3.5 text-muted-foreground" />
+                    {/if}
+                    <span class="font-medium">{connector.connectorId}</span>
+                    {#if isRunning && dataTypeLabel}
+                      <span class="text-xs text-muted-foreground">
+                        {dataTypeLabel}
+                        {#if connector.latestProgress?.totalDataTypes}
+                          ({(connector.latestProgress.completedDataTypes?.length ?? 0) + 1}
+                          of {connector.latestProgress.totalDataTypes})
+                        {/if}
+                      </span>
+                    {/if}
+                    <span class="ml-auto text-xs text-muted-foreground">
+                      {#if isRunning && items > 0}
+                        {items.toLocaleString()} records
+                      {/if}
+                      {#if percent !== null}
+                        · {percent}%
+                      {/if}
+                    </span>
+                  </div>
+                  {#if isRunning}
+                    <Progress value={percent ?? 0} class="h-1.5 {percent === null ? 'opacity-40' : ''}" />
                   {/if}
-                  <span>{connector.connectorId}</span>
                 </div>
               {/each}
             </div>

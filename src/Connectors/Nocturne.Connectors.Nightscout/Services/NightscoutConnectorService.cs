@@ -193,6 +193,48 @@ public class NightscoutConnectorServiceBase<TConfig> : BaseConnectorService<TCon
         // ranged syncs (request.To set, e.g. a manual re-import) honour request.From/To as-is.
         var openEnded = request.To is null;
 
+        // Nightscout fetches all treatment types as one batch
+        SyncDataType[] treatmentTypes =
+        [
+            SyncDataType.Boluses, SyncDataType.CarbIntake, SyncDataType.ManualBG,
+            SyncDataType.BolusCalculations, SyncDataType.Notes, SyncDataType.DeviceEvents
+        ];
+
+        // Progress reporting counts the sequential sections below, with the treatment batch as a
+        // single section represented by Boluses in CompletedDataTypes. Page-level progress within
+        // a section is reported separately by the fetch loops via ReportFetchProgressAsync.
+        var syncsTreatments = activeTypes.Any(t => treatmentTypes.Contains(t));
+        var totalSections =
+            (activeTypes.Contains(SyncDataType.Glucose) ? 1 : 0)
+            + (syncsTreatments ? 1 : 0)
+            + (activeTypes.Contains(SyncDataType.Profiles) ? 1 : 0)
+            + (activeTypes.Contains(SyncDataType.DeviceStatus) ? 1 : 0)
+            + (activeTypes.Contains(SyncDataType.Food) ? 1 : 0)
+            + (activeTypes.Contains(SyncDataType.Activity) ? 1 : 0);
+        var completedSections = new List<SyncDataType>();
+
+        async Task ReportSectionAsync(
+            SyncDataType type, SyncMessageType messageType, string dataTypeLabel, int? count = null)
+        {
+            if (progressReporter is null)
+                return;
+            var messageParams = new Dictionary<string, string> { ["dataType"] = dataTypeLabel };
+            if (count.HasValue)
+                messageParams["count"] = count.Value.ToString();
+            await progressReporter.ReportProgressAsync(new SyncProgressEvent
+            {
+                ConnectorId = ConnectorSource,
+                ConnectorName = ServiceName,
+                Phase = SyncPhase.Syncing,
+                CurrentDataType = type,
+                CompletedDataTypes = [.. completedSections],
+                TotalDataTypes = totalSections,
+                ItemsSyncedSoFar = new(result.ItemsSynced),
+                MessageType = messageType,
+                MessageParams = messageParams,
+            }, cancellationToken);
+        }
+
         // Handle Glucose
         // Glucose keeps request.From — for background syncs the framework already derived
         // it from the latest glucose entry, so it is glucose's own independent cursor.
@@ -200,12 +242,15 @@ public class NightscoutConnectorServiceBase<TConfig> : BaseConnectorService<TCon
         {
             try
             {
+                await ReportSectionAsync(SyncDataType.Glucose, SyncMessageType.FetchingDataType, "Glucose");
                 var entries = await FetchGlucoseDataRangeAsync(request.From, request.To);
                 var entryList = entries.ToList();
                 result.ItemsSynced[SyncDataType.Glucose] = entryList.Count;
                 if (entryList.Count > 0)
                 {
                     result.LastEntryTimes[SyncDataType.Glucose] = entryList.Max(e => e.Date);
+                    await ReportSectionAsync(
+                        SyncDataType.Glucose, SyncMessageType.PublishingDataType, "Glucose", entryList.Count);
                     var publishSuccess = await PublishGlucoseDataInBatchesAsync(
                         entryList, config, cancellationToken);
                     if (!publishSuccess)
@@ -221,18 +266,18 @@ public class NightscoutConnectorServiceBase<TConfig> : BaseConnectorService<TCon
                 result.Errors.Add($"Failed to sync Glucose: {ex.Message}");
                 _logger.LogError(ex, "Failed to sync Glucose for {Connector}", ConnectorSource);
             }
+            finally
+            {
+                completedSections.Add(SyncDataType.Glucose);
+            }
         }
 
-        // Handle Treatments — Nightscout fetches all treatment types as one batch
-        SyncDataType[] treatmentTypes =
-        [
-            SyncDataType.Boluses, SyncDataType.CarbIntake, SyncDataType.ManualBG,
-            SyncDataType.BolusCalculations, SyncDataType.Notes, SyncDataType.DeviceEvents
-        ];
-        if (activeTypes.Any(t => treatmentTypes.Contains(t)))
+        // Handle Treatments
+        if (syncsTreatments)
         {
             try
             {
+                await ReportSectionAsync(SyncDataType.Boluses, SyncMessageType.FetchingDataType, "Treatments");
                 // Treatments track their own cursor (latest treatment, else 6-month initial
                 // backfill) so historical boluses/carbs are filled even once glucose is current.
                 var treatmentFrom = openEnded
@@ -246,6 +291,8 @@ public class NightscoutConnectorServiceBase<TConfig> : BaseConnectorService<TCon
                         .Select(t => DateTime.TryParse(t.CreatedAt, out var dt) ? dt : (DateTime?)null)
                         .Where(dt => dt.HasValue)
                         .Max();
+                    await ReportSectionAsync(
+                        SyncDataType.Boluses, SyncMessageType.PublishingDataType, "Treatments", treatmentList.Count);
                     var publishSuccess = await PublishTreatmentDataInBatchesAsync(
                         treatmentList, config, cancellationToken);
 
@@ -269,6 +316,10 @@ public class NightscoutConnectorServiceBase<TConfig> : BaseConnectorService<TCon
                 result.Errors.Add($"Failed to sync Treatments: {ex.Message}");
                 _logger.LogError(ex, "Failed to sync Treatments for {Connector}", ConnectorSource);
             }
+            finally
+            {
+                completedSections.Add(SyncDataType.Boluses);
+            }
         }
 
         // Handle Profiles
@@ -276,6 +327,7 @@ public class NightscoutConnectorServiceBase<TConfig> : BaseConnectorService<TCon
         {
             try
             {
+                await ReportSectionAsync(SyncDataType.Profiles, SyncMessageType.FetchingDataType, "Profiles");
                 var profiles = await FetchProfilesAsync();
                 var profileList = profiles.ToList();
                 result.ItemsSynced[SyncDataType.Profiles] = profileList.Count;
@@ -301,6 +353,10 @@ public class NightscoutConnectorServiceBase<TConfig> : BaseConnectorService<TCon
                 result.Errors.Add($"Failed to sync Profiles: {ex.Message}");
                 _logger.LogError(ex, "Failed to sync Profiles for {Connector}", ConnectorSource);
             }
+            finally
+            {
+                completedSections.Add(SyncDataType.Profiles);
+            }
         }
 
         // Handle DeviceStatus
@@ -308,6 +364,7 @@ public class NightscoutConnectorServiceBase<TConfig> : BaseConnectorService<TCon
         {
             try
             {
+                await ReportSectionAsync(SyncDataType.DeviceStatus, SyncMessageType.FetchingDataType, "DeviceStatus");
                 // Device status tracks its own cursor when a watermark is available; if none
                 // exists yet it falls back to request.From (current behaviour) rather than
                 // re-fetching the full initial window of this high-volume telemetry every sync.
@@ -339,6 +396,10 @@ public class NightscoutConnectorServiceBase<TConfig> : BaseConnectorService<TCon
                 result.Errors.Add($"Failed to sync DeviceStatus: {ex.Message}");
                 _logger.LogError(ex, "Failed to sync DeviceStatus for {Connector}", ConnectorSource);
             }
+            finally
+            {
+                completedSections.Add(SyncDataType.DeviceStatus);
+            }
         }
 
         // Handle Food
@@ -346,6 +407,7 @@ public class NightscoutConnectorServiceBase<TConfig> : BaseConnectorService<TCon
         {
             try
             {
+                await ReportSectionAsync(SyncDataType.Food, SyncMessageType.FetchingDataType, "Food");
                 var foods = await FetchFoodAsync();
                 var foodList = foods.ToList();
                 result.ItemsSynced[SyncDataType.Food] = foodList.Count;
@@ -366,6 +428,10 @@ public class NightscoutConnectorServiceBase<TConfig> : BaseConnectorService<TCon
                 result.Errors.Add($"Failed to sync Food: {ex.Message}");
                 _logger.LogError(ex, "Failed to sync Food for {Connector}", ConnectorSource);
             }
+            finally
+            {
+                completedSections.Add(SyncDataType.Food);
+            }
         }
 
         // Handle Activity
@@ -373,6 +439,7 @@ public class NightscoutConnectorServiceBase<TConfig> : BaseConnectorService<TCon
         {
             try
             {
+                await ReportSectionAsync(SyncDataType.Activity, SyncMessageType.FetchingDataType, "Activity");
                 // Activity tracks its own cursor when a watermark is available, else falls
                 // back to request.From.
                 var activityFrom = openEnded
@@ -403,9 +470,29 @@ public class NightscoutConnectorServiceBase<TConfig> : BaseConnectorService<TCon
                 result.Errors.Add($"Failed to sync Activity: {ex.Message}");
                 _logger.LogError(ex, "Failed to sync Activity for {Connector}", ConnectorSource);
             }
+            finally
+            {
+                completedSections.Add(SyncDataType.Activity);
+            }
         }
 
         result.EndTime = DateTimeOffset.UtcNow;
+
+        if (progressReporter is not null)
+        {
+            await progressReporter.ReportProgressAsync(new SyncProgressEvent
+            {
+                ConnectorId = ConnectorSource,
+                ConnectorName = ServiceName,
+                Phase = result.Success ? SyncPhase.Completed : SyncPhase.Failed,
+                CompletedDataTypes = [.. completedSections],
+                TotalDataTypes = totalSections,
+                ItemsSyncedSoFar = new(result.ItemsSynced),
+                ErrorMessage = result.Success ? null : string.Join("; ", result.Errors),
+                MessageType = result.Success ? SyncMessageType.SyncComplete : SyncMessageType.SyncFailed,
+            }, cancellationToken);
+        }
+
         return result;
     }
 
@@ -461,6 +548,9 @@ public class NightscoutConnectorServiceBase<TConfig> : BaseConnectorService<TCon
                 ConnectorSource,
                 allEntries.Count,
                 currentTo);
+
+            await ReportFetchProgressAsync(
+                SyncDataType.Glucose, allEntries.Count, from, to ?? DateTime.UtcNow, currentTo);
         }
 
         _logger.LogInformation(
@@ -517,6 +607,10 @@ public class NightscoutConnectorServiceBase<TConfig> : BaseConnectorService<TCon
                 ConnectorSource,
                 allTreatments.Count,
                 currentTo);
+
+            // Boluses stands in for the whole treatment batch, matching the section reporting.
+            await ReportFetchProgressAsync(
+                SyncDataType.Boluses, allTreatments.Count, from, to ?? DateTime.UtcNow, currentTo);
         }
 
         _logger.LogInformation(
@@ -590,6 +684,9 @@ public class NightscoutConnectorServiceBase<TConfig> : BaseConnectorService<TCon
                 ConnectorSource,
                 allStatuses.Count,
                 currentTo);
+
+            await ReportFetchProgressAsync(
+                SyncDataType.DeviceStatus, allStatuses.Count, from, to ?? DateTime.UtcNow, currentTo);
         }
 
         _logger.LogInformation(
@@ -663,6 +760,9 @@ public class NightscoutConnectorServiceBase<TConfig> : BaseConnectorService<TCon
                 ConnectorSource,
                 allActivities.Count,
                 currentTo);
+
+            await ReportFetchProgressAsync(
+                SyncDataType.Activity, allActivities.Count, from, to ?? DateTime.UtcNow, currentTo);
         }
 
         _logger.LogInformation(

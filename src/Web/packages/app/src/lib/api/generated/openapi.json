@@ -36473,6 +36473,15 @@
                 "$ref": "#/components/schemas/SyncResult"
               }
             ]
+          },
+          "latestProgress": {
+            "description": "The most recent progress event reported by the connector's sync — running per-data-type\ncounts and the date-window position for a progress bar. Null until the sync first reports.",
+            "nullable": true,
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/SyncProgressEvent"
+              }
+            ]
           }
         }
       },
@@ -36490,6 +36499,125 @@
           "Running",
           "Succeeded",
           "Failed"
+        ]
+      },
+      "SyncProgressEvent": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "connectorId": {
+            "type": "string"
+          },
+          "connectorName": {
+            "type": "string"
+          },
+          "phase": {
+            "$ref": "#/components/schemas/SyncPhase"
+          },
+          "currentDataType": {
+            "nullable": true,
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/SyncDataType"
+              }
+            ]
+          },
+          "completedDataTypes": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SyncDataType"
+            }
+          },
+          "totalDataTypes": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "itemsSyncedSoFar": {
+            "type": "object",
+            "x-dictionaryKey": {
+              "$ref": "#/components/schemas/SyncDataType"
+            },
+            "additionalProperties": {
+              "type": "integer",
+              "format": "int32"
+            }
+          },
+          "errorMessage": {
+            "type": "string",
+            "nullable": true
+          },
+          "messageType": {
+            "nullable": true,
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/SyncMessageType"
+              }
+            ]
+          },
+          "messageParams": {
+            "type": "object",
+            "nullable": true,
+            "additionalProperties": {
+              "type": "string"
+            }
+          },
+          "timestamp": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "windowStart": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          },
+          "windowEnd": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          },
+          "currentPosition": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          }
+        }
+      },
+      "SyncPhase": {
+        "type": "integer",
+        "description": "",
+        "x-enumNames": [
+          "Syncing",
+          "Completed",
+          "Failed"
+        ],
+        "enum": [
+          0,
+          1,
+          2
+        ]
+      },
+      "SyncMessageType": {
+        "type": "string",
+        "description": "",
+        "x-enumNames": [
+          "Authenticating",
+          "FetchingData",
+          "FetchingDataType",
+          "ProcessingDataType",
+          "PublishingDataType",
+          "FetchProgress",
+          "SyncComplete",
+          "SyncFailed"
+        ],
+        "enum": [
+          "Authenticating",
+          "FetchingData",
+          "FetchingDataType",
+          "ProcessingDataType",
+          "PublishingDataType",
+          "FetchProgress",
+          "SyncComplete",
+          "SyncFailed"
         ]
       },
       "StartSyncJobRequest": {

@@ -31610,6 +31610,9 @@ export interface ConnectorSyncJobConnectorProgress {
     message?: string | undefined;
     /** The full sync result, once the connector has completed. */
     result?: SyncResult | undefined;
+    /** The most recent progress event reported by the connector's sync — running per-data-type
+counts and the date-window position for a progress bar. Null until the sync first reports. */
+    latestProgress?: SyncProgressEvent | undefined;
 }
 
 /** State of a single connector within a sync job. */
@@ -31618,6 +31621,40 @@ export enum ConnectorSyncJobConnectorState {
     Running = "Running",
     Succeeded = "Succeeded",
     Failed = "Failed",
+}
+
+export interface SyncProgressEvent {
+    connectorId?: string;
+    connectorName?: string;
+    phase?: SyncPhase;
+    currentDataType?: SyncDataType | undefined;
+    completedDataTypes?: SyncDataType[];
+    totalDataTypes?: number;
+    itemsSyncedSoFar?: { [key in keyof typeof SyncDataType]?: number; };
+    errorMessage?: string | undefined;
+    messageType?: SyncMessageType | undefined;
+    messageParams?: { [key: string]: string; } | undefined;
+    timestamp?: Date;
+    windowStart?: Date | undefined;
+    windowEnd?: Date | undefined;
+    currentPosition?: Date | undefined;
+}
+
+export enum SyncPhase {
+    Syncing = 0,
+    Completed = 1,
+    Failed = 2,
+}
+
+export enum SyncMessageType {
+    Authenticating = "Authenticating",
+    FetchingData = "FetchingData",
+    FetchingDataType = "FetchingDataType",
+    ProcessingDataType = "ProcessingDataType",
+    PublishingDataType = "PublishingDataType",
+    FetchProgress = "FetchProgress",
+    SyncComplete = "SyncComplete",
+    SyncFailed = "SyncFailed",
 }
 
 /** Request body for starting a manual connector sync as a background job. */

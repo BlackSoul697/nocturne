@@ -31,6 +31,15 @@ public abstract class BaseConnectorService<TConfig> : IConnectorService<TConfig>
     private WriteOrigin? _devicePublishOrigin;
 
     /// <summary>
+    ///     Progress reporter for the sync currently executing on this service instance. Set by the
+    ///     sync entry points so fetch loops several calls deep can report page-level progress via
+    ///     <see cref="ReportFetchProgressAsync"/> without threading the reporter through every
+    ///     fetch signature. Per-run for the same reason as the publish origins above: the connector
+    ///     service is resolved fresh per sync run.
+    /// </summary>
+    protected ISyncProgressReporter? ActiveProgressReporter { get; set; }
+
+    /// <summary>
     ///     Base constructor for connector services using IHttpClientFactory pattern
     /// </summary>
     /// <param name="httpClient">HttpClient instance from IHttpClientFactory (will not be disposed)</param>
@@ -78,6 +87,7 @@ public abstract class BaseConnectorService<TConfig> : IConnectorService<TConfig>
         ISyncProgressReporter? progressReporter = null
     )
     {
+        ActiveProgressReporter = progressReporter;
         return await PerformSyncInternalAsync(request, config, cancellationToken, progressReporter);
     }
 
@@ -510,6 +520,43 @@ public abstract class BaseConnectorService<TConfig> : IConnectorService<TConfig>
         }
 
         return result;
+    }
+
+    /// <summary>
+    ///     Reports page-level fetch progress for the sync currently executing on this instance.
+    ///     Call from paginating fetch loops after each page; no-op when no reporter is active.
+    ///     <paramref name="currentPosition"/> is the backwards-moving pagination cursor between
+    ///     <paramref name="windowEnd"/> and <paramref name="windowStart"/>, letting clients render
+    ///     a date-based progress bar; <paramref name="itemsSoFar"/> is the running record count.
+    /// </summary>
+    protected async Task ReportFetchProgressAsync(
+        SyncDataType dataType,
+        int itemsSoFar,
+        DateTime? windowStart,
+        DateTime? windowEnd,
+        DateTime? currentPosition
+    )
+    {
+        if (ActiveProgressReporter is null)
+            return;
+
+        await ActiveProgressReporter.ReportProgressAsync(new SyncProgressEvent
+        {
+            ConnectorId = ConnectorSource,
+            ConnectorName = ServiceName,
+            Phase = SyncPhase.Syncing,
+            CurrentDataType = dataType,
+            ItemsSyncedSoFar = new() { [dataType] = itemsSoFar },
+            WindowStart = windowStart,
+            WindowEnd = windowEnd,
+            CurrentPosition = currentPosition,
+            MessageType = SyncMessageType.FetchProgress,
+            MessageParams = new()
+            {
+                ["dataType"] = dataType.ToString(),
+                ["count"] = itemsSoFar.ToString(),
+            },
+        });
     }
 
     protected virtual Task<IEnumerable<Entry>> FetchGlucoseDataRangeAsync(
@@ -1087,6 +1134,7 @@ public abstract class BaseConnectorService<TConfig> : IConnectorService<TConfig>
             "Starting background data sync for {ConnectorSource}",
             ConnectorSource
         );
+        ActiveProgressReporter = progressReporter;
         try
         {
             // Authenticate if needed
