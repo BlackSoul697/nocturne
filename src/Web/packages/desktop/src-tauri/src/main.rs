@@ -14,6 +14,7 @@
 
 mod auth;
 mod glucose_file;
+mod glucose_hub;
 mod glucose_poll;
 mod tray;
 
@@ -82,8 +83,32 @@ fn http_client() -> CommandResult<reqwest::Client> {
     reqwest::Client::builder()
         // Local dev runs behind the Aspire gateway's self-signed certificate.
         .danger_accept_invalid_certs(cfg!(debug_assertions))
+        // Trust the OS certificate store in addition to the bundled roots, so release builds
+        // behind TLS-intercepting antivirus/VPN/proxies (which curl and browsers accept via the
+        // Windows store) don't fail every request with an opaque transport error.
+        .tls_built_in_native_certs(true)
+        // Bound each request so a stalled connect (dead network, dropped route, TLS hang)
+        // fails fast and lets the 60s poll loop retry, rather than parking on the OS SYN
+        // timeout.
+        .connect_timeout(std::time::Duration::from_secs(10))
+        .timeout(std::time::Duration::from_secs(30))
         .build()
         .map_err(|e| CommandError::new(format!("Could not create HTTP client: {e}")))
+}
+
+/// Formats an error with its full `source()` chain. `reqwest::Error`'s own Display stops at
+/// "error sending request for url (…)" and hides the underlying transport cause (DNS failure,
+/// invalid/untrusted certificate, connection reset), which is exactly what we need when a
+/// request won't go through.
+pub(crate) fn error_chain(err: &dyn std::error::Error) -> String {
+    let mut msg = err.to_string();
+    let mut source = err.source();
+    while let Some(cause) = source {
+        msg.push_str(": ");
+        msg.push_str(&cause.to_string());
+        source = cause.source();
+    }
+    msg
 }
 
 /// Parses and stores a `nocturne-connect://link?server=…&token=…` link code.
@@ -446,7 +471,8 @@ async fn poll_glucose(client: &reqwest::Client, app: &tauri::AppHandle) {
 }
 
 /// Background poll loop. Polls before sleeping, so a launch (or a just-completed link) populates
-/// promptly; idles while unlinked.
+/// promptly; idles while unlinked. A SignalR hub (best-effort) nudges the loop to poll early on any
+/// data change; the timer remains the fallback whenever the hub is down.
 fn spawn_glucose_poller(app: tauri::AppHandle) {
     tauri::async_runtime::spawn(async move {
         let client = match http_client() {
@@ -456,11 +482,22 @@ fn spawn_glucose_poller(app: tauri::AppHandle) {
                 return;
             }
         };
+
+        // Capacity 1: a full channel means a refresh is already pending, so realtime nudges coalesce.
+        let (refresh_tx, mut refresh_rx) = tokio::sync::mpsc::channel::<()>(1);
+        glucose_hub::spawn(client.clone(), refresh_tx);
+
         loop {
             if auth::is_linked() {
                 poll_glucose(&client, &app).await;
             }
-            tokio::time::sleep(std::time::Duration::from_secs(GLUCOSE_POLL_SECS)).await;
+            tokio::select! {
+                _ = tokio::time::sleep(std::time::Duration::from_secs(GLUCOSE_POLL_SECS)) => {}
+                _ = refresh_rx.recv() => {
+                    // Drain a burst of events so many arrivals collapse into a single poll.
+                    while refresh_rx.try_recv().is_ok() {}
+                }
+            }
         }
     });
 }
