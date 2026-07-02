@@ -11997,6 +11997,145 @@
         "x-remote-type": "query"
       }
     },
+    "/api/v4/alerts/dnd/windows/active": {
+      "get": {
+        "tags": [
+          "Dnd Windows"
+        ],
+        "summary": "List the tenant's DND windows that are active right now (resolved on read).",
+        "operationId": "DndWindows_GetActive",
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/DndWindowResponse"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "x-remote-type": "query"
+      }
+    },
+    "/api/v4/alerts/dnd/windows": {
+      "post": {
+        "tags": [
+          "Dnd Windows"
+        ],
+        "summary": "Create (or idempotently return) a DND window. Supersedes any active window of the same\nscope so at most one is ever active per scope.",
+        "operationId": "DndWindows_Create",
+        "requestBody": {
+          "x-name": "request",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateDndWindowRequest"
+              }
+            }
+          },
+          "required": true,
+          "x-position": 1
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DndWindowResponse"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DndWindowResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        },
+        "x-remote-type": "command",
+        "x-remote-invalidates": [
+          "GetActive"
+        ]
+      }
+    },
+    "/api/v4/alerts/dnd/windows/{id}/clear": {
+      "post": {
+        "tags": [
+          "Dnd Windows"
+        ],
+        "summary": "Clear a DND window (turn the mute off). Idempotent: a window already cleared (by the user\nor by supersede) is returned unchanged so a retry never rewrites the audit timestamp.",
+        "operationId": "DndWindows_Clear",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "guid"
+            },
+            "x-position": 1
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DndWindowResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        },
+        "x-remote-type": "command",
+        "x-remote-invalidates": [
+          "GetActive"
+        ]
+      }
+    },
     "/api/v4/notifications": {
       "post": {
         "tags": [
@@ -12300,7 +12439,7 @@
         "tags": [
           "Tenant Alert Settings"
         ],
-        "summary": "Replace the current tenant's alert settings. Upserts on first call.",
+        "summary": "Replace the current tenant's alert settings. Upserts on first call. The manual-DND toggle\ncreates/clears the tenant's scope=all window; scheduled fields persist on the row.",
         "operationId": "TenantAlertSettings_Update",
         "requestBody": {
           "x-name": "request",
@@ -37082,6 +37221,14 @@
             "type": "boolean",
             "description": "When true, this rule still fires while the tenant is in Do Not Disturb mode.\n            Critical rules implicitly bypass DND regardless of this flag."
           },
+          "scopeClass": {
+            "description": "Low/high classification for scoped Do Not Disturb (ADR 0004), derived by the\n            shared engine from the rule's directional leaves. Read-only — computed server-side on\n            create/update; a scoped lows/highs window silences a rule only when its\n            class matches.",
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/RuleScopeClass"
+              }
+            ]
+          },
           "autoResolveEnabled": {
             "type": "boolean"
           },
@@ -37097,6 +37244,22 @@
             }
           }
         }
+      },
+      "RuleScopeClass": {
+        "type": "string",
+        "description": "",
+        "x-enumNames": [
+          "Low",
+          "High",
+          "Composite",
+          "Undirected"
+        ],
+        "enum": [
+          "low",
+          "high",
+          "composite",
+          "undirected"
+        ]
       },
       "AlertRuleChannelResponse": {
         "type": "object",
@@ -37488,6 +37651,96 @@
           "retryCount": {
             "type": "integer",
             "format": "int32"
+          }
+        }
+      },
+      "DndWindowResponse": {
+        "type": "object",
+        "description": "A DND window with its resolver fields. active state is computed on read.",
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "guid"
+          },
+          "scope": {
+            "$ref": "#/components/schemas/DndScope"
+          },
+          "startedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "endsAt": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          },
+          "clearedAt": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          },
+          "clearedBy": {
+            "type": "string",
+            "nullable": true
+          },
+          "source": {
+            "type": "string",
+            "nullable": true
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "DndScope": {
+        "type": "string",
+        "description": "",
+        "x-enumNames": [
+          "Lows",
+          "Highs",
+          "All"
+        ],
+        "enum": [
+          "lows",
+          "highs",
+          "all"
+        ]
+      },
+      "CreateDndWindowRequest": {
+        "type": "object",
+        "description": "Request to create a DND window. Id is client-supplied for idempotency.",
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "Client-generated UUID. Re-sending the same id is a no-op that returns the stored window.",
+            "format": "guid"
+          },
+          "scope": {
+            "description": "Which alerts to silence: lows | highs | all.",
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/DndScope"
+              }
+            ]
+          },
+          "startedAt": {
+            "type": "string",
+            "description": "When the mute takes effect (may predate receipt for offline authoring).",
+            "format": "date-time"
+          },
+          "endsAt": {
+            "type": "string",
+            "description": "Auto-expiry instant; null mutes until explicitly cleared.",
+            "format": "date-time",
+            "nullable": true
+          },
+          "source": {
+            "type": "string",
+            "description": "Audit label for what created the window (e.g. web, prelude-device).",
+            "nullable": true
           }
         }
       },

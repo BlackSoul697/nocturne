@@ -46,6 +46,7 @@ import {
   DeviceEventClient,
   DirectGrantClient,
   DiscrepancyClient,
+  DndWindowsClient,
   FoodsClient,
   GlucoseProcessingSettingsClient,
   GuestLinkClient,
@@ -156,6 +157,7 @@ export class ApiClient {
   public readonly deviceEvent: DeviceEventClient;
   public readonly directGrant: DirectGrantClient;
   public readonly discrepancy: DiscrepancyClient;
+  public readonly dndWindows: DndWindowsClient;
   public readonly foodsV4: FoodsClient;
   public readonly glucoseProcessingSettings: GlucoseProcessingSettingsClient;
   public readonly guestLink: GuestLinkClient;
@@ -266,6 +268,7 @@ export class ApiClient {
     this.deviceEvent = new DeviceEventClient(apiBaseUrl, http);
     this.directGrant = new DirectGrantClient(apiBaseUrl, http);
     this.discrepancy = new DiscrepancyClient(apiBaseUrl, http);
+    this.dndWindows = new DndWindowsClient(apiBaseUrl, http);
     this.foodsV4 = new FoodsClient(apiBaseUrl, http);
     this.glucoseProcessingSettings = new GlucoseProcessingSettingsClient(apiBaseUrl, http);
     this.guestLink = new GuestLinkClient(apiBaseUrl, http);

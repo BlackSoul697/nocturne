@@ -37,6 +37,7 @@ export { validateInvite, redeemInvite } from './alertInvites.generated.remote';
 export * from './alertReplays.generated.remote';
 export * from './alertRules.generated.remote';
 export * from './alerts.generated.remote';
+export { getActive, clear } from './dndWindows.generated.remote';
 export * from './notifications.generated.remote';
 // './tenantAlertSettings.generated.remote' - all exports collide, import directly
 export * from './trackers.generated.remote';

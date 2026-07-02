@@ -13009,6 +13009,161 @@ export class AlertsClient {
     }
 }
 
+export class DndWindowsClient {
+    private http: { fetch(url: RequestInfo, init?: RequestInit): Promise<Response> };
+    private baseUrl: string;
+    protected jsonParseReviver: ((key: string, value: any) => any) | undefined = undefined;
+
+    constructor(baseUrl?: string, http?: { fetch(url: RequestInfo, init?: RequestInit): Promise<Response> }) {
+        this.http = http ? http : window as any;
+        this.baseUrl = baseUrl ?? "";
+    }
+
+    /**
+     * List the tenant's DND windows that are active right now (resolved on read).
+     */
+    getActive(signal?: AbortSignal): Promise<DndWindowResponse[]> {
+        let url_ = this.baseUrl + "/api/v4/alerts/dnd/windows/active";
+        url_ = url_.replace(/[?&]$/, "");
+
+        let options_: RequestInit = {
+            method: "GET",
+            signal,
+            headers: {
+                "Accept": "application/json"
+            }
+        };
+
+        return this.http.fetch(url_, options_).then((_response: Response) => {
+            return this.processGetActive(_response);
+        });
+    }
+
+    protected processGetActive(response: Response): Promise<DndWindowResponse[]> {
+        const status = response.status;
+        let _headers: any = {}; if (response.headers && response.headers.forEach) { response.headers.forEach((v: any, k: any) => _headers[k] = v); };
+        if (status === 200) {
+            return response.text().then((_responseText) => {
+            let result200: any = null;
+            result200 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver) as DndWindowResponse[];
+            return result200;
+            });
+        } else if (status !== 200 && status !== 204) {
+            return response.text().then((_responseText) => {
+            return throwException("An unexpected server error occurred.", status, _responseText, _headers);
+            });
+        }
+        return Promise.resolve<DndWindowResponse[]>(null as any);
+    }
+
+    /**
+     * Create (or idempotently return) a DND window. Supersedes any active window of the same
+    scope so at most one is ever active per scope.
+     */
+    create(request: CreateDndWindowRequest, signal?: AbortSignal): Promise<DndWindowResponse> {
+        let url_ = this.baseUrl + "/api/v4/alerts/dnd/windows";
+        url_ = url_.replace(/[?&]$/, "");
+
+        const content_ = JSON.stringify(request);
+
+        let options_: RequestInit = {
+            body: content_,
+            method: "POST",
+            signal,
+            headers: {
+                "Content-Type": "application/json",
+                "Accept": "application/json"
+            }
+        };
+
+        return this.http.fetch(url_, options_).then((_response: Response) => {
+            return this.processCreate(_response);
+        });
+    }
+
+    protected processCreate(response: Response): Promise<DndWindowResponse> {
+        const status = response.status;
+        let _headers: any = {}; if (response.headers && response.headers.forEach) { response.headers.forEach((v: any, k: any) => _headers[k] = v); };
+        if (status === 200) {
+            return response.text().then((_responseText) => {
+            let result200: any = null;
+            result200 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver) as DndWindowResponse;
+            return result200;
+            });
+        } else if (status === 201) {
+            return response.text().then((_responseText) => {
+            let result201: any = null;
+            result201 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver) as DndWindowResponse;
+            return result201;
+            });
+        } else if (status === 400) {
+            return response.text().then((_responseText) => {
+            let result400: any = null;
+            result400 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver) as ProblemDetails;
+            return throwException("A server side error occurred.", status, _responseText, _headers, result400);
+            });
+        } else if (status === 409) {
+            return response.text().then((_responseText) => {
+            let result409: any = null;
+            result409 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver) as ProblemDetails;
+            return throwException("A server side error occurred.", status, _responseText, _headers, result409);
+            });
+        } else if (status !== 200 && status !== 204) {
+            return response.text().then((_responseText) => {
+            return throwException("An unexpected server error occurred.", status, _responseText, _headers);
+            });
+        }
+        return Promise.resolve<DndWindowResponse>(null as any);
+    }
+
+    /**
+     * Clear a DND window (turn the mute off). Idempotent: a window already cleared (by the user
+    or by supersede) is returned unchanged so a retry never rewrites the audit timestamp.
+     */
+    clear(id: string, signal?: AbortSignal): Promise<DndWindowResponse> {
+        let url_ = this.baseUrl + "/api/v4/alerts/dnd/windows/{id}/clear";
+        if (id === undefined || id === null)
+            throw new globalThis.Error("The parameter 'id' must be defined.");
+        url_ = url_.replace("{id}", encodeURIComponent("" + id));
+        url_ = url_.replace(/[?&]$/, "");
+
+        let options_: RequestInit = {
+            method: "POST",
+            signal,
+            headers: {
+                "Accept": "application/json"
+            }
+        };
+
+        return this.http.fetch(url_, options_).then((_response: Response) => {
+            return this.processClear(_response);
+        });
+    }
+
+    protected processClear(response: Response): Promise<DndWindowResponse> {
+        const status = response.status;
+        let _headers: any = {}; if (response.headers && response.headers.forEach) { response.headers.forEach((v: any, k: any) => _headers[k] = v); };
+        if (status === 200) {
+            return response.text().then((_responseText) => {
+            let result200: any = null;
+            result200 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver) as DndWindowResponse;
+            return result200;
+            });
+        } else if (status === 404) {
+            return response.text().then((_responseText) => {
+            let result404: any = null;
+            result404 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver) as ProblemDetails;
+            return throwException("A server side error occurred.", status, _responseText, _headers, result404);
+            });
+        } else if (status !== 200 && status !== 204) {
+            return response.text().then((_responseText) => {
+            return throwException("An unexpected server error occurred.", status, _responseText, _headers);
+            });
+        }
+        return Promise.resolve<DndWindowResponse>(null as any);
+    }
+}
+
 export class NotificationsClient {
     private http: { fetch(url: RequestInfo, init?: RequestInit): Promise<Response> };
     private baseUrl: string;
@@ -13345,7 +13500,8 @@ export class TenantAlertSettingsClient {
     }
 
     /**
-     * Replace the current tenant's alert settings. Upserts on first call.
+     * Replace the current tenant's alert settings. Upserts on first call. The manual-DND toggle
+    creates/clears the tenant's scope=all window; scheduled fields persist on the row.
      */
     update(request: UpdateTenantAlertSettingsRequest, signal?: AbortSignal): Promise<TenantAlertSettingsResponse> {
         let url_ = this.baseUrl + "/api/v4/tenant-alert-settings";
@@ -31732,11 +31888,23 @@ export interface AlertRuleResponse {
     /** When true, this rule still fires while the tenant is in Do Not Disturb mode.
             Critical rules implicitly bypass DND regardless of this flag. */
     allowThroughDnd?: boolean;
+    /** Low/high classification for scoped Do Not Disturb (ADR 0004), derived by the
+            shared engine from the rule's directional leaves. Read-only — computed server-side on
+            create/update; a scoped lows/highs window silences a rule only when its
+            class matches. */
+    scopeClass?: RuleScopeClass;
     autoResolveEnabled?: boolean;
     autoResolveParams?: any | undefined;
     clientConfiguration?: any;
     /** Flat list of delivery channels. Dispatched in parallel when the rule fires. */
     channels?: AlertRuleChannelResponse[];
+}
+
+export enum RuleScopeClass {
+    Low = "low",
+    High = "high",
+    Composite = "composite",
+    Undirected = "undirected",
 }
 
 export interface AlertRuleChannelResponse {
@@ -31863,6 +32031,38 @@ export interface PendingDeliveryResponse {
     payload?: string;
     createdAt?: Date;
     retryCount?: number;
+}
+
+/** A DND window with its resolver fields. active state is computed on read. */
+export interface DndWindowResponse {
+    id?: string;
+    scope?: DndScope;
+    startedAt?: Date;
+    endsAt?: Date | undefined;
+    clearedAt?: Date | undefined;
+    clearedBy?: string | undefined;
+    source?: string | undefined;
+    createdAt?: Date;
+}
+
+export enum DndScope {
+    Lows = "lows",
+    Highs = "highs",
+    All = "all",
+}
+
+/** Request to create a DND window. Id is client-supplied for idempotency. */
+export interface CreateDndWindowRequest {
+    /** Client-generated UUID. Re-sending the same id is a no-op that returns the stored window. */
+    id?: string;
+    /** Which alerts to silence: lows | highs | all. */
+    scope?: DndScope;
+    /** When the mute takes effect (may predate receipt for offline authoring). */
+    startedAt?: Date;
+    /** Auto-expiry instant; null mutes until explicitly cleared. */
+    endsAt?: Date | undefined;
+    /** Audit label for what created the window (e.g. web, prelude-device). */
+    source?: string | undefined;
 }
 
 export interface InAppNotificationDto {
