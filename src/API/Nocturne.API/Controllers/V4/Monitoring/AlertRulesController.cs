@@ -38,6 +38,7 @@ public class AlertRulesController : ControllerBase
     private readonly ITenantDbContextFactory _contextFactory;
     private readonly IAlertReferenceService _referenceService;
     private readonly IAlertDeliveryService _deliveryService;
+    private readonly IRuleScopeClassifier _scopeClassifier;
     private readonly ILogger<AlertRulesController> _logger;
 
     /// <summary>
@@ -47,11 +48,13 @@ public class AlertRulesController : ControllerBase
         ITenantDbContextFactory contextFactory,
         IAlertReferenceService referenceService,
         IAlertDeliveryService deliveryService,
+        IRuleScopeClassifier scopeClassifier,
         ILogger<AlertRulesController> logger)
     {
         _contextFactory = contextFactory;
         _referenceService = referenceService;
         _deliveryService = deliveryService;
+        _scopeClassifier = scopeClassifier;
         _logger = logger;
     }
 
@@ -115,6 +118,10 @@ public class AlertRulesController : ControllerBase
 
         var tenantId = db.TenantId;
 
+        var conditionParamsJson = request.ConditionParams is not null
+            ? JsonSerializer.Serialize(request.ConditionParams)
+            : "{}";
+
         var rule = new AlertRuleEntity
         {
             Id = Guid.CreateVersion7(),
@@ -122,9 +129,8 @@ public class AlertRulesController : ControllerBase
             Name = request.Name,
             Description = request.Description,
             ConditionType = request.ConditionType,
-            ConditionParams = request.ConditionParams is not null
-                ? JsonSerializer.Serialize(request.ConditionParams)
-                : "{}",
+            ConditionParams = conditionParamsJson,
+            ScopeClass = _scopeClassifier.Classify(request.ConditionType, conditionParamsJson),
             IsEnabled = request.IsEnabled,
             SortOrder = request.SortOrder,
             Severity = request.Severity ?? AlertRuleSeverity.Warning,
@@ -194,12 +200,15 @@ public class AlertRulesController : ControllerBase
 
         var tenantId = db.TenantId;
 
+        var conditionParamsJson = request.ConditionParams is not null
+            ? JsonSerializer.Serialize(request.ConditionParams)
+            : "{}";
+
         rule.Name = request.Name;
         rule.Description = request.Description;
         rule.ConditionType = request.ConditionType;
-        rule.ConditionParams = request.ConditionParams is not null
-            ? JsonSerializer.Serialize(request.ConditionParams)
-            : "{}";
+        rule.ConditionParams = conditionParamsJson;
+        rule.ScopeClass = _scopeClassifier.Classify(request.ConditionType, conditionParamsJson);
         rule.IsEnabled = request.IsEnabled;
         rule.SortOrder = request.SortOrder;
         rule.Severity = request.Severity ?? AlertRuleSeverity.Warning;
@@ -411,6 +420,7 @@ public class AlertRulesController : ControllerBase
         SortOrder = entity.SortOrder,
         Severity = entity.Severity,
         AllowThroughDnd = entity.AllowThroughDnd,
+        ScopeClass = entity.ScopeClass,
         AutoResolveEnabled = entity.AutoResolveEnabled,
         AutoResolveParams = entity.AutoResolveParams is null
             ? null
@@ -553,6 +563,11 @@ public class AlertRuleResponse
     /// <summary>When true, this rule still fires while the tenant is in Do Not Disturb mode.
     /// Critical rules implicitly bypass DND regardless of this flag.</summary>
     public bool AllowThroughDnd { get; set; }
+    /// <summary>Low/high classification for scoped Do Not Disturb (ADR 0004), derived by the
+    /// shared engine from the rule's directional leaves. Read-only — computed server-side on
+    /// create/update; a scoped <c>lows</c>/<c>highs</c> window silences a rule only when its
+    /// class matches.</summary>
+    public RuleScopeClass ScopeClass { get; set; } = RuleScopeClass.Undirected;
     public bool AutoResolveEnabled { get; set; }
     public object? AutoResolveParams { get; set; }
     public object ClientConfiguration { get; set; } = new { };

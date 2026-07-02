@@ -171,10 +171,11 @@ internal sealed class SensorContextEnricher : ISensorContextEnricher
         // applies to every rule regardless of whether its tree references the do_not_disturb
         // condition fact. Gating on a NeedsDoNotDisturb walker flag would silently exempt
         // every typical glucose/threshold rule from suppression, which is the opposite of
-        // what users expect. The lookup is one indexed row from `tenant_alert_settings` per
-        // evaluation pass — cheap enough to make unconditional. Runs after Phase 2 so
-        // `enriched.TenantTimeZoneId` (populated from the canonical PatientRecord) is
-        // available to interpret the scheduled DND window.
+        // what users expect. The lookups are one indexed row from `tenant_alert_settings` plus
+        // the tenant's uncleared `dnd_windows` (partial-index scan) per evaluation pass — cheap
+        // enough to make unconditional. Runs after Phase 2 so `enriched.TenantTimeZoneId`
+        // (populated from the canonical PatientRecord) is available to interpret the scheduled
+        // DND window.
         if (!isReplay)
         {
             // Force the timezone fetch even when no other leaf demands it — scheduled DND
@@ -195,12 +196,42 @@ internal sealed class SensorContextEnricher : ISensorContextEnricher
 
             var settings = await _deps.Alerts.GetTenantAlertSettingsAsync(tenantId, ct);
             // No row yet means DND has never been configured for this tenant — treat as off.
-            var projection = settings?.Resolve(now, enriched.TenantTimeZoneId);
+            // Scheduled DND is tenant-wide, i.e. == scope=all (manual DND is a scope=all window,
+            // resolved below); this projects the active scheduled window if any (ADR 0004 D5).
+            var scheduled = settings?.Resolve(now, enriched.TenantTimeZoneId);
+
+            // Scoped DND windows: resolve each uncleared window active-at-now into its scope.
+            var windows = await _deps.Alerts.GetUnclearedDndWindowsAsync(tenantId, ct);
+            var activeScopes = new HashSet<DndScope>();
+            foreach (var w in windows)
+            {
+                if (w.IsActiveAt(now))
+                    activeScopes.Add(w.Scope);
+            }
+            if (scheduled is not null)
+                activeScopes.Add(DndScope.All);
+
+            // ActiveDoNotDisturb drives the do_not_disturb condition leaf and the tenant-wide
+            // notion of DND, so it is non-null exactly when `all` is active — lows/highs windows
+            // feed ActiveDndScopes (the gate) only. When a manual (all-window) mute and the
+            // scheduled window are both active, the manual path takes precedence for the
+            // for_minutes anchor and source — the pre-window TenantAlertSettingsSnapshot.Resolve
+            // contract, preserved so overlap doesn't shift the elapsed-time anchor.
+            DoNotDisturbSnapshot? dnd = null;
+            if (activeScopes.Contains(DndScope.All))
+            {
+                var activeAllWindows = windows
+                    .Where(w => w.Scope == DndScope.All && w.IsActiveAt(now))
+                    .ToList();
+                dnd = activeAllWindows.Count > 0
+                    ? new DoNotDisturbSnapshot(activeAllWindows.Min(w => w.StartedAt), "manual")
+                    : new DoNotDisturbSnapshot(scheduled!.StartedAt, scheduled.Source);
+            }
+
             enriched = enriched with
             {
-                ActiveDoNotDisturb = projection is null
-                    ? null
-                    : new DoNotDisturbSnapshot(projection.StartedAt, projection.Source),
+                ActiveDoNotDisturb = dnd,
+                ActiveDndScopes = activeScopes,
             };
         }
 

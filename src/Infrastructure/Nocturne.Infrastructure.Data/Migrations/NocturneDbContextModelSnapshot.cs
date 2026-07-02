@@ -498,6 +498,11 @@ namespace Nocturne.Infrastructure.Data.Migrations
                         .HasColumnType("character varying(128)")
                         .HasColumnName("name");
 
+                    b.Property<string>("ScopeClass")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("scope_class");
+
                     b.Property<string>("Severity")
                         .IsRequired()
                         .HasMaxLength(16)
@@ -1528,6 +1533,58 @@ namespace Nocturne.Infrastructure.Data.Migrations
                     b.HasIndex("TenantId");
 
                     b.ToTable("discrepancy_details");
+                });
+
+            modelBuilder.Entity("Nocturne.Infrastructure.Data.Entities.DndWindowEntity", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<DateTime?>("ClearedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("cleared_at");
+
+                    b.Property<string>("ClearedBy")
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)")
+                        .HasColumnName("cleared_by");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at")
+                        .HasDefaultValueSql("CURRENT_TIMESTAMP");
+
+                    b.Property<DateTime?>("EndsAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("ends_at");
+
+                    b.Property<string>("Scope")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("scope");
+
+                    b.Property<string>("Source")
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)")
+                        .HasColumnName("source");
+
+                    b.Property<DateTime>("StartedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("started_at");
+
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("tenant_id");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("TenantId", "Scope")
+                        .HasFilter("cleared_at IS NULL");
+
+                    b.ToTable("dnd_windows", (string)null);
                 });
 
             modelBuilder.Entity("Nocturne.Infrastructure.Data.Entities.FoodEntity", b =>
@@ -3851,18 +3908,6 @@ namespace Nocturne.Infrastructure.Data.Migrations
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("created_at")
                         .HasDefaultValueSql("CURRENT_TIMESTAMP");
-
-                    b.Property<bool>("DndManualActive")
-                        .HasColumnType("boolean")
-                        .HasColumnName("dnd_manual_active");
-
-                    b.Property<DateTime?>("DndManualStartedAt")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("dnd_manual_started_at");
-
-                    b.Property<DateTime?>("DndManualUntil")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("dnd_manual_until");
 
                     b.Property<bool>("DndScheduleEnabled")
                         .HasColumnType("boolean")
@@ -7704,6 +7749,15 @@ namespace Nocturne.Infrastructure.Data.Migrations
                         .IsRequired();
 
                     b.Navigation("Analysis");
+                });
+
+            modelBuilder.Entity("Nocturne.Infrastructure.Data.Entities.DndWindowEntity", b =>
+                {
+                    b.HasOne("Nocturne.Infrastructure.Data.Entities.TenantEntity", null)
+                        .WithMany()
+                        .HasForeignKey("TenantId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
                 });
 
             modelBuilder.Entity("Nocturne.Infrastructure.Data.Entities.FoodEntity", b =>

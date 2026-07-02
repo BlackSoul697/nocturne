@@ -1,4 +1,5 @@
 using Nocturne.Core.Models;
+using Nocturne.Core.Models.Alerts;
 
 namespace Nocturne.Core.Contracts.Alerts;
 
@@ -124,6 +125,27 @@ public interface IAlertRepository
     /// <see cref="SensorContext.ActiveDoNotDisturb"/> per evaluation pass.
     /// </summary>
     Task<TenantAlertSettingsSnapshot> GetTenantAlertSettingsAsync(Guid tenantId, CancellationToken ct);
+
+    /// <summary>
+    /// Returns the tenant's uncleared DND windows (<c>cleared_at IS NULL</c>) as resolver
+    /// snapshots, for scoped Do Not Disturb (ADR 0004 D5). Every <see cref="DateTime"/> is
+    /// normalised to <see cref="DateTimeKind.Utc"/> so <see cref="DndWindowSnapshot.IsActiveAt"/>
+    /// (naive comparison) is sound. The caller resolves active-at-now; the enricher folds the
+    /// active scopes into <see cref="SensorContext.ActiveDndScopes"/>. Backed by the partial
+    /// index on <c>(tenant_id, scope) WHERE cleared_at IS NULL</c>.
+    /// </summary>
+    Task<IReadOnlyList<DndWindowSnapshot>> GetUnclearedDndWindowsAsync(Guid tenantId, CancellationToken ct);
+
+    /// <summary>
+    /// Returns every DND window for the tenant received by <paramref name="asOfReceiptUtc"/>
+    /// (<c>created_at &lt;= asOfReceiptUtc</c>), <b>including cleared/expired ones</b>, for replay
+    /// (ADR 0004 D5). Replay resolves each window with
+    /// <see cref="DndWindowSnapshot.WasActiveAt"/> (receipt-gated) per tick, so cleared windows'
+    /// <c>cleared_at</c> still matters. Every <see cref="DateTime"/> is normalised to
+    /// <see cref="DateTimeKind.Utc"/>.
+    /// </summary>
+    Task<IReadOnlyList<DndWindowSnapshot>> GetDndWindowsAsOfAsync(
+        Guid tenantId, DateTime asOfReceiptUtc, CancellationToken ct);
 
     /// <summary>
     /// Marks an alert instance as suppressed at fire time without dispatching deliveries.

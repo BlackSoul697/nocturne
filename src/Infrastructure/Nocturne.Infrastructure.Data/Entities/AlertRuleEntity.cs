@@ -91,6 +91,17 @@ public class AlertRuleEntity : ITenantScoped, IAuditable
     public bool AllowThroughDnd { get; set; }
 
     /// <summary>
+    /// Low/high classification for scoped Do Not Disturb (ADR 0004), derived by the
+    /// shared engine's <c>classify</c> from the directional leaves of
+    /// <see cref="ConditionParams"/>. Computed on create/update (and backfilled once
+    /// for pre-existing rules); a scoped <c>lows</c>/<c>highs</c> window silences a
+    /// rule only when its class matches. Defaults to <see cref="RuleScopeClass.Undirected"/>
+    /// (all-only) until classified.
+    /// </summary>
+    [Column("scope_class")]
+    public RuleScopeClass ScopeClass { get; set; } = RuleScopeClass.Undirected;
+
+    /// <summary>
     /// Order in which the rule should be processed or displayed
     /// </summary>
     [Column("sort_order")]

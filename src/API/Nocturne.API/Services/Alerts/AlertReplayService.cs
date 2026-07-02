@@ -90,6 +90,21 @@ internal sealed class AlertReplayService(
             .OrderBy(r => r.Timestamp)
             .ToList();
 
+        // Scoped DND (ADR 0004 D5): the tenant's windows received by the replay's end, resolved
+        // per tick with WasActiveAt (receipt-gated) so replay reproduces what the live engine
+        // saw and never rewrites the offline-authoring gap. Both the suppression scopes and the
+        // do_not_disturb leaf's ActiveDoNotDisturb snapshot re-source from these windows per
+        // tick. Scheduled DND is not reconstructible historically (the schedule row keeps no
+        // change history), so — as before D5 — replay considers windows only.
+        var dndWindows = await alertRepository.GetDndWindowsAsOfAsync(tenantId, windowEnd, ct);
+
+        // TODO(alerts-engine-seam): replay still evaluates through the managed
+        // ConditionEvaluatorRegistry directly rather than IAlertEvaluationEngine. The seam
+        // contract assumes engine-owned persistence, while replay needs a replay-local
+        // in-memory timer store and a fake clock per pass — wiring the rust path here means
+        // threading that state through per-tick envelopes like the parity tests do. Replay
+        // is read-only and its semantics are pinned by the golden corpus
+        // (tests/Parity/AlertEngineCorpus), so it stays managed until the cutover phase.
         var fakeTime = new ReplayTimeProvider();
         var timerStore = new InMemoryConditionTimerStore();
         await using var replayServices = BuildReplayServices(timerStore, fakeTime);
@@ -155,8 +170,14 @@ internal sealed class AlertReplayService(
 
             // Pin every fact in the per-tick context to `tick` — APS / pump / uploader /
             // state-span / temp-basal / device-event repos all support an as-of cutoff.
-            var enrichedBase = await enricher.EnrichAsOfAsync(
-                baseContext, ordered, tenantId, DateTime.SpecifyKind(tick, DateTimeKind.Utc), ct);
+            var tickUtc = DateTime.SpecifyKind(tick, DateTimeKind.Utc);
+            var enrichedBase = (await enricher.EnrichAsOfAsync(
+                baseContext, ordered, tenantId, tickUtc, ct))
+                with
+            {
+                ActiveDndScopes = ResolveDndScopes(dndWindows, tickUtc),
+                ActiveDoNotDisturb = ResolveDoNotDisturb(dndWindows, tickUtc),
+            };
 
             CaptureFactSnapshots(enrichedBase, DateTime.SpecifyKind(tick, DateTimeKind.Utc), factPrev, factPoints);
 
@@ -246,15 +267,13 @@ internal sealed class AlertReplayService(
                 if (met && !wasFiring)
                 {
                     // Fresh open. DND suppression mirror of HandleExcursionOpened: a non-Critical
-                    // rule without AllowThroughDnd that fires while the tenant is in DND would
-                    // have been recorded as suppressed in the live engine. We still seed
-                    // activeAlerts so downstream alert_state references see the excursion as
+                    // rule whose class is covered by an active DND scope (receipt-gated to this
+                    // tick) would have been recorded as suppressed in the live engine. We still
+                    // seed activeAlerts so downstream alert_state references see the excursion as
                     // open — only the surfaced event kind differs (matches live, where the
                     // instance row is created and then marked suppressed).
                     var suppressedByDnd =
-                        ruleContext.ActiveDoNotDisturb is not null
-                        && rule.Severity != AlertRuleSeverity.Critical
-                        && !rule.AllowThroughDnd;
+                        DndSuppressionGate.IsSuppressed(rule, ruleContext.ActiveDndScopes);
 
                     var kind = suppressedByDnd
                         ? AlertReplayEventKind.SuppressedByDnd
@@ -587,6 +606,44 @@ internal sealed class AlertReplayService(
     /// against the override rather than against a non-existent rule). The original list is
     /// returned unchanged when <paramref name="ruleOverride"/> is null.
     /// </summary>
+    private static readonly IReadOnlySet<DndScope> NoDndScopes = new HashSet<DndScope>();
+
+    /// <summary>
+    /// The DND scopes active at <paramref name="atUtc"/>, resolved from the tenant's windows with
+    /// receipt-gated <see cref="DndWindowSnapshot.WasActiveAt"/>. Returns a shared empty set when
+    /// none are active so the common no-DND tick allocates nothing.
+    /// </summary>
+    private static IReadOnlySet<DndScope> ResolveDndScopes(
+        IReadOnlyList<DndWindowSnapshot> windows, DateTime atUtc)
+    {
+        HashSet<DndScope>? scopes = null;
+        foreach (var w in windows)
+        {
+            if (w.WasActiveAt(atUtc))
+                (scopes ??= new HashSet<DndScope>()).Add(w.Scope);
+        }
+        return scopes ?? NoDndScopes;
+    }
+
+    /// <summary>
+    /// The tenant-wide DND snapshot at <paramref name="atUtc"/> for the <c>do_not_disturb</c>
+    /// leaf: the earliest StartedAt among receipt-gated active <c>scope=all</c> windows with
+    /// source <c>manual</c> (the live enricher's window branch produces the same projection),
+    /// or null when no all-window was active. Scheduled DND is not reconstructible
+    /// historically, so replay's snapshot considers windows only.
+    /// </summary>
+    private static DoNotDisturbSnapshot? ResolveDoNotDisturb(
+        IReadOnlyList<DndWindowSnapshot> windows, DateTime atUtc)
+    {
+        DateTime? earliest = null;
+        foreach (var w in windows)
+        {
+            if (w.Scope == DndScope.All && w.WasActiveAt(atUtc) && (earliest is null || w.StartedAt < earliest))
+                earliest = w.StartedAt;
+        }
+        return earliest is { } startedAt ? new DoNotDisturbSnapshot(startedAt, "manual") : null;
+    }
+
     private static IReadOnlyList<AlertRuleSnapshot> ApplyOverride(
         IReadOnlyList<AlertRuleSnapshot> stored,
         ReplayRuleOverride? ruleOverride,

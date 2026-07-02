@@ -1,0 +1,33 @@
+<Project Sdk="Microsoft.NET.Sdk">
+    <PropertyGroup>
+        <TargetFramework>net10.0</TargetFramework>
+        <ImplicitUsings>enable</ImplicitUsings>
+        <Nullable>enable</Nullable>
+        <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+        <Description>P/Invoke bindings for the nocturne_alerts Rust library (crates/nocturne-alerts-ffi)</Description>
+    </PropertyGroup>
+
+    <!-- Native library deployment, mirroring Nocturne.Core.Oref: pack the cdylib from the
+         cargo workspace target dir (or $(NocturneAlertsNativeDir) override) into
+         runtimes/{rid}/native when it has been built. At runtime AlertsInterop also probes
+         the NOCTURNE_ALERTS_NATIVE_DIR environment variable, so a freshly built library can
+         be picked up without rebuilding this project. -->
+    <PropertyGroup>
+        <NocturneAlertsNativeDir Condition="'$(NocturneAlertsNativeDir)' == ''">$(MSBuildThisFileDirectory)..\..\..\crates\target\release\</NocturneAlertsNativeDir>
+    </PropertyGroup>
+    <ItemGroup Condition="Exists('$(NocturneAlertsNativeDir)nocturne_alerts.dll')">
+        <Content Include="$(NocturneAlertsNativeDir)nocturne_alerts.dll" Link="runtimes\win-x64\native\nocturne_alerts.dll">
+            <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+        </Content>
+    </ItemGroup>
+    <ItemGroup Condition="Exists('$(NocturneAlertsNativeDir)libnocturne_alerts.so')">
+        <Content Include="$(NocturneAlertsNativeDir)libnocturne_alerts.so" Link="runtimes\linux-x64\native\libnocturne_alerts.so">
+            <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+        </Content>
+    </ItemGroup>
+    <ItemGroup Condition="Exists('$(NocturneAlertsNativeDir)libnocturne_alerts.dylib')">
+        <Content Include="$(NocturneAlertsNativeDir)libnocturne_alerts.dylib" Link="runtimes\osx-x64\native\libnocturne_alerts.dylib">
+            <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+        </Content>
+    </ItemGroup>
+</Project>

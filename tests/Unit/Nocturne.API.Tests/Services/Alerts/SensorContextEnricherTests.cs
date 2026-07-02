@@ -43,6 +43,15 @@ public class SensorContextEnricherTests
     private readonly FakeTimeProvider _timeProvider = new(new DateTimeOffset(2026, 3, 22, 12, 0, 0, TimeSpan.Zero));
     private readonly Guid _tenantId = Guid.NewGuid();
 
+    public SensorContextEnricherTests()
+    {
+        // The repo never returns null; default the new DND-windows fetch to empty so the
+        // unconditional enrichment block is exercised. Per-test setups override this.
+        _alertRepository
+            .Setup(r => r.GetUnclearedDndWindowsAsync(It.IsAny<Guid>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(Array.Empty<DndWindowSnapshot>());
+    }
+
     [Fact]
     public async Task BgAndTrend_only_rule_triggers_no_external_fetches()
     {
@@ -616,6 +625,105 @@ public class SensorContextEnricherTests
         var enriched = await enricher.EnrichAsOfAsync(baseContext, new[] { rule }, _tenantId, tickUtc, CancellationToken.None);
 
         enriched.GlucoseBucket.Should().Be(Nocturne.Core.Models.Alerts.GlucoseBucket.Low);
+    }
+
+    // ---- scoped Do Not Disturb (ADR 0004 D5) ----
+
+    [Fact]
+    public async Task LowsWindow_setsLowsScope_butNotActiveDnd()
+    {
+        var now = _timeProvider.GetUtcNow().UtcDateTime;
+        _alertRepository
+            .Setup(r => r.GetUnclearedDndWindowsAsync(_tenantId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new List<DndWindowSnapshot>
+            {
+                new(DndScope.Lows, StartedAt: now.AddMinutes(-5), EndsAt: null, ClearedAt: null, CreatedAt: now.AddMinutes(-5)),
+            });
+
+        var enricher = BuildEnricher();
+        var rule = MakeRule(AlertConditionType.Threshold, """{"direction":"below","value":70}""");
+
+        var enriched = await enricher.EnrichAsync(BaseContext(), new[] { rule }, _tenantId, CancellationToken.None);
+
+        enriched.ActiveDndScopes.Should().BeEquivalentTo(new[] { DndScope.Lows });
+        // lows/highs windows feed the gate only — they never trip the do_not_disturb condition.
+        enriched.ActiveDoNotDisturb.Should().BeNull();
+    }
+
+    [Fact]
+    public async Task AllWindow_setsAllScope_andActiveDndAnchoredOnTheWindow()
+    {
+        var now = _timeProvider.GetUtcNow().UtcDateTime;
+        var startedAt = now.AddMinutes(-30);
+        _alertRepository
+            .Setup(r => r.GetUnclearedDndWindowsAsync(_tenantId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new List<DndWindowSnapshot>
+            {
+                new(DndScope.All, StartedAt: startedAt, EndsAt: null, ClearedAt: null, CreatedAt: startedAt),
+            });
+
+        var enricher = BuildEnricher();
+        var rule = MakeRule(AlertConditionType.Threshold, """{"direction":"below","value":70}""");
+
+        var enriched = await enricher.EnrichAsync(BaseContext(), new[] { rule }, _tenantId, CancellationToken.None);
+
+        enriched.ActiveDndScopes.Should().BeEquivalentTo(new[] { DndScope.All });
+        enriched.ActiveDoNotDisturb.Should().NotBeNull();
+        enriched.ActiveDoNotDisturb!.StartedAt.Should().Be(startedAt);
+        enriched.ActiveDoNotDisturb.Source.Should().Be("manual");
+    }
+
+    [Fact]
+    public async Task ScheduledDnd_contributesAllScope_andTripsActiveDnd()
+    {
+        // FakeTimeProvider is 2026-03-22 12:00 UTC; a 00:00–23:00 schedule (UTC fallback, no tz)
+        // is active, so scheduled DND is tenant-wide == scope=all.
+        _alertRepository
+            .Setup(r => r.GetTenantAlertSettingsAsync(_tenantId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new TenantAlertSettingsSnapshot(
+                DndScheduleEnabled: true,
+                DndScheduleStart: new TimeOnly(0, 0),
+                DndScheduleEnd: new TimeOnly(23, 0)));
+
+        var enricher = BuildEnricher();
+        var rule = MakeRule(AlertConditionType.Threshold, """{"direction":"below","value":70}""");
+
+        var enriched = await enricher.EnrichAsync(BaseContext(), new[] { rule }, _tenantId, CancellationToken.None);
+
+        enriched.ActiveDndScopes.Should().Contain(DndScope.All);
+        enriched.ActiveDoNotDisturb.Should().NotBeNull();
+        enriched.ActiveDoNotDisturb!.Source.Should().Be("scheduled");
+    }
+
+    [Fact]
+    public async Task ManualWindowAndScheduledDnd_bothActive_anchorsOnTheManualWindow()
+    {
+        // Pre-window contract (TenantAlertSettingsSnapshot.Resolve): the manual path takes
+        // precedence for the for_minutes anchor and source when both are active.
+        var now = _timeProvider.GetUtcNow().UtcDateTime;
+        var manualStartedAt = now.AddMinutes(-90);
+        _alertRepository
+            .Setup(r => r.GetTenantAlertSettingsAsync(_tenantId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new TenantAlertSettingsSnapshot(
+                DndScheduleEnabled: true,
+                DndScheduleStart: new TimeOnly(0, 0),
+                DndScheduleEnd: new TimeOnly(23, 0)));
+        _alertRepository
+            .Setup(r => r.GetUnclearedDndWindowsAsync(_tenantId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new List<DndWindowSnapshot>
+            {
+                new(DndScope.All, StartedAt: manualStartedAt, EndsAt: null, ClearedAt: null, CreatedAt: manualStartedAt),
+            });
+
+        var enricher = BuildEnricher();
+        var rule = MakeRule(AlertConditionType.Threshold, """{"direction":"below","value":70}""");
+
+        var enriched = await enricher.EnrichAsync(BaseContext(), new[] { rule }, _tenantId, CancellationToken.None);
+
+        enriched.ActiveDndScopes.Should().Contain(DndScope.All);
+        enriched.ActiveDoNotDisturb.Should().NotBeNull();
+        enriched.ActiveDoNotDisturb!.StartedAt.Should().Be(manualStartedAt);
+        enriched.ActiveDoNotDisturb.Source.Should().Be("manual");
     }
 
     private static string TryResolve(string ianaId, string windowsId)

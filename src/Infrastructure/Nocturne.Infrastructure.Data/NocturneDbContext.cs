@@ -506,6 +506,12 @@ public class NocturneDbContext : DbContext, IDataProtectionKeyContext
     public DbSet<TenantAlertSettingsEntity> TenantAlertSettings { get; set; }
 
     /// <summary>
+    /// Gets or sets the DndWindows table — scoped Do Not Disturb windows (ADR 0004):
+    /// independent per-scope mutes with client-supplied ids.
+    /// </summary>
+    public DbSet<DndWindowEntity> DndWindows { get; set; }
+
+    /// <summary>
     /// Gets or sets the ChatIdentityDirectory table — global routing for chat platform identities to tenant+user.
     /// </summary>
     public DbSet<ChatIdentityDirectoryEntry> ChatIdentityDirectory { get; set; }
@@ -2795,6 +2801,8 @@ public class NocturneDbContext : DbContext, IDataProtectionKeyContext
             entity.Property(e => e.ConditionParams).HasColumnType("jsonb").HasDefaultValue("{}");
             entity.Property(e => e.Severity).HasConversion(
                 new Converters.EnumMemberValueConverter<Core.Models.Alerts.AlertRuleSeverity>());
+            entity.Property(e => e.ScopeClass).HasConversion(
+                new Converters.EnumMemberValueConverter<Core.Models.Alerts.RuleScopeClass>());
             entity.Property(e => e.ClientConfiguration).HasColumnType("jsonb").HasDefaultValue("{}");
             entity.Property(e => e.IsEnabled).HasDefaultValue(true);
             entity.Property(e => e.CreatedAt).HasDefaultValueSql("CURRENT_TIMESTAMP");
@@ -2930,6 +2938,21 @@ public class NocturneDbContext : DbContext, IDataProtectionKeyContext
             entity.HasIndex(e => e.TenantId)
                 .IsUnique()
                 .HasDatabaseName("IX_tenant_alert_settings_tenant_id_unique");
+        });
+
+        // DndWindowEntity (scoped Do Not Disturb windows, ADR 0004)
+        modelBuilder.Entity<DndWindowEntity>(entity =>
+        {
+            entity.ToTable("dnd_windows");
+            // Id is client-supplied (idempotent upsert) — no value generator.
+            entity.Property(e => e.Scope).HasConversion(
+                new Converters.EnumMemberValueConverter<Core.Models.Alerts.DndScope>());
+            entity.Property(e => e.CreatedAt).HasDefaultValueSql("CURRENT_TIMESTAMP");
+            // Scope-keyed lookups for the gate/supersede only ever read uncleared windows,
+            // so a partial index over active windows (WHERE cleared_at IS NULL) keeps the
+            // cleared/expired audit history out of the hot path (ADR 0004 D5).
+            entity.HasIndex(e => new { e.TenantId, e.Scope })
+                .HasFilter("cleared_at IS NULL");
         });
 
         // PasskeyCredentialEntity

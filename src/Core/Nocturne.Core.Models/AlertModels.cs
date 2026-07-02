@@ -134,12 +134,23 @@ public record SensorContext
     public decimal? SensitivityRatio { get; init; }
 
     /// <summary>
-    /// Currently active Do Not Disturb projection, or null when DND is off. Populated from
-    /// <c>tenant_alert_settings</c> by the context enricher; collapses both manual and
-    /// scheduled DND activation paths into one snapshot, so condition evaluators don't have
-    /// to know which path is active.
+    /// Currently active Do Not Disturb projection, or null when DND is off. Drives the
+    /// <c>do_not_disturb</c> condition leaf and the tenant-wide notion of DND. Re-sourced by
+    /// the enricher from the active <c>scope=all</c> DND window and scheduled DND (ADR 0004 D5):
+    /// <c>lows</c>/<c>highs</c> windows feed <see cref="ActiveDndScopes"/> only and never trip
+    /// this. Non-null exactly when <see cref="ActiveDndScopes"/> contains <see cref="DndScope.All"/>.
     /// </summary>
     public DoNotDisturbSnapshot? ActiveDoNotDisturb { get; init; }
+
+    /// <summary>
+    /// The set of DND scopes active as of this context's evaluation instant (resolved on read
+    /// from the tenant's <c>dnd_windows</c> plus scheduled DND), for scoped Do Not Disturb
+    /// suppression (ADR 0004 D5). The shared <c>DndSuppressionGate</c> silences a rule when one
+    /// of these scopes covers the rule's <see cref="AlertRuleSnapshot.ScopeClass"/>. Empty when
+    /// no DND is active. Assembled live (<c>IsActiveAt(now)</c>) or, in replay, receipt-gated
+    /// (<c>WasActiveAt(T)</c>).
+    /// </summary>
+    public IReadOnlySet<DndScope> ActiveDndScopes { get; init; } = new HashSet<DndScope>();
 
     // ----- Cold-start null-suppression flags -----
     // These exist for facts where "no data yet" must be distinguished from "data is just

@@ -51,6 +51,97 @@ jobs:
           name: unit-trx
           path: "**/*.trx"
 
+  # The alert-engine golden corpus (tests/Parity/AlertEngineCorpus) is the normative
+  # spec for the Rust port of the leaf/node evaluation engine. While the C# engine is
+  # authoritative, any behavioural change to the evaluators/tracker must regenerate the
+  # corpus deliberately — this job fails if the committed corpus no longer matches what
+  # the engine produces.
+  alert-corpus-check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "10.0"
+      - name: Cache NuGet
+        uses: actions/cache@v4
+        with:
+          path: ~/.nuget/packages
+          key: nuget-${{ runner.os }}-${{ hashFiles('**/*.csproj', 'Directory.Packages.props') }}
+      - name: Verify alert engine corpus is current
+        run: |
+          dotnet run --project tests/Parity/Nocturne.Alerts.ParityCorpus.Generator \
+            -p:GenerateNSwagClient=false -- --check
+
+  # Rust alert engine FFI: lints + tests the crates workspace, builds the
+  # nocturne_alerts cdylib, then runs the three-way parity suite (C# engine vs
+  # committed corpus vs Rust engine over the C ABI). NOCTURNE_ALERTS_REQUIRE_NATIVE
+  # turns silent skips (native lib not found) into a hard failure so the parity
+  # theories can never quietly stop running here.
+  alerts-ffi-parity:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "10.0"
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy, rustfmt
+      - name: Cache cargo
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            crates/target
+          key: cargo-${{ runner.os }}-${{ hashFiles('crates/Cargo.lock') }}
+      - name: Cache NuGet
+        uses: actions/cache@v4
+        with:
+          path: ~/.nuget/packages
+          key: nuget-${{ runner.os }}-${{ hashFiles('**/*.csproj', 'Directory.Packages.props') }}
+      - name: Rust tests, clippy, fmt
+        working-directory: crates
+        run: |
+          cargo test --workspace
+          cargo clippy --workspace --all-targets -- -D warnings
+          cargo fmt --check
+      - name: Build nocturne_alerts cdylib
+        working-directory: crates
+        run: cargo build --release -p nocturne-alerts-ffi
+      - name: Three-way parity tests (C# engine vs corpus vs Rust FFI)
+        env:
+          NOCTURNE_ALERTS_NATIVE_DIR: ${{ github.workspace }}/crates/target/release
+          NOCTURNE_ALERTS_REQUIRE_NATIVE: "1"
+        run: |
+          dotnet test tests/Unit/Nocturne.Alerts.Native.Tests/Nocturne.Alerts.Native.Tests.csproj \
+            --logger "trx;LogFileName=alerts-ffi-parity.trx" \
+            -p:GenerateNSwagClient=false \
+            || exit 1
+      # Engine-seam tests (IAlertEvaluationEngine): corpus parity for both the managed and
+      # rust-backed seam adapters, cross-engine timer continuity, shadow-mode divergence
+      # logging, and Alerts:Engine flag selection. The rust-backed theories require the
+      # cdylib built above; NOCTURNE_ALERTS_REQUIRE_NATIVE turns silent skips into failures.
+      - name: Engine seam tests (managed + rust adapters, shadow, flag)
+        env:
+          NOCTURNE_ALERTS_NATIVE_DIR: ${{ github.workspace }}/crates/target/release
+          NOCTURNE_ALERTS_REQUIRE_NATIVE: "1"
+          Alerts__Engine: rust
+        run: |
+          dotnet test tests/Unit/Nocturne.API.Tests/Nocturne.API.Tests.csproj \
+            --filter "FullyQualifiedName~Services.Alerts.Engines" \
+            --logger "trx;LogFileName=alerts-engine-seam.trx" \
+            -p:GenerateNSwagClient=false \
+            || exit 1
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: alerts-ffi-parity-trx
+          path: "**/*.trx"
+
   # Database integration tests: bare-Postgres Testcontainers (no Aspire), so they
   # run reliably on GitHub-hosted runners where Docker is available. Other
   # integration projects stay deferred until their fixtures/references are fixed.
