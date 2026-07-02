@@ -5,8 +5,8 @@
 import { getRequestEvent, query, command } from '$app/server';
 import { error, redirect } from '@sveltejs/kit';
 import { z } from 'zod';
-import { SyncRequestSchema, ResetCursorRequestSchema } from '$lib/api/generated/schemas';
-import { type SyncRequest, type ResetCursorRequest } from '$api';
+import { SyncRequestSchema, StartSyncJobRequestSchema, ResetCursorRequestSchema } from '$lib/api/generated/schemas';
+import { type SyncRequest, type StartSyncJobRequest, type ResetCursorRequest } from '$api';
 
 /** Get a complete overview of services, data sources, and available integrations. */
 export const getServicesOverview = query(async () => {
@@ -314,6 +314,71 @@ export const triggerConnectorSync = command(z.object({ id: z.string(), request: 
     const message = flat ?? body?.message ?? body?.title ?? body?.detail ?? e?.message ?? e?.title ?? e?.detail;
     if (status === 400 || status === 409) throw error(status, message ?? 'Request rejected');
     throw error(500, message ?? 'Failed to trigger connector sync');
+  }
+});
+
+/** Start a manual connector sync as a background job. */
+export const startConnectorSyncJob = command(StartSyncJobRequestSchema, async (request) => {
+  const apiClient = getRequestEvent().locals.apiClient;
+  try {
+    const result = await apiClient.services.startConnectorSyncJob(request as StartSyncJobRequest);
+    return result;
+  } catch (err) {
+    const status = (err as any)?.status;
+    if (status === 401) { throw error(401, 'Unauthorized'); }
+    if (status === 403) throw error(403, (err as any)?.message ?? (err as any)?.detail ?? 'Forbidden');
+    console.error('Error in services.startConnectorSyncJob:', err);
+    const e = err as any;
+    const body = e?.body ?? e?.response;
+    const errors = body?.errors ?? e?.errors;
+    const flat = errors ? Object.entries(errors).map(([, v]: [string, any]) => Array.isArray(v) ? v.join(', ') : v).join('; ') : undefined;
+    const message = flat ?? body?.message ?? body?.title ?? body?.detail ?? e?.message ?? e?.title ?? e?.detail;
+    if (status === 400 || status === 409) throw error(status, message ?? 'Request rejected');
+    throw error(500, message ?? 'Failed to start connector sync job');
+  }
+});
+
+/** Get the progress of a manual connector sync job. */
+export const getConnectorSyncJob = query(z.string(), async (jobId) => {
+  const apiClient = getRequestEvent().locals.apiClient;
+  try {
+    return await apiClient.services.getConnectorSyncJob(jobId);
+  } catch (err) {
+    const status = (err as any)?.status;
+    if (status === 401) { const { request, url } = getRequestEvent();
+    const shareHost = request.headers.get('x-forwarded-host') ?? request.headers.get('host') ?? '';
+    if (/^[^.]+\.share\./i.test(shareHost)) throw error(401, 'Unauthorized');
+    throw redirect(302, `/auth/login?returnUrl=${encodeURIComponent(url.pathname + url.search)}`); }
+    if (status === 403) throw error(403, (err as any)?.message ?? (err as any)?.detail ?? 'Forbidden');
+    console.error('Error in services.getConnectorSyncJob:', err);
+    const e = err as any;
+    const body = e?.body ?? e?.response;
+    const errors = body?.errors ?? e?.errors;
+    const flat = errors ? Object.entries(errors).map(([, v]: [string, any]) => Array.isArray(v) ? v.join(', ') : v).join('; ') : undefined;
+    const message = flat ?? body?.message ?? body?.title ?? body?.detail ?? e?.message ?? e?.title ?? e?.detail;
+    if (status === 400 || status === 409) throw error(status, message ?? 'Request rejected');
+    throw error(500, message ?? 'Failed to get connector sync job');
+  }
+});
+
+/** Cancel a running manual connector sync job. */
+export const cancelConnectorSyncJob = command(z.string(), async (jobId) => {
+  const apiClient = getRequestEvent().locals.apiClient;
+  try {
+    const result = await apiClient.services.cancelConnectorSyncJob(jobId);
+    return result;
+  } catch (err) {
+    const status = (err as any)?.status;
+    if (status === 401) { throw error(401, 'Unauthorized'); }
+    if (status === 403) throw error(403, (err as any)?.message ?? (err as any)?.detail ?? 'Forbidden');
+    console.error('Error in services.cancelConnectorSyncJob:', err);
+    const e = err as any;
+    const body = e?.body ?? e?.response;
+    const errors = body?.errors ?? e?.errors;
+    const flat = errors ? Object.entries(errors).map(([, v]: [string, any]) => Array.isArray(v) ? v.join(', ') : v).join('; ') : undefined;
+    const message = flat ?? body?.message ?? body?.title ?? body?.detail ?? e?.message ?? e?.title ?? e?.detail;
+    if (status === 400 || status === 409) throw error(status, message ?? 'Request rejected');
+    throw error(500, message ?? 'Failed to cancel connector sync job');
   }
 });
 

@@ -9,8 +9,12 @@
     UploaderApp,
     DataSourceInfo,
     ConnectorStatusDto,
-    SyncRequest,
     ConnectorCapabilities,
+    ConnectorSyncJobStatus,
+  } from "$lib/api/generated/nocturne-api-client";
+  import {
+    ConnectorSyncJobState,
+    ConnectorSyncJobConnectorState,
   } from "$lib/api/generated/nocturne-api-client";
 
   import {
@@ -98,6 +102,7 @@
   let isManualSyncing = $state(false);
   let showManualSyncDialog = $state(false);
   let manualSyncResult = $state<BatchSyncResult | null>(null);
+  let manualSyncJobStatus = $state<ConnectorSyncJobStatus | null>(null);
 
   // Connector heartbeat metrics state
   let selectedConnector = $state<ConnectorStatusWithDescription | null>(null);
@@ -187,59 +192,88 @@
     return source.category === "demo" || source.sourceType === "demo";
   }
 
+  const SYNC_JOB_POLL_INTERVAL_MS = 2000;
+  const SYNC_JOB_MAX_POLL_FAILURES = 3;
+
+  function isSyncJobActive(status: ConnectorSyncJobStatus): boolean {
+    return (
+      status.state === ConnectorSyncJobState.Pending ||
+      status.state === ConnectorSyncJobState.Running
+    );
+  }
+
+  /** Polls a sync job until it reaches a terminal state, tolerating transient poll failures. */
+  async function pollSyncJob(jobId: string): Promise<ConnectorSyncJobStatus> {
+    const apiClient = getApiClient();
+    let consecutiveFailures = 0;
+
+    while (true) {
+      await new Promise((resolve) => setTimeout(resolve, SYNC_JOB_POLL_INTERVAL_MS));
+      try {
+        const status = await apiClient.services.getConnectorSyncJob(jobId);
+        consecutiveFailures = 0;
+        manualSyncJobStatus = status;
+        if (!isSyncJobActive(status)) return status;
+      } catch (e) {
+        consecutiveFailures++;
+        if (consecutiveFailures >= SYNC_JOB_MAX_POLL_FAILURES) throw e;
+      }
+    }
+  }
+
   async function triggerManualSync() {
+    if (isManualSyncing) {
+      showManualSyncDialog = true;
+      return;
+    }
+
     isManualSyncing = true;
     manualSyncResult = null;
+    manualSyncJobStatus = null;
     showManualSyncDialog = true;
 
     const startTime = new Date();
-    const connectorsToSync = connectorStatuses.filter((c) => c.isEnabled !== false);
-    const results: BatchSyncResult["connectorResults"] = [];
-    let successes = 0;
-
     const to = new Date();
     const from = new Date(to.getTime() - 30 * 24 * 60 * 60 * 1000);
-    const request: SyncRequest = { from, to };
 
     try {
       const apiClient = getApiClient();
 
-      for (const connector of connectorsToSync) {
-        const connectorId = connector.id;
-        if (!connectorId) continue;
+      // The server runs the sync as a background job (defaulting to every enabled connector)
+      // so this request returns immediately instead of blocking until proxies time out.
+      let status = await apiClient.services.startConnectorSyncJob({ from, to });
+      manualSyncJobStatus = status;
 
-        const start = performance.now();
-        let success = false;
-        let errorMsg = undefined;
-
-        try {
-          const result = await apiClient.services.triggerConnectorSync(connectorId, request);
-          success = result.success ?? false;
-          if (!success) errorMsg = result.message || "Unknown error";
-        } catch (e) {
-          success = false;
-          errorMsg = e instanceof Error ? e.message : "Request failed";
-        }
-
-        const durationMs = performance.now() - start;
-        results.push({
-          connectorName: connectorId,
-          success,
-          errorMessage: errorMsg,
-          duration: `${Math.round(durationMs)}ms`,
-        });
-
-        if (success) successes++;
+      if (isSyncJobActive(status) && status.jobId) {
+        status = await pollSyncJob(status.jobId);
       }
 
-      const endTime = new Date();
+      const results: BatchSyncResult["connectorResults"] = (status.connectors ?? []).map((c) => ({
+        connectorName: c.connectorId ?? "unknown",
+        success: c.state === ConnectorSyncJobConnectorState.Succeeded,
+        errorMessage:
+          c.state === ConnectorSyncJobConnectorState.Failed
+            ? c.message || "Unknown error"
+            : undefined,
+        duration:
+          c.startedAt && c.completedAt
+            ? `${Math.round(new Date(c.completedAt).getTime() - new Date(c.startedAt).getTime())}ms`
+            : undefined,
+      }));
+      const successes = results.filter((r) => r.success).length;
+      const totalConnectors = status.totalConnectors ?? results.length;
+
       manualSyncResult = {
-        success: successes > 0,
-        totalConnectors: connectorsToSync.length,
+        success: status.state === ConnectorSyncJobState.Completed && successes > 0,
+        errorMessage:
+          status.state === ConnectorSyncJobState.Cancelled
+            ? "Sync was cancelled"
+            : status.errorMessage ?? undefined,
+        totalConnectors,
         successfulConnectors: successes,
-        failedConnectors: connectorsToSync.length - successes,
+        failedConnectors: totalConnectors - successes,
         startTime,
-        endTime,
+        endTime: new Date(),
         connectorResults: results,
       };
 
@@ -253,12 +287,23 @@
         totalConnectors: 0,
         successfulConnectors: 0,
         failedConnectors: 0,
-        startTime: new Date(),
+        startTime,
         endTime: new Date(),
         connectorResults: [],
       };
     } finally {
       isManualSyncing = false;
+      manualSyncJobStatus = null;
+    }
+  }
+
+  async function cancelManualSync() {
+    const jobId = manualSyncJobStatus?.jobId;
+    if (!jobId) return;
+    try {
+      await getApiClient().services.cancelConnectorSyncJob(jobId);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Failed to cancel sync");
     }
   }
 
@@ -268,13 +313,9 @@
     quickSyncingById = { ...quickSyncingById, [connectorId]: true };
     try {
       const apiClient = getApiClient();
-      const result = await apiClient.services.triggerConnectorSync(connectorId, {});
-
-      if (result.success) {
-        toast.success("Sync started");
-      } else {
-        toast.error(result.message || "Sync failed");
-      }
+      // Background job with no date range: the connector resumes from its catch-up cursors.
+      await apiClient.services.startConnectorSyncJob({ connectorIds: [connectorId] });
+      toast.success("Sync started");
 
       await loadConnectorStatuses();
     } catch (e) {
@@ -672,7 +713,14 @@
   onDeleteComplete={loadServices}
 />
 
-<ManualSyncDialog bind:open={showManualSyncDialog} {isManualSyncing} {manualSyncResult} syncProgress={isManualSyncing ? activeSyncProgress : null} />
+<ManualSyncDialog
+  bind:open={showManualSyncDialog}
+  {isManualSyncing}
+  {manualSyncResult}
+  syncProgress={isManualSyncing ? activeSyncProgress : null}
+  jobStatus={isManualSyncing ? manualSyncJobStatus : null}
+  onCancel={cancelManualSync}
+/>
 
 <!-- Connector Details Dialog -->
 <ConnectorDetailsDialog bind:open={showConnectorDialog} {selectedConnector} {selectedConnectorCapabilities} onSyncComplete={loadConnectorStatuses} />

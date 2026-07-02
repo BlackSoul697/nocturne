@@ -779,6 +779,8 @@ public static class ServiceRegistrationExtensions
         // Singleton: holds the in-memory job registry so a reset started by one request can be
         // polled by later requests. Creates its own DI scopes for the scoped reset engine.
         services.AddSingleton<IConnectorCursorResetJobService, ConnectorCursorResetJobService>();
+        // Singleton for the same reason: manual sync jobs are polled across requests.
+        services.AddSingleton<IConnectorSyncJobService, ConnectorSyncJobService>();
 
         // Connector runtime
         services.AddBaseConnectorServices();

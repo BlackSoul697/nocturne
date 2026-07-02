@@ -10272,6 +10272,7 @@
           "Services"
         ],
         "summary": "Trigger a manual sync for a specific connector.",
+        "description": "Latency: this runs synchronously and only responds once the sync completes, so a\nlarge date range can exceed reverse-proxy / CDN request timeouts (e.g. Cloudflare's ~100s\nlimit → HTTP 524). Interactive callers should prefer the background-job equivalent\n(POST /api/v4/services/connectors/sync-jobs) and poll its status instead.",
         "operationId": "Services_TriggerConnectorSync",
         "parameters": [
           {
@@ -10310,6 +10311,142 @@
             }
           },
           "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        },
+        "x-remote-type": "command"
+      }
+    },
+    "/api/v4/services/connectors/sync-jobs": {
+      "post": {
+        "tags": [
+          "Services"
+        ],
+        "summary": "Start a manual connector sync as a background job.",
+        "description": "Returns immediately with 202 and a job snapshot; the sync itself runs in the background and\noutlives this request, so it cannot hit reverse-proxy / CDN timeouts the way the synchronous\nper-connector endpoint can. Poll GET connectors/sync-jobs/{jobId} for per-connector\nprogress. Only one job runs per tenant at a time — starting while one is active returns the\nactive job.",
+        "operationId": "Services_StartConnectorSyncJob",
+        "requestBody": {
+          "x-name": "request",
+          "description": "Connectors to sync (defaults to every enabled connector) plus the date range and data types applied to each.",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/StartSyncJobRequest"
+              }
+            }
+          },
+          "required": true,
+          "x-position": 1
+        },
+        "responses": {
+          "202": {
+            "description": "The created (or already-active) job's status snapshot.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConnectorSyncJobStatus"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        },
+        "x-remote-type": "command"
+      }
+    },
+    "/api/v4/services/connectors/sync-jobs/{jobId}": {
+      "get": {
+        "tags": [
+          "Services"
+        ],
+        "summary": "Get the progress of a manual connector sync job.",
+        "operationId": "Services_GetConnectorSyncJob",
+        "parameters": [
+          {
+            "name": "jobId",
+            "in": "path",
+            "required": true,
+            "description": "The job id returned when the job was started.",
+            "schema": {
+              "type": "string",
+              "format": "guid"
+            },
+            "x-position": 1
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The job's current status, including per-connector progress.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConnectorSyncJobStatus"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        },
+        "x-remote-type": "query"
+      }
+    },
+    "/api/v4/services/connectors/sync-jobs/{jobId}/cancel": {
+      "post": {
+        "tags": [
+          "Services"
+        ],
+        "summary": "Cancel a running manual connector sync job.",
+        "operationId": "Services_CancelConnectorSyncJob",
+        "parameters": [
+          {
+            "name": "jobId",
+            "in": "path",
+            "required": true,
+            "description": "The job id returned when the job was started.",
+            "schema": {
+              "type": "string",
+              "format": "guid"
+            },
+            "x-position": 1
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The job's status after the cancellation request.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConnectorSyncJobStatus"
+                }
+              }
+            }
+          },
+          "404": {
             "description": "",
             "content": {
               "application/json": {
@@ -36211,6 +36348,179 @@
           },
           "dataTypes": {
             "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SyncDataType"
+            }
+          }
+        }
+      },
+      "ConnectorSyncJobStatus": {
+        "type": "object",
+        "description": "A pollable snapshot of a manual connector sync job's progress.",
+        "additionalProperties": false,
+        "properties": {
+          "jobId": {
+            "type": "string",
+            "description": "The job id, used to poll status and cancel.",
+            "format": "guid"
+          },
+          "state": {
+            "description": "The job's current lifecycle state.",
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/ConnectorSyncJobState"
+              }
+            ]
+          },
+          "createdAt": {
+            "type": "string",
+            "description": "When the job was created.",
+            "format": "date-time"
+          },
+          "startedAt": {
+            "type": "string",
+            "description": "When the background work started, or null if not yet started.",
+            "format": "date-time",
+            "nullable": true
+          },
+          "completedAt": {
+            "type": "string",
+            "description": "When the job reached a terminal state, or null if still running.",
+            "format": "date-time",
+            "nullable": true
+          },
+          "errorMessage": {
+            "type": "string",
+            "description": "An error message when the whole job failed (not a single connector).",
+            "nullable": true
+          },
+          "totalConnectors": {
+            "type": "integer",
+            "description": "Total connectors the job will sync.",
+            "format": "int32"
+          },
+          "completedConnectors": {
+            "type": "integer",
+            "description": "How many connectors have finished (succeeded or failed).",
+            "format": "int32"
+          },
+          "connectors": {
+            "type": "array",
+            "description": "Per-connector progress, in requested order.",
+            "items": {
+              "$ref": "#/components/schemas/ConnectorSyncJobConnectorProgress"
+            }
+          }
+        }
+      },
+      "ConnectorSyncJobState": {
+        "type": "string",
+        "description": "Lifecycle state of a manual connector sync job.",
+        "x-enumNames": [
+          "Pending",
+          "Running",
+          "Completed",
+          "Failed",
+          "Cancelled"
+        ],
+        "enum": [
+          "Pending",
+          "Running",
+          "Completed",
+          "Failed",
+          "Cancelled"
+        ]
+      },
+      "ConnectorSyncJobConnectorProgress": {
+        "type": "object",
+        "description": "Progress for a single connector within a sync job.",
+        "additionalProperties": false,
+        "properties": {
+          "connectorId": {
+            "type": "string",
+            "description": "The connector id (e.g. nightscout)."
+          },
+          "state": {
+            "description": "The connector's current state in this job.",
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/ConnectorSyncJobConnectorState"
+              }
+            ]
+          },
+          "startedAt": {
+            "type": "string",
+            "description": "When this connector's sync started, or null if still pending.",
+            "format": "date-time",
+            "nullable": true
+          },
+          "completedAt": {
+            "type": "string",
+            "description": "When this connector's sync finished, or null if pending or running.",
+            "format": "date-time",
+            "nullable": true
+          },
+          "message": {
+            "type": "string",
+            "description": "A human-readable message for the outcome, once the connector has completed.",
+            "nullable": true
+          },
+          "result": {
+            "description": "The full sync result, once the connector has completed.",
+            "nullable": true,
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/SyncResult"
+              }
+            ]
+          }
+        }
+      },
+      "ConnectorSyncJobConnectorState": {
+        "type": "string",
+        "description": "State of a single connector within a sync job.",
+        "x-enumNames": [
+          "Pending",
+          "Running",
+          "Succeeded",
+          "Failed"
+        ],
+        "enum": [
+          "Pending",
+          "Running",
+          "Succeeded",
+          "Failed"
+        ]
+      },
+      "StartSyncJobRequest": {
+        "type": "object",
+        "description": "Request body for starting a manual connector sync as a background job.",
+        "additionalProperties": false,
+        "properties": {
+          "connectorIds": {
+            "type": "array",
+            "description": "Connectors to sync, in order. When null or empty, every enabled connector is synced.",
+            "nullable": true,
+            "items": {
+              "type": "string"
+            }
+          },
+          "from": {
+            "type": "string",
+            "description": "Optional lower bound of the sync window.",
+            "format": "date-time",
+            "nullable": true
+          },
+          "to": {
+            "type": "string",
+            "description": "Optional upper bound of the sync window. When null, connectors resume from their per-type\ncatch-up cursors instead of re-pulling the explicit range.",
+            "format": "date-time",
+            "nullable": true
+          },
+          "dataTypes": {
+            "type": "array",
+            "description": "Optional set of data types to sync. When null or empty, every data type each connector\nsupports is synced.",
+            "nullable": true,
             "items": {
               "$ref": "#/components/schemas/SyncDataType"
             }

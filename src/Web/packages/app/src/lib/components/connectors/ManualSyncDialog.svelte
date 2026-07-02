@@ -1,8 +1,10 @@
 <script lang="ts">
   import * as Dialog from "$lib/components/ui/dialog";
   import { Button } from "$lib/components/ui/button";
-  import { Loader2, Download, CheckCircle, AlertCircle } from "lucide-svelte";
+  import { Loader2, Download, CheckCircle, AlertCircle, Circle } from "lucide-svelte";
   import type { SyncProgressEvent } from "$lib/websocket/types";
+  import type { ConnectorSyncJobStatus } from "$lib/api/generated/nocturne-api-client";
+  import { ConnectorSyncJobConnectorState } from "$lib/api/generated/nocturne-api-client";
   import { formatSyncMessage } from "$lib/utils/sync-messages";
   import { tick } from "svelte";
 
@@ -32,11 +34,15 @@
     isManualSyncing = false,
     manualSyncResult = null,
     syncProgress = null,
+    jobStatus = null,
+    onCancel = undefined,
   } = $props<{
     open: boolean;
     isManualSyncing: boolean;
     manualSyncResult: BatchSyncResult | null;
     syncProgress: SyncProgressEvent | null;
+    jobStatus?: ConnectorSyncJobStatus | null;
+    onCancel?: () => void;
   }>();
 
   let logEntries = $state<LogEntry[]>([]);
@@ -82,9 +88,31 @@
           <div class="flex items-center gap-2">
             <Loader2 class="h-4 w-4 animate-spin text-primary" />
             <p class="text-sm text-muted-foreground">
-              {syncProgress?.connectorName ?? "Connector"} is syncing...
+              {#if jobStatus && (jobStatus.totalConnectors ?? 0) > 1}
+                Syncing connectors ({jobStatus.completedConnectors ?? 0} of {jobStatus.totalConnectors} done)
+              {:else}
+                {syncProgress?.connectorName ?? "Connector"} is syncing...
+              {/if}
             </p>
           </div>
+          {#if jobStatus?.connectors && jobStatus.connectors.length > 1}
+            <div class="space-y-1">
+              {#each jobStatus.connectors as connector (connector.connectorId)}
+                <div class="flex items-center gap-2 text-sm">
+                  {#if connector.state === ConnectorSyncJobConnectorState.Running}
+                    <Loader2 class="h-3.5 w-3.5 animate-spin text-primary" />
+                  {:else if connector.state === ConnectorSyncJobConnectorState.Succeeded}
+                    <CheckCircle class="h-3.5 w-3.5 text-green-600 dark:text-green-400" />
+                  {:else if connector.state === ConnectorSyncJobConnectorState.Failed}
+                    <AlertCircle class="h-3.5 w-3.5 text-red-600 dark:text-red-400" />
+                  {:else}
+                    <Circle class="h-3.5 w-3.5 text-muted-foreground" />
+                  {/if}
+                  <span>{connector.connectorId}</span>
+                </div>
+              {/each}
+            </div>
+          {/if}
           {#if logEntries.length > 0}
             <div
               bind:this={logContainer}
@@ -162,6 +190,11 @@
     </div>
 
     <Dialog.Footer>
+      {#if isManualSyncing && onCancel && jobStatus}
+        <Button variant="destructive" onclick={onCancel}>
+          Cancel Sync
+        </Button>
+      {/if}
       <Button variant="outline" onclick={() => (open = false)}>
         Close
       </Button>

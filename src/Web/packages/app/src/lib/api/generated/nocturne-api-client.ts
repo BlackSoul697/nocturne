@@ -11122,6 +11122,151 @@ export class ServicesClient {
     }
 
     /**
+     * Start a manual connector sync as a background job.
+     * @param request Connectors to sync (defaults to every enabled connector) plus the date range and data types applied to each.
+     * @return The created (or already-active) job's status snapshot.
+     */
+    startConnectorSyncJob(request: StartSyncJobRequest, signal?: AbortSignal): Promise<ConnectorSyncJobStatus> {
+        let url_ = this.baseUrl + "/api/v4/services/connectors/sync-jobs";
+        url_ = url_.replace(/[?&]$/, "");
+
+        const content_ = JSON.stringify(request);
+
+        let options_: RequestInit = {
+            body: content_,
+            method: "POST",
+            signal,
+            headers: {
+                "Content-Type": "application/json",
+                "Accept": "application/json"
+            }
+        };
+
+        return this.http.fetch(url_, options_).then((_response: Response) => {
+            return this.processStartConnectorSyncJob(_response);
+        });
+    }
+
+    protected processStartConnectorSyncJob(response: Response): Promise<ConnectorSyncJobStatus> {
+        const status = response.status;
+        let _headers: any = {}; if (response.headers && response.headers.forEach) { response.headers.forEach((v: any, k: any) => _headers[k] = v); };
+        if (status === 202) {
+            return response.text().then((_responseText) => {
+            let result202: any = null;
+            result202 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver) as ConnectorSyncJobStatus;
+            return result202;
+            });
+        } else if (status === 400) {
+            return response.text().then((_responseText) => {
+            let result400: any = null;
+            result400 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver) as ProblemDetails;
+            return throwException("A server side error occurred.", status, _responseText, _headers, result400);
+            });
+        } else if (status !== 200 && status !== 204) {
+            return response.text().then((_responseText) => {
+            return throwException("An unexpected server error occurred.", status, _responseText, _headers);
+            });
+        }
+        return Promise.resolve<ConnectorSyncJobStatus>(null as any);
+    }
+
+    /**
+     * Get the progress of a manual connector sync job.
+     * @param jobId The job id returned when the job was started.
+     * @return The job's current status, including per-connector progress.
+     */
+    getConnectorSyncJob(jobId: string, signal?: AbortSignal): Promise<ConnectorSyncJobStatus> {
+        let url_ = this.baseUrl + "/api/v4/services/connectors/sync-jobs/{jobId}";
+        if (jobId === undefined || jobId === null)
+            throw new globalThis.Error("The parameter 'jobId' must be defined.");
+        url_ = url_.replace("{jobId}", encodeURIComponent("" + jobId));
+        url_ = url_.replace(/[?&]$/, "");
+
+        let options_: RequestInit = {
+            method: "GET",
+            signal,
+            headers: {
+                "Accept": "application/json"
+            }
+        };
+
+        return this.http.fetch(url_, options_).then((_response: Response) => {
+            return this.processGetConnectorSyncJob(_response);
+        });
+    }
+
+    protected processGetConnectorSyncJob(response: Response): Promise<ConnectorSyncJobStatus> {
+        const status = response.status;
+        let _headers: any = {}; if (response.headers && response.headers.forEach) { response.headers.forEach((v: any, k: any) => _headers[k] = v); };
+        if (status === 200) {
+            return response.text().then((_responseText) => {
+            let result200: any = null;
+            result200 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver) as ConnectorSyncJobStatus;
+            return result200;
+            });
+        } else if (status === 404) {
+            return response.text().then((_responseText) => {
+            let result404: any = null;
+            result404 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver) as ProblemDetails;
+            return throwException("A server side error occurred.", status, _responseText, _headers, result404);
+            });
+        } else if (status !== 200 && status !== 204) {
+            return response.text().then((_responseText) => {
+            return throwException("An unexpected server error occurred.", status, _responseText, _headers);
+            });
+        }
+        return Promise.resolve<ConnectorSyncJobStatus>(null as any);
+    }
+
+    /**
+     * Cancel a running manual connector sync job.
+     * @param jobId The job id returned when the job was started.
+     * @return The job's status after the cancellation request.
+     */
+    cancelConnectorSyncJob(jobId: string, signal?: AbortSignal): Promise<ConnectorSyncJobStatus> {
+        let url_ = this.baseUrl + "/api/v4/services/connectors/sync-jobs/{jobId}/cancel";
+        if (jobId === undefined || jobId === null)
+            throw new globalThis.Error("The parameter 'jobId' must be defined.");
+        url_ = url_.replace("{jobId}", encodeURIComponent("" + jobId));
+        url_ = url_.replace(/[?&]$/, "");
+
+        let options_: RequestInit = {
+            method: "POST",
+            signal,
+            headers: {
+                "Accept": "application/json"
+            }
+        };
+
+        return this.http.fetch(url_, options_).then((_response: Response) => {
+            return this.processCancelConnectorSyncJob(_response);
+        });
+    }
+
+    protected processCancelConnectorSyncJob(response: Response): Promise<ConnectorSyncJobStatus> {
+        const status = response.status;
+        let _headers: any = {}; if (response.headers && response.headers.forEach) { response.headers.forEach((v: any, k: any) => _headers[k] = v); };
+        if (status === 200) {
+            return response.text().then((_responseText) => {
+            let result200: any = null;
+            result200 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver) as ConnectorSyncJobStatus;
+            return result200;
+            });
+        } else if (status === 404) {
+            return response.text().then((_responseText) => {
+            let result404: any = null;
+            result404 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver) as ProblemDetails;
+            return throwException("A server side error occurred.", status, _responseText, _headers, result404);
+            });
+        } else if (status !== 200 && status !== 204) {
+            return response.text().then((_responseText) => {
+            return throwException("An unexpected server error occurred.", status, _responseText, _headers);
+            });
+        }
+        return Promise.resolve<ConnectorSyncJobStatus>(null as any);
+    }
+
+    /**
      * Reset a connector's sync cursor for the current tenant and re-pull historical data.
      * @param id Connector ID (e.g., "nightscout", "dexcom").
      * @param request Optional lower bound and data-type filter. Omit from to re-pull all available history; omit dataTypes to reset every supported type.
@@ -31418,6 +31563,75 @@ export interface SyncRequest {
     from?: Date | undefined;
     to?: Date | undefined;
     dataTypes?: SyncDataType[];
+}
+
+/** A pollable snapshot of a manual connector sync job's progress. */
+export interface ConnectorSyncJobStatus {
+    /** The job id, used to poll status and cancel. */
+    jobId?: string;
+    /** The job's current lifecycle state. */
+    state?: ConnectorSyncJobState;
+    /** When the job was created. */
+    createdAt?: Date;
+    /** When the background work started, or null if not yet started. */
+    startedAt?: Date | undefined;
+    /** When the job reached a terminal state, or null if still running. */
+    completedAt?: Date | undefined;
+    /** An error message when the whole job failed (not a single connector). */
+    errorMessage?: string | undefined;
+    /** Total connectors the job will sync. */
+    totalConnectors?: number;
+    /** How many connectors have finished (succeeded or failed). */
+    completedConnectors?: number;
+    /** Per-connector progress, in requested order. */
+    connectors?: ConnectorSyncJobConnectorProgress[];
+}
+
+/** Lifecycle state of a manual connector sync job. */
+export enum ConnectorSyncJobState {
+    Pending = "Pending",
+    Running = "Running",
+    Completed = "Completed",
+    Failed = "Failed",
+    Cancelled = "Cancelled",
+}
+
+/** Progress for a single connector within a sync job. */
+export interface ConnectorSyncJobConnectorProgress {
+    /** The connector id (e.g. nightscout). */
+    connectorId?: string;
+    /** The connector's current state in this job. */
+    state?: ConnectorSyncJobConnectorState;
+    /** When this connector's sync started, or null if still pending. */
+    startedAt?: Date | undefined;
+    /** When this connector's sync finished, or null if pending or running. */
+    completedAt?: Date | undefined;
+    /** A human-readable message for the outcome, once the connector has completed. */
+    message?: string | undefined;
+    /** The full sync result, once the connector has completed. */
+    result?: SyncResult | undefined;
+}
+
+/** State of a single connector within a sync job. */
+export enum ConnectorSyncJobConnectorState {
+    Pending = "Pending",
+    Running = "Running",
+    Succeeded = "Succeeded",
+    Failed = "Failed",
+}
+
+/** Request body for starting a manual connector sync as a background job. */
+export interface StartSyncJobRequest {
+    /** Connectors to sync, in order. When null or empty, every enabled connector is synced. */
+    connectorIds?: string[] | undefined;
+    /** Optional lower bound of the sync window. */
+    from?: Date | undefined;
+    /** Optional upper bound of the sync window. When null, connectors resume from their per-type
+catch-up cursors instead of re-pulling the explicit range. */
+    to?: Date | undefined;
+    /** Optional set of data types to sync. When null or empty, every data type each connector
+supports is synced. */
+    dataTypes?: SyncDataType[] | undefined;
 }
 
 /** Request body for resetting a connector's sync cursor and re-pulling history. */

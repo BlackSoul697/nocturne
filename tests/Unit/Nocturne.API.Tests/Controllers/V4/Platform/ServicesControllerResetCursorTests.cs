@@ -27,6 +27,7 @@ public class ServicesControllerResetCursorTests
             Mock.Of<IDataSourceService>(),
             Mock.Of<IConnectorHealthService>(),
             syncService,
+            Mock.Of<IConnectorSyncJobService>(),
             Mock.Of<ILogger<ServicesController>>(),
             Mock.Of<IConfiguration>(),
             Mock.Of<ITenantAccessor>(),

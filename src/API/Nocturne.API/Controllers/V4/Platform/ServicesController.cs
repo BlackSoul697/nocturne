@@ -27,6 +27,7 @@ public class ServicesController : ControllerBase
     private readonly IDataSourceService _dataSourceService;
     private readonly IConnectorHealthService _connectorHealthService;
     private readonly IConnectorSyncService _connectorSyncService;
+    private readonly IConnectorSyncJobService _connectorSyncJobService;
     private readonly ILogger<ServicesController> _logger;
     private readonly IConfiguration _configuration;
     private readonly ITenantAccessor _tenantAccessor;
@@ -38,6 +39,7 @@ public class ServicesController : ControllerBase
     /// <param name="dataSourceService">Service for querying active data sources and their status.</param>
     /// <param name="connectorHealthService">Service for connector health state queries.</param>
     /// <param name="connectorSyncService">Service for triggering on-demand connector syncs.</param>
+    /// <param name="connectorSyncJobService">Service for running manual syncs as pollable background jobs.</param>
     /// <param name="logger">Logger instance.</param>
     /// <param name="configuration">Application configuration for base URL resolution.</param>
     /// <param name="tenantAccessor">Resolved tenant context, used to build the tenant's subdomain base URL.</param>
@@ -46,6 +48,7 @@ public class ServicesController : ControllerBase
         IDataSourceService dataSourceService,
         IConnectorHealthService connectorHealthService,
         IConnectorSyncService connectorSyncService,
+        IConnectorSyncJobService connectorSyncJobService,
         ILogger<ServicesController> logger,
         IConfiguration configuration,
         ITenantAccessor tenantAccessor,
@@ -55,6 +58,7 @@ public class ServicesController : ControllerBase
         _dataSourceService = dataSourceService;
         _connectorHealthService = connectorHealthService;
         _connectorSyncService = connectorSyncService;
+        _connectorSyncJobService = connectorSyncJobService;
         _logger = logger;
         _configuration = configuration;
         _tenantAccessor = tenantAccessor;
@@ -427,6 +431,12 @@ public class ServicesController : ControllerBase
     /// <summary>
     /// Trigger a manual sync for a specific connector.
     /// </summary>
+    /// <remarks>
+    /// <b>Latency:</b> this runs synchronously and only responds once the sync completes, so a
+    /// large date range can exceed reverse-proxy / CDN request timeouts (e.g. Cloudflare's ~100s
+    /// limit → HTTP 524). Interactive callers should prefer the background-job equivalent
+    /// (<c>POST /api/v4/services/connectors/sync-jobs</c>) and poll its status instead.
+    /// </remarks>
     /// <param name="id">Connector ID (e.g., "dexcom", "tidepool")</param>
     /// <param name="request">Sync request parameters (date range and data types)</param>
     /// <param name="cancellationToken">Cancellation token</param>
@@ -449,6 +459,94 @@ public class ServicesController : ControllerBase
 
         var result = await _connectorSyncService.TriggerSyncAsync(id, request, cancellationToken);
         return Ok(result);
+    }
+
+    /// <summary>
+    /// Start a manual connector sync as a background job.
+    /// </summary>
+    /// <remarks>
+    /// Returns immediately with 202 and a job snapshot; the sync itself runs in the background and
+    /// outlives this request, so it cannot hit reverse-proxy / CDN timeouts the way the synchronous
+    /// per-connector endpoint can. Poll <c>GET connectors/sync-jobs/{jobId}</c> for per-connector
+    /// progress. Only one job runs per tenant at a time — starting while one is active returns the
+    /// active job.
+    /// </remarks>
+    /// <param name="request">Connectors to sync (defaults to every enabled connector) plus the date range and data types applied to each.</param>
+    /// <param name="cancellationToken">Cancellation token for connector-list resolution (not the background job).</param>
+    /// <returns>The created (or already-active) job's status snapshot.</returns>
+    [HttpPost("connectors/sync-jobs")]
+    [RequireAdmin]
+    [RemoteCommand]
+    [ProducesResponseType(typeof(ConnectorSyncJobStatus), 202)]
+    [ProducesResponseType(400)]
+    public async Task<ActionResult<ConnectorSyncJobStatus>> StartConnectorSyncJob(
+        [FromBody] StartSyncJobRequest request,
+        CancellationToken cancellationToken
+    )
+    {
+        if (_tenantAccessor.Context is not { } tenant)
+            return Problem(detail: "No tenant context", statusCode: 400, title: "Bad Request");
+
+        var connectorIds = request.ConnectorIds
+            ?.Where(id => !string.IsNullOrWhiteSpace(id))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
+
+        if (connectorIds is not { Count: > 0 })
+        {
+            var statuses = await _connectorHealthService.GetConnectorStatusesAsync(cancellationToken);
+            connectorIds = statuses.Where(s => s.IsEnabled).Select(s => s.Id).ToList();
+        }
+
+        if (connectorIds.Count == 0)
+            return Problem(detail: "No enabled connectors to sync", statusCode: 400, title: "Bad Request");
+
+        var syncRequest = new Nocturne.Connectors.Core.Models.SyncRequest
+        {
+            From = request.From,
+            To = request.To,
+            DataTypes = request.DataTypes ?? [],
+        };
+
+        var status = _connectorSyncJobService.StartSync(tenant, connectorIds, syncRequest);
+        return AcceptedAtAction(nameof(GetConnectorSyncJob), new { jobId = status.JobId }, status);
+    }
+
+    /// <summary>
+    /// Get the progress of a manual connector sync job.
+    /// </summary>
+    /// <param name="jobId">The job id returned when the job was started.</param>
+    /// <returns>The job's current status, including per-connector progress.</returns>
+    [HttpGet("connectors/sync-jobs/{jobId:guid}")]
+    [RequireAdmin]
+    [RemoteQuery]
+    [ProducesResponseType(typeof(ConnectorSyncJobStatus), 200)]
+    [ProducesResponseType(404)]
+    public ActionResult<ConnectorSyncJobStatus> GetConnectorSyncJob(Guid jobId)
+    {
+        var status = _connectorSyncJobService.GetStatus(jobId, _tenantAccessor.TenantId);
+        if (status is null)
+            return Problem(detail: "Sync job not found", statusCode: 404, title: "Not Found");
+
+        return Ok(status);
+    }
+
+    /// <summary>
+    /// Cancel a running manual connector sync job.
+    /// </summary>
+    /// <param name="jobId">The job id returned when the job was started.</param>
+    /// <returns>The job's status after the cancellation request.</returns>
+    [HttpPost("connectors/sync-jobs/{jobId:guid}/cancel")]
+    [RequireAdmin]
+    [RemoteCommand]
+    [ProducesResponseType(typeof(ConnectorSyncJobStatus), 200)]
+    [ProducesResponseType(404)]
+    public ActionResult<ConnectorSyncJobStatus> CancelConnectorSyncJob(Guid jobId)
+    {
+        if (!_connectorSyncJobService.Cancel(jobId, _tenantAccessor.TenantId))
+            return Problem(detail: "Sync job not found", statusCode: 404, title: "Not Found");
+
+        return Ok(_connectorSyncJobService.GetStatus(jobId, _tenantAccessor.TenantId));
     }
 
     /// <summary>
@@ -647,6 +745,32 @@ public class ResetCursorRequest
     /// <summary>
     /// Optional set of data types to reset. When null or empty, every data type the connector
     /// supports is re-pulled.
+    /// </summary>
+    public List<Nocturne.Connectors.Core.Models.SyncDataType>? DataTypes { get; init; }
+}
+
+/// <summary>
+/// Request body for starting a manual connector sync as a background job.
+/// </summary>
+public class StartSyncJobRequest
+{
+    /// <summary>
+    /// Connectors to sync, in order. When null or empty, every enabled connector is synced.
+    /// </summary>
+    public List<string>? ConnectorIds { get; init; }
+
+    /// <summary>Optional lower bound of the sync window.</summary>
+    public DateTime? From { get; init; }
+
+    /// <summary>
+    /// Optional upper bound of the sync window. When null, connectors resume from their per-type
+    /// catch-up cursors instead of re-pulling the explicit range.
+    /// </summary>
+    public DateTime? To { get; init; }
+
+    /// <summary>
+    /// Optional set of data types to sync. When null or empty, every data type each connector
+    /// supports is synced.
     /// </summary>
     public List<Nocturne.Connectors.Core.Models.SyncDataType>? DataTypes { get; init; }
 }
