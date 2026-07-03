@@ -3,7 +3,6 @@
   import { Button } from "$lib/components/ui/button";
   import { Separator } from "$lib/components/ui/separator";
   import {
-    Loader2,
     Copy,
     Check,
     ExternalLink,
@@ -15,11 +14,7 @@
   import TabletSmartphone from "lucide-svelte/icons/tablet-smartphone";
   import XdripQuickConnect from "$lib/components/XdripQuickConnect.svelte";
   import PreludeQuickConnect from "$lib/components/PreludeQuickConnect.svelte";
-  import type {
-    UploaderApp,
-    UploaderSetupResponse,
-  } from "$lib/api/generated/nocturne-api-client";
-  import { getUploaderSetup } from "$api/generated/services.generated.remote";
+  import type { UploaderApp } from "$lib/api/generated/nocturne-api-client";
   import { KeyRound } from "lucide-svelte";
   import {
     getUploaderName,
@@ -36,12 +31,6 @@
     onRequestApiKey?: (label: string, scopes: string[]) => void;
   } = $props();
 
-  const uploaderSetupQuery = $derived(
-    open && selectedUploader?.id ? getUploaderSetup(selectedUploader.id) : null,
-  );
-  const uploaderSetup = $derived<UploaderSetupResponse | null>(
-    uploaderSetupQuery?.current ?? null,
-  );
   let copiedField = $state<string | null>(null);
 
   const hasOAuthFlow = $derived(
@@ -78,8 +67,8 @@
 </script>
 
 <Dialog.Root bind:open>
-  <Dialog.Content class="max-w-2xl max-h-[80vh] overflow-y-auto">
-    {#if selectedUploader && uploaderSetup}
+  <Dialog.Content class="sm:max-w-2xl max-h-[80vh] overflow-y-auto">
+    {#if selectedUploader}
       {@const PlatformIcon = getPlatformIcon(selectedUploader.platform)}
       <Dialog.Header>
         <Dialog.Title class="flex items-center gap-2">
@@ -159,10 +148,6 @@
           </div>
         {/if}
         </div>
-      </div>
-    {:else}
-      <div class="flex items-center justify-center py-8">
-        <Loader2 class="h-6 w-6 animate-spin text-muted-foreground" />
       </div>
     {/if}
   </Dialog.Content>
