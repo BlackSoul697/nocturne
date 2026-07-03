@@ -37,14 +37,15 @@ public class SleepService : ISleepService
         int limit,
         int offset,
         bool descending,
+        bool includeStages,
         CancellationToken cancellationToken)
     {
         _logger.LogDebug(
-            "Getting sleep sessions with type: {Type}, source: {Source}, from: {From}, to: {To}, limit: {Limit}, offset: {Offset}",
-            type, source, from, to, limit, offset);
+            "Getting sleep sessions with type: {Type}, source: {Source}, from: {From}, to: {To}, limit: {Limit}, offset: {Offset}, includeStages: {IncludeStages}",
+            type, source, from, to, limit, offset, includeStages);
 
         return await _repository.GetSessionsAsync(
-            from, to, type, source, limit, offset, descending, cancellationToken);
+            from, to, type, source, limit, offset, descending, includeStages, cancellationToken);
     }
 
     /// <inheritdoc />

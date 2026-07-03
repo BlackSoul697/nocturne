@@ -41608,8 +41608,16 @@
           "id": {
             "type": "string"
           },
+          "kind": {
+            "$ref": "#/components/schemas/ChartSpanKind"
+          },
           "category": {
-            "$ref": "#/components/schemas/StateSpanCategory"
+            "nullable": true,
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/StateSpanCategory"
+              }
+            ]
           },
           "state": {
             "type": "string"
@@ -41632,6 +41640,18 @@
             "additionalProperties": {}
           }
         }
+      },
+      "ChartSpanKind": {
+        "type": "string",
+        "description": "",
+        "x-enumNames": [
+          "StateSpan",
+          "Sleep"
+        ],
+        "enum": [
+          "StateSpan",
+          "Sleep"
+        ]
       },
       "BasalDeliverySpanDto": {
         "type": "object",

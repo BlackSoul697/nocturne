@@ -1,4 +1,5 @@
 using FluentAssertions;
+using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Time.Testing;
 using Nocturne.API.Services.Alerts.Evaluators;
 using Nocturne.Core.Models;
@@ -16,7 +17,9 @@ public class StateSpanActiveEvaluatorTests
 
     public StateSpanActiveEvaluatorTests()
     {
-        _sut = new StateSpanActiveEvaluator(new FakeTimeProvider(new DateTimeOffset(FixedNow)));
+        _sut = new StateSpanActiveEvaluator(
+            new FakeTimeProvider(new DateTimeOffset(FixedNow)),
+            NullLogger<StateSpanActiveEvaluator>.Instance);
     }
 
     [Fact]
@@ -84,6 +87,20 @@ public class StateSpanActiveEvaluatorTests
             new StateSpanSnapshot(StateSpanCategory.PumpConnectivity, "Disconnected", FixedNow.AddMinutes(-3)));
 
         (await _sut.EvaluateAsync(json, ctx, CancellationToken.None)).Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task LegacySleepCategory_DoesNotThrow_ReturnsFalse()
+    {
+        // PR #226 removed the Sleep StateSpanCategory. A stored rule still carrying
+        // {"category":"Sleep"} must be skipped (evaluates to false) rather than throwing a
+        // JsonException every evaluation cycle.
+        var json = """{"category": "Sleep", "is_active": true}""";
+        var ctx = MakeContext(activeSpans: new Dictionary<(StateSpanCategory, string?), StateSpanSnapshot>());
+
+        var act = async () => await _sut.EvaluateAsync(json, ctx, CancellationToken.None);
+
+        (await act.Should().NotThrowAsync()).Subject.Should().BeFalse();
     }
 
     private static SensorContext MakeContext(

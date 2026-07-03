@@ -5,6 +5,7 @@ using Nocturne.API.Services.Treatments;
 using Nocturne.Core.Contracts.Alerts;
 using Nocturne.Core.Contracts.Glucose;
 using Nocturne.Core.Contracts.Profiles.Resolvers;
+using Nocturne.Core.Contracts.Sleep;
 using Nocturne.Core.Contracts.Treatments;
 using Nocturne.Core.Contracts.V4.Repositories;
 
@@ -37,4 +38,5 @@ internal sealed record SensorContextEnricherDependencies(
     ITargetRangeScheduleRepository TargetRangeSchedules,
     IActiveProfileResolver ActiveProfileResolver,
     ITherapySettingsResolver TherapySettings,
+    ISleepService Sleep,
     IOptions<AlertEvaluationOptions> Options);

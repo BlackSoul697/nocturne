@@ -28,6 +28,8 @@
     Bell,
     BellOff,
     CalendarClock,
+    CalendarDays,
+    Moon,
   } from "lucide-svelte";
   import type { ConditionNode } from "./types";
   import type { TrendBucket } from "./types";
@@ -85,6 +87,8 @@
     bell: Bell,
     "bell-off": BellOff,
     "calendar-clock": CalendarClock,
+    "calendar-days": CalendarDays,
+    moon: Moon,
   };
 
   // Map the alert builder's trend buckets to the shared `Direction` enum so

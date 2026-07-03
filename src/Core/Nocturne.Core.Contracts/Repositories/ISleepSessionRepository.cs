@@ -21,6 +21,7 @@ public interface ISleepSessionRepository
     /// <param name="limit">Maximum number of records to return.</param>
     /// <param name="offset">Number of records to skip for pagination.</param>
     /// <param name="descending">When <c>true</c>, orders by start time descending.</param>
+    /// <param name="includeStages">When <c>true</c>, populates <see cref="SleepSession.Stages"/> on each record.</param>
     /// <param name="cancellationToken">Cancellation token.</param>
     /// <returns>A collection of matching <see cref="SleepSession"/> records.</returns>
     Task<IEnumerable<SleepSession>> GetSessionsAsync(
@@ -31,6 +32,7 @@ public interface ISleepSessionRepository
         int limit = 100,
         int offset = 0,
         bool descending = true,
+        bool includeStages = false,
         CancellationToken cancellationToken = default);
 
     /// <summary>

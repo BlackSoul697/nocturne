@@ -181,7 +181,7 @@ public class DataFetchStageTests
             .Setup(s => s.GetSessionsAsync(
                 It.IsAny<DateTime?>(), It.IsAny<DateTime?>(),
                 It.IsAny<SleepSessionType?>(), It.IsAny<SleepSource?>(),
-                It.IsAny<int>(), It.IsAny<int>(), It.IsAny<bool>(),
+                It.IsAny<int>(), It.IsAny<int>(), It.IsAny<bool>(), It.IsAny<bool>(),
                 It.IsAny<CancellationToken>()))
             .ReturnsAsync(Array.Empty<SleepSession>());
 

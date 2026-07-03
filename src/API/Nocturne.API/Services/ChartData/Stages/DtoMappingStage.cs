@@ -144,7 +144,9 @@ internal sealed class DtoMappingStage(ITreatmentFoodService treatmentFoodService
 
     /// <summary>
     /// Projects sleep sessions into activity-span DTOs so they appear on the chart's activity layer.
-    /// Each session becomes one span coloured with <see cref="ChartColor.ActivitySleep"/>.
+    /// Sleep is not a <see cref="StateSpanCategory"/>; each span carries
+    /// <see cref="ChartSpanKind.Sleep"/> with a null category so consumers select the sleep icon
+    /// and label without inspecting <see cref="ChartStateSpanDto.State"/>.
     /// </summary>
     private static List<ChartStateSpanDto> MapSleepSessions(IEnumerable<SleepSession> sessions)
     {
@@ -152,10 +154,9 @@ internal sealed class DtoMappingStage(ITreatmentFoodService treatmentFoodService
             .Select(s => new ChartStateSpanDto
             {
                 Id = s.Id ?? "",
-                // Sleep is no longer a StateSpanCategory; use Exercise as the closest
-                // activity-layer stand-in. The Color and State carry the real semantics.
-                Category = StateSpanCategory.Exercise,
-                State = $"Sleep ({s.Type})",
+                Kind = ChartSpanKind.Sleep,
+                Category = null,
+                State = SleepStateLabel(s.Type),
                 StartMills = s.StartMills,
                 EndMills = s.EndMills,
                 Color = ChartColor.ActivitySleep,
@@ -163,6 +164,14 @@ internal sealed class DtoMappingStage(ITreatmentFoodService treatmentFoodService
             })
             .ToList();
     }
+
+    private static string SleepStateLabel(SleepSessionType type) =>
+        type switch
+        {
+            SleepSessionType.Nap => "Nap",
+            SleepSessionType.Rest => "Rest",
+            _ => "Sleep",
+        };
 
     private async Task ProcessFoodOffsetsAsync(
         List<CarbMarkerDto> carbMarkers,

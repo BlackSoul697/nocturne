@@ -14,17 +14,21 @@ namespace Nocturne.Infrastructure.Data.Migrations
             // StateSpan rows held only a coarse start/end/state and cannot be
             // faithfully reshaped into stage-aware sessions, so they are dropped
             // rather than migrated. Sources re-sync sleep into the new tables.
-            // FORCE ROW LEVEL SECURITY applies to the migrator, so the delete is
-            // scoped per tenant with the tenant context set for each iteration.
+            // state_spans has FORCE ROW LEVEL SECURITY and the migrator role is
+            // NOBYPASSRLS, so state_spans cannot be used to discover tenants —
+            // without app.current_tenant_id set, RLS filters every row. Tenants
+            // are enumerated from the tenants table (not tenant-scoped, no RLS
+            // policy), and the GUC is set per iteration so each DELETE runs
+            // inside that tenant's RLS context.
             migrationBuilder.Sql("""
                 DO $$
                 DECLARE
-                    t RECORD;
+                    r RECORD;
                 BEGIN
-                    FOR t IN SELECT DISTINCT tenant_id FROM state_spans WHERE category = 'Sleep'
+                    FOR r IN SELECT id FROM tenants
                     LOOP
-                        PERFORM set_config('app.current_tenant_id', t.tenant_id::text, true);
-                        DELETE FROM state_spans WHERE category = 'Sleep' AND tenant_id = t.tenant_id;
+                        PERFORM set_config('app.current_tenant_id', r.id::text, true);
+                        DELETE FROM state_spans WHERE category = 'Sleep' AND tenant_id = r.id;
                     END LOOP;
                 END $$;
                 """);

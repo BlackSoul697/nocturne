@@ -198,6 +198,13 @@ public record SensorContext
     /// </summary>
     public IReadOnlyDictionary<(StateSpanCategory Category, string? State), StateSpanSnapshot> ActiveStateSpans { get; init; }
         = new Dictionary<(StateSpanCategory, string?), StateSpanSnapshot>();
+
+    /// <summary>
+    /// True when a sleep session (from the sleep_sessions tables) has
+    /// <c>StartTime &lt;= now &lt;= EndTime</c> for the tenant. Populated by the enricher only
+    /// when a rule references the <c>sleep_session_active</c> condition; false otherwise.
+    /// </summary>
+    public bool SleepSessionActive { get; init; }
 }
 
 /// <summary>
@@ -436,6 +443,13 @@ public record StateSpanActiveCondition(
     [property: JsonPropertyName("is_active")] bool IsActive,
     [property: JsonPropertyName("for_minutes")] int? ForMinutes);
 
+/// <summary>Sleep-session-active condition. True when a sleep session (from the sleep_sessions
+/// tables) has <c>StartTime &lt;= now &lt;= EndTime</c> for the tenant. <see cref="IsActive"/>
+/// selects which side of the boolean is asserted: <c>true</c> matches while a session is active,
+/// <c>false</c> matches when none is.</summary>
+public record SleepSessionActiveCondition(
+    [property: JsonPropertyName("is_active")] bool IsActive);
+
 /// <summary>Selects which TempBasal field a TempBasalCondition compares.</summary>
 [JsonConverter(typeof(JsonStringEnumConverter<TempBasalMetric>))]
 public enum TempBasalMetric
@@ -484,7 +498,8 @@ public record ConditionNode(
     [property: JsonPropertyName("time_since_last_bolus")] TimeSinceLastBolusCondition? TimeSinceLastBolus = null,
     [property: JsonPropertyName("day_of_week")] DayOfWeekCondition? DayOfWeek = null,
     [property: JsonPropertyName("pump_state")] PumpStateCondition? PumpState = null,
-    [property: JsonPropertyName("state_span_active")] StateSpanActiveCondition? StateSpanActive = null
+    [property: JsonPropertyName("state_span_active")] StateSpanActiveCondition? StateSpanActive = null,
+    [property: JsonPropertyName("sleep_session_active")] SleepSessionActiveCondition? SleepSessionActive = null
 );
 
 /// <summary>

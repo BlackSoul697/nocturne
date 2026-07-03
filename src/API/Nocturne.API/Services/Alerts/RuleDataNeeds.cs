@@ -34,6 +34,7 @@ public sealed record DataNeedsSet(
     bool NeedsGlucoseBucket,
     bool NeedsTreatments,
     bool NeedsTenantTimeZone,
+    bool NeedsSleepSession,
     IReadOnlySet<PumpModeState> ReferencedPumpStates,
     IReadOnlySet<(StateSpanCategory Category, string? State)> ReferencedStateSpans)
 // Note: there is intentionally no `NeedsDoNotDisturb` here. DND state must be available for
@@ -46,7 +47,7 @@ public sealed record DataNeedsSet(
     public static DataNeedsSet None { get; } =
         new(false, false, false, false, false, false, false, false,
             false, false, false, false, false, false, false,
-            false, false, false,
+            false, false, false, false,
             new HashSet<PumpModeState>(),
             new HashSet<(StateSpanCategory, string?)>());
 }
@@ -193,6 +194,7 @@ public static class RuleDataNeeds
             // null (the default the UI saves), so the enricher must populate it. Without
             // this co-fetch the evaluator would silently fall back to UTC.
             case AlertConditionType.TimeOfDay: b.TenantTimeZone = true; break;
+            case AlertConditionType.SleepSessionActive: b.SleepSession = true; break;
             case AlertConditionType.PumpState: /* handled in VisitTopLevel/VisitNode */ break;
             case AlertConditionType.StateSpanActive: /* handled in VisitTopLevel/VisitNode */ break;
             // DoNotDisturb deliberately not handled here — see DataNeedsSet docs above.
@@ -237,12 +239,13 @@ public static class RuleDataNeeds
         public bool GlucoseBucket;
         public bool Treatments;
         public bool TenantTimeZone;
+        public bool SleepSession;
         public readonly HashSet<PumpModeState> PumpStates = new();
         public readonly HashSet<(StateSpanCategory Category, string? State)> StateSpans = new();
 
         public DataNeedsSet Build() =>
             new(Iob, Cob, Predicted, Reservoir, SiteAge, SensorAge, Trend, ActiveAlerts,
                 LastApsCycle, LastApsEnacted, PumpStatus, TempBasal, UploaderStatus, Override, SensitivityRatio,
-                GlucoseBucket, Treatments, TenantTimeZone, PumpStates, StateSpans);
+                GlucoseBucket, Treatments, TenantTimeZone, SleepSession, PumpStates, StateSpans);
     }
 }

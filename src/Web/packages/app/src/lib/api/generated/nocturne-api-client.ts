@@ -32195,12 +32195,18 @@ export interface BgCheckMarkerDto {
 
 export interface ChartStateSpanDto {
     id?: string;
-    category?: StateSpanCategory;
+    kind?: ChartSpanKind;
+    category?: StateSpanCategory | undefined;
     state?: string;
     startMills?: number;
     endMills?: number | undefined;
     color?: ChartColor;
     metadata?: { [key: string]: any; } | undefined;
+}
+
+export enum ChartSpanKind {
+    StateSpan = "StateSpan",
+    Sleep = "Sleep",
 }
 
 export interface BasalDeliverySpanDto {

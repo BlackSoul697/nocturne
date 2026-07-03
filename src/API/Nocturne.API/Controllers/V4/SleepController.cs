@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
 using Nocturne.Core.Contracts.Sleep;
 using Nocturne.Core.Models;
 using Nocturne.Core.Models.V4;
@@ -49,7 +50,7 @@ public class SleepController : ControllerBase
             return Problem(detail: $"Invalid sort value '{sort}'. Must be 'timestamp_asc' or 'timestamp_desc'.", statusCode: 400, title: "Bad Request");
 
         var descending = sort == "timestamp_desc";
-        var data = await _sleepService.GetSessionsAsync(from, to, type, source, limit, offset, descending, cancellationToken);
+        var data = await _sleepService.GetSessionsAsync(from, to, type, source, limit, offset, descending, cancellationToken: cancellationToken);
         var total = await _sleepService.CountSessionsAsync(from, to, type, source, cancellationToken);
         return Ok(new PaginatedResponse<SleepSession> { Data = data, Pagination = new PaginationInfo(limit, offset, total) });
     }
@@ -73,12 +74,22 @@ public class SleepController : ControllerBase
     /// </summary>
     [HttpPost]
     [ProducesResponseType(typeof(SleepSession), StatusCodes.Status201Created)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
     public async Task<ActionResult<SleepSession>> CreateSession(
         [FromBody] SleepSession session,
         CancellationToken cancellationToken = default)
     {
-        var created = await _sleepService.UpsertSessionAsync(session, cancellationToken);
-        return CreatedAtAction(nameof(GetSession), new { id = created.Id }, created);
+        try
+        {
+            var created = await _sleepService.UpsertSessionAsync(session, cancellationToken);
+            return CreatedAtAction(nameof(GetSession), new { id = created.Id }, created);
+        }
+        catch (DbUpdateException)
+        {
+            // A concurrent request inserted a session with the same key between
+            // the upsert's dedup lookup and its insert.
+            return Problem(detail: "A sleep session with the same identifier was created concurrently.", statusCode: 409, title: "Conflict");
+        }
     }
 
     /// <summary>

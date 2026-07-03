@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using Nocturne.Core.Contracts.Repositories;
 using Nocturne.Core.Models;
+using Nocturne.Infrastructure.Data.Entities;
 using Nocturne.Infrastructure.Data.Mappers;
 using Nocturne.Infrastructure.Data.Services;
 
@@ -25,16 +26,18 @@ public class SleepSessionRepository : ISleepSessionRepository
     /// <inheritdoc />
     public async Task<IEnumerable<SleepSession>> GetSessionsAsync(
         DateTime? from = null, DateTime? to = null, SleepSessionType? type = null, SleepSource? source = null,
-        int limit = 100, int offset = 0, bool descending = true,
+        int limit = 100, int offset = 0, bool descending = true, bool includeStages = false,
         CancellationToken cancellationToken = default)
     {
         await using var ctx = await _contextFactory.CreateAsync(cancellationToken);
         var query = BuildFilteredQuery(ctx, from, to, type, source);
+        if (includeStages)
+            query = query.Include(e => e.Stages);
         query = descending
             ? query.OrderByDescending(e => e.StartTime)
             : query.OrderBy(e => e.StartTime);
         var entities = await query.Skip(offset).Take(limit).ToListAsync(cancellationToken);
-        return entities.Select(e => SleepSessionMapper.ToDomainModel(e));
+        return entities.Select(e => SleepSessionMapper.ToDomainModel(e, includeChildren: includeStages));
     }
 
     /// <inheritdoc />
@@ -72,23 +75,33 @@ public class SleepSessionRepository : ISleepSessionRepository
             // Dedup by Source + OriginalId. When a prior sync of the same source
             // record exists, replace its contents in place: keep its primary key
             // so re-syncs don't churn the session id (and any reference to it).
+            SleepSessionEntity? existing = null;
             if (!string.IsNullOrEmpty(entity.OriginalId))
             {
-                var existing = await ctx.SleepSessions
+                existing = await ctx.SleepSessions
                     .Include(s => s.Stages)
                     .Include(s => s.BiometricSamples)
                     .FirstOrDefaultAsync(
                         s => s.Source == entity.Source && s.OriginalId == entity.OriginalId,
                         cancellationToken);
+            }
 
-                if (existing is not null)
-                {
-                    entity.Id = existing.Id;
-                    ctx.SleepBiometricSamples.RemoveRange(existing.BiometricSamples);
-                    ctx.SleepStages.RemoveRange(existing.Stages);
-                    ctx.SleepSessions.Remove(existing);
-                    await ctx.SaveChangesAsync(cancellationToken);
-                }
+            // Dedup by primary key. The mapper derives a deterministic entity Id
+            // from an incoming session Id, so an upsert carrying an existing
+            // session's Id (with a null or different OriginalId) must replace
+            // that row rather than insert a duplicate key.
+            existing ??= await ctx.SleepSessions
+                .Include(s => s.Stages)
+                .Include(s => s.BiometricSamples)
+                .FirstOrDefaultAsync(s => s.Id == entity.Id, cancellationToken);
+
+            if (existing is not null)
+            {
+                entity.Id = existing.Id;
+                ctx.SleepBiometricSamples.RemoveRange(existing.BiometricSamples);
+                ctx.SleepStages.RemoveRange(existing.Stages);
+                ctx.SleepSessions.Remove(existing);
+                await ctx.SaveChangesAsync(cancellationToken);
             }
 
             ctx.SleepSessions.Add(entity);

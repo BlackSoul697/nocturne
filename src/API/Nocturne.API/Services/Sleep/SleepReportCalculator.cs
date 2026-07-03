@@ -69,6 +69,12 @@ internal static class SleepReportCalculator
 
     // ── Overnight TIR ─────────────────────────────────────────────────────
 
+    /// <summary>
+    /// Computes overnight time-in-range percentages. Bucketing matches
+    /// <c>StatisticsService.CalculateTimeInRange</c>: very low is <c>&lt; VeryLow</c>,
+    /// low is <c>&lt; Low</c>, very high is <c>&gt; VeryHigh</c>, high is
+    /// <c>&gt; TargetTop</c>, and everything else is in range.
+    /// </summary>
     internal static SleepOvernightTir? ComputeOvernightTir(
         SleepSession session, IEnumerable<SensorGlucose> allGlucose, GlycemicThresholds thresholds)
     {
@@ -87,11 +93,11 @@ internal static class SleepReportCalculator
         foreach (var g in readings)
         {
             sum += g.Mgdl;
-            if      (g.Mgdl <= thresholds.VeryLow)  veryLow++;
-            else if (g.Mgdl <= thresholds.Low)      low++;
-            else if (g.Mgdl <= thresholds.High)     inRange++;
-            else if (g.Mgdl <= thresholds.VeryHigh) high++;
-            else                                                                   veryHigh++;
+            if      (g.Mgdl < thresholds.VeryLow)   veryLow++;
+            else if (g.Mgdl < thresholds.Low)       low++;
+            else if (g.Mgdl > thresholds.VeryHigh)  veryHigh++;
+            else if (g.Mgdl > thresholds.TargetTop) high++;
+            else                                    inRange++;
         }
 
         var n = (double)readings.Count;
@@ -164,7 +170,8 @@ internal static class SleepReportCalculator
             DurationMinutes = (int)(end.Timestamp - start.Timestamp).TotalMinutes,
             LowestBg        = (int)Math.Round(nadir.Mgdl),
             Stage           = stage,
-            Severity        = nadir.Mgdl <= thresholds.VeryLow
+            // Strict < matches StatisticsService.CalculateEpisodes' VeryLow classification.
+            Severity        = nadir.Mgdl < thresholds.VeryLow
                                 ? SleepHypoSeverity.VeryLow
                                 : SleepHypoSeverity.Low,
         };
@@ -312,11 +319,20 @@ internal static class SleepReportCalculator
 
     // ── Deduplication ─────────────────────────────────────────────────────
 
+    /// <summary>
+    /// Collapses concurrent multi-device recordings to one session per night.
+    /// Sessions are bucketed by a noon-to-noon night key: the UTC start time is
+    /// converted to the session's IANA <see cref="SleepSession.Timezone"/> (falling
+    /// back to UTC when the timezone is null or unresolvable), then shifted back
+    /// 12 hours and truncated to a date — so any start before local noon belongs
+    /// to the previous calendar day's night. Within a bucket the session with the
+    /// most sleep wins, tie-broken by source priority.
+    /// </summary>
     internal static IReadOnlyList<SleepSession> DeduplicateToOnePerNight(
         IEnumerable<SleepSession> sessions)
     {
         return sessions
-            .GroupBy(s => s.StartTime.Date)
+            .GroupBy(NightKey)
             .Select(g => g
                 .OrderByDescending(s => s.TotalSleepMs)
                 .ThenBy(s =>
@@ -327,6 +343,31 @@ internal static class SleepReportCalculator
                 .First())
             .OrderBy(s => s.StartTime)
             .ToList();
+    }
+
+    private static DateTime NightKey(SleepSession session)
+    {
+        var localStart = session.StartTime;
+
+        if (!string.IsNullOrWhiteSpace(session.Timezone))
+        {
+            try
+            {
+                var tz = TimeZoneInfo.FindSystemTimeZoneById(session.Timezone);
+                localStart = TimeZoneInfo.ConvertTimeFromUtc(
+                    DateTime.SpecifyKind(session.StartTime, DateTimeKind.Utc), tz);
+            }
+            catch (TimeZoneNotFoundException)
+            {
+                // Unresolvable timezone id — key on UTC.
+            }
+            catch (InvalidTimeZoneException)
+            {
+                // Corrupt timezone data — key on UTC.
+            }
+        }
+
+        return localStart.AddHours(-12).Date;
     }
 
     // ── Trends Summary ────────────────────────────────────────────────────
@@ -342,7 +383,9 @@ internal static class SleepReportCalculator
         var totalRem   = nights.Sum(n => n.RemMinutes);
 
         var last7  = nights.TakeLast(7).ToList();
-        var prior7 = nights.TakeLast(14).Take(7).ToList();
+        // Exclude the last-7 window so the two never overlap; empty when fewer
+        // than 8 nights exist, which nulls every delta below.
+        var prior7 = nights.SkipLast(7).TakeLast(7).ToList();
 
         static double? MeanScore(IList<SleepNightSummary> ns) =>
             ns.Any(n => n.SleepScore.HasValue)

@@ -94,6 +94,7 @@ export interface TrackerMarkerData {
 /** A state span (pump mode, override, profile, activity, temp basal, basal delivery) */
 export interface StateSpan {
   id?: string;
+  kind?: string;
   category?: string;
   state?: string;
   startTime: Date;

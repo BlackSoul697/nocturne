@@ -1,4 +1,5 @@
 using Microsoft.Extensions.Logging;
+using Nocturne.Core.Contracts.Profiles.Resolvers;
 using Nocturne.Core.Contracts.Repositories;
 using Nocturne.Core.Contracts.Sleep;
 using Nocturne.Core.Contracts.V4.Repositories;
@@ -11,20 +12,71 @@ namespace Nocturne.API.Services.Sleep;
 /// Orchestrates sleep report data by combining session records with CGM readings
 /// and delegating all computation to <see cref="SleepReportCalculator"/>.
 /// </summary>
+/// <remarks>
+/// Glycemic thresholds mirror <c>ProfileLoadStage</c>: very-low (54 mg/dL) and
+/// very-high (250 mg/dL) are fixed; low/target-bottom and high/target-top come from
+/// the active profile's target range, with 70/180 fallbacks when no therapy
+/// settings exist.
+/// </remarks>
 public class SleepReportService : ISleepReportService
 {
+    private const double DefaultVeryLow  = 54;
+    private const double DefaultLow      = 70;
+    private const double DefaultHigh     = 180;
+    private const double DefaultVeryHigh = 250;
+
     private readonly ISleepSessionRepository _sessions;
     private readonly ISensorGlucoseRepository _glucose;
+    private readonly ITherapySettingsResolver _therapySettingsResolver;
+    private readonly ITargetRangeResolver _targetRangeResolver;
     private readonly ILogger<SleepReportService> _logger;
 
     public SleepReportService(
         ISleepSessionRepository sessions,
         ISensorGlucoseRepository glucose,
+        ITherapySettingsResolver therapySettingsResolver,
+        ITargetRangeResolver targetRangeResolver,
         ILogger<SleepReportService> logger)
     {
         _sessions = sessions;
         _glucose  = glucose;
+        _therapySettingsResolver = therapySettingsResolver;
+        _targetRangeResolver     = targetRangeResolver;
         _logger   = logger;
+    }
+
+    /// <summary>
+    /// Resolves glycemic thresholds at <paramref name="timeMills"/> the same way
+    /// <c>ProfileLoadStage</c> does: very-low/very-high are fixed; low and high come
+    /// from the active profile's target range, falling back to 70/180 when no therapy
+    /// settings exist for the tenant.
+    /// </summary>
+    private async Task<GlycemicThresholds> ResolveThresholdsAsync(long timeMills, CancellationToken ct)
+    {
+        if (!await _therapySettingsResolver.HasDataAsync(ct))
+        {
+            return new GlycemicThresholds
+            {
+                VeryLow      = DefaultVeryLow,
+                Low          = DefaultLow,
+                TargetBottom = DefaultLow,
+                High         = DefaultHigh,
+                TargetTop    = DefaultHigh,
+                VeryHigh     = DefaultVeryHigh,
+            };
+        }
+
+        var low  = await _targetRangeResolver.GetLowBGTargetAsync(timeMills, ct: ct);
+        var high = await _targetRangeResolver.GetHighBGTargetAsync(timeMills, ct: ct);
+        return new GlycemicThresholds
+        {
+            VeryLow      = DefaultVeryLow,
+            Low          = low,
+            TargetBottom = low,
+            High         = high,
+            TargetTop    = high,
+            VeryHigh     = DefaultVeryHigh,
+        };
     }
 
     /// <inheritdoc/>
@@ -49,7 +101,7 @@ public class SleepReportService : ISleepReportService
             afterId:        null,
             ct:             ct);
 
-        var thresholds = new GlycemicThresholds();
+        var thresholds = await ResolveThresholdsAsync(session.EndMills, ct);
         var stages    = session.Stages ?? [];
         var breakdown = SleepReportCalculator.ComputeStageBreakdown(session);
         var tir       = SleepReportCalculator.ComputeOvernightTir(session, glucoseReadings, thresholds);
@@ -113,7 +165,7 @@ public class SleepReportService : ISleepReportService
 
         // Slice the (date-range-bounded) glucose set per night so each night's
         // computation scans only its own window, not every reading in the range.
-        var thresholds = new GlycemicThresholds();
+        var thresholds = await ResolveThresholdsAsync(new DateTimeOffset(glucoseTo, TimeSpan.Zero).ToUnixTimeMilliseconds(), ct);
         var nights = sessions
             .Select(s =>
             {

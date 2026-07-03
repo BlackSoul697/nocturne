@@ -134,4 +134,8 @@ public enum AlertConditionType
     /// <summary>Generic state-span-active leaf for non-pump-mode categories (Override, Sleep, Exercise, ...).</summary>
     [EnumMember(Value = "state_span_active"), JsonStringEnumMemberName("state_span_active")]
     StateSpanActive,
+
+    /// <summary>A sleep session (from the sleep_sessions tables) is active at the current time.</summary>
+    [EnumMember(Value = "sleep_session_active"), JsonStringEnumMemberName("sleep_session_active")]
+    SleepSessionActive,
 }

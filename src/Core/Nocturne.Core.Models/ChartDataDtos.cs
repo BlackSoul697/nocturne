@@ -233,14 +233,42 @@ public class SystemEventMarkerDto
 }
 
 /// <summary>
-/// State span DTO for chart rendering. Projected from <see cref="StateSpan"/> records.
+/// Discriminator for what a <see cref="ChartStateSpanDto"/> represents on the activity layer.
+/// State spans and sleep sessions share the activity chart layer but come from different domain
+/// sources; consumers branch on this to select icons and tooltip labels without parsing
+/// <see cref="ChartStateSpanDto.State"/> strings.
+/// </summary>
+[JsonConverter(typeof(JsonStringEnumConverter<ChartSpanKind>))]
+public enum ChartSpanKind
+{
+    /// <summary>
+    /// A span projected from a <see cref="StateSpan"/> record. <see cref="ChartStateSpanDto.Category"/> is set.
+    /// </summary>
+    StateSpan,
+
+    /// <summary>
+    /// A span projected from a <see cref="SleepSession"/>. <see cref="ChartStateSpanDto.Category"/> is null.
+    /// </summary>
+    Sleep
+}
+
+/// <summary>
+/// State span DTO for chart rendering. Projected from <see cref="StateSpan"/> records or
+/// <see cref="SleepSession"/> records that share the activity layer.
 /// </summary>
 /// <seealso cref="StateSpanCategory"/>
+/// <seealso cref="ChartSpanKind"/>
 /// <seealso cref="ChartColor"/>
 public class ChartStateSpanDto
 {
     public string Id { get; set; } = "";
-    public StateSpanCategory Category { get; set; }
+
+    /// <summary>What this span represents. Sleep sessions use <see cref="ChartSpanKind.Sleep"/>.</summary>
+    public ChartSpanKind Kind { get; set; }
+
+    /// <summary>Source state-span category. Null when <see cref="Kind"/> is <see cref="ChartSpanKind.Sleep"/>.</summary>
+    public StateSpanCategory? Category { get; set; }
+
     public string State { get; set; } = "";
     public long StartMills { get; set; }
     public long? EndMills { get; set; }

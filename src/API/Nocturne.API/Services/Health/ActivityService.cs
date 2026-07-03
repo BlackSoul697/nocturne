@@ -14,6 +14,7 @@ namespace Nocturne.API.Services.Health;
 /// <summary>
 /// Domain service implementation for <see cref="Activity"/> operations with WebSocket broadcasting.
 /// Regular activities are stored as <see cref="StateSpan"/> records via <see cref="IStateSpanService"/>.
+/// Sleep-typed activities are stored as <see cref="SleepSession"/> records via <see cref="ISleepService"/>.
 /// Heart rate and step count sensor data is routed to dedicated tables via <see cref="IActivityDecomposer"/>.
 /// On create, all sources are merged, sorted by <see cref="Activity.Mills"/> descending, and re-paginated.
 /// </summary>
@@ -314,6 +315,48 @@ public class ActivityService : IActivityService
         {
             _logger.LogDebug("Updating activity record with ID: {Id}", id);
 
+            // Try sleep sessions first: GET projects sleep activities with the session Guid as id
+            if (Guid.TryParse(id, out var sleepGuid))
+            {
+                var existingSession = await _sleepService.GetSessionByIdAsync(sleepGuid, cancellationToken);
+                if (existingSession != null)
+                {
+                    var session = ActivityStateSpanMapper.ToSleepSession(activity);
+                    // Keep the stored row's dedup key (Source + OriginalId); the v1 payload
+                    // carries the session Guid, not the original source record id
+                    session.Source = existingSession.Source;
+                    session.OriginalId = existingSession.OriginalId;
+
+                    var updatedSession = await _sleepService.UpdateSessionAsync(
+                        sleepGuid,
+                        session,
+                        cancellationToken
+                    );
+                    if (updatedSession == null)
+                        return null;
+
+                    var updatedFromSession = ActivityStateSpanMapper.SleepSessionToActivity(updatedSession);
+                    await BroadcastActivityUpdateAsync(updatedFromSession, id, cancellationToken);
+                    _logger.LogDebug("Successfully updated sleep session for activity ID: {Id}", id);
+                    return updatedFromSession;
+                }
+            }
+
+            // Sleep-typed payloads whose id is not a session Guid are upserted by
+            // OriginalId, matching the row created by CreateActivitiesAsync. Falling
+            // through to the StateSpan path would recategorize the record as Exercise.
+            if (ActivityStateSpanMapper.IsSleepType(activity.Type))
+            {
+                var sleepSession = ActivityStateSpanMapper.ToSleepSession(activity);
+                sleepSession.OriginalId = id;
+
+                var upsertedSession = await _sleepService.UpsertSessionAsync(sleepSession, cancellationToken);
+                var upsertedActivity = ActivityStateSpanMapper.SleepSessionToActivity(upsertedSession);
+                await BroadcastActivityUpdateAsync(upsertedActivity, id, cancellationToken);
+                _logger.LogDebug("Successfully upserted sleep session for activity ID: {Id}", id);
+                return upsertedActivity;
+            }
+
             var updatedActivity = await _stateSpanService.UpdateActivityAsync(
                 id,
                 activity,
@@ -322,12 +365,7 @@ public class ActivityService : IActivityService
 
             if (updatedActivity != null)
             {
-                await _signalRBroadcastService.BroadcastStorageUpdateAsync(
-                    "activity",
-                    new { collection = "activity", data = updatedActivity, id = id }
-                );
-
-                await _events.OnUpdatedAsync(updatedActivity, cancellationToken);
+                await BroadcastActivityUpdateAsync(updatedActivity, id, cancellationToken);
 
                 _logger.LogDebug("Successfully updated activity record with ID: {Id}", id);
             }
@@ -339,6 +377,23 @@ public class ActivityService : IActivityService
             _logger.LogError(ex, "Error updating activity record with ID: {Id}", id);
             throw;
         }
+    }
+
+    /// <summary>
+    /// Broadcasts a storage update over SignalR and raises the updated data event.
+    /// </summary>
+    private async Task BroadcastActivityUpdateAsync(
+        Activity updatedActivity,
+        string id,
+        CancellationToken cancellationToken
+    )
+    {
+        await _signalRBroadcastService.BroadcastStorageUpdateAsync(
+            "activity",
+            new { collection = "activity", data = updatedActivity, id = id }
+        );
+
+        await _events.OnUpdatedAsync(updatedActivity, cancellationToken);
     }
 
     /// <inheritdoc />
@@ -455,9 +510,11 @@ public class ActivityService : IActivityService
                 cancellationToken: cancellationToken
             );
 
-            var sleepCountTask = _sleepService.CountSessionsAsync(
-                cancellationToken: cancellationToken
-            );
+            // Sleep sessions are merged into GetActivitiesAsync only when `find` is
+            // empty or a sleep type; the count applies the same gate
+            var sleepCountTask = string.IsNullOrEmpty(find) || ActivityStateSpanMapper.IsSleepType(find)
+                ? _sleepService.CountSessionsAsync(cancellationToken: cancellationToken)
+                : Task.FromResult(0);
 
             await Task.WhenAll(stateSpanTask, heartRateTask, stepCountTask, sleepCountTask);
 

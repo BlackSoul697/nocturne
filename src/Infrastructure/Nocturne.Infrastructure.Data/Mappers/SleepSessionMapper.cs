@@ -16,7 +16,7 @@ public static class SleepSessionMapper
     {
         var entityId = string.IsNullOrEmpty(session.Id)
             ? Guid.CreateVersion7()
-            : ParseIdToGuid(session.Id);
+            : MapperHelpers.ParseIdToGuid(session.Id);
 
         var entity = new SleepSessionEntity
         {
@@ -126,7 +126,7 @@ public static class SleepSessionMapper
             SourceDevice = entity.SourceDevice,
             SourceApp = entity.SourceApp,
             OriginalId = entity.OriginalId,
-            Metadata = DeserializeMetadata(entity.MetadataJson),
+            Metadata = MapperHelpers.DeserializeJson<Dictionary<string, object>>(entity.MetadataJson),
             CreatedAt = entity.CreatedAt,
             UpdatedAt = entity.UpdatedAt,
         };
@@ -161,42 +161,5 @@ public static class SleepSessionMapper
         }
 
         return session;
-    }
-
-    /// <summary>
-    /// Safely deserialize metadata JSON to a dictionary.
-    /// </summary>
-    private static Dictionary<string, object>? DeserializeMetadata(string? json)
-    {
-        if (string.IsNullOrEmpty(json) || json == "null")
-            return null;
-
-        try
-        {
-            return JsonSerializer.Deserialize<Dictionary<string, object>>(json);
-        }
-        catch (JsonException)
-        {
-            return null;
-        }
-    }
-
-    /// <summary>
-    /// Parse string ID to GUID, or generate new GUID if invalid.
-    /// </summary>
-    private static Guid ParseIdToGuid(string id)
-    {
-        if (string.IsNullOrEmpty(id))
-            return Guid.CreateVersion7();
-
-        if (Guid.TryParse(id, out var guidId))
-            return guidId;
-
-        // Hash the ID to get a deterministic GUID
-        using var sha1 = System.Security.Cryptography.SHA1.Create();
-        var hashBytes = sha1.ComputeHash(System.Text.Encoding.UTF8.GetBytes(id));
-        var guidBytes = new byte[16];
-        Array.Copy(hashBytes, guidBytes, 16);
-        return new Guid(guidBytes);
     }
 }

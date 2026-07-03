@@ -14,6 +14,7 @@ export function transformChartData(data: DashboardChartData) {
 	const mapSpans = (spans: typeof data.pumpModeSpans) =>
 		(spans ?? []).map((s) => ({
 			id: s.id,
+			kind: s.kind,
 			category: s.category,
 			state: s.state,
 			startTime: new Date(s.startMills ?? 0),

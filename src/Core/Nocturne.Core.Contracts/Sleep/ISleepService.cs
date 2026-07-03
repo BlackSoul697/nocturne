@@ -24,6 +24,7 @@ public interface ISleepService
         int limit = 100,
         int offset = 0,
         bool descending = true,
+        bool includeStages = false,
         CancellationToken cancellationToken = default);
 
     /// <summary>

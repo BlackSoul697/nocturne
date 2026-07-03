@@ -53,16 +53,17 @@ public static class ActivityStateSpanMapper
     ];
 
     /// <summary>
-    /// Returns true when the activity type string maps to a sleep category.
-    /// Sleep activities are routed to the dedicated sleep_sessions table instead of StateSpans.
+    /// Returns true when the activity type string equals one of the sleep types
+    /// (case-insensitive exact match). Sleep activities are routed to the dedicated
+    /// sleep_sessions table instead of StateSpans. Types that merely contain a sleep
+    /// word ("restaurant", "rest day", "snap") do not match.
     /// </summary>
     public static bool IsSleepType(string? activityType)
     {
         if (string.IsNullOrEmpty(activityType))
             return false;
 
-        var lowerType = activityType.ToLowerInvariant();
-        return SleepTypes.Any(t => lowerType.Contains(t));
+        return SleepTypes.Contains(activityType.ToLowerInvariant());
     }
 
     /// <summary>
@@ -79,8 +80,7 @@ public static class ActivityStateSpanMapper
 
         var durationMs = (long)(end - start).TotalMilliseconds;
 
-        var lowerType = activity.Type?.ToLowerInvariant() ?? "";
-        var isNap = lowerType.Contains("nap");
+        var isNap = string.Equals(activity.Type, "nap", StringComparison.OrdinalIgnoreCase);
 
         return new SleepSession
         {
@@ -89,6 +89,9 @@ public static class ActivityStateSpanMapper
             Type = isNap ? SleepSessionType.Nap : SleepSessionType.Overnight,
             DetectionMethod = SleepDetectionMethod.Manual,
             Source = SleepSource.Manual,
+            // Dedup key half for UpsertSessionAsync (Source + OriginalId); mirrors
+            // ToStateSpan, which sets OriginalId = activity.Id on the StateSpan path
+            OriginalId = activity.Id,
             DurationMs = durationMs,
             TotalSleepMs = durationMs,
             Metadata = BuildSleepMetadata(activity),

@@ -811,6 +811,7 @@ public static class ServiceRegistrationExtensions
         services.AddScoped<IConditionEvaluator, DayOfWeekEvaluator>();
         services.AddScoped<IConditionEvaluator, PumpStateEvaluator>();
         services.AddScoped<IConditionEvaluator, StateSpanActiveEvaluator>();
+        services.AddScoped<IConditionEvaluator, SleepSessionActiveEvaluator>();
         return services;
     }
 

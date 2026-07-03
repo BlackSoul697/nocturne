@@ -185,7 +185,7 @@
       <Group x={spanXPos} y={lane.top + (lane.bottom - lane.top) / 2}>
         <foreignObject x="2" y="-6" width="12" height="12">
           <div class="flex items-center justify-center w-full h-full">
-            <ActivityCategoryIcon category={span.category} size={10} color={span.color} />
+            <ActivityCategoryIcon kind={span.kind} category={span.category} size={10} color={span.color} />
           </div>
         </foreignObject>
       </Group>

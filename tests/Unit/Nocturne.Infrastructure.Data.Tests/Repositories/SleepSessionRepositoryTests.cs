@@ -142,6 +142,76 @@ public class SleepSessionRepositoryTests : IDisposable
     }
 
     [Fact]
+    public async Task GetSessionsAsync_includes_stages_when_requested()
+    {
+        var entity = CreateEntity(TenantA,
+            new DateTime(2026, 1, 1, 22, 0, 0, DateTimeKind.Utc),
+            new DateTime(2026, 1, 2, 6, 0, 0, DateTimeKind.Utc));
+
+        entity.Stages =
+        [
+            new SleepStageEntity
+            {
+                Id = Guid.CreateVersion7(),
+                TenantId = TenantA,
+                SleepSessionId = entity.Id,
+                StartTime = new DateTime(2026, 1, 1, 22, 0, 0, DateTimeKind.Utc),
+                EndTime = new DateTime(2026, 1, 1, 23, 0, 0, DateTimeKind.Utc),
+                Stage = "Light",
+                Ordinal = 0,
+            },
+            new SleepStageEntity
+            {
+                Id = Guid.CreateVersion7(),
+                TenantId = TenantA,
+                SleepSessionId = entity.Id,
+                StartTime = new DateTime(2026, 1, 1, 23, 0, 0, DateTimeKind.Utc),
+                EndTime = new DateTime(2026, 1, 2, 0, 0, 0, DateTimeKind.Utc),
+                Stage = "Deep",
+                Ordinal = 1,
+            },
+        ];
+
+        await SeedAsync(entity);
+
+        var result = (await _repository.GetSessionsAsync(includeStages: true)).ToList();
+
+        result.Should().HaveCount(1);
+        result[0].Stages.Should().HaveCount(2);
+        result[0].Stages![0].Stage.Should().Be(SleepStageType.Light);
+        result[0].Stages[1].Stage.Should().Be(SleepStageType.Deep);
+    }
+
+    [Fact]
+    public async Task GetSessionsAsync_omits_stages_by_default()
+    {
+        var entity = CreateEntity(TenantA,
+            new DateTime(2026, 1, 1, 22, 0, 0, DateTimeKind.Utc),
+            new DateTime(2026, 1, 2, 6, 0, 0, DateTimeKind.Utc));
+
+        entity.Stages =
+        [
+            new SleepStageEntity
+            {
+                Id = Guid.CreateVersion7(),
+                TenantId = TenantA,
+                SleepSessionId = entity.Id,
+                StartTime = new DateTime(2026, 1, 1, 22, 0, 0, DateTimeKind.Utc),
+                EndTime = new DateTime(2026, 1, 1, 23, 0, 0, DateTimeKind.Utc),
+                Stage = "Light",
+                Ordinal = 0,
+            },
+        ];
+
+        await SeedAsync(entity);
+
+        var result = (await _repository.GetSessionsAsync()).ToList();
+
+        result.Should().HaveCount(1);
+        result[0].Stages.Should().BeNull();
+    }
+
+    [Fact]
     public async Task GetSessionsAsync_filters_by_source()
     {
         var fitbit = CreateEntity(TenantA,
@@ -309,6 +379,131 @@ public class SleepSessionRepositoryTests : IDisposable
 
         var count = await _repository.CountSessionsAsync();
         count.Should().Be(1);
+    }
+
+    [Fact]
+    public async Task UpsertSessionAsync_replaces_by_id_when_original_id_is_null()
+    {
+        var existing = CreateEntity(TenantA,
+            new DateTime(2026, 1, 1, 22, 0, 0, DateTimeKind.Utc),
+            new DateTime(2026, 1, 2, 6, 0, 0, DateTimeKind.Utc),
+            originalId: "fitbit-abc-123");
+        existing.SleepScore = 80;
+
+        await SeedAsync(existing);
+
+        var incoming = new SleepSession
+        {
+            Id = existing.Id.ToString(),
+            StartTime = new DateTime(2026, 1, 1, 22, 0, 0, DateTimeKind.Utc),
+            EndTime = new DateTime(2026, 1, 2, 6, 30, 0, DateTimeKind.Utc),
+            Type = SleepSessionType.Overnight,
+            DetectionMethod = SleepDetectionMethod.Auto,
+            Source = SleepSource.Fitbit,
+            DurationMs = 30_600_000,
+            TotalSleepMs = 27_000_000,
+            OriginalId = null,
+            SleepScore = 85,
+        };
+
+        var result = await _repository.UpsertSessionAsync(incoming);
+
+        result.Id.Should().Be(existing.Id.ToString());
+        result.SleepScore.Should().Be(85);
+
+        var count = await _repository.CountSessionsAsync();
+        count.Should().Be(1);
+    }
+
+    [Fact]
+    public async Task UpsertSessionAsync_replaces_by_id_when_original_id_differs()
+    {
+        var existing = CreateEntity(TenantA,
+            new DateTime(2026, 1, 1, 22, 0, 0, DateTimeKind.Utc),
+            new DateTime(2026, 1, 2, 6, 0, 0, DateTimeKind.Utc),
+            originalId: "fitbit-abc-123");
+
+        existing.Stages =
+        [
+            new SleepStageEntity
+            {
+                Id = Guid.CreateVersion7(),
+                TenantId = TenantA,
+                SleepSessionId = existing.Id,
+                StartTime = new DateTime(2026, 1, 1, 22, 0, 0, DateTimeKind.Utc),
+                EndTime = new DateTime(2026, 1, 1, 23, 0, 0, DateTimeKind.Utc),
+                Stage = "Light",
+                Ordinal = 0,
+            },
+        ];
+
+        await SeedAsync(existing);
+
+        var incoming = new SleepSession
+        {
+            Id = existing.Id.ToString(),
+            StartTime = new DateTime(2026, 1, 1, 22, 0, 0, DateTimeKind.Utc),
+            EndTime = new DateTime(2026, 1, 2, 6, 0, 0, DateTimeKind.Utc),
+            Type = SleepSessionType.Overnight,
+            DetectionMethod = SleepDetectionMethod.Auto,
+            Source = SleepSource.Fitbit,
+            DurationMs = 28_800_000,
+            TotalSleepMs = 25_200_000,
+            OriginalId = "fitbit-different-999",
+            Stages =
+            [
+                new SleepStageInterval
+                {
+                    StartTime = new DateTime(2026, 1, 1, 23, 0, 0, DateTimeKind.Utc),
+                    EndTime = new DateTime(2026, 1, 2, 0, 0, 0, DateTimeKind.Utc),
+                    Stage = SleepStageType.Deep,
+                    Ordinal = 0,
+                },
+            ],
+        };
+
+        var result = await _repository.UpsertSessionAsync(incoming);
+
+        result.Id.Should().Be(existing.Id.ToString());
+        result.Stages.Should().ContainSingle().Which.Stage.Should().Be(SleepStageType.Deep);
+
+        var count = await _repository.CountSessionsAsync();
+        count.Should().Be(1);
+
+        var persisted = await _repository.GetSessionByIdAsync(existing.Id);
+        persisted!.Stages.Should().ContainSingle().Which.Stage.Should().Be(SleepStageType.Deep);
+    }
+
+    [Fact]
+    public async Task UpsertSessionAsync_keeps_primary_key_stable_across_original_id_resync()
+    {
+        var session1 = new SleepSession
+        {
+            StartTime = new DateTime(2026, 1, 1, 22, 0, 0, DateTimeKind.Utc),
+            EndTime = new DateTime(2026, 1, 2, 6, 0, 0, DateTimeKind.Utc),
+            Type = SleepSessionType.Overnight,
+            DetectionMethod = SleepDetectionMethod.Auto,
+            Source = SleepSource.Fitbit,
+            DurationMs = 28_800_000,
+            OriginalId = "fitbit-abc-123",
+        };
+
+        var first = await _repository.UpsertSessionAsync(session1);
+
+        var session2 = new SleepSession
+        {
+            StartTime = new DateTime(2026, 1, 1, 22, 0, 0, DateTimeKind.Utc),
+            EndTime = new DateTime(2026, 1, 2, 6, 30, 0, DateTimeKind.Utc),
+            Type = SleepSessionType.Overnight,
+            DetectionMethod = SleepDetectionMethod.Auto,
+            Source = SleepSource.Fitbit,
+            DurationMs = 30_600_000,
+            OriginalId = "fitbit-abc-123",
+        };
+
+        var second = await _repository.UpsertSessionAsync(session2);
+
+        second.Id.Should().Be(first.Id);
     }
 
     // --- UpdateSessionAsync ---

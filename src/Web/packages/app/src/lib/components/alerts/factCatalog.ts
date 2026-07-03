@@ -99,6 +99,7 @@ export const LEAF_FACTS: readonly FactDef[] = [
 
 	// State spans
 	{ kind: "state_span_active", label: "State active", description: "Generic state span (override, sleep, exercise, …)", group: "state", icon: "activity" },
+	{ kind: "sleep_session_active", label: "Sleep session", description: "A recorded sleep session is in progress", group: "state", icon: "moon" },
 
 	// Time
 	{ kind: "time_of_day", label: "Time of day", description: "Current local time falls in a window", group: "time", icon: "clock" },

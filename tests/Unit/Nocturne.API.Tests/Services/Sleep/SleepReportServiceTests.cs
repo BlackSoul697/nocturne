@@ -2,6 +2,7 @@ using FluentAssertions;
 using Microsoft.Extensions.Logging.Abstractions;
 using Moq;
 using Nocturne.API.Services.Sleep;
+using Nocturne.Core.Contracts.Profiles.Resolvers;
 using Nocturne.Core.Contracts.Repositories;
 using Nocturne.Core.Contracts.V4.Repositories;
 using Nocturne.Core.Models;
@@ -15,6 +16,8 @@ public class SleepReportServiceTests
 {
     private readonly Mock<ISleepSessionRepository> _sessionRepo = new();
     private readonly Mock<ISensorGlucoseRepository> _glucoseRepo = new();
+    private readonly Mock<ITherapySettingsResolver> _therapySettings = new();
+    private readonly Mock<ITargetRangeResolver> _targetRange = new();
     private readonly SleepReportService _sut;
 
     public SleepReportServiceTests()
@@ -22,6 +25,8 @@ public class SleepReportServiceTests
         _sut = new SleepReportService(
             _sessionRepo.Object,
             _glucoseRepo.Object,
+            _therapySettings.Object,
+            _targetRange.Object,
             NullLogger<SleepReportService>.Instance);
     }
 
@@ -117,7 +122,7 @@ public class SleepReportServiceTests
         _sessionRepo
             .Setup(r => r.GetSessionsAsync(
                 It.IsAny<DateTime?>(), It.IsAny<DateTime?>(), It.IsAny<SleepSessionType?>(),
-                It.IsAny<SleepSource?>(), It.IsAny<int>(), It.IsAny<int>(), It.IsAny<bool>(),
+                It.IsAny<SleepSource?>(), It.IsAny<int>(), It.IsAny<int>(), It.IsAny<bool>(), It.IsAny<bool>(),
                 It.IsAny<CancellationToken>()))
             .ReturnsAsync(Array.Empty<SleepSession>());
 
@@ -164,7 +169,7 @@ public class SleepReportServiceTests
         _sessionRepo
             .Setup(r => r.GetSessionsAsync(
                 It.IsAny<DateTime?>(), It.IsAny<DateTime?>(), It.IsAny<SleepSessionType?>(),
-                It.IsAny<SleepSource?>(), It.IsAny<int>(), It.IsAny<int>(), It.IsAny<bool>(),
+                It.IsAny<SleepSource?>(), It.IsAny<int>(), It.IsAny<int>(), It.IsAny<bool>(), It.IsAny<bool>(),
                 It.IsAny<CancellationToken>()))
             .ReturnsAsync(sessions);
 
@@ -211,7 +216,7 @@ public class SleepReportServiceTests
         _sessionRepo
             .Setup(r => r.GetSessionsAsync(
                 It.IsAny<DateTime?>(), It.IsAny<DateTime?>(), It.IsAny<SleepSessionType?>(),
-                It.IsAny<SleepSource?>(), It.IsAny<int>(), It.IsAny<int>(), It.IsAny<bool>(),
+                It.IsAny<SleepSource?>(), It.IsAny<int>(), It.IsAny<int>(), It.IsAny<bool>(), It.IsAny<bool>(),
                 It.IsAny<CancellationToken>()))
             .ReturnsAsync(sessions);
 

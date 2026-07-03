@@ -82,9 +82,12 @@ public sealed class ActogramReportService : IActogramReportService
             ct: cancellationToken
         );
 
+        // includeStages: the per-stage banding below is keyed off session.Stages,
+        // which the list query only populates on request.
         var sleepSessions = await _sleepService.GetSessionsAsync(
             from: fromDt, to: toDt,
             limit: SleepSpanLimit, descending: false,
+            includeStages: true,
             cancellationToken: cancellationToken);
 
         var stepRecords = await _stepCountService.GetStepCountsByDateRangeAsync(
