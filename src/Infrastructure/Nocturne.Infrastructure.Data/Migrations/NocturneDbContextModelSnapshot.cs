@@ -492,6 +492,11 @@ namespace Nocturne.Infrastructure.Data.Migrations
                         .HasDefaultValue(true)
                         .HasColumnName("is_enabled");
 
+                    b.Property<string>("ManagedBy")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasColumnName("managed_by");
+
                     b.Property<string>("Name")
                         .IsRequired()
                         .HasMaxLength(128)
@@ -524,6 +529,10 @@ namespace Nocturne.Infrastructure.Data.Migrations
                         .HasDefaultValueSql("CURRENT_TIMESTAMP");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("ManagedBy")
+                        .HasDatabaseName("ix_alert_rules_managed_by")
+                        .HasFilter("managed_by IS NOT NULL");
 
                     b.HasIndex("TenantId");
 
@@ -4660,6 +4669,10 @@ namespace Nocturne.Infrastructure.Data.Migrations
                         .HasColumnType("uuid")
                         .HasColumnName("id");
 
+                    b.Property<Guid?>("AlertRuleId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("alert_rule_id");
+
                     b.Property<bool>("AudioEnabled")
                         .HasColumnType("boolean")
                         .HasColumnName("audio_enabled");
@@ -4715,6 +4728,8 @@ namespace Nocturne.Infrastructure.Data.Migrations
                         .HasColumnName("vibrate_enabled");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("AlertRuleId");
 
                     b.HasIndex("TenantId");
 
@@ -8322,6 +8337,11 @@ namespace Nocturne.Infrastructure.Data.Migrations
 
             modelBuilder.Entity("Nocturne.Infrastructure.Data.Entities.TrackerNotificationThresholdEntity", b =>
                 {
+                    b.HasOne("Nocturne.Infrastructure.Data.Entities.AlertRuleEntity", null)
+                        .WithMany()
+                        .HasForeignKey("AlertRuleId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
                     b.HasOne("Nocturne.Infrastructure.Data.Entities.TenantEntity", null)
                         .WithMany()
                         .HasForeignKey("TenantId")
