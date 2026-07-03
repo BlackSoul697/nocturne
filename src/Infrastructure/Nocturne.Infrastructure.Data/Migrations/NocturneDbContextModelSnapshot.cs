@@ -883,6 +883,82 @@ namespace Nocturne.Infrastructure.Data.Migrations
                     b.ToTable("chat_identity_pending_links");
                 });
 
+            modelBuilder.Entity("Nocturne.Infrastructure.Data.Entities.ClientDeviceEntity", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.PrimitiveCollection<string[]>("Capabilities")
+                        .IsRequired()
+                        .HasColumnType("text[]")
+                        .HasColumnName("capabilities");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at")
+                        .HasDefaultValueSql("CURRENT_TIMESTAMP");
+
+                    b.Property<Guid?>("GrantId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("grant_id");
+
+                    b.Property<string>("InstallId")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasColumnName("install_id");
+
+                    b.Property<string>("Kind")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)")
+                        .HasColumnName("kind");
+
+                    b.Property<string>("Label")
+                        .HasMaxLength(255)
+                        .HasColumnType("character varying(255)")
+                        .HasColumnName("label");
+
+                    b.Property<DateTime>("LastSeenAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("last_seen_at")
+                        .HasDefaultValueSql("CURRENT_TIMESTAMP");
+
+                    b.Property<Guid>("SubjectId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("subject_id");
+
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("tenant_id");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at")
+                        .HasDefaultValueSql("CURRENT_TIMESTAMP");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("GrantId");
+
+                    b.HasIndex("TenantId", "InstallId")
+                        .IsUnique()
+                        .HasDatabaseName("ix_client_devices_tenant_install");
+
+                    b.HasIndex("TenantId", "Kind")
+                        .HasDatabaseName("ix_client_devices_tenant_kind");
+
+                    b.HasIndex("TenantId", "SubjectId")
+                        .HasDatabaseName("ix_client_devices_tenant_subject");
+
+                    b.ToTable("client_devices", (string)null);
+                });
+
             modelBuilder.Entity("Nocturne.Infrastructure.Data.Entities.ClockFaceEntity", b =>
                 {
                     b.Property<Guid>("Id")
@@ -7648,6 +7724,20 @@ namespace Nocturne.Infrastructure.Data.Migrations
 
             modelBuilder.Entity("Nocturne.Infrastructure.Data.Entities.BodyWeightEntity", b =>
                 {
+                    b.HasOne("Nocturne.Infrastructure.Data.Entities.TenantEntity", null)
+                        .WithMany()
+                        .HasForeignKey("TenantId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("Nocturne.Infrastructure.Data.Entities.ClientDeviceEntity", b =>
+                {
+                    b.HasOne("Nocturne.Infrastructure.Data.Entities.OAuthGrantEntity", null)
+                        .WithMany()
+                        .HasForeignKey("GrantId")
+                        .OnDelete(DeleteBehavior.Cascade);
+
                     b.HasOne("Nocturne.Infrastructure.Data.Entities.TenantEntity", null)
                         .WithMany()
                         .HasForeignKey("TenantId")

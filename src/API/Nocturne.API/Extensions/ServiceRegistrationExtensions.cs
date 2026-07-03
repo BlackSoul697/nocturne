@@ -129,6 +129,7 @@ public static class ServiceRegistrationExtensions
         services.AddScoped<IBolusWizardService, BolusWizardService>();
 
         services.AddScoped<IAuthorizationService, AuthorizationService>();
+        services.AddScoped<IHubTokenAuthorizer, HubTokenAuthorizer>();
         services.AddScoped<IAlexaService, AlexaService>();
 
         services.AddScoped<IStatisticsService, StatisticsService>();
@@ -680,6 +681,11 @@ public static class ServiceRegistrationExtensions
         var templateRegistry = new NotificationTemplateRegistry().AddBuiltInTemplates();
         services.AddSingleton<INotificationTemplateRegistry>(templateRegistry);
 
+        // Client device registry (Prelude/Companion actuation targets)
+        services.AddScoped<
+            Nocturne.Core.Contracts.ClientDevices.IClientDeviceService,
+            Nocturne.API.Services.ClientDevices.ClientDeviceService>();
+
         // Notification action handlers (scoped -- they may depend on scoped services)
         services.AddScoped<INotificationActionHandler, MealMatchActionHandler>();
         services.AddScoped<INotificationActionHandler, TrackerSuggestionActionHandler>();
@@ -748,6 +754,7 @@ public static class ServiceRegistrationExtensions
         services.AddScoped<Nocturne.API.Services.Alerts.Providers.WebhookProvider>();
         services.AddScoped<Nocturne.API.Services.Alerts.Providers.ChatBotProvider>();
         services.AddScoped<Nocturne.API.Services.Alerts.Providers.HomeAssistantProvider>();
+        services.AddScoped<Nocturne.API.Services.Alerts.Providers.DeviceActionProvider>();
         services.AddHttpClient("ChatBot");
 
         // Chat identity

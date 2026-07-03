@@ -12,10 +12,15 @@
 
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
+mod alert_actuation;
 mod auth;
+mod client_devices;
 mod glucose_file;
-mod glucose_hub;
 mod glucose_poll;
+mod http;
+mod install_id;
+mod signalr;
+mod toast;
 mod tray;
 
 use serde::{Deserialize, Serialize};
@@ -80,20 +85,7 @@ struct CompleteResponse {
 }
 
 fn http_client() -> CommandResult<reqwest::Client> {
-    reqwest::Client::builder()
-        // Local dev runs behind the Aspire gateway's self-signed certificate.
-        .danger_accept_invalid_certs(cfg!(debug_assertions))
-        // Trust the OS certificate store in addition to the bundled roots, so release builds
-        // behind TLS-intercepting antivirus/VPN/proxies (which curl and browsers accept via the
-        // Windows store) don't fail every request with an opaque transport error.
-        .tls_built_in_native_certs(true)
-        // Bound each request so a stalled connect (dead network, dropped route, TLS hang)
-        // fails fast and lets the 60s poll loop retry, rather than parking on the OS SYN
-        // timeout.
-        .connect_timeout(std::time::Duration::from_secs(10))
-        .timeout(std::time::Duration::from_secs(30))
-        .build()
-        .map_err(|e| CommandError::new(format!("Could not create HTTP client: {e}")))
+    http::client().map_err(CommandError::new)
 }
 
 /// Formats an error with its full `source()` chain. `reqwest::Error`'s own Display stops at
@@ -310,6 +302,10 @@ async fn companion_link_start(
         };
         match auth::await_authorization(&client, pending).await {
             Ok(()) => {
+                // Fresh credentials were just stored (this is the only path that writes them, so
+                // it also covers a relink without a prior unlink): reset the actuation loop's
+                // registration and wake it out of any backoff.
+                alert_actuation::on_link(&app);
                 let _ = app.emit("companion-linked", ());
                 // Populate the taskbar/widget now rather than waiting for the next poll tick.
                 poll_glucose(&client, &app).await;
@@ -328,9 +324,30 @@ fn companion_is_linked() -> bool {
     auth::is_linked()
 }
 
+/// Link state plus whether device alerts need a relink (the stored grant lacks the device scopes,
+/// or the server refuses this install's registration).
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct LinkStatus {
+    linked: bool,
+    needs_relink: bool,
+}
+
 #[tauri::command]
-fn companion_unlink() -> CommandResult<()> {
-    auth::clear().map_err(CommandError::new)
+fn companion_link_status() -> LinkStatus {
+    LinkStatus {
+        linked: auth::is_linked(),
+        needs_relink: alert_actuation::needs_relink(),
+    }
+}
+
+#[tauri::command]
+fn companion_unlink(app: tauri::AppHandle) -> CommandResult<()> {
+    auth::clear().map_err(CommandError::new)?;
+    // Unlink definitively withdraws every device actuation: flashes stop and the tray repaints now;
+    // the actuation loop drops its state and registration on its next pass.
+    alert_actuation::on_unlink(&app);
+    Ok(())
 }
 
 /// The latest reading from the last-written glucose file, for the readout to show on load. Live
@@ -414,7 +431,9 @@ struct ClockFaceSummary {
 #[tauri::command]
 async fn list_clock_faces() -> CommandResult<Vec<ClockFaceSummary>> {
     let client = http_client()?;
-    let (server, token) = auth::get_valid_token(&client).await.map_err(CommandError::new)?;
+    let (server, token) = auth::get_valid_token(&client)
+        .await
+        .map_err(|e| CommandError::new(e.to_string()))?;
     let resp = client
         .get(format!("{server}/api/v4/clockfaces"))
         .bearer_auth(&token)
@@ -471,9 +490,10 @@ async fn poll_glucose(client: &reqwest::Client, app: &tauri::AppHandle) {
 }
 
 /// Background poll loop. Polls before sleeping, so a launch (or a just-completed link) populates
-/// promptly; idles while unlinked. A SignalR hub (best-effort) nudges the loop to poll early on any
-/// data change; the timer remains the fallback whenever the hub is down.
-fn spawn_glucose_poller(app: tauri::AppHandle) {
+/// promptly; idles while unlinked. `refresh_rx` carries "data changed" nudges from the shared
+/// SignalR session (alert_actuation) to poll early; the timer remains the fallback whenever the
+/// hub is down.
+fn spawn_glucose_poller(app: tauri::AppHandle, mut refresh_rx: tokio::sync::mpsc::Receiver<()>) {
     tauri::async_runtime::spawn(async move {
         let client = match http_client() {
             Ok(c) => c,
@@ -482,10 +502,6 @@ fn spawn_glucose_poller(app: tauri::AppHandle) {
                 return;
             }
         };
-
-        // Capacity 1: a full channel means a refresh is already pending, so realtime nudges coalesce.
-        let (refresh_tx, mut refresh_rx) = tokio::sync::mpsc::channel::<()>(1);
-        glucose_hub::spawn(client.clone(), refresh_tx);
 
         loop {
             if auth::is_linked() {
@@ -541,7 +557,21 @@ fn main() {
                 }
             }
 
-            spawn_glucose_poller(handle.clone());
+            // Realtime "data changed" nudges flow from the shared SignalR session (owned by the
+            // actuation loop) to the glucose poll loop. Capacity 1: a full channel means a refresh
+            // is already pending, so nudges coalesce.
+            let (refresh_tx, refresh_rx) = tokio::sync::mpsc::channel::<()>(1);
+            spawn_glucose_poller(handle.clone(), refresh_rx);
+
+            // Device-action actuation: register this install and toast on alerts (notify capability).
+            // Also owns the SignalR connection that feeds `refresh_tx`. Self-idles while unlinked,
+            // so it is safe to start unconditionally here.
+            {
+                let handle = handle.clone();
+                tauri::async_runtime::spawn(async move {
+                    alert_actuation::run(handle, refresh_tx).await;
+                });
+            }
             Ok(())
         })
         .on_window_event(|window, event| {
@@ -579,6 +609,7 @@ fn main() {
             cancel_login,
             companion_link_start,
             companion_is_linked,
+            companion_link_status,
             companion_unlink,
             get_current_glucose,
             open_floating_clock,

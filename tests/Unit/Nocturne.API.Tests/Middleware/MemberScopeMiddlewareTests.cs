@@ -208,6 +208,177 @@ public class MemberScopeMiddlewareTests
         grantedScopes!.Should().Contain("*");
     }
 
+    [Fact]
+    public async Task NonOwnerMember_WithDeviceScopedToken_RetainsDeviceScopes()
+    {
+        // A caretaker running the desktop Companion: the OAuth token carries the device
+        // capability scopes, and the caretaker seed role grants the matching permission atoms,
+        // so the scope intersection must keep them (they'd otherwise 403 on
+        // POST /api/v4/client-devices).
+        using var connection = new SqliteConnection("DataSource=:memory:");
+        connection.Open();
+        var options = new DbContextOptionsBuilder<NocturneDbContext>().UseSqlite(connection).Options;
+
+        var subjectId = SeedMemberWithRole(
+            options, TenantPermissions.SeedRolePermissions[TenantPermissions.SeedRoles.Caretaker]);
+
+        var (context, provider) = BuildMemberContext(options, subjectId, CompanionTokenScopes);
+        using (provider)
+        {
+            var middleware = new MemberScopeMiddleware(_ => Task.CompletedTask, NullLogger<MemberScopeMiddleware>.Instance);
+            await middleware.InvokeAsync(context);
+        }
+
+        var grantedScopes = context.Items["GrantedScopes"] as IReadOnlySet<string>;
+        grantedScopes.Should().NotBeNull();
+        grantedScopes.Should().Contain(OAuthScopes.DeviceNotify);
+        grantedScopes.Should().Contain(OAuthScopes.DeviceActuate);
+        // Role atoms the token didn't request stay excluded.
+        grantedScopes.Should().NotContain(OAuthScopes.TreatmentsReadWrite);
+        grantedScopes.Should().NotContain("*");
+    }
+
+    [Fact]
+    public async Task StaleSeedRole_WithoutDeviceAtoms_StillGrantsDeviceScopesFromToken()
+    {
+        // A tenant seeded before device.notify/device.actuate existed: its persisted caretaker
+        // role row lacks the atoms and SeedRolesForTenantAsync never reconciles existing slugs.
+        // The scopes are member-personal (the member's own client devices, not patient data), so
+        // the middleware must grant them from the token alone — otherwise every pre-existing
+        // tenant's members 403 on the client-devices API forever.
+        using var connection = new SqliteConnection("DataSource=:memory:");
+        connection.Open();
+        var options = new DbContextOptionsBuilder<NocturneDbContext>().UseSqlite(connection).Options;
+
+        var staleCaretakerPermissions = TenantPermissions
+            .SeedRolePermissions[TenantPermissions.SeedRoles.Caretaker]
+            .Where(p => !TenantPermissions.MemberPersonalScopes.Contains(p))
+            .ToList();
+        var subjectId = SeedMemberWithRole(options, staleCaretakerPermissions);
+
+        var (context, provider) = BuildMemberContext(options, subjectId, CompanionTokenScopes);
+        using (provider)
+        {
+            var middleware = new MemberScopeMiddleware(_ => Task.CompletedTask, NullLogger<MemberScopeMiddleware>.Instance);
+            await middleware.InvokeAsync(context);
+        }
+
+        var grantedScopes = context.Items["GrantedScopes"] as IReadOnlySet<string>;
+        grantedScopes.Should().NotBeNull();
+        grantedScopes.Should().Contain(OAuthScopes.DeviceNotify);
+        grantedScopes.Should().Contain(OAuthScopes.DeviceActuate);
+        // The role intersection still applies to everything else.
+        grantedScopes.Should().Contain(OAuthScopes.GlucoseRead);
+        grantedScopes.Should().NotContain(OAuthScopes.TreatmentsReadWrite);
+        grantedScopes.Should().NotContain("*");
+    }
+
+    [Fact]
+    public async Task ZeroPermissionMember_WithDeviceScopedToken_DoesNotGetDeviceScopes()
+    {
+        // The Denied seed role grants nothing. Device scopes must not bypass that: alert
+        // actuations reveal patient state, so a member with no permissions at all gets none.
+        using var connection = new SqliteConnection("DataSource=:memory:");
+        connection.Open();
+        var options = new DbContextOptionsBuilder<NocturneDbContext>().UseSqlite(connection).Options;
+
+        var subjectId = SeedMemberWithRole(
+            options, TenantPermissions.SeedRolePermissions[TenantPermissions.SeedRoles.Denied]);
+
+        var (context, provider) = BuildMemberContext(options, subjectId, CompanionTokenScopes);
+        using (provider)
+        {
+            var middleware = new MemberScopeMiddleware(_ => Task.CompletedTask, NullLogger<MemberScopeMiddleware>.Instance);
+            await middleware.InvokeAsync(context);
+        }
+
+        var grantedScopes = context.Items["GrantedScopes"] as IReadOnlySet<string>;
+        grantedScopes.Should().NotBeNull();
+        grantedScopes.Should().BeEmpty();
+    }
+
+    /// <summary>The desktop Companion's device-flow token scopes.</summary>
+    private static readonly List<string> CompanionTokenScopes =
+    [
+        OAuthScopes.GlucoseRead, OAuthScopes.TherapyRead, OAuthScopes.DevicesRead,
+        OAuthScopes.DeviceNotify, OAuthScopes.DeviceActuate,
+    ];
+
+    /// <summary>
+    /// Seeds the default tenant plus a non-owner member holding a single role with the given
+    /// permission atoms. Returns the member's subject id.
+    /// </summary>
+    private static Guid SeedMemberWithRole(
+        DbContextOptions<NocturneDbContext> options, List<string> rolePermissions)
+    {
+        var subjectId = Guid.CreateVersion7();
+        using var seed = new NocturneDbContext(options);
+        seed.Database.EnsureCreated();
+        TestDatabaseSeeder.Seed(seed);
+
+        seed.Subjects.Add(new Nocturne.Infrastructure.Data.Entities.SubjectEntity
+        {
+            Id = subjectId,
+            Name = "Member",
+            IsActive = true,
+            IsSystemSubject = false,
+        });
+        var memberId = Guid.CreateVersion7();
+        seed.TenantMembers.Add(new Nocturne.Infrastructure.Data.Entities.TenantMemberEntity
+        {
+            Id = memberId,
+            TenantId = TestDatabaseSeeder.TenantId,
+            SubjectId = subjectId,
+        });
+        var roleId = Guid.CreateVersion7();
+        seed.TenantRoles.Add(new Nocturne.Infrastructure.Data.Entities.TenantRoleEntity
+        {
+            Id = roleId,
+            TenantId = TestDatabaseSeeder.TenantId,
+            Name = "Member Role",
+            Slug = "member-role",
+            Permissions = rolePermissions,
+            IsSystem = true,
+            SysCreatedAt = DateTime.UtcNow,
+            SysUpdatedAt = DateTime.UtcNow,
+        });
+        seed.TenantMemberRoles.Add(new Nocturne.Infrastructure.Data.Entities.TenantMemberRoleEntity
+        {
+            Id = Guid.CreateVersion7(),
+            TenantMemberId = memberId,
+            TenantRoleId = roleId,
+            SysCreatedAt = DateTime.UtcNow,
+        });
+        seed.SaveChanges();
+        return subjectId;
+    }
+
+    /// <summary>
+    /// Builds an HTTP context for an OAuth-token member request whose token carries the given
+    /// scopes, as AuthenticationMiddleware would leave it. The caller disposes the provider.
+    /// </summary>
+    private static (DefaultHttpContext context, ServiceProvider provider) BuildMemberContext(
+        DbContextOptions<NocturneDbContext> options, Guid subjectId, List<string> tokenScopes)
+    {
+        var services = new ServiceCollection();
+        services.AddScoped(_ => new NocturneDbContext(options));
+        var provider = services.BuildServiceProvider();
+
+        var context = new DefaultHttpContext { RequestServices = provider };
+        context.Items["AuthContext"] = new AuthContext
+        {
+            IsAuthenticated = true,
+            AuthType = AuthType.OAuthAccessToken,
+            SubjectId = subjectId,
+            TenantId = TestDatabaseSeeder.TenantId,
+            Scopes = tokenScopes,
+        };
+        context.Items["GrantedScopes"] = OAuthScopes.Normalize(tokenScopes);
+        context.Items["PermissionTrie"] = new PermissionTrie();
+
+        return (context, provider);
+    }
+
     private (MemberScopeMiddleware middleware, DefaultHttpContext context) Build(AuthContext authContext)
     {
         RequestDelegate next = _ => Task.CompletedTask;
