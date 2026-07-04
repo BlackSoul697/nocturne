@@ -161,6 +161,7 @@ public class SignalRBroadcastService : ISignalRBroadcastService
     private readonly IHubContext<ConfigHub> _configHubContext;
     private readonly IHubContext<AlertHub> _alertHubContext;
     private readonly IHubContext<HomeAssistantHub> _homeAssistantHubContext;
+    private readonly IHubContext<OverviewHub> _overviewHubContext;
     private readonly ITenantAccessor _tenantAccessor;
     private readonly ILogger<SignalRBroadcastService> _logger;
 
@@ -172,6 +173,7 @@ public class SignalRBroadcastService : ISignalRBroadcastService
     /// <param name="configHubContext">Hub context for <see cref="ConfigHub"/> — configuration changes and sync progress.</param>
     /// <param name="alertHubContext">Hub context for <see cref="AlertHub"/> — alert engine dispatch, resolution, and acknowledgement events.</param>
     /// <param name="homeAssistantHubContext">Hub context for <see cref="HomeAssistantHub"/> — glucose relay and alert event relay to Home Assistant instances.</param>
+    /// <param name="overviewHubContext">Hub context for <see cref="OverviewHub"/> — cross-tenant overview pings.</param>
     /// <param name="tenantAccessor">Provides the current tenant context for scoping group names.</param>
     /// <param name="logger">The logger instance.</param>
     public SignalRBroadcastService(
@@ -180,6 +182,7 @@ public class SignalRBroadcastService : ISignalRBroadcastService
         IHubContext<ConfigHub> configHubContext,
         IHubContext<AlertHub> alertHubContext,
         IHubContext<HomeAssistantHub> homeAssistantHubContext,
+        IHubContext<OverviewHub> overviewHubContext,
         ITenantAccessor tenantAccessor,
         ILogger<SignalRBroadcastService> logger
     )
@@ -189,6 +192,7 @@ public class SignalRBroadcastService : ISignalRBroadcastService
         _configHubContext = configHubContext;
         _alertHubContext = alertHubContext;
         _homeAssistantHubContext = homeAssistantHubContext;
+        _overviewHubContext = overviewHubContext;
         _tenantAccessor = tenantAccessor;
         _logger = logger;
     }
@@ -235,6 +239,21 @@ public class SignalRBroadcastService : ISignalRBroadcastService
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error broadcasting data update");
+        }
+
+        // Tenant-tagged ping to cross-tenant overview subscribers. Same "{tenantId}:" group
+        // scheme but on OverviewHub, so no collision with DataHub groups. Minimal payload:
+        // clients refetch the overview endpoint.
+        try
+        {
+            var tenantId = GetTenantId();
+            await _overviewHubContext
+                .Clients.Group(TenantAwareHub.FormatTenantGroup(tenantId, OverviewHub.GroupName))
+                .SendCoreAsync("overviewUpdate", new object[] { new { tenantId } });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error broadcasting overview update");
         }
     }
 

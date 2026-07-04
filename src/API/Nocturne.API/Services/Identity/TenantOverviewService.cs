@@ -45,15 +45,7 @@ public class TenantOverviewService : ITenantOverviewService
         Guid subjectId, IReadOnlySet<string> tokenScopes, AuthType authType,
         CancellationToken ct = default)
     {
-        // tenant_members has a global RevokedAt == null query filter, so revoked
-        // memberships are already excluded here. The read spans tenants for one person, so the
-        // context is pinned to the subject rather than to a tenant.
-        await using var context = await _factory.CreateSubjectPinnedContextAsync(subjectId, ct);
-        var memberships = await context.TenantMembers.AsNoTracking()
-            .Include(tm => tm.Tenant)
-            .Include(tm => tm.MemberRoles).ThenInclude(mr => mr.TenantRole)
-            .Where(tm => tm.SubjectId == subjectId)
-            .ToListAsync(ct);
+        var glucoseReadTenants = await GetGlucoseReadTenantsAsync(subjectId, tokenScopes, authType, ct);
 
         var defaults = new TenantOverviewThresholds(
             UrgentLow: _configuration.GetValue("Thresholds:BgLow", 55),
@@ -63,13 +55,8 @@ public class TenantOverviewService : ITenantOverviewService
         var staleAfter = TimeSpan.FromMinutes(_configuration.GetValue("Overview:StaleAfterMinutes", 25));
 
         var items = new List<TenantOverviewItem>();
-        foreach (var membership in memberships)
+        foreach (var (tenant, allowed) in glucoseReadTenants)
         {
-            var tenant = membership.Tenant;
-            if (tenant is null || !tenant.IsActive) continue;
-
-            var allowed = ResolveAllowedScopes(membership, tokenScopes, authType);
-            if (!TenantPermissions.HasPermission(allowed, TenantPermissions.GlucoseRead)) continue;
             var includeAlerts = TenantPermissions.HasPermission(allowed, TenantPermissions.AlertsRead);
 
             try
@@ -87,6 +74,35 @@ public class TenantOverviewService : ITenantOverviewService
         }
 
         return new TenantOverviewResponse(items);
+    }
+
+    public async Task<IReadOnlyList<GlucoseReadTenant>> GetGlucoseReadTenantsAsync(
+        Guid subjectId, IReadOnlySet<string> tokenScopes, AuthType authType,
+        CancellationToken ct = default)
+    {
+        // tenant_members has a global RevokedAt == null query filter, so revoked
+        // memberships are already excluded here. The read spans tenants for one person, so the
+        // context is pinned to the subject rather than to a tenant.
+        await using var context = await _factory.CreateSubjectPinnedContextAsync(subjectId, ct);
+        var memberships = await context.TenantMembers.AsNoTracking()
+            .Include(tm => tm.Tenant)
+            .Include(tm => tm.MemberRoles).ThenInclude(mr => mr.TenantRole)
+            .Where(tm => tm.SubjectId == subjectId)
+            .ToListAsync(ct);
+
+        var result = new List<GlucoseReadTenant>();
+        foreach (var membership in memberships)
+        {
+            var tenant = membership.Tenant;
+            if (tenant is null || !tenant.IsActive) continue;
+
+            var allowed = ResolveAllowedScopes(membership, tokenScopes, authType);
+            if (!TenantPermissions.HasPermission(allowed, TenantPermissions.GlucoseRead)) continue;
+
+            result.Add(new GlucoseReadTenant(tenant, allowed));
+        }
+
+        return result;
     }
 
     /// <summary>

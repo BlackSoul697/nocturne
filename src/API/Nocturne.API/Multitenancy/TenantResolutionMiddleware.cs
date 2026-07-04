@@ -88,6 +88,10 @@ public class TenantResolutionMiddleware
         "/api/v4/dev-only/",
         "/api/v4/platform/",
         "/api/v4/setup/",
+        // Cross-tenant overview hub: authorizes a subject in-band and joins per-tenant groups
+        // itself, so the connection is negotiated from the apex with no tenant. Prefix, not
+        // exact path: SignalR appends /negotiate to the hub path.
+        "/hubs/overview",
     ];
 
     /// <summary>
