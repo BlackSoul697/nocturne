@@ -25,6 +25,24 @@ public class CareLinkData
     [JsonPropertyName("medicalDeviceFamily")]
     public string? MedicalDeviceFamily { get; set; }
 
+    [JsonPropertyName("pumpModelNumber")]
+    public string? PumpModelNumber { get; set; }
+
+    [JsonPropertyName("medicalDeviceSerialNumber")]
+    public string? MedicalDeviceSerialNumber { get; set; }
+
+    [JsonPropertyName("cgmInfo")]
+    public CareLinkCgmInfo? CgmInfo { get; set; }
+
+    [JsonPropertyName("medicalDeviceInformation")]
+    public CareLinkMedicalDeviceInformation? MedicalDeviceInformation { get; set; }
+
+    [JsonPropertyName("medicalDeviceSuspended")]
+    public bool? MedicalDeviceSuspended { get; set; }
+
+    [JsonPropertyName("gstBatteryLevel")]
+    public int? GstBatteryLevel { get; set; }
+
     [JsonPropertyName("medicalDeviceBatteryLevelPercent")]
     public int? MedicalDeviceBatteryLevelPercent { get; set; }
 
@@ -76,8 +94,163 @@ public class CareLinkData
     [JsonPropertyName("timeFormat")]
     public string? TimeFormat { get; set; }
 
+    [JsonPropertyName("markers")]
+    public List<CareLinkMarker>? Markers { get; set; }
+
+    [JsonPropertyName("therapyAlgorithmState")]
+    public CareLinkTherapyAlgorithmState? TherapyAlgorithmState { get; set; }
+
+    [JsonPropertyName("notificationHistory")]
+    public CareLinkNotificationHistory? NotificationHistory { get; set; }
+
+    [JsonPropertyName("clientTimeZoneName")]
+    public string? ClientTimeZoneName { get; set; }
+
     [JsonIgnore]
     public string? EffectiveBgUnits => BgUnits ?? BgUnitsAlt;
+}
+
+/// <summary>
+/// A single periodic-payload marker. One permissive type covers every observed marker variant
+/// (INSULIN, MEAL, AUTO_BASAL_DELIVERY, AUTO_MODE_STATUS, LOW_GLUCOSE_SUSPENDED); only the fields
+/// relevant to a given <see cref="Type"/> are populated.
+/// </summary>
+public class CareLinkMarker
+{
+    [JsonPropertyName("type")]
+    public string? Type { get; set; }
+
+    [JsonPropertyName("kind")]
+    public string? Kind { get; set; }
+
+    [JsonPropertyName("dateTime")]
+    public string? DateTime { get; set; }
+
+    [JsonPropertyName("id")]
+    public long? Id { get; set; }
+
+    [JsonPropertyName("index")]
+    public int Index { get; set; }
+
+    // INSULIN
+    [JsonPropertyName("bolusType")]
+    public string? BolusType { get; set; }
+
+    [JsonPropertyName("activationType")]
+    public string? ActivationType { get; set; }
+
+    [JsonPropertyName("programmedFastAmount")]
+    public double? ProgrammedFastAmount { get; set; }
+
+    [JsonPropertyName("deliveredFastAmount")]
+    public double? DeliveredFastAmount { get; set; }
+
+    [JsonPropertyName("programmedExtendedAmount")]
+    public double? ProgrammedExtendedAmount { get; set; }
+
+    [JsonPropertyName("deliveredExtendedAmount")]
+    public double? DeliveredExtendedAmount { get; set; }
+
+    [JsonPropertyName("programmedDuration")]
+    public int? ProgrammedDuration { get; set; }
+
+    [JsonPropertyName("effectiveDuration")]
+    public int? EffectiveDuration { get; set; }
+
+    [JsonPropertyName("completed")]
+    public bool? Completed { get; set; }
+
+    // MEAL
+    [JsonPropertyName("amount")]
+    public double? Amount { get; set; }
+
+    // AUTO_BASAL_DELIVERY
+    [JsonPropertyName("bolusAmount")]
+    public double? BolusAmount { get; set; }
+
+    // AUTO_MODE_STATUS
+    [JsonPropertyName("autoModeOn")]
+    public bool? AutoModeOn { get; set; }
+
+    // LOW_GLUCOSE_SUSPENDED
+    [JsonPropertyName("deliverySuspended")]
+    public bool? DeliverySuspended { get; set; }
+}
+
+/// <summary>
+/// The pump's current closed-loop algorithm state. <see cref="AutoModeShieldState"/> drives the
+/// Automatic/Manual pump-mode signal.
+/// </summary>
+public class CareLinkTherapyAlgorithmState
+{
+    [JsonPropertyName("autoModeShieldState")]
+    public string? AutoModeShieldState { get; set; }
+
+    [JsonPropertyName("autoModeReadinessState")]
+    public string? AutoModeReadinessState { get; set; }
+
+    [JsonPropertyName("plgmLgsState")]
+    public string? PlgmLgsState { get; set; }
+
+    [JsonPropertyName("safeBasalDuration")]
+    public int? SafeBasalDuration { get; set; }
+}
+
+public class CareLinkNotificationHistory
+{
+    [JsonPropertyName("activeNotifications")]
+    public List<CareLinkNotification>? ActiveNotifications { get; set; }
+
+    [JsonPropertyName("clearedNotifications")]
+    public List<CareLinkNotification>? ClearedNotifications { get; set; }
+}
+
+public class CareLinkNotification
+{
+    [JsonPropertyName("referenceGUID")]
+    public string? ReferenceGUID { get; set; }
+
+    [JsonPropertyName("dateTime")]
+    public string? DateTime { get; set; }
+
+    [JsonPropertyName("triggeredDateTime")]
+    public string? TriggeredDateTime { get; set; }
+
+    [JsonPropertyName("type")]
+    public string? Type { get; set; }
+
+    [JsonPropertyName("faultId")]
+    public int? FaultId { get; set; }
+
+    [JsonPropertyName("messageId")]
+    public string? MessageId { get; set; }
+
+    [JsonPropertyName("unitsRemaining")]
+    public double? UnitsRemaining { get; set; }
+}
+
+public class CareLinkCgmInfo
+{
+    [JsonPropertyName("sensorType")]
+    public string? SensorType { get; set; }
+}
+
+public class CareLinkMedicalDeviceInformation
+{
+    [JsonPropertyName("manufacturer")]
+    public string? Manufacturer { get; set; }
+
+    [JsonPropertyName("modelNumber")]
+    public string? ModelNumber { get; set; }
+
+    [JsonPropertyName("hardwareRevision")]
+    public string? HardwareRevision { get; set; }
+
+    [JsonPropertyName("firmwareRevision")]
+    public string? FirmwareRevision { get; set; }
+
+    [JsonPropertyName("softwareRevision")]
+    public string? SoftwareRevision { get; set; }
 }
 
 public class CareLinkSensorGlucose

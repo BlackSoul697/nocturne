@@ -15,10 +15,6 @@ public class SoftDeleteCleanupService(
     private static readonly TimeSpan InitialDelay = TimeSpan.FromMinutes(10);
     private static readonly TimeSpan Interval = TimeSpan.FromHours(24);
     private const int BatchSize = 10_000;
-    private const int MinRetentionDays = 7;
-
-    private int DefaultRetentionDays =>
-        configuration.GetValue("DataRetention:SoftDeleteRetentionDays", 30);
 
     /// <summary>
     /// All v4 tables with a deleted_at column.
@@ -27,7 +23,7 @@ public class SoftDeleteCleanupService(
     [
         "aps_snapshots", "basal_schedules", "bg_checks", "bolus_calculations",
         "boluses", "calibrations", "carb_intakes", "carb_ratio_schedules",
-        "decomposition_batches", "device_events", "device_status_extras",
+        "device_events", "device_status_extras",
         "devices", "meter_glucose", "notes", "patient_devices",
         "patient_insulins", "patient_records", "pump_snapshots",
         "sensitivity_schedules", "sensor_glucose", "target_range_schedules",
@@ -78,8 +74,8 @@ public class SoftDeleteCleanupService(
         {
             try
             {
-                var retentionDays = configMap.GetValueOrDefault(tenantId) ?? DefaultRetentionDays;
-                retentionDays = Math.Max(retentionDays, MinRetentionDays); // Enforce minimum
+                var retentionDays = SoftDeleteRetentionPolicy.ResolveDays(
+                    configMap.GetValueOrDefault(tenantId), configuration);
                 var cutoff = DateTime.UtcNow.AddDays(-retentionDays);
 
                 var totalDeleted = 0;

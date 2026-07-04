@@ -1,6 +1,7 @@
 <script lang="ts">
   import type { Thresholds, DayToDayDailyData } from "./types";
   import { getGlucoseColor } from "$lib/utils/glucose-analytics.ts";
+  import { bg, bgLabel, bgRange } from "$lib/utils/formatting";
 
   interface Props {
     dayData: DayToDayDailyData;
@@ -10,7 +11,8 @@
   let { dayData, thresholds }: Props = $props();
 </script>
 
-<div class="mt-4 grid grid-cols-2 md:grid-cols-3 gap-4 text-sm">
+<div class="@container mt-4">
+<div class="grid grid-cols-2 @lg:grid-cols-3 gap-4 text-sm">
   <div class="bg-gray-50 p-3 rounded">
     <div class="text-gray-600 text-xs">Average</div>
     <div
@@ -19,13 +21,13 @@
         thresholds
       )}"
     >
-      {Math.round(dayData.analytics?.basicStats?.mean ?? 0)} mg/dL
+      {bg(dayData.analytics?.basicStats?.mean ?? 0)} {bgLabel()}
     </div>
   </div>
   <div class="bg-gray-50 p-3 rounded">
     <div class="text-gray-600 text-xs">Range</div>
     <div class="font-semibold">
-      {Math.round(dayData.analytics?.basicStats?.min ?? 0)} - {Math.round(
+      {bg(dayData.analytics?.basicStats?.min ?? 0)} - {bg(
         dayData.analytics?.basicStats?.max ?? 0
       )}
     </div>
@@ -36,7 +38,7 @@
       {dayData.analytics?.timeInRange?.percentages?.target ?? 0}%
     </div>
     <div class="text-xs text-gray-500">
-      ({thresholds.targetBottom}-{thresholds.targetTop} mg/dL)
+      ({bgRange(thresholds.targetBottom, thresholds.targetTop)})
     </div>
   </div>
   <div class="bg-gray-50 p-3 rounded">
@@ -48,7 +50,7 @@
         0}%
     </div>
     <div class="text-xs text-gray-500">
-      ({thresholds.targetBottom}-{thresholds.tightTargetTop} mg/dL)
+      ({bgRange(thresholds.targetBottom, thresholds.tightTargetTop)})
     </div>
   </div>
   <div class="bg-gray-50 p-3 rounded">
@@ -65,4 +67,5 @@
         (dayData.analytics?.timeInRange?.percentages?.veryHigh ?? 0)}%
     </div>
   </div>
+</div>
 </div>

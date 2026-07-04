@@ -1,4 +1,5 @@
 using Nocturne.Core.Models;
+using Nocturne.Core.Models.Alerts;
 
 namespace Nocturne.Core.Contracts.Alerts;
 
@@ -22,7 +23,10 @@ public interface IAlertRepository
     /// Returns the flat per-rule channel list. Channels are dispatched in parallel when the
     /// rule fires; <see cref="AlertRuleChannelSnapshot.SortOrder"/> is cosmetic only.
     /// </summary>
-    Task<IReadOnlyList<AlertRuleChannelSnapshot>> GetChannelsForRuleAsync(Guid ruleId, CancellationToken ct);
+    /// <param name="tenantId">The tenant that owns the rule, used to scope the query.</param>
+    /// <param name="ruleId">The alert rule identifier.</param>
+    /// <param name="ct">Cancellation token.</param>
+    Task<IReadOnlyList<AlertRuleChannelSnapshot>> GetChannelsForRuleAsync(Guid tenantId, Guid ruleId, CancellationToken ct);
 
     /// <summary>
     /// Creates a new <see cref="AlertInstanceSnapshot"/> for a triggered alert.
@@ -32,15 +36,17 @@ public interface IAlertRepository
     /// <summary>
     /// Returns all alert instances associated with a specific excursion.
     /// </summary>
+    /// <param name="tenantId">The tenant that owns the excursion, used to scope the query.</param>
     /// <param name="excursionId">The <see cref="AlertExcursion"/> identifier.</param>
     /// <param name="ct">Cancellation token.</param>
     /// <returns>A read-only list of alert instances for the excursion.</returns>
-    Task<IReadOnlyList<AlertInstanceSnapshot>> GetInstancesForExcursionAsync(Guid excursionId, CancellationToken ct);
+    Task<IReadOnlyList<AlertInstanceSnapshot>> GetInstancesForExcursionAsync(Guid tenantId, Guid excursionId, CancellationToken ct);
 
     /// <summary>
     /// Resolves all active alert instances for the specified excursion, marking them
     /// with the given resolution timestamp and reason.
     /// </summary>
+    /// <param name="tenantId">The tenant that owns the excursion, used to scope the update.</param>
     /// <param name="excursionId">The <see cref="AlertExcursion"/> identifier.</param>
     /// <param name="resolvedAt">The timestamp when the excursion was resolved.</param>
     /// <param name="resolutionReason">
@@ -49,7 +55,7 @@ public interface IAlertRepository
     /// fall-back — every production call site has a reason.
     /// </param>
     /// <param name="ct">Cancellation token.</param>
-    Task ResolveInstancesForExcursionAsync(Guid excursionId, DateTime resolvedAt, string? resolutionReason, CancellationToken ct);
+    Task ResolveInstancesForExcursionAsync(Guid tenantId, Guid excursionId, DateTime resolvedAt, string? resolutionReason, CancellationToken ct);
 
     /// <summary>
     /// Returns every open excursion whose owning rule has auto-resolve enabled
@@ -65,7 +71,10 @@ public interface IAlertRepository
     /// <c>ExcursionResolutionHandler</c> to auto-archive in-app notifications when the
     /// excursion closes.
     /// </summary>
-    Task<IReadOnlyList<string>> GetInAppDestinationsForExcursionAsync(Guid excursionId, CancellationToken ct);
+    /// <param name="tenantId">The tenant that owns the excursion, used to scope the query.</param>
+    /// <param name="excursionId">The <see cref="AlertExcursion"/> identifier.</param>
+    /// <param name="ct">Cancellation token.</param>
+    Task<IReadOnlyList<string>> GetInAppDestinationsForExcursionAsync(Guid tenantId, Guid excursionId, CancellationToken ct);
 
     /// <summary>
     /// Updates an existing alert instance (e.g., advancing its escalation step or snooze state).
@@ -79,10 +88,11 @@ public interface IAlertRepository
     /// Expires all pending (unsent) deliveries for the specified alert instances,
     /// typically called when instances are resolved or acknowledged.
     /// </summary>
+    /// <param name="tenantId">The tenant that owns the instances, used to scope the update.</param>
     /// <param name="instanceIds">The alert instance identifiers whose pending deliveries should be expired.</param>
     /// <param name="ct">Cancellation token.</param>
     /// <returns>A task that completes when the deliveries have been expired.</returns>
-    Task ExpirePendingDeliveriesAsync(IReadOnlyList<Guid> instanceIds, CancellationToken ct);
+    Task ExpirePendingDeliveriesAsync(Guid tenantId, IReadOnlyList<Guid> instanceIds, CancellationToken ct);
 
     /// <summary>
     /// Counts the number of active (unresolved) excursions for a tenant.
@@ -117,6 +127,27 @@ public interface IAlertRepository
     Task<TenantAlertSettingsSnapshot> GetTenantAlertSettingsAsync(Guid tenantId, CancellationToken ct);
 
     /// <summary>
+    /// Returns the tenant's uncleared DND windows (<c>cleared_at IS NULL</c>) as resolver
+    /// snapshots, for scoped Do Not Disturb (ADR 0004 D5). Every <see cref="DateTime"/> is
+    /// normalised to <see cref="DateTimeKind.Utc"/> so <see cref="DndWindowSnapshot.IsActiveAt"/>
+    /// (naive comparison) is sound. The caller resolves active-at-now; the enricher folds the
+    /// active scopes into <see cref="SensorContext.ActiveDndScopes"/>. Backed by the partial
+    /// index on <c>(tenant_id, scope) WHERE cleared_at IS NULL</c>.
+    /// </summary>
+    Task<IReadOnlyList<DndWindowSnapshot>> GetUnclearedDndWindowsAsync(Guid tenantId, CancellationToken ct);
+
+    /// <summary>
+    /// Returns every DND window for the tenant received by <paramref name="asOfReceiptUtc"/>
+    /// (<c>created_at &lt;= asOfReceiptUtc</c>), <b>including cleared/expired ones</b>, for replay
+    /// (ADR 0004 D5). Replay resolves each window with
+    /// <see cref="DndWindowSnapshot.WasActiveAt"/> (receipt-gated) per tick, so cleared windows'
+    /// <c>cleared_at</c> still matters. Every <see cref="DateTime"/> is normalised to
+    /// <see cref="DateTimeKind.Utc"/>.
+    /// </summary>
+    Task<IReadOnlyList<DndWindowSnapshot>> GetDndWindowsAsOfAsync(
+        Guid tenantId, DateTime asOfReceiptUtc, CancellationToken ct);
+
+    /// <summary>
     /// Marks an alert instance as suppressed at fire time without dispatching deliveries.
     /// Writes <paramref name="reason"/> to <c>alert_instances.suppression_reason</c> so Replay
     /// and History can display "would have fired but suppressed" rows. Currently the only
@@ -132,6 +163,18 @@ public interface IAlertRepository
     /// <param name="ct">Cancellation token.</param>
     /// <returns>A read-only list of enabled signal-loss rule snapshots.</returns>
     Task<IReadOnlyList<SignalLossRuleSnapshot>> GetEnabledSignalLossRulesAsync(CancellationToken ct);
+
+    /// <summary>
+    /// Returns all enabled rules with the given root condition type across all tenants.
+    /// Used by the sweep service to periodically evaluate wall-clock-driven rules
+    /// (e.g. <c>tracker_age</c>) that must fire even when no new reading arrives.
+    /// Rules that only reference the type inside a composite tree are not returned —
+    /// those still evaluate on the per-reading path.
+    /// </summary>
+    /// <param name="conditionType">The root condition type to filter on.</param>
+    /// <param name="ct">Cancellation token.</param>
+    Task<IReadOnlyList<AlertRuleSnapshot>> GetEnabledRulesByConditionTypeAsync(
+        Nocturne.Core.Models.Alerts.AlertConditionType conditionType, CancellationToken ct);
 
     /// <summary>
     /// Returns the latest glucose trend rate (mg/dL per minute) for the tenant,

@@ -3,29 +3,30 @@ using Microsoft.AspNetCore.SignalR;
 using Nocturne.API.Extensions;
 using Nocturne.API.Middleware;
 using Nocturne.API.Services.Devices;
-using Nocturne.Core.Contracts.Identity;
+using Nocturne.API.Services.Identity;
 using Nocturne.Connectors.Core.Utilities;
 using Nocturne.Core.Constants;
 using Nocturne.Core.Contracts.Glucose;
 using Nocturne.Core.Contracts.Treatments;
+using Nocturne.Core.Models.Authorization;
 
 namespace Nocturne.API.Hubs;
 
 /// <summary>
 /// SignalR hub for real-time data updates, replacing socket.io main data connection
 /// </summary>
+// Connections authenticate in-band after negotiate and are reachable only via the internal
+// realtime bridge, so the HTTP fallback authorization policy must not gate the handshake.
+[AllowAnonymous]
 public class DataHub : TenantAwareHub
 {
     private readonly ILogger<DataHub> _logger;
-    private readonly Nocturne.Core.Contracts.Identity.IAuthorizationService _authorizationService;
+    private readonly IHubTokenAuthorizer _tokenAuthorizer;
 
-    public DataHub(
-        ILogger<DataHub> logger,
-        Nocturne.Core.Contracts.Identity.IAuthorizationService authorizationService
-    )
+    public DataHub(ILogger<DataHub> logger, IHubTokenAuthorizer tokenAuthorizer)
     {
         _logger = logger;
-        _authorizationService = authorizationService;
+        _tokenAuthorizer = tokenAuthorizer;
     }
 
     /// <summary>
@@ -52,11 +53,14 @@ public class DataHub : TenantAwareHub
             {
                 if (!string.IsNullOrEmpty(authData.Token))
                 {
-                    // Try to generate JWT from access token
-                    var authResponse = await _authorizationService.GenerateJwtFromAccessTokenAsync(
-                        authData.Token
+                    // OAuth JWT (validated + tenant-pinned + scope-checked) or legacy opaque
+                    // access token. Glucose read is the gate: the authorized group receives the
+                    // tenant's live data broadcasts.
+                    isAuthorized = await _tokenAuthorizer.IsTokenAuthorizedAsync(
+                        authData.Token,
+                        TenantContext?.TenantId,
+                        OAuthScopes.GlucoseRead
                     );
-                    isAuthorized = authResponse != null;
                 }
                 else if (!string.IsNullOrEmpty(authData.Secret))
                 {
@@ -75,8 +79,8 @@ public class DataHub : TenantAwareHub
                         ?? configuration?[ServiceNames.ConfigKeys.InstanceKey];
                     if (!string.IsNullOrEmpty(configuredSecret))
                     {
-                        // Calculate SHA1 hash of the configured secret
-                        var expectedHash = HashUtils.Sha1Hex(configuredSecret);
+                        // Calculate SHA-256 hash of the configured secret
+                        var expectedHash = HashUtils.Sha256Hex(configuredSecret);
 
                         // Compare with provided secret (should be the hashed value)
                         isAuthorized = authData.Secret.ToLowerInvariant() == expectedHash;
@@ -247,7 +251,7 @@ public class DataHub : TenantAwareHub
     {
         try
         {
-            var enabledCollections = new[] { "entries", "treatments", "devicestatus", "profiles" };
+            var enabledCollections = Services.Realtime.RealtimeCategories.All;
             var collections = request.Collections ?? enabledCollections;
             var subscribed = new List<string>();
 

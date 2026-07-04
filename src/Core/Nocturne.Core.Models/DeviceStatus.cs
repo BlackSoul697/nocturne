@@ -262,6 +262,21 @@ public class PumpStatus
     public string? Model { get; set; }
 
     /// <summary>
+    /// Pump serial number, used to uniquely identify the device in the registry.
+    /// </summary>
+    [JsonPropertyName("serial")]
+    public string? Serial { get; set; }
+
+    /// <summary>
+    /// Canonical closed-loop operating mode of the pump as a <see cref="PumpModeState"/> name
+    /// (e.g. "Automatic", "Manual"). Connectors that can observe the pump's auto-mode state set this
+    /// so the decomposer can emit <see cref="StateSpanCategory.PumpMode"/> spans. Null when the
+    /// uploader/connector reports no mode signal.
+    /// </summary>
+    [JsonPropertyName("pumpMode")]
+    public string? PumpMode { get; set; }
+
+    /// <summary>
     /// Extended pump data (arbitrary key-value pairs from the device)
     /// </summary>
     [JsonPropertyName("extended")]
@@ -992,6 +1007,25 @@ public class CorrectionRange
 /// </summary>
 public class CgmStatus
 {
+    /// <summary>
+    /// CGM manufacturer (e.g., "Dexcom", "Abbott", "Medtronic"). Used to register the
+    /// sensor in the device registry.
+    /// </summary>
+    [JsonPropertyName("manufacturer")]
+    public string? Manufacturer { get; set; }
+
+    /// <summary>
+    /// CGM model identifier (e.g., "G7", "Libre 3", "Guardian 4").
+    /// </summary>
+    [JsonPropertyName("model")]
+    public string? Model { get; set; }
+
+    /// <summary>
+    /// CGM/transmitter serial number, used to uniquely identify the device in the registry.
+    /// </summary>
+    [JsonPropertyName("serial")]
+    public string? Serial { get; set; }
+
     /// <summary>
     /// Gets or sets the sensor age in human-readable format (e.g., "1d 4h 23m")
     /// </summary>

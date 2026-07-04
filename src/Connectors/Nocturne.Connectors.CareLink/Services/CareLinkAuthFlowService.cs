@@ -168,6 +168,119 @@ public partial class CareLinkAuthFlowService(ILogger logger) : IDisposable
         return new AuthResult(accessToken, refreshToken, ssoConfig.Client.ClientId, tokenUrl, ssoConfig.Client.Audience);
     }
 
+    /// <summary>
+    /// Carries the PKCE verifier and token-exchange parameters produced by
+    /// <see cref="BuildAuthorizeUrlAsync"/>. Everything except <see cref="AuthorizeUrl"/> must be
+    /// stored server-side (keyed by <see cref="State"/>) and handed back to <see cref="ExchangeCodeAsync"/>.
+    /// </summary>
+    public record AuthorizeFlow(
+        string AuthorizeUrl, string CodeVerifier, string State,
+        string ClientId, string TokenUrl, string RedirectUri, string? Audience);
+
+    /// <summary>
+    /// Builds the Auth0 authorize URL for the user-driven ("manual-paste") connect flow. The user opens
+    /// the URL in their own browser, signs in and solves the CAPTCHA, and returns the resulting code to
+    /// <see cref="ExchangeCodeAsync"/>. This is the only viable interactive path — Medtronic's Auth0
+    /// client only permits the <c>com.medtronic.carepartner:/sso</c> redirect, so no web callback can
+    /// receive the code, and headless login is CAPTCHA-blocked.
+    /// </summary>
+    public async Task<AuthorizeFlow?> BuildAuthorizeUrlAsync(string server, CancellationToken ct)
+    {
+        var discoveryUrl = GetDiscoveryUrl(server);
+        var discoveryResponse = await _httpClient.GetAsync(discoveryUrl, ct);
+        discoveryResponse.EnsureSuccessStatusCode();
+        var discovery = JsonSerializer.Deserialize<DiscoverResponse>(
+            await discoveryResponse.Content.ReadAsStringAsync(ct));
+
+        var ssoConfigUrl = ResolveSSOConfigUrl(discovery, server);
+        if (ssoConfigUrl == null)
+        {
+            _logger.LogError("Could not resolve SSO config URL for region {Server}", server);
+            return null;
+        }
+
+        var ssoResponse = await _httpClient.GetAsync(ssoConfigUrl, ct);
+        ssoResponse.EnsureSuccessStatusCode();
+        var ssoConfig = JsonSerializer.Deserialize<Auth0SSOConfig>(
+            await ssoResponse.Content.ReadAsStringAsync(ct));
+        if (ssoConfig == null)
+        {
+            _logger.LogError("Failed to deserialize Auth0 SSO config");
+            return null;
+        }
+
+        var baseUrl = ssoConfig.GetBaseUrl();
+        var tokenUrl = $"{baseUrl}{ssoConfig.SystemEndpoints.TokenEndpointPath}";
+        var (codeVerifier, codeChallenge) = GeneratePkce();
+        var state = Convert.ToHexString(RandomNumberGenerator.GetBytes(16)).ToLowerInvariant();
+        var authorizeUrl = BuildAuthorizeUrl(baseUrl, ssoConfig, codeChallenge, state);
+
+        return new AuthorizeFlow(
+            authorizeUrl, codeVerifier, state,
+            ssoConfig.Client.ClientId, tokenUrl, ssoConfig.Client.RedirectUri, ssoConfig.Client.Audience);
+    }
+
+    /// <summary>
+    /// Exchanges the authorization code (captured by the user from the redirect) for tokens, using the
+    /// PKCE verifier and parameters from the corresponding <see cref="AuthorizeFlow"/>.
+    /// </summary>
+    public async Task<AuthResult?> ExchangeCodeAsync(
+        string code, string codeVerifier, string clientId, string tokenUrl, string redirectUri,
+        string? audience, CancellationToken ct)
+    {
+        using var tokenContent = new FormUrlEncodedContent(new Dictionary<string, string>
+        {
+            ["grant_type"] = "authorization_code",
+            ["client_id"] = clientId,
+            ["code"] = code,
+            ["redirect_uri"] = redirectUri,
+            ["code_verifier"] = codeVerifier,
+        });
+
+        var tokenResponse = await _httpClient.PostAsync(tokenUrl, tokenContent, ct);
+        if (!tokenResponse.IsSuccessStatusCode)
+        {
+            var err = await tokenResponse.Content.ReadAsStringAsync(ct);
+            _logger.LogError("CareLink code exchange failed with {StatusCode}: {Body}", tokenResponse.StatusCode, err);
+            return null;
+        }
+
+        var tokenJson = await tokenResponse.Content.ReadAsStringAsync(ct);
+        using var tokenDoc = JsonDocument.Parse(tokenJson);
+        var root = tokenDoc.RootElement;
+        var accessToken = root.TryGetProperty("access_token", out var at) ? at.GetString() : null;
+        var refreshToken = root.TryGetProperty("refresh_token", out var rt) ? rt.GetString() : null;
+
+        if (string.IsNullOrEmpty(accessToken) || string.IsNullOrEmpty(refreshToken))
+        {
+            _logger.LogError("CareLink code exchange response missing access_token or refresh_token");
+            return null;
+        }
+
+        return new AuthResult(accessToken, refreshToken, clientId, tokenUrl, audience);
+    }
+
+    /// <summary>
+    /// Fetches the authenticated user's CareLink profile (username, country) with a freshly-issued
+    /// access token, so the connect flow can auto-fill the connector configuration.
+    /// </summary>
+    public async Task<CareLinkUserInfo?> FetchUserInfoAsync(string accessToken, string server, CancellationToken ct)
+    {
+        var host = server.Equals("US", StringComparison.OrdinalIgnoreCase)
+            ? CareLinkConstants.Servers.Us
+            : CareLinkConstants.Servers.Eu;
+
+        using var request = new HttpRequestMessage(HttpMethod.Get, $"https://{host}{CareLinkConstants.Endpoints.UsersMe}");
+        request.Headers.Add("Authorization", $"Bearer {accessToken}");
+        request.Headers.Add("User-Agent", CareLinkConstants.UserAgents.MobileApp);
+
+        var response = await _httpClient.SendAsync(request, ct);
+        if (!response.IsSuccessStatusCode)
+            return null;
+
+        return JsonSerializer.Deserialize<CareLinkUserInfo>(await response.Content.ReadAsStringAsync(ct));
+    }
+
     // --- Static helpers ---
 
     public static string GetDiscoveryUrl(string server)

@@ -264,6 +264,8 @@ public class ConnectorConfigurationService : IConnectorConfigurationService
             return;
         }
 
+        // SHA-1 is required here: the Nightscout `api-secret` protocol hashes the secret
+        // with SHA-1, so legacy clients (xDrip, etc.) send that hash and we must match it.
         var sha1Hash = HashUtils.Sha1Hex(apiSecret);
 
         var alreadyExists = await _context.OAuthGrants
@@ -290,6 +292,7 @@ public class ConnectorConfigurationService : IConnectorConfigurationService
             Label = "Nightscout (migrated)",
             TokenHash = null,
             LegacySecretHash = sha1Hash,
+            IsMigrated = true,
             CreatedAt = DateTime.UtcNow,
         };
 
@@ -618,6 +621,11 @@ public class ConnectorConfigurationService : IConnectorConfigurationService
                     ["x-secret"] = true
                 };
 
+                if (connectorPropAttr.Hidden)
+                {
+                    secretSchema["x-hidden"] = true;
+                }
+
                 if (!string.IsNullOrEmpty(envPrefix))
                 {
                     secretSchema["x-envVar"] = connectorPropAttr.GetFullEnvVarName(envPrefix);
@@ -806,6 +814,11 @@ public class ConnectorConfigurationService : IConnectorConfigurationService
         if (!string.IsNullOrEmpty(connectorAttr.Format))
         {
             schema["format"] = connectorAttr.Format;
+        }
+
+        if (connectorAttr.Hidden)
+        {
+            schema["x-hidden"] = true;
         }
 
         return schema;

@@ -31,7 +31,6 @@
   import type { AlertRuleResponse } from "$api-clients";
   import type { ConditionNode } from "./types";
   import {
-    assignLeafIds,
     composeRuleTruth,
     type LeafTransitionLog,
   } from "./leafEval";
@@ -134,6 +133,7 @@
     "calendar-clock": CalendarClock,
     "calendar-days": CalendarDays,
     moon: Moon,
+    timer: Timer,
   };
 
   // Pin the rule under edit to the top so it's always visible. Other rules
@@ -297,7 +297,7 @@
         </Collapsible.Trigger>
         <Switch
           checked={!disabled}
-          onCheckedChange={(c) => id && toggleDisabled(id, c)}
+          onCheckedChange={(c: boolean) => id && toggleDisabled(id, c)}
           aria-label={disabled ? `Enable ${rule.name}` : `Disable ${rule.name}`}
         />
       </div>

@@ -17,9 +17,10 @@
   import { coachmark } from "@nocturne/coach";
 
   // Infer DayStats type from the query result
-  type DayStats = NonNullable<
-    Awaited<ReturnType<typeof getPunchCardData>>
-  >["months"][number]["days"][number];
+  type PunchCardMonth = NonNullable<
+    NonNullable<Awaited<ReturnType<typeof getPunchCardData>>>["months"]
+  >[number];
+  type DayStats = NonNullable<PunchCardMonth["days"]>[number];
 
   // View mode: 'tir' for Time in Range bars, 'profile' for glucose line charts
   type ViewMode = "tir" | "profile";
@@ -159,6 +160,7 @@
     const daysMap = new Map<string, DayStats>();
     if (monthData) {
       for (const day of monthData?.days || []) {
+        if (!day.date) continue;
         daysMap.set(day.date, day);
       }
     }
@@ -393,8 +395,19 @@
     </Card.Root>
   </div>
 {:else}
-  <div class="flex flex-col h-full">
+  <div class="@container flex flex-col h-full">
+    <div class="hidden print:block border-b pb-3 mb-4">
+      <h1 class="text-xl font-bold">
+        Month-to-Month Report — {MONTH_NAMES[currentMonth]}
+        {currentYear}
+      </h1>
+      <p class="text-sm text-muted-foreground">
+        Generated {new Date().toLocaleString()}
+      </p>
+    </div>
+
     <div
+      class="print:hidden"
       {@attach coachmark({
         key: "feature-intro.calendar-views",
         title: "View modes",
@@ -416,7 +429,7 @@
     </div>
 
     {#if trackersLoading}
-      <div class="flex-1 p-4">
+      <div class="flex-1 p-3 sm:p-4">
         <Card.Root class="h-full">
           <Card.Content class="p-4 h-full flex items-center justify-center">
             <div class="text-muted-foreground">Loading data...</div>
@@ -424,9 +437,9 @@
         </Card.Root>
       </div>
     {:else if trackersError}
-      <div class="flex-1 p-4">
+      <div class="flex-1 p-3 sm:p-4">
         <Card.Root class="h-full">
-          <Card.Content class="p-4 h-full flex flex-col">
+          <Card.Content class="p-2 sm:p-4 h-full flex flex-col">
             <div class="grid grid-cols-7 gap-1 mb-2">
               {#each DAY_NAMES as dayName}
                 <div
@@ -444,32 +457,33 @@
         </Card.Root>
       </div>
     {:else}
-      <div class="flex-1 p-4">
+      <div class="flex-1 p-3 sm:p-4">
         <Card.Root class="h-full">
-          <Card.Content class="p-4 h-full flex flex-col">
-            <div class="grid grid-cols-7 gap-1 mb-2">
-              {#each DAY_NAMES as dayName}
-                <div
-                  class="text-center text-sm font-medium text-muted-foreground py-2"
-                >
-                  {dayName}
-                </div>
-              {/each}
-            </div>
+          <Card.Content class="p-2 sm:p-4 h-full flex flex-col">
+            <div class="flex-1 overflow-x-auto print:overflow-visible flex flex-col">
+              <div class="grid grid-cols-7 gap-1 mb-2 min-w-[28rem] @md:min-w-0">
+                {#each DAY_NAMES as dayName}
+                  <div
+                    class="text-center text-sm font-medium text-muted-foreground py-2"
+                  >
+                    {dayName}
+                  </div>
+                {/each}
+              </div>
 
-            <div
-              class="flex-1 grid grid-rows-6 gap-1"
-              {@attach coachmark({
-                key: "feature-intro.calendar-trackers",
-                title: "Tracker events",
-                description:
-                  "Tracker events appear on your calendar \u2014 colored by urgency.",
-              })}
-            >
-              {#each calendarGrid as week}
-                <div class="grid grid-cols-7 gap-1">
-                  {#each week as day}
-                    <CalendarDayCell
+              <div
+                class="flex-1 grid grid-rows-6 gap-1 min-w-[28rem] @md:min-w-0"
+                {@attach coachmark({
+                  key: "feature-intro.calendar-trackers",
+                  title: "Tracker events",
+                  description:
+                    "Tracker events appear on your calendar \u2014 colored by urgency.",
+                })}
+              >
+                {#each calendarGrid as week}
+                  <div class="grid grid-cols-7 gap-1">
+                    {#each week as day}
+                      <CalendarDayCell
                       {day}
                       {viewMode}
                       {currentYear}
@@ -490,6 +504,7 @@
                   {/each}
                 </div>
               {/each}
+              </div>
             </div>
 
             <CalendarMonthSummary {monthSummary} {units} {unitLabel} />

@@ -1,5 +1,6 @@
 <script lang="ts">
   import * as Dialog from "$lib/components/ui/dialog";
+  import { Button } from "$lib/components/ui/button";
   import { Activity, Syringe, Utensils } from "lucide-svelte";
 
   type InspectionContext = "glucose" | "delivery" | "treatment";
@@ -33,7 +34,7 @@
 </script>
 
 <Dialog.Root bind:open>
-  <Dialog.Content class="max-w-md">
+  <Dialog.Content class="max-w-md print:hidden">
     <Dialog.Header>
       <Dialog.Title>Inspect Point</Dialog.Title>
       <Dialog.Description>
@@ -59,13 +60,9 @@
       {/each}
     </div>
     <Dialog.Footer>
-      <button
-        type="button"
-        class="px-4 py-2 text-sm rounded-md border border-input bg-background hover:bg-accent transition-colors"
-        onclick={onClose}
-      >
+      <Button variant="outline" onclick={onClose}>
         Cancel
-      </button>
+      </Button>
     </Dialog.Footer>
   </Dialog.Content>
 </Dialog.Root>

@@ -59,6 +59,7 @@ internal static class ConditionNodePayloads
             "pump_state" => node.PumpState,
             "state_span_active" => node.StateSpanActive,
             "sleep_session_active" => node.SleepSessionActive,
+            "tracker_age" => node.TrackerAge,
             _ => null,
         };
 

@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Nocturne.API.Attributes;
 using Nocturne.API.Authorization;
+using Nocturne.Core.Models.Authorization;
 using Nocturne.API.Services.Devices;
 using Nocturne.API.Services.Legacy;
 using Nocturne.Core.Contracts.Effects;
@@ -165,6 +166,7 @@ public class DeviceStatusController : ControllerBase
     /// <returns>Created device status entries with assigned IDs</returns>
     [HttpPost]
     [Authorize]
+    [RequireScope(OAuthScopes.DevicesReadWrite)]
     [NightscoutEndpoint("/api/v1/devicestatus")]
     [ProducesResponseType(typeof(DeviceStatus[]), 200)]
     [ProducesResponseType(400)]
@@ -222,7 +224,8 @@ public class DeviceStatusController : ControllerBase
             var projectedResults = new List<DeviceStatus>();
             foreach (var ds in deviceStatusEntries)
             {
-                await _decomposer.DecomposeAsync(ds, cancellationToken);
+                // Direct v1 upload has no connector data source; a live upload broadcasts.
+                await _decomposer.DecomposeAsync(ds, source: null, WriteOrigin.Live, cancellationToken);
 
                 // Project the V4 snapshots back to DeviceStatus shape for the response
                 var projected = ds;
@@ -276,6 +279,7 @@ public class DeviceStatusController : ControllerBase
     /// <returns>Success status</returns>
     [HttpDelete("{id}")]
     [Authorize]
+    [RequireScope(OAuthScopes.FullAccess)]
     [NightscoutEndpoint("/api/v1/devicestatus/:id")]
     [ProducesResponseType(200)]
     [ProducesResponseType(404)]
@@ -303,7 +307,7 @@ public class DeviceStatusController : ControllerBase
             var deviceStatusToDelete = await _projection.GetByIdAsync(id, cancellationToken);
 
             // Delete V4 snapshot records by legacy ID
-            var deleted = await _decomposer.DeleteByLegacyIdAsync(id, cancellationToken);
+            var deleted = await _decomposer.DeleteByLegacyIdAsync(id, WriteOrigin.Live, cancellationToken);
 
             if (deleted > 0 || deviceStatusToDelete != null)
             {
@@ -340,6 +344,7 @@ public class DeviceStatusController : ControllerBase
     /// <returns>Number of deleted entries</returns>
     [HttpDelete]
     [Authorize]
+    [RequireScope(OAuthScopes.FullAccess)]
     [NightscoutEndpoint("/api/v1/devicestatus")]
     [ProducesResponseType(typeof(object), 200)]
     [ProducesResponseType(400)]
@@ -394,7 +399,7 @@ public class DeviceStatusController : ControllerBase
             {
                 if (!string.IsNullOrEmpty(record.Id))
                 {
-                    var count = await _decomposer.DeleteByLegacyIdAsync(record.Id, cancellationToken);
+                    var count = await _decomposer.DeleteByLegacyIdAsync(record.Id, WriteOrigin.Live, cancellationToken);
                     if (count > 0)
                         deletedCount++;
                 }

@@ -75,7 +75,7 @@ jobs:
             DOCKER_TAGS="${{ env.REGISTRY }}/${{ env.IMAGE_REPOSITORY }}/nocturne-web:${VERSION}"
           elif [[ "${{ github.ref }}" == refs/tags/v* ]]; then
             VERSION=${GITHUB_REF#refs/tags/v}
-            DOTNET_TAGS="${VERSION}%3Blatest"
+            DOTNET_TAGS="${VERSION}"
             DOCKER_TAGS="${{ env.REGISTRY }}/${{ env.IMAGE_REPOSITORY }}/nocturne-web:${VERSION},${{ env.REGISTRY }}/${{ env.IMAGE_REPOSITORY }}/nocturne-web:latest"
           elif [[ "${{ github.ref }}" == refs/heads/master ]] || [[ "${{ github.ref }}" == refs/heads/main ]]; then
             VERSION=latest
@@ -127,6 +127,28 @@ jobs:
             exit 1
           fi
 
+      # The scoped-DND rule classifier (and the optional rust/shadow alert engines)
+      # load the nocturne_alerts cdylib at runtime. The API csproj packs it only when
+      # crates/target/release contains it at publish time, so build it here or the
+      # image ships without it and every rule classifies as undirected.
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache cargo
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            crates/target
+          key: cargo-${{ runner.os }}-${{ hashFiles('crates/Cargo.lock') }}
+
+      - name: Build nocturne_alerts native library
+        working-directory: crates
+        run: |
+          cargo build --release -p nocturne-alerts-ffi
+          test -f target/release/libnocturne_alerts.so
+
       - name: Build and push Nocturne.API container
         if: github.event_name != 'pull_request' || (github.event_name == 'pull_request' && github.event.pull_request.head.repo.fork == false)
         working-directory: src/API/Nocturne.API
@@ -136,7 +158,9 @@ jobs:
             -p:PublishProfile=DefaultContainer \
             -p:ContainerRegistry=${{ env.REGISTRY }} \
             -p:ContainerRepository=${{ env.IMAGE_REPOSITORY }}/nocturne-api \
-            "-p:ContainerImageTags=${{ steps.version.outputs.dotnet_tags }}"
+            "-p:ContainerImageTags=${{ steps.version.outputs.dotnet_tags }}" \
+            "-p:ContainerGitCommit=${GITHUB_SHA}" \
+            "-p:ContainerBuildDate=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
 
       - name: Build and push Nocturne.Services.Demo container
         if: github.event_name != 'pull_request' || (github.event_name == 'pull_request' && github.event.pull_request.head.repo.fork == false)
@@ -148,6 +172,15 @@ jobs:
             -p:ContainerRegistry=${{ env.REGISTRY }} \
             -p:ContainerRepository=${{ env.IMAGE_REPOSITORY }}/nocturne-demo \
             "-p:ContainerImageTags=${{ steps.version.outputs.dotnet_tags }}"
+
+      - name: Tag dotnet containers as latest
+        if: startsWith(github.ref, 'refs/tags/v') && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.fork == false)
+        run: |
+          for image in nocturne-api nocturne-demo; do
+            docker buildx imagetools create \
+              --tag ${{ env.REGISTRY }}/${{ env.IMAGE_REPOSITORY }}/${image}:latest \
+              ${{ env.REGISTRY }}/${{ env.IMAGE_REPOSITORY }}/${image}:${{ steps.version.outputs.version }}
+          done
 
       - name: Build and push Nocturne.Web container
         if: github.event_name != 'pull_request' || (github.event_name == 'pull_request' && github.event.pull_request.head.repo.fork == false)

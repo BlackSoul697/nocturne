@@ -2,6 +2,7 @@ import type { ComponentType } from "svelte";
 import {
   Bell,
   BellRing,
+  MonitorSmartphone,
   Webhook as WebhookIcon,
 } from "lucide-svelte";
 import { ChannelType } from "$api-clients";
@@ -27,6 +28,13 @@ export interface ChannelMetaEntry {
   destinationPlaceholder?: string;
   destinationHelper?: string;
   destinationRequired?: boolean;
+  /**
+   * When true, this channel is authored by the dedicated device-action editor
+   * (kind selector + capability checkboxes) rather than the generic
+   * destination/label inputs. Its destination is a device kind and its metadata
+   * carries the selected capabilities.
+   */
+  isDeviceAction?: boolean;
 }
 
 /** All known channel kinds. Kept in display order for the picker. */
@@ -147,6 +155,25 @@ export const CHANNEL_META: ChannelMetaEntry[] = [
     destinationLabel: "Phone (E.164)",
     destinationPlaceholder: "+15551234567",
     destinationRequired: true,
+  },
+  {
+    type: ChannelType.ResendEmail,
+    label: "Email",
+    description: "Send alerts to an email address via Resend",
+    logo: "/logos/email.jpg",
+    platform: "resend",
+    destinationInput: "text",
+    destinationLabel: "Email Address",
+    destinationPlaceholder: "user@example.com",
+    destinationRequired: true,
+  },
+  {
+    type: ChannelType.DeviceAction,
+    label: "Device",
+    description: "Send an actuation intent to a registered device by kind",
+    icon: MonitorSmartphone as unknown as ComponentType,
+    isDeviceAction: true,
+    destinationRequired: false,
   },
 ];
 

@@ -26,7 +26,6 @@ import {
 	House,
 	LifeBuoy,
 	Link,
-	Lock,
 	MapPin,
 	Moon,
 	Palette,
@@ -67,6 +66,8 @@ export interface CommandPaletteItem {
 	icon?: ComponentType;
 	shortcut?: string;
 	permission?: string;
+	/** Role required to see this item (e.g. "platform_admin"). */
+	role?: string;
 	href?: string;
 	linkedHref?: string;
 }
@@ -360,12 +361,12 @@ export const items: CommandPaletteItem[] = [
 	},
 	{
 		id: "page-tenants",
-		label: "Tenants",
-		group: "pages",
-		keywords: ["tenants", "organizations", "accounts"],
+		label: "Tenant Management",
+		group: "settings",
+		keywords: ["tenants", "organizations", "accounts", "platform admin"],
 		icon: Building,
-		href: "/tenants",
-		permission: "api:tenants:read",
+		href: "/settings/admin/tenants",
+		role: "platform_admin",
 	},
 
 	// ─── Settings ────────────────────────────────────────────────────────
@@ -459,30 +460,24 @@ export const items: CommandPaletteItem[] = [
 		href: "/settings/patient",
 	},
 	{
-		id: "settings-sharing",
-		label: "Sharing",
+		id: "settings-sharing-privacy",
+		label: "Sharing & Privacy",
 		group: "settings",
-		keywords: ["sharing", "followers", "caregivers"],
-		icon: Users,
-		href: "/settings/sharing",
-	},
-	{
-		id: "settings-members",
-		label: "Members",
-		group: "settings",
-		keywords: ["members", "users", "team"],
+		keywords: [
+			"sharing",
+			"privacy",
+			"public",
+			"members",
+			"users",
+			"team",
+			"roles",
+			"permissions",
+			"access control",
+			"followers",
+			"caregivers",
+		],
 		icon: Users,
 		href: "/settings/members",
-		permission: "api:settings:admin",
-	},
-	{
-		id: "settings-roles",
-		label: "Roles",
-		group: "settings",
-		keywords: ["roles", "permissions", "access control"],
-		icon: Lock,
-		href: "/settings/roles",
-		permission: "api:settings:admin",
 	},
 	{
 		id: "settings-audit",

@@ -9,6 +9,8 @@
   import { TrackerCategory } from "$api";
   import type { TrackerInstanceDto, TrackerDefinitionDto } from "$api";
   import { formatGlucoseValue } from "$lib/utils/formatting";
+  import type { GlucoseUnits } from "$lib/utils/formatting";
+  import { formatCalendarDate, getCalendarDayNumber } from "$lib/components/calendar/calendar-date";
 
   let {
     day,
@@ -35,7 +37,7 @@
     trackerEvents: Map<string, any[]>;
     definitions: TrackerDefinitionDto[];
     openPopoverId: string | null;
-    units: string;
+    units: GlucoseUnits;
     unitLabel: string;
     handleDayClick: (day: any) => void;
     getDefinition: (instance: TrackerInstanceDto, defs: TrackerDefinitionDto[]) => TrackerDefinitionDto | undefined;
@@ -84,7 +86,7 @@
     <span
       class="absolute top-1 left-2 text-xs text-muted-foreground font-medium z-10"
     >
-      {new Date(day.date).getDate()}
+      {getCalendarDayNumber(day.date)}
     </span>
 
     <!-- Tracker icons in top-right corner -->
@@ -101,7 +103,7 @@
             onOpenChange={(open) => (openPopoverId = open ? popoverId : null)}
           >
             <Popover.Trigger>
-              {#snippet child({ props })}
+              {#snippet child({ props }: { props: Record<string, unknown> })}
                 <button
                   {...props}
                   class={cn(
@@ -133,7 +135,7 @@
     <!-- Show chart based on view mode -->
     <Tooltip.Root>
       <Tooltip.Trigger>
-        {#snippet child({ props })}
+        {#snippet child({ props }: { props: Record<string, unknown> })}
           {#if viewMode === "tir"}
             <div
               {...props}
@@ -150,6 +152,7 @@
             <div {...props} class="absolute inset-0">
               <DayGlucoseProfile
                 entries={day.entries}
+                dayStartMills={day.timestamp}
                 onclick={() => handleDayClick(day)}
               />
             </div>
@@ -162,7 +165,7 @@
       >
         <div class="space-y-1.5">
           <div class="font-medium text-sm">
-            {new Date(day.date).toLocaleDateString(undefined, {
+            {formatCalendarDate(day.date, undefined, {
               weekday: "long",
               month: "short",
               day: "numeric",
@@ -222,7 +225,7 @@
             onOpenChange={(open) => (openPopoverId = open ? popoverId : null)}
           >
             <Popover.Trigger>
-              {#snippet child({ props })}
+              {#snippet child({ props }: { props: Record<string, unknown> })}
                 <button
                   {...props}
                   class={cn(
@@ -254,7 +257,7 @@
   {:else if day && "date" in day}
     <!-- Day exists in data but has no readings -->
     <span class="absolute top-1 left-2 text-xs text-muted-foreground">
-      {new Date(day.date).getDate()}
+      {getCalendarDayNumber(day.date)}
     </span>
     <!-- Tracker icons for days with no readings -->
     {#if dayTrackerEvents.length > 0}
@@ -270,7 +273,7 @@
             onOpenChange={(open) => (openPopoverId = open ? popoverId : null)}
           >
             <Popover.Trigger>
-              {#snippet child({ props })}
+              {#snippet child({ props }: { props: Record<string, unknown> })}
                 <button
                   {...props}
                   class={cn(

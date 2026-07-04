@@ -22,15 +22,18 @@ import {
   BolusClient,
   BolusCalculationClient,
   CalibrationClient,
+  CareLinkConnectClient,
   ChartDataClient,
   ChatIdentityClient,
   ChatIdentityDirectoryClient,
+  ClientDevicesClient,
   ClockFacesClient,
   CoachMarkClient,
   CompatibilityClient,
   CompressionLowClient,
   ConfigurationClient,
   ConnectedAppsClient,
+  ConnectorAdminClient,
   ConnectorFoodEntriesClient,
   ConnectorStatusClient,
   CorrelationClient,
@@ -44,6 +47,7 @@ import {
   DeviceEventClient,
   DirectGrantClient,
   DiscrepancyClient,
+  DndWindowsClient,
   FoodsClient,
   GlucoseProcessingSettingsClient,
   GuestLinkClient,
@@ -70,6 +74,7 @@ import {
   PasskeyClient,
   PatientRecordClient,
   PlatformClient,
+  PlatformAccessClient,
   PlatformSettingsClient,
   PredictionClient,
   ProcessingClient,
@@ -78,10 +83,10 @@ import {
   RetrospectiveClient,
   RoleClient,
   SensorGlucoseClient,
+  SensorIntegrityClient,
   ServicesClient,
   SetupClient,
-  SleepClient,
-  SleepReportClient,
+  ShareLinkClient,
   StateSpansClient,
   StatisticsClient,
   StatusClient,
@@ -93,8 +98,9 @@ import {
   SystemEventsClient,
   TenantClient,
   TenantAlertSettingsClient,
+  TimezoneTimelineClient,
+  TlsAuthorizationClient,
   TotpClient,
-  TrackerAlertsClient,
   TrackersClient,
   UISettingsClient,
   UploaderSnapshotClient,
@@ -127,15 +133,18 @@ export class ApiClient {
   public readonly bolus: BolusClient;
   public readonly bolusCalculation: BolusCalculationClient;
   public readonly calibration: CalibrationClient;
+  public readonly careLinkConnect: CareLinkConnectClient;
   public readonly chartData: ChartDataClient;
   public readonly chatIdentity: ChatIdentityClient;
   public readonly chatIdentityDirectory: ChatIdentityDirectoryClient;
+  public readonly clientDevices: ClientDevicesClient;
   public readonly clockFaces: ClockFacesClient;
   public readonly coachMark: CoachMarkClient;
   public readonly compatibility: CompatibilityClient;
   public readonly compressionLow: CompressionLowClient;
   public readonly configuration: ConfigurationClient;
   public readonly connectedApps: ConnectedAppsClient;
+  public readonly connectorAdmin: ConnectorAdminClient;
   public readonly connectorFoodEntries: ConnectorFoodEntriesClient;
   public readonly connectorStatus: ConnectorStatusClient;
   public readonly correlation: CorrelationClient;
@@ -149,6 +158,7 @@ export class ApiClient {
   public readonly deviceEvent: DeviceEventClient;
   public readonly directGrant: DirectGrantClient;
   public readonly discrepancy: DiscrepancyClient;
+  public readonly dndWindows: DndWindowsClient;
   public readonly foodsV4: FoodsClient;
   public readonly glucoseProcessingSettings: GlucoseProcessingSettingsClient;
   public readonly guestLink: GuestLinkClient;
@@ -175,6 +185,7 @@ export class ApiClient {
   public readonly passkey: PasskeyClient;
   public readonly patientRecord: PatientRecordClient;
   public readonly platform: PlatformClient;
+  public readonly platformAccess: PlatformAccessClient;
   public readonly platformSettings: PlatformSettingsClient;
   public readonly predictions: PredictionClient;
   public readonly processing: ProcessingClient;
@@ -183,10 +194,10 @@ export class ApiClient {
   public readonly retrospective: RetrospectiveClient;
   public readonly role: RoleClient;
   public readonly sensorGlucose: SensorGlucoseClient;
+  public readonly sensorIntegrity: SensorIntegrityClient;
   public readonly services: ServicesClient;
   public readonly setup: SetupClient;
-  public readonly sleep: SleepClient;
-  public readonly sleepReport: SleepReportClient;
+  public readonly shareLink: ShareLinkClient;
   public readonly stateSpans: StateSpansClient;
   public readonly statistics: StatisticsClient;
   public readonly status: StatusClient;
@@ -198,8 +209,9 @@ export class ApiClient {
   public readonly systemEvents: SystemEventsClient;
   public readonly tenant: TenantClient;
   public readonly tenantAlertSettings: TenantAlertSettingsClient;
+  public readonly timezoneTimeline: TimezoneTimelineClient;
+  public readonly tlsAuthorization: TlsAuthorizationClient;
   public readonly totp: TotpClient;
-  public readonly trackerAlerts: TrackerAlertsClient;
   public readonly trackers: TrackersClient;
   public readonly uiSettings: UISettingsClient;
   public readonly uploaderSnapshot: UploaderSnapshotClient;
@@ -232,15 +244,18 @@ export class ApiClient {
     this.bolus = new BolusClient(apiBaseUrl, http);
     this.bolusCalculation = new BolusCalculationClient(apiBaseUrl, http);
     this.calibration = new CalibrationClient(apiBaseUrl, http);
+    this.careLinkConnect = new CareLinkConnectClient(apiBaseUrl, http);
     this.chartData = new ChartDataClient(apiBaseUrl, http);
     this.chatIdentity = new ChatIdentityClient(apiBaseUrl, http);
     this.chatIdentityDirectory = new ChatIdentityDirectoryClient(apiBaseUrl, http);
+    this.clientDevices = new ClientDevicesClient(apiBaseUrl, http);
     this.clockFaces = new ClockFacesClient(apiBaseUrl, http);
     this.coachMark = new CoachMarkClient(apiBaseUrl, http);
     this.compatibility = new CompatibilityClient(apiBaseUrl, http);
     this.compressionLow = new CompressionLowClient(apiBaseUrl, http);
     this.configuration = new ConfigurationClient(apiBaseUrl, http);
     this.connectedApps = new ConnectedAppsClient(apiBaseUrl, http);
+    this.connectorAdmin = new ConnectorAdminClient(apiBaseUrl, http);
     this.connectorFoodEntries = new ConnectorFoodEntriesClient(apiBaseUrl, http);
     this.connectorStatus = new ConnectorStatusClient(apiBaseUrl, http);
     this.correlation = new CorrelationClient(apiBaseUrl, http);
@@ -254,6 +269,7 @@ export class ApiClient {
     this.deviceEvent = new DeviceEventClient(apiBaseUrl, http);
     this.directGrant = new DirectGrantClient(apiBaseUrl, http);
     this.discrepancy = new DiscrepancyClient(apiBaseUrl, http);
+    this.dndWindows = new DndWindowsClient(apiBaseUrl, http);
     this.foodsV4 = new FoodsClient(apiBaseUrl, http);
     this.glucoseProcessingSettings = new GlucoseProcessingSettingsClient(apiBaseUrl, http);
     this.guestLink = new GuestLinkClient(apiBaseUrl, http);
@@ -280,6 +296,7 @@ export class ApiClient {
     this.passkey = new PasskeyClient(apiBaseUrl, http);
     this.patientRecord = new PatientRecordClient(apiBaseUrl, http);
     this.platform = new PlatformClient(apiBaseUrl, http);
+    this.platformAccess = new PlatformAccessClient(apiBaseUrl, http);
     this.platformSettings = new PlatformSettingsClient(apiBaseUrl, http);
     this.predictions = new PredictionClient(apiBaseUrl, http);
     this.processing = new ProcessingClient(apiBaseUrl, http);
@@ -288,10 +305,10 @@ export class ApiClient {
     this.retrospective = new RetrospectiveClient(apiBaseUrl, http);
     this.role = new RoleClient(apiBaseUrl, http);
     this.sensorGlucose = new SensorGlucoseClient(apiBaseUrl, http);
+    this.sensorIntegrity = new SensorIntegrityClient(apiBaseUrl, http);
     this.services = new ServicesClient(apiBaseUrl, http);
     this.setup = new SetupClient(apiBaseUrl, http);
-    this.sleep = new SleepClient(apiBaseUrl, http);
-    this.sleepReport = new SleepReportClient(apiBaseUrl, http);
+    this.shareLink = new ShareLinkClient(apiBaseUrl, http);
     this.stateSpans = new StateSpansClient(apiBaseUrl, http);
     this.statistics = new StatisticsClient(apiBaseUrl, http);
     this.status = new StatusClient(apiBaseUrl, http);
@@ -303,8 +320,9 @@ export class ApiClient {
     this.systemEvents = new SystemEventsClient(apiBaseUrl, http);
     this.tenant = new TenantClient(apiBaseUrl, http);
     this.tenantAlertSettings = new TenantAlertSettingsClient(apiBaseUrl, http);
+    this.timezoneTimeline = new TimezoneTimelineClient(apiBaseUrl, http);
+    this.tlsAuthorization = new TlsAuthorizationClient(apiBaseUrl, http);
     this.totp = new TotpClient(apiBaseUrl, http);
-    this.trackerAlerts = new TrackerAlertsClient(apiBaseUrl, http);
     this.trackers = new TrackersClient(apiBaseUrl, http);
     this.uiSettings = new UISettingsClient(apiBaseUrl, http);
     this.uploaderSnapshot = new UploaderSnapshotClient(apiBaseUrl, http);

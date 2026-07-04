@@ -154,6 +154,7 @@ public class DexcomConnectorService : BaseConnectorService<DexcomConnectorConfig
                 sessionId = newToken;
                 return true;
             },
+            maxRetries: config.MaxRetryAttempts,
             operationName: "FetchDexcomData"
         );
 
@@ -174,13 +175,13 @@ public class DexcomConnectorService : BaseConnectorService<DexcomConnectorConfig
         return result;
     }
 
+    internal static DateTime CalculateStartTime(DateTime? since, DateTime now) =>
+        since ?? now.AddDays(-2);
+
     private async Task<DexcomEntry[]?> FetchRawDataCoreAsync(
         DexcomConnectorConfiguration config, string sessionId, DateTime? since = null)
     {
-        var twoDaysAgo = DateTime.UtcNow.AddDays(-2);
-        var startTime = since.HasValue
-            ? since.Value > twoDaysAgo ? since.Value : twoDaysAgo
-            : twoDaysAgo;
+        var startTime = CalculateStartTime(since, DateTime.UtcNow);
 
         var timeDiff = DateTime.UtcNow - startTime;
         var maxCount = Math.Ceiling(timeDiff.TotalMinutes / 5);

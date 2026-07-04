@@ -125,6 +125,13 @@ public static class ServiceNames
     public const string CareLinkConnector = "carelink-connector";
 
     /// <summary>
+    /// Aspire resource name for the Tandem Source (t:connect) connector service,
+    /// which imports t:slim X2 / Mobi pump data.
+    /// </summary>
+    /// <seealso cref="DataSources.TConnectSyncConnector"/>
+    public const string TConnectSyncConnector = "tconnectsync-connector";
+
+    /// <summary>
     /// Aspire parameter names resolved by the AppHost via <c>AddParameter</c> and
     /// by services reading <c>Parameters:&lt;name&gt;</c> from configuration.
     /// </summary>
@@ -160,6 +167,27 @@ public static class ServiceNames
         /// </summary>
         /// <seealso cref="ConfigKeys.InstanceKey"/>
         public const string InstanceKey = "instance-key";
+    }
+
+    /// <summary>
+    /// HTTP header names used for service-to-service authentication.
+    /// </summary>
+    public static class Headers
+    {
+        /// <summary>
+        /// Header carrying the SHA1 hash of the shared instance key.
+        /// </summary>
+        /// <seealso cref="ConfigKeys.InstanceKey"/>
+        public const string InstanceKey = "X-Instance-Key";
+
+        /// <summary>
+        /// Header naming the trusted service that is presenting the instance key
+        /// (e.g. <c>nocturne-web</c>, <c>nocturne-bridge</c>, <c>nocturne-billing</c>).
+        /// The instance key only authenticates when this marker is present, so a
+        /// bare key accidentally forwarded onto an end-user request cannot elevate
+        /// that request to admin and bypass per-tenant public-access controls.
+        /// </summary>
+        public const string InstanceService = "X-Instance-Service";
     }
 
     /// <summary>
@@ -273,5 +301,12 @@ public static class ServiceNames
         /// Default PostgreSQL database name.
         /// </summary>
         public const string PostgresDatabase = "nocturne";
+
+        /// <summary>
+        /// Default PostgreSQL bootstrap superuser name. Used only at first
+        /// container init to create the runtime roles; the app never connects
+        /// as this user.
+        /// </summary>
+        public const string PostgresUsername = "nocturne";
     }
 }

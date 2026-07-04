@@ -13,6 +13,7 @@ public sealed class ScalarExtensionsDocumentTransformer : IOpenApiDocumentTransf
 {
     private static readonly Dictionary<string, string[]> NocturneTagGroups = new()
     {
+        ["Concepts"] = ["Syncing"],
         ["Authentication & Identity"] = ["Authentication", "OIDC Discovery", "Identity"],
         ["Health Data"] = ["Glucose", "Treatments", "Health", "Devices", "State Spans"],
         ["Insights & Alerting"] = ["Analytics", "Current Therapy State", "Monitoring"],
@@ -23,6 +24,8 @@ public sealed class ScalarExtensionsDocumentTransformer : IOpenApiDocumentTransf
     private static readonly Dictionary<string, string[]> NightscoutTagGroups = new()
     {
         ["Nightscout Legacy API"] = ["V1", "V2", "V3"],
+        ["Data Model"] =
+            ["ns-model-entries", "ns-model-treatments", "ns-model-devicestatus", "ns-model-profile"],
     };
 
     public Task TransformAsync(
@@ -70,6 +73,14 @@ public sealed class ScalarExtensionsDocumentTransformer : IOpenApiDocumentTransf
     private static HashSet<string> CollectUsedTags(OpenApiDocument document)
     {
         var used = new HashSet<string>(StringComparer.Ordinal);
+
+        // Document-level tags include standalone conceptual pages (e.g. Syncing)
+        // added by TagDescriptionDocumentTransformer, which runs before this one.
+        if (document.Tags is not null)
+            foreach (var tag in document.Tags)
+                if (tag.Name is not null)
+                    used.Add(tag.Name);
+
         if (document.Paths is null) return used;
 
         foreach (var pathItem in document.Paths.Values)

@@ -15,6 +15,7 @@ public class RefreshTokenServiceTests
 {
     private readonly Mock<IFirstPartyTokenRepository> _repository = new();
     private readonly Mock<IJwtService> _jwtService = new();
+    private readonly Mock<IRotationSuccessorCache> _successorCache = new();
     private readonly JwtOptions _options = new() { RefreshTokenLifetimeDays = 7 };
     private readonly Guid _subjectId = Guid.CreateVersion7();
 
@@ -22,6 +23,7 @@ public class RefreshTokenServiceTests
         new(
             _repository.Object,
             _jwtService.Object,
+            _successorCache.Object,
             Options.Create(_options),
             NullLogger<RefreshTokenService>.Instance);
 
@@ -131,7 +133,7 @@ public class RefreshTokenServiceTests
 
     [Fact]
     [Trait("Category", "Unit")]
-    public async Task RotateRefreshTokenAsync_ValidToken_RevokesOldCreatesNew()
+    public async Task RotateRefreshTokenAsync_ValidToken_AtomicallyClaimsRotationAndCreatesNew()
     {
         // Arrange
         var oldTokenId = Guid.CreateVersion7();
@@ -145,6 +147,10 @@ public class RefreshTokenServiceTests
                 revokedAt: null,
                 expiresAt: DateTime.UtcNow.AddHours(1)));
 
+        // This caller wins the atomic rotation claim.
+        _repository.Setup(r => r.TryMarkRotatedAsync(oldTokenId, It.IsAny<Guid>(), default))
+            .ReturnsAsync(true);
+
         var service = CreateService();
 
         // Act
@@ -153,24 +159,100 @@ public class RefreshTokenServiceTests
         // Assert
         result.Should().Be("new-token");
 
-        _repository.Verify(r => r.RevokeAsync(
+        // Rotation is claimed atomically (not via the unconditional RevokeAsync).
+        _repository.Verify(r => r.TryMarkRotatedAsync(
             oldTokenId,
-            "Rotated",
-            It.IsAny<Guid?>(),
+            It.IsAny<Guid>(),
             default));
+        _repository.Verify(
+            r => r.RevokeAsync(It.IsAny<Guid>(), It.IsAny<string>(), It.IsAny<Guid?>(), default),
+            Times.Never);
 
         _repository.Verify(r => r.CreateAsync(
             It.Is<RefreshTokenRecord>(rec =>
                 rec.TokenHash == "hash-new" &&
                 rec.SubjectId == _subjectId),
             default));
+
+        // The successor is published for the grace window so concurrent requests still
+        // carrying the old cookie can converge on the same token.
+        _successorCache.Verify(c => c.StoreAsync(
+            "hash-old",
+            "new-token",
+            It.IsAny<TimeSpan>(),
+            default));
     }
 
     [Fact]
     [Trait("Category", "Unit")]
-    public async Task RotateRefreshTokenAsync_ReuseOutsideGracePeriod_RevokesFamily()
+    public async Task RotateRefreshTokenAsync_LostAtomicClaim_ThrowsRaceWithoutForkingOrNuking()
     {
-        // Arrange — revoked token reused after 5 minutes (well past grace period)
+        // Arrange — token reads as active, but a concurrent request wins the atomic claim,
+        // so TryMarkRotatedAsync reports we lost the race. This is the SSR fan-out case
+        // (many parallel requests carrying the same cookie) that previously forked the
+        // token family into many siblings.
+        var oldTokenId = Guid.CreateVersion7();
+        _jwtService.Setup(j => j.HashRefreshToken("old-token")).Returns("hash-old");
+        _jwtService.Setup(j => j.GenerateRefreshToken()).Returns("new-token");
+        _jwtService.Setup(j => j.HashRefreshToken("new-token")).Returns("hash-new");
+
+        _repository.Setup(r => r.FindByHashAsync("hash-old", default))
+            .ReturnsAsync(MakeRecord(
+                id: oldTokenId,
+                revokedAt: null,
+                expiresAt: DateTime.UtcNow.AddHours(1)));
+
+        _repository.Setup(r => r.TryMarkRotatedAsync(oldTokenId, It.IsAny<Guid>(), default))
+            .ReturnsAsync(false);
+
+        var service = CreateService();
+
+        // Act & Assert — benign race: throws rather than authenticating with a forked token.
+        await service.Invoking(s => s.RotateRefreshTokenAsync("old-token"))
+            .Should().ThrowAsync<TokenRotationRaceException>();
+
+        // No second successor is created (no fork) and no session-wide revocation happens.
+        _repository.Verify(r => r.CreateAsync(It.IsAny<RefreshTokenRecord>(), default), Times.Never);
+        _repository.Verify(
+            r => r.RevokeAllForSubjectAsync(It.IsAny<Guid>(), It.IsAny<string>(), default),
+            Times.Never);
+    }
+
+    [Fact]
+    [Trait("Category", "Unit")]
+    public async Task RotateRefreshTokenAsync_ReuseOutsideGracePeriod_WithSessionId_RevokesOnlyThatSession()
+    {
+        // Arrange — revoked token (tagged with a session id) reused well past the grace period.
+        _jwtService.Setup(j => j.HashRefreshToken("stolen")).Returns("hash-stolen");
+
+        _repository.Setup(r => r.FindByHashAsync("hash-stolen", default))
+            .ReturnsAsync(MakeRecord(
+                revokedAt: DateTime.UtcNow.AddMinutes(-5),
+                expiresAt: DateTime.UtcNow.AddHours(1),
+                replacedByTokenId: Guid.CreateVersion7(),
+                oidcSessionId: "session-abc"));
+
+        var service = CreateService();
+
+        // Act
+        await service.RotateRefreshTokenAsync("stolen");
+
+        // Assert — only the affected session's chain is revoked, not every session the subject has.
+        _repository.Verify(r => r.RevokeByOidcSessionAsync(
+            "session-abc",
+            "Token reuse detected",
+            default));
+        _repository.Verify(
+            r => r.RevokeAllForSubjectAsync(It.IsAny<Guid>(), It.IsAny<string>(), default),
+            Times.Never);
+    }
+
+    [Fact]
+    [Trait("Category", "Unit")]
+    public async Task RotateRefreshTokenAsync_ReuseOutsideGracePeriod_NoSessionId_RevokesAllForSubject()
+    {
+        // Arrange — a legacy token issued before sessions were tagged (no session id),
+        // reused well past the grace period, falls back to a subject-wide revocation.
         _jwtService.Setup(j => j.HashRefreshToken("stolen")).Returns("hash-stolen");
 
         _repository.Setup(r => r.FindByHashAsync("hash-stolen", default))
@@ -189,6 +271,9 @@ public class RefreshTokenServiceTests
             _subjectId,
             "Token reuse detected",
             default));
+        _repository.Verify(
+            r => r.RevokeByOidcSessionAsync(It.IsAny<string>(), It.IsAny<string>(), default),
+            Times.Never);
     }
 
     [Fact]
@@ -238,6 +323,99 @@ public class RefreshTokenServiceTests
             Times.Never);
     }
 
+    [Fact]
+    [Trait("Category", "Unit")]
+    public async Task RotateRefreshTokenAsync_ReuseWithinGracePeriod_WithCachedSuccessor_ReturnsSuccessor()
+    {
+        // Arrange — token rotated seconds ago by a concurrent request; the winner's
+        // successor is still in the grace-period cache.
+        _jwtService.Setup(j => j.HashRefreshToken("raced")).Returns("hash-raced");
+
+        _repository.Setup(r => r.FindByHashAsync("hash-raced", default))
+            .ReturnsAsync(MakeRecord(
+                revokedAt: DateTime.UtcNow.AddSeconds(-2),
+                expiresAt: DateTime.UtcNow.AddHours(1),
+                replacedByTokenId: Guid.CreateVersion7()));
+
+        _successorCache.Setup(c => c.GetAsync("hash", default))
+            .ReturnsAsync("winners-token");
+
+        var service = CreateService();
+
+        // Act — the loser authenticates with the same token the winner received.
+        var result = await service.RotateRefreshTokenAsync("raced");
+
+        // Assert
+        result.Should().Be("winners-token");
+
+        // No fork, no revocation: the existing successor is replayed, not re-rotated.
+        _repository.Verify(r => r.CreateAsync(It.IsAny<RefreshTokenRecord>(), default), Times.Never);
+        _repository.Verify(
+            r => r.RevokeAllForSubjectAsync(It.IsAny<Guid>(), It.IsAny<string>(), default),
+            Times.Never);
+        _repository.Verify(
+            r => r.RevokeByOidcSessionAsync(It.IsAny<string>(), It.IsAny<string>(), default),
+            Times.Never);
+    }
+
+    [Fact]
+    [Trait("Category", "Unit")]
+    public async Task RotateRefreshTokenAsync_LostAtomicClaim_WithCachedSuccessor_ReturnsWinnersToken()
+    {
+        // Arrange — token reads as active but a concurrent request wins the atomic claim;
+        // by the time this caller checks, the winner has already published its successor.
+        var oldTokenId = Guid.CreateVersion7();
+        _jwtService.Setup(j => j.HashRefreshToken("old-token")).Returns("hash-old");
+        _jwtService.Setup(j => j.GenerateRefreshToken()).Returns("would-be-fork");
+        _jwtService.Setup(j => j.HashRefreshToken("would-be-fork")).Returns("hash-fork");
+
+        _repository.Setup(r => r.FindByHashAsync("hash-old", default))
+            .ReturnsAsync(MakeRecord(
+                id: oldTokenId,
+                revokedAt: null,
+                expiresAt: DateTime.UtcNow.AddHours(1)));
+
+        _repository.Setup(r => r.TryMarkRotatedAsync(oldTokenId, It.IsAny<Guid>(), default))
+            .ReturnsAsync(false);
+
+        _successorCache.Setup(c => c.GetAsync("hash-old", default))
+            .ReturnsAsync("winners-token");
+
+        var service = CreateService();
+
+        // Act
+        var result = await service.RotateRefreshTokenAsync("old-token");
+
+        // Assert — converges on the winner's token instead of throwing.
+        result.Should().Be("winners-token");
+        _repository.Verify(r => r.CreateAsync(It.IsAny<RefreshTokenRecord>(), default), Times.Never);
+    }
+
+    [Fact]
+    [Trait("Category", "Unit")]
+    public async Task RotateRefreshTokenAsync_RevokedWithoutSuccessor_ReturnsNull_WithoutConsultingCache()
+    {
+        // Arrange — a token revoked by logout (no successor link) presented within what
+        // would be the grace window. Logout must not be resurrectable via the cache.
+        _jwtService.Setup(j => j.HashRefreshToken("logged-out")).Returns("hash-logged-out");
+
+        _repository.Setup(r => r.FindByHashAsync("hash-logged-out", default))
+            .ReturnsAsync(MakeRecord(
+                revokedAt: DateTime.UtcNow.AddSeconds(-2),
+                expiresAt: DateTime.UtcNow.AddHours(1)));
+
+        var service = CreateService();
+
+        // Act
+        var result = await service.RotateRefreshTokenAsync("logged-out");
+
+        // Assert
+        result.Should().BeNull();
+        _successorCache.Verify(
+            c => c.GetAsync(It.IsAny<string>(), default),
+            Times.Never);
+    }
+
     #endregion
 
     #region PruneExpiredRefreshTokensAsync
@@ -269,12 +447,13 @@ public class RefreshTokenServiceTests
         Guid? id = null,
         DateTime? revokedAt = null,
         DateTime? expiresAt = null,
-        Guid? replacedByTokenId = null) =>
+        Guid? replacedByTokenId = null,
+        string? oidcSessionId = null) =>
         new(
             Id: id ?? Guid.CreateVersion7(),
             TokenHash: "hash",
             SubjectId: _subjectId,
-            OidcSessionId: null,
+            OidcSessionId: oidcSessionId,
             DeviceDescription: null,
             IpAddress: null,
             UserAgent: null,

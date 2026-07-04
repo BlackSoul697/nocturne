@@ -28,6 +28,7 @@
   import { sequences } from "$lib/coach-marks/sequences";
   import CoachParamHandler from "$lib/coach-marks/CoachParamHandler.svelte";
   import { STALE_THRESHOLD_MS } from "$lib/constants/staleness";
+  import ChartPrintPatterns from "$lib/components/charts/print/ChartPrintPatterns.svelte";
 
   // LocalStorage key for title/favicon settings
   const SETTINGS_STORAGE_KEY = "nocturne-title-favicon-settings";
@@ -35,7 +36,7 @@
   // WebSocket config - defaults, can be overridden in production
   const config = {
     url: typeof window !== "undefined" ? window.location.origin : "",
-    reconnectAttempts: 10,
+    reconnectAttempts: Infinity,
     reconnectDelay: 5000,
     maxReconnectDelay: 30000,
     pingTimeout: 60000,
@@ -187,7 +188,7 @@
           const alarmVisual: AlarmVisualSettings = {
             screenFlash: true,
             flashColor: "",
-            flashIntervalMs: 500,
+            flashIntervalMs: 1000,
             persistentBanner: true,
             wakeScreen: true,
             showEmergencyContacts: false,
@@ -206,10 +207,11 @@
 
 <CoachMarkProvider adapter={coachMarkAdapter} {sequences} onBeforeNavigate={beforeNavigate}>
   <CoachParamHandler />
+  <ChartPrintPatterns />
   <Sidebar.Provider>
-    <AppSidebar user={data.user} tenantCount={data.tenantCount} effectivePermissions={data.effectivePermissions} isPlatformAdmin={data.isPlatformAdmin} isGuestSession={data.isGuestSession} />
-    <MobileHeader />
+    <AppSidebar user={data.user} isPlatformAdmin={data.isPlatformAdmin} isPlatformAccessGrant={data.isPlatformAccessGrant} isGuestSession={data.isGuestSession} />
     <Sidebar.Inset>
+      <MobileHeader />
       {#if data.isDemo}
         <DemoBanner nextResetAt={data.nextResetAt} />
       {/if}

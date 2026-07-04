@@ -1037,6 +1037,242 @@ export class SetupClient {
     }
 }
 
+export class TimezoneTimelineClient {
+    private http: { fetch(url: RequestInfo, init?: RequestInit): Promise<Response> };
+    private baseUrl: string;
+    protected jsonParseReviver: ((key: string, value: any) => any) | undefined = undefined;
+
+    constructor(baseUrl?: string, http?: { fetch(url: RequestInfo, init?: RequestInit): Promise<Response> }) {
+        this.http = http ? http : window as any;
+        this.baseUrl = baseUrl ?? "";
+    }
+
+    /**
+     * Get the tenant's timezone timeline, ordered by effective date.
+     */
+    getTimeline(signal?: AbortSignal): Promise<TimezoneTimelineEntry[]> {
+        let url_ = this.baseUrl + "/api/v4/timezone-timeline";
+        url_ = url_.replace(/[?&]$/, "");
+
+        let options_: RequestInit = {
+            method: "GET",
+            signal,
+            headers: {
+                "Accept": "application/json"
+            }
+        };
+
+        return this.http.fetch(url_, options_).then((_response: Response) => {
+            return this.processGetTimeline(_response);
+        });
+    }
+
+    protected processGetTimeline(response: Response): Promise<TimezoneTimelineEntry[]> {
+        const status = response.status;
+        let _headers: any = {}; if (response.headers && response.headers.forEach) { response.headers.forEach((v: any, k: any) => _headers[k] = v); };
+        if (status === 200) {
+            return response.text().then((_responseText) => {
+            let result200: any = null;
+            result200 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver) as TimezoneTimelineEntry[];
+            return result200;
+            });
+        } else if (status !== 200 && status !== 204) {
+            return response.text().then((_responseText) => {
+            return throwException("An unexpected server error occurred.", status, _responseText, _headers);
+            });
+        }
+        return Promise.resolve<TimezoneTimelineEntry[]>(null as any);
+    }
+
+    /**
+     * Create or update a timeline entry. EffectiveFrom is a local wall-clock date/time (the
+    moment, in local terms, that the zone took effect). A trip is two entries (out + return); a
+    move is a single entry; the origin entry covers all earlier history.
+     */
+    upsert(request: UpsertTimezoneEntryRequest, signal?: AbortSignal): Promise<TimezoneTimelineEntry> {
+        let url_ = this.baseUrl + "/api/v4/timezone-timeline";
+        url_ = url_.replace(/[?&]$/, "");
+
+        const content_ = JSON.stringify(request);
+
+        let options_: RequestInit = {
+            body: content_,
+            method: "PUT",
+            signal,
+            headers: {
+                "Content-Type": "application/json",
+                "Accept": "application/json"
+            }
+        };
+
+        return this.http.fetch(url_, options_).then((_response: Response) => {
+            return this.processUpsert(_response);
+        });
+    }
+
+    protected processUpsert(response: Response): Promise<TimezoneTimelineEntry> {
+        const status = response.status;
+        let _headers: any = {}; if (response.headers && response.headers.forEach) { response.headers.forEach((v: any, k: any) => _headers[k] = v); };
+        if (status === 200) {
+            return response.text().then((_responseText) => {
+            let result200: any = null;
+            result200 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver) as TimezoneTimelineEntry;
+            return result200;
+            });
+        } else if (status !== 200 && status !== 204) {
+            return response.text().then((_responseText) => {
+            return throwException("An unexpected server error occurred.", status, _responseText, _headers);
+            });
+        }
+        return Promise.resolve<TimezoneTimelineEntry>(null as any);
+    }
+
+    /**
+     * Delete a timeline entry.
+     */
+    delete(id: string, signal?: AbortSignal): Promise<FileResponse> {
+        let url_ = this.baseUrl + "/api/v4/timezone-timeline/{id}";
+        if (id === undefined || id === null)
+            throw new globalThis.Error("The parameter 'id' must be defined.");
+        url_ = url_.replace("{id}", encodeURIComponent("" + id));
+        url_ = url_.replace(/[?&]$/, "");
+
+        let options_: RequestInit = {
+            method: "DELETE",
+            signal,
+            headers: {
+                "Accept": "application/octet-stream"
+            }
+        };
+
+        return this.http.fetch(url_, options_).then((_response: Response) => {
+            return this.processDelete(_response);
+        });
+    }
+
+    protected processDelete(response: Response): Promise<FileResponse> {
+        const status = response.status;
+        let _headers: any = {}; if (response.headers && response.headers.forEach) { response.headers.forEach((v: any, k: any) => _headers[k] = v); };
+        if (status === 200 || status === 206) {
+            const contentDisposition = response.headers ? response.headers.get("content-disposition") : undefined;
+            let fileNameMatch = contentDisposition ? /filename\*=(?:(\\?['"])(.*?)\1|(?:[^\s]+'.*?')?([^;\n]*))/g.exec(contentDisposition) : undefined;
+            let fileName = fileNameMatch && fileNameMatch.length > 1 ? fileNameMatch[3] || fileNameMatch[2] : undefined;
+            if (fileName) {
+                fileName = decodeURIComponent(fileName);
+            } else {
+                fileNameMatch = contentDisposition ? /filename="?([^"]*?)"?(;|$)/g.exec(contentDisposition) : undefined;
+                fileName = fileNameMatch && fileNameMatch.length > 1 ? fileNameMatch[1] : undefined;
+            }
+            return response.blob().then(blob => { return { fileName: fileName, data: blob, status: status, headers: _headers }; });
+        } else if (status !== 200 && status !== 204) {
+            return response.text().then((_responseText) => {
+            return throwException("An unexpected server error occurred.", status, _responseText, _headers);
+            });
+        }
+        return Promise.resolve<FileResponse>(null as any);
+    }
+
+    /**
+     * Re-correct already-imported data after a timeline change by re-pulling the affected window from
+    Glooko. Records re-flow the normal publish path and upsert in place on their stable
+    SyncIdentifier, so timestamps move without duplicating. Intended to be called after the user
+    confirms the affected window. Runs synchronously; the window is bounded.
+     * @param request Optional lower bound (UTC). When null, the connector's default window is used.
+     */
+    recorrect(request: RecorrectRequest, signal?: AbortSignal): Promise<RecorrectResult> {
+        let url_ = this.baseUrl + "/api/v4/timezone-timeline/recorrect";
+        url_ = url_.replace(/[?&]$/, "");
+
+        const content_ = JSON.stringify(request);
+
+        let options_: RequestInit = {
+            body: content_,
+            method: "POST",
+            signal,
+            headers: {
+                "Content-Type": "application/json",
+                "Accept": "application/json"
+            }
+        };
+
+        return this.http.fetch(url_, options_).then((_response: Response) => {
+            return this.processRecorrect(_response);
+        });
+    }
+
+    protected processRecorrect(response: Response): Promise<RecorrectResult> {
+        const status = response.status;
+        let _headers: any = {}; if (response.headers && response.headers.forEach) { response.headers.forEach((v: any, k: any) => _headers[k] = v); };
+        if (status === 200) {
+            return response.text().then((_responseText) => {
+            let result200: any = null;
+            result200 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver) as RecorrectResult;
+            return result200;
+            });
+        } else if (status !== 200 && status !== 204) {
+            return response.text().then((_responseText) => {
+            return throwException("An unexpected server error occurred.", status, _responseText, _headers);
+            });
+        }
+        return Promise.resolve<RecorrectResult>(null as any);
+    }
+}
+
+export class TlsAuthorizationClient {
+    private http: { fetch(url: RequestInfo, init?: RequestInit): Promise<Response> };
+    private baseUrl: string;
+    protected jsonParseReviver: ((key: string, value: any) => any) | undefined = undefined;
+
+    constructor(baseUrl?: string, http?: { fetch(url: RequestInfo, init?: RequestInit): Promise<Response> }) {
+        this.http = http ? http : window as any;
+        this.baseUrl = baseUrl ?? "";
+    }
+
+    /**
+     * Returns 200 when a certificate should be issued for domain
+    (the apex domain or an active tenant subdomain), 404 otherwise.
+     * @param domain (optional) 
+     */
+    authorize(domain?: string | null | undefined, signal?: AbortSignal): Promise<void> {
+        let url_ = this.baseUrl + "/api/v4/platform/tls-authorize?";
+        if (domain !== undefined && domain !== null)
+            url_ += "domain=" + encodeURIComponent("" + domain) + "&";
+        url_ = url_.replace(/[?&]$/, "");
+
+        let options_: RequestInit = {
+            method: "GET",
+            signal,
+            headers: {
+            }
+        };
+
+        return this.http.fetch(url_, options_).then((_response: Response) => {
+            return this.processAuthorize(_response);
+        });
+    }
+
+    protected processAuthorize(response: Response): Promise<void> {
+        const status = response.status;
+        let _headers: any = {}; if (response.headers && response.headers.forEach) { response.headers.forEach((v: any, k: any) => _headers[k] = v); };
+        if (status === 200) {
+            return response.text().then((_responseText) => {
+            return;
+            });
+        } else if (status === 404) {
+            return response.text().then((_responseText) => {
+            let result404: any = null;
+            result404 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver) as ProblemDetails;
+            return throwException("A server side error occurred.", status, _responseText, _headers, result404);
+            });
+        } else if (status !== 200 && status !== 204) {
+            return response.text().then((_responseText) => {
+            return throwException("An unexpected server error occurred.", status, _responseText, _headers);
+            });
+        }
+        return Promise.resolve<void>(null as any);
+    }
+}
+
 export class BasalInjectionClient {
     private http: { fetch(url: RequestInfo, init?: RequestInit): Promise<Response> };
     private baseUrl: string;
@@ -6190,6 +6426,54 @@ export class ClockFacesClient {
     }
 
     /**
+     * Get the latest glucose readings a public clock face displays (public, no authentication required).
+     * @param id Clock face UUID
+     * @return The two most recent sensor glucose readings (newest first), or 404 if the clock does not exist.
+     */
+    getGlucose(id: string, signal?: AbortSignal): Promise<ClockGlucoseDto[]> {
+        let url_ = this.baseUrl + "/api/v4/clockfaces/{id}/glucose";
+        if (id === undefined || id === null)
+            throw new globalThis.Error("The parameter 'id' must be defined.");
+        url_ = url_.replace("{id}", encodeURIComponent("" + id));
+        url_ = url_.replace(/[?&]$/, "");
+
+        let options_: RequestInit = {
+            method: "GET",
+            signal,
+            headers: {
+                "Accept": "application/json"
+            }
+        };
+
+        return this.http.fetch(url_, options_).then((_response: Response) => {
+            return this.processGetGlucose(_response);
+        });
+    }
+
+    protected processGetGlucose(response: Response): Promise<ClockGlucoseDto[]> {
+        const status = response.status;
+        let _headers: any = {}; if (response.headers && response.headers.forEach) { response.headers.forEach((v: any, k: any) => _headers[k] = v); };
+        if (status === 200) {
+            return response.text().then((_responseText) => {
+            let result200: any = null;
+            result200 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver) as ClockGlucoseDto[];
+            return result200;
+            });
+        } else if (status === 404) {
+            return response.text().then((_responseText) => {
+            let result404: any = null;
+            result404 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver) as ProblemDetails;
+            return throwException("A server side error occurred.", status, _responseText, _headers, result404);
+            });
+        } else if (status !== 200 && status !== 204) {
+            return response.text().then((_responseText) => {
+            return throwException("An unexpected server error occurred.", status, _responseText, _headers);
+            });
+        }
+        return Promise.resolve<ClockGlucoseDto[]>(null as any);
+    }
+
+    /**
      * List all clock faces for the current user
      * @return List of clock faces
      */
@@ -8540,6 +8824,268 @@ export class AccessRequestClient {
     }
 }
 
+export class ConnectorAdminClient {
+    private http: { fetch(url: RequestInfo, init?: RequestInit): Promise<Response> };
+    private baseUrl: string;
+    protected jsonParseReviver: ((key: string, value: any) => any) | undefined = undefined;
+
+    constructor(baseUrl?: string, http?: { fetch(url: RequestInfo, init?: RequestInit): Promise<Response> }) {
+        this.http = http ? http : window as any;
+        this.baseUrl = baseUrl ?? "";
+    }
+
+    /**
+     * List the connectors a target tenant has configured, with their last-sync and health state.
+     * @param tenantId The target tenant.
+     */
+    getTenantConnectors(tenantId: string, signal?: AbortSignal): Promise<TenantConnectorsDto> {
+        let url_ = this.baseUrl + "/api/v4/admin/connectors/{tenantId}";
+        if (tenantId === undefined || tenantId === null)
+            throw new globalThis.Error("The parameter 'tenantId' must be defined.");
+        url_ = url_.replace("{tenantId}", encodeURIComponent("" + tenantId));
+        url_ = url_.replace(/[?&]$/, "");
+
+        let options_: RequestInit = {
+            method: "GET",
+            signal,
+            headers: {
+                "Accept": "application/json"
+            }
+        };
+
+        return this.http.fetch(url_, options_).then((_response: Response) => {
+            return this.processGetTenantConnectors(_response);
+        });
+    }
+
+    protected processGetTenantConnectors(response: Response): Promise<TenantConnectorsDto> {
+        const status = response.status;
+        let _headers: any = {}; if (response.headers && response.headers.forEach) { response.headers.forEach((v: any, k: any) => _headers[k] = v); };
+        if (status === 200) {
+            return response.text().then((_responseText) => {
+            let result200: any = null;
+            result200 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver) as TenantConnectorsDto;
+            return result200;
+            });
+        } else if (status === 404) {
+            return response.text().then((_responseText) => {
+            let result404: any = null;
+            result404 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver) as ProblemDetails;
+            return throwException("A server side error occurred.", status, _responseText, _headers, result404);
+            });
+        } else if (status !== 200 && status !== 204) {
+            return response.text().then((_responseText) => {
+            return throwException("An unexpected server error occurred.", status, _responseText, _headers);
+            });
+        }
+        return Promise.resolve<TenantConnectorsDto>(null as any);
+    }
+
+    /**
+     * Enqueue a background reset of the sync cursor for every connector configured on a target
+    tenant, forcing a re-pull of history. Use after fixing a connector bug to push corrected data
+    to an affected tenant.
+     * @param tenantId The target tenant whose connectors should be re-pulled.
+     * @param request Optional lower bound and data-type filter, mirroring the per-tenant reset endpoint.
+     */
+    resetTenantCursors(tenantId: string, request: AdminResetCursorsRequest, signal?: AbortSignal): Promise<ConnectorResetJobInfo> {
+        let url_ = this.baseUrl + "/api/v4/admin/connectors/{tenantId}/reset-cursors";
+        if (tenantId === undefined || tenantId === null)
+            throw new globalThis.Error("The parameter 'tenantId' must be defined.");
+        url_ = url_.replace("{tenantId}", encodeURIComponent("" + tenantId));
+        url_ = url_.replace(/[?&]$/, "");
+
+        const content_ = JSON.stringify(request);
+
+        let options_: RequestInit = {
+            body: content_,
+            method: "POST",
+            signal,
+            headers: {
+                "Content-Type": "application/json",
+                "Accept": "application/json"
+            }
+        };
+
+        return this.http.fetch(url_, options_).then((_response: Response) => {
+            return this.processResetTenantCursors(_response);
+        });
+    }
+
+    protected processResetTenantCursors(response: Response): Promise<ConnectorResetJobInfo> {
+        const status = response.status;
+        let _headers: any = {}; if (response.headers && response.headers.forEach) { response.headers.forEach((v: any, k: any) => _headers[k] = v); };
+        if (status === 202) {
+            return response.text().then((_responseText) => {
+            let result202: any = null;
+            result202 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver) as ConnectorResetJobInfo;
+            return result202;
+            });
+        } else if (status === 404) {
+            return response.text().then((_responseText) => {
+            let result404: any = null;
+            result404 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver) as ProblemDetails;
+            return throwException("A server side error occurred.", status, _responseText, _headers, result404);
+            });
+        } else if (status !== 200 && status !== 204) {
+            return response.text().then((_responseText) => {
+            return throwException("An unexpected server error occurred.", status, _responseText, _headers);
+            });
+        }
+        return Promise.resolve<ConnectorResetJobInfo>(null as any);
+    }
+
+    /**
+     * Get the progress of a connector cursor reset job, including per-connector outcomes as they land.
+     * @param jobId The job id returned by ResetTenantCursors.
+     */
+    getResetJobStatus(jobId: string, signal?: AbortSignal): Promise<ConnectorResetJobStatus> {
+        let url_ = this.baseUrl + "/api/v4/admin/connectors/jobs/{jobId}";
+        if (jobId === undefined || jobId === null)
+            throw new globalThis.Error("The parameter 'jobId' must be defined.");
+        url_ = url_.replace("{jobId}", encodeURIComponent("" + jobId));
+        url_ = url_.replace(/[?&]$/, "");
+
+        let options_: RequestInit = {
+            method: "GET",
+            signal,
+            headers: {
+                "Accept": "application/json"
+            }
+        };
+
+        return this.http.fetch(url_, options_).then((_response: Response) => {
+            return this.processGetResetJobStatus(_response);
+        });
+    }
+
+    protected processGetResetJobStatus(response: Response): Promise<ConnectorResetJobStatus> {
+        const status = response.status;
+        let _headers: any = {}; if (response.headers && response.headers.forEach) { response.headers.forEach((v: any, k: any) => _headers[k] = v); };
+        if (status === 200) {
+            return response.text().then((_responseText) => {
+            let result200: any = null;
+            result200 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver) as ConnectorResetJobStatus;
+            return result200;
+            });
+        } else if (status === 404) {
+            return response.text().then((_responseText) => {
+            let result404: any = null;
+            result404 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver) as ProblemDetails;
+            return throwException("A server side error occurred.", status, _responseText, _headers, result404);
+            });
+        } else if (status !== 200 && status !== 204) {
+            return response.text().then((_responseText) => {
+            return throwException("An unexpected server error occurred.", status, _responseText, _headers);
+            });
+        }
+        return Promise.resolve<ConnectorResetJobStatus>(null as any);
+    }
+
+    /**
+     * Request cancellation of a running connector cursor reset job. Connectors already re-pulled
+    keep their committed data; the fan-out simply stops before the next connector.
+     * @param jobId The job id to cancel.
+     */
+    cancelResetJob(jobId: string, signal?: AbortSignal): Promise<void> {
+        let url_ = this.baseUrl + "/api/v4/admin/connectors/jobs/{jobId}/cancel";
+        if (jobId === undefined || jobId === null)
+            throw new globalThis.Error("The parameter 'jobId' must be defined.");
+        url_ = url_.replace("{jobId}", encodeURIComponent("" + jobId));
+        url_ = url_.replace(/[?&]$/, "");
+
+        let options_: RequestInit = {
+            method: "POST",
+            signal,
+            headers: {
+            }
+        };
+
+        return this.http.fetch(url_, options_).then((_response: Response) => {
+            return this.processCancelResetJob(_response);
+        });
+    }
+
+    protected processCancelResetJob(response: Response): Promise<void> {
+        const status = response.status;
+        let _headers: any = {}; if (response.headers && response.headers.forEach) { response.headers.forEach((v: any, k: any) => _headers[k] = v); };
+        if (status === 204) {
+            return response.text().then((_responseText) => {
+            return;
+            });
+        } else if (status === 404) {
+            return response.text().then((_responseText) => {
+            let result404: any = null;
+            result404 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver) as ProblemDetails;
+            return throwException("A server side error occurred.", status, _responseText, _headers, result404);
+            });
+        } else if (status !== 200 && status !== 204) {
+            return response.text().then((_responseText) => {
+            return throwException("An unexpected server error occurred.", status, _responseText, _headers);
+            });
+        }
+        return Promise.resolve<void>(null as any);
+    }
+}
+
+export class PlatformAccessClient {
+    private http: { fetch(url: RequestInfo, init?: RequestInit): Promise<Response> };
+    private baseUrl: string;
+    protected jsonParseReviver: ((key: string, value: any) => any) | undefined = undefined;
+
+    constructor(baseUrl?: string, http?: { fetch(url: RequestInfo, init?: RequestInit): Promise<Response> }) {
+        this.http = http ? http : window as any;
+        this.baseUrl = baseUrl ?? "";
+    }
+
+    /**
+     * Mint a platform-access grant for the given tenant slug and redirect the operator into the
+    tenant. Bounces through OIDC login if there is no session yet; 403s if the session is not a
+    platform admin.
+     * @param tenant (optional) Target tenant slug.
+     */
+    access(tenant?: string | null | undefined, signal?: AbortSignal): Promise<FileResponse> {
+        let url_ = this.baseUrl + "/api/auth/platform-access?";
+        if (tenant !== undefined && tenant !== null)
+            url_ += "tenant=" + encodeURIComponent("" + tenant) + "&";
+        url_ = url_.replace(/[?&]$/, "");
+
+        let options_: RequestInit = {
+            method: "GET",
+            signal,
+            headers: {
+                "Accept": "application/octet-stream"
+            }
+        };
+
+        return this.http.fetch(url_, options_).then((_response: Response) => {
+            return this.processAccess(_response);
+        });
+    }
+
+    protected processAccess(response: Response): Promise<FileResponse> {
+        const status = response.status;
+        let _headers: any = {}; if (response.headers && response.headers.forEach) { response.headers.forEach((v: any, k: any) => _headers[k] = v); };
+        if (status === 200 || status === 206) {
+            const contentDisposition = response.headers ? response.headers.get("content-disposition") : undefined;
+            let fileNameMatch = contentDisposition ? /filename\*=(?:(\\?['"])(.*?)\1|(?:[^\s]+'.*?')?([^;\n]*))/g.exec(contentDisposition) : undefined;
+            let fileName = fileNameMatch && fileNameMatch.length > 1 ? fileNameMatch[3] || fileNameMatch[2] : undefined;
+            if (fileName) {
+                fileName = decodeURIComponent(fileName);
+            } else {
+                fileNameMatch = contentDisposition ? /filename="?([^"]*?)"?(;|$)/g.exec(contentDisposition) : undefined;
+                fileName = fileNameMatch && fileNameMatch.length > 1 ? fileNameMatch[1] : undefined;
+            }
+            return response.blob().then(blob => { return { fileName: fileName, data: blob, status: status, headers: _headers }; });
+        } else if (status !== 200 && status !== 204) {
+            return response.text().then((_responseText) => {
+            return throwException("An unexpected server error occurred.", status, _responseText, _headers);
+            });
+        }
+        return Promise.resolve<FileResponse>(null as any);
+    }
+}
+
 export class PlatformSettingsClient {
     private http: { fetch(url: RequestInfo, init?: RequestInit): Promise<Response> };
     private baseUrl: string;
@@ -10576,6 +11122,59 @@ export class ServicesClient {
     }
 
     /**
+     * Reset a connector's sync cursor for the current tenant and re-pull historical data.
+     * @param id Connector ID (e.g., "nightscout", "dexcom").
+     * @param request Optional lower bound and data-type filter. Omit from to re-pull all available history; omit dataTypes to reset every supported type.
+     * @return Sync result with success status and details.
+     */
+    resetConnectorCursor(id: string, request: ResetCursorRequest, signal?: AbortSignal): Promise<SyncResult> {
+        let url_ = this.baseUrl + "/api/v4/services/connectors/{id}/reset-cursor";
+        if (id === undefined || id === null)
+            throw new globalThis.Error("The parameter 'id' must be defined.");
+        url_ = url_.replace("{id}", encodeURIComponent("" + id));
+        url_ = url_.replace(/[?&]$/, "");
+
+        const content_ = JSON.stringify(request);
+
+        let options_: RequestInit = {
+            body: content_,
+            method: "POST",
+            signal,
+            headers: {
+                "Content-Type": "application/json",
+                "Accept": "application/json"
+            }
+        };
+
+        return this.http.fetch(url_, options_).then((_response: Response) => {
+            return this.processResetConnectorCursor(_response);
+        });
+    }
+
+    protected processResetConnectorCursor(response: Response): Promise<SyncResult> {
+        const status = response.status;
+        let _headers: any = {}; if (response.headers && response.headers.forEach) { response.headers.forEach((v: any, k: any) => _headers[k] = v); };
+        if (status === 200) {
+            return response.text().then((_responseText) => {
+            let result200: any = null;
+            result200 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver) as SyncResult;
+            return result200;
+            });
+        } else if (status === 400) {
+            return response.text().then((_responseText) => {
+            let result400: any = null;
+            result400 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver) as ProblemDetails;
+            return throwException("A server side error occurred.", status, _responseText, _headers, result400);
+            });
+        } else if (status !== 200 && status !== 204) {
+            return response.text().then((_responseText) => {
+            return throwException("An unexpected server error occurred.", status, _responseText, _headers);
+            });
+        }
+        return Promise.resolve<SyncResult>(null as any);
+    }
+
+    /**
      * Get sync status for a specific connector, including latest timestamps and connector state.
     Used by connectors on startup to determine where to resume syncing from.
      * @param id The connector ID (e.g., "dexcom", "libre", "glooko")
@@ -12182,6 +12781,56 @@ export class AlertsClient {
     }
 
     /**
+     * Acknowledge a single alert excursion, halting escalation delivery for its
+    active instances. Acknowledging an excursion that is already acknowledged
+    or already closed is a no-op. Returns 404 when the excursion does not
+    exist for the current tenant.
+     */
+    acknowledgeExcursion(excursionId: string, request: AcknowledgeRequest, signal?: AbortSignal): Promise<void> {
+        let url_ = this.baseUrl + "/api/v4/alerts/excursions/{excursionId}/acknowledge";
+        if (excursionId === undefined || excursionId === null)
+            throw new globalThis.Error("The parameter 'excursionId' must be defined.");
+        url_ = url_.replace("{excursionId}", encodeURIComponent("" + excursionId));
+        url_ = url_.replace(/[?&]$/, "");
+
+        const content_ = JSON.stringify(request);
+
+        let options_: RequestInit = {
+            body: content_,
+            method: "POST",
+            signal,
+            headers: {
+                "Content-Type": "application/json",
+            }
+        };
+
+        return this.http.fetch(url_, options_).then((_response: Response) => {
+            return this.processAcknowledgeExcursion(_response);
+        });
+    }
+
+    protected processAcknowledgeExcursion(response: Response): Promise<void> {
+        const status = response.status;
+        let _headers: any = {}; if (response.headers && response.headers.forEach) { response.headers.forEach((v: any, k: any) => _headers[k] = v); };
+        if (status === 204) {
+            return response.text().then((_responseText) => {
+            return;
+            });
+        } else if (status === 404) {
+            return response.text().then((_responseText) => {
+            let result404: any = null;
+            result404 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver) as ProblemDetails;
+            return throwException("A server side error occurred.", status, _responseText, _headers, result404);
+            });
+        } else if (status !== 200 && status !== 204) {
+            return response.text().then((_responseText) => {
+            return throwException("An unexpected server error occurred.", status, _responseText, _headers);
+            });
+        }
+        return Promise.resolve<void>(null as any);
+    }
+
+    /**
      * Snooze an alert instance for the specified duration.
      */
     snoozeInstance(instanceId: string, request: SnoozeRequest, signal?: AbortSignal): Promise<void> {
@@ -12360,6 +13009,161 @@ export class AlertsClient {
     }
 }
 
+export class DndWindowsClient {
+    private http: { fetch(url: RequestInfo, init?: RequestInit): Promise<Response> };
+    private baseUrl: string;
+    protected jsonParseReviver: ((key: string, value: any) => any) | undefined = undefined;
+
+    constructor(baseUrl?: string, http?: { fetch(url: RequestInfo, init?: RequestInit): Promise<Response> }) {
+        this.http = http ? http : window as any;
+        this.baseUrl = baseUrl ?? "";
+    }
+
+    /**
+     * List the tenant's DND windows that are active right now (resolved on read).
+     */
+    getActive(signal?: AbortSignal): Promise<DndWindowResponse[]> {
+        let url_ = this.baseUrl + "/api/v4/alerts/dnd/windows/active";
+        url_ = url_.replace(/[?&]$/, "");
+
+        let options_: RequestInit = {
+            method: "GET",
+            signal,
+            headers: {
+                "Accept": "application/json"
+            }
+        };
+
+        return this.http.fetch(url_, options_).then((_response: Response) => {
+            return this.processGetActive(_response);
+        });
+    }
+
+    protected processGetActive(response: Response): Promise<DndWindowResponse[]> {
+        const status = response.status;
+        let _headers: any = {}; if (response.headers && response.headers.forEach) { response.headers.forEach((v: any, k: any) => _headers[k] = v); };
+        if (status === 200) {
+            return response.text().then((_responseText) => {
+            let result200: any = null;
+            result200 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver) as DndWindowResponse[];
+            return result200;
+            });
+        } else if (status !== 200 && status !== 204) {
+            return response.text().then((_responseText) => {
+            return throwException("An unexpected server error occurred.", status, _responseText, _headers);
+            });
+        }
+        return Promise.resolve<DndWindowResponse[]>(null as any);
+    }
+
+    /**
+     * Create (or idempotently return) a DND window. Supersedes any active window of the same
+    scope so at most one is ever active per scope.
+     */
+    create(request: CreateDndWindowRequest, signal?: AbortSignal): Promise<DndWindowResponse> {
+        let url_ = this.baseUrl + "/api/v4/alerts/dnd/windows";
+        url_ = url_.replace(/[?&]$/, "");
+
+        const content_ = JSON.stringify(request);
+
+        let options_: RequestInit = {
+            body: content_,
+            method: "POST",
+            signal,
+            headers: {
+                "Content-Type": "application/json",
+                "Accept": "application/json"
+            }
+        };
+
+        return this.http.fetch(url_, options_).then((_response: Response) => {
+            return this.processCreate(_response);
+        });
+    }
+
+    protected processCreate(response: Response): Promise<DndWindowResponse> {
+        const status = response.status;
+        let _headers: any = {}; if (response.headers && response.headers.forEach) { response.headers.forEach((v: any, k: any) => _headers[k] = v); };
+        if (status === 200) {
+            return response.text().then((_responseText) => {
+            let result200: any = null;
+            result200 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver) as DndWindowResponse;
+            return result200;
+            });
+        } else if (status === 201) {
+            return response.text().then((_responseText) => {
+            let result201: any = null;
+            result201 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver) as DndWindowResponse;
+            return result201;
+            });
+        } else if (status === 400) {
+            return response.text().then((_responseText) => {
+            let result400: any = null;
+            result400 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver) as ProblemDetails;
+            return throwException("A server side error occurred.", status, _responseText, _headers, result400);
+            });
+        } else if (status === 409) {
+            return response.text().then((_responseText) => {
+            let result409: any = null;
+            result409 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver) as ProblemDetails;
+            return throwException("A server side error occurred.", status, _responseText, _headers, result409);
+            });
+        } else if (status !== 200 && status !== 204) {
+            return response.text().then((_responseText) => {
+            return throwException("An unexpected server error occurred.", status, _responseText, _headers);
+            });
+        }
+        return Promise.resolve<DndWindowResponse>(null as any);
+    }
+
+    /**
+     * Clear a DND window (turn the mute off). Idempotent: a window already cleared (by the user
+    or by supersede) is returned unchanged so a retry never rewrites the audit timestamp.
+     */
+    clear(id: string, signal?: AbortSignal): Promise<DndWindowResponse> {
+        let url_ = this.baseUrl + "/api/v4/alerts/dnd/windows/{id}/clear";
+        if (id === undefined || id === null)
+            throw new globalThis.Error("The parameter 'id' must be defined.");
+        url_ = url_.replace("{id}", encodeURIComponent("" + id));
+        url_ = url_.replace(/[?&]$/, "");
+
+        let options_: RequestInit = {
+            method: "POST",
+            signal,
+            headers: {
+                "Accept": "application/json"
+            }
+        };
+
+        return this.http.fetch(url_, options_).then((_response: Response) => {
+            return this.processClear(_response);
+        });
+    }
+
+    protected processClear(response: Response): Promise<DndWindowResponse> {
+        const status = response.status;
+        let _headers: any = {}; if (response.headers && response.headers.forEach) { response.headers.forEach((v: any, k: any) => _headers[k] = v); };
+        if (status === 200) {
+            return response.text().then((_responseText) => {
+            let result200: any = null;
+            result200 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver) as DndWindowResponse;
+            return result200;
+            });
+        } else if (status === 404) {
+            return response.text().then((_responseText) => {
+            let result404: any = null;
+            result404 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver) as ProblemDetails;
+            return throwException("A server side error occurred.", status, _responseText, _headers, result404);
+            });
+        } else if (status !== 200 && status !== 204) {
+            return response.text().then((_responseText) => {
+            return throwException("An unexpected server error occurred.", status, _responseText, _headers);
+            });
+        }
+        return Promise.resolve<DndWindowResponse>(null as any);
+    }
+}
+
 export class NotificationsClient {
     private http: { fetch(url: RequestInfo, init?: RequestInit): Promise<Response> };
     private baseUrl: string;
@@ -12518,6 +13322,89 @@ export class NotificationsClient {
         return Promise.resolve<void>(null as any);
     }
 
+    markAllAsRead(signal?: AbortSignal): Promise<void> {
+        let url_ = this.baseUrl + "/api/v4/notifications/read-all";
+        url_ = url_.replace(/[?&]$/, "");
+
+        let options_: RequestInit = {
+            method: "POST",
+            signal,
+            headers: {
+            }
+        };
+
+        return this.http.fetch(url_, options_).then((_response: Response) => {
+            return this.processMarkAllAsRead(_response);
+        });
+    }
+
+    protected processMarkAllAsRead(response: Response): Promise<void> {
+        const status = response.status;
+        let _headers: any = {}; if (response.headers && response.headers.forEach) { response.headers.forEach((v: any, k: any) => _headers[k] = v); };
+        if (status === 204) {
+            return response.text().then((_responseText) => {
+            return;
+            });
+        } else if (status === 401) {
+            return response.text().then((_responseText) => {
+            let result401: any = null;
+            result401 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver) as ProblemDetails;
+            return throwException("A server side error occurred.", status, _responseText, _headers, result401);
+            });
+        } else if (status !== 200 && status !== 204) {
+            return response.text().then((_responseText) => {
+            return throwException("An unexpected server error occurred.", status, _responseText, _headers);
+            });
+        }
+        return Promise.resolve<void>(null as any);
+    }
+
+    markAsRead(id: string, signal?: AbortSignal): Promise<void> {
+        let url_ = this.baseUrl + "/api/v4/notifications/{id}/read";
+        if (id === undefined || id === null)
+            throw new globalThis.Error("The parameter 'id' must be defined.");
+        url_ = url_.replace("{id}", encodeURIComponent("" + id));
+        url_ = url_.replace(/[?&]$/, "");
+
+        let options_: RequestInit = {
+            method: "POST",
+            signal,
+            headers: {
+            }
+        };
+
+        return this.http.fetch(url_, options_).then((_response: Response) => {
+            return this.processMarkAsRead(_response);
+        });
+    }
+
+    protected processMarkAsRead(response: Response): Promise<void> {
+        const status = response.status;
+        let _headers: any = {}; if (response.headers && response.headers.forEach) { response.headers.forEach((v: any, k: any) => _headers[k] = v); };
+        if (status === 204) {
+            return response.text().then((_responseText) => {
+            return;
+            });
+        } else if (status === 401) {
+            return response.text().then((_responseText) => {
+            let result401: any = null;
+            result401 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver) as ProblemDetails;
+            return throwException("A server side error occurred.", status, _responseText, _headers, result401);
+            });
+        } else if (status === 404) {
+            return response.text().then((_responseText) => {
+            let result404: any = null;
+            result404 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver) as ProblemDetails;
+            return throwException("A server side error occurred.", status, _responseText, _headers, result404);
+            });
+        } else if (status !== 200 && status !== 204) {
+            return response.text().then((_responseText) => {
+            return throwException("An unexpected server error occurred.", status, _responseText, _headers);
+            });
+        }
+        return Promise.resolve<void>(null as any);
+    }
+
     dismissNotification(id: string, signal?: AbortSignal): Promise<void> {
         let url_ = this.baseUrl + "/api/v4/notifications/{id}";
         if (id === undefined || id === null)
@@ -12613,7 +13500,8 @@ export class TenantAlertSettingsClient {
     }
 
     /**
-     * Replace the current tenant's alert settings. Upserts on first call.
+     * Replace the current tenant's alert settings. Upserts on first call. The manual-DND toggle
+    creates/clears the tenant's scope=all window; scheduled fields persist on the row.
      */
     update(request: UpdateTenantAlertSettingsRequest, signal?: AbortSignal): Promise<TenantAlertSettingsResponse> {
         let url_ = this.baseUrl + "/api/v4/tenant-alert-settings";
@@ -12657,89 +13545,6 @@ export class TenantAlertSettingsClient {
             });
         }
         return Promise.resolve<TenantAlertSettingsResponse>(null as any);
-    }
-}
-
-export class TrackerAlertsClient {
-    private http: { fetch(url: RequestInfo, init?: RequestInit): Promise<Response> };
-    private baseUrl: string;
-    protected jsonParseReviver: ((key: string, value: any) => any) | undefined = undefined;
-
-    constructor(baseUrl?: string, http?: { fetch(url: RequestInfo, init?: RequestInit): Promise<Response> }) {
-        this.http = http ? http : window as any;
-        this.baseUrl = baseUrl ?? "";
-    }
-
-    getPendingAlerts(signal?: AbortSignal): Promise<TrackerAlertDto[]> {
-        let url_ = this.baseUrl + "/api/v4/trackers/alerts/pending";
-        url_ = url_.replace(/[?&]$/, "");
-
-        let options_: RequestInit = {
-            method: "GET",
-            signal,
-            headers: {
-                "Accept": "application/json"
-            }
-        };
-
-        return this.http.fetch(url_, options_).then((_response: Response) => {
-            return this.processGetPendingAlerts(_response);
-        });
-    }
-
-    protected processGetPendingAlerts(response: Response): Promise<TrackerAlertDto[]> {
-        const status = response.status;
-        let _headers: any = {}; if (response.headers && response.headers.forEach) { response.headers.forEach((v: any, k: any) => _headers[k] = v); };
-        if (status === 200) {
-            return response.text().then((_responseText) => {
-            let result200: any = null;
-            result200 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver) as TrackerAlertDto[];
-            return result200;
-            });
-        } else if (status !== 200 && status !== 204) {
-            return response.text().then((_responseText) => {
-            return throwException("An unexpected server error occurred.", status, _responseText, _headers);
-            });
-        }
-        return Promise.resolve<TrackerAlertDto[]>(null as any);
-    }
-
-    /**
-     * Get available alert sounds
-     * @return List of available sound preset names
-     */
-    getAvailableSounds(signal?: AbortSignal): Promise<string[]> {
-        let url_ = this.baseUrl + "/api/v4/trackers/alerts/sounds";
-        url_ = url_.replace(/[?&]$/, "");
-
-        let options_: RequestInit = {
-            method: "GET",
-            signal,
-            headers: {
-                "Accept": "application/json"
-            }
-        };
-
-        return this.http.fetch(url_, options_).then((_response: Response) => {
-            return this.processGetAvailableSounds(_response);
-        });
-    }
-
-    protected processGetAvailableSounds(response: Response): Promise<string[]> {
-        const status = response.status;
-        let _headers: any = {}; if (response.headers && response.headers.forEach) { response.headers.forEach((v: any, k: any) => _headers[k] = v); };
-        if (status === 200) {
-            return response.text().then((_responseText) => {
-            let result200: any = null;
-            result200 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver) as string[];
-            return result200;
-            });
-        } else if (status !== 200 && status !== 204) {
-            return response.text().then((_responseText) => {
-            return throwException("An unexpected server error occurred.", status, _responseText, _headers);
-            });
-        }
-        return Promise.resolve<string[]>(null as any);
     }
 }
 
@@ -13164,7 +13969,10 @@ export class TrackersClient {
     }
 
     /**
-     * Acknowledge/snooze a tracker notification
+     * Acknowledge a tracker notification. SnoozeMins is stored on the instance
+    (pill display/legacy clients); the alert-engine side is a plain acknowledgement of
+    the managed rules' open excursions — re-notification is the threshold ladder's and
+    alert_state escalation rules' job, not a snooze re-fire.
      */
     ackInstance(id: string, request: AckTrackerRequest, signal?: AbortSignal): Promise<void> {
         let url_ = this.baseUrl + "/api/v4/trackers/instances/{id}/ack";
@@ -14599,51 +15407,6 @@ export class MemberInviteClient {
         }
         return Promise.resolve<void>(null as any);
     }
-
-    /**
-     * Toggle public (unauthenticated) read access for this tenant.
-    Assigns or removes the viewer role on the Public system subject.
-     */
-    setPublicAccess(request: SetPublicAccessRequest, signal?: AbortSignal): Promise<void> {
-        let url_ = this.baseUrl + "/api/v4/member-invites/public-access";
-        url_ = url_.replace(/[?&]$/, "");
-
-        const content_ = JSON.stringify(request);
-
-        let options_: RequestInit = {
-            body: content_,
-            method: "PUT",
-            signal,
-            headers: {
-                "Content-Type": "application/json",
-            }
-        };
-
-        return this.http.fetch(url_, options_).then((_response: Response) => {
-            return this.processSetPublicAccess(_response);
-        });
-    }
-
-    protected processSetPublicAccess(response: Response): Promise<void> {
-        const status = response.status;
-        let _headers: any = {}; if (response.headers && response.headers.forEach) { response.headers.forEach((v: any, k: any) => _headers[k] = v); };
-        if (status === 204) {
-            return response.text().then((_responseText) => {
-            return;
-            });
-        } else if (status === 403) {
-            return response.text().then((_responseText) => {
-            let result403: any = null;
-            result403 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver) as ProblemDetails;
-            return throwException("A server side error occurred.", status, _responseText, _headers, result403);
-            });
-        } else if (status !== 200 && status !== 204) {
-            return response.text().then((_responseText) => {
-            return throwException("An unexpected server error occurred.", status, _responseText, _headers);
-            });
-        }
-        return Promise.resolve<void>(null as any);
-    }
 }
 
 export class MembershipRequestClient {
@@ -14889,6 +15652,96 @@ export class MembershipRequestClient {
             });
         }
         return Promise.resolve<DecideMembershipRequestResult>(null as any);
+    }
+
+    /**
+     * Get whether this tenant currently lets people request to become a member.
+     */
+    getMembershipRequestSettings(signal?: AbortSignal): Promise<MembershipRequestSettingsDto> {
+        let url_ = this.baseUrl + "/api/v4/membership-requests/settings";
+        url_ = url_.replace(/[?&]$/, "");
+
+        let options_: RequestInit = {
+            method: "GET",
+            signal,
+            headers: {
+                "Accept": "application/json"
+            }
+        };
+
+        return this.http.fetch(url_, options_).then((_response: Response) => {
+            return this.processGetMembershipRequestSettings(_response);
+        });
+    }
+
+    protected processGetMembershipRequestSettings(response: Response): Promise<MembershipRequestSettingsDto> {
+        const status = response.status;
+        let _headers: any = {}; if (response.headers && response.headers.forEach) { response.headers.forEach((v: any, k: any) => _headers[k] = v); };
+        if (status === 200) {
+            return response.text().then((_responseText) => {
+            let result200: any = null;
+            result200 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver) as MembershipRequestSettingsDto;
+            return result200;
+            });
+        } else if (status === 403) {
+            return response.text().then((_responseText) => {
+            let result403: any = null;
+            result403 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver) as ProblemDetails;
+            return throwException("A server side error occurred.", status, _responseText, _headers, result403);
+            });
+        } else if (status !== 200 && status !== 204) {
+            return response.text().then((_responseText) => {
+            return throwException("An unexpected server error occurred.", status, _responseText, _headers);
+            });
+        }
+        return Promise.resolve<MembershipRequestSettingsDto>(null as any);
+    }
+
+    /**
+     * Enable or disable whether people can request to become a member. Independent of public access.
+     */
+    setMembershipRequestSettings(request: UpdateMembershipRequestSettingsRequest, signal?: AbortSignal): Promise<MembershipRequestSettingsDto> {
+        let url_ = this.baseUrl + "/api/v4/membership-requests/settings";
+        url_ = url_.replace(/[?&]$/, "");
+
+        const content_ = JSON.stringify(request);
+
+        let options_: RequestInit = {
+            body: content_,
+            method: "PUT",
+            signal,
+            headers: {
+                "Content-Type": "application/json",
+                "Accept": "application/json"
+            }
+        };
+
+        return this.http.fetch(url_, options_).then((_response: Response) => {
+            return this.processSetMembershipRequestSettings(_response);
+        });
+    }
+
+    protected processSetMembershipRequestSettings(response: Response): Promise<MembershipRequestSettingsDto> {
+        const status = response.status;
+        let _headers: any = {}; if (response.headers && response.headers.forEach) { response.headers.forEach((v: any, k: any) => _headers[k] = v); };
+        if (status === 200) {
+            return response.text().then((_responseText) => {
+            let result200: any = null;
+            result200 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver) as MembershipRequestSettingsDto;
+            return result200;
+            });
+        } else if (status === 403) {
+            return response.text().then((_responseText) => {
+            let result403: any = null;
+            result403 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver) as ProblemDetails;
+            return throwException("A server side error occurred.", status, _responseText, _headers, result403);
+            });
+        } else if (status !== 200 && status !== 204) {
+            return response.text().then((_responseText) => {
+            return throwException("An unexpected server error occurred.", status, _responseText, _headers);
+            });
+        }
+        return Promise.resolve<MembershipRequestSettingsDto>(null as any);
     }
 }
 
@@ -15265,6 +16118,249 @@ export class RoleClient {
             });
         }
         return Promise.resolve<void>(null as any);
+    }
+}
+
+export class ShareLinkClient {
+    private http: { fetch(url: RequestInfo, init?: RequestInit): Promise<Response> };
+    private baseUrl: string;
+    protected jsonParseReviver: ((key: string, value: any) => any) | undefined = undefined;
+
+    constructor(baseUrl?: string, http?: { fetch(url: RequestInfo, init?: RequestInit): Promise<Response> }) {
+        this.http = http ? http : window as any;
+        this.baseUrl = baseUrl ?? "";
+    }
+
+    /**
+     * Get the current public share link state.
+     */
+    getShareLink(signal?: AbortSignal): Promise<ShareLinkDto> {
+        let url_ = this.baseUrl + "/api/v4/share";
+        url_ = url_.replace(/[?&]$/, "");
+
+        let options_: RequestInit = {
+            method: "GET",
+            signal,
+            headers: {
+                "Accept": "application/json"
+            }
+        };
+
+        return this.http.fetch(url_, options_).then((_response: Response) => {
+            return this.processGetShareLink(_response);
+        });
+    }
+
+    protected processGetShareLink(response: Response): Promise<ShareLinkDto> {
+        const status = response.status;
+        let _headers: any = {}; if (response.headers && response.headers.forEach) { response.headers.forEach((v: any, k: any) => _headers[k] = v); };
+        if (status === 200) {
+            return response.text().then((_responseText) => {
+            let result200: any = null;
+            result200 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver) as ShareLinkDto;
+            return result200;
+            });
+        } else if (status === 403) {
+            return response.text().then((_responseText) => {
+            let result403: any = null;
+            result403 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver) as ProblemDetails;
+            return throwException("A server side error occurred.", status, _responseText, _headers, result403);
+            });
+        } else if (status !== 200 && status !== 204) {
+            return response.text().then((_responseText) => {
+            return throwException("An unexpected server error occurred.", status, _responseText, _headers);
+            });
+        }
+        return Promise.resolve<ShareLinkDto>(null as any);
+    }
+
+    /**
+     * Disable public sharing and invalidate the current link.
+     */
+    disableShareLink(signal?: AbortSignal): Promise<ShareLinkDto> {
+        let url_ = this.baseUrl + "/api/v4/share";
+        url_ = url_.replace(/[?&]$/, "");
+
+        let options_: RequestInit = {
+            method: "DELETE",
+            signal,
+            headers: {
+                "Accept": "application/json"
+            }
+        };
+
+        return this.http.fetch(url_, options_).then((_response: Response) => {
+            return this.processDisableShareLink(_response);
+        });
+    }
+
+    protected processDisableShareLink(response: Response): Promise<ShareLinkDto> {
+        const status = response.status;
+        let _headers: any = {}; if (response.headers && response.headers.forEach) { response.headers.forEach((v: any, k: any) => _headers[k] = v); };
+        if (status === 200) {
+            return response.text().then((_responseText) => {
+            let result200: any = null;
+            result200 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver) as ShareLinkDto;
+            return result200;
+            });
+        } else if (status === 403) {
+            return response.text().then((_responseText) => {
+            let result403: any = null;
+            result403 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver) as ProblemDetails;
+            return throwException("A server side error occurred.", status, _responseText, _headers, result403);
+            });
+        } else if (status !== 200 && status !== 204) {
+            return response.text().then((_responseText) => {
+            return throwException("An unexpected server error occurred.", status, _responseText, _headers);
+            });
+        }
+        return Promise.resolve<ShareLinkDto>(null as any);
+    }
+
+    /**
+     * Mint a new share token — enables sharing, or rotates an existing link. The previous link
+    stops working immediately.
+     */
+    rotateShareLink(signal?: AbortSignal): Promise<ShareLinkDto> {
+        let url_ = this.baseUrl + "/api/v4/share/rotate";
+        url_ = url_.replace(/[?&]$/, "");
+
+        let options_: RequestInit = {
+            method: "POST",
+            signal,
+            headers: {
+                "Accept": "application/json"
+            }
+        };
+
+        return this.http.fetch(url_, options_).then((_response: Response) => {
+            return this.processRotateShareLink(_response);
+        });
+    }
+
+    protected processRotateShareLink(response: Response): Promise<ShareLinkDto> {
+        const status = response.status;
+        let _headers: any = {}; if (response.headers && response.headers.forEach) { response.headers.forEach((v: any, k: any) => _headers[k] = v); };
+        if (status === 200) {
+            return response.text().then((_responseText) => {
+            let result200: any = null;
+            result200 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver) as ShareLinkDto;
+            return result200;
+            });
+        } else if (status === 403) {
+            return response.text().then((_responseText) => {
+            let result403: any = null;
+            result403 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver) as ProblemDetails;
+            return throwException("A server side error occurred.", status, _responseText, _headers, result403);
+            });
+        } else if (status !== 200 && status !== 204) {
+            return response.text().then((_responseText) => {
+            return throwException("An unexpected server error occurred.", status, _responseText, _headers);
+            });
+        }
+        return Promise.resolve<ShareLinkDto>(null as any);
+    }
+
+    /**
+     * Choose whether the public view shows full history or only the last 24 hours.
+     */
+    setShareLinkFullHistory(request: SetShareFullHistoryRequest, signal?: AbortSignal): Promise<ShareLinkDto> {
+        let url_ = this.baseUrl + "/api/v4/share/full-history";
+        url_ = url_.replace(/[?&]$/, "");
+
+        const content_ = JSON.stringify(request);
+
+        let options_: RequestInit = {
+            body: content_,
+            method: "PUT",
+            signal,
+            headers: {
+                "Content-Type": "application/json",
+                "Accept": "application/json"
+            }
+        };
+
+        return this.http.fetch(url_, options_).then((_response: Response) => {
+            return this.processSetShareLinkFullHistory(_response);
+        });
+    }
+
+    protected processSetShareLinkFullHistory(response: Response): Promise<ShareLinkDto> {
+        const status = response.status;
+        let _headers: any = {}; if (response.headers && response.headers.forEach) { response.headers.forEach((v: any, k: any) => _headers[k] = v); };
+        if (status === 200) {
+            return response.text().then((_responseText) => {
+            let result200: any = null;
+            result200 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver) as ShareLinkDto;
+            return result200;
+            });
+        } else if (status === 403) {
+            return response.text().then((_responseText) => {
+            let result403: any = null;
+            result403 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver) as ProblemDetails;
+            return throwException("A server side error occurred.", status, _responseText, _headers, result403);
+            });
+        } else if (status !== 200 && status !== 204) {
+            return response.text().then((_responseText) => {
+            return throwException("An unexpected server error occurred.", status, _responseText, _headers);
+            });
+        }
+        return Promise.resolve<ShareLinkDto>(null as any);
+    }
+
+    /**
+     * Set which data categories anonymous viewers can see. Scopes must be read-permission atoms
+    drawn from TenantPermissions.PublicShareScopes; an empty list keeps the link live but
+    shares nothing.
+     */
+    setShareLinkScopes(request: SetShareScopesRequest, signal?: AbortSignal): Promise<ShareLinkDto> {
+        let url_ = this.baseUrl + "/api/v4/share/scopes";
+        url_ = url_.replace(/[?&]$/, "");
+
+        const content_ = JSON.stringify(request);
+
+        let options_: RequestInit = {
+            body: content_,
+            method: "PUT",
+            signal,
+            headers: {
+                "Content-Type": "application/json",
+                "Accept": "application/json"
+            }
+        };
+
+        return this.http.fetch(url_, options_).then((_response: Response) => {
+            return this.processSetShareLinkScopes(_response);
+        });
+    }
+
+    protected processSetShareLinkScopes(response: Response): Promise<ShareLinkDto> {
+        const status = response.status;
+        let _headers: any = {}; if (response.headers && response.headers.forEach) { response.headers.forEach((v: any, k: any) => _headers[k] = v); };
+        if (status === 200) {
+            return response.text().then((_responseText) => {
+            let result200: any = null;
+            result200 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver) as ShareLinkDto;
+            return result200;
+            });
+        } else if (status === 400) {
+            return response.text().then((_responseText) => {
+            let result400: any = null;
+            result400 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver) as ProblemDetails;
+            return throwException("A server side error occurred.", status, _responseText, _headers, result400);
+            });
+        } else if (status === 403) {
+            return response.text().then((_responseText) => {
+            let result403: any = null;
+            result403 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver) as ProblemDetails;
+            return throwException("A server side error occurred.", status, _responseText, _headers, result403);
+            });
+        } else if (status !== 200 && status !== 204) {
+            return response.text().then((_responseText) => {
+            return throwException("An unexpected server error occurred.", status, _responseText, _headers);
+            });
+        }
+        return Promise.resolve<ShareLinkDto>(null as any);
     }
 }
 
@@ -18758,8 +19854,10 @@ export class DevAdminClient {
     }
 
     /**
-     * Create a tenant, owner subject, owner membership, and a session in one call.
-    Used exclusively by the E2E test suite to bypass passkey/OIDC ceremonies.
+     * Create a tenant, owner subject, synthetic passkey, owner membership, and a session
+    in one call. The synthetic passkey satisfies the TenantSetupMiddleware credential
+    check so the returned session can immediately call tenant APIs.
+    Used by E2E tests and headless dev tooling to bypass passkey/OIDC ceremonies.
      */
     seedTenant(request: DevSeedTenantRequest, signal?: AbortSignal): Promise<DevSeedTenantResponse> {
         let url_ = this.baseUrl + "/api/v4/dev-only/admin/seed-tenant";
@@ -20166,6 +21264,160 @@ export class UploaderSnapshotClient {
     }
 }
 
+export class CareLinkConnectClient {
+    private http: { fetch(url: RequestInfo, init?: RequestInit): Promise<Response> };
+    private baseUrl: string;
+    protected jsonParseReviver: ((key: string, value: any) => any) | undefined = undefined;
+
+    constructor(baseUrl?: string, http?: { fetch(url: RequestInfo, init?: RequestInit): Promise<Response> }) {
+        this.http = http ? http : window as any;
+        this.baseUrl = baseUrl ?? "";
+    }
+
+    /**
+     * Begins the connect flow: builds the Auth0 authorize URL and stashes the PKCE verifier server-side.
+    The client opens AuthorizeUrl in a new tab.
+     */
+    start(request: CareLinkConnectStartRequest, signal?: AbortSignal): Promise<CareLinkConnectStartResponse> {
+        let url_ = this.baseUrl + "/api/v4/connectors/carelink/connect/start";
+        url_ = url_.replace(/[?&]$/, "");
+
+        const content_ = JSON.stringify(request);
+
+        let options_: RequestInit = {
+            body: content_,
+            method: "POST",
+            signal,
+            headers: {
+                "Content-Type": "application/json",
+                "Accept": "application/json"
+            }
+        };
+
+        return this.http.fetch(url_, options_).then((_response: Response) => {
+            return this.processStart(_response);
+        });
+    }
+
+    protected processStart(response: Response): Promise<CareLinkConnectStartResponse> {
+        const status = response.status;
+        let _headers: any = {}; if (response.headers && response.headers.forEach) { response.headers.forEach((v: any, k: any) => _headers[k] = v); };
+        if (status === 200) {
+            return response.text().then((_responseText) => {
+            let result200: any = null;
+            result200 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver) as CareLinkConnectStartResponse;
+            return result200;
+            });
+        } else if (status === 400) {
+            return response.text().then((_responseText) => {
+            let result400: any = null;
+            result400 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver) as ProblemDetails;
+            return throwException("A server side error occurred.", status, _responseText, _headers, result400);
+            });
+        } else if (status !== 200 && status !== 204) {
+            return response.text().then((_responseText) => {
+            return throwException("An unexpected server error occurred.", status, _responseText, _headers);
+            });
+        }
+        return Promise.resolve<CareLinkConnectStartResponse>(null as any);
+    }
+
+    /**
+     * Completes the connect flow: exchanges the pasted code for a refresh token and stores it as the
+    connector secret. Returns the discovered username/country for auto-filling the config form.
+     */
+    complete(request: CareLinkConnectCompleteRequest, signal?: AbortSignal): Promise<CareLinkConnectCompleteResponse> {
+        let url_ = this.baseUrl + "/api/v4/connectors/carelink/connect/complete";
+        url_ = url_.replace(/[?&]$/, "");
+
+        const content_ = JSON.stringify(request);
+
+        let options_: RequestInit = {
+            body: content_,
+            method: "POST",
+            signal,
+            headers: {
+                "Content-Type": "application/json",
+                "Accept": "application/json"
+            }
+        };
+
+        return this.http.fetch(url_, options_).then((_response: Response) => {
+            return this.processComplete(_response);
+        });
+    }
+
+    protected processComplete(response: Response): Promise<CareLinkConnectCompleteResponse> {
+        const status = response.status;
+        let _headers: any = {}; if (response.headers && response.headers.forEach) { response.headers.forEach((v: any, k: any) => _headers[k] = v); };
+        if (status === 200) {
+            return response.text().then((_responseText) => {
+            let result200: any = null;
+            result200 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver) as CareLinkConnectCompleteResponse;
+            return result200;
+            });
+        } else if (status === 400) {
+            return response.text().then((_responseText) => {
+            let result400: any = null;
+            result400 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver) as ProblemDetails;
+            return throwException("A server side error occurred.", status, _responseText, _headers, result400);
+            });
+        } else if (status !== 200 && status !== 204) {
+            return response.text().then((_responseText) => {
+            return throwException("An unexpected server error occurred.", status, _responseText, _headers);
+            });
+        }
+        return Promise.resolve<CareLinkConnectCompleteResponse>(null as any);
+    }
+
+    /**
+     * Mints a short-lived link code for the desktop companion app. The code carries the server URL
+    plus a tenant-pinned bearer token scoped to this controller, so the app can drive
+    start/complete for the user's tenant without a second login. The app intercepts
+    the com.medtronic.carepartner:/sso redirect in its own webview, removing the
+    manual code-paste step of the browser flow.
+     */
+    desktopToken(signal?: AbortSignal): Promise<CareLinkDesktopTokenResponse> {
+        let url_ = this.baseUrl + "/api/v4/connectors/carelink/connect/desktop-token";
+        url_ = url_.replace(/[?&]$/, "");
+
+        let options_: RequestInit = {
+            method: "POST",
+            signal,
+            headers: {
+                "Accept": "application/json"
+            }
+        };
+
+        return this.http.fetch(url_, options_).then((_response: Response) => {
+            return this.processDesktopToken(_response);
+        });
+    }
+
+    protected processDesktopToken(response: Response): Promise<CareLinkDesktopTokenResponse> {
+        const status = response.status;
+        let _headers: any = {}; if (response.headers && response.headers.forEach) { response.headers.forEach((v: any, k: any) => _headers[k] = v); };
+        if (status === 200) {
+            return response.text().then((_responseText) => {
+            let result200: any = null;
+            result200 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver) as CareLinkDesktopTokenResponse;
+            return result200;
+            });
+        } else if (status === 401) {
+            return response.text().then((_responseText) => {
+            let result401: any = null;
+            result401 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver) as ProblemDetails;
+            return throwException("A server side error occurred.", status, _responseText, _headers, result401);
+            });
+        } else if (status !== 200 && status !== 204) {
+            return response.text().then((_responseText) => {
+            return throwException("An unexpected server error occurred.", status, _responseText, _headers);
+            });
+        }
+        return Promise.resolve<CareLinkDesktopTokenResponse>(null as any);
+    }
+}
+
 export class ConfigurationClient {
     private http: { fetch(url: RequestInfo, init?: RequestInit): Promise<Response> };
     private baseUrl: string;
@@ -20702,6 +21954,311 @@ export class WebhookSettingsClient {
     }
 }
 
+export class ClientDevicesClient {
+    private http: { fetch(url: RequestInfo, init?: RequestInit): Promise<Response> };
+    private baseUrl: string;
+    protected jsonParseReviver: ((key: string, value: any) => any) | undefined = undefined;
+
+    constructor(baseUrl?: string, http?: { fetch(url: RequestInfo, init?: RequestInit): Promise<Response> }) {
+        this.http = http ? http : window as any;
+        this.baseUrl = baseUrl ?? "";
+    }
+
+    /**
+     * Register or refresh this device. Idempotent upsert keyed on the install id — apps call it on
+    every startup to keep their advertised capabilities and last-seen time current.
+     */
+    register(request: RegisterDeviceRequest, signal?: AbortSignal): Promise<ClientDeviceDto> {
+        let url_ = this.baseUrl + "/api/v4/client-devices";
+        url_ = url_.replace(/[?&]$/, "");
+
+        const content_ = JSON.stringify(request);
+
+        let options_: RequestInit = {
+            body: content_,
+            method: "POST",
+            signal,
+            headers: {
+                "Content-Type": "application/json",
+                "Accept": "application/json"
+            }
+        };
+
+        return this.http.fetch(url_, options_).then((_response: Response) => {
+            return this.processRegister(_response);
+        });
+    }
+
+    protected processRegister(response: Response): Promise<ClientDeviceDto> {
+        const status = response.status;
+        let _headers: any = {}; if (response.headers && response.headers.forEach) { response.headers.forEach((v: any, k: any) => _headers[k] = v); };
+        if (status === 200) {
+            return response.text().then((_responseText) => {
+            let result200: any = null;
+            result200 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver) as ClientDeviceDto;
+            return result200;
+            });
+        } else if (status === 400) {
+            return response.text().then((_responseText) => {
+            let result400: any = null;
+            result400 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver) as ProblemDetails;
+            return throwException("A server side error occurred.", status, _responseText, _headers, result400);
+            });
+        } else if (status === 401) {
+            return response.text().then((_responseText) => {
+            let result401: any = null;
+            result401 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver) as ProblemDetails;
+            return throwException("A server side error occurred.", status, _responseText, _headers, result401);
+            });
+        } else if (status === 409) {
+            return response.text().then((_responseText) => {
+            let result409: any = null;
+            result409 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver) as ProblemDetails;
+            return throwException("A server side error occurred.", status, _responseText, _headers, result409);
+            });
+        } else if (status !== 200 && status !== 204) {
+            return response.text().then((_responseText) => {
+            return throwException("An unexpected server error occurred.", status, _responseText, _headers);
+            });
+        }
+        return Promise.resolve<ClientDeviceDto>(null as any);
+    }
+
+    /**
+     * Lists the devices registered by the current user, most-recently-seen first.
+     */
+    getDevices(signal?: AbortSignal): Promise<ClientDeviceDto[]> {
+        let url_ = this.baseUrl + "/api/v4/client-devices";
+        url_ = url_.replace(/[?&]$/, "");
+
+        let options_: RequestInit = {
+            method: "GET",
+            signal,
+            headers: {
+                "Accept": "application/json"
+            }
+        };
+
+        return this.http.fetch(url_, options_).then((_response: Response) => {
+            return this.processGetDevices(_response);
+        });
+    }
+
+    protected processGetDevices(response: Response): Promise<ClientDeviceDto[]> {
+        const status = response.status;
+        let _headers: any = {}; if (response.headers && response.headers.forEach) { response.headers.forEach((v: any, k: any) => _headers[k] = v); };
+        if (status === 200) {
+            return response.text().then((_responseText) => {
+            let result200: any = null;
+            result200 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver) as ClientDeviceDto[];
+            return result200;
+            });
+        } else if (status === 401) {
+            return response.text().then((_responseText) => {
+            let result401: any = null;
+            result401 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver) as ProblemDetails;
+            return throwException("A server side error occurred.", status, _responseText, _headers, result401);
+            });
+        } else if (status !== 200 && status !== 204) {
+            return response.text().then((_responseText) => {
+            return throwException("An unexpected server error occurred.", status, _responseText, _headers);
+            });
+        }
+        return Promise.resolve<ClientDeviceDto[]>(null as any);
+    }
+
+    /**
+     * The static device-action capability catalog (kinds + capabilities) that drives the rule
+    builder's device-action authoring UI. Static metadata, so no device scope is required.
+     */
+    getCapabilityCatalog(signal?: AbortSignal): Promise<DeviceCapabilityCatalog> {
+        let url_ = this.baseUrl + "/api/v4/client-devices/capabilities";
+        url_ = url_.replace(/[?&]$/, "");
+
+        let options_: RequestInit = {
+            method: "GET",
+            signal,
+            headers: {
+                "Accept": "application/json"
+            }
+        };
+
+        return this.http.fetch(url_, options_).then((_response: Response) => {
+            return this.processGetCapabilityCatalog(_response);
+        });
+    }
+
+    protected processGetCapabilityCatalog(response: Response): Promise<DeviceCapabilityCatalog> {
+        const status = response.status;
+        let _headers: any = {}; if (response.headers && response.headers.forEach) { response.headers.forEach((v: any, k: any) => _headers[k] = v); };
+        if (status === 200) {
+            return response.text().then((_responseText) => {
+            let result200: any = null;
+            result200 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver) as DeviceCapabilityCatalog;
+            return result200;
+            });
+        } else if (status !== 200 && status !== 204) {
+            return response.text().then((_responseText) => {
+            return throwException("An unexpected server error occurred.", status, _responseText, _headers);
+            });
+        }
+        return Promise.resolve<DeviceCapabilityCatalog>(null as any);
+    }
+
+    /**
+     * Rename a device you own.
+     */
+    rename(id: string, request: RenameDeviceRequest, signal?: AbortSignal): Promise<ClientDeviceDto> {
+        let url_ = this.baseUrl + "/api/v4/client-devices/{id}";
+        if (id === undefined || id === null)
+            throw new globalThis.Error("The parameter 'id' must be defined.");
+        url_ = url_.replace("{id}", encodeURIComponent("" + id));
+        url_ = url_.replace(/[?&]$/, "");
+
+        const content_ = JSON.stringify(request);
+
+        let options_: RequestInit = {
+            body: content_,
+            method: "PATCH",
+            signal,
+            headers: {
+                "Content-Type": "application/json",
+                "Accept": "application/json"
+            }
+        };
+
+        return this.http.fetch(url_, options_).then((_response: Response) => {
+            return this.processRename(_response);
+        });
+    }
+
+    protected processRename(response: Response): Promise<ClientDeviceDto> {
+        const status = response.status;
+        let _headers: any = {}; if (response.headers && response.headers.forEach) { response.headers.forEach((v: any, k: any) => _headers[k] = v); };
+        if (status === 200) {
+            return response.text().then((_responseText) => {
+            let result200: any = null;
+            result200 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver) as ClientDeviceDto;
+            return result200;
+            });
+        } else if (status === 401) {
+            return response.text().then((_responseText) => {
+            let result401: any = null;
+            result401 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver) as ProblemDetails;
+            return throwException("A server side error occurred.", status, _responseText, _headers, result401);
+            });
+        } else if (status === 404) {
+            return response.text().then((_responseText) => {
+            let result404: any = null;
+            result404 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver) as ProblemDetails;
+            return throwException("A server side error occurred.", status, _responseText, _headers, result404);
+            });
+        } else if (status !== 200 && status !== 204) {
+            return response.text().then((_responseText) => {
+            return throwException("An unexpected server error occurred.", status, _responseText, _headers);
+            });
+        }
+        return Promise.resolve<ClientDeviceDto>(null as any);
+    }
+
+    /**
+     * Revoke (remove) a device you own. Its future registrations start fresh.
+     */
+    revoke(id: string, signal?: AbortSignal): Promise<void> {
+        let url_ = this.baseUrl + "/api/v4/client-devices/{id}";
+        if (id === undefined || id === null)
+            throw new globalThis.Error("The parameter 'id' must be defined.");
+        url_ = url_.replace("{id}", encodeURIComponent("" + id));
+        url_ = url_.replace(/[?&]$/, "");
+
+        let options_: RequestInit = {
+            method: "DELETE",
+            signal,
+            headers: {
+            }
+        };
+
+        return this.http.fetch(url_, options_).then((_response: Response) => {
+            return this.processRevoke(_response);
+        });
+    }
+
+    protected processRevoke(response: Response): Promise<void> {
+        const status = response.status;
+        let _headers: any = {}; if (response.headers && response.headers.forEach) { response.headers.forEach((v: any, k: any) => _headers[k] = v); };
+        if (status === 204) {
+            return response.text().then((_responseText) => {
+            return;
+            });
+        } else if (status === 401) {
+            return response.text().then((_responseText) => {
+            let result401: any = null;
+            result401 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver) as ProblemDetails;
+            return throwException("A server side error occurred.", status, _responseText, _headers, result401);
+            });
+        } else if (status === 404) {
+            return response.text().then((_responseText) => {
+            let result404: any = null;
+            result404 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver) as ProblemDetails;
+            return throwException("A server side error occurred.", status, _responseText, _headers, result404);
+            });
+        } else if (status !== 200 && status !== 204) {
+            return response.text().then((_responseText) => {
+            return throwException("An unexpected server error occurred.", status, _responseText, _headers);
+            });
+        }
+        return Promise.resolve<void>(null as any);
+    }
+
+    /**
+     * The actuation intents currently active for this device — the reconcile snapshot a push-mode
+    device reads on (re)connect to start anything still active and drop anything resolved. Empty
+    for a local-engine device or one the caller does not own.
+     */
+    getActiveIntents(id: string, signal?: AbortSignal): Promise<DeviceActionIntent[]> {
+        let url_ = this.baseUrl + "/api/v4/client-devices/{id}/active-intents";
+        if (id === undefined || id === null)
+            throw new globalThis.Error("The parameter 'id' must be defined.");
+        url_ = url_.replace("{id}", encodeURIComponent("" + id));
+        url_ = url_.replace(/[?&]$/, "");
+
+        let options_: RequestInit = {
+            method: "GET",
+            signal,
+            headers: {
+                "Accept": "application/json"
+            }
+        };
+
+        return this.http.fetch(url_, options_).then((_response: Response) => {
+            return this.processGetActiveIntents(_response);
+        });
+    }
+
+    protected processGetActiveIntents(response: Response): Promise<DeviceActionIntent[]> {
+        const status = response.status;
+        let _headers: any = {}; if (response.headers && response.headers.forEach) { response.headers.forEach((v: any, k: any) => _headers[k] = v); };
+        if (status === 200) {
+            return response.text().then((_responseText) => {
+            let result200: any = null;
+            result200 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver) as DeviceActionIntent[];
+            return result200;
+            });
+        } else if (status === 401) {
+            return response.text().then((_responseText) => {
+            let result401: any = null;
+            result401 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver) as ProblemDetails;
+            return throwException("A server side error occurred.", status, _responseText, _headers, result401);
+            });
+        } else if (status !== 200 && status !== 204) {
+            return response.text().then((_responseText) => {
+            return throwException("An unexpected server error occurred.", status, _responseText, _headers);
+            });
+        }
+        return Promise.resolve<DeviceActionIntent[]>(null as any);
+    }
+}
+
 export class AuditClient {
     private http: { fetch(url: RequestInfo, init?: RequestInit): Promise<Response> };
     private baseUrl: string;
@@ -20947,6 +22504,12 @@ export class AuditClient {
             let result200: any = null;
             result200 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver) as AuditConfigDto;
             return result200;
+            });
+        } else if (status === 400) {
+            return response.text().then((_responseText) => {
+            let result400: any = null;
+            result400 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver) as ProblemDetails;
+            return throwException("A server side error occurred.", status, _responseText, _headers, result400);
             });
         } else if (status === 403) {
             return response.text().then((_responseText) => {
@@ -21899,6 +23462,53 @@ export class PredictionClient {
         }
         return Promise.resolve<PredictionStatusResponse>(null as any);
     }
+
+    /**
+     * Get the pre-resolved therapy profile for the next 24 hours, flattened into contiguous
+    absolute-time segments, for an offline on-device oref prediction run.
+     * @param profileId (optional) Optional profile name. The device omits it (resolves the active profile).
+     */
+    getProfileSnapshot(profileId?: string | null | undefined, signal?: AbortSignal): Promise<ProfileSnapshotResponse> {
+        let url_ = this.baseUrl + "/api/v4/predictions/profile-snapshot?";
+        if (profileId !== undefined && profileId !== null)
+            url_ += "profileId=" + encodeURIComponent("" + profileId) + "&";
+        url_ = url_.replace(/[?&]$/, "");
+
+        let options_: RequestInit = {
+            method: "GET",
+            signal,
+            headers: {
+                "Accept": "application/json"
+            }
+        };
+
+        return this.http.fetch(url_, options_).then((_response: Response) => {
+            return this.processGetProfileSnapshot(_response);
+        });
+    }
+
+    protected processGetProfileSnapshot(response: Response): Promise<ProfileSnapshotResponse> {
+        const status = response.status;
+        let _headers: any = {}; if (response.headers && response.headers.forEach) { response.headers.forEach((v: any, k: any) => _headers[k] = v); };
+        if (status === 200) {
+            return response.text().then((_responseText) => {
+            let result200: any = null;
+            result200 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver) as ProfileSnapshotResponse;
+            return result200;
+            });
+        } else if (status === 500) {
+            return response.text().then((_responseText) => {
+            let result500: any = null;
+            result500 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver) as PredictionErrorResponse;
+            return throwException("A server side error occurred.", status, _responseText, _headers, result500);
+            });
+        } else if (status !== 200 && status !== 204) {
+            return response.text().then((_responseText) => {
+            return throwException("An unexpected server error occurred.", status, _responseText, _headers);
+            });
+        }
+        return Promise.resolve<ProfileSnapshotResponse>(null as any);
+    }
 }
 
 export class RetrospectiveClient {
@@ -22081,6 +23691,93 @@ export class RetrospectiveClient {
             });
         }
         return Promise.resolve<BasalTimelineResponse>(null as any);
+    }
+}
+
+export class SensorIntegrityClient {
+    private http: { fetch(url: RequestInfo, init?: RequestInit): Promise<Response> };
+    private baseUrl: string;
+    protected jsonParseReviver: ((key: string, value: any) => any) | undefined = undefined;
+
+    constructor(baseUrl?: string, http?: { fetch(url: RequestInfo, init?: RequestInit): Promise<Response> }) {
+        this.http = http ? http : window as any;
+        this.baseUrl = baseUrl ?? "";
+    }
+
+    /**
+     * Analyze a UTC window for sensor-integrity clusters and cluster-linked hypo events.
+     * @param startDate (optional) Inclusive UTC start of the window.
+     * @param endDate (optional) Exclusive UTC end of the window.
+     * @param source (optional) Optional data source filter; omitted analyzes the combined stream.
+     * @param bySource (optional) When true, also return a per-data-source breakdown.
+     * @param minConfidence (optional) Minimum cluster confidence for a hypo event to be reported.
+     * @param requireInsulin (optional) When true, only report hypo events with insulin dosed during the cluster.
+     * @param hypoThresholdMgdl (optional) Glucose level (mg/dL) below which a reading counts as hypo.
+     * @param windowHours (optional) Hours after a cluster to search for a hypo nadir.
+     * @return The sensor-integrity report for the window.
+     */
+    analyze(startDate?: Date | undefined, endDate?: Date | undefined, source?: string | null | undefined, bySource?: boolean | undefined, minConfidence?: ClusterConfidence | undefined, requireInsulin?: boolean | undefined, hypoThresholdMgdl?: number | undefined, windowHours?: number | undefined, signal?: AbortSignal): Promise<SensorIntegrityReport> {
+        let url_ = this.baseUrl + "/api/v4/sensor-integrity?";
+        if (startDate === null)
+            throw new globalThis.Error("The parameter 'startDate' cannot be null.");
+        else if (startDate !== undefined)
+            url_ += "startDate=" + encodeURIComponent(startDate ? "" + startDate.toISOString() : "") + "&";
+        if (endDate === null)
+            throw new globalThis.Error("The parameter 'endDate' cannot be null.");
+        else if (endDate !== undefined)
+            url_ += "endDate=" + encodeURIComponent(endDate ? "" + endDate.toISOString() : "") + "&";
+        if (source !== undefined && source !== null)
+            url_ += "source=" + encodeURIComponent("" + source) + "&";
+        if (bySource === null)
+            throw new globalThis.Error("The parameter 'bySource' cannot be null.");
+        else if (bySource !== undefined)
+            url_ += "bySource=" + encodeURIComponent("" + bySource) + "&";
+        if (minConfidence === null)
+            throw new globalThis.Error("The parameter 'minConfidence' cannot be null.");
+        else if (minConfidence !== undefined)
+            url_ += "minConfidence=" + encodeURIComponent("" + minConfidence) + "&";
+        if (requireInsulin === null)
+            throw new globalThis.Error("The parameter 'requireInsulin' cannot be null.");
+        else if (requireInsulin !== undefined)
+            url_ += "requireInsulin=" + encodeURIComponent("" + requireInsulin) + "&";
+        if (hypoThresholdMgdl === null)
+            throw new globalThis.Error("The parameter 'hypoThresholdMgdl' cannot be null.");
+        else if (hypoThresholdMgdl !== undefined)
+            url_ += "hypoThresholdMgdl=" + encodeURIComponent("" + hypoThresholdMgdl) + "&";
+        if (windowHours === null)
+            throw new globalThis.Error("The parameter 'windowHours' cannot be null.");
+        else if (windowHours !== undefined)
+            url_ += "windowHours=" + encodeURIComponent("" + windowHours) + "&";
+        url_ = url_.replace(/[?&]$/, "");
+
+        let options_: RequestInit = {
+            method: "GET",
+            signal,
+            headers: {
+                "Accept": "application/json"
+            }
+        };
+
+        return this.http.fetch(url_, options_).then((_response: Response) => {
+            return this.processAnalyze(_response);
+        });
+    }
+
+    protected processAnalyze(response: Response): Promise<SensorIntegrityReport> {
+        const status = response.status;
+        let _headers: any = {}; if (response.headers && response.headers.forEach) { response.headers.forEach((v: any, k: any) => _headers[k] = v); };
+        if (status === 200) {
+            return response.text().then((_responseText) => {
+            let result200: any = null;
+            result200 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver) as SensorIntegrityReport;
+            return result200;
+            });
+        } else if (status !== 200 && status !== 204) {
+            return response.text().then((_responseText) => {
+            return throwException("An unexpected server error occurred.", status, _responseText, _headers);
+            });
+        }
+        return Promise.resolve<SensorIntegrityReport>(null as any);
     }
 }
 
@@ -23368,6 +25065,62 @@ export class StatisticsClient {
             });
         }
         return Promise.resolve<ExtendedGlucoseAnalytics>(null as any);
+    }
+
+    /**
+     * Extended glucose analytics for a date range, computed server-side. Fetches glucose,
+    manual boluses, and carb intakes for the window from the database and runs
+    AnalyzeGlucoseDataExtended plus
+    CalculateAveragedStats.
+     * @param startDate (optional) Start of the window (inclusive, UTC).
+     * @param endDate (optional) End of the window (exclusive, UTC).
+     * @param population (optional) Diabetes population for clinical target assessment. Defaults to Type 1 adult.
+     * @return The extended analytics and time-of-day averaged stats for the window.
+     */
+    getRangeAnalytics(startDate?: Date | undefined, endDate?: Date | undefined, population?: DiabetesPopulation | undefined, signal?: AbortSignal): Promise<ReportAnalysisResult> {
+        let url_ = this.baseUrl + "/api/v4/Statistics/range-analytics?";
+        if (startDate === null)
+            throw new globalThis.Error("The parameter 'startDate' cannot be null.");
+        else if (startDate !== undefined)
+            url_ += "startDate=" + encodeURIComponent(startDate ? "" + startDate.toISOString() : "") + "&";
+        if (endDate === null)
+            throw new globalThis.Error("The parameter 'endDate' cannot be null.");
+        else if (endDate !== undefined)
+            url_ += "endDate=" + encodeURIComponent(endDate ? "" + endDate.toISOString() : "") + "&";
+        if (population === null)
+            throw new globalThis.Error("The parameter 'population' cannot be null.");
+        else if (population !== undefined)
+            url_ += "population=" + encodeURIComponent("" + population) + "&";
+        url_ = url_.replace(/[?&]$/, "");
+
+        let options_: RequestInit = {
+            method: "GET",
+            signal,
+            headers: {
+                "Accept": "application/json"
+            }
+        };
+
+        return this.http.fetch(url_, options_).then((_response: Response) => {
+            return this.processGetRangeAnalytics(_response);
+        });
+    }
+
+    protected processGetRangeAnalytics(response: Response): Promise<ReportAnalysisResult> {
+        const status = response.status;
+        let _headers: any = {}; if (response.headers && response.headers.forEach) { response.headers.forEach((v: any, k: any) => _headers[k] = v); };
+        if (status === 200) {
+            return response.text().then((_responseText) => {
+            let result200: any = null;
+            result200 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver) as ReportAnalysisResult;
+            return result200;
+            });
+        } else if (status !== 200 && status !== 204) {
+            return response.text().then((_responseText) => {
+            return throwException("An unexpected server error occurred.", status, _responseText, _headers);
+            });
+        }
+        return Promise.resolve<ReportAnalysisResult>(null as any);
     }
 
     /**
@@ -26332,116 +28085,6 @@ export class PasskeyClient {
     }
 
     /**
-     * Generate registration options for the first user during initial setup.
-    Only available when no non-system subjects exist (setup mode).
-    Creates the subject, assigns admin role, and returns passkey registration options.
-     */
-    setupOptions(request: SetupOptionsRequest, signal?: AbortSignal): Promise<PasskeyOptionsResponse> {
-        let url_ = this.baseUrl + "/api/auth/passkey/setup/options";
-        url_ = url_.replace(/[?&]$/, "");
-
-        const content_ = JSON.stringify(request);
-
-        let options_: RequestInit = {
-            body: content_,
-            method: "POST",
-            signal,
-            headers: {
-                "Content-Type": "application/json",
-                "Accept": "application/json"
-            }
-        };
-
-        return this.http.fetch(url_, options_).then((_response: Response) => {
-            return this.processSetupOptions(_response);
-        });
-    }
-
-    protected processSetupOptions(response: Response): Promise<PasskeyOptionsResponse> {
-        const status = response.status;
-        let _headers: any = {}; if (response.headers && response.headers.forEach) { response.headers.forEach((v: any, k: any) => _headers[k] = v); };
-        if (status === 200) {
-            return response.text().then((_responseText) => {
-            let result200: any = null;
-            result200 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver) as PasskeyOptionsResponse;
-            return result200;
-            });
-        } else if (status === 400) {
-            return response.text().then((_responseText) => {
-            let result400: any = null;
-            result400 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver) as ProblemDetails;
-            return throwException("A server side error occurred.", status, _responseText, _headers, result400);
-            });
-        } else if (status === 403) {
-            return response.text().then((_responseText) => {
-            let result403: any = null;
-            result403 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver) as ProblemDetails;
-            return throwException("A server side error occurred.", status, _responseText, _headers, result403);
-            });
-        } else if (status !== 200 && status !== 204) {
-            return response.text().then((_responseText) => {
-            return throwException("An unexpected server error occurred.", status, _responseText, _headers);
-            });
-        }
-        return Promise.resolve<PasskeyOptionsResponse>(null as any);
-    }
-
-    /**
-     * Complete passkey registration during initial setup.
-    Verifies attestation, generates recovery codes, issues a full JWT session,
-    and exits setup mode.
-     */
-    setupComplete(request: SetupCompleteRequest, signal?: AbortSignal): Promise<SetupCompleteResponse> {
-        let url_ = this.baseUrl + "/api/auth/passkey/setup/complete";
-        url_ = url_.replace(/[?&]$/, "");
-
-        const content_ = JSON.stringify(request);
-
-        let options_: RequestInit = {
-            body: content_,
-            method: "POST",
-            signal,
-            headers: {
-                "Content-Type": "application/json",
-                "Accept": "application/json"
-            }
-        };
-
-        return this.http.fetch(url_, options_).then((_response: Response) => {
-            return this.processSetupComplete(_response);
-        });
-    }
-
-    protected processSetupComplete(response: Response): Promise<SetupCompleteResponse> {
-        const status = response.status;
-        let _headers: any = {}; if (response.headers && response.headers.forEach) { response.headers.forEach((v: any, k: any) => _headers[k] = v); };
-        if (status === 200) {
-            return response.text().then((_responseText) => {
-            let result200: any = null;
-            result200 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver) as SetupCompleteResponse;
-            return result200;
-            });
-        } else if (status === 400) {
-            return response.text().then((_responseText) => {
-            let result400: any = null;
-            result400 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver) as ProblemDetails;
-            return throwException("A server side error occurred.", status, _responseText, _headers, result400);
-            });
-        } else if (status === 403) {
-            return response.text().then((_responseText) => {
-            let result403: any = null;
-            result403 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver) as ProblemDetails;
-            return throwException("A server side error occurred.", status, _responseText, _headers, result403);
-            });
-        } else if (status !== 200 && status !== 204) {
-            return response.text().then((_responseText) => {
-            return throwException("An unexpected server error occurred.", status, _responseText, _headers);
-            });
-        }
-        return Promise.resolve<SetupCompleteResponse>(null as any);
-    }
-
-    /**
      * Begin passkey registration for an anonymous access request.
     Creates a pending subject and returns WebAuthn registration options.
     Only available when AllowAccessRequests is enabled on the default tenant.
@@ -26616,7 +28259,7 @@ export class PasskeyClient {
      * Complete passkey registration for an invite acceptance.
     Verifies attestation, accepts the invite, generates recovery codes, and issues a session.
      */
-    inviteComplete(request: InviteCompleteRequest, signal?: AbortSignal): Promise<SetupCompleteResponse> {
+    inviteComplete(request: InviteCompleteRequest, signal?: AbortSignal): Promise<PasskeyRegistrationResponse> {
         let url_ = this.baseUrl + "/api/auth/passkey/invite/complete";
         url_ = url_.replace(/[?&]$/, "");
 
@@ -26637,13 +28280,13 @@ export class PasskeyClient {
         });
     }
 
-    protected processInviteComplete(response: Response): Promise<SetupCompleteResponse> {
+    protected processInviteComplete(response: Response): Promise<PasskeyRegistrationResponse> {
         const status = response.status;
         let _headers: any = {}; if (response.headers && response.headers.forEach) { response.headers.forEach((v: any, k: any) => _headers[k] = v); };
         if (status === 200) {
             return response.text().then((_responseText) => {
             let result200: any = null;
-            result200 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver) as SetupCompleteResponse;
+            result200 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver) as PasskeyRegistrationResponse;
             return result200;
             });
         } else if (status === 400) {
@@ -26663,7 +28306,7 @@ export class PasskeyClient {
             return throwException("An unexpected server error occurred.", status, _responseText, _headers);
             });
         }
-        return Promise.resolve<SetupCompleteResponse>(null as any);
+        return Promise.resolve<PasskeyRegistrationResponse>(null as any);
     }
 }
 
@@ -26963,6 +28606,7 @@ export interface ConditionNode {
     day_of_week?: DayOfWeekCondition | undefined;
     pump_state?: PumpStateCondition | undefined;
     state_span_active?: StateSpanActiveCondition | undefined;
+    tracker_age?: TrackerAgeCondition | undefined;
 }
 
 export interface ThresholdCondition {
@@ -27155,6 +28799,7 @@ export enum PumpModeState {
     EaseOff = "EaseOff",
     Sleep = "Sleep",
     Exercise = "Exercise",
+    Liberty = "Liberty",
     Suspended = "Suspended",
     Off = "Off",
 }
@@ -27177,6 +28822,12 @@ export enum StateSpanCategory {
     Travel = "Travel",
     DataExclusion = "DataExclusion",
     TemporaryTarget = "TemporaryTarget",
+}
+
+export interface TrackerAgeCondition {
+    tracker_definition_id?: string;
+    operator?: string;
+    minutes?: number;
 }
 
 /** Metadata about authentication error codes for NSwag generation */
@@ -27278,7 +28929,6 @@ export enum OAuthScope {
     StepCountReadWrite = "stepcount.readwrite",
     FoodRead = "food.read",
     FoodReadWrite = "food.readwrite",
-    StatisticsRead = "statistics.read",
     HealthRead = "health.read",
     HealthReadWrite = "health.readwrite",
     FullAccess = "*",
@@ -27466,6 +29116,38 @@ export interface SetupOwnerOidcRequest {
     username?: string;
     displayName?: string;
     providerId?: string;
+}
+
+export interface TimezoneTimelineEntry {
+    id?: string;
+    effectiveFrom?: Date;
+    timezone?: string;
+    createdAt?: Date | undefined;
+    updatedAt?: Date | undefined;
+}
+
+/** Request to create or update a timezone timeline entry. */
+export interface UpsertTimezoneEntryRequest {
+    /** Existing entry id to update, or null to create. */
+    id?: string | undefined;
+    /** Local wall-clock instant from which the zone takes effect. */
+    effectiveFrom?: Date;
+    /** IANA timezone id (e.g. "Australia/Sydney"). */
+    timezone?: string;
+}
+
+/** Outcome of a re-correction re-sync. */
+export interface RecorrectResult {
+    /** Whether the re-sync succeeded. */
+    success?: boolean;
+    /** Human-readable status message. */
+    message?: string;
+}
+
+/** Request to re-correct imported data after a timeline change. */
+export interface RecorrectRequest {
+    /** Optional UTC lower bound for the re-pull window. */
+    from?: Date | undefined;
 }
 
 export interface BasalInjection {
@@ -28697,6 +30379,21 @@ export interface OidcProviderResponse {
     displayOrder?: number;
     icon?: string | undefined;
     buttonColor?: string | undefined;
+    providerType?: OidcProviderType;
+    oAuth2?: OAuth2ProviderSettings | undefined;
+}
+
+export enum OidcProviderType {
+    Oidc = "Oidc",
+    OAuth2 = "OAuth2",
+}
+
+export interface OAuth2ProviderSettings {
+    authorizationEndpoint?: string;
+    tokenEndpoint?: string;
+    userInfoEndpoint?: string;
+    userInfoEmailEndpoint?: string | undefined;
+    claimMappings?: { [key: string]: string; };
 }
 
 export interface CreateOidcProviderRequest {
@@ -28711,6 +30408,8 @@ export interface CreateOidcProviderRequest {
     displayOrder?: number;
     icon?: string | undefined;
     buttonColor?: string | undefined;
+    providerType?: OidcProviderType;
+    oAuth2?: OAuth2ProviderSettings | undefined;
 }
 
 export interface ConfigManagedResponse {
@@ -28729,6 +30428,8 @@ export interface UpdateOidcProviderRequest {
     displayOrder?: number;
     icon?: string | undefined;
     buttonColor?: string | undefined;
+    providerType?: OidcProviderType;
+    oAuth2?: OAuth2ProviderSettings | undefined;
 }
 
 export interface OidcProviderTestResult {
@@ -28844,6 +30545,15 @@ export interface ClockSettings {
     alwaysShowTime?: boolean;
     backgroundImage?: string | undefined;
     backgroundOpacity?: number;
+    screensaverMode?: boolean;
+}
+
+export interface ClockGlucoseDto {
+    mills?: number;
+    mgdl?: number;
+    direction?: string | undefined;
+    delta?: number | undefined;
+    dataSource?: string | undefined;
 }
 
 export interface ClockFaceListItem {
@@ -29561,6 +31271,138 @@ export interface ApproveAccessRequestRequest {
     directPermissions?: string[] | undefined;
 }
 
+/** A tenant and the connectors it has configured. */
+export interface TenantConnectorsDto {
+    /** The tenant id. */
+    tenantId?: string;
+    /** The tenant slug, for display. */
+    tenantSlug?: string;
+    /** One entry per configured connector. */
+    connectors?: TenantConnectorSummary[];
+}
+
+/** Sync/health summary for a single configured connector. */
+export interface TenantConnectorSummary {
+    /** The connector name (e.g. nightscout). */
+    connectorName?: string;
+    /** Whether the connector last reported healthy. */
+    isHealthy?: boolean;
+    /** When the connector last completed a successful sync. */
+    lastSuccessfulSync?: Date | undefined;
+    /** When the connector last attempted a sync. */
+    lastSyncAttempt?: Date | undefined;
+    /** The most recent error message, if any. */
+    lastErrorMessage?: string | undefined;
+}
+
+/** Summary returned when a reset job is created (202 Accepted). */
+export interface ConnectorResetJobInfo {
+    /** The job id, used to poll status. */
+    jobId?: string;
+    /** The target tenant being reset. */
+    tenantId?: string;
+    /** The target tenant's slug, for display. */
+    tenantSlug?: string;
+    /** When the job was created. */
+    createdAt?: Date;
+    /** The job's current state. */
+    state?: ConnectorResetJobState;
+    /** How many connectors the job will reset. */
+    totalConnectors?: number;
+}
+
+/** Lifecycle state of a connector cursor reset job. */
+export enum ConnectorResetJobState {
+    Pending = "Pending",
+    Running = "Running",
+    Completed = "Completed",
+    Failed = "Failed",
+    Cancelled = "Cancelled",
+}
+
+/** Request body for a cross-tenant cursor reset. Mirrors the per-tenant ResetCursorRequest shape. */
+export interface AdminResetCursorsRequest {
+    /** Optional lower bound for the re-pull. When null, all available history is re-ingested. */
+    from?: Date | undefined;
+    /** Optional set of data types to reset. When null or empty, every supported data type is reset. */
+    dataTypes?: SyncDataType[] | undefined;
+}
+
+export enum SyncDataType {
+    Glucose = "Glucose",
+    ManualBG = "ManualBG",
+    Calibrations = "Calibrations",
+    Boluses = "Boluses",
+    BasalInjections = "BasalInjections",
+    CarbIntake = "CarbIntake",
+    BGChecks = "BGChecks",
+    BolusCalculations = "BolusCalculations",
+    Notes = "Notes",
+    DeviceEvents = "DeviceEvents",
+    StateSpans = "StateSpans",
+    TempBasals = "TempBasals",
+    Profiles = "Profiles",
+    DeviceStatus = "DeviceStatus",
+    Activity = "Activity",
+    Food = "Food",
+}
+
+/** A pollable snapshot of a reset job's progress. */
+export interface ConnectorResetJobStatus {
+    /** The job id. */
+    jobId?: string;
+    /** The target tenant being reset. */
+    tenantId?: string;
+    /** The target tenant's slug, for display. */
+    tenantSlug?: string;
+    /** The job's current lifecycle state. */
+    state?: ConnectorResetJobState;
+    /** When the job was created. */
+    createdAt?: Date;
+    /** When the background work started, or null if not yet started. */
+    startedAt?: Date | undefined;
+    /** When the job reached a terminal state, or null if still running. */
+    completedAt?: Date | undefined;
+    /** An error message when the whole job failed (not a single connector). */
+    errorMessage?: string | undefined;
+    /** Total connectors the job will reset. */
+    totalConnectors?: number;
+    /** How many connectors have finished (succeeded or failed). */
+    completedConnectors?: number;
+    /** Per-connector progress, in configured order. */
+    connectors?: ConnectorResetConnectorProgress[];
+}
+
+/** Progress for a single connector within a reset job. */
+export interface ConnectorResetConnectorProgress {
+    /** The connector name (e.g. nightscout). */
+    connectorName?: string;
+    /** The connector's current state in this job. */
+    state?: ConnectorResetConnectorState;
+    /** A human-readable message for the outcome, once the connector has completed. */
+    message?: string | undefined;
+    /** The full sync result, once the connector has completed. */
+    result?: SyncResult | undefined;
+}
+
+/** State of a single connector within a reset job. */
+export enum ConnectorResetConnectorState {
+    Pending = "Pending",
+    Running = "Running",
+    Succeeded = "Succeeded",
+    Failed = "Failed",
+}
+
+export interface SyncResult {
+    success?: boolean;
+    message?: string;
+    startTime?: Date;
+    endTime?: Date;
+    itemsSynced?: { [key in keyof typeof SyncDataType]?: number; };
+    lastEntryTimes?: { [key in keyof typeof SyncDataType]?: Date; };
+    errors?: string[];
+}
+
 export interface PlatformSettingsSummary {
     category?: string;
     enabled?: boolean;
@@ -29598,12 +31440,14 @@ export interface TenantMemberDto {
     id?: string;
     subjectId?: string;
     name?: string | undefined;
+    isSystemSubject?: boolean;
     roles?: TenantMemberRoleDto[];
     directPermissions?: string[] | undefined;
     label?: string | undefined;
     limitTo24Hours?: boolean;
     lastUsedAt?: Date | undefined;
     sysCreatedAt?: Date;
+    isPlatformAdmin?: boolean;
 }
 
 export interface TenantMemberRoleDto {
@@ -29958,37 +31802,20 @@ export interface ConnectorDataSummary {
     total?: number;
 }
 
-export interface SyncResult {
-    success?: boolean;
-    message?: string;
-    startTime?: Date;
-    endTime?: Date;
-    itemsSynced?: { [key in keyof typeof SyncDataType]?: number; };
-    lastEntryTimes?: { [key in keyof typeof SyncDataType]?: Date; };
-    errors?: string[];
-}
-
-export enum SyncDataType {
-    Glucose = "Glucose",
-    ManualBG = "ManualBG",
-    Calibrations = "Calibrations",
-    Boluses = "Boluses",
-    CarbIntake = "CarbIntake",
-    BGChecks = "BGChecks",
-    BolusCalculations = "BolusCalculations",
-    Notes = "Notes",
-    DeviceEvents = "DeviceEvents",
-    StateSpans = "StateSpans",
-    Profiles = "Profiles",
-    DeviceStatus = "DeviceStatus",
-    Activity = "Activity",
-    Food = "Food",
-}
-
 export interface SyncRequest {
     from?: Date | undefined;
     to?: Date | undefined;
     dataTypes?: SyncDataType[];
+}
+
+/** Request body for resetting a connector's sync cursor and re-pulling history. */
+export interface ResetCursorRequest {
+    /** Optional lower bound for the re-pull. When null, no lower bound is applied and all
+available history is re-ingested. */
+    from?: Date | undefined;
+    /** Optional set of data types to reset. When null or empty, every data type the connector
+supports is re-pulled. */
+    dataTypes?: SyncDataType[] | undefined;
 }
 
 /** Response model for connector sync status */
@@ -30036,8 +31863,10 @@ export interface StatusResponse {
     authorized?: any | undefined;
     runtimeState?: string | undefined;
     head?: string | undefined;
+    build?: string | undefined;
     isDemo?: boolean | undefined;
     nextResetAt?: Date | undefined;
+    anonymousReadAccess?: boolean;
 }
 
 export interface CreateIssueResponse {
@@ -30090,6 +31919,8 @@ export enum ChannelType {
     WhatsApp = "whatsapp",
     WhatsAppDm = "whatsapp_dm",
     HomeAssistant = "home_assistant",
+    ResendEmail = "resend_email",
+    DeviceAction = "device_action",
 }
 
 export enum ChannelStatus {
@@ -30276,6 +32107,7 @@ export enum AlertConditionType {
     DayOfWeek = "day_of_week",
     PumpState = "pump_state",
     StateSpanActive = "state_span_active",
+    TrackerAge = "tracker_age",
 }
 
 export interface AlertRuleResponse {
@@ -30290,11 +32122,28 @@ export interface AlertRuleResponse {
     /** When true, this rule still fires while the tenant is in Do Not Disturb mode.
             Critical rules implicitly bypass DND regardless of this flag. */
     allowThroughDnd?: boolean;
+    /** Low/high classification for scoped Do Not Disturb (ADR 0004), derived by the
+            shared engine from the rule's directional leaves. Read-only — computed server-side on
+            create/update; a scoped lows/highs window silences a rule only when its
+            class matches. */
+    scopeClass?: RuleScopeClass;
+    /** Owner tag when this rule is synthesised from another feature's configuration
+            (e.g. tracker:{definitionId}). Null for user-authored rules. Managed rules
+            cannot be deleted here — the owning configuration re-syncs their condition, name and
+            severity; channels and client configuration remain user-editable. */
+    managedBy?: string | undefined;
     autoResolveEnabled?: boolean;
     autoResolveParams?: any | undefined;
     clientConfiguration?: any;
     /** Flat list of delivery channels. Dispatched in parallel when the rule fires. */
     channels?: AlertRuleChannelResponse[];
+}
+
+export enum RuleScopeClass {
+    Low = "low",
+    High = "high",
+    Composite = "composite",
+    Undirected = "undirected",
 }
 
 export interface AlertRuleChannelResponse {
@@ -30303,6 +32152,8 @@ export interface AlertRuleChannelResponse {
     destination?: string;
     destinationLabel?: string | undefined;
     sortOrder?: number;
+    /** Channel-specific config (e.g. device_action capabilities). Null when unset. */
+    metadata?: any | undefined;
 }
 
 export interface CreateAlertRuleRequest {
@@ -30322,9 +32173,11 @@ export interface CreateAlertRuleRequest {
 
 export interface CreateAlertRuleChannelRequest {
     channelType?: ChannelType;
-    /** Channel-specific address: webhook URL, chat handle, etc. Empty for in-app/web-push. */
+    /** Channel-specific address: webhook URL, chat handle, device kind for device_action, etc. Empty for in-app/web-push. */
     destination?: string | undefined;
     destinationLabel?: string | undefined;
+    /** Channel-specific config, persisted as JSONB. For device_action: { "capabilities": ["notify", ...] }. */
+    metadata?: any | undefined;
 }
 
 export interface UpdateAlertRuleRequest {
@@ -30359,6 +32212,7 @@ export interface ActiveExcursionResponse {
     alertRuleId?: string;
     ruleName?: string;
     conditionType?: AlertConditionType;
+    severity?: AlertRuleSeverity;
     startedAt?: Date;
     acknowledgedAt?: Date | undefined;
     acknowledgedBy?: string | undefined;
@@ -30422,6 +32276,38 @@ export interface PendingDeliveryResponse {
     retryCount?: number;
 }
 
+/** A DND window with its resolver fields. active state is computed on read. */
+export interface DndWindowResponse {
+    id?: string;
+    scope?: DndScope;
+    startedAt?: Date;
+    endsAt?: Date | undefined;
+    clearedAt?: Date | undefined;
+    clearedBy?: string | undefined;
+    source?: string | undefined;
+    createdAt?: Date;
+}
+
+export enum DndScope {
+    Lows = "lows",
+    Highs = "highs",
+    All = "all",
+}
+
+/** Request to create a DND window. Id is client-supplied for idempotency. */
+export interface CreateDndWindowRequest {
+    /** Client-generated UUID. Re-sending the same id is a no-op that returns the stored window. */
+    id?: string;
+    /** Which alerts to silence: lows | highs | all. */
+    scope?: DndScope;
+    /** When the mute takes effect (may predate receipt for offline authoring). */
+    startedAt?: Date;
+    /** Auto-expiry instant; null mutes until explicitly cleared. */
+    endsAt?: Date | undefined;
+    /** Audit label for what created the window (e.g. web, prelude-device). */
+    source?: string | undefined;
+}
+
 export interface InAppNotificationDto {
     id?: string;
     type?: string;
@@ -30430,6 +32316,7 @@ export interface InAppNotificationDto {
     title?: string;
     subtitle?: string | undefined;
     createdAt?: Date;
+    readAt?: Date | undefined;
     icon?: string | undefined;
     source?: string | undefined;
     sourceId?: string | undefined;
@@ -30506,20 +32393,6 @@ export interface UpdateTenantAlertSettingsRequest {
     dndScheduleEnabled?: boolean;
     dndScheduleStart?: string | undefined;
     dndScheduleEnd?: string | undefined;
-}
-
-/** DTO for tracker alerts returned to the frontend */
-export interface TrackerAlertDto {
-    instanceId?: string;
-    definitionId?: string;
-    thresholdId?: string;
-    trackerName?: string;
-    urgency?: NotificationUrgency;
-    message?: string;
-    pushEnabled?: boolean;
-    audioEnabled?: boolean;
-    audioSound?: string | undefined;
-    vibrateEnabled?: boolean;
 }
 
 export interface TrackerDefinitionDto {
@@ -30874,10 +32747,6 @@ export interface SetMemberLimitTo24HoursRequest {
     limitTo24Hours?: boolean;
 }
 
-export interface SetPublicAccessRequest {
-    enabled?: boolean;
-}
-
 export interface CreateMembershipRequestResult {
     success?: boolean;
     error?: string | undefined;
@@ -30906,6 +32775,14 @@ export interface ApproveMembershipRequestRequest {
     roleIds?: string[];
 }
 
+export interface MembershipRequestSettingsDto {
+    allowRequests?: boolean;
+}
+
+export interface UpdateMembershipRequestSettingsRequest {
+    allowRequests?: boolean;
+}
+
 export interface CreateMyTenantRequest {
     slug?: string;
     displayName?: string;
@@ -30932,6 +32809,30 @@ export interface UpdateRoleRequest {
     name?: string;
     description?: string | undefined;
     permissions?: string[];
+}
+
+/** Current state of a tenant's single public share link. */
+export interface ShareLinkDto {
+    /** Whether a public share link is currently active. */
+    enabled?: boolean;
+    /** The full share URL when enabled; null otherwise. The raw token is never returned separately. */
+    url?: string | undefined;
+    /** When true the public view shows full history; when false, only the last 24 hours. */
+    fullHistory?: boolean;
+    /** The data categories anonymous viewers can see, as read-permission atoms (e.g. glucose.read).
+A subset of PublicShareScopes.
+Empty means the link is live but nothing is shared yet. */
+    scopes?: string[];
+    /** When the share link was last accessed, or null if never (or not yet recorded). */
+    lastAccessedAt?: Date | undefined;
+}
+
+export interface SetShareFullHistoryRequest {
+    fullHistory?: boolean;
+}
+
+export interface SetShareScopesRequest {
+    scopes?: string[];
 }
 
 export interface PaginatedResponseOfActivity {
@@ -31006,6 +32907,7 @@ export interface BodyWeight extends ProcessableDocumentBase {
     device?: string | undefined;
     enteredBy?: string | undefined;
     data_source?: string | undefined;
+    syncIdentifier?: string | undefined;
 }
 
 export function isBodyWeight(object: any): object is BodyWeight {
@@ -31023,6 +32925,7 @@ export interface HeartRate extends ProcessableDocumentBase {
     device?: string | undefined;
     enteredBy?: string | undefined;
     data_source?: string | undefined;
+    syncIdentifier?: string | undefined;
 }
 
 export function isHeartRate(object: any): object is HeartRate {
@@ -31043,8 +32946,11 @@ export interface UpsertHeartRateRequest {
     device?: string | undefined;
     /** Name of the application that submitted this record. */
     app?: string | undefined;
-    /** Upstream data source identifier. */
+    /** Upstream data source identifier; paired with SyncIdentifier for dedup. */
     dataSource?: string | undefined;
+    /** Stable per-source identifier. When paired with DataSource, re-uploading the
+same measurement updates the existing record in place rather than creating a duplicate. */
+    syncIdentifier?: string | undefined;
 }
 
 export interface PatientRecord {
@@ -31137,6 +33043,7 @@ export interface StepCount extends ProcessableDocumentBase {
     device?: string | undefined;
     enteredBy?: string | undefined;
     data_source?: string | undefined;
+    syncIdentifier?: string | undefined;
 }
 
 export function isStepCount(object: any): object is StepCount {
@@ -31157,8 +33064,11 @@ export interface UpsertStepCountRequest {
     device?: string | undefined;
     /** Name of the application that submitted this record. */
     app?: string | undefined;
-    /** Upstream data source identifier. */
+    /** Upstream data source identifier; paired with SyncIdentifier for dedup. */
     dataSource?: string | undefined;
+    /** Stable per-source identifier. When paired with DataSource, re-uploading the
+same measurement updates the existing record in place rather than creating a duplicate. */
+    syncIdentifier?: string | undefined;
 }
 
 export interface BGCheck {
@@ -31316,6 +33226,7 @@ export interface SensorGlucose {
     correlationId?: string | undefined;
     patientDeviceId?: string | undefined;
     legacyId?: string | undefined;
+    syncIdentifier?: string | undefined;
     createdAt?: Date;
     modifiedAt?: Date;
     mgdl?: number;
@@ -31831,6 +33742,7 @@ export interface PumpSnapshot {
     bolusing?: boolean | undefined;
     suspended?: boolean | undefined;
     pumpStatus?: string | undefined;
+    pumpMode?: string | undefined;
     clock?: string | undefined;
     deviceId?: string | undefined;
     patientDeviceId?: string | undefined;
@@ -31864,6 +33776,41 @@ export interface UploaderSnapshot {
     type?: string | undefined;
     deviceId?: string | undefined;
     additionalProperties?: { [key: string]: any; } | undefined;
+}
+
+/** The authorize URL to open and the opaque state to echo back on completion. */
+export interface CareLinkConnectStartResponse {
+    authorizeUrl?: string;
+    state?: string;
+}
+
+/** Request to begin the CareLink connect flow. */
+export interface CareLinkConnectStartRequest {
+    /** Region: "EU" (Outside-US, incl. Australia) or "US". */
+    server?: string;
+}
+
+/** Result of completing the flow, with optional profile details for auto-fill. */
+export interface CareLinkConnectCompleteResponse {
+    success?: boolean;
+    username?: string | undefined;
+    country?: string | undefined;
+}
+
+/** Request to complete the flow with the code captured from the redirect. */
+export interface CareLinkConnectCompleteRequest {
+    /** The authorization code, or the full com.medtronic.carepartner:/sso?code=... URL. */
+    code?: string;
+    state?: string;
+}
+
+/** A link code for the desktop companion app. */
+export interface CareLinkDesktopTokenResponse {
+    /** nocturne-connect://link?server=…&token=… — pasted into the desktop app (or later
+opened as a deep link). Carries the server base URL and a short-lived bearer token. */
+    linkCode?: string;
+    /** Seconds until the embedded token expires. */
+    expiresInSeconds?: number;
 }
 
 export interface ConnectorConfigurationResponse {
@@ -31913,6 +33860,53 @@ export interface WebhookTestResult {
 export interface WebhookTestRequest {
     urls?: string[];
     secret?: string | undefined;
+}
+
+export interface ClientDeviceDto {
+    id?: string;
+    installId?: string;
+    kind?: string;
+    label?: string | undefined;
+    capabilities?: string[];
+    lastSeenAt?: Date;
+    createdAt?: Date;
+}
+
+export interface RegisterDeviceRequest {
+    installId: string;
+    kind: string;
+    label?: string | undefined;
+    capabilities?: string[];
+}
+
+export interface DeviceCapabilityCatalog {
+    kinds?: string[];
+    capabilities?: DeviceCapabilityInfo[];
+}
+
+export interface DeviceCapabilityInfo {
+    key?: string;
+    label?: string;
+    requiredScope?: string;
+    kinds?: string[];
+    isHardware?: boolean;
+}
+
+export interface RenameDeviceRequest {
+    label?: string | undefined;
+}
+
+export interface DeviceActionIntent {
+    intent?: string;
+    excursionId?: string;
+    ruleName?: string;
+    severity?: AlertRuleSeverity;
+    targetKind?: string;
+    capabilities?: string[];
+    acknowledged?: boolean;
+    startedAt?: Date;
+    glucoseValue?: number | undefined;
+    trend?: string | undefined;
 }
 
 export interface PaginatedResponseOfMutationAuditDto {
@@ -31982,6 +33976,8 @@ export interface ChartThresholdsDto {
     veryLow?: number;
     veryHigh?: number;
     glucoseYMax?: number;
+    targetLow?: number | undefined;
+    targetHigh?: number | undefined;
 }
 
 export interface HeartRatePointDto {
@@ -32125,6 +34121,7 @@ export enum ChartColor {
     PumpModeExercise = "pump-mode-exercise",
     PumpModeSuspended = "pump-mode-suspended",
     PumpModeOff = "pump-mode-off",
+    PumpModeLiberty = "pump-mode-liberty",
     SystemEventAlarm = "system-event-alarm",
     SystemEventHazard = "system-event-hazard",
     SystemEventWarning = "system-event-warning",
@@ -32372,6 +34369,38 @@ export interface PredictionStatusResponse {
     source?: string;
 }
 
+/** Pre-resolved therapy profile flattened into contiguous absolute-time segments covering [now, now+24h) for on-device oref prediction. Property names are pinned to snake_case with JsonPropertyNameAttribute so the wire contract is independent of any ambient serializer naming policy, and every field is emitted (including zeros) so the client's strict decoder never sees a missing key. */
+export interface ProfileSnapshotResponse {
+    /** When the snapshot was resolved (Unix ms); equals the window start. */
+    fetched_at_mills?: number;
+    /** Ascending, contiguous, gap/overlap-free segments covering [now, now+24h). */
+    segments?: ProfileSnapshotSegment[];
+}
+
+/** One flat segment of the resolved profile: all scalars are constant over [start, end). */
+export interface ProfileSnapshotSegment {
+    /** Segment start (Unix ms, inclusive). */
+    start_mills?: number;
+    /** Segment end (Unix ms, exclusive). */
+    end_mills?: number;
+    /** Duration of insulin action (hours). */
+    dia?: number;
+    /** Scheduled basal rate (U/hr). */
+    basal?: number;
+    /** Insulin sensitivity (mg/dL per U). */
+    sens?: number;
+    /** Carb ratio (g/U). */
+    carb_ratio?: number;
+    /** Low BG target (mg/dL). */
+    min_bg?: number;
+    /** High BG target (mg/dL). */
+    max_bg?: number;
+    /** Insulin activity peak (minutes). */
+    peak?: number;
+    /** Insulin activity curve model name (e.g. "rapid-acting"). */
+    curve?: string;
+}
+
 /** Response for single point retrospective data */
 export interface RetrospectiveDataResponse {
     time?: number;
@@ -32469,6 +34498,77 @@ export interface BasalDataPoint {
     timeLabel?: string | undefined;
     rate?: number;
     isTemp?: boolean;
+}
+
+export interface SensorIntegrityReport {
+    from?: Date;
+    to?: Date;
+    source?: string | undefined;
+    clusters?: GlucoseCluster[];
+    hypoEvents?: SensorIntegrityHypoEvent[];
+    summary?: SensorIntegritySummary;
+    perSource?: SensorIntegritySourceMetrics[] | undefined;
+}
+
+export interface GlucoseCluster {
+    start?: Date;
+    end?: Date;
+    minMgdl?: number;
+    maxMgdl?: number;
+    durationMinutes?: number;
+    confidence?: ClusterConfidence;
+    diagnostics?: ClusterDiagnostics;
+}
+
+export enum ClusterConfidence {
+    Low = "Low",
+    Medium = "Medium",
+    High = "High",
+}
+
+export interface ClusterDiagnostics {
+    samplingIntervalMinutes?: number;
+    windowPoints?: number;
+    peakReversals?: number;
+    peakIncoherenceRatio?: number;
+    amplitude?: number;
+    maxStep?: number;
+    spikePromoted?: boolean;
+    chainSize?: number;
+    chainPromoted?: boolean;
+}
+
+export interface SensorIntegrityHypoEvent {
+    event?: HypoEvent;
+    isNocturnal?: boolean;
+}
+
+export interface HypoEvent {
+    cluster?: GlucoseCluster;
+    nadirMgdl?: number;
+    nadirTime?: Date;
+    timeToNadirHours?: number;
+    readingsBelowThreshold?: number;
+    insulinDuringCluster?: InsulinDose[];
+}
+
+export interface InsulinDose {
+    time?: Date;
+    units?: number;
+}
+
+export interface SensorIntegritySummary {
+    days?: number;
+    clusters?: number;
+    mediumClusters?: number;
+    highClusters?: number;
+    events?: number;
+    nocturnalEvents?: number;
+}
+
+export interface SensorIntegritySourceMetrics {
+    source?: string;
+    summary?: SensorIntegritySummary;
 }
 
 export interface PaginatedResponseOfStateSpan {
@@ -33018,6 +35118,11 @@ export interface ExtendedGlucoseAnalyticsRequest {
     population?: DiabetesPopulation;
     /** Optional extended analysis configuration */
     config?: ExtendedAnalysisConfig | undefined;
+}
+
+export interface ReportAnalysisResult {
+    analysis?: ExtendedGlucoseAnalytics;
+    averagedStats?: AveragedStats[];
 }
 
 /** Request model for clinical assessment */
@@ -33618,6 +35723,10 @@ export interface SessionInfo {
     preferredLanguage?: string | undefined;
     /** Whether this subject has platform-level admin access */
     isPlatformAdmin?: boolean;
+    /** Whether this session is a short-lived platform-admin access grant on a tenant the
+subject is NOT a member of (as opposed to ordinary membership). Authoritative signal
+for the "platform admin access" indicator in the UI. */
+    isPlatformAccessGrant?: boolean;
     /** URL to the subject's avatar image */
     avatarUrl?: string | undefined;
 }
@@ -33711,27 +35820,6 @@ export interface AuthStatusResponse {
     onboardingCompleted?: boolean;
 }
 
-/** Request for initial setup registration options (first user creation) */
-export interface SetupOptionsRequest {
-    username?: string;
-    displayName?: string;
-}
-
-/** Response for completed setup registration */
-export interface SetupCompleteResponse {
-    success?: boolean;
-    recoveryCodes?: string[];
-    accessToken?: string;
-    refreshToken?: string | undefined;
-    expiresIn?: number;
-}
-
-/** Request to complete initial setup registration */
-export interface SetupCompleteRequest {
-    attestationResponseJson?: string;
-    challengeToken?: string;
-}
-
 export interface AccessRequestOptionsRequest {
     displayName?: string;
     message?: string | undefined;
@@ -33746,6 +35834,15 @@ export interface InviteOptionsRequest {
     token?: string;
     username?: string;
     displayName?: string;
+}
+
+/** Response for a completed passkey registration that issues a session (recovery codes plus session tokens). */
+export interface PasskeyRegistrationResponse {
+    success?: boolean;
+    recoveryCodes?: string[];
+    accessToken?: string;
+    refreshToken?: string | undefined;
+    expiresIn?: number;
 }
 
 export interface InviteCompleteRequest {

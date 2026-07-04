@@ -19,12 +19,20 @@
     AlertTriangle,
     Info,
     X,
+    Plus,
+    ShieldCheck,
   } from "lucide-svelte";
+  import { Debounced } from "runed";
   import * as Alert from "$lib/components/ui/alert";
   import * as tenantRemote from "$api/generated/tenants.generated.remote";
-  import type { TenantDetailDto } from "$api";
+  import {
+    createTenant,
+    validateSlug,
+  } from "$api/generated/myTenants.generated.remote";
+  import * as adminSubjectsRemote from "../admin-subjects.remote";
+  import type { TenantDetailDto, TenantMemberDto } from "$api";
   import { getCurrentTenantId } from "../../current-tenant.remote";
-  import { getTransitionStatus } from "../../../tenants/transition-status.remote";
+  import { getTransitionStatus } from "$api/generated/platforms.generated.remote";
 
   const tenantIdQuery = getCurrentTenantId();
   const currentTenantId = $derived(tenantIdQuery.current ?? undefined);
@@ -69,7 +77,7 @@
     loading = true;
     loadError = null;
     try {
-      tenant = await tenantRemote.getById(currentTenantId);
+      tenant = await tenantRemote.getById(currentTenantId).run();
     } catch {
       loadError = "Failed to load tenant details.";
     } finally {
@@ -78,8 +86,9 @@
   }
 
   $effect(() => {
+    // `.run()` rejects during the render/effect flush, so defer out of it.
     if (currentTenantId) {
-      loadTenant();
+      queueMicrotask(loadTenant);
     }
   });
 
@@ -106,18 +115,156 @@
       editSaving = false;
     }
   }
+
+  // Platform-admin management (relocated here from the admin Users tab). Platform admin is a
+  // global, instance-wide capability granted per subject; here it's managed among this tenant's
+  // members.
+  let platformAdminError = $state<string | null>(null);
+  let platformAdminSavingId = $state<string | null>(null);
+
+  // Real members only — the Public/system subject can't be a platform admin.
+  const manageableMembers = $derived(
+    (tenant?.members ?? []).filter((m) => !m.isSystemSubject),
+  );
+
+  async function togglePlatformAdmin(member: TenantMemberDto) {
+    if (!member.subjectId || !tenant) return;
+    platformAdminError = null;
+    platformAdminSavingId = member.subjectId;
+    const next = !member.isPlatformAdmin;
+    try {
+      await adminSubjectsRemote.setPlatformAdmin({
+        subjectId: member.subjectId,
+        isPlatformAdmin: next,
+      });
+      tenant = {
+        ...tenant,
+        members: (tenant.members ?? []).map((m) =>
+          m.subjectId === member.subjectId ? { ...m, isPlatformAdmin: next } : m,
+        ),
+      };
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : String(err);
+      platformAdminError = message.includes("last_platform_admin")
+        ? "Cannot demote the last platform admin. Promote another user first."
+        : "Failed to update platform admin status.";
+    } finally {
+      platformAdminSavingId = null;
+    }
+  }
+
+  // Create-tenant dialog. Tenant creation is a platform-admin action; the backend
+  // additionally honors OperatorConfiguration.AllowSelfServiceCreation.
+  let isCreateDialogOpen = $state(false);
+  let createdSlug = $state<string | null>(null);
+  let slug = $state("");
+  let displayName = $state("");
+  let creating = $state(false);
+  let slugError = $state<string | null>(null);
+  let slugValid = $state(false);
+  let validating = $state(false);
+  let createError = $state<string | null>(null);
+
+  const normalizedSlug = $derived(slug.trim().toLowerCase());
+  const debouncedSlug = new Debounced(() => normalizedSlug, 400);
+
+  $effect(() => {
+    const value = normalizedSlug;
+
+    slugError = null;
+    slugValid = false;
+
+    if (!value) return;
+    if (value.length < 3) {
+      slugError = "Slug must be at least 3 characters";
+      return;
+    }
+
+    if (debouncedSlug.current !== value) {
+      validating = true;
+      return;
+    }
+
+    const result = validateSlug({ slug: value });
+
+    // loading=true: fetch in progress; !current: result not yet populated
+    if (result.loading || !result.current) {
+      validating = true;
+      return;
+    }
+
+    validating = false;
+
+    if (result.error) {
+      slugError = "Could not validate slug";
+      return;
+    }
+
+    if (result.current.isValid) {
+      slugValid = true;
+    } else {
+      slugError = result.current.message ?? "Invalid slug";
+    }
+  });
+
+  function openCreateDialog() {
+    slug = "";
+    displayName = "";
+    slugError = null;
+    slugValid = false;
+    createError = null;
+    createdSlug = null;
+    isCreateDialogOpen = true;
+  }
+
+  async function handleCreate() {
+    if (!slugValid || !displayName.trim()) return;
+    creating = true;
+    createError = null;
+    try {
+      await createTenant({
+        slug: normalizedSlug,
+        displayName: displayName.trim(),
+      });
+      createdSlug = normalizedSlug;
+      isCreateDialogOpen = false;
+    } catch (err) {
+      createError =
+        (err as Error)?.message ?? "Failed to create tenant. Please try again.";
+    } finally {
+      creating = false;
+    }
+  }
 </script>
 
-<div class="container mx-auto max-w-4xl p-6 space-y-6">
-  <div class="flex items-center gap-3">
-    <Building2 class="h-8 w-8 text-primary" />
-    <div>
-      <h1 class="text-2xl font-bold">Tenant Management</h1>
-      <p class="text-muted-foreground">
-        Manage the current tenant's details and members
-      </p>
+<div class="@container container mx-auto max-w-4xl p-3 @md:p-6 space-y-6">
+  <div class="flex items-center justify-between gap-3">
+    <div class="flex items-center gap-3">
+      <Building2 class="h-8 w-8 text-primary" />
+      <div>
+        <h1 class="text-2xl font-bold">Tenant Management</h1>
+        <p class="text-muted-foreground">
+          Manage the current tenant's details and members
+        </p>
+      </div>
     </div>
+    <Button onclick={openCreateDialog}>
+      <Plus class="mr-2 h-4 w-4" />
+      Create tenant
+    </Button>
   </div>
+
+  {#if createdSlug}
+    <Alert.Root>
+      <Info class="h-4 w-4" />
+      <Alert.Title>Tenant created</Alert.Title>
+      <Alert.Description>
+        <code class="rounded bg-muted px-1 py-0.5 font-mono text-xs"
+          >{createdSlug}</code
+        > is ready. Switch to it from the tenant selector in the sidebar.
+      </Alert.Description>
+    </Alert.Root>
+  {/if}
 
   {#if showBanner}
     <Alert.Root>
@@ -190,6 +337,61 @@
         </div>
       </CardContent>
     </Card>
+
+    <Card>
+      <CardHeader>
+        <CardTitle class="flex items-center gap-2">
+          <ShieldCheck class="h-5 w-5" />
+          Platform Administrators
+        </CardTitle>
+        <CardDescription>
+          Platform admins can manage every tenant on this instance. Grant or
+          revoke it for members of this tenant.
+        </CardDescription>
+      </CardHeader>
+      <CardContent class="space-y-3">
+        {#if platformAdminError}
+          <Alert.Root variant="destructive">
+            <AlertTriangle class="h-4 w-4" />
+            <Alert.Description>{platformAdminError}</Alert.Description>
+          </Alert.Root>
+        {/if}
+        {#if manageableMembers.length === 0}
+          <p class="text-sm text-muted-foreground">No members to manage.</p>
+        {:else}
+          {#each manageableMembers as member (member.subjectId)}
+            <div
+              class="flex items-center justify-between gap-4 rounded-md border p-3"
+            >
+              <div class="min-w-0">
+                <p class="text-sm font-medium truncate">
+                  {member.name ?? "Unnamed user"}
+                </p>
+                {#if member.isPlatformAdmin}
+                  <Badge variant="default" class="mt-1 text-xs">
+                    <ShieldCheck class="mr-1 h-3 w-3" />
+                    Platform admin
+                  </Badge>
+                {/if}
+              </div>
+              <div class="flex items-center gap-2 shrink-0">
+                {#if platformAdminSavingId === member.subjectId}
+                  <Loader2 class="h-4 w-4 animate-spin text-muted-foreground" />
+                {/if}
+                <Switch
+                  checked={member.isPlatformAdmin}
+                  disabled={platformAdminSavingId === member.subjectId}
+                  onCheckedChange={() => togglePlatformAdmin(member)}
+                  aria-label={member.isPlatformAdmin
+                    ? `Revoke platform admin from ${member.name}`
+                    : `Grant platform admin to ${member.name}`}
+                />
+              </div>
+            </div>
+          {/each}
+        {/if}
+      </CardContent>
+    </Card>
   {/if}
 </div>
 
@@ -228,6 +430,68 @@
           <Loader2 class="mr-2 h-4 w-4 animate-spin" />
         {/if}
         Save
+      </Button>
+    </Dialog.Footer>
+  </Dialog.Content>
+</Dialog.Root>
+
+<!-- Create Tenant Dialog -->
+<Dialog.Root bind:open={isCreateDialogOpen}>
+  <Dialog.Content class="max-w-md">
+    <Dialog.Header>
+      <Dialog.Title>Create new tenant</Dialog.Title>
+      <Dialog.Description>Set up a new Nocturne instance</Dialog.Description>
+    </Dialog.Header>
+    <div class="space-y-4 py-4">
+      {#if createError}
+        <Alert.Root variant="destructive">
+          <AlertTriangle class="h-4 w-4" />
+          <Alert.Description>{createError}</Alert.Description>
+        </Alert.Root>
+      {/if}
+
+      <div class="space-y-2">
+        <Label for="new-slug">Slug</Label>
+        <Input
+          id="new-slug"
+          bind:value={slug}
+          placeholder="my-instance"
+          class="font-mono {slugError
+            ? 'border-destructive'
+            : slugValid
+              ? 'border-green-500'
+              : ''}"
+        />
+        {#if validating}
+          <p class="text-xs text-muted-foreground">Checking availability...</p>
+        {:else if slugError}
+          <p class="text-xs text-destructive">{slugError}</p>
+        {:else if slugValid}
+          <p class="text-xs text-green-600">Available</p>
+        {/if}
+      </div>
+
+      <div class="space-y-2">
+        <Label for="new-display-name">Display name</Label>
+        <Input
+          id="new-display-name"
+          bind:value={displayName}
+          placeholder="My Nocturne Instance"
+        />
+      </div>
+    </div>
+    <Dialog.Footer>
+      <Button variant="outline" onclick={() => (isCreateDialogOpen = false)}>
+        Cancel
+      </Button>
+      <Button
+        onclick={handleCreate}
+        disabled={creating || !slugValid || !displayName.trim()}
+      >
+        {#if creating}
+          <Loader2 class="mr-2 h-4 w-4 animate-spin" />
+        {/if}
+        Create tenant
       </Button>
     </Dialog.Footer>
   </Dialog.Content>

@@ -2,11 +2,13 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Nocturne.API.Controllers.V4.Base;
 using Nocturne.API.Models.Requests.V4;
+using Nocturne.API.Services.Glucose;
 using Nocturne.API.Services.V4;
 using Nocturne.Core.Contracts.Alerts;
 using Nocturne.Core.Contracts.V4.Repositories;
 using Nocturne.Core.Models;
 using Nocturne.Core.Models.V4;
+using Nocturne.Core.Contracts.V4;
 
 namespace Nocturne.API.Controllers.V4.Glucose;
 
@@ -50,7 +52,7 @@ public class SensorGlucoseController(
 
         await glucoseResolver.ResolveAsync(model, request.GlucoseProcessing, request.SmoothedMgdl, request.UnsmoothedMgdl, ct);
 
-        var created = await Repository.CreateAsync(model, ct);
+        var created = await Repository.CreateAsync(model, WriteOrigin.Live, ct);
         created = await OnAfterCreateAsync(created, ct);
         return CreatedAtAction(nameof(GetById), new { id = created.Id }, created);
     }
@@ -107,7 +109,8 @@ public class SensorGlucoseController(
 
         try
         {
-            var updated = await Repository.UpdateAsync(id, model, ct);
+            var updated = await Repository.UpdateAsync(id, model, WriteOrigin.Live, ct);
+
             return Ok(updated);
         }
         catch (KeyNotFoundException)
@@ -137,7 +140,7 @@ public class SensorGlucoseController(
         for (var i = 0; i < models.Count; i++)
             await glucoseResolver.ResolveAsync(models[i], requests[i].GlucoseProcessing, requests[i].SmoothedMgdl, requests[i].UnsmoothedMgdl, ct);
 
-        var created = await Repository.BulkCreateAsync(models, ct);
+        var created = await Repository.BulkCreateAsync(models, WriteOrigin.Live, ct);
         var createdArray = created.ToArray();
 
         // Evaluate alerts for the most recent reading only (not every historical reading during backfill)

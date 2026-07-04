@@ -8,6 +8,7 @@ using Nocturne.Core.Contracts.V4.Repositories;
 using Nocturne.Core.Models;
 using Nocturne.Core.Models.V4;
 using Nocturne.Core.Contracts.Repositories;
+using Nocturne.Core.Contracts.V4;
 
 namespace Nocturne.API.Services.ConnectorPublishing;
 
@@ -52,7 +53,7 @@ internal sealed class MetadataPublisher : IMetadataPublisher
     public async Task<bool> PublishProfilesAsync(
         IEnumerable<Profile> profiles,
         string source,
-        CancellationToken cancellationToken = default)
+        WriteOrigin origin, CancellationToken cancellationToken = default)
     {
         try
         {
@@ -70,7 +71,7 @@ internal sealed class MetadataPublisher : IMetadataPublisher
     public async Task<bool> PublishFoodAsync(
         IEnumerable<Food> foods,
         string source,
-        CancellationToken cancellationToken = default)
+        WriteOrigin origin, CancellationToken cancellationToken = default)
     {
         try
         {
@@ -88,7 +89,7 @@ internal sealed class MetadataPublisher : IMetadataPublisher
     public async Task<IReadOnlyList<ConnectorFoodEntry>?> PublishConnectorFoodEntriesAsync(
         IEnumerable<ConnectorFoodEntryImport> entries,
         string source,
-        CancellationToken cancellationToken = default)
+        WriteOrigin origin, CancellationToken cancellationToken = default)
     {
         try
         {
@@ -108,7 +109,7 @@ internal sealed class MetadataPublisher : IMetadataPublisher
     public async Task<bool> PublishActivityAsync(
         IEnumerable<Activity> activities,
         string source,
-        CancellationToken cancellationToken = default)
+        WriteOrigin origin, CancellationToken cancellationToken = default)
     {
         try
         {
@@ -126,7 +127,7 @@ internal sealed class MetadataPublisher : IMetadataPublisher
     public async Task<bool> PublishStateSpansAsync(
         IEnumerable<StateSpan> stateSpans,
         string source,
-        CancellationToken cancellationToken = default)
+        WriteOrigin origin, CancellationToken cancellationToken = default)
     {
         try
         {
@@ -147,7 +148,7 @@ internal sealed class MetadataPublisher : IMetadataPublisher
     public async Task<bool> PublishSystemEventsAsync(
         IEnumerable<SystemEvent> systemEvents,
         string source,
-        CancellationToken cancellationToken = default)
+        WriteOrigin origin, CancellationToken cancellationToken = default)
     {
         try
         {
@@ -165,14 +166,14 @@ internal sealed class MetadataPublisher : IMetadataPublisher
     public async Task<bool> PublishNotesAsync(
         IEnumerable<Note> records,
         string source,
-        CancellationToken cancellationToken = default)
+        WriteOrigin origin, CancellationToken cancellationToken = default)
     {
         try
         {
             var recordList = records.ToList();
             if (recordList.Count == 0) return true;
 
-            await _noteRepository.BulkCreateAsync(recordList, cancellationToken);
+            await _noteRepository.BulkCreateAsync(recordList, origin, cancellationToken);
             _logger.LogDebug("Published {Count} Note records for {Source}", recordList.Count, source);
             return true;
         }
@@ -182,5 +183,36 @@ internal sealed class MetadataPublisher : IMetadataPublisher
             _logger.LogError(ex, "Failed to publish Note records for {Source}", source);
             return false;
         }
+    }
+
+    /// <summary>
+    /// Returns the timestamp of the most recent activity record for the current tenant,
+    /// or <c>null</c> if none exist. Activities are stored across decomposed sources (StateSpans,
+    /// HeartRate, StepCount); <see cref="IActivityService.GetActivitiesAsync"/> merges them and
+    /// orders newest-first, so requesting a single record yields the global latest. Like
+    /// <see cref="ITreatmentPublisher.GetLatestTreatmentTimestampAsync"/>, this is not source-filtered.
+    /// </summary>
+    public async Task<DateTime?> GetLatestActivityTimestampAsync(
+        string source,
+        CancellationToken cancellationToken = default)
+    {
+        // TODO: Filter by source to support multi-connector catch-up. Currently returns global latest.
+        var latest = (await _activityService.GetActivitiesAsync(
+                count: 1,
+                skip: 0,
+                cancellationToken: cancellationToken))
+            .FirstOrDefault();
+
+        if (latest == null)
+            return null;
+
+        if (!string.IsNullOrEmpty(latest.CreatedAt)
+            && DateTime.TryParse(latest.CreatedAt, out var createdAt))
+            return createdAt;
+
+        if (latest.Mills > 0)
+            return DateTimeOffset.FromUnixTimeMilliseconds(latest.Mills).UtcDateTime;
+
+        return null;
     }
 }

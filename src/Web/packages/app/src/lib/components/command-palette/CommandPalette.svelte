@@ -40,7 +40,9 @@
 
   const visibleItems = $derived(
     items.filter(
-      (item) => !item.permission || authStore.hasPermission(item.permission)
+      (item) =>
+        (!item.permission || authStore.hasPermission(item.permission)) &&
+        (!item.role || authStore.hasRole(item.role))
     )
   );
 
@@ -76,11 +78,13 @@
       (groups[item.group] ??= []).push(item);
     }
 
-    const sorted = Object.entries(groups).sort(
-      ([a], [b]) =>
-        groupMeta[a as CommandPaletteGroup].order -
-        groupMeta[b as CommandPaletteGroup].order
-    ) as [CommandPaletteGroup, CommandPaletteItem[]][];
+    const entries = Object.entries(groups) as [
+      CommandPaletteGroup,
+      CommandPaletteItem[],
+    ][];
+    const sorted = entries.sort(
+      ([a], [b]) => groupMeta[a].order - groupMeta[b].order
+    );
 
     return sorted;
   });

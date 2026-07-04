@@ -237,21 +237,32 @@
     if (finishIdx >= 0) stepIndex = finishIdx;
   }
 
+  // The Nightscout history import is started from the saved connector. It lives here (a
+  // deliberate action after the user connects their source) rather than auto-firing inside the
+  // progress view, so it runs in the onboarding tenant's own request context.
+  const MIGRATION_CONNECTOR = "nightscout";
+
   async function handleMigrationConnected() {
-    // Check for an active migration job started by the connector
+    // Start the import explicitly now that the user has connected their source. Reuse an
+    // already-running or already-completed job if one exists (e.g. the user navigated back),
+    // so re-entering this step never kicks off a duplicate migration.
     try {
-      const history = await migrationRemote.getHistory();
-      const activeJob = history?.find(
+      const history = await migrationRemote.getHistory().run();
+      const existing = history?.find(
         (j) =>
           j.state === MigrationJobState.Running ||
           j.state === MigrationJobState.Pending ||
-          j.state === MigrationJobState.Validating
+          j.state === MigrationJobState.Validating ||
+          j.state === MigrationJobState.Completed
       );
-      if (activeJob?.id) {
-        migrationJobId = activeJob.id;
+      if (existing?.id) {
+        migrationJobId = existing.id;
+      } else {
+        const job = await migrationRemote.startFromConnector(MIGRATION_CONNECTOR);
+        if (job?.id) migrationJobId = job.id;
       }
     } catch {
-      // ImportProgress will find the job itself if we can't here
+      // Leave migrationJobId unset; the import step shows a neutral state if no job exists.
     }
     handleNext();
   }
@@ -267,8 +278,11 @@
   <title>Get Started - Nocturne</title>
 </svelte:head>
 
+<!-- The onboarding surface is always dark by design. Force a `dark` theme context so
+     shadcn children (inputs, recovery-code chips, buttons) render with dark tokens even
+     when the user's system theme — applied by ModeWatcher on <html> — is light. -->
 <div
-  class="relative min-h-screen grid grid-rows-[auto_1fr_auto] text-white"
+  class="dark relative min-h-screen grid grid-rows-[auto_1fr_auto] text-white"
   style="{styleVars}; background: var(--onb-navy);"
 >
   <!-- Background gradient -->

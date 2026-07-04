@@ -323,6 +323,57 @@ public class StatisticsController : ControllerBase
     }
 
     /// <summary>
+    /// Extended glucose analytics for a date range, computed server-side. Fetches glucose,
+    /// manual boluses, and carb intakes for the window from the database and runs
+    /// <see cref="IStatisticsService.AnalyzeGlucoseDataExtended"/> plus
+    /// <see cref="IStatisticsService.CalculateAveragedStats"/>.
+    /// </summary>
+    /// <param name="startDate">Start of the window (inclusive, UTC).</param>
+    /// <param name="endDate">End of the window (exclusive, UTC).</param>
+    /// <param name="population">Diabetes population for clinical target assessment. Defaults to Type 1 adult.</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>The extended analytics and time-of-day averaged stats for the window.</returns>
+    [HttpGet("range-analytics")]
+    [RemoteQuery]
+    [ResponseCache(Duration = 60, VaryByQueryKeys = new[] { "*" })]
+    public async Task<ActionResult<ReportAnalysisResult>> GetRangeAnalytics(
+        [FromQuery] DateTime startDate,
+        [FromQuery] DateTime endDate,
+        [FromQuery] DiabetesPopulation population = DiabetesPopulation.Type1Adult,
+        CancellationToken cancellationToken = default
+    )
+    {
+        try
+        {
+            var startDt = DateTime.SpecifyKind(startDate, DateTimeKind.Utc);
+            var endDt = DateTime.SpecifyKind(endDate, DateTimeKind.Utc);
+
+            // int.MaxValue limit mirrors ActogramReportService so dense tenants are never
+            // silently truncated (the cause of skewed report stats on high-frequency uploads).
+            var glucoseTask = _sensorGlucoseRepository.GetAsync(startDt, endDt, null, null, int.MaxValue, descending: false, ct: cancellationToken);
+            var bolusTask   = _bolusRepository.GetAsync(startDt, endDt, null, null, int.MaxValue, descending: false, kind: BolusKind.Manual, ct: cancellationToken);
+            var carbTask    = _carbIntakeRepository.GetAsync(startDt, endDt, null, null, int.MaxValue, descending: false, ct: cancellationToken);
+
+            await Task.WhenAll(glucoseTask, bolusTask, carbTask);
+
+            var entries = (await glucoseTask).ToList();
+            var boluses = await bolusTask;
+            var carbs   = await carbTask;
+
+            var result = new ReportAnalysisResult
+            {
+                Analysis = _statisticsService.AnalyzeGlucoseDataExtended(entries, boluses, carbs, population),
+                AveragedStats = _statisticsService.CalculateAveragedStats(entries).ToList(),
+            };
+            return Ok(result);
+        }
+        catch (Exception ex)
+        {
+            return BadRequest(new { error = ex.Message });
+        }
+    }
+
+    /// <summary>
     /// Calculate Glucose Management Indicator (GMI)
     /// </summary>
     /// <param name="meanGlucose">Mean glucose in mg/dL</param>
@@ -616,9 +667,9 @@ public class StatisticsController : ControllerBase
                 var startTimestamp = startDate;
                 var endTimestamp = endDate;
 
-                var glucoseTask = _sensorGlucoseRepository.GetAsync(from: (DateTime?)startTimestamp, to: (DateTime?)endTimestamp, device: null, source: null, limit: 10000, descending: false, ct: cancellationToken);
-                var bolusTask   = _bolusRepository.GetAsync(from: (DateTime?)startTimestamp, to: (DateTime?)endTimestamp, device: null, source: null, limit: 10000, descending: false, kind: BolusKind.Manual, ct: cancellationToken);
-                var carbTask    = _carbIntakeRepository.GetAsync(from: (DateTime?)startTimestamp, to: (DateTime?)endTimestamp, device: null, source: null, limit: 10000, descending: false, ct: cancellationToken);
+                var glucoseTask = _sensorGlucoseRepository.GetAsync(from: (DateTime?)startTimestamp, to: (DateTime?)endTimestamp, device: null, source: null, limit: int.MaxValue, descending: false, ct: cancellationToken);
+                var bolusTask   = _bolusRepository.GetAsync(from: (DateTime?)startTimestamp, to: (DateTime?)endTimestamp, device: null, source: null, limit: int.MaxValue, descending: false, kind: BolusKind.Manual, ct: cancellationToken);
+                var carbTask    = _carbIntakeRepository.GetAsync(from: (DateTime?)startTimestamp, to: (DateTime?)endTimestamp, device: null, source: null, limit: int.MaxValue, descending: false, ct: cancellationToken);
 
                 await Task.WhenAll(glucoseTask, bolusTask, carbTask);
 
@@ -647,8 +698,8 @@ public class StatisticsController : ControllerBase
 
                     // Fetch TempBasals and algorithm boluses for basal data
                     // Deduplicate by 30s window + rate to eliminate duplicates from multiple connectors
-                    var tempBasalTask = _tempBasalRepository.GetAsync(from: startTimestamp, to: endTimestamp, device: null, source: null, limit: 10000, descending: false, ct: cancellationToken);
-                    var algoTask      = _bolusRepository.GetAsync(from: startTimestamp, to: endTimestamp, device: null, source: null, limit: 10000, descending: false, kind: BolusKind.Algorithm, ct: cancellationToken);
+                    var tempBasalTask = _tempBasalRepository.GetAsync(from: startTimestamp, to: endTimestamp, device: null, source: null, limit: int.MaxValue, descending: false, ct: cancellationToken);
+                    var algoTask      = _bolusRepository.GetAsync(from: startTimestamp, to: endTimestamp, device: null, source: null, limit: int.MaxValue, descending: false, kind: BolusKind.Algorithm, ct: cancellationToken);
 
                     await Task.WhenAll(tempBasalTask, algoTask);
 
@@ -887,9 +938,15 @@ public class StatisticsController : ControllerBase
     {
         try
         {
-            // Normalise to UTC day boundaries.
-            var startDt = DateTime.SpecifyKind(startDate.Date, DateTimeKind.Utc);
-            var endDt = DateTime.SpecifyKind(endDate.Date, DateTimeKind.Utc).AddDays(1).AddTicks(-1);
+            var tzId = await _therapySettingsResolver.GetTimezoneAsync(ct: cancellationToken);
+            var tz = !string.IsNullOrEmpty(tzId)
+                ? TimeZoneHelper.GetTimeZoneInfoFromId(tzId)
+                : TimeZoneInfo.Utc;
+
+            var startLocalDate = DateTime.SpecifyKind(startDate.Date, DateTimeKind.Unspecified);
+            var endLocalDate = DateTime.SpecifyKind(endDate.Date, DateTimeKind.Unspecified);
+            var startDt = TimeZoneInfo.ConvertTimeToUtc(startLocalDate, tz);
+            var endDt = TimeZoneInfo.ConvertTimeToUtc(endLocalDate.AddDays(1).AddTicks(-1), tz);
 
             var glucoseTask   = _sensorGlucoseRepository.GetAsync(startDt, endDt, null, null, 100_000, descending: false, ct: cancellationToken);
             var bolusTask     = _bolusRepository.GetAsync(startDt, endDt, null, null, 10_000, descending: false, kind: BolusKind.Manual, ct: cancellationToken);
@@ -907,11 +964,6 @@ public class StatisticsController : ControllerBase
 
             // Daily basal totals come from the existing service path so the calendar's "totalBasal"
             // matches what /daily-basal-bolus-ratios would return for the same window.
-            var tzId = await _therapySettingsResolver.GetTimezoneAsync(ct: cancellationToken);
-            var tz = !string.IsNullOrEmpty(tzId)
-                ? TimeZoneHelper.GetTimeZoneInfoFromId(tzId)
-                : TimeZoneInfo.Utc;
-
             var dailyBasalBolus = _statisticsService.CalculateDailyBasalBolusRatios(
                 manualBoluses, algorithmBoluses, tempBasals, tz);
             var dailyBasalMap = new Dictionary<string, double>(StringComparer.Ordinal);
@@ -928,7 +980,7 @@ public class StatisticsController : ControllerBase
                 "July", "August", "September", "October", "November", "December"
             ];
 
-            for (var day = startDt.Date; day <= endDt.Date; day = day.AddDays(1))
+            for (var day = startLocalDate.Date; day <= endLocalDate.Date; day = day.AddDays(1))
             {
                 cancellationToken.ThrowIfCancellationRequested();
 
@@ -944,8 +996,10 @@ public class StatisticsController : ControllerBase
                     monthsMap[monthKey] = monthBucket;
                 }
 
-                var dayStartUtc = DateTime.SpecifyKind(day, DateTimeKind.Utc);
-                var dayEndUtc = dayStartUtc.AddDays(1).AddTicks(-1);
+                var dayStartLocal = DateTime.SpecifyKind(day, DateTimeKind.Unspecified);
+                var dayEndLocal = dayStartLocal.AddDays(1).AddTicks(-1);
+                var dayStartUtc = TimeZoneInfo.ConvertTimeToUtc(dayStartLocal, tz);
+                var dayEndUtc = TimeZoneInfo.ConvertTimeToUtc(dayEndLocal, tz);
                 var dayStartMs = new DateTimeOffset(dayStartUtc, TimeSpan.Zero).ToUnixTimeMilliseconds();
                 var dayEndMs = new DateTimeOffset(dayEndUtc, TimeSpan.Zero).ToUnixTimeMilliseconds();
 

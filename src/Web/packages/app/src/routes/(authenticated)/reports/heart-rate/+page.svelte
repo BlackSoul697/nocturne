@@ -111,17 +111,17 @@
 
 {#await actogramResource then actogramData}
   {#if actogramData}
-  <div class="container mx-auto space-y-6 px-4 py-6 max-w-7xl">
+  <div class="@container container mx-auto space-y-6 p-3 @md:p-6 max-w-7xl">
     <!-- Header -->
     <div>
-      <h1 class="text-3xl font-bold">Heart Rate</h1>
+      <h1 class="text-2xl @md:text-3xl font-bold">Heart Rate</h1>
       <p class="text-muted-foreground">
         Daily heart rate patterns with glucose overlay
       </p>
     </div>
 
     <!-- Summary Cards -->
-    <div class="grid grid-cols-2 sm:grid-cols-4 gap-4">
+    <div class="grid grid-cols-2 @sm:grid-cols-4 gap-4">
       <Card>
         <CardHeader class="pb-2">
           <CardTitle class="text-sm font-medium text-muted-foreground">
@@ -194,7 +194,7 @@
           Heart Rate Actogram
         </CardTitle>
       </CardHeader>
-      <CardContent>
+      <CardContent class="w-full overflow-x-auto print:overflow-visible">
         <Actogram
           data={hrPoints}
           bgData={bgPoints}

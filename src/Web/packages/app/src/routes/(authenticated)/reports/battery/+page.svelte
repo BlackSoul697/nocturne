@@ -128,16 +128,21 @@
 </svelte:head>
 
 {#if batteryResource.current}
-<div class="container mx-auto space-y-6 px-4 py-6">
+<div class="@container container mx-auto space-y-6 p-3 @md:p-6">
   <!-- Header -->
-  <div class="flex items-center justify-between">
+  <div class="flex flex-col gap-3 @lg:flex-row @lg:items-center @lg:justify-between">
     <div>
       <h1 class="text-3xl font-bold">Battery Report</h1>
       <p class="text-muted-foreground">
         Device battery statistics and charge cycle history
       </p>
     </div>
-    <Button variant="outline" size="sm" onclick={fetchData}>
+    <Button
+      variant="outline"
+      size="sm"
+      onclick={fetchData}
+      class="shrink-0 print:hidden"
+    >
       <RefreshCw class="h-4 w-4 mr-2" />
       Refresh
     </Button>
@@ -171,7 +176,7 @@
   {:else}
     <!-- Device Filter (if multiple devices) -->
     {#if allDevices.length > 1}
-      <div class="flex gap-2 flex-wrap">
+      <div class="flex gap-2 flex-wrap print:hidden">
         <Button
           variant={selectedDevice === null ? "default" : "outline"}
           size="sm"
@@ -192,7 +197,7 @@
     {/if}
 
     <!-- Statistics Cards -->
-    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+    <div class="grid grid-cols-1 @xl:grid-cols-2 @4xl:grid-cols-3 gap-4">
       {#each displayedStats as stat}
         {@const StatIcon = getBatteryIconComponent(
           stat?.level,
@@ -386,7 +391,7 @@
           <div class="space-y-3">
             {#each cycles.slice(0, 10) as cycle}
               <div
-                class="flex items-center justify-between p-3 rounded-lg border"
+                class="flex flex-col gap-3 p-3 rounded-lg border @md:flex-row @md:items-center @md:justify-between"
               >
                 <div class="flex items-center gap-3">
                   <div class="flex flex-col items-center">
@@ -414,7 +419,7 @@
                     {/if}
                   </div>
                 </div>
-                <div class="text-right">
+                <div class="text-right @md:shrink-0">
                   {#if cycle.dischargeDurationMinutes}
                     <div class="text-lg font-bold">
                       {formatDuration(cycle.dischargeDurationMinutes)}

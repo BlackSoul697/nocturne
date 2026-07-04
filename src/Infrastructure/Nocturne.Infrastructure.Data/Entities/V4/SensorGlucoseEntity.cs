@@ -10,7 +10,7 @@ namespace Nocturne.Infrastructure.Data.Entities.V4;
 /// Maps to Nocturne.Core.Models.V4.SensorGlucose
 /// </summary>
 [Table("sensor_glucose")]
-public class SensorGlucoseEntity : ITenantScoped, IAuditable, ISoftDeletable
+public class SensorGlucoseEntity : ITenantScoped, IAuditable, ISoftDeletable, IV4TimeSeriesEntity, ISystemTimestamped
 {
     /// <summary>
     /// The unique identifier of the tenant this record belongs to.
@@ -73,8 +73,17 @@ public class SensorGlucoseEntity : ITenantScoped, IAuditable, ISoftDeletable
     /// Original v1/v3 record ID for migration traceability
     /// </summary>
     [Column("legacy_id")]
-    [MaxLength(64)]
+    [MaxLength(255)]
     public string? LegacyId { get; set; }
+
+    /// <summary>
+    /// Stable per-source identifier for synchronization. Unlike <see cref="LegacyId"/> (insert-only),
+    /// a record matched by (DataSource, SyncIdentifier) is updated in place on re-import — required so
+    /// timezone re-correction can move a reading's timestamp without duplicating it.
+    /// </summary>
+    [Column("sync_identifier")]
+    [MaxLength(256)]
+    public string? SyncIdentifier { get; set; }
 
     /// <summary>
     /// System tracking: when record was inserted

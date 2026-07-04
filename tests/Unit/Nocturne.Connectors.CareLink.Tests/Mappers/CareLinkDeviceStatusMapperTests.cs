@@ -27,6 +27,31 @@ public class CareLinkDeviceStatusMapperTests
         CurrentServerTime = new DateTimeOffset(2024, 1, 15, 13, 30, 0, TimeSpan.Zero).ToUnixTimeMilliseconds(),
     };
 
+    [Theory]
+    [InlineData("AUTO_BASAL", "Automatic")]
+    [InlineData("SAFE_BASAL", "Automatic")]
+    [InlineData("MANUAL", "Manual")]
+    [InlineData("SOME_UNKNOWN_STATE", "Manual")]
+    public void Map_SetsPumpMode_FromTherapyAlgorithmShieldState(string shieldState, string expectedMode)
+    {
+        var data = CreatePumpData();
+        data.TherapyAlgorithmState = new CareLinkTherapyAlgorithmState { AutoModeShieldState = shieldState };
+
+        var result = CareLinkDeviceStatusMapper.Map(data);
+
+        result!.Pump!.PumpMode.Should().Be(expectedMode);
+    }
+
+    [Fact]
+    public void Map_LeavesPumpModeNull_WhenNoTherapyAlgorithmState()
+    {
+        var data = CreatePumpData();
+
+        var result = CareLinkDeviceStatusMapper.Map(data);
+
+        result!.Pump!.PumpMode.Should().BeNull();
+    }
+
     [Fact]
     public void Map_NonGuardian_PopulatesPumpStatusWithBatteryReservoirAndIob()
     {
@@ -86,5 +111,98 @@ public class CareLinkDeviceStatusMapperTests
     public void Map_ReturnsNull_WhenDataIsNull()
     {
         CareLinkDeviceStatusMapper.Map(null).Should().BeNull();
+    }
+
+    [Fact]
+    public void Map_NonGuardian_PopulatesPumpModelAndSerialForRegistration()
+    {
+        var data = CreatePumpData();
+        data.PumpModelNumber = "MMT-1885";
+        data.MedicalDeviceSerialNumber = "NG4304436H";
+
+        var result = CareLinkDeviceStatusMapper.Map(data);
+
+        result!.Pump!.Model.Should().Be("MMT-1885");
+        result.Pump.Serial.Should().Be("NG4304436H");
+    }
+
+    [Fact]
+    public void Map_WithSensorType_RegistersCgmWithGuardianModel()
+    {
+        var data = CreatePumpData();
+        data.SensorState = "NO_ERROR_MESSAGE";
+        data.CgmInfo = new CareLinkCgmInfo { SensorType = "DURABLE" };
+
+        var result = CareLinkDeviceStatusMapper.Map(data);
+
+        result!.Cgm.Should().NotBeNull();
+        result.Cgm!.Manufacturer.Should().Be("Medtronic");
+        result.Cgm.Model.Should().Be("Guardian (DURABLE)");
+    }
+
+    [Fact]
+    public void Map_WithSensorStateButNoCgmInfo_RegistersGenericGuardian()
+    {
+        var data = CreatePumpData();
+        data.SensorState = "NO_ERROR_MESSAGE";
+
+        var result = CareLinkDeviceStatusMapper.Map(data);
+
+        result!.Cgm.Should().NotBeNull();
+        result.Cgm!.Model.Should().Be("Guardian");
+    }
+
+    [Fact]
+    public void Map_WithNoSensorPresent_OmitsCgm()
+    {
+        var data = CreatePumpData();
+        data.SensorState = null;
+        data.CgmInfo = null;
+
+        var result = CareLinkDeviceStatusMapper.Map(data);
+
+        result!.Cgm.Should().BeNull();
+    }
+
+    [Fact]
+    public void Map_WithSuspendedFlag_SetsPumpSuspended()
+    {
+        var data = CreatePumpData();
+        data.MedicalDeviceSuspended = true;
+
+        var result = CareLinkDeviceStatusMapper.Map(data);
+
+        result!.Pump!.Status!.Suspended.Should().BeTrue();
+    }
+
+    [Fact]
+    public void Map_WithGstBattery_SetsCgmTransmitterBattery()
+    {
+        var data = CreatePumpData();
+        data.SensorState = "NO_ERROR_MESSAGE";
+        data.GstBatteryLevel = 71;
+
+        var result = CareLinkDeviceStatusMapper.Map(data);
+
+        result!.Cgm!.TransmitterBattery.Should().Be(71);
+    }
+
+    [Fact]
+    public void Map_WithDeviceInformation_PrefersModelNumberAndCapturesFirmware()
+    {
+        var data = CreatePumpData();
+        data.PumpModelNumber = "MMT-1885";
+        data.MedicalDeviceInformation = new CareLinkMedicalDeviceInformation
+        {
+            ModelNumber = "MMT-1885",
+            FirmwareRevision = "18.12.3",
+            HardwareRevision = "A2.01",
+        };
+
+        var result = CareLinkDeviceStatusMapper.Map(data);
+
+        result!.Pump!.Model.Should().Be("MMT-1885");
+        result.Pump.Extended.Should().ContainKey("firmwareRevision");
+        result.Pump.Extended!["firmwareRevision"].Should().Be("18.12.3");
     }
 }

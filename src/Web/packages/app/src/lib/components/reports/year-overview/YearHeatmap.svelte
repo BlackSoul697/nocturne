@@ -6,6 +6,7 @@
   import { fly } from "svelte/transition";
   import { cubicOut } from "svelte/easing";
   import { formatGlucoseValue } from "$lib/utils/formatting";
+  import type { GlucoseUnits } from "$lib/utils/formatting";
   import { getDataTypeLabel } from "$lib/utils/data-type-labels";
 
   let {
@@ -35,7 +36,7 @@
     getWeekColumns: (cells: any[]) => any[];
     navigateToDayInReview: (dateStr: string) => void;
     glucoseColorScale: any;
-    units: string;
+    units: GlucoseUnits;
     unitLabel: string;
     formatUnits: (value: number | null) => string;
     getVisibleCounts: (counts: Record<string, number>) => [string, number][];
@@ -49,6 +50,7 @@
 </script>
 
 <div
+  class="@container"
   in:fly={{
     y: 30,
     duration: 500,
@@ -79,7 +81,7 @@
   <!-- Calendar Heatmap -->
   {#if chartData.length > 0}
     <div
-      class="w-full overflow-x-clip overflow-y-visible rounded-lg border border-border bg-card p-4"
+      class="w-full overflow-x-auto overflow-y-visible rounded-lg border border-border bg-card p-4 print:overflow-visible"
     >
       <div class="min-w-[900px] h-60">
         <Chart

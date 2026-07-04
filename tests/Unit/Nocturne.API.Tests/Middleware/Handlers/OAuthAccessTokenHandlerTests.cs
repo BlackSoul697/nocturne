@@ -1,0 +1,159 @@
+using System.IdentityModel.Tokens.Jwt;
+using System.Security.Claims;
+using System.Text;
+using FluentAssertions;
+using Microsoft.AspNetCore.Http;
+using Microsoft.IdentityModel.Tokens;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging.Abstractions;
+using Microsoft.Extensions.Options;
+using Moq;
+using Nocturne.API.Middleware.Handlers;
+using Nocturne.API.Services.Auth;
+using Nocturne.Core.Contracts.Auth;
+using Nocturne.Core.Contracts.Multitenancy;
+using Nocturne.Core.Models.Authorization;
+using Nocturne.Core.Models.Configuration;
+using Xunit;
+
+namespace Nocturne.API.Tests.Middleware.Handlers;
+
+/// <summary>
+/// Verifies that a scoped, tenant-pinned access token from <see cref="JwtService"/> — the shape
+/// the CareLink desktop link code carries — authenticates as a Bearer token on the issuing
+/// tenant, and only there. The desktop companion relies on this path instead of a dedicated
+/// auth scheme.
+/// </summary>
+public class OAuthAccessTokenHandlerTests
+{
+    private const string SecretKey = "oauth-handler-test-secret-key-32+chars";
+
+    private readonly Guid _tenantId = Guid.CreateVersion7();
+    private readonly Guid _subjectId = Guid.CreateVersion7();
+
+    private readonly IJwtService _jwt;
+    private readonly OAuthAccessTokenHandler _handler;
+
+    public OAuthAccessTokenHandlerTests()
+    {
+        _jwt = new JwtService(
+            Options.Create(new JwtOptions
+            {
+                SecretKey = SecretKey,
+                Issuer = "nocturne",
+                Audience = "nocturne-api",
+                AccessTokenLifetimeMinutes = 15,
+            }),
+            NullLogger<JwtService>.Instance);
+
+        var revocationCache = new Mock<IOAuthTokenRevocationCache>();
+        revocationCache
+            .Setup(c => c.IsRevokedAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(false);
+
+        var services = new ServiceCollection();
+        services.AddSingleton(_jwt);
+        services.AddSingleton(revocationCache.Object);
+        var scopeFactory = services.BuildServiceProvider().GetRequiredService<IServiceScopeFactory>();
+
+        _handler = new OAuthAccessTokenHandler(scopeFactory, NullLogger<OAuthAccessTokenHandler>.Instance);
+    }
+
+    private string MintDesktopStyleToken() =>
+        _jwt.GenerateAccessToken(
+            new SubjectInfo { Id = _subjectId, Name = "Acme User" },
+            permissions: [],
+            roles: [],
+            scopes: ["connectors:carelink:connect"],
+            tenantId: _tenantId,
+            lifetime: TimeSpan.FromMinutes(10));
+
+    /// <summary>JwtService refuses to mint already-expired tokens, so build one by hand.</summary>
+    private string MintExpiredToken()
+    {
+        var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(SecretKey));
+        var token = new JwtSecurityToken(
+            issuer: "nocturne",
+            audience: "nocturne-api",
+            claims:
+            [
+                new Claim(JwtRegisteredClaimNames.Sub, _subjectId.ToString()),
+                new Claim("scope", "connectors:carelink:connect"),
+            ],
+            notBefore: DateTime.UtcNow.AddMinutes(-20),
+            expires: DateTime.UtcNow.AddMinutes(-10),
+            signingCredentials: new SigningCredentials(key, SecurityAlgorithms.HmacSha256));
+        return new JwtSecurityTokenHandler().WriteToken(token);
+    }
+
+    private static DefaultHttpContext Request(string token, TenantContext? tenant)
+    {
+        var context = new DefaultHttpContext();
+        context.Request.Headers.Authorization = $"Bearer {token}";
+        if (tenant != null)
+        {
+            context.Items["TenantContext"] = tenant;
+        }
+        return context;
+    }
+
+    private TenantContext Tenant(Guid? id = null) =>
+        new(id ?? _tenantId, "acme", "Acme", IsActive: true);
+
+    [Fact]
+    public async Task Accepts_a_scoped_tenant_pinned_token_on_the_issuing_tenant()
+    {
+        var context = Request(MintDesktopStyleToken(), Tenant());
+
+        var result = await _handler.AuthenticateAsync(context);
+
+        result.Succeeded.Should().BeTrue(result.Error);
+        result.AuthContext!.AuthType.Should().Be(AuthType.OAuthAccessToken);
+        result.AuthContext.SubjectId.Should().Be(_subjectId);
+        result.AuthContext.Scopes.Should().BeEquivalentTo(["connectors:carelink:connect"]);
+        result.AuthContext.Permissions.Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task Rejects_the_token_on_a_different_tenant()
+    {
+        var context = Request(MintDesktopStyleToken(), Tenant(Guid.CreateVersion7()));
+
+        var result = await _handler.AuthenticateAsync(context);
+
+        result.Succeeded.Should().BeFalse();
+        result.ShouldSkip.Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task Rejects_the_token_when_no_tenant_is_resolved()
+    {
+        var context = Request(MintDesktopStyleToken(), tenant: null);
+
+        var result = await _handler.AuthenticateAsync(context);
+
+        result.Succeeded.Should().BeFalse();
+        result.ShouldSkip.Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task Rejects_an_expired_token()
+    {
+        var context = Request(MintExpiredToken(), Tenant());
+
+        var result = await _handler.AuthenticateAsync(context);
+
+        result.Succeeded.Should().BeFalse();
+        result.ShouldSkip.Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task Skips_a_non_jwt_bearer_token()
+    {
+        var context = Request("noc_an-opaque-api-token", Tenant());
+
+        var result = await _handler.AuthenticateAsync(context);
+
+        result.ShouldSkip.Should().BeTrue();
+    }
+}

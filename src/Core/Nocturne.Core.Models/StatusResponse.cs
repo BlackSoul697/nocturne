@@ -109,6 +109,13 @@ public class StatusResponse
     public string? Head { get; set; }
 
     /// <summary>
+    /// Build timestamp (UTC, ISO 8601) of the running image, when the build stamped it.
+    /// </summary>
+    [JsonPropertyName("build")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? Build { get; set; }
+
+    /// <summary>
     /// Whether this tenant is a demo instance.
     /// </summary>
     [JsonPropertyName("isDemo")]
@@ -121,4 +128,13 @@ public class StatusResponse
     [JsonPropertyName("nextResetAt")]
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public DateTime? NextResetAt { get; set; }
+
+    /// <summary>
+    /// Whether this tenant grants read access to anonymous (unauthenticated) callers —
+    /// i.e. the tenant's public subject carries a read permission. The web app uses this
+    /// per-tenant signal to decide whether an anonymous visitor may view the dashboard or
+    /// should be redirected to sign in.
+    /// </summary>
+    [JsonPropertyName("anonymousReadAccess")]
+    public bool AnonymousReadAccess { get; set; }
 }

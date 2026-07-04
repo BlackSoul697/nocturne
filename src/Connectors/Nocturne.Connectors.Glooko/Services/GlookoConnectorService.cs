@@ -10,9 +10,12 @@ using Nocturne.Connectors.Glooko.Mappers;
 using Nocturne.Connectors.Glooko.Models;
 using Nocturne.Connectors.Glooko.Utilities;
 using Nocturne.Core.Constants;
+using Nocturne.Core.Contracts.Timezones;
 using Nocturne.Core.Contracts.Treatments;
 using Nocturne.Core.Models;
+using Nocturne.Core.Models.Timezones;
 using Nocturne.Core.Models.V4;
+using Nocturne.Core.Contracts.V4;
 
 namespace Nocturne.Connectors.Glooko.Services;
 
@@ -27,6 +30,7 @@ public class GlookoConnectorService : BaseConnectorService<GlookoConnectorConfig
     private readonly IRateLimitingStrategy _rateLimitingStrategy;
     private readonly IRetryDelayStrategy _retryDelayStrategy;
     private readonly GlookoAuthTokenProvider _tokenProvider;
+    private readonly ITimezoneTimelineService? _timezoneTimelineService;
     private readonly ILogger<GlookoConnectorService> _glookoLogger;
 
     public GlookoConnectorService(
@@ -37,7 +41,8 @@ public class GlookoConnectorService : BaseConnectorService<GlookoConnectorConfig
         IRateLimitingStrategy rateLimitingStrategy,
         GlookoAuthTokenProvider tokenProvider,
         IConnectorPublisher? publisher = null,
-        IMealMatchingService? mealMatchingService = null
+        IMealMatchingService? mealMatchingService = null,
+        ITimezoneTimelineService? timezoneTimelineService = null
     )
         : base(httpClient, serverResolver, logger, publisher)
     {
@@ -46,6 +51,7 @@ public class GlookoConnectorService : BaseConnectorService<GlookoConnectorConfig
         _retryDelayStrategy = retryDelayStrategy ?? throw new ArgumentNullException(nameof(retryDelayStrategy));
         _rateLimitingStrategy = rateLimitingStrategy ?? throw new ArgumentNullException(nameof(rateLimitingStrategy));
         _tokenProvider = tokenProvider ?? throw new ArgumentNullException(nameof(tokenProvider));
+        _timezoneTimelineService = timezoneTimelineService;
         _glookoLogger = logger;
     }
 
@@ -55,9 +61,12 @@ public class GlookoConnectorService : BaseConnectorService<GlookoConnectorConfig
     public override List<SyncDataType> SupportedDataTypes =>
     [
         SyncDataType.Glucose,
+        SyncDataType.ManualBG,
         SyncDataType.Boluses,
+        SyncDataType.BasalInjections,
         SyncDataType.CarbIntake,
         SyncDataType.StateSpans,
+        SyncDataType.TempBasals,
         SyncDataType.DeviceEvents,
         SyncDataType.Profiles
     ];
@@ -176,6 +185,17 @@ public class GlookoConnectorService : BaseConnectorService<GlookoConnectorConfig
             throw new HttpRequestException("422 UnprocessableEntity - Rate limited");
         }
 
+        // 403 on a patient-scoped endpoint (e.g. {"code":"data_cant_view"}) means the cached
+        // glookoCode is no longer authorized — typically it changed after an account/data-source
+        // re-link. Surface a distinct type so the sync re-authenticates and re-resolves the code
+        // instead of hammering the stale one until the 24h session cache expires.
+        if (response.StatusCode == HttpStatusCode.Forbidden)
+        {
+            var body = await GlookoHttpHelper.ReadResponseAsync(response);
+            _logger.LogWarning("Forbidden (403) fetching from {Url}: {Body}", absoluteUrl, body);
+            throw new GlookoDataForbiddenException($"Glooko returned 403 Forbidden for {absoluteUrl}: {body}");
+        }
+
         _logger.LogWarning("Failed to fetch from {Url}: {StatusCode}", absoluteUrl, response.StatusCode);
         throw new HttpRequestException($"HTTP {(int)response.StatusCode} {response.StatusCode}");
     }
@@ -195,6 +215,12 @@ public class GlookoConnectorService : BaseConnectorService<GlookoConnectorConfig
                 if (result.HasValue) return result;
 
                 _logger.LogWarning("Attempt {AttemptNumber} failed for {Url}", attempt + 1, url);
+            }
+            catch (GlookoDataForbiddenException)
+            {
+                // The patient code is part of the URL; retrying it unchanged will 403 again.
+                // Bubble up immediately so the caller can re-authenticate and rebuild URLs.
+                throw;
             }
             catch (HttpRequestException ex) when (ex.Message.Contains("422"))
             {
@@ -243,9 +269,11 @@ public class GlookoConnectorService : BaseConnectorService<GlookoConnectorConfig
     {
         var patientCode = _userData?.GlookoCode;
 
-        var series = _syncConfig!.V3IncludeCgmBackfill
-            ? GlookoConstants.V3GraphSeries.Concat(GlookoConstants.V3CgmBackfillSeries)
-            : GlookoConstants.V3GraphSeries;
+        var series = GlookoConstants.V3GraphSeries
+            .Concat(GlookoConstants.V3PumpModeSeries);
+
+        if (_syncConfig!.V3IncludeCgmBackfill)
+            series = series.Concat(GlookoConstants.V3CgmBackfillSeries);
 
         var seriesParams = string.Join("&", series.Select(s => $"series[]={s}"));
 
@@ -291,10 +319,19 @@ public class GlookoConnectorService : BaseConnectorService<GlookoConnectorConfig
             var enabledTypes = config.GetEnabledDataTypes(SupportedDataTypes);
             var activeTypes = request.DataTypes.Where(t => enabledTypes.Contains(t)).ToHashSet();
 
+            // Resolve the tenant's timezone timeline before mapping any records. The account's home
+            // zone (from the V3 profile) seeds the timeline's origin on first sync; thereafter the
+            // user's travel/relocation entries drive per-record conversion. Falls back to the legacy
+            // static offset when the timeline is empty (e.g. V2-only accounts, or profile tz unknown).
+            await ConfigureTimezoneTimelineAsync(config, cancellationToken);
+
+            // The request window is real-UTC; Glooko queries expect fake-UTC (local wall-clock). Pad by
+            // a day each side so a non-zero offset between the two never clips edge data (dedup absorbs
+            // the overlap).
             var from = request.From.HasValue
-                ? _timeMapper.ToGlookoTime(request.From.Value)
-                : _timeMapper.ToGlookoTime(DateTime.UtcNow.AddMonths(-6));
-            var to = _timeMapper.ToGlookoTime(DateTime.UtcNow);
+                ? _timeMapper.ToGlookoTime(request.From.Value).AddDays(-1)
+                : _timeMapper.ToGlookoTime(DateTime.UtcNow.AddMonths(-6)).AddDays(-1);
+            var to = _timeMapper.ToGlookoTime(DateTime.UtcNow).AddDays(1);
 
             var chunks = DateChunker.Chunk(from, to, TimeSpan.FromDays(14)).ToList();
 
@@ -302,62 +339,51 @@ public class GlookoConnectorService : BaseConnectorService<GlookoConnectorConfig
                 "[{ConnectorSource}] Syncing {From:yyyy-MM-dd} to {To:yyyy-MM-dd} in {ChunkCount} chunk(s)",
                 ConnectorSource, from, to, chunks.Count);
 
-            for (var i = 0; i < chunks.Count; i++)
-            {
-                var (chunkFrom, chunkTo) = chunks[i];
-
-                await ReportMessageAsync(progressReporter, SyncMessageType.FetchingData,
-                    new()
-                    {
-                        ["from"] = chunkFrom.ToString("MMM dd"),
-                        ["to"] = chunkTo.ToString("MMM dd"),
-                        ["chunk"] = $"{i + 1}/{chunks.Count}",
-                    },
-                    cancellationToken);
-
-                var chunkSuccess = _syncConfig!.UseV3Api
-                    ? await FetchAndMapViaV3Async(chunkFrom, chunkTo, activeTypes, result, config, cancellationToken)
-                    : await FetchAndMapViaV2Async(chunkFrom, chunkTo, activeTypes, result, config, cancellationToken);
-
-                if (!chunkSuccess)
-                {
-                    _logger.LogWarning(
-                        "[{ConnectorSource}] Chunk {Chunk}/{Total} ({From:yyyy-MM-dd} to {To:yyyy-MM-dd}) failed, stopping sync",
-                        ConnectorSource, i + 1, chunks.Count, chunkFrom, chunkTo);
-                    result.Success = false;
-                    result.Message = "Sync failed during data fetch";
-                    result.Errors.Add($"Chunk {i + 1}/{chunks.Count} failed ({chunkFrom:yyyy-MM-dd} to {chunkTo:yyyy-MM-dd})");
-                    break;
-                }
-
-                _logger.LogInformation(
-                    "[{ConnectorSource}] Completed chunk {Chunk}/{Total} ({From:yyyy-MM-dd} to {To:yyyy-MM-dd})",
-                    ConnectorSource, i + 1, chunks.Count, chunkFrom, chunkTo);
-            }
-
-            // Profiles (V3 device settings — used in both modes, no V2 equivalent)
-            await ReportMessageAsync(progressReporter, SyncMessageType.ProcessingDataType,
-                new() { ["dataType"] = SyncDataType.Profiles.ToString() }, cancellationToken);
-
-            if (activeTypes.Contains(SyncDataType.Profiles))
+            // Run the sync; if Glooko rejects the patient code (403 data_cant_view) the cached
+            // glookoCode has gone stale (e.g. the account was re-linked), so re-authenticate once
+            // to resolve the current code and retry from scratch. A second 403 propagates to the
+            // outer handler and fails the sync rather than looping.
+            for (var attempt = 0; ; attempt++)
             {
                 try
                 {
-                    var deviceSettings = await FetchV3DeviceSettingsAsync();
-                    if (deviceSettings != null)
-                    {
-                        var profiles = _profileMapper.TransformDeviceSettingsToProfiles(deviceSettings);
-                        if (profiles.Any() && await PublishProfileDataAsync(profiles, config, cancellationToken))
-                        {
-                            result.ItemsSynced[SyncDataType.Profiles] = profiles.Count;
-                            _logger.LogInformation("[{ConnectorSource}] Published {Count} profiles from device settings",
-                                ConnectorSource, profiles.Count);
-                        }
-                    }
+                    await RunSyncPassAsync(chunks, activeTypes, result, config, cancellationToken, progressReporter);
+                    break;
                 }
-                catch (Exception profileEx)
+                catch (GlookoDataForbiddenException ex) when (attempt == 0)
                 {
-                    _logger.LogWarning(profileEx, "[{ConnectorSource}] Failed to fetch/publish profile data", ConnectorSource);
+                    _logger.LogWarning(ex,
+                        "[{ConnectorSource}] Glooko returned 403 (data_cant_view) for patient code {Code}; the account's "
+                        + "glookoCode likely changed. Invalidating cached session and re-authenticating.",
+                        ConnectorSource, _userData?.GlookoCode);
+
+                    _tokenProvider.InvalidateToken();
+                    _sessionCookie = null;
+                    _userData = null;
+                    _meterUnits = null;
+                    _timezone = null;
+
+                    if (!await AuthenticateWithConfigAsync(config))
+                    {
+                        result.Success = false;
+                        result.Message = "Re-authentication failed after Glooko denied data access";
+                        result.Errors.Add("Re-authentication failed after Glooko returned 403 (data_cant_view)");
+                        break;
+                    }
+
+                    await ConfigureTimezoneTimelineAsync(config, cancellationToken);
+
+                    // Drop partial results from the aborted pass; the retry re-syncs from scratch
+                    // with the refreshed patient code.
+                    result.ItemsSynced.Clear();
+                    result.LastEntryTimes.Clear();
+                    result.Errors.Clear();
+                    result.Success = true;
+                    result.Message = "Sync completed successfully";
+
+                    _logger.LogInformation(
+                        "[{ConnectorSource}] Re-authenticated after 403; retrying sync with patient code {Code}",
+                        ConnectorSource, _userData?.GlookoCode);
                 }
             }
 
@@ -377,6 +403,88 @@ public class GlookoConnectorService : BaseConnectorService<GlookoConnectorConfig
             await ReportMessageAsync(progressReporter, SyncMessageType.SyncFailed, null, cancellationToken);
             result.EndTime = DateTime.UtcNow;
             return result;
+        }
+    }
+
+    /// <summary>
+    ///     Runs one full sync pass: every date chunk followed by the profile/device-settings fetch.
+    ///     Throws <see cref="GlookoDataForbiddenException"/> when Glooko rejects the patient code, so
+    ///     the caller can re-authenticate and retry with a refreshed code.
+    /// </summary>
+    private async Task RunSyncPassAsync(
+        List<(DateTime From, DateTime To)> chunks,
+        HashSet<SyncDataType> activeTypes,
+        SyncResult result,
+        GlookoConnectorConfiguration config,
+        CancellationToken cancellationToken,
+        ISyncProgressReporter? progressReporter)
+    {
+        for (var i = 0; i < chunks.Count; i++)
+        {
+            var (chunkFrom, chunkTo) = chunks[i];
+
+            await ReportMessageAsync(progressReporter, SyncMessageType.FetchingData,
+                new()
+                {
+                    ["from"] = chunkFrom.ToString("MMM dd"),
+                    ["to"] = chunkTo.ToString("MMM dd"),
+                    ["chunk"] = $"{i + 1}/{chunks.Count}",
+                },
+                cancellationToken);
+
+            var chunkSuccess = _syncConfig!.UseV3Api
+                ? await FetchAndMapViaV3Async(chunkFrom, chunkTo, activeTypes, result, config, cancellationToken)
+                : await FetchAndMapViaV2Async(chunkFrom, chunkTo, activeTypes, result, config, cancellationToken);
+
+            if (!chunkSuccess)
+            {
+                _logger.LogWarning(
+                    "[{ConnectorSource}] Chunk {Chunk}/{Total} ({From:yyyy-MM-dd} to {To:yyyy-MM-dd}) failed, stopping sync",
+                    ConnectorSource, i + 1, chunks.Count, chunkFrom, chunkTo);
+                result.Success = false;
+                result.Message = "Sync failed during data fetch";
+                result.Errors.Add($"Chunk {i + 1}/{chunks.Count} failed ({chunkFrom:yyyy-MM-dd} to {chunkTo:yyyy-MM-dd})");
+                return;
+            }
+
+            _logger.LogInformation(
+                "[{ConnectorSource}] Completed chunk {Chunk}/{Total} ({From:yyyy-MM-dd} to {To:yyyy-MM-dd})",
+                ConnectorSource, i + 1, chunks.Count, chunkFrom, chunkTo);
+        }
+
+        // Profiles (V3 device settings — used in both modes, no V2 equivalent)
+        await ReportMessageAsync(progressReporter, SyncMessageType.ProcessingDataType,
+            new() { ["dataType"] = SyncDataType.Profiles.ToString() }, cancellationToken);
+
+        if (activeTypes.Contains(SyncDataType.Profiles))
+        {
+            try
+            {
+                var deviceSettings = await FetchV3DeviceSettingsAsync();
+                if (deviceSettings != null)
+                {
+                    var profiles = _profileMapper!.TransformDeviceSettingsToProfiles(deviceSettings);
+                    if (profiles.Any() && await PublishProfileDataAsync(profiles, config, cancellationToken))
+                    {
+                        result.ItemsSynced[SyncDataType.Profiles] = profiles.Count;
+                        _logger.LogInformation("[{ConnectorSource}] Published {Count} profiles from device settings",
+                            ConnectorSource, profiles.Count);
+                    }
+
+                    var profileStateSpans = _profileMapper.TransformDeviceSettingsToStateSpans(deviceSettings);
+                    if (profileStateSpans.Count > 0)
+                    {
+                        await PublishStateSpanDataAsync(profileStateSpans, config, cancellationToken);
+                        _logger.LogInformation("[{ConnectorSource}] Published {Count} profile state spans from device settings",
+                            ConnectorSource, profileStateSpans.Count);
+                    }
+                }
+            }
+            catch (GlookoDataForbiddenException) { throw; }
+            catch (Exception profileEx)
+            {
+                _logger.LogWarning(profileEx, "[{ConnectorSource}] Failed to fetch/publish profile data", ConnectorSource);
+            }
         }
     }
 
@@ -406,11 +514,8 @@ public class GlookoConnectorService : BaseConnectorService<GlookoConnectorConfig
         await PublishRecordTypeAsync(result, SyncDataType.ManualBG, activeTypes,
             bgChecks, PublishBGCheckDataAsync, config, cancellationToken);
 
-        // 2. Treatments (FK order: batches → boluses → carbs+foods)
-        var (boluses, carbs, batches) = _v4TreatmentMapper.MapBatchData(batchData);
-
-        if (batches.Count > 0)
-            await PublishDecompositionBatchesAsync(batches, config, cancellationToken);
+        // 2. Treatments (boluses → carbs+foods)
+        var (boluses, carbs, _) = _v4TreatmentMapper.MapBatchData(batchData);
 
         await PublishRecordTypeAsync(result, SyncDataType.Boluses, activeTypes,
             boluses, PublishBolusDataAsync, config, cancellationToken);
@@ -425,16 +530,20 @@ public class GlookoConnectorService : BaseConnectorService<GlookoConnectorConfig
         await PublishFoodEntriesAndAttributeAsync(
             foodEntryImports, carbs, foodResolver, config, cancellationToken);
 
-        // 4. State spans + temp basals (old code only counted temp basals in ItemsSynced)
+        // 4. State spans
         if (activeTypes.Contains(SyncDataType.StateSpans))
         {
             var stateSpans = _stateSpanMapper.TransformV2ToStateSpans(batchData);
             if (stateSpans.Count > 0)
                 await PublishStateSpanDataAsync(stateSpans, config, cancellationToken);
+        }
 
+        // 5. Temp basals
+        if (activeTypes.Contains(SyncDataType.TempBasals))
+        {
             var tempBasals = _tempBasalMapper.TransformV2ToTempBasals(batchData);
             if (tempBasals.Count > 0 && await PublishTempBasalDataAsync(tempBasals, config, cancellationToken))
-                result.ItemsSynced[SyncDataType.StateSpans] = tempBasals.Count;
+                result.ItemsSynced[SyncDataType.TempBasals] = tempBasals.Count;
         }
 
         return true;
@@ -478,8 +587,8 @@ public class GlookoConnectorService : BaseConnectorService<GlookoConnectorConfig
         await PublishRecordTypeAsync(result, SyncDataType.ManualBG, activeTypes,
             bgChecks, PublishBGCheckDataAsync, config, cancellationToken);
 
-        // 2. Treatments (FK order: batches → boluses → carbs+foods)
-        var (v3Boluses, v3BolusCarbIntakes, v3Batches) = _v4TreatmentMapper.MapV3Boluses(v3Data);
+        // 2. Treatments (boluses → carbs+foods)
+        var (v3Boluses, v3BolusCarbIntakes, _) = _v4TreatmentMapper.MapV3Boluses(v3Data);
 
         // Carbs: bolus wizard + history meals (preferred) or carbAll (fallback)
         var allCarbs = new List<CarbIntake>(v3BolusCarbIntakes);
@@ -491,14 +600,20 @@ public class GlookoConnectorService : BaseConnectorService<GlookoConnectorConfig
         else
             allCarbs.AddRange(_v4TreatmentMapper.MapV3CarbAll(v3Data));
 
-        if (v3Batches.Count > 0)
-            await PublishDecompositionBatchesAsync(v3Batches, config, cancellationToken);
-
         await PublishRecordTypeAsync(result, SyncDataType.Boluses, activeTypes,
             v3Boluses, PublishBolusDataAsync, config, cancellationToken);
 
         await PublishRecordTypeAsync(result, SyncDataType.CarbIntake, activeTypes,
             allCarbs, PublishCarbIntakeDataAsync, config, cancellationToken);
+
+        // 2b. Manual insulin (pen injections: gkInsulinBasal → BasalInjection, gkInsulinBolus → Bolus)
+        var (manualBasalInjections, manualBoluses) = _v4TreatmentMapper.MapV3ManualInsulin(v3Data);
+
+        await PublishRecordTypeAsync(result, SyncDataType.Boluses, activeTypes,
+            manualBoluses, PublishBolusDataAsync, config, cancellationToken);
+
+        await PublishRecordTypeAsync(result, SyncDataType.BasalInjections, activeTypes,
+            manualBasalInjections, PublishBasalInjectionDataAsync, config, cancellationToken);
 
         // 3. Foods + attribution (coupled with carbs)
         GlookoFood[]? v2Foods = null;
@@ -537,16 +652,21 @@ public class GlookoConnectorService : BaseConnectorService<GlookoConnectorConfig
         await PublishFoodEntriesAndAttributeAsync(
             foodEntryImports, allCarbs, foodResolver, config, cancellationToken);
 
-        // 4. State spans + temp basals (old code only counted temp basals in ItemsSynced)
+        // 4. State spans
         if (activeTypes.Contains(SyncDataType.StateSpans))
         {
             var stateSpans = _stateSpanMapper.TransformV3ToStateSpans(v3Data);
+            stateSpans.AddRange(_stateSpanMapper.TransformV3PumpModeToStateSpans(v3Data));
             if (stateSpans.Count > 0)
                 await PublishStateSpanDataAsync(stateSpans, config, cancellationToken);
+        }
 
+        // 4b. Temp basals
+        if (activeTypes.Contains(SyncDataType.TempBasals))
+        {
             var tempBasals = _tempBasalMapper.TransformV3ToTempBasals(v3Data);
             if (tempBasals.Count > 0 && await PublishTempBasalDataAsync(tempBasals, config, cancellationToken))
-                result.ItemsSynced[SyncDataType.StateSpans] = tempBasals.Count;
+                result.ItemsSynced[SyncDataType.TempBasals] = tempBasals.Count;
         }
 
         // 5. Device events + system events (summed into single ItemsSynced entry)
@@ -585,7 +705,7 @@ public class GlookoConnectorService : BaseConnectorService<GlookoConnectorConfig
             return;
 
         var importedEntries = await _connectorPublisher.Metadata.PublishConnectorFoodEntriesAsync(
-            foodEntryImports, ConnectorSource, cancellationToken);
+            foodEntryImports, ConnectorSource, WriteOrigin.Live, cancellationToken); // Food is a dormant broadcast category — origin irrelevant until wired.
 
         if (importedEntries is not { Count: > 0 })
             return;
@@ -737,6 +857,7 @@ public class GlookoConnectorService : BaseConnectorService<GlookoConnectorConfig
 
             return batchData;
         }
+        catch (GlookoDataForbiddenException) { throw; }
         catch (InvalidOperationException) { throw; }
         catch (HttpRequestException) { throw; }
         catch (Exception ex)
@@ -781,9 +902,10 @@ public class GlookoConnectorService : BaseConnectorService<GlookoConnectorConfig
     }
 
     private string? _meterUnits;
+    private string? _timezone;
 
     /// <summary>
-    ///     Fetches user profile from v3 API to get meter units setting.
+    ///     Fetches user profile from v3 API to get meter units and the account's home timezone.
     /// </summary>
     public async Task<GlookoV3UsersResponse?> FetchV3UserProfileAsync()
     {
@@ -798,8 +920,9 @@ public class GlookoConnectorService : BaseConnectorService<GlookoConnectorConfig
             if (profile?.CurrentUser != null)
             {
                 _meterUnits = profile.CurrentUser.MeterUnits;
-                _logger.LogInformation("[{ConnectorSource}] User profile loaded. MeterUnits: {Units}",
-                    ConnectorSource, _meterUnits);
+                _timezone = profile.CurrentUser.Timezone;
+                _logger.LogInformation("[{ConnectorSource}] User profile loaded. MeterUnits: {Units}, Timezone: {Timezone}",
+                    ConnectorSource, _meterUnits, _timezone ?? "(none)");
             }
 
             return profile;
@@ -808,6 +931,39 @@ public class GlookoConnectorService : BaseConnectorService<GlookoConnectorConfig
         {
             _logger.LogError(ex, "Error fetching Glooko v3 user profile");
             return null;
+        }
+    }
+
+    /// <summary>
+    ///     Builds and installs the tenant's timezone timeline on the shared time mapper for this sync.
+    ///     For V3 accounts it fetches the profile (capturing the home zone and meter units in one call)
+    ///     and seeds the timeline origin from that zone on first sync. When no timezone service is wired
+    ///     or the timeline is empty, conversion falls back to the legacy static offset.
+    /// </summary>
+    private async Task ConfigureTimezoneTimelineAsync(GlookoConnectorConfiguration config, CancellationToken cancellationToken)
+    {
+        if (_timezoneTimelineService is null || _timeMapper is null)
+            return;
+
+        try
+        {
+            if (config.UseV3Api && string.IsNullOrEmpty(_meterUnits))
+                await FetchV3UserProfileAsync();
+
+            if (!string.IsNullOrWhiteSpace(_timezone))
+                await _timezoneTimelineService.EnsureOriginAsync(_timezone, cancellationToken);
+
+            var resolver = await _timezoneTimelineService.GetResolverAsync(config.TimezoneOffset, cancellationToken);
+            _timeMapper.UseTimeline(resolver);
+
+            _logger.LogInformation(
+                "[{ConnectorSource}] Timezone timeline configured (entries present: {HasEntries}, home zone: {Zone})",
+                ConnectorSource, resolver.HasEntries, _timezone ?? "(none)");
+        }
+        catch (Exception ex)
+        {
+            // Never fail a sync over timeline setup — fall back to the static offset.
+            _logger.LogWarning(ex, "[{ConnectorSource}] Failed to configure timezone timeline; using static offset", ConnectorSource);
         }
     }
 
@@ -864,6 +1020,7 @@ public class GlookoConnectorService : BaseConnectorService<GlookoConnectorConfig
 
             return graphData;
         }
+        catch (GlookoDataForbiddenException) { throw; }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error fetching Glooko v3 graph data");
@@ -897,6 +1054,7 @@ public class GlookoConnectorService : BaseConnectorService<GlookoConnectorConfig
 
             return settings;
         }
+        catch (GlookoDataForbiddenException) { throw; }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error fetching Glooko v3 device settings");

@@ -67,6 +67,26 @@ public class MutationAuditInterceptor : SaveChangesInterceptor
             if (action == "update" && changesJson is null)
                 continue;
 
+            // Maintain the dedup flag carried by soft-deletable rows: a user-initiated
+            // soft-delete blocks connector resync from re-creating the row; a system
+            // sweep or a restore does not. Only meaningful for soft-delete transitions
+            // (Modified state) — a hard delete (Deleted state) removes the row entirely.
+            if (entry.State == EntityState.Modified && entry.Entity is ISoftDeletable)
+            {
+                if (action == "delete")
+                    entry.Property("DeletedByUser").CurrentValue = auditContext?.AuthType != null;
+                else if (action == "restore")
+                    entry.Property("DeletedByUser").CurrentValue = false;
+            }
+
+            // System/connector/background mutations have no human actor. They are high-volume
+            // automated data ingestion (CGM readings, temp basals, etc.) whose provenance is
+            // already captured on the records themselves (data_source), so they are not recorded
+            // here — auditing them grew this table to 36GB / ~1.8M rows-per-day in production.
+            // The soft-delete/dedup maintenance above still runs for these mutations.
+            if (auditContext?.IsSystem == true)
+                continue;
+
             var audit = new MutationAuditLogEntity
             {
                 Id = Guid.CreateVersion7(),

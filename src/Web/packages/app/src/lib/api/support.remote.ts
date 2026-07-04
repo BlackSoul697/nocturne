@@ -39,22 +39,23 @@ function buildIssueFormData(params: IssueParams): FormData {
   return formData;
 }
 
-export const createIssue = command(async (params: IssueParams) => {
+export const createIssue = command("unchecked", async (params: IssueParams) => {
   const apiClient = getRequestEvent().locals.apiClient;
   try {
-    const formData = buildIssueFormData(params);
-    const url = apiClient.baseUrl + "/api/v4/support/issues";
-    const response = await (apiClient as any).http.fetch(url, {
-      body: formData,
-      method: "POST",
-      headers: { Accept: "application/json" },
-    });
-    if (!response.ok) {
-      const err: any = new Error(`Issue creation failed (${response.status})`);
-      err.status = response.status;
-      throw err;
-    }
-    return await response.json();
+    // The generated remote can't model this endpoint's multipart file upload,
+    // so call the NSwag client method directly (it builds the multipart body).
+    return await apiClient.support.createIssue(
+      params.template,
+      params.title,
+      params.description,
+      params.stepsToReproduce,
+      params.expectedBehavior,
+      params.actualBehavior,
+      params.cgmSource,
+      params.timeRange,
+      params.diagnosticInfo,
+      params.images.map((file) => ({ data: file, fileName: file.name })),
+    );
   } catch (err) {
     const status = (err as any)?.status;
     if (status === 401) {
@@ -70,7 +71,9 @@ export const createIssue = command(async (params: IssueParams) => {
   }
 });
 
-export const createOperatorIssue = command(async (params: IssueParams) => {
+export const createOperatorIssue = command(
+  "unchecked",
+  async (params: IssueParams) => {
   const apiClient = getRequestEvent().locals.apiClient;
   try {
     // Resolve operator URL server-side to prevent SSRF via client-supplied URLs

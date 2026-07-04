@@ -86,6 +86,15 @@ public class AlertSweepService : BackgroundService
             {
                 _logger.LogError(ex, "Error evaluating auto-resolve");
             }
+
+            try
+            {
+                await EvaluateTrackerAgeRulesAsync(ct);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error evaluating tracker-age rules");
+            }
         }
 
         _logger.LogInformation("Alert Sweep Service stopped");
@@ -277,6 +286,7 @@ public class AlertSweepService : BackgroundService
                 if (extend)
                 {
                     await repository.UpdateInstanceAsync(new UpdateAlertInstanceRequest(
+                        tenantId,
                         instance.InstanceId,
                         SnoozedUntil: now.AddMinutes(cfg.ExtendMinutes),
                         SnoozeCount: instance.SnoozeCount + 1), ct);
@@ -288,6 +298,7 @@ public class AlertSweepService : BackgroundService
                 else
                 {
                     await repository.UpdateInstanceAsync(new UpdateAlertInstanceRequest(
+                        tenantId,
                         instance.InstanceId,
                         SnoozedUntil: DateTime.MinValue), ct);
 
@@ -377,21 +388,19 @@ public class AlertSweepService : BackgroundService
         CancellationToken ct)
     {
         using var scope = _serviceProvider.CreateScope();
-        var registry = scope.ServiceProvider.GetRequiredService<ConditionEvaluatorRegistry>();
+        var engine = scope.ServiceProvider.GetRequiredService<IAlertEvaluationEngine>();
 
         var node = new ConditionNode(
             "composite",
             Composite: new CompositeCondition("and", conditions));
 
-        var ruleContext = enrichedContext with
-        {
-            CurrentRuleId = instance.AlertRuleId,
-            CurrentPath = AlertConditionTypeNames.SnoozePathRoot,
-        };
-
         try
         {
-            return await registry.EvaluateNodeAsync(node, ruleContext, ct);
+            // The engine seeds CurrentRuleId/CurrentPath; snooze conditions evaluate under
+            // the reserved "snooze" path root so nested sustained timers don't collide
+            // with rule-body or auto-resolve timers.
+            return await engine.EvaluateNodeAsync(
+                instance.AlertRuleId, node, enrichedContext, AlertConditionTypeNames.SnoozePathRoot, ct);
         }
         catch (Exception ex)
         {
@@ -477,9 +486,8 @@ public class AlertSweepService : BackgroundService
                 tenantContext.DisplayName ?? string.Empty,
                 true));
 
-            var registry = tenantScope.ServiceProvider.GetRequiredService<ConditionEvaluatorRegistry>();
+            var engine = tenantScope.ServiceProvider.GetRequiredService<IAlertEvaluationEngine>();
             var enricher = tenantScope.ServiceProvider.GetRequiredService<ISensorContextEnricher>();
-            var tracker = tenantScope.ServiceProvider.GetRequiredService<IExcursionTracker>();
             var resolutionHandler = tenantScope.ServiceProvider.GetRequiredService<IExcursionResolutionHandler>();
 
             // Build a baseline context from tenant freshness; enricher fills the rest.
@@ -507,41 +515,79 @@ public class AlertSweepService : BackgroundService
             {
                 if (string.IsNullOrWhiteSpace(entry.Rule.AutoResolveParams)) continue;
 
-                ConditionNode? node;
+                // The engine evaluates the auto-resolve tree under the reserved
+                // "auto_resolve" path root (parse failures and evaluation errors are
+                // logged + skipped inside) and force-closes the active excursion when it
+                // fires; this loop only applies the close side effects.
+                ExcursionTransition transition;
                 try
                 {
-                    node = JsonSerializer.Deserialize<ConditionNode>(entry.Rule.AutoResolveParams, EvaluatorJson.Options);
-                }
-                catch (JsonException ex)
-                {
-                    _logger.LogWarning(ex, "Failed to parse AutoResolveParams for rule {AlertRuleId}", entry.Rule.Id);
-                    continue;
-                }
-                if (node is null) continue;
-
-                var ruleContext = enriched with
-                {
-                    CurrentRuleId = entry.Rule.Id,
-                    CurrentPath = AlertConditionTypeNames.AutoResolvePathRoot,
-                };
-
-                bool shouldResolve;
-                try
-                {
-                    shouldResolve = await registry.EvaluateNodeAsync(node, ruleContext, ct);
+                    transition = await engine.EvaluateAutoResolveAsync(entry.Rule, enriched, ct);
                 }
                 catch (Exception ex)
                 {
                     _logger.LogError(ex, "Auto-resolve evaluation failed for rule {AlertRuleId}", entry.Rule.Id);
                     continue;
                 }
-                if (!shouldResolve) continue;
 
-                var transition = await tracker.ForceCloseAsync(entry.Rule.Id, ExcursionCloseReason.AutoResolve, ct);
                 if (transition.Type == ExcursionTransitionType.ExcursionClosed)
                 {
                     await resolutionHandler.HandleClosedAsync(transition, tenantId, ct);
                 }
+            }
+        }
+    }
+
+    /// <summary>
+    /// Periodically evaluates enabled <c>tracker_age</c> rules through the orchestrator's
+    /// full pipeline. Tracker ages advance with the wall clock, not with readings — the
+    /// per-reading path alone would delay (or, with a dead sensor, entirely drop) a
+    /// "sensor expired" alert. The excursion state machine dedupes: once opened, further
+    /// sweep passes are ExcursionContinues no-ops.
+    /// </summary>
+    private async Task EvaluateTrackerAgeRulesAsync(CancellationToken ct)
+    {
+        using var lookupScope = _serviceProvider.CreateScope();
+        var lookupRepository = lookupScope.ServiceProvider.GetRequiredService<IAlertRepository>();
+
+        var trackerRules = await lookupRepository.GetEnabledRulesByConditionTypeAsync(
+            AlertConditionType.TrackerAge, ct);
+        if (trackerRules.Count == 0) return;
+
+        foreach (var tenantGroup in trackerRules.GroupBy(r => r.TenantId))
+        {
+            var tenantId = tenantGroup.Key;
+            var tenantContext = await lookupRepository.GetTenantAlertContextAsync(tenantId, ct);
+            if (tenantContext is null || !tenantContext.IsActive) continue;
+
+            using var tenantScope = _serviceProvider.CreateScope();
+            var tenantAccessor = tenantScope.ServiceProvider.GetRequiredService<ITenantAccessor>();
+            tenantAccessor.SetTenant(new TenantContext(
+                tenantContext.TenantId,
+                tenantContext.Slug ?? string.Empty,
+                tenantContext.DisplayName ?? string.Empty,
+                true));
+
+            var orchestrator = tenantScope.ServiceProvider.GetRequiredService<IAlertOrchestrator>();
+
+            // LatestValue stays null: tracker_age doesn't read it, and the most recent
+            // reading-dependent evaluation already ran on the per-reading path.
+            var baseContext = new SensorContext
+            {
+                LatestValue = null,
+                LatestTimestamp = tenantContext.LastReadingAt,
+                TrendRate = null,
+                LastReadingAt = tenantContext.LastReadingAt ?? DateTime.MinValue,
+            };
+
+            try
+            {
+                await orchestrator.EvaluateRulesAsync(tenantGroup.ToList(), baseContext, ct);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex,
+                    "Tracker-age rule evaluation failed for tenant {TenantId}", tenantId);
             }
         }
     }

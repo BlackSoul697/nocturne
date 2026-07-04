@@ -74,6 +74,38 @@ public class BaseConnectorConfigurationTests
         Assert.Equal(50, config.BatchSize);
         Assert.Equal(5, config.SyncIntervalMinutes);
     }
+
+    [Fact]
+    public void SyncTempBasals_IsEnabledByDefault()
+    {
+        var config = new TestConnectorConfiguration();
+
+        Assert.True(config.SyncTempBasals);
+        Assert.True(config.IsDataTypeEnabled(SyncDataType.TempBasals));
+    }
+
+    [Fact]
+    public void IsDataTypeEnabled_TempBasals_FollowsToggle()
+    {
+        var config = new TestConnectorConfiguration { SyncTempBasals = false };
+
+        Assert.False(config.IsDataTypeEnabled(SyncDataType.TempBasals));
+    }
+
+    [Fact]
+    public void GetEnabledDataTypes_IncludesTempBasals_WhenSupportedAndEnabled()
+    {
+        var config = new TestConnectorConfiguration();
+
+        var enabled = config.GetEnabledDataTypes([SyncDataType.StateSpans, SyncDataType.TempBasals]);
+
+        Assert.Contains(SyncDataType.TempBasals, enabled);
+        // Guards the Glooko refactor: temp basals are no longer dropped when StateSpans is off.
+        var stateSpansOff = new TestConnectorConfiguration { SyncStateSpans = false };
+        var stillEnabled = stateSpansOff.GetEnabledDataTypes([SyncDataType.StateSpans, SyncDataType.TempBasals]);
+        Assert.DoesNotContain(SyncDataType.StateSpans, stillEnabled);
+        Assert.Contains(SyncDataType.TempBasals, stillEnabled);
+    }
 }
 
 /// <summary>

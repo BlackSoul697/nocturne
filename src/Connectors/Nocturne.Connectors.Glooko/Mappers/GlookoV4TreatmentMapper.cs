@@ -54,11 +54,14 @@ public class GlookoV4TreatmentMapper(string connectorSource, GlookoTimeMapper ti
 
                         if (hasInsulin)
                         {
+                            var bolusLegacyId = GenerateLegacyId("bolus", bolusDate, $"insulin:{bolus.InsulinDelivered}_carbs:{bolus.CarbsInput}");
                             boluses.Add(new Bolus
                             {
                                 Id = Guid.CreateVersion7(),
                                 Timestamp = correctedDate,
-                                LegacyId = GenerateLegacyId("bolus", bolusDate, $"insulin:{bolus.InsulinDelivered}_carbs:{bolus.CarbsInput}"),
+                                LegacyId = bolusLegacyId,
+                                // Stable (raw-timestamp-derived) key so re-correction upserts in place.
+                                SyncIdentifier = bolusLegacyId,
                                 Device = _connectorSource,
                                 DataSource = _connectorSource,
                                 Insulin = bolus.InsulinDelivered,
@@ -72,11 +75,13 @@ public class GlookoV4TreatmentMapper(string connectorSource, GlookoTimeMapper ti
 
                         if (hasCarbs)
                         {
+                            var carbLegacyId = GenerateLegacyId("carbs", bolusDate, $"insulin:{bolus.InsulinDelivered}_carbs:{bolus.CarbsInput}");
                             carbs.Add(new CarbIntake
                             {
                                 Id = Guid.CreateVersion7(),
                                 Timestamp = correctedDate,
-                                LegacyId = GenerateLegacyId("carbs", bolusDate, $"insulin:{bolus.InsulinDelivered}_carbs:{bolus.CarbsInput}"),
+                                LegacyId = carbLegacyId,
+                                SyncIdentifier = carbLegacyId,
                                 Device = _connectorSource,
                                 DataSource = _connectorSource,
                                 Carbs = bolus.CarbsInput,
@@ -291,7 +296,7 @@ public class GlookoV4TreatmentMapper(string connectorSource, GlookoTimeMapper ti
 
     /// <summary>
     /// Maps V3 bolus series (DeliveredBolus, AutomaticBolus, InjectionBolus) to Bolus and CarbIntake records.
-    /// TODO: Add code to deal with manual insulin, informed in gkInsulinBasal, gkInsulinBolus, gkInsulinPremixed, gkInsulinOther
+    /// Manual insulin (gkInsulinBasal, gkInsulinBolus) is handled separately by <see cref="MapV3ManualInsulin"/>.
     /// </summary>
     public (List<Bolus> boluses, List<CarbIntake> carbs, List<DecompositionBatch> batches) MapV3Boluses(GlookoV3GraphResponse graphData)
     {
@@ -340,11 +345,15 @@ public class GlookoV4TreatmentMapper(string connectorSource, GlookoTimeMapper ti
 
                 if (hasInsulin)
                 {
+                    var v3BolusLegacyId = GenerateLegacyId("v3_bolus", rawTimestamp, $"carbs:{carbsInput}_insulin:{insulin}");
                     boluses.Add(new Bolus
                     {
                         Id = Guid.CreateVersion7(),
                         Timestamp = correctedTimestamp,
-                        LegacyId = GenerateLegacyId("v3_bolus", rawTimestamp, $"carbs:{carbsInput}_insulin:{insulin}"),
+                        LegacyId = v3BolusLegacyId,
+                        // rawTimestamp is the raw fake-UTC (stable); key the upsert on it so re-correction
+                        // moves the row instead of duplicating it.
+                        SyncIdentifier = v3BolusLegacyId,
                         Device = _connectorSource,
                         DataSource = _connectorSource,
                         Insulin = insulin,
@@ -358,11 +367,13 @@ public class GlookoV4TreatmentMapper(string connectorSource, GlookoTimeMapper ti
 
                 if (hasCarbs)
                 {
+                    var v3CarbLegacyId = GenerateLegacyId("v3_carbs", rawTimestamp, $"carbs:{carbsInput}_insulin:{insulin}");
                     carbs.Add(new CarbIntake
                     {
                         Id = Guid.CreateVersion7(),
                         Timestamp = correctedTimestamp,
-                        LegacyId = GenerateLegacyId("v3_carbs", rawTimestamp, $"carbs:{carbsInput}_insulin:{insulin}"),
+                        LegacyId = v3CarbLegacyId,
+                        SyncIdentifier = v3CarbLegacyId,
                         Device = _connectorSource,
                         DataSource = _connectorSource,
                         Carbs = carbsInput,
@@ -743,6 +754,184 @@ public class GlookoV4TreatmentMapper(string connectorSource, GlookoTimeMapper ti
             if (entry.Type == "meals" && entry.Item != null && entry.SoftDeleted != true)
                 yield return entry.Item;
         }
+    }
+
+    /// <summary>
+    /// Maps V3 manual insulin series (gkInsulinBasal → BasalInjection, gkInsulinBolus → Bolus).
+    /// These represent pen injections logged by the user, not pump-delivered insulin.
+    /// Insulin names from Glooko (e.g., "Tresiba®U100", "Admelog®") are matched against
+    /// the <see cref="InsulinCatalog"/> to populate <see cref="TreatmentInsulinContext"/>.
+    /// </summary>
+    public (List<BasalInjection> basalInjections, List<Bolus> boluses) MapV3ManualInsulin(GlookoV3GraphResponse graphData)
+    {
+        var basalInjections = new List<BasalInjection>();
+        var boluses = new List<Bolus>();
+
+        if (graphData?.Series == null)
+            return (basalInjections, boluses);
+
+        // Map gkInsulinBasal → BasalInjection
+        if (graphData.Series.GkInsulinBasal != null)
+        {
+            foreach (var point in graphData.Series.GkInsulinBasal)
+            {
+                try
+                {
+                    var units = point.ActualUnits;
+                    if (units <= 0) continue;
+
+                    var rawTimestamp = DateTimeOffset.FromUnixTimeSeconds(point.X).UtcDateTime;
+                    var correctedTimestamp = _timeMapper.GetCorrectedGlookoTime(point.X);
+                    var now = DateTime.UtcNow;
+
+                    var insulinContext = ResolveInsulinContext(point.InsulinName, InsulinCategory.LongActing, InsulinCategory.UltraLongActing);
+
+                    basalInjections.Add(new BasalInjection
+                    {
+                        Id = Guid.CreateVersion7(),
+                        Timestamp = correctedTimestamp,
+                        LegacyId = GenerateLegacyId("v3_insulin_basal", rawTimestamp, $"units:{units}_name:{point.InsulinName}"),
+                        Device = _connectorSource,
+                        DataSource = _connectorSource,
+                        Units = units,
+                        InsulinContext = insulinContext,
+                        CreatedAt = now,
+                        ModifiedAt = now
+                    });
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(ex, "[{ConnectorSource}] Error mapping V3 gkInsulinBasal at X={X}", _connectorSource, point.X);
+                }
+            }
+        }
+
+        // Map gkInsulinBolus → Bolus (pen bolus injection)
+        if (graphData.Series.GkInsulinBolus != null)
+        {
+            foreach (var point in graphData.Series.GkInsulinBolus)
+            {
+                try
+                {
+                    var units = point.ActualUnits;
+                    if (units <= 0) continue;
+
+                    var rawTimestamp = DateTimeOffset.FromUnixTimeSeconds(point.X).UtcDateTime;
+                    var correctedTimestamp = _timeMapper.GetCorrectedGlookoTime(point.X);
+                    var now = DateTime.UtcNow;
+
+                    var insulinContext = ResolveInsulinContext(point.InsulinName, InsulinCategory.RapidActing, InsulinCategory.ShortActing);
+
+                    boluses.Add(new Bolus
+                    {
+                        Id = Guid.CreateVersion7(),
+                        Timestamp = correctedTimestamp,
+                        LegacyId = GenerateLegacyId("v3_insulin_bolus", rawTimestamp, $"units:{units}_name:{point.InsulinName}"),
+                        Device = _connectorSource,
+                        DataSource = _connectorSource,
+                        Insulin = units,
+                        BolusType = V4BolusType.Normal,
+                        Automatic = false,
+                        InsulinType = point.InsulinName,
+                        InsulinContext = insulinContext,
+                        CreatedAt = now,
+                        ModifiedAt = now
+                    });
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(ex, "[{ConnectorSource}] Error mapping V3 gkInsulinBolus at X={X}", _connectorSource, point.X);
+                }
+            }
+        }
+
+        _logger.LogInformation(
+            "[{ConnectorSource}] Transformed {BasalCount} basal injections and {BolusCount} pen boluses from v3 manual insulin data",
+            _connectorSource, basalInjections.Count, boluses.Count);
+
+        return (basalInjections, boluses);
+    }
+
+    /// <summary>
+    /// Resolves a Glooko insulin name (e.g., "Tresiba®U100", "Admelog®") to a
+    /// <see cref="TreatmentInsulinContext"/> by fuzzy-matching against the <see cref="InsulinCatalog"/>.
+    /// Falls back to a generic context with the raw name if no match is found.
+    /// </summary>
+    private static TreatmentInsulinContext ResolveInsulinContext(
+        string? glookoName,
+        InsulinCategory primaryCategory,
+        InsulinCategory secondaryCategory)
+    {
+        if (string.IsNullOrWhiteSpace(glookoName))
+        {
+            // No name provided — use a generic entry from the primary category
+            var fallback = InsulinCatalog.GetByCategory(primaryCategory).FirstOrDefault()
+                ?? InsulinCatalog.GetByCategory(secondaryCategory).FirstOrDefault();
+            return new TreatmentInsulinContext
+            {
+                PatientInsulinId = Guid.Empty,
+                InsulinName = "Unknown",
+                Dia = fallback?.DefaultDia ?? 4.0,
+                Peak = fallback?.DefaultPeak ?? 75,
+                Curve = fallback?.Curve ?? "bilinear",
+                Concentration = fallback?.Concentration ?? 100,
+            };
+        }
+
+        // Normalize: strip ® and trademark symbols, lowercase for matching
+        var normalized = glookoName
+            .Replace("®", "", StringComparison.Ordinal)
+            .Replace("™", "", StringComparison.Ordinal)
+            .Trim();
+
+        // Hyphen-free version for ID matching: catalog IDs use hyphens (e.g., "humalog-u200")
+        // but Glooko names concatenate them ("HumalogU200") or use spaces ("Humulin R U500")
+        var normalizedCompact = normalized
+            .Replace("-", "", StringComparison.Ordinal)
+            .Replace(" ", "", StringComparison.Ordinal);
+
+        // Try catalog ID match, most-specific (longest ID) first so that
+        // "HumalogU200" matches "humalog-u200" before the shorter "humalog".
+        var match = InsulinCatalog.GetAll()
+            .OrderByDescending(f => f.Id.Length)
+            .FirstOrDefault(f =>
+                normalizedCompact.Contains(f.Id.Replace("-", ""), StringComparison.OrdinalIgnoreCase));
+
+        // Try matching by catalog name keywords
+        if (match == null)
+        {
+            // Extract the first word as the brand name for matching
+            var brandWord = normalized.Split(' ', StringSplitOptions.RemoveEmptyEntries).FirstOrDefault() ?? "";
+            match = InsulinCatalog.GetAll()
+                .OrderByDescending(f => f.Id.Length)
+                .FirstOrDefault(f => f.Name.Contains(brandWord, StringComparison.OrdinalIgnoreCase));
+        }
+
+        if (match != null)
+        {
+            return new TreatmentInsulinContext
+            {
+                PatientInsulinId = Guid.Empty,
+                InsulinName = match.Name,
+                Dia = match.DefaultDia,
+                Peak = match.DefaultPeak,
+                Curve = match.Curve,
+                Concentration = match.Concentration,
+            };
+        }
+
+        // No match — use the raw Glooko name with defaults from the primary category
+        var categoryDefault = InsulinCatalog.GetByCategory(primaryCategory).FirstOrDefault()
+            ?? InsulinCatalog.GetByCategory(secondaryCategory).FirstOrDefault();
+        return new TreatmentInsulinContext
+        {
+            PatientInsulinId = Guid.Empty,
+            InsulinName = glookoName,
+            Dia = categoryDefault?.DefaultDia ?? 4.0,
+            Peak = categoryDefault?.DefaultPeak ?? 75,
+            Curve = categoryDefault?.Curve ?? "bilinear",
+            Concentration = categoryDefault?.Concentration ?? 100,
+        };
     }
 
     private static string GenerateLegacyId(string eventType, DateTime timestamp, string? additionalData = null)

@@ -76,20 +76,20 @@
 </svelte:head>
 
 {#if siteChangeResource.current}
-<div class="container mx-auto max-w-7xl space-y-8 px-4 py-6">
+<div class="@container container mx-auto max-w-7xl space-y-8 p-3 @md:p-6">
   <!-- Header -->
   <div class="space-y-4">
     <div class="flex flex-wrap items-center justify-between gap-4">
       <div>
-        <h1 class="flex items-center gap-3 text-3xl font-bold">
-          <SiteChangeIcon class="h-8 w-8 text-rose-600" />
+        <h1 class="flex items-center gap-3 text-2xl font-bold @md:text-3xl">
+          <SiteChangeIcon class="h-6 w-6 text-rose-600 @md:h-8 @md:w-8" />
           Site Change Impact
         </h1>
         <p class="mt-1 text-muted-foreground">
           Analyze glucose patterns before and after pump site changes
         </p>
       </div>
-      <div class="flex items-center gap-2">
+      <div class="flex items-center gap-2 print:hidden">
         <Button
           variant="outline"
           onclick={() => window.print()}
@@ -160,7 +160,9 @@
           </div>
         </div>
       {:else if analysis !== null && analysis !== undefined}
-        <SiteChangeImpactChart {analysis} />
+        <div class="w-full">
+          <SiteChangeImpactChart {analysis} />
+        </div>
       {/if}
     </CardContent>
   </Card>
@@ -185,7 +187,7 @@
         ages.
       </p>
 
-      <div class="grid gap-4 md:grid-cols-2">
+      <div class="grid gap-4 @lg:grid-cols-2">
         <div>
           <p class="font-medium">Before Site Change (Left)</p>
           <p class="text-blue-700/80 dark:text-blue-300/80">
@@ -228,7 +230,7 @@
         </CardTitle>
       </CardHeader>
       <CardContent class="space-y-4">
-        <div class="grid gap-4 md:grid-cols-2">
+        <div class="grid gap-4 @lg:grid-cols-2">
           {#if percentImprovement > 5}
             <div
               class="flex items-start gap-3 rounded-lg bg-green-50 p-4 dark:bg-green-950/30"

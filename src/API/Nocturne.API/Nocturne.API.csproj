@@ -18,6 +18,12 @@
   <ItemGroup>
     <InternalsVisibleTo Include="Nocturne.API.Tests" />
   </ItemGroup>
+  <!-- Build provenance baked into the published container image. CI passes the source
+       commit and build timestamp; the status endpoint surfaces them in the About panel. -->
+  <ItemGroup>
+    <ContainerEnvironmentVariable Include="GIT_COMMIT" Value="$(ContainerGitCommit)" Condition="'$(ContainerGitCommit)' != ''" />
+    <ContainerEnvironmentVariable Include="BUILD_DATE" Value="$(ContainerBuildDate)" Condition="'$(ContainerBuildDate)' != ''" />
+  </ItemGroup>
   <ItemGroup>
     <PackageReference Include="Alexa.NET" />
     <PackageReference Include="Microsoft.Bcl.Memory" />
@@ -40,6 +46,7 @@
     <PackageReference Include="OpenTelemetry.Extensions.Hosting" />
     <PackageReference Include="ShiroTrie" />
     <PackageReference Include="SixLabors.ImageSharp" />
+    <PackageReference Include="SocketIOClient" />
     <PackageReference Include="Wasmtime" />
     <PackageReference Include="YamlDotNet" />
     <PackageReference Include="Yarp.ReverseProxy" />
@@ -56,6 +63,7 @@
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\..\Aspire\Nocturne.Aspire.ServiceDefaults\Nocturne.Aspire.ServiceDefaults.csproj" />
+    <ProjectReference Include="..\..\Core\Nocturne.Core.Alerts.Native\Nocturne.Core.Alerts.Native.csproj" />
     <ProjectReference Include="..\..\Core\Nocturne.Core.Constants\Nocturne.Core.Constants.csproj" />
     <ProjectReference Include="..\..\Core\Nocturne.Core.Contracts\Nocturne.Core.Contracts.csproj" />
     <ProjectReference Include="..\..\Core\Nocturne.Core.Models\Nocturne.Core.Models.csproj" />
@@ -77,6 +85,7 @@
     <ProjectReference Include="..\..\Connectors\Nocturne.Connectors.NocturneRemote\Nocturne.Connectors.NocturneRemote.csproj" />
     <ProjectReference Include="..\..\Connectors\Nocturne.Connectors.Twiist\Nocturne.Connectors.Twiist.csproj" />
     <ProjectReference Include="..\..\Connectors\Nocturne.Connectors.CareLink\Nocturne.Connectors.CareLink.csproj" />
+    <ProjectReference Include="..\..\Connectors\Nocturne.Connectors.Tandem\Nocturne.Connectors.Tandem.csproj" />
   </ItemGroup>
   <!-- Diagram sources — published to wwwroot/diagrams/ so the OpenAPI document
        transformers can find them in Docker (where the source tree isn't available). -->

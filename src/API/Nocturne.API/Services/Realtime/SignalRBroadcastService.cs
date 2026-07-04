@@ -3,6 +3,7 @@ using Nocturne.API.Hubs;
 using Nocturne.Connectors.Core.Models;
 using Nocturne.Core.Contracts.Multitenancy;
 using Nocturne.Core.Models;
+using Nocturne.Core.Models.ClientDevices;
 
 namespace Nocturne.API.Services.Realtime;
 
@@ -107,6 +108,22 @@ public interface ISignalRBroadcastService
     /// <param name="eventName">The event name to broadcast</param>
     /// <param name="payload">The event payload</param>
     Task BroadcastAlertEventAsync(string eventName, object payload);
+
+    /// <summary>
+    /// Broadcast a device actuation intent to the tenant's authenticated DataHub clients.
+    /// Registered push-mode devices (e.g. the Companion) act on it when it targets their kind;
+    /// other clients ignore it. Tenant-scoped and authenticated (not the anonymous AlertHub).
+    /// </summary>
+    /// <param name="intent">The actuation intent to deliver.</param>
+    Task BroadcastDeviceActionAsync(DeviceActionIntent intent);
+
+    /// <summary>
+    /// Mirror a non-alert in-app notification to the tenant's authenticated clients. A device
+    /// surfaces it only if it owns the notification (matches <see cref="DeviceNotificationMirror.UserId"/>);
+    /// web clients ignore it. Alerts do NOT use this path (they go via device_action).
+    /// </summary>
+    /// <param name="mirror">The user-tagged notification to mirror.</param>
+    Task BroadcastDeviceNotificationAsync(DeviceNotificationMirror mirror);
 
     /// <summary>
     /// Broadcast sync progress event to subscribers via ConfigHub
@@ -572,6 +589,44 @@ public class SignalRBroadcastService : ISignalRBroadcastService
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error relaying alert event {EventName} to HA", eventName);
+        }
+    }
+
+    /// <inheritdoc />
+    public async Task BroadcastDeviceActionAsync(DeviceActionIntent intent)
+    {
+        try
+        {
+            _logger.LogDebug(
+                "Broadcasting device_action {Intent} for excursion {ExcursionId} (kind {Kind})",
+                intent.Intent, intent.ExcursionId, intent.TargetKind);
+
+            await _dataHubContext
+                .Clients.Group(TenantGroup("authorized"))
+                .SendCoreAsync("device_action", new object[] { intent });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error broadcasting device_action for excursion {ExcursionId}", intent.ExcursionId);
+        }
+    }
+
+    /// <inheritdoc />
+    public async Task BroadcastDeviceNotificationAsync(DeviceNotificationMirror mirror)
+    {
+        try
+        {
+            _logger.LogDebug(
+                "Broadcasting device_notification mirror for user {UserId}: {NotificationId}",
+                mirror.UserId, mirror.Notification.Id);
+
+            await _dataHubContext
+                .Clients.Group(TenantGroup("authorized"))
+                .SendCoreAsync("device_notification", new object[] { mirror });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error broadcasting device_notification for user {UserId}", mirror.UserId);
         }
     }
 

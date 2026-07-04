@@ -12,6 +12,7 @@ using Nocturne.Core.Models.V4;
 using Nocturne.Connectors.Eversense.Models;
 using Nocturne.Connectors.Eversense.Services;
 using Xunit;
+using Nocturne.Core.Contracts.V4;
 
 namespace Nocturne.Connectors.Eversense.Tests.Services;
 
@@ -145,7 +146,7 @@ public class EversenseConnectorServiceTests
         publisherMock.Setup(p => p.Glucose.PublishSensorGlucoseAsync(
                 It.IsAny<IEnumerable<SensorGlucose>>(),
                 It.IsAny<string>(),
-                It.IsAny<CancellationToken>()))
+                It.IsAny<WriteOrigin>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(true);
 
         var fixture = new ServiceFixture(
@@ -168,7 +169,7 @@ public class EversenseConnectorServiceTests
         publisherMock.Verify(p => p.Glucose.PublishSensorGlucoseAsync(
             It.Is<IEnumerable<SensorGlucose>>(sg => sg.Count() == 1),
             It.IsAny<string>(),
-            It.IsAny<CancellationToken>()), Times.Once);
+            It.IsAny<WriteOrigin>(), It.IsAny<CancellationToken>()), Times.Once);
     }
 
     [Fact]
@@ -211,11 +212,11 @@ public class EversenseConnectorServiceTests
         publisherMock.Verify(p => p.Glucose.PublishSensorGlucoseAsync(
             It.IsAny<IEnumerable<SensorGlucose>>(),
             It.IsAny<string>(),
-            It.IsAny<CancellationToken>()), Times.Never);
+            It.IsAny<WriteOrigin>(), It.IsAny<CancellationToken>()), Times.Never);
     }
 
     [Fact]
-    public async Task SyncDataAsync_EmptyPatientList_SkipsPublish()
+    public async Task SyncDataAsync_EmptyPatientList_ReportsUnhealthyWithGuidance()
     {
         // Arrange
         var publisherMock = new Mock<IConnectorPublisher>();
@@ -234,17 +235,20 @@ public class EversenseConnectorServiceTests
         // Act
         var result = await fixture.Service.SyncDataAsync(request, fixture.Config, CancellationToken.None);
 
-        // Assert
-        result.Success.Should().BeTrue();
+        // Assert — empty follow list is a setup problem, surfaced as unhealthy with instructions
+        // rather than a silent successful empty sync.
+        result.Success.Should().BeFalse();
+        result.Errors.Should().ContainSingle()
+            .Which.Should().Contain("not following anyone");
 
         publisherMock.Verify(p => p.Glucose.PublishSensorGlucoseAsync(
             It.IsAny<IEnumerable<SensorGlucose>>(),
             It.IsAny<string>(),
-            It.IsAny<CancellationToken>()), Times.Never);
+            It.IsAny<WriteOrigin>(), It.IsAny<CancellationToken>()), Times.Never);
     }
 
     [Fact]
-    public async Task SyncDataAsync_MultiplePatientsWithoutConfiguredUsername_SkipsPublishAndLogs()
+    public async Task SyncDataAsync_MultiplePatientsWithoutConfiguredUsername_ReportsUnhealthyWithNames()
     {
         // Arrange
         var patients = new List<EversensePatientDatum>
@@ -272,8 +276,6 @@ public class EversenseConnectorServiceTests
         var publisherMock = new Mock<IConnectorPublisher>();
         publisherMock.Setup(p => p.IsAvailable).Returns(true);
 
-        var loggerMock = new Mock<ILogger<EversenseConnectorService>>();
-
         var fixture = new ServiceFixture(
             tokenToReturn: "valid-token",
             httpResponses: new Dictionary<string, HttpResponseMessage>
@@ -281,7 +283,6 @@ public class EversenseConnectorServiceTests
                 [EversenseConstants.Endpoints.GetFollowingPatientList] = CreateJsonResponse(patients)
             },
             publisher: publisherMock.Object,
-            serviceLogger: loggerMock.Object,
             patientUsername: null); // No patient username configured
 
         var request = new SyncRequest { DataTypes = [SyncDataType.Glucose] };
@@ -289,23 +290,16 @@ public class EversenseConnectorServiceTests
         // Act
         var result = await fixture.Service.SyncDataAsync(request, fixture.Config, CancellationToken.None);
 
-        // Assert
-        result.Success.Should().BeTrue();
+        // Assert — ambiguous selection is surfaced as unhealthy, naming the available patients
+        // so the user knows which username to configure.
+        result.Success.Should().BeFalse();
+        result.Errors.Should().ContainSingle()
+            .Which.Should().Contain("alice@example.com").And.Contain("bob@example.com");
 
         publisherMock.Verify(p => p.Glucose.PublishSensorGlucoseAsync(
             It.IsAny<IEnumerable<SensorGlucose>>(),
             It.IsAny<string>(),
-            It.IsAny<CancellationToken>()), Times.Never);
-
-        // Verify a warning was logged about multiple patients
-        loggerMock.Verify(
-            x => x.Log(
-                LogLevel.Warning,
-                It.IsAny<EventId>(),
-                It.Is<It.IsAnyType>((v, t) => v.ToString()!.Contains("Multiple patients")),
-                It.IsAny<Exception?>(),
-                It.IsAny<Func<It.IsAnyType, Exception?, string>>()),
-            Times.Once);
+            It.IsAny<WriteOrigin>(), It.IsAny<CancellationToken>()), Times.Never);
     }
 
     #endregion

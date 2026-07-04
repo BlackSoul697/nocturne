@@ -7,6 +7,7 @@ using Nocturne.Core.Contracts.Alerts;
 using Nocturne.Core.Contracts.Multitenancy;
 using Nocturne.Core.Models.Alerts;
 using Nocturne.Infrastructure.Data;
+using Nocturne.Infrastructure.Data.Services;
 
 namespace Nocturne.API.Controllers.V4.Monitoring;
 
@@ -21,7 +22,7 @@ namespace Nocturne.API.Controllers.V4.Monitoring;
 [Route("api/v4/alerts")]
 public class AlertsController : ControllerBase
 {
-    private readonly IDbContextFactory<NocturneDbContext> _contextFactory;
+    private readonly ITenantDbContextFactory _contextFactory;
     private readonly IAlertAcknowledgementService _acknowledgementService;
     private readonly IAlertDeliveryService _deliveryService;
     private readonly ITenantAccessor _tenantAccessor;
@@ -30,13 +31,13 @@ public class AlertsController : ControllerBase
     /// <summary>
     /// Initializes a new instance of <see cref="AlertsController"/>.
     /// </summary>
-    /// <param name="contextFactory">Factory for creating <see cref="NocturneDbContext"/> instances.</param>
+    /// <param name="contextFactory">Tenant-scoped factory for creating <see cref="NocturneDbContext"/> instances.</param>
     /// <param name="acknowledgementService">Service for acknowledging alert excursions.</param>
     /// <param name="deliveryService">Service for marking alert delivery outcomes.</param>
     /// <param name="tenantAccessor">Accessor for the current request tenant context.</param>
     /// <param name="logger">Logger instance.</param>
     public AlertsController(
-        IDbContextFactory<NocturneDbContext> contextFactory,
+        ITenantDbContextFactory contextFactory,
         IAlertAcknowledgementService acknowledgementService,
         IAlertDeliveryService deliveryService,
         ITenantAccessor tenantAccessor,
@@ -57,7 +58,7 @@ public class AlertsController : ControllerBase
     [ProducesResponseType(typeof(List<ActiveExcursionResponse>), StatusCodes.Status200OK)]
     public async Task<ActionResult<List<ActiveExcursionResponse>>> GetActiveAlerts(CancellationToken ct)
     {
-        await using var db = await _contextFactory.CreateDbContextAsync(ct);
+        await using var db = await _contextFactory.CreateAsync(ct);
 
         var excursions = await db.AlertExcursions
             .AsNoTracking()
@@ -73,6 +74,7 @@ public class AlertsController : ControllerBase
             AlertRuleId = e.AlertRuleId,
             RuleName = e.AlertRule?.Name ?? string.Empty,
             ConditionType = e.AlertRule?.ConditionType ?? AlertConditionType.Threshold,
+            Severity = e.AlertRule?.Severity ?? AlertRuleSeverity.Warning,
             StartedAt = e.StartedAt,
             AcknowledgedAt = e.AcknowledgedAt,
             AcknowledgedBy = e.AcknowledgedBy,
@@ -110,12 +112,16 @@ public class AlertsController : ControllerBase
         if (pageSize < 1) pageSize = 1;
         if (pageSize > 100) pageSize = 100;
 
-        await using var db = await _contextFactory.CreateDbContextAsync(ct);
+        await using var db = await _contextFactory.CreateAsync(ct);
 
+        // EndedAt <= now: history is completed excursions only. device_action test fires carry
+        // a short future EndedAt (AlertDeliveryService.TestFireAsync) so they read as live in
+        // the active-intents snapshot; they join history once that window lapses.
+        var now = DateTime.UtcNow;
         var query = db.AlertExcursions
             .AsNoTracking()
             .Include(e => e.AlertRule)
-            .Where(e => e.EndedAt != null);
+            .Where(e => e.EndedAt != null && e.EndedAt <= now);
 
         if (alertRuleId.HasValue)
             query = query.Where(e => e.AlertRuleId == alertRuleId.Value);
@@ -187,6 +193,43 @@ public class AlertsController : ControllerBase
     }
 
     /// <summary>
+    /// Acknowledge a single alert excursion, halting escalation delivery for its
+    /// active instances. Acknowledging an excursion that is already acknowledged
+    /// or already closed is a no-op. Returns 404 when the excursion does not
+    /// exist for the current tenant.
+    /// </summary>
+    /// <seealso cref="IAlertAcknowledgementService.AcknowledgeExcursionAsync"/>
+    [HttpPost("excursions/{excursionId:guid}/acknowledge")]
+    [RemoteCommand(Invalidates = ["GetActiveAlerts"])]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<ActionResult> AcknowledgeExcursion(
+        Guid excursionId, [FromBody] AcknowledgeRequest request, CancellationToken ct)
+    {
+        var tenantId = _tenantAccessor.TenantId;
+
+        // The acknowledgement service silently no-ops on an unknown excursion, so
+        // resolve existence here (tenant-scoped context — another tenant's
+        // excursion is invisible and yields 404).
+        await using var db = await _contextFactory.CreateAsync(ct);
+        var exists = await db.AlertExcursions
+            .AsNoTracking()
+            .AnyAsync(e => e.Id == excursionId, ct);
+
+        if (!exists)
+            return NotFound();
+
+        await _acknowledgementService.AcknowledgeExcursionAsync(
+            tenantId,
+            excursionId,
+            request.AcknowledgedBy ?? "unknown",
+            broadcast: true,
+            ct);
+
+        return NoContent();
+    }
+
+    /// <summary>
     /// Snooze an alert instance for the specified duration.
     /// </summary>
     [HttpPost("instances/{instanceId:guid}/snooze")]
@@ -198,7 +241,7 @@ public class AlertsController : ControllerBase
     public async Task<ActionResult> SnoozeInstance(
         Guid instanceId, [FromBody] SnoozeRequest request, CancellationToken ct)
     {
-        await using var db = await _contextFactory.CreateDbContextAsync(ct);
+        await using var db = await _contextFactory.CreateAsync(ct);
 
         var instance = await db.AlertInstances
             .Include(i => i.AlertExcursion)
@@ -262,7 +305,7 @@ public class AlertsController : ControllerBase
     public async Task<ActionResult<List<PendingDeliveryResponse>>> GetPendingDeliveries(
         [FromQuery] ChannelType[] channelType, CancellationToken ct)
     {
-        await using var db = await _contextFactory.CreateDbContextAsync(ct);
+        await using var db = await _contextFactory.CreateAsync(ct);
 
         var query = db.AlertDeliveries
             .AsNoTracking()
@@ -297,6 +340,7 @@ public class ActiveExcursionResponse
     public Guid AlertRuleId { get; set; }
     public string RuleName { get; set; } = string.Empty;
     public AlertConditionType ConditionType { get; set; } = AlertConditionType.Threshold;
+    public AlertRuleSeverity Severity { get; set; } = AlertRuleSeverity.Warning;
     public DateTime StartedAt { get; set; }
     public DateTime? AcknowledgedAt { get; set; }
     public string? AcknowledgedBy { get; set; }

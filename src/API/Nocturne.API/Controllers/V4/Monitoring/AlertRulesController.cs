@@ -4,11 +4,14 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using OpenApi.Remote.Attributes;
 using Nocturne.API.Services.Alerts;
+using Nocturne.API.Services.Alerts.Evaluators;
 using Nocturne.Core.Contracts.Alerts;
 using Nocturne.Core.Models;
 using Nocturne.Core.Models.Alerts;
+using Nocturne.Core.Models.ClientDevices;
 using Nocturne.Infrastructure.Data;
 using Nocturne.Infrastructure.Data.Entities;
+using Nocturne.Infrastructure.Data.Services;
 
 namespace Nocturne.API.Controllers.V4.Monitoring;
 
@@ -34,23 +37,26 @@ namespace Nocturne.API.Controllers.V4.Monitoring;
 [Route("api/v4/alert-rules")]
 public class AlertRulesController : ControllerBase
 {
-    private readonly IDbContextFactory<NocturneDbContext> _contextFactory;
+    private readonly ITenantDbContextFactory _contextFactory;
     private readonly IAlertReferenceService _referenceService;
     private readonly IAlertDeliveryService _deliveryService;
+    private readonly IRuleScopeClassifier _scopeClassifier;
     private readonly ILogger<AlertRulesController> _logger;
 
     /// <summary>
     /// Initializes a new instance of <see cref="AlertRulesController"/>.
     /// </summary>
     public AlertRulesController(
-        IDbContextFactory<NocturneDbContext> contextFactory,
+        ITenantDbContextFactory contextFactory,
         IAlertReferenceService referenceService,
         IAlertDeliveryService deliveryService,
+        IRuleScopeClassifier scopeClassifier,
         ILogger<AlertRulesController> logger)
     {
         _contextFactory = contextFactory;
         _referenceService = referenceService;
         _deliveryService = deliveryService;
+        _scopeClassifier = scopeClassifier;
         _logger = logger;
     }
 
@@ -62,7 +68,7 @@ public class AlertRulesController : ControllerBase
     [ProducesResponseType(typeof(List<AlertRuleResponse>), StatusCodes.Status200OK)]
     public async Task<ActionResult<List<AlertRuleResponse>>> GetRules(CancellationToken ct)
     {
-        await using var db = await _contextFactory.CreateDbContextAsync(ct);
+        await using var db = await _contextFactory.CreateAsync(ct);
 
         var rules = await db.AlertRules
             .AsNoTracking()
@@ -82,7 +88,7 @@ public class AlertRulesController : ControllerBase
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<ActionResult<AlertRuleResponse>> GetRule(Guid id, CancellationToken ct)
     {
-        await using var db = await _contextFactory.CreateDbContextAsync(ct);
+        await using var db = await _contextFactory.CreateAsync(ct);
 
         var rule = await db.AlertRules
             .AsNoTracking()
@@ -108,11 +114,21 @@ public class AlertRulesController : ControllerBase
         if (RejectPumpModeOnGenericStateSpan(request.ConditionType, request.ConditionParams) is { } badRequest)
             return badRequest;
 
+        if (RejectInvalidDeviceActionChannels(request.Channels) is { } badChannel)
+            return badChannel;
+
         // No cycle detection on create: the new id is server-generated, so the proposed tree
         // cannot reference an id it doesn't yet know. Cycles can only be introduced via PUT.
-        await using var db = await _contextFactory.CreateDbContextAsync(ct);
+        await using var db = await _contextFactory.CreateAsync(ct);
+
+        if (await RejectInvalidTrackerAgeAsync(db, request.ConditionType, request.ConditionParams, ct) is { } badTracker)
+            return badTracker;
 
         var tenantId = db.TenantId;
+
+        var conditionParamsJson = request.ConditionParams is not null
+            ? JsonSerializer.Serialize(request.ConditionParams)
+            : "{}";
 
         var rule = new AlertRuleEntity
         {
@@ -121,9 +137,8 @@ public class AlertRulesController : ControllerBase
             Name = request.Name,
             Description = request.Description,
             ConditionType = request.ConditionType,
-            ConditionParams = request.ConditionParams is not null
-                ? JsonSerializer.Serialize(request.ConditionParams)
-                : "{}",
+            ConditionParams = conditionParamsJson,
+            ScopeClass = _scopeClassifier.Classify(request.ConditionType, conditionParamsJson),
             IsEnabled = request.IsEnabled,
             SortOrder = request.SortOrder,
             Severity = request.Severity ?? AlertRuleSeverity.Warning,
@@ -173,7 +188,13 @@ public class AlertRulesController : ControllerBase
         if (RejectPumpModeOnGenericStateSpan(request.ConditionType, request.ConditionParams) is { } badRequest)
             return badRequest;
 
-        await using var db = await _contextFactory.CreateDbContextAsync(ct);
+        if (RejectInvalidDeviceActionChannels(request.Channels) is { } badChannel)
+            return badChannel;
+
+        await using var db = await _contextFactory.CreateAsync(ct);
+
+        if (await RejectInvalidTrackerAgeAsync(db, request.ConditionType, request.ConditionParams, ct) is { } badTracker)
+            return badTracker;
 
         var rule = await db.AlertRules
             .Include(r => r.Channels)
@@ -193,12 +214,15 @@ public class AlertRulesController : ControllerBase
 
         var tenantId = db.TenantId;
 
+        var conditionParamsJson = request.ConditionParams is not null
+            ? JsonSerializer.Serialize(request.ConditionParams)
+            : "{}";
+
         rule.Name = request.Name;
         rule.Description = request.Description;
         rule.ConditionType = request.ConditionType;
-        rule.ConditionParams = request.ConditionParams is not null
-            ? JsonSerializer.Serialize(request.ConditionParams)
-            : "{}";
+        rule.ConditionParams = conditionParamsJson;
+        rule.ScopeClass = _scopeClassifier.Classify(request.ConditionType, conditionParamsJson);
         rule.IsEnabled = request.IsEnabled;
         rule.SortOrder = request.SortOrder;
         rule.Severity = request.Severity ?? AlertRuleSeverity.Warning;
@@ -247,11 +271,23 @@ public class AlertRulesController : ControllerBase
     [ProducesResponseType(typeof(ReferencingRulesResponse), StatusCodes.Status409Conflict)]
     public async Task<ActionResult> DeleteRule(Guid id, CancellationToken ct)
     {
-        await using var db = await _contextFactory.CreateDbContextAsync(ct);
+        await using var db = await _contextFactory.CreateAsync(ct);
 
         var rule = await db.AlertRules.FirstOrDefaultAsync(r => r.Id == id, ct);
         if (rule is null)
             return NotFound();
+
+        // Managed rules are owned by their source feature's configuration (e.g. a tracker
+        // notification threshold) — deleting here would only get re-synthesised by the
+        // backfill. Delete the source config instead.
+        if (rule.ManagedBy is not null)
+        {
+            return Conflict(new
+            {
+                message = $"This rule is managed by '{rule.ManagedBy}' — delete the tracker notification threshold instead.",
+                managedBy = rule.ManagedBy,
+            });
+        }
 
         // Refuse to break the alert_state graph: if any other rule references this one, the
         // caller must update or delete those first. Returning the offending ids lets the FE
@@ -277,7 +313,7 @@ public class AlertRulesController : ControllerBase
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<ActionResult<AlertRuleResponse>> ToggleRule(Guid id, CancellationToken ct)
     {
-        await using var db = await _contextFactory.CreateDbContextAsync(ct);
+        await using var db = await _contextFactory.CreateAsync(ct);
 
         var rule = await db.AlertRules
             .Include(r => r.Channels)
@@ -304,7 +340,7 @@ public class AlertRulesController : ControllerBase
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<IActionResult> TestFire(Guid id, CancellationToken ct)
     {
-        await using var db = await _contextFactory.CreateDbContextAsync(ct);
+        await using var db = await _contextFactory.CreateAsync(ct);
 
         var rule = await db.AlertRules
             .AsNoTracking()
@@ -334,7 +370,7 @@ public class AlertRulesController : ControllerBase
     public async Task<IActionResult> TestFireDryRun(
         [FromBody] TestFireDryRunRequest request, CancellationToken ct)
     {
-        await using var db = await _contextFactory.CreateDbContextAsync(ct);
+        await using var db = await _contextFactory.CreateAsync(ct);
         var tenantId = db.TenantId;
 
         // Synthesise channel snapshots with provisional ids — none of them point to a
@@ -386,6 +422,62 @@ public class AlertRulesController : ControllerBase
 
     #region Helpers
 
+    /// <summary>
+    /// Rejects a channel list that contains a <c>device_action</c> channel whose destination is not
+    /// a valid device kind, or whose metadata requests a capability that is unknown or not allowed
+    /// for that kind — otherwise a typo'd kind/capability would silently never actuate. Returns a
+    /// 400 <see cref="BadRequestObjectResult"/> on the first offender, or null when all channels
+    /// are valid.
+    /// </summary>
+    private ActionResult? RejectInvalidDeviceActionChannels(List<CreateAlertRuleChannelRequest>? channels)
+    {
+        if (channels is null)
+        {
+            return null;
+        }
+
+        foreach (var ch in channels)
+        {
+            if (ch.ChannelType != ChannelType.DeviceAction)
+            {
+                continue;
+            }
+
+            if (string.IsNullOrWhiteSpace(ch.Destination) || !DeviceKinds.IsValid(ch.Destination))
+            {
+                return BadRequest(new
+                {
+                    message = $"A device_action channel's destination must be a device kind "
+                        + $"({string.Join(", ", DeviceKinds.All)}); got '{ch.Destination}'.",
+                });
+            }
+
+            var requested = DeviceCapabilities.ParseRequestedCapabilities(
+                ch.Metadata is not null ? JsonSerializer.Serialize(ch.Metadata) : null);
+            foreach (var capability in requested)
+            {
+                if (!DeviceCapabilities.IsKnown(capability))
+                {
+                    return BadRequest(new
+                    {
+                        message = $"Unknown device capability '{capability}'.",
+                    });
+                }
+
+                if (!DeviceCapabilities.Registry[capability].Kinds.Contains(ch.Destination))
+                {
+                    return BadRequest(new
+                    {
+                        message = $"Capability '{capability}' is not available on "
+                            + $"device kind '{ch.Destination}'.",
+                    });
+                }
+            }
+        }
+
+        return null;
+    }
+
     private static AlertRuleChannelEntity BuildChannel(
         CreateAlertRuleChannelRequest req, Guid ruleId, Guid tenantId, int sortOrder) => new()
     {
@@ -395,6 +487,7 @@ public class AlertRulesController : ControllerBase
         ChannelType = req.ChannelType,
         Destination = req.Destination ?? string.Empty,
         DestinationLabel = req.DestinationLabel,
+        Metadata = req.Metadata is not null ? JsonSerializer.Serialize(req.Metadata) : null,
         SortOrder = sortOrder,
         CreatedAt = DateTime.UtcNow,
     };
@@ -410,6 +503,8 @@ public class AlertRulesController : ControllerBase
         SortOrder = entity.SortOrder,
         Severity = entity.Severity,
         AllowThroughDnd = entity.AllowThroughDnd,
+        ScopeClass = entity.ScopeClass,
+        ManagedBy = entity.ManagedBy,
         AutoResolveEnabled = entity.AutoResolveEnabled,
         AutoResolveParams = entity.AutoResolveParams is null
             ? null
@@ -424,6 +519,7 @@ public class AlertRulesController : ControllerBase
                 Destination = c.Destination,
                 DestinationLabel = c.DestinationLabel,
                 SortOrder = c.SortOrder,
+                Metadata = c.Metadata is null ? null : DeserializeJson(c.Metadata),
             })
             .ToList(),
     };
@@ -477,6 +573,60 @@ public class AlertRulesController : ControllerBase
         PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower,
         PropertyNameCaseInsensitive = true,
     };
+
+    /// <summary>
+    /// Returns a <c>400 BadRequest</c> when the rule contains a <c>tracker_age</c> leaf whose
+    /// <c>tracker_definition_id</c> is missing, malformed, or does not exist for this tenant.
+    /// Without this the rule saves fine but the evaluator fails closed on every reading and
+    /// sweep pass — a rule that silently never fires (or throws into the per-rule catch when
+    /// the id can't even deserialise). Returns null when the request is acceptable.
+    /// </summary>
+    private static async Task<BadRequestObjectResult?> RejectInvalidTrackerAgeAsync(
+        NocturneDbContext db, AlertConditionType type, object? conditionParams, CancellationToken ct)
+    {
+        if (conditionParams is null)
+            return null;
+
+        var definitionIds = new List<Guid>();
+        if (type == AlertConditionType.TrackerAge)
+        {
+            try
+            {
+                var json = JsonSerializer.Serialize(conditionParams);
+                var typed = JsonSerializer.Deserialize<TrackerAgeCondition>(json, ReferenceJsonOptions);
+                if (typed is null || typed.TrackerDefinitionId == Guid.Empty)
+                    return new BadRequestObjectResult("tracker_age requires a tracker_definition_id.");
+                definitionIds.Add(typed.TrackerDefinitionId);
+            }
+            catch (JsonException)
+            {
+                return new BadRequestObjectResult("tracker_age requires a valid tracker_definition_id.");
+            }
+        }
+        else
+        {
+            var root = TryDeserializeRoot(type, conditionParams);
+            if (root is not null)
+            {
+                ConditionPath.Walk<object>(root, (visited, _) =>
+                {
+                    if (visited.TrackerAge is { } trackerAge)
+                        definitionIds.Add(trackerAge.TrackerDefinitionId);
+                    return null;
+                });
+                if (definitionIds.Contains(Guid.Empty))
+                    return new BadRequestObjectResult("tracker_age requires a tracker_definition_id.");
+            }
+        }
+
+        foreach (var definitionId in definitionIds)
+        {
+            if (!await db.TrackerDefinitions.AnyAsync(d => d.Id == definitionId, ct))
+                return new BadRequestObjectResult($"Unknown tracker definition '{definitionId}'.");
+        }
+
+        return null;
+    }
 
     /// <summary>
     /// Returns a <c>400 BadRequest</c> when the rule contains a <c>state_span_active</c> leaf
@@ -552,6 +702,16 @@ public class AlertRuleResponse
     /// <summary>When true, this rule still fires while the tenant is in Do Not Disturb mode.
     /// Critical rules implicitly bypass DND regardless of this flag.</summary>
     public bool AllowThroughDnd { get; set; }
+    /// <summary>Low/high classification for scoped Do Not Disturb (ADR 0004), derived by the
+    /// shared engine from the rule's directional leaves. Read-only — computed server-side on
+    /// create/update; a scoped <c>lows</c>/<c>highs</c> window silences a rule only when its
+    /// class matches.</summary>
+    public RuleScopeClass ScopeClass { get; set; } = RuleScopeClass.Undirected;
+    /// <summary>Owner tag when this rule is synthesised from another feature's configuration
+    /// (e.g. <c>tracker:{definitionId}</c>). Null for user-authored rules. Managed rules
+    /// cannot be deleted here — the owning configuration re-syncs their condition, name and
+    /// severity; channels and client configuration remain user-editable.</summary>
+    public string? ManagedBy { get; set; }
     public bool AutoResolveEnabled { get; set; }
     public object? AutoResolveParams { get; set; }
     public object ClientConfiguration { get; set; } = new { };
@@ -566,6 +726,8 @@ public class AlertRuleChannelResponse
     public string Destination { get; set; } = string.Empty;
     public string? DestinationLabel { get; set; }
     public int SortOrder { get; set; }
+    /// <summary>Channel-specific config (e.g. device_action capabilities). Null when unset.</summary>
+    public object? Metadata { get; set; }
 }
 
 public class CreateAlertRuleRequest
@@ -603,9 +765,11 @@ public class UpdateAlertRuleRequest
 public class CreateAlertRuleChannelRequest
 {
     public ChannelType ChannelType { get; set; }
-    /// <summary>Channel-specific address: webhook URL, chat handle, etc. Empty for in-app/web-push.</summary>
+    /// <summary>Channel-specific address: webhook URL, chat handle, device kind for device_action, etc. Empty for in-app/web-push.</summary>
     public string? Destination { get; set; }
     public string? DestinationLabel { get; set; }
+    /// <summary>Channel-specific config, persisted as JSONB. For device_action: <c>{ "capabilities": ["notify", ...] }</c>.</summary>
+    public object? Metadata { get; set; }
 }
 
 /// <summary>

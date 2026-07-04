@@ -21,10 +21,10 @@
     chartShowPoints,
     chartAreaMode,
     chartAreaOpacity,
+    chartAlwaysShowPatterns,
     type ColorScheme,
   } from "$lib/stores/appearance-store.svelte";
   import HaloDialConfigurator from "$lib/components/settings/HaloDialConfigurator.svelte";
-  import type { HaloDialConfig } from "$lib/components/dashboard/halo-dial/config";
   import { getRealtimeStore } from "$lib/stores/realtime-store.svelte";
   import TitleFaviconSettings from "$lib/components/settings/TitleFaviconSettings.svelte";
   import DashboardWidgetConfigurator from "$lib/components/settings/DashboardWidgetConfigurator.svelte";
@@ -72,6 +72,7 @@
   } from "lucide-svelte";
   import SettingsPageSkeleton from "$lib/components/settings/SettingsPageSkeleton.svelte";
   import { browser } from "$app/environment";
+  import { resolve } from "$app/paths";
   import { WidgetId } from "$lib/api/generated/nocturne-api-client";
   import { page } from "$app/state";
   import { coachmark } from "@nocturne/coach";
@@ -133,27 +134,28 @@
   );
 
   // Glucose processing settings
-  let glucoseProcessingPreference = $state<string | null>(null);
-  let sourceDefaults = $state<Array<{ match: string; field: string; processing: string }>>([]);
+  const preferenceQuery = getPreference();
+  const sourceDefaultsQuery = getSourceDefaults();
+  let glucoseProcessingPreference: string | null = $derived(
+    preferenceQuery.current?.preferredGlucoseProcessing ?? null,
+  );
+  let sourceDefaults: Array<{ match: string; field: string; processing: string }> =
+    $derived(
+      // eslint-disable-next-line @typescript-eslint/consistent-type-assertions -- zod types the rule fields as optional, but the API always returns them populated
+      (sourceDefaultsQuery.current?.rules ?? []) as Array<{
+        match: string;
+        field: string;
+        processing: string;
+      }>,
+    );
   let sourceDefaultsDialogOpen = $state(false);
-
-  $effect(() => {
-    if (browser) {
-      getPreference().then((result) => {
-        glucoseProcessingPreference = result?.preferredGlucoseProcessing ?? null;
-      });
-      getSourceDefaults().then((result) => {
-        sourceDefaults = result?.rules ?? [];
-      });
-    }
-  });
 </script>
 
 <svelte:head>
   <title>Appearance - Settings - Nocturne</title>
 </svelte:head>
 
-<div class="container mx-auto max-w-4xl p-6 space-y-6">
+<div class="@container container mx-auto max-w-4xl p-3 @md:p-6 space-y-6">
   <!-- Header -->
   <div class="flex items-center gap-3">
     <div class="flex h-12 w-12 items-center justify-center rounded-xl bg-primary/10">
@@ -190,7 +192,7 @@
         </CardDescription>
       </CardHeader>
       <CardContent class="space-y-4">
-        <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <div class="grid gap-4 @xl:grid-cols-2 @5xl:grid-cols-4">
           <!-- Nocturne Theme -->
           <button
             type="button"
@@ -382,13 +384,14 @@
 
         <Separator />
 
-        <div class="grid gap-4 sm:grid-cols-2">
+        <div class="grid gap-4 @sm:grid-cols-2">
           <div class="space-y-2">
             <Label>Color scheme</Label>
             <Select
               type="single"
               value={currentColorScheme}
               onValueChange={(value) => {
+                // eslint-disable-next-line @typescript-eslint/consistent-type-assertions -- value is constrained to the ColorScheme options by the sibling SelectItems
                 setColorScheme(value as ColorScheme);
               }}
             >
@@ -438,7 +441,7 @@
             </div>
             <Switch
               checked={nightModeSchedule.current}
-              onCheckedChange={(checked) => {
+              onCheckedChange={(checked: boolean) => {
                 nightModeSchedule.current = checked;
               }}
             />
@@ -493,13 +496,14 @@
         </CardDescription>
       </CardHeader>
       <CardContent class="space-y-4">
-        <div class="grid gap-4 sm:grid-cols-2">
+        <div class="grid gap-4 @sm:grid-cols-2">
           <div class="space-y-2">
             <Label>Blood glucose units</Label>
             <Select
               type="single"
               value={glucoseUnits.current}
               onValueChange={(value) => {
+                // eslint-disable-next-line @typescript-eslint/consistent-type-assertions -- value is constrained to the glucose unit options by the sibling SelectItems
                 glucoseUnits.current = value as "mg/dl" | "mmol";
               }}
             >
@@ -521,6 +525,7 @@
               type="single"
               value={timeFormat.current}
               onValueChange={(value) => {
+                // eslint-disable-next-line @typescript-eslint/consistent-type-assertions -- value is constrained to the time format options by the sibling SelectItems
                 timeFormat.current = value as "12" | "24";
               }}
             >
@@ -551,7 +556,7 @@
         </CardDescription>
       </CardHeader>
       <CardContent>
-        <div class="grid gap-4 sm:grid-cols-2">
+        <div class="grid gap-4 @sm:grid-cols-2">
           <div class="space-y-1">
             <Label class="text-muted-foreground text-xs">Timezone</Label>
             <p class="font-medium">{browserTimezone}</p>
@@ -582,7 +587,7 @@
         <CardDescription>Configure chart display preferences</CardDescription>
       </CardHeader>
       <CardContent>
-        <div class="grid gap-4 sm:grid-cols-2">
+        <div class="grid gap-4 @sm:grid-cols-2">
           <div class="space-y-2">
             <FormLabel>Default chart range</FormLabel>
             <Select
@@ -615,7 +620,7 @@
         <Separator class="my-4" />
 
         <!-- Glucose line visual style -->
-        <div class="grid gap-4 sm:grid-cols-2">
+        <div class="grid gap-4 @sm:grid-cols-2">
           <!-- Line Color Mode -->
           <div class="space-y-2">
             <FormLabel>Line color mode</FormLabel>
@@ -624,6 +629,7 @@
                 type="single"
                 value={chartLineColorMode.current}
                 onValueChange={(value: string) => {
+                  // eslint-disable-next-line @typescript-eslint/consistent-type-assertions -- value is constrained to the line color mode options by the sibling SelectItems
                   chartLineColorMode.current = value as "single" | "threshold" | "continuous";
                 }}
               >
@@ -675,6 +681,7 @@
                   type="single"
                   value={chartPointColorMode.current}
                   onValueChange={(value: string) => {
+                    // eslint-disable-next-line @typescript-eslint/consistent-type-assertions -- value is constrained to the point color mode options by the sibling SelectItems
                     chartPointColorMode.current = value as "single" | "threshold" | "continuous";
                   }}
                 >
@@ -714,6 +721,7 @@
               type="single"
               value={chartAreaMode.current}
               onValueChange={(value: string) => {
+                // eslint-disable-next-line @typescript-eslint/consistent-type-assertions -- value is constrained to the area fill options by the sibling SelectItems
                 chartAreaMode.current = value as "off" | "baseline" | "deviation";
               }}
             >
@@ -752,6 +760,25 @@
             />
           </div>
         {/if}
+
+        <Separator class="my-4" />
+
+        <!-- Always show patterns (accessibility) -->
+        <div class="flex items-center justify-between gap-4">
+          <div class="space-y-0.5">
+            <FormLabel>Always show chart patterns</FormLabel>
+            <p class="text-sm text-muted-foreground">
+              Add textures to chart colors so series stay distinguishable for
+              color-blind and low-vision readers. Patterns always appear when printing.
+            </p>
+          </div>
+          <Switch
+            checked={chartAlwaysShowPatterns.current}
+            onCheckedChange={(checked: boolean) => {
+              chartAlwaysShowPatterns.current = checked;
+            }}
+          />
+        </div>
       </CardContent>
     </Card>
 
@@ -781,7 +808,7 @@
         </CardDescription>
       </CardHeader>
       <CardContent class="space-y-4">
-        <div class="grid gap-4 sm:grid-cols-2">
+        <div class="grid gap-4 @xl:grid-cols-2">
           <button
             type="button"
             class="relative flex flex-col items-start gap-2 rounded-lg border-2 p-4 text-left transition-colors hover:bg-accent/50 {sidebarWidget.current === 'graph'
@@ -840,7 +867,7 @@
         </CardDescription>
       </CardHeader>
       <CardContent class="space-y-4">
-        <div class="grid gap-4 sm:grid-cols-2">
+        <div class="grid gap-4 @sm:grid-cols-2">
           <div class="space-y-2">
             <Label>Display preference</Label>
             <Select
@@ -928,7 +955,7 @@
           </div>
           <Switch
             checked={store.features?.trackerPills?.enabled ?? true}
-            onCheckedChange={(checked) => {
+            onCheckedChange={(checked: boolean) => {
               if (!store.features) return;
               if (!store.features.trackerPills) {
                 store.features.trackerPills = {
@@ -943,7 +970,7 @@
 
         <p class="text-xs text-muted-foreground">
           Each tracker's dashboard visibility is configured in
-          <a href="/settings/trackers" class="text-primary hover:underline">
+          <a href={resolve("/settings/trackers")} class="text-primary hover:underline">
             Settings → Trackers
           </a>
         </p>

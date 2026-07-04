@@ -18,10 +18,30 @@ namespace Nocturne.Infrastructure.Data.Migrations
         {
 #pragma warning disable 612, 618
             modelBuilder
-                .HasAnnotation("ProductVersion", "10.0.1")
+                .HasAnnotation("ProductVersion", "10.0.8")
                 .HasAnnotation("Relational:MaxIdentifierLength", 63);
 
             NpgsqlModelBuilderExtensions.UseIdentityByDefaultColumns(modelBuilder);
+
+            modelBuilder.Entity("Microsoft.AspNetCore.DataProtection.EntityFrameworkCore.DataProtectionKey", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasColumnName("id");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("FriendlyName")
+                        .HasColumnType("text");
+
+                    b.Property<string>("Xml")
+                        .HasColumnType("text");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("DataProtectionKeys");
+                });
 
             modelBuilder.Entity("Nocturne.Infrastructure.Data.Entities.AlertConditionTimerEntity", b =>
                 {
@@ -472,11 +492,21 @@ namespace Nocturne.Infrastructure.Data.Migrations
                         .HasDefaultValue(true)
                         .HasColumnName("is_enabled");
 
+                    b.Property<string>("ManagedBy")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasColumnName("managed_by");
+
                     b.Property<string>("Name")
                         .IsRequired()
                         .HasMaxLength(128)
                         .HasColumnType("character varying(128)")
                         .HasColumnName("name");
+
+                    b.Property<string>("ScopeClass")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("scope_class");
 
                     b.Property<string>("Severity")
                         .IsRequired()
@@ -499,6 +529,10 @@ namespace Nocturne.Infrastructure.Data.Migrations
                         .HasDefaultValueSql("CURRENT_TIMESTAMP");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("ManagedBy")
+                        .HasDatabaseName("ix_alert_rules_managed_by")
+                        .HasFilter("managed_by IS NOT NULL");
 
                     b.HasIndex("TenantId");
 
@@ -642,6 +676,21 @@ namespace Nocturne.Infrastructure.Data.Migrations
                         .HasColumnType("character varying(50)")
                         .HasColumnName("created_at");
 
+                    b.Property<string>("DataSource")
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)")
+                        .HasColumnName("data_source");
+
+                    b.Property<DateTime?>("DeletedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("deleted_at");
+
+                    b.Property<bool>("DeletedByUser")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(false)
+                        .HasColumnName("deleted_by_user");
+
                     b.Property<string>("Device")
                         .HasMaxLength(255)
                         .HasColumnType("character varying(255)")
@@ -664,6 +713,11 @@ namespace Nocturne.Infrastructure.Data.Migrations
                         .HasMaxLength(24)
                         .HasColumnType("character varying(24)")
                         .HasColumnName("original_id");
+
+                    b.Property<string>("SyncIdentifier")
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)")
+                        .HasColumnName("sync_identifier");
 
                     b.Property<DateTime>("SysCreatedAt")
                         .HasColumnType("timestamp with time zone")
@@ -694,7 +748,13 @@ namespace Nocturne.Infrastructure.Data.Migrations
                     b.HasIndex("SysCreatedAt")
                         .HasDatabaseName("ix_body_weights_sys_created_at");
 
-                    b.HasIndex("TenantId");
+                    b.HasIndex("TenantId", "Mills")
+                        .HasDatabaseName("ix_body_weights_tenant_mills");
+
+                    b.HasIndex("TenantId", "DataSource", "SyncIdentifier")
+                        .IsUnique()
+                        .HasDatabaseName("ix_body_weights_tenant_source_sync_id")
+                        .HasFilter("sync_identifier IS NOT NULL AND deleted_at IS NULL");
 
                     b.ToTable("body_weights");
                 });
@@ -830,6 +890,82 @@ namespace Nocturne.Infrastructure.Data.Migrations
                         .HasDatabaseName("ix_pending_links_expires_at");
 
                     b.ToTable("chat_identity_pending_links");
+                });
+
+            modelBuilder.Entity("Nocturne.Infrastructure.Data.Entities.ClientDeviceEntity", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.PrimitiveCollection<string[]>("Capabilities")
+                        .IsRequired()
+                        .HasColumnType("text[]")
+                        .HasColumnName("capabilities");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at")
+                        .HasDefaultValueSql("CURRENT_TIMESTAMP");
+
+                    b.Property<Guid?>("GrantId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("grant_id");
+
+                    b.Property<string>("InstallId")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasColumnName("install_id");
+
+                    b.Property<string>("Kind")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)")
+                        .HasColumnName("kind");
+
+                    b.Property<string>("Label")
+                        .HasMaxLength(255)
+                        .HasColumnType("character varying(255)")
+                        .HasColumnName("label");
+
+                    b.Property<DateTime>("LastSeenAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("last_seen_at")
+                        .HasDefaultValueSql("CURRENT_TIMESTAMP");
+
+                    b.Property<Guid>("SubjectId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("subject_id");
+
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("tenant_id");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at")
+                        .HasDefaultValueSql("CURRENT_TIMESTAMP");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("GrantId");
+
+                    b.HasIndex("TenantId", "InstallId")
+                        .IsUnique()
+                        .HasDatabaseName("ix_client_devices_tenant_install");
+
+                    b.HasIndex("TenantId", "Kind")
+                        .HasDatabaseName("ix_client_devices_tenant_kind");
+
+                    b.HasIndex("TenantId", "SubjectId")
+                        .HasDatabaseName("ix_client_devices_tenant_subject");
+
+                    b.ToTable("client_devices", (string)null);
                 });
 
             modelBuilder.Entity("Nocturne.Infrastructure.Data.Entities.ClockFaceEntity", b =>
@@ -1272,6 +1408,21 @@ namespace Nocturne.Infrastructure.Data.Migrations
                     b.ToTable("data_source_metadata");
                 });
 
+            modelBuilder.Entity("Nocturne.Infrastructure.Data.Entities.DedupReconcileStateEntity", b =>
+                {
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("tenant_id");
+
+                    b.Property<DateTime>("LastReconciledLinkCreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("last_reconciled_link_created_at");
+
+                    b.HasKey("TenantId");
+
+                    b.ToTable("dedup_reconcile_state");
+                });
+
             modelBuilder.Entity("Nocturne.Infrastructure.Data.Entities.DiscrepancyAnalysisEntity", b =>
                 {
                     b.Property<Guid>("Id")
@@ -1469,6 +1620,58 @@ namespace Nocturne.Infrastructure.Data.Migrations
                     b.ToTable("discrepancy_details");
                 });
 
+            modelBuilder.Entity("Nocturne.Infrastructure.Data.Entities.DndWindowEntity", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<DateTime?>("ClearedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("cleared_at");
+
+                    b.Property<string>("ClearedBy")
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)")
+                        .HasColumnName("cleared_by");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at")
+                        .HasDefaultValueSql("CURRENT_TIMESTAMP");
+
+                    b.Property<DateTime?>("EndsAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("ends_at");
+
+                    b.Property<string>("Scope")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("scope");
+
+                    b.Property<string>("Source")
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)")
+                        .HasColumnName("source");
+
+                    b.Property<DateTime>("StartedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("started_at");
+
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("tenant_id");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("TenantId", "Scope")
+                        .HasFilter("cleared_at IS NULL");
+
+                    b.ToTable("dnd_windows", (string)null);
+                });
+
             modelBuilder.Entity("Nocturne.Infrastructure.Data.Entities.FoodEntity", b =>
                 {
                     b.Property<Guid>("Id")
@@ -1627,6 +1830,21 @@ namespace Nocturne.Infrastructure.Data.Migrations
                         .HasColumnType("integer")
                         .HasColumnName("bpm");
 
+                    b.Property<string>("DataSource")
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)")
+                        .HasColumnName("data_source");
+
+                    b.Property<DateTime?>("DeletedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("deleted_at");
+
+                    b.Property<bool>("DeletedByUser")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(false)
+                        .HasColumnName("deleted_by_user");
+
                     b.Property<string>("Device")
                         .HasMaxLength(255)
                         .HasColumnType("character varying(255)")
@@ -1641,6 +1859,11 @@ namespace Nocturne.Infrastructure.Data.Migrations
                         .HasMaxLength(24)
                         .HasColumnType("character varying(24)")
                         .HasColumnName("original_id");
+
+                    b.Property<string>("SyncIdentifier")
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)")
+                        .HasColumnName("sync_identifier");
 
                     b.Property<DateTime>("SysCreatedAt")
                         .HasColumnType("timestamp with time zone")
@@ -1669,11 +1892,17 @@ namespace Nocturne.Infrastructure.Data.Migrations
                     b.HasIndex("SysCreatedAt")
                         .HasDatabaseName("ix_heart_rates_sys_created_at");
 
-                    b.HasIndex("TenantId");
-
                     b.HasIndex("Timestamp")
                         .IsDescending()
                         .HasDatabaseName("ix_heart_rates_timestamp");
+
+                    b.HasIndex("TenantId", "Timestamp")
+                        .HasDatabaseName("ix_heart_rates_tenant_timestamp");
+
+                    b.HasIndex("TenantId", "DataSource", "SyncIdentifier")
+                        .IsUnique()
+                        .HasDatabaseName("ix_heart_rates_tenant_source_sync_id")
+                        .HasFilter("sync_identifier IS NOT NULL AND deleted_at IS NULL");
 
                     b.ToTable("heart_rates");
                 });
@@ -1724,6 +1953,10 @@ namespace Nocturne.Infrastructure.Data.Migrations
                     b.Property<string>("MetadataJson")
                         .HasColumnType("jsonb")
                         .HasColumnName("metadata_json");
+
+                    b.Property<DateTime?>("ReadAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("read_at");
 
                     b.Property<string>("ResolutionConditionsJson")
                         .HasColumnType("jsonb")
@@ -2518,6 +2751,10 @@ namespace Nocturne.Infrastructure.Data.Migrations
                         .HasDefaultValue("app")
                         .HasColumnName("grant_type");
 
+                    b.Property<bool>("IsMigrated")
+                        .HasColumnType("boolean")
+                        .HasColumnName("is_migrated");
+
                     b.Property<string>("Label")
                         .HasMaxLength(255)
                         .HasColumnType("character varying(255)")
@@ -2724,6 +2961,16 @@ namespace Nocturne.Infrastructure.Data.Migrations
                         .HasMaxLength(100)
                         .HasColumnType("character varying(100)")
                         .HasColumnName("name");
+
+                    b.Property<string>("OAuth2SettingsJson")
+                        .HasColumnType("jsonb")
+                        .HasColumnName("oauth2_settings");
+
+                    b.Property<string>("ProviderType")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)")
+                        .HasColumnName("provider_type");
 
                     b.PrimitiveCollection<string>("Scopes")
                         .IsRequired()
@@ -3574,6 +3821,21 @@ namespace Nocturne.Infrastructure.Data.Migrations
                         .HasColumnType("uuid")
                         .HasColumnName("id");
 
+                    b.Property<string>("DataSource")
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)")
+                        .HasColumnName("data_source");
+
+                    b.Property<DateTime?>("DeletedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("deleted_at");
+
+                    b.Property<bool>("DeletedByUser")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(false)
+                        .HasColumnName("deleted_by_user");
+
                     b.Property<string>("Device")
                         .HasMaxLength(255)
                         .HasColumnType("character varying(255)")
@@ -3596,6 +3858,11 @@ namespace Nocturne.Infrastructure.Data.Migrations
                     b.Property<int>("Source")
                         .HasColumnType("integer")
                         .HasColumnName("source");
+
+                    b.Property<string>("SyncIdentifier")
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)")
+                        .HasColumnName("sync_identifier");
 
                     b.Property<DateTime>("SysCreatedAt")
                         .HasColumnType("timestamp with time zone")
@@ -3624,11 +3891,17 @@ namespace Nocturne.Infrastructure.Data.Migrations
                     b.HasIndex("SysCreatedAt")
                         .HasDatabaseName("ix_step_counts_sys_created_at");
 
-                    b.HasIndex("TenantId");
-
                     b.HasIndex("Timestamp")
                         .IsDescending()
                         .HasDatabaseName("ix_step_counts_timestamp");
+
+                    b.HasIndex("TenantId", "Timestamp")
+                        .HasDatabaseName("ix_step_counts_tenant_timestamp");
+
+                    b.HasIndex("TenantId", "DataSource", "SyncIdentifier")
+                        .IsUnique()
+                        .HasDatabaseName("ix_step_counts_tenant_source_sync_id")
+                        .HasFilter("sync_identifier IS NOT NULL AND deleted_at IS NULL");
 
                     b.ToTable("step_counts");
                 });
@@ -3960,18 +4233,6 @@ namespace Nocturne.Infrastructure.Data.Migrations
                         .HasColumnName("created_at")
                         .HasDefaultValueSql("CURRENT_TIMESTAMP");
 
-                    b.Property<bool>("DndManualActive")
-                        .HasColumnType("boolean")
-                        .HasColumnName("dnd_manual_active");
-
-                    b.Property<DateTime?>("DndManualStartedAt")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("dnd_manual_started_at");
-
-                    b.Property<DateTime?>("DndManualUntil")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("dnd_manual_until");
-
                     b.Property<bool>("DndScheduleEnabled")
                         .HasColumnType("boolean")
                         .HasColumnName("dnd_schedule_enabled");
@@ -4155,6 +4416,19 @@ namespace Nocturne.Infrastructure.Data.Migrations
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("onboarding_completed_at");
 
+                    b.Property<DateTime?>("ShareLastAccessedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("share_last_accessed_at");
+
+                    b.Property<string>("ShareToken")
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)")
+                        .HasColumnName("share_token");
+
+                    b.Property<DateTime?>("ShareTokenSetAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("share_token_set_at");
+
                     b.Property<string>("Slug")
                         .IsRequired()
                         .HasMaxLength(64)
@@ -4173,6 +4447,10 @@ namespace Nocturne.Infrastructure.Data.Migrations
 
                     b.HasIndex("LastReadingAt")
                         .HasDatabaseName("ix_tenants_last_reading_at");
+
+                    b.HasIndex("ShareToken")
+                        .IsUnique()
+                        .HasDatabaseName("ix_tenants_share_token");
 
                     b.HasIndex("Slug")
                         .IsUnique()
@@ -4349,6 +4627,44 @@ namespace Nocturne.Infrastructure.Data.Migrations
                         .IsUnique();
 
                     b.ToTable("tenant_roles");
+                });
+
+            modelBuilder.Entity("Nocturne.Infrastructure.Data.Entities.TimezoneTimelineEntity", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<DateTime>("EffectiveFrom")
+                        .HasColumnType("timestamp without time zone")
+                        .HasColumnName("effective_from");
+
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("tenant_id");
+
+                    b.Property<string>("Timezone")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasColumnName("timezone");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("TenantId", "EffectiveFrom")
+                        .IsUnique()
+                        .HasDatabaseName("ix_timezone_timeline_tenant_effective_from");
+
+                    b.ToTable("timezone_timeline");
                 });
 
             modelBuilder.Entity("Nocturne.Infrastructure.Data.Entities.TotpCredentialEntity", b =>
@@ -4592,6 +4908,10 @@ namespace Nocturne.Infrastructure.Data.Migrations
                         .HasColumnType("uuid")
                         .HasColumnName("id");
 
+                    b.Property<Guid?>("AlertRuleId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("alert_rule_id");
+
                     b.Property<bool>("AudioEnabled")
                         .HasColumnType("boolean")
                         .HasColumnName("audio_enabled");
@@ -4647,6 +4967,8 @@ namespace Nocturne.Infrastructure.Data.Migrations
                         .HasColumnName("vibrate_enabled");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("AlertRuleId");
 
                     b.HasIndex("TenantId");
 
@@ -4856,9 +5178,19 @@ namespace Nocturne.Infrastructure.Data.Migrations
                         .HasColumnType("double precision")
                         .HasColumnName("current_bg");
 
+                    b.Property<string>("DataSource")
+                        .HasColumnType("text")
+                        .HasColumnName("data_source");
+
                     b.Property<DateTime?>("DeletedAt")
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("deleted_at");
+
+                    b.Property<bool>("DeletedByUser")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(false)
+                        .HasColumnName("deleted_by_user");
 
                     b.Property<string>("Device")
                         .HasMaxLength(256)
@@ -4898,8 +5230,8 @@ namespace Nocturne.Infrastructure.Data.Migrations
                         .HasColumnName("iob");
 
                     b.Property<string>("LegacyId")
-                        .HasMaxLength(64)
-                        .HasColumnType("character varying(64)")
+                        .HasMaxLength(255)
+                        .HasColumnType("character varying(255)")
                         .HasColumnName("legacy_id");
 
                     b.Property<string>("LoopJson")
@@ -5017,6 +5349,12 @@ namespace Nocturne.Infrastructure.Data.Migrations
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("deleted_at");
 
+                    b.Property<bool>("DeletedByUser")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(false)
+                        .HasColumnName("deleted_by_user");
+
                     b.Property<string>("Device")
                         .HasMaxLength(256)
                         .HasColumnType("character varying(256)")
@@ -5032,8 +5370,8 @@ namespace Nocturne.Infrastructure.Data.Migrations
                         .HasColumnName("glucose_type");
 
                     b.Property<string>("LegacyId")
-                        .HasMaxLength(64)
-                        .HasColumnType("character varying(64)")
+                        .HasMaxLength(255)
+                        .HasColumnType("character varying(255)")
                         .HasColumnName("legacy_id");
 
                     b.Property<string>("SyncIdentifier")
@@ -5112,6 +5450,12 @@ namespace Nocturne.Infrastructure.Data.Migrations
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("deleted_at");
 
+                    b.Property<bool>("DeletedByUser")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(false)
+                        .HasColumnName("deleted_by_user");
+
                     b.Property<string>("Device")
                         .HasMaxLength(256)
                         .HasColumnType("character varying(256)")
@@ -5123,8 +5467,8 @@ namespace Nocturne.Infrastructure.Data.Migrations
                         .HasColumnName("insulin_context");
 
                     b.Property<string>("LegacyId")
-                        .HasMaxLength(64)
-                        .HasColumnType("character varying(64)")
+                        .HasMaxLength(255)
+                        .HasColumnType("character varying(255)")
                         .HasColumnName("legacy_id");
 
                     b.Property<string>("Notes")
@@ -5212,6 +5556,12 @@ namespace Nocturne.Infrastructure.Data.Migrations
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("deleted_at");
 
+                    b.Property<bool>("DeletedByUser")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(false)
+                        .HasColumnName("deleted_by_user");
+
                     b.Property<string>("Device")
                         .HasMaxLength(256)
                         .HasColumnType("character varying(256)")
@@ -5223,8 +5573,8 @@ namespace Nocturne.Infrastructure.Data.Migrations
                         .HasColumnName("entries_json");
 
                     b.Property<string>("LegacyId")
-                        .HasMaxLength(64)
-                        .HasColumnType("character varying(64)")
+                        .HasMaxLength(255)
+                        .HasColumnType("character varying(255)")
                         .HasColumnName("legacy_id");
 
                     b.Property<string>("ProfileName")
@@ -5328,6 +5678,12 @@ namespace Nocturne.Infrastructure.Data.Migrations
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("deleted_at");
 
+                    b.Property<bool>("DeletedByUser")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(false)
+                        .HasColumnName("deleted_by_user");
+
                     b.Property<string>("Device")
                         .HasMaxLength(256)
                         .HasColumnType("character varying(256)")
@@ -5354,8 +5710,8 @@ namespace Nocturne.Infrastructure.Data.Migrations
                         .HasColumnName("insulin_recommendation_for_carbs");
 
                     b.Property<string>("LegacyId")
-                        .HasMaxLength(64)
-                        .HasColumnType("character varying(64)")
+                        .HasMaxLength(255)
+                        .HasColumnType("character varying(255)")
                         .HasColumnName("legacy_id");
 
                     b.Property<double?>("PreBolus")
@@ -5459,6 +5815,12 @@ namespace Nocturne.Infrastructure.Data.Migrations
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("deleted_at");
 
+                    b.Property<bool>("DeletedByUser")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(false)
+                        .HasColumnName("deleted_by_user");
+
                     b.Property<double?>("Delivered")
                         .HasColumnType("double precision")
                         .HasColumnName("delivered");
@@ -5490,8 +5852,8 @@ namespace Nocturne.Infrastructure.Data.Migrations
                         .HasColumnName("insulin_type");
 
                     b.Property<string>("LegacyId")
-                        .HasMaxLength(64)
-                        .HasColumnType("character varying(64)")
+                        .HasMaxLength(255)
+                        .HasColumnType("character varying(255)")
                         .HasColumnName("legacy_id");
 
                     b.Property<Guid?>("PatientDeviceId")
@@ -5599,6 +5961,12 @@ namespace Nocturne.Infrastructure.Data.Migrations
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("deleted_at");
 
+                    b.Property<bool>("DeletedByUser")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(false)
+                        .HasColumnName("deleted_by_user");
+
                     b.Property<string>("Device")
                         .HasMaxLength(256)
                         .HasColumnType("character varying(256)")
@@ -5609,8 +5977,8 @@ namespace Nocturne.Infrastructure.Data.Migrations
                         .HasColumnName("intercept");
 
                     b.Property<string>("LegacyId")
-                        .HasMaxLength(64)
-                        .HasColumnType("character varying(64)")
+                        .HasMaxLength(255)
+                        .HasColumnType("character varying(255)")
                         .HasColumnName("legacy_id");
 
                     b.Property<double?>("Scale")
@@ -5699,14 +6067,20 @@ namespace Nocturne.Infrastructure.Data.Migrations
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("deleted_at");
 
+                    b.Property<bool>("DeletedByUser")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(false)
+                        .HasColumnName("deleted_by_user");
+
                     b.Property<string>("Device")
                         .HasMaxLength(256)
                         .HasColumnType("character varying(256)")
                         .HasColumnName("device");
 
                     b.Property<string>("LegacyId")
-                        .HasMaxLength(64)
-                        .HasColumnType("character varying(64)")
+                        .HasMaxLength(255)
+                        .HasColumnType("character varying(255)")
                         .HasColumnName("legacy_id");
 
                     b.Property<string>("SyncIdentifier")
@@ -5789,6 +6163,12 @@ namespace Nocturne.Infrastructure.Data.Migrations
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("deleted_at");
 
+                    b.Property<bool>("DeletedByUser")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(false)
+                        .HasColumnName("deleted_by_user");
+
                     b.Property<string>("Device")
                         .HasMaxLength(256)
                         .HasColumnType("character varying(256)")
@@ -5800,8 +6180,8 @@ namespace Nocturne.Infrastructure.Data.Migrations
                         .HasColumnName("entries_json");
 
                     b.Property<string>("LegacyId")
-                        .HasMaxLength(64)
-                        .HasColumnType("character varying(64)")
+                        .HasMaxLength(255)
+                        .HasColumnType("character varying(255)")
                         .HasColumnName("legacy_id");
 
                     b.Property<string>("ProfileName")
@@ -5854,43 +6234,6 @@ namespace Nocturne.Infrastructure.Data.Migrations
                     b.ToTable("carb_ratio_schedules");
                 });
 
-            modelBuilder.Entity("Nocturne.Infrastructure.Data.Entities.V4.DecompositionBatchEntity", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid")
-                        .HasColumnName("id");
-
-                    b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("created_at");
-
-                    b.Property<DateTime?>("DeletedAt")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("deleted_at");
-
-                    b.Property<string>("Source")
-                        .IsRequired()
-                        .HasMaxLength(128)
-                        .HasColumnType("character varying(128)")
-                        .HasColumnName("source");
-
-                    b.Property<string>("SourceRecordId")
-                        .HasMaxLength(128)
-                        .HasColumnType("character varying(128)")
-                        .HasColumnName("source_record_id");
-
-                    b.Property<Guid>("TenantId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("tenant_id");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("TenantId");
-
-                    b.ToTable("decomposition_batches");
-                });
-
             modelBuilder.Entity("Nocturne.Infrastructure.Data.Entities.V4.DeviceEntity", b =>
                 {
                     b.Property<Guid>("Id")
@@ -5911,6 +6254,12 @@ namespace Nocturne.Infrastructure.Data.Migrations
                     b.Property<DateTime?>("DeletedAt")
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("deleted_at");
+
+                    b.Property<bool>("DeletedByUser")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(false)
+                        .HasColumnName("deleted_by_user");
 
                     b.Property<DateTime>("FirstSeenTimestamp")
                         .HasColumnType("timestamp with time zone")
@@ -5938,9 +6287,7 @@ namespace Nocturne.Infrastructure.Data.Migrations
 
                     b.HasKey("Id");
 
-                    b.HasIndex("TenantId");
-
-                    b.HasIndex("Category", "Type", "Serial")
+                    b.HasIndex("TenantId", "Category", "Type", "Serial")
                         .IsUnique()
                         .HasDatabaseName("ix_devices_category_type_serial")
                         .HasFilter("deleted_at IS NULL");
@@ -5977,6 +6324,12 @@ namespace Nocturne.Infrastructure.Data.Migrations
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("deleted_at");
 
+                    b.Property<bool>("DeletedByUser")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(false)
+                        .HasColumnName("deleted_by_user");
+
                     b.Property<string>("Device")
                         .HasMaxLength(256)
                         .HasColumnType("character varying(256)")
@@ -5993,8 +6346,8 @@ namespace Nocturne.Infrastructure.Data.Migrations
                         .HasColumnName("event_type");
 
                     b.Property<string>("LegacyId")
-                        .HasMaxLength(64)
-                        .HasColumnType("character varying(64)")
+                        .HasMaxLength(255)
+                        .HasColumnType("character varying(255)")
                         .HasColumnName("legacy_id");
 
                     b.Property<string>("Notes")
@@ -6067,6 +6420,12 @@ namespace Nocturne.Infrastructure.Data.Migrations
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("deleted_at");
 
+                    b.Property<bool>("DeletedByUser")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(false)
+                        .HasColumnName("deleted_by_user");
+
                     b.Property<string>("ExtrasJson")
                         .HasColumnType("jsonb")
                         .HasColumnName("extras");
@@ -6126,14 +6485,20 @@ namespace Nocturne.Infrastructure.Data.Migrations
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("deleted_at");
 
+                    b.Property<bool>("DeletedByUser")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(false)
+                        .HasColumnName("deleted_by_user");
+
                     b.Property<string>("Device")
                         .HasMaxLength(256)
                         .HasColumnType("character varying(256)")
                         .HasColumnName("device");
 
                     b.Property<string>("LegacyId")
-                        .HasMaxLength(64)
-                        .HasColumnType("character varying(64)")
+                        .HasMaxLength(255)
+                        .HasColumnType("character varying(255)")
                         .HasColumnName("legacy_id");
 
                     b.Property<double>("Mgdl")
@@ -6206,6 +6571,12 @@ namespace Nocturne.Infrastructure.Data.Migrations
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("deleted_at");
 
+                    b.Property<bool>("DeletedByUser")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(false)
+                        .HasColumnName("deleted_by_user");
+
                     b.Property<string>("Device")
                         .HasMaxLength(256)
                         .HasColumnType("character varying(256)")
@@ -6221,8 +6592,8 @@ namespace Nocturne.Infrastructure.Data.Migrations
                         .HasColumnName("is_announcement");
 
                     b.Property<string>("LegacyId")
-                        .HasMaxLength(64)
-                        .HasColumnType("character varying(64)")
+                        .HasMaxLength(255)
+                        .HasColumnType("character varying(255)")
                         .HasColumnName("legacy_id");
 
                     b.Property<string>("SyncIdentifier")
@@ -6293,6 +6664,12 @@ namespace Nocturne.Infrastructure.Data.Migrations
                     b.Property<DateTime?>("DeletedAt")
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("deleted_at");
+
+                    b.Property<bool>("DeletedByUser")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(false)
+                        .HasColumnName("deleted_by_user");
 
                     b.Property<string>("DeviceCategory")
                         .IsRequired()
@@ -6380,6 +6757,12 @@ namespace Nocturne.Infrastructure.Data.Migrations
                     b.Property<DateTime?>("DeletedAt")
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("deleted_at");
+
+                    b.Property<bool>("DeletedByUser")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(false)
+                        .HasColumnName("deleted_by_user");
 
                     b.Property<double>("Dia")
                         .HasColumnType("double precision")
@@ -6473,6 +6856,12 @@ namespace Nocturne.Infrastructure.Data.Migrations
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("deleted_at");
 
+                    b.Property<bool>("DeletedByUser")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(false)
+                        .HasColumnName("deleted_by_user");
+
                     b.Property<string>("DiabetesType")
                         .HasMaxLength(32)
                         .HasColumnType("character varying(32)")
@@ -6560,9 +6949,19 @@ namespace Nocturne.Infrastructure.Data.Migrations
                         .HasColumnType("uuid")
                         .HasColumnName("correlation_id");
 
+                    b.Property<string>("DataSource")
+                        .HasColumnType("text")
+                        .HasColumnName("data_source");
+
                     b.Property<DateTime?>("DeletedAt")
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("deleted_at");
+
+                    b.Property<bool>("DeletedByUser")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(false)
+                        .HasColumnName("deleted_by_user");
 
                     b.Property<string>("Device")
                         .HasMaxLength(256)
@@ -6578,8 +6977,8 @@ namespace Nocturne.Infrastructure.Data.Migrations
                         .HasColumnName("iob");
 
                     b.Property<string>("LegacyId")
-                        .HasMaxLength(64)
-                        .HasColumnType("character varying(64)")
+                        .HasMaxLength(255)
+                        .HasColumnType("character varying(255)")
                         .HasColumnName("legacy_id");
 
                     b.Property<string>("Manufacturer")
@@ -6595,6 +6994,11 @@ namespace Nocturne.Infrastructure.Data.Migrations
                     b.Property<Guid?>("PatientDeviceId")
                         .HasColumnType("uuid")
                         .HasColumnName("patient_device_id");
+
+                    b.Property<string>("PumpMode")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasColumnName("pump_mode");
 
                     b.Property<string>("PumpStatus")
                         .HasMaxLength(64)
@@ -6681,6 +7085,12 @@ namespace Nocturne.Infrastructure.Data.Migrations
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("deleted_at");
 
+                    b.Property<bool>("DeletedByUser")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(false)
+                        .HasColumnName("deleted_by_user");
+
                     b.Property<string>("Device")
                         .HasMaxLength(256)
                         .HasColumnType("character varying(256)")
@@ -6692,8 +7102,8 @@ namespace Nocturne.Infrastructure.Data.Migrations
                         .HasColumnName("entries_json");
 
                     b.Property<string>("LegacyId")
-                        .HasMaxLength(64)
-                        .HasColumnType("character varying(64)")
+                        .HasMaxLength(255)
+                        .HasColumnType("character varying(255)")
                         .HasColumnName("legacy_id");
 
                     b.Property<string>("ProfileName")
@@ -6775,6 +7185,12 @@ namespace Nocturne.Infrastructure.Data.Migrations
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("deleted_at");
 
+                    b.Property<bool>("DeletedByUser")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(false)
+                        .HasColumnName("deleted_by_user");
+
                     b.Property<double?>("Delta")
                         .HasColumnType("double precision")
                         .HasColumnName("delta");
@@ -6799,8 +7215,8 @@ namespace Nocturne.Infrastructure.Data.Migrations
                         .HasColumnName("glucose_processing");
 
                     b.Property<string>("LegacyId")
-                        .HasMaxLength(64)
-                        .HasColumnType("character varying(64)")
+                        .HasMaxLength(255)
+                        .HasColumnType("character varying(255)")
                         .HasColumnName("legacy_id");
 
                     b.Property<double>("Mgdl")
@@ -6818,6 +7234,11 @@ namespace Nocturne.Infrastructure.Data.Migrations
                     b.Property<double?>("SmoothedMgdl")
                         .HasColumnType("double precision")
                         .HasColumnName("smoothed_mgdl");
+
+                    b.Property<string>("SyncIdentifier")
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)")
+                        .HasColumnName("sync_identifier");
 
                     b.Property<DateTime>("SysCreatedAt")
                         .HasColumnType("timestamp with time zone")
@@ -6873,6 +7294,11 @@ namespace Nocturne.Infrastructure.Data.Migrations
                         .IsDescending(false, true)
                         .HasDatabaseName("ix_sensor_glucose_tenant_timestamp");
 
+                    b.HasIndex("TenantId", "DataSource", "SyncIdentifier")
+                        .IsUnique()
+                        .HasDatabaseName("ix_sensor_glucose_tenant_source_sync_id")
+                        .HasFilter("sync_identifier IS NOT NULL AND deleted_at IS NULL");
+
                     b.ToTable("sensor_glucose");
                 });
 
@@ -6905,6 +7331,12 @@ namespace Nocturne.Infrastructure.Data.Migrations
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("deleted_at");
 
+                    b.Property<bool>("DeletedByUser")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(false)
+                        .HasColumnName("deleted_by_user");
+
                     b.Property<string>("Device")
                         .HasMaxLength(256)
                         .HasColumnType("character varying(256)")
@@ -6916,8 +7348,8 @@ namespace Nocturne.Infrastructure.Data.Migrations
                         .HasColumnName("entries_json");
 
                     b.Property<string>("LegacyId")
-                        .HasMaxLength(64)
-                        .HasColumnType("character varying(64)")
+                        .HasMaxLength(255)
+                        .HasColumnType("character varying(255)")
                         .HasColumnName("legacy_id");
 
                     b.Property<string>("ProfileName")
@@ -7003,6 +7435,12 @@ namespace Nocturne.Infrastructure.Data.Migrations
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("deleted_at");
 
+                    b.Property<bool>("DeletedByUser")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(false)
+                        .HasColumnName("deleted_by_user");
+
                     b.Property<string>("Device")
                         .HasMaxLength(256)
                         .HasColumnType("character varying(256)")
@@ -7021,8 +7459,8 @@ namespace Nocturne.Infrastructure.Data.Migrations
                         .HasColumnName("insulin_context");
 
                     b.Property<string>("LegacyId")
-                        .HasMaxLength(64)
-                        .HasColumnType("character varying(64)")
+                        .HasMaxLength(255)
+                        .HasColumnType("character varying(255)")
                         .HasColumnName("legacy_id");
 
                     b.Property<string>("Origin")
@@ -7159,6 +7597,12 @@ namespace Nocturne.Infrastructure.Data.Migrations
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("deleted_at");
 
+                    b.Property<bool>("DeletedByUser")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(false)
+                        .HasColumnName("deleted_by_user");
+
                     b.Property<string>("Device")
                         .HasMaxLength(256)
                         .HasColumnType("character varying(256)")
@@ -7182,8 +7626,8 @@ namespace Nocturne.Infrastructure.Data.Migrations
                         .HasColumnName("is_externally_managed");
 
                     b.Property<string>("LegacyId")
-                        .HasMaxLength(64)
-                        .HasColumnType("character varying(64)")
+                        .HasMaxLength(255)
+                        .HasColumnType("character varying(255)")
                         .HasColumnName("legacy_id");
 
                     b.Property<string>("LoopSettingsJson")
@@ -7282,9 +7726,19 @@ namespace Nocturne.Infrastructure.Data.Migrations
                         .HasColumnType("uuid")
                         .HasColumnName("correlation_id");
 
+                    b.Property<string>("DataSource")
+                        .HasColumnType("text")
+                        .HasColumnName("data_source");
+
                     b.Property<DateTime?>("DeletedAt")
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("deleted_at");
+
+                    b.Property<bool>("DeletedByUser")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(false)
+                        .HasColumnName("deleted_by_user");
 
                     b.Property<string>("Device")
                         .HasMaxLength(256)
@@ -7300,8 +7754,8 @@ namespace Nocturne.Infrastructure.Data.Migrations
                         .HasColumnName("is_charging");
 
                     b.Property<string>("LegacyId")
-                        .HasMaxLength(64)
-                        .HasColumnType("character varying(64)")
+                        .HasMaxLength(255)
+                        .HasColumnType("character varying(255)")
                         .HasColumnName("legacy_id");
 
                     b.Property<string>("Name")
@@ -7531,6 +7985,20 @@ namespace Nocturne.Infrastructure.Data.Migrations
                         .IsRequired();
                 });
 
+            modelBuilder.Entity("Nocturne.Infrastructure.Data.Entities.ClientDeviceEntity", b =>
+                {
+                    b.HasOne("Nocturne.Infrastructure.Data.Entities.OAuthGrantEntity", null)
+                        .WithMany()
+                        .HasForeignKey("GrantId")
+                        .OnDelete(DeleteBehavior.Cascade);
+
+                    b.HasOne("Nocturne.Infrastructure.Data.Entities.TenantEntity", null)
+                        .WithMany()
+                        .HasForeignKey("TenantId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
             modelBuilder.Entity("Nocturne.Infrastructure.Data.Entities.ClockFaceEntity", b =>
                 {
                     b.HasOne("Nocturne.Infrastructure.Data.Entities.TenantEntity", null)
@@ -7592,6 +8060,15 @@ namespace Nocturne.Infrastructure.Data.Migrations
                         .IsRequired();
                 });
 
+            modelBuilder.Entity("Nocturne.Infrastructure.Data.Entities.DedupReconcileStateEntity", b =>
+                {
+                    b.HasOne("Nocturne.Infrastructure.Data.Entities.TenantEntity", null)
+                        .WithMany()
+                        .HasForeignKey("TenantId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
             modelBuilder.Entity("Nocturne.Infrastructure.Data.Entities.DiscrepancyAnalysisEntity", b =>
                 {
                     b.HasOne("Nocturne.Infrastructure.Data.Entities.TenantEntity", null)
@@ -7616,6 +8093,15 @@ namespace Nocturne.Infrastructure.Data.Migrations
                         .IsRequired();
 
                     b.Navigation("Analysis");
+                });
+
+            modelBuilder.Entity("Nocturne.Infrastructure.Data.Entities.DndWindowEntity", b =>
+                {
+                    b.HasOne("Nocturne.Infrastructure.Data.Entities.TenantEntity", null)
+                        .WithMany()
+                        .HasForeignKey("TenantId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
                 });
 
             modelBuilder.Entity("Nocturne.Infrastructure.Data.Entities.FoodEntity", b =>
@@ -8021,8 +8507,8 @@ namespace Nocturne.Infrastructure.Data.Migrations
             modelBuilder.Entity("Nocturne.Infrastructure.Data.Entities.TenantDemoConfigEntity", b =>
                 {
                     b.HasOne("Nocturne.Infrastructure.Data.Entities.TenantEntity", "Tenant")
-                        .WithMany()
-                        .HasForeignKey("TenantId")
+                        .WithOne("DemoConfig")
+                        .HasForeignKey("Nocturne.Infrastructure.Data.Entities.TenantDemoConfigEntity", "TenantId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
@@ -8085,6 +8571,15 @@ namespace Nocturne.Infrastructure.Data.Migrations
                     b.Navigation("Tenant");
                 });
 
+            modelBuilder.Entity("Nocturne.Infrastructure.Data.Entities.TimezoneTimelineEntity", b =>
+                {
+                    b.HasOne("Nocturne.Infrastructure.Data.Entities.TenantEntity", null)
+                        .WithMany()
+                        .HasForeignKey("TenantId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
             modelBuilder.Entity("Nocturne.Infrastructure.Data.Entities.TotpCredentialEntity", b =>
                 {
                     b.HasOne("Nocturne.Infrastructure.Data.Entities.SubjectEntity", "Subject")
@@ -8124,6 +8619,11 @@ namespace Nocturne.Infrastructure.Data.Migrations
 
             modelBuilder.Entity("Nocturne.Infrastructure.Data.Entities.TrackerNotificationThresholdEntity", b =>
                 {
+                    b.HasOne("Nocturne.Infrastructure.Data.Entities.AlertRuleEntity", null)
+                        .WithMany()
+                        .HasForeignKey("AlertRuleId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
                     b.HasOne("Nocturne.Infrastructure.Data.Entities.TenantEntity", null)
                         .WithMany()
                         .HasForeignKey("TenantId")
@@ -8218,11 +8718,6 @@ namespace Nocturne.Infrastructure.Data.Migrations
 
             modelBuilder.Entity("Nocturne.Infrastructure.Data.Entities.V4.BGCheckEntity", b =>
                 {
-                    b.HasOne("Nocturne.Infrastructure.Data.Entities.V4.DecompositionBatchEntity", null)
-                        .WithMany()
-                        .HasForeignKey("CorrelationId")
-                        .OnDelete(DeleteBehavior.Cascade);
-
                     b.HasOne("Nocturne.Infrastructure.Data.Entities.TenantEntity", null)
                         .WithMany()
                         .HasForeignKey("TenantId")
@@ -8241,11 +8736,6 @@ namespace Nocturne.Infrastructure.Data.Migrations
 
             modelBuilder.Entity("Nocturne.Infrastructure.Data.Entities.V4.BasalScheduleEntity", b =>
                 {
-                    b.HasOne("Nocturne.Infrastructure.Data.Entities.V4.DecompositionBatchEntity", null)
-                        .WithMany()
-                        .HasForeignKey("CorrelationId")
-                        .OnDelete(DeleteBehavior.Cascade);
-
                     b.HasOne("Nocturne.Infrastructure.Data.Entities.TenantEntity", null)
                         .WithMany()
                         .HasForeignKey("TenantId")
@@ -8255,11 +8745,6 @@ namespace Nocturne.Infrastructure.Data.Migrations
 
             modelBuilder.Entity("Nocturne.Infrastructure.Data.Entities.V4.BolusCalculationEntity", b =>
                 {
-                    b.HasOne("Nocturne.Infrastructure.Data.Entities.V4.DecompositionBatchEntity", null)
-                        .WithMany()
-                        .HasForeignKey("CorrelationId")
-                        .OnDelete(DeleteBehavior.Cascade);
-
                     b.HasOne("Nocturne.Infrastructure.Data.Entities.TenantEntity", null)
                         .WithMany()
                         .HasForeignKey("TenantId")
@@ -8278,11 +8763,6 @@ namespace Nocturne.Infrastructure.Data.Migrations
                         .WithMany()
                         .HasForeignKey("BolusCalculationId")
                         .OnDelete(DeleteBehavior.SetNull);
-
-                    b.HasOne("Nocturne.Infrastructure.Data.Entities.V4.DecompositionBatchEntity", null)
-                        .WithMany()
-                        .HasForeignKey("CorrelationId")
-                        .OnDelete(DeleteBehavior.Cascade);
 
                     b.HasOne("Nocturne.Infrastructure.Data.Entities.V4.DeviceEntity", null)
                         .WithMany()
@@ -8303,11 +8783,6 @@ namespace Nocturne.Infrastructure.Data.Migrations
 
             modelBuilder.Entity("Nocturne.Infrastructure.Data.Entities.V4.CalibrationEntity", b =>
                 {
-                    b.HasOne("Nocturne.Infrastructure.Data.Entities.V4.DecompositionBatchEntity", null)
-                        .WithMany()
-                        .HasForeignKey("CorrelationId")
-                        .OnDelete(DeleteBehavior.Cascade);
-
                     b.HasOne("Nocturne.Infrastructure.Data.Entities.TenantEntity", null)
                         .WithMany()
                         .HasForeignKey("TenantId")
@@ -8317,11 +8792,6 @@ namespace Nocturne.Infrastructure.Data.Migrations
 
             modelBuilder.Entity("Nocturne.Infrastructure.Data.Entities.V4.CarbIntakeEntity", b =>
                 {
-                    b.HasOne("Nocturne.Infrastructure.Data.Entities.V4.DecompositionBatchEntity", null)
-                        .WithMany()
-                        .HasForeignKey("CorrelationId")
-                        .OnDelete(DeleteBehavior.Cascade);
-
                     b.HasOne("Nocturne.Infrastructure.Data.Entities.TenantEntity", null)
                         .WithMany()
                         .HasForeignKey("TenantId")
@@ -8330,20 +8800,6 @@ namespace Nocturne.Infrastructure.Data.Migrations
                 });
 
             modelBuilder.Entity("Nocturne.Infrastructure.Data.Entities.V4.CarbRatioScheduleEntity", b =>
-                {
-                    b.HasOne("Nocturne.Infrastructure.Data.Entities.V4.DecompositionBatchEntity", null)
-                        .WithMany()
-                        .HasForeignKey("CorrelationId")
-                        .OnDelete(DeleteBehavior.Cascade);
-
-                    b.HasOne("Nocturne.Infrastructure.Data.Entities.TenantEntity", null)
-                        .WithMany()
-                        .HasForeignKey("TenantId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-                });
-
-            modelBuilder.Entity("Nocturne.Infrastructure.Data.Entities.V4.DecompositionBatchEntity", b =>
                 {
                     b.HasOne("Nocturne.Infrastructure.Data.Entities.TenantEntity", null)
                         .WithMany()
@@ -8363,11 +8819,6 @@ namespace Nocturne.Infrastructure.Data.Migrations
 
             modelBuilder.Entity("Nocturne.Infrastructure.Data.Entities.V4.DeviceEventEntity", b =>
                 {
-                    b.HasOne("Nocturne.Infrastructure.Data.Entities.V4.DecompositionBatchEntity", null)
-                        .WithMany()
-                        .HasForeignKey("CorrelationId")
-                        .OnDelete(DeleteBehavior.Cascade);
-
                     b.HasOne("Nocturne.Infrastructure.Data.Entities.V4.DeviceEntity", null)
                         .WithMany()
                         .HasForeignKey("DeviceId")
@@ -8396,11 +8847,6 @@ namespace Nocturne.Infrastructure.Data.Migrations
 
             modelBuilder.Entity("Nocturne.Infrastructure.Data.Entities.V4.MeterGlucoseEntity", b =>
                 {
-                    b.HasOne("Nocturne.Infrastructure.Data.Entities.V4.DecompositionBatchEntity", null)
-                        .WithMany()
-                        .HasForeignKey("CorrelationId")
-                        .OnDelete(DeleteBehavior.Cascade);
-
                     b.HasOne("Nocturne.Infrastructure.Data.Entities.TenantEntity", null)
                         .WithMany()
                         .HasForeignKey("TenantId")
@@ -8410,11 +8856,6 @@ namespace Nocturne.Infrastructure.Data.Migrations
 
             modelBuilder.Entity("Nocturne.Infrastructure.Data.Entities.V4.NoteEntity", b =>
                 {
-                    b.HasOne("Nocturne.Infrastructure.Data.Entities.V4.DecompositionBatchEntity", null)
-                        .WithMany()
-                        .HasForeignKey("CorrelationId")
-                        .OnDelete(DeleteBehavior.Cascade);
-
                     b.HasOne("Nocturne.Infrastructure.Data.Entities.TenantEntity", null)
                         .WithMany()
                         .HasForeignKey("TenantId")
@@ -8475,11 +8916,6 @@ namespace Nocturne.Infrastructure.Data.Migrations
 
             modelBuilder.Entity("Nocturne.Infrastructure.Data.Entities.V4.SensitivityScheduleEntity", b =>
                 {
-                    b.HasOne("Nocturne.Infrastructure.Data.Entities.V4.DecompositionBatchEntity", null)
-                        .WithMany()
-                        .HasForeignKey("CorrelationId")
-                        .OnDelete(DeleteBehavior.Cascade);
-
                     b.HasOne("Nocturne.Infrastructure.Data.Entities.TenantEntity", null)
                         .WithMany()
                         .HasForeignKey("TenantId")
@@ -8489,11 +8925,6 @@ namespace Nocturne.Infrastructure.Data.Migrations
 
             modelBuilder.Entity("Nocturne.Infrastructure.Data.Entities.V4.SensorGlucoseEntity", b =>
                 {
-                    b.HasOne("Nocturne.Infrastructure.Data.Entities.V4.DecompositionBatchEntity", null)
-                        .WithMany()
-                        .HasForeignKey("CorrelationId")
-                        .OnDelete(DeleteBehavior.Cascade);
-
                     b.HasOne("Nocturne.Infrastructure.Data.Entities.V4.PatientDeviceEntity", null)
                         .WithMany()
                         .HasForeignKey("PatientDeviceId")
@@ -8508,11 +8939,6 @@ namespace Nocturne.Infrastructure.Data.Migrations
 
             modelBuilder.Entity("Nocturne.Infrastructure.Data.Entities.V4.TargetRangeScheduleEntity", b =>
                 {
-                    b.HasOne("Nocturne.Infrastructure.Data.Entities.V4.DecompositionBatchEntity", null)
-                        .WithMany()
-                        .HasForeignKey("CorrelationId")
-                        .OnDelete(DeleteBehavior.Cascade);
-
                     b.HasOne("Nocturne.Infrastructure.Data.Entities.TenantEntity", null)
                         .WithMany()
                         .HasForeignKey("TenantId")
@@ -8526,11 +8952,6 @@ namespace Nocturne.Infrastructure.Data.Migrations
                         .WithMany()
                         .HasForeignKey("ApsSnapshotId")
                         .OnDelete(DeleteBehavior.SetNull);
-
-                    b.HasOne("Nocturne.Infrastructure.Data.Entities.V4.DecompositionBatchEntity", null)
-                        .WithMany()
-                        .HasForeignKey("CorrelationId")
-                        .OnDelete(DeleteBehavior.Cascade);
 
                     b.HasOne("Nocturne.Infrastructure.Data.Entities.V4.DeviceEntity", null)
                         .WithMany()
@@ -8551,11 +8972,6 @@ namespace Nocturne.Infrastructure.Data.Migrations
 
             modelBuilder.Entity("Nocturne.Infrastructure.Data.Entities.V4.TherapySettingsEntity", b =>
                 {
-                    b.HasOne("Nocturne.Infrastructure.Data.Entities.V4.DecompositionBatchEntity", null)
-                        .WithMany()
-                        .HasForeignKey("CorrelationId")
-                        .OnDelete(DeleteBehavior.Cascade);
-
                     b.HasOne("Nocturne.Infrastructure.Data.Entities.TenantEntity", null)
                         .WithMany()
                         .HasForeignKey("TenantId")
@@ -8641,6 +9057,8 @@ namespace Nocturne.Infrastructure.Data.Migrations
 
             modelBuilder.Entity("Nocturne.Infrastructure.Data.Entities.TenantEntity", b =>
                 {
+                    b.Navigation("DemoConfig");
+
                     b.Navigation("Members");
                 });
 

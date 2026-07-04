@@ -21,7 +21,7 @@
   import { getUnitLabel } from "$lib/utils/formatting";
   import { glucoseUnits } from "$lib/stores/appearance-store.svelte";
   import { getDateParamsContext } from "$lib/hooks/date-params.svelte";
-  import { untrack, tick } from "svelte";
+  import { onMount, untrack, tick } from "svelte";
   import { fade } from "svelte/transition";
 
   const reportsParams = getDateParamsContext();
@@ -433,16 +433,15 @@
   // Lifecycle
   // =========================================================================
 
-  $effect(() => {
-    if (browser && !metadataLoaded && !metadataLoading) {
-      loadMetadata();
-    }
-  });
-
-  $effect(() => {
-    if (metadataLoaded && sortedYears.length > 0) {
-      loadYearData(sortedYears[0]);
-    }
+  onMount(() => {
+    // `.run()` rejects when called during the render/effect flush, so defer the
+    // bootstrap to a microtask — onMount's synchronous body still counts as render.
+    queueMicrotask(async () => {
+      await loadMetadata();
+      if (sortedYears.length > 0) {
+        loadYearData(sortedYears[0]);
+      }
+    });
   });
 
   $effect(() => {
@@ -463,7 +462,7 @@
     const prevKey = [...prevDataSources].sort().join(",");
     if (currentKey !== prevKey && metadataLoaded) {
       prevDataSources = [...selectedDataSources];
-      clearAndReload();
+      queueMicrotask(() => clearAndReload());
     }
   });
 
@@ -563,22 +562,24 @@
   />
 </svelte:head>
 
-<div class="flex min-h-full">
+<div class="@container flex min-h-full">
   <!-- Main Content -->
   <div
-    class="flex-1 transition-[margin] duration-200 {selectedDay
-      ? 'mr-80 lg:mr-96'
+    class="flex-1 transition-[margin] duration-200 print:mr-0 {selectedDay
+      ? 'mr-80 @5xl:mr-96'
       : ''}"
   >
-    <!-- Header -->
-    <YearOverviewFilters
-      {availableDataSources}
-      bind:selectedDataSources
-      {presentDataTypes}
-      {hiddenDataTypes}
-      {toggleDataType}
-      {showAllDataTypes}
-    />
+    <!-- Header / interactive filters — hidden on print -->
+    <div class="print:hidden">
+      <YearOverviewFilters
+        {availableDataSources}
+        bind:selectedDataSources
+        {presentDataTypes}
+        {hiddenDataTypes}
+        {toggleDataType}
+        {showAllDataTypes}
+      />
+    </div>
 
     <!-- Color Legend -->
     <HeatmapLegend
@@ -597,7 +598,7 @@
     <!-- Loading state for metadata -->
     {#if metadataLoading && !metadataLoaded}
       <div
-        class="flex items-center justify-center py-20"
+        class="flex items-center justify-center py-20 print:hidden"
         in:fade={{ duration: 200 }}
       >
         <div class="flex flex-col items-center gap-3">
@@ -624,7 +625,11 @@
             There is no data to display yet. Connect a data source in your
             settings to get started.
           </p>
-          <Button href="/settings/connectors" variant="outline">
+          <Button
+            href="/settings/connectors"
+            variant="outline"
+            class="print:hidden"
+          >
             Configure Data Sources
           </Button>
         </div>
@@ -668,16 +673,18 @@
     {/if}
   </div>
 
-  <!-- Day Detail Panel -->
-  <DayDetailPanel
-    {selectedDay}
-    {units}
-    {unitLabel}
-    {formatSelectedDate}
-    {formatUnits}
-    {glucoseColorScale}
-    {getVisibleCounts}
-    {closeDetailPanel}
-    {navigateToDayInReview}
-  />
+  <!-- Day Detail Panel — interactive fly-out, hidden on print -->
+  <div class="print:hidden">
+    <DayDetailPanel
+      {selectedDay}
+      {units}
+      {unitLabel}
+      {formatSelectedDate}
+      {formatUnits}
+      {glucoseColorScale}
+      {getVisibleCounts}
+      {closeDetailPanel}
+      {navigateToDayInReview}
+    />
+  </div>
 </div>

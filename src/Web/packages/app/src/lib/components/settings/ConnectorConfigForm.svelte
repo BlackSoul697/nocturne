@@ -125,6 +125,9 @@
       // Skip secret fields - they're handled separately
       if (secretFieldSet.has(propName)) continue;
 
+      // Skip hidden fields - connector derives these automatically
+      if (propSchema["x-hidden"] === true) continue;
+
       // Skip 'enabled' field - it's controlled by the "Enable Connector" toggle
       if (propName.toLowerCase() === "enabled") continue;
 
@@ -166,7 +169,7 @@
         name,
         schema: schema.properties[name],
       }))
-      .filter((s) => s.schema);
+      .filter((s) => s.schema && s.schema["x-hidden"] !== true);
   });
 
   // Get non-secret fields in the Credentials category
@@ -174,8 +177,10 @@
     const secretFieldSet = new Set(schema.secrets ?? []);
     return Object.entries(schema.properties)
       .filter(
-        ([name]) =>
-          getPropertyMeta(name).category === "Credentials" && !secretFieldSet.has(name)
+        ([name, propSchema]) =>
+          getPropertyMeta(name).category === "Credentials" &&
+          !secretFieldSet.has(name) &&
+          propSchema["x-hidden"] !== true
       )
       .map(([name, schema]) => ({ name, schema }));
   });
@@ -286,14 +291,22 @@
 
 </script>
 
+{#snippet envVarHint(envVar: string | undefined)}
+  {#if envVar && showEnvVarHints}
+    <p class="text-xs text-muted-foreground/70">
+      <code class="bg-muted px-1 rounded break-all">{envVar}</code>
+    </p>
+  {/if}
+{/snippet}
+
 {#snippet propertyField(propName: string, propSchema: JsonSchemaProperty)}
   {@const meta = getPropertyMeta(propName)}
   <div class="space-y-2">
     {#if propSchema.type === "boolean"}
       <!-- Boolean: Switch -->
-      <div class="flex items-center justify-between">
-        <div class="space-y-0.5">
-          <div class="flex items-center gap-2">
+      <div class="flex items-center justify-between gap-4">
+        <div class="space-y-0.5 min-w-0">
+          <div class="flex flex-wrap items-center gap-2">
             <Label>{meta.label}</Label>
             {#if hasUnsavedChanges(propName)}
               <Badge variant="default" class="text-xs">Unsaved</Badge>
@@ -317,22 +330,18 @@
               {meta.description}
             </p>
           {/if}
-          {#if propSchema["x-envVar"] && showEnvVarHints}
-            <p class="text-xs text-muted-foreground/70">
-              <code class="bg-muted px-1 rounded">
-                {propSchema["x-envVar"]}
-              </code>
-            </p>
-          {/if}
+          {@render envVarHint(propSchema["x-envVar"])}
         </div>
         <Switch
+          class="shrink-0"
           checked={Boolean(getPropertyValue(propName))}
-          onCheckedChange={(checked) => setPropertyValue(propName, checked)}
+          onCheckedChange={(checked: boolean) =>
+            setPropertyValue(propName, checked)}
         />
       </div>
     {:else if propSchema.enum}
       <!-- Enum: Select -->
-      <div class="flex items-center gap-2">
+      <div class="flex flex-wrap items-center gap-2">
         <Label>{meta.label}</Label>
         {#if hasUnsavedChanges(propName)}
           <Badge variant="default" class="text-xs">Unsaved</Badge>
@@ -368,14 +377,10 @@
       {#if meta.description}
         <p class="text-sm text-muted-foreground">{meta.description}</p>
       {/if}
-      {#if propSchema["x-envVar"] && showEnvVarHints}
-        <p class="text-xs text-muted-foreground/70">
-          <code class="bg-muted px-1 rounded">{propSchema["x-envVar"]}</code>
-        </p>
-      {/if}
+      {@render envVarHint(propSchema["x-envVar"])}
     {:else if propSchema.type === "integer" || propSchema.type === "number"}
       <!-- Number: Input with constraints -->
-      <div class="flex items-center gap-2">
+      <div class="flex flex-wrap items-center gap-2">
         <Label>{meta.label}</Label>
         {#if hasUnsavedChanges(propName)}
           <Badge variant="default" class="text-xs">Unsaved</Badge>
@@ -399,7 +404,7 @@
         value={String(getPropertyValue(propName) ?? "")}
         min={propSchema.minimum}
         max={propSchema.maximum}
-        oninput={(e) => {
+        oninput={(e: Event & { currentTarget: HTMLInputElement }) => {
           const target = e.currentTarget;
           const value =
             propSchema.type === "integer"
@@ -424,14 +429,10 @@
           {/if}
         </p>
       {/if}
-      {#if propSchema["x-envVar"] && showEnvVarHints}
-        <p class="text-xs text-muted-foreground/70">
-          <code class="bg-muted px-1 rounded">{propSchema["x-envVar"]}</code>
-        </p>
-      {/if}
+      {@render envVarHint(propSchema["x-envVar"])}
     {:else}
       <!-- String: Input -->
-      <div class="flex items-center gap-2">
+      <div class="flex flex-wrap items-center gap-2">
         <Label>{meta.label}</Label>
         {#if hasUnsavedChanges(propName)}
           <Badge variant="default" class="text-xs">Unsaved</Badge>
@@ -457,16 +458,13 @@
         minlength={propSchema.minLength}
         maxlength={propSchema.maxLength}
         pattern={propSchema.pattern}
-        oninput={(e) => setPropertyValue(propName, e.currentTarget.value)}
+        oninput={(e: Event & { currentTarget: HTMLInputElement }) =>
+          setPropertyValue(propName, e.currentTarget.value)}
       />
       {#if meta.description}
         <p class="text-sm text-muted-foreground">{meta.description}</p>
       {/if}
-      {#if propSchema["x-envVar"] && showEnvVarHints}
-        <p class="text-xs text-muted-foreground/70">
-          <code class="bg-muted px-1 rounded">{propSchema["x-envVar"]}</code>
-        </p>
-      {/if}
+      {@render envVarHint(propSchema["x-envVar"])}
     {/if}
   </div>
 {/snippet}
@@ -564,7 +562,8 @@
                 type={visibleSecrets.has(name) ? "text" : "password"}
                 value={getSecretValue(name)}
                 placeholder="Enter to update (leave blank to keep current)"
-                oninput={(e) => setSecretValue(name, e.currentTarget.value)}
+                oninput={(e: Event & { currentTarget: HTMLInputElement }) =>
+                  setSecretValue(name, e.currentTarget.value)}
                 class="flex-1"
               />
               <Button
@@ -586,7 +585,7 @@
             {/if}
             {#if propSchema["x-envVar"] && showEnvVarHints}
               <p class="text-xs text-muted-foreground/70">
-                Environment variable: <code class="bg-muted px-1 rounded">
+                Environment variable: <code class="bg-muted px-1 rounded break-all">
                   {propSchema["x-envVar"]}
                 </code>
               </p>
@@ -603,7 +602,7 @@
 
   <!-- Sticky Save Bar -->
   {#if hasAnyUnsavedChanges}
-    <div class="sticky bottom-0 -mx-6 border-t bg-background px-6 py-4 flex items-center justify-between gap-4">
+    <div class="sticky bottom-0 -mx-3 @md:-mx-6 border-t bg-background px-3 @md:px-6 py-4 flex items-center justify-between gap-4">
       <p class="text-sm text-muted-foreground">You have unsaved changes</p>
       <div class="flex gap-2">
         <Button variant="outline" onclick={handleCancel} disabled={isSaving}>

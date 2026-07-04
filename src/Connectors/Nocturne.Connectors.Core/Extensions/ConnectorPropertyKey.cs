@@ -25,6 +25,7 @@ public enum ConnectorPropertyKey
     SyncNotes,
     SyncDeviceEvents,
     SyncStateSpans,
+    SyncTempBasals,
     SyncProfiles,
     SyncDeviceStatus,
     SyncActivity,
@@ -83,4 +84,9 @@ public enum ConnectorPropertyKey
     RefreshToken,
     CountryCode,
     LanguageCode,
+
+    // Tandem-specific
+    PumpSerialNumber,
+    FetchAllEventTypes,
+    IgnoreZeroUnitBasal,
 }

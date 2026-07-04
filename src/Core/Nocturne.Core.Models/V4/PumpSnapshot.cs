@@ -95,6 +95,14 @@ public class PumpSnapshot : IV4Record
     public string? PumpStatus { get; set; }
 
     /// <summary>
+    /// Canonical closed-loop operating mode (a <see cref="PumpModeState"/> name such as
+    /// "Automatic" or "Manual"), when the source reports it. Drives
+    /// <see cref="StateSpanCategory.PumpMode"/> Automatic/Manual span transitions. Null for sources
+    /// that report no mode signal.
+    /// </summary>
+    public string? PumpMode { get; set; }
+
+    /// <summary>
     /// Pump internal clock time as a string (device-local time).
     /// </summary>
     public string? Clock { get; set; }

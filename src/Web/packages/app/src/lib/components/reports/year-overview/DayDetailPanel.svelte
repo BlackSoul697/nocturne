@@ -5,6 +5,7 @@
   import { slide } from "svelte/transition";
   import { cubicOut } from "svelte/easing";
   import { formatGlucoseValue } from "$lib/utils/formatting";
+  import type { GlucoseUnits } from "$lib/utils/formatting";
   import { getDataTypeLabel } from "$lib/utils/data-type-labels";
 
   let {
@@ -19,7 +20,7 @@
     navigateToDayInReview,
   } = $props<{
     selectedDay: any; // Using any for brevity in this refactor, but it's CalendarDatum
-    units: string;
+    units: GlucoseUnits;
     unitLabel: string;
     formatSelectedDate: (dateStr: string) => string;
     formatUnits: (value: number | null) => string;
@@ -40,9 +41,9 @@
       class="flex items-center justify-between border-b border-border px-4 py-3"
     >
       <h3 class="text-sm font-semibold">Day Details</h3>
-      <button onclick={closeDetailPanel} class="p-2 hover:bg-muted rounded-md transition-colors">
+      <Button variant="ghost" size="icon" onclick={closeDetailPanel}>
         <X class="h-4 w-4" />
-      </button>
+      </Button>
     </div>
 
     <!-- Panel Content -->

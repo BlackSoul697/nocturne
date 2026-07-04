@@ -6,6 +6,7 @@ using Nocturne.Connectors.Core.Models;
 using Nocturne.Connectors.Core.Utilities;
 using Nocturne.Core.Models;
 using Nocturne.Core.Models.V4;
+using Nocturne.Core.Contracts.V4;
 
 namespace Nocturne.Connectors.Core.Services;
 
@@ -20,6 +21,14 @@ public abstract class BaseConnectorService<TConfig> : IConnectorService<TConfig>
     protected readonly IConnectorServerResolver<TConfig> _serverResolver;
     protected readonly ILogger _logger;
     private readonly IConnectorPublisher? _publisher;
+
+    // Broadcast origin for this run's glucose / care (treatment-family) publishes, resolved once from the
+    // pre-run resume watermark and memoized so every batch and granular publish in the run agrees — a
+    // paginated or multi-call first sync can't flip to Live mid-backfill. The connector service is
+    // resolved fresh per sync run, so these are naturally per-run.
+    private WriteOrigin? _glucosePublishOrigin;
+    private WriteOrigin? _treatmentPublishOrigin;
+    private WriteOrigin? _devicePublishOrigin;
 
     /// <summary>
     ///     Base constructor for connector services using IHttpClientFactory pattern
@@ -161,10 +170,68 @@ public abstract class BaseConnectorService<TConfig> : IConnectorService<TConfig>
     }
 
     /// <summary>
+    ///     Get the timestamp of the most recent device status from the Nocturne API
+    ///     This enables independent "catch up" for device status, decoupled from glucose
+    /// </summary>
+    private async Task<DateTime?> FetchLatestDeviceStatusTimestampAsync(TConfig config)
+    {
+        if (_publisher is not { IsAvailable: true })
+        {
+            _logger.LogDebug(
+                "API data submitter not available, cannot fetch latest device status timestamp"
+            );
+            return null;
+        }
+
+        try
+        {
+            return await _publisher.Device.GetLatestDeviceStatusTimestampAsync(ConnectorSource);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(
+                ex,
+                "Failed to fetch latest device status timestamp for {ConnectorSource}",
+                ConnectorSource
+            );
+            return null;
+        }
+    }
+
+    /// <summary>
+    ///     Get the timestamp of the most recent activity record from the Nocturne API
+    ///     This enables independent "catch up" for activity, decoupled from glucose
+    /// </summary>
+    private async Task<DateTime?> FetchLatestActivityTimestampAsync(TConfig config)
+    {
+        if (_publisher is not { IsAvailable: true })
+        {
+            _logger.LogDebug(
+                "API data submitter not available, cannot fetch latest activity timestamp"
+            );
+            return null;
+        }
+
+        try
+        {
+            return await _publisher.Metadata.GetLatestActivityTimestampAsync(ConnectorSource);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(
+                ex,
+                "Failed to fetch latest activity timestamp for {ConnectorSource}",
+                ConnectorSource
+            );
+            return null;
+        }
+    }
+
+    /// <summary>
     ///     Calculate the optimal "since" timestamp for fetching glucose entries
     ///     Uses catch-up logic to fetch from the most recent entry, or falls back to default lookback
     /// </summary>
-    protected async Task<DateTime> CalculateSinceTimestampAsync(
+    protected async Task<DateTime?> CalculateSinceTimestampAsync(
         TConfig config,
         DateTime? defaultSince = null
     )
@@ -182,7 +249,7 @@ public abstract class BaseConnectorService<TConfig> : IConnectorService<TConfig>
     ///     Calculate the optimal "since" timestamp for fetching treatments
     ///     Uses catch-up logic to fetch from the most recent treatment, or falls back to default lookback
     /// </summary>
-    protected async Task<DateTime> CalculateTreatmentSinceTimestampAsync(
+    protected async Task<DateTime?> CalculateTreatmentSinceTimestampAsync(
         TConfig config,
         DateTime? defaultSince = null
     )
@@ -197,9 +264,34 @@ public abstract class BaseConnectorService<TConfig> : IConnectorService<TConfig>
     }
 
     /// <summary>
-    ///     Helper method to calculate the since timestamp from a latest timestamp
+    ///     Calculate an independent catch-up "since" timestamp for device status.
+    ///     Returns the most recent device-status timestamp (minus a small overlap), or
+    ///     <c>null</c> when none exists — letting the caller decide its own fallback
+    ///     rather than forcing a full initial-window re-fetch of high-volume telemetry.
     /// </summary>
-    private DateTime CalculateSinceFromTimestamp(DateTime? latestTimestamp, string dataType)
+    protected async Task<DateTime?> CalculateDeviceStatusCatchUpSinceAsync(TConfig config)
+    {
+        var latest = await FetchLatestDeviceStatusTimestampAsync(config);
+        return TryCalculateCatchUpSince(latest, "device status");
+    }
+
+    /// <summary>
+    ///     Calculate an independent catch-up "since" timestamp for activity.
+    ///     Returns the most recent activity timestamp (minus a small overlap), or
+    ///     <c>null</c> when none exists so the caller can choose its own fallback.
+    /// </summary>
+    protected async Task<DateTime?> CalculateActivityCatchUpSinceAsync(TConfig config)
+    {
+        var latest = await FetchLatestActivityTimestampAsync(config);
+        return TryCalculateCatchUpSince(latest, "activity");
+    }
+
+    /// <summary>
+    ///     Applies the catch-up overlap to a latest-record timestamp: returns the timestamp
+    ///     minus a small overlap (to absorb clock drift), or <c>null</c> when there is no
+    ///     usable prior timestamp.
+    /// </summary>
+    private DateTime? TryCalculateCatchUpSince(DateTime? latestTimestamp, string dataType)
     {
         if (latestTimestamp.HasValue && latestTimestamp.Value > DateTime.MinValue.AddMinutes(10))
         {
@@ -215,16 +307,50 @@ public abstract class BaseConnectorService<TConfig> : IConnectorService<TConfig>
             return sinceWithOverlap;
         }
 
-        // Fallback to 6 months for initial sync if no existing data found
-        var fallbackSince = DateTime.UtcNow.AddMonths(-6);
-        _logger?.LogInformation(
-            "No existing {DataType} found for {ConnectorSource}, performing initial sync from {Since:yyyy-MM-dd HH:mm:ss} UTC",
-            dataType,
-            ConnectorSource,
-            fallbackSince
-        );
+        return null;
+    }
+
+    /// <summary>
+    ///     Helper method to calculate the since timestamp from a latest timestamp.
+    ///     When no prior data exists, falls back to <see cref="InitialSyncFloor"/> — which may be
+    ///     <c>null</c> (no lower bound) for connectors that import the source's full history.
+    /// </summary>
+    private DateTime? CalculateSinceFromTimestamp(DateTime? latestTimestamp, string dataType)
+    {
+        var catchUpSince = TryCalculateCatchUpSince(latestTimestamp, dataType);
+        if (catchUpSince.HasValue)
+            return catchUpSince.Value;
+
+        // No prior data: this is the initial sync. Most connectors bound the first backfill to
+        // InitialSyncFloor; a null floor means "no lower bound" — import the source's full history.
+        var fallbackSince = InitialSyncFloor;
+        if (fallbackSince.HasValue)
+            _logger?.LogInformation(
+                "No existing {DataType} found for {ConnectorSource}, performing initial sync from {Since:yyyy-MM-dd HH:mm:ss} UTC",
+                dataType,
+                ConnectorSource,
+                fallbackSince.Value
+            );
+        else
+            _logger?.LogInformation(
+                "No existing {DataType} found for {ConnectorSource}, performing initial sync over the source's full history",
+                dataType,
+                ConnectorSource
+            );
         return fallbackSince;
     }
+
+    /// <summary>
+    ///     Lower bound applied to an initial sync when no prior data exists for a data type.
+    ///     Connectors whose source is a full data export (e.g. Nightscout) override this to return
+    ///     <c>null</c> so the first backfill imports the entire history; the default bounds the
+    ///     initial window to <see cref="DefaultInitialSyncFloor"/> so a first sync against a
+    ///     long-running source is not unbounded.
+    /// </summary>
+    protected virtual DateTime? InitialSyncFloor => DefaultInitialSyncFloor();
+
+    /// <summary>The default initial backfill window: six months before now.</summary>
+    protected static DateTime DefaultInitialSyncFloor() => DateTime.UtcNow.AddMonths(-6);
 
     /// <summary>
     ///     Core synchronization logic that processes data types sequentially.
@@ -410,6 +536,54 @@ public abstract class BaseConnectorService<TConfig> : IConnectorService<TConfig>
     /// <summary>
     ///     Submits glucose data directly to the API via HTTP
     /// </summary>
+    /// <summary>
+    ///     The broadcast origin for this run's glucose-family publishes: <see cref="WriteOrigin.Backfill"/>
+    ///     on the source's first-ever glucose sync (no prior data — suppress so a first sync of history
+    ///     doesn't flood clients), else <see cref="WriteOrigin.Live"/>. Memoized for the run.
+    /// </summary>
+    protected async Task<WriteOrigin> GlucosePublishOriginAsync()
+    {
+        _glucosePublishOrigin ??= await ResolvePublishOriginAsync(
+            () => _publisher!.Glucose.GetLatestEntryTimestampAsync(ConnectorSource));
+        return _glucosePublishOrigin.Value;
+    }
+
+    /// <summary>
+    ///     The broadcast origin for this run's care-family (treatment) publishes — Bolus, CarbIntake,
+    ///     BG check, calculations, basal, notes, device events. Backfill on the source's first-ever
+    ///     treatment sync, else Live. Memoized for the run.
+    /// </summary>
+    protected async Task<WriteOrigin> TreatmentPublishOriginAsync()
+    {
+        _treatmentPublishOrigin ??= await ResolvePublishOriginAsync(
+            () => _publisher!.Treatments.GetLatestTreatmentTimestampAsync(ConnectorSource));
+        return _treatmentPublishOrigin.Value;
+    }
+
+    /// <summary>
+    ///     The broadcast origin for this run's device-status (snapshot) publishes — APS, pump, and uploader
+    ///     snapshots. Backfill on the source's first-ever device-status sync (suppress so a first sync of
+    ///     history doesn't flood the device category), else Live. Memoized for the run.
+    /// </summary>
+    protected async Task<WriteOrigin> DevicePublishOriginAsync()
+    {
+        _devicePublishOrigin ??= await ResolvePublishOriginAsync(
+            () => _publisher!.Device.GetLatestDeviceStatusTimestampAsync(ConnectorSource));
+        return _devicePublishOrigin.Value;
+    }
+
+    /// <summary>
+    ///     Resolves a publish origin from a resume watermark: Backfill when no prior data exists (initial
+    ///     full-history sync), else Live. When the publisher is unavailable the publish will fail anyway,
+    ///     so the origin is irrelevant and defaults to Live.
+    /// </summary>
+    private async Task<WriteOrigin> ResolvePublishOriginAsync(Func<Task<DateTime?>> latestTimestamp)
+    {
+        if (_publisher is not { IsAvailable: true })
+            return WriteOrigin.Live;
+        return await latestTimestamp() is null ? WriteOrigin.Backfill : WriteOrigin.Live;
+    }
+
     protected virtual async Task<bool> PublishGlucoseDataAsync(
         IEnumerable<Entry> entries,
         TConfig config,
@@ -422,7 +596,7 @@ public abstract class BaseConnectorService<TConfig> : IConnectorService<TConfig>
             return false;
         }
 
-        return await _publisher.Glucose.PublishEntriesAsync(entries, ConnectorSource, cancellationToken);
+        return await _publisher.Glucose.PublishEntriesAsync(entries, ConnectorSource, await GlucosePublishOriginAsync(), cancellationToken);
     }
 
     /// <summary>
@@ -442,7 +616,7 @@ public abstract class BaseConnectorService<TConfig> : IConnectorService<TConfig>
 
         return await _publisher.Treatments.PublishTreatmentsAsync(
             treatments,
-            ConnectorSource,
+            ConnectorSource, await TreatmentPublishOriginAsync(),
             cancellationToken
         );
     }
@@ -464,7 +638,7 @@ public abstract class BaseConnectorService<TConfig> : IConnectorService<TConfig>
 
         return await _publisher.Device.PublishDeviceStatusAsync(
             deviceStatuses,
-            ConnectorSource,
+            ConnectorSource, await DevicePublishOriginAsync(),
             cancellationToken
         );
     }
@@ -484,7 +658,7 @@ public abstract class BaseConnectorService<TConfig> : IConnectorService<TConfig>
             return false;
         }
 
-        return await _publisher.Metadata.PublishProfilesAsync(profiles, ConnectorSource, cancellationToken);
+        return await _publisher.Metadata.PublishProfilesAsync(profiles, ConnectorSource, WriteOrigin.Live, cancellationToken); // Dormant broadcast category (snapshots off-base / no V4 category yet) — origin irrelevant until wired.
     }
 
     /// <summary>
@@ -502,7 +676,7 @@ public abstract class BaseConnectorService<TConfig> : IConnectorService<TConfig>
             return false;
         }
 
-        return await _publisher.Metadata.PublishFoodAsync(foods, ConnectorSource, cancellationToken);
+        return await _publisher.Metadata.PublishFoodAsync(foods, ConnectorSource, WriteOrigin.Live, cancellationToken); // Dormant broadcast category (snapshots off-base / no V4 category yet) — origin irrelevant until wired.
     }
 
     /// <summary>
@@ -522,9 +696,9 @@ public abstract class BaseConnectorService<TConfig> : IConnectorService<TConfig>
 
         return await _publisher.Metadata.PublishActivityAsync(
             activities,
-            ConnectorSource,
+            ConnectorSource, WriteOrigin.Live,
             cancellationToken
-        );
+        ); // Dormant broadcast category (snapshots off-base / no V4 category yet) — origin irrelevant until wired.
     }
 
     /// <summary>
@@ -544,9 +718,9 @@ public abstract class BaseConnectorService<TConfig> : IConnectorService<TConfig>
 
         return await _publisher.Metadata.PublishStateSpansAsync(
             stateSpans,
-            ConnectorSource,
+            ConnectorSource, WriteOrigin.Live,
             cancellationToken
-        );
+        ); // Dormant broadcast category (snapshots off-base / no V4 category yet) — origin irrelevant until wired.
     }
 
     /// <summary>
@@ -566,9 +740,9 @@ public abstract class BaseConnectorService<TConfig> : IConnectorService<TConfig>
 
         return await _publisher.Metadata.PublishSystemEventsAsync(
             systemEvents,
-            ConnectorSource,
+            ConnectorSource, WriteOrigin.Live,
             cancellationToken
-        );
+        ); // Dormant broadcast category (snapshots off-base / no V4 category yet) — origin irrelevant until wired.
     }
 
     /// <summary>
@@ -630,7 +804,7 @@ public abstract class BaseConnectorService<TConfig> : IConnectorService<TConfig>
 
         return await _publisher.Glucose.PublishSensorGlucoseAsync(
             records,
-            ConnectorSource,
+            ConnectorSource, await GlucosePublishOriginAsync(),
             cancellationToken
         );
     }
@@ -650,25 +824,7 @@ public abstract class BaseConnectorService<TConfig> : IConnectorService<TConfig>
             return false;
         }
 
-        return await _publisher.Treatments.PublishBolusesAsync(records, ConnectorSource, cancellationToken);
-    }
-
-    /// <summary>
-    ///     Submits DecompositionBatch records before their V4 siblings (FK ordering)
-    /// </summary>
-    protected virtual async Task<bool> PublishDecompositionBatchesAsync(
-        IEnumerable<DecompositionBatch> batches,
-        TConfig config,
-        CancellationToken cancellationToken = default
-    )
-    {
-        if (_publisher == null || !_publisher.IsAvailable)
-        {
-            _logger?.LogWarning("Publisher not available for DecompositionBatch submission");
-            return false;
-        }
-
-        return await _publisher.Treatments.PublishDecompositionBatchesAsync(batches, ConnectorSource, cancellationToken);
+        return await _publisher.Treatments.PublishBolusesAsync(records, ConnectorSource, await TreatmentPublishOriginAsync(), cancellationToken);
     }
 
     /// <summary>
@@ -688,7 +844,7 @@ public abstract class BaseConnectorService<TConfig> : IConnectorService<TConfig>
 
         return await _publisher.Treatments.PublishCarbIntakesAsync(
             records,
-            ConnectorSource,
+            ConnectorSource, await TreatmentPublishOriginAsync(),
             cancellationToken
         );
     }
@@ -708,7 +864,7 @@ public abstract class BaseConnectorService<TConfig> : IConnectorService<TConfig>
             return false;
         }
 
-        return await _publisher.Treatments.PublishBGChecksAsync(records, ConnectorSource, cancellationToken);
+        return await _publisher.Treatments.PublishBGChecksAsync(records, ConnectorSource, await TreatmentPublishOriginAsync(), cancellationToken);
     }
 
     /// <summary>
@@ -728,7 +884,7 @@ public abstract class BaseConnectorService<TConfig> : IConnectorService<TConfig>
 
         return await _publisher.Treatments.PublishBolusCalculationsAsync(
             records,
-            ConnectorSource,
+            ConnectorSource, await TreatmentPublishOriginAsync(),
             cancellationToken
         );
     }
@@ -748,7 +904,7 @@ public abstract class BaseConnectorService<TConfig> : IConnectorService<TConfig>
             return false;
         }
 
-        return await _publisher.Metadata.PublishNotesAsync(records, ConnectorSource, cancellationToken);
+        return await _publisher.Metadata.PublishNotesAsync(records, ConnectorSource, await TreatmentPublishOriginAsync(), cancellationToken);
     }
 
     /// <summary>
@@ -768,7 +924,7 @@ public abstract class BaseConnectorService<TConfig> : IConnectorService<TConfig>
 
         return await _publisher.Device.PublishDeviceEventsAsync(
             records,
-            ConnectorSource,
+            ConnectorSource, await TreatmentPublishOriginAsync(),
             cancellationToken
         );
     }
@@ -790,7 +946,29 @@ public abstract class BaseConnectorService<TConfig> : IConnectorService<TConfig>
 
         return await _publisher.Treatments.PublishTempBasalsAsync(
             records,
-            ConnectorSource,
+            ConnectorSource, await TreatmentPublishOriginAsync(),
+            cancellationToken
+        );
+    }
+
+    /// <summary>
+    ///     Submits V4 BasalInjection data directly to the API
+    /// </summary>
+    protected virtual async Task<bool> PublishBasalInjectionDataAsync(
+        IEnumerable<BasalInjection> records,
+        TConfig config,
+        CancellationToken cancellationToken = default
+    )
+    {
+        if (_publisher == null || !_publisher.IsAvailable)
+        {
+            _logger?.LogWarning("Publisher not available for BasalInjection submission");
+            return false;
+        }
+
+        return await _publisher.Treatments.PublishBasalInjectionsAsync(
+            records,
+            ConnectorSource, await TreatmentPublishOriginAsync(),
             cancellationToken
         );
     }
@@ -1064,7 +1242,11 @@ public abstract class BaseConnectorService<TConfig> : IConnectorService<TConfig>
     /// <param name="operation">The async operation to execute</param>
     /// <param name="retryStrategy">Strategy for calculating retry delays</param>
     /// <param name="reAuthenticateOnUnauthorized">Optional callback to re-authenticate on 401 responses</param>
-    /// <param name="maxRetries">Maximum number of retry attempts (default: 3)</param>
+    /// <param name="maxRetries">
+    ///     Maximum number of attempts (default: 3). Clamped to a floor of 1 so a connector's
+    ///     configured MaxRetryAttempts of 0 still makes a single attempt instead of skipping
+    ///     the operation entirely.
+    /// </param>
     /// <param name="operationName">Name of the operation for logging</param>
     /// <param name="cancellationToken">Cancellation token</param>
     /// <returns>The result of the operation, or default(T) on failure</returns>
@@ -1077,6 +1259,10 @@ public abstract class BaseConnectorService<TConfig> : IConnectorService<TConfig>
         CancellationToken cancellationToken = default
     )
     {
+        // Connectors pass their configured MaxRetryAttempts, which allows 0; the loop needs at
+        // least one attempt for the operation to run.
+        maxRetries = Math.Max(1, maxRetries);
+
         var opName = operationName ?? "operation";
         HttpRequestException? lastException = null;
 

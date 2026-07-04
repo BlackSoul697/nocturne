@@ -762,6 +762,174 @@
         }
       }
     },
+    "/api/v4/timezone-timeline": {
+      "get": {
+        "tags": [
+          "Timezone Timeline"
+        ],
+        "summary": "Get the tenant's timezone timeline, ordered by effective date.",
+        "operationId": "TimezoneTimeline_GetTimeline",
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/TimezoneTimelineEntry"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "x-remote-type": "query"
+      },
+      "put": {
+        "tags": [
+          "Timezone Timeline"
+        ],
+        "summary": "Create or update a timeline entry. EffectiveFrom is a local wall-clock date/time (the\nmoment, in local terms, that the zone took effect). A trip is two entries (out + return); a\nmove is a single entry; the origin entry covers all earlier history.",
+        "operationId": "TimezoneTimeline_Upsert",
+        "requestBody": {
+          "x-name": "request",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpsertTimezoneEntryRequest"
+              }
+            }
+          },
+          "required": true,
+          "x-position": 1
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TimezoneTimelineEntry"
+                }
+              }
+            }
+          }
+        },
+        "x-remote-type": "command",
+        "x-remote-invalidates": [
+          "GetTimeline"
+        ]
+      }
+    },
+    "/api/v4/timezone-timeline/{id}": {
+      "delete": {
+        "tags": [
+          "Timezone Timeline"
+        ],
+        "summary": "Delete a timeline entry.",
+        "operationId": "TimezoneTimeline_Delete",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "guid"
+            },
+            "x-position": 1
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/octet-stream": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          }
+        },
+        "x-remote-type": "command",
+        "x-remote-invalidates": [
+          "GetTimeline"
+        ]
+      }
+    },
+    "/api/v4/timezone-timeline/recorrect": {
+      "post": {
+        "tags": [
+          "Timezone Timeline"
+        ],
+        "summary": "Re-correct already-imported data after a timeline change by re-pulling the affected window from\nGlooko. Records re-flow the normal publish path and upsert in place on their stable\nSyncIdentifier, so timestamps move without duplicating. Intended to be called after the user\nconfirms the affected window. Runs synchronously; the window is bounded.",
+        "operationId": "TimezoneTimeline_Recorrect",
+        "requestBody": {
+          "x-name": "request",
+          "description": "Optional lower bound (UTC). When null, the connector's default window is used.",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RecorrectRequest"
+              }
+            }
+          },
+          "required": true,
+          "x-position": 1
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RecorrectResult"
+                }
+              }
+            }
+          }
+        },
+        "x-remote-type": "command"
+      }
+    },
+    "/api/v4/platform/tls-authorize": {
+      "get": {
+        "tags": [
+          "Tls Authorization"
+        ],
+        "summary": "Returns 200 when a certificate should be issued for domain\n(the apex domain or an active tenant subdomain), 404 otherwise.",
+        "operationId": "TlsAuthorization_Authorize",
+        "parameters": [
+          {
+            "name": "domain",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "nullable": true
+            },
+            "x-position": 1
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v4/insulin/basal-injections": {
       "post": {
         "tags": [
@@ -5128,7 +5296,8 @@
           "500": {
             "description": ""
           }
-        }
+        },
+        "x-remote-type": "query"
       }
     },
     "/api/v4/admin/oidc-providers": {
@@ -5823,6 +5992,55 @@
         "x-remote-invalidates": [
           "List"
         ]
+      }
+    },
+    "/api/v4/clockfaces/{id}/glucose": {
+      "get": {
+        "tags": [
+          "Clock Faces"
+        ],
+        "summary": "Get the latest glucose readings a public clock face displays (public, no authentication required).",
+        "description": "The clock UUID is the capability: a caller must hold a valid clock id for the host-resolved\ntenant to get any data, and tenant-isolation RLS scopes the read to that tenant. This endpoint\nonly ever reads sensor glucose — never treatments, device status, or any other category — so a\nclock link grants exactly what the clock shows and nothing more. It is deliberately independent\nof the tenant's global anonymous-read setting.",
+        "operationId": "ClockFaces_GetGlucose",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "Clock face UUID",
+            "schema": {
+              "type": "string",
+              "format": "guid"
+            },
+            "x-position": 1
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The two most recent sensor glucose readings (newest first), or 404 if the clock does not exist.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/ClockGlucoseDto"
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        },
+        "x-remote-type": "query"
       }
     },
     "/api/v4/clockfaces": {
@@ -7976,6 +8194,231 @@
         "x-remote-type": "command"
       }
     },
+    "/api/v4/admin/connectors/{tenantId}": {
+      "get": {
+        "tags": [
+          "Connector Admin"
+        ],
+        "summary": "List the connectors a target tenant has configured, with their last-sync and health state.",
+        "description": "Lets an admin inspect the data gap (last successful sync, health, last error) before deciding\nto reset cursors.",
+        "operationId": "ConnectorAdmin_GetTenantConnectors",
+        "parameters": [
+          {
+            "name": "tenantId",
+            "in": "path",
+            "required": true,
+            "description": "The target tenant.",
+            "schema": {
+              "type": "string",
+              "format": "guid"
+            },
+            "x-position": 1
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TenantConnectorsDto"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        },
+        "x-remote-type": "query"
+      }
+    },
+    "/api/v4/admin/connectors/{tenantId}/reset-cursors": {
+      "post": {
+        "tags": [
+          "Connector Admin"
+        ],
+        "summary": "Enqueue a background reset of the sync cursor for every connector configured on a target\ntenant, forcing a re-pull of history. Use after fixing a connector bug to push corrected data\nto an affected tenant.",
+        "description": "A full re-pull can take minutes per connector — far longer than gateway/proxy/browser request\ntimeouts — so the work runs on a background job that outlives the request. This returns\n202 Accepted with a job id immediately; poll GetResetJobStatus for\nper-connector progress, and CancelResetJob to stop it.",
+        "operationId": "ConnectorAdmin_ResetTenantCursors",
+        "parameters": [
+          {
+            "name": "tenantId",
+            "in": "path",
+            "required": true,
+            "description": "The target tenant whose connectors should be re-pulled.",
+            "schema": {
+              "type": "string",
+              "format": "guid"
+            },
+            "x-position": 1
+          }
+        ],
+        "requestBody": {
+          "x-name": "request",
+          "description": "Optional lower bound and data-type filter, mirroring the per-tenant reset endpoint.",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AdminResetCursorsRequest"
+              }
+            }
+          },
+          "required": true,
+          "x-position": 2
+        },
+        "responses": {
+          "202": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConnectorResetJobInfo"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        },
+        "x-remote-type": "command"
+      }
+    },
+    "/api/v4/admin/connectors/jobs/{jobId}": {
+      "get": {
+        "tags": [
+          "Connector Admin"
+        ],
+        "summary": "Get the progress of a connector cursor reset job, including per-connector outcomes as they land.",
+        "operationId": "ConnectorAdmin_GetResetJobStatus",
+        "parameters": [
+          {
+            "name": "jobId",
+            "in": "path",
+            "required": true,
+            "description": "The job id returned by ResetTenantCursors.",
+            "schema": {
+              "type": "string",
+              "format": "guid"
+            },
+            "x-position": 1
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConnectorResetJobStatus"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        },
+        "x-remote-type": "query"
+      }
+    },
+    "/api/v4/admin/connectors/jobs/{jobId}/cancel": {
+      "post": {
+        "tags": [
+          "Connector Admin"
+        ],
+        "summary": "Request cancellation of a running connector cursor reset job. Connectors already re-pulled\nkeep their committed data; the fan-out simply stops before the next connector.",
+        "operationId": "ConnectorAdmin_CancelResetJob",
+        "parameters": [
+          {
+            "name": "jobId",
+            "in": "path",
+            "required": true,
+            "description": "The job id to cancel.",
+            "schema": {
+              "type": "string",
+              "format": "guid"
+            },
+            "x-position": 1
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": ""
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        },
+        "x-remote-type": "command",
+        "x-remote-invalidates": [
+          "GetResetJobStatus"
+        ]
+      }
+    },
+    "/api/auth/platform-access": {
+      "get": {
+        "tags": [
+          "Platform Access"
+        ],
+        "summary": "Mint a platform-access grant for the given tenant slug and redirect the operator into the\ntenant. Bounces through OIDC login if there is no session yet; 403s if the session is not a\nplatform admin.",
+        "operationId": "PlatformAccess_Access",
+        "parameters": [
+          {
+            "name": "tenant",
+            "in": "query",
+            "description": "Target tenant slug.",
+            "schema": {
+              "type": "string",
+              "nullable": true
+            },
+            "x-position": 1
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/octet-stream": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v4/admin/platform-settings": {
       "get": {
         "tags": [
@@ -9881,6 +10324,64 @@
         "x-remote-type": "command"
       }
     },
+    "/api/v4/services/connectors/{id}/reset-cursor": {
+      "post": {
+        "tags": [
+          "Services"
+        ],
+        "summary": "Reset a connector's sync cursor for the current tenant and re-pull historical data.",
+        "description": "Nocturne does not persist a sync cursor — each data type resumes from the latest record\nalready stored. This endpoint forces a fresh ingest of history by running an explicit-range\nsync (an upper bound of \"now\" bypasses the per-type catch-up cursors), so the effect is a\ncursor reset. Re-ingested records are deduplicated on their idempotency keys (see the\n\"Syncing\" guide), so it is safe to run after fixing a connector bug to push corrected data\nto a tenant.\n            \nLatency: this runs synchronously. A full-history re-pull with no lower bound\nre-ingests every data type over the connector's entire history (glucose can be tens of\nthousands of records), which is a multi-minute request and may approach or exceed\nreverse-proxy / browser timeouts. Scope it with from and/or dataTypes when\npossible. The cross-tenant equivalent\n(POST /api/v4/admin/connectors/{tenantId}/reset-cursors) runs as a background job to\navoid this.",
+        "operationId": "Services_ResetConnectorCursor",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "Connector ID (e.g., \"nightscout\", \"dexcom\").",
+            "schema": {
+              "type": "string"
+            },
+            "x-position": 1
+          }
+        ],
+        "requestBody": {
+          "x-name": "request",
+          "description": "Optional lower bound and data-type filter. Omit from to re-pull all available history; omit dataTypes to reset every supported type.",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ResetCursorRequest"
+              }
+            }
+          },
+          "required": true,
+          "x-position": 2
+        },
+        "responses": {
+          "200": {
+            "description": "Sync result with success status and details.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SyncResult"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        },
+        "x-remote-type": "command"
+      }
+    },
     "/api/v4/services/connectors/{id}/sync-status": {
       "get": {
         "tags": [
@@ -11259,6 +11760,58 @@
         ]
       }
     },
+    "/api/v4/alerts/excursions/{excursionId}/acknowledge": {
+      "post": {
+        "tags": [
+          "Alerts"
+        ],
+        "summary": "Acknowledge a single alert excursion, halting escalation delivery for its\nactive instances. Acknowledging an excursion that is already acknowledged\nor already closed is a no-op. Returns 404 when the excursion does not\nexist for the current tenant.",
+        "operationId": "Alerts_AcknowledgeExcursion",
+        "parameters": [
+          {
+            "name": "excursionId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "guid"
+            },
+            "x-position": 1
+          }
+        ],
+        "requestBody": {
+          "x-name": "request",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AcknowledgeRequest"
+              }
+            }
+          },
+          "required": true,
+          "x-position": 2
+        },
+        "responses": {
+          "204": {
+            "description": ""
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        },
+        "x-remote-type": "command",
+        "x-remote-invalidates": [
+          "GetActiveAlerts"
+        ]
+      }
+    },
     "/api/v4/alerts/instances/{instanceId}/snooze": {
       "post": {
         "tags": [
@@ -11445,6 +11998,145 @@
         "x-remote-type": "query"
       }
     },
+    "/api/v4/alerts/dnd/windows/active": {
+      "get": {
+        "tags": [
+          "Dnd Windows"
+        ],
+        "summary": "List the tenant's DND windows that are active right now (resolved on read).",
+        "operationId": "DndWindows_GetActive",
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/DndWindowResponse"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "x-remote-type": "query"
+      }
+    },
+    "/api/v4/alerts/dnd/windows": {
+      "post": {
+        "tags": [
+          "Dnd Windows"
+        ],
+        "summary": "Create (or idempotently return) a DND window. Supersedes any active window of the same\nscope so at most one is ever active per scope.",
+        "operationId": "DndWindows_Create",
+        "requestBody": {
+          "x-name": "request",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateDndWindowRequest"
+              }
+            }
+          },
+          "required": true,
+          "x-position": 1
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DndWindowResponse"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DndWindowResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        },
+        "x-remote-type": "command",
+        "x-remote-invalidates": [
+          "GetActive"
+        ]
+      }
+    },
+    "/api/v4/alerts/dnd/windows/{id}/clear": {
+      "post": {
+        "tags": [
+          "Dnd Windows"
+        ],
+        "summary": "Clear a DND window (turn the mute off). Idempotent: a window already cleared (by the user\nor by supersede) is returned unchanged so a retry never rewrites the audit timestamp.",
+        "operationId": "DndWindows_Clear",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "guid"
+            },
+            "x-position": 1
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DndWindowResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        },
+        "x-remote-type": "command",
+        "x-remote-invalidates": [
+          "GetActive"
+        ]
+      }
+    },
     "/api/v4/notifications": {
       "post": {
         "tags": [
@@ -11598,6 +12290,82 @@
         ]
       }
     },
+    "/api/v4/notifications/read-all": {
+      "post": {
+        "tags": [
+          "Notifications"
+        ],
+        "operationId": "Notifications_MarkAllAsRead",
+        "responses": {
+          "204": {
+            "description": ""
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        },
+        "x-remote-type": "command",
+        "x-remote-invalidates": [
+          "GetNotifications"
+        ]
+      }
+    },
+    "/api/v4/notifications/{id}/read": {
+      "post": {
+        "tags": [
+          "Notifications"
+        ],
+        "operationId": "Notifications_MarkAsRead",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "guid"
+            },
+            "x-position": 1
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": ""
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        },
+        "x-remote-type": "command",
+        "x-remote-invalidates": [
+          "GetNotifications"
+        ]
+      }
+    },
     "/api/v4/notifications/{id}": {
       "delete": {
         "tags": [
@@ -11672,7 +12440,7 @@
         "tags": [
           "Tenant Alert Settings"
         ],
-        "summary": "Replace the current tenant's alert settings. Upserts on first call.",
+        "summary": "Replace the current tenant's alert settings. Upserts on first call. The manual-DND toggle\ncreates/clears the tenant's scope=all window; scheduled fields persist on the row.",
         "operationId": "TenantAlertSettings_Update",
         "requestBody": {
           "x-name": "request",
@@ -11712,53 +12480,6 @@
         "x-remote-invalidates": [
           "Get"
         ]
-      }
-    },
-    "/api/v4/trackers/alerts/pending": {
-      "get": {
-        "tags": [
-          "Tracker Alerts"
-        ],
-        "operationId": "TrackerAlerts_GetPendingAlerts",
-        "responses": {
-          "200": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "array",
-                  "items": {
-                    "$ref": "#/components/schemas/TrackerAlertDto"
-                  }
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/v4/trackers/alerts/sounds": {
-      "get": {
-        "tags": [
-          "Tracker Alerts"
-        ],
-        "summary": "Get available alert sounds",
-        "operationId": "TrackerAlerts_GetAvailableSounds",
-        "responses": {
-          "200": {
-            "description": "List of available sound preset names",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "array",
-                  "items": {
-                    "type": "string"
-                  }
-                }
-              }
-            }
-          }
-        }
       }
     },
     "/api/v4/trackers/definitions": {
@@ -12149,7 +12870,7 @@
         "tags": [
           "Trackers"
         ],
-        "summary": "Acknowledge/snooze a tracker notification",
+        "summary": "Acknowledge a tracker notification. SnoozeMins is stored on the instance\n(pill display/legacy clients); the alert-engine side is a plain acknowledgement of\nthe managed rules' open excursions — re-notification is the threshold ladder's and\nalert_state escalation rules' job, not a snooze re-fire.",
         "operationId": "Trackers_AckInstance",
         "parameters": [
           {
@@ -13388,46 +14109,6 @@
         ]
       }
     },
-    "/api/v4/member-invites/public-access": {
-      "put": {
-        "tags": [
-          "Member Invite"
-        ],
-        "summary": "Toggle public (unauthenticated) read access for this tenant.\nAssigns or removes the viewer role on the Public system subject.",
-        "operationId": "MemberInvite_SetPublicAccess",
-        "requestBody": {
-          "x-name": "request",
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/SetPublicAccessRequest"
-              }
-            }
-          },
-          "required": true,
-          "x-position": 1
-        },
-        "responses": {
-          "204": {
-            "description": ""
-          },
-          "403": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            }
-          }
-        },
-        "x-remote-type": "command",
-        "x-remote-invalidates": [
-          "GetMembers"
-        ]
-      }
-    },
     "/api/v4/membership-requests": {
       "post": {
         "tags": [
@@ -13645,6 +14326,83 @@
           }
         },
         "x-remote-type": "command"
+      }
+    },
+    "/api/v4/membership-requests/settings": {
+      "get": {
+        "tags": [
+          "Membership Request"
+        ],
+        "summary": "Get whether this tenant currently lets people request to become a member.",
+        "operationId": "MembershipRequest_GetMembershipRequestSettings",
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MembershipRequestSettingsDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        },
+        "x-remote-type": "query"
+      },
+      "put": {
+        "tags": [
+          "Membership Request"
+        ],
+        "summary": "Enable or disable whether people can request to become a member. Independent of public access.",
+        "operationId": "MembershipRequest_SetMembershipRequestSettings",
+        "requestBody": {
+          "x-name": "request",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateMembershipRequestSettingsRequest"
+              }
+            }
+          },
+          "required": true,
+          "x-position": 1
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MembershipRequestSettingsDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        },
+        "x-remote-type": "command",
+        "x-remote-invalidates": [
+          "GetMembershipRequestSettings"
+        ]
       }
     },
     "/api/v4/me/permissions": {
@@ -13955,6 +14713,210 @@
         "x-remote-type": "command",
         "x-remote-invalidates": [
           "GetRoles"
+        ]
+      }
+    },
+    "/api/v4/share": {
+      "get": {
+        "tags": [
+          "Share Link"
+        ],
+        "summary": "Get the current public share link state.",
+        "operationId": "ShareLink_GetShareLink",
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ShareLinkDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        },
+        "x-remote-type": "query"
+      },
+      "delete": {
+        "tags": [
+          "Share Link"
+        ],
+        "summary": "Disable public sharing and invalidate the current link.",
+        "operationId": "ShareLink_DisableShareLink",
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ShareLinkDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        },
+        "x-remote-type": "command",
+        "x-remote-invalidates": [
+          "GetShareLink"
+        ]
+      }
+    },
+    "/api/v4/share/rotate": {
+      "post": {
+        "tags": [
+          "Share Link"
+        ],
+        "summary": "Mint a new share token — enables sharing, or rotates an existing link. The previous link\nstops working immediately.",
+        "operationId": "ShareLink_RotateShareLink",
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ShareLinkDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        },
+        "x-remote-type": "command",
+        "x-remote-invalidates": [
+          "GetShareLink"
+        ]
+      }
+    },
+    "/api/v4/share/full-history": {
+      "put": {
+        "tags": [
+          "Share Link"
+        ],
+        "summary": "Choose whether the public view shows full history or only the last 24 hours.",
+        "operationId": "ShareLink_SetShareLinkFullHistory",
+        "requestBody": {
+          "x-name": "request",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SetShareFullHistoryRequest"
+              }
+            }
+          },
+          "required": true,
+          "x-position": 1
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ShareLinkDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        },
+        "x-remote-type": "command",
+        "x-remote-invalidates": [
+          "GetShareLink"
+        ]
+      }
+    },
+    "/api/v4/share/scopes": {
+      "put": {
+        "tags": [
+          "Share Link"
+        ],
+        "summary": "Set which data categories anonymous viewers can see. Scopes must be read-permission atoms\ndrawn from TenantPermissions.PublicShareScopes; an empty list keeps the link live but\nshares nothing.",
+        "operationId": "ShareLink_SetShareLinkScopes",
+        "requestBody": {
+          "x-name": "request",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SetShareScopesRequest"
+              }
+            }
+          },
+          "required": true,
+          "x-position": 1
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ShareLinkDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        },
+        "x-remote-type": "command",
+        "x-remote-invalidates": [
+          "GetShareLink"
         ]
       }
     },
@@ -17311,7 +18273,7 @@
         "tags": [
           "Dev Admin"
         ],
-        "summary": "Create a tenant, owner subject, owner membership, and a session in one call.\nUsed exclusively by the E2E test suite to bypass passkey/OIDC ceremonies.",
+        "summary": "Create a tenant, owner subject, synthetic passkey, owner membership, and a session\nin one call. The synthetic passkey satisfies the TenantSetupMiddleware credential\ncheck so the returned session can immediately call tenant APIs.\nUsed by E2E tests and headless dev tooling to bypass passkey/OIDC ceremonies.",
         "operationId": "DevAdmin_SeedTenant",
         "requestBody": {
           "x-name": "request",
@@ -18855,6 +19817,130 @@
         "x-remote-type": "query"
       }
     },
+    "/api/v4/connectors/carelink/connect/start": {
+      "post": {
+        "tags": [
+          "Care Link Connect"
+        ],
+        "summary": "Begins the connect flow: builds the Auth0 authorize URL and stashes the PKCE verifier server-side.\nThe client opens AuthorizeUrl in a new tab.",
+        "operationId": "CareLinkConnect_Start",
+        "requestBody": {
+          "x-name": "request",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CareLinkConnectStartRequest"
+              }
+            }
+          },
+          "required": true,
+          "x-position": 1
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CareLinkConnectStartResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        },
+        "x-remote-type": "command"
+      }
+    },
+    "/api/v4/connectors/carelink/connect/complete": {
+      "post": {
+        "tags": [
+          "Care Link Connect"
+        ],
+        "summary": "Completes the connect flow: exchanges the pasted code for a refresh token and stores it as the\nconnector secret. Returns the discovered username/country for auto-filling the config form.",
+        "operationId": "CareLinkConnect_Complete",
+        "requestBody": {
+          "x-name": "request",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CareLinkConnectCompleteRequest"
+              }
+            }
+          },
+          "required": true,
+          "x-position": 1
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CareLinkConnectCompleteResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        },
+        "x-remote-type": "command",
+        "x-remote-invalidates": [
+          "GetConfiguration",
+          "GetAllConnectorStatus"
+        ]
+      }
+    },
+    "/api/v4/connectors/carelink/connect/desktop-token": {
+      "post": {
+        "tags": [
+          "Care Link Connect"
+        ],
+        "summary": "Mints a short-lived link code for the desktop companion app. The code carries the server URL\nplus a tenant-pinned bearer token scoped to this controller, so the app can drive\nstart/complete for the user's tenant without a second login. The app intercepts\nthe com.medtronic.carepartner:/sso redirect in its own webview, removing the\nmanual code-paste step of the browser flow.",
+        "operationId": "CareLinkConnect_DesktopToken",
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CareLinkDesktopTokenResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        },
+        "x-remote-type": "command"
+      }
+    },
     "/api/v4/connectors/config/{connectorName}": {
       "get": {
         "tags": [
@@ -19307,6 +20393,288 @@
         }
       }
     },
+    "/api/v4/client-devices": {
+      "post": {
+        "tags": [
+          "Client Devices"
+        ],
+        "summary": "Register or refresh this device. Idempotent upsert keyed on the install id — apps call it on\nevery startup to keep their advertised capabilities and last-seen time current.",
+        "operationId": "ClientDevices_Register",
+        "requestBody": {
+          "x-name": "request",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RegisterDeviceRequest"
+              }
+            }
+          },
+          "required": true,
+          "x-position": 1
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ClientDeviceDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      },
+      "get": {
+        "tags": [
+          "Client Devices"
+        ],
+        "summary": "Lists the devices registered by the current user, most-recently-seen first.",
+        "operationId": "ClientDevices_GetDevices",
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/ClientDeviceDto"
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        },
+        "x-remote-type": "query"
+      }
+    },
+    "/api/v4/client-devices/capabilities": {
+      "get": {
+        "tags": [
+          "Client Devices"
+        ],
+        "summary": "The static device-action capability catalog (kinds + capabilities) that drives the rule\nbuilder's device-action authoring UI. Static metadata, so no device scope is required.",
+        "operationId": "ClientDevices_GetCapabilityCatalog",
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DeviceCapabilityCatalog"
+                }
+              }
+            }
+          }
+        },
+        "x-remote-type": "query"
+      }
+    },
+    "/api/v4/client-devices/{id}": {
+      "patch": {
+        "tags": [
+          "Client Devices"
+        ],
+        "summary": "Rename a device you own.",
+        "operationId": "ClientDevices_Rename",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "guid"
+            },
+            "x-position": 1
+          }
+        ],
+        "requestBody": {
+          "x-name": "request",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RenameDeviceRequest"
+              }
+            }
+          },
+          "required": true,
+          "x-position": 2
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ClientDeviceDto"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        },
+        "x-remote-type": "command",
+        "x-remote-invalidates": [
+          "GetDevices"
+        ]
+      },
+      "delete": {
+        "tags": [
+          "Client Devices"
+        ],
+        "summary": "Revoke (remove) a device you own. Its future registrations start fresh.",
+        "operationId": "ClientDevices_Revoke",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "guid"
+            },
+            "x-position": 1
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": ""
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        },
+        "x-remote-type": "command",
+        "x-remote-invalidates": [
+          "GetDevices"
+        ]
+      }
+    },
+    "/api/v4/client-devices/{id}/active-intents": {
+      "get": {
+        "tags": [
+          "Client Devices"
+        ],
+        "summary": "The actuation intents currently active for this device — the reconcile snapshot a push-mode\ndevice reads on (re)connect to start anything still active and drop anything resolved. Empty\nfor a local-engine device or one the caller does not own.",
+        "operationId": "ClientDevices_GetActiveIntents",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "guid"
+            },
+            "x-position": 1
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/DeviceActionIntent"
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        },
+        "x-remote-type": "query"
+      }
+    },
     "/api/v4/audit/mutations": {
       "get": {
         "tags": [
@@ -19601,6 +20969,16 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/AuditConfigDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
                 }
               }
             }
@@ -20301,6 +21679,52 @@
         "x-client-property": "predictions"
       }
     },
+    "/api/v4/predictions/profile-snapshot": {
+      "get": {
+        "tags": [
+          "Prediction"
+        ],
+        "summary": "Get the pre-resolved therapy profile for the next 24 hours, flattened into contiguous\nabsolute-time segments, for an offline on-device oref prediction run.",
+        "description": "Unlike GetPredictions, this action is intentionally available regardless of\nPredictions:Source: the client runs oref on-device and needs its therapy profile\nprecisely when server-side prediction is off (the offline case). It depends only on the\nunconditionally-registered profile resolvers, not on IPredictionService, so it\ncarries no _predictionService/_source guard.\n            \nClients must additionally apply the fixed oref constants max_iob=10, max_basal=4,\nmax_daily_basal=2 (which PredictionService.GetProfileAsync hardcodes) to match a\nserver-side oref run; they are not part of this payload.",
+        "operationId": "Prediction_GetProfileSnapshot",
+        "parameters": [
+          {
+            "name": "profileId",
+            "in": "query",
+            "description": "Optional profile name. The device omits it (resolves the active profile).",
+            "schema": {
+              "type": "string",
+              "nullable": true
+            },
+            "x-position": 1
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProfileSnapshotResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PredictionErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "x-remote-type": "query",
+        "x-client-property": "predictions"
+      }
+    },
     "/api/v4/Retrospective/at": {
       "get": {
         "tags": [
@@ -20457,6 +21881,116 @@
           },
           "500": {
             "description": ""
+          }
+        },
+        "x-remote-type": "query"
+      }
+    },
+    "/api/v4/sensor-integrity": {
+      "get": {
+        "tags": [
+          "Sensor Integrity"
+        ],
+        "summary": "Analyze a UTC window for sensor-integrity clusters and cluster-linked hypo events.",
+        "operationId": "SensorIntegrity_Analyze",
+        "parameters": [
+          {
+            "name": "startDate",
+            "in": "query",
+            "description": "Inclusive UTC start of the window.",
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            },
+            "x-position": 1
+          },
+          {
+            "name": "endDate",
+            "in": "query",
+            "description": "Exclusive UTC end of the window.",
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            },
+            "x-position": 2
+          },
+          {
+            "name": "source",
+            "in": "query",
+            "description": "Optional data source filter; omitted analyzes the combined stream.",
+            "schema": {
+              "type": "string",
+              "nullable": true
+            },
+            "x-position": 3
+          },
+          {
+            "name": "bySource",
+            "in": "query",
+            "description": "When true, also return a per-data-source breakdown.",
+            "schema": {
+              "type": "boolean",
+              "default": false
+            },
+            "x-position": 4
+          },
+          {
+            "name": "minConfidence",
+            "in": "query",
+            "description": "Minimum cluster confidence for a hypo event to be reported.",
+            "schema": {
+              "default": "Medium",
+              "oneOf": [
+                {
+                  "$ref": "#/components/schemas/ClusterConfidence"
+                }
+              ]
+            },
+            "x-position": 5
+          },
+          {
+            "name": "requireInsulin",
+            "in": "query",
+            "description": "When true, only report hypo events with insulin dosed during the cluster.",
+            "schema": {
+              "type": "boolean",
+              "default": false
+            },
+            "x-position": 6
+          },
+          {
+            "name": "hypoThresholdMgdl",
+            "in": "query",
+            "description": "Glucose level (mg/dL) below which a reading counts as hypo.",
+            "schema": {
+              "type": "number",
+              "format": "double",
+              "default": 70.0
+            },
+            "x-position": 7
+          },
+          {
+            "name": "windowHours",
+            "in": "query",
+            "description": "Hours after a cluster to search for a hypo nadir.",
+            "schema": {
+              "type": "number",
+              "format": "double",
+              "default": 3.0
+            },
+            "x-position": 8
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The sensor-integrity report for the window.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SensorIntegrityReport"
+                }
+              }
+            }
           }
         },
         "x-remote-type": "query"
@@ -21873,6 +23407,64 @@
             }
           }
         }
+      }
+    },
+    "/api/v4/Statistics/range-analytics": {
+      "get": {
+        "tags": [
+          "Statistics"
+        ],
+        "summary": "Extended glucose analytics for a date range, computed server-side. Fetches glucose,\nmanual boluses, and carb intakes for the window from the database and runs\nAnalyzeGlucoseDataExtended plus\nCalculateAveragedStats.",
+        "operationId": "Statistics_GetRangeAnalytics",
+        "parameters": [
+          {
+            "name": "startDate",
+            "in": "query",
+            "description": "Start of the window (inclusive, UTC).",
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            },
+            "x-position": 1
+          },
+          {
+            "name": "endDate",
+            "in": "query",
+            "description": "End of the window (exclusive, UTC).",
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            },
+            "x-position": 2
+          },
+          {
+            "name": "population",
+            "in": "query",
+            "description": "Diabetes population for clinical target assessment. Defaults to Type 1 adult.",
+            "schema": {
+              "default": 0,
+              "oneOf": [
+                {
+                  "$ref": "#/components/schemas/DiabetesPopulation"
+                }
+              ]
+            },
+            "x-position": 3
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The extended analytics and time-of-day averaged stats for the window.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReportAnalysisResult"
+                }
+              }
+            }
+          }
+        },
+        "x-remote-type": "query"
       }
     },
     "/api/v4/Statistics/gmi/{meanGlucose}": {
@@ -23847,7 +25439,7 @@
           "Oidc"
         ],
         "summary": "Refresh the session tokens.\nUses the refresh token to get a new access token.",
-        "description": "The refresh token is read from the cookie or the Refresh Authorization header (for API clients).\nOn failure, all session cookies are cleared to force re-authentication.\nLogs TokenRefreshed on success.",
+        "description": "The refresh token is read from the cookie or the Refresh Authorization header (for API clients).\nOn failure, returns 401 without touching cookies — session cookies are domain-wide, so a\ndeletion issued for a stale token would wipe a newer session the browser obtained concurrently.\nLogs TokenRefreshed on success.",
         "operationId": "Oidc_Refresh",
         "responses": {
           "200": {
@@ -24416,114 +26008,6 @@
         ]
       }
     },
-    "/api/auth/passkey/setup/options": {
-      "post": {
-        "tags": [
-          "Passkey"
-        ],
-        "summary": "Generate registration options for the first user during initial setup.\nOnly available when no non-system subjects exist (setup mode).\nCreates the subject, assigns admin role, and returns passkey registration options.",
-        "operationId": "Passkey_SetupOptions",
-        "requestBody": {
-          "x-name": "request",
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/SetupOptionsRequest"
-              }
-            }
-          },
-          "required": true,
-          "x-position": 1
-        },
-        "responses": {
-          "200": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/PasskeyOptionsResponse"
-                }
-              }
-            }
-          },
-          "403": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            }
-          }
-        },
-        "x-remote-type": "command"
-      }
-    },
-    "/api/auth/passkey/setup/complete": {
-      "post": {
-        "tags": [
-          "Passkey"
-        ],
-        "summary": "Complete passkey registration during initial setup.\nVerifies attestation, generates recovery codes, issues a full JWT session,\nand exits setup mode.",
-        "operationId": "Passkey_SetupComplete",
-        "requestBody": {
-          "x-name": "request",
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/SetupCompleteRequest"
-              }
-            }
-          },
-          "required": true,
-          "x-position": 1
-        },
-        "responses": {
-          "200": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/SetupCompleteResponse"
-                }
-              }
-            }
-          },
-          "403": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            }
-          }
-        },
-        "x-remote-type": "command"
-      }
-    },
     "/api/auth/passkey/access-request/options": {
       "post": {
         "tags": [
@@ -24716,7 +26200,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/SetupCompleteResponse"
+                  "$ref": "#/components/schemas/PasskeyRegistrationResponse"
                 }
               }
             }
@@ -25252,6 +26736,14 @@
                 "$ref": "#/components/schemas/StateSpanActiveCondition"
               }
             ]
+          },
+          "tracker_age": {
+            "nullable": true,
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/TrackerAgeCondition"
+              }
+            ]
           }
         }
       },
@@ -25739,6 +27231,7 @@
           "EaseOff",
           "Sleep",
           "Exercise",
+          "Liberty",
           "Suspended",
           "Off"
         ],
@@ -25750,6 +27243,7 @@
           "EaseOff",
           "Sleep",
           "Exercise",
+          "Liberty",
           "Suspended",
           "Off"
         ]
@@ -25802,6 +27296,23 @@
           "DataExclusion",
           "TemporaryTarget"
         ]
+      },
+      "TrackerAgeCondition": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "tracker_definition_id": {
+            "type": "string",
+            "format": "guid"
+          },
+          "operator": {
+            "type": "string"
+          },
+          "minutes": {
+            "type": "integer",
+            "format": "int32"
+          }
+        }
       },
       "AuthErrorCodesMetadata": {
         "type": "object",
@@ -26079,7 +27590,6 @@
           "StepCountReadWrite",
           "FoodRead",
           "FoodReadWrite",
-          "StatisticsRead",
           "HealthRead",
           "HealthReadWrite",
           "FullAccess"
@@ -26104,7 +27614,6 @@
           "stepcount.readwrite",
           "food.read",
           "food.readwrite",
-          "statistics.read",
           "health.read",
           "health.readwrite",
           "*"
@@ -26596,6 +28105,83 @@
           "providerId": {
             "type": "string",
             "format": "guid"
+          }
+        }
+      },
+      "TimezoneTimelineEntry": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "guid"
+          },
+          "effectiveFrom": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "timezone": {
+            "type": "string"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          }
+        }
+      },
+      "UpsertTimezoneEntryRequest": {
+        "type": "object",
+        "description": "Request to create or update a timezone timeline entry.",
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "Existing entry id to update, or null to create.",
+            "format": "guid",
+            "nullable": true
+          },
+          "effectiveFrom": {
+            "type": "string",
+            "description": "Local wall-clock instant from which the zone takes effect.",
+            "format": "date-time"
+          },
+          "timezone": {
+            "type": "string",
+            "description": "IANA timezone id (e.g. \"Australia/Sydney\")."
+          }
+        }
+      },
+      "RecorrectResult": {
+        "type": "object",
+        "description": "Outcome of a re-correction re-sync.",
+        "additionalProperties": false,
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "description": "Whether the re-sync succeeded."
+          },
+          "message": {
+            "type": "string",
+            "description": "Human-readable status message."
+          }
+        }
+      },
+      "RecorrectRequest": {
+        "type": "object",
+        "description": "Request to re-correct imported data after a timeline change.",
+        "additionalProperties": false,
+        "properties": {
+          "from": {
+            "type": "string",
+            "description": "Optional UTC lower bound for the re-pull window.",
+            "format": "date-time",
+            "nullable": true
           }
         }
       },
@@ -30559,6 +32145,54 @@
           "buttonColor": {
             "type": "string",
             "nullable": true
+          },
+          "providerType": {
+            "$ref": "#/components/schemas/OidcProviderType"
+          },
+          "oAuth2": {
+            "nullable": true,
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/OAuth2ProviderSettings"
+              }
+            ]
+          }
+        }
+      },
+      "OidcProviderType": {
+        "type": "string",
+        "description": "",
+        "x-enumNames": [
+          "Oidc",
+          "OAuth2"
+        ],
+        "enum": [
+          "Oidc",
+          "OAuth2"
+        ]
+      },
+      "OAuth2ProviderSettings": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "authorizationEndpoint": {
+            "type": "string"
+          },
+          "tokenEndpoint": {
+            "type": "string"
+          },
+          "userInfoEndpoint": {
+            "type": "string"
+          },
+          "userInfoEmailEndpoint": {
+            "type": "string",
+            "nullable": true
+          },
+          "claimMappings": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            }
           }
         }
       },
@@ -30614,6 +32248,17 @@
           "buttonColor": {
             "type": "string",
             "nullable": true
+          },
+          "providerType": {
+            "$ref": "#/components/schemas/OidcProviderType"
+          },
+          "oAuth2": {
+            "nullable": true,
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/OAuth2ProviderSettings"
+              }
+            ]
           }
         }
       },
@@ -30678,6 +32323,17 @@
           "buttonColor": {
             "type": "string",
             "nullable": true
+          },
+          "providerType": {
+            "$ref": "#/components/schemas/OidcProviderType"
+          },
+          "oAuth2": {
+            "nullable": true,
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/OAuth2ProviderSettings"
+              }
+            ]
           }
         }
       },
@@ -31067,6 +32723,36 @@
           "backgroundOpacity": {
             "type": "integer",
             "format": "int32"
+          },
+          "screensaverMode": {
+            "type": "boolean"
+          }
+        }
+      },
+      "ClockGlucoseDto": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "mills": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "mgdl": {
+            "type": "number",
+            "format": "double"
+          },
+          "direction": {
+            "type": "string",
+            "nullable": true
+          },
+          "delta": {
+            "type": "number",
+            "format": "double",
+            "nullable": true
+          },
+          "dataSource": {
+            "type": "string",
+            "nullable": true
           }
         }
       },
@@ -33350,6 +35036,343 @@
           }
         }
       },
+      "TenantConnectorsDto": {
+        "type": "object",
+        "description": "A tenant and the connectors it has configured.",
+        "additionalProperties": false,
+        "properties": {
+          "tenantId": {
+            "type": "string",
+            "description": "The tenant id.",
+            "format": "guid"
+          },
+          "tenantSlug": {
+            "type": "string",
+            "description": "The tenant slug, for display."
+          },
+          "connectors": {
+            "type": "array",
+            "description": "One entry per configured connector.",
+            "items": {
+              "$ref": "#/components/schemas/TenantConnectorSummary"
+            }
+          }
+        }
+      },
+      "TenantConnectorSummary": {
+        "type": "object",
+        "description": "Sync/health summary for a single configured connector.",
+        "additionalProperties": false,
+        "properties": {
+          "connectorName": {
+            "type": "string",
+            "description": "The connector name (e.g. nightscout)."
+          },
+          "isHealthy": {
+            "type": "boolean",
+            "description": "Whether the connector last reported healthy."
+          },
+          "lastSuccessfulSync": {
+            "type": "string",
+            "description": "When the connector last completed a successful sync.",
+            "format": "date-time",
+            "nullable": true
+          },
+          "lastSyncAttempt": {
+            "type": "string",
+            "description": "When the connector last attempted a sync.",
+            "format": "date-time",
+            "nullable": true
+          },
+          "lastErrorMessage": {
+            "type": "string",
+            "description": "The most recent error message, if any.",
+            "nullable": true
+          }
+        }
+      },
+      "ConnectorResetJobInfo": {
+        "type": "object",
+        "description": "Summary returned when a reset job is created (202 Accepted).",
+        "additionalProperties": false,
+        "properties": {
+          "jobId": {
+            "type": "string",
+            "description": "The job id, used to poll status.",
+            "format": "guid"
+          },
+          "tenantId": {
+            "type": "string",
+            "description": "The target tenant being reset.",
+            "format": "guid"
+          },
+          "tenantSlug": {
+            "type": "string",
+            "description": "The target tenant's slug, for display."
+          },
+          "createdAt": {
+            "type": "string",
+            "description": "When the job was created.",
+            "format": "date-time"
+          },
+          "state": {
+            "description": "The job's current state.",
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/ConnectorResetJobState"
+              }
+            ]
+          },
+          "totalConnectors": {
+            "type": "integer",
+            "description": "How many connectors the job will reset.",
+            "format": "int32"
+          }
+        }
+      },
+      "ConnectorResetJobState": {
+        "type": "string",
+        "description": "Lifecycle state of a connector cursor reset job.",
+        "x-enumNames": [
+          "Pending",
+          "Running",
+          "Completed",
+          "Failed",
+          "Cancelled"
+        ],
+        "enum": [
+          "Pending",
+          "Running",
+          "Completed",
+          "Failed",
+          "Cancelled"
+        ]
+      },
+      "AdminResetCursorsRequest": {
+        "type": "object",
+        "description": "Request body for a cross-tenant cursor reset. Mirrors the per-tenant\nResetCursorRequest shape.",
+        "additionalProperties": false,
+        "properties": {
+          "from": {
+            "type": "string",
+            "description": "Optional lower bound for the re-pull. When null, all available history is re-ingested.",
+            "format": "date-time",
+            "nullable": true
+          },
+          "dataTypes": {
+            "type": "array",
+            "description": "Optional set of data types to reset. When null or empty, every supported data type is reset.",
+            "nullable": true,
+            "items": {
+              "$ref": "#/components/schemas/SyncDataType"
+            }
+          }
+        }
+      },
+      "SyncDataType": {
+        "type": "string",
+        "description": "",
+        "x-enumNames": [
+          "Glucose",
+          "ManualBG",
+          "Calibrations",
+          "Boluses",
+          "BasalInjections",
+          "CarbIntake",
+          "BGChecks",
+          "BolusCalculations",
+          "Notes",
+          "DeviceEvents",
+          "StateSpans",
+          "TempBasals",
+          "Profiles",
+          "DeviceStatus",
+          "Activity",
+          "Food"
+        ],
+        "enum": [
+          "Glucose",
+          "ManualBG",
+          "Calibrations",
+          "Boluses",
+          "BasalInjections",
+          "CarbIntake",
+          "BGChecks",
+          "BolusCalculations",
+          "Notes",
+          "DeviceEvents",
+          "StateSpans",
+          "TempBasals",
+          "Profiles",
+          "DeviceStatus",
+          "Activity",
+          "Food"
+        ]
+      },
+      "ConnectorResetJobStatus": {
+        "type": "object",
+        "description": "A pollable snapshot of a reset job's progress.",
+        "additionalProperties": false,
+        "properties": {
+          "jobId": {
+            "type": "string",
+            "description": "The job id.",
+            "format": "guid"
+          },
+          "tenantId": {
+            "type": "string",
+            "description": "The target tenant being reset.",
+            "format": "guid"
+          },
+          "tenantSlug": {
+            "type": "string",
+            "description": "The target tenant's slug, for display."
+          },
+          "state": {
+            "description": "The job's current lifecycle state.",
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/ConnectorResetJobState"
+              }
+            ]
+          },
+          "createdAt": {
+            "type": "string",
+            "description": "When the job was created.",
+            "format": "date-time"
+          },
+          "startedAt": {
+            "type": "string",
+            "description": "When the background work started, or null if not yet started.",
+            "format": "date-time",
+            "nullable": true
+          },
+          "completedAt": {
+            "type": "string",
+            "description": "When the job reached a terminal state, or null if still running.",
+            "format": "date-time",
+            "nullable": true
+          },
+          "errorMessage": {
+            "type": "string",
+            "description": "An error message when the whole job failed (not a single connector).",
+            "nullable": true
+          },
+          "totalConnectors": {
+            "type": "integer",
+            "description": "Total connectors the job will reset.",
+            "format": "int32"
+          },
+          "completedConnectors": {
+            "type": "integer",
+            "description": "How many connectors have finished (succeeded or failed).",
+            "format": "int32"
+          },
+          "connectors": {
+            "type": "array",
+            "description": "Per-connector progress, in configured order.",
+            "items": {
+              "$ref": "#/components/schemas/ConnectorResetConnectorProgress"
+            }
+          }
+        }
+      },
+      "ConnectorResetConnectorProgress": {
+        "type": "object",
+        "description": "Progress for a single connector within a reset job.",
+        "additionalProperties": false,
+        "properties": {
+          "connectorName": {
+            "type": "string",
+            "description": "The connector name (e.g. nightscout)."
+          },
+          "state": {
+            "description": "The connector's current state in this job.",
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/ConnectorResetConnectorState"
+              }
+            ]
+          },
+          "message": {
+            "type": "string",
+            "description": "A human-readable message for the outcome, once the connector has completed.",
+            "nullable": true
+          },
+          "result": {
+            "description": "The full sync result, once the connector has completed.",
+            "nullable": true,
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/SyncResult"
+              }
+            ]
+          }
+        }
+      },
+      "ConnectorResetConnectorState": {
+        "type": "string",
+        "description": "State of a single connector within a reset job.",
+        "x-enumNames": [
+          "Pending",
+          "Running",
+          "Succeeded",
+          "Failed"
+        ],
+        "enum": [
+          "Pending",
+          "Running",
+          "Succeeded",
+          "Failed"
+        ]
+      },
+      "SyncResult": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "success": {
+            "type": "boolean"
+          },
+          "message": {
+            "type": "string"
+          },
+          "startTime": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "endTime": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "itemsSynced": {
+            "type": "object",
+            "x-dictionaryKey": {
+              "$ref": "#/components/schemas/SyncDataType"
+            },
+            "additionalProperties": {
+              "type": "integer",
+              "format": "int32"
+            }
+          },
+          "lastEntryTimes": {
+            "type": "object",
+            "x-dictionaryKey": {
+              "$ref": "#/components/schemas/SyncDataType"
+            },
+            "additionalProperties": {
+              "type": "string",
+              "format": "date-time",
+              "nullable": true
+            }
+          },
+          "errors": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      },
       "PlatformSettingsSummary": {
         "type": "object",
         "additionalProperties": false,
@@ -33467,6 +35490,9 @@
             "type": "string",
             "nullable": true
           },
+          "isSystemSubject": {
+            "type": "boolean"
+          },
           "roles": {
             "type": "array",
             "items": {
@@ -33495,6 +35521,9 @@
           "sysCreatedAt": {
             "type": "string",
             "format": "date-time"
+          },
+          "isPlatformAdmin": {
+            "type": "boolean"
           }
         }
       },
@@ -34566,89 +36595,6 @@
           }
         }
       },
-      "SyncResult": {
-        "type": "object",
-        "additionalProperties": false,
-        "properties": {
-          "success": {
-            "type": "boolean"
-          },
-          "message": {
-            "type": "string"
-          },
-          "startTime": {
-            "type": "string",
-            "format": "date-time"
-          },
-          "endTime": {
-            "type": "string",
-            "format": "date-time"
-          },
-          "itemsSynced": {
-            "type": "object",
-            "x-dictionaryKey": {
-              "$ref": "#/components/schemas/SyncDataType"
-            },
-            "additionalProperties": {
-              "type": "integer",
-              "format": "int32"
-            }
-          },
-          "lastEntryTimes": {
-            "type": "object",
-            "x-dictionaryKey": {
-              "$ref": "#/components/schemas/SyncDataType"
-            },
-            "additionalProperties": {
-              "type": "string",
-              "format": "date-time",
-              "nullable": true
-            }
-          },
-          "errors": {
-            "type": "array",
-            "items": {
-              "type": "string"
-            }
-          }
-        }
-      },
-      "SyncDataType": {
-        "type": "string",
-        "description": "",
-        "x-enumNames": [
-          "Glucose",
-          "ManualBG",
-          "Calibrations",
-          "Boluses",
-          "CarbIntake",
-          "BGChecks",
-          "BolusCalculations",
-          "Notes",
-          "DeviceEvents",
-          "StateSpans",
-          "Profiles",
-          "DeviceStatus",
-          "Activity",
-          "Food"
-        ],
-        "enum": [
-          "Glucose",
-          "ManualBG",
-          "Calibrations",
-          "Boluses",
-          "CarbIntake",
-          "BGChecks",
-          "BolusCalculations",
-          "Notes",
-          "DeviceEvents",
-          "StateSpans",
-          "Profiles",
-          "DeviceStatus",
-          "Activity",
-          "Food"
-        ]
-      },
       "SyncRequest": {
         "type": "object",
         "additionalProperties": false,
@@ -34665,6 +36611,27 @@
           },
           "dataTypes": {
             "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SyncDataType"
+            }
+          }
+        }
+      },
+      "ResetCursorRequest": {
+        "type": "object",
+        "description": "Request body for resetting a connector's sync cursor and re-pulling history.",
+        "additionalProperties": false,
+        "properties": {
+          "from": {
+            "type": "string",
+            "description": "Optional lower bound for the re-pull. When null, no lower bound is applied and all\navailable history is re-ingested.",
+            "format": "date-time",
+            "nullable": true
+          },
+          "dataTypes": {
+            "type": "array",
+            "description": "Optional set of data types to reset. When null or empty, every data type the connector\nsupports is re-pulled.",
+            "nullable": true,
             "items": {
               "$ref": "#/components/schemas/SyncDataType"
             }
@@ -34809,6 +36776,10 @@
             "type": "string",
             "nullable": true
           },
+          "build": {
+            "type": "string",
+            "nullable": true
+          },
           "isDemo": {
             "type": "boolean",
             "nullable": true
@@ -34817,6 +36788,9 @@
             "type": "string",
             "format": "date-time",
             "nullable": true
+          },
+          "anonymousReadAccess": {
+            "type": "boolean"
           }
         }
       },
@@ -34939,7 +36913,9 @@
           "TelegramGroup",
           "WhatsApp",
           "WhatsAppDm",
-          "HomeAssistant"
+          "HomeAssistant",
+          "ResendEmail",
+          "DeviceAction"
         ],
         "enum": [
           "web_push",
@@ -34954,7 +36930,9 @@
           "telegram_group",
           "whatsapp",
           "whatsapp_dm",
-          "home_assistant"
+          "home_assistant",
+          "resend_email",
+          "device_action"
         ]
       },
       "ChannelStatus": {
@@ -35437,7 +37415,8 @@
           "TimeSinceLastBolus",
           "DayOfWeek",
           "PumpState",
-          "StateSpanActive"
+          "StateSpanActive",
+          "TrackerAge"
         ],
         "enum": [
           "threshold",
@@ -35470,7 +37449,8 @@
           "time_since_last_bolus",
           "day_of_week",
           "pump_state",
-          "state_span_active"
+          "state_span_active",
+          "tracker_age"
         ]
       },
       "AlertRuleResponse": {
@@ -35506,6 +37486,19 @@
             "type": "boolean",
             "description": "When true, this rule still fires while the tenant is in Do Not Disturb mode.\n            Critical rules implicitly bypass DND regardless of this flag."
           },
+          "scopeClass": {
+            "description": "Low/high classification for scoped Do Not Disturb (ADR 0004), derived by the\n            shared engine from the rule's directional leaves. Read-only — computed server-side on\n            create/update; a scoped lows/highs window silences a rule only when its\n            class matches.",
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/RuleScopeClass"
+              }
+            ]
+          },
+          "managedBy": {
+            "type": "string",
+            "description": "Owner tag when this rule is synthesised from another feature's configuration\n            (e.g. tracker:{definitionId}). Null for user-authored rules. Managed rules\n            cannot be deleted here — the owning configuration re-syncs their condition, name and\n            severity; channels and client configuration remain user-editable.",
+            "nullable": true
+          },
           "autoResolveEnabled": {
             "type": "boolean"
           },
@@ -35521,6 +37514,22 @@
             }
           }
         }
+      },
+      "RuleScopeClass": {
+        "type": "string",
+        "description": "",
+        "x-enumNames": [
+          "Low",
+          "High",
+          "Composite",
+          "Undirected"
+        ],
+        "enum": [
+          "low",
+          "high",
+          "composite",
+          "undirected"
+        ]
       },
       "AlertRuleChannelResponse": {
         "type": "object",
@@ -35543,6 +37552,10 @@
           "sortOrder": {
             "type": "integer",
             "format": "int32"
+          },
+          "metadata": {
+            "description": "Channel-specific config (e.g. device_action capabilities). Null when unset.",
+            "nullable": true
           }
         }
       },
@@ -35608,11 +37621,15 @@
           },
           "destination": {
             "type": "string",
-            "description": "Channel-specific address: webhook URL, chat handle, etc. Empty for in-app/web-push.",
+            "description": "Channel-specific address: webhook URL, chat handle, device kind for device_action, etc. Empty for in-app/web-push.",
             "nullable": true
           },
           "destinationLabel": {
             "type": "string",
+            "nullable": true
+          },
+          "metadata": {
+            "description": "Channel-specific config, persisted as JSONB. For device_action: { \"capabilities\": [\"notify\", ...] }.",
             "nullable": true
           }
         }
@@ -35720,6 +37737,9 @@
           },
           "conditionType": {
             "$ref": "#/components/schemas/AlertConditionType"
+          },
+          "severity": {
+            "$ref": "#/components/schemas/AlertRuleSeverity"
           },
           "startedAt": {
             "type": "string",
@@ -35912,6 +37932,96 @@
           }
         }
       },
+      "DndWindowResponse": {
+        "type": "object",
+        "description": "A DND window with its resolver fields. active state is computed on read.",
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "guid"
+          },
+          "scope": {
+            "$ref": "#/components/schemas/DndScope"
+          },
+          "startedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "endsAt": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          },
+          "clearedAt": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          },
+          "clearedBy": {
+            "type": "string",
+            "nullable": true
+          },
+          "source": {
+            "type": "string",
+            "nullable": true
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "DndScope": {
+        "type": "string",
+        "description": "",
+        "x-enumNames": [
+          "Lows",
+          "Highs",
+          "All"
+        ],
+        "enum": [
+          "lows",
+          "highs",
+          "all"
+        ]
+      },
+      "CreateDndWindowRequest": {
+        "type": "object",
+        "description": "Request to create a DND window. Id is client-supplied for idempotency.",
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "Client-generated UUID. Re-sending the same id is a no-op that returns the stored window.",
+            "format": "guid"
+          },
+          "scope": {
+            "description": "Which alerts to silence: lows | highs | all.",
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/DndScope"
+              }
+            ]
+          },
+          "startedAt": {
+            "type": "string",
+            "description": "When the mute takes effect (may predate receipt for offline authoring).",
+            "format": "date-time"
+          },
+          "endsAt": {
+            "type": "string",
+            "description": "Auto-expiry instant; null mutes until explicitly cleared.",
+            "format": "date-time",
+            "nullable": true
+          },
+          "source": {
+            "type": "string",
+            "description": "Audit label for what created the window (e.g. web, prelude-device).",
+            "nullable": true
+          }
+        }
+      },
       "InAppNotificationDto": {
         "type": "object",
         "additionalProperties": false,
@@ -35939,6 +38049,11 @@
           "createdAt": {
             "type": "string",
             "format": "date-time"
+          },
+          "readAt": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
           },
           "icon": {
             "type": "string",
@@ -36193,47 +38308,6 @@
             "type": "string",
             "format": "time",
             "nullable": true
-          }
-        }
-      },
-      "TrackerAlertDto": {
-        "type": "object",
-        "description": "DTO for tracker alerts returned to the frontend",
-        "additionalProperties": false,
-        "properties": {
-          "instanceId": {
-            "type": "string",
-            "format": "guid"
-          },
-          "definitionId": {
-            "type": "string",
-            "format": "guid"
-          },
-          "thresholdId": {
-            "type": "string",
-            "format": "guid"
-          },
-          "trackerName": {
-            "type": "string"
-          },
-          "urgency": {
-            "$ref": "#/components/schemas/NotificationUrgency"
-          },
-          "message": {
-            "type": "string"
-          },
-          "pushEnabled": {
-            "type": "boolean"
-          },
-          "audioEnabled": {
-            "type": "boolean"
-          },
-          "audioSound": {
-            "type": "string",
-            "nullable": true
-          },
-          "vibrateEnabled": {
-            "type": "boolean"
           }
         }
       },
@@ -37334,15 +39408,6 @@
           }
         }
       },
-      "SetPublicAccessRequest": {
-        "type": "object",
-        "additionalProperties": false,
-        "properties": {
-          "enabled": {
-            "type": "boolean"
-          }
-        }
-      },
       "CreateMembershipRequestResult": {
         "type": "object",
         "additionalProperties": false,
@@ -37422,6 +39487,24 @@
               "type": "string",
               "format": "guid"
             }
+          }
+        }
+      },
+      "MembershipRequestSettingsDto": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "allowRequests": {
+            "type": "boolean"
+          }
+        }
+      },
+      "UpdateMembershipRequestSettingsRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "allowRequests": {
+            "type": "boolean"
           }
         }
       },
@@ -37505,6 +39588,60 @@
             "nullable": true
           },
           "permissions": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      "ShareLinkDto": {
+        "type": "object",
+        "description": "Current state of a tenant's single public share link.",
+        "additionalProperties": false,
+        "properties": {
+          "enabled": {
+            "type": "boolean",
+            "description": "Whether a public share link is currently active."
+          },
+          "url": {
+            "type": "string",
+            "description": "The full share URL when enabled; null otherwise. The raw token is never returned separately.",
+            "nullable": true
+          },
+          "fullHistory": {
+            "type": "boolean",
+            "description": "When true the public view shows full history; when false, only the last 24 hours."
+          },
+          "scopes": {
+            "type": "array",
+            "description": "The data categories anonymous viewers can see, as read-permission atoms (e.g. glucose.read).\nA subset of PublicShareScopes.\nEmpty means the link is live but nothing is shared yet.",
+            "items": {
+              "type": "string"
+            }
+          },
+          "lastAccessedAt": {
+            "type": "string",
+            "description": "When the share link was last accessed, or null if never (or not yet recorded).",
+            "format": "date-time",
+            "nullable": true
+          }
+        }
+      },
+      "SetShareFullHistoryRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "fullHistory": {
+            "type": "boolean"
+          }
+        }
+      },
+      "SetShareScopesRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "scopes": {
             "type": "array",
             "items": {
               "type": "string"
@@ -37740,6 +39877,10 @@
               "data_source": {
                 "type": "string",
                 "nullable": true
+              },
+              "syncIdentifier": {
+                "type": "string",
+                "nullable": true
               }
             }
           }
@@ -37794,6 +39935,10 @@
               "data_source": {
                 "type": "string",
                 "nullable": true
+              },
+              "syncIdentifier": {
+                "type": "string",
+                "nullable": true
               }
             }
           }
@@ -37837,7 +39982,12 @@
           },
           "dataSource": {
             "type": "string",
-            "description": "Upstream data source identifier.",
+            "description": "Upstream data source identifier; paired with SyncIdentifier for dedup.",
+            "nullable": true
+          },
+          "syncIdentifier": {
+            "type": "string",
+            "description": "Stable per-source identifier. When paired with DataSource, re-uploading the\nsame measurement updates the existing record in place rather than creating a duplicate.",
             "nullable": true
           }
         }
@@ -38142,6 +40292,10 @@
               "data_source": {
                 "type": "string",
                 "nullable": true
+              },
+              "syncIdentifier": {
+                "type": "string",
+                "nullable": true
               }
             }
           }
@@ -38185,7 +40339,12 @@
           },
           "dataSource": {
             "type": "string",
-            "description": "Upstream data source identifier.",
+            "description": "Upstream data source identifier; paired with SyncIdentifier for dedup.",
+            "nullable": true
+          },
+          "syncIdentifier": {
+            "type": "string",
+            "description": "Stable per-source identifier. When paired with DataSource, re-uploading the\nsame measurement updates the existing record in place rather than creating a duplicate.",
             "nullable": true
           }
         }
@@ -38694,6 +40853,10 @@
             "nullable": true
           },
           "legacyId": {
+            "type": "string",
+            "nullable": true
+          },
+          "syncIdentifier": {
             "type": "string",
             "nullable": true
           },
@@ -40428,6 +42591,10 @@
             "type": "string",
             "nullable": true
           },
+          "pumpMode": {
+            "type": "string",
+            "nullable": true
+          },
           "clock": {
             "type": "string",
             "nullable": true
@@ -40560,6 +42727,78 @@
             "type": "object",
             "nullable": true,
             "additionalProperties": {}
+          }
+        }
+      },
+      "CareLinkConnectStartResponse": {
+        "type": "object",
+        "description": "The authorize URL to open and the opaque state to echo back on completion.",
+        "additionalProperties": false,
+        "properties": {
+          "authorizeUrl": {
+            "type": "string"
+          },
+          "state": {
+            "type": "string"
+          }
+        }
+      },
+      "CareLinkConnectStartRequest": {
+        "type": "object",
+        "description": "Request to begin the CareLink connect flow.",
+        "additionalProperties": false,
+        "properties": {
+          "server": {
+            "type": "string",
+            "description": "Region: \"EU\" (Outside-US, incl. Australia) or \"US\"."
+          }
+        }
+      },
+      "CareLinkConnectCompleteResponse": {
+        "type": "object",
+        "description": "Result of completing the flow, with optional profile details for auto-fill.",
+        "additionalProperties": false,
+        "properties": {
+          "success": {
+            "type": "boolean"
+          },
+          "username": {
+            "type": "string",
+            "nullable": true
+          },
+          "country": {
+            "type": "string",
+            "nullable": true
+          }
+        }
+      },
+      "CareLinkConnectCompleteRequest": {
+        "type": "object",
+        "description": "Request to complete the flow with the code captured from the redirect.",
+        "additionalProperties": false,
+        "properties": {
+          "code": {
+            "type": "string",
+            "description": "The authorization code, or the full com.medtronic.carepartner:/sso?code=... URL."
+          },
+          "state": {
+            "type": "string"
+          }
+        }
+      },
+      "CareLinkDesktopTokenResponse": {
+        "type": "object",
+        "description": "A link code for the desktop companion app.",
+        "additionalProperties": false,
+        "properties": {
+          "linkCode": {
+            "type": "string",
+            "description": "nocturne-connect://link?server=…&token=… — pasted into the desktop app (or later\nopened as a deep link). Carries the server base URL and a short-lived bearer token."
+          },
+          "expiresInSeconds": {
+            "type": "integer",
+            "description": "Seconds until the embedded token expires.",
+            "format": "int32"
           }
         }
       },
@@ -40705,6 +42944,169 @@
             }
           },
           "secret": {
+            "type": "string",
+            "nullable": true
+          }
+        }
+      },
+      "ClientDeviceDto": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "guid"
+          },
+          "installId": {
+            "type": "string"
+          },
+          "kind": {
+            "type": "string"
+          },
+          "label": {
+            "type": "string",
+            "nullable": true
+          },
+          "capabilities": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "lastSeenAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "RegisterDeviceRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "installId",
+          "kind"
+        ],
+        "properties": {
+          "installId": {
+            "type": "string",
+            "maxLength": 64,
+            "minLength": 1,
+            "pattern": "^[A-Za-z0-9_-]{1,64}$"
+          },
+          "kind": {
+            "type": "string",
+            "maxLength": 32,
+            "minLength": 1
+          },
+          "label": {
+            "type": "string",
+            "maxLength": 255,
+            "nullable": true
+          },
+          "capabilities": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      "DeviceCapabilityCatalog": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "kinds": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "capabilities": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/DeviceCapabilityInfo"
+            }
+          }
+        }
+      },
+      "DeviceCapabilityInfo": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "key": {
+            "type": "string"
+          },
+          "label": {
+            "type": "string"
+          },
+          "requiredScope": {
+            "type": "string"
+          },
+          "kinds": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "isHardware": {
+            "type": "boolean"
+          }
+        }
+      },
+      "RenameDeviceRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "label": {
+            "type": "string",
+            "maxLength": 255,
+            "nullable": true
+          }
+        }
+      },
+      "DeviceActionIntent": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "intent": {
+            "type": "string"
+          },
+          "excursionId": {
+            "type": "string",
+            "format": "guid"
+          },
+          "ruleName": {
+            "type": "string"
+          },
+          "severity": {
+            "$ref": "#/components/schemas/AlertRuleSeverity"
+          },
+          "targetKind": {
+            "type": "string"
+          },
+          "capabilities": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "acknowledged": {
+            "type": "boolean"
+          },
+          "startedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "glucoseValue": {
+            "type": "number",
+            "format": "decimal",
+            "nullable": true
+          },
+          "trend": {
             "type": "string",
             "nullable": true
           }
@@ -40945,6 +43347,16 @@
           "glucoseYMax": {
             "type": "number",
             "format": "double"
+          },
+          "targetLow": {
+            "type": "number",
+            "format": "double",
+            "nullable": true
+          },
+          "targetHigh": {
+            "type": "number",
+            "format": "double",
+            "nullable": true
           }
         }
       },
@@ -41408,6 +43820,7 @@
           "PumpModeExercise",
           "PumpModeSuspended",
           "PumpModeOff",
+          "PumpModeLiberty",
           "SystemEventAlarm",
           "SystemEventHazard",
           "SystemEventWarning",
@@ -41450,6 +43863,7 @@
           "pump-mode-exercise",
           "pump-mode-suspended",
           "pump-mode-off",
+          "pump-mode-liberty",
           "system-event-alarm",
           "system-event-hazard",
           "system-event-warning",
@@ -42128,6 +44542,81 @@
           }
         }
       },
+      "ProfileSnapshotResponse": {
+        "type": "object",
+        "description": "Pre-resolved therapy profile flattened into contiguous absolute-time segments covering\n[now, now+24h) for on-device oref prediction. Property names are pinned to snake_case\nwith JsonPropertyNameAttribute so the wire contract is independent of any ambient\nserializer naming policy, and every field is emitted (including zeros) so the client's strict\ndecoder never sees a missing key.",
+        "additionalProperties": false,
+        "properties": {
+          "fetched_at_mills": {
+            "type": "integer",
+            "description": "When the snapshot was resolved (Unix ms); equals the window start.",
+            "format": "int64"
+          },
+          "segments": {
+            "type": "array",
+            "description": "Ascending, contiguous, gap/overlap-free segments covering [now, now+24h).",
+            "items": {
+              "$ref": "#/components/schemas/ProfileSnapshotSegment"
+            }
+          }
+        }
+      },
+      "ProfileSnapshotSegment": {
+        "type": "object",
+        "description": "One flat segment of the resolved profile: all scalars are constant over [start, end).",
+        "additionalProperties": false,
+        "properties": {
+          "start_mills": {
+            "type": "integer",
+            "description": "Segment start (Unix ms, inclusive).",
+            "format": "int64"
+          },
+          "end_mills": {
+            "type": "integer",
+            "description": "Segment end (Unix ms, exclusive).",
+            "format": "int64"
+          },
+          "dia": {
+            "type": "number",
+            "description": "Duration of insulin action (hours).",
+            "format": "double"
+          },
+          "basal": {
+            "type": "number",
+            "description": "Scheduled basal rate (U/hr).",
+            "format": "double"
+          },
+          "sens": {
+            "type": "number",
+            "description": "Insulin sensitivity (mg/dL per U).",
+            "format": "double"
+          },
+          "carb_ratio": {
+            "type": "number",
+            "description": "Carb ratio (g/U).",
+            "format": "double"
+          },
+          "min_bg": {
+            "type": "number",
+            "description": "Low BG target (mg/dL).",
+            "format": "double"
+          },
+          "max_bg": {
+            "type": "number",
+            "description": "High BG target (mg/dL).",
+            "format": "double"
+          },
+          "peak": {
+            "type": "integer",
+            "description": "Insulin activity peak (minutes).",
+            "format": "int32"
+          },
+          "curve": {
+            "type": "string",
+            "description": "Insulin activity curve model name (e.g. \"rapid-acting\")."
+          }
+        }
+      },
       "RetrospectiveDataResponse": {
         "type": "object",
         "description": "Response for single point retrospective data",
@@ -42462,6 +44951,231 @@
           },
           "isTemp": {
             "type": "boolean"
+          }
+        }
+      },
+      "SensorIntegrityReport": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "from": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "to": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "source": {
+            "type": "string",
+            "nullable": true
+          },
+          "clusters": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/GlucoseCluster"
+            }
+          },
+          "hypoEvents": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SensorIntegrityHypoEvent"
+            }
+          },
+          "summary": {
+            "$ref": "#/components/schemas/SensorIntegritySummary"
+          },
+          "perSource": {
+            "type": "array",
+            "nullable": true,
+            "items": {
+              "$ref": "#/components/schemas/SensorIntegritySourceMetrics"
+            }
+          }
+        }
+      },
+      "GlucoseCluster": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "start": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "end": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "minMgdl": {
+            "type": "number",
+            "format": "double"
+          },
+          "maxMgdl": {
+            "type": "number",
+            "format": "double"
+          },
+          "durationMinutes": {
+            "type": "number",
+            "format": "double"
+          },
+          "confidence": {
+            "$ref": "#/components/schemas/ClusterConfidence"
+          },
+          "diagnostics": {
+            "$ref": "#/components/schemas/ClusterDiagnostics"
+          }
+        }
+      },
+      "ClusterConfidence": {
+        "type": "string",
+        "description": "",
+        "x-enumNames": [
+          "Low",
+          "Medium",
+          "High"
+        ],
+        "enum": [
+          "Low",
+          "Medium",
+          "High"
+        ]
+      },
+      "ClusterDiagnostics": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "samplingIntervalMinutes": {
+            "type": "number",
+            "format": "double"
+          },
+          "windowPoints": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "peakReversals": {
+            "type": "number",
+            "format": "double"
+          },
+          "peakIncoherenceRatio": {
+            "type": "number",
+            "format": "double"
+          },
+          "amplitude": {
+            "type": "number",
+            "format": "double"
+          },
+          "maxStep": {
+            "type": "number",
+            "format": "double"
+          },
+          "spikePromoted": {
+            "type": "boolean"
+          },
+          "chainSize": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "chainPromoted": {
+            "type": "boolean"
+          }
+        }
+      },
+      "SensorIntegrityHypoEvent": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "event": {
+            "$ref": "#/components/schemas/HypoEvent"
+          },
+          "isNocturnal": {
+            "type": "boolean"
+          }
+        }
+      },
+      "HypoEvent": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "cluster": {
+            "$ref": "#/components/schemas/GlucoseCluster"
+          },
+          "nadirMgdl": {
+            "type": "number",
+            "format": "double"
+          },
+          "nadirTime": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "timeToNadirHours": {
+            "type": "number",
+            "format": "double"
+          },
+          "readingsBelowThreshold": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "insulinDuringCluster": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/InsulinDose"
+            }
+          }
+        }
+      },
+      "InsulinDose": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "time": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "units": {
+            "type": "number",
+            "format": "double"
+          }
+        }
+      },
+      "SensorIntegritySummary": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "days": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "clusters": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "mediumClusters": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "highClusters": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "events": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "nocturnalEvents": {
+            "type": "integer",
+            "format": "int32"
+          }
+        }
+      },
+      "SensorIntegritySourceMetrics": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "source": {
+            "type": "string"
+          },
+          "summary": {
+            "$ref": "#/components/schemas/SensorIntegritySummary"
           }
         }
       },
@@ -44223,6 +46937,21 @@
                 "$ref": "#/components/schemas/ExtendedAnalysisConfig"
               }
             ]
+          }
+        }
+      },
+      "ReportAnalysisResult": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "analysis": {
+            "$ref": "#/components/schemas/ExtendedGlucoseAnalytics"
+          },
+          "averagedStats": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AveragedStats"
+            }
           }
         }
       },
@@ -46043,6 +48772,10 @@
             "type": "boolean",
             "description": "Whether this subject has platform-level admin access"
           },
+          "isPlatformAccessGrant": {
+            "type": "boolean",
+            "description": "Whether this session is a short-lived platform-admin access grant on a tenant the\nsubject is NOT a member of (as opposed to ordinary membership). Authoritative signal\nfor the \"platform admin access\" indicator in the UI."
+          },
           "avatarUrl": {
             "type": "string",
             "description": "URL to the subject's avatar image",
@@ -46267,59 +49000,6 @@
           }
         }
       },
-      "SetupOptionsRequest": {
-        "type": "object",
-        "description": "Request for initial setup registration options (first user creation)",
-        "additionalProperties": false,
-        "properties": {
-          "username": {
-            "type": "string"
-          },
-          "displayName": {
-            "type": "string"
-          }
-        }
-      },
-      "SetupCompleteResponse": {
-        "type": "object",
-        "description": "Response for completed setup registration",
-        "additionalProperties": false,
-        "properties": {
-          "success": {
-            "type": "boolean"
-          },
-          "recoveryCodes": {
-            "type": "array",
-            "items": {
-              "type": "string"
-            }
-          },
-          "accessToken": {
-            "type": "string"
-          },
-          "refreshToken": {
-            "type": "string",
-            "nullable": true
-          },
-          "expiresIn": {
-            "type": "integer",
-            "format": "int32"
-          }
-        }
-      },
-      "SetupCompleteRequest": {
-        "type": "object",
-        "description": "Request to complete initial setup registration",
-        "additionalProperties": false,
-        "properties": {
-          "attestationResponseJson": {
-            "type": "string"
-          },
-          "challengeToken": {
-            "type": "string"
-          }
-        }
-      },
       "AccessRequestOptionsRequest": {
         "type": "object",
         "additionalProperties": false,
@@ -46357,6 +49037,33 @@
           },
           "displayName": {
             "type": "string"
+          }
+        }
+      },
+      "PasskeyRegistrationResponse": {
+        "type": "object",
+        "description": "Response for a completed passkey registration that issues a session\n(recovery codes plus session tokens).",
+        "additionalProperties": false,
+        "properties": {
+          "success": {
+            "type": "boolean"
+          },
+          "recoveryCodes": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "accessToken": {
+            "type": "string"
+          },
+          "refreshToken": {
+            "type": "string",
+            "nullable": true
+          },
+          "expiresIn": {
+            "type": "integer",
+            "format": "int32"
           }
         }
       },

@@ -1,5 +1,6 @@
 <script lang="ts">
   import RotateCcw from "lucide-svelte/icons/rotate-ccw";
+  import { Button } from "$lib/components/ui/button";
 
   interface Props {
     isZoomed: boolean;
@@ -12,7 +13,7 @@
 
 {#if isZoomed}
   <div
-    class="flex items-center justify-between px-4 py-2 mb-2 bg-primary/5 border border-primary/20 rounded-lg"
+    class="flex items-center justify-between px-4 py-2 mb-2 bg-primary/5 border border-primary/20 rounded-lg print:hidden"
   >
     <div class="flex items-center gap-2 text-sm text-primary">
       <span class="font-medium">Zoomed view</span>
@@ -28,13 +29,9 @@
         </span>
       {/if}
     </div>
-    <button
-      type="button"
-      class="flex items-center gap-1 px-2 py-1 text-xs font-medium text-primary bg-primary/10 hover:bg-primary/20 rounded transition-colors"
-      onclick={onResetZoom}
-    >
+    <Button variant="ghost" size="sm" class="flex items-center gap-1 text-xs font-medium text-primary" onclick={onResetZoom}>
       <RotateCcw size={12} />
       Reset zoom
-    </button>
+    </Button>
   </div>
 {/if}

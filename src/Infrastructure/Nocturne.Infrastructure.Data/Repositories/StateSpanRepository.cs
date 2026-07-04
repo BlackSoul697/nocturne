@@ -214,12 +214,20 @@ public class StateSpanRepository : IStateSpanRepository
         // For exclusive categories, close any existing open spans when a new one is inserted
         if (isNew && ExclusiveCategories.Contains(entity.Category))
         {
-            var openSpans = await _context.StateSpans
+            var openSpansQuery = _context.StateSpans
                 .Where(s =>
                     s.Category == entity.Category
                     && s.EndTimestamp == null
-                    && s.Id != entity.Id)
-                .ToListAsync(cancellationToken);
+                    && s.Id != entity.Id);
+
+            // PumpMode mixes independent dimensions — Automatic/Manual loop mode vs Suspended
+            // delivery — which can legitimately overlap, so only the SAME state is mutually exclusive
+            // there. Other exclusive categories (Override, TemporaryTarget, Profile) supersede any
+            // open span regardless of state.
+            if (string.Equals(entity.Category, nameof(StateSpanCategory.PumpMode), StringComparison.OrdinalIgnoreCase))
+                openSpansQuery = openSpansQuery.Where(s => s.State == entity.State);
+
+            var openSpans = await openSpansQuery.ToListAsync(cancellationToken);
 
             if (openSpans.Count > 0)
             {

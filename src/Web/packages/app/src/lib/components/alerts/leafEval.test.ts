@@ -60,7 +60,7 @@ function makeRule(id: string, condition: ConditionNode): AlertRuleResponse {
 		id,
 		name: id,
 		conditionType: condition.type as AlertRuleResponse["conditionType"],
-		conditionParams: (condition as Record<string, unknown>)[condition.type],
+		conditionParams: (condition as unknown as Record<string, unknown>)[condition.type],
 	};
 }
 
@@ -261,6 +261,18 @@ describe("composeRuleTruth", () => {
 			{ ruleId: "r1", leafId: 0, points: [[0, true]] },
 			{ ruleId: "r1", leafId: 1, points: [[0, false]] },
 		]);
+		expect(compose(r, log2, 100)).toBe(false);
+	});
+
+	it("tracker_age composes as an ordinary leaf from the transition log", () => {
+		// The leaf's truth comes entirely from the backend-emitted log — the
+		// composer has no tracker-specific handling.
+		const a = leaf("tracker_age");
+		const r = rule("rt", and(a));
+		const log = logFrom([{ ruleId: "rt", leafId: 0, points: [[0, true]] }]);
+		expect(compose(r, log, 100)).toBe(true);
+
+		const log2 = logFrom([{ ruleId: "rt", leafId: 0, points: [[0, false]] }]);
 		expect(compose(r, log2, 100)).toBe(false);
 	});
 

@@ -1,19 +1,26 @@
 <script lang="ts">
   import { onMount, onDestroy } from "svelte";
-  import { getActiveAlerts } from "$api/generated/alerts.generated.remote";
-  import { acknowledge } from "$api/generated/alerts.generated.remote";
-  import type { ActiveExcursionResponse } from "$api-clients";
+  import {
+    getActiveAlerts,
+    acknowledgeExcursion,
+  } from "$api/generated/alerts.generated.remote";
   import { Button } from "$lib/components/ui/button";
   import { AlertTriangle, X, Check } from "lucide-svelte";
   import { formatTimeSince } from "./alertTime";
 
-  let alerts = $state<ActiveExcursionResponse[]>([]);
+  // Reactive query: reading `.current` subscribes this component, so an
+  // optimistic withOverride from any acknowledge (here or the fresh-fire
+  // toast) shows immediately and is reconciled by the single-flight refresh.
+  const activeAlerts = getActiveAlerts();
+
   let dismissedIds = $state<Set<string>>(new Set());
-  let acknowledging = $state(false);
+  let acknowledgingId = $state<string | null>(null);
   let pollInterval: ReturnType<typeof setInterval> | null = null;
 
   const visibleAlerts = $derived(
-    alerts.filter((a) => !a.acknowledgedAt && !dismissedIds.has(a.id ?? ""))
+    (activeAlerts.current ?? []).filter(
+      (a) => !a.acknowledgedAt && !dismissedIds.has(a.id ?? "")
+    )
   );
 
   function getConditionLabel(conditionType: string | undefined): string {
@@ -33,26 +40,23 @@
     }
   }
 
-  async function fetchAlerts() {
+  async function handleAcknowledge(id: string) {
+    acknowledgingId = id;
     try {
-      const result = await getActiveAlerts();
-      if (Array.isArray(result)) {
-        alerts = result;
-      }
-    } catch {
-      // Silently fail on polling errors
-    }
-  }
-
-  async function handleAcknowledge() {
-    acknowledging = true;
-    try {
-      await acknowledge({ acknowledgedBy: "web_user" });
-      await fetchAlerts();
-    } catch {
-      // Error handling via remote function
+      // Optimistically mark this excursion acknowledged so it drops out of
+      // visibleAlerts at once; the single-flight refresh confirms server-side.
+      await acknowledgeExcursion({
+        excursionId: id,
+        request: { acknowledgedBy: "web_user" },
+      }).updates(
+        activeAlerts.withOverride((current) =>
+          (current ?? []).map((a) =>
+            a.id === id ? { ...a, acknowledgedAt: new Date() } : a
+          )
+        )
+      );
     } finally {
-      acknowledging = false;
+      acknowledgingId = null;
     }
   }
 
@@ -60,9 +64,10 @@
     dismissedIds = new Set([...dismissedIds, id]);
   }
 
-  onMount(async () => {
-    await fetchAlerts();
-    pollInterval = setInterval(fetchAlerts, 30000);
+  onMount(() => {
+    // The reactive query self-loads on first read; keep the surface fresh with
+    // a periodic refresh (aligned with FiringToast's polling cadence).
+    pollInterval = setInterval(() => activeAlerts.refresh(), 30000);
   });
 
   onDestroy(() => {
@@ -96,8 +101,8 @@
               variant="outline"
               size="sm"
               class="h-7 text-xs"
-              onclick={handleAcknowledge}
-              disabled={acknowledging}
+              onclick={() => handleAcknowledge(alert.id ?? "")}
+              disabled={acknowledgingId === alert.id}
             >
               <Check class="h-3 w-3 mr-1" />
               Acknowledge

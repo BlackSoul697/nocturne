@@ -9,6 +9,7 @@ using Nocturne.Connectors.Core.Models;
 using Nocturne.Connectors.Core.Services;
 using Nocturne.Core.Constants;
 using Nocturne.Core.Contracts.Connectors;
+using Nocturne.Core.Contracts.Timezones;
 
 namespace Nocturne.Connectors.CareLink.Services;
 
@@ -21,6 +22,7 @@ public class CareLinkConnectorService : BaseConnectorService<CareLinkConnectorCo
 {
     private readonly CareLinkAuthTokenProvider _tokenProvider;
     private readonly IConnectorConfigurationService _configService;
+    private readonly ITimezoneTimelineService? _timezoneTimelineService;
     private readonly CareLinkSensorGlucoseMapper _sgMapper;
 
     private string? _cachedBleVersion;
@@ -34,18 +36,28 @@ public class CareLinkConnectorService : BaseConnectorService<CareLinkConnectorCo
         CareLinkAuthTokenProvider tokenProvider,
         IConnectorConfigurationService configService,
         ILogger<CareLinkConnectorService> logger,
-        IConnectorPublisher? publisher = null
+        IConnectorPublisher? publisher = null,
+        ITimezoneTimelineService? timezoneTimelineService = null
     )
         : base(httpClient, serverResolver, logger, publisher)
     {
         _tokenProvider = tokenProvider ?? throw new ArgumentNullException(nameof(tokenProvider));
         _configService = configService ?? throw new ArgumentNullException(nameof(configService));
+        _timezoneTimelineService = timezoneTimelineService;
         _sgMapper = new CareLinkSensorGlucoseMapper(logger);
     }
 
     protected override string ConnectorSource => DataSources.CareLinkConnector;
     public override string ServiceName => ServiceNames.CareLinkConnector;
-    public override List<SyncDataType> SupportedDataTypes => [SyncDataType.Glucose, SyncDataType.DeviceStatus];
+    public override List<SyncDataType> SupportedDataTypes =>
+    [
+        SyncDataType.Glucose,
+        SyncDataType.DeviceStatus,
+        SyncDataType.Boluses,
+        SyncDataType.CarbIntake,
+        SyncDataType.TempBasals,
+        SyncDataType.StateSpans,
+    ];
 
     /// <inheritdoc />
     public override Task<bool> AuthenticateAsync()
@@ -111,189 +123,28 @@ public class CareLinkConnectorService : BaseConnectorService<CareLinkConnectorCo
             return result;
         }
 
-        // Determine role
-        CareLinkUserInfo? userInfo = null;
-        try
-        {
-            var host = GetServerHost(config);
-            var response = await GetWithHeadersAsync(
-                $"https://{host}{CareLinkConstants.Endpoints.UsersMe}",
-                AuthHeaders(),
-                cancellationToken);
-
-            if (response.IsSuccessStatusCode)
-                userInfo = await DeserializeResponseAsync<CareLinkUserInfo>(response, cancellationToken);
-        }
-        catch (OperationCanceledException) { throw; }
-        catch (HttpRequestException ex)
-        {
-            _logger.LogWarning(ex, "[{ConnectorSource}] Failed to fetch user info", ConnectorSource);
-        }
-        catch (JsonException ex)
-        {
-            _logger.LogWarning(ex, "[{ConnectorSource}] Failed to fetch user info", ConnectorSource);
-        }
-        catch (InvalidOperationException ex)
-        {
-            _logger.LogWarning(ex, "[{ConnectorSource}] Failed to fetch user info", ConnectorSource);
-        }
-
+        var userInfo = await FetchUserInfoAsync(config, cancellationToken);
         var role = userInfo?.Role ?? string.Empty;
         var isCarePartner = role.Equals(CareLinkConstants.CarePartnerRoles.CarePartner, StringComparison.OrdinalIgnoreCase)
             || role.Equals(CareLinkConstants.CarePartnerRoles.CarePartnerOus, StringComparison.OrdinalIgnoreCase);
 
-        CareLinkData? data;
-        try
+        var data = await TryFetchDataAsync(config, userInfo, isCarePartner, result, cancellationToken);
+        if (data == null)
         {
-            data = isCarePartner
-                ? await FetchAsCarePartnerAsync(config, cancellationToken)
-                : await FetchAsPatientAsync(config, cancellationToken);
-        }
-        catch (OperationCanceledException) { throw; }
-        catch (HttpRequestException ex)
-        {
-            _logger.LogError(ex, "[{ConnectorSource}] Failed to fetch CareLink data", ConnectorSource);
-            result.Success = false;
-            result.Errors.Add($"Data fetch failed: {ex.Message}");
-            result.EndTime = DateTimeOffset.UtcNow;
-            return result;
-        }
-        catch (JsonException ex)
-        {
-            _logger.LogError(ex, "[{ConnectorSource}] Failed to fetch CareLink data", ConnectorSource);
-            result.Success = false;
-            result.Errors.Add($"Data fetch failed: {ex.Message}");
-            result.EndTime = DateTimeOffset.UtcNow;
-            return result;
-        }
-        catch (InvalidOperationException ex)
-        {
-            _logger.LogError(ex, "[{ConnectorSource}] Failed to fetch CareLink data", ConnectorSource);
-            result.Success = false;
-            result.Errors.Add($"Data fetch failed: {ex.Message}");
             result.EndTime = DateTimeOffset.UtcNow;
             return result;
         }
 
-        if (data == null)
-        {
-            _logger.LogWarning("[{ConnectorSource}] No data returned from CareLink", ConnectorSource);
-            result.EndTime = DateTimeOffset.UtcNow;
-            return result;
-        }
+        // Seed the tenant timezone timeline from the pump's reported zone (idempotent; first sync only).
+        await ConfigureCareLinkTimezoneAsync(data, cancellationToken);
 
         var enabledTypes = config.GetEnabledDataTypes(SupportedDataTypes);
         var isStale = IsDataStale(data);
 
-        // Publish sensor glucose (skip if stale)
-        if (enabledTypes.Contains(SyncDataType.Glucose) && !isStale)
-        {
-            try
-            {
-                var sgRecords = _sgMapper.Map(data);
-                if (sgRecords.Count > 0)
-                {
-                    var success = await PublishSensorGlucoseDataAsync(sgRecords, config, cancellationToken);
-                    result.ItemsSynced[SyncDataType.Glucose] = sgRecords.Count;
-                    if (!success)
-                    {
-                        result.Success = false;
-                        result.Errors.Add("SensorGlucose publish failed");
-                    }
-                    else
-                    {
-                        _logger.LogInformation(
-                            "[{ConnectorSource}] Synced {Count} SensorGlucose records",
-                            ConnectorSource, sgRecords.Count);
-                    }
-                }
-            }
-            catch (OperationCanceledException) { throw; }
-            catch (HttpRequestException ex)
-            {
-                _logger.LogError(ex, "[{ConnectorSource}] Error publishing SensorGlucose", ConnectorSource);
-                result.Success = false;
-                result.Errors.Add($"SensorGlucose error: {ex.Message}");
-            }
-            catch (InvalidOperationException ex)
-            {
-                _logger.LogError(ex, "[{ConnectorSource}] Error publishing SensorGlucose", ConnectorSource);
-                result.Success = false;
-                result.Errors.Add($"SensorGlucose error: {ex.Message}");
-            }
-        }
-        else if (isStale && enabledTypes.Contains(SyncDataType.Glucose))
-        {
-            _logger.LogDebug("[{ConnectorSource}] Skipping SGVs — data is stale (>{Threshold} min)",
-                ConnectorSource, CareLinkConstants.StaleDataThresholdMinutes);
-        }
-
-        // Publish DeviceStatus (always, even when stale)
-        if (enabledTypes.Contains(SyncDataType.DeviceStatus))
-        {
-            try
-            {
-                var deviceStatus = CareLinkDeviceStatusMapper.Map(data);
-                var success = await PublishDeviceStatusAsync([deviceStatus], config, cancellationToken);
-                result.ItemsSynced[SyncDataType.DeviceStatus] = 1;
-                if (!success)
-                {
-                    result.Success = false;
-                    result.Errors.Add("DeviceStatus publish failed");
-                }
-                else
-                {
-                    _logger.LogInformation("[{ConnectorSource}] Synced DeviceStatus", ConnectorSource);
-                }
-            }
-            catch (OperationCanceledException) { throw; }
-            catch (HttpRequestException ex)
-            {
-                _logger.LogError(ex, "[{ConnectorSource}] Error publishing DeviceStatus", ConnectorSource);
-                result.Success = false;
-                result.Errors.Add($"DeviceStatus error: {ex.Message}");
-            }
-            catch (InvalidOperationException ex)
-            {
-                _logger.LogError(ex, "[{ConnectorSource}] Error publishing DeviceStatus", ConnectorSource);
-                result.Success = false;
-                result.Errors.Add($"DeviceStatus error: {ex.Message}");
-            }
-        }
-
-        // Publish alarm as SystemEvent (dedup by datetime+code)
-        if (data.LastAlarm != null)
-        {
-            try
-            {
-                var alarmKey = $"{data.LastAlarm.Datetime}_{data.LastAlarm.Code}";
-                if (alarmKey != _lastAlarmKey)
-                {
-                    var pumpOffsetMs = Utilities.CareLinkTimestampParser.CalculatePumpOffsetMs(
-                        data.MedicalDeviceTime ?? "", data.CurrentServerTime);
-                    var systemEvent = CareLinkSystemEventMapper.Map(data.LastAlarm, pumpOffsetMs, data.CurrentServerTime);
-                    if (systemEvent != null)
-                    {
-                        var success = await PublishSystemEventDataAsync([systemEvent], config, cancellationToken);
-                        if (success)
-                        {
-                            _lastAlarmKey = alarmKey;
-                            _logger.LogInformation("[{ConnectorSource}] Published alarm event {Code}",
-                                ConnectorSource, data.LastAlarm.Code);
-                        }
-                    }
-                }
-            }
-            catch (OperationCanceledException) { throw; }
-            catch (HttpRequestException ex)
-            {
-                _logger.LogWarning(ex, "[{ConnectorSource}] Error publishing alarm event", ConnectorSource);
-            }
-            catch (InvalidOperationException ex)
-            {
-                _logger.LogWarning(ex, "[{ConnectorSource}] Error publishing alarm event", ConnectorSource);
-            }
-        }
+        await PublishSensorGlucoseStepAsync(data, config, enabledTypes, isStale, result, cancellationToken);
+        await PublishDeviceStatusStepAsync(data, config, enabledTypes, result, cancellationToken);
+        await PublishAlarmStepAsync(data, config, result, cancellationToken);
+        await PublishTreatmentsStepAsync(data, config, enabledTypes, result, cancellationToken);
 
         // Persist refresh token if it changed during sync
         await PersistRefreshTokenIfChangedAsync(cancellationToken);
@@ -303,52 +154,355 @@ public class CareLinkConnectorService : BaseConnectorService<CareLinkConnectorCo
     }
 
     /// <summary>
+    ///     Fetches the authenticated CareLink user for role determination. Returns null on any
+    ///     failure — the caller then treats the session as a (non-care-partner) patient.
+    /// </summary>
+    private async Task<CareLinkUserInfo?> FetchUserInfoAsync(
+        CareLinkConnectorConfiguration config, CancellationToken cancellationToken)
+    {
+        try
+        {
+            var host = GetServerHost(config);
+            var response = await GetWithHeadersAsync(
+                $"https://{host}{CareLinkConstants.Endpoints.UsersMe}",
+                AuthHeaders(),
+                cancellationToken);
+
+            if (response.IsSuccessStatusCode)
+                return await DeserializeResponseAsync<CareLinkUserInfo>(response, cancellationToken);
+        }
+        catch (OperationCanceledException) { throw; }
+        catch (HttpRequestException ex)
+        {
+            _logger.LogWarning(ex, "[{ConnectorSource}] Failed to fetch user info", ConnectorSource);
+        }
+        catch (JsonException ex)
+        {
+            _logger.LogWarning(ex, "[{ConnectorSource}] Failed to fetch user info", ConnectorSource);
+        }
+        catch (InvalidOperationException ex)
+        {
+            _logger.LogWarning(ex, "[{ConnectorSource}] Failed to fetch user info", ConnectorSource);
+        }
+
+        return null;
+    }
+
+    /// <summary>
+    ///     Fetches CareLink data for the resolved role. On a fetch error, records the failure on
+    ///     <paramref name="result"/> and returns null; also returns null (without failing the sync)
+    ///     when the service has no data to return.
+    /// </summary>
+    private async Task<CareLinkData?> TryFetchDataAsync(
+        CareLinkConnectorConfiguration config,
+        CareLinkUserInfo? userInfo,
+        bool isCarePartner,
+        SyncResult result,
+        CancellationToken cancellationToken)
+    {
+        CareLinkData? data;
+        try
+        {
+            data = isCarePartner
+                ? await FetchAsCarePartnerAsync(config, cancellationToken)
+                : await FetchAsPatientAsync(config, userInfo, cancellationToken);
+        }
+        catch (OperationCanceledException) { throw; }
+        catch (HttpRequestException ex)
+        {
+            _logger.LogError(ex, "[{ConnectorSource}] Failed to fetch CareLink data", ConnectorSource);
+            result.Success = false;
+            result.Errors.Add($"Data fetch failed: {ex.Message}");
+            return null;
+        }
+        catch (JsonException ex)
+        {
+            _logger.LogError(ex, "[{ConnectorSource}] Failed to fetch CareLink data", ConnectorSource);
+            result.Success = false;
+            result.Errors.Add($"Data fetch failed: {ex.Message}");
+            return null;
+        }
+        catch (InvalidOperationException ex)
+        {
+            _logger.LogError(ex, "[{ConnectorSource}] Failed to fetch CareLink data", ConnectorSource);
+            result.Success = false;
+            result.Errors.Add($"Data fetch failed: {ex.Message}");
+            return null;
+        }
+
+        if (data == null)
+            _logger.LogWarning("[{ConnectorSource}] No data returned from CareLink", ConnectorSource);
+
+        return data;
+    }
+
+    /// <summary>
+    ///     Publishes sensor glucose, skipping when glucose is disabled or the data is stale.
+    /// </summary>
+    private async Task PublishSensorGlucoseStepAsync(
+        CareLinkData data,
+        CareLinkConnectorConfiguration config,
+        List<SyncDataType> enabledTypes,
+        bool isStale,
+        SyncResult result,
+        CancellationToken cancellationToken)
+    {
+        if (!enabledTypes.Contains(SyncDataType.Glucose))
+            return;
+
+        if (isStale)
+        {
+            _logger.LogDebug("[{ConnectorSource}] Skipping SGVs — data is stale (>{Threshold} min)",
+                ConnectorSource, CareLinkConstants.StaleDataThresholdMinutes);
+            return;
+        }
+
+        try
+        {
+            var sgRecords = _sgMapper.Map(data);
+            if (sgRecords.Count > 0)
+            {
+                var success = await PublishSensorGlucoseDataAsync(sgRecords, config, cancellationToken);
+                result.ItemsSynced[SyncDataType.Glucose] = sgRecords.Count;
+                if (!success)
+                {
+                    result.Success = false;
+                    result.Errors.Add("SensorGlucose publish failed");
+                }
+                else
+                {
+                    _logger.LogInformation(
+                        "[{ConnectorSource}] Synced {Count} SensorGlucose records",
+                        ConnectorSource, sgRecords.Count);
+                }
+            }
+        }
+        catch (OperationCanceledException) { throw; }
+        catch (HttpRequestException ex)
+        {
+            _logger.LogError(ex, "[{ConnectorSource}] Error publishing SensorGlucose", ConnectorSource);
+            result.Success = false;
+            result.Errors.Add($"SensorGlucose error: {ex.Message}");
+        }
+        catch (InvalidOperationException ex)
+        {
+            _logger.LogError(ex, "[{ConnectorSource}] Error publishing SensorGlucose", ConnectorSource);
+            result.Success = false;
+            result.Errors.Add($"SensorGlucose error: {ex.Message}");
+        }
+    }
+
+    /// <summary>
+    ///     Publishes device status (always, even when data is stale).
+    /// </summary>
+    private async Task PublishDeviceStatusStepAsync(
+        CareLinkData data,
+        CareLinkConnectorConfiguration config,
+        List<SyncDataType> enabledTypes,
+        SyncResult result,
+        CancellationToken cancellationToken)
+    {
+        if (!enabledTypes.Contains(SyncDataType.DeviceStatus))
+            return;
+
+        try
+        {
+            var deviceStatus = CareLinkDeviceStatusMapper.Map(data);
+            var success = await PublishDeviceStatusAsync([deviceStatus], config, cancellationToken);
+            result.ItemsSynced[SyncDataType.DeviceStatus] = 1;
+            if (!success)
+            {
+                result.Success = false;
+                result.Errors.Add("DeviceStatus publish failed");
+            }
+            else
+            {
+                _logger.LogInformation("[{ConnectorSource}] Synced DeviceStatus", ConnectorSource);
+            }
+        }
+        catch (OperationCanceledException) { throw; }
+        catch (HttpRequestException ex)
+        {
+            _logger.LogError(ex, "[{ConnectorSource}] Error publishing DeviceStatus", ConnectorSource);
+            result.Success = false;
+            result.Errors.Add($"DeviceStatus error: {ex.Message}");
+        }
+        catch (InvalidOperationException ex)
+        {
+            _logger.LogError(ex, "[{ConnectorSource}] Error publishing DeviceStatus", ConnectorSource);
+            result.Success = false;
+            result.Errors.Add($"DeviceStatus error: {ex.Message}");
+        }
+    }
+
+    /// <summary>
+    ///     Publishes the latest alarm as a SystemEvent, deduped by datetime+code. Alarm failures
+    ///     are logged but never fail the sync.
+    /// </summary>
+    private async Task PublishAlarmStepAsync(
+        CareLinkData data,
+        CareLinkConnectorConfiguration config,
+        SyncResult result,
+        CancellationToken cancellationToken)
+    {
+        if (data.LastAlarm == null)
+            return;
+
+        try
+        {
+            var alarmKey = $"{data.LastAlarm.Datetime}_{data.LastAlarm.Code}";
+            if (alarmKey != _lastAlarmKey)
+            {
+                var pumpOffsetMs = Utilities.CareLinkTimestampParser.CalculatePumpOffsetMs(
+                    data.MedicalDeviceTime ?? "", data.CurrentServerTime);
+                var systemEvent = CareLinkSystemEventMapper.Map(data.LastAlarm, pumpOffsetMs, data.CurrentServerTime);
+                if (systemEvent != null)
+                {
+                    var success = await PublishSystemEventDataAsync([systemEvent], config, cancellationToken);
+                    if (success)
+                    {
+                        _lastAlarmKey = alarmKey;
+                        _logger.LogInformation("[{ConnectorSource}] Published alarm event {Code}",
+                            ConnectorSource, data.LastAlarm.Code);
+                    }
+                }
+            }
+        }
+        catch (OperationCanceledException) { throw; }
+        catch (HttpRequestException ex)
+        {
+            _logger.LogWarning(ex, "[{ConnectorSource}] Error publishing alarm event", ConnectorSource);
+        }
+        catch (InvalidOperationException ex)
+        {
+            _logger.LogWarning(ex, "[{ConnectorSource}] Error publishing alarm event", ConnectorSource);
+        }
+    }
+
+    /// <summary>
+    ///     Publishes treatments (boluses, carbs, temp basals) plus notification events from the
+    ///     periodic payload. These are historical markers with their own timestamps, so staleness
+    ///     does not apply.
+    /// </summary>
+    private async Task PublishTreatmentsStepAsync(
+        CareLinkData data,
+        CareLinkConnectorConfiguration config,
+        List<SyncDataType> enabledTypes,
+        SyncResult result,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            var pumpOffsetMs = Utilities.CareLinkTimestampParser.CalculatePumpOffsetMs(
+                data.MedicalDeviceTime ?? "", data.CurrentServerTime);
+
+            if (enabledTypes.Contains(SyncDataType.Boluses))
+            {
+                var boluses = CareLinkTreatmentMapper.MapBoluses(data, pumpOffsetMs);
+                if (boluses.Count > 0 && await PublishBolusDataAsync(boluses, config, cancellationToken))
+                {
+                    result.ItemsSynced[SyncDataType.Boluses] = boluses.Count;
+                    _logger.LogInformation("[{ConnectorSource}] Synced {Count} Bolus records", ConnectorSource, boluses.Count);
+                }
+            }
+
+            if (enabledTypes.Contains(SyncDataType.CarbIntake))
+            {
+                var carbs = CareLinkTreatmentMapper.MapCarbIntakes(data, pumpOffsetMs);
+                if (carbs.Count > 0 && await PublishCarbIntakeDataAsync(carbs, config, cancellationToken))
+                {
+                    result.ItemsSynced[SyncDataType.CarbIntake] = carbs.Count;
+                    _logger.LogInformation("[{ConnectorSource}] Synced {Count} CarbIntake records", ConnectorSource, carbs.Count);
+                }
+            }
+
+            if (enabledTypes.Contains(SyncDataType.TempBasals))
+            {
+                var tempBasals = CareLinkTreatmentMapper.MapTempBasals(data, pumpOffsetMs);
+                if (tempBasals.Count > 0 && await PublishTempBasalDataAsync(tempBasals, config, cancellationToken))
+                {
+                    result.ItemsSynced[SyncDataType.TempBasals] = tempBasals.Count;
+                    _logger.LogInformation("[{ConnectorSource}] Synced {Count} TempBasal records", ConnectorSource, tempBasals.Count);
+                }
+            }
+
+            var notifications = CareLinkSystemEventMapper.MapNotifications(data.NotificationHistory, pumpOffsetMs);
+            if (notifications.Count > 0 && await PublishSystemEventDataAsync(notifications, config, cancellationToken))
+                _logger.LogInformation("[{ConnectorSource}] Synced {Count} notification events", ConnectorSource, notifications.Count);
+        }
+        catch (OperationCanceledException) { throw; }
+        catch (HttpRequestException ex)
+        {
+            _logger.LogError(ex, "[{ConnectorSource}] Error publishing treatments", ConnectorSource);
+            result.Success = false;
+            result.Errors.Add($"Treatment error: {ex.Message}");
+        }
+        catch (InvalidOperationException ex)
+        {
+            _logger.LogError(ex, "[{ConnectorSource}] Error publishing treatments", ConnectorSource);
+            result.Success = false;
+            result.Errors.Add($"Treatment error: {ex.Message}");
+        }
+    }
+
+    /// <summary>
+    ///     Seeds the tenant timezone timeline origin from the pump's reported <c>clientTimeZoneName</c>.
+    ///     Idempotent — <see cref="ITimezoneTimelineService.EnsureOriginAsync"/> only seeds when the
+    ///     tenant has no timeline yet. Unresolved or UTC zones are skipped (never stored). Never fails
+    ///     the sync.
+    /// </summary>
+    private async Task ConfigureCareLinkTimezoneAsync(CareLinkData data, CancellationToken ct)
+    {
+        if (_timezoneTimelineService is null)
+            return;
+
+        try
+        {
+            var iana = Utilities.CareLinkTimezoneResolver.ResolveIana(data.ClientTimeZoneName);
+            if (iana is null)
+            {
+                if (!string.IsNullOrWhiteSpace(data.ClientTimeZoneName))
+                    _logger.LogDebug("[{ConnectorSource}] Could not resolve CareLink timezone '{Timezone}'; skipping timeline seed",
+                        ConnectorSource, data.ClientTimeZoneName);
+                return;
+            }
+
+            var seeded = await _timezoneTimelineService.EnsureOriginAsync(iana, ct);
+            if (seeded)
+                _logger.LogInformation("[{ConnectorSource}] Seeded timezone timeline origin: {Zone}", ConnectorSource, iana);
+        }
+        catch (OperationCanceledException) { throw; }
+        catch (Exception ex)
+        {
+            // Never fail a sync over timeline setup.
+            _logger.LogWarning(ex, "[{ConnectorSource}] Failed to configure timezone timeline", ConnectorSource);
+        }
+    }
+
+    /// <summary>
     ///     Fetches data as the authenticated patient.
     ///     Tries the monitor endpoint first; if device is BLE/SIMPLERA, fetches via the BLE periodic endpoint.
     ///     Falls back to the legacy connect endpoint on failure.
     /// </summary>
     private async Task<CareLinkData?> FetchAsPatientAsync(
         CareLinkConnectorConfiguration config,
+        CareLinkUserInfo? userInfo,
         CancellationToken ct)
     {
         var host = GetServerHost(config);
 
-        // Try monitor first to detect device family
-        CareLinkData? monitorData = null;
-        try
-        {
-            var monitorResponse = await GetWithHeadersAsync(
-                $"https://{host}{CareLinkConstants.Endpoints.MonitorData}",
-                AuthHeaders(), ct);
-            if (monitorResponse.IsSuccessStatusCode)
-                monitorData = await DeserializeResponseAsync<CareLinkData>(monitorResponse, ct);
-        }
-        catch (OperationCanceledException) { throw; }
-        catch (HttpRequestException ex)
-        {
-            _logger.LogDebug(ex, "[{ConnectorSource}] Monitor endpoint unavailable", ConnectorSource);
-        }
-        catch (JsonException ex)
-        {
-            _logger.LogDebug(ex, "[{ConnectorSource}] Monitor endpoint unavailable", ConnectorSource);
-        }
-        catch (InvalidOperationException ex)
-        {
-            _logger.LogDebug(ex, "[{ConnectorSource}] Monitor endpoint unavailable", ConnectorSource);
-        }
-
-        if (monitorData != null && IsBleDevice(monitorData))
-        {
-            var bleData = await FetchViaBleEndpointAsync(host, config, monitorData, role: "patient", patientId: null, ct);
-            if (bleData != null)
-                return bleData;
-        }
-        else if (monitorData?.Sgs?.Count > 0 || monitorData?.LastSG != null)
-        {
+        // If the monitor endpoint returns inline readings, use them directly.
+        var monitorData = await TryGetMonitorDataAsync(host, ct);
+        if (HasReadings(monitorData))
             return monitorData;
-        }
 
-        // Legacy connect fallback
+        // Modern Medtronic pumps (NGP/BLE/SIMPLERA) serve sensor data only via the country-settings
+        // periodic endpoint; the monitor and legacy connect endpoints return empty for them.
+        var periodic = await FetchViaPeriodicEndpointAsync(host, config, role: "patient", patientId: userInfo?.Id, ct);
+        if (periodic != null)
+            return periodic;
+
+        // Legacy connect fallback for older devices.
         return await FetchViaConnectEndpointAsync(host, ct);
     }
 
@@ -372,48 +526,62 @@ public class CareLinkConnectorService : BaseConnectorService<CareLinkConnectorCo
                 return null;
         }
 
-        // Try monitor → BLE path
-        CareLinkData? monitorData = null;
+        // If the monitor endpoint returns inline readings, use them directly.
+        var monitorData = await TryGetMonitorDataAsync(host, ct);
+        if (HasReadings(monitorData))
+            return monitorData;
+
+        // Modern Medtronic pumps serve sensor data only via the country-settings periodic endpoint.
+        var periodic = await FetchViaPeriodicEndpointAsync(host, config, role: "carepartner", patientId, ct);
+        if (periodic != null)
+            return periodic;
+
+        // Versioned POST fallback for care partners.
+        return await PostToVersionedEndpointAsync(host, config, patientId, ct);
+    }
+
+    /// <summary>
+    ///     Fetches the monitor endpoint, returning null on any failure. The monitor endpoint returns
+    ///     inline readings for some devices and an empty body for modern pumps that report via the
+    ///     periodic endpoint.
+    /// </summary>
+    private async Task<CareLinkData?> TryGetMonitorDataAsync(string host, CancellationToken ct)
+    {
         try
         {
             var monitorResponse = await GetWithHeadersAsync(
                 $"https://{host}{CareLinkConstants.Endpoints.MonitorData}",
                 AuthHeaders(), ct);
             if (monitorResponse.IsSuccessStatusCode)
-                monitorData = await DeserializeResponseAsync<CareLinkData>(monitorResponse, ct);
+                return await DeserializeResponseAsync<CareLinkData>(monitorResponse, ct);
         }
         catch (OperationCanceledException) { throw; }
         catch (HttpRequestException ex)
         {
-            _logger.LogDebug(ex, "[{ConnectorSource}] Monitor endpoint unavailable (care partner)", ConnectorSource);
+            _logger.LogDebug(ex, "[{ConnectorSource}] Monitor endpoint unavailable", ConnectorSource);
         }
         catch (JsonException ex)
         {
-            _logger.LogDebug(ex, "[{ConnectorSource}] Monitor endpoint unavailable (care partner)", ConnectorSource);
+            _logger.LogDebug(ex, "[{ConnectorSource}] Monitor endpoint unavailable", ConnectorSource);
         }
         catch (InvalidOperationException ex)
         {
-            _logger.LogDebug(ex, "[{ConnectorSource}] Monitor endpoint unavailable (care partner)", ConnectorSource);
+            _logger.LogDebug(ex, "[{ConnectorSource}] Monitor endpoint unavailable", ConnectorSource);
         }
 
-        if (monitorData != null && IsBleDevice(monitorData))
-        {
-            var bleData = await FetchViaBleEndpointAsync(host, config, monitorData, role: "carepartner", patientId, ct);
-            if (bleData != null)
-                return bleData;
-        }
-
-        // Versioned POST fallback for care partners
-        return await PostToVersionedEndpointAsync(host, config, patientId, ct);
+        return null;
     }
 
+    private static bool HasReadings(CareLinkData? data) =>
+        data?.Sgs?.Count > 0 || data?.LastSG != null;
+
     /// <summary>
-    ///     Fetches country settings and POSTs to the BLE periodic data endpoint.
+    ///     Fetches country settings and POSTs to the periodic data endpoint — the modern data source
+    ///     for Medtronic NGP/BLE/SIMPLERA devices, which return empty monitor/connect responses.
     /// </summary>
-    private async Task<CareLinkData?> FetchViaBleEndpointAsync(
+    private async Task<CareLinkData?> FetchViaPeriodicEndpointAsync(
         string host,
         CareLinkConnectorConfiguration config,
-        CareLinkData monitorData,
         string role,
         string? patientId,
         CancellationToken ct)
@@ -654,14 +822,6 @@ public class CareLinkConnectorService : BaseConnectorService<CareLinkConnectorCo
     /// </summary>
     private Dictionary<string, string> AuthHeaders() =>
         new() { ["Authorization"] = $"Bearer {_accessToken}" };
-
-    /// <summary>
-    ///     Returns true if the device family indicates a BLE or SIMPLERA device.
-    /// </summary>
-    private static bool IsBleDevice(CareLinkData data) =>
-        data.MedicalDeviceFamily != null &&
-        (data.MedicalDeviceFamily.Contains("BLE", StringComparison.OrdinalIgnoreCase)
-            || data.MedicalDeviceFamily.Contains("SIMPLERA", StringComparison.OrdinalIgnoreCase));
 
     /// <summary>
     ///     Returns true if the last medical device update is older than the staleness threshold.

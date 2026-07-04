@@ -10,6 +10,7 @@ using Nocturne.Core.Contracts.Alerts;
 using Nocturne.Core.Contracts.V4.Repositories;
 using Nocturne.Core.Models.V4;
 using Xunit;
+using Nocturne.Core.Contracts.V4;
 
 namespace Nocturne.API.Tests.Controllers.V4;
 
@@ -55,11 +56,11 @@ public class SensorGlucoseControllerTests
         };
 
         _repoMock
-            .Setup(r => r.CreateAsync(It.IsAny<SensorGlucose>(), It.IsAny<CancellationToken>()))
+            .Setup(r => r.CreateAsync(It.IsAny<SensorGlucose>(), It.IsAny<WriteOrigin>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(created);
 
         _repoMock.As<IV4Repository<SensorGlucose>>()
-            .Setup(r => r.CreateAsync(It.IsAny<SensorGlucose>(), It.IsAny<CancellationToken>()))
+            .Setup(r => r.CreateAsync(It.IsAny<SensorGlucose>(), It.IsAny<WriteOrigin>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(created);
 
         var controller = CreateController();
@@ -71,5 +72,61 @@ public class SensorGlucoseControllerTests
         var createdResult = result.Result.Should().BeOfType<CreatedAtActionResult>().Subject;
         createdResult.StatusCode.Should().Be(StatusCodes.Status201Created);
         createdResult.Value.Should().Be(created);
+    }
+
+    [Fact]
+    public async Task CreateBulk_Returns201_WithCreatedReadings()
+    {
+        // Arrange
+        var requests = new[]
+        {
+            new UpsertSensorGlucoseRequest { Timestamp = DateTimeOffset.UtcNow, Mgdl = 120 },
+            new UpsertSensorGlucoseRequest { Timestamp = DateTimeOffset.UtcNow.AddMinutes(-5), Mgdl = 115 },
+        };
+        var created = new[]
+        {
+            new SensorGlucose { Id = Guid.NewGuid(), Timestamp = requests[0].Timestamp.UtcDateTime, Mgdl = 120 },
+            new SensorGlucose { Id = Guid.NewGuid(), Timestamp = requests[1].Timestamp.UtcDateTime, Mgdl = 115 },
+        };
+
+        _repoMock
+            .Setup(r => r.BulkCreateAsync(It.IsAny<IEnumerable<SensorGlucose>>(), It.IsAny<WriteOrigin>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(created);
+
+        var controller = CreateController();
+
+        // Act
+        var result = await controller.CreateSensorGlucoseBulk(requests);
+
+        // Assert
+        var objectResult = result.Result.Should().BeOfType<ObjectResult>().Subject;
+        objectResult.StatusCode.Should().Be(StatusCodes.Status201Created);
+        objectResult.Value.Should().BeEquivalentTo(created);
+    }
+
+    [Fact]
+    public async Task Update_Returns200_WithUpdatedReading()
+    {
+        // Arrange
+        var id = Guid.NewGuid();
+        var input = new UpsertSensorGlucoseRequest { Timestamp = DateTimeOffset.UtcNow, Mgdl = 95 };
+        var existing = new SensorGlucose { Id = id, Timestamp = input.Timestamp.UtcDateTime, Mgdl = 120 };
+        var updated = new SensorGlucose { Id = id, Timestamp = input.Timestamp.UtcDateTime, Mgdl = 95 };
+
+        _repoMock
+            .Setup(r => r.GetByIdAsync(id, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(existing);
+        _repoMock
+            .Setup(r => r.UpdateAsync(id, It.IsAny<SensorGlucose>(), It.IsAny<WriteOrigin>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(updated);
+
+        var controller = CreateController();
+
+        // Act
+        var result = await controller.Update(id, input);
+
+        // Assert
+        var okResult = result.Result.Should().BeOfType<OkObjectResult>().Subject;
+        okResult.Value.Should().Be(updated);
     }
 }

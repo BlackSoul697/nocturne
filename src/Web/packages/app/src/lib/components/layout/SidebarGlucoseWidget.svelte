@@ -5,6 +5,7 @@
     formatGlucoseValue,
     formatGlucoseDelta,
   } from "$lib/utils/formatting";
+  import { deltaColorClass } from "@nocturne/ui/glucose";
   import {
     glucoseUnits,
     sidebarWidget,
@@ -41,12 +42,13 @@
     deviceEvents: false,
     alarms: false,
     scheduledTrackers: false,
+    basalInjections: false,
     overrideSpans: false,
     profileSpans: false,
     activitySpans: false,
     pumpModes: false,
     expandedPumpModes: false,
-    toggle() {},
+    toggle(_key: string) {},
   };
 
   // Collapsed state needs basic BG info
@@ -55,7 +57,22 @@
   const now = $derived(realtimeStore?.now ?? Date.now());
   const isConnected = $derived(realtimeStore?.isConnected ?? false);
   const isStale = $derived(now - lastUpdated > STALE_THRESHOLD_MS);
-  const isDisconnected = $derived(!isConnected);
+
+  // Debounce the connected→disconnected transition so a brief blip (e.g. the
+  // socket reconnecting during page load) doesn't flash the "Connection error"
+  // state. Reconnecting clears it immediately; dropping waits this long first.
+  const DISCONNECT_GRACE_MS = 3000;
+  let isDisconnected = $state(false);
+  $effect(() => {
+    if (isConnected) {
+      isDisconnected = false;
+      return;
+    }
+    const timeout = setTimeout(() => {
+      isDisconnected = true;
+    }, DISCONNECT_GRACE_MS);
+    return () => clearTimeout(timeout);
+  });
   const isLoading = $derived(
     rawCurrentBG === 0 && (realtimeStore?.entries.length ?? 0) === 0
   );
@@ -80,25 +97,6 @@
     duration: reducedMotion ? 0 : 600,
     easing: cubicOut,
   });
-
-  // Delta color based on direction severity
-  function getDeltaColor(dir: string): string {
-    switch (dir) {
-      case "DoubleUp":
-      case "DoubleDown":
-        return "text-red-500";
-      case "SingleUp":
-      case "SingleDown":
-        return "text-orange-500";
-      case "FortyFiveUp":
-      case "FortyFiveDown":
-        return "text-yellow-500";
-      case "Flat":
-        return "text-green-500";
-      default:
-        return "text-muted-foreground";
-    }
-  }
 </script>
 
 <!-- Expanded state: widget based on preference -->
@@ -121,7 +119,7 @@
         />
         {#if hasData && !isStale}
           <div class="flex flex-col items-center gap-0.5">
-            <div class="flex items-center gap-0.5 {getDeltaColor(direction)}">
+            <div class="flex items-center gap-0.5 {deltaColorClass(direction)}">
               <ArrowRight
                 class="size-4"
                 style="transform: rotate({arrowAngle.current}deg)"
@@ -168,7 +166,7 @@
     class="text-lg"
   />
   {#if hasData && !isStale}
-    <div class="flex items-center gap-0.5 {getDeltaColor(direction)}">
+    <div class="flex items-center gap-0.5 {deltaColorClass(direction)}">
       <ArrowRight
         class="size-3"
         style="transform: rotate({arrowAngle.current}deg)"

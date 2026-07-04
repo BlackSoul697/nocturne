@@ -263,57 +263,78 @@
       {label}
       {#if sortColumn === column}
         {#if sortDirection === "asc"}
-          <ArrowUp class="ml-1 h-4 w-4" />
+          <ArrowUp class="ml-1 h-4 w-4 print:hidden" />
         {:else}
-          <ArrowDown class="ml-1 h-4 w-4" />
+          <ArrowDown class="ml-1 h-4 w-4 print:hidden" />
         {/if}
       {:else}
-        <ArrowUpDown class="ml-1 h-4 w-4 opacity-50" />
+        <ArrowUpDown class="ml-1 h-4 w-4 opacity-50 print:hidden" />
       {/if}
     </Button>
   </Table.Head>
 {/snippet}
 
 {#if dayDataResource.current}
-<div class="space-y-6 p-4">
+<div class="@container space-y-6 p-3 @md:p-6">
   <!-- Header with Navigation -->
-  <Card.Root>
+  <Card.Root class="print:hidden">
     <Card.Content class="p-4">
-      <div class="flex flex-wrap items-center justify-between gap-4">
-        <Button variant="ghost" size="sm" onclick={goBackToMonthView}>
+      <div
+        class="flex flex-col gap-3 @2xl:flex-row @2xl:flex-wrap @2xl:items-center @2xl:justify-between"
+      >
+        <Button
+          variant="ghost"
+          size="sm"
+          class="self-start @2xl:self-auto"
+          onclick={goBackToMonthView}
+        >
           <ArrowLeft class="h-4 w-4 mr-2" />
           Back to Month View
         </Button>
 
-        <div class="flex items-center gap-2">
-          <Button variant="outline" size="icon" onclick={goToPreviousDay}>
+        <div class="flex items-center justify-center gap-2">
+          <Button
+            variant="outline"
+            size="icon"
+            class="shrink-0"
+            onclick={goToPreviousDay}
+          >
             <ChevronLeft class="h-4 w-4" />
           </Button>
-          <div class="flex items-center gap-2 min-w-[280px] justify-center">
-            <Calendar class="h-4 w-4 text-muted-foreground" />
-            <span class="text-lg font-medium">{dateDisplay}</span>
+          <div
+            class="flex min-w-0 items-center justify-center gap-2 px-1 @2xl:min-w-[220px]"
+          >
+            <Calendar class="h-4 w-4 shrink-0 text-muted-foreground" />
+            <span class="truncate text-base font-medium @2xl:text-lg">
+              {dateDisplay}
+            </span>
           </div>
-          <Button variant="outline" size="icon" onclick={goToNextDay}>
+          <Button
+            variant="outline"
+            size="icon"
+            class="shrink-0"
+            onclick={goToNextDay}
+          >
             <ChevronRight class="h-4 w-4" />
           </Button>
         </div>
 
-        <div class="w-[100px]"><!-- Spacer for alignment --></div>
+        <div class="hidden @2xl:block @2xl:w-[100px]"><!-- Spacer for alignment --></div>
       </div>
     </Card.Content>
   </Card.Root>
 
   <!-- Summary Stats -->
-  <div class="grid md:grid-cols-3 gap-6">
+  <div class="grid @4xl:grid-cols-3 gap-6">
     <!-- Glucose Overview -->
-    <Card.Root class="md:col-span-2">
+    <Card.Root class="@4xl:col-span-2">
       <Card.Content class="p-4 space-y-4">
         <TIRStackedChart
           percentages={analysis?.timeInRange?.percentages}
           orientation="horizontal"
           compact
         />
-        <div class="grid grid-cols-2 sm:grid-cols-4 gap-x-6 gap-y-3 text-sm">
+        <div class="grid grid-cols-2 @lg:grid-cols-4 gap-x-6 gap-y-3 text-sm">
           <div>
             <div class="text-muted-foreground">Mean</div>
             <div class="font-medium tabular-nums">
@@ -415,12 +436,14 @@
 
   <!-- Historical Prediction Scrubber + APS State -->
   {#if hasApsSnapshots}
-    <RetrospectiveTimeScrubber
-      date={currentDate}
-      bind:currentTime={scrubberTime}
-      onTimeChange={handleScrubberTimeChange}
-      stepMinutes={5}
-    />
+    <div class="print:hidden">
+      <RetrospectiveTimeScrubber
+        date={currentDate}
+        bind:currentTime={scrubberTime}
+        onTimeChange={handleScrubberTimeChange}
+        stepMinutes={5}
+      />
+    </div>
     <ApsStateCard snapshot={selectedSnapshot} />
   {/if}
 
@@ -433,7 +456,7 @@
           Treatments Timeline
         </Card.Title>
 
-        <div class="flex items-center gap-2">
+        <div class="flex items-center gap-2 print:hidden">
           <Select.Root
             type="single"
             value={filterEventType ?? ""}
@@ -462,10 +485,11 @@
           {/if}
         </div>
       </div>
-      <Card.Description>Click on a treatment to edit it</Card.Description>
+      <Card.Description class="print:hidden">Click on a treatment to edit it</Card.Description>
     </Card.Header>
     <Card.Content>
       {#if filteredTreatments.length > 0}
+        <div class="overflow-x-auto print:overflow-visible">
         <Table.Root>
           <Table.Header>
             <Table.Row>
@@ -474,7 +498,7 @@
               {@render sortableHeader("carbs", "Carbs", true)}
               {@render sortableHeader("insulin", "Insulin", true)}
               <Table.Head>Notes</Table.Head>
-              <Table.Head class="w-[50px]"></Table.Head>
+              <Table.Head class="w-[50px] print:hidden"></Table.Head>
             </Table.Row>
           </Table.Header>
           <Table.Body>
@@ -523,7 +547,7 @@
                 >
                   —
                 </Table.Cell>
-                <Table.Cell>
+                <Table.Cell class="print:hidden">
                   <Button variant="ghost" size="icon" class="h-8 w-8">
                     <Edit class="h-4 w-4" />
                   </Button>
@@ -532,6 +556,7 @@
             {/each}
           </Table.Body>
         </Table.Root>
+        </div>
       {:else}
         <p class="text-center text-muted-foreground py-8">
           {filterEventType

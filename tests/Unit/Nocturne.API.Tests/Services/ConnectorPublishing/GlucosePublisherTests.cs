@@ -5,6 +5,7 @@ using Microsoft.Extensions.Logging.Abstractions;
 using Moq;
 using Nocturne.API.Services.ConnectorPublishing;
 using Nocturne.Core.Constants;
+using Nocturne.Core.Contracts.Audit;
 using Nocturne.Core.Contracts.Glucose;
 using Nocturne.Core.Contracts.Alerts;
 using Nocturne.Core.Contracts.Multitenancy;
@@ -13,6 +14,7 @@ using Nocturne.Core.Models;
 using Nocturne.Core.Models.V4;
 using Nocturne.Infrastructure.Data;
 using Xunit;
+using Nocturne.Core.Contracts.V4;
 
 namespace Nocturne.API.Tests.Services.ConnectorPublishing;
 
@@ -37,6 +39,7 @@ public class GlucosePublisherTests
             Mock.Of<IDbContextFactory<NocturneDbContext>>(),
             Mock.Of<ITenantAccessor>(),
             Mock.Of<IAlertOrchestrator>(),
+            Mock.Of<IAuditContext>(),
             NullLogger<GlucosePublisher>.Instance
         );
     }
@@ -49,7 +52,7 @@ public class GlucosePublisherTests
             .Setup(s => s.CreateEntriesAsync(It.IsAny<IEnumerable<Entry>>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(entries);
 
-        var result = await _publisher.PublishEntriesAsync(entries, "test-source");
+        var result = await _publisher.PublishEntriesAsync(entries, "test-source", WriteOrigin.Live);
 
         result.Should().BeTrue();
         _mockEntryService.Verify(
@@ -65,9 +68,40 @@ public class GlucosePublisherTests
             .Setup(s => s.CreateEntriesAsync(It.IsAny<IEnumerable<Entry>>(), It.IsAny<CancellationToken>()))
             .ThrowsAsync(new InvalidOperationException("test error"));
 
-        var result = await _publisher.PublishEntriesAsync(new List<Entry>(), "test-source");
+        var result = await _publisher.PublishEntriesAsync(new List<Entry>(), "test-source", WriteOrigin.Live);
 
         result.Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task PublishSensorGlucoseAsync_WritesThroughRepository_ForPublishedReadings()
+    {
+        _mockPatientDeviceRepository
+            .Setup(r => r.GetCurrentAsync(It.IsAny<CancellationToken>()))
+            .ReturnsAsync(Enumerable.Empty<PatientDevice>());
+
+        var records = new List<SensorGlucose>
+        {
+            new() { Mgdl = 120, Timestamp = DateTime.UtcNow.AddMinutes(-5), DataSource = DataSources.DexcomConnector },
+            new() { Mgdl = 130, Timestamp = DateTime.UtcNow, DataSource = DataSources.DexcomConnector },
+        };
+
+        // BulkCreateAsync routes through the repository chokepoint, which fires the realtime "entries"
+        // broadcast itself — the publisher no longer emits events directly.
+        var inserted = new List<SensorGlucose> { records[1] };
+        _mockSensorGlucoseRepository
+            .Setup(r => r.BulkCreateAsync(It.IsAny<IEnumerable<SensorGlucose>>(), It.IsAny<WriteOrigin>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(inserted);
+
+        var result = await _publisher.PublishSensorGlucoseAsync(records, DataSources.DexcomConnector, WriteOrigin.Live);
+
+        result.Should().BeTrue();
+        _mockSensorGlucoseRepository.Verify(
+            r => r.BulkCreateAsync(
+                It.Is<IEnumerable<SensorGlucose>>(l => l.Count() == 2),
+                It.IsAny<WriteOrigin>(),
+                It.IsAny<CancellationToken>()),
+            Times.Once);
     }
 
     [Fact]
@@ -132,8 +166,8 @@ public class GlucosePublisherTests
 
         List<SensorGlucose>? captured = null;
         _mockSensorGlucoseRepository
-            .Setup(r => r.BulkCreateAsync(It.IsAny<IEnumerable<SensorGlucose>>(), It.IsAny<CancellationToken>()))
-            .Callback<IEnumerable<SensorGlucose>, CancellationToken>((records, _) => captured = records.ToList())
+            .Setup(r => r.BulkCreateAsync(It.IsAny<IEnumerable<SensorGlucose>>(), It.IsAny<WriteOrigin>(), It.IsAny<CancellationToken>()))
+            .Callback<IEnumerable<SensorGlucose>, WriteOrigin, CancellationToken>((records, _, _) => captured = records.ToList())
             .ReturnsAsync(Enumerable.Empty<SensorGlucose>());
 
         var records = new List<SensorGlucose>
@@ -141,7 +175,7 @@ public class GlucosePublisherTests
             new() { Mgdl = 120, Timestamp = DateTime.UtcNow, DataSource = DataSources.DexcomConnector },
         };
 
-        var result = await _publisher.PublishSensorGlucoseAsync(records, DataSources.DexcomConnector);
+        var result = await _publisher.PublishSensorGlucoseAsync(records, DataSources.DexcomConnector, WriteOrigin.Live);
 
         result.Should().BeTrue();
         captured.Should().NotBeNull();
@@ -157,8 +191,8 @@ public class GlucosePublisherTests
 
         List<SensorGlucose>? captured = null;
         _mockSensorGlucoseRepository
-            .Setup(r => r.BulkCreateAsync(It.IsAny<IEnumerable<SensorGlucose>>(), It.IsAny<CancellationToken>()))
-            .Callback<IEnumerable<SensorGlucose>, CancellationToken>((records, _) => captured = records.ToList())
+            .Setup(r => r.BulkCreateAsync(It.IsAny<IEnumerable<SensorGlucose>>(), It.IsAny<WriteOrigin>(), It.IsAny<CancellationToken>()))
+            .Callback<IEnumerable<SensorGlucose>, WriteOrigin, CancellationToken>((records, _, _) => captured = records.ToList())
             .ReturnsAsync(Enumerable.Empty<SensorGlucose>());
 
         var records = new List<SensorGlucose>
@@ -166,7 +200,7 @@ public class GlucosePublisherTests
             new() { Mgdl = 120, Timestamp = DateTime.UtcNow, DataSource = DataSources.DexcomConnector },
         };
 
-        var result = await _publisher.PublishSensorGlucoseAsync(records, DataSources.DexcomConnector);
+        var result = await _publisher.PublishSensorGlucoseAsync(records, DataSources.DexcomConnector, WriteOrigin.Live);
 
         result.Should().BeTrue();
         captured.Should().NotBeNull();
@@ -193,8 +227,8 @@ public class GlucosePublisherTests
 
         List<SensorGlucose>? captured = null;
         _mockSensorGlucoseRepository
-            .Setup(r => r.BulkCreateAsync(It.IsAny<IEnumerable<SensorGlucose>>(), It.IsAny<CancellationToken>()))
-            .Callback<IEnumerable<SensorGlucose>, CancellationToken>((records, _) => captured = records.ToList())
+            .Setup(r => r.BulkCreateAsync(It.IsAny<IEnumerable<SensorGlucose>>(), It.IsAny<WriteOrigin>(), It.IsAny<CancellationToken>()))
+            .Callback<IEnumerable<SensorGlucose>, WriteOrigin, CancellationToken>((records, _, _) => captured = records.ToList())
             .ReturnsAsync(Enumerable.Empty<SensorGlucose>());
 
         var records = new List<SensorGlucose>
@@ -202,7 +236,7 @@ public class GlucosePublisherTests
             new() { Mgdl = 95, Timestamp = DateTime.UtcNow, DataSource = DataSources.LibreConnector },
         };
 
-        var result = await _publisher.PublishSensorGlucoseAsync(records, DataSources.LibreConnector);
+        var result = await _publisher.PublishSensorGlucoseAsync(records, DataSources.LibreConnector, WriteOrigin.Live);
 
         result.Should().BeTrue();
         captured![0].PatientDeviceId.Should().Be(deviceId);
@@ -228,8 +262,8 @@ public class GlucosePublisherTests
 
         List<SensorGlucose>? captured = null;
         _mockSensorGlucoseRepository
-            .Setup(r => r.BulkCreateAsync(It.IsAny<IEnumerable<SensorGlucose>>(), It.IsAny<CancellationToken>()))
-            .Callback<IEnumerable<SensorGlucose>, CancellationToken>((records, _) => captured = records.ToList())
+            .Setup(r => r.BulkCreateAsync(It.IsAny<IEnumerable<SensorGlucose>>(), It.IsAny<WriteOrigin>(), It.IsAny<CancellationToken>()))
+            .Callback<IEnumerable<SensorGlucose>, WriteOrigin, CancellationToken>((records, _, _) => captured = records.ToList())
             .ReturnsAsync(Enumerable.Empty<SensorGlucose>());
 
         var records = new List<SensorGlucose>
@@ -237,7 +271,7 @@ public class GlucosePublisherTests
             new() { Mgdl = 110, Timestamp = DateTime.UtcNow, DataSource = null },
         };
 
-        var result = await _publisher.PublishSensorGlucoseAsync(records, DataSources.DexcomConnector);
+        var result = await _publisher.PublishSensorGlucoseAsync(records, DataSources.DexcomConnector, WriteOrigin.Live);
 
         result.Should().BeTrue();
         captured![0].PatientDeviceId.Should().Be(deviceId);
@@ -265,8 +299,8 @@ public class GlucosePublisherTests
 
         List<SensorGlucose>? captured = null;
         _mockSensorGlucoseRepository
-            .Setup(r => r.BulkCreateAsync(It.IsAny<IEnumerable<SensorGlucose>>(), It.IsAny<CancellationToken>()))
-            .Callback<IEnumerable<SensorGlucose>, CancellationToken>((records, _) => captured = records.ToList())
+            .Setup(r => r.BulkCreateAsync(It.IsAny<IEnumerable<SensorGlucose>>(), It.IsAny<WriteOrigin>(), It.IsAny<CancellationToken>()))
+            .Callback<IEnumerable<SensorGlucose>, WriteOrigin, CancellationToken>((records, _, _) => captured = records.ToList())
             .ReturnsAsync(Enumerable.Empty<SensorGlucose>());
 
         var records = new List<SensorGlucose>
@@ -274,7 +308,7 @@ public class GlucosePublisherTests
             new() { Mgdl = 100, Timestamp = DateTime.UtcNow, DataSource = DataSources.DexcomConnector, PatientDeviceId = existingDeviceId },
         };
 
-        var result = await _publisher.PublishSensorGlucoseAsync(records, DataSources.DexcomConnector);
+        var result = await _publisher.PublishSensorGlucoseAsync(records, DataSources.DexcomConnector, WriteOrigin.Live);
 
         result.Should().BeTrue();
         captured![0].PatientDeviceId.Should().Be(existingDeviceId);
@@ -301,8 +335,8 @@ public class GlucosePublisherTests
 
         List<SensorGlucose>? captured = null;
         _mockSensorGlucoseRepository
-            .Setup(r => r.BulkCreateAsync(It.IsAny<IEnumerable<SensorGlucose>>(), It.IsAny<CancellationToken>()))
-            .Callback<IEnumerable<SensorGlucose>, CancellationToken>((records, _) => captured = records.ToList())
+            .Setup(r => r.BulkCreateAsync(It.IsAny<IEnumerable<SensorGlucose>>(), It.IsAny<WriteOrigin>(), It.IsAny<CancellationToken>()))
+            .Callback<IEnumerable<SensorGlucose>, WriteOrigin, CancellationToken>((records, _, _) => captured = records.ToList())
             .ReturnsAsync(Enumerable.Empty<SensorGlucose>());
 
         var records = new List<SensorGlucose>
@@ -310,7 +344,7 @@ public class GlucosePublisherTests
             new() { Mgdl = 130, Timestamp = DateTime.UtcNow, DataSource = DataSources.DexcomConnector },
         };
 
-        var result = await _publisher.PublishSensorGlucoseAsync(records, DataSources.DexcomConnector);
+        var result = await _publisher.PublishSensorGlucoseAsync(records, DataSources.DexcomConnector, WriteOrigin.Live);
 
         result.Should().BeTrue();
         captured![0].PatientDeviceId.Should().Be(deviceId);
@@ -336,8 +370,8 @@ public class GlucosePublisherTests
 
         List<SensorGlucose>? captured = null;
         _mockSensorGlucoseRepository
-            .Setup(r => r.BulkCreateAsync(It.IsAny<IEnumerable<SensorGlucose>>(), It.IsAny<CancellationToken>()))
-            .Callback<IEnumerable<SensorGlucose>, CancellationToken>((records, _) => captured = records.ToList())
+            .Setup(r => r.BulkCreateAsync(It.IsAny<IEnumerable<SensorGlucose>>(), It.IsAny<WriteOrigin>(), It.IsAny<CancellationToken>()))
+            .Callback<IEnumerable<SensorGlucose>, WriteOrigin, CancellationToken>((records, _, _) => captured = records.ToList())
             .ReturnsAsync(Enumerable.Empty<SensorGlucose>());
 
         var records = new List<SensorGlucose>
@@ -345,7 +379,7 @@ public class GlucosePublisherTests
             new() { Mgdl = 100, Timestamp = DateTime.UtcNow, DataSource = DataSources.DexcomConnector },
         };
 
-        var result = await _publisher.PublishSensorGlucoseAsync(records, DataSources.DexcomConnector);
+        var result = await _publisher.PublishSensorGlucoseAsync(records, DataSources.DexcomConnector, WriteOrigin.Live);
 
         result.Should().BeTrue();
         captured![0].PatientDeviceId.Should().BeNull();
@@ -359,7 +393,7 @@ public class GlucosePublisherTests
             .ThrowsAsync(new InvalidOperationException("DB error"));
 
         _mockSensorGlucoseRepository
-            .Setup(r => r.BulkCreateAsync(It.IsAny<IEnumerable<SensorGlucose>>(), It.IsAny<CancellationToken>()))
+            .Setup(r => r.BulkCreateAsync(It.IsAny<IEnumerable<SensorGlucose>>(), It.IsAny<WriteOrigin>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(Enumerable.Empty<SensorGlucose>());
 
         var records = new List<SensorGlucose>
@@ -367,11 +401,11 @@ public class GlucosePublisherTests
             new() { Mgdl = 100, Timestamp = DateTime.UtcNow, DataSource = DataSources.DexcomConnector },
         };
 
-        var result = await _publisher.PublishSensorGlucoseAsync(records, DataSources.DexcomConnector);
+        var result = await _publisher.PublishSensorGlucoseAsync(records, DataSources.DexcomConnector, WriteOrigin.Live);
 
         result.Should().BeTrue();
         _mockSensorGlucoseRepository.Verify(
-            r => r.BulkCreateAsync(It.IsAny<IEnumerable<SensorGlucose>>(), It.IsAny<CancellationToken>()),
+            r => r.BulkCreateAsync(It.IsAny<IEnumerable<SensorGlucose>>(), It.IsAny<WriteOrigin>(), It.IsAny<CancellationToken>()),
             Times.Once);
     }
 }

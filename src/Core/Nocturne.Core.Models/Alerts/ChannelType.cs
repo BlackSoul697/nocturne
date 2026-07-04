@@ -63,4 +63,17 @@ public enum ChannelType
     /// <summary>Home Assistant integration delivery via dedicated SignalR hub.</summary>
     [EnumMember(Value = "home_assistant"), JsonStringEnumMemberName("home_assistant")]
     HomeAssistant,
+
+    /// <summary>Email delivery via Resend.</summary>
+    [EnumMember(Value = "resend_email"), JsonStringEnumMemberName("resend_email")]
+    ResendEmail,
+
+    /// <summary>
+    /// Actuation intent to a registered client device (Prelude, Companion). Destination is the
+    /// target device kind; metadata carries the requested capabilities. Push-mode devices receive a
+    /// real-time intent over SignalR; local-engine devices (e.g. Prelude) are suppressed here and
+    /// actuate from their own synced rule config instead.
+    /// </summary>
+    [EnumMember(Value = "device_action"), JsonStringEnumMemberName("device_action")]
+    DeviceAction,
 }

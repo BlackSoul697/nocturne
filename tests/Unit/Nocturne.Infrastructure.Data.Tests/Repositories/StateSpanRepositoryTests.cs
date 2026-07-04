@@ -75,6 +75,71 @@ public class StateSpanRepositoryTests : IDisposable
     }
 
     [Fact]
+    public async Task UpsertStateSpanAsync_PumpModeAutomatic_DoesNotSupersedeOpenSuspended()
+    {
+        // Suspended (LGS) and Automatic/Manual loop mode are independent dimensions that can overlap,
+        // so opening one must NOT close the other even though both share the PumpMode category.
+        var suspended = new StateSpan
+        {
+            Category = StateSpanCategory.PumpMode,
+            State = PumpModeState.Suspended.ToString(),
+            StartTimestamp = new DateTime(2026, 1, 1, 10, 0, 0, DateTimeKind.Utc),
+            EndTimestamp = null,
+            Source = "CareLink NGP",
+            OriginalId = "suspend-1",
+        };
+        await _repository.UpsertStateSpanAsync(suspended);
+
+        var automatic = new StateSpan
+        {
+            Category = StateSpanCategory.PumpMode,
+            State = PumpModeState.Automatic.ToString(),
+            StartTimestamp = new DateTime(2026, 1, 1, 10, 5, 0, DateTimeKind.Utc),
+            EndTimestamp = null,
+            Source = "CareLink NGP",
+            OriginalId = "auto-1",
+        };
+        await _repository.UpsertStateSpanAsync(automatic);
+
+        var spans = (await _repository.GetStateSpansAsync(category: StateSpanCategory.PumpMode)).ToList();
+        spans.First(s => s.OriginalId == "suspend-1").IsActive
+            .Should().BeTrue("a different-state PumpMode span must not close the suspension span");
+        spans.First(s => s.OriginalId == "auto-1").IsActive.Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task UpsertStateSpanAsync_PumpModeSameState_SupersedesOpenSpan()
+    {
+        // Per-state exclusivity is preserved: a newer open span of the SAME PumpMode state closes the prior.
+        var first = new StateSpan
+        {
+            Category = StateSpanCategory.PumpMode,
+            State = PumpModeState.Automatic.ToString(),
+            StartTimestamp = new DateTime(2026, 1, 1, 10, 0, 0, DateTimeKind.Utc),
+            EndTimestamp = null,
+            Source = "CareLink NGP",
+            OriginalId = "auto-old",
+        };
+        await _repository.UpsertStateSpanAsync(first);
+
+        var second = new StateSpan
+        {
+            Category = StateSpanCategory.PumpMode,
+            State = PumpModeState.Automatic.ToString(),
+            StartTimestamp = new DateTime(2026, 1, 1, 11, 0, 0, DateTimeKind.Utc),
+            EndTimestamp = null,
+            Source = "CareLink NGP",
+            OriginalId = "auto-new",
+        };
+        await _repository.UpsertStateSpanAsync(second);
+
+        var spans = (await _repository.GetStateSpansAsync(category: StateSpanCategory.PumpMode)).ToList();
+        spans.First(s => s.OriginalId == "auto-old").IsActive
+            .Should().BeFalse("a newer same-state span supersedes the prior open one");
+        spans.First(s => s.OriginalId == "auto-new").IsActive.Should().BeTrue();
+    }
+
+    [Fact]
     public async Task UpsertStateSpanAsync_NewTemporaryTarget_SupersedesExistingOpenTarget()
     {
         // Arrange

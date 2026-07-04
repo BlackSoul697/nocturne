@@ -10,7 +10,6 @@
     DataSourceInfo,
     ConnectorStatusDto,
     SyncRequest,
-    AvailableConnector,
     ConnectorCapabilities,
   } from "$lib/api/generated/nocturne-api-client";
 
@@ -44,6 +43,7 @@
   import DataSourceRow from "$lib/components/settings/DataSourceRow.svelte";
   import type { DataSourceStatus } from "$lib/components/settings/DataSourceRow.svelte";
   import ConnectedApps from "$lib/components/settings/ConnectedApps.svelte";
+  import ClientDevices from "$lib/components/settings/ClientDevices.svelte";
   import ApiTokens from "$lib/components/settings/ApiTokens.svelte";
   import DeduplicationDialog from "$lib/components/connectors/DeduplicationDialog.svelte";
   import AppLogo from "$lib/components/ui/AppLogo.svelte";
@@ -55,10 +55,14 @@
   import ServerConnectorsCard, { type ConnectorStatusWithDescription } from "$lib/components/connectors/ServerConnectorsCard.svelte";
   import DataSourceManageDialog from "$lib/components/connectors/DataSourceManageDialog.svelte";
   import { getApiClient } from "$lib/api";
+  import { resolve } from "$app/paths";
+  import { page } from "$app/state";
   import { toast } from "svelte-sonner";
   import { getUploaderName } from "$lib/utils/uploader-labels";
   import { coachmark } from "@nocturne/coach";
   import { getRealtimeStore } from "$lib/stores/realtime-store.svelte";
+
+  const isPlatformAdmin = $derived((page.data as { isPlatformAdmin?: boolean }).isPlatformAdmin ?? false);
 
   // Queries — fire on the server during SSR; results land in cache for hydration.
   const servicesOverviewQuery = getServicesOverview();
@@ -99,7 +103,19 @@
   // Connector heartbeat metrics state
   let selectedConnector = $state<ConnectorStatusWithDescription | null>(null);
   let selectedConnectorCapabilities = $state<ConnectorCapabilities | null>(null);
-  let connectorCapabilitiesById = $state<Record<string, ConnectorCapabilities | null>>({});
+  // Capability descriptors per connector, keyed by connector id.
+  const connectorCapabilitiesById = $derived.by(() => {
+    const overview = servicesOverviewQuery.current;
+    const result: Record<string, ConnectorCapabilities | null> = {};
+    if (!overview?.availableConnectors?.length) return result;
+    for (const connector of overview.availableConnectors) {
+      if (connector.id) {
+        result[connector.id] =
+          getConnectorCapabilities(connector.id).current ?? null;
+      }
+    }
+    return result;
+  });
   let quickSyncingById = $state<Record<string, boolean>>({});
   let showConnectorDialog = $state(false);
 
@@ -119,16 +135,6 @@
     if (hasCompleted) {
       connectorStatusesQuery.refresh();
     }
-  });
-
-  // Fan-out load of capability descriptors once the services overview is in.
-  $effect(() => {
-    const overview = servicesOverviewQuery.current;
-    if (!overview?.availableConnectors) {
-      connectorCapabilitiesById = {};
-      return;
-    }
-    loadConnectorCapabilitiesMap(overview.availableConnectors);
   });
 
   // API token create dialog (triggered from uploader setup)
@@ -161,40 +167,10 @@
       return;
     }
     try {
-      selectedConnectorCapabilities = await getConnectorCapabilities(connectorId);
+      selectedConnectorCapabilities = await getConnectorCapabilities(connectorId).run();
     } catch (e) {
       console.error("Failed to load connector capabilities", e);
       selectedConnectorCapabilities = null;
-    }
-  }
-
-  async function loadConnectorCapabilitiesMap(connectors: AvailableConnector[]) {
-    const connectorIds = connectors
-      .map((connector) => connector.id)
-      .filter((id): id is string => !!id);
-
-    if (connectorIds.length === 0) {
-      connectorCapabilitiesById = {};
-      return;
-    }
-
-    try {
-      const results = await Promise.all(
-        connectorIds.map(async (connectorId) => ({
-          connectorId,
-          capabilities: await getConnectorCapabilities(connectorId),
-        }))
-      );
-      connectorCapabilitiesById = results.reduce(
-        (acc, result) => {
-          acc[result.connectorId] = result.capabilities;
-          return acc;
-        },
-        {} as Record<string, ConnectorCapabilities | null>
-      );
-    } catch (e) {
-      console.error("Failed to load connector capabilities map", e);
-      connectorCapabilitiesById = {};
     }
   }
 
@@ -377,7 +353,7 @@
   <title>Connectors & Apps - Settings - Nocturne</title>
 </svelte:head>
 
-<div class="container mx-auto max-w-4xl p-6 space-y-6">
+<div class="@container container mx-auto max-w-4xl p-3 @md:p-6 space-y-6">
   <!-- Header -->
   <div class="flex items-start justify-between">
     <div class="flex items-center gap-3">
@@ -441,7 +417,7 @@
           </div>
         {:else}
           <div class="space-y-3">
-            {#each servicesOverview.activeDataSources as source}
+            {#each servicesOverview.activeDataSources as source (source.id)}
               {@const matchingUploader = getMatchingUploader(source)}
               {@const isDemo = isDemoDataSource(source)}
               <DataSourceRow
@@ -605,6 +581,28 @@
             </Button>
           </div>
         </div>
+
+        {#if isPlatformAdmin}
+          <a
+            href={resolve("/settings/admin/connector-cursors")}
+            class="group flex items-center gap-4 rounded-lg border bg-card p-4 transition-colors hover:border-primary/40 hover:bg-muted/40"
+          >
+            <div
+              class="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-primary/10"
+            >
+              <RefreshCw class="h-5 w-5 text-primary" />
+            </div>
+            <div class="min-w-0 flex-1">
+              <h4 class="font-medium">Reset Connector Cursors</h4>
+              <p class="text-sm text-muted-foreground mt-1">
+                Re-sync a connector from a chosen point.
+              </p>
+            </div>
+            <ChevronRight
+              class="h-4 w-4 shrink-0 text-muted-foreground transition-transform group-hover:translate-x-0.5"
+            />
+          </a>
+        {/if}
       </CardContent>
     </Card>
 
@@ -621,7 +619,7 @@
       </CardHeader>
       <CardContent>
         <a
-          href="/settings/integrations/discord"
+          href={resolve("/settings/integrations/discord")}
           class="flex items-center justify-between rounded-lg border p-4 hover:bg-accent transition-colors"
         >
           <div class="flex items-center gap-3">
@@ -642,6 +640,9 @@
 
     <!-- Connected Apps Section -->
     <ConnectedApps />
+
+    <!-- Devices Section -->
+    <ClientDevices />
 
     <!-- API Tokens Section -->
     <div id="api-tokens-section">

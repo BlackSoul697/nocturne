@@ -4,8 +4,9 @@
 	import { Switch } from '$lib/components/ui/switch';
 	import { Label } from '$lib/components/ui/label';
 	import { Select, SelectContent, SelectItem, SelectTrigger } from '$lib/components/ui/select';
-	import { Moon, Activity, AlertCircle, Globe } from 'lucide-svelte';
+	import { Moon, Activity, AlertCircle, Globe, ChevronRight } from 'lucide-svelte';
 	import SettingsPageSkeleton from '$lib/components/settings/SettingsPageSkeleton.svelte';
+	import { resolve } from '$app/paths';
 
 	const store = getSettingsStore();
 
@@ -43,7 +44,7 @@
 	<title>Data Quality - Settings - Nocturne</title>
 </svelte:head>
 
-<div class="container mx-auto max-w-4xl p-6 space-y-6">
+<div class="@container container mx-auto max-w-4xl p-3 @md:p-6 space-y-6">
 	<!-- Header -->
 	<div class="flex items-center gap-3">
 		<div class="flex h-12 w-12 items-center justify-center rounded-xl bg-primary/10">
@@ -111,7 +112,7 @@
 					{/if}
 				</div>
 
-				<div class="grid gap-4 sm:grid-cols-2">
+				<div class="grid gap-4 @sm:grid-cols-2">
 					<div class="space-y-2">
 						<Label>Typical bedtime</Label>
 						<Select
@@ -182,7 +183,7 @@
 					</div>
 					<Switch
 						checked={store.dataQuality.compressionLowDetection?.enabled ?? true}
-						onCheckedChange={(checked) => {
+						onCheckedChange={(checked: boolean) => {
 							if (store.dataQuality?.compressionLowDetection) {
 								store.dataQuality.compressionLowDetection.enabled = checked;
 								store.markChanged();
@@ -201,7 +202,7 @@
 					</div>
 					<Switch
 						checked={store.dataQuality.compressionLowDetection?.excludeFromStatistics ?? true}
-						onCheckedChange={(checked) => {
+						onCheckedChange={(checked: boolean) => {
 							if (store.dataQuality?.compressionLowDetection) {
 								store.dataQuality.compressionLowDetection.excludeFromStatistics = checked;
 								store.markChanged();
@@ -218,5 +219,25 @@
 				</div>
 			</CardContent>
 		</Card>
+
+		<!-- Timezone History (lives under Data Quality — correct timestamps are a data-quality concern) -->
+		<a href={resolve('/settings/timezone')} class="group block">
+			<Card class="transition-colors hover:border-primary/40 hover:bg-muted/40">
+				<CardContent class="flex items-center gap-4 p-4">
+					<div class="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-primary/10">
+						<Globe class="h-5 w-5 text-primary" />
+					</div>
+					<div class="min-w-0 flex-1">
+						<p class="font-medium">Timezone History</p>
+						<p class="text-sm text-muted-foreground">
+							Where you've lived and travelled, for correct timestamps.
+						</p>
+					</div>
+					<ChevronRight
+						class="h-4 w-4 shrink-0 text-muted-foreground transition-transform group-hover:translate-x-0.5"
+					/>
+				</CardContent>
+			</Card>
+		</a>
 	{/if}
 </div>

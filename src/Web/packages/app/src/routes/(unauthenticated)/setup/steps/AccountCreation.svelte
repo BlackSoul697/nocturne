@@ -2,15 +2,16 @@
   import { AlertTriangle, Check, Fingerprint, Loader2, UserPlus } from "lucide-svelte";
   import { startRegistration } from "@simplewebauthn/browser";
   import {
-    setupOptions,
-    setupComplete,
-  } from "$lib/api/generated/passkeys.generated.remote";
-  import {
     getAuthState,
     getOidcProviders,
     setAuthCookies,
   } from "$routes/(unauthenticated)/auth/auth.remote";
-  import { setupOwnerOidc, validateSetupUsername } from "../setup.remote";
+  import {
+    setupOwnerOptions,
+    setupOwnerComplete,
+    setupOwnerOidc,
+    validateSetupUsername,
+  } from "../setup.remote";
   import { Debounced } from "runed";
   import RecoveryCodes from "$lib/components/auth/RecoveryCodes.svelte";
   import OidcProviderButtons from "$lib/components/auth/OidcProviderButtons.svelte";
@@ -53,15 +54,10 @@
   const normalizedUsername = $derived(username.trim().toLowerCase());
   const debouncedUsername = new Debounced(() => normalizedUsername, 400);
 
-  const usernameValidation = $derived.by(() => {
-    const value = debouncedUsername.current;
-    if (!value || value.length < 3) return null;
-    return validateSetupUsername({ username: value });
-  });
-
   $effect(() => {
     const value = normalizedUsername;
 
+    // Reset on every keystroke
     usernameError = null;
     usernameValid = false;
 
@@ -71,15 +67,16 @@
       return;
     }
 
+    // Still waiting for debounce to settle
     if (debouncedUsername.current !== value) {
       validatingUsername = true;
       return;
     }
 
-    const result = usernameValidation;
-    if (!result) return;
+    const result = validateSetupUsername({ username: value });
 
-    if (result.loading) {
+    // loading=true: fetch in progress; !current: result not yet populated
+    if (result.loading || !result.current) {
       validatingUsername = true;
       return;
     }
@@ -91,11 +88,10 @@
       return;
     }
 
-    const data = result.current;
-    if (data?.isValid) {
+    if (result.current.isValid) {
       usernameValid = true;
     } else {
-      usernameError = data?.message ?? "Invalid username";
+      usernameError = result.current.message ?? "Invalid username";
     }
   });
 
@@ -140,7 +136,7 @@
     passkeyError = null;
 
     try {
-      const response = await setupOptions({
+      const response = await setupOwnerOptions({
         username: username.trim().toLowerCase(),
         displayName: displayName.trim(),
       });
@@ -149,7 +145,7 @@
 
       const attestation = await startRegistration({ optionsJSON: options });
 
-      const result = await setupComplete({
+      const result = await setupOwnerComplete({
         attestationResponseJson: JSON.stringify(attestation),
         challengeToken,
       });
@@ -231,27 +227,33 @@
 
         <!-- Shared form fields -->
         <div class="space-y-2">
-          <Label for="display-name">Display name</Label>
+          <Label for="display-name" class="text-white/70">Display name</Label>
           <Input
             id="display-name"
             type="text"
             placeholder="Your name"
             bind:value={displayName}
             disabled={isRedirecting || isRegistering}
+            class="bg-white/5 border-white/10 text-white placeholder:text-white/25"
           />
-          <p class="text-xs text-muted-foreground">
+          <p class="text-xs text-white/30">
             This is how you will appear to others.
           </p>
         </div>
 
         <div class="space-y-2">
-          <Label for="pk-username">Username</Label>
+          <Label for="pk-username" class="text-white/70">Username</Label>
           <Input
             id="pk-username"
             type="text"
             placeholder="your-username"
             bind:value={username}
             disabled={isRedirecting || isRegistering}
+            class="bg-white/5 border-white/10 text-white placeholder:text-white/25 {usernameError
+              ? 'border-red-500/50'
+              : usernameValid
+                ? 'border-green-500/50'
+                : ''}"
           />
           {#if validatingUsername}
             <p class="text-xs text-white/40">Checking availability...</p>
@@ -263,7 +265,7 @@
               Available
             </p>
           {:else}
-            <p class="text-xs text-muted-foreground">
+            <p class="text-xs text-white/30">
               3-32 characters: letters, numbers, dots, underscores, and hyphens.
             </p>
           {/if}

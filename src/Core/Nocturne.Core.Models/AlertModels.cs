@@ -134,12 +134,23 @@ public record SensorContext
     public decimal? SensitivityRatio { get; init; }
 
     /// <summary>
-    /// Currently active Do Not Disturb projection, or null when DND is off. Populated from
-    /// <c>tenant_alert_settings</c> by the context enricher; collapses both manual and
-    /// scheduled DND activation paths into one snapshot, so condition evaluators don't have
-    /// to know which path is active.
+    /// Currently active Do Not Disturb projection, or null when DND is off. Drives the
+    /// <c>do_not_disturb</c> condition leaf and the tenant-wide notion of DND. Re-sourced by
+    /// the enricher from the active <c>scope=all</c> DND window and scheduled DND (ADR 0004 D5):
+    /// <c>lows</c>/<c>highs</c> windows feed <see cref="ActiveDndScopes"/> only and never trip
+    /// this. Non-null exactly when <see cref="ActiveDndScopes"/> contains <see cref="DndScope.All"/>.
     /// </summary>
     public DoNotDisturbSnapshot? ActiveDoNotDisturb { get; init; }
+
+    /// <summary>
+    /// The set of DND scopes active as of this context's evaluation instant (resolved on read
+    /// from the tenant's <c>dnd_windows</c> plus scheduled DND), for scoped Do Not Disturb
+    /// suppression (ADR 0004 D5). The shared <c>DndSuppressionGate</c> silences a rule when one
+    /// of these scopes covers the rule's <see cref="AlertRuleSnapshot.ScopeClass"/>. Empty when
+    /// no DND is active. Assembled live (<c>IsActiveAt(now)</c>) or, in replay, receipt-gated
+    /// (<c>WasActiveAt(T)</c>).
+    /// </summary>
+    public IReadOnlySet<DndScope> ActiveDndScopes { get; init; } = new HashSet<DndScope>();
 
     // ----- Cold-start null-suppression flags -----
     // These exist for facts where "no data yet" must be distinguished from "data is just
@@ -205,6 +216,15 @@ public record SensorContext
     /// when a rule references the <c>sleep_session_active</c> condition; false otherwise.
     /// </summary>
     public bool SleepSessionActive { get; init; }
+
+    /// <summary>
+    /// Reference timestamp of the active tracker instance per tracker definition: start
+    /// time for Duration trackers, scheduled time for Event trackers. Populated by the
+    /// enricher for every definition referenced by a <c>tracker_age</c> leaf in the rules
+    /// being evaluated. An absent key means no active instance — the leaf evaluates false.
+    /// </summary>
+    public IReadOnlyDictionary<Guid, DateTime> ActiveTrackers { get; init; }
+        = new Dictionary<Guid, DateTime>();
 }
 
 /// <summary>
@@ -450,6 +470,17 @@ public record StateSpanActiveCondition(
 public record SleepSessionActiveCondition(
     [property: JsonPropertyName("is_active")] bool IsActive);
 
+/// <summary>Tracker-age condition: minutes since the active tracker instance's reference
+/// timestamp (start for Duration trackers, scheduled time for Event trackers) compared
+/// against <see cref="Minutes"/>. Elapsed time is negative before a scheduled event, so a
+/// negative <see cref="Minutes"/> with <c>&gt;=</c> expresses "within N minutes before the
+/// event". No active instance for the definition evaluates false — a tracker that isn't
+/// running has no age (deliberately opposite to the time_since_last_* cold-start infinity).</summary>
+public record TrackerAgeCondition(
+    [property: JsonPropertyName("tracker_definition_id")] Guid TrackerDefinitionId,
+    string Operator,
+    int Minutes);
+
 /// <summary>Selects which TempBasal field a TempBasalCondition compares.</summary>
 [JsonConverter(typeof(JsonStringEnumConverter<TempBasalMetric>))]
 public enum TempBasalMetric
@@ -499,7 +530,8 @@ public record ConditionNode(
     [property: JsonPropertyName("day_of_week")] DayOfWeekCondition? DayOfWeek = null,
     [property: JsonPropertyName("pump_state")] PumpStateCondition? PumpState = null,
     [property: JsonPropertyName("state_span_active")] StateSpanActiveCondition? StateSpanActive = null,
-    [property: JsonPropertyName("sleep_session_active")] SleepSessionActiveCondition? SleepSessionActive = null
+    [property: JsonPropertyName("sleep_session_active")] SleepSessionActiveCondition? SleepSessionActive = null,
+    [property: JsonPropertyName("tracker_age")] TrackerAgeCondition? TrackerAge = null
 );
 
 /// <summary>

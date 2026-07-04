@@ -2,6 +2,7 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
+using Nocturne.API.Tests.Infrastructure;
 using Microsoft.Extensions.Options;
 using Moq;
 using Nocturne.API.Services.Platform;
@@ -168,7 +169,7 @@ public class CacheIntegrationTests
         };
 
         _mockEntryDecomposer
-            .Setup(x => x.DecomposeAsync(It.IsAny<Entry>(), It.IsAny<CancellationToken>()))
+            .Setup(x => x.DecomposeAsync(It.IsAny<Entry>(), It.IsAny<WriteOrigin>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(new Core.Models.V4.DecompositionResult());
 
         var entryService = new EntryService(
@@ -188,7 +189,7 @@ public class CacheIntegrationTests
 
         // Verify decomposition happened and events fired (cache invalidation is handled by the event sink)
         _mockEntryDecomposer.Verify(
-            x => x.DecomposeAsync(It.IsAny<Entry>(), It.IsAny<CancellationToken>()),
+            x => x.DecomposeAsync(It.IsAny<Entry>(), It.IsAny<WriteOrigin>(), It.IsAny<CancellationToken>()),
             Times.Once
         );
         _mockEntryEvents.Verify(
@@ -247,6 +248,7 @@ public class CacheIntegrationTests
             mockDbContextFactory.Object,
             httpContextAccessor,
             _mockTenantAccessor.Object,
+            TestPublicAccessCache.Create(),
             _mockStatusLogger.Object
         );
 
@@ -327,6 +329,7 @@ public class CacheIntegrationTests
             mockDbContextFactory.Object,
             httpContextAccessor,
             _mockTenantAccessor.Object,
+            TestPublicAccessCache.Create(),
             _mockStatusLogger.Object
         );
 

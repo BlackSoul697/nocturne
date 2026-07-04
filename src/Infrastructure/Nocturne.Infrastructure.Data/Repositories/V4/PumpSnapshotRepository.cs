@@ -1,9 +1,13 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
+using Nocturne.Core.Contracts.Events;
 using Nocturne.Core.Contracts.V4.Repositories;
 using Nocturne.Core.Models.V4;
+using Nocturne.Infrastructure.Data.Entities.V4;
+using Nocturne.Infrastructure.Data.Extensions;
 using Nocturne.Infrastructure.Data.Mappers.V4;
 using Nocturne.Infrastructure.Data.Services;
+using Nocturne.Core.Contracts.V4;
 
 namespace Nocturne.Infrastructure.Data.Repositories.V4;
 
@@ -14,17 +18,35 @@ public class PumpSnapshotRepository : IPumpSnapshotRepository
 {
     private readonly ITenantDbContextFactory _contextFactory;
     private readonly ILogger<PumpSnapshotRepository> _logger;
+    private readonly IV4RecordBroadcaster<PumpSnapshot>? _broadcaster;
 
     /// <summary>
     /// Initializes a new instance of the <see cref="PumpSnapshotRepository"/> class.
     /// </summary>
     /// <param name="contextFactory">The tenant database context factory.</param>
     /// <param name="logger">The logger instance.</param>
-    public PumpSnapshotRepository(ITenantDbContextFactory contextFactory, ILogger<PumpSnapshotRepository> logger)
+    /// <param name="broadcaster">Optional native V4 broadcaster; null disables broadcasting.</param>
+    public PumpSnapshotRepository(
+        ITenantDbContextFactory contextFactory,
+        ILogger<PumpSnapshotRepository> logger,
+        IV4RecordBroadcaster<PumpSnapshot>? broadcaster = null)
     {
         _contextFactory = contextFactory;
         _logger = logger;
+        _broadcaster = broadcaster;
     }
+
+    /// <summary>
+    /// Fires the native V4 broadcast for a just-committed write — but only for <see cref="WriteOrigin.Live"/>
+    /// writes (backfill imports stay silent). Mirrors the gate in <c>V4RepositoryBase.RaiseBroadcastAsync</c>.
+    /// </summary>
+    private Task RaiseBroadcastAsync(
+        IReadOnlyList<PumpSnapshot> created,
+        IReadOnlyList<PumpSnapshot> updated,
+        IReadOnlyList<Guid> deletedIds,
+        WriteOrigin origin,
+        CancellationToken ct)
+        => V4RecordBroadcast.RaiseAsync(_broadcaster, created, updated, deletedIds, origin, ct);
 
     /// <summary>
     /// Gets pump snapshot records based on filter criteria.
@@ -109,13 +131,15 @@ public class PumpSnapshotRepository : IPumpSnapshotRepository
     /// <param name="model">The pump snapshot to create.</param>
     /// <param name="ct">The cancellation token.</param>
     /// <returns>The created pump snapshot.</returns>
-    public async Task<PumpSnapshot> CreateAsync(PumpSnapshot model, CancellationToken ct = default)
+    public async Task<PumpSnapshot> CreateAsync(PumpSnapshot model, WriteOrigin origin, CancellationToken ct = default)
     {
         await using var ctx = await _contextFactory.CreateAsync(ct);
         var entity = PumpSnapshotMapper.ToEntity(model);
         ctx.PumpSnapshots.Add(entity);
         await ctx.SaveChangesAsync(ct);
-        return PumpSnapshotMapper.ToDomainModel(entity);
+        var created = PumpSnapshotMapper.ToDomainModel(entity);
+        await RaiseBroadcastAsync([created], [], [], origin, ct);
+        return created;
     }
 
     /// <summary>
@@ -125,7 +149,7 @@ public class PumpSnapshotRepository : IPumpSnapshotRepository
     /// <param name="model">The updated snapshot data.</param>
     /// <param name="ct">The cancellation token.</param>
     /// <returns>The updated pump snapshot.</returns>
-    public async Task<PumpSnapshot> UpdateAsync(Guid id, PumpSnapshot model, CancellationToken ct = default)
+    public async Task<PumpSnapshot> UpdateAsync(Guid id, PumpSnapshot model, WriteOrigin origin, CancellationToken ct = default)
     {
         await using var ctx = await _contextFactory.CreateAsync(ct);
         var entity = await ctx.PumpSnapshots.FindAsync([id], ct)
@@ -140,7 +164,7 @@ public class PumpSnapshotRepository : IPumpSnapshotRepository
     /// </summary>
     /// <param name="id">The unique identifier.</param>
     /// <param name="ct">The cancellation token.</param>
-    public async Task DeleteAsync(Guid id, CancellationToken ct = default)
+    public async Task DeleteAsync(Guid id, WriteOrigin origin, CancellationToken ct = default)
     {
         await using var ctx = await _contextFactory.CreateAsync(ct);
         var entity = await ctx.PumpSnapshots.FindAsync([id], ct)
@@ -150,7 +174,7 @@ public class PumpSnapshotRepository : IPumpSnapshotRepository
     }
 
     /// <inheritdoc />
-    public async Task<PumpSnapshot> RestoreAsync(Guid id, CancellationToken ct = default)
+    public async Task<PumpSnapshot> RestoreAsync(Guid id, WriteOrigin origin, CancellationToken ct = default)
     {
         await using var ctx = await _contextFactory.CreateAsync(ct);
         var entity = await ctx.PumpSnapshots.IgnoreQueryFilters()
@@ -163,7 +187,7 @@ public class PumpSnapshotRepository : IPumpSnapshotRepository
     }
 
     /// <inheritdoc />
-    public async Task<IEnumerable<PumpSnapshot>> BulkRestoreAsync(IEnumerable<Guid> ids, CancellationToken ct = default)
+    public async Task<IEnumerable<PumpSnapshot>> BulkRestoreAsync(IEnumerable<Guid> ids, WriteOrigin origin, CancellationToken ct = default)
     {
         await using var ctx = await _contextFactory.CreateAsync(ct);
         var idSet = ids.ToHashSet();
@@ -241,7 +265,7 @@ public class PumpSnapshotRepository : IPumpSnapshotRepository
     /// <param name="legacyId">The legacy identifier.</param>
     /// <param name="ct">The cancellation token.</param>
     /// <returns>The number of deleted records.</returns>
-    public async Task<int> DeleteByLegacyIdAsync(string legacyId, CancellationToken ct = default)
+    public async Task<int> DeleteByLegacyIdAsync(string legacyId, WriteOrigin origin, CancellationToken ct = default)
     {
         await using var ctx = await _contextFactory.CreateAsync(ct);
         return await ctx.PumpSnapshots
@@ -250,9 +274,18 @@ public class PumpSnapshotRepository : IPumpSnapshotRepository
     }
 
     /// <inheritdoc />
+    public async Task<DateTime?> GetLatestTimestampAsync(string? source = null, CancellationToken ct = default)
+    {
+        await using var ctx = await _contextFactory.CreateAsync(ct);
+        var query = ctx.PumpSnapshots.AsNoTracking();
+        if (source != null) query = query.Where(e => e.DataSource == source);
+        return await query.MaxAsync(e => (DateTime?)e.Timestamp, ct);
+    }
+
+    /// <inheritdoc />
     public async Task<IEnumerable<PumpSnapshot>> BulkCreateAsync(
         IEnumerable<PumpSnapshot> records,
-        CancellationToken ct = default)
+        WriteOrigin origin, CancellationToken ct = default)
     {
         var entities = records.Select(PumpSnapshotMapper.ToEntity).ToList();
         if (entities.Count == 0)
@@ -278,22 +311,10 @@ public class PumpSnapshotRepository : IPumpSnapshotRepository
 
             if (legacyIds.Count > 0)
             {
-                var existingRecords = await ctx.PumpSnapshots.IgnoreQueryFilters().AsNoTracking()
-                    .Where(e => e.TenantId == ctx.TenantId)
-                    .Where(e => legacyIds.Contains(e.LegacyId!))
-                    .Select(e => new { e.LegacyId, IsSoftDeleted = e.DeletedAt != null })
-                    .ToListAsync(ct);
-
-                var existingSet = existingRecords.Select(r => r.LegacyId).ToHashSet();
-                var softDeletedCount = existingRecords.Count(r => r.IsSoftDeleted);
-
-                if (softDeletedCount > 0)
-                    _logger.LogInformation(
-                        "Skipped {Count} previously-deleted {Type} records during import",
-                        softDeletedCount, "PumpSnapshot");
+                var blockedLegacyIds = await ctx.GetBlockingLegacyIdsAsync<PumpSnapshotEntity>(legacyIds, ct);
 
                 entities = entities
-                    .Where(e => string.IsNullOrEmpty(e.LegacyId) || !existingSet.Contains(e.LegacyId))
+                    .Where(e => string.IsNullOrEmpty(e.LegacyId) || !blockedLegacyIds.Contains(e.LegacyId))
                     .ToList();
             }
 
@@ -312,7 +333,10 @@ public class PumpSnapshotRepository : IPumpSnapshotRepository
             }
 
             await tx.CommitAsync(ct);
-            return entities.Select(PumpSnapshotMapper.ToDomainModel);
+
+            var created = entities.Select(PumpSnapshotMapper.ToDomainModel).ToList();
+            await RaiseBroadcastAsync(created, [], [], origin, ct);
+            return created;
         });
     }
 }

@@ -42,7 +42,6 @@
   const data = $derived({
     entries: reportsResource.current?.entries ?? [],
     boluses: reportsResource.current?.boluses ?? [],
-    carbIntakes: reportsResource.current?.carbIntakes ?? [],
     insulinDeliveryStats: reportsResource.current?.insulinDeliveryStats,
     profileSummary: reportsResource.current?.profileSummary,
     analysis: reportsResource.current?.analysis,
@@ -83,20 +82,20 @@
 </svelte:head>
 
 {#if reportsResource.current}
-<div class="@container container mx-auto px-4 py-6 space-y-8 max-w-7xl">
+<div class="@container container mx-auto space-y-8 p-3 @md:p-6 max-w-7xl">
   <!-- Header -->
   <div class="space-y-4">
     <div class="flex items-center justify-between flex-wrap gap-4">
       <div>
-        <h1 class="text-3xl font-bold flex items-center gap-3">
-          <Syringe class="w-8 h-8 text-primary" />
+        <h1 class="text-2xl @md:text-3xl font-bold flex items-center gap-3">
+          <Syringe class="w-6 h-6 @md:w-8 @md:h-8 text-primary" />
           Insulin Dosing Profile
         </h1>
         <p class="text-muted-foreground mt-1">
           Comprehensive insulin delivery analysis with glucose context
         </p>
       </div>
-      <div class="flex items-center gap-2">
+      <div class="flex items-center gap-2 print:hidden">
         <Button
           variant="outline"
           size="sm"
@@ -229,7 +228,7 @@
           {@const tir = analysis.timeInRange?.percentages ?? {}}
 
           <!-- Average, GMI, CV -->
-          <div class="grid grid-cols-3 gap-4 text-center">
+          <div class="grid grid-cols-3 gap-2 @sm:gap-4 text-center">
             <div>
               <div class="text-2xl font-bold">{stats.mean ? bg(stats.mean) : "--"}</div>
               <div class="text-xs text-muted-foreground">Average</div>
@@ -254,7 +253,7 @@
           <!-- TIR Horizontal Stacked Bar -->
           <div class="space-y-2">
             <div class="text-sm font-medium">Time in Range</div>
-            <div class="h-32">
+            <div class="h-32 w-full">
               <TIRStackedChart percentages={tir} orientation="horizontal" />
             </div>
           </div>
@@ -285,7 +284,7 @@
         </CardDescription>
       </CardHeader>
       <CardContent>
-        <div class="grid grid-cols-2 gap-4 text-sm">
+        <div class="grid grid-cols-1 @xs:grid-cols-2 gap-4 text-sm">
           <div>
             <div class="text-muted-foreground">CGM</div>
             <div class="font-semibold text-lg">{aidMetrics?.cgmDeviceNames ?? '--'}</div>
@@ -350,20 +349,20 @@
     </CardHeader>
     <CardContent class="space-y-6">
       <!-- AGP -->
-      <div class="h-80 @2xl:h-96">
+      <div class="h-80 w-full @2xl:h-96">
         <AmbulatoryGlucoseProfile averagedStats={data.averagedStats} />
       </div>
 
       <!-- Scheduled Basal Rate -->
       <div>
         <h4 class="text-sm font-semibold text-muted-foreground mb-1">Scheduled Basal Rate</h4>
-        <div class="h-24">
+        <div class="h-24 w-full">
           <ScheduledBasalRateChart entries={data.profileSummary?.basalSchedules?.[0]?.entries ?? []} />
         </div>
       </div>
 
       <!-- User-Initiated Boluses Per Day -->
-      <div>
+      <div class="w-full">
         <h4 class="text-sm font-semibold text-muted-foreground mb-1">User-Initiated Boluses Per Day</h4>
         <HourlyBolusChart {boluses} {dayCount} />
       </div>

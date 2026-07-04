@@ -6,7 +6,6 @@
     ConnectorStatusInfo,
     ConnectorDataSummary,
     ConnectorCapabilities,
-    ServicesOverview,
     SyncResult,
   } from "$lib/api/generated/nocturne-api-client";
   import {
@@ -38,6 +37,7 @@
   import { Switch } from "$lib/components/ui/switch";
   import { Label } from "$lib/components/ui/label";
   import ConnectorConfigForm from "$lib/components/settings/ConnectorConfigForm.svelte";
+  import CareLinkConnectPanel from "$lib/components/connectors/CareLinkConnectPanel.svelte";
   import SettingsPageSkeleton from "$lib/components/settings/SettingsPageSkeleton.svelte";
 
   import {
@@ -107,7 +107,7 @@
   const statusQuery = getAllConnectorStatus();
 
   // --- Derived data from queries ---
-  const servicesOverview = $derived(servicesOverviewQuery.current);
+  const servicesOverview = $derived(servicesOverviewQuery.current ?? null);
 
   const connectorInfo = $derived(
     activeId && servicesOverview
@@ -139,6 +139,19 @@
   // --- User-editable state ---
   let configuration = $state<Record<string, unknown>>({});
   let secrets = $state<Record<string, string>>({});
+
+  // CareLink uses a browser-based sign-in (manual-paste OAuth) instead of a stored password.
+  const isCareLink = $derived(connectorInfo?.id?.toLowerCase() === "carelink");
+
+  function onCareLinkConnected(info: { username?: string | null; country?: string | null }) {
+    // Auto-fill identity the sign-in discovered, without clobbering anything already set.
+    if (info.username && !configuration.username) {
+      configuration = { ...configuration, username: info.username };
+    }
+    if (info.country && !configuration.countryCode) {
+      configuration = { ...configuration, countryCode: info.country.toLowerCase() };
+    }
+  }
   let syncResult = $state<SyncResult | null>(null);
 
   // --- UI state ---
@@ -319,14 +332,14 @@
   {:else if connectorInfo && schema}
     <div class="space-y-6">
       <!-- Header -->
-      <div class="flex items-start justify-between">
-        <div>
+      <div class="flex items-start justify-between gap-4">
+        <div class="min-w-0">
           <h2 class="text-2xl font-bold tracking-tight">{displayName}</h2>
           {#if connectorInfo.description}
             <p class="text-muted-foreground">{connectorInfo.description}</p>
           {/if}
         </div>
-        <Badge variant={isActive ? "default" : "secondary"}>
+        <Badge variant={isActive ? "default" : "secondary"} class="shrink-0">
           {isActive ? "Active" : "Inactive"}
         </Badge>
       </div>
@@ -368,8 +381,8 @@
       <!-- Enable/Disable Toggle -->
       {#if showToggle}
         <Card>
-          <CardContent class="flex items-center justify-between py-4">
-            <div class="space-y-0.5">
+          <CardContent class="flex items-center justify-between gap-4 py-4">
+            <div class="space-y-0.5 min-w-0">
               <Label class="text-base">Enable Connector</Label>
               <p class="text-sm text-muted-foreground">
                 When enabled, the connector will actively sync data
@@ -377,11 +390,16 @@
             </div>
             <Switch
               checked={isActive}
-              onCheckedChange={(checked) => handleToggleActive(checked)}
+              onCheckedChange={(checked: boolean) => handleToggleActive(checked)}
               disabled={isSaving}
             />
           </CardContent>
         </Card>
+      {/if}
+
+      <!-- CareLink browser-based sign-in -->
+      {#if isCareLink}
+        <CareLinkConnectPanel onConnected={onCareLinkConnected} />
       {/if}
 
       <!-- Configuration Form -->
@@ -436,8 +454,8 @@
             </CardDescription>
           </CardHeader>
           <CardContent class="space-y-3">
-            <div class="flex items-center justify-between">
-              <span class="text-sm text-muted-foreground"
+            <div class="flex items-center justify-between gap-4">
+              <span class="shrink-0 text-sm text-muted-foreground"
                 >Supported data types</span
               >
               <div class="flex flex-wrap gap-1 justify-end">
@@ -452,7 +470,7 @@
                 {/if}
               </div>
             </div>
-            <div class="flex items-center justify-between">
+            <div class="flex items-center justify-between gap-4">
               <span class="text-sm text-muted-foreground"
                 >Historical sync</span
               >
@@ -468,7 +486,7 @@
               </Badge>
             </div>
             {#if connectorCapabilities.maxHistoricalDays}
-              <div class="flex items-center justify-between">
+              <div class="flex items-center justify-between gap-4">
                 <span class="text-sm text-muted-foreground"
                   >Max historical days</span
                 >
@@ -477,7 +495,7 @@
                 </span>
               </div>
             {/if}
-            <div class="flex items-center justify-between">
+            <div class="flex items-center justify-between gap-4">
               <span class="text-sm text-muted-foreground">Manual sync</span>
               <Badge
                 variant={connectorCapabilities.supportsManualSync

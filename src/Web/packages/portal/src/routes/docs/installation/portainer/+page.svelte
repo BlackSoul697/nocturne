@@ -1,14 +1,21 @@
 <script lang="ts">
     import NextSteps from "$lib/components/docs/NextSteps.svelte";
     import PasswordGenerator from "$lib/components/docs/PasswordGenerator.svelte";
-    import CopyButton from "$lib/components/docs/CopyButton.svelte";
+    import CodeBlock from "$lib/components/docs/CodeBlock.svelte";
     import { Info } from "@lucide/svelte";
 
     const templateUrl = "https://raw.githubusercontent.com/nightscout/nocturne/main/deploy/portainer/templates.json";
 </script>
 
 <div class="max-w-3xl">
-    <h1 class="text-4xl font-bold tracking-tight mb-4">Portainer</h1>
+    <div class="flex items-center gap-4 mb-4">
+        <img
+            src="/logos/portainer.jpg"
+            alt="Portainer"
+            class="w-12 h-12 rounded-lg object-cover shrink-0"
+        />
+        <h1 class="text-4xl font-bold tracking-tight">Portainer</h1>
+    </div>
     <p class="text-lg text-muted-foreground mb-8">
         Deploy Nocturne using the Portainer web interface. No command-line access required.
     </p>
@@ -17,7 +24,14 @@
     <ul class="list-disc list-inside space-y-2 text-muted-foreground mb-8">
         <li>A running Portainer instance (Community or Business Edition)</li>
         <li>Docker Engine 24+ and Docker Compose 2.23.1+</li>
-        <li>A domain name (recommended) or static IP address</li>
+        <li>
+            A domain with a DNS <strong>A</strong> record pointing at your server
+            (<code class="text-xs bg-muted/50 px-1.5 py-0.5 rounded">example.com</code>),
+            plus a wildcard <strong>A</strong> record
+            (<code class="text-xs bg-muted/50 px-1.5 py-0.5 rounded">*.example.com</code>)
+            to run more than one tenant.
+        </li>
+        <li>Ports <strong>80</strong> and <strong>443</strong> open to the internet for automatic TLS certificates.</li>
     </ul>
 
     <h2 class="text-2xl font-bold mt-8 mb-4">Option 1: App Template (recommended)</h2>
@@ -31,12 +45,7 @@
         In Portainer, go to <strong class="text-foreground">Settings → App Templates</strong> and
         set the URL to:
     </p>
-    <div class="flex items-center gap-2 rounded-lg bg-muted/50 border border-border/60 mb-4">
-        <pre class="flex-1 p-3 text-sm overflow-x-auto"><code>{templateUrl}</code></pre>
-        <div class="mr-3">
-            <CopyButton text={templateUrl} label="Copy URL to clipboard" />
-        </div>
-    </div>
+    <CodeBlock code={templateUrl} class="mb-4" />
     <p class="text-muted-foreground mb-8">
         Click <strong class="text-foreground">Save settings</strong>.
     </p>
@@ -110,8 +119,11 @@
         container to view its logs and check for errors.
     </p>
     <p class="text-muted-foreground mb-8">
-        Once running, the stack is accessible on port
-        <code class="text-xs bg-muted/50 px-1.5 py-0.5 rounded">8080</code> of your host.
+        Once running, the bundled Caddy proxy obtains Let's Encrypt TLS certificates
+        automatically and serves the stack at
+        <code class="text-xs bg-muted/50 px-1.5 py-0.5 rounded">https://your-domain</code>
+        on ports 80 and 443 — no certificate files to manage. Each tenant subdomain
+        gets its own certificate on demand the first time it is visited.
     </p>
 
     <h2 class="text-2xl font-bold mt-8 mb-4">Updating</h2>

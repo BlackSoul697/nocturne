@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Nocturne.API.Attributes;
 using Nocturne.API.Authorization;
+using Nocturne.Core.Models.Authorization;
 using Nocturne.API.Services.Devices;
 using Nocturne.Core.Contracts.Effects;
 using Nocturne.Core.Contracts.Events;
@@ -185,6 +186,7 @@ public class DeviceStatusController : BaseV3Controller<DeviceStatus>
     /// <returns>Created device status records</returns>
     [HttpPost]
     [Authorize]
+    [RequireScope(OAuthScopes.DevicesReadWrite)]
     [NightscoutEndpoint("/api/v3/devicestatus")]
     [ProducesResponseType(typeof(DeviceStatus[]), 201)]
     [ProducesResponseType(typeof(V3ErrorResponse), 400)]
@@ -272,7 +274,8 @@ public class DeviceStatusController : BaseV3Controller<DeviceStatus>
             var projectedResults = new List<DeviceStatus>();
             foreach (var ds in recordsList)
             {
-                await _decomposer.DecomposeAsync(ds, cancellationToken);
+                // Direct v3 upload has no connector data source; a live upload broadcasts.
+                await _decomposer.DecomposeAsync(ds, source: null, WriteOrigin.Live, cancellationToken);
 
                 // Project the V4 snapshots back to DeviceStatus shape for the response
                 var projected = ds;
@@ -324,6 +327,7 @@ public class DeviceStatusController : BaseV3Controller<DeviceStatus>
     /// <returns>Updated device status record</returns>
     [HttpPut("{id}")]
     [Authorize]
+    [RequireScope(OAuthScopes.DevicesReadWrite)]
     [NightscoutEndpoint("/api/v3/devicestatus/{id}")]
     [ProducesResponseType(typeof(Dictionary<string, object>), 200)]
     [ProducesResponseType(typeof(V3ErrorResponse), 400)]
@@ -383,8 +387,9 @@ public class DeviceStatusController : BaseV3Controller<DeviceStatus>
             }
 
             // Delete old V4 records by legacy ID, then decompose the updated DeviceStatus
-            await _decomposer.DeleteByLegacyIdAsync(id, cancellationToken);
-            await _decomposer.DecomposeAsync(deviceStatus, cancellationToken);
+            await _decomposer.DeleteByLegacyIdAsync(id, WriteOrigin.Live, cancellationToken);
+            // Direct v3 update has no connector data source; a live update broadcasts.
+            await _decomposer.DecomposeAsync(deviceStatus, source: null, WriteOrigin.Live, cancellationToken);
 
             // Project the V4 snapshots back to DeviceStatus shape for the response
             var updated = await _projection.GetByIdAsync(id, cancellationToken) ?? deviceStatus;
@@ -422,6 +427,7 @@ public class DeviceStatusController : BaseV3Controller<DeviceStatus>
     /// <returns>No content on success</returns>
     [HttpDelete("{id}")]
     [Authorize]
+    [RequireScope(OAuthScopes.FullAccess)]
     [NightscoutEndpoint("/api/v3/devicestatus/{id}")]
     [ProducesResponseType(204)]
     [ProducesResponseType(typeof(V3ErrorResponse), 404)]
@@ -443,7 +449,7 @@ public class DeviceStatusController : BaseV3Controller<DeviceStatus>
             var deviceStatusToDelete = await _projection.GetByIdAsync(id, cancellationToken);
 
             // Delete V4 snapshot records by legacy ID
-            var deleted = await _decomposer.DeleteByLegacyIdAsync(id, cancellationToken);
+            var deleted = await _decomposer.DeleteByLegacyIdAsync(id, WriteOrigin.Live, cancellationToken);
 
             if (deleted == 0 && deviceStatusToDelete == null)
             {

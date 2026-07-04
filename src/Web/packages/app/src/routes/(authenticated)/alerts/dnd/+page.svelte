@@ -19,6 +19,7 @@
     CardDescription,
   } from "$lib/components/ui/card";
   import { ArrowLeft, BellOff, Save, Loader2 } from "lucide-svelte";
+  import { EditorActionBar } from "$lib/components/layout";
 
   const dndQuery = getDnd();
 
@@ -35,7 +36,7 @@
   // Convert a UTC ISO string into a `datetime-local` input value (YYYY-MM-
   // DDTHH:mm) in the *browser's* local zone — keeps the form usable without
   // re-implementing tz conversion. The save path round-trips back to UTC.
-  function isoToLocal(iso: string | null | undefined): string {
+  function isoToLocal(iso: string | Date | null | undefined): string {
     if (!iso) return "";
     const d = new Date(iso);
     if (Number.isNaN(d.getTime())) return "";
@@ -92,9 +93,9 @@
   <title>Do Not Disturb · Alerts · Nocturne</title>
 </svelte:head>
 
-<div class="container mx-auto max-w-3xl p-4 lg:p-6 space-y-6">
-  <div class="flex items-center justify-between gap-2">
-    <div class="flex items-center gap-2">
+<div class="@container container mx-auto max-w-3xl p-3 @md:p-6 space-y-6 max-md:pb-24">
+  <EditorActionBar>
+    {#snippet leading()}
       <Button
         type="button"
         variant="ghost"
@@ -112,16 +113,18 @@
           Suppress non-critical alerts. Critical-severity rules and rules opted in via "Allow through DND" still fire.
         </p>
       </div>
-    </div>
-    <Button onclick={save} disabled={saving || !seeded}>
-      {#if saving}
-        <Loader2 class="h-4 w-4 mr-2 animate-spin" />
-      {:else}
-        <Save class="h-4 w-4 mr-2" />
-      {/if}
-      Save
-    </Button>
-  </div>
+    {/snippet}
+    {#snippet actions()}
+      <Button class="shrink-0" onclick={save} disabled={saving || !seeded}>
+        {#if saving}
+          <Loader2 class="h-4 w-4 mr-2 animate-spin" />
+        {:else}
+          <Save class="h-4 w-4 mr-2" />
+        {/if}
+        Save
+      </Button>
+    {/snippet}
+  </EditorActionBar>
 
   {#if error}
     <div class="rounded-md border border-destructive/40 bg-destructive/5 p-3 text-sm text-destructive">{error}</div>
@@ -138,7 +141,7 @@
         <Switch
           id="dnd-manual"
           checked={dndManualActive}
-          onCheckedChange={(c) => (dndManualActive = c)}
+          onCheckedChange={(c: boolean) => (dndManualActive = c)}
         />
       </div>
       {#if dndManualActive}
@@ -148,7 +151,8 @@
             id="dnd-until"
             type="datetime-local"
             value={dndManualUntilLocal}
-            oninput={(e) => (dndManualUntilLocal = e.currentTarget.value)}
+            oninput={(e: Event & { currentTarget: HTMLInputElement }) =>
+              (dndManualUntilLocal = e.currentTarget.value)}
           />
           <p class="text-xs text-muted-foreground">Leave blank to keep DND on indefinitely.</p>
         </div>
@@ -167,18 +171,19 @@
         <Switch
           id="dnd-schedule"
           checked={dndScheduleEnabled}
-          onCheckedChange={(c) => (dndScheduleEnabled = c)}
+          onCheckedChange={(c: boolean) => (dndScheduleEnabled = c)}
         />
       </div>
       {#if dndScheduleEnabled}
-        <div class="grid gap-4 sm:grid-cols-2">
+        <div class="grid gap-4 @sm:grid-cols-2">
           <div class="space-y-2">
             <Label for="dnd-start">From</Label>
             <Input
               id="dnd-start"
               type="time"
               value={dndScheduleStart}
-              oninput={(e) => (dndScheduleStart = e.currentTarget.value)}
+              oninput={(e: Event & { currentTarget: HTMLInputElement }) =>
+                (dndScheduleStart = e.currentTarget.value)}
             />
           </div>
           <div class="space-y-2">
@@ -187,7 +192,8 @@
               id="dnd-end"
               type="time"
               value={dndScheduleEnd}
-              oninput={(e) => (dndScheduleEnd = e.currentTarget.value)}
+              oninput={(e: Event & { currentTarget: HTMLInputElement }) =>
+                (dndScheduleEnd = e.currentTarget.value)}
             />
           </div>
         </div>

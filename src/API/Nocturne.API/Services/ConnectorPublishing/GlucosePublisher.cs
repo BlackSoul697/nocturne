@@ -1,6 +1,8 @@
 using Microsoft.EntityFrameworkCore;
+using Nocturne.API.Services.Audit;
 using Nocturne.Connectors.Core.Interfaces;
 using Nocturne.Core.Constants;
+using Nocturne.Core.Contracts.Audit;
 using Nocturne.Core.Contracts.Glucose;
 using Nocturne.Core.Contracts.Alerts;
 using Nocturne.Core.Contracts.Multitenancy;
@@ -8,6 +10,7 @@ using Nocturne.Core.Contracts.V4.Repositories;
 using Nocturne.Core.Models;
 using Nocturne.Core.Models.V4;
 using Nocturne.Infrastructure.Data;
+using Nocturne.Core.Contracts.V4;
 
 namespace Nocturne.API.Services.ConnectorPublishing;
 
@@ -25,6 +28,7 @@ internal sealed class GlucosePublisher : IGlucosePublisher
     private readonly IDbContextFactory<NocturneDbContext> _contextFactory;
     private readonly ITenantAccessor _tenantAccessor;
     private readonly IAlertOrchestrator _alertOrchestrator;
+    private readonly IAuditContext _auditContext;
     private readonly ILogger<GlucosePublisher> _logger;
 
     public GlucosePublisher(
@@ -34,6 +38,7 @@ internal sealed class GlucosePublisher : IGlucosePublisher
         IDbContextFactory<NocturneDbContext> contextFactory,
         ITenantAccessor tenantAccessor,
         IAlertOrchestrator alertOrchestrator,
+        IAuditContext auditContext,
         ILogger<GlucosePublisher> logger)
     {
         _entryService = entryService ?? throw new ArgumentNullException(nameof(entryService));
@@ -42,13 +47,14 @@ internal sealed class GlucosePublisher : IGlucosePublisher
         _contextFactory = contextFactory ?? throw new ArgumentNullException(nameof(contextFactory));
         _tenantAccessor = tenantAccessor ?? throw new ArgumentNullException(nameof(tenantAccessor));
         _alertOrchestrator = alertOrchestrator ?? throw new ArgumentNullException(nameof(alertOrchestrator));
+        _auditContext = auditContext;
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
     }
 
     public async Task<bool> PublishEntriesAsync(
         IEnumerable<Entry> entries,
         string source,
-        CancellationToken cancellationToken = default)
+        WriteOrigin origin, CancellationToken cancellationToken = default)
     {
         try
         {
@@ -69,7 +75,7 @@ internal sealed class GlucosePublisher : IGlucosePublisher
     public async Task<bool> PublishSensorGlucoseAsync(
         IEnumerable<SensorGlucose> records,
         string source,
-        CancellationToken cancellationToken = default)
+        WriteOrigin origin, CancellationToken cancellationToken = default)
     {
         try
         {
@@ -77,7 +83,8 @@ internal sealed class GlucosePublisher : IGlucosePublisher
             if (recordList.Count == 0) return true;
 
             await StampPatientDeviceIdsAsync(recordList, source, cancellationToken);
-            await _sensorGlucoseRepository.BulkCreateAsync(recordList, cancellationToken);
+            using (SystemAuditScope.Push(_auditContext))
+                await _sensorGlucoseRepository.BulkCreateAsync(recordList, origin, cancellationToken);
             await UpdateLastReadingAtAsync(cancellationToken);
             await EvaluateAlertsForSensorGlucoseAsync(recordList, cancellationToken);
 
