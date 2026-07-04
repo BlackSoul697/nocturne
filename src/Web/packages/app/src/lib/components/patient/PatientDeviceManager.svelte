@@ -108,6 +108,9 @@
 
   const activeForm = $derived(editing?.id ? deviceList.updateForm : deviceList.createForm);
   const dialogSaving = $derived(!!deviceList.createForm.pending || !!deviceList.updateForm.pending);
+  // updateDevice's schema is { id, request: PatientDeviceSchema } — fields must nest under "request."
+  // for SvelteKit's dot-path form parsing; createDevice's schema is flat.
+  const namePrefix = $derived(editing?.id ? "request." : "");
 
   function openDialog(device?: PatientDevice) {
     if (device) {
@@ -482,7 +485,7 @@
         <div class="@container space-y-4 py-4">
           <div class="space-y-2">
             <Label for="device-category">Category</Label>
-            <Select.Root type="single" name="deviceCategory" bind:value={deviceCategory}>
+            <Select.Root type="single" name="{namePrefix}deviceCategory" bind:value={deviceCategory}>
               <Select.Trigger id="device-category">
                 {deviceCategoryLabels[deviceCategory as DeviceCategory] ?? deviceCategory}
               </Select.Trigger>
@@ -498,7 +501,7 @@
             <div class="space-y-2">
               <Label for="device-manufacturer">Manufacturer</Label>
               <Input
-                name="manufacturer"
+                name="{namePrefix}manufacturer"
                 id="device-manufacturer"
                 bind:value={deviceManufacturer}
                 placeholder="e.g. Medtronic, Dexcom"
@@ -507,7 +510,7 @@
             <div class="space-y-2">
               <Label for="device-model">Model</Label>
               <Input
-                name="model"
+                name="{namePrefix}model"
                 id="device-model"
                 bind:value={deviceModel}
                 placeholder="e.g. 780G, G7"
@@ -518,7 +521,7 @@
           {#if showAidAlgorithm}
             <div class="space-y-2">
               <Label for="device-aid">AID Algorithm</Label>
-              <Select.Root type="single" name="aidAlgorithm" bind:value={deviceAidAlgorithm}>
+              <Select.Root type="single" name="{namePrefix}aidAlgorithm" bind:value={deviceAidAlgorithm}>
                 <Select.Trigger id="device-aid">
                   {deviceAidAlgorithm
                     ? (aidAlgorithmLabels[deviceAidAlgorithm as AidAlgorithm] ?? deviceAidAlgorithm)
@@ -536,7 +539,7 @@
           <div class="space-y-2">
             <Label for="device-serial">Serial Number</Label>
             <Input
-              name="serialNumber"
+              name="{namePrefix}serialNumber"
               id="device-serial"
               bind:value={deviceSerialNumber}
               placeholder="Optional"
@@ -547,7 +550,7 @@
             <div class="space-y-2">
               <Label for="device-start">Start Date</Label>
               <Input
-                name="startDate"
+                name="{namePrefix}startDate"
                 id="device-start"
                 type="date"
                 bind:value={deviceStartDate}
@@ -556,7 +559,7 @@
             <div class="space-y-2">
               <Label for="device-end">End Date</Label>
               <Input
-                name="endDate"
+                name="{namePrefix}endDate"
                 id="device-end"
                 type="date"
                 bind:value={deviceEndDate}
@@ -568,7 +571,7 @@
             <input
               id="device-current"
               type="checkbox"
-              name="isCurrent"
+              name="{namePrefix}isCurrent"
               bind:checked={deviceIsCurrent}
               class="h-4 w-4 rounded border-input"
             />
@@ -578,13 +581,17 @@
           <div class="space-y-2">
             <Label for="device-notes">Notes</Label>
             <Textarea
-              name="notes"
+              name="{namePrefix}notes"
               id="device-notes"
               bind:value={deviceNotes}
               placeholder="Any additional notes about this device"
               rows={2}
             />
           </div>
+
+          {#each activeForm.fields.allIssues() as issue}
+            <p class="text-sm text-destructive">{issue.message}</p>
+          {/each}
         </div>
 
         <Dialog.Footer>

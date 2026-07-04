@@ -4,14 +4,11 @@
 	import { Switch } from '$lib/components/ui/switch';
 	import { Label } from '$lib/components/ui/label';
 	import { Select, SelectContent, SelectItem, SelectTrigger } from '$lib/components/ui/select';
-	import { Moon, Activity, AlertCircle, Globe, ChevronRight } from 'lucide-svelte';
+	import { Moon, Activity, AlertCircle, Globe, Weight, ChevronRight } from 'lucide-svelte';
 	import SettingsPageSkeleton from '$lib/components/settings/SettingsPageSkeleton.svelte';
 	import { resolve } from '$app/paths';
 
 	const store = getSettingsStore();
-
-	const detectedTimezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
-	const timezones = Intl.supportedValuesOf('timeZone');
 
 	// Hour options for bedtime (evening hours)
 	const bedtimeHours = [
@@ -81,37 +78,6 @@
 				</CardDescription>
 			</CardHeader>
 			<CardContent class="space-y-6">
-				<div class="space-y-2">
-					<Label class="flex items-center gap-1.5">
-						<Globe class="h-4 w-4" />
-						Timezone
-					</Label>
-					<Select
-						type="single"
-						value={store.dataQuality.sleepSchedule?.timezone || detectedTimezone}
-						onValueChange={(value) => {
-							if (store.dataQuality?.sleepSchedule) {
-								store.dataQuality.sleepSchedule.timezone = value;
-								store.markChanged();
-							}
-						}}
-					>
-						<SelectTrigger class="w-full">
-							{store.dataQuality.sleepSchedule?.timezone || detectedTimezone}
-						</SelectTrigger>
-						<SelectContent class="max-h-60">
-							{#each timezones as tz}
-								<SelectItem value={tz}>{tz.replaceAll('_', ' ')}</SelectItem>
-							{/each}
-						</SelectContent>
-					</Select>
-					{#if !store.dataQuality.sleepSchedule?.timezone}
-						<p class="text-sm text-muted-foreground">
-							Detected from your browser. Save to confirm.
-						</p>
-					{/if}
-				</div>
-
 				<div class="grid gap-4 @sm:grid-cols-2">
 					<div class="space-y-2">
 						<Label>Typical bedtime</Label>
@@ -231,6 +197,26 @@
 						<p class="font-medium">Timezone History</p>
 						<p class="text-sm text-muted-foreground">
 							Where you've lived and travelled, for correct timestamps.
+						</p>
+					</div>
+					<ChevronRight
+						class="h-4 w-4 shrink-0 text-muted-foreground transition-transform group-hover:translate-x-0.5"
+					/>
+				</CardContent>
+			</Card>
+		</a>
+
+		<!-- Weight History (lives under Data Quality — same pattern as Timezone History) -->
+		<a href={resolve('/settings/weight')} class="group block">
+			<Card class="transition-colors hover:border-primary/40 hover:bg-muted/40">
+				<CardContent class="flex items-center gap-4 p-4">
+					<div class="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-primary/10">
+						<Weight class="h-5 w-5 text-primary" />
+					</div>
+					<div class="min-w-0 flex-1">
+						<p class="font-medium">Weight History</p>
+						<p class="text-sm text-muted-foreground">
+							Your recorded weights over time.
 						</p>
 					</div>
 					<ChevronRight

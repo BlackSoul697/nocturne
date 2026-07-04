@@ -47,6 +47,9 @@ export class ClinicalState {
   readonly #record = patientRemote.getPatientRecord();
   readonly form = patientRemote.updatePatientRecord;
   readonly guard: FormGuard<z.infer<typeof ClinicalFieldsSchema>>;
+  /** Weight isn't a PatientRecord field — it's saved to the BodyWeight history alongside the
+  clinical form, driven by the same Save button. */
+  readonly weight = new WeightState();
 
   /** Expose record for hidden form inputs (id, createdAt, etc.) */
   get record() { return this.#record.current; }
@@ -163,11 +166,16 @@ export class InsulinListState {
   };
 }
 
-/** Reactive weight state for initial body weight entry */
+/** Reactive weight state backed by the BodyWeight history (there's no "current weight" field on
+PatientRecord — the latest BodyWeight entry *is* the current weight). Bound to a plain input the
+user can freely retype; `save()` only fires on explicit commit (e.g. the clinical form's Save
+button) and only inserts a new history entry when the value actually changed, so typing "75",
+backspacing, and retyping "75" doesn't create a run of spurious same-day weight changes. */
 export class WeightState {
   weightKg = $state("");
   saving = $state(false);
   saveError = $state<string | null>(null);
+  #initialWeightKg = $state("");
 
   readonly #existing = getBodyWeights({ count: 1, skip: 0 });
 
@@ -175,13 +183,19 @@ export class WeightState {
     $effect(() => {
       const records = this.#existing.current;
       if (records && records.length > 0) {
-        this.weightKg = String(records[0].weightKg ?? "");
+        const kg = String(records[0].weightKg ?? "");
+        this.weightKg = kg;
+        this.#initialWeightKg = kg;
       }
     });
   }
 
+  get dirty(): boolean {
+    return this.weightKg.trim() !== this.#initialWeightKg;
+  }
+
   save = async (): Promise<boolean> => {
-    if (!this.weightKg) return true;
+    if (!this.dirty || !this.weightKg) return true;
     this.saving = true;
     this.saveError = null;
     try {
@@ -189,6 +203,7 @@ export class WeightState {
         weightKg: Number(this.weightKg),
         mills: Date.now(),
       });
+      this.#initialWeightKg = this.weightKg;
       return true;
     } catch {
       this.saveError = "Failed to save weight. Please try again.";

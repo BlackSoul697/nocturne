@@ -140,6 +140,9 @@
 
   const activeForm = $derived(editing?.id ? insulinList.updateForm : insulinList.createForm);
   const dialogSaving = $derived(!!insulinList.createForm.pending || !!insulinList.updateForm.pending);
+  // updateInsulin's schema is { id, request: PatientInsulinSchema } — fields must nest under
+  // "request." for SvelteKit's dot-path form parsing; createInsulin's schema is flat.
+  const namePrefix = $derived(editing?.id ? "request." : "");
 
   function onDialogCategoryChange() {
     insulinFormulationId = "";
@@ -426,6 +429,7 @@
         {/if}
         <div class="space-y-4 py-4">
           <InsulinFormFields
+            {namePrefix}
             bind:category={insulinCategory}
             bind:formulationId={insulinFormulationId}
             bind:name={insulinName}
@@ -446,13 +450,17 @@
           />
 
           <!-- Hidden fields for form submission -->
-          <input type="hidden" name="n:dia" value={insulinDia} />
-          <input type="hidden" name="n:peak" value={insulinPeak} />
-          <input type="hidden" name="curve" value={insulinCurve} />
-          <input type="hidden" name="n:concentration" value={insulinConcentration} />
+          <input type="hidden" name="n:{namePrefix}dia" value={insulinDia} />
+          <input type="hidden" name="n:{namePrefix}peak" value={insulinPeak} />
+          <input type="hidden" name="{namePrefix}curve" value={insulinCurve} />
+          <input type="hidden" name="n:{namePrefix}concentration" value={insulinConcentration} />
           {#if insulinFormulationId}
-            <input type="hidden" name="formulationId" value={insulinFormulationId} />
+            <input type="hidden" name="{namePrefix}formulationId" value={insulinFormulationId} />
           {/if}
+
+          {#each activeForm.fields.allIssues() as issue}
+            <p class="text-sm text-destructive">{issue.message}</p>
+          {/each}
         </div>
 
         <Dialog.Footer>
