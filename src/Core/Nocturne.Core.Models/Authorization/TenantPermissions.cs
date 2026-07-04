@@ -77,6 +77,30 @@ public static class TenantPermissions
     /// <summary>Permission to manage audit settings (retention, export).</summary>
     public const string AuditManage = "audit.manage";
 
+    // Client devices
+    //
+    // Capability grants for the member's own registered client devices (Prelude, the desktop
+    // Companion) — the alert engine drives the member's device, not the patient's hardware.
+    // Mirror OAuthScopes.DeviceNotify / OAuthScopes.DeviceActuate.
+
+    /// <summary>Allows the alert engine to push notifications to the member's registered client devices.</summary>
+    public const string DeviceNotify = "device.notify";
+    /// <summary>Allows the alert engine to actuate hardware (sound, torch, vibration) on the member's registered client devices.</summary>
+    public const string DeviceActuate = "device.actuate";
+
+    /// <summary>
+    /// Member-personal capability scopes. These authorize the alert engine to drive the member's
+    /// OWN registered client devices (rows are RLS-scoped to the member's subject), not access to
+    /// the patient record, so <c>MemberScopeMiddleware</c> exempts them from the role-permission
+    /// intersection for any member holding at least one permission. See the note on
+    /// <see cref="SeedRolePermissions"/> for why enforcement cannot rely on role rows.
+    /// </summary>
+    public static readonly IReadOnlySet<string> MemberPersonalScopes = new HashSet<string>
+    {
+        DeviceNotify,
+        DeviceActuate,
+    };
+
     // Superuser
 
     /// <summary>Superuser permission that satisfies all other permissions.</summary>
@@ -105,6 +129,8 @@ public static class TenantPermissions
         SharingGuest,
         AuditRead,
         AuditManage,
+        DeviceNotify,
+        DeviceActuate,
     ];
 
     /// <summary>
@@ -138,7 +164,14 @@ public static class TenantPermissions
     }
 
     /// <summary>
-    /// Default permissions for each seed role.
+    /// Default permissions for each seed role. Every authenticated human role lists the
+    /// <see cref="DeviceNotify"/>/<see cref="DeviceActuate"/> capability grants — they control the
+    /// member's own registered client devices, not the patient record — so the role editor shows
+    /// them as part of the role's surface for new tenants. Enforcement does NOT depend on these
+    /// atoms: seed roles are persisted per-tenant rows and <c>SeedRolesForTenantAsync</c> skips
+    /// slugs that already exist, so tenants seeded before an atom was added never receive it.
+    /// <c>MemberScopeMiddleware</c> therefore grants <see cref="MemberPersonalScopes"/> from the
+    /// auth token alone (for members holding at least one permission).
     /// </summary>
     public static readonly Dictionary<string, List<string>> SeedRolePermissions = new()
     {
@@ -152,6 +185,7 @@ public static class TenantPermissions
             IdentityRead,
             MembersInvite, MembersManage, TenantSettings, RolesManage, SharingManage, SharingGuest,
             AuditRead,
+            DeviceNotify, DeviceActuate,
         ],
         [SeedRoles.Caretaker] =
         [
@@ -159,6 +193,7 @@ public static class TenantPermissions
             FoodRead, HeartRateRead, StepCountRead,
             ReportsRead,
             TherapyRead, AlertsReadWrite,
+            DeviceNotify, DeviceActuate,
         ],
         [SeedRoles.Clinician] =
         [
@@ -166,8 +201,9 @@ public static class TenantPermissions
             FoodRead, HeartRateRead, StepCountRead,
             ReportsRead,
             TherapyRead, AlertsRead,
+            DeviceNotify, DeviceActuate,
         ],
-        [SeedRoles.Viewer] = [GlucoseRead, ReportsRead],
+        [SeedRoles.Viewer] = [GlucoseRead, ReportsRead, DeviceNotify, DeviceActuate],
         [SeedRoles.Denied] = [],
     };
 

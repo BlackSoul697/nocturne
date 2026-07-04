@@ -13154,6 +13154,161 @@ export class AlertsClient {
     }
 }
 
+export class DndWindowsClient {
+    private http: { fetch(url: RequestInfo, init?: RequestInit): Promise<Response> };
+    private baseUrl: string;
+    protected jsonParseReviver: ((key: string, value: any) => any) | undefined = undefined;
+
+    constructor(baseUrl?: string, http?: { fetch(url: RequestInfo, init?: RequestInit): Promise<Response> }) {
+        this.http = http ? http : window as any;
+        this.baseUrl = baseUrl ?? "";
+    }
+
+    /**
+     * List the tenant's DND windows that are active right now (resolved on read).
+     */
+    getActive(signal?: AbortSignal): Promise<DndWindowResponse[]> {
+        let url_ = this.baseUrl + "/api/v4/alerts/dnd/windows/active";
+        url_ = url_.replace(/[?&]$/, "");
+
+        let options_: RequestInit = {
+            method: "GET",
+            signal,
+            headers: {
+                "Accept": "application/json"
+            }
+        };
+
+        return this.http.fetch(url_, options_).then((_response: Response) => {
+            return this.processGetActive(_response);
+        });
+    }
+
+    protected processGetActive(response: Response): Promise<DndWindowResponse[]> {
+        const status = response.status;
+        let _headers: any = {}; if (response.headers && response.headers.forEach) { response.headers.forEach((v: any, k: any) => _headers[k] = v); };
+        if (status === 200) {
+            return response.text().then((_responseText) => {
+            let result200: any = null;
+            result200 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver) as DndWindowResponse[];
+            return result200;
+            });
+        } else if (status !== 200 && status !== 204) {
+            return response.text().then((_responseText) => {
+            return throwException("An unexpected server error occurred.", status, _responseText, _headers);
+            });
+        }
+        return Promise.resolve<DndWindowResponse[]>(null as any);
+    }
+
+    /**
+     * Create (or idempotently return) a DND window. Supersedes any active window of the same
+    scope so at most one is ever active per scope.
+     */
+    create(request: CreateDndWindowRequest, signal?: AbortSignal): Promise<DndWindowResponse> {
+        let url_ = this.baseUrl + "/api/v4/alerts/dnd/windows";
+        url_ = url_.replace(/[?&]$/, "");
+
+        const content_ = JSON.stringify(request);
+
+        let options_: RequestInit = {
+            body: content_,
+            method: "POST",
+            signal,
+            headers: {
+                "Content-Type": "application/json",
+                "Accept": "application/json"
+            }
+        };
+
+        return this.http.fetch(url_, options_).then((_response: Response) => {
+            return this.processCreate(_response);
+        });
+    }
+
+    protected processCreate(response: Response): Promise<DndWindowResponse> {
+        const status = response.status;
+        let _headers: any = {}; if (response.headers && response.headers.forEach) { response.headers.forEach((v: any, k: any) => _headers[k] = v); };
+        if (status === 200) {
+            return response.text().then((_responseText) => {
+            let result200: any = null;
+            result200 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver) as DndWindowResponse;
+            return result200;
+            });
+        } else if (status === 201) {
+            return response.text().then((_responseText) => {
+            let result201: any = null;
+            result201 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver) as DndWindowResponse;
+            return result201;
+            });
+        } else if (status === 400) {
+            return response.text().then((_responseText) => {
+            let result400: any = null;
+            result400 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver) as ProblemDetails;
+            return throwException("A server side error occurred.", status, _responseText, _headers, result400);
+            });
+        } else if (status === 409) {
+            return response.text().then((_responseText) => {
+            let result409: any = null;
+            result409 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver) as ProblemDetails;
+            return throwException("A server side error occurred.", status, _responseText, _headers, result409);
+            });
+        } else if (status !== 200 && status !== 204) {
+            return response.text().then((_responseText) => {
+            return throwException("An unexpected server error occurred.", status, _responseText, _headers);
+            });
+        }
+        return Promise.resolve<DndWindowResponse>(null as any);
+    }
+
+    /**
+     * Clear a DND window (turn the mute off). Idempotent: a window already cleared (by the user
+    or by supersede) is returned unchanged so a retry never rewrites the audit timestamp.
+     */
+    clear(id: string, signal?: AbortSignal): Promise<DndWindowResponse> {
+        let url_ = this.baseUrl + "/api/v4/alerts/dnd/windows/{id}/clear";
+        if (id === undefined || id === null)
+            throw new globalThis.Error("The parameter 'id' must be defined.");
+        url_ = url_.replace("{id}", encodeURIComponent("" + id));
+        url_ = url_.replace(/[?&]$/, "");
+
+        let options_: RequestInit = {
+            method: "POST",
+            signal,
+            headers: {
+                "Accept": "application/json"
+            }
+        };
+
+        return this.http.fetch(url_, options_).then((_response: Response) => {
+            return this.processClear(_response);
+        });
+    }
+
+    protected processClear(response: Response): Promise<DndWindowResponse> {
+        const status = response.status;
+        let _headers: any = {}; if (response.headers && response.headers.forEach) { response.headers.forEach((v: any, k: any) => _headers[k] = v); };
+        if (status === 200) {
+            return response.text().then((_responseText) => {
+            let result200: any = null;
+            result200 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver) as DndWindowResponse;
+            return result200;
+            });
+        } else if (status === 404) {
+            return response.text().then((_responseText) => {
+            let result404: any = null;
+            result404 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver) as ProblemDetails;
+            return throwException("A server side error occurred.", status, _responseText, _headers, result404);
+            });
+        } else if (status !== 200 && status !== 204) {
+            return response.text().then((_responseText) => {
+            return throwException("An unexpected server error occurred.", status, _responseText, _headers);
+            });
+        }
+        return Promise.resolve<DndWindowResponse>(null as any);
+    }
+}
+
 export class NotificationsClient {
     private http: { fetch(url: RequestInfo, init?: RequestInit): Promise<Response> };
     private baseUrl: string;
@@ -13490,7 +13645,8 @@ export class TenantAlertSettingsClient {
     }
 
     /**
-     * Replace the current tenant's alert settings. Upserts on first call.
+     * Replace the current tenant's alert settings. Upserts on first call. The manual-DND toggle
+    creates/clears the tenant's scope=all window; scheduled fields persist on the row.
      */
     update(request: UpdateTenantAlertSettingsRequest, signal?: AbortSignal): Promise<TenantAlertSettingsResponse> {
         let url_ = this.baseUrl + "/api/v4/tenant-alert-settings";
@@ -13534,89 +13690,6 @@ export class TenantAlertSettingsClient {
             });
         }
         return Promise.resolve<TenantAlertSettingsResponse>(null as any);
-    }
-}
-
-export class TrackerAlertsClient {
-    private http: { fetch(url: RequestInfo, init?: RequestInit): Promise<Response> };
-    private baseUrl: string;
-    protected jsonParseReviver: ((key: string, value: any) => any) | undefined = undefined;
-
-    constructor(baseUrl?: string, http?: { fetch(url: RequestInfo, init?: RequestInit): Promise<Response> }) {
-        this.http = http ? http : window as any;
-        this.baseUrl = baseUrl ?? "";
-    }
-
-    getPendingAlerts(signal?: AbortSignal): Promise<TrackerAlertDto[]> {
-        let url_ = this.baseUrl + "/api/v4/trackers/alerts/pending";
-        url_ = url_.replace(/[?&]$/, "");
-
-        let options_: RequestInit = {
-            method: "GET",
-            signal,
-            headers: {
-                "Accept": "application/json"
-            }
-        };
-
-        return this.http.fetch(url_, options_).then((_response: Response) => {
-            return this.processGetPendingAlerts(_response);
-        });
-    }
-
-    protected processGetPendingAlerts(response: Response): Promise<TrackerAlertDto[]> {
-        const status = response.status;
-        let _headers: any = {}; if (response.headers && response.headers.forEach) { response.headers.forEach((v: any, k: any) => _headers[k] = v); };
-        if (status === 200) {
-            return response.text().then((_responseText) => {
-            let result200: any = null;
-            result200 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver) as TrackerAlertDto[];
-            return result200;
-            });
-        } else if (status !== 200 && status !== 204) {
-            return response.text().then((_responseText) => {
-            return throwException("An unexpected server error occurred.", status, _responseText, _headers);
-            });
-        }
-        return Promise.resolve<TrackerAlertDto[]>(null as any);
-    }
-
-    /**
-     * Get available alert sounds
-     * @return List of available sound preset names
-     */
-    getAvailableSounds(signal?: AbortSignal): Promise<string[]> {
-        let url_ = this.baseUrl + "/api/v4/trackers/alerts/sounds";
-        url_ = url_.replace(/[?&]$/, "");
-
-        let options_: RequestInit = {
-            method: "GET",
-            signal,
-            headers: {
-                "Accept": "application/json"
-            }
-        };
-
-        return this.http.fetch(url_, options_).then((_response: Response) => {
-            return this.processGetAvailableSounds(_response);
-        });
-    }
-
-    protected processGetAvailableSounds(response: Response): Promise<string[]> {
-        const status = response.status;
-        let _headers: any = {}; if (response.headers && response.headers.forEach) { response.headers.forEach((v: any, k: any) => _headers[k] = v); };
-        if (status === 200) {
-            return response.text().then((_responseText) => {
-            let result200: any = null;
-            result200 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver) as string[];
-            return result200;
-            });
-        } else if (status !== 200 && status !== 204) {
-            return response.text().then((_responseText) => {
-            return throwException("An unexpected server error occurred.", status, _responseText, _headers);
-            });
-        }
-        return Promise.resolve<string[]>(null as any);
     }
 }
 
@@ -14041,7 +14114,10 @@ export class TrackersClient {
     }
 
     /**
-     * Acknowledge/snooze a tracker notification
+     * Acknowledge a tracker notification. SnoozeMins is stored on the instance
+    (pill display/legacy clients); the alert-engine side is a plain acknowledgement of
+    the managed rules' open excursions — re-notification is the threshold ladder's and
+    alert_state escalation rules' job, not a snooze re-fire.
      */
     ackInstance(id: string, request: AckTrackerRequest, signal?: AbortSignal): Promise<void> {
         let url_ = this.baseUrl + "/api/v4/trackers/instances/{id}/ack";
@@ -22023,6 +22099,311 @@ export class WebhookSettingsClient {
     }
 }
 
+export class ClientDevicesClient {
+    private http: { fetch(url: RequestInfo, init?: RequestInit): Promise<Response> };
+    private baseUrl: string;
+    protected jsonParseReviver: ((key: string, value: any) => any) | undefined = undefined;
+
+    constructor(baseUrl?: string, http?: { fetch(url: RequestInfo, init?: RequestInit): Promise<Response> }) {
+        this.http = http ? http : window as any;
+        this.baseUrl = baseUrl ?? "";
+    }
+
+    /**
+     * Register or refresh this device. Idempotent upsert keyed on the install id — apps call it on
+    every startup to keep their advertised capabilities and last-seen time current.
+     */
+    register(request: RegisterDeviceRequest, signal?: AbortSignal): Promise<ClientDeviceDto> {
+        let url_ = this.baseUrl + "/api/v4/client-devices";
+        url_ = url_.replace(/[?&]$/, "");
+
+        const content_ = JSON.stringify(request);
+
+        let options_: RequestInit = {
+            body: content_,
+            method: "POST",
+            signal,
+            headers: {
+                "Content-Type": "application/json",
+                "Accept": "application/json"
+            }
+        };
+
+        return this.http.fetch(url_, options_).then((_response: Response) => {
+            return this.processRegister(_response);
+        });
+    }
+
+    protected processRegister(response: Response): Promise<ClientDeviceDto> {
+        const status = response.status;
+        let _headers: any = {}; if (response.headers && response.headers.forEach) { response.headers.forEach((v: any, k: any) => _headers[k] = v); };
+        if (status === 200) {
+            return response.text().then((_responseText) => {
+            let result200: any = null;
+            result200 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver) as ClientDeviceDto;
+            return result200;
+            });
+        } else if (status === 400) {
+            return response.text().then((_responseText) => {
+            let result400: any = null;
+            result400 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver) as ProblemDetails;
+            return throwException("A server side error occurred.", status, _responseText, _headers, result400);
+            });
+        } else if (status === 401) {
+            return response.text().then((_responseText) => {
+            let result401: any = null;
+            result401 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver) as ProblemDetails;
+            return throwException("A server side error occurred.", status, _responseText, _headers, result401);
+            });
+        } else if (status === 409) {
+            return response.text().then((_responseText) => {
+            let result409: any = null;
+            result409 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver) as ProblemDetails;
+            return throwException("A server side error occurred.", status, _responseText, _headers, result409);
+            });
+        } else if (status !== 200 && status !== 204) {
+            return response.text().then((_responseText) => {
+            return throwException("An unexpected server error occurred.", status, _responseText, _headers);
+            });
+        }
+        return Promise.resolve<ClientDeviceDto>(null as any);
+    }
+
+    /**
+     * Lists the devices registered by the current user, most-recently-seen first.
+     */
+    getDevices(signal?: AbortSignal): Promise<ClientDeviceDto[]> {
+        let url_ = this.baseUrl + "/api/v4/client-devices";
+        url_ = url_.replace(/[?&]$/, "");
+
+        let options_: RequestInit = {
+            method: "GET",
+            signal,
+            headers: {
+                "Accept": "application/json"
+            }
+        };
+
+        return this.http.fetch(url_, options_).then((_response: Response) => {
+            return this.processGetDevices(_response);
+        });
+    }
+
+    protected processGetDevices(response: Response): Promise<ClientDeviceDto[]> {
+        const status = response.status;
+        let _headers: any = {}; if (response.headers && response.headers.forEach) { response.headers.forEach((v: any, k: any) => _headers[k] = v); };
+        if (status === 200) {
+            return response.text().then((_responseText) => {
+            let result200: any = null;
+            result200 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver) as ClientDeviceDto[];
+            return result200;
+            });
+        } else if (status === 401) {
+            return response.text().then((_responseText) => {
+            let result401: any = null;
+            result401 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver) as ProblemDetails;
+            return throwException("A server side error occurred.", status, _responseText, _headers, result401);
+            });
+        } else if (status !== 200 && status !== 204) {
+            return response.text().then((_responseText) => {
+            return throwException("An unexpected server error occurred.", status, _responseText, _headers);
+            });
+        }
+        return Promise.resolve<ClientDeviceDto[]>(null as any);
+    }
+
+    /**
+     * The static device-action capability catalog (kinds + capabilities) that drives the rule
+    builder's device-action authoring UI. Static metadata, so no device scope is required.
+     */
+    getCapabilityCatalog(signal?: AbortSignal): Promise<DeviceCapabilityCatalog> {
+        let url_ = this.baseUrl + "/api/v4/client-devices/capabilities";
+        url_ = url_.replace(/[?&]$/, "");
+
+        let options_: RequestInit = {
+            method: "GET",
+            signal,
+            headers: {
+                "Accept": "application/json"
+            }
+        };
+
+        return this.http.fetch(url_, options_).then((_response: Response) => {
+            return this.processGetCapabilityCatalog(_response);
+        });
+    }
+
+    protected processGetCapabilityCatalog(response: Response): Promise<DeviceCapabilityCatalog> {
+        const status = response.status;
+        let _headers: any = {}; if (response.headers && response.headers.forEach) { response.headers.forEach((v: any, k: any) => _headers[k] = v); };
+        if (status === 200) {
+            return response.text().then((_responseText) => {
+            let result200: any = null;
+            result200 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver) as DeviceCapabilityCatalog;
+            return result200;
+            });
+        } else if (status !== 200 && status !== 204) {
+            return response.text().then((_responseText) => {
+            return throwException("An unexpected server error occurred.", status, _responseText, _headers);
+            });
+        }
+        return Promise.resolve<DeviceCapabilityCatalog>(null as any);
+    }
+
+    /**
+     * Rename a device you own.
+     */
+    rename(id: string, request: RenameDeviceRequest, signal?: AbortSignal): Promise<ClientDeviceDto> {
+        let url_ = this.baseUrl + "/api/v4/client-devices/{id}";
+        if (id === undefined || id === null)
+            throw new globalThis.Error("The parameter 'id' must be defined.");
+        url_ = url_.replace("{id}", encodeURIComponent("" + id));
+        url_ = url_.replace(/[?&]$/, "");
+
+        const content_ = JSON.stringify(request);
+
+        let options_: RequestInit = {
+            body: content_,
+            method: "PATCH",
+            signal,
+            headers: {
+                "Content-Type": "application/json",
+                "Accept": "application/json"
+            }
+        };
+
+        return this.http.fetch(url_, options_).then((_response: Response) => {
+            return this.processRename(_response);
+        });
+    }
+
+    protected processRename(response: Response): Promise<ClientDeviceDto> {
+        const status = response.status;
+        let _headers: any = {}; if (response.headers && response.headers.forEach) { response.headers.forEach((v: any, k: any) => _headers[k] = v); };
+        if (status === 200) {
+            return response.text().then((_responseText) => {
+            let result200: any = null;
+            result200 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver) as ClientDeviceDto;
+            return result200;
+            });
+        } else if (status === 401) {
+            return response.text().then((_responseText) => {
+            let result401: any = null;
+            result401 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver) as ProblemDetails;
+            return throwException("A server side error occurred.", status, _responseText, _headers, result401);
+            });
+        } else if (status === 404) {
+            return response.text().then((_responseText) => {
+            let result404: any = null;
+            result404 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver) as ProblemDetails;
+            return throwException("A server side error occurred.", status, _responseText, _headers, result404);
+            });
+        } else if (status !== 200 && status !== 204) {
+            return response.text().then((_responseText) => {
+            return throwException("An unexpected server error occurred.", status, _responseText, _headers);
+            });
+        }
+        return Promise.resolve<ClientDeviceDto>(null as any);
+    }
+
+    /**
+     * Revoke (remove) a device you own. Its future registrations start fresh.
+     */
+    revoke(id: string, signal?: AbortSignal): Promise<void> {
+        let url_ = this.baseUrl + "/api/v4/client-devices/{id}";
+        if (id === undefined || id === null)
+            throw new globalThis.Error("The parameter 'id' must be defined.");
+        url_ = url_.replace("{id}", encodeURIComponent("" + id));
+        url_ = url_.replace(/[?&]$/, "");
+
+        let options_: RequestInit = {
+            method: "DELETE",
+            signal,
+            headers: {
+            }
+        };
+
+        return this.http.fetch(url_, options_).then((_response: Response) => {
+            return this.processRevoke(_response);
+        });
+    }
+
+    protected processRevoke(response: Response): Promise<void> {
+        const status = response.status;
+        let _headers: any = {}; if (response.headers && response.headers.forEach) { response.headers.forEach((v: any, k: any) => _headers[k] = v); };
+        if (status === 204) {
+            return response.text().then((_responseText) => {
+            return;
+            });
+        } else if (status === 401) {
+            return response.text().then((_responseText) => {
+            let result401: any = null;
+            result401 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver) as ProblemDetails;
+            return throwException("A server side error occurred.", status, _responseText, _headers, result401);
+            });
+        } else if (status === 404) {
+            return response.text().then((_responseText) => {
+            let result404: any = null;
+            result404 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver) as ProblemDetails;
+            return throwException("A server side error occurred.", status, _responseText, _headers, result404);
+            });
+        } else if (status !== 200 && status !== 204) {
+            return response.text().then((_responseText) => {
+            return throwException("An unexpected server error occurred.", status, _responseText, _headers);
+            });
+        }
+        return Promise.resolve<void>(null as any);
+    }
+
+    /**
+     * The actuation intents currently active for this device — the reconcile snapshot a push-mode
+    device reads on (re)connect to start anything still active and drop anything resolved. Empty
+    for a local-engine device or one the caller does not own.
+     */
+    getActiveIntents(id: string, signal?: AbortSignal): Promise<DeviceActionIntent[]> {
+        let url_ = this.baseUrl + "/api/v4/client-devices/{id}/active-intents";
+        if (id === undefined || id === null)
+            throw new globalThis.Error("The parameter 'id' must be defined.");
+        url_ = url_.replace("{id}", encodeURIComponent("" + id));
+        url_ = url_.replace(/[?&]$/, "");
+
+        let options_: RequestInit = {
+            method: "GET",
+            signal,
+            headers: {
+                "Accept": "application/json"
+            }
+        };
+
+        return this.http.fetch(url_, options_).then((_response: Response) => {
+            return this.processGetActiveIntents(_response);
+        });
+    }
+
+    protected processGetActiveIntents(response: Response): Promise<DeviceActionIntent[]> {
+        const status = response.status;
+        let _headers: any = {}; if (response.headers && response.headers.forEach) { response.headers.forEach((v: any, k: any) => _headers[k] = v); };
+        if (status === 200) {
+            return response.text().then((_responseText) => {
+            let result200: any = null;
+            result200 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver) as DeviceActionIntent[];
+            return result200;
+            });
+        } else if (status === 401) {
+            return response.text().then((_responseText) => {
+            let result401: any = null;
+            result401 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver) as ProblemDetails;
+            return throwException("A server side error occurred.", status, _responseText, _headers, result401);
+            });
+        } else if (status !== 200 && status !== 204) {
+            return response.text().then((_responseText) => {
+            return throwException("An unexpected server error occurred.", status, _responseText, _headers);
+            });
+        }
+        return Promise.resolve<DeviceActionIntent[]>(null as any);
+    }
+}
+
 export class AuditClient {
     private http: { fetch(url: RequestInfo, init?: RequestInit): Promise<Response> };
     private baseUrl: string;
@@ -28370,6 +28751,7 @@ export interface ConditionNode {
     day_of_week?: DayOfWeekCondition | undefined;
     pump_state?: PumpStateCondition | undefined;
     state_span_active?: StateSpanActiveCondition | undefined;
+    tracker_age?: TrackerAgeCondition | undefined;
 }
 
 export interface ThresholdCondition {
@@ -28585,6 +28967,12 @@ export enum StateSpanCategory {
     Travel = "Travel",
     DataExclusion = "DataExclusion",
     TemporaryTarget = "TemporaryTarget",
+}
+
+export interface TrackerAgeCondition {
+    tracker_definition_id?: string;
+    operator?: string;
+    minutes?: number;
 }
 
 /** Metadata about authentication error codes for NSwag generation */
@@ -28918,6 +29306,7 @@ export interface BasalInjection {
     syncIdentifier?: string | undefined;
     correlationId?: string | undefined;
     legacyId?: string | undefined;
+    patientDeviceId?: string | undefined;
     createdAt?: Date;
     modifiedAt?: Date;
     units?: number;
@@ -31783,6 +32172,7 @@ export enum ChannelType {
     WhatsAppDm = "whatsapp_dm",
     HomeAssistant = "home_assistant",
     ResendEmail = "resend_email",
+    DeviceAction = "device_action",
 }
 
 export enum ChannelStatus {
@@ -31969,6 +32359,7 @@ export enum AlertConditionType {
     DayOfWeek = "day_of_week",
     PumpState = "pump_state",
     StateSpanActive = "state_span_active",
+    TrackerAge = "tracker_age",
 }
 
 export interface AlertRuleResponse {
@@ -31983,11 +32374,28 @@ export interface AlertRuleResponse {
     /** When true, this rule still fires while the tenant is in Do Not Disturb mode.
             Critical rules implicitly bypass DND regardless of this flag. */
     allowThroughDnd?: boolean;
+    /** Low/high classification for scoped Do Not Disturb (ADR 0004), derived by the
+            shared engine from the rule's directional leaves. Read-only — computed server-side on
+            create/update; a scoped lows/highs window silences a rule only when its
+            class matches. */
+    scopeClass?: RuleScopeClass;
+    /** Owner tag when this rule is synthesised from another feature's configuration
+            (e.g. tracker:{definitionId}). Null for user-authored rules. Managed rules
+            cannot be deleted here — the owning configuration re-syncs their condition, name and
+            severity; channels and client configuration remain user-editable. */
+    managedBy?: string | undefined;
     autoResolveEnabled?: boolean;
     autoResolveParams?: any | undefined;
     clientConfiguration?: any;
     /** Flat list of delivery channels. Dispatched in parallel when the rule fires. */
     channels?: AlertRuleChannelResponse[];
+}
+
+export enum RuleScopeClass {
+    Low = "low",
+    High = "high",
+    Composite = "composite",
+    Undirected = "undirected",
 }
 
 export interface AlertRuleChannelResponse {
@@ -31996,6 +32404,8 @@ export interface AlertRuleChannelResponse {
     destination?: string;
     destinationLabel?: string | undefined;
     sortOrder?: number;
+    /** Channel-specific config (e.g. device_action capabilities). Null when unset. */
+    metadata?: any | undefined;
 }
 
 export interface CreateAlertRuleRequest {
@@ -32015,9 +32425,11 @@ export interface CreateAlertRuleRequest {
 
 export interface CreateAlertRuleChannelRequest {
     channelType?: ChannelType;
-    /** Channel-specific address: webhook URL, chat handle, etc. Empty for in-app/web-push. */
+    /** Channel-specific address: webhook URL, chat handle, device kind for device_action, etc. Empty for in-app/web-push. */
     destination?: string | undefined;
     destinationLabel?: string | undefined;
+    /** Channel-specific config, persisted as JSONB. For device_action: { "capabilities": ["notify", ...] }. */
+    metadata?: any | undefined;
 }
 
 export interface UpdateAlertRuleRequest {
@@ -32116,6 +32528,38 @@ export interface PendingDeliveryResponse {
     retryCount?: number;
 }
 
+/** A DND window with its resolver fields. active state is computed on read. */
+export interface DndWindowResponse {
+    id?: string;
+    scope?: DndScope;
+    startedAt?: Date;
+    endsAt?: Date | undefined;
+    clearedAt?: Date | undefined;
+    clearedBy?: string | undefined;
+    source?: string | undefined;
+    createdAt?: Date;
+}
+
+export enum DndScope {
+    Lows = "lows",
+    Highs = "highs",
+    All = "all",
+}
+
+/** Request to create a DND window. Id is client-supplied for idempotency. */
+export interface CreateDndWindowRequest {
+    /** Client-generated UUID. Re-sending the same id is a no-op that returns the stored window. */
+    id?: string;
+    /** Which alerts to silence: lows | highs | all. */
+    scope?: DndScope;
+    /** When the mute takes effect (may predate receipt for offline authoring). */
+    startedAt?: Date;
+    /** Auto-expiry instant; null mutes until explicitly cleared. */
+    endsAt?: Date | undefined;
+    /** Audit label for what created the window (e.g. web, prelude-device). */
+    source?: string | undefined;
+}
+
 export interface InAppNotificationDto {
     id?: string;
     type?: string;
@@ -32201,20 +32645,6 @@ export interface UpdateTenantAlertSettingsRequest {
     dndScheduleEnabled?: boolean;
     dndScheduleStart?: string | undefined;
     dndScheduleEnd?: string | undefined;
-}
-
-/** DTO for tracker alerts returned to the frontend */
-export interface TrackerAlertDto {
-    instanceId?: string;
-    definitionId?: string;
-    thresholdId?: string;
-    trackerName?: string;
-    urgency?: NotificationUrgency;
-    message?: string;
-    pushEnabled?: boolean;
-    audioEnabled?: boolean;
-    audioSound?: string | undefined;
-    vibrateEnabled?: boolean;
 }
 
 export interface TrackerDefinitionDto {
@@ -32810,6 +33240,7 @@ export interface PatientDevice {
     startDate?: Date | undefined;
     endDate?: Date | undefined;
     isCurrent?: boolean;
+    rank?: number | undefined;
     notes?: string | undefined;
     createdAt?: Date;
     modifiedAt?: Date;
@@ -33009,6 +33440,7 @@ export interface MeterGlucose {
     dataSource?: string | undefined;
     correlationId?: string | undefined;
     legacyId?: string | undefined;
+    patientDeviceId?: string | undefined;
     createdAt?: Date;
     modifiedAt?: Date;
     mgdl?: number;
@@ -33682,6 +34114,53 @@ export interface WebhookTestResult {
 export interface WebhookTestRequest {
     urls?: string[];
     secret?: string | undefined;
+}
+
+export interface ClientDeviceDto {
+    id?: string;
+    installId?: string;
+    kind?: string;
+    label?: string | undefined;
+    capabilities?: string[];
+    lastSeenAt?: Date;
+    createdAt?: Date;
+}
+
+export interface RegisterDeviceRequest {
+    installId: string;
+    kind: string;
+    label?: string | undefined;
+    capabilities?: string[];
+}
+
+export interface DeviceCapabilityCatalog {
+    kinds?: string[];
+    capabilities?: DeviceCapabilityInfo[];
+}
+
+export interface DeviceCapabilityInfo {
+    key?: string;
+    label?: string;
+    requiredScope?: string;
+    kinds?: string[];
+    isHardware?: boolean;
+}
+
+export interface RenameDeviceRequest {
+    label?: string | undefined;
+}
+
+export interface DeviceActionIntent {
+    intent?: string;
+    excursionId?: string;
+    ruleName?: string;
+    severity?: AlertRuleSeverity;
+    targetKind?: string;
+    capabilities?: string[];
+    acknowledged?: boolean;
+    startedAt?: Date;
+    glucoseValue?: number | undefined;
+    trend?: string | undefined;
 }
 
 export interface PaginatedResponseOfMutationAuditDto {

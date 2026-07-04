@@ -129,6 +129,7 @@ public static class ServiceRegistrationExtensions
         services.AddScoped<IBolusWizardService, BolusWizardService>();
 
         services.AddScoped<IAuthorizationService, AuthorizationService>();
+        services.AddScoped<IHubTokenAuthorizer, HubTokenAuthorizer>();
         services.AddScoped<IAlexaService, AlexaService>();
 
         services.AddScoped<IStatisticsService, StatisticsService>();
@@ -507,12 +508,17 @@ public static class ServiceRegistrationExtensions
 
         // Tracker services
         services.AddScoped<ITrackerTriggerService, TrackerTriggerService>();
-        services.AddScoped<ITrackerAlertService, TrackerAlertService>();
+        // Tracker notifications ride the alert engine: thresholds are synthesised into
+        // managed tracker_age alert rules, backfilled once at startup for pre-existing
+        // definitions (and self-healing if a managed rule is ever lost).
+        services.AddScoped<ITrackerAlertRuleSyncService, TrackerAlertRuleSyncService>();
+        services.AddHostedService<TrackerAlertRuleBackfillService>();
         services.AddScoped<ITrackerSuggestionService, TrackerSuggestionService>();
         services.AddScoped<IDeviceAgeService, DeviceAgeService>();
 
         // Device resolution
         services.AddScoped<IDeviceService, DeviceService>();
+        services.AddScoped<IPatientDeviceStamper, PatientDeviceStamper>();
 
         // Coach marks
         services.AddScoped<ICoachMarkService, CoachMarkService>();
@@ -680,6 +686,11 @@ public static class ServiceRegistrationExtensions
         var templateRegistry = new NotificationTemplateRegistry().AddBuiltInTemplates();
         services.AddSingleton<INotificationTemplateRegistry>(templateRegistry);
 
+        // Client device registry (Prelude/Companion actuation targets)
+        services.AddScoped<
+            Nocturne.Core.Contracts.ClientDevices.IClientDeviceService,
+            Nocturne.API.Services.ClientDevices.ClientDeviceService>();
+
         // Notification action handlers (scoped -- they may depend on scoped services)
         services.AddScoped<INotificationActionHandler, MealMatchActionHandler>();
         services.AddScoped<INotificationActionHandler, TrackerSuggestionActionHandler>();
@@ -721,6 +732,9 @@ public static class ServiceRegistrationExtensions
         // Excursion tracker
         services.AddScoped<IExcursionTracker, ExcursionTracker>();
 
+        // Alert evaluation engine seam (Alerts:Engine = managed | shadow | rust)
+        services.AddAlertEvaluationEngine(configuration);
+
         // Alert engine core
         services.AddScoped<IAlertRepository, AlertRepository>();
         services.Configure<AlertEvaluationOptions>(
@@ -734,6 +748,10 @@ public static class ServiceRegistrationExtensions
         services.AddScoped<IExcursionResolutionHandler, ExcursionResolutionHandler>();
         services.AddScoped<IAlertReferenceService, AlertReferenceService>();
         services.AddScoped<IAlertReplayService, AlertReplayService>();
+        // Scope-class classification (scoped Do Not Disturb, ADR 0004): stateless over
+        // the static native engine, so a singleton. Backfilled once at startup.
+        services.AddSingleton<IRuleScopeClassifier, RuleScopeClassifier>();
+        services.AddHostedService<RuleScopeClassBackfillService>();
 
         // Delivery providers
         services.AddScoped<Nocturne.API.Services.Alerts.Providers.WebPushProvider>();
@@ -741,6 +759,7 @@ public static class ServiceRegistrationExtensions
         services.AddScoped<Nocturne.API.Services.Alerts.Providers.WebhookProvider>();
         services.AddScoped<Nocturne.API.Services.Alerts.Providers.ChatBotProvider>();
         services.AddScoped<Nocturne.API.Services.Alerts.Providers.HomeAssistantProvider>();
+        services.AddScoped<Nocturne.API.Services.Alerts.Providers.DeviceActionProvider>();
         services.AddHttpClient("ChatBot");
 
         // Chat identity
@@ -802,6 +821,58 @@ public static class ServiceRegistrationExtensions
     }
 
     /// <summary>
+    /// Registers the <see cref="Nocturne.Core.Contracts.Alerts.IAlertEvaluationEngine"/>
+    /// seam: all three engine implementations plus the singleton
+    /// <see cref="Nocturne.API.Services.Alerts.Engines.AlertEngineSelection"/> resolved
+    /// from the <c>Alerts:Engine</c> flag (<c>managed</c> | <c>shadow</c> | <c>rust</c>,
+    /// default <c>managed</c>). The native-library probe runs once, on first resolution;
+    /// rust/shadow degrade gracefully to managed with a logged warning when the
+    /// nocturne_alerts library can't load.
+    /// </summary>
+    /// <param name="services">The service collection.</param>
+    /// <param name="configuration">Configuration carrying the <c>Alerts:Engine</c> flag.</param>
+    /// <param name="nativeProbe">
+    /// Native-library availability probe override for tests; defaults to
+    /// <see cref="Nocturne.Core.Alerts.Native.AlertsInterop.IsAvailable"/> (the version export).
+    /// </param>
+    public static IServiceCollection AddAlertEvaluationEngine(
+        this IServiceCollection services,
+        IConfiguration configuration,
+        Func<bool>? nativeProbe = null)
+    {
+        services.AddScoped<Nocturne.API.Services.Alerts.Engines.ManagedAlertEngine>();
+        services.AddScoped<Nocturne.API.Services.Alerts.Engines.RustBackedAlertEngine>();
+        services.AddScoped<
+            Nocturne.API.Services.Alerts.Engines.IShadowRuleEvaluator,
+            Nocturne.API.Services.Alerts.Engines.RustShadowRuleEvaluator>();
+        services.AddScoped<Nocturne.API.Services.Alerts.Engines.ShadowAlertEngine>();
+
+        // Singleton so the configuration parse + native probe + selection log happen once
+        // (lazily, on the first scope that evaluates alerts).
+        services.AddSingleton(sp =>
+        {
+            var logger = sp.GetRequiredService<ILoggerFactory>()
+                .CreateLogger(typeof(Nocturne.API.Services.Alerts.Engines.AlertEngineSelector).FullName!);
+            return Nocturne.API.Services.Alerts.Engines.AlertEngineSelector.Select(
+                configuration[Nocturne.API.Services.Alerts.Engines.AlertEngineSelector.ConfigurationKey],
+                nativeProbe ?? Nocturne.Core.Alerts.Native.AlertsInterop.IsAvailable,
+                logger);
+        });
+
+        services.AddScoped<Nocturne.Core.Contracts.Alerts.IAlertEvaluationEngine>(sp =>
+            sp.GetRequiredService<Nocturne.API.Services.Alerts.Engines.AlertEngineSelection>().Mode switch
+            {
+                Nocturne.API.Services.Alerts.Engines.AlertEngineMode.Rust =>
+                    sp.GetRequiredService<Nocturne.API.Services.Alerts.Engines.RustBackedAlertEngine>(),
+                Nocturne.API.Services.Alerts.Engines.AlertEngineMode.Shadow =>
+                    sp.GetRequiredService<Nocturne.API.Services.Alerts.Engines.ShadowAlertEngine>(),
+                _ => sp.GetRequiredService<Nocturne.API.Services.Alerts.Engines.ManagedAlertEngine>(),
+            });
+
+        return services;
+    }
+
+    /// <summary>
     /// Registers every <see cref="IConditionEvaluator"/> implementation that the
     /// <see cref="ConditionEvaluatorRegistry"/> resolves at runtime. Extracted from
     /// <see cref="AddAlertingAndMonitoring"/> so production wiring and the registry
@@ -840,6 +911,7 @@ public static class ServiceRegistrationExtensions
         services.AddScoped<IConditionEvaluator, DayOfWeekEvaluator>();
         services.AddScoped<IConditionEvaluator, PumpStateEvaluator>();
         services.AddScoped<IConditionEvaluator, StateSpanActiveEvaluator>();
+        services.AddScoped<IConditionEvaluator, TrackerAgeEvaluator>();
         return services;
     }
 

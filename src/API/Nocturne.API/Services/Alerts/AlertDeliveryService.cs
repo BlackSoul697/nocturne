@@ -29,6 +29,12 @@ internal sealed class AlertDeliveryService(
     ILogger<AlertDeliveryService> logger)
     : IAlertDeliveryService
 {
+    /// <summary>
+    /// How long a test-fired excursion with a <c>device_action</c> channel stays visible in the
+    /// active-intents snapshot (via a future EndedAt) before self-withdrawing.
+    /// </summary>
+    internal static readonly TimeSpan DeviceActionTestFireWindow = TimeSpan.FromSeconds(90);
+
     public async Task DispatchAsync(
         Guid alertInstanceId,
         IReadOnlyList<AlertRuleChannelSnapshot> channels,
@@ -131,14 +137,25 @@ internal sealed class AlertDeliveryService(
         // excursion is opened and immediately resolved — it never participates in tracker
         // state because we don't go through IExcursionTracker (which would mutate the live
         // ActiveExcursionId on AlertTrackerStateEntity and confuse the orchestrator).
+        //
+        // device_action channels are the exception: push-mode devices actuate from the
+        // active-intents snapshot, which only surfaces excursions that have not yet ended.
+        // Give the test excursion a short future end so it appears in the snapshot for the
+        // window and then self-withdraws — no background job needed. Consumers that must treat
+        // the fire as live during the window (the snapshot, AlertAcknowledgementService) filter
+        // on EndedAt == null || EndedAt > now; alert history filters on EndedAt <= now so the
+        // future end stays out of it until the window lapses.
         var now = DateTime.UtcNow;
+        var endedAt = channels.Any(c => c.ChannelType == ChannelType.DeviceAction)
+            ? now + DeviceActionTestFireWindow
+            : now;
         var excursion = new AlertExcursionEntity
         {
             Id = Guid.CreateVersion7(),
             TenantId = tenantId,
             AlertRuleId = alertRuleId,
             StartedAt = now,
-            EndedAt = now,
+            EndedAt = endedAt,
         };
         db.AlertExcursions.Add(excursion);
 
@@ -358,6 +375,23 @@ internal sealed class AlertDeliveryService(
                         await MarkDeliveredAsync(delivery.Id, null, null, ct);
                     else
                         await MarkFailedAsync(delivery.Id, "No Home Assistant instance connected", ct);
+                }
+                break;
+
+            case ChannelType.DeviceAction:
+                var deviceActionProvider = serviceProvider.GetService<Providers.DeviceActionProvider>();
+                if (deviceActionProvider is not null)
+                {
+                    // Destination is the target device kind. The provider suppresses local-engine
+                    // kinds and broadcasts to push-mode devices; either of those is "handled" (the
+                    // active-intents snapshot is the source of truth for reconcile). A false result
+                    // means a misconfigured channel (unknown kind) — record it as failed so History
+                    // doesn't show a silent success.
+                    var handled = await deviceActionProvider.SendAsync(delivery.Destination, payload, channelMetadata, ct);
+                    if (handled)
+                        await MarkDeliveredAsync(delivery.Id, null, null, ct);
+                    else
+                        await MarkFailedAsync(delivery.Id, $"Unknown device_action target kind '{delivery.Destination}'", ct);
                 }
                 break;
 

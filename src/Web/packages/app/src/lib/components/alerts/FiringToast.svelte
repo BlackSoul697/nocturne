@@ -3,13 +3,14 @@
   import {
     getActiveAlerts,
     snoozeInstance,
-    acknowledge,
+    acknowledgeExcursion,
   } from "$api/generated/alerts.generated.remote";
   import { toggleRule } from "$api/generated/alertRules.generated.remote";
   import type { ActiveExcursionResponse } from "$api-clients";
   import { Button } from "$lib/components/ui/button";
-  import { Bell, BellOff, X, Loader2 } from "lucide-svelte";
+  import { Bell, BellOff, X } from "lucide-svelte";
   import { severity } from "./severity";
+  import { formatTimeSince } from "./alertTime";
 
   /**
    * App-wide fresh-fire toast. Polls the active-alerts surface; whenever a new
@@ -19,6 +20,11 @@
    * The component intentionally does _not_ show every active alert — that's the
    * persistent banner's job (currently <see cref="AlertBanner"/>). This is for
    * the trust-critical "you should know about this RIGHT NOW" moment.
+   *
+   * Actions are optimistic: the card leaves the queue immediately and is
+   * restored only if the command fails. Acknowledge additionally pushes a
+   * single-flight override into the shared getActiveAlerts query so the banner
+   * reflects it in the same round-trip.
    */
 
   // Polling cadence — kept aligned with AlertBanner so we don't double-poll.
@@ -29,10 +35,14 @@
   let queue = $state<ActiveExcursionResponse[]>([]);
   // Tracks which ids we've already shown so a re-poll doesn't spawn dupes.
   let seen = $state<Set<string>>(new Set());
-  let busyForId = $state<string | null>(null);
   let pollTimer: ReturnType<typeof setInterval> | null = null;
+  // Reactive clock so each card's relative time ages while it sits on screen.
+  // Toasts never auto-dismiss and existing queue items aren't replaced on poll,
+  // so without this the label would freeze at first render.
+  let now = $state(Date.now());
 
   async function poll(): Promise<void> {
+    now = Date.now();
     try {
       const result = await getActiveAlerts().run();
       const list = Array.isArray(result) ? result : [];
@@ -69,41 +79,50 @@
     queue = queue.filter((a) => a.id !== id);
   }
 
-  async function snooze(id: string, minutes: number): Promise<void> {
-    busyForId = id;
-    try {
-      await snoozeInstance({ instanceId: id, request: { minutes } });
-      dismiss(id);
-    } finally {
-      busyForId = null;
-    }
-  }
-
-  async function ack(id: string): Promise<void> {
-    busyForId = id;
-    try {
-      await acknowledge({ acknowledgedBy: "web_user" });
-      dismiss(id);
-    } finally {
-      busyForId = null;
-    }
-  }
-
-  async function muteRule(
+  /**
+   * Drop the card now, run the command, and restore it if the command fails.
+   * `seen` already holds the id, so poll() won't resurface a rolled-back card.
+   */
+  async function optimistic(
     id: string,
-    ruleId: string | undefined
+    action: () => Promise<unknown>
   ): Promise<void> {
+    const snapshot = queue;
+    queue = queue.filter((a) => a.id !== id);
+    try {
+      await action();
+    } catch {
+      queue = snapshot;
+    }
+  }
+
+  function snooze(id: string, minutes: number): Promise<void> {
+    return optimistic(id, () =>
+      snoozeInstance({ instanceId: id, request: { minutes } })
+    );
+  }
+
+  function ack(id: string): Promise<void> {
+    return optimistic(id, () =>
+      acknowledgeExcursion({
+        excursionId: id,
+        request: { acknowledgedBy: "web_user" },
+      }).updates(
+        getActiveAlerts().withOverride((current) =>
+          (current ?? []).map((a) =>
+            a.id === id ? { ...a, acknowledgedAt: new Date() } : a
+          )
+        )
+      )
+    );
+  }
+
+  function muteRule(id: string, ruleId: string | undefined): Promise<void> {
     if (!ruleId) {
       dismiss(id);
-      return;
+      return Promise.resolve();
     }
-    busyForId = id;
-    try {
-      await toggleRule(ruleId);
-      dismiss(id);
-    } finally {
-      busyForId = null;
-    }
+    return optimistic(id, () => toggleRule(ruleId));
   }
 </script>
 
@@ -135,7 +154,7 @@
               <span
                 class="ml-auto text-[10px] uppercase tracking-wider text-muted-foreground"
               >
-                just now
+                {formatTimeSince(a.startedAt, now)}
               </span>
             </div>
             <div class="mt-2 flex flex-wrap items-center gap-1">
@@ -145,7 +164,6 @@
                 size="sm"
                 class="h-7 px-2 text-xs"
                 onclick={() => snooze(a.id ?? "", 5)}
-                disabled={busyForId === a.id}
               >
                 5m
               </Button>
@@ -155,7 +173,6 @@
                 size="sm"
                 class="h-7 px-2 text-xs"
                 onclick={() => snooze(a.id ?? "", 15)}
-                disabled={busyForId === a.id}
               >
                 15m
               </Button>
@@ -165,7 +182,6 @@
                 size="sm"
                 class="h-7 px-2 text-xs"
                 onclick={() => snooze(a.id ?? "", 30)}
-                disabled={busyForId === a.id}
               >
                 30m
               </Button>
@@ -175,7 +191,6 @@
                 size="sm"
                 class="h-7 px-2 text-xs"
                 onclick={() => snooze(a.id ?? "", 60)}
-                disabled={busyForId === a.id}
               >
                 1h
               </Button>
@@ -185,14 +200,9 @@
                 size="sm"
                 class="h-7 px-2 text-xs ml-auto"
                 onclick={() => ack(a.id ?? "")}
-                disabled={busyForId === a.id}
                 title="Acknowledge"
               >
-                {#if busyForId === a.id}
-                  <Loader2 class="h-3.5 w-3.5 animate-spin" />
-                {:else}
-                  Dismiss
-                {/if}
+                Dismiss
               </Button>
               <Button
                 type="button"
@@ -200,7 +210,6 @@
                 size="sm"
                 class="h-7 px-2 text-xs"
                 onclick={() => muteRule(a.id ?? "", a.alertRuleId)}
-                disabled={busyForId === a.id}
                 title="Mute the rule"
               >
                 <BellOff class="h-3.5 w-3.5" />

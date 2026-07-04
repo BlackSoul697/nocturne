@@ -32,7 +32,7 @@
   import * as adminSubjectsRemote from "../admin-subjects.remote";
   import type { TenantDetailDto, TenantMemberDto } from "$api";
   import { getCurrentTenantId } from "../../current-tenant.remote";
-  import { getTransitionStatus } from "./transition-status.remote";
+  import { getTransitionStatus } from "$api/generated/platforms.generated.remote";
 
   const tenantIdQuery = getCurrentTenantId();
   const currentTenantId = $derived(tenantIdQuery.current ?? undefined);

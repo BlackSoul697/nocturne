@@ -5296,7 +5296,8 @@
           "500": {
             "description": ""
           }
-        }
+        },
+        "x-remote-type": "query"
       }
     },
     "/api/v4/admin/oidc-providers": {
@@ -12134,6 +12135,145 @@
         "x-remote-type": "query"
       }
     },
+    "/api/v4/alerts/dnd/windows/active": {
+      "get": {
+        "tags": [
+          "Dnd Windows"
+        ],
+        "summary": "List the tenant's DND windows that are active right now (resolved on read).",
+        "operationId": "DndWindows_GetActive",
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/DndWindowResponse"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "x-remote-type": "query"
+      }
+    },
+    "/api/v4/alerts/dnd/windows": {
+      "post": {
+        "tags": [
+          "Dnd Windows"
+        ],
+        "summary": "Create (or idempotently return) a DND window. Supersedes any active window of the same\nscope so at most one is ever active per scope.",
+        "operationId": "DndWindows_Create",
+        "requestBody": {
+          "x-name": "request",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateDndWindowRequest"
+              }
+            }
+          },
+          "required": true,
+          "x-position": 1
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DndWindowResponse"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DndWindowResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        },
+        "x-remote-type": "command",
+        "x-remote-invalidates": [
+          "GetActive"
+        ]
+      }
+    },
+    "/api/v4/alerts/dnd/windows/{id}/clear": {
+      "post": {
+        "tags": [
+          "Dnd Windows"
+        ],
+        "summary": "Clear a DND window (turn the mute off). Idempotent: a window already cleared (by the user\nor by supersede) is returned unchanged so a retry never rewrites the audit timestamp.",
+        "operationId": "DndWindows_Clear",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "guid"
+            },
+            "x-position": 1
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DndWindowResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        },
+        "x-remote-type": "command",
+        "x-remote-invalidates": [
+          "GetActive"
+        ]
+      }
+    },
     "/api/v4/notifications": {
       "post": {
         "tags": [
@@ -12437,7 +12577,7 @@
         "tags": [
           "Tenant Alert Settings"
         ],
-        "summary": "Replace the current tenant's alert settings. Upserts on first call.",
+        "summary": "Replace the current tenant's alert settings. Upserts on first call. The manual-DND toggle\ncreates/clears the tenant's scope=all window; scheduled fields persist on the row.",
         "operationId": "TenantAlertSettings_Update",
         "requestBody": {
           "x-name": "request",
@@ -12477,53 +12617,6 @@
         "x-remote-invalidates": [
           "Get"
         ]
-      }
-    },
-    "/api/v4/trackers/alerts/pending": {
-      "get": {
-        "tags": [
-          "Tracker Alerts"
-        ],
-        "operationId": "TrackerAlerts_GetPendingAlerts",
-        "responses": {
-          "200": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "array",
-                  "items": {
-                    "$ref": "#/components/schemas/TrackerAlertDto"
-                  }
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/v4/trackers/alerts/sounds": {
-      "get": {
-        "tags": [
-          "Tracker Alerts"
-        ],
-        "summary": "Get available alert sounds",
-        "operationId": "TrackerAlerts_GetAvailableSounds",
-        "responses": {
-          "200": {
-            "description": "List of available sound preset names",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "array",
-                  "items": {
-                    "type": "string"
-                  }
-                }
-              }
-            }
-          }
-        }
       }
     },
     "/api/v4/trackers/definitions": {
@@ -12914,7 +13007,7 @@
         "tags": [
           "Trackers"
         ],
-        "summary": "Acknowledge/snooze a tracker notification",
+        "summary": "Acknowledge a tracker notification. SnoozeMins is stored on the instance\n(pill display/legacy clients); the alert-engine side is a plain acknowledgement of\nthe managed rules' open excursions — re-notification is the threshold ladder's and\nalert_state escalation rules' job, not a snooze re-fire.",
         "operationId": "Trackers_AckInstance",
         "parameters": [
           {
@@ -20437,6 +20530,288 @@
         }
       }
     },
+    "/api/v4/client-devices": {
+      "post": {
+        "tags": [
+          "Client Devices"
+        ],
+        "summary": "Register or refresh this device. Idempotent upsert keyed on the install id — apps call it on\nevery startup to keep their advertised capabilities and last-seen time current.",
+        "operationId": "ClientDevices_Register",
+        "requestBody": {
+          "x-name": "request",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RegisterDeviceRequest"
+              }
+            }
+          },
+          "required": true,
+          "x-position": 1
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ClientDeviceDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      },
+      "get": {
+        "tags": [
+          "Client Devices"
+        ],
+        "summary": "Lists the devices registered by the current user, most-recently-seen first.",
+        "operationId": "ClientDevices_GetDevices",
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/ClientDeviceDto"
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        },
+        "x-remote-type": "query"
+      }
+    },
+    "/api/v4/client-devices/capabilities": {
+      "get": {
+        "tags": [
+          "Client Devices"
+        ],
+        "summary": "The static device-action capability catalog (kinds + capabilities) that drives the rule\nbuilder's device-action authoring UI. Static metadata, so no device scope is required.",
+        "operationId": "ClientDevices_GetCapabilityCatalog",
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DeviceCapabilityCatalog"
+                }
+              }
+            }
+          }
+        },
+        "x-remote-type": "query"
+      }
+    },
+    "/api/v4/client-devices/{id}": {
+      "patch": {
+        "tags": [
+          "Client Devices"
+        ],
+        "summary": "Rename a device you own.",
+        "operationId": "ClientDevices_Rename",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "guid"
+            },
+            "x-position": 1
+          }
+        ],
+        "requestBody": {
+          "x-name": "request",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RenameDeviceRequest"
+              }
+            }
+          },
+          "required": true,
+          "x-position": 2
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ClientDeviceDto"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        },
+        "x-remote-type": "command",
+        "x-remote-invalidates": [
+          "GetDevices"
+        ]
+      },
+      "delete": {
+        "tags": [
+          "Client Devices"
+        ],
+        "summary": "Revoke (remove) a device you own. Its future registrations start fresh.",
+        "operationId": "ClientDevices_Revoke",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "guid"
+            },
+            "x-position": 1
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": ""
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        },
+        "x-remote-type": "command",
+        "x-remote-invalidates": [
+          "GetDevices"
+        ]
+      }
+    },
+    "/api/v4/client-devices/{id}/active-intents": {
+      "get": {
+        "tags": [
+          "Client Devices"
+        ],
+        "summary": "The actuation intents currently active for this device — the reconcile snapshot a push-mode\ndevice reads on (re)connect to start anything still active and drop anything resolved. Empty\nfor a local-engine device or one the caller does not own.",
+        "operationId": "ClientDevices_GetActiveIntents",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "guid"
+            },
+            "x-position": 1
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/DeviceActionIntent"
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        },
+        "x-remote-type": "query"
+      }
+    },
     "/api/v4/audit/mutations": {
       "get": {
         "tags": [
@@ -26498,6 +26873,14 @@
                 "$ref": "#/components/schemas/StateSpanActiveCondition"
               }
             ]
+          },
+          "tracker_age": {
+            "nullable": true,
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/TrackerAgeCondition"
+              }
+            ]
           }
         }
       },
@@ -27050,6 +27433,23 @@
           "DataExclusion",
           "TemporaryTarget"
         ]
+      },
+      "TrackerAgeCondition": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "tracker_definition_id": {
+            "type": "string",
+            "format": "guid"
+          },
+          "operator": {
+            "type": "string"
+          },
+          "minutes": {
+            "type": "integer",
+            "format": "int32"
+          }
+        }
       },
       "AuthErrorCodesMetadata": {
         "type": "object",
@@ -27966,6 +28366,11 @@
           },
           "legacyId": {
             "type": "string",
+            "nullable": true
+          },
+          "patientDeviceId": {
+            "type": "string",
+            "format": "guid",
             "nullable": true
           },
           "createdAt": {
@@ -36952,7 +37357,8 @@
           "WhatsApp",
           "WhatsAppDm",
           "HomeAssistant",
-          "ResendEmail"
+          "ResendEmail",
+          "DeviceAction"
         ],
         "enum": [
           "web_push",
@@ -36968,7 +37374,8 @@
           "whatsapp",
           "whatsapp_dm",
           "home_assistant",
-          "resend_email"
+          "resend_email",
+          "device_action"
         ]
       },
       "ChannelStatus": {
@@ -37451,7 +37858,8 @@
           "TimeSinceLastBolus",
           "DayOfWeek",
           "PumpState",
-          "StateSpanActive"
+          "StateSpanActive",
+          "TrackerAge"
         ],
         "enum": [
           "threshold",
@@ -37484,7 +37892,8 @@
           "time_since_last_bolus",
           "day_of_week",
           "pump_state",
-          "state_span_active"
+          "state_span_active",
+          "tracker_age"
         ]
       },
       "AlertRuleResponse": {
@@ -37520,6 +37929,19 @@
             "type": "boolean",
             "description": "When true, this rule still fires while the tenant is in Do Not Disturb mode.\n            Critical rules implicitly bypass DND regardless of this flag."
           },
+          "scopeClass": {
+            "description": "Low/high classification for scoped Do Not Disturb (ADR 0004), derived by the\n            shared engine from the rule's directional leaves. Read-only — computed server-side on\n            create/update; a scoped lows/highs window silences a rule only when its\n            class matches.",
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/RuleScopeClass"
+              }
+            ]
+          },
+          "managedBy": {
+            "type": "string",
+            "description": "Owner tag when this rule is synthesised from another feature's configuration\n            (e.g. tracker:{definitionId}). Null for user-authored rules. Managed rules\n            cannot be deleted here — the owning configuration re-syncs their condition, name and\n            severity; channels and client configuration remain user-editable.",
+            "nullable": true
+          },
           "autoResolveEnabled": {
             "type": "boolean"
           },
@@ -37535,6 +37957,22 @@
             }
           }
         }
+      },
+      "RuleScopeClass": {
+        "type": "string",
+        "description": "",
+        "x-enumNames": [
+          "Low",
+          "High",
+          "Composite",
+          "Undirected"
+        ],
+        "enum": [
+          "low",
+          "high",
+          "composite",
+          "undirected"
+        ]
       },
       "AlertRuleChannelResponse": {
         "type": "object",
@@ -37557,6 +37995,10 @@
           "sortOrder": {
             "type": "integer",
             "format": "int32"
+          },
+          "metadata": {
+            "description": "Channel-specific config (e.g. device_action capabilities). Null when unset.",
+            "nullable": true
           }
         }
       },
@@ -37622,11 +38064,15 @@
           },
           "destination": {
             "type": "string",
-            "description": "Channel-specific address: webhook URL, chat handle, etc. Empty for in-app/web-push.",
+            "description": "Channel-specific address: webhook URL, chat handle, device kind for device_action, etc. Empty for in-app/web-push.",
             "nullable": true
           },
           "destinationLabel": {
             "type": "string",
+            "nullable": true
+          },
+          "metadata": {
+            "description": "Channel-specific config, persisted as JSONB. For device_action: { \"capabilities\": [\"notify\", ...] }.",
             "nullable": true
           }
         }
@@ -37929,6 +38375,96 @@
           }
         }
       },
+      "DndWindowResponse": {
+        "type": "object",
+        "description": "A DND window with its resolver fields. active state is computed on read.",
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "guid"
+          },
+          "scope": {
+            "$ref": "#/components/schemas/DndScope"
+          },
+          "startedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "endsAt": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          },
+          "clearedAt": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          },
+          "clearedBy": {
+            "type": "string",
+            "nullable": true
+          },
+          "source": {
+            "type": "string",
+            "nullable": true
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "DndScope": {
+        "type": "string",
+        "description": "",
+        "x-enumNames": [
+          "Lows",
+          "Highs",
+          "All"
+        ],
+        "enum": [
+          "lows",
+          "highs",
+          "all"
+        ]
+      },
+      "CreateDndWindowRequest": {
+        "type": "object",
+        "description": "Request to create a DND window. Id is client-supplied for idempotency.",
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "Client-generated UUID. Re-sending the same id is a no-op that returns the stored window.",
+            "format": "guid"
+          },
+          "scope": {
+            "description": "Which alerts to silence: lows | highs | all.",
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/DndScope"
+              }
+            ]
+          },
+          "startedAt": {
+            "type": "string",
+            "description": "When the mute takes effect (may predate receipt for offline authoring).",
+            "format": "date-time"
+          },
+          "endsAt": {
+            "type": "string",
+            "description": "Auto-expiry instant; null mutes until explicitly cleared.",
+            "format": "date-time",
+            "nullable": true
+          },
+          "source": {
+            "type": "string",
+            "description": "Audit label for what created the window (e.g. web, prelude-device).",
+            "nullable": true
+          }
+        }
+      },
       "InAppNotificationDto": {
         "type": "object",
         "additionalProperties": false,
@@ -38215,47 +38751,6 @@
             "type": "string",
             "format": "time",
             "nullable": true
-          }
-        }
-      },
-      "TrackerAlertDto": {
-        "type": "object",
-        "description": "DTO for tracker alerts returned to the frontend",
-        "additionalProperties": false,
-        "properties": {
-          "instanceId": {
-            "type": "string",
-            "format": "guid"
-          },
-          "definitionId": {
-            "type": "string",
-            "format": "guid"
-          },
-          "thresholdId": {
-            "type": "string",
-            "format": "guid"
-          },
-          "trackerName": {
-            "type": "string"
-          },
-          "urgency": {
-            "$ref": "#/components/schemas/NotificationUrgency"
-          },
-          "message": {
-            "type": "string"
-          },
-          "pushEnabled": {
-            "type": "boolean"
-          },
-          "audioEnabled": {
-            "type": "boolean"
-          },
-          "audioSound": {
-            "type": "string",
-            "nullable": true
-          },
-          "vibrateEnabled": {
-            "type": "boolean"
           }
         }
       },
@@ -40067,6 +40562,11 @@
           "isCurrent": {
             "type": "boolean"
           },
+          "rank": {
+            "type": "integer",
+            "format": "int32",
+            "nullable": true
+          },
           "notes": {
             "type": "string",
             "nullable": true
@@ -40679,6 +41179,11 @@
           },
           "legacyId": {
             "type": "string",
+            "nullable": true
+          },
+          "patientDeviceId": {
+            "type": "string",
+            "format": "guid",
             "nullable": true
           },
           "createdAt": {
@@ -42892,6 +43397,169 @@
             }
           },
           "secret": {
+            "type": "string",
+            "nullable": true
+          }
+        }
+      },
+      "ClientDeviceDto": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "guid"
+          },
+          "installId": {
+            "type": "string"
+          },
+          "kind": {
+            "type": "string"
+          },
+          "label": {
+            "type": "string",
+            "nullable": true
+          },
+          "capabilities": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "lastSeenAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "RegisterDeviceRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "installId",
+          "kind"
+        ],
+        "properties": {
+          "installId": {
+            "type": "string",
+            "maxLength": 64,
+            "minLength": 1,
+            "pattern": "^[A-Za-z0-9_-]{1,64}$"
+          },
+          "kind": {
+            "type": "string",
+            "maxLength": 32,
+            "minLength": 1
+          },
+          "label": {
+            "type": "string",
+            "maxLength": 255,
+            "nullable": true
+          },
+          "capabilities": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      "DeviceCapabilityCatalog": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "kinds": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "capabilities": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/DeviceCapabilityInfo"
+            }
+          }
+        }
+      },
+      "DeviceCapabilityInfo": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "key": {
+            "type": "string"
+          },
+          "label": {
+            "type": "string"
+          },
+          "requiredScope": {
+            "type": "string"
+          },
+          "kinds": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "isHardware": {
+            "type": "boolean"
+          }
+        }
+      },
+      "RenameDeviceRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "label": {
+            "type": "string",
+            "maxLength": 255,
+            "nullable": true
+          }
+        }
+      },
+      "DeviceActionIntent": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "intent": {
+            "type": "string"
+          },
+          "excursionId": {
+            "type": "string",
+            "format": "guid"
+          },
+          "ruleName": {
+            "type": "string"
+          },
+          "severity": {
+            "$ref": "#/components/schemas/AlertRuleSeverity"
+          },
+          "targetKind": {
+            "type": "string"
+          },
+          "capabilities": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "acknowledged": {
+            "type": "boolean"
+          },
+          "startedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "glucoseValue": {
+            "type": "number",
+            "format": "decimal",
+            "nullable": true
+          },
+          "trend": {
             "type": "string",
             "nullable": true
           }

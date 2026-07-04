@@ -6,7 +6,7 @@ export { deleteAll, updateStatus } from './coachMarks.generated.remote';
 // './connectorStatus.generated.remote' - all exports collide, import directly
 // './deviceCatalogs.generated.remote' - all exports collide, import directly
 // './insulinCatalogs.generated.remote' - all exports collide, import directly
-export { getTenants, getTransitionStatus } from './platforms.generated.remote';
+export { getTenants } from './platforms.generated.remote';
 export { validateUsername, ownerOptions, ownerComplete, ownerOidc } from './setups.generated.remote';
 export { getTimeline, recorrect } from './timezoneTimelines.generated.remote';
 // './basalInjections.generated.remote' - all exports collide, import directly
@@ -19,6 +19,7 @@ export * from './nutritions.generated.remote';
 export { getSuggestion, deleteSuggestion, acceptSuggestion, dismissSuggestion, triggerDetection } from './compressionLows.generated.remote';
 export * from './deduplications.generated.remote';
 export { testConnection, startMigration, startFromConnector, cancelMigration, getHistory, getPendingConfig, getSources } from './migrations.generated.remote';
+// './nightscoutTransitions.generated.remote' - all exports collide, import directly
 export { getConfigManaged, enable, disable, testExisting, testUnsaved } from './oidcProviderAdmins.generated.remote';
 export { getGlucose } from './clockFaces.generated.remote';
 export * from './glucoseProcessingSettings.generated.remote';
@@ -37,6 +38,7 @@ export { validateInvite, redeemInvite } from './alertInvites.generated.remote';
 export * from './alertReplays.generated.remote';
 export * from './alertRules.generated.remote';
 export * from './alerts.generated.remote';
+export { getActive, clear } from './dndWindows.generated.remote';
 export * from './notifications.generated.remote';
 // './tenantAlertSettings.generated.remote' - all exports collide, import directly
 export * from './trackers.generated.remote';
@@ -53,7 +55,7 @@ export * from './shareLinks.generated.remote';
 export * from './activities.generated.remote';
 export { getBodyWeights, getBodyWeight, updateBodyWeight, deleteBodyWeight } from './bodyWeights.generated.remote';
 export * from './heartRates.generated.remote';
-export * from './patientRecords.generated.remote';
+export { getPatientRecord, updatePatientRecord, createDevice, updateDevice, deleteDevice, getInsulins, createInsulin, updateInsulin, deleteInsulin } from './patientRecords.generated.remote';
 export * from './stepCounts.generated.remote';
 // './bgChecks.generated.remote' - all exports collide, import directly
 // './calibrations.generated.remote' - all exports collide, import directly
@@ -66,6 +68,7 @@ export * from './batteries.generated.remote';
 // './uploaderSnapshots.generated.remote' - all exports collide, import directly
 export * from './careLinkConnects.generated.remote';
 export * from './configurations.generated.remote';
+export { getCapabilityCatalog, rename, getActiveIntents } from './clientDevices.generated.remote';
 export * from './audits.generated.remote';
 export * from './actograms.generated.remote';
 export * from './chartDatas.generated.remote';

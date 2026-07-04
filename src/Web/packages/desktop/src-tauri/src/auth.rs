@@ -4,8 +4,9 @@
 //!
 //! Ports the Windows 11 widget's `OAuthService` pattern (src/Widgets/.../OAuthService.cs):
 //! RFC 7591 dynamic client registration, RFC 8628 device-authorization grant, refresh-token
-//! rotation, and credential persistence to the Windows Credential Manager. Read-scoped
-//! (`glucose.read therapy.read devices.read`).
+//! rotation, and credential persistence to the Windows Credential Manager. Read-scoped, plus
+//! `device.notify` (toast) and `device.actuate` (tray_flash) so the companion can register as a
+//! notify- and tray-flash-capable actuation target.
 //!
 //! Separate from the CareLink link-code JWT in `main.rs`, which is a one-shot connect credential;
 //! this module owns the long-lived credential the poll loop runs on.
@@ -13,7 +14,7 @@
 use serde::{Deserialize, Serialize};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
-const DEFAULT_SCOPES: &str = "glucose.read therapy.read devices.read";
+const DEFAULT_SCOPES: &str = "glucose.read therapy.read devices.read device.notify device.actuate";
 const CLIENT_NAME: &str = "Nocturne Companion";
 const SOFTWARE_ID: &str = "nocturne-companion";
 const CLIENT_URI: &str = "https://github.com/nightscout/nocturne";
@@ -25,6 +26,11 @@ const CRED_USER: &str = "default";
 
 // Refresh this many seconds before the access token expires.
 const REFRESH_SKEW_SECS: i64 = 60;
+
+// Serializes refreshes so concurrent callers (the poll loop and the realtime hub) can't fire two
+// refresh_token grants at once and replay a rotating (single-use) refresh token, which would
+// invalidate the newer one and force a re-link.
+static REFRESH_LOCK: std::sync::OnceLock<tokio::sync::Mutex<()>> = std::sync::OnceLock::new();
 
 // Serialized as the Credential Manager secret.
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
@@ -65,6 +71,23 @@ struct TokenResponse {
 struct OAuthError {
     error: String,
     error_description: Option<String>,
+}
+
+/// Why a token could not be produced. `NotLinked` is definitive — there is no usable credential
+/// (never linked, or the refresh grant was rejected) and only a relink fixes it. `Transient` should
+/// be retried with the same credential.
+#[derive(Debug)]
+pub enum TokenError {
+    NotLinked(String),
+    Transient(String),
+}
+
+impl std::fmt::Display for TokenError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            TokenError::NotLinked(m) | TokenError::Transient(m) => f.write_str(m),
+        }
+    }
 }
 
 /// Shown to the user to complete the device-authorization ceremony.
@@ -108,7 +131,7 @@ pub async fn begin_device_flow(
         .form(&[("client_id", client_id.as_str()), ("scope", DEFAULT_SCOPES)])
         .send()
         .await
-        .map_err(|e| format!("Could not reach {api_url}: {e}"))?;
+        .map_err(|e| format!("Could not reach {api_url}: {}", crate::error_chain(&e)))?;
 
     if !resp.status().is_success() {
         return Err(format!("Device authorization failed ({}).", oauth_error(resp).await));
@@ -159,7 +182,7 @@ pub async fn await_authorization(
             ])
             .send()
             .await
-            .map_err(|e| format!("Could not reach the server: {e}"))?;
+            .map_err(|e| format!("Could not reach the server: {}", crate::error_chain(&e)))?;
 
         if resp.status().is_success() {
             let token: TokenResponse = resp
@@ -193,15 +216,28 @@ pub async fn await_authorization(
 }
 
 /// Returns `(api_url, access_token)` for the poller, refreshing the access token first if it is
-/// within `REFRESH_SKEW_SECS` of expiry. Errors if there are no stored credentials (the user
-/// must link) or the refresh fails (re-link needed).
-pub async fn get_valid_token(client: &reqwest::Client) -> Result<(String, String), String> {
-    let creds = load().ok_or("Not linked to a Nocturne server yet.")?;
+/// within `REFRESH_SKEW_SECS` of expiry. `TokenError::NotLinked` means there is no usable
+/// credential (never linked, or the refresh grant was rejected — re-link needed);
+/// `TokenError::Transient` means the refresh should be retried later.
+pub async fn get_valid_token(client: &reqwest::Client) -> Result<(String, String), TokenError> {
+    let creds = load().ok_or_else(|| TokenError::NotLinked("Not linked to a Nocturne server yet.".to_string()))?;
+    if now_unix() < creds.expires_at_unix - REFRESH_SKEW_SECS {
+        return Ok((creds.api_url, creds.access_token));
+    }
+
+    // A refresh is due. Serialize it: another caller may already be refreshing, so take the lock and
+    // re-check before spending the single-use refresh token.
+    let lock = REFRESH_LOCK.get_or_init(|| tokio::sync::Mutex::new(()));
+    let _guard = lock.lock().await;
+
+    let creds = load().ok_or_else(|| TokenError::NotLinked("Not linked to a Nocturne server yet.".to_string()))?;
     if now_unix() < creds.expires_at_unix - REFRESH_SKEW_SECS {
         return Ok((creds.api_url, creds.access_token));
     }
     if creds.refresh_token.is_empty() {
-        return Err("Session expired and there is no refresh token; please link again.".to_string());
+        return Err(TokenError::NotLinked(
+            "Session expired and there is no refresh token; please link again.".to_string(),
+        ));
     }
 
     let resp = client
@@ -213,16 +249,28 @@ pub async fn get_valid_token(client: &reqwest::Client) -> Result<(String, String
         ])
         .send()
         .await
-        .map_err(|e| format!("Could not reach {}: {e}", creds.api_url))?;
+        .map_err(|e| {
+            TokenError::Transient(format!("Could not reach {}: {}", creds.api_url, crate::error_chain(&e)))
+        })?;
 
     if !resp.status().is_success() {
-        return Err(format!("Token refresh failed ({}); please link again.", oauth_error(resp).await));
+        let status = resp.status().as_u16();
+        return Err(match resp.json::<OAuthError>().await {
+            // `invalid_grant` means the refresh token itself was rejected (revoked/expired): the
+            // stored credential is dead. Any other error could be transient.
+            Ok(e) if e.error == "invalid_grant" => TokenError::NotLinked(format!(
+                "Token refresh was rejected ({}); please link again.",
+                describe_oauth(&e)
+            )),
+            Ok(e) => TokenError::Transient(format!("Token refresh failed ({}).", describe_oauth(&e))),
+            Err(_) => TokenError::Transient(format!("Token refresh failed (HTTP {status}).")),
+        });
     }
 
     let token: TokenResponse = resp
         .json()
         .await
-        .map_err(|e| format!("Unexpected refresh response: {e}"))?;
+        .map_err(|e| TokenError::Transient(format!("Unexpected refresh response: {e}")))?;
 
     let refreshed = StoredCreds {
         api_url: creds.api_url.clone(),
@@ -236,12 +284,75 @@ pub async fn get_valid_token(client: &reqwest::Client) -> Result<(String, String
             .map(|s| s.split_whitespace().map(str::to_string).collect())
             .unwrap_or(creds.scopes),
     };
-    store(&refreshed)?;
+    store(&refreshed).map_err(TokenError::Transient)?;
     Ok((refreshed.api_url, token.access_token))
 }
 
 pub fn is_linked() -> bool {
     load().is_some()
+}
+
+/// The scopes granted to the stored credential, if linked. Empty when the server did not echo a
+/// `scope` on the token response (callers should treat that as unknown, not missing).
+pub fn granted_scopes() -> Option<Vec<String>> {
+    load().map(|c| c.scopes)
+}
+
+/// Extracts the `sub` (subject id) claim from a JWT access token without verifying its signature —
+/// the token is our own, already trusted for the HTTP calls it authorizes. Splits on '.', base64url-
+/// decodes the payload segment, and reads `sub`. Returns `None` if the token isn't a well-formed JWT
+/// or has no string `sub`. Used to filter fan-out SignalR events (e.g. `device_notification`) to this
+/// device's user in a multi-user tenant.
+pub fn subject_from_token(token: &str) -> Option<String> {
+    let payload_b64 = token.split('.').nth(1)?;
+    let payload = base64url_decode(payload_b64)?;
+    let json: serde_json::Value = serde_json::from_slice(&payload).ok()?;
+    json.get("sub").and_then(|s| s.as_str()).map(str::to_string)
+}
+
+/// Decodes an unpadded base64url segment (JWT alphabet: `-`/`_`, no `=` padding). Returns `None` on
+/// any invalid character or a truncated (length ≡ 1 mod 4) input.
+fn base64url_decode(input: &str) -> Option<Vec<u8>> {
+    fn val(c: u8) -> Option<u8> {
+        match c {
+            b'A'..=b'Z' => Some(c - b'A'),
+            b'a'..=b'z' => Some(c - b'a' + 26),
+            b'0'..=b'9' => Some(c - b'0' + 52),
+            b'-' => Some(62),
+            b'_' => Some(63),
+            _ => None,
+        }
+    }
+
+    let bytes = input.as_bytes();
+    if bytes.len() % 4 == 1 {
+        return None;
+    }
+
+    let mut out = Vec::with_capacity(bytes.len() / 4 * 3);
+    for chunk in bytes.chunks(4) {
+        let mut buf = [0u8; 4];
+        let mut n = 0;
+        for (i, &b) in chunk.iter().enumerate() {
+            buf[i] = val(b)?;
+            n += 1;
+        }
+        // n symbols -> n*6 bits -> (n*6)/8 whole bytes.
+        let combined = (u32::from(buf[0]) << 18)
+            | (u32::from(buf[1]) << 12)
+            | (u32::from(buf[2]) << 6)
+            | u32::from(buf[3]);
+        if n >= 2 {
+            out.push((combined >> 16) as u8);
+        }
+        if n >= 3 {
+            out.push((combined >> 8) as u8);
+        }
+        if n >= 4 {
+            out.push(combined as u8);
+        }
+    }
+    Some(out)
 }
 
 /// The linked server's base URL, if any. The floating clock window uses it to build the public
@@ -274,7 +385,7 @@ async fn register_client(client: &reqwest::Client, api_url: &str) -> Result<Stri
         }))
         .send()
         .await
-        .map_err(|e| format!("Could not reach {api_url}: {e}"))?;
+        .map_err(|e| format!("Could not reach {api_url}: {}", crate::error_chain(&e)))?;
 
     if !resp.status().is_success() {
         return Err(format!("Client registration failed ({}).", oauth_error(resp).await));
@@ -299,11 +410,16 @@ async fn oauth_error_code(resp: reqwest::Response) -> String {
 async fn oauth_error(resp: reqwest::Response) -> String {
     let status = resp.status().as_u16();
     match resp.json::<OAuthError>().await {
-        Ok(e) => match e.error_description {
-            Some(d) => format!("{}: {d}", e.error),
-            None => e.error,
-        },
+        Ok(e) => describe_oauth(&e),
         Err(_) => format!("HTTP {status}"),
+    }
+}
+
+/// `error: error_description` when a description is present, else just the code.
+fn describe_oauth(e: &OAuthError) -> String {
+    match &e.error_description {
+        Some(d) => format!("{}: {d}", e.error),
+        None => e.error.clone(),
     }
 }
 
@@ -363,5 +479,34 @@ mod tests {
         let t: TokenResponse = serde_json::from_str(json).unwrap();
         assert_eq!(t.access_token, "AT");
         assert!(t.refresh_token.is_none());
+    }
+
+    #[test]
+    fn subject_from_token_reads_sub_claim() {
+        // header . payload({"sub":"user-42","name":"Rhys"}) . signature — signature not verified.
+        let jwt = "eyJhbGciOiJIUzI1NiJ9\
+                   .eyJzdWIiOiJ1c2VyLTQyIiwibmFtZSI6IlJoeXMifQ\
+                   .c2lnbmF0dXJl";
+        assert_eq!(subject_from_token(jwt).as_deref(), Some("user-42"));
+    }
+
+    #[test]
+    fn subject_from_token_rejects_non_jwt() {
+        assert!(subject_from_token("not-a-jwt").is_none());
+        // Two segments but the payload has no `sub`.
+        let no_sub = "eyJhbGciOiJIUzI1NiJ9.eyJuYW1lIjoiUmh5cyJ9";
+        assert!(subject_from_token(no_sub).is_none());
+    }
+
+    #[test]
+    fn base64url_decode_round_trips_and_rejects_bad_input() {
+        // "Man" -> "TWFu" (no padding needed), 3 bytes.
+        assert_eq!(base64url_decode("TWFu").unwrap(), b"Man");
+        // "M" -> "TQ" (2 symbols -> 1 byte).
+        assert_eq!(base64url_decode("TQ").unwrap(), b"M");
+        // Length ≡ 1 mod 4 is impossible in valid base64.
+        assert!(base64url_decode("TWF").is_some()); // 3 symbols -> 2 bytes, valid
+        assert!(base64url_decode("A").is_none()); // 1 symbol, truncated
+        assert!(base64url_decode("**").is_none()); // invalid chars
     }
 }
