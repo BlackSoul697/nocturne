@@ -522,6 +522,11 @@ public static class ServiceRegistrationExtensions
 
         // Device resolution
         services.AddScoped<IDeviceService, DeviceService>();
+        services.AddScoped<IPatientDeviceStamper, PatientDeviceStamper>();
+
+        // Canonical glucose stream (single-stream view for v1/v3, alarms, unfiltered analytics)
+        services.AddScoped<ICanonicalGlucoseService, CanonicalGlucoseService>();
+        services.AddScoped<ICanonicalAlertEvaluator, CanonicalAlertEvaluator>();
 
         // Coach marks
         services.AddScoped<ICoachMarkService, CoachMarkService>();
@@ -742,6 +747,7 @@ public static class ServiceRegistrationExtensions
         services.AddScoped<IAlertRepository, AlertRepository>();
         services.Configure<AlertEvaluationOptions>(
             configuration.GetSection(AlertEvaluationOptions.SectionName));
+        services.AddScoped<IReservoirEstimationService, ReservoirEstimationService>();
         // Bundles the enricher's data-source dependencies; resolved positionally from DI.
         services.AddScoped<SensorContextEnricherDependencies>();
         services.AddScoped<ISensorContextEnricher, SensorContextEnricher>();

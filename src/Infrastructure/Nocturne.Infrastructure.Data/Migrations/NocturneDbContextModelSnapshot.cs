@@ -5476,6 +5476,10 @@ namespace Nocturne.Infrastructure.Data.Migrations
                         .HasColumnType("character varying(4096)")
                         .HasColumnName("notes");
 
+                    b.Property<Guid?>("PatientDeviceId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("patient_device_id");
+
                     b.Property<string>("SyncIdentifier")
                         .HasMaxLength(256)
                         .HasColumnType("character varying(256)")
@@ -5509,6 +5513,10 @@ namespace Nocturne.Infrastructure.Data.Migrations
 
                     b.HasIndex("CorrelationId")
                         .HasDatabaseName("ix_basal_injections_correlation_id");
+
+                    b.HasIndex("PatientDeviceId")
+                        .HasDatabaseName("ix_basal_injections_patient_device_id")
+                        .HasFilter("patient_device_id IS NOT NULL");
 
                     b.HasIndex("Timestamp")
                         .IsDescending()
@@ -6505,6 +6513,10 @@ namespace Nocturne.Infrastructure.Data.Migrations
                         .HasColumnType("double precision")
                         .HasColumnName("mgdl");
 
+                    b.Property<Guid?>("PatientDeviceId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("patient_device_id");
+
                     b.Property<DateTime>("SysCreatedAt")
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("sys_created_at");
@@ -6532,6 +6544,10 @@ namespace Nocturne.Infrastructure.Data.Migrations
 
                     b.HasIndex("LegacyId")
                         .HasDatabaseName("ix_meter_glucose_legacy_id");
+
+                    b.HasIndex("PatientDeviceId")
+                        .HasDatabaseName("ix_meter_glucose_patient_device_id")
+                        .HasFilter("patient_device_id IS NOT NULL");
 
                     b.HasIndex("TenantId");
 
@@ -6705,6 +6721,10 @@ namespace Nocturne.Infrastructure.Data.Migrations
                         .HasMaxLength(4096)
                         .HasColumnType("character varying(4096)")
                         .HasColumnName("notes");
+
+                    b.Property<int?>("Rank")
+                        .HasColumnType("integer")
+                        .HasColumnName("rank");
 
                     b.Property<string>("SerialNumber")
                         .HasMaxLength(256)
@@ -8727,6 +8747,11 @@ namespace Nocturne.Infrastructure.Data.Migrations
 
             modelBuilder.Entity("Nocturne.Infrastructure.Data.Entities.V4.BasalInjectionEntity", b =>
                 {
+                    b.HasOne("Nocturne.Infrastructure.Data.Entities.V4.PatientDeviceEntity", null)
+                        .WithMany()
+                        .HasForeignKey("PatientDeviceId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
                     b.HasOne("Nocturne.Infrastructure.Data.Entities.TenantEntity", null)
                         .WithMany()
                         .HasForeignKey("TenantId")
@@ -8847,6 +8872,11 @@ namespace Nocturne.Infrastructure.Data.Migrations
 
             modelBuilder.Entity("Nocturne.Infrastructure.Data.Entities.V4.MeterGlucoseEntity", b =>
                 {
+                    b.HasOne("Nocturne.Infrastructure.Data.Entities.V4.PatientDeviceEntity", null)
+                        .WithMany()
+                        .HasForeignKey("PatientDeviceId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
                     b.HasOne("Nocturne.Infrastructure.Data.Entities.TenantEntity", null)
                         .WithMany()
                         .HasForeignKey("TenantId")

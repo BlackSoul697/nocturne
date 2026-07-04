@@ -74,6 +74,7 @@ public class AlertReplayServiceTests
             new Mock<Nocturne.Core.Contracts.Profiles.Resolvers.ITherapySettingsResolver>().Object,
             new Mock<Nocturne.Core.Contracts.Sleep.ISleepService>().Object,
             new Mock<Nocturne.Infrastructure.Data.Abstractions.ITrackerRepository>().Object,
+            new Mock<Nocturne.API.Services.Devices.IReservoirEstimationService>().Object,
             Options.Create(new AlertEvaluationOptions()));
         var enricher = new SensorContextEnricher(
             enricherDeps,
@@ -84,6 +85,7 @@ public class AlertReplayServiceTests
         _sut = new AlertReplayService(
             _alertRepository.Object,
             _glucoseRepository.Object,
+            TestDoubles.CanonicalGlucosePassThrough.Create(),
             enricher,
             _tenantAccessor.Object,
             NullLogger<AlertReplayService>.Instance);

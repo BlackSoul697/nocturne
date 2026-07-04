@@ -131,8 +131,12 @@ internal sealed class SensorContextEnricher : ISensorContextEnricher
 
         if (needs.NeedsReservoir)
         {
-            var reservoirUnits = await FetchReservoirAsync(isReplay ? now : null, ct);
-            enriched = enriched with { ReservoirUnits = reservoirUnits };
+            var estimate = await _deps.Reservoir.GetEstimateAsync(isReplay ? now : null, ct);
+            enriched = enriched with
+            {
+                ReservoirUnits = estimate?.Units,
+                ReservoirIsLowerBound = estimate?.IsLowerBound ?? false,
+            };
         }
 
         if (needs.NeedsSiteAge)
@@ -662,18 +666,6 @@ internal sealed class SensorContextEnricher : ISensorContextEnricher
             points.Add(new PredictedGlucosePoint(offsetMinutes, (decimal)curve[i]));
         }
         return points;
-    }
-
-    private async Task<decimal?> FetchReservoirAsync(DateTime? asOf, CancellationToken ct)
-    {
-        // Pin the upper bound to `asOf` for replay; live path leaves both bounds null and gets
-        // the absolute latest. `to: asOf` upper-bounds the read to the replay tick (inclusive).
-        var snapshots = await _deps.PumpSnapshots.GetAsync(
-            from: null, to: asOf, device: null, source: null,
-            limit: 1, offset: 0, descending: true, ct: ct);
-
-        var reservoir = snapshots.FirstOrDefault()?.Reservoir;
-        return reservoir is null ? null : (decimal)reservoir.Value;
     }
 
     private async Task<DateTime?> FetchLatestEventAsync(DeviceEventType eventType, DateTime? asOf, CancellationToken ct)
