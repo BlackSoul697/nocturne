@@ -38419,6 +38419,20 @@
             "format": "int32",
             "nullable": true
           },
+          "lowReservoirUnits": {
+            "type": "number",
+            "description": "Reservoir category only: units level below which the synced managed reservoir\nrule fires. Null = no level rule.",
+            "format": "double",
+            "nullable": true
+          },
+          "lowReservoirUrgency": {
+            "description": "Urgency of the low-reservoir level rule.",
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/NotificationUrgency"
+              }
+            ]
+          },
           "notificationThresholds": {
             "type": "array",
             "items": {
@@ -38631,6 +38645,20 @@
             "format": "int32",
             "nullable": true
           },
+          "lowReservoirUnits": {
+            "type": "number",
+            "description": "Reservoir category only: units level below which the synced managed reservoir\nrule fires. Null = no level rule.",
+            "format": "double",
+            "nullable": true
+          },
+          "lowReservoirUrgency": {
+            "description": "Urgency of the low-reservoir level rule.",
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/NotificationUrgency"
+              }
+            ]
+          },
           "notificationThresholds": {
             "type": "array",
             "nullable": true,
@@ -38761,6 +38789,21 @@
             "type": "integer",
             "format": "int32",
             "nullable": true
+          },
+          "lowReservoirUnits": {
+            "type": "number",
+            "description": "Reservoir category only: units level below which the synced managed reservoir\nrule fires. The tracker editor posts the whole definition, so for a Reservoir\ndefinition this value is applied as-is on every update — null clears the rule\n(null-means-keep cannot express clearing).",
+            "format": "double",
+            "nullable": true
+          },
+          "lowReservoirUrgency": {
+            "description": "Urgency of the low-reservoir level rule. Null keeps the current value.",
+            "nullable": true,
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/NotificationUrgency"
+              }
+            ]
           },
           "notificationThresholds": {
             "type": "array",
