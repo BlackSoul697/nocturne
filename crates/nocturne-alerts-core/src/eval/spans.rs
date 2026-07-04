@@ -1,9 +1,11 @@
 //! State-span and cross-alert leaves: alert_state, override_active,
-//! do_not_disturb, pump_state, state_span_active.
+//! do_not_disturb, pump_state, state_span_active, sleep_session_active.
 
 use super::Env;
 use crate::compare::total_minutes;
-use crate::model::{ActiveForPayload, AlertStatePayload, PumpStatePayload, StateSpanPayload};
+use crate::model::{
+    ActiveForPayload, AlertStatePayload, PumpStatePayload, SleepSessionPayload, StateSpanPayload,
+};
 
 /// Cross-alert state. `firing`: snapshot state equals "firing" (ci);
 /// `unacknowledged`: firing and not acknowledged; `acknowledged`: acknowledged
@@ -124,4 +126,11 @@ pub(super) fn state_span_active(p: &StateSpanPayload, env: &Env) -> bool {
         return true;
     };
     total_minutes(env.now - snapshot.started_at) >= f64::from(for_minutes)
+}
+
+/// Sleep-session leaf. Matches the pre-computed `sleep_session_active` signal
+/// against the asserted side: `is_active` true fires while a session is active,
+/// false fires while none is.
+pub(super) fn sleep_session_active(p: &SleepSessionPayload, env: &Env) -> bool {
+    env.ctx.sleep_session_active == p.is_active
 }

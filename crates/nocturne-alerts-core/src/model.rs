@@ -58,11 +58,12 @@ pub enum ConditionKind {
     DayOfWeek,
     PumpState,
     StateSpanActive,
+    SleepSessionActive,
     TrackerAge,
 }
 
 /// `(kind, wire name, C# enum member name)` in declaration order.
-const KINDS: [(ConditionKind, &str, &str); 32] = [
+const KINDS: [(ConditionKind, &str, &str); 33] = [
     (ConditionKind::Threshold, "threshold", "Threshold"),
     (
         ConditionKind::RateOfChange,
@@ -137,6 +138,11 @@ const KINDS: [(ConditionKind, &str, &str); 32] = [
         ConditionKind::StateSpanActive,
         "state_span_active",
         "StateSpanActive",
+    ),
+    (
+        ConditionKind::SleepSessionActive,
+        "sleep_session_active",
+        "SleepSessionActive",
     ),
     (ConditionKind::TrackerAge, "tracker_age", "TrackerAge"),
 ];
@@ -520,6 +526,13 @@ pub struct StateSpanPayload {
     pub for_minutes: Option<i32>,
 }
 
+#[derive(Debug, Clone, Default)]
+pub struct SleepSessionPayload {
+    /// Asserts the side of the pre-computed `sleep_session_active` signal to
+    /// match: `true` fires while a session is active, `false` while none is.
+    pub is_active: bool,
+}
+
 /// Parsed kind-specific payload of a [`Node`].
 #[derive(Debug, Clone)]
 pub enum Payload {
@@ -543,6 +556,7 @@ pub enum Payload {
     DayOfWeek(DayOfWeekPayload),
     PumpState(PumpStatePayload),
     StateSpan(StateSpanPayload),
+    SleepSession(SleepSessionPayload),
     TrackerAge(TrackerAgePayload),
 }
 
@@ -649,6 +663,9 @@ pub fn parse_payload(kind: ConditionKind, v: &Value) -> ParseResult<Payload> {
             state: f_string(o, "state")?,
             is_active: f_bool(o, "is_active")?,
             for_minutes: f_opt_i32(o, "for_minutes")?,
+        }),
+        ConditionKind::SleepSessionActive => Payload::SleepSession(SleepSessionPayload {
+            is_active: f_bool(o, "is_active")?,
         }),
         ConditionKind::TrackerAge => Payload::TrackerAge(TrackerAgePayload {
             tracker_definition_id: f_uuid(o, "tracker_definition_id")?,

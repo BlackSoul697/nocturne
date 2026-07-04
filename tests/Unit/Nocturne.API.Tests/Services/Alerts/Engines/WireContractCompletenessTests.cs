@@ -39,9 +39,6 @@ public class WireContractCompletenessTests
             // Scoped DND suppression is applied host-side (DndSuppressionGate); the engine
             // only sees the tenant-wide ActiveDoNotDisturb snapshot.
             nameof(SensorContext.ActiveDndScopes),
-            // sleep_session_active is a managed-engine-only leaf; the Rust FFI engine has no
-            // corresponding evaluator, so the signal deliberately does not cross the wire.
-            nameof(SensorContext.SleepSessionActive),
         ]),
         new(typeof(PredictedGlucosePoint), "WirePrediction", typeof(ScenarioPrediction), []),
         // AlertId travels as the wire record's extra field (it is the dictionary key on

@@ -790,6 +790,7 @@ fn payload_json(p: &Payload) -> Value {
             "is_active": s.is_active,
             "for_minutes": opt_i32(s.for_minutes),
         }),
+        Payload::SleepSession(s) => json!({ "is_active": s.is_active }),
         Payload::TrackerAge(t) => json!({
             "tracker_definition_id": t.tracker_definition_id.to_string(),
             "operator": opt_str(&t.operator),

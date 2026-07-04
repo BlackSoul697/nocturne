@@ -175,6 +175,7 @@ internal static class RustEnvelopeMapper
                 : ctx.ActiveTrackers
                     .Select(kv => new WireTrackerReference(kv.Key, Utc(kv.Value)!.Value))
                     .ToList(),
+            SleepSessionActive = ctx.SleepSessionActive,
         };
 
         return JsonSerializer.SerializeToElement(wire, AlertEnvelopeJson.Options);
@@ -277,6 +278,7 @@ internal static class RustEnvelopeMapper
         [JsonPropertyName("active_pump_state")] public WirePumpState? ActivePumpState { get; init; }
         [JsonPropertyName("active_state_spans")] public List<WireStateSpan>? ActiveStateSpans { get; init; }
         [JsonPropertyName("active_trackers")] public List<WireTrackerReference>? ActiveTrackers { get; init; }
+        [JsonPropertyName("sleep_session_active")] public bool SleepSessionActive { get; init; }
     }
 
     private sealed record WirePrediction(
