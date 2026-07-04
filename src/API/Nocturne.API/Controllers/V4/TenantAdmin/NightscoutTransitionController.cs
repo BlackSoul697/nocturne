@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Options;
+using OpenApi.Remote.Attributes;
 using Nocturne.API.Attributes;
 using Nocturne.API.Configuration;
 using Nocturne.API.Services.Compatibility;
@@ -61,6 +62,7 @@ public class NightscoutTransitionController : ControllerBase
     /// write-back health, and disconnect readiness recommendation.
     /// </summary>
     [HttpGet("status")]
+    [RemoteQuery]
     [ProducesResponseType(typeof(NightscoutTransitionStatus), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status500InternalServerError)]
     public async Task<ActionResult<NightscoutTransitionStatus>> GetTransitionStatus(
