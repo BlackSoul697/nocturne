@@ -6,7 +6,7 @@ export { deleteAll, updateStatus } from './coachMarks.generated.remote';
 // './connectorStatus.generated.remote' - all exports collide, import directly
 // './deviceCatalogs.generated.remote' - all exports collide, import directly
 // './insulinCatalogs.generated.remote' - all exports collide, import directly
-export { getTenants, getTransitionStatus } from './platforms.generated.remote';
+export { getTenants } from './platforms.generated.remote';
 export { validateUsername, ownerOptions, ownerComplete, ownerOidc } from './setups.generated.remote';
 export { getTimeline, recorrect } from './timezoneTimelines.generated.remote';
 // './basalInjections.generated.remote' - all exports collide, import directly
@@ -19,6 +19,7 @@ export * from './nutritions.generated.remote';
 export { getSuggestion, deleteSuggestion, acceptSuggestion, dismissSuggestion, triggerDetection } from './compressionLows.generated.remote';
 export * from './deduplications.generated.remote';
 export { testConnection, startMigration, startFromConnector, cancelMigration, getHistory, getPendingConfig, getSources } from './migrations.generated.remote';
+// './nightscoutTransitions.generated.remote' - all exports collide, import directly
 export { getConfigManaged, enable, disable, testExisting, testUnsaved } from './oidcProviderAdmins.generated.remote';
 export { getGlucose } from './clockFaces.generated.remote';
 export * from './glucoseProcessingSettings.generated.remote';
