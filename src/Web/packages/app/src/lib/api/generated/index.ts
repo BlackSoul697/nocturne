@@ -55,7 +55,7 @@ export * from './shareLinks.generated.remote';
 export * from './activities.generated.remote';
 export { getBodyWeights, getBodyWeight, updateBodyWeight, deleteBodyWeight } from './bodyWeights.generated.remote';
 export * from './heartRates.generated.remote';
-export { getPatientRecord, updatePatientRecord, createDevice, updateDevice, deleteDevice, getInsulins, createInsulin, updateInsulin, deleteInsulin } from './patientRecords.generated.remote';
+export { getPatientRecord, updatePatientRecord, createDevice, getDiscoveredSources, updateDevice, deleteDevice, reorderDevices, getInsulins, createInsulin, updateInsulin, deleteInsulin } from './patientRecords.generated.remote';
 export * from './stepCounts.generated.remote';
 // './bgChecks.generated.remote' - all exports collide, import directly
 // './calibrations.generated.remote' - all exports collide, import directly

@@ -15809,8 +15809,34 @@
         },
         "x-remote-type": "form",
         "x-remote-invalidates": [
-          "GetDevices"
+          "GetDevices",
+          "GetDiscoveredSources"
         ]
+      }
+    },
+    "/api/v4/patient-record/devices/discovered-sources": {
+      "get": {
+        "tags": [
+          "Patient Record"
+        ],
+        "summary": "Lists distinct (DataSource, Device) combinations seen in recent unattributed readings —\ncandidate streams the user can register as devices from the settings UI.",
+        "operationId": "PatientRecord_GetDiscoveredSources",
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/DiscoveredSource"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "x-remote-type": "query"
       }
     },
     "/api/v4/patient-record/devices/{id}": {
@@ -15882,6 +15908,49 @@
         "responses": {
           "204": {
             "description": ""
+          }
+        },
+        "x-remote-type": "command",
+        "x-remote-invalidates": [
+          "GetDevices"
+        ]
+      }
+    },
+    "/api/v4/patient-record/devices/reorder": {
+      "post": {
+        "tags": [
+          "Patient Record"
+        ],
+        "summary": "Reassigns device priority in a single batch. Drag-to-reorder in the UI sends the full ordered\nlist; each entry's position becomes its Rank. One round trip instead\nof one PUT per device. An imperative command (no HTML form), mirroring the delete/restore surface.",
+        "operationId": "PatientRecord_ReorderDevices",
+        "requestBody": {
+          "x-name": "ranks",
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/DeviceRankAssignment"
+                }
+              }
+            }
+          },
+          "required": true,
+          "x-position": 1
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/PatientDevice"
+                  }
+                }
+              }
+            }
           }
         },
         "x-remote-type": "command",
@@ -17592,6 +17661,8 @@
         "tags": [
           "Sensor Glucose"
         ],
+        "summary": "Lists sensor glucose readings. Adds an optional patientDeviceId query filter on top of the base\nlist surface: when set, results are that registered device's raw readings (canonical stream selection is\nbypassed); when unset, the caller sees every stored reading. Pagination totals match the base\ndevice/source behaviour (the count is unscoped by the device filters).",
+        "description": "The patientDeviceId query parameter is read directly from the request because the base list\nsignature (shared by every V4 read controller) has no device-attribution concept — binding it here keeps\na single GET action while adding the sensor-glucose-only filter.",
         "operationId": "SensorGlucose_GetAll",
         "parameters": [
           {
@@ -23517,6 +23588,16 @@
               ]
             },
             "x-position": 3
+          },
+          {
+            "name": "patientDeviceId",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "format": "guid",
+              "nullable": true
+            },
+            "x-position": 4
           }
         ],
         "responses": {
@@ -40283,6 +40364,45 @@
           "Unknown"
         ]
       },
+      "DiscoveredSource": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "dataSource": {
+            "type": "string",
+            "nullable": true
+          },
+          "device": {
+            "type": "string",
+            "nullable": true
+          },
+          "readingCount": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "lastSeen": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "DeviceRankAssignment": {
+        "type": "object",
+        "description": "A single device→rank assignment in a ReorderDevices batch.",
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "The patient device identifier.",
+            "format": "guid"
+          },
+          "rank": {
+            "type": "integer",
+            "description": "Its new priority (lower = higher priority).",
+            "format": "int32"
+          }
+        }
+      },
       "PatientInsulin": {
         "type": "object",
         "additionalProperties": false,
@@ -47136,6 +47256,30 @@
             "items": {
               "$ref": "#/components/schemas/AveragedStats"
             }
+          },
+          "contributingDevices": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ContributingDevice"
+            }
+          }
+        }
+      },
+      "ContributingDevice": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "patientDeviceId": {
+            "type": "string",
+            "format": "guid",
+            "nullable": true
+          },
+          "name": {
+            "type": "string"
+          },
+          "readingCount": {
+            "type": "integer",
+            "format": "int32"
           }
         }
       },

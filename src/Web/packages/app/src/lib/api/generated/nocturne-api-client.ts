@@ -17364,6 +17364,44 @@ export class PatientRecordClient {
     }
 
     /**
+     * Lists distinct (DataSource, Device) combinations seen in recent unattributed readings —
+    candidate streams the user can register as devices from the settings UI.
+     */
+    getDiscoveredSources(signal?: AbortSignal): Promise<DiscoveredSource[]> {
+        let url_ = this.baseUrl + "/api/v4/patient-record/devices/discovered-sources";
+        url_ = url_.replace(/[?&]$/, "");
+
+        let options_: RequestInit = {
+            method: "GET",
+            signal,
+            headers: {
+                "Accept": "application/json"
+            }
+        };
+
+        return this.http.fetch(url_, options_).then((_response: Response) => {
+            return this.processGetDiscoveredSources(_response);
+        });
+    }
+
+    protected processGetDiscoveredSources(response: Response): Promise<DiscoveredSource[]> {
+        const status = response.status;
+        let _headers: any = {}; if (response.headers && response.headers.forEach) { response.headers.forEach((v: any, k: any) => _headers[k] = v); };
+        if (status === 200) {
+            return response.text().then((_responseText) => {
+            let result200: any = null;
+            result200 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver) as DiscoveredSource[];
+            return result200;
+            });
+        } else if (status !== 200 && status !== 204) {
+            return response.text().then((_responseText) => {
+            return throwException("An unexpected server error occurred.", status, _responseText, _headers);
+            });
+        }
+        return Promise.resolve<DiscoveredSource[]>(null as any);
+    }
+
+    /**
      * Update a patient device
      */
     updateDevice(id: string, model: PatientDevice, signal?: AbortSignal): Promise<PatientDevice> {
@@ -17442,6 +17480,49 @@ export class PatientRecordClient {
             });
         }
         return Promise.resolve<void>(null as any);
+    }
+
+    /**
+     * Reassigns device priority in a single batch. Drag-to-reorder in the UI sends the full ordered
+    list; each entry's position becomes its Rank. One round trip instead
+    of one PUT per device. An imperative command (no HTML form), mirroring the delete/restore surface.
+     */
+    reorderDevices(ranks: DeviceRankAssignment[], signal?: AbortSignal): Promise<PatientDevice[]> {
+        let url_ = this.baseUrl + "/api/v4/patient-record/devices/reorder";
+        url_ = url_.replace(/[?&]$/, "");
+
+        const content_ = JSON.stringify(ranks);
+
+        let options_: RequestInit = {
+            body: content_,
+            method: "POST",
+            signal,
+            headers: {
+                "Content-Type": "application/json",
+                "Accept": "application/json"
+            }
+        };
+
+        return this.http.fetch(url_, options_).then((_response: Response) => {
+            return this.processReorderDevices(_response);
+        });
+    }
+
+    protected processReorderDevices(response: Response): Promise<PatientDevice[]> {
+        const status = response.status;
+        let _headers: any = {}; if (response.headers && response.headers.forEach) { response.headers.forEach((v: any, k: any) => _headers[k] = v); };
+        if (status === 200) {
+            return response.text().then((_responseText) => {
+            let result200: any = null;
+            result200 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver) as PatientDevice[];
+            return result200;
+            });
+        } else if (status !== 200 && status !== 204) {
+            return response.text().then((_responseText) => {
+            return throwException("An unexpected server error occurred.", status, _responseText, _headers);
+            });
+        }
+        return Promise.resolve<PatientDevice[]>(null as any);
     }
 
     /**
@@ -19108,6 +19189,19 @@ export class SensorGlucoseClient {
         this.baseUrl = baseUrl ?? "";
     }
 
+    /**
+     * Lists sensor glucose readings. Adds an optional patientDeviceId query filter on top of the base
+    list surface: when set, results are that registered device's raw readings (canonical stream selection is
+    bypassed); when unset, the caller sees every stored reading. Pagination totals match the base
+    device/source behaviour (the count is unscoped by the device filters).
+     * @param from (optional) 
+     * @param to (optional) 
+     * @param limit (optional) 
+     * @param offset (optional) 
+     * @param sort (optional) 
+     * @param device (optional) 
+     * @param source (optional) 
+     */
     getAll(from?: Date | null | undefined, to?: Date | null | undefined, limit?: number | undefined, offset?: number | undefined, sort?: string | undefined, device?: string | null | undefined, source?: string | null | undefined, signal?: AbortSignal): Promise<PaginatedResponseOfSensorGlucose> {
         let url_ = this.baseUrl + "/api/v4/glucose/sensor?";
         if (from !== undefined && from !== null)
@@ -25185,9 +25279,10 @@ export class StatisticsClient {
      * @param startDate (optional) Start of the window (inclusive, UTC).
      * @param endDate (optional) End of the window (exclusive, UTC).
      * @param population (optional) Diabetes population for clinical target assessment. Defaults to Type 1 adult.
+     * @param patientDeviceId (optional) 
      * @return The extended analytics and time-of-day averaged stats for the window.
      */
-    getRangeAnalytics(startDate?: Date | undefined, endDate?: Date | undefined, population?: DiabetesPopulation | undefined, signal?: AbortSignal): Promise<ReportAnalysisResult> {
+    getRangeAnalytics(startDate?: Date | undefined, endDate?: Date | undefined, population?: DiabetesPopulation | undefined, patientDeviceId?: string | null | undefined, signal?: AbortSignal): Promise<ReportAnalysisResult> {
         let url_ = this.baseUrl + "/api/v4/Statistics/range-analytics?";
         if (startDate === null)
             throw new globalThis.Error("The parameter 'startDate' cannot be null.");
@@ -25201,6 +25296,8 @@ export class StatisticsClient {
             throw new globalThis.Error("The parameter 'population' cannot be null.");
         else if (population !== undefined)
             url_ += "population=" + encodeURIComponent("" + population) + "&";
+        if (patientDeviceId !== undefined && patientDeviceId !== null)
+            url_ += "patientDeviceId=" + encodeURIComponent("" + patientDeviceId) + "&";
         url_ = url_.replace(/[?&]$/, "");
 
         let options_: RequestInit = {
@@ -33136,6 +33233,21 @@ export enum AidAlgorithm {
     Unknown = "Unknown",
 }
 
+export interface DiscoveredSource {
+    dataSource?: string | undefined;
+    device?: string | undefined;
+    readingCount?: number;
+    lastSeen?: Date;
+}
+
+/** A single device→rank assignment in a ReorderDevices batch. */
+export interface DeviceRankAssignment {
+    /** The patient device identifier. */
+    id?: string;
+    /** Its new priority (lower = higher priority). */
+    rank?: number;
+}
+
 export interface PatientInsulin {
     id?: string;
     insulinCategory?: InsulinCategory;
@@ -35283,6 +35395,13 @@ export interface ExtendedGlucoseAnalyticsRequest {
 export interface ReportAnalysisResult {
     analysis?: ExtendedGlucoseAnalytics;
     averagedStats?: AveragedStats[];
+    contributingDevices?: ContributingDevice[];
+}
+
+export interface ContributingDevice {
+    patientDeviceId?: string | undefined;
+    name?: string;
+    readingCount?: number;
 }
 
 /** Request model for clinical assessment */

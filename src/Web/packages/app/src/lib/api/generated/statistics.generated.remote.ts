@@ -58,10 +58,10 @@ export const calculateAveragedStats = query(z.array(SensorGlucoseSchema), async 
 manual boluses, and carb intakes for the window from the database and runs
 AnalyzeGlucoseDataExtended plus
 CalculateAveragedStats. */
-export const getRangeAnalytics = query(z.object({ startDate: z.coerce.date().optional(), endDate: z.coerce.date().optional(), population: z.enum(DiabetesPopulation).optional() }).optional(), async (params) => {
+export const getRangeAnalytics = query(z.object({ startDate: z.coerce.date().optional(), endDate: z.coerce.date().optional(), population: z.enum(DiabetesPopulation).optional(), patientDeviceId: z.string().optional() }).optional(), async (params) => {
   const apiClient = getRequestEvent().locals.apiClient;
   try {
-    return await apiClient.statistics.getRangeAnalytics(params?.startDate, params?.endDate, params?.population);
+    return await apiClient.statistics.getRangeAnalytics(params?.startDate, params?.endDate, params?.population, params?.patientDeviceId);
   } catch (err) {
     const status = (err as any)?.status;
     if (status === 401) { const { request, url } = getRequestEvent();

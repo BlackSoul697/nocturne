@@ -9,6 +9,10 @@ import { formCoerce } from './form-utils.generated.js';
 import { UpsertSensorGlucoseRequestSchema } from '$lib/api/generated/schemas';
 import { type UpsertSensorGlucoseRequest } from '$api';
 
+/** Lists sensor glucose readings. Adds an optional patientDeviceId query filter on top of the base
+list surface: when set, results are that registered device's raw readings (canonical stream selection is
+bypassed); when unset, the caller sees every stored reading. Pagination totals match the base
+device/source behaviour (the count is unscoped by the device filters). */
 export const getAll = query(z.object({ from: z.coerce.date().optional(), to: z.coerce.date().optional(), limit: z.number().optional(), offset: z.number().optional(), sort: z.string().optional(), device: z.string().optional(), source: z.string().optional() }).optional(), async (params) => {
   const apiClient = getRequestEvent().locals.apiClient;
   try {
