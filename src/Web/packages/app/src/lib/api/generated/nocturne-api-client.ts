@@ -21136,6 +21136,55 @@ export class PumpSnapshotClient {
     }
 }
 
+export class ReservoirClient {
+    private http: { fetch(url: RequestInfo, init?: RequestInit): Promise<Response> };
+    private baseUrl: string;
+    protected jsonParseReviver: ((key: string, value: any) => any) | undefined = undefined;
+
+    constructor(baseUrl?: string, http?: { fetch(url: RequestInfo, init?: RequestInit): Promise<Response> }) {
+        this.http = http ? http : window as any;
+        this.baseUrl = baseUrl ?? "";
+    }
+
+    /**
+     * Get the current reservoir estimate.
+     * @return The estimate, or found = false when no snapshot carries a reservoir value.
+     */
+    getEstimate(signal?: AbortSignal): Promise<ReservoirEstimateResponse> {
+        let url_ = this.baseUrl + "/api/v4/reservoir";
+        url_ = url_.replace(/[?&]$/, "");
+
+        let options_: RequestInit = {
+            method: "GET",
+            signal,
+            headers: {
+                "Accept": "application/json"
+            }
+        };
+
+        return this.http.fetch(url_, options_).then((_response: Response) => {
+            return this.processGetEstimate(_response);
+        });
+    }
+
+    protected processGetEstimate(response: Response): Promise<ReservoirEstimateResponse> {
+        const status = response.status;
+        let _headers: any = {}; if (response.headers && response.headers.forEach) { response.headers.forEach((v: any, k: any) => _headers[k] = v); };
+        if (status === 200) {
+            return response.text().then((_responseText) => {
+            let result200: any = null;
+            result200 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver) as ReservoirEstimateResponse;
+            return result200;
+            });
+        } else if (status !== 200 && status !== 204) {
+            return response.text().then((_responseText) => {
+            return throwException("An unexpected server error occurred.", status, _responseText, _headers);
+            });
+        }
+        return Promise.resolve<ReservoirEstimateResponse>(null as any);
+    }
+}
+
 export class ReservoirReportsClient {
     private http: { fetch(url: RequestInfo, init?: RequestInit): Promise<Response> };
     private baseUrl: string;
@@ -33813,6 +33862,20 @@ export interface PumpSnapshot {
     iob?: number | undefined;
     bolusIob?: number | undefined;
     additionalProperties?: { [key: string]: any; } | undefined;
+}
+
+/** The current reservoir level resolved by IReservoirEstimationService. Found is false when no snapshot in the estimation window carries a reservoir value; the remaining fields are then unset. */
+export interface ReservoirEstimateResponse {
+    /** Whether an estimate could be resolved. */
+    found?: boolean;
+    /** Remaining insulin in units. Null when Found is false. */
+    units?: number | undefined;
+    /** True when the value only proves the reservoir holds at least this much
+            (capped reading like "50+", or a bound overriding a lower estimate). */
+    isLowerBound?: boolean;
+    /** True when the value was projected from an older reading rather than
+            taken directly from the newest snapshot. */
+    isEstimated?: boolean;
 }
 
 /** Request body for reporting a known reservoir value via the V4 API. */

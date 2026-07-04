@@ -19662,6 +19662,28 @@
         "x-remote-type": "query"
       }
     },
+    "/api/v4/reservoir": {
+      "get": {
+        "tags": [
+          "Reservoir"
+        ],
+        "summary": "Get the current reservoir estimate.",
+        "operationId": "Reservoir_GetEstimate",
+        "responses": {
+          "200": {
+            "description": "The estimate, or found = false when no snapshot carries a reservoir value.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReservoirEstimateResponse"
+                }
+              }
+            }
+          }
+        },
+        "x-remote-type": "query"
+      }
+    },
     "/api/v4/reservoir/reports": {
       "post": {
         "tags": [
@@ -42683,6 +42705,31 @@
             "type": "object",
             "nullable": true,
             "additionalProperties": {}
+          }
+        }
+      },
+      "ReservoirEstimateResponse": {
+        "type": "object",
+        "description": "The current reservoir level resolved by IReservoirEstimationService.\nFound is false when no snapshot in the estimation window carries a\nreservoir value; the remaining fields are then unset.",
+        "additionalProperties": false,
+        "properties": {
+          "found": {
+            "type": "boolean",
+            "description": "Whether an estimate could be resolved."
+          },
+          "units": {
+            "type": "number",
+            "description": "Remaining insulin in units. Null when Found is false.",
+            "format": "decimal",
+            "nullable": true
+          },
+          "isLowerBound": {
+            "type": "boolean",
+            "description": "True when the value only proves the reservoir holds at least this much\n            (capped reading like \"50+\", or a bound overriding a lower estimate)."
+          },
+          "isEstimated": {
+            "type": "boolean",
+            "description": "True when the value was projected from an older reading rather than\n            taken directly from the newest snapshot."
           }
         }
       },

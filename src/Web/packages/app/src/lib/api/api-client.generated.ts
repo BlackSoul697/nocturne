@@ -80,6 +80,7 @@ import {
   ProcessingClient,
   ProfileClient,
   PumpSnapshotClient,
+  ReservoirClient,
   ReservoirReportsClient,
   RetrospectiveClient,
   RoleClient,
@@ -192,6 +193,7 @@ export class ApiClient {
   public readonly processing: ProcessingClient;
   public readonly profile: ProfileClient;
   public readonly pumpSnapshot: PumpSnapshotClient;
+  public readonly reservoir: ReservoirClient;
   public readonly reservoirReports: ReservoirReportsClient;
   public readonly retrospective: RetrospectiveClient;
   public readonly role: RoleClient;
@@ -304,6 +306,7 @@ export class ApiClient {
     this.processing = new ProcessingClient(apiBaseUrl, http);
     this.profile = new ProfileClient(apiBaseUrl, http);
     this.pumpSnapshot = new PumpSnapshotClient(apiBaseUrl, http);
+    this.reservoir = new ReservoirClient(apiBaseUrl, http);
     this.reservoirReports = new ReservoirReportsClient(apiBaseUrl, http);
     this.retrospective = new RetrospectiveClient(apiBaseUrl, http);
     this.role = new RoleClient(apiBaseUrl, http);
