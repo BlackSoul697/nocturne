@@ -14716,6 +14716,105 @@
         ]
       }
     },
+    "/api/v4/account/sessions": {
+      "get": {
+        "tags": [
+          "Sessions"
+        ],
+        "summary": "List the authenticated user's active login sessions, most recently active first.",
+        "operationId": "Sessions_List",
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/SessionDto"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "x-remote-type": "query"
+      }
+    },
+    "/api/v4/account/sessions/{sessionId}": {
+      "delete": {
+        "tags": [
+          "Sessions"
+        ],
+        "summary": "Revoke a login session, logging that device out. Revoking the current\nsession is allowed and acts as a logout.",
+        "operationId": "Sessions_Revoke",
+        "parameters": [
+          {
+            "name": "sessionId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-position": 1
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": ""
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        },
+        "x-remote-type": "command",
+        "x-remote-invalidates": [
+          "List"
+        ]
+      }
+    },
+    "/api/v4/account/sessions/revoke-others": {
+      "post": {
+        "tags": [
+          "Sessions"
+        ],
+        "summary": "Revoke every session except the current one (log out everywhere else).",
+        "operationId": "Sessions_RevokeOthers",
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RevokeOthersResultDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        },
+        "x-remote-type": "command",
+        "x-remote-invalidates": [
+          "List"
+        ]
+      }
+    },
     "/api/v4/share": {
       "get": {
         "tags": [
@@ -39788,6 +39887,46 @@
             "items": {
               "type": "string"
             }
+          }
+        }
+      },
+      "SessionDto": {
+        "type": "object",
+        "description": "Login session DTO returned by GET /api/v4/account/sessions.",
+        "additionalProperties": false,
+        "properties": {
+          "sessionId": {
+            "type": "string"
+          },
+          "deviceDescription": {
+            "type": "string",
+            "nullable": true
+          },
+          "ipAddress": {
+            "type": "string",
+            "nullable": true
+          },
+          "lastActiveAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "expiresAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "isCurrent": {
+            "type": "boolean"
+          }
+        }
+      },
+      "RevokeOthersResultDto": {
+        "type": "object",
+        "description": "Result of POST /api/v4/account/sessions/revoke-others.",
+        "additionalProperties": false,
+        "properties": {
+          "revokedTokenCount": {
+            "type": "integer",
+            "format": "int32"
           }
         }
       },

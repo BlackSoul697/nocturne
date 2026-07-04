@@ -51,6 +51,7 @@ export { createRequest, getMyRequest, approveRequest, denyRequest, getMembership
 export * from './myPermissions.generated.remote';
 export { getMyTenants, validateSlug } from './myTenants.generated.remote';
 export * from './roles.generated.remote';
+export { revokeOthers } from './sessions.generated.remote';
 export * from './shareLinks.generated.remote';
 export * from './activities.generated.remote';
 export { getBodyWeights, getBodyWeight, updateBodyWeight, deleteBodyWeight } from './bodyWeights.generated.remote';
