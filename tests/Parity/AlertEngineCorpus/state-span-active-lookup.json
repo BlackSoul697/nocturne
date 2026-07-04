@@ -86,7 +86,8 @@
             "category": "PumpMode",
             "started_at": "2026-01-05T11:20:00Z"
           }
-        ]
+        ],
+        "sleep_session_active": false
       }
     },
     {
@@ -106,7 +107,8 @@
             "state": "running",
             "started_at": "2026-01-05T11:50:00Z"
           }
-        ]
+        ],
+        "sleep_session_active": false
       }
     },
     {
@@ -119,7 +121,8 @@
         "has_ever_aps_cycled": false,
         "has_ever_pump_snapshot": false,
         "has_ever_uploader_snapshot": false,
-        "has_ever_aps_sensitivity": false
+        "has_ever_aps_sensitivity": false,
+        "sleep_session_active": false
       }
     }
   ]

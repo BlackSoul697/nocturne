@@ -107,9 +107,9 @@ public static class LoopDeviceScenarios
             "state-span-active-lookup",
             "lookup is by exact (category, state) key; null state means the any-of-category key; is_active=false asserts key absence; PumpMode category is always false",
             [
-                Rule(1, "state_span_active", """{"category": "Sleep", "state": null, "is_active": true, "for_minutes": null}"""),
+                Rule(1, "state_span_active", """{"category": "Illness", "state": null, "is_active": true, "for_minutes": null}"""),
                 Rule(2, "state_span_active", """{"category": "Exercise", "state": "running", "is_active": true, "for_minutes": 20}"""),
-                Rule(3, "state_span_active", """{"category": "Sleep", "state": null, "is_active": false, "for_minutes": null}"""),
+                Rule(3, "state_span_active", """{"category": "Illness", "state": null, "is_active": false, "for_minutes": null}"""),
                 Rule(4, "state_span_active", """{"category": "PumpMode", "state": null, "is_active": true, "for_minutes": null}"""),
             ],
             [
@@ -117,7 +117,7 @@ public static class LoopDeviceScenarios
                 {
                     ActiveStateSpans =
                     [
-                        new("Sleep", null, T(-40)),
+                        new("Illness", null, T(-40)),
                         new("Exercise", "running", T(-20)),
                         new("PumpMode", null, T(-40)),
                     ],

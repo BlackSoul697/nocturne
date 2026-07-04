@@ -49,7 +49,8 @@
             "tracker_definition_id": "00000000-0000-0000-0001-000000000001",
             "reference_at": "2026-01-03T11:00:00Z"
           }
-        ]
+        ],
+        "sleep_session_active": false
       }
     }
   ]
