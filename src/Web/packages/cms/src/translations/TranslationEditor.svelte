@@ -22,6 +22,18 @@
 	let page = $state(0);
 	const pageSize = 50;
 
+	// Keys drafted since the last filter/page/search change. The
+	// 'untranslated' filter keeps these visible so a row does not vanish
+	// from under the user on their first keystroke.
+	let touched = $state(new Set<string>());
+
+	function onRowDraft(message: TranslationMessage, values: string[] | null) {
+		if (!touched.has(message.key)) {
+			touched = new Set([...touched, message.key]);
+		}
+		ondraft(message, values);
+	}
+
 	const filterLabels: Record<Filter, string> = {
 		all: 'All messages',
 		untranslated: 'Untranslated',
@@ -31,7 +43,10 @@
 	const filtered = $derived.by(() => {
 		const needle = search.trim().toLowerCase();
 		return messages.filter((m) => {
-			if (filter === 'untranslated' && (m.upstream.some((v) => v.length > 0) || drafts.has(m.key)))
+			if (
+				filter === 'untranslated' &&
+				(m.upstream.some((v) => v.length > 0) || (drafts.has(m.key) && !touched.has(m.key)))
+			)
 				return false;
 			if (filter === 'drafts' && !drafts.has(m.key)) return false;
 			if (needle.length === 0) return true;
@@ -68,6 +83,7 @@
 			oninput={(e: Event) => {
 				search = (e.currentTarget as HTMLInputElement).value;
 				page = 0;
+				touched = new Set();
 			}}
 			placeholder="Search source text or translations"
 			class="max-w-sm"
@@ -78,6 +94,7 @@
 			onValueChange={(v: string | undefined) => {
 				filter = (v as Filter) ?? 'all';
 				page = 0;
+				touched = new Set();
 			}}
 		>
 			<Select.Trigger class="w-44">{filterLabels[filter]}</Select.Trigger>
@@ -97,7 +114,7 @@
 				<TranslationRow
 					{message}
 					draft={drafts.get(message.key)}
-					ondraft={(values) => ondraft(message, values)}
+					ondraft={(values) => onRowDraft(message, values)}
 				/>
 			{/each}
 		</div>
@@ -109,7 +126,7 @@
 				variant="outline"
 				size="sm"
 				disabled={clampedPage === 0}
-				onclick={() => (page = clampedPage - 1)}
+				onclick={() => { page = clampedPage - 1; touched = new Set(); }}
 			>
 				Previous
 			</Button>
@@ -118,7 +135,7 @@
 				variant="outline"
 				size="sm"
 				disabled={clampedPage >= pageCount - 1}
-				onclick={() => (page = clampedPage + 1)}
+				onclick={() => { page = clampedPage + 1; touched = new Set(); }}
 			>
 				Next
 			</Button>

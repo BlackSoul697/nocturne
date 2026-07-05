@@ -22,9 +22,11 @@
 	function update(index: number, value: string) {
 		const next = [...values];
 		next[index] = value;
+		// Only a value identical to upstream clears the draft. An emptied
+		// field must stay a draft, or the textarea would snap back to the
+		// upstream text mid-edit.
 		const matchesUpstream = next.every((v, n) => v === (message.upstream[n] ?? ''));
-		const allEmpty = next.every((v) => v.length === 0);
-		ondraft(matchesUpstream || allEmpty ? null : next);
+		ondraft(matchesUpstream ? null : next);
 	}
 
 	const hasUpstream = $derived(message.upstream.some((v) => v.length > 0));

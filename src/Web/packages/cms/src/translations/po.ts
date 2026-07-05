@@ -59,17 +59,16 @@ export function parsePo(text: string): PoCatalog {
 		}
 
 		// One block: comments then msgctxt/msgid/msgid_plural/msgstr(s).
+		// Obsolete (#~) lines are skipped one by one, never by jumping to the
+		// next blank line: a live entry directly after an obsolete block with
+		// no separator must not be swallowed.
 		let fuzzy = false;
-		let obsolete = false;
-		while (i < lines.length && lines[i].startsWith('#')) {
+		while (i < lines.length && lines[i].startsWith('#') && !lines[i].startsWith('#~')) {
 			if (lines[i].startsWith('#,') && lines[i].includes('fuzzy')) fuzzy = true;
-			if (lines[i].startsWith('#~')) obsolete = true;
 			i++;
 		}
-		if (obsolete) {
-			// Skip the rest of the obsolete block (all lines are #~-prefixed,
-			// already consumed by the comment loop above).
-			while (i < lines.length && lines[i].length > 0) i++;
+		if (i < lines.length && lines[i].startsWith('#~')) {
+			while (i < lines.length && lines[i].startsWith('#~')) i++;
 			continue;
 		}
 
@@ -87,8 +86,9 @@ export function parsePo(text: string): PoCatalog {
 		const context = readString('msgctxt ') ?? '';
 		const msgid = readString('msgid ');
 		if (msgid === null) {
-			// Not an entry block (stray content); skip the block.
-			while (i < lines.length && lines[i].length > 0) i++;
+			// Stray content: skip one line and resync, so a following valid
+			// entry is not swallowed even without blank-line separators.
+			i++;
 			continue;
 		}
 		const msgidPlural = readString('msgid_plural ') ?? undefined;

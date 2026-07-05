@@ -1,6 +1,7 @@
 <script lang="ts">
   import { page } from "$app/state";
   import { browser } from "$app/environment";
+  import { beforeNavigate } from "$app/navigation";
   import * as Dialog from "$lib/components/ui/dialog";
   import * as AlertDialog from "$lib/components/ui/alert-dialog";
   import { Button } from "$lib/components/ui/button";
@@ -46,36 +47,73 @@
     const current = draftsQuery?.current;
     if (!current || serverSeeded) return;
     for (const d of current) {
-      drafts.set(messageKey(d.context ?? "", d.msgId), d.translations);
+      const key = messageKey(d.context ?? "", d.msgId);
+      // A local edit made before the server drafts arrived wins.
+      if (!pending.has(key)) {
+        drafts.set(key, d.translations);
+      }
     }
     serverSeeded = true;
   });
 
+  // Client-side navigation between locales reuses this component: flush the
+  // old locale's queued edits under the OLD locale, then reset all state so
+  // one locale's drafts can never appear under, or be saved to, another.
+  let activeLocale = $state("");
+  $effect(() => {
+    const next = locale;
+    if (next === activeLocale) return;
+    const prev = activeLocale;
+    activeLocale = next;
+    if (prev.length > 0) {
+      void flushNow(prev);
+      drafts.clear();
+      serverSeeded = false;
+      saveState = "idle";
+      messages = [];
+    }
+  });
+
+  beforeNavigate(() => {
+    // The command keeps running after unmount; only the batch capture must
+    // happen before the component goes away.
+    if (activeLocale.length > 0) void flushNow(activeLocale);
+  });
+
+  let fetchSeq = 0;
   $effect(() => {
     if (!browser || !localeValid) return;
+    const seq = ++fetchSeq;
+    const target = locale;
     catalogLoading = true;
     catalogError = null;
     Promise.all(
-      ["en", locale].map(async (l) => {
+      ["en", target].map(async (l) => {
         const res = await fetch(`${CATALOG_BASE}/${l}.po`);
         if (!res.ok) throw new Error(`Failed to load the ${l} catalog (${res.status})`);
         return parsePo(await res.text());
       }),
     )
-      .then(([source, target]) => {
-        messages = buildMessages(source, target);
+      .then(([source, targetCatalog]) => {
+        if (seq !== fetchSeq) return;
+        messages = buildMessages(source, targetCatalog);
       })
       .catch((e) => {
+        if (seq !== fetchSeq) return;
         catalogError = e instanceof Error ? e.message : "Failed to load catalogs";
       })
       .finally(() => {
-        catalogLoading = false;
+        if (seq === fetchSeq) catalogLoading = false;
       });
   });
 
-  // Autosave: queue changed keys, flush as one batch upsert.
+  // Autosave: queue changed keys, flush as one batch upsert. Flushes are
+  // serialized on a promise chain; the batch (and its locale) is captured
+  // synchronously at flush time so a locale switch or navigation cannot
+  // re-label queued edits.
   const pending = new Map<string, { message: TranslationMessage; values: string[] | null }>();
   let flushTimer: ReturnType<typeof setTimeout> | null = null;
+  let flushChain: Promise<void> = Promise.resolve();
   let saveState = $state<"idle" | "saving" | "error">("idle");
 
   function onDraft(message: TranslationMessage, values: string[] | null) {
@@ -83,28 +121,48 @@
     else drafts.set(message.key, values);
     pending.set(message.key, { message, values });
     if (flushTimer) clearTimeout(flushTimer);
-    flushTimer = setTimeout(() => void flush(), 800);
+    const forLocale = locale;
+    flushTimer = setTimeout(() => void flushNow(forLocale), 800);
   }
 
-  async function flush() {
-    if (pending.size === 0) return;
+  function flushNow(forLocale: string): Promise<void> {
+    if (flushTimer) {
+      clearTimeout(flushTimer);
+      flushTimer = null;
+    }
+    if (pending.size === 0) return flushChain;
     const batch = [...pending.values()];
     pending.clear();
+    flushChain = flushChain.then(() => sendBatch(forLocale, batch));
+    return flushChain;
+  }
+
+  async function sendBatch(
+    forLocale: string,
+    batch: { message: TranslationMessage; values: string[] | null }[],
+  ) {
+    // A plural draft with some forms still empty cannot be stored (the API
+    // requires non-empty values); it stays local-only until completed. A
+    // fully emptied draft deletes the stored one.
+    const entries = batch
+      .filter(({ values }) => values === null || !values.some((v) => v.length === 0) || values.every((v) => v.length === 0))
+      .map(({ message, values }) => ({
+        msgId: message.msgid,
+        context: message.context.length === 0 ? null : message.context,
+        translations: values === null || values.every((v) => v.length === 0) ? [] : values,
+      }));
+    if (entries.length === 0) return;
     saveState = "saving";
     try {
-      await translationsApi.upsertDrafts({
-        locale,
-        entries: batch.map(({ message, values }) => ({
-          msgId: message.msgid,
-          context: message.context.length === 0 ? null : message.context,
-          translations: values ?? [],
-        })),
-      });
+      await translationsApi.upsertDrafts({ locale: forLocale, entries });
       saveState = "idle";
     } catch {
-      // Re-queue so the next edit retries the failed batch.
-      for (const item of batch) {
-        if (!pending.has(item.message.key)) pending.set(item.message.key, item);
+      // Re-queue so the next edit retries the failed batch (only while the
+      // same locale is still active).
+      if (forLocale === activeLocale) {
+        for (const item of batch) {
+          if (!pending.has(item.message.key)) pending.set(item.message.key, item);
+        }
       }
       saveState = "error";
     }
@@ -137,8 +195,7 @@
   });
 
   async function submit() {
-    if (flushTimer) clearTimeout(flushTimer);
-    await flush();
+    await flushNow(locale);
     if (saveState === "error") {
       submitError = "Some drafts failed to save. Try again.";
       return;
@@ -184,14 +241,25 @@
   }
 
   let clearOpen = $state(false);
+  let clearError = $state<string | null>(null);
   async function clearAll() {
-    pending.clear();
-    if (flushTimer) clearTimeout(flushTimer);
-    await translationsApi.clearDrafts({ locale });
-    drafts.clear();
-    serverSeeded = false;
-    await draftsQuery?.refresh();
-    clearOpen = false;
+    clearError = null;
+    try {
+      await translationsApi.clearDrafts({ locale });
+      // Only discard local state once the server confirmed the delete.
+      pending.clear();
+      if (flushTimer) {
+        clearTimeout(flushTimer);
+        flushTimer = null;
+      }
+      drafts.clear();
+      serverSeeded = false;
+      await draftsQuery?.refresh();
+      clearOpen = false;
+    } catch (e) {
+      clearError =
+        (e as { message?: string })?.message ?? "Failed to clear drafts.";
+    }
   }
 </script>
 
@@ -341,9 +409,14 @@
           {getLanguageLabel(locale as SupportedLocale)} will be deleted. This cannot be undone.
         </AlertDialog.Description>
       </AlertDialog.Header>
+      {#if clearError}
+        <p class="text-sm text-destructive">{clearError}</p>
+      {/if}
       <AlertDialog.Footer>
         <AlertDialog.Cancel>Cancel</AlertDialog.Cancel>
-        <AlertDialog.Action onclick={clearAll}>Clear drafts</AlertDialog.Action>
+        <!-- Plain Button instead of AlertDialog.Action: the dialog must stay
+             open to show the error when the server delete fails. -->
+        <Button onclick={() => void clearAll()}>Clear drafts</Button>
       </AlertDialog.Footer>
     </AlertDialog.Content>
   </AlertDialog.Root>

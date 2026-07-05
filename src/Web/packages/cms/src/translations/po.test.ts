@@ -72,6 +72,19 @@ describe('parsePo', () => {
 		expect(catalog.entries.some((e) => e.msgid === 'Obsolete')).toBe(false);
 	});
 
+	it('keeps a live entry directly after an obsolete block with no separator', () => {
+		const parsed = parsePo(
+			`#~ msgid "Old"\n#~ msgstr "Vieux"\nmsgid "Live"\nmsgstr "Vivant"\n`,
+		);
+		expect(parsed.entries).toHaveLength(1);
+		expect(parsed.entries[0].msgid).toBe('Live');
+	});
+
+	it('does not hang on malformed lines', () => {
+		const parsed = parsePo(`msgstr\nmsgid "A"\nmsgstr "B"\ngarbage line\nmsgid "C"\nmsgstr\n`);
+		expect(parsed.entries.map((e) => e.msgid)).toContain('A');
+	});
+
 	it('unescapes po escape sequences', () => {
 		expect(unescapePo('a\\nb\\t\\"c\\"\\\\d')).toBe('a\nb\t"c"\\d');
 	});
