@@ -1,7 +1,5 @@
 using System.Text;
 using System.Text.Json;
-using System.Text.Json.Serialization;
-using System.Text.RegularExpressions;
 using Microsoft.Extensions.Options;
 using Nocturne.Core.Contracts.Translations;
 using Nocturne.Core.Models.Translations;
@@ -17,6 +15,7 @@ public class GitHubTranslationOptions
     /// </summary>
     public string? TranslationsPat { get; set; }
     public string TranslationsRelayUrl { get; set; } = "https://nocturne.run/api/v4/translations/relay";
+    public string ContentRelayUrl { get; set; } = "https://nocturne.run/api/v4/content/relay";
     /// <summary>
     /// Accept anonymous relayed contributions from other instances (the
     /// nocturne.run side of the relay). Requires TranslationsPat. Off by
@@ -32,7 +31,8 @@ public class GitHubTranslationOptions
 /// <summary>
 /// Mirrors GitHubIssueService — keep the two in step.
 /// </summary>
-public partial class GitHubTranslationService(
+public class GitHubTranslationService(
+    GitHubPrClient prClient,
     IHttpClientFactory httpClientFactory,
     IOptions<GitHubTranslationOptions> options,
     ILogger<GitHubTranslationService> logger) : ITranslationContributionService
@@ -47,10 +47,14 @@ public partial class GitHubTranslationService(
         TranslationContributionRequest request, CancellationToken ct)
     {
         var opts = options.Value;
-        using var client = GitHubApi.CreateClient(httpClientFactory, options.Value.TranslationsPat);
+        using var client = prClient.CreateClient(opts.TranslationsPat);
 
+        // The contents API caps files at 1 MB; the largest catalog is ~0.9 MB
+        // today. If catalogs outgrow that, switch to the blobs API.
         var catalogPath = $"{opts.CatalogDir}/{request.Locale}.po";
-        var (catalogText, fileSha) = await GetCatalogAsync(client, catalogPath, ct);
+        var catalogFile = await prClient.GetFileAsync(client, opts.Owner, opts.Repo, catalogPath, opts.BaseBranch, ct)
+            ?? throw new TranslationContributionRejectedException($"No catalog exists for this locale ({catalogPath}).");
+        var (catalogText, fileSha) = catalogFile;
 
         var edits = request.Entries.ToDictionary(
             e => (e.Context ?? "", e.MsgId),
@@ -62,19 +66,24 @@ public partial class GitHubTranslationService(
                 "No contributed message matched the current catalog. The catalog may have changed; refresh and try again.");
 
         var branch = $"translations/{request.Locale}-{Guid.NewGuid().ToString("N")[..12]}";
-        var baseSha = await GetBranchShaAsync(client, opts.BaseBranch, ct);
-        await CreateBranchAsync(client, branch, baseSha, ct);
+        var baseSha = await prClient.GetBranchShaAsync(client, opts.Owner, opts.Repo, opts.BaseBranch, ct);
+        await prClient.CreateBranchAsync(client, opts.Owner, opts.Repo, branch, baseSha, ct);
 
         int prNumber;
         string prUrl;
         try
         {
-            await CommitCatalogAsync(client, catalogPath, branch, fileSha, result.Text, request, result.Applied, ct);
-            (prNumber, prUrl) = await OpenPullRequestAsync(client, branch, request, result, ct);
+            await prClient.CommitFileAsync(
+                client, opts.Owner, opts.Repo, catalogPath, branch,
+                fileSha, result.Text, BuildCommitMessage(request, result.Applied), ct);
+            (prNumber, prUrl) = await prClient.OpenPullRequestAsync(
+                client, opts.Owner, opts.Repo, branch, opts.BaseBranch,
+                $"i18n({request.Locale}): {result.Applied} translation{(result.Applied == 1 ? "" : "s")} via in-app contribution",
+                BuildPrBody(request, result), ct);
         }
         catch
         {
-            await TryDeleteBranchAsync(client, branch);
+            await prClient.TryDeleteBranchAsync(client, opts.Owner, opts.Repo, branch);
             throw;
         }
 
@@ -111,154 +120,11 @@ public partial class GitHubTranslationService(
             ?? throw new InvalidOperationException("Failed to deserialize relay response");
     }
 
-    private async Task<(string Text, string Sha)> GetCatalogAsync(
-        HttpClient client, string path, CancellationToken ct)
-    {
-        var opts = options.Value;
-        // The contents API caps files at 1 MB; the largest catalog is ~0.9 MB
-        // today. If catalogs outgrow that, switch to the blobs API.
-        var response = await client.GetAsync(
-            $"/repos/{opts.Owner}/{opts.Repo}/contents/{path}?ref={Uri.EscapeDataString(opts.BaseBranch)}", ct);
 
-        if (!response.IsSuccessStatusCode)
-        {
-            if (response.StatusCode == System.Net.HttpStatusCode.NotFound)
-                throw new TranslationContributionRejectedException($"No catalog exists for this locale ({path}).");
-            var error = await response.Content.ReadAsStringAsync(ct);
-            logger.LogError("GitHub API error fetching catalog: {StatusCode} {Error}", response.StatusCode, error);
-            throw new InvalidOperationException($"GitHub API error: {response.StatusCode}");
-        }
+    internal static string SanitizeMetadata(string value) => GitHubPrClient.SanitizeMetadata(value);
 
-        var file = await response.Content.ReadFromJsonAsync<GitHubContentResponse>(ct)
-            ?? throw new InvalidOperationException("Failed to deserialize GitHub content response");
-        var text = Encoding.UTF8.GetString(Convert.FromBase64String(file.Content.Replace("\n", "")));
-        return (text, file.Sha);
-    }
-
-    private async Task<string> GetBranchShaAsync(HttpClient client, string branch, CancellationToken ct)
-    {
-        var opts = options.Value;
-        var response = await client.GetAsync(
-            $"/repos/{opts.Owner}/{opts.Repo}/git/ref/heads/{branch}", ct);
-        response.EnsureSuccessStatusCode();
-        var reference = await response.Content.ReadFromJsonAsync<GitHubRefResponse>(ct)
-            ?? throw new InvalidOperationException("Failed to deserialize GitHub ref response");
-        return reference.Object.Sha;
-    }
-
-    private async Task CreateBranchAsync(HttpClient client, string branch, string sha, CancellationToken ct)
-    {
-        var opts = options.Value;
-        var response = await client.PostAsJsonAsync(
-            $"/repos/{opts.Owner}/{opts.Repo}/git/refs",
-            new { @ref = $"refs/heads/{branch}", sha }, ct);
-        if (!response.IsSuccessStatusCode)
-        {
-            var error = await response.Content.ReadAsStringAsync(ct);
-            logger.LogError("GitHub API error creating branch: {StatusCode} {Error}", response.StatusCode, error);
-            throw new InvalidOperationException($"GitHub API error: {response.StatusCode}");
-        }
-    }
-
-    private async Task CommitCatalogAsync(
-        HttpClient client, string path, string branch, string fileSha,
-        string newText, TranslationContributionRequest request, int applied, CancellationToken ct)
-    {
-        var opts = options.Value;
-        var message = BuildCommitMessage(request, applied);
-
-        var response = await client.PutAsJsonAsync(
-            $"/repos/{opts.Owner}/{opts.Repo}/contents/{path}",
-            new
-            {
-                message,
-                content = Convert.ToBase64String(Encoding.UTF8.GetBytes(newText)),
-                sha = fileSha,
-                branch,
-            }, ct);
-
-        if (!response.IsSuccessStatusCode)
-        {
-            var error = await response.Content.ReadAsStringAsync(ct);
-            logger.LogError("GitHub API error committing catalog: {StatusCode} {Error}", response.StatusCode, error);
-            throw new InvalidOperationException($"GitHub API error: {response.StatusCode}");
-        }
-    }
-
-    private async Task<(int Number, string Url)> OpenPullRequestAsync(
-        HttpClient client, string branch, TranslationContributionRequest request,
-        PoEditResult result, CancellationToken ct)
-    {
-        var opts = options.Value;
-        var response = await client.PostAsJsonAsync(
-            $"/repos/{opts.Owner}/{opts.Repo}/pulls",
-            new
-            {
-                title = $"i18n({request.Locale}): {result.Applied} translation{(result.Applied == 1 ? "" : "s")} via in-app contribution",
-                head = branch,
-                @base = opts.BaseBranch,
-                body = BuildPrBody(request, result),
-                maintainer_can_modify = true,
-            }, ct);
-
-        if (!response.IsSuccessStatusCode)
-        {
-            var error = await response.Content.ReadAsStringAsync(ct);
-            logger.LogError("GitHub API error opening PR: {StatusCode} {Error}", response.StatusCode, error);
-            throw new InvalidOperationException($"GitHub API error: {response.StatusCode}");
-        }
-
-        var pr = await response.Content.ReadFromJsonAsync<GitHubPullResponse>(ct)
-            ?? throw new InvalidOperationException("Failed to deserialize GitHub PR response");
-        return (pr.Number, pr.HtmlUrl);
-    }
-
-    /// <summary>Defense in depth behind controller validation.</summary>
-    internal static string SanitizeMetadata(string value) =>
-        new([.. value.Trim().Where(c => !char.IsControl(c) && c is not '<' and not '>')]);
-
-    /// <summary>
-    /// Renders a contributor-supplied display name for a sink GitHub gives
-    /// side effects to. The name arrives from an anonymous relay, so
-    /// <c>Jane fixes #12 cc @someone</c> would otherwise auto-close an issue
-    /// and notify arbitrary users from the upstream PR body and from the
-    /// commit message. A commit message is not markdown — a backslash escape
-    /// would render literally there — so the reference-carrying characters
-    /// are dropped instead of escaped when <paramref name="markdown"/> is
-    /// false. The backslash is escaped first so a submitted <c>\</c> cannot
-    /// consume the escape that follows it.
-    ///
-    /// <c>#</c> handling covers <c>#12</c> and <c>owner/repo#12</c>, but
-    /// GitHub resolves two further reference forms that carry no <c>#</c> and
-    /// no <c>@</c>: the <c>GH-12</c> shorthand and a full issue or pull URL.
-    /// Both fit inside a name and both honour closing keywords, so both are
-    /// removed outright — a person's name legitimately contains neither.
-    /// </summary>
-    internal static string RenderName(string name, bool markdown)
-    {
-        var value = SanitizeMetadata(name);
-        value = markdown
-            ? value.Replace("\\", "\\\\").Replace("@", "\\@").Replace("#", "\\#").Replace("`", "\\`")
-            : new string([.. value.Where(c => c is not '@' and not '#')]);
-
-        // Last, because dropping a "#" above can splice a reference back
-        // together ("htt#ps://…", "GH#-1"). Neither pass can recreate the
-        // other's target: URL removal only deletes, and separating "GH" from
-        // its digits cannot produce a "://".
-        value = UrlReference().Replace(value, "");
-        return GitHubShorthandReference().Replace(value, "$1 ").Trim();
-    }
-
-    [GeneratedRegex(@"https?://\S+", RegexOptions.IgnoreCase)]
-    private static partial Regex UrlReference();
-
-    /// <summary>
-    /// The <c>GH-123</c> shorthand. Only the hyphen is replaced: the autolink
-    /// requires <c>GH-</c> immediately followed by a digit, so a space between
-    /// them leaves nothing for GitHub to resolve while the name stays readable.
-    /// </summary>
-    [GeneratedRegex(@"(GH)-(?=\d)", RegexOptions.IgnoreCase)]
-    private static partial Regex GitHubShorthandReference();
+    internal static string RenderName(string name, bool markdown) =>
+        GitHubPrClient.RenderName(name, markdown);
 
     /// <summary>
     /// Renders free-text contributor input inside a fenced code block.
@@ -313,19 +179,8 @@ public partial class GitHubTranslationService(
         return sb.ToString();
     }
 
-    internal static string? CoAuthorTrailer(TranslationContributorDto contributor)
-    {
-        if (!string.IsNullOrWhiteSpace(contributor.GitHubUsername))
-        {
-            var username = SanitizeMetadata(contributor.GitHubUsername);
-            return $"Co-authored-by: {username} <{username}@users.noreply.github.com>";
-        }
-
-        if (!string.IsNullOrWhiteSpace(contributor.Email))
-            return $"Co-authored-by: {RenderName(contributor.Name, markdown: false)} <{SanitizeMetadata(contributor.Email)}>";
-
-        return null;
-    }
+    internal static string? CoAuthorTrailer(TranslationContributorDto contributor) =>
+        GitHubPrClient.CoAuthorTrailer(contributor);
 
     internal static string BuildPrBody(TranslationContributionRequest request, PoEditResult result)
     {
@@ -372,47 +227,7 @@ public partial class GitHubTranslationService(
         return sb.ToString();
     }
 
-    private async Task TryDeleteBranchAsync(HttpClient client, string branch)
-    {
-        var opts = options.Value;
-        try
-        {
-            await client.DeleteAsync(
-                $"/repos/{opts.Owner}/{opts.Repo}/git/refs/heads/{branch}");
-        }
-        catch (Exception ex)
-        {
-            logger.LogWarning(ex, "Failed to clean up branch {Branch} after error", branch);
-        }
-    }
 
-    private record GitHubContentResponse
-    {
-        [JsonPropertyName("content")]
-        public string Content { get; init; } = "";
-        [JsonPropertyName("sha")]
-        public string Sha { get; init; } = "";
-    }
-
-    private record GitHubRefResponse
-    {
-        [JsonPropertyName("object")]
-        public GitHubRefObject Object { get; init; } = new();
-    }
-
-    private record GitHubRefObject
-    {
-        [JsonPropertyName("sha")]
-        public string Sha { get; init; } = "";
-    }
-
-    private record GitHubPullResponse
-    {
-        [JsonPropertyName("number")]
-        public int Number { get; init; }
-        [JsonPropertyName("html_url")]
-        public string HtmlUrl { get; init; } = "";
-    }
 }
 
 public class TranslationContributionRejectedException(string message) : Exception(message);
