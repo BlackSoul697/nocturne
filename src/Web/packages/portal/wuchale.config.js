@@ -1,20 +1,39 @@
 // @ts-check
 import { adapter as svelte } from "@wuchale/svelte"
 import { adapter as js } from 'wuchale/adapter-vanilla'
-import { defineConfig, gemini } from "wuchale"
+import { defineConfig, gemini, pofile } from "wuchale"
 import supportedLocales from "../../supportedLocales.json" with { type: 'json' };
-const localesDir = '../../locales'
+
+// Both adapters share one catalog set (same storage key → shared .po files).
+const storage = pofile({ location: '../../locales/{locale}.po' })
+
 export default defineConfig({
     locales: supportedLocales,
+    localesDir: '../../locales',
     adapters: {
-        main: svelte({ loader: 'sveltekit', localesDir: localesDir, sourceLocale: 'en' }),
+        // Both packages' files are listed in both configs so a single
+        // extraction run (from either package) produces the complete shared
+        // catalog. An extraction that sees only one package obsoletes the
+        // other package's messages.
+        main: svelte({
+            loader: 'sveltekit',
+            sourceLocale: 'en',
+            storage,
+            files: [
+                'src/**/*.svelte',
+                'src/**/*.svelte.{js,ts}',
+
+                '../app/src/**/*.svelte',
+                '../app/src/**/*.svelte.{js,ts}',
+            ],
+        }),
         js: js({
             loader: 'vite',
-            localesDir: localesDir,
+            sourceLocale: 'en',
+            storage,
             files: [
                 'src/**/+{page,layout}.{js,ts}',
                 'src/**/+{page,layout}.server.{js,ts}',
-
 
                 '../app/src/**/+{page,layout}.{js,ts}',
                 '../app/src/**/+{page,layout}.server.{js,ts}',

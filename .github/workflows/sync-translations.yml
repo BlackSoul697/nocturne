@@ -34,9 +34,12 @@ jobs:
         working-directory: src/Web
         run: pnpm install --frozen-lockfile
 
+      # Both wuchale configs list both packages' files, so one extraction run
+      # produces the complete shared catalog. A message missing from the
+      # catalog compiles to an empty string in production builds.
       - name: Sync translations
         working-directory: src/Web/packages/app
-        run: pnpm wuchale sync
+        run: pnpm wuchale
 
       - name: Commit translation changes
         uses: stefanzweifel/git-auto-commit-action@v5

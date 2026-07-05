@@ -841,7 +841,15 @@ export async function setLanguage(
   preferredLanguage.current = locale;
   syncLanguageCookie(locale);
 
-  // WUCHALE-DISABLED: wuchale temporarily disabled — dynamic catalog load skipped.
+  // Dynamically load the locale for wuchale
+  if (browser) {
+    try {
+      const { loadLocale } = await import("wuchale/load-utils");
+      await loadLocale(locale);
+    } catch (error) {
+      console.error("Failed to load locale:", error);
+    }
+  }
 
   // Update backend preference if callback provided
   if (updateBackend) {
