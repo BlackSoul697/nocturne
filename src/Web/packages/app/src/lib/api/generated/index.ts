@@ -49,7 +49,7 @@ export * from './linkedPlatforms.generated.remote';
 export * from './memberInvites.generated.remote';
 export { createRequest, getMyRequest, approveRequest, denyRequest, getMembershipRequestSettings, setMembershipRequestSettings } from './membershipRequests.generated.remote';
 export * from './myPermissions.generated.remote';
-export { getMyTenants, validateSlug } from './myTenants.generated.remote';
+export { getMyTenants, getOverview, validateSlug } from './myTenants.generated.remote';
 export * from './roles.generated.remote';
 export { revokeOthers } from './sessions.generated.remote';
 export * from './shareLinks.generated.remote';

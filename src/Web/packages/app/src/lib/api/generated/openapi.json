@@ -14498,6 +14498,27 @@
         ]
       }
     },
+    "/api/v4/me/tenants/overview": {
+      "get": {
+        "tags": [
+          "My Tenants"
+        ],
+        "operationId": "MyTenants_GetOverview",
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TenantOverviewResponse"
+                }
+              }
+            }
+          }
+        },
+        "x-remote-type": "query"
+      }
+    },
     "/api/v4/me/tenants/validate-slug": {
       "get": {
         "tags": [
@@ -39803,6 +39824,170 @@
           }
         }
       },
+      "TenantOverviewResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "tenants": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/TenantOverviewItem"
+            }
+          }
+        }
+      },
+      "TenantOverviewItem": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "tenantId": {
+            "type": "string",
+            "format": "guid"
+          },
+          "slug": {
+            "type": "string"
+          },
+          "displayName": {
+            "type": "string"
+          },
+          "lastReadingAt": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          },
+          "latest": {
+            "nullable": true,
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/TenantOverviewReading"
+              }
+            ]
+          },
+          "status": {
+            "$ref": "#/components/schemas/GlucoseStatus"
+          },
+          "thresholds": {
+            "$ref": "#/components/schemas/TenantOverviewThresholds"
+          },
+          "activeAlertCount": {
+            "type": "integer",
+            "format": "int32",
+            "nullable": true
+          },
+          "highestActiveSeverity": {
+            "nullable": true,
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/AlertRuleSeverity"
+              }
+            ]
+          }
+        }
+      },
+      "TenantOverviewReading": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "mgdl": {
+            "type": "number",
+            "format": "double"
+          },
+          "delta": {
+            "type": "number",
+            "format": "double",
+            "nullable": true
+          },
+          "direction": {
+            "nullable": true,
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/GlucoseDirection"
+              }
+            ]
+          },
+          "trendRate": {
+            "type": "number",
+            "format": "double",
+            "nullable": true
+          },
+          "timestamp": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "GlucoseDirection": {
+        "type": "string",
+        "description": "",
+        "x-enumNames": [
+          "None",
+          "DoubleUp",
+          "SingleUp",
+          "FortyFiveUp",
+          "Flat",
+          "FortyFiveDown",
+          "SingleDown",
+          "DoubleDown",
+          "NotComputable",
+          "RateOutOfRange"
+        ],
+        "enum": [
+          "None",
+          "DoubleUp",
+          "SingleUp",
+          "FortyFiveUp",
+          "Flat",
+          "FortyFiveDown",
+          "SingleDown",
+          "DoubleDown",
+          "NotComputable",
+          "RateOutOfRange"
+        ]
+      },
+      "GlucoseStatus": {
+        "type": "string",
+        "description": "",
+        "x-enumNames": [
+          "Unknown",
+          "Stale",
+          "UrgentLow",
+          "Low",
+          "InRange",
+          "High",
+          "UrgentHigh"
+        ],
+        "enum": [
+          "Unknown",
+          "Stale",
+          "UrgentLow",
+          "Low",
+          "InRange",
+          "High",
+          "UrgentHigh"
+        ]
+      },
+      "TenantOverviewThresholds": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "urgentLow": {
+            "type": "number",
+            "format": "double"
+          },
+          "low": {
+            "type": "number",
+            "format": "double"
+          },
+          "high": {
+            "type": "number",
+            "format": "double"
+          },
+          "urgentHigh": {
+            "type": "number",
+            "format": "double"
+          }
+        }
+      },
       "CreateMyTenantRequest": {
         "type": "object",
         "additionalProperties": false,
@@ -41335,34 +41520,6 @@
             "additionalProperties": {}
           }
         }
-      },
-      "GlucoseDirection": {
-        "type": "string",
-        "description": "",
-        "x-enumNames": [
-          "None",
-          "DoubleUp",
-          "SingleUp",
-          "FortyFiveUp",
-          "Flat",
-          "FortyFiveDown",
-          "SingleDown",
-          "DoubleDown",
-          "NotComputable",
-          "RateOutOfRange"
-        ],
-        "enum": [
-          "None",
-          "DoubleUp",
-          "SingleUp",
-          "FortyFiveUp",
-          "Flat",
-          "FortyFiveDown",
-          "SingleDown",
-          "DoubleDown",
-          "NotComputable",
-          "RateOutOfRange"
-        ]
       },
       "GlucoseTrend": {
         "type": "string",

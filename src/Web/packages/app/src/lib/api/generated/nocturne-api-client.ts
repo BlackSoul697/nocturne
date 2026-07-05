@@ -15882,6 +15882,40 @@ export class MyTenantsClient {
         return Promise.resolve<TenantCreatedDto>(null as any);
     }
 
+    getOverview(signal?: AbortSignal): Promise<TenantOverviewResponse> {
+        let url_ = this.baseUrl + "/api/v4/me/tenants/overview";
+        url_ = url_.replace(/[?&]$/, "");
+
+        let options_: RequestInit = {
+            method: "GET",
+            signal,
+            headers: {
+                "Accept": "application/json"
+            }
+        };
+
+        return this.http.fetch(url_, options_).then((_response: Response) => {
+            return this.processGetOverview(_response);
+        });
+    }
+
+    protected processGetOverview(response: Response): Promise<TenantOverviewResponse> {
+        const status = response.status;
+        let _headers: any = {}; if (response.headers && response.headers.forEach) { response.headers.forEach((v: any, k: any) => _headers[k] = v); };
+        if (status === 200) {
+            return response.text().then((_responseText) => {
+            let result200: any = null;
+            result200 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver) as TenantOverviewResponse;
+            return result200;
+            });
+        } else if (status !== 200 && status !== 204) {
+            return response.text().then((_responseText) => {
+            return throwException("An unexpected server error occurred.", status, _responseText, _headers);
+            });
+        }
+        return Promise.resolve<TenantOverviewResponse>(null as any);
+    }
+
     validateSlug(slug?: string | undefined, signal?: AbortSignal): Promise<SlugValidationResult> {
         let url_ = this.baseUrl + "/api/v4/me/tenants/validate-slug?";
         if (slug === null)
@@ -33143,6 +33177,60 @@ export interface UpdateMembershipRequestSettingsRequest {
     allowRequests?: boolean;
 }
 
+export interface TenantOverviewResponse {
+    tenants?: TenantOverviewItem[];
+}
+
+export interface TenantOverviewItem {
+    tenantId?: string;
+    slug?: string;
+    displayName?: string;
+    lastReadingAt?: Date | undefined;
+    latest?: TenantOverviewReading | undefined;
+    status?: GlucoseStatus;
+    thresholds?: TenantOverviewThresholds;
+    activeAlertCount?: number | undefined;
+    highestActiveSeverity?: AlertRuleSeverity | undefined;
+}
+
+export interface TenantOverviewReading {
+    mgdl?: number;
+    delta?: number | undefined;
+    direction?: GlucoseDirection | undefined;
+    trendRate?: number | undefined;
+    timestamp?: Date;
+}
+
+export enum GlucoseDirection {
+    None = "None",
+    DoubleUp = "DoubleUp",
+    SingleUp = "SingleUp",
+    FortyFiveUp = "FortyFiveUp",
+    Flat = "Flat",
+    FortyFiveDown = "FortyFiveDown",
+    SingleDown = "SingleDown",
+    DoubleDown = "DoubleDown",
+    NotComputable = "NotComputable",
+    RateOutOfRange = "RateOutOfRange",
+}
+
+export enum GlucoseStatus {
+    Unknown = "Unknown",
+    Stale = "Stale",
+    UrgentLow = "UrgentLow",
+    Low = "Low",
+    InRange = "InRange",
+    High = "High",
+    UrgentHigh = "UrgentHigh",
+}
+
+export interface TenantOverviewThresholds {
+    urgentLow?: number;
+    low?: number;
+    high?: number;
+    urgentHigh?: number;
+}
+
 export interface CreateMyTenantRequest {
     slug?: string;
     displayName?: string;
@@ -33636,19 +33724,6 @@ export interface SensorGlucose {
     unsmoothedMgdl?: number | undefined;
     unsmoothedMmol?: number | undefined;
     additionalProperties?: { [key: string]: any; } | undefined;
-}
-
-export enum GlucoseDirection {
-    None = "None",
-    DoubleUp = "DoubleUp",
-    SingleUp = "SingleUp",
-    FortyFiveUp = "FortyFiveUp",
-    Flat = "Flat",
-    FortyFiveDown = "FortyFiveDown",
-    SingleDown = "SingleDown",
-    DoubleDown = "DoubleDown",
-    NotComputable = "NotComputable",
-    RateOutOfRange = "RateOutOfRange",
 }
 
 export enum GlucoseTrend {
