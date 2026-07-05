@@ -97,6 +97,12 @@
     <DiagramSource Include="..\..\..\docs\diagrams\diagrams.yaml;..\..\..\docs\diagrams\*.mmd" />
     <Content Include="@(DiagramSource)" Link="wwwroot\diagrams\%(Filename)%(Extension)" CopyToOutputDirectory="Never" CopyToPublishDirectory="PreserveNewest" />
   </ItemGroup>
+  <!-- The diagram Content items only exist as virtual Links; the physical wwwroot\diagrams
+       directory is never created. dotnet watch's FileSystemWatcher throws on startup when it
+       tries to watch a directory that doesn't exist, so create it eagerly before build. -->
+  <Target Name="EnsureDiagramsDir" BeforeTargets="BeforeBuild">
+    <MakeDir Directories="$(MSBuildProjectDirectory)\wwwroot\diagrams" />
+  </Target>
   <!-- NSwag TypeScript Client Generation -->
   <!-- Runs on `dotnet build` and on initial Aspire startup (first build before watch loop). -->
   <!-- Skipped on subsequent `dotnet watch` rebuilds (DOTNET_WATCH_ITERATION is set from -->
