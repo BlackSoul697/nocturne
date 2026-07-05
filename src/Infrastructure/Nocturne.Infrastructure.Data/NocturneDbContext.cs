@@ -598,6 +598,11 @@ public class NocturneDbContext : DbContext, IDataProtectionKeyContext
     public DbSet<CoachMarkStateEntity> CoachMarkStates { get; set; }
 
     /// <summary>
+    /// Gets or sets the TranslationDrafts table for per-user in-progress translations
+    /// </summary>
+    public DbSet<TranslationDraftEntity> TranslationDrafts { get; set; }
+
+    /// <summary>
     /// Gets or sets the ReadAccessLog table for HIPAA read-access audit logging
     /// </summary>
     public DbSet<ReadAccessLogEntity> ReadAccessLog { get; set; }
@@ -3337,6 +3342,13 @@ public class NocturneDbContext : DbContext, IDataProtectionKeyContext
             .Entity<CoachMarkStateEntity>()
             .HasIndex(e => new { e.SubjectId, e.MarkKey })
             .IsUnique();
+
+        // TranslationDraftEntity: msgid is unbounded text, so the logical key
+        // (subject, locale, msgctxt, msgid) cannot be a btree unique index;
+        // uniqueness is enforced by the upsert in TranslationDraftService.
+        modelBuilder
+            .Entity<TranslationDraftEntity>()
+            .HasIndex(e => new { e.SubjectId, e.Locale });
 
     }
 

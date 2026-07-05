@@ -13,6 +13,7 @@ using Nocturne.API.Services.Analytics;
 using Nocturne.API.Services.Auth;
 using Nocturne.API.Services.BackgroundServices;
 using Nocturne.API.Services.CoachMarks;
+using Nocturne.Core.Contracts.Translations;
 using Nocturne.API.Services.Timezones;
 using Nocturne.API.Services.ChartData;
 using Nocturne.API.Services.ChartData.Stages;
@@ -173,9 +174,10 @@ public static class ServiceRegistrationExtensions
         services.Configure<GitHubIssueOptions>(configuration.GetSection("GitHub"));
         services.AddSingleton<GitHubIssueService>();
 
-        // GitHub translation contribution PRs
+        // GitHub translation contribution PRs + per-user draft storage
         services.Configure<GitHubTranslationOptions>(configuration.GetSection("GitHub"));
-        services.AddSingleton<GitHubTranslationService>();
+        services.AddSingleton<ITranslationContributionService, GitHubTranslationService>();
+        services.AddScoped<ITranslationDraftService, TranslationDraftService>();
 
         return services;
     }
