@@ -14,7 +14,7 @@ namespace Nocturne.API.Controllers.V4.Platform;
 [Route("api/v4/content")]
 public class ContentContributionsController(
     IContentContributionService contentService,
-    IOptions<GitHubTranslationOptions> options,
+    IOptions<GitHubContributionOptions> options,
     ILogger<ContentContributionsController> logger) : ControllerBase
 {
     private const int MaxContentBytes = 512 * 1024;

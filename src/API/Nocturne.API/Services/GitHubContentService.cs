@@ -11,13 +11,13 @@ namespace Nocturne.API.Services;
 /// Turns a CMS content contribution into an upstream pull request: fetch the
 /// current file (if any), commit the new content to a branch, open a PR with
 /// contributor attribution. Instances without a PAT relay to nocturne.run.
-/// Shares GitHubTranslationOptions ("GitHub" config section): same PAT,
+/// Shares GitHubContributionOptions ("GitHub" config section): same PAT,
 /// repo, base branch and relay opt-in as translation contributions.
 /// </summary>
 public partial class GitHubContentService(
     GitHubPrClient prClient,
     IHttpClientFactory httpClientFactory,
-    IOptions<GitHubTranslationOptions> options,
+    IOptions<GitHubContributionOptions> options,
     ILogger<GitHubContentService> logger) : IContentContributionService
 {
     private static readonly JsonSerializerOptions JsonOpts = new(JsonSerializerDefaults.Web);
@@ -32,7 +32,7 @@ public partial class GitHubContentService(
     [GeneratedRegex(@"\Asrc/Web/packages/portal/src/content/(blog|docs)(/[a-z0-9][a-z0-9._-]*)*/[a-z0-9][a-z0-9._-]*\.svx\z")]
     public static partial Regex AllowedPathPattern();
 
-    public bool HasLocalPat => !string.IsNullOrEmpty(options.Value.TranslationsPat);
+    public bool HasLocalPat => !string.IsNullOrEmpty(options.Value.ContributionsPat);
 
     public async Task<ContentContributionResponse> SubmitAsync(
         ContentContributionRequest request, CancellationToken ct)
@@ -41,7 +41,7 @@ public partial class GitHubContentService(
         if (!AllowedPathPattern().IsMatch(request.Path))
             throw new TranslationContributionRejectedException("This path cannot be modified through content contributions.");
 
-        using var client = prClient.CreateClient(opts.TranslationsPat);
+        using var client = prClient.CreateClient(opts.ContributionsPat);
 
         var existing = await prClient.GetFileAsync(client, opts.Owner, opts.Repo, request.Path, opts.BaseBranch, ct);
         if (existing is { } file && file.Text == request.Content)

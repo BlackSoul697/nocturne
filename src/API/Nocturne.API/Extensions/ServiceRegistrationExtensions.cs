@@ -245,7 +245,7 @@ public static class ServiceRegistrationExtensions
 
         // GitHub contribution PRs (translations + CMS content) and per-user
         // translation draft storage
-        services.Configure<GitHubTranslationOptions>(configuration.GetSection("GitHub"));
+        services.Configure<GitHubContributionOptions>(configuration.GetSection("GitHub"));
         services.AddSingleton<GitHubPrClient>();
         services.AddSingleton<ITranslationContributionService, GitHubTranslationService>();
         services.AddSingleton<IContentContributionService, GitHubContentService>();

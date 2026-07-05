@@ -6,40 +6,18 @@ using Nocturne.Core.Models.Translations;
 
 namespace Nocturne.API.Services;
 
-public class GitHubTranslationOptions
-{
-    /// <summary>
-    /// PAT with contents+pull-request write access. Needs more privilege than
-    /// IssuesPat, so it is a separate key; instances without one relay to
-    /// nocturne.run like the support-issue flow.
-    /// </summary>
-    public string? TranslationsPat { get; set; }
-    public string TranslationsRelayUrl { get; set; } = "https://nocturne.run/api/v4/translations/relay";
-    public string ContentRelayUrl { get; set; } = "https://nocturne.run/api/v4/content/relay";
-    /// <summary>
-    /// Accept anonymous relayed contributions from other instances (the
-    /// nocturne.run side of the relay). Requires TranslationsPat. Off by
-    /// default so a regular instance never exposes an anonymous endpoint.
-    /// </summary>
-    public bool AcceptRelayedContributions { get; set; }
-    public string Owner { get; set; } = GitHubApi.DefaultOwner;
-    public string Repo { get; set; } = GitHubApi.DefaultRepo;
-    public string BaseBranch { get; set; } = "main";
-    public string CatalogDir { get; set; } = "src/Web/locales";
-}
-
 /// <summary>
 /// Mirrors GitHubIssueService — keep the two in step.
 /// </summary>
 public class GitHubTranslationService(
     GitHubPrClient prClient,
     IHttpClientFactory httpClientFactory,
-    IOptions<GitHubTranslationOptions> options,
+    IOptions<GitHubContributionOptions> options,
     ILogger<GitHubTranslationService> logger) : ITranslationContributionService
 {
     private static readonly JsonSerializerOptions JsonOpts = new(JsonSerializerDefaults.Web);
 
-    public bool HasLocalPat => !string.IsNullOrEmpty(options.Value.TranslationsPat);
+    public bool HasLocalPat => !string.IsNullOrEmpty(options.Value.ContributionsPat);
 
     public bool AcceptsRelay => options.Value.AcceptRelayedContributions && HasLocalPat;
 
@@ -47,7 +25,7 @@ public class GitHubTranslationService(
         TranslationContributionRequest request, CancellationToken ct)
     {
         var opts = options.Value;
-        using var client = prClient.CreateClient(opts.TranslationsPat);
+        using var client = prClient.CreateClient(opts.ContributionsPat);
 
         // The contents API caps files at 1 MB; the largest catalog is ~0.9 MB
         // today. If catalogs outgrow that, switch to the blobs API.
