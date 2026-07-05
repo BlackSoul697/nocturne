@@ -32,7 +32,10 @@ public partial class TranslationsController(
     ITranslationDraftService draftService,
     ILogger<TranslationsController> logger) : ControllerBase
 {
-    private const int MaxEntries = 500;
+    // Large enough for a full-locale submission (the catalog is ~4.7k
+    // messages) and matches the per-locale draft cap, so a drafts submit can
+    // never exceed it.
+    private const int MaxEntries = 5000;
     private const int MaxMsgIdLength = 4096;
     private const int MaxTranslationLength = 8192;
     private const int MaxPluralForms = 8;
@@ -155,7 +158,14 @@ public partial class TranslationsController(
         if (entriesError is not null)
             return entriesError;
 
-        return Ok(await draftService.UpsertDraftsAsync(request.Locale, request.Entries, ct));
+        try
+        {
+            return Ok(await draftService.UpsertDraftsAsync(request.Locale, request.Entries, ct));
+        }
+        catch (TranslationDraftLimitExceededException ex)
+        {
+            return Problem(detail: ex.Message, statusCode: 400, title: "Bad Request");
+        }
     }
 
     [HttpDelete("drafts")]

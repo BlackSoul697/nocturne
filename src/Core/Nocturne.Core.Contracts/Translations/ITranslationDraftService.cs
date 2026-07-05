@@ -12,6 +12,8 @@ public record TranslationDraftSubmitResult
     public int RemainingDrafts { get; init; }
 }
 
+public class TranslationDraftLimitExceededException(string message) : Exception(message);
+
 /// <summary>
 /// Server-side storage for the current user's in-progress translations.
 /// </summary>

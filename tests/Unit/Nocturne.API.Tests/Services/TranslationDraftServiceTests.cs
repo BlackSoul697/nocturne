@@ -127,7 +127,7 @@ public class TranslationDraftServiceTests
                 PrNumber = 12,
                 PrUrl = "https://github.com/x/y/pull/12",
                 Applied = 1,
-                Unmatched = ["Gone"],
+                Unmatched = [new TranslationUnmatchedEntry { MsgId = "Gone" }],
             });
 
         var result = await _service.SubmitDraftsAsync("fr", Contributor(), null);
@@ -136,6 +136,86 @@ public class TranslationDraftServiceTests
         result.RemainingDrafts.Should().Be(1);
         var remaining = await _service.GetDraftsAsync("fr");
         remaining.Should().ContainSingle().Which.MsgId.Should().Be("Gone");
+    }
+
+    [Fact]
+    public async Task SubmitDraftsAsync_Keeps_Only_The_Unmatched_Context_Variant()
+    {
+        await _service.UpsertDraftsAsync("fr",
+            [Entry("Welcome", "Bienvenue"), Entry("Welcome", "Accueil", context: "page-title")]);
+        _contributionService.SetupGet(s => s.HasLocalPat).Returns(true);
+        _contributionService
+            .Setup(s => s.SubmitAsync(It.IsAny<TranslationContributionRequest>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new TranslationContributionResponse
+            {
+                Applied = 1,
+                Unmatched = [new TranslationUnmatchedEntry { MsgId = "Welcome", Context = "page-title" }],
+            });
+
+        var result = await _service.SubmitDraftsAsync("fr", Contributor(), null);
+
+        result.RemainingDrafts.Should().Be(1);
+        var remaining = await _service.GetDraftsAsync("fr");
+        remaining.Should().ContainSingle().Which.Context.Should().Be("page-title");
+    }
+
+    [Fact]
+    public async Task SubmitDraftsAsync_Keeps_Draft_Edited_During_Submission()
+    {
+        await _service.UpsertDraftsAsync("fr", [Entry("Hello", "Bonjour")]);
+        _contributionService.SetupGet(s => s.HasLocalPat).Returns(true);
+        _contributionService
+            .Setup(s => s.SubmitAsync(It.IsAny<TranslationContributionRequest>(), It.IsAny<CancellationToken>()))
+            .Callback(() =>
+            {
+                // Simulate a concurrent edit landing while the PR flow runs.
+                var draft = _dbContext.TranslationDrafts.Single();
+                draft.Translations = ["Salut"];
+                draft.UpdatedAt = DateTime.UtcNow.AddSeconds(5);
+                _dbContext.SaveChanges();
+            })
+            .ReturnsAsync(new TranslationContributionResponse { Applied = 1 });
+
+        var result = await _service.SubmitDraftsAsync("fr", Contributor(), null);
+
+        result.RemainingDrafts.Should().Be(1);
+        var remaining = await _service.GetDraftsAsync("fr");
+        remaining.Should().ContainSingle().Which.Translations.Should().Equal("Salut");
+    }
+
+    [Fact]
+    public async Task LoadPath_SelfHeals_Duplicate_Keys()
+    {
+        // Simulate a historical race: two rows with the same logical key.
+        var older = DateTime.UtcNow.AddMinutes(-10);
+        var newer = DateTime.UtcNow;
+        _dbContext.TranslationDrafts.AddRange(
+            new TranslationDraftEntity
+            {
+                Id = Guid.CreateVersion7(),
+                TenantId = TestTenantId,
+                SubjectId = TestSubjectId,
+                Locale = "fr",
+                MsgId = "Hello",
+                Translations = ["Vieux"],
+                UpdatedAt = older,
+            },
+            new TranslationDraftEntity
+            {
+                Id = Guid.CreateVersion7(),
+                TenantId = TestTenantId,
+                SubjectId = TestSubjectId,
+                Locale = "fr",
+                MsgId = "Hello",
+                Translations = ["Bonjour"],
+                UpdatedAt = newer,
+            });
+        await _dbContext.SaveChangesAsync();
+
+        var drafts = await _service.GetDraftsAsync("fr");
+
+        drafts.Should().ContainSingle().Which.Translations.Should().Equal("Bonjour");
+        _dbContext.TranslationDrafts.Count().Should().Be(1);
     }
 
     [Fact]

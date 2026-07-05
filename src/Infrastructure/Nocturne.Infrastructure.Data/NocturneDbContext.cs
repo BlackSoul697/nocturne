@@ -3343,9 +3343,10 @@ public class NocturneDbContext : DbContext, IDataProtectionKeyContext
             .HasIndex(e => new { e.SubjectId, e.MarkKey })
             .IsUnique();
 
-        // TranslationDraftEntity: msgid is unbounded text, so the logical key
-        // (subject, locale, msgctxt, msgid) cannot be a btree unique index;
-        // uniqueness is enforced by the upsert in TranslationDraftService.
+        // TranslationDraftEntity: the logical key (subject, locale, msgctxt,
+        // msgid) is unique via a functional index on md5(msgid) created with
+        // raw SQL in the migration (EF cannot model expression indexes), so
+        // only the lookup index is declared here.
         modelBuilder
             .Entity<TranslationDraftEntity>()
             .HasIndex(e => new { e.SubjectId, e.Locale });

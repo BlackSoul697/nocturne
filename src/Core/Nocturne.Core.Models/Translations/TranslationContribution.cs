@@ -23,10 +23,17 @@ public record TranslationContributionRequest
     public string? Note { get; init; }
 }
 
+public record TranslationUnmatchedEntry
+{
+    public required string MsgId { get; init; }
+    /// <summary>msgctxt of the entry; empty string when uncontexted.</summary>
+    public string Context { get; init; } = "";
+}
+
 public record TranslationContributionResponse
 {
     public int PrNumber { get; init; }
     public string PrUrl { get; init; } = "";
     public int Applied { get; init; }
-    public List<string> Unmatched { get; init; } = [];
+    public List<TranslationUnmatchedEntry> Unmatched { get; init; } = [];
 }

@@ -46,6 +46,15 @@ namespace Nocturne.Infrastructure.Data.Migrations
                 table: "translation_drafts",
                 column: "tenant_id");
 
+            // The logical key includes unbounded msgid text, which cannot be
+            // a plain btree column; hash it. Raw SQL because EF cannot model
+            // expression indexes.
+            migrationBuilder.Sql(
+                """
+                CREATE UNIQUE INDEX ux_translation_drafts_logical_key
+                    ON translation_drafts (subject_id, locale, msgctxt, md5(msgid));
+                """);
+
             migrationBuilder.Sql("ALTER TABLE translation_drafts ENABLE ROW LEVEL SECURITY;");
             migrationBuilder.Sql("ALTER TABLE translation_drafts FORCE ROW LEVEL SECURITY;");
             migrationBuilder.Sql(
