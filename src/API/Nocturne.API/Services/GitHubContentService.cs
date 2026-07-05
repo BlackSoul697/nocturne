@@ -27,7 +27,9 @@ public partial class GitHubContentService(
     /// with conservative path segments. Anything else is rejected before any
     /// GitHub call — the relay ingress is reachable anonymously.
     /// </summary>
-    [GeneratedRegex(@"^src/Web/packages/portal/src/content/(blog|docs)(/[a-z0-9][a-z0-9._-]*)*/[a-z0-9][a-z0-9._-]*\.svx$")]
+    // \A/\z anchors: $ would also match before a trailing newline, letting
+    // "post.svx\n" through validation.
+    [GeneratedRegex(@"\Asrc/Web/packages/portal/src/content/(blog|docs)(/[a-z0-9][a-z0-9._-]*)*/[a-z0-9][a-z0-9._-]*\.svx\z")]
     public static partial Regex AllowedPathPattern();
 
     public bool HasLocalPat => !string.IsNullOrEmpty(options.Value.TranslationsPat);

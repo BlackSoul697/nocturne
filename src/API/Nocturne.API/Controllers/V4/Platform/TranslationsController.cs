@@ -288,8 +288,9 @@ public partial class TranslationsController(
             && (email.Length > 254 || !EmailPattern().IsMatch(email)))
             return Problem(detail: "Invalid contributor email", statusCode: 400, title: "Bad Request");
 
-        if (note?.Length > 2000)
-            return Problem(detail: "Note must be under 2000 characters", statusCode: 400, title: "Bad Request");
+        if (note is not null
+            && (note.Length > 2000 || note.Any(c => char.IsControl(c) && c != '\n' && c != '\r')))
+            return Problem(detail: "Note must be under 2000 characters and cannot contain control characters", statusCode: 400, title: "Bad Request");
 
         return null;
     }

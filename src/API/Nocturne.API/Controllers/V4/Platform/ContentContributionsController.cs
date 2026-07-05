@@ -119,8 +119,9 @@ public class ContentContributionsController(
             && (email.Length > 254 || !System.Text.RegularExpressions.Regex.IsMatch(email, @"^[^\s<>@]+@[^\s<>@]+\.[^\s<>@]+$")))
             return Problem(detail: "Invalid contributor email", statusCode: 400, title: "Bad Request");
 
-        if (request.Note?.Length > 2000)
-            return Problem(detail: "Note must be under 2000 characters", statusCode: 400, title: "Bad Request");
+        if (request.Note is { } note
+            && (note.Length > 2000 || note.Any(c => char.IsControl(c) && c != '\n' && c != '\r')))
+            return Problem(detail: "Note must be under 2000 characters and cannot contain control characters", statusCode: 400, title: "Bad Request");
 
         return null;
     }

@@ -19,6 +19,7 @@ public class GitHubContentServiceTests
     [InlineData("src/Web/packages/portal/src/content/blog/UPPER.svx", false)]
     [InlineData("src/Web/packages/portal/src/content/blog/.hidden.svx", false)]
     [InlineData("src/Web/packages/portal/src/content/blog//double.svx", false)]
+    [InlineData("src/Web/packages/portal/src/content/blog/post.svx\n", false)]
     public void AllowedPathPattern_Constrains_To_Portal_Content(string path, bool allowed)
     {
         GitHubContentService.AllowedPathPattern().IsMatch(path).Should().Be(allowed);

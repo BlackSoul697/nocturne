@@ -94,7 +94,10 @@
   }
 
   function cancelProposal() {
-    proposal?.reject(new Error('Proposal cancelled'));
+    // Cancelling is a normal outcome (the local draft is kept), so resolve
+    // rather than reject: ContentEditor awaits publish without a catch and a
+    // rejection would surface as an unhandled promise rejection.
+    proposal?.resolve();
     proposal = null;
     proposeError = null;
   }
@@ -195,6 +198,9 @@
       const title = String(item.metadata.title || slug);
       const svxContent = toSvx(item.metadata, item.content);
 
+      // Settle any dialog already open so its awaiting publish call cannot
+      // leak as a forever-pending promise.
+      proposal?.resolve();
       await new Promise<void>((resolve, reject) => {
         proposal = { slug, title, content: svxContent, resolve, reject };
       });
