@@ -95,8 +95,19 @@ public class GitHubTranslationService(
         var branch = $"translations/{request.Locale}-{Guid.NewGuid().ToString("N")[..12]}";
         var baseSha = await GetBranchShaAsync(client, opts.BaseBranch, ct);
         await CreateBranchAsync(client, branch, baseSha, ct);
-        await CommitCatalogAsync(client, catalogPath, branch, fileSha, result.Text, request, result.Applied, ct);
-        var (prNumber, prUrl) = await OpenPullRequestAsync(client, branch, request, result, ct);
+
+        int prNumber;
+        string prUrl;
+        try
+        {
+            await CommitCatalogAsync(client, catalogPath, branch, fileSha, result.Text, request, result.Applied, ct);
+            (prNumber, prUrl) = await OpenPullRequestAsync(client, branch, request, result, ct);
+        }
+        catch
+        {
+            await TryDeleteBranchAsync(client, branch);
+            throw;
+        }
 
         logger.LogInformation(
             "Opened translation PR #{PrNumber} for {Locale}: {Applied} applied, {Unmatched} unmatched",
@@ -159,7 +170,7 @@ public class GitHubTranslationService(
     {
         var opts = options.Value;
         var response = await client.GetAsync(
-            $"/repos/{opts.Owner}/{opts.Repo}/git/ref/heads/{Uri.EscapeDataString(branch)}", ct);
+            $"/repos/{opts.Owner}/{opts.Repo}/git/ref/heads/{branch}", ct);
         response.EnsureSuccessStatusCode();
         var reference = await response.Content.ReadFromJsonAsync<GitHubRefResponse>(ct)
             ?? throw new InvalidOperationException("Failed to deserialize GitHub ref response");
@@ -233,12 +244,20 @@ public class GitHubTranslationService(
         return (pr.Number, pr.HtmlUrl);
     }
 
+    /// <summary>
+    /// Defense in depth behind controller validation: these values land in a
+    /// commit message and PR body, so newlines or angle brackets would allow
+    /// trailer injection regardless of what the caller validated.
+    /// </summary>
+    internal static string SanitizeMetadata(string value) =>
+        new([.. value.Trim().Where(c => !char.IsControl(c) && c is not '<' and not '>')]);
+
     internal static string BuildCommitMessage(TranslationContributionRequest request, int applied)
     {
         var sb = new StringBuilder();
         sb.AppendLine($"chore(i18n): {request.Locale} translations via in-app contribution");
         sb.AppendLine();
-        sb.AppendLine($"Applies {applied} message{(applied == 1 ? "" : "s")} contributed by {request.Contributor.Name}.");
+        sb.AppendLine($"Applies {applied} message{(applied == 1 ? "" : "s")} contributed by {SanitizeMetadata(request.Contributor.Name)}.");
 
         var coAuthor = CoAuthorTrailer(request.Contributor);
         if (coAuthor is not null)
@@ -254,12 +273,12 @@ public class GitHubTranslationService(
     {
         if (!string.IsNullOrWhiteSpace(contributor.GitHubUsername))
         {
-            var username = contributor.GitHubUsername.Trim();
+            var username = SanitizeMetadata(contributor.GitHubUsername);
             return $"Co-authored-by: {username} <{username}@users.noreply.github.com>";
         }
 
         if (!string.IsNullOrWhiteSpace(contributor.Email))
-            return $"Co-authored-by: {contributor.Name} <{contributor.Email.Trim()}>";
+            return $"Co-authored-by: {SanitizeMetadata(contributor.Name)} <{SanitizeMetadata(contributor.Email)}>";
 
         return null;
     }
@@ -269,10 +288,10 @@ public class GitHubTranslationService(
         var sb = new StringBuilder();
         sb.AppendLine($"Translation contribution for `{request.Locale}` submitted through the in-app translation mode.");
         sb.AppendLine();
-        sb.AppendLine($"- **Contributor:** {request.Contributor.Name}"
+        sb.AppendLine($"- **Contributor:** {SanitizeMetadata(request.Contributor.Name)}"
             + (string.IsNullOrWhiteSpace(request.Contributor.GitHubUsername)
                 ? ""
-                : $" (@{request.Contributor.GitHubUsername.Trim()})"));
+                : $" (@{SanitizeMetadata(request.Contributor.GitHubUsername)})"));
         sb.AppendLine($"- **Messages updated:** {result.Applied}");
 
         if (result.Unmatched.Count > 0)
@@ -281,8 +300,15 @@ public class GitHubTranslationService(
             sb.AppendLine("<details>");
             sb.AppendLine($"<summary>{result.Unmatched.Count} entr{(result.Unmatched.Count == 1 ? "y" : "ies")} no longer in the catalog (skipped)</summary>");
             sb.AppendLine();
+            // msgids are arbitrary contributor input echoed into markdown:
+            // keep them on one line inside the code span or they escape it.
             foreach (var msgId in result.Unmatched.Take(50))
-                sb.AppendLine($"- `{msgId.Replace("`", "\\`")}`");
+            {
+                var display = msgId.Replace("\r", "").Replace("\n", "\\n").Replace("`", "\\`");
+                if (display.Length > 120)
+                    display = display[..120] + "…";
+                sb.AppendLine($"- `{display}`");
+            }
             sb.AppendLine();
             sb.AppendLine("</details>");
         }
@@ -296,6 +322,20 @@ public class GitHubTranslationService(
         }
 
         return sb.ToString();
+    }
+
+    private async Task TryDeleteBranchAsync(HttpClient client, string branch)
+    {
+        var opts = options.Value;
+        try
+        {
+            await client.DeleteAsync(
+                $"/repos/{opts.Owner}/{opts.Repo}/git/refs/heads/{branch}");
+        }
+        catch (Exception ex)
+        {
+            logger.LogWarning(ex, "Failed to clean up branch {Branch} after error", branch);
+        }
     }
 
     private HttpClient CreateGitHubClient()

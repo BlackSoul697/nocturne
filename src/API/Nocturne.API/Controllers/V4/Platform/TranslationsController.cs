@@ -21,8 +21,20 @@ public partial class TranslationsController(
     private const int MaxTranslationLength = 8192;
     private const int MaxPluralForms = 8;
 
+    private const int MaxContextLength = 256;
+
     [GeneratedRegex("^[a-z]{2,3}(-[A-Za-z0-9]{2,8})?$")]
     private static partial Regex LocalePattern();
+
+    // GitHub's username grammar: alphanumeric and single hyphens, no
+    // leading/trailing hyphen, max 39 chars.
+    [GeneratedRegex("^[A-Za-z0-9](?:-?[A-Za-z0-9]){0,38}$")]
+    private static partial Regex GitHubUsernamePattern();
+
+    // Conservative mailbox shape: the value lands inside a Co-authored-by
+    // trailer, so whitespace and angle brackets must be impossible.
+    [GeneratedRegex(@"^[^\s<>@]+@[^\s<>@]+\.[^\s<>@]+$")]
+    private static partial Regex EmailPattern();
 
     [HttpPost("contributions")]
     [RemoteCommand]
@@ -104,17 +116,35 @@ public partial class TranslationsController(
         if (request.Entries.Count is 0 or > MaxEntries)
             return Problem(detail: $"Between 1 and {MaxEntries} entries required", statusCode: 400, title: "Bad Request");
 
+        var seenKeys = new HashSet<(string, string)>();
         foreach (var entry in request.Entries)
         {
             if (string.IsNullOrEmpty(entry.MsgId) || entry.MsgId.Length > MaxMsgIdLength)
                 return Problem(detail: "Each entry needs a msgid under 4096 characters", statusCode: 400, title: "Bad Request");
+            if (entry.Context?.Length > MaxContextLength)
+                return Problem(detail: "Entry context must be under 256 characters", statusCode: 400, title: "Bad Request");
             if (entry.Translations.Count is 0 or > MaxPluralForms
                 || entry.Translations.Any(t => string.IsNullOrEmpty(t) || t.Length > MaxTranslationLength))
                 return Problem(detail: "Each entry needs 1-8 non-empty translations under 8192 characters", statusCode: 400, title: "Bad Request");
+            if (!seenKeys.Add((entry.Context ?? "", entry.MsgId)))
+                return Problem(detail: "Duplicate entry for the same msgid and context", statusCode: 400, title: "Bad Request");
         }
 
-        if (string.IsNullOrWhiteSpace(request.Contributor.Name) || request.Contributor.Name.Length > 128)
-            return Problem(detail: "Contributor name is required and must be under 128 characters", statusCode: 400, title: "Bad Request");
+        // Contributor identity ends up in the commit message (Co-authored-by
+        // trailer) and PR body; control characters or trailer syntax in any
+        // of these fields would allow commit-metadata injection.
+        if (string.IsNullOrWhiteSpace(request.Contributor.Name)
+            || request.Contributor.Name.Length > 128
+            || request.Contributor.Name.Any(char.IsControl))
+            return Problem(detail: "Contributor name is required, must be under 128 characters, and cannot contain control characters", statusCode: 400, title: "Bad Request");
+
+        if (request.Contributor.GitHubUsername is { Length: > 0 } username
+            && !GitHubUsernamePattern().IsMatch(username))
+            return Problem(detail: "Invalid GitHub username", statusCode: 400, title: "Bad Request");
+
+        if (request.Contributor.Email is { Length: > 0 } email
+            && (email.Length > 254 || !EmailPattern().IsMatch(email)))
+            return Problem(detail: "Invalid contributor email", statusCode: 400, title: "Bad Request");
 
         if (request.Note?.Length > 2000)
             return Problem(detail: "Note must be under 2000 characters", statusCode: 400, title: "Bad Request");
