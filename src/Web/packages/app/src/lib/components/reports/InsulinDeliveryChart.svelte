@@ -159,7 +159,6 @@
         x={(d) => d.hour}
         y={(d) => d.total}
         renderContext="svg"
-        legend
         series={showStacked
           ? [
               // Show scheduled basal, temp basal adjustments, and bolus as stacked
@@ -218,9 +217,7 @@
         seriesLayout={showStacked ? "stack" : "overlap"}
         tooltip={{ mode: "bisect-x" }}
         props={{
-          area: { motion: { type: "tween", duration: 200 } },
           xAxis: {
-            motion: { type: "tween", duration: 200 },
             format: formatHour,
           },
           yAxis: {

@@ -123,9 +123,7 @@
         seriesLayout="overlap"
         tooltip={{ mode: "bisect-x" }}
         props={{
-          area: { motion: { type: "tween", duration: 200 } },
           xAxis: {
-            motion: { type: "tween", duration: 200 },
             tickMultiline: true,
             format: formatHour,
           },
