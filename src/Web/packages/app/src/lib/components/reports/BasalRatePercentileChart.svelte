@@ -47,7 +47,7 @@
     .range([
       "var(--chart-1)",
       "var(--chart-2)",
-      "hsl(var(--primary))",
+      "var(--primary)",
     ]);
 </script>
 
@@ -93,7 +93,7 @@
               (d: HourlyBasalPercentileData) => d.median,
               (d: HourlyBasalPercentileData) => d.median,
             ],
-            color: "hsl(var(--primary))",
+            color: "var(--primary)",
             props: {
               line: { strokeWidth: 2 },
             },
