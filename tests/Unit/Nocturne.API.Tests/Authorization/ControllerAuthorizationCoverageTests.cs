@@ -21,6 +21,21 @@ namespace Nocturne.API.Tests.Authorization;
 /// </summary>
 /// <remarks>
 /// <para>
+/// SCOPE: this guard covers only <see cref="ControllerBase"/>-derived actions discovered via
+/// reflection. Minimal-API endpoints registered with <c>app.MapGet</c>/<c>app.MapPost</c> in
+/// <c>Program.cs</c> are NOT visible to reflection and are therefore OUT OF SCOPE here — they must
+/// be gated manually at their registration site. The known minimal-API endpoints and their gates:
+/// <list type="bullet">
+///   <item><c>app.MapGet("/")</c> — returns the tenant's latest entry (PHI); explicitly
+///   <c>.RequireAuthorization()</c> (NOT <c>[AllowAnonymous]</c>, which would leak latest glucose
+///   to anonymous callers because <c>GET /</c> resolves with <c>app.is_share=false</c>, so the
+///   per-category share RLS does not restrict it).</item>
+///   <item><c>app.MapDefaultEndpoints()</c> — Aspire health/liveness endpoints (no PHI).</item>
+/// </list>
+/// Adding a new minimal-API endpoint that returns tenant data requires giving it an explicit gate;
+/// this test cannot catch a regression there.
+/// </para>
+/// <para>
 /// The <see cref="AuthorizationConfiguration.AddNocturneAuthorization"/> fallback policy
 /// (<see cref="HasPermissionsRequirement"/>) gates every attribute-less endpoint by requiring a
 /// non-empty <see cref="Nocturne.Core.Models.PermissionTrie"/>. That fallback rejects a bare
@@ -66,13 +81,15 @@ public class ControllerAuthorizationCoverageTests
 
             // ── Legacy Nightscout v1 surfaces (authorize via OAuth scope in the fallback trie) ──
             // v1 endpoints authenticate via the api-secret / token trie and are gated by the
-            // fallback policy plus in-handler scope checks, matching upstream Nightscout behaviour.
-            // They deliberately do not use the v4 [Authorize] convention.
-            ["Nocturne.API.Controllers.V1.AlexaController"] = "legacy v1 (fallback trie + in-handler)",
-            ["Nocturne.API.Controllers.V1.CountController"] = "legacy v1 (fallback trie + in-handler)",
-            ["Nocturne.API.Controllers.V1.IobController"] = "legacy v1 (fallback trie + in-handler)",
-            ["Nocturne.API.Controllers.V1.PebbleController"] = "legacy v1 (fallback trie + in-handler)",
-            ["Nocturne.API.Controllers.V1.TimeQueryController"] = "legacy v1 (fallback trie + in-handler)",
+            // fallback policy plus DB-layer RLS (tenant isolation + per-category share RLS on the
+            // underlying entries/treatments/etc.), matching upstream Nightscout behaviour. Only
+            // AlexaController additionally performs an in-handler CheckPermissionAsync; the others
+            // have no in-handler check. They deliberately do not use the v4 [Authorize] convention.
+            ["Nocturne.API.Controllers.V1.AlexaController"] = "legacy v1 (fallback trie + in-handler CheckPermissionAsync)",
+            ["Nocturne.API.Controllers.V1.CountController"] = "legacy v1 (fallback trie + share RLS; no in-handler check)",
+            ["Nocturne.API.Controllers.V1.IobController"] = "legacy v1 (fallback trie + share RLS; no in-handler check)",
+            ["Nocturne.API.Controllers.V1.PebbleController"] = "legacy v1 (fallback trie + share RLS; no in-handler check)",
+            ["Nocturne.API.Controllers.V1.TimeQueryController"] = "legacy v1 (fallback trie + share RLS; no in-handler check)",
             ["Nocturne.API.Controllers.V1.DebugController"] = "legacy v1 debug (fallback trie)",
 
             // ── Authentication credential-management surfaces ──────────────────────────────────

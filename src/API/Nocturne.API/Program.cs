@@ -458,7 +458,14 @@ app.MapScalarApiReference(options =>
         });
 });
 
-// Add root endpoint to serve a basic info page
+// Add root endpoint to serve a basic info page. Returns the tenant's latest entry
+// (sgv/mbg/direction) as a connectivity indicator, so it exposes PHI and must carry an
+// explicit authorization decision. On an ordinary tenant subdomain the request resolves
+// with app.is_share=false, so the per-category public-share RLS does NOT restrict this read;
+// the endpoint's own gate is the only protection. It is deliberately NOT [AllowAnonymous]:
+// that would return the latest glucose reading to any unauthenticated caller on any tenant.
+// Gated with RequireAuthorization (fallback/default policy) as the safe default — a maintainer
+// who wants a public info page should strip the latest_entry payload rather than relax this.
 app.MapGet(
     "/",
     async (IEntryStore entryStore) =>
@@ -514,7 +521,7 @@ app.MapGet(
             }
         );
     }
-).AllowAnonymous();
+).RequireAuthorization();
 
 app.MapDefaultEndpoints();
 
