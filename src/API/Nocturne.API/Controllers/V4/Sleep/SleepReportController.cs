@@ -69,7 +69,12 @@ public class SleepReportController : ControllerBase
                 statusCode: StatusCodes.Status400BadRequest,
                 title: "Bad Request");
 
-        var report = await _service.GetTrendsReportAsync(from, to, source, cancellationToken);
+        // Query-bound dates arrive Kind=Unspecified when the client omits an offset;
+        // Npgsql rejects those against timestamptz. Same normalization as StatisticsController.
+        var fromUtc = DateTime.SpecifyKind(from, DateTimeKind.Utc);
+        var toUtc   = DateTime.SpecifyKind(to, DateTimeKind.Utc);
+
+        var report = await _service.GetTrendsReportAsync(fromUtc, toUtc, source, cancellationToken);
         return Ok(report);
     }
 }
