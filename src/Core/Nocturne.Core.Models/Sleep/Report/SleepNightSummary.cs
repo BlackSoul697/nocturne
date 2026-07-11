@@ -15,6 +15,8 @@ public class SleepNightSummary
     public int RemMinutes { get; set; }
     public int LightMinutes { get; set; }
     public int AwakeMinutes { get; set; }
+    /// <summary>Minutes asleep without stage differentiation (e.g. manual entries, some Health Connect sources).</summary>
+    public int UnspecifiedMinutes { get; set; }
     public int? SleepScore { get; set; }
     public SleepScoreSource? ScoreSource { get; set; }
     /// <summary>Overnight time-in-range percentage (70–180 mg/dL). Null if no CGM data.</summary>

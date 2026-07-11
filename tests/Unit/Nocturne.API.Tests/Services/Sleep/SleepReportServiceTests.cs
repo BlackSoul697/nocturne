@@ -133,6 +133,8 @@ public class SleepReportServiceTests
 
         result.Nights.Should().BeEmpty();
         result.Summary.NightCount.Should().Be(0);
+        result.Summary.DaysInRange.Should().Be(31); // Jan 1 – Jan 31 inclusive
+        result.Summary.CoveragePct.Should().Be(0);
 
         _glucoseRepo.Verify(r => r.GetAsync(
             It.IsAny<DateTime?>(), It.IsAny<DateTime?>(), It.IsAny<string?>(), It.IsAny<string?>(),
@@ -186,6 +188,8 @@ public class SleepReportServiceTests
         var result = await _sut.GetTrendsReportAsync(from, to, source: null);
 
         result.Nights.Should().HaveCount(1);
+        result.Summary.DaysInRange.Should().Be(31); // Jan 1 – Jan 31 inclusive
+        result.Summary.CoveragePct.Should().BeApproximately(1 * 100.0 / 31, 0.01);
     }
 
     [Fact]

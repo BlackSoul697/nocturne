@@ -50,6 +50,72 @@ public class SleepReportCalculatorTests
     }
 
     [Fact]
+    public void ComputeStageBreakdown_DerivesUnspecified_WhenTotalSleepExceedsDifferentiatedStages()
+    {
+        var session = new SleepSession
+        {
+            StartTime    = DateTime.UtcNow,
+            EndTime      = DateTime.UtcNow.AddHours(8),
+            DeepSleepMs  = 90  * 60 * 1000L,
+            RemSleepMs   = 100 * 60 * 1000L,
+            LightSleepMs = 200 * 60 * 1000L,
+            TotalAwakeMs = 30  * 60 * 1000L,
+            TotalSleepMs = 440 * 60 * 1000L, // 50 minutes more than deep + rem + light
+        };
+
+        var result = API.Services.Sleep.SleepReportCalculator.ComputeStageBreakdown(session);
+
+        result.UnspecifiedMinutes.Should().Be(50);
+        result.TotalMinutes.Should().Be(470); // 90 + 100 + 200 + 30 + 50
+        result.UnspecifiedPct.Should().BeApproximately(50.0 / 470 * 100, 0.01);
+    }
+
+    [Fact]
+    public void ComputeStageBreakdown_UnspecifiedIsZero_WhenTotalSleepWithinDifferentiatedStages()
+    {
+        var session = new SleepSession
+        {
+            StartTime    = DateTime.UtcNow,
+            EndTime      = DateTime.UtcNow.AddHours(8),
+            DeepSleepMs  = 90  * 60 * 1000L,
+            RemSleepMs   = 100 * 60 * 1000L,
+            LightSleepMs = 220 * 60 * 1000L,
+            TotalAwakeMs = 30  * 60 * 1000L,
+            TotalSleepMs = 400 * 60 * 1000L, // less than deep + rem + light — no negative remainder
+        };
+
+        var result = API.Services.Sleep.SleepReportCalculator.ComputeStageBreakdown(session);
+
+        result.UnspecifiedMinutes.Should().Be(0);
+        result.TotalMinutes.Should().Be(440);
+        result.UnspecifiedPct.Should().Be(0);
+    }
+
+    [Fact]
+    public void ComputeStageBreakdown_BucketsAsleepAsUnspecified_NotLight()
+    {
+        var now = new DateTime(2026, 5, 16, 23, 0, 0, DateTimeKind.Utc);
+        var session = new SleepSession
+        {
+            StartTime = now,
+            EndTime   = now.AddHours(8),
+            Stages =
+            [
+                new SleepStageInterval { StartTime = now, EndTime = now.AddMinutes(420), Stage = SleepStageType.Asleep },
+            ],
+        };
+
+        var result = API.Services.Sleep.SleepReportCalculator.ComputeStageBreakdown(session);
+
+        result.UnspecifiedMinutes.Should().Be(420);
+        result.LightMinutes.Should().Be(0);
+        result.DeepMinutes.Should().Be(0);
+        result.RemMinutes.Should().Be(0);
+        result.TotalMinutes.Should().Be(420);
+        result.UnspecifiedPct.Should().BeApproximately(100, 0.01);
+    }
+
+    [Fact]
     public void ComputeStageBreakdown_DerivesFromStages_WhenSummaryFieldsNull()
     {
         var now = new DateTime(2026, 5, 16, 23, 0, 0, DateTimeKind.Utc);
@@ -335,6 +401,33 @@ public class SleepReportCalculatorTests
         source.Should().BeNull();
     }
 
+    [Fact]
+    public void ResolveScore_ReturnsNull_WhenOnlyUnspecifiedMinutes()
+    {
+        var session = new SleepSession { SleepScore = null };
+        var breakdown = new SleepStageBreakdown { UnspecifiedMinutes = 420, TotalMinutes = 420 };
+        var (score, source) = API.Services.Sleep.SleepReportCalculator.ResolveScore(session, hypoCount: 0, breakdown);
+        score.Should().BeNull();
+        source.Should().BeNull();
+    }
+
+    [Fact]
+    public void ResolveScore_IncludesUnspecifiedInEfficiency_WhenDifferentiatedMinutesExist()
+    {
+        var session = new SleepSession { SleepScore = null };
+        var breakdown = new SleepStageBreakdown
+        {
+            DeepMinutes = 60, RemMinutes = 60, LightMinutes = 120, UnspecifiedMinutes = 60, AwakeMinutes = 0, TotalMinutes = 300,
+        };
+
+        var (score, source) = API.Services.Sleep.SleepReportCalculator.ResolveScore(session, hypoCount: 0, breakdown);
+
+        // efficiency = (60+60+120+60)/300 = 1.0, deepFrac = 0.2, remFrac = 0.2, disruption = 0
+        // raw = 40 + 1.0*25 + 0.2*90 + 0.2*35 = 90
+        score.Should().Be(90);
+        source.Should().Be(SleepScoreSource.Computed);
+    }
+
     // ── Night Summary ─────────────────────────────────────────────────────
 
     [Fact]
@@ -396,6 +489,25 @@ public class SleepReportCalculatorTests
     }
 
     [Fact]
+    public void ComputeNightSummary_CountsUnspecifiedAsSleep_ButNullsScore_WhenOnlyAsleepIntervals()
+    {
+        var session = MakeSession();
+        session.Id = Guid.NewGuid().ToString();
+        session.Stages =
+        [
+            new SleepStageInterval { StartTime = session.StartTime, EndTime = session.StartTime.AddMinutes(420), Stage = SleepStageType.Asleep },
+        ];
+
+        var result = API.Services.Sleep.SleepReportCalculator.ComputeNightSummary(session, [], _thresholds);
+
+        result.UnspecifiedMinutes.Should().Be(420);
+        result.SleepMinutes.Should().Be(420);
+        result.LightMinutes.Should().Be(0);
+        result.SleepScore.Should().BeNull();
+        result.ScoreSource.Should().BeNull();
+    }
+
+    [Fact]
     public void ComputeNightSummary_PopulatesLowestBg_FromAllReadings()
     {
         var session = MakeSession();
@@ -451,7 +563,7 @@ public class SleepReportCalculatorTests
             new SleepNightSummary { SleepScore = 80, OvernightTirPct = 90, DeepMinutes = 110, SleepMinutes = 460, HypoCount = 1 },
         };
 
-        var result = API.Services.Sleep.SleepReportCalculator.ComputeTrendsSummary(nights);
+        var result = API.Services.Sleep.SleepReportCalculator.ComputeTrendsSummary(nights, daysInRange: 30);
 
         result.NightCount.Should().Be(2);
         result.MeanScore.Should().BeApproximately(75, 0.01);
@@ -473,7 +585,7 @@ public class SleepReportCalculatorTests
             HypoCount       = 0,
         }).ToArray();
 
-        var result = API.Services.Sleep.SleepReportCalculator.ComputeTrendsSummary(nights);
+        var result = API.Services.Sleep.SleepReportCalculator.ComputeTrendsSummary(nights, daysInRange: 14);
 
         result.Last7dVsPrior7d.ScoreDelta.Should().BeApproximately(20, 0.01);
     }
@@ -489,8 +601,56 @@ public class SleepReportCalculatorTests
             HypoCount       = 0,
         }).ToArray();
 
-        var result = API.Services.Sleep.SleepReportCalculator.ComputeTrendsSummary(nights);
+        var result = API.Services.Sleep.SleepReportCalculator.ComputeTrendsSummary(nights, daysInRange: 14);
 
         result.Last7dVsPrior7d.DawnRiseDelta.Should().BeApproximately(15, 0.01);
+    }
+
+    [Fact]
+    public void ComputeTrendsSummary_ComputesCoverage_FromDaysInRange()
+    {
+        var nights = Enumerable.Range(0, 3).Select(_ => new SleepNightSummary
+        {
+            SleepMinutes = 440,
+            HypoCount    = 0,
+        }).ToArray();
+
+        var result = API.Services.Sleep.SleepReportCalculator.ComputeTrendsSummary(nights, daysInRange: 10);
+
+        result.DaysInRange.Should().Be(10);
+        result.CoveragePct.Should().BeApproximately(30, 0.01);
+    }
+
+    [Fact]
+    public void ComputeTrendsSummary_ClampsCoverage_WhenNightsExceedDays()
+    {
+        var nights = Enumerable.Range(0, 5).Select(_ => new SleepNightSummary
+        {
+            SleepMinutes = 440,
+            HypoCount    = 0,
+        }).ToArray();
+
+        var result = API.Services.Sleep.SleepReportCalculator.ComputeTrendsSummary(nights, daysInRange: 3);
+
+        result.CoveragePct.Should().Be(100);
+    }
+
+    [Fact]
+    public void ComputeTrendsSummary_SetsDaysInRange_WhenNoNights()
+    {
+        var result = API.Services.Sleep.SleepReportCalculator.ComputeTrendsSummary([], daysInRange: 30);
+
+        result.NightCount.Should().Be(0);
+        result.DaysInRange.Should().Be(30);
+        result.CoveragePct.Should().Be(0);
+    }
+
+    [Fact]
+    public void ComputeTrendsSummary_ZeroCoverage_WhenDaysInRangeIsZero()
+    {
+        var result = API.Services.Sleep.SleepReportCalculator.ComputeTrendsSummary([], daysInRange: 0);
+
+        result.DaysInRange.Should().Be(0);
+        result.CoveragePct.Should().Be(0);
     }
 }

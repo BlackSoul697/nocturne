@@ -25,7 +25,7 @@ internal static class SleepReportCalculator
 
     internal static SleepStageBreakdown ComputeStageBreakdown(SleepSession session)
     {
-        int deep, rem, light, awake;
+        int deep, rem, light, awake, unspecified;
 
         if (session.DeepSleepMs.HasValue && session.RemSleepMs.HasValue
             && session.LightSleepMs.HasValue && session.TotalAwakeMs.HasValue)
@@ -34,36 +34,44 @@ internal static class SleepReportCalculator
             rem   = (int)(session.RemSleepMs.Value   / 60_000);
             light = (int)(session.LightSleepMs.Value / 60_000);
             awake = (int)(session.TotalAwakeMs.Value / 60_000);
+
+            // Some devices report a TotalSleepMs larger than the sum of the differentiated
+            // stages; the remainder is asleep time the device didn't stage-classify.
+            var totalSleep = (int)(session.TotalSleepMs / 60_000);
+            unspecified = Math.Max(0, totalSleep - (deep + rem + light));
         }
         else
         {
-            deep = rem = light = awake = 0;
+            deep = rem = light = awake = unspecified = 0;
             foreach (var stage in session.Stages ?? [])
             {
                 var mins = (int)(stage.EndTime - stage.StartTime).TotalMinutes;
                 switch (stage.Stage)
                 {
-                    case SleepStageType.Deep:                                     deep  += mins; break;
-                    case SleepStageType.Rem:                                      rem   += mins; break;
-                    case SleepStageType.Light: case SleepStageType.Asleep:        light += mins; break;
+                    case SleepStageType.Deep:                                     deep        += mins; break;
+                    case SleepStageType.Rem:                                      rem         += mins; break;
+                    case SleepStageType.Light:                                    light       += mins; break;
+                    case SleepStageType.Asleep:                                   unspecified += mins; break;
                     case SleepStageType.Awake: case SleepStageType.AwakeInBed:
-                    case SleepStageType.Restless:                                 awake += mins; break;
+                    case SleepStageType.Restless:                                 awake       += mins; break;
                 }
             }
         }
 
-        var total = deep + rem + light + awake;
+        var total = deep + rem + light + awake + unspecified;
         return new SleepStageBreakdown
         {
-            DeepMinutes  = deep,
-            RemMinutes   = rem,
-            LightMinutes = light,
-            AwakeMinutes = awake,
-            TotalMinutes = total,
-            DeepPct  = total > 0 ? deep  * 100.0 / total : 0,
-            RemPct   = total > 0 ? rem   * 100.0 / total : 0,
-            LightPct = total > 0 ? light * 100.0 / total : 0,
-            AwakePct = total > 0 ? awake * 100.0 / total : 0,
+            DeepMinutes        = deep,
+            RemMinutes         = rem,
+            LightMinutes       = light,
+            AwakeMinutes       = awake,
+            UnspecifiedMinutes = unspecified,
+            TotalMinutes       = total,
+            DeepPct        = total > 0 ? deep        * 100.0 / total : 0,
+            RemPct         = total > 0 ? rem         * 100.0 / total : 0,
+            LightPct       = total > 0 ? light       * 100.0 / total : 0,
+            AwakePct       = total > 0 ? awake       * 100.0 / total : 0,
+            UnspecifiedPct = total > 0 ? unspecified * 100.0 / total : 0,
         };
     }
 
@@ -262,10 +270,13 @@ internal static class SleepReportCalculator
         if (session.SleepScore.HasValue)
             return (session.SleepScore.Value, SleepScoreSource.Device);
 
-        var total = (double)breakdown.TotalMinutes;
-        if (total == 0) return (null, null);
+        // Undifferentiated-only data (e.g. manual entries) carries no stage composition
+        // to score against — fabricating a number from it would be misleading.
+        var differentiated = breakdown.DeepMinutes + breakdown.RemMinutes + breakdown.LightMinutes;
+        if (differentiated == 0) return (null, null);
 
-        var efficiency = (breakdown.DeepMinutes + breakdown.RemMinutes + breakdown.LightMinutes) / total;
+        var total = (double)breakdown.TotalMinutes;
+        var efficiency = (breakdown.DeepMinutes + breakdown.RemMinutes + breakdown.LightMinutes + breakdown.UnspecifiedMinutes) / total;
         var deepFrac   = breakdown.DeepMinutes  / total;
         var remFrac    = breakdown.RemMinutes   / total;
         var disruption = Math.Min(20, breakdown.AwakeMinutes * 0.6 + hypoCount * 4);
@@ -295,25 +306,26 @@ internal static class SleepReportCalculator
 
         return new SleepNightSummary
         {
-            SessionId       = sessionId,
-            Date            = session.StartTime.ToString("MMM d"),
-            Weekday         = session.StartTime.DayOfWeek.ToString()[..3],
-            InBedAt         = session.StartTime,
-            WakeAt          = session.EndTime,
-            SleepMinutes    = breakdown.DeepMinutes + breakdown.RemMinutes + breakdown.LightMinutes,
-            DeepMinutes     = breakdown.DeepMinutes,
-            RemMinutes      = breakdown.RemMinutes,
-            LightMinutes    = breakdown.LightMinutes,
-            AwakeMinutes    = breakdown.AwakeMinutes,
-            SleepScore      = finalScore,
-            ScoreSource     = scoreSource,
-            OvernightTirPct = tir?.InRangePct,
-            HypoCount       = hypos.Count,
-            LowestBg        = sessionReadings.Count > 0
+            SessionId          = sessionId,
+            Date               = session.StartTime.ToString("MMM d"),
+            Weekday            = session.StartTime.DayOfWeek.ToString()[..3],
+            InBedAt            = session.StartTime,
+            WakeAt             = session.EndTime,
+            SleepMinutes       = breakdown.DeepMinutes + breakdown.RemMinutes + breakdown.LightMinutes + breakdown.UnspecifiedMinutes,
+            DeepMinutes        = breakdown.DeepMinutes,
+            RemMinutes         = breakdown.RemMinutes,
+            LightMinutes       = breakdown.LightMinutes,
+            AwakeMinutes       = breakdown.AwakeMinutes,
+            UnspecifiedMinutes = breakdown.UnspecifiedMinutes,
+            SleepScore         = finalScore,
+            ScoreSource        = scoreSource,
+            OvernightTirPct    = tir?.InRangePct,
+            HypoCount          = hypos.Count,
+            LowestBg           = sessionReadings.Count > 0
                                   ? (int)Math.Round(sessionReadings.Min(g => g.Mgdl))
                                   : null,
-            DawnRiseDeltaMg = dawn?.DeltaBg,
-            HrvMeanMs       = session.AvgHrv,
+            DawnRiseDeltaMg    = dawn?.DeltaBg,
+            HrvMeanMs          = session.AvgHrv,
         };
     }
 
@@ -372,9 +384,12 @@ internal static class SleepReportCalculator
 
     // ── Trends Summary ────────────────────────────────────────────────────
 
-    internal static SleepTrendsSummary ComputeTrendsSummary(IReadOnlyList<SleepNightSummary> nights)
+    internal static SleepTrendsSummary ComputeTrendsSummary(IReadOnlyList<SleepNightSummary> nights, int daysInRange)
     {
-        if (nights.Count == 0) return new SleepTrendsSummary();
+        var coveragePct = daysInRange > 0 ? Math.Min(100.0, nights.Count * 100.0 / daysInRange) : 0;
+
+        if (nights.Count == 0)
+            return new SleepTrendsSummary { DaysInRange = daysInRange, CoveragePct = coveragePct };
 
         var scored     = nights.Where(n => n.SleepScore.HasValue).ToList();
         var tirNights  = nights.Where(n => n.OvernightTirPct.HasValue).ToList();
@@ -413,6 +428,8 @@ internal static class SleepReportCalculator
         return new SleepTrendsSummary
         {
             NightCount        = nights.Count,
+            DaysInRange       = daysInRange,
+            CoveragePct       = coveragePct,
             MeanScore         = scored.Count   > 0 ? scored.Average(n => (double)n.SleepScore!.Value) : null,
             MeanTirPct        = tirNights.Count > 0 ? tirNights.Average(n => n.OvernightTirPct!.Value) : null,
             MeanAsleepMinutes = nights.Average(n => n.SleepMinutes),

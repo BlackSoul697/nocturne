@@ -140,8 +140,13 @@ public class SleepReportService : ISleepReportService
             descending:        false,
             cancellationToken: ct);
 
+        var daysInRange = (int)(to.Date - from.Date).TotalDays + 1;
+
         if (!allSessions.Any())
-            return new SleepTrendsReport();
+            return new SleepTrendsReport
+            {
+                Summary = SleepReportCalculator.ComputeTrendsSummary([], daysInRange),
+            };
 
         IReadOnlyList<SleepSession> sessions = source is null
             ? SleepReportCalculator.DeduplicateToOnePerNight(allSessions)
@@ -175,7 +180,7 @@ public class SleepReportService : ISleepReportService
                 return SleepReportCalculator.ComputeNightSummary(s, nightGlucose, thresholds);
             })
             .ToList();
-        var summary = SleepReportCalculator.ComputeTrendsSummary(nights);
+        var summary = SleepReportCalculator.ComputeTrendsSummary(nights, daysInRange);
 
         return new SleepTrendsReport
         {
