@@ -1015,7 +1015,14 @@ public class DevAdminController : ControllerBase
                 tenant.Id, fixtureSubjectId, [ownerRole.Id], label: "dev fixture", ct: ct);
         }
 
-        // 6. Sample data
+        // 6. Mark onboarding complete. The web layout redirects every page to
+        // /setup until Tenant.OnboardingCompletedAt is set; a seeded dev tenant
+        // has nothing left to onboard.
+        var tenantEntity = await _db.Tenants.FirstAsync(t => t.Id == tenant.Id, ct);
+        tenantEntity.OnboardingCompletedAt = DateTime.UtcNow;
+        await _db.SaveChangesAsync(ct);
+
+        // 7. Sample data
         var entriesSeeded = 0;
         var treatmentsSeeded = 0;
         var sleepSessionsSeeded = 0;
@@ -1027,7 +1034,7 @@ public class DevAdminController : ControllerBase
                 ct);
         }
 
-        // 7. Session
+        // 8. Session
         var sessionContext = new SessionContext(
             DeviceDescription: "e2e-test",
             IpAddress: "127.0.0.1",
