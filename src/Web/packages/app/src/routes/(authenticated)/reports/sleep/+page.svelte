@@ -12,6 +12,7 @@
   } from "$lib/components/actogram";
   import { MS_PER_HOUR, HOURS_PER_ROW } from "$lib/components/actogram/actogram";
   import { getActogramData } from "$api/actogram.remote";
+  import { getTrends } from "$api/generated/sleepReports.generated.remote";
   import { requireDateParamsContext } from "$lib/hooks/date-params.svelte";
   import { contextResource } from "$lib/hooks/resource-context.svelte";
 
@@ -31,6 +32,18 @@
       getActogramData({
         from: dateRangeMillis.from,
         to: dateRangeMillis.to,
+      }),
+    { errorTitle: "Error Loading Sleep Report" }
+  );
+
+  // Summary tiles come from the backend trends report (authoritative per-night
+  // aggregation over the same window the actogram loads) — not the raw stage
+  // spans, which would count each stage interval as a "night".
+  const trendsResource = contextResource(
+    () =>
+      getTrends({
+        from: new Date(dateRangeMillis.from),
+        to: new Date(dateRangeMillis.to),
       }),
     { errorTitle: "Error Loading Sleep Report" }
   );
@@ -77,16 +90,18 @@
     (actogramResource.current?.glucoseData ?? []).map((g) => ({ mills: g.mills, sgv: g.sgv, color: g.color }))
   );
 
-  // Summary statistics
-  const totalSleepMs = $derived(
-    (actogramResource.current?.sleepSpans ?? []).reduce((sum, s) => sum + (s.endMills - s.startMills), 0)
-  );
-  const avgSleepHours = $derived(
-    days.length > 0
-      ? totalSleepMs / days.length / (1000 * 60 * 60)
-      : 0
-  );
-  const totalNights = $derived((actogramResource.current?.sleepSpans ?? []).length);
+  // Summary statistics: distinct recorded nights and mean asleep time computed
+  // server-side by the sleep report calculator; Period is the calendar span the
+  // recorded nights actually cover.
+  const sleepSummary = $derived(trendsResource.current?.summary);
+  const sleepNights = $derived(trendsResource.current?.nights ?? []);
+  const avgSleepHours = $derived((sleepSummary?.meanAsleepMinutes ?? 0) / 60);
+  const totalNights = $derived(sleepSummary?.nightCount ?? sleepNights.length);
+  const periodDays = $derived.by(() => {
+    if (sleepNights.length === 0) return 0;
+    const times = sleepNights.map((n) => new Date(n.inBedAt).getTime());
+    return Math.round((Math.max(...times) - Math.min(...times)) / MS_PER_DAY) + 1;
+  });
 
   function formatHoursMinutes(hours: number): string {
     const h = Math.floor(hours);
@@ -154,7 +169,7 @@
           <div class="flex items-center gap-2">
             <Clock class="h-5 w-5 text-muted-foreground" />
             <span class="text-2xl font-bold tabular-nums">{totalNights}</span>
-            <span class="text-sm text-muted-foreground">sessions</span>
+            <span class="text-sm text-muted-foreground">nights</span>
           </div>
         </CardContent>
       </Card>
@@ -168,7 +183,7 @@
         <CardContent>
           <div class="flex items-center gap-2">
             <Calendar class="h-5 w-5 text-muted-foreground" />
-            <span class="text-2xl font-bold tabular-nums">{days.length}</span>
+            <span class="text-2xl font-bold tabular-nums">{periodDays}</span>
             <span class="text-sm text-muted-foreground">days</span>
           </div>
         </CardContent>

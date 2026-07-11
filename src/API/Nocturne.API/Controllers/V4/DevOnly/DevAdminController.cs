@@ -1018,9 +1018,10 @@ public class DevAdminController : ControllerBase
         // 6. Sample data
         var entriesSeeded = 0;
         var treatmentsSeeded = 0;
+        var sleepSessionsSeeded = 0;
         if (request.SampleData)
         {
-            (entriesSeeded, treatmentsSeeded) = await sampleDataService.SeedAsync(
+            (entriesSeeded, treatmentsSeeded, sleepSessionsSeeded) = await sampleDataService.SeedAsync(
                 new TenantContext(tenant.Id, tenant.Slug, tenant.DisplayName, tenant.IsActive),
                 request.SampleDataDays,
                 ct);
@@ -1052,7 +1053,8 @@ public class DevAdminController : ControllerBase
             url,
             loginLink,
             entriesSeeded,
-            treatmentsSeeded));
+            treatmentsSeeded,
+            sleepSessionsSeeded));
     }
 
     // ── Sample data ─────────────────────────────────────────────────────────
@@ -1073,12 +1075,12 @@ public class DevAdminController : ControllerBase
         if (tenant is null)
             return NotFound(new { error = $"Tenant {id} not found" });
 
-        var (entries, treatments) = await sampleDataService.SeedAsync(
+        var (entries, treatments, sleepSessions) = await sampleDataService.SeedAsync(
             new TenantContext(tenant.Id, tenant.Slug, tenant.DisplayName, tenant.IsActive),
             request?.Days ?? 7,
             ct);
 
-        return Ok(new { entries, treatments });
+        return Ok(new { entries, treatments, sleepSessions });
     }
 
     // ── Recovery mode ───────────────────────────────────────────────────────
@@ -1236,7 +1238,8 @@ public record DevSeedTenantResponse(
     string? Url = null,
     string? LoginLink = null,
     int EntriesSeeded = 0,
-    int TreatmentsSeeded = 0);
+    int TreatmentsSeeded = 0,
+    int SleepSessionsSeeded = 0);
 
 public record DevSeedSampleDataRequest(int Days = 7);
 

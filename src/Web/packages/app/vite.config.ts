@@ -45,8 +45,10 @@ export default defineConfig(({ mode }) => {
     ssr: {
       // Bundle the Resend adapter (and its React deps) into the SSR output so
       // there is no bare `react` import left for Node to resolve from pnpm's
-      // store path at prerender/runtime.
-      noExternal: ["@resend/chat-sdk-adapter"],
+      // store path at prerender/runtime. Same reason for layerchart and its
+      // @layerstack/* utilities: their dist emits bare `svelte` imports that
+      // Node can't resolve from pnpm's isolated store, so bundle them for SSR.
+      noExternal: ["@resend/chat-sdk-adapter", "layerchart", /^@layerstack\//],
     },
     plugins: [
       tailwindcss(),
