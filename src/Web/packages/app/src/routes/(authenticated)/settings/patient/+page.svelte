@@ -71,9 +71,12 @@
       <Button
         type="submit"
         form="clinical-form"
-        disabled={!clinicalState?.record || !clinicalState?.guard.dirty || !!clinicalState?.form.pending}
+        disabled={!clinicalState?.record
+          || (!clinicalState?.guard.dirty && !clinicalState?.weight.dirty)
+          || !!clinicalState?.form.pending
+          || !!clinicalState?.weight.saving}
       >
-        {#if clinicalState?.form.pending}
+        {#if clinicalState?.form.pending || clinicalState?.weight.saving}
           <Loader2 class="mr-2 h-4 w-4 animate-spin" />
         {:else}
           <Save class="mr-2 h-4 w-4" />

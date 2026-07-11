@@ -4746,6 +4746,14 @@ namespace Nocturne.Infrastructure.Data.Migrations
                         .HasColumnType("integer")
                         .HasColumnName("lifespan_hours");
 
+                    b.Property<double?>("LowReservoirUnits")
+                        .HasColumnType("double precision")
+                        .HasColumnName("low_reservoir_units");
+
+                    b.Property<int>("LowReservoirUrgency")
+                        .HasColumnType("integer")
+                        .HasColumnName("low_reservoir_urgency");
+
                     b.Property<int>("Mode")
                         .HasColumnType("integer")
                         .HasColumnName("mode");

@@ -49,6 +49,10 @@ public class TenantResolutionMiddleware
         "/ready",
         "/api/v4/status",
         "/api/v4/me/tenants/validate-slug",
+        // Cross-tenant caregiver overview: aggregates across the subject's tenants,
+        // so it must be reachable from the apex in multi-tenant deployments. The
+        // service pins each tenant itself and never uses the request-scoped context.
+        "/api/v4/me/tenants/overview",
         "/api/v4/admin/tenants/validate-slug",
         "/api/metadata",
         "/api/v4/chat-identity/directory/resolve",
@@ -245,6 +249,7 @@ public class TenantResolutionMiddleware
         // pre-auth) and leaves the CSV null, so a share reading PHI on this path is denied.
         db.IsShareContext = context.RequestServices.GetService<ICategoryReadContext>()?.IsShare == true;
         db.VisibleCategories = null;
+        db.ShareFullHistory = false;
     }
 
     private const string ShareSubdomainLabel = "share";

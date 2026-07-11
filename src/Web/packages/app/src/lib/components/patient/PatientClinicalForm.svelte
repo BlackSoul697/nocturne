@@ -5,6 +5,7 @@
   import { DiabetesType } from "$api";
   import { diabetesTypeLabels } from "./labels";
   import { ClinicalState } from "./state.svelte";
+  import TimezoneCombobox from "./TimezoneCombobox.svelte";
 
   interface Props {
     onstate?: (state: ClinicalState) => void;
@@ -24,7 +25,9 @@
   id="clinical-form"
   class="@container"
   bind:this={formEl}
-  {...clinical.guard.enhance()}
+  {...clinical.guard.enhance(async () => {
+    if (clinical.form.result) await clinical.weight.save();
+  })}
 >
   <!-- Hidden fields for read-only record data -->
   {#if clinical.record?.id}
@@ -114,20 +117,42 @@
 
     <div class="space-y-2 @sm:col-span-2">
       <Label for="timezone">Timezone</Label>
-      <Input
+      <input type="hidden" name="timezone" value={clinical.timezone} />
+      <TimezoneCombobox
         id="timezone"
-        name="timezone"
         bind:value={clinical.timezone}
-        placeholder="e.g. Australia/Sydney"
+        aria-invalid={clinical.guard.issuesFor("timezone").length > 0}
+        placeholder="Search timezones..."
       />
       {#if clinical.timezoneAutoDetected}
         <p class="text-xs text-muted-foreground">
-          Auto-detected from your browser. Save to confirm — alerts with time-of-day rules use this to interpret window hours in your local time.
+          Auto-detected from your browser. Save to confirm — alerts with time-of-day rules use this to interpret window hours in your local time, starting from when you save.
         </p>
       {:else}
         <p class="text-xs text-muted-foreground">
-          IANA timezone id (e.g. Europe/London). Used by alerts, schedules, and analytics.
+          Used by alerts, schedules, and analytics. Changing it takes effect from when you save — past data isn't reinterpreted.
         </p>
+      {/if}
+      {#each clinical.guard.issuesFor("timezone") as issue}
+        <p class="text-sm text-destructive">{issue.message}</p>
+      {/each}
+    </div>
+
+    <div class="space-y-2">
+      <Label for="weight">Weight (kg)</Label>
+      <Input
+        id="weight"
+        type="number"
+        step="0.1"
+        min="0"
+        bind:value={clinical.weight.weightKg}
+        placeholder="e.g. 70"
+      />
+      <p class="text-xs text-muted-foreground">
+        Recorded to your weight history when you save — only if it's changed.
+      </p>
+      {#if clinical.weight.saveError}
+        <p class="text-sm text-destructive">{clinical.weight.saveError}</p>
       {/if}
     </div>
   </div>

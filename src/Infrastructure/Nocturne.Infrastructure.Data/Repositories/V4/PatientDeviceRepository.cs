@@ -37,9 +37,14 @@ public class PatientDeviceRepository : IPatientDeviceRepository
     public async Task<IEnumerable<PatientDevice>> GetAllAsync(CancellationToken ct = default)
     {
         await using var ctx = await _contextFactory.CreateAsync(ct);
+        // Rank leads the sort so the management list's order IS the priority order — otherwise
+        // drag/arrow reordering (which persists rank = list index) would snap back on refresh.
+        // Unranked devices fall back to the previous current-then-recent ordering.
         var entities = await ctx.PatientDevices
             .AsNoTracking()
-            .OrderByDescending(e => e.IsCurrent)
+            .OrderBy(e => e.Rank == null)
+            .ThenBy(e => e.Rank)
+            .ThenByDescending(e => e.IsCurrent)
             .ThenByDescending(e => e.StartDate)
             .ToListAsync(ct);
 
@@ -166,6 +171,33 @@ public class PatientDeviceRepository : IPatientDeviceRepository
 
         entity.DeletedAt = DateTime.UtcNow;
         await ctx.SaveChangesAsync(ct);
+    }
+
+    /// <inheritdoc />
+    public async Task<IEnumerable<PatientDevice>> ReorderAsync(
+        IReadOnlyList<(Guid Id, int Rank)> ranks, WriteOrigin origin, CancellationToken ct = default)
+    {
+        if (ranks.Count == 0) return [];
+
+        await using var ctx = await _contextFactory.CreateAsync(ct);
+        var rankById = ranks.ToDictionary(r => r.Id, r => r.Rank);
+        var ids = rankById.Keys.ToList();
+        var entities = await ctx.PatientDevices
+            .Where(e => ids.Contains(e.Id))
+            .ToListAsync(ct);
+
+        var changed = new List<PatientDevice>();
+        foreach (var entity in entities)
+        {
+            var newRank = rankById[entity.Id];
+            if (entity.Rank == newRank) continue;
+            entity.Rank = newRank;
+            changed.Add(PatientDeviceMapper.ToDomainModel(entity));
+        }
+
+        if (changed.Count > 0)
+            await ctx.SaveChangesAsync(ct);
+        return changed;
     }
 
     /// <inheritdoc />

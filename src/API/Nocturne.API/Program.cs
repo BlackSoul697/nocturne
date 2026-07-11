@@ -11,6 +11,7 @@ using Nocturne.API.Configuration;
 using Nocturne.API.Services.Audit;
 using Nocturne.API.Services.Auth;
 using Nocturne.API.Services.BackgroundServices;
+using Nocturne.API.Services.DevOnly;
 using Nocturne.Core.Contracts.Audit;
 using Nocturne.API.Extensions;
 using Nocturne.API.Filters;
@@ -150,6 +151,10 @@ builder.Services.AddScoped<IAuditContext, AuditContext>();
 builder.Services.AddHostedService<AuditRetentionService>();
 builder.Services.AddHostedService<SoftDeleteCleanupService>();
 
+// Consumed only by the dev-only admin controllers, which are stripped from
+// controller discovery outside Development.
+builder.Services.AddScoped<DevSampleDataService>();
+
 // Add native API services for strangler pattern
 // Note: NightscoutJsonFilter is added globally to apply null-omission and
 // NocturneOnly field exclusion to v1-v3 API responses only
@@ -280,15 +285,28 @@ builder
 
 builder.Services.AddNocturneAuthorization();
 
-// Configure CORS for frontend with credentials support
-// Note: AllowAnyOrigin() cannot be combined with AllowCredentials() per CORS spec
-// Using SetIsOriginAllowed to dynamically allow origins while supporting cookies
+// Configure CORS for frontend with credentials support.
+// AllowAnyOrigin() cannot be combined with AllowCredentials() per the CORS spec, and a
+// static allow-list can't cover the open-ended per-tenant wildcard subdomains
+// ({slug}.{BaseDomain}) or public shares ({token}.share.{BaseDomain}). Instead validate the
+// origin against the configured base domain: apex + any subdomain are allowed, loopback
+// origins only in development. See CorsOriginPolicy.
+// Normalize the configured base domain once (strip scheme/path/port/stray dots) so
+// misformatted values like "https://nocturne.run" or "nocturne.run/" still resolve to
+// a matchable host instead of silently disabling cross-origin CORS. See CorsOriginPolicy.
+var rawCorsBaseDomain = builder.Configuration[BaseDomainOptions.ConfigKey] ?? "";
+var corsBaseDomain = CorsOriginPolicy.NormalizeBaseHost(rawCorsBaseDomain);
+var corsAllowLocalhost = builder.Environment.IsDevelopment();
+// A credentialed CORS base must be a real multi-label domain; a bare suffix ("com") or
+// single-label/empty value would either widen the allow-list or disable it. The predicate
+// already fails closed on such values — validity is surfaced at startup below.
+var corsBaseDomainIsValid = corsBaseDomain.Length > 0 && corsBaseDomain.Contains('.');
 builder.Services.AddCors(options =>
 {
     options.AddDefaultPolicy(policy =>
     {
         policy
-            .SetIsOriginAllowed(_ => true) // Allow any origin (development-friendly, restrict in production)
+            .SetIsOriginAllowed(origin => CorsOriginPolicy.IsAllowed(origin, corsBaseDomain, corsAllowLocalhost))
             .AllowAnyMethod()
             .AllowAnyHeader()
             .AllowCredentials(); // Required for cookies/auth to work cross-origin
@@ -306,6 +324,29 @@ builder.Services.Configure<ForwardedHeadersOptions>(options =>
 });
 
 var app = builder.Build();
+
+// Surface the effective credentialed-CORS base domain so operators can see what's active.
+// An invalid base (bare suffix, single-label, or empty) fails closed: cross-origin CORS is
+// disabled and only same-origin (plus loopback in Development) requests are admitted.
+if (corsBaseDomainIsValid)
+{
+    app.Logger.LogInformation("CORS base domain: {CorsBaseDomain}", corsBaseDomain);
+}
+else if (app.Environment.IsDevelopment())
+{
+    app.Logger.LogInformation(
+        "CORS base domain '{RawCorsBaseDomain}' is not a multi-label host; cross-origin CORS is "
+        + "disabled (loopback origins are still allowed in Development).",
+        rawCorsBaseDomain);
+}
+else
+{
+    app.Logger.LogError(
+        "CORS base domain '{RawCorsBaseDomain}' is not a valid multi-label host ({ConfigKey}). "
+        + "Cross-origin CORS is disabled (fail closed) — tenant and share subdomains will be "
+        + "rejected until this is corrected.",
+        rawCorsBaseDomain, BaseDomainOptions.ConfigKey);
+}
 
 // Configure middleware pipeline
 app.UseExceptionHandler();
@@ -530,6 +571,17 @@ if (!isNSwagGeneration && !app.Environment.IsEnvironment("Testing"))
         var bootstrap = new PlatformAdminBootstrapService(db, platformOptions);
         await bootstrap.BootstrapAsync(CancellationToken.None);
     }
+}
+
+// Development only: re-seed the committed dev identity fixture (real WebAuthn
+// public keys) so a database wipe doesn't cost developers their passkey login.
+if (app.Environment.IsDevelopment() && !isNSwagGeneration)
+{
+    using var devSeedScope = app.Services.CreateScope();
+    var devSeedDb = devSeedScope.ServiceProvider.GetRequiredService<NocturneDbContext>();
+    var devSeedLogger = devSeedScope.ServiceProvider.GetRequiredService<ILogger<Program>>();
+    await DevIdentityFixtureSeeder.SeedAsync(
+        devSeedDb, app.Configuration, devSeedLogger, CancellationToken.None);
 }
 
 await app.RunAsync();

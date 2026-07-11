@@ -241,6 +241,7 @@ public static class ServiceRegistrationExtensions
         services.AddScoped<ITenantMemberService, TenantMemberService>();
         services.AddScoped<ITenantRoleService, TenantRoleService>();
         services.AddScoped<ITenantService, TenantService>();
+        services.AddScoped<ITenantOverviewService, TenantOverviewService>();
 
         // Shared by InstanceKeyHandler (authentication) and TenantSetupMiddleware
         // (setup-gate bypass) so instance-key validation rules live in one place.
@@ -523,6 +524,7 @@ public static class ServiceRegistrationExtensions
         // Device resolution
         services.AddScoped<IDeviceService, DeviceService>();
         services.AddScoped<IPatientDeviceStamper, PatientDeviceStamper>();
+        services.AddScoped<IDeviceReattributionService, DeviceReattributionService>();
 
         // Canonical glucose stream (single-stream view for v1/v3, alarms, unfiltered analytics)
         services.AddScoped<ICanonicalGlucoseService, CanonicalGlucoseService>();

@@ -344,6 +344,7 @@ public class StatisticsController : ControllerBase
         [FromQuery] DateTime startDate,
         [FromQuery] DateTime endDate,
         [FromQuery] DiabetesPopulation population = DiabetesPopulation.Type1Adult,
+        [FromQuery] Guid? patientDeviceId = null,
         CancellationToken cancellationToken = default
     )
     {
@@ -354,21 +355,68 @@ public class StatisticsController : ControllerBase
 
             // int.MaxValue limit mirrors ActogramReportService so dense tenants are never
             // silently truncated (the cause of skewed report stats on high-frequency uploads).
-            var glucoseTask = _sensorGlucoseRepository.GetAsync(startDt, endDt, null, null, int.MaxValue, descending: false, ct: cancellationToken);
+            var glucoseTask = _sensorGlucoseRepository.GetAsync(startDt, endDt, null, null, int.MaxValue, descending: false, patientDeviceId: patientDeviceId, ct: cancellationToken);
             var bolusTask   = _bolusRepository.GetAsync(startDt, endDt, null, null, int.MaxValue, descending: false, kind: BolusKind.Manual, ct: cancellationToken);
             var carbTask    = _carbIntakeRepository.GetAsync(startDt, endDt, null, null, int.MaxValue, descending: false, ct: cancellationToken);
+            var devicesTask = _patientDeviceRepository.GetByDateRangeAsync(startDt, endDt, ct: cancellationToken);
 
-            await Task.WhenAll(glucoseTask, bolusTask, carbTask);
+            await Task.WhenAll(glucoseTask, bolusTask, carbTask, devicesTask);
+
+            var rawGlucose = (await glucoseTask).ToList();
 
             // Unfiltered statistics compute over the canonical stream, never blended CGMs.
-            var entries = (await _canonicalGlucose.SelectAsync((await glucoseTask).ToList(), cancellationToken)).ToList();
+            // A patientDeviceId filter already restricts the fetch to one device raw, so there
+            // is nothing left to canonicalize/blend.
+            var entries = patientDeviceId is null
+                ? (await _canonicalGlucose.SelectAsync(rawGlucose, cancellationToken)).ToList()
+                : rawGlucose;
             var boluses = await bolusTask;
             var carbs   = await carbTask;
+            var devices = await devicesTask;
+
+            // Registered devices that contributed readings, for the UI's device picker. Count in a
+            // single pass over the raw readings rather than re-scanning per device. The unattributed
+            // bucket is tracked separately — a null key can't live in a Dictionary.
+            var countByDevice = new Dictionary<Guid, int>();
+            var unattributedCount = 0;
+            foreach (var r in rawGlucose)
+            {
+                if (r.PatientDeviceId is { } id)
+                    countByDevice[id] = countByDevice.GetValueOrDefault(id) + 1;
+                else
+                    unattributedCount++;
+            }
+
+            var contributingDevices = new List<ContributingDevice>();
+            foreach (var d in devices.Where(d => d.DeviceCategory == DeviceCategory.CGM))
+            {
+                if (!countByDevice.TryGetValue(d.Id, out var readingCount) || readingCount == 0) continue;
+
+                var name = (d.CatalogId != null ? DeviceCatalog.GetById(d.CatalogId)?.Name : null)
+                    ?? d.Model ?? d.Manufacturer ?? "Unknown device";
+                contributingDevices.Add(new ContributingDevice
+                {
+                    PatientDeviceId = d.Id,
+                    Name = name,
+                    ReadingCount = readingCount,
+                });
+            }
+
+            if (unattributedCount > 0)
+            {
+                contributingDevices.Add(new ContributingDevice
+                {
+                    PatientDeviceId = null,
+                    Name = "Unattributed",
+                    ReadingCount = unattributedCount,
+                });
+            }
 
             var result = new ReportAnalysisResult
             {
                 Analysis = _statisticsService.AnalyzeGlucoseDataExtended(entries, boluses, carbs, population),
                 AveragedStats = _statisticsService.CalculateAveragedStats(entries).ToList(),
+                ContributingDevices = contributingDevices,
             };
             return Ok(result);
         }

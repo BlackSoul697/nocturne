@@ -1,5 +1,6 @@
 using Nocturne.Core.Models.V4;
 using Nocturne.Core.Contracts.V4;
+using Nocturne.Core.Models.Projections;
 
 namespace Nocturne.Core.Contracts.V4.Repositories;
 
@@ -30,6 +31,10 @@ public interface ISensorGlucoseRepository : IV4Repository<SensorGlucose>
     /// <param name="descending">When <c>true</c>, results are ordered newest-first (default).</param>
     /// <param name="nativeOnly">When <c>true</c>, excludes records projected from legacy V1/V2/V3 entries.</param>
     /// <param name="ct">Cancellation token.</param>
+    /// <param name="patientDeviceId">Optional filter restricting results to a single registered <see cref="PatientDevice"/>'s
+    /// attributed readings. Bypasses canonical stream selection at the caller — a filtered read returns that device raw.
+    /// Placed after <paramref name="ct"/> so it is additive: existing positional callers (which end at the token) are
+    /// unaffected.</param>
     Task<IEnumerable<SensorGlucose>> GetAsync(
         DateTime? from,
         DateTime? to,
@@ -41,7 +46,8 @@ public interface ISensorGlucoseRepository : IV4Repository<SensorGlucose>
         bool nativeOnly = false,
         DateTime? afterTimestamp = null,
         Guid? afterId = null,
-        CancellationToken ct = default
+        CancellationToken ct = default,
+        Guid? patientDeviceId = null
     );
 
     // Explicit base-interface bridge — delegates to the extended overload
@@ -138,6 +144,26 @@ public interface ISensorGlucoseRepository : IV4Repository<SensorGlucose>
     /// <param name="ct">Cancellation token.</param>
     /// <returns>Number of records deleted.</returns>
     Task<int> DeleteBySourceAsync(string source, CancellationToken ct = default);
+
+    /// <summary>
+    /// Lists distinct <c>(DataSource, Device)</c> combinations among unattributed readings
+    /// (<c>PatientDeviceId == null</c>) newer than <paramref name="since"/>, with a reading count and
+    /// last-seen timestamp per combination. Drives the "discovered sources" device-registration UI.
+    /// </summary>
+    Task<IReadOnlyList<DiscoveredSource>> GetDiscoveredSourcesAsync(DateTime since, CancellationToken ct = default);
+
+    /// <summary>
+    /// Returns unattributed readings (<c>PatientDeviceId == null</c>) within the time window, capped at
+    /// <paramref name="limit"/>. Used to back-stamp attribution when a device is registered from a discovered source.
+    /// </summary>
+    Task<IReadOnlyList<SensorGlucose>> GetUnattributedAsync(DateTime? from, DateTime? to, int limit, CancellationToken ct = default);
+
+    /// <summary>
+    /// Persists <see cref="SensorGlucose.PatientDeviceId"/> for the given record ids in one batch.
+    /// Ids absent for this tenant are ignored.
+    /// </summary>
+    /// <returns>The number of rows updated.</returns>
+    Task<int> SetPatientDeviceIdsAsync(IReadOnlyDictionary<Guid, Guid> patientDeviceIdByRecordId, CancellationToken ct = default);
 
     /// <summary>
     /// Delete all records within the given time range.
