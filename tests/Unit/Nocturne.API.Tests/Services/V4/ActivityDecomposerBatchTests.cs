@@ -1,6 +1,7 @@
 using Microsoft.Extensions.Logging.Abstractions;
 using Nocturne.API.Services.V4;
 using Nocturne.Core.Contracts.Repositories;
+using Nocturne.Core.Models.Authorization;
 using Nocturne.Core.Models.V4;
 using Nocturne.Tests.Shared.Infrastructure;
 using Nocturne.Infrastructure.Data;
@@ -154,6 +155,46 @@ public class ActivityDecomposerBatchTests : IDisposable
         // All records produced in one decompose share a single non-empty correlation id
         result.CorrelationId.Should().NotBeNull().And.NotBe(Guid.Empty);
     }
+
+    #region RequiredWriteScope
+
+    [Fact]
+    public void RequiredWriteScope_HeartRate_ReturnsHeartRateReadWrite()
+    {
+        _decomposer.RequiredWriteScope(CreateHeartRateActivity("hr", 72))
+            .Should().Be(OAuthScopes.HeartRateReadWrite);
+    }
+
+    [Fact]
+    public void RequiredWriteScope_StepCount_ReturnsStepCountReadWrite()
+    {
+        _decomposer.RequiredWriteScope(CreateStepCountActivity("sc", 1500))
+            .Should().Be(OAuthScopes.StepCountReadWrite);
+    }
+
+    [Theory]
+    [InlineData("sleep")]
+    [InlineData("nap")]
+    [InlineData("Sleep")]
+    public void RequiredWriteScope_SleepType_ReturnsSleepReadWrite(string type)
+    {
+        _decomposer.RequiredWriteScope(CreateRegularActivity("s", type))
+            .Should().Be(OAuthScopes.SleepReadWrite);
+    }
+
+    [Theory]
+    [InlineData("exercise")]
+    [InlineData("running")]
+    [InlineData("illness")]
+    [InlineData("travel")]
+    [InlineData("restaurant")] // contains "rest" but is not an exact sleep type
+    public void RequiredWriteScope_RegularActivity_ReturnsNull(string type)
+    {
+        _decomposer.RequiredWriteScope(CreateRegularActivity("r", type))
+            .Should().BeNull();
+    }
+
+    #endregion
 
     #region Helpers
 

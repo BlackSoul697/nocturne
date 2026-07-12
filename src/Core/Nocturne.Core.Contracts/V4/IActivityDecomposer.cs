@@ -56,4 +56,11 @@ public interface IActivityDecomposer
     /// rather than stored as a StateSpan.
     /// </summary>
     bool IsSensorData(Activity activity);
+
+    /// <summary>
+    /// Returns the OAuth write scope required to persist the activity, based on the dedicated
+    /// table it routes to (heart rate, step count, or sleep), or <see langword="null"/> for a
+    /// regular activity that routes to StateSpans and carries no category scope.
+    /// </summary>
+    string? RequiredWriteScope(Activity activity);
 }
