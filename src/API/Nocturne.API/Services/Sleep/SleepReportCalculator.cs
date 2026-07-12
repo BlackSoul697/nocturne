@@ -384,12 +384,21 @@ internal static class SleepReportCalculator
 
     // ── Trends Summary ────────────────────────────────────────────────────
 
-    internal static SleepTrendsSummary ComputeTrendsSummary(IReadOnlyList<SleepNightSummary> nights, int daysInRange)
+    internal static SleepTrendsSummary ComputeTrendsSummary(
+        IReadOnlyList<SleepNightSummary> nights,
+        int daysInRange,
+        SleepStageReferenceRangeSet? referenceRanges = null)
     {
+        referenceRanges ??= SleepStageReferenceRangeSet.Default;
         var coveragePct = daysInRange > 0 ? Math.Min(100.0, nights.Count * 100.0 / daysInRange) : 0;
 
         if (nights.Count == 0)
-            return new SleepTrendsSummary { DaysInRange = daysInRange, CoveragePct = coveragePct };
+            return new SleepTrendsSummary
+            {
+                DaysInRange = daysInRange,
+                CoveragePct = coveragePct,
+                ReferenceRanges = referenceRanges,
+            };
 
         var scored     = nights.Where(n => n.SleepScore.HasValue).ToList();
         var tirNights  = nights.Where(n => n.OvernightTirPct.HasValue).ToList();
@@ -443,6 +452,7 @@ internal static class SleepReportCalculator
                                   : null,
             TotalHypoCount    = nights.Sum(n => n.HypoCount),
             NightsWithHypoPct = nights.Count > 0 ? nights.Count(n => n.HypoCount > 0) * 100.0 / nights.Count : 0,
+            ReferenceRanges   = referenceRanges,
             Last7dVsPrior7d = new SleepTrendsDelta
             {
                 ScoreDelta       = l7Score.HasValue && p7Score.HasValue ? l7Score - p7Score : null,

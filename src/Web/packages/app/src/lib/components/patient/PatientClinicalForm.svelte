@@ -2,8 +2,8 @@
   import { Input } from "$lib/components/ui/input";
   import { Label } from "$lib/components/ui/label";
   import * as Select from "$lib/components/ui/select";
-  import { DiabetesType } from "$api";
-  import { diabetesTypeLabels } from "./labels";
+  import { DiabetesType, BiologicalSex } from "$api";
+  import { diabetesTypeLabels, biologicalSexLabels } from "./labels";
   import { ClinicalState } from "./state.svelte";
   import TimezoneCombobox from "./TimezoneCombobox.svelte";
 
@@ -93,6 +93,26 @@
         type="date"
         bind:value={clinical.dateOfBirth}
       />
+    </div>
+
+    <div class="space-y-2">
+      <Label for="sex">Sex</Label>
+      <Select.Root type="single" name="sex" bind:value={clinical.sex}>
+        <Select.Trigger id="sex">
+          {clinical.sex
+            ? (biologicalSexLabels[clinical.sex as BiologicalSex] ?? clinical.sex)
+            : "Select sex"}
+        </Select.Trigger>
+        <Select.Content>
+          <Select.Item value="" label="Prefer not to say" />
+          {#each Object.entries(biologicalSexLabels) as [value, label]}
+            <Select.Item {value} {label} />
+          {/each}
+        </Select.Content>
+      </Select.Root>
+      <p class="text-xs text-muted-foreground">
+        Biological sex, used with your age to show sex-specific typical ranges in sleep reports. Separate from pronouns.
+      </p>
     </div>
 
     <div class="space-y-2">

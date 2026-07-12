@@ -22,6 +22,7 @@ const ClinicalFieldsSchema = z.object({
   diabetesTypeOther: z.string().optional(),
   diagnosisDate: z.string().optional(),
   dateOfBirth: z.string().optional(),
+  sex: z.string().optional(),
   preferredName: z.string().optional(),
   pronouns: z.string().optional(),
   timezone: z.string().optional(),
@@ -38,6 +39,7 @@ export class ClinicalState {
   diabetesTypeOther = $state("");
   diagnosisDate = $state("");
   dateOfBirth = $state("");
+  sex = $state("");
   preferredName = $state("");
   pronouns = $state("");
   timezone = $state("");
@@ -63,6 +65,7 @@ export class ClinicalState {
         this.diabetesTypeOther = r.diabetesTypeOther ?? "";
         this.diagnosisDate = toDateInput(r.diagnosisDate);
         this.dateOfBirth = toDateInput(r.dateOfBirth);
+        this.sex = r.sex ?? "";
         this.preferredName = r.preferredName ?? "";
         this.pronouns = r.pronouns ?? "";
         if (r.timezone) {
@@ -90,6 +93,7 @@ export class ClinicalState {
           diabetesTypeOther: r.diabetesTypeOther ?? "",
           diagnosisDate: toDateInput(r.diagnosisDate),
           dateOfBirth: toDateInput(r.dateOfBirth),
+          sex: r.sex ?? "",
           preferredName: r.preferredName ?? "",
           pronouns: r.pronouns ?? "",
           // Initial reflects the *server* value, NOT the pre-filled browser tz. Diverging
@@ -103,6 +107,7 @@ export class ClinicalState {
         diabetesTypeOther: this.diabetesType === DiabetesType.Other ? this.diabetesTypeOther : "",
         diagnosisDate: this.diagnosisDate,
         dateOfBirth: this.dateOfBirth,
+        sex: this.sex,
         preferredName: this.preferredName,
         pronouns: this.pronouns,
         timezone: this.timezone,
@@ -113,6 +118,7 @@ export class ClinicalState {
         this.diabetesTypeOther = snapshot.diabetesTypeOther ?? "";
         this.diagnosisDate = snapshot.diagnosisDate ?? "";
         this.dateOfBirth = snapshot.dateOfBirth ?? "";
+        this.sex = snapshot.sex ?? "";
         this.preferredName = snapshot.preferredName ?? "";
         this.pronouns = snapshot.pronouns ?? "";
         this.timezone = snapshot.timezone ?? "";
