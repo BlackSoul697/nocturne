@@ -23,6 +23,8 @@ public class OAuthScopesTests
     [InlineData("heartrate.readwrite", true)]
     [InlineData("stepcount.read", true)]
     [InlineData("stepcount.readwrite", true)]
+    [InlineData("sleep.read", true)]
+    [InlineData("sleep.readwrite", true)]
     [InlineData("food.read", true)]
     [InlineData("food.readwrite", true)]
     [InlineData("health.readwrite", true)]
@@ -123,6 +125,7 @@ public class OAuthScopesTests
 
         Assert.Contains(OAuthScopes.HeartRateRead, result);
         Assert.Contains(OAuthScopes.StepCountRead, result);
+        Assert.Contains(OAuthScopes.SleepRead, result);
     }
 
     [Fact]
@@ -136,6 +139,7 @@ public class OAuthScopesTests
         Assert.Contains(OAuthScopes.TherapyReadWrite, result);
         Assert.Contains(OAuthScopes.HeartRateReadWrite, result);
         Assert.Contains(OAuthScopes.StepCountReadWrite, result);
+        Assert.Contains(OAuthScopes.SleepReadWrite, result);
         Assert.DoesNotContain(OAuthScopes.AlertsReadWrite, result);
     }
 
@@ -156,6 +160,16 @@ public class OAuthScopesTests
 
         Assert.True(OAuthScopes.SatisfiesScope(granted, "stepcount.read"));
         Assert.True(OAuthScopes.SatisfiesScope(granted, "stepcount.readwrite"));
+        Assert.False(OAuthScopes.SatisfiesScope(granted, "glucose.read"));
+    }
+
+    [Fact]
+    public void SatisfiesScope_SleepReadWriteImpliesRead()
+    {
+        var granted = new HashSet<string> { "sleep.readwrite" };
+
+        Assert.True(OAuthScopes.SatisfiesScope(granted, "sleep.read"));
+        Assert.True(OAuthScopes.SatisfiesScope(granted, "sleep.readwrite"));
         Assert.False(OAuthScopes.SatisfiesScope(granted, "glucose.read"));
     }
 

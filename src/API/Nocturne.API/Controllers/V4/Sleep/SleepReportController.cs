@@ -1,8 +1,10 @@
 using System.Globalization;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Nocturne.API.Attributes;
 using Nocturne.Core.Contracts.Sleep;
 using Nocturne.Core.Models;
+using Nocturne.Core.Models.Authorization;
 using Nocturne.Core.Models.Sleep.Report;
 using OpenApi.Remote.Attributes;
 
@@ -10,13 +12,15 @@ namespace Nocturne.API.Controllers.V4.Sleep;
 
 /// <summary>
 /// On-demand sleep report endpoints: single-night detail and multi-night trends.
-/// Both endpoints join CGM data with the session window at request time.
+/// Both endpoints join CGM data with the session window at request time, so callers
+/// need glucose.read in addition to sleep.read.
 /// </summary>
 /// <seealso cref="ISleepReportService"/>
 [ApiController]
 [Tags("Sleep")]
 [Route("api/v4/sleep/report")]
 [Authorize]
+[RequireScope(requireAll: true, OAuthScopes.SleepRead, OAuthScopes.GlucoseRead)]
 public class SleepReportController : ControllerBase
 {
     private readonly ISleepReportService _service;
