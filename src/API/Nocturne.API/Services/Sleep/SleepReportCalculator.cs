@@ -1,3 +1,4 @@
+using System.Globalization;
 using Nocturne.Core.Models;
 using Nocturne.Core.Models.Sleep.Report;
 using Nocturne.Core.Models.V4;
@@ -308,6 +309,7 @@ internal static class SleepReportCalculator
         {
             SessionId          = sessionId,
             Date               = session.StartTime.ToString("MMM d"),
+            DisplayDate        = NightDate(session).ToString("yyyy-MM-dd", CultureInfo.InvariantCulture),
             Weekday            = session.StartTime.DayOfWeek.ToString()[..3],
             InBedAt            = session.StartTime,
             WakeAt             = session.EndTime,
@@ -356,6 +358,13 @@ internal static class SleepReportCalculator
             .OrderBy(s => s.StartTime)
             .ToList();
     }
+
+    /// <summary>
+    /// The display-night date a session buckets to under the noon rule (in the
+    /// session's timezone). The single-night by-date lookup matches on this so a
+    /// deep-linked date resolves to the same night the trends views show.
+    /// </summary>
+    internal static DateOnly NightDate(SleepSession session) => DateOnly.FromDateTime(NightKey(session));
 
     private static DateTime NightKey(SleepSession session)
     {
@@ -461,5 +470,78 @@ internal static class SleepReportCalculator
                 DawnRiseDelta    = l7Dawn.HasValue && p7Dawn.HasValue ? l7Dawn - p7Dawn : null,
             },
         };
+    }
+
+    // ── Weekly Summaries ──────────────────────────────────────────────────
+
+    /// <summary>
+    /// Noon-rule display day for a night, taken from the authoritative
+    /// <see cref="SleepNightSummary.DisplayDate"/> (timezone-aware, set by
+    /// <see cref="ComputeNightSummary"/>) so weekly bucketing agrees with
+    /// <see cref="NightDate"/>. Falls back to the timezone-naive UTC noon rule only
+    /// for summaries constructed without a DisplayDate (e.g. test fixtures).
+    /// </summary>
+    private static DateTime DisplayDay(SleepNightSummary night) =>
+        DateOnly.TryParseExact(night.DisplayDate, "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out var d)
+            ? d.ToDateTime(TimeOnly.MinValue)
+            : night.InBedAt.AddHours(-12).Date;
+
+    /// <summary>Monday on or before <paramref name="day"/>.</summary>
+    private static DateTime WeekStartOf(DateTime day) => day.AddDays(-(((int)day.DayOfWeek + 6) % 7));
+
+    internal static IReadOnlyList<SleepWeekSummary> ComputeWeekSummaries(
+        IReadOnlyList<SleepNightSummary> nights, DateTime from, DateTime to)
+    {
+        var rangeStart = from.Date;
+        var rangeEnd   = to.Date;
+        if (rangeEnd < rangeStart)
+            return [];
+
+        var nightsByWeek = nights
+            .GroupBy(n => WeekStartOf(DisplayDay(n)))
+            .ToDictionary(g => g.Key, g => g.OrderBy(n => n.InBedAt).ToList());
+
+        // A night starting shortly after midnight on the range's first day displays
+        // under the previous day, which can fall in the week before the range —
+        // widen the loop bounds to any such spillover weeks.
+        var firstWeek = WeekStartOf(rangeStart);
+        var lastWeek  = WeekStartOf(rangeEnd);
+        if (nightsByWeek.Count > 0)
+        {
+            var minNightWeek = nightsByWeek.Keys.Min();
+            var maxNightWeek = nightsByWeek.Keys.Max();
+            if (minNightWeek < firstWeek) firstWeek = minNightWeek;
+            if (maxNightWeek > lastWeek)  lastWeek  = maxNightWeek;
+        }
+
+        var weeks = new List<SleepWeekSummary>();
+        for (var weekStart = firstWeek; weekStart <= lastWeek; weekStart = weekStart.AddDays(7))
+        {
+            var weekEnd      = weekStart.AddDays(6);
+            var overlapStart = weekStart > rangeStart ? weekStart : rangeStart;
+            var overlapEnd   = weekEnd   < rangeEnd   ? weekEnd   : rangeEnd;
+            var overlapDays  = overlapEnd >= overlapStart ? (int)(overlapEnd - overlapStart).TotalDays + 1 : 0;
+            var weekNights   = nightsByWeek.TryGetValue(weekStart, out var list) ? list : [];
+
+            var scored    = weekNights.Where(n => n.SleepScore.HasValue).ToList();
+            var tirNights = weekNights.Where(n => n.OvernightTirPct.HasValue).ToList();
+
+            weeks.Add(new SleepWeekSummary
+            {
+                WeekStart         = weekStart,
+                WeekEnd           = weekEnd,
+                Label             = $"{weekStart:MMM d} – {weekEnd:MMM d}",
+                NightCount        = weekNights.Count,
+                // Floored at NightCount so spillover weeks never report more nights than days.
+                DaysInRange       = Math.Max(overlapDays, weekNights.Count),
+                MeanAsleepMinutes = weekNights.Count > 0 ? weekNights.Average(n => n.SleepMinutes) : 0,
+                MeanScore         = scored.Count    > 0 ? scored.Average(n => (double)n.SleepScore!.Value) : null,
+                MeanTirPct        = tirNights.Count > 0 ? tirNights.Average(n => n.OvernightTirPct!.Value) : null,
+                TotalHypoCount    = weekNights.Sum(n => n.HypoCount),
+                SessionIds        = weekNights.Select(n => n.SessionId).ToList(),
+            });
+        }
+
+        return weeks;
     }
 }

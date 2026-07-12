@@ -18,15 +18,22 @@ public class SleepReportServiceTests
     private readonly Mock<ISensorGlucoseRepository> _glucoseRepo = new();
     private readonly Mock<ITherapySettingsResolver> _therapySettings = new();
     private readonly Mock<ITargetRangeResolver> _targetRange = new();
+    private readonly Mock<IPatientRecordRepository> _patientRecord = new();
     private readonly SleepReportService _sut;
 
     public SleepReportServiceTests()
     {
+        // No patient record by default → reference ranges fall back to adult-female norms.
+        _patientRecord
+            .Setup(r => r.GetAsync(It.IsAny<CancellationToken>()))
+            .ReturnsAsync((PatientRecord?)null);
+
         _sut = new SleepReportService(
             _sessionRepo.Object,
             _glucoseRepo.Object,
             _therapySettings.Object,
             _targetRange.Object,
+            _patientRecord.Object,
             NullLogger<SleepReportService>.Instance);
     }
 
@@ -112,6 +119,108 @@ public class SleepReportServiceTests
             start, end, null, null,
             int.MaxValue, 0, false, false, null, null,
             It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+    // ── GetSingleNightReportByDateAsync ────────────────────────────────────
+
+    private void SetupSessionsForByDate(params SleepSession[] sessions)
+    {
+        _sessionRepo
+            .Setup(r => r.GetSessionsAsync(
+                It.IsAny<DateTime?>(), It.IsAny<DateTime?>(), It.IsAny<SleepSessionType?>(),
+                It.IsAny<SleepSource?>(), It.IsAny<int>(), It.IsAny<int>(), It.IsAny<bool>(), It.IsAny<bool>(),
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync(sessions);
+        _glucoseRepo
+            .Setup(r => r.GetAsync(
+                It.IsAny<DateTime?>(), It.IsAny<DateTime?>(), null, null,
+                It.IsAny<int>(), 0, false, false, It.IsAny<DateTime?>(), It.IsAny<Guid?>(),
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync(Array.Empty<SensorGlucose>());
+    }
+
+    [Fact]
+    public async Task GetSingleNightReportByDateAsync_ResolvesNightStartedThatEvening()
+    {
+        var session = new SleepSession
+        {
+            Id           = Guid.NewGuid().ToString(),
+            StartTime    = new DateTime(2026, 1, 15, 22, 0, 0, DateTimeKind.Utc),
+            EndTime      = new DateTime(2026, 1, 16, 6, 0, 0, DateTimeKind.Utc),
+            TotalSleepMs = 480L * 60_000,
+            Source       = SleepSource.Oura,
+        };
+        SetupSessionsForByDate(session);
+
+        var result = await _sut.GetSingleNightReportByDateAsync(new DateOnly(2026, 1, 15));
+
+        result.Should().NotBeNull();
+        result!.Session.Should().BeSameAs(session);
+    }
+
+    [Fact]
+    public async Task GetSingleNightReportByDateAsync_ResolvesEarlyMorningNight_ToPreviousDay()
+    {
+        // In bed 1am Jan 16 → noon rule buckets it to the Jan 15 display night.
+        var session = new SleepSession
+        {
+            Id           = Guid.NewGuid().ToString(),
+            StartTime    = new DateTime(2026, 1, 16, 1, 0, 0, DateTimeKind.Utc),
+            EndTime      = new DateTime(2026, 1, 16, 8, 0, 0, DateTimeKind.Utc),
+            TotalSleepMs = 420L * 60_000,
+            Source       = SleepSource.Apple,
+        };
+        SetupSessionsForByDate(session);
+
+        var result = await _sut.GetSingleNightReportByDateAsync(new DateOnly(2026, 1, 15));
+
+        result.Should().NotBeNull();
+        result!.Session.Should().BeSameAs(session);
+    }
+
+    [Fact]
+    public async Task GetSingleNightReportByDateAsync_ReturnsNull_WhenNoSessionOnDate()
+    {
+        var session = new SleepSession
+        {
+            Id           = Guid.NewGuid().ToString(),
+            StartTime    = new DateTime(2026, 1, 15, 22, 0, 0, DateTimeKind.Utc),
+            EndTime      = new DateTime(2026, 1, 16, 6, 0, 0, DateTimeKind.Utc),
+            TotalSleepMs = 480L * 60_000,
+            Source       = SleepSource.Oura,
+        };
+        SetupSessionsForByDate(session);
+
+        var result = await _sut.GetSingleNightReportByDateAsync(new DateOnly(2026, 1, 17));
+
+        result.Should().BeNull();
+    }
+
+    [Fact]
+    public async Task GetSingleNightReportByDateAsync_DeduplicatesToLongestSession()
+    {
+        var longer = new SleepSession
+        {
+            Id           = Guid.NewGuid().ToString(),
+            StartTime    = new DateTime(2026, 1, 15, 22, 0, 0, DateTimeKind.Utc),
+            EndTime      = new DateTime(2026, 1, 16, 6, 0, 0, DateTimeKind.Utc),
+            TotalSleepMs = 460L * 60_000,
+            Source       = SleepSource.Garmin,
+        };
+        var shorter = new SleepSession
+        {
+            Id           = Guid.NewGuid().ToString(),
+            StartTime    = new DateTime(2026, 1, 15, 23, 0, 0, DateTimeKind.Utc),
+            EndTime      = new DateTime(2026, 1, 16, 6, 0, 0, DateTimeKind.Utc),
+            TotalSleepMs = 360L * 60_000,
+            Source       = SleepSource.Apple,
+        };
+        SetupSessionsForByDate(shorter, longer);
+
+        var result = await _sut.GetSingleNightReportByDateAsync(new DateOnly(2026, 1, 15));
+
+        result.Should().NotBeNull();
+        result!.Session.Should().BeSameAs(longer);
     }
 
     // ── GetTrendsReportAsync ───────────────────────────────────────────────

@@ -653,4 +653,140 @@ public class SleepReportCalculatorTests
         result.DaysInRange.Should().Be(0);
         result.CoveragePct.Should().Be(0);
     }
+
+    [Fact]
+    public void ComputeNightSummary_DisplayDate_UsesSessionTimezone_NotUtc()
+    {
+        // 22:00 Sydney (UTC+11 in Jan) = 11:00 UTC. The noon rule in Sydney lands on
+        // Jan 15; the timezone-naive UTC rule (11:00 − 12h) would land on Jan 14.
+        var session = new SleepSession
+        {
+            Id           = Guid.NewGuid().ToString(),
+            StartTime    = new DateTime(2026, 1, 15, 11, 0, 0, DateTimeKind.Utc),
+            EndTime      = new DateTime(2026, 1, 15, 19, 0, 0, DateTimeKind.Utc),
+            Timezone     = "Australia/Sydney",
+            TotalSleepMs = 480L * 60_000,
+            Source       = SleepSource.Oura,
+        };
+
+        var summary = API.Services.Sleep.SleepReportCalculator.ComputeNightSummary(session, [], _thresholds);
+
+        summary.DisplayDate.Should().Be("2026-01-15");
+    }
+
+    // ── Weekly Summaries ──────────────────────────────────────────────────
+
+    // 2026-05-04, -11, -18 are Mondays.
+    private static SleepNightSummary MakeNight(DateTime inBedAt, int? score = null, double? tirPct = null, int sleepMinutes = 440, int hypoCount = 0) =>
+        new()
+        {
+            SessionId       = Guid.NewGuid(),
+            InBedAt         = inBedAt,
+            WakeAt          = inBedAt.AddHours(8),
+            SleepMinutes    = sleepMinutes,
+            SleepScore      = score,
+            OvernightTirPct = tirPct,
+            HypoCount       = hypoCount,
+        };
+
+    [Fact]
+    public void ComputeWeekSummaries_BucketsNightsIntoMondayWeeks_OldestFirst()
+    {
+        var nights = new[]
+        {
+            MakeNight(new DateTime(2026, 5, 12, 23, 0, 0, DateTimeKind.Utc), score: 70, tirPct: 80, sleepMinutes: 400, hypoCount: 1),
+            MakeNight(new DateTime(2026, 5, 13, 23, 0, 0, DateTimeKind.Utc), score: 80, tirPct: 90, sleepMinutes: 480, hypoCount: 0),
+            MakeNight(new DateTime(2026, 5, 19, 23, 0, 0, DateTimeKind.Utc), score: 60, sleepMinutes: 420),
+        };
+
+        var result = API.Services.Sleep.SleepReportCalculator.ComputeWeekSummaries(
+            nights, from: new DateTime(2026, 5, 11), to: new DateTime(2026, 5, 24));
+
+        result.Should().HaveCount(2);
+
+        result[0].WeekStart.Should().Be(new DateTime(2026, 5, 11));
+        result[0].WeekEnd.Should().Be(new DateTime(2026, 5, 17));
+        result[0].NightCount.Should().Be(2);
+        result[0].DaysInRange.Should().Be(7);
+        result[0].MeanAsleepMinutes.Should().BeApproximately(440, 0.01);
+        result[0].MeanScore.Should().BeApproximately(75, 0.01);
+        result[0].MeanTirPct.Should().BeApproximately(85, 0.01);
+        result[0].TotalHypoCount.Should().Be(1);
+        result[0].SessionIds.Should().Equal(nights[0].SessionId, nights[1].SessionId);
+
+        result[1].WeekStart.Should().Be(new DateTime(2026, 5, 18));
+        result[1].NightCount.Should().Be(1);
+        result[1].MeanScore.Should().Be(60);
+        result[1].MeanTirPct.Should().BeNull("no night in the week has CGM data");
+    }
+
+    [Fact]
+    public void ComputeWeekSummaries_IncludesGapWeeks_WithZeroNights()
+    {
+        var nights = new[]
+        {
+            MakeNight(new DateTime(2026, 5, 5, 23, 0, 0, DateTimeKind.Utc)),
+            MakeNight(new DateTime(2026, 5, 19, 23, 0, 0, DateTimeKind.Utc)),
+        };
+
+        var result = API.Services.Sleep.SleepReportCalculator.ComputeWeekSummaries(
+            nights, from: new DateTime(2026, 5, 4), to: new DateTime(2026, 5, 24));
+
+        result.Should().HaveCount(3);
+        result[1].WeekStart.Should().Be(new DateTime(2026, 5, 11));
+        result[1].NightCount.Should().Be(0);
+        result[1].MeanScore.Should().BeNull();
+        result[1].SessionIds.Should().BeEmpty();
+    }
+
+    [Fact]
+    public void ComputeWeekSummaries_PartialEdgeWeeks_ReportOverlapDays()
+    {
+        // Range Wed May 13 – Tue May 19: 5 days of the first week, 2 of the second.
+        var result = API.Services.Sleep.SleepReportCalculator.ComputeWeekSummaries(
+            [], from: new DateTime(2026, 5, 13), to: new DateTime(2026, 5, 19));
+
+        result.Should().HaveCount(2);
+        result[0].DaysInRange.Should().Be(5);
+        result[1].DaysInRange.Should().Be(2);
+    }
+
+    [Fact]
+    public void ComputeWeekSummaries_NoonRule_EarlyMorningStartBelongsToPreviousWeek()
+    {
+        // In bed 1am Monday May 18 → display day Sunday May 17 → week of May 11.
+        var nights = new[] { MakeNight(new DateTime(2026, 5, 18, 1, 0, 0, DateTimeKind.Utc)) };
+
+        var result = API.Services.Sleep.SleepReportCalculator.ComputeWeekSummaries(
+            nights, from: new DateTime(2026, 5, 11), to: new DateTime(2026, 5, 24));
+
+        result[0].WeekStart.Should().Be(new DateTime(2026, 5, 11));
+        result[0].NightCount.Should().Be(1);
+        result[1].NightCount.Should().Be(0);
+    }
+
+    [Fact]
+    public void ComputeWeekSummaries_SpilloverNightBeforeRange_WidensToItsWeek()
+    {
+        // Range starts Monday May 18, but a night in bed 00:30 that Monday displays
+        // under Sunday May 17, whose week (May 11) precedes the range.
+        var nights = new[] { MakeNight(new DateTime(2026, 5, 18, 0, 30, 0, DateTimeKind.Utc)) };
+
+        var result = API.Services.Sleep.SleepReportCalculator.ComputeWeekSummaries(
+            nights, from: new DateTime(2026, 5, 18), to: new DateTime(2026, 5, 24));
+
+        result.Should().HaveCount(2);
+        result[0].WeekStart.Should().Be(new DateTime(2026, 5, 11));
+        result[0].NightCount.Should().Be(1);
+        result[0].DaysInRange.Should().Be(1, "floored at NightCount even though the week has no overlap with the range");
+    }
+
+    [Fact]
+    public void ComputeWeekSummaries_EmptyRange_ReturnsEmpty()
+    {
+        var result = API.Services.Sleep.SleepReportCalculator.ComputeWeekSummaries(
+            [], from: new DateTime(2026, 5, 18), to: new DateTime(2026, 5, 11));
+
+        result.Should().BeEmpty();
+    }
 }

@@ -1,3 +1,4 @@
+using System.Globalization;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Nocturne.Core.Contracts.Sleep;
@@ -40,6 +41,36 @@ public class SleepReportController : ControllerBase
         CancellationToken cancellationToken = default)
     {
         var report = await _service.GetSingleNightReportAsync(sessionId, cancellationToken);
+        if (report is null) return NotFound();
+        return Ok(report);
+    }
+
+    /// <summary>
+    /// Get the single-night report for the night that falls on a calendar date, resolving
+    /// the date to a session via the same noon-rule bucketing and one-per-night deduplication
+    /// the trends report uses. Lets reports deep-link a night by date rather than session id.
+    /// </summary>
+    /// <param name="date">The display-night date (YYYY-MM-DD).</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    [HttpGet("single-night/by-date/{date}")]
+    [RemoteQuery]
+    [ProducesResponseType(typeof(SleepSingleNightReport), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<ActionResult<SleepSingleNightReport>> GetSingleNightByDate(
+        // Bound as a string rather than DateOnly: the generated TS client serializes
+        // DateOnly route params via Date.toISOString(), which the string-typed remote
+        // wrapper can't satisfy. A parsed string keeps the whole chain YYYY-MM-DD.
+        string date,
+        CancellationToken cancellationToken = default)
+    {
+        if (!DateOnly.TryParseExact(date, "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out var displayDate))
+            return Problem(
+                detail: "Date must be in YYYY-MM-DD format.",
+                statusCode: StatusCodes.Status400BadRequest,
+                title: "Bad Request");
+
+        var report = await _service.GetSingleNightReportByDateAsync(displayDate, cancellationToken);
         if (report is null) return NotFound();
         return Ok(report);
     }

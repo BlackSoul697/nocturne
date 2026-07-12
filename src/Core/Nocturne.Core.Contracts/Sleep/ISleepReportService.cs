@@ -17,6 +17,16 @@ public interface ISleepReportService
         CancellationToken ct = default);
 
     /// <summary>
+    /// Returns the full single-night report for the night that buckets to
+    /// <paramref name="displayDate"/> under the noon rule (in the session's
+    /// timezone), deduplicated to one session per night, or null if no session
+    /// falls on that night.
+    /// </summary>
+    Task<SleepSingleNightReport?> GetSingleNightReportByDateAsync(
+        DateOnly displayDate,
+        CancellationToken ct = default);
+
+    /// <summary>
     /// Returns a trends report covering all sessions in the date range (max 90 days).
     /// When <paramref name="source"/> is null, deduplicates to one session per calendar
     /// night (longest TotalSleepMs wins; tie-break by source priority).

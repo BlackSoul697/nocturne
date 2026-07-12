@@ -6,6 +6,12 @@ public class SleepNightSummary
     public Guid SessionId { get; set; }
     /// <summary>Session start date formatted as "MMM d" (e.g. "May 16").</summary>
     public string Date { get; set; } = string.Empty;
+    /// <summary>
+    /// The display-night date (YYYY-MM-DD) this session buckets to under the noon
+    /// rule, in the session's timezone. Authoritative key for deep-linking the
+    /// single-night report — the frontend must not recompute it from timestamps.
+    /// </summary>
+    public string DisplayDate { get; set; } = string.Empty;
     /// <summary>Abbreviated weekday name (e.g. "Thu").</summary>
     public string Weekday { get; set; } = string.Empty;
     public DateTime InBedAt { get; set; }

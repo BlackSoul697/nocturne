@@ -5,6 +5,7 @@ using Nocturne.Core.Contracts.Sleep;
 using Nocturne.Core.Contracts.V4.Repositories;
 using Nocturne.Core.Models;
 using Nocturne.Core.Models.Sleep.Report;
+using Nocturne.Core.Models.V4;
 
 namespace Nocturne.API.Services.Sleep;
 
@@ -29,6 +30,7 @@ public class SleepReportService : ISleepReportService
     private readonly ISensorGlucoseRepository _glucose;
     private readonly ITherapySettingsResolver _therapySettingsResolver;
     private readonly ITargetRangeResolver _targetRangeResolver;
+    private readonly IPatientRecordRepository _patientRecord;
     private readonly ILogger<SleepReportService> _logger;
 
     public SleepReportService(
@@ -36,13 +38,36 @@ public class SleepReportService : ISleepReportService
         ISensorGlucoseRepository glucose,
         ITherapySettingsResolver therapySettingsResolver,
         ITargetRangeResolver targetRangeResolver,
+        IPatientRecordRepository patientRecord,
         ILogger<SleepReportService> logger)
     {
         _sessions = sessions;
         _glucose  = glucose;
         _therapySettingsResolver = therapySettingsResolver;
         _targetRangeResolver     = targetRangeResolver;
+        _patientRecord = patientRecord;
         _logger   = logger;
+    }
+
+    /// <summary>
+    /// Resolves the normative stage reference ranges for the current tenant's patient, using their
+    /// date of birth (age) and biological sex. Falls back to adult-female norms when the record is
+    /// absent or those fields are unset.
+    /// </summary>
+    private async Task<SleepStageReferenceRangeSet> ResolveReferenceRangesAsync(CancellationToken ct)
+    {
+        var record = await _patientRecord.GetAsync(ct);
+        var age = record?.DateOfBirth is { } dob ? AgeInYears(dob) : (int?)null;
+        return SleepStageReferenceRangeSet.Resolve(age, record?.Sex);
+    }
+
+    /// <summary>Completed years between <paramref name="dob"/> and today (UTC).</summary>
+    private static int AgeInYears(DateOnly dob)
+    {
+        var today = DateOnly.FromDateTime(DateTime.UtcNow);
+        var age = today.Year - dob.Year;
+        if (dob > today.AddYears(-age)) age--;
+        return age;
     }
 
     /// <summary>
@@ -88,6 +113,46 @@ public class SleepReportService : ISleepReportService
         if (session is null)
             return null;
 
+        return await BuildSingleNightReportAsync(session, ct);
+    }
+
+    /// <inheritdoc/>
+    public async Task<SleepSingleNightReport?> GetSingleNightReportByDateAsync(
+        DateOnly displayDate,
+        CancellationToken ct = default)
+    {
+        // A night displayed on `displayDate` starts (in its own timezone) between
+        // noon that day and noon the next — so its UTC StartTime can land anywhere
+        // from the previous day to two days out once timezone offsets are applied.
+        // Query that padded window, then match on the same noon-rule night key the
+        // trends report buckets by.
+        // Kind=Utc so Npgsql accepts the bounds against timestamptz (same normalization
+        // GetTrends applies); the ±1–2 day padding absorbs any timezone offset when the
+        // session's own timezone shifts its night key.
+        var midnight   = DateTime.SpecifyKind(displayDate.ToDateTime(TimeOnly.MinValue), DateTimeKind.Utc);
+        var sessions = await _sessions.GetSessionsAsync(
+            from:              midnight.AddDays(-1),
+            to:                midnight.AddDays(2),
+            type:              null,
+            source:            null,
+            limit:             int.MaxValue,
+            offset:            0,
+            descending:        false,
+            includeStages:     true,
+            cancellationToken: ct);
+
+        var session = SleepReportCalculator.DeduplicateToOnePerNight(sessions)
+            .FirstOrDefault(s => SleepReportCalculator.NightDate(s) == displayDate);
+        if (session is null)
+            return null;
+
+        return await BuildSingleNightReportAsync(session, ct);
+    }
+
+    private async Task<SleepSingleNightReport> BuildSingleNightReportAsync(
+        SleepSession session,
+        CancellationToken ct)
+    {
         var glucoseReadings = await _glucose.GetAsync(
             from:           session.StartTime,
             to:             session.EndTime,
@@ -104,6 +169,7 @@ public class SleepReportService : ISleepReportService
         var thresholds = await ResolveThresholdsAsync(session.EndMills, ct);
         var stages    = session.Stages ?? [];
         var breakdown = SleepReportCalculator.ComputeStageBreakdown(session);
+        breakdown.ReferenceRanges = await ResolveReferenceRangesAsync(ct);
         var tir       = SleepReportCalculator.ComputeOvernightTir(session, glucoseReadings, thresholds);
         var hypos     = SleepReportCalculator.ComputeHypoEvents(session, glucoseReadings, stages, thresholds);
         var dawn      = SleepReportCalculator.ComputeDawnPhenomenon(session, glucoseReadings);
@@ -141,11 +207,12 @@ public class SleepReportService : ISleepReportService
             cancellationToken: ct);
 
         var daysInRange = (int)(to.Date - from.Date).TotalDays + 1;
+        var referenceRanges = await ResolveReferenceRangesAsync(ct);
 
         if (!allSessions.Any())
             return new SleepTrendsReport
             {
-                Summary = SleepReportCalculator.ComputeTrendsSummary([], daysInRange),
+                Summary = SleepReportCalculator.ComputeTrendsSummary([], daysInRange, referenceRanges),
             };
 
         IReadOnlyList<SleepSession> sessions = source is null
@@ -180,11 +247,13 @@ public class SleepReportService : ISleepReportService
                 return SleepReportCalculator.ComputeNightSummary(s, nightGlucose, thresholds);
             })
             .ToList();
-        var summary = SleepReportCalculator.ComputeTrendsSummary(nights, daysInRange);
+        var summary = SleepReportCalculator.ComputeTrendsSummary(nights, daysInRange, referenceRanges);
+        var weeks   = SleepReportCalculator.ComputeWeekSummaries(nights, from, to);
 
         return new SleepTrendsReport
         {
             Nights  = nights,
+            Weeks   = weeks,
             Summary = summary,
         };
     }
