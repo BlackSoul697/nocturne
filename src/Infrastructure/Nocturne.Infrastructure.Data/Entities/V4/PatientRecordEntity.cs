@@ -51,6 +51,14 @@ public class PatientRecordEntity : ITenantScoped, ISoftDeletable, ISystemTimesta
     public DateOnly? DateOfBirth { get; set; }
 
     /// <summary>
+    /// Patient biological (natal) sex stored as string (e.g. "Female", "Male"). Optional.
+    /// Distinct from pronouns/gender; used for sex-specific normative reference ranges.
+    /// </summary>
+    [Column("sex")]
+    [MaxLength(16)]
+    public string? Sex { get; set; }
+
+    /// <summary>
     /// Patient preferred name
     /// </summary>
     [Column("preferred_name")]

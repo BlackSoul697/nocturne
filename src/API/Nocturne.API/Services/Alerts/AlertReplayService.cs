@@ -596,6 +596,7 @@ internal sealed class AlertReplayService(
         IConditionTimerStore timerStore, TimeProvider time)
     {
         var services = new ServiceCollection();
+        services.AddLogging();
         services.AddSingleton(time);
         services.AddSingleton(timerStore);
         services.AddAlertEvaluators();

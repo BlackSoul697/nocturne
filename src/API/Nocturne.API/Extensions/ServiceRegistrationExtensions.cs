@@ -22,6 +22,7 @@ using Nocturne.API.Services.Devices;
 using Nocturne.API.Services.Effects;
 using Nocturne.API.Services.Entries;
 using Nocturne.API.Services.Glucose;
+using Nocturne.API.Services.Sleep;
 using Nocturne.API.Services.Health;
 using Nocturne.API.Services.Identity;
 using Nocturne.API.Services.Legacy;
@@ -50,6 +51,7 @@ using Nocturne.Core.Contracts.Devices;
 using Nocturne.Core.Contracts.Entries;
 using Nocturne.Core.Contracts.Events;
 using Nocturne.Core.Contracts.Glucose;
+using Nocturne.Core.Contracts.Sleep;
 using Nocturne.Core.Contracts.Health;
 using Nocturne.Core.Contracts.Identity;
 using Nocturne.Core.Contracts.Legacy;
@@ -442,6 +444,8 @@ public static class ServiceRegistrationExtensions
                 sp.GetService<ILogger<CompositeDataEventSink<Entry>>>());
         });
         services.AddScoped<IStateSpanService, StateSpanService>();
+        services.AddScoped<ISleepService, SleepService>();
+        services.AddScoped<ISleepReportService, SleepReportService>();
         services.AddScoped<DeviceStatusProjectionService>();
         services.AddScoped<IDataEventSink<DeviceStatus>>(sp =>
         {
@@ -916,6 +920,7 @@ public static class ServiceRegistrationExtensions
         services.AddScoped<IConditionEvaluator, DayOfWeekEvaluator>();
         services.AddScoped<IConditionEvaluator, PumpStateEvaluator>();
         services.AddScoped<IConditionEvaluator, StateSpanActiveEvaluator>();
+        services.AddScoped<IConditionEvaluator, SleepSessionActiveEvaluator>();
         services.AddScoped<IConditionEvaluator, TrackerAgeEvaluator>();
         return services;
     }

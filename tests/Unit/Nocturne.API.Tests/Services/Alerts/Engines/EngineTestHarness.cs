@@ -53,6 +53,7 @@ internal static class EngineTestHarness
         InMemoryTrackerRepository trackerRepo)
     {
         var services = new ServiceCollection();
+        services.AddLogging();
         services.AddSingleton<TimeProvider>(time);
         services.AddSingleton(timerStore);
         services.AddAlertEvaluators();

@@ -216,6 +216,23 @@ public class NocturneDbContext : DbContext, IDataProtectionKeyContext
     /// </summary>
     public DbSet<SystemEventEntity> SystemEvents { get; set; }
 
+    // Sleep entities
+
+    /// <summary>
+    /// Gets or sets the SleepSessions table for first-party sleep session records
+    /// </summary>
+    public DbSet<SleepSessionEntity> SleepSessions { get; set; }
+
+    /// <summary>
+    /// Gets or sets the SleepStages table for individual sleep stages within sessions
+    /// </summary>
+    public DbSet<SleepStageEntity> SleepStages { get; set; }
+
+    /// <summary>
+    /// Gets or sets the SleepBiometricSamples table for biometric data during sleep
+    /// </summary>
+    public DbSet<SleepBiometricSampleEntity> SleepBiometricSamples { get; set; }
+
     // Migration tracking entities
 
     /// <summary>
@@ -1146,6 +1163,44 @@ public class NocturneDbContext : DbContext, IDataProtectionKeyContext
             .Entity<SystemEventEntity>()
             .HasIndex(e => e.OriginalId)
             .HasDatabaseName("ix_system_events_original_id");
+
+        // Sleep session indexes and relationships
+        modelBuilder
+            .Entity<SleepSessionEntity>()
+            .HasIndex(s => new { s.TenantId, s.Source, s.OriginalId })
+            .IsUnique()
+            .HasFilter("original_id IS NOT NULL")
+            .HasDatabaseName("ux_sleep_sessions_tenant_source_original");
+
+        modelBuilder
+            .Entity<SleepSessionEntity>()
+            .HasIndex(s => new { s.TenantId, s.StartTime })
+            .IsDescending(false, true)
+            .HasDatabaseName("ix_sleep_sessions_tenant_start_time");
+
+        modelBuilder
+            .Entity<SleepStageEntity>()
+            .HasOne(s => s.SleepSession)
+            .WithMany(ss => ss.Stages)
+            .HasForeignKey(s => s.SleepSessionId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        modelBuilder
+            .Entity<SleepBiometricSampleEntity>()
+            .HasOne(b => b.SleepSession)
+            .WithMany(ss => ss.BiometricSamples)
+            .HasForeignKey(b => b.SleepSessionId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        modelBuilder
+            .Entity<SleepStageEntity>()
+            .HasIndex(s => s.SleepSessionId)
+            .HasDatabaseName("ix_sleep_stages_sleep_session_id");
+
+        modelBuilder
+            .Entity<SleepBiometricSampleEntity>()
+            .HasIndex(b => b.SleepSessionId)
+            .HasDatabaseName("ix_sleep_biometric_samples_sleep_session_id");
 
         // Migration source indexes
         modelBuilder
@@ -2133,6 +2188,19 @@ public class NocturneDbContext : DbContext, IDataProtectionKeyContext
         modelBuilder
             .Entity<SystemEventEntity>()
             .Property(e => e.Id)
+            .HasValueGenerator<GuidV7ValueGenerator>();
+
+        modelBuilder
+            .Entity<SleepSessionEntity>()
+            .Property(s => s.Id)
+            .HasValueGenerator<GuidV7ValueGenerator>();
+        modelBuilder
+            .Entity<SleepStageEntity>()
+            .Property(s => s.Id)
+            .HasValueGenerator<GuidV7ValueGenerator>();
+        modelBuilder
+            .Entity<SleepBiometricSampleEntity>()
+            .Property(b => b.Id)
             .HasValueGenerator<GuidV7ValueGenerator>();
 
         modelBuilder

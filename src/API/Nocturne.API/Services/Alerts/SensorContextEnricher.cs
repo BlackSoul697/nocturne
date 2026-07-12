@@ -330,6 +330,11 @@ internal sealed class SensorContextEnricher : ISensorContextEnricher
             enriched = enriched with { ActiveStateSpans = dict };
         }
 
+        if (needs.NeedsSleepSession)
+        {
+            enriched = enriched with { SleepSessionActive = await IsSleepSessionActiveAsync(now, ct) };
+        }
+
         if (needs.ReferencedTrackerDefinitions.Count > 0)
         {
             // One query for the whole referenced set. `now` is the live clock for
@@ -341,6 +346,27 @@ internal sealed class SensorContextEnricher : ISensorContextEnricher
         }
 
         return enriched;
+    }
+
+    /// <summary>
+    /// Returns true when a sleep session has <c>StartTime &lt;= now &lt;= EndTime</c>. The sleep
+    /// service's range filter maps <c>from</c> to <c>EndTime &gt;= from</c> and <c>to</c> to
+    /// <c>StartTime &lt;= to</c>, so passing <paramref name="now"/> as both bounds selects exactly
+    /// the sessions overlapping the instant. A query failure is treated as "not active" (logged
+    /// and swallowed), matching the silent fail-mode of the other enrichment branches.
+    /// </summary>
+    private async Task<bool> IsSleepSessionActiveAsync(DateTime now, CancellationToken ct)
+    {
+        try
+        {
+            var sessions = await _deps.Sleep.GetSessionsAsync(from: now, to: now, limit: 1, cancellationToken: ct);
+            return sessions.Any();
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Failed to resolve active sleep session for alert evaluation; treating as inactive");
+            return false;
+        }
     }
 
     /// <summary>

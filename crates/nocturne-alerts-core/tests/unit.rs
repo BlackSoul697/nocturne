@@ -397,6 +397,36 @@ fn state_span_active_pump_mode_category_is_always_false() {
 }
 
 #[test]
+fn sleep_session_active_matches_the_asserted_side_of_the_signal() {
+    let active = SensorContext {
+        sleep_session_active: true,
+        ..Default::default()
+    };
+    assert!(eval_payload(
+        ConditionKind::SleepSessionActive,
+        &json!({"is_active": true}),
+        &active
+    ));
+    assert!(!eval_payload(
+        ConditionKind::SleepSessionActive,
+        &json!({"is_active": false}),
+        &active
+    ));
+
+    let idle = SensorContext::default();
+    assert!(eval_payload(
+        ConditionKind::SleepSessionActive,
+        &json!({"is_active": false}),
+        &idle
+    ));
+    assert!(!eval_payload(
+        ConditionKind::SleepSessionActive,
+        &json!({"is_active": true}),
+        &idle
+    ));
+}
+
+#[test]
 fn loop_stale_null_timestamp_with_guard_set_returns_false() {
     // Guard passes but the cycle timestamp is null: no infinity convention.
     let ctx = SensorContext {

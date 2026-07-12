@@ -2,7 +2,7 @@
   import { Tooltip, getChartContext } from "layerchart";
   import { cn } from "$lib/utils";
   import { goto } from "$app/navigation";
-  import { BasalDeliveryOrigin } from "$lib/api";
+  import { BasalDeliveryOrigin, ChartSpanKind } from "$lib/api";
   import { bg, bgLabel } from "$lib/utils/formatting";
   import { getGlucoseChartContext } from "./chart-context.svelte";
   import type { GlucosePoint } from "./engine/chart-data-engine.svelte";
@@ -236,7 +236,9 @@
       {#if showActivitySpans}
         {#each activeActivities as activity (activity.id)}
           <Tooltip.Item
-            label={activity.category ?? ""}
+            label={activity.kind === ChartSpanKind.Sleep
+              ? "Sleep"
+              : (activity.category ?? "")}
             value={activity.state}
             color={activity.color}
             class="font-medium"

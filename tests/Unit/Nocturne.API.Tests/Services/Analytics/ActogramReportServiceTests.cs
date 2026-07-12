@@ -3,7 +3,9 @@ using Nocturne.API.Services.Analytics;
 using Nocturne.Core.Contracts.Glucose;
 using Nocturne.Core.Contracts.Health;
 using Nocturne.Core.Contracts.Profiles.Resolvers;
+using Nocturne.Core.Contracts.Sleep;
 using Nocturne.Core.Contracts.V4.Repositories;
+using Nocturne.Core.Models;
 using Nocturne.Core.Models.V4;
 
 namespace Nocturne.API.Tests.Services.Analytics;
@@ -16,7 +18,7 @@ public class ActogramReportServiceTests
     private const long EndMills = StartMills + 14L * 24 * 60 * 60 * 1000;
 
     private readonly Mock<ISensorGlucoseRepository> _glucose = new();
-    private readonly Mock<IStateSpanService> _stateSpans = new();
+    private readonly Mock<ISleepService> _sleep = new();
     private readonly Mock<IStepCountService> _steps = new();
     private readonly Mock<IHeartRateService> _heartRates = new();
     private readonly Mock<ITherapySettingsResolver> _therapy = new();
@@ -25,7 +27,7 @@ public class ActogramReportServiceTests
     private ActogramReportService CreateService() =>
         new(
             _glucose.Object,
-            _stateSpans.Object,
+            _sleep.Object,
             _steps.Object,
             _heartRates.Object,
             _therapy.Object,
@@ -90,23 +92,32 @@ public class ActogramReportServiceTests
             Timestamp = DateTimeOffset.FromUnixTimeMilliseconds(StartMills + 180_000).UtcDateTime,
             Metric = 250,
         };
-        var sleepRow = new StateSpan
+        var sleepSession = new SleepSession
         {
-            Category = StateSpanCategory.Sleep,
-            State = "Deep",
-            StartTimestamp = DateTimeOffset.FromUnixTimeMilliseconds(StartMills + 300_000).UtcDateTime,
-            EndTimestamp = DateTimeOffset.FromUnixTimeMilliseconds(StartMills + 600_000).UtcDateTime,
+            StartTime = DateTimeOffset.FromUnixTimeMilliseconds(StartMills + 300_000).UtcDateTime,
+            EndTime = DateTimeOffset.FromUnixTimeMilliseconds(StartMills + 600_000).UtcDateTime,
+            Type = SleepSessionType.Overnight,
+            Stages = new List<SleepStageInterval>
+            {
+                new()
+                {
+                    Stage = SleepStageType.Deep,
+                    StartTime = DateTimeOffset.FromUnixTimeMilliseconds(StartMills + 300_000).UtcDateTime,
+                    EndTime = DateTimeOffset.FromUnixTimeMilliseconds(StartMills + 600_000).UtcDateTime,
+                },
+            },
         };
 
         _glucose
             .Setup(g => g.GetAsync(It.IsAny<DateTime?>(), It.IsAny<DateTime?>(), null, null,
                 It.IsAny<int>(), 0, false, false, It.IsAny<DateTime?>(), It.IsAny<Guid?>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(new[] { glucoseRow });
-        _stateSpans
-            .Setup(s => s.GetStateSpansAsync(StateSpanCategory.Sleep, null,
-                It.IsAny<DateTime?>(), It.IsAny<DateTime?>(), null, null,
-                It.IsAny<int>(), 0, false, It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new[] { sleepRow });
+        _sleep
+            .Setup(s => s.GetSessionsAsync(
+                It.IsAny<DateTime?>(), It.IsAny<DateTime?>(), It.IsAny<SleepSessionType?>(),
+                It.IsAny<SleepSource?>(), It.IsAny<int>(), It.IsAny<int>(), It.IsAny<bool>(), It.IsAny<bool>(),
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new[] { sleepSession });
         _steps
             .Setup(s => s.GetStepCountsByDateRangeAsync(It.IsAny<DateTime>(), It.IsAny<DateTime>(),
                 It.IsAny<CancellationToken>()))
@@ -123,27 +134,28 @@ public class ActogramReportServiceTests
         result.HeartRates.Should().ContainSingle().Which.Bpm.Should().Be(72);
         result.StepCounts.Should().ContainSingle().Which.Steps.Should().Be(250);
         result.SleepSpans.Should().ContainSingle();
-        result.SleepSpans[0].State.Should().Be("Deep");
+        result.SleepSpans[0].State.Should().Be("deep");
         result.SleepSpans[0].StartMills.Should().Be(StartMills + 300_000);
         result.SleepSpans[0].EndMills.Should().Be(StartMills + 600_000);
     }
 
     [Fact]
-    public async Task GetAsync_OpenSleepSpan_FallsBackToStartMillsForEnd()
+    public async Task GetAsync_SleepSessionWithoutStages_FallsBackToAsleepState()
     {
         SetupEmpty();
-        _stateSpans
-            .Setup(s => s.GetStateSpansAsync(StateSpanCategory.Sleep, null,
-                It.IsAny<DateTime?>(), It.IsAny<DateTime?>(), null, null,
-                It.IsAny<int>(), 0, false, It.IsAny<CancellationToken>()))
+        _sleep
+            .Setup(s => s.GetSessionsAsync(
+                It.IsAny<DateTime?>(), It.IsAny<DateTime?>(), It.IsAny<SleepSessionType?>(),
+                It.IsAny<SleepSource?>(), It.IsAny<int>(), It.IsAny<int>(), It.IsAny<bool>(), It.IsAny<bool>(),
+                It.IsAny<CancellationToken>()))
             .ReturnsAsync(new[]
             {
-                new StateSpan
+                new SleepSession
                 {
-                    Category = StateSpanCategory.Sleep,
-                    State = "Light",
-                    StartTimestamp = DateTimeOffset.FromUnixTimeMilliseconds(StartMills + 1000).UtcDateTime,
-                    EndTimestamp = null,
+                    StartTime = DateTimeOffset.FromUnixTimeMilliseconds(StartMills + 1000).UtcDateTime,
+                    EndTime = DateTimeOffset.FromUnixTimeMilliseconds(StartMills + 2000).UtcDateTime,
+                    Type = SleepSessionType.Overnight,
+                    Stages = null,
                 },
             });
         _therapy.Setup(t => t.HasDataAsync(It.IsAny<CancellationToken>())).ReturnsAsync(false);
@@ -151,7 +163,9 @@ public class ActogramReportServiceTests
         var result = await CreateService().GetAsync(StartMills, EndMills);
 
         result.SleepSpans.Should().ContainSingle();
-        result.SleepSpans[0].EndMills.Should().Be(result.SleepSpans[0].StartMills);
+        result.SleepSpans[0].State.Should().Be("asleep");
+        result.SleepSpans[0].StartMills.Should().Be(StartMills + 1000);
+        result.SleepSpans[0].EndMills.Should().Be(StartMills + 2000);
     }
 
     [Fact]
@@ -176,11 +190,12 @@ public class ActogramReportServiceTests
             .Setup(g => g.GetAsync(It.IsAny<DateTime?>(), It.IsAny<DateTime?>(), null, null,
                 It.IsAny<int>(), 0, false, false, It.IsAny<DateTime?>(), It.IsAny<Guid?>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(Array.Empty<SensorGlucose>());
-        _stateSpans
-            .Setup(s => s.GetStateSpansAsync(StateSpanCategory.Sleep, null,
-                It.IsAny<DateTime?>(), It.IsAny<DateTime?>(), null, null,
-                It.IsAny<int>(), 0, false, It.IsAny<CancellationToken>()))
-            .ReturnsAsync(Array.Empty<StateSpan>());
+        _sleep
+            .Setup(s => s.GetSessionsAsync(
+                It.IsAny<DateTime?>(), It.IsAny<DateTime?>(), It.IsAny<SleepSessionType?>(),
+                It.IsAny<SleepSource?>(), It.IsAny<int>(), It.IsAny<int>(), It.IsAny<bool>(), It.IsAny<bool>(),
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync(Array.Empty<SleepSession>());
         _steps
             .Setup(s => s.GetStepCountsByDateRangeAsync(It.IsAny<DateTime>(), It.IsAny<DateTime>(),
                 It.IsAny<CancellationToken>()))

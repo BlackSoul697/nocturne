@@ -18,7 +18,7 @@ public static class BodyWeightMapper
         {
             Id = string.IsNullOrEmpty(bodyWeight.Id)
                 ? Guid.CreateVersion7()
-                : ParseIdToGuid(bodyWeight.Id),
+                : MapperHelpers.ParseIdToGuid(bodyWeight.Id),
             OriginalId = MongoIdUtils.IsValidMongoId(bodyWeight.Id) ? bodyWeight.Id : null,
             Mills = bodyWeight.Mills,
             WeightKg = bodyWeight.WeightKg,
@@ -70,24 +70,5 @@ public static class BodyWeightMapper
         entity.DataSource = bodyWeight.DataSource;
         entity.SyncIdentifier = bodyWeight.SyncIdentifier;
         entity.SysUpdatedAt = DateTime.UtcNow;
-    }
-
-    /// <summary>
-    /// Parse string ID to GUID, or generate a deterministic GUID via hash if invalid
-    /// </summary>
-    private static Guid ParseIdToGuid(string id)
-    {
-        if (string.IsNullOrEmpty(id))
-            return Guid.CreateVersion7();
-
-        if (Guid.TryParse(id, out var guid))
-            return guid;
-
-        var hash = System.Security.Cryptography.SHA1.HashData(
-            System.Text.Encoding.UTF8.GetBytes(id)
-        );
-        var guidBytes = new byte[16];
-        Array.Copy(hash, guidBytes, 16);
-        return new Guid(guidBytes);
     }
 }

@@ -33,7 +33,8 @@
         "has_ever_aps_cycled": false,
         "has_ever_pump_snapshot": false,
         "has_ever_uploader_snapshot": false,
-        "has_ever_aps_sensitivity": false
+        "has_ever_aps_sensitivity": false,
+        "sleep_session_active": false
       }
     },
     {
@@ -46,7 +47,8 @@
         "has_ever_aps_cycled": false,
         "has_ever_pump_snapshot": false,
         "has_ever_uploader_snapshot": false,
-        "has_ever_aps_sensitivity": false
+        "has_ever_aps_sensitivity": false,
+        "sleep_session_active": false
       }
     },
     {
@@ -59,7 +61,8 @@
         "has_ever_aps_cycled": false,
         "has_ever_pump_snapshot": false,
         "has_ever_uploader_snapshot": false,
-        "has_ever_aps_sensitivity": false
+        "has_ever_aps_sensitivity": false,
+        "sleep_session_active": false
       }
     },
     {
@@ -72,7 +75,8 @@
         "has_ever_aps_cycled": false,
         "has_ever_pump_snapshot": false,
         "has_ever_uploader_snapshot": false,
-        "has_ever_aps_sensitivity": false
+        "has_ever_aps_sensitivity": false,
+        "sleep_session_active": false
       }
     },
     {
@@ -85,7 +89,8 @@
         "has_ever_aps_cycled": false,
         "has_ever_pump_snapshot": false,
         "has_ever_uploader_snapshot": false,
-        "has_ever_aps_sensitivity": false
+        "has_ever_aps_sensitivity": false,
+        "sleep_session_active": false
       }
     },
     {
@@ -98,7 +103,8 @@
         "has_ever_aps_cycled": false,
         "has_ever_pump_snapshot": false,
         "has_ever_uploader_snapshot": false,
-        "has_ever_aps_sensitivity": false
+        "has_ever_aps_sensitivity": false,
+        "sleep_session_active": false
       }
     }
   ]

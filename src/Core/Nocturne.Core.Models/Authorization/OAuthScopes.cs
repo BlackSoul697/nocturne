@@ -46,6 +46,10 @@ public static class OAuthScopes
     public const string StepCountRead = "stepcount.read";
     /// <summary>Read and write access to step count data.</summary>
     public const string StepCountReadWrite = "stepcount.readwrite";
+    /// <summary>Read-only access to sleep sessions.</summary>
+    public const string SleepRead = "sleep.read";
+    /// <summary>Read and write access to sleep sessions.</summary>
+    public const string SleepReadWrite = "sleep.readwrite";
     /// <summary>Read-only access to food records.</summary>
     public const string FoodRead = "food.read";
     /// <summary>Read and write access to food records.</summary>
@@ -112,6 +116,8 @@ public static class OAuthScopes
         HeartRateReadWrite,
         StepCountRead,
         StepCountReadWrite,
+        SleepRead,
+        SleepReadWrite,
         FoodRead,
         FoodReadWrite,
         SharingReadWrite,
@@ -140,6 +146,7 @@ public static class OAuthScopes
         TherapyRead,
         HeartRateRead,
         StepCountRead,
+        SleepRead,
         FoodRead,
     };
 
@@ -154,6 +161,7 @@ public static class OAuthScopes
         TherapyReadWrite,
         HeartRateReadWrite,
         StepCountReadWrite,
+        SleepReadWrite,
         FoodReadWrite,
     };
 
@@ -170,6 +178,7 @@ public static class OAuthScopes
         [AlertsReadWrite] = AlertsRead,
         [HeartRateReadWrite] = HeartRateRead,
         [StepCountReadWrite] = StepCountRead,
+        [SleepReadWrite] = SleepRead,
         [FoodReadWrite] = FoodRead,
     };
 

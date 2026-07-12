@@ -144,13 +144,9 @@ public class TandemE2eSyncTests
         cannula.Notes.Should().Be("Cannula Filled (0.3u primed)");
         cannula.Timestamp.Should().Be(Utc(2026, 5, 16, 4, 14, 9));
 
-        // The manual sleep start/stop pair becomes one closed state span.
-        var sleep = pub.StateSpans.Should().ContainSingle().Subject;
-        sleep.Category.Should().Be(StateSpanCategory.Sleep);
-        sleep.State.Should().Be("Sleep (Manual)");
-        sleep.StartTimestamp.Should().Be(Utc(2026, 5, 18, 14, 16, 0));
-        sleep.EndTimestamp.Should().Be(Utc(2026, 5, 18, 14, 19, 55));
-        sleep.OriginalId.Should().Be("tandem_usermode_456855_456952");
+        // The manual sleep start/stop pair produces nothing: sleep user modes no longer
+        // map to state spans (sleep lives in the first-party sleep_sessions tables).
+        pub.StateSpans.Should().BeEmpty();
 
         result.ItemsSynced.Should().Contain(new Dictionary<SyncDataType, int>
         {
@@ -160,8 +156,8 @@ public class TandemE2eSyncTests
             [SyncDataType.BolusCalculations] = 1,
             [SyncDataType.TempBasals] = 2,
             [SyncDataType.DeviceEvents] = 3,
-            [SyncDataType.StateSpans] = 1,
         });
+        result.ItemsSynced.Should().NotContainKey(SyncDataType.StateSpans);
     }
 
     [Fact]

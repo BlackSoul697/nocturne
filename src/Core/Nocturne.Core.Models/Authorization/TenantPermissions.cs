@@ -32,6 +32,10 @@ public static class TenantPermissions
     public const string StepCountRead = "stepcount.read";
     /// <summary>Read and write access to step count data within the tenant.</summary>
     public const string StepCountReadWrite = "stepcount.readwrite";
+    /// <summary>Read-only access to sleep sessions within the tenant.</summary>
+    public const string SleepRead = "sleep.read";
+    /// <summary>Read and write access to sleep sessions within the tenant.</summary>
+    public const string SleepReadWrite = "sleep.readwrite";
     /// <summary>Read-only access to food records within the tenant.</summary>
     public const string FoodRead = "food.read";
     /// <summary>Read and write access to food records within the tenant.</summary>
@@ -116,6 +120,7 @@ public static class TenantPermissions
         DevicesRead, DevicesReadWrite,
         HeartRateRead, HeartRateReadWrite,
         StepCountRead, StepCountReadWrite,
+        SleepRead, SleepReadWrite,
         FoodRead, FoodReadWrite,
         ReportsRead,
         TherapyRead, TherapyReadWrite,
@@ -179,7 +184,7 @@ public static class TenantPermissions
         [SeedRoles.Admin] =
         [
             GlucoseReadWrite, TreatmentsReadWrite, DevicesReadWrite,
-            HeartRateReadWrite, StepCountReadWrite, FoodReadWrite,
+            HeartRateReadWrite, StepCountReadWrite, SleepReadWrite, FoodReadWrite,
             ReportsRead,
             TherapyReadWrite, AlertsReadWrite,
             IdentityRead,
@@ -190,7 +195,7 @@ public static class TenantPermissions
         [SeedRoles.Caretaker] =
         [
             GlucoseRead, TreatmentsReadWrite, DevicesRead,
-            FoodRead, HeartRateRead, StepCountRead,
+            FoodRead, HeartRateRead, StepCountRead, SleepRead,
             ReportsRead,
             TherapyRead, AlertsReadWrite,
             DeviceNotify, DeviceActuate,
@@ -198,7 +203,7 @@ public static class TenantPermissions
         [SeedRoles.Clinician] =
         [
             GlucoseRead, TreatmentsRead, DevicesRead,
-            FoodRead, HeartRateRead, StepCountRead,
+            FoodRead, HeartRateRead, StepCountRead, SleepRead,
             ReportsRead,
             TherapyRead, AlertsRead,
             DeviceNotify, DeviceActuate,

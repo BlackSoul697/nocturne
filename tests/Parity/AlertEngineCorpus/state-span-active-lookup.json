@@ -8,7 +8,7 @@
       "name": "rule-1",
       "condition_type": "state_span_active",
       "condition_params": {
-        "category": "Sleep",
+        "category": "Illness",
         "state": null,
         "is_active": true,
         "for_minutes": null
@@ -36,7 +36,7 @@
       "name": "rule-3",
       "condition_type": "state_span_active",
       "condition_params": {
-        "category": "Sleep",
+        "category": "Illness",
         "state": null,
         "is_active": false,
         "for_minutes": null
@@ -74,7 +74,7 @@
         "has_ever_aps_sensitivity": false,
         "active_state_spans": [
           {
-            "category": "Sleep",
+            "category": "Illness",
             "started_at": "2026-01-05T11:20:00Z"
           },
           {
@@ -86,7 +86,8 @@
             "category": "PumpMode",
             "started_at": "2026-01-05T11:20:00Z"
           }
-        ]
+        ],
+        "sleep_session_active": false
       }
     },
     {
@@ -106,7 +107,8 @@
             "state": "running",
             "started_at": "2026-01-05T11:50:00Z"
           }
-        ]
+        ],
+        "sleep_session_active": false
       }
     },
     {
@@ -119,7 +121,8 @@
         "has_ever_aps_cycled": false,
         "has_ever_pump_snapshot": false,
         "has_ever_uploader_snapshot": false,
-        "has_ever_aps_sensitivity": false
+        "has_ever_aps_sensitivity": false,
+        "sleep_session_active": false
       }
     }
   ]

@@ -72,6 +72,7 @@ public sealed record ChartDataContext
     public IReadOnlyList<TrackerInstanceEntity> TrackerInstances { get; init; } = [];
     public IReadOnlyList<HeartRate> HeartRateList { get; init; } = [];
     public IReadOnlyList<StepCount> StepCountList { get; init; } = [];
+    public IReadOnlyList<SleepSession> SleepSessions { get; init; } = [];
 
     // === Computed series (set by computation stages) ===
 

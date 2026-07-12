@@ -39,7 +39,8 @@
         "has_ever_aps_cycled": false,
         "has_ever_pump_snapshot": false,
         "has_ever_uploader_snapshot": false,
-        "has_ever_aps_sensitivity": false
+        "has_ever_aps_sensitivity": false,
+        "sleep_session_active": false
       }
     },
     {
@@ -53,7 +54,8 @@
         "has_ever_pump_snapshot": false,
         "has_ever_uploader_snapshot": false,
         "has_ever_aps_sensitivity": false,
-        "last_bolus_at": "2026-01-05T09:05:00Z"
+        "last_bolus_at": "2026-01-05T09:05:00Z",
+        "sleep_session_active": false
       }
     },
     {
@@ -67,7 +69,8 @@
         "has_ever_pump_snapshot": false,
         "has_ever_uploader_snapshot": false,
         "has_ever_aps_sensitivity": false,
-        "last_bolus_at": "2026-01-05T12:00:00Z"
+        "last_bolus_at": "2026-01-05T12:00:00Z",
+        "sleep_session_active": false
       }
     }
   ]

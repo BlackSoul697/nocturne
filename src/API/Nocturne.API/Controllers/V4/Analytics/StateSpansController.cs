@@ -9,14 +9,14 @@ namespace Nocturne.API.Controllers.V4.Analytics;
 
 /// <summary>
 /// Controller for managing time-ranged system states such as pump modes, connectivity periods,
-/// temporary targets, overrides, and user-annotated activity periods (sleep, exercise, illness, travel).
+/// temporary targets, overrides, and user-annotated activity periods (exercise, illness, travel).
 /// </summary>
 /// <remarks>
 /// <see cref="StateSpan"/> records are created automatically by connector-based ingest pipelines
 /// but can also be created and updated manually via this API.
 ///
 /// Convenience sub-routes (<c>/pump-modes</c>, <c>/connectivity</c>, <c>/overrides</c>,
-/// <c>/temporary-targets</c>, <c>/profiles</c>, <c>/sleep</c>, <c>/exercise</c>,
+/// <c>/temporary-targets</c>, <c>/profiles</c>, <c>/exercise</c>,
 /// <c>/illness</c>, <c>/travel</c>, <c>/activities</c>) are thin wrappers that pre-filter
 /// <see cref="IStateSpanService.GetStateSpansAsync"/> by <see cref="StateSpanCategory"/>.
 ///
@@ -187,29 +187,6 @@ public class StateSpansController : ControllerBase
     }
 
     /// <summary>
-    /// Get sleep state spans (user-annotated sleep periods)
-    /// </summary>
-    [HttpGet("sleep")]
-    [ProducesResponseType(typeof(PaginatedResponse<StateSpan>), StatusCodes.Status200OK)]
-    [ProducesResponseType(StatusCodes.Status400BadRequest)]
-    public async Task<ActionResult<PaginatedResponse<StateSpan>>> GetSleep(
-        [FromQuery] DateTime? from = null,
-        [FromQuery] DateTime? to = null,
-        [FromQuery] int limit = 100,
-        [FromQuery] int offset = 0,
-        [FromQuery] string sort = "timestamp_desc",
-        CancellationToken cancellationToken = default)
-    {
-        if (sort is not "timestamp_desc" and not "timestamp_asc")
-            return Problem(detail: $"Invalid sort value '{sort}'. Must be 'timestamp_asc' or 'timestamp_desc'.", statusCode: 400, title: "Bad Request");
-
-        var descending = sort == "timestamp_desc";
-        var data = await _stateSpanService.GetStateSpansAsync(StateSpanCategory.Sleep, from: from, to: to, count: limit, skip: offset, descending: descending, cancellationToken: cancellationToken);
-        var total = await _stateSpanService.CountStateSpansAsync(StateSpanCategory.Sleep, from: from, to: to, cancellationToken: cancellationToken);
-        return Ok(new PaginatedResponse<StateSpan> { Data = data, Pagination = new PaginationInfo(limit, offset, total) });
-    }
-
-    /// <summary>
     /// Get exercise state spans (user-annotated activity periods)
     /// </summary>
     [HttpGet("exercise")]
@@ -279,7 +256,7 @@ public class StateSpansController : ControllerBase
     }
 
     /// <summary>
-    /// Get all activity state spans (sleep, exercise, illness, travel)
+    /// Get all activity state spans (exercise, illness, travel)
     /// </summary>
     [HttpGet("activities")]
     [ProducesResponseType(typeof(PaginatedResponse<StateSpan>), StatusCodes.Status200OK)]
@@ -296,7 +273,7 @@ public class StateSpansController : ControllerBase
             return Problem(detail: $"Invalid sort value '{sort}'. Must be 'timestamp_asc' or 'timestamp_desc'.", statusCode: 400, title: "Bad Request");
 
         var descending = sort == "timestamp_desc";
-        var activityCategories = new[] { StateSpanCategory.Sleep, StateSpanCategory.Exercise, StateSpanCategory.Illness, StateSpanCategory.Travel };
+        var activityCategories = new[] { StateSpanCategory.Exercise, StateSpanCategory.Illness, StateSpanCategory.Travel };
         var allSpans = new List<StateSpan>();
         var total = 0;
 

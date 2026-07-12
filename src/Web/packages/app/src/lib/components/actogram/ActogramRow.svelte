@@ -1,6 +1,6 @@
 <script lang="ts">
   import type { Snippet } from 'svelte';
-  import { Chart, Svg, Spline, Points, Tooltip } from 'layerchart';
+  import { Chart, Svg, Spline, Points, Circle, Tooltip } from 'layerchart';
   import { scaleTime } from 'd3-scale';
   import type { ScaleTime } from 'd3-scale';
   import { curveMonotoneX } from 'd3';
@@ -79,16 +79,19 @@
           class="stroke-muted-foreground/50 fill-none"
           strokeWidth={1.5}
         />
-        {#each bgChartData as point (point.time)}
-          <Points
-            data={[point]}
-            x={(d) => d.time}
-            y={(d) => d.sgv}
-            r={2}
-            fill={point.color}
-            class="opacity-80"
-          />
-        {/each}
+        <Points data={bgChartData} x={(d) => d.time} y={(d) => d.sgv} r={2}>
+          {#snippet children({ points })}
+            {#each points as point (point.data.time)}
+              <Circle
+                cx={point.x}
+                cy={point.y}
+                r={point.r}
+                fill={point.data.color}
+                class="opacity-80"
+              />
+            {/each}
+          {/snippet}
+        </Points>
       {/if}
 
       <!-- Dimming overlay for the extended (24–48h) half (top layer) -->

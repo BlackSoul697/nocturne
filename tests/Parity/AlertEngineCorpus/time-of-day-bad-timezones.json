@@ -42,7 +42,8 @@
         "has_ever_pump_snapshot": false,
         "has_ever_uploader_snapshot": false,
         "has_ever_aps_sensitivity": false,
-        "tenant_time_zone_id": "Atlantis/Lost_City"
+        "tenant_time_zone_id": "Atlantis/Lost_City",
+        "sleep_session_active": false
       }
     }
   ]

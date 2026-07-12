@@ -101,7 +101,6 @@
     [StateSpanCategory.PumpConnectivity]: "Pump connectivity",
     [StateSpanCategory.Override]: "Override",
     [StateSpanCategory.Profile]: "Profile",
-    [StateSpanCategory.Sleep]: "Sleep",
     [StateSpanCategory.Exercise]: "Exercise",
     [StateSpanCategory.Illness]: "Illness",
     [StateSpanCategory.Travel]: "Travel",
@@ -696,6 +695,16 @@
       />
       <span class="text-xs text-muted-foreground">min</span>
     {/if}
+  {:else if node.type === "sleep_session_active" && node.sleep_session_active}
+    <span class="text-xs text-muted-foreground">sleep session is</span>
+    <Switch
+      checked={node.sleep_session_active.is_active ?? true}
+      onCheckedChange={(checked) => {
+        if (node.sleep_session_active)
+          node.sleep_session_active.is_active = checked;
+      }}
+    />
+    <span class="text-xs text-muted-foreground">{node.sleep_session_active.is_active ? "active" : "inactive"}</span>
   {:else if node.type === "tracker_age" && node.tracker_age}
     {@const selectedDef = trackerDefinitions.find(
       (d) => d.id === node.tracker_age?.tracker_definition_id,

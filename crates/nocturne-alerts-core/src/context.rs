@@ -101,6 +101,9 @@ pub struct SensorContext {
     /// definition: start time for duration trackers, scheduled time for event
     /// trackers (resolved by the enricher). Absent key = no active instance.
     pub active_trackers: HashMap<Uuid, DateTime<Utc>>,
+    /// Pre-computed by the enricher: a sleep session (from the sleep_sessions
+    /// tables) has `StartTime <= now <= EndTime` for the tenant.
+    pub sleep_session_active: bool,
 }
 
 // ---------------------------------------------------------------------------
@@ -175,6 +178,8 @@ struct WireContext {
     active_state_spans: Option<Vec<WireStateSpan>>,
     #[serde(default)]
     active_trackers: Option<Vec<WireTrackerReference>>,
+    #[serde(default)]
+    sleep_session_active: bool,
 }
 
 #[derive(Deserialize)]
@@ -353,6 +358,7 @@ impl SensorContext {
                 .transpose()?,
             active_state_spans,
             active_trackers,
+            sleep_session_active: w.sleep_session_active,
         })
     }
 }

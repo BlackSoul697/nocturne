@@ -2,7 +2,9 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Nocturne.API.Attributes;
 using Nocturne.API.Authorization;
+using Nocturne.API.Extensions;
 using Nocturne.Core.Contracts.Health;
+using Nocturne.Core.Contracts.V4;
 using Nocturne.Core.Models;
 using Nocturne.Core.Models.Authorization;
 
@@ -22,20 +24,25 @@ namespace Nocturne.API.Controllers.V1;
 public class ActivityController : ControllerBase
 {
     private readonly IActivityService _activityService;
+    private readonly IActivityDecomposer _activityDecomposer;
     private readonly ILogger<ActivityController> _logger;
 
     /// <summary>
     /// Initializes a new instance of <see cref="ActivityController"/>.
     /// </summary>
     /// <param name="activityService">Service handling activity data operations.</param>
+    /// <param name="activityDecomposer">Classifier mapping each activity to its required write scope.</param>
     /// <param name="logger">Logger instance.</param>
     public ActivityController(
         IActivityService activityService,
+        IActivityDecomposer activityDecomposer,
         ILogger<ActivityController> logger
     )
     {
         _activityService =
             activityService ?? throw new ArgumentNullException(nameof(activityService));
+        _activityDecomposer =
+            activityDecomposer ?? throw new ArgumentNullException(nameof(activityDecomposer));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
     }
 
@@ -162,6 +169,11 @@ public class ActivityController : ControllerBase
             if (activityList.Count == 0)
                 return BadRequest(new { error = "At least one activity is required" });
 
+            var missingScope = ActivityWriteScopeGuard.FindMissingScope(
+                activityList, _activityDecomposer, HttpContext.GetGrantedScopes());
+            if (missingScope is not null)
+                return ForbiddenForScope(missingScope);
+
             // ActivityService handles document processing, routing, and broadcasting
             var result = await _activityService.CreateActivitiesAsync(
                 activityList,
@@ -201,6 +213,17 @@ public class ActivityController : ControllerBase
         {
             if (activity == null)
                 return BadRequest(new { error = "Activity data is required" });
+
+            // Gate on both the payload's destination and the existing record's destination so a
+            // caller cannot write or edit sleep/heart-rate/step data without its category scope.
+            var existing = await _activityService.GetActivityByIdAsync(id, cancellationToken);
+            var toCheck = new List<Activity> { activity };
+            if (existing is not null)
+                toCheck.Add(existing);
+            var missingScope = ActivityWriteScopeGuard.FindMissingScope(
+                toCheck, _activityDecomposer, HttpContext.GetGrantedScopes());
+            if (missingScope is not null)
+                return ForbiddenForScope(missingScope);
 
             var updatedActivity = await _activityService.UpdateActivityAsync(
                 id,
@@ -254,4 +277,9 @@ public class ActivityController : ControllerBase
             );
         }
     }
+
+    private ObjectResult ForbiddenForScope(string scope) => StatusCode(
+        StatusCodes.Status403Forbidden,
+        new { error = $"This operation requires the '{scope}' scope." }
+    );
 }

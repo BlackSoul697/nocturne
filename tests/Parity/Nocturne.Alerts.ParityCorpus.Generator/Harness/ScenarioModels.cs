@@ -152,6 +152,7 @@ public sealed record ScenarioContext
     [JsonPropertyName("active_pump_state")] public ScenarioPumpState? ActivePumpState { get; init; }
     [JsonPropertyName("active_state_spans")] public List<ScenarioStateSpan>? ActiveStateSpans { get; init; }
     [JsonPropertyName("active_trackers")] public List<ScenarioTrackerReference>? ActiveTrackers { get; init; }
+    [JsonPropertyName("sleep_session_active")] public bool SleepSessionActive { get; init; }
 }
 
 public sealed record ScenarioPrediction(

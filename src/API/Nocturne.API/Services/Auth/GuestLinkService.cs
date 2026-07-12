@@ -24,8 +24,8 @@ public class GuestLinkService : IGuestLinkService
     {
         OAuthScopes.GlucoseRead, OAuthScopes.TreatmentsRead, OAuthScopes.DevicesRead,
         OAuthScopes.TherapyRead, OAuthScopes.HeartRateRead, OAuthScopes.StepCountRead,
-        OAuthScopes.AlertsRead, OAuthScopes.ReportsRead, OAuthScopes.IdentityRead,
-        OAuthScopes.HealthRead,
+        OAuthScopes.SleepRead, OAuthScopes.AlertsRead, OAuthScopes.ReportsRead,
+        OAuthScopes.IdentityRead, OAuthScopes.HealthRead,
     };
 
     private static readonly List<string> DefaultScopes =

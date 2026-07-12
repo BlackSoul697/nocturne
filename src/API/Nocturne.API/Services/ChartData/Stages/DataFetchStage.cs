@@ -5,6 +5,7 @@ using Nocturne.Core.Models;
 using Nocturne.Core.Models.V4;
 using Nocturne.Core.Contracts.Health;
 using Nocturne.Core.Contracts.Repositories;
+using Nocturne.Core.Contracts.Sleep;
 using Nocturne.Infrastructure.Data.Abstractions;
 
 namespace Nocturne.API.Services.ChartData.Stages;
@@ -52,7 +53,8 @@ internal sealed class DataFetchStage(
     IBasalInjectionRepository basalInjectionRepository,
     ILogger<DataFetchStage> logger,
     IHeartRateService heartRateService,
-    IStepCountService stepCountService
+    IStepCountService stepCountService,
+    ISleepService sleepService
 ) : IChartDataStage
 {
     public async Task<ChartDataContext> ExecuteAsync(ChartDataContext context, CancellationToken cancellationToken)
@@ -181,7 +183,6 @@ internal sealed class DataFetchStage(
             StateSpanCategory.PumpMode,
             StateSpanCategory.Profile,
             StateSpanCategory.Override,
-            StateSpanCategory.Sleep,
             StateSpanCategory.Exercise,
             StateSpanCategory.Illness,
             StateSpanCategory.Travel,
@@ -227,6 +228,14 @@ internal sealed class DataFetchStage(
             cancellationToken
         )).ToList();
 
+        // Sleep sessions
+        var sleepSessionList = (await sleepService.GetSessionsAsync(
+            from: MillsToDateTime(startTime),
+            to: MillsToDateTime(endTime),
+            limit: displayRangeLimit,
+            cancellationToken: cancellationToken
+        )).ToList();
+
         // Display-range subsets for markers
         var displayBoluses = bolusList
             .Where(b => b.Mills >= startTime && b.Mills <= endTime)
@@ -236,7 +245,7 @@ internal sealed class DataFetchStage(
             .ToList();
 
         logger.LogDebug(
-            "DataFetchStage: fetched {Glucose} glucose, {Bolus} bolus, {Carb} carb, {BgCheck} bg-check, {DeviceEvent} device-event, {TempBasal} temp-basal, {HeartRate} heart-rate, {StepCount} step-count records",
+            "DataFetchStage: fetched {Glucose} glucose, {Bolus} bolus, {Carb} carb, {BgCheck} bg-check, {DeviceEvent} device-event, {TempBasal} temp-basal, {HeartRate} heart-rate, {StepCount} step-count, {Sleep} sleep records",
             sensorGlucoseList.Count,
             bolusList.Count,
             carbIntakeList.Count,
@@ -244,7 +253,8 @@ internal sealed class DataFetchStage(
             deviceEventList.Count,
             tempBasalList.Count,
             heartRateList.Count,
-            stepCountList.Count
+            stepCountList.Count,
+            sleepSessionList.Count
         );
 
         // Project Dictionary<K, List<V>> to IReadOnlyDictionary<K, IEnumerable<V>>
@@ -271,6 +281,7 @@ internal sealed class DataFetchStage(
             TrackerInstances = trackerInstances?.ToList() ?? [],
             HeartRateList = heartRateList,
             StepCountList = stepCountList,
+            SleepSessions = sleepSessionList,
         };
     }
 }

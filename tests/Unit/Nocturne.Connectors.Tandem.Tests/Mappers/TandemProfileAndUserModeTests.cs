@@ -63,8 +63,11 @@ public class TandemProfileAndUserModeTests
     }
 
     [Fact]
-    public void UserModeMapper_pairs_manual_sleep_start_and_stop()
+    public void UserModeMapper_ignores_sleep_mode_events()
     {
+        // Control-IQ Sleep-mode events no longer produce a span: StateSpanCategory.Sleep was
+        // removed (sleep now lives in the sleep_sessions tables). A lone sleep start/stop pair
+        // yields no state spans.
         var start = new TandemEventBuilder(229, Raw, seqNum: 1)
             .UInt8(1, 1)  // RequestedAction -> "Start Sleep"
             .UInt8(7, 1); // SleepStartedByGUI -> "TRUE"
@@ -74,11 +77,7 @@ public class TandemProfileAndUserModeTests
 
         var spans = new TandemUserModeMapper(NullLogger.Instance, Time).Map(events);
 
-        spans.Should().ContainSingle();
-        spans[0].Category.Should().Be(StateSpanCategory.Sleep);
-        spans[0].State.Should().Be("Sleep (Manual)");
-        spans[0].StartTimestamp.Should().Be(Time.ToUtc(Raw));
-        spans[0].EndTimestamp.Should().Be(Time.ToUtc(Raw + 3600));
+        spans.Should().BeEmpty();
     }
 
     [Fact]

@@ -135,6 +135,10 @@ public enum AlertConditionType
     [EnumMember(Value = "state_span_active"), JsonStringEnumMemberName("state_span_active")]
     StateSpanActive,
 
+    /// <summary>A sleep session (from the sleep_sessions tables) is active at the current time.</summary>
+    [EnumMember(Value = "sleep_session_active"), JsonStringEnumMemberName("sleep_session_active")]
+    SleepSessionActive,
+
     /// <summary>Minutes since the active tracker instance's reference timestamp (start for duration trackers, scheduled time for event trackers) compared against a threshold.</summary>
     [EnumMember(Value = "tracker_age"), JsonStringEnumMemberName("tracker_age")]
     TrackerAge,

@@ -2,6 +2,7 @@ using Microsoft.EntityFrameworkCore;
 using Nocturne.Core.Contracts.Repositories;
 using Nocturne.Core.Contracts.V4;
 using Nocturne.Core.Models;
+using Nocturne.Core.Models.Authorization;
 using Nocturne.Core.Models.V4;
 using Nocturne.Infrastructure.Data;
 using Nocturne.Infrastructure.Data.Entities.V4;
@@ -69,6 +70,26 @@ public class ActivityDecomposer : IActivityDecomposer, IDecomposer<Activity>
     public bool IsSensorData(Activity activity)
     {
         return IsHeartRate(activity) || IsStepCount(activity);
+    }
+
+    /// <summary>
+    /// Returns the OAuth write scope required to persist this activity, based on the dedicated
+    /// table it routes to: heart-rate data needs <c>heartrate.readwrite</c>, step-count data
+    /// <c>stepcount.readwrite</c>, and sleep-typed activities <c>sleep.readwrite</c>. Regular
+    /// activities (exercise, illness, travel) route to StateSpans and carry no category scope,
+    /// so this returns <see langword="null"/>. Uses the same predicates as the create/update
+    /// routing so the scope gate and the storage destination cannot drift apart.
+    /// </summary>
+    /// <param name="activity">The activity to classify.</param>
+    public string? RequiredWriteScope(Activity activity)
+    {
+        if (IsHeartRate(activity))
+            return OAuthScopes.HeartRateReadWrite;
+        if (IsStepCount(activity))
+            return OAuthScopes.StepCountReadWrite;
+        if (ActivityStateSpanMapper.IsSleepType(activity.Type))
+            return OAuthScopes.SleepReadWrite;
+        return null;
     }
 
     /// <inheritdoc/>

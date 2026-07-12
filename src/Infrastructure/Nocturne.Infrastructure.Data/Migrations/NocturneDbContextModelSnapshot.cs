@@ -3487,6 +3487,245 @@ namespace Nocturne.Infrastructure.Data.Migrations
                     b.ToTable("settings");
                 });
 
+            modelBuilder.Entity("Nocturne.Infrastructure.Data.Entities.SleepBiometricSampleEntity", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<float?>("HeartRate")
+                        .HasColumnType("real")
+                        .HasColumnName("heart_rate");
+
+                    b.Property<float?>("Hrv")
+                        .HasColumnType("real")
+                        .HasColumnName("hrv");
+
+                    b.Property<float?>("Movement")
+                        .HasColumnType("real")
+                        .HasColumnName("movement");
+
+                    b.Property<float?>("RespirationRate")
+                        .HasColumnType("real")
+                        .HasColumnName("respiration_rate");
+
+                    b.Property<Guid>("SleepSessionId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("sleep_session_id");
+
+                    b.Property<float?>("Spo2")
+                        .HasColumnType("real")
+                        .HasColumnName("spo2");
+
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("tenant_id");
+
+                    b.Property<DateTime>("Timestamp")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("timestamp");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("SleepSessionId")
+                        .HasDatabaseName("ix_sleep_biometric_samples_sleep_session_id");
+
+                    b.HasIndex("TenantId");
+
+                    b.ToTable("sleep_biometric_samples");
+                });
+
+            modelBuilder.Entity("Nocturne.Infrastructure.Data.Entities.SleepSessionEntity", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<float?>("AvgBreathRate")
+                        .HasColumnType("real")
+                        .HasColumnName("avg_breath_rate");
+
+                    b.Property<float?>("AvgHeartRate")
+                        .HasColumnType("real")
+                        .HasColumnName("avg_heart_rate");
+
+                    b.Property<float?>("AvgHrv")
+                        .HasColumnType("real")
+                        .HasColumnName("avg_hrv");
+
+                    b.Property<float?>("AvgSpo2")
+                        .HasColumnType("real")
+                        .HasColumnName("avg_spo2");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<long?>("DeepSleepMs")
+                        .HasColumnType("bigint")
+                        .HasColumnName("deep_sleep_ms");
+
+                    b.Property<string>("DetectionMethod")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)")
+                        .HasColumnName("detection_method");
+
+                    b.Property<long>("DurationMs")
+                        .HasColumnType("bigint")
+                        .HasColumnName("duration_ms");
+
+                    b.Property<float?>("Efficiency")
+                        .HasColumnType("real")
+                        .HasColumnName("efficiency");
+
+                    b.Property<DateTime>("EndTime")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("end_time");
+
+                    b.Property<bool?>("IsMainSleep")
+                        .HasColumnType("boolean")
+                        .HasColumnName("is_main_sleep");
+
+                    b.Property<long?>("LightSleepMs")
+                        .HasColumnType("bigint")
+                        .HasColumnName("light_sleep_ms");
+
+                    b.Property<string>("MetadataJson")
+                        .HasColumnType("jsonb")
+                        .HasColumnName("metadata");
+
+                    b.Property<float?>("MinHeartRate")
+                        .HasColumnType("real")
+                        .HasColumnName("min_heart_rate");
+
+                    b.Property<string>("OriginalId")
+                        .HasMaxLength(255)
+                        .HasColumnType("character varying(255)")
+                        .HasColumnName("original_id");
+
+                    b.Property<long?>("RemSleepMs")
+                        .HasColumnType("bigint")
+                        .HasColumnName("rem_sleep_ms");
+
+                    b.Property<int?>("RestlessPeriods")
+                        .HasColumnType("integer")
+                        .HasColumnName("restless_periods");
+
+                    b.Property<long?>("SleepLatencyMs")
+                        .HasColumnType("bigint")
+                        .HasColumnName("sleep_latency_ms");
+
+                    b.Property<short?>("SleepScore")
+                        .HasColumnType("smallint")
+                        .HasColumnName("sleep_score");
+
+                    b.Property<string>("Source")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)")
+                        .HasColumnName("source");
+
+                    b.Property<string>("SourceApp")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)")
+                        .HasColumnName("source_app");
+
+                    b.Property<string>("SourceDevice")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)")
+                        .HasColumnName("source_device");
+
+                    b.Property<DateTime>("StartTime")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("start_time");
+
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("tenant_id");
+
+                    b.Property<string>("Timezone")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)")
+                        .HasColumnName("timezone");
+
+                    b.Property<long?>("TotalAwakeMs")
+                        .HasColumnType("bigint")
+                        .HasColumnName("total_awake_ms");
+
+                    b.Property<long>("TotalSleepMs")
+                        .HasColumnType("bigint")
+                        .HasColumnName("total_sleep_ms");
+
+                    b.Property<string>("Type")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasColumnName("type");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("TenantId", "StartTime")
+                        .IsDescending(false, true)
+                        .HasDatabaseName("ix_sleep_sessions_tenant_start_time");
+
+                    b.HasIndex("TenantId", "Source", "OriginalId")
+                        .IsUnique()
+                        .HasDatabaseName("ux_sleep_sessions_tenant_source_original")
+                        .HasFilter("original_id IS NOT NULL");
+
+                    b.ToTable("sleep_sessions");
+                });
+
+            modelBuilder.Entity("Nocturne.Infrastructure.Data.Entities.SleepStageEntity", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<DateTime>("EndTime")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("end_time");
+
+                    b.Property<int>("Ordinal")
+                        .HasColumnType("integer")
+                        .HasColumnName("ordinal");
+
+                    b.Property<Guid>("SleepSessionId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("sleep_session_id");
+
+                    b.Property<string>("Stage")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasColumnName("stage");
+
+                    b.Property<DateTime>("StartTime")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("start_time");
+
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("tenant_id");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("SleepSessionId")
+                        .HasDatabaseName("ix_sleep_stages_sleep_session_id");
+
+                    b.HasIndex("TenantId");
+
+                    b.ToTable("sleep_stages");
+                });
+
             modelBuilder.Entity("Nocturne.Infrastructure.Data.Entities.StateSpanEntity", b =>
                 {
                     b.Property<Guid>("Id")
@@ -6675,6 +6914,11 @@ namespace Nocturne.Infrastructure.Data.Migrations
                         .HasColumnType("character varying(64)")
                         .HasColumnName("pronouns");
 
+                    b.Property<string>("Sex")
+                        .HasMaxLength(16)
+                        .HasColumnType("character varying(16)")
+                        .HasColumnName("sex");
+
                     b.Property<DateTime>("SysCreatedAt")
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("sys_created_at");
@@ -8133,6 +8377,49 @@ namespace Nocturne.Infrastructure.Data.Migrations
                         .IsRequired();
                 });
 
+            modelBuilder.Entity("Nocturne.Infrastructure.Data.Entities.SleepBiometricSampleEntity", b =>
+                {
+                    b.HasOne("Nocturne.Infrastructure.Data.Entities.SleepSessionEntity", "SleepSession")
+                        .WithMany("BiometricSamples")
+                        .HasForeignKey("SleepSessionId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("Nocturne.Infrastructure.Data.Entities.TenantEntity", null)
+                        .WithMany()
+                        .HasForeignKey("TenantId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("SleepSession");
+                });
+
+            modelBuilder.Entity("Nocturne.Infrastructure.Data.Entities.SleepSessionEntity", b =>
+                {
+                    b.HasOne("Nocturne.Infrastructure.Data.Entities.TenantEntity", null)
+                        .WithMany()
+                        .HasForeignKey("TenantId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("Nocturne.Infrastructure.Data.Entities.SleepStageEntity", b =>
+                {
+                    b.HasOne("Nocturne.Infrastructure.Data.Entities.SleepSessionEntity", "SleepSession")
+                        .WithMany("Stages")
+                        .HasForeignKey("SleepSessionId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("Nocturne.Infrastructure.Data.Entities.TenantEntity", null)
+                        .WithMany()
+                        .HasForeignKey("TenantId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("SleepSession");
+                });
+
             modelBuilder.Entity("Nocturne.Infrastructure.Data.Entities.StateSpanEntity", b =>
                 {
                     b.HasOne("Nocturne.Infrastructure.Data.Entities.StateSpanEntity", null)
@@ -8789,6 +9076,13 @@ namespace Nocturne.Infrastructure.Data.Migrations
             modelBuilder.Entity("Nocturne.Infrastructure.Data.Entities.RoleEntity", b =>
                 {
                     b.Navigation("SubjectRoles");
+                });
+
+            modelBuilder.Entity("Nocturne.Infrastructure.Data.Entities.SleepSessionEntity", b =>
+                {
+                    b.Navigation("BiometricSamples");
+
+                    b.Navigation("Stages");
                 });
 
             modelBuilder.Entity("Nocturne.Infrastructure.Data.Entities.SubjectEntity", b =>

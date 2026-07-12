@@ -1324,7 +1324,6 @@ public class ChartDataServiceTests
         #region FromActivity
 
         [Theory]
-        [InlineData(StateSpanCategory.Sleep, ChartColor.ActivitySleep)]
         [InlineData(StateSpanCategory.Exercise, ChartColor.ActivityExercise)]
         [InlineData(StateSpanCategory.Illness, ChartColor.ActivityIllness)]
         [InlineData(StateSpanCategory.Travel, ChartColor.ActivityTravel)]

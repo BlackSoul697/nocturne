@@ -193,6 +193,11 @@ export function summarizeCondition(
 			const verb = p.is_active ? `${subject} active` : `${subject} not active`;
 			return p.for_minutes ? `${verb} for ${formatMinutes(p.for_minutes)}` : verb;
 		}
+		case "sleep_session_active": {
+			const p = node.sleep_session_active;
+			if (!p) return "";
+			return p.is_active ? "Sleep session active" : "No sleep session active";
+		}
 		case "tracker_age": {
 			const p = node.tracker_age;
 			if (!p) return "";

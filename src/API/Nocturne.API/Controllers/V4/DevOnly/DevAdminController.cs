@@ -1015,18 +1015,26 @@ public class DevAdminController : ControllerBase
                 tenant.Id, fixtureSubjectId, [ownerRole.Id], label: "dev fixture", ct: ct);
         }
 
-        // 6. Sample data
+        // 6. Mark onboarding complete. The web layout redirects every page to
+        // /setup until Tenant.OnboardingCompletedAt is set; a seeded dev tenant
+        // has nothing left to onboard.
+        var tenantEntity = await _db.Tenants.FirstAsync(t => t.Id == tenant.Id, ct);
+        tenantEntity.OnboardingCompletedAt = DateTime.UtcNow;
+        await _db.SaveChangesAsync(ct);
+
+        // 7. Sample data
         var entriesSeeded = 0;
         var treatmentsSeeded = 0;
+        var sleepSessionsSeeded = 0;
         if (request.SampleData)
         {
-            (entriesSeeded, treatmentsSeeded) = await sampleDataService.SeedAsync(
+            (entriesSeeded, treatmentsSeeded, sleepSessionsSeeded) = await sampleDataService.SeedAsync(
                 new TenantContext(tenant.Id, tenant.Slug, tenant.DisplayName, tenant.IsActive),
                 request.SampleDataDays,
                 ct);
         }
 
-        // 7. Session
+        // 8. Session
         var sessionContext = new SessionContext(
             DeviceDescription: "e2e-test",
             IpAddress: "127.0.0.1",
@@ -1052,7 +1060,8 @@ public class DevAdminController : ControllerBase
             url,
             loginLink,
             entriesSeeded,
-            treatmentsSeeded));
+            treatmentsSeeded,
+            sleepSessionsSeeded));
     }
 
     // ── Sample data ─────────────────────────────────────────────────────────
@@ -1073,12 +1082,12 @@ public class DevAdminController : ControllerBase
         if (tenant is null)
             return NotFound(new { error = $"Tenant {id} not found" });
 
-        var (entries, treatments) = await sampleDataService.SeedAsync(
+        var (entries, treatments, sleepSessions) = await sampleDataService.SeedAsync(
             new TenantContext(tenant.Id, tenant.Slug, tenant.DisplayName, tenant.IsActive),
             request?.Days ?? 7,
             ct);
 
-        return Ok(new { entries, treatments });
+        return Ok(new { entries, treatments, sleepSessions });
     }
 
     // ── Recovery mode ───────────────────────────────────────────────────────
@@ -1236,7 +1245,8 @@ public record DevSeedTenantResponse(
     string? Url = null,
     string? LoginLink = null,
     int EntriesSeeded = 0,
-    int TreatmentsSeeded = 0);
+    int TreatmentsSeeded = 0,
+    int SleepSessionsSeeded = 0);
 
 public record DevSeedSampleDataRequest(int Days = 7);
 

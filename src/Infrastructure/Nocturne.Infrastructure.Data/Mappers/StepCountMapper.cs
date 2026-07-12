@@ -18,7 +18,7 @@ public static class StepCountMapper
         {
             Id = string.IsNullOrEmpty(stepCount.Id)
                 ? Guid.CreateVersion7()
-                : ParseIdToGuid(stepCount.Id),
+                : MapperHelpers.ParseIdToGuid(stepCount.Id),
             OriginalId = MongoIdUtils.IsValidMongoId(stepCount.Id) ? stepCount.Id : null,
             Timestamp = stepCount.Timestamp,
             Metric = stepCount.Metric,
@@ -64,24 +64,5 @@ public static class StepCountMapper
         entity.DataSource = stepCount.DataSource;
         entity.SyncIdentifier = stepCount.SyncIdentifier;
         entity.SysUpdatedAt = DateTime.UtcNow;
-    }
-
-    /// <summary>
-    /// Parse string ID to GUID, or generate a deterministic GUID via hash if invalid
-    /// </summary>
-    private static Guid ParseIdToGuid(string id)
-    {
-        if (string.IsNullOrEmpty(id))
-            return Guid.CreateVersion7();
-
-        if (Guid.TryParse(id, out var guid))
-            return guid;
-
-        var hash = System.Security.Cryptography.SHA1.HashData(
-            System.Text.Encoding.UTF8.GetBytes(id)
-        );
-        var guidBytes = new byte[16];
-        Array.Copy(hash, guidBytes, 16);
-        return new Guid(guidBytes);
     }
 }

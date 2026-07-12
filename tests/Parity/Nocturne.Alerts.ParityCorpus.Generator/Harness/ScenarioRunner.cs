@@ -1,6 +1,7 @@
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using Nocturne.API.Extensions;
 using Nocturne.API.Services.Alerts;
@@ -35,6 +36,7 @@ public sealed class ScenarioRunner
         // single AddAlertEvaluators registration so the corpus can never drift behind the
         // live engine when evaluators are added.
         var services = new ServiceCollection();
+        services.AddLogging();
         services.AddSingleton<TimeProvider>(time);
         services.AddSingleton<IConditionTimerStore>(timerStore);
         services.AddAlertEvaluators();

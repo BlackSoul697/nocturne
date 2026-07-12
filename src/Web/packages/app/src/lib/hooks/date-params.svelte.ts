@@ -235,6 +235,27 @@ export function useDateParams(defaultDays = 7) {
     };
   }
 
+  /**
+   * Effective [from, to] as YYYY-MM-DD strings. Explicit from/to win; otherwise
+   * the window is the last `days` (or defaultDays) ending today.
+   *
+   * The previous per-field `Date.now()` fallback in the getters below collapsed
+   * a params state that had `days` but no explicit from/to (e.g. a `?days=7` URL,
+   * which the init effect copies through as from/to undefined) into a single
+   * today→today range — reported as "N of 1" and anchoring the actograms on today.
+   */
+  function resolveRangeStrings(
+    daysVal: number | null | undefined,
+    fromVal: string | null | undefined,
+    toVal: string | null | undefined,
+  ): { from: string; to: string } {
+    if (fromVal && toVal) return { from: fromVal, to: toVal };
+    const daysCount = daysVal ?? defaultDays;
+    const end = today(getLocalTimeZone());
+    const start = end.subtract({ days: daysCount - 1 });
+    return { from: start.toString(), to: end.toString() };
+  }
+
   return {
     // Reactive properties from runed
     get days() {
@@ -258,24 +279,18 @@ export function useDateParams(defaultDays = 7) {
 
     /** Start of the date range as a Date object. Derived from memoizedInput for stability. */
     get startDate(): Date {
-      const from = memoizedInput.from;
-      return from ? new Date(from) : new Date();
+      return new Date(resolveRangeStrings(memoizedInput.days, memoizedInput.from, memoizedInput.to).from);
     },
 
     /** End of the date range as a Date object. Derived from memoizedInput for stability. */
     get endDate(): Date {
-      const to = memoizedInput.to;
-      return to ? new Date(to) : new Date();
+      return new Date(resolveRangeStrings(memoizedInput.days, memoizedInput.from, memoizedInput.to).to);
     },
 
     /** Date range as Unix milliseconds. Derived from memoizedInput for stability. */
     get dateRangeMillis(): { from: number; to: number } {
-      const from = memoizedInput.from;
-      const to = memoizedInput.to;
-      return {
-        from: from ? new Date(from).getTime() : Date.now(),
-        to: to ? new Date(to).getTime() : Date.now(),
-      };
+      const { from, to } = resolveRangeStrings(memoizedInput.days, memoizedInput.from, memoizedInput.to);
+      return { from: new Date(from).getTime(), to: new Date(to).getTime() };
     },
 
     // Helper methods

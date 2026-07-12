@@ -47,7 +47,8 @@
             "tracker_definition_id": "00000000-0000-0000-0001-000000000001",
             "reference_at": "2026-01-06T00:00:00Z"
           }
-        ]
+        ],
+        "sleep_session_active": false
       }
     },
     {
@@ -66,7 +67,8 @@
             "tracker_definition_id": "00000000-0000-0000-0001-000000000001",
             "reference_at": "2026-01-06T00:00:00Z"
           }
-        ]
+        ],
+        "sleep_session_active": false
       }
     }
   ]

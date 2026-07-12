@@ -5,9 +5,13 @@ using Nocturne.Core.Models;
 namespace Nocturne.Connectors.Tandem.Mappers;
 
 /// <summary>
-/// Maps Tandem user-mode change events (sleep / exercise start and stop) into <see cref="StateSpan"/>
+/// Maps Tandem user-mode change events (exercise start and stop) into <see cref="StateSpan"/>
 /// records by pairing each start with its matching stop within the processed window. Mirrors
 /// <c>tconnectsync</c>'s <c>process_user_mode.py</c>; an unmatched start is left open (no end).
+/// Control-IQ Sleep-mode events are tracked only to close out an open Exercise span on a
+/// "Stop All"; they no longer produce their own span because <c>StateSpanCategory.Sleep</c> was
+/// removed (sleep data lives in the sleep_sessions tables, sourced from wearables/health
+/// platforms — not from a pump activity mode).
 /// </summary>
 public sealed class TandemUserModeMapper(ILogger logger, TandemTimeResolver time)
 {
@@ -19,7 +23,6 @@ public sealed class TandemUserModeMapper(ILogger logger, TandemTimeResolver time
         var ordered = events.OrderBy(e => e.RawTimestampSeconds).ToList();
         var spans = new List<StateSpan>();
 
-        TandemPumpEvent? sleepStart = null;
         TandemPumpEvent? exerciseStart = null;
 
         foreach (var ev in ordered)
@@ -27,25 +30,10 @@ public sealed class TandemUserModeMapper(ILogger logger, TandemTimeResolver time
             var action = ev.EnumName("RequestedAction");
             switch (action)
             {
-                case "Start Sleep":
-                    sleepStart = ev;
-                    break;
                 case "Start Exercise":
                     exerciseStart = ev;
                     break;
-                case "Stop Sleep":
-                case "Stop All" when sleepStart != null:
-                    if (sleepStart != null)
-                    {
-                        spans.Add(BuildSleep(sleepStart, ev));
-                        sleepStart = null;
-                    }
-                    if (action == "Stop All" && exerciseStart != null)
-                    {
-                        spans.Add(BuildExercise(exerciseStart, ev));
-                        exerciseStart = null;
-                    }
-                    break;
+                case "Stop All":
                 case "Stop Exercise":
                     if (exerciseStart != null)
                     {
@@ -56,23 +44,11 @@ public sealed class TandemUserModeMapper(ILogger logger, TandemTimeResolver time
             }
         }
 
-        if (sleepStart != null)
-            spans.Add(BuildSleep(sleepStart, null));
         if (exerciseStart != null)
             spans.Add(BuildExercise(exerciseStart, null));
 
         _logger.LogDebug("Mapped {Count} Tandem user-mode state spans", spans.Count);
         return spans;
-    }
-
-    private StateSpan BuildSleep(TandemPumpEvent start, TandemPumpEvent? stop)
-    {
-        var state = start.EnumName("SleepStartedByGUI") == "TRUE"
-            ? "Sleep (Manual)"
-            : start.Bits("ActiveSleepSchedule").Count > 0
-                ? "Sleep (Scheduled)"
-                : "Sleep";
-        return Build(StateSpanCategory.Sleep, state, start, stop);
     }
 
     private StateSpan BuildExercise(TandemPumpEvent start, TandemPumpEvent? stop)

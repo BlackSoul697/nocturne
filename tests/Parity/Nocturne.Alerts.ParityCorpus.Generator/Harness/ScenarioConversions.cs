@@ -109,6 +109,7 @@ public static class ScenarioConversions
                     t => t.TrackerDefinitionId,
                     t => Utc(t.ReferenceAt)!.Value)
                 ?? new Dictionary<Guid, DateTime>(),
+            SleepSessionActive = ctx.SleepSessionActive,
         };
     }
 
