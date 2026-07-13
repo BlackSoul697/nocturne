@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using Moq;
+using Nocturne.Core.Contracts.Audit;
 using Nocturne.Core.Contracts.Multitenancy;
 using Nocturne.Infrastructure.Data.Services;
 using Xunit;
@@ -126,6 +127,46 @@ public class TenantDbContextFactoryTests
         await using var result = await factory.CreateAsync();
 
         result.IsShareContext.Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task CreateAsync_StampsScopedAuditContext()
+    {
+        // The MutationAuditInterceptor resolves the audit context via IHttpContextAccessor,
+        // which is null in background services (connector syncs), where it falls back to
+        // NocturneDbContext.AuditContext. Without this stamping, every V4 repository write
+        // from a background scope was audited as a null-attributed user mutation (~1.5M
+        // mutation_audit_log rows/day in production) instead of being skipped as system.
+        var auditContext = Mock.Of<IAuditContext>(a => a.IsSystem == true);
+
+        var factory = new TenantDbContextFactory(
+            NewPool().Object, ResolvedAccessor(Guid.NewGuid()).Object, categoryReadContext: null,
+            auditContext: auditContext);
+        await using var result = await factory.CreateAsync();
+
+        result.AuditContext.Should().BeSameAs(auditContext);
+    }
+
+    [Fact]
+    public async Task CreateAsync_NoAuditContext_ClearsStaleAuditContextFromPooledContext()
+    {
+        // Pooling does not reset custom properties: assign unconditionally so a context that
+        // last served an attributed scope cannot leak that attribution into the next lease.
+        var options = new DbContextOptionsBuilder<NocturneDbContext>()
+            .UseInMemoryDatabase(Guid.NewGuid().ToString())
+            .Options;
+        var pooled = new NocturneDbContext(options)
+        {
+            AuditContext = Mock.Of<IAuditContext>(),
+        };
+        var pool = new Mock<IDbContextFactory<NocturneDbContext>>();
+        pool.Setup(f => f.CreateDbContextAsync(It.IsAny<CancellationToken>())).ReturnsAsync(pooled);
+
+        var factory = new TenantDbContextFactory(
+            pool.Object, ResolvedAccessor(Guid.NewGuid()).Object, categoryReadContext: null);
+        await using var result = await factory.CreateAsync();
+
+        result.AuditContext.Should().BeNull();
     }
 
     [Fact]

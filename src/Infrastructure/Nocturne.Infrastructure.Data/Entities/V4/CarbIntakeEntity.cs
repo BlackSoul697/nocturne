@@ -60,6 +60,7 @@ public class CarbIntakeEntity : ITenantScoped, IAuditable, ISoftDeletable, IV4Ti
     /// <summary>
     /// Links records that were split from the same legacy Treatment
     /// </summary>
+    [AuditIgnored]
     [Column("correlation_id")]
     public Guid? CorrelationId { get; set; }
 

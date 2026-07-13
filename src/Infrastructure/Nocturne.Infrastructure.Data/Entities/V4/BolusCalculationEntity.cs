@@ -60,6 +60,7 @@ public class BolusCalculationEntity : ITenantScoped, IAuditable, ISoftDeletable,
     /// <summary>
     /// Links records that were split from the same legacy Treatment
     /// </summary>
+    [AuditIgnored]
     [Column("correlation_id")]
     public Guid? CorrelationId { get; set; }
 

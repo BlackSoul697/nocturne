@@ -67,6 +67,7 @@ public class BasalInjectionEntity : ITenantScoped, IAuditable, ISoftDeletable, I
     /// <summary>
     /// Links records that were split from the same legacy Treatment
     /// </summary>
+    [AuditIgnored]
     [Column("correlation_id")]
     public Guid? CorrelationId { get; set; }
 
@@ -126,6 +127,7 @@ public class BasalInjectionEntity : ITenantScoped, IAuditable, ISoftDeletable, I
     /// Soft-delete timestamp. When non-null, the record is treated as deleted
     /// by the global query filter and is invisible above the repository layer.
     /// </summary>
+    [AuditIgnored]
     [Column("deleted_at")]
     public DateTime? DeletedAt { get; set; }
 }

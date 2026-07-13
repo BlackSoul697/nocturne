@@ -60,6 +60,7 @@ public class SensorGlucoseEntity : ITenantScoped, IAuditable, ISoftDeletable, IV
     /// <summary>
     /// Links records that were split from the same legacy Treatment
     /// </summary>
+    [AuditIgnored]
     [Column("correlation_id")]
     public Guid? CorrelationId { get; set; }
 
