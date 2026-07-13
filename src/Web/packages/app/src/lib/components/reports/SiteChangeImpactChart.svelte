@@ -157,7 +157,6 @@
         data={chartData}
         x={(d) => d.minutesFromChange}
         y={(d) => d.medianGlucose}
-        renderContext="svg"
         {xDomain}
         {yDomain}
         series={[
@@ -211,7 +210,7 @@
           },
         ]}
         seriesLayout="overlap"
-        tooltip={{ mode: "bisect-x" }}
+        tooltipContext={{ mode: "bisect-x" }}
         props={{
           area: { motion: { type: "tween", duration: 200 } },
           xAxis: {

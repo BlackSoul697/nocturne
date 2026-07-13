@@ -215,7 +215,7 @@
       cDomain={[...rangeKeys]}
       cRange={rangeKeys.map((k) => rangeMeta[k].color)}
       padding={chartPadding}
-      tooltip={{ mode: "band" }}
+      tooltipContext={{ mode: "band" }}
     >
       {#snippet children({ context })}
         {@const rawLabelYs = rangeKeys.map((key) => {

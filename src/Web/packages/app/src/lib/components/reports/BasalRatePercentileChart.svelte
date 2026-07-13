@@ -67,7 +67,6 @@
         data={chartData}
         x={(d) => d.hour}
         y={(d) => d.median}
-        renderContext="svg"
         series={[
           {
             key: "p10",
@@ -121,7 +120,7 @@
         xDomain={[0, 23]}
         yDomain={[0, maxRate]}
         seriesLayout="overlap"
-        tooltip={{ mode: "bisect-x" }}
+        tooltipContext={{ mode: "bisect-x" }}
         props={{
           xAxis: {
             tickMultiline: true,

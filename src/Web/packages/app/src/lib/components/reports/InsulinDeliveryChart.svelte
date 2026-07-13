@@ -158,7 +158,6 @@
         data={chartData}
         x={(d) => d.hour}
         y={(d) => d.total}
-        renderContext="svg"
         series={showStacked
           ? [
               // Show scheduled basal, temp basal adjustments, and bolus as stacked
@@ -215,7 +214,7 @@
         xDomain={[0, 23]}
         yDomain={[0, maxInsulin]}
         seriesLayout={showStacked ? "stack" : "overlap"}
-        tooltip={{ mode: "bisect-x" }}
+        tooltipContext={{ mode: "bisect-x" }}
         props={{
           xAxis: {
             format: formatHour,

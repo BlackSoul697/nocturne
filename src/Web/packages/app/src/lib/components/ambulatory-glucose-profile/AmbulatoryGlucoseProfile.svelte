@@ -12,6 +12,7 @@
     formatHour as _formatHour,
     transformStats,
     AGP_LOW_THRESHOLD,
+    type AgpDataPoint,
   } from "./agp-utils";
 
   let {
@@ -60,24 +61,29 @@
     {data}
     x={(d) => d.hour}
     y={(d) => d.median}
-    renderContext="svg"
     legend
     series={[
       {
         key: "p10",
-        value: [(d) => d.percentiles?.p25, (d) => d.percentiles?.p10],
+        value: [
+          (d: AgpDataPoint) => d.percentiles?.p25,
+          (d: AgpDataPoint) => d.percentiles?.p10,
+        ],
         color: BAND_OUTER,
         label: "P10",
       },
       {
         key: "p25",
-        value: [(d) => d.median, (d) => d.percentiles?.p25],
+        value: [
+          (d: AgpDataPoint) => d.median,
+          (d: AgpDataPoint) => d.percentiles?.p25,
+        ],
         color: BAND_INNER,
         label: "P25",
       },
       {
         key: "median",
-        value: [(d) => d.median, (d) => d.median],
+        value: [(d: AgpDataPoint) => d.median, (d: AgpDataPoint) => d.median],
         color: MEDIAN_COLOR,
         props: {
           line: { strokeWidth: 1.75 },
@@ -86,13 +92,19 @@
       },
       {
         key: "percentiles.p75",
-        value: [(d) => d.median, (d) => d.percentiles?.p75],
+        value: [
+          (d: AgpDataPoint) => d.median,
+          (d: AgpDataPoint) => d.percentiles?.p75,
+        ],
         color: BAND_INNER,
         label: "P75",
       },
       {
         key: "p90",
-        value: [(d) => d.percentiles?.p75, (d) => d.percentiles?.p90],
+        value: [
+          (d: AgpDataPoint) => d.percentiles?.p75,
+          (d: AgpDataPoint) => d.percentiles?.p90,
+        ],
         color: BAND_OUTER,
         label: "P90",
       },
@@ -152,16 +164,7 @@
     {#snippet tooltip({ context })}
       <Tooltip.Root {context}>
         {#snippet children({ data })}
-          {@const d = data as (typeof data) & {
-            hour: number;
-            median: number;
-            percentiles?: {
-              p10: number;
-              p25: number;
-              p75: number;
-              p90: number;
-            };
-          }}
+          {@const d = data as AgpDataPoint & { hour: number }}
           <Tooltip.Header value={`${formatHour(d.hour)} · ${bgLabel()}`} />
           <Tooltip.List>
             <Tooltip.Item

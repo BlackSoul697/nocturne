@@ -140,7 +140,6 @@
         innerRadius={-30}
         cornerRadius={3}
         padAngle={0.02}
-        renderContext={"svg"}
         onArcClick={handleArcClick}
         props={{
           arc: {

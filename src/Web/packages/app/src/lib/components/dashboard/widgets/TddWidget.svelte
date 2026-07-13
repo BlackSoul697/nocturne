@@ -87,7 +87,6 @@
               innerRadius={-20}
               cornerRadius={2}
               padAngle={0.02}
-              renderContext={"svg"}
             >
               {#snippet aboveMarks()}
                 <Text
