@@ -605,53 +605,63 @@ class Program
             ? ForwardedTransformActions.Set
             : ForwardedTransformActions.Off;
 
+        // In publish mode, also keep the incoming Host on the proxied request.
+        // With X-Forwarded Off, YARP's default Host rewrite (to the destination
+        // service name) discards the only copy of the public host when nothing
+        // is in front of the gateway — e.g. the byo-proxy bundle accessed
+        // directly on :8080 before a proxy is set up — leaving the API and the
+        // web app to resolve tenants and reconstruct origins against
+        // cluster-internal hostnames. Caddy and compliant byo proxies pass the
+        // original Host through, so the preserved value always matches
+        // X-Forwarded-Host when an edge is present. In run mode YARP already
+        // Sets X-Forwarded-Host, and the Vite dev server validates Host, so the
+        // default rewrite stays.
+        var preserveOriginalHost = !builder.ExecutionContext.IsRunMode;
+
+        void ApplyEdgeTransforms(YarpRoute route)
+        {
+            route.WithTransformXForwarded("X-Forwarded-", xForwardedAction);
+            if (preserveOriginalHost)
+            {
+                route.WithTransformUseOriginalHostHeader(true);
+            }
+        }
+
         gateway
             .WaitFor(api)
             .WaitFor(web)
             .WithConfiguration(yarp =>
             {
                 // OIDC callback on apex → API (must come before /api/ → web catch-all)
-                yarp.AddRoute("/api/auth/oidc/{**catch-all}", api.GetEndpoint("http"))
-                    .WithTransformXForwarded("X-Forwarded-", xForwardedAction);
+                ApplyEdgeTransforms(yarp.AddRoute("/api/auth/oidc/{**catch-all}", api.GetEndpoint("http")));
 
                 // OAuth endpoints → API (must bypass SvelteKit CSRF for external clients)
-                yarp.AddRoute("/api/oauth/{**catch-all}", api.GetEndpoint("http"))
-                    .WithTransformXForwarded("X-Forwarded-", xForwardedAction);
+                ApplyEdgeTransforms(yarp.AddRoute("/api/oauth/{**catch-all}", api.GetEndpoint("http")));
 
                 // Dev-only admin endpoints → API (not remote functions)
-                yarp.AddRoute("/api/v4/dev-only/{**catch-all}", api.GetEndpoint("http"))
-                    .WithTransformXForwarded("X-Forwarded-", xForwardedAction);
+                ApplyEdgeTransforms(yarp.AddRoute("/api/v4/dev-only/{**catch-all}", api.GetEndpoint("http")));
 
                 // Platform-admin tenant-access grant → API (sets the .basedomain grant cookie on a
                 // browser navigation; must come before /api/ → web catch-all)
-                yarp.AddRoute("/api/auth/platform-access/{**catch-all}", api.GetEndpoint("http"))
-                    .WithTransformXForwarded("X-Forwarded-", xForwardedAction);
-                yarp.AddRoute("/api/auth/platform-access", api.GetEndpoint("http"))
-                    .WithTransformXForwarded("X-Forwarded-", xForwardedAction);
+                ApplyEdgeTransforms(yarp.AddRoute("/api/auth/platform-access/{**catch-all}", api.GetEndpoint("http")));
+                ApplyEdgeTransforms(yarp.AddRoute("/api/auth/platform-access", api.GetEndpoint("http")));
 
                 // Bot webhooks, remote functions → web
-                yarp.AddRoute("/api/{**catch-all}", webEndpoints.GetEndpoint("http"))
-                    .WithTransformXForwarded("X-Forwarded-", xForwardedAction);
+                ApplyEdgeTransforms(yarp.AddRoute("/api/{**catch-all}", webEndpoints.GetEndpoint("http")));
 
                 // Bot account linking
-                yarp.AddRoute("/auth/bot/{**catch-all}", webEndpoints.GetEndpoint("http"))
-                    .WithTransformXForwarded("X-Forwarded-", xForwardedAction);
+                ApplyEdgeTransforms(yarp.AddRoute("/auth/bot/{**catch-all}", webEndpoints.GetEndpoint("http")));
 
                 // API docs (Scalar UI) — served directly by the API via Scalar.AspNetCore
-                yarp.AddRoute("/scalar", api.GetEndpoint("http"))
-                    .WithTransformXForwarded("X-Forwarded-", xForwardedAction);
-                yarp.AddRoute("/scalar/{**catch-all}", api.GetEndpoint("http"))
-                    .WithTransformXForwarded("X-Forwarded-", xForwardedAction);
-                yarp.AddRoute("/openapi/{**catch-all}", api.GetEndpoint("http"))
-                    .WithTransformXForwarded("X-Forwarded-", xForwardedAction);
+                ApplyEdgeTransforms(yarp.AddRoute("/scalar", api.GetEndpoint("http")));
+                ApplyEdgeTransforms(yarp.AddRoute("/scalar/{**catch-all}", api.GetEndpoint("http")));
+                ApplyEdgeTransforms(yarp.AddRoute("/openapi/{**catch-all}", api.GetEndpoint("http")));
 
                 // OAuth/OIDC discovery endpoints → API
-                yarp.AddRoute("/.well-known/{**catch-all}", api.GetEndpoint("http"))
-                    .WithTransformXForwarded("X-Forwarded-", xForwardedAction);
+                ApplyEdgeTransforms(yarp.AddRoute("/.well-known/{**catch-all}", api.GetEndpoint("http")));
 
                 // Fallback → web (includes Socket.IO websockets, HMR, all frontend routes)
-                yarp.AddRoute(webEndpoints.GetEndpoint("http"))
-                    .WithTransformXForwarded("X-Forwarded-", xForwardedAction);
+                ApplyEdgeTransforms(yarp.AddRoute(webEndpoints.GetEndpoint("http")));
             });
 
         // ------------------------------------------------------------------
