@@ -86,6 +86,5 @@ public static class PatientDeviceMapper
         entity.IsCurrent = model.IsCurrent;
         entity.Rank = model.Rank;
         entity.Notes = model.Notes;
-        entity.SysUpdatedAt = DateTime.UtcNow;
     }
 }

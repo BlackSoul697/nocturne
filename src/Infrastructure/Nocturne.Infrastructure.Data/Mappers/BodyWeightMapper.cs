@@ -69,6 +69,5 @@ public static class BodyWeightMapper
         entity.UtcOffset = bodyWeight.UtcOffset;
         entity.DataSource = bodyWeight.DataSource;
         entity.SyncIdentifier = bodyWeight.SyncIdentifier;
-        entity.SysUpdatedAt = DateTime.UtcNow;
     }
 }

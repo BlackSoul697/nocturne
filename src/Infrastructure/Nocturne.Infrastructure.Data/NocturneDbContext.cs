@@ -621,6 +621,25 @@ public class NocturneDbContext : DbContext, IDataProtectionKeyContext
                 idProperty.SetColumnName("id");
             }
         }
+
+        // Postgres normalizes jsonb on write (key order, whitespace), so a jsonb-backed string
+        // read back never equals the app's compact serialization byte-for-byte. Compare these
+        // columns semantically so an unchanged round-trip is not flagged as a modification.
+        // Guarded on relational: the InMemory test provider has no column types (and no jsonb
+        // normalization to compensate for).
+        if (Database.IsRelational())
+        {
+            foreach (var entityType in modelBuilder.Model.GetEntityTypes())
+            {
+                foreach (var property in entityType.GetProperties())
+                {
+                    if (property.ClrType == typeof(string) && property.GetColumnType() == "jsonb")
+                    {
+                        property.SetValueComparer(JsonbStringComparer.Instance);
+                    }
+                }
+            }
+        }
     }
 
     private static void ConfigureIndexes(ModelBuilder modelBuilder)
@@ -3174,12 +3193,18 @@ public class NocturneDbContext : DbContext, IDataProtectionKeyContext
 
             EnforceTenantOwnership(entry, isAdded);
 
+            // Update timestamps are stamped on insert and on real modifications only. An
+            // unchanged tracked row is left alone rather than rewritten on every save, and a row
+            // whose only modified properties are these bookkeeping timestamps (a deliberate
+            // "touch") keeps the value the caller assigned.
+            var stampUpdated = isAdded || HasNonTimestampModification(entry);
+
             // System tracking columns (sys_created_at / sys_updated_at) on tenant data.
             if (isAdded && entry.Entity is ISystemCreated systemCreated)
             {
                 systemCreated.SysCreatedAt = utcNow;
             }
-            if (entry.Entity is ISystemTimestamped systemTimestamped)
+            if (stampUpdated && entry.Entity is ISystemTimestamped systemTimestamped)
             {
                 systemTimestamped.SysUpdatedAt = utcNow;
             }
@@ -3189,14 +3214,25 @@ public class NocturneDbContext : DbContext, IDataProtectionKeyContext
             {
                 entityCreated.CreatedAt = utcNow;
             }
-            if (entry.Entity is IEntityTimestamped entityTimestamped)
+            if (stampUpdated && entry.Entity is IEntityTimestamped entityTimestamped)
             {
                 entityTimestamped.UpdatedAt = utcNow;
             }
 
-            ApplyEntitySpecificTimestamps(entry.Entity, isAdded, utcNow);
+            ApplyEntitySpecificTimestamps(entry.Entity, isAdded, stampUpdated, utcNow);
         }
     }
+
+    /// <summary>
+    /// True if the entry has a modified property other than the update-timestamp bookkeeping
+    /// columns managed by <see cref="UpdateTimestamps"/>.
+    /// </summary>
+    private static bool HasNonTimestampModification(EntityEntry entry)
+        => entry.State == EntityState.Modified
+            && entry.Properties.Any(p =>
+                p.IsModified
+                && p.Metadata.Name != nameof(ISystemTimestamped.SysUpdatedAt)
+                && p.Metadata.Name != nameof(IEntityTimestamped.UpdatedAt));
 
     /// <summary>
     /// Enforces tenant ownership on a tracked entity: stamps the resolved tenant on new
@@ -3236,12 +3272,12 @@ public class NocturneDbContext : DbContext, IDataProtectionKeyContext
     /// Applies timestamps for the few entities whose columns do not follow either the
     /// sys_* or created_at/updated_at conventions covered by the marker interfaces.
     /// </summary>
-    private static void ApplyEntitySpecificTimestamps(object entity, bool isAdded, DateTime utcNow)
+    private static void ApplyEntitySpecificTimestamps(object entity, bool isAdded, bool stampUpdated, DateTime utcNow)
     {
         switch (entity)
         {
-            // Nullable updated_at, set on every save alongside its ISystemTimestamped stamps.
-            case ClockFaceEntity clockFace:
+            // Nullable updated_at, set alongside its ISystemTimestamped stamps.
+            case ClockFaceEntity clockFace when stampUpdated:
                 clockFace.UpdatedAt = utcNow;
                 break;
             // Mirror of sys_created_at on a DateTimeOffset column, set on insert only.

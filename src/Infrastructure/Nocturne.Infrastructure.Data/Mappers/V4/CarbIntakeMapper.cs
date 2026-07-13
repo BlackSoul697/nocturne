@@ -81,7 +81,6 @@ public static class CarbIntakeMapper
         entity.DataSource = model.DataSource;
         entity.CorrelationId = model.CorrelationId;
         entity.LegacyId = model.LegacyId;
-        entity.SysUpdatedAt = DateTime.UtcNow;
         entity.Carbs = model.Carbs;
         entity.SyncIdentifier = model.SyncIdentifier;
         entity.CarbTime = model.CarbTime;

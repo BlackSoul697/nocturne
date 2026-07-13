@@ -98,7 +98,6 @@ public static class TempBasalMapper
         entity.DataSource = model.DataSource;
         entity.CorrelationId = model.CorrelationId;
         entity.LegacyId = model.LegacyId;
-        entity.SysUpdatedAt = DateTime.UtcNow;
         entity.Rate = model.Rate;
         entity.ScheduledRate = model.ScheduledRate;
         entity.Origin = model.Origin.ToString();

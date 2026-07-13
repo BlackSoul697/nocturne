@@ -124,7 +124,6 @@ public static class ApsSnapshotMapper
         entity.CorrelationId = model.CorrelationId;
         entity.LegacyId = model.LegacyId;
         entity.DataSource = model.DataSource;
-        entity.SysUpdatedAt = DateTime.UtcNow;
         entity.AidAlgorithm = model.AidAlgorithm.ToString();
         entity.Iob = model.Iob;
         entity.BasalIob = model.BasalIob;

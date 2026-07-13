@@ -73,6 +73,5 @@ public static class StateSpanMapper
             ? JsonSerializer.Serialize(stateSpan.Metadata)
             : null;
         entity.OriginalId = stateSpan.OriginalId;
-        entity.UpdatedAt = DateTime.UtcNow;
     }
 }

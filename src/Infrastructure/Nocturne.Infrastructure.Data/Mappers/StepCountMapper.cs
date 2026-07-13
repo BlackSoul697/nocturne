@@ -63,6 +63,5 @@ public static class StepCountMapper
         entity.UtcOffset = stepCount.UtcOffset;
         entity.DataSource = stepCount.DataSource;
         entity.SyncIdentifier = stepCount.SyncIdentifier;
-        entity.SysUpdatedAt = DateTime.UtcNow;
     }
 }

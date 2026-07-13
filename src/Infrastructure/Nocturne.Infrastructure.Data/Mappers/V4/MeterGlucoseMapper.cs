@@ -78,7 +78,6 @@ public static class MeterGlucoseMapper
         entity.CorrelationId = model.CorrelationId;
         entity.LegacyId = model.LegacyId;
         entity.PatientDeviceId = model.PatientDeviceId;
-        entity.SysUpdatedAt = DateTime.UtcNow;
         entity.Mgdl = model.Mgdl;
         entity.AdditionalPropertiesJson = model.AdditionalProperties is { Count: > 0 }
             ? JsonSerializer.Serialize(model.AdditionalProperties)

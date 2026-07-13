@@ -109,7 +109,6 @@ public static class BolusMapper
         entity.DataSource = model.DataSource;
         entity.CorrelationId = model.CorrelationId;
         entity.LegacyId = model.LegacyId;
-        entity.SysUpdatedAt = DateTime.UtcNow;
         entity.Insulin = model.Insulin;
         entity.Programmed = model.Programmed;
         entity.Delivered = model.Delivered;

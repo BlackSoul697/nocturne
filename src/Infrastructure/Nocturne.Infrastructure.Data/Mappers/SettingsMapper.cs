@@ -95,7 +95,6 @@ public static class SettingsMapper
         entity.Version = settings.Version;
         entity.IsActive = settings.IsActive;
         entity.Notes = settings.Notes;
-        entity.SysUpdatedAt = DateTime.UtcNow;
     }
 
     /// <summary>

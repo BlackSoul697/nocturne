@@ -55,6 +55,64 @@ public class UpdateTimestampsTests
     }
 
     [Fact]
+    public async Task SystemTimestamped_UnchangedTrackedRow_IsNotBumpedByAnotherRowsSave()
+    {
+        var options = NewStore();
+        var tenantId = Guid.NewGuid();
+        var idA = Guid.CreateVersion7();
+        var idB = Guid.CreateVersion7();
+
+        await using (var ctx = new NocturneDbContext(options) { TenantId = tenantId })
+        {
+            ctx.Foods.AddRange(new FoodEntity { Id = idA }, new FoodEntity { Id = idB });
+            await ctx.SaveChangesAsync();
+        }
+
+        await using (var ctx = new NocturneDbContext(options) { TenantId = tenantId })
+        {
+            var changed = await ctx.Foods.SingleAsync(f => f.Id == idA);
+            var untouched = await ctx.Foods.SingleAsync(f => f.Id == idB);
+            var untouchedStamp = untouched.SysUpdatedAt;
+
+            changed.Name = "changed";
+            await Task.Delay(5);
+            await ctx.SaveChangesAsync();
+
+            untouched.SysUpdatedAt.Should().Be(untouchedStamp,
+                "a tracked row with no modifications is not rewritten by an unrelated save");
+        }
+    }
+
+    [Fact]
+    public async Task SystemTimestamped_TimestampOnlyModification_KeepsTheAssignedValue()
+    {
+        var options = NewStore();
+        var tenantId = Guid.NewGuid();
+        var id = Guid.CreateVersion7();
+
+        await using (var ctx = new NocturneDbContext(options) { TenantId = tenantId })
+        {
+            ctx.Foods.Add(new FoodEntity { Id = id });
+            await ctx.SaveChangesAsync();
+        }
+
+        await using (var ctx = new NocturneDbContext(options) { TenantId = tenantId })
+        {
+            var food = await ctx.Foods.SingleAsync();
+            // A deliberate "touch": the caller-assigned value must survive, not be re-stamped.
+            food.SysUpdatedAt = Stale;
+            await ctx.SaveChangesAsync();
+        }
+
+        await using (var verify = new NocturneDbContext(options) { TenantId = tenantId })
+        {
+            var food = await verify.Foods.SingleAsync();
+            food.SysUpdatedAt.Should().Be(Stale,
+                "a modification consisting only of the update timestamp keeps the assigned value");
+        }
+    }
+
+    [Fact]
     public async Task SystemCreated_StampsCreatedOnInsertOnly()
     {
         var options = NewStore();

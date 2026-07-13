@@ -78,6 +78,5 @@ public static class PatientRecordMapper
         entity.Pronouns = model.Pronouns;
         entity.AvatarUrl = model.AvatarUrl;
         entity.Timezone = model.Timezone;
-        entity.SysUpdatedAt = DateTime.UtcNow;
     }
 }

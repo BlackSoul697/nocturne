@@ -88,7 +88,6 @@ public static class DeviceEventMapper
         entity.DataSource = model.DataSource;
         entity.CorrelationId = model.CorrelationId;
         entity.LegacyId = model.LegacyId;
-        entity.SysUpdatedAt = DateTime.UtcNow;
         entity.EventType = model.EventType.ToString();
         entity.Notes = model.Notes;
         entity.SyncIdentifier = model.SyncIdentifier;

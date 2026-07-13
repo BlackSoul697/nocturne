@@ -63,6 +63,5 @@ public static class HeartRateMapper
         entity.UtcOffset = heartRate.UtcOffset;
         entity.DataSource = heartRate.DataSource;
         entity.SyncIdentifier = heartRate.SyncIdentifier;
-        entity.SysUpdatedAt = DateTime.UtcNow;
     }
 }

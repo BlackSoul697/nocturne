@@ -89,7 +89,6 @@ public static class FoodMapper
         entity.HideAfterUse = food.HideAfterUse;
         entity.Hidden = food.Hidden;
         entity.Position = food.Position;
-        entity.SysUpdatedAt = DateTime.UtcNow;
     }
 
     /// <summary>

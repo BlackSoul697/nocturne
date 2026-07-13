@@ -81,7 +81,6 @@ public static class NoteMapper
         entity.DataSource = model.DataSource;
         entity.CorrelationId = model.CorrelationId;
         entity.LegacyId = model.LegacyId;
-        entity.SysUpdatedAt = DateTime.UtcNow;
         entity.Text = model.Text;
         entity.EventType = model.EventType;
         entity.IsAnnouncement = model.IsAnnouncement;

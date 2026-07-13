@@ -114,7 +114,6 @@ public static class TherapySettingsMapper
         entity.DataSource = model.DataSource;
         entity.CorrelationId = model.CorrelationId;
         entity.LegacyId = model.LegacyId;
-        entity.SysUpdatedAt = DateTime.UtcNow;
         entity.ProfileName = model.ProfileName;
         entity.Timezone = model.Timezone;
         entity.Units = model.Units;
