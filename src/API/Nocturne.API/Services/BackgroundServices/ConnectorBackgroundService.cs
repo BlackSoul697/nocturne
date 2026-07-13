@@ -2,6 +2,7 @@ using System.Collections.Concurrent;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
+using Nocturne.API.Services.Audit;
 using Nocturne.Connectors.Core.Interfaces;
 using Nocturne.Connectors.Core.Models;
 using Nocturne.Core.Contracts.Audit;
@@ -291,6 +292,13 @@ public abstract class ConnectorBackgroundService<TConfig> : BackgroundService
         // Populate audit context so mutations are attributed to this connector
         var dbContext = scope.ServiceProvider.GetRequiredService<NocturneDbContext>();
         dbContext.AuditContext = SystemAuditContext.ForService($"connector:{ConnectorName}");
+
+        // TenantDbContextFactory stamps the scoped IAuditContext onto every context it
+        // creates for the V4 repositories, and in a background scope that context is a
+        // blank user context (IsSystem = false) — without this push, their writes are
+        // audited as null-attributed user mutations instead of being skipped as system.
+        using var systemScope = SystemAuditScope.Push(
+            scope.ServiceProvider.GetRequiredService<IAuditContext>());
 
         // Pin the RLS tenant on the scoped DbContext. NocturneDbContext is pooled and the
         // CarrierResettingDbContextFactory leases it with TenantId reset to Guid.Empty; the scoped

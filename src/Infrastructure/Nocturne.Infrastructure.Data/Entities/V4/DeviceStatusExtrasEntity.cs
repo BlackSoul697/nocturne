@@ -27,6 +27,7 @@ public class DeviceStatusExtrasEntity : ITenantScoped, IAuditable, ISoftDeletabl
     /// <summary>
     /// Links back to the originating DeviceStatus decomposition batch
     /// </summary>
+    [AuditIgnored]
     [Column("correlation_id")]
     public Guid CorrelationId { get; set; }
 
@@ -45,12 +46,14 @@ public class DeviceStatusExtrasEntity : ITenantScoped, IAuditable, ISoftDeletabl
     /// <summary>
     /// System tracking: when record was inserted
     /// </summary>
+    [AuditIgnored]
     [Column("sys_created_at")]
     public DateTime SysCreatedAt { get; set; } = DateTime.UtcNow;
 
     /// <summary>
     /// System tracking: when record was last updated
     /// </summary>
+    [AuditIgnored]
     [Column("sys_updated_at")]
     public DateTime SysUpdatedAt { get; set; } = DateTime.UtcNow;
 

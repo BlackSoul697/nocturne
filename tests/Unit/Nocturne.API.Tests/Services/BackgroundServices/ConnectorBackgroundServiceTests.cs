@@ -4,9 +4,11 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using Moq;
+using Nocturne.API.Services.Audit;
 using Nocturne.API.Services.BackgroundServices;
 using Nocturne.Connectors.Core.Interfaces;
 using Nocturne.Connectors.Core.Models;
+using Nocturne.Core.Contracts.Audit;
 using Nocturne.Core.Contracts.Connectors;
 using Nocturne.Core.Contracts.Multitenancy;
 using Nocturne.Infrastructure.Data;
@@ -213,6 +215,10 @@ public class ConnectorBackgroundServiceTests
         });
 
         services.AddScoped<IConnectorConfigurationService>(_ => configServiceMock.Object);
+
+        // Mirrors the production registration (Program.cs) — the sync scope resolves
+        // the mutable scoped AuditContext to mark it system for the sync's duration.
+        services.AddScoped<IAuditContext, AuditContext>();
 
         // Register config loader that returns the test config
         services.AddScoped<IConnectorConfigurationLoader<TestConnectorConfig>>(
@@ -553,6 +559,56 @@ public class ConnectorBackgroundServiceTests
         // Assert — the scoped DbContext the connector services share must be pinned to the synced
         // tenant so RLS scopes correctly.
         Assert.Equal(tenantId, capturedTenantId);
+    }
+
+    [Fact]
+    public async Task SyncForTenant_MarksScopedAuditContextAsSystem()
+    {
+        // Regression test for the mutation_audit_log firehose: V4 repositories stamp their
+        // factory-created DbContexts from the scoped IAuditContext (V4RepositoryBase), not from
+        // the scoped NocturneDbContext the sync annotates. A background scope's AuditContext is
+        // a blank user context (IsSystem = false), so every connector upsert was audited with
+        // null attribution — ~1.5M rows/day in production — instead of being skipped as a
+        // system mutation.
+        var (cleanup, connStr) = CreateSqliteDb();
+        using var _ = cleanup;
+
+        var syncResult = new SyncResult { Success = true, Message = "OK" };
+
+        var configServiceMock = new Mock<IConnectorConfigurationService>();
+        configServiceMock
+            .Setup(x => x.GetConfigurationAsync("TestConnector", It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new ConnectorConfigurationResponse
+            {
+                ConnectorName = "TestConnector",
+                IsActive = true,
+                Configuration = JsonDocument.Parse("{\"enabled\": true, \"syncIntervalMinutes\": 5}")
+            });
+        configServiceMock
+            .Setup(x => x.GetSecretsAsync("TestConnector", It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new Dictionary<string, string>());
+        configServiceMock
+            .Setup(x => x.UpdateHealthStateAsync(
+                It.IsAny<string>(), It.IsAny<DateTime?>(), It.IsAny<DateTime?>(),
+                It.IsAny<string?>(), It.IsAny<DateTime?>(), It.IsAny<bool?>(),
+                It.IsAny<CancellationToken>()))
+            .Returns(Task.CompletedTask);
+
+        var config = new TestConnectorConfig { Enabled = true, SyncIntervalMinutes = 5 };
+        var serviceProvider = BuildServiceProvider(connStr, configServiceMock, config);
+
+        bool? capturedIsSystem = null;
+        var sut = new TestConnectorBackgroundService(
+            serviceProvider,
+            syncResult,
+            NullLogger<TestConnectorBackgroundService>.Instance,
+            onSyncScope: sp => capturedIsSystem = sp.GetRequiredService<IAuditContext>().IsSystem);
+
+        // Act
+        await sut.ExecuteOnceAsync(CancellationToken.None);
+
+        // Assert — everything written during the sync must carry system attribution.
+        Assert.True(capturedIsSystem);
     }
 
     [Fact]

@@ -69,6 +69,11 @@ public class ProfileDecomposer : IProfileDecomposer, IDecomposer<Profile>
             return result;
         }
 
+        // No SystemAuditScope here: profiles persist ONLY as these five granular records,
+        // so on the HTTP path (v1/v3 profile create/update) their audit rows are the entire
+        // mutation trail for a user's profile edit. Connector re-syncs are suppressed by the
+        // sync scope's system audit context instead, and byte-identical re-upserts diff to
+        // empty (bookkeeping columns are [AuditIgnored]) and are skipped.
         foreach (var (storeName, profileData) in profile.Store)
         {
             var legacyId = $"{profile.Id}:{storeName}";
