@@ -260,10 +260,10 @@ public class EntryReadService : IEntryStore
     private async Task<Entry?> CheckSgvDuplicateAsync(
         string? device, double? sgv, DateTime from, DateTime to, CancellationToken ct)
     {
-        var results = await _sgRepo.GetAsync(from, to, device, source: null, limit: 100, offset: 0, descending: true, nativeOnly: false, ct: ct);
-        var match = sgv.HasValue
-            ? results.FirstOrDefault(r => Math.Abs(r.Mgdl - sgv.Value) < 0.01)
-            : results.FirstOrDefault();
+        // Probe raw storage rather than the visibility-filtered GetAsync: copies linked as
+        // non-primary cross-connector duplicates are hidden from reads, but they still mean the
+        // reading is already stored — a filtered check re-inserts them on every upload.
+        var match = await _sgRepo.FindStoredDuplicateAsync(device, sgv, from, to, ct);
         return match is null ? null : EntryProjection.FromSensorGlucose(match);
     }
 
