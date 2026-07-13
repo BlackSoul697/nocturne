@@ -99,7 +99,6 @@ public static class BolusCalculationMapper
         entity.DataSource = model.DataSource;
         entity.CorrelationId = model.CorrelationId;
         entity.LegacyId = model.LegacyId;
-        entity.SysUpdatedAt = DateTime.UtcNow;
         entity.BloodGlucoseInput = model.BloodGlucoseInput;
         entity.BloodGlucoseInputSource = model.BloodGlucoseInputSource;
         entity.CarbInput = model.CarbInput;

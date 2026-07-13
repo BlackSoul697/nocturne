@@ -100,6 +100,46 @@ public class BroadcastGoldenTests
     }
 
     [Fact]
+    public async Task JsonbRoundTrip_IdenticalReupload_IsSilent_AndDoesNotRewriteTheRow()
+    {
+        var tenant = Guid.NewGuid();
+        using var scope = await _fx.BeginTenantScopeAsync(tenant);
+        var repo = scope.ServiceProvider.GetRequiredService<IBolusRepository>();
+
+        // AdditionalProperties lands in a jsonb column: Postgres normalizes it on write (key
+        // order, spacing), so the stored string never byte-matches the compact serialization
+        // the mapper re-assigns on the next identical upload.
+        static Bolus Upload() => new()
+        {
+            Timestamp = T0,
+            Insulin = 3.0,
+            DataSource = "aaps",
+            SyncIdentifier = "jsonb-1",
+            AdditionalProperties = new Dictionary<string, object?>
+            {
+                ["pumpSerial"] = "SN123",
+                ["programmed"] = 3.0,
+            },
+        };
+
+        await repo.BulkCreateAsync(new[] { Upload() }, WriteOrigin.Live, CancellationToken.None);
+
+        var stampAfterInsert = await _fx.QueryAsync(tenant, ctx => ctx.Boluses.AsNoTracking()
+            .Where(b => b.SyncIdentifier == "jsonb-1").Select(b => b.SysUpdatedAt).SingleAsync());
+
+        _fx.Capture.Clear();
+        await repo.BulkCreateAsync(new[] { Upload() }, WriteOrigin.Live, CancellationToken.None);
+
+        _fx.Capture.Snapshot().Should().NotContain(e => e.Kind == "updated",
+            "a jsonb-normalized round-trip of identical content is not a material change");
+
+        var stampAfterReupload = await _fx.QueryAsync(tenant, ctx => ctx.Boluses.AsNoTracking()
+            .Where(b => b.SyncIdentifier == "jsonb-1").Select(b => b.SysUpdatedAt).SingleAsync());
+        stampAfterReupload.Should().Be(stampAfterInsert,
+            "an identical re-upload must not rewrite the row");
+    }
+
+    [Fact]
     public async Task DeleteByLegacyId_BroadcastsDeletedIds()
     {
         var tenant = Guid.NewGuid();

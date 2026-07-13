@@ -79,7 +79,6 @@ public static class CalibrationMapper
         entity.DataSource = model.DataSource;
         entity.CorrelationId = model.CorrelationId;
         entity.LegacyId = model.LegacyId;
-        entity.SysUpdatedAt = DateTime.UtcNow;
         entity.Slope = model.Slope;
         entity.Intercept = model.Intercept;
         entity.Scale = model.Scale;

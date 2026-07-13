@@ -77,7 +77,6 @@ public static class CarbRatioScheduleMapper
         entity.DataSource = model.DataSource;
         entity.CorrelationId = model.CorrelationId;
         entity.LegacyId = model.LegacyId;
-        entity.SysUpdatedAt = DateTime.UtcNow;
         entity.ProfileName = model.ProfileName;
         entity.EntriesJson = JsonSerializer.Serialize(model.Entries);
         entity.AdditionalPropertiesJson = model.AdditionalProperties is { Count: > 0 }

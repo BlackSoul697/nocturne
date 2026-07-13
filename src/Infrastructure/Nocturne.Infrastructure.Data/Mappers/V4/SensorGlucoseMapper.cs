@@ -99,7 +99,6 @@ public static class SensorGlucoseMapper
         entity.PatientDeviceId = model.PatientDeviceId;
         entity.LegacyId = model.LegacyId;
         entity.SyncIdentifier = model.SyncIdentifier;
-        entity.SysUpdatedAt = DateTime.UtcNow;
         entity.Mgdl = model.Mgdl;
         entity.Direction = model.Direction?.ToString();
         entity.TrendRate = model.TrendRate;

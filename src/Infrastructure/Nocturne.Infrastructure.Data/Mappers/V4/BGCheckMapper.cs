@@ -81,7 +81,6 @@ public static class BGCheckMapper
         entity.DataSource = model.DataSource;
         entity.CorrelationId = model.CorrelationId;
         entity.LegacyId = model.LegacyId;
-        entity.SysUpdatedAt = DateTime.UtcNow;
         entity.Glucose = model.Glucose;
         entity.GlucoseType = model.GlucoseType?.ToString();
         entity.Units = model.Units?.ToString();

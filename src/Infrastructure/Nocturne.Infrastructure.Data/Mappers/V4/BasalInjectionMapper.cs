@@ -98,7 +98,6 @@ public static class BasalInjectionMapper
         entity.CorrelationId = model.CorrelationId;
         entity.LegacyId = model.LegacyId;
         entity.PatientDeviceId = model.PatientDeviceId;
-        entity.SysUpdatedAt = DateTime.UtcNow;
         entity.Units = model.Units;
         entity.Notes = model.Notes;
         entity.InsulinContextJson = JsonSerializer.Serialize(model.InsulinContext);
