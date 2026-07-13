@@ -118,14 +118,57 @@ public class SensorGlucoseRepositoryDuplicateProbeTests : IDisposable
         match!.Id.Should().Be(hiddenId);
     }
 
-    [Fact]
-    public async Task FindStoredDuplicateAsync_ValueOutsideTolerance_ReturnsNull()
+    [Theory]
+    [InlineData(134.005, true)]  // inside ±0.01
+    [InlineData(134.02, false)]  // just outside
+    [InlineData(135, false)]
+    public async Task FindStoredDuplicateAsync_MatchesValueWithinTolerance(double probeValue, bool expectMatch)
     {
         var now = DateTime.UtcNow;
         SeedReading(now, 134, "Dexcom G7 DXCMRf");
 
         var match = await _repo.FindStoredDuplicateAsync(
-            "Dexcom G7 DXCMRf", 135, now.AddMinutes(-5), now.AddMinutes(5));
+            "Dexcom G7 DXCMRf", probeValue, now.AddMinutes(-5), now.AddMinutes(5));
+
+        (match != null).Should().Be(expectMatch);
+    }
+
+    [Fact]
+    public async Task FindStoredDuplicateAsync_SoftDeletedRow_ReturnsNull()
+    {
+        // Guardrail: the probe skips the LinkedRecords visibility exclusion, but must keep the
+        // global query filters — a soft-deleted reading is not a stored duplicate, and widening
+        // the probe with IgnoreQueryFilters would also breach tenant isolation.
+        var now = DateTime.UtcNow;
+        var id = SeedReading(now, 134, "Dexcom G7 DXCMRf");
+        var entity = _context.SensorGlucose.IgnoreQueryFilters().Single(e => e.Id == id);
+        entity.DeletedAt = now;
+        _context.SaveChanges();
+
+        var match = await _repo.FindStoredDuplicateAsync(
+            "Dexcom G7 DXCMRf", 134, now.AddMinutes(-5), now.AddMinutes(5));
+
+        match.Should().BeNull();
+    }
+
+    [Fact]
+    public async Task FindStoredDuplicateAsync_OtherTenantsRow_ReturnsNull()
+    {
+        var otherTenant = Guid.Parse("00000000-0000-0000-0000-000000000002");
+        var now = DateTime.UtcNow;
+        _context.Tenants.Add(new TenantEntity { Id = otherTenant, Slug = "other" });
+        _context.SensorGlucose.Add(new SensorGlucoseEntity
+        {
+            Id = Guid.NewGuid(),
+            TenantId = otherTenant,
+            Timestamp = now,
+            Mgdl = 134,
+            Device = "Dexcom G7 DXCMRf",
+        });
+        _context.SaveChanges();
+
+        var match = await _repo.FindStoredDuplicateAsync(
+            "Dexcom G7 DXCMRf", 134, now.AddMinutes(-5), now.AddMinutes(5));
 
         match.Should().BeNull();
     }
