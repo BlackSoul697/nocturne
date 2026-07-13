@@ -113,6 +113,25 @@ public interface ISensorGlucoseRepository : IV4Repository<SensorGlucose>
     );
 
     /// <summary>
+    /// Raw-storage duplicate probe for upload idempotency: returns a stored reading matching the
+    /// device, value (±0.01 mg/dL), and time window, or <c>null</c>.
+    /// </summary>
+    /// <remarks>
+    /// Unlike <see cref="GetAsync(DateTime?, DateTime?, string?, string?, int, int, bool, bool, DateTime?, Guid?, CancellationToken, Guid?)"/>,
+    /// this deliberately includes rows hidden from reads as non-primary cross-connector duplicates.
+    /// A hidden copy still means "already stored" — when a second source re-uploads readings whose
+    /// copies have all been linked non-primary, a visibility-filtered check finds nothing and the
+    /// same readings are re-inserted on every upload cycle.
+    /// </remarks>
+    /// <param name="device">Optional device identifier filter.</param>
+    /// <param name="mgdl">Optional glucose value to match within ±0.01 mg/dL.</param>
+    /// <param name="from">Inclusive start of the time window.</param>
+    /// <param name="to">Inclusive end of the time window.</param>
+    /// <param name="ct">Cancellation token.</param>
+    Task<SensorGlucose?> FindStoredDuplicateAsync(
+        string? device, double? mgdl, DateTime from, DateTime to, CancellationToken ct = default);
+
+    /// <summary>
     /// Retrieve the timestamp of the most recently stored <see cref="SensorGlucose"/> reading, optionally scoped to a data source.
     /// </summary>
     /// <remarks>Used by connectors to determine the last sync time and avoid re-fetching already-stored data.</remarks>

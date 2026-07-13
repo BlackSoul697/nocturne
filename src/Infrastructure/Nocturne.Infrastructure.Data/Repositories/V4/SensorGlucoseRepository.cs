@@ -249,6 +249,29 @@ public class SensorGlucoseRepository : V4RepositoryBase<SensorGlucose, SensorGlu
         return created;
     }
 
+    /// <inheritdoc />
+    /// <remarks>
+    /// Queries raw storage without the non-primary LinkedRecords exclusion: a reading whose copies
+    /// are all linked non-primary is still a stored duplicate, and hiding it here caused uploads
+    /// from a second source to re-insert their whole window on every cycle.
+    /// </remarks>
+    public async Task<SensorGlucose?> FindStoredDuplicateAsync(
+        string? device, double? mgdl, DateTime from, DateTime to, CancellationToken ct = default)
+    {
+        await using var ctx = await ContextFactory.CreateAsync(ct);
+        var query = ctx.SensorGlucose.AsNoTracking()
+            .Where(e => e.Timestamp >= from && e.Timestamp <= to);
+        if (device != null)
+            query = query.Where(e => e.Device == device);
+        if (mgdl.HasValue)
+            query = query.Where(e => Math.Abs(e.Mgdl - mgdl.Value) < 0.01);
+
+        var entity = await query
+            .OrderByDescending(e => e.Timestamp).ThenByDescending(e => e.Id)
+            .FirstOrDefaultAsync(ct);
+        return entity is null ? null : SensorGlucoseMapper.ToDomainModel(entity);
+    }
+
     /// <summary>
     /// Gets sensor glucose records by correlation identifier.
     /// </summary>

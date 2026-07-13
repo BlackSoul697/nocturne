@@ -313,10 +313,9 @@ public class EntryReadServiceTests
     public async Task CheckDuplicateAsync_MatchFound_ReturnsEntry()
     {
         var sg = MakeSg(Now, 120);
-        _sgRepo.Setup(r => r.GetAsync(
-                It.IsAny<DateTime?>(), It.IsAny<DateTime?>(), "xdrip", It.IsAny<string?>(),
-                It.IsAny<int>(), It.IsAny<int>(), It.IsAny<bool>(), It.IsAny<bool>(), It.IsAny<DateTime?>(), It.IsAny<Guid?>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new[] { sg });
+        _sgRepo.Setup(r => r.FindStoredDuplicateAsync(
+                "xdrip", 120, It.IsAny<DateTime>(), It.IsAny<DateTime>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(sg);
 
         var result = await _sut.CheckDuplicateAsync("xdrip", "sgv", 120, sg.Mills, 5);
 
@@ -328,10 +327,9 @@ public class EntryReadServiceTests
     [Trait("Category", "Unit")]
     public async Task CheckDuplicateAsync_NoMatch_ReturnsNull()
     {
-        _sgRepo.Setup(r => r.GetAsync(
-                It.IsAny<DateTime?>(), It.IsAny<DateTime?>(), "xdrip", It.IsAny<string?>(),
-                It.IsAny<int>(), It.IsAny<int>(), It.IsAny<bool>(), It.IsAny<bool>(), It.IsAny<DateTime?>(), It.IsAny<Guid?>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync(Enumerable.Empty<SensorGlucose>());
+        _sgRepo.Setup(r => r.FindStoredDuplicateAsync(
+                "xdrip", 120, It.IsAny<DateTime>(), It.IsAny<DateTime>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync((SensorGlucose?)null);
 
         var mills = new DateTimeOffset(Now, TimeSpan.Zero).ToUnixTimeMilliseconds();
         var result = await _sut.CheckDuplicateAsync("xdrip", "sgv", 120, mills, 5);
