@@ -149,7 +149,7 @@
           yScale={scaleLinear()}
           yDomain={[0, yMaxMinutes]}
           padding={{ top: 10, right: 8, bottom: 30, left: 40 }}
-          tooltip={{ mode: "manual" }}
+          tooltipContext={{ mode: "manual" }}
         >
           {#snippet children({ context })}
             {@const xBandScale = context.xScale as unknown as ScaleBand<string>}

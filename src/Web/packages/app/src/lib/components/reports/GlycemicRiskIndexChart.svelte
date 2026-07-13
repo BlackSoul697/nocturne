@@ -200,7 +200,7 @@
           yDomain={[0, HYPER_MAX]}
           yReverse
           padding={{ top: 10, right: 10, bottom: 36, left: 46 }}
-          tooltip={{ mode: "manual" }}
+          tooltipContext={{ mode: "manual" }}
         >
           {#snippet children({ context })}
             <Svg>

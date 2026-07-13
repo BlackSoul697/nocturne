@@ -97,7 +97,7 @@
             "var(--glucose-high)",
             "var(--glucose-very-high)",
           ]}
-          tooltip={{ mode: "manual" }}
+          tooltipContext={{ mode: "manual" }}
         >
           {#snippet children({ context })}
             <Layer type="svg">
@@ -107,7 +107,6 @@
                 cellSize={24}
                 monthPath
                 monthLabel={false}
-                tooltipContext={context.tooltip}
               >
                 {#snippet children({ cells, cellSize })}
                   <!-- Month labels (clickable → calendar) -->

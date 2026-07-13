@@ -76,9 +76,7 @@
         ]}
         seriesLayout="stack"
         legend
-        tooltip={{
-          mode: "band",
-        }}
+        tooltipContext={{ mode: "band" }}
         props={{
           xAxis: {
             tickMultiline: true,

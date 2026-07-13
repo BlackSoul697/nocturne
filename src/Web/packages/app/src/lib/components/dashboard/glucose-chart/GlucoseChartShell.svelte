@@ -100,7 +100,7 @@
     xDomain={[chartXDomain.from, chartXDomain.to]}
     yDomain={[0, engine.glucoseYMax]}
     {padding}
-    tooltip={{ mode: "quadtree-x" }}
+    tooltipContext={{ mode: "quadtree-x" }}
   >
     {#snippet children({ context })}
       {(chartHeight = context.height, chartWidth = context.width, "")}
@@ -126,18 +126,11 @@
       {#if onSelectionChange}
         <BrushContext
           axis="x"
-          mode="separated"
-          xDomain={selectionDomain ?? [chartXDomain.from, chartXDomain.to]}
+          x={selectionDomain ?? [chartXDomain.from, chartXDomain.to]}
           onChange={(e) => {
-            if (
-              e.xDomain &&
-              Array.isArray(e.xDomain) &&
-              e.xDomain.length === 2
-            ) {
-              onSelectionChange?.([
-                new Date(e.xDomain[0]!),
-                new Date(e.xDomain[1]!),
-              ]);
+            const [start, end] = e.brush.x ?? [];
+            if (start != null && end != null) {
+              onSelectionChange?.([new Date(start), new Date(end)]);
             }
           }}
           classes={{
