@@ -78,17 +78,6 @@ public class DemoDataGenerator : IDemoDataGenerator
     private int _trendStepsRemaining;
     private DateTime? _lastTempBasalIssuedAt;
 
-    private enum DayScenario
-    {
-        Normal,
-        HighDay,
-        LowDay,
-        Exercise,
-        SickDay,
-        StressDay,
-        PoorSleep,
-    }
-
     public bool IsRunning { get; internal set; }
 
     public DemoDataGenerator(
@@ -214,7 +203,8 @@ public class DemoDataGenerator : IDemoDataGenerator
 
     public (List<Entry> Entries, List<Treatment> Treatments) GenerateHistoricalData()
     {
-        var endDate = DateTime.UtcNow;
+        // Local-time day iteration — see GenerateHistoricalEntries.
+        var endDate = DateTime.Now;
         var startDate = endDate.AddDays(-_config.BackfillDays);
 
         var entries = new List<Entry>();
@@ -263,7 +253,11 @@ public class DemoDataGenerator : IDemoDataGenerator
     /// </summary>
     public IEnumerable<Entry> GenerateHistoricalEntries()
     {
-        var endDate = DateTime.UtcNow;
+        // Local-time day iteration: meals land at local wall-clock mealtimes,
+        // and the per-date DayScenario key matches the sleep/activity/device
+        // generators, which anchor on local dates. Timestamps convert to UTC
+        // at the point of storage (DateTimeOffset respects Kind).
+        var endDate = DateTime.Now;
         var startDate = endDate.AddDays(-_config.BackfillDays);
 
         _logger.LogInformation(
@@ -417,7 +411,8 @@ public class DemoDataGenerator : IDemoDataGenerator
     /// </summary>
     public IEnumerable<Treatment> GenerateHistoricalTreatments()
     {
-        var endDate = DateTime.UtcNow;
+        // Local-time day iteration — see GenerateHistoricalEntries.
+        var endDate = DateTime.Now;
         var startDate = endDate.AddDays(-_config.BackfillDays);
 
         _logger.LogInformation(
@@ -651,37 +646,12 @@ public class DemoDataGenerator : IDemoDataGenerator
         _logger.LogInformation("Streamed {TreatmentCount} treatments", totalTreatments);
     }
 
-    private DayScenario SelectDayScenario(DateTime date)
-    {
-        var roll = _random.Next(100);
-        var isWeekend = date.DayOfWeek == DayOfWeek.Saturday || date.DayOfWeek == DayOfWeek.Sunday;
-
-        // T1D management with modern AID - more normal days than challenging days
-        if (isWeekend)
-        {
-            return roll switch
-            {
-                < 40 => DayScenario.Normal, // 40% normal weekends
-                < 55 => DayScenario.HighDay, // 15% high
-                < 70 => DayScenario.Exercise, // 15% exercise
-                < 80 => DayScenario.PoorSleep, // 10% poor sleep
-                < 90 => DayScenario.LowDay, // 10% low
-                < 97 => DayScenario.StressDay, // 7% stress
-                _ => DayScenario.SickDay, // 3% sick
-            };
-        }
-
-        return roll switch
-        {
-            < 50 => DayScenario.Normal, // 50% truly "normal" days with AID
-            < 65 => DayScenario.HighDay, // 15% high days
-            < 78 => DayScenario.LowDay, // 13% low days
-            < 88 => DayScenario.Exercise, // 10% exercise
-            < 94 => DayScenario.StressDay, // 6% stress
-            < 98 => DayScenario.PoorSleep, // 4% poor sleep
-            _ => DayScenario.SickDay, // 2% sick
-        };
-    }
+    /// <summary>
+    /// Deterministic per-date selection (see <see cref="DayScenarios"/>): the
+    /// entry and treatment streams iterate days independently, so a random roll
+    /// here would give the same date different scenarios in each stream.
+    /// </summary>
+    private static DayScenario SelectDayScenario(DateTime date) => DayScenarios.For(date);
 
     private (
         List<Entry> Entries,
@@ -721,8 +691,9 @@ public class DemoDataGenerator : IDemoDataGenerator
         }
 
         var currentTime = date;
-        // Cap endTime to now on the final day to prevent generating future data
-        var now = DateTime.UtcNow;
+        // Cap endTime to now on the final day to prevent generating future
+        // data. Local basis, matching the day iteration.
+        var now = DateTime.Now;
         var endTime = date.Date == now.Date
             ? now
             : date.AddDays(1);
