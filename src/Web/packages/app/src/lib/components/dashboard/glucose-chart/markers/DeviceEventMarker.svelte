@@ -1,5 +1,7 @@
 <script lang="ts">
-  import { Group } from "layerchart";
+  // Native <g> instead of layerchart's Group: Group calls registerMark() on
+  // mount and this renders once per device event, so a component per event cost
+  // O(N^2) across the chart's mark deriveds. <g> registers nothing.
   import { DeviceEventIcon } from "$lib/components/icons";
   import type { DeviceEventType } from "$lib/api";
 
@@ -14,15 +16,19 @@
 
   let { xPos, yPos, eventType, color, treatmentId, onMarkerClick }: Props =
     $props();
+
+  const clickable = $derived(Boolean(treatmentId && onMarkerClick));
 </script>
 
-<Group
-  x={xPos}
-  y={yPos}
-  onclick={treatmentId && onMarkerClick
-    ? () => onMarkerClick(treatmentId)
-    : undefined}
-  class={treatmentId && onMarkerClick ? "cursor-pointer" : ""}
+<!-- Mouse-only click, matching the original <Group onclick>; the chart is not a
+     keyboard tab-stop surface (events are reachable via the data table). -->
+<!-- svelte-ignore a11y_click_events_have_key_events -->
+<g
+  transform="translate({xPos}, {yPos})"
+  role={clickable ? "button" : undefined}
+  aria-label={clickable ? `${eventType ?? "device"} event` : undefined}
+  onclick={clickable ? () => onMarkerClick?.(treatmentId ?? "") : undefined}
+  class={clickable ? "cursor-pointer" : ""}
 >
   <!-- Background circle -->
   <circle
@@ -40,4 +46,4 @@
       <DeviceEventIcon {eventType} size={16} {color} />
     </div>
   </foreignObject>
-</Group>
+</g>

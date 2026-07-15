@@ -1,6 +1,8 @@
 <script lang="ts">
-  import { Group, Text } from "layerchart";
-
+  // Native SVG throughout: layerchart 2.x marks (Group/Text) each call
+  // registerMark() on mount, and this renders once per carb entry, so a
+  // component per treatment cost O(N^2) across the chart's mark deriveds.
+  // Native <g>/<text> render identically while registering nothing.
   interface Props {
     xPos: number;
     yPos: number;
@@ -14,21 +16,25 @@
     $props();
 </script>
 
-<Group
-  x={xPos}
-  y={yPos}
+<!-- Mouse-only click, matching the original <Group onclick>; the chart is not a
+     keyboard tab-stop surface (treatments are reachable via the data table). -->
+<!-- svelte-ignore a11y_click_events_have_key_events -->
+<g
+  transform="translate({xPos}, {yPos})"
+  role="button"
+  aria-label="{carbs}g carbs"
   onclick={() => onMarkerClick(treatmentId)}
   class="cursor-pointer"
 >
   <!-- Food/meal label above the marker -->
   {#if label}
-    <Text
+    <text
       y={-18}
-      textAnchor="middle"
+      text-anchor="middle"
       class="text-[7px] fill-carbs font-medium opacity-80"
     >
       {label}
-    </Text>
+    </text>
   {/if}
   <!-- Hemisphere (bowl shape - curves below baseline) -->
   <path
@@ -36,7 +42,7 @@
     fill="var(--carbs)"
     class="opacity-90 hover:opacity-100 transition-opacity"
   />
-  <Text y={18} textAnchor="middle" class="text-[8px] fill-carbs font-medium">
+  <text y={18} text-anchor="middle" class="text-[8px] fill-carbs font-medium">
     {carbs}g
-  </Text>
-</Group>
+  </text>
+</g>

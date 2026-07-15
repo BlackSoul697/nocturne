@@ -1,5 +1,8 @@
 <script lang="ts">
-  import { Group, Rect, Text } from "layerchart";
+  // Native SVG throughout: layerchart 2.x marks (Group/Rect/Text) each call
+  // registerMark() on mount, and this renders once per tracker expiration, so a
+  // component per marker cost O(N^2) across the chart's mark deriveds. Native
+  // <g>/<rect>/<text> render identically while registering nothing.
   import { TrackerCategoryIcon } from "$lib/components/icons";
   import type { TrackerCategory } from "$lib/api";
 
@@ -29,9 +32,9 @@
   class="opacity-60"
 />
 <!-- Icon and label at the top of the basal track -->
-<Group x={xPos} y={basalTrackTop + 10}>
+<g transform="translate({xPos}, {basalTrackTop + 10})">
   <!-- Background pill -->
-  <Rect
+  <rect
     x={-24}
     y={-8}
     width={48}
@@ -49,10 +52,10 @@
     </div>
   </foreignObject>
   <!-- Time label -->
-  <Text
+  <text
     x={3}
     y={0}
-    textAnchor="start"
+    text-anchor="start"
     class="text-[7px] fill-muted-foreground font-medium"
     dy="0.35em"
   >
@@ -60,5 +63,5 @@
       hour: "numeric",
       minute: "2-digit",
     })}
-  </Text>
-</Group>
+  </text>
+</g>

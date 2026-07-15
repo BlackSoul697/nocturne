@@ -1,6 +1,8 @@
 <script lang="ts">
-  import { Group, Polygon, Text } from "layerchart";
-
+  // Native SVG throughout: layerchart 2.x marks (Group/Text/Polygon) each call
+  // registerMark() on mount, and this renders once per bolus, so a component per
+  // treatment cost O(N^2) across the chart's mark deriveds. Native <g>/<text>/
+  // <polygon> render identically while registering nothing.
   interface Props {
     xPos: number;
     yPos: number;
@@ -14,20 +16,20 @@
     $props();
 </script>
 
-<Group
-  x={xPos}
-  y={yPos + 0}
+<!-- Mouse-only click, matching the original <Group onclick>; the chart is not a
+     keyboard tab-stop surface (treatments are reachable via the data table). -->
+<!-- svelte-ignore a11y_click_events_have_key_events -->
+<g
+  transform="translate({xPos}, {yPos})"
+  role="button"
+  aria-label="{insulin.toFixed(1)}U bolus"
   onclick={() => onMarkerClick(treatmentId)}
   class="cursor-pointer"
 >
   {#if isOverride}
     <!-- Triangle for manual override -->
-    <Polygon
-      points={[
-        { x: 0, y: 12 },
-        { x: -8, y: 0 },
-        { x: 8, y: 0 },
-      ]}
+    <polygon
+      points="0,12 -8,0 8,0"
       class="opacity-90 fill-insulin-bolus hover:opacity-100 transition-opacity"
     />
   {:else}
@@ -37,11 +39,11 @@
       class="opacity-90 fill-insulin-bolus hover:opacity-100 transition-opacity"
     />
   {/if}
-  <Text
+  <text
     y={-14}
-    textAnchor="middle"
+    text-anchor="middle"
     class="text-[8px] fill-insulin-bolus font-medium"
   >
     {insulin.toFixed(1)}U
-  </Text>
-</Group>
+  </text>
+</g>
