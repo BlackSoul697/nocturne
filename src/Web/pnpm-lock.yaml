@@ -583,6 +583,9 @@ importers:
       '@types/d3-scale':
         specifier: ^4.0.9
         version: 4.0.9
+      '@typescript/native-preview':
+        specifier: 7.0.0-dev.20260513.1
+        version: 7.0.0-dev.20260513.1
       d3:
         specifier: ^7.9.0
         version: 7.9.0
