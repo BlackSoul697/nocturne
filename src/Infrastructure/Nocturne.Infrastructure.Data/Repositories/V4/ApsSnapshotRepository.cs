@@ -377,4 +377,113 @@ public class ApsSnapshotRepository : IApsSnapshotRepository
             return created;
         });
     }
+
+    /// <inheritdoc />
+    /// <remarks>
+    /// Mirrors the (DataSource, SyncIdentifier) upsert split in <c>SensorGlucoseRepository</c> /
+    /// <c>BolusRepository</c>: intra-batch keep-last per key, DB-matched rows update in place,
+    /// the rest insert through the LegacyId-dedup path.
+    /// </remarks>
+    public async Task<IEnumerable<ApsSnapshot>> BulkUpsertAsync(
+        IEnumerable<ApsSnapshot> records,
+        WriteOrigin origin, CancellationToken ct = default)
+    {
+        var entities = records.Select(ApsSnapshotMapper.ToEntity).ToList();
+        if (entities.Count == 0)
+            return [];
+
+        // Intra-batch dedup: keep the last occurrence per (DataSource, SyncIdentifier).
+        // Records without both keys keep a unique grouping key so they're not collapsed.
+        entities = entities
+            .GroupBy(e => !string.IsNullOrEmpty(e.DataSource) && !string.IsNullOrEmpty(e.SyncIdentifier)
+                ? $"sync|{e.DataSource}|{e.SyncIdentifier}"
+                : $"id|{e.Id}")
+            .Select(g => g.Last())
+            .ToList();
+
+        await using var ctx = await _contextFactory.CreateAsync(ct);
+        var strategy = ctx.Database.CreateExecutionStrategy();
+        return await strategy.ExecuteAsync(async () =>
+        {
+            await using var tx = await ctx.Database.BeginTransactionAsync(ct);
+
+            // DB-level upsert: rows matched by (DataSource, SyncIdentifier) are updated in place.
+            // Soft-deleted rows are excluded: the partial unique index ignores them, so a
+            // re-upload after a delete inserts a fresh row instead of writing into the deleted one.
+            var updatedEntities = new List<ApsSnapshotEntity>();
+            var materiallyChanged = new List<ApsSnapshotEntity>();
+            var toInsert = entities;
+            var syncKeyed = entities
+                .Where(e => !string.IsNullOrEmpty(e.DataSource) && !string.IsNullOrEmpty(e.SyncIdentifier))
+                .ToList();
+
+            if (syncKeyed.Count > 0)
+            {
+                var sources = syncKeyed.Select(e => e.DataSource!).Distinct().ToList();
+                var syncIds = syncKeyed.Select(e => e.SyncIdentifier!).Distinct().ToList();
+
+                var existingRows = await ctx.ApsSnapshots.IgnoreQueryFilters()
+                    .Where(e => e.TenantId == ctx.TenantId && e.DeletedAt == null)
+                    .Where(e => sources.Contains(e.DataSource!) && syncIds.Contains(e.SyncIdentifier!))
+                    .ToListAsync(ct);
+
+                var existingByKey = existingRows
+                    .GroupBy(e => $"{e.DataSource}|{e.SyncIdentifier}")
+                    .ToDictionary(g => g.Key, g => g.First());
+
+                toInsert = [];
+                foreach (var entity in entities)
+                {
+                    var hasKey = !string.IsNullOrEmpty(entity.DataSource)
+                        && !string.IsNullOrEmpty(entity.SyncIdentifier);
+                    if (hasKey && existingByKey.TryGetValue($"{entity.DataSource}|{entity.SyncIdentifier}", out var existing))
+                    {
+                        ApsSnapshotMapper.UpdateEntity(existing, ApsSnapshotMapper.ToDomainModel(entity));
+                        updatedEntities.Add(existing);
+                        // Capture material changes now, before SaveChanges clears the modified flags.
+                        if (V4MaterialChange.HasMaterialChange(ctx.Entry(existing)))
+                            materiallyChanged.Add(existing);
+                    }
+                    else
+                    {
+                        toInsert.Add(entity);
+                    }
+                }
+
+                if (updatedEntities.Count > 0)
+                    await ctx.SaveChangesAsync(ct);
+            }
+
+            // Insert path: LegacyId dedup as in BulkCreateAsync.
+            var legacyIds = toInsert
+                .Where(e => !string.IsNullOrEmpty(e.LegacyId))
+                .Select(e => e.LegacyId!)
+                .ToHashSet();
+
+            if (legacyIds.Count > 0)
+            {
+                var blockedLegacyIds = await ctx.GetBlockingLegacyIdsAsync<ApsSnapshotEntity>(legacyIds, ct);
+                toInsert = toInsert
+                    .Where(e => string.IsNullOrEmpty(e.LegacyId) || !blockedLegacyIds.Contains(e.LegacyId))
+                    .ToList();
+            }
+
+            const int batchSize = 500;
+            foreach (var batch in toInsert.Chunk(batchSize))
+            {
+                ctx.ApsSnapshots.AddRange(batch);
+                await ctx.SaveChangesAsync(ct);
+                ctx.ChangeTracker.Clear();
+            }
+
+            await tx.CommitAsync(ct);
+
+            var updated = updatedEntities.Select(ApsSnapshotMapper.ToDomainModel).ToList();
+            var created = toInsert.Select(ApsSnapshotMapper.ToDomainModel).ToList();
+            // Broadcast only materially changed updates: a byte-identical retry of the same
+            // batch must not push update events to every client (the #513 broadcast-storm shape).
+            await RaiseBroadcastAsync(created, materiallyChanged.Select(ApsSnapshotMapper.ToDomainModel).ToList(), [], origin, ct);
+            return updated.Concat(created).ToList();
+        });
+    }
 }

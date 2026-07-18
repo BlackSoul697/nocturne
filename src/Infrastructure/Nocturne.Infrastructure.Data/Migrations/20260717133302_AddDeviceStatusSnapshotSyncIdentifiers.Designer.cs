@@ -3,6 +3,7 @@ using System;
 using System.Collections.Generic;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Nocturne.Infrastructure.Data;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
@@ -12,9 +13,11 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace Nocturne.Infrastructure.Data.Migrations
 {
     [DbContext(typeof(NocturneDbContext))]
-    partial class NocturneDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260717133302_AddDeviceStatusSnapshotSyncIdentifiers")]
+    partial class AddDeviceStatusSnapshotSyncIdentifiers
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -6110,18 +6113,10 @@ namespace Nocturne.Infrastructure.Data.Migrations
                         .HasColumnType("character varying(256)")
                         .HasColumnName("device");
 
-                    b.Property<double?>("FatGrams")
-                        .HasColumnType("double precision")
-                        .HasColumnName("fat_grams");
-
                     b.Property<string>("LegacyId")
                         .HasMaxLength(255)
                         .HasColumnType("character varying(255)")
                         .HasColumnName("legacy_id");
-
-                    b.Property<double?>("ProteinGrams")
-                        .HasColumnType("double precision")
-                        .HasColumnName("protein_grams");
 
                     b.Property<string>("SyncIdentifier")
                         .HasMaxLength(256)
@@ -7563,11 +7558,6 @@ namespace Nocturne.Infrastructure.Data.Migrations
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("start_timestamp");
 
-                    b.Property<string>("SyncIdentifier")
-                        .HasMaxLength(256)
-                        .HasColumnType("character varying(256)")
-                        .HasColumnName("sync_identifier");
-
                     b.Property<DateTime>("SysCreatedAt")
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("sys_created_at");
@@ -7610,11 +7600,6 @@ namespace Nocturne.Infrastructure.Data.Migrations
                     b.HasIndex("TenantId", "StartTimestamp")
                         .IsDescending(false, true)
                         .HasDatabaseName("ix_temp_basals_tenant_start_timestamp");
-
-                    b.HasIndex("TenantId", "DataSource", "SyncIdentifier")
-                        .IsUnique()
-                        .HasDatabaseName("ix_temp_basals_tenant_source_sync_id")
-                        .HasFilter("sync_identifier IS NOT NULL AND deleted_at IS NULL");
 
                     b.ToTable("temp_basals");
                 });
