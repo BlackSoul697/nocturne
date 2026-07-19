@@ -239,6 +239,9 @@ public class Treatment : ProcessableDocumentBase
     /// </summary>
     [JsonPropertyName("duration")]
     [JsonIgnore(Condition = JsonIgnoreCondition.Never)]
+    // Serializes rounded to whole minutes (AAPS parses duration as a Long); the getter keeps the
+    // exact value so in-memory duration math (e.g. temp-basal cutting) is not corrupted.
+    [JsonConverter(typeof(RoundedNullableDoubleConverter))]
     public double? Duration
     {
         get
