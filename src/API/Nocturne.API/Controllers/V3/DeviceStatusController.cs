@@ -109,15 +109,21 @@ public class DeviceStatusController : BaseV3Controller<DeviceStatus>
 
             // Check for conditional requests (304 Not Modified)
             var lastModified = GetLastModified(deviceStatusList.Cast<object>());
-            var etag = GenerateETag(deviceStatusList);
 
-            if (lastModified.HasValue && ShouldReturn304(etag, lastModified.Value, parameters))
+            if (lastModified.HasValue && ShouldReturn304(lastModified.Value, parameters))
             {
                 return StatusCode(304);
             }
 
-            // Create V3 response
-            var response = CreateV3CollectionResponse(mappedData, parameters, totalCount);
+            // Create V3 response. Pass the model-derived timestamp explicitly: the mapped
+            // DTOs are dictionaries the timestamp reflection can't read, and the emitted
+            // ETag must match the one the 304 check above compares against.
+            var response = CreateV3CollectionResponse(
+                mappedData,
+                parameters,
+                totalCount,
+                lastModified
+            );
 
             _logger.LogDebug(
                 "Successfully returned {Count} device status records with V3 format",
