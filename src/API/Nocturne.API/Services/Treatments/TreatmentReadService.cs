@@ -3,7 +3,7 @@ using Nocturne.Core.Contracts.Treatments;
 using Nocturne.Core.Contracts.V4;
 using Nocturne.Core.Contracts.V4.Repositories;
 using Nocturne.Core.Models;
-using Nocturne.Core.Models.Entries;
+using Nocturne.Core.Models.Queries;
 using Nocturne.Core.Models.V4;
 using Nocturne.Infrastructure.Data.Mappers;
 
@@ -53,24 +53,75 @@ public class TreatmentReadService : ITreatmentStore
         _logger = logger;
     }
 
+    /// <summary>
+    /// Upper bound on rows fetched into memory when a find query carries field filters, which can
+    /// only be applied after projection and therefore defeat limit pushdown.
+    /// </summary>
+    private const int MaxFilterFetch = 100_000;
+
     /// <inheritdoc />
     public async Task<IReadOnlyList<Treatment>> QueryAsync(TreatmentQuery query, CancellationToken ct = default)
     {
-        var (fromMills, toMills) = ParseTimeRangeFromFind(query.Find);
+        var find = FindQuery.Parse(query.Find);
 
-        var projected = await _projection.GetProjectedTreatmentsAsync(
-            fromMills, toMills, query.Count + query.Skip, nativeOnly: false, ct: ct);
-
-        var results = projected
-            .OrderByDescending(t => t.Mills)
-            .Skip(query.Skip)
-            .Take(query.Count)
-            .ToList();
+        var results = find.HasFieldFilters
+            ? await QueryFilteredAsync(find, query.Count, query.Skip, ct)
+            : await QueryByTimeRangeAsync(find, query.Count, query.Skip, ct);
 
         if (query.ReverseResults)
             return results.OrderBy(t => t.Mills).ToList();
 
         return results;
+    }
+
+    private async Task<IReadOnlyList<Treatment>> QueryByTimeRangeAsync(
+        FindQuery find, int count, int skip, CancellationToken ct)
+    {
+        var limit = (int)Math.Min((long)count + skip, int.MaxValue);
+        var projected = await _projection.GetProjectedTreatmentsAsync(
+            find.FromMills, find.ToMills, limit, nativeOnly: false, ct: ct);
+
+        return projected
+            .OrderByDescending(t => t.Mills)
+            .Skip(skip)
+            .Take(count)
+            .ToList();
+    }
+
+    /// <summary>
+    /// Serves a find query with field filters (eventType, enteredBy, $exists, …) by matching the
+    /// projected legacy shape. Paging cannot be pushed down past an in-memory filter, so the fetch
+    /// window grows geometrically until the page fills or the window is exhausted.
+    /// </summary>
+    private async Task<IReadOnlyList<Treatment>> QueryFilteredAsync(
+        FindQuery find, int count, int skip, CancellationToken ct)
+    {
+        var needed = (long)count + skip;
+        var fetchLimit = (int)Math.Min(Math.Max(needed * 4, 100), MaxFilterFetch);
+
+        while (true)
+        {
+            var projected = (await _projection.GetProjectedTreatmentsAsync(
+                find.FromMills, find.ToMills, fetchLimit, nativeOnly: false, ct: ct)).ToList();
+
+            var matching = projected.Where(find.Matches).ToList();
+            var exhausted = projected.Count < fetchLimit || fetchLimit >= MaxFilterFetch;
+            if (matching.Count >= needed || exhausted)
+            {
+                if (matching.Count < needed && projected.Count >= fetchLimit)
+                    _logger.LogWarning(
+                        "Find-filtered treatment query hit the {MaxFetch}-row window; older matches are not returned",
+                        MaxFilterFetch);
+
+                return matching
+                    .OrderByDescending(t => t.Mills)
+                    .Skip(skip)
+                    .Take(count)
+                    .ToList();
+            }
+
+            fetchLimit = (int)Math.Min((long)fetchLimit * 4, MaxFilterFetch);
+        }
     }
 
     /// <inheritdoc />
@@ -202,6 +253,14 @@ public class TreatmentReadService : ITreatmentStore
             }
         }
 
+        // Projected treatments for V4 rows carry the raw record UUID as their id (the 24-hex
+        // ObjectId form only exists on the wire), so the filtered bulk-delete path and direct
+        // by-UUID deletes arrive here with a Guid string. Resolve it across the repos, preferring
+        // the stored LegacyId so correlated siblings (e.g. a meal bolus's carb) go together.
+        if (deleted == 0 && Guid.TryParse(id, out var recordId)
+            && await DeleteByRecordIdAsync(recordId, ct))
+            return true;
+
         // A 24-hex ObjectId AAPS derived from the record's UUID: resolve it via the uuid prefix
         // range. Prefer deleting by the resolved record's LegacyId so correlated siblings (e.g. a
         // meal bolus's carb, a bolus wizard's calculation) are removed together — DeleteByGuidRange
@@ -227,7 +286,18 @@ public class TreatmentReadService : ITreatmentStore
     /// <inheritdoc />
     public async Task<long> CountAsync(string? find = null, CancellationToken ct = default)
     {
-        var (fromMills, toMills) = ParseTimeRangeFromFind(find);
+        var findQuery = FindQuery.Parse(find);
+
+        if (findQuery.HasFieldFilters)
+        {
+            // Field filters only exist on the projected shape; count matches within the
+            // (bounded) window instead of delegating to per-repo counts.
+            var projected = await _projection.GetProjectedTreatmentsAsync(
+                findQuery.FromMills, findQuery.ToMills, MaxFilterFetch, nativeOnly: false, ct: ct);
+            return projected.Count(findQuery.Matches);
+        }
+
+        var (fromMills, toMills) = (findQuery.FromMills, findQuery.ToMills);
         var from = fromMills.HasValue ? DateTimeOffset.FromUnixTimeMilliseconds(fromMills.Value).UtcDateTime : (DateTime?)null;
         var to = toMills.HasValue ? DateTimeOffset.FromUnixTimeMilliseconds(toMills.Value).UtcDateTime : (DateTime?)null;
 
@@ -409,6 +479,36 @@ public class TreatmentReadService : ITreatmentStore
         return null;
     }
 
+    /// <summary>
+    /// Deletes the record with the given UUID from whichever repo owns it, via LegacyId when one
+    /// is stored (so correlated siblings are removed together). TempBasal is handled by the
+    /// caller before this runs.
+    /// </summary>
+    private async Task<bool> DeleteByRecordIdAsync(Guid id, CancellationToken ct)
+    {
+        return await TryDeleteFromRepoAsync(_bolusRepo, id, ct)
+            || await TryDeleteFromRepoAsync(_carbIntakeRepo, id, ct)
+            || await TryDeleteFromRepoAsync(_bgCheckRepo, id, ct)
+            || await TryDeleteFromRepoAsync(_noteRepo, id, ct)
+            || await TryDeleteFromRepoAsync(_deviceEventRepo, id, ct)
+            || await TryDeleteFromRepoAsync(_bolusCalcRepo, id, ct);
+    }
+
+    private async Task<bool> TryDeleteFromRepoAsync<T>(
+        IV4Repository<T> repo, Guid id, CancellationToken ct) where T : class, IV4Record
+    {
+        var record = await repo.GetByIdAsync(id, ct);
+        if (record is null)
+            return false;
+
+        if (!string.IsNullOrEmpty(record.LegacyId))
+            return await _pipeline.DeleteByLegacyIdAsync<Treatment>(record.LegacyId, WriteOrigin.Live, ct) > 0;
+
+        // Native row with no LegacyId (no correlated sibling to worry about): delete directly.
+        await repo.DeleteAsync(id, WriteOrigin.Live, ct);
+        return true;
+    }
+
     /// <summary>Deletes the record inside a UUID prefix range (derived ObjectId) by its real UUID.</summary>
     private async Task<bool> DeleteByGuidRangeAsync(Guid low, Guid high, CancellationToken ct)
     {
@@ -488,10 +588,4 @@ public class TreatmentReadService : ITreatmentStore
 
     #endregion
 
-    #region Private — Find query parsing
-
-    private static (long? From, long? To) ParseTimeRangeFromFind(string? find)
-        => EntryDomainLogic.ParseTimeRangeFromFind(find);
-
-    #endregion
 }
