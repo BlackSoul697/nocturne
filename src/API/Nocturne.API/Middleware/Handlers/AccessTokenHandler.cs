@@ -5,9 +5,10 @@ using Nocturne.Core.Models.Authorization;
 namespace Nocturne.API.Middleware.Handlers;
 
 /// <summary>
-/// Authentication handler for Nightscout legacy access tokens.
-/// Access tokens use format: {name_abbrev}-{16_char_sha1_digest}
-/// Example: rhys-a1b2c3d4e5f6g7h8
+/// Authentication handler for subject access tokens.
+/// Two shapes are accepted, because tokens reach us from two places:
+/// - Nocturne-minted: 64 lowercase hex chars, no dash (see <c>SubjectService.GenerateAccessToken</c>)
+/// - Imported from classic Nightscout: {name_abbrev}-{hex_digest}, e.g. rhys-a1b2c3d4e5f6a7b8
 /// Tokens can be provided via:
 /// - Authorization header (Bearer token)
 /// - Query parameter: ?token=xxx
@@ -15,6 +16,13 @@ namespace Nocturne.API.Middleware.Handlers;
 /// </summary>
 public class AccessTokenHandler : IAuthHandler
 {
+    /// <summary>
+    /// Length of a Nocturne-minted access token in hex characters (32 random bytes).
+    /// Kept in sync with <c>SubjectService.GenerateAccessToken</c>; the round-trip test in
+    /// <c>AccessTokenHandlerTests</c> fails if the two ever drift apart.
+    /// </summary>
+    private const int AccessTokenHexLength = 64;
+
     /// <summary>
     /// Handler priority (300 - after JWT handlers, before API secret)
     /// </summary>
@@ -75,8 +83,12 @@ public class AccessTokenHandler : IAuthHandler
 
             if (subject == null)
             {
+                // Skip rather than fail: a non-skip result stops the whole handler chain
+                // (see AuthenticationMiddleware), so failing here would block ApiKeyHandler
+                // for a request that also carries a valid api-secret. Matches how
+                // DirectGrantTokenHandler treats an unrecognized token.
                 _logger.LogDebug("Access token not found in database");
-                return AuthResult.Failure("Invalid access token");
+                return AuthResult.Skip();
             }
 
             if (!subject.IsActive)
@@ -156,12 +168,23 @@ public class AccessTokenHandler : IAuthHandler
     }
 
     /// <summary>
-    /// Validate that the token matches the access token format
-    /// Format: {name_abbrev}-{hex_digest} where digest is typically 16 chars
+    /// Validate that the token matches one of the access token formats.
+    /// This is only a cheap pre-filter to avoid a database lookup on values that clearly
+    /// aren't access tokens — it must keep skipping JWTs (handled by the JWT handlers) and
+    /// <c>noc_</c> direct grant tokens (handled by <see cref="DirectGrantTokenHandler"/>).
     /// </summary>
     private static bool IsValidAccessTokenFormat(string token)
     {
-        // Must have at least one dash
+        // Nocturne-minted tokens: 32 random bytes, hex-encoded, no dash. Pinning the length
+        // to exactly 64 keeps the filter tight: noc_ tokens carry a non-hex underscore, JWTs
+        // are rejected on the dot check above, and pre-hashed legacy api-secrets (40 hex
+        // chars, and sent via api-secret/?secret= anyway) are the wrong length.
+        if (token.Length == AccessTokenHexLength && token.All(char.IsAsciiHexDigit))
+        {
+            return true;
+        }
+
+        // Imported Nightscout tokens: {name_abbrev}-{hex_digest}, digest typically 16 chars.
         var dashIndex = token.LastIndexOf('-');
         if (dashIndex <= 0 || dashIndex >= token.Length - 1)
         {
