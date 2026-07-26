@@ -31,6 +31,24 @@ public interface IOidcAuthService
     );
 
     /// <summary>
+    /// Reads the tenant slug out of a protected state parameter, for routing a callback that
+    /// landed on the apex to the subdomain the login was initiated from.
+    /// </summary>
+    /// <param name="state">The state parameter as received on the callback.</param>
+    /// <returns>
+    /// The tenant slug the login was initiated against, or <c>null</c> when the state was not
+    /// issued by this instance, has been tampered with, or carries no slug (an apex login).
+    /// </returns>
+    /// <remarks>
+    /// This is the only part of the state readable before the callback is handled, and it goes
+    /// through the same protector as the rest of the payload — the redirect target is therefore
+    /// derived from data this instance signed, not from a caller-supplied value. Deliberately
+    /// exposes only the slug: nothing else in the state is safe to act on before the full
+    /// callback validation in <see cref="HandleCallbackAsync"/> has run.
+    /// </remarks>
+    string? TryReadTenantSlug(string state);
+
+    /// <summary>
     /// Handle the OIDC callback - exchange code for tokens and create session
     /// </summary>
     /// <param name="code">Authorization code from provider</param>

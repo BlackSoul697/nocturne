@@ -313,14 +313,34 @@ public class OidcAuthService : IOidcAuthService
         // identity is not a member of the tenant being logged into. The per-request
         // membership gate in AuthenticationMiddleware would block this subject's data
         // access anyway, but only after a session (and a "logged in" UI) already existed.
-        if (currentTenantId is { } tenantId
-            && !await _tenantMemberService.IsMemberAsync(subject.Id, tenantId))
+        //
+        // Whether a tenant is required is decided by the state, not by whether one happened to
+        // resolve. A state carrying a TenantSlug was minted by a tenant login, so the callback
+        // must have been bounced to that subdomain and the tenant must be resolved here — if it
+        // is not, something upstream failed and treating that as "no check needed" would skip
+        // the gate entirely. A state with no slug is an apex login (the platform-access operator
+        // bounce), which is subject-scoped by design and has no tenant to check against.
+        if (!string.IsNullOrEmpty(stateData.TenantSlug))
         {
-            _logger.LogWarning(
-                "OIDC login denied: subject {SubjectId} is not a member of tenant {TenantId}",
-                subject.Id,
-                tenantId);
-            return OidcCallbackResult.NotAMember(subject.Id, stateData.ReturnUrl);
+            if (currentTenantId is not { } tenantId)
+            {
+                _logger.LogError(
+                    "OIDC login denied: state was minted for tenant '{TenantSlug}' but no tenant "
+                        + "resolved on the callback, so membership could not be verified",
+                    stateData.TenantSlug);
+                return OidcCallbackResult.Failed(
+                    "invalid_state",
+                    "The login could not be completed against the tenant it was started from.");
+            }
+
+            if (!await _tenantMemberService.IsMemberAsync(subject.Id, tenantId))
+            {
+                _logger.LogWarning(
+                    "OIDC login denied: subject {SubjectId} is not a member of tenant {TenantId}",
+                    subject.Id,
+                    tenantId);
+                return OidcCallbackResult.NotAMember(subject.Id, stateData.ReturnUrl);
+            }
         }
 
         // Update last login
@@ -1068,6 +1088,23 @@ public class OidcAuthService : IOidcAuthService
 
         return JsonSerializer.Deserialize<OidcStateData>(json)
             ?? throw new InvalidOperationException("Invalid state data");
+    }
+
+    /// <inheritdoc />
+    public string? TryReadTenantSlug(string state)
+    {
+        if (string.IsNullOrEmpty(state))
+            return null;
+
+        try
+        {
+            return DecodeState(state).TenantSlug;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogDebug(ex, "Could not read a tenant slug from the OIDC state");
+            return null;
+        }
     }
 
     /// <summary>
