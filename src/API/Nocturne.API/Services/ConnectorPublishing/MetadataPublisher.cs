@@ -57,9 +57,8 @@ internal sealed class MetadataPublisher : IMetadataPublisher
     }
 
     /// <summary>
-    /// The subject a connector's food entries are attributed to, so the match suggestions they raise
-    /// reach a real person. A sync has no user of its own, and the UI lists notifications for the
-    /// signed-in subject, so anything else is filed where nobody will ever see it.
+    /// The subject a connector's food entries, and the match suggestions they raise, are attributed
+    /// to. A sync has no user of its own, and the UI lists notifications by subject id.
     /// </summary>
     private async Task<string?> ResolveNotificationSubjectAsync(
         string source,
@@ -139,6 +138,31 @@ internal sealed class MetadataPublisher : IMetadataPublisher
         catch (Exception ex)
         {
             _logger.LogError(ex, "Failed to publish connector food entries for {Source}", source);
+            return null;
+        }
+    }
+
+    public async Task<int?> ReconcileConnectorFoodEntriesAsync(
+        IEnumerable<string> presentExternalEntryIds,
+        DateTimeOffset from,
+        DateTimeOffset to,
+        string source,
+        WriteOrigin origin, CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            return await _connectorFoodEntryService.MarkMissingAsDeletedAsync(
+                await ResolveNotificationSubjectAsync(source, cancellationToken),
+                source,
+                from,
+                to,
+                presentExternalEntryIds,
+                cancellationToken);
+        }
+        catch (OperationCanceledException) { throw; }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to reconcile connector food entries for {Source}", source);
             return null;
         }
     }

@@ -21,6 +21,20 @@ public interface IMetadataPublisher
         string source,
         WriteOrigin origin, CancellationToken cancellationToken = default);
 
+    /// <summary>
+    /// Withdraws pending food entries in <paramref name="from"/>..<paramref name="to"/> that
+    /// <paramref name="presentExternalEntryIds"/> does not mention. Call only after reading the source
+    /// exhaustively: absence from a partial read is not evidence of a deletion, and an incomplete list
+    /// withdraws every entry it omitted.
+    /// </summary>
+    /// <returns>The number of entries withdrawn, or <c>null</c> if reconciliation failed.</returns>
+    Task<int?> ReconcileConnectorFoodEntriesAsync(
+        IEnumerable<string> presentExternalEntryIds,
+        DateTimeOffset from,
+        DateTimeOffset to,
+        string source,
+        WriteOrigin origin, CancellationToken cancellationToken = default);
+
     Task<bool> PublishActivityAsync(
         IEnumerable<Activity> activities,
         string source,
