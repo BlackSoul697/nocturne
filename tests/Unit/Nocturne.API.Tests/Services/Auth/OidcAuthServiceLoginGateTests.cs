@@ -1,5 +1,6 @@
 using System.Threading;
 using FluentAssertions;
+using Microsoft.AspNetCore.DataProtection;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
@@ -44,6 +45,7 @@ public class OidcAuthServiceLoginGateTests
             _refreshTokenService.Object,
             _httpFactory.Object,
             _tenantMemberService.Object,
+            new EphemeralDataProtectionProvider(),
             options,
             _configuration.Object,
             NullLogger<OidcAuthService>.Instance);

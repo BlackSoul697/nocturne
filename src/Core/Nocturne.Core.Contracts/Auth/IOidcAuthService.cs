@@ -17,13 +17,16 @@ public interface IOidcAuthService
     /// </summary>
     /// <param name="providerId">OIDC provider ID (null = use default)</param>
     /// <param name="returnUrl">URL to return to after login</param>
-    /// <param name="state">State parameter for CSRF protection (generated if null)</param>
+    /// <param name="tenantSlug">Tenant the login is being performed against</param>
     /// <returns>Authorization request containing URL and state</returns>
+    /// <remarks>
+    /// The state is always generated and cryptographically protected here. There is deliberately
+    /// no caller-supplied override: the callback trusts the intent and subject the state carries.
+    /// </remarks>
     /// <exception cref="InvalidOperationException">Thrown when the provider is not found, not configured, or not enabled.</exception>
     Task<OidcAuthorizationRequest> GenerateAuthorizationUrlAsync(
         Guid? providerId,
         string? returnUrl = null,
-        string? state = null,
         string? tenantSlug = null
     );
 
