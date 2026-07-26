@@ -139,6 +139,26 @@ public class OidcAuthServiceStateProtectionTests
 
     [Fact]
     [Trait("Category", "Unit")]
+    public async Task TryReadTenantSlug_RoundTripsTheSlugItWasIssuedWith()
+    {
+        // The seam OidcCallbackRedirectMiddleware depends on. It stubs TryReadTenantSlug, so
+        // without this nothing asserts that a real generated state actually yields its slug —
+        // which is how protecting the payload silently broke the apex-to-subdomain redirect.
+        var request = await _service.GenerateAuthorizationUrlAsync(ProviderId, "/", tenantSlug: "erik");
+
+        _service.TryReadTenantSlug(request.State).Should().Be("erik");
+    }
+
+    [Fact]
+    [Trait("Category", "Unit")]
+    public void TryReadTenantSlug_ForAStateThisInstanceDidNotIssue_ReturnsNull()
+    {
+        _service.TryReadTenantSlug(ForgeState("login", Guid.NewGuid())).Should().BeNull();
+        _service.TryReadTenantSlug("not-a-state").Should().BeNull();
+    }
+
+    [Fact]
+    [Trait("Category", "Unit")]
     public async Task StateFromAnotherKeyRing_IsRejected()
     {
         // Stands in for any state this instance did not issue. A well-formed state minted

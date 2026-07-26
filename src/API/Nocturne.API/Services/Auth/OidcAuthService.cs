@@ -314,25 +314,19 @@ public class OidcAuthService : IOidcAuthService
         // membership gate in AuthenticationMiddleware would block this subject's data
         // access anyway, but only after a session (and a "logged in" UI) already existed.
         //
-        // Whether a tenant is required is decided by the state, not by whether one happened to
-        // resolve. A state carrying a TenantSlug was minted by a tenant login, so the callback
-        // must have been bounced to that subdomain and the tenant must be resolved here — if it
-        // is not, something upstream failed and treating that as "no check needed" would skip
-        // the gate entirely. A state with no slug is an apex login (the platform-access operator
-        // bounce), which is subject-scoped by design and has no tenant to check against.
-        if (!string.IsNullOrEmpty(stateData.TenantSlug))
+        // Two conditions, because either one alone leaves a gap.
+        //
+        // A resolved tenant always requires membership. A callback delivered to a tenant
+        // subdomain resolves that tenant wherever the login started, so an apex-minted state
+        // (no slug) replayed at {tenant}.{basedomain} arrives here with a tenant resolved;
+        // keying only off the slug would skip the check for exactly that case.
+        //
+        // A state that names a tenant also requires one to have resolved. Such a state was
+        // minted by a tenant login and must have been bounced to that subdomain, so an
+        // unresolved tenant means something upstream failed — and treating that as "nothing to
+        // check" is how the gate silently disappeared when the state encoding changed.
+        if (currentTenantId is { } tenantId)
         {
-            if (currentTenantId is not { } tenantId)
-            {
-                _logger.LogError(
-                    "OIDC login denied: state was minted for tenant '{TenantSlug}' but no tenant "
-                        + "resolved on the callback, so membership could not be verified",
-                    stateData.TenantSlug);
-                return OidcCallbackResult.Failed(
-                    "invalid_state",
-                    "The login could not be completed against the tenant it was started from.");
-            }
-
             if (!await _tenantMemberService.IsMemberAsync(subject.Id, tenantId))
             {
                 _logger.LogWarning(
@@ -341,6 +335,16 @@ public class OidcAuthService : IOidcAuthService
                     tenantId);
                 return OidcCallbackResult.NotAMember(subject.Id, stateData.ReturnUrl);
             }
+        }
+        else if (!string.IsNullOrEmpty(stateData.TenantSlug))
+        {
+            _logger.LogError(
+                "OIDC login denied: state was minted for tenant '{TenantSlug}' but no tenant "
+                    + "resolved on the callback, so membership could not be verified",
+                stateData.TenantSlug);
+            return OidcCallbackResult.Failed(
+                "invalid_state",
+                "The login could not be completed against the tenant it was started from.");
         }
 
         // Update last login
