@@ -27831,6 +27831,9 @@
             "type": "string",
             "nullable": true
           },
+          "isTimeInferred": {
+            "type": "boolean"
+          },
           "food": {
             "nullable": true,
             "oneOf": [
@@ -43787,6 +43790,14 @@
           },
           "conditionType": {
             "$ref": "#/components/schemas/AlertConditionType"
+          },
+          "severity": {
+            "description": "The rule's severity, so a history row can be read the same way as a live\none rather than showing every past fire identically.",
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/AlertRuleSeverity"
+              }
+            ]
           },
           "startedAt": {
             "type": "string",
