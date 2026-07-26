@@ -221,20 +221,28 @@
     );
     const summary = monthData?.summary;
     const days = monthData?.days ?? [];
-    const daysWithData = days.filter((d) => d.totalReadings || 0 > 0);
-    const totalCarbs = days.reduce((sum, d) => sum + (d.totalCarbs ?? 0), 0);
-    const totalInsulin = days.reduce(
-      (sum, d) => sum + (d.totalInsulin ?? 0),
-      0
-    );
-    const dayCount = daysWithData.length;
+
+    // Each per-day average divides by the days that carry that kind of data.
+    // Dividing both by the days with CGM readings overstated TDD and carbs by the
+    // whole sensor-outage share of the month — a month with 10 outage days but
+    // complete pump data read about 50% high.
+    const withCarbs = days.filter((d) => (d.totalCarbs ?? 0) > 0);
+    const withInsulin = days.filter((d) => (d.totalInsulin ?? 0) > 0);
+    const sum = (
+      entries: typeof days,
+      read: (day: (typeof days)[number]) => number | undefined
+    ) => entries.reduce((total, day) => total + (read(day) ?? 0), 0);
 
     return {
       totalReadings: summary?.totalReadings ?? 0,
       inRangePercent: summary?.inRangePercent ?? 0,
       avgGlucose: summary?.avgGlucose ?? 0,
-      avgDailyCarbs: dayCount > 0 ? totalCarbs / dayCount : 0,
-      tdd: dayCount > 0 ? totalInsulin / dayCount : 0,
+      avgDailyCarbs:
+        withCarbs.length > 0 ? sum(withCarbs, (d) => d.totalCarbs) / withCarbs.length : 0,
+      tdd:
+        withInsulin.length > 0
+          ? sum(withInsulin, (d) => d.totalInsulin) / withInsulin.length
+          : 0,
     };
   });
 
@@ -309,21 +317,14 @@
     return events;
   }
 
-  function getTrackerIconColor(eventType: string, level: string): string {
-    if (eventType === "completed") return "text-muted-foreground";
-    if (eventType === "start") return "text-green-500 dark:text-green-400";
-    switch (level) {
-      case "urgent":
-        return "text-red-500 dark:text-red-400";
-      case "hazard":
-        return "text-orange-500 dark:text-orange-400";
-      case "warn":
-        return "text-yellow-500 dark:text-yellow-400";
-      case "info":
-        return "text-blue-500 dark:text-blue-400";
-      default:
-        return "text-muted-foreground";
-    }
+  /**
+   * The tone a tracker icon is drawn in, emitted as a data attribute so the
+   * colour itself lives in CSS (see CalendarDayCell).
+   */
+  function getTrackerTone(eventType: string, level: string): string {
+    if (eventType === "completed") return "completed";
+    if (eventType === "start") return "start";
+    return level;
   }
 
   function formatTrackerStartTime(startedAt: Date | undefined): string | null {
@@ -496,7 +497,7 @@
                       {handleDayClick}
                       {getDefinition}
                       {getTrackerLevel}
-                      {getTrackerIconColor}
+                      {getTrackerTone}
                       {formatTrackerStartTime}
                       {formatTrackerAge}
                       {openCompletionDialog}

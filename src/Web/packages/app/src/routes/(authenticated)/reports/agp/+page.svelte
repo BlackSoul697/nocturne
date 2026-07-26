@@ -11,14 +11,11 @@
   import {
     BarChart3,
     Calendar,
-    Info,
     Target,
     TrendingUp,
     ArrowRight,
     Printer,
     HelpCircle,
-    CheckCircle2,
-    AlertTriangle,
   } from "lucide-svelte";
   import { AmbulatoryGlucoseProfile } from "$lib/components/ambulatory-glucose-profile";
   import TIRStackedChart from "$lib/components/reports/TIRStackedChart.svelte";
@@ -32,38 +29,20 @@
   // Default: 14 days is the standard AGP report period
   const reportsParams = requireDateParamsContext(14);
 
-  // Create resource with automatic layout registration
+  // Create resource with automatic layout registration; `date` carries the
+  // selected range so the header and footer never disagree with the query.
   const reportsResource = contextResource(
     () => getReportsData(reportsParams.dateRangeInput),
-    { errorTitle: "Error Loading AGP Report" }
+    { errorTitle: "Error Loading AGP Report", dateParams: reportsParams }
   );
 
-  // Unwrap the data from the resource with null safety
-  const data = $derived({
-    entries: reportsResource.current?.entries ?? [],
-    analysis: reportsResource.current?.analysis,
-    averagedStats: reportsResource.current?.averagedStats,
-    dateRange: reportsResource.current?.dateRange ?? {
-      from: new Date().toISOString(),
-      to: new Date().toISOString(),
-      lastUpdated: new Date().toISOString(),
-    },
-  });
-
-  // Derived values from data
-  const entries = $derived(data.entries);
-  const analysis = $derived(data.analysis);
-  const dateRange = $derived(data.dateRange);
-  const startDate = $derived(new Date(dateRange.from));
-  const endDate = $derived(new Date(dateRange.to));
-  const dayCount = $derived(
-    Math.max(
-      1,
-      Math.round(
-        (endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24)
-      )
-    )
-  );
+  const entries = $derived(reportsResource.current?.entries ?? []);
+  const analysis = $derived(reportsResource.current?.analysis);
+  const averagedStats = $derived(reportsResource.current?.averagedStats);
+  const lastUpdated = $derived(reportsResource.current?.dateRange?.lastUpdated);
+  const startDate = $derived(reportsResource.date.from);
+  const endDate = $derived(reportsResource.date.to);
+  const dayCount = $derived(reportsResource.date.dayCount);
 </script>
 
 <svelte:head>
@@ -158,7 +137,8 @@
           </p>
           <p>
             <strong>Green zone</strong>
-            ({bgRange(70, 180)}) is your target range. Time in this zone is your goal!
+            ({bgRange(70, 180)}) is the consensus target range. The consensus target
+            is at least 70% of time in this zone.
           </p>
         </div>
       </details>
@@ -232,7 +212,7 @@
         </CardDescription>
       </CardHeader>
       <CardContent class="h-80 @lg:h-96 w-full">
-        <AmbulatoryGlucoseProfile averagedStats={data.averagedStats} />
+        <AmbulatoryGlucoseProfile {averagedStats} />
       </CardContent>
     </Card>
 
@@ -258,111 +238,58 @@
         <CardHeader>
           <CardTitle class="flex items-center gap-2">
             <TrendingUp class="w-5 h-5 text-purple-600" />
-            Pattern Observations
+            Measured Against Consensus Targets
           </CardTitle>
           <CardDescription>
-            What your AGP reveals about your glucose patterns
+            Each figure from this window next to the international consensus
+            target for it
           </CardDescription>
         </CardHeader>
         <CardContent class="space-y-4">
-          <!-- Target Achievement -->
-          <div class="flex items-start gap-3 p-3 rounded-lg bg-muted/50">
-            {#if (tir.target ?? 0) >= 70}
-              <CheckCircle2 class="w-5 h-5 text-green-600 shrink-0 mt-0.5" />
+          {@const observations = [
+            {
+              label: "Time in target range",
+              value: tir.target,
+              format: (v: number) => `${v.toFixed(0)}%`,
+              target: "at least 70%",
+            },
+            {
+              label: "Coefficient of variation (CV)",
+              value: variability.coefficientOfVariation,
+              format: (v: number) => `${v.toFixed(0)}%`,
+              target: "33% or below",
+            },
+            {
+              label: `Time below ${bg(70)} ${bgLabel()}`,
+              value:
+                tir.low != null || tir.veryLow != null
+                  ? (tir.low ?? 0) + (tir.veryLow ?? 0)
+                  : undefined,
+              format: (v: number) => `${v.toFixed(1)}%`,
+              target: "under 4%",
+            },
+          ]}
+          {#each observations as observation (observation.label)}
+            <div
+              class="flex flex-wrap items-baseline justify-between gap-2 rounded-lg bg-muted/50 p-3"
+            >
               <div>
-                <p class="font-medium text-green-600">
-                  Excellent Time in Range
-                </p>
+                <p class="font-medium">{observation.label}</p>
                 <p class="text-sm text-muted-foreground">
-                  You're spending {(tir.target ?? 0).toFixed(0)}% of time in
-                  target — above the 70% goal!
+                  Consensus target: {observation.target}
                 </p>
               </div>
-            {:else if (tir.target ?? 0) >= 50}
-              <Info class="w-5 h-5 text-blue-600 shrink-0 mt-0.5" />
-              <div>
-                <p class="font-medium text-blue-600">Good Progress</p>
-                <p class="text-sm text-muted-foreground">
-                  Your TIR of {(tir.target ?? 0).toFixed(0)}% shows room for
-                  improvement. Each 5% gain matters!
-                </p>
-              </div>
-            {:else}
-              <AlertTriangle class="w-5 h-5 text-orange-600 shrink-0 mt-0.5" />
-              <div>
-                <p class="font-medium text-orange-600">Let's Work on This</p>
-                <p class="text-sm text-muted-foreground">
-                  Your TIR is {(tir.target ?? 0).toFixed(0)}%. Looking at when
-                  highs/lows occur can help identify solutions.
-                </p>
-              </div>
-            {/if}
-          </div>
-
-          <!-- Variability -->
-          <div class="flex items-start gap-3 p-3 rounded-lg bg-muted/50">
-            {#if (variability.coefficientOfVariation ?? 50) <= 33}
-              <CheckCircle2 class="w-5 h-5 text-green-600 shrink-0 mt-0.5" />
-              <div>
-                <p class="font-medium text-green-600">Stable Glucose</p>
-                <p class="text-sm text-muted-foreground">
-                  Your CV of {(variability.coefficientOfVariation ?? 0).toFixed(
-                    0
-                  )}% indicates steady glucose with minimal swings.
-                </p>
-              </div>
-            {:else if (variability.coefficientOfVariation ?? 50) <= 40}
-              <Info class="w-5 h-5 text-blue-600 shrink-0 mt-0.5" />
-              <div>
-                <p class="font-medium text-blue-600">Moderate Variability</p>
-                <p class="text-sm text-muted-foreground">
-                  Some glucose swings present. The AGP bands show where
-                  variation occurs.
-                </p>
-              </div>
-            {:else}
-              <AlertTriangle class="w-5 h-5 text-orange-600 shrink-0 mt-0.5" />
-              <div>
-                <p class="font-medium text-orange-600">High Variability</p>
-                <p class="text-sm text-muted-foreground">
-                  Wide percentile bands suggest significant glucose swings.
-                  Check the daily view for patterns.
-                </p>
-              </div>
-            {/if}
-          </div>
-
-          <!-- Low Risk -->
-          {@const totalLows = (tir.low ?? 0) + (tir.veryLow ?? 0)}
-          <div class="flex items-start gap-3 p-3 rounded-lg bg-muted/50">
-            {#if totalLows < 1}
-              <CheckCircle2 class="w-5 h-5 text-green-600 shrink-0 mt-0.5" />
-              <div>
-                <p class="font-medium text-green-600">Minimal Lows</p>
-                <p class="text-sm text-muted-foreground">
-                  Excellent job avoiding low blood sugars!
-                </p>
-              </div>
-            {:else if totalLows < 4}
-              <Info class="w-5 h-5 text-blue-600 shrink-0 mt-0.5" />
-              <div>
-                <p class="font-medium text-blue-600">Low Risk Acceptable</p>
-                <p class="text-sm text-muted-foreground">
-                  {totalLows.toFixed(1)}% time below range — within acceptable
-                  limits.
-                </p>
-              </div>
-            {:else}
-              <AlertTriangle class="w-5 h-5 text-red-600 shrink-0 mt-0.5" />
-              <div>
-                <p class="font-medium text-red-600">Address Lows</p>
-                <p class="text-sm text-muted-foreground">
-                  {totalLows.toFixed(1)}% time below range. The daily view can
-                  help identify when lows occur.
-                </p>
-              </div>
-            {/if}
-          </div>
+              <p class="text-2xl font-bold tabular-nums">
+                {observation.value != null
+                  ? observation.format(observation.value)
+                  : "No data"}
+              </p>
+            </div>
+          {/each}
+          <p class="text-xs text-muted-foreground">
+            The percentile bands above show when in the day variation and
+            excursions occur. Discuss any patterns with your care team.
+          </p>
         </CardContent>
       </Card>
     </div>
@@ -403,7 +330,9 @@
 
   <div class="text-xs text-muted-foreground text-center">
     Data from {startDate.toLocaleDateString()} – {endDate.toLocaleDateString()}.
-    Last updated {new Date(dateRange.lastUpdated).toLocaleString()}.
+    {#if lastUpdated}
+      Last updated {new Date(lastUpdated).toLocaleString()}.
+    {/if}
   </div>
 </div>
 {/if}
