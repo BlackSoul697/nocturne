@@ -24,6 +24,7 @@ public class OAuthTokenServiceTests : IDisposable
     private readonly Mock<IJwtService> _mockJwtService;
     private readonly Mock<ISubjectService> _mockSubjectService;
     private readonly Mock<IOAuthGrantService> _mockGrantService;
+    private readonly Mock<IOAuthTokenRevocationCache> _mockRevocationCache;
     private readonly Mock<ILogger<OAuthTokenService>> _mockLogger;
 
     // Deterministic test values
@@ -61,6 +62,7 @@ public class OAuthTokenServiceTests : IDisposable
         _mockJwtService = new Mock<IJwtService>();
         _mockSubjectService = new Mock<ISubjectService>();
         _mockGrantService = new Mock<IOAuthGrantService>();
+        _mockRevocationCache = new Mock<IOAuthTokenRevocationCache>();
         _mockLogger = new Mock<ILogger<OAuthTokenService>>();
 
         SetupDefaultMocks();
@@ -85,7 +87,9 @@ public class OAuthTokenServiceTests : IDisposable
                 It.IsAny<string?>(),
                 It.IsAny<bool>(),
                 It.IsAny<Guid?>(),
-                It.IsAny<TimeSpan?>()))
+                It.IsAny<TimeSpan?>(),
+                It.IsAny<bool>(),
+                It.IsAny<Guid?>()))
             .Returns(TestAccessToken);
         _mockJwtService.Setup(j => j.GetAccessTokenLifetime())
             .Returns(TimeSpan.FromHours(1));
@@ -125,6 +129,7 @@ public class OAuthTokenServiceTests : IDisposable
             _mockJwtService.Object,
             _mockSubjectService.Object,
             _mockGrantService.Object,
+            _mockRevocationCache.Object,
             _mockLogger.Object
         );
     }
@@ -292,8 +297,12 @@ public class OAuthTokenServiceTests : IDisposable
         Assert.Null(result.Error);
         Assert.Null(result.ErrorDescription);
 
-        // Verify the auth code was marked as redeemed
-        var redeemed = await db.OAuthAuthorizationCodes.FirstAsync(c => c.CodeHash == testCodeHash);
+        // Verify the auth code was marked as redeemed. Read fresh: the claim is an ExecuteUpdate,
+        // which bypasses the change tracker, so the instance seeded on this context is stale.
+        using var verifyDb = CreateDbContext();
+        var redeemed = await verifyDb.OAuthAuthorizationCodes
+            .AsNoTracking()
+            .FirstAsync(c => c.CodeHash == testCodeHash);
         Assert.NotNull(redeemed.RedeemedAt);
 
         // Verify grant creation was called
@@ -331,14 +340,19 @@ public class OAuthTokenServiceTests : IDisposable
             TestRedirectUri,
             TestClientId);
 
-        // Assert
+        // Assert — unknown, expired and already-used share one invalid_grant message per
+        // RFC 6749 Section 5.2, so the response reveals nothing about which codes exist.
         Assert.False(result.Success);
         Assert.Equal("invalid_grant", result.Error);
-        Assert.Contains("expired", result.ErrorDescription, StringComparison.OrdinalIgnoreCase);
+        Assert.Equal("Authorization code is invalid.", result.ErrorDescription);
+
+        // An expired code was never redeemed, so there is nothing to revoke.
+        _mockGrantService.Verify(g => g.RevokeGrantAsync(
+            It.IsAny<Guid>(), It.IsAny<CancellationToken>()), Times.Never);
     }
 
     [Fact]
-    public async Task ExchangeAuthorizationCodeAsync_AlreadyRedeemed_ReturnsError()
+    public async Task ExchangeAuthorizationCodeAsync_AlreadyRedeemed_RevokesTheGrantItIssued()
     {
         // Arrange
         const string testCode = "redeemed-auth-code";
@@ -353,6 +367,10 @@ public class OAuthTokenServiceTests : IDisposable
         await SeedAuthorizationCodeAsync(db, testCodeHash,
             redeemedAt: DateTime.UtcNow.AddMinutes(-1));
 
+        _mockGrantService.Setup(g => g.GetActiveGrantAsync(
+                _testClientEntityId, _testSubjectId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new OAuthGrantInfo { Id = _testGrantId, SubjectId = _testSubjectId });
+
         var service = CreateService(db);
 
         // Act
@@ -365,7 +383,71 @@ public class OAuthTokenServiceTests : IDisposable
         // Assert
         Assert.False(result.Success);
         Assert.Equal("invalid_grant", result.Error);
-        Assert.Contains("already been used", result.ErrorDescription, StringComparison.OrdinalIgnoreCase);
+        Assert.Equal("Authorization code is invalid.", result.ErrorDescription);
+
+        // A replayed code means the tokens from the first redemption are suspect
+        // (RFC 6749 Section 4.1.2).
+        _mockGrantService.Verify(g => g.RevokeGrantAsync(
+            _testGrantId, It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+    [Fact]
+    public async Task ExchangeAuthorizationCodeAsync_ConcurrentRedemptions_OnlyOneSucceeds()
+    {
+        // Two exchanges of the same code at the same time. The claim is a single conditional UPDATE,
+        // so only one can move redeemed_at away from NULL; a read-then-write check let both through.
+        // Separate connections to a shared-cache database so the two calls really contend.
+        const string testCode = "raced-auth-code";
+        const string testCodeHash = "raced-auth-code-hash";
+        var dataSource = $"file:{Guid.NewGuid():N}?mode=memory&cache=shared";
+
+        _mockJwtService.Setup(j => j.HashRefreshToken(testCode))
+            .Returns(testCodeHash);
+
+        // Keeps the shared-cache database alive for the duration of the test.
+        using var keepAlive = new SqliteConnection($"DataSource={dataSource}");
+        keepAlive.Open();
+
+        var options = new DbContextOptionsBuilder<NocturneDbContext>()
+            .UseSqlite($"DataSource={dataSource};Default Timeout=30")
+            .Options;
+
+        using (var seed = new NocturneDbContext(options) { TenantId = _testTenantId })
+        {
+            await seed.Database.EnsureCreatedAsync();
+            seed.Tenants.Add(new TenantEntity { Id = _testTenantId, Slug = "test" });
+            await seed.SaveChangesAsync();
+            await SeedClientAsync(seed);
+            await SeedSubjectAsync(seed);
+            await SeedGrantAsync(seed);
+            await SeedAuthorizationCodeAsync(seed, testCodeHash);
+        }
+
+        using var dbA = new NocturneDbContext(options) { TenantId = _testTenantId };
+        using var dbB = new NocturneDbContext(options) { TenantId = _testTenantId };
+
+        // Act
+        var attempts = await Task.WhenAll(
+            Redeem(CreateService(dbA)),
+            Redeem(CreateService(dbB)));
+
+        // Assert
+        Assert.Equal(1, attempts.Count(r => r));
+
+        async Task<bool> Redeem(OAuthTokenService service)
+        {
+            try
+            {
+                var result = await service.ExchangeAuthorizationCodeAsync(
+                    testCode, TestCodeVerifier, TestRedirectUri, TestClientId);
+                return result.Success;
+            }
+            catch (SqliteException)
+            {
+                // Losing the write lock is a failed redemption, not a second success.
+                return false;
+            }
+        }
     }
 
     [Fact]
@@ -577,6 +659,65 @@ public class OAuthTokenServiceTests : IDisposable
         _mockGrantService.Verify(g => g.RevokeGrantAsync(
             It.IsAny<Guid>(),
             It.IsAny<CancellationToken>()), Times.Never);
+    }
+
+    // ---------------------------------------------------------------
+    // RevokeTokenAsync tests
+    // ---------------------------------------------------------------
+
+    [Fact]
+    public async Task RevokeTokenAsync_AccessToken_BlocklistsTheJti()
+    {
+        // RFC 7009 allows revoking an access token. It is a stateless JWT, so the only way to stop
+        // it before expiry is the jti blocklist.
+        const string accessToken = "header.payload.signature";
+        var expiresAt = DateTimeOffset.UtcNow.AddMinutes(12);
+
+        _mockJwtService.Setup(j => j.HashRefreshToken(accessToken))
+            .Returns("no-such-refresh-token-hash");
+        _mockJwtService.Setup(j => j.ValidateAccessToken(accessToken))
+            .Returns(JwtValidationResult.Success(new JwtClaims
+            {
+                SubjectId = _testSubjectId,
+                JwtId = "jti-to-revoke",
+                IssuedAt = DateTimeOffset.UtcNow,
+                ExpiresAt = expiresAt,
+            }));
+
+        using var db = CreateDbContext();
+        var service = CreateService(db);
+
+        await service.RevokeTokenAsync(accessToken, "access_token");
+
+        _mockRevocationCache.Verify(c => c.RevokeAsync(
+            "jti-to-revoke",
+            It.Is<TimeSpan>(t => t > TimeSpan.Zero),
+            It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+    [Fact]
+    public async Task RevokeTokenAsync_RefreshTokenWithAccessTokenHint_StillRevokesIt()
+    {
+        // The hint is advisory per RFC 7009 Section 2.1: a wrong hint must not make revocation a
+        // no-op.
+        const string refreshToken = "opaque-refresh-token";
+        const string refreshTokenHash = "opaque-refresh-token-hash";
+
+        _mockJwtService.Setup(j => j.HashRefreshToken(refreshToken))
+            .Returns(refreshTokenHash);
+
+        using var db = CreateDbContext();
+        await SeedClientAsync(db);
+        await SeedSubjectAsync(db);
+        var grantId = await SeedGrantAsync(db);
+        await SeedRefreshTokenAsync(db, refreshTokenHash, grantId: grantId);
+
+        var service = CreateService(db);
+
+        await service.RevokeTokenAsync(refreshToken, "access_token");
+
+        var stored = await db.OAuthRefreshTokens.FirstAsync(t => t.TokenHash == refreshTokenHash);
+        Assert.NotNull(stored.RevokedAt);
     }
 
     [Fact]
