@@ -14140,7 +14140,7 @@
         "tags": [
           "Connected Apps"
         ],
-        "summary": "Revoke a connected app. Soft-deletes the grant and invalidates all\nassociated refresh tokens; previously-issued access tokens become\nunusable on next request via the revocation cache.",
+        "summary": "Revoke a connected app. Soft-deletes the grant and invalidates all associated refresh\ntokens. Previously-issued access tokens carry the grant id and are rejected on their next\nrequest, so no residual access survives the revocation. Access tokens minted before the\ngrant id was added to them are not covered and remain usable until they expire.",
         "operationId": "ConnectedApps_Revoke",
         "parameters": [
           {
