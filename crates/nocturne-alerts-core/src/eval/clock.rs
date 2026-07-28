@@ -32,9 +32,11 @@ fn parse_hh_mm(s: &str) -> Option<NaiveTime> {
 /// overnight low rule never fires, and a mis-cased *tenant* tz silently shifts
 /// the whole rule set to UTC.
 ///
-/// Windows timezone ids (`AUS Eastern Standard Time`) are **not** resolved here
-/// — `TimeZoneHelper` accepts them via `TryConvertWindowsIdToIanaId`, which has
-/// no `chrono_tz` equivalent. See `docs/alerts/engine-semantics.md` §4.
+/// The two retries agree on that population but are not the same set. Windows
+/// ids (`AUS Eastern Standard Time`) resolve in C# and not here; conversely
+/// `TZ_VARIANTS` includes tzdb backward links (`Etc/Greenwich`, `US/Pacific`)
+/// that C#'s ICU-canonical scan rejects, so those resolve here and not there.
+/// Both divergences are cutover gates — see `docs/alerts/engine-semantics.md` §4.
 fn find_tz(id: &str) -> Option<Tz> {
     if let Ok(tz) = id.parse::<Tz>() {
         return Some(tz);
@@ -166,5 +168,21 @@ mod tests {
         assert!(find_tz("").is_none());
         // Windows ids stay unresolved here — documented divergence from TimeZoneHelper.
         assert!(find_tz("AUS Eastern Standard Time").is_none());
+    }
+
+    /// The other half of the documented divergence: `TZ_VARIANTS` carries tzdb backward
+    /// links that C#'s ICU-canonical scan rejects, so these resolve here and fail closed
+    /// under the managed engine. Pinned so a change to the set is a deliberate one.
+    #[test]
+    fn resolves_backward_links_that_the_managed_engine_rejects() {
+        assert_eq!(
+            find_tz("Etc/Greenwich").map(Tz::name),
+            Some("Etc/Greenwich")
+        );
+        assert_eq!(find_tz("US/Pacific").map(Tz::name), Some("US/Pacific"));
+        assert_eq!(
+            find_tz("Asia/Calcutta").map(Tz::name),
+            Some("Asia/Calcutta")
+        );
     }
 }

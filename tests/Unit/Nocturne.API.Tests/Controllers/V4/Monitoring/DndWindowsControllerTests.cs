@@ -166,7 +166,7 @@ public class DndWindowsControllerTests
     }
 
     [Fact]
-    public async Task Create_doesNotSupersedeAWindowThatHasNotStartedYet()
+    public async Task Create_doesNotSupersedeANonOverlappingFutureWindow()
     {
         var (controller, options) = NewController();
         var futureId = Guid.NewGuid();
@@ -182,13 +182,86 @@ public class DndWindowsControllerTests
             },
             CancellationToken.None);
 
-        // ...must survive a quick mute taken out now.
-        await controller.Create(Request(Guid.NewGuid(), DndScope.All), CancellationToken.None);
+        // ...must survive a short mute taken out now that ends before it begins.
+        await controller.Create(
+            new CreateDndWindowRequest
+            {
+                Id = Guid.NewGuid(),
+                Scope = DndScope.All,
+                StartedAt = Now,
+                EndsAt = Now.AddMinutes(30),
+            },
+            CancellationToken.None);
 
         await using var db = new NocturneDbContext(options) { TenantId = Tenant };
         var future = await db.DndWindows.SingleAsync(w => w.Id == futureId);
         future.ClearedAt.Should().BeNull();
         future.ClearedBy.Should().BeNull();
+    }
+
+    /// <summary>
+    /// The invariant the supersede exists for: never two windows of a scope active at the same
+    /// instant. Narrowing supersede to "active right now" would leave an open-ended mute taken out
+    /// now alongside a window scheduled inside it, and the resolver would then report the earlier
+    /// one's expiry while the later kept suppressing past it.
+    /// </summary>
+    [Fact]
+    public async Task Create_supersedesAFutureWindowThatOverlapsTheIncomingSpan()
+    {
+        var (controller, options) = NewController();
+        var futureId = Guid.NewGuid();
+
+        await controller.Create(
+            new CreateDndWindowRequest
+            {
+                Id = futureId,
+                Scope = DndScope.All,
+                StartedAt = Now.AddHours(2),
+                EndsAt = Now.AddHours(4),
+            },
+            CancellationToken.None);
+
+        // An open-ended mute from now on covers the scheduled span, so the scheduled one goes.
+        await controller.Create(Request(Guid.NewGuid(), DndScope.All), CancellationToken.None);
+
+        await using var db = new NocturneDbContext(options) { TenantId = Tenant };
+        var future = await db.DndWindows.SingleAsync(w => w.Id == futureId);
+        future.ClearedAt.Should().NotBeNull();
+        future.ClearedBy.Should().Be(DndWindowsController.SupersededBy);
+    }
+
+    [Fact]
+    public async Task Create_supersedesTheRunningWindowWhenAScheduledOneOverlapsIt()
+    {
+        var (controller, options) = NewController();
+        var runningId = Guid.NewGuid();
+
+        // An indefinite mute running since an hour ago.
+        await controller.Create(
+            new CreateDndWindowRequest
+            {
+                Id = runningId,
+                Scope = DndScope.All,
+                StartedAt = Now.AddHours(-1),
+                EndsAt = null,
+            },
+            CancellationToken.None);
+
+        // Scheduling tonight overlaps the open-ended span, so exactly one survives.
+        await controller.Create(
+            new CreateDndWindowRequest
+            {
+                Id = Guid.NewGuid(),
+                Scope = DndScope.All,
+                StartedAt = Now.AddHours(10),
+                EndsAt = Now.AddHours(18),
+            },
+            CancellationToken.None);
+
+        await using var db = new NocturneDbContext(options) { TenantId = Tenant };
+        var running = await db.DndWindows.SingleAsync(w => w.Id == runningId);
+        running.ClearedBy.Should().Be(DndWindowsController.SupersededBy);
+        (await db.DndWindows.CountAsync(w => w.ClearedAt == null)).Should().Be(1);
     }
 
     [Fact]

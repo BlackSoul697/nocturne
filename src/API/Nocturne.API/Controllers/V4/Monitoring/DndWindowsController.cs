@@ -2,6 +2,7 @@ using System.ComponentModel.DataAnnotations;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using Npgsql;
 using OpenApi.Remote.Attributes;
 using Nocturne.Core.Models.Alerts;
 using Nocturne.Infrastructure.Data.Entities;
@@ -16,8 +17,9 @@ namespace Nocturne.API.Controllers.V4.Monitoring;
 /// state is computed on read, never stored; rows are retained after clear/expiry for audit.
 /// </summary>
 /// <remarks>
-/// One active window per scope is enforced here: creating a window supersedes any active window of
-/// the same scope (<c>cleared_by = "system:superseded"</c>). Creates are idempotent by the
+/// One active window per scope at any instant is enforced here: creating a window supersedes the
+/// same-scope windows whose span overlaps it (<c>cleared_by = "system:superseded"</c>), so a mute
+/// scheduled for a span that does not overlap survives. Creates are idempotent by the
 /// client-supplied id so a device/web retry never double-applies. A <c>scope=all</c> window is
 /// tenant-wide DND and additionally drives the <c>do_not_disturb</c> condition via the enricher.
 /// </remarks>
@@ -96,15 +98,22 @@ public class DndWindowsController : ControllerBase
         if (existing is not null)
             return Ok(MapToResponse(existing));
 
-        // Supersede the *active* window(s) of this scope so exactly one stays active per scope.
-        // Deliberately not every uncleared row: a window whose start is still in the future is
-        // standing user intent that a mute taken out now must not silently destroy, and a window
-        // that has simply expired is already inert — stamping it `system:superseded` would
-        // rewrite the audit trail this table exists to keep.
+        // Supersede same-scope windows whose span *overlaps* the incoming one, so no two windows
+        // of a scope are ever active at the same instant.
+        //
+        // Overlap rather than "active right now" in either direction. Superseding every uncleared
+        // row destroys a mute scheduled for later tonight when the user takes out a quick mute
+        // now, and restamps windows that merely expired as `system:superseded`, falsifying the
+        // audit trail these rows are retained for. Superseding only what is active right now
+        // leaves two windows able to be active later — and the resolver would then report the
+        // earlier one's expiry while the later one kept suppressing past it.
+        //
+        // A null EndsAt is an open-ended span, so [started, ∞).
         var now = DateTime.UtcNow;
         var superseded = await db.DndWindows
             .Where(w => w.Scope == scope && w.ClearedAt == null
-                        && w.StartedAt <= now && (w.EndsAt == null || now < w.EndsAt))
+                        && (w.EndsAt == null || w.EndsAt > startedAt)
+                        && (endsAt == null || w.StartedAt < endsAt))
             .ToListAsync(ct);
         foreach (var w in superseded)
         {
@@ -128,11 +137,14 @@ public class DndWindowsController : ControllerBase
         {
             await db.SaveChangesAsync(ct);
         }
-        catch (DbUpdateException)
+        catch (DbUpdateException ex) when (IsUniqueViolation(ex))
         {
             // The id is client-supplied and the PK is global, so it can collide with a row
             // belonging to another tenant — which the RLS-filtered existence check above cannot
-            // see. Report the collision instead of surfacing a 500.
+            // see. Report the collision instead of surfacing a 500. Narrowed to the unique
+            // violation specifically: this SaveChanges also carries the supersede UPDATEs, and
+            // reporting an FK failure or an RLS-blocked write as "id already exists" would turn a
+            // misconfiguration into a plausible-looking 409.
             return Conflict("A DND window with this id already exists.");
         }
 
@@ -177,6 +189,15 @@ public class DndWindowsController : ControllerBase
         Source = w.Source,
         CreatedAt = w.CreatedAt,
     };
+
+    /// <summary>
+    /// Whether the write failed specifically because a row with this primary key already exists
+    /// (Postgres <c>23505 unique_violation</c>). The provider exception is matched by SQLSTATE
+    /// rather than type so a concurrency, foreign-key or RLS failure is not misreported as a
+    /// duplicate id.
+    /// </summary>
+    private static bool IsUniqueViolation(DbUpdateException ex) =>
+        ex.InnerException is PostgresException { SqlState: PostgresErrorCodes.UniqueViolation };
 
     /// <summary>Normalises an incoming instant to UTC (the windows columns are UTC instants).</summary>
     private static DateTime AsUtc(DateTime value) => value.Kind switch

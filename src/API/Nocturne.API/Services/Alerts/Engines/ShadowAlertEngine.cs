@@ -148,7 +148,9 @@ internal sealed class ShadowAlertEngine(
         // is skipped, whereas the Rust engine fails closed to `false` — which moves an active
         // excursion into hysteresis and lets the 30s sweep force-close a live alert. The corpus
         // can't cover it either (the generator has no try/catch, so a throwing scenario cannot
-        // be authored). Log the divergence, then rethrow untouched.
+        // be authored). Run the secondary engine on the same pre-state so the log carries what it
+        // actually produced — the whole point is to learn which side diverges, and "managed threw"
+        // on its own says nothing about the Rust half — then rethrow untouched.
         AlertEngineEvaluation managed;
         try
         {
@@ -156,9 +158,7 @@ internal sealed class ShadowAlertEngine(
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
-            logger.LogWarning(ex,
-                "AlertEngineDivergence rule={RuleId} engine={Engine} field=managed_threw managed={Managed} rust={Rust}",
-                rule.Id, shadowEvaluator.Name, ex.GetType().Name, "(evaluated, no throw)");
+            await LogManagedThrewAsync(rule, context, ruleRow, preTimers, preTracker, now, ex, ct);
             throw;
         }
 
@@ -187,6 +187,54 @@ internal sealed class ShadowAlertEngine(
         }
 
         return managed;
+    }
+
+    /// <summary>
+    /// Logs the <c>managed_threw</c> divergence, including what the secondary engine produced for
+    /// the same rule and pre-state. Runs the secondary evaluation itself because the normal
+    /// comparison path is unreachable once the managed call has thrown; the evaluation is pure, so
+    /// running it here persists nothing. Reports the Rust side as <c>(unavailable)</c> when the
+    /// pre-state snapshot failed or the rule row was missing, and as its own error when the
+    /// secondary engine also fails — never as a value it did not produce.
+    /// </summary>
+    private async Task LogManagedThrewAsync(
+        AlertRuleSnapshot rule,
+        SensorContext context,
+        AlertRule? ruleRow,
+        IReadOnlyDictionary<string, DateTime>? preTimers,
+        AlertTrackerState? preTracker,
+        DateTime now,
+        Exception managedError,
+        CancellationToken ct)
+    {
+        string shadowOutcome;
+        if (ruleRow is null || preTimers is null)
+        {
+            shadowOutcome = "(unavailable: no pre-state snapshot)";
+        }
+        else
+        {
+            try
+            {
+                var shadow = await shadowEvaluator.EvaluateAsync(
+                    ruleRow, context, now, preTimers, preTracker, ct);
+                shadowOutcome = shadow.Skipped
+                    ? "skipped"
+                    : $"root={shadow.Root} transition={shadow.Transition} auto_resolved={shadow.AutoResolved}";
+            }
+            catch (OperationCanceledException)
+            {
+                throw;
+            }
+            catch (Exception ex)
+            {
+                shadowOutcome = $"threw {ex.GetType().Name}";
+            }
+        }
+
+        logger.LogWarning(managedError,
+            "AlertEngineDivergence rule={RuleId} engine={Engine} field=managed_threw managed={Managed} rust={Rust}",
+            rule.Id, shadowEvaluator.Name, $"threw {managedError.GetType().Name}", shadowOutcome);
     }
 
     /// <inheritdoc/>

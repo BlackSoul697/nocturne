@@ -91,12 +91,19 @@ internal static class RustEnvelopeMapper
 
     /// <summary>
     /// Copies persisted sustained timers into the envelope with every instant pinned to
-    /// <see cref="DateTimeKind.Utc"/>. The crate deserialises these as <c>DateTime&lt;Utc&gt;</c>,
-    /// which requires an offset in the wire form — a <see cref="DateTimeKind.Unspecified"/>
-    /// instant serialises without one and the whole call comes back as an error envelope. Every
-    /// other instant crossing the boundary is normalised the same way; the timer map is the one
-    /// that arrives straight from a store rather than through a projection.
+    /// <see cref="DateTimeKind.Utc"/>.
     /// </summary>
+    /// <remarks>
+    /// Defensive rather than a live fix: <c>alert_condition_timers.first_true_at</c> is
+    /// <c>timestamp with time zone</c>, so Npgsql already hands these back as
+    /// <see cref="DateTimeKind.Utc"/>, and the replay store round-trips whatever it was given.
+    /// The reason to pin it anyway is that the crate deserialises these as
+    /// <c>DateTime&lt;Utc&gt;</c>, which requires an offset in the wire form — a
+    /// <see cref="DateTimeKind.Unspecified"/> instant serialises without one and turns the whole
+    /// call into an error envelope. This is the one instant crossing the boundary that arrives
+    /// straight from a store rather than through a projection that normalises it, so a future
+    /// column or store change would otherwise land as a silent engine failure.
+    /// </remarks>
     public static Dictionary<string, DateTime> BuildTimers(IReadOnlyDictionary<string, DateTime> timers)
     {
         var wire = new Dictionary<string, DateTime>(timers.Count, StringComparer.Ordinal);

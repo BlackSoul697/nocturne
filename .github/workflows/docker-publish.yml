@@ -104,13 +104,32 @@ jobs:
             ~/.cargo/registry
             ~/.cargo/git
             crates/target
-          key: cargo-release-${{ runner.os }}-${{ hashFiles('crates/Cargo.lock') }}
+          # The key must cover the Rust sources, not just the lockfile: actions/cache
+          # restores crates/target with mtimes newer than the freshly checked-out sources,
+          # and cargo's fingerprint for path packages is mtime-based — so a source-only
+          # change would restore a stale cdylib, skip the rebuild, and never re-save it.
+          key: cargo-release-${{ runner.os }}-${{ hashFiles('crates/Cargo.lock', 'crates/**/*.rs', 'crates/**/Cargo.toml') }}
       - name: Build nocturne_alerts cdylib
         working-directory: crates
         run: cargo build --release -p nocturne-alerts-ffi
 
       - name: Restore .NET dependencies
         run: dotnet restore
+
+      # RequireNocturneAlertsNative only proves the file exists. A cdylib built for the wrong
+      # architecture — or against a newer glibc than the aspnet base image carries — satisfies
+      # that guard, ships, throws BadImageFormatException/DllNotFoundException at runtime, and
+      # the host's catch handlers turn it into the silent degraded path. P/Invoke it once here so
+      # an unloadable artifact fails the pipeline instead. Note this validates the *build host*;
+      # a runner-vs-base-image glibc gap would still get through.
+      - name: Verify the cdylib actually loads
+        env:
+          NOCTURNE_ALERTS_NATIVE_DIR: ${{ github.workspace }}/crates/target/release
+          NOCTURNE_ALERTS_REQUIRE_NATIVE: "1"
+        run: |
+          dotnet test tests/Unit/Nocturne.Alerts.Native.Tests/Nocturne.Alerts.Native.Tests.csproj \
+            --filter "FullyQualifiedName~NativeGateTests" \
+            -p:GenerateNSwagClient=false
 
       # Generate API client, Zod schemas, and remote functions for the web build.
       # IMPORTANT: Must run BEFORE dotnet publish (publish marks outputs as

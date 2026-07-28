@@ -11,7 +11,12 @@ namespace Nocturne.Core.Models.Alerts;
 /// Non-null exactly when <paramref name="Scopes"/> contains <see cref="DndScope.All"/> —
 /// <c>lows</c>/<c>highs</c> windows are gate-only and never trip the condition leaf.
 /// </param>
-public readonly record struct DndResolution(
+/// <remarks>
+/// A record class, not a <c>readonly record struct</c>: a struct's <c>default</c> would carry a
+/// null <see cref="Scopes"/> and NRE on the first membership test, and there is no useful
+/// "empty resolution" literal — the only way to obtain one is <see cref="DndWindowResolver.Resolve"/>.
+/// </remarks>
+public sealed record DndResolution(
     IReadOnlySet<DndScope> Scopes,
     DoNotDisturbSnapshot? ActiveDoNotDisturb);
 
@@ -19,9 +24,15 @@ public readonly record struct DndResolution(
 /// Resolves a tenant's DND windows (plus scheduled DND) into the <see cref="DndResolution"/>
 /// the evaluation context carries. The single resolver for both paths: the live enricher and
 /// the replay walker call this instead of each assembling the scope set and the
-/// <see cref="DoNotDisturbSnapshot"/> themselves, so they cannot disagree about whether a
-/// tick was in DND (ADR 0004 D5).
+/// <see cref="DoNotDisturbSnapshot"/> themselves, so the two cannot drift on how a window
+/// resolves (ADR 0004 D5).
 /// </summary>
+/// <remarks>
+/// Shared window resolution is not the same as identical DND state: replay passes no
+/// <c>scheduled</c> projection, because a recurring schedule's past state is not reconstructible
+/// from the settings row as it stands today. Live and replay therefore still differ whenever
+/// scheduled DND is on — the windows half is what this guarantees.
+/// </remarks>
 /// <seealso cref="DndWindowSnapshot"/>
 /// <seealso cref="DndSuppressionGate"/>
 public static class DndWindowResolver
