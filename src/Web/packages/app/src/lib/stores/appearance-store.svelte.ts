@@ -28,6 +28,7 @@ import supportedLocales from "../../../../../supportedLocales.json";
 import { WidgetId } from "../api/generated/nocturne-api-client";
 import type { UserDisplayPreferences } from "$lib/api";
 import { type HaloDialConfig, defaultHaloDialConfig } from "../components/dashboard/halo-dial/config";
+import { weekStartName } from "../components/calendar/calendar-date";
 
 // ==========================================
 // Type Definitions
@@ -44,6 +45,24 @@ export type GlucoseUnits = "mg/dl" | "mmol";
 
 /** Time format preference */
 export type TimeFormat = "12" | "24";
+
+/**
+ * Regional format: a BCP-47 tag driving date ordering, month/weekday names and the
+ * first day of the week. Empty string follows the display language.
+ */
+export type RegionFormat = (typeof REGION_FORMATS)[number];
+
+/**
+ * Regional formats offered in settings, mirroring the backend allow-list. Labels are
+ * derived at render time from `Intl.DisplayNames` plus a sample date, so a new region
+ * only needs its tag added here (and to `AllowedRegionFormats` server-side).
+ */
+export const REGION_FORMATS = [
+  "",
+  "en-US", "en-GB", "en-AU", "en-CA", "en-IE", "en-NZ", "en-ZA",
+  "de-DE", "fr-FR", "es-ES", "it-IT", "nl-NL", "pl-PL", "pt-PT", "pt-BR",
+  "sv-SE", "nb-NO", "da-DK", "fi-FI", "cs-CZ", "ru-RU", "ja-JP",
+] as const;
 
 /** Sidebar widget preference */
 export type SidebarWidget = "graph" | "halo-dial";
@@ -166,6 +185,14 @@ export const glucoseUnits = new SyncedPref<GlucoseUnits>("nocturne-glucose-units
  * Time format preference (12-hour or 24-hour)
  */
 export const timeFormat = new SyncedPref<TimeFormat>("nocturne-time-format", "12");
+
+/**
+ * Regional format preference. Empty (the default) means "follow the display language",
+ * which is what a user who never opens this setting gets. Set it to e.g. "en-GB" or
+ * "de-DE" for European date ordering and Monday-first calendars while keeping the
+ * interface in another language.
+ */
+export const regionFormat = new SyncedPref<RegionFormat>("nocturne-region-format", "");
 
 /**
  * Night mode schedule toggle
@@ -440,6 +467,7 @@ export function collectPreferences(): UserDisplayPreferences {
   return {
     glucoseUnits: glucoseUnits.current,
     timeFormat: timeFormat.current,
+    regionFormat: regionFormat.current,
     colorTheme: colorTheme.current,
     nightModeSchedule: nightModeSchedule.current,
     dashboardTopWidgets: dashboardTopWidgets.current,
@@ -476,6 +504,7 @@ export function applyPreferences(
 
   hydrateIfPresent(glucoseUnits, prefs.glucoseUnits as GlucoseUnits | undefined);
   hydrateIfPresent(timeFormat, prefs.timeFormat as TimeFormat | undefined);
+  hydrateIfPresent(regionFormat, prefs.regionFormat as RegionFormat | undefined);
   hydrateIfPresent(colorTheme, prefs.colorTheme as ColorTheme | undefined);
   hydrateIfPresent(nightModeSchedule, prefs.nightModeSchedule ?? undefined);
   hydrateIfPresent(dashboardTopWidgets, prefs.dashboardTopWidgets ?? undefined);
@@ -651,6 +680,34 @@ export function getLanguageLabel(
   } catch {
     return code;
   }
+}
+
+/** A date whose day, month and year are all unambiguous, so a sample shows the real ordering. */
+const REGION_SAMPLE_DATE = new Date(2026, 11, 31);
+
+/**
+ * Label for a regional format: the region's name in the user's own language, then the
+ * date it produces and the day its weeks start on. Both samples are spelled out because
+ * neither is guessable from a country name — Portugal writes 31/12/2026 but still starts
+ * its weeks on Sunday — and nobody picks a calendar style by its BCP-47 tag.
+ */
+export function regionFormatLabel(tag: RegionFormat): string {
+  if (!tag) return "Match my language";
+
+  const region = tag.split("-")[1];
+  let name: string = tag;
+  try {
+    name =
+      new Intl.DisplayNames([preferredLanguage.current], { type: "region" }).of(
+        region
+      ) ?? tag;
+  } catch {
+    // Unknown region subtag: the tag itself is still a usable label.
+  }
+
+  const sample = REGION_SAMPLE_DATE.toLocaleDateString(tag);
+  const weekStart = weekStartName(tag, preferredLanguage.current);
+  return `${name} — ${sample}, weeks start ${weekStart}`;
 }
 
 /**
