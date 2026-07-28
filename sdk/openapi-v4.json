@@ -43047,6 +43047,10 @@
             "type": "string",
             "nullable": true
           },
+          "regionFormat": {
+            "type": "string",
+            "nullable": true
+          },
           "colorTheme": {
             "type": "string",
             "nullable": true
