@@ -65,7 +65,7 @@ internal sealed class RustShadowRuleEvaluator : IShadowRuleEvaluator
             RustEnvelopeMapper.BuildRule(rule),
             RustEnvelopeMapper.BuildContext(context),
             now,
-            timers,
+            RustEnvelopeMapper.BuildTimers(timers),
             RustEnvelopeMapper.BuildTracker(trackerState));
         var result = RustAlertEngine.GetRuleResult(response);
 
@@ -141,7 +141,26 @@ internal sealed class ShadowAlertEngine(
             snapshotError = ex;
         }
 
-        var managed = await managedEngine.EvaluateRuleAsync(rule, context, options, ct);
+        // The managed engine stays authoritative, including when it throws — the orchestrator's
+        // per-rule catch is what decides a throwing rule is skipped, so the exception has to
+        // reach it unchanged. But a throw is precisely the divergence class shadow mode is
+        // otherwise blind to: the managed evaluators NRE on a missing payload field and the rule
+        // is skipped, whereas the Rust engine fails closed to `false` — which moves an active
+        // excursion into hysteresis and lets the 30s sweep force-close a live alert. The corpus
+        // can't cover it either (the generator has no try/catch, so a throwing scenario cannot
+        // be authored). Log the divergence, then rethrow untouched.
+        AlertEngineEvaluation managed;
+        try
+        {
+            managed = await managedEngine.EvaluateRuleAsync(rule, context, options, ct);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            logger.LogWarning(ex,
+                "AlertEngineDivergence rule={RuleId} engine={Engine} field=managed_threw managed={Managed} rust={Rust}",
+                rule.Id, shadowEvaluator.Name, ex.GetType().Name, "(evaluated, no throw)");
+            throw;
+        }
 
         if (snapshotError is not null)
         {

@@ -20,8 +20,29 @@ fn parse_hh_mm(s: &str) -> Option<NaiveTime> {
     NaiveTime::from_hms_opt(hh, mm, 0)
 }
 
+/// Resolves an IANA timezone id, mirroring the resolution order of the C#
+/// `TimeZoneHelper`: exact match first, then a case-insensitive match against
+/// the zone table.
+///
+/// The case-insensitive pass is not cosmetic. `chrono_tz`'s `FromStr` is an
+/// exact-match table lookup, while `TimeZoneHelper` deliberately resolves
+/// mis-cased ids because connector data carries them in bulk (production has
+/// ~240 rows spelling `Etc/GMT-2` as `ETC/GMT-2`). Without this the two engines
+/// disagree on every such rule: a mis-cased *per-rule* tz fails closed, so an
+/// overnight low rule never fires, and a mis-cased *tenant* tz silently shifts
+/// the whole rule set to UTC.
+///
+/// Windows timezone ids (`AUS Eastern Standard Time`) are **not** resolved here
+/// — `TimeZoneHelper` accepts them via `TryConvertWindowsIdToIanaId`, which has
+/// no `chrono_tz` equivalent. See `docs/alerts/engine-semantics.md` §4.
 fn find_tz(id: &str) -> Option<Tz> {
-    id.parse::<Tz>().ok()
+    if let Ok(tz) = id.parse::<Tz>() {
+        return Some(tz);
+    }
+    chrono_tz::TZ_VARIANTS
+        .iter()
+        .find(|tz| tz.name().eq_ignore_ascii_case(id))
+        .copied()
 }
 
 fn local_now(now: DateTime<Utc>, tz: Option<Tz>) -> chrono::NaiveDateTime {
@@ -104,5 +125,46 @@ pub(super) fn time_since(p: &TimeSincePayload, anchor: Option<DateTime<Utc>>, en
         3 => elapsed <= threshold,
         4 => elapsed == threshold,
         _ => false,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn resolves_exact_iana_ids() {
+        assert_eq!(find_tz("Etc/GMT-2").map(Tz::name), Some("Etc/GMT-2"));
+        assert_eq!(
+            find_tz("Australia/Sydney").map(Tz::name),
+            Some("Australia/Sydney")
+        );
+    }
+
+    /// The production case: ~240 rows spell `Etc/GMT-2` as `ETC/GMT-2`.
+    #[test]
+    fn resolves_miscased_etc_ids() {
+        assert_eq!(find_tz("ETC/GMT-2").map(Tz::name), Some("Etc/GMT-2"));
+        assert_eq!(find_tz("etc/utc").map(Tz::name), Some("Etc/UTC"));
+    }
+
+    #[test]
+    fn resolves_miscased_region_ids() {
+        assert_eq!(
+            find_tz("australia/sydney").map(Tz::name),
+            Some("Australia/Sydney")
+        );
+        assert_eq!(
+            find_tz("AMERICA/NEW_YORK").map(Tz::name),
+            Some("America/New_York")
+        );
+    }
+
+    #[test]
+    fn rejects_unknown_ids() {
+        assert!(find_tz("Not/AZone").is_none());
+        assert!(find_tz("").is_none());
+        // Windows ids stay unresolved here — documented divergence from TimeZoneHelper.
+        assert!(find_tz("AUS Eastern Standard Time").is_none());
     }
 }

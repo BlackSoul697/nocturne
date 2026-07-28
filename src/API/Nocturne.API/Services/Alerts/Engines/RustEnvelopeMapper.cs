@@ -90,6 +90,22 @@ internal static class RustEnvelopeMapper
     }
 
     /// <summary>
+    /// Copies persisted sustained timers into the envelope with every instant pinned to
+    /// <see cref="DateTimeKind.Utc"/>. The crate deserialises these as <c>DateTime&lt;Utc&gt;</c>,
+    /// which requires an offset in the wire form — a <see cref="DateTimeKind.Unspecified"/>
+    /// instant serialises without one and the whole call comes back as an error envelope. Every
+    /// other instant crossing the boundary is normalised the same way; the timer map is the one
+    /// that arrives straight from a store rather than through a projection.
+    /// </summary>
+    public static Dictionary<string, DateTime> BuildTimers(IReadOnlyDictionary<string, DateTime> timers)
+    {
+        var wire = new Dictionary<string, DateTime>(timers.Count, StringComparer.Ordinal);
+        foreach (var (path, at) in timers)
+            wire[path] = DateTime.SpecifyKind(at, DateTimeKind.Utc);
+        return wire;
+    }
+
+    /// <summary>
     /// Projects a <see cref="SensorContext"/> onto the corpus <c>ScenarioContext</c> wire
     /// shape. Field-by-field total against the generator's <c>ScenarioModels.cs</c>
     /// (its <c>ToSensorContext</c> is the inverse of this mapping).

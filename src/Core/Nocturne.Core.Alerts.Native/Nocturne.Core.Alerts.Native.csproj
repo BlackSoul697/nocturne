@@ -30,4 +30,16 @@
             <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
         </Content>
     </ItemGroup>
+
+    <!-- The packing conditions above stay silent so the ordinary dev loop works without
+         cargo. Builds that produce a shipped artifact set RequireNocturneAlertsNative=true
+         (the container publish in docker-publish.yml) so a missing cdylib fails the build
+         instead of degrading to the unavailable fallback at runtime. -->
+    <Target Name="VerifyNocturneAlertsNativePresent" BeforeTargets="Build"
+            Condition="'$(RequireNocturneAlertsNative)' == 'true'">
+        <Error Condition="!Exists('$(NocturneAlertsNativeDir)nocturne_alerts.dll')
+                          AND !Exists('$(NocturneAlertsNativeDir)libnocturne_alerts.so')
+                          AND !Exists('$(NocturneAlertsNativeDir)libnocturne_alerts.dylib')"
+               Text="RequireNocturneAlertsNative=true but no nocturne_alerts cdylib was found in '$(NocturneAlertsNativeDir)'. Run 'cargo build --release -p nocturne-alerts-ffi' from crates/ first, or point NocturneAlertsNativeDir at the directory containing it." />
+    </Target>
 </Project>

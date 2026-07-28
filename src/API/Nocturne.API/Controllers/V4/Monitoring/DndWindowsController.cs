@@ -1,3 +1,4 @@
+using System.ComponentModel.DataAnnotations;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -67,11 +68,18 @@ public class DndWindowsController : ControllerBase
     [ProducesResponseType(typeof(DndWindowResponse), StatusCodes.Status201Created)]
     [ProducesResponseType(typeof(DndWindowResponse), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
     public async Task<ActionResult<DndWindowResponse>> Create(
         [FromBody] CreateDndWindowRequest request, CancellationToken ct)
     {
         if (request.Id == Guid.Empty)
             return BadRequest("A client-supplied window id is required.");
+
+        // Scope is nullable on the request so an omitted field is rejected rather than
+        // silently defaulting to the zero enum member (lows) — muting the wrong class of
+        // alert is not a reasonable reading of a malformed request.
+        if (request.Scope is not { } scope)
+            return BadRequest("scope is required (lows | highs | all).");
 
         var startedAt = AsUtc(request.StartedAt);
         var endsAt = request.EndsAt is { } e ? AsUtc(e) : (DateTime?)null;
@@ -88,10 +96,15 @@ public class DndWindowsController : ControllerBase
         if (existing is not null)
             return Ok(MapToResponse(existing));
 
-        // Supersede the active window(s) of this scope so exactly one stays active per scope.
+        // Supersede the *active* window(s) of this scope so exactly one stays active per scope.
+        // Deliberately not every uncleared row: a window whose start is still in the future is
+        // standing user intent that a mute taken out now must not silently destroy, and a window
+        // that has simply expired is already inert — stamping it `system:superseded` would
+        // rewrite the audit trail this table exists to keep.
         var now = DateTime.UtcNow;
         var superseded = await db.DndWindows
-            .Where(w => w.Scope == request.Scope && w.ClearedAt == null)
+            .Where(w => w.Scope == scope && w.ClearedAt == null
+                        && w.StartedAt <= now && (w.EndsAt == null || now < w.EndsAt))
             .ToListAsync(ct);
         foreach (var w in superseded)
         {
@@ -103,14 +116,25 @@ public class DndWindowsController : ControllerBase
         {
             Id = request.Id,
             TenantId = tenantId,
-            Scope = request.Scope,
+            Scope = scope,
             StartedAt = startedAt,
             EndsAt = endsAt,
             Source = request.Source,
             // CreatedAt is the server receipt time, set by the DB default (CURRENT_TIMESTAMP).
         };
         db.DndWindows.Add(window);
-        await db.SaveChangesAsync(ct);
+
+        try
+        {
+            await db.SaveChangesAsync(ct);
+        }
+        catch (DbUpdateException)
+        {
+            // The id is client-supplied and the PK is global, so it can collide with a row
+            // belonging to another tenant — which the RLS-filtered existence check above cannot
+            // see. Report the collision instead of surfacing a 500.
+            return Conflict("A DND window with this id already exists.");
+        }
 
         var created = await db.DndWindows.AsNoTracking().FirstAsync(w => w.Id == window.Id, ct);
         return CreatedAtAction(nameof(GetActive), MapToResponse(created));
@@ -171,8 +195,11 @@ public class CreateDndWindowRequest
     /// <summary>Client-generated UUID. Re-sending the same id is a no-op that returns the stored window.</summary>
     public Guid Id { get; set; }
 
-    /// <summary>Which alerts to silence: <c>lows</c> | <c>highs</c> | <c>all</c>.</summary>
-    public DndScope Scope { get; set; }
+    /// <summary>
+    /// Which alerts to silence: <c>lows</c> | <c>highs</c> | <c>all</c>. Required — nullable so
+    /// an omitted value is a 400 rather than defaulting to the zero enum member.
+    /// </summary>
+    public DndScope? Scope { get; set; }
 
     /// <summary>When the mute takes effect (may predate receipt for offline authoring).</summary>
     public DateTime StartedAt { get; set; }
@@ -181,6 +208,7 @@ public class CreateDndWindowRequest
     public DateTime? EndsAt { get; set; }
 
     /// <summary>Audit label for what created the window (e.g. <c>web</c>, <c>prelude-device</c>).</summary>
+    [MaxLength(128)]
     public string? Source { get; set; }
 }
 

@@ -210,6 +210,16 @@ in §3 plus:
 - Timezone resolution order (where applicable): per-rule condition timezone → tenant
   timezone (`TenantTimeZoneId`, IANA id) → UTC. Failure modes differ by leaf (§3:
   `time_of_day` fails closed on a bad per-rule tz, falls back on a bad tenant tz).
+- **Which ids resolve** is itself normative, because it decides whether a rule fires at
+  all. Both engines resolve an exact IANA id, then retry case-insensitively — connector
+  data carries mis-cased ids in bulk (production has ~240 rows spelling `Etc/GMT-2` as
+  `ETC/GMT-2`), and dropping them would make an overnight low rule silently never fire.
+  **Known divergence:** the C# `TimeZoneHelper` additionally accepts Windows ids
+  (`AUS Eastern Standard Time`) via `TryConvertWindowsIdToIanaId`; `chrono_tz` has no
+  equivalent, so the crate leaves them unresolved (per-rule ⇒ false, tenant ⇒ UTC).
+  Closing it means carrying a CLDR Windows↔IANA mapping in the crate — a mapping that
+  would then need its own drift check against .NET's — so it stays open and is a cutover
+  gate rather than something the corpus can catch.
 
 ---
 

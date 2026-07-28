@@ -17,9 +17,15 @@ namespace Nocturne.API.Services.Alerts;
 /// is per-tenant because <c>alert_rules</c> is RLS-scoped and the policy is fail-closed — a
 /// cross-tenant <c>IgnoreQueryFilters</c> read would be blocked, so we set the tenant context per
 /// iteration exactly like the sweep service does.
+///
+/// A <see cref="BackgroundService"/> rather than a bare <see cref="IHostedService"/>: the work is
+/// a full scan of every rule of every tenant, and <c>StartAsync</c> runs before the host begins
+/// serving, so doing it there delays readiness for as long as the scan takes. Nothing depends on
+/// the backfill having completed — unclassified rules read as <c>undirected</c>, which is the
+/// all-only fallback the gate already handles.
 /// </remarks>
 /// <seealso cref="RuleScopeClassifier"/>
-public sealed class RuleScopeClassBackfillService : IHostedService
+public sealed class RuleScopeClassBackfillService : BackgroundService
 {
     private readonly IServiceProvider _serviceProvider;
     private readonly ILogger<RuleScopeClassBackfillService> _logger;
@@ -32,13 +38,30 @@ public sealed class RuleScopeClassBackfillService : IHostedService
         _logger = logger;
     }
 
-    public async Task StartAsync(CancellationToken cancellationToken)
+    protected override async Task ExecuteAsync(CancellationToken cancellationToken)
     {
+        // ExecuteAsync runs synchronously up to its first await, and the host waits on that
+        // stretch — yield before touching DI or the native probe so none of the scan is on the
+        // startup path.
+        await Task.Yield();
+
         try
         {
             using var scope = _serviceProvider.CreateScope();
             var factory = scope.ServiceProvider.GetRequiredService<IDbContextFactory<NocturneDbContext>>();
             var classifier = scope.ServiceProvider.GetRequiredService<IRuleScopeClassifier>();
+
+            // Without the native engine every Classify returns the Undirected fallback, so the
+            // scan can only ever write the value the D2 migration already defaulted to — while
+            // logging one warning per rule per boot. Skip it and say so once.
+            if (!classifier.IsAvailable)
+            {
+                _logger.LogWarning(
+                    "Skipping alert-rule scope-class backfill: the nocturne_alerts native library "
+                    + "could not be loaded, so every rule would classify as undirected (all-only) "
+                    + "and scoped lows/highs Do Not Disturb cannot narrow-match any rule.");
+                return;
+            }
 
             // Tenants are not RLS-scoped, so this list read is safe without a tenant context.
             List<Guid> tenantIds;
@@ -88,11 +111,13 @@ public sealed class RuleScopeClassBackfillService : IHostedService
                     tenantIds.Count);
             }
         }
+        catch (OperationCanceledException)
+        {
+            // Host shutting down mid-scan; the next boot picks up where this left off.
+        }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error backfilling alert-rule scope classes");
         }
     }
-
-    public Task StopAsync(CancellationToken cancellationToken) => Task.CompletedTask;
 }

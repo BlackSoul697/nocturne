@@ -91,6 +91,24 @@ jobs:
           echo "dotnet_tags=$DOTNET_TAGS" >> $GITHUB_OUTPUT
           echo "docker_tags=$DOCKER_TAGS" >> $GITHUB_OUTPUT
 
+      # The nocturne_alerts cdylib is a cargo artifact, not a committed binary, and
+      # Nocturne.Core.Alerts.Native.csproj packs it only when it already exists. It has to
+      # be built before any dotnet build/publish in this job, or the API image ships
+      # without it and every Rust-backed path (the engine seam, scope-class classify)
+      # silently degrades to its unavailable fallback at runtime.
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Cache cargo
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            crates/target
+          key: cargo-release-${{ runner.os }}-${{ hashFiles('crates/Cargo.lock') }}
+      - name: Build nocturne_alerts cdylib
+        working-directory: crates
+        run: cargo build --release -p nocturne-alerts-ffi
+
       - name: Restore .NET dependencies
         run: dotnet restore
 
@@ -99,7 +117,7 @@ jobs:
       # up-to-date, causing post-build generation targets to be skipped).
       - name: Generate API client for web build
         working-directory: src/API/Nocturne.API
-        run: dotnet build -c Release
+        run: dotnet build -c Release -p:RequireNocturneAlertsNative=true
 
       - name: Verify generated API client files
         run: |
@@ -134,6 +152,7 @@ jobs:
           dotnet publish \
             -c Release \
             -p:PublishProfile=DefaultContainer \
+            -p:RequireNocturneAlertsNative=true \
             -p:ContainerRegistry=${{ env.REGISTRY }} \
             -p:ContainerRepository=${{ env.IMAGE_REPOSITORY }}/nocturne-api \
             "-p:ContainerImageTags=${{ steps.version.outputs.dotnet_tags }}" \

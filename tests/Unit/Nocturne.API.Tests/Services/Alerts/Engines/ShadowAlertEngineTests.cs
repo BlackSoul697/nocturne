@@ -1,3 +1,4 @@
+using System.Text.Json;
 using FluentAssertions;
 using Microsoft.Extensions.Logging;
 using Nocturne.Alerts.ParityCorpus.Generator.Harness;
@@ -165,6 +166,34 @@ public class ShadowAlertEngineTests
         (await timerStore.GetAllForRuleAsync(RuleId, CancellationToken.None)).Should().BeEmpty();
         var state = await trackerRepo.GetTrackerStateAsync(RuleId, CancellationToken.None);
         state!.State.Should().Be("active", "the managed write is the only persisted state");
+    }
+
+    /// <summary>
+    /// A managed throw is the one divergence class a comparison after the fact cannot see: the
+    /// managed evaluators throw and the orchestrator skips the rule, while the Rust engine fails
+    /// closed to <c>false</c> — which moves an active excursion into hysteresis and lets the sweep
+    /// force-close a live alert. Shadow mode has to surface it, and must still let the exception
+    /// through so the orchestrator's per-rule catch keeps deciding what a throwing rule means.
+    /// </summary>
+    [Fact]
+    public async Task Managed_throwing_logs_a_managed_threw_divergence_and_rethrows()
+    {
+        var rule = BuildThresholdRule();
+        rule.ConditionParams = "{ this is not json";
+        var fake = new FakeShadowEvaluator(AgreeingOutcome);
+        var (engine, logger, _, _, provider) = BuildShadowEngine(rule, fake);
+        await using var _ = provider;
+
+        var act = async () => await engine.EvaluateRuleAsync(
+            ToSnapshot(rule), LowGlucoseContext(), AlertEngineOptions.Default, CancellationToken.None);
+
+        await act.Should().ThrowAsync<JsonException>(
+            "the managed engine stays authoritative, throws included");
+
+        logger.Entries.Should().ContainSingle(e =>
+            e.Level == LogLevel.Warning
+            && e.Message.Contains("AlertEngineDivergence")
+            && e.Message.Contains("field=managed_threw"));
     }
 
     [EngineNativeFact]

@@ -200,43 +200,15 @@ internal sealed class SensorContextEnricher : ISensorContextEnricher
             // resolved below); this projects the active scheduled window if any (ADR 0004 D5).
             var scheduled = settings?.Resolve(now, enriched.TenantTimeZoneId);
 
-            // Scoped DND windows: resolve each uncleared window active-at-now into its scope.
-            var windows = await _deps.Alerts.GetUnclearedDndWindowsAsync(tenantId, ct);
-            var activeScopes = new HashSet<DndScope>();
-            foreach (var w in windows)
-            {
-                if (w.IsActiveAt(now))
-                    activeScopes.Add(w.Scope);
-            }
-            if (scheduled is not null)
-                activeScopes.Add(DndScope.All);
-
-            // ActiveDoNotDisturb drives the do_not_disturb condition leaf and the tenant-wide
-            // notion of DND, so it is non-null exactly when `all` is active — lows/highs windows
-            // feed ActiveDndScopes (the gate) only. Anchor for_minutes on the scheduled projection
-            // when present, else on the earliest active all-window (manual mute).
-            DoNotDisturbSnapshot? dnd = null;
-            if (activeScopes.Contains(DndScope.All))
-            {
-                if (scheduled is not null)
-                {
-                    dnd = new DoNotDisturbSnapshot(scheduled.StartedAt, scheduled.Source);
-                }
-                else
-                {
-                    var allStartedAt = windows
-                        .Where(w => w.Scope == DndScope.All && w.IsActiveAt(now))
-                        .Select(w => w.StartedAt)
-                        .DefaultIfEmpty(now)
-                        .Min();
-                    dnd = new DoNotDisturbSnapshot(allStartedAt, "manual");
-                }
-            }
+            // Scoped DND windows + scheduled DND, folded into scopes and the tenant-wide
+            // projection by the shared resolver (the same call replay makes, receipt-gated).
+            var windows = await _deps.Alerts.GetUnexpiredDndWindowsAsync(tenantId, now, ct);
+            var dnd = DndWindowResolver.Resolve(windows, now, receiptGated: false, scheduled);
 
             enriched = enriched with
             {
-                ActiveDoNotDisturb = dnd,
-                ActiveDndScopes = activeScopes,
+                ActiveDoNotDisturb = dnd.ActiveDoNotDisturb,
+                ActiveDndScopes = dnd.Scopes,
             };
         }
 

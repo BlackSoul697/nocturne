@@ -169,10 +169,20 @@ internal sealed class AlertReplayService(
             // Pin every fact in the per-tick context to `tick` — APS / pump / uploader /
             // state-span / temp-basal / device-event repos all support an as-of cutoff.
             var tickUtc = DateTime.SpecifyKind(tick, DateTimeKind.Utc);
+            // The enricher leaves DND alone on the replay path (it has no historical answer for
+            // scheduled DND), so resolve the windows here — through the same resolver the live
+            // path uses, receipt-gated. Both halves of the picture have to be set: the gate reads
+            // ActiveDndScopes and the `do_not_disturb` leaf reads ActiveDoNotDisturb, so setting
+            // only the former makes a tick that the gate calls suppressed evaluate its own
+            // do_not_disturb condition as false.
+            var tickDnd = DndWindowResolver.Resolve(dndWindows, tickUtc, receiptGated: true);
             var enrichedBase = (await enricher.EnrichAsOfAsync(
                 baseContext, ordered, tenantId, tickUtc, ct))
                 with
-            { ActiveDndScopes = ResolveDndScopes(dndWindows, tickUtc) };
+            {
+                ActiveDndScopes = tickDnd.Scopes,
+                ActiveDoNotDisturb = tickDnd.ActiveDoNotDisturb,
+            };
 
             CaptureFactSnapshots(enrichedBase, DateTime.SpecifyKind(tick, DateTimeKind.Utc), factPrev, factPoints);
 
@@ -593,33 +603,12 @@ internal sealed class AlertReplayService(
     }
 
     /// <summary>
-    /// Topologically sort rules so each rule appears after every rule it depends on via
-    /// <c>alert_state</c>. Falls back to insertion order on cycle (cycles are blocked at
     /// Layers <paramref name="ruleOverride"/> onto <paramref name="stored"/>: when its Id
     /// matches an existing rule the override replaces it; otherwise the override is appended
     /// (with a synthesised id so any <c>alert_state</c> references the editor seeded resolve
     /// against the override rather than against a non-existent rule). The original list is
     /// returned unchanged when <paramref name="ruleOverride"/> is null.
     /// </summary>
-    private static readonly IReadOnlySet<DndScope> NoDndScopes = new HashSet<DndScope>();
-
-    /// <summary>
-    /// The DND scopes active at <paramref name="atUtc"/>, resolved from the tenant's windows with
-    /// receipt-gated <see cref="DndWindowSnapshot.WasActiveAt"/>. Returns a shared empty set when
-    /// none are active so the common no-DND tick allocates nothing.
-    /// </summary>
-    private static IReadOnlySet<DndScope> ResolveDndScopes(
-        IReadOnlyList<DndWindowSnapshot> windows, DateTime atUtc)
-    {
-        HashSet<DndScope>? scopes = null;
-        foreach (var w in windows)
-        {
-            if (w.WasActiveAt(atUtc))
-                (scopes ??= new HashSet<DndScope>()).Add(w.Scope);
-        }
-        return scopes ?? NoDndScopes;
-    }
-
     private static IReadOnlyList<AlertRuleSnapshot> ApplyOverride(
         IReadOnlyList<AlertRuleSnapshot> stored,
         ReplayRuleOverride? ruleOverride,
