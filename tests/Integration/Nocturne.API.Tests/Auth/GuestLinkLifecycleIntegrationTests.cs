@@ -316,6 +316,99 @@ public class GuestLinkLifecycleIntegrationTests : AspireIntegrationTestBase
     }
 
     [Fact]
+    public async Task GuestSession_CannotWriteV4SensorGlucose()
+    {
+        // The V4 plane carries only [Authorize], which a guest session satisfies. Enforcement is
+        // the per-controller write scope (RequireDeclaredWriteScopeAttribute), not the RLS policies:
+        // the share policy is FOR SELECT and the tenant policy's WITH CHECK admits the write.
+        var code = await CreateGuestLinkCodeAsync();
+
+        var handler = new HttpClientHandler { UseCookies = true };
+        using var cookieClient = new HttpClient(handler)
+        {
+            BaseAddress = ApiClient.BaseAddress
+        };
+
+        var activateResponse = await cookieClient.PostAsJsonAsync("/api/v4/guest-links/activate", new
+        {
+            code
+        });
+        activateResponse.StatusCode.Should().Be(HttpStatusCode.OK);
+
+        var response = await cookieClient.PostAsJsonAsync("/api/v4/glucose/sensor", new
+        {
+            timestamp = DateTimeOffset.UtcNow,
+            mgdl = 120.0,
+            device = "fabricated",
+        });
+
+        response.StatusCode.Should().BeOneOf(HttpStatusCode.Unauthorized, HttpStatusCode.Forbidden);
+        Log($"Guest session V4 glucose write rejected, status: {response.StatusCode}");
+    }
+
+    [Fact]
+    public async Task GuestSession_CannotWriteV4TherapySettings()
+    {
+        // ProfileController does not derive from V4CrudControllerBase, so it carries the write-scope
+        // gate on its own actions. A guest session holds therapy.read at most; therapy settings are
+        // the values the bolus calculator reads.
+        var code = await CreateGuestLinkCodeAsync();
+
+        var handler = new HttpClientHandler { UseCookies = true };
+        using var cookieClient = new HttpClient(handler)
+        {
+            BaseAddress = ApiClient.BaseAddress
+        };
+
+        var activateResponse = await cookieClient.PostAsJsonAsync("/api/v4/guest-links/activate", new
+        {
+            code
+        });
+        activateResponse.StatusCode.Should().Be(HttpStatusCode.OK);
+
+        var response = await cookieClient.PostAsJsonAsync("/api/v4/profile/settings", new
+        {
+            timestamp = DateTimeOffset.UtcNow,
+            profileName = "fabricated",
+            isDefault = true,
+        });
+
+        response.StatusCode.Should().BeOneOf(HttpStatusCode.Unauthorized, HttpStatusCode.Forbidden);
+        Log($"Guest session V4 therapy settings write rejected, status: {response.StatusCode}");
+    }
+
+    [Fact]
+    public async Task GuestSession_CannotWriteV4TrackerDefinitions()
+    {
+        // TrackersController carries [Authorize] per action and no scope gate before this change, so
+        // a guest session could create and delete the tracker definitions that drive sensor and
+        // site-change care reminders. A guest holds alerts.read at most.
+        var code = await CreateGuestLinkCodeAsync();
+
+        var handler = new HttpClientHandler { UseCookies = true };
+        using var cookieClient = new HttpClient(handler)
+        {
+            BaseAddress = ApiClient.BaseAddress
+        };
+
+        var activateResponse = await cookieClient.PostAsJsonAsync("/api/v4/guest-links/activate", new
+        {
+            code
+        });
+        activateResponse.StatusCode.Should().Be(HttpStatusCode.OK);
+
+        var response = await cookieClient.PostAsJsonAsync("/api/v4/trackers/definitions", new
+        {
+            name = "fabricated",
+            category = "consumable",
+            lifespanHours = 72,
+        });
+
+        response.StatusCode.Should().BeOneOf(HttpStatusCode.Unauthorized, HttpStatusCode.Forbidden);
+        Log($"Guest session V4 tracker definition write rejected, status: {response.StatusCode}");
+    }
+
+    [Fact]
     public async Task GuestSession_CannotAccessAdminEndpoints()
     {
         // Arrange - create and activate a guest link with cookie-enabled client
