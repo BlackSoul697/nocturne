@@ -177,6 +177,21 @@ public class AuthenticationMiddleware
                 context.User = new System.Security.Claims.ClaimsPrincipal(identity);
 
             }
+            else
+            {
+                // This middleware owns the final principal on EVERY path, including rejection.
+                // The framework's authentication middleware runs ahead of this one (minimal hosting
+                // auto-inserts it at the head of the pipeline because AddAuthentication is
+                // registered), so by the time we get here context.User may already hold the
+                // JwtBearer scheme's principal — built with no issuer or audience check, no tenant
+                // pin and no revocation check. Without this else, a credential the handler chain
+                // REJECTED keeps that principal: [Authorize] reads the principal, not Items, so a
+                // revoked grant, a token pinned to another tenant, or a credential presented on a
+                // share host would still reach every bare-[Authorize] controller — including the
+                // sensor-glucose read. The membership check below cannot catch it either, since it
+                // only runs for IsAuthenticated: true.
+                SetUnauthenticated(context);
+            }
         }
         catch (Exception ex)
         {
@@ -362,6 +377,13 @@ public class AuthenticationMiddleware
         context.Items["PermissionTrie"] = new PermissionTrie();
         context.Items["GrantedScopes"] = (IReadOnlySet<string>)new HashSet<string>();
         context.Items["AuthenticationContext"] = MapToLegacyContext(authContext);
+
+        // Clearing Items is not enough: this method is also the tenant-membership rejection
+        // path, and by then the principal above has already been built. [Authorize] reads
+        // HttpContext.User, not Items, so leaving a populated principal here authenticates a
+        // rejected caller against any endpoint whose only gate is [Authorize].
+        context.User = new System.Security.Claims.ClaimsPrincipal(
+            new System.Security.Claims.ClaimsIdentity());
     }
 
     /// <summary>
