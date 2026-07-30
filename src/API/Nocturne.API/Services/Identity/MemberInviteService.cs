@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using Nocturne.Core.Constants;
 using Nocturne.Core.Contracts.Multitenancy;
+using Nocturne.Core.Models.Authorization;
 using Nocturne.Infrastructure.Data;
 using Nocturne.Infrastructure.Data.Entities;
 
@@ -16,6 +17,7 @@ public class MemberInviteService : IMemberInviteService
     private readonly NocturneDbContext _dbContext;
     private readonly IJwtService _jwtService;
     private readonly ITenantService _tenantService;
+    private readonly ITenantRoleService _tenantRoleService;
     private readonly IConfiguration _configuration;
     private readonly ILogger<MemberInviteService> _logger;
 
@@ -23,12 +25,14 @@ public class MemberInviteService : IMemberInviteService
         NocturneDbContext dbContext,
         IJwtService jwtService,
         ITenantService tenantService,
+        ITenantRoleService tenantRoleService,
         IConfiguration configuration,
         ILogger<MemberInviteService> logger)
     {
         _dbContext = dbContext;
         _jwtService = jwtService;
         _tenantService = tenantService;
+        _tenantRoleService = tenantRoleService;
         _configuration = configuration;
         _logger = logger;
     }
@@ -37,6 +41,7 @@ public class MemberInviteService : IMemberInviteService
     public async Task<MemberInviteResult> CreateInviteAsync(
         Guid tenantId,
         Guid createdBySubjectId,
+        IEnumerable<string> granterPermissions,
         List<Guid> roleIds,
         List<string>? directPermissions = null,
         string? label = null,
@@ -47,15 +52,15 @@ public class MemberInviteService : IMemberInviteService
         if (roleIds.Count == 0 && (directPermissions == null || directPermissions.Count == 0))
             throw new ArgumentException("At least one role or direct permission is required.");
 
-        // Validate roleIds belong to this tenant
-        if (roleIds.Count > 0)
-        {
-            var validCount = await _dbContext.TenantRoles
-                .CountAsync(r => r.TenantId == tenantId && roleIds.Contains(r.Id));
+        var granter = granterPermissions as IReadOnlyCollection<string> ?? granterPermissions.ToList();
 
-            if (validCount != roleIds.Count)
-                throw new ArgumentException("One or more role IDs do not belong to this tenant.");
-        }
+        var directViolation = TenantPermissions.ValidateGrant(directPermissions, granter);
+        if (directViolation != null)
+            throw new ArgumentException(directViolation.Description);
+
+        var roleGrant = await _tenantRoleService.ValidateRoleGrantAsync(tenantId, roleIds, granter);
+        if (!roleGrant.Ok)
+            throw new ArgumentException(roleGrant.ErrorDescription);
 
         // Generate token
         var token = _jwtService.GenerateRefreshToken();

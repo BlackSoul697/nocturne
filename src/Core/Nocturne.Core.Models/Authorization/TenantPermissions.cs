@@ -255,4 +255,61 @@ public static class TenantPermissions
     {
         return permissions.Any(p => Satisfies(p, required));
     }
+
+    /// <summary>
+    /// Validates a set of permissions a caller is trying to grant (to a member, a role, or an
+    /// invite) against the permissions the caller itself holds. Every requested atom must be a
+    /// known permission and must be satisfied by <paramref name="granterScopes"/>, so a grant can
+    /// never exceed the granter's own access. <see cref="Superuser"/> is satisfied only by
+    /// <see cref="Superuser"/>, so it cannot be minted by a non-superuser.
+    /// </summary>
+    /// <param name="requested">The permissions being granted. <c>null</c> or empty is always allowed.</param>
+    /// <param name="granterScopes">
+    /// The granting caller's resolved scopes. Callers pass a scope set rather than a permission set:
+    /// the two vocabularies are deliberately separate, and this works because
+    /// <c>OAuthScopes.MemberGrantableScopes</c> is a superset of <see cref="All"/>, so every
+    /// permission atom survives scope resolution on an unscoped credential.
+    /// </param>
+    /// <returns>The first violation, or <c>null</c> when the whole set is grantable.</returns>
+    public static GrantCeilingViolation? ValidateGrant(
+        IEnumerable<string>? requested,
+        IEnumerable<string> granterScopes)
+    {
+        if (requested is null)
+            return null;
+
+        var granter = granterScopes as IReadOnlyCollection<string> ?? granterScopes.ToList();
+
+        foreach (var permission in requested)
+        {
+            if (permission != Superuser && !All.Contains(permission))
+            {
+                return new GrantCeilingViolation(
+                    GrantCeilingViolation.UnknownPermission,
+                    $"'{permission}' is not a known permission.");
+            }
+
+            if (!HasPermission(granter, permission))
+            {
+                return new GrantCeilingViolation(
+                    GrantCeilingViolation.ExceedsGranter,
+                    $"Cannot grant '{permission}' because the caller does not hold it.");
+            }
+        }
+
+        return null;
+    }
+}
+
+/// <summary>
+/// Why a grant was refused. <see cref="Code"/> is stable for a caller to branch on and for the
+/// frontend to localise; <see cref="Description"/> is diagnostic and names the offending permission.
+/// </summary>
+public record GrantCeilingViolation(string Code, string Description)
+{
+    /// <summary>The permission is not in the vocabulary — malformed input rather than a refusal.</summary>
+    public const string UnknownPermission = "unknown_permission";
+
+    /// <summary>The caller does not hold the permission it is trying to confer.</summary>
+    public const string ExceedsGranter = "grant_exceeds_granter";
 }
