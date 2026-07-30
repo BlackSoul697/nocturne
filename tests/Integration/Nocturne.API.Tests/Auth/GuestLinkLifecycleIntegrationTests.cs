@@ -57,7 +57,7 @@ public class GuestLinkLifecycleIntegrationTests : AspireIntegrationTestBase
         var response = await client.PostAsJsonAsync("/api/v4/guest-links", new
         {
             label = "Test Link",
-            scopes = new[] { "entries.read" }
+            scopes = new[] { "glucose.read" }
         });
 
         // Assert
@@ -70,7 +70,7 @@ public class GuestLinkLifecycleIntegrationTests : AspireIntegrationTestBase
         code.Should().NotBeNullOrWhiteSpace();
         code.Should().MatchRegex(@"^[A-Z0-9]{3}-[A-Z0-9]{4}$", "code should be formatted as ABC-DEFG");
 
-        var url = body.GetProperty("url").GetString();
+        var url = body.GetProperty("fullUrl").GetString();
         url.Should().NotBeNullOrWhiteSpace();
         url.Should().Contain("/guest/");
 
@@ -84,7 +84,7 @@ public class GuestLinkLifecycleIntegrationTests : AspireIntegrationTestBase
         var response = await ApiClient.PostAsJsonAsync("/api/v4/guest-links", new
         {
             label = "Unauthenticated Link",
-            scopes = new[] { "entries.read" }
+            scopes = new[] { "glucose.read" }
         });
 
         // Assert
@@ -103,7 +103,7 @@ public class GuestLinkLifecycleIntegrationTests : AspireIntegrationTestBase
             var createResponse = await client.PostAsJsonAsync("/api/v4/guest-links", new
             {
                 label = $"Link {i + 1}",
-                scopes = new[] { "entries.read" }
+                scopes = new[] { "glucose.read" }
             });
             createResponse.StatusCode.Should().Be(HttpStatusCode.OK, $"link {i + 1} creation should succeed");
         }
@@ -112,7 +112,7 @@ public class GuestLinkLifecycleIntegrationTests : AspireIntegrationTestBase
         var response = await client.PostAsJsonAsync("/api/v4/guest-links", new
         {
             label = "Link 6 - Over Limit",
-            scopes = new[] { "entries.read" }
+            scopes = new[] { "glucose.read" }
         });
 
         // Assert
@@ -129,11 +129,17 @@ public class GuestLinkLifecycleIntegrationTests : AspireIntegrationTestBase
         var response = await client.PostAsJsonAsync("/api/v4/guest-links", new
         {
             label = "Write Scope Link",
-            scopes = new[] { "entries.readwrite" }
+            scopes = new[] { "glucose.readwrite" }
         });
 
         // Assert
         response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+
+        // glucose.readwrite is a recognised request scope, so this reaches the guest cap rather than
+        // the recognised-scope guard. Asserted so the case cannot silently start passing for the
+        // wrong reason if the scope name changes again.
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>();
+        body.GetProperty("error").GetString().Should().Contain("not allowed for guest links");
     }
 
     #endregion
@@ -148,7 +154,7 @@ public class GuestLinkLifecycleIntegrationTests : AspireIntegrationTestBase
         var createResponse = await client.PostAsJsonAsync("/api/v4/guest-links", new
         {
             label = "Activate Test",
-            scopes = new[] { "entries.read" }
+            scopes = new[] { "glucose.read" }
         });
         createResponse.StatusCode.Should().Be(HttpStatusCode.OK);
 
@@ -434,6 +440,52 @@ public class GuestLinkLifecycleIntegrationTests : AspireIntegrationTestBase
         Log($"Guest session admin access rejected, status: {response.StatusCode}");
     }
 
+    [Fact]
+    public async Task GuestSession_ReplayedAtAnotherTenantHost_Rejected()
+    {
+        // Arrange - seed a second tenant to replay the session cookie against
+        var connStr = await GetPostgresConnectionStringAsync();
+        await using var conn = new NpgsqlConnection(connStr);
+        await conn.OpenAsync();
+
+        var victimSlug = $"victim-{Guid.NewGuid():N}"[..20];
+        await AuthTestHelpers.SeedTenantAsync(conn, victimSlug, "Victim Tenant");
+
+        var code = await CreateGuestLinkCodeAsync();
+
+        var handler = new HttpClientHandler { UseCookies = true };
+        using var cookieClient = new HttpClient(handler)
+        {
+            BaseAddress = ApiClient.BaseAddress
+        };
+
+        var activateResponse = await cookieClient.PostAsJsonAsync("/api/v4/guest-links/activate", new
+        {
+            code
+        });
+        activateResponse.StatusCode.Should().Be(HttpStatusCode.OK);
+
+        // Warm the guest-session cache on the tenant the grant belongs to.
+        var ownTenantResponse = await cookieClient.GetAsync("/api/v1/entries/current");
+        ownTenantResponse.StatusCode.Should().NotBe(HttpStatusCode.Unauthorized);
+
+        var guestCookie = handler.CookieContainer
+            .GetCookies(ApiClient.BaseAddress!)
+            .Cast<System.Net.Cookie>()
+            .Single(c => c.Name == "nocturne-guest-session");
+
+        // Act - present the same cookie at the other tenant's host, inside the cache TTL
+        using var victimClient = AuthTestHelpers.CreateTenantClient(
+            Fixture, victimSlug, AuthTestHelpers.GetBaseDomain(ApiClient));
+        victimClient.DefaultRequestHeaders.Add("Cookie", $"{guestCookie.Name}={guestCookie.Value}");
+
+        var response = await victimClient.GetAsync("/api/v1/entries/current");
+
+        // Assert
+        response.StatusCode.Should().BeOneOf(HttpStatusCode.Unauthorized, HttpStatusCode.Forbidden);
+        Log($"Cross-tenant guest session replay rejected, status: {response.StatusCode}");
+    }
+
     #endregion
 
     #region Revoke Guest Link
@@ -447,7 +499,7 @@ public class GuestLinkLifecycleIntegrationTests : AspireIntegrationTestBase
         var createResponse = await client.PostAsJsonAsync("/api/v4/guest-links", new
         {
             label = "Revoke Test",
-            scopes = new[] { "entries.read" }
+            scopes = new[] { "glucose.read" }
         });
         createResponse.StatusCode.Should().Be(HttpStatusCode.OK);
 
@@ -475,7 +527,7 @@ public class GuestLinkLifecycleIntegrationTests : AspireIntegrationTestBase
         var createResponse = await ownerClient.PostAsJsonAsync("/api/v4/guest-links", new
         {
             label = "Non-Owner Revoke Test",
-            scopes = new[] { "entries.read" }
+            scopes = new[] { "glucose.read" }
         });
         createResponse.StatusCode.Should().Be(HttpStatusCode.OK);
 
@@ -517,7 +569,7 @@ public class GuestLinkLifecycleIntegrationTests : AspireIntegrationTestBase
             var createResponse = await client.PostAsJsonAsync("/api/v4/guest-links", new
             {
                 label = $"List Test Link {i + 1}",
-                scopes = new[] { "entries.read" }
+                scopes = new[] { "glucose.read" }
             });
             createResponse.StatusCode.Should().Be(HttpStatusCode.OK);
         }
@@ -549,7 +601,7 @@ public class GuestLinkLifecycleIntegrationTests : AspireIntegrationTestBase
         var response = await client.PostAsJsonAsync("/api/v4/guest-links", new
         {
             label = "Session Test",
-            scopes = new[] { "entries.read" }
+            scopes = new[] { "glucose.read" }
         });
         response.StatusCode.Should().Be(HttpStatusCode.OK);
 
