@@ -36,7 +36,9 @@ public interface IMigrationJobService
         CancellationToken ct = default
     );
     PendingMigrationConfig GetPendingConfig();
-    Task<IReadOnlyList<MigrationSourceDto>> GetSourcesAsync(CancellationToken ct = default);
+
+    /// <summary>Lists the calling tenant's migration sources. Source URLs frequently identify a person, so sources are never listed cross-tenant.</summary>
+    Task<IReadOnlyList<MigrationSourceDto>> GetSourcesAsync(Guid tenantId, CancellationToken ct = default);
 }
 
 /// <summary>
@@ -52,8 +54,6 @@ public class MigrationJobService : IMigrationJobService
     private readonly IServiceProvider _serviceProvider;
     private readonly IConfiguration _configuration;
     private readonly ConcurrentDictionary<Guid, MigrationJob> _jobs = new();
-    private readonly List<(Guid TenantId, MigrationJobInfo Info)> _history = [];
-    private readonly object _historyLock = new();
 
     public MigrationJobService(
         ILogger<MigrationJobService> logger,
@@ -97,12 +97,14 @@ public class MigrationJobService : IMigrationJobService
         };
 
         var job = new MigrationJob(jobId, tenantId, request, jobInfo, tenantContext, _logger, _serviceProvider);
-        _jobs[jobId] = job;
 
-        lock (_historyLock)
-        {
-            _history.Add((tenantId, jobInfo));
-        }
+        // Record the job (and its source) before the work starts. The in-process task cannot
+        // survive an API restart, but its record must — job history and "was this source ever
+        // migrated?" checks read these rows, and without them a restart erases all evidence
+        // that the run happened. Registered in the job map only after the record exists, so a
+        // failed persist doesn't leave a phantom Pending job answering status probes.
+        await job.PersistSnapshotAsync(ct);
+        _jobs[jobId] = job;
 
         // Start migration on a detached background task. This deliberately does NOT use the
         // request's CancellationToken (HttpContext.RequestAborted): the migration is designed to
@@ -134,35 +136,57 @@ public class MigrationJobService : IMigrationJobService
         return jobInfo;
     }
 
-    public Task<MigrationJobStatus> GetStatusAsync(Guid tenantId, Guid jobId)
+    public async Task<MigrationJobStatus> GetStatusAsync(Guid tenantId, Guid jobId)
     {
         if (_jobs.TryGetValue(jobId, out var job) && job.TenantId == tenantId)
         {
-            return Task.FromResult(job.GetStatus());
+            return job.GetStatus();
         }
 
-        throw new KeyNotFoundException($"Migration job {jobId} not found");
+        // Not in memory (e.g. the API restarted since the job ran): serve the persisted record.
+        var record = await FindRunAsync(tenantId, jobId)
+            ?? throw new KeyNotFoundException($"Migration job {jobId} not found");
+
+        return MigrationJob.StatusFromRecord(record);
     }
 
-    public Task CancelAsync(Guid tenantId, Guid jobId)
+    public async Task CancelAsync(Guid tenantId, Guid jobId)
     {
         if (_jobs.TryGetValue(jobId, out var job) && job.TenantId == tenantId)
         {
             job.Cancel();
+            await job.PersistSnapshotAsync(CancellationToken.None);
             _logger.LogInformation("Cancelled migration job {JobId}", jobId);
-            return Task.CompletedTask;
+            return;
         }
 
-        throw new KeyNotFoundException($"Migration job {jobId} not found");
+        // A persisted record without a live job is terminal or orphaned by a restart — nothing
+        // left to stop, but the id is valid, so don't report it as unknown.
+        _ = await FindRunAsync(tenantId, jobId)
+            ?? throw new KeyNotFoundException($"Migration job {jobId} not found");
+
+        _logger.LogInformation("Cancel requested for migration job {JobId} which is no longer running", jobId);
     }
 
-    public Task<IReadOnlyList<MigrationJobInfo>> GetHistoryAsync(Guid tenantId)
+    public async Task<IReadOnlyList<MigrationJobInfo>> GetHistoryAsync(Guid tenantId)
     {
-        lock (_historyLock)
-        {
-            return Task.FromResult<IReadOnlyList<MigrationJobInfo>>(
-                _history.Where(h => h.TenantId == tenantId).Select(h => h.Info).ToList());
-        }
+        using var scope = _serviceProvider.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<NocturneDbContext>();
+
+        var runs = await db.MigrationRuns.AsNoTracking()
+            .Where(r => r.TenantId == tenantId)
+            .OrderByDescending(r => r.CreatedAt)
+            .ToListAsync();
+
+        return runs.Select(MigrationJob.InfoFromRecord).ToList();
+    }
+
+    private async Task<MigrationRunEntity?> FindRunAsync(Guid tenantId, Guid jobId)
+    {
+        using var scope = _serviceProvider.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<NocturneDbContext>();
+        return await db.MigrationRuns.AsNoTracking()
+            .FirstOrDefaultAsync(r => r.Id == jobId && r.TenantId == tenantId);
     }
 
     public async Task<TestMigrationConnectionResult> TestConnectionAsync(
@@ -335,6 +359,7 @@ public class MigrationJobService : IMigrationJobService
     }
 
     public async Task<IReadOnlyList<MigrationSourceDto>> GetSourcesAsync(
+        Guid tenantId,
         CancellationToken ct = default
     )
     {
@@ -342,7 +367,9 @@ public class MigrationJobService : IMigrationJobService
         var dbContext = scope.ServiceProvider.GetRequiredService<NocturneDbContext>();
 
         var sources = await dbContext
-            .MigrationSources.OrderByDescending(s => s.LastMigrationAt ?? s.CreatedAt)
+            .MigrationSources
+            .Where(s => s.TenantId == tenantId)
+            .OrderByDescending(s => s.LastMigrationAt ?? s.CreatedAt)
             .Select(s => new MigrationSourceDto
             {
                 Id = s.Id,
@@ -441,7 +468,11 @@ internal class MigrationJob
     public void Cancel()
     {
         _cts.Cancel();
-        _state = MigrationJobState.Cancelled;
+        // Leave terminal states untouched — cancelling a job that already Completed/Failed must
+        // not rewrite its (now persisted) outcome, which would also un-satisfy the startup
+        // "was this source ever migrated?" check.
+        if (_state is MigrationJobState.Pending or MigrationJobState.Validating or MigrationJobState.Running)
+            _state = MigrationJobState.Cancelled;
     }
 
     public async Task ExecuteAsync(CancellationToken externalCt)
@@ -454,6 +485,7 @@ internal class MigrationJob
 
         _startedAt = DateTime.UtcNow;
         _state = MigrationJobState.Running;
+        await PersistSnapshotAsync(CancellationToken.None);
 
         try
         {
@@ -485,7 +517,161 @@ internal class MigrationJob
             _completedAt = DateTime.UtcNow;
             _logger.LogError(ex, "Migration job {JobId} failed", _id);
         }
+        finally
+        {
+            await PersistSnapshotAsync(CancellationToken.None);
+        }
     }
+
+    /// <summary>
+    /// Upserts the job's persisted run record (and its migration source) from the current
+    /// in-memory state. The initial call (state Pending) propagates failures — a job whose
+    /// record cannot be written must not start; later calls log instead, because the running
+    /// work matters more than its record and the terminal snapshot retries.
+    /// </summary>
+    public async Task PersistSnapshotAsync(CancellationToken ct)
+    {
+        try
+        {
+            using var scope = _serviceProvider.CreateScope();
+            var db = scope.ServiceProvider.GetRequiredService<NocturneDbContext>();
+
+            var sourceId = await UpsertSourceAsync(db, ct);
+
+            var run = await db.MigrationRuns.FirstOrDefaultAsync(r => r.Id == _id, ct);
+            if (run is null)
+            {
+                run = new MigrationRunEntity { Id = _id, CreatedAt = _info.CreatedAt };
+                db.MigrationRuns.Add(run);
+            }
+
+            run.SourceId = sourceId;
+            run.TenantId = _tenantId;
+            run.Mode = _request.Mode.ToString();
+            run.SourceDescription = _info.SourceDescription is { Length: > 512 } d ? d[..512] : _info.SourceDescription;
+            run.State = _state.ToString();
+            run.StartedAt = _startedAt == default ? _info.CreatedAt : _startedAt;
+            run.CompletedAt = _completedAt;
+            run.DateRangeStart = AsUtc(_request.StartDate);
+            run.DateRangeEnd = AsUtc(_request.EndDate);
+            run.ErrorMessage = _errorMessage;
+            run.EntriesMigrated = (int)Math.Min(int.MaxValue, MigratedCount("entries"));
+            run.TreatmentsMigrated = (int)Math.Min(int.MaxValue, MigratedCount("treatments"));
+
+            if (_state == MigrationJobState.Completed)
+            {
+                var source = await db.MigrationSources.FirstAsync(s => s.Id == sourceId, ct);
+                source.LastMigrationAt = _completedAt ?? DateTime.UtcNow;
+            }
+
+            await db.SaveChangesAsync(ct);
+        }
+        catch (Exception ex) when (_state is not MigrationJobState.Pending)
+        {
+            _logger.LogError(ex, "Failed to persist migration job {JobId}", _id);
+        }
+    }
+
+    private long MigratedCount(string collection) =>
+        _collectionProgress.TryGetValue(collection, out var p) ? p.DocumentsMigrated : 0;
+
+    /// <summary>
+    /// Finds or creates the migration source row for this job's target. Sources dedupe per
+    /// tenant on <see cref="MigrationSourceEntity.SourceIdentifier"/>: the Nightscout URL for
+    /// API mode, a SHA-256 digest of the connection string for MongoDB mode. Only non-usable
+    /// digests are stored — never the API secret or connection string themselves.
+    /// </summary>
+    private async Task<Guid> UpsertSourceAsync(NocturneDbContext db, CancellationToken ct)
+    {
+        var isApi = _request.Mode == MigrationMode.Api;
+        var identifier = isApi
+            ? ApiSourceIdentifier(_request.NightscoutUrl!)
+            : MongoSourceIdentifier(_request.MongoConnectionString ?? string.Empty);
+
+        var source = await db.MigrationSources.FirstOrDefaultAsync(
+            s => s.TenantId == _tenantId && s.SourceIdentifier == identifier, ct);
+        if (source is not null)
+            return source.Id;
+
+        source = new MigrationSourceEntity
+        {
+            Id = Guid.CreateVersion7(),
+            TenantId = _tenantId,
+            Mode = _request.Mode.ToString(),
+            SourceIdentifier = identifier,
+            NightscoutUrl = isApi ? _request.NightscoutUrl : null,
+            NightscoutApiSecretHash = isApi && !string.IsNullOrEmpty(_request.NightscoutApiSecret)
+                ? Sha256Hex(_request.NightscoutApiSecret)
+                : null,
+            MongoDatabaseName = isApi ? null : _request.MongoDatabaseName,
+            CreatedAt = DateTime.UtcNow,
+        };
+        db.MigrationSources.Add(source);
+        return source.Id;
+    }
+
+    /// <summary>Canonical source identifier for an API-mode migration. Shared with the startup pending-migration check so the two always agree.</summary>
+    internal static string ApiSourceIdentifier(string nightscoutUrl) => nightscoutUrl.TrimEnd('/');
+
+    /// <summary>Canonical source identifier for a MongoDB-mode migration: a non-usable digest, never the connection string itself.</summary>
+    internal static string MongoSourceIdentifier(string connectionString) => Sha256Hex(connectionString);
+
+    private static string Sha256Hex(string value) =>
+        Convert.ToHexStringLower(System.Security.Cryptography.SHA256.HashData(Encoding.UTF8.GetBytes(value)));
+
+    /// <summary>Npgsql rejects Local/Unspecified kinds for timestamptz; normalize optional caller-supplied dates.</summary>
+    private static DateTime? AsUtc(DateTime? value) => value switch
+    {
+        null => null,
+        { Kind: DateTimeKind.Unspecified } v => DateTime.SpecifyKind(v, DateTimeKind.Utc),
+        { } v => v.ToUniversalTime(),
+    };
+
+    /// <summary>Reconstructs a status snapshot from a persisted run (post-restart lookups).</summary>
+    public static MigrationJobStatus StatusFromRecord(MigrationRunEntity run)
+    {
+        var state = Enum.TryParse<MigrationJobState>(run.State, out var s)
+            ? s
+            : MigrationJobState.Interrupted;
+
+        return new MigrationJobStatus
+        {
+            JobId = run.Id,
+            State = state,
+            ProgressPercentage = state == MigrationJobState.Completed ? 100 : 0,
+            ErrorMessage = run.ErrorMessage,
+            StartedAt = run.StartedAt,
+            CompletedAt = run.CompletedAt,
+            CollectionProgress = new Dictionary<string, CollectionProgress>
+            {
+                ["entries"] = new()
+                {
+                    CollectionName = "entries",
+                    DocumentsMigrated = run.EntriesMigrated,
+                    IsComplete = state == MigrationJobState.Completed,
+                },
+                ["treatments"] = new()
+                {
+                    CollectionName = "treatments",
+                    DocumentsMigrated = run.TreatmentsMigrated,
+                    IsComplete = state == MigrationJobState.Completed,
+                },
+            },
+        };
+    }
+
+    /// <summary>Reconstructs a history entry from a persisted run.</summary>
+    public static MigrationJobInfo InfoFromRecord(MigrationRunEntity run) => new()
+    {
+        Id = run.Id,
+        Mode = Enum.TryParse<MigrationMode>(run.Mode, out var m) ? m : MigrationMode.Api,
+        CreatedAt = run.CreatedAt,
+        SourceDescription = run.SourceDescription,
+        State = Enum.TryParse<MigrationJobState>(run.State, out var s) ? s : MigrationJobState.Interrupted,
+        StartedAt = run.StartedAt,
+        CompletedAt = run.CompletedAt,
+        ErrorMessage = run.ErrorMessage,
+    };
 
     private long _totalDocumentsAllCollections;
     private long _migratedDocumentsAllCollections; // computed by UpdateOverallProgress

@@ -260,6 +260,11 @@ public class NocturneDbContext : DbContext, IDataProtectionKeyContext
     public DbSet<MigrationRunEntity> MigrationRuns { get; set; }
 
     /// <summary>
+    /// Gets or sets the ConnectorResetJobs table recording platform-admin cursor reset jobs
+    /// </summary>
+    public DbSet<ConnectorResetJobEntity> ConnectorResetJobs { get; set; }
+
+    /// <summary>
     /// Gets or sets the LinkedRecords table for deduplication linking
     /// </summary>
     public DbSet<LinkedRecordEntity> LinkedRecords { get; set; }
@@ -1253,11 +1258,13 @@ public class NocturneDbContext : DbContext, IDataProtectionKeyContext
             .HasIndex(b => b.SleepSessionId)
             .HasDatabaseName("ix_sleep_biometric_samples_sleep_session_id");
 
-        // Migration source indexes
+        // Migration source indexes. Sources dedupe per tenant: the identifier alone must
+        // not be unique, or tenant B migrating from the same URL as tenant A would collide
+        // with (and read) A's source row.
         modelBuilder
             .Entity<MigrationSourceEntity>()
-            .HasIndex(s => s.SourceIdentifier)
-            .HasDatabaseName("ix_migration_sources_identifier")
+            .HasIndex(s => new { s.TenantId, s.SourceIdentifier })
+            .HasDatabaseName("ix_migration_sources_tenant_identifier")
             .IsUnique();
 
         modelBuilder
@@ -1297,6 +1304,22 @@ public class NocturneDbContext : DbContext, IDataProtectionKeyContext
             .Entity<MigrationRunEntity>()
             .HasIndex(r => new { r.SourceId, r.State })
             .HasDatabaseName("ix_migration_runs_source_state");
+
+        modelBuilder
+            .Entity<MigrationRunEntity>()
+            .HasIndex(r => r.TenantId)
+            .HasDatabaseName("ix_migration_runs_tenant");
+
+        // Connector reset job indexes
+        modelBuilder
+            .Entity<ConnectorResetJobEntity>()
+            .HasIndex(j => j.TenantId)
+            .HasDatabaseName("ix_connector_reset_jobs_tenant");
+
+        modelBuilder
+            .Entity<ConnectorResetJobEntity>()
+            .HasIndex(j => j.State)
+            .HasDatabaseName("ix_connector_reset_jobs_state");
 
         // LinkedRecords indexes - optimized for deduplication queries
         modelBuilder
