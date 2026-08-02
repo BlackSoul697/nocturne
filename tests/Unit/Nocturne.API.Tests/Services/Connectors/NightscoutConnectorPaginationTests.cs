@@ -370,6 +370,74 @@ public class NightscoutConnectorPaginationTests
     }
 
     [Fact]
+    public async Task SyncData_PublishesEachPageBeforeFetchingTheNext()
+    {
+        // Regression: the sync used to fetch the ENTIRE range into one list before
+        // publishing anything — a multi-year backfill of a high-volume collection OOMed
+        // the process mid-publish. Streaming means each page is published before the next
+        // is fetched, and a failing publish marks the sync failed while every page is
+        // still attempted (holes stay bounded to the failed pages).
+        var page1 = CreateEntries(MaxCount, BaseTime);
+        var oldestPage1Ms = page1.Min(e => e.Mills);
+        var page2Start = DateTimeOffset.FromUnixTimeMilliseconds(oldestPage1Ms).AddMilliseconds(-1);
+        var page2 = CreateEntries(3, page2Start); // short page ends the crawl
+
+        var handler = new SequentialMockHandler();
+        handler.Enqueue(JsonResponse(Array.Empty<Entry>())); // auth check
+        handler.Enqueue(JsonResponse(page1));
+        handler.Enqueue(JsonResponse(page2));
+
+        var config = new NightscoutConnectorConfiguration
+        {
+            Url = "https://nightscout.example.com",
+            ApiSecret = "test-secret",
+            MaxCount = MaxCount,
+            BatchSize = MaxCount, // one publish call per page
+        };
+
+        // Snapshot how many HTTP requests had been made at the moment of each publish call —
+        // this is what pins the interleaving: the first page must be published while only the
+        // auth probe and page 1 have been fetched.
+        var requestsAtPublish = new List<int>();
+        var glucoseMock = new Mock<IGlucosePublisher>();
+        glucoseMock.Setup(p => p.PublishEntriesAsync(
+                It.IsAny<IEnumerable<Entry>>(), It.IsAny<string>(), It.IsAny<WriteOrigin>(), It.IsAny<CancellationToken>()))
+            .Callback(() => requestsAtPublish.Add(handler.RequestUrls.Count))
+            .ReturnsAsync(false); // every publish fails
+
+        var publisherMock = new Mock<IConnectorPublisher>();
+        publisherMock.Setup(p => p.IsAvailable).Returns(true);
+        publisherMock.Setup(p => p.Glucose).Returns(glucoseMock.Object);
+
+        var service = new NightscoutConnectorService(
+            new HttpClient(handler) { BaseAddress = new Uri(config.Url) },
+            new ConnectorServerResolver<NightscoutConnectorConfiguration>(null, null, null),
+            Mock.Of<ILogger<NightscoutConnectorService>>(),
+            Mock.Of<IRetryDelayStrategy>(),
+            Mock.Of<IRateLimitingStrategy>(),
+            new ConnectorRegistration<NightscoutConnectorConfiguration>(config, "Nightscout"),
+            publisherMock.Object);
+
+        var request = new Nocturne.Connectors.Core.Models.SyncRequest
+        {
+            From = BaseTime.AddDays(-30).UtcDateTime,
+            To = BaseTime.UtcDateTime,
+            DataTypes = [Nocturne.Connectors.Core.Models.SyncDataType.Glucose],
+        };
+
+        var result = await service.SyncDataAsync(request, config, CancellationToken.None);
+
+        result.Success.Should().BeFalse();
+        result.Errors.Should().Contain("Glucose publish failed");
+        // Both pages were attempted despite the first publish failing…
+        requestsAtPublish.Should().HaveCount(2);
+        // …and the first page was published before page 2 was fetched (auth + page 1 = 2 requests).
+        requestsAtPublish[0].Should().Be(2,
+            "the first page must be published before the next page is fetched");
+        result.ItemsSynced[Nocturne.Connectors.Core.Models.SyncDataType.Glucose].Should().Be(MaxCount + 3);
+    }
+
+    [Fact]
     public async Task FetchTreatments_OpenEndedInitialSync_AnchorsFirstPageToNow()
     {
         // Same implicit-window regression as glucose: an open-ended first-ever treatments
