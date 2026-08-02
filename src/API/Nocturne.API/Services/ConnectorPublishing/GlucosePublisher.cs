@@ -1,7 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using Nocturne.API.Services.Audit;
 using Nocturne.Connectors.Core.Interfaces;
-using Nocturne.Core.Constants;
 using Nocturne.Core.Contracts.Audit;
 using Nocturne.Core.Contracts.Devices;
 using Nocturne.Core.Contracts.Glucose;
@@ -25,6 +24,7 @@ internal sealed class GlucosePublisher : IGlucosePublisher
 {
     private readonly IEntryService _entryService;
     private readonly ISensorGlucoseRepository _sensorGlucoseRepository;
+    private readonly IMeterGlucoseRepository _meterGlucoseRepository;
     private readonly IPatientDeviceStamper _patientDeviceStamper;
     private readonly IDbContextFactory<NocturneDbContext> _contextFactory;
     private readonly ITenantAccessor _tenantAccessor;
@@ -35,6 +35,7 @@ internal sealed class GlucosePublisher : IGlucosePublisher
     public GlucosePublisher(
         IEntryService entryService,
         ISensorGlucoseRepository sensorGlucoseRepository,
+        IMeterGlucoseRepository meterGlucoseRepository,
         IPatientDeviceStamper patientDeviceStamper,
         IDbContextFactory<NocturneDbContext> contextFactory,
         ITenantAccessor tenantAccessor,
@@ -44,6 +45,7 @@ internal sealed class GlucosePublisher : IGlucosePublisher
     {
         _entryService = entryService ?? throw new ArgumentNullException(nameof(entryService));
         _sensorGlucoseRepository = sensorGlucoseRepository ?? throw new ArgumentNullException(nameof(sensorGlucoseRepository));
+        _meterGlucoseRepository = meterGlucoseRepository ?? throw new ArgumentNullException(nameof(meterGlucoseRepository));
         _patientDeviceStamper = patientDeviceStamper ?? throw new ArgumentNullException(nameof(patientDeviceStamper));
         _contextFactory = contextFactory ?? throw new ArgumentNullException(nameof(contextFactory));
         _tenantAccessor = tenantAccessor ?? throw new ArgumentNullException(nameof(tenantAccessor));
@@ -60,7 +62,7 @@ internal sealed class GlucosePublisher : IGlucosePublisher
         try
         {
             var entryList = entries.ToList();
-            await _entryService.CreateEntriesAsync(entryList, cancellationToken);
+            await _entryService.CreateEntriesAsync(entryList, origin, cancellationToken);
             await UpdateLastReadingAtAsync(cancellationToken);
             await _alertEvaluator.EvaluateAsync(cancellationToken);
             return true;
@@ -104,25 +106,20 @@ internal sealed class GlucosePublisher : IGlucosePublisher
         string source,
         CancellationToken cancellationToken = default)
     {
+        // The v1 entries collection spans CGM readings (sensor glucose) and manual BG
+        // checks (meter glucose), so the resume watermark is the latest of either —
+        // scoped to THIS source. Never fall back across sources: when another uploader
+        // is already writing glucose (e.g. Trio pushing directly while a Nightscout
+        // migration runs), a cross-source "current entry" mis-classifies the
+        // connector's first-ever sync as incremental and skips its full-history
+        // backfill.
         var sgTimestamp = await _sensorGlucoseRepository.GetLatestTimestampAsync(source, cancellationToken);
-        if (sgTimestamp.HasValue)
-            return sgTimestamp.Value;
+        var mgTimestamp = await _meterGlucoseRepository.GetLatestTimestampAsync(source, cancellationToken);
 
-        // Entry has no source column — only fall back for nightscout-connector.
-        if (source == DataSources.NightscoutConnector)
-        {
-            var entry = await _entryService.GetCurrentEntryAsync(cancellationToken);
-            if (entry == null)
-                return null;
+        if (sgTimestamp.HasValue && mgTimestamp.HasValue)
+            return sgTimestamp.Value > mgTimestamp.Value ? sgTimestamp.Value : mgTimestamp.Value;
 
-            if (entry.Date != default)
-                return entry.Date;
-
-            if (entry.Mills > 0)
-                return DateTimeOffset.FromUnixTimeMilliseconds(entry.Mills).UtcDateTime;
-        }
-
-        return null;
+        return sgTimestamp ?? mgTimestamp;
     }
 
     public async Task<DateTime?> GetLatestSensorGlucoseTimestampAsync(
