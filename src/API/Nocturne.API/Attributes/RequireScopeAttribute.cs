@@ -17,6 +17,13 @@ namespace Nocturne.API.Attributes;
 /// hierarchical scope matching (e.g., <c>read</c> satisfies <c>read:entries</c>).
 /// The granted scopes are further refined by <see cref="Middleware.MemberScopeMiddleware"/>
 /// based on the user's tenant membership roles.
+/// <para>
+/// A read requirement is decided on the resolved scope set alone, so it admits the anonymous
+/// public-share principal, whose scopes are narrowed to
+/// <see cref="TenantPermissions.PublicShareScopes"/>. A requirement naming anything other than
+/// read also requires an authenticated caller, so no anonymous principal can pass a write gate
+/// however its scopes are resolved. An empty scope set is rejected either way.
+/// </para>
 /// </remarks>
 /// <seealso cref="RequirePermissionAttribute"/>
 /// <seealso cref="Middleware.AuthenticationMiddleware"/>
@@ -56,6 +63,12 @@ public class RequireScopeAttribute : Attribute, IAuthorizationFilter
         _requireAll = requireAll;
     }
 
+    /// <summary>The scopes this attribute requires.</summary>
+    public IReadOnlyList<string> RequiredScopes => _requiredScopes;
+
+    /// <summary>Whether every scope in <see cref="RequiredScopes"/> is required (AND) or any one (OR).</summary>
+    public bool RequiresAll => _requireAll;
+
     /// <summary>
     /// Evaluates the scope requirement against the current request's granted scopes.
     /// </summary>
@@ -64,13 +77,35 @@ public class RequireScopeAttribute : Attribute, IAuthorizationFilter
     {
         var httpContext = context.HttpContext;
 
-        if (!httpContext.IsAuthenticated())
+        var grantedScopes = httpContext.GetGrantedScopes();
+
+        // An unauthenticated caller is eligible only for a read requirement. A public share link
+        // ({token}.share.{baseDomain}) is deliberately IsAuthenticated: false, yet
+        // AuthenticationMiddleware resolves its Public subject down to
+        // TenantPermissions.PublicShareScopes and publishes them here, so requiring authentication
+        // outright would 401 every share.
+        //
+        // Restricting it to read requirements keeps "an unauthenticated principal can never pass a
+        // write gate" a property of this attribute. Deriving it from the scopes a share happens to
+        // hold would instead make it depend on every present and future anonymous path publishing
+        // only read scopes, and SatisfiesScope matches device.notify and device.actuate on an exact
+        // string — neither is ".read" nor ".readwrite".
+        if (!httpContext.IsAuthenticated()
+            && !_requiredScopes.All(scope => scope.EndsWith(".read", StringComparison.Ordinal)))
         {
             context.Result = new UnauthorizedResult();
             return;
         }
 
-        var grantedScopes = httpContext.GetGrantedScopes();
+        // No scopes at all means no resolved grant, which fails closed. An authenticated caller
+        // gets 403 (identity known, grant insufficient); anyone else gets 401.
+        if (grantedScopes.Count == 0)
+        {
+            context.Result = httpContext.IsAuthenticated()
+                ? new ForbidResult()
+                : new UnauthorizedResult();
+            return;
+        }
 
         var hasSufficientScope = _requireAll
             ? _requiredScopes.All(s => OAuthScopes.SatisfiesScope(grantedScopes, s))

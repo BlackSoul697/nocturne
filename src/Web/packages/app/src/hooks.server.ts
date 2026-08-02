@@ -1,3 +1,4 @@
+import { isInternalOnlyApiPath } from "$lib/server/internal-only-api-paths";
 import { type Handle } from "@sveltejs/kit";
 import { randomUUID } from "$lib/utils";
 import type { HandleServerError } from "@sveltejs/kit";
@@ -274,10 +275,16 @@ const siteSecurityHandle: Handle = async ({ event, resolve }) => {
   return resolve(event);
 };
 
+// This proxy is the only route from the edge to the API (the gateway sends /api/{**catch-all}
+// here), so refusing a path here makes it internal-network-only. See internal-only-api-paths.
+
 // Proxy handler for /api requests
 const proxyHandle: Handle = async ({ event, resolve }) => {
   // Check if the request is for /api (but not SvelteKit-handled routes like webhooks and bot dispatch)
   const path = event.url.pathname;
+  if (isInternalOnlyApiPath(path)) {
+    return new Response("Not Found", { status: 404 });
+  }
   if (path.startsWith("/api") && !path.startsWith("/api/v4/webhooks") && !path.startsWith("/api/v4/bot") && !path.startsWith("/api/otel")) {
     const apiBaseUrl = getApiBaseUrl();
     if (!apiBaseUrl) {

@@ -35,14 +35,36 @@ public class RequireScopeAttributeTests
     }
 
     [Fact]
-    public void UnauthenticatedRequest_IsRejectedWith401()
+    public void UnauthenticatedRequestWithNoScopes_IsRejectedWith401()
     {
-        // The public-tenant path leaves AuthContext.IsAuthenticated = false, even though it
-        // populates read scopes. Writes must still be rejected before any scope check.
+        // No resolved scopes means no grant at all: neither an authenticated caller nor a share.
+        var result = Evaluate(new RequireScopeAttribute(OAuthScopes.GlucoseReadWrite),
+            authenticated: false);
+
+        result.Should().BeOfType<UnauthorizedResult>();
+    }
+
+    [Fact]
+    public void UnauthenticatedPublicShare_WithReadScopes_StillCannotWrite()
+    {
+        // The public-share path leaves AuthContext.IsAuthenticated = false while populating read
+        // scopes, so the filter admits an unauthenticated caller for a read requirement — otherwise
+        // every share link would 401. A write requirement is refused before the scope set is
+        // consulted, which is what keeps write-immunity a property of the filter rather than of the
+        // scopes a share happens to hold.
         var result = Evaluate(new RequireScopeAttribute(OAuthScopes.GlucoseReadWrite),
             authenticated: false, OAuthScopes.GlucoseRead);
 
         result.Should().BeOfType<UnauthorizedResult>();
+    }
+
+    [Fact]
+    public void UnauthenticatedPublicShare_WithReadScopes_CanRead()
+    {
+        var result = Evaluate(new RequireScopeAttribute(OAuthScopes.GlucoseRead),
+            authenticated: false, OAuthScopes.GlucoseRead);
+
+        result.Should().BeNull("public share links read the V1/V2/V3 surface");
     }
 
     [Fact]
