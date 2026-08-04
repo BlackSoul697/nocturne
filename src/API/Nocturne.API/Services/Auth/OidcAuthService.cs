@@ -6,6 +6,7 @@ using System.Text.Json.Serialization;
 using Microsoft.AspNetCore.DataProtection;
 using Microsoft.Extensions.Options;
 using Nocturne.API.Helpers;
+using Nocturne.API.Multitenancy;
 using Nocturne.Core.Constants;
 using Nocturne.Core.Contracts.Multitenancy;
 using Nocturne.Core.Models.Configuration;
@@ -509,7 +510,7 @@ public class OidcAuthService : IOidcAuthService
                     var logoutUrl = new UriBuilder(discoveryDoc.EndSessionEndpoint);
                     var query = System.Web.HttpUtility.ParseQueryString(string.Empty);
                     query["client_id"] = provider.ClientId;
-                    query["post_logout_redirect_uri"] = _configuration[ServiceNames.ConfigKeys.BaseUrl] ?? "";
+                    query["post_logout_redirect_uri"] = PublicBaseUrl.Resolve(_configuration) ?? "";
                     logoutUrl.Query = query.ToString();
                     providerLogoutUrl = logoutUrl.ToString();
                 }
@@ -751,13 +752,41 @@ public class OidcAuthService : IOidcAuthService
     private const string SetupCallbackPath = "/api/v4/setup/oidc/callback";
 
     /// <summary>
-    /// Builds the absolute redirect URI by combining the configured base URL with the specified callback path.
+    /// Last-ditch origin for an instance that configures neither <c>BaseUrl</c> nor
+    /// <c>BASE_DOMAIN</c>. Only a bare <c>dotnet run</c> lands here — every packaged deployment
+    /// sets <c>BASE_DOMAIN</c>, which <see cref="PublicBaseUrl"/> resolves from.
+    /// </summary>
+    private const string UnconfiguredBaseUrl = "http://localhost:5000";
+
+    /// <summary>
+    /// Builds the absolute redirect URI by combining the deployment's public base URL with the
+    /// specified callback path.
     /// </summary>
     /// <param name="callbackPath">The server-relative callback path (default: <see cref="LoginCallbackPath"/>).</param>
     /// <returns>The fully qualified redirect URI.</returns>
+    /// <remarks>
+    /// This is the apex origin, not the tenant subdomain: the redirect URI has to be a single
+    /// value the operator registers once with the provider, so the callback lands on the apex and
+    /// <c>OidcCallbackRedirectMiddleware</c> bounces it to <c>{slug}.{baseDomain}</c> using the
+    /// slug carried in the protected state.
+    /// </remarks>
     private string GetRedirectUri(string callbackPath = LoginCallbackPath)
     {
-        var baseUrl = _configuration[ServiceNames.ConfigKeys.BaseUrl]?.TrimEnd('/') ?? "http://localhost:5000";
+        var baseUrl = PublicBaseUrl.Resolve(_configuration);
+
+        if (string.IsNullOrEmpty(baseUrl))
+        {
+            _logger.LogWarning(
+                "Neither {BaseUrlKey} nor {BaseDomainKey} is configured; OIDC redirect URIs fall "
+                    + "back to {Fallback}, which no identity provider will accept. Set "
+                    + "{BaseDomainKey} to the domain this instance is served on.",
+                ServiceNames.ConfigKeys.BaseUrl,
+                BaseDomainOptions.ConfigKey,
+                UnconfiguredBaseUrl
+            );
+            baseUrl = UnconfiguredBaseUrl;
+        }
+
         return $"{baseUrl}{callbackPath}";
     }
 
