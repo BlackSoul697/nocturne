@@ -248,7 +248,9 @@ public class OidcLinkEndpointsTests : AspireIntegrationTestBase
             await cmd.ExecuteNonQueryAsync();
         }
 
-        // Link subject to tenant
+        // Link subject to tenant. tenant_members is behind RLS, so its WITH CHECK clause needs
+        // the tenant context set before the insert is allowed.
+        await AuthTestHelpers.SetTenantContextAsync(conn, _tenantId);
         await using (var cmd = conn.CreateCommand())
         {
             cmd.CommandText = """

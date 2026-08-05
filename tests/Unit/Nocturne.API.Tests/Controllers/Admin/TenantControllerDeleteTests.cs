@@ -8,12 +8,11 @@ namespace Nocturne.API.Tests.Controllers.Admin;
 public class TenantControllerDeleteTests
 {
     private readonly Mock<ITenantService> _tenantService = new();
-    private readonly Mock<ITenantRoleService> _roleService = new();
     private readonly TenantController _controller;
 
     public TenantControllerDeleteTests()
     {
-        _controller = new TenantController(_tenantService.Object, _roleService.Object)
+        _controller = new TenantController(_tenantService.Object)
         {
             ControllerContext = new ControllerContext { HttpContext = new DefaultHttpContext() }
         };

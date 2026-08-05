@@ -71,7 +71,9 @@ public static class AuthTestHelpers
             await cmd.ExecuteNonQueryAsync();
         }
 
-        // Insert tenant member
+        // Insert tenant member. tenant_members is behind RLS, so the WITH CHECK clause needs the
+        // tenant context set before the insert is allowed.
+        await SetTenantContextAsync(conn, tenantId);
         await using (var cmd = conn.CreateCommand())
         {
             cmd.CommandText = """
@@ -124,13 +126,7 @@ public static class AuthTestHelpers
     {
         var grantId = Guid.CreateVersion7();
 
-        // Set RLS context
-        await using (var cmd = conn.CreateCommand())
-        {
-            cmd.CommandText = "SELECT set_config('app.current_tenant_id', @tenantId, false);";
-            cmd.Parameters.AddWithValue("tenantId", tenantId.ToString());
-            await cmd.ExecuteNonQueryAsync();
-        }
+        await SetTenantContextAsync(conn, tenantId);
 
         await using (var cmd = conn.CreateCommand())
         {
@@ -178,7 +174,9 @@ public static class AuthTestHelpers
             await cmd.ExecuteNonQueryAsync();
         }
 
-        // Insert tenant member
+        // Insert tenant member. tenant_members is behind RLS, so the WITH CHECK clause needs the
+        // tenant context set before the insert is allowed.
+        await SetTenantContextAsync(conn, tenantId);
         await using (var cmd = conn.CreateCommand())
         {
             cmd.CommandText = """
@@ -347,12 +345,7 @@ public static class AuthTestHelpers
         }
 
         // Set RLS tenant context for the insert
-        await using (var cmd = conn.CreateCommand())
-        {
-            cmd.CommandText = "SELECT set_config('app.current_tenant_id', @tenantId, false);";
-            cmd.Parameters.AddWithValue("tenantId", tenantId.ToString());
-            await cmd.ExecuteNonQueryAsync();
-        }
+        await SetTenantContextAsync(conn, tenantId);
 
         await using (var cmd = conn.CreateCommand())
         {
@@ -376,6 +369,19 @@ public static class AuthTestHelpers
     /// <summary>
     /// Gets the first tenant ID from the database.
     /// </summary>
+    /// <summary>
+    /// Sets <c>app.current_tenant_id</c> on the connection. The membership tables are behind Row
+    /// Level Security with FORCE enabled, so even the migrator role these helpers connect as needs
+    /// the tenant context before it can read or write them.
+    /// </summary>
+    public static async Task SetTenantContextAsync(NpgsqlConnection conn, Guid tenantId)
+    {
+        await using var cmd = conn.CreateCommand();
+        cmd.CommandText = "SELECT set_config('app.current_tenant_id', @tenantId, false);";
+        cmd.Parameters.AddWithValue("tenantId", tenantId.ToString());
+        await cmd.ExecuteNonQueryAsync();
+    }
+
     public static async Task<Guid> GetTenantIdAsync(NpgsqlConnection conn)
     {
         await using var cmd = conn.CreateCommand();
@@ -389,6 +395,9 @@ public static class AuthTestHelpers
     /// </summary>
     public static async Task<Guid> GetPublicMemberIdAsync(NpgsqlConnection conn, Guid tenantId)
     {
+        // tenant_members is behind RLS: without the tenant context the row reads as absent.
+        await SetTenantContextAsync(conn, tenantId);
+
         await using var cmd = conn.CreateCommand();
         cmd.CommandText = """
             SELECT tm.id
@@ -475,7 +484,8 @@ public static class AuthTestHelpers
             await cmd.ExecuteNonQueryAsync();
         }
 
-        // Create Public system subject tenant member
+        // Create Public system subject tenant member (RLS WITH CHECK needs the tenant context)
+        await SetTenantContextAsync(conn, tenantId);
         await using (var cmd = conn.CreateCommand())
         {
             cmd.CommandText = """
@@ -569,13 +579,7 @@ public static class AuthTestHelpers
         var stepId = Guid.CreateVersion7();
         var channelId = Guid.CreateVersion7();
 
-        // Set RLS context
-        await using (var cmd = conn.CreateCommand())
-        {
-            cmd.CommandText = "SELECT set_config('app.current_tenant_id', @tenantId, false);";
-            cmd.Parameters.AddWithValue("tenantId", tenantId.ToString());
-            await cmd.ExecuteNonQueryAsync();
-        }
+        await SetTenantContextAsync(conn, tenantId);
 
         // Insert alert rule
         await using (var cmd = conn.CreateCommand())
@@ -647,13 +651,7 @@ public static class AuthTestHelpers
         var excursionId = Guid.CreateVersion7();
         var instanceId = Guid.CreateVersion7();
 
-        // Set RLS context
-        await using (var cmd = conn.CreateCommand())
-        {
-            cmd.CommandText = "SELECT set_config('app.current_tenant_id', @tenantId, false);";
-            cmd.Parameters.AddWithValue("tenantId", tenantId.ToString());
-            await cmd.ExecuteNonQueryAsync();
-        }
+        await SetTenantContextAsync(conn, tenantId);
 
         // Insert alert excursion
         await using (var cmd = conn.CreateCommand())

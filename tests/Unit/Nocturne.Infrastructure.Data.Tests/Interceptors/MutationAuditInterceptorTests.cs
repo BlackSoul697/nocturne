@@ -73,22 +73,25 @@ public class TestNocturneDbContext : NocturneDbContext
     {
         base.OnModelCreating(modelBuilder);
 
-        // Remove the global query filters that reference PostgreSQL-specific functions
-        // (set_config / current_setting) which don't work with SQLite.
+        // Drop the filters ConfigureTenantFilters puts on these ITenantScoped test entities, so the
+        // tests can read rows for any tenant and see soft-deleted ones. Cleared by key: the filters
+        // are named, and the no-key overload only clears an anonymous filter, of which there is
+        // none — it would leave both named filters applied.
         modelBuilder.Entity<TestAuditableEntity>(e =>
         {
-            e.HasQueryFilter(null as LambdaExpression);
+            e.HasQueryFilter(NocturneDbContext.TenantFilterKey, null);
+            e.HasQueryFilter(NocturneDbContext.SoftDeleteFilterKey, null);
             e.Property(x => x.DeletedAt).IsRequired(false);
         });
 
         modelBuilder.Entity<TestSensorGlucoseEntity>(e =>
         {
-            e.HasQueryFilter(null as LambdaExpression);
+            e.HasQueryFilter(NocturneDbContext.TenantFilterKey, null);
         });
 
         modelBuilder.Entity<TestNonAuditableEntity>(e =>
         {
-            e.HasQueryFilter(null as LambdaExpression);
+            e.HasQueryFilter(NocturneDbContext.TenantFilterKey, null);
         });
     }
 }

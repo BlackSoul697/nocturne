@@ -140,6 +140,10 @@ public class TenantSetupGuardIntegrationTests : AspireIntegrationTestBase
 
     private static async Task DeleteAllPasskeysForTenantAsync(NpgsqlConnection conn, Guid tenantId)
     {
+        // The sub-select reads tenant_members, which is behind RLS: with no tenant context it
+        // matches nothing and the delete silently becomes a no-op.
+        await AuthTestHelpers.SetTenantContextAsync(conn, tenantId);
+
         await using var cmd = conn.CreateCommand();
         cmd.CommandText = """
             DELETE FROM passkey_credentials

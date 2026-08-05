@@ -560,6 +560,9 @@ public class MultitenantIsolationIntegrationTests : AspireIntegrationTestBase
         await using (var conn = new NpgsqlConnection(connStr))
         {
             await conn.OpenAsync();
+            // tenant_members is behind RLS: the UPDATE needs the tenant context to see the row at
+            // all, and to satisfy WITH CHECK on the updated one.
+            await AuthTestHelpers.SetTenantContextAsync(conn, _tenantAId);
             await using var cmd = conn.CreateCommand();
             cmd.CommandText = "UPDATE tenant_members SET revoked_at = now() WHERE subject_id = @s AND tenant_id = @t;";
             cmd.Parameters.AddWithValue("s", _subjectAId);
