@@ -119,7 +119,7 @@ public class RlsMembershipTests
             "tenant_member_roles inherits the subject arm through its EXISTS on tenant_members");
         (await CountMemberRolesAsync(conn, second.MemberId)).Should().Be(1);
         (await CountRolesAsync(conn, first.RoleId)).Should().Be(1,
-            "tenant_roles inherits it one step further, through tenant_member_roles");
+            "tenant_roles is reachable because the subject is a member of that tenant");
         (await CountMemberRolesAsync(conn, somebodyElse.MemberId)).Should().Be(0);
         (await CountRolesAsync(conn, somebodyElse.RoleId)).Should().Be(0,
             "a role nobody reachable holds must stay invisible");

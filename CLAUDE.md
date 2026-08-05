@@ -208,6 +208,17 @@ tenant's role and inherit that role's permissions.
   — the EF filter is a separate gate from the policy. Skip the tenant filter **by
   key**, never with the no-argument overload: that would also drop
   `RevokedMembershipFilterKey` and resurrect revoked memberships.
+- **Residual exposure to keep in mind on `TenantRoles`.** `tenant_roles`'
+  `subject_read` grants "any role of any tenant this subject belongs to", so on a
+  subject-pinned context the EF tenant filter is the *only* thing scoping a
+  `TenantRoles` query to one tenant — the policy will not stop it. A future caller
+  adding `.IgnoreQueryFilters([TenantFilterKey])` to a `TenantRoles` query would
+  silently receive the full role catalogue, permissions included, of every tenant
+  the subject is a member of. Nothing does today, and that is the whole defence:
+  no existing query asks for those rows (`RoleController.GetRoles` is gated on
+  `RolesManage` and runs tenant-pinned). Dropping the tenant filter on
+  `TenantRoles` therefore deserves the same scrutiny as dropping it on
+  `TenantMembers`.
 
 Roles are created by `docs/postgres/container-init/00-init.sh` (container
 init, bind-mounted into the Postgres container) or
