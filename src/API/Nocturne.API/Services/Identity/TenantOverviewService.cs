@@ -9,12 +9,13 @@ using Nocturne.Core.Models.Authorization;
 using Nocturne.Core.Models.V4;
 using Nocturne.Infrastructure.Data;
 using Nocturne.Infrastructure.Data.Entities;
+using Nocturne.Infrastructure.Data.Extensions;
 
 namespace Nocturne.API.Services.Identity;
 
 /// <summary>
-/// Cross-tenant caregiver overview. Enumerates the subject's active memberships from an
-/// unpinned factory context (same pattern as <see cref="TenantService.GetTenantsForSubjectAsync"/>),
+/// Cross-tenant caregiver overview. Enumerates the subject's active memberships from a
+/// subject-pinned factory context (same pattern as <see cref="TenantService.GetTenantsForSubjectAsync"/>),
 /// then fans out per tenant: a fresh DI scope pinned via <see cref="ITenantAccessor"/> for the
 /// canonical glucose read, and a factory context pinned via <see cref="NocturneDbContext.TenantId"/>
 /// for alert rules and active excursions. Never touches the request-scoped DbContext, so the
@@ -45,8 +46,9 @@ public class TenantOverviewService : ITenantOverviewService
         CancellationToken ct = default)
     {
         // tenant_members has a global RevokedAt == null query filter, so revoked
-        // memberships are already excluded here.
-        await using var context = await _factory.CreateDbContextAsync(ct);
+        // memberships are already excluded here. The read spans tenants for one person, so the
+        // context is pinned to the subject rather than to a tenant.
+        await using var context = await _factory.CreateSubjectPinnedContextAsync(subjectId, ct);
         var memberships = await context.TenantMembers.AsNoTracking()
             .Include(tm => tm.Tenant)
             .Include(tm => tm.MemberRoles).ThenInclude(mr => mr.TenantRole)
@@ -122,8 +124,7 @@ public class TenantOverviewService : ITenantOverviewService
                 .GetLatestAsync(ct);
         }
 
-        await using var db = await _factory.CreateDbContextAsync(ct);
-        db.TenantId = tenant.Id;
+        await using var db = await _factory.CreateTenantPinnedContextAsync(tenant.Id, ct);
 
         int? activeAlertCount = null;
         AlertRuleSeverity? highestSeverity = null;

@@ -2,6 +2,7 @@ using Microsoft.EntityFrameworkCore;
 using Nocturne.Core.Contracts.Identity;
 using Nocturne.Core.Models.Authorization;
 using Nocturne.Infrastructure.Data;
+using Nocturne.Infrastructure.Data.Extensions;
 
 namespace Nocturne.API.Services.Identity;
 
@@ -20,7 +21,11 @@ public class TenantOwnerResolver : ITenantOwnerResolver
         Guid tenantId,
         CancellationToken cancellationToken = default)
     {
-        await using var context = await _contextFactory.CreateDbContextAsync(cancellationToken);
+        // Pinned to the tenant asked about: the callers are background services
+        // (metadata publishing, compression-low detection, share-link notifications) with no
+        // ambient tenant, so the context carries no pin of its own.
+        await using var context = await _contextFactory.CreateTenantPinnedContextAsync(
+            tenantId, cancellationToken);
 
         var ownerSubjectId = await context.TenantMembers.AsNoTracking()
             .Where(tm => tm.TenantId == tenantId
