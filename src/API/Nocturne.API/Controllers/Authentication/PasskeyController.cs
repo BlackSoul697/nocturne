@@ -70,6 +70,7 @@ public class PasskeyController : ControllerBase
     private readonly IAuthAuditService _auditService;
     private readonly ITenantAccessor _tenantAccessor;
     private readonly ITenantService _tenantService;
+    private readonly ITenantMemberService _tenantMemberService;
     private readonly NocturneDbContext _dbContext;
     private readonly OidcOptions _oidcOptions;
     private readonly ILogger<PasskeyController> _logger;
@@ -87,6 +88,7 @@ public class PasskeyController : ControllerBase
         IAuthAuditService auditService,
         ITenantAccessor tenantAccessor,
         ITenantService tenantService,
+        ITenantMemberService tenantMemberService,
         NocturneDbContext dbContext,
         IOptions<OidcOptions> oidcOptions,
         ILogger<PasskeyController> logger)
@@ -100,6 +102,7 @@ public class PasskeyController : ControllerBase
         _auditService = auditService;
         _tenantAccessor = tenantAccessor;
         _tenantService = tenantService;
+        _tenantMemberService = tenantMemberService;
         _dbContext = dbContext;
         _oidcOptions = oidcOptions.Value;
         _logger = logger;
@@ -376,22 +379,48 @@ public class PasskeyController : ControllerBase
     /// check to the current tenant would let a tenant claim another tenant's credential-less member
     /// — the locked-out state recovery mode exists for — by enrolling a passkey onto them.
     /// </para>
+    /// <para>
+    /// Hence the two steps. The candidate list comes from tables that are not tenant-scoped, so one
+    /// query answers it. The membership check cannot join to them in the same statement: a single
+    /// anti-join spans every candidate at once, and the reach that makes it cross-tenant is granted
+    /// one subject at a time (<c>app.current_subject_id</c>), so no one pin can cover the statement.
+    /// It is asked per candidate instead, through <see cref="ITenantMemberService"/>, whose
+    /// enumeration carries that subject's own reach.
+    /// </para>
     /// The preconditions mean only a half-finished enrolment can match, never an account that can
     /// already sign in or that belongs to a tenant — so with several candidates (duplicates left by
     /// an older build of the options step) every one of them is an empty shell and the newest, which
     /// the caller's ceremony was minted against, wins. Ids are UUID v7, which sort in creation order.
+    /// Walking the candidates newest-first and taking the first with no membership is the same
+    /// answer as the newest candidate satisfying all four conditions at once.
+    /// <para>
+    /// A membership that has been revoked does not count, here or in
+    /// <see cref="ITenantMemberService.GetTenantIdsForSubjectAsync"/>: the global
+    /// <c>RevokedAt == null</c> filter excludes it either way. A revoked member is a shell with no
+    /// remaining access, so enrolling onto it takes nothing over.
+    /// </para>
     /// </remarks>
     private async Task<Guid?> FindEnrollingSubjectIdAsync(Expression<Func<SubjectEntity, bool>> match)
     {
-        return await _dbContext.Subjects
+        var candidateIds = await _dbContext.Subjects
             .Where(match)
             .Where(s => !s.IsSystemSubject
                 && !_dbContext.PasskeyCredentials.Any(c => c.SubjectId == s.Id)
-                && !_dbContext.SubjectOidcIdentities.Any(o => o.SubjectId == s.Id)
-                && !_dbContext.TenantMembers.Any(m => m.SubjectId == s.Id))
+                && !_dbContext.SubjectOidcIdentities.Any(o => o.SubjectId == s.Id))
             .OrderByDescending(s => s.Id)
-            .Select(s => (Guid?)s.Id)
-            .FirstOrDefaultAsync();
+            .Select(s => s.Id)
+            .ToListAsync();
+
+        foreach (var candidateId in candidateIds)
+        {
+            var memberships = await _tenantMemberService.GetTenantIdsForSubjectAsync(candidateId);
+            if (memberships.Count == 0)
+            {
+                return candidateId;
+            }
+        }
+
+        return null;
     }
 
     /// <summary>

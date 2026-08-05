@@ -9,6 +9,7 @@ using Microsoft.Extensions.Options;
 using Moq;
 using Nocturne.API.Controllers.Authentication;
 using Nocturne.API.Services.Auth;
+using Nocturne.API.Services.Identity;
 using Nocturne.Core.Contracts.Multitenancy;
 using Nocturne.Core.Contracts.Auth;
 using Nocturne.Core.Contracts.Notifications;
@@ -22,6 +23,16 @@ namespace Nocturne.API.Tests.Controllers;
 
 public class PasskeyControllerTests : IDisposable
 {
+    /// <summary>
+    /// Hands out contexts over the test's own SQLite connection, so the real
+    /// <see cref="TenantMemberService"/> sees the seeded rows.
+    /// </summary>
+    private sealed class SharedSqliteFactory(DbContextOptions<NocturneDbContext> options)
+        : IDbContextFactory<NocturneDbContext>
+    {
+        public NocturneDbContext CreateDbContext() => new(options);
+    }
+
     private readonly SqliteConnection _connection;
     private readonly DbContextOptions<NocturneDbContext> _dbOptions;
     private readonly NocturneDbContext _dbContext;
@@ -87,6 +98,10 @@ public class PasskeyControllerTests : IDisposable
             auditService.Object,
             _tenantAccessor.Object,
             _tenantService.Object,
+            // The real service, not a mock: the enrolment probe's cross-tenant reach and its
+            // revoked-membership filtering are the properties under test, and a mock would
+            // assert the mock.
+            new TenantMemberService(new SharedSqliteFactory(_dbOptions)),
             _dbContext,
             oidcOptions,
             logger.Object);
@@ -653,6 +668,104 @@ public class PasskeyControllerTests : IDisposable
     }
 
     /// <summary>
+    /// The enrolment probe asks each candidate separately whether it belongs to any tenant, so a
+    /// candidate whose membership is in a tenant other than the resolved one is still excluded —
+    /// the same answer the single anti-join gave, which is what stops one tenant enrolling a
+    /// passkey onto another tenant's credential-less member.
+    /// </summary>
+    [Fact]
+    public async Task InviteComplete_WhenTheOnlyCandidateBelongsToAnotherTenant_ResolvesNoSubject()
+    {
+        var elsewhereId = await SeedMemberAsync("shared-name", tenantId: Guid.CreateVersion7());
+        var inviteService = StubValidInvite();
+        StubRegistrationChallengeMintedFor(elsewhereId);
+
+        var result = await _controller.InviteComplete(
+            new InviteCompleteRequest
+            {
+                Token = "invite-token",
+                Username = "shared-name",
+                AttestationResponseJson = "{}",
+                ChallengeToken = "challenge-for-elsewhere",
+            },
+            inviteService.Object);
+
+        Assert.Equal(400, Assert.IsType<ObjectResult>(result.Result).StatusCode);
+        _passkeyService.Verify(
+            s => s.CompleteRegistrationAsync(
+                It.IsAny<string>(), It.IsAny<string>(), It.IsAny<Guid>(), elsewhereId, It.IsAny<string?>()),
+            Times.Never,
+            "membership of any tenant, not just this one, disqualifies a candidate");
+    }
+
+    /// <summary>
+    /// Walking candidates newest-first and taking the first with no membership must give the same
+    /// answer as the newest candidate satisfying every condition at once: when the newest shares
+    /// the username but belongs to a tenant, the older shell still resolves rather than the
+    /// enrolment dead-ending.
+    /// </summary>
+    [Fact]
+    public async Task InviteComplete_WhenTheNewestCandidateBelongsToATenant_ResolvesTheOlderShell()
+    {
+        var shell = await SeedEnrollingSubjectAsync("contested");
+        var newerMember = await SeedMemberAsync("contested", tenantId: Guid.CreateVersion7());
+        newerMember.CompareTo(shell).Should().BePositive("UUID v7 ids sort in creation order");
+        var inviteService = StubValidInvite();
+        StubRegistrationChallengeMintedFor(shell);
+        _recoveryCodeService.Setup(s => s.GenerateCodesAsync(shell)).ReturnsAsync(["code-1"]);
+        _sessionService
+            .Setup(s => s.IssueSessionAsync(shell, It.IsAny<SessionContext>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new SessionTokenPair("access", "refresh", 900));
+
+        var result = await _controller.InviteComplete(
+            new InviteCompleteRequest
+            {
+                Token = "invite-token",
+                Username = "contested",
+                AttestationResponseJson = "{}",
+                ChallengeToken = "challenge-for-shell",
+            },
+            inviteService.Object);
+
+        Assert.IsType<OkObjectResult>(result.Result);
+        inviteService.Verify(s => s.AcceptInviteAsync("invite-token", shell, _tenantId), Times.Once);
+        _passkeyService.Verify(
+            s => s.CompleteRegistrationAsync(
+                It.IsAny<string>(), It.IsAny<string>(), It.IsAny<Guid>(), newerMember, It.IsAny<string?>()),
+            Times.Never);
+    }
+
+    /// <summary>
+    /// A revoked membership does not disqualify a candidate: it carries no access, so the subject
+    /// is the same empty shell as one that never had a membership. Current behaviour of the single
+    /// anti-join too — the global <c>RevokedAt == null</c> filter excluded it there as well.
+    /// </summary>
+    [Fact]
+    public async Task InviteComplete_WhenTheCandidatesOnlyMembershipIsRevoked_ResolvesThatSubject()
+    {
+        var revokedId = await SeedRevokedMemberAsync("returning", tenantId: Guid.CreateVersion7());
+        var inviteService = StubValidInvite();
+        StubRegistrationChallengeMintedFor(revokedId);
+        _recoveryCodeService.Setup(s => s.GenerateCodesAsync(revokedId)).ReturnsAsync(["code-1"]);
+        _sessionService
+            .Setup(s => s.IssueSessionAsync(revokedId, It.IsAny<SessionContext>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new SessionTokenPair("access", "refresh", 900));
+
+        var result = await _controller.InviteComplete(
+            new InviteCompleteRequest
+            {
+                Token = "invite-token",
+                Username = "returning",
+                AttestationResponseJson = "{}",
+                ChallengeToken = "challenge-for-returning",
+            },
+            inviteService.Object);
+
+        Assert.IsType<OkObjectResult>(result.Result);
+        inviteService.Verify(s => s.AcceptInviteAsync("invite-token", revokedId, _tenantId), Times.Once);
+    }
+
+    /// <summary>
     /// Duplicate subjects left behind by an older build of the options step are all credential-less
     /// shells that nobody can sign in as, so the completion resolves the newest — the one the
     /// caller's ceremony was minted against — rather than refusing the invite forever.
@@ -829,6 +942,35 @@ public class PasskeyControllerTests : IDisposable
     /// Adds the subject that <c>invite/options</c> creates: active, no credentials, and not yet a
     /// member of the tenant.
     /// </summary>
+    /// <summary>
+    /// Seeds an active subject whose only membership — of another tenant — has been revoked, and
+    /// returns the subject id. A revoked membership carries no access, so the subject is the same
+    /// credential-less shell as one that never had a membership at all.
+    /// </summary>
+    private async Task<Guid> SeedRevokedMemberAsync(string username, Guid tenantId)
+    {
+        await EnsureTenantAsync(tenantId);
+
+        var subjectId = Guid.CreateVersion7();
+        _dbContext.Subjects.Add(new SubjectEntity
+        {
+            Id = subjectId,
+            Name = username,
+            Username = username,
+            IsActive = true,
+            IsSystemSubject = false,
+        });
+        _dbContext.TenantMembers.Add(new TenantMemberEntity
+        {
+            Id = Guid.CreateVersion7(),
+            TenantId = tenantId,
+            SubjectId = subjectId,
+            RevokedAt = DateTime.UtcNow.AddDays(-1),
+        });
+        await _dbContext.SaveChangesAsync();
+        return subjectId;
+    }
+
     private async Task<Guid> SeedEnrollingSubjectAsync(string username)
     {
         var subjectId = Guid.CreateVersion7();
