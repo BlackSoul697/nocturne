@@ -172,9 +172,10 @@ public class DevAuthController : ControllerBase
             tenant = tenants[0];
         }
 
-        // tenant_members/tenant_roles carry no RLS policies today, but set the
-        // context's TenantId so the connection interceptor pins the GUC on every
-        // open (a raw set_config would be reset when EF closes the connection).
+        // tenant_members and tenant_roles are behind RLS and carry a tenant query filter, so the
+        // reads below need the context pinned. Setting the property rather than issuing a raw
+        // set_config: the property drives the filter, and the connection interceptor writes the GUC
+        // on every open, where a raw set_config would be lost when EF closes the connection.
         _db.TenantId = tenant.Id;
 
         var members = await _db.TenantMembers

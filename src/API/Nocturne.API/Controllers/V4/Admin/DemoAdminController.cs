@@ -252,7 +252,9 @@ public class DemoAdminController : ControllerBase
         if (tenant is null)
             return NotFound();
 
-        db.TenantId = tenant.Id;
+        // The context has already served the demo-tenant lookup, so pin it rather than only setting
+        // the property — the interceptor has already run for any connection still open.
+        await db.PinTenantAsync(tenant.Id, ct);
         var publicSubjectId = await db.TenantMembers
             .Where(m => m.TenantId == tenant.Id && m.Subject!.IsSystemSubject && m.Subject.Name == "Public")
             .Select(m => (Guid?)m.SubjectId)

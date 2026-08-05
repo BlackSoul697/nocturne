@@ -170,11 +170,26 @@ the two is the classic silent-empty-result bug.
 
 `tenant_members` is the one table a caller may read outside its tenant, because
 "which tenants does this person belong to" cannot be expressed by a tenant pin.
-Its `tenant_isolation` policy therefore has two USING arms — `tenant_id =` the
-tenant GUC **or** `subject_id =` the subject GUC — while its WITH CHECK stays
-tenant-only. `tenant_member_roles` and `tenant_roles` inherit that reach through
-EXISTS chains rather than restating it (PostgreSQL applies RLS to the tables a
-policy expression references, so membership stays the single source of truth).
+Each of the three membership tables therefore carries **two permissive policies**:
+
+- **`tenant_isolation`** — `FOR ALL`, purely tenant-pinned in both USING and
+  WITH CHECK.
+- **`subject_read`** — `FOR SELECT` only, adding the subject's reach over their
+  own rows.
+
+PostgreSQL ORs permissive policies **per command**, so `SELECT` sees both while
+`INSERT`/`UPDATE`/`DELETE` see only the tenant-pinned one. That split is the
+mechanism, not a stylistic choice: a single `FOR ALL` policy with the subject arm
+in its USING clause would also grant `DELETE`, because USING is what DELETE is
+checked against and there is no WITH CHECK to stop it.
+
+`tenant_member_roles` and `tenant_roles` inherit the read reach through EXISTS
+chains rather than restating it (PostgreSQL applies RLS to the tables a policy
+expression references, so membership stays the single source of truth).
+`tenant_member_roles` has no tenant column, so its WITH CHECK validates **both**
+sides of a new row against the pinned tenant — the parent membership and the role
+being granted — otherwise a caller could link its own membership to another
+tenant's role and inherit that role's permissions.
 
 - **`app.current_subject_id`** — carried by `TenantConnectionInterceptor` from
   `NocturneDbContext.SubjectId`, set only when non-empty and RESET on close, the
@@ -185,9 +200,10 @@ policy expression references, so membership stays the single source of truth).
   `TenantService.GetTenantsForSubjectAsync`), the caregiver overview
   (`TenantOverviewService`), and the passkey enrolment probe. Everything else —
   including the whole authentication hot path — pins the tenant instead.
-- **Read reach only, never write reach.** The subject arm appears in no WITH
-  CHECK clause, so a subject GUC can never insert, update or delete a membership
-  in a tenant the connection is not pinned to.
+- **Read reach only, never write reach.** The subject arm lives in a `FOR SELECT`
+  policy, so a subject GUC can never insert, update **or delete** a membership in
+  a tenant the connection is not pinned to. Do not move it into `tenant_isolation`
+  to "simplify" — that silently grants DELETE.
 - Those reads also need `.IgnoreQueryFilters([NocturneDbContext.TenantFilterKey])`
   — the EF filter is a separate gate from the policy. Skip the tenant filter **by
   key**, never with the no-argument overload: that would also drop

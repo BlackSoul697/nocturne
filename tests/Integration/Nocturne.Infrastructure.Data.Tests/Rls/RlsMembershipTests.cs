@@ -185,6 +185,79 @@ public class RlsMembershipTests
             "the subject arm must never become write reach");
     }
 
+    /// <summary>
+    /// The subject arm lives in a FOR SELECT policy, so it grants no DELETE. Were it folded into
+    /// the FOR ALL policy's USING clause instead, DELETE would be checked against it — USING is
+    /// what DELETE is checked against, and there is no WITH CHECK to stop it — and a
+    /// subject-pinned connection could delete its own memberships in any tenant.
+    /// </summary>
+    /// <remarks>
+    /// A DELETE that no policy admits removes zero rows rather than raising, so these assert the
+    /// rows survive rather than expecting a SQLSTATE.
+    /// </remarks>
+    [Fact]
+    public async Task WithOnlyTheSubjectGuc_DeletesAreRefusedOnAllThreeTables()
+    {
+        var subjectId = await SeedSubjectAsync();
+        var t = await SeedMembershipAsync(subjectId: subjectId);
+
+        await using var conn = await _fx.OpenAppConnectionAsync();
+        await SetSubjectAsync(conn, subjectId);
+
+        // Reachable for reading under the subject arm — so a DELETE that silently matched nothing
+        // would be indistinguishable from one the policy refused, were the reads not asserted too.
+        (await CountMembersAsync(conn, subjectId)).Should().Be(1);
+        (await CountMemberRolesAsync(conn, t.MemberId)).Should().Be(1);
+        (await CountRolesAsync(conn, t.RoleId)).Should().Be(1);
+
+        (await DeleteMemberRolesAsync(conn, t.MemberId)).Should().Be(0,
+            "the subject arm is FOR SELECT, so it admits no delete of a role assignment");
+        (await DeleteRoleAsync(conn, t.RoleId)).Should().Be(0,
+            "nor of a role");
+        (await DeleteMembersAsync(conn, subjectId)).Should().Be(0,
+            "nor of the subject's own membership");
+
+        // Confirmed from the tenant's own pin, which can see the rows regardless of the arm above.
+        await SetTenantAsync(conn, t.TenantId);
+        (await CountMembersAsync(conn, subjectId)).Should().Be(1, "the membership must have survived");
+        (await CountMemberRolesAsync(conn, t.MemberId)).Should().Be(1, "the role assignment must have survived");
+        (await CountRolesAsync(conn, t.RoleId)).Should().Be(1, "the role must have survived");
+    }
+
+    [Fact]
+    public async Task PinnedToItsOwnTenant_DeletesAreAdmitted()
+    {
+        var t = await SeedMembershipAsync();
+
+        await using var conn = await _fx.OpenAppConnectionAsync();
+        await SetTenantAsync(conn, t.TenantId);
+
+        (await DeleteMemberRolesAsync(conn, t.MemberId)).Should().Be(1,
+            "the tenant arm is FOR ALL, so a tenant can still delete its own rows");
+        (await DeleteMembersAsync(conn, t.SubjectId)).Should().Be(1);
+        (await DeleteRoleAsync(conn, t.RoleId)).Should().Be(1);
+    }
+
+    /// <summary>
+    /// tenant_member_roles has no tenant of its own, so WITH CHECK validates both sides of a new
+    /// row. Without the role-side conjunct a caller could link one of its own memberships to
+    /// another tenant's role and inherit that role's permissions.
+    /// </summary>
+    [Fact]
+    public async Task GrantingAnotherTenantsRoleToItsOwnMembership_IsRefused()
+    {
+        var mine = await SeedMembershipAsync();
+        var foreign = await SeedMembershipAsync();
+
+        await using var conn = await _fx.OpenAppConnectionAsync();
+        await SetTenantAsync(conn, mine.TenantId);
+
+        var act = () => InsertMemberRoleAsync(conn, mine.MemberId, foreign.RoleId);
+
+        (await act.Should().ThrowAsync<PostgresException>()).Which.SqlState.Should().Be("42501",
+            "the role being granted must belong to the pinned tenant, not just the membership");
+    }
+
     [Fact]
     public async Task InsertingARoleForAnotherTenant_IsRefused()
     {
@@ -417,6 +490,25 @@ public class RlsMembershipTests
         cmd.CommandText = sql;
         AddParam(cmd, "@p", parameter);
         return Convert.ToInt64(await cmd.ExecuteScalarAsync());
+    }
+
+    // Rows the policies do not admit are not deleted and no error is raised, so these return the
+    // affected count for the caller to assert on.
+    private static Task<int> DeleteMembersAsync(NpgsqlConnection conn, Guid subjectId) =>
+        ExecuteAsync(conn, "DELETE FROM tenant_members WHERE subject_id = @p", subjectId);
+
+    private static Task<int> DeleteMemberRolesAsync(NpgsqlConnection conn, Guid memberId) =>
+        ExecuteAsync(conn, "DELETE FROM tenant_member_roles WHERE tenant_member_id = @p", memberId);
+
+    private static Task<int> DeleteRoleAsync(NpgsqlConnection conn, Guid roleId) =>
+        ExecuteAsync(conn, "DELETE FROM tenant_roles WHERE id = @p", roleId);
+
+    private static async Task<int> ExecuteAsync(NpgsqlConnection conn, string sql, Guid parameter)
+    {
+        await using var cmd = conn.CreateCommand();
+        cmd.CommandText = sql;
+        AddParam(cmd, "@p", parameter);
+        return await cmd.ExecuteNonQueryAsync();
     }
 
     private static Task SetTenantAsync(NpgsqlConnection conn, Guid tenantId) =>
