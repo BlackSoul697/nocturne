@@ -1,7 +1,9 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
+using Nocturne.Core.Models.Authorization;
 using Nocturne.Core.Models.Configuration;
 using Nocturne.Infrastructure.Data;
+using Nocturne.Infrastructure.Data.Extensions;
 
 namespace Nocturne.API.Services.Auth;
 
@@ -50,17 +52,43 @@ public class PlatformAdminBootstrapService
         if (await _db.Subjects.AnyAsync(s => s.IsPlatformAdmin, cancellationToken))
             return;
 
-        // Option 2: grant to owner of oldest tenant
-        var firstOwnerSubjectId = await _db.TenantMembers
-            .Where(tm => tm.MemberRoles.Any(mr => mr.TenantRole!.Slug == "owner"))
-            .OrderBy(tm => tm.Tenant!.SysCreatedAt)
-            .Select(tm => tm.SubjectId)
-            .FirstOrDefaultAsync(cancellationToken);
-
-        if (firstOwnerSubjectId == default) return;
+        // Option 2: grant to the owner of the oldest tenant that has one. Resolved by walking
+        // tenants oldest-first and looking the owner up under each tenant's own pin, because a
+        // single query over every tenant's memberships has no tenant to be pinned to.
+        var firstOwnerSubjectId = await FindOldestTenantOwnerAsync(cancellationToken);
+        if (firstOwnerSubjectId is null) return;
 
         await _db.Subjects
             .Where(s => s.Id == firstOwnerSubjectId)
             .ExecuteUpdateAsync(s => s.SetProperty(x => x.IsPlatformAdmin, true), cancellationToken);
+    }
+
+    /// <summary>
+    /// The subject holding the owner role on the oldest tenant that has one, or
+    /// <see langword="null"/> when no tenant does. Tenants without an owner are skipped, matching
+    /// the ordered membership scan this replaces.
+    /// </summary>
+    private async Task<Guid?> FindOldestTenantOwnerAsync(CancellationToken cancellationToken)
+    {
+        // tenants is not tenant-scoped, so the ordering can be resolved unpinned.
+        var tenantIds = await _db.Tenants
+            .OrderBy(t => t.SysCreatedAt)
+            .Select(t => t.Id)
+            .ToListAsync(cancellationToken);
+
+        foreach (var tenantId in tenantIds)
+        {
+            await _db.PinTenantAsync(tenantId, cancellationToken);
+
+            var ownerSubjectId = await _db.TenantMembers
+                .Where(tm => tm.TenantId == tenantId
+                    && tm.MemberRoles.Any(mr => mr.TenantRole!.Slug == TenantPermissions.SeedRoles.Owner))
+                .Select(tm => tm.SubjectId)
+                .FirstOrDefaultAsync(cancellationToken);
+
+            if (ownerSubjectId != default) return ownerSubjectId;
+        }
+
+        return null;
     }
 }
