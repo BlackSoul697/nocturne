@@ -56,7 +56,7 @@ public sealed class TenantServiceRemoveMemberTests : IDisposable
         db.SaveChanges();
     }
 
-    private NocturneDbContext Context() => new(_options) { TenantId = _tenantId };
+    private NocturneDbContext Context(Guid? tenantId = null) => new(_options) { TenantId = tenantId ?? _tenantId };
 
     private sealed class Factory(DbContextOptions<NocturneDbContext> options, Guid tenantId)
         : IDbContextFactory<NocturneDbContext>
@@ -195,7 +195,9 @@ public sealed class TenantServiceRemoveMemberTests : IDisposable
         var result = await Service().RemoveMemberAsync(_tenantId, subjectId);
 
         result.Ok.Should().BeTrue("an absent membership on this tenant is not a refusal");
-        await using var check = Context();
+        // Read under the other tenant's pin: the row is invisible from this tenant by design, so
+        // checking it from here would pass whether or not the removal had deleted it.
+        await using var check = Context(otherTenantId);
         (await check.TenantMembers.AnyAsync(m => m.SubjectId == subjectId)).Should().BeTrue(
             "the other tenant's membership must be untouched");
     }

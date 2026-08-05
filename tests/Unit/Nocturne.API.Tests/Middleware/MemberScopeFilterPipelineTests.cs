@@ -263,7 +263,7 @@ public class MemberScopeFilterPipelineTests
         var options = new DbContextOptionsBuilder<NocturneDbContext>().UseSqlite(connection).Options;
 
         var subjectId = Guid.CreateVersion7();
-        using (var seed = new NocturneDbContext(options))
+        using (var seed = new NocturneDbContext(options) { TenantId = TestDatabaseSeeder.TenantId })
         {
             seed.Database.EnsureCreated();
             TestDatabaseSeeder.Seed(seed);
@@ -302,7 +302,7 @@ public class MemberScopeFilterPipelineTests
         }
 
         var services = new ServiceCollection();
-        services.AddScoped(_ => new NocturneDbContext(options));
+        services.AddScoped(_ => new NocturneDbContext(options) { TenantId = TestDatabaseSeeder.TenantId });
         using var provider = services.BuildServiceProvider();
 
         var httpContext = new DefaultHttpContext { RequestServices = provider };

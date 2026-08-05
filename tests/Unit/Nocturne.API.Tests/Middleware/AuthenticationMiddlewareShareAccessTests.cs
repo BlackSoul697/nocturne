@@ -37,14 +37,14 @@ public sealed class AuthenticationMiddlewareShareAccessTests
     public AuthenticationMiddlewareShareAccessTests()
     {
         _dbName = $"share_gate_{Guid.NewGuid()}";
-        using (var seed = TestDbContextFactory.CreateInMemoryContext(_dbName))
+        using (var seed = TestDbContextFactory.CreateInMemoryContext(_dbName, TestDatabaseSeeder.TenantId))
         {
             TestDatabaseSeeder.Seed(seed);
         }
 
         var factory = new Mock<IDbContextFactory<NocturneDbContext>>();
         factory.Setup(f => f.CreateDbContextAsync(It.IsAny<CancellationToken>()))
-            .ReturnsAsync(() => TestDbContextFactory.CreateInMemoryContext(_dbName));
+            .ReturnsAsync(() => TestDbContextFactory.CreateInMemoryContext(_dbName, TestDatabaseSeeder.TenantId));
 
         _publicAccess = new PublicAccessCacheService(
             new MemoryCache(new MemoryCacheOptions()), factory.Object, NullLogger<PublicAccessCacheService>.Instance);
@@ -200,7 +200,7 @@ public sealed class AuthenticationMiddlewareShareAccessTests
 
     private void SetPublicDirectPermissions(List<string> permissions)
     {
-        using var db = TestDbContextFactory.CreateInMemoryContext(_dbName);
+        using var db = TestDbContextFactory.CreateInMemoryContext(_dbName, TestDatabaseSeeder.TenantId);
         var member = db.TenantMembers
             .Include(m => m.MemberRoles)
             .Single(m => m.SubjectId == TestDatabaseSeeder.PublicSubjectId);
@@ -223,7 +223,7 @@ public sealed class AuthenticationMiddlewareShareAccessTests
     [Fact]
     public async Task Share_access_carries_full_history_when_not_limited()
     {
-        using (var db = TestDbContextFactory.CreateInMemoryContext(_dbName))
+        using (var db = TestDbContextFactory.CreateInMemoryContext(_dbName, TestDatabaseSeeder.TenantId))
         {
             var member = db.TenantMembers.Single(m => m.SubjectId == TestDatabaseSeeder.PublicSubjectId);
             member.LimitTo24Hours = false;

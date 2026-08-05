@@ -29,7 +29,7 @@ public sealed class ShareLinkServiceTests : IDisposable
     public ShareLinkServiceTests()
     {
         var dbName = $"sharelink_{Guid.NewGuid()}";
-        _db = TestDbContextFactory.CreateInMemoryContext(dbName);
+        _db = TestDbContextFactory.CreateInMemoryContext(dbName, TenantId);
         TestDatabaseSeeder.Seed(_db);
 
         // The seeder grants the Public subject the Clinician role; keep a Viewer role available too
@@ -49,7 +49,7 @@ public sealed class ShareLinkServiceTests : IDisposable
 
         var factory = new Mock<IDbContextFactory<NocturneDbContext>>();
         factory.Setup(f => f.CreateDbContextAsync(It.IsAny<CancellationToken>()))
-            .ReturnsAsync(() => TestDbContextFactory.CreateInMemoryContext(dbName));
+            .ReturnsAsync(() => TestDbContextFactory.CreateInMemoryContext(dbName, TenantId));
 
         _service = new ShareLinkService(
             _db,

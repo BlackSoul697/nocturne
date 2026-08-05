@@ -11,9 +11,11 @@ namespace Nocturne.API.Services.Auth;
 
 /// <summary>
 /// Manages a tenant's single public share link: its token, the Public subject's read role, and
-/// the 24-hour/full-history scope. Runs on the request-scoped <see cref="NocturneDbContext"/>;
-/// the membership tables are not RLS-scoped, so tenant isolation comes from the explicit tenant-id
-/// predicate on every query — those predicates must be preserved.
+/// the 24-hour/full-history scope. Runs on the request-scoped <see cref="NocturneDbContext"/>,
+/// which every route reaching it has resolved a tenant for, so the membership query filter and the
+/// RLS policy both apply. The explicit tenant-id predicate on every query sits on top of them and
+/// must be preserved: it is what ties a lookup to the tenant the caller named, rather than to
+/// whatever the context happens to be pinned to.
 /// </summary>
 public interface IShareLinkService
 {

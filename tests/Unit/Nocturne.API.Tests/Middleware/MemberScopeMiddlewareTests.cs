@@ -173,7 +173,7 @@ public class MemberScopeMiddlewareTests
         connection.Open();
         var options = new DbContextOptionsBuilder<NocturneDbContext>().UseSqlite(connection).Options;
 
-        using (var seed = new NocturneDbContext(options))
+        using (var seed = new NocturneDbContext(options) { TenantId = TestDatabaseSeeder.TenantId })
         {
             seed.Database.EnsureCreated();
             // Seeds the default tenant with TestSubjectId as owner (the "*" wildcard role).
@@ -181,7 +181,7 @@ public class MemberScopeMiddlewareTests
         }
 
         var services = new ServiceCollection();
-        services.AddScoped(_ => new NocturneDbContext(options));
+        services.AddScoped(_ => new NocturneDbContext(options) { TenantId = TestDatabaseSeeder.TenantId });
         using var provider = services.BuildServiceProvider();
 
         var context = new DefaultHttpContext { RequestServices = provider };
@@ -812,7 +812,7 @@ public class MemberScopeMiddlewareTests
         connection.Open();
         var options = new DbContextOptionsBuilder<NocturneDbContext>().UseSqlite(connection).Options;
 
-        using (var seed = new NocturneDbContext(options))
+        using (var seed = new NocturneDbContext(options) { TenantId = TestDatabaseSeeder.TenantId })
         {
             seed.Database.EnsureCreated();
             TestDatabaseSeeder.Seed(seed);
@@ -879,7 +879,7 @@ public class MemberScopeMiddlewareTests
         DbContextOptions<NocturneDbContext> options, List<string> rolePermissions)
     {
         var subjectId = Guid.CreateVersion7();
-        using var seed = new NocturneDbContext(options);
+        using var seed = new NocturneDbContext(options) { TenantId = TestDatabaseSeeder.TenantId };
         seed.Database.EnsureCreated();
         TestDatabaseSeeder.Seed(seed);
 
@@ -931,7 +931,7 @@ public class MemberScopeMiddlewareTests
         AuthType authType = AuthType.OAuthAccessToken)
     {
         var services = new ServiceCollection();
-        services.AddScoped(_ => new NocturneDbContext(options));
+        services.AddScoped(_ => new NocturneDbContext(options) { TenantId = TestDatabaseSeeder.TenantId });
         var provider = services.BuildServiceProvider();
 
         var context = new DefaultHttpContext { RequestServices = provider };

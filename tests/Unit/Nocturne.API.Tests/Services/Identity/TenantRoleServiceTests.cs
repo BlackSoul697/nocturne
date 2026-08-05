@@ -36,13 +36,16 @@ public class TenantRoleServiceTests : IDisposable
     }
 
     private readonly SharedInMemoryFactory _factory;
+    private readonly string _dbName;
 
     public TenantRoleServiceTests()
     {
-        var dbName = Guid.NewGuid().ToString();
-        var factory = new SharedInMemoryFactory(dbName);
+        _dbName = Guid.NewGuid().ToString();
+        var factory = new SharedInMemoryFactory(_dbName);
         _factory = factory;
-        _context = TestDbContextFactory.CreateInMemoryContext(dbName);
+        // The CRUD methods run on the injected request-scoped context, which every route reaching
+        // them has resolved a tenant for; tenant_roles carries a query filter on that pin.
+        _context = TestDbContextFactory.CreateInMemoryContext(_dbName, _tenantId);
         _context.Tenants.Add(new TenantEntity
         {
             Id = _tenantId,
@@ -70,15 +73,24 @@ public class TenantRoleServiceTests : IDisposable
     [Fact]
     public async Task SeedRolesForTenantAsync_SeedsOnAContextPinnedToTheTenant()
     {
-        // The injected context is the request-scoped one, which on every tenant-creation entry
-        // point carries no pin. The seed must not write through it.
-        _context.TenantId.Should().Be(Guid.Empty);
+        // Every caller of the seed is a tenant-creation flow reached without a resolved tenant, so
+        // the injected context carries no pin. Reproduce that rather than using the pinned fixture
+        // one: writing the seed through an unpinned context is exactly the failure being excluded.
+        var unpinnedFactory = new SharedInMemoryFactory(_dbName);
+        await using var unpinnedContext = TestDbContextFactory.CreateInMemoryContext(_dbName);
+        var service = new TenantRoleService(unpinnedContext, unpinnedFactory);
 
-        await _service.SeedRolesForTenantAsync(_tenantId);
+        unpinnedContext.TenantId.Should().Be(Guid.Empty);
 
-        _factory.Handed.Should().ContainSingle("the seed takes exactly one context of its own");
-        _factory.Handed[0].TenantId.Should().Be(_tenantId);
-        _context.TenantId.Should().Be(Guid.Empty, "the request-scoped context must not be re-pinned");
+        await service.SeedRolesForTenantAsync(_tenantId);
+
+        unpinnedFactory.Handed.Should().ContainSingle("the seed takes exactly one context of its own");
+        unpinnedFactory.Handed[0].TenantId.Should().Be(_tenantId);
+        unpinnedContext.TenantId.Should().Be(
+            Guid.Empty, "the request-scoped context must not be re-pinned");
+
+        // And the rows landed where the pinned fixture context can see them.
+        (await _context.TenantRoles.CountAsync(r => r.TenantId == _tenantId)).Should().Be(6);
     }
 
     [Fact]
@@ -182,7 +194,8 @@ public class TenantRoleServiceTests : IDisposable
 
         result.Should().BeNull("a role ID from another tenant must not resolve");
 
-        var untouched = await _context.TenantRoles.AsNoTracking().FirstAsync(r => r.Id == otherRoleId);
+        await using var otherTenantView = TestDbContextFactory.CreateInMemoryContext(_dbName, _otherTenantId);
+        var untouched = await otherTenantView.TenantRoles.AsNoTracking().FirstAsync(r => r.Id == otherRoleId);
         untouched.Name.Should().Be("Viewer");
         untouched.Permissions.Should().BeEquivalentTo([TenantPermissions.GlucoseRead]);
     }
@@ -196,7 +209,9 @@ public class TenantRoleServiceTests : IDisposable
 
         result.Success.Should().BeFalse();
         result.ErrorCode.Should().Be("role_not_found");
-        (await _context.TenantRoles.AsNoTracking().AnyAsync(r => r.Id == otherRoleId)).Should().BeTrue();
+        await using var otherTenantView = TestDbContextFactory.CreateInMemoryContext(_dbName, _otherTenantId);
+        (await otherTenantView.TenantRoles.AsNoTracking().AnyAsync(r => r.Id == otherRoleId))
+            .Should().BeTrue();
     }
 
     [Fact]
@@ -207,9 +222,11 @@ public class TenantRoleServiceTests : IDisposable
         (await _service.GetRoleByIdAsync(_tenantId, otherRoleId)).Should().BeNull();
     }
 
+    private readonly Guid _otherTenantId = Guid.CreateVersion7();
+
     private async Task<Guid> SeedOtherTenantViewerRoleAsync()
     {
-        var otherTenantId = Guid.CreateVersion7();
+        var otherTenantId = _otherTenantId;
         _context.Tenants.Add(new TenantEntity
         {
             Id = otherTenantId,

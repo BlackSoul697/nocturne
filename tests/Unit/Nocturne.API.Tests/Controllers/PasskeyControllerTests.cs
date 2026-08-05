@@ -59,7 +59,9 @@ public class PasskeyControllerTests : IDisposable
             .ConfigureWarnings(w => w.Ignore(RelationalEventId.PendingModelChangesWarning))
             .Options;
 
-        _dbContext = new NocturneDbContext(_dbOptions);
+        // Pinned as TenantResolutionMiddleware would pin the request-scoped context: tenant_members
+        // carries a tenant query filter, so the controller's own membership reads need it.
+        _dbContext = new NocturneDbContext(_dbOptions) { TenantId = _tenantId };
         _dbContext.Database.EnsureCreated();
 
         _passkeyService = new Mock<IPasskeyService>();
