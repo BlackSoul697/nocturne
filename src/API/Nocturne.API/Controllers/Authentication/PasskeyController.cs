@@ -971,7 +971,13 @@ public class PasskeyController : ControllerBase
                 .Select(s => s.AccessRequestMessage)
                 .FirstOrDefaultAsync();
 
-            var ownerIds = await _dbContext.TenantMembers
+            // Pinned, not the request-scoped context: "Request access" is rendered on the login
+            // page of a share host too, where the scoped context is marked as a share and
+            // membership is denied. Resolved there, this would find no owners and the request would
+            // be filed with nobody notified.
+            await using var ownerCtx = await _dbContextFactory.CreateTenantPinnedContextAsync(
+                tenant.Id, HttpContext.RequestAborted);
+            var ownerIds = await ownerCtx.TenantMembers
                 .Where(tm => tm.TenantId == tenant.Id
                     && tm.MemberRoles.Any(mr => mr.TenantRole.Slug == Core.Models.Authorization.TenantPermissions.SeedRoles.Owner))
                 .Select(tm => tm.SubjectId)
