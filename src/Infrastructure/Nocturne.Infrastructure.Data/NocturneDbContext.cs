@@ -46,6 +46,16 @@ public class NocturneDbContext : DbContext, IDataProtectionKeyContext
     public Guid TenantId { get; set; }
 
     /// <summary>
+    /// The subject whose own rows a subject-scoped cross-tenant read may reach. Set per-lease by
+    /// the few callers that legitimately read one subject's rows across tenants (the tenant
+    /// switcher, the caregiver overview, membership enumeration). The
+    /// <see cref="Interceptors.TenantConnectionInterceptor"/> carries it to the
+    /// <c>app.current_subject_id</c> GUC. <see cref="Guid.Empty"/> leaves the GUC unset, so a
+    /// policy arm reading it matches no row (fail-closed).
+    /// </summary>
+    public Guid SubjectId { get; set; }
+
+    /// <summary>
     /// Audit context for the current operation. Populated from HttpContext for HTTP
     /// requests (via <see cref="Interceptors.MutationAuditInterceptor"/>), or set
     /// directly by background services that have no HttpContext.

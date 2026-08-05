@@ -105,8 +105,8 @@ public static class ServiceCollectionExtensions
             }
         );
 
-        // Normalize the four context carriers to fail-closed defaults on every acquisition, so raw
-        // IDbContextFactory callers start from a known-safe tenant/share state. See
+        // Normalize the context carriers to fail-closed defaults on every acquisition, so raw
+        // IDbContextFactory callers start from a known-safe tenant/subject/share state. See
         // CarrierResettingDbContextFactory.
         DecorateWithCarrierReset(services);
 
@@ -277,8 +277,8 @@ public static class ServiceCollectionExtensions
             }
         );
 
-        // Normalize the four context carriers to fail-closed defaults on every acquisition, so raw
-        // IDbContextFactory callers start from a known-safe tenant/share state. See
+        // Normalize the context carriers to fail-closed defaults on every acquisition, so raw
+        // IDbContextFactory callers start from a known-safe tenant/subject/share state. See
         // CarrierResettingDbContextFactory.
         DecorateWithCarrierReset(services);
 
