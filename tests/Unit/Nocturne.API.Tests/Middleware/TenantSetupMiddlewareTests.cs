@@ -23,7 +23,19 @@ public class TenantSetupMiddlewareTests : IDisposable
 {
     private readonly SqliteConnection _connection;
     private readonly NocturneDbContext _dbContext;
+    private readonly IDbContextFactory<NocturneDbContext> _dbFactory;
     private readonly Mock<ITenantAccessor> _tenantAccessor;
+
+    /// <summary>
+    /// Hands the middleware contexts over the test's own SQLite connection. The middleware takes a
+    /// factory rather than the request-scoped context so its reads are never flagged as a public
+    /// share, which the restrictive share policy on tenant_members would deny.
+    /// </summary>
+    private sealed class SharedSqliteFactory(DbContextOptions<NocturneDbContext> options)
+        : IDbContextFactory<NocturneDbContext>
+    {
+        public NocturneDbContext CreateDbContext() => new(options);
+    }
     private readonly Guid _tenantId = Guid.CreateVersion7();
 
     // Default validator with no instance key configured — Classify() always returns
@@ -44,6 +56,7 @@ public class TenantSetupMiddlewareTests : IDisposable
         _dbContext = new NocturneDbContext(options);
         _dbContext.TenantId = _tenantId;
         _dbContext.Database.EnsureCreated();
+        _dbFactory = new SharedSqliteFactory(options);
 
         // Seed the tenant entity so FK constraints are satisfied for TenantMembers
         _dbContext.Set<TenantEntity>().Add(new TenantEntity
@@ -91,7 +104,7 @@ public class TenantSetupMiddlewareTests : IDisposable
         ctx.Response.Body = new MemoryStream();
 
         // Act
-        await mw.InvokeAsync(ctx, _tenantAccessor.Object, _dbContext, _noInstanceKey);
+        await mw.InvokeAsync(ctx, _tenantAccessor.Object, _dbFactory, _noInstanceKey);
 
         // Assert
         ctx.Response.StatusCode.Should().Be(503);
@@ -133,7 +146,7 @@ public class TenantSetupMiddlewareTests : IDisposable
         var (mw, ctx) = Build(onNext: () => nextCalled = true);
 
         // Act
-        await mw.InvokeAsync(ctx, _tenantAccessor.Object, _dbContext, _noInstanceKey);
+        await mw.InvokeAsync(ctx, _tenantAccessor.Object, _dbFactory, _noInstanceKey);
 
         // Assert
         nextCalled.Should().BeTrue();
@@ -149,7 +162,7 @@ public class TenantSetupMiddlewareTests : IDisposable
         var (mw, ctx) = Build(onNext: () => nextCalled = true);
 
         // Act
-        await mw.InvokeAsync(ctx, _tenantAccessor.Object, _dbContext, _noInstanceKey);
+        await mw.InvokeAsync(ctx, _tenantAccessor.Object, _dbFactory, _noInstanceKey);
 
         // Assert
         nextCalled.Should().BeTrue();
@@ -205,7 +218,7 @@ public class TenantSetupMiddlewareTests : IDisposable
         var (mw, ctx) = Build();
 
         // Act
-        await mw.InvokeAsync(ctx, _tenantAccessor.Object, _dbContext, _noInstanceKey);
+        await mw.InvokeAsync(ctx, _tenantAccessor.Object, _dbFactory, _noInstanceKey);
 
         // Assert
         ctx.Response.StatusCode.Should().Be(503);
@@ -275,7 +288,7 @@ public class TenantSetupMiddlewareTests : IDisposable
         var (mw, ctx) = Build(onNext: () => nextCalled = true);
 
         // Act
-        await mw.InvokeAsync(ctx, _tenantAccessor.Object, _dbContext, _noInstanceKey);
+        await mw.InvokeAsync(ctx, _tenantAccessor.Object, _dbFactory, _noInstanceKey);
 
         // Assert
         nextCalled.Should().BeTrue();
@@ -316,7 +329,7 @@ public class TenantSetupMiddlewareTests : IDisposable
         var (mw, ctx) = Build(onNext: () => nextCalled = true);
 
         // Act
-        await mw.InvokeAsync(ctx, _tenantAccessor.Object, _dbContext, _noInstanceKey);
+        await mw.InvokeAsync(ctx, _tenantAccessor.Object, _dbFactory, _noInstanceKey);
 
         // Assert
         nextCalled.Should().BeTrue();
@@ -337,7 +350,7 @@ public class TenantSetupMiddlewareTests : IDisposable
         ctx.SetEndpoint(CreateEndpoint(new AllowDuringSetupAttribute()));
 
         // Act
-        await mw.InvokeAsync(ctx, _tenantAccessor.Object, _dbContext, _noInstanceKey);
+        await mw.InvokeAsync(ctx, _tenantAccessor.Object, _dbFactory, _noInstanceKey);
 
         // Assert
         nextCalled.Should().BeTrue();
@@ -352,7 +365,7 @@ public class TenantSetupMiddlewareTests : IDisposable
         ctx.SetEndpoint(CreateEndpoint());
 
         // Act
-        await mw.InvokeAsync(ctx, _tenantAccessor.Object, _dbContext, _noInstanceKey);
+        await mw.InvokeAsync(ctx, _tenantAccessor.Object, _dbFactory, _noInstanceKey);
 
         // Assert
         ctx.Response.StatusCode.Should().Be(503);
@@ -367,7 +380,7 @@ public class TenantSetupMiddlewareTests : IDisposable
         // (no SetEndpoint call)
 
         // Act
-        await mw.InvokeAsync(ctx, _tenantAccessor.Object, _dbContext, _noInstanceKey);
+        await mw.InvokeAsync(ctx, _tenantAccessor.Object, _dbFactory, _noInstanceKey);
 
         // Assert
         nextCalled.Should().BeTrue();
@@ -387,7 +400,7 @@ public class TenantSetupMiddlewareTests : IDisposable
         ctx.Response.Body = new MemoryStream();
 
         // Act — tenant is resolved (simulating single-tenant auto-resolution)
-        await mw.InvokeAsync(ctx, _tenantAccessor.Object, _dbContext, _noInstanceKey);
+        await mw.InvokeAsync(ctx, _tenantAccessor.Object, _dbFactory, _noInstanceKey);
 
         // Assert
         ctx.Response.StatusCode.Should().Be(503);
@@ -428,7 +441,7 @@ public class TenantSetupMiddlewareTests : IDisposable
         var (mw, ctx) = Build(onNext: () => nextCalled = true);
 
         // Act
-        await mw.InvokeAsync(ctx, _tenantAccessor.Object, _dbContext, _noInstanceKey);
+        await mw.InvokeAsync(ctx, _tenantAccessor.Object, _dbFactory, _noInstanceKey);
 
         // Assert
         nextCalled.Should().BeTrue();
@@ -485,7 +498,7 @@ public class TenantSetupMiddlewareTests : IDisposable
         var (mw, ctx) = Build(onNext: () => nextCalled = true);
 
         // Act
-        await mw.InvokeAsync(ctx, _tenantAccessor.Object, _dbContext, _noInstanceKey);
+        await mw.InvokeAsync(ctx, _tenantAccessor.Object, _dbFactory, _noInstanceKey);
 
         // Assert
         nextCalled.Should().BeTrue("OIDC identity alone should satisfy the setup check");
@@ -567,7 +580,7 @@ public class TenantSetupMiddlewareTests : IDisposable
         var (mw, ctx) = Build(onNext: () => nextCalled = true);
 
         // Act — middleware checks tenant B
-        await mw.InvokeAsync(ctx, _tenantAccessor.Object, _dbContext, _noInstanceKey);
+        await mw.InvokeAsync(ctx, _tenantAccessor.Object, _dbFactory, _noInstanceKey);
 
         // Assert
         nextCalled.Should().BeTrue(
@@ -633,7 +646,7 @@ public class TenantSetupMiddlewareTests : IDisposable
         var (mw, ctx) = Build(onNext: () => nextCalled = true);
 
         // Act
-        await mw.InvokeAsync(ctx, _tenantAccessor.Object, _dbContext, _noInstanceKey);
+        await mw.InvokeAsync(ctx, _tenantAccessor.Object, _dbFactory, _noInstanceKey);
 
         // Assert — should pass through cleanly, no 503, no recovery mode
         nextCalled.Should().BeTrue();
@@ -666,7 +679,7 @@ public class TenantSetupMiddlewareTests : IDisposable
         var (mw, ctx) = Build();
 
         // Act
-        await mw.InvokeAsync(ctx, _tenantAccessor.Object, _dbContext, _noInstanceKey);
+        await mw.InvokeAsync(ctx, _tenantAccessor.Object, _dbFactory, _noInstanceKey);
 
         // Assert
         ctx.Response.StatusCode.Should().Be(503);
@@ -695,7 +708,7 @@ public class TenantSetupMiddlewareTests : IDisposable
         ctx.Request.Headers[ServiceNames.Headers.InstanceService] = "nocturne-setup-agent";
 
         // Act
-        await mw.InvokeAsync(ctx, _tenantAccessor.Object, _dbContext, ValidatorFor(key));
+        await mw.InvokeAsync(ctx, _tenantAccessor.Object, _dbFactory, ValidatorFor(key));
 
         // Assert
         nextCalled.Should().BeTrue("a trusted instance-key caller must reach config endpoints during setup");
@@ -739,7 +752,7 @@ public class TenantSetupMiddlewareTests : IDisposable
         ctx.Request.Headers[ServiceNames.Headers.InstanceService] = "nocturne-setup-agent";
 
         // Act
-        await mw.InvokeAsync(ctx, _tenantAccessor.Object, _dbContext, ValidatorFor(key));
+        await mw.InvokeAsync(ctx, _tenantAccessor.Object, _dbFactory, ValidatorFor(key));
 
         // Assert
         nextCalled.Should().BeTrue();
@@ -758,7 +771,7 @@ public class TenantSetupMiddlewareTests : IDisposable
         // no X-Instance-Service marker
 
         // Act
-        await mw.InvokeAsync(ctx, _tenantAccessor.Object, _dbContext, ValidatorFor(key));
+        await mw.InvokeAsync(ctx, _tenantAccessor.Object, _dbFactory, ValidatorFor(key));
 
         // Assert
         ctx.Response.StatusCode.Should().Be(503);
@@ -773,7 +786,7 @@ public class TenantSetupMiddlewareTests : IDisposable
         ctx.Request.Headers[ServiceNames.Headers.InstanceService] = "nocturne-setup-agent";
 
         // Act
-        await mw.InvokeAsync(ctx, _tenantAccessor.Object, _dbContext, ValidatorFor("bootstrap-key"));
+        await mw.InvokeAsync(ctx, _tenantAccessor.Object, _dbFactory, ValidatorFor("bootstrap-key"));
 
         // Assert
         ctx.Response.StatusCode.Should().Be(503);

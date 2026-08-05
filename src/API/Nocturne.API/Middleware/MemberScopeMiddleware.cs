@@ -185,6 +185,7 @@ public class MemberScopeMiddleware
                 || (DateTime.UtcNow - membership.LastUsedAt.Value).TotalMinutes > 5))
         {
             var membershipId = membership.Id;
+            var tenantId = authContext.TenantId.Value;
             var ip = context.Connection.RemoteIpAddress?.ToString();
             var userAgent = context.Request.Headers.UserAgent.FirstOrDefault();
             var serviceScopeFactory = context.RequestServices.GetRequiredService<IServiceScopeFactory>();
@@ -193,18 +194,27 @@ public class MemberScopeMiddleware
             {
                 try
                 {
+                    // The fresh scope outlives the request, so its context resolves without an
+                    // ambient tenant and carries no pin of its own. Pin it, and key the update on
+                    // the tenant as well as the membership id.
                     using var scope = serviceScopeFactory.CreateScope();
                     var db = scope.ServiceProvider.GetRequiredService<NocturneDbContext>();
+                    db.TenantId = tenantId;
                     await db.TenantMembers
-                        .Where(tm => tm.Id == membershipId)
+                        .Where(tm => tm.Id == membershipId && tm.TenantId == tenantId)
                         .ExecuteUpdateAsync(s => s
                             .SetProperty(tm => tm.LastUsedAt, DateTime.UtcNow)
                             .SetProperty(tm => tm.LastUsedIp, ip)
                             .SetProperty(tm => tm.LastUsedUserAgent, userAgent));
                 }
-                catch
+                catch (Exception ex)
                 {
-                    // Best-effort — don't let tracking failures affect the request
+                    // Best-effort — don't let tracking failures affect the request. Warned rather
+                    // than debugged: a write the database refuses would otherwise be invisible at
+                    // production log levels. The 5-minute refresh window bounds the rate to one
+                    // per member.
+                    _logger.LogWarning(
+                        ex, "Failed to record last-used for membership {MembershipId}", membershipId);
                 }
             });
         }

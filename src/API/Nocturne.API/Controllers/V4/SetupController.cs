@@ -15,6 +15,7 @@ using Nocturne.API.Extensions;
 using Nocturne.API.Services.Auth;
 using Nocturne.Infrastructure.Data;
 using Nocturne.Infrastructure.Data.Entities;
+using Nocturne.Infrastructure.Data.Extensions;
 using Nocturne.API.Configuration;
 using SameSiteMode = Nocturne.Core.Models.Configuration.SameSiteMode;
 
@@ -87,14 +88,8 @@ public partial class SetupController : ControllerBase
     public async Task<IActionResult> CreateTenant(
         [FromBody] SetupTenantRequest request, CancellationToken ct)
     {
-        await using var context = await _dbFactory.CreateDbContextAsync(ct);
-
         // Block if any tenant already has a member with credentials (passkey or OIDC).
-        var hasConfiguredTenant = await context.TenantMembers
-            .AnyAsync(m =>
-                context.PasskeyCredentials.Any(c => c.SubjectId == m.SubjectId) ||
-                context.SubjectOidcIdentities.Any(o => o.SubjectId == m.SubjectId), ct);
-        if (hasConfiguredTenant)
+        if (await AnyTenantHasCredentialedMemberAsync(ct))
             return Conflict(new { error = "setup_already_complete" });
 
         if (string.IsNullOrWhiteSpace(request.Slug) || string.IsNullOrWhiteSpace(request.DisplayName))
@@ -137,9 +132,7 @@ public partial class SetupController : ControllerBase
         if (tenant == null)
             return Ok(new SlugValidationResult(false, "No tenant exists"));
 
-        await context.Database.ExecuteSqlRawAsync(
-            "SELECT set_config('app.current_tenant_id', {0}, false)",
-            tenant.Id.ToString());
+        await context.PinTenantAsync(tenant.Id, ct);
 
         var exists = await context.TenantMembers.AsNoTracking()
             .AnyAsync(m => m.TenantId == tenant.Id && m.Username == normalized, ct);
@@ -391,6 +384,44 @@ public partial class SetupController : ControllerBase
     #region Private Helpers
 
     /// <summary>
+    /// Whether any tenant on the instance already has a member holding a real credential (passkey
+    /// or linked OIDC identity), i.e. whether first-run setup has already produced a usable
+    /// account somewhere.
+    /// </summary>
+    /// <remarks>
+    /// Asked per tenant under that tenant's own pin, then OR'd. The equivalent single query over
+    /// every tenant's memberships has no tenant to be pinned to, and a membership hidden from it
+    /// would read as "no credentialed member exists" — re-opening setup on a configured instance.
+    /// <para>
+    /// The per-iteration re-pin is confined to a context of its own, so the caller is not left
+    /// holding one pinned to whichever tenant happened to be enumerated last.
+    /// </para>
+    /// </remarks>
+    private async Task<bool> AnyTenantHasCredentialedMemberAsync(CancellationToken ct)
+    {
+        await using var context = await _dbFactory.CreateDbContextAsync(ct);
+
+        var tenantIds = await context.Tenants.AsNoTracking()
+            .Select(t => t.Id)
+            .ToListAsync(ct);
+
+        foreach (var tenantId in tenantIds)
+        {
+            await context.PinTenantAsync(tenantId, ct);
+
+            var hasCredentialedMember = await context.TenantMembers.AsNoTracking()
+                .Where(m => m.TenantId == tenantId)
+                .AnyAsync(m =>
+                    context.PasskeyCredentials.Any(c => c.SubjectId == m.SubjectId) ||
+                    context.SubjectOidcIdentities.Any(o => o.SubjectId == m.SubjectId), ct);
+
+            if (hasCredentialedMember) return true;
+        }
+
+        return false;
+    }
+
+    /// <summary>
     /// Returns the sole tenant if exactly one exists and it has no non-system members,
     /// or an error result if the preconditions are not met.
     /// </summary>
@@ -408,10 +439,8 @@ public partial class SetupController : ControllerBase
 
         var tenant = tenants[0];
 
-        // Set RLS context to query tenant-scoped members table
-        await context.Database.ExecuteSqlRawAsync(
-            "SELECT set_config('app.current_tenant_id', {0}, false)",
-            tenant.Id.ToString());
+        // Pin the RLS context to query the tenant-scoped members table
+        await context.PinTenantAsync(tenant.Id, ct);
 
         // Setup is "complete" only once a member holds real credentials (passkey or
         // OIDC). A credential-less member is a half-finished setup left behind by an
@@ -447,9 +476,7 @@ public partial class SetupController : ControllerBase
     {
         await using var context = await _dbFactory.CreateDbContextAsync(ct);
 
-        await context.Database.ExecuteSqlRawAsync(
-            "SELECT set_config('app.current_tenant_id', {0}, false)",
-            tenant.Id.ToString());
+        await context.PinTenantAsync(tenant.Id, ct);
 
         return await SetupOwnerSubjects(context)
             .AsNoTracking()
@@ -468,9 +495,7 @@ public partial class SetupController : ControllerBase
     {
         await using var context = await _dbFactory.CreateDbContextAsync(ct);
 
-        await context.Database.ExecuteSqlRawAsync(
-            "SELECT set_config('app.current_tenant_id', {0}, false)",
-            tenant.Id.ToString());
+        await context.PinTenantAsync(tenant.Id, ct);
 
         var existingSubject = await SetupOwnerSubjects(context).FirstOrDefaultAsync(ct);
 
@@ -514,9 +539,7 @@ public partial class SetupController : ControllerBase
 
         // Set per-tenant username on the membership
         await using var memberCtx = await _dbFactory.CreateDbContextAsync(ct);
-        await memberCtx.Database.ExecuteSqlRawAsync(
-            "SELECT set_config('app.current_tenant_id', {0}, false)",
-            tenant.Id.ToString());
+        await memberCtx.PinTenantAsync(tenant.Id, ct);
         var membership = await memberCtx.TenantMembers
             .FirstOrDefaultAsync(m => m.TenantId == tenant.Id && m.SubjectId == subjectId, ct);
         if (membership != null)

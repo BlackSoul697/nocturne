@@ -16,6 +16,7 @@ using Nocturne.Core.Contracts.Connectors;
 using Nocturne.Core.Contracts.Multitenancy;
 using Nocturne.Core.Models.Authorization;
 using Nocturne.Infrastructure.Data;
+using Nocturne.Infrastructure.Data.Extensions;
 
 namespace Nocturne.API.Controllers.V4.DevOnly;
 
@@ -87,7 +88,7 @@ public class DevAdminController : ControllerBase
         foreach (var tenant in tenants)
         {
             // Set RLS GUC for tenant-scoped queries
-            await SetTenantGuc(tenant.Id, ct);
+            await _db.PinTenantAsync(tenant.Id, ct);
 
             // Query tenant-scoped entities
             var roles = await _db.TenantRoles
@@ -310,7 +311,7 @@ public class DevAdminController : ControllerBase
                 foreach (var ts in snapshot.Tenants)
                 {
                     var tenantId = ts.Tenant.Id;
-                    await SetTenantGuc(tenantId, ct);
+                    await _db.PinTenantAsync(tenantId, ct);
 
                     // Delete in FK-safe order: member-roles -> members -> roles -> OAuth clients -> connector configs
                     var existingMemberRoles = await _db.TenantMemberRoles
@@ -443,7 +444,7 @@ public class DevAdminController : ControllerBase
                 foreach (var ts in snapshot.Tenants)
                 {
                     var tenantId = ts.Tenant.Id;
-                    await SetTenantGuc(tenantId, ct);
+                    await _db.PinTenantAsync(tenantId, ct);
 
                     // Insert roles
                     foreach (var r in ts.Roles)
@@ -587,7 +588,7 @@ public class DevAdminController : ControllerBase
 
         foreach (var tenant in tenants)
         {
-            await SetTenantGuc(tenant.Id, ct);
+            await _db.PinTenantAsync(tenant.Id, ct);
 
             var configs = await _db.ConnectorConfigurations
                 .AsNoTracking()
@@ -655,7 +656,7 @@ public class DevAdminController : ControllerBase
 
         foreach (var tenant in tenants)
         {
-            await SetTenantGuc(tenant.Id, ct);
+            await _db.PinTenantAsync(tenant.Id, ct);
 
             var entryCount = (long)await _db.SensorGlucose.CountAsync(ct)
                 + await _db.MeterGlucose.CountAsync(ct)
@@ -778,7 +779,7 @@ public class DevAdminController : ControllerBase
         try
         {
             // Phase 1: Clean existing scoped data for this tenant
-            await SetTenantGuc(id, ct);
+            await _db.PinTenantAsync(id, ct);
 
             var existingMemberRoles = await _db.TenantMemberRoles
                 .Where(mr => _db.TenantMembers
@@ -997,7 +998,7 @@ public class DevAdminController : ControllerBase
         await _db.SaveChangesAsync(ct);
 
         // 4. Owner membership with full permissions
-        await SetTenantGuc(tenant.Id, ct);
+        await _db.PinTenantAsync(tenant.Id, ct);
         var ownerRole = await _db.TenantRoles
             .Where(r => r.TenantId == tenant.Id && r.IsSystem && r.Slug == TenantPermissions.SeedRoles.Owner)
             .FirstAsync(ct);
@@ -1087,7 +1088,7 @@ public class DevAdminController : ControllerBase
         if (tenant is null)
             return NotFound(new { error = $"Tenant {id} not found" });
 
-        await SetTenantGuc(tenant.Id, ct);
+        await _db.PinTenantAsync(tenant.Id, ct);
         var members = await _db.TenantMembers
             .AsNoTracking()
             .Include(m => m.Subject)
@@ -1130,7 +1131,7 @@ public class DevAdminController : ControllerBase
         if (tenant is null)
             return NotFound(new { error = $"Tenant {id} not found" });
 
-        await SetTenantGuc(tenant.Id, ct);
+        await _db.PinTenantAsync(tenant.Id, ct);
 
         var members = await _db.TenantMembers
             .Include(m => m.Subject)
@@ -1207,14 +1208,6 @@ public class DevAdminController : ControllerBase
     }
 
     // ── Helpers ───────────────────────────────────────────────────────────
-
-    private async Task SetTenantGuc(Guid tenantId, CancellationToken ct)
-    {
-        await _db.Database.ExecuteSqlRawAsync(
-            "SELECT set_config('app.current_tenant_id', {0}, false)",
-            [tenantId.ToString()],
-            ct);
-    }
 
     /// <summary>
     /// 400 for a rejected slug, with up to three valid alternatives so callers

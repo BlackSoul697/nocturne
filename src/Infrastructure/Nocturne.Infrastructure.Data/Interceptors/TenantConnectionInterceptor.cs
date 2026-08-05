@@ -12,6 +12,11 @@ namespace Nocturne.Infrastructure.Data.Interceptors;
 /// On connection open: SELECT set_config('app.current_tenant_id', $1, false)
 /// On connection close: RESET app.current_tenant_id
 ///
+/// The same open/reset pair carries app.current_subject_id, which gives the
+/// subject-scoped cross-tenant reads (tenant switcher, caregiver overview,
+/// membership enumeration) reach over one subject's own rows. Both are set only
+/// when non-empty, so an unpinned context leaves the GUC unset and matches nothing.
+///
 /// Additionally, on the first open against any given connection string, the
 /// interceptor verifies that the connected role is neither a superuser nor
 /// has BYPASSRLS. Both attributes silently defeat Row Level Security, so
@@ -48,12 +53,18 @@ public class TenantConnectionInterceptor : DbConnectionInterceptor
         }
 
         await using var cmd = connection.CreateCommand();
-        var clauses = new List<string>(4);
+        var clauses = new List<string>(5);
 
         if (ctx.TenantId != Guid.Empty)
         {
             clauses.Add("set_config('app.current_tenant_id', @tenant_id, false)");
             AddParameter(cmd, "tenant_id", ctx.TenantId.ToString());
+        }
+
+        if (ctx.SubjectId != Guid.Empty)
+        {
+            clauses.Add("set_config('app.current_subject_id', @subject_id, false)");
+            AddParameter(cmd, "subject_id", ctx.SubjectId.ToString());
         }
 
         // app.is_share, app.visible_categories and app.share_full_history gate the
@@ -95,14 +106,14 @@ public class TenantConnectionInterceptor : DbConnectionInterceptor
         ConnectionEventData eventData,
         InterceptionResult result)
     {
-        // Reset the session variable before the connection returns to the pool.
-        // This prevents a stale tenant ID from leaking to the next request.
+        // Reset the session variables before the connection returns to the pool.
+        // This prevents a stale tenant or subject ID from leaking to the next request.
         try
         {
             await using var cmd = connection.CreateCommand();
             cmd.CommandText =
-                "RESET app.current_tenant_id; RESET app.is_share; RESET app.visible_categories; " +
-                "RESET app.share_full_history";
+                "RESET app.current_tenant_id; RESET app.current_subject_id; RESET app.is_share; " +
+                "RESET app.visible_categories; RESET app.share_full_history";
             await cmd.ExecuteNonQueryAsync();
         }
         catch
