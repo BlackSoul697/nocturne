@@ -6,6 +6,7 @@ using Nocturne.Core.Constants;
 using Nocturne.Core.Contracts.Multitenancy;
 using Nocturne.Core.Models.Authorization;
 using Nocturne.Infrastructure.Data;
+using Nocturne.Infrastructure.Data.Extensions;
 using Nocturne.Infrastructure.Data.Entities;
 using Nocturne.Infrastructure.Data.Entities.V4;
 
@@ -318,7 +319,10 @@ public class DemoAdminController : ControllerBase
     /// </summary>
     private static async Task GrantPublicWriteAccessAsync(NocturneDbContext db, Guid tenantId, CancellationToken ct)
     {
-        db.TenantId = tenantId;
+        // The context has already served queries for the caller's tenantless work, so pin it to the
+        // demo tenant rather than only setting the property — the interceptor has already run for
+        // any connection still open.
+        await db.PinTenantAsync(tenantId, ct);
 
         var publicMember = await db.TenantMembers
             .Include(m => m.Subject)

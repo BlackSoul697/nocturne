@@ -26,14 +26,10 @@ namespace Nocturne.API.Controllers.V4.PlatformAdmin;
 public class TenantController : ControllerBase
 {
     private readonly ITenantService _tenantService;
-    private readonly ITenantRoleService _tenantRoleService;
 
-    public TenantController(
-        ITenantService tenantService,
-        ITenantRoleService tenantRoleService)
+    public TenantController(ITenantService tenantService)
     {
         _tenantService = tenantService;
-        _tenantRoleService = tenantRoleService;
     }
 
     [HttpGet]

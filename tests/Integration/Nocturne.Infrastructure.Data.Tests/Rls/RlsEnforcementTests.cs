@@ -2,6 +2,7 @@ using FluentAssertions;
 using Microsoft.Extensions.Logging.Abstractions;
 using Nocturne.Infrastructure.Data.Entities;
 using Nocturne.Infrastructure.Data.Extensions;
+using Nocturne.Infrastructure.Data.Security;
 using Npgsql;
 using Xunit;
 
@@ -33,15 +34,21 @@ public class RlsEnforcementTests
     [Fact]
     public async Task AllTenantScopedTables_HaveRlsEnabledAndForcedAndPolicied()
     {
-        var tenantScopedTables = TenantScopedTableNames().ToArray();
-        tenantScopedTables.Should().NotBeEmpty(
+        // Unions the derived-tenant tables the way the startup check does: they have no tenant_id,
+        // so the ITenantScoped walk misses them and a dropped policy would go unnoticed.
+        var rlsTables = TenantScopedTableNames()
+            .Concat(RlsProtectedTables.DerivedTenantTables)
+            .Distinct(StringComparer.Ordinal)
+            .ToArray();
+        rlsTables.Should().NotBeEmpty(
             "the EF model should declare at least one ITenantScoped entity");
+        rlsTables.Should().Contain("tenant_member_roles");
 
         await using var conn = await _fx.OpenMigratorConnectionAsync();
 
         var act = () => DatabaseInitializationExtensions.VerifyRlsAsync(
             conn,
-            tenantScopedTables,
+            rlsTables,
             NullLogger.Instance);
 
         await act.Should().NotThrowAsync(

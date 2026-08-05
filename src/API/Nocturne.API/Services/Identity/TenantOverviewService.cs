@@ -50,6 +50,10 @@ public class TenantOverviewService : ITenantOverviewService
         // context is pinned to the subject rather than to a tenant.
         await using var context = await _factory.CreateSubjectPinnedContextAsync(subjectId, ct);
         var memberships = await context.TenantMembers.AsNoTracking()
+            // Dropping tenant isolation by key covers the included TenantRole as well, which is
+            // also tenant-scoped: left filtered, the navigation would come back null and the
+            // Permissions read below would throw. The revoked-membership filter stays applied.
+            .IgnoreQueryFilters([NocturneDbContext.TenantFilterKey])
             .Include(tm => tm.Tenant)
             .Include(tm => tm.MemberRoles).ThenInclude(mr => mr.TenantRole)
             .Where(tm => tm.SubjectId == subjectId)

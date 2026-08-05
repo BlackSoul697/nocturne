@@ -269,17 +269,21 @@ public static class DatabaseInitializationExtensions
         var context = scope.ServiceProvider.GetRequiredService<NocturneDbContext>();
         var logger = scope.ServiceProvider.GetRequiredService<ILogger<NocturneDbContext>>();
 
-        var tenantScopedTables = context.Model.GetEntityTypes()
+        // RlsProtectedTables covers the tables whose policies derive the tenant from a parent row;
+        // they have no tenant_id, so the ITenantScoped walk cannot see them and a policy dropped
+        // from one would otherwise pass the self-check.
+        var rlsTables = context.Model.GetEntityTypes()
             .Where(et => typeof(ITenantScoped).IsAssignableFrom(et.ClrType))
             .Select(et => et.GetTableName())
             .Where(name => !string.IsNullOrEmpty(name))
             .Select(name => name!)
+            .Concat(RlsProtectedTables.DerivedTenantTables)
             .Distinct()
             .ToArray();
 
         await VerifyRlsAsync(
             context.Database.GetDbConnection(),
-            tenantScopedTables,
+            rlsTables,
             logger,
             cancellationToken);
 

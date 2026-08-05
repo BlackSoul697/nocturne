@@ -39,6 +39,7 @@ public class TenantMemberService : ITenantMemberService
     {
         await using var context = await _factory.CreateSubjectPinnedContextAsync(subjectId, ct);
         return await context.TenantMembers.AsNoTracking()
+            .IgnoreQueryFilters([NocturneDbContext.TenantFilterKey])
             .Where(tm => tm.SubjectId == subjectId)
             .Select(tm => tm.TenantId)
             .ToListAsync(ct);

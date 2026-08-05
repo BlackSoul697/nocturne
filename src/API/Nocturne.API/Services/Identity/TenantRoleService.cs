@@ -13,10 +13,12 @@ namespace Nocturne.API.Services.Identity;
 /// deletion, and slug validation of <see cref="TenantRoleDto"/> records.
 /// </summary>
 /// <remarks>
-/// <c>tenant_roles</c> carries no global query filter and no Row Level Security policy (it sits
-/// in the identity cluster alongside <c>tenant_members</c>, which auth resolution reads before a
-/// tenant context exists), so every lookup here keys on the tenant AND the role ID. A role ID
-/// alone is not an authorization decision.
+/// Every lookup here keys on the tenant AND the role ID: a role ID alone is not an authorization
+/// decision. Those predicates now sit on top of the <c>tenant_roles</c> global query filter and
+/// its Row Level Security policy rather than standing in for them, and they stay because the
+/// filter's reach is whatever the context happens to be pinned to — the predicate is what ties a
+/// lookup to the tenant the caller named. All of these run on the injected request-scoped context,
+/// which every route reaching them has resolved a tenant for.
 /// </remarks>
 /// <seealso cref="ITenantRoleService"/>
 public partial class TenantRoleService(

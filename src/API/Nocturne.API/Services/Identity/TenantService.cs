@@ -346,6 +346,7 @@ public partial class TenantService : ITenantService
         // no single tenant pin can express. The subject pin gives reach over their own rows only.
         await using var context = await _factory.CreateSubjectPinnedContextAsync(subjectId, ct);
         return await context.TenantMembers.AsNoTracking()
+            .IgnoreQueryFilters([NocturneDbContext.TenantFilterKey])
             .Where(tm => tm.SubjectId == subjectId)
             .Include(tm => tm.Tenant)
             .Select(tm => new TenantDto(

@@ -35,6 +35,11 @@ public class ShareDataCategoriesGuardTests
         "sleep_biometric_samples", "sleep_sessions", "sleep_stages",
         "state_spans", "system_events",
         "target_range_schedules", "tenant_alert_settings",
+        // Membership data is never share-visible. tenant_member_roles is absent deliberately: it
+        // carries no tenant_id, so it is not ITenantScoped and this guard would reject it. Its
+        // share denial is inherited — its policy tests membership through tenant_members, to which
+        // RLS applies recursively.
+        "tenant_members", "tenant_roles",
         "tenant_data_retention_config", "therapy_settings", "timezone_timeline", "tracker_definitions",
         "tracker_instances", "tracker_notification_thresholds", "tracker_presets", "treatment_foods",
         "user_food_favorites",

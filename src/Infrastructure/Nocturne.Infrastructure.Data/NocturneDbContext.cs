@@ -46,6 +46,29 @@ public class NocturneDbContext : DbContext, IDataProtectionKeyContext
     public Guid TenantId { get; set; }
 
     /// <summary>
+    /// Key of the tenant-isolation query filter applied to every <see cref="Entities.ITenantScoped"/>
+    /// entity. A subject-scoped cross-tenant read passes this to
+    /// <see cref="EntityFrameworkQueryableExtensions.IgnoreQueryFilters{TEntity}(IQueryable{TEntity}, IReadOnlyCollection{string})"/>
+    /// to drop tenant isolation alone, keeping every other filter — notably
+    /// <see cref="RevokedMembershipFilterKey"/>, whose loss would resurrect revoked memberships.
+    /// </summary>
+    public const string TenantFilterKey = "tenant_isolation";
+
+    /// <summary>
+    /// Key of the soft-delete query filter. Named separately from
+    /// <see cref="TenantFilterKey"/> so dropping tenant isolation cannot also expose
+    /// soft-deleted rows. The callers that legitimately need deleted rows (dedup, resurrection
+    /// checks) drop every filter with the no-argument overload and are unaffected by the naming.
+    /// </summary>
+    public const string SoftDeleteFilterKey = "soft_delete";
+
+    /// <summary>
+    /// Key of the filter restricting <see cref="Entities.TenantMemberEntity"/> to memberships that
+    /// have not been revoked.
+    /// </summary>
+    public const string RevokedMembershipFilterKey = "revoked_membership";
+
+    /// <summary>
     /// The subject whose own rows a subject-scoped cross-tenant read may reach. Set per-lease by
     /// the few callers that legitimately read one subject's rows across tenants (the tenant
     /// switcher, the caregiver overview, membership enumeration). The
@@ -646,7 +669,13 @@ public class NocturneDbContext : DbContext, IDataProtectionKeyContext
         // having to repeat `RevokedAt == null`. The matching partial unique index
         // (ix_tenant_members_tenant_subject, filtered on revoked_at IS NULL) lets a revoked
         // membership coexist with a fresh active one, so re-adds remain valid.
-        modelBuilder.Entity<TenantMemberEntity>().HasQueryFilter(tm => tm.RevokedAt == null);
+        //
+        // Named, and separate from the tenant-isolation filter ConfigureTenantFilters adds, because
+        // the subject-scoped cross-tenant reads drop tenant isolation by name and must keep this
+        // one: a revoked membership reappearing in the tenant switcher or the enrolment probe is an
+        // authorization regression, not a widening.
+        modelBuilder.Entity<TenantMemberEntity>()
+            .HasQueryFilter(RevokedMembershipFilterKey, tm => tm.RevokedAt == null);
 
         // Configure cascade deletes from tenant to all tenant-scoped entities
         ConfigureTenantCascadeDeletes(modelBuilder);
@@ -3041,13 +3070,9 @@ public class NocturneDbContext : DbContext, IDataProtectionKeyContext
                 .ValueGeneratedOnAddOrUpdate();
         });
 
-        // Configure TenantMember relationships
-        modelBuilder.Entity<TenantMemberEntity>()
-            .HasOne(tm => tm.Tenant)
-            .WithMany(t => t.Members)
-            .HasForeignKey(tm => tm.TenantId)
-            .OnDelete(DeleteBehavior.Cascade);
-
+        // Configure TenantMember relationships. The tenant relationship is configured centrally for
+        // every ITenantScoped entity by ConfigureTenantCascadeDeletes, which binds both the Tenant
+        // navigation and TenantEntity.Members as its inverse.
         modelBuilder.Entity<TenantMemberEntity>()
             .HasOne(tm => tm.Subject)
             .WithMany()
@@ -3443,6 +3468,14 @@ public class NocturneDbContext : DbContext, IDataProtectionKeyContext
     /// Filters reference this.TenantId which is set per-request.
     /// EF Core parameterizes the value, so pooled contexts work correctly.
     /// </summary>
+    /// <remarks>
+    /// Tenant isolation and soft-delete exclusion are registered as two named filters rather than
+    /// one composed predicate. EF applies every named filter to a query, so the behaviour is
+    /// unchanged — but a caller can now drop one by key, and the subject-scoped cross-tenant reads
+    /// drop only <see cref="TenantFilterKey"/>. Naming them also stops a second
+    /// <c>HasQueryFilter</c> on the same entity from silently replacing this one, which is what a
+    /// per-entity filter such as <see cref="RevokedMembershipFilterKey"/> would otherwise do.
+    /// </remarks>
     private void ConfigureTenantFilters(ModelBuilder modelBuilder)
     {
         foreach (var entityType in modelBuilder.Model.GetEntityTypes())
@@ -3453,14 +3486,19 @@ public class NocturneDbContext : DbContext, IDataProtectionKeyContext
             var parameter = Expression.Parameter(entityType.ClrType, "e");
             var tenantIdProperty = Expression.Property(parameter, nameof(ITenantScoped.TenantId));
             var currentTenantId = Expression.Property(Expression.Constant(this), nameof(TenantId));
-            Expression body = Expression.Equal(tenantIdProperty, currentTenantId);
+            var isCurrentTenant = Expression.Equal(tenantIdProperty, currentTenantId);
+
+            modelBuilder.Entity(entityType.ClrType)
+                .HasQueryFilter(TenantFilterKey, Expression.Lambda(isCurrentTenant, parameter));
 
             if (typeof(ISoftDeletable).IsAssignableFrom(entityType.ClrType))
             {
                 var deletedAtProperty = Expression.Property(parameter, nameof(ISoftDeletable.DeletedAt));
                 var nullValue = Expression.Constant(null, typeof(DateTime?));
                 var isNotDeleted = Expression.Equal(deletedAtProperty, nullValue);
-                body = Expression.AndAlso(body, isNotDeleted);
+
+                modelBuilder.Entity(entityType.ClrType)
+                    .HasQueryFilter(SoftDeleteFilterKey, Expression.Lambda(isNotDeleted, parameter));
 
                 // Records whether the latest soft-delete was user-initiated. The soft-delete
                 // dedup discriminator (SoftDeleteDedupExtensions) blocks connector resync from
@@ -3471,8 +3509,6 @@ public class NocturneDbContext : DbContext, IDataProtectionKeyContext
                     .HasColumnName("deleted_by_user")
                     .HasDefaultValue(false);
             }
-
-            modelBuilder.Entity(entityType.ClrType).HasQueryFilter(Expression.Lambda(body, parameter));
         }
     }
 
@@ -3482,7 +3518,10 @@ public class NocturneDbContext : DbContext, IDataProtectionKeyContext
     /// all tenant-scoped data instead of silently orphaning rows.
     /// An entity that also exposes a <c>Tenant</c> reference has that navigation bound to this
     /// relationship; configured without it, EF treats the navigation as a second relationship and
-    /// gives it a shadow foreign key of its own.
+    /// gives it a shadow foreign key of its own. The same applies on the principal side: where
+    /// <see cref="TenantEntity"/> exposes a collection of the entity, that collection is bound as
+    /// the inverse, otherwise <c>WithMany()</c> leaves it to become a relationship of its own with
+    /// a shadow <c>tenant_id1</c>.
     /// </summary>
     private static void ConfigureTenantCascadeDeletes(ModelBuilder modelBuilder)
     {
@@ -3500,9 +3539,22 @@ public class NocturneDbContext : DbContext, IDataProtectionKeyContext
 
             modelBuilder.Entity(entityType.ClrType)
                 .HasOne(typeof(TenantEntity), navigation)
-                .WithMany()
+                .WithMany(InverseCollectionOnTenant(entityType.ClrType))
                 .HasForeignKey(nameof(ITenantScoped.TenantId))
                 .OnDelete(DeleteBehavior.Cascade);
         }
+    }
+
+    /// <summary>
+    /// The name of the <see cref="TenantEntity"/> collection navigation holding
+    /// <paramref name="dependentType"/>, or <see langword="null"/> when the tenant exposes none.
+    /// </summary>
+    private static string? InverseCollectionOnTenant(Type dependentType)
+    {
+        var collectionType = typeof(IEnumerable<>).MakeGenericType(dependentType);
+
+        return typeof(TenantEntity).GetProperties()
+            .FirstOrDefault(p => collectionType.IsAssignableFrom(p.PropertyType))
+            ?.Name;
     }
 }

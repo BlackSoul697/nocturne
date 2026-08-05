@@ -157,6 +157,42 @@ Schema-only migrations (CREATE/ALTER TABLE, CREATE INDEX, etc.) are
 unaffected. If a data migration needs to touch multiple tenants, loop over
 tenants and set the GUC per iteration.
 
+Pin a context with `RlsPinningExtensions` rather than hand-rolling `set_config`:
+`factory.CreateTenantPinnedContextAsync(tenantId)` when the tenant is known
+before the first query (no extra round-trip — the interceptor writes the GUC at
+connection open), or `context.PinTenantAsync(tenantId)` when the tenant is only
+known after the connection is already open (provisioning, the setup flow). Both
+set the `NocturneDbContext.TenantId` property *and* the GUC: the property drives
+the EF global query filters, the GUC drives the policies, and setting only one of
+the two is the classic silent-empty-result bug.
+
+#### Subject reach (`app.current_subject_id`)
+
+`tenant_members` is the one table a caller may read outside its tenant, because
+"which tenants does this person belong to" cannot be expressed by a tenant pin.
+Its `tenant_isolation` policy therefore has two USING arms — `tenant_id =` the
+tenant GUC **or** `subject_id =` the subject GUC — while its WITH CHECK stays
+tenant-only. `tenant_member_roles` and `tenant_roles` inherit that reach through
+EXISTS chains rather than restating it (PostgreSQL applies RLS to the tables a
+policy expression references, so membership stays the single source of truth).
+
+- **`app.current_subject_id`** — carried by `TenantConnectionInterceptor` from
+  `NocturneDbContext.SubjectId`, set only when non-empty and RESET on close, the
+  same shape as the tenant GUC. Set it **only** where a subject-scoped
+  cross-tenant read is intended, via
+  `factory.CreateSubjectPinnedContextAsync(subjectId)`: the tenant switcher
+  (`TenantMemberService.GetTenantIdsForSubjectAsync`,
+  `TenantService.GetTenantsForSubjectAsync`), the caregiver overview
+  (`TenantOverviewService`), and the passkey enrolment probe. Everything else —
+  including the whole authentication hot path — pins the tenant instead.
+- **Read reach only, never write reach.** The subject arm appears in no WITH
+  CHECK clause, so a subject GUC can never insert, update or delete a membership
+  in a tenant the connection is not pinned to.
+- Those reads also need `.IgnoreQueryFilters([NocturneDbContext.TenantFilterKey])`
+  — the EF filter is a separate gate from the policy. Skip the tenant filter **by
+  key**, never with the no-argument overload: that would also drop
+  `RevokedMembershipFilterKey` and resurrect revoked memberships.
+
 Roles are created by `docs/postgres/container-init/00-init.sh` (container
 init, bind-mounted into the Postgres container) or
 `docs/postgres/bootstrap-roles.sql` (bring-your-own PostgreSQL, run once
