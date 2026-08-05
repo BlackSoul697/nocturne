@@ -35,7 +35,11 @@ public interface ITenantRoleService
     /// <summary>Creates the default system roles (owner, member, follower) for a newly provisioned tenant.</summary>
     Task SeedRolesForTenantAsync(Guid tenantId, CancellationToken ct = default);
 
-    /// <summary>Returns the combined set of permissions a member has through their roles and direct grants.</summary>
+    /// <summary>
+    /// Returns the combined set of permissions a member has through their roles and direct grants,
+    /// or an empty set when the membership does not resolve. Keyed on the membership id alone, so
+    /// the caller must have established that the id belongs to its tenant.
+    /// </summary>
     Task<List<string>> GetEffectivePermissionsAsync(Guid memberId, CancellationToken ct = default);
 
     /// <summary>
