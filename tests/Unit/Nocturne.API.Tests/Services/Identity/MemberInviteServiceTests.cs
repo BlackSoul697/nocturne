@@ -68,7 +68,10 @@ public class MemberInviteServiceTests : IDisposable
             _dbContext,
             _jwtService.Object,
             _tenantService.Object,
-            new TenantRoleService(_dbContext),
+            new TenantRoleService(
+                _dbContext,
+                // Only SeedRolesForTenantAsync takes a context of its own, and nothing here seeds.
+                Mock.Of<IDbContextFactory<NocturneDbContext>>()),
             configuration,
             logger.Object);
 

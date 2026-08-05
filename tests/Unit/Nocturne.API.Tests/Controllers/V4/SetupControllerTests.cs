@@ -22,6 +22,10 @@ namespace Nocturne.API.Tests.Controllers.V4;
 /// Tests for the setup flow, focusing on the soft-lock scenario where a tenant
 /// exists but owner passkey registration was never completed.
 /// </summary>
+/// <remarks>
+/// SQLite has no Row Level Security, so every row is visible here. These tests pin the guard
+/// logic and the shape of the per-tenant scan, not the policies that make the scan necessary.
+/// </remarks>
 public class SetupControllerTests : IDisposable
 {
     private readonly SqliteConnection _connection;
@@ -39,14 +43,6 @@ public class SetupControllerTests : IDisposable
     {
         _connection = new SqliteConnection("DataSource=:memory:");
         _connection.Open();
-
-        // GetSoleTenantWithoutOwnerAsync/EnsureOwnerSubjectAsync scope their queries
-        // with `SELECT set_config('app.current_tenant_id', ...)`, a PostgreSQL-only
-        // function. Register a no-op stand-in so the sole-tenant guard paths execute
-        // under SQLite (there is no RLS here, so all rows are visible — which is what
-        // we want for asserting the credential-based guard logic).
-        _connection.CreateFunction<string, string, bool, string>(
-            "set_config", (_, value, _) => value);
 
         _dbOptions = new DbContextOptionsBuilder<NocturneDbContext>()
             .UseSqlite(_connection)
@@ -178,6 +174,62 @@ public class SetupControllerTests : IDisposable
     }
 
     [Fact]
+    public async Task CreateTenant_WhenTheConfiguredTenantIsNotTheFirstOne_Returns409()
+    {
+        // The gate asks each tenant in turn, so it must not stop at the first one that answers no.
+        _dbContext.Set<TenantEntity>().Add(new TenantEntity
+        {
+            Id = Guid.CreateVersion7(),
+            Slug = "unconfigured-first",
+            DisplayName = "Unconfigured First",
+        });
+        await _dbContext.SaveChangesAsync();
+        await SeedConfiguredTenantAsync("configured-second", "Configured Second");
+
+        var result = await _controller.CreateTenant(
+            new SetupTenantRequest("tenant-c", "Tenant C"), CancellationToken.None);
+
+        result.Should().BeOfType<ConflictObjectResult>();
+    }
+
+    [Fact]
+    public async Task CreateTenant_WhenACredentialBelongsToNoTenantsMember_Succeeds()
+    {
+        // The gate is anchored on membership: a credentialed subject who belongs to no tenant is
+        // a half-finished enrolment, not a configured instance.
+        var subjectId = Guid.CreateVersion7();
+        _dbContext.Set<TenantEntity>().Add(new TenantEntity
+        {
+            Id = Guid.CreateVersion7(), Slug = "ownerless", DisplayName = "Ownerless",
+        });
+        _dbContext.Subjects.Add(new SubjectEntity
+        {
+            Id = subjectId, Name = "Stray", Username = "stray", IsActive = true,
+        });
+        _dbContext.PasskeyCredentials.Add(new PasskeyCredentialEntity
+        {
+            Id = Guid.CreateVersion7(),
+            SubjectId = subjectId,
+            CredentialId = System.Text.Encoding.UTF8.GetBytes("cred-stray"),
+            PublicKey = [],
+            SignCount = 0,
+        });
+        await _dbContext.SaveChangesAsync();
+
+        var newTenantId = Guid.CreateVersion7();
+        _tenantService.Setup(s => s.ValidateSlugAsync("retry", It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new SlugValidationResult(true));
+        _tenantService.Setup(s => s.CreateWithoutOwnerAsync("retry", "Retry", It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new TenantCreatedDto(newTenantId, "retry", "Retry", true, DateTime.UtcNow));
+
+        var result = await _controller.CreateTenant(
+            new SetupTenantRequest("retry", "Retry"), CancellationToken.None);
+
+        var ok = result.Should().BeOfType<OkObjectResult>().Subject;
+        ok.Value.Should().BeOfType<SetupTenantResponse>().Subject.TenantId.Should().Be(newTenantId);
+    }
+
+    [Fact]
     public async Task CreateTenant_WithInvalidSlug_Returns400()
     {
         // Arrange — no tenants, but slug validation fails
@@ -259,9 +311,8 @@ public class SetupControllerTests : IDisposable
         result.Should().BeOfType<ConflictObjectResult>();
     }
 
-    // OwnerOptions tests that require a sole tenant with members are skipped
-    // in unit tests because GetSoleTenantWithoutOwnerAsync calls set_config(),
-    // a PostgreSQL-only function. These scenarios are covered by integration tests.
+    // OwnerOptions scenarios whose outcome depends on RLS rather than on the guard logic live
+    // in the integration suite: SQLite has no policies for the pinned reads to be gated by.
 
     // ── Soft-lock scenario: the full sequence ─────────────────────────────
 
@@ -400,14 +451,10 @@ public class SetupControllerTests : IDisposable
         conflict.Value.Should().BeEquivalentTo(new { error = "owner_already_exists" });
     }
 
-    // SoftLock_TenantWithOnlySystemMembers_OwnerOptionsSucceeds is an
-    // integration test — it requires PostgreSQL's set_config() function
-    // which is not available in SQLite.
+    // SoftLock_TenantWithOnlySystemMembers_OwnerOptionsSucceeds is an integration test — it
+    // asserts what the tenant pin makes reachable, which needs real policies.
 
     // ── ValidateUsername ──────────────────────────────────────────────────
-    // Tests that hit the DB after format checks (valid usernames) are skipped
-    // because ValidateUsername calls ExecuteSqlRawAsync("set_config(...)"),
-    // a PostgreSQL-only function not available in SQLite.
 
     [Theory]
     [InlineData("ab")]           // too short
@@ -576,10 +623,8 @@ public class SetupControllerTests : IDisposable
         result.Should().BeOfType<ConflictObjectResult>();
     }
 
-    // OwnerOidc tests that require a sole tenant (e.g. validation of empty
-    // username/ProviderId) are skipped in unit tests because
-    // GetSoleTenantWithoutOwnerAsync calls set_config(), a PostgreSQL-only
-    // function. These scenarios are covered by integration tests.
+    // OwnerOidc scenarios that require a sole tenant (e.g. validation of empty
+    // username/ProviderId) are covered by the integration suite.
 
     // ── Helpers ──────────────────────────────────────────────────────────
 
