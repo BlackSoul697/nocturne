@@ -209,9 +209,11 @@ public class MemberScopeMiddleware
                 }
                 catch (Exception ex)
                 {
-                    // Best-effort — don't let tracking failures affect the request. Logged so a
-                    // write the database refuses is visible rather than silent.
-                    _logger.LogDebug(
+                    // Best-effort — don't let tracking failures affect the request. Warned rather
+                    // than debugged: a write the database refuses would otherwise be invisible at
+                    // production log levels. The 5-minute refresh window bounds the rate to one
+                    // per member.
+                    _logger.LogWarning(
                         ex, "Failed to record last-used for membership {MembershipId}", membershipId);
                 }
             });

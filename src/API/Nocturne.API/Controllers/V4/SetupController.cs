@@ -88,10 +88,8 @@ public partial class SetupController : ControllerBase
     public async Task<IActionResult> CreateTenant(
         [FromBody] SetupTenantRequest request, CancellationToken ct)
     {
-        await using var context = await _dbFactory.CreateDbContextAsync(ct);
-
         // Block if any tenant already has a member with credentials (passkey or OIDC).
-        if (await AnyTenantHasCredentialedMemberAsync(context, ct))
+        if (await AnyTenantHasCredentialedMemberAsync(ct))
             return Conflict(new { error = "setup_already_complete" });
 
         if (string.IsNullOrWhiteSpace(request.Slug) || string.IsNullOrWhiteSpace(request.DisplayName))
@@ -394,10 +392,15 @@ public partial class SetupController : ControllerBase
     /// Asked per tenant under that tenant's own pin, then OR'd. The equivalent single query over
     /// every tenant's memberships has no tenant to be pinned to, and a membership hidden from it
     /// would read as "no credentialed member exists" — re-opening setup on a configured instance.
+    /// <para>
+    /// The per-iteration re-pin is confined to a context of its own, so the caller is not left
+    /// holding one pinned to whichever tenant happened to be enumerated last.
+    /// </para>
     /// </remarks>
-    private static async Task<bool> AnyTenantHasCredentialedMemberAsync(
-        NocturneDbContext context, CancellationToken ct)
+    private async Task<bool> AnyTenantHasCredentialedMemberAsync(CancellationToken ct)
     {
+        await using var context = await _dbFactory.CreateDbContextAsync(ct);
+
         var tenantIds = await context.Tenants.AsNoTracking()
             .Select(t => t.Id)
             .ToListAsync(ct);
