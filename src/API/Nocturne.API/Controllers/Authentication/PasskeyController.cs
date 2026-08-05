@@ -15,6 +15,7 @@ using Nocturne.Core.Contracts.Auth;
 using Nocturne.Core.Models;
 using Nocturne.Infrastructure.Data;
 using Nocturne.Infrastructure.Data.Entities;
+using Nocturne.Infrastructure.Data.Extensions;
 
 namespace Nocturne.API.Controllers.Authentication;
 
@@ -72,6 +73,7 @@ public class PasskeyController : ControllerBase
     private readonly ITenantService _tenantService;
     private readonly ITenantMemberService _tenantMemberService;
     private readonly NocturneDbContext _dbContext;
+    private readonly IDbContextFactory<NocturneDbContext> _dbContextFactory;
     private readonly OidcOptions _oidcOptions;
     private readonly ILogger<PasskeyController> _logger;
 
@@ -90,6 +92,7 @@ public class PasskeyController : ControllerBase
         ITenantService tenantService,
         ITenantMemberService tenantMemberService,
         NocturneDbContext dbContext,
+        IDbContextFactory<NocturneDbContext> dbContextFactory,
         IOptions<OidcOptions> oidcOptions,
         ILogger<PasskeyController> logger)
     {
@@ -104,6 +107,7 @@ public class PasskeyController : ControllerBase
         _tenantService = tenantService;
         _tenantMemberService = tenantMemberService;
         _dbContext = dbContext;
+        _dbContextFactory = dbContextFactory;
         _oidcOptions = oidcOptions.Value;
         _logger = logger;
     }
@@ -318,6 +322,12 @@ public class PasskeyController : ControllerBase
     /// Returns the subject named by <paramref name="username"/> when the tenant is in recovery
     /// mode and that subject has no primary auth factor, otherwise <see langword="null"/>.
     /// </summary>
+    /// <remarks>
+    /// The subject lookup stays on the request-scoped context, deliberately, unlike the two
+    /// preconditions above it. A recovery ceremony enrols a credential, so on a share host — where
+    /// the scoped context is marked as a share and membership is denied — it must resolve nobody
+    /// and fail closed. Pinning it would make the ceremony reachable there.
+    /// </remarks>
     private async Task<SubjectEntity?> ResolveRecoveryModeSubjectAsync(string? username)
     {
         if (string.IsNullOrWhiteSpace(username))
@@ -768,31 +778,45 @@ public class PasskeyController : ControllerBase
     /// Whether any member of the tenant has a passkey or a linked provider, i.e. whether the
     /// tenant is past first-run setup.
     /// </summary>
-    private Task<bool> TenantHasCredentialsAsync(Guid tenantId)
+    /// <remarks>
+    /// On a tenant-pinned context of its own, not the request-scoped one, for the same reason as
+    /// <c>TenantSetupMiddleware</c>: <see cref="GetAuthStatus"/> is anonymous and reachable on a
+    /// share host, where the scoped context is marked as a share. Membership is not share-visible
+    /// data, so once tenant_members is behind Row Level Security a share is denied every row of it
+    /// — and this would report a configured tenant as needing first-run setup.
+    /// </remarks>
+    private async Task<bool> TenantHasCredentialsAsync(Guid tenantId)
     {
-        return _dbContext.TenantMembers
+        await using var db = await _dbContextFactory.CreateTenantPinnedContextAsync(tenantId, HttpContext.RequestAborted);
+
+        return await db.TenantMembers
             .Where(m => m.TenantId == tenantId)
             .AnyAsync(m =>
-                _dbContext.PasskeyCredentials.Any(c => c.SubjectId == m.SubjectId) ||
-                _dbContext.SubjectOidcIdentities.Any(o => o.SubjectId == m.SubjectId));
+                db.PasskeyCredentials.Any(c => c.SubjectId == m.SubjectId) ||
+                db.SubjectOidcIdentities.Any(o => o.SubjectId == m.SubjectId));
     }
 
     /// <summary>
     /// Whether the tenant has an active, non-system member with no passkey and no linked
     /// provider — an account that cannot sign in at all.
     /// </summary>
-    private Task<bool> HasOrphanedSubjectAsync(Guid tenantId)
+    /// <remarks>
+    /// Pinned for the same reason as <see cref="TenantHasCredentialsAsync"/>.
+    /// </remarks>
+    private async Task<bool> HasOrphanedSubjectAsync(Guid tenantId)
     {
-        return _dbContext.TenantMembers
+        await using var db = await _dbContextFactory.CreateTenantPinnedContextAsync(tenantId, HttpContext.RequestAborted);
+
+        return await db.TenantMembers
             .Where(tm => tm.TenantId == tenantId)
             .Join(
-                _dbContext.Subjects.Where(s => s.IsActive && !s.IsSystemSubject),
+                db.Subjects.Where(s => s.IsActive && !s.IsSystemSubject),
                 tm => tm.SubjectId,
                 s => s.Id,
                 (tm, s) => s)
             .Where(s =>
-                !_dbContext.SubjectOidcIdentities.Any(i => i.SubjectId == s.Id) &&
-                !_dbContext.PasskeyCredentials.Any(p => p.SubjectId == s.Id))
+                !db.SubjectOidcIdentities.Any(i => i.SubjectId == s.Id) &&
+                !db.PasskeyCredentials.Any(p => p.SubjectId == s.Id))
             .AnyAsync();
     }
 

@@ -2,6 +2,7 @@ using Microsoft.EntityFrameworkCore;
 using Nocturne.API.Authorization;
 using Nocturne.Core.Contracts.Multitenancy;
 using Nocturne.Infrastructure.Data;
+using Nocturne.Infrastructure.Data.Extensions;
 
 namespace Nocturne.API.Middleware;
 
@@ -57,13 +58,13 @@ public class TenantSetupMiddleware
     /// </summary>
     /// <param name="context">The current HTTP context.</param>
     /// <param name="tenantAccessor">Accessor for the resolved tenant identity.</param>
-    /// <param name="db">Database context for querying passkey credentials and orphaned subjects.</param>
+    /// <param name="dbFactory">Factory for the tenant-pinned context the checks below run on.</param>
     /// <param name="instanceKeyValidator">Validator used to let trusted instance-key callers bypass the setup gate.</param>
     /// <returns>A task that completes when the middleware has finished processing.</returns>
     public async Task InvokeAsync(
         HttpContext context,
         ITenantAccessor tenantAccessor,
-        NocturneDbContext db,
+        IDbContextFactory<NocturneDbContext> dbFactory,
         IInstanceKeyValidator instanceKeyValidator)
     {
         // Only check when a tenant has been resolved
@@ -115,7 +116,16 @@ public class TenantSetupMiddleware
 
         // Check 1: Does this tenant have any members with auth credentials (passkey or OIDC)?
         // These entities are subject-scoped (not tenant-scoped), so we join through TenantMembers.
+        //
+        // On its own context rather than the request-scoped one. A public-share request marks the
+        // scoped context as a share, and membership is not share-visible data: once tenant_members
+        // is behind Row Level Security, the restrictive share_category_read policy denies a share
+        // every row of it. Read there, this gate would see no members and answer 503
+        // setup_required to every share request. Whether the instance is configured is a property
+        // of the instance, not of what a share may see, so the check runs on a plain tenant-pinned
+        // context that is never flagged as a share.
         var tenantId = tenantAccessor.TenantId;
+        await using var db = await dbFactory.CreateTenantPinnedContextAsync(tenantId, context.RequestAborted);
         var memberCount = await db.TenantMembers
             .Where(m => m.TenantId == tenantId)
             .CountAsync();

@@ -103,6 +103,7 @@ public class PasskeyControllerTests : IDisposable
             // assert the mock.
             new TenantMemberService(new SharedSqliteFactory(_dbOptions)),
             _dbContext,
+            new SharedSqliteFactory(_dbOptions),
             oidcOptions,
             logger.Object);
 
