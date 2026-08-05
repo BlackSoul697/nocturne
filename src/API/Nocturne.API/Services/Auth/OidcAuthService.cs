@@ -30,6 +30,7 @@ public class OidcAuthService : IOidcAuthService
     private readonly IRefreshTokenService _refreshTokenService;
     private readonly IHttpClientFactory _httpClientFactory;
     private readonly ITenantMemberService _tenantMemberService;
+    private readonly IMemberInviteService _memberInviteService;
     private readonly IDataProtector _stateProtector;
     private readonly OidcOptions _options;
     private readonly IConfiguration _configuration;
@@ -45,6 +46,7 @@ public class OidcAuthService : IOidcAuthService
     /// <param name="refreshTokenService">Service for validating refresh tokens (non-rotation refresh path only).</param>
     /// <param name="httpClientFactory">Factory for the <c>OidcProvider</c> named HTTP client.</param>
     /// <param name="tenantMemberService">Service for verifying tenant membership before issuing a login session.</param>
+    /// <param name="memberInviteService">Service for accepting an invite named by the login's return URL.</param>
     /// <param name="dataProtectionProvider">Provider for the protector that authenticates the state parameter.</param>
     /// <param name="options">OIDC session and state configuration options.</param>
     /// <param name="configuration">Application configuration for reading the base URL.</param>
@@ -57,6 +59,7 @@ public class OidcAuthService : IOidcAuthService
         IRefreshTokenService refreshTokenService,
         IHttpClientFactory httpClientFactory,
         ITenantMemberService tenantMemberService,
+        IMemberInviteService memberInviteService,
         IDataProtectionProvider dataProtectionProvider,
         IOptions<OidcOptions> options,
         IConfiguration configuration,
@@ -70,6 +73,7 @@ public class OidcAuthService : IOidcAuthService
         _refreshTokenService = refreshTokenService;
         _httpClientFactory = httpClientFactory;
         _tenantMemberService = tenantMemberService;
+        _memberInviteService = memberInviteService;
         _stateProtector = dataProtectionProvider.CreateProtector("Nocturne.Oidc.State");
         _options = options.Value;
         _configuration = configuration;
@@ -316,9 +320,9 @@ public class OidcAuthService : IOidcAuthService
         );
 
         // Cross-tenant guard: deny — without issuing a session — when the authenticated
-        // identity is not a member of the tenant being logged into. The per-request
-        // membership gate in AuthenticationMiddleware would block this subject's data
-        // access anyway, but only after a session (and a "logged in" UI) already existed.
+        // identity is not a member of the tenant being logged into, and holds no invite to it.
+        // The per-request membership gate in AuthenticationMiddleware would block this subject's
+        // data access anyway, but only after a session (and a "logged in" UI) already existed.
         //
         // Two conditions, because either one alone leaves a gap.
         //
@@ -333,7 +337,8 @@ public class OidcAuthService : IOidcAuthService
         // check" is how the gate silently disappeared when the state encoding changed.
         if (currentTenantId is { } tenantId)
         {
-            if (!await _tenantMemberService.IsMemberAsync(subject.Id, tenantId))
+            if (!await _tenantMemberService.IsMemberAsync(subject.Id, tenantId)
+                && !await IsInvitedByReturnUrlAsync(stateData.ReturnUrl, tenantId))
             {
                 _logger.LogWarning(
                     "OIDC login denied: subject {SubjectId} is not a member of tenant {TenantId}",
@@ -400,6 +405,63 @@ public class OidcAuthService : IOidcAuthService
         );
 
         return OidcCallbackResult.Succeeded(tokens, userInfo, stateData.ReturnUrl);
+    }
+
+    /// <summary>
+    /// Whether the login was started from a join link whose invite is still valid for
+    /// <paramref name="tenantId"/>, and so should be allowed to complete for a non-member.
+    /// </summary>
+    /// <param name="returnUrl">The return URL carried in the (data-protected) state.</param>
+    /// <param name="tenantId">The tenant the callback resolved to.</param>
+    /// <remarks>
+    /// A first-time OIDC identity is a member of nothing, so the membership guard alone sends the
+    /// invitee back to a login page that cannot help them. This only issues the session; the join
+    /// itself stays behind the Accept button on the join page, which the invite-token exemption
+    /// makes reachable for a signed-in non-member.
+    /// <para>
+    /// Joining here instead would be a forced join: the login endpoint is anonymous and takes the
+    /// return URL from the query string, so anyone could navigate a victim to a join link of their
+    /// choosing and have the silent IdP round-trip write the membership without a gesture.
+    /// </para>
+    /// </remarks>
+    private async Task<bool> IsInvitedByReturnUrlAsync(string? returnUrl, Guid tenantId)
+    {
+        var token = InviteTokenFromReturnUrl(returnUrl);
+        if (token == null)
+            return false;
+
+        var invite = await _memberInviteService.GetInviteByTokenAsync(token, tenantId);
+        return invite is { IsValid: true };
+    }
+
+    /// <summary>
+    /// Reads the invite token out of a join link (<c>/join?token=...</c>), the only return URL
+    /// that carries one. Returns null for any other return URL.
+    /// </summary>
+    /// <param name="returnUrl">The return URL carried in the state.</param>
+    /// <returns>The invite token, or null.</returns>
+    private static string? InviteTokenFromReturnUrl(string? returnUrl)
+    {
+        if (string.IsNullOrEmpty(returnUrl))
+            return null;
+
+        var queryStart = returnUrl.IndexOf('?');
+        if (queryStart < 0)
+            return null;
+
+        if (!returnUrl.AsSpan(0, queryStart)
+                .Equals(IMemberInviteService.JoinPath, StringComparison.OrdinalIgnoreCase))
+        {
+            return null;
+        }
+
+        var token = Microsoft.AspNetCore.WebUtilities.QueryHelpers
+            .ParseQuery(returnUrl[queryStart..])
+            .TryGetValue(IMemberInviteService.TokenQueryParameter, out var values)
+                ? values.ToString()
+                : null;
+
+        return string.IsNullOrEmpty(token) ? null : token;
     }
 
     /// <inheritdoc />

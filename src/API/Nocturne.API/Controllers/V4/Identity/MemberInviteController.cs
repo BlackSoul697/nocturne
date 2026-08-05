@@ -2,8 +2,10 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using OpenApi.Remote.Attributes;
+using Nocturne.API.Authorization;
 using Nocturne.API.Extensions;
 using Nocturne.Core.Contracts.Multitenancy;
+using Nocturne.Core.Models;
 using Nocturne.Core.Models.Authorization;
 using Nocturne.API.Services.Auth;
 using Nocturne.Infrastructure.Data;
@@ -28,6 +30,7 @@ public class MemberInviteController : ControllerBase
     private readonly IMemberInviteService _memberInviteService;
     private readonly ITenantService _tenantService;
     private readonly ITenantRoleService _tenantRoleService;
+    private readonly ITenantMemberService _tenantMemberService;
     private readonly ITenantAccessor _tenantAccessor;
     private readonly NocturneDbContext _dbContext;
 
@@ -37,44 +40,170 @@ public class MemberInviteController : ControllerBase
     /// <param name="memberInviteService">Service for invite token lifecycle management.</param>
     /// <param name="tenantService">Service for tenant membership operations.</param>
     /// <param name="tenantRoleService">Service for member role assignment.</param>
+    /// <param name="tenantMemberService">Service for membership lookups.</param>
     /// <param name="tenantAccessor">Accessor for the current request tenant context.</param>
     /// <param name="dbContext">Database context for direct entity access.</param>
     public MemberInviteController(
         IMemberInviteService memberInviteService,
         ITenantService tenantService,
         ITenantRoleService tenantRoleService,
+        ITenantMemberService tenantMemberService,
         ITenantAccessor tenantAccessor,
         NocturneDbContext dbContext)
     {
         _memberInviteService = memberInviteService;
         _tenantService = tenantService;
         _tenantRoleService = tenantRoleService;
+        _tenantMemberService = tenantMemberService;
         _tenantAccessor = tenantAccessor;
         _dbContext = dbContext;
     }
 
+    /// <inheritdoc cref="IMemberInviteService.CreateInviteAsync"/>
+    [HttpPost]
+    [RemoteCommand(Invalidates = ["ListInvites"])]
+    [ProducesResponseType(typeof(MemberInviteResult), StatusCodes.Status201Created)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    public async Task<IActionResult> CreateInvite([FromBody] CreateMemberInviteRequest request)
+    {
+        if (!HasPermission(TenantPermissions.MembersInvite))
+            return Forbid();
+
+        var subjectId = HttpContext.GetSubjectId();
+        if (subjectId == null)
+            return Unauthorized();
+
+        // The clamp is an access boundary enforced in RLS via app.share_full_history, so a
+        // clamped member minting an unclamped invite would widen past their own ceiling by
+        // handing the wider access to someone else. Lifting an existing member's clamp already
+        // requires members.manage and is refused for self-edits.
+        var authContext = HttpContext.Items["AuthContext"] as AuthContext;
+        var limitTo24Hours = request.LimitTo24Hours || authContext?.LimitTo24Hours == true;
+
+        try
+        {
+            var result = await _memberInviteService.CreateInviteAsync(
+                _tenantAccessor.TenantId,
+                subjectId.Value,
+                HttpContext.GetGrantedScopes(),
+                request.RoleIds,
+                request.DirectPermissions,
+                request.Label,
+                request.ExpiresInDays,
+                request.MaxUses,
+                limitTo24Hours,
+                $"{Request.Scheme}://{Request.Host}");
+
+            return StatusCode(StatusCodes.Status201Created, result);
+        }
+        catch (ArgumentException ex)
+        {
+            // Title as well as detail: openapi-remote-codegen 0.2.0 resolves a ProblemDetails to
+            // `title` first, so a reason carried only in the detail reaches the creator as the
+            // literal "Bad Request".
+            return Problem(detail: ex.Message, statusCode: 400, title: ex.Message);
+        }
+    }
+
+    /// <inheritdoc cref="IMemberInviteService.GetInvitesForTenantAsync"/>
+    [HttpGet]
+    [RemoteQuery]
+    [ProducesResponseType(typeof(List<MemberInviteInfo>), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    public async Task<IActionResult> ListInvites()
+    {
+        if (!HasPermission(TenantPermissions.MembersInvite))
+            return Forbid();
+
+        var invites = await _memberInviteService.GetInvitesForTenantAsync(_tenantAccessor.TenantId);
+        return Ok(invites);
+    }
+
+    /// <inheritdoc cref="IMemberInviteService.RevokeInviteAsync"/>
+    [HttpDelete("{inviteId:guid}")]
+    [RemoteCommand(Invalidates = ["ListInvites"])]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> RevokeInvite(Guid inviteId)
+    {
+        if (!HasPermission(TenantPermissions.MembersInvite))
+            return Forbid();
+
+        var revoked = await _memberInviteService.RevokeInviteAsync(inviteId, _tenantAccessor.TenantId);
+        return revoked ? NoContent() : NotFound();
+    }
+
+    /// <inheritdoc cref="ITenantService.RemoveMemberAsync"/>
+    /// <remarks>
+    /// Keyed by subject, unlike the sibling <c>members/{id}</c> routes below, which take the
+    /// membership id. Removal is the one operation whose caller — the cloud billing service as well
+    /// as the member list — knows the subject rather than the membership.
+    /// </remarks>
+    [HttpDelete("members/{subjectId:guid}")]
+    [RemoteCommand(Invalidates = ["GetMembers"])]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    public async Task<IActionResult> RemoveMember(Guid subjectId, CancellationToken ct)
+    {
+        if (!HasPermission(TenantPermissions.MembersManage))
+            return Forbid();
+
+        var result = await _tenantService.RemoveMemberAsync(_tenantAccessor.TenantId, subjectId, ct);
+        return result.Ok
+            ? NoContent()
+            // "Cannot remove the last owner of a tenant" has to reach the member list, and the
+            // generated client resolves `title` before `detail`.
+            : Problem(
+                detail: result.ErrorDescription, statusCode: 400, title: result.ErrorDescription);
+    }
+
     /// <summary>
-    /// Get invite info for the accept page (anonymous).
+    /// Get invite info for the accept page, along with where the caller stands relative to it.
     /// </summary>
+    /// <remarks>
+    /// Anonymous, because the invitee may have no account yet. A caller who does arrive signed in
+    /// is reported in <see cref="MemberInviteInfo.Viewer"/> so the join page can offer acceptance
+    /// instead of a second registration — including when they are signed in as a member of some
+    /// other tenant on this instance, whose session cookie is domain-wide.
+    /// </remarks>
     [HttpGet("{token}/info")]
     [AllowAnonymous]
+    [InviteTokenAuthorized]
     [RemoteQuery]
     [ProducesResponseType(typeof(MemberInviteInfo), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
-    public async Task<IActionResult> GetInviteInfo(string token)
+    public async Task<IActionResult> GetInviteInfo(string token, CancellationToken ct)
     {
-        var invite = await _memberInviteService.GetInviteByTokenAsync(token);
+        var tenantId = _tenantAccessor.TenantId;
+        var invite = await _memberInviteService.GetInviteByTokenAsync(token, tenantId);
         if (invite == null)
             return NotFound();
 
-        return Ok(invite);
+        var subjectId = HttpContext.GetSubjectId();
+        if (subjectId == null)
+            return Ok(invite);
+
+        var authContext = HttpContext.Items["AuthContext"] as AuthContext;
+        var isMember = await _tenantMemberService.IsMemberAsync(subjectId.Value, tenantId, ct);
+
+        return Ok(invite with { Viewer = new InviteViewer(subjectId, authContext?.SubjectName, isMember) });
     }
 
     /// <summary>
     /// Accept an invite and join the tenant.
     /// </summary>
+    /// <remarks>
+    /// The caller must be signed in as some subject, but need not already belong to this tenant —
+    /// that is the point of an invite. <see cref="InviteTokenAuthorizedAttribute"/> is what lets a
+    /// non-member reach this action at all, and the token is re-validated against the resolved
+    /// tenant by the service before any membership is written.
+    /// </remarks>
     [HttpPost("{token}/accept")]
     [Authorize]
+    [InviteTokenAuthorized]
     [RemoteCommand]
     [ProducesResponseType(typeof(AcceptMemberInviteResult), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
@@ -84,10 +213,16 @@ public class MemberInviteController : ControllerBase
         if (subjectId == null)
             return Unauthorized();
 
-        var result = await _memberInviteService.AcceptInviteAsync(token, subjectId.Value);
+        var result = await _memberInviteService.AcceptInviteAsync(
+            token, subjectId.Value, _tenantAccessor.TenantId);
 
+        // The refusal reason is written for the invitee — "You are already a member of this
+        // tenant", "This invite has expired". It goes in the title as well as the detail because
+        // openapi-remote-codegen 0.2.0 resolves a ProblemDetails to `title` before `detail`, so a
+        // reason carried only in the detail reaches the invitee as the literal "Bad Request".
         if (!result.Success)
-            return BadRequest(result);
+            return Problem(
+                detail: result.ErrorDescription, statusCode: 400, title: result.ErrorDescription);
 
         return Ok(result);
     }
@@ -358,6 +493,16 @@ public class MemberInviteController : ControllerBase
         validation.ErrorCode == RoleGrantValidation.ForeignRole
             ? Problem(detail: validation.ErrorDescription, statusCode: 400, title: "Bad Request")
             : Problem(detail: validation.ErrorDescription, statusCode: 403, title: "Forbidden");
+}
+
+public class CreateMemberInviteRequest
+{
+    public List<Guid> RoleIds { get; set; } = [];
+    public List<string>? DirectPermissions { get; set; }
+    public string? Label { get; set; }
+    public int ExpiresInDays { get; set; } = 7;
+    public int? MaxUses { get; set; }
+    public bool LimitTo24Hours { get; set; }
 }
 
 public record SetMemberRolesRequest(List<Guid> RoleIds);

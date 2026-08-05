@@ -1,13 +1,10 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.EntityFrameworkCore;
 using OpenApi.Remote.Attributes;
 using Nocturne.API.Authorization;
-using Nocturne.API.Extensions;
 using Nocturne.Core.Contracts.Auth;
 using Nocturne.Core.Contracts.Multitenancy;
 using Nocturne.Core.Models.Authorization;
-using Nocturne.Infrastructure.Data;
 
 namespace Nocturne.API.Controllers.V4.PlatformAdmin;
 
@@ -30,16 +27,13 @@ public class TenantController : ControllerBase
 {
     private readonly ITenantService _tenantService;
     private readonly ITenantRoleService _tenantRoleService;
-    private readonly IMemberInviteService _memberInviteService;
 
     public TenantController(
         ITenantService tenantService,
-        ITenantRoleService tenantRoleService,
-        IMemberInviteService memberInviteService)
+        ITenantRoleService tenantRoleService)
     {
         _tenantService = tenantService;
         _tenantRoleService = tenantRoleService;
-        _memberInviteService = memberInviteService;
     }
 
     [HttpGet]
@@ -107,107 +101,18 @@ public class TenantController : ControllerBase
     [HttpDelete("{id:guid}/members/{subjectId:guid}")]
     [RemoteCommand(Invalidates = ["GetById"])]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
-    [ProducesResponseType(StatusCodes.Status403Forbidden)]
-    public async Task<IActionResult> RemoveMember(
-        Guid id, Guid subjectId,
-        [FromServices] NocturneDbContext dbContext,
-        CancellationToken ct)
-    {
-        if (!await IsCallerTenantOwnerAsync(id, ct))
-            return Forbid();
-
-        var member = await dbContext.TenantMembers
-            .Include(m => m.Subject)
-            .Where(m => m.TenantId == id && m.SubjectId == subjectId)
-            .FirstOrDefaultAsync(ct);
-
-        if (member == null)
-            return NoContent();
-
-        if (member.Subject?.IsSystemSubject == true)
-            return Problem(detail: "Cannot remove system subject memberships", statusCode: 400, title: "Bad Request");
-
-        // Prevent removing the last member with the owner role
-        var isOwner = await dbContext.TenantMemberRoles
-            .AnyAsync(mr => mr.TenantMemberId == member.Id
-                && mr.TenantRole.Slug == TenantPermissions.SeedRoles.Owner, ct);
-
-        if (isOwner)
-        {
-            var ownerCount = await dbContext.TenantMemberRoles
-                .CountAsync(mr => mr.TenantRole.TenantId == id
-                    && mr.TenantRole.Slug == TenantPermissions.SeedRoles.Owner
-                    && mr.TenantMember.RevokedAt == null, ct);
-
-            if (ownerCount <= 1)
-                return Problem(detail: "Cannot remove the last owner of a tenant", statusCode: 400, title: "Bad Request");
-        }
-
-        await _tenantService.RemoveMemberAsync(id, subjectId, ct);
-        return NoContent();
-    }
-
-    /// <inheritdoc cref="IMemberInviteService.CreateInviteAsync"/>
-    [HttpPost("{id:guid}/invites")]
-    [RemoteCommand(Invalidates = ["GetById", "ListInvites"])]
-    [ProducesResponseType(typeof(MemberInviteResult), StatusCodes.Status201Created)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status403Forbidden)]
-    public async Task<IActionResult> CreateInvite(
-        Guid id, [FromBody] CreateMemberInviteRequest request, CancellationToken ct)
+    public async Task<IActionResult> RemoveMember(Guid id, Guid subjectId, CancellationToken ct)
     {
         if (!await IsCallerTenantOwnerAsync(id, ct))
             return Forbid();
 
-        var authContext = HttpContext.Items["AuthContext"] as AuthContext;
-        try
-        {
-            var result = await _memberInviteService.CreateInviteAsync(
-                id,
-                authContext!.SubjectId!.Value,
-                HttpContext.GetGrantedScopes(),
-                request.RoleIds,
-                request.DirectPermissions,
-                request.Label,
-                request.ExpiresInDays,
-                request.MaxUses,
-                request.LimitTo24Hours);
-
-            return StatusCode(StatusCodes.Status201Created, result);
-        }
-        catch (ArgumentException ex)
-        {
-            return Problem(detail: ex.Message, statusCode: 400, title: "Bad Request");
-        }
-    }
-
-    /// <inheritdoc cref="IMemberInviteService.GetInvitesForTenantAsync"/>
-    [HttpGet("{id:guid}/invites")]
-    [RemoteQuery]
-    [ProducesResponseType(typeof(List<MemberInviteInfo>), StatusCodes.Status200OK)]
-    [ProducesResponseType(StatusCodes.Status403Forbidden)]
-    public async Task<IActionResult> ListInvites(Guid id, CancellationToken ct)
-    {
-        if (!await IsCallerTenantOwnerAsync(id, ct))
-            return Forbid();
-
-        var invites = await _memberInviteService.GetInvitesForTenantAsync(id);
-        return Ok(invites);
-    }
-
-    /// <inheritdoc cref="IMemberInviteService.RevokeInviteAsync"/>
-    [HttpDelete("{id:guid}/invites/{inviteId:guid}")]
-    [RemoteCommand(Invalidates = ["GetById", "ListInvites"])]
-    [ProducesResponseType(StatusCodes.Status204NoContent)]
-    [ProducesResponseType(StatusCodes.Status403Forbidden)]
-    [ProducesResponseType(StatusCodes.Status404NotFound)]
-    public async Task<IActionResult> RevokeInvite(Guid id, Guid inviteId, CancellationToken ct)
-    {
-        if (!await IsCallerTenantOwnerAsync(id, ct))
-            return Forbid();
-
-        var revoked = await _memberInviteService.RevokeInviteAsync(inviteId, id);
-        return revoked ? NoContent() : NotFound();
+        var result = await _tenantService.RemoveMemberAsync(id, subjectId, ct);
+        return result.Ok
+            ? NoContent()
+            : Problem(
+                detail: result.ErrorDescription, statusCode: 400, title: result.ErrorDescription);
     }
 
     [HttpDelete("{id:guid}")]
@@ -380,16 +285,6 @@ public record ProvisionRequest(
     string OwnerEmail,
     ProvisionCredentialData? Credential = null,
     ProvisionOidcIdentityData? OidcIdentity = null);
-
-public class CreateMemberInviteRequest
-{
-    public List<Guid> RoleIds { get; set; } = [];
-    public List<string>? DirectPermissions { get; set; }
-    public string? Label { get; set; }
-    public int ExpiresInDays { get; set; } = 7;
-    public int? MaxUses { get; set; }
-    public bool LimitTo24Hours { get; set; }
-}
 
 public record SubjectCredentialsDto(List<PasskeyCredentialDto> Passkeys, List<OidcIdentityDto> OidcIdentities);
 public record PasskeyCredentialDto(Guid Id, string? DisplayName, DateTime CreatedAt);

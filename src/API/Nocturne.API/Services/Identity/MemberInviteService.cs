@@ -14,6 +14,9 @@ namespace Nocturne.API.Services.Identity;
 /// <seealso cref="IMemberInviteService"/>
 public class MemberInviteService : IMemberInviteService
 {
+    /// <summary>Longest lifetime an invite token may be minted with.</summary>
+    private const int MaxExpiresInDays = 90;
+
     private readonly NocturneDbContext _dbContext;
     private readonly IJwtService _jwtService;
     private readonly ITenantService _tenantService;
@@ -47,10 +50,16 @@ public class MemberInviteService : IMemberInviteService
         string? label = null,
         int expiresInDays = 7,
         int? maxUses = null,
-        bool limitTo24Hours = false)
+        bool limitTo24Hours = false,
+        string? baseUrl = null)
     {
         if (roleIds.Count == 0 && (directPermissions == null || directPermissions.Count == 0))
             throw new ArgumentException("At least one role or direct permission is required.");
+
+        // The token is a bearer credential for tenant membership, so its lifetime is bounded
+        // rather than taken from the caller.
+        if (expiresInDays is < 1 or > MaxExpiresInDays)
+            throw new ArgumentException($"Expiry must be between 1 and {MaxExpiresInDays} days.");
 
         var granter = granterPermissions as IReadOnlyCollection<string> ?? granterPermissions.ToList();
 
@@ -89,9 +98,12 @@ public class MemberInviteService : IMemberInviteService
             "MemberInviteAudit: {Event} invite_id={InviteId} tenant_id={TenantId} role_count={RoleCount} expires_at={ExpiresAt}",
             "invite_created", entity.Id, tenantId, roleIds.Count, entity.ExpiresAt);
 
-        // Build invite URL
-        var baseUrl = _configuration[ServiceNames.ConfigKeys.BaseUrl]?.TrimEnd('/') ?? "";
-        var inviteUrl = $"{baseUrl}/join?token={token}";
+        // The join page is served per tenant, so the invite has to point at the tenant's own host.
+        // The configured base URL is the instance apex, which in a multi-tenant deployment serves a
+        // different site entirely — only the caller knows the host the invite was minted on.
+        var origin = (baseUrl ?? _configuration[ServiceNames.ConfigKeys.BaseUrl])?.TrimEnd('/') ?? "";
+        var inviteUrl =
+            $"{origin}{IMemberInviteService.JoinPath}?{IMemberInviteService.TokenQueryParameter}={token}";
 
         return new MemberInviteResult(
             entity.Id,
@@ -101,7 +113,7 @@ public class MemberInviteService : IMemberInviteService
     }
 
     /// <inheritdoc />
-    public async Task<MemberInviteInfo?> GetInviteByTokenAsync(string token)
+    public async Task<MemberInviteInfo?> GetInviteByTokenAsync(string token, Guid tenantId)
     {
         if (string.IsNullOrEmpty(token))
             return null;
@@ -111,7 +123,7 @@ public class MemberInviteService : IMemberInviteService
         var entity = await _dbContext.MemberInvites
             .Include(i => i.Tenant)
             .Include(i => i.CreatedBy)
-            .Where(i => i.TokenHash == tokenHash)
+            .Where(i => i.TokenHash == tokenHash && i.TenantId == tenantId)
             .FirstOrDefaultAsync();
 
         if (entity == null)
@@ -121,16 +133,20 @@ public class MemberInviteService : IMemberInviteService
     }
 
     /// <inheritdoc />
-    public async Task<AcceptMemberInviteResult> AcceptInviteAsync(string token, Guid acceptingSubjectId)
+    public async Task<AcceptMemberInviteResult> AcceptInviteAsync(
+        string token, Guid acceptingSubjectId, Guid tenantId)
     {
         if (string.IsNullOrEmpty(token))
             return new AcceptMemberInviteResult(false, "invalid_token", "Invite token is required.");
 
         var tokenHash = _jwtService.HashRefreshToken(token);
 
+        // Bounded by the tenant the request resolved to, not by the one the token names. The token
+        // is the only thing authorizing the join, so a token minted for another tenant must read as
+        // unknown here rather than as an invite that happens to point elsewhere.
         var entity = await _dbContext.MemberInvites
             .Include(i => i.Tenant)
-            .Where(i => i.TokenHash == tokenHash)
+            .Where(i => i.TokenHash == tokenHash && i.TenantId == tenantId)
             .FirstOrDefaultAsync();
 
         if (entity == null)
@@ -165,6 +181,26 @@ public class MemberInviteService : IMemberInviteService
         if (validRoleIds.Count == 0 && (entity.DirectPermissions == null || entity.DirectPermissions.Count == 0))
             return new AcceptMemberInviteResult(false, "no_permissions", "All roles from this invite have been deleted and no direct permissions are assigned.");
 
+        // Claim the use before writing the membership. The IsExhausted check above is a fast path
+        // on a value read earlier in the request; two concurrent accepts of a single-use invite —
+        // the default the UI mints — would both pass it and both join. Only a row that is still
+        // under its cap matches here, so the loser claims nothing and is refused.
+        //
+        // The claim commits on its own and the membership is written on a separate context, so a
+        // failure in between burns the use without joining anyone: a single-use invite then reads
+        // as exhausted and the owner has to mint another. That is the direction to fail in — the
+        // alternative admits the double join this guards against.
+        var claimed = await _dbContext.MemberInvites
+            .Where(i => i.Id == entity.Id && (i.MaxUses == null || i.UseCount < i.MaxUses))
+            .ExecuteUpdateAsync(s => s.SetProperty(i => i.UseCount, i => i.UseCount + 1));
+
+        if (claimed == 0)
+            return new AcceptMemberInviteResult(false, "exhausted", "This invite has reached its maximum uses.");
+
+        // The guarded update bypasses the change tracker, so the entity loaded above still carries
+        // the pre-claim count. Reload it rather than leave a stale row for anything downstream.
+        await _dbContext.Entry(entity).ReloadAsync();
+
         // Create the tenant membership via the tenant service
         await _tenantService.AddMemberAsync(
             entity.TenantId,
@@ -181,9 +217,6 @@ public class MemberInviteService : IMemberInviteService
 
         // Update the invite link to the member
         member.CreatedFromInviteId = entity.Id;
-
-        // Increment use count
-        entity.UseCount++;
         await _dbContext.SaveChangesAsync();
 
         _logger.LogInformation(

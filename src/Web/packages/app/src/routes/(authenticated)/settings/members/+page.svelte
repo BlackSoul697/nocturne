@@ -1,5 +1,6 @@
 <script lang="ts">
   import { page } from "$app/state";
+  import { describeSubmitError } from "$lib/forms";
   import { slide } from "svelte/transition";
   import { flip } from "svelte/animate";
   import * as Card from "$lib/components/ui/card";
@@ -15,16 +16,13 @@
     ChevronRight,
   } from "lucide-svelte";
   import { resolve } from "$app/paths";
-  import { getCurrentTenantId } from "../current-tenant.remote";
-  import { getMembers } from "$lib/api/generated/memberInvites.generated.remote";
-  import {
-    listInvites,
-    revokeInvite,
-    removeMember,
-  } from "$api/generated/tenants.generated.remote";
   import { getRoles } from "$lib/api/generated/roles.generated.remote";
   import { getShareLink } from "$api/generated/shareLinks.generated.remote";
   import {
+    getMembers,
+    listInvites,
+    revokeInvite,
+    removeMember,
     setMemberRoles,
     setMemberPermissions,
     setMemberLimitTo24Hours,
@@ -76,13 +74,9 @@
     hasStar || effectivePermissions.includes("sharing.guest"),
   );
 
-  // Tenant
-  const tenantIdQuery = getCurrentTenantId();
-  const tenantId = $derived(tenantIdQuery.current ?? undefined);
-
   // Queries
   const membersQuery = getMembers();
-  const invitesQuery = $derived(tenantId ? listInvites(tenantId) : null);
+  const invitesQuery = $derived(canInvite ? listInvites() : null);
   const rolesQuery = getRoles();
   const pendingRequestsQuery = $derived(canManageMembers ? getPendingRequests() : null);
   const shareQuery = $derived(canManageSharing ? getShareLink() : null);
@@ -121,11 +115,6 @@
   let isSavingMember = $state(false);
   let isRevokingInvite = $state<string | null>(null);
 
-  /** Surface a server-provided message when present, else a generic fallback. */
-  function messageFrom(e: unknown, fallback: string): string {
-    return (e as { body?: { message?: string } })?.body?.message ?? fallback;
-  }
-
   // Visible members — system subjects (e.g. Public) are managed via the
   // public access card above, not as removable/editable cards.
   const visibleMembers = $derived(
@@ -162,7 +151,7 @@
       expandedMember = null;
       clearMessages();
     } catch (e) {
-      errorMessage = messageFrom(e, "Failed to update member. Please try again.");
+      errorMessage = describeSubmitError(e, "Failed to update member. Please try again.");
       clearMessages();
     } finally {
       isSavingMember = false;
@@ -307,22 +296,19 @@
                     request: { limitTo24Hours },
                   });
                 } catch (e) {
-                  errorMessage = messageFrom(e, "Failed to update member. Please try again.");
+                  errorMessage = describeSubmitError(e, "Failed to update member. Please try again.");
                   clearMessages();
                 }
               }}
               onRemove={async () => {
-                if (!tenantId || !member.subjectId) return;
+                if (!member.subjectId) return;
                 errorMessage = null;
                 try {
-                  await removeMember({ id: tenantId, subjectId: member.subjectId });
-                  // GetMembers lives on MemberInviteController, so RemoveMember's
-                  // Invalidates cannot name it — refresh from here.
-                  await membersQuery.refresh();
+                  await removeMember(member.subjectId);
                   successMessage = "Member removed successfully.";
                   clearMessages();
                 } catch (e) {
-                  errorMessage = messageFrom(e, "Failed to remove member. Please try again.");
+                  errorMessage = describeSubmitError(e, "Failed to remove member. Please try again.");
                   clearMessages();
                 }
               }}
@@ -334,10 +320,9 @@
 
       <!-- Create Invite Link (inline card) -->
       {#if canInvite}
-        {#if showCreateInvite && tenantId}
+        {#if showCreateInvite}
           <CreateInviteCard
             roles={allRoles}
-            tenantId={tenantId}
             onCreated={() => {
               successMessage = "Invite link created. Share it with the new member.";
               clearMessages();
@@ -368,11 +353,10 @@
           roles={allRoles}
           isRevoking={isRevokingInvite !== null}
           onRevoke={async (inviteId) => {
-            if (!tenantId) return;
             isRevokingInvite = inviteId;
             errorMessage = null;
             try {
-              await revokeInvite({ id: tenantId, inviteId });
+              await revokeInvite(inviteId);
               successMessage = "Invite revoked successfully.";
               clearMessages();
             } catch {
