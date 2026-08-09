@@ -163,6 +163,24 @@ public class ActivityService : IActivityService
     }
 
     /// <inheritdoc />
+    public async Task<DateTime?> GetLatestTimestampAsync(
+        string source,
+        CancellationToken cancellationToken = default
+    )
+    {
+        // Sequential: the three services share one DbContext. Max over DateTime? skips the
+        // destinations this source has never written to, and is null when that is all of them.
+        var candidates = new[]
+        {
+            await _stateSpanService.GetLatestActivityTimestampAsync(source, cancellationToken),
+            await _heartRateService.GetLatestTimestampAsync(source, cancellationToken),
+            await _stepCountService.GetLatestTimestampAsync(source, cancellationToken),
+        };
+
+        return candidates.Max();
+    }
+
+    /// <inheritdoc />
     public async Task<Activity?> GetActivityByIdAsync(
         string id,
         CancellationToken cancellationToken = default
