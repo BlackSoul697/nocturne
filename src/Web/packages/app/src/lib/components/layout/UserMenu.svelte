@@ -4,7 +4,6 @@
   import { Button } from "$lib/components/ui/button";
   import { User, LogOut, Settings, Shield, ChevronDown, UserPlus } from "lucide-svelte";
   import { goto } from "$app/navigation";
-  import { browser } from "$app/environment";
   import type { AuthUser } from "$lib/stores/auth-store.svelte";
   import RequestMembershipDialog from "$lib/components/members/RequestMembershipDialog.svelte";
 
@@ -24,13 +23,6 @@
 
   let isOpen = $state(false);
   let showRequestDialog = $state(false);
-
-  let tenantSlug = $state<string | undefined>(undefined);
-  $effect(() => {
-    if (!browser) return;
-    const parts = window.location.hostname.split(".");
-    if (parts.length > 2) tenantSlug = parts[0];
-  });
 
   /** Get initials from user name */
   function getInitials(name: string): string {
@@ -155,7 +147,7 @@
     </DropdownMenu.Content>
   </DropdownMenu.Root>
   {#if isGuestSession}
-    <RequestMembershipDialog bind:open={showRequestDialog} {tenantSlug} />
+    <RequestMembershipDialog bind:open={showRequestDialog} />
   {/if}
 {:else}
   <!-- Not logged in - show login button -->
