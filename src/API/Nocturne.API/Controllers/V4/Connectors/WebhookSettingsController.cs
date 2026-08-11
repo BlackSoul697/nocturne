@@ -1,6 +1,7 @@
 using System.Text.Json;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Nocturne.API.Authorization;
 using Nocturne.API.Extensions;
 using Nocturne.API.Services.Alerts.Webhooks;
 using Nocturne.Core.Models.Configuration;
@@ -63,7 +64,14 @@ public class WebhookSettingsController(
     }
 
     /// <summary>Tests webhook settings by sending test payloads to configured URLs.</summary>
+    /// <remarks>
+    /// Gated for the demo's shared visitor because the destination is caller-chosen: the server
+    /// makes an outbound POST from its own address. <c>OutboundDestination</c> keeps it off private
+    /// networks, so what remains is a relay to public hosts. The GET and PUT above are a stub and a
+    /// logged no-op, so gating them would only break the demo's notification settings screen.
+    /// </remarks>
     [HttpPost("test")]
+    [DenyDemoSubject]
     [ProducesResponseType(typeof(WebhookTestResult), 200)]
     [ProducesResponseType(400)]
     [ProducesResponseType(500)]

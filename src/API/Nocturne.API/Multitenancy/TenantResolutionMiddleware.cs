@@ -90,6 +90,14 @@ public class TenantResolutionMiddleware
         "/api/v4/setup/",
     ];
 
+    /// <summary>
+    /// Whether a request path is served without a resolved tenant. Public so the authorization
+    /// guard tests can enumerate the same surface rather than restating these lists.
+    /// </summary>
+    public static bool IsTenantlessAllowed(string path) =>
+        TenantlessAllowedPaths.Any(p => path.Equals(p, StringComparison.OrdinalIgnoreCase)) ||
+        TenantlessAllowedPrefixes.Any(p => path.StartsWith(p, StringComparison.OrdinalIgnoreCase));
+
     public async Task InvokeAsync(HttpContext context)
     {
         var tenantAccessor = context.RequestServices.GetRequiredService<ITenantAccessor>();
@@ -132,9 +140,7 @@ public class TenantResolutionMiddleware
         }
 
         var path = context.Request.Path.Value ?? "";
-        var isTenantlessAllowedPath =
-            TenantlessAllowedPaths.Any(p => path.Equals(p, StringComparison.OrdinalIgnoreCase)) ||
-            TenantlessAllowedPrefixes.Any(p => path.StartsWith(p, StringComparison.OrdinalIgnoreCase));
+        var isTenantlessAllowedPath = IsTenantlessAllowed(path);
 
         // On the apex (no subdomain), GET /api/v4/status is tenant-scoped yet listed as
         // tenantless-allowed (so a fresh apex doesn't 404). On a single-tenant install,

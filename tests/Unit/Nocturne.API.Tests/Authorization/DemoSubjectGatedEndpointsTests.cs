@@ -14,11 +14,10 @@ namespace Nocturne.API.Tests.Authorization;
 /// Pins which endpoints refuse the demo tenant's shared visitor account.
 /// </summary>
 /// <remarks>
-/// A demo session is handed to any anonymous caller, so the subject behind it is
-/// authenticated but stands for no one, and every visitor is the <em>same</em> subject.
-/// Two classes of endpoint must refuse it, and neither is protected by a tenant permission
-/// check — one because there is no tenant in the request to check against, the other
-/// because the demo member legitimately holds the permission involved:
+/// The premise is in <see cref="DenyDemoSubjectAttribute"/>. Two classes of endpoint must refuse
+/// that subject, and neither is protected by a tenant permission check — one because there is no
+/// tenant in the request to check against, the other because the demo member legitimately holds
+/// the permission involved:
 /// <list type="bullet">
 /// <item><b>Acting as a platform user</b> — creating a tenant, accepting an invite,
 /// requesting membership, minting a subject. Covered by
@@ -79,6 +78,15 @@ public class DemoSubjectGatedEndpointsTests
         // guards the write, but this flow stores a refresh token as a connector secret on the way
         // and its persist step swallows exceptions, so it has to be refused at the edge too.
         { typeof(CareLinkConnectController), nameof(CareLinkConnectController.Start) },
+
+        // The webhook tester posts to a caller-named destination from inside the deployment's
+        // network. It carries no permission attribute at all, so [Authorize] is the whole gate.
+        { typeof(WebhookSettingsController), nameof(WebhookSettingsController.TestWebhookSettings) },
+
+        // Session management on a shared subject acts on other visitors' sessions, not the
+        // caller's. List stays open — see TheSessionListStaysOpenWhileRevocationDoesNot.
+        { typeof(SessionsController), nameof(SessionsController.Revoke) },
+        { typeof(SessionsController), nameof(SessionsController.RevokeOthers) },
     };
 
     [Theory]
@@ -115,5 +123,22 @@ public class DemoSubjectGatedEndpointsTests
         ungated!.GetCustomAttribute<DenyDemoSubjectAttribute>().Should().BeNull();
         typeof(GuestLinkController).GetCustomAttribute<DenyDemoSubjectAttribute>().Should().BeNull(
             "the gate is per-endpoint here, so the guest-activation path stays open");
+    }
+
+    /// <summary>
+    /// Listing sessions stays open while revoking them does not: the rows carry no address — the
+    /// repository scrubs them for a demo subject — and no device beyond <c>demo-visitor</c>, so the
+    /// list tells a visitor only how many people are on the demo.
+    /// </summary>
+    [Fact]
+    public void TheSessionListStaysOpenWhileRevocationDoesNot()
+    {
+        var list = typeof(SessionsController)
+            .GetMethod(nameof(SessionsController.List), BindingFlags.Public | BindingFlags.Instance);
+
+        list.Should().NotBeNull();
+        list!.GetCustomAttribute<DenyDemoSubjectAttribute>().Should().BeNull();
+        typeof(SessionsController).GetCustomAttribute<DenyDemoSubjectAttribute>().Should().BeNull(
+            "gating the controller would take the list with it");
     }
 }

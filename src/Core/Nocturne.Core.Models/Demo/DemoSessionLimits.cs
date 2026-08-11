@@ -8,6 +8,11 @@ namespace Nocturne.Core.Models.Demo;
 /// the single place a <c>refresh_tokens</c> row is created — the demo sign-in endpoint is only one
 /// of the paths that reaches it, and the anonymous, unrate-limited refresh endpoint rotates rows
 /// through the same sink without passing through any demo code.
+/// <para>
+/// The sign-in endpoint's per-IP rate limit is not a substitute: it partitions on a caller-supplied
+/// header (see the <c>demo-session</c> policy in <c>ServiceRegistrationExtensions</c>), while this
+/// cap keys on the subject id.
+/// </para>
 /// </remarks>
 public static class DemoSessionLimits
 {
