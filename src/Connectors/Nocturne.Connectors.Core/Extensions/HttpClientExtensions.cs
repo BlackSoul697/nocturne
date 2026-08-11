@@ -3,6 +3,7 @@ using System.Net.Http.Headers;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Http.Resilience;
 using Nocturne.Connectors.Core.Services;
+using Nocturne.Core.Models.Net;
 using Polly;
 
 namespace Nocturne.Connectors.Core.Extensions;
@@ -72,21 +73,17 @@ public static class HttpClientExtensions
                         AutomaticDecompression = DecompressionMethods.All,
                         ConnectTimeout = effectiveConnectTimeout,
                         PooledConnectionLifetime = effectiveTimeout,
-                        // Redirects are followed by LinkLocalGuardHandler instead, which
-                        // re-checks each hop. Left on, the transport would follow a 3xx
-                        // beneath that handler, which only ever sees the first URI — so an
-                        // allowed host answering 307 with Location: http://169.254.169.254/
-                        // would be fetched from inside the network with the guard none the
-                        // wiser. Disabling redirects outright would instead break a
-                        // Nightscout sitting behind an http-to-https redirect.
-                        AllowAutoRedirect = false
+                        // LinkLocalGuardHandler follows redirects itself so it can re-check each
+                        // hop; see its remarks for why neither leaving them on nor refusing them
+                        // outright works.
+                        AllowAutoRedirect = false,
+                        ConnectCallback =
+                            new PinnedConnector(OutboundAddressPolicy.NotLinkLocal).ConnectAsync
                     }
                 );
 
-            // Connector base URLs come from tenant configuration, and the request goes out from
-            // inside the deployment's network with its outcome reported back through connector
-            // status. Refuse link-local targets — the cloud metadata endpoint — for every
-            // connector, at the sink, so a row already in the database is covered too.
+            // At the sink rather than at config-validation time, so a base URL already sitting in
+            // the database is covered too.
             builder.Services.AddTransient<LinkLocalGuardHandler>();
             builder.AddHttpMessageHandler<LinkLocalGuardHandler>();
 

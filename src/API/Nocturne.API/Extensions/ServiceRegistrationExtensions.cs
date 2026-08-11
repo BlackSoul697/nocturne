@@ -67,6 +67,7 @@ using Nocturne.Core.Contracts.V4;
 using Nocturne.Core.Contracts.V4.Repositories;
 using Nocturne.Core.Models;
 using Nocturne.Core.Models.Configuration;
+using Nocturne.Core.Models.Net;
 using Nocturne.Core.Models.V4;
 using Nocturne.Infrastructure.Data.Abstractions;
 using Nocturne.Infrastructure.Data.Repositories;
@@ -271,14 +272,20 @@ public static class ServiceRegistrationExtensions
         services.AddSingleton<IAuthHandler, AccessTokenHandler>(); // Priority 300
         services.AddSingleton<IAuthHandler, ApiKeyHandler>(); // Priority 400
 
-        // OIDC provider discovery HTTP client
+        // OIDC provider discovery HTTP client. The issuer URL is tenant configuration, and the
+        // unsaved-provider test button hands the caller the status of whatever it reached. Redirects
+        // stay on — an issuer that redirects its discovery path is ordinary, and the pin applies to
+        // every hop's connect anyway.
         services.AddHttpClient(
             "OidcProvider",
             client =>
             {
                 client.Timeout = TimeSpan.FromSeconds(30);
             }
-        );
+        ).ConfigurePrimaryHttpMessageHandler(() => new SocketsHttpHandler
+        {
+            ConnectCallback = new PinnedConnector(OutboundAddressPolicy.NotLinkLocal).ConnectAsync,
+        });
 
         // Rate limiting for OAuth endpoints
         services.AddRateLimiter(options =>
@@ -791,15 +798,16 @@ public static class ServiceRegistrationExtensions
         // Webhook infrastructure (reused by new alert engine)
         services.AddScoped<WebhookRequestSender>();
 
-        // Webhook targets are supplied by whoever is signed in, and OutboundDestination can
-        // only vet the URL it is given. Following redirects would walk straight past that
-        // check — a target answering 307 with http://169.254.169.254/ or an internal
-        // service name reaches it from inside the deployment network — so this client does
-        // not follow them.
+        // Webhook targets are supplied by whoever is signed in. Nothing re-checks a hop here, so
+        // redirects are off outright rather than followed by a guard — a target answering 307 with
+        // http://169.254.169.254/ or an internal service name would otherwise be fetched from
+        // inside the deployment network.
         services.AddHttpClient(WebhookRequestSender.HttpClientName)
-            .ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler
+            .ConfigurePrimaryHttpMessageHandler(() => new SocketsHttpHandler
             {
                 AllowAutoRedirect = false,
+                ConnectCallback =
+                    new PinnedConnector(OutboundAddressPolicy.PubliclyRoutable).ConnectAsync,
             });
 
         // Condition evaluators. Scoped because SustainedEvaluator depends on the scoped
@@ -1008,6 +1016,13 @@ public static class ServiceRegistrationExtensions
             Nocturne.API.Services.Migration.MigrationJobService
         >();
         services.AddHostedService<Nocturne.API.Services.Migration.MigrationStartupService>();
+
+        // The Nightscout to migrate from is a tenant-admin-supplied URL, the same shape as a
+        // connector base URL, so it takes the connector client. That also puts redirects under the
+        // guard, which drops the tenant's api-secret when a hop crosses origin — .NET's own redirect
+        // handling strips Authorization but not api-secret.
+        services.AddHttpClient(Nocturne.API.Services.Migration.MigrationJobService.HttpClientName)
+            .ConfigureConnectorClient(baseUrl: null, userAgent: "Nocturne-Migration/1.0");
 
         return services;
     }

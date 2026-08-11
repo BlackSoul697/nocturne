@@ -5,21 +5,14 @@ using Nocturne.Core.Models.Net;
 namespace Nocturne.Connectors.Core.Services;
 
 /// <summary>
-/// Refuses a connector request whose target resolves to a link-local address, on every hop.
+/// Refuses an outbound request whose target resolves to a link-local address, on every hop.
 /// </summary>
 /// <remarks>
 /// Connector base URLs come from tenant configuration — a value someone signed in supplied
 /// through <c>PUT /api/v4/connectors/config/{connectorName}</c> — and the request is sent from
 /// inside the deployment's network, with the outcome reported back through connector status. That
-/// makes the connector fetch a request-forgery primitive.
-/// <para>
-/// Only link-local is refused, not every private range. A self-hosted deployment legitimately
-/// points a connector with a member-supplied base URL — Nightscout, remote Nocturne, MyLife — at a
-/// private address, and a Nightscout on the same Docker network or LAN is the ordinary migration
-/// setup, so requiring public routability would break real installs. <c>169.254.169.254</c> and
-/// its neighbours have no legitimate connector use and are where cloud instance credentials live,
-/// so that range is refused for every tenant regardless of what was configured.
-/// </para>
+/// makes the connector fetch a request-forgery primitive. Why the rule is link-local rather than
+/// the whole private range is on <see cref="OutboundAddressPolicy.NotLinkLocal"/>.
 /// <para>
 /// <b>Redirects are followed here, not by the transport.</b> Checking only
 /// <see cref="HttpRequestMessage.RequestUri"/> and letting the primary handler follow 3xx would
@@ -50,9 +43,11 @@ namespace Nocturne.Connectors.Core.Services;
 /// goes through that extension automatically — an installer calling <c>AddHttpClient</c> without
 /// it gets no guard and transport-level redirects, which is how the MyLife connector was left
 /// outside this for a while. <c>ConnectorClientGuardCoverageTests</c> walks every installer and
-/// fails if one registers a client without it. See the note on
-/// <see cref="OutboundDestination"/> about the residual gap between resolving a name and
-/// connecting to it.
+/// fails if one registers a client without it.
+/// </para>
+/// <para>
+/// Refuses early and legibly, before a body is sent; <see cref="PinnedConnector"/> on the same
+/// client's transport is what the socket obeys.
 /// </para>
 /// </remarks>
 public sealed class LinkLocalGuardHandler : DelegatingHandler
@@ -142,7 +137,7 @@ public sealed class LinkLocalGuardHandler : DelegatingHandler
             {
                 response.Dispose();
                 throw new HttpRequestException(
-                    $"Connector request exceeded {MaxRedirects} redirects.");
+                    $"Outbound request exceeded {MaxRedirects} redirects.");
             }
 
             var next = CloneForRedirect(current, response.StatusCode, target!);
@@ -168,7 +163,7 @@ public sealed class LinkLocalGuardHandler : DelegatingHandler
             return;
 
         _logger.LogWarning(
-            "Refusing connector request to {Host}: resolves to a link-local address", uri.Host);
+            "Refusing outbound request to {Host}: resolves to a link-local address", uri.Host);
 
         throw new HttpRequestException(
             $"Refusing to reach '{uri.Host}': the address is link-local, which no connector " +

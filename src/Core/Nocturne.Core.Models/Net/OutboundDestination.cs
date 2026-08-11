@@ -13,30 +13,14 @@ namespace Nocturne.Core.Models.Net;
 /// learns the outcome — a webhook test reports per-URL success, a connector reports its sync
 /// status. That makes a user-supplied URL a request-forgery primitive.
 /// <para>
-/// Two different properties are needed, because the two sinks have different legitimate ranges:
+/// Two different properties are needed, because the sinks have different legitimate ranges; which
+/// range belongs to which sink is on <see cref="OutboundAddressPolicy"/>.
 /// </para>
-/// <list type="bullet">
-/// <item><see cref="IsPubliclyRoutableAsync"/> — for alert webhooks, which notify a third-party
-/// service on the internet. Nothing private is a legitimate target.</item>
-/// <item><see cref="IsNotLinkLocalAsync"/> — for connector base URLs. A self-hosted deployment
-/// legitimately points a connector with a member-supplied base URL (Nightscout, remote Nocturne,
-/// MyLife) at a private address: a Nightscout on the same Docker network or LAN is an ordinary
-/// migration setup, so requiring public routability there would break real installs. Link-local is
-/// refused regardless, because no connector has any reason to reach <c>169.254.169.254</c> and that
-/// address is where cloud credentials live. Applied by
-/// <c>Nocturne.Connectors.Core.Services.LinkLocalGuardHandler</c>, which is installed per connector
-/// HTTP client — see the coverage note there.</item>
-/// </list>
 /// <para>
-/// Every resolved address is checked, so a name pointing at a refused address is refused too.
-/// <b>A name whose DNS answer changes between the check and the send still slips through</b>: the
-/// addresses are resolved for the decision and then discarded, and the transport resolves the name
-/// again for the connect. Closing it means pinning the send to the address that was checked —
-/// <c>SocketsHttpHandler.ConnectCallback</c> can do this — which is a change to the shared
-/// connector transport rather than to this classifier, so it is not attempted here. Until then,
-/// treat these checks as covering a misconfigured or hostile <em>address</em>, not an attacker who
-/// controls a DNS zone. Resolution failure is refused rather than allowed: a name this process
-/// cannot resolve may still resolve for the HTTP stack.
+/// Every resolved address is checked, so a name pointing at a refused address is refused too; the
+/// socket the request then opens is pinned to a checked address by <see cref="PinnedConnector"/>.
+/// Resolution failure is refused rather than allowed: a name this process cannot resolve may still
+/// resolve for the HTTP stack.
 /// </para>
 /// </remarks>
 public static class OutboundDestination
@@ -72,18 +56,26 @@ public static class OutboundDestination
     /// </summary>
     public static Task<bool> IsPubliclyRoutableAsync(
         string url, CancellationToken ct = default, AddressResolver? resolver = null) =>
-        EveryAddressSatisfiesAsync(url, IsPubliclyRoutable, ct, resolver);
+        IsAllowedAsync(url, OutboundAddressPolicy.PubliclyRoutable, ct, resolver);
 
     /// <summary>
     /// True when <paramref name="url"/> is an absolute http(s) URL and no resolved address is
-    /// link-local. Private and loopback addresses are permitted — see the type remarks.
+    /// link-local. Private and loopback addresses are permitted — see
+    /// <see cref="OutboundAddressPolicy.NotLinkLocal"/>.
     /// </summary>
     public static Task<bool> IsNotLinkLocalAsync(
         string url, CancellationToken ct = default, AddressResolver? resolver = null) =>
-        EveryAddressSatisfiesAsync(url, address => !IsLinkLocal(address), ct, resolver);
+        IsAllowedAsync(url, OutboundAddressPolicy.NotLinkLocal, ct, resolver);
 
-    private static async Task<bool> EveryAddressSatisfiesAsync(
-        string url, Func<IPAddress, bool> predicate, CancellationToken ct, AddressResolver? resolver)
+    /// <summary>
+    /// True when <paramref name="url"/> is an absolute http(s) URL whose every resolved address
+    /// satisfies <paramref name="policy"/>.
+    /// </summary>
+    public static async Task<bool> IsAllowedAsync(
+        string url,
+        OutboundAddressPolicy policy,
+        CancellationToken ct = default,
+        AddressResolver? resolver = null)
     {
         if (!Uri.TryCreate(url, UriKind.Absolute, out var uri))
             return false;
@@ -91,22 +83,38 @@ public static class OutboundDestination
         if (uri.Scheme != Uri.UriSchemeHttp && uri.Scheme != Uri.UriSchemeHttps)
             return false;
 
-        var addresses = await ResolveAsync(uri, ct, resolver ?? SystemResolver);
+        var addresses = await ResolveAsync(uri.DnsSafeHost, ct, resolver);
 
         // Fail closed on an empty result: "nothing to check" must deny, not allow.
         if (addresses.Count == 0)
             return false;
 
-        return addresses.All(predicate);
+        return addresses.All(address => IsAllowed(address, policy));
     }
 
-    private static async ValueTask<IReadOnlyList<IPAddress>> ResolveAsync(
-        Uri uri, CancellationToken ct, AddressResolver resolver)
+    /// <summary>
+    /// The single place an address is judged, shared by the URL checks above and by
+    /// <see cref="PinnedConnector"/>.
+    /// </summary>
+    public static bool IsAllowed(IPAddress address, OutboundAddressPolicy policy) => policy switch
     {
-        if (IPAddress.TryParse(uri.DnsSafeHost, out var literal))
+        OutboundAddressPolicy.PubliclyRoutable => IsPubliclyRoutable(address),
+        OutboundAddressPolicy.NotLinkLocal => !IsLinkLocal(address),
+        _ => false,
+    };
+
+    /// <summary>
+    /// Addresses for <paramref name="host"/>, which may be a name or an IP literal. Brackets around
+    /// an IPv6 literal have to be gone already — <see cref="Uri.DnsSafeHost"/> and
+    /// <see cref="DnsEndPoint.Host"/> both strip them.
+    /// </summary>
+    public static async ValueTask<IReadOnlyList<IPAddress>> ResolveAsync(
+        string host, CancellationToken ct = default, AddressResolver? resolver = null)
+    {
+        if (IPAddress.TryParse(host, out var literal))
             return [literal];
 
-        return await resolver(uri.DnsSafeHost, ct);
+        return await (resolver ?? SystemResolver)(host, ct);
     }
 
     /// <summary>
@@ -173,9 +181,16 @@ public static class OutboundDestination
 
     /// <summary>
     /// Reduces an IPv6 address that carries an embedded IPv4 address to that IPv4 address, so the
-    /// v4 range checks apply. Covers IPv4-mapped (::ffff:a.b.c.d), 6to4 (2002::/16, IPv4 in bytes
-    /// 2-5) and Teredo (2001::/32, IPv4 in bytes 12-15, stored inverted).
+    /// v4 range checks apply. Covers IPv4-mapped (::ffff:a.b.c.d), IPv4-compatible (::a.b.c.d),
+    /// NAT64 (64:ff9b::/96), 6to4 (2002::/16, IPv4 in bytes 2-5) and Teredo (2001::/32, IPv4 in
+    /// bytes 12-15, stored inverted).
     /// </summary>
+    /// <remarks>
+    /// Only the mapped form is routed to the embedded IPv4 address by a stock stack; the rest need
+    /// a relay or a translator on the path. They are unwrapped anyway because whether one of them
+    /// reaches <c>169.254.169.254</c> is a property of the network the deployment happens to sit
+    /// on, and this classifier does not get to see that.
+    /// </remarks>
     private static IPAddress Unwrap(IPAddress address)
     {
         if (address.IsIPv4MappedToIPv6)
@@ -193,6 +208,16 @@ public static class OutboundDestination
         // Teredo: 2001:0000:SERVER:FLAGS:PORT:CLIENTV4, client v4 one's-complemented.
         if (bytes[0] == 0x20 && bytes[1] == 0x01 && bytes[2] == 0x00 && bytes[3] == 0x00)
             return new IPAddress([.. bytes[12..16].Select(b => (byte)~b)]);
+
+        // NAT64: 64:ff9b::V4ADDR (and the local-use 64:ff9b:1::/48 prefix's /96 suffix).
+        if (bytes[0] == 0x00 && bytes[1] == 0x64 && bytes[2] == 0xFF && bytes[3] == 0x9B)
+            return new IPAddress(bytes[12..16]);
+
+        // IPv4-compatible: ::a.b.c.d, the deprecated ::/96 form, which is not IsIPv4MappedToIPv6.
+        // :: and ::1 are the unspecified and loopback addresses rather than a wrapped IPv4 one, and
+        // both are already judged in their own right.
+        if (bytes[..12].All(b => b == 0) && (bytes[12] != 0 || bytes[13] != 0 || bytes[14] != 0))
+            return new IPAddress(bytes[12..16]);
 
         return address;
     }

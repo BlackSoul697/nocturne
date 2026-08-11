@@ -189,7 +189,9 @@ public class OidcProviderAdminController : ControllerBase
         try
         {
             var discoveryUrl = request.IssuerUrl.TrimEnd('/') + "/.well-known/openid-configuration";
-            var httpClient = _httpClientFactory.CreateClient();
+
+            // Named, not the unnamed default, which carries no address policy.
+            var httpClient = _httpClientFactory.CreateClient("OidcProvider");
             httpClient.Timeout = TimeSpan.FromSeconds(10);
 
             var response = await httpClient.GetAsync(discoveryUrl);
