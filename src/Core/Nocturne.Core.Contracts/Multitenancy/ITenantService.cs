@@ -29,6 +29,10 @@ public interface ITenantService
     /// <summary>Updates a tenant's display name, active state, and access-request policy.</summary>
     Task<TenantDto> UpdateAsync(Guid id, string displayName, bool isActive, bool? allowAccessRequests = null, CancellationToken ct = default);
 
+    Task<TenantSettingsDto> GetSettingsAsync(Guid id, CancellationToken ct = default);
+
+    Task<TenantSettingsDto> SetAllowPublicDocsAsync(Guid id, bool allowPublicDocs, CancellationToken ct = default);
+
     /// <summary>Permanently deletes a tenant and all associated data.</summary>
     Task DeleteAsync(Guid id, CancellationToken ct = default);
 
@@ -56,6 +60,8 @@ public interface ITenantService
 }
 
 public record TenantDto(Guid Id, string Slug, string DisplayName, bool IsActive, DateTime SysCreatedAt);
+
+public record TenantSettingsDto(bool AllowPublicDocs);
 
 public record TenantCreatedDto(Guid Id, string Slug, string DisplayName, bool IsActive, DateTime SysCreatedAt);
 

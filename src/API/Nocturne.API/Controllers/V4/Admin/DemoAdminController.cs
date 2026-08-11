@@ -60,9 +60,11 @@ public class DemoAdminController : ControllerBase
 
         if (existing is not null)
         {
-            // Re-apply the access grants: this runs on every demo service start, so it
-            // repairs a tenant left without roles or a demo member by a reset that
-            // failed between wiping and re-seeding.
+            // Re-apply the tenant defaults and the access grants: this runs on every demo
+            // service start, so it repairs a tenant left without roles or a demo member by a
+            // reset that failed between wiping and re-seeding.
+            DemoTenantService.ApplyTenantDefaults(existing);
+            await db.SaveChangesAsync(ct);
             await _demoTenantService.ConfigureAccessAsync(existing.Id, ct);
             return Ok(ToDto(existing, alreadyExisted: true));
         }
@@ -73,6 +75,7 @@ public class DemoAdminController : ControllerBase
             .FirstAsync(t => t.Id == created.Id, ct);
 
         tenant.IsDemo = true;
+        DemoTenantService.ApplyTenantDefaults(tenant);
 
         var config = new TenantDemoConfigEntity { TenantId = tenant.Id };
         db.Set<TenantDemoConfigEntity>().Add(config);

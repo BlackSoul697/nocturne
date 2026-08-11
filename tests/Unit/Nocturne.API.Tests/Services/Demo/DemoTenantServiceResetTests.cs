@@ -78,6 +78,21 @@ public class DemoTenantServiceResetTests : IDisposable
         tenant.OnboardingCompletedAt.Should().NotBeNull("a demo visitor must not be sent to /setup");
     }
 
+    /// <summary>
+    /// The column defaults to off, so the demo's own reference depends on the reset re-applying it.
+    /// </summary>
+    [Fact]
+    public async Task ResetAsync_LeavesTheDocumentationSurfaceOn()
+    {
+        var tenantId = SeedDemoTenant();
+
+        await _service.ResetAsync();
+
+        await using var db = new NocturneDbContext(_dbOptions);
+        var tenant = await db.Tenants.SingleAsync(t => t.Id == tenantId);
+        tenant.AllowPublicDocs.Should().BeTrue();
+    }
+
     [Fact]
     public async Task ResetAsync_CarriesDemoScheduleAcross()
     {
