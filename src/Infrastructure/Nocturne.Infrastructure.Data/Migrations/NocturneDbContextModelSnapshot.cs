@@ -4100,6 +4100,10 @@ namespace Nocturne.Infrastructure.Data.Migrations
                         .HasDefaultValue(true)
                         .HasColumnName("is_active");
 
+                    b.Property<bool>("IsDemoSubject")
+                        .HasColumnType("boolean")
+                        .HasColumnName("is_demo_subject");
+
                     b.Property<bool>("IsPlatformAdmin")
                         .HasColumnType("boolean")
                         .HasColumnName("is_platform_admin");

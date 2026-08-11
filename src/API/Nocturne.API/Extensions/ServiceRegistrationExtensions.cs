@@ -18,7 +18,9 @@ using Nocturne.API.Services.ChartData;
 using Nocturne.API.Services.ChartData.Stages;
 using Nocturne.API.Services.ConnectorPublishing;
 using Nocturne.API.Services.Connectors;
+using Nocturne.API.Services.Demo;
 using Nocturne.API.Services.Devices;
+using Nocturne.API.Services.Docs;
 using Nocturne.API.Services.Effects;
 using Nocturne.API.Services.Entries;
 using Nocturne.API.Services.Glucose;
@@ -243,6 +245,8 @@ public static class ServiceRegistrationExtensions
         services.AddScoped<ITenantRoleService, TenantRoleService>();
         services.AddScoped<ITenantService, TenantService>();
         services.AddScoped<ITenantOverviewService, TenantOverviewService>();
+        services.AddScoped<DemoTenantService>();
+        services.AddScoped<ScalarAuthProvider>();
 
         // Shared by InstanceKeyHandler (authentication) and TenantSetupMiddleware
         // (setup-gate bypass) so instance-key validation rules live in one place.
@@ -354,6 +358,26 @@ public static class ServiceRegistrationExtensions
                         {
                             PermitLimit = 5,
                             Window = TimeSpan.FromMinutes(10),
+                            QueueLimit = 0,
+                        }
+                    )
+            );
+
+            // Demo sign-in: 10 sessions per IP per 5 minutes. Friction against naive abuse
+            // only — this does NOT bound the refresh_tokens table. The partition key comes from
+            // Connection.RemoteIpAddress, which UseForwardedHeaders sets from X-Forwarded-For
+            // with no trusted-proxy list, and the gateway does not strip that header, so a
+            // caller rotating it gets a fresh partition every request. The real ceiling is
+            // DemoTenantService.MaxLiveDemoSessions, enforced on the subject id.
+            options.AddPolicy(
+                "demo-session",
+                context =>
+                    RateLimitPartition.GetFixedWindowLimiter(
+                        partitionKey: context.Connection.RemoteIpAddress?.ToString() ?? "unknown",
+                        factory: _ => new FixedWindowRateLimiterOptions
+                        {
+                            PermitLimit = 10,
+                            Window = TimeSpan.FromMinutes(5),
                             QueueLimit = 0,
                         }
                     )
@@ -739,6 +763,17 @@ public static class ServiceRegistrationExtensions
 
         // Webhook infrastructure (reused by new alert engine)
         services.AddScoped<WebhookRequestSender>();
+
+        // Webhook targets are supplied by whoever is signed in, and OutboundDestination can
+        // only vet the URL it is given. Following redirects would walk straight past that
+        // check — a target answering 307 with http://169.254.169.254/ or an internal
+        // service name reaches it from inside the deployment network — so this client does
+        // not follow them.
+        services.AddHttpClient(WebhookRequestSender.HttpClientName)
+            .ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler
+            {
+                AllowAutoRedirect = false,
+            });
 
         // Condition evaluators. Scoped because SustainedEvaluator depends on the scoped
         // IConditionTimerStore (DbContext-backed); the registry is also scoped because it captures

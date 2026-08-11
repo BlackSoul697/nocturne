@@ -101,7 +101,7 @@ public class TenantResolutionMiddleware
         // Public share link: {token}.share.{baseDomain}. Resolve the tenant by its share token
         // and mark the request read-only-public. An unknown token returns the same 404 as an
         // unknown slug, so the share host can't be used as a tenant-existence oracle.
-        if (slug != null && TryExtractShareToken(slug, out var shareToken))
+        if (slug != null && SubdomainParser.TryExtractShareToken(slug, out var shareToken))
         {
             var shareCache = context.RequestServices.GetRequiredService<ShareTokenCacheService>();
             var shareTenant = await shareCache.ResolveByTokenAsync(shareToken);
@@ -251,26 +251,32 @@ public class TenantResolutionMiddleware
         db.ShareFullHistory = false;
     }
 
-    private const string ShareSubdomainLabel = "share";
+
+    /// <summary>Cache key holding the resolved <see cref="TenantContext"/> for a slug.</summary>
+    public static string TenantCacheKey(string slug) => $"tenant:{slug}";
+
+    /// <summary>Cache key holding the sole-tenant context used to resolve the apex.</summary>
+    public const string SoleTenantCacheKey = "tenant:__sole__";
 
     /// <summary>
-    /// Detects the public-share host form <c>{token}.share</c> (the subdomain left of the base
-    /// domain) and extracts the token. Returns false for ordinary tenant slugs, empty tokens,
-    /// or nested forms — slugs and tokens never contain dots. The token is lower-cased because
-    /// hostnames are case-insensitive and generated tokens are always lowercase.
+    /// Drops the cached <see cref="TenantContext"/> for a tenant, so the next request rebuilds it
+    /// from the row.
     /// </summary>
-    private static bool TryExtractShareToken(string subdomain, out string token)
+    /// <remarks>
+    /// Call after writing any column the context carries. <see cref="TenantContext.IsDemo"/> in
+    /// particular gates <c>GET /api/v4/demo/session</c> and the <c>isDemo</c> field on
+    /// <c>/api/v4/status</c>, so without this a tenant stays non-demo for
+    /// <see cref="CacheDuration"/> after being flagged — a login page with no passkey and no
+    /// working demo sign-in.
+    /// <para>
+    /// Both keys go: the apex resolves single-tenant installs through
+    /// <see cref="SoleTenantCacheKey"/>, which holds a copy of the same context.
+    /// </para>
+    /// </remarks>
+    public static void EvictTenant(IMemoryCache cache, string slug)
     {
-        const string suffix = "." + ShareSubdomainLabel;
-        if (subdomain.EndsWith(suffix, StringComparison.OrdinalIgnoreCase))
-        {
-            token = subdomain[..^suffix.Length].ToLowerInvariant();
-            if (token.Length > 0 && !token.Contains('.'))
-                return true;
-        }
-
-        token = string.Empty;
-        return false;
+        cache.Remove(TenantCacheKey(slug));
+        cache.Remove(SoleTenantCacheKey);
     }
 
     /// <summary>
@@ -278,7 +284,7 @@ public class TenantResolutionMiddleware
     /// </summary>
     private async Task<TenantContext?> ResolveTenantBySlugAsync(IServiceProvider services, string slug)
     {
-        var cacheKey = $"tenant:{slug}";
+        var cacheKey = TenantCacheKey(slug);
 
         if (_cache.TryGetValue(cacheKey, out TenantContext? cached))
             return cached;
@@ -315,7 +321,7 @@ public class TenantResolutionMiddleware
     /// </summary>
     private async Task<TenantContext?> GetSoleTenantAsync(IServiceProvider services)
     {
-        var cacheKey = "tenant:__sole__";
+        var cacheKey = SoleTenantCacheKey;
 
         if (_cache.TryGetValue(cacheKey, out TenantContext? cached))
             return cached;

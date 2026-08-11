@@ -1,6 +1,7 @@
 using System.Text.Json;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Nocturne.API.Authorization;
 using OpenApi.Remote.Attributes;
 using Nocturne.Core.Contracts.Connectors;
 
@@ -16,6 +17,12 @@ namespace Nocturne.API.Controllers.V4.Connectors;
 [Tags("Connectors")]
 [Route("api/v4/connectors/config")]
 [Authorize]
+// Connector configuration names the host the server will fetch from, and connector status
+// reports what happened, so these endpoints let their caller aim a request from inside the
+// deployment's network and read the result. That is a tenant owner's business, not an anonymous
+// visitor's: the demo's account is shared and obtainable without signing up. A permission gate
+// would not do — the demo member holds tenant.settings.
+[DenyDemoSubject]
 public class ConfigurationController : ControllerBase
 {
     private readonly IConnectorConfigurationService _configService;
@@ -265,9 +272,77 @@ public class ConfigurationController : ControllerBase
                     errors.Add($"Field '{configProp.Name}' value '{actualValue}' is not one of: {string.Join(", ", validValues)}");
                 }
             }
+
+            // Validate format: "uri". Declared by every connector that takes a base URL
+            // (Nightscout, remote Nocturne, MyLife) and previously unenforced, so anything at all
+            // could be stored — a non-http scheme, or a string that is not a URL, which then
+            // failed at sync time instead of at the write. The address the URL resolves to is not
+            // judged here; that is enforced at the sink, where a row stored by any other path is
+            // covered too (see LinkLocalGuardHandler).
+            if (propSchema.TryGetProperty("format", out var formatProp)
+                && formatProp.GetString() == "uri"
+                && configProp.Value.ValueKind == JsonValueKind.String)
+            {
+                var candidate = configProp.Value.GetString();
+                if (!IsAcceptableUri(candidate))
+                {
+                    errors.Add(
+                        $"Field '{configProp.Name}' must be an http or https URL " +
+                        "with no embedded credentials");
+                }
+            }
         }
 
         return errors;
+    }
+
+    /// <summary>
+    /// An <c>http</c>/<c>https</c> URL carrying no <c>user:password@</c> component. A value with no
+    /// scheme of its own — a bare hostname, or a <c>host:port</c> pair — is accepted and treated as
+    /// <c>https</c>.
+    /// </summary>
+    /// <remarks>
+    /// The scheme-less allowance mirrors the connectors' own normalisation
+    /// (<c>NightscoutConnectorService.ResolveBaseUrl</c> and <c>ConfigureConnectorClient</c> prepend
+    /// <c>https://</c> to any stored value that does not already begin with <c>http</c>), so
+    /// validating here does not reject a value the connector would have accepted — an existing
+    /// tenant re-saving <c>mysite.example</c> or <c>mysite.example:1337</c> must not start failing.
+    /// <para>
+    /// A scheme-less <c>host:port</c> cannot be told apart from an explicit scheme by an absolute
+    /// parse alone: <c>Uri.TryCreate("mysite.example:1337", UriKind.Absolute, …)</c> succeeds with
+    /// <c>Scheme == "mysite.example"</c> and an empty host, and <c>"localhost:1337"</c> the same way
+    /// — 1337 is Nightscout's default self-hosted port, so that form is common. A candidate
+    /// therefore counts as carrying its own scheme only when the absolute parse yields http/https,
+    /// or when it contains <c>"://"</c>. The second test is what keeps <c>file://</c> and friends
+    /// off the prepend path, where they would parse as a host named <c>file</c> and sail through.
+    /// </para>
+    /// <para>
+    /// Embedded credentials are refused because this value is stored in the connector's runtime
+    /// configuration, which <c>GET</c> returns in the clear — the secret fields are the ones kept
+    /// out of that response, and a password smuggled into the URL would bypass that. The check runs
+    /// on the prepended form too, since <c>admin:hunter2@mysite.example</c> only reveals its
+    /// userinfo once a scheme is in front of it.
+    /// </para>
+    /// </remarks>
+    private static bool IsAcceptableUri(string? candidate)
+    {
+        if (string.IsNullOrWhiteSpace(candidate))
+            return false;
+
+        if (Uri.TryCreate(candidate, UriKind.Absolute, out var absolute)
+            && (absolute.Scheme == Uri.UriSchemeHttp || absolute.Scheme == Uri.UriSchemeHttps))
+        {
+            return string.IsNullOrEmpty(absolute.UserInfo);
+        }
+
+        // Any other explicit scheme is out. Tested before the scheme-less fallback, because
+        // prepending https:// to "file:///etc/passwd" produces something that still parses.
+        if (candidate.Contains("://", StringComparison.Ordinal))
+            return false;
+
+        // No scheme of its own: a host, optionally with a port, which the connectors read as https.
+        return Uri.TryCreate($"https://{candidate}", UriKind.Absolute, out var implied)
+            && string.IsNullOrEmpty(implied.UserInfo);
     }
 
     /// <summary>

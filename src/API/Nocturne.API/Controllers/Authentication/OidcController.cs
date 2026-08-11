@@ -275,6 +275,7 @@ public class OidcController : ControllerBase
     /// endpoint so they can attach the external identity to their current account.
     /// </summary>
     [HttpGet("link")]
+    [DenyDemoSubject]
     [ProducesResponseType(StatusCodes.Status302Found)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status401Unauthorized)]
@@ -384,6 +385,7 @@ public class OidcController : ControllerBase
     /// List OIDC identities linked to the currently-authenticated subject.
     /// </summary>
     [HttpGet("link/identities")]
+    [DenyDemoSubject]
     [RemoteQuery]
     [ProducesResponseType(typeof(LinkedOidcIdentitiesResponse), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status401Unauthorized)]
@@ -427,6 +429,7 @@ public class OidcController : ControllerBase
     /// <response code="404">Identity not found.</response>
     /// <response code="409">Cannot remove the last primary sign-in method.</response>
     [HttpDelete("link/identities/{identityId:guid}")]
+    [DenyDemoSubject]
     [RemoteCommand(Invalidates = ["GetLinkedIdentities"])]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     [ProducesResponseType(StatusCodes.Status401Unauthorized)]

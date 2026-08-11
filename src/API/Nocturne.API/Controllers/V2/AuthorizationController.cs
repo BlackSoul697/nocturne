@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Nocturne.API.Attributes;
+using Nocturne.API.Authorization;
 using OpenApi.Remote.Attributes;
 using Nocturne.Core.Contracts.Identity;
 using Nocturne.Core.Models;
@@ -180,6 +181,11 @@ public class AuthorizationController : ControllerBase
     /// <returns>Created subject</returns>
     [HttpPost("subjects")]
     [RequireAdmin]
+    // A subject minted here carries a plaintext access token and any global role named in
+    // the body, and its own is_demo_subject is false — so without this the shared demo
+    // account could launder itself into an unflagged credential that [DenyDemoSubject]
+    // waves through.
+    [DenyDemoSubject]
     [NightscoutEndpoint("/api/v2/authorization/subjects")]
     [RemoteForm(Invalidates = ["GetAllSubjects"])]
     [ProducesResponseType(typeof(Subject), 201)]
