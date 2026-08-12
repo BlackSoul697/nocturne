@@ -171,6 +171,10 @@
     children?: NavItem[];
   };
 
+  const grantedScopes: string[] = $derived(
+    (page.data as { effectivePermissions?: string[] }).effectivePermissions ?? [],
+  );
+
   /** Read-only navigation items shown to guest sessions. */
   const guestNavTitles = new Set(["Dashboard", "Calendar", "Time Spans", "Reports", "Clock"]);
 
@@ -197,7 +201,7 @@
       icon: BarChart3,
       children: [
         { title: "Overview", href: "/reports", icon: PieChart, strict: true },
-        ...getSidebarReportItems(!user),
+        ...getSidebarReportItems({ grantedScopes, anonymous: !user }),
       ],
     },
     {
