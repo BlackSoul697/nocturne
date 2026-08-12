@@ -3,6 +3,7 @@ using System;
 using System.Collections.Generic;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Nocturne.Infrastructure.Data;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
@@ -12,9 +13,11 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace Nocturne.Infrastructure.Data.Migrations
 {
     [DbContext(typeof(NocturneDbContext))]
-    partial class NocturneDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260811185512_AddDeviceEventsTenantEventTypeTimestampIndex")]
+    partial class AddDeviceEventsTenantEventTypeTimestampIndex
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -5098,9 +5101,17 @@ namespace Nocturne.Infrastructure.Data.Migrations
                         .HasColumnType("integer")
                         .HasColumnName("hours");
 
+                    b.Property<int>("MaxRepeats")
+                        .HasColumnType("integer")
+                        .HasColumnName("max_repeats");
+
                     b.Property<bool>("PushEnabled")
                         .HasColumnType("boolean")
                         .HasColumnName("push_enabled");
+
+                    b.Property<int>("RepeatIntervalMins")
+                        .HasColumnType("integer")
+                        .HasColumnName("repeat_interval_mins");
 
                     b.Property<bool>("RespectQuietHours")
                         .HasColumnType("boolean")
