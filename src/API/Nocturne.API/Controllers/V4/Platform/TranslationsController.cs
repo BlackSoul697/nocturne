@@ -131,6 +131,7 @@ public partial class TranslationsController(
 
     [HttpGet("drafts")]
     [RemoteQuery]
+    [EnableRateLimiting(ServiceRegistrationExtensions.TranslationDraftsRateLimitPolicy)]
     [ProducesResponseType(typeof(IReadOnlyList<TranslationDraft>), StatusCodes.Status200OK)]
     public async Task<ActionResult<IReadOnlyList<TranslationDraft>>> GetDrafts(
         [FromQuery] string locale, CancellationToken ct)
@@ -144,7 +145,12 @@ public partial class TranslationsController(
     }
 
     [HttpPut("drafts")]
-    [RemoteCommand(Invalidates = ["GetDrafts"])]
+    // No Invalidates: openapi-remote-codegen only threads path parameters into
+    // an invalidation, and GetDrafts takes a required "locale" query parameter,
+    // so the emitted refresh would call it with none and 400. The editor
+    // refreshes its own per-locale query instance instead.
+    [RemoteCommand]
+    [EnableRateLimiting(ServiceRegistrationExtensions.TranslationDraftsRateLimitPolicy)]
     [ProducesResponseType(typeof(IReadOnlyList<TranslationDraft>), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     public async Task<ActionResult<IReadOnlyList<TranslationDraft>>> UpsertDrafts(
@@ -169,7 +175,12 @@ public partial class TranslationsController(
     }
 
     [HttpDelete("drafts")]
-    [RemoteCommand(Invalidates = ["GetDrafts"])]
+    // No Invalidates: openapi-remote-codegen only threads path parameters into
+    // an invalidation, and GetDrafts takes a required "locale" query parameter,
+    // so the emitted refresh would call it with none and 400. The editor
+    // refreshes its own per-locale query instance instead.
+    [RemoteCommand]
+    [EnableRateLimiting(ServiceRegistrationExtensions.TranslationDraftsRateLimitPolicy)]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     public async Task<ActionResult> ClearDrafts([FromQuery] string locale, CancellationToken ct)
     {
@@ -183,7 +194,11 @@ public partial class TranslationsController(
     }
 
     [HttpPost("drafts/submit")]
-    [RemoteCommand(Invalidates = ["GetDrafts"])]
+    // No Invalidates: openapi-remote-codegen only threads path parameters into
+    // an invalidation, and GetDrafts takes a required "locale" query parameter,
+    // so the emitted refresh would call it with none and 400. The editor
+    // refreshes its own per-locale query instance instead.
+    [RemoteCommand]
     [EnableRateLimiting("translation-contributions")]
     [ProducesResponseType(typeof(TranslationDraftSubmitResult), StatusCodes.Status201Created)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]

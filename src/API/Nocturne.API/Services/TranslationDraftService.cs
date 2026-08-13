@@ -4,6 +4,7 @@ using Nocturne.Core.Contracts.Translations;
 using Nocturne.Core.Models.Translations;
 using Nocturne.Infrastructure.Data;
 using Nocturne.Infrastructure.Data.Entities;
+using Nocturne.Infrastructure.Data.Extensions;
 using Nocturne.Infrastructure.Data.Mappers;
 
 namespace Nocturne.API.Services;
@@ -38,10 +39,17 @@ public class TranslationDraftService(
         return entities.Select(TranslationDraftMapper.ToDomainModel).ToList();
     }
 
-    public async Task<IReadOnlyList<TranslationDraft>> UpsertDraftsAsync(
-        string locale, IReadOnlyList<TranslationEntryDto> entries, CancellationToken ct = default)
+    public Task<IReadOnlyList<TranslationDraft>> UpsertDraftsAsync(
+        string locale, IReadOnlyList<TranslationEntryDto> entries, CancellationToken ct = default) =>
+        UpsertDraftsAsync(locale, entries, isRetry: false, ct);
+
+    private async Task<IReadOnlyList<TranslationDraft>> UpsertDraftsAsync(
+        string locale, IReadOnlyList<TranslationEntryDto> entries, bool isRetry, CancellationToken ct)
     {
-        var existing = await LoadDedupedAsync(locale, ct);
+        // Only the keys this request touches are loaded. Loading the subject's
+        // whole per-locale set on every autosave made a single writer able to
+        // materialize the entire catalog (thousands of rows) per keystroke.
+        var existing = await LoadKeysAsync(locale, entries, ct);
         var byKey = existing.ToDictionary(d => (d.Context, d.MsgId));
         var now = DateTime.UtcNow;
         var added = 0;
@@ -85,21 +93,27 @@ public class TranslationDraftService(
         }
 
         if (added > 0)
-        {
-            if (byKey.Count > MaxDraftsPerSubjectPerLocale)
-                throw new TranslationDraftLimitExceededException(
-                    $"At most {MaxDraftsPerSubjectPerLocale} drafts per locale.");
+            await EnforceLimitsAsync(locale, added, ct);
 
-            var subjectId = SubjectId;
-            var totalOtherLocales = await dbContext.TranslationDrafts
-                .Where(d => d.SubjectId == subjectId && d.Locale != locale)
-                .CountAsync(ct);
-            if (totalOtherLocales + byKey.Count > MaxDraftsPerSubject)
-                throw new TranslationDraftLimitExceededException(
-                    $"At most {MaxDraftsPerSubject} drafts in total.");
+        try
+        {
+            await dbContext.SaveChangesAsync(ct);
+        }
+        catch (DbUpdateException ex) when (!isRetry && ex.IsUniqueViolation())
+        {
+            // Another writer inserted one of these logical keys between the
+            // read above and this insert (the functional unique index on
+            // (subject_id, locale, msgctxt, md5(msgid)) rejects the duplicate).
+            // Re-read on a clean tracker and apply the same entries again; the
+            // second pass sees the winner's row and updates it. Any further
+            // rejection is not a lost race and is left to surface. Only
+            // PostgreSQL reports a SQLSTATE, so this branch cannot be reached
+            // by the in-memory provider the unit tests use; the load-path
+            // dedupe covers the same duplicate arriving from an older row.
+            dbContext.ChangeTracker.Clear();
+            return await UpsertDraftsAsync(locale, entries, isRetry: true, ct);
         }
 
-        await dbContext.SaveChangesAsync(ct);
         return byKey.Values
             .OrderBy(d => d.UpdatedAt)
             .Select(TranslationDraftMapper.ToDomainModel)
@@ -146,6 +160,13 @@ public class TranslationDraftService(
             ? await contributionService.SubmitAsync(request, ct)
             : await contributionService.RelayAsync(request, ct);
 
+        // Nothing above leaves pending changes, so dropping the tracked graph
+        // only discards the pre-submit snapshot of these rows. Without it, EF
+        // identity resolution answers the reload below from the instances
+        // loaded before the PR flow started — the reload would report the
+        // stale UpdatedAt and delete a draft a concurrent autosave had edited.
+        dbContext.ChangeTracker.Clear();
+
         // Applied drafts are done; unmatched ones (message no longer in the
         // catalog) and drafts edited mid-submit are kept.
         var unmatched = response.Unmatched
@@ -171,6 +192,51 @@ public class TranslationDraftService(
     }
 
     /// <summary>
+    /// Counts what is already stored so a batch cannot push the subject past
+    /// either cap. Rows the batch deletes are not discounted — the caps are a
+    /// ceiling on accumulation, not an exact accounting.
+    /// </summary>
+    private async Task EnforceLimitsAsync(string locale, int added, CancellationToken ct)
+    {
+        var subjectId = SubjectId;
+        var inLocale = await dbContext.TranslationDrafts
+            .Where(d => d.SubjectId == subjectId && d.Locale == locale)
+            .CountAsync(ct);
+        if (inLocale + added > MaxDraftsPerSubjectPerLocale)
+            throw new TranslationDraftLimitExceededException(
+                $"At most {MaxDraftsPerSubjectPerLocale} drafts per locale.");
+
+        var inOtherLocales = await dbContext.TranslationDrafts
+            .Where(d => d.SubjectId == subjectId && d.Locale != locale)
+            .CountAsync(ct);
+        if (inOtherLocales + inLocale + added > MaxDraftsPerSubject)
+            throw new TranslationDraftLimitExceededException(
+                $"At most {MaxDraftsPerSubject} drafts in total.");
+    }
+
+    /// <summary>
+    /// Loads only the rows matching the incoming (context, msgid) keys. The
+    /// msgid set narrows the query in the database; the context is matched in
+    /// memory because the unique index is on md5(msgid), not on the pair.
+    /// </summary>
+    private async Task<List<TranslationDraftEntity>> LoadKeysAsync(
+        string locale, IReadOnlyList<TranslationEntryDto> entries, CancellationToken ct)
+    {
+        var msgIds = entries.Select(e => e.MsgId).Distinct().ToList();
+        if (msgIds.Count == 0)
+            return [];
+
+        var wanted = entries.Select(e => (e.Context ?? "", e.MsgId)).ToHashSet();
+        var subjectId = SubjectId;
+        var rows = await dbContext.TranslationDrafts
+            .Where(d => d.SubjectId == subjectId && d.Locale == locale && msgIds.Contains(d.MsgId))
+            .OrderBy(d => d.UpdatedAt)
+            .ToListAsync(ct);
+
+        return await Dedupe([.. rows.Where(d => wanted.Contains((d.Context, d.MsgId)))], ct);
+    }
+
+    /// <summary>
     /// Loads the subject's drafts for a locale, deleting all but the newest
     /// of any duplicated (context, msgid) key so a historical race cannot
     /// wedge the locale.
@@ -183,6 +249,12 @@ public class TranslationDraftService(
             .OrderBy(d => d.UpdatedAt)
             .ToListAsync(ct);
 
+        return await Dedupe(all, ct);
+    }
+
+    private async Task<List<TranslationDraftEntity>> Dedupe(
+        List<TranslationDraftEntity> all, CancellationToken ct)
+    {
         var duplicates = all
             .GroupBy(d => (d.Context, d.MsgId))
             .Where(g => g.Count() > 1)

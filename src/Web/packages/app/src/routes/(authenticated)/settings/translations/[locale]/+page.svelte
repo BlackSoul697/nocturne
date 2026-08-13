@@ -47,9 +47,12 @@
     const current = draftsQuery?.current;
     if (!current || serverSeeded) return;
     for (const d of current) {
+      // msgId/translations are required on the server model but the generated
+      // client types every field as optional.
+      if (!d.msgId || !d.translations) continue;
       const key = messageKey(d.context ?? "", d.msgId);
       // A local edit made before the server drafts arrived wins.
-      if (!pending.has(key)) {
+      if (!pendingByLocale.get(locale)?.has(key)) {
         drafts.set(key, d.translations);
       }
     }
@@ -71,6 +74,16 @@
       serverSeeded = false;
       saveState = "idle";
       messages = [];
+    }
+    // Edits whose save failed while this locale was last open are still
+    // queued under it: show them again and retry the save.
+    const queued = pendingByLocale.get(next);
+    if (queued && queued.size > 0) {
+      for (const [key, item] of queued) {
+        if (item.values !== null) drafts.set(key, item.values);
+      }
+      if (flushTimer) clearTimeout(flushTimer);
+      flushTimer = setTimeout(() => void flushNow(next), 800);
     }
   });
 
@@ -110,18 +123,30 @@
   // Autosave: queue changed keys, flush as one batch upsert. Flushes are
   // serialized on a promise chain; the batch (and its locale) is captured
   // synchronously at flush time so a locale switch or navigation cannot
-  // re-label queued edits.
-  const pending = new Map<string, { message: TranslationMessage; values: string[] | null }>();
+  // re-label queued edits. Queues are per-locale so a batch that fails after
+  // the user has already moved on is retried on the next flush of the locale
+  // it belongs to instead of being dropped.
+  type PendingEdit = { message: TranslationMessage; values: string[] | null };
+  const pendingByLocale = new Map<string, Map<string, PendingEdit>>();
   let flushTimer: ReturnType<typeof setTimeout> | null = null;
   let flushChain: Promise<void> = Promise.resolve();
   let saveState = $state<"idle" | "saving" | "error">("idle");
 
+  function pendingFor(forLocale: string): Map<string, PendingEdit> {
+    let queue = pendingByLocale.get(forLocale);
+    if (!queue) {
+      queue = new Map();
+      pendingByLocale.set(forLocale, queue);
+    }
+    return queue;
+  }
+
   function onDraft(message: TranslationMessage, values: string[] | null) {
     if (values === null) drafts.delete(message.key);
     else drafts.set(message.key, values);
-    pending.set(message.key, { message, values });
-    if (flushTimer) clearTimeout(flushTimer);
     const forLocale = locale;
+    pendingFor(forLocale).set(message.key, { message, values });
+    if (flushTimer) clearTimeout(flushTimer);
     flushTimer = setTimeout(() => void flushNow(forLocale), 800);
   }
 
@@ -130,9 +155,10 @@
       clearTimeout(flushTimer);
       flushTimer = null;
     }
-    if (pending.size === 0) return flushChain;
-    const batch = [...pending.values()];
-    pending.clear();
+    const queue = pendingByLocale.get(forLocale);
+    if (!queue || queue.size === 0) return flushChain;
+    const batch = [...queue.values()];
+    queue.clear();
     flushChain = flushChain.then(() => sendBatch(forLocale, batch));
     return flushChain;
   }
@@ -152,19 +178,19 @@
         translations: values === null || values.every((v) => v.length === 0) ? [] : values,
       }));
     if (entries.length === 0) return;
-    saveState = "saving";
+    if (forLocale === activeLocale) saveState = "saving";
     try {
       await translationsApi.upsertDrafts({ locale: forLocale, entries });
-      saveState = "idle";
+      if (forLocale === activeLocale) saveState = "idle";
     } catch {
-      // Re-queue so the next edit retries the failed batch (only while the
-      // same locale is still active).
-      if (forLocale === activeLocale) {
-        for (const item of batch) {
-          if (!pending.has(item.message.key)) pending.set(item.message.key, item);
-        }
+      // Re-queue under the locale the edits were made in, so returning to that
+      // locale retries them. The status line only speaks for the locale on
+      // screen.
+      const queue = pendingFor(forLocale);
+      for (const item of batch) {
+        if (!queue.has(item.message.key)) queue.set(item.message.key, item);
       }
-      saveState = "error";
+      if (forLocale === activeLocale) saveState = "error";
     }
   }
 
@@ -247,7 +273,7 @@
     try {
       await translationsApi.clearDrafts({ locale });
       // Only discard local state once the server confirmed the delete.
-      pending.clear();
+      pendingByLocale.get(locale)?.clear();
       if (flushTimer) {
         clearTimeout(flushTimer);
         flushTimer = null;

@@ -1,6 +1,4 @@
-import type { LoaderFunc } from 'wuchale/load-utils';
-export const key: string;
-export const loadCatalog: LoaderFunc;
-export const loadCount: number;
+// The client loaders export only the runtime getters; key/loadCatalog/loadCount
+// are server-side exports used to preload catalogs before runWithLocale.
 export function getRuntime(loadID?: number): any;
 export function getRuntimeRx(loadID?: number): any;

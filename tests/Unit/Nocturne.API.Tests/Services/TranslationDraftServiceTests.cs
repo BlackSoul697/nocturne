@@ -16,13 +16,14 @@ public class TranslationDraftServiceTests
     private static readonly Guid OtherSubjectId = Guid.Parse("11111111-2222-3333-4444-555555555555");
     private static readonly Guid TestTenantId = Guid.Parse("00000000-0000-0000-0000-000000000001");
 
+    private readonly string _databaseName = $"translation_drafts_{Guid.NewGuid()}";
     private readonly NocturneDbContext _dbContext;
     private readonly Mock<ITranslationContributionService> _contributionService = new();
     private readonly TranslationDraftService _service;
 
     public TranslationDraftServiceTests()
     {
-        _dbContext = TestDbContextFactory.CreateInMemoryContext();
+        _dbContext = TestDbContextFactory.CreateInMemoryContext(_databaseName);
         _dbContext.TenantId = TestTenantId;
 
         var httpContext = new DefaultHttpContext();
@@ -168,11 +169,18 @@ public class TranslationDraftServiceTests
             .Setup(s => s.SubmitAsync(It.IsAny<TranslationContributionRequest>(), It.IsAny<CancellationToken>()))
             .Callback(() =>
             {
-                // Simulate a concurrent edit landing while the PR flow runs.
-                var draft = _dbContext.TranslationDrafts.Single();
+                // A second writer (its own request, its own DbContext) saves an
+                // edit while the PR flow runs. Editing through _dbContext would
+                // mutate the very instance the service is tracking, so the
+                // post-submit reload would see the new UpdatedAt for free —
+                // this has to go through a separate context over the same store
+                // to exercise EF identity resolution on the reload.
+                using var otherWriter = TestDbContextFactory.CreateInMemoryContext(_databaseName);
+                otherWriter.TenantId = TestTenantId;
+                var draft = otherWriter.TranslationDrafts.Single();
                 draft.Translations = ["Salut"];
                 draft.UpdatedAt = DateTime.UtcNow.AddSeconds(5);
-                _dbContext.SaveChanges();
+                otherWriter.SaveChanges();
             })
             .ReturnsAsync(new TranslationContributionResponse { Applied = 1 });
 
@@ -181,6 +189,72 @@ public class TranslationDraftServiceTests
         result.RemainingDrafts.Should().Be(1);
         var remaining = await _service.GetDraftsAsync("fr");
         remaining.Should().ContainSingle().Which.Translations.Should().Equal("Salut");
+    }
+
+    [Fact]
+    public async Task UpsertDraftsAsync_Accepts_The_Per_Locale_Cap()
+    {
+        SeedDrafts("fr", TranslationDraftService.MaxDraftsPerSubjectPerLocale - 1);
+
+        var act = () => _service.UpsertDraftsAsync("fr", [Entry("last", "dernier")]);
+
+        await act.Should().NotThrowAsync();
+    }
+
+    [Fact]
+    public async Task UpsertDraftsAsync_Rejects_One_Over_The_Per_Locale_Cap()
+    {
+        SeedDrafts("fr", TranslationDraftService.MaxDraftsPerSubjectPerLocale);
+
+        var act = () => _service.UpsertDraftsAsync("fr", [Entry("one-too-many", "de trop")]);
+
+        (await act.Should().ThrowAsync<TranslationDraftLimitExceededException>())
+            .WithMessage($"*{TranslationDraftService.MaxDraftsPerSubjectPerLocale}*per locale*");
+    }
+
+    [Fact]
+    public async Task UpsertDraftsAsync_Rejects_One_Over_The_Per_Subject_Cap()
+    {
+        // Split across locales so only the all-locales cap can be the one hit.
+        SeedDrafts("fr", 4000);
+        SeedDrafts("de", TranslationDraftService.MaxDraftsPerSubject - 4000);
+
+        var act = () => _service.UpsertDraftsAsync("fr", [Entry("one-too-many", "de trop")]);
+
+        (await act.Should().ThrowAsync<TranslationDraftLimitExceededException>())
+            .WithMessage($"*{TranslationDraftService.MaxDraftsPerSubject}*in total*");
+    }
+
+    [Fact]
+    public async Task UpsertDraftsAsync_Updating_Existing_Drafts_Is_Not_Capped()
+    {
+        SeedDrafts("fr", TranslationDraftService.MaxDraftsPerSubjectPerLocale);
+
+        // No row is added, so a subject sitting exactly on the cap can still
+        // edit what they already drafted.
+        var act = () => _service.UpsertDraftsAsync("fr", [Entry("msg-0", "revisé")]);
+
+        await act.Should().NotThrowAsync();
+    }
+
+    private void SeedDrafts(string locale, int count)
+    {
+        var now = DateTime.UtcNow;
+        _dbContext.TranslationDrafts.AddRange(Enumerable.Range(0, count).Select(i =>
+            new TranslationDraftEntity
+            {
+                Id = Guid.CreateVersion7(),
+                TenantId = TestTenantId,
+                SubjectId = TestSubjectId,
+                Locale = locale,
+                Context = "",
+                MsgId = $"msg-{i}",
+                Translations = ["x"],
+                CreatedAt = now,
+                UpdatedAt = now,
+            }));
+        _dbContext.SaveChanges();
+        _dbContext.ChangeTracker.Clear();
     }
 
     [Fact]

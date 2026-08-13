@@ -112,6 +112,11 @@ public static class ServiceRegistrationExtensions
         context.Request.Host.Host.ToLowerInvariant();
 
     /// <summary>
+    /// Rate-limiting policy for the per-subject translation draft store.
+    /// </summary>
+    public const string TranslationDraftsRateLimitPolicy = "translation-drafts";
+
+    /// <summary>
     /// Core API utility and calculation services (status, versioning, time queries,
     /// IOB/COB, predictions, statistics, etc.)
     /// </summary>
@@ -490,6 +495,29 @@ public static class ServiceRegistrationExtensions
                         {
                             PermitLimit = 10,
                             Window = TimeSpan.FromHours(1),
+                            QueueLimit = 0,
+                        }
+                    )
+            );
+
+            // Translation drafts: 60 per authenticated subject per minute, sliding.
+            // Autosave batches every 800ms while typing, so the ceiling has to
+            // clear normal editing while still bounding the per-call database
+            // work an editor session can force. Partitioned by subject rather
+            // than IP because these endpoints are authenticated and the caller
+            // controls X-Forwarded-For.
+            options.AddPolicy(
+                TranslationDraftsRateLimitPolicy,
+                context =>
+                    RateLimitPartition.GetSlidingWindowLimiter(
+                        partitionKey: context.GetSubjectId()?.ToString()
+                            ?? context.Connection.RemoteIpAddress?.ToString()
+                            ?? "unknown",
+                        factory: _ => new SlidingWindowRateLimiterOptions
+                        {
+                            PermitLimit = 60,
+                            Window = TimeSpan.FromMinutes(1),
+                            SegmentsPerWindow = 6,
                             QueueLimit = 0,
                         }
                     )
