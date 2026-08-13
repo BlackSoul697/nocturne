@@ -252,6 +252,39 @@ public class GitHubTranslationService(
     internal static string SanitizeMetadata(string value) =>
         new([.. value.Trim().Where(c => !char.IsControl(c) && c is not '<' and not '>')]);
 
+    /// <summary>
+    /// Renders free-text contributor input as an inert markdown blockquote.
+    /// The note reaches a PR body on the upstream repository from an anonymous
+    /// relay, so unescaped text would let a submitter notify arbitrary users
+    /// (<c>@</c>), cross-link or auto-close issues (<c>#</c>, <c>Fixes #1</c>)
+    /// and inject arbitrary block markup.
+    /// </summary>
+    internal static string RenderNoteAsBlockquote(string note)
+    {
+        var sb = new StringBuilder();
+        foreach (var rawLine in StripControlChars(note).ReplaceLineEndings("\n").Split('\n'))
+        {
+            var line = EscapeMarkdown(rawLine);
+            sb.AppendLine(line.Length == 0 ? ">" : $"> {line}");
+        }
+        return sb.ToString();
+    }
+
+    /// <summary>Drops C0/C1 control characters but keeps line structure.</summary>
+    private static string StripControlChars(string value) =>
+        new([.. value.Where(c => !char.IsControl(c) || c is '\r' or '\n')]);
+
+    /// <summary>
+    /// Backslash-escapes the characters that carry side effects on GitHub.
+    /// The backslash itself goes first so a submitted <c>\</c> cannot consume
+    /// the escape that follows it.
+    /// </summary>
+    private static string EscapeMarkdown(string line) => line
+        .Replace("\\", "\\\\")
+        .Replace("@", "\\@")
+        .Replace("#", "\\#")
+        .Replace("`", "\\`");
+
     internal static string BuildCommitMessage(TranslationContributionRequest request, int applied)
     {
         var sb = new StringBuilder();
@@ -300,11 +333,13 @@ public class GitHubTranslationService(
             sb.AppendLine("<details>");
             sb.AppendLine($"<summary>{result.Unmatched.Count} entr{(result.Unmatched.Count == 1 ? "y" : "ies")} no longer in the catalog (skipped)</summary>");
             sb.AppendLine();
-            // msgids are arbitrary contributor input echoed into markdown:
-            // keep them on one line inside the code span or they escape it.
+            // msgids are arbitrary contributor input echoed into markdown: keep
+            // them on one line inside the code span, and drop backticks rather
+            // than escaping them — a backslash is literal inside a CommonMark
+            // code span, so an escaped backtick would still close the span.
             foreach (var msgId in result.Unmatched.Take(50))
             {
-                var display = msgId.Replace("\r", "").Replace("\n", "\\n").Replace("`", "\\`");
+                var display = msgId.Replace("\r", "").Replace("\n", "\\n").Replace("`", "");
                 if (display.Length > 120)
                     display = display[..120] + "…";
                 sb.AppendLine($"- `{display}`");
@@ -318,7 +353,7 @@ public class GitHubTranslationService(
             sb.AppendLine();
             sb.AppendLine("## Contributor note");
             sb.AppendLine();
-            sb.AppendLine(request.Note);
+            sb.Append(RenderNoteAsBlockquote(request.Note));
         }
 
         return sb.ToString();

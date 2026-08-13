@@ -23,17 +23,19 @@ public partial class TranslationsController(
 
     private const int MaxContextLength = 256;
 
-    [GeneratedRegex("^[a-z]{2,3}(-[A-Za-z0-9]{2,8})?$")]
+    // Anchored with \z, not $: in .NET $ also matches before a trailing
+    // newline, and this value is interpolated into the catalog file path.
+    [GeneratedRegex("^[a-z]{2,3}(-[A-Za-z0-9]{2,8})?\\z")]
     private static partial Regex LocalePattern();
 
     // GitHub's username grammar: alphanumeric and single hyphens, no
     // leading/trailing hyphen, max 39 chars.
-    [GeneratedRegex("^[A-Za-z0-9](?:-?[A-Za-z0-9]){0,38}$")]
+    [GeneratedRegex("^[A-Za-z0-9](?:-?[A-Za-z0-9]){0,38}\\z")]
     private static partial Regex GitHubUsernamePattern();
 
     // Conservative mailbox shape: the value lands inside a Co-authored-by
     // trailer, so whitespace and angle brackets must be impossible.
-    [GeneratedRegex(@"^[^\s<>@]+@[^\s<>@]+\.[^\s<>@]+$")]
+    [GeneratedRegex(@"^[^\s<>@]+@[^\s<>@]+\.[^\s<>@]+\z")]
     private static partial Regex EmailPattern();
 
     [HttpPost("contributions")]
@@ -108,7 +110,10 @@ public partial class TranslationsController(
         }
     }
 
-    private ObjectResult? Validate(TranslationContributionRequest request)
+    private static bool IsDisallowedControlChar(char c) =>
+        char.IsControl(c) && c is not '\n' and not '\t' and not '\r';
+
+    internal ObjectResult? Validate(TranslationContributionRequest request)
     {
         if (!LocalePattern().IsMatch(request.Locale))
             return Problem(detail: $"Invalid locale: {request.Locale}", statusCode: 400, title: "Bad Request");
@@ -126,6 +131,11 @@ public partial class TranslationsController(
             if (entry.Translations.Count is 0 or > MaxPluralForms
                 || entry.Translations.Any(t => string.IsNullOrEmpty(t) || t.Length > MaxTranslationLength))
                 return Problem(detail: "Each entry needs 1-8 non-empty translations under 8192 characters", statusCode: 400, title: "Bad Request");
+            // Translation values are written verbatim into the committed .po
+            // file, and the catalog escaper only handles \\ \" \n \t \r — any
+            // other control character would land raw in the catalog.
+            if (entry.Translations.Any(t => t.Any(IsDisallowedControlChar)))
+                return Problem(detail: "Translations cannot contain control characters", statusCode: 400, title: "Bad Request");
             if (!seenKeys.Add((entry.Context ?? "", entry.MsgId)))
                 return Problem(detail: "Duplicate entry for the same msgid and context", statusCode: 400, title: "Bad Request");
         }
