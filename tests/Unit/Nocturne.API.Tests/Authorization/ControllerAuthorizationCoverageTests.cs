@@ -58,9 +58,7 @@ public class ControllerAuthorizationCoverageTests
             // underlying rows to the categories the share was granted. Adding [Authorize] here
             // would 401 the anonymous share dashboard. All actions are GET, so there is no write
             // surface to expose.
-            ["Nocturne.API.Controllers.V4.Analytics.ActogramController"] = "public-share read analytics (fallback + share RLS)",
             ["Nocturne.API.Controllers.V4.Analytics.ChartDataController"] = "public-share read analytics (fallback + share RLS)",
-            ["Nocturne.API.Controllers.V4.Analytics.DataOverviewController"] = "public-share read analytics (fallback + share RLS)",
             ["Nocturne.API.Controllers.V4.Analytics.RetrospectiveController"] = "public-share read analytics (fallback + share RLS)",
             ["Nocturne.API.Controllers.V4.Analytics.PredictionController"] = "public-share read analytics (fallback + share RLS)",
 
@@ -69,6 +67,15 @@ public class ControllerAuthorizationCoverageTests
             // theirs would not. The share view needs it to offer only the reports it can load, and
             // the share subject is unauthenticated, so [Authorize] would 401 every public share.
             ["Nocturne.API.Controllers.V4.Identity.MyPermissionsController"] = "returns the caller's own grant; fallback rejects an empty trie",
+
+            // ── V4 tracker reads ─────────────────────────────────────────────────────────────
+            // GET definitions/instances lean on the fallback policy: a bare unauthenticated request
+            // on a tenant subdomain has an empty trie and is rejected, so a private tenant exposes
+            // no tracker anonymously. The actions still filter by owner/visibility in
+            // CanViewTracker. Tracker tables are not in ShareDataCategories, so a public-share
+            // subject (admitted by the fallback) reads nothing via the share RLS policy. The write
+            // actions carry [Authorize] + [RequireDeclaredWriteScope] and are gated explicitly.
+            ["Nocturne.API.Controllers.V4.Monitoring.TrackersController"] = "tracker reads gated by fallback trie (rejects bare anonymous); not share-governed",
 
             // ── Legacy Nightscout v1 surfaces (authorize via OAuth scope in the fallback trie) ──
             // v1 endpoints authenticate via the api-secret / token trie and are gated by the

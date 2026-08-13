@@ -192,6 +192,7 @@ public static class ServiceRegistrationExtensions
         services.AddScoped<IRoleService, RoleService>();
         services.AddScoped<IOidcProviderService, OidcProviderService>();
         services.AddScoped<IOidcAuthService, OidcAuthService>();
+        services.AddScoped<PlatformAdminBootstrapService>();
 
         // OAuth services
         services.AddScoped<IOAuthClientService, OAuthClientService>();
@@ -819,7 +820,9 @@ public static class ServiceRegistrationExtensions
         // Sustained-condition timer store
         services.AddScoped<IConditionTimerStore, ConditionTimerRepository>();
 
-        // Excursion tracker
+        // Excursion tracker. Its per-rule serialisation gate is a singleton: the sweep and the
+        // per-reading path evaluate the same rule from different scopes.
+        services.AddSingleton<AlertRuleEvaluationGate>();
         services.AddScoped<IExcursionTracker, ExcursionTracker>();
 
         // Alert evaluation engine seam (Alerts:Engine = managed | shadow | rust)
