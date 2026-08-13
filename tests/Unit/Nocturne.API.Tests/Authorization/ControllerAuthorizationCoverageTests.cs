@@ -64,6 +64,12 @@ public class ControllerAuthorizationCoverageTests
             ["Nocturne.API.Controllers.V4.Analytics.RetrospectiveController"] = "public-share read analytics (fallback + share RLS)",
             ["Nocturne.API.Controllers.V4.Analytics.PredictionController"] = "public-share read analytics (fallback + share RLS)",
 
+            // ── V4 caller-scoped identity read ──────────────────────────────────────────────
+            // Answers with the caller's own resolved grant, which discloses nothing a request of
+            // theirs would not. The share view needs it to offer only the reports it can load, and
+            // the share subject is unauthenticated, so [Authorize] would 401 every public share.
+            ["Nocturne.API.Controllers.V4.Identity.MyPermissionsController"] = "returns the caller's own grant; fallback rejects an empty trie",
+
             // ── Legacy Nightscout v1 surfaces (authorize via OAuth scope in the fallback trie) ──
             // v1 endpoints authenticate via the api-secret / token trie and are gated by the
             // fallback policy plus in-handler scope checks, matching upstream Nightscout behaviour.
