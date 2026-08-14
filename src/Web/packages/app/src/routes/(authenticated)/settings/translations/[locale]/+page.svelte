@@ -126,26 +126,37 @@
   // re-label queued edits. Queues are per-locale so a batch that fails after
   // the user has already moved on is retried on the next flush of the locale
   // it belongs to instead of being dropped.
-  type PendingEdit = { message: TranslationMessage; values: string[] | null };
+  // Each queued edit carries a monotonic sequence, and the newest sequence
+  // per key outlives the queue clear a flush does. A batch that fails is
+  // re-queued only for keys nothing newer has superseded, so a slow failing
+  // save cannot resurrect a stale value over a newer one that already saved.
+  type PendingEdit = { message: TranslationMessage; values: string[] | null; seq: number };
   const pendingByLocale = new Map<string, Map<string, PendingEdit>>();
+  const latestSeqByLocale = new Map<string, Map<string, number>>();
+  let editSeq = 0;
   let flushTimer: ReturnType<typeof setTimeout> | null = null;
   let flushChain: Promise<void> = Promise.resolve();
   let saveState = $state<"idle" | "saving" | "error">("idle");
 
-  function pendingFor(forLocale: string): Map<string, PendingEdit> {
-    let queue = pendingByLocale.get(forLocale);
-    if (!queue) {
-      queue = new Map();
-      pendingByLocale.set(forLocale, queue);
+  function perLocale<V>(
+    store: Map<string, Map<string, V>>,
+    forLocale: string,
+  ): Map<string, V> {
+    let inner = store.get(forLocale);
+    if (!inner) {
+      inner = new Map();
+      store.set(forLocale, inner);
     }
-    return queue;
+    return inner;
   }
 
   function onDraft(message: TranslationMessage, values: string[] | null) {
     if (values === null) drafts.delete(message.key);
     else drafts.set(message.key, values);
     const forLocale = locale;
-    pendingFor(forLocale).set(message.key, { message, values });
+    const seq = ++editSeq;
+    perLocale(pendingByLocale, forLocale).set(message.key, { message, values, seq });
+    perLocale(latestSeqByLocale, forLocale).set(message.key, seq);
     if (flushTimer) clearTimeout(flushTimer);
     flushTimer = setTimeout(() => void flushNow(forLocale), 800);
   }
@@ -163,10 +174,7 @@
     return flushChain;
   }
 
-  async function sendBatch(
-    forLocale: string,
-    batch: { message: TranslationMessage; values: string[] | null }[],
-  ) {
+  async function sendBatch(forLocale: string, batch: PendingEdit[]) {
     // A plural draft with some forms still empty cannot be stored (the API
     // requires non-empty values); it stays local-only until completed. A
     // fully emptied draft deletes the stored one.
@@ -186,9 +194,14 @@
       // Re-queue under the locale the edits were made in, so returning to that
       // locale retries them. The status line only speaks for the locale on
       // screen.
-      const queue = pendingFor(forLocale);
+      const queue = perLocale(pendingByLocale, forLocale);
+      const latest = perLocale(latestSeqByLocale, forLocale);
       for (const item of batch) {
-        if (!queue.has(item.message.key)) queue.set(item.message.key, item);
+        // Skip keys a newer edit has superseded, whether it is still queued or
+        // already went out in a later batch that succeeded. Re-queuing those
+        // would send the older value over the newer one.
+        if ((latest.get(item.message.key) ?? item.seq) > item.seq) continue;
+        queue.set(item.message.key, item);
       }
       if (forLocale === activeLocale) saveState = "error";
     }

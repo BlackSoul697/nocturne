@@ -1,4 +1,7 @@
+using System.Security.Cryptography;
+using System.Text;
 using System.Threading.RateLimiting;
+using Microsoft.Extensions.Options;
 using Fido2NetLib;
 using Nocturne.API.Authorization;
 using Nocturne.API.Configuration;
@@ -112,9 +115,48 @@ public static class ServiceRegistrationExtensions
         context.Request.Host.Host.ToLowerInvariant();
 
     /// <summary>
-    /// Rate-limiting policy for the per-subject translation draft store.
+    /// Rate-limiting policy for the per-session translation draft store.
     /// </summary>
     public const string TranslationDraftsRateLimitPolicy = "translation-drafts";
+
+    /// <summary>Shared bucket for draft requests that present no credential.</summary>
+    internal const string AnonymousDraftPartition = "anonymous";
+
+    /// <summary>
+    /// Partition key for the translation-drafts limiter, keyed on the
+    /// credential the request presents.
+    ///
+    /// Nothing identifying is available here by any other route.
+    /// <c>UseRateLimiter</c> runs ahead of <c>AuthenticationMiddleware</c>, so
+    /// <c>Items["AuthContext"]</c> — and with it <c>GetSubjectId()</c> — is
+    /// always null; the only authentication that has run is the framework
+    /// JwtBearer scheme auto-inserted at the head of the pipeline, and it
+    /// reads the Authorization header only, so a browser forwarding its
+    /// session as a cookie leaves <c>context.User</c> empty too. Falling back
+    /// to <c>Connection.RemoteIpAddress</c> is worse than having no limit at
+    /// all: <c>UseForwardedHeaders</c> sets it from X-Forwarded-For with no
+    /// trusted-proxy list, so rotating that header mints unlimited buckets.
+    ///
+    /// The credential is the right granularity anyway — the limit exists to
+    /// bound the database work one editor session can force — and it covers
+    /// the cookie and bearer paths uniformly. It is hashed so no token is
+    /// held as a dictionary key. A caller rotating junk credentials does get
+    /// fresh buckets, but <c>[Authorize]</c> rejects those long before they
+    /// reach the draft store. Requests presenting nothing at all share one
+    /// fixed bucket, so an anonymous flood cannot evict an editor's.
+    /// </summary>
+    internal static string TranslationDraftPartitionKey(HttpContext context)
+    {
+        var cookie = context.RequestServices.GetRequiredService<IOptions<OidcOptions>>().Value.Cookie;
+        var credential =
+            context.Request.Cookies[cookie.AccessTokenName]
+            ?? context.Request.Cookies[cookie.RefreshTokenName]
+            ?? context.Request.Headers.Authorization.ToString();
+
+        return string.IsNullOrEmpty(credential)
+            ? AnonymousDraftPartition
+            : Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(credential)));
+    }
 
     /// <summary>
     /// Core API utility and calculation services (status, versioning, time queries,
@@ -500,19 +542,17 @@ public static class ServiceRegistrationExtensions
                     )
             );
 
-            // Translation drafts: 60 per authenticated subject per minute, sliding.
-            // Autosave batches every 800ms while typing, so the ceiling has to
-            // clear normal editing while still bounding the per-call database
-            // work an editor session can force. Partitioned by subject rather
-            // than IP because these endpoints are authenticated and the caller
-            // controls X-Forwarded-For.
+            // Translation drafts: 60 per session per minute, sliding. Autosave
+            // batches every 800ms while typing, so the ceiling has to clear
+            // normal editing while still bounding the per-call database work an
+            // editor session can force. Partitioned by credential rather than
+            // IP because the caller controls X-Forwarded-For; see
+            // TranslationDraftPartitionKey.
             options.AddPolicy(
                 TranslationDraftsRateLimitPolicy,
                 context =>
                     RateLimitPartition.GetSlidingWindowLimiter(
-                        partitionKey: context.GetSubjectId()?.ToString()
-                            ?? context.Connection.RemoteIpAddress?.ToString()
-                            ?? "unknown",
+                        partitionKey: TranslationDraftPartitionKey(context),
                         factory: _ => new SlidingWindowRateLimiterOptions
                         {
                             PermitLimit = 60,
