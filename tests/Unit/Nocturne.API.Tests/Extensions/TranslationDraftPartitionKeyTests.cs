@@ -20,6 +20,7 @@ public class TranslationDraftPartitionKeyTests
         string? accessToken = null,
         string? refreshToken = null,
         string? authorization = null,
+        string? queryToken = null,
         string? forwardedFor = null,
         string remoteIp = "10.0.0.1")
     {
@@ -38,6 +39,8 @@ public class TranslationDraftPartitionKeyTests
             context.Request.Headers.Cookie = string.Join("; ", cookies);
         if (authorization is not null)
             context.Request.Headers.Authorization = authorization;
+        if (queryToken is not null)
+            context.Request.QueryString = QueryString.Create("token", queryToken);
         if (forwardedFor is not null)
             context.Request.Headers["X-Forwarded-For"] = forwardedFor;
 
@@ -116,6 +119,70 @@ public class TranslationDraftPartitionKeyTests
 
         Key(Context(accessToken: "jwt-a", authorization: "Bearer other-1")).Should().Be(cookieOnly);
         Key(Context(accessToken: "jwt-a", authorization: "Bearer other-2")).Should().Be(cookieOnly);
+    }
+
+    [Fact]
+    public void Query_Token_Gets_Its_Own_Partition()
+    {
+        // DirectGrantTokenHandler and AccessTokenHandler both authenticate a
+        // Nightscout-style ?token=, so a request carrying only one is an
+        // identified caller, not an anonymous flood.
+        var mine = Key(Context(queryToken: "noc_grant-a"));
+
+        mine.Should().NotBe(Key(Context(queryToken: "noc_grant-b")));
+        mine.Should().NotBe(ServiceRegistrationExtensions.AnonymousDraftPartition);
+    }
+
+    [Fact]
+    public void Query_Token_Prefix_Variants_Share_One_Partition()
+    {
+        // DirectGrantTokenHandler normalizes the noc_ marker in on the query
+        // path, so both spellings resolve to the same grant — and so must to
+        // the same bucket.
+        Key(Context(queryToken: "grant-a"))
+            .Should().Be(Key(Context(queryToken: "noc_grant-a")));
+    }
+
+    [Fact]
+    public void Query_Token_Survives_A_Rotating_Unrecognised_Authorization_Header()
+    {
+        // The bypass this ordering closes: neither token handler reads an
+        // Authorization header whose scheme it does not recognise, so the
+        // query token still authenticates. Keying on the header would mint a
+        // fresh 60/min bucket per rotation for one direct-grant holder.
+        var tokenOnly = Key(Context(queryToken: "noc_grant-a"));
+
+        Key(Context(authorization: "Token junk-1", queryToken: "noc_grant-a")).Should().Be(tokenOnly);
+        Key(Context(authorization: "Token junk-2", queryToken: "noc_grant-a")).Should().Be(tokenOnly);
+        Key(Context(authorization: "Basic junk-3", queryToken: "noc_grant-a")).Should().Be(tokenOnly);
+    }
+
+    [Fact]
+    public void Bearer_Header_Outranks_The_Query_Token()
+    {
+        // The handlers read the query only when no Bearer is present, so the
+        // Bearer is what authenticates — and a rotating ?token= behind it must
+        // not move the bucket.
+        var bearerOnly = Key(Context(authorization: "Bearer jwt-a"));
+
+        Key(Context(authorization: "Bearer jwt-a", queryToken: "rot-1")).Should().Be(bearerOnly);
+        Key(Context(authorization: "Bearer jwt-a", queryToken: "rot-2")).Should().Be(bearerOnly);
+    }
+
+    [Fact]
+    public void Session_Cookie_Outranks_The_Query_Token()
+    {
+        // A cookie SessionCookieHandler cannot validate ends the chain with a
+        // Failure, so nothing behind it authenticates: the cookie is always
+        // the credential, and a rotating ?token= mints nothing.
+        var cookieOnly = Key(Context(accessToken: "jwt-a"));
+
+        Key(Context(accessToken: "jwt-a", queryToken: "rot-1")).Should().Be(cookieOnly);
+        Key(Context(accessToken: "jwt-a", queryToken: "rot-2")).Should().Be(cookieOnly);
+
+        var refreshOnly = Key(Context(refreshToken: "refresh-a"));
+        Key(Context(refreshToken: "refresh-a", queryToken: "rot-1")).Should().Be(refreshOnly);
+        Key(Context(refreshToken: "refresh-a", queryToken: "rot-2")).Should().Be(refreshOnly);
     }
 
     [Fact]

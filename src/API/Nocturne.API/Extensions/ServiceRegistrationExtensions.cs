@@ -139,11 +139,33 @@ public static class ServiceRegistrationExtensions
     ///
     /// The credential is the right granularity anyway — the limit exists to
     /// bound the database work one editor session can force — and it covers
-    /// the cookie and bearer paths uniformly. It is hashed so no token is
-    /// held as a dictionary key. A caller rotating junk credentials does get
-    /// fresh buckets, but <c>[Authorize]</c> rejects those long before they
-    /// reach the draft store. Requests presenting nothing at all share one
-    /// fixed bucket, so an anonymous flood cannot evict an editor's.
+    /// the cookie, bearer and <c>?token=</c> paths uniformly. It is hashed so
+    /// no token is held as a dictionary key. Requests presenting nothing at
+    /// all share one fixed bucket, so an anonymous flood cannot evict an
+    /// editor's.
+    ///
+    /// Which channel wins follows the handler chain, so that the value a
+    /// caller can rotate for free is the one the key ignores. A session
+    /// cookie is terminal — <c>SessionCookieHandler</c> (priority 50) returns
+    /// Failure, not Skip, for a cookie it cannot validate, so the chain stops
+    /// and no later credential can authenticate behind it. A <c>Bearer</c>
+    /// header shadows <c>?token=</c> inside both
+    /// <see cref="Middleware.Handlers.DirectGrantTokenHandler"/> and
+    /// <see cref="Middleware.Handlers.AccessTokenHandler"/>, which read the
+    /// query only when the header is absent or carries a scheme they do not
+    /// recognise — so the query token is keyed on in exactly that case, and
+    /// keying on the unrecognised header instead would hand one direct-grant
+    /// or legacy-token holder a fresh bucket per rotation of it.
+    ///
+    /// A request carrying nothing but junk does get a fresh bucket per
+    /// rotation, but it authenticates as nobody and <c>[Authorize]</c>
+    /// rejects it before the draft store. Two channels remain where junk is
+    /// non-terminal and still outranks a real credential: an unmatched
+    /// <c>Bearer</c> value in front of an api-secret, and a rotating session
+    /// cookie under an active platform-access grant (priority 40, which skips
+    /// rather than fails). Both need a platform-admin or api-secret
+    /// credential to reach, and closing them needs the limiter to partition
+    /// after authentication rather than before it.
     /// </summary>
     internal static string TranslationDraftPartitionKey(HttpContext context)
     {
@@ -151,7 +173,7 @@ public static class ServiceRegistrationExtensions
         var credential =
             context.Request.Cookies[cookie.AccessTokenName]
             ?? context.Request.Cookies[cookie.RefreshTokenName]
-            ?? NormalizeAuthorizationCredential(context.Request.Headers.Authorization.FirstOrDefault());
+            ?? TokenCredential(context.Request);
 
         return string.IsNullOrEmpty(credential)
             ? AnonymousDraftPartition
@@ -159,18 +181,40 @@ public static class ServiceRegistrationExtensions
     }
 
     /// <summary>
-    /// Reduces an Authorization header to the token the handlers actually
-    /// authenticate on. They accept the scheme case-insensitively and trim the
-    /// remainder, so <c>bearer t</c>, <c>Bearer  t</c> and <c>Bearer t </c> are
-    /// one credential to them; hashing the raw header would give each of those
-    /// its own 60/min allowance, which one authenticated caller could mint
-    /// without limit. Mirrors <see cref="Middleware.Handlers.AccessTokenHandler"/>
-    /// and <see cref="Middleware.Handlers.DirectGrantTokenHandler"/>.
+    /// Reduces the Authorization header and <c>?token=</c> query parameter to
+    /// the single token the handlers would authenticate on, in their own
+    /// order of preference. Spellings the handlers treat as one credential
+    /// are collapsed the same way they collapse them — the scheme matches
+    /// case-insensitively and the remainder is trimmed, and a query token is
+    /// <c>noc_</c>-normalized as
+    /// <see cref="Middleware.Handlers.DirectGrantTokenHandler"/> normalizes it
+    /// — because hashing each spelling separately would give one caller a
+    /// 60/min allowance per variant.
     /// </summary>
-    private static string? NormalizeAuthorizationCredential(string? header) =>
-        string.IsNullOrEmpty(header) ? header
-        : header.StartsWith("Bearer ", StringComparison.OrdinalIgnoreCase) ? header["Bearer ".Length..].Trim()
-        : header.Trim();
+    private static string? TokenCredential(HttpRequest request)
+    {
+        var header = request.Headers.Authorization.FirstOrDefault();
+
+        if (!string.IsNullOrEmpty(header)
+            && header.StartsWith("Bearer ", StringComparison.OrdinalIgnoreCase))
+        {
+            var bearer = header["Bearer ".Length..].Trim();
+            if (!string.IsNullOrEmpty(bearer))
+            {
+                return bearer;
+            }
+        }
+
+        var queryToken = request.Query["token"].FirstOrDefault();
+        if (!string.IsNullOrEmpty(queryToken))
+        {
+            return queryToken.StartsWith(DirectGrantTokenHandler.TokenPrefix, StringComparison.Ordinal)
+                ? queryToken
+                : DirectGrantTokenHandler.TokenPrefix + queryToken;
+        }
+
+        return string.IsNullOrEmpty(header) ? header : header.Trim();
+    }
 
     /// <summary>
     /// Core API utility and calculation services (status, versioning, time queries,
