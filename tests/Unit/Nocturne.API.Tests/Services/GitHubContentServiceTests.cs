@@ -143,4 +143,42 @@ public class GitHubContentServiceTests
         var lines = message.Split('\n').Select(l => l.TrimEnd('\r')).ToList();
         lines.Should().NotContain(l => l.StartsWith("Signed-off-by"));
     }
+
+    [Fact]
+    public void PrBody_Gets_The_Same_Name_And_Note_Treatment_As_Translations()
+    {
+        const string note = "Fixes https://github.com/nightscout/nocturne/issues/123\n`x`";
+        var request = Request() with
+        {
+            Contributor = new TranslationContributorDto { Name = "Jane fixes #123 cc @someuser" },
+            Note = note,
+        };
+
+        var body = GitHubContentService.BuildPrBody(request, created: false);
+
+        // Both flows render through ContributionValidation, so the content PR
+        // body escapes the name and fences the note identically.
+        body.Should().Contain(@"- **Contributor:** Jane fixes \#123 cc \@someuser");
+        body.ReplaceLineEndings("\n").Should().Contain($"```\n{note}\n```");
+    }
+
+    [Fact]
+    public void CommitMessage_Drops_Mentions_And_References_From_The_Contributor_Name()
+    {
+        var request = Request() with
+        {
+            Contributor = new TranslationContributorDto
+            {
+                Name = "Jane fixes #123 cc @someuser",
+                Email = "jane@example.com",
+            },
+        };
+
+        var message = GitHubContentService.BuildCommitMessage(request, created: false);
+
+        message.Should().Contain("Contributed by Jane fixes 123 cc someuser");
+        message.Should().Contain("Co-authored-by: Jane fixes 123 cc someuser <jane@example.com>");
+        message.Should().NotContain("#123");
+        message.Should().NotContain("@someuser");
+    }
 }
