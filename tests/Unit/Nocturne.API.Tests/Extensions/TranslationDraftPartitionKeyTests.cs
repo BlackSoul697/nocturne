@@ -78,6 +78,46 @@ public class TranslationDraftPartitionKeyTests
             .Should().NotBe(Key(Context(refreshToken: "refresh-b")));
     }
 
+    [Theory]
+    [InlineData("Bearer jwt-a")]
+    [InlineData("bearer jwt-a")]
+    [InlineData("BEARER jwt-a")]
+    [InlineData("Bearer  jwt-a")]
+    [InlineData("Bearer jwt-a ")]
+    [InlineData("Bearer \tjwt-a\t")]
+    public void Bearer_Spelling_Variants_Share_One_Partition(string authorization)
+    {
+        // The token handlers match the scheme case-insensitively and trim the
+        // remainder, so all of these authenticate as the same credential. If
+        // the raw header were hashed, each spelling would be a fresh 60/min
+        // bucket that one authenticated caller could mint without limit.
+        Key(Context(authorization: authorization))
+            .Should().Be(Key(Context(authorization: "Bearer jwt-a")));
+    }
+
+    [Fact]
+    public void Non_Bearer_Authorization_Is_Only_Trimmed()
+    {
+        // Nothing strips a scheme the handlers do not recognise, so the whole
+        // value stays the credential — but padding still must not split it.
+        Key(Context(authorization: "  Token abc  "))
+            .Should().Be(Key(Context(authorization: "Token abc")));
+        Key(Context(authorization: "Token abc"))
+            .Should().NotBe(Key(Context(authorization: "Bearer abc")));
+    }
+
+    [Fact]
+    public void Cookie_Takes_Precedence_Over_The_Authorization_Header()
+    {
+        // The security argument rests on this order: a caller who already has
+        // a session cannot escape its bucket by also sending a header, and
+        // rotating that header mints nothing.
+        var cookieOnly = Key(Context(accessToken: "jwt-a"));
+
+        Key(Context(accessToken: "jwt-a", authorization: "Bearer other-1")).Should().Be(cookieOnly);
+        Key(Context(accessToken: "jwt-a", authorization: "Bearer other-2")).Should().Be(cookieOnly);
+    }
+
     [Fact]
     public void Credential_Is_Never_The_Key_Itself()
     {

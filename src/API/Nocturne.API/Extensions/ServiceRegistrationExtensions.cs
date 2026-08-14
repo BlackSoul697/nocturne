@@ -151,12 +151,26 @@ public static class ServiceRegistrationExtensions
         var credential =
             context.Request.Cookies[cookie.AccessTokenName]
             ?? context.Request.Cookies[cookie.RefreshTokenName]
-            ?? context.Request.Headers.Authorization.ToString();
+            ?? NormalizeAuthorizationCredential(context.Request.Headers.Authorization.FirstOrDefault());
 
         return string.IsNullOrEmpty(credential)
             ? AnonymousDraftPartition
             : Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(credential)));
     }
+
+    /// <summary>
+    /// Reduces an Authorization header to the token the handlers actually
+    /// authenticate on. They accept the scheme case-insensitively and trim the
+    /// remainder, so <c>bearer t</c>, <c>Bearer  t</c> and <c>Bearer t </c> are
+    /// one credential to them; hashing the raw header would give each of those
+    /// its own 60/min allowance, which one authenticated caller could mint
+    /// without limit. Mirrors <see cref="Middleware.Handlers.AccessTokenHandler"/>
+    /// and <see cref="Middleware.Handlers.DirectGrantTokenHandler"/>.
+    /// </summary>
+    private static string? NormalizeAuthorizationCredential(string? header) =>
+        string.IsNullOrEmpty(header) ? header
+        : header.StartsWith("Bearer ", StringComparison.OrdinalIgnoreCase) ? header["Bearer ".Length..].Trim()
+        : header.Trim();
 
     /// <summary>
     /// Core API utility and calculation services (status, versioning, time queries,
