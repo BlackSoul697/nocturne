@@ -5,18 +5,33 @@ namespace Nocturne.API.Tests.Services;
 public class GitHubTranslationServiceTests
 {
     private static TranslationContributionRequest Request(
-        string? gitHubUsername = null, string? email = null, string? note = null) => new()
+        string? gitHubUsername = null, string? email = null, string? note = null,
+        string name = "Jane Doe") => new()
     {
         Locale = "fr",
         Entries = [new TranslationEntryDto { MsgId = "Hello", Translations = ["Bonjour"] }],
         Contributor = new TranslationContributorDto
         {
-            Name = "Jane Doe",
+            Name = name,
             GitHubUsername = gitHubUsername,
             Email = email,
         },
         Note = note,
     };
+
+    /// <summary>
+    /// The note body between the fence lines, plus the fences themselves.
+    /// </summary>
+    private static (string Fence, string Body) NoteFence(string body)
+    {
+        const string heading = "## Contributor note";
+        var section = body[(body.IndexOf(heading, StringComparison.Ordinal) + heading.Length)..]
+            .ReplaceLineEndings("\n");
+        var lines = section.Split('\n').SkipWhile(l => l.Length == 0).ToList();
+        var fence = lines[0];
+        var closing = lines.FindLastIndex(l => l == fence);
+        return (fence, string.Join('\n', lines.Skip(1).Take(closing - 1)));
+    }
 
     [Fact]
     public void CoAuthorTrailer_Prefers_GitHub_Username()
@@ -114,38 +129,87 @@ public class GitHubTranslationServiceTests
         body.Should().Contain("**Messages updated:** 2");
         body.Should().Contain("`Gone message`");
         body.Should().Contain("## Contributor note");
-        body.Should().Contain("> Reviewed against the app UI");
+        NoteFence(body).Body.Should().Be("Reviewed against the app UI");
     }
 
     [Fact]
-    public void PrBody_Renders_Note_As_An_Inert_Blockquote()
+    public void PrBody_Renders_Note_Inside_An_Inert_Code_Fence()
     {
+        const string note = "cc @nightscout/maintainers\nFixes #1234\n`rm -rf`\n\n## Injected heading\n<img src=x onerror=alert(1)>";
         var body = GitHubTranslationService.BuildPrBody(
-            Request(note: "cc @nightscout/maintainers\nFixes #1234\n`rm -rf`\n\n## Injected heading"),
+            Request(note: note),
             new PoEditResult { Text = "", Applied = 1, Unmatched = [] });
 
-        // Every note line is quoted, so no line can become a heading, a list
-        // or a bare "Fixes #N" that GitHub would act on.
-        var noteLines = body[body.IndexOf("## Contributor note", StringComparison.Ordinal)..]
-            .Split('\n')
-            .Select(l => l.TrimEnd('\r'))
-            .Skip(2)
-            .Where(l => l.Length > 0)
-            .ToList();
-        noteLines.Should().OnlyContain(l => l.StartsWith('>'));
+        // Nothing inside a code fence is interpreted, so the note survives
+        // verbatim while mentions, references, headings and raw HTML are inert.
+        var (fence, fenced) = NoteFence(body);
+        fence.Should().Be("```");
+        fenced.Should().Be(note);
 
-        // No bare mention or issue reference survives: every "@" and "#" in the
-        // note is backslash-escaped.
-        const string heading = "## Contributor note";
-        var note = body[(body.IndexOf(heading, StringComparison.Ordinal) + heading.Length)..];
-        for (var i = 0; i < note.Length; i++)
-            if (note[i] is '@' or '#' or '`')
-                note[i - 1].Should().Be('\\');
+        // Exactly one opening and one closing fence: the note is wholly inside.
+        var section = body[(body.IndexOf("## Contributor note", StringComparison.Ordinal))..];
+        section.Split('\n').Count(l => l.TrimEnd('\r') == fence).Should().Be(2);
+    }
 
-        body.Should().Contain(@"\@nightscout/maintainers");
-        body.Should().Contain(@"Fixes \#1234");
-        body.Should().Contain(@"\`rm -rf\`");
-        body.Should().NotContain("\n## Injected heading");
+    [Fact]
+    public void PrBody_Neutralizes_Issue_Urls_In_The_Note()
+    {
+        const string url = "Fixes https://github.com/nightscout/nocturne/issues/123";
+        var body = GitHubTranslationService.BuildPrBody(
+            Request(note: url),
+            new PoEditResult { Text = "", Applied = 1, Unmatched = [] });
+
+        // A URL-form reference bypasses a "#" escape entirely: it auto-closes
+        // the issue on merge and backlinks at PR-open. It is only safe because
+        // it appears nowhere outside the code fence.
+        var (_, fenced) = NoteFence(body);
+        fenced.Should().Be(url);
+        body.Replace(fenced, "").Should().NotContain("github.com/nightscout/nocturne/issues/123");
+    }
+
+    [Fact]
+    public void PrBody_Fence_Cannot_Be_Closed_By_Backticks_In_The_Note()
+    {
+        const string note = "```\n## escaped heading\n```\nstill inside `````";
+        var body = GitHubTranslationService.BuildPrBody(
+            Request(note: note),
+            new PoEditResult { Text = "", Applied = 1, Unmatched = [] });
+
+        // The fence must be longer than the longest backtick run in the note,
+        // or the note closes it early and the tail renders as markdown.
+        var (fence, fenced) = NoteFence(body);
+        fence.Should().Be("``````");
+        fenced.Should().Be(note);
+        fenced.Split('\n').Should().NotContain(
+            l => l.TrimStart().StartsWith(fence, StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void PrBody_Escapes_Mentions_And_References_In_The_Contributor_Name()
+    {
+        var body = GitHubTranslationService.BuildPrBody(
+            Request(name: @"Jane fixes #123 cc @someuser \x"),
+            new PoEditResult { Text = "", Applied = 1, Unmatched = [] });
+
+        // The backslash is escaped first, so a submitted "\" cannot neutralise
+        // the escape in front of the "@" or "#".
+        body.Should().Contain(@"- **Contributor:** Jane fixes \#123 cc \@someuser \\x");
+        body.Should().NotContain("cc @someuser");
+    }
+
+    [Fact]
+    public void CommitMessage_Drops_Mentions_And_References_From_The_Contributor_Name()
+    {
+        var request = Request(email: "jane@example.com", name: "Jane fixes #123 cc @someuser");
+        var message = GitHubTranslationService.BuildCommitMessage(request, applied: 1);
+
+        // A commit message is not markdown — a backslash escape would render
+        // literally — but GitHub still resolves mentions and issue references
+        // in it, so those characters are dropped rather than escaped.
+        message.Should().Contain("contributed by Jane fixes 123 cc someuser.");
+        message.Should().Contain("Co-authored-by: Jane fixes 123 cc someuser <jane@example.com>");
+        message.Should().NotContain("#123");
+        message.Should().NotContain("@someuser");
     }
 
     [Fact]
@@ -155,21 +219,21 @@ public class GitHubTranslationServiceTests
             Request(note: "clean\u0000er\u001b[31m text"),
             new PoEditResult { Text = "", Applied = 1, Unmatched = [] });
 
-        body.Should().Contain("> cleaner[31m text");
+        NoteFence(body).Body.Should().Be("cleaner[31m text");
         body.Should().NotContain("\u0000");
         body.Should().NotContain("\u001b");
     }
 
     [Fact]
-    public void PrBody_Escapes_Backslashes_Before_Markdown_Actives()
+    public void PrBody_Keeps_Note_Backslashes_Verbatim_Inside_The_Fence()
     {
         var body = GitHubTranslationService.BuildPrBody(
             Request(note: @"trailing backslash \@nobody"),
             new PoEditResult { Text = "", Applied = 1, Unmatched = [] });
 
-        // The submitted backslash is escaped first, so it cannot neutralise
-        // the escape we add in front of the "@".
-        body.Should().Contain(@"trailing backslash \\\@nobody");
+        // Inside a code fence a backslash is literal and the "@" is inert, so
+        // the note is neither escaped nor mangled.
+        NoteFence(body).Body.Should().Be(@"trailing backslash \@nobody");
     }
 
     [Fact]

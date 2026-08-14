@@ -253,44 +253,70 @@ public class GitHubTranslationService(
         new([.. value.Trim().Where(c => !char.IsControl(c) && c is not '<' and not '>')]);
 
     /// <summary>
-    /// Renders free-text contributor input as an inert markdown blockquote.
-    /// The note reaches a PR body on the upstream repository from an anonymous
-    /// relay, so unescaped text would let a submitter notify arbitrary users
-    /// (<c>@</c>), cross-link or auto-close issues (<c>#</c>, <c>Fixes #1</c>)
-    /// and inject arbitrary block markup.
+    /// Renders a contributor-supplied display name for a sink GitHub gives
+    /// side effects to. The name arrives from an anonymous relay, so
+    /// <c>Jane fixes #12 cc @someone</c> would otherwise auto-close an issue
+    /// and notify arbitrary users from the upstream PR body and from the
+    /// commit message. A commit message is not markdown — a backslash escape
+    /// would render literally there — so the reference-carrying characters
+    /// are dropped instead of escaped when <paramref name="markdown"/> is
+    /// false. The backslash is escaped first so a submitted <c>\</c> cannot
+    /// consume the escape that follows it.
     /// </summary>
-    internal static string RenderNoteAsBlockquote(string note)
+    internal static string RenderName(string name, bool markdown)
     {
+        var value = SanitizeMetadata(name);
+        return markdown
+            ? value.Replace("\\", "\\\\").Replace("@", "\\@").Replace("#", "\\#").Replace("`", "\\`")
+            : new string([.. value.Where(c => c is not '@' and not '#')]);
+    }
+
+    /// <summary>
+    /// Renders free-text contributor input inside a fenced code block. The
+    /// note reaches a PR body on the upstream repository from an anonymous
+    /// relay, so rendered text would let a submitter notify arbitrary users
+    /// (<c>@</c>), cross-link or auto-close issues (<c>#1</c> as well as a
+    /// full <c>https://github.com/…/issues/1</c> URL), inject block markup
+    /// and embed raw HTML. Nothing inside a code fence is interpreted, which
+    /// covers all of those at once — provided the note cannot close the
+    /// fence, so the fence runs one backtick longer than the longest backtick
+    /// run in the note.
+    /// </summary>
+    internal static string RenderNoteAsCodeFence(string note)
+    {
+        var text = StripControlChars(note).ReplaceLineEndings("\n");
+        var fence = new string('`', Math.Max(3, LongestBacktickRun(text) + 1));
+
         var sb = new StringBuilder();
-        foreach (var rawLine in StripControlChars(note).ReplaceLineEndings("\n").Split('\n'))
-        {
-            var line = EscapeMarkdown(rawLine);
-            sb.AppendLine(line.Length == 0 ? ">" : $"> {line}");
-        }
+        sb.AppendLine(fence);
+        foreach (var line in text.Split('\n'))
+            sb.AppendLine(line);
+        sb.AppendLine(fence);
         return sb.ToString();
+    }
+
+    private static int LongestBacktickRun(string value)
+    {
+        int longest = 0, run = 0;
+        foreach (var c in value)
+        {
+            run = c == '`' ? run + 1 : 0;
+            if (run > longest)
+                longest = run;
+        }
+        return longest;
     }
 
     /// <summary>Drops C0/C1 control characters but keeps line structure.</summary>
     private static string StripControlChars(string value) =>
         new([.. value.Where(c => !char.IsControl(c) || c is '\r' or '\n')]);
 
-    /// <summary>
-    /// Backslash-escapes the characters that carry side effects on GitHub.
-    /// The backslash itself goes first so a submitted <c>\</c> cannot consume
-    /// the escape that follows it.
-    /// </summary>
-    private static string EscapeMarkdown(string line) => line
-        .Replace("\\", "\\\\")
-        .Replace("@", "\\@")
-        .Replace("#", "\\#")
-        .Replace("`", "\\`");
-
     internal static string BuildCommitMessage(TranslationContributionRequest request, int applied)
     {
         var sb = new StringBuilder();
         sb.AppendLine($"chore(i18n): {request.Locale} translations via in-app contribution");
         sb.AppendLine();
-        sb.AppendLine($"Applies {applied} message{(applied == 1 ? "" : "s")} contributed by {SanitizeMetadata(request.Contributor.Name)}.");
+        sb.AppendLine($"Applies {applied} message{(applied == 1 ? "" : "s")} contributed by {RenderName(request.Contributor.Name, markdown: false)}.");
 
         var coAuthor = CoAuthorTrailer(request.Contributor);
         if (coAuthor is not null)
@@ -311,7 +337,7 @@ public class GitHubTranslationService(
         }
 
         if (!string.IsNullOrWhiteSpace(contributor.Email))
-            return $"Co-authored-by: {SanitizeMetadata(contributor.Name)} <{SanitizeMetadata(contributor.Email)}>";
+            return $"Co-authored-by: {RenderName(contributor.Name, markdown: false)} <{SanitizeMetadata(contributor.Email)}>";
 
         return null;
     }
@@ -321,7 +347,7 @@ public class GitHubTranslationService(
         var sb = new StringBuilder();
         sb.AppendLine($"Translation contribution for `{request.Locale}` submitted through the in-app translation mode.");
         sb.AppendLine();
-        sb.AppendLine($"- **Contributor:** {SanitizeMetadata(request.Contributor.Name)}"
+        sb.AppendLine($"- **Contributor:** {RenderName(request.Contributor.Name, markdown: true)}"
             + (string.IsNullOrWhiteSpace(request.Contributor.GitHubUsername)
                 ? ""
                 : $" (@{SanitizeMetadata(request.Contributor.GitHubUsername)})"));
@@ -353,7 +379,7 @@ public class GitHubTranslationService(
             sb.AppendLine();
             sb.AppendLine("## Contributor note");
             sb.AppendLine();
-            sb.Append(RenderNoteAsBlockquote(request.Note));
+            sb.Append(RenderNoteAsCodeFence(request.Note));
         }
 
         return sb.ToString();
