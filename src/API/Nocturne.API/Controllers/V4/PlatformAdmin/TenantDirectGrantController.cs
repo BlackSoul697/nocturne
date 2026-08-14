@@ -4,6 +4,7 @@ using Microsoft.EntityFrameworkCore;
 using OpenApi.Remote.Attributes;
 using Nocturne.API.Authorization;
 using Nocturne.API.Controllers.Authentication;
+using Nocturne.API.Extensions;
 using Nocturne.API.Services.Auth;
 using Nocturne.Core.Contracts.Multitenancy;
 using Nocturne.Infrastructure.Data;
@@ -72,7 +73,8 @@ public class TenantDirectGrantController : ControllerBase
             dbContext, request.SubjectId, request.Label, request.Scopes,
             HttpContext.Connection.RemoteIpAddress?.ToString(),
             Request.Headers.UserAgent.ToString(),
-            ct);
+            actor: CallerDescription(),
+            ct: ct);
 
         if (result.Error != null)
         {
@@ -116,7 +118,8 @@ public class TenantDirectGrantController : ControllerBase
             dbContext, grantId, subjectId: null,
             HttpContext.Connection.RemoteIpAddress?.ToString(),
             Request.Headers.UserAgent.ToString(),
-            ct);
+            actor: CallerDescription(),
+            ct: ct);
 
         if (!found)
         {
@@ -124,6 +127,16 @@ public class TenantDirectGrantController : ControllerBase
         }
 
         return NoContent();
+    }
+
+    /// <summary>
+    /// Describes the platform-admin caller for the audit trail: their subject ID, or the auth
+    /// type (e.g. <c>InstanceKey</c>) for callers with no subject of their own.
+    /// </summary>
+    private string CallerDescription()
+    {
+        var auth = HttpContext.GetAuthContext();
+        return auth?.SubjectId?.ToString() ?? auth?.AuthType.ToString() ?? "unknown";
     }
 }
 

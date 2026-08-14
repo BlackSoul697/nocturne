@@ -26,6 +26,7 @@ public class TenantDirectGrantControllerTests : IDisposable
     private readonly DbContextOptions<NocturneDbContext> _dbOptions;
     private readonly NocturneDbContext _dbContext;
     private readonly TenantDirectGrantController _controller;
+    private readonly Mock<IAuthAuditService> _auditService;
     private readonly Guid _tenantId = Guid.CreateVersion7();
     private readonly Guid _memberSubjectId = Guid.CreateVersion7();
     private readonly Guid _nonMemberSubjectId = Guid.CreateVersion7();
@@ -75,9 +76,9 @@ public class TenantDirectGrantControllerTests : IDisposable
         factory.Setup(f => f.CreateDbContextAsync(It.IsAny<CancellationToken>()))
             .ReturnsAsync(() => new NocturneDbContext(_dbOptions));
 
-        var auditService = new Mock<IAuthAuditService>();
+        _auditService = new Mock<IAuthAuditService>();
         var directGrantService = new DirectGrantService(
-            auditService.Object, new Mock<ILogger<DirectGrantService>>().Object);
+            _auditService.Object, new Mock<ILogger<DirectGrantService>>().Object);
         var tenantMemberService = new TenantMemberService(factory.Object);
 
         _controller = new TenantDirectGrantController(
@@ -262,5 +263,40 @@ public class TenantDirectGrantControllerTests : IDisposable
 
         var objectResult = Assert.IsType<ObjectResult>(result);
         Assert.Equal(404, objectResult.StatusCode);
+    }
+
+    [Fact]
+    public async Task AdminActions_RecordTheActorInAuditDetails()
+    {
+        _controller.HttpContext.Items["AuthContext"] = new Nocturne.Core.Models.Authorization.AuthContext
+        {
+            IsAuthenticated = true,
+            AuthType = Nocturne.Core.Models.Authorization.AuthType.InstanceKey,
+            SubjectId = null,
+        };
+
+        var request = new AdminCreateDirectGrantRequest
+        {
+            SubjectId = _memberSubjectId,
+            Label = "Provisioner Token",
+            Scopes = ["glucose.read"],
+        };
+        var createResult = await _controller.Create(_tenantId, request, CancellationToken.None);
+        var okResult = Assert.IsType<OkObjectResult>(createResult.Result);
+        var response = Assert.IsType<CreateDirectGrantResponse>(okResult.Value);
+
+        _auditService.Verify(a => a.LogAsync(
+            It.IsAny<string>(), _memberSubjectId, true,
+            It.IsAny<string?>(), It.IsAny<string?>(), It.IsAny<string?>(),
+            It.Is<string?>(d => d != null && d.Contains("\"issued_by\":\"InstanceKey\"")),
+            It.IsAny<Guid?>()));
+
+        await _controller.Revoke(_tenantId, response.Id, CancellationToken.None);
+
+        _auditService.Verify(a => a.LogAsync(
+            It.IsAny<string>(), _memberSubjectId, true,
+            It.IsAny<string?>(), It.IsAny<string?>(), It.IsAny<string?>(),
+            It.Is<string?>(d => d != null && d.Contains("\"revoked_by\":\"InstanceKey\"")),
+            It.IsAny<Guid?>()));
     }
 }

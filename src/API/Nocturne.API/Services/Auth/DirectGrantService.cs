@@ -34,6 +34,11 @@ public interface IDirectGrantService
     /// <param name="scopes">The requested scopes; normalized before storage.</param>
     /// <param name="ipAddress">The caller's IP address, for the audit trail.</param>
     /// <param name="userAgent">The caller's user agent, for the audit trail.</param>
+    /// <param name="actor">
+    /// Who performed the action when it was not the grant's own subject — a platform admin's
+    /// subject ID or an auth type like <c>InstanceKey</c>. Recorded in the audit details; leave
+    /// null on the self-service path, where the subject acts for themselves.
+    /// </param>
     /// <param name="ct">The cancellation token.</param>
     /// <returns>The created grant, or an error message describing the invalid input.</returns>
     Task<DirectGrantCreationResult> CreateAsync(
@@ -43,6 +48,7 @@ public interface IDirectGrantService
         IReadOnlyCollection<string>? scopes,
         string? ipAddress,
         string? userAgent,
+        string? actor = null,
         CancellationToken ct = default);
 
     /// <summary>
@@ -64,6 +70,10 @@ public interface IDirectGrantService
     /// <param name="subjectId">When set, the grant must belong to this subject.</param>
     /// <param name="ipAddress">The caller's IP address, for the audit trail.</param>
     /// <param name="userAgent">The caller's user agent, for the audit trail.</param>
+    /// <param name="actor">
+    /// Who performed the action when it was not the grant's own subject; see
+    /// <see cref="CreateAsync"/>.
+    /// </param>
     /// <param name="ct">The cancellation token.</param>
     /// <returns><c>true</c> when the grant was found (revoked now or already); <c>false</c> otherwise.</returns>
     Task<bool> RevokeAsync(
@@ -72,6 +82,7 @@ public interface IDirectGrantService
         Guid? subjectId,
         string? ipAddress,
         string? userAgent,
+        string? actor = null,
         CancellationToken ct = default);
 }
 
@@ -108,6 +119,7 @@ public class DirectGrantService : IDirectGrantService
         IReadOnlyCollection<string>? scopes,
         string? ipAddress,
         string? userAgent,
+        string? actor = null,
         CancellationToken ct = default)
     {
         if (string.IsNullOrWhiteSpace(label))
@@ -156,7 +168,9 @@ public class DirectGrantService : IDirectGrantService
         await _auditService.LogAsync(AuthAuditEventType.TokenIssued, subjectId, success: true,
             ipAddress: ipAddress,
             userAgent: userAgent,
-            detailsJson: JsonSerializer.Serialize(new { method = "direct_grant", grant_id = entity.Id }));
+            detailsJson: actor == null
+                ? JsonSerializer.Serialize(new { method = "direct_grant", grant_id = entity.Id })
+                : JsonSerializer.Serialize(new { method = "direct_grant", grant_id = entity.Id, issued_by = actor }));
 
         return DirectGrantCreationResult.Created(new CreateDirectGrantResponse
         {
@@ -198,6 +212,7 @@ public class DirectGrantService : IDirectGrantService
         Guid? subjectId,
         string? ipAddress,
         string? userAgent,
+        string? actor = null,
         CancellationToken ct = default)
     {
         var grant = await dbContext.OAuthGrants
@@ -226,7 +241,9 @@ public class DirectGrantService : IDirectGrantService
         await _auditService.LogAsync(AuthAuditEventType.TokenRevoked, grant.SubjectId, success: true,
             ipAddress: ipAddress,
             userAgent: userAgent,
-            detailsJson: JsonSerializer.Serialize(new { grant_id = grantId }));
+            detailsJson: actor == null
+                ? JsonSerializer.Serialize(new { grant_id = grantId })
+                : JsonSerializer.Serialize(new { grant_id = grantId, revoked_by = actor }));
 
         return true;
     }

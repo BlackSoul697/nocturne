@@ -71,7 +71,7 @@ public class DirectGrantController : ControllerBase
             _dbContext, auth.SubjectId.Value, request.Label, request.Scopes,
             HttpContext.Connection.RemoteIpAddress?.ToString(),
             Request.Headers.UserAgent.ToString(),
-            HttpContext.RequestAborted);
+            ct: HttpContext.RequestAborted);
 
         if (result.Error != null)
         {
@@ -126,7 +126,7 @@ public class DirectGrantController : ControllerBase
             _dbContext, id, auth.SubjectId.Value,
             HttpContext.Connection.RemoteIpAddress?.ToString(),
             Request.Headers.UserAgent.ToString(),
-            HttpContext.RequestAborted);
+            ct: HttpContext.RequestAborted);
 
         if (!found)
         {
