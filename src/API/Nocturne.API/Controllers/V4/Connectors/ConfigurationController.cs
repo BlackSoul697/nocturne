@@ -1,7 +1,10 @@
 using System.Text.Json;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.RateLimiting;
+using Nocturne.API.Attributes;
 using Nocturne.API.Authorization;
+using Nocturne.Core.Models.Authorization;
 using OpenApi.Remote.Attributes;
 using Nocturne.Connectors.Core.Interfaces;
 using Nocturne.Connectors.Core.Models;
@@ -421,6 +424,8 @@ public class ConfigurationController : ControllerBase
     /// <returns>The verification outcome</returns>
     [HttpPost("{connectorName}/verify")]
     [RemoteCommand]
+    [RequireScope(TenantPermissions.TenantSettings)]
+    [EnableRateLimiting("connector-verify")]
     [ProducesResponseType(typeof(ConnectorCredentialVerificationResult), StatusCodes.Status200OK)]
     public async Task<ActionResult<ConnectorCredentialVerificationResult>> VerifyCredentials(
         string connectorName,
