@@ -183,6 +183,7 @@ public static class ServiceRegistrationExtensions
         services.Configure<PlatformOptions>(configuration.GetSection(PlatformOptions.SectionName));
         // Auth services
         services.AddScoped<IAuthAuditService, AuthAuditService>();
+        services.AddScoped<IDirectGrantService, DirectGrantService>();
         services.AddScoped<IJwtService, JwtService>();
         services.AddScoped<IRefreshTokenService, RefreshTokenService>();
         services.AddSingleton<IRotationSuccessorCache, RotationSuccessorCache>();

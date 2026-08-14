@@ -153,6 +153,7 @@ public class V4WriteScopeGatingTests
             ["PlatformSettingsController"] = NotDataCategory.PlatformAdminRole,
             ["SubjectAdminController"] = NotDataCategory.PlatformAdminRole,
             ["TenantController"] = NotDataCategory.PlatformAdminRole,
+            ["TenantDirectGrantController"] = NotDataCategory.PlatformAdminRole,
 
             ["DeduplicationController"] = NotDataCategory.TenantAdminAttribute,
             ["MigrationController"] = NotDataCategory.TenantAdminAttribute,
