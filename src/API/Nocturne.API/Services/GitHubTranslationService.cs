@@ -31,7 +31,7 @@ public class GitHubTranslationService(
         // today. If catalogs outgrow that, switch to the blobs API.
         var catalogPath = $"{opts.CatalogDir}/{request.Locale}.po";
         var catalogFile = await prClient.GetFileAsync(client, opts.Owner, opts.Repo, catalogPath, opts.BaseBranch, ct)
-            ?? throw new TranslationContributionRejectedException($"No catalog exists for this locale ({catalogPath}).");
+            ?? throw new ContributionRejectedException($"No catalog exists for this locale ({catalogPath}).");
         var (catalogText, fileSha) = catalogFile;
 
         var edits = request.Entries.ToDictionary(
@@ -40,7 +40,7 @@ public class GitHubTranslationService(
         var result = PoCatalogEditor.ApplyTranslations(catalogText, edits);
 
         if (result.Applied == 0)
-            throw new TranslationContributionRejectedException(
+            throw new ContributionRejectedException(
                 "No contributed message matched the current catalog. The catalog may have changed; refresh and try again.");
 
         var branch = $"translations/{request.Locale}-{Guid.NewGuid().ToString("N")[..12]}";
@@ -89,7 +89,7 @@ public class GitHubTranslationService(
             var error = await response.Content.ReadAsStringAsync(ct);
             logger.LogError("Translation relay error: {StatusCode} {Error}", response.StatusCode, error);
             if (response.StatusCode == System.Net.HttpStatusCode.UnprocessableEntity)
-                throw new TranslationContributionRejectedException(
+                throw new ContributionRejectedException(
                     "No contributed message matched the current catalog. The catalog may have changed; refresh and try again.");
             throw new InvalidOperationException($"Translation relay error: {response.StatusCode}");
         }
@@ -101,51 +101,12 @@ public class GitHubTranslationService(
 
     internal static string SanitizeMetadata(string value) => GitHubPrClient.SanitizeMetadata(value);
 
-    internal static string RenderName(string name, bool markdown) =>
-        GitHubPrClient.RenderName(name, markdown);
-
-    /// <summary>
-    /// Renders free-text contributor input inside a fenced code block.
-    /// Nothing inside a code fence is interpreted, which neutralizes the
-    /// references <see cref="RenderName"/> describes plus block markup and
-    /// raw HTML at once — provided the note cannot close the fence, so the
-    /// fence runs one backtick longer than the longest backtick run in it.
-    /// </summary>
-    internal static string RenderNoteAsCodeFence(string note)
-    {
-        var text = StripControlChars(note).ReplaceLineEndings("\n");
-        var fence = new string('`', Math.Max(3, LongestBacktickRun(text) + 1));
-
-        var sb = new StringBuilder();
-        sb.AppendLine(fence);
-        foreach (var line in text.Split('\n'))
-            sb.AppendLine(line);
-        sb.AppendLine(fence);
-        return sb.ToString();
-    }
-
-    private static int LongestBacktickRun(string value)
-    {
-        int longest = 0, run = 0;
-        foreach (var c in value)
-        {
-            run = c == '`' ? run + 1 : 0;
-            if (run > longest)
-                longest = run;
-        }
-        return longest;
-    }
-
-    /// <summary>Drops C0/C1 control characters but keeps line structure.</summary>
-    private static string StripControlChars(string value) =>
-        new([.. value.Where(c => !char.IsControl(c) || c is '\r' or '\n')]);
-
     internal static string BuildCommitMessage(TranslationContributionRequest request, int applied)
     {
         var sb = new StringBuilder();
         sb.AppendLine($"chore(i18n): {request.Locale} translations via in-app contribution");
         sb.AppendLine();
-        sb.AppendLine($"Applies {applied} message{(applied == 1 ? "" : "s")} contributed by {RenderName(request.Contributor.Name, markdown: false)}.");
+        sb.AppendLine($"Applies {applied} message{(applied == 1 ? "" : "s")} contributed by {ContributionValidation.RenderName(request.Contributor.Name, markdown: false)}.");
 
         var coAuthor = CoAuthorTrailer(request.Contributor);
         if (coAuthor is not null)
@@ -165,7 +126,7 @@ public class GitHubTranslationService(
         var sb = new StringBuilder();
         sb.AppendLine($"Translation contribution for `{request.Locale}` submitted through the in-app translation mode.");
         sb.AppendLine();
-        sb.AppendLine($"- **Contributor:** {RenderName(request.Contributor.Name, markdown: true)}"
+        sb.AppendLine($"- **Contributor:** {ContributionValidation.RenderName(request.Contributor.Name, markdown: true)}"
             + (string.IsNullOrWhiteSpace(request.Contributor.GitHubUsername)
                 ? ""
                 : $" (@{SanitizeMetadata(request.Contributor.GitHubUsername)})"));
@@ -199,7 +160,7 @@ public class GitHubTranslationService(
             sb.AppendLine();
             sb.AppendLine("## Contributor note");
             sb.AppendLine();
-            sb.Append(RenderNoteAsCodeFence(request.Note));
+            sb.Append(ContributionValidation.RenderNoteAsCodeFence(request.Note));
         }
 
         return sb.ToString();
@@ -207,5 +168,3 @@ public class GitHubTranslationService(
 
 
 }
-
-public class TranslationContributionRejectedException(string message) : Exception(message);

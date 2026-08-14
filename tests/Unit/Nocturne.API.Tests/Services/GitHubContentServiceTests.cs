@@ -19,10 +19,40 @@ public class GitHubContentServiceTests
     [InlineData("src/Web/packages/portal/src/content/blog/UPPER.svx", false)]
     [InlineData("src/Web/packages/portal/src/content/blog/.hidden.svx", false)]
     [InlineData("src/Web/packages/portal/src/content/blog//double.svx", false)]
+    [InlineData("src/Web/packages/portal/src/content/blog/my-post.v2.svx", true)]
+    [InlineData("src/Web/packages/portal/src/content/docs/a_b/c-d.e.svx", true)]
+    // Consecutive separators would produce a branch name git refuses as a ref.
+    [InlineData("src/Web/packages/portal/src/content/blog/a..b.svx", false)]
+    [InlineData("src/Web/packages/portal/src/content/blog/a--b.svx", false)]
+    [InlineData("src/Web/packages/portal/src/content/blog/a._b.svx", false)]
+    [InlineData("src/Web/packages/portal/src/content/blog/post-.svx", false)]
+    [InlineData("src/Web/packages/portal/src/content/b..log/post.svx", false)]
     [InlineData("src/Web/packages/portal/src/content/blog/post.svx\n", false)]
     public void AllowedPathPattern_Constrains_To_Portal_Content(string path, bool allowed)
     {
         GitHubContentService.AllowedPathPattern().IsMatch(path).Should().Be(allowed);
+    }
+
+    /// <summary>
+    /// Every other negative case is rejected with or without the leading
+    /// anchor, so nothing proved the anchor was load-bearing: an unanchored
+    /// pattern would happily match this allowed suffix inside a hostile prefix.
+    /// </summary>
+    [Theory]
+    [InlineData("evil/src/Web/packages/portal/src/content/blog/x.svx")]
+    [InlineData("../src/Web/packages/portal/src/content/blog/x.svx")]
+    [InlineData("xsrc/Web/packages/portal/src/content/blog/x.svx")]
+    public void AllowedPathPattern_Is_Anchored_At_The_Start(string path)
+    {
+        GitHubContentService.AllowedPathPattern().IsMatch(path).Should().BeFalse();
+    }
+
+    [Theory]
+    [InlineData("src/Web/packages/portal/src/content/blog/my-post.svx", "my-post")]
+    [InlineData("src/Web/packages/portal/src/content/blog/post.2024.svx", "post-2024")]
+    public void BranchSlug_Reduces_The_Stem_To_A_Legal_Ref_Segment(string path, string expected)
+    {
+        GitHubContentService.BranchSlug(path).Should().Be(expected);
     }
 
     private static ContentContributionRequest Request() => new()

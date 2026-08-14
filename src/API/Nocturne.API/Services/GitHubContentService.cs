@@ -29,7 +29,10 @@ public partial class GitHubContentService(
     /// </summary>
     // \A/\z anchors: $ would also match before a trailing newline, letting
     // "post.svx\n" through validation.
-    [GeneratedRegex(@"\Asrc/Web/packages/portal/src/content/(blog|docs)(/[a-z0-9][a-z0-9._-]*)*/[a-z0-9][a-z0-9._-]*\.svx\z")]
+    // Each segment alternates alphanumerics and single separators: ".." would
+    // otherwise be admitted and produce "content/a..b-..." , which git refuses
+    // as a ref name and GitHub rejects with a 422.
+    [GeneratedRegex(@"\Asrc/Web/packages/portal/src/content/(blog|docs)(/[a-z0-9](?:[._-]?[a-z0-9])*)*/[a-z0-9](?:[._-]?[a-z0-9])*\.svx\z")]
     public static partial Regex AllowedPathPattern();
 
     public bool HasLocalPat => !string.IsNullOrEmpty(options.Value.ContributionsPat);
@@ -39,16 +42,15 @@ public partial class GitHubContentService(
     {
         var opts = options.Value;
         if (!AllowedPathPattern().IsMatch(request.Path))
-            throw new TranslationContributionRejectedException("This path cannot be modified through content contributions.");
+            throw new ContributionRejectedException("This path cannot be modified through content contributions.");
 
         using var client = prClient.CreateClient(opts.ContributionsPat);
 
         var existing = await prClient.GetFileAsync(client, opts.Owner, opts.Repo, request.Path, opts.BaseBranch, ct);
         if (existing is { } file && file.Text == request.Content)
-            throw new TranslationContributionRejectedException("The content is identical to the published version.");
+            throw new ContributionRejectedException("The content is identical to the published version.");
 
-        var slug = Path.GetFileNameWithoutExtension(request.Path);
-        var branch = $"content/{slug}-{Guid.NewGuid().ToString("N")[..12]}";
+        var branch = $"content/{BranchSlug(request.Path)}-{Guid.NewGuid().ToString("N")[..12]}";
         var baseSha = await prClient.GetBranchShaAsync(client, opts.Owner, opts.Repo, opts.BaseBranch, ct);
         await prClient.CreateBranchAsync(client, opts.Owner, opts.Repo, branch, baseSha, ct);
 
@@ -93,12 +95,43 @@ public partial class GitHubContentService(
             var error = await response.Content.ReadAsStringAsync(ct);
             logger.LogError("Content relay error: {StatusCode} {Error}", response.StatusCode, error);
             if (response.StatusCode == System.Net.HttpStatusCode.UnprocessableEntity)
-                throw new TranslationContributionRejectedException("The contribution was rejected by the relay.");
+                // Forward the relay's own reason so the contributor can tell
+                // "identical to published" from "path not allowed".
+                throw new ContributionRejectedException(
+                    RelayRejectionDetail(error) ?? "The contribution was rejected by the relay.");
             throw new InvalidOperationException($"Content relay error: {response.StatusCode}");
         }
 
         return await response.Content.ReadFromJsonAsync<ContentContributionResponse>(JsonOpts, ct)
             ?? throw new InvalidOperationException("Failed to deserialize relay response");
+    }
+
+    /// <summary>
+    /// Git refs cannot contain "..", a leading/trailing dot or a trailing
+    /// ".lock", so the file stem is reduced to alphanumerics and hyphens
+    /// before it becomes a branch name.
+    /// </summary>
+    internal static string BranchSlug(string path)
+    {
+        var stem = Path.GetFileNameWithoutExtension(path);
+        var slug = new string([.. stem.Select(c => char.IsAsciiLetterOrDigit(c) ? c : '-')]).Trim('-');
+        return slug.Length == 0 ? "content" : slug;
+    }
+
+    /// <summary>Reads the ProblemDetails "detail" out of a relay rejection.</summary>
+    private static string? RelayRejectionDetail(string body)
+    {
+        try
+        {
+            var detail = JsonDocument.Parse(body).RootElement;
+            return detail.TryGetProperty("detail", out var value) && value.ValueKind == JsonValueKind.String
+                ? value.GetString()
+                : null;
+        }
+        catch (JsonException)
+        {
+            return null;
+        }
     }
 
     internal static string BuildCommitMessage(ContentContributionRequest request, bool created)
@@ -107,7 +140,7 @@ public partial class GitHubContentService(
         var slug = Path.GetFileNameWithoutExtension(request.Path);
         sb.AppendLine($"content: {(created ? "add" : "update")} {slug}");
         sb.AppendLine();
-        sb.AppendLine($"Contributed by {GitHubPrClient.RenderName(request.Contributor.Name, markdown: false)} via the in-app content studio.");
+        sb.AppendLine($"Contributed by {ContributionValidation.RenderName(request.Contributor.Name, markdown: false)} via the in-app content studio.");
 
         var coAuthor = GitHubPrClient.CoAuthorTrailer(request.Contributor);
         if (coAuthor is not null)
@@ -125,7 +158,7 @@ public partial class GitHubContentService(
         sb.AppendLine($"{(created ? "New" : "Updated")} content proposed through the in-app content studio.");
         sb.AppendLine();
         sb.AppendLine($"- **File:** `{request.Path}`");
-        sb.AppendLine($"- **Contributor:** {GitHubPrClient.RenderName(request.Contributor.Name, markdown: true)}"
+        sb.AppendLine($"- **Contributor:** {ContributionValidation.RenderName(request.Contributor.Name, markdown: true)}"
             + (string.IsNullOrWhiteSpace(request.Contributor.GitHubUsername)
                 ? ""
                 : $" (@{GitHubPrClient.SanitizeMetadata(request.Contributor.GitHubUsername)})"));
@@ -135,7 +168,7 @@ public partial class GitHubContentService(
             sb.AppendLine();
             sb.AppendLine("## Contributor note");
             sb.AppendLine();
-            sb.AppendLine(request.Note);
+            sb.Append(ContributionValidation.RenderNoteAsCodeFence(request.Note));
         }
 
         return sb.ToString();

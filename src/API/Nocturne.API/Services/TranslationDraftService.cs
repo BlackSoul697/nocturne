@@ -128,7 +128,7 @@ public class TranslationDraftService(
         var drafts = await LoadForLocaleAsync(locale, ct);
 
         if (drafts.Count == 0)
-            throw new TranslationContributionRejectedException("There are no drafts to submit for this locale.");
+            throw new ContributionRejectedException("There are no drafts to submit for this locale.");
 
         // Remember each draft's revision so an edit that lands while the
         // (multi-second) PR flow runs is kept instead of silently deleted.

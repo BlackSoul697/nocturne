@@ -42,7 +42,7 @@ public class ContentContributionsController(
 
             return StatusCode(201, result);
         }
-        catch (TranslationContributionRejectedException ex)
+        catch (ContributionRejectedException ex)
         {
             return Problem(detail: ex.Message, statusCode: 422, title: "Unprocessable Entity");
         }
@@ -78,7 +78,7 @@ public class ContentContributionsController(
             var result = await contentService.SubmitAsync(request, ct);
             return StatusCode(201, result);
         }
-        catch (TranslationContributionRejectedException ex)
+        catch (ContributionRejectedException ex)
         {
             return Problem(detail: ex.Message, statusCode: 422, title: "Unprocessable Entity");
         }
@@ -92,7 +92,11 @@ public class ContentContributionsController(
 
     private ObjectResult? Validate(ContentContributionRequest request)
     {
-        if (!GitHubContentService.AllowedPathPattern().IsMatch(request.Path))
+        // Bound the path before the regex sees it: the allowlist accepts
+        // arbitrarily long repeated segments, and the value is echoed into a
+        // branch name, a commit message and a PR body.
+        if (request.Path.Length > ContributionValidation.MaxPathLength
+            || !GitHubContentService.AllowedPathPattern().IsMatch(request.Path))
             return Problem(detail: "Path must be a portal blog or docs .svx file", statusCode: 400, title: "Bad Request");
 
         if (string.IsNullOrWhiteSpace(request.Content)
@@ -102,27 +106,10 @@ public class ContentContributionsController(
         if (string.IsNullOrWhiteSpace(request.Title)
             || request.Title.Length > MaxTitleLength
             || request.Title.Any(char.IsControl))
-            return Problem(detail: "Title is required, must be under 200 characters, and cannot contain control characters", statusCode: 400, title: "Bad Request");
+            return Problem(detail: $"Title is required, must be under {MaxTitleLength} characters, and cannot contain control characters", statusCode: 400, title: "Bad Request");
 
-        // Contributor identity ends up in the commit message (Co-authored-by
-        // trailer) and PR body; same constraints as translation contributions.
-        if (string.IsNullOrWhiteSpace(request.Contributor.Name)
-            || request.Contributor.Name.Length > 128
-            || request.Contributor.Name.Any(char.IsControl))
-            return Problem(detail: "Contributor name is required, must be under 128 characters, and cannot contain control characters", statusCode: 400, title: "Bad Request");
-
-        if (request.Contributor.GitHubUsername is { Length: > 0 } username
-            && !System.Text.RegularExpressions.Regex.IsMatch(username, "^[A-Za-z0-9](?:-?[A-Za-z0-9]){0,38}$"))
-            return Problem(detail: "Invalid GitHub username", statusCode: 400, title: "Bad Request");
-
-        if (request.Contributor.Email is { Length: > 0 } email
-            && (email.Length > 254 || !System.Text.RegularExpressions.Regex.IsMatch(email, @"^[^\s<>@]+@[^\s<>@]+\.[^\s<>@]+$")))
-            return Problem(detail: "Invalid contributor email", statusCode: 400, title: "Bad Request");
-
-        if (request.Note is { } note
-            && (note.Length > 2000 || note.Any(c => char.IsControl(c) && c != '\n' && c != '\r')))
-            return Problem(detail: "Note must be under 2000 characters and cannot contain control characters", statusCode: 400, title: "Bad Request");
-
-        return null;
+        return ContributionValidation.ValidateContributor(request.Contributor, request.Note) is { } reason
+            ? Problem(detail: reason, statusCode: 400, title: "Bad Request")
+            : null;
     }
 }

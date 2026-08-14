@@ -1,6 +1,5 @@
 using System.Text;
 using System.Text.Json.Serialization;
-using System.Text.RegularExpressions;
 using Nocturne.Core.Models.Translations;
 
 namespace Nocturne.API.Services;
@@ -10,7 +9,7 @@ namespace Nocturne.API.Services;
 /// requests (translations, CMS content): fetch a file, branch, commit, open
 /// the PR, and clean up on failure.
 /// </summary>
-public partial class GitHubPrClient(IHttpClientFactory httpClientFactory, ILogger<GitHubPrClient> logger)
+public class GitHubPrClient(IHttpClientFactory httpClientFactory, ILogger<GitHubPrClient> logger)
 {
     public HttpClient CreateClient(string? pat) => GitHubApi.CreateClient(httpClientFactory, pat);
 
@@ -67,14 +66,17 @@ public partial class GitHubPrClient(IHttpClientFactory httpClientFactory, ILogge
         HttpClient client, string owner, string repo, string path, string branch,
         string? fileSha, string content, string message, CancellationToken ct)
     {
+        // sha must be absent, not null, when creating a file: the contents API
+        // 422s on an explicit null. Creating is the headline Studio case (a new
+        // blog post), so a serialized null broke it outright.
         var response = await client.PutAsJsonAsync(
             $"/repos/{owner}/{repo}/contents/{path}",
-            new
+            new CommitFileBody
             {
-                message,
-                content = Convert.ToBase64String(Encoding.UTF8.GetBytes(content)),
-                sha = fileSha,
-                branch,
+                Message = message,
+                Content = Convert.ToBase64String(Encoding.UTF8.GetBytes(content)),
+                Sha = fileSha,
+                Branch = branch,
             }, ct);
 
         if (!response.IsSuccessStatusCode)
@@ -124,57 +126,9 @@ public partial class GitHubPrClient(IHttpClientFactory httpClientFactory, ILogge
         }
     }
 
-    /// <summary>
-    /// Defense in depth behind controller validation: these values land in
-    /// commit messages and PR bodies, so newlines or angle brackets would
-    /// allow trailer injection regardless of what the caller validated.
-    /// </summary>
+    /// <summary>Defense in depth behind controller validation.</summary>
     public static string SanitizeMetadata(string value) =>
         new([.. value.Trim().Where(c => !char.IsControl(c) && c is not '<' and not '>')]);
-
-    /// <summary>
-    /// Renders a contributor-supplied display name for a sink GitHub gives
-    /// side effects to. The name arrives from an anonymous relay, so
-    /// <c>Jane fixes #12 cc @someone</c> would otherwise auto-close an issue
-    /// and notify arbitrary users from the upstream PR body and from the
-    /// commit message. A commit message is not markdown — a backslash escape
-    /// would render literally there — so the reference-carrying characters
-    /// are dropped instead of escaped when <paramref name="markdown"/> is
-    /// false. The backslash is escaped first so a submitted <c>\</c> cannot
-    /// consume the escape that follows it.
-    ///
-    /// <c>#</c> handling covers <c>#12</c> and <c>owner/repo#12</c>, but
-    /// GitHub resolves two further reference forms that carry no <c>#</c> and
-    /// no <c>@</c>: the <c>GH-12</c> shorthand and a full issue or pull URL.
-    /// Both fit inside a name and both honour closing keywords, so both are
-    /// removed outright — a person's name legitimately contains neither.
-    /// </summary>
-    public static string RenderName(string name, bool markdown)
-    {
-        var value = SanitizeMetadata(name);
-        value = markdown
-            ? value.Replace("\\", "\\\\").Replace("@", "\\@").Replace("#", "\\#").Replace("`", "\\`")
-            : new string([.. value.Where(c => c is not '@' and not '#')]);
-
-        // Last, because dropping a "#" above can splice a reference back
-        // together ("htt#ps://…", "GH#-1"). Neither pass can recreate the
-        // other's target: URL removal only deletes, and separating "GH" from
-        // its digits cannot produce a "://".
-        value = UrlReference().Replace(value, "");
-        return GitHubShorthandReference().Replace(value, "$1 ").Trim();
-    }
-
-    /// <summary>Any absolute http(s) URL, which covers the full issue/PR reference form.</summary>
-    [GeneratedRegex(@"https?://\S+", RegexOptions.IgnoreCase)]
-    private static partial Regex UrlReference();
-
-    /// <summary>
-    /// The <c>GH-123</c> shorthand. Only the hyphen is replaced: the autolink
-    /// requires <c>GH-</c> immediately followed by a digit, so a space between
-    /// them leaves nothing for GitHub to resolve while the name stays readable.
-    /// </summary>
-    [GeneratedRegex(@"(GH)-(?=\d)", RegexOptions.IgnoreCase)]
-    private static partial Regex GitHubShorthandReference();
 
     public static string? CoAuthorTrailer(TranslationContributorDto contributor)
     {
@@ -184,12 +138,23 @@ public partial class GitHubPrClient(IHttpClientFactory httpClientFactory, ILogge
             return $"Co-authored-by: {username} <{username}@users.noreply.github.com>";
         }
 
-        // The trailer lands in a commit message, so the name gets the same
-        // reference-dropping treatment as the attribution line above it.
         if (!string.IsNullOrWhiteSpace(contributor.Email))
-            return $"Co-authored-by: {RenderName(contributor.Name, markdown: false)} <{SanitizeMetadata(contributor.Email)}>";
+            return $"Co-authored-by: {ContributionValidation.RenderName(contributor.Name, markdown: false)} <{SanitizeMetadata(contributor.Email)}>";
 
         return null;
+    }
+
+    private record CommitFileBody
+    {
+        [JsonPropertyName("message")]
+        public required string Message { get; init; }
+        [JsonPropertyName("content")]
+        public required string Content { get; init; }
+        [JsonPropertyName("sha")]
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        public string? Sha { get; init; }
+        [JsonPropertyName("branch")]
+        public required string Branch { get; init; }
     }
 
     private record GitHubContentResponse
