@@ -213,6 +213,47 @@ public class GitHubTranslationServiceTests
     }
 
     [Fact]
+    public void PrBody_Removes_Url_And_Shorthand_References_From_The_Contributor_Name()
+    {
+        var body = GitHubTranslationService.BuildPrBody(
+            Request(name: "Jane fixes GH-123 see https://github.com/nightscout/nocturne/issues/456"),
+            new PoEditResult { Text = "", Applied = 1, Unmatched = [] });
+
+        // Neither form carries a "#" or "@", so the escapes miss both: they
+        // would backlink at PR-open and auto-close on merge.
+        body.Should().Contain("- **Contributor:** Jane fixes GH 123 see");
+        body.Should().NotContain("GH-123");
+        body.Should().NotContain("github.com");
+    }
+
+    [Fact]
+    public void CommitMessage_Removes_Url_And_Shorthand_References_From_The_Contributor_Name()
+    {
+        var request = Request(
+            email: "jane@example.com",
+            name: "Jane fixes GH-123 see https://github.com/nightscout/nocturne/issues/456");
+        var message = GitHubTranslationService.BuildCommitMessage(request, applied: 1);
+
+        message.Should().Contain("contributed by Jane fixes GH 123 see.");
+        message.Should().Contain("Co-authored-by: Jane fixes GH 123 see <jane@example.com>");
+        message.Should().NotContain("GH-123");
+        message.Should().NotContain("github.com");
+    }
+
+    [Fact]
+    public void CommitMessage_Neutralizes_References_Spliced_By_Dropping_A_Hash()
+    {
+        var request = Request(name: "Jane htt#ps://github.com/nightscout/nocturne/issues/9 GH#-7");
+        var message = GitHubTranslationService.BuildCommitMessage(request, applied: 1);
+
+        // Dropping "#" reassembles both forms, so they have to be neutralised
+        // after that pass rather than before it.
+        message.Should().NotContain("github.com");
+        message.Should().NotContain("GH-7");
+        message.Should().Contain("contributed by Jane  GH 7.");
+    }
+
+    [Fact]
     public void PrBody_Strips_Control_Chars_From_The_Note()
     {
         var body = GitHubTranslationService.BuildPrBody(

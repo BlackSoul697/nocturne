@@ -2,6 +2,7 @@ using System.Net.Http.Headers;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using System.Text.RegularExpressions;
 using Microsoft.Extensions.Options;
 
 namespace Nocturne.API.Services;
@@ -65,7 +66,7 @@ public record TranslationContributionResponse
 /// Instances without a PAT relay the contribution to nocturne.run, mirroring
 /// GitHubIssueService.
 /// </summary>
-public class GitHubTranslationService(
+public partial class GitHubTranslationService(
     IHttpClientFactory httpClientFactory,
     IOptions<GitHubTranslationOptions> options,
     ILogger<GitHubTranslationService> logger)
@@ -262,14 +263,39 @@ public class GitHubTranslationService(
     /// are dropped instead of escaped when <paramref name="markdown"/> is
     /// false. The backslash is escaped first so a submitted <c>\</c> cannot
     /// consume the escape that follows it.
+    ///
+    /// <c>#</c> handling covers <c>#12</c> and <c>owner/repo#12</c>, but
+    /// GitHub resolves two further reference forms that carry no <c>#</c> and
+    /// no <c>@</c>: the <c>GH-12</c> shorthand and a full issue or pull URL.
+    /// Both fit inside a name and both honour closing keywords, so both are
+    /// removed outright — a person's name legitimately contains neither.
     /// </summary>
     internal static string RenderName(string name, bool markdown)
     {
         var value = SanitizeMetadata(name);
-        return markdown
+        value = markdown
             ? value.Replace("\\", "\\\\").Replace("@", "\\@").Replace("#", "\\#").Replace("`", "\\`")
             : new string([.. value.Where(c => c is not '@' and not '#')]);
+
+        // Last, because dropping a "#" above can splice a reference back
+        // together ("htt#ps://…", "GH#-1"). Neither pass can recreate the
+        // other's target: URL removal only deletes, and separating "GH" from
+        // its digits cannot produce a "://".
+        value = UrlReference().Replace(value, "");
+        return GitHubShorthandReference().Replace(value, "$1 ").Trim();
     }
+
+    /// <summary>Any absolute http(s) URL, which covers the full issue/PR reference form.</summary>
+    [GeneratedRegex(@"https?://\S+", RegexOptions.IgnoreCase)]
+    private static partial Regex UrlReference();
+
+    /// <summary>
+    /// The <c>GH-123</c> shorthand. Only the hyphen is replaced: the autolink
+    /// requires <c>GH-</c> immediately followed by a digit, so a space between
+    /// them leaves nothing for GitHub to resolve while the name stays readable.
+    /// </summary>
+    [GeneratedRegex(@"(GH)-(?=\d)", RegexOptions.IgnoreCase)]
+    private static partial Regex GitHubShorthandReference();
 
     /// <summary>
     /// Renders free-text contributor input inside a fenced code block. The
