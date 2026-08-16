@@ -31,6 +31,9 @@ export interface AuthUser {
 	avatarUrl?: string;
 }
 
+/** The tenant status document, as returned by the API's status endpoint. */
+type TenantStatusResponse = Awaited<ReturnType<ApiClient["status"]["getStatus"]>>;
+
 declare global {
 	namespace App {
 		interface Error {
@@ -38,8 +41,21 @@ declare global {
 			details?: string;
 			errorId?: string;
 		}
+		type TenantStatus = TenantStatusResponse;
 		interface Locals {
 			apiClient: ApiClient;
+			/** Whether this request arrived on a public share host ({token}.share.{base-domain}). */
+			isShareHost: boolean;
+			/**
+			 * Set-Cookie headers to append verbatim to the outgoing response, for the half of a
+			 * same-named pair SvelteKit's cookie jar cannot hold. See propagateAuthCookies.
+			 */
+			rawSetCookies: string[];
+			/**
+			 * Memoized tenant status for this request. Read it through getRequestStatus rather
+			 * than touching it directly.
+			 */
+			statusPromise?: Promise<TenantStatusResponse | null>;
 			/**
 			 * Current authenticated user, or null if not authenticated
 			 */

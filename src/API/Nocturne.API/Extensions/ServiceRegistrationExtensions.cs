@@ -256,6 +256,12 @@ public static class ServiceRegistrationExtensions
             opts.BaseDomain = configuration[BaseDomainOptions.ConfigKey] ?? ""
         );
 
+        // Derive the session-, state-, and platform-access cookie Domain attributes from the base
+        // domain, in one place, so every writer and deleter of those cookies agrees on their scope.
+        services.PostConfigure<OidcOptions>(opts =>
+            SessionCookieExtensions.ApplyCookieDomainDefaults(opts, baseDomain)
+        );
+
         // Operator (SaaS platform policy)
         services.AddOptions<OperatorConfiguration>()
             .Bind(configuration.GetSection(OperatorConfiguration.SectionName))

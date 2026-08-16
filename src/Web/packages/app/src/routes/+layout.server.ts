@@ -1,5 +1,11 @@
 import type { LayoutServerLoad } from "./$types";
-import { extractTenantSlug, getOriginalHost, isShareHost } from "$lib/server/request-host";
+import { getOriginalHost } from "$lib/server/request-host";
+import {
+  classifyHost,
+  isTenantlessHost,
+  parseDashboardSlugs,
+} from "$lib/server/tenantless-host";
+import { getRequestStatus } from "$lib/server/request-status";
 import {
   LANGUAGE_COOKIE_NAME,
   PREFS_COOKIE_NAME,
@@ -17,10 +23,21 @@ import {
 export const load: LayoutServerLoad = async ({ locals, request, cookies }) => {
   // Tenant identity is resolved here, from the request host against BASE_DOMAIN,
   // so the browser never has to guess it by counting hostname labels. A share
-  // host carries a token rather than a slug, so it has no tenant to name.
+  // host carries a token rather than a slug, so it has no tenant to name, and a
+  // reserved dashboard slug names no single tenant either.
   const host = getOriginalHost(request);
   const baseDomain = process.env.BASE_DOMAIN ?? null;
-  const tenantSlug = isShareHost(host) ? null : extractTenantSlug(host, baseDomain);
+  const dashboardSlugs = parseDashboardSlugs(process.env.DASHBOARD_SLUGS);
+  const { kind, slug } = classifyHost(host, baseDomain, dashboardSlugs);
+  const tenantSlug = slug;
+
+  // Resolved once here, for every route: the apex needs the API's answer (does a sole tenant
+  // resolve behind it?) and asking per-page would repeat both the question and the round-trip.
+  // Children read `tenantless` from this layout's data via parent().
+  const tenantless = isTenantlessHost(
+    kind,
+    kind === "apex" ? Boolean((await getRequestStatus(locals))?.tenantSlug) : false
+  );
 
   // Display preferences for SSR, in the same precedence the browser applies them
   // (backend blob over the mirrored cookie) so the markup matches hydration.
@@ -44,6 +61,8 @@ export const load: LayoutServerLoad = async ({ locals, request, cookies }) => {
     isPlatformAdmin: locals.isPlatformAdmin,
     isPlatformAccessGrant: locals.isPlatformAccessGrant ?? false,
     tenantSlug,
+    tenantless,
     baseDomain,
+    dashboardSlugs,
   };
 };

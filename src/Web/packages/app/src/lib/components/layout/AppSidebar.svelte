@@ -47,6 +47,7 @@
     History as HistoryIcon,
   } from "lucide-svelte";
   import { getSidebarReportItems } from "$lib/navigation/report-navigation";
+  import { filterTenantlessNav } from "$lib/navigation/tenantless-navigation";
   import { tenantUrl } from "$lib/utils/tenant-host";
   import type { AuthUser } from "$lib/stores/auth-store.svelte";
 
@@ -63,6 +64,8 @@
     currentSlug?: string | null;
     /** Public base domain tenant subdomains hang off (from layout data) */
     baseDomain?: string | null;
+    /** Whether this host serves the cross-tenant dashboard rather than one tenant (from layout data) */
+    tenantless?: boolean;
   }
 
   const {
@@ -72,6 +75,7 @@
     isGuestSession = false,
     currentSlug = null,
     baseDomain = null,
+    tenantless = false,
   }: Props = $props();
 
   const sidebar = Sidebar.useSidebar();
@@ -307,6 +311,11 @@
       ],
     });
 
+    // See tenantless-navigation for why the tenant-scoped pages come out.
+    if (tenantless) {
+      return filterTenantlessNav(items);
+    }
+
     return items;
   });
 
@@ -377,14 +386,16 @@
     <Sidebar.Trigger />
   </Sidebar.Header>
 
-  <!-- Glucose Widget (fixed, not scrollable) -->
-  <Sidebar.Group>
-    <Sidebar.GroupContent>
-      <SidebarGlucoseWidget />
-    </Sidebar.GroupContent>
-  </Sidebar.Group>
+  <!-- Glucose Widget (fixed, not scrollable). One tenant's latest reading. -->
+  {#if !tenantless}
+    <Sidebar.Group>
+      <Sidebar.GroupContent>
+        <SidebarGlucoseWidget />
+      </Sidebar.GroupContent>
+    </Sidebar.Group>
 
-  <Sidebar.Separator />
+    <Sidebar.Separator />
+  {/if}
 
   <!-- Platform-admin access indicator: viewing a tenant you're NOT a member of,
        via a short-lived platform-access grant (distinct from the member switcher). -->
@@ -531,8 +542,11 @@
     <Sidebar.Menu>
       {#if !langPrefKnown}
         <Sidebar.MenuItem class="group-data-[collapsible=icon]:hidden">
+          <!-- The language choice still applies to this page; only persisting it needs a tenant
+               (the preferences write is tenant-scoped), so a tenantless host keeps the selector
+               and drops the write rather than losing the control entirely. -->
           <LanguageSelector
-            onLanguageChange={user
+            onLanguageChange={user && !tenantless
               ? (locale: string) =>
                   updateLanguagePreference({ preferredLanguage: locale })
               : undefined}
@@ -542,13 +556,14 @@
       <Sidebar.MenuItem
         class="flex items-center gap-2 min-w-0 group-data-[collapsible=icon]:flex-col"
       >
-        {#if user && !isGuestSession}
+        {#if user && !isGuestSession && !tenantless}
           <SidebarNotifications />
         {/if}
         <UserMenu
           {user}
           {isPlatformAdmin}
           {isGuestSession}
+          {tenantless}
           collapsed={sidebar.state === "collapsed"}
           class="flex-1 min-w-0"
         />
