@@ -1627,7 +1627,7 @@ msgstr "{0}ms"
 msgid ""
 "vs {0}ms\n"
 "Nightscout"
-msgstr ""
+msgstr "vs. {0}ms\nNightscout"
 
 #: src/routes/dashboard/+page.svelte
 msgid "Response Match Breakdown"
@@ -2024,7 +2024,7 @@ msgstr "NC: {0}"
 msgid ""
 "No analyses found. Make sure the compatibility proxy service is\n"
 "running and receiving traffic."
-msgstr ""
+msgstr "Keine Analysen gefunden. Stelle sicher, dass der Kompatibilitäts-Proxy\nausgeführt wird und Datenverkehr empfängt."
 
 #: src/routes/food/food-state.svelte.ts
 msgid "Database loaded"
@@ -3457,7 +3457,7 @@ msgstr "Datenqualität"
 msgid ""
 "This report is for informational purposes only. Always consult your\n"
 "healthcare provider for medical advice."
-msgstr ""
+msgstr "Dieser Bericht dient nur zu Informationszwecken. Hole für medizinischen Rat immer\närztlichen Rat ein."
 
 #: src/routes/(authenticated)/settings/profile/+page.svelte
 #: src/routes/profile/+page.svelte
@@ -3510,7 +3510,7 @@ msgid ""
 "Profiles are typically uploaded from your diabetes management\n"
 "app (like AAPS, Loop, or xDrip+). They contain your basal rates,\n"
 "insulin sensitivity factors, and carb ratios."
-msgstr ""
+msgstr "Profile werden normalerweise von deiner Diabetesmanagement-App\n(wie AAPS, Loop oder xDrip+) hochgeladen. Sie enthalten deine Basalraten,\nInsulinsensitivitätsfaktoren und Kohlenhydratfaktoren."
 
 #: src/routes/profile/+page.svelte
 msgid "<0/> Create Profile"
@@ -3530,7 +3530,7 @@ msgstr "<0/> Profilverlauf"
 msgid ""
 "Select a profile to view its settings. The most recently used\n"
 "profile is shown first."
-msgstr ""
+msgstr "Wähle ein Profil aus, um seine Einstellungen anzuzeigen. Das zuletzt verwendete\nProfil wird zuerst angezeigt."
 
 #: src/lib/components/profile/ProfileDeleteDialog.svelte
 #: src/routes/profile/+page.svelte
@@ -3793,7 +3793,7 @@ msgstr "Keine Daten für diesen Profilspeicher verfügbar."
 msgid ""
 "This profile doesn't contain any therapy settings (basal, carb\n"
 "ratios, etc.)"
-msgstr ""
+msgstr "Dieses Profil enthält keine Therapieeinstellungen (Basalraten, Kohlenhydrat-\nfaktoren usw.)."
 
 #: src/routes/profile/+page.svelte
 msgid "<0/> Add Settings"
@@ -4780,7 +4780,7 @@ msgstr "Sitzung läuft ab"
 msgid ""
 "Your session will expire in {0}.\n"
 "Click refresh to extend your session."
-msgstr ""
+msgstr "Deine Sitzung läuft in {0} ab.\nKlicke auf Aktualisieren, um sie zu verlängern."
 
 #: src/lib/components/layout/SessionExpiryWarning.svelte
 msgid "Refreshing..."
@@ -4972,13 +4972,13 @@ msgstr "Insulin (U)"
 msgid ""
 "Your basal percentage is higher than typical — consider discussing\n"
 "with your healthcare provider."
-msgstr ""
+msgstr "Dein Basalanteil ist höher als üblich — besprich dies gegebenenfalls\nmit deinem Behandlungsteam."
 
 #: src/lib/components/reports/BasalBolusRatioChart.svelte
 msgid ""
 "Your bolus percentage is higher than typical — this may indicate\n"
 "high carb meals or frequent corrections."
-msgstr ""
+msgstr "Dein Bolusanteil ist höher als üblich — dies kann auf\nkohlenhydratreiche Mahlzeiten oder häufige Korrekturen hindeuten."
 
 #~ msgid ""
 #~ "<0>Typical ratios:</0> Most people with Type 1 diabetes have around 50% basal and 50% bolus.\n"
@@ -5668,7 +5668,7 @@ msgstr "nach Standortwechsel"
 msgid ""
 "↑ {0}%\n"
 "higher"
-msgstr ""
+msgstr "↑ {0}%\nhöher"
 
 #: src/lib/components/reports/SiteChangeImpactChart.svelte
 msgid "Insufficient Data"
@@ -5679,13 +5679,13 @@ msgstr "Unzureichende Daten"
 msgid ""
 "At least 2 site changes are required for meaningful analysis.\n"
 "Currently found: {0} site change(s)."
-msgstr ""
+msgstr "Für eine aussagekräftige Analyse sind mindestens 2 Katheterwechsel erforderlich.\nDerzeit gefunden: {0} Katheterwechsel."
 
 #: src/lib/components/reports/SiteChangeImpactChart.svelte
 msgid ""
 "Not enough glucose readings around your site changes to generate a\n"
 "reliable analysis."
-msgstr ""
+msgstr "Rund um deine Katheterwechsel liegen nicht genügend Glukosewerte für eine\nzuverlässige Analyse vor."
 
 #: src/lib/components/reports/SiteChangeImpactChart.svelte
 msgid "No site change data available"
@@ -5742,7 +5742,7 @@ msgstr "• {0}g Kohlenhydrate"
 msgid ""
 "Are you sure you want to delete this profile? This action cannot be\n"
 "undone."
-msgstr ""
+msgstr "Möchtest du dieses Profil wirklich löschen? Diese Aktion kann nicht\nrückgängig gemacht werden."
 
 #. placeholder {0}: formatDate(subject.sysCreatedAt)
 #. placeholder {0}: formatDateDetailed(profile.created_at)
@@ -5833,7 +5833,7 @@ msgstr "<0/> Profil bearbeiten: {0}"
 msgid ""
 "Modify your therapy settings. Changes are not saved until you click\n"
 "Save."
-msgstr ""
+msgstr "Ändere deine Therapieeinstellungen. Änderungen werden erst gespeichert, wenn du auf\nSpeichern klickst."
 
 #: src/lib/components/alerts/RuleEditorSheet.svelte
 #: src/lib/components/profile/ProfileEditDialog.svelte
@@ -5943,7 +5943,7 @@ msgstr "Extern verwaltetes Profil"
 msgid ""
 "This profile is managed by an external source (e.g., Glooko). <0/> Any changes made here will <1>NOT</1> be reflected on your device (pump/CGM). They will only affect how data is\n"
 "viewed in Nocturne."
-msgstr ""
+msgstr "Dieses Profil wird von einer externen Quelle (z. B. Glooko) verwaltet. <0/> Hier vorgenommene Änderungen werden <1>NICHT</1> auf dein Gerät (Pumpe/CGM) übertragen. Sie beeinflussen nur, wie Daten in\nNocturne angezeigt werden."
 
 #: src/lib/components/profile/ProfileEditDialog.svelte
 msgid "I Understand"
@@ -6385,7 +6385,7 @@ msgstr "Neuer Alarm"
 msgid ""
 "Configure all aspects of this alarm including sounds, visuals, and smart\n"
 "behaviors."
-msgstr ""
+msgstr "Konfiguriere alle Aspekte dieses Alarms, einschließlich Tönen, visuellen Hinweisen und intelligenten\nVerhaltensweisen."
 
 #: src/lib/components/settings/AlarmProfileDialog.svelte
 msgid "<0/> General"
@@ -6963,7 +6963,7 @@ msgstr "Wake Lock API wird nicht unterstützt"
 msgid ""
 "Click each capability to test it. These determine what alarm features are\n"
 "available in your browser."
-msgstr ""
+msgstr "Klicke auf jede Funktion, um sie zu testen. Sie bestimmen, welche Alarmfunktionen in\ndeinem Browser verfügbar sind."
 
 #: src/lib/components/settings/DashboardWidgetConfigurator.svelte
 msgid "<0/> Dashboard Widgets"
@@ -7450,7 +7450,7 @@ msgstr "Keine weiteren Übereinstimmungen gefunden."
 msgid ""
 "Log carbs without creating a food entry. The note will be saved with\n"
 "this entry."
-msgstr ""
+msgstr "Erfasse Kohlenhydrate, ohne einen Lebensmitteleintrag anzulegen. Die Notiz wird mit\ndiesem Eintrag gespeichert."
 
 #. placeholder {0}: foodFat
 #. placeholder {1}: foodProtein
@@ -7504,30 +7504,30 @@ msgstr "Notiz hinzufügen..."
 
 #: src/lib/components/treatments/TreatmentPortionsForm.svelte
 msgid "Add a note..."
-msgstr "Kohlenhydrataufnahme"
+msgstr "Notiz hinzufügen..."
 
 #: src/lib/components/treatments/TreatmentFoodSelectorDialog.svelte
 msgid "Logging..."
-msgstr "Kohlenhydrate erfassen"
+msgstr "Wird protokolliert..."
 
 #: src/lib/components/treatments/TreatmentFoodSelectorDialog.svelte
 msgid "Log Carbs"
-msgstr "Speichern & Hinzufügen"
+msgstr "Kohlenhydrate protokollieren"
 
 #: src/lib/components/treatments/TreatmentFoodSelectorDialog.svelte
 msgid "Save & Add"
-msgstr "Als neu speichern"
+msgstr "Speichern und hinzufügen"
 
 #: src/lib/components/treatments/TreatmentFoodSelectorDialog.svelte
 msgid "Save as New"
-msgstr "<0/> Wird aktualisiert..."
+msgstr "Als neu speichern"
 
 #~ msgid "Updating..."
 #~ msgstr ""
 
 #: src/lib/components/treatments/TreatmentFoodSelectorDialog.svelte
 msgid "Update & Add"
-msgstr "Wie viel hast du gegessen?"
+msgstr "Aktualisieren und hinzufügen"
 
 #: src/lib/components/patient/PatientDeviceManager.svelte
 #: src/lib/components/patient/PatientInsulinManager.svelte
@@ -7542,12 +7542,12 @@ msgstr "Wird hinzugefügt..."
 #. placeholder {0}: bolusCount
 #: src/lib/components/treatments/TreatmentStatsCard.svelte
 msgid "{0} boluses"
-msgstr "{0}/Tag"
+msgstr "{0} Boli"
 
 #. placeholder {0}: dailyAvgBoluses.toFixed(1)
 #: src/lib/components/treatments/TreatmentStatsCard.svelte
 msgid "{0}/day"
-msgstr "{0}U Ø"
+msgstr "{0}/Tag"
 
 #. placeholder {0}: avgInsulinPerBolus.toFixed(1)
 #: src/lib/components/treatments/TreatmentStatsCard.svelte
@@ -7922,12 +7922,12 @@ msgstr "Passwort bestätigen"
 #: src/routes/auth/change-password/+page.svelte
 #: src/routes/auth/reset-password/+page.svelte
 msgid "Confirm your new password"
-msgstr "Bestätige dein neues Passwort"
+msgstr "Neues Passwort bestätigen"
 
 #: src/lib/components/treatments/TreatmentFoodSelectorDialog.svelte
 #: src/routes/auth/change-password/+page.svelte
 msgid "<0/> Updating..."
-msgstr "Aktualisieren & Hinzufügen"
+msgstr "<0/> Wird aktualisiert..."
 
 #: src/routes/auth/change-password/+page.svelte
 msgid "Update Password"
@@ -7940,11 +7940,11 @@ msgstr "Zurück zur Anmeldung"
 
 #: src/lib/components/ui/date-range-picker.svelte
 msgid "Select date"
-msgstr "Neues Zifferblatt"
+msgstr "Datum auswählen"
 
 #: src/lib/components/treatments/TreatmentFoodEntryEditDialog.svelte
 msgid "Failed to load food"
-msgstr "Fehler beim Laden des Lebensmittels"
+msgstr "Lebensmittel konnten nicht geladen werden"
 
 #: src/lib/components/treatments/TreatmentFoodEntryEditDialog.svelte
 msgid "Food entry updated"
@@ -8005,7 +8005,7 @@ msgstr "Gib deine E-Mail-Adresse ein, und wir senden dir einen Link zum Zurücks
 msgid ""
 "Local authentication is not enabled. Please contact your\n"
 "administrator."
-msgstr ""
+msgstr "Die lokale Authentifizierung ist nicht aktiviert. Wende dich an deine\nAdministration."
 
 #: src/routes/(legal)/+layout.svelte
 #: src/routes/auth/forgot-password/+page.svelte
@@ -8020,7 +8020,7 @@ msgstr "<0/> Zurück zum Login"
 msgid ""
 "If an account exists with that email address, you'll receive a\n"
 "password reset link shortly."
-msgstr ""
+msgstr "Falls ein Konto mit dieser E-Mail-Adresse existiert, erhältst du in Kürze einen\nLink zum Zurücksetzen des Passworts."
 
 #: src/routes/auth/forgot-password/+page.svelte
 msgid "Email delivery not configured"
@@ -8030,7 +8030,7 @@ msgstr "E-Mail-Versand nicht konfiguriert"
 msgid ""
 "An administrator has been notified and will contact you\n"
 "with reset instructions."
-msgstr ""
+msgstr "Die Administration wurde benachrichtigt und wird dich\nmit Anweisungen zum Zurücksetzen kontaktieren."
 
 #: src/routes/auth/forgot-password/+page.svelte
 msgid "Didn't receive an email? <0>Try again</0>"
@@ -8083,7 +8083,7 @@ msgstr "Gib deine Informationen ein, um dein Nocturne-Konto zu erstellen."
 msgid ""
 "New user registration is currently disabled. Please contact your\n"
 "administrator for an account."
-msgstr ""
+msgstr "Die Registrierung neuer Benutzer ist derzeit deaktiviert. Wende dich für ein Konto an deine\nAdministration."
 
 #: src/routes/auth/register/+page.svelte
 msgid "Check your email"
@@ -8093,34 +8093,34 @@ msgstr "Prüfe deine E-Mail"
 msgid ""
 "We've sent a verification link to your email address. Please\n"
 "click the link to activate your account."
-msgstr ""
+msgstr "Wir haben einen Bestätigungslink an Ihre E-Mail-Adresse gesendet. Bitte\nklicken Sie auf den Link, um Ihr Konto zu aktivieren."
 
 #: src/routes/auth/register/+page.svelte
 msgid "Pending Approval"
-msgstr "Freigabe ausstehend"
+msgstr "Genehmigung ausstehend"
 
 #: src/routes/auth/register/+page.svelte
 msgid ""
 "Your registration has been submitted. An administrator will\n"
 "review your account shortly. You'll receive an email once\n"
 "approved."
-msgstr "Weiter zur Anmeldung"
+msgstr "Ihre Registrierung wurde übermittelt. Ein Administrator wird\nIhr Konto in Kürze prüfen. Nach der Genehmigung erhalten Sie\neine E-Mail."
 
 #: src/routes/auth/register/+page.svelte
 msgid "Your account has been created successfully!"
-msgstr "Dein Konto wurde erfolgreich erstellt!"
+msgstr "Ihr Konto wurde erfolgreich erstellt!"
 
 #: src/routes/auth/register/+page.svelte
 msgid "Continue to Sign In"
-msgstr "E-Mail <0/>"
+msgstr "Weiter zur Anmeldung"
 
 #: src/routes/auth/register/+page.svelte
 msgid "Your name (optional)"
-msgstr "Dein Name (optional)"
+msgstr "Ihr Name (optional)"
 
 #: src/routes/auth/register/+page.svelte
 msgid "Email <0/>"
-msgstr "Mindestens {0} Zeichen"
+msgstr "E-Mail <0/>"
 
 #: src/routes/auth/register/+page.svelte
 msgid "Password <0/>"
@@ -8129,7 +8129,7 @@ msgstr "Passwort <0/>"
 #. placeholder {0}: passwordRequirements.minLength
 #: src/routes/auth/register/+page.svelte
 msgid "Minimum {0} characters"
-msgstr "<0/> Konto wird erstellt..."
+msgstr "Mindestens {0} Zeichen"
 
 #: src/routes/auth/register/+page.svelte
 msgid "Confirm Password <0/>"
@@ -8137,7 +8137,7 @@ msgstr "Passwort bestätigen <0/>"
 
 #: src/routes/auth/register/+page.svelte
 msgid "<0/> Creating account..."
-msgstr "Bereits ein Konto? <0>Anmelden</0>"
+msgstr "<0/> Konto wird erstellt..."
 
 #: src/routes/auth/register/+page.svelte
 msgid "Create Account"
@@ -8146,61 +8146,61 @@ msgstr "Konto erstellen"
 #: src/routes/auth/register/+page.svelte
 #: src/routes/invite/[token]/+page.svelte
 msgid "Already have an account? <0>Sign in</0>"
-msgstr "E-Mail bestätigen | Nocturne"
+msgstr "Sie haben bereits ein Konto? <0>Anmelden</0>"
 
 #: src/routes/auth/register/+page.svelte
 msgid "By creating an account, you agree to our <0>Terms of Service</0> and <1>Privacy Policy</1>"
-msgstr "Mit der Erstellung eines Kontos stimmst du unseren <0>Nutzungsbedingungen</0> und <1>Datenschutzrichtlinien</1> zu."
+msgstr "Mit der Erstellung eines Kontos stimmen Sie unseren <0>Nutzungsbedingungen</0> und unserer <1>Datenschutzerklärung</1> zu"
 
 #: src/routes/auth/verify-email/+page.svelte
 msgid "Verify Email | Nocturne"
-msgstr "E-Mail bestätigen"
+msgstr "E-Mail bestätigen | Nocturne"
 
 #: src/routes/auth/verify-email/+page.svelte
 msgid "We couldn't verify your email. Please try again or contact support."
-msgstr "Wir konnten deine E-Mail nicht verifizieren. Bitte versuche es erneut oder kontaktiere den Support."
+msgstr "Ihre E-Mail-Adresse konnte nicht bestätigt werden. Bitte versuchen Sie es erneut oder wenden Sie sich an den Support."
 
 #: src/routes/auth/verify-email/+page.svelte
 #: src/routes/auth/verify-email/+page.svelte
 msgid "Verify Your Email"
-msgstr "Zurück zur Anmeldung"
+msgstr "Bestätigen Sie Ihre E-Mail-Adresse"
 
 #: src/routes/auth/verify-email/+page.svelte
 msgid ""
 "No verification token was provided. Please check your email for the\n"
 "verification link and click on it to verify your account."
-msgstr ""
+msgstr "Es wurde kein Bestätigungstoken angegeben. Prüfen Sie Ihre E-Mails auf den\nBestätigungslink und klicken Sie darauf, um Ihr Konto zu bestätigen."
 
 #: src/routes/auth/reset-password/+page.svelte
 #: src/routes/auth/verify-email/+page.svelte
 #: src/routes/auth/verify-email/+page.svelte
 msgid "Return to login"
-msgstr "Bitte warten Sie, während wir Ihre E-Mail-Adresse bestätigen..."
+msgstr "Zurück zur Anmeldung"
 
 #: src/routes/auth/verify-email/+page.svelte
 msgid "Verifying Your Email"
-msgstr "E-Mail wird verifiziert"
+msgstr "E-Mail-Adresse wird bestätigt"
 
 #: src/routes/auth/verify-email/+page.svelte
 msgid "Please wait while we verify your email address..."
-msgstr "Anmelden"
+msgstr "Bitte warten Sie, während wir Ihre E-Mail-Adresse bestätigen..."
 
 #: src/routes/auth/verify-email/+page.svelte
 msgid "Email Verified!"
-msgstr "E-Mail verifiziert!"
+msgstr "E-Mail-Adresse bestätigt!"
 
 #: src/routes/auth/reset-password/+page.svelte
 #: src/routes/auth/verify-email/+page.svelte
 msgid "Log In"
-msgstr "<0/> E-Mail bestätigen"
+msgstr "Anmelden"
 
 #: src/routes/auth/verify-email/+page.svelte
 msgid "Click the button below to verify your email address."
-msgstr "Klicke auf die Schaltfläche unten, um deine E-Mail-Adresse zu verifizieren."
+msgstr "Klicken Sie auf die Schaltfläche unten, um Ihre E-Mail-Adresse zu bestätigen."
 
 #: src/routes/auth/verify-email/+page.svelte
 msgid "<0/> Verify Email"
-msgstr "Ihre Anfrage konnte nicht verarbeitet werden. Bitte versuchen Sie es erneut oder kontaktieren Sie den Support."
+msgstr "<0/> E-Mail bestätigen"
 
 #: src/routes/auth/reset-password/+page.svelte
 msgid "Reset Password | Nocturne"
@@ -8208,7 +8208,7 @@ msgstr "Passwort zurücksetzen | Nocturne"
 
 #: src/routes/auth/reset-password/+page.svelte
 msgid "We couldn't process your request. Please try again or contact support."
-msgstr "Wir konnten deine Anfrage nicht verarbeiten. Bitte versuche es erneut oder kontaktiere den Support."
+msgstr "Ihre Anfrage konnte nicht verarbeitet werden. Bitte versuchen Sie es erneut oder wenden Sie sich an den Support."
 
 #: src/routes/auth/reset-password/+page.svelte
 #: src/routes/auth/reset-password/+page.svelte
@@ -8219,7 +8219,7 @@ msgstr "Passwort zurücksetzen"
 msgid ""
 "No reset token was provided. Please check your email for the\n"
 "password reset link and click on it to continue."
-msgstr "Passwort zurücksetzen!"
+msgstr "Es wurde kein Token zum Zurücksetzen angegeben. Prüfen Sie Ihre E-Mails auf den\nLink zum Zurücksetzen des Passworts und klicken Sie darauf, um fortzufahren."
 
 #: src/routes/auth/reset-password/+page.svelte
 msgid "Request a new reset link"
@@ -8532,7 +8532,7 @@ msgstr "<0/> Filter"
 #: src/routes/dashboard/analyses/+page.svelte
 #: src/routes/dashboard/analyses/+page.svelte
 msgid "All match types"
-msgstr "Bis Datum"
+msgstr "Alle Übereinstimmungstypen"
 
 #: src/routes/dashboard/analyses/+page.svelte
 msgid "From Date"
@@ -8540,7 +8540,7 @@ msgstr "Von Datum"
 
 #: src/routes/dashboard/analyses/+page.svelte
 msgid "To Date"
-msgstr "Filter löschen"
+msgstr "Bis Datum"
 
 #: src/routes/dashboard/analyses/+page.svelte
 msgid "<0/> Apply Filters"
@@ -8548,7 +8548,7 @@ msgstr "<0/> Filter anwenden"
 
 #: src/routes/dashboard/analyses/+page.svelte
 msgid "Clear Filters"
-msgstr "Zeige {0} Ergebnisse (ab {1})"
+msgstr "Filter zurücksetzen"
 
 #: src/routes/dashboard/analyses/+page.svelte
 msgid "Analysis Results"
@@ -8558,7 +8558,7 @@ msgstr "Analyseergebnisse"
 #. placeholder {1}: filters.skip + 1
 #: src/routes/dashboard/analyses/+page.svelte
 msgid "Showing {0} results (starting from {1})"
-msgstr "Zeit: {0}"
+msgstr "{0} Ergebnisse werden angezeigt (ab {1})"
 
 #. placeholder {0}: analysis.totalProcessingTimeMs
 #: src/routes/dashboard/analyses/+page.svelte
@@ -8568,7 +8568,7 @@ msgstr "<0/> {0}ms"
 #. placeholder {0}: analysis.analysisTimestamp ? new Date(analysis.analysisTimestamp).toLocaleString() : "N/A"
 #: src/routes/dashboard/analyses/+page.svelte
 msgid "Time: {0}"
-msgstr "Nightscout:"
+msgstr "Zeit: {0}"
 
 #. placeholder {0}: analysis.selectedResponseTarget
 #: src/routes/dashboard/analyses/+page.svelte
@@ -8579,7 +8579,7 @@ msgstr "Ausgewählt: {0}"
 #: src/routes/dashboard/analyses/[id]/+page.svelte
 #: src/routes/dashboard/analyses/[id]/+page.svelte
 msgid "Nightscout:"
-msgstr "<0/> {0} Kritisch"
+msgstr "Nightscout:"
 
 #: src/routes/dashboard/analyses/+page.svelte
 #: src/routes/dashboard/analyses/[id]/+page.svelte
@@ -8590,17 +8590,17 @@ msgstr "Nocturne:"
 #. placeholder {0}: analysis.criticalDiscrepancyCount
 #: src/routes/dashboard/analyses/+page.svelte
 msgid "<0/> {0} Critical"
-msgstr "{0} Gering"
+msgstr "<0/> {0} kritisch"
 
 #. placeholder {0}: analysis.majorDiscrepancyCount
 #: src/routes/dashboard/analyses/+page.svelte
 msgid "<0/> {0} Major"
-msgstr "<0/> {0} Major"
+msgstr "<0/> {0} schwerwiegend"
 
 #. placeholder {0}: analysis.minorDiscrepancyCount
 #: src/routes/dashboard/analyses/+page.svelte
 msgid "{0} Minor"
-msgstr "Keine Analysen gefunden, die den aktuellen Filtern entsprechen."
+msgstr "{0} geringfügig"
 
 #: src/routes/dashboard/analyses/+page.svelte
 msgid "No Issues"
@@ -8608,7 +8608,7 @@ msgstr "Keine Probleme"
 
 #: src/routes/dashboard/analyses/+page.svelte
 msgid "No analyses found matching the current filters."
-msgstr "Zeige {0}-{1}"
+msgstr "Keine Analysen gefunden, die den aktuellen Filtern entsprechen."
 
 #: src/routes/dashboard/analyses/+page.svelte
 msgid "<0/> Previous"
@@ -8618,7 +8618,7 @@ msgstr "<0/> Zurück"
 #. placeholder {1}: filters.skip + analyses.length
 #: src/routes/dashboard/analyses/+page.svelte
 msgid "Showing {0}-{1}"
-msgstr "Uhrzeit: {0}"
+msgstr "{0}–{1} werden angezeigt"
 
 #: src/routes/(authenticated)/settings/alerts/setup/+page.svelte
 #: src/routes/dashboard/analyses/+page.svelte
@@ -8629,7 +8629,7 @@ msgstr "Weiter <0/>"
 #. placeholder {0}: face
 #: src/routes/clock/[face]/+page.svelte
 msgid "Clock - {0}"
-msgstr "Uhr - {0}"
+msgstr "Uhr – {0}"
 
 #: src/lib/components/clock-builder/ClockBuilderHeader.svelte
 #: src/lib/components/setup/WizardShell.svelte
@@ -8647,7 +8647,7 @@ msgstr "<0/> Zurück"
 #: src/routes/clock/[face]/+page.svelte
 #: src/routes/clock/[id]/+page.svelte
 msgid "Demo Mode"
-msgstr "Demo-Modus"
+msgstr "Demomodus"
 
 #: src/lib/components/connectors/ConnectorDetailsDialog.svelte
 #: src/lib/components/ui/connector-toggle-group/connector-toggle-group-item.svelte
@@ -9013,7 +9013,7 @@ msgstr "<0/> Perzentildiagramm der Basalrate"
 msgid ""
 "Your typical basal delivery pattern across 24 hours (like an AGP for\n"
 "basal rates)"
-msgstr ""
+msgstr "Dein typisches Basalabgabemuster über 24 Stunden (wie ein AGP für\nBasalraten)"
 
 #: src/routes/(authenticated)/reports/basal-analysis/+page.svelte
 #: src/routes/reports/basal-analysis/+page.svelte
@@ -9040,7 +9040,7 @@ msgstr "Basalratenbereich"
 msgid ""
 "This indicates significant variation in your basal needs\n"
 "throughout the day."
-msgstr ""
+msgstr "Dies weist auf deutliche Schwankungen deines Basalbedarfs\nim Tagesverlauf hin."
 
 #: src/routes/(authenticated)/reports/basal-analysis/+page.svelte
 #: src/routes/reports/basal-analysis/+page.svelte
@@ -9073,24 +9073,24 @@ msgstr "Hohe Temp-Basal-Aktivität ({0}/Tag) deutet auf aktive automatisierte od
 msgid ""
 "Low temp basal activity — your basal rates may be\n"
 "well-tuned."
-msgstr ""
+msgstr "Geringe temporäre Basalaktivität — deine Basalraten sind möglicherweise\ngut eingestellt."
 
 #: src/routes/(authenticated)/reports/basal-analysis/+page.svelte
 #: src/routes/reports/basal-analysis/+page.svelte
 msgid "No temp basal activity recorded in this period."
-msgstr "In diesem Zeitraum wurde keine Temp-Basal-Aktivität aufgezeichnet."
+msgstr "In diesem Zeitraum wurde keine temporäre Basalaktivität aufgezeichnet."
 
 #: src/routes/(authenticated)/reports/basal-analysis/+page.svelte
 #: src/routes/reports/basal-analysis/+page.svelte
 msgid "Suspend/Zero Temp Basals"
-msgstr "Unterbrechen/Null-Temp-Basalraten"
+msgstr "Unterbrechungen/temporäre Null-Basalraten"
 
 #: src/routes/(authenticated)/reports/basal-analysis/+page.svelte
 #: src/routes/reports/basal-analysis/+page.svelte
 msgid ""
 "<0/> zero or suspend temp basals were recorded. This often indicates\n"
 "low glucose prevention or manual suspensions."
-msgstr ""
+msgstr "<0/> temporäre Null-Basalraten oder Unterbrechungen wurden aufgezeichnet. Dies deutet häufig auf\ndie Vermeidung niedriger Glukosewerte oder manuelle Unterbrechungen hin."
 
 #: src/routes/(authenticated)/reports/basal-analysis/+page.svelte
 #: src/routes/reports/basal-analysis/+page.svelte
@@ -9103,7 +9103,7 @@ msgstr "Tägliches Basalinsulin"
 msgid ""
 "Average of <0>{0} units</0> of basal insulin delivered per day over this {0}-day\n"
 "period."
-msgstr "<0>Grüner Bereich</0> (70-180 mg/dL) ist Ihr Zielbereich. Zeit in diesem Bereich ist Ihr Ziel!"
+msgstr "Über diesen Zeitraum von {0} Tagen wurden täglich durchschnittlich <0>{0} Einheiten</0> Basalinsulin\nabgegeben."
 
 #: src/routes/(authenticated)/reports/basal-analysis/+page.svelte
 #: src/routes/(authenticated)/reports/insulin-delivery/+page.svelte
@@ -9123,12 +9123,12 @@ msgstr "Bericht zur Insulinabgabe <0/>"
 #: src/routes/(authenticated)/reports/agp/+page.svelte
 #: src/routes/reports/agp/+page.svelte
 msgid "Ambulatory Glucose Profile - Nocturne Reports"
-msgstr "Ambulantes Glukoseprofil - Nocturne-Berichte"
+msgstr "Ambulantes Glukoseprofil – Nocturne-Berichte"
 
 #: src/routes/(authenticated)/reports/agp/+page.svelte
 #: src/routes/reports/agp/+page.svelte
 msgid "Standard AGP report with glucose pattern overlay, percentile bands, and time-in-range analysis"
-msgstr "Standard-AGP-Bericht mit Glukosemuster-Overlay, Perzentilbändern und Analyse der Zeit im Zielbereich"
+msgstr "Standard-AGP-Bericht mit überlagerten Glukosemustern, Perzentilbereichen und Analyse der Zeit im Zielbereich"
 
 #: src/routes/(authenticated)/reports/agp/+page.svelte
 #: src/routes/features/+page.svelte
@@ -9181,7 +9181,7 @@ msgstr "<0>Der hellere schattierte Bereich</0> (10.-90. Perzentil) zeigt, wo du 
 #: src/routes/(authenticated)/reports/agp/+page.svelte
 #: src/routes/reports/agp/+page.svelte
 msgid "<0>Green zone</0> (70-180 mg/dL) is your target range. Time in this zone is your goal!"
-msgstr ""
+msgstr "Die <0>grüne Zone</0> (70-180 mg/dL) ist dein Zielbereich. Zeit in dieser Zone ist dein Ziel!"
 
 #: src/routes/(authenticated)/reports/agp/+page.svelte
 #: src/routes/reports/agp/+page.svelte
@@ -9254,7 +9254,7 @@ msgstr "<0/> Glukosemuster (24-Stunden-Überlagerung)"
 msgid ""
 "Median glucose with percentile bands showing your typical daily\n"
 "pattern"
-msgstr ""
+msgstr "Median der Glukosewerte mit Perzentilbändern, die dein typisches tägliches\nMuster zeigen"
 
 #: src/routes/(authenticated)/reports/agp/+page.svelte
 #: src/routes/reports/agp/+page.svelte
@@ -9282,7 +9282,7 @@ msgstr "Was dein AGP über deine Glukosemuster verrät"
 msgid ""
 "You're spending {0}% of time in\n"
 "target — above the 70% goal!"
-msgstr ""
+msgstr "Du verbringst {0}% der Zeit im\nZielbereich — mehr als das Ziel von 70%!"
 
 #: src/routes/(authenticated)/reports/agp/+page.svelte
 #: src/routes/reports/agp/+page.svelte
@@ -9295,7 +9295,7 @@ msgstr "Guter Fortschritt"
 msgid ""
 "Your TIR of {0}% shows room for\n"
 "improvement. Each 5% gain matters!"
-msgstr ""
+msgstr "Deine TIR von {0}% bietet noch Raum für\nVerbesserungen. Jede Steigerung um 5% zählt!"
 
 #: src/routes/(authenticated)/reports/agp/+page.svelte
 #: src/routes/reports/agp/+page.svelte
@@ -9308,7 +9308,7 @@ msgstr "Lass uns daran arbeiten"
 msgid ""
 "Your TIR is {0}%. Looking at when\n"
 "highs/lows occur can help identify solutions."
-msgstr ""
+msgstr "Deine TIR beträgt {0}%. Zu prüfen, wann\nhohe/niedrige Werte auftreten, kann helfen, Lösungen zu finden."
 
 #: src/routes/(authenticated)/reports/agp/+page.svelte
 #: src/routes/reports/agp/+page.svelte
@@ -9331,7 +9331,7 @@ msgstr "Mäßige Variabilität"
 msgid ""
 "Some glucose swings present. The AGP bands show where\n"
 "variation occurs."
-msgstr ""
+msgstr "Es gibt einige Glukoseschwankungen. Die AGP-Bänder zeigen, wo\ndiese auftreten."
 
 #: src/routes/(authenticated)/reports/agp/+page.svelte
 #: src/routes/reports/agp/+page.svelte
@@ -9343,7 +9343,7 @@ msgstr "Hohe Variabilität"
 msgid ""
 "Wide percentile bands suggest significant glucose swings.\n"
 "Check the daily view for patterns."
-msgstr ""
+msgstr "Breite Perzentilbänder deuten auf deutliche Glukoseschwankungen hin.\nPrüfe die Tagesansicht auf Muster."
 
 #: src/routes/(authenticated)/reports/agp/+page.svelte
 #: src/routes/reports/agp/+page.svelte
@@ -9366,7 +9366,7 @@ msgstr "Geringes Risiko, akzeptabel"
 msgid ""
 "{0}% time below range — within acceptable\n"
 "limits."
-msgstr ""
+msgstr "{0}% Zeit unterhalb des Zielbereichs — innerhalb akzeptabler\nGrenzen."
 
 #: src/routes/(authenticated)/reports/agp/+page.svelte
 #: src/routes/reports/agp/+page.svelte
@@ -9379,7 +9379,7 @@ msgstr "Unterzuckerungen angehen"
 msgid ""
 "{0}% time below range. The daily view can\n"
 "help identify when lows occur."
-msgstr ""
+msgstr "{0}% Zeit unterhalb des Zielbereichs. Die Tagesansicht kann\nhelfen zu erkennen, wann niedrige Werte auftreten."
 
 #: src/routes/(authenticated)/reports/agp/+page.svelte
 #: src/routes/reports/agp/+page.svelte
@@ -9405,7 +9405,7 @@ msgid ""
 "This AGP follows international consensus guidelines. The modal day\n"
 "view with 10th-90th percentile bands helps identify variability\n"
 "patterns and timing of excursions."
-msgstr ""
+msgstr "Dieses AGP entspricht internationalen Konsensleitlinien. Die Darstellung als Modaltag\nmit Perzentilbändern vom 10. bis 90. Perzentil hilft, Muster der Variabilität\nund den Zeitpunkt von Abweichungen zu erkennen."
 
 #: src/routes/(authenticated)/reports/agp/+page.svelte
 #: src/routes/docs/installation/docker-compose/+page.svelte
@@ -9434,7 +9434,7 @@ msgstr "Diabetes-Management-Bericht"
 msgid ""
 "Data from {0} – {1}.\n"
 "Last updated {2}."
-msgstr ""
+msgstr "Daten vom {0} – {1}.\nZuletzt aktualisiert: {2}."
 
 #: src/routes/(authenticated)/reports/day-in-review/+page.svelte
 #: src/routes/reports/day-in-review/+page.svelte
@@ -9861,7 +9861,7 @@ msgstr "Gesamtbewertung"
 msgid ""
 "Based on Time in Range, Glucose Variability, and Hypoglycemia\n"
 "Avoidance"
-msgstr ""
+msgstr "Basierend auf Zeit im Zielbereich, Glukosevariabilität und Vermeidung von\nHypoglykämien"
 
 #: src/lib/components/calendar/CalendarHeader.svelte
 #: src/lib/components/dashboard/widgets/DailySummaryWidget.svelte
@@ -9894,12 +9894,12 @@ msgstr "<0/> Geschätzter A1C"
 #: src/routes/(authenticated)/reports/executive-summary/+page.svelte
 #: src/routes/reports/executive-summary/+page.svelte
 msgid "Great! Below the 7% target"
-msgstr "Großartig! Unter dem Zielwert von 7 %"
+msgstr "Großartig! Unter dem Zielwert von 7%"
 
 #: src/routes/(authenticated)/reports/executive-summary/+page.svelte
 #: src/routes/reports/executive-summary/+page.svelte
 msgid "Near target — keep it up!"
-msgstr "In der Nähe des Zielwerts – weiter so!"
+msgstr "Fast am Ziel – weiter so!"
 
 #: src/routes/(authenticated)/reports/executive-summary/+page.svelte
 #: src/routes/reports/executive-summary/+page.svelte
@@ -9909,7 +9909,7 @@ msgstr "Verbesserungspotenzial"
 #: src/routes/(authenticated)/reports/executive-summary/+page.svelte
 #: src/routes/reports/executive-summary/+page.svelte
 msgid "<0>What is eA1C?</0> This estimates what your lab A1C would be based on your average glucose."
-msgstr "<0>Was ist eA1C?</0> Dies ist eine Schätzung Ihres Labor-A1C basierend auf Ihrem durchschnittlichen Glukosewert."
+msgstr "<0>Was ist eA1C?</0> Dieser Wert schätzt anhand deiner durchschnittlichen Glukose, wie hoch dein A1C-Laborwert wäre."
 
 #. placeholder {0}: stats?.mean?.toFixed(0)
 #. placeholder {1}: dayCount
@@ -9918,7 +9918,7 @@ msgstr "<0>Was ist eA1C?</0> Dies ist eine Schätzung Ihres Labor-A1C basierend 
 msgid ""
 "Calculated using the Nathan formula: eA1C = (GMI + 2.59) /\n"
 "1.59. Based on mean glucose of {0} mg/dL over {1} days."
-msgstr "Zeit unter 70 mg/dL (Ziel: <4%)"
+msgstr "Berechnet mit der Nathan-Formel: eA1C = (GMI + 2.59) /\n1.59. Basierend auf einer mittleren Glukose von {0} mg/dL über {1} Tage."
 
 #: src/routes/(authenticated)/reports/executive-summary/+page.svelte
 #: src/routes/reports/executive-summary/+page.svelte
@@ -9950,7 +9950,7 @@ msgstr "Variabel – Schwankungen vorhanden"
 msgid ""
 "Target: ≤33%. Lower means steadier glucose with fewer ups and\n"
 "downs."
-msgstr ""
+msgstr "Ziel: ≤33%. Ein niedrigerer Wert bedeutet stabilere Glukosewerte mit weniger Auf und\nAb."
 
 #: src/routes/(authenticated)/reports/executive-summary/+page.svelte
 #: src/routes/reports/executive-summary/+page.svelte
@@ -9987,7 +9987,7 @@ msgstr "Unterzuckerungs-Episoden:"
 msgid ""
 "<0>Action needed:</0> You're experiencing more lows than recommended. Discuss with your\n"
 "care team about adjusting your treatment."
-msgstr ""
+msgstr "<0>Handlungsbedarf:</0> Bei dir treten häufiger niedrige Werte auf als empfohlen. Besprich mit deinem\nBehandlungsteam eine Anpassung deiner Therapie."
 
 #: src/routes/(authenticated)/reports/executive-summary/+page.svelte
 #: src/routes/reports/executive-summary/+page.svelte
@@ -10014,7 +10014,7 @@ msgstr "Gesamtzeit über dem Zielbereich"
 msgid ""
 "<0>Consider:</0> Look at post-meal patterns and correction doses. Your AGP report can\n"
 "help identify when highs occur most."
-msgstr ""
+msgstr "<0>Zu erwägen:</0> Prüfe Muster nach Mahlzeiten und Korrekturdosen. Dein AGP-Bericht kann\nhelfen zu erkennen, wann hohe Werte am häufigsten auftreten."
 
 #: src/routes/(authenticated)/reports/executive-summary/+page.svelte
 #: src/routes/reports/executive-summary/+page.svelte
@@ -10129,7 +10129,7 @@ msgstr "Bericht erstellt: {0}"
 msgid ""
 "This report is for informational purposes. Always consult your\n"
 "healthcare provider for medical decisions."
-msgstr ""
+msgstr "Dieser Bericht dient zu Informationszwecken. Hole für medizinische Entscheidungen immer\närztlichen Rat ein."
 
 #: src/routes/(authenticated)/reports/insulin-delivery/+page.svelte
 #: src/routes/reports/insulin-delivery/+page.svelte
@@ -10208,7 +10208,7 @@ msgid ""
 "A typical split is around 50/50, but this can vary based on diet,\n"
 "activity, and individual needs. Some people do well with 40/60 or 60/40\n"
 "ratios."
-msgstr ""
+msgstr "Eine typische Aufteilung liegt bei etwa 50/50, kann aber je nach Ernährung,\nAktivität und individuellem Bedarf variieren. Manche kommen mit einem Verhältnis von 40/60 oder 60/40\ngut zurecht."
 
 #: src/routes/(authenticated)/reports/insulin-delivery/+page.svelte
 #: src/routes/reports/insulin-delivery/+page.svelte
@@ -10319,14 +10319,14 @@ msgstr "Bolus-Muster-Erkenntnisse"
 msgid ""
 "More corrections than meal boluses suggests possible\n"
 "underbolusing for meals or basal rate adjustments needed."
-msgstr ""
+msgstr "Mehr Korrekturen als Mahlzeitenboli können auf eine zu geringe\nBolusabgabe zu Mahlzeiten oder nötige Anpassungen der Basalrate hindeuten."
 
 #: src/routes/(authenticated)/reports/insulin-delivery/+page.svelte
 #: src/routes/reports/insulin-delivery/+page.svelte
 msgid ""
 "Low bolus frequency — typical for low-carb diets or those with\n"
 "significant basal coverage."
-msgstr ""
+msgstr "Geringe Bolushäufigkeit — typisch bei kohlenhydratarmer Ernährung oder\nhoher Basalabdeckung."
 
 #: src/routes/(authenticated)/reports/insulin-delivery/+page.svelte
 #: src/routes/reports/insulin-delivery/+page.svelte
@@ -10341,57 +10341,57 @@ msgstr "Diesen Probanden löschen? Diese Aktion kann nicht rückgängig gemacht 
 msgid ""
 "smaller boluses may indicate frequent snacking or active\n"
 "lifestyle."
-msgstr ""
+msgstr "Kleinere Boli können auf häufige Snacks oder einen aktiven\nLebensstil hindeuten."
 
 #: src/routes/(authenticated)/reports/insulin-delivery/+page.svelte
 #: src/routes/reports/insulin-delivery/+page.svelte
 msgid "larger boluses typical for higher carb meals."
-msgstr "Größere Boli sind typisch für kohlenhydratreiche Mahlzeiten."
+msgstr "größere Boli, wie sie für Mahlzeiten mit mehr Kohlenhydraten typisch sind."
 
 #: src/routes/(authenticated)/reports/insulin-delivery/+page.svelte
 #: src/routes/reports/insulin-delivery/+page.svelte
 msgid "moderate bolus sizes."
-msgstr "Moderate Bolusgrößen."
+msgstr "moderate Bolusgrößen."
 
 #. placeholder {0}: (insulinStats.avgBolus ?? 0).toFixed(1)
 #: src/routes/(authenticated)/reports/insulin-delivery/+page.svelte
 #: src/routes/reports/insulin-delivery/+page.svelte
 msgid "Average bolus size of {0}U — <0/>"
-msgstr "Durchschnittliche Bolusgröße von {0}U — <0/>"
+msgstr "Durchschnittliche Bolusgröße von {0}U – <0/>"
 
 #: src/routes/(authenticated)/reports/insulin-delivery/+page.svelte
 #: src/routes/reports/insulin-delivery/+page.svelte
 msgid "<0/> Clinical Reference"
-msgstr "<0/> Klinische Referenz"
+msgstr "<0/> Klinischer Referenzwert"
 
 #: src/routes/(authenticated)/reports/insulin-delivery/+page.svelte
 #: src/routes/reports/insulin-delivery/+page.svelte
 msgid ""
 "<0>Total Daily Dose (TDD):</0> Typically ranges from 0.4-1.0 units/kg body weight for Type 1 diabetes. Your\n"
 "TDD of <1>{0}U/day</1> can be compared to this reference."
-msgstr "Ton"
+msgstr "<0>Gesamttagesdosis (TDD):</0> Bei Typ-1-Diabetes liegt sie üblicherweise zwischen 0.4-1.0 units/kg Körpergewicht. Deine\nTDD von <1>{0}U/day</1> kann mit diesem Referenzwert verglichen werden."
 
 #: src/routes/(authenticated)/reports/insulin-delivery/+page.svelte
 #: src/routes/reports/insulin-delivery/+page.svelte
 msgid "<0>Basal Rate Estimation:</0> If your TDD is accurate, your hourly basal rate should be approximately <1>{0} U/hr</1> (using 50% basal assumption)."
-msgstr "<0>Basalraten-Schätzung:</0> Wenn deine TDD korrekt ist, sollte deine stündliche Basalrate ungefähr <1>{0} U/Std.</1> betragen (unter Annahme von 50% Basal)."
+msgstr "<0>Schätzung der Basalrate:</0> Wenn deine TDD korrekt ist, sollte deine stündliche Basalrate ungefähr <1>{0} U/hr</1> betragen (bei angenommenem Basalanteil von 50%)."
 
 #. placeholder {0}: (insulinStats.icRatio ?? 0).toFixed( 0 )
 #: src/routes/(authenticated)/reports/insulin-delivery/+page.svelte
 #: src/routes/reports/insulin-delivery/+page.svelte
 msgid "means you use about 1 unit of insulin for every {0} grams of carbs."
-msgstr "bedeutet, dass du etwa 1 Einheit Insulin für jede {0} Gramm Kohlenhydrate verwendest."
+msgstr "bedeutet, dass du etwa 1 Einheit Insulin pro {0} Gramm Kohlenhydrate verwendest."
 
 #. placeholder {0}: (insulinStats.icRatio ?? 0).toFixed( 0 )
 #: src/routes/(authenticated)/reports/insulin-delivery/+page.svelte
 #: src/routes/reports/insulin-delivery/+page.svelte
 msgid "<0>I:C Ratio Check:</0> Your average insulin-to-carb ratio of 1:{0} <1/>"
-msgstr "<0>I:C-Verhältnis-Check:</0> Dein durchschnittliches Insulin-Kohlenhydrat-Verhältnis von 1:{0} <1/>"
+msgstr "<0>Prüfung des I:C-Verhältnisses:</0> Dein durchschnittliches Insulin-Kohlenhydrat-Verhältnis von 1:{0} <1/>"
 
 #: src/routes/(authenticated)/reports/insulin-delivery/+page.svelte
 #: src/routes/reports/insulin-delivery/+page.svelte
 msgid "Basal Rate Analysis <0/>"
-msgstr "Basalraten-Analyse <0/>"
+msgstr "Analyse der Basalrate <0/>"
 
 #~ msgid "Loading readings..."
 #~ msgstr ""
@@ -10543,7 +10543,7 @@ msgid ""
 "<0>What this shows:</0> This report averages your glucose readings across all your site changes to\n"
 "reveal patterns in how your glucose control changes as your infusion site\n"
 "ages."
-msgstr ""
+msgstr "<0>Was dies zeigt:</0> Dieser Bericht mittelt deine Glukosewerte über alle Katheterwechsel hinweg, um\nMuster sichtbar zu machen, wie sich deine Glukosekontrolle mit zunehmender Liegedauer des\nKatheters verändert."
 
 #: src/routes/(authenticated)/reports/site-change-impact/+page.svelte
 #: src/routes/reports/site-change-impact/+page.svelte
@@ -10556,7 +10556,7 @@ msgid ""
 "Shows glucose patterns in the hours before you changed your site.\n"
 "Higher glucose here may indicate absorption issues with an aging\n"
 "site."
-msgstr ""
+msgstr "Zeigt Glukosemuster in den Stunden vor deinem Katheterwechsel.\nHöhere Werte können hier auf Absorptionsprobleme bei einem länger liegenden\nKatheter hindeuten."
 
 #: src/routes/(authenticated)/reports/site-change-impact/+page.svelte
 #: src/routes/reports/site-change-impact/+page.svelte
@@ -10568,7 +10568,7 @@ msgstr "Nach dem Wechsel (rechts)"
 msgid ""
 "Shows glucose patterns after the fresh site is inserted. Watch for\n"
 "improvements in control indicating better insulin absorption."
-msgstr ""
+msgstr "Zeigt Glukosemuster nach dem Einsetzen der neuen Kanüle. Achte auf\neine bessere Glukosekontrolle als Zeichen für eine verbesserte Insulinaufnahme."
 
 #: src/routes/(authenticated)/reports/site-change-impact/+page.svelte
 #: src/routes/reports/site-change-impact/+page.svelte
@@ -10581,7 +10581,7 @@ msgid ""
 "If you see consistently higher glucose before site changes, consider\n"
 "changing your site more frequently or investigating potential site\n"
 "issues."
-msgstr ""
+msgstr "Wenn deine Glukosewerte vor dem Kanülenwechsel durchgehend höher sind, solltest du\ndie Kanüle häufiger wechseln oder möglichen Problemen mit der\nInfusionsstelle nachgehen."
 
 #: src/routes/(authenticated)/reports/site-change-impact/+page.svelte
 #: src/routes/reports/site-change-impact/+page.svelte
@@ -10600,7 +10600,7 @@ msgid ""
 "Your glucose improves by {0}%\n"
 "after site changes. Consider more frequent changes if site age\n"
 "affects control."
-msgstr ""
+msgstr "Deine Glukosewerte verbessern sich nach Kanülenwechseln um {0}%\n. Erwäge häufigere Wechsel, wenn das Alter der Kanüle\ndie Glukosekontrolle beeinflusst."
 
 #: src/routes/(authenticated)/reports/site-change-impact/+page.svelte
 #: src/routes/reports/site-change-impact/+page.svelte
@@ -10614,7 +10614,7 @@ msgid ""
 "Your glucose is {0}%\n"
 "higher after site changes. This might indicate insertion\n"
 "issues or site location sensitivity."
-msgstr ""
+msgstr "Deine Glukosewerte sind nach Kanülenwechseln um {0}%\nhöher. Dies könnte auf Probleme beim Einsetzen\noder eine empfindliche Infusionsstelle hindeuten."
 
 #: src/routes/(authenticated)/reports/site-change-impact/+page.svelte
 #: src/routes/reports/site-change-impact/+page.svelte
@@ -10626,7 +10626,7 @@ msgstr "Stabile Kontrolle"
 msgid ""
 "Your glucose control is relatively stable around site changes.\n"
 "Site age doesn't appear to significantly affect your control."
-msgstr ""
+msgstr "Deine Glukosekontrolle ist rund um Kanülenwechsel relativ stabil.\nDas Alter der Kanüle scheint sie nicht wesentlich zu beeinflussen."
 
 #: src/routes/(authenticated)/reports/site-change-impact/+page.svelte
 #: src/routes/reports/site-change-impact/+page.svelte
@@ -10727,7 +10727,7 @@ msgstr "Öffentlich"
 #: src/routes/(authenticated)/settings/admin/+page.svelte
 #: src/routes/settings/admin/+page.svelte
 msgid "Delete this subject? This action cannot be undone."
-msgstr ""
+msgstr "Dieses Profil löschen? Diese Aktion kann nicht rückgängig gemacht werden."
 
 #~ msgid "Delete this role? This action cannot be undone."
 #~ msgstr ""
@@ -10930,7 +10930,7 @@ msgstr "System"
 #: src/lib/components/admin/SubjectEditDialog.svelte
 #: src/routes/settings/admin/+page.svelte
 msgid "Full Admin Access"
-msgstr "Voller Admin-Zugriff"
+msgstr "Vollständiger Administratorzugriff"
 
 #~ msgid ""
 #~ "The selected role(s) grant complete control of this Nocturne\n"
@@ -10956,17 +10956,17 @@ msgstr "Rolle bearbeiten"
 msgid ""
 "Create a role with fine-grained permissions for your subject. After\n"
 "saving, you'll return to the subject dialog with this role selected."
-msgstr "<0/> Ruhige Zeiten"
+msgstr "Erstelle eine Rolle mit detaillierten Berechtigungen für dein Subjekt. Nach dem\nSpeichern kehrst du zum Subjektdialog zurück, in dem diese Rolle ausgewählt ist."
 
 #: src/lib/components/admin/RoleDialog.svelte
 #: src/routes/settings/admin/+page.svelte
 msgid "Create a new role with specific permissions."
-msgstr "Erstelle eine neue Rolle mit bestimmten Berechtigungen."
+msgstr "Neue Rolle mit bestimmten Berechtigungen erstellen."
 
 #: src/lib/components/admin/RoleDialog.svelte
 #: src/routes/settings/admin/+page.svelte
 msgid "Update role details and permissions."
-msgstr "Aktualisiere Rollendetails und Berechtigungen."
+msgstr "Rollendetails und Berechtigungen aktualisieren."
 
 #: src/lib/components/admin/RoleDialog.svelte
 #: src/routes/settings/admin/+page.svelte
@@ -11026,7 +11026,7 @@ msgstr "<0/> Kopiert!"
 #: src/routes/settings/admin/+page.svelte
 #: src/routes/settings/support/+page.svelte
 msgid "<0/> Copy to Clipboard"
-msgstr "<0/> In Zwischenablage kopieren"
+msgstr "<0/> In die Zwischenablage kopieren"
 
 #~ msgid "<0>Important:</0> Store this token securely. Use it in the <1/> header or as an <2/> query parameter."
 #~ msgstr ""
@@ -11112,7 +11112,7 @@ msgstr "Schließen"
 
 #: src/lib/components/alerts/AudioSection.svelte
 msgid "Sound"
-msgstr "Diesen Probanden löschen? Diese Aktion kann nicht rückgängig gemacht werden."
+msgstr "Ton"
 
 #~ msgid "Global Volume"
 #~ msgstr ""
@@ -11162,7 +11162,7 @@ msgstr "Diesen Probanden löschen? Diese Aktion kann nicht rückgängig gemacht 
 #: src/lib/components/alerts/QuietHoursCard.svelte
 #: src/routes/settings/alerts/+page.svelte
 msgid "<0/> Quiet Hours"
-msgstr "Ton"
+msgstr "<0/> Ruhezeiten"
 
 #~ msgid "Reduce notification noise during specified hours"
 #~ msgstr ""
@@ -11256,7 +11256,7 @@ msgstr "Aktiviert"
 
 #: src/routes/settings/algorithm/+page.svelte
 msgid "Algorithm - Settings - Nocturne"
-msgstr "Algorithmus - Einstellungen - Nocturne"
+msgstr "Algorithmus – Einstellungen – Nocturne"
 
 #: src/routes/settings/algorithm/+page.svelte
 msgid "Algorithm Settings"
@@ -11325,7 +11325,7 @@ msgstr "Autosens"
 
 #: src/routes/settings/algorithm/+page.svelte
 msgid "Automatic sensitivity adjustments based on recent data"
-msgstr "Automatische Empfindlichkeitsanpassungen basierend auf aktuellen Daten"
+msgstr "Automatische Anpassung der Empfindlichkeit anhand aktueller Daten"
 
 #: src/routes/settings/algorithm/+page.svelte
 msgid "Minimum adjustment"
@@ -11339,11 +11339,11 @@ msgstr "Maximale Anpassung"
 msgid ""
 "Autosens will adjust your sensitivity factor within these bounds\n"
 "based on recent glucose patterns."
-msgstr "<0/> Ruhezeiten"
+msgstr "Autosens passt deinen Empfindlichkeitsfaktor innerhalb dieser Grenzen\nanhand der jüngsten Glukoseverläufe an."
 
 #: src/routes/settings/algorithm/+page.svelte
 msgid "<0/> Carb Absorption"
-msgstr "<0/> Kohlenhydratabsorption"
+msgstr "<0/> Kohlenhydrataufnahme"
 
 #: src/routes/settings/algorithm/+page.svelte
 msgid "How the algorithm estimates carbohydrate absorption"
@@ -11351,11 +11351,11 @@ msgstr "Wie der Algorithmus die Kohlenhydrataufnahme schätzt"
 
 #: src/routes/settings/algorithm/+page.svelte
 msgid "Default absorption time"
-msgstr "Standard-Absorptionszeit"
+msgstr "Standard-Aufnahmezeit"
 
 #: src/routes/settings/algorithm/+page.svelte
 msgid "Minimum absorption rate"
-msgstr "Minimale Absorptionsrate"
+msgstr "Minimale Aufnahmerate"
 
 #: src/routes/settings/algorithm/+page.svelte
 msgid "g/hour"
@@ -11377,7 +11377,7 @@ msgstr "Erweiterte Funktion"
 msgid ""
 "Closed loop operation requires careful configuration and\n"
 "monitoring. Ensure your therapy settings are accurate."
-msgstr ""
+msgstr "Der Closed-Loop-Betrieb erfordert eine sorgfältige Konfiguration und\nÜberwachung. Stelle sicher, dass deine Therapieeinstellungen korrekt sind."
 
 #: src/routes/settings/algorithm/+page.svelte
 msgid "Loop mode"
@@ -11740,7 +11740,7 @@ msgstr "UTC-Offset"
 msgid ""
 "Timezone is automatically detected from your device. Data is displayed\n"
 "in this timezone."
-msgstr ""
+msgstr "Die Zeitzone wird automatisch von deinem Gerät erkannt. Daten werden\nin dieser Zeitzone angezeigt."
 
 #: src/routes/settings/features/+page.svelte
 msgid "Features - Settings - Nocturne"
@@ -11979,7 +11979,7 @@ msgstr "Datenschutzhinweis"
 msgid ""
 "Logs never include your glucose data, API tokens, or passwords.\n"
 "Only diagnostic information is shared."
-msgstr ""
+msgstr "Protokolle enthalten niemals deine Glukosedaten, API-Tokens oder Passwörter.\nEs werden nur Diagnoseinformationen geteilt."
 
 #: src/routes/(authenticated)/settings/support/+page.svelte
 #: src/routes/settings/support/+page.svelte
@@ -12015,14 +12015,14 @@ msgstr "API-Kompatibilität"
 msgid ""
 "Made with <0/> by the Nightscout\n"
 "community"
-msgstr ""
+msgstr "Mit <0/> von der Nightscout-\nCommunity entwickelt"
 
 #: src/routes/(authenticated)/settings/support/+page.svelte
 #: src/routes/settings/support/+page.svelte
 msgid ""
 "Nocturne is free and open source software, created by people with\n"
 "diabetes, for people with diabetes."
-msgstr ""
+msgstr "Nocturne ist kostenlose Open-Source-Software, entwickelt von Menschen mit\nDiabetes für Menschen mit Diabetes."
 
 #: src/routes/(authenticated)/settings/support/+page.svelte
 #: src/routes/settings/support/+page.svelte
@@ -12141,7 +12141,7 @@ msgid ""
 "Your deployment is configured for migration. The form below has been\n"
 "pre-populated with your settings. Review and start the migration when\n"
 "ready."
-msgstr ""
+msgstr "Deine Bereitstellung ist für die Migration konfiguriert. Das folgende Formular wurde\nmit deinen Einstellungen vorausgefüllt. Prüfe alles und starte die Migration, sobald du\nbereit bist."
 
 #: src/routes/(authenticated)/settings/migration/+page.svelte
 #: src/routes/settings/migration/+page.svelte
@@ -12168,7 +12168,7 @@ msgstr "Neue Migration starten"
 msgid ""
 "Import entries and treatments from an existing Nightscout\n"
 "instance."
-msgstr ""
+msgstr "Einträge und Behandlungen aus einer vorhandenen Nightscout-\nInstanz importieren."
 
 #: src/routes/(authenticated)/settings/migration/+page.svelte
 #: src/routes/settings/migration/+page.svelte
@@ -12226,7 +12226,7 @@ msgstr "Datumsbereich (optional)"
 msgid ""
 "Leave empty to import all data, or specify a range to import\n"
 "partial data."
-msgstr ""
+msgstr "Leer lassen, um alle Daten zu importieren, oder einen Zeitraum für einen\nTeilimport angeben."
 
 #: src/lib/components/patient/InsulinFormFields.svelte
 #: src/lib/components/patient/PatientDeviceManager.svelte
@@ -12361,7 +12361,7 @@ msgstr "Bekannte Quellen"
 msgid ""
 "Previously used migration sources with their last sync\n"
 "timestamps."
-msgstr ""
+msgstr "Zuvor verwendete Migrationsquellen mit den Zeitstempeln ihrer letzten\nSynchronisierung."
 
 #. placeholder {0}: formatDate(source.lastMigrationAt)
 #: src/routes/(authenticated)/settings/migration/+page.svelte
@@ -12658,7 +12658,7 @@ msgstr "Entries-Endpunkt"
 msgid ""
 "Most uploaders use the Nightscout API format. Use your API secret\n"
 "for authentication via the <0/> header or embed it in the URL."
-msgstr ""
+msgstr "Die meisten Uploader verwenden das Nightscout-API-Format. Nutze dein API-Secret\nzur Authentifizierung über den <0/>-Header oder binde es in die URL ein."
 
 #. placeholder {0}: selectedUploader.name
 #: src/lib/components/connectors/UploaderSetupDialog.svelte
@@ -12797,7 +12797,7 @@ msgstr "Alle Daten dieser Quelle löschen"
 msgid ""
 "This will permanently delete all entries, treatments, and device\n"
 "status records from this data source."
-msgstr ""
+msgstr "Dadurch werden alle Einträge, Behandlungen und Gerätestatus-\nDatensätze dieser Datenquelle dauerhaft gelöscht."
 
 #: src/lib/components/connectors/DataSourceManageDialog.svelte
 #: src/routes/settings/connectors/+page.svelte
@@ -12880,7 +12880,7 @@ msgstr "<0/> Manuelle Synchronisationsergebnisse"
 msgid ""
 "Re-sync data from all enabled connectors for the configured lookback\n"
 "period"
-msgstr ""
+msgstr "Daten aller aktivierten Konnektoren für den konfigurierten rückwirkenden\nZeitraum erneut synchronisieren"
 
 #: src/routes/settings/connectors/+page.svelte
 #: src/routes/settings/services/+page.svelte
@@ -12984,7 +12984,7 @@ msgstr "Connector offline"
 msgid ""
 "This connector is not currently running or cannot be reached.\n"
 "Check your server configuration and logs."
-msgstr ""
+msgstr "Dieser Konnektor läuft derzeit nicht oder ist nicht erreichbar.\nPrüfe deine Serverkonfiguration und Protokolle."
 
 #: src/lib/components/connectors/ConnectorDetailsDialog.svelte
 #: src/routes/settings/connectors/+page.svelte
@@ -13048,7 +13048,7 @@ msgid ""
 "Download food data from MyFitnessPal for the date range above,\n"
 "without creating treatments. Useful for populating your food\n"
 "database."
-msgstr ""
+msgstr "Lebensmitteldaten für den obigen Zeitraum von MyFitnessPal herunterladen,\nohne Behandlungen zu erstellen. Nützlich zum Befüllen deiner Lebensmittel-\ndatenbank."
 
 #. placeholder {0}: foodOnlySyncResult.itemsSynced.Food
 #: src/lib/components/connectors/ConnectorDetailsDialog.svelte
@@ -13089,7 +13089,7 @@ msgstr "Alle Daten von diesem Connector löschen"
 msgid ""
 "This will permanently delete all entries, treatments, and\n"
 "device status records synchronized by this connector."
-msgstr ""
+msgstr "Dadurch werden alle von diesem Konnektor synchronisierten Einträge, Behandlungen und\nGerätestatus-Datensätze dauerhaft gelöscht."
 
 #: src/routes/settings/services/+page.svelte
 msgid "<0/> Permanently Delete Connector Data"
@@ -13439,7 +13439,7 @@ msgid ""
 "Are you sure you want to delete this tracker definition? This action\n"
 "cannot be undone. Any active instances using this definition will\n"
 "remain, but you won't be able to start new ones."
-msgstr ""
+msgstr "Möchtest du diese Tracker-Definition wirklich löschen? Diese Aktion\nkann nicht rückgängig gemacht werden. Aktive Instanzen mit dieser Definition\nbleiben bestehen, aber du kannst keine neuen mehr starten."
 
 #: src/routes/(authenticated)/settings/trackers/+page.svelte
 #: src/routes/settings/trackers/+page.svelte
@@ -13451,7 +13451,7 @@ msgstr "Tracker-Instanz löschen"
 msgid ""
 "Are you sure you want to delete this tracker instance? This action\n"
 "cannot be undone."
-msgstr ""
+msgstr "Möchtest du diese Tracker-Instanz wirklich löschen? Diese Aktion\nkann nicht rückgängig gemacht werden."
 
 #: src/routes/(authenticated)/settings/trackers/+page.svelte
 #: src/routes/settings/trackers/+page.svelte
@@ -13503,7 +13503,7 @@ msgstr "Voreinstellung löschen"
 msgid ""
 "Are you sure you want to delete this preset? This action cannot be\n"
 "undone."
-msgstr ""
+msgstr "Möchtest du diese Voreinstellung wirklich löschen? Diese Aktion kann nicht\nrückgängig gemacht werden."
 
 #: src/lib/components/dashboard/widgets/ConnectionStatusWidget.svelte
 msgid "Connection"
@@ -13828,7 +13828,7 @@ msgstr "Connector läuft nicht"
 msgid ""
 "This connector is not currently running, but data from previous\n"
 "syncs is still stored. You can delete this data below."
-msgstr ""
+msgstr "Dieser Konnektor läuft derzeit nicht, aber Daten aus früheren\nSynchronisierungen sind noch gespeichert. Du kannst diese Daten unten löschen."
 
 #~ msgid "Total entries"
 #~ msgstr ""
@@ -13888,7 +13888,7 @@ msgid ""
 "This connector is not currently enabled, but historical data from\n"
 "previous syncs is still stored. Enable the connector in your\n"
 "server configuration to resume syncing, or delete the data below."
-msgstr ""
+msgstr "Dieser Konnektor ist derzeit nicht aktiviert, aber Verlaufsdaten aus\nfrüheren Synchronisierungen sind noch gespeichert. Aktiviere den Konnektor in deiner\nServerkonfiguration, um die Synchronisierung fortzusetzen, oder lösche die Daten unten."
 
 #~ msgid ""
 #~ "Review and manage your insulin doses, carb entries, and device events. Use\n"
@@ -13996,7 +13996,7 @@ msgstr "Keine Daten verfügbar"
 msgid ""
 "There aren't enough glucose readings in the selected date range to\n"
 "generate analytics. Try selecting a larger date range."
-msgstr ""
+msgstr "Im ausgewählten Zeitraum gibt es nicht genügend Glukosemesswerte, um\nAnalysen zu erstellen. Wähle einen längeren Zeitraum aus."
 
 #: src/routes/(authenticated)/reports/+page.svelte
 #: src/routes/reports/+page.svelte
@@ -14021,7 +14021,7 @@ msgstr "<0>{0} Messwerte</0> von {0} bis {1} <1/> Zuletzt aktualisiert {2}"
 msgid ""
 "This report is for informational purposes. Always consult your\n"
 "healthcare provider for medical advice."
-msgstr ""
+msgstr "Dieser Bericht dient nur zur Information. Hole für medizinische Beratung stets\närztlichen Rat ein."
 
 #: src/lib/components/connectors/DeduplicationDialog.svelte
 #: src/routes/settings/connectors/+page.svelte
@@ -14063,7 +14063,7 @@ msgstr "Datensätze deduplizieren"
 msgid ""
 "Link records from multiple data sources that represent the same underlying event.\n"
 "This improves data quality when the same glucose readings or treatments are uploaded from different apps."
-msgstr ""
+msgstr "Verknüpfe Datensätze aus mehreren Datenquellen, die dasselbe zugrunde liegende Ereignis darstellen.\nDies verbessert die Datenqualität, wenn dieselben Glukosemesswerte oder Behandlungen von verschiedenen Apps hochgeladen werden."
 
 #: src/routes/(authenticated)/settings/connectors/+page.svelte
 #: src/routes/settings/connectors/+page.svelte
@@ -14224,7 +14224,7 @@ msgstr "{0} Datensätze (24h)"
 msgid ""
 "{0} records\n"
 "(24h)"
-msgstr ""
+msgstr "{0} Datensätze\n(24h)"
 
 #: src/lib/components/connectors/DataSourceManageDialog.svelte
 #: src/routes/settings/connectors/+page.svelte
@@ -14272,7 +14272,7 @@ msgstr "Letzter empfangener Datensatz"
 msgid ""
 "This process will scan all your glucose records, treatments, and state spans\n"
 "to identify and link records that represent the same event from different data sources."
-msgstr ""
+msgstr "Dieser Vorgang durchsucht alle deine Glukosedatensätze, Behandlungen und Statuszeiträume,\num Datensätze zu erkennen und zu verknüpfen, die dasselbe Ereignis aus verschiedenen Datenquellen darstellen."
 
 #: src/lib/components/dashboard/GlucoseChartCard.svelte
 #: src/lib/components/dashboard/glucose-chart/tracks/SwimLaneTrack.svelte
@@ -14328,7 +14328,7 @@ msgid ""
 "A modern, open-source platform for managing your glucose data with full\n"
 "Nightscout compatibility. Built by the diabetes community, for the\n"
 "diabetes community."
-msgstr ""
+msgstr "Eine moderne Open-Source-Plattform zur Verwaltung deiner Glukosedaten mit vollständiger\nNightscout-Kompatibilität. Entwickelt von der Diabetes-Community für die\nDiabetes-Community."
 
 #: src/routes/+page.svelte
 msgid "Get Started <0/>"
@@ -14350,7 +14350,7 @@ msgstr "Warum Nocturne wählen?"
 msgid ""
 "Modern architecture meets proven reliability. Get the features you need\n"
 "without sacrificing compatibility."
-msgstr ""
+msgstr "Moderne Architektur trifft bewährte Zuverlässigkeit. Erhalte die Funktionen, die du brauchst,\nohne auf Kompatibilität zu verzichten."
 
 #: src/routes/+page.svelte
 msgid "Nightscout Compatible"
@@ -14360,7 +14360,7 @@ msgstr "Nightscout-kompatibel"
 msgid ""
 "Full API compatibility means your existing apps and devices work\n"
 "seamlessly. No migration headaches."
-msgstr ""
+msgstr "Volle API-Kompatibilität bedeutet, dass deine vorhandenen Apps und Geräte\nnahtlos funktionieren. Keine mühsame Migration."
 
 #: src/routes/+page.svelte
 #: src/routes/features/+page.svelte
@@ -14371,7 +14371,7 @@ msgstr "Moderne Leistung"
 msgid ""
 "Built on .NET 10 for blazing fast performance. Handle more data with\n"
 "less resources."
-msgstr ""
+msgstr "Basierend auf .NET 10 für rasante Leistung. Verarbeite mehr Daten mit\nweniger Ressourcen."
 
 #: src/routes/+page.svelte
 msgid "Self-Hosted Security"
@@ -14381,7 +14381,7 @@ msgstr "Sicherheit durch Self-Hosting"
 msgid ""
 "Your data stays on your server. Full control over your health\n"
 "information, always."
-msgstr ""
+msgstr "Deine Daten bleiben auf deinem Server. Du behältst jederzeit die volle Kontrolle über deine\nGesundheitsdaten."
 
 #: src/routes/+page.svelte
 msgid "Multiple Data Sources"
@@ -14391,7 +14391,7 @@ msgstr "Mehrere Datenquellen"
 msgid ""
 "Connect Dexcom, Libre, Glooko, and more. Bring all your data\n"
 "together in one place."
-msgstr ""
+msgstr "Verbinde Dexcom, Libre, Glooko und weitere Dienste. Führe all deine Daten\nan einem Ort zusammen."
 
 #: src/routes/+page.svelte
 msgid "Real-Time Monitoring"
@@ -14401,7 +14401,7 @@ msgstr "Echtzeit-Überwachung"
 msgid ""
 "Live glucose updates with WebSocket support. Stay informed with\n"
 "instant notifications."
-msgstr ""
+msgstr "Live-Glukoseaktualisierungen mit WebSocket-Unterstützung. Bleibe mit\nsofortigen Benachrichtigungen auf dem Laufenden."
 
 #: src/routes/+page.svelte
 msgid "Easy Migration"
@@ -14411,7 +14411,7 @@ msgstr "Einfache Migration"
 msgid ""
 "Import your existing Nightscout data with one click. Or run both\n"
 "side-by-side to test first."
-msgstr ""
+msgstr "Importiere deine vorhandenen Nightscout-Daten mit einem Klick. Oder betreibe beide\nzunächst zum Testen parallel."
 
 #: src/routes/+page.svelte
 msgid "Get Started in Minutes"
@@ -14460,7 +14460,7 @@ msgstr "Überwachen"
 msgid ""
 "Start tracking your glucose data with a modern, responsive\n"
 "interface."
-msgstr ""
+msgstr "Beginne mit der Erfassung deiner Glukosedaten über eine moderne, responsive\nOberfläche."
 
 #: src/routes/+page.svelte
 msgid "Ready to Take Control?"
@@ -14470,7 +14470,7 @@ msgstr "Bereit, die Kontrolle zu übernehmen?"
 msgid ""
 "Join the community of people managing their diabetes data on their own\n"
 "terms. Free, open source, and always will be."
-msgstr ""
+msgstr "Schließe dich der Community von Menschen an, die ihre Diabetesdaten selbstbestimmt\nverwalten. Kostenlos, Open Source – jetzt und für immer."
 
 #: src/routes/features/+page.svelte
 msgid "Start Configuration <0/>"
@@ -14561,7 +14561,7 @@ msgstr "({0} Min.)"
 msgid ""
 "Open source diabetes data management with full Nightscout\n"
 "compatibility."
-msgstr ""
+msgstr "Open-Source-Verwaltung von Diabetesdaten mit vollständiger Nightscout-\nKompatibilität."
 
 #: src/lib/components/SiteFooter.svelte
 msgid "Product"
@@ -14595,13 +14595,13 @@ msgstr "<0/> GitHub"
 msgid ""
 "© {0} Nocturne. Open source under MIT\n"
 "license."
-msgstr ""
+msgstr "© {0} Nocturne. Open Source unter der MIT-\nLizenz."
 
 #: src/lib/components/SiteFooter.svelte
 msgid ""
 "Made with <0/> by the\n"
 "diabetes community"
-msgstr ""
+msgstr "Mit <0/> von der\nDiabetes-Community entwickelt"
 
 #: src/routes/setup/+page.svelte
 msgid "Please enter a Nightscout URL"
@@ -14662,7 +14662,7 @@ msgstr "Kompatibilitäts-Proxy"
 msgid ""
 "Try Nocturne alongside your existing Nightscout -\n"
 "\"try before you buy\""
-msgstr ""
+msgstr "Teste Nocturne parallel zu deinem vorhandenen Nightscout –\n\"erst testen, dann entscheiden\""
 
 #: src/routes/setup/+page.svelte
 msgid "<0/> Back to setup types"
@@ -14724,7 +14724,7 @@ msgstr "Letzter Messwert:"
 msgid ""
 "Your MongoDB Atlas or self-hosted connection\n"
 "string"
-msgstr ""
+msgstr "Die Verbindungszeichenfolge für MongoDB Atlas oder deine selbst gehostete\nInstanz"
 
 #: src/routes/setup/+page.svelte
 msgid "Usually \"nightscout\" or your site name"
@@ -14753,7 +14753,7 @@ msgstr "Empfohlen"
 msgid ""
 "We'll set up and manage everything for you\n"
 "automatically"
-msgstr ""
+msgstr "Wir richten alles für dich ein und verwalten es\nautomatisch"
 
 #: src/routes/setup/+page.svelte
 msgid "External PostgreSQL Database"
@@ -14763,7 +14763,7 @@ msgstr "Externe PostgreSQL-Datenbank"
 msgid ""
 "Connect to your own managed database\n"
 "instance"
-msgstr ""
+msgstr "Mit deiner eigenen verwalteten Datenbank-\ninstanz verbinden"
 
 #: src/routes/download/+page.svelte
 #: src/routes/setup/+page.svelte
@@ -14786,7 +14786,7 @@ msgstr "Detaillierte Protokollierung"
 msgid ""
 "Log detailed request/response\n"
 "comparisons for debugging"
-msgstr ""
+msgstr "Detaillierte Vergleiche von Anfragen und Antworten\nzur Fehlerbehebung protokollieren"
 
 #: src/routes/download/+page.svelte
 #: src/routes/setup/+page.svelte
@@ -14981,7 +14981,7 @@ msgstr "Konfigurationsanleitung"
 msgid ""
 "Learn how to configure connectors, settings, and\n"
 "customize your instance."
-msgstr ""
+msgstr "Erfahre, wie du Konnektoren und Einstellungen konfigurierst und\ndeine Instanz anpasst."
 
 #: src/routes/docs/+page.svelte
 msgid "API Reference <0/>"
@@ -14992,7 +14992,7 @@ msgstr "API-Referenz <0/>"
 msgid ""
 "Interactive API documentation powered by Scalar. Explore\n"
 "endpoints, test requests, and integrate with Nocturne."
-msgstr ""
+msgstr "Interaktive API-Dokumentation auf Basis von Scalar. Erkunden Sie\nEndpunkte, testen Sie Anfragen und integrieren Sie Nocturne."
 
 #: src/routes/docs/+page.svelte
 msgid "API Reference"
@@ -15002,7 +15002,7 @@ msgstr "API-Referenz"
 msgid ""
 "Available at <0>/scalar</0> on\n"
 "your Nocturne API"
-msgstr ""
+msgstr "Verfügbar unter <0>/scalar</0> in\nIhrer Nocturne API"
 
 #: src/routes/docs/+page.svelte
 msgid "Documentation In Progress"
@@ -15013,13 +15013,13 @@ msgid ""
 "We're actively working on expanding the documentation. Check\n"
 "back soon for more guides and tutorials, or contribute on\n"
 "GitHub!"
-msgstr ""
+msgstr "Wir erweitern die Dokumentation laufend. Schauen Sie\nbald wieder vorbei, um weitere Anleitungen und Tutorials zu finden, oder wirken Sie auf\nGitHub mit!"
 
 #: src/routes/features/+page.svelte
 msgid ""
 "Everything you need to manage your diabetes data, built on modern\n"
 "technology with full Nightscout compatibility."
-msgstr ""
+msgstr "Alles, was Sie zur Verwaltung Ihrer Diabetesdaten benötigen – auf moderner\nTechnologie aufgebaut und vollständig mit Nightscout kompatibel."
 
 #: src/routes/features/+page.svelte
 msgid "<0/> Core Features"
@@ -15034,7 +15034,7 @@ msgid ""
 "Drop-in replacement for Nightscout with v1, v2, and v3 API support.\n"
 "Your existing apps, uploaders, and integrations work without any\n"
 "changes."
-msgstr ""
+msgstr "Direkter Ersatz für Nightscout mit Unterstützung der APIs v1, v2 und v3.\nIhre vorhandenen Apps, Uploader und Integrationen funktionieren ohne\nÄnderungen."
 
 #: src/routes/features/+page.svelte
 msgid "<0/> xDrip+ compatible"
@@ -15052,7 +15052,7 @@ msgstr "<0/> AndroidAPS kompatibel"
 msgid ""
 "Built on .NET 10 with PostgreSQL for exceptional performance. Handle\n"
 "years of data without slowdowns."
-msgstr ""
+msgstr "Basiert auf .NET 10 und PostgreSQL für herausragende Leistung. Verarbeitet\njahrelange Daten ohne Leistungseinbußen."
 
 #: src/routes/features/+page.svelte
 msgid "<0/> Sub-millisecond query response"
@@ -15074,7 +15074,7 @@ msgstr "Echtzeit-Updates"
 msgid ""
 "WebSocket and SignalR support for instant glucose updates. Socket.IO\n"
 "bridge for Nightscout client compatibility."
-msgstr ""
+msgstr "WebSocket- und SignalR-Unterstützung für sofortige Glukoseaktualisierungen. Socket.IO-\nBridge für die Kompatibilität mit Nightscout-Clients."
 
 #: src/routes/features/+page.svelte
 msgid "<0/> Instant data sync"
@@ -15096,7 +15096,7 @@ msgstr "Modernes Dashboard & Berichte"
 msgid ""
 "Beautiful, responsive dashboard built with SvelteKit. Advanced\n"
 "reporting with AGP, TIR, and more."
-msgstr ""
+msgstr "Ansprechendes, responsives Dashboard auf Basis von SvelteKit. Erweiterte\nBerichte mit AGP, TIR und mehr."
 
 #: src/routes/features/+page.svelte
 msgid "<0/> Time in Range analysis"
@@ -15119,7 +15119,7 @@ msgstr "Dexcom"
 msgid ""
 "Direct integration with Dexcom Share. Automatic data sync from G6, G7,\n"
 "and ONE sensors."
-msgstr ""
+msgstr "Direkte Integration mit Dexcom Share. Automatische Datensynchronisierung von G6-, G7-\nund ONE-Sensoren."
 
 #: src/routes/features/+page.svelte
 msgid "Libre"
@@ -15129,7 +15129,7 @@ msgstr "Libre"
 msgid ""
 "Connect to LibreView for Freestyle Libre 2 and 3 data. Real-time sync\n"
 "with LibreLinkUp."
-msgstr ""
+msgstr "Verbindung mit LibreView für Daten von Freestyle Libre 2 und 3. Echtzeitsynchronisierung\nmit LibreLinkUp."
 
 #: src/routes/(legal)/terms/+page.svelte
 #: src/routes/features/+page.svelte
@@ -15140,13 +15140,13 @@ msgstr "Glooko"
 msgid ""
 "Import data from Glooko for comprehensive diabetes management data\n"
 "aggregation."
-msgstr ""
+msgstr "Importieren Sie Daten aus Glooko, um alle Daten für Ihr Diabetesmanagement\nzusammenzuführen."
 
 #: src/routes/features/+page.svelte
 msgid ""
 "Run as a proxy alongside existing Nightscout or migrate your complete\n"
 "data history."
-msgstr ""
+msgstr "Nutzen Sie die Anwendung als Proxy neben einer bestehenden Nightscout-Instanz oder migrieren Sie Ihren gesamten\nDatenverlauf."
 
 #: src/routes/features/+page.svelte
 msgid "xDrip+"
@@ -15156,7 +15156,7 @@ msgstr "xDrip+"
 msgid ""
 "Full xDrip+ uploader support. Continue using your favorite Android CGM\n"
 "app."
-msgstr ""
+msgstr "Vollständige Unterstützung für den xDrip+ Uploader. Nutzen Sie weiterhin Ihre bevorzugte Android CGM-\nApp."
 
 #: src/routes/features/+page.svelte
 msgid "More Coming"
@@ -15166,7 +15166,7 @@ msgstr "Weitere folgen"
 msgid ""
 "Extensible connector architecture makes adding new data sources\n"
 "straightforward."
-msgstr ""
+msgstr "Neue Datenquellen lassen sich dank der erweiterbaren Connector-Architektur\nunkompliziert hinzufügen."
 
 #: src/routes/features/+page.svelte
 msgid "<0/> Security & Privacy"
@@ -15180,7 +15180,7 @@ msgstr "Selbst gehostet"
 msgid ""
 "Your data stays on your server. No cloud dependencies or third-party\n"
 "data access."
-msgstr ""
+msgstr "Ihre Daten bleiben auf Ihrem Server. Es gibt keine Cloud-Abhängigkeiten und Dritte haben keinen\nZugriff darauf."
 
 #: src/routes/features/+page.svelte
 msgid "Role-Based Access"
@@ -15190,7 +15190,7 @@ msgstr "Rollenbasierter Zugriff"
 msgid ""
 "Fine-grained permissions for caregivers, healthcare providers, and\n"
 "family members."
-msgstr ""
+msgstr "Detaillierte Berechtigungen für Betreuungspersonen, medizinisches Fachpersonal und\nFamilienmitglieder."
 
 #: src/routes/features/+page.svelte
 msgid "Multi-User Support"
@@ -15200,7 +15200,7 @@ msgstr "Multi-User-Support"
 msgid ""
 "Manage multiple profiles for families. Each person gets their own data\n"
 "and settings."
-msgstr ""
+msgstr "Verwalten Sie mehrere Profile für Familien. Jede Person erhält eigene Daten\nund Einstellungen."
 
 #: src/routes/features/+page.svelte
 msgid "<0/> Developer Features"
@@ -15214,13 +15214,13 @@ msgstr "OpenAPI-Dokumentation"
 msgid ""
 "Full OpenAPI/Swagger documentation with Scalar UI. Generate client\n"
 "libraries for any language."
-msgstr ""
+msgstr "Vollständige OpenAPI/Swagger-Dokumentation mit Scalar UI. Erstellen Sie Client-\nBibliotheken für jede Sprache."
 
 #: src/routes/features/+page.svelte
 msgid ""
 "Built-in observability with distributed tracing, structured logging,\n"
 "and metrics visualization."
-msgstr ""
+msgstr "Integrierte Überwachung mit verteiltem Tracing, strukturierter Protokollierung\nund visualisierten Metriken."
 
 #: src/routes/features/+page.svelte
 msgid "Clean Architecture"
@@ -15230,7 +15230,7 @@ msgstr "Saubere Architektur"
 msgid ""
 "Well-organized codebase following Clean Architecture principles.\n"
 "Easy to extend and customize."
-msgstr ""
+msgstr "Übersichtlich strukturierte Codebasis nach den Prinzipien der Clean Architecture.\nEinfach zu erweitern und anzupassen."
 
 #: src/routes/features/+page.svelte
 msgid "Docker Ready"
@@ -15240,7 +15240,7 @@ msgstr "Docker-bereit"
 msgid ""
 "Production-ready Docker images with docker-compose configurations.\n"
 "Deploy anywhere containers run."
-msgstr ""
+msgstr "Produktionsreife Docker-Images mit docker-compose-Konfigurationen.\nÜberall einsetzbar, wo Container ausgeführt werden können."
 
 #: src/routes/features/+page.svelte
 msgid "Ready to Get Started?"
@@ -15250,7 +15250,7 @@ msgstr "Bereit loszulegen?"
 msgid ""
 "Set up your own Nocturne instance in minutes with our configuration\n"
 "wizard."
-msgstr ""
+msgstr "Richten Sie mit unserem Konfigurationsassistenten in wenigen Minuten Ihre eigene Nocturne-Instanz\nein."
 
 #: src/routes/faq/+page.svelte
 msgid "What is Nocturne?"
@@ -15396,7 +15396,7 @@ msgstr "Häufig gestellte Fragen"
 msgid ""
 "Find answers to common questions about Nocturne, installation, migration,\n"
 "and more."
-msgstr ""
+msgstr "Hier finden Sie Antworten auf häufige Fragen zu Nocturne, Installation, Migration\nund mehr."
 
 #: src/routes/faq/+page.svelte
 msgid "Still Have Questions?"
@@ -15406,7 +15406,7 @@ msgstr "Noch Fragen?"
 msgid ""
 "Check out the documentation for detailed guides, or visit GitHub\n"
 "to ask the community."
-msgstr ""
+msgstr "Ausführliche Anleitungen finden Sie in der Dokumentation. Auf GitHub\nkönnen Sie die Community fragen."
 
 #: src/routes/faq/+page.svelte
 msgid "Browse Documentation <0/>"
@@ -15639,7 +15639,7 @@ msgstr "Konfiguriert"
 msgid ""
 "Sensitive credentials are stored encrypted and never displayed after\n"
 "saving. <0/>"
-msgstr ""
+msgstr "Vertrauliche Zugangsdaten werden verschlüsselt gespeichert und nach dem\nSpeichern nie wieder angezeigt. <0/>"
 
 #: src/lib/components/settings/ConnectorConfigForm.svelte
 msgid "Environment variable: <0/>"
@@ -15843,7 +15843,7 @@ msgstr "Protokollierte Zeit"
 msgid ""
 "{0}g carbs\n"
 "· {1}% match"
-msgstr ""
+msgstr "{0}g Kohlenhydrate\n· {1}% Übereinstimmung"
 
 #. placeholder {0}: bolusDateDisplay
 #: src/lib/components/meal-matching/MealMatchReviewDialog.svelte
@@ -16042,7 +16042,7 @@ msgstr "Auto-Basal"
 msgid ""
 "Click on a connector to configure credentials and settings. Changes\n"
 "take effect immediately."
-msgstr ""
+msgstr "Klicken Sie auf einen Connector, um Zugangsdaten und Einstellungen zu konfigurieren. Änderungen\nwerden sofort wirksam."
 
 #: src/routes/(authenticated)/settings/connectors/+page.svelte
 #: src/routes/settings/connectors/+page.svelte
@@ -16050,14 +16050,14 @@ msgid ""
 "Link records from multiple data sources that represent the same\n"
 "underlying event. This improves data quality when the same glucose\n"
 "readings or treatments are uploaded from different apps."
-msgstr ""
+msgstr "Verknüpfen Sie Datensätze aus mehreren Datenquellen, die dasselbe\nzugrunde liegende Ereignis darstellen. Das verbessert die Datenqualität, wenn dieselben Glukosewerte\noder Behandlungen von verschiedenen Apps hochgeladen werden."
 
 #: src/lib/components/connectors/DeduplicationDialog.svelte
 #: src/routes/settings/connectors/+page.svelte
 msgid ""
 "Link records from multiple data sources that represent the same\n"
 "underlying event"
-msgstr ""
+msgstr "Datensätze aus mehreren Datenquellen verknüpfen, die dasselbe\nzugrunde liegende Ereignis darstellen"
 
 #: src/lib/components/connectors/DeduplicationDialog.svelte
 #: src/routes/settings/connectors/+page.svelte
@@ -16065,7 +16065,7 @@ msgid ""
 "This process will scan all your glucose records, treatments, and\n"
 "state spans to identify and link records that represent the same\n"
 "event from different data sources."
-msgstr ""
+msgstr "Dieser Vorgang durchsucht alle Glukosedatensätze, Behandlungen und\nStatuszeiträume, um Datensätze zu erkennen und zu verknüpfen, die dasselbe\nEreignis aus verschiedenen Datenquellen darstellen."
 
 #: src/lib/components/connectors/ConnectorDangerZone.svelte
 msgid "Irreversible actions that affect this connector"
@@ -16806,7 +16806,7 @@ msgstr "Hintergrunddiagramm"
 #: src/routes/(unauthenticated)/clock/[id]/+page.svelte
 #: src/routes/clock/[id]/+page.svelte
 msgid "Clock - Nocturne"
-msgstr "Uhr - Nocturne"
+msgstr "Uhr – Nocturne"
 
 #: src/routes/(unauthenticated)/clock/[id]/+page.svelte
 #: src/routes/clock/[id]/+page.svelte
@@ -16816,27 +16816,27 @@ msgstr "<0/> Zurück zu den Zifferblättern"
 #: src/routes/(authenticated)/clock/+page.svelte
 #: src/routes/clock/+page.svelte
 msgid "Clock Faces - Nocturne"
-msgstr "Zifferblätter"
+msgstr "Zifferblätter – Nocturne"
 
 #: src/routes/(authenticated)/clock/+page.svelte
 #: src/routes/clock/+page.svelte
 msgid "Clock Faces"
-msgstr "Erstelle und verwalte deine benutzerdefinierten Zifferblätter"
+msgstr "Zifferblätter"
 
 #: src/routes/(authenticated)/clock/+page.svelte
 #: src/routes/clock/+page.svelte
 msgid "Create and manage your custom clock displays"
-msgstr "<0/> Neues Zifferblatt"
+msgstr "Eigene Uhranzeigen erstellen und verwalten"
 
 #: src/routes/(authenticated)/clock/+page.svelte
 #: src/routes/clock/+page.svelte
 msgid "<0/> New Clock"
-msgstr "Noch keine Zifferblätter"
+msgstr "<0/> Neue Uhr"
 
 #: src/routes/(authenticated)/clock/+page.svelte
 #: src/routes/clock/+page.svelte
 msgid "No clock faces yet"
-msgstr "<0/> Zifferblatt erstellen"
+msgstr "Noch keine Zifferblätter"
 
 #~ msgid "Create your first custom clock face to display your glucose data exactly how you want it."
 #~ msgstr ""
@@ -16936,7 +16936,7 @@ msgstr "Zifferblatt gelöscht"
 msgid ""
 "Create your first custom clock face to display your glucose data\n"
 "exactly how you want it."
-msgstr ""
+msgstr "Erstellen Sie Ihr erstes eigenes Zifferblatt, um Ihre Glukosedaten\ngenau nach Ihren Vorstellungen anzuzeigen."
 
 #: src/lib/components/clock-builder/ClockBuilderHeader.svelte
 msgid "Undo (Ctrl+Z)"
@@ -17277,7 +17277,7 @@ msgstr "Automatische Erkennung aktivieren"
 msgid ""
 "Nocturne will analyze your overnight data and notify you when potential compression\n"
 "lows are detected"
-msgstr ""
+msgstr "Nocturne analysiert Ihre nächtlichen Daten und benachrichtigt Sie, wenn mögliche kompressionsbedingte\nTiefwerte erkannt werden"
 
 #: src/routes/(authenticated)/settings/data-quality/+page.svelte
 #: src/routes/settings/data-quality/+page.svelte
@@ -17289,14 +17289,14 @@ msgstr "Von Statistiken ausschließen"
 msgid ""
 "Don't include accepted compression lows when calculating Time in Range and other\n"
 "statistics"
-msgstr ""
+msgstr "Bestätigte kompressionsbedingte Tiefwerte bei der Berechnung von Time in Range und anderen\nStatistiken nicht berücksichtigen"
 
 #: src/routes/(authenticated)/settings/data-quality/+page.svelte
 #: src/routes/settings/data-quality/+page.svelte
 msgid ""
 "Compression lows are falsely low CGM readings caused by sleeping on your sensor. When\n"
 "detected, you'll be notified to review and confirm them."
-msgstr ""
+msgstr "Kompressionsbedingte Tiefwerte sind fälschlich niedrige CGM-Messwerte, die entstehen, wenn Sie auf Ihrem Sensor schlafen. Bei\nErkennung werden Sie benachrichtigt, um sie zu prüfen und zu bestätigen."
 
 #: src/routes/(authenticated)/reports/data-quality/compression-lows/+page.svelte
 #: src/routes/reports/data-quality/compression-lows/+page.svelte
@@ -17610,7 +17610,7 @@ msgstr "{0} löschen"
 msgid ""
 "Are you sure you want to delete this {0}?\n"
 "This action cannot be undone."
-msgstr ""
+msgstr "Möchten Sie {0} wirklich löschen?\nDiese Aktion kann nicht rückgängig gemacht werden."
 
 #: src/routes/(authenticated)/reports/treatments/+page.svelte
 #: src/routes/reports/treatments/+page.svelte
@@ -17892,7 +17892,7 @@ msgstr "Kohlenhydrataufnahme gesamt"
 msgid ""
 "Review and manage your insulin doses, carb entries, BG checks, notes, and\n"
 "device events. Use filters to find specific records."
-msgstr ""
+msgstr "Prüfen und verwalten Sie Ihre Insulindosen, Kohlenhydrateinträge, BZ-Messungen, Notizen und\nGeräteereignisse. Mit Filtern finden Sie bestimmte Datensätze."
 
 #: src/routes/(authenticated)/reports/treatments/+page.svelte
 #: src/routes/reports/treatments/+page.svelte
@@ -18068,14 +18068,14 @@ msgid ""
 "Use this to identify times when your basal insulin may need\n"
 "adjustment, or to discuss temp basal patterns with your healthcare\n"
 "provider."
-msgstr ""
+msgstr "Erkennen Sie damit Zeiträume, in denen Ihr Basalinsulin möglicherweise\nangepasst werden muss, oder besprechen Sie Muster temporärer Basalraten mit Ihrem medizinischen\nFachpersonal."
 
 #: src/routes/(authenticated)/reports/basal-analysis/+page.svelte
 #: src/routes/reports/basal-analysis/+page.svelte
 msgid ""
 "Moderate temp basal activity — typical for automated\n"
 "insulin delivery systems."
-msgstr ""
+msgstr "Mittlere Aktivität temporärer Basalraten – typisch für automatisierte\nInsulinabgabesysteme."
 
 #. placeholder {0}: showTightRange ? "Hide" : "Show"
 #: src/routes/(authenticated)/reports/glucose-distribution/+page.svelte
@@ -18983,7 +18983,7 @@ msgstr "Datenübersicht wird geladen..."
 msgid ""
 "There is no data to display yet. Connect a data source in your\n"
 "settings to get started."
-msgstr ""
+msgstr "Es sind noch keine Daten vorhanden. Verbinden Sie zunächst in den\nEinstellungen eine Datenquelle."
 
 #: src/routes/(authenticated)/reports/year-overview/+page.svelte
 #: src/routes/reports/year-overview/+page.svelte
@@ -19139,7 +19139,7 @@ msgstr "Nocturne ausprobieren"
 msgid ""
 "Experience Nocturne with realistic demo data. Explore the interface,\n"
 "check out the charts, and browse the API documentation."
-msgstr ""
+msgstr "Erleben Sie Nocturne mit realistischen Demodaten. Erkunden Sie die Oberfläche,\nsehen Sie sich die Diagramme an und stöbern Sie in der API-Dokumentation."
 
 #: src/routes/demo/+page.svelte
 msgid "Real-time glucose monitoring"
@@ -19177,7 +19177,7 @@ msgstr "<0/> API-Dokumentation erkunden <1/>"
 msgid ""
 "<0>Note:</0> This is a demo instance with synthetic data. Data resets periodically.\n"
 "For your own instance with real data, use the <1>setup wizard</1>."
-msgstr ""
+msgstr "<0>Hinweis:</0> Dies ist eine Demo-Instanz mit synthetischen Daten. Die Daten werden regelmäßig zurückgesetzt.\nVerwenden Sie für eine eigene Instanz mit echten Daten den <1>Einrichtungsassistenten</1>."
 
 #: src/routes/demo/+page.svelte
 msgid "Demo Not Available"
@@ -19205,7 +19205,7 @@ msgstr "Roadmap"
 msgid ""
 "Track the development progress of Nocturne. See what we're working on,\n"
 "what's coming next, and what's been completed."
-msgstr ""
+msgstr "Verfolgen Sie den Entwicklungsfortschritt von Nocturne. Sehen Sie, woran wir arbeiten,\nwas als Nächstes ansteht und was bereits abgeschlossen ist."
 
 #: src/routes/changelog/+page.svelte
 #: src/routes/roadmap/+page.svelte
@@ -19508,7 +19508,7 @@ msgstr "Raspberry Pi"
 msgid ""
 "Nocturne supports ARM64 architecture. Use Raspberry Pi 4 or newer with 64-bit\n"
 "Raspberry Pi OS."
-msgstr ""
+msgstr "Nocturne unterstützt die ARM64-Architektur. Verwenden Sie Raspberry Pi 4 oder neuer mit 64-bit\nRaspberry Pi OS."
 
 #~ msgid "Windows"
 #~ msgstr ""
@@ -19539,13 +19539,13 @@ msgstr "Portainer"
 msgid ""
 "Step-by-step guides for deploying Nocturne with Docker Compose,\n"
 "Portainer, and more."
-msgstr ""
+msgstr "Schritt-für-Schritt-Anleitungen zur Bereitstellung von Nocturne mit Docker Compose,\nPortainer und mehr."
 
 #: src/routes/+page.svelte
 msgid ""
 "Follow our step-by-step guides to deploy Nocturne on your\n"
 "preferred platform."
-msgstr ""
+msgstr "Folgen Sie unseren Schritt-für-Schritt-Anleitungen, um Nocturne auf Ihrer\nbevorzugten Plattform bereitzustellen."
 
 #: src/routes/+page.svelte
 #: src/routes/docs/installation/+page.svelte
@@ -19556,13 +19556,13 @@ msgstr "Wähle deine Plattform"
 msgid ""
 "Pick your hosting provider. We have guides for Docker Compose,\n"
 "Portainer, and more."
-msgstr ""
+msgstr "Wählen Sie Ihren Hosting-Anbieter. Wir bieten Anleitungen für Docker Compose,\nPortainer und mehr."
 
 #: src/routes/+page.svelte
 msgid ""
 "Follow the guide to deploy with Docker Compose. Configure\n"
 "environment variables for your setup."
-msgstr ""
+msgstr "Folgen Sie der Anleitung zur Bereitstellung mit Docker Compose. Konfigurieren Sie\ndie Umgebungsvariablen für Ihre Umgebung."
 
 #: src/routes/+page.svelte
 msgid "Installation Guide <0/>"
@@ -19596,19 +19596,19 @@ msgstr "Ersetze den Port durch den von dir konfigurierten Wert. Du solltest eine
 msgid ""
 "Choose a deployment method below to get Nocturne running on your infrastructure.\n"
 "All methods use the same Docker images and configuration."
-msgstr ""
+msgstr "Wählen Sie unten eine Bereitstellungsmethode aus, um Nocturne auf Ihrer Infrastruktur auszuführen.\nAlle Methoden verwenden dieselben Docker-Images und dieselbe Konfiguration."
 
 #: src/routes/docs/installation/+page.svelte
 msgid ""
 "Deploy directly on any Linux server, VPS, or Raspberry Pi using Docker Compose\n"
 "from the command line."
-msgstr ""
+msgstr "Direkte Bereitstellung auf einem beliebigen Linux-Server, VPS oder Raspberry Pi\nüber die Befehlszeile mit Docker Compose."
 
 #: src/routes/docs/installation/+page.svelte
 msgid ""
 "Deploy using the Portainer web interface. Great for managing your stack\n"
 "visually without SSH access."
-msgstr ""
+msgstr "Bereitstellung über die Portainer-Weboberfläche. Ideal, um Ihren Stack\nohne SSH-Zugriff visuell zu verwalten."
 
 #: src/routes/docs/installation/+page.svelte
 msgid "Cloud Providers"
@@ -19626,7 +19626,7 @@ msgstr "Plattform-Hinweise"
 msgid ""
 "Install Docker using the official repository for the latest version. Both x86_64 and ARM64\n"
 "architectures are supported."
-msgstr ""
+msgstr "Installiere Docker über das offizielle Repository, um die neueste Version zu erhalten. Sowohl x86_64- als auch ARM64\nArchitekturen werden unterstützt."
 
 #: src/routes/docs/installation/+page.svelte
 msgid "Windows / macOS"
@@ -19636,7 +19636,7 @@ msgstr "Windows / macOS"
 msgid ""
 "Use Docker Desktop with WSL2 backend (Windows) or the native Docker Desktop (macOS).\n"
 "Both Intel and Apple Silicon Macs are supported."
-msgstr ""
+msgstr "Verwende Docker Desktop mit WSL2-Backend (Windows) oder das native Docker Desktop (macOS).\nSowohl Intel- als auch Apple Silicon-Macs werden unterstützt."
 
 #~ msgid "A server or VPS with at least 1 GB RAM"
 #~ msgstr ""
@@ -19684,7 +19684,7 @@ msgstr "Navigiere zu Stacks"
 msgid ""
 "In the Portainer sidebar, click <0>Stacks</0>,\n"
 "then click <1>Add stack</1>."
-msgstr ""
+msgstr "Klicke in der Portainer-Seitenleiste auf <0>Stacks</0> und\ndann auf <1>Add stack</1>."
 
 #: src/routes/docs/installation/portainer/+page.svelte
 msgid "Name your stack"
@@ -19711,13 +19711,13 @@ msgid ""
 "Copy the following Docker Compose configuration and paste it into the Portainer web editor.\n"
 "The minimal configuration includes PostgreSQL, the Nocturne API, and Watchtower for\n"
 "automatic updates."
-msgstr ""
+msgstr "Kopiere die folgende Docker Compose-Konfiguration und füge sie in den Portainer-Webeditor ein.\nDie Minimalkonfiguration umfasst PostgreSQL, die Nocturne API und Watchtower für\nautomatische Updates."
 
 #: src/routes/docs/installation/portainer/+page.svelte
 msgid ""
 "<0>Only paste the docker-compose.yml content.</0> The .env variables will be configured separately in Portainer's environment\n"
 "variables section below."
-msgstr ""
+msgstr "<0>Füge nur den Inhalt der docker-compose.yml ein.</0> Die .env-Variablen werden separat im unten stehenden Bereich für Umgebungsvariablen\nvon Portainer konfiguriert."
 
 #: src/routes/docs/installation/docker-compose/+page.svelte
 #: src/routes/docs/installation/portainer/+page.svelte
@@ -19729,7 +19729,7 @@ msgid ""
 "Scroll down to the <0>Environment variables</0> section\n"
 "in Portainer. Click <1>Advanced mode</1> and add the\n"
 "following variables, one per line in <2/> format:"
-msgstr ""
+msgstr "Scrolle in Portainer nach unten zum Abschnitt <0>Environment variables</0>.\nKlicke auf <1>Advanced mode</1> und füge die\nfolgenden Variablen ein, eine pro Zeile im Format <2/>:"
 
 #: src/routes/docs/installation/portainer/+page.svelte
 msgid "Make sure to replace the placeholder values with your own secure passwords and secrets."
@@ -19755,7 +19755,7 @@ msgstr "Klicke auf \\\"Stack bereitstellen\\\""
 msgid ""
 "Portainer will pull the Docker images and start all services. This may take\n"
 "a few minutes on first deployment."
-msgstr ""
+msgstr "Portainer lädt die Docker-Images herunter und startet alle Dienste. Bei der ersten Bereitstellung kann dies\neinige Minuten dauern."
 
 #: src/routes/docs/installation/portainer/+page.svelte
 msgid "Monitor the deployment"
@@ -19765,7 +19765,7 @@ msgstr "Überwache die Bereitstellung"
 msgid ""
 "The stack details page will show the status of each container. Wait until all\n"
 "containers show as <0>Running</0>."
-msgstr ""
+msgstr "Auf der Stack-Detailseite wird der Status jedes Containers angezeigt. Warte, bis alle\nContainer als <0>Running</0> angezeigt werden."
 
 #: src/routes/docs/installation/docker-compose/+page.svelte
 #: src/routes/docs/installation/portainer/+page.svelte
@@ -19776,7 +19776,7 @@ msgstr "Schritt 5: Installation überprüfen"
 msgid ""
 "You can check the container logs directly in Portainer by clicking on any container\n"
 "in your stack, or from the command line:"
-msgstr ""
+msgstr "Du kannst die Containerprotokolle direkt in Portainer prüfen, indem du auf einen beliebigen Container\nin deinem Stack klickst, oder über die Befehlszeile:"
 
 #: src/routes/docs/installation/docker-compose/+page.svelte
 #: src/routes/docs/installation/portainer/+page.svelte
@@ -19787,7 +19787,7 @@ msgstr "Aktualisierung"
 msgid ""
 "Watchtower is included in the stack and will automatically check for image updates\n"
 "once per day. To update manually through Portainer:"
-msgstr ""
+msgstr "Watchtower ist im Stack enthalten und sucht automatisch einmal täglich nach Image-Updates.\nSo aktualisierst du manuell über Portainer:"
 
 #: src/routes/docs/installation/portainer/+page.svelte
 msgid "Navigate to your <0>nocturne</0> stack"
@@ -19818,7 +19818,7 @@ msgid ""
 "To add data source connectors (Dexcom, LibreLinkUp, etc.), edit your stack in Portainer\n"
 "and add the connector services to the compose configuration. You will also need to add the\n"
 "connector-specific environment variables. See the <0>Configuration Guide</0> for details."
-msgstr ""
+msgstr "Um Datenquellen-Connectors (Dexcom, LibreLinkUp usw.) hinzuzufügen, bearbeite deinen Stack in Portainer\nund füge die Connector-Dienste zur Compose-Konfiguration hinzu. Außerdem musst du die\nConnector-spezifischen Umgebungsvariablen hinzufügen. Weitere Informationen findest du im <0>Konfigurationsleitfaden</0>."
 
 #~ msgid "PostgreSQL database username"
 #~ msgstr ""
@@ -19922,20 +19922,20 @@ msgid ""
 "Create a <0/> and <1/> file in your\n"
 "project directory. The minimal configuration includes PostgreSQL, the Nocturne API, and\n"
 "Watchtower for automatic updates."
-msgstr ""
+msgstr "Erstelle eine <0/>- und eine <1/>-Datei in deinem\nProjektverzeichnis. Die Minimalkonfiguration umfasst PostgreSQL, die Nocturne API und\nWatchtower für automatische Updates."
 
 #: src/routes/docs/installation/docker-compose/+page.svelte
 msgid ""
 "<0>Connectors are optional.</0> The minimal compose above runs the core Nocturne stack. To add data source connectors\n"
 "(Dexcom, LibreLinkUp, etc.), add the connector services to your compose file.\n"
 "See the <1>Configuration Guide</1>."
-msgstr ""
+msgstr "<0>Connectors sind optional.</0> Die obige minimale Compose-Konfiguration führt den Nocturne-Kern-Stack aus. Um Datenquellen-Connectors\n(Dexcom, LibreLinkUp usw.) hinzuzufügen, füge die Connector-Dienste zu deiner Compose-Datei hinzu.\nSiehe <1>Konfigurationsleitfaden</1>."
 
 #: src/routes/docs/installation/docker-compose/+page.svelte
 msgid ""
 "Edit the <0/> file and set\n"
 "your values. At minimum, you must change the database password and API secret:"
-msgstr ""
+msgstr "Bearbeite die Datei <0/> und trage\ndeine Werte ein. Du musst mindestens das Datenbankpasswort und das API-Secret ändern:"
 
 #: src/routes/docs/installation/docker-compose/+page.svelte
 msgid "Step 4: Start the services"
@@ -19945,13 +19945,13 @@ msgstr "Schritt 4: Dienste starten"
 msgid ""
 "Docker will pull the required images and start all services. This may take a few minutes\n"
 "on first run."
-msgstr ""
+msgstr "Docker lädt die erforderlichen Images herunter und startet alle Dienste. Beim ersten Start kann dies einige Minuten\ndauern."
 
 #: src/routes/docs/installation/docker-compose/+page.svelte
 msgid ""
 "Watchtower is included in the default compose and will automatically check for image updates\n"
 "once per day. To update manually:"
-msgstr ""
+msgstr "Watchtower ist in der standardmäßigen Compose-Konfiguration enthalten und sucht automatisch einmal täglich nach Image-Updates.\nSo aktualisierst du manuell:"
 
 #: src/routes/docs/installation/docker-compose/+page.svelte
 msgid "If you encounter issues, check the logs for error details:"
@@ -20195,7 +20195,7 @@ msgstr "<0/> Deduplizierung läuft..."
 msgid ""
 "You can close this dialog — the job will continue in the background\n"
 "and you'll be notified when it's done."
-msgstr ""
+msgstr "Du kannst diesen Dialog schließen – der Vorgang wird im Hintergrund fortgesetzt\nund du wirst benachrichtigt, sobald er abgeschlossen ist."
 
 #: src/lib/components/connectors/ApiSecretSection.svelte
 #: src/lib/components/connectors/ConnectorSelectionGrid.svelte
@@ -20239,7 +20239,7 @@ msgstr "Multitenancy nicht konfiguriert"
 msgid ""
 "A base domain must be configured to enable URL-based tenant switching\n"
 "and tenant creation."
-msgstr ""
+msgstr "Eine Basisdomain muss konfiguriert sein, um den URL-basierten Mandantenwechsel\nund das Erstellen von Mandanten zu ermöglichen."
 
 #: src/routes/tenants/+page.svelte
 msgid "Tenant creation managed externally"
@@ -20249,7 +20249,7 @@ msgstr "Tenant-Erstellung extern verwaltet"
 msgid ""
 "New tenants are managed by your service provider. Contact your\n"
 "administrator to request a new instance."
-msgstr ""
+msgstr "Neue Mandanten werden von deinem Dienstanbieter verwaltet. Wende dich an deine\nAdministration, um eine neue Instanz anzufordern."
 
 #: src/routes/(authenticated)/tenants/+page.svelte
 #: src/routes/tenants/+page.svelte
@@ -21031,7 +21031,7 @@ msgstr "Standardisierte Insulin- und Glukoseübersicht"
 msgid ""
 "Risk is indicated in percentiles — 0 is lowest risk and 100 is\n"
 "highest risk"
-msgstr ""
+msgstr "Das Risiko wird in Perzentilen angegeben – 0 steht für das geringste und 100 für das\nhöchste Risiko"
 
 #: src/lib/components/reports/GlycemicRiskIndexChart.svelte
 msgid "GRI Score"
@@ -21330,7 +21330,7 @@ msgstr "Gerät löschen"
 msgid ""
 "Are you sure you want to delete this device? This action cannot be\n"
 "undone."
-msgstr ""
+msgstr "Möchtest du dieses Gerät wirklich löschen? Diese Aktion kann nicht\nrückgängig gemacht werden."
 
 #: src/lib/components/patient/PatientInsulinManager.svelte
 msgid "Edit Insulin"
@@ -21370,7 +21370,7 @@ msgstr "Insulin löschen"
 msgid ""
 "Are you sure you want to delete this insulin? This action cannot be\n"
 "undone."
-msgstr ""
+msgstr "Möchtest du dieses Insulin wirklich löschen? Diese Aktion kann nicht\nrückgängig gemacht werden."
 
 #: src/routes/settings/setup/+page.svelte
 msgid "Set your diabetes type and clinical information"
@@ -21427,7 +21427,7 @@ msgstr "Profil automatisch synchronisiert"
 msgid ""
 "Your therapy profile is being managed by a connected system. Changes\n"
 "will sync automatically."
-msgstr ""
+msgstr "Dein Therapieprofil wird von einem verbundenen System verwaltet. Änderungen\nwerden automatisch synchronisiert."
 
 #: src/routes/(fullscreen)/setup/profile/+page.svelte
 #: src/routes/settings/setup/profile/+page.svelte
@@ -21851,7 +21851,7 @@ msgstr "Alarmvoreinstellungen wählen"
 msgid ""
 "Select the alerts you want to enable. You can customize thresholds for\n"
 "each one."
-msgstr ""
+msgstr "Wähle die Warnungen aus, die du aktivieren möchtest. Du kannst die Schwellenwerte für\njede Warnung anpassen."
 
 #. placeholder {1}: preset.confirmationReadings !== 1 ? "s" : ""
 #: src/routes/settings/alerts/setup/+page.svelte
@@ -21915,7 +21915,7 @@ msgstr "Ausgewählte Alarmregeln ({0})"
 msgid ""
 "No presets selected. Go back to step 1 to select at least one\n"
 "alert."
-msgstr ""
+msgstr "Keine Voreinstellungen ausgewählt. Gehe zurück zu Schritt 1 und wähle mindestens eine\nWarnung aus."
 
 #. placeholder {1}: preset.hysteresisMinutes
 #: src/routes/settings/alerts/setup/+page.svelte
@@ -21927,7 +21927,7 @@ msgstr "{0} Konf. / {1}m Hyst."
 msgid ""
 "No delivery channels configured. Alerts will still be visible in\n"
 "the dashboard, but no push notifications will be sent."
-msgstr ""
+msgstr "Keine Zustellungskanäle konfiguriert. Warnungen sind weiterhin im\nDashboard sichtbar, es werden jedoch keine Push-Benachrichtigungen gesendet."
 
 #~ msgid "Webhook: {0}"
 #~ msgstr ""
@@ -21946,7 +21946,7 @@ msgid ""
 "connectivity, device availability, and third-party service\n"
 "reliability. Do not rely solely on these alerts for critical\n"
 "medical decisions."
-msgstr ""
+msgstr "Nocturne-Warnungen sind kein Ersatz für professionelle medizinische\nBeratung, Diagnose oder Behandlung. Ziehe bei medizinischen Entscheidungen immer dein medizinisches\nFachpersonal zurate. Die Zustellung von Warnungen hängt von der Netzwerkverbindung,\nder Geräteverfügbarkeit und der Zuverlässigkeit von Drittanbieterdiensten\nab. Verlasse dich bei kritischen medizinischen Entscheidungen nicht ausschließlich auf diese\nWarnungen."
 
 #: src/routes/(authenticated)/settings/alerts/setup/+page.svelte
 #: src/routes/settings/alerts/setup/+page.svelte
@@ -22166,7 +22166,7 @@ msgid ""
 "Are you sure you want to delete \"{0}\"? This\n"
 "will also remove all associated schedules and\n"
 "escalation steps. This action cannot be undone."
-msgstr ""
+msgstr "Möchtest du \"{0}\" wirklich löschen? Dadurch\nwerden auch alle zugehörigen Zeitpläne und\nEskalationsschritte entfernt. Diese Aktion kann nicht rückgängig gemacht werden."
 
 #: src/lib/components/alerts/AlertHistoryCard.svelte
 #: src/routes/settings/alerts/+page.svelte
@@ -22709,7 +22709,7 @@ msgstr "Keine serverseitigen Connectors sind in dieser Installation registriert.
 msgid ""
 "Check the documentation for environment variable\n"
 "configuration."
-msgstr ""
+msgstr "Informationen zur Konfiguration von Umgebungsvariablen findest du in der\nDokumentation."
 
 #~ msgid "Save and Sync"
 #~ msgstr ""
@@ -22749,7 +22749,7 @@ msgstr "Weiterleitung..."
 msgid ""
 "Total: {0} records\n"
 "deleted"
-msgstr ""
+msgstr "Insgesamt: {0} Datensätze\ngelöscht"
 
 #: src/lib/components/schedule/ScheduleView.svelte
 msgid "No schedule entries configured."
@@ -22865,7 +22865,7 @@ msgstr "<0/> Gerät hinzufügen"
 msgid ""
 "No connected applications. When you authorize apps to access your\n"
 "data, they will appear here."
-msgstr ""
+msgstr "Keine verbundenen Anwendungen. Wenn du Apps den Zugriff auf deine\nDaten erlaubst, werden sie hier angezeigt."
 
 #: src/lib/components/settings/ConnectedApps.svelte
 #: src/routes/settings/connected-apps/+page.svelte
@@ -22986,7 +22986,7 @@ msgstr "Einladungslink erstellen"
 msgid ""
 "Generate a shareable link. Anyone with this link can accept the invite\n"
 "after signing in."
-msgstr ""
+msgstr "Erstelle einen teilbaren Link. Nach der Anmeldung kann jeder mit diesem Link die Einladung\nannehmen."
 
 #~ msgid "Invite link created! Share it with your friend or family member."
 #~ msgstr ""
@@ -23088,19 +23088,19 @@ msgstr "Freigegebene Daten"
 msgid ""
 "Generate a shareable link. Anyone with this link can accept the\n"
 "invite after signing in."
-msgstr ""
+msgstr "Erstelle einen teilbaren Link. Nach der Anmeldung kann jeder mit diesem Link die\nEinladung annehmen."
 
 #: src/routes/settings/sharing/+page.svelte
 msgid ""
 "Invite link created! Share it with your friend or family\n"
 "member."
-msgstr ""
+msgstr "Einladungslink erstellt! Teile ihn mit Freunden oder\nFamilienmitgliedern."
 
 #: src/routes/settings/sharing/+page.svelte
 msgid ""
 "By default, invite links can only be used once. Enable this\n"
 "to allow unlimited uses."
-msgstr ""
+msgstr "Standardmäßig können Einladungslinks nur einmal verwendet werden. Aktiviere diese Option,\num eine unbegrenzte Nutzung zu erlauben."
 
 #~ msgid ""
 #~ "Grant someone read access to your data by entering their email and\n"
@@ -23176,7 +23176,7 @@ msgstr "Anwendung autorisieren"
 msgid ""
 "<0/> wants to access\n"
 "your Nocturne data."
-msgstr ""
+msgstr "<0/> möchte auf\ndeine Nocturne-Daten zugreifen."
 
 #: src/lib/components/XdripQuickConnect.svelte
 #: src/routes/(authenticated)/oauth/consent/+page.svelte
@@ -23186,7 +23186,7 @@ msgstr ""
 msgid ""
 "This application is not in the Nocturne known app directory. Only\n"
 "approve if you trust this application."
-msgstr ""
+msgstr "Diese Anwendung ist nicht im Verzeichnis bekannter Nocturne-Apps aufgeführt. Stimme nur zu,\nwenn du dieser Anwendung vertraust."
 
 #: src/lib/components/connectors/UploaderSetupView.svelte
 #: src/routes/(authenticated)/oauth/consent/+page.svelte
@@ -23211,7 +23211,7 @@ msgstr "Diese App kann deine Daten nicht löschen."
 msgid ""
 "This app is requesting full access, including the ability to delete\n"
 "data."
-msgstr ""
+msgstr "Diese App fordert Vollzugriff an, einschließlich der Berechtigung,\nDaten zu löschen."
 
 #: src/lib/components/XdripQuickConnect.svelte
 #: src/lib/components/connectors/UploaderSetupView.svelte
@@ -23460,7 +23460,7 @@ msgid ""
 "When enabled, this app will only be able to access data from the\n"
 "last 24 hours. Historical reports will show a notice that data is\n"
 "limited."
-msgstr ""
+msgstr "Wenn diese Option aktiviert ist, kann die App nur auf Daten der\nletzten 24 Stunden zugreifen. In Verlaufsberichten wird darauf hingewiesen, dass die Daten\neingeschränkt sind."
 
 #: src/routes/invite/[token]/+page.svelte
 msgid "Accept Invite - Nocturne"
@@ -23700,7 +23700,7 @@ msgid ""
 "Tokens use the <0/> prefix and\n"
 "grant programmatic access to your data. Each token is shown only once\n"
 "at creation."
-msgstr ""
+msgstr "Tokens verwenden das Präfix <0/> und\ngewähren programmgesteuerten Zugriff auf deine Daten. Jedes Token wird nur einmal bei der\nErstellung angezeigt."
 
 #: src/lib/components/settings/ApiTokens.svelte
 #: src/lib/components/settings/ApiTokens.svelte
@@ -23714,7 +23714,7 @@ msgstr "<0/> Token erstellen"
 msgid ""
 "No API tokens. Create a token to enable programmatic access to\n"
 "your data."
-msgstr ""
+msgstr "Keine API-Tokens. Erstelle ein Token, um den programmgesteuerten Zugriff auf\ndeine Daten zu ermöglichen."
 
 #: src/lib/components/settings/ApiTokens.svelte
 #: src/routes/settings/api-access/+page.svelte
@@ -23759,7 +23759,7 @@ msgstr "API-Token widerrufen"
 msgid ""
 "Are you sure you want to revoke \"{0}\"? Any\n"
 "applications using this token will immediately lose access."
-msgstr ""
+msgstr "Möchtest du \"{0}\" wirklich widerrufen? Alle\nAnwendungen, die dieses Token verwenden, verlieren sofort den Zugriff."
 
 #: src/lib/components/settings/ApiTokens.svelte
 #: src/lib/components/settings/ConnectedApps.svelte
@@ -23902,7 +23902,7 @@ msgstr "<0/> Passkeys"
 msgid ""
 "Passkeys provide secure, phishing-resistant authentication using\n"
 "your device's biometrics or security key."
-msgstr ""
+msgstr "Passkeys ermöglichen eine sichere, phishingresistente Authentifizierung über\ndie biometrischen Merkmale deines Geräts oder einen Sicherheitsschlüssel."
 
 #: src/routes/settings/account/+page.svelte
 #: src/routes/settings/security/+page.svelte
@@ -23914,7 +23914,7 @@ msgstr "<0/> Passkey hinzufügen"
 msgid ""
 "No passkeys registered. Add a passkey to enable passwordless\n"
 "sign-in."
-msgstr ""
+msgstr "Keine Passkeys registriert. Füge einen Passkey hinzu, um die passwortlose\nAnmeldung zu aktivieren."
 
 #: src/routes/(authenticated)/settings/account/+page.svelte
 #: src/routes/settings/account/+page.svelte
@@ -23936,7 +23936,7 @@ msgstr "Maximum von {0} Passkeys erreicht."
 msgid ""
 "You cannot remove your only passkey without an alternative sign-in\n"
 "method linked to your account."
-msgstr ""
+msgstr "Du kannst deinen einzigen Passkey nicht entfernen, ohne dass eine alternative Anmeldemethode\nmit deinem Konto verknüpft ist."
 
 #: src/routes/(authenticated)/settings/account/+page.svelte
 #: src/routes/settings/account/+page.svelte
@@ -23950,7 +23950,7 @@ msgstr "<0/> Wiederherstellungscodes"
 msgid ""
 "Recovery codes allow you to access your account if you lose all your\n"
 "passkeys. Store them in a safe place."
-msgstr ""
+msgstr "Mit Wiederherstellungscodes kannst du auf dein Konto zugreifen, wenn du alle deine\nPasskeys verlierst. Bewahre sie an einem sicheren Ort auf."
 
 #. placeholder {0}: recoveryStatus.remainingCodes
 #. placeholder {1}: recoveryStatus.totalCodes
@@ -23962,7 +23962,7 @@ msgstr ""
 msgid ""
 "{0} of {1} recovery\n"
 "codes remaining"
-msgstr ""
+msgstr "{0} von {1} Wiederherstellungs-\ncodes verbleibend"
 
 #: src/routes/(authenticated)/settings/account/+page.svelte
 #: src/routes/settings/account/+page.svelte
@@ -24002,7 +24002,7 @@ msgstr "<0/> Serverseitige Kontowiederherstellung"
 msgid ""
 "If you lose all your passkeys and recovery codes, you can recover\n"
 "your account by setting the <0/> environment variable on your server."
-msgstr ""
+msgstr "Wenn du alle deine Passkeys und Wiederherstellungscodes verlierst, kannst du dein\nKonto wiederherstellen, indem du die Umgebungsvariable <0/> auf deinem Server festlegst."
 
 #: src/routes/(authenticated)/settings/account/+page.svelte
 #: src/routes/settings/account/+page.svelte
@@ -24011,7 +24011,7 @@ msgid ""
 "This enables a temporary recovery flow that allows you to register\n"
 "a new passkey. It requires physical access to the server\n"
 "environment."
-msgstr ""
+msgstr "Dies aktiviert vorübergehend einen Wiederherstellungsablauf, mit dem du\neinen neuen Passkey registrieren kannst. Dafür ist physischer Zugriff auf die\nServerumgebung erforderlich."
 
 #: src/routes/(authenticated)/settings/account/+page.svelte
 #: src/routes/settings/account/+page.svelte
@@ -24025,7 +24025,7 @@ msgstr "Gib deinem Passkey einen Namen"
 msgid ""
 "Give this passkey a name to help you identify it later (e.g. \"MacBook\n"
 "Touch ID\", \"YubiKey 5\")."
-msgstr ""
+msgstr "Gib diesem Passkey einen Namen, damit du ihn später leichter erkennst (z. B. \"MacBook\nTouch ID\", \"YubiKey 5\")."
 
 #: src/routes/(authenticated)/settings/account/+page.svelte
 #: src/routes/settings/account/+page.svelte
@@ -24047,7 +24047,7 @@ msgstr "Passkey entfernen"
 msgid ""
 "Are you sure you want to remove \"{0}\"? You will no longer be able to sign in with this\n"
 "passkey."
-msgstr ""
+msgstr "Möchten Sie \"{0}\" wirklich entfernen? Sie können sich dann nicht mehr mit diesem\nPasskey anmelden."
 
 #: src/routes/(authenticated)/settings/account/+page.svelte
 #: src/routes/settings/account/+page.svelte
@@ -24061,7 +24061,7 @@ msgstr "Wiederherstellungscodes neu generieren"
 msgid ""
 "This will invalidate all existing recovery codes and generate new ones.\n"
 "Make sure to save the new codes in a safe place."
-msgstr ""
+msgstr "Dadurch werden alle vorhandenen Wiederherstellungscodes ungültig und neue erstellt.\nSpeichern Sie die neuen Codes an einem sicheren Ort."
 
 #: src/lib/components/connectors/ApiSecretSection.svelte
 #: src/lib/components/connectors/ApiSecretSection.svelte
@@ -24085,7 +24085,7 @@ msgstr "Neue Wiederherstellungscodes"
 msgid ""
 "Save these codes in a safe place. Each code can only be used once. This\n"
 "is the only time they will be shown."
-msgstr ""
+msgstr "Speichern Sie diese Codes an einem sicheren Ort. Jeder Code kann nur einmal verwendet werden. Dies\nist das einzige Mal, dass sie angezeigt werden."
 
 #: src/lib/components/support/IssueCreatorDialog.svelte
 #: src/routes/(authenticated)/settings/account/+page.svelte
@@ -24171,7 +24171,7 @@ msgstr "Du musst deine Wiederherstellungscodes kopieren, bevor du fortfährst."
 msgid ""
 "No recovery codes were returned. You can generate new ones later\n"
 "from your account settings."
-msgstr ""
+msgstr "Es wurden keine Wiederherstellungscodes zurückgegeben. Sie können später\nin Ihren Kontoeinstellungen neue erstellen."
 
 #: src/routes/(fullscreen)/auth/recovery/+page.svelte
 #: src/routes/(unauthenticated)/auth/recovery/+page.svelte
@@ -24901,7 +24901,7 @@ msgstr "Nur die letzten 24 Stunden"
 msgid ""
 "Restrict access to only the most recent 24 hours of data.\n"
 "Older data will not be visible to the follower."
-msgstr ""
+msgstr "Beschränkt den Zugriff auf die Daten der letzten 24 Stunden.\nÄltere Daten sind für die folgende Person nicht sichtbar."
 
 #: src/lib/components/members/PendingInvitesList.svelte
 #: src/routes/settings/members/+page.svelte
@@ -24920,7 +24920,7 @@ msgstr "Läuft ab {0} <0/> <1/>"
 msgid ""
 "No followers. Share your data with caregivers by creating an invite\n"
 "link."
-msgstr ""
+msgstr "Keine Follower. Teilen Sie Ihre Daten mit Betreuungspersonen, indem Sie einen Einladungslink\nerstellen."
 
 #: src/routes/settings/sharing/+page.svelte
 msgid "Limited to last 24 hours of data"
@@ -25035,7 +25035,7 @@ msgstr "Prüfe und verwalte ausstehende Anfragen für den Zugriff auf deine Date
 msgid ""
 "No pending access requests. When someone requests access to your data,\n"
 "they will appear here."
-msgstr ""
+msgstr "Keine ausstehenden Zugriffsanfragen. Wenn jemand Zugriff auf Ihre Daten anfordert,\nwird die Anfrage hier angezeigt."
 
 #: src/lib/components/members/CreateInviteCard.svelte
 #: src/routes/(authenticated)/settings/access-requests/+page.svelte
@@ -25062,7 +25062,7 @@ msgstr "Zugriffsanfrage ablehnen"
 msgid ""
 "Deny the access request from {0}?\n"
 "They will not be granted access to your data."
-msgstr ""
+msgstr "Zugriffsanfrage von {0} ablehnen?\nDie Person erhält keinen Zugriff auf Ihre Daten."
 
 #: src/routes/(authenticated)/settings/access-requests/+page.svelte
 #: src/routes/settings/access-requests/+page.svelte
@@ -25177,7 +25177,7 @@ msgid ""
 "device's built-in security — like a fingerprint sensor, face\n"
 "recognition, or a hardware security key — so there's no password to\n"
 "remember."
-msgstr ""
+msgstr "Passkeys sind die wichtigste Anmeldemethode für Nocturne. Sie nutzen die integrierten\nSicherheitsfunktionen Ihres Geräts — etwa Fingerabdrucksensor,\nGesichtserkennung oder einen Hardware-Sicherheitsschlüssel — sodass Sie sich kein Passwort\nmerken müssen."
 
 #: src/routes/(fullscreen)/auth/help/+page.svelte
 #: src/routes/(unauthenticated)/auth/help/+page.svelte
@@ -25185,7 +25185,7 @@ msgstr ""
 msgid ""
 "On the login page, tap <0>Sign in with passkey</0> and\n"
 "follow your device's prompt. If you have multiple accounts, choose <1>Sign in with username</1> and enter your username first."
-msgstr ""
+msgstr "Tippen Sie auf der Anmeldeseite auf <0>Mit Passkey anmelden</0> und\nfolgen Sie den Anweisungen Ihres Geräts. Wenn Sie mehrere Konten haben, wählen Sie <1>Mit Benutzername anmelden</1> und geben Sie zuerst Ihren Benutzernamen ein."
 
 #: src/routes/(fullscreen)/auth/help/+page.svelte
 #: src/routes/(unauthenticated)/auth/help/+page.svelte
@@ -25200,7 +25200,7 @@ msgid ""
 "If you've set up an authenticator app (such as Google Authenticator or\n"
 "Authy), you can sign in using a 6-digit code that refreshes every 30\n"
 "seconds."
-msgstr ""
+msgstr "Wenn Sie eine Authenticator-App eingerichtet haben (z. B. Google Authenticator oder\nAuthy), können Sie sich mit einem 6-stelligen Code anmelden, der alle 30\nSekunden aktualisiert wird."
 
 #: src/routes/(fullscreen)/auth/help/+page.svelte
 #: src/routes/(unauthenticated)/auth/help/+page.svelte
@@ -25210,7 +25210,7 @@ msgid ""
 "enter your username, then type the code shown in your authenticator\n"
 "app. You can set up an authenticator in your account settings after\n"
 "signing in."
-msgstr ""
+msgstr "Wählen Sie auf der Anmeldeseite <0>Mit Authenticator anmelden</0>,\ngeben Sie Ihren Benutzernamen und anschließend den in Ihrer Authenticator-App angezeigten\nCode ein. Nach der Anmeldung können Sie in Ihren Kontoeinstellungen einen Authenticator\neinrichten."
 
 #: src/routes/(fullscreen)/auth/help/+page.svelte
 #: src/routes/(unauthenticated)/auth/help/+page.svelte
@@ -25219,7 +25219,7 @@ msgid ""
 "Recovery codes are one-time backup codes you received when you first\n"
 "set up your account. Use them if you can't access your passkey or\n"
 "authenticator app."
-msgstr ""
+msgstr "Wiederherstellungscodes sind einmalig verwendbare Ersatzcodes, die Sie bei der ersten\nEinrichtung Ihres Kontos erhalten haben. Verwenden Sie sie, wenn Sie nicht auf Ihren Passkey oder Ihre\nAuthenticator-App zugreifen können."
 
 #: src/routes/(fullscreen)/auth/help/+page.svelte
 #: src/routes/(unauthenticated)/auth/help/+page.svelte
@@ -25228,7 +25228,7 @@ msgid ""
 "On the login page, choose <0>Sign in with recovery code</0>, enter your username and\n"
 "one of your remaining codes. Each code can only be used once, so cross\n"
 "it off your list after use."
-msgstr ""
+msgstr "Wählen Sie auf der Anmeldeseite <0>Mit Wiederherstellungscode anmelden</0> und geben Sie Ihren Benutzernamen sowie\neinen Ihrer verbleibenden Codes ein. Jeder Code kann nur einmal verwendet werden. Streichen\nSie ihn daher nach der Verwendung von Ihrer Liste."
 
 #: src/routes/(fullscreen)/auth/help/+page.svelte
 #: src/routes/(unauthenticated)/auth/help/+page.svelte
@@ -25243,7 +25243,7 @@ msgid ""
 "Your Nocturne instance may allow you to sign in with an external\n"
 "account like Google, GitHub, or Microsoft. If available, you'll see\n"
 "provider buttons on the login page."
-msgstr ""
+msgstr "Ihre Nocturne-Instanz erlaubt möglicherweise die Anmeldung mit einem externen\nKonto wie Google, GitHub oder Microsoft. Falls verfügbar, sehen Sie auf der\nAnmeldeseite Schaltflächen der Anbieter."
 
 #: src/routes/(fullscreen)/auth/help/+page.svelte
 #: src/routes/(unauthenticated)/auth/help/+page.svelte
@@ -25252,7 +25252,7 @@ msgid ""
 "External providers are configured by your instance administrator. If\n"
 "you don't see any provider buttons on the login page, this sign-in\n"
 "method isn't enabled for your instance."
-msgstr ""
+msgstr "Externe Anbieter werden von der Administration Ihrer Instanz konfiguriert. Wenn\nauf der Anmeldeseite keine Anbieter-Schaltflächen angezeigt werden, ist diese Anmeldemethode\nfür Ihre Instanz nicht aktiviert."
 
 #: src/routes/(fullscreen)/auth/help/+page.svelte
 #: src/routes/(unauthenticated)/auth/help/+page.svelte
@@ -25322,7 +25322,7 @@ msgstr "{0} direkte Berechtigung{1}"
 msgid ""
 "Remove {0} from the tenant?\n"
 "They will lose access to all tenant data."
-msgstr ""
+msgstr "{0} aus dem Mandanten entfernen?\nDie Person verliert den Zugriff auf alle Mandantendaten."
 
 #: src/routes/invite/[token]/+page.svelte
 #: src/routes/settings/members/+page.svelte
@@ -25351,7 +25351,7 @@ msgstr "<0/> Zuletzt aktiv {0}"
 msgid ""
 "You do not have permission to manage members. Contact your tenant\n"
 "administrator for access."
-msgstr ""
+msgstr "Sie sind nicht berechtigt, Mitglieder zu verwalten. Wenden Sie sich an die\nMandantenadministration, um Zugriff zu erhalten."
 
 #: src/routes/invite/[token]/+page.svelte
 msgid "Read blood glucose"
@@ -25464,7 +25464,7 @@ msgstr "<0/> Akzeptieren..."
 msgid ""
 "Save these recovery codes in a safe place. Each code can only\n"
 "be used once."
-msgstr ""
+msgstr "Speichern Sie diese Wiederherstellungscodes an einem sicheren Ort. Jeder Code kann nur\neinmal verwendet werden."
 
 #: src/routes/(authenticated)/settings/account/+page.svelte
 #: src/routes/settings/account/+page.svelte
@@ -25500,7 +25500,7 @@ msgstr "<0/> Authenticator-Apps"
 msgid ""
 "Use an authenticator app like Google Authenticator or Authy to\n"
 "generate time-based one-time passwords for sign-in."
-msgstr ""
+msgstr "Verwenden Sie eine Authenticator-App wie Google Authenticator oder Authy, um\nzeitbasierte Einmalpasswörter für die Anmeldung zu erzeugen."
 
 #: src/routes/settings/account/+page.svelte
 msgid "<0/> Add authenticator"
@@ -25510,7 +25510,7 @@ msgstr "<0/> Authenticator hinzufügen"
 msgid ""
 "No authenticator apps registered. Add one for an additional\n"
 "sign-in method."
-msgstr ""
+msgstr "Keine Authenticator-Apps registriert. Fügen Sie eine als zusätzliche\nAnmeldemethode hinzu."
 
 #: src/routes/(authenticated)/settings/account/+page.svelte
 #: src/routes/settings/account/+page.svelte
@@ -25533,7 +25533,7 @@ msgstr "Authenticator-App einrichten"
 msgid ""
 "Scan the QR code with your authenticator app, then enter the 6-digit\n"
 "code to verify."
-msgstr ""
+msgstr "Scannen Sie den QR-Code mit Ihrer Authenticator-App und geben Sie anschließend den 6-stelligen\nCode zur Bestätigung ein."
 
 #: src/lib/components/account/TotpSetupDialog.svelte
 #: src/routes/settings/account/+page.svelte
@@ -25566,7 +25566,7 @@ msgstr "Authenticator entfernen"
 msgid ""
 "Are you sure you want to remove \"{0}\"? You will no longer be able to sign in with\n"
 "this authenticator app."
-msgstr ""
+msgstr "Möchten Sie \"{0}\" wirklich entfernen? Sie können sich dann nicht mehr mit\ndieser Authenticator-App anmelden."
 
 #: src/routes/(authenticated)/settings/roles/+page.svelte
 #: src/routes/settings/roles/+page.svelte
@@ -25608,7 +25608,7 @@ msgstr "Rollen - Einstellungen - Nocturne"
 msgid ""
 "You do not have permission to manage roles. Contact your tenant\n"
 "administrator for access."
-msgstr ""
+msgstr "Sie sind nicht berechtigt, Rollen zu verwalten. Wenden Sie sich an die\nMandantenadministration, um Zugriff zu erhalten."
 
 #: src/routes/(authenticated)/settings/roles/+page.svelte
 #: src/routes/settings/roles/+page.svelte
@@ -25664,7 +25664,7 @@ msgstr "Rolle löschen"
 msgid ""
 "This role is currently assigned to {0} member{1}. They will lose any\n"
 "permissions granted by this role."
-msgstr ""
+msgstr "Diese Rolle ist derzeit {0} Mitglied{1} zugewiesen. Die Person bzw. Personen verlieren alle\ndurch diese Rolle gewährten Berechtigungen."
 
 #. placeholder {0}: deleteName
 #: src/routes/(authenticated)/settings/roles/+page.svelte
@@ -25726,7 +25726,7 @@ msgstr "Migriere deine Daten und halte beide Systeme während der Umstellung syn
 msgid ""
 "Optionally create treatment events when this tracker starts or completes.\n"
 "This maintains compatibility with existing CAGE/SAGE pills."
-msgstr ""
+msgstr "Erstellt optional Behandlungsereignisse, wenn dieser Tracker startet oder abgeschlossen wird.\nDies gewährleistet die Kompatibilität mit vorhandenen CAGE/SAGE-Anzeigen."
 
 #: src/routes/(fullscreen)/setup/migrate/nightscout/+page.svelte
 #: src/routes/settings/setup/migrate/nightscout/+page.svelte
@@ -25743,7 +25743,7 @@ msgstr "Migration erfolgreich gestartet"
 msgid ""
 "Your Nightscout data is being synced. You can continue setting up\n"
 "Nocturne while the sync runs in the background."
-msgstr ""
+msgstr "Ihre Nightscout-Daten werden synchronisiert. Sie können Nocturne weiter einrichten,\nwährend die Synchronisierung im Hintergrund läuft."
 
 #: src/routes/(fullscreen)/setup/migrate/nightscout/+page.svelte
 #: src/routes/settings/setup/migrate/nightscout/+page.svelte
@@ -25802,14 +25802,14 @@ msgstr "Generieren"
 msgid ""
 "Your API secret is configured. Regenerating it will invalidate the current secret\n"
 "and disconnect any uploaders using it."
-msgstr ""
+msgstr "Ihr API-Secret ist konfiguriert. Wenn Sie es neu erzeugen, wird das aktuelle Secret ungültig\nund alle damit verbundenen Uploader werden getrennt."
 
 #: src/lib/components/connectors/ApiSecretSection.svelte
 #: src/routes/settings/connectors/+page.svelte
 msgid ""
 "No API secret is configured. Generate one to allow Nightscout-compatible\n"
 "uploaders to send data to your site."
-msgstr ""
+msgstr "Es ist kein API-Secret konfiguriert. Erzeugen Sie eines, damit Nightscout-kompatible\nUploader Daten an Ihre Website senden können."
 
 #: src/lib/components/connectors/ApiSecretSection.svelte
 #: src/routes/settings/connectors/+page.svelte
@@ -25836,14 +25836,14 @@ msgstr "API-Geheimnis generieren?"
 msgid ""
 "This will replace your current API secret. Any uploaders or apps using the\n"
 "current secret will stop working until reconfigured with the new secret."
-msgstr ""
+msgstr "Dadurch wird Ihr aktuelles API-Secret ersetzt. Alle Uploader oder Apps, die das\naktuelle Secret verwenden, funktionieren erst wieder, wenn sie mit dem neuen Secret konfiguriert wurden."
 
 #: src/lib/components/connectors/ApiSecretSection.svelte
 #: src/routes/settings/connectors/+page.svelte
 msgid ""
 "This will generate a new API secret that you can use to authenticate\n"
 "Nightscout-compatible uploaders and CGM apps."
-msgstr ""
+msgstr "Dadurch wird ein neues API-Secret erzeugt, mit dem Sie Nightscout-kompatible\nUploader und CGM-Apps authentifizieren können."
 
 #: src/routes/(authenticated)/settings/nightscout-transition/+page.svelte
 #: src/routes/settings/nightscout-transition/+page.svelte
@@ -26020,7 +26020,7 @@ msgstr "Migration von Nightscout"
 msgid ""
 "Copy your existing data and keep both systems in sync during\n"
 "transition"
-msgstr ""
+msgstr "Vorhandene Daten kopieren und beide Systeme während des\nUmstiegs synchron halten"
 
 #: src/routes/(fullscreen)/setup/migrate/+page.svelte
 #: src/routes/settings/setup/migrate/+page.svelte
@@ -26120,7 +26120,7 @@ msgstr "Nur auf Einladung"
 msgid ""
 "Your data is completely private. Only people you explicitly invite\n"
 "can access your instance."
-msgstr ""
+msgstr "Ihre Daten sind vollständig privat. Nur ausdrücklich von Ihnen eingeladene Personen\nkönnen auf Ihre Instanz zugreifen."
 
 #: src/routes/(fullscreen)/setup/permissions/+page.svelte
 #: src/routes/settings/setup/permissions/+page.svelte
@@ -26132,7 +26132,7 @@ msgstr "Öffentlich lesbar"
 msgid ""
 "Anyone with the link can view your data without signing in.\n"
 "Useful for sharing with caregivers or medical staff."
-msgstr ""
+msgstr "Jeder mit dem Link kann Ihre Daten ohne Anmeldung ansehen.\nPraktisch zum Teilen mit Betreuungspersonen oder medizinischem Fachpersonal."
 
 #: src/routes/(fullscreen)/setup/permissions/+page.svelte
 #: src/routes/settings/setup/permissions/+page.svelte
@@ -26144,7 +26144,7 @@ msgstr "Auf die letzten 24 Stunden begrenzen"
 msgid ""
 "When enabled, public viewers only see the most recent 24 hours of\n"
 "data instead of the full history."
-msgstr ""
+msgstr "Wenn diese Option aktiviert ist, sehen öffentliche Betrachter nur die Daten der letzten 24 Stunden\nund nicht den vollständigen Verlauf."
 
 #: src/routes/(fullscreen)/setup/permissions/+page.svelte
 #: src/routes/settings/setup/permissions/+page.svelte
@@ -26156,7 +26156,7 @@ msgstr "Erweitert <0/>"
 msgid ""
 "Choose which data types are visible to public viewers.\n"
 "By default, all are included when readable access is granted."
-msgstr ""
+msgstr "Wählen Sie aus, welche Datentypen für öffentliche Betrachter sichtbar sind.\nStandardmäßig sind bei erteiltem Lesezugriff alle enthalten."
 
 #: src/routes/(fullscreen)/setup/permissions/+page.svelte
 #: src/routes/settings/setup/permissions/+page.svelte
@@ -26195,7 +26195,7 @@ msgid ""
 "This user will have complete control of this Nocturne instance,\n"
 "including the ability to manage other users, modify all data,\n"
 "and change system settings. Only assign admin access to trusted users."
-msgstr ""
+msgstr "Diese Person erhält die vollständige Kontrolle über diese Nocturne-Instanz,\neinschließlich der Möglichkeit, andere Benutzer zu verwalten, alle Daten zu ändern\nund Systemeinstellungen anzupassen. Gewähren Sie Administratorzugriff nur vertrauenswürdigen Personen."
 
 #: src/lib/components/auth/ProviderIcon.svelte
 msgid "Provider icon"
@@ -26491,7 +26491,7 @@ msgstr "Verknüpfte Konten"
 msgid ""
 "Discord accounts linked to <0>this Nocturne instance</0>. Each one can be\n"
 "queried from Discord with <1/>."
-msgstr ""
+msgstr "Mit <0>dieser Nocturne-Instanz</0> verknüpfte Discord-Konten. Jedes davon kann\nüber Discord mit <1/> abgefragt werden."
 
 #: src/routes/(authenticated)/settings/integrations/discord/+page.svelte
 #: src/routes/settings/integrations/discord/+page.svelte
@@ -26526,17 +26526,17 @@ msgstr "<0/> Mein Discord-Konto verknüpfen"
 #: src/routes/(authenticated)/settings/integrations/discord/+page.svelte
 #: src/routes/settings/integrations/discord/+page.svelte
 msgid "Discord OAuth2 is not configured on this instance. Ask the administrator to set <0/> and <1/>, or run <2/> directly from Discord."
-msgstr "Server falsch konfiguriert: PUBLIC_BASE_DOMAIN ist nicht gesetzt."
+msgstr "Discord OAuth2 ist auf dieser Instanz nicht konfiguriert. Bitte den Administrator, <0/> und <1/> festzulegen, oder führe <2/> direkt in Discord aus."
 
 #: src/routes/(authenticated)/settings/integrations/discord/+page.svelte
 #: src/routes/settings/integrations/discord/+page.svelte
 msgid "Add the bot to a Discord server"
-msgstr "Füge den Bot zu einem Discord-Server hinzu"
+msgstr "Bot zu einem Discord-Server hinzufügen"
 
 #: src/routes/(authenticated)/settings/integrations/discord/+page.svelte
 #: src/routes/settings/integrations/discord/+page.svelte
 msgid "Invite the Nocturne bot to a Discord server you manage so you can use <0/> there."
-msgstr "Lade den Nocturne-Bot auf einen Discord-Server ein, den du verwaltest, damit du <0/> dort verwenden kannst."
+msgstr "Lade den Nocturne-Bot auf einen von dir verwalteten Discord-Server ein, um <0/> dort zu verwenden."
 
 #: src/routes/(authenticated)/settings/integrations/discord/+page.svelte
 #: src/routes/settings/integrations/discord/+page.svelte
@@ -26547,13 +26547,13 @@ msgstr "Discord-Einladung öffnen"
 #: src/routes/(unauthenticated)/auth/bot/discord/finalize/+page.svelte
 #: src/routes/auth/bot/discord/finalize/+page.svelte
 msgid "Discord account linked"
-msgstr "Discord-Account verknüpft"
+msgstr "Discord-Konto verknüpft"
 
 #: src/routes/(fullscreen)/auth/bot/discord/finalize/+page.svelte
 #: src/routes/(unauthenticated)/auth/bot/discord/finalize/+page.svelte
 #: src/routes/auth/bot/discord/finalize/+page.svelte
 msgid "Your Discord account is now linked as <0/> (label <1/>). Run <2/> in Discord to get started."
-msgstr "Dein Discord-Account ist jetzt als <0/> verknüpft (Label <1/>). Führe <2/> in Discord aus, um loszulegen."
+msgstr "Dein Discord-Konto ist jetzt als <0/> (Bezeichnung <1/>) verknüpft. Führe zum Einstieg <2/> in Discord aus."
 
 #: src/routes/(fullscreen)/auth/bot/discord/finalize/+page.svelte
 #: src/routes/(fullscreen)/auth/bot/discord/finalize/+page.svelte
@@ -26576,29 +26576,29 @@ msgstr "Discord OAuth2 ist auf diesem Server nicht konfiguriert."
 
 #: src/routes/settings/integrations/discord/+page.server.ts
 msgid "Could not determine tenant slug from current host."
-msgstr "Discord OAuth2 ist auf dieser Instanz nicht konfiguriert. Bitte den Administrator, <0/> und <1/> zu setzen, oder führe <2/> direkt von Discord aus."
+msgstr "Der Tenant-Slug konnte nicht aus dem aktuellen Host ermittelt werden."
 
 #: src/routes/settings/integrations/discord/+page.server.ts
 #: src/routes/settings/integrations/discord/+page.server.ts
 #: src/routes/settings/integrations/discord/+page.server.ts
 msgid "Missing link id."
-msgstr "Fehlende Link-ID."
+msgstr "Link-ID fehlt."
 
 #: src/routes/(authenticated)/settings/integrations/discord/+page.svelte
 #: src/routes/settings/integrations/discord/+page.server.ts
 #: src/routes/settings/integrations/discord/+page.svelte
 msgid "Failed to set default link."
-msgstr "Standard-Link konnte nicht festgelegt werden."
+msgstr "Der Standardlink konnte nicht festgelegt werden."
 
 #: src/routes/settings/integrations/discord/+page.server.ts
 msgid "Label must be lowercase letters, digits, or hyphens."
-msgstr "Der Tenant-Slug konnte vom aktuellen Host nicht ermittelt werden."
+msgstr "Die Bezeichnung darf nur Kleinbuchstaben, Ziffern oder Bindestriche enthalten."
 
 #: src/routes/(authenticated)/settings/integrations/discord/+page.svelte
 #: src/routes/settings/integrations/discord/+page.server.ts
 #: src/routes/settings/integrations/discord/+page.svelte
 msgid "Failed to update link."
-msgstr "Link konnte nicht aktualisiert werden."
+msgstr "Der Link konnte nicht aktualisiert werden."
 
 #: src/routes/(authenticated)/settings/integrations/discord/+page.svelte
 #: src/routes/settings/integrations/discord/+page.server.ts
@@ -26633,7 +26633,7 @@ msgstr "<0/> Verknüpfte Anmeldemethoden"
 msgid ""
 "Sign in to Nocturne with an external identity provider such as\n"
 "Google, Microsoft, or GitHub."
-msgstr ""
+msgstr "Melden Sie sich bei Nocturne über einen externen Identitätsanbieter wie\nGoogle, Microsoft oder GitHub an."
 
 #: src/lib/components/settings/LinkedOidcIdentities.svelte
 msgid "<0/> Link an account"
@@ -26726,7 +26726,7 @@ msgstr "Noch keine verbundenen Apps"
 
 #: src/routes/settings/connected-apps/+page.svelte
 msgid "Apps you authorize will appear here."
-msgstr "Verbundene Apps konnten nicht geladen werden."
+msgstr "Von dir autorisierte Apps werden hier angezeigt."
 
 #: src/routes/settings/connected-apps/+page.svelte
 msgid "Unknown App"
@@ -26748,11 +26748,11 @@ msgid ""
 "Revoke {0}'s access to your\n"
 "data? The app will need to be re-authorized to regain\n"
 "access."
-msgstr "Apps, die du autorisierst, werden hier angezeigt."
+msgstr "Zugriff von {0} auf deine\nDaten widerrufen? Die App muss erneut autorisiert werden, um wieder\nZugriff zu erhalten."
 
 #: src/routes/settings/connected-apps/+page.svelte
 msgid "Scopes:"
-msgstr "Bereiche:"
+msgstr "Berechtigungen:"
 
 #: src/routes/settings/connected-apps/+page.svelte
 msgid "Authorized:"
@@ -26770,38 +26770,38 @@ msgstr "<0/> Integrationen"
 #: src/routes/(authenticated)/settings/connectors/+page.svelte
 #: src/routes/settings/connectors/+page.svelte
 msgid "Connect Nocturne to chat platforms and other external services"
-msgstr "Verbinde Nocturne mit Chat-Plattformen und anderen externen Diensten"
+msgstr "Nocturne mit Chat-Plattformen und anderen externen Diensten verbinden"
 
 #: src/routes/(authenticated)/settings/connectors/+page.svelte
 #: src/routes/settings/connectors/+page.svelte
 msgid "Link a Discord account to receive alerts and use the Nocturne bot"
-msgstr "Verknüpfe ein Discord-Konto, um Benachrichtigungen zu erhalten und den Nocturne-Bot zu nutzen"
+msgstr "Ein Discord-Konto verknüpfen, um Warnungen zu erhalten und den Nocturne-Bot zu verwenden"
 
 #. placeholder {0}: app.clientName ?? "this app"
 #: src/lib/components/settings/ConnectedApps.svelte
 msgid ""
 "Revoke {0}'s access to your data?\n"
 "The app will need to be re-authorized to regain access."
-msgstr "Autorisiert:"
+msgstr "Zugriff von {0} auf deine Daten widerrufen?\nDie App muss erneut autorisiert werden, um wieder Zugriff zu erhalten."
 
 #: src/routes/docs/installation/+page.svelte
 #: src/routes/docs/installation/byo-postgres/+page.svelte
 msgid "Bring Your Own PostgreSQL"
-msgstr "Bring dein eigenes PostgreSQL mit"
+msgstr "Eigene PostgreSQL-Datenbank verwenden"
 
 #: src/routes/docs/installation/+page.svelte
 msgid ""
 "Use a managed PostgreSQL service (RDS, Cloud SQL, Supabase, Neon) or an\n"
 "existing shared database instance. Requires a one-time role bootstrap."
-msgstr ""
+msgstr "Einen verwalteten PostgreSQL-Dienst (RDS, Cloud SQL, Supabase, Neon) oder eine\nvorhandene gemeinsam genutzte Datenbankinstanz verwenden. Erfordert die einmalige Einrichtung der Rollen."
 
 #: src/lib/components/docs/EnvVarReference.svelte
 msgid "PostgreSQL bootstrap superuser. Only used by the Postgres image at first container start to create the nocturne_migrator and nocturne_app roles."
-msgstr "PostgreSQL-Bootstrap-Superuser. Wird nur vom Postgres-Image beim ersten Start des Containers verwendet, um die Rollen nocturne_migrator und nocturne_app zu erstellen."
+msgstr "PostgreSQL-Superuser für die Ersteinrichtung. Wird nur beim ersten Containerstart vom Postgres-Image verwendet, um die Rollen nocturne_migrator und nocturne_app zu erstellen."
 
 #: src/lib/components/docs/EnvVarReference.svelte
 msgid "Password for the bootstrap superuser above."
-msgstr "Passwort für den oben genannten Bootstrap-Superuser."
+msgstr "Passwort für den oben angegebenen Superuser zur Ersteinrichtung."
 
 #: src/lib/components/docs/EnvVarReference.svelte
 msgid "Password for the nocturne_migrator role. This role owns the schema and runs EF migrations on startup."
@@ -26846,7 +26846,7 @@ msgid ""
 "request time with no DDL privileges and cannot bypass Row Level Security; <2/> owns the\n"
 "SvelteKit bot framework's <3/> tables. The init script mounted at <4/> creates all three\n"
 "roles at first container start. Do not consolidate them."
-msgstr ""
+msgstr "Nocturne verwendet zum mehrstufigen Schutz vor der Offenlegung von PHI drei separate PostgreSQL-Benutzer. <0/> führt Schema-\nMigrationen aus; <1/> wird\nzur Laufzeit von Anfragen ohne DDL-Berechtigungen verwendet und kann Row Level Security nicht umgehen; <2/> ist Eigentümer der\n<3/>-Tabellen des SvelteKit-Bot-Frameworks. Das unter <4/> eingebundene Initialisierungsskript erstellt beim ersten Containerstart alle drei\nRollen. Fassen Sie sie nicht zusammen."
 
 #: src/routes/docs/installation/byo-postgres/+page.svelte
 msgid ""
@@ -26862,26 +26862,26 @@ msgstr "Drei nicht privilegierte Rollen sind erforderlich"
 msgid ""
 "Nocturne enforces Row Level Security on every medical-data table. RLS is only meaningful\n"
 "when the runtime connection cannot bypass it, so Nocturne requires three separate roles:"
-msgstr ""
+msgstr "Nocturne erzwingt Row Level Security für jede Tabelle mit medizinischen Daten. RLS ist nur wirksam,\nwenn die Laufzeitverbindung es nicht umgehen kann. Daher benötigt Nocturne drei separate Rollen:"
 
 #: src/routes/docs/installation/byo-postgres/+page.svelte
 msgid ""
 "<0/> —\n"
 "owns the schema and runs migrations."
-msgstr ""
+msgstr "<0/> —\nist Eigentümer des Schemas und führt Migrationen aus."
 
 #: src/routes/docs/installation/byo-postgres/+page.svelte
 msgid ""
 "<0/> —\n"
 "runtime connection for the .NET API. Cannot bypass RLS and has no DDL privileges."
-msgstr ""
+msgstr "<0/> —\nLaufzeitverbindung für die .NET API. Kann RLS nicht umgehen und hat keine DDL-Berechtigungen."
 
 #: src/routes/docs/installation/byo-postgres/+page.svelte
 msgid ""
 "<0/> —\n"
 "used by the SvelteKit web app's bot framework to store chat-platform state. Owns\n"
 "only its own <1/> tables (not tenant-scoped, no PHI)."
-msgstr "Lege drei Verbindungszeichenfolgen in der Nocturne-Umgebung fest: <0><0/> — verwende die Rolle <1/>.<0/> — verwende die Rolle <1/>.<0/> — eine <1/>-URL für die Rolle <2/> (wird vom SvelteKit-Bot-State-Adapter verwendet).</0>"
+msgstr "<0/> —\nwird vom Bot-Framework der SvelteKit-Web-App verwendet, um den Status der Chat-Plattform zu speichern. Ist Eigentümer\nnur der eigenen <1/>-Tabellen (nicht Tenant-bezogen, keine PHI)."
 
 #: src/routes/docs/installation/byo-postgres/+page.svelte
 msgid "Setup steps"
@@ -26889,51 +26889,51 @@ msgstr "Einrichtungsschritte"
 
 #: src/routes/docs/installation/byo-postgres/+page.svelte
 msgid "Download <0/> from the Nocturne repository under <1/>."
-msgstr "Lade <0/> aus dem Nocturne-Repository unter <1/> herunter."
+msgstr "<0/> aus dem Nocturne-Repository unter <1/> herunterladen."
 
 #: src/routes/docs/installation/byo-postgres/+page.svelte
 msgid "Edit the file and replace the three <0/> passwords with strong values from your secrets manager."
-msgstr "Bearbeite die Datei und ersetze die drei <0/>-Passwörter durch deine starken Passwörter aus deinem Secrets-Manager."
+msgstr "Die Datei bearbeiten und die drei <0/>-Passwörter durch sichere Werte aus deinem Secrets Manager ersetzen."
 
 #: src/routes/docs/installation/byo-postgres/+page.svelte
 msgid "Run as a PostgreSQL superuser against your Nocturne database: <0/>"
-msgstr "Führe als PostgreSQL-Superuser gegen deine Nocturne-Datenbank aus: <0/>"
+msgstr "Als PostgreSQL-Superuser für deine Nocturne-Datenbank ausführen: <0/>"
 
 #: src/routes/docs/installation/byo-postgres/+page.svelte
 msgid "Set three connection strings in Nocturne's environment: <0><0/> — use the <1/> role.<0/> — use the <1/> role.<0/> — a <1/> URL for the <2/> role (consumed by the SvelteKit bot state adapter).</0>"
-msgstr ""
+msgstr "Drei Verbindungszeichenfolgen in der Nocturne-Umgebung festlegen: <0><0/> — die Rolle <1/> verwenden.<0/> — die Rolle <1/> verwenden.<0/> — eine <1/>-URL für die Rolle <2/> (wird vom SvelteKit-Adapter für den Bot-Status verwendet).</0>"
 
 #: src/routes/docs/installation/byo-postgres/+page.svelte
 msgid ""
 "Start Nocturne. If either role is missing or misconfigured, the startup error will\n"
 "inline the exact SQL needed to fix it."
-msgstr ""
+msgstr "Nocturne starten. Wenn eine der Rollen fehlt oder falsch konfiguriert ist, enthält der Startfehler\ndirekt den genauen SQL-Code zur Behebung."
 
 #: src/routes/docs/installation/byo-postgres/+page.svelte
 msgid ""
 "The two roles only need to be created once per database. Re-running <0/> is\n"
 "idempotent."
-msgstr "Setze drei Verbindungsstrings in Nocturnes Umgebung: <0><0/> — verwende die Rolle <1/>.<0/> — verwende die Rolle <1/>.<0/> — eine <1/>-URL für die Rolle <2/> (vom SvelteKit-Bot-State-Adapter konsumiert).</0>"
+msgstr "Die beiden Rollen müssen nur einmal pro Datenbank erstellt werden. <0/> kann\nmehrfach ohne unerwünschte Nebenwirkungen ausgeführt werden."
 
 #: src/routes/docs/installation/byo-postgres/+page.svelte
 msgid ""
 "Neither role has <0/> or <1/>. Nocturne\n"
 "refuses to start if the runtime role can bypass Row Level Security."
-msgstr ""
+msgstr "Keine der Rollen verfügt über <0/> oder <1/>. Nocturne\nverweigert den Start, wenn die Laufzeitrolle Row Level Security umgehen kann."
 
 #: src/routes/docs/installation/byo-postgres/+page.svelte
 msgid ""
 "On managed PostgreSQL services (RDS, Cloud SQL, Supabase, Neon), run the script as the\n"
 "database owner your provider gave you rather than the literal <0/> user."
-msgstr ""
+msgstr "Bei verwalteten PostgreSQL-Diensten (RDS, Cloud SQL, Supabase, Neon) das Skript als den\nvom Anbieter zugewiesenen Datenbankeigentümer statt als den Benutzer <0/> ausführen."
 
 #: src/routes/studio/+page.svelte
 msgid "Blog Posts"
-msgstr "Blog-Beiträge"
+msgstr "Blogbeiträge"
 
 #: src/routes/studio/+page.svelte
 msgid "Studio - Nocturne"
-msgstr "Studio - Nocturne"
+msgstr "Studio – Nocturne"
 
 #: src/routes/studio/+page.svelte
 msgid "Failed to publish"
@@ -26989,7 +26989,7 @@ msgstr "Erforderliche OAuth-Parameter fehlen."
 msgid ""
 "<0>Typical ratios:</0> Most people with Type 1 diabetes have around 50% basal and 50% bolus. Ratios\n"
 "can vary based on diet, activity level, and individual needs. <1/>"
-msgstr ""
+msgstr "<0>Typische Verhältnisse:</0> Bei den meisten Menschen mit Typ-1-Diabetes entfallen etwa 50% auf Basal- und 50% auf Bolusinsulin. Die Verhältnisse\nkönnen je nach Ernährung, Aktivitätsniveau und individuellen Bedürfnissen variieren. <1/>"
 
 #: src/routes/(fullscreen)/setup/patient/+page.svelte
 msgid "Weight (kg)"
@@ -27042,7 +27042,7 @@ msgid ""
 "Save these recovery codes in a safe place. If you lose access to\n"
 "your passkey, you can use one of these codes to sign in. Each code\n"
 "can only be used once."
-msgstr ""
+msgstr "Speichern Sie diese Wiederherstellungscodes an einem sicheren Ort. Wenn Sie den Zugriff auf\nIhren Passkey verlieren, können Sie sich mit einem dieser Codes anmelden. Jeder Code\nkann nur einmal verwendet werden."
 
 #: src/routes/(fullscreen)/join/+page.svelte
 #: src/routes/(unauthenticated)/join/+page.svelte
@@ -27054,19 +27054,19 @@ msgstr "Einladung annehmen"
 #: src/routes/(unauthenticated)/join/+page.svelte
 #: src/routes/(unauthenticated)/join/+page.svelte
 msgid "<0/> has invited you to join"
-msgstr "<0/> hat dich eingeladen, beizutreten"
+msgstr "<0/> hat dich eingeladen beizutreten"
 
 #: src/routes/(fullscreen)/join/+page.svelte
 #: src/routes/(fullscreen)/join/+page.svelte
 #: src/routes/(unauthenticated)/join/+page.svelte
 #: src/routes/(unauthenticated)/join/+page.svelte
 msgid "You've been invited to join"
-msgstr "Du wurdest eingeladen, beizutreten"
+msgstr "Du wurdest zum Beitritt eingeladen"
 
 #: src/routes/(fullscreen)/join/+page.svelte
 #: src/routes/(unauthenticated)/join/+page.svelte
 msgid "<0/> Joining..."
-msgstr "<0/> tritt bei..."
+msgstr "<0/> Beitritt läuft ..."
 
 #: src/routes/(fullscreen)/join/+page.svelte
 #: src/routes/(unauthenticated)/join/+page.svelte
@@ -27078,7 +27078,7 @@ msgstr "Nocturne beitreten"
 msgid ""
 "<0/> <1/>.\n"
 "Create an account or sign in to accept."
-msgstr "Konto einrichten"
+msgstr "<0/> <1/>.\nErstelle ein Konto oder melde dich an, um die Einladung anzunehmen."
 
 #. placeholder {0}: provider.name
 #. placeholder {0}: provider.name
@@ -27086,17 +27086,17 @@ msgstr "Konto einrichten"
 #: src/routes/(fullscreen)/join/+page.svelte
 #: src/routes/(fullscreen)/setup/passkey/+page.svelte
 msgid "<0/> Continue with {0}"
-msgstr "<0/> Weiter mit {0}"
+msgstr "<0/> Mit {0} fortfahren"
 
 #: src/lib/components/auth/OidcProviderButtons.svelte
 #: src/routes/(fullscreen)/join/+page.svelte
 msgid "Or create an account with a passkey"
-msgstr "Oder erstelle ein Konto mit einem Passkey"
+msgstr "Oder ein Konto mit einem Passkey erstellen"
 
 #: src/lib/components/auth/PasskeyRegistrationForm.svelte
 #: src/routes/(fullscreen)/join/+page.svelte
 msgid "A unique identifier for your account."
-msgstr "Ein eindeutiger Bezeichner für dein Konto."
+msgstr "Eine eindeutige Kennung für dein Konto."
 
 #: src/lib/components/auth/PasskeyRegistrationForm.svelte
 #: src/routes/(fullscreen)/join/+page.svelte
@@ -27145,11 +27145,11 @@ msgstr "Sende Warnungen als Slack-Direktnachricht"
 
 #: src/lib/components/alerts/ChannelPicker.svelte
 msgid "Send alerts to your Telegram chat"
-msgstr "Sende Alarme als Discord-Direktnachricht"
+msgstr "Warnungen an deinen Telegram-Chat senden"
 
 #: src/lib/components/alerts/ChannelPicker.svelte
 msgid "Send alerts to your WhatsApp"
-msgstr "Sende Warnungen an dein WhatsApp"
+msgstr "Warnungen an dein WhatsApp senden"
 
 #: src/lib/components/alerts/ChannelPicker.svelte
 msgid "No notification channels are currently available."
@@ -27157,14 +27157,14 @@ msgstr "Derzeit sind keine Benachrichtigungskanäle verfügbar."
 
 #: src/lib/components/alerts/ChannelPicker.svelte
 msgid "Service hasn't reported recently — alerts may be delayed"
-msgstr "Der Dienst hat sich in letzter Zeit nicht gemeldet – Alarme können sich verzögern"
+msgstr "Dienst hat sich kürzlich nicht gemeldet — Warnungen können verzögert eintreffen"
 
 #. placeholder {0}: getPlatformName(ct)
 #: src/lib/components/alerts/ChannelPicker.svelte
 msgid ""
 "Account not linked. Use /connect in {0} to\n"
 "enable delivery."
-msgstr "Sende Alarme an deinen Telegram-Chat"
+msgstr "Konto nicht verknüpft. Verwende /connect in {0}, um\ndie Zustellung zu aktivieren."
 
 #: src/lib/components/dashboard/OnboardingProgress.svelte
 #: src/lib/components/dashboard/SetupCard.svelte
@@ -27174,7 +27174,7 @@ msgstr "Patientendaten"
 #: src/lib/components/dashboard/OnboardingProgress.svelte
 #: src/lib/components/dashboard/SetupCard.svelte
 msgid "Therapy profile"
-msgstr ""
+msgstr "Therapieprofil"
 
 #: src/lib/components/dashboard/SetupCard.svelte
 msgid "Finish setting up"
@@ -27183,7 +27183,7 @@ msgstr "Einrichtung abschließen"
 #: src/routes/(fullscreen)/setup/+page.svelte
 #: src/routes/(unauthenticated)/setup/+page.svelte
 msgid "Choose how you'd like to set up Nocturne."
-msgstr "Therapieprofil"
+msgstr "Wähle aus, wie du Nocturne einrichten möchtest."
 
 #: src/routes/(fullscreen)/setup/+page.svelte
 #: src/routes/(unauthenticated)/setup/+page.svelte
@@ -27381,7 +27381,7 @@ msgstr "Neu beginnen"
 msgid ""
 "No recovery codes were returned. You can generate new ones later from\n"
 "your account settings."
-msgstr ""
+msgstr "Es wurden keine Wiederherstellungscodes zurückgegeben. Du kannst später in\ndeinen Kontoeinstellungen neue erstellen."
 
 #~ msgid "Threshold: {0} mg/dL"
 #~ msgstr ""
@@ -27440,7 +27440,7 @@ msgstr "Konto erstellt"
 msgid ""
 "Your admin account has been created. Save your recovery codes before\n"
 "continuing."
-msgstr ""
+msgstr "Dein Administratorkonto wurde erstellt. Speichere deine Wiederherstellungscodes, bevor\ndu fortfährst."
 
 #: src/routes/(unauthenticated)/setup/account/+page.svelte
 #: src/routes/(unauthenticated)/setup/steps/AccountCreation.svelte
@@ -27459,14 +27459,14 @@ msgstr "Richte das Administratorkonto für deine Nocturne-Instanz ein."
 msgid ""
 "Remove this connector's configuration. The connector will need to\n"
 "be set up again to resume syncing."
-msgstr ""
+msgstr "Entferne die Konfiguration dieses Konnektors. Der Konnektor muss\nerneut eingerichtet werden, um die Synchronisierung fortzusetzen."
 
 #. placeholder {0}: title.toLowerCase()
 #: src/lib/components/account/SecurityCredentialCard.svelte
 msgid ""
 "No {0} registered. Add one to enable additional sign-in\n"
 "methods."
-msgstr ""
+msgstr "Kein {0} registriert. Füge einen hinzu, um zusätzliche Anmelde\nmethoden zu aktivieren."
 
 #. placeholder {0}: title.toLowerCase()
 #: src/lib/components/account/SecurityCredentialCard.svelte
@@ -27483,7 +27483,7 @@ msgstr "Maximum von {0} {1} erreicht."
 msgid ""
 "You cannot remove your only credential without an alternative sign-in\n"
 "method linked to your account."
-msgstr ""
+msgstr "Du kannst deinen einzigen Anmeldenachweis nicht entfernen, ohne eine alternative Anmelde\nmethode mit deinem Konto zu verknüpfen."
 
 #: src/lib/components/meals/MealsFilterBar.svelte
 msgid "Foods <0/> <1/>"
@@ -27527,7 +27527,7 @@ msgstr "U-{0}"
 msgid ""
 "Remove {0} from the tenant? They\n"
 "will lose access to all tenant data."
-msgstr ""
+msgstr "{0} aus dem Mandanten entfernen? Die Person\nverliert den Zugriff auf alle Mandantendaten."
 
 #: src/routes/(unauthenticated)/setup/+page@.svelte
 #: src/routes/(unauthenticated)/setup/+page@.svelte
@@ -27645,7 +27645,7 @@ msgstr "Suche nach deiner <0>ersten</0> Messung…"
 msgid ""
 "We're listening on your uploader endpoint. As soon as a reading arrives,\n"
 "we'll confirm the connection and send you to the dashboard."
-msgstr ""
+msgstr "Wir überwachen deinen Uploader-Endpunkt. Sobald ein Messwert eingeht,\nbestätigen wir die Verbindung und leiten dich zum Dashboard weiter."
 
 #: src/routes/(unauthenticated)/setup/steps/FirstSync.svelte
 msgid "Listener"
@@ -27764,7 +27764,7 @@ msgstr "Wähle deine <0>erste</0> Datenquelle."
 msgid ""
 "You can connect more later. If your rig uses an uploader already pointing\n"
 "at Nightscout, choose xDrip+ or Nightscout — that's all you need."
-msgstr ""
+msgstr "Du kannst später weitere verbinden. Wenn dein Rig bereits einen auf\nNightscout ausgerichteten Uploader verwendet, wähle xDrip+ oder Nightscout — mehr brauchst du nicht."
 
 #: src/routes/(unauthenticated)/setup/steps/DevicePicker.svelte
 msgid "Don't see your device?"
@@ -27838,13 +27838,13 @@ msgid ""
 "All your entries, treatments, and profiles are in Nocturne. Your\n"
 "existing uploaders keep working — you don't need to change them until\n"
 "you're ready."
-msgstr ""
+msgstr "Alle deine Einträge, Behandlungen und Profile sind in Nocturne. Deine\nbestehenden Uploader funktionieren weiter — du musst sie erst ändern, wenn\ndu dazu bereit bist."
 
 #: src/routes/(unauthenticated)/setup/steps/Finish.svelte
 msgid ""
 "Your CGM is connected, your target range is set, and the dashboard is\n"
 "waiting. The next reading will land any minute."
-msgstr ""
+msgstr "Dein CGM ist verbunden, dein Zielbereich ist festgelegt und das Dashboard\nwartet. Der nächste Messwert trifft jeden Moment ein."
 
 #: src/routes/(unauthenticated)/setup/steps/Finish.svelte
 msgid "<0/> Open my dashboard"
@@ -27870,13 +27870,13 @@ msgstr "Bring deine <0>Dekade</0> an Daten mit."
 msgid ""
 "Four short steps. Nothing to uninstall later, nothing sent off-server.\n"
 "You can change every choice in Settings afterwards."
-msgstr ""
+msgstr "Vier kurze Schritte. Später muss nichts deinstalliert werden, nichts wird an externe Server gesendet.\nDu kannst anschließend jede Auswahl in den Einstellungen ändern."
 
 #: src/routes/(unauthenticated)/setup/StepSidebar.svelte
 msgid ""
 "We'll connect to your Nightscout instance, copy your entries over, and\n"
 "keep your uploaders pointing at the new host. No data loss, no downtime."
-msgstr ""
+msgstr "Wir verbinden uns mit deiner Nightscout-Instanz, kopieren deine Einträge und\nrichten deine Uploader auf den neuen Host aus. Kein Datenverlust, keine Ausfallzeit."
 
 #: src/routes/(unauthenticated)/setup/steps/NightscoutConnect.svelte
 msgid "Point us at your <0>Nightscout</0>."
@@ -27886,26 +27886,26 @@ msgstr "Verweise uns auf dein <0>Nightscout</0>."
 msgid ""
 "Enter the URL and API secret for the Nightscout instance you want to copy\n"
 "across. We read only — your existing site isn't modified."
-msgstr ""
+msgstr "Gib die URL und das API-Secret der Nightscout-Instanz ein, die du kopieren\nmöchtest. Wir lesen nur — deine bestehende Website wird nicht verändert."
 
 #: src/routes/(unauthenticated)/setup/steps/PathChoice.svelte
 msgid ""
 "Both roads end in the same place. We just want to know whether to carry\n"
 "your existing Nightscout data over, or give you a clean notebook to start\n"
 "in."
-msgstr ""
+msgstr "Beide Wege führen zum selben Ziel. Wir möchten nur wissen, ob wir\ndeine bestehenden Nightscout-Daten übernehmen oder dir ein leeres Notizbuch für den\nNeustart geben sollen."
 
 #: src/routes/(unauthenticated)/setup/steps/PathChoice.svelte
 msgid ""
 "I'm new to open-source diabetes data, or I'd rather not bring old data\n"
 "with me."
-msgstr ""
+msgstr "Open-Source-Diabetesdaten sind neu für mich oder ich möchte meine alten Daten lieber nicht\nmitnehmen."
 
 #: src/routes/(unauthenticated)/setup/steps/PathChoice.svelte
 msgid ""
 "I already run Nightscout. Pull my history across and keep my uploaders\n"
 "working."
-msgstr ""
+msgstr "Ich betreibe bereits Nightscout. Übernimm meinen Verlauf und sorge dafür, dass meine Uploader\nweiter funktionieren."
 
 #: src/routes/(unauthenticated)/setup/steps/ImportProgress.svelte
 msgid "Failed to find active migration"
@@ -27987,7 +27987,7 @@ msgstr "Verbinde eine <0>Datenquelle</0>."
 msgid ""
 "Choose a cloud service or phone app to start sending glucose\n"
 "and treatment data to Nocturne. You can connect more later."
-msgstr ""
+msgstr "Wähle einen Cloud-Dienst oder eine Smartphone-App, um Glukose-\nund Behandlungsdaten an Nocturne zu senden. Du kannst später weitere verbinden."
 
 #: src/routes/(unauthenticated)/setup/+page@.svelte
 msgid "Configure your <0>connection</0> ."
@@ -28001,14 +28001,14 @@ msgstr "Richte deine <0>App</0> ein."
 msgid ""
 "Follow the steps below to connect your phone app to\n"
 "Nocturne."
-msgstr ""
+msgstr "Führe die folgenden Schritte aus, um deine Smartphone-App mit\nNocturne zu verbinden."
 
 #: src/routes/(unauthenticated)/setup/steps/ImportProgress.svelte
 msgid ""
 "We're streaming entries, treatments, and profiles from your Nightscout\n"
 "into Nocturne's store. You can navigate away — this continues in the\n"
 "background."
-msgstr ""
+msgstr "Wir übertragen Einträge, Behandlungen und Profile aus deinem Nightscout\nin den Speicher von Nocturne. Du kannst die Seite verlassen — die Übertragung läuft im\nHintergrund weiter."
 
 #: src/routes/(unauthenticated)/setup/+page@.svelte
 msgid "Save and continue <0/>"
@@ -28157,7 +28157,7 @@ msgstr "Benenne deine <0>Instanz</0> ."
 msgid ""
 "Choose a slug and display name for your Nocturne instance. The slug is a\n"
 "short, URL-friendly identifier that cannot be changed later."
-msgstr ""
+msgstr "Wähle einen Slug und einen Anzeigenamen für deine Nocturne-Instanz. Der Slug ist eine\nkurze, URL-taugliche Kennung, die später nicht geändert werden kann."
 
 #: src/routes/(unauthenticated)/setup/steps/AccountCreation.svelte
 #: src/routes/(unauthenticated)/setup/steps/TenantIdentity.svelte
@@ -28208,7 +28208,7 @@ msgstr "Erstelle dein <0>Konto</0>."
 msgid ""
 "Set up the owner account for your Nocturne instance. You will be the\n"
 "administrator."
-msgstr ""
+msgstr "Richte das Eigentümerkonto für deine Nocturne-Instanz ein. Du wirst\nAdministrator."
 
 #: src/routes/(unauthenticated)/setup/steps/AccountCreation.svelte
 msgid "Save your recovery codes before continuing."
@@ -28238,7 +28238,7 @@ msgstr "Veraltet — zu gerätespezifischem Schlüssel wechseln"
 msgid ""
 "Create an API key below to authenticate uploaders. Each key is\n"
 "scoped to specific permissions and can be revoked independently."
-msgstr ""
+msgstr "Erstelle unten einen API-Schlüssel, um Uploader zu authentifizieren. Jeder Schlüssel ist\nauf bestimmte Berechtigungen beschränkt und kann unabhängig widerrufen werden."
 
 #: src/routes/(authenticated)/settings/connectors/+page.svelte
 msgid "<0/> Create API key"
@@ -28308,7 +28308,7 @@ msgstr "Anzeigepräferenz"
 msgid ""
 "This only affects values where both smoothed and unsmoothed readings are present.\n"
 "\"Default\" uses the value as reported by the data source."
-msgstr ""
+msgstr "Dies betrifft nur Werte, für die sowohl geglättete als auch ungeglättete Messwerte vorliegen.\n\"Standard\" verwendet den von der Datenquelle gemeldeten Wert."
 
 #: src/routes/(authenticated)/settings/appearance/+page.svelte
 msgid "Client upload source defaults"
@@ -28378,7 +28378,7 @@ msgstr "Gastlink erstellen"
 msgid ""
 "Generate a temporary code or link for read-only access. It expires in\n"
 "48 hours and can only be used once."
-msgstr ""
+msgstr "Erstelle einen temporären Code oder Link für den schreibgeschützten Zugriff. Er läuft nach\n48 Stunden ab und kann nur einmal verwendet werden."
 
 #: src/lib/components/members/GuestLinksSection.svelte
 msgid "Guest link created successfully."
@@ -28396,7 +28396,7 @@ msgstr "Link"
 msgid ""
 "Share this code or link. It expires in 48 hours and can only be\n"
 "used once."
-msgstr ""
+msgstr "Teile diesen Code oder Link. Er läuft nach 48 Stunden ab und kann nur\neinmal verwendet werden."
 
 #: src/lib/components/members/GuestLinksSection.svelte
 msgid "Who is this for?"
@@ -28943,7 +28943,7 @@ msgstr "Meldung konnte nicht erstellt werden"
 msgid ""
 "We've opened a pre-filled GitHub issue form in a new tab as a\n"
 "fallback. You can paste your screenshots there manually."
-msgstr ""
+msgstr "Als Ausweichlösung haben wir ein vorausgefülltes GitHub-Issue-Formular in einem neuen Tab\ngeöffnet. Dort kannst du deine Screenshots manuell einfügen."
 
 #: src/lib/components/support/IssueCreatorDialog.svelte
 msgid "Title *"
@@ -29025,7 +29025,7 @@ msgstr "Diagnose-Informationen (automatisch enthalten)"
 msgid ""
 "Browser, screen size, route, and locale are always included. Toggle\n"
 "additional info below:"
-msgstr ""
+msgstr "Browser, Bildschirmgröße, Route und Spracheinstellung werden immer einbezogen. Aktiviere\nweitere Informationen unten:"
 
 #: src/lib/components/support/IssueCreatorDialog.svelte
 msgid "Tenant slug"
@@ -29507,7 +29507,7 @@ msgstr "Erstelle deine Lebensmittel-Datenbank"
 msgid ""
 "Add the foods you eat regularly with their carb counts. Once they're here,\n"
 "logging a meal takes a couple of taps anywhere in Nocturne."
-msgstr ""
+msgstr "Füge häufig verzehrte Lebensmittel mit ihrer Kohlenhydratmenge hinzu. Sobald sie hier sind,\nkannst du überall in Nocturne mit wenigen Fingertipps eine Mahlzeit protokollieren."
 
 #: src/routes/(authenticated)/food/+page.svelte
 msgid "<0/> Add your first food"
@@ -29693,7 +29693,7 @@ msgid ""
 "Build the condition that fires this alert. Group conditions\n"
 "with AND/OR, negate them, or require sustained truth before\n"
 "firing."
-msgstr ""
+msgstr "Erstelle die Bedingung, die diesen Alarm auslöst. Gruppiere Bedingungen\nmit AND/OR, negiere sie oder verlange, dass sie über einen bestimmten Zeitraum erfüllt sind, bevor\nder Alarm ausgelöst wird."
 
 #: src/lib/components/alerts/RuleEditorSheet.svelte
 msgid "No condition configured."
@@ -29719,7 +29719,7 @@ msgid ""
 "Automatically close active alerts when a separate condition is\n"
 "true. Useful for mirroring \"alert clears when value returns to\n"
 "range\"."
-msgstr ""
+msgstr "Schließe aktive Alarme automatisch, wenn eine separate Bedingung\nerfüllt ist. Nützlich für das Verhalten \"Alarm endet, wenn der Wert wieder im\nBereich liegt\"."
 
 #: src/lib/components/alerts/RuleEditorSheet.svelte
 msgid "Auto-resolve is enabled — add a condition or turn it off."
@@ -29745,7 +29745,7 @@ msgid ""
 "How long to extend the snooze when conditions hold. With no\n"
 "conditions configured, the backend falls back to a trend-favorable\n"
 "heuristic."
-msgstr ""
+msgstr "Lege fest, wie lange die Schlummerzeit verlängert wird, wenn die Bedingungen erfüllt sind. Sind keine\nBedingungen konfiguriert, verwendet das Backend ersatzweise eine trendgünstige\nHeuristik."
 
 #: src/lib/components/alerts/SnoozeTab.svelte
 msgid "Conditions to extend snooze"
@@ -29760,7 +29760,7 @@ msgstr "<0/> Bedingung hinzufügen"
 msgid ""
 "All conditions must hold for the snooze to extend. Leave empty to use\n"
 "the default trend-favorable heuristic."
-msgstr ""
+msgstr "Alle Bedingungen müssen erfüllt sein, damit die Schlummerzeit verlängert wird. Leer lassen, um\ndie standardmäßige trendgünstige Heuristik zu verwenden."
 
 #: src/lib/components/alerts/SnoozeTab.svelte
 msgid "No conditions configured."
@@ -30159,7 +30159,7 @@ msgstr "Zeilenaktionen"
 msgid ""
 "This rule will stop firing immediately. Existing alert history\n"
 "is preserved. This action cannot be undone."
-msgstr ""
+msgstr "Diese Regel löst ab sofort nicht mehr aus. Der bestehende Alarmverlauf\nbleibt erhalten. Diese Aktion kann nicht rückgängig gemacht werden."
 
 #: src/lib/components/alerts/ReplayDialog.svelte
 msgid "<0/> Simulate alert rules"
@@ -30193,7 +30193,7 @@ msgstr "<0/> Alarme zum Laufen bringen"
 msgid ""
 "Four short steps. The point isn't the checklist — it's the moment your phone buzzes\n"
 "and you trust it."
-msgstr ""
+msgstr "Vier kurze Schritte. Es geht nicht um die Checkliste — sondern um den Moment, in dem dein Smartphone vibriert\nund du darauf vertraust."
 
 #: src/lib/components/alerts/OnboardingCard.svelte
 msgid "Grant browser notification permission"
@@ -30954,34 +30954,34 @@ msgstr "Benutzer-Schlummeraktionen können nicht wiedergegeben werden."
 msgid ""
 "Critical-severity rules implicitly bypass DND regardless of\n"
 "this flag."
-msgstr ""
+msgstr "Regeln mit kritischem Schweregrad umgehen DND unabhängig von\ndieser Einstellung automatisch."
 
 #: src/routes/(authenticated)/alerts/[id]/+page.svelte
 msgid ""
 "Define when this alert fires. Mix facts with AND/OR; nest with\n"
 "brackets."
-msgstr ""
+msgstr "Lege fest, wann dieser Alarm ausgelöst wird. Verknüpfe Fakten mit AND/OR und verschachtele sie mit\nKlammern."
 
 #: src/routes/(authenticated)/alerts/[id]/+page.svelte
 msgid ""
 "When the user snoozes, extend the snooze automatically while these\n"
 "conditions hold."
-msgstr ""
+msgstr "Wenn der Benutzer den Alarm in den Schlummermodus versetzt, verlängere die Schlummerzeit automatisch, solange diese\nBedingungen erfüllt sind."
 
 #: src/routes/(authenticated)/alerts/[id]/+page.svelte
 msgid ""
 "Fire a real notification, or replay the rule against historical\n"
 "glucose."
-msgstr ""
+msgstr "Löse eine echte Benachrichtigung aus oder spiele die Regel mit historischen\nGlukosewerten erneut ab."
 
 #: src/routes/(authenticated)/alerts/[id]/+page.svelte
 msgid ""
 "Real fires for this rule. Click any to replay the day in the\n"
 "simulator."
-msgstr ""
+msgstr "Echte Auslösungen dieser Regel. Klicke auf eine, um den Tag im\nSimulator erneut abzuspielen."
 
 #: src/routes/(authenticated)/alerts/[id]/+page.svelte
 msgid ""
 "Replay this alert (and any siblings) against historical glucose. Nothing\n"
 "is delivered."
-msgstr ""
+msgstr "Spiele diesen Alarm (und alle verwandten Alarme) mit historischen Glukosewerten erneut ab. Es wird nichts\nzugestellt."
