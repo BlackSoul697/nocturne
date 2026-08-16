@@ -1,9 +1,31 @@
+using Microsoft.Extensions.Logging.Abstractions;
+using Microsoft.Extensions.Options;
+using Moq;
 using Nocturne.API.Services;
 
 namespace Nocturne.API.Tests.Services;
 
 public class GitHubTranslationServiceTests
 {
+    private static GitHubTranslationService Service(GitHubTranslationOptions options) =>
+        new(Mock.Of<IHttpClientFactory>(), Options.Create(options),
+            NullLogger<GitHubTranslationService>.Instance);
+
+    [Theory]
+    [InlineData(false, null, false)]
+    [InlineData(true, null, false)]
+    [InlineData(false, "pat", false)]
+    [InlineData(true, "pat", true)]
+    public void AcceptsRelay_Needs_Both_The_Opt_In_And_A_Local_Pat(
+        bool optedIn, string? pat, bool expected)
+    {
+        Service(new GitHubTranslationOptions
+        {
+            AcceptRelayedContributions = optedIn,
+            TranslationsPat = pat,
+        }).AcceptsRelay.Should().Be(expected);
+    }
+
     private static TranslationContributionRequest Request(
         string? gitHubUsername = null, string? email = null, string? note = null,
         string name = "Jane Doe") => new()
@@ -106,7 +128,7 @@ public class GitHubTranslationServiceTests
             {
                 Text = "",
                 Applied = 1,
-                Unmatched = ["evil\n</details>\n# heading"],
+                Unmatched = [new TranslationUnmatchedEntry { MsgId = "evil\n</details>\n# heading" }],
             });
 
         body.Should().NotContain("evil\n");
@@ -122,12 +144,12 @@ public class GitHubTranslationServiceTests
             {
                 Text = "",
                 Applied = 2,
-                Unmatched = ["Gone message"],
+                Unmatched = [new TranslationUnmatchedEntry { MsgId = "Gone message", Context = "page-title" }],
             });
 
         body.Should().Contain("**Contributor:** Jane Doe (@janedoe)");
         body.Should().Contain("**Messages updated:** 2");
-        body.Should().Contain("`Gone message`");
+        body.Should().Contain("`Gone message` (context: page-title)");
         body.Should().Contain("## Contributor note");
         NoteFence(body).Body.Should().Be("Reviewed against the app UI");
     }
@@ -140,8 +162,6 @@ public class GitHubTranslationServiceTests
             Request(note: note),
             new PoEditResult { Text = "", Applied = 1, Unmatched = [] });
 
-        // Nothing inside a code fence is interpreted, so the note survives
-        // verbatim while mentions, references, headings and raw HTML are inert.
         var (fence, fenced) = NoteFence(body);
         fence.Should().Be("```");
         fenced.Should().Be(note);
@@ -159,9 +179,6 @@ public class GitHubTranslationServiceTests
             Request(note: url),
             new PoEditResult { Text = "", Applied = 1, Unmatched = [] });
 
-        // A URL-form reference bypasses a "#" escape entirely: it auto-closes
-        // the issue on merge and backlinks at PR-open. It is only safe because
-        // it appears nowhere outside the code fence.
         var (_, fenced) = NoteFence(body);
         fenced.Should().Be(url);
         body.Replace(fenced, "").Should().NotContain("github.com/nightscout/nocturne/issues/123");
@@ -191,8 +208,6 @@ public class GitHubTranslationServiceTests
             Request(name: @"Jane fixes #123 cc @someuser \x"),
             new PoEditResult { Text = "", Applied = 1, Unmatched = [] });
 
-        // The backslash is escaped first, so a submitted "\" cannot neutralise
-        // the escape in front of the "@" or "#".
         body.Should().Contain(@"- **Contributor:** Jane fixes \#123 cc \@someuser \\x");
         body.Should().NotContain("cc @someuser");
     }
@@ -203,9 +218,6 @@ public class GitHubTranslationServiceTests
         var request = Request(email: "jane@example.com", name: "Jane fixes #123 cc @someuser");
         var message = GitHubTranslationService.BuildCommitMessage(request, applied: 1);
 
-        // A commit message is not markdown — a backslash escape would render
-        // literally — but GitHub still resolves mentions and issue references
-        // in it, so those characters are dropped rather than escaped.
         message.Should().Contain("contributed by Jane fixes 123 cc someuser.");
         message.Should().Contain("Co-authored-by: Jane fixes 123 cc someuser <jane@example.com>");
         message.Should().NotContain("#123");
@@ -219,8 +231,6 @@ public class GitHubTranslationServiceTests
             Request(name: "Jane fixes GH-123 see https://github.com/nightscout/nocturne/issues/456"),
             new PoEditResult { Text = "", Applied = 1, Unmatched = [] });
 
-        // Neither form carries a "#" or "@", so the escapes miss both: they
-        // would backlink at PR-open and auto-close on merge.
         body.Should().Contain("- **Contributor:** Jane fixes GH 123 see");
         body.Should().NotContain("GH-123");
         body.Should().NotContain("github.com");
@@ -288,7 +298,7 @@ public class GitHubTranslationServiceTests
                 Applied = 1,
                 // A backslash is literal inside a CommonMark code span, so an
                 // escaped backtick would still terminate the span.
-                Unmatched = ["evil` <img src=x> `rest"],
+                Unmatched = [new TranslationUnmatchedEntry { MsgId = "evil` <img src=x> `rest" }],
             });
 
         body.Should().Contain("`evil <img src=x> rest`");

@@ -75,7 +75,7 @@ public class PoCatalogEditorTests
         var result = Apply(("", "Welcome", ["Bienvenue"]));
 
         result.Applied.Should().Be(0);
-        result.Unmatched.Should().ContainSingle().Which.Should().Be("Welcome");
+        result.Unmatched.Should().ContainSingle().Which.MsgId.Should().Be("Welcome");
         result.Text.Should().Contain("old translation");
     }
 
@@ -107,7 +107,7 @@ public class PoCatalogEditorTests
         var result = Apply(("", "One item", ["Un élément"]));
 
         result.Applied.Should().Be(0);
-        result.Unmatched.Should().ContainSingle().Which.Should().Be("One item");
+        result.Unmatched.Should().ContainSingle().Which.MsgId.Should().Be("One item");
     }
 
     [Fact]
@@ -181,7 +181,7 @@ public class PoCatalogEditorTests
             ("", "Does not exist", ["N'existe pas"]));
 
         result.Applied.Should().Be(1);
-        result.Unmatched.Should().ContainSingle().Which.Should().Be("Does not exist");
+        result.Unmatched.Should().ContainSingle().Which.MsgId.Should().Be("Does not exist");
     }
 
     [Fact]

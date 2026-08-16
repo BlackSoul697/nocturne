@@ -6,7 +6,7 @@ public record PoEditResult
 {
     public required string Text { get; init; }
     public int Applied { get; init; }
-    public IReadOnlyList<string> Unmatched { get; init; } = [];
+    public IReadOnlyList<TranslationUnmatchedEntry> Unmatched { get; init; } = [];
 }
 
 /// <summary>
@@ -64,7 +64,7 @@ public static class PoCatalogEditor
 
         var unmatched = entries.Keys
             .Where(k => !matchedKeys.Contains(k))
-            .Select(k => k.MsgId)
+            .Select(k => new TranslationUnmatchedEntry { MsgId = k.MsgId, Context = k.Context })
             .ToList();
 
         return new PoEditResult
@@ -83,7 +83,6 @@ public static class PoCatalogEditor
     {
         rewritten = [];
 
-        // Leading comment lines; obsolete entries (#~) are never touched.
         var i = 0;
         while (i < block.Count && block[i].StartsWith('#'))
         {
@@ -111,8 +110,9 @@ public static class PoCatalogEditor
 
         var msgStrStart = i;
         var msgStrCount = 0;
-        while (i < block.Count &&
-               (block[i].StartsWith("msgstr") || (i > msgStrStart && block[i].StartsWith('"'))))
+        // A msgstr's own continuation lines are consumed here; unlike msgid,
+        // nothing has read past the keyword line yet.
+        while (i < block.Count && (block[i].StartsWith("msgstr") || block[i].StartsWith('"')))
         {
             if (block[i].StartsWith("msgstr"))
                 msgStrCount++;

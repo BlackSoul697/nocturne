@@ -2,7 +2,6 @@ using System.Text.RegularExpressions;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.RateLimiting;
-using Microsoft.Extensions.Options;
 using Nocturne.API.Services;
 using OpenApi.Remote.Attributes;
 
@@ -13,7 +12,6 @@ namespace Nocturne.API.Controllers.V4.Platform;
 [Route("api/v4/translations")]
 public partial class TranslationsController(
     GitHubTranslationService translationService,
-    IOptions<GitHubTranslationOptions> options,
     ILogger<TranslationsController> logger) : ControllerBase
 {
     private const int MaxEntries = 500;
@@ -52,32 +50,18 @@ public partial class TranslationsController(
         if (validationError is not null)
             return validationError;
 
-        try
-        {
-            var result = translationService.HasLocalPat
-                ? await translationService.SubmitAsync(request, ct)
-                : await translationService.RelayAsync(request, ct);
+        Func<Task<TranslationContributionResponse>> submit = translationService.HasLocalPat
+            ? () => translationService.SubmitAsync(request, ct)
+            : () => translationService.RelayAsync(request, ct);
 
-            return StatusCode(201, result);
-        }
-        catch (TranslationContributionRejectedException ex)
-        {
-            return Problem(detail: ex.Message, statusCode: 422, title: "Unprocessable Entity");
-        }
-        catch (Exception ex)
-        {
-            logger.LogError(ex, "Failed to submit translation contribution");
-            return Problem(detail: "Failed to submit the contribution. Try again later.",
-                statusCode: 502, title: "Bad Gateway");
-        }
+        return await SubmitAsync(submit, "translation contribution");
     }
 
     /// <summary>
     /// Anonymous ingress for contributions relayed from instances without
-    /// their own PAT (the nocturne.run side of the relay). Hidden unless this
-    /// instance explicitly opted in and can open PRs itself. The relayed
-    /// payload is re-validated here; the rate limit is shared with the
-    /// authenticated endpoint.
+    /// their own PAT (the nocturne.run side of the relay). The relayed payload
+    /// is re-validated here; the rate limit is shared with the authenticated
+    /// endpoint.
     /// </summary>
     [HttpPost("relay")]
     [AllowAnonymous]
@@ -86,17 +70,27 @@ public partial class TranslationsController(
     public async Task<ActionResult<TranslationContributionResponse>> AcceptRelayedContribution(
         [FromBody] TranslationContributionRequest request, CancellationToken ct)
     {
-        if (!options.Value.AcceptRelayedContributions || !translationService.HasLocalPat)
+        if (!translationService.AcceptsRelay)
             return NotFound();
 
         var validationError = Validate(request);
         if (validationError is not null)
             return validationError;
 
+        return await SubmitAsync(
+            () => translationService.SubmitAsync(request, ct), "relayed translation contribution");
+    }
+
+    /// <summary>
+    /// One error policy for both ingresses, so the direct and relayed paths
+    /// cannot answer the same failure differently.
+    /// </summary>
+    private async Task<ActionResult<TranslationContributionResponse>> SubmitAsync(
+        Func<Task<TranslationContributionResponse>> submit, string logContext)
+    {
         try
         {
-            var result = await translationService.SubmitAsync(request, ct);
-            return StatusCode(201, result);
+            return StatusCode(201, await submit());
         }
         catch (TranslationContributionRejectedException ex)
         {
@@ -104,7 +98,7 @@ public partial class TranslationsController(
         }
         catch (Exception ex)
         {
-            logger.LogError(ex, "Failed to submit relayed translation contribution");
+            logger.LogError(ex, "Failed to submit {LogContext}", logContext);
             return Problem(detail: "Failed to submit the contribution. Try again later.",
                 statusCode: 502, title: "Bad Gateway");
         }

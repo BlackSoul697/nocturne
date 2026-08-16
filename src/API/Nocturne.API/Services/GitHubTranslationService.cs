@@ -1,4 +1,3 @@
-using System.Net.Http.Headers;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
@@ -22,8 +21,8 @@ public class GitHubTranslationOptions
     /// default so a regular instance never exposes an anonymous endpoint.
     /// </summary>
     public bool AcceptRelayedContributions { get; set; }
-    public string Owner { get; set; } = "nightscout";
-    public string Repo { get; set; } = "nocturne";
+    public string Owner { get; set; } = GitHubApi.DefaultOwner;
+    public string Repo { get; set; } = GitHubApi.DefaultRepo;
     public string BaseBranch { get; set; } = "main";
     public string CatalogDir { get; set; } = "src/Web/locales";
 }
@@ -51,20 +50,23 @@ public record TranslationContributionRequest
     public string? Note { get; init; }
 }
 
+public record TranslationUnmatchedEntry
+{
+    public required string MsgId { get; init; }
+    /// <summary>msgctxt of the entry; empty string when uncontexted.</summary>
+    public string Context { get; init; } = "";
+}
+
 public record TranslationContributionResponse
 {
     public int PrNumber { get; init; }
     public string PrUrl { get; init; } = "";
     public int Applied { get; init; }
-    public List<string> Unmatched { get; init; } = [];
+    public List<TranslationUnmatchedEntry> Unmatched { get; init; } = [];
 }
 
 /// <summary>
-/// Turns an in-app translation contribution into an upstream pull request:
-/// fetch the locale catalog from the repo, apply the contributed msgstr
-/// values, commit to a new branch and open a PR with contributor attribution.
-/// Instances without a PAT relay the contribution to nocturne.run, mirroring
-/// GitHubIssueService.
+/// Mirrors GitHubIssueService — keep the two in step.
 /// </summary>
 public partial class GitHubTranslationService(
     IHttpClientFactory httpClientFactory,
@@ -75,11 +77,13 @@ public partial class GitHubTranslationService(
 
     public bool HasLocalPat => !string.IsNullOrEmpty(options.Value.TranslationsPat);
 
+    public bool AcceptsRelay => options.Value.AcceptRelayedContributions && HasLocalPat;
+
     public async Task<TranslationContributionResponse> SubmitAsync(
         TranslationContributionRequest request, CancellationToken ct)
     {
         var opts = options.Value;
-        using var client = CreateGitHubClient();
+        using var client = GitHubApi.CreateClient(httpClientFactory, options.Value.TranslationsPat);
 
         var catalogPath = $"{opts.CatalogDir}/{request.Locale}.po";
         var (catalogText, fileSha) = await GetCatalogAsync(client, catalogPath, ct);
@@ -245,11 +249,7 @@ public partial class GitHubTranslationService(
         return (pr.Number, pr.HtmlUrl);
     }
 
-    /// <summary>
-    /// Defense in depth behind controller validation: these values land in a
-    /// commit message and PR body, so newlines or angle brackets would allow
-    /// trailer injection regardless of what the caller validated.
-    /// </summary>
+    /// <summary>Defense in depth behind controller validation.</summary>
     internal static string SanitizeMetadata(string value) =>
         new([.. value.Trim().Where(c => !char.IsControl(c) && c is not '<' and not '>')]);
 
@@ -285,7 +285,6 @@ public partial class GitHubTranslationService(
         return GitHubShorthandReference().Replace(value, "$1 ").Trim();
     }
 
-    /// <summary>Any absolute http(s) URL, which covers the full issue/PR reference form.</summary>
     [GeneratedRegex(@"https?://\S+", RegexOptions.IgnoreCase)]
     private static partial Regex UrlReference();
 
@@ -298,15 +297,11 @@ public partial class GitHubTranslationService(
     private static partial Regex GitHubShorthandReference();
 
     /// <summary>
-    /// Renders free-text contributor input inside a fenced code block. The
-    /// note reaches a PR body on the upstream repository from an anonymous
-    /// relay, so rendered text would let a submitter notify arbitrary users
-    /// (<c>@</c>), cross-link or auto-close issues (<c>#1</c> as well as a
-    /// full <c>https://github.com/…/issues/1</c> URL), inject block markup
-    /// and embed raw HTML. Nothing inside a code fence is interpreted, which
-    /// covers all of those at once — provided the note cannot close the
-    /// fence, so the fence runs one backtick longer than the longest backtick
-    /// run in the note.
+    /// Renders free-text contributor input inside a fenced code block.
+    /// Nothing inside a code fence is interpreted, which neutralizes the
+    /// references <see cref="RenderName"/> describes plus block markup and
+    /// raw HTML at once — provided the note cannot close the fence, so the
+    /// fence runs one backtick longer than the longest backtick run in it.
     /// </summary>
     internal static string RenderNoteAsCodeFence(string note)
     {
@@ -385,16 +380,18 @@ public partial class GitHubTranslationService(
             sb.AppendLine("<details>");
             sb.AppendLine($"<summary>{result.Unmatched.Count} entr{(result.Unmatched.Count == 1 ? "y" : "ies")} no longer in the catalog (skipped)</summary>");
             sb.AppendLine();
-            // msgids are arbitrary contributor input echoed into markdown: keep
-            // them on one line inside the code span, and drop backticks rather
-            // than escaping them — a backslash is literal inside a CommonMark
-            // code span, so an escaped backtick would still close the span.
-            foreach (var msgId in result.Unmatched.Take(50))
+            // Backticks are dropped rather than escaped: a backslash is literal
+            // inside a CommonMark code span, so an escaped backtick would still
+            // close it.
+            foreach (var entry in result.Unmatched.Take(50))
             {
-                var display = msgId.Replace("\r", "").Replace("\n", "\\n").Replace("`", "");
+                var display = entry.MsgId.Replace("\r", "").Replace("\n", "\\n").Replace("`", "");
                 if (display.Length > 120)
                     display = display[..120] + "…";
-                sb.AppendLine($"- `{display}`");
+                var context = entry.Context.Length == 0
+                    ? ""
+                    : $" (context: {SanitizeMetadata(entry.Context)})";
+                sb.AppendLine($"- `{display}`{context}");
             }
             sb.AppendLine();
             sb.AppendLine("</details>");
@@ -423,19 +420,6 @@ public partial class GitHubTranslationService(
         {
             logger.LogWarning(ex, "Failed to clean up branch {Branch} after error", branch);
         }
-    }
-
-    private HttpClient CreateGitHubClient()
-    {
-        var client = httpClientFactory.CreateClient();
-        client.BaseAddress = new Uri("https://api.github.com");
-        client.DefaultRequestHeaders.UserAgent.Add(new ProductInfoHeaderValue("Nocturne", "1.0"));
-        client.DefaultRequestHeaders.Authorization =
-            new AuthenticationHeaderValue("Bearer", options.Value.TranslationsPat);
-        client.DefaultRequestHeaders.Accept.Add(
-            new MediaTypeWithQualityHeaderValue("application/vnd.github+json"));
-        client.DefaultRequestHeaders.Add("X-GitHub-Api-Version", "2022-11-28");
-        return client;
     }
 
     private record GitHubContentResponse

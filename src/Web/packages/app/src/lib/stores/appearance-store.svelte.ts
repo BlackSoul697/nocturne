@@ -841,14 +841,12 @@ export async function setLanguage(
   preferredLanguage.current = locale;
   syncLanguageCookie(locale);
 
-  // Dynamically load the locale for wuchale
+  // Dynamically load the locale for wuchale. A failure propagates, as it does
+  // from the +layout.ts loaders: swallowing it would leave the preference
+  // switched with no catalog behind it, which renders every message as ''.
   if (browser) {
-    try {
-      const { loadLocale } = await import("wuchale/load-utils");
-      await loadLocale(locale);
-    } catch (error) {
-      console.error("Failed to load locale:", error);
-    }
+    const { loadLocale } = await import("wuchale/load-utils");
+    await loadLocale(locale);
   }
 
   // Update backend preference if callback provided

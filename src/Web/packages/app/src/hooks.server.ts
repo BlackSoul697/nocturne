@@ -31,7 +31,6 @@ import { locales } from '../../../locales/data.js'
 import supportedLocales from '../../../supportedLocales.json';
 import { LANGUAGE_COOKIE_NAME } from "$lib/stores/appearance-store.svelte";
 
-// load at server startup
 // Await so no request can render before catalogs are registered: a lookup
 // against an unloaded runtime silently renders every message as ''.
 await loadLocales(main.key, main.loadCount, main.loadCatalog, locales)
