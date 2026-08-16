@@ -10600,7 +10600,7 @@ msgid ""
 "Your glucose improves by {0}%\n"
 "after site changes. Consider more frequent changes if site age\n"
 "affects control."
-msgstr "Deine Glukosewerte verbessern sich nach Kanülenwechseln um {0}%\n. Erwäge häufigere Wechsel, wenn das Alter der Kanüle\ndie Glukosekontrolle beeinflusst."
+msgstr "Deine Glukosewerte verbessern sich nach Kanülenwechseln um {0}%.\nErwäge häufigere Wechsel, wenn das Alter der Kanüle\ndie Glukosekontrolle beeinflusst."
 
 #: src/routes/(authenticated)/reports/site-change-impact/+page.svelte
 #: src/routes/reports/site-change-impact/+page.svelte
@@ -10727,7 +10727,7 @@ msgstr "Öffentlich"
 #: src/routes/(authenticated)/settings/admin/+page.svelte
 #: src/routes/settings/admin/+page.svelte
 msgid "Delete this subject? This action cannot be undone."
-msgstr "Dieses Profil löschen? Diese Aktion kann nicht rückgängig gemacht werden."
+msgstr "Diesen Probanden löschen? Diese Aktion kann nicht rückgängig gemacht werden."
 
 #~ msgid "Delete this role? This action cannot be undone."
 #~ msgstr ""
@@ -15002,7 +15002,7 @@ msgstr "API-Referenz"
 msgid ""
 "Available at <0>/scalar</0> on\n"
 "your Nocturne API"
-msgstr "Verfügbar unter <0>/scalar</0> in\nIhrer Nocturne API"
+msgstr "Verfügbar unter <0>/scalar</0> in\ndeiner Nocturne-API"
 
 #: src/routes/docs/+page.svelte
 msgid "Documentation In Progress"
@@ -15156,7 +15156,7 @@ msgstr "xDrip+"
 msgid ""
 "Full xDrip+ uploader support. Continue using your favorite Android CGM\n"
 "app."
-msgstr "Vollständige Unterstützung für den xDrip+ Uploader. Nutzen Sie weiterhin Ihre bevorzugte Android CGM-\nApp."
+msgstr "Vollständige Unterstützung für den xDrip+-Uploader. Nutze weiterhin deine bevorzugte Android-CGM-\nApp."
 
 #: src/routes/features/+page.svelte
 msgid "More Coming"
@@ -19508,7 +19508,7 @@ msgstr "Raspberry Pi"
 msgid ""
 "Nocturne supports ARM64 architecture. Use Raspberry Pi 4 or newer with 64-bit\n"
 "Raspberry Pi OS."
-msgstr "Nocturne unterstützt die ARM64-Architektur. Verwenden Sie Raspberry Pi 4 oder neuer mit 64-bit\nRaspberry Pi OS."
+msgstr "Nocturne unterstützt die ARM64-Architektur. Verwende einen Raspberry Pi 4 oder neuer mit der 64-Bit-Version von\nRaspberry Pi OS."
 
 #~ msgid "Windows"
 #~ msgstr ""
@@ -19626,7 +19626,7 @@ msgstr "Plattform-Hinweise"
 msgid ""
 "Install Docker using the official repository for the latest version. Both x86_64 and ARM64\n"
 "architectures are supported."
-msgstr "Installiere Docker über das offizielle Repository, um die neueste Version zu erhalten. Sowohl x86_64- als auch ARM64\nArchitekturen werden unterstützt."
+msgstr "Installiere Docker über das offizielle Repository, um die neueste Version zu erhalten. Sowohl x86_64- als auch ARM64-\nArchitekturen werden unterstützt."
 
 #: src/routes/docs/installation/+page.svelte
 msgid "Windows / macOS"
@@ -27466,7 +27466,7 @@ msgstr "Entferne die Konfiguration dieses Konnektors. Der Konnektor muss\nerneut
 msgid ""
 "No {0} registered. Add one to enable additional sign-in\n"
 "methods."
-msgstr "Kein {0} registriert. Füge einen hinzu, um zusätzliche Anmelde\nmethoden zu aktivieren."
+msgstr "Kein {0} registriert. Füge einen hinzu, um zusätzliche Anmelde-\nmethoden zu aktivieren."
 
 #. placeholder {0}: title.toLowerCase()
 #: src/lib/components/account/SecurityCredentialCard.svelte
@@ -27483,7 +27483,7 @@ msgstr "Maximum von {0} {1} erreicht."
 msgid ""
 "You cannot remove your only credential without an alternative sign-in\n"
 "method linked to your account."
-msgstr "Du kannst deinen einzigen Anmeldenachweis nicht entfernen, ohne eine alternative Anmelde\nmethode mit deinem Konto zu verknüpfen."
+msgstr "Du kannst deinen einzigen Anmeldenachweis nicht entfernen, ohne eine alternative Anmelde-\nmethode mit deinem Konto zu verknüpfen."
 
 #: src/lib/components/meals/MealsFilterBar.svelte
 msgid "Foods <0/> <1/>"
