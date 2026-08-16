@@ -66,6 +66,8 @@ public class OverviewHub : Hub
     /// they are tenant-bound and carry no subject scope set. An empty tenant list is a valid
     /// success.
     /// </summary>
+    [HubAuthenticationMethod]
+    [HubTenantGroup]
     public async Task<OverviewAuthorizeResponse> Authorize(OverviewAuthorizeRequest request)
     {
         try
