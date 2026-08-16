@@ -123,49 +123,17 @@ public static class ServiceRegistrationExtensions
     internal const string AnonymousDraftPartition = "anonymous";
 
     /// <summary>
-    /// Partition key for the translation-drafts limiter, keyed on the
-    /// credential the request presents.
-    ///
-    /// Nothing identifying is available here by any other route.
-    /// <c>UseRateLimiter</c> runs ahead of <c>AuthenticationMiddleware</c>, so
-    /// <c>Items["AuthContext"]</c> — and with it <c>GetSubjectId()</c> — is
-    /// always null; the only authentication that has run is the framework
-    /// JwtBearer scheme auto-inserted at the head of the pipeline, and it
-    /// reads the Authorization header only, so a browser forwarding its
-    /// session as a cookie leaves <c>context.User</c> empty too. Falling back
-    /// to <c>Connection.RemoteIpAddress</c> is worse than having no limit at
-    /// all: <c>UseForwardedHeaders</c> sets it from X-Forwarded-For with no
-    /// trusted-proxy list, so rotating that header mints unlimited buckets.
-    ///
-    /// The credential is the right granularity anyway — the limit exists to
-    /// bound the database work one editor session can force — and it covers
-    /// the cookie, bearer and <c>?token=</c> paths uniformly. It is hashed so
-    /// no token is held as a dictionary key. Requests presenting nothing at
-    /// all share one fixed bucket, so an anonymous flood cannot evict an
-    /// editor's.
-    ///
-    /// Which channel wins follows the handler chain, so that the value a
-    /// caller can rotate for free is the one the key ignores. A session
-    /// cookie is terminal — <c>SessionCookieHandler</c> (priority 50) returns
-    /// Failure, not Skip, for a cookie it cannot validate, so the chain stops
-    /// and no later credential can authenticate behind it. A <c>Bearer</c>
-    /// header shadows <c>?token=</c> inside both
-    /// <see cref="Middleware.Handlers.DirectGrantTokenHandler"/> and
-    /// <see cref="Middleware.Handlers.AccessTokenHandler"/>, which read the
-    /// query only when the header is absent or carries a scheme they do not
-    /// recognise — so the query token is keyed on in exactly that case, and
-    /// keying on the unrecognised header instead would hand one direct-grant
-    /// or legacy-token holder a fresh bucket per rotation of it.
-    ///
-    /// A request carrying nothing but junk does get a fresh bucket per
-    /// rotation, but it authenticates as nobody and <c>[Authorize]</c>
-    /// rejects it before the draft store. Two channels remain where junk is
-    /// non-terminal and still outranks a real credential: an unmatched
-    /// <c>Bearer</c> value in front of an api-secret, and a rotating session
-    /// cookie under an active platform-access grant (priority 40, which skips
-    /// rather than fails). Both need a platform-admin or api-secret
-    /// credential to reach, and closing them needs the limiter to partition
-    /// after authentication rather than before it.
+    /// Partition key for the translation-drafts limiter: the hashed credential
+    /// the request presents. Not the IP — <c>UseForwardedHeaders</c> takes
+    /// <c>RemoteIpAddress</c> from X-Forwarded-For with no trusted-proxy list,
+    /// so the sibling per-IP policies are the wrong model to copy here.
+    /// Hashing keeps no token as a dictionary key. Requests with no credential
+    /// share one fixed bucket, so an anonymous flood cannot evict an editor's.
+    /// Channel precedence follows the handler chain in
+    /// <c>AuthenticationMiddleware</c> and is pinned by
+    /// <c>TranslationDraftPartitionKeyTests</c>. Two residual bypasses remain,
+    /// each needing a platform-admin or api-secret credential to reach;
+    /// closing them needs partitioning after authentication.
     /// </summary>
     internal static string TranslationDraftPartitionKey(HttpContext context)
     {
@@ -182,14 +150,9 @@ public static class ServiceRegistrationExtensions
 
     /// <summary>
     /// Reduces the Authorization header and <c>?token=</c> query parameter to
-    /// the single token the handlers would authenticate on, in their own
-    /// order of preference. Spellings the handlers treat as one credential
-    /// are collapsed the same way they collapse them — the scheme matches
-    /// case-insensitively and the remainder is trimmed, and a query token is
-    /// <c>noc_</c>-normalized as
-    /// <see cref="Middleware.Handlers.DirectGrantTokenHandler"/> normalizes it
-    /// — because hashing each spelling separately would give one caller a
-    /// 60/min allowance per variant.
+    /// the one token the handlers would authenticate on, collapsing the
+    /// spellings they treat as one credential — hashing each separately would
+    /// give one caller a 60/min allowance per variant.
     /// </summary>
     private static string? TokenCredential(HttpRequest request)
     {

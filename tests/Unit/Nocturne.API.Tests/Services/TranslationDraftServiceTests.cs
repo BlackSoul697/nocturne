@@ -258,41 +258,6 @@ public class TranslationDraftServiceTests
     }
 
     [Fact]
-    public async Task LoadPath_SelfHeals_Duplicate_Keys()
-    {
-        // Simulate a historical race: two rows with the same logical key.
-        var older = DateTime.UtcNow.AddMinutes(-10);
-        var newer = DateTime.UtcNow;
-        _dbContext.TranslationDrafts.AddRange(
-            new TranslationDraftEntity
-            {
-                Id = Guid.CreateVersion7(),
-                TenantId = TestTenantId,
-                SubjectId = TestSubjectId,
-                Locale = "fr",
-                MsgId = "Hello",
-                Translations = ["Vieux"],
-                UpdatedAt = older,
-            },
-            new TranslationDraftEntity
-            {
-                Id = Guid.CreateVersion7(),
-                TenantId = TestTenantId,
-                SubjectId = TestSubjectId,
-                Locale = "fr",
-                MsgId = "Hello",
-                Translations = ["Bonjour"],
-                UpdatedAt = newer,
-            });
-        await _dbContext.SaveChangesAsync();
-
-        var drafts = await _service.GetDraftsAsync("fr");
-
-        drafts.Should().ContainSingle().Which.Translations.Should().Equal("Bonjour");
-        _dbContext.TranslationDrafts.Count().Should().Be(1);
-    }
-
-    [Fact]
     public async Task SubmitDraftsAsync_Uses_Relay_Without_Pat_And_Sends_All_Drafts()
     {
         await _service.UpsertDraftsAsync("fr", [Entry("Hello", "Bonjour")]);

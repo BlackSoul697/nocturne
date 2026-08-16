@@ -6,8 +6,8 @@ public record TranslationDraftSubmitResult
 {
     public required TranslationContributionResponse Contribution { get; init; }
     /// <summary>
-    /// Drafts kept because their message no longer exists in the catalog
-    /// (reported unmatched by the contribution flow).
+    /// Drafts still stored after the submit: those the contribution flow
+    /// reported unmatched, plus any edited while the submit was in flight.
     /// </summary>
     public int RemainingDrafts { get; init; }
 }
@@ -33,7 +33,8 @@ public interface ITranslationDraftService
     /// <summary>
     /// Submits all drafts for the locale as one contribution. Drafts applied
     /// upstream are deleted; drafts whose message no longer exists in the
-    /// catalog are kept so the work is not lost.
+    /// catalog, and drafts edited while the submit was in flight, are kept so
+    /// the work is not lost.
     /// </summary>
     Task<TranslationDraftSubmitResult> SubmitDraftsAsync(
         string locale, TranslationContributorDto contributor, string? note, CancellationToken ct = default);

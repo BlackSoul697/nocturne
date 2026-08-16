@@ -13,10 +13,8 @@ namespace Nocturne.API.Services;
 /// Server-side storage for the current user's in-progress translations.
 /// Tenant isolation comes from the RLS global query filter (and TenantId is
 /// auto-stamped on save); this service only scopes by subject. The database
-/// enforces logical-key uniqueness via a functional unique index on
-/// (subject_id, locale, msgctxt, md5(msgid)); the load path additionally
-/// self-heals duplicates that predate the index or slip past providers
-/// without it.
+/// enforces logical-key uniqueness (see ux_translation_drafts_logical_key in
+/// the AddTranslationDrafts migration).
 /// </summary>
 public class TranslationDraftService(
     NocturneDbContext dbContext,
@@ -35,7 +33,7 @@ public class TranslationDraftService(
     public async Task<IReadOnlyList<TranslationDraft>> GetDraftsAsync(
         string locale, CancellationToken ct = default)
     {
-        var entities = await LoadDedupedAsync(locale, ct);
+        var entities = await LoadForLocaleAsync(locale, ct);
         return entities.Select(TranslationDraftMapper.ToDomainModel).ToList();
     }
 
@@ -46,10 +44,7 @@ public class TranslationDraftService(
     private async Task<IReadOnlyList<TranslationDraft>> UpsertDraftsAsync(
         string locale, IReadOnlyList<TranslationEntryDto> entries, bool isRetry, CancellationToken ct)
     {
-        // Only the keys this request touches are loaded. Loading the subject's
-        // whole per-locale set on every autosave made a single writer able to
-        // materialize the entire catalog (thousands of rows) per keystroke.
-        var existing = await LoadKeysAsync(locale, entries, ct);
+        var existing = await LoadMatchingAsync(locale, entries, ct);
         var byKey = existing.ToDictionary(d => (d.Context, d.MsgId));
         var now = DateTime.UtcNow;
         var added = 0;
@@ -102,14 +97,10 @@ public class TranslationDraftService(
         catch (DbUpdateException ex) when (!isRetry && ex.IsUniqueViolation())
         {
             // Another writer inserted one of these logical keys between the
-            // read above and this insert (the functional unique index on
-            // (subject_id, locale, msgctxt, md5(msgid)) rejects the duplicate).
-            // Re-read on a clean tracker and apply the same entries again; the
-            // second pass sees the winner's row and updates it. Any further
-            // rejection is not a lost race and is left to surface. Only
-            // PostgreSQL reports a SQLSTATE, so this branch cannot be reached
-            // by the in-memory provider the unit tests use; the load-path
-            // dedupe covers the same duplicate arriving from an older row.
+            // read above and this insert. Re-read on a clean tracker and apply
+            // the same entries again; the second pass sees the winner's row and
+            // updates it. Any further rejection is not a lost race and is left
+            // to surface.
             dbContext.ChangeTracker.Clear();
             return await UpsertDraftsAsync(locale, entries, isRetry: true, ct);
         }
@@ -134,7 +125,7 @@ public class TranslationDraftService(
     public async Task<TranslationDraftSubmitResult> SubmitDraftsAsync(
         string locale, TranslationContributorDto contributor, string? note, CancellationToken ct = default)
     {
-        var drafts = await LoadDedupedAsync(locale, ct);
+        var drafts = await LoadForLocaleAsync(locale, ct);
 
         if (drafts.Count == 0)
             throw new TranslationContributionRejectedException("There are no drafts to submit for this locale.");
@@ -215,11 +206,13 @@ public class TranslationDraftService(
     }
 
     /// <summary>
-    /// Loads only the rows matching the incoming (context, msgid) keys. The
-    /// msgid set narrows the query in the database; the context is matched in
-    /// memory because the unique index is on md5(msgid), not on the pair.
+    /// Loads only the rows matching the incoming (context, msgid) keys, so an
+    /// autosave keystroke cannot materialize the subject's whole per-locale set
+    /// (thousands of rows). The msgid set narrows the query in the database;
+    /// the context is matched in memory because the unique index is on
+    /// md5(msgid), not on the pair.
     /// </summary>
-    private async Task<List<TranslationDraftEntity>> LoadKeysAsync(
+    private async Task<List<TranslationDraftEntity>> LoadMatchingAsync(
         string locale, IReadOnlyList<TranslationEntryDto> entries, CancellationToken ct)
     {
         var msgIds = entries.Select(e => e.MsgId).Distinct().ToList();
@@ -233,42 +226,15 @@ public class TranslationDraftService(
             .OrderBy(d => d.UpdatedAt)
             .ToListAsync(ct);
 
-        return await Dedupe([.. rows.Where(d => wanted.Contains((d.Context, d.MsgId)))], ct);
+        return [.. rows.Where(d => wanted.Contains((d.Context, d.MsgId)))];
     }
 
-    /// <summary>
-    /// Loads the subject's drafts for a locale, deleting all but the newest
-    /// of any duplicated (context, msgid) key so a historical race cannot
-    /// wedge the locale.
-    /// </summary>
-    private async Task<List<TranslationDraftEntity>> LoadDedupedAsync(string locale, CancellationToken ct)
+    private async Task<List<TranslationDraftEntity>> LoadForLocaleAsync(string locale, CancellationToken ct)
     {
         var subjectId = SubjectId;
-        var all = await dbContext.TranslationDrafts
+        return await dbContext.TranslationDrafts
             .Where(d => d.SubjectId == subjectId && d.Locale == locale)
             .OrderBy(d => d.UpdatedAt)
             .ToListAsync(ct);
-
-        return await Dedupe(all, ct);
-    }
-
-    private async Task<List<TranslationDraftEntity>> Dedupe(
-        List<TranslationDraftEntity> all, CancellationToken ct)
-    {
-        var duplicates = all
-            .GroupBy(d => (d.Context, d.MsgId))
-            .Where(g => g.Count() > 1)
-            .SelectMany(g => g.OrderByDescending(d => d.UpdatedAt).ThenByDescending(d => d.Id).Skip(1))
-            .ToList();
-
-        if (duplicates.Count > 0)
-        {
-            dbContext.TranslationDrafts.RemoveRange(duplicates);
-            await dbContext.SaveChangesAsync(ct);
-            var removed = duplicates.ToHashSet();
-            all = all.Where(d => !removed.Contains(d)).ToList();
-        }
-
-        return all;
     }
 }

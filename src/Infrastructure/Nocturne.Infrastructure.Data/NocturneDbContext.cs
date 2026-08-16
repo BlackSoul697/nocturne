@@ -3343,13 +3343,14 @@ public class NocturneDbContext : DbContext, IDataProtectionKeyContext
             .HasIndex(e => new { e.SubjectId, e.MarkKey })
             .IsUnique();
 
-        // TranslationDraftEntity: the logical key (subject, locale, msgctxt,
-        // msgid) is unique via a functional index on md5(msgid) created with
-        // raw SQL in the migration (EF cannot model expression indexes), so
-        // only the lookup index is declared here.
+        // TranslationDraftEntity: the logical key is unique via a functional
+        // index created with raw SQL in the migration (see AddTranslationDrafts);
+        // only the lookup index is declared here. Both lead with TenantId
+        // because a subject is a global membership scope and can hold drafts in
+        // more than one tenant.
         modelBuilder
             .Entity<TranslationDraftEntity>()
-            .HasIndex(e => new { e.SubjectId, e.Locale });
+            .HasIndex(e => new { e.TenantId, e.SubjectId, e.Locale });
 
     }
 

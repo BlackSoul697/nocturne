@@ -37,22 +37,21 @@ namespace Nocturne.Infrastructure.Data.Migrations
                 });
 
             migrationBuilder.CreateIndex(
-                name: "IX_translation_drafts_subject_id_locale",
+                name: "IX_translation_drafts_tenant_id_subject_id_locale",
                 table: "translation_drafts",
-                columns: new[] { "subject_id", "locale" });
+                columns: new[] { "tenant_id", "subject_id", "locale" });
 
-            migrationBuilder.CreateIndex(
-                name: "IX_translation_drafts_tenant_id",
-                table: "translation_drafts",
-                column: "tenant_id");
-
-            // The logical key includes unbounded msgid text, which cannot be
-            // a plain btree column; hash it. Raw SQL because EF cannot model
+            // Leads with tenant_id to match the RLS grain: a subject is a
+            // global membership scope, so the same person can draft the same
+            // message in two tenants, and a global index would reject the
+            // second insert against a row the tenant cannot even see. The
+            // logical key includes unbounded msgid text, which cannot be a
+            // plain btree column; hash it. Raw SQL because EF cannot model
             // expression indexes.
             migrationBuilder.Sql(
                 """
                 CREATE UNIQUE INDEX ux_translation_drafts_logical_key
-                    ON translation_drafts (subject_id, locale, msgctxt, md5(msgid));
+                    ON translation_drafts (tenant_id, subject_id, locale, msgctxt, md5(msgid));
                 """);
 
             migrationBuilder.Sql("ALTER TABLE translation_drafts ENABLE ROW LEVEL SECURITY;");

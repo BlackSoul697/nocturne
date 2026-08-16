@@ -93,10 +93,17 @@ public class TranslationsControllerValidationTests
     }
 
     // --- entry caps -----------------------------------------------------
-    // Mirrors TranslationsController.MaxEntries, which is private; it is also
-    // pinned to TranslationDraftService.MaxDraftsPerSubjectPerLocale so a
-    // full-locale drafts submit can never exceed it.
-    private const int MaxEntries = 5000;
+
+    private const int MaxEntries = TranslationsController.MaxEntries;
+
+    [Fact]
+    public void The_Entry_Cap_Clears_A_Full_Locale_Drafts_Submit()
+    {
+        // A drafts submit sends every stored draft for the locale, so the
+        // per-locale draft cap has to fit inside the request cap.
+        MaxEntries.Should().BeGreaterThanOrEqualTo(
+            TranslationDraftService.MaxDraftsPerSubjectPerLocale);
+    }
 
     [Fact]
     public void Validate_Rejects_Empty_Entry_List()
@@ -397,6 +404,75 @@ public class TranslationsControllerValidationTests
             gitHubUsername: "janedoe",
             email: "jane@example.com",
             note: "Reviewed against the app UI")).Should().BeNull();
+    }
+
+    // --- relay ceiling ----------------------------------------------------
+    // The relay is [AllowAnonymous], so raising the authenticated cap to fit a
+    // full-locale drafts submit must not raise the relay's with it: every
+    // accepted entry is regex-validated and then applied in a full catalog
+    // rewrite, on nobody's credential.
+
+    private static TranslationsController CreateRelayController()
+    {
+        var contributionService = new Mock<ITranslationContributionService>();
+        contributionService.SetupGet(s => s.AcceptsRelay).Returns(true);
+        contributionService
+            .Setup(s => s.SubmitAsync(
+                It.IsAny<TranslationContributionRequest>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new TranslationContributionResponse());
+
+        return new TranslationsController(
+            contributionService.Object,
+            Mock.Of<ITranslationDraftService>(),
+            NullLogger<TranslationsController>.Instance)
+        {
+            ProblemDetailsFactory = new TestProblemDetailsFactory(),
+            ControllerContext = new ControllerContext { HttpContext = new DefaultHttpContext() },
+        };
+    }
+
+    private static List<TranslationEntryDto> Entries(int count) =>
+        [.. Enumerable.Range(0, count)
+            .Select(i => new TranslationEntryDto { MsgId = $"m{i}", Translations = ["t"] })];
+
+    [Fact]
+    public void The_Relay_Cap_Is_Lower_Than_The_Authenticated_Cap()
+    {
+        TranslationsController.MaxRelayEntries.Should().BeLessThan(TranslationsController.MaxEntries);
+    }
+
+    [Fact]
+    public async Task Relay_Accepts_Exactly_Its_Own_Cap()
+    {
+        var result = await CreateRelayController().AcceptRelayedContribution(
+            Request(entries: Entries(TranslationsController.MaxRelayEntries)), CancellationToken.None);
+
+        Assert.IsType<ObjectResult>(result.Result).StatusCode.Should().Be(201);
+    }
+
+    [Fact]
+    public async Task Relay_Rejects_One_Entry_Over_Its_Own_Cap()
+    {
+        var result = await CreateRelayController().AcceptRelayedContribution(
+            Request(entries: Entries(TranslationsController.MaxRelayEntries + 1)), CancellationToken.None);
+
+        var problem = Assert.IsType<ObjectResult>(result.Result);
+        problem.StatusCode.Should().Be(400);
+        ((ProblemDetails)problem.Value!).Detail.Should().Be(
+            $"Between 1 and {TranslationsController.MaxRelayEntries} entries required");
+    }
+
+    [Fact]
+    public async Task Relay_Rejects_A_Payload_The_Authenticated_Path_Accepts()
+    {
+        var entries = Entries(TranslationsController.MaxEntries);
+
+        Reject(Request(entries: entries)).Should().BeNull();
+
+        var result = await CreateRelayController().AcceptRelayedContribution(
+            Request(entries: entries), CancellationToken.None);
+
+        Assert.IsType<ObjectResult>(result.Result).StatusCode.Should().Be(400);
     }
 
     // --- draft limits ----------------------------------------------------

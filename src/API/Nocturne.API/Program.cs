@@ -346,11 +346,10 @@ app.UseRouting();
 // Ahead of the documentation branch below, which jumps straight to its endpoint and would
 // otherwise skip the limiter entirely; the policies are attached to endpoints, so this needs
 // UseRouting to have run. Everything without a policy passes through untouched, and no policy
-// partitions on anything this position withholds: all but one partition on pre-auth request
-// data (the remote address or the Host), and the translation-drafts policy partitions on the
-// credential the request carries (HttpContext.Items["AuthContext"] is not populated until
-// AuthenticationMiddleware, further down). So none of their accounting depends on running
-// after UseAuthorization.
+// partitions on anything this position withholds: all but one partition on pre-auth request data
+// (the remote address or the Host), and translation-drafts partitions on the raw credential
+// because HttpContext.Items["AuthContext"] is not populated until AuthenticationMiddleware,
+// further down.
 app.UseRateLimiter();
 
 app.UseMiddleware<PublicDocsMiddleware>();

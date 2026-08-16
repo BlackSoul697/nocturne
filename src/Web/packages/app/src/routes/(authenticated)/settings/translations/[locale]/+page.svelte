@@ -40,7 +40,6 @@
     localeValid ? translationsApi.getDrafts({ locale }) : null,
   );
 
-  // Server drafts merged with local edits; local edits win until flushed.
   const drafts = new SvelteMap<string, string[]>();
   let serverSeeded = $state(false);
   $effect(() => {
@@ -126,10 +125,6 @@
   // re-label queued edits. Queues are per-locale so a batch that fails after
   // the user has already moved on is retried on the next flush of the locale
   // it belongs to instead of being dropped.
-  // Each queued edit carries a monotonic sequence, and the newest sequence
-  // per key outlives the queue clear a flush does. A batch that fails is
-  // re-queued only for keys nothing newer has superseded, so a slow failing
-  // save cannot resurrect a stale value over a newer one that already saved.
   type PendingEdit = { message: TranslationMessage; values: string[] | null; seq: number };
   const pendingByLocale = new Map<string, Map<string, PendingEdit>>();
   const latestSeqByLocale = new Map<string, Map<string, number>>();
@@ -175,15 +170,19 @@
   }
 
   async function sendBatch(forLocale: string, batch: PendingEdit[]) {
-    // A plural draft with some forms still empty cannot be stored (the API
-    // requires non-empty values); it stays local-only until completed. A
-    // fully emptied draft deletes the stored one.
+    // A partly-filled plural draft cannot be stored (the API requires
+    // non-empty values); it stays local-only until completed.
+    const isCleared = (values: string[] | null) =>
+      values === null || values.every((v) => v.length === 0);
+    const isStorable = (values: string[] | null) =>
+      isCleared(values) || !values!.some((v) => v.length === 0);
+
     const entries = batch
-      .filter(({ values }) => values === null || !values.some((v) => v.length === 0) || values.every((v) => v.length === 0))
+      .filter(({ values }) => isStorable(values))
       .map(({ message, values }) => ({
         msgId: message.msgid,
         context: message.context.length === 0 ? null : message.context,
-        translations: values === null || values.every((v) => v.length === 0) ? [] : values,
+        translations: isCleared(values) ? [] : values!,
       }));
     if (entries.length === 0) return;
     if (forLocale === activeLocale) saveState = "saving";
@@ -264,9 +263,9 @@
         applied: result.contribution?.applied ?? 0,
         remaining: result.remainingDrafts ?? 0,
       };
-      // Applied drafts were deleted server-side; reseed from the server.
-      // The generated invalidation only refreshes the no-args query, so
-      // refresh the per-locale instance explicitly.
+      // Applied drafts were deleted server-side; reseed from the server. The
+      // routes carry no Invalidates (see TranslationsController.UpsertDrafts),
+      // so refresh the per-locale query instance explicitly.
       drafts.clear();
       serverSeeded = false;
       await draftsQuery?.refresh();
@@ -285,7 +284,6 @@
     clearError = null;
     try {
       await translationsApi.clearDrafts({ locale });
-      // Only discard local state once the server confirmed the delete.
       pendingByLocale.get(locale)?.clear();
       if (flushTimer) {
         clearTimeout(flushTimer);
@@ -375,7 +373,6 @@
             {submitResult.applied} translation{submitResult.applied === 1 ? "" : "s"} proposed
             {#if submitResult.remaining > 0}
               · {submitResult.remaining} draft{submitResult.remaining === 1 ? "" : "s"} kept
-              (their messages changed upstream)
             {/if}
           </Dialog.Description>
         </Dialog.Header>

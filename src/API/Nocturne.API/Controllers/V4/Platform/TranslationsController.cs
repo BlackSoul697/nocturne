@@ -35,7 +35,14 @@ public partial class TranslationsController(
     // Large enough for a full-locale submission (the catalog is ~4.7k
     // messages) and matches the per-locale draft cap, so a drafts submit can
     // never exceed it.
-    private const int MaxEntries = 5000;
+    internal const int MaxEntries = 5000;
+
+    // The relay keeps the original, tenfold lower bound. It is anonymous
+    // ingress: every entry is regex-validated and then applied in a full
+    // catalog rewrite, and nothing about a relayed contribution needs the
+    // headroom a signed-in editor's full-locale drafts submit does.
+    internal const int MaxRelayEntries = 500;
+
     private const int MaxMsgIdLength = 4096;
     private const int MaxTranslationLength = 8192;
     private const int MaxPluralForms = 8;
@@ -81,8 +88,8 @@ public partial class TranslationsController(
     /// <summary>
     /// Anonymous ingress for contributions relayed from instances without
     /// their own PAT (the nocturne.run side of the relay). The relayed payload
-    /// is re-validated here; the rate limit is shared with the authenticated
-    /// endpoint.
+    /// is re-validated here, against the lower <see cref="MaxRelayEntries"/>
+    /// ceiling; the rate limit is shared with the authenticated endpoint.
     /// </summary>
     [HttpPost("relay")]
     [AllowAnonymous]
@@ -94,7 +101,7 @@ public partial class TranslationsController(
         if (!translationService.AcceptsRelay)
             return NotFound();
 
-        var validationError = Validate(request);
+        var validationError = Validate(request, MaxRelayEntries);
         if (validationError is not null)
             return validationError;
 
@@ -127,7 +134,6 @@ public partial class TranslationsController(
 
     private static bool IsDisallowedControlChar(char c) =>
         char.IsControl(c) && c is not '\n' and not '\t' and not '\r';
-
 
     [HttpGet("drafts")]
     [RemoteQuery]
@@ -175,10 +181,7 @@ public partial class TranslationsController(
     }
 
     [HttpDelete("drafts")]
-    // No Invalidates: openapi-remote-codegen only threads path parameters into
-    // an invalidation, and GetDrafts takes a required "locale" query parameter,
-    // so the emitted refresh would call it with none and 400. The editor
-    // refreshes its own per-locale query instance instead.
+    // No Invalidates; see UpsertDrafts.
     [RemoteCommand]
     [EnableRateLimiting(ServiceRegistrationExtensions.TranslationDraftsRateLimitPolicy)]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
@@ -194,10 +197,7 @@ public partial class TranslationsController(
     }
 
     [HttpPost("drafts/submit")]
-    // No Invalidates: openapi-remote-codegen only threads path parameters into
-    // an invalidation, and GetDrafts takes a required "locale" query parameter,
-    // so the emitted refresh would call it with none and 400. The editor
-    // refreshes its own per-locale query instance instead.
+    // No Invalidates; see UpsertDrafts.
     [RemoteCommand]
     [EnableRateLimiting("translation-contributions")]
     [ProducesResponseType(typeof(TranslationDraftSubmitResult), StatusCodes.Status201Created)]
@@ -232,19 +232,20 @@ public partial class TranslationsController(
         }
     }
 
-    internal ObjectResult? Validate(TranslationContributionRequest request)
+    internal ObjectResult? Validate(TranslationContributionRequest request, int maxEntries = MaxEntries)
     {
         if (!LocalePattern().IsMatch(request.Locale))
             return Problem(detail: $"Invalid locale: {request.Locale}", statusCode: 400, title: "Bad Request");
 
-        return ValidateEntries(request.Entries, allowEmptyTranslations: false)
+        return ValidateEntries(request.Entries, allowEmptyTranslations: false, maxEntries)
             ?? ValidateContributor(request.Contributor, request.Note);
     }
 
-    private ObjectResult? ValidateEntries(List<TranslationEntryDto> entries, bool allowEmptyTranslations)
+    private ObjectResult? ValidateEntries(
+        List<TranslationEntryDto> entries, bool allowEmptyTranslations, int maxEntries = MaxEntries)
     {
-        if (entries.Count is 0 or > MaxEntries)
-            return Problem(detail: $"Between 1 and {MaxEntries} entries required", statusCode: 400, title: "Bad Request");
+        if (entries.Count is 0 || entries.Count > maxEntries)
+            return Problem(detail: $"Between 1 and {maxEntries} entries required", statusCode: 400, title: "Bad Request");
 
         var seenKeys = new HashSet<(string, string)>();
         foreach (var entry in entries)

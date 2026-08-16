@@ -4849,9 +4849,7 @@ namespace Nocturne.Infrastructure.Data.Migrations
 
                     b.HasKey("Id");
 
-                    b.HasIndex("TenantId");
-
-                    b.HasIndex("SubjectId", "Locale");
+                    b.HasIndex("TenantId", "SubjectId", "Locale");
 
                     b.ToTable("translation_drafts");
                 });
