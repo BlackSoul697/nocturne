@@ -49,6 +49,7 @@
   import { getSidebarReportItems } from "$lib/navigation/report-navigation";
   import { filterTenantlessNav } from "$lib/navigation/tenantless-navigation";
   import {
+    activeTenants,
     resolveTenantSwitcher,
     tenantUrl,
     type TenantSwitcherTarget,
@@ -148,9 +149,10 @@
     totalTenantCount = switcher.totalCount;
     tenantTargets = switcher.targets;
 
-    // Pre-select based on current subdomain
+    // Pre-select based on current subdomain; the first reachable tenant is "My Data".
+    const defaultSlug = activeTenants(tenants)[0]?.slug ?? null;
     selectedTenantSlug =
-      currentSlug && currentSlug !== switcher.defaultSlug ? currentSlug : null;
+      currentSlug && currentSlug !== defaultSlug ? currentSlug : null;
   });
 
   type NavItem = {
