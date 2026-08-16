@@ -10,6 +10,9 @@ namespace Nocturne.Core.Contracts.Content;
 public interface IContentContributionService
 {
     bool HasLocalPat { get; }
+
+    /// <summary>Whether the anonymous relay ingress is open on this instance.</summary>
+    bool AcceptsRelay { get; }
     Task<ContentContributionResponse> SubmitAsync(ContentContributionRequest request, CancellationToken ct);
     Task<ContentContributionResponse> RelayAsync(ContentContributionRequest request, CancellationToken ct);
 }

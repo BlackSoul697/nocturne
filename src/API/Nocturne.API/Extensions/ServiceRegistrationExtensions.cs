@@ -120,6 +120,14 @@ public static class ServiceRegistrationExtensions
     /// </summary>
     public const string TranslationDraftsRateLimitPolicy = "translation-drafts";
 
+    /// <summary>
+    /// Rate-limiting policy shared by every contribution flow that opens an
+    /// upstream pull request (translations, CMS content). One bucket on
+    /// purpose: the cost being bounded is PRs on the upstream repository, not
+    /// requests to any one endpoint.
+    /// </summary>
+    public const string ContributionsRateLimitPolicy = "contributions";
+
     /// <summary>Shared bucket for draft requests that present no credential.</summary>
     internal const string AnonymousDraftPartition = "anonymous";
 
@@ -243,8 +251,6 @@ public static class ServiceRegistrationExtensions
         services.Configure<GitHubIssueOptions>(configuration.GetSection("GitHub"));
         services.AddSingleton<GitHubIssueService>();
 
-        // GitHub contribution PRs (translations + CMS content) and per-user
-        // translation draft storage
         services.Configure<GitHubContributionOptions>(configuration.GetSection("GitHub"));
         services.AddSingleton<GitHubPrClient>();
         services.AddSingleton<ITranslationContributionService, GitHubTranslationService>();
@@ -551,10 +557,10 @@ public static class ServiceRegistrationExtensions
                     )
             );
 
-            // Translation contributions: 10 per IP per hour (each opens an
-            // upstream PR, directly or via the relay).
+            // Contributions: 10 per IP per hour (each opens an upstream PR,
+            // directly or via the relay).
             options.AddPolicy(
-                "translation-contributions",
+                ContributionsRateLimitPolicy,
                 context =>
                     RateLimitPartition.GetFixedWindowLimiter(
                         partitionKey: context.Connection.RemoteIpAddress?.ToString() ?? "unknown",

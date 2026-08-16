@@ -27,7 +27,6 @@
     title: string;
     content: string;
     resolve: () => void;
-    reject: (e: Error) => void;
   }
 
   let proposal = $state<Proposal | null>(null);
@@ -201,8 +200,8 @@
       // Settle any dialog already open so its awaiting publish call cannot
       // leak as a forever-pending promise.
       proposal?.resolve();
-      await new Promise<void>((resolve, reject) => {
-        proposal = { slug, title, content: svxContent, resolve, reject };
+      await new Promise<void>((resolve) => {
+        proposal = { slug, title, content: svxContent, resolve };
       });
     },
 

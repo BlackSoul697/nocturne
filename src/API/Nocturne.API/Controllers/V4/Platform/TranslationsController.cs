@@ -20,7 +20,7 @@ public record UpsertTranslationDraftsRequest
 public record SubmitTranslationDraftsRequest
 {
     public required string Locale { get; init; }
-    public required TranslationContributorDto Contributor { get; init; }
+    public required ContributionContributorDto Contributor { get; init; }
     public string? Note { get; init; }
 }
 
@@ -56,7 +56,7 @@ public partial class TranslationsController(
 
     [HttpPost("contributions")]
     [RemoteCommand]
-    [EnableRateLimiting("translation-contributions")]
+    [EnableRateLimiting(ServiceRegistrationExtensions.ContributionsRateLimitPolicy)]
     [ProducesResponseType(typeof(TranslationContributionResponse), StatusCodes.Status201Created)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status422UnprocessableEntity)]
@@ -83,7 +83,7 @@ public partial class TranslationsController(
     /// </summary>
     [HttpPost("relay")]
     [AllowAnonymous]
-    [EnableRateLimiting("translation-contributions")]
+    [EnableRateLimiting(ServiceRegistrationExtensions.ContributionsRateLimitPolicy)]
     [ApiExplorerSettings(IgnoreApi = true)]
     public async Task<ActionResult<TranslationContributionResponse>> AcceptRelayedContribution(
         [FromBody] TranslationContributionRequest request, CancellationToken ct)
@@ -121,7 +121,6 @@ public partial class TranslationsController(
                 statusCode: 502, title: "Bad Gateway");
         }
     }
-
 
     [HttpGet("drafts")]
     [RemoteQuery]
@@ -187,7 +186,7 @@ public partial class TranslationsController(
     [HttpPost("drafts/submit")]
     // No Invalidates; see UpsertDrafts.
     [RemoteCommand]
-    [EnableRateLimiting("translation-contributions")]
+    [EnableRateLimiting(ServiceRegistrationExtensions.ContributionsRateLimitPolicy)]
     [ProducesResponseType(typeof(TranslationDraftSubmitResult), StatusCodes.Status201Created)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status422UnprocessableEntity)]
@@ -258,7 +257,7 @@ public partial class TranslationsController(
         return null;
     }
 
-    private ObjectResult? ValidateContributor(TranslationContributorDto contributor, string? note) =>
+    private ObjectResult? ValidateContributor(ContributionContributorDto contributor, string? note) =>
         ContributionValidation.ValidateContributor(contributor, note) is { } reason
             ? Problem(detail: reason, statusCode: 400, title: "Bad Request")
             : null;

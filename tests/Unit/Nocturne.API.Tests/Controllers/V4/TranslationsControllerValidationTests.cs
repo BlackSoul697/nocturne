@@ -40,7 +40,7 @@ public class TranslationsControllerValidationTests
         {
             Locale = locale,
             Entries = entries ?? [new TranslationEntryDto { MsgId = "Hello", Translations = ["Bonjour"] }],
-            Contributor = new TranslationContributorDto
+            Contributor = new ContributionContributorDto
             {
                 Name = name,
                 GitHubUsername = gitHubUsername,

@@ -27,15 +27,18 @@ public partial class GitHubContentService(
     /// with conservative path segments. Anything else is rejected before any
     /// GitHub call — the relay ingress is reachable anonymously.
     /// </summary>
-    // \A/\z anchors: $ would also match before a trailing newline, letting
-    // "post.svx\n" through validation.
-    // Each segment alternates alphanumerics and single separators: ".." would
-    // otherwise be admitted and produce "content/a..b-..." , which git refuses
-    // as a ref name and GitHub rejects with a 422.
+    // Each segment alternates alphanumerics and single separators. Traversal
+    // is already impossible — a segment must start [a-z0-9], so "/../" can
+    // never match — and BranchSlug maps every non-alphanumeric to a hyphen, so
+    // even "a..b" would yield the legal ref "content/a--b-...". What the rule
+    // buys is a predictable one-to-one shape: the file stem, the generated
+    // slug and the branch name stay recognisably the same string.
     [GeneratedRegex(@"\Asrc/Web/packages/portal/src/content/(blog|docs)(/[a-z0-9](?:[._-]?[a-z0-9])*)*/[a-z0-9](?:[._-]?[a-z0-9])*\.svx\z")]
     public static partial Regex AllowedPathPattern();
 
     public bool HasLocalPat => !string.IsNullOrEmpty(options.Value.ContributionsPat);
+
+    public bool AcceptsRelay => options.Value.AcceptRelayedContributions && HasLocalPat;
 
     public async Task<ContentContributionResponse> SubmitAsync(
         ContentContributionRequest request, CancellationToken ct)
@@ -98,7 +101,7 @@ public partial class GitHubContentService(
                 // Forward the relay's own reason so the contributor can tell
                 // "identical to published" from "path not allowed".
                 throw new ContributionRejectedException(
-                    RelayRejectionDetail(error) ?? "The contribution was rejected by the relay.");
+                    GitHubPrClient.RelayRejectionDetail(error) ?? "The contribution was rejected by the relay.");
             throw new InvalidOperationException($"Content relay error: {response.StatusCode}");
         }
 
@@ -116,22 +119,6 @@ public partial class GitHubContentService(
         var stem = Path.GetFileNameWithoutExtension(path);
         var slug = new string([.. stem.Select(c => char.IsAsciiLetterOrDigit(c) ? c : '-')]).Trim('-');
         return slug.Length == 0 ? "content" : slug;
-    }
-
-    /// <summary>Reads the ProblemDetails "detail" out of a relay rejection.</summary>
-    private static string? RelayRejectionDetail(string body)
-    {
-        try
-        {
-            var detail = JsonDocument.Parse(body).RootElement;
-            return detail.TryGetProperty("detail", out var value) && value.ValueKind == JsonValueKind.String
-                ? value.GetString()
-                : null;
-        }
-        catch (JsonException)
-        {
-            return null;
-        }
     }
 
     internal static string BuildCommitMessage(ContentContributionRequest request, bool created)

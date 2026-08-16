@@ -1,7 +1,7 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.RateLimiting;
-using Microsoft.Extensions.Options;
+using Nocturne.API.Extensions;
 using Nocturne.API.Services;
 using Nocturne.Core.Contracts.Content;
 using Nocturne.Core.Models.Content;
@@ -14,15 +14,14 @@ namespace Nocturne.API.Controllers.V4.Platform;
 [Route("api/v4/content")]
 public class ContentContributionsController(
     IContentContributionService contentService,
-    IOptions<GitHubContributionOptions> options,
     ILogger<ContentContributionsController> logger) : ControllerBase
 {
-    private const int MaxContentBytes = 512 * 1024;
-    private const int MaxTitleLength = 200;
+    internal const int MaxContentBytes = 512 * 1024;
+    internal const int MaxTitleLength = 200;
 
     [HttpPost("contributions")]
     [RemoteCommand]
-    [EnableRateLimiting("translation-contributions")]
+    [EnableRateLimiting(ServiceRegistrationExtensions.ContributionsRateLimitPolicy)]
     [ProducesResponseType(typeof(ContentContributionResponse), StatusCodes.Status201Created)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status422UnprocessableEntity)]
@@ -34,49 +33,45 @@ public class ContentContributionsController(
         if (validationError is not null)
             return validationError;
 
-        try
-        {
-            var result = contentService.HasLocalPat
-                ? await contentService.SubmitAsync(request, ct)
-                : await contentService.RelayAsync(request, ct);
+        Func<Task<ContentContributionResponse>> submit = contentService.HasLocalPat
+            ? () => contentService.SubmitAsync(request, ct)
+            : () => contentService.RelayAsync(request, ct);
 
-            return StatusCode(201, result);
-        }
-        catch (ContributionRejectedException ex)
-        {
-            return Problem(detail: ex.Message, statusCode: 422, title: "Unprocessable Entity");
-        }
-        catch (Exception ex)
-        {
-            logger.LogError(ex, "Failed to submit content contribution");
-            return Problem(detail: "Failed to submit the contribution. Try again later.",
-                statusCode: 502, title: "Bad Gateway");
-        }
+        return await SubmitAsync(submit, "content contribution");
     }
 
     /// <summary>
     /// Anonymous ingress for contributions relayed from instances or tools
-    /// without their own PAT (the nocturne.run side of the relay). Hidden
-    /// unless this instance explicitly opted in and can open PRs itself.
+    /// without their own PAT (the nocturne.run side of the relay).
     /// </summary>
     [HttpPost("relay")]
     [AllowAnonymous]
-    [EnableRateLimiting("translation-contributions")]
+    [EnableRateLimiting(ServiceRegistrationExtensions.ContributionsRateLimitPolicy)]
     [ApiExplorerSettings(IgnoreApi = true)]
     public async Task<ActionResult<ContentContributionResponse>> AcceptRelayedContribution(
         [FromBody] ContentContributionRequest request, CancellationToken ct)
     {
-        if (!options.Value.AcceptRelayedContributions || !contentService.HasLocalPat)
+        if (!contentService.AcceptsRelay)
             return NotFound();
 
         var validationError = Validate(request);
         if (validationError is not null)
             return validationError;
 
+        return await SubmitAsync(
+            () => contentService.SubmitAsync(request, ct), "relayed content contribution");
+    }
+
+    /// <summary>
+    /// One error policy for both ingresses, so the direct and relayed paths
+    /// cannot answer the same failure differently.
+    /// </summary>
+    private async Task<ActionResult<ContentContributionResponse>> SubmitAsync(
+        Func<Task<ContentContributionResponse>> submit, string logContext)
+    {
         try
         {
-            var result = await contentService.SubmitAsync(request, ct);
-            return StatusCode(201, result);
+            return StatusCode(201, await submit());
         }
         catch (ContributionRejectedException ex)
         {
@@ -84,17 +79,16 @@ public class ContentContributionsController(
         }
         catch (Exception ex)
         {
-            logger.LogError(ex, "Failed to submit relayed content contribution");
+            logger.LogError(ex, "Failed to submit {LogContext}", logContext);
             return Problem(detail: "Failed to submit the contribution. Try again later.",
                 statusCode: 502, title: "Bad Gateway");
         }
     }
 
-    private ObjectResult? Validate(ContentContributionRequest request)
+    internal ObjectResult? Validate(ContentContributionRequest request)
     {
-        // Bound the path before the regex sees it: the allowlist accepts
-        // arbitrarily long repeated segments, and the value is echoed into a
-        // branch name, a commit message and a PR body.
+        // Bound the path independently of the allowlist: the value is echoed
+        // into a branch name, a commit message and a PR body.
         if (request.Path.Length > ContributionValidation.MaxPathLength
             || !GitHubContentService.AllowedPathPattern().IsMatch(request.Path))
             return Problem(detail: "Path must be a portal blog or docs .svx file", statusCode: 400, title: "Bad Request");

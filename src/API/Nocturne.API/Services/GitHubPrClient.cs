@@ -1,4 +1,5 @@
 using System.Text;
+using System.Text.Json;
 using System.Text.Json.Serialization;
 using Nocturne.Core.Models.Translations;
 
@@ -6,8 +7,9 @@ namespace Nocturne.API.Services;
 
 /// <summary>
 /// Shared GitHub REST plumbing for contribution flows that open pull
-/// requests (translations, CMS content): fetch a file, branch, commit, open
-/// the PR, and clean up on failure.
+/// requests (translations, CMS content). Callers own the <see cref="HttpClient"/>
+/// they pass in, so one flow's sequence of calls reuses a single connection
+/// and a single PAT.
 /// </summary>
 public class GitHubPrClient(IHttpClientFactory httpClientFactory, ILogger<GitHubPrClient> logger)
 {
@@ -17,7 +19,6 @@ public class GitHubPrClient(IHttpClientFactory httpClientFactory, ILogger<GitHub
     public async Task<(string Text, string Sha)?> GetFileAsync(
         HttpClient client, string owner, string repo, string path, string reference, CancellationToken ct)
     {
-        // The contents API caps files at 1 MB; large files need the blobs API.
         var response = await client.GetAsync(
             $"/repos/{owner}/{repo}/contents/{path}?ref={Uri.EscapeDataString(reference)}", ct);
 
@@ -66,9 +67,6 @@ public class GitHubPrClient(IHttpClientFactory httpClientFactory, ILogger<GitHub
         HttpClient client, string owner, string repo, string path, string branch,
         string? fileSha, string content, string message, CancellationToken ct)
     {
-        // sha must be absent, not null, when creating a file: the contents API
-        // 422s on an explicit null. Creating is the headline Studio case (a new
-        // blog post), so a serialized null broke it outright.
         var response = await client.PutAsJsonAsync(
             $"/repos/{owner}/{repo}/contents/{path}",
             new CommitFileBody
@@ -130,7 +128,22 @@ public class GitHubPrClient(IHttpClientFactory httpClientFactory, ILogger<GitHub
     public static string SanitizeMetadata(string value) =>
         new([.. value.Trim().Where(c => !char.IsControl(c) && c is not '<' and not '>')]);
 
-    public static string? CoAuthorTrailer(TranslationContributorDto contributor)
+    public static string? RelayRejectionDetail(string body)
+    {
+        try
+        {
+            var problem = JsonDocument.Parse(body).RootElement;
+            return problem.TryGetProperty("detail", out var value) && value.ValueKind == JsonValueKind.String
+                ? value.GetString()
+                : null;
+        }
+        catch (JsonException)
+        {
+            return null;
+        }
+    }
+
+    public static string? CoAuthorTrailer(ContributionContributorDto contributor)
     {
         if (!string.IsNullOrWhiteSpace(contributor.GitHubUsername))
         {
@@ -150,6 +163,11 @@ public class GitHubPrClient(IHttpClientFactory httpClientFactory, ILogger<GitHub
         public required string Message { get; init; }
         [JsonPropertyName("content")]
         public required string Content { get; init; }
+        /// <summary>
+        /// Absent creates the file, present updates it. The contents API 422s
+        /// on an explicit null, so this must be omitted rather than serialized
+        /// as null.
+        /// </summary>
         [JsonPropertyName("sha")]
         [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
         public string? Sha { get; init; }

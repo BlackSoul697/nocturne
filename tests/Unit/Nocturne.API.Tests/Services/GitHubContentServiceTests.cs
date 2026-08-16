@@ -1,3 +1,6 @@
+using Microsoft.Extensions.Logging.Abstractions;
+using Microsoft.Extensions.Options;
+using Moq;
 using Nocturne.API.Services;
 using Nocturne.Core.Models.Content;
 using Nocturne.Core.Models.Translations;
@@ -6,6 +9,29 @@ namespace Nocturne.API.Tests.Services;
 
 public class GitHubContentServiceTests
 {
+    // The relay is [AllowAnonymous]; each operand of the gate is pinned on its
+    // own, so flipping either sense or the && to an || fails one of these.
+    [Theory]
+    [InlineData(false, null, false)]
+    [InlineData(true, null, false)]
+    [InlineData(false, "pat", false)]
+    [InlineData(true, "pat", true)]
+    public void AcceptsRelay_Needs_Both_The_Opt_In_And_A_Local_Pat(
+        bool optedIn, string? pat, bool expected)
+    {
+        var options = Options.Create(new GitHubContributionOptions
+        {
+            AcceptRelayedContributions = optedIn,
+            ContributionsPat = pat,
+        });
+        var httpClientFactory = Mock.Of<IHttpClientFactory>();
+
+        new GitHubContentService(
+            new GitHubPrClient(httpClientFactory, NullLogger<GitHubPrClient>.Instance),
+            httpClientFactory, options, NullLogger<GitHubContentService>.Instance)
+            .AcceptsRelay.Should().Be(expected);
+    }
+
     [Theory]
     [InlineData("src/Web/packages/portal/src/content/blog/my-post.svx", true)]
     [InlineData("src/Web/packages/portal/src/content/docs/authentication/github.svx", true)]
@@ -21,7 +47,9 @@ public class GitHubContentServiceTests
     [InlineData("src/Web/packages/portal/src/content/blog//double.svx", false)]
     [InlineData("src/Web/packages/portal/src/content/blog/my-post.v2.svx", true)]
     [InlineData("src/Web/packages/portal/src/content/docs/a_b/c-d.e.svx", true)]
-    // Consecutive separators would produce a branch name git refuses as a ref.
+    // Consecutive separators are rejected to keep the stem, the slug and the
+    // branch name the same recognisable string, not because they would be
+    // unsafe: BranchSlug already reduces them to a legal ref.
     [InlineData("src/Web/packages/portal/src/content/blog/a..b.svx", false)]
     [InlineData("src/Web/packages/portal/src/content/blog/a--b.svx", false)]
     [InlineData("src/Web/packages/portal/src/content/blog/a._b.svx", false)]
@@ -34,9 +62,8 @@ public class GitHubContentServiceTests
     }
 
     /// <summary>
-    /// Every other negative case is rejected with or without the leading
-    /// anchor, so nothing proved the anchor was load-bearing: an unanchored
-    /// pattern would happily match this allowed suffix inside a hostile prefix.
+    /// Pins the leading anchor: every one of these carries an allowed suffix
+    /// behind a hostile prefix, so an unanchored pattern would match them all.
     /// </summary>
     [Theory]
     [InlineData("evil/src/Web/packages/portal/src/content/blog/x.svx")]
@@ -50,6 +77,9 @@ public class GitHubContentServiceTests
     [Theory]
     [InlineData("src/Web/packages/portal/src/content/blog/my-post.svx", "my-post")]
     [InlineData("src/Web/packages/portal/src/content/blog/post.2024.svx", "post-2024")]
+    // The allowlist rejects this stem, but only for slug predictability: were
+    // it admitted, the branch name would still be a legal ref.
+    [InlineData("src/Web/packages/portal/src/content/blog/a..b.svx", "a--b")]
     public void BranchSlug_Reduces_The_Stem_To_A_Legal_Ref_Segment(string path, string expected)
     {
         GitHubContentService.BranchSlug(path).Should().Be(expected);
@@ -60,7 +90,7 @@ public class GitHubContentServiceTests
         Path = "src/Web/packages/portal/src/content/blog/my-post.svx",
         Content = "---\ntitle: My Post\n---\n\nBody",
         Title = "My Post",
-        Contributor = new TranslationContributorDto { Name = "Jane Doe", GitHubUsername = "janedoe" },
+        Contributor = new ContributionContributorDto { Name = "Jane Doe", GitHubUsername = "janedoe" },
         Note = "First draft",
     };
 
@@ -90,7 +120,7 @@ public class GitHubContentServiceTests
     {
         var request = Request() with
         {
-            Contributor = new TranslationContributorDto
+            Contributor = new ContributionContributorDto
             {
                 Name = "Jane fixes GH-123 see https://github.com/nightscout/nocturne/issues/456",
             },
@@ -110,7 +140,7 @@ public class GitHubContentServiceTests
     {
         var request = Request() with
         {
-            Contributor = new TranslationContributorDto
+            Contributor = new ContributionContributorDto
             {
                 Name = "Jane htt#ps://github.com/nightscout/nocturne/issues/9 GH#-7",
                 Email = "jane@example.com",
@@ -132,7 +162,7 @@ public class GitHubContentServiceTests
     {
         var request = Request() with
         {
-            Contributor = new TranslationContributorDto
+            Contributor = new ContributionContributorDto
             {
                 Name = "Jane\nSigned-off-by: maintainer <m@x>",
             },
@@ -150,14 +180,12 @@ public class GitHubContentServiceTests
         const string note = "Fixes https://github.com/nightscout/nocturne/issues/123\n`x`";
         var request = Request() with
         {
-            Contributor = new TranslationContributorDto { Name = "Jane fixes #123 cc @someuser" },
+            Contributor = new ContributionContributorDto { Name = "Jane fixes #123 cc @someuser" },
             Note = note,
         };
 
         var body = GitHubContentService.BuildPrBody(request, created: false);
 
-        // Both flows render through ContributionValidation, so the content PR
-        // body escapes the name and fences the note identically.
         body.Should().Contain(@"- **Contributor:** Jane fixes \#123 cc \@someuser");
         body.ReplaceLineEndings("\n").Should().Contain($"```\n{note}\n```");
     }
@@ -167,7 +195,7 @@ public class GitHubContentServiceTests
     {
         var request = Request() with
         {
-            Contributor = new TranslationContributorDto
+            Contributor = new ContributionContributorDto
             {
                 Name = "Jane fixes #123 cc @someuser",
                 Email = "jane@example.com",

@@ -123,7 +123,7 @@ public class TranslationDraftService(
     }
 
     public async Task<TranslationDraftSubmitResult> SubmitDraftsAsync(
-        string locale, TranslationContributorDto contributor, string? note, CancellationToken ct = default)
+        string locale, ContributionContributorDto contributor, string? note, CancellationToken ct = default)
     {
         var drafts = await LoadForLocaleAsync(locale, ct);
 

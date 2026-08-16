@@ -6,11 +6,9 @@ public record ContentContributionRequest
 {
     /// <summary>Repo-relative path of the .svx file to create or update.</summary>
     public required string Path { get; init; }
-    /// <summary>Full new file content (frontmatter + body).</summary>
     public required string Content { get; init; }
-    /// <summary>Short human title for the pull request.</summary>
     public required string Title { get; init; }
-    public required TranslationContributorDto Contributor { get; init; }
+    public required ContributionContributorDto Contributor { get; init; }
     public string? Note { get; init; }
 }
 

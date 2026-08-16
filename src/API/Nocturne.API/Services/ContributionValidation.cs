@@ -29,11 +29,7 @@ public static partial class ContributionValidation
     [GeneratedRegex(@"^[^\s<>@]+@[^\s<>@]+\.[^\s<>@]+\z")]
     public static partial Regex EmailPattern();
 
-    /// <summary>
-    /// Returns the rejection reason, or null when the contributor and note are
-    /// acceptable. Callers turn the reason into their own problem response.
-    /// </summary>
-    public static string? ValidateContributor(TranslationContributorDto contributor, string? note)
+    public static string? ValidateContributor(ContributionContributorDto contributor, string? note)
     {
         // Control characters or trailer syntax in any of these fields would
         // allow commit-metadata injection.
@@ -79,9 +75,8 @@ public static partial class ContributionValidation
     /// <c>#</c> handling covers <c>#12</c> and <c>owner/repo#12</c>, but
     /// GitHub resolves two further reference forms that carry no <c>#</c> and
     /// no <c>@</c>: the <c>GH-12</c> shorthand and a full issue or pull URL.
-    /// Both fit inside <see cref="MaxNameLength"/> and both honour closing
-    /// keywords, so both are removed outright — a person's name legitimately
-    /// contains neither.
+    /// Both honour closing keywords, so both are removed outright — a
+    /// person's name legitimately contains neither.
     /// </summary>
     public static string RenderName(string name, bool markdown)
     {
@@ -110,11 +105,10 @@ public static partial class ContributionValidation
     private static partial Regex GitHubShorthandReference();
 
     /// <summary>
-    /// Renders free-text contributor input inside a fenced code block.
-    /// Nothing inside a code fence is interpreted, which neutralizes the
-    /// references <see cref="RenderName"/> describes plus block markup and
-    /// raw HTML at once — provided the note cannot close the fence, so the
-    /// fence runs one backtick longer than the longest backtick run in it.
+    /// Renders free-text contributor input inside a fenced code block, where
+    /// nothing is interpreted — which covers every markdown vector at once,
+    /// provided the note cannot close the fence. So the fence runs one
+    /// backtick longer than the longest backtick run in the note.
     /// </summary>
     public static string RenderNoteAsCodeFence(string note)
     {
@@ -141,7 +135,6 @@ public static partial class ContributionValidation
         return longest;
     }
 
-    /// <summary>Drops C0/C1 control characters but keeps line structure.</summary>
     private static string StripControlChars(string value) =>
         new([.. value.Where(c => !char.IsControl(c) || c is '\r' or '\n')]);
 }

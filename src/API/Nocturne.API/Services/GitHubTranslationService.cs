@@ -89,17 +89,17 @@ public class GitHubTranslationService(
             var error = await response.Content.ReadAsStringAsync(ct);
             logger.LogError("Translation relay error: {StatusCode} {Error}", response.StatusCode, error);
             if (response.StatusCode == System.Net.HttpStatusCode.UnprocessableEntity)
+                // Forward the relay's own reason: a 422 is just as likely to be
+                // a contributor-validation rejection as an unmatched catalog.
                 throw new ContributionRejectedException(
-                    "No contributed message matched the current catalog. The catalog may have changed; refresh and try again.");
+                    GitHubPrClient.RelayRejectionDetail(error)
+                    ?? "The contribution was rejected by the relay.");
             throw new InvalidOperationException($"Translation relay error: {response.StatusCode}");
         }
 
         return await response.Content.ReadFromJsonAsync<TranslationContributionResponse>(JsonOpts, ct)
             ?? throw new InvalidOperationException("Failed to deserialize relay response");
     }
-
-
-    internal static string SanitizeMetadata(string value) => GitHubPrClient.SanitizeMetadata(value);
 
     internal static string BuildCommitMessage(TranslationContributionRequest request, int applied)
     {
@@ -108,7 +108,7 @@ public class GitHubTranslationService(
         sb.AppendLine();
         sb.AppendLine($"Applies {applied} message{(applied == 1 ? "" : "s")} contributed by {ContributionValidation.RenderName(request.Contributor.Name, markdown: false)}.");
 
-        var coAuthor = CoAuthorTrailer(request.Contributor);
+        var coAuthor = GitHubPrClient.CoAuthorTrailer(request.Contributor);
         if (coAuthor is not null)
         {
             sb.AppendLine();
@@ -118,9 +118,6 @@ public class GitHubTranslationService(
         return sb.ToString();
     }
 
-    internal static string? CoAuthorTrailer(TranslationContributorDto contributor) =>
-        GitHubPrClient.CoAuthorTrailer(contributor);
-
     internal static string BuildPrBody(TranslationContributionRequest request, PoEditResult result)
     {
         var sb = new StringBuilder();
@@ -129,7 +126,7 @@ public class GitHubTranslationService(
         sb.AppendLine($"- **Contributor:** {ContributionValidation.RenderName(request.Contributor.Name, markdown: true)}"
             + (string.IsNullOrWhiteSpace(request.Contributor.GitHubUsername)
                 ? ""
-                : $" (@{SanitizeMetadata(request.Contributor.GitHubUsername)})"));
+                : $" (@{GitHubPrClient.SanitizeMetadata(request.Contributor.GitHubUsername)})"));
         sb.AppendLine($"- **Messages updated:** {result.Applied}");
 
         if (result.Unmatched.Count > 0)
@@ -148,7 +145,7 @@ public class GitHubTranslationService(
                     display = display[..120] + "…";
                 var context = entry.Context.Length == 0
                     ? ""
-                    : $" (context: {SanitizeMetadata(entry.Context)})";
+                    : $" (context: {GitHubPrClient.SanitizeMetadata(entry.Context)})";
                 sb.AppendLine($"- `{display}`{context}");
             }
             sb.AppendLine();
@@ -165,6 +162,4 @@ public class GitHubTranslationService(
 
         return sb.ToString();
     }
-
-
 }

@@ -29,8 +29,6 @@ public class GitHubPrClientTests
             http, "nightscout", "nocturne", "src/Web/packages/portal/src/content/blog/new.svx",
             "content/new-abc", fileSha: null, "body", "content: add new", CancellationToken.None);
 
-        // The contents API rejects an explicit null sha with a 422, so the key
-        // has to be absent — not present-and-null.
         var payload = JsonDocument.Parse(bodies.Single()).RootElement;
         payload.TryGetProperty("sha", out _).Should().BeFalse();
         payload.GetProperty("branch").GetString().Should().Be("content/new-abc");
