@@ -26,20 +26,30 @@ export function tenantUrl(
  * Returns null — meaning "render the dashboard" — for zero or several tenants, or when no base
  * domain is configured and so no tenant URL can be built.
  *
+ * Inactive tenants do not count and are never a destination. Their host answers 403 on every
+ * path, which lands the visitor on a login page whose sign-in cannot succeed and which links
+ * nowhere else, so a redirect there is a dead end only the URL bar can escape.
+ *
  * It also returns null when the sole tenant's own slug is a reserved dashboard slug. Its host is
  * then the dashboard host, so redirecting there would land back on this same load and redirect
  * again, forever. Nothing is reserved by default, so this only arises once an operator sets
  * DASHBOARD_SLUGS — and it may name a slug some tenant already holds.
  */
 export function resolveSingleTenantLanding(
-  tenants: readonly { slug?: string | null }[] | null | undefined,
+  tenants:
+    | readonly { slug?: string | null; isActive?: boolean | null }[]
+    | null
+    | undefined,
   baseDomain: string | null | undefined,
   protocol?: string,
   dashboardSlugs: readonly string[] = []
 ): string | null {
   if (!baseDomain) return null;
 
-  const slugs = (tenants ?? []).map((t) => t.slug).filter((s): s is string => !!s);
+  const slugs = (tenants ?? [])
+    .filter((t) => t.isActive ?? true)
+    .map((t) => t.slug)
+    .filter((s): s is string => !!s);
   if (slugs.length !== 1) return null;
 
   const slug = slugs[0]!;
