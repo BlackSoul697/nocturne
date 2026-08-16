@@ -90,4 +90,90 @@ describe("resolveSingleTenantLanding", () => {
       ])
     ).toBe("https://alice.example.com/");
   });
+
+  it("redirects to a sole tenant that is active", () => {
+    expect(
+      resolveSingleTenantLanding(
+        [{ slug: "alice", isActive: true }],
+        "example.com",
+        "https:"
+      )
+    ).toBe("https://alice.example.com/");
+  });
+
+  it("does not redirect to a sole tenant that is inactive", () => {
+    // Its host answers 403 on every path, so the caregiver would be stranded there. The
+    // dashboard is the only place that can still tell them anything.
+    expect(
+      resolveSingleTenantLanding(
+        [{ slug: "alice", isActive: false }],
+        "example.com",
+        "https:"
+      )
+    ).toBeNull();
+  });
+
+  it("redirects to the sole active tenant among inactive ones", () => {
+    expect(
+      resolveSingleTenantLanding(
+        [
+          { slug: "alice", isActive: false },
+          { slug: "bob", isActive: true },
+          { slug: "carol", isActive: false },
+        ],
+        "example.com",
+        "https:"
+      )
+    ).toBe("https://bob.example.com/");
+  });
+
+  it("renders the dashboard when every tenant is inactive", () => {
+    expect(
+      resolveSingleTenantLanding(
+        [
+          { slug: "alice", isActive: false },
+          { slug: "bob", isActive: false },
+        ],
+        "example.com",
+        "https:"
+      )
+    ).toBeNull();
+  });
+
+  it("does not redirect when several tenants are active", () => {
+    expect(
+      resolveSingleTenantLanding(
+        [
+          { slug: "alice", isActive: true },
+          { slug: "bob", isActive: true },
+          { slug: "carol", isActive: false },
+        ],
+        "example.com",
+        "https:"
+      )
+    ).toBeNull();
+  });
+
+  it("treats an absent isActive as active", () => {
+    // Every property of the generated TenantDto is optional, and the rest of the app reads this
+    // field as `isActive ?? true`.
+    expect(
+      resolveSingleTenantLanding(
+        [{ slug: "alice", isActive: undefined }],
+        "example.com",
+        "https:"
+      )
+    ).toBe("https://alice.example.com/");
+  });
+
+  it("does not redirect to a sole inactive tenant whose slug is a dashboard slug", () => {
+    expect(
+      resolveSingleTenantLanding(
+        [{ slug: "home", isActive: false }],
+        "example.com",
+        "https:",
+        ["home"]
+      )
+    ).toBeNull();
+  });
 });
