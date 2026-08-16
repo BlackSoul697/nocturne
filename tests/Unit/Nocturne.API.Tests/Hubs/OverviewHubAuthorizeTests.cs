@@ -162,6 +162,33 @@ public class OverviewHubAuthorizeTests
             Times.Once);
     }
 
+    [Fact]
+    public async Task Authorize_normalizes_the_jwt_scopes_before_handing_them_to_the_seam()
+    {
+        // The seam treats these as the credential's ceiling, so they have to arrive expanded the way
+        // every other JWT-claims consumer expands them: the health.read alias becomes the concrete
+        // scopes it stands for, and an unrecognized scope is dropped.
+        var (hub, _, overview, jwt, revocation, _) = CreateHub();
+        jwt.Setup(j => j.ValidateAccessToken(JwtShapedToken))
+            .Returns(ValidJwt(Subject, OAuthScopes.HealthRead, "not.a.scope"));
+        revocation.Setup(r => r.IsRevokedAsync("jti-1")).ReturnsAsync(false);
+        overview
+            .Setup(o => o.GetGlucoseReadTenantsAsync(Subject, It.IsAny<IReadOnlySet<string>>(), It.IsAny<AuthType>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(Array.Empty<GlucoseReadTenant>());
+
+        await hub.Authorize(new OverviewAuthorizeRequest { Token = JwtShapedToken });
+
+        overview.Verify(
+            o => o.GetGlucoseReadTenantsAsync(
+                Subject,
+                It.Is<IReadOnlySet<string>>(s =>
+                    s.IsSupersetOf(OAuthScopes.HealthReadExpansion)
+                    && !s.Contains(OAuthScopes.HealthRead)
+                    && !s.Contains("not.a.scope")),
+                It.IsAny<AuthType>(), It.IsAny<CancellationToken>()),
+            Times.Once);
+    }
+
     // The hub is reachable on tenant subdomains, so a credential that only ever authorized one
     // tenant can reach Authorize with a valid AuthContext. Joining the subject's every
     // glucose-readable tenant would widen it, so only subject-scoped credential types are accepted.
@@ -298,7 +325,7 @@ public class OverviewHubAuthorizeTests
         var result = await hub.Authorize(new OverviewAuthorizeRequest { Token = "opaque-legacy-token" });
 
         result.Success.Should().BeFalse();
-        result.Error.Should().Contain("tenant-bound");
+        result.Error.Should().Contain("cannot be authenticated in-band");
         jwt.Verify(j => j.ValidateAccessToken(It.IsAny<string>()), Times.Never);
         groups.Verify(
             g => g.AddToGroupAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<CancellationToken>()),

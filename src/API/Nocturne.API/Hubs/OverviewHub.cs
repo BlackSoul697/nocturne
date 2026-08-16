@@ -62,9 +62,9 @@ public class OverviewHub : Hub
     /// every tenant the subject may read glucose for (resolved via
     /// <see cref="ITenantOverviewService.GetGlucoseReadTenantsAsync"/>). Accepts the upgrade
     /// request's authenticated subject credential (AuthContext) or a subject-scoped OAuth
-    /// access-token JWT in <paramref name="request"/>. Opaque tokens in the payload are rejected:
-    /// they are tenant-bound and carry no subject scope set. An empty tenant list is a valid
-    /// success.
+    /// access-token JWT in <paramref name="request"/>. Opaque tokens in the payload are rejected
+    /// because this hub implements no in-band verification path for them; presented on the upgrade
+    /// request they authenticate normally. An empty tenant list is a valid success.
     /// </summary>
     [HubAuthenticationMethod]
     [HubTenantGroup]
@@ -106,7 +106,8 @@ public class OverviewHub : Hub
                 if (request.Token.Count(c => c == '.') != 2)
                 {
                     return OverviewAuthorizeResponse.Failed(
-                        "Opaque access tokens are tenant-bound and not accepted here; use an OAuth JWT.");
+                        "Opaque access tokens cannot be authenticated in-band here; present one on "
+                        + "the connection request, or send an OAuth JWT.");
                 }
 
                 var validation = _jwtService.ValidateAccessToken(request.Token);
@@ -139,7 +140,7 @@ public class OverviewHub : Hub
                 }
 
                 subjectId = claims.SubjectId;
-                tokenScopes = claims.Scopes.ToHashSet();
+                tokenScopes = OAuthScopes.Normalize(claims.Scopes);
                 authType = AuthType.OAuthAccessToken;
             }
             else
