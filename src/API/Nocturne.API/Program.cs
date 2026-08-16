@@ -404,6 +404,7 @@ app.MapHub<AlarmHub>("/hubs/alarms");
 app.MapHub<AlertHub>("/hubs/alerts");
 app.MapHub<ConfigHub>("/hubs/config");
 app.MapHub<HomeAssistantHub>("/hubs/home-assistant");
+app.MapHub<OverviewHub>("/hubs/overview");
 
 // Serve OpenAPI specs at /openapi/{documentName}.json
 app.MapOpenApi().RequireRateLimiting(ServiceRegistrationExtensions.DocsRateLimitPolicy);

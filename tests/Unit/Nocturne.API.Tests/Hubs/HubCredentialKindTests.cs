@@ -357,6 +357,7 @@ public class HubCredentialKindTests
             Mock.Of<IHubContext<ConfigHub>>(),
             Mock.Of<IHubContext<AlertHub>>(),
             Mock.Of<IHubContext<HomeAssistantHub>>(),
+            Mock.Of<IHubContext<OverviewHub>>(),
             tenantAccessor.Object,
             Mock.Of<ILogger<SignalRBroadcastService>>());
 

@@ -305,9 +305,15 @@ public class TenantIsolationTests
         mockHaHub.Setup(x => x.Clients).Returns(haClients.Object);
         haClients.Setup(x => x.Group(It.IsAny<string>())).Returns(haProxy.Object);
 
+        var mockOverviewHub = new Mock<IHubContext<OverviewHub>>();
+        var overviewClients = new Mock<IHubClients>();
+        var overviewProxy = new Mock<IClientProxy>();
+        mockOverviewHub.Setup(x => x.Clients).Returns(overviewClients.Object);
+        overviewClients.Setup(x => x.Group(It.IsAny<string>())).Returns(overviewProxy.Object);
+
         var service = new SignalRBroadcastService(
             mockDataHub.Object, mockAlarmHub.Object, mockConfigHub.Object, mockAlertHub.Object,
-            mockHaHub.Object, mockAccessor.Object, mockLogger.Object);
+            mockHaHub.Object, mockOverviewHub.Object, mockAccessor.Object, mockLogger.Object);
 
         return (service, dataClients, alarmClients, configClients, dataProxy, alarmProxy, configProxy);
     }
@@ -704,6 +710,24 @@ public class TenantIsolationTests
 
         var context = CreateMiddlewareHttpContext("nocturnecgm.com");
         context.Request.Path = "/api/v4/platform/info";
+        await middleware.InvokeAsync(context);
+
+        nextCalled.Should().BeTrue();
+        context.Items.ContainsKey("TenantContext").Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task TenantResolutionMiddleware_OverviewHubNegotiate_ApexDomain_PassesThrough()
+    {
+        // The cross-tenant overview hub is negotiated from the apex with no tenant;
+        // SignalR appends /negotiate to the hub path, so the prefix must match.
+        var nextCalled = false;
+        var middleware = CreateMiddlewareWithNext(
+            _ => { nextCalled = true; return Task.CompletedTask; },
+            tenants: new[] { ("alice", TenantAId, true) });
+
+        var context = CreateMiddlewareHttpContext("nocturnecgm.com");
+        context.Request.Path = "/hubs/overview/negotiate";
         await middleware.InvokeAsync(context);
 
         nextCalled.Should().BeTrue();

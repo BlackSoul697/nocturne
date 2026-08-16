@@ -262,6 +262,82 @@ public class TenantOverviewServiceTests
         delegated.Tenants.Should().BeEmpty();
     }
 
+    // ---- hub seam ----
+    //
+    // The overview hub derives its group set from GetGlucoseReadTenantsAsync, so the seam must
+    // gate on credential type exactly as the endpoint does or the hub streams a tenant the
+    // endpoint refuses.
+
+    [Fact]
+    public async Task GetGlucoseReadTenants_delegatedTokenWithoutGlucoseScope_excludesEveryTenant()
+    {
+        var subjectId = Guid.NewGuid();
+        var options = NewOptions();
+
+        SeedMembership(options, subjectId, "member-tenant", [TenantPermissions.GlucoseRead]);
+        SeedMembership(options, subjectId, "owner-tenant", [TenantPermissions.Superuser]);
+
+        var service = NewService(options);
+
+        var narrow = await service.GetGlucoseReadTenantsAsync(
+            subjectId, new HashSet<string> { OAuthScopes.TreatmentsRead }, AuthType.OAuthAccessToken);
+        narrow.Should().BeEmpty();
+
+        var empty = await service.GetGlucoseReadTenantsAsync(
+            subjectId, new HashSet<string>(), AuthType.OAuthAccessToken);
+        empty.Should().BeEmpty();
+
+        var full = await service.GetGlucoseReadTenantsAsync(
+            subjectId, FullTokenScopes, AuthType.OAuthAccessToken);
+        full.Select(t => t.Tenant.Slug).Should().BeEquivalentTo(["member-tenant", "owner-tenant"]);
+    }
+
+    [Fact]
+    public async Task GetGlucoseReadTenants_unscopedSessionCredential_seesTenantsFromTheMembershipAlone()
+    {
+        var subjectId = Guid.NewGuid();
+        var options = NewOptions();
+
+        SeedMembership(options, subjectId, "member-tenant", [TenantPermissions.GlucoseRead]);
+        SeedMembership(options, subjectId, "admin-tenant",
+            TenantPermissions.SeedRolePermissions[TenantPermissions.SeedRoles.Admin]);
+        SeedMembership(options, subjectId, "no-glucose", [TenantPermissions.TreatmentsRead]);
+        SeedMembership(options, subjectId, "denied",
+            TenantPermissions.SeedRolePermissions[TenantPermissions.SeedRoles.Denied]);
+
+        var service = NewService(options);
+
+        var session = await service.GetGlucoseReadTenantsAsync(
+            subjectId, new HashSet<string>(), AuthType.SessionCookie);
+        session.Select(t => t.Tenant.Slug).Should().BeEquivalentTo(["member-tenant", "admin-tenant"]);
+
+        var delegated = await service.GetGlucoseReadTenantsAsync(
+            subjectId, new HashSet<string>(), AuthType.OAuthAccessToken);
+        delegated.Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task GetGlucoseReadTenants_superuserMembership_widensOnlyForUnscopedCredentials()
+    {
+        var subjectId = Guid.NewGuid();
+        var options = NewOptions();
+        SeedMembership(options, subjectId, "owner-tenant", [TenantPermissions.Superuser]);
+
+        var service = NewService(options);
+
+        // Unscoped credential: membership is the whole authority, so "*" reaches the caller.
+        var session = await service.GetGlucoseReadTenantsAsync(
+            subjectId, new HashSet<string>(), AuthType.SessionCookie);
+        session.Single().AllowedScopes.Should().Contain(TenantPermissions.Superuser);
+
+        // Delegated credential: the consented scope list is a ceiling the "*" membership
+        // must not widen past.
+        var delegated = await service.GetGlucoseReadTenantsAsync(
+            subjectId, new HashSet<string> { OAuthScopes.GlucoseRead }, AuthType.OAuthAccessToken);
+        delegated.Single().AllowedScopes.Should().NotContain(TenantPermissions.Superuser);
+        delegated.Single().AllowedScopes.Should().Contain(OAuthScopes.GlucoseRead);
+    }
+
     [Fact]
     public async Task GetOverview_tokenWithGlucoseButNotAlerts_getsGlucoseWithoutAlertFields()
     {

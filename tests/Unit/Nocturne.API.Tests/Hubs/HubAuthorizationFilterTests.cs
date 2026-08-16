@@ -31,11 +31,14 @@ public class HubAuthorizationFilterTests
     /// connection carrying <paramref name="authorization"/> (null = anonymous).
     /// </summary>
     private static HubInvocationContext CreateInvocation(
-        Type hubType, string methodName, HubAuthorization? authorization)
+        Type hubType, string methodName, HubAuthorization? authorization, bool tenantResolved = true)
     {
         var httpContext = new DefaultHttpContext();
-        httpContext.Items["TenantContext"] =
-            new TenantContext(Tenant, "default", "Default", IsActive: true, IsDemo: false);
+        if (tenantResolved)
+        {
+            httpContext.Items["TenantContext"] =
+                new TenantContext(Tenant, "default", "Default", IsActive: true, IsDemo: false);
+        }
 
         var features = new FeatureCollection();
         features.Set<IHttpContextFeature>(new TestHttpContextFeature { HttpContext = httpContext });
@@ -198,6 +201,24 @@ public class HubAuthorizationFilterTests
     }
 
     /// <summary>
+    /// <see cref="OverviewHub"/> is reached from the apex, where <c>TenantResolutionMiddleware</c>
+    /// resolves no tenant. Its entry point must survive the filter there, which is the condition the
+    /// invocation below reproduces: <see cref="HubAuthorizationState.Resolve"/> returns null with no
+    /// <c>TenantContext</c> on the handshake, so a method the filter gates would be refused outright.
+    /// </summary>
+    [Fact]
+    public async Task Overview_authorization_survives_the_filter_with_no_tenant_on_the_handshake()
+    {
+        var reached = await InvokeAsync(CreateInvocation(
+            typeof(OverviewHub),
+            nameof(OverviewHub.Authorize),
+            authorization: null,
+            tenantResolved: false));
+
+        reached.Should().BeTrue();
+    }
+
+    /// <summary>
     /// The methods the filter gates that join a group carrying the whole tenant's payloads. Scope alone
     /// does not constrain them: a guest link's scopes are the data owner's own read scopes, so the
     /// credential kind is the only thing separating a share of one patient's glucose from the tenant's
@@ -281,7 +302,8 @@ public class HubAuthorizationFilterTests
             .Select(Describe)
             .ToList();
 
-        entryPoints.Should().BeEquivalentTo(["DataHub.Authorize", "AlarmHub.Subscribe"]);
+        entryPoints.Should().BeEquivalentTo(
+            ["DataHub.Authorize", "AlarmHub.Subscribe", "OverviewHub.Authorize"]);
     }
 
     /// <summary>
@@ -289,6 +311,10 @@ public class HubAuthorizationFilterTests
     /// <see cref="Hub"/> lifetime member.
     /// </summary>
     /// <remarks>
+    /// Every <see cref="Hub"/> is scanned, not only <see cref="TenantAwareHub"/> descendants: the
+    /// filter is added to <c>HubOptions</c> globally, so it gates every hub in the assembly and the
+    /// scan has to cover the same set or a hub outside that hierarchy is guarded but unexamined.
+    ///
     /// The lifetime overrides (<c>OnConnectedAsync</c>, <c>OnDisconnectedAsync</c>) are excluded
     /// because <see cref="IHubFilter.InvokeMethodAsync"/> never sees them — SignalR routes them through
     /// <see cref="IHubFilter.OnConnectedAsync"/> and <see cref="IHubFilter.OnDisconnectedAsync"/>
@@ -297,7 +323,7 @@ public class HubAuthorizationFilterTests
     /// </remarks>
     private static IEnumerable<MethodInfo> HubMethods() =>
         typeof(DataHub).Assembly.GetTypes()
-            .Where(t => t.IsAssignableTo(typeof(TenantAwareHub)) && !t.IsAbstract)
+            .Where(t => t.IsAssignableTo(typeof(Hub)) && !t.IsAbstract)
             .SelectMany(t => t.GetMethods(
                 BindingFlags.Public | BindingFlags.Instance | BindingFlags.DeclaredOnly))
             .Where(m => m.GetBaseDefinition().DeclaringType == m.DeclaringType);
