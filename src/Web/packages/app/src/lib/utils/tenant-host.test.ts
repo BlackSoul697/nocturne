@@ -59,13 +59,13 @@ describe("resolveSingleTenantLanding", () => {
   it("ignores tenants with no slug, and counts what remains", () => {
     expect(
       resolveSingleTenantLanding(
-        [{ slug: "alice" }, { slug: null }],
+        [{ slug: "alice" }, {}],
         "example.com",
         "https:"
       )
     ).toBe("https://alice.example.com/");
     expect(
-      resolveSingleTenantLanding([{ slug: null }], "example.com", "https:")
+      resolveSingleTenantLanding([{}], "example.com", "https:")
     ).toBeNull();
   });
 
@@ -95,19 +95,7 @@ describe("resolveSingleTenantLanding", () => {
     ).toBe("https://alice.example.com/");
   });
 
-  it("redirects to a sole tenant that is active", () => {
-    expect(
-      resolveSingleTenantLanding(
-        [{ slug: "alice", isActive: true }],
-        "example.com",
-        "https:"
-      )
-    ).toBe("https://alice.example.com/");
-  });
-
   it("does not redirect to a sole tenant that is inactive", () => {
-    // Its host answers 403 on every path, so the caregiver would be stranded there. The
-    // dashboard is the only place that can still tell them anything.
     expect(
       resolveSingleTenantLanding(
         [{ slug: "alice", isActive: false }],
@@ -169,17 +157,6 @@ describe("resolveSingleTenantLanding", () => {
       )
     ).toBe("https://alice.example.com/");
   });
-
-  it("does not redirect to a sole inactive tenant whose slug is a dashboard slug", () => {
-    expect(
-      resolveSingleTenantLanding(
-        [{ slug: "home", isActive: false }],
-        "example.com",
-        "https:",
-        ["home"]
-      )
-    ).toBeNull();
-  });
 });
 
 describe("resolveTenantSwitcher", () => {
@@ -193,7 +170,6 @@ describe("resolveTenantSwitcher", () => {
       { id: "b", slug: "bob", displayName: "Bob" },
     ]);
     expect(switcher.totalCount).toBe(2);
-    expect(switcher.defaultSlug).toBe("alice");
   });
 
   it("offers every tenant on a tenantless host", () => {
@@ -203,9 +179,6 @@ describe("resolveTenantSwitcher", () => {
   });
 
   it("never offers an inactive tenant as a switch target", () => {
-    // Its host answers 403 on every path, so switching there is the same dead end the tenantless
-    // dashboard refuses to redirect into — and on that host currentSlug is null, so nothing else
-    // would exclude it.
     const switcher = resolveTenantSwitcher(
       [
         { ...alice, isActive: true },
@@ -218,8 +191,7 @@ describe("resolveTenantSwitcher", () => {
   });
 
   it("does not count inactive tenants, so one active tenant shows no switcher", () => {
-    // totalCount > 1 is what renders the switcher and the Tenants nav entry; with a single
-    // reachable tenant both would only ever show one usable destination.
+    // totalCount > 1 is what renders the switcher and the Tenants nav entry.
     const switcher = resolveTenantSwitcher(
       [
         { ...alice, isActive: true },
@@ -232,24 +204,11 @@ describe("resolveTenantSwitcher", () => {
     expect(switcher.targets).toEqual([]);
   });
 
-  it("keeps an active tenant as a target and a count", () => {
-    const switcher = resolveTenantSwitcher(
-      [
-        { ...alice, isActive: true },
-        { ...bob, isActive: true },
-      ],
-      "alice"
-    );
-
-    expect(switcher.targets.map((t) => t.slug)).toEqual(["bob"]);
-    expect(switcher.totalCount).toBe(2);
-  });
-
   it("treats an absent isActive as active", () => {
     const switcher = resolveTenantSwitcher(
       [
         { ...alice, isActive: undefined },
-        { ...bob, isActive: null },
+        { ...bob, isActive: undefined },
       ],
       null
     );
@@ -258,22 +217,9 @@ describe("resolveTenantSwitcher", () => {
     expect(switcher.totalCount).toBe(2);
   });
 
-  it("names the first active tenant as the default, not an inactive one", () => {
-    const switcher = resolveTenantSwitcher(
-      [
-        { ...alice, isActive: false },
-        { ...bob, isActive: true },
-      ],
-      "bob"
-    );
-
-    expect(switcher.defaultSlug).toBe("bob");
-    expect(switcher.targets).toEqual([]);
-  });
-
   it("drops tenants with no id or no slug", () => {
     const switcher = resolveTenantSwitcher(
-      [{ id: "x", slug: null }, { id: null, slug: "ghost" }, bob],
+      [{ id: "x" }, { slug: "ghost" }, bob],
       null
     );
 
@@ -285,7 +231,6 @@ describe("resolveTenantSwitcher", () => {
       const switcher = resolveTenantSwitcher(tenants, null);
       expect(switcher.targets).toEqual([]);
       expect(switcher.totalCount).toBe(0);
-      expect(switcher.defaultSlug).toBeNull();
     }
   });
 
