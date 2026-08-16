@@ -48,7 +48,12 @@
   } from "lucide-svelte";
   import { getSidebarReportItems } from "$lib/navigation/report-navigation";
   import { filterTenantlessNav } from "$lib/navigation/tenantless-navigation";
-  import { tenantUrl } from "$lib/utils/tenant-host";
+  import {
+    activeTenants,
+    resolveTenantSwitcher,
+    tenantUrl,
+    type TenantSwitcherTarget,
+  } from "$lib/utils/tenant-host";
   import type { AuthUser } from "$lib/stores/auth-store.svelte";
 
   interface Props {
@@ -90,15 +95,9 @@
   });
 
   // Tenant switcher state
-  interface TenantTarget {
-    id: string;
-    slug: string;
-    displayName: string | null;
-  }
-  let tenantTargets = $state<TenantTarget[]>([]);
+  let tenantTargets = $state<TenantSwitcherTarget[]>([]);
   let totalTenantCount = $state(0);
   let selectedTenantSlug = $state<string | null>(null);
-  let defaultTenantSlug = $state<string | null>(null);
 
   /**
    * Platform-admin "access" mode: the session is a short-lived platform-access grant on a
@@ -133,7 +132,7 @@
     }
   }
 
-  function formatTenantLabel(target: TenantTarget): string {
+  function formatTenantLabel(target: TenantSwitcherTarget): string {
     return target.displayName
       ? `${target.displayName} (${target.slug})`
       : target.slug;
@@ -146,23 +145,14 @@
     const tenants = myTenantsQuery.current;
     if (tenants === undefined) return;
 
-    totalTenantCount = (tenants ?? []).length;
-    defaultTenantSlug = (tenants ?? [])[0]?.slug ?? null;
+    const switcher = resolveTenantSwitcher(tenants, currentSlug);
+    totalTenantCount = switcher.totalCount;
+    tenantTargets = switcher.targets;
 
-    tenantTargets = (tenants ?? [])
-      .filter(
-        (t): t is typeof t & { id: string; slug: string } =>
-          !!t.id && !!t.slug && t.slug !== currentSlug,
-      )
-      .map((t) => ({
-        id: t.id,
-        slug: t.slug,
-        displayName: t.displayName ?? null,
-      }));
-
-    // Pre-select based on current subdomain
+    // Pre-select based on current subdomain; the first reachable tenant is "My Data".
+    const defaultSlug = activeTenants(tenants)[0]?.slug ?? null;
     selectedTenantSlug =
-      currentSlug && currentSlug !== defaultTenantSlug ? currentSlug : null;
+      currentSlug && currentSlug !== defaultSlug ? currentSlug : null;
   });
 
   type NavItem = {

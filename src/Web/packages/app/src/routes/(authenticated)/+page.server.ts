@@ -19,7 +19,7 @@ export const load: PageServerLoad = async ({ locals, request, parent }) => {
 	// client-side by the same remote query /tenants uses.
 	if (tenantless) {
 		const landing = resolveSingleTenantLanding(
-			await getAccessibleTenants(apiClient),
+			await getTenantMemberships(apiClient),
 			baseDomain,
 			getOriginalProto(request) + ':',
 			dashboardSlugs
@@ -76,9 +76,12 @@ export const load: PageServerLoad = async ({ locals, request, parent }) => {
  * sole one is called, and the overview aggregates each tenant's latest glucose to answer that.
  * TenantsOverview fetches the aggregate itself once the page renders.
  *
+ * The overview is further narrowed to tenants the current token can read glucose from, which no
+ * field of TenantDto can express, so this list cannot match it.
+ *
  * A failure here must not block the dashboard: it only costs the single-tenant shortcut.
  */
-async function getAccessibleTenants(apiClient: App.Locals['apiClient']) {
+async function getTenantMemberships(apiClient: App.Locals['apiClient']) {
 	try {
 		return await apiClient.myTenants.getMyTenants();
 	} catch (err) {

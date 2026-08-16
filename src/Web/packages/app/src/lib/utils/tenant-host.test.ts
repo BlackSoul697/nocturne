@@ -1,5 +1,9 @@
 import { describe, it, expect } from "vitest";
-import { resolveSingleTenantLanding, tenantUrl } from "./tenant-host";
+import {
+  resolveSingleTenantLanding,
+  resolveTenantSwitcher,
+  tenantUrl,
+} from "./tenant-host";
 
 describe("tenantUrl", () => {
   it("builds a tenant subdomain URL", () => {
@@ -55,13 +59,13 @@ describe("resolveSingleTenantLanding", () => {
   it("ignores tenants with no slug, and counts what remains", () => {
     expect(
       resolveSingleTenantLanding(
-        [{ slug: "alice" }, { slug: null }],
+        [{ slug: "alice" }, {}],
         "example.com",
         "https:"
       )
     ).toBe("https://alice.example.com/");
     expect(
-      resolveSingleTenantLanding([{ slug: null }], "example.com", "https:")
+      resolveSingleTenantLanding([{}], "example.com", "https:")
     ).toBeNull();
   });
 
@@ -89,5 +93,152 @@ describe("resolveSingleTenantLanding", () => {
         "app",
       ])
     ).toBe("https://alice.example.com/");
+  });
+
+  it("does not redirect to a sole tenant that is inactive", () => {
+    expect(
+      resolveSingleTenantLanding(
+        [{ slug: "alice", isActive: false }],
+        "example.com",
+        "https:"
+      )
+    ).toBeNull();
+  });
+
+  it("redirects to the sole active tenant among inactive ones", () => {
+    expect(
+      resolveSingleTenantLanding(
+        [
+          { slug: "alice", isActive: false },
+          { slug: "bob", isActive: true },
+          { slug: "carol", isActive: false },
+        ],
+        "example.com",
+        "https:"
+      )
+    ).toBe("https://bob.example.com/");
+  });
+
+  it("renders the dashboard when every tenant is inactive", () => {
+    expect(
+      resolveSingleTenantLanding(
+        [
+          { slug: "alice", isActive: false },
+          { slug: "bob", isActive: false },
+        ],
+        "example.com",
+        "https:"
+      )
+    ).toBeNull();
+  });
+
+  it("does not redirect when several tenants are active", () => {
+    expect(
+      resolveSingleTenantLanding(
+        [
+          { slug: "alice", isActive: true },
+          { slug: "bob", isActive: true },
+          { slug: "carol", isActive: false },
+        ],
+        "example.com",
+        "https:"
+      )
+    ).toBeNull();
+  });
+
+  it("treats an absent isActive as active", () => {
+    // Every property of the generated TenantDto is optional, and the rest of the app reads this
+    // field as `isActive ?? true`.
+    expect(
+      resolveSingleTenantLanding(
+        [{ slug: "alice", isActive: undefined }],
+        "example.com",
+        "https:"
+      )
+    ).toBe("https://alice.example.com/");
+  });
+});
+
+describe("resolveTenantSwitcher", () => {
+  const alice = { id: "a", slug: "alice", displayName: "Alice" };
+  const bob = { id: "b", slug: "bob", displayName: "Bob" };
+
+  it("offers the other tenants a visitor belongs to", () => {
+    const switcher = resolveTenantSwitcher([alice, bob], "alice");
+
+    expect(switcher.targets).toEqual([
+      { id: "b", slug: "bob", displayName: "Bob" },
+    ]);
+    expect(switcher.totalCount).toBe(2);
+  });
+
+  it("offers every tenant on a tenantless host", () => {
+    const switcher = resolveTenantSwitcher([alice, bob], null);
+
+    expect(switcher.targets.map((t) => t.slug)).toEqual(["alice", "bob"]);
+  });
+
+  it("never offers an inactive tenant as a switch target", () => {
+    const switcher = resolveTenantSwitcher(
+      [
+        { ...alice, isActive: true },
+        { ...bob, isActive: false },
+      ],
+      null
+    );
+
+    expect(switcher.targets.map((t) => t.slug)).toEqual(["alice"]);
+  });
+
+  it("does not count inactive tenants, so one active tenant shows no switcher", () => {
+    // totalCount > 1 is what renders the switcher and the Tenants nav entry.
+    const switcher = resolveTenantSwitcher(
+      [
+        { ...alice, isActive: true },
+        { ...bob, isActive: false },
+      ],
+      "alice"
+    );
+
+    expect(switcher.totalCount).toBe(1);
+    expect(switcher.targets).toEqual([]);
+  });
+
+  it("treats an absent isActive as active", () => {
+    const switcher = resolveTenantSwitcher(
+      [
+        { ...alice, isActive: undefined },
+        { ...bob, isActive: undefined },
+      ],
+      null
+    );
+
+    expect(switcher.targets.map((t) => t.slug)).toEqual(["alice", "bob"]);
+    expect(switcher.totalCount).toBe(2);
+  });
+
+  it("drops tenants with no id or no slug", () => {
+    const switcher = resolveTenantSwitcher(
+      [{ id: "x" }, { slug: "ghost" }, bob],
+      null
+    );
+
+    expect(switcher.targets.map((t) => t.slug)).toEqual(["bob"]);
+  });
+
+  it("has nothing to switch between with no tenants", () => {
+    for (const tenants of [[], null, undefined]) {
+      const switcher = resolveTenantSwitcher(tenants, null);
+      expect(switcher.targets).toEqual([]);
+      expect(switcher.totalCount).toBe(0);
+    }
+  });
+
+  it("carries a missing display name as null", () => {
+    const switcher = resolveTenantSwitcher([{ id: "c", slug: "carol" }], null);
+
+    expect(switcher.targets).toEqual([
+      { id: "c", slug: "carol", displayName: null },
+    ]);
   });
 });

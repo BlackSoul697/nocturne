@@ -4,10 +4,11 @@
  */
 import { getRequestEvent, query } from "$app/server";
 import { error, redirect } from "@sveltejs/kit";
+import { activeTenants } from "$lib/utils/tenant-host";
 
 /**
  * Get the current tenant ID for the authenticated user.
- * Returns the first tenant the user is a member of.
+ * Returns the first tenant the user is a member of and can reach.
  */
 export const getCurrentTenantId = query(async () => {
   const { locals, url } = getRequestEvent();
@@ -19,7 +20,7 @@ export const getCurrentTenantId = query(async () => {
   const apiClient = locals.apiClient;
   try {
     const tenants = await apiClient.myTenants.getMyTenants();
-    return tenants[0]?.id ?? null;
+    return activeTenants(tenants)[0]?.id ?? null;
   } catch (err) {
     const status = (err as any)?.status;
     if (status === 401) {
