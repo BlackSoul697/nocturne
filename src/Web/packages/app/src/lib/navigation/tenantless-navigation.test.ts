@@ -13,10 +13,7 @@ describe("filterTenantlessNav", () => {
     expect(filterTenantlessNav(items)).toEqual([{ title: "Dashboard", href: "/" }]);
   });
 
-  it("drops the settings group, whose pages all need a resolved tenant", () => {
-    // Account and appearance look subject-scoped but call /api/auth/passkey/*, /api/v4/totp/*,
-    // and /api/v4/settings, none of which the API serves without a tenant. Listing them would
-    // put entries in the sidebar that 404 when opened.
+  it("keeps only the subject-scoped pages in the settings group", () => {
     const items = [
       {
         title: "Settings",
@@ -30,7 +27,31 @@ describe("filterTenantlessNav", () => {
       },
     ];
 
-    expect(filterTenantlessNav(items)).toEqual([]);
+    expect(filterTenantlessNav(items)).toEqual([
+      {
+        title: "Settings",
+        children: [
+          { title: "Account", href: "/settings/account" },
+          { title: "Appearance", href: "/settings/appearance" },
+        ],
+      },
+    ]);
+  });
+
+  it("admits the subject's own settings pages as routes", () => {
+    expect(isTenantlessRoute("/settings/appearance")).toBe(true);
+    expect(isTenantlessRoute("/settings/account")).toBe(true);
+  });
+
+  it("keeps the rest of settings off a tenantless host", () => {
+    for (const href of [
+      "/settings",
+      "/settings/members",
+      "/settings/profile",
+      "/settings/trackers",
+    ]) {
+      expect(isTenantlessRoute(href)).toBe(false);
+    }
   });
 
   it("drops a group whose children are all tenant-scoped, leaving no empty heading", () => {
@@ -69,8 +90,6 @@ describe("isTenantlessRoute", () => {
     expect(isTenantlessRoute("/calendar")).toBe(false);
     expect(isTenantlessRoute("/tenants")).toBe(false);
     expect(isTenantlessRoute("/settings/members")).toBe(false);
-    expect(isTenantlessRoute("/settings/account")).toBe(false);
-    expect(isTenantlessRoute("/settings/appearance")).toBe(false);
   });
 
   it("matches whole paths, not prefixes", () => {

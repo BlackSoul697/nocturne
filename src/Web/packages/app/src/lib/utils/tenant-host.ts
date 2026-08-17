@@ -18,6 +18,27 @@ export function tenantUrl(
   return `${protocol}//${slug}.${baseDomain}/`;
 }
 
+/**
+ * The `Domain` attribute scoping a cookie to every host under the base domain, or null where a
+ * browser would reject or discard it: a single-label host, an IP literal, or a `*.localhost` name
+ * (Chromium does not reliably scope cookies across those).
+ *
+ * Mirrors the API's `SessionCookieExtensions.ResolveCookieDomain`. The two must agree, or a
+ * browser holds its preferences at one scope and its session at another.
+ */
+export function resolveCookieDomain(baseDomain: string | null | undefined): string | null {
+  // A value carrying a port is discarded wholesale.
+  const host = (baseDomain ?? "").split(":")[0]!;
+  if (!host) return null;
+  // Any all-numeric dotted form, not just four octets: the API uses IPAddress.TryParse, which
+  // also accepts shorthand such as "10.0.1".
+  if (/^\d+(\.\d+)*$/.test(host)) return null;
+  if (!host.includes(".")) return null;
+  if (host.toLowerCase().endsWith(".localhost")) return null;
+
+  return `.${host}`;
+}
+
 /** A membership as the tenant list returns it. */
 export type TenantListEntry = Pick<
   TenantDto,

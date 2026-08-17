@@ -53,6 +53,8 @@ public class TenantlessDemoSubjectCoverageTests
             ["MyPermissionsController.GetMyPermissions"] = "returns the caller's own global subject-role scopes; tenant-derived scopes are not applied off a tenant",
 
             ["PlatformController.GetTransitionStatus"] = "reports the deployment's multitenancy configuration, not subject state",
+
+            ["UserPreferencesController.GetPreferences"] = "returns the caller's own units and formats, which for the demo subject are the demo account's public display defaults",
         };
 
     [Fact]
