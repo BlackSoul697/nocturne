@@ -1,14 +1,10 @@
-using System.Security.Cryptography;
-using System.Text.Json;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.EntityFrameworkCore;
 using OpenApi.Remote.Attributes;
 using Nocturne.API.Extensions;
 using Nocturne.API.Middleware.Handlers;
-using Nocturne.Connectors.Core.Utilities;
+using Nocturne.API.Services.Auth;
 using Nocturne.Core.Models.Authorization;
 using Nocturne.Infrastructure.Data;
-using Nocturne.Infrastructure.Data.Entities;
 
 namespace Nocturne.API.Controllers.Authentication;
 
@@ -30,34 +26,27 @@ namespace Nocturne.API.Controllers.Authentication;
 /// All mutations are audit-logged through <see cref="IAuthAuditService"/>.
 /// </remarks>
 /// <seealso cref="DirectGrantTokenHandler"/>
-/// <seealso cref="IAuthAuditService"/>
+/// <seealso cref="IDirectGrantService"/>
 /// <seealso cref="OAuthScopes"/>
 [ApiController]
 [Route("api/auth/direct-grants")]
 [Tags("Authentication")]
 public class DirectGrantController : ControllerBase
 {
-    private const string TokenPrefix = "noc_";
-    private const int TokenRandomBytes = 32;
-
     private readonly NocturneDbContext _dbContext;
-    private readonly IAuthAuditService _auditService;
-    private readonly ILogger<DirectGrantController> _logger;
+    private readonly IDirectGrantService _directGrantService;
 
     /// <summary>
     /// Initializes a new instance of the <see cref="DirectGrantController"/> class.
     /// </summary>
     /// <param name="dbContext">The application database context used to read and write grant records.</param>
-    /// <param name="auditService">The audit service for recording token issuance and revocation events.</param>
-    /// <param name="logger">The logger.</param>
+    /// <param name="directGrantService">The service that creates, lists, and revokes direct grants.</param>
     public DirectGrantController(
         NocturneDbContext dbContext,
-        IAuthAuditService auditService,
-        ILogger<DirectGrantController> logger)
+        IDirectGrantService directGrantService)
     {
         _dbContext = dbContext;
-        _auditService = auditService;
-        _logger = logger;
+        _directGrantService = directGrantService;
     }
 
     /// <summary>
@@ -78,70 +67,18 @@ public class DirectGrantController : ControllerBase
             return Problem(detail: "Authentication required", statusCode: 401, title: "Unauthorized");
         }
 
-        if (string.IsNullOrWhiteSpace(request.Label))
+        var result = await _directGrantService.CreateAsync(
+            _dbContext, auth.SubjectId.Value, request.Label, request.Scopes,
+            HttpContext.Connection.RemoteIpAddress?.ToString(),
+            Request.Headers.UserAgent.ToString(),
+            ct: HttpContext.RequestAborted);
+
+        if (result.Error != null)
         {
-            return Problem(detail: "Label is required", statusCode: 400, title: "Bad Request");
+            return Problem(detail: result.Error, statusCode: 400, title: "Bad Request");
         }
 
-        if (request.Scopes == null || request.Scopes.Count == 0)
-        {
-            return Problem(detail: "At least one scope is required", statusCode: 400, title: "Bad Request");
-        }
-
-        var normalizedScopes = OAuthScopes.Normalize(request.Scopes).ToList();
-        if (normalizedScopes.Count == 0)
-        {
-            return Problem(detail: "No valid scopes provided", statusCode: 400, title: "Bad Request");
-        }
-
-        // Generate opaque token
-        var randomBytes = RandomNumberGenerator.GetBytes(TokenRandomBytes);
-        var plaintextToken = TokenPrefix + Base64UrlEncode(randomBytes);
-        var tokenHash = DirectGrantTokenHandler.ComputeSha256Hex(plaintextToken);
-
-        var entity = new OAuthGrantEntity
-        {
-            Id = Guid.CreateVersion7(),
-            ClientEntityId = null,
-            SubjectId = auth.SubjectId.Value,
-            GrantType = OAuthGrantTypes.Direct,
-            Scopes = normalizedScopes,
-            Label = request.Label,
-            TokenHash = tokenHash,
-            // Also store the SHA-1 of the token so uploaders that use the legacy Nightscout
-            // api-secret protocol (Loop, AAPS, Trio, iAPS) — which pre-hash the value with SHA-1
-            // before sending — authenticate with this same token via ApiKeyHandler's legacy path.
-            LegacySecretHash = HashUtils.Sha1Hex(plaintextToken),
-            CreatedAt = DateTime.UtcNow,
-        };
-
-        if (request.ExpiresAt.HasValue)
-        {
-            // Store expiration as part of the grant metadata
-            // Note: Direct grants don't have a built-in expiry field,
-            // but we can track it in the label or via a separate mechanism
-        }
-
-        _dbContext.OAuthGrants.Add(entity);
-        await _dbContext.SaveChangesAsync();
-
-        _logger.LogInformation(
-            "DirectGrantAudit: {Event} grant_id={GrantId} subject_id={SubjectId} scopes={Scopes}",
-            "direct_grant_created", entity.Id, auth.SubjectId.Value, string.Join(" ", normalizedScopes));
-
-        await _auditService.LogAsync(AuthAuditEventType.TokenIssued, auth.SubjectId.Value, success: true,
-            ipAddress: HttpContext.Connection.RemoteIpAddress?.ToString(),
-            userAgent: Request.Headers.UserAgent.ToString(),
-            detailsJson: JsonSerializer.Serialize(new { method = "direct_grant", grant_id = entity.Id }));
-
-        return Ok(new CreateDirectGrantResponse
-        {
-            Id = entity.Id,
-            Token = plaintextToken,
-            Label = entity.Label!,
-            Scopes = normalizedScopes,
-            CreatedAt = entity.CreatedAt,
-        });
+        return Ok(result.Response);
     }
 
     /// <summary>
@@ -161,22 +98,8 @@ public class DirectGrantController : ControllerBase
             return Problem(detail: "Authentication required", statusCode: 401, title: "Unauthorized");
         }
 
-        var grants = await _dbContext.OAuthGrants
-            .AsNoTracking()
-            .Where(g => g.SubjectId == auth.SubjectId.Value
-                     && g.GrantType == OAuthGrantTypes.Direct
-                     && g.RevokedAt == null)
-            .OrderByDescending(g => g.CreatedAt)
-            .Select(g => new DirectGrantDto
-            {
-                Id = g.Id,
-                Label = g.Label ?? string.Empty,
-                Scopes = g.Scopes,
-                CreatedAt = g.CreatedAt,
-                LastUsedAt = g.LastUsedAt,
-                IsLegacy = g.IsMigrated,
-            })
-            .ToListAsync();
+        var grants = await _directGrantService.ListAsync(
+            _dbContext, auth.SubjectId.Value, HttpContext.RequestAborted);
 
         return Ok(grants);
     }
@@ -199,43 +122,18 @@ public class DirectGrantController : ControllerBase
             return Problem(detail: "Authentication required", statusCode: 401, title: "Unauthorized");
         }
 
-        var grant = await _dbContext.OAuthGrants
-            .Where(g => g.Id == id
-                     && g.SubjectId == auth.SubjectId.Value
-                     && g.GrantType == OAuthGrantTypes.Direct)
-            .FirstOrDefaultAsync();
+        var found = await _directGrantService.RevokeAsync(
+            _dbContext, id, auth.SubjectId.Value,
+            HttpContext.Connection.RemoteIpAddress?.ToString(),
+            Request.Headers.UserAgent.ToString(),
+            ct: HttpContext.RequestAborted);
 
-        if (grant == null)
+        if (!found)
         {
             return Problem(detail: "Direct grant not found", statusCode: 404, title: "Not Found");
         }
 
-        if (grant.RevokedAt.HasValue)
-        {
-            return NoContent(); // Already revoked, idempotent
-        }
-
-        grant.RevokedAt = DateTime.UtcNow;
-        await _dbContext.SaveChangesAsync();
-
-        _logger.LogInformation(
-            "DirectGrantAudit: {Event} grant_id={GrantId} subject_id={SubjectId}",
-            "direct_grant_revoked", id, auth.SubjectId.Value);
-
-        await _auditService.LogAsync(AuthAuditEventType.TokenRevoked, auth.SubjectId.Value, success: true,
-            ipAddress: HttpContext.Connection.RemoteIpAddress?.ToString(),
-            userAgent: Request.Headers.UserAgent.ToString(),
-            detailsJson: JsonSerializer.Serialize(new { grant_id = id }));
-
         return NoContent();
-    }
-
-    private static string Base64UrlEncode(byte[] bytes)
-    {
-        return Convert.ToBase64String(bytes)
-            .TrimEnd('=')
-            .Replace('+', '-')
-            .Replace('/', '_');
     }
 }
 
@@ -269,6 +167,7 @@ public class CreateDirectGrantResponse
 public class DirectGrantDto
 {
     public Guid Id { get; set; }
+    public Guid SubjectId { get; set; }
     public string Label { get; set; } = string.Empty;
     public List<string> Scopes { get; set; } = new();
     public DateTime CreatedAt { get; set; }
