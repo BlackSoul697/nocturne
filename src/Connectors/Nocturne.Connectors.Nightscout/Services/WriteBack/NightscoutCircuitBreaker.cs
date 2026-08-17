@@ -6,8 +6,15 @@ namespace Nocturne.Connectors.Nightscout.Services.WriteBack;
 /// to avoid hammering an unavailable Nightscout instance.
 /// Registered as singleton — all fields must be thread-safe.
 /// </summary>
-public class NightscoutCircuitBreaker
+/// <param name="timeProvider">
+/// Clock used for the recovery window. Defaults to <see cref="TimeProvider.System"/>
+/// when not supplied, so DI registration and tests both work unchanged. Nothing
+/// registers a <see cref="TimeProvider"/> in the container today; if something ever
+/// does, this singleton will start resolving it instead of the default.
+/// </param>
+public class NightscoutCircuitBreaker(TimeProvider? timeProvider = null)
 {
+    private readonly TimeProvider _timeProvider = timeProvider ?? TimeProvider.System;
     private long _consecutiveFailures;
     private long _openedAtTicks;
     private const int FailureThreshold = 5;
@@ -15,7 +22,7 @@ public class NightscoutCircuitBreaker
 
     public bool IsOpen =>
         Interlocked.Read(ref _consecutiveFailures) >= FailureThreshold
-        && DateTimeOffset.UtcNow.Ticks - Interlocked.Read(ref _openedAtTicks) < RecoveryTimeout.Ticks;
+        && _timeProvider.GetUtcNow().Ticks - Interlocked.Read(ref _openedAtTicks) < RecoveryTimeout.Ticks;
 
     public void RecordSuccess()
     {
@@ -25,7 +32,7 @@ public class NightscoutCircuitBreaker
 
     public void RecordFailure()
     {
-        Interlocked.Exchange(ref _openedAtTicks, DateTimeOffset.UtcNow.Ticks);
+        Interlocked.Exchange(ref _openedAtTicks, _timeProvider.GetUtcNow().Ticks);
         Interlocked.Increment(ref _consecutiveFailures);
     }
 }

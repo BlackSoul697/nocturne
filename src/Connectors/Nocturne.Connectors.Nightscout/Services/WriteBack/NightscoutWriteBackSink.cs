@@ -54,9 +54,15 @@ public abstract class NightscoutWriteBackSink<T> : IDataEventSink<T>
         if (filtered.Count == 0)
             return;
 
-        for (var i = 0; i < filtered.Count; i += config.WriteBackBatchSize)
+        // WriteBackBatchSize is bound straight from the tenant's configuration row and
+        // its declared minimum of 1 only reaches the UI schema, so a zero or negative
+        // value can arrive here. Either would leave the loop index standing still and
+        // POST at the tenant's Nightscout without end.
+        var batchSize = Math.Max(1, config.WriteBackBatchSize);
+
+        for (var i = 0; i < filtered.Count; i += batchSize)
         {
-            var batch = filtered.Skip(i).Take(config.WriteBackBatchSize).ToList();
+            var batch = filtered.Skip(i).Take(batchSize).ToList();
             await SendAsync(config, HttpMethod.Post, Endpoint, batch, ct);
         }
     }

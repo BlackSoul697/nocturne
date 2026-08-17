@@ -774,9 +774,10 @@ public class PasskeyControllerTests : IDisposable
     [Fact]
     public async Task InviteComplete_WithDuplicateEnrollingSubjects_ResolvesTheNewest()
     {
-        var older = await SeedEnrollingSubjectAsync("invitee");
-        var newest = await SeedEnrollingSubjectAsync("invitee");
-        newest.CompareTo(older).Should().BePositive("UUID v7 ids sort in creation order");
+        var (olderId, newestId) = OrderedIdPair();
+        var older = await SeedEnrollingSubjectAsync("invitee", olderId);
+        var newest = await SeedEnrollingSubjectAsync("invitee", newestId);
+        newest.CompareTo(older).Should().BePositive("the pair must order the same way the query sorts");
         var inviteService = StubValidInvite();
         StubRegistrationChallengeMintedFor(newest);
         _recoveryCodeService.Setup(s => s.GenerateCodesAsync(newest)).ReturnsAsync(["code-1"]);
@@ -972,9 +973,33 @@ public class PasskeyControllerTests : IDisposable
         return subjectId;
     }
 
-    private async Task<Guid> SeedEnrollingSubjectAsync(string username)
+    /// <summary>
+    /// Two ids that sort the same way under every representation the enrolling-subject query might
+    /// order on: <see cref="Guid.CompareTo(Guid)"/>, the SQLite column these tests sort in, and the
+    /// PostgreSQL <c>uuid</c> column production sorts in.
+    /// </summary>
+    /// <remarks>
+    /// A pair of back-to-back <see cref="Guid.CreateVersion7"/> ids does not qualify.
+    /// <c>Guid.CompareTo</c> compares the struct's fields, and the first two are read in
+    /// little-endian order, so it byte-swaps the very timestamp bytes that make v7 sortable — two
+    /// ids minted in the same millisecond then fall back to comparing random bits and order
+    /// arbitrarily. Holding the whole v7 prefix fixed and varying only the trailing byte sidesteps
+    /// that: the tail is the last field in the struct layout and the last byte of the serialized
+    /// form, so every ordering agrees on it. That is exactly the tiebreak
+    /// <c>OrderByDescending(s =&gt; s.Id)</c> resolves.
+    /// </remarks>
+    private static (Guid Older, Guid Newer) OrderedIdPair()
     {
-        var subjectId = Guid.CreateVersion7();
+        var bytes = Guid.CreateVersion7().ToByteArray();
+        bytes[^1] = 0x01;
+        var older = new Guid(bytes);
+        bytes[^1] = 0x02;
+        return (older, new Guid(bytes));
+    }
+
+    private async Task<Guid> SeedEnrollingSubjectAsync(string username, Guid? id = null)
+    {
+        var subjectId = id ?? Guid.CreateVersion7();
         _dbContext.Subjects.Add(new SubjectEntity
         {
             Id = subjectId,
