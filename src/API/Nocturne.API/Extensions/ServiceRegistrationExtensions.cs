@@ -106,6 +106,23 @@ public static class ServiceRegistrationExtensions
         ("oauth-register", 10, TimeSpan.FromHours(1)),
         ("oauth-device-approve", 20, TimeSpan.FromMinutes(1)),
         ("totp-login", 10, TimeSpan.FromMinutes(1)),
+        // The passkey ceremonies. An assertion is phishing-resistant and its challenge is a
+        // stateless Data Protection token, so what these bound is the work each attempt costs —
+        // the credential lookup, the audit row a failure writes, and the crypto the completion
+        // step runs. Two things set the ceilings well above that work: a ceremony spends two
+        // permits (options then complete), and a household or clinic behind one NAT is a single
+        // partition, so the whole family signs in from one bucket.
+        ("passkey-login", 30, TimeSpan.FromMinutes(1)),
+        ("passkey-register", 20, TimeSpan.FromMinutes(1)),
+        // A recovery code is a one-time human-typed secret and the last way back into an account,
+        // so the ceiling has to leave room to mistype ten characters under stress. The window,
+        // not the ceiling, is what makes this an order of magnitude tighter than totp-login: an
+        // authenticator code rotates every 30 seconds, a recovery code does not.
+        ("passkey-recovery", 10, TimeSpan.FromMinutes(10)),
+        // The one anonymous ceremony that writes a row before any credential exists: each start
+        // files a pending subject under a display name not already taken, and nothing else prunes
+        // them.
+        ("passkey-access-request", 5, TimeSpan.FromMinutes(10)),
         ("guest-activate", 5, TimeSpan.FromMinutes(10)),
         // Friction against naive abuse only — this does NOT bound the refresh_tokens table. The
         // real ceiling is DemoSessionLimits.MaxLiveSessions, enforced on the subject id.
