@@ -251,6 +251,67 @@ public class UISettingsServiceTests
     }
 
     [Fact]
+    public async Task SaveSectionAsync_refusesANameNoSectionOwns()
+    {
+        var context = NewContext();
+        var service = NewService(context);
+
+        var save = () => service.SaveSectionAsync("dataQaulity", new DataQualitySettings());
+
+        await save.Should().ThrowAsync<ArgumentException>();
+        StoredRows(context).Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task SaveSectionAsync_acceptsEveryRegisteredSection()
+    {
+        var context = NewContext();
+        var service = NewService(context);
+
+        foreach (var section in UISettingsSections.All)
+        {
+            var save = () =>
+                service.SaveSectionAsync(
+                    section.Name,
+                    Activator.CreateInstance(section.Type)!,
+                    CancellationToken.None
+                );
+
+            await save.Should().NotThrowAsync($"section {section.Name} should be writable");
+        }
+
+        await service.SaveSectionAsync(
+            "DATAQUALITY",
+            new DataQualitySettings
+            {
+                SleepSchedule = new SleepScheduleSettings { BedtimeHour = 1 },
+            }
+        );
+
+        (await service.GetSettingsAsync()).DataQuality.SleepSchedule.BedtimeHour.Should().Be(1);
+    }
+
+    [Theory]
+    [InlineData("alarms")]
+    [InlineData("alarmConfiguration")]
+    [InlineData("AlarmConfiguration")]
+    [InlineData("ALARMS")]
+    public async Task SaveSectionAsync_routesEveryAlarmAliasToTheOwningRow(string alias)
+    {
+        var context = NewContext();
+        var service = NewService(context);
+
+        await service.SaveSectionAsync(alias, AlarmConfiguration("aliased", 123));
+
+        foreach (var config in await EveryAlarmReadPath(service))
+        {
+            config.Profiles.Should().ContainSingle().Which.Threshold.Should().Be(123);
+        }
+
+        StoredRows(context).Select(r => r.Key).Should().Equal([AlarmsKey]);
+    }
+
+    [Fact]
     public async Task SaveAlarmConfigurationAsync_revivesADeactivatedRow()
     {
         var context = NewContext();

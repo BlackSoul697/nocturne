@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using OpenApi.Remote.Attributes;
 using Nocturne.API.Attributes;
+using Nocturne.API.Services.Platform;
 using Nocturne.Connectors.Core.Services;
 using Nocturne.Core.Contracts.Profiles;
 using Nocturne.Core.Models.Authorization;
@@ -36,8 +37,17 @@ public class UISettingsController : ControllerBase, IWriteScopedController
     /// </summary>
     public string WriteScope => OAuthScopes.AlertsReadWrite;
 
+    /// <summary>
+    /// Deadline for the demo service's ui-settings read. The demo service is co-deployed and answers
+    /// this route from memory, so anything slower than a few seconds is a hang, and the demo tenant
+    /// has fixtures to fall back on. The unnamed <see cref="IHttpClientFactory"/> client carries no
+    /// resilience handler, so without a deadline a hung demo service would hold the request open for
+    /// <see cref="HttpClient"/>'s 100-second default.
+    /// </summary>
+    internal static readonly TimeSpan DemoServiceProxyTimeout = TimeSpan.FromSeconds(3);
+
     private readonly ILogger<UISettingsController> _logger;
-    private readonly IConfiguration _configuration;
+    private readonly IDemoModeService _demoMode;
     private readonly IHttpClientFactory _httpClientFactory;
     private readonly IUISettingsService _settingsService;
 
@@ -45,18 +55,18 @@ public class UISettingsController : ControllerBase, IWriteScopedController
     /// Initializes a new instance of <see cref="UISettingsController"/>.
     /// </summary>
     /// <param name="logger">Logger instance.</param>
-    /// <param name="configuration">Application configuration (used for DemoMode settings).</param>
+    /// <param name="demoMode">Owner of whether this deployment is a demo, and of the demo service URL.</param>
     /// <param name="httpClientFactory">Factory for creating HTTP clients to proxy demo service calls.</param>
     /// <param name="settingsService">Service for persisting and retrieving UI settings.</param>
     public UISettingsController(
         ILogger<UISettingsController> logger,
-        IConfiguration configuration,
+        IDemoModeService demoMode,
         IHttpClientFactory httpClientFactory,
         IUISettingsService settingsService
     )
     {
         _logger = logger;
-        _configuration = configuration;
+        _demoMode = demoMode;
         _httpClientFactory = httpClientFactory;
         _settingsService = settingsService;
     }
@@ -81,22 +91,21 @@ public class UISettingsController : ControllerBase, IWriteScopedController
 
         try
         {
-            // Check if demo mode is enabled
-            var demoEnabled = _configuration.GetValue<bool>("DemoMode:Enabled");
-
-            if (demoEnabled)
+            if (_demoMode.IsEnabled)
             {
-                // Try to fetch from demo service
-                var demoServiceUrl = _configuration.GetValue<string>("DemoMode:ServiceUrl");
-
-                if (!string.IsNullOrEmpty(demoServiceUrl))
+                if (_demoMode.IsConfigured)
                 {
                     try
                     {
+                        using var deadline = CancellationTokenSource.CreateLinkedTokenSource(
+                            cancellationToken
+                        );
+                        deadline.CancelAfter(DemoServiceProxyTimeout);
+
                         var httpClient = _httpClientFactory.CreateClient();
                         var response = await httpClient.GetFromJsonAsync<UISettingsConfiguration>(
-                            $"{demoServiceUrl}/ui-settings",
-                            cancellationToken
+                            $"{_demoMode.ServiceUrl?.TrimEnd('/')}/ui-settings",
+                            deadline.Token
                         );
 
                         if (response != null)
@@ -193,9 +202,7 @@ public class UISettingsController : ControllerBase, IWriteScopedController
 
         try
         {
-            // Check if demo mode is enabled - in demo mode, we don't persist
-            var demoEnabled = _configuration.GetValue<bool>("DemoMode:Enabled");
-            if (demoEnabled)
+            if (_demoMode.IsEnabled)
             {
                 _logger.LogWarning(
                     "Attempted to save settings in demo mode - returning input unchanged"
@@ -236,8 +243,7 @@ public class UISettingsController : ControllerBase, IWriteScopedController
 
         try
         {
-            var demoEnabled = _configuration.GetValue<bool>("DemoMode:Enabled");
-            if (demoEnabled)
+            if (_demoMode.IsEnabled)
             {
                 return Ok(settings);
             }
@@ -271,8 +277,7 @@ public class UISettingsController : ControllerBase, IWriteScopedController
 
         try
         {
-            var demoEnabled = _configuration.GetValue<bool>("DemoMode:Enabled");
-            if (demoEnabled)
+            if (_demoMode.IsEnabled)
             {
                 return Ok(GenerateDemoAlarmConfiguration());
             }
@@ -311,8 +316,7 @@ public class UISettingsController : ControllerBase, IWriteScopedController
 
         try
         {
-            var demoEnabled = _configuration.GetValue<bool>("DemoMode:Enabled");
-            if (demoEnabled)
+            if (_demoMode.IsEnabled)
             {
                 return Ok(config);
             }
@@ -351,8 +355,7 @@ public class UISettingsController : ControllerBase, IWriteScopedController
 
         try
         {
-            var demoEnabled = _configuration.GetValue<bool>("DemoMode:Enabled");
-            if (demoEnabled)
+            if (_demoMode.IsEnabled)
             {
                 return Ok(
                     new UserAlarmConfiguration
@@ -418,8 +421,7 @@ public class UISettingsController : ControllerBase, IWriteScopedController
 
         try
         {
-            var demoEnabled = _configuration.GetValue<bool>("DemoMode:Enabled");
-            if (demoEnabled)
+            if (_demoMode.IsEnabled)
             {
                 return Ok(
                     new UserAlarmConfiguration { Profiles = new List<AlarmProfileConfiguration>() }
@@ -639,8 +641,9 @@ public class UISettingsController : ControllerBase, IWriteScopedController
     }
 
     /// <summary>
-    /// The plugin pills the demo tenant shows. <see cref="FeatureSettings.Plugins"/> has no defaults,
-    /// so there is nothing to inherit here.
+    /// Sample <see cref="FeatureSettings.Plugins"/> entries for the demo tenant, mirroring what the
+    /// demo data service serves so the fallback shows the same settings page. These name the legacy
+    /// Nightscout plugins; they do not decide which pills the demo dashboard shows.
     /// </summary>
     private static Dictionary<string, PluginSettings> GenerateDemoPlugins()
     {
