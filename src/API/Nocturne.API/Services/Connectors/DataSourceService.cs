@@ -955,10 +955,9 @@ public class DataSourceService : IDataSourceService
     /// Capability matrix (entity interfaces decide the path):
     /// <list type="bullet">
     /// <item>Glucose and the auditable+soft-deletable records (Bolus, CarbIntake, BolusCalculation,
-    ///   DeviceEvent, BGCheck, Note, ApsSnapshot, TempBasal) take the audited soft-delete path, which stamps the
-    ///   <c>deleted_by_user</c> flag the soft-delete dedup reads to block re-import
+    ///   DeviceEvent, BGCheck, Note, ApsSnapshot, TempBasal, StateSpan) take the audited soft-delete path,
+    ///   which stamps the <c>deleted_by_user</c> flag the soft-delete dedup reads to block re-import
     ///   (<see cref="SoftDeleteDedupExtensions"/>).</item>
-    /// <item>StateSpan is auditable but not soft-deletable, so it takes the audited hard-delete path.</item>
     /// </list>
     /// </remarks>
     private async Task<Dictionary<string, long>> DeleteAllSourceDataAsync(
@@ -990,9 +989,8 @@ public class DataSourceService : IDataSourceService
         var tempBasalsDeleted = await _context.AuditedSoftDeleteAsync(
             _context.TempBasals.FromSource(source), _auditContext, scope, cancellationToken);
 
-        // StateSpan is auditable but not soft-deletable: audited hard delete.
-        var stateSpansDeleted = await _context.AuditedExecuteDeleteAsync(
-            _context.StateSpans.Where(s => s.Source == source), _auditContext, cancellationToken);
+        var stateSpansDeleted = await _context.AuditedSoftDeleteAsync(
+            _context.StateSpans.Where(s => s.Source == source), _auditContext, scope, cancellationToken);
 
         var deletedCounts = new Dictionary<string, long>();
         if (sensorGlucoseDeleted > 0) deletedCounts[nameof(SyncDataType.Glucose)] = sensorGlucoseDeleted;
