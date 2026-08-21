@@ -77,6 +77,24 @@ public class AuthAuditServiceTests : IDisposable
     }
 
     [Fact]
+    public async Task Log_NamesACallerWithBothASubjectAndAGrantByItsSubject()
+    {
+        var row = await LogAndReadAsync(
+            AuthAuditEventType.SubjectDeleted,
+            _subjectId,
+            caller: new AuthContext
+            {
+                IsAuthenticated = true,
+                AuthType = AuthType.ApiKey,
+                SubjectId = _adminSubjectId,
+                TokenId = Guid.NewGuid(),
+            });
+
+        Assert.Equal(_adminSubjectId, row.ActorSubjectId);
+        Assert.Null(row.ActorCredential);
+    }
+
+    [Fact]
     public async Task Log_NamesTheCredentialWhenTheCallerHasNoSubjectOfItsOwn()
     {
         var row = await LogAndReadAsync(
@@ -107,6 +125,31 @@ public class AuthAuditServiceTests : IDisposable
             });
 
         Assert.Equal("InstanceKey:0123456789abcdef", row.ActorCredential);
+        Assert.Null(row.ActorSubjectId);
+    }
+
+    /// <summary>
+    /// A guest session has no subject and no credential fingerprint, so the grant it authenticated
+    /// with is the only thing that tells one guest from another on the logout it writes.
+    /// </summary>
+    [Fact]
+    public async Task Log_NamesTheGrantWhenTheCallerIsAGuestSession()
+    {
+        var grantId = Guid.CreateVersion7();
+
+        var row = await LogAndReadAsync(
+            AuthAuditEventType.Logout,
+            subjectId: null,
+            caller: new AuthContext
+            {
+                IsAuthenticated = true,
+                AuthType = AuthType.Guest,
+                SubjectId = null,
+                ActingAsSubjectId = _subjectId,
+                TokenId = grantId,
+            });
+
+        Assert.Equal($"Guest:{grantId}", row.ActorCredential);
         Assert.Null(row.ActorSubjectId);
     }
 
