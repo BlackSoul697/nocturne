@@ -2,6 +2,7 @@ using System.Globalization;
 using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
+using Nocturne.API.Services.Demo;
 using Nocturne.Connectors.Core.Models;
 using Nocturne.Connectors.Core.Services;
 using Nocturne.Connectors.Core.Utilities;
@@ -12,6 +13,7 @@ using Nocturne.Core.Contracts.V4.Repositories;
 using Nocturne.Core.Models;
 using Nocturne.Core.Models.Services;
 using Nocturne.Infrastructure.Data;
+using Nocturne.Infrastructure.Data.Entities;
 using Nocturne.Infrastructure.Data.Entities.V4;
 using Nocturne.Infrastructure.Data.Extensions;
 
@@ -52,7 +54,11 @@ public class DataSourceService : IDataSourceService
         _logger = logger;
     }
 
-    private record TableStats(long Count, int CountLast24H, DateTime Latest, DateTime? Oldest);
+    /// <param name="Handle">
+    /// Which handle the bucket's key names, or <see langword="null"/> when no contributing table
+    /// could tell.
+    /// </param>
+    private record TableStats(long Count, int CountLast24H, DateTime Latest, DateTime? Oldest, SourceHandle? Handle);
 
     private static void ApplyStatus(DataSourceInfo info, DateTimeOffset now, int activeMinutes, int staleMinutes)
     {
@@ -134,12 +140,28 @@ public class DataSourceService : IDataSourceService
         return result;
     }
 
+    /// <summary>
+    /// Aggregates every non-glucose table a source can produce rows in, bucketed by the source
+    /// identifier the row carries. The bucket key is <c>DataSource ?? Device</c>, the same key the
+    /// discovery merge resolves an entry under, and each bucket records which handle produced it
+    /// (<see cref="SourceHandle"/>) so an entry surfaced from a bucket alone can say so — or records
+    /// that no contributing table could tell.
+    /// </summary>
     private async Task<Dictionary<string, TableStats>> GetNonGlucoseStatsAsync(
         DateTime thirtyDaysAgo, DateTime last24HoursDate, CancellationToken ct)
     {
         var result = new Dictionary<string, TableStats>(StringComparer.OrdinalIgnoreCase);
 
-        void Merge(string? key, long count, int count24h, DateTime latest, DateTime? oldest)
+        // A table that stores the two handles in separate columns can say which one the key came
+        // from; one that stores a single undifferentiated origin cannot, and contributes null so the
+        // bucket keeps whatever evidence the other tables carry. Only a row bearing an actual
+        // DataSource column value proves the key is a data source, so that answer wins over Device.
+        static SourceHandle? CombineHandles(SourceHandle? left, SourceHandle? right) =>
+            left == SourceHandle.DataSource || right == SourceHandle.DataSource
+                ? SourceHandle.DataSource
+                : left ?? right;
+
+        void Merge(string? key, long count, int count24h, DateTime latest, DateTime? oldest, SourceHandle? handle)
         {
             if (string.IsNullOrEmpty(key) || count == 0) return;
             if (result.TryGetValue(key, out var existing))
@@ -149,62 +171,65 @@ public class DataSourceService : IDataSourceService
                     existing.CountLast24H + count24h,
                     latest > existing.Latest ? latest : existing.Latest,
                     oldest.HasValue && (!existing.Oldest.HasValue || oldest.Value < existing.Oldest.Value)
-                        ? oldest : existing.Oldest);
+                        ? oldest : existing.Oldest,
+                    CombineHandles(existing.Handle, handle));
             }
             else
             {
-                result[key] = new TableStats(count, count24h, latest, oldest);
+                result[key] = new TableStats(count, count24h, latest, oldest, handle);
             }
         }
 
-        var mgStats = await _context.MeterGlucose
-            .Where(mg => mg.Timestamp >= thirtyDaysAgo)
-            .GroupBy(mg => mg.DataSource ?? mg.Device)
-            .Select(g => new { Key = g.Key, Count = g.LongCount(), Count24H = g.Count(x => x.Timestamp >= last24HoursDate), Latest = g.Max(x => x.Timestamp), Oldest = (DateTime?)g.Min(x => x.Timestamp) })
-            .ToListAsync(ct);
-        foreach (var s in mgStats) Merge(s.Key, s.Count, s.Count24H, s.Latest, s.Oldest);
+        static SourceHandle HandleOf(bool fromDataSource) =>
+            fromDataSource ? SourceHandle.DataSource : SourceHandle.Device;
 
-        var bolusStats = await _context.Boluses
-            .Where(b => b.Timestamp >= thirtyDaysAgo)
-            .GroupBy(b => b.DataSource ?? b.Device)
-            .Select(g => new { Key = g.Key, Count = g.LongCount(), Count24H = g.Count(x => x.Timestamp >= last24HoursDate), Latest = g.Max(x => x.Timestamp), Oldest = (DateTime?)g.Min(x => x.Timestamp) })
-            .ToListAsync(ct);
-        foreach (var s in bolusStats) Merge(s.Key, s.Count, s.Count24H, s.Latest, s.Oldest);
+        async Task MergeTimeSeriesAsync<TEntity>() where TEntity : class, IV4TimeSeriesEntity
+        {
+            var stats = await _context.Set<TEntity>()
+                .Where(e => e.Timestamp >= thirtyDaysAgo)
+                .GroupBy(e => e.DataSource ?? e.Device)
+                .Select(g => new
+                {
+                    Key = g.Key,
+                    FromDataSource = g.Max(x => x.DataSource) != null,
+                    Count = g.LongCount(),
+                    Count24H = g.Count(x => x.Timestamp >= last24HoursDate),
+                    Latest = g.Max(x => x.Timestamp),
+                    Oldest = (DateTime?)g.Min(x => x.Timestamp),
+                })
+                .ToListAsync(ct);
 
-        var carbStats = await _context.CarbIntakes
-            .Where(c => c.Timestamp >= thirtyDaysAgo)
-            .GroupBy(c => c.DataSource ?? c.Device)
-            .Select(g => new { Key = g.Key, Count = g.LongCount(), Count24H = g.Count(x => x.Timestamp >= last24HoursDate), Latest = g.Max(x => x.Timestamp), Oldest = (DateTime?)g.Min(x => x.Timestamp) })
-            .ToListAsync(ct);
-        foreach (var s in carbStats) Merge(s.Key, s.Count, s.Count24H, s.Latest, s.Oldest);
+            foreach (var s in stats)
+                Merge(s.Key, s.Count, s.Count24H, s.Latest, s.Oldest, HandleOf(s.FromDataSource));
+        }
 
-        var bgStats = await _context.BGChecks
-            .Where(b => b.Timestamp >= thirtyDaysAgo)
-            .GroupBy(b => b.DataSource ?? b.Device)
-            .Select(g => new { Key = g.Key, Count = g.LongCount(), Count24H = g.Count(x => x.Timestamp >= last24HoursDate), Latest = g.Max(x => x.Timestamp), Oldest = (DateTime?)g.Min(x => x.Timestamp) })
-            .ToListAsync(ct);
-        foreach (var s in bgStats) Merge(s.Key, s.Count, s.Count24H, s.Latest, s.Oldest);
+        await MergeTimeSeriesAsync<MeterGlucoseEntity>();
+        await MergeTimeSeriesAsync<BolusEntity>();
+        await MergeTimeSeriesAsync<CarbIntakeEntity>();
+        await MergeTimeSeriesAsync<BGCheckEntity>();
+        await MergeTimeSeriesAsync<NoteEntity>();
+        await MergeTimeSeriesAsync<DeviceEventEntity>();
+        await MergeTimeSeriesAsync<BolusCalculationEntity>();
+        await MergeTimeSeriesAsync<ApsSnapshotEntity>();
 
-        var noteStats = await _context.Notes
-            .Where(n => n.Timestamp >= thirtyDaysAgo)
-            .GroupBy(n => n.DataSource ?? n.Device)
-            .Select(g => new { Key = g.Key, Count = g.LongCount(), Count24H = g.Count(x => x.Timestamp >= last24HoursDate), Latest = g.Max(x => x.Timestamp), Oldest = (DateTime?)g.Min(x => x.Timestamp) })
+        // TempBasal is span-shaped, so it keys on StartTimestamp and stays off IV4TimeSeriesEntity.
+        var tbStats = await _context.TempBasals
+            .Where(t => t.StartTimestamp >= thirtyDaysAgo)
+            .GroupBy(t => t.DataSource ?? t.Device)
+            .Select(g => new { Key = g.Key, FromDataSource = g.Max(x => x.DataSource) != null, Count = g.LongCount(), Count24H = g.Count(x => x.StartTimestamp >= last24HoursDate), Latest = g.Max(x => x.StartTimestamp), Oldest = (DateTime?)g.Min(x => x.StartTimestamp) })
             .ToListAsync(ct);
-        foreach (var s in noteStats) Merge(s.Key, s.Count, s.Count24H, s.Latest, s.Oldest);
+        foreach (var s in tbStats) Merge(s.Key, s.Count, s.Count24H, s.Latest, s.Oldest, HandleOf(s.FromDataSource));
 
-        var deStats = await _context.DeviceEvents
-            .Where(de => de.Timestamp >= thirtyDaysAgo)
-            .GroupBy(de => de.DataSource ?? de.Device)
-            .Select(g => new { Key = g.Key, Count = g.LongCount(), Count24H = g.Count(x => x.Timestamp >= last24HoursDate), Latest = g.Max(x => x.Timestamp), Oldest = (DateTime?)g.Min(x => x.Timestamp) })
-            .ToListAsync(ct);
-        foreach (var s in deStats) Merge(s.Key, s.Count, s.Count24H, s.Latest, s.Oldest);
-
+        // StateSpan records one undifferentiated origin: its writers populate Source from the
+        // reported device string (DeviceStatusDecomposer) or from the row's data source, falling back
+        // to the entering party (TreatmentDecomposer). It therefore names neither handle in
+        // particular and contributes no evidence about which one its bucket's key is.
         var ssStats = await _context.StateSpans
             .Where(s => s.StartTimestamp >= thirtyDaysAgo)
             .GroupBy(s => s.Source)
             .Select(g => new { Key = g.Key, Count = g.LongCount(), Count24H = g.Count(x => x.StartTimestamp >= last24HoursDate), Latest = g.Max(x => x.StartTimestamp), Oldest = (DateTime?)g.Min(x => x.StartTimestamp) })
             .ToListAsync(ct);
-        foreach (var s in ssStats) Merge(s.Key, s.Count, s.Count24H, s.Latest, s.Oldest);
+        foreach (var s in ssStats) Merge(s.Key, s.Count, s.Count24H, s.Latest, s.Oldest, null);
 
         return result;
     }
@@ -234,6 +259,10 @@ public class DataSourceService : IDataSourceService
                 TotalCount = g.LongCount(),
                 Last24HCount = g.Count(e => e.Timestamp >= last24HoursDate),
             })
+            // Sibling devices sharing a data source both resolve to its single non-glucose bucket,
+            // and only the first of them claims it. Ordering by the group key makes which one that is
+            // the same on every refresh instead of whatever the grouping happened to return.
+            .OrderBy(d => d.Device)
             .ToListAsync(cancellationToken);
 
         // Also check APS snapshots for devices that might not have entries. Discovery keys on Device,
@@ -245,7 +274,12 @@ public class DataSourceService : IDataSourceService
                 ds.Timestamp >= thirtyDaysAgoDate && ds.Device != null && ds.Device != ""
             )
             .GroupBy(ds => ds.Device)
-            .Select(g => new { Device = g.Key!, LastMills = new DateTimeOffset(g.Max(ds => ds.Timestamp), TimeSpan.Zero).ToUnixTimeMilliseconds() })
+            .Select(g => new
+            {
+                Device = g.Key!,
+                DataSource = g.Max(ds => ds.DataSource),
+                LastMills = new DateTimeOffset(g.Max(ds => ds.Timestamp), TimeSpan.Zero).ToUnixTimeMilliseconds(),
+            })
             .ToListAsync(cancellationToken);
 
         // Batch-aggregate non-glucose tables
@@ -261,9 +295,39 @@ public class DataSourceService : IDataSourceService
         var dataSources = new List<DataSourceInfo>();
         var processedNonGlucoseKeys = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
+        // A bucket is consumed by exactly one entry, or by none and surfaced as its own entry below.
+        // An entry claims the bucket its own key names first; the Device-field fallback may then take
+        // only a bucket no entry claims that way, which is the same entry the leftover loop would
+        // have built for it. Without that exclusivity a bucket reachable from two entries is added
+        // to both and any consumer summing the list double-counts it.
+        var primaryKeys = new HashSet<string>(
+            entryDevices.Select(d => d.DataSource ?? d.Device), StringComparer.OrdinalIgnoreCase);
+
+        TableStats? Claim(string key) =>
+            nonGlucoseStats.TryGetValue(key, out var stats) && processedNonGlucoseKeys.Add(key)
+                ? stats
+                : null;
+
+        static void MergeStats(DataSourceInfo info, TableStats stats)
+        {
+            info.TotalEntries += stats.Count;
+            info.EntriesLast24Hours += stats.CountLast24H;
+
+            var latest = new DateTimeOffset(stats.Latest, TimeSpan.Zero);
+            if (latest > info.LastSeen)
+                info.LastSeen = latest;
+
+            if (stats.Oldest.HasValue)
+            {
+                var oldest = new DateTimeOffset(stats.Oldest.Value, TimeSpan.Zero);
+                if (!info.FirstSeen.HasValue || oldest < info.FirstSeen)
+                    info.FirstSeen = oldest;
+            }
+        }
+
         foreach (var device in entryDevices)
         {
-            var info = CreateDataSourceInfo(device.Device, device.DataSource);
+            var info = CreateDataSourceInfo(device.Device, device.DataSource, SourceHandle.Device);
             info.LastSeen = new DateTimeOffset(device.LastTimestamp, TimeSpan.Zero);
             info.FirstSeen = new DateTimeOffset(device.FirstTimestamp, TimeSpan.Zero);
             info.TotalEntries = device.TotalCount;
@@ -291,37 +355,14 @@ public class DataSourceService : IDataSourceService
 
             // Merge non-glucose stats
             var mergeKey = device.DataSource ?? device.Device;
-            if (nonGlucoseStats.TryGetValue(mergeKey, out var ngStats))
-            {
-                info.TotalEntries += ngStats.Count;
-                info.EntriesLast24Hours += ngStats.CountLast24H;
-                var ngLastSeen = new DateTimeOffset(ngStats.Latest, TimeSpan.Zero);
-                if (ngLastSeen > info.LastSeen)
-                    info.LastSeen = ngLastSeen;
-                if (ngStats.Oldest.HasValue)
-                {
-                    var ngFirstSeen = new DateTimeOffset(ngStats.Oldest.Value, TimeSpan.Zero);
-                    if (!info.FirstSeen.HasValue || ngFirstSeen < info.FirstSeen)
-                        info.FirstSeen = ngFirstSeen;
-                }
-                processedNonGlucoseKeys.Add(mergeKey);
-            }
+            if (Claim(mergeKey) is { } ngStats)
+                MergeStats(info, ngStats);
+
             // Also try matching by Device field
-            if (mergeKey != device.Device && nonGlucoseStats.TryGetValue(device.Device, out var ngDeviceStats))
-            {
-                info.TotalEntries += ngDeviceStats.Count;
-                info.EntriesLast24Hours += ngDeviceStats.CountLast24H;
-                var ngLastSeen = new DateTimeOffset(ngDeviceStats.Latest, TimeSpan.Zero);
-                if (ngLastSeen > info.LastSeen)
-                    info.LastSeen = ngLastSeen;
-                if (ngDeviceStats.Oldest.HasValue)
-                {
-                    var ngFirstSeen = new DateTimeOffset(ngDeviceStats.Oldest.Value, TimeSpan.Zero);
-                    if (!info.FirstSeen.HasValue || ngFirstSeen < info.FirstSeen)
-                        info.FirstSeen = ngFirstSeen;
-                }
-                processedNonGlucoseKeys.Add(device.Device);
-            }
+            if (mergeKey != device.Device
+                && !primaryKeys.Contains(device.Device)
+                && Claim(device.Device) is { } ngDeviceStats)
+                MergeStats(info, ngDeviceStats);
 
             // Apply status with resolved thresholds
             var (activeMinutes, staleMinutes) = ResolveThresholds(connectorKey, thresholdOverrides);
@@ -335,22 +376,15 @@ public class DataSourceService : IDataSourceService
         {
             if (!dataSources.Any(d => d.DeviceId == dsDevice.Device))
             {
-                var info = CreateDataSourceInfo(dsDevice.Device, null);
+                var info = CreateDataSourceInfo(dsDevice.Device, dsDevice.DataSource, SourceHandle.Device);
                 info.LastSeen = DateTimeOffset.FromUnixTimeMilliseconds(dsDevice.LastMills);
                 info.FirstSeen = info.LastSeen;
                 info.TotalEntries = 0;
                 info.EntriesLast24Hours = 0;
 
                 // Merge non-glucose stats if available
-                if (nonGlucoseStats.TryGetValue(dsDevice.Device, out var ngStats))
-                {
-                    info.TotalEntries = ngStats.Count;
-                    info.EntriesLast24Hours = ngStats.CountLast24H;
-                    var ngLastSeen = new DateTimeOffset(ngStats.Latest, TimeSpan.Zero);
-                    if (ngLastSeen > info.LastSeen)
-                        info.LastSeen = ngLastSeen;
-                    processedNonGlucoseKeys.Add(dsDevice.Device);
-                }
+                if (Claim(dsDevice.Device) is { } ngStats)
+                    MergeStats(info, ngStats);
 
                 var (activeMinutes, staleMinutes) = ResolveThresholds(dsDevice.Device, thresholdOverrides);
                 ApplyStatus(info, now, activeMinutes, staleMinutes);
@@ -364,7 +398,7 @@ public class DataSourceService : IDataSourceService
         {
             if (processedNonGlucoseKeys.Contains(key)) continue;
 
-            var info = CreateDataSourceInfo(key, key);
+            var info = CreateDataSourceInfo(key, key, stats.Handle ?? SourceHandle.Unknown);
             info.LastSeen = new DateTimeOffset(stats.Latest, TimeSpan.Zero);
             info.FirstSeen = stats.Oldest.HasValue ? new DateTimeOffset(stats.Oldest.Value, TimeSpan.Zero) : info.LastSeen;
             info.TotalEntries = stats.Count;
@@ -600,9 +634,14 @@ public class DataSourceService : IDataSourceService
     /// <summary>
     /// Create a DataSourceInfo from a device identifier
     /// </summary>
-    private DataSourceInfo CreateDataSourceInfo(string deviceId, string? dataSource)
+    private DataSourceInfo CreateDataSourceInfo(string deviceId, string? dataSource, SourceHandle handle)
     {
-        var info = new DataSourceInfo { Id = GenerateId(deviceId), DeviceId = deviceId };
+        var info = new DataSourceInfo
+        {
+            Id = GenerateId(deviceId),
+            DeviceId = deviceId,
+            DeviceIdHandle = handle,
+        };
 
         // Parse device identifier to determine type
         var lowerDevice = deviceId.ToLowerInvariant();
@@ -1055,21 +1094,9 @@ public class DataSourceService : IDataSourceService
 
         try
         {
-            var glucoseDeleted = await DeleteGlucoseDataBySourceAsync(
-                DataSources.DemoService,
-                cancellationToken
-            );
-
-            var treatmentsDeleted = await _context.Boluses.PurgeAsync(SourceFilter.For<BolusEntity>(DataSources.DemoService), cancellationToken);
-            treatmentsDeleted += await _context.CarbIntakes.PurgeAsync(SourceFilter.For<CarbIntakeEntity>(DataSources.DemoService), cancellationToken);
-            treatmentsDeleted += await _context.BGChecks.PurgeAsync(SourceFilter.For<BGCheckEntity>(DataSources.DemoService), cancellationToken);
-            treatmentsDeleted += await _context.Notes.PurgeAsync(SourceFilter.For<NoteEntity>(DataSources.DemoService), cancellationToken);
-            treatmentsDeleted += await _context.DeviceEvents.PurgeAsync(SourceFilter.For<DeviceEventEntity>(DataSources.DemoService), cancellationToken);
-            treatmentsDeleted += await _context.BolusCalculations.PurgeAsync(SourceFilter.For<BolusCalculationEntity>(DataSources.DemoService), cancellationToken);
-            treatmentsDeleted += await _context.TempBasals.PurgeAsync(SourceFilter.For<TempBasalEntity>(DataSources.DemoService), cancellationToken);
-            treatmentsDeleted += await _context.StateSpans.PurgeAsync(s => s.Source == DataSources.DemoService, cancellationToken);
-
-            var deviceStatusDeleted = await _context.ApsSnapshots.PurgeAsync(SourceFilter.For<ApsSnapshotEntity>(DataSources.DemoService), cancellationToken);
+            var glucoseDeleted = await DemoDataPurge.PurgeEntriesAsync(_context, cancellationToken);
+            var treatmentsDeleted = await DemoDataPurge.PurgeTreatmentsAsync(_context, cancellationToken);
+            var deviceStatusDeleted = await DemoDataPurge.PurgeDeviceStatusAsync(_context, cancellationToken);
 
             var deletedCounts = new Dictionary<string, long>();
             if (glucoseDeleted > 0) deletedCounts[nameof(SyncDataType.Glucose)] = glucoseDeleted;
@@ -1336,18 +1363,5 @@ public class DataSourceService : IDataSourceService
             await _context.BolusCalculations.AsNoTracking().FromSource(dataSource).OrderBy(b => b.Timestamp).Select(b => (DateTime?)b.Timestamp).FirstOrDefaultAsync(cancellationToken),
         };
         return timestamps.Where(t => t.HasValue).Select(t => t!.Value).DefaultIfEmpty().Min() is var min && min == default ? null : min;
-    }
-
-    /// <inheritdoc />
-    public async Task<long> DeleteGlucoseDataBySourceAsync(
-        string dataSource,
-        CancellationToken cancellationToken = default
-    )
-    {
-        var sgDeleted = await _sensorGlucose.DeleteBySourceAsync(dataSource, cancellationToken);
-        var mgDeleted = await _meterGlucose.DeleteBySourceAsync(dataSource, cancellationToken);
-        var calDeleted = await _calibrations.DeleteBySourceAsync(dataSource, cancellationToken);
-
-        return sgDeleted + mgDeleted + calDeleted;
     }
 }
