@@ -98,20 +98,12 @@ public class CareLinkConnectorService : BaseConnectorService<CareLinkConnectorCo
 
         // Authenticate with per-tenant config
         if (!await AuthenticateWithConfigAsync(config))
-        {
-            result.Success = false;
-            result.Errors.Add("Authentication failed");
-            result.EndTime = DateTimeOffset.UtcNow;
-            return result;
-        }
+            return AuthenticationFailedResult();
 
         if (string.IsNullOrEmpty(_accessToken))
         {
             _logger.LogError("[{ConnectorSource}] No access token available — authentication must succeed before sync", ConnectorSource);
-            result.Success = false;
-            result.Errors.Add("Authentication failed");
-            result.EndTime = DateTimeOffset.UtcNow;
-            return result;
+            return AuthenticationFailedResult();
         }
 
         var userInfo = await FetchUserInfoAsync(config, cancellationToken);
@@ -265,7 +257,7 @@ public class CareLinkConnectorService : BaseConnectorService<CareLinkConnectorCo
                 if (!success)
                 {
                     result.Success = false;
-                    result.Errors.Add("SensorGlucose publish failed");
+                    result.Errors.Add($"{SyncDataType.Glucose} publish failed");
                 }
                 else
                 {
@@ -360,7 +352,7 @@ public class CareLinkConnectorService : BaseConnectorService<CareLinkConnectorCo
                 if (systemEvent != null
                     && await PublishRecordTypeAsync(result, SyncDataType.DeviceEvents, enabledTypes,
                         [systemEvent], PublishSystemEventDataAsync, config, cancellationToken,
-                        context: "the last alarm"))
+                        context: "from the last alarm"))
                     _lastAlarmKey = alarmKey;
             }
         }
@@ -407,7 +399,7 @@ public class CareLinkConnectorService : BaseConnectorService<CareLinkConnectorCo
             await PublishRecordTypeAsync(result, SyncDataType.DeviceEvents, enabledTypes,
                 CareLinkSystemEventMapper.MapNotifications(data.NotificationHistory, pumpOffsetMs),
                 PublishSystemEventDataAsync, config, cancellationToken,
-                context: "notification history");
+                context: "from notification history");
         }
         catch (OperationCanceledException) { throw; }
         catch (HttpRequestException ex)

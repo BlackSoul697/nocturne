@@ -92,7 +92,40 @@ public abstract class BaseConnectorService<TConfig> : IConnectorService<TConfig>
         return await RunWithProgressAsync(
             progressReporter,
             cancellationToken,
-            () => PerformSyncInternalAsync(request, config, cancellationToken));
+            async () => await EnsureAuthenticatedAsync(config, cancellationToken)
+                ? await PerformSyncInternalAsync(request, config, cancellationToken)
+                : AuthenticationFailedResult());
+    }
+
+    /// <summary>
+    ///     Hand-shake run before <see cref="PerformSyncInternalAsync"/> on the requested-range entry
+    ///     point. Connectors that must authenticate before they can fetch override this instead of the
+    ///     <see cref="SyncRequest"/> overload, so a rejected credential still passes through
+    ///     <see cref="RunWithProgressAsync"/> and produces the run's one terminal progress message.
+    ///     The background entry point authenticates through <see cref="AuthenticateAsync"/> in
+    ///     <see cref="RunBackgroundSyncAsync"/> and never reaches this overload, so a connector
+    ///     overriding both is not authenticated twice for one run.
+    /// </summary>
+    protected virtual Task<bool> EnsureAuthenticatedAsync(
+        TConfig config,
+        CancellationToken cancellationToken) => Task.FromResult(true);
+
+    /// <summary>
+    ///     The result of a run that never got past authentication. Carries the detail in
+    ///     <see cref="SyncResult.Errors"/> and the summary in <see cref="SyncResult.Message"/>
+    ///     because the terminal progress message reads the former and the tenant's sync card the latter.
+    /// </summary>
+    protected SyncResult AuthenticationFailedResult()
+    {
+        var now = DateTimeOffset.UtcNow;
+        return new SyncResult
+        {
+            Success = false,
+            StartTime = now,
+            EndTime = now,
+            Message = "Authentication failed",
+            Errors = { $"Authentication failed for {ConnectorSource}" },
+        };
     }
 
     /// <summary>
@@ -655,6 +688,10 @@ public abstract class BaseConnectorService<TConfig> : IConnectorService<TConfig>
     ///     publishes a batch of records, updates the <see cref="SyncResult"/> counts, and logs the
     ///     outcome.
     /// </summary>
+    /// <param name="context">
+    ///     Detail about this batch — where it came from, or what it held — appended to the success log
+    ///     in parentheses.
+    /// </param>
     /// <returns>
     ///     Whether the batch reached the tenant. An inactive type, an empty batch and a rejected
     ///     publish are alike <c>false</c>: no record was accepted in any of them.
@@ -669,7 +706,16 @@ public abstract class BaseConnectorService<TConfig> : IConnectorService<TConfig>
         CancellationToken cancellationToken,
         string? context = null) where T : class
     {
-        if (!activeTypes.Contains(dataType) || records.Count == 0) return false;
+        if (!activeTypes.Contains(dataType)) return false;
+
+        if (records.Count == 0)
+        {
+            // An active type the sync did look at reports an explicit zero: the tenant's sync card
+            // renders a badge per key, so a missing key reads as "never checked" rather than
+            // "checked, found nothing". TryAdd so a later empty page cannot erase an earlier count.
+            result.ItemsSynced.TryAdd(dataType, 0);
+            return false;
+        }
 
         await ReportSyncMessageAsync(SyncMessageType.PublishingDataType,
             new() { ["count"] = records.Count.ToString(), ["dataType"] = dataType.ToString() },
@@ -685,9 +731,8 @@ public abstract class BaseConnectorService<TConfig> : IConnectorService<TConfig>
         }
         else
         {
-            var ctx = context != null ? $" from {context}" : "";
-            _logger.LogInformation("Synced {Count} {Type} records{Context}",
-                records.Count, dataType, ctx);
+            _logger.LogInformation("[{ConnectorSource}] Synced {Count} {Type} records{Context}",
+                ConnectorSource, records.Count, dataType, context != null ? $" ({context})" : "");
         }
 
         return success;
@@ -1049,13 +1094,7 @@ public abstract class BaseConnectorService<TConfig> : IConnectorService<TConfig>
             if (!await AuthenticateAsync())
             {
                 _logger.LogError("Authentication failed for {ConnectorSource}", ConnectorSource);
-                return new SyncResult
-                {
-                    Success = false,
-                    StartTime = DateTimeOffset.UtcNow,
-                    EndTime = DateTimeOffset.UtcNow,
-                    Errors = { $"Authentication failed for {ConnectorSource}" }
-                };
+                return AuthenticationFailedResult();
             }
 
             // Determine catch-up timestamp
