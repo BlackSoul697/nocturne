@@ -133,6 +133,59 @@ Domain models use **mills-first** timestamps. `Entry.Mills` (Unix milliseconds) 
 - UUID v7 for new records; `OriginalId` preserved for MongoDB migration compatibility
 - Row Level Security for multitenancy
 
+### Unique indexes over existing data
+
+Migrations run on API startup, so a `CREATE UNIQUE INDEX` (or `unique: true`
+`CreateIndex`, or an added unique constraint) that trips over rows the database
+already holds fails the whole chain and crash-loops the API — with no
+self-service way out for a self-hosted instance. The instances most likely to
+carry pre-index duplicates are the ones upgrading across several versions.
+
+**Every unique index over a table the migration did not create in that same
+migration ships with a loser-cleanup step earlier in the same `Up`.** Soft-delete
+(or delete) all but the winner of each duplicate key first;
+`20260818102940_AddTenantScopedLegacyIdIndexesToSnapshots` is the worked example,
+including the per-tenant `set_config` loop that FORCE ROW LEVEL SECURITY requires.
+A table created in the same migration is exempt — it holds no rows yet, and a
+cleanup there would be dead code.
+
+`UniqueIndexDeduplicationGuardTests` is a backstop for this rule, not the rule.
+Know what it actually checks before trusting it:
+
+- **Presence and ordering per migration, not per index.** It wants one live
+  duplicate-ranking statement somewhere in `Up` ahead of the *first* unique index
+  over a table the migration did not create. A single cleanup — even one for an
+  unrelated table — clears every index in that migration. It runs no SQL and
+  proves nothing about correctness.
+- **Only the house idiom is recognised**: `row_number() OVER (PARTITION BY …)`
+  plus a soft delete or a delete. A correct cleanup written another way is a false
+  red. Widen the migration to the idiom, not the guard to the migration.
+- **Shapes it cannot see**, which review has to catch: `CREATE TABLE IF NOT
+  EXISTS` naming a table that already exists, which spoofs the new-table
+  exemption; an unnamed `CREATE UNIQUE INDEX ON …`; a primary key added by raw SQL
+  `ADD CONSTRAINT … PRIMARY KEY`, since only the `AddPrimaryKey` builder call is
+  matched — the rule above is deliberately broader than the guard; and a cleanup
+  that cannot run, e.g. wrapped in `IF false`.
+- **Three of its detection paths redden nothing if they break.** Raw-SQL
+  `CREATE UNIQUE INDEX` does fire on a shipped migration —
+  `20260424051736_AddReadAccessAudit` — but that migration is *exempt*, because it
+  creates the table in the same `Up`, so breaking the regex still leaves the suite
+  green. That migration's exact spacing is load-bearing for a regex nothing tests.
+  `AddUniqueConstraint`/`AddPrimaryKey` and `ALTER TABLE … ADD CONSTRAINT … UNIQUE`
+  have no live example at all. Treat all three as unexercised.
+
+An index whose table it cannot read off the call — an interpolated `{table}` hole,
+or a loop variable — is reported rather than skipped, so the multi-table loop the
+worked example is written in stays visible. Clearing that report means unrolling
+the loop so both the `CREATE TABLE` and the index name the table literally; naming
+only the index still reports, because the exemption cannot match a create it also
+cannot read. A schema qualifier is not a cause — `public.x` resolves to `x` on
+both sides, so a schema-qualified new table is exempted like any other.
+
+Older migrations that predate the rule are listed in the guard by name; an
+instance whose chain fails on one never reaches a later migration, so nothing can
+repair them and nothing may be added to that list.
+
 ### Row Level Security
 
 Tenant-scoped tables enforce isolation via PostgreSQL Row Level Security.

@@ -36,24 +36,15 @@ public class DataMigrationTenantContextGuardTests
         @"FOR\s+\w+\s+IN\s+SELECT\s+(?:(?!\bFROM\b).)*?\s+FROM\s+(\S+)",
         RegexOptions.IgnoreCase | RegexOptions.Singleline | RegexOptions.Compiled);
 
+    private static readonly IReadOnlySet<string> ScopedTables = MigrationSourceFiles.TenantScopedTableNames();
+
     [Fact]
     public void NoDataMigrationDrivesItsTenantLoopOffATenantScopedTable()
     {
-        var scoped = MigrationSourceFiles.TenantScopedTableNames();
-        var offenders = new List<string>();
-
-        foreach (var file in MigrationSourceFiles.All())
-        {
-            var migration = Path.GetFileNameWithoutExtension(file);
-
-            foreach (System.Text.RegularExpressions.Match match in LoopHeader.Matches(File.ReadAllText(file)))
-            {
-                var source = LoopSourceTable(match.Groups[1].Value);
-
-                if (scoped.Contains(source) && !KnownNoOpMigrations.Contains(migration))
-                    offenders.Add($"{migration} -> FROM {source}");
-            }
-        }
+        var offenders = MigrationSourceFiles.All()
+            .Where(f => !KnownNoOpMigrations.Contains(MigrationSourceFiles.Name(f)))
+            .SelectMany(f => ScopedLoopSources(f).Select(t => $"{MigrationSourceFiles.Name(f)} -> FROM {t}"))
+            .ToList();
 
         offenders.Should().BeEmpty(
             "a tenant loop must be driven off the tenants table; reading its bounds from a "
@@ -72,13 +63,10 @@ public class DataMigrationTenantContextGuardTests
     [Fact]
     public void EveryAllowlistedMigrationStillExistsAndStillOffends()
     {
-        var scoped = MigrationSourceFiles.TenantScopedTableNames();
-
         var stillOffending = MigrationSourceFiles.All()
-            .Where(f => KnownNoOpMigrations.Contains(Path.GetFileNameWithoutExtension(f)))
-            .Where(f => LoopHeader.Matches(File.ReadAllText(f))
-                .Any(m => scoped.Contains(LoopSourceTable(m.Groups[1].Value))))
-            .Select(Path.GetFileNameWithoutExtension)
+            .Where(f => KnownNoOpMigrations.Contains(MigrationSourceFiles.Name(f)))
+            .Where(f => ScopedLoopSources(f).Count > 0)
+            .Select(MigrationSourceFiles.Name)
             .ToHashSet(StringComparer.Ordinal);
 
         stillOffending.Should().BeEquivalentTo(KnownNoOpMigrations,
@@ -86,10 +74,19 @@ public class DataMigrationTenantContextGuardTests
     }
 
     /// <summary>
-    /// Trims the captured FROM source to its bare table name, dropping an argument list,
-    /// alias, or trailing punctuation. A derived table yields an empty string, which matches
-    /// no table.
+    /// Tenant-scoped tables the migration's <c>Up</c> drives a tenant loop off. Scanned as raw
+    /// text: this detects offenders, and
+    /// <see cref="MigrationSourceFiles.WithCommentsBlanked"/> withholds evidence, so a stray
+    /// <c>/*</c> inside a SQL literal would blank a live loop out of view. A commented-out loop
+    /// is therefore reported — the cheap direction to be wrong in.
     /// </summary>
-    private static string LoopSourceTable(string captured) =>
-        Regex.Split(captured, @"[(;,\s]")[0].Trim('"').ToLowerInvariant();
+    private static IReadOnlyList<string> ScopedLoopSources(string file)
+    {
+        var up = MigrationSourceFiles.UpBody(file);
+
+        return LoopHeader.Matches(up)
+            .Select(m => MigrationSourceFiles.BareTableName(m.Groups[1].Value))
+            .Where(ScopedTables.Contains)
+            .ToList();
+    }
 }
