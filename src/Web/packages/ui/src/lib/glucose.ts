@@ -10,7 +10,7 @@ export type GlucoseUnits = "mg/dl" | "mmol";
 
 /**
  * Milligrams per decilitre in one millimole per litre of glucose. Must equal
- * `GlucoseConstants.MgdlPerMmol`; `GlucoseConversionFactorMirrorTests` fails if it does not.
+ * `GlucoseConstants.MgdlPerMmol`; `GlucoseMirrorTests` fails if it does not.
  */
 export const MGDL_PER_MMOL = 18.0182;
 
