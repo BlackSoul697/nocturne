@@ -1,4 +1,5 @@
 using FluentAssertions;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using Moq;
 using Nocturne.Connectors.Core.Interfaces;
@@ -21,14 +22,34 @@ public class PublishRecordTypePathTests
         protected override void ValidateSourceSpecificConfiguration() { }
     }
 
+    /// <summary>Captures the messages the shared publish path logs, which no fixture otherwise sees.</summary>
+    private sealed class RecordingLogger : ILogger<TestConnectorService>
+    {
+        public List<string> Messages { get; } = [];
+
+        public IDisposable? BeginScope<TState>(TState state) where TState : notnull => null;
+
+        public bool IsEnabled(LogLevel logLevel) => true;
+
+        public void Log<TState>(
+            LogLevel logLevel,
+            EventId eventId,
+            TState state,
+            Exception? exception,
+            Func<TState, Exception?, string> formatter)
+            => Messages.Add(formatter(state, exception));
+    }
+
     private sealed class TestConnectorService : BaseConnectorService<TestConfig>
     {
         private readonly Func<SyncResult, CancellationToken, Task> _syncBody;
 
-        public TestConnectorService(Func<SyncResult, CancellationToken, Task> syncBody)
+        public TestConnectorService(
+            Func<SyncResult, CancellationToken, Task> syncBody,
+            ILogger<TestConnectorService>? logger = null)
             : base(new HttpClient(),
                 new ConnectorServerResolver<TestConfig>(null, null, null),
-                NullLogger<TestConnectorService>.Instance)
+                logger ?? NullLogger<TestConnectorService>.Instance)
         {
             _syncBody = syncBody;
         }
@@ -58,6 +79,15 @@ public class PublishRecordTypePathTests
             => PublishRecordTypeAsync(result, dataType, activeTypes, records,
                 (_, _, _) => Task.FromResult(publishSucceeds),
                 new TestConfig(), cancellationToken);
+
+        public Task<bool> PublishThrowingAsync(
+            SyncResult result,
+            SyncDataType dataType,
+            HashSet<SyncDataType> activeTypes,
+            List<PublishedRecord> records)
+            => PublishRecordTypeAsync(result, dataType, activeTypes, records,
+                (_, _, _) => throw new InvalidOperationException("publisher exploded"),
+                new TestConfig(), CancellationToken.None);
     }
 
     private static Task<SyncResult> RunAsync(
@@ -100,6 +130,9 @@ public class PublishRecordTypePathTests
             service.PublishAsync(syncResult, SyncDataType.Glucose, active, []));
 
         // Assert
+        result.Success.Should().BeTrue(
+            "finding nothing is not a failure: reporting one would turn every quiet but enabled "
+            + "type red and freeze the connector's last successful sync");
         result.ItemsSynced.Should().Equal(new Dictionary<SyncDataType, int>
         {
             [SyncDataType.Glucose] = 0,
@@ -139,6 +172,64 @@ public class PublishRecordTypePathTests
         // Assert
         result.Success.Should().BeFalse();
         result.ItemsSynced[SyncDataType.Glucose].Should().Be(1);
+    }
+
+    [Fact]
+    public async Task SuccessLog_CoversThePublishedBatchAndNotTheEmptyOne()
+    {
+        // Arrange: the empty path records its zero without logging, so a run over quiet types does
+        // not fill the log with "Synced 0" lines it has nothing to say about.
+        var logger = new RecordingLogger();
+        var active = new HashSet<SyncDataType> { SyncDataType.Glucose, SyncDataType.Boluses };
+        var service = new TestConnectorService((_, _) => Task.CompletedTask, logger);
+        var result = new SyncResult { Success = true };
+
+        // Act
+        await service.PublishAsync(result, SyncDataType.Glucose, active,
+            [new PublishedRecord(), new PublishedRecord()]);
+        await service.PublishAsync(result, SyncDataType.Boluses, active, []);
+
+        // Assert
+        logger.Messages.Should().ContainSingle(m => m.Contains("Synced"))
+            .Which.Should().Contain("Synced 2 Glucose records");
+    }
+
+    [Fact]
+    public async Task SuccessLog_IsSuppressedForARejectedPublish()
+    {
+        // Arrange: the log says "Synced", so it must not appear for a batch the publisher refused —
+        // a triage reading it would take the records for stored.
+        var logger = new RecordingLogger();
+        var active = new HashSet<SyncDataType> { SyncDataType.Boluses };
+        var service = new TestConnectorService((_, _) => Task.CompletedTask, logger);
+        var result = new SyncResult { Success = true };
+
+        // Act
+        await service.PublishAsync(result, SyncDataType.Boluses, active,
+            [new PublishedRecord(), new PublishedRecord()], publishSucceeds: false);
+
+        // Assert
+        result.ItemsSynced[SyncDataType.Boluses].Should().Be(2, "the batch still reached the publisher");
+        logger.Messages.Should().NotContain(m => m.Contains("Synced"));
+    }
+
+    [Fact]
+    public async Task ThrowingPublish_RecordsNoCount()
+    {
+        // Arrange: the count is recorded once the publish has returned, so a batch whose publish
+        // threw is not reported as handed over — unlike one the publisher rejected, which is.
+        // Connectors catch the throw and report it as a sync error instead.
+        var active = new HashSet<SyncDataType> { SyncDataType.Glucose };
+        var result = new SyncResult { Success = true };
+        var service = new TestConnectorService((_, _) => Task.CompletedTask);
+
+        // Act
+        var publish = () => service.PublishThrowingAsync(result, SyncDataType.Glucose, active,
+            [new PublishedRecord()]);
+
+        // Assert
+        await publish.Should().ThrowAsync<InvalidOperationException>();
+        result.ItemsSynced.Should().BeEmpty();
     }
 
     [Fact]

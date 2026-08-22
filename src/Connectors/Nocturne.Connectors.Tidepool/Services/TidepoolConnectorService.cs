@@ -76,15 +76,12 @@ public class TidepoolConnectorService : BaseConnectorService<TidepoolConnectorCo
             var token = await _tokenProvider.GetValidTokenAsync(config, cancellationToken);
             if (string.IsNullOrEmpty(token))
             {
-                result.Success = false;
-                result.Errors.Add("Authentication failed");
-                result.EndTime = DateTimeOffset.UtcNow;
                 _logger.LogWarning("[{ConnectorSource}] Sync failed: authentication unsuccessful", ConnectorSource);
-                return result;
+                return AuthenticationFailedResult();
             }
         }
 
-        // Handle Glucose (CBG + SMBG → SensorGlucose)
+        // CBG and SMBG both map to SensorGlucose.
         if (activeTypes.Contains(SyncDataType.Glucose))
         {
             try
@@ -94,10 +91,16 @@ public class TidepoolConnectorService : BaseConnectorService<TidepoolConnectorCo
                     $"{TidepoolConstants.DataTypes.Cbg},{TidepoolConstants.DataTypes.Smbg}",
                     request.From, request.To);
 
-                if (bgValues != null)
+                if (bgValues is null)
+                {
+                    ReportFailedFetch(result, SyncDataType.Glucose, activeTypes);
+                }
+                else
+                {
                     await PublishRecordTypeAsync(result, SyncDataType.Glucose, activeTypes,
                         _sensorGlucoseMapper.MapBgValues(bgValues).ToList(), PublishSensorGlucoseDataAsync,
                         config, cancellationToken);
+                }
             }
             catch (Exception ex)
             {
@@ -107,7 +110,6 @@ public class TidepoolConnectorService : BaseConnectorService<TidepoolConnectorCo
             }
         }
 
-        // Handle Boluses and CarbIntake
         SyncDataType[] treatmentTypes = [SyncDataType.Boluses, SyncDataType.CarbIntake];
         if (activeTypes.Any(t => treatmentTypes.Contains(t)))
         {
@@ -122,35 +124,23 @@ public class TidepoolConnectorService : BaseConnectorService<TidepoolConnectorCo
 
                 var (mappedBoluses, mappedCarbs, _) = _v4TreatmentMapper.MapTreatments(boluses, foods);
 
-                if (activeTypes.Contains(SyncDataType.Boluses) && mappedBoluses.Count > 0)
-                {
-                    var success = await PublishBolusDataAsync(mappedBoluses, config, cancellationToken);
-                    if (success)
-                    {
-                        result.ItemsSynced[SyncDataType.Boluses] = mappedBoluses.Count;
-                        _logger.LogInformation("[{ConnectorSource}] Synced {Count} Bolus records", ConnectorSource, mappedBoluses.Count);
-                    }
-                    else
-                    {
-                        result.Success = false;
-                        result.Errors.Add($"{SyncDataType.Boluses} publish failed");
-                    }
-                }
+                // Both fetches are issued whenever either type is active, because the correlation
+                // that pairs a carb intake with a bolus needs the boluses even when boluses
+                // themselves are not being synced.
+                if (boluses is null)
+                    ReportFailedFetch(result, SyncDataType.Boluses, activeTypes);
+                if (foods is null)
+                    ReportFailedFetch(result, SyncDataType.CarbIntake, activeTypes);
 
-                if (activeTypes.Contains(SyncDataType.CarbIntake) && mappedCarbs.Count > 0)
-                {
-                    var success = await PublishCarbIntakeDataAsync(mappedCarbs, config, cancellationToken);
-                    if (success)
-                    {
-                        result.ItemsSynced[SyncDataType.CarbIntake] = mappedCarbs.Count;
-                        _logger.LogInformation("[{ConnectorSource}] Synced {Count} CarbIntake records", ConnectorSource, mappedCarbs.Count);
-                    }
-                    else
-                    {
-                        result.Success = false;
-                        result.Errors.Add("CarbIntake publish failed");
-                    }
-                }
+                // Boluses come from the bolus fetch and carb intakes from the food fetch, so each
+                // type is reported only when its own fetch came back.
+                if (boluses is not null)
+                    await PublishRecordTypeAsync(result, SyncDataType.Boluses, activeTypes,
+                        mappedBoluses, PublishBolusDataAsync, config, cancellationToken);
+
+                if (foods is not null)
+                    await PublishRecordTypeAsync(result, SyncDataType.CarbIntake, activeTypes,
+                        mappedCarbs, PublishCarbIntakeDataAsync, config, cancellationToken);
             }
             catch (Exception ex)
             {
@@ -165,8 +155,39 @@ public class TidepoolConnectorService : BaseConnectorService<TidepoolConnectorCo
     }
 
     /// <summary>
+    ///     Reports a fetch that came back null (see <see cref="FetchDataAsync{T}"/>) as a failure of
+    ///     the run, but only for a type the tenant enabled.
+    /// </summary>
+    /// <remarks>
+    ///     A failed run withholds the connector's last-successful-sync stamp and shows the tenant a
+    ///     red connector, so a fetch issued only to support another type — the bolus fetch feeding
+    ///     the carb correlation — must not be able to fail the sync. Losing it costs that
+    ///     correlation and nothing else.
+    /// </remarks>
+    private void ReportFailedFetch(
+        SyncResult result, SyncDataType dataType, HashSet<SyncDataType> activeTypes)
+    {
+        if (!activeTypes.Contains(dataType))
+        {
+            _logger.LogDebug(
+                "[{ConnectorSource}] {DataType} fetch failed for a type that is switched off",
+                ConnectorSource, dataType);
+            return;
+        }
+
+        result.Success = false;
+        result.Errors.Add($"Failed to fetch {dataType}");
+    }
+
+    /// <summary>
     ///     Fetches typed data from the Tidepool API data endpoint.
     /// </summary>
+    /// <returns>
+    ///     The deserialized collection, or <c>null</c> when the fetch failed — no token, an error
+    ///     response, or exhausted retries. A caller must not read that as an empty window: a type
+    ///     the sync could not check has to go unreported, because the count the tenant's sync card
+    ///     renders as "checked, found nothing" is a claim the source was reached.
+    /// </returns>
     private async Task<T?> FetchDataAsync<T>(
         TidepoolConnectorConfiguration config,
         string dataType, DateTime? startDate = null, DateTime? endDate = null) where T : class

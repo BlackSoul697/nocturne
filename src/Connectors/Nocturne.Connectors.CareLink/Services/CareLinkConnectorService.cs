@@ -242,30 +242,18 @@ public class CareLinkConnectorService : BaseConnectorService<CareLinkConnectorCo
 
         if (isStale)
         {
+            // The payload arrived and held nothing recent enough to publish, which is a checked
+            // result rather than an unchecked one, so it still owes the tenant a count.
             _logger.LogDebug("[{ConnectorSource}] Skipping SGVs — data is stale (>{Threshold} min)",
                 ConnectorSource, CareLinkConstants.StaleDataThresholdMinutes);
+            RecordPublishOutcome(result, SyncDataType.Glucose, 0, success: true);
             return;
         }
 
         try
         {
-            var sgRecords = _sgMapper.Map(data);
-            if (sgRecords.Count > 0)
-            {
-                var success = await PublishSensorGlucoseDataAsync(sgRecords, config, cancellationToken);
-                result.ItemsSynced[SyncDataType.Glucose] = sgRecords.Count;
-                if (!success)
-                {
-                    result.Success = false;
-                    result.Errors.Add($"{SyncDataType.Glucose} publish failed");
-                }
-                else
-                {
-                    _logger.LogInformation(
-                        "[{ConnectorSource}] Synced {Count} SensorGlucose records",
-                        ConnectorSource, sgRecords.Count);
-                }
-            }
+            await PublishRecordTypeAsync(result, SyncDataType.Glucose, enabledTypes,
+                _sgMapper.Map(data), PublishSensorGlucoseDataAsync, config, cancellationToken);
         }
         catch (OperationCanceledException) { throw; }
         catch (HttpRequestException ex)
@@ -292,23 +280,17 @@ public class CareLinkConnectorService : BaseConnectorService<CareLinkConnectorCo
         SyncResult result,
         CancellationToken cancellationToken)
     {
+        // Gated here as well as in the shared path, so a switched-off type is not mapped at all.
         if (!enabledTypes.Contains(SyncDataType.DeviceStatus))
             return;
 
         try
         {
-            var deviceStatus = CareLinkDeviceStatusMapper.Map(data);
-            var success = await PublishDeviceStatusAsync([deviceStatus], config, cancellationToken);
-            result.ItemsSynced[SyncDataType.DeviceStatus] = 1;
-            if (!success)
-            {
-                result.Success = false;
-                result.Errors.Add("DeviceStatus publish failed");
-            }
-            else
-            {
-                _logger.LogInformation("[{ConnectorSource}] Synced DeviceStatus", ConnectorSource);
-            }
+            List<Nocturne.Core.Models.DeviceStatus> deviceStatuses =
+                CareLinkDeviceStatusMapper.Map(data) is { } deviceStatus ? [deviceStatus] : [];
+
+            await PublishRecordTypeAsync(result, SyncDataType.DeviceStatus, enabledTypes,
+                deviceStatuses, PublishDeviceStatusAsync, config, cancellationToken);
         }
         catch (OperationCanceledException) { throw; }
         catch (HttpRequestException ex)
