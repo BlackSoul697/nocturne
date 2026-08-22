@@ -6,6 +6,10 @@ export const GENERIC_SUBMIT_ERROR =
 export const RATE_LIMITED_ERROR =
   "Too many attempts. Please wait a few minutes and try again.";
 
+/** Shown when the thing an action referred to is no longer on the server. */
+export const MISSING_ITEM_ERROR =
+  "That item no longer exists. Refresh the page to see what's there now.";
+
 /** The HTTP status carried by a thrown value, if it has one. */
 export function errorStatus(err: unknown): number | undefined {
   if (err && typeof err === "object" && "status" in err) {
@@ -44,6 +48,11 @@ export function errorMessage(err: unknown): string | undefined {
  * rate limiter's body carries no `message` and a caller's fallback describes
  * what it asked for — "this invite link is invalid" for a request the limiter
  * never let reach the invite.
+ *
+ * A 404 answers with the caller's fallback for the same reason: the codegen
+ * forwards it with a fixed reason, so its message names the status rather than
+ * what was missing. A caller that can say something better ("already removed")
+ * reads the status itself.
  */
 export function describeSubmitError(
   err: unknown,
@@ -51,6 +60,7 @@ export function describeSubmitError(
 ): string {
   const status = errorStatus(err);
   if (status === 429) return RATE_LIMITED_ERROR;
+  if (status === 404) return fallback;
 
   if (status !== undefined && status >= 400 && status < 500) {
     return errorMessage(err) ?? fallback;
