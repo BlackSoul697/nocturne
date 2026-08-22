@@ -1,6 +1,7 @@
 import { render } from "vitest-browser-svelte";
 import { page } from "vitest/browser";
 import { describe, it, expect, beforeEach, vi } from "vitest";
+import { error } from "@sveltejs/kit";
 import { page as pageState } from "$app/state";
 
 const { toastError } = vi.hoisted(() => ({ toastError: vi.fn() }));
@@ -81,13 +82,17 @@ describe("compression-lows page", () => {
 
   it("surfaces a refused accept instead of discarding it", async () => {
     pageState.data = { effectivePermissions: ["glucose.readwrite"] };
-    acceptImpl = () => Promise.reject({ status: 403, body: { message: "Forbidden" } });
+    acceptImpl = async () => error(403, "Forbidden");
 
     render(CompressionLowsPage, {});
 
     await expect.element(acceptButton()).toBeVisible();
     await acceptButton().click();
 
-    await vi.waitFor(() => expect(toastError).toHaveBeenCalled());
+    await vi.waitFor(() =>
+      expect(toastError).toHaveBeenCalledWith(
+        "Reviewing compression lows requires the glucose.readwrite permission."
+      )
+    );
   });
 });

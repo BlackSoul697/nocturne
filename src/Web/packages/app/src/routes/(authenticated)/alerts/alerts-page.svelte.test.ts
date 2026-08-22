@@ -1,6 +1,7 @@
 import { render } from "vitest-browser-svelte";
 import { page } from "vitest/browser";
 import { describe, it, expect, beforeEach, vi } from "vitest";
+import { error } from "@sveltejs/kit";
 import { page as pageState } from "$app/state";
 import type { AlertRuleResponse } from "$api-clients";
 
@@ -96,13 +97,33 @@ describe("alerts page", () => {
 
   it("surfaces a refused toggle instead of discarding it", async () => {
     pageState.data = { effectivePermissions: ["alerts.readwrite"] };
-    toggleImpl = () => Promise.reject({ status: 403, body: { message: "Forbidden" } });
+    toggleImpl = async () => error(403, "Forbidden");
 
     render(AlertsPage, {});
 
     await expect.element(enableSwitch()).toBeVisible();
     await enableSwitch().click();
 
-    await vi.waitFor(() => expect(toastError).toHaveBeenCalled());
+    await vi.waitFor(() =>
+      expect(toastError).toHaveBeenCalledWith(
+        "Changing alerts requires the alerts.readwrite permission."
+      )
+    );
+  });
+
+  it("surfaces a stale rule as gone rather than as a permission problem", async () => {
+    pageState.data = { effectivePermissions: ["alerts.readwrite"] };
+    toggleImpl = async () => error(404, "Not Found");
+
+    render(AlertsPage, {});
+
+    await expect.element(enableSwitch()).toBeVisible();
+    await enableSwitch().click();
+
+    await vi.waitFor(() =>
+      expect(toastError).toHaveBeenCalledWith(
+        "That item no longer exists. Refresh the page to see what's there now."
+      )
+    );
   });
 });
