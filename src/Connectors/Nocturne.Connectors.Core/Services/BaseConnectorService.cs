@@ -755,14 +755,65 @@ public abstract class BaseConnectorService<TConfig> : IConnectorService<TConfig>
 
         if (!success)
         {
-            result.Success = false;
-            result.Errors.Add($"{dataType} publish failed");
+            RecordFailure(result, $"{dataType} publish failed", PublishFailedMessage);
         }
         else if (count > 0)
         {
             _logger.LogInformation("[{ConnectorSource}] Synced {Count} {Type} records{Context}",
                 ConnectorSource, count, dataType, context != null ? $" ({context})" : "");
         }
+    }
+
+    /// <summary>
+    ///     The counterpart of <see cref="RecordPublishOutcome"/> one level up: a fetch that came back
+    ///     with nothing because it failed, reported as a failure of the run but only for a type the
+    ///     tenant enabled. Records no count — the source was never reached, and a count is a claim it
+    ///     was (see the remarks on <see cref="RecordPublishOutcome"/>).
+    /// </summary>
+    /// <remarks>
+    ///     A failed run withholds the connector's last-successful-sync stamp and shows the tenant a
+    ///     red connector, so a fetch issued only to support another type — a bolus fetch feeding a
+    ///     carb correlation — must not be able to fail the sync. Losing it costs that correlation and
+    ///     nothing else. The failure is sticky rather than fatal: whatever the run already fetched
+    ///     still publishes.
+    /// </remarks>
+    protected void RecordFetchFailure(
+        SyncResult result,
+        SyncDataType dataType,
+        HashSet<SyncDataType> activeTypes)
+    {
+        if (!activeTypes.Contains(dataType))
+        {
+            _logger.LogDebug(
+                "[{ConnectorSource}] {DataType} fetch failed for a type that is switched off",
+                ConnectorSource, dataType);
+            return;
+        }
+
+        RecordFailure(result, $"Failed to fetch {dataType}", FetchFailedMessage);
+    }
+
+    /// <summary>
+    ///     What a run says for itself when it failed and the reader has no <see cref="SyncResult.Errors"/>
+    ///     to go on. The first recorded failure names the run, so a fetch that fell over followed by a
+    ///     publish rejection still reads as the fetch failure that started it.
+    /// </summary>
+    protected const string FetchFailedMessage = "Sync failed while fetching data";
+
+    /// <inheritdoc cref="FetchFailedMessage"/>
+    protected const string PublishFailedMessage = "Sync failed while publishing data";
+
+    private static void RecordFailure(SyncResult result, string error, string message)
+    {
+        if (result.Errors.Count == 0)
+            result.Message = message;
+
+        result.Success = false;
+
+        // A windowed sync meets the same failure once per chunk, and the terminal progress message
+        // joins every entry, so the tenant reads one line per distinct failure rather than per chunk.
+        if (!result.Errors.Contains(error))
+            result.Errors.Add(error);
     }
 
     /// <summary>

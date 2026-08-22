@@ -129,26 +129,52 @@ public class GlookoConnectorServicePublishFailureTests
         var service = BuildService(rejected: null, publisher);
 
         var result = await service.SyncDataAsync(
-            BuildRequest(), BuildConfig(useV3Api: false), CancellationToken.None);
+            BuildFoodRequest(), BuildConfig(useV3Api: false), CancellationToken.None);
 
         VerifyFoodEntriesWerePublished(metadata);
         result.Success.Should().BeFalse();
         result.Errors.Should().ContainSingle()
-            .Which.Should().Contain("Food entries");
+            .Which.Should().Contain("Food");
     }
 
+    /// <summary>
+    /// An import the catalog accepted nothing from still counts what the sync handed over, so the
+    /// tenant's card shows a food badge rather than the blank that reads as "never checked".
+    /// </summary>
     [Fact]
-    public async Task SyncDataAsync_WhenTheFoodEntryPublishImportsNothing_ReportsSuccess()
+    public async Task SyncDataAsync_WhenTheFoodEntryPublishImportsNothing_ReportsSuccessAndCountsFood()
     {
         var (publisher, metadata) = BuildFoodPublisher(imported: []);
         var service = BuildService(rejected: null, publisher);
 
         var result = await service.SyncDataAsync(
-            BuildRequest(), BuildConfig(useV3Api: false), CancellationToken.None);
+            BuildFoodRequest(), BuildConfig(useV3Api: false), CancellationToken.None);
 
         VerifyFoodEntriesWerePublished(metadata);
         result.Success.Should().BeTrue();
         result.Errors.Should().BeEmpty();
+        result.ItemsSynced[SyncDataType.Food].Should().Be(1);
+    }
+
+    /// <summary>
+    /// The scheduled sync names no data types and is expanded to every supported one, so that — not
+    /// the hand-listed request the cases above use — is what a tenant's connector actually runs. A
+    /// window that held no food still owes the card the zero that reads as "checked, found nothing".
+    /// </summary>
+    [Fact]
+    public async Task SyncDataAsync_WhenTheRequestNamesNoTypes_CountsFoodAsChecked()
+    {
+        var service = BuildService(rejected: null);
+        var request = new SyncRequest { From = DateTime.UtcNow.AddDays(-3) };
+
+        var result = await service.SyncDataAsync(
+            request, BuildConfig(useV3Api: true), CancellationToken.None);
+
+        request.DataTypes.Should().Contain(SyncDataType.Food,
+            "the expansion must actually reach food, or the assertions below prove nothing");
+        result.Success.Should().BeTrue();
+        result.Errors.Should().BeEmpty();
+        result.ItemsSynced[SyncDataType.Food].Should().Be(0);
     }
 
     // ── Test infrastructure ─────────────────────────────────────────────
@@ -162,6 +188,17 @@ public class GlookoConnectorServicePublishFailureTests
         ],
         From = DateTime.UtcNow.AddDays(-3), // single chunk keeps one request per endpoint
     };
+
+    /// <summary>
+    /// Food is its own toggle, so a request that does not name it publishes no food at all — the
+    /// food cases have to ask for it.
+    /// </summary>
+    private static SyncRequest BuildFoodRequest()
+    {
+        var request = BuildRequest();
+        request.DataTypes = [.. request.DataTypes, SyncDataType.Food];
+        return request;
+    }
 
     private static GlookoConnectorConfiguration BuildConfig(bool useV3Api) =>
         GlookoSyncHarness.Config(useV3Api);
