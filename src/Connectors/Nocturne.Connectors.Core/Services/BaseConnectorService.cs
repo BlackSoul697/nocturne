@@ -794,6 +794,27 @@ public abstract class BaseConnectorService<TConfig> : IConnectorService<TConfig>
     }
 
     /// <summary>
+    ///     The failure a connector raises when the source did not answer, for the fetches whose
+    ///     caller cannot tell a failure from a result by its shape.
+    /// </summary>
+    /// <remarks>
+    ///     A fetch that failed is not an answer, and must never be read as one. Standing in an empty
+    ///     result ends a paginated crawl at the page that broke and reports the truncation as a
+    ///     successful sync, and it advances whatever the connector resumes from next cycle — a
+    ///     persisted backfill low-water mark, or the newest record now stored locally — past history
+    ///     that was never read, so the gap outlives the failure instead of being repaired. A source
+    ///     with nothing left to give answers with an empty payload; that is what ends a crawl.
+    /// </remarks>
+    /// <param name="detail">
+    ///     What the source did, when the caller knows it and the reader would otherwise have to read
+    ///     the connector logs to find out — which a hosted tenant cannot do.
+    /// </param>
+    protected static Exception FetchFailed(string operationName, string? detail = null) =>
+        new HttpRequestException(detail is null
+            ? $"{operationName} fetch failed; see preceding connector logs"
+            : $"{operationName} fetch failed: {detail}");
+
+    /// <summary>
     ///     What a run says for itself when it failed and the reader has no <see cref="SyncResult.Errors"/>
     ///     to go on. The first recorded failure names the run, so a fetch that fell over followed by a
     ///     publish rejection still reads as the fetch failure that started it.
