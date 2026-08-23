@@ -11,13 +11,88 @@ using Xunit;
 namespace Nocturne.Connectors.Glooko.Tests.Services;
 
 /// <summary>
-/// Glooko's supporting fetches each sit behind their own catch, so a Glooko endpoint that is down
-/// used to cost the tenant that data while the run still reported green. A failed fetch of a type
-/// the tenant enabled must reach <see cref="SyncResult.Success"/> and <see cref="SyncResult.Errors"/>,
-/// while whatever the run already fetched still publishes.
+/// Glooko's fetches each sit behind their own catch — the supporting ones singly, the V2 batch's
+/// endpoints in a loop — so a Glooko endpoint that is down used to cost the tenant that data while
+/// the run still reported green. A failed fetch of a type the tenant enabled must reach
+/// <see cref="SyncResult.Success"/> and <see cref="SyncResult.Errors"/>, while whatever the run
+/// already fetched still publishes.
 /// </summary>
 public class GlookoConnectorServiceFetchFailureTests
 {
+    /// <summary>
+    /// Every V2 batch endpoint against the types its payload feeds, so a row that stops matching what
+    /// the mappers actually read off that payload ships red. Glucose is the connector's primary type
+    /// and has one V2 source, so a dead CGM endpoint reporting green was indistinguishable from a
+    /// quiet day; a bolus carries the wizard's carbs alongside its insulin, foods become carb intakes
+    /// as well as catalog entries, and all three basal endpoints feed temp basals.
+    /// </summary>
+    /// <param name="stillPublished">
+    ///     A publish the failing endpoint has no part in, which must still be reached — the failure is
+    ///     sticky, not an abort.
+    /// </param>
+    [Theory]
+    [InlineData(GlookoConstants.CgmReadingsPath, "Glucose", PublishKind.StateSpans)]
+    [InlineData(GlookoConstants.MeterReadingsPath, "ManualBG", PublishKind.StateSpans)]
+    [InlineData(GlookoConstants.NormalBolusesPath, "Boluses,CarbIntake", PublishKind.StateSpans)]
+    [InlineData(GlookoConstants.FoodsPath, "CarbIntake,Food", PublishKind.StateSpans)]
+    [InlineData(GlookoConstants.ScheduledBasalsPath, "TempBasals", PublishKind.StateSpans)]
+    [InlineData(GlookoConstants.TemporaryBasalsPath, "TempBasals", PublishKind.StateSpans)]
+    [InlineData(GlookoConstants.SuspendBasalsPath, "StateSpans,TempBasals", PublishKind.TempBasals)]
+    public async Task SyncDataAsync_WhenAV2BatchEndpointFails_ReportsEveryTypeItServes(
+        string failingPath, string expectedTypes, PublishKind stillPublished)
+    {
+        var service = BuildService(failingPath);
+
+        var result = await service.SyncDataAsync(
+            Request(V2BatchTypes), GlookoSyncHarness.Config(useV3Api: false), CancellationToken.None);
+
+        // The whole batch is fetched before anything publishes, so a publish rejection can never be
+        // the failure that named the run.
+        result.Message.Should().Be("Sync failed while fetching data");
+        result.Errors
+            .Where(error => error.StartsWith("Failed to fetch ", StringComparison.Ordinal))
+            .Should().BeEquivalentTo(
+                expectedTypes.Split(',').Select(type => $"Failed to fetch {type}"));
+        service.Published.Should().Contain(stillPublished);
+    }
+
+    /// <summary>
+    /// A payload that arrived but would not map loses the tenant exactly what one that never arrived
+    /// does, so the two report alike.
+    /// </summary>
+    [Fact]
+    public async Task SyncDataAsync_WhenAV2BatchEndpointServesUnmappablePayload_ReportsItsType()
+    {
+        var service = GlookoSyncHarness.Service(
+            new GlookoEndpointHandler(malformedPaths: [GlookoConstants.CgmReadingsPath]));
+
+        var result = await service.SyncDataAsync(
+            Request(SyncDataType.Glucose, SyncDataType.StateSpans),
+            GlookoSyncHarness.Config(useV3Api: false), CancellationToken.None);
+
+        result.Success.Should().BeFalse();
+        result.Errors.Should().ContainSingle().Which.Should().Be("Failed to fetch Glucose");
+        service.Published.Should().Contain(PublishKind.StateSpans);
+    }
+
+    /// <summary>
+    /// A failed run withholds the connector's last-successful-sync stamp, so a batch endpoint whose
+    /// types the tenant switched off must not be able to fail the sync.
+    /// </summary>
+    [Fact]
+    public async Task SyncDataAsync_WhenAV2BatchEndpointFailsForSwitchedOffTypes_ReportsSuccess()
+    {
+        var service = BuildService(GlookoConstants.CgmReadingsPath);
+
+        var result = await service.SyncDataAsync(
+            Request(SyncDataType.StateSpans), GlookoSyncHarness.Config(useV3Api: false),
+            CancellationToken.None);
+
+        result.Success.Should().BeTrue();
+        result.Errors.Should().BeEmpty();
+        service.Published.Should().Contain(PublishKind.StateSpans);
+    }
+
     /// <summary>
     /// Device settings are the only profile source in either fetch mode, so both modes must report
     /// the loss — and both must still publish the chunk's own state spans.
@@ -105,6 +180,13 @@ public class GlookoConnectorServiceFetchFailureTests
     }
 
     // ── Test infrastructure ─────────────────────────────────────────────
+
+    /// <summary>Every type the V2 batch endpoints serve, so no row is gated off by an inactive type.</summary>
+    private static readonly SyncDataType[] V2BatchTypes =
+    [
+        SyncDataType.Glucose, SyncDataType.ManualBG, SyncDataType.Boluses, SyncDataType.CarbIntake,
+        SyncDataType.Food, SyncDataType.StateSpans, SyncDataType.TempBasals,
+    ];
 
     private static SyncRequest Request(params SyncDataType[] dataTypes) => new()
     {
