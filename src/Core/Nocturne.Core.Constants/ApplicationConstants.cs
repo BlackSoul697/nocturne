@@ -299,13 +299,16 @@ public static class ApplicationConstants
         }
 
         /// <summary>
-        /// Defaults for the four legacy Nightscout <c>bg*</c> threshold settings, in mg/dL. Nothing
-        /// reads these: the values that ship are literals against the <c>Thresholds:Bg*</c>
-        /// configuration keys in the status and tenant-overview services, and this class records
-        /// what they are rather than supplying them. They are client alarm settings, not a clinical
-        /// range — <see cref="GlucoseConstants.TargetBottomMgdl"/> and
+        /// Defaults for the four legacy Nightscout <c>bg*</c> threshold settings, in mg/dL. They are
+        /// what ships when nothing else supplies a value: the status and tenant-overview services
+        /// fall back to them when the matching <c>Thresholds:Bg*</c> configuration key is absent, and
+        /// the properties and AR2 services use them for the <c>bgTarget*</c> entries of the settings
+        /// map they build and read, which never consults configuration at all. They are client alarm
+        /// settings, not a clinical range — <see cref="GlucoseConstants.TargetBottomMgdl"/> and
         /// <see cref="GlucoseConstants.TargetTopMgdl"/> are the consensus in-range boundaries, and
-        /// <see cref="BgTargetBottom"/> deliberately differs from the former.
+        /// <see cref="BgTargetBottom"/> deliberately differs from the former. Collapsing the two
+        /// families onto each other moves either every tenant's default alarm threshold or every
+        /// time-in-range denominator.
         /// </summary>
         public static class Thresholds
         {

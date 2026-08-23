@@ -1179,8 +1179,8 @@ public class StatisticsService : IStatisticsService
             return 0;
         }
 
-        const double targetLow = 70;
-        const double targetHigh = 180;
+        const double targetLow = GlucoseConstants.TargetBottomMgdl;
+        const double targetHigh = GlucoseConstants.TargetTopMgdl;
 
         var inRangeCount = valuesList.Count(val => val >= targetLow && val <= targetHigh);
         var percentTimeInRange = (double)inRangeCount / valuesList.Count;
@@ -2935,9 +2935,9 @@ public class StatisticsService : IStatisticsService
 
             // Calculate time in range
             var tirBefore =
-                (double)beforeValues.Count(v => v >= 70 && v <= 180) / beforeValues.Count * 100;
+                (double)beforeValues.Count(v => v >= GlucoseConstants.TargetBottomMgdl && v <= GlucoseConstants.TargetTopMgdl) / beforeValues.Count * 100;
             var tirAfter =
-                (double)afterValues.Count(v => v >= 70 && v <= 180) / afterValues.Count * 100;
+                (double)afterValues.Count(v => v >= GlucoseConstants.TargetBottomMgdl && v <= GlucoseConstants.TargetTopMgdl) / afterValues.Count * 100;
 
             // Calculate CV (coefficient of variation)
             var stdDevBefore = Math.Sqrt(
