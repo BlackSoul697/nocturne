@@ -137,8 +137,20 @@ public class NocturneRemoteConnectorService : BaseConnectorService<NocturneRemot
         Task<DateTime?> ActivityFromAsync() =>
             activity ??= BoundAsync(() => CalculateActivityCatchUpSinceAsync(config));
 
-        async Task<DateTime?> BoundAsync(Func<Task<DateTime?>> resumePoint) =>
-            openEnded ? ResumeFrom(request.From, await resumePoint()) : request.From;
+        async Task<DateTime?> BoundAsync(Func<Task<DateTime?>> resumePoint)
+        {
+            if (!openEnded)
+                return request.From;
+
+            // Awaited before the bound is decided, so a watermark the publisher cannot answer
+            // fails this family whether or not the value is used.
+            var resume = await resumePoint();
+
+            // A run carrying no glucose cursor imports the remote's full history here, which no
+            // family's resume point may narrow — unlike ResumeFrom's own reading of an absent
+            // caller bound, which the other connectors keep.
+            return request.From is null ? null : ResumeFrom(request.From, resume ?? request.From);
+        }
 
         foreach (var type in activeTypes)
         {
@@ -175,30 +187,6 @@ public class NocturneRemoteConnectorService : BaseConnectorService<NocturneRemot
 
         result.EndTime = DateTimeOffset.UtcNow;
         return result;
-    }
-
-    /// <summary>
-    ///     The lower bound a family crawls from: whichever of the caller's bound and the family's own
-    ///     resume point reaches further back.
-    /// </summary>
-    /// <remarks>
-    ///     Neither may narrow the other. The resume point cannot narrow the caller's bound, because
-    ///     an explicit <c>from</c> with no <c>to</c> is the shape an admin repairing a gap sends, and
-    ///     answering that from the watermark returns nothing and reports it as a success. The
-    ///     caller's bound cannot narrow the resume point either, because on a background catch-up
-    ///     that bound is the glucose watermark, and honouring it alone is what strands the other
-    ///     families behind glucose. A family with no resume point has nothing stored yet, so the
-    ///     caller's bound stands as given — a null one included, which imports the full history.
-    /// </remarks>
-    private static DateTime? ResumeFrom(DateTime? requested, DateTime? resumePoint)
-    {
-        if (resumePoint is null)
-            return requested;
-
-        if (requested is null)
-            return null;
-
-        return requested < resumePoint ? requested : resumePoint;
     }
 
     #region V4 Data Type Sync Methods
