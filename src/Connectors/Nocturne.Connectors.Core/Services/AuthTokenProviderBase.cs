@@ -160,6 +160,13 @@ public abstract class AuthTokenProviderBase<TConfig>(
         TConfig config, CancellationToken cancellationToken);
 
     /// <summary>
+    ///     The number of login attempts a token acquisition makes.
+    ///     <see cref="BaseConnectorConfiguration.MaxRetryAttempts"/> counts total attempts and
+    ///     permits 0; authenticating at all needs one.
+    /// </summary>
+    protected static int LoginAttempts(TConfig config) => Math.Max(1, config.MaxRetryAttempts);
+
+    /// <summary>
     ///     Attempts <paramref name="operation"/> under the shared connector retry loop; see
     ///     <see cref="ConnectorRetryLoop.RunAsync{T}"/> for the attempt-budget and delay contract.
     /// </summary>

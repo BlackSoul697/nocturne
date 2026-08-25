@@ -1,3 +1,4 @@
+using System.Net;
 using FluentAssertions;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -36,6 +37,27 @@ public class CareLinkConnectorServiceTests
         result.Success.Should().BeFalse(
             "a sync that obtained no data from any endpoint has not succeeded");
         result.Errors.Should().ContainMatch("*No data returned from any CareLink endpoint*");
+    }
+
+    /// <summary>
+    /// A token CareLink has rejected must not stay cached until its nominal expiry, or every sync
+    /// until then fails. Only a 401 drops it: the other failures a data endpoint returns say
+    /// nothing about the token.
+    /// </summary>
+    [Theory]
+    [InlineData(HttpStatusCode.Unauthorized, true)]
+    [InlineData(HttpStatusCode.NotFound, false)]
+    public async Task SyncDataAsync_DropsTheCachedToken_OnlyWhenCareLinkRejectsIt(
+        HttpStatusCode dataEndpointStatus, bool expectTokenDropped)
+    {
+        var handler = new CareLinkFakeHandler { UnmodelledStatus = dataEndpointStatus };
+        var fixture = new ServiceFixture(handler);
+
+        await fixture.Service.SyncDataAsync(
+            new SyncRequest { DataTypes = [SyncDataType.Glucose] }, fixture.Config, CancellationToken.None);
+
+        var session = await fixture.TokenProvider.GetCachedSessionAsync();
+        (session == null).Should().Be(expectTokenDropped);
     }
 
     /// <summary>
@@ -394,6 +416,7 @@ public class CareLinkConnectorServiceTests
     private sealed class ServiceFixture
     {
         internal CareLinkConnectorService Service { get; }
+        internal CareLinkAuthTokenProvider TokenProvider { get; }
         internal CareLinkConnectorConfiguration Config { get; }
         internal List<SensorGlucose> PublishedGlucose { get; } = [];
         internal List<Nocturne.Core.Models.DeviceStatus> PublishedDeviceStatuses { get; } = [];
@@ -421,7 +444,7 @@ public class CareLinkConnectorServiceTests
             var serverResolver = new ConnectorServerResolver<CareLinkConnectorConfiguration>(
                 null, null, CareLinkConstants.Servers.Eu);
 
-            var tokenProvider = new HandlerBackedTokenProvider(
+            TokenProvider = new HandlerBackedTokenProvider(
                 new HttpClient(handler),
                 new ConnectorTokenCache(),
                 serverResolver,
@@ -463,7 +486,7 @@ public class CareLinkConnectorServiceTests
             Service = new CareLinkConnectorService(
                 new HttpClient(handler),
                 serverResolver,
-                tokenProvider,
+                TokenProvider,
                 configService.Object,
                 NullLogger<CareLinkConnectorService>.Instance,
                 publisher);
