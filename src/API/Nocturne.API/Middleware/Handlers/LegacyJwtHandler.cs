@@ -1,5 +1,6 @@
 using Nocturne.Core.Contracts.Multitenancy;
 using Nocturne.Core.Models.Authorization;
+using Nocturne.API.Authorization;
 using Nocturne.API.Extensions;
 
 namespace Nocturne.API.Middleware.Handlers;
@@ -46,24 +47,11 @@ public class LegacyJwtHandler : IAuthHandler
     /// <inheritdoc />
     public Task<AuthResult> AuthenticateAsync(HttpContext context)
     {
-        // Check for Bearer token in Authorization header
-        var authHeader = context.Request.Headers.Authorization.FirstOrDefault();
+        var token = context.Request.GetAuthorizationCredential();
 
-        if (
-            string.IsNullOrEmpty(authHeader)
-            || !authHeader.StartsWith("Bearer ", StringComparison.OrdinalIgnoreCase)
-        )
+        if (!TokenFormat.IsJwt(token))
         {
-            // No Bearer token, skip to next handler
-            return Task.FromResult(AuthResult.Skip());
-        }
-
-        var token = authHeader["Bearer ".Length..].Trim();
-
-        // Check if it looks like a JWT (has 3 parts separated by dots)
-        if (string.IsNullOrEmpty(token) || token.Count(c => c == '.') != 2)
-        {
-            // Not a JWT, skip to next handler (might be an opaque token)
+            // Might be an opaque token; skip to the next handler
             return Task.FromResult(AuthResult.Skip());
         }
 

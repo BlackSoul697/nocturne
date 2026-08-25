@@ -6,6 +6,7 @@ using Microsoft.Extensions.Options;
 using Nocturne.API.Attributes;
 using Nocturne.API.Configuration;
 using Nocturne.API.Controllers.V4.Base;
+using Nocturne.API.Extensions;
 using Nocturne.API.Services.Compatibility;
 using Nocturne.Core.Models;
 using Nocturne.Infrastructure.Data.Abstractions;
@@ -474,14 +475,20 @@ public class DiscrepancyController : ControllerBase
             return false;
         }
 
-        var header = Request.Headers.Authorization.ToString();
-        const string scheme = "Bearer ";
-        if (!header.StartsWith(scheme, StringComparison.OrdinalIgnoreCase))
+        // A repeated Authorization header is ambiguous about which credential was meant, and this
+        // is a private shared secret rather than a user credential, so it is refused rather than
+        // resolved. The shared reader takes the first value; the rest of the auth chain accepts
+        // that because a bearer token names its own subject.
+        if (Request.Headers.Authorization.Count > 1)
         {
             return false;
         }
 
-        var provided = header[scheme.Length..].Trim();
+        if (Request.GetAuthorizationCredential() is not { } provided)
+        {
+            return false;
+        }
+
         return CryptographicOperations.FixedTimeEquals(
             Encoding.UTF8.GetBytes(provided),
             Encoding.UTF8.GetBytes(expectedKey));

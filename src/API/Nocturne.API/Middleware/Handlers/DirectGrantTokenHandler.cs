@@ -1,7 +1,6 @@
 using System.Linq.Expressions;
-using System.Security.Cryptography;
-using System.Text;
 using Microsoft.EntityFrameworkCore;
+using Nocturne.Connectors.Core.Utilities;
 using Nocturne.Core.Contracts.Multitenancy;
 using Nocturne.Core.Models.Authorization;
 using Nocturne.Infrastructure.Data;
@@ -60,7 +59,8 @@ public class DirectGrantTokenHandler : IAuthHandler
             return AuthResult.Skip();
         }
 
-        // Skip JWT-formatted tokens (base64url-encoded JSON starts with eyJ)
+        // Deliberately looser than TokenFormat.IsJwt: a malformed JWT still belongs to the JWT
+        // handlers, and no noc_ token can open with a Base64-URL JSON header.
         if (token.StartsWith("eyJ", StringComparison.Ordinal))
         {
             return AuthResult.Skip();
@@ -85,7 +85,8 @@ public class DirectGrantTokenHandler : IAuthHandler
         // Update last used metadata (fire and forget via separate context)
         var ipAddress = context.Connection.RemoteIpAddress?.ToString();
         var userAgent = context.Request.Headers.UserAgent.FirstOrDefault();
-        _ = UpdateLastUsedAsync(grant.Id, tenantCtx.TenantId, ipAddress, userAgent);
+        _ = RecordLastUsedAsync(
+            _dbContextFactory, _logger, grant.Id, tenantCtx.TenantId, ipAddress, userAgent);
 
         _logger.LogDebug("Direct grant authentication successful for grant {GrantId}, subject {SubjectId}",
             grant.Id, grant.SubjectId);
@@ -124,7 +125,7 @@ public class DirectGrantTokenHandler : IAuthHandler
         DateTime now,
         CancellationToken ct = default)
     {
-        var tokenHash = ComputeSha256Hex(token);
+        var tokenHash = HashUtils.Sha256Hex(token);
 
         await using var dbContext = await dbContextFactory.CreateDbContextAsync(ct);
         dbContext.TenantId = tenantId;
@@ -181,15 +182,10 @@ public class DirectGrantTokenHandler : IAuthHandler
     /// </remarks>
     private static string? ExtractToken(HttpContext context)
     {
-        var authHeader = context.Request.Headers.Authorization.FirstOrDefault();
-        if (!string.IsNullOrEmpty(authHeader)
-            && authHeader.StartsWith("Bearer ", StringComparison.OrdinalIgnoreCase))
+        var bearer = context.Request.GetAuthorizationCredential();
+        if (!string.IsNullOrEmpty(bearer))
         {
-            var bearer = authHeader["Bearer ".Length..].Trim();
-            if (!string.IsNullOrEmpty(bearer))
-            {
-                return bearer;
-            }
+            return bearer;
         }
 
         var queryToken = context.Request.Query["token"].FirstOrDefault();
@@ -203,11 +199,31 @@ public class DirectGrantTokenHandler : IAuthHandler
         return null;
     }
 
-    private async Task UpdateLastUsedAsync(Guid grantId, Guid tenantId, string? ipAddress, string? userAgent)
+    /// <summary>
+    /// Stamps when, from where and by what a grant was last presented.
+    /// </summary>
+    /// <remarks>
+    /// Runs on its own context pinned to <paramref name="tenantId"/>, for the reason given on
+    /// <see cref="FindActiveGrantAsync"/>. Every caller starts it fire-and-forget from a request that
+    /// has already authenticated, so a failure is logged and swallowed rather than surfaced.
+    /// </remarks>
+    /// <param name="dbContextFactory">Factory for the tenant-pinned context.</param>
+    /// <param name="logger">Where a failure is reported.</param>
+    /// <param name="grantId">The grant that was presented.</param>
+    /// <param name="tenantId">The tenant the grant belongs to.</param>
+    /// <param name="ipAddress">The caller's address, when the connection has one.</param>
+    /// <param name="userAgent">The caller's user-agent, when it sent one.</param>
+    internal static async Task RecordLastUsedAsync(
+        IDbContextFactory<NocturneDbContext> dbContextFactory,
+        ILogger logger,
+        Guid grantId,
+        Guid tenantId,
+        string? ipAddress,
+        string? userAgent)
     {
         try
         {
-            await using var dbContext = await _dbContextFactory.CreateDbContextAsync();
+            await using var dbContext = await dbContextFactory.CreateDbContextAsync();
             dbContext.TenantId = tenantId;
             await dbContext.OAuthGrants
                 .IgnoreQueryFilters()
@@ -219,13 +235,7 @@ public class DirectGrantTokenHandler : IAuthHandler
         }
         catch (Exception ex)
         {
-            _logger.LogWarning(ex, "Failed to update last used metadata for grant {GrantId}", grantId);
+            logger.LogWarning(ex, "Failed to update last used metadata for grant {GrantId}", grantId);
         }
-    }
-
-    internal static string ComputeSha256Hex(string input)
-    {
-        var bytes = SHA256.HashData(Encoding.UTF8.GetBytes(input));
-        return Convert.ToHexStringLower(bytes);
     }
 }
