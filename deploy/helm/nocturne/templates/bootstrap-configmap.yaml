@@ -40,11 +40,16 @@ data:
     # psql's `:'var'` substitution doesn't reach inside dollar-quoted DO
     # blocks (psql 14+), so we prepend SET statements that the DO block
     # then reads via current_setting('nocturne.<role>_password').
+    # The literal is escaped SQL-style (single quotes doubled) so passwords
+    # containing single quotes cannot break the statement.
+    escape_sql_literal() {
+      printf "%s" "$1" | sed "s/'/''/g"
+    }
     TMPSQL=$(mktemp) && trap 'rm -f "$TMPSQL"' EXIT
     {
-      printf "SET nocturne.migrator_password TO %s;\n" "$(printf "'%s'" "$MIGRATOR_PASSWORD")"
-      printf "SET nocturne.app_password TO %s;\n"      "$(printf "'%s'" "$APP_PASSWORD")"
-      printf "SET nocturne.web_password TO %s;\n"      "$(printf "'%s'" "$WEB_PASSWORD")"
+      printf "SET nocturne.migrator_password TO '%s';\n" "$(escape_sql_literal "$MIGRATOR_PASSWORD")"
+      printf "SET nocturne.app_password TO '%s';\n"      "$(escape_sql_literal "$APP_PASSWORD")"
+      printf "SET nocturne.web_password TO '%s';\n"      "$(escape_sql_literal "$WEB_PASSWORD")"
       cat /scripts/bootstrap-roles.sql
     } > "$TMPSQL"
     exec psql -v ON_ERROR_STOP=1 -f "$TMPSQL"
