@@ -1,0 +1,151 @@
+{
+	"alerts-configuration": {
+		"alt": "The Alerts page of a newly created site. It has no alert rules yet, and offers a New rule button to add the first one.",
+		"variants": {
+			"light": {
+				"file": "images/alerts-configuration.light.webp",
+				"width": 2880,
+				"height": 1800
+			},
+			"dark": {
+				"file": "images/alerts-configuration.dark.webp",
+				"width": 2880,
+				"height": 1800
+			}
+		}
+	},
+	"connect-data-source": {
+		"alt": "The Connect a Data Source step of setup. Each service Nocturne can collect readings from, and each phone app that can send readings to it, is listed as a tile you pick from.",
+		"variants": {
+			"light": {
+				"file": "images/connect-data-source.light.webp",
+				"width": 2880,
+				"height": 1800
+			},
+			"dark": {
+				"file": "images/connect-data-source.dark.webp",
+				"width": 2880,
+				"height": 1800
+			}
+		}
+	},
+	"connector-dexcom-credentials": {
+		"alt": "The Credentials panel of the Dexcom connection page, holding the boxes for the Dexcom Share username and password that Nocturne signs in with.",
+		"variants": {
+			"light": {
+				"file": "images/connector-dexcom-credentials.light.webp",
+				"width": 1488,
+				"height": 646
+			},
+			"dark": {
+				"file": "images/connector-dexcom-credentials.dark.webp",
+				"width": 1488,
+				"height": 646
+			}
+		},
+		"anchors": {
+			"username": {
+				"x": 50,
+				"y": 230,
+				"width": 1388,
+				"height": 72
+			},
+			"password": {
+				"x": 50,
+				"y": 468,
+				"width": 1300,
+				"height": 72
+			}
+		}
+	},
+	"connector-dexcom-enable": {
+		"alt": "The Enable Connector card of the Dexcom connection page, with a switch that turns collection on or off.",
+		"variants": {
+			"light": {
+				"file": "images/connector-dexcom-enable.light.webp",
+				"width": 1488,
+				"height": 256
+			},
+			"dark": {
+				"file": "images/connector-dexcom-enable.dark.webp",
+				"width": 1488,
+				"height": 256
+			}
+		}
+	},
+	"dashboard-overview": {
+		"alt": "The Nocturne home screen. A large number shows the most recent glucose reading with an arrow for which way it is heading, and a graph underneath plots the readings from the last few hours alongside markers for insulin doses and meals.",
+		"variants": {
+			"light": {
+				"file": "images/dashboard-overview.light.webp",
+				"width": 2880,
+				"height": 1800
+			},
+			"dark": {
+				"file": "images/dashboard-overview.dark.webp",
+				"width": 2880,
+				"height": 1800
+			}
+		}
+	},
+	"first-run": {
+		"alt": "The Nocturne home screen on a brand new site, before any device or app has sent readings. The graph is empty and every panel reads zero or \"No data available\".",
+		"variants": {
+			"light": {
+				"file": "images/first-run.light.webp",
+				"width": 2880,
+				"height": 1800
+			},
+			"dark": {
+				"file": "images/first-run.dark.webp",
+				"width": 2880,
+				"height": 1800
+			}
+		}
+	},
+	"report-agp": {
+		"alt": "The Ambulatory Glucose Profile report. It stacks every day of the chosen date range onto one 24-hour graph, drawing a middle line with shaded bands around it, and lists the share of time spent in each glucose range beside it.",
+		"variants": {
+			"light": {
+				"file": "images/report-agp.light.webp",
+				"width": 2880,
+				"height": 1800
+			},
+			"dark": {
+				"file": "images/report-agp.dark.webp",
+				"width": 2880,
+				"height": 1800
+			}
+		}
+	},
+	"settings-overview": {
+		"alt": "The main Settings page, a grid of cards linking to each group of settings: your account, your data sources, sharing, alerts, appearance and more.",
+		"variants": {
+			"light": {
+				"file": "images/settings-overview.light.webp",
+				"width": 2880,
+				"height": 1800
+			},
+			"dark": {
+				"file": "images/settings-overview.dark.webp",
+				"width": 2880,
+				"height": 1800
+			}
+		}
+	},
+	"sharing-settings": {
+		"alt": "The Sharing and Privacy settings page, where you choose whether anyone with the link can view your data, and see the list of people you have invited along with what each of them is allowed to do.",
+		"variants": {
+			"light": {
+				"file": "images/sharing-settings.light.webp",
+				"width": 2880,
+				"height": 1800
+			},
+			"dark": {
+				"file": "images/sharing-settings.dark.webp",
+				"width": 2880,
+				"height": 1800
+			}
+		}
+	}
+}
