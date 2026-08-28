@@ -848,12 +848,13 @@ public class EntriesController : ControllerBase
 
         try
         {
-            // Validate ID format
+            // Validate ID format: legacy MongoDB ObjectIds (24 hex) and system-assigned
+            // UUID v7 ids from POST /api/v1/entries (32 hex, see NormalizeEntry) are both valid.
             if (
                 string.IsNullOrEmpty(id)
                 || !System.Text.RegularExpressions.Regex.IsMatch(
                     id,
-                    "^[a-f\\d]{24}$",
+                    "^([a-f\\d]{24}|[a-f\\d]{32})$",
                     System.Text.RegularExpressions.RegexOptions.IgnoreCase
                 )
             )
@@ -936,12 +937,13 @@ public class EntriesController : ControllerBase
 
         try
         {
-            // Validate ID format
+            // Validate ID format: legacy MongoDB ObjectIds (24 hex) and system-assigned
+            // UUID v7 ids from POST /api/v1/entries (32 hex, see NormalizeEntry) are both valid.
             if (
                 string.IsNullOrEmpty(id)
                 || !System.Text.RegularExpressions.Regex.IsMatch(
                     id,
-                    "^[a-f\\d]{24}$",
+                    "^([a-f\\d]{24}|[a-f\\d]{32})$",
                     System.Text.RegularExpressions.RegexOptions.IgnoreCase
                 )
             )
