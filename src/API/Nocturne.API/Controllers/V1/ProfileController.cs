@@ -329,12 +329,10 @@ public class ProfileController : ControllerBase
 
         try
         {
-            // Check if spec is a 24-character hex string (MongoDB ObjectId)
-            bool isId =
-                spec.Length == 24
-                && System.Text.RegularExpressions.Regex.IsMatch(
+            // Accept legacy MongoDB ObjectIds and system-assigned UUID v7 ids.
+            bool isId = System.Text.RegularExpressions.Regex.IsMatch(
                     spec,
-                    "^[a-f\\d]{24}$",
+                    "^([a-f\\d]{24}|[a-f\\d]{32})$",
                     System.Text.RegularExpressions.RegexOptions.IgnoreCase
                 );
 
