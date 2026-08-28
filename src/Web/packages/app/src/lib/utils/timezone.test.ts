@@ -87,7 +87,7 @@ describe("getLocalDayBoundariesUtc", () => {
 		const spring = getLocalDayBoundariesUtc("2026-09-06", "America/Santiago");
 		expect(spring.end.getTime() - spring.start.getTime() + 1).toBe(23 * 60 * 60 * 1000);
 
-		// Chile falls back on 2027-04-03 at 01:00 -> 00:00 (-03 -> -04); the extra
+		// Chile falls back on 2027-04-03 at 00:00 -> 23:00 (-03 -> -04); the extra
 		// hour repeats at the END of Apr 3, so the 25-hour day is Apr 3.
 		const fall = getLocalDayBoundariesUtc("2027-04-03", "America/Santiago");
 		expect(fall.end.getTime() - fall.start.getTime() + 1).toBe(25 * 60 * 60 * 1000);
