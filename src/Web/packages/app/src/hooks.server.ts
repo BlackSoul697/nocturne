@@ -21,7 +21,12 @@ import { AUTH_COOKIE_NAMES } from "$lib/config/auth-cookies";
 import { buildProxyHeaders } from "$lib/server/api-proxy-headers";
 import { clientAddressHeaders } from "$lib/server/client-address";
 import { getOriginalProto, getEffectiveHost, getOriginalHost, isShareHost } from "$lib/server/request-host";
-import { STATIC_ASSET_PREFIXES, requiresSignIn } from "$lib/server/public-routes";
+import {
+  STATIC_ASSET_PREFIXES,
+  requiresSignIn,
+  statusProbeRedirect,
+} from "$lib/server/public-routes";
+import { SHARE_UNAVAILABLE_PATH } from "$lib/share-host";
 import {
   installRequestScopedBitsIdCounter,
   withFreshBitsIdCounter,
@@ -184,12 +189,13 @@ const siteSecurityHandle: Handle = async ({ event, resolve }) => {
   const pathname = event.url.pathname;
 
   // Skip the status probe entirely for static assets, for pages that ARE
-  // the setup/recovery/auth destinations (probing those would cause infinite
+  // the setup/recovery/auth/share-unavailable destinations (probing those would cause infinite
   // redirect loops), and for external webhook/bot endpoints that must respond
   // regardless of setup state — third-party services like Discord cannot
   // follow HTML redirects and will treat any non-2xx as a hard failure.
   const skipProbe =
     STATIC_ASSET_PREFIXES.some((p) => pathname.startsWith(p)) ||
+    pathname.startsWith(SHARE_UNAVAILABLE_PATH) ||
     pathname.startsWith("/setup") ||
     pathname.startsWith("/auth") ||
     pathname.startsWith("/api/v4/webhooks") ||
@@ -242,49 +248,24 @@ const siteSecurityHandle: Handle = async ({ event, resolve }) => {
     }
   } catch (error) {
     if (error && typeof error === "object" && "status" in error) {
-      const status = (error as any).status;
-
-      if (status === 503) {
-        let body: any = {};
-        try {
-          body = JSON.parse((error as any).response ?? "{}");
-        } catch {
-          // Couldn't parse — treat as setup required (API isn't ready)
-        }
-
-        if (body.recoveryMode) {
-          return new Response(null, {
-            status: 303,
-            headers: { Location: "/auth/recovery" },
-          });
-        }
-
-        // Any 503 from the API (setup_required, no tenants, or unparseable)
-        // means the instance isn't ready — redirect to setup
-        return new Response(null, {
-          status: 303,
-          headers: { Location: "/setup" },
-        });
+      let body: any = {};
+      try {
+        body = JSON.parse((error as any).response ?? "{}");
+      } catch {
+        // Couldn't parse — leave recoveryMode unset, which reads as "not ready"
       }
 
-      // Tenant not found (404) — either no tenant for this subdomain,
-      // or apex domain with no tenants set up yet.
-      if (status === 404) {
-        // If a marketing site is configured, redirect there (SaaS apex landing)
-        const marketingUrl = env.MARKETING_URL;
-        if (marketingUrl) {
-          return new Response(null, {
-            status: 302,
-            headers: { Location: marketingUrl },
-          });
-        }
+      const redirect = statusProbeRedirect({
+        isShareHost: event.locals.isShareHost,
+        apiStatus: (error as any).status,
+        recoveryMode: body.recoveryMode === true,
+        marketingUrl: env.MARKETING_URL,
+      });
 
-        // No marketing site — this is likely a self-hosted install.
-        // Check if this is an apex domain request (no tenant subdomain).
-        // If so, redirect to setup so the user can create their first tenant.
+      if (redirect) {
         return new Response(null, {
-          status: 303,
-          headers: { Location: "/setup" },
+          status: redirect.status,
+          headers: { Location: redirect.location },
         });
       }
     }

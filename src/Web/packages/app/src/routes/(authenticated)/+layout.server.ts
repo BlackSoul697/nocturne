@@ -3,6 +3,7 @@ import type { LayoutServerLoad } from "./$types";
 import { checkOnboarding } from "$lib/server/onboarding-check";
 import { getRequestStatus } from "$lib/server/request-status";
 import { isTenantlessRoute } from "$lib/navigation/tenantless-navigation";
+import { SHARE_UNAVAILABLE_PATH } from "$lib/share-host";
 import { toIsoString } from "$lib/utils/api-date";
 
 /** Permissions that grant read access to glucose data (mirrors API's CanRead + OAuth scopes). */
@@ -38,13 +39,17 @@ export const load: LayoutServerLoad = async ({ locals, cookies, url, parent }) =
   // then bursting 401s on the bare host.
   // Security headers for the share host (Referrer-Policy, X-Robots-Tag) are applied for every
   // response in hooks.server.ts (shareHostSecurityHandle).
-  //
-  // Resolved before the setup redirects below because /setup is a sign-in destination for anyone
-  // without a session: it renders the wizard for an authenticated operator and redirects everyone
-  // else to /auth/login. A share host holds no session by construction, so sending one to /setup
-  // is a longer road to the sign-in page this view exists to avoid — and a share link only
-  // resolves a tenant on an instance that is past setup.
   const publicViewAllowed = locals.isShareHost && anonymousReadAccess;
+
+  // Resolved above every redirect below, because none of them reaches anywhere a share host can
+  // act on: /auth/login wants a session this host holds none of by construction, and /setup offers
+  // a first-run wizard on an instance a share link only resolves on once it is past setup — which
+  // reads as "this deployment is broken" to whoever was handed the link. A share host that grants
+  // nothing has a link that was rotated, disabled, or never valid; it is also what a status call
+  // that simply failed looks like from here, so the page it lands on claims neither.
+  if (locals.isShareHost && !publicViewAllowed) {
+    throw redirect(303, SHARE_UNAVAILABLE_PATH);
+  }
 
   // Guest sessions bypass onboarding — the data owner's instance is already set up.
   if (!locals.isGuestSession && !publicViewAllowed) {
