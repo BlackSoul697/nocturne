@@ -12,42 +12,8 @@
   import { updateLanguagePreference } from "$api/user-preferences.remote";
   import { hasLanguagePreference } from "$lib/stores/appearance-store.svelte";
   import { getMyTenants } from "$lib/api/generated/myTenants.generated.remote";
-  import {
-    Home,
-    BarChart3,
-    PieChart,
-    Settings,
-    Clock,
-    User,
-    ChevronDown,
-    Syringe,
-    Apple,
-    Utensils,
-    Bell,
-    BellOff,
-    HeartHandshake,
-    Plug,
-    Calendar,
-    CheckCircle,
-    Terminal,
-    TestTube,
-    Palette,
-    Timer,
-    Layers,
-    ShieldCheck,
-    Building2,
-    Wrench,
-    HeartPulse,
-    ListChecks,
-    Shield,
-    Eye,
-    Users,
-    KeyRound,
-    PlayCircle,
-    History as HistoryIcon,
-  } from "lucide-svelte";
-  import { getSidebarReportItems } from "$lib/navigation/report-navigation";
-  import { filterTenantlessNav } from "$lib/navigation/tenantless-navigation";
+  import { ChevronDown, Shield, Eye } from "lucide-svelte";
+  import { buildAppNavigation, type NavItem } from "$lib/navigation/app-navigation";
   import {
     activeTenants,
     resolveTenantSwitcher,
@@ -155,159 +121,16 @@
       currentSlug && currentSlug !== defaultSlug ? currentSlug : null;
   });
 
-  type NavItem = {
-    title: string;
-    href?: string;
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    icon: any;
-    strict?: boolean;
-    isActive?: boolean;
-    children?: NavItem[];
-  };
-
-  /** Read-only navigation items shown to guest sessions. */
-  const guestNavTitles = new Set(["Dashboard", "Calendar", "Time Spans", "Reports", "Clock"]);
-
-  const navigation: NavItem[] = $derived.by(() => {
-    const items: NavItem[] = [
-    {
-      title: "Dashboard",
-      href: "/",
-      icon: Home,
-      strict: true,
-    },
-    {
-      title: "Calendar",
-      href: "/calendar",
-      icon: Calendar,
-    },
-    {
-      title: "Time Spans",
-      href: "/time-spans",
-      icon: Layers,
-    },
-    {
-      title: "Reports",
-      icon: BarChart3,
-      children: [
-        { title: "Overview", href: "/reports", icon: PieChart, strict: true },
-        ...getSidebarReportItems(!user),
-      ],
-    },
-    {
-      title: "Clock",
-      href: "/clock",
-      icon: Clock,
-    },
-    ];
-
-    // Guest sessions only see read-only navigation
-    if (isGuestSession) {
-      return items.filter((i) => guestNavTitles.has(i.title));
-    }
-
-    if (totalTenantCount > 1) {
-      items.push({
-        title: "Tenants",
-        href: "/tenants",
-        icon: Users,
-      });
-    }
-
-    items.push(
-    {
-      title: "Food",
-      href: "/food",
-      icon: Apple,
-    },
-    {
-      title: "Meals",
-      href: "/meals",
-      icon: Utensils,
-    },
-    {
-      title: "Tools",
-      icon: Wrench,
-      children: [
-        { title: "Packing", href: "/tools/packing", icon: Wrench },
-      ],
-    },
-    );
-
-    items.push(
-    {
-      title: "Alerts",
-      icon: Bell,
-      children: [
-        { title: "Rules", href: "/alerts", icon: Bell, strict: true },
-        { title: "Simulator", href: "/alerts/simulator", icon: PlayCircle },
-        { title: "Do Not Disturb", href: "/alerts/dnd", icon: BellOff },
-        { title: "History", href: "/alerts/history", icon: HistoryIcon },
-      ],
-    },
-    {
-      title: "Dev Tools",
-      icon: Terminal,
-      children: [
-        {
-          title: "Compatibility",
-          href: "/compatibility",
-          icon: CheckCircle,
-          strict: true,
-        },
-        {
-          title: "Test Endpoint Compatibility",
-          href: "/compatibility/test",
-          icon: TestTube,
-        },
-      ],
-    },
-    {
-      title: "Settings",
-      icon: Settings,
-      children: [
-        { title: "Setup", href: "/setup", icon: ListChecks },
-        { title: "Account", href: "/settings/account", icon: User },
-        {
-          title: "Patient Record",
-          href: "/settings/patient",
-          icon: HeartPulse,
-        },
-        { title: "Appearance", href: "/settings/appearance", icon: Palette },
-        { title: "Therapy", href: "/settings/profile", icon: Syringe },
-        {
-          title: "Data Quality",
-          href: "/settings/data-quality",
-          icon: ShieldCheck,
-        },
-        {
-          title: "Notifications & Trackers",
-          href: "/settings/trackers",
-          icon: Timer,
-        },
-        { title: "Active Access", href: "/settings/access", icon: KeyRound },
-        { title: "Connectors & Apps", href: "/settings/connectors", icon: Plug },
-        { title: "Sharing & Privacy", href: "/settings/members", icon: Users },
-        {
-          title: "Support & Community",
-          href: "/settings/support",
-          icon: HeartHandshake,
-        },
-        ...(isPlatformAdmin
-          ? [
-              { title: "Tenant Management", href: "/settings/admin/tenants", icon: Building2 },
-            ]
-          : []),
-      ],
-    });
-
-    // See tenantless-navigation for why the tenant-scoped pages come out.
-    if (tenantless) {
-      return filterTenantlessNav(items);
-    }
-
-    return items;
-  });
+  const navigation: NavItem[] = $derived(
+    buildAppNavigation({
+      user,
+      isGuestSession,
+      isPlatformAdmin,
+      grantedScopes: page.data.effectivePermissions ?? [],
+      tenantCount: totalTenantCount,
+      tenantless,
+    }),
+  );
 
   // Track which collapsible menus are open
   let openMenus = $state<Record<string, boolean>>({});
