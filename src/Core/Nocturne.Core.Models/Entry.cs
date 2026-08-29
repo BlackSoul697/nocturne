@@ -379,8 +379,8 @@ public class Entry : ProcessableDocumentBase
 
     /// <summary>
     /// Gets or sets the server-modified timestamp (Unix milliseconds). V3 compatibility field.
-    /// Falls back to Mills so every serialized entry carries it: NS v3 socket clients (AAPS)
-    /// read it unconditionally from realtime storage events and drop docs without it.
+    /// Falls back to <see cref="FallbackTimestampMills"/>; see <see cref="V3Timestamps"/> for
+    /// why it may never serialize as null.
     /// </summary>
     private long? _srvModified;
 
@@ -388,7 +388,7 @@ public class Entry : ProcessableDocumentBase
     [JsonConverter(typeof(FlexibleNullableLongConverter))]
     public long? SrvModified
     {
-        get => _srvModified ?? (Mills > 0 ? Mills : null);
+        get => _srvModified ?? FallbackTimestampMills();
         set => _srvModified = value;
     }
 
@@ -401,9 +401,16 @@ public class Entry : ProcessableDocumentBase
     [JsonConverter(typeof(FlexibleNullableLongConverter))]
     public long? SrvCreated
     {
-        get => _srvCreated ?? (Mills > 0 ? Mills : null);
+        get => _srvCreated ?? FallbackTimestampMills();
         set => _srvCreated = value;
     }
+
+    /// <summary>
+    /// Resolves the V3 compatibility timestamps: Mills, then <c>created_at</c>. Mills already
+    /// resolves <c>date</c> and <c>dateString</c>; <c>created_at</c> is the only timestamp it
+    /// does not reach.
+    /// </summary>
+    private long? FallbackTimestampMills() => V3Timestamps.Resolve(Mills, CreatedAt);
 
     /// <summary>
     /// Gets or sets the subject identifier. V3 compatibility field.
