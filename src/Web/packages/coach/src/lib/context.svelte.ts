@@ -130,6 +130,14 @@ export class CoachMarkContext {
   }
 
   activate(key: string, step: number): void {
+    // The hotspot dot is the only caller, and it decides what to raise from state that can have
+    // moved on since the dot was last drawn — so the same eligibility its visibility reflects is
+    // enforced here rather than at the click. `isMarkEligible` also carries the kill switch, which
+    // this path would otherwise walk straight past.
+    const status = this.getStatus(key);
+    if (status === "completed" || status === "dismissed") return;
+    if (!this.isMarkEligible(key)) return;
+
     if (this._activeSelection && this._activeSelection.key !== key) {
       this.markSeen(this._activeSelection.key);
     }
@@ -185,6 +193,11 @@ export class CoachMarkContext {
     if (this._activeSelection?.key === key) {
       this._activeSelection = null;
     }
+
+    // Recording progress is worth doing even with the marks switched off, but choosing the next
+    // one is not: the paths below assign _activeSelection directly, so the kill switch has to be
+    // honoured here as well as in scheduleSelection.
+    if (this._disabled) return;
 
     if (this._forcedSequence) {
       this.activateNextForcedStep();

@@ -14,10 +14,9 @@
   import {
     list as listClockFaces,
     create as createClockFace,
-    getById as getClockFaceById,
     remove as removeClockFace,
   } from "$api/generated/clockFaces.generated.remote";
-  import ClockFaceRenderer from "$lib/components/clock/ClockFaceRenderer.svelte";
+  import ClockFacePreview from "$lib/components/clock/ClockFacePreview.svelte";
   import type { ClockFaceConfig } from "$lib/api";
 
   const clockFacesQuery = listClockFaces();
@@ -203,33 +202,11 @@
             <Card.Root
               class="group cursor-pointer transition-all hover:-translate-y-1 hover:shadow-lg"
             >
-              <!-- Preview Area -->
+              <!-- Each preview reads its own query's state rather than awaiting it: an await here
+                   is work the enclosing boundary has to finish before it can show the list at all,
+                   and one preview that never resolves holds the whole page on its placeholder. -->
               <div class="h-32 overflow-hidden">
-                <svelte:boundary>
-                  {#snippet pending()}
-                    <div class="flex h-full items-center justify-center bg-neutral-950">
-                      <Loader2 class="size-6 animate-spin text-muted-foreground" />
-                    </div>
-                  {/snippet}
-                  {#snippet failed()}
-                    <div class="flex h-full items-center justify-center bg-neutral-950">
-                      <ClockIcon class="size-6 text-muted-foreground" />
-                    </div>
-                  {/snippet}
-                  {@const fullFace = face.id ? await getClockFaceById(face.id) : null}
-                  {#if fullFace?.config}
-                    <ClockFaceRenderer
-                      config={fullFace.config}
-                      scale={0.4}
-                      showCharts={false}
-                      class="h-full w-full"
-                    />
-                  {:else}
-                    <div class="flex h-full items-center justify-center bg-neutral-950">
-                      <ClockIcon class="size-6 text-muted-foreground" />
-                    </div>
-                  {/if}
-                </svelte:boundary>
+                <ClockFacePreview faceId={face.id} />
               </div>
 
             <Card.Content class="p-4">

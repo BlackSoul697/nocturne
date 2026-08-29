@@ -1,16 +1,26 @@
 import { mkdir, readdir, rm, writeFile } from 'node:fs/promises';
 import { basename, join } from 'node:path';
-import { chromium, errors, type Browser, type Page, type Request } from '@playwright/test';
+import {
+	chromium,
+	errors,
+	type Browser,
+	type BrowserContext,
+	type Page,
+	type Request,
+} from '@playwright/test';
 import sharp from 'sharp';
 import { definitions } from './manifest.js';
 import { imagesDir, manifestPath } from './paths.js';
 import { embeds, references, report } from './report.js';
 import type {
+	ArrangeContext,
+	ArrangeRequest,
 	Manifest,
 	ManifestAnchor,
 	ManifestVariant,
 	Scenario,
 	ScreenshotDefinition,
+	Session,
 	Theme,
 	Viewport,
 } from './types.js';
@@ -46,6 +56,9 @@ const SETTLE_TIMEOUT_MS = 120_000;
 const PROBE_TIMEOUT_MS = 5_000;
 const POLL_MS = 250;
 const SCREENSHOT_TIMEOUT_MS = 30_000;
+// What a prepare's clicks and waits get. Deliberately not the settle budget: settle waits on data
+// arriving, whereas a control a prepare names either shows up promptly or is not there at all.
+const ACTION_TIMEOUT_MS = 30_000;
 const SELECTOR_TIMEOUT_MS = 10_000;
 const SETTLE_MS = 750;
 
@@ -53,6 +66,9 @@ const SETTLE_MS = 750;
 const REMOTE_ENDPOINT = '/_app/remote/';
 
 const ID_PATTERN = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
+const PLACEHOLDER_PATTERN = /\{([A-Za-z][A-Za-z0-9]*)\}/g;
+/** A route that is nothing but one hole, which is the only shape allowed to resolve off-origin. */
+const WHOLE_ROUTE_PLACEHOLDER = /^\{[A-Za-z][A-Za-z0-9]*\}$/;
 
 interface Box {
 	x: number;
@@ -65,18 +81,10 @@ interface DevTenant {
 	id: string;
 	url: string;
 	loginLink: string;
+	accessToken: string;
 }
 
 const remoteCallsInFlight = new WeakMap<Page, Set<Request>>();
-
-/**
- * A request the previous route left hanging would otherwise hold every later definition on that
- * page unsettled for good. Cleared immediately before the navigation that replaces the route
- * rather than on `framenavigated`, which the new page's own requests can outrun.
- */
-function forgetRemoteCalls(page: Page): void {
-	remoteCallsInFlight.get(page)?.clear();
-}
 
 function validate(candidates: ScreenshotDefinition[]): string[] {
 	const problems: string[] = [];
@@ -93,8 +101,12 @@ function validate(candidates: ScreenshotDefinition[]): string[] {
 			seen.add(definition.id);
 		}
 
-		if (!definition.route?.startsWith('/')) {
-			problems.push(`${where}: route must be a path beginning with "/"`);
+		const route = definition.route ?? '';
+		if (!route.startsWith('/') && !WHOLE_ROUTE_PLACEHOLDER.test(route)) {
+			problems.push(`${where}: route must be a path beginning with "/", or a single placeholder`);
+		}
+		if (route.match(PLACEHOLDER_PATTERN) && !definition.arrange) {
+			problems.push(`${where}: route has placeholders but no arrange to fill them`);
 		}
 		if (!definition.alt?.trim()) {
 			problems.push(`${where}: alt is required`);
@@ -127,19 +139,88 @@ async function seedTenant(scenario: Scenario, runStart: Date): Promise<DevTenant
 	}
 
 	const body = (await response.json()) as Partial<DevTenant> & { tenantId?: string };
-	if (!body.tenantId || !body.url || !body.loginLink) {
-		throw new Error(`seed-tenant returned no tenantId/url/loginLink for scenario "${scenario}"`);
+	if (!body.tenantId || !body.url || !body.loginLink || !body.accessToken) {
+		throw new Error(
+			`seed-tenant returned no tenantId/url/loginLink/accessToken for scenario "${scenario}"`,
+		);
 	}
-	return { id: body.tenantId, url: body.url, loginLink: body.loginLink };
+	return {
+		id: body.tenantId,
+		url: body.url,
+		loginLink: body.loginLink,
+		accessToken: body.accessToken,
+	};
+}
+
+/**
+ * Tenant resolution reads the forwarded host rather than the URL's own, so an entry's arrangement
+ * can call the API directly on its unencrypted origin and still land on the seeded tenant — which
+ * the gateway's local certificate would otherwise make awkward from Node.
+ */
+function arrangeContext(definition: ScreenshotDefinition, tenant: DevTenant): ArrangeContext {
+	const forwardedHost = new URL(tenant.url).host;
+
+	return {
+		tenant: { id: tenant.id, url: tenant.url, accessToken: tenant.accessToken },
+		apiUrl: API_URL,
+		fetch: async <T>(path: string, request: ArrangeRequest = {}): Promise<T> => {
+			const hasBody = request.body !== undefined;
+			const response = await fetch(`${API_URL}${path}`, {
+				method: request.method ?? 'GET',
+				headers: {
+					Authorization: `Bearer ${tenant.accessToken}`,
+					'X-Forwarded-Host': forwardedHost,
+					...(hasBody ? { 'Content-Type': 'application/json' } : {}),
+				},
+				...(hasBody ? { body: JSON.stringify(request.body) } : {}),
+			});
+
+			if (!response.ok) {
+				throw new Error(
+					`${definition.id}: ${request.method ?? 'GET'} ${path} returned ${response.status} ${await response.text()}`,
+				);
+			}
+			return (await response.json()) as T;
+		},
+	};
+}
+
+/** Fails rather than navigating to a URL still carrying a hole, which would 404 somewhere obscure. */
+function resolveRoute(definition: ScreenshotDefinition, values: Record<string, string>): string {
+	return definition.route.replace(PLACEHOLDER_PATTERN, (_, key: string) => {
+		const value = values[key];
+		if (value === undefined) {
+			throw new Error(`${definition.id}: route placeholder {${key}} was not returned by arrange`);
+		}
+		return value;
+	});
+}
+
+/**
+ * A page of its own per entry. The session's cookies live on the context, so this costs nothing but
+ * the navigation each entry performs anyway — and it stops one route's leftovers (timers, listeners,
+ * a renderer the last route left busy) from deciding whether the next route can be photographed.
+ */
+async function openPage(context: BrowserContext): Promise<Page> {
+	const page = await context.newPage();
+	const inFlight = new Set<Request>();
+	remoteCallsInFlight.set(page, inFlight);
+	page.on('request', (request) => {
+		if (request.url().includes(REMOTE_ENDPOINT)) inFlight.add(request);
+	});
+	page.on('requestfinished', (request) => inFlight.delete(request));
+	page.on('requestfailed', (request) => inFlight.delete(request));
+	return page;
 }
 
 async function openSession(
 	browser: Browser,
 	tenant: DevTenant,
+	session: Session,
 	theme: Theme,
 	viewport: Viewport,
 	runStart: Date,
-): Promise<Page> {
+): Promise<BrowserContext> {
 	const context = await browser.newContext({
 		ignoreHTTPSErrors: true,
 		locale: LOCALE,
@@ -149,6 +230,11 @@ async function openSession(
 		viewport: VIEWPORTS[viewport],
 		deviceScaleFactor: DEVICE_SCALE_FACTOR,
 	});
+
+	// An entry's prepare navigates and clicks on this context too, so the budgets live here rather
+	// than at each call site.
+	context.setDefaultNavigationTimeout(NAVIGATION_TIMEOUT_MS);
+	context.setDefaultTimeout(ACTION_TIMEOUT_MS);
 
 	await context.addInitScript(
 		(entries: [string, string][]) => {
@@ -163,20 +249,15 @@ async function openSession(
 	// capture of a run. Fixing the clock leaves timers running, so the app still hydrates.
 	await context.clock.setFixedTime(runStart);
 
-	const page = await context.newPage();
-	const inFlight = new Set<Request>();
-	remoteCallsInFlight.set(page, inFlight);
-	page.on('request', (request) => {
-		if (request.url().includes(REMOTE_ENDPOINT)) inFlight.add(request);
-	});
-	page.on('requestfinished', (request) => inFlight.delete(request));
-	page.on('requestfailed', (request) => inFlight.delete(request));
-
-	await page.goto(tenant.loginLink, {
-		waitUntil: 'domcontentloaded',
-		timeout: NAVIGATION_TIMEOUT_MS,
-	});
-	return page;
+	// Signing in once puts the session cookies on the context, where every later page inherits
+	// them. `anonymous` and `isolated` both start signed out; they differ only in whether the
+	// context is shared with the entries around them.
+	if (session === 'owner') {
+		const page = await openPage(context);
+		await page.goto(tenant.loginLink, { waitUntil: 'domcontentloaded' });
+		await page.close();
+	}
+	return context;
 }
 
 /**
@@ -374,6 +455,19 @@ async function shoot(
 	};
 }
 
+/**
+ * A Playwright locator error names the selector that timed out and nothing else, so on its own it
+ * says which control moved but not which screenshot was reaching for it.
+ */
+async function prepare(page: Page, definition: ScreenshotDefinition): Promise<void> {
+	try {
+		await definition.prepare!(page);
+	} catch (error) {
+		const detail = error instanceof Error ? error.message : String(error);
+		throw new Error(`${definition.id}: prepare failed: ${detail}`, { cause: error });
+	}
+}
+
 async function encode(png: Buffer, file: string): Promise<ManifestVariant> {
 	const { data, info } = await sharp(png)
 		.webp({ quality: WEBP_QUALITY })
@@ -392,16 +486,12 @@ async function captureTheme(
 	page: Page,
 	definition: ScreenshotDefinition,
 	theme: Theme,
-	tenantUrl: string,
+	target: string,
 ): Promise<Capture> {
-	forgetRemoteCalls(page);
-	await page.goto(new URL(definition.route, tenantUrl).href, {
-		waitUntil: 'domcontentloaded',
-		timeout: NAVIGATION_TIMEOUT_MS,
-	});
+	await page.goto(target, { waitUntil: 'domcontentloaded' });
 	await settle(page, definition, theme);
 	if (definition.prepare) {
-		await definition.prepare(page);
+		await prepare(page, definition);
 		await settle(page, definition, theme);
 	}
 
@@ -501,7 +591,7 @@ async function main(): Promise<void> {
 	await mkdir(imagesDir, { recursive: true });
 
 	const tenants = new Map<Scenario, DevTenant>();
-	const sessions = new Map<string, Page>();
+	const sessions = new Map<string, BrowserContext>();
 	const manifest: Manifest = {};
 	const browser = await chromium.launch();
 
@@ -516,22 +606,45 @@ async function main(): Promise<void> {
 	try {
 		for (const definition of definitions) {
 			const scenario = definition.scenario ?? 'patient';
+			const session = definition.session ?? 'owner';
 			const viewport = definition.viewport ?? 'desktop';
 			const tenant = await tenantFor(scenario);
 
-			const sessionFor = async (theme: Theme): Promise<Page> => {
-				const key = `${scenario}|${theme}|${viewport}`;
+			const sessionFor = async (theme: Theme): Promise<BrowserContext> => {
+				const key = `${scenario}|${session}|${theme}|${viewport}`;
 				const existing = sessions.get(key);
 				if (existing) return existing;
-				const page = await openSession(browser, tenant, theme, viewport, runStart);
-				sessions.set(key, page);
-				return page;
+				const context = await openSession(browser, tenant, session, theme, viewport, runStart);
+				sessions.set(key, context);
+				return context;
+			};
+
+			const values = definition.arrange
+				? await definition.arrange(arrangeContext(definition, tenant))
+				: {};
+			const target = new URL(resolveRoute(definition, values), tenant.url).href;
+
+			const photograph = async (theme: Theme): Promise<Capture> => {
+				const context =
+					session === 'isolated'
+						? await openSession(browser, tenant, session, theme, viewport, runStart)
+						: await sessionFor(theme);
+				const page = await openPage(context);
+				try {
+					return await captureTheme(page, definition, theme, target);
+				} finally {
+					try {
+						await page.close();
+					} finally {
+						if (session === 'isolated') await context.close();
+					}
+				}
 			};
 
 			// Both themes resolve the anchors, so a selector that has gone stale fails the run
 			// whichever theme it broke under.
-			const light = await captureTheme(await sessionFor('light'), definition, 'light', tenant.url);
-			const dark = await captureTheme(await sessionFor('dark'), definition, 'dark', tenant.url);
+			const light = await photograph('light');
+			const dark = await photograph('dark');
 			if (light.anchors) assertSharedFrame(definition.id, light, dark);
 
 			manifest[definition.id] = {
