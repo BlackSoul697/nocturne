@@ -3,7 +3,7 @@
   import { cn } from "$lib/utils";
   import { goto } from "$app/navigation";
   import { BasalDeliveryOrigin, ChartSpanKind } from "$lib/api";
-  import { bg, bgLabel } from "$lib/utils/formatting";
+  import { bg, bgLabel, time } from "$lib/utils/formatting";
   import { getGlucoseChartContext } from "./chart-context.svelte";
   import { isBasalAdjusted } from "./engine/basal-presentation";
   import type { GlucosePoint } from "./engine/chart-data-engine.svelte";
@@ -81,7 +81,7 @@
 
     <Tooltip.Header
       value={data?.time}
-      format="minute"
+      format={(v) => (v instanceof Date ? time(v) : String(v))}
       class="text-popover-foreground border-b border-border pb-1 mb-1 text-sm font-semibold"
     />
     <Tooltip.List>
@@ -272,7 +272,7 @@
   {#snippet children({ data })}
     <Tooltip.Item
       value={data?.time}
-      format="minute"
+      format={(v) => (v instanceof Date ? time(v) : String(v))}
       onclick={() => goto(`/reports/day-in-review?date=${data?.time}`)}
     />
   {/snippet}
