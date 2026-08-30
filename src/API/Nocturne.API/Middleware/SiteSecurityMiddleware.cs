@@ -1,3 +1,4 @@
+using Microsoft.AspNetCore.Authorization;
 using Nocturne.API.Extensions;
 using Nocturne.Core.Models.Authorization;
 
@@ -74,6 +75,15 @@ public class SiteSecurityMiddleware
             return;
         }
 
+        // A public share link is a per-tenant grant of anonymous read the tenant owner minted
+        // deliberately, and the site-wide lockdown must not silently 401 every link already handed
+        // out. Mirrors requiresSignIn in the web layer's public-routes.ts.
+        if (context.IsShareAccess() && IsShareExempt(context, path))
+        {
+            await _next(context);
+            return;
+        }
+
         // Check if user is authenticated
         var authContext = context.GetAuthContext();
         if (authContext == null || !authContext.IsAuthenticated)
@@ -94,6 +104,39 @@ public class SiteSecurityMiddleware
 
         // User is authenticated, proceed
         await _next(context);
+    }
+
+    /// <summary>
+    /// Whether a share-resolved request may skip the lockdown gate for the endpoint it is routed to.
+    /// </summary>
+    /// <remarks>
+    /// The anonymous surface has two halves and only one of them re-authorizes. An endpoint gated by
+    /// the default-deny fallback policy (a non-empty <see cref="Core.Models.PermissionTrie"/>) is
+    /// re-derived per request from the share's <see cref="Scope.PublicShareScopes"/> grant, so this
+    /// gate adds nothing there and skipping it cannot reach past what the tenant published. An
+    /// <see cref="Microsoft.AspNetCore.Authorization.IAllowAnonymous"/> endpoint consults no policy
+    /// at all -- for the passkey ceremony, guest-link activation and the invite-token lookups this
+    /// gate is the only gate -- so a share host stays subject to lockdown there. The status document
+    /// is the one exception: it is <c>[AllowAnonymous]</c> and is how the shared view learns the
+    /// tenant grants anonymous read at all, so a lockdown that denied it would leave every share
+    /// link dead with nothing to say why.
+    /// <para>
+    /// Read off endpoint metadata rather than a path list because the two halves do not follow a
+    /// path shape. <c>UseRouting</c> runs earlier in the pipeline, so the endpoint is resolved by
+    /// now; a request that routed to none is not exempted, leaving it on the normal gate.
+    /// </para>
+    /// </remarks>
+    /// <param name="context">The current HTTP context.</param>
+    /// <param name="path">The lowercased request path to evaluate.</param>
+    private static bool IsShareExempt(HttpContext context, string path)
+    {
+        if (path == "/api/v4/status")
+        {
+            return true;
+        }
+
+        var endpoint = context.GetEndpoint();
+        return endpoint != null && endpoint.Metadata.GetMetadata<IAllowAnonymous>() == null;
     }
 
     /// <summary>
