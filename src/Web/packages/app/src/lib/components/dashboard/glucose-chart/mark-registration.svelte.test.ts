@@ -1,6 +1,12 @@
 import { render } from "vitest-browser-svelte";
 import { describe, it, expect, vi } from "vitest";
 import Harness from "./MarkRegistrationHarness.test.svelte";
+import {
+	BOLUS_LABEL_Y,
+	CARB_LABEL_Y,
+	MARKER_HALF_WIDTH,
+	MARKER_HEIGHT,
+} from "$lib/components/icons/marker-shapes";
 
 /**
  * Every layerchart component registers itself with the chart on mount, and
@@ -75,24 +81,67 @@ describe("glucose-chart mark registration", () => {
 	it("keeps marker glyph geometry and classes", async () => {
 		const { container } = await renderAt(1);
 
-		// Bolus override triangle (i % 3 === 0), pointing down at the baseline.
+		// Bolus override triangle (i % 3 === 0), hanging below the baseline.
 		const triangle = container.querySelector<SVGPolygonElement>(
-			"polygon[points='-8,-12 8,-12 0,0']",
+			"polygon[points='-8,0 8,0 0,12']",
 		);
 		expect(triangle).not.toBeNull();
 		expect(triangle?.getAttribute("class")).toBe(
 			"opacity-90 fill-insulin-bolus hover:opacity-100 transition-opacity",
 		);
 
-		// Carb triangle, pointing up at the same baseline.
+		// Carb triangle, rising from the baseline off the same base edge.
 		expect(
-			container.querySelector("polygon[points='-8,8 8,8 0,0']"),
+			container.querySelector("polygon[points='-8,0 8,0 0,-8']"),
 		).not.toBeNull();
 
 		// Tracker pill.
 		const pill = container.querySelector<SVGRectElement>("rect[rx='8']");
 		expect(pill?.getAttribute("width")).toBe("48");
 		expect(pill?.getAttribute("class")).toBe("opacity-90");
+	});
+
+	it("hangs the treatment labels off the baseline", async () => {
+		const { container } = await renderAt(1);
+
+		const byText = (value: string) =>
+			Array.from(container.querySelectorAll<SVGTextElement>("text")).find(
+				(t) => t.textContent?.trim() === value,
+			);
+
+		// Amounts stack above the diamond, the meal name beside its waist.
+		const carbs = byText("30g");
+		expect(carbs?.getAttribute("y")).toBe(String(CARB_LABEL_Y));
+		expect(carbs?.getAttribute("dy")).toBe("-0.355em");
+		expect(carbs?.getAttribute("text-anchor")).toBe("middle");
+		expect(carbs?.getAttribute("x")).toBeNull();
+
+		const units = byText("1.5U");
+		expect(units?.getAttribute("y")).toBe(String(BOLUS_LABEL_Y));
+		expect(units?.getAttribute("dy")).toBe("-0.355em");
+		expect(units?.getAttribute("text-anchor")).toBe("middle");
+		expect(units?.getAttribute("x")).toBeNull();
+
+		// The meal name is the one label placed beside the diamond rather than
+		// above it, so it is also the only one inside the band the triangles
+		// occupy. It reaches left, back over markers already painted, so a
+		// later meal's triangle cannot overdraw it. dy is pinned with it: it
+		// sets the row as much as y does.
+		const meal = byText("Lunch");
+		expect(meal?.getAttribute("x")).toBe(String(-(MARKER_HALF_WIDTH + 3)));
+		expect(meal?.getAttribute("y")).toBe("0");
+		expect(meal?.getAttribute("dy")).toBe("0.35em");
+		expect(meal?.getAttribute("text-anchor")).toBe("end");
+
+		for (const label of [carbs, units]) {
+			expect(Number(label?.getAttribute("y"))).toBeLessThan(-MARKER_HEIGHT);
+		}
+
+		// A label can outgrow its own glyph and reach over a neighbouring
+		// marker, so none of them may take a click that marker would have had.
+		for (const label of [carbs, units, meal]) {
+			expect(label?.getAttribute("pointer-events")).toBe("none");
+		}
 	});
 
 	it("draws BasalTrack temp-basal spans and hatched steps without marks", async () => {

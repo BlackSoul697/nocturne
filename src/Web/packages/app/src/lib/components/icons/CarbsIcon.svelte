@@ -1,9 +1,9 @@
 <script lang="ts">
   /**
-   * Carbs marker icon — a triangle pointing up at the baseline. Used for carb
+   * Carbs marker icon — the upper half of the chart's meal diamond, sized to
+   * its own icon box rather than to the chart's baseline. Used for carb
    * treatment markers in legends and stat cards; the chart draws the same shape
-   * from <see>marker-shapes</see>. Complements BolusIcon, which points down at
-   * the same baseline.
+   * from <see>marker-shapes</see>. Complements BolusIcon, the lower half.
    */
   import type { IconProps } from "./types";
   import { trianglePoints } from "./marker-shapes";
