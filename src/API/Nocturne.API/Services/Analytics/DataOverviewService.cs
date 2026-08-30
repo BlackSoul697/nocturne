@@ -252,10 +252,7 @@ public class DataOverviewService : IDataOverviewService
         await using var context = await _factory.CreateAsync(cancellationToken);
 
         var tz = await GetUserTimeZoneAsync(cancellationToken);
-        var localYearStart = new DateTime(year, 1, 1, 0, 0, 0, DateTimeKind.Unspecified);
-        var localNextYearStart = new DateTime(year + 1, 1, 1, 0, 0, 0, DateTimeKind.Unspecified);
-        var startUtc = TimeZoneInfo.ConvertTimeToUtc(localYearStart, tz);
-        var endUtc = TimeZoneInfo.ConvertTimeToUtc(localNextYearStart, tz);
+        var (startUtc, endUtc) = LocalYearBoundsUtc(year, tz);
         var startMills = new DateTimeOffset(startUtc, TimeSpan.Zero).ToUnixTimeMilliseconds();
         var endMills = new DateTimeOffset(endUtc, TimeSpan.Zero).ToUnixTimeMilliseconds();
 
@@ -479,11 +476,7 @@ public class DataOverviewService : IDataOverviewService
         // Minimum readings required for a valid GRI calculation (72 = ~6 hours of 5-min CGM data)
         const int minimumReadings = 72;
 
-        // Compute year-level UTC boundaries once
-        var localYearStart = new DateTime(year, 1, 1, 0, 0, 0, DateTimeKind.Unspecified);
-        var localNextYearStart = new DateTime(year + 1, 1, 1, 0, 0, 0, DateTimeKind.Unspecified);
-        var startUtc = TimeZoneInfo.ConvertTimeToUtc(localYearStart, tz);
-        var endUtc = TimeZoneInfo.ConvertTimeToUtc(localNextYearStart, tz);
+        var (startUtc, endUtc) = LocalYearBoundsUtc(year, tz);
 
         // Hoist LinkedRecord subqueries — IQueryable construction is free
         var npSensorGlucoseIds = context
@@ -506,7 +499,8 @@ public class DataOverviewService : IDataOverviewService
         // SensorGlucose (CGM)
         await AccumulateMonthlyReadingsAsync(
             context.SensorGlucose
-                .Where(e => e.Timestamp >= startUtc && e.Timestamp < endUtc && e.Mgdl > 0)
+                .Where(e => e.Timestamp >= startUtc && e.Timestamp < endUtc)
+                .Where(e => e.Mgdl > 0 && !double.IsNaN(e.Mgdl))
                 .Where(e => !hasFilter || dataSources!.Contains(e.DataSource!))
                 .Where(e => !npSensorGlucoseIds.Contains(e.Id))
                 .Select(e => new { e.Timestamp, e.Mgdl }),
@@ -516,7 +510,8 @@ public class DataOverviewService : IDataOverviewService
         // MeterGlucose (finger sticks)
         await AccumulateMonthlyReadingsAsync(
             context.MeterGlucose
-                .Where(e => e.Timestamp >= startUtc && e.Timestamp < endUtc && e.Mgdl > 0)
+                .Where(e => e.Timestamp >= startUtc && e.Timestamp < endUtc)
+                .Where(e => e.Mgdl > 0 && !double.IsNaN(e.Mgdl))
                 .Where(e => !hasFilter || dataSources!.Contains(e.DataSource!))
                 .Select(e => new { e.Timestamp, e.Mgdl }),
             r => r.Timestamp, r => r.Mgdl, allGlucoseByMonth, tz,
@@ -584,6 +579,21 @@ public class DataOverviewService : IDataOverviewService
         }
 
         return new GriTimelineResponse { Year = year, Periods = periods.ToArray() };
+    }
+
+    /// <summary>
+    /// The half-open UTC interval covering <paramref name="year"/> in <paramref name="tz"/>, so a
+    /// year runs from local midnight to local midnight rather than from midnight UTC.
+    /// </summary>
+    private static (DateTime StartUtc, DateTime EndUtc) LocalYearBoundsUtc(int year, TimeZoneInfo tz)
+    {
+        var localYearStart = new DateTime(year, 1, 1, 0, 0, 0, DateTimeKind.Unspecified);
+        var localNextYearStart = new DateTime(year + 1, 1, 1, 0, 0, 0, DateTimeKind.Unspecified);
+
+        return (
+            TimeZoneInfo.ConvertTimeToUtc(localYearStart, tz),
+            TimeZoneInfo.ConvertTimeToUtc(localNextYearStart, tz)
+        );
     }
 
     /// <summary>
@@ -664,10 +674,34 @@ public class DataOverviewService : IDataOverviewService
     }
 
     /// <summary>
-    /// Builds one month's GRI timeline period, or null when the month has fewer than
-    /// <paramref name="minimumReadings"/> glucose readings.
+    /// The zones the GRI is scored over. These are the consensus bounds rather than the tenant's
+    /// thresholds — <see cref="GetGriTimelineAsync"/> takes no <c>GlycemicThresholds</c>, so no
+    /// caller can move them.
     /// </summary>
-    private GriTimelinePeriod? BuildGriPeriod(
+    private enum GriZone
+    {
+        VeryLow,
+        Low,
+        Target,
+        High,
+        VeryHigh,
+    }
+
+    private static readonly GlucoseZoneScale GriZones = new(
+        GlucoseZoneBound.Under(GlucoseConstants.VeryLowMgdl),
+        GlucoseZoneBound.Under(GlucoseConstants.TargetBottomMgdl),
+        GlucoseZoneBound.UpTo(GlucoseConstants.TargetTopMgdl),
+        GlucoseZoneBound.UpTo(GlucoseConstants.VeryHighMgdl)
+    );
+
+    /// <summary>
+    /// Builds one month's GRI timeline period, or null when the month has fewer than
+    /// <paramref name="minimumReadings"/> glucose readings. Values that are not readings are
+    /// dropped before anything is counted, so they reach neither a zone nor the denominator — see
+    /// <see cref="GlucoseStatistics.IsReading"/>. Internal for the test assembly; not part of the
+    /// service's contract.
+    /// </summary>
+    internal GriTimelinePeriod? BuildGriPeriod(
         int month,
         int year,
         int minimumReadings,
@@ -677,28 +711,24 @@ public class DataOverviewService : IDataOverviewService
         Dictionary<int, double> tempBasalByMonth,
         Dictionary<int, double> carbsByMonth)
     {
-        if (
-            !allGlucoseByMonth.TryGetValue(month, out var glucoseReadings)
-            || glucoseReadings.Count < minimumReadings
-        )
+        if (!allGlucoseByMonth.TryGetValue(month, out var monthValues))
             return null;
 
-        // Bucket readings into TIR zones
+        var glucoseReadings = monthValues.Where(GlucoseStatistics.IsReading).ToList();
+        if (glucoseReadings.Count < minimumReadings)
+            return null;
+
         var totalCount = glucoseReadings.Count;
-        var veryLowCount = glucoseReadings.Count(v => v < 54);
-        var lowCount = glucoseReadings.Count(v => v >= 54 && v < GlucoseConstants.TargetBottomMgdl);
-        var targetCount = glucoseReadings.Count(
-            v => v >= GlucoseConstants.TargetBottomMgdl && v <= GlucoseConstants.TargetTopMgdl);
-        var highCount = glucoseReadings.Count(v => v > GlucoseConstants.TargetTopMgdl && v <= 250);
-        var veryHighCount = glucoseReadings.Count(v => v > 250);
+        var counts = GriZones.Count(glucoseReadings);
+        double Percent(GriZone zone) => (double)counts[(int)zone] / totalCount * 100.0;
 
         var percentages = new TimeInRangePercentages
         {
-            VeryLow = (double)veryLowCount / totalCount * 100.0,
-            Low = (double)lowCount / totalCount * 100.0,
-            Target = (double)targetCount / totalCount * 100.0,
-            High = (double)highCount / totalCount * 100.0,
-            VeryHigh = (double)veryHighCount / totalCount * 100.0,
+            VeryLow = Percent(GriZone.VeryLow),
+            Low = Percent(GriZone.Low),
+            Target = Percent(GriZone.Target),
+            High = Percent(GriZone.High),
+            VeryHigh = Percent(GriZone.VeryHigh),
         };
 
         var timeInRange = new TimeInRangeMetrics { Percentages = percentages };
@@ -886,9 +916,8 @@ public class DataOverviewService : IDataOverviewService
                 .Select(lr => lr.RecordId);
 
             var sensorReadings = await context
-                .SensorGlucose.Where(e =>
-                    e.Timestamp >= startUtc && e.Timestamp < endUtc && e.Mgdl > 0
-                )
+                .SensorGlucose.Where(e => e.Timestamp >= startUtc && e.Timestamp < endUtc)
+                .Where(e => e.Mgdl > 0 && !double.IsNaN(e.Mgdl))
                 .Where(e => !hasFilter || dataSources!.Contains(e.DataSource!))
                 .Where(e => !npSensorGlucoseIds.Contains(e.Id))
                 .Select(e => new { e.Timestamp, e.Mgdl })
@@ -905,9 +934,8 @@ public class DataOverviewService : IDataOverviewService
         try
         {
             var meterReadings = await context
-                .MeterGlucose.Where(e =>
-                    e.Timestamp >= startUtc && e.Timestamp < endUtc && e.Mgdl > 0
-                )
+                .MeterGlucose.Where(e => e.Timestamp >= startUtc && e.Timestamp < endUtc)
+                .Where(e => e.Mgdl > 0 && !double.IsNaN(e.Mgdl))
                 .Where(e => !hasFilter || dataSources!.Contains(e.DataSource!))
                 .Select(e => new { e.Timestamp, e.Mgdl })
                 .ToListAsync(cancellationToken);
@@ -931,6 +959,7 @@ public class DataOverviewService : IDataOverviewService
 
         // Group by date and compute daily averages + time in range
         var grouped = allReadings
+            .Where(r => GlucoseStatistics.IsReading(r.Mgdl))
             .GroupBy(r => TimestampToDateString(r.Timestamp, tz))
             .Select(g =>
             {
