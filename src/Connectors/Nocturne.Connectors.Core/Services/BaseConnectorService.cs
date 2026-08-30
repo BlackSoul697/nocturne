@@ -79,7 +79,18 @@ public abstract class BaseConnectorService<TConfig> : IConnectorService<TConfig>
         typeof(TConfig).GetCustomAttribute<ConnectorRegistrationAttribute>()?.SupportedDataTypes
         ?? [SyncDataType.Glucose];
 
-    public abstract Task<bool> AuthenticateAsync();
+    /// <summary>
+    ///     The pre-flight <see cref="RunBackgroundSyncAsync"/> runs before it fetches anything.
+    ///     It carries no configuration, so a connector whose credentials are per-tenant has nothing
+    ///     to authenticate against here and admits the run: it resolves and checks the tenant's
+    ///     credential inside <see cref="PerformSyncInternalAsync"/>, where the config is in hand.
+    ///     Only a connector holding a process-wide credential overrides this.
+    /// </summary>
+    public virtual Task<bool> AuthenticateAsync()
+    {
+        TrackSuccessfulRequest();
+        return Task.FromResult(true);
+    }
 
     /// <inheritdoc />
     public virtual async Task<SyncResult> SyncDataAsync(
@@ -508,16 +519,35 @@ public abstract class BaseConnectorService<TConfig> : IConnectorService<TConfig>
     protected static DateTime DefaultInitialSyncFloor() => DateTime.UtcNow.AddMonths(-6);
 
     /// <summary>
-    ///     Core synchronization logic: fetches and publishes every data type the tenant has enabled,
-    ///     honouring <see cref="BaseConnectorConfiguration.GetEnabledDataTypes"/> over
-    ///     <see cref="SupportedDataTypes"/>. Shared between the manual and background sync flows.
-    ///     There is deliberately no default implementation: a connector that advertises data types it
-    ///     does not sync would fail silently, so the omission is a compile error instead.
+    ///     Core synchronization logic: fetches and publishes the data types
+    ///     <see cref="ResolveActiveTypes"/> resolves for the run. Shared between the manual and
+    ///     background sync flows. There is deliberately no default implementation: a connector that
+    ///     advertises data types it does not sync would fail silently, so the omission is a compile
+    ///     error instead.
     /// </summary>
     protected abstract Task<SyncResult> PerformSyncInternalAsync(
         SyncRequest request,
         TConfig config,
         CancellationToken cancellationToken);
+
+    /// <summary>
+    ///     The data types one run of <see cref="PerformSyncInternalAsync"/> may touch: what the
+    ///     caller asked for, narrowed to what the tenant has switched on. An empty
+    ///     <see cref="SyncRequest.DataTypes"/> asks for everything, which is how an unfiltered cursor
+    ///     reset arrives; a narrowed one is an operator re-pulling a single type and must not drag
+    ///     the rest of the connector's history back with it.
+    /// </summary>
+    /// <remarks>
+    ///     Answered rather than written back into <paramref name="request"/>: a tenant-wide cursor
+    ///     reset builds one <see cref="SyncRequest"/> and hands the same instance to every connector
+    ///     it fans out to, so a connector recording its own answer there would narrow the next
+    ///     connector's run to its own supported types.
+    /// </remarks>
+    protected HashSet<SyncDataType> ResolveActiveTypes(SyncRequest request, TConfig config)
+    {
+        var enabled = config.GetEnabledDataTypes(SupportedDataTypes).ToHashSet();
+        return request.DataTypes.Count == 0 ? enabled : [.. request.DataTypes.Where(enabled.Contains)];
+    }
 
     protected virtual Task<IEnumerable<Profile>> FetchProfilesAsync()
     {
@@ -1452,7 +1482,7 @@ public abstract class BaseConnectorService<TConfig> : IConnectorService<TConfig>
                     TrackFailedRequest("Unauthorized and re-authentication failed");
                     return RetryStep<T>.Complete(default);
                 }
-                catch (HttpRequestException ex) when (IsRetryableStatusCode(ex.StatusCode))
+                catch (HttpRequestException ex) when (HttpResponseExtensions.IsRetryableStatusCode(ex.StatusCode))
                 {
                     lastException = ex;
                     _logger.LogWarning(
@@ -1595,20 +1625,6 @@ public abstract class BaseConnectorService<TConfig> : IConnectorService<TConfig>
             content,
             cancellationToken
         );
-    }
-
-    /// <summary>
-    ///     Determines if an HTTP status code is retryable.
-    /// </summary>
-    private static bool IsRetryableStatusCode(HttpStatusCode? statusCode)
-    {
-        return statusCode
-            is HttpStatusCode.TooManyRequests
-                or HttpStatusCode.ServiceUnavailable
-                or HttpStatusCode.InternalServerError
-                or HttpStatusCode.BadGateway
-                or HttpStatusCode.GatewayTimeout
-                or HttpStatusCode.RequestTimeout;
     }
 
     /// <summary>

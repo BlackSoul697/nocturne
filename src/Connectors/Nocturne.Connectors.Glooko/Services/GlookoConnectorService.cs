@@ -63,13 +63,6 @@ public class GlookoConnectorService : BaseConnectorService<GlookoConnectorConfig
 
     // ── Authentication ──────────────────────────────────────────────────
 
-    public override async Task<bool> AuthenticateAsync()
-    {
-        // Legacy method; actual auth happens per-tenant in sync flow
-        TrackSuccessfulRequest();
-        return true;
-    }
-
     private async Task<bool> AuthenticateWithConfigAsync(GlookoSyncContext context)
     {
         var token = await _tokenProvider.GetValidTokenAsync(context.Config);
@@ -282,10 +275,7 @@ public class GlookoConnectorService : BaseConnectorService<GlookoConnectorConfig
                 return result;
             }
 
-            if (!request.DataTypes.Any())
-                request.DataTypes = SupportedDataTypes;
-            var enabledTypes = config.GetEnabledDataTypes(SupportedDataTypes);
-            var activeTypes = request.DataTypes.Where(t => enabledTypes.Contains(t)).ToHashSet();
+            var activeTypes = ResolveActiveTypes(request, config);
 
             // Resolve the tenant's timezone timeline before mapping any records. The account's home
             // zone (from the V3 profile) seeds the timeline's origin on first sync; thereafter the

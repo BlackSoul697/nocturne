@@ -36,13 +36,6 @@ public class NocturneRemoteConnectorService : BaseConnectorService<NocturneRemot
     public override string ServiceName => "Nocturne Remote";
 
     /// <summary>
-    ///     Legacy no-config overload, carrying no configuration to authenticate against. This
-    ///     connector resolves and checks the run's credential in
-    ///     <see cref="PerformSyncInternalAsync"/>, where both entry points supply their own.
-    /// </summary>
-    public override Task<bool> AuthenticateAsync() => Task.FromResult(true);
-
-    /// <summary>
     ///     Resolves the run's base URL and bearer header, then asks the remote whether it accepts the
     ///     credential. Answers with the result that ends the run, or null for a run that may proceed.
     /// </summary>
@@ -160,11 +153,7 @@ public class NocturneRemoteConnectorService : BaseConnectorService<NocturneRemot
 
         var result = new SyncResult { StartTime = DateTimeOffset.UtcNow, Success = true };
 
-        if (!request.DataTypes.Any())
-            request.DataTypes = SupportedDataTypes;
-
-        var enabledTypes = config.GetEnabledDataTypes(SupportedDataTypes);
-        var activeTypes = request.DataTypes.Where(t => enabledTypes.Contains(t)).ToHashSet();
+        var activeTypes = ResolveActiveTypes(request, config);
 
         // Glucose keeps request.From: the framework derived it from the newest stored glucose
         // record, so it already is glucose's own cursor. Every other family widens it with its own

@@ -54,14 +54,6 @@ public class MyFitnessPalConnectorService : BaseConnectorService<MyFitnessPalCon
     protected override string ConnectorSource => DataSources.MyFitnessPalConnector;
     public override string ServiceName => "MyFitnessPal";
 
-    /// <inheritdoc />
-    public override Task<bool> AuthenticateAsync()
-    {
-        // Legacy method; actual auth happens per-tenant in PerformSyncInternalAsync
-        TrackSuccessfulRequest();
-        return Task.FromResult(true);
-    }
-
     /// <summary>
     /// Entry point for the scheduled sync.
     /// </summary>
@@ -93,8 +85,8 @@ public class MyFitnessPalConnectorService : BaseConnectorService<MyFitnessPalCon
 
         // This override replaces the base's data-type dispatch, so the toggle it would have
         // honoured has to be checked here.
-        var enabledTypes = config.GetEnabledDataTypes(SupportedDataTypes).ToHashSet();
-        if (!enabledTypes.Contains(SyncDataType.Food))
+        var activeTypes = ResolveActiveTypes(request, config);
+        if (!activeTypes.Contains(SyncDataType.Food))
         {
             _logger.LogInformation(
                 "[{ConnectorSource}] Food sync is disabled; nothing to do", ConnectorSource);
@@ -130,7 +122,7 @@ public class MyFitnessPalConnectorService : BaseConnectorService<MyFitnessPalCon
 
         var foodEntryImports = _mapper.Map(read.Entries, config, from, to, mealNames);
 
-        await PublishRecordTypeAsync(result, SyncDataType.Food, enabledTypes, foodEntryImports,
+        await PublishRecordTypeAsync(result, SyncDataType.Food, activeTypes, foodEntryImports,
             PublishFoodEntriesAsync, config, cancellationToken,
             context: $"since {from:yyyy-MM-dd}");
 

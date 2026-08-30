@@ -47,13 +47,6 @@ public class DexcomConnectorService : BaseConnectorService<DexcomConnectorConfig
     protected override string ConnectorSource => DataSources.DexcomConnector;
     public override string ServiceName => "Dexcom Share";
 
-    public override async Task<bool> AuthenticateAsync()
-    {
-        // AuthenticateAsync is a legacy method; actual auth happens per-tenant in sync flow
-        TrackSuccessfulRequest();
-        return true;
-    }
-
     /// <summary>
     ///     Fetches SensorGlucose records from the Dexcom Share API.
     /// </summary>
@@ -82,8 +75,8 @@ public class DexcomConnectorService : BaseConnectorService<DexcomConnectorConfig
     {
         var result = new SyncResult { StartTime = DateTimeOffset.UtcNow, Success = true };
 
-        var enabledTypes = config.GetEnabledDataTypes(SupportedDataTypes).ToHashSet();
-        if (!enabledTypes.Contains(SyncDataType.Glucose))
+        var activeTypes = ResolveActiveTypes(request, config);
+        if (!activeTypes.Contains(SyncDataType.Glucose))
         {
             result.EndTime = DateTimeOffset.UtcNow;
             return result;
@@ -93,7 +86,7 @@ public class DexcomConnectorService : BaseConnectorService<DexcomConnectorConfig
         {
             var sensorGlucose = await FetchSensorGlucoseAsync(config, request.From);
 
-            await PublishRecordTypeAsync(result, SyncDataType.Glucose, enabledTypes,
+            await PublishRecordTypeAsync(result, SyncDataType.Glucose, activeTypes,
                 sensorGlucose.ToList(), PublishSensorGlucoseDataAsync, config, cancellationToken);
         }
         catch (Exception ex)

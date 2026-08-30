@@ -46,13 +46,6 @@ public class TidepoolConnectorService : BaseConnectorService<TidepoolConnectorCo
     protected override string ConnectorSource => DataSources.TidepoolConnector;
     public override string ServiceName => "Tidepool";
 
-    public override Task<bool> AuthenticateAsync()
-    {
-        // Auth happens per-tenant inside PerformSyncInternalAsync where config is available
-        TrackSuccessfulRequest();
-        return Task.FromResult(true);
-    }
-
     protected override async Task<SyncResult> PerformSyncInternalAsync(
         SyncRequest request,
         TidepoolConnectorConfiguration config,
@@ -60,11 +53,7 @@ public class TidepoolConnectorService : BaseConnectorService<TidepoolConnectorCo
     {
         var result = new SyncResult { StartTime = DateTimeOffset.UtcNow, Success = true };
 
-        if (!request.DataTypes.Any())
-            request.DataTypes = SupportedDataTypes;
-
-        var enabledTypes = config.GetEnabledDataTypes(SupportedDataTypes);
-        var activeTypes = request.DataTypes.Where(t => enabledTypes.Contains(t)).ToHashSet();
+        var activeTypes = ResolveActiveTypes(request, config);
 
         // Authenticate up front. The data fetches below treat a missing token as "no data" and
         // return null without raising an error, so without this gate an auth failure (e.g. bad

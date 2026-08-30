@@ -52,14 +52,6 @@ public class CareLinkConnectorService : BaseConnectorService<CareLinkConnectorCo
     protected override string ConnectorSource => DataSources.CareLinkConnector;
     public override string ServiceName => ServiceNames.CareLinkConnector;
 
-    /// <inheritdoc />
-    public override Task<bool> AuthenticateAsync()
-    {
-        // Legacy method; actual auth happens per-tenant in PerformSyncInternalAsync
-        TrackSuccessfulRequest();
-        return Task.FromResult(true);
-    }
-
     private async Task<bool> AuthenticateWithConfigAsync(CareLinkConnectorConfiguration config)
     {
         // Seed the token provider with persisted secrets so refresh is available immediately
@@ -122,13 +114,13 @@ public class CareLinkConnectorService : BaseConnectorService<CareLinkConnectorCo
         // Seed the tenant timezone timeline from the pump's reported zone (idempotent; first sync only).
         await ConfigureCareLinkTimezoneAsync(data, cancellationToken);
 
-        var enabledTypes = config.GetEnabledDataTypes(SupportedDataTypes).ToHashSet();
+        var activeTypes = ResolveActiveTypes(request, config);
         var isStale = IsDataStale(data);
 
-        await PublishSensorGlucoseStepAsync(data, config, enabledTypes, isStale, result, cancellationToken);
-        await PublishDeviceStatusStepAsync(data, config, enabledTypes, result, cancellationToken);
-        await PublishAlarmStepAsync(data, config, enabledTypes, result, cancellationToken);
-        await PublishTreatmentsStepAsync(data, config, enabledTypes, result, cancellationToken);
+        await PublishSensorGlucoseStepAsync(data, config, activeTypes, isStale, result, cancellationToken);
+        await PublishDeviceStatusStepAsync(data, config, activeTypes, result, cancellationToken);
+        await PublishAlarmStepAsync(data, config, activeTypes, result, cancellationToken);
+        await PublishTreatmentsStepAsync(data, config, activeTypes, result, cancellationToken);
 
         // Persist refresh token if it changed during sync
         await PersistRefreshTokenIfChangedAsync(cancellationToken);
@@ -232,12 +224,12 @@ public class CareLinkConnectorService : BaseConnectorService<CareLinkConnectorCo
     private async Task PublishSensorGlucoseStepAsync(
         CareLinkData data,
         CareLinkConnectorConfiguration config,
-        HashSet<SyncDataType> enabledTypes,
+        HashSet<SyncDataType> activeTypes,
         bool isStale,
         SyncResult result,
         CancellationToken cancellationToken)
     {
-        if (!enabledTypes.Contains(SyncDataType.Glucose))
+        if (!activeTypes.Contains(SyncDataType.Glucose))
             return;
 
         if (isStale)
@@ -252,7 +244,7 @@ public class CareLinkConnectorService : BaseConnectorService<CareLinkConnectorCo
 
         try
         {
-            await PublishRecordTypeAsync(result, SyncDataType.Glucose, enabledTypes,
+            await PublishRecordTypeAsync(result, SyncDataType.Glucose, activeTypes,
                 _sgMapper.Map(data), PublishSensorGlucoseDataAsync, config, cancellationToken);
         }
         catch (OperationCanceledException) { throw; }
@@ -276,12 +268,12 @@ public class CareLinkConnectorService : BaseConnectorService<CareLinkConnectorCo
     private async Task PublishDeviceStatusStepAsync(
         CareLinkData data,
         CareLinkConnectorConfiguration config,
-        HashSet<SyncDataType> enabledTypes,
+        HashSet<SyncDataType> activeTypes,
         SyncResult result,
         CancellationToken cancellationToken)
     {
         // Gated here as well as in the shared path, so a switched-off type is not mapped at all.
-        if (!enabledTypes.Contains(SyncDataType.DeviceStatus))
+        if (!activeTypes.Contains(SyncDataType.DeviceStatus))
             return;
 
         try
@@ -289,7 +281,7 @@ public class CareLinkConnectorService : BaseConnectorService<CareLinkConnectorCo
             List<Nocturne.Core.Models.DeviceStatus> deviceStatuses =
                 CareLinkDeviceStatusMapper.Map(data) is { } deviceStatus ? [deviceStatus] : [];
 
-            await PublishRecordTypeAsync(result, SyncDataType.DeviceStatus, enabledTypes,
+            await PublishRecordTypeAsync(result, SyncDataType.DeviceStatus, activeTypes,
                 deviceStatuses, PublishDeviceStatusAsync, config, cancellationToken);
         }
         catch (OperationCanceledException) { throw; }
@@ -316,7 +308,7 @@ public class CareLinkConnectorService : BaseConnectorService<CareLinkConnectorCo
     private async Task PublishAlarmStepAsync(
         CareLinkData data,
         CareLinkConnectorConfiguration config,
-        HashSet<SyncDataType> enabledTypes,
+        HashSet<SyncDataType> activeTypes,
         SyncResult result,
         CancellationToken cancellationToken)
     {
@@ -332,7 +324,7 @@ public class CareLinkConnectorService : BaseConnectorService<CareLinkConnectorCo
                     data.MedicalDeviceTime ?? "", data.CurrentServerTime);
                 var systemEvent = CareLinkSystemEventMapper.Map(data.LastAlarm, pumpOffsetMs, data.CurrentServerTime);
                 if (systemEvent != null
-                    && await PublishRecordTypeAsync(result, SyncDataType.DeviceEvents, enabledTypes,
+                    && await PublishRecordTypeAsync(result, SyncDataType.DeviceEvents, activeTypes,
                         [systemEvent], PublishSystemEventDataAsync, config, cancellationToken,
                         context: "from the last alarm"))
                     _lastAlarmKey = alarmKey;
@@ -357,7 +349,7 @@ public class CareLinkConnectorService : BaseConnectorService<CareLinkConnectorCo
     private async Task PublishTreatmentsStepAsync(
         CareLinkData data,
         CareLinkConnectorConfiguration config,
-        HashSet<SyncDataType> enabledTypes,
+        HashSet<SyncDataType> activeTypes,
         SyncResult result,
         CancellationToken cancellationToken)
     {
@@ -366,19 +358,19 @@ public class CareLinkConnectorService : BaseConnectorService<CareLinkConnectorCo
             var pumpOffsetMs = Utilities.CareLinkTimestampParser.CalculatePumpOffsetMs(
                 data.MedicalDeviceTime ?? "", data.CurrentServerTime);
 
-            await PublishRecordTypeAsync(result, SyncDataType.Boluses, enabledTypes,
+            await PublishRecordTypeAsync(result, SyncDataType.Boluses, activeTypes,
                 CareLinkTreatmentMapper.MapBoluses(data, pumpOffsetMs), PublishBolusDataAsync,
                 config, cancellationToken);
 
-            await PublishRecordTypeAsync(result, SyncDataType.CarbIntake, enabledTypes,
+            await PublishRecordTypeAsync(result, SyncDataType.CarbIntake, activeTypes,
                 CareLinkTreatmentMapper.MapCarbIntakes(data, pumpOffsetMs), PublishCarbIntakeDataAsync,
                 config, cancellationToken);
 
-            await PublishRecordTypeAsync(result, SyncDataType.TempBasals, enabledTypes,
+            await PublishRecordTypeAsync(result, SyncDataType.TempBasals, activeTypes,
                 CareLinkTreatmentMapper.MapTempBasals(data, pumpOffsetMs), PublishTempBasalDataAsync,
                 config, cancellationToken);
 
-            await PublishRecordTypeAsync(result, SyncDataType.DeviceEvents, enabledTypes,
+            await PublishRecordTypeAsync(result, SyncDataType.DeviceEvents, activeTypes,
                 CareLinkSystemEventMapper.MapNotifications(data.NotificationHistory, pumpOffsetMs),
                 PublishSystemEventDataAsync, config, cancellationToken,
                 context: "from notification history");

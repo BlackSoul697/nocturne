@@ -74,13 +74,6 @@ public class LibreConnectorService(
 
     public override bool IsHealthy => base.IsHealthy && !_tokenProvider.IsTokenExpired;
 
-    public override async Task<bool> AuthenticateAsync()
-    {
-        // Legacy method; actual auth happens per-tenant in sync flow
-        TrackSuccessfulRequest();
-        return true;
-    }
-
     private async Task<bool> AuthenticateWithConfigAsync(LibreLinkUpConnectorConfiguration config)
     {
         var token = await _tokenProvider.GetValidTokenAsync(config);
@@ -172,8 +165,8 @@ public class LibreConnectorService(
     {
         var result = new SyncResult { StartTime = DateTimeOffset.UtcNow, Success = true };
 
-        var enabledTypes = config.GetEnabledDataTypes(SupportedDataTypes).ToHashSet();
-        if (!enabledTypes.Contains(SyncDataType.Glucose))
+        var activeTypes = ResolveActiveTypes(request, config);
+        if (!activeTypes.Contains(SyncDataType.Glucose))
         {
             result.EndTime = DateTimeOffset.UtcNow;
             return result;
@@ -183,7 +176,7 @@ public class LibreConnectorService(
         {
             var sensorGlucose = await FetchSensorGlucoseAsync(config, request.From);
 
-            await PublishRecordTypeAsync(result, SyncDataType.Glucose, enabledTypes,
+            await PublishRecordTypeAsync(result, SyncDataType.Glucose, activeTypes,
                 sensorGlucose.ToList(), PublishSensorGlucoseDataAsync, config, cancellationToken);
         }
         catch (Exception ex)
