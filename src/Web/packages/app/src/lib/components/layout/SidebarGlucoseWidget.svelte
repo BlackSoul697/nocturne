@@ -23,6 +23,7 @@
   const sidebarEngine = createChartDataEngine({
     enablePredictions: false,
     focusHours: 3,
+    dataWindow: "display",
   });
 
   // Glucose-only layout — no space reserved for basal/IOB/swim lanes
@@ -129,7 +130,10 @@
         >
           {#snippet tracks(_ctx)}
             <ThresholdRules />
-            <GlucoseTrack showAxis={false} />
+            <!-- The density heuristic would show a dot per reading now that the
+                 series is the displayed window rather than the 48-hour buffer.
+                 A 120px sparkline reads as a line. -->
+            <GlucoseTrack showAxis={false} showPoints={false} />
           {/snippet}
         </GlucoseChartShell>
       </a>
