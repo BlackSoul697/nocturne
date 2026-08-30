@@ -258,11 +258,6 @@ class Program
             "",
             secret: false
         );
-
-        // Resend (email alerts). Optional like the other chat-platform
-        // credentials — consumed by the web's bot init (RESEND_API_KEY,
-        // RESEND_FROM_ADDRESS) and the @resend/chat-sdk-adapter
-        // (RESEND_FROM_NAME, RESEND_WEBHOOK_SECRET).
         var resendApiKey = builder.AddParameter("resend-api-key", "", secret: true);
         var resendFromAddress = builder.AddParameter("resend-from-address", "", secret: false);
         var resendFromName = builder.AddParameter("resend-from-name", "", secret: false);
@@ -424,9 +419,6 @@ class Program
                 .WithEnvironment("WHATSAPP_VERIFY_TOKEN", whatsappVerifyToken)
                 .WithEnvironment("WHATSAPP_APP_SECRET", whatsappAppSecret)
                 .WithEnvironment("WHATSAPP_PHONE_NUMBER_ID", whatsappPhoneNumberId)
-                // Resend email-alert credentials — documented as env-var
-                // configurable (docs/alerts/email.svx, Option B) and consumed
-                // by the bot init in src/lib/server/bot/index.ts.
                 .WithEnvironment("RESEND_API_KEY", resendApiKey)
                 .WithEnvironment("RESEND_FROM_ADDRESS", resendFromAddress)
                 .WithEnvironment("RESEND_FROM_NAME", resendFromName)
