@@ -11,6 +11,7 @@
     ConnectorFoodEntry,
     SuggestedMealMatch,
   } from "$lib/api/generated/nocturne-api-client";
+  import { retainQuery } from "$lib/api/retain-query.svelte";
 
   interface Props {
     open: boolean;
@@ -59,6 +60,7 @@
   const foodEntryQuery = $derived(
     open && foodEntryId ? getFoodEntry(foodEntryId) : null,
   );
+  retainQuery(() => foodEntryQuery);
   const foodEntry = $derived<ConnectorFoodEntry | null>(
     foodEntryQuery?.current ?? null,
   );
