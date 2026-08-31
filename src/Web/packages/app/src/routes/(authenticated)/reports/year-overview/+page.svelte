@@ -408,12 +408,7 @@
   }
 
   function navigateToDayInReview(dateStr: string) {
-    if (reportsParams) {
-      reportsParams.setCustomRange(dateStr, dateStr);
-    }
-    goto(
-      `/reports/day-in-review?from=${dateStr}&to=${dateStr}&isDefault=false`
-    );
+    goto(`/reports/day-in-review?date=${dateStr}`);
   }
 
   // =========================================================================

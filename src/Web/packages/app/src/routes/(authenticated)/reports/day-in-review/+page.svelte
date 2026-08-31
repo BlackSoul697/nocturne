@@ -79,11 +79,16 @@
     target.setDate(target.getDate() + days);
     goto(`/reports/day-in-review?date=${toDayString(target)}`, {
       invalidateAll: true,
+      replaceState: true,
     });
   }
 
-  function goBackToMonthView() {
-    goto("/calendar");
+  function goBackToPreviousView() {
+    if (window.history.length > 1) {
+      window.history.back();
+    } else {
+      goto("/calendar");
+    }
   }
 
   // Format date for display
@@ -280,10 +285,10 @@
           variant="ghost"
           size="sm"
           class="self-start @2xl:self-auto"
-          onclick={goBackToMonthView}
+          onclick={goBackToPreviousView}
         >
           <ArrowLeft class="h-4 w-4 mr-2" />
-          Back to Month View
+          Back to Previous View
         </Button>
 
         <div class="flex items-center justify-center gap-2">
