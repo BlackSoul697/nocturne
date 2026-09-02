@@ -4,6 +4,7 @@
   import { page } from "$app/state";
   import { toast } from "svelte-sonner";
   import { remoteErrorMessage } from "$lib/api/remote-error";
+  import { permissionGatedMutationError } from "$lib/forms";
   import {
     getRules,
     deleteRule,
@@ -52,6 +53,9 @@
   const NEEDS_ALERTS_READWRITE =
     "Changing alerts requires the alerts.readwrite permission.";
 
+  const mutationError = (err: unknown) =>
+    permissionGatedMutationError(err, NEEDS_ALERTS_READWRITE);
+
   // ---- Queries ----
   const rulesQuery = getRules();
   const activeAlertsQuery = getActiveAlerts();
@@ -72,7 +76,7 @@
       await toggleRule(ruleId);
       await rulesQuery.refresh();
     } catch (err) {
-      toast.error(remoteErrorMessage(err, NEEDS_ALERTS_READWRITE));
+      toast.error(mutationError(err));
     } finally {
       togglingRuleId = null;
     }
@@ -84,7 +88,7 @@
       await deleteRule(ruleId);
       await rulesQuery.refresh();
     } catch (err) {
-      toast.error(remoteErrorMessage(err, NEEDS_ALERTS_READWRITE));
+      toast.error(mutationError(err));
     } finally {
       deletingRuleId = null;
     }
@@ -95,7 +99,7 @@
     try {
       await testFire(ruleId);
     } catch (err) {
-      toast.error(remoteErrorMessage(err, NEEDS_ALERTS_READWRITE));
+      toast.error(mutationError(err));
     } finally {
       testingRuleId = null;
     }
@@ -117,7 +121,7 @@
       });
       await dndQuery.refresh();
     } catch (err) {
-      toast.error(remoteErrorMessage(err, NEEDS_ALERTS_READWRITE));
+      toast.error(mutationError(err));
     } finally {
       disablingDnd = false;
     }
@@ -137,7 +141,7 @@
         ),
       );
     } catch (err) {
-      toast.error(remoteErrorMessage(err, NEEDS_ALERTS_READWRITE));
+      toast.error(mutationError(err));
     } finally {
       acknowledging = false;
     }

@@ -31,6 +31,7 @@
     GuestLinkStatus,
   } from "$api/generated/nocturne-api-client";
   import { retainQuery } from "$lib/api/retain-query.svelte";
+  import { describeSubmitError } from "$lib/forms";
 
   const effectivePermissions: string[] = $derived(
     (page.data as any).effectivePermissions ?? []
@@ -168,8 +169,11 @@
       createdCode = result.code ?? null;
       createdUrl = result.fullUrl ? normalizeCreatedUrl(result.fullUrl) : null;
       await guestLinksQuery?.refresh();
-    } catch {
-      createError = "Failed to create guest link. Please try again.";
+    } catch (err) {
+      createError = describeSubmitError(
+        err,
+        "Failed to create guest link. Please try again."
+      );
     } finally {
       isCreating = false;
     }
@@ -232,9 +236,10 @@
       showCreateForm = true;
       await guestLinksQuery?.refresh();
     } catch (err) {
-      createError =
-        (err as any)?.body?.message ??
-        "Failed to create a new code. Active links are limited to 5 at a time.";
+      createError = describeSubmitError(
+        err,
+        "Failed to create a new code. Active links are limited to 5 at a time."
+      );
       showCreateForm = true;
     } finally {
       reissuingId = null;
