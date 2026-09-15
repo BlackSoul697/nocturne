@@ -46,12 +46,20 @@ namespace Nocturne.Infrastructure.Data.Migrations
                             FROM connector_configurations
                             WHERE tenant_id = t_id
                         ),
+                        -- jsonb_each raises on anything but an object, which would abort the whole
+                        -- block and leave the API unable to start: migrations run before the host
+                        -- does. A hand-edited row holding an array or a scalar carries nothing this
+                        -- merge could use, so read it as empty instead.
                         pairs AS (
                             SELECT r.canonical, 'configuration' AS doc, e.key, e.value, r.rank
-                            FROM ranked r, jsonb_each(r.configuration) e
+                            FROM ranked r,
+                                 jsonb_each(CASE WHEN jsonb_typeof(r.configuration) = 'object'
+                                                 THEN r.configuration ELSE '{}'::jsonb END) e
                             UNION ALL
                             SELECT r.canonical, 'secrets', e.key, e.value, r.rank
-                            FROM ranked r, jsonb_each(r.secrets) e
+                            FROM ranked r,
+                                 jsonb_each(CASE WHEN jsonb_typeof(r.secrets) = 'object'
+                                                 THEN r.secrets ELSE '{}'::jsonb END) e
                         ),
                         winning AS (
                             SELECT DISTINCT ON (canonical, doc, key) canonical, doc, key, value
@@ -102,13 +110,22 @@ namespace Nocturne.Infrastructure.Data.Migrations
                     END LOOP;
                 END $$;
                 """);
+
+            // Last, so it is checked against rows the statements above have already folded and
+            // lowered — and in the same transaction, so a row they somehow missed rolls the
+            // normalisation back rather than leaving the constraint to fail on every later start.
+            migrationBuilder.AddCheckConstraint(
+                name: "ck_connector_configurations_connector_name_lower",
+                table: "connector_configurations",
+                sql: "connector_name = lower(connector_name)");
         }
 
         /// <inheritdoc />
         protected override void Down(MigrationBuilder migrationBuilder)
         {
-            // Nothing to undo: the casing a row was written with is not recorded anywhere else, and
-            // a folded duplicate no longer exists to split back apart.
+            migrationBuilder.DropCheckConstraint(
+                name: "ck_connector_configurations_connector_name_lower",
+                table: "connector_configurations");
         }
     }
 }

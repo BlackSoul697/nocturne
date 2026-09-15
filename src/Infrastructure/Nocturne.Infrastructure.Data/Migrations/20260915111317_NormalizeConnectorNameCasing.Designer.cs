@@ -13,7 +13,7 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace Nocturne.Infrastructure.Data.Migrations
 {
     [DbContext(typeof(NocturneDbContext))]
-    [Migration("20260915102522_NormalizeConnectorNameCasing")]
+    [Migration("20260915111317_NormalizeConnectorNameCasing")]
     partial class NormalizeConnectorNameCasing
     {
         /// <inheritdoc />
@@ -1275,7 +1275,10 @@ namespace Nocturne.Infrastructure.Data.Migrations
                         .IsUnique()
                         .HasDatabaseName("ix_connector_configurations_connector_name_tenant");
 
-                    b.ToTable("connector_configurations");
+                    b.ToTable("connector_configurations", t =>
+                        {
+                            t.HasCheckConstraint("ck_connector_configurations_connector_name_lower", "connector_name = lower(connector_name)");
+                        });
                 });
 
             modelBuilder.Entity("Nocturne.Infrastructure.Data.Entities.ConnectorFoodEntryEntity", b =>
