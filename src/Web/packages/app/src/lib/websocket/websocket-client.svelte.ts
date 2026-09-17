@@ -13,6 +13,7 @@ import type {
   AlarmEvent,
   StatusEvent,
 } from "./types";
+import { realtimeSocketOptions } from "./socket-options";
 
 export class WebSocketClient {
   private socket: Socket | null = null;
@@ -36,6 +37,10 @@ export class WebSocketClient {
    *  permitted realtime for this tenant) rather than a transient failure. Lets
    *  connect_error stay quiet and stop retrying for unauthorized users. */
   private lastTicketDenied = false;
+  /** Whether the last handshake carried a ticket. The bridge admits a ticket-less
+   *  handshake so legacy Nightscout clients can run the classic `authorize`
+   *  exchange, but joins such a socket to no room. */
+  private lastTicketPresented = false;
   /** Set when disconnect() is called so a scheduled retry doesn't resurrect a
    *  deliberately-closed socket. */
   private intentionallyClosed = false;
@@ -83,20 +88,17 @@ export class WebSocketClient {
     this.clearAuthRetry();
 
     try {
-      this.socket = io(this.config.url, {
-        transports: ["websocket", "polling"],
-        timeout: this.config.pingTimeout,
-        reconnection: true,
-        reconnectionAttempts: this.config.reconnectAttempts,
-        reconnectionDelay: this.config.reconnectDelay,
-        reconnectionDelayMax: this.config.maxReconnectDelay,
-        randomizationFactor: 0.5,
-        // Fetched fresh on every (re)connect so a short-lived ticket never goes
-        // stale across reconnections.
-        auth: (cb: (data: Record<string, unknown>) => void) => {
-          this.fetchTicket().then((token) => cb({ token: token ?? "" }));
-        },
-      });
+      this.socket = io(
+        this.config.url,
+        realtimeSocketOptions(this.config, (cb) => {
+          // Fetched fresh on every (re)connect so a short-lived ticket never goes
+          // stale across reconnections.
+          this.fetchTicket().then((token) => {
+            this.lastTicketPresented = token != null;
+            cb({ token: token ?? "" });
+          });
+        })
+      );
 
       this.setupEventListeners();
     } catch (error) {
@@ -155,6 +157,24 @@ export class WebSocketClient {
     }, delay);
   }
 
+  /** Drop a ticket-less handshake rather than leave it masquerading as a working
+   *  connection. A definitive denial is terminal and reported as `unauthorized`
+   *  so the UI shows "no realtime" rather than an error the user cannot act on;
+   *  a slow or failing ticket endpoint is retried with backoff. */
+  private handleTicketlessConnection(): void {
+    this.socket?.disconnect();
+
+    if (this.lastTicketDenied) {
+      this.clearAuthRetry();
+      this.lastError = null;
+      this.connectionStatus = "unauthorized";
+      return;
+    }
+
+    this.connectionStatus = "connecting";
+    this.scheduleAuthRetry();
+  }
+
   private clearAuthRetry(): void {
     if (this.authRetryTimer) {
       clearTimeout(this.authRetryTimer);
@@ -180,6 +200,14 @@ export class WebSocketClient {
 
     // Connection events
     this.socket.on("connect", () => {
+      // Admitted without a ticket: joined to no room, so this socket delivers
+      // nothing. Reporting it as connected hides a dead feed behind a healthy
+      // indicator.
+      if (!this.lastTicketPresented) {
+        this.handleTicketlessConnection();
+        return;
+      }
+
       this.connectionStatus = "connected";
       this.reconnectAttempts = 0;
       this.lastError = null;
