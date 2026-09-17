@@ -31,6 +31,7 @@ class FakeSocket {
 
   connect() {
     this.connectCalls++;
+    void this.handshake();
     return this;
   }
 
@@ -43,6 +44,13 @@ class FakeSocket {
     await new Promise<void>((resolve) => this.options.auth(() => resolve()));
     this.connected = true;
     this.handlers.get("connect")?.();
+  }
+
+  /** The bridge rejecting the handshake outright, as it does for an invalid
+   *  ticket or an unresolvable tenant. */
+  async rejectHandshake(message: string): Promise<void> {
+    await new Promise<void>((resolve) => this.options.auth(() => resolve()));
+    this.handlers.get("connect_error")?.(new Error(message));
   }
 }
 
@@ -127,5 +135,40 @@ describe("WebSocketClient handshake ticket handling", () => {
     expect(client.connectionStatus).toBe("unauthorized");
     expect(client.lastError).toBeNull();
     expect(lastSocket!.connectCalls).toBe(0);
+  });
+
+  it("reports unauthorized when the bridge rejects a denied connection", async () => {
+    stubTicketEndpoint({ token: null });
+    const client = new WebSocketClient(config);
+
+    client.connect();
+    await lastSocket!.rejectHandshake("unauthorized");
+
+    expect(client.connectionStatus).toBe("unauthorized");
+    expect(client.lastError).toBeNull();
+  });
+
+  it("surfaces an error once a ticket outage outlasts the quiet retries", async () => {
+    stubTicketEndpoint({ token: null, retry: true });
+    const client = new WebSocketClient(config);
+
+    client.connect();
+    await lastSocket!.handshake();
+
+    expect(client.connectionStatus).toBe("connecting");
+    await vi.waitFor(() => expect(client.connectionStatus).toBe("error"), {
+      timeout: 5000,
+    });
+  });
+
+  it("treats an empty token as no ticket, matching the bridge", async () => {
+    stubTicketEndpoint({ token: "", retry: true });
+    const client = new WebSocketClient(config);
+
+    client.connect();
+    await lastSocket!.handshake();
+
+    expect(client.connectionStatus).not.toBe("connected");
+    expect(lastSocket!.disconnectCalls).toBeGreaterThan(0);
   });
 });

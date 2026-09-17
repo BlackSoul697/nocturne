@@ -1,4 +1,4 @@
-import { describe, it, expect, afterEach } from "vitest";
+import { describe, it, expect, afterEach, vi } from "vitest";
 import { createServer, type Server } from "node:http";
 import { io, type Socket } from "socket.io-client";
 import { realtimeSocketOptions } from "./socket-options";
@@ -27,46 +27,55 @@ afterEach(async () => {
 });
 
 /** A server that answers HTTP but refuses the WebSocket upgrade, standing in for
- *  the proxies, carriers and extensions that do the same to real users. */
-async function startWebsocketHostileServer(): Promise<string> {
-  server = createServer((_req, res) => {
+ *  the proxies, carriers and extensions that do the same to real users. It
+ *  records the transports it is asked for, so the assertion observes what the
+ *  client actually attempted rather than sampling its internal state. */
+async function startWebsocketHostileServer(): Promise<{
+  url: string;
+  attempted: Set<string>;
+}> {
+  const attempted = new Set<string>();
+
+  server = createServer((req, res) => {
+    const transport = new URL(
+      req.url ?? "/",
+      "http://localhost"
+    ).searchParams.get("transport");
+    if (transport) attempted.add(transport);
     res.writeHead(502);
     res.end();
   });
-  server.on("upgrade", (_req, socketConn) => socketConn.destroy());
+  server.on("upgrade", (req, connection) => {
+    const transport = new URL(
+      req.url ?? "/",
+      "http://localhost"
+    ).searchParams.get("transport");
+    if (transport) attempted.add(transport);
+    connection.destroy();
+  });
+
   await new Promise<void>((resolve) => server!.listen(0, "127.0.0.1", resolve));
   const address = server.address();
   if (typeof address === "string" || address === null) {
     throw new Error("expected a TCP address");
   }
-  return `http://127.0.0.1:${address.port}`;
-}
-
-async function observeAttemptedTransports(
-  socketUnderTest: Socket,
-  durationMs: number
-): Promise<Set<string>> {
-  const seen = new Set<string>();
-  const deadline = Date.now() + durationMs;
-  while (Date.now() < deadline) {
-    const name = socketUnderTest.io.engine?.transport?.name;
-    if (name) seen.add(name);
-    await new Promise((resolve) => setTimeout(resolve, 5));
-  }
-  return seen;
+  return { url: `http://127.0.0.1:${address.port}`, attempted };
 }
 
 describe("realtimeSocketOptions", () => {
   it("falls back to polling when the WebSocket transport fails", async () => {
-    const url = await startWebsocketHostileServer();
+    const { url, attempted } = await startWebsocketHostileServer();
 
     socket = io(url, realtimeSocketOptions(config, (cb) => cb({ token: "" })));
-    const attempted = await observeAttemptedTransports(socket, 1500);
 
     // Without tryAllTransports, engine.io-client abandons the attempt on the
-    // first transport error and "polling" is never reached.
-    expect(attempted).toContain("websocket");
-    expect(attempted).toContain("polling");
+    // first transport error and "polling" is never requested.
+    await vi.waitFor(() => expect(attempted).toContain("websocket"), {
+      timeout: 5000,
+    });
+    await vi.waitFor(() => expect(attempted).toContain("polling"), {
+      timeout: 5000,
+    });
   });
 
   it("keeps WebSocket as the preferred transport", () => {
