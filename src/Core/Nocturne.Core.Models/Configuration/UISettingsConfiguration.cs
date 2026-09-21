@@ -351,7 +351,7 @@ public static class WidgetCatalog
             "LineChart", on: true),
         Main(WidgetId.Statistics, "Statistics",
             "BG statistics cards",
-            "BarChart2", on: true),
+            "BarChart2", renderable: false),
         Main(WidgetId.Predictions, "Predictions",
             "Glucose prediction lines on chart",
             "TrendingUp", on: true),
