@@ -11,7 +11,8 @@ namespace Nocturne.Connectors.Core.Tests.Extensions;
 /// retry loops consult, so it decides both whether a request is sent again and — for the statuses
 /// it declines — whether a sign-in failure is reported as refused credentials. These tests hold the
 /// allow-list shape: a status is retried only when it names rate limiting or a transient fault, so
-/// a rejected credential is never sent again.
+/// the classifier never replays a credential the source refused. A 401 is handled above it, by
+/// re-authenticating and retrying with a fresh credential.
 /// </summary>
 public class HttpResponseClassifierTests
 {
@@ -26,7 +27,8 @@ public class HttpResponseClassifierTests
     public void RateLimitingAndTransientFaultsAreRetryable(HttpStatusCode status)
     {
         HttpResponseExtensions.IsRetryableStatusCode(status).Should().BeTrue();
-        new HttpResponseMessage(status).IsRetryableError().Should().BeTrue();
+        using var response = new HttpResponseMessage(status);
+        response.IsRetryableError().Should().BeTrue();
     }
 
     [Theory]
@@ -46,7 +48,8 @@ public class HttpResponseClassifierTests
     public void EverythingOutsideTheAllowListIsNotRetryable(HttpStatusCode status)
     {
         HttpResponseExtensions.IsRetryableStatusCode(status).Should().BeFalse();
-        new HttpResponseMessage(status).IsRetryableError().Should().BeFalse();
+        using var response = new HttpResponseMessage(status);
+        response.IsRetryableError().Should().BeFalse();
     }
 
     [Theory]
@@ -60,15 +63,17 @@ public class HttpResponseClassifierTests
     public void PermanentClientErrorsAreNotRetryable(HttpStatusCode status)
     {
         HttpResponseExtensions.IsRetryableStatusCode(status).Should().BeFalse();
-        new HttpResponseMessage(status).IsRetryableError().Should().BeFalse();
+        using var response = new HttpResponseMessage(status);
+        response.IsRetryableError().Should().BeFalse();
     }
 
     [Fact]
     [Trait("Category", "Unit")]
-    public void ARejectedCredentialIsNeverSentAgain()
+    public void ARefusedCredentialIsNotReplayedByTheClassifier()
     {
         HttpResponseExtensions.IsRetryableStatusCode(HttpStatusCode.Unauthorized).Should().BeFalse();
-        new HttpResponseMessage(HttpStatusCode.Unauthorized).IsRetryableError().Should().BeFalse();
+        using var response = new HttpResponseMessage(HttpStatusCode.Unauthorized);
+        response.IsRetryableError().Should().BeFalse();
     }
 
     [Fact]
