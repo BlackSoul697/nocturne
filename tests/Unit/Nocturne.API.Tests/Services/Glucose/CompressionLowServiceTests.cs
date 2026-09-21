@@ -111,7 +111,7 @@ public class CompressionLowServiceTests
 
         await sut.Invoking(s => s.GetSuggestionWithEntriesAsync(suggestion.Id))
             .Should()
-            .ThrowAsync<InvalidOperationException>();
+            .ThrowAsync<SettingsUnavailableException>();
     }
 
     private CompressionLowSuggestion PendingSuggestion(int stillPendingAfterReview)

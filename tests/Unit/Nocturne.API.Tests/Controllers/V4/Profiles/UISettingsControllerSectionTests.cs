@@ -17,19 +17,36 @@ namespace Nocturne.API.Tests.Controllers.V4.Profiles;
 public class UISettingsControllerSectionTests
 {
     /// <summary>
-    /// The service reserves null for a read it could not make; the wire contract predates that and
-    /// still owes a settings document, so a client never sees the difference.
+    /// <c>saveUiSettingsSection</c> is a read-modify-write over this body, so a defaults document
+    /// served for a read that failed is written straight back over every section the tenant owns.
+    /// The read refuses instead, and 503 is the retryable way to say so.
     /// </summary>
     [Fact]
-    public async Task GetUISettings_stillServesASettingsDocumentWhenTheReadFails()
+    public async Task GetUISettings_refusesToServeDefaultsWhenTheReadFails()
     {
         var database = NewDatabase();
         var controller = NewController(database);
         await database.DisposeAsync();
 
-        OkValue<UISettingsConfiguration>((await controller.GetUISettings()).Result)
-            .Should()
-            .NotBeNull();
+        (await controller.GetUISettings())
+            .Result.Should()
+            .BeOfType<ObjectResult>()
+            .Which.StatusCode.Should()
+            .Be(StatusCodes.Status503ServiceUnavailable);
+    }
+
+    [Fact]
+    public async Task GetSectionSettings_refusesTheSectionWhenTheReadFails()
+    {
+        var database = NewDatabase();
+        var controller = NewController(database);
+        await database.DisposeAsync();
+
+        (await controller.GetSectionSettings("dataQuality"))
+            .Result.Should()
+            .BeOfType<ObjectResult>()
+            .Which.StatusCode.Should()
+            .Be(StatusCodes.Status503ServiceUnavailable);
     }
 
     [Fact]
