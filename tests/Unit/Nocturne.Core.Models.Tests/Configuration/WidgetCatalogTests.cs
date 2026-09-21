@@ -147,6 +147,42 @@ public class WidgetCatalogTests
             .Be(WidgetId.Statistics);
     }
 
+    // A row written before the size and per-widget settings fields were dropped carries keys no
+    // property matches; deserialising must ignore them rather than throw the whole tenant's
+    // settings away.
+    [Fact]
+    public void Stored_row_naming_a_dropped_field_still_deserialises()
+    {
+        const string json = """
+            {
+              "widgets": [
+                {
+                  "id": "Statistics",
+                  "enabled": false,
+                  "placement": "Main",
+                  "size": "Large",
+                  "settings": { "columns": 2 }
+                }
+              ]
+            }
+            """;
+
+        var settings = JsonSerializer.Deserialize<FeatureSettings>(json)!;
+
+        settings
+            .Widgets.Should()
+            .ContainSingle()
+            .Which.Should()
+            .BeEquivalentTo(
+                new
+                {
+                    Id = WidgetId.Statistics,
+                    Enabled = false,
+                    Placement = WidgetPlacement.Main,
+                }
+            );
+    }
+
     [Fact]
     public void Stored_settings_naming_an_unrendered_widget_still_deserialise()
     {
