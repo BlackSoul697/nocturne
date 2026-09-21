@@ -143,27 +143,11 @@ public class WidgetCatalogTests
             .Be(WidgetId.Statistics);
     }
 
+    // A row written before the size and per-widget settings fields were dropped carries keys no
+    // property matches; deserialising must ignore them rather than throw the whole tenant's
+    // settings away.
     [Fact]
-    public void Stored_settings_naming_an_unrendered_widget_still_deserialise()
-    {
-        const string json = """
-            {
-              "widgets": [
-                { "id": "Agp", "enabled": true, "placement": "Main" },
-                { "id": "BatteryStatus", "enabled": true, "placement": "Main" }
-              ]
-            }
-            """;
-
-        var settings = JsonSerializer.Deserialize<FeatureSettings>(json)!;
-
-        settings.Widgets.Select(w => w.Id).Should().Equal(WidgetId.Agp, WidgetId.BatteryStatus);
-    }
-
-    // Rows written while WidgetConfig carried a size and a per-widget settings bag are still out
-    // there. Reading one must keep the widget, not throw and cost the tenant the whole section.
-    [Fact]
-    public void Stored_row_carrying_a_size_and_widget_settings_still_deserialises()
+    public void Stored_row_naming_a_dropped_field_still_deserialises()
     {
         const string json = """
             {
@@ -173,7 +157,7 @@ public class WidgetCatalogTests
                   "enabled": false,
                   "placement": "Main",
                   "size": "Large",
-                  "settings": { "foo": 1 }
+                  "settings": { "columns": 2 }
                 }
               ]
             }
@@ -193,5 +177,22 @@ public class WidgetCatalogTests
                     Placement = WidgetPlacement.Main,
                 }
             );
+    }
+
+    [Fact]
+    public void Stored_settings_naming_an_unrendered_widget_still_deserialise()
+    {
+        const string json = """
+            {
+              "widgets": [
+                { "id": "Agp", "enabled": true, "placement": "Main" },
+                { "id": "BatteryStatus", "enabled": true, "placement": "Main" }
+              ]
+            }
+            """;
+
+        var settings = JsonSerializer.Deserialize<FeatureSettings>(json)!;
+
+        settings.Widgets.Select(w => w.Id).Should().Equal(WidgetId.Agp, WidgetId.BatteryStatus);
     }
 }
