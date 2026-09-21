@@ -26,7 +26,7 @@ public class WidgetCatalogTests
     [InlineData(WidgetId.Clock, "Clock", null, WidgetPlacement.Top, true)]
     [InlineData(WidgetId.Tdd, "Total Daily Dose", null, WidgetPlacement.Top, true)]
     [InlineData(WidgetId.GlucoseChart, "Glucose Chart", true, WidgetPlacement.Main, true)]
-    [InlineData(WidgetId.Statistics, "Statistics", true, WidgetPlacement.Main, true)]
+    [InlineData(WidgetId.Statistics, "Statistics", false, WidgetPlacement.Main, false)]
     [InlineData(WidgetId.Predictions, "Predictions", true, WidgetPlacement.Main, true)]
     [InlineData(WidgetId.DailyStats, "Daily Stats", true, WidgetPlacement.Main, true)]
     [InlineData(WidgetId.Treatments, "Treatments", true, WidgetPlacement.Main, true)]
@@ -91,7 +91,11 @@ public class WidgetCatalogTests
         WidgetCatalog
             .Defaults()
             .Should()
-            .NotContain(w => w.Id == WidgetId.Agp || w.Id == WidgetId.BatteryStatus);
+            .NotContain(w =>
+                w.Id == WidgetId.Agp
+                || w.Id == WidgetId.BatteryStatus
+                || w.Id == WidgetId.Statistics
+            );
     }
 
     [Fact]
