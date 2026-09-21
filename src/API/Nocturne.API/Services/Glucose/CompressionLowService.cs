@@ -71,8 +71,12 @@ public class CompressionLowService : ICompressionLowService
         if (suggestion == null)
             return null;
 
-        // Get sleep schedule from settings
-        var settings = await _uiSettingsService.GetSettingsAsync(cancellationToken);
+        // Null is a failed read, and the overnight window is cut from the tenant's own bedtime and
+        // wake time: the default 23:00-07:00 would serve a different night's readings under this
+        // suggestion. A null return here means "no such suggestion", so the failure has to throw.
+        var settings = await _uiSettingsService.GetSettingsAsync(cancellationToken)
+            ?? throw new InvalidOperationException(
+                "UI settings could not be read, so the overnight window for this suggestion is unknown.");
         var sleepSchedule = settings.DataQuality.SleepSchedule;
 
         // Get user's timezone: prefer UI settings, fall back to profile, then UTC

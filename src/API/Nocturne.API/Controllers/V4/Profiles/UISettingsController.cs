@@ -130,7 +130,12 @@ public class UISettingsController : ControllerBase, IWriteScopedController
             // defaults when the tenant has never saved. Returning freshly generated
             // defaults here instead meant a saved setting never came back on the
             // next load, so every settings page appeared to revert on reload.
-            var settings = await _settingsService.GetSettingsAsync(cancellationToken);
+            // A null is a read the service could not make; this endpoint has always answered a
+            // failed read with a settings document, and a client that started seeing 500s here
+            // would lose its settings pages entirely.
+            var settings =
+                await _settingsService.GetSettingsAsync(cancellationToken)
+                ?? new UISettingsConfiguration();
 
             // The connector catalog is static metadata, not persisted tenant state.
             settings.Services ??= new ServicesSettings();

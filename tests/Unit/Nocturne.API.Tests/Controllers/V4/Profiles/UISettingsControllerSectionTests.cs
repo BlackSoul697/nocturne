@@ -16,6 +16,22 @@ namespace Nocturne.API.Tests.Controllers.V4.Profiles;
 [Trait("Category", "Unit")]
 public class UISettingsControllerSectionTests
 {
+    /// <summary>
+    /// The service reserves null for a read it could not make; the wire contract predates that and
+    /// still owes a settings document, so a client never sees the difference.
+    /// </summary>
+    [Fact]
+    public async Task GetUISettings_stillServesASettingsDocumentWhenTheReadFails()
+    {
+        var database = NewDatabase();
+        var controller = NewController(database);
+        await database.DisposeAsync();
+
+        OkValue<UISettingsConfiguration>((await controller.GetUISettings()).Result)
+            .Should()
+            .NotBeNull();
+    }
+
     [Fact]
     public async Task GetSectionSettings_servesEverySectionTheAggregateOwns()
     {
