@@ -1,10 +1,10 @@
 <script lang="ts">
-  import * as Sidebar from "$lib/components/ui/sidebar";
+  // Imported directly rather than through the barrel, which pulls the whole
+  // component library in with it.
+  import SidebarProvider from "$lib/components/ui/sidebar/sidebar-provider.svelte";
   import SidebarContextConsumer from "./SidebarContextConsumer.svelte";
-
-  const { marker }: { marker: string } = $props();
 </script>
 
-<Sidebar.Provider>
-  <SidebarContextConsumer {marker} />
-</Sidebar.Provider>
+<SidebarProvider>
+  <SidebarContextConsumer />
+</SidebarProvider>

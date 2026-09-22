@@ -219,7 +219,7 @@ jobs:
       # what that transform does to code that only runs at render time, and the
       # E2E suite that would is opt-in, so this is the only gate on it.
       - name: App server-rendering tests
-        run: pnpm --filter @nocturne/app run test:ssr
+        run: pnpm --filter @nocturne/app run test:render
       # The portal's `check` needs the generated client, but its vitest suites do not.
       - name: Portal unit tests
         run: pnpm --filter @nocturne/portal run test
