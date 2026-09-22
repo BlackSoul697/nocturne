@@ -159,6 +159,10 @@ public static class ServiceRegistrationExtensions
         // real ceiling is DemoSessionLimits.MaxLiveSessions, enforced on the subject id.
         ("demo-session", 10, TimeSpan.FromMinutes(5)),
         ("support-issues", 5, TimeSpan.FromHours(1)),
+        // Each contribution opens an upstream PR, directly or through the relay, so the ceiling
+        // bounds how much of that a caller can spend. The page is server-rendered, so the address
+        // only distinguishes contributors when it comes off the signed header.
+        ("translation-contributions", 10, TimeSpan.FromHours(1)),
         // Connector credential verification drives a live sign-in against the external provider
         // from this deployment's address, so the ceiling bounds both provider-side lockouts and
         // use of the API as a credential-testing proxy.
@@ -260,6 +264,10 @@ public static class ServiceRegistrationExtensions
         services.Configure<GitHubIssueOptions>(configuration.GetSection("GitHub"));
         services.AddSingleton<GitHubIssueService>();
         services.AddScoped<ISupportDiagnosticsService, SupportDiagnosticsService>();
+
+        // GitHub translation contribution PRs
+        services.Configure<GitHubTranslationOptions>(configuration.GetSection("GitHub"));
+        services.AddSingleton<GitHubTranslationService>();
 
         return services;
     }
