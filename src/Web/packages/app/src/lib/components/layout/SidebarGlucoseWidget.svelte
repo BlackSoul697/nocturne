@@ -53,7 +53,7 @@
   const isStale = $derived(now - lastUpdated > STALE_THRESHOLD_MS);
 
   const connection = createConnectionIndicator(
-    () => realtimeStore?.connectionStatus ?? "disconnected"
+    () => realtimeStore?.connectionStatus ?? "idle"
   );
   const isDisconnected = $derived(connection.isDisconnected);
   const isLoading = $derived(

@@ -32,7 +32,7 @@
   const displayCurrentBG = $derived(formatGlucoseValue(rawCurrentBG, units));
   const isStale = $derived(now - lastUpdated > STALE_THRESHOLD_MS);
   const connection = createConnectionIndicator(
-    () => realtimeStore?.connectionStatus ?? "disconnected"
+    () => realtimeStore?.connectionStatus ?? "idle"
   );
   const isDisconnected = $derived(connection.isDisconnected);
   // No reading yet: show the skeleton rather than rendering the 0 sentinel as a

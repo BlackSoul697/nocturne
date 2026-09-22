@@ -19,7 +19,21 @@ import { realtimeSocketOptions } from "./socket-options";
  *  admits a ticket-less handshake so legacy Nightscout clients can run the
  *  classic `authorize` exchange, but joins such a socket to no room. */
 interface HandshakeState {
+  /** Sequence of the most recently started attempt. Socket.IO re-invokes `auth`
+   *  on every engine reopen without waiting for the previous invocation to
+   *  settle, so a slow ticket fetch can still be in flight when the next attempt
+   *  begins. Only the newest attempt may publish its verdict. */
+  attempt: number;
   ticketPresented: boolean;
+}
+
+/** Outcome of one ticket fetch, returned rather than written to the client so a
+ *  superseded attempt cannot overwrite the live one's verdict. */
+interface TicketResult {
+  token: string | null;
+  /** A definitive denial (the user isn't permitted realtime for this tenant)
+   *  rather than a transient failure. */
+  denied: boolean;
 }
 
 export class WebSocketClient {
@@ -27,7 +41,7 @@ export class WebSocketClient {
   private config: WebSocketConfig;
   private eventHandlers: Partial<WebSocketEventHandlers> = {};
 
-  connectionStatus = $state<WebSocketConnectionStatus>("disconnected");
+  connectionStatus = $state<WebSocketConnectionStatus>("idle");
   lastError = $state<WebSocketError | null>(null);
   stats = $state<WebSocketStats>({
     connectedClients: 0,
@@ -40,10 +54,15 @@ export class WebSocketClient {
   private reconnectAttempts = $state(0);
   private lastMessageTime = $state<number>(0);
 
-  /** True when the last ticket fetch was a definitive denial (the user isn't
-   *  permitted realtime for this tenant) rather than a transient failure. Lets
-   *  connect_error stay quiet and stop retrying for unauthorized users. */
+  /** Verdict of the live handshake attempt's ticket fetch: true for a definitive
+   *  denial (the user isn't permitted realtime for this tenant) rather than a
+   *  transient failure. Lets connect_error stay quiet and stop retrying for
+   *  unauthorized users. Written only under the `activeHandshake` guard, so a
+   *  superseded attempt can't strand a good socket. */
   private lastTicketDenied = false;
+  /** The handshake state of the socket currently being established, so an
+   *  attempt belonging to a replaced socket can recognise itself as stale. */
+  private activeHandshake: HandshakeState | null = null;
   /** Set when disconnect() is called so a scheduled retry doesn't resurrect a
    *  deliberately-closed socket. */
   private intentionallyClosed = false;
@@ -92,9 +111,11 @@ export class WebSocketClient {
     this.intentionallyClosed = false;
     this.clearAuthRetry();
 
-    // Scoped to this socket, so a ticket fetch left hanging by a previous one
-    // cannot resolve late and condemn its successor's good handshake.
-    const handshake: HandshakeState = { ticketPresented: false };
+    // Scoped to this socket and recorded as the active one, so a ticket fetch
+    // left hanging by a previous socket recognises itself as stale instead of
+    // condemning this one's good handshake.
+    const handshake: HandshakeState = { attempt: 0, ticketPresented: false };
+    this.activeHandshake = handshake;
 
     try {
       this.socket = io(
@@ -102,7 +123,14 @@ export class WebSocketClient {
         realtimeSocketOptions(this.config, (cb) => {
           // Fetched fresh on every (re)connect so a short-lived ticket never goes
           // stale across reconnections.
-          this.fetchTicket().then((token) => {
+          const attempt = ++handshake.attempt;
+          this.fetchTicket().then(({ token, denied }) => {
+            // A superseded attempt neither publishes its verdict nor completes
+            // its handshake: the engine that asked for it is already gone, and
+            // the socket it would speak for belongs to a newer attempt.
+            if (this.activeHandshake !== handshake) return;
+            if (attempt !== handshake.attempt) return;
+            this.lastTicketDenied = denied;
             // Boolean, not a null check: the bridge gates on truthiness, so an
             // empty token is ticket-less there and must be here too.
             handshake.ticketPresented = Boolean(token);
@@ -121,12 +149,12 @@ export class WebSocketClient {
     }
   }
 
-  /** Fetch a realtime handshake ticket from the BFF. Returns the token, or null
-   *  when no ticket was minted. Sets `lastTicketDenied` only for a definitive
-   *  denial (`retry` not set by the endpoint); transient failures (timeout,
-   *  network, 5xx) leave it false so the connect_error path keeps retrying.
-   *  Bounded by a timeout so the Socket.IO `auth` callback always resolves. */
-  private async fetchTicket(): Promise<string | null> {
+  /** Fetch a realtime handshake ticket from the BFF. Reports a denial only for a
+   *  definitive one (`retry` not set by the endpoint); transient failures
+   *  (timeout, network, 5xx) report false so the connect_error path keeps
+   *  retrying. Bounded by a timeout so the Socket.IO `auth` callback always
+   *  resolves. */
+  private async fetchTicket(): Promise<TicketResult> {
     try {
       const res = await fetch(`${this.config.url}/realtime/ticket`, {
         credentials: "include",
@@ -134,8 +162,7 @@ export class WebSocketClient {
         signal: AbortSignal.timeout(8000),
       });
       if (!res.ok) {
-        this.lastTicketDenied = false; // redirect / 5xx — treat as transient
-        return null;
+        return { token: null, denied: false }; // redirect / 5xx — transient
       }
       const body = (await res.json().catch(() => null)) as
         | { token?: string | null; retry?: boolean }
@@ -143,11 +170,9 @@ export class WebSocketClient {
       const token = body?.token ?? null;
       // 200 + null token = no ticket; a definitive denial unless the endpoint
       // flagged it transient.
-      this.lastTicketDenied = token == null && body?.retry !== true;
-      return token;
+      return { token, denied: token == null && body?.retry !== true };
     } catch {
-      this.lastTicketDenied = false; // network error / timeout — transient
-      return null;
+      return { token: null, denied: false }; // network error / timeout
     }
   }
 
@@ -207,6 +232,7 @@ export class WebSocketClient {
   disconnect(): void {
     this.intentionallyClosed = true;
     this.clearAuthRetry();
+    this.activeHandshake = null;
     if (this.socket) {
       this.socket.disconnect();
       this.socket = null;

@@ -41,7 +41,20 @@ class FakeSocket {
 
   /** Run the handshake the way Socket.IO does: resolve `auth`, then connect. */
   async handshake(): Promise<void> {
-    await new Promise<void>((resolve) => this.options.auth(() => resolve()));
+    await this.sendHandshake();
+    this.fireConnect();
+  }
+
+  /** Resolve `auth` for one attempt without delivering the server's acceptance.
+   *  Socket.IO calls `auth` on every engine reopen without waiting for the
+   *  previous call to settle, so attempts have to be drivable separately. */
+  sendHandshake(): Promise<void> {
+    return new Promise<void>((resolve) => this.options.auth(() => resolve()));
+  }
+
+  /** The server accepting the handshake, which arrives a round trip after the
+   *  CONNECT packet was sent. */
+  fireConnect(): void {
     this.connected = true;
     this.handlers.get("connect")?.();
   }
@@ -84,12 +97,60 @@ function stubTicketEndpoint(body: unknown, ok = true) {
   );
 }
 
+/** Stub the ticket endpoint so each successive call gets the next body, the last
+ *  one repeating. A pending promise stands in for a fetch still in flight. */
+function stubTicketSequence(bodies: PromiseLike<unknown>[]) {
+  let call = 0;
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async () => {
+      const body = bodies[Math.min(call++, bodies.length - 1)];
+      return { ok: true, status: 200, json: () => body };
+    })
+  );
+}
+
+/** Let queued microtasks run, so a resolved ticket fetch reaches the client. */
+const flush = () => new Promise<void>((resolve) => setTimeout(resolve, 0));
+
 afterEach(() => {
   vi.unstubAllGlobals();
   lastSocket = null;
 });
 
 describe("WebSocketClient handshake ticket handling", () => {
+  it("is idle before a connection has been attempted", () => {
+    stubTicketEndpoint({ token: "a-verifiable-ticket" });
+
+    expect(new WebSocketClient(config).connectionStatus).toBe("idle");
+  });
+
+  it("ignores a superseded ticket fetch that resolves after a good handshake", async () => {
+    let releaseStale: (() => void) | undefined;
+    const stale = new Promise<unknown>((resolve) => {
+      releaseStale = () => resolve({ token: null });
+    });
+    stubTicketSequence([stale, Promise.resolve({ token: "a-verifiable-ticket" })]);
+
+    const client = new WebSocketClient(config);
+    client.connect();
+    const socket = lastSocket!;
+
+    // The first attempt's ticket is still in flight when the engine reopens, so
+    // a second attempt starts and gets a good ticket.
+    void socket.sendHandshake();
+    await socket.sendHandshake();
+
+    // The superseded fetch resolves with no ticket while the server's
+    // acceptance of the good handshake is still on the wire.
+    releaseStale!();
+    await flush();
+    socket.fireConnect();
+
+    expect(client.connectionStatus).toBe("connected");
+    expect(socket.disconnectCalls).toBe(0);
+  });
+
   it("reports connected once a ticket is accepted", async () => {
     stubTicketEndpoint({ token: "a-verifiable-ticket" });
     const client = new WebSocketClient(config);

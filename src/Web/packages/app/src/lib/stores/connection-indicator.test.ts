@@ -7,6 +7,10 @@ describe("isErrorStatus", () => {
     expect(isErrorStatus("error")).toBe(true);
   });
 
+  it("stays quiet before a connection has been attempted", () => {
+    expect(isErrorStatus("idle")).toBe(false);
+  });
+
   it("stays quiet while a connection is in flight", () => {
     expect(isErrorStatus("connecting")).toBe(false);
     expect(isErrorStatus("reconnecting")).toBe(false);
