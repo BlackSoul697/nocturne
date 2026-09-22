@@ -1,19 +1,26 @@
 <script lang="ts">
   import * as Dialog from "$lib/components/ui/dialog";
   import { Badge } from "$lib/components/ui/badge";
-  import { Button } from "$lib/components/ui/button";
-  import { Activity, Syringe, Pencil } from "lucide-svelte";
-  import { bg, bgLabel } from "$lib/utils/formatting";
+  import { Syringe } from "lucide-svelte";
+  import {
+    bg,
+    bgLabel,
+    formatCarbDisplay,
+    formatInsulinDisplay,
+    formatLocale,
+    time,
+  } from "$lib/utils/formatting";
   import { getDataSourceDisplayName } from "$lib/utils/data-source-display";
-  import type { PredictionData } from "$api/predictions.remote";
+  import { entrySummary } from "$lib/utils/entry-summary";
   import type { BolusCalculation } from "$lib/api";
   import { CalculationType } from "$lib/api";
   import type { EntryRecord } from "$lib/constants/entry-categories";
   import { ENTRY_CATEGORIES } from "$lib/constants/entry-categories";
   import { getAll as getBolusCalculations } from "$lib/api/generated/bolusCalculations.generated.remote";
-  import { getAll as getApsSnapshots } from "$lib/api/generated/apsSnapshots.generated.remote";
-  import { apsSnapshotToPrediction } from "$lib/utils/aps-snapshot-to-prediction";
-  import GlucoseResponseChart from "./GlucoseResponseChart.svelte";
+  import { useApsPrediction } from "./aps-prediction.svelte";
+  import { inspectionSearchWindow } from "./inspection-window";
+  import InspectionChart from "./InspectionChart.svelte";
+  import InspectionFooter from "./InspectionFooter.svelte";
 
   interface Props {
     open: boolean;
@@ -75,19 +82,23 @@
   );
 
   let bolusCalc: BolusCalculation | null = $state(null);
-  let predictionData: PredictionData | null = $state(null);
+
+  const aps = useApsPrediction(
+    () => open,
+    () => timestamp,
+  );
 
   // Build the treatment header summary
   const treatmentSummary = $derived.by(() => {
     const parts: string[] = [];
     if (bolusInsulin != null) {
-      let bolusText = `${bolusInsulin}U`;
+      let bolusText = `${formatInsulinDisplay(bolusInsulin)}U`;
       if (bolusType) bolusText += ` ${bolusType}`;
       else bolusText += " bolus";
       parts.push(bolusText);
     }
     if (carbGrams != null) {
-      let carbText = `${carbGrams}g carbs`;
+      let carbText = `${formatCarbDisplay(carbGrams)}g carbs`;
       if (carbLabel) carbText += ` (${carbLabel})`;
       parts.push(carbText);
     }
@@ -97,10 +108,11 @@
   // Build the chart center label
   const chartLabel = $derived.by(() => {
     if (bolusInsulin != null && carbGrams != null) {
-      return `${bolusInsulin}U + ${carbGrams}g`;
+      return `${formatInsulinDisplay(bolusInsulin)}U + ${formatCarbDisplay(carbGrams)}g`;
     }
-    if (bolusInsulin != null) return `${bolusInsulin}U bolus`;
-    if (carbGrams != null) return `${carbGrams}g carbs`;
+    if (bolusInsulin != null)
+      return `${formatInsulinDisplay(bolusInsulin)}U bolus`;
+    if (carbGrams != null) return `${formatCarbDisplay(carbGrams)}g carbs`;
     return undefined;
   });
 
@@ -119,61 +131,14 @@
     }
   });
 
-  // Filter glucose data for the response chart window (-15 min to +3 hours)
-  const chartGlucoseData = $derived.by(() => {
-    const centerMs = timestamp.getTime();
-    const minMs = centerMs - 15 * 60 * 1000;
-    const predictionHorizonMs = predictionData?.curves.main.length
-      ? Math.max(...predictionData.curves.main.map((p) => p.timestamp))
-      : centerMs + 3 * 60 * 60 * 1000;
-    const maxMs = Math.max(centerMs + 3 * 60 * 60 * 1000, predictionHorizonMs);
-    return glucoseData.filter((d) => {
-      const t = d.time.getTime();
-      return t >= minMs && t <= maxMs;
-    });
-  });
 
-  // Format entry summary for correlated records (matches TreatmentDisambiguationDialog)
-  function formatEntrySummary(record: EntryRecord): string {
-    const parts: string[] = [];
-    switch (record.kind) {
-      case "bolus":
-        if (record.data.insulin) parts.push(`${record.data.insulin}U`);
-        if (record.data.bolusType) parts.push(record.data.bolusType);
-        break;
-      case "carbs":
-        if (record.data.carbs) parts.push(`${record.data.carbs}g carbs`);
-        break;
-      case "bgCheck":
-        if (record.data.mgdl) parts.push(`${record.data.mgdl} mg/dL`);
-        break;
-      case "note":
-        if (record.data.text) parts.push(record.data.text.slice(0, 50));
-        break;
-      case "deviceEvent":
-        if (record.data.eventType) parts.push(record.data.eventType);
-        break;
-    }
-    return parts.join(" · ") || ENTRY_CATEGORIES[record.kind].name;
-  }
-
-  // Fetch bolus calculation and APS snapshot in parallel on open
+  // Fetch the bolus calculation behind the treatment on open
   $effect(() => {
     if (!open) return;
     bolusCalc = null;
-    predictionData = null;
     let cancelled = false;
-
-    const from = new Date(timestamp.getTime() - 5 * 60 * 1000);
-    const to = new Date(timestamp.getTime() + 5 * 60 * 1000);
-
-    // Fetch both in parallel
-    const bolusCalcPromise = getBolusCalculations({
-      from,
-      to,
-      limit: 1,
-      sort: "timestamp_desc",
-    })
+    const { from, to } = inspectionSearchWindow(timestamp);
+    getBolusCalculations({ from, to, limit: 1, sort: "timestamp_desc" })
       .then((result) => {
         if (!cancelled && result?.data?.length) {
           bolusCalc = result.data[0];
@@ -182,25 +147,6 @@
       .catch(() => {
         /* Bolus calculation data is optional */
       });
-
-    const apsPromise = getApsSnapshots({
-      from,
-      to,
-      limit: 1,
-      sort: "timestamp_desc",
-    })
-      .then((result) => {
-        if (!cancelled && result?.data?.length) {
-          predictionData = apsSnapshotToPrediction(result.data[0]);
-        }
-      })
-      .catch(() => {
-        /* APS data is optional */
-      });
-
-    // Await both (fire-and-forget pattern — cleanup on cancelled)
-    void Promise.all([bolusCalcPromise, apsPromise]);
-
     return () => {
       cancelled = true;
     };
@@ -217,7 +163,7 @@
             class="{ENTRY_CATEGORIES.bolus.colorClass} {ENTRY_CATEGORIES.bolus.bgClass} {ENTRY_CATEGORIES.bolus.borderClass}"
           >
             <Syringe class="mr-1 h-3.5 w-3.5" />
-            {bolusInsulin}U{bolusType ? ` ${bolusType}` : ""}
+            {formatInsulinDisplay(bolusInsulin)}U{bolusType ? ` ${bolusType}` : ""}
           </Badge>
         {/if}
         {#if carbGrams != null}
@@ -225,18 +171,14 @@
             variant="outline"
             class="{ENTRY_CATEGORIES.carbs.colorClass} {ENTRY_CATEGORIES.carbs.bgClass} {ENTRY_CATEGORIES.carbs.borderClass}"
           >
-            {carbGrams}g{carbLabel ? ` ${carbLabel}` : " carbs"}
+            {formatCarbDisplay(carbGrams)}g{carbLabel ? ` ${carbLabel}` : " carbs"}
           </Badge>
         {/if}
       </Dialog.Title>
       <Dialog.Description>
-        {timestamp.toLocaleTimeString([], {
-          hour: "numeric",
-          minute: "2-digit",
-          second: "2-digit",
-        })}
+        {time(timestamp, { seconds: true })}
         &mdash;
-        {timestamp.toLocaleDateString([], {
+        {timestamp.toLocaleDateString(formatLocale(), {
           month: "short",
           day: "numeric",
         })}
@@ -346,20 +288,16 @@
       </div>
     {/if}
 
-    <!-- Glucose response chart -->
-    {#if chartGlucoseData.length > 0}
-      <div class="py-2">
-        <p class="text-xs text-muted-foreground mb-1">Glucose Response</p>
-        <GlucoseResponseChart
-          glucoseData={chartGlucoseData}
-          centerTime={timestamp}
-          {predictionData}
-          {highThreshold}
-          {lowThreshold}
-          label={chartLabel}
-        />
-      </div>
-    {/if}
+    <InspectionChart
+      {glucoseData}
+      centerTime={timestamp}
+      predictionData={aps.predictionData}
+      {highThreshold}
+      {lowThreshold}
+      beforeMs={15 * 60 * 1000}
+      afterMs={3 * 60 * 60 * 1000}
+      label={chartLabel}
+    />
 
     <!-- Related entries (conditional) -->
     {#if correlatedRecords && correlatedRecords.length > 0}
@@ -379,14 +317,11 @@
             >
               <div class="flex-1">
                 <div class="font-medium text-sm">
-                  {formatEntrySummary(record)}
+                  {entrySummary(record)}
                 </div>
                 <div class="text-xs text-muted-foreground">
                   {record.data.mills
-                    ? new Date(record.data.mills).toLocaleTimeString([], {
-                        hour: "numeric",
-                        minute: "2-digit",
-                      })
+                    ? time(record.data.mills)
                     : ""}
                 </div>
               </div>
@@ -399,28 +334,11 @@
       </div>
     {/if}
 
-    <Dialog.Footer class="flex gap-2">
-      {#if hasGlucoseContext && onNavigateGlucose}
-        <Button variant="outline" size="sm" onclick={onNavigateGlucose}>
-          <Activity class="mr-1.5 h-4 w-4" />
-          Glucose
-        </Button>
-      {/if}
-      {#if hasDeliveryContext && onNavigateDelivery}
-        <Button variant="outline" size="sm" onclick={onNavigateDelivery}>
-          <Syringe class="mr-1.5 h-4 w-4" />
-          Delivery
-        </Button>
-      {/if}
-      {#if onEditEntry}
-        <Button variant="outline" size="sm" onclick={onEditEntry}>
-          <Pencil class="mr-1.5 h-4 w-4" />
-          Edit
-        </Button>
-      {/if}
-      <Button variant="secondary" size="sm" onclick={onClose}>
-        Close
-      </Button>
-    </Dialog.Footer>
+    <InspectionFooter
+      onNavigateGlucose={hasGlucoseContext ? onNavigateGlucose : undefined}
+      onNavigateDelivery={hasDeliveryContext ? onNavigateDelivery : undefined}
+      {onEditEntry}
+      {onClose}
+    />
   </Dialog.Content>
 </Dialog.Root>

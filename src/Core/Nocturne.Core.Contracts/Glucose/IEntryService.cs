@@ -1,5 +1,7 @@
+using System.Text.Json;
 using Nocturne.Core.Contracts.V4;
 using Nocturne.Core.Models;
+using Nocturne.Core.Contracts.Entries;
 
 namespace Nocturne.Core.Contracts.Glucose;
 
@@ -72,6 +74,25 @@ public interface IEntryService
     );
 
     /// <summary>
+    /// Check a whole upload batch for duplicates in one pass
+    /// </summary>
+    /// <remarks>
+    /// Same per-entry classification as
+    /// <see cref="CheckForDuplicateEntryAsync(string?, string, double?, long, int, CancellationToken)"/>,
+    /// but the stored readings covering an <c>sgv</c> batch are loaded in one query rather than a
+    /// query per entry. Other types are probed one at a time.
+    /// </remarks>
+    /// <param name="probes">Entries to classify, in submission order</param>
+    /// <param name="windowMinutes">Time window in minutes to check for duplicates (default: 5)</param>
+    /// <param name="cancellationToken">Cancellation token</param>
+    /// <returns>One result per probe in the order given: the existing entry, or null</returns>
+    Task<IReadOnlyList<Entry?>> CheckForDuplicateEntriesAsync(
+        IReadOnlyList<EntryDuplicateProbe> probes,
+        int windowMinutes = 5,
+        CancellationToken cancellationToken = default
+    );
+
+    /// <summary>
     /// Create new entries with WebSocket broadcasting
     /// </summary>
     /// <param name="entries">Entries to create</param>
@@ -97,6 +118,24 @@ public interface IEntryService
     Task<Entry?> UpdateEntryAsync(
         string id,
         Entry entry,
+        CancellationToken cancellationToken = default
+    );
+
+    /// <summary>
+    /// Partially update an entry via JSON merge-patch.
+    /// </summary>
+    /// <remarks>
+    /// AAPS's NSClientV3 uses <c>PATCH v3/entries/{id}</c> rather than <c>PUT</c> to update entries;
+    /// see <c>TreatmentService.PatchTreatmentAsync</c> for the equivalent treatments implementation
+    /// this mirrors.
+    /// </remarks>
+    /// <param name="id">Entry ID to patch</param>
+    /// <param name="patchData">JSON merge-patch data</param>
+    /// <param name="cancellationToken">Cancellation token</param>
+    /// <returns>Patched entry if successful, null otherwise</returns>
+    Task<Entry?> PatchEntryAsync(
+        string id,
+        JsonElement patchData,
         CancellationToken cancellationToken = default
     );
 

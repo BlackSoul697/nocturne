@@ -3,8 +3,9 @@ using System.Text.Json.Serialization;
 namespace Nocturne.Core.Models.Configuration;
 
 /// <summary>
-/// Complete UI settings configuration that can be served to frontend clients.
-/// This model aggregates all settings pages data - devices, algorithm, features, notifications, and services.
+/// Complete UI settings configuration that can be served to frontend clients. It aggregates the
+/// settings pages listed in <see cref="UISettingsSections"/>, each of which is separately
+/// addressable and separately persisted.
 /// In demo mode, these are generated from demo configuration; in production, they come from the database.
 /// Note: Therapy settings are managed via Nightscout Profiles (/api/v1/profile).
 /// </summary>
@@ -45,12 +46,6 @@ public class UISettingsConfiguration
     /// </summary>
     [JsonPropertyName("dataQuality")]
     public DataQualitySettings DataQuality { get; set; } = new();
-
-    /// <summary>
-    /// Security settings including site lockdown and privacy options
-    /// </summary>
-    [JsonPropertyName("security")]
-    public SecuritySettings Security { get; set; } = new();
 }
 
 #region Device Settings
@@ -231,11 +226,21 @@ public class FeatureSettings
     public DisplaySettings Display { get; set; } = new();
 
     /// <summary>
-    /// Dashboard widget configurations. Array position determines display order within each category.
+    /// Which main dashboard sections this tenant shows. Array position determines display order.
+    /// Top-grid widgets are not here: which of them a viewer sees, and in what order, is a per-user
+    /// preference (<c>UserDisplayPreferences.DashboardTopWidgets</c>) the client owns, so a row for
+    /// one here would gate nothing.
     /// </summary>
     [JsonPropertyName("widgets")]
-    public List<WidgetConfig> Widgets { get; set; } = GetDefaultWidgets();
+    public List<WidgetConfig> Widgets { get; set; } = WidgetCatalog.Defaults();
 
+    /// <summary>
+    /// Legacy Nightscout plugin toggles, carried for schema compatibility and empty by default.
+    /// Unlike <see cref="Widgets"/> this gates nothing: the dashboard's status pills appear when the
+    /// data behind them arrives, and the tracker pill row is gated by
+    /// <see cref="TrackerPillsSettings.Enabled"/>. Defaults here would ship every tenant a stored
+    /// list nothing reads.
+    /// </summary>
     [JsonPropertyName("plugins")]
     public Dictionary<string, PluginSettings> Plugins { get; set; } = new();
 
@@ -247,26 +252,6 @@ public class FeatureSettings
     /// </summary>
     [JsonPropertyName("trackerPills")]
     public TrackerPillsSettings TrackerPills { get; set; } = new();
-
-    private static List<WidgetConfig> GetDefaultWidgets() =>
-    [
-        // Top widgets (widget grid)
-        new() { Id = WidgetId.BgDelta, Enabled = true, Placement = WidgetPlacement.Top },
-        new() { Id = WidgetId.LastUpdated, Enabled = true, Placement = WidgetPlacement.Top },
-        new() { Id = WidgetId.ConnectionStatus, Enabled = true, Placement = WidgetPlacement.Top },
-        new() { Id = WidgetId.Meals, Enabled = false, Placement = WidgetPlacement.Top },
-        new() { Id = WidgetId.Trackers, Enabled = false, Placement = WidgetPlacement.Top },
-        new() { Id = WidgetId.TirChart, Enabled = false, Placement = WidgetPlacement.Top },
-        new() { Id = WidgetId.DailySummary, Enabled = false, Placement = WidgetPlacement.Top },
-        // Main sections
-        new() { Id = WidgetId.GlucoseChart, Enabled = true, Placement = WidgetPlacement.Main },
-        new() { Id = WidgetId.Statistics, Enabled = true, Placement = WidgetPlacement.Main },
-        new() { Id = WidgetId.Predictions, Enabled = true, Placement = WidgetPlacement.Main },
-        new() { Id = WidgetId.DailyStats, Enabled = true, Placement = WidgetPlacement.Main },
-        new() { Id = WidgetId.Treatments, Enabled = true, Placement = WidgetPlacement.Main },
-        new() { Id = WidgetId.Agp, Enabled = false, Placement = WidgetPlacement.Main },
-        new() { Id = WidgetId.BatteryStatus, Enabled = true, Placement = WidgetPlacement.Main },
-    ];
 }
 
 /// <summary>
@@ -321,6 +306,131 @@ public enum WidgetId
 }
 
 /// <summary>
+/// The one description of every dashboard widget: what it is called, where it sits, and — for a main
+/// section — whether a fresh tenant gets it. <see cref="FeatureSettings.Widgets"/> and the widget
+/// metadata endpoint both read from here, so adding a widget means adding a <see cref="WidgetId"/>
+/// and a row below.
+/// </summary>
+public static class WidgetCatalog
+{
+    /// <summary>
+    /// Every <see cref="WidgetId"/>, including the ones nothing renders — stored settings still
+    /// carry them, and <see cref="WidgetDefinition.Renderable"/> is what tells them apart.
+    /// </summary>
+    public static IReadOnlyList<WidgetDefinition> All { get; } =
+    [
+        Top(WidgetId.BgDelta, "BG Delta",
+            "Blood glucose change with connection status and last updated time",
+            "TrendingUp"),
+        Top(WidgetId.LastUpdated, "Last Updated",
+            "Time since last glucose reading with device info",
+            "Clock"),
+        Top(WidgetId.ConnectionStatus, "Connection Status",
+            "Real-time data connection status",
+            "Wifi"),
+        Top(WidgetId.Meals, "Recent Meals",
+            "Recent meal entries and carb intake",
+            "UtensilsCrossed"),
+        Top(WidgetId.Trackers, "Trackers",
+            "Active tracker status and progress",
+            "ListChecks"),
+        Top(WidgetId.TirChart, "Time in Range",
+            "Stacked chart showing time in glucose ranges",
+            "BarChart3"),
+        Top(WidgetId.DailySummary, "Daily Summary",
+            "Today's glucose statistics overview",
+            "CalendarDays"),
+        Top(WidgetId.Clock, "Clock",
+            "Current time and date display",
+            "Clock"),
+        Top(WidgetId.Tdd, "Total Daily Dose",
+            "Today's insulin with basal/bolus breakdown",
+            "PieChart"),
+        Main(WidgetId.GlucoseChart, "Glucose Chart",
+            "Main glucose trend chart with treatments",
+            "LineChart", on: true),
+        Main(WidgetId.Statistics, "Statistics",
+            "BG statistics cards",
+            "BarChart2", renderable: false),
+        Main(WidgetId.Predictions, "Predictions",
+            "Glucose prediction lines on chart",
+            "TrendingUp", on: true),
+        Main(WidgetId.DailyStats, "Daily Stats",
+            "Recent entries card",
+            "CalendarDays", on: true),
+        Main(WidgetId.Treatments, "Treatments",
+            "Recent treatments card",
+            "Syringe", on: true),
+        Main(WidgetId.Agp, "AGP",
+            "Ambulatory glucose profile",
+            "Activity", renderable: false),
+        Main(WidgetId.BatteryStatus, "Battery Status",
+            "Device battery status",
+            "Battery", renderable: false),
+    ];
+
+    private static WidgetDefinition Top(
+        WidgetId id,
+        string name,
+        string description,
+        string icon,
+        bool renderable = true
+    ) => Row(id, WidgetPlacement.Top, name, description, icon, null, renderable);
+
+    private static WidgetDefinition Main(
+        WidgetId id,
+        string name,
+        string description,
+        string icon,
+        bool on = false,
+        bool renderable = true
+    ) => Row(id, WidgetPlacement.Main, name, description, icon, on, renderable);
+
+    private static WidgetDefinition Row(
+        WidgetId id,
+        WidgetPlacement placement,
+        string name,
+        string description,
+        string icon,
+        bool? on,
+        bool renderable
+    ) =>
+        new()
+        {
+            Id = id,
+            Placement = placement,
+            Name = name,
+            Description = description,
+            Icon = icon,
+            DefaultEnabled = on,
+            Renderable = renderable,
+        };
+
+    /// <summary>
+    /// The widget configuration a tenant starts with: one entry per renderable widget the catalogue
+    /// gives a default, which is every main section and no top-grid widget.
+    /// </summary>
+    public static List<WidgetConfig> Defaults() =>
+        [
+            .. All.Where(d => d.Renderable && d.DefaultEnabled.HasValue)
+                .Select(d => new WidgetConfig
+                {
+                    Id = d.Id,
+                    Enabled = d.DefaultEnabled!.Value,
+                    Placement = d.Placement,
+                }),
+        ];
+
+    /// <summary>
+    /// <paramref name="stored"/> narrowed to the rows that still gate something. Settings written
+    /// before the top grid became a per-user preference carry top rows nothing reads, and serving
+    /// them invites a reader to act on them.
+    /// </summary>
+    public static List<WidgetConfig> MainSectionsOf(IEnumerable<WidgetConfig>? stored) =>
+        [.. (stored ?? []).Where(w => w.Placement == WidgetPlacement.Main)];
+}
+
+/// <summary>
 /// Widget placement determines where the widget is displayed.
 /// </summary>
 [JsonConverter(typeof(JsonStringEnumConverter))]
@@ -338,63 +448,47 @@ public enum WidgetPlacement
 }
 
 /// <summary>
-/// Widget size variants for layout.
-/// </summary>
-[JsonConverter(typeof(JsonStringEnumConverter))]
-public enum WidgetSize
-{
-    Small,
-    Medium,
-    Large
-}
-
-/// <summary>
-/// Widget UI category for grouping in settings.
-/// </summary>
-[JsonConverter(typeof(JsonStringEnumConverter))]
-public enum WidgetUICategory
-{
-    Glucose,
-    Meals,
-    Device,
-    Status
-}
-
-/// <summary>
 /// Widget definition with metadata for UI display.
 /// Served from the API so frontend doesn't need to maintain widget definitions.
 /// </summary>
 public class WidgetDefinition
 {
     [JsonPropertyName("id")]
-    public WidgetId Id { get; set; }
+    public WidgetId Id { get; init; }
 
     [JsonPropertyName("name")]
-    public string Name { get; set; } = string.Empty;
+    public string Name { get; init; } = string.Empty;
 
     [JsonPropertyName("description")]
-    public string Description { get; set; } = string.Empty;
+    public string Description { get; init; } = string.Empty;
 
+    /// <summary>
+    /// Whether a fresh tenant's <see cref="FeatureSettings.Widgets"/> enables this. Null on a
+    /// top-grid widget: the top grid is a per-user preference, so no tenant default exists to
+    /// report, and reporting <c>false</c> would read as "off by default".
+    /// </summary>
     [JsonPropertyName("defaultEnabled")]
-    public bool DefaultEnabled { get; set; } = true;
+    public bool? DefaultEnabled { get; init; }
+
+    /// <summary>
+    /// Whether a dashboard surface exists for this widget. Ids kept only so that stored settings
+    /// naming them still deserialise are catalogued with <c>false</c>: they get no default and are
+    /// not offered.
+    /// </summary>
+    [JsonPropertyName("renderable")]
+    public bool Renderable { get; init; } = true;
 
     /// <summary>
     /// Icon name (e.g., "TrendingUp", "Clock") - frontend maps to actual icon component
     /// </summary>
     [JsonPropertyName("icon")]
-    public string Icon { get; set; } = string.Empty;
-
-    /// <summary>
-    /// UI category for grouping in settings
-    /// </summary>
-    [JsonPropertyName("uiCategory")]
-    public WidgetUICategory UICategory { get; set; }
+    public string Icon { get; init; } = string.Empty;
 
     /// <summary>
     /// Where the widget is displayed (top grid or main section)
     /// </summary>
     [JsonPropertyName("placement")]
-    public WidgetPlacement Placement { get; set; }
+    public WidgetPlacement Placement { get; init; }
 }
 
 /// <summary>
@@ -411,15 +505,6 @@ public class WidgetConfig
 
     [JsonPropertyName("placement")]
     public WidgetPlacement Placement { get; set; } = WidgetPlacement.Main;
-
-    [JsonPropertyName("size")]
-    public WidgetSize? Size { get; set; }
-
-    /// <summary>
-    /// Widget-specific settings (future extensibility)
-    /// </summary>
-    [JsonPropertyName("settings")]
-    public Dictionary<string, object>? Settings { get; set; }
 }
 
 /// <summary>
@@ -507,7 +592,7 @@ public class NotificationSettings
 {
     /// <summary>
     /// xDrip+-style alarm configuration stored as JSONB.
-    /// Contains all alarm profiles, quiet hours, channels, and emergency contacts.
+    /// Contains all alarm profiles, channels, and emergency contacts.
     /// </summary>
     [JsonPropertyName("alarmConfiguration")]
     public UserAlarmConfiguration AlarmConfiguration { get; set; } = new();
@@ -526,6 +611,11 @@ public class ServicesSettings
     [JsonPropertyName("connectedServices")]
     public List<ConnectedService> ConnectedServices { get; set; } = new();
 
+    /// <summary>
+    /// The connector catalog, served from <c>ConnectorMetadataService</c> on every read. It is
+    /// build-time metadata rather than tenant state, so the services row omits it — see
+    /// <see cref="UISettingsSection.OmittedProperties"/>.
+    /// </summary>
     [JsonPropertyName("availableServices")]
     public List<AvailableService> AvailableServices { get; set; } = new();
 
@@ -666,28 +756,6 @@ public class CompressionLowDetectionSettings
     /// </summary>
     [JsonPropertyName("excludeFromStatistics")]
     public bool ExcludeFromStatistics { get; set; } = true;
-}
-
-#endregion
-
-#region Security Settings
-
-/// <summary>
-/// Security settings including site lockdown and privacy options
-/// </summary>
-public class SecuritySettings
-{
-    /// <summary>
-    /// Whether to require authentication to view any part of the site (including glucose data)
-    /// </summary>
-    [JsonPropertyName("requireAuthForPublicAccess")]
-    public bool RequireAuthForPublicAccess { get; set; } = false;
-
-    /// <summary>
-    /// Whether to hide glucose values from favicon for unauthenticated users
-    /// </summary>
-    [JsonPropertyName("hideGlucoseInFavicon")]
-    public bool HideGlucoseInFavicon { get; set; } = false;
 }
 
 #endregion

@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using Nocturne.API.Authorization;
 using Nocturne.API.Hubs;
 using Nocturne.API.Middleware.Handlers;
 using Nocturne.Connectors.Core.Utilities;
@@ -8,16 +9,16 @@ using Nocturne.Core.Contracts.Identity;
 using Nocturne.Core.Contracts.Multitenancy;
 using Nocturne.Core.Models.Authorization;
 using Nocturne.Infrastructure.Data;
+using Nocturne.API.Services.Auth;
 
 namespace Nocturne.API.Services.Identity;
 
 /// <summary>
 /// Authorizes the credentials presented in-band to a SignalR hub (the socket.io-style
 /// <c>authorize</c> / <c>subscribe</c> handshake). Accepts OAuth access-token JWTs (validated
-/// statelessly, tenant-pinned, then intersected with the subject's membership), legacy opaque subject
-/// access tokens (hash lookup plus an explicit tenant-membership check), <c>noc_</c> direct grants
-/// (grant row read on the connection's tenant, then intersected with its subject's membership), and
-/// the hashed instance key.
+/// statelessly, tenant-pinned, then intersected with the subject's membership), opaque grant
+/// credentials (grant row read on the connection's tenant, then intersected with its subject's
+/// membership), and the hashed instance key.
 /// </summary>
 /// <seealso cref="Hubs.DataHub"/>
 /// <seealso cref="Hubs.AlarmHub"/>
@@ -31,10 +32,9 @@ public interface IHubTokenAuthorizer
     /// A token must be pinned to <paramref name="connectionTenantId"/> — the hub connection's tenant
     /// group is immutable, so a token from another tenant must never authorize it — and must satisfy
     /// <paramref name="requiredScope"/>. This holds on every branch: an OAuth JWT is checked against
-    /// its <c>tenant</c> claim and then against a membership row on that tenant, a legacy opaque
-    /// token against a membership row alone, a direct grant against its row's own <c>TenantId</c>,
-    /// read on a context pinned to the connection's tenant rather than on whatever tenant state the
-    /// caller's scope carries.
+    /// its <c>tenant</c> claim and then against a membership row on that tenant, and a grant against
+    /// its row's own <c>TenantId</c>, read on a context pinned to the connection's tenant rather than
+    /// on whatever tenant state the caller's scope carries.
     /// </remarks>
     /// <param name="token">The token supplied in the hub's authorize payload.</param>
     /// <param name="connectionTenantId">The tenant resolved for the connection's HTTP handshake.</param>
@@ -56,31 +56,25 @@ public interface IHubTokenAuthorizer
 /// <inheritdoc cref="IHubTokenAuthorizer"/>
 public class HubTokenAuthorizer : IHubTokenAuthorizer
 {
-    private readonly IJwtService _jwtService;
-    private readonly IOAuthTokenRevocationCache _revocationCache;
-    private readonly IOAuthGrantService _grantService;
-    private readonly IAuthorizationService _authorizationService;
+    private readonly IJwtCredentialValidator _credentialValidator;
     private readonly ITenantMemberService _memberService;
     private readonly IDbContextFactory<NocturneDbContext> _dbContextFactory;
+    private readonly TimeProvider _timeProvider;
     private readonly IConfiguration _configuration;
     private readonly ILogger<HubTokenAuthorizer> _logger;
 
     public HubTokenAuthorizer(
-        IJwtService jwtService,
-        IOAuthTokenRevocationCache revocationCache,
-        IOAuthGrantService grantService,
-        IAuthorizationService authorizationService,
+        IJwtCredentialValidator credentialValidator,
         ITenantMemberService memberService,
         IDbContextFactory<NocturneDbContext> dbContextFactory,
+        TimeProvider timeProvider,
         IConfiguration configuration,
         ILogger<HubTokenAuthorizer> logger)
     {
-        _jwtService = jwtService;
-        _revocationCache = revocationCache;
-        _grantService = grantService;
-        _authorizationService = authorizationService;
+        _credentialValidator = credentialValidator;
         _memberService = memberService;
         _dbContextFactory = dbContextFactory;
+        _timeProvider = timeProvider;
         _configuration = configuration;
         _logger = logger;
     }
@@ -95,22 +89,15 @@ public class HubTokenAuthorizer : IHubTokenAuthorizer
             return null;
         }
 
-        // A direct grant is a row in oauth_grants, not a subject token, so it is decided on the
-        // prefix that identifies it — the same discriminator DirectGrantTokenHandler and the
-        // token-exchange endpoint use.
-        if (token.StartsWith(DirectGrantTokenHandler.TokenPrefix, StringComparison.Ordinal))
-        {
-            return await AuthorizeDirectGrantAsync(token, connectionTenantId.Value, requiredScope);
-        }
-
-        // JWTs are three-segment; legacy opaque tokens are not. Mirrors OAuthAccessTokenHandler:
-        // once a token reads as a JWT it is decided on the JWT path only.
-        if (token.Count(c => c == '.') == 2)
+        // Once a token reads as a JWT it is decided on the JWT path only, as in
+        // OAuthAccessTokenHandler.
+        if (TokenFormat.IsJwt(token))
         {
             return await AuthorizeJwtAsync(token, connectionTenantId.Value, requiredScope);
         }
 
-        return await AuthorizeOpaqueTokenAsync(token, connectionTenantId.Value, requiredScope);
+        // Every remaining opaque credential is a row in oauth_grants, so one lookup answers all.
+        return await AuthorizeDirectGrantAsync(token, connectionTenantId.Value, requiredScope);
     }
 
     /// <inheritdoc />
@@ -141,7 +128,7 @@ public class HubTokenAuthorizer : IHubTokenAuthorizer
 
         return new HubAuthorization(
             connectionTenantId.Value,
-            new HashSet<string> { OAuthScopes.FullAccess },
+            new HashSet<string> { Scope.FullAccess },
             HubCredentialKind.Infrastructure,
             SubjectId: null);
     }
@@ -149,14 +136,15 @@ public class HubTokenAuthorizer : IHubTokenAuthorizer
     private async Task<HubAuthorization?> AuthorizeJwtAsync(
         string token, Guid connectionTenantId, string requiredScope)
     {
-        var validation = _jwtService.ValidateAccessToken(token);
-        if (!validation.IsValid || validation.Claims is null)
+        var validation = await _credentialValidator.ValidateAsync(token);
+        if (!validation.IsValid)
         {
-            _logger.LogDebug("Hub JWT validation failed: {Error}", validation.Error);
+            _logger.LogDebug(
+                "Hub token refused ({Rejection}): {Error}", validation.Rejection, validation.Error);
             return null;
         }
 
-        var claims = validation.Claims;
+        var claims = validation.Claims!;
 
         // Unlike the HTTP handler, an unpinned (null-tenant) JWT is rejected outright: the hub
         // group is tenant-scoped and there is no per-request middleware to re-check access.
@@ -165,21 +153,6 @@ public class HubTokenAuthorizer : IHubTokenAuthorizer
             _logger.LogWarning(
                 "Hub JWT tenant mismatch: token tenant {TokenTenant}, connection tenant {ConnectionTenant}",
                 claims.TenantId, connectionTenantId);
-            return null;
-        }
-
-        if (!string.IsNullOrEmpty(claims.JwtId)
-            && await _revocationCache.IsRevokedAsync(claims.JwtId))
-        {
-            _logger.LogDebug("Hub JWT has been revoked (jti: {Jti})", claims.JwtId);
-            return null;
-        }
-
-        // A grant revocation reaches outstanding access tokens through the grant id they carry.
-        if (claims.GrantId.HasValue
-            && await _grantService.IsGrantRevokedAsync(claims.GrantId.Value, connectionTenantId))
-        {
-            _logger.LogDebug("Hub JWT's grant has been revoked (grant: {GrantId})", claims.GrantId);
             return null;
         }
 
@@ -206,9 +179,9 @@ public class HubTokenAuthorizer : IHubTokenAuthorizer
         var scopes = MemberScopeResolver.Resolve(
             effectivePermissions,
             AuthType.OAuthAccessToken,
-            OAuthScopes.Normalize(claims.Scopes));
+            Scope.Normalize(claims.Scopes));
 
-        if (!OAuthScopes.SatisfiesScope(scopes, requiredScope))
+        if (!Scope.Satisfies(scopes, requiredScope))
         {
             return null;
         }
@@ -220,7 +193,7 @@ public class HubTokenAuthorizer : IHubTokenAuthorizer
     }
 
     /// <summary>
-    /// Authorizes a <c>noc_</c> direct-grant token against the connection's tenant.
+    /// Authorizes an opaque grant credential against the connection's tenant.
     /// </summary>
     /// <remarks>
     /// The grant row is read on a context pinned to the connection's tenant and matched on that
@@ -239,7 +212,7 @@ public class HubTokenAuthorizer : IHubTokenAuthorizer
         string token, Guid connectionTenantId, string requiredScope)
     {
         var grant = await DirectGrantTokenHandler.FindActiveGrantAsync(
-            _dbContextFactory, token, connectionTenantId);
+            _dbContextFactory, token, connectionTenantId, _timeProvider.GetUtcNow().UtcDateTime);
 
         if (grant is null)
         {
@@ -263,79 +236,12 @@ public class HubTokenAuthorizer : IHubTokenAuthorizer
         var scopes = MemberScopeResolver.Resolve(
             effectivePermissions, AuthType.DirectGrant, grant.Scopes.ToHashSet());
 
-        if (!OAuthScopes.SatisfiesScope(scopes, requiredScope))
+        if (!Scope.Satisfies(scopes, requiredScope))
         {
             return null;
         }
 
         return new HubAuthorization(
             connectionTenantId, scopes, HubCredentialKind.Subject, grant.SubjectId);
-    }
-
-    /// <summary>
-    /// Authorizes a legacy opaque subject access token. The exchange only proves the token exists, so
-    /// the resulting identity is then pinned to the connection's tenant by an explicit
-    /// tenant-membership row, which does not rely on the database's tenant scoping being in place.
-    /// </summary>
-    private async Task<HubAuthorization?> AuthorizeOpaqueTokenAsync(
-        string token, Guid connectionTenantId, string requiredScope)
-    {
-        var authResponse = await _authorizationService.GenerateJwtFromAccessTokenAsync(token);
-        if (authResponse?.Token is null)
-        {
-            return null;
-        }
-
-        // The exchange mints a JWT for the resolved identity; re-reading it is how the subject id
-        // comes back out.
-        var validation = _jwtService.ValidateAccessToken(authResponse.Token);
-        if (!validation.IsValid || validation.Claims is null)
-        {
-            _logger.LogDebug(
-                "Hub opaque token exchange produced an unusable JWT: {Error}", validation.Error);
-            return null;
-        }
-
-        var claims = validation.Claims;
-
-        // A subject-token exchange mints an unpinned JWT; only the direct-grant exchange pins a
-        // tenant, and direct grants are routed away from this path. A pinned JWT here therefore
-        // resolved something this path does not decide, and is refused rather than guessed at.
-        if (claims.TenantId is not null)
-        {
-            _logger.LogWarning(
-                "Hub opaque token exchange returned a tenant-pinned JWT on the subject-token path");
-            return null;
-        }
-
-        if (claims.SubjectId == Guid.Empty)
-        {
-            return null;
-        }
-
-        // Legacy subject tokens carry no tenant pin, so membership is the pin.
-        var effectivePermissions = await _memberService.GetEffectivePermissionsAsync(
-            claims.SubjectId, connectionTenantId);
-
-        if (effectivePermissions is null)
-        {
-            _logger.LogWarning(
-                "Hub opaque token subject {SubjectId} is not a member of connection tenant {ConnectionTenant}",
-                claims.SubjectId, connectionTenantId);
-            return null;
-        }
-
-        // AuthType.LegacyAccessToken is in MemberScopeResolver.UnscopedCredentialTypes, so membership
-        // is the whole authority and the credential's own scope list is not consulted at all —
-        // matching what MemberScopeMiddleware resolves for the same credential presented over HTTP.
-        var memberScopes = MemberScopeResolver.Resolve(
-            effectivePermissions,
-            AuthType.LegacyAccessToken,
-            credentialScopes: new HashSet<string>());
-
-        return OAuthScopes.SatisfiesScope(memberScopes, requiredScope)
-            ? new HubAuthorization(
-                connectionTenantId, memberScopes, HubCredentialKind.Subject, claims.SubjectId)
-            : null;
     }
 }

@@ -20,6 +20,7 @@ namespace Nocturne.API.Tests.Controllers.V4.Analytics;
 /// the API's CPU and the bytes it reads. The sweep pins the rule rather than today's action list,
 /// so a new compute POST that ships without the policy fails here.
 /// </remarks>
+[Trait("Category", "Unit")]
 public class StatisticsComputeLimitTests
 {
     [Fact]
@@ -64,6 +65,30 @@ public class StatisticsComputeLimitTests
         return context;
     }
 
+    [Fact]
+    public void TheBodyLimit_IsDeclaredOnceOnTheController()
+    {
+        // RequestSizeLimitAttribute keeps its bytes private, so the declaration is read off the metadata.
+        var declared = typeof(StatisticsController)
+            .GetCustomAttributesData()
+            .SingleOrDefault(a => a.AttributeType == typeof(RequestSizeLimitAttribute));
+
+        declared.Should().NotBeNull("the ceiling is a controller-wide convention, not a per-action opt-in");
+        Convert.ToInt64(declared!.ConstructorArguments.Single().Value)
+            .Should().Be(StatisticsController.ComputeBodyLimitBytes,
+                "the attribute has to carry the declared ceiling, not some other number");
+
+        var perAction = typeof(StatisticsController)
+            .GetMethods(BindingFlags.Public | BindingFlags.Instance | BindingFlags.DeclaredOnly)
+            .Where(m => m.GetCustomAttribute<RequestSizeLimitAttribute>() is not null)
+            .Select(m => m.Name)
+            .ToList();
+
+        perAction.Should().BeEmpty(
+            "an action-level copy overrides the controller's and lets the two drift. Copies on: "
+            + string.Join(", ", perAction));
+    }
+
     /// <summary>
     /// The declared body limit has to cover the largest range a report can ask for: the web client
     /// pages every reading in the range into one <c>site-change-impact</c> post, so a year of
@@ -73,10 +98,6 @@ public class StatisticsComputeLimitTests
     public void TheDeclaredBodyLimit_CoversAYearOfReadings()
     {
         const int readingsPerYear = 365 * 24 * 12;
-
-        ComputePosts()
-            .Count(a => a.GetCustomAttribute<RequestSizeLimitAttribute>() is not null)
-            .Should().BeGreaterThan(0, "the collection-taking posts declare a body ceiling");
 
         (readingsPerYear * (long)SerializedReadingBytes()).Should()
             .BeLessThan(StatisticsController.ComputeBodyLimitBytes,

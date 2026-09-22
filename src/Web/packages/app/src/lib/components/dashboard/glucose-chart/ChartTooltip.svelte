@@ -3,8 +3,15 @@
   import { cn } from "$lib/utils";
   import { goto } from "$app/navigation";
   import { BasalDeliveryOrigin, ChartSpanKind } from "$lib/api";
-  import { bg, bgLabel } from "$lib/utils/formatting";
+  import {
+    bg,
+    bgLabel,
+    formatCarbDisplay,
+    formatInsulinDisplay,
+    time,
+  } from "$lib/utils/formatting";
   import { getGlucoseChartContext } from "./chart-context.svelte";
+  import { isBasalAdjusted } from "./engine/basal-presentation";
   import type { GlucosePoint } from "./engine/chart-data-engine.svelte";
 
   interface Props {
@@ -80,7 +87,7 @@
 
     <Tooltip.Header
       value={data?.time}
-      format="minute"
+      format={(v) => (v instanceof Date ? time(v) : String(v))}
       class="text-popover-foreground border-b border-border pb-1 mb-1 text-sm font-semibold"
     />
     <Tooltip.List>
@@ -95,7 +102,7 @@
       {#if showBolus && nearbyBolus}
         <Tooltip.Item
           label="Bolus"
-          value={`${(nearbyBolus.insulin ?? 0).toFixed(1)}U`}
+          value={`${formatInsulinDisplay(nearbyBolus.insulin ?? 0)}U`}
           color="var(--insulin-bolus)"
           class="font-medium"
         />
@@ -103,7 +110,7 @@
       {#if showCarbs && nearbyCarbs}
         <Tooltip.Item
           label="Carbs"
-          value={`${nearbyCarbs.carbs ?? 0}g`}
+          value={`${formatCarbDisplay(nearbyCarbs.carbs ?? 0)}g`}
           color="var(--carbs)"
           class="font-medium"
         />
@@ -133,10 +140,11 @@
       {/if}
       {#if showBasal && (activeBasal || activeBasalDelivery || activeTempBasal)}
         {#if activeBasal}
-          {@const isAdjusted =
-            (activeBasal.origin === BasalDeliveryOrigin.Algorithm ||
-              activeBasal.origin === BasalDeliveryOrigin.Manual) &&
-            activeBasal.rate !== activeBasal.scheduledRate}
+          {@const isAdjusted = isBasalAdjusted(
+            activeBasal.origin,
+            activeBasal.rate,
+            activeBasal.scheduledRate
+          )}
           {@const basalLabel =
             activeBasal.origin === BasalDeliveryOrigin.Suspended
               ? "Suspended"
@@ -159,7 +167,7 @@
                 : ""
             )}
           />
-          {#if isAdjusted && activeBasal.scheduledRate !== undefined}
+          {#if isAdjusted && activeBasal.scheduledRate != null}
             <Tooltip.Item
               label="Scheduled"
               value={activeBasal.scheduledRate}
@@ -270,7 +278,7 @@
   {#snippet children({ data })}
     <Tooltip.Item
       value={data?.time}
-      format="minute"
+      format={(v) => (v instanceof Date ? time(v) : String(v))}
       onclick={() => goto(`/reports/day-in-review?date=${data?.time}`)}
     />
   {/snippet}

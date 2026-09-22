@@ -1,6 +1,6 @@
 <script lang="ts">
   import StatusPill from "./StatusPill.svelte";
-  import { bg } from "$lib/utils/formatting";
+  import { bg, formatLocale } from "$lib/utils/formatting";
   import type {
     LoopPillData,
     PillInfoItem,
@@ -47,7 +47,7 @@
         }
       } else if (data.lastEnacted.type === "cancel") {
         actionText = "<b>Temp Basal Canceled</b>";
-      } else if (data.lastEnacted.rate !== undefined) {
+      } else if (data.lastEnacted.rate != null) {
         actionText = `<b>Temp Basal Started</b> ${data.lastEnacted.rate.toFixed(2)}U/hour for ${data.lastEnacted.duration}m`;
       }
 
@@ -56,15 +56,15 @@
       }
 
       // Add IOB/COB info from loop
-      if (data.iob !== undefined) {
+      if (data.iob != null) {
         actionText += `, IOB: ${data.iob.toFixed(2)}U`;
       }
-      if (data.cob !== undefined) {
+      if (data.cob != null) {
         actionText += `, COB: ${Math.round(data.cob)}g`;
       }
 
       // Add eventual BG
-      if (data.eventualBG !== undefined) {
+      if (data.eventualBG != null) {
         actionText += `, Eventual BG: ${bg(data.eventualBG)}`;
       }
 
@@ -114,12 +114,15 @@
   const display = $derived.by(() => {
     if (!data?.lastLoopTime) return null;
 
-    const time = new Date(data.lastLoopTime).toLocaleTimeString([], {
-      hour: "2-digit",
-      minute: "2-digit",
-    });
+    const time = new Date(data.lastLoopTime).toLocaleTimeString(
+      formatLocale(),
+      {
+        hour: "2-digit",
+        minute: "2-digit",
+      }
+    );
 
-    if (data.eventualBG !== undefined) {
+    if (data.eventualBG != null) {
       return `${time} ↝ ${bg(data.eventualBG)}`;
     }
 

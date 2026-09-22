@@ -78,9 +78,10 @@ public partial class GitHubTranslationService(
             throw;
         }
 
+        var safeLocaleForLog = SanitizeForLog(request.Locale);
         logger.LogInformation(
             "Opened translation PR #{PrNumber} for {Locale}: {Applied} applied, {Unmatched} unmatched",
-            prNumber, request.Locale, result.Applied, result.Unmatched.Count);
+            prNumber, safeLocaleForLog, result.Applied, result.Unmatched.Count);
 
         return new TranslationContributionResponse
         {
@@ -380,9 +381,9 @@ public partial class GitHubTranslationService(
             await client.DeleteAsync(
                 $"/repos/{opts.Owner}/{opts.Repo}/git/refs/heads/{branch}");
         }
-        catch (Exception ex)
+        catch (Exception ex) when (ex is HttpRequestException or OperationCanceledException)
         {
-            logger.LogWarning(ex, "Failed to clean up branch {Branch} after error", branch);
+            logger.LogWarning(ex, "Failed to clean up branch {Branch} after error", SanitizeForLog(branch));
         }
     }
 
@@ -413,6 +414,9 @@ public partial class GitHubTranslationService(
         [JsonPropertyName("html_url")]
         public string HtmlUrl { get; init; } = "";
     }
+
+    private static string SanitizeForLog(string value) =>
+        value.Replace("\r", string.Empty).Replace("\n", string.Empty);
 }
 
 public class TranslationContributionRejectedException(string message) : Exception(message);

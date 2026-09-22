@@ -1,4 +1,9 @@
 <script lang="ts">
+  import {
+    formatCarbDisplay,
+    formatInsulinDisplay,
+    formatLocale,
+  } from "$lib/utils/formatting";
   import type { TreatmentDataItem } from "./types";
 
   interface Props {
@@ -18,14 +23,14 @@
         >
           <div class="font-medium">{treatment.eventType}</div>
           <div class="text-gray-600">
-            {new Date(treatment.timestamp).toLocaleTimeString([], {
+            {new Date(treatment.timestamp).toLocaleTimeString(formatLocale(), {
               hour: "2-digit",
               minute: "2-digit",
             })}
             {#if treatment.insulin}
-              • {treatment.insulin}U{/if}
+              • {formatInsulinDisplay(treatment.insulin)}U{/if}
             {#if treatment.carbs}
-              • {treatment.carbs}g carbs{/if}
+              • {formatCarbDisplay(treatment.carbs)}g carbs{/if}
           </div>
         </div>
       {/each}

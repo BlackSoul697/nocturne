@@ -135,6 +135,14 @@ public class AuthContext
     public string? RawToken { get; set; }
 
     /// <summary>
+    /// Distinguishes one credential from another, so the audit trail can name which credential
+    /// acted — the only identity available for a caller with no subject of its own, such as the
+    /// instance key. Non-reversible: it can neither be presented as a credential nor reduced back
+    /// to one.
+    /// </summary>
+    public string? CredentialFingerprint { get; set; }
+
+    /// <summary>
     /// When the authentication expires
     /// </summary>
     public DateTimeOffset? ExpiresAt { get; set; }
@@ -245,11 +253,6 @@ public enum AuthType
     /// Legacy JWT token (self-issued)
     /// </summary>
     LegacyJwt,
-
-    /// <summary>
-    /// Legacy access token
-    /// </summary>
-    LegacyAccessToken,
 
     /// <summary>
     /// API key (resolved via DirectGrant lookup by SHA-256 or legacy SHA-1 hash)

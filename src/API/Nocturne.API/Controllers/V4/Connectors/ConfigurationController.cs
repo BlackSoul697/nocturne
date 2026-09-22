@@ -1,9 +1,14 @@
 using System.Text.Json;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.RateLimiting;
 using Nocturne.API.Attributes;
 using Nocturne.API.Authorization;
+using Nocturne.API.Extensions;
+using Nocturne.Connectors.Core.Utilities;
 using OpenApi.Remote.Attributes;
+using Nocturne.Connectors.Core.Interfaces;
+using Nocturne.Connectors.Core.Models;
 using Nocturne.Core.Contracts.Connectors;
 using Nocturne.Core.Models.Authorization;
 
@@ -59,7 +64,7 @@ public class ConfigurationController : ControllerBase
     /// <returns>Configuration response or 404 if not found</returns>
     [HttpGet("{connectorName}")]
     [RemoteQuery]
-    [RequireScope(TenantPermissions.TenantSettings)]
+    [RequireScope(Scope.TenantSettings)]
     [ProducesResponseType(typeof(ConnectorConfigurationResponse), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<ActionResult<ConnectorConfigurationResponse>> GetConfiguration(
@@ -110,7 +115,7 @@ public class ConfigurationController : ControllerBase
     /// <returns>Dictionary of property names to effective values</returns>
     [HttpGet("{connectorName}/effective")]
     [RemoteQuery]
-    [RequireScope(TenantPermissions.TenantSettings)]
+    [RequireScope(Scope.TenantSettings)]
     [ProducesResponseType(typeof(Dictionary<string, object?>), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status503ServiceUnavailable)]
     public async Task<ActionResult<Dictionary<string, object?>>> GetEffectiveConfiguration(
@@ -142,7 +147,7 @@ public class ConfigurationController : ControllerBase
     /// <returns>The saved configuration</returns>
     [HttpPut("{connectorName}")]
     [RemoteCommand(Invalidates = ["GetConfiguration", "GetAllConnectorStatus"])]
-    [RequireScope(TenantPermissions.TenantSettings)]
+    [RequireScope(Scope.TenantSettings)]
     [ProducesResponseType(typeof(ConnectorConfigurationResponse), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     public async Task<ActionResult<ConnectorConfigurationResponse>> SaveConfiguration(
@@ -315,8 +320,8 @@ public class ConfigurationController : ControllerBase
     /// </summary>
     /// <remarks>
     /// The scheme-less allowance mirrors the connectors' own normalisation
-    /// (<c>NightscoutConnectorService.ResolveBaseUrl</c> and <c>ConfigureConnectorClient</c> prepend
-    /// <c>https://</c> to any stored value that does not already begin with <c>http</c>), so
+    /// (<c>ConnectorUrl.ResolveBase</c> and <c>ConfigureConnectorClient</c> prepend
+    /// <c>https://</c> to any stored value that is not already an absolute http/https URI), so
     /// validating here does not reject a value the connector would have accepted — an existing
     /// tenant re-saving <c>mysite.example</c> or <c>mysite.example:1337</c> must not start failing.
     /// <para>
@@ -324,8 +329,9 @@ public class ConfigurationController : ControllerBase
     /// parse alone: <c>Uri.TryCreate("mysite.example:1337", UriKind.Absolute, …)</c> succeeds with
     /// <c>Scheme == "mysite.example"</c> and an empty host, and <c>"localhost:1337"</c> the same way
     /// — 1337 is Nightscout's default self-hosted port, so that form is common. So once http/https
-    /// has been accepted above, what is left has to look like a host: no leading slash, and no
-    /// colon except the one introducing a port.
+    /// has been accepted, what is left has to look like a host: no leading slash, and no colon
+    /// except the one introducing a port. Both readings are
+    /// <c>ConnectorUrl.TryResolveBase</c>, which the connectors resolve their base URL through.
     /// </para>
     /// <para>
     /// Embedded credentials are refused because this value is stored in the connector's runtime
@@ -337,52 +343,9 @@ public class ConfigurationController : ControllerBase
     /// </remarks>
     private static bool IsAcceptableUri(string? candidate)
     {
-        if (string.IsNullOrWhiteSpace(candidate))
-            return false;
-
-        if (Uri.TryCreate(candidate, UriKind.Absolute, out var absolute)
-            && (absolute.Scheme == Uri.UriSchemeHttp || absolute.Scheme == Uri.UriSchemeHttps))
-        {
-            return string.IsNullOrEmpty(absolute.UserInfo);
-        }
-
-        // Any other explicit scheme is out. Tested before the scheme-less fallback, because
-        // prepending https:// to "file:/etc/passwd" produces something that still parses.
-        if (candidate.StartsWith('/') || !ColonIntroducesOnlyAPort(candidate))
-            return false;
-
-        // No scheme of its own: a host, optionally with a port, which the connectors read as https.
-        return Uri.TryCreate($"https://{candidate}", UriKind.Absolute, out var implied)
-            && string.IsNullOrEmpty(implied.UserInfo);
-    }
-
-    /// <summary>
-    /// A scheme and a <c>host:port</c> cannot be told apart by charset — a scheme may contain the
-    /// dots and dashes a hostname does — so what follows the first colon decides: digits to the end
-    /// of the value or to the first path separator, and it is a port.
-    /// </summary>
-    private static bool ColonIntroducesOnlyAPort(string candidate)
-    {
-        var authority = candidate.AsSpan();
-
-        if (authority[0] == '[')
-        {
-            var close = authority.IndexOf(']');
-            if (close < 0)
-                return false;
-
-            authority = authority[(close + 1)..];
-        }
-
-        var colon = authority.IndexOf(':');
-        if (colon < 0)
-            return true;
-
-        var afterColon = authority[(colon + 1)..];
-        var slash = afterColon.IndexOf('/');
-        var port = slash < 0 ? afterColon : afterColon[..slash];
-
-        return port.Length > 0 && !port.ContainsAnyExcept("0123456789");
+        return ConnectorUrl.TryResolveBase(candidate, out var resolved)
+            && Uri.TryCreate(resolved, UriKind.Absolute, out var absolute)
+            && string.IsNullOrEmpty(absolute.UserInfo);
     }
 
     /// <summary>
@@ -394,7 +357,7 @@ public class ConfigurationController : ControllerBase
     /// <param name="ct">Cancellation token</param>
     [HttpPut("{connectorName}/secrets")]
     [RemoteCommand(Invalidates = ["GetConfiguration", "GetAllConnectorStatus"])]
-    [RequireScope(TenantPermissions.TenantSettings)]
+    [RequireScope(Scope.TenantSettings)]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     public async Task<IActionResult> SaveSecrets(
@@ -419,13 +382,61 @@ public class ConfigurationController : ControllerBase
     }
 
     /// <summary>
+    /// Verifies connector credentials against the provider without persisting anything.
+    /// Accepts the combined configuration and secrets payload (the same field shapes the
+    /// configuration and secrets PUT endpoints take) and attempts a live authentication.
+    /// Connectors that do not support verification return <c>supported = false</c>.
+    /// The submitted values are never stored, logged, or echoed back.
+    /// </summary>
+    /// <param name="connectorName">The connector name</param>
+    /// <param name="request">The configuration and secrets to verify</param>
+    /// <param name="verifiers">The registered per-connector credential verifiers</param>
+    /// <param name="ct">Cancellation token</param>
+    /// <returns>The verification outcome</returns>
+    [HttpPost("{connectorName}/verify")]
+    [RemoteCommand]
+    [RequireScope(Scope.TenantSettings)]
+    [EnableRateLimiting(ServiceRegistrationExtensions.ConnectorVerifyRateLimitPolicy)]
+    [ProducesResponseType(typeof(ConnectorCredentialVerificationResult), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    public async Task<ActionResult<ConnectorCredentialVerificationResult>> VerifyCredentials(
+        string connectorName,
+        [FromBody] VerifyConnectorCredentialsRequest request,
+        [FromServices] IEnumerable<IConnectorCredentialVerifier> verifiers,
+        CancellationToken ct)
+    {
+        _logger.LogDebug("Verifying credentials for connector {ConnectorName}", connectorName);
+
+        var verifier = verifiers.FirstOrDefault(
+            v => v.ConnectorId.Equals(connectorName, StringComparison.OrdinalIgnoreCase));
+        if (verifier == null)
+        {
+            return Ok(ConnectorCredentialVerificationResult.NotSupported());
+        }
+
+        // The same schema gate the configuration PUT runs. Verification binds the submitted values
+        // to a live configuration and signs in with them, so a value this endpoint waves through is
+        // one the connector acts on without the bounds its schema declares.
+        if (request.Configuration is { } submitted)
+        {
+            var validationErrors = await ValidateConfigurationAsync(connectorName, submitted, ct);
+            if (validationErrors.Count > 0)
+                return BadRequest(new { message = "Configuration validation failed", errors = validationErrors });
+        }
+
+        var result = await verifier.VerifyAsync(
+            request.Configuration, request.Secrets ?? new Dictionary<string, string>(), ct);
+        return Ok(result);
+    }
+
+    /// <summary>
     /// Gets status information for all registered connectors.
     /// </summary>
     /// <param name="ct">Cancellation token</param>
     /// <returns>List of connector status information</returns>
     [HttpGet]
     [RemoteQuery]
-    [RequireScope(TenantPermissions.TenantSettings)]
+    [RequireScope(Scope.TenantSettings)]
     [ProducesResponseType(typeof(IReadOnlyList<ConnectorStatusInfo>), StatusCodes.Status200OK)]
     public async Task<ActionResult<IReadOnlyList<ConnectorStatusInfo>>> GetAllConnectorStatus(
         CancellationToken ct)
@@ -444,7 +455,7 @@ public class ConfigurationController : ControllerBase
     /// <param name="ct">Cancellation token</param>
     [HttpPatch("{connectorName}/active")]
     [RemoteCommand(Invalidates = ["GetConfiguration", "GetAllConnectorStatus"])]
-    [RequireScope(TenantPermissions.TenantSettings)]
+    [RequireScope(Scope.TenantSettings)]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     public async Task<IActionResult> SetActive(
         string connectorName,
@@ -466,7 +477,7 @@ public class ConfigurationController : ControllerBase
     /// <param name="ct">Cancellation token</param>
     [HttpDelete("{connectorName}")]
     [RemoteCommand(Invalidates = ["GetConfiguration", "GetAllConnectorStatus"])]
-    [RequireScope(TenantPermissions.TenantSettings)]
+    [RequireScope(Scope.TenantSettings)]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<IActionResult> DeleteConfiguration(

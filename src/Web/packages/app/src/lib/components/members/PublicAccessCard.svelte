@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { formatDayTime } from "$lib/utils/formatting";
   import { page } from "$app/state";
   import { Button } from "$lib/components/ui/button";
   import * as Card from "$lib/components/ui/card";
@@ -13,10 +14,12 @@
     Loader2,
     Link as LinkIcon,
     Eye,
+    EyeOff,
     Clock,
   } from "lucide-svelte";
   import {
     getShareLink,
+    revealShareLink,
     rotateShareLink,
     disableShareLink,
     setShareLinkFullHistory,
@@ -26,6 +29,8 @@
     publicDataCategories,
     formatList,
   } from "./public-data-categories";
+  import { retainQuery } from "$lib/api/retain-query.svelte";
+  import { describeSubmitError } from "$lib/forms/submit-error";
 
   const effectivePermissions: string[] = $derived(
     (page.data as any).effectivePermissions ?? [],
@@ -36,6 +41,7 @@
   );
 
   const shareQuery = $derived(canManageSharing ? getShareLink() : null);
+  retainQuery(() => shareQuery);
   const share = $derived(shareQuery?.current ?? null);
 
   // Optimistic overrides held only while a mutation is in flight; null = use server truth.
@@ -53,9 +59,22 @@
   let errorMessage = $state<string | null>(null);
   let scopeWritesInFlight = $state(0);
 
-  // The server stores only a fingerprint of the link, so it can return the URL once — when the
-  // link is created. Held here for the rest of the visit; a reload shows the hidden state.
+  // The read that loads this card deliberately does not carry the URL; it travels only when asked
+  // for, and each reveal is audited.
   let revealedUrl = $state<string | null>(null);
+  let revealing = $state(false);
+  /** Whether the URL is on screen, as opposed to merely fetched. Copying does not show it. */
+  let plainVisible = $state(false);
+  /**
+   * What a reveal found, once one has run. It outranks the query's answer, which is read off the
+   * columns and so cannot see a link whose stored copy no longer decrypts.
+   */
+  let revealSucceeded = $state<boolean | null>(null);
+
+  const redactedUrl = $derived(share?.redactedUrl ?? null);
+  const canReveal = $derived(revealSucceeded ?? share?.canReveal ?? false);
+  /** Whether there is a link to show or copy at all, as opposed to only to regenerate. */
+  const recoverable = $derived(canReveal || revealedUrl != null);
 
   const sharedLabels = $derived(
     publicDataCategories.filter((c) => scopes.includes(c.scope)).map((c) => c.name.toLowerCase()),
@@ -70,15 +89,20 @@
     errorMessage = null;
     pendingEnabled = on;
     try {
-      if (on) revealedUrl = (await rotateShareLink()).url ?? null;
+      if (on) await mint(rotateShareLink);
       else {
         await disableShareLink();
         revealedUrl = null;
+        plainVisible = false;
+        revealSucceeded = null;
       }
-    } catch {
-      errorMessage = on
-        ? "Couldn't create the link. Please try again."
-        : "Couldn't turn off public access. Please try again.";
+    } catch (err) {
+      errorMessage = describeSubmitError(
+        err,
+        on
+          ? "Couldn't create the link. Please try again."
+          : "Couldn't turn off public access. Please try again."
+      );
     } finally {
       busy = false;
       pendingEnabled = null;
@@ -90,12 +114,48 @@
     errorMessage = null;
     confirmingRotate = false;
     try {
-      revealedUrl = (await rotateShareLink()).url ?? null;
-    } catch {
-      errorMessage = "Couldn't regenerate the link. Please try again.";
+      await mint(rotateShareLink);
+    } catch (err) {
+      errorMessage = describeSubmitError(err, "Couldn't regenerate the link. Please try again.");
     } finally {
       busy = false;
     }
+  }
+
+  /** Takes a freshly minted link onto the screen: the owner just asked for it. */
+  async function mint(rotate: typeof rotateShareLink) {
+    revealedUrl = (await rotate()).url ?? null;
+    plainVisible = revealedUrl != null;
+    revealSucceeded = null;
+  }
+
+  /** The URL, fetched once per visit and then reused. */
+  async function loadUrl(): Promise<string | null> {
+    if (revealedUrl) return revealedUrl;
+
+    revealing = true;
+    errorMessage = null;
+    try {
+      const link = await revealShareLink();
+      revealedUrl = link.url ?? null;
+      // Settles what the card could only guess at until now, which is what withdraws the show and
+      // copy controls when the stored copy turns out not to decrypt.
+      revealSucceeded = link.canReveal ?? revealedUrl != null;
+      return revealedUrl;
+    } catch (err) {
+      errorMessage = describeSubmitError(err, "Couldn't show the link. Please try again.");
+      return null;
+    } finally {
+      revealing = false;
+    }
+  }
+
+  async function togglePlain() {
+    if (plainVisible) {
+      plainVisible = false;
+      return;
+    }
+    plainVisible = (await loadUrl()) != null;
   }
 
   async function toggleScope(scope: string) {
@@ -108,8 +168,8 @@
     scopeWritesInFlight++;
     try {
       await setShareLinkScopes({ scopes: list });
-    } catch {
-      errorMessage = "Couldn't update what's shared. Please try again.";
+    } catch (err) {
+      errorMessage = describeSubmitError(err, "Couldn't update what's shared. Please try again.");
     } finally {
       // Hold the optimistic value until every concurrent toggle settles, then fall back to
       // server truth — the generated command already refreshed getShareLink.
@@ -123,16 +183,17 @@
     errorMessage = null;
     try {
       await setShareLinkFullHistory({ fullHistory: fh });
-    } catch {
-      errorMessage = "Couldn't update the time window. Please try again.";
+    } catch (err) {
+      errorMessage = describeSubmitError(err, "Couldn't update the time window. Please try again.");
     } finally {
       pendingFullHistory = null;
     }
   }
 
   async function copyLink() {
-    if (!revealedUrl) return;
-    if (!(await copyToClipboard(revealedUrl))) {
+    const url = await loadUrl();
+    if (!url) return;
+    if (!(await copyToClipboard(url))) {
       errorMessage = "Couldn't copy the link to the clipboard. Copy it manually instead.";
       return;
     }
@@ -143,17 +204,12 @@
   function formatDate(date: Date | string | undefined | null): string {
     if (!date) return "never";
     const d = date instanceof Date ? date : new Date(date);
-    return d.toLocaleDateString(undefined, {
-      month: "short",
-      day: "numeric",
-      hour: "numeric",
-      minute: "2-digit",
-    });
+    return formatDayTime(d);
   }
 </script>
 
 {#if canManageSharing}
-  <Card.Root>
+  <Card.Root data-testid="public-access-card">
     <!-- Hero header: globe/lock + master toggle -->
     <div class="flex items-start gap-4 p-5 @md:p-6">
       <div
@@ -175,6 +231,7 @@
         </p>
       </div>
       <Switch
+        data-testid="public-access-toggle"
         checked={enabled}
         disabled={busy}
         onCheckedChange={(v: boolean) => setEnabled(v)}
@@ -197,17 +254,45 @@
               class="flex h-11 min-w-0 flex-1 items-center gap-2 rounded-lg border border-border bg-background px-3 font-mono text-sm"
             >
               <LinkIcon class="h-4 w-4 shrink-0 text-muted-foreground" />
-              {#if revealedUrl}
-                <span class="truncate">{revealedUrl}</span>
+              {#if plainVisible && revealedUrl}
+                <span class="truncate" data-testid="public-access-url">{revealedUrl}</span>
+              {:else if redactedUrl}
+                <span class="truncate" data-testid="public-access-url-redacted">
+                  {redactedUrl}
+                </span>
               {:else}
+                <!-- The optimistic toggle turns this section on before the refreshed share
+                     arrives, so this is the moment between the two, not a steady state. -->
                 <span class="truncate font-sans text-muted-foreground">
-                  Your link is only shown when you create it
+                  Fetching your link...
                 </span>
               {/if}
             </div>
             <div class="flex gap-2">
-              {#if revealedUrl}
-                <Button variant="outline" class="shrink-0" onclick={copyLink}>
+              {#if recoverable}
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  class="shrink-0"
+                  disabled={revealing}
+                  onclick={togglePlain}
+                  aria-label={plainVisible ? "Hide the link" : "Show the link"}
+                  data-testid="public-access-reveal"
+                >
+                  {#if revealing}
+                    <Loader2 class="h-4 w-4 animate-spin" />
+                  {:else if plainVisible}
+                    <EyeOff class="h-4 w-4" />
+                  {:else}
+                    <Eye class="h-4 w-4" />
+                  {/if}
+                </Button>
+                <Button
+                  variant="outline"
+                  class="shrink-0"
+                  disabled={revealing}
+                  onclick={copyLink}
+                >
                   {#if copied}
                     <Check class="mr-1.5 h-4 w-4 text-green-600" />
                   {:else}
@@ -247,19 +332,18 @@
                 </Button>
               </div>
             </div>
-          {:else if revealedUrl}
+          {:else if recoverable}
             <p class="text-xs text-muted-foreground">
-              Anyone you send this link to can open the read-only view — no sign-in
-              needed. Copy it now: it isn't shown again after you leave this page.
-              Last viewed {formatDate(share?.lastAccessedAt)}.
+              Anyone you send this link to can open the read-only view without
+              signing in. It stays hidden here until you show or copy it. Last
+              viewed {formatDate(share?.lastAccessedAt)}.
             </p>
           {:else}
             <p class="text-xs text-muted-foreground">
-              Anyone who already has your link can open the read-only view — no
-              sign-in needed. To get a link you can send, regenerate it; that also
-              stops the previous one from working. Last viewed {formatDate(
-                share?.lastAccessedAt,
-              )}.
+              Anyone who already has your link can still open the read-only view
+              without signing in, but Nocturne can no longer show you what it is.
+              To get a link you can send, regenerate it; that stops the current one
+              from working. Last viewed {formatDate(share?.lastAccessedAt)}.
             </p>
           {/if}
         </div>
@@ -306,7 +390,7 @@
               Limit public viewers to recent data only. Older history stays private.
             </div>
           </div>
-          <div class="inline-flex shrink-0 rounded-lg bg-muted p-1">
+          <div class="inline-flex shrink-0 rounded-lg bg-muted p-1" data-testid="public-access-window">
             <button
               type="button"
               onclick={() => setWindow(true)}

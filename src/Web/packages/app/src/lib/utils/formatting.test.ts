@@ -34,10 +34,21 @@ const {
 	formatGlucoseRange,
 	formatLocale,
 	prefersHour12,
+	formatLongDate,
+	formatMediumDate,
+	formatMediumDateTime,
+	formatMonthYear,
+	formatMonthLabel,
+	formatWeekdayLabel,
+	formatClock,
+	formatDayTime,
+	formatNumber,
+	formatNumericDate,
+	formatMediumDateRange,
+	time,
 	formatShortDate,
 	formatWeekdayDate,
 	formatDateTime,
-	formatDate,
 	formatDateDetailed,
 	formatDateForInput,
 	formatDateTimeCompact,
@@ -53,6 +64,31 @@ const {
 // The mocked store holds plain objects, so a test can move a preference and read
 // the effect the same way the app does.
 const store = await import("$lib/stores/appearance-store.svelte");
+/** Run `body` with the 12/24 time-format preference set to `value`. */
+function withTimeFormat<T>(value: "12" | "24", run: () => T): T {
+	const previous = store.timeFormat.current;
+	store.timeFormat.current = value;
+	try {
+		return run();
+	} finally {
+		store.timeFormat.current = previous;
+	}
+}
+
+/** Run `body` with the regional-format preference set to `tag`. */
+function withRegionValue<T>(tag: RegionFormat, run: () => T): T {
+	const previous = store.regionFormat.current;
+	store.regionFormat.current = tag;
+	try {
+		return run();
+	} finally {
+		store.regionFormat.current = previous;
+	}
+}
+
+function withRegion(tag: RegionFormat, run: () => void): void {
+	withRegionValue(tag, run);
+}
 
 describe("Glucose conversion", () => {
 	describe("convertToDisplayUnits", () => {
@@ -164,6 +200,33 @@ describe("Date formatting", () => {
 		});
 	});
 
+	describe("formatMediumDateTime", () => {
+		it("reads every unusable value as no value rather than as 1970", () => {
+			// null is the case that needs the explicit guard: it coerces to the epoch and would
+			// otherwise render a date. The rest reach the NaN branch on their own.
+			expect(formatMediumDateTime(null)).toBe("—");
+			expect(formatMediumDateTime(undefined)).toBe("—");
+			expect(formatMediumDateTime("")).toBe("—");
+			expect(formatMediumDateTime("not a date")).toBe("—");
+		});
+
+		it("names the month and drops the seconds, whatever the region writes", () => {
+			// What the "Created"/"Last used" rows across the app are built from: a bare
+			// toLocaleString gave "4/30/2026, 11:00:39 PM", which is unreadable to anyone who
+			// does not share the locale's field order, and precise to a second nothing needs.
+			const stamp = new Date(2026, 7, 29, 14, 5, 9);
+			const british = withRegionValue("en-GB", () => formatMediumDateTime(stamp));
+			expect(british).toContain("29 Aug 2026");
+			expect(british).toContain("14:05");
+			expect(british).not.toContain(":09");
+
+			expect(withRegionValue("de-DE", () => formatMediumDateTime(stamp))).toMatch(/Aug/);
+			expect(withRegionValue("en-US", () => formatMediumDateTime(stamp))).toMatch(
+				/Aug 29, 2026/
+			);
+		});
+	});
+
 	describe("formatDateTime", () => {
 		it("returns — for undefined", () => {
 			expect(formatDateTime(undefined)).toBe("—");
@@ -173,22 +236,6 @@ describe("Date formatting", () => {
 			const result = formatDateTime("2025-06-15T10:30:00Z");
 			expect(result).toBeTruthy();
 			expect(result).not.toBe("—");
-		});
-	});
-
-	describe("formatDate", () => {
-		it("returns N/A for undefined", () => {
-			expect(formatDate(undefined)).toBe("N/A");
-		});
-
-		it("formats a Date object", () => {
-			const result = formatDate(new Date(2025, 0, 1));
-			expect(result).not.toBe("N/A");
-		});
-
-		it("formats a string date", () => {
-			const result = formatDate("2025-06-15T10:30:00Z");
-			expect(result).not.toBe("N/A");
 		});
 	});
 
@@ -323,16 +370,6 @@ describe("Treatment formatting", () => {
 });
 
 describe("Regional format", () => {
-	function withRegion(tag: RegionFormat, run: () => void) {
-		const previous = store.regionFormat.current;
-		store.regionFormat.current = tag;
-		try {
-			run();
-		} finally {
-			store.regionFormat.current = previous;
-		}
-	}
-
 	it("falls back to the display language when no region is chosen", () => {
 		expect(formatLocale()).toBe("en");
 	});
@@ -358,7 +395,154 @@ describe("Regional format", () => {
 	});
 });
 
+describe("Shared date shapes", () => {
+	// A fixed local instant: these helpers read the viewer's clock, so building it
+	// locally is what a caller does.
+	const date = new Date(2026, 7, 29, 14, 5);
+
+	function shapes() {
+		return {
+			long: formatLongDate(date),
+			medium: formatMediumDate(date),
+			mediumTime: formatMediumDateTime(date),
+			monthYear: formatMonthYear(date),
+			month: formatMonthLabel(date),
+			weekday: formatWeekdayLabel(date),
+			numeric: formatNumericDate(date),
+		};
+	}
+
+	it("names months and weekdays in the regional format", () => {
+		const english = withRegionValue("en-GB", shapes);
+		const german = withRegionValue("de-DE", shapes);
+
+		// August is spelled alike; the ordering and the weekday are what differ.
+		expect(english.long).toMatch(/^Saturday, 29 August 2026$/);
+		expect(german.long).toMatch(/^Samstag, 29\. August 2026$/);
+		expect(english.long).toContain("Saturday");
+		expect(german.long).toContain("Samstag");
+		expect(english.weekday).toBe("Sat");
+		expect(german.weekday).toMatch(/^Sa\.?$/);
+		expect(english.month).toBe("Aug");
+		expect(english.monthYear).toBe("August 2026");
+	});
+
+	it("writes each shape at its own precision", () => {
+		const s = withRegionValue("en-GB", shapes);
+
+		expect(s.medium).toBe("29 Aug 2026");
+		expect(s.mediumTime).toContain("29 Aug 2026");
+		// en-GB writes a 24-hour clock, and this helper follows the locale.
+		expect(s.mediumTime).toContain("14:05");
+		expect(s.numeric).toBe("29/08/2026");
+	});
+
+	it("writes the clock in the preferred format where the surface follows it", () => {
+		withRegion("en-GB", () => expect(time(date)).toBe("2:05 pm"));
+	});
+
+	it("leaves the clock to the locale on the surfaces that never followed a preference", () => {
+		// German has no day-period abbreviation, so ICU would hand a German reader the
+		// English "AM" if the preference won here. The second iteration is what pins it:
+		// making these helpers read `prefersHour12()` fails only under "12".
+		for (const preference of ["12", "24"] as const) {
+			withTimeFormat(preference, () => {
+				expect(withRegionValue("en-GB", () => formatDayTime(date))).toContain("14:05");
+				expect(withRegionValue("de-DE", () => formatDayTime(date))).toContain("14:05");
+				// Normalised: ICU emits a narrow no-break space before the day period
+				// in some builds and a plain one in others.
+				expect(
+					withRegionValue("en-US", () => formatDayTime(date)).replace(/\s/g, " ")
+				).toContain("2:05 PM");
+				expect(withRegionValue("de-DE", () => formatMediumDateTime(date))).toContain("14:05");
+			});
+		}
+	});
+
+	it("follows the 12/24 preference on the surfaces that always did", () => {
+		withRegionValue("en-GB", () => {
+			withTimeFormat("24", () => {
+				expect(time(date)).toBe("14:05");
+				expect(formatDateTimeCompact(date)).toContain("14:05");
+			});
+			withTimeFormat("12", () => {
+				expect(time(date)).toBe("2:05 pm");
+				expect(formatDateTimeCompact(date)).toMatch(/02:05\s*pm/i);
+			});
+		});
+	});
+
+	it("writes a range through ICU rather than joining two dates", () => {
+		const end = new Date(2026, 8, 3, 9, 0);
+		// Collapsing the shared year is the tell that ICU formatted the range: hyphenating two
+		// whole dates by hand would repeat "2026" on both sides.
+		const british = withRegionValue("en-GB", () => formatMediumDateRange(date, end));
+		expect(british).toContain("29 Aug");
+		// "Sept", not "Sep": the abbreviation is ICU's to choose, and en-GB writes four letters.
+		expect(british).toContain("3 Sept 2026");
+		expect(british.match(/2026/g)).toHaveLength(1);
+
+		expect(withRegionValue("en-US", () => formatMediumDateRange(date, end))).toContain(
+			"Aug 29"
+		);
+	});
+
+	it("lets the locale glue the date to the time", () => {
+		// Composing the halves and joining them by hand hardcodes ", " — ja-JP, zh-CN
+		// and ko-KR write a space there, and ar-EG U+060C.
+		const japanese = withRegionValue("ja-JP", () => formatDayTime(date));
+		expect(japanese).toContain("14:05");
+		expect(japanese).not.toContain(",");
+	});
+
+	it("takes the hour style from the locale, not from the call site", () => {
+		// Asserted literally rather than against a re-derived option set, which would
+		// move with the implementation.
+		const american = withRegionValue("en-US", () => formatDayTime(date)).replace(/\s/g, " ");
+		expect(american).toContain("2:05 PM");
+		expect(american).not.toContain("02:05");
+
+		expect(withRegionValue("en-GB", () => formatDayTime(date))).toContain("14:05");
+		expect(withRegionValue("en-GB", () => formatClock(date))).toBe("14:05");
+		expect(withRegionValue("en-GB", () => formatClock(date, { seconds: true }))).toBe(
+			"14:05:00"
+		);
+	});
+
+	it("reads an unusable value as no time rather than as 1970", () => {
+		// A nullable `mills` would otherwise render "Invalid Date" or the epoch into a
+		// treatment row.
+		expect(time(undefined)).toBe("—");
+		expect(time(null)).toBe("—");
+		expect(time("not a date")).toBe("—");
+	});
+
+	it("reads a wire value, not only a Date", () => {
+		// NSwag types DTO date fields as `Date`, but the generated client parses with
+		// no reviver, so what actually arrives is an ISO string.
+		const iso = "2026-08-29T14:05:00.000Z";
+		withRegion("en-GB", () => {
+			expect(() => time(iso)).not.toThrow();
+			expect(time(iso)).toBe(time(new Date(iso)));
+			expect(time(new Date(iso).getTime())).toBe(time(new Date(iso)));
+		});
+	});
+
+	it("groups numbers in the regional format", () => {
+		withRegion("de-DE", () => expect(formatNumber(1234567)).toBe("1.234.567"));
+		withRegion("en-US", () => expect(formatNumber(1234567)).toBe("1,234,567"));
+	});
+
+	it("reads a missing count as zero rather than as text", () => {
+		withRegion("en-US", () => {
+			expect(formatNumber(undefined)).toBe("0");
+			expect(formatNumber(null)).toBe("0");
+		});
+	});
+});
+
 describe("prefersHour12", () => {
+
 	it("follows the time-format preference when not overridden", () => {
 		expect(prefersHour12()).toBe(true);
 	});

@@ -3,13 +3,13 @@
   import {
     getServicesOverview,
     getConnectorCapabilities,
+    triggerConnectorSync,
   } from "$api/generated/services.generated.remote";
   import type {
     ServicesOverview,
     UploaderApp,
     DataSourceInfo,
     ConnectorStatusDto,
-    SyncRequest,
     ConnectorCapabilities,
   } from "$lib/api/generated/nocturne-api-client";
 
@@ -33,10 +33,6 @@
     Database,
     Copy,
     Check,
-    Link2,
-    Wrench,
-    ChevronRight,
-    Loader2,
     KeyRound,
   } from "lucide-svelte";
   import SettingsPageSkeleton from "$lib/components/settings/SettingsPageSkeleton.svelte";
@@ -45,25 +41,20 @@
   import ConnectedApps from "$lib/components/settings/ConnectedApps.svelte";
   import ClientDevices from "$lib/components/settings/ClientDevices.svelte";
   import ApiTokens from "$lib/components/settings/ApiTokens.svelte";
-  import DeduplicationDialog from "$lib/components/connectors/DeduplicationDialog.svelte";
-  import AppLogo from "$lib/components/ui/AppLogo.svelte";
   import UploaderSetupDialog from "$lib/components/connectors/UploaderSetupDialog.svelte";
+  import { createUploaderTokenHandoff } from "./uploader-token-handoff";
   import ConnectorDetailsDialog from "$lib/components/connectors/ConnectorDetailsDialog.svelte";
   import ManualSyncDialog, { type BatchSyncResult } from "$lib/components/connectors/ManualSyncDialog.svelte";
-  import DemoDataSection from "$lib/components/connectors/DemoDataSection.svelte";
   import UploaderAppsCard from "$lib/components/connectors/UploaderAppsCard.svelte";
   import ServerConnectorsCard, { type ConnectorStatusWithDescription } from "$lib/components/connectors/ServerConnectorsCard.svelte";
   import DataSourceManageDialog from "$lib/components/connectors/DataSourceManageDialog.svelte";
-  import { getApiClient } from "$lib/api";
-  import { resolve } from "$app/paths";
-  import { page } from "$app/state";
+  import { describeSubmitError } from "$lib/forms/submit-error";
   import { toast } from "svelte-sonner";
   import { getUploaderName } from "$lib/utils/uploader-labels";
   import { coachmark } from "@nocturne/coach";
   import { getRealtimeStore } from "$lib/stores/realtime-store.svelte";
   import { copyToClipboard } from "$lib/utils";
-
-  const isPlatformAdmin = $derived((page.data as { isPlatformAdmin?: boolean }).isPlatformAdmin ?? false);
+  import { createTerminalRunTracker } from "./terminal-run-tracker";
 
   // Queries — fire on the server during SSR; results land in cache for hydration.
   const servicesOverviewQuery = getServicesOverview();
@@ -88,9 +79,6 @@
   let selectedUploader = $state<UploaderApp | null>(null);
   let showSetupDialog = $state(false);
   let copiedField = $state<string | null>(null);
-
-  // Demo data dialog state
-  let showDemoDataDialog = $state(false);
 
   // Data source management dialog state
   let selectedDataSource = $state<DataSourceInfo | null>(null);
@@ -128,13 +116,10 @@
     return entries.find((p) => p.phase === "Syncing") ?? entries.at(-1) ?? null;
   });
 
+  const terminalRuns = createTerminalRunTracker();
   $effect(() => {
-    const progress = syncProgressByConnector;
-    const hasCompleted = Object.values(progress).some(
-      (p) => p.phase === "Completed" || p.phase === "Failed"
-    );
-    if (hasCompleted) {
-      connectorStatusesQuery.refresh();
+    if (terminalRuns.hasNewlyFinishedRun(syncProgressByConnector)) {
+      void loadConnectorStatuses();
     }
   });
 
@@ -142,24 +127,55 @@
   let apiTokenCreateOpen = $state(false);
   let apiTokenPrefillLabel = $state("");
   let apiTokenPrefillScopes = $state<string[]>([]);
+  const uploaderHandoff = createUploaderTokenHandoff();
 
-  // Deduplication state
-  let showDeduplicationDialog = $state(false);
-  let isDeduplicating = $state(false);
+  // Whether the user has already been told these lists are stale. The effect
+  // below refreshes once per finished run, so a batch of them and the refresh
+  // that follows are one thing going wrong reported many times over.
+  let staleListReported = false;
+
+  /**
+   * A refresh rejects when it fails, and every caller here is either a click
+   * handler or a completion callback whose own outcome must not be replaced by
+   * the refresh's, so the staleness is reported on its own and swallowed. It is
+   * reported once until a refresh gets through again.
+   */
+  async function refreshQuietly(...refreshes: Array<() => Promise<void>>) {
+    const outcomes = await Promise.allSettled(
+      refreshes.map((refresh) => refresh())
+    );
+
+    for (const outcome of outcomes) {
+      if (outcome.status !== "rejected") continue;
+
+      if (!staleListReported) {
+        staleListReported = true;
+        toast.error(
+          describeSubmitError(
+            outcome.reason,
+            "This list may be out of date. Reload the page to see the latest."
+          )
+        );
+      }
+      return;
+    }
+
+    staleListReported = false;
+  }
 
   async function refreshAll() {
-    await Promise.all([
-      servicesOverviewQuery.refresh(),
-      connectorStatusesQuery.refresh(),
-    ]);
+    await refreshQuietly(
+      () => servicesOverviewQuery.refresh(),
+      () => connectorStatusesQuery.refresh()
+    );
   }
 
   async function loadServices() {
-    await servicesOverviewQuery.refresh();
+    await refreshQuietly(() => servicesOverviewQuery.refresh());
   }
 
   async function loadConnectorStatuses() {
-    await connectorStatusesQuery.refresh();
+    await refreshQuietly(() => connectorStatusesQuery.refresh());
   }
 
   async function loadConnectorCapabilitiesFor(connectorId?: string) {
@@ -201,11 +217,9 @@
 
     const to = new Date();
     const from = new Date(to.getTime() - 30 * 24 * 60 * 60 * 1000);
-    const request: SyncRequest = { from, to };
+    const request = { from: from.toISOString(), to: to.toISOString() };
 
     try {
-      const apiClient = getApiClient();
-
       for (const connector of connectorsToSync) {
         const connectorId = connector.id;
         if (!connectorId) continue;
@@ -215,12 +229,15 @@
         let errorMsg = undefined;
 
         try {
-          const result = await apiClient.services.triggerConnectorSync(connectorId, request);
+          const result = await triggerConnectorSync({ id: connectorId, request });
           success = result.success ?? false;
           if (!success) errorMsg = result.message || "Unknown error";
         } catch (e) {
           success = false;
-          errorMsg = e instanceof Error ? e.message : "Request failed";
+          errorMsg = describeSubmitError(
+            e,
+            "We couldn't start this sync. Please try again."
+          );
         }
 
         const durationMs = performance.now() - start;
@@ -246,12 +263,15 @@
       };
 
       if (successes > 0) {
-        await Promise.all([loadServices(), loadConnectorStatuses()]);
+        await refreshAll();
       }
     } catch (e) {
       manualSyncResult = {
         success: false,
-        errorMessage: e instanceof Error ? e.message : "Failed to trigger manual sync",
+        errorMessage: describeSubmitError(
+          e,
+          "We couldn't start the sync. Please try again."
+        ),
         totalConnectors: 0,
         successfulConnectors: 0,
         failedConnectors: 0,
@@ -269,8 +289,7 @@
 
     quickSyncingById = { ...quickSyncingById, [connectorId]: true };
     try {
-      const apiClient = getApiClient();
-      const result = await apiClient.services.triggerConnectorSync(connectorId, {});
+      const result = await triggerConnectorSync({ id: connectorId, request: {} });
 
       if (result.success) {
         toast.success("Sync started");
@@ -280,7 +299,9 @@
 
       await loadConnectorStatuses();
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Sync failed");
+      toast.error(
+        describeSubmitError(e, "We couldn't start the sync. Please try again.")
+      );
     } finally {
       quickSyncingById = { ...quickSyncingById, [connectorId]: false };
     }
@@ -365,7 +386,7 @@
         <Wifi class="h-6 w-6 text-primary" />
       </div>
       <div>
-        <h1 class="text-2xl font-bold tracking-tight">Connectors & Connected Apps</h1>
+        <h1 class="text-2xl font-bold tracking-tight">Connectors & Apps</h1>
         <p class="text-muted-foreground">
           Manage data sources, set up new connections, and control app access
         </p>
@@ -545,128 +566,6 @@
       </Card>
     {/if}
 
-    <!-- Data Maintenance -->
-    <Card>
-      <CardHeader>
-        <CardTitle class="flex items-center gap-2">
-          <Wrench class="h-5 w-5" />
-          Data Maintenance
-        </CardTitle>
-        <CardDescription>
-          Administrative tools for managing your data
-        </CardDescription>
-      </CardHeader>
-      <CardContent class="space-y-4">
-        <div class="flex items-start gap-4 p-4 rounded-lg border bg-card">
-          <div
-            class="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-primary/10"
-          >
-            <Link2 class="h-5 w-5 text-primary" />
-          </div>
-          <div class="flex-1">
-            <h4 class="font-medium">Deduplicate Records</h4>
-            <p class="text-sm text-muted-foreground mt-1">
-              Link records from multiple data sources that represent the same
-              underlying event. This improves data quality when the same glucose
-              readings or treatments are uploaded from different apps.
-            </p>
-            <Button
-              variant="outline"
-              size="sm"
-              class="mt-3 gap-2"
-              onclick={() => (showDeduplicationDialog = true)}
-            >
-              {#if isDeduplicating}
-                <Loader2 class="h-4 w-4 animate-spin" />
-                Deduplication Running...
-              {:else}
-                <Link2 class="h-4 w-4" />
-                Run Deduplication
-              {/if}
-            </Button>
-          </div>
-        </div>
-
-        <div class="flex items-start gap-4 p-4 rounded-lg border bg-card">
-          <div
-            class="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-primary/10"
-          >
-            <Sparkles class="h-5 w-5 text-primary" />
-          </div>
-          <div class="flex-1">
-            <h4 class="font-medium">Remove Demo Data</h4>
-            <p class="text-sm text-muted-foreground mt-1">
-              Delete the sample readings and treatments that were generated to
-              show you around. Your own data is not affected.
-            </p>
-            <Button
-              variant="outline"
-              size="sm"
-              class="mt-3 gap-2"
-              onclick={() => (showDemoDataDialog = true)}
-            >
-              <Sparkles class="h-4 w-4" />
-              Remove Demo Data
-            </Button>
-          </div>
-        </div>
-
-        {#if isPlatformAdmin}
-          <a
-            href={resolve("/settings/admin/connector-cursors")}
-            class="group flex items-center gap-4 rounded-lg border bg-card p-4 transition-colors hover:border-primary/40 hover:bg-muted/40"
-          >
-            <div
-              class="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-primary/10"
-            >
-              <RefreshCw class="h-5 w-5 text-primary" />
-            </div>
-            <div class="min-w-0 flex-1">
-              <h4 class="font-medium">Reset Connector Cursors</h4>
-              <p class="text-sm text-muted-foreground mt-1">
-                Re-sync a connector from a chosen point.
-              </p>
-            </div>
-            <ChevronRight
-              class="h-4 w-4 shrink-0 text-muted-foreground transition-transform group-hover:translate-x-0.5"
-            />
-          </a>
-        {/if}
-      </CardContent>
-    </Card>
-
-    <!-- Integrations -->
-    <Card>
-      <CardHeader>
-        <CardTitle class="flex items-center gap-2">
-          <Link2 class="h-5 w-5" />
-          Integrations
-        </CardTitle>
-        <CardDescription>
-          Connect Nocturne to chat platforms and other external services
-        </CardDescription>
-      </CardHeader>
-      <CardContent>
-        <a
-          href={resolve("/settings/integrations/discord")}
-          class="flex items-center justify-between rounded-lg border p-4 hover:bg-accent transition-colors"
-        >
-          <div class="flex items-center gap-3">
-            <div class="flex h-10 w-10 items-center justify-center overflow-hidden rounded-md bg-muted">
-              <AppLogo icon="discord" />
-            </div>
-            <div>
-              <p class="font-medium">Discord</p>
-              <p class="text-sm text-muted-foreground">
-                Link a Discord account to receive alerts and use the Nocturne bot
-              </p>
-            </div>
-          </div>
-          <ChevronRight class="h-4 w-4 text-muted-foreground" />
-        </a>
-      </CardContent>
-    </Card>
-
     <!-- Connected Apps Section -->
     <ConnectedApps />
 
@@ -679,6 +578,9 @@
         bind:createOpen={apiTokenCreateOpen}
         prefillLabel={apiTokenPrefillLabel}
         prefillScopes={apiTokenPrefillScopes}
+        onCreateClose={() => {
+          if (uploaderHandoff.resumes()) showSetupDialog = true;
+        }}
       />
     </div>
   {/if}
@@ -691,12 +593,10 @@
   onRequestApiKey={(label, scopes) => {
     apiTokenPrefillLabel = label;
     apiTokenPrefillScopes = scopes;
+    uploaderHandoff.handOff();
     apiTokenCreateOpen = true;
   }}
 />
-
-<!-- Demo Data Management Dialog -->
-<DemoDataSection bind:open={showDemoDataDialog} onDeleteComplete={loadServices} />
 
 <!-- Data Source Management Dialog -->
 <DataSourceManageDialog
@@ -710,4 +610,3 @@
 <!-- Connector Details Dialog -->
 <ConnectorDetailsDialog bind:open={showConnectorDialog} {selectedConnector} {selectedConnectorCapabilities} onSyncComplete={loadConnectorStatuses} />
 
-<DeduplicationDialog bind:open={showDeduplicationDialog} bind:isDeduplicating />
