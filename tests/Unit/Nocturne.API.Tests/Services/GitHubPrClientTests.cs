@@ -6,13 +6,22 @@ using Nocturne.API.Services;
 
 namespace Nocturne.API.Tests.Services;
 
-public class GitHubPrClientTests
+public class GitHubPrClientTests : IDisposable
 {
-    private static (GitHubPrClient Client, HttpClient Http, List<string> Bodies) CreateClient()
+    private readonly List<HttpClient> _clients = [];
+
+    public void Dispose()
+    {
+        foreach (var client in _clients)
+            client.Dispose();
+    }
+
+    private (GitHubPrClient Client, HttpClient Http, List<string> Bodies) CreateClient()
     {
         var bodies = new List<string>();
         var handler = new CapturingHandler(bodies);
         var http = new HttpClient(handler) { BaseAddress = new Uri("https://api.github.com") };
+        _clients.Add(http);
 
         var factory = new Mock<IHttpClientFactory>();
         factory.Setup(f => f.CreateClient(It.IsAny<string>())).Returns(http);

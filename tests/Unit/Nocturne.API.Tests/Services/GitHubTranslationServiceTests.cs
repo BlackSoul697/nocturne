@@ -7,8 +7,16 @@ using Nocturne.Core.Models.Translations;
 
 namespace Nocturne.API.Tests.Services;
 
-public class GitHubTranslationServiceTests
+public class GitHubTranslationServiceTests : IDisposable
 {
+    private readonly List<HttpClient> _clients = [];
+
+    public void Dispose()
+    {
+        foreach (var client in _clients)
+            client.Dispose();
+    }
+
     private static GitHubTranslationService Service(GitHubContributionOptions options) =>
         new(new GitHubPrClient(Mock.Of<IHttpClientFactory>(), NullLogger<GitHubPrClient>.Instance),
             Mock.Of<IHttpClientFactory>(), Options.Create(options),
@@ -335,9 +343,10 @@ public class GitHubTranslationServiceTests
             .WithMessage("The contribution was rejected by the relay.");
     }
 
-    private static GitHubTranslationService RelayService(HttpStatusCode status, string body)
+    private GitHubTranslationService RelayService(HttpStatusCode status, string body)
     {
         var http = new HttpClient(new StubHandler(status, body));
+        _clients.Add(http);
         var factory = new Mock<IHttpClientFactory>();
         factory.Setup(f => f.CreateClient(It.IsAny<string>())).Returns(http);
 
