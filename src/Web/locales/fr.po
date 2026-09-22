@@ -19393,10 +19393,8 @@ msgstr ""
 msgid "{0} days {1} hours"
 msgstr ""
 
-#. 0: SIDEBAR_COOKIE_NAME; 1: open; 2: SIDEBAR_COOKIE_MAX_AGE
-#: src/lib/components/ui/sidebar/sidebar-provider.svelte
-msgid "{0}={1}; path=/; max-age={2}"
-msgstr ""
+#~ msgid "{0}={1}; path=/; max-age={2}"
+#~ msgstr ""
 
 #: src/routes/(authenticated)/settings/admin/tenants/+page.svelte
 msgid "Tenant created"
@@ -24207,4 +24205,8 @@ msgstr ""
 
 #: src/routes/(authenticated)/settings/translations/[locale]/+page.svelte
 msgid "Clear drafts"
+msgstr ""
+
+#: src/routes/(authenticated)/settings/translations/[locale]/+page.svelte
+msgid "Failed to load the translation catalog source."
 msgstr ""

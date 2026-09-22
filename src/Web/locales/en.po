@@ -19390,10 +19390,8 @@ msgstr "Search event types..."
 msgid "{0} days {1} hours"
 msgstr "{0} days {1} hours"
 
-#. 0: SIDEBAR_COOKIE_NAME; 1: open; 2: SIDEBAR_COOKIE_MAX_AGE
-#: src/lib/components/ui/sidebar/sidebar-provider.svelte
-msgid "{0}={1}; path=/; max-age={2}"
-msgstr "{0}={1}; path=/; max-age={2}"
+#~ msgid "{0}={1}; path=/; max-age={2}"
+#~ msgstr "{0}={1}; path=/; max-age={2}"
 
 #: src/routes/(authenticated)/settings/admin/tenants/+page.svelte
 msgid "Tenant created"
@@ -24205,3 +24203,7 @@ msgstr "All {0} draft{1} for {2} will be deleted. This cannot be undone."
 #: src/routes/(authenticated)/settings/translations/[locale]/+page.svelte
 msgid "Clear drafts"
 msgstr "Clear drafts"
+
+#: src/routes/(authenticated)/settings/translations/[locale]/+page.svelte
+msgid "Failed to load the translation catalog source."
+msgstr "Failed to load the translation catalog source."

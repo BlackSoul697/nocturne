@@ -24,10 +24,10 @@
   } from "$lib/stores/appearance-store.svelte";
   import { SvelteMap } from "svelte/reactivity";
 
-  // Catalogs are read from the upstream repo so drafts are always edited
-  // against the same base the contribution PR will be applied to.
-  const CATALOG_BASE =
-    "https://raw.githubusercontent.com/nightscout/nocturne/main/src/Web/locales";
+  // The repository coordinates are configurable per instance, so the base the
+  // drafts are edited against comes from the same options the contribution is
+  // written through instead of being assumed here.
+  const catalogSourceQuery = translationsApi.getCatalogSource();
 
   const locale = $derived(page.params.locale ?? "");
   const localeValid = $derived(isSupportedLocale(locale) && locale !== "en");
@@ -95,13 +95,20 @@
   let fetchSeq = 0;
   $effect(() => {
     if (!browser || !localeValid) return;
+    if (catalogSourceQuery.error) {
+      catalogError = "Failed to load the translation catalog source.";
+      catalogLoading = false;
+      return;
+    }
+    const catalogBase = catalogSourceQuery.current?.catalogBaseUrl;
+    if (!catalogBase) return;
     const seq = ++fetchSeq;
     const target = locale;
     catalogLoading = true;
     catalogError = null;
     Promise.all(
       ["en", target].map(async (l) => {
-        const res = await fetch(`${CATALOG_BASE}/${l}.po`);
+        const res = await fetch(`${catalogBase}/${l}.po`);
         if (!res.ok) throw new Error(`Failed to load the ${l} catalog (${res.status})`);
         return parsePo(await res.text());
       }),
