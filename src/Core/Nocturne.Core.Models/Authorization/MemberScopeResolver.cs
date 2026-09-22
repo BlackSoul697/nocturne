@@ -7,8 +7,8 @@ namespace Nocturne.Core.Models.Authorization;
 /// per membership to decide which tenants the caller may see. Both must agree, or the tenant picker
 /// and the endpoints it links to disagree about access.
 /// </summary>
-/// <seealso cref="OAuthScopes"/>
-/// <seealso cref="TenantPermissions"/>
+/// <seealso cref="Scope"/>
+/// <seealso cref="Scope"/>
 /// <seealso cref="ScopeTranslator"/>
 public static class MemberScopeResolver
 {
@@ -37,11 +37,6 @@ public static class MemberScopeResolver
     /// <c>client_id</c> claim, so a JWT that reaches <c>LegacyJwtHandler</c> has neither.
     /// <c>SessionService</c> mints session tokens through the same <c>IJwtService</c>, so this is
     /// the same credential as a session cookie presented on a different transport.</item>
-    /// <item><see cref="AuthType.LegacyAccessToken"/> — <c>AccessTokenHandler</c> never sets
-    /// <c>Scopes</c>. The token identifies a subject; every path that gives a subject a tenant
-    /// membership (invite acceptance, membership-request approval, platform admin, tenant setup)
-    /// assigns tenant roles deliberately, and none of them writes global <c>SubjectRoles</c>. The
-    /// membership is the grant.</item>
     /// </list>
     /// <see cref="AuthType.Guest"/>, <see cref="AuthType.InstanceKey"/> and
     /// <see cref="AuthType.PlatformAccess"/> are absent because <c>MemberScopeMiddleware</c>
@@ -58,7 +53,6 @@ public static class MemberScopeResolver
         AuthType.SessionCookie,
         AuthType.OidcToken,
         AuthType.LegacyJwt,
-        AuthType.LegacyAccessToken,
     };
 
     /// <summary>
@@ -67,8 +61,8 @@ public static class MemberScopeResolver
     /// <param name="effectivePermissions">
     /// The membership's effective permissions: role permissions unioned with direct permissions.
     /// These come from the tenant RBAC vocabulary, so they are normalized through
-    /// <see cref="OAuthScopes.NormalizeMemberPermissions"/> rather than
-    /// <see cref="OAuthScopes.Normalize"/>.
+    /// <see cref="Scope.NormalizeMemberPermissions"/> rather than
+    /// <see cref="Scope.Normalize"/>.
     /// </param>
     /// <param name="authType">The credential type, matched against <see cref="UnscopedCredentialTypes"/>.</param>
     /// <param name="credentialScopes">
@@ -85,10 +79,10 @@ public static class MemberScopeResolver
         // Superuser on an unscoped credential: membership is the whole authority. The raw
         // permissions are published (rather than the normalized expansion) so "*" itself reaches
         // RequireScope checks and ScopeTranslator collapses the trie to a wildcard.
-        if (isUnscoped && effectivePermissions.Contains(TenantPermissions.Superuser))
+        if (isUnscoped && effectivePermissions.Contains(Scope.FullAccess))
             return effectivePermissions;
 
-        var memberScopes = OAuthScopes.NormalizeMemberPermissions(effectivePermissions).ToHashSet();
+        var memberScopes = Scope.NormalizeMemberPermissions(effectivePermissions).ToHashSet();
 
         // Member-personal device scopes are not part of the role intersection. device.notify /
         // device.actuate authorize the alert engine to drive the member's OWN registered client
@@ -101,7 +95,7 @@ public static class MemberScopeResolver
         // actuations reveal patient state. Added before the intersection below, so a scoped
         // credential still has to carry them.
         if (effectivePermissions.Count > 0)
-            memberScopes.UnionWith(TenantPermissions.MemberPersonalScopes);
+            memberScopes.UnionWith(Scope.MemberPersonalScopes);
 
         // No grant to intersect against, so membership is the whole ceiling. An empty scope list on
         // an unscoped credential is the absence of a ceiling, not a ceiling of nothing: intersecting
@@ -119,12 +113,12 @@ public static class MemberScopeResolver
         // administration atom that reached a credential's scope list by any route (a hand-written
         // grant row, a future endpoint), because an exact match satisfies the intersection. Making
         // it structural here means the property does not rest on every issuing path staying correct.
-        var boundedCredentialScopes = OAuthScopes.Normalize(credentialScopes);
+        var boundedCredentialScopes = Scope.Normalize(credentialScopes);
 
         var resolved = new HashSet<string>();
         foreach (var memberScope in memberScopes)
         {
-            if (OAuthScopes.SatisfiesScope(boundedCredentialScopes, memberScope))
+            if (Scope.Satisfies(boundedCredentialScopes, memberScope))
             {
                 resolved.Add(memberScope);
                 continue;
@@ -136,8 +130,8 @@ public static class MemberScopeResolver
             // glucose.readwrite against a glucose.read token previously resolved to neither scope.
             // Both sides permit the read counterpart: the membership because readwrite includes
             // read, the credential because it granted read outright.
-            if (OAuthScopes.TryGetImpliedReadScope(memberScope, out var readScope)
-                && OAuthScopes.SatisfiesScope(boundedCredentialScopes, readScope))
+            if (Scope.TryGetImpliedReadScope(memberScope, out var readScope)
+                && Scope.Satisfies(boundedCredentialScopes, readScope))
             {
                 resolved.Add(readScope);
             }

@@ -58,12 +58,11 @@ public class ExperimentsControllerTests : IClassFixture<AuthenticationTestFactor
                 SubjectId = TestDatabaseSeeder.TestSubjectId,
                 GrantType = OAuthGrantTypes.Direct,
                 LegacySecretHash = TestDatabaseSeeder.Sha1Hex(uploaderToken),
-                IsMigrated = false,
                 Scopes =
                 [
-                    OAuthScopes.GlucoseReadWrite,
-                    OAuthScopes.TreatmentsReadWrite,
-                    OAuthScopes.DevicesReadWrite,
+                    Scope.GlucoseReadWrite,
+                    Scope.TreatmentsReadWrite,
+                    Scope.DevicesReadWrite,
                 ],
                 Label = "Loop",
                 CreatedAt = DateTime.UtcNow,

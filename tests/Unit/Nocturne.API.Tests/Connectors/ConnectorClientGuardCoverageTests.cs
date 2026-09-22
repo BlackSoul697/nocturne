@@ -1,4 +1,3 @@
-using System.Reflection;
 using FluentAssertions;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -14,7 +13,8 @@ namespace Nocturne.API.Tests.Connectors;
 
 /// <summary>
 /// Every HTTP client a connector installer registers must carry
-/// <see cref="LinkLocalGuardHandler"/> and have transport-level redirects off.
+/// <see cref="LinkLocalGuardHandler"/>, and have transport-level redirects and the automatic
+/// cookie jar off.
 /// </summary>
 /// <remarks>
 /// The guard is installed by <c>ConfigureConnectorClient</c>, and nothing forces an installer to
@@ -36,8 +36,8 @@ public class ConnectorClientGuardCoverageTests
     public static TheoryData<string> Installers()
     {
         var data = new TheoryData<string>();
-        foreach (var installer in DiscoverInstallers())
-            data.Add(installer.ConnectorName);
+        foreach (var installer in ConnectorInstallers.Discover())
+            data.Add(ConnectorInstallers.NameOf(installer));
         return data;
     }
 
@@ -46,7 +46,7 @@ public class ConnectorClientGuardCoverageTests
     {
         // Guards the guard: if reflection finds nothing, every theory case below silently vanishes
         // and this file would pass while testing nothing at all.
-        DiscoverInstallers().Should().HaveCountGreaterThan(5,
+        ConnectorInstallers.Discover().Should().HaveCountGreaterThan(5,
             "the connector installers are discovered by reflection; finding none would make the " +
             "coverage theory vacuous");
     }
@@ -70,7 +70,8 @@ public class ConnectorClientGuardCoverageTests
     public void EveryClientAConnectorRegisters_CarriesTheGuardAndNoTransportRedirects(
         string connectorName)
     {
-        var installer = DiscoverInstallers().Single(i => i.ConnectorName == connectorName);
+        var installer = ConnectorInstallers.Discover()
+            .Single(i => ConnectorInstallers.NameOf(i) == connectorName);
 
         var services = new ServiceCollection();
         services.AddLogging();
@@ -123,46 +124,22 @@ public class ConnectorClientGuardCoverageTests
                 "{0}'s '{1}' client is a connector: private and LAN targets are supported and only " +
                 "link-local is refused",
                 connectorName, clientName);
-        }
-    }
 
-    private static List<IConnectorInstaller> DiscoverInstallers()
-    {
-        // Touch one type per connector assembly so they are loaded before the scan.
-        _ = typeof(LinkLocalGuardHandler);
-        foreach (var path in Directory.GetFiles(
-                     AppContext.BaseDirectory, "Nocturne.Connectors.*.dll"))
-        {
-            try
+            var usesCookies = primary switch
             {
-                Assembly.LoadFrom(path);
-            }
-            catch (BadImageFormatException)
-            {
-                // Not a managed assembly; nothing to scan.
-            }
-        }
+                SocketsHttpHandler sockets => sockets.UseCookies,
+                HttpClientHandler legacy => legacy.UseCookies,
+                // Same rule as the redirect check: a handler this test cannot read counts as
+                // keeping a cookie jar rather than being skipped.
+                _ => true,
+            };
 
-        return [.. AppDomain.CurrentDomain.GetAssemblies()
-            .Where(a => a.GetName().Name?.StartsWith("Nocturne.Connectors.", StringComparison.Ordinal) == true)
-            .SelectMany(SafeTypes)
-            .Where(t => typeof(IConnectorInstaller).IsAssignableFrom(t)
-                        && t is { IsAbstract: false, IsInterface: false }
-                        && t.GetConstructor(Type.EmptyTypes) is not null)
-            .Select(t => (IConnectorInstaller)Activator.CreateInstance(t)!)
-            .GroupBy(i => i.ConnectorName)
-            .Select(g => g.First())];
-    }
-
-    private static IEnumerable<Type> SafeTypes(Assembly assembly)
-    {
-        try
-        {
-            return assembly.GetTypes();
-        }
-        catch (ReflectionTypeLoadException ex)
-        {
-            return ex.Types.Where(t => t is not null)!;
+            usesCookies.Should().BeFalse(
+                "{0}'s '{1}' client must have the automatic cookie jar off on its primary handler " +
+                "(a {2}); the handler is pooled across tenants, so a Set-Cookie one tenant's " +
+                "sign-in returns would be replayed on another's requests and override the Cookie " +
+                "header the connector manages per session",
+                connectorName, clientName, primary.GetType().Name);
         }
     }
 

@@ -48,6 +48,7 @@ import {
 	Wrench,
 	ZoomIn,
 } from "lucide-svelte";
+import { filterTenantlessNav } from "$lib/navigation/tenantless-navigation";
 
 export type CommandPaletteGroup =
 	| "stats"
@@ -429,12 +430,15 @@ export const items: CommandPaletteItem[] = [
 		href: "/settings/connectors",
 	},
 	{
+		// Kept while the label and href moved on: pinned and recent ids persist in local storage,
+		// and one that no longer matches an item is dropped from a user's pins without a word.
 		id: "settings-integrations",
-		label: "Integrations",
+		// The parent /settings/integrations has no page of its own; only this child does.
+		label: "Discord",
 		group: "settings",
-		keywords: ["integrations", "api", "webhooks"],
+		keywords: ["discord", "bot", "chat", "integrations", "alerts"],
 		icon: Link,
-		href: "/settings/integrations",
+		href: "/settings/integrations/discord",
 	},
 	{
 		id: "settings-data-quality",
@@ -550,3 +554,11 @@ export const items: CommandPaletteItem[] = [
 		icon: RefreshCw,
 	},
 ];
+
+/**
+ * The entries a host can actually use. Narrowed on a tenantless host from the same list of hrefs
+ * the sidebar narrows from, rather than a second one. See tenantless-navigation.
+ */
+export function paletteItemsFor(tenantless: boolean): CommandPaletteItem[] {
+	return tenantless ? filterTenantlessNav(items) : items;
+}

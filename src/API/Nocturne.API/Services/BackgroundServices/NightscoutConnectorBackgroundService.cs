@@ -1,6 +1,5 @@
 using Microsoft.EntityFrameworkCore;
 using Nocturne.Connectors.Core.Interfaces;
-using Nocturne.Connectors.Core.Models;
 using Nocturne.Connectors.Nightscout.Configurations;
 using Nocturne.Connectors.Nightscout.Services;
 using Nocturne.Core.Contracts.Multitenancy;
@@ -16,8 +15,8 @@ namespace Nocturne.API.Services.BackgroundServices;
 /// Optionally connects to each tenant's Nightscout Socket.IO endpoint to trigger
 /// immediate syncs when upstream data changes.
 /// </summary>
-/// <seealso cref="ConnectorBackgroundService{TConfig}"/>
-public class NightscoutConnectorBackgroundService : ConnectorBackgroundService<NightscoutConnectorConfiguration>
+public class NightscoutConnectorBackgroundService
+    : ConnectorBackgroundService<NightscoutConnectorService, NightscoutConnectorConfiguration>
 {
     private readonly ConcurrentDictionary<Guid, SocketIO> _socketClients = new();
 
@@ -42,20 +41,16 @@ public class NightscoutConnectorBackgroundService : ConnectorBackgroundService<N
     private static readonly TimeSpan ConnectTimeout = TimeSpan.FromSeconds(10);
 
     /// <param name="serviceProvider">Service provider used to create a DI scope per sync cycle.</param>
+    /// <param name="budget">The process-wide budget.</param>
     /// <param name="logger">Logger instance for this background service.</param>
+    /// <param name="nudge">Delivers configuration writes for this connector.</param>
     public NightscoutConnectorBackgroundService(
         IServiceProvider serviceProvider,
-        ILogger<NightscoutConnectorBackgroundService> logger
+        ConnectorSyncBudget budget,
+        ILogger<NightscoutConnectorBackgroundService> logger,
+        ConnectorPollerNudge? nudge = null
     )
-        : base(serviceProvider, logger) { }
-
-    protected override string ConnectorName => "Nightscout";
-
-    protected override async Task<SyncResult> PerformSyncAsync(IServiceProvider scopeProvider, NightscoutConnectorConfiguration config, CancellationToken cancellationToken, ISyncProgressReporter? progressReporter = null)
-    {
-        var connectorService = scopeProvider.GetRequiredService<NightscoutConnectorService>();
-        return await connectorService.SyncDataAsync(config, cancellationToken, since: null, progressReporter);
-    }
+        : base(serviceProvider, budget, logger, nudge) { }
 
     /// <inheritdoc />
     protected override async Task StartRealtimeListenersAsync(CancellationToken cancellationToken)
@@ -130,19 +125,19 @@ public class NightscoutConnectorBackgroundService : ConnectorBackgroundService<N
         if (!config.Enabled || string.IsNullOrWhiteSpace(config.Url))
             return;
 
-        // Tenants may store a bare host with no scheme. Normalise through the same helper the sync
-        // path uses so a URL that polls fine does not fail here on Uri parsing.
-        var socketUrl = NightscoutConnectorService.ResolveBaseUrl(config.Url);
+        // A deployment may expose bounded REST reads through an adapter while the original
+        // Nightscout origin still provides Socket.IO. Keep Url as the polling source and use the
+        // optional real-time origin only for the listener. Existing configurations fall back to
+        // Url unchanged. Both values may be bare hosts, so normalise through the same helper the
+        // sync path uses rather than parsing them directly.
+        var realtimeUrl = string.IsNullOrWhiteSpace(config.RealtimeUrl)
+            ? config.Url
+            : config.RealtimeUrl;
 
-        if (!Uri.TryCreate(socketUrl, UriKind.Absolute, out var socketUri))
-        {
-            Logger.LogWarning(
-                "Nightscout URL {Url} for tenant {TenantSlug} is not a valid absolute URI, will rely on polling",
-                socketUrl, tenantSlug);
+        if (ResolveListenerBaseUrl(realtimeUrl, tenantSlug) is not { } socketUrl)
             return;
-        }
 
-        var client = new SocketIO(socketUri, new SocketIOOptions
+        var client = new SocketIO(new Uri(socketUrl), new SocketIOOptions
         {
             Reconnection = true,
             ReconnectionAttempts = ReconnectionAttempts,

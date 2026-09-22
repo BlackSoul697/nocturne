@@ -24,10 +24,10 @@
   } from "$lib/stores/appearance-store.svelte";
   import { SvelteMap } from "svelte/reactivity";
 
-  // Catalogs are read from the upstream repo so drafts are always edited
-  // against the same base the contribution PR will be applied to.
-  const CATALOG_BASE =
-    "https://raw.githubusercontent.com/nightscout/nocturne/main/src/Web/locales";
+  // The repository coordinates are configurable per instance, so the base the
+  // drafts are edited against comes from the same options the contribution is
+  // written through instead of being assumed here.
+  const catalogSourceQuery = translationsApi.getCatalogSource();
 
   const locale = $derived(page.params.locale ?? "");
   const localeValid = $derived(isSupportedLocale(locale) && locale !== "en");
@@ -95,13 +95,20 @@
   let fetchSeq = 0;
   $effect(() => {
     if (!browser || !localeValid) return;
+    if (catalogSourceQuery.error) {
+      catalogError = "Failed to load the translation catalog source.";
+      catalogLoading = false;
+      return;
+    }
+    const catalogBase = catalogSourceQuery.current?.catalogBaseUrl;
+    if (!catalogBase) return;
     const seq = ++fetchSeq;
     const target = locale;
     catalogLoading = true;
     catalogError = null;
     Promise.all(
       ["en", target].map(async (l) => {
-        const res = await fetch(`${CATALOG_BASE}/${l}.po`);
+        const res = await fetch(`${catalogBase}/${l}.po`);
         if (!res.ok) throw new Error(`Failed to load the ${l} catalog (${res.status})`);
         return parsePo(await res.text());
       }),
@@ -305,63 +312,69 @@
 </svelte:head>
 
 {#if !localeValid}
-  <p class="text-muted-foreground">Unknown locale.</p>
-{:else}
-  <div class="space-y-6">
-    <div class="flex flex-wrap items-center justify-between gap-3">
-      <div>
-        <a
-          href="/settings/translations"
-          class="mb-1 inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground"
-        >
-          <ArrowLeft class="h-3.5 w-3.5" />
-          Translations
-        </a>
-        <h1 class="text-2xl font-bold">
-          {getLanguageLabel(locale as SupportedLocale, locale as SupportedLocale)}
-          <span class="text-muted-foreground font-normal">
-            · {getLanguageLabel(locale as SupportedLocale)}
-          </span>
-        </h1>
-      </div>
-      <div class="flex items-center gap-2">
-        {#if saveState === "saving"}
-          <span class="text-sm text-muted-foreground">Saving…</span>
-        {:else if saveState === "error"}
-          <span class="text-sm text-destructive">Draft save failed — edits retry on next change</span>
-        {/if}
-        <Button
-          variant="outline"
-          disabled={drafts.size === 0}
-          onclick={() => (clearOpen = true)}
-        >
-          <Trash2 class="mr-1 h-4 w-4" />
-          Clear drafts
-        </Button>
-        <Button
-          disabled={drafts.size === 0}
-          onclick={() => {
-            submitResult = null;
-            submitError = null;
-            submitOpen = true;
-          }}
-        >
-          <GitPullRequest class="mr-1 h-4 w-4" />
-          Submit {drafts.size || ""} draft{drafts.size === 1 ? "" : "s"}
-        </Button>
-      </div>
+  <div class="@container flex flex-col h-full">
+    <div class="flex-1 p-3 sm:p-4">
+      <p class="text-muted-foreground">Unknown locale.</p>
     </div>
-
-    {#if catalogLoading}
-      <div class="flex items-center gap-2 py-12 justify-center text-muted-foreground">
-        <Loader2 class="h-4 w-4 animate-spin" />
-        Loading catalogs…
+  </div>
+{:else}
+  <div class="@container flex flex-col h-full">
+    <div class="flex-1 p-3 sm:p-4 space-y-6">
+      <div class="flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <a
+            href="/settings/translations"
+            class="mb-1 inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground"
+          >
+            <ArrowLeft class="h-3.5 w-3.5" />
+            Translations
+          </a>
+          <h1 class="text-2xl font-bold">
+            {getLanguageLabel(locale as SupportedLocale, locale as SupportedLocale)}
+            <span class="text-muted-foreground font-normal">
+              · {getLanguageLabel(locale as SupportedLocale)}
+            </span>
+          </h1>
+        </div>
+        <div class="flex items-center gap-2">
+          {#if saveState === "saving"}
+            <span class="text-sm text-muted-foreground">Saving…</span>
+          {:else if saveState === "error"}
+            <span class="text-sm text-destructive">Draft save failed — edits retry on next change</span>
+          {/if}
+          <Button
+            variant="outline"
+            disabled={drafts.size === 0}
+            onclick={() => (clearOpen = true)}
+          >
+            <Trash2 class="mr-1 h-4 w-4" />
+            Clear drafts
+          </Button>
+          <Button
+            disabled={drafts.size === 0}
+            onclick={() => {
+              submitResult = null;
+              submitError = null;
+              submitOpen = true;
+            }}
+          >
+            <GitPullRequest class="mr-1 h-4 w-4" />
+            Submit {drafts.size || ""} draft{drafts.size === 1 ? "" : "s"}
+          </Button>
+        </div>
       </div>
-    {:else if catalogError}
-      <p class="py-12 text-center text-sm text-destructive">{catalogError}</p>
-    {:else}
-      <TranslationEditor {messages} {drafts} ondraft={onDraft} />
-    {/if}
+
+      {#if catalogLoading}
+        <div class="flex items-center gap-2 py-12 justify-center text-muted-foreground">
+          <Loader2 class="h-4 w-4 animate-spin" />
+          Loading catalogs…
+        </div>
+      {:else if catalogError}
+        <p class="py-12 text-center text-sm text-destructive">{catalogError}</p>
+      {:else}
+        <TranslationEditor {messages} {drafts} ondraft={onDraft} />
+      {/if}
+    </div>
   </div>
 
   <Dialog.Root bind:open={submitOpen}>

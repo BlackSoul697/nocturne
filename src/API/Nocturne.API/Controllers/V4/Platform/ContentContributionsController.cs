@@ -1,3 +1,4 @@
+using System.Text.Json;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.RateLimiting;
@@ -37,7 +38,7 @@ public class ContentContributionsController(
             ? () => contentService.SubmitAsync(request, ct)
             : () => contentService.RelayAsync(request, ct);
 
-        return await SubmitAsync(submit, "content contribution");
+        return await SubmitAsync(submit, "content contribution", ct);
     }
 
     /// <summary>
@@ -59,7 +60,7 @@ public class ContentContributionsController(
             return validationError;
 
         return await SubmitAsync(
-            () => contentService.SubmitAsync(request, ct), "relayed content contribution");
+            () => contentService.SubmitAsync(request, ct), "relayed content contribution", ct);
     }
 
     /// <summary>
@@ -67,7 +68,7 @@ public class ContentContributionsController(
     /// cannot answer the same failure differently.
     /// </summary>
     private async Task<ActionResult<ContentContributionResponse>> SubmitAsync(
-        Func<Task<ContentContributionResponse>> submit, string logContext)
+        Func<Task<ContentContributionResponse>> submit, string logContext, CancellationToken ct)
     {
         try
         {
@@ -77,7 +78,17 @@ public class ContentContributionsController(
         {
             return Problem(detail: ex.Message, statusCode: 422, title: "Unprocessable Entity");
         }
-        catch (Exception ex)
+        // Same policy as the translation ingresses: a caller that went away is not
+        // an upstream failure, and the guard reads the token rather than the type
+        // because an HttpClient timeout also surfaces as OperationCanceledException.
+        catch (OperationCanceledException) when (ct.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch (Exception ex) when (ex is HttpRequestException
+            or OperationCanceledException
+            or JsonException
+            or InvalidOperationException)
         {
             logger.LogError(ex, "Failed to submit {LogContext}", logContext);
             return Problem(detail: "Failed to submit the contribution. Try again later.",

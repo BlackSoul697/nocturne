@@ -33,17 +33,13 @@ public class MyFitnessPalAuthTokenProvider(
     private readonly IRetryDelayStrategy _retryDelayStrategy =
         retryDelayStrategy ?? throw new ArgumentNullException(nameof(retryDelayStrategy));
 
-    protected override string ConnectorName => "MyFitnessPal";
-
     protected override async Task<(string? Token, DateTime ExpiresAt, IReadOnlyDictionary<string, string>? Metadata)> AcquireTokenAsync(
         MyFitnessPalConnectorConfiguration config, CancellationToken cancellationToken)
     {
-        var maxRetries = Math.Max(1, config.MaxRetryAttempts);
-
         var token = await ExecuteWithRetryAsync(
             async attempt => await RequestTokenAsync(config, attempt, cancellationToken),
             _retryDelayStrategy,
-            maxRetries,
+            config.MaxRetryAttempts,
             "MyFitnessPal authentication",
             cancellationToken
         );

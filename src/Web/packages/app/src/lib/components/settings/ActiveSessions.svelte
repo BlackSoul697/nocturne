@@ -1,7 +1,7 @@
 <script lang="ts">
   import { Button } from "$lib/components/ui/button";
   import * as Card from "$lib/components/ui/card";
-  import * as AlertDialog from "$lib/components/ui/alert-dialog";
+  import { ConfirmDialog } from "$lib/components/ui/confirm-dialog";
   import { Badge } from "$lib/components/ui/badge";
   import {
     Monitor,
@@ -13,12 +13,13 @@
     LoaderCircle,
     LogOut,
   } from "lucide-svelte";
-  import { formatDate } from "$lib/utils/formatting";
+  import { formatMediumDateTime } from "$lib/utils/formatting";
   import {
     list,
     revoke,
     revokeOthers,
   } from "$lib/api/generated/sessions.generated.remote";
+  import { describeSubmitError } from "$lib/forms/submit-error";
 
   type SessionInfo = {
     sessionId?: string;
@@ -74,7 +75,10 @@
       successMessage = "Session signed out.";
       clearMessages();
     } catch (err) {
-      errorMessage = "Failed to sign out the session. Please try again.";
+      errorMessage = describeSubmitError(
+        err,
+        "Failed to sign out the session. Please try again."
+      );
       clearMessages();
     } finally {
       isRevoking = null;
@@ -90,7 +94,10 @@
       successMessage = "All other sessions signed out.";
       clearMessages();
     } catch (err) {
-      errorMessage = "Failed to sign out other sessions. Please try again.";
+      errorMessage = describeSubmitError(
+        err,
+        "Failed to sign out other sessions. Please try again."
+      );
       clearMessages();
     } finally {
       isRevokingOthers = false;
@@ -111,44 +118,35 @@
       </p>
     </div>
     {#if otherSessionCount > 0}
-      <AlertDialog.Root>
-        <AlertDialog.Trigger>
-          {#snippet child({ props }: { props: Record<string, unknown> })}
-            <Button
-              {...props}
-              type="button"
-              variant="outline"
-              size="sm"
-              class="shrink-0"
-              disabled={isRevokingOthers}
-            >
-              {#if isRevokingOthers}
-                <LoaderCircle class="mr-1.5 h-3.5 w-3.5 animate-spin" />
-              {:else}
-                <LogOut class="mr-1.5 h-3.5 w-3.5" />
-              {/if}
-              Sign out everywhere else
-            </Button>
-          {/snippet}
-        </AlertDialog.Trigger>
-        <AlertDialog.Content>
-          <AlertDialog.Header>
-            <AlertDialog.Title>Sign out everywhere else</AlertDialog.Title>
-            <AlertDialog.Description>
-              Sign out {otherSessionCount}
-              {otherSessionCount === 1 ? "other session" : "other sessions"}?
-              This device stays signed in. The other devices will need to log
-              in again.
-            </AlertDialog.Description>
-          </AlertDialog.Header>
-          <AlertDialog.Footer>
-            <AlertDialog.Cancel>Cancel</AlertDialog.Cancel>
-            <AlertDialog.Action onclick={handleRevokeOthers}>
-              Sign out
-            </AlertDialog.Action>
-          </AlertDialog.Footer>
-        </AlertDialog.Content>
-      </AlertDialog.Root>
+      <ConfirmDialog
+        title="Sign out everywhere else"
+        confirmLabel="Sign out"
+        onConfirm={handleRevokeOthers}
+      >
+        {#snippet trigger(props)}
+          <Button
+            {...props}
+            type="button"
+            variant="outline"
+            size="sm"
+            class="shrink-0"
+            disabled={isRevokingOthers}
+          >
+            {#if isRevokingOthers}
+              <LoaderCircle class="mr-1.5 h-3.5 w-3.5 animate-spin" />
+            {:else}
+              <LogOut class="mr-1.5 h-3.5 w-3.5" />
+            {/if}
+            Sign out everywhere else
+          </Button>
+        {/snippet}
+        {#snippet description()}
+          Sign out {otherSessionCount}
+          {otherSessionCount === 1 ? "other session" : "other sessions"}?
+          This device stays signed in. The other devices will need to log
+          in again.
+        {/snippet}
+      </ConfirmDialog>
     {/if}
   </div>
 
@@ -219,7 +217,7 @@
                   >
                     <span class="flex items-center gap-1.5">
                       <Clock class="h-3 w-3" />
-                      Last active {formatDate(session.lastActiveAt)}
+                      Last active {formatMediumDateTime(session.lastActiveAt)}
                     </span>
                     {#if session.ipAddress}
                       <span>IP {session.ipAddress}</span>
@@ -228,52 +226,41 @@
                 </Card.Description>
               </div>
             </div>
-            <AlertDialog.Root>
-              <AlertDialog.Trigger>
-                {#snippet child({ props }: { props: Record<string, unknown> })}
-                  <Button
-                    {...props}
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    class="text-destructive border-destructive/30 hover:bg-destructive/10 shrink-0"
-                    disabled={isRevoking === session.sessionId}
-                  >
-                    {#if isRevoking === session.sessionId}
-                      <LoaderCircle class="mr-1.5 h-3.5 w-3.5 animate-spin" />
-                    {:else}
-                      <Trash2 class="mr-1.5 h-3.5 w-3.5" />
-                    {/if}
-                    Sign out
-                  </Button>
-                {/snippet}
-              </AlertDialog.Trigger>
-              <AlertDialog.Content>
-                <AlertDialog.Header>
-                  <AlertDialog.Title>
-                    {session.isCurrent ? "Sign out this device" : "Sign out session"}
-                  </AlertDialog.Title>
-                  <AlertDialog.Description>
-                    {#if session.isCurrent}
-                      This is the session you are using now. Signing it out
-                      logs you out here.
-                    {:else}
-                      Sign out {session.deviceDescription ?? "this device"}?
-                      It will need to log in again.
-                    {/if}
-                  </AlertDialog.Description>
-                </AlertDialog.Header>
-                <AlertDialog.Footer>
-                  <AlertDialog.Cancel>Cancel</AlertDialog.Cancel>
-                  <AlertDialog.Action
-                    onclick={() =>
-                      handleRevoke(session.sessionId!, session.isCurrent ?? false)}
-                  >
-                    Sign out
-                  </AlertDialog.Action>
-                </AlertDialog.Footer>
-              </AlertDialog.Content>
-            </AlertDialog.Root>
+            <ConfirmDialog
+              title={session.isCurrent
+                ? "Sign out this device"
+                : "Sign out session"}
+              confirmLabel="Sign out"
+              onConfirm={() =>
+                handleRevoke(session.sessionId!, session.isCurrent ?? false)}
+            >
+              {#snippet trigger(props)}
+                <Button
+                  {...props}
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  class="text-destructive border-destructive/30 hover:bg-destructive/10 shrink-0"
+                  disabled={isRevoking === session.sessionId}
+                >
+                  {#if isRevoking === session.sessionId}
+                    <LoaderCircle class="mr-1.5 h-3.5 w-3.5 animate-spin" />
+                  {:else}
+                    <Trash2 class="mr-1.5 h-3.5 w-3.5" />
+                  {/if}
+                  Sign out
+                </Button>
+              {/snippet}
+              {#snippet description()}
+                {#if session.isCurrent}
+                  This is the session you are using now. Signing it out
+                  logs you out here.
+                {:else}
+                  Sign out {session.deviceDescription ?? "this device"}?
+                  It will need to log in again.
+                {/if}
+              {/snippet}
+            </ConfirmDialog>
           </div>
         </Card.Header>
       </Card.Root>

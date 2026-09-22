@@ -65,9 +65,10 @@ public class GitHubTranslationService(
             throw;
         }
 
+        var safeLocaleForLog = SanitizeForLog(request.Locale);
         logger.LogInformation(
             "Opened translation PR #{PrNumber} for {Locale}: {Applied} applied, {Unmatched} unmatched",
-            prNumber, request.Locale, result.Applied, result.Unmatched.Count);
+            prNumber, safeLocaleForLog, result.Applied, result.Unmatched.Count);
 
         return new TranslationContributionResponse
         {
@@ -162,4 +163,7 @@ public class GitHubTranslationService(
 
         return sb.ToString();
     }
+
+    private static string SanitizeForLog(string value) =>
+        value.Replace("\r", string.Empty).Replace("\n", string.Empty);
 }

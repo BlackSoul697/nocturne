@@ -32,8 +32,9 @@ namespace Nocturne.API.Controllers.V4.Treatments;
 /// </list>
 ///
 /// The <c>POST /meals</c> endpoint is idempotent on <c>(DataSource, SyncIdentifier)</c>: if a matching
-/// bolus already exists its <c>CorrelationId</c> is propagated to both records. A database transaction
-/// wraps both inserts to ensure atomicity.
+/// bolus already exists its <c>CorrelationId</c> is propagated to both records. The two repositories
+/// write on their own contexts, so <see cref="GuardRecreationAsync"/> — not the transaction opened
+/// here — is what keeps a refused meal from writing one half.
 ///
 /// Demo mode is respected in <c>GET /meals</c>: when enabled only records from
 /// <c>DataSources.DemoService</c> are returned; otherwise demo records are excluded.
@@ -44,7 +45,7 @@ namespace Nocturne.API.Controllers.V4.Treatments;
 [ApiController]
 [Tags("Treatments")]
 [Route("api/v4/nutrition")]
-[RequireScope(OAuthScopes.TreatmentsRead)]
+[RequireScope(Scope.TreatmentsRead)]
 [Produces("application/json")]
 public class NutritionController : ControllerBase, IWriteScopedController
 {
@@ -55,7 +56,7 @@ public class NutritionController : ControllerBase, IWriteScopedController
     /// treatment write endpoints. The per-carb-intake food breakdown is keyed by carb intake and
     /// reads the food catalog without mutating it, so it is gated with the treatment it describes.
     /// </summary>
-    public string WriteScope => OAuthScopes.TreatmentsReadWrite;
+    public string WriteScope => Scope.TreatmentsReadWrite;
 
     private readonly ICarbIntakeRepository _carbIntakeRepo;
     private readonly IBolusRepository _bolusRepo;
@@ -126,6 +127,7 @@ public class NutritionController : ControllerBase, IWriteScopedController
     [RemoteForm(Invalidates = ["GetCarbIntakes"])]
     [ProducesResponseType(typeof(CarbIntake), StatusCodes.Status201Created)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
     public async Task<ActionResult<CarbIntake>> CreateCarbIntake([FromBody] CreateCarbIntakeRequest request, CancellationToken ct = default)
     {
         if (request.Timestamp == default)
@@ -154,17 +156,8 @@ public class NutritionController : ControllerBase, IWriteScopedController
         [FromBody] CreateCarbIntakeRequest[] requests,
         CancellationToken ct = default)
     {
-        if (requests is not { Length: > 0 })
-            return Problem(detail: "Carb intake data is required", statusCode: 400, title: "Bad Request");
-
-        if (requests.Length > 1000)
-            return Problem(detail: "Bulk operations are limited to 1000 intakes per request", statusCode: 400, title: "Bad Request");
-
-        if (requests.Any(r => r.Timestamp == default))
-            return Problem(detail: "Timestamp must be set on every intake", statusCode: 400, title: "Bad Request");
-
-        if (requests.Any(r => !string.IsNullOrEmpty(r.SyncIdentifier) && string.IsNullOrEmpty(r.DataSource)))
-            return Problem(detail: "DataSource is required when SyncIdentifier is supplied", statusCode: 400, title: "Bad Request");
+        if (await this.ValidateBulkAsync(requests, "Carb intake", "intake", "intakes", ct) is { } invalid)
+            return invalid;
 
         var models = requests.Select(MapCreateToModel).ToList();
         var persisted = await _carbIntakeRepo.BulkCreateAsync(models, WriteOrigin.Live, ct);
@@ -390,11 +383,12 @@ public class NutritionController : ControllerBase, IWriteScopedController
     #region Meals
 
     /// <summary>
-    /// Atomically create a correlated Bolus + CarbIntake for a meal event.
-    /// Both records share a single CorrelationId and are persisted within a
-    /// single transaction. When an existing row matches on
-    /// (DataSource, SyncIdentifier), the idempotent upsert applies and the
-    /// response returns 200 instead of 201.
+    /// Create a correlated Bolus + CarbIntake for a meal event, sharing a single
+    /// CorrelationId. When an existing row matches on (DataSource, SyncIdentifier),
+    /// the idempotent upsert applies and the response returns 200 instead of 201.
+    /// Either half being held by a record the owner deleted refuses the whole meal
+    /// with 409 before anything is written; see <see cref="GuardRecreationAsync"/>
+    /// for why that check is what makes the pair all-or-nothing.
     /// </summary>
     [HttpPost("meals")]
     [RequireDeclaredWriteScope]
@@ -402,6 +396,7 @@ public class NutritionController : ControllerBase, IWriteScopedController
     [ProducesResponseType(typeof(CreateMealResponse), StatusCodes.Status201Created)]
     [ProducesResponseType(typeof(CreateMealResponse), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
     public async Task<ActionResult<CreateMealResponse>> CreateMeal(
         [FromBody] CreateMealRequest request,
         CancellationToken ct = default)
@@ -444,6 +439,9 @@ public class NutritionController : ControllerBase, IWriteScopedController
             AbsorptionTime = request.AbsorptionTime,
             CorrelationId = correlationId,
         };
+
+        if (!string.IsNullOrEmpty(request.DataSource) && !string.IsNullOrEmpty(request.SyncIdentifier))
+            await GuardRecreationAsync(request.DataSource, request.SyncIdentifier, ct);
 
         await using var tx = await _context.Database.BeginTransactionAsync(ct);
 
@@ -488,6 +486,27 @@ public class NutritionController : ControllerBase, IWriteScopedController
         return (bolusWasNew || carbWasNew)
             ? StatusCode(StatusCodes.Status201Created, response)
             : Ok(response);
+    }
+
+    /// <summary>
+    /// Refuses the whole meal when either half's sync key is held by a record the user deleted.
+    /// </summary>
+    /// <remarks>
+    /// The transaction opened here is on this controller's context, while each repository writes on
+    /// its own, so the bolus write commits before the carb write is attempted. Asking both
+    /// repositories first is what keeps a key blocked on one half only from leaving a committed
+    /// bolus behind the refusal.
+    /// </remarks>
+    /// <exception cref="RecreationBlockedException">
+    /// Mapped to <c>409 Conflict</c> by <see cref="Filters.RecreationBlockedFilter"/>.
+    /// </exception>
+    private async Task GuardRecreationAsync(string dataSource, string syncIdentifier, CancellationToken ct)
+    {
+        if (await _bolusRepo.IsRecreationBlockedAsync(dataSource, syncIdentifier, ct))
+            throw RecreationBlockedException.ForSyncKey(nameof(Bolus), dataSource, syncIdentifier);
+
+        if (await _carbIntakeRepo.IsRecreationBlockedAsync(dataSource, syncIdentifier, ct))
+            throw RecreationBlockedException.ForSyncKey(nameof(CarbIntake), dataSource, syncIdentifier);
     }
 
     /// <summary>

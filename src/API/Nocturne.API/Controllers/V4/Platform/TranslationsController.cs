@@ -1,7 +1,9 @@
+using System.Text.Json;
 using System.Text.RegularExpressions;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.RateLimiting;
+using Microsoft.Extensions.Options;
 using Nocturne.API.Extensions;
 using Nocturne.API.Services;
 using Nocturne.Core.Contracts.Translations;
@@ -22,6 +24,15 @@ public record SubmitTranslationDraftsRequest
     public required string Locale { get; init; }
     public required ContributionContributorDto Contributor { get; init; }
     public string? Note { get; init; }
+}
+
+public record TranslationCatalogSourceResponse
+{
+    /// <summary>
+    /// Directory the <c>{locale}.po</c> catalogs are read from, as raw files.
+    /// No trailing slash.
+    /// </summary>
+    public required string CatalogBaseUrl { get; init; }
 }
 
 [ApiController]
@@ -72,7 +83,7 @@ public partial class TranslationsController(
             ? () => translationService.SubmitAsync(request, ct)
             : () => translationService.RelayAsync(request, ct);
 
-        return await SubmitAsync(submit, "translation contribution");
+        return await SubmitAsync(submit, "translation contribution", ct);
     }
 
     /// <summary>
@@ -96,7 +107,7 @@ public partial class TranslationsController(
             return validationError;
 
         return await SubmitAsync(
-            () => translationService.SubmitAsync(request, ct), "relayed translation contribution");
+            () => translationService.SubmitAsync(request, ct), "relayed translation contribution", ct);
     }
 
     /// <summary>
@@ -104,7 +115,7 @@ public partial class TranslationsController(
     /// cannot answer the same failure differently.
     /// </summary>
     private async Task<ActionResult<TranslationContributionResponse>> SubmitAsync(
-        Func<Task<TranslationContributionResponse>> submit, string logContext)
+        Func<Task<TranslationContributionResponse>> submit, string logContext, CancellationToken ct)
     {
         try
         {
@@ -114,7 +125,20 @@ public partial class TranslationsController(
         {
             return Problem(detail: ex.Message, statusCode: 422, title: "Unprocessable Entity");
         }
-        catch (Exception ex)
+        // A caller that went away is not an upstream failure, and answering it is pointless. The
+        // guard is on the token rather than the exception type because an HttpClient timeout also
+        // surfaces as OperationCanceledException, and that one is a gateway failure.
+        catch (OperationCanceledException) when (ct.IsCancellationRequested)
+        {
+            throw;
+        }
+        // The ways reaching GitHub (or the relay) fails: the request itself, the timeout, a
+        // response the service rejects as unusable. Anything else is a defect and belongs to the
+        // centralized handler rather than a 502 that reads like GitHub's fault.
+        catch (Exception ex) when (ex is HttpRequestException
+            or OperationCanceledException
+            or JsonException
+            or InvalidOperationException)
         {
             logger.LogError(ex, "Failed to submit {LogContext}", logContext);
             return Problem(detail: "Failed to submit the contribution. Try again later.",
@@ -211,7 +235,15 @@ public partial class TranslationsController(
         {
             return Problem(detail: ex.Message, statusCode: 422, title: "Unprocessable Entity");
         }
-        catch (Exception ex)
+        // Same policy as the contribution ingresses above, for the same reasons.
+        catch (OperationCanceledException) when (ct.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch (Exception ex) when (ex is HttpRequestException
+            or OperationCanceledException
+            or JsonException
+            or InvalidOperationException)
         {
             logger.LogError(ex, "Failed to submit translation drafts");
             return Problem(detail: "Failed to submit the contribution. Try again later.",
@@ -261,4 +293,36 @@ public partial class TranslationsController(
         ContributionValidation.ValidateContributor(contributor, note) is { } reason
             ? Problem(detail: reason, statusCode: 400, title: "Bad Request")
             : null;
+
+    /// <summary>
+    /// Where the editor must read the catalogs it drafts against.
+    /// </summary>
+    /// <remarks>
+    /// Derived from the same <see cref="GitHubContributionOptions"/> the
+    /// contribution writes through: an instance pointed at a fork or a test
+    /// branch would otherwise have the editor drafting against upstream while
+    /// the pull request lands elsewhere, and every entry would silently come
+    /// back unmatched.
+    /// </remarks>
+    [HttpGet("catalog-source")]
+    [RemoteQuery]
+    [ProducesResponseType(typeof(TranslationCatalogSourceResponse), StatusCodes.Status200OK)]
+    public ActionResult<TranslationCatalogSourceResponse> GetCatalogSource(
+        [FromServices] IOptions<GitHubContributionOptions> githubOptions)
+    {
+        var opts = githubOptions.Value;
+        var dir = EscapePath(opts.CatalogDir.Trim('/'));
+        var baseUrl =
+            $"https://raw.githubusercontent.com/{Uri.EscapeDataString(opts.Owner)}/{Uri.EscapeDataString(opts.Repo)}/{EscapePath(opts.BaseBranch)}"
+            + (dir.Length == 0 ? "" : $"/{dir}");
+
+        return Ok(new TranslationCatalogSourceResponse { CatalogBaseUrl = baseUrl });
+    }
+
+    /// <summary>
+    /// Escapes each segment but keeps the separators: both a branch name and a
+    /// catalog directory may legitimately contain slashes.
+    /// </summary>
+    private static string EscapePath(string value) =>
+        string.Join('/', value.Split('/').Select(Uri.EscapeDataString));
 }

@@ -17,7 +17,9 @@ namespace Nocturne.Core.Contracts.V4.Repositories;
 /// <seealso cref="IBGCheckRepository"/>
 /// <seealso cref="ICalibrationRepository"/>
 /// <seealso cref="IV4Repository{T}"/>
-public interface ISensorGlucoseRepository : IV4Repository<SensorGlucose>, IDeviceAttributedRepository<SensorGlucose>
+public interface ISensorGlucoseRepository
+    : ILegacyKeyedRepository<SensorGlucose>, IDeviceAttributedRepository<SensorGlucose>,
+      ISyncKeyedRepository<SensorGlucose>
 {
     /// <summary>
     /// Retrieve a page of <see cref="SensorGlucose"/> records filtered by time range, device, source, and origin.
@@ -56,60 +58,12 @@ public interface ISensorGlucoseRepository : IV4Repository<SensorGlucose>, IDevic
         int limit, int offset, bool descending, CancellationToken ct)
         => GetAsync(from, to, device, source, limit, offset, descending, false, null, null, ct);
 
-    /// <summary>Returns a single <see cref="SensorGlucose"/> by its UUID v7, or <c>null</c> if not found.</summary>
-    /// <param name="id">UUID v7 record identifier.</param>
-    /// <param name="ct">Cancellation token.</param>
-    new Task<SensorGlucose?> GetByIdAsync(Guid id, CancellationToken ct = default);
-
-    /// <summary>Retrieve a <see cref="SensorGlucose"/> by its original MongoDB ObjectId.</summary>
-    /// <param name="legacyId">Original MongoDB ObjectId string.</param>
-    /// <param name="ct">Cancellation token.</param>
-    /// <returns>The matching record, or <c>null</c> if not found.</returns>
-    Task<SensorGlucose?> GetByLegacyIdAsync(string legacyId, CancellationToken ct = default);
-
-    /// <summary>Persist a new <see cref="SensorGlucose"/> record and return the saved entity.</summary>
-    /// <param name="model">Record to create.</param>
-    /// <param name="ct">Cancellation token.</param>
-    new Task<SensorGlucose> CreateAsync(SensorGlucose model, WriteOrigin origin, CancellationToken ct = default);
-
-    /// <summary>Replace an existing <see cref="SensorGlucose"/> identified by <paramref name="id"/>.</summary>
-    /// <param name="id">UUID v7 identifier of the record to update.</param>
-    /// <param name="model">Updated record data.</param>
-    /// <param name="ct">Cancellation token.</param>
-    new Task<SensorGlucose> UpdateAsync(Guid id, SensorGlucose model, WriteOrigin origin, CancellationToken ct = default);
-
-    /// <summary>Delete a <see cref="SensorGlucose"/> record by its UUID v7.</summary>
-    /// <param name="id">UUID v7 identifier of the record to delete.</param>
-    /// <param name="ct">Cancellation token.</param>
-    new Task DeleteAsync(Guid id, WriteOrigin origin, CancellationToken ct = default);
-
-    /// <summary>Delete the <see cref="SensorGlucose"/> with the given legacy MongoDB ObjectId.</summary>
-    /// <param name="legacyId">Original MongoDB ObjectId string.</param>
-    /// <param name="ct">Cancellation token.</param>
-    /// <returns>Number of records deleted (0 or 1).</returns>
-    Task<int> DeleteByLegacyIdAsync(string legacyId, WriteOrigin origin, CancellationToken ct = default);
-
-    /// <summary>Count <see cref="SensorGlucose"/> records within an optional time range.</summary>
-    /// <param name="from">Inclusive start, or <c>null</c> for no lower bound.</param>
-    /// <param name="to">Exclusive end, or <c>null</c> for no upper bound.</param>
-    /// <param name="ct">Cancellation token.</param>
-    new Task<int> CountAsync(DateTime? from, DateTime? to, CancellationToken ct = default);
-
     /// <summary>Retrieve all <see cref="SensorGlucose"/> records sharing the same correlation identifier.</summary>
     /// <param name="correlationId">Correlation ID linking related records.</param>
     /// <param name="ct">Cancellation token.</param>
     Task<IEnumerable<SensorGlucose>> GetByCorrelationIdAsync(
         Guid correlationId,
         CancellationToken ct = default
-    );
-
-    /// <summary>Insert multiple <see cref="SensorGlucose"/> records in a single batch operation.</summary>
-    /// <param name="records">Records to insert.</param>
-    /// <param name="ct">Cancellation token.</param>
-    /// <returns>The inserted records with server-assigned fields populated.</returns>
-    Task<IEnumerable<SensorGlucose>> BulkCreateAsync(
-        IEnumerable<SensorGlucose> records,
-        WriteOrigin origin, CancellationToken ct = default
     );
 
     /// <summary>
@@ -132,6 +86,29 @@ public interface ISensorGlucoseRepository : IV4Repository<SensorGlucose>, IDevic
         string? device, double? mgdl, DateTime from, DateTime to, CancellationToken ct = default);
 
     /// <summary>
+    /// Raw-storage duplicate probe for a whole upload batch: returns the stored readings in
+    /// <paramref name="from"/>..<paramref name="to"/> for the given devices, newest first, so the
+    /// caller can match every submitted entry in memory instead of querying per entry.
+    /// </summary>
+    /// <remarks>
+    /// Same raw semantics as
+    /// <see cref="FindStoredDuplicateAsync(string?, double?, DateTime, DateTime, CancellationToken)"/> —
+    /// non-primary duplicate copies are included, and the ordering (timestamp then id, both
+    /// descending) is the one the single-entry probe resolves ties by, so scanning the returned
+    /// list in order and taking the first match reproduces its result exactly.
+    /// </remarks>
+    /// <param name="devices">Device identifiers to include, or <c>null</c> for every device
+    /// (required when any submitted entry has no device, since such an entry matches any).</param>
+    /// <param name="from">Inclusive start of the time window.</param>
+    /// <param name="to">Inclusive end of the time window.</param>
+    /// <param name="limit">Maximum rows to return. A caller that needs to know whether the window
+    /// held more than it can use should ask for one row more than that.</param>
+    /// <param name="ct">Cancellation token.</param>
+    Task<IReadOnlyList<SensorGlucose>> FindStoredDuplicateCandidatesAsync(
+        IReadOnlyCollection<string>? devices, DateTime from, DateTime to, int limit,
+        CancellationToken ct = default);
+
+    /// <summary>
     /// Retrieve the timestamp of the most recently stored <see cref="SensorGlucose"/> reading, optionally scoped to a data source.
     /// </summary>
     /// <remarks>Used by connectors to determine the last sync time and avoid re-fetching already-stored data.</remarks>
@@ -147,14 +124,6 @@ public interface ISensorGlucoseRepository : IV4Repository<SensorGlucose>, IDevic
     /// <param name="ct">Cancellation token.</param>
     /// <returns>The oldest reading timestamp, or <c>null</c> if no records exist.</returns>
     Task<DateTime?> GetOldestTimestampAsync(string? source = null, CancellationToken ct = default);
-
-    /// <summary>
-    /// Count <see cref="SensorGlucose"/> records matching the given data source.
-    /// </summary>
-    /// <param name="source">Data source identifier (e.g., connector name).</param>
-    /// <param name="ct">Cancellation token.</param>
-    /// <returns>Number of matching records.</returns>
-    Task<int> CountBySourceAsync(string source, CancellationToken ct = default);
 
     /// <summary>
     /// Delete all <see cref="SensorGlucose"/> records matching the given data source.

@@ -3,6 +3,7 @@
   import { createSettingsStore } from "$lib/stores/settings-store.svelte";
   import { createAuthStore } from "$lib/stores/auth-store.svelte";
   import { authInterceptorState } from "$lib/api/auth-interceptor";
+  import { remoteErrorMessage } from "$lib/api/remote-error";
   import { onMount, onDestroy } from "svelte";
   import * as Sidebar from "$lib/components/ui/sidebar";
   import { AppSidebar, MobileHeader } from "$lib/components/layout";
@@ -15,11 +16,11 @@
   import { beforeNavigate } from "$app/navigation";
   import * as Card from "$lib/components/ui/card";
   import { Button } from "$lib/components/ui/button";
-  import AlertBanner from "$lib/components/alerts/AlertBanner.svelte";
-  import FiringToast from "$lib/components/alerts/FiringToast.svelte";
-  import { pollActiveAlerts } from "$lib/components/alerts/active-alerts-poll.svelte";
+  import AlertSurfaces from "$lib/components/alerts/AlertSurfaces.svelte";
   import DemoBanner from "$lib/components/layout/DemoBanner.svelte";
   import GuestBanner from "$lib/components/layout/GuestBanner.svelte";
+  import BackupSignInPrompt from "$lib/components/layout/BackupSignInPrompt.svelte";
+  import SessionExpiryWatcher from "$lib/components/layout/SessionExpiryWatcher.svelte";
   import MembershipRequestAutoSubmit from "$lib/components/members/MembershipRequestAutoSubmit.svelte";
   import { CommandPalette } from "$lib/components/command-palette";
   import { CoachMarkProvider } from "@nocturne/coach";
@@ -30,6 +31,7 @@
   import CoachParamHandler from "$lib/coach-marks/CoachParamHandler.svelte";
   import { STALE_THRESHOLD_MS } from "$lib/constants/staleness";
   import ChartPrintPatterns from "$lib/components/charts/print/ChartPrintPatterns.svelte";
+  import { createConnectionIndicator } from "$lib/stores/connection-indicator.svelte";
 
   // LocalStorage key for title/favicon settings
   const SETTINGS_STORAGE_KEY = "nocturne-title-favicon-settings";
@@ -46,6 +48,11 @@
 
   const { data, children } = $props<{ data: LayoutData; children: any }>();
 
+  // A tenantless host leaves the tenant-scoped surfaces below unmounted; see
+  // tenantless-navigation. Read once: the host cannot change without a fresh load.
+  // svelte-ignore state_referenced_locally
+  const tenantless: boolean = data.tenantless === true;
+
   const realtimeStore = createRealtimeStore(config);
   createAuthStore(); // Initialize auth store in context
 
@@ -56,16 +63,12 @@
   });
 
   // Create settings store in context for the entire app
-  // This makes feature settings available on all pages including the main dashboard
-  createSettingsStore();
+  // This makes feature settings available on all pages including the main dashboard.
+  createSettingsStore(!tenantless);
 
   let commandPaletteOpen = $state(false);
 
-  // One poll for the alert surfaces this layout mounts (AlertBanner and
-  // FiringToast both read the same query).
-  pollActiveAlerts();
-
-  const coachMarkAdapter = createCoachMarkAdapter();
+  const coachMarkAdapter = createCoachMarkAdapter(tenantless);
 
   // Title/Favicon service for dynamic updates
   const titleFaviconService = getTitleFaviconService();
@@ -140,7 +143,10 @@
   const lastUpdated = $derived(realtimeStore.lastUpdated);
   const timeSinceReading = $derived(realtimeStore.timeSinceReading);
 
-  const isDisconnected = $derived(!realtimeStore.isConnected);
+  const connection = createConnectionIndicator(
+    () => realtimeStore.connectionStatus
+  );
+  const isDisconnected = $derived(connection.isDisconnected);
   const isStale = $derived(now - lastUpdated > STALE_THRESHOLD_MS);
 
   $effect(() => {
@@ -207,7 +213,7 @@
   <CoachParamHandler />
   <ChartPrintPatterns />
   <Sidebar.Provider>
-    <AppSidebar user={data.user} isPlatformAdmin={data.isPlatformAdmin} isPlatformAccessGrant={data.isPlatformAccessGrant} isGuestSession={data.isGuestSession} currentSlug={data.tenantSlug} baseDomain={data.baseDomain} />
+    <AppSidebar user={data.user} isPlatformAdmin={data.isPlatformAdmin} isPlatformAccessGrant={data.isPlatformAccessGrant} isGuestSession={data.isGuestSession} currentSlug={data.tenantSlug} baseDomain={data.baseDomain} tenantless={data.tenantless} />
     <Sidebar.Inset>
       <MobileHeader />
       {#if data.isDemo}
@@ -216,18 +222,25 @@
       {#if data.isGuestSession && data.guestExpiresAt}
         <GuestBanner expiresAt={data.guestExpiresAt} />
       {/if}
-      <MembershipRequestAutoSubmit
-        isAuthenticated={!!data.user}
-        isGuestSession={data.isGuestSession}
-      />
-      <AlertBanner />
-      <FiringToast />
+      {#if !tenantless && data.user && !data.isGuestSession && !data.isDemo}
+        <BackupSignInPrompt />
+      {/if}
+      {#if data.user && !data.isGuestSession}
+        <SessionExpiryWatcher />
+      {/if}
+      {#if !tenantless}
+        <MembershipRequestAutoSubmit
+          isAuthenticated={!!data.user}
+          isGuestSession={data.isGuestSession}
+        />
+        <AlertSurfaces />
+      {/if}
       <main class="flex-1 overflow-auto">
         <svelte:boundary>
           {@render children()}
 
           {#snippet failed(e, reset)}
-            {@const message = e instanceof Error ? e.message : typeof e === 'string' ? e : 'An unexpected error occurred'}
+            {@const message = e instanceof Error ? e.message : typeof e === 'string' ? e : remoteErrorMessage(e, 'An unexpected error occurred')}
             {@const stack = dev && e instanceof Error ? e.stack : undefined}
             <Card.Root class="mx-auto mt-10 max-w-2xl">
               <Card.Header>
@@ -249,5 +262,5 @@
       </main>
     </Sidebar.Inset>
   </Sidebar.Provider>
-  <CommandPalette bind:open={commandPaletteOpen} />
+  <CommandPalette bind:open={commandPaletteOpen} {tenantless} />
 </CoachMarkProvider>

@@ -112,15 +112,22 @@ public class GitHubPrClient(IHttpClientFactory httpClientFactory, ILogger<GitHub
         return (pr.Number, pr.HtmlUrl);
     }
 
+    /// <summary>
+    /// Strips the line breaks a caller-supplied value could carry into a log
+    /// line, where they would read as separate entries.
+    /// </summary>
+    private static string SanitizeForLog(string value) =>
+        value.Replace("\r", string.Empty).Replace("\n", string.Empty);
+
     public async Task TryDeleteBranchAsync(HttpClient client, string owner, string repo, string branch)
     {
         try
         {
             await client.DeleteAsync($"/repos/{owner}/{repo}/git/refs/heads/{branch}");
         }
-        catch (Exception ex)
+        catch (Exception ex) when (ex is HttpRequestException or OperationCanceledException)
         {
-            logger.LogWarning(ex, "Failed to clean up branch {Branch} after error", branch);
+            logger.LogWarning(ex, "Failed to clean up branch {Branch} after error", SanitizeForLog(branch));
         }
     }
 
