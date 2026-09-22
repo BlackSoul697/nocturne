@@ -312,63 +312,69 @@
 </svelte:head>
 
 {#if !localeValid}
-  <p class="text-muted-foreground">Unknown locale.</p>
-{:else}
-  <div class="space-y-6">
-    <div class="flex flex-wrap items-center justify-between gap-3">
-      <div>
-        <a
-          href="/settings/translations"
-          class="mb-1 inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground"
-        >
-          <ArrowLeft class="h-3.5 w-3.5" />
-          Translations
-        </a>
-        <h1 class="text-2xl font-bold">
-          {getLanguageLabel(locale as SupportedLocale, locale as SupportedLocale)}
-          <span class="text-muted-foreground font-normal">
-            · {getLanguageLabel(locale as SupportedLocale)}
-          </span>
-        </h1>
-      </div>
-      <div class="flex items-center gap-2">
-        {#if saveState === "saving"}
-          <span class="text-sm text-muted-foreground">Saving…</span>
-        {:else if saveState === "error"}
-          <span class="text-sm text-destructive">Draft save failed — edits retry on next change</span>
-        {/if}
-        <Button
-          variant="outline"
-          disabled={drafts.size === 0}
-          onclick={() => (clearOpen = true)}
-        >
-          <Trash2 class="mr-1 h-4 w-4" />
-          Clear drafts
-        </Button>
-        <Button
-          disabled={drafts.size === 0}
-          onclick={() => {
-            submitResult = null;
-            submitError = null;
-            submitOpen = true;
-          }}
-        >
-          <GitPullRequest class="mr-1 h-4 w-4" />
-          Submit {drafts.size || ""} draft{drafts.size === 1 ? "" : "s"}
-        </Button>
-      </div>
+  <div class="@container flex flex-col h-full">
+    <div class="flex-1 p-3 sm:p-4">
+      <p class="text-muted-foreground">Unknown locale.</p>
     </div>
-
-    {#if catalogLoading}
-      <div class="flex items-center gap-2 py-12 justify-center text-muted-foreground">
-        <Loader2 class="h-4 w-4 animate-spin" />
-        Loading catalogs…
+  </div>
+{:else}
+  <div class="@container flex flex-col h-full">
+    <div class="flex-1 p-3 sm:p-4 space-y-6">
+      <div class="flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <a
+            href="/settings/translations"
+            class="mb-1 inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground"
+          >
+            <ArrowLeft class="h-3.5 w-3.5" />
+            Translations
+          </a>
+          <h1 class="text-2xl font-bold">
+            {getLanguageLabel(locale as SupportedLocale, locale as SupportedLocale)}
+            <span class="text-muted-foreground font-normal">
+              · {getLanguageLabel(locale as SupportedLocale)}
+            </span>
+          </h1>
+        </div>
+        <div class="flex items-center gap-2">
+          {#if saveState === "saving"}
+            <span class="text-sm text-muted-foreground">Saving…</span>
+          {:else if saveState === "error"}
+            <span class="text-sm text-destructive">Draft save failed — edits retry on next change</span>
+          {/if}
+          <Button
+            variant="outline"
+            disabled={drafts.size === 0}
+            onclick={() => (clearOpen = true)}
+          >
+            <Trash2 class="mr-1 h-4 w-4" />
+            Clear drafts
+          </Button>
+          <Button
+            disabled={drafts.size === 0}
+            onclick={() => {
+              submitResult = null;
+              submitError = null;
+              submitOpen = true;
+            }}
+          >
+            <GitPullRequest class="mr-1 h-4 w-4" />
+            Submit {drafts.size || ""} draft{drafts.size === 1 ? "" : "s"}
+          </Button>
+        </div>
       </div>
-    {:else if catalogError}
-      <p class="py-12 text-center text-sm text-destructive">{catalogError}</p>
-    {:else}
-      <TranslationEditor {messages} {drafts} ondraft={onDraft} />
-    {/if}
+
+      {#if catalogLoading}
+        <div class="flex items-center gap-2 py-12 justify-center text-muted-foreground">
+          <Loader2 class="h-4 w-4 animate-spin" />
+          Loading catalogs…
+        </div>
+      {:else if catalogError}
+        <p class="py-12 text-center text-sm text-destructive">{catalogError}</p>
+      {:else}
+        <TranslationEditor {messages} {drafts} ondraft={onDraft} />
+      {/if}
+    </div>
   </div>
 
   <Dialog.Root bind:open={submitOpen}>
