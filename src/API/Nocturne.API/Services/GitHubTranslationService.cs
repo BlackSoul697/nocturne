@@ -417,9 +417,9 @@ public partial class GitHubTranslationService(
             await client.DeleteAsync(
                 $"/repos/{opts.Owner}/{opts.Repo}/git/refs/heads/{branch}");
         }
-        catch (Exception ex)
+        catch (Exception ex) when (ex is HttpRequestException or OperationCanceledException)
         {
-            logger.LogWarning(ex, "Failed to clean up branch {Branch} after error", branch);
+            logger.LogWarning(ex, "Failed to clean up branch {Branch} after error", SanitizeForLog(branch));
         }
     }
 

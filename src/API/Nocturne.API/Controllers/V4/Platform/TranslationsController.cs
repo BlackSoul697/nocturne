@@ -1,3 +1,4 @@
+using System.Text.Json;
 using System.Text.RegularExpressions;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -54,7 +55,7 @@ public partial class TranslationsController(
             ? () => translationService.SubmitAsync(request, ct)
             : () => translationService.RelayAsync(request, ct);
 
-        return await SubmitAsync(submit, "translation contribution");
+        return await SubmitAsync(submit, "translation contribution", ct);
     }
 
     /// <summary>
@@ -78,7 +79,7 @@ public partial class TranslationsController(
             return validationError;
 
         return await SubmitAsync(
-            () => translationService.SubmitAsync(request, ct), "relayed translation contribution");
+            () => translationService.SubmitAsync(request, ct), "relayed translation contribution", ct);
     }
 
     /// <summary>
@@ -86,7 +87,7 @@ public partial class TranslationsController(
     /// cannot answer the same failure differently.
     /// </summary>
     private async Task<ActionResult<TranslationContributionResponse>> SubmitAsync(
-        Func<Task<TranslationContributionResponse>> submit, string logContext)
+        Func<Task<TranslationContributionResponse>> submit, string logContext, CancellationToken ct)
     {
         try
         {
@@ -96,7 +97,20 @@ public partial class TranslationsController(
         {
             return Problem(detail: ex.Message, statusCode: 422, title: "Unprocessable Entity");
         }
-        catch (Exception ex)
+        // A caller that went away is not an upstream failure, and answering it is pointless. The
+        // guard is on the token rather than the exception type because an HttpClient timeout also
+        // surfaces as OperationCanceledException, and that one is a gateway failure.
+        catch (OperationCanceledException) when (ct.IsCancellationRequested)
+        {
+            throw;
+        }
+        // The ways reaching GitHub (or the relay) fails: the request itself, the timeout, a
+        // response the service rejects as unusable. Anything else is a defect and belongs to the
+        // centralized handler rather than a 502 that reads like GitHub's fault.
+        catch (Exception ex) when (ex is HttpRequestException
+            or OperationCanceledException
+            or JsonException
+            or InvalidOperationException)
         {
             logger.LogError(ex, "Failed to submit {LogContext}", logContext);
             return Problem(detail: "Failed to submit the contribution. Try again later.",
