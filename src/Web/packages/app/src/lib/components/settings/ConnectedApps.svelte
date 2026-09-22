@@ -15,9 +15,10 @@
     BadgeCheck,
     ExternalLink,
   } from "lucide-svelte";
-  import { formatDate } from "$lib/utils/formatting";
+  import { formatMediumDateTime } from "$lib/utils/formatting";
   import { list, revoke } from "$lib/api/generated/connectedApps.generated.remote";
   import { getOAuthScopeDescription } from "$lib/constants/oauth-scopes";
+  import { describeSubmitError } from "$lib/forms/submit-error";
 
   // Remote queries
   const appsQuery = list();
@@ -45,7 +46,10 @@
       successMessage = "App access revoked successfully.";
       clearMessages();
     } catch (err) {
-      errorMessage = "Failed to revoke access. Please try again.";
+      errorMessage = describeSubmitError(
+        err,
+        "Failed to revoke access. Please try again."
+      );
       clearMessages();
     } finally {
       isRevoking = null;
@@ -196,12 +200,12 @@
           >
             <span class="flex items-center gap-1.5">
               <Clock class="h-3 w-3" />
-              Created {formatDate(app.createdAt)}
+              Created {formatMediumDateTime(app.createdAt)}
             </span>
             {#if app.lastUsedAt}
               <span class="flex items-center gap-1.5">
                 <Clock class="h-3 w-3" />
-                Last used {formatDate(app.lastUsedAt)}
+                Last used {formatMediumDateTime(app.lastUsedAt)}
               </span>
             {/if}
           </div>

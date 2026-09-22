@@ -38,6 +38,7 @@ using Nocturne.API.Services.Platform;
 using Nocturne.API.Services.Profiles;
 using Nocturne.API.Services.Profiles.Resolvers;
 using Nocturne.Core.Contracts.Profiles.Resolvers;
+using Nocturne.Core.Contracts;
 using Nocturne.API.Services.Realtime;
 using Nocturne.API.Services.Treatments;
 using Nocturne.API.Services.V4;
@@ -92,6 +93,12 @@ public static class ServiceRegistrationExtensions
     /// controller actions and so cannot carry the attribute.
     /// </summary>
     public const string DocsRateLimitPolicy = "docs";
+
+    /// <summary>
+    /// Rate-limiting policy for connector credential verification, which is named here rather than
+    /// inline so the action's attribute and the registration read the same value.
+    /// </summary>
+    public const string ConnectorVerifyRateLimitPolicy = "connector-verify";
 
     /// <summary>
     /// The rate-limiting policies partitioned on the calling client, with the ceiling and window
@@ -156,6 +163,10 @@ public static class ServiceRegistrationExtensions
         // bounds how much of that a caller can spend. The page is server-rendered, so the address
         // only distinguishes contributors when it comes off the signed header.
         ("translation-contributions", 10, TimeSpan.FromHours(1)),
+        // Connector credential verification drives a live sign-in against the external provider
+        // from this deployment's address, so the ceiling bounds both provider-side lockouts and
+        // use of the API as a credential-testing proxy.
+        (ConnectorVerifyRateLimitPolicy, 5, TimeSpan.FromMinutes(5)),
         // The documentation surface (/scalar, /openapi) runs before tenant resolution and
         // authentication, and the reference reads the tenants table and may write that tenant's
         // OAuth client, so it is the one unauthenticated path that reaches the database that
@@ -252,6 +263,7 @@ public static class ServiceRegistrationExtensions
         // GitHub issue creation
         services.Configure<GitHubIssueOptions>(configuration.GetSection("GitHub"));
         services.AddSingleton<GitHubIssueService>();
+        services.AddScoped<ISupportDiagnosticsService, SupportDiagnosticsService>();
 
         // GitHub translation contribution PRs
         services.Configure<GitHubTranslationOptions>(configuration.GetSection("GitHub"));
@@ -321,6 +333,7 @@ public static class ServiceRegistrationExtensions
         services.AddSingleton<IShareTokenResolver>(sp => sp.GetRequiredService<ShareTokenCacheService>());
         services.AddSingleton<IShareTokenGenerator, ShareTokenGenerator>();
         services.AddScoped<IShareLinkService, ShareLinkService>();
+        services.AddScoped<IShareAppearanceReader>(sp => sp.GetRequiredService<IShareLinkService>());
         // Singleton because its consumer runs at startup outside any request scope; it creates its
         // own scope per notification.
         services.AddSingleton<IShareLinkRotatedNotifier, ShareLinkRotatedNotifier>();
@@ -396,7 +409,6 @@ public static class ServiceRegistrationExtensions
         services.AddSingleton<IAuthHandler, OAuthAccessTokenHandler>(); // Priority 150
         services.AddSingleton<IAuthHandler, DirectGrantTokenHandler>(); // Priority 150
         services.AddSingleton<IAuthHandler, LegacyJwtHandler>(); // Priority 200
-        services.AddSingleton<IAuthHandler, AccessTokenHandler>(); // Priority 300
         services.AddSingleton<IAuthHandler, ApiKeyHandler>(); // Priority 400
 
         // OIDC provider discovery HTTP client. The issuer URL is tenant configuration, and the
@@ -592,8 +604,10 @@ public static class ServiceRegistrationExtensions
         services.AddScoped<IBodyWeightService, BodyWeightService>();
         services.AddScoped<IStepCountService, StepCountService>();
 
-        // Tracker services
-        services.AddScoped<ITrackerTriggerService, TrackerTriggerService>();
+        // Tracker services. The trigger is the IDeviceEventReactor adapter rather than a service any
+        // caller invokes: it runs from the V4 device-event write chokepoint, which is what makes a
+        // connector-ingested site change advance a tracker the same way a hand-entered one does.
+        services.AddScoped<IDeviceEventReactor, TrackerTriggerService>();
         // Tracker notifications ride the alert engine: thresholds are synthesised into
         // managed tracker_age alert rules, backfilled once at startup for pre-existing
         // definitions (and self-healing if a managed rule is ever lost).
@@ -610,6 +624,7 @@ public static class ServiceRegistrationExtensions
         // Canonical glucose stream (single-stream view for v1/v3, alarms, unfiltered analytics)
         services.AddScoped<ICanonicalGlucoseService, CanonicalGlucoseService>();
         services.AddScoped<ICanonicalAlertEvaluator, CanonicalAlertEvaluator>();
+        services.AddSingleton<AlertEvaluationWatermark>();
 
         // Coach marks
         services.AddScoped<ICoachMarkService, CoachMarkService>();
@@ -669,6 +684,9 @@ public static class ServiceRegistrationExtensions
         services.AddScoped<IDeviceEventRepository, DeviceEventRepository>();
         services.AddScoped<IBolusCalculationRepository, BolusCalculationRepository>();
         services.AddScoped<IDeviceRepository, DeviceRepository>();
+
+        // Manually-entered lab results (outside the V4 sync/dedup family)
+        services.AddScoped<ILabHbA1cResultRepository, LabHbA1cResultRepository>();
 
         // V4 Snapshot Repositories
         services.AddScoped<IApsSnapshotRepository, ApsSnapshotRepository>();
@@ -889,7 +907,7 @@ public static class ServiceRegistrationExtensions
         // Background sweep
         services.AddHostedService<AlertSweepService>();
 
-        // Periodic watermark-driven deduplication reconciliation across active tenants
+        // Periodic cursor-driven deduplication reconciliation across active tenants
         services.AddHostedService<Nocturne.API.Services.BackgroundServices.DeduplicationReconciliationBackgroundService>();
 
         return services;
@@ -908,6 +926,7 @@ public static class ServiceRegistrationExtensions
         services.AddScoped<IDeduplicationService, DeduplicationService>();
         services.AddSingleton<ISecretEncryptionService, SecretEncryptionService>();
         services.AddScoped<IConnectorConfigurationService, ConnectorConfigurationService>();
+        services.AddScoped<IConnectorSyncCursorStore, ConnectorSyncCursorStore>();
         services.AddScoped<PlatformSettingsService>();
         services.AddScoped<IConnectorSyncService, ConnectorSyncService>();
         services.AddScoped<IConnectorCursorResetService, ConnectorCursorResetService>();
@@ -926,6 +945,11 @@ public static class ServiceRegistrationExtensions
             configuration,
             pollingService: typeof(ConnectorBackgroundService<,>)
         );
+        services.AddSingleton(ConnectorSyncBudget.FromConfiguration(configuration, services));
+        // After AddConnectors: the installers register the token caches as IConnectorCacheInvalidator
+        // with TryAddSingleton, which a prior registration of the interface would silently suppress.
+        services.AddSingleton<ConnectorPollerNudge>();
+        services.AddSingleton<IConnectorCacheInvalidator>(sp => sp.GetRequiredService<ConnectorPollerNudge>());
 
         // Demo service health monitor
         services.AddHttpClient("DemoServiceHealth");

@@ -13,12 +13,13 @@
     LoaderCircle,
     LogOut,
   } from "lucide-svelte";
-  import { formatDate } from "$lib/utils/formatting";
+  import { formatMediumDateTime } from "$lib/utils/formatting";
   import {
     list,
     revoke,
     revokeOthers,
   } from "$lib/api/generated/sessions.generated.remote";
+  import { describeSubmitError } from "$lib/forms/submit-error";
 
   type SessionInfo = {
     sessionId?: string;
@@ -74,7 +75,10 @@
       successMessage = "Session signed out.";
       clearMessages();
     } catch (err) {
-      errorMessage = "Failed to sign out the session. Please try again.";
+      errorMessage = describeSubmitError(
+        err,
+        "Failed to sign out the session. Please try again."
+      );
       clearMessages();
     } finally {
       isRevoking = null;
@@ -90,7 +94,10 @@
       successMessage = "All other sessions signed out.";
       clearMessages();
     } catch (err) {
-      errorMessage = "Failed to sign out other sessions. Please try again.";
+      errorMessage = describeSubmitError(
+        err,
+        "Failed to sign out other sessions. Please try again."
+      );
       clearMessages();
     } finally {
       isRevokingOthers = false;
@@ -210,7 +217,7 @@
                   >
                     <span class="flex items-center gap-1.5">
                       <Clock class="h-3 w-3" />
-                      Last active {formatDate(session.lastActiveAt)}
+                      Last active {formatMediumDateTime(session.lastActiveAt)}
                     </span>
                     {#if session.ipAddress}
                       <span>IP {session.ipAddress}</span>

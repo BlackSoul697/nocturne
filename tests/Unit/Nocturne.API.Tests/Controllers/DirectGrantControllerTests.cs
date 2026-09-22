@@ -13,6 +13,7 @@ using Nocturne.Core.Contracts.Multitenancy;
 using Nocturne.Core.Models.Authorization;
 using Nocturne.Infrastructure.Data;
 using Nocturne.Infrastructure.Data.Entities;
+using Nocturne.Infrastructure.Data.Extensions;
 using Nocturne.Tests.Shared.Infrastructure;
 using Xunit;
 
@@ -365,5 +366,113 @@ public class DirectGrantControllerTests : IDisposable
         var result = await _controller.Revoke(grantId);
 
         Assert.IsType<NoContentResult>(result);
+    }
+
+    /// <summary>
+    /// Puts a token on the tenant's device holder, which is where an imported uploader token lives.
+    /// </summary>
+    private async Task<Guid> SeedSiteTokenAsync()
+    {
+        var holderId = await _dbContext.DeviceSubjectOf(_testTenantId);
+        var grant = OAuthGrantEntity.AdoptedLegacyCredential(
+            holderId, "xDrip on the old phone", [Scope.GlucoseRead], tokenHash: "hash");
+        grant.TenantId = _testTenantId;
+
+        _dbContext.OAuthGrants.Add(grant);
+        await _dbContext.SaveChangesAsync();
+        return grant.Id;
+    }
+
+    private void GrantCallerScopes(params string[] scopes) =>
+        _controller.HttpContext.Items["GrantedScopes"] = scopes.ToHashSet();
+
+    [Fact]
+    [Trait("Category", "Unit")]
+    public async Task List_includes_the_sites_tokens_for_a_member_who_can_manage_them()
+    {
+        var siteToken = await SeedSiteTokenAsync();
+        GrantCallerScopes(Scope.MembersManage);
+
+        var result = await _controller.List();
+
+        // A site's uploader tokens belong to nobody, so they appear in no person's own list. If this
+        // screen cannot show them, nothing can, and revoking a lost phone stops being self-service.
+        var grants = Assert.IsType<List<DirectGrantDto>>(
+            Assert.IsType<OkObjectResult>(result.Result).Value);
+        grants.Should().ContainSingle(g => g.Id == siteToken)
+            .Which.IsLegacy.Should().BeTrue();
+    }
+
+    [Fact]
+    [Trait("Category", "Unit")]
+    public async Task List_tells_an_adopted_credential_apart_from_a_minted_one()
+    {
+        var adopted = await SeedSiteTokenAsync();
+
+        var minted = new OAuthGrantEntity
+        {
+            Id = Guid.CreateVersion7(),
+            SubjectId = await _dbContext.DeviceSubjectOf(_testTenantId),
+            GrantType = OAuthGrantTypes.Direct,
+            Scopes = [Scope.GlucoseRead],
+            Label = "Minted here",
+            TokenHash = "minted",
+            CreatedAt = DateTime.UtcNow,
+        };
+        _dbContext.OAuthGrants.Add(minted);
+        await _dbContext.SaveChangesAsync();
+
+        GrantCallerScopes(Scope.MembersManage);
+
+        var result = await _controller.List();
+
+        // The only thing standing between the two on this screen is the rotation prompt, so the
+        // flag has to survive the trip from the grant row to the response.
+        var grants = Assert.IsType<List<DirectGrantDto>>(
+            Assert.IsType<OkObjectResult>(result.Result).Value);
+        grants.Single(g => g.Id == adopted).IsLegacy.Should().BeTrue();
+        grants.Single(g => g.Id == minted.Id).IsLegacy.Should().BeFalse();
+    }
+
+    [Fact]
+    [Trait("Category", "Unit")]
+    public async Task List_hides_the_sites_tokens_from_a_member_who_cannot_manage_them()
+    {
+        await SeedSiteTokenAsync();
+        GrantCallerScopes(Scope.GlucoseRead);
+
+        var result = await _controller.List();
+
+        // A site's tokens are not the business of everyone who can read its data.
+        var grants = Assert.IsType<List<DirectGrantDto>>(
+            Assert.IsType<OkObjectResult>(result.Result).Value);
+        grants.Should().BeEmpty();
+    }
+
+    [Fact]
+    [Trait("Category", "Unit")]
+    public async Task Revoke_stops_a_site_token_for_a_member_who_can_manage_them()
+    {
+        var siteToken = await SeedSiteTokenAsync();
+        GrantCallerScopes(Scope.MembersManage);
+
+        var result = await _controller.Revoke(siteToken);
+
+        result.Should().BeOfType<NoContentResult>();
+        var reloaded = await _dbContext.OAuthGrants.SingleAsync(g => g.Id == siteToken);
+        reloaded.RevokedAt.Should().NotBeNull();
+    }
+
+    [Fact]
+    [Trait("Category", "Unit")]
+    public async Task Revoke_refuses_a_site_token_for_a_member_who_cannot_manage_them()
+    {
+        var siteToken = await SeedSiteTokenAsync();
+        GrantCallerScopes(Scope.GlucoseRead);
+
+        await _controller.Revoke(siteToken);
+
+        var reloaded = await _dbContext.OAuthGrants.SingleAsync(g => g.Id == siteToken);
+        reloaded.RevokedAt.Should().BeNull();
     }
 }

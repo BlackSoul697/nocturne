@@ -280,7 +280,6 @@ msgstr "UrgentHigh"
 #: src/lib/components/dashboard/glucose-chart/ChartLegend.svelte
 #: src/lib/components/dashboard/glucose-chart/dialogs/GlucoseInspectionDialog.svelte
 #: src/lib/components/reports/TIRStackedChart.svelte
-#: src/lib/components/reports/year-overview/HeatmapLegend.svelte
 #: src/lib/components/settings/alarm-profile/AlarmGeneralTab.svelte
 #: src/lib/components/settings/alarm-profile/AlarmGeneralTab.svelte
 #: src/lib/components/treatments/FoodNutritionalForm.svelte
@@ -301,7 +300,6 @@ msgstr "Low"
 #: src/lib/components/dashboard/glucose-chart/ChartLegend.svelte
 #: src/lib/components/dashboard/glucose-chart/dialogs/GlucoseInspectionDialog.svelte
 #: src/lib/components/reports/TIRStackedChart.svelte
-#: src/lib/components/reports/year-overview/HeatmapLegend.svelte
 #: src/lib/components/settings/alarm-profile/AlarmGeneralTab.svelte
 #: src/lib/components/settings/alarm-profile/AlarmGeneralTab.svelte
 #: src/lib/components/treatments/FoodNutritionalForm.svelte
@@ -362,7 +360,6 @@ msgstr "Failed to connect to real-time data"
 msgid "Syncing"
 msgstr "Syncing"
 
-#: src/lib/components/dashboard/RecentTreatmentsCard.svelte
 #: src/lib/components/icons/TreatmentTypeIcon.svelte
 #: src/lib/components/treatments/TreatmentsDataTable.svelte
 #: src/lib/components/treatments/edit-dialog/NoteFormFields.svelte
@@ -505,19 +502,19 @@ msgstr "Unnamed {0}"
 msgid "Unknown"
 msgstr "Unknown"
 
-#. 0: credential.createdAt ? formatDate(credential.createdAt) \\: "Unknown"
-#. 0: formatDate(grant.createdAt)
-#. 0: formatDate(app.createdAt)
+#. 0: credential.createdAt ? formatMediumDateTime(credential.createdAt) \\: "Unknown"
+#. 0: formatMediumDateTime(grant.createdAt)
+#. 0: formatMediumDateTime(app.createdAt)
 #: src/lib/components/account/SecurityCredentialCard.svelte
 #: src/lib/components/settings/ApiTokens.svelte
 #: src/lib/components/settings/ConnectedApps.svelte
 msgid "<0/> Created {0}"
 msgstr "<0/> Created {0}"
 
-#. 0: formatDate(credential.lastUsedAt)
-#. 0: formatDate(grant.lastUsedAt)
-#. 0: formatDate(app.lastUsedAt)
-#. 0: formatDate(identity.lastUsedAt)
+#. 0: formatMediumDateTime(credential.lastUsedAt)
+#. 0: formatMediumDateTime(grant.lastUsedAt)
+#. 0: formatMediumDateTime(app.lastUsedAt)
+#. 0: formatMediumDateTime(identity.lastUsedAt)
 #: src/lib/components/account/SecurityCredentialCard.svelte
 #: src/lib/components/settings/ApiTokens.svelte
 #: src/lib/components/settings/ConnectedApps.svelte
@@ -791,6 +788,7 @@ msgstr "Edit"
 #: src/lib/components/settings/CustomSoundUpload.svelte
 #: src/lib/components/treatments/TreatmentsDataTable.svelte
 #: src/routes/(authenticated)/clock/+page.svelte
+#: src/routes/(authenticated)/reports/ehba1c/+page.svelte
 #: src/routes/(authenticated)/reports/treatments/+page.svelte
 #: src/routes/(authenticated)/settings/timezone/+page.svelte
 #: src/routes/(authenticated)/settings/trackers/+page.svelte
@@ -1362,12 +1360,10 @@ msgstr "Upload Custom Sound"
 msgid "Ascending Volume"
 msgstr "Ascending Volume"
 
-#: ../portal/src/lib/components/DocsSidebar.svelte
 #: src/lib/components/admin/IntegrationsTabContent.svelte
 msgid "Telegram"
 msgstr "Telegram"
 
-#: ../portal/src/lib/components/DocsSidebar.svelte
 #: src/lib/components/admin/IntegrationsTabContent.svelte
 msgid "WhatsApp"
 msgstr "WhatsApp"
@@ -1833,7 +1829,7 @@ msgstr "Bolus:"
 #. 0: monthSummary.tdd.toFixed(1)
 #. 0: units.toFixed(1)
 #. 0: insulin.toFixed(1)
-#. 0: bolus.insulin
+#. 0: formatInsulinDisplay(bolus.insulin)
 #. 0: dayTotalInsulin.toFixed(1)
 #. 0: meal.totalInsulin.toFixed(1)
 #. 0: totalIob.toFixed(2)
@@ -1916,7 +1912,6 @@ msgstr "Profile"
 #: src/lib/components/dashboard/glucose-chart/ChartLegend.svelte
 #: src/lib/components/dashboard/glucose-chart/dialogs/GlucoseInspectionDialog.svelte
 #: src/lib/components/reports/TIRStackedChart.svelte
-#: src/lib/components/reports/year-overview/HeatmapLegend.svelte
 #: src/routes/(authenticated)/reports/executive-summary/+page.svelte
 #: src/routes/(authenticated)/reports/glucose-distribution/+page.svelte
 #: src/routes/(authenticated)/reports/glucose-distribution/+page.svelte
@@ -1948,8 +1943,6 @@ msgstr "Avg TIR"
 
 #: src/lib/components/calendar/CalendarMonthSummary.svelte
 #: src/lib/components/reports/GlycemicRiskIndexChart.svelte
-#: src/lib/components/reports/year-overview/HeatmapLegend.svelte
-#: src/lib/components/reports/year-overview/HeatmapLegend.svelte
 #: src/routes/(authenticated)/reports/year-overview/+page.svelte
 msgid "Avg Glucose"
 msgstr "Avg Glucose"
@@ -3524,7 +3517,6 @@ msgstr "Devices"
 msgid "Insulins"
 msgstr "Insulins"
 
-#: ../portal/src/lib/components/DocsSidebar.svelte
 #: src/lib/components/rbac/PermissionCategorySelector.svelte
 #: src/lib/components/rbac/PermissionSummary.svelte
 #: src/lib/components/settings/TokenScopeSelector.svelte
@@ -3533,13 +3525,12 @@ msgstr "Insulins"
 msgid "Alerts"
 msgstr "Alerts"
 
-#: ../portal/src/lib/components/DocsSidebar.svelte
-#: src/routes/(authenticated)/settings/+page.svelte
 #: src/routes/(authenticated)/settings/members/+page.svelte
 msgid "Sharing & Privacy"
 msgstr "Sharing & Privacy"
 
 #: src/lib/components/layout/BackupSignInPrompt.svelte
+#: src/lib/components/layout/SessionExpiryWarning.svelte
 #: src/lib/components/meal-matching/MealMatchReviewDialog.svelte
 #: src/lib/components/meals/MealSuggestionRow.svelte
 #: src/routes/(authenticated)/settings/admin/tenants/+page.svelte
@@ -3649,7 +3640,6 @@ msgid "Last 24 hours"
 msgstr "Last 24 hours"
 
 #: ../portal/src/lib/components/features/ReportsDemo.svelte
-#: src/lib/components/dashboard/RecentTreatmentsCard.svelte
 #: src/lib/components/dashboard/glucose-chart/ChartLegend.svelte
 #: src/lib/components/dashboard/glucose-chart/ChartTooltip.svelte
 #: src/lib/components/dashboard/widgets/TddWidget.svelte
@@ -3666,7 +3656,6 @@ msgstr "Last 24 hours"
 msgid "Bolus"
 msgstr "Bolus"
 
-#: src/lib/components/dashboard/RecentTreatmentsCard.svelte
 #: src/lib/components/dashboard/glucose-chart/ChartLegend.svelte
 #: src/lib/components/dashboard/glucose-chart/ChartTooltip.svelte
 #: src/lib/components/meals/MealsTable.svelte
@@ -3681,14 +3670,12 @@ msgstr "Bolus"
 msgid "Carbs"
 msgstr "Carbs"
 
-#: src/lib/components/dashboard/RecentTreatmentsCard.svelte
 #: src/lib/components/icons/TreatmentTypeIcon.svelte
 #: src/lib/components/treatments/TreatmentsDataTable.svelte
 #: src/routes/(authenticated)/reports/treatments/+page.svelte
 msgid "BG Check"
 msgstr "BG Check"
 
-#: src/lib/components/dashboard/RecentTreatmentsCard.svelte
 #: src/lib/components/icons/TreatmentTypeIcon.svelte
 #: src/lib/components/treatments/TreatmentFoodEntryEditDialog.svelte
 #: src/lib/components/treatments/TreatmentsDataTable.svelte
@@ -3696,7 +3683,6 @@ msgstr "BG Check"
 msgid "Note"
 msgstr "Note"
 
-#: src/lib/components/dashboard/RecentTreatmentsCard.svelte
 #: src/lib/components/treatments/TreatmentsDataTable.svelte
 #: src/routes/(authenticated)/reports/treatments/+page.svelte
 msgid "Device Event"
@@ -3952,6 +3938,7 @@ msgid "Rate (U/hr)"
 msgstr "Rate (U/hr)"
 
 #: src/lib/components/entries/BolusSection.svelte
+#: src/lib/components/reports/year-overview/HeatmapLegend.svelte
 msgid "<0/> Advanced"
 msgstr "<0/> Advanced"
 
@@ -3991,11 +3978,8 @@ msgstr "<0/> Add Food"
 msgid "No foods added yet."
 msgstr "No foods added yet."
 
-#. 0: entry.data.carbs
-#. 0: entry.data.carbs
-#. 0: carbGrams
-#. 0: carbGrams
-#. 0: record.data.carbs
+#. 0: formatCarbDisplay(carbGrams)
+#. 0: formatCarbDisplay(carbGrams)
 #. 0: food.displayCarbs
 #. 0: foodEntry.carbs
 #. 0: d.linkedCarbs
@@ -4005,9 +3989,6 @@ msgstr "No foods added yet."
 #. 0: food.carbs
 #. 0: food.carbs
 #. 0: (insulinStats.totalCarbs ?? 0).toFixed(0)
-#: src/lib/components/dashboard/RecentTreatmentsCard.svelte
-#: src/lib/components/dashboard/glucose-chart/dialogs/TreatmentDisambiguationDialog.svelte
-#: src/lib/components/dashboard/glucose-chart/dialogs/TreatmentInspectionDialog.svelte
 #: src/lib/components/dashboard/glucose-chart/dialogs/TreatmentInspectionDialog.svelte
 #: src/lib/components/dashboard/glucose-chart/dialogs/TreatmentInspectionDialog.svelte
 #: src/lib/components/entries/CarbIntakeSection.svelte
@@ -4545,11 +4526,6 @@ msgstr "Reports"
 msgid "Clock"
 msgstr "Clock"
 
-#: ../portal/src/lib/components/DocsSidebar.svelte
-#: ../portal/src/lib/components/DocsSidebar.svelte
-#: ../portal/src/lib/components/DocsSidebar.svelte
-#: ../portal/src/lib/components/DocsSidebar.svelte
-#: ../portal/src/lib/components/DocsSidebar.svelte
 #: src/routes/(authenticated)/compatibility/[id]/+page.svelte
 msgid "Overview"
 msgstr "Overview"
@@ -4580,7 +4556,6 @@ msgstr "Tools"
 msgid "Settings"
 msgstr "Settings"
 
-#: src/routes/(authenticated)/settings/+page.svelte
 #: src/routes/(unauthenticated)/setup/+page@.svelte
 msgid "Setup"
 msgstr "Setup"
@@ -4588,39 +4563,33 @@ msgstr "Setup"
 #: src/lib/components/layout/UserMenu.svelte
 #: src/lib/components/rbac/PermissionCategorySelector.svelte
 #: src/lib/components/settings/TokenScopeSelector.svelte
-#: src/routes/(authenticated)/settings/+page.svelte
 #: src/routes/(authenticated)/settings/account/+page.svelte
 #: src/routes/(unauthenticated)/setup/+page@.svelte
 msgid "Account"
 msgstr "Account"
 
 #: src/lib/components/rbac/PermissionCategorySelector.svelte
-#: src/routes/(authenticated)/settings/+page.svelte
 #: src/routes/(authenticated)/settings/patient/+page.svelte
 msgid "Patient Record"
 msgstr "Patient Record"
 
-#: src/routes/(authenticated)/settings/+page.svelte
 #: src/routes/(authenticated)/settings/appearance/+page.svelte
 msgid "Appearance"
 msgstr "Appearance"
 
-#: src/routes/(authenticated)/settings/+page.svelte
-msgid "Therapy"
-msgstr "Therapy"
+#~ msgid "Therapy"
+#~ msgstr "Therapy"
 
 #: src/routes/(authenticated)/reports/data-quality/+page.svelte
-#: src/routes/(authenticated)/settings/+page.svelte
 #: src/routes/(authenticated)/settings/data-quality/+page.svelte
 msgid "Data Quality"
 msgstr "Data Quality"
 
-#: src/routes/(authenticated)/settings/+page.svelte
 #: src/routes/(authenticated)/settings/trackers/+page.svelte
 msgid "Notifications & Trackers"
 msgstr "Notifications & Trackers"
 
-#: src/routes/(authenticated)/settings/+page.svelte
+#: src/routes/(authenticated)/settings/connectors/+page.svelte
 msgid "Connectors & Apps"
 msgstr "Connectors & Apps"
 
@@ -4629,12 +4598,10 @@ msgstr "Connectors & Apps"
 msgid "Audit Log"
 msgstr "Audit Log"
 
-#: src/routes/(authenticated)/settings/+page.svelte
 #: src/routes/(authenticated)/settings/support/+page.svelte
 msgid "Support & Community"
 msgstr "Support & Community"
 
-#: src/routes/(authenticated)/settings/+page.svelte
 #: src/routes/(authenticated)/settings/admin/tenants/+page.svelte
 msgid "Tenant Management"
 msgstr "Tenant Management"
@@ -5040,7 +5007,7 @@ msgstr "· {0}/{1} uses"
 msgid "· Last 24 hours only"
 msgstr "· Last 24 hours only"
 
-#. 0: formatDate(invite.expiresAt)
+#. 0: formatMediumDateTime(invite.expiresAt)
 #: src/lib/components/members/PendingInvitesList.svelte
 msgid "Expires {0} <0/> <1/>"
 msgstr "Expires {0} <0/> <1/>"
@@ -5049,7 +5016,7 @@ msgstr "Expires {0} <0/> <1/>"
 msgid "Used by"
 msgstr "Used by"
 
-#. 0: formatDate(usage.joinedAt)
+#. 0: formatMediumDateTime(usage.joinedAt)
 #: src/lib/components/members/PendingInvitesList.svelte
 msgid "on {0}"
 msgstr "on {0}"
@@ -5476,13 +5443,13 @@ msgstr "<0/> Save Changes"
 msgid "<0/> 24-hour limit"
 msgstr "<0/> 24-hour limit"
 
-#. 0: formatDate(member.sysCreatedAt)
+#. 0: formatMediumDateTime(member.sysCreatedAt)
 #: src/lib/components/members/MemberCard.svelte
 msgid "<0/> Joined {0}"
 msgstr "<0/> Joined {0}"
 
-#. 0: formatDate(member.lastUsedAt)
-#. 0: formatDate(session.lastActiveAt)
+#. 0: formatMediumDateTime(member.lastUsedAt)
+#. 0: formatMediumDateTime(session.lastActiveAt)
 #: src/lib/components/members/MemberCard.svelte
 #: src/lib/components/settings/ActiveSessions.svelte
 msgid "<0/> Last active {0}"
@@ -5695,7 +5662,6 @@ msgid "Identity"
 msgstr "Identity"
 
 #: src/lib/components/rbac/PermissionCategorySelector.svelte
-#: src/routes/(authenticated)/settings/+page.svelte
 #: src/routes/(authenticated)/settings/admin/+page.svelte
 msgid "Administration"
 msgstr "Administration"
@@ -5936,13 +5902,7 @@ msgid "Average"
 msgstr "Average"
 
 #. 0: Math.round(currentGlucose)
-#. 0: entry.data.mgdl
-#. 0: entry.data.mgdl
-#. 0: record.data.mgdl
 #: ../portal/src/lib/components/features/AlarmsDemo.svelte
-#: src/lib/components/dashboard/RecentTreatmentsCard.svelte
-#: src/lib/components/dashboard/glucose-chart/dialogs/TreatmentDisambiguationDialog.svelte
-#: src/lib/components/dashboard/glucose-chart/dialogs/TreatmentInspectionDialog.svelte
 msgid "{0} mg/dL"
 msgstr "{0} mg/dL"
 
@@ -6518,7 +6478,6 @@ msgstr "Very Low"
 
 #: src/lib/components/dashboard/glucose-chart/ChartLegend.svelte
 #: src/lib/components/reports/TIRStackedChart.svelte
-#: src/lib/components/reports/year-overview/HeatmapLegend.svelte
 #: src/routes/(authenticated)/reports/glucose-distribution/+page.svelte
 msgid "Very High"
 msgstr "Very High"
@@ -6527,12 +6486,12 @@ msgstr "Very High"
 msgid "Treatment Events"
 msgstr "Treatment Events"
 
-#. 0: treatment.insulin
+#. 0: formatInsulinDisplay(treatment.insulin)
 #: src/lib/components/reports/TreatmentEvents.svelte
 msgid "• {0}U"
 msgstr "• {0}U"
 
-#. 0: treatment.carbs
+#. 0: formatCarbDisplay(treatment.carbs)
 #: src/lib/components/reports/TreatmentEvents.svelte
 msgid "• {0}g carbs"
 msgstr "• {0}g carbs"
@@ -7104,7 +7063,7 @@ msgstr "<0/> Link an account"
 msgid "Unknown provider"
 msgstr "Unknown provider"
 
-#. 0: formatDate(identity.linkedAt)
+#. 0: formatMediumDateTime(identity.linkedAt)
 #: src/lib/components/settings/LinkedOidcIdentities.svelte
 msgid "<0/> Linked {0}"
 msgstr "<0/> Linked {0}"
@@ -7559,17 +7518,14 @@ msgstr "CGM source"
 msgid "Your connector type"
 msgstr "Your connector type"
 
-#: src/lib/components/support/IssueCreatorDialog.svelte
-msgid "Recent logs"
-msgstr "Recent logs"
+#~ msgid "Recent logs"
+#~ msgstr "Recent logs"
 
-#: src/lib/components/support/IssueCreatorDialog.svelte
-msgid "API calls and debug information"
-msgstr "API calls and debug information"
+#~ msgid "API calls and debug information"
+#~ msgstr "API calls and debug information"
 
-#: src/lib/components/support/IssueCreatorDialog.svelte
-msgid "Your configuration (no passwords/tokens)"
-msgstr "Your configuration (no passwords/tokens)"
+#~ msgid "Your configuration (no passwords/tokens)"
+#~ msgstr "Your configuration (no passwords/tokens)"
 
 #: src/lib/components/support/IssueCreatorDialog.svelte
 msgid "<0/> Preview Issue"
@@ -8244,6 +8200,7 @@ msgstr "Portions"
 msgid "Scale down"
 msgstr "Scale down"
 
+#: src/lib/components/reports/year-overview/HeatmapLegend.svelte
 #: src/lib/components/treatments/TreatmentFoodEntryEditDialog.svelte
 msgid "Scale"
 msgstr "Scale"
@@ -8300,6 +8257,7 @@ msgid "<0/> Scale to fill remaining {0}g"
 msgstr "<0/> Scale to fill remaining {0}g"
 
 #: src/lib/components/treatments/TreatmentPortionsForm.svelte
+#: src/routes/(authenticated)/reports/ehba1c/+page.svelte
 msgid "Note (optional)"
 msgstr "Note (optional)"
 
@@ -8468,7 +8426,6 @@ msgstr "Polling Active"
 msgid "Polling Paused"
 msgstr "Polling Paused"
 
-#: ../portal/src/lib/components/DocsSidebar.svelte
 #: ../portal/src/lib/components/SiteFooter.svelte
 #: src/routes/(authenticated)/compatibility/+page.svelte
 msgid "Configuration"
@@ -10336,18 +10293,14 @@ msgstr "<0/> Carbs {0}g"
 msgid "No data for 90-day average"
 msgstr "No data for 90-day average"
 
-#: src/lib/components/reports/year-overview/HeatmapLegend.svelte
-msgid "Glucose color scale legend"
-msgstr "Glucose color scale legend"
+#~ msgid "Glucose color scale legend"
+#~ msgstr "Glucose color scale legend"
 
-#: src/lib/components/reports/year-overview/HeatmapLegend.svelte
-msgid "<0/> Other Data (no glucose)"
-msgstr "<0/> Other Data (no glucose)"
+#~ msgid "<0/> Other Data (no glucose)"
+#~ msgstr "<0/> Other Data (no glucose)"
 
-#. 0: metricLabel.toLowerCase()
-#: src/lib/components/reports/year-overview/HeatmapLegend.svelte
-msgid "<0/> No {0} data"
-msgstr "<0/> No {0} data"
+#~ msgid "<0/> No {0} data"
+#~ msgstr "<0/> No {0} data"
 
 #. 0: days.filter((d\\: any) => (d.totalCount ?? 0) > 0).length
 #: src/lib/components/reports/year-overview/YearHeatmap.svelte
@@ -11479,6 +11432,7 @@ msgid "For Healthcare Providers"
 msgstr "For Healthcare Providers"
 
 #: ../portal/src/routes/docs/installation/docker-compose/+page.svelte
+#: ../portal/src/routes/docs/installation/oracle-cloud/+page.svelte
 #: ../portal/src/routes/docs/installation/portainer/+page.svelte
 #: src/routes/(authenticated)/reports/agp/+page.svelte
 msgid "Next Steps"
@@ -12058,7 +12012,7 @@ msgstr "Day-by-Day"
 msgid "All Reports"
 msgstr "All Reports"
 
-#. 0: formatDate(new Date(lastUpdated))
+#. 0: formatMediumDateTime(new Date(lastUpdated))
 #: src/routes/(authenticated)/reports/executive-summary/+page.svelte
 msgid "Report generated: {0}"
 msgstr "Report generated: {0}"
@@ -12117,8 +12071,10 @@ msgstr "A1c (DCCT)"
 #~ msgid "A1c (IFCC)"
 #~ msgstr "A1c (IFCC)"
 
-#~ msgid "{0} mmol/mol"
-#~ msgstr "{0} mmol/mol"
+#. 0: Math.round(toIfccMmolMol(percent))
+#: src/routes/(authenticated)/reports/ehba1c/+page.svelte
+msgid "{0} mmol/mol"
+msgstr "{0} mmol/mol"
 
 #: src/routes/(authenticated)/reports/glucose-distribution/+page.svelte
 msgid "Glycemic Variability"
@@ -12674,6 +12630,8 @@ msgstr "Error Loading Week Comparison"
 
 #: ../portal/src/lib/components/features/AlarmsDemo.svelte
 #: src/lib/components/alerts/PlaybackStrip.svelte
+#: src/lib/components/reports/year-overview/ColorFocusRange.svelte
+#: src/lib/components/reports/year-overview/ColorFocusRange.svelte
 #: src/routes/(authenticated)/reports/week-to-week/+page.svelte
 msgid "Reset"
 msgstr "Reset"
@@ -12786,7 +12744,6 @@ msgstr "Failed to deny request. Please try again."
 msgid "Access Requests - Settings - Nocturne"
 msgstr "Access Requests - Settings - Nocturne"
 
-#: src/routes/(authenticated)/settings/+page.svelte
 #: src/routes/(authenticated)/settings/access-requests/+page.svelte
 msgid "Access Requests"
 msgstr "Access Requests"
@@ -13421,9 +13378,8 @@ msgstr "Sync started"
 msgid "Connectors & Apps - Settings - Nocturne"
 msgstr "Connectors & Apps - Settings - Nocturne"
 
-#: src/routes/(authenticated)/settings/connectors/+page.svelte
-msgid "Connectors & Connected Apps"
-msgstr "Connectors & Connected Apps"
+#~ msgid "Connectors & Connected Apps"
+#~ msgstr "Connectors & Connected Apps"
 
 #: src/routes/(authenticated)/settings/connectors/+page.svelte
 msgid "Manage data sources, set up new connections, and control app access"
@@ -13465,43 +13421,40 @@ msgstr "Base URL"
 msgid "<0/> Create API key"
 msgstr "<0/> Create API key"
 
-#: src/routes/(authenticated)/settings/connectors/+page.svelte
+#: src/lib/components/settings/DataMaintenanceCard.svelte
 msgid "<0/> Data Maintenance"
 msgstr "<0/> Data Maintenance"
 
-#: src/routes/(authenticated)/settings/connectors/+page.svelte
+#: src/lib/components/settings/DataMaintenanceCard.svelte
 msgid "Administrative tools for managing your data"
 msgstr "Administrative tools for managing your data"
 
-#: src/routes/(authenticated)/settings/connectors/+page.svelte
+#: src/lib/components/settings/DataMaintenanceCard.svelte
 msgid "Deduplicate Records"
 msgstr "Deduplicate Records"
 
-#: src/routes/(authenticated)/settings/connectors/+page.svelte
+#: src/lib/components/settings/DataMaintenanceCard.svelte
 msgid "<0/> Deduplication Running..."
 msgstr "<0/> Deduplication Running..."
 
-#: src/routes/(authenticated)/settings/connectors/+page.svelte
+#: src/lib/components/settings/DataMaintenanceCard.svelte
 msgid "<0/> Run Deduplication"
 msgstr "<0/> Run Deduplication"
 
 #: src/routes/(authenticated)/settings/admin/+page.svelte
-#: src/routes/(authenticated)/settings/connectors/+page.svelte
 msgid "<0/> Integrations"
 msgstr "<0/> Integrations"
 
-#: src/routes/(authenticated)/settings/connectors/+page.svelte
-msgid "Connect Nocturne to chat platforms and other external services"
-msgstr "Connect Nocturne to chat platforms and other external services"
+#~ msgid "Connect Nocturne to chat platforms and other external services"
+#~ msgstr "Connect Nocturne to chat platforms and other external services"
 
-#: ../portal/src/lib/components/DocsSidebar.svelte
 #: ../portal/src/lib/components/SiteFooter.svelte
 #: src/lib/components/admin/IntegrationsTabContent.svelte
-#: src/routes/(authenticated)/settings/connectors/+page.svelte
+#: src/routes/(authenticated)/alerts/+page.svelte
 msgid "Discord"
 msgstr "Discord"
 
-#: src/routes/(authenticated)/settings/connectors/+page.svelte
+#: src/routes/(authenticated)/alerts/+page.svelte
 msgid "Link a Discord account to receive alerts and use the Nocturne bot"
 msgstr "Link a Discord account to receive alerts and use the Nocturne bot"
 
@@ -13831,12 +13784,12 @@ msgstr "Completed migrations will appear here"
 msgid "Unknown Source"
 msgstr "Unknown Source"
 
-#. 0: formatDate(job.startedAt)
+#. 0: formatMediumDateTime(job.startedAt)
 #: src/routes/(authenticated)/settings/migration/+page.svelte
 msgid "Started: {0}"
 msgstr "Started: {0}"
 
-#. 0: formatDate(job.completedAt)
+#. 0: formatMediumDateTime(job.completedAt)
 #: src/routes/(authenticated)/settings/migration/+page.svelte
 msgid "Completed: {0}"
 msgstr "Completed: {0}"
@@ -13845,7 +13798,7 @@ msgstr "Completed: {0}"
 msgid "Known Sources"
 msgstr "Known Sources"
 
-#. 0: formatDate(source.lastMigrationAt)
+#. 0: formatMediumDateTime(source.lastMigrationAt)
 #: src/routes/(authenticated)/settings/migration/+page.svelte
 msgid "Last migration: {0}"
 msgstr "Last migration: {0}"
@@ -15000,12 +14953,12 @@ msgstr "Inspect Point"
 msgid "Multiple data types available at this time. Choose what to inspect."
 msgstr "Multiple data types available at this time. Choose what to inspect."
 
-#. 0: bolusInsulin; 1: bolusType ? ` ${bolusType}` \\: ""
+#. 0: formatInsulinDisplay(bolusInsulin); 1: bolusType ? ` ${bolusType}` \\: ""
 #: src/lib/components/dashboard/glucose-chart/dialogs/TreatmentInspectionDialog.svelte
 msgid "<0/> {0}U{1}"
 msgstr "<0/> {0}U{1}"
 
-#. 0: carbGrams; 1: carbLabel ? ` ${carbLabel}` \\: " carbs"
+#. 0: formatCarbDisplay(carbGrams); 1: carbLabel ? ` ${carbLabel}` \\: " carbs"
 #: src/lib/components/dashboard/glucose-chart/dialogs/TreatmentInspectionDialog.svelte
 msgid "{0}g{1}"
 msgstr "{0}g{1}"
@@ -16287,10 +16240,8 @@ msgstr "Connectors"
 msgid "Settings - Nocturne"
 msgstr "Settings - Nocturne"
 
-#. 0: entry.data.insulin
-#: src/lib/components/dashboard/RecentTreatmentsCard.svelte
-msgid "{0}u insulin"
-msgstr "{0}u insulin"
+#~ msgid "{0}u insulin"
+#~ msgstr "{0}u insulin"
 
 #~ msgid "Email"
 #~ msgstr "Email"
@@ -16324,12 +16275,10 @@ msgstr "Product"
 msgid "FAQ"
 msgstr "FAQ"
 
-#: ../portal/src/lib/components/DocsSidebar.svelte
 #: ../portal/src/lib/components/SiteFooter.svelte
 msgid "Getting Started"
 msgstr "Getting Started"
 
-#: ../portal/src/lib/components/DocsSidebar.svelte
 #: ../portal/src/lib/components/SiteFooter.svelte
 #: ../portal/src/routes/faq/+page.svelte
 msgid "Installation"
@@ -16344,7 +16293,6 @@ msgstr "Community"
 msgid "<0/> GitHub"
 msgstr "<0/> GitHub"
 
-#: ../portal/src/lib/components/DocsSidebar.svelte
 #: ../portal/src/routes/docs/+page.svelte
 msgid "Quick Start"
 msgstr "Quick Start"
@@ -16358,12 +16306,10 @@ msgstr "Get up and running with Nocturne in just a few minutes."
 msgid "Installation Guide"
 msgstr "Installation Guide"
 
-#: ../portal/src/lib/components/DocsSidebar.svelte
 #: ../portal/src/routes/docs/+page.svelte
 msgid "Configuration Guide"
 msgstr "Configuration Guide"
 
-#: ../portal/src/lib/components/DocsSidebar.svelte
 #: ../portal/src/routes/docs/+page.svelte
 msgid "API Reference"
 msgstr "API Reference"
@@ -16602,13 +16548,11 @@ msgstr "Minimum"
 msgid "RAM"
 msgstr "RAM"
 
-#: ../portal/src/lib/components/docs/SystemRequirements.svelte
-msgid "1 GB"
-msgstr "1 GB"
+#~ msgid "1 GB"
+#~ msgstr "1 GB"
 
-#: ../portal/src/lib/components/docs/SystemRequirements.svelte
-msgid "2 GB+"
-msgstr "2 GB+"
+#~ msgid "2 GB+"
+#~ msgstr "2 GB+"
 
 #: ../portal/src/lib/components/docs/SystemRequirements.svelte
 msgid "Storage"
@@ -16632,7 +16576,6 @@ msgstr "Docker"
 msgid "Latest"
 msgstr "Latest"
 
-#: ../portal/src/lib/components/DocsSidebar.svelte
 #: ../portal/src/lib/components/docs/SystemRequirements.svelte
 #: ../portal/src/routes/docs/installation/+page.svelte
 #: ../portal/src/routes/docs/installation/+page.svelte
@@ -16657,7 +16600,6 @@ msgstr "Raspberry Pi"
 msgid "Troubleshooting"
 msgstr "Troubleshooting"
 
-#: ../portal/src/lib/components/DocsSidebar.svelte
 #: ../portal/src/routes/docs/installation/+page.svelte
 #: ../portal/src/routes/docs/installation/+page.svelte
 #: ../portal/src/routes/docs/installation/portainer/+page.svelte
@@ -16771,7 +16713,6 @@ msgstr "Search timezones..."
 msgid "No timezone found."
 msgstr "No timezone found."
 
-#: ../portal/src/lib/components/DocsSidebar.svelte
 #: ../portal/src/routes/docs/installation/+page.svelte
 #: ../portal/src/routes/docs/installation/byo-postgres/+page.svelte
 msgid "Bring Your Own PostgreSQL"
@@ -16980,7 +16921,7 @@ msgstr "Failed to load clock faces"
 msgid "Month-to-Month Report — {0} {1}"
 msgstr "Month-to-Month Report — {0} {1}"
 
-#. 0: formatDate(new Date())
+#. 0: formatMediumDateTime(new Date())
 #: src/routes/(authenticated)/calendar/+page.svelte
 msgid "Generated {0}"
 msgstr "Generated {0}"
@@ -17027,62 +16968,48 @@ msgstr "There aren't enough glucose readings in the selected date range to gener
 msgid "This report is for informational purposes. Always consult your healthcare provider for medical advice."
 msgstr "This report is for informational purposes. Always consult your healthcare provider for medical advice."
 
-#: src/routes/(authenticated)/settings/+page.svelte
-msgid "Profile, passkeys, authenticator apps, and recovery codes."
-msgstr "Profile, passkeys, authenticator apps, and recovery codes."
+#~ msgid "Profile, passkeys, authenticator apps, and recovery codes."
+#~ msgstr "Profile, passkeys, authenticator apps, and recovery codes."
 
-#: src/routes/(authenticated)/settings/+page.svelte
-msgid "Details for the person being monitored."
-msgstr "Details for the person being monitored."
+#~ msgid "Details for the person being monitored."
+#~ msgstr "Details for the person being monitored."
 
-#: src/routes/(authenticated)/settings/+page.svelte
-msgid "Theme, units, and display preferences."
-msgstr "Theme, units, and display preferences."
+#~ msgid "Theme, units, and display preferences."
+#~ msgstr "Theme, units, and display preferences."
 
-#: src/routes/(authenticated)/settings/+page.svelte
-msgid "Targets, basal rates, ratios, and treatment profiles."
-msgstr "Targets, basal rates, ratios, and treatment profiles."
+#~ msgid "Targets, basal rates, ratios, and treatment profiles."
+#~ msgstr "Targets, basal rates, ratios, and treatment profiles."
 
-#: src/routes/(authenticated)/settings/+page.svelte
-msgid "Data validation and cleanup settings."
-msgstr "Data validation and cleanup settings."
+#~ msgid "Data validation and cleanup settings."
+#~ msgstr "Data validation and cleanup settings."
 
-#: src/routes/(authenticated)/settings/+page.svelte
-msgid "Alerts, reminders, and tracked events."
-msgstr "Alerts, reminders, and tracked events."
+#~ msgid "Alerts, reminders, and tracked events."
+#~ msgstr "Alerts, reminders, and tracked events."
 
-#: src/routes/(authenticated)/settings/+page.svelte
 #: src/routes/(authenticated)/settings/access/+page.svelte
 msgid "Active Access"
 msgstr "Active Access"
 
-#: src/routes/(authenticated)/settings/+page.svelte
-msgid "Signed-in devices, guest links, and connected apps."
-msgstr "Signed-in devices, guest links, and connected apps."
+#~ msgid "Signed-in devices, guest links, and connected apps."
+#~ msgstr "Signed-in devices, guest links, and connected apps."
 
-#: src/routes/(authenticated)/settings/+page.svelte
-msgid "Connect data sources and authorized devices."
-msgstr "Connect data sources and authorized devices."
+#~ msgid "Connect data sources and authorized devices."
+#~ msgstr "Connect data sources and authorized devices."
 
-#: src/routes/(authenticated)/settings/+page.svelte
-msgid "Members, invitations, and public sharing."
-msgstr "Members, invitations, and public sharing."
+#~ msgid "Members, invitations, and public sharing."
+#~ msgstr "Members, invitations, and public sharing."
 
-#: src/routes/(authenticated)/settings/+page.svelte
-msgid "Get help and connect with the community."
-msgstr "Get help and connect with the community."
+#~ msgid "Get help and connect with the community."
+#~ msgstr "Get help and connect with the community."
 
-#: src/routes/(authenticated)/settings/+page.svelte
-msgid "Identity providers and integrations."
-msgstr "Identity providers and integrations."
+#~ msgid "Identity providers and integrations."
+#~ msgstr "Identity providers and integrations."
 
-#: src/routes/(authenticated)/settings/+page.svelte
-msgid "Tenant details and platform administrators."
-msgstr "Tenant details and platform administrators."
+#~ msgid "Tenant details and platform administrators."
+#~ msgstr "Tenant details and platform administrators."
 
-#: src/routes/(authenticated)/settings/+page.svelte
-msgid "Re-run the guided onboarding checklist."
-msgstr "Re-run the guided onboarding checklist."
+#~ msgid "Re-run the guided onboarding checklist."
+#~ msgstr "Re-run the guided onboarding checklist."
 
 #: src/routes/(authenticated)/settings/+page.svelte
 msgid "Manage your account, data, and how Nocturne works for you."
@@ -17222,7 +17149,6 @@ msgstr "Select a tracker"
 msgid "h (negative = before a scheduled event)"
 msgstr "h (negative = before a scheduled event)"
 
-#: ../portal/src/lib/components/DocsSidebar.svelte
 #: src/lib/components/admin/IntegrationsTabContent.svelte
 msgid "Slack"
 msgstr "Slack"
@@ -17524,12 +17450,9 @@ msgstr "This process will scan all your glucose records, treatments, and state s
 #~ msgid "{0} synced successfully."
 #~ msgstr "{0} synced successfully."
 
-#. 0: entry.data.units
-#: src/lib/components/dashboard/RecentTreatmentsCard.svelte
-msgid "{0}u basal"
-msgstr "{0}u basal"
+#~ msgid "{0}u basal"
+#~ msgstr "{0}u basal"
 
-#: src/lib/components/dashboard/RecentTreatmentsCard.svelte
 #: src/lib/components/treatments/TreatmentsDataTable.svelte
 #: src/routes/(authenticated)/reports/treatments/+page.svelte
 msgid "Long-acting injection"
@@ -18726,9 +18649,8 @@ msgstr "<0>What this shows:</0> This report averages your glucose readings acros
 msgid "Active Access - Nocturne"
 msgstr "Active Access - Nocturne"
 
-#: src/routes/(authenticated)/settings/access/+page.svelte
-msgid "Everything currently able to access this account's data."
-msgstr "Everything currently able to access this account's data."
+#~ msgid "Everything currently able to access this account's data."
+#~ msgstr "Everything currently able to access this account's data."
 
 #: src/routes/(authenticated)/reports/treatments/+page.svelte
 msgid "Record created successfully"
@@ -18824,16 +18746,16 @@ msgstr "Are you sure you want to remove \"{0}\"? You will no longer be able to s
 msgid "Create an API key below to authenticate uploaders. Each key is scoped to specific permissions and can be revoked independently."
 msgstr "Create an API key below to authenticate uploaders. Each key is scoped to specific permissions and can be revoked independently."
 
-#: src/routes/(authenticated)/settings/connectors/+page.svelte
+#: src/lib/components/settings/DataMaintenanceCard.svelte
 msgid "Link records from multiple data sources that represent the same underlying event. This improves data quality when the same glucose readings or treatments are uploaded from different apps."
 msgstr "Link records from multiple data sources that represent the same underlying event. This improves data quality when the same glucose readings or treatments are uploaded from different apps."
 
+#: src/lib/components/settings/DataMaintenanceCard.svelte
 #: src/routes/(authenticated)/settings/admin/connector-cursors/+page.svelte
-#: src/routes/(authenticated)/settings/connectors/+page.svelte
 msgid "Reset Connector Cursors"
 msgstr "Reset Connector Cursors"
 
-#: src/routes/(authenticated)/settings/connectors/+page.svelte
+#: src/lib/components/settings/DataMaintenanceCard.svelte
 msgid "Re-sync a connector from a chosen point."
 msgstr "Re-sync a connector from a chosen point."
 
@@ -19263,7 +19185,6 @@ msgstr "Your Nocturne instance may allow you to sign in with an external account
 msgid "External providers are configured by your instance administrator. If you don't see any provider buttons on the login page, this sign-in method isn't enabled for your instance."
 msgstr "External providers are configured by your instance administrator. If you don't see any provider buttons on the login page, this sign-in method isn't enabled for your instance."
 
-#: ../portal/src/lib/components/DocsSidebar.svelte
 #: src/routes/(unauthenticated)/auth/login/+page.svelte
 msgid "Request membership"
 msgstr "Request membership"
@@ -19686,7 +19607,7 @@ msgstr "Discord OAuth2 is not configured on this instance. Ask the administrator
 msgid "Drop Rate ({0}/min)"
 msgstr "Drop Rate ({0}/min)"
 
-#. 0: bolusInsulin
+#. 0: formatInsulinDisplay(bolusInsulin)
 #: src/lib/components/dashboard/glucose-chart/dialogs/TreatmentInspectionDialog.svelte
 msgid "{0}U bolus"
 msgstr "{0}U bolus"
@@ -20305,72 +20226,56 @@ msgstr "Interactive API documentation powered by Scalar. Explore endpoints, test
 msgid "We're actively working on expanding the documentation. Check back soon for more guides and tutorials, or contribute on GitHub!"
 msgstr "We're actively working on expanding the documentation. Check back soon for more guides and tutorials, or contribute on GitHub!"
 
-#: ../portal/src/lib/components/DocsSidebar.svelte
-msgid "Authentication"
-msgstr "Authentication"
+#~ msgid "Authentication"
+#~ msgstr "Authentication"
 
-#: ../portal/src/lib/components/DocsSidebar.svelte
-msgid "Sign in with Google"
-msgstr "Sign in with Google"
+#~ msgid "Sign in with Google"
+#~ msgstr "Sign in with Google"
 
-#: ../portal/src/lib/components/DocsSidebar.svelte
-msgid "Sign in with GitHub"
-msgstr "Sign in with GitHub"
+#~ msgid "Sign in with GitHub"
+#~ msgstr "Sign in with GitHub"
 
-#: ../portal/src/lib/components/DocsSidebar.svelte
-msgid "Generic OIDC"
-msgstr "Generic OIDC"
+#~ msgid "Generic OIDC"
+#~ msgstr "Generic OIDC"
 
 #~ msgid "Sharing your data"
 #~ msgstr "Sharing your data"
 
-#: ../portal/src/lib/components/DocsSidebar.svelte
-msgid "Email (Resend)"
-msgstr "Email (Resend)"
+#~ msgid "Email (Resend)"
+#~ msgstr "Email (Resend)"
 
-#: ../portal/src/lib/components/DocsSidebar.svelte
-msgid "Chat Bots"
-msgstr "Chat Bots"
+#~ msgid "Chat Bots"
+#~ msgstr "Chat Bots"
 
-#: ../portal/src/lib/components/DocsSidebar.svelte
-msgid "Observability"
-msgstr "Observability"
+#~ msgid "Observability"
+#~ msgstr "Observability"
 
-#: ../portal/src/lib/components/DocsSidebar.svelte
-msgid "OpenTelemetry"
-msgstr "OpenTelemetry"
+#~ msgid "OpenTelemetry"
+#~ msgstr "OpenTelemetry"
 
-#: ../portal/src/lib/components/DocsSidebar.svelte
-msgid "Windows Widget"
-msgstr "Windows Widget"
+#~ msgid "Windows Widget"
+#~ msgstr "Windows Widget"
 
-#: ../portal/src/lib/components/DocsSidebar.svelte
-msgid "Overview & setup"
-msgstr "Overview & setup"
+#~ msgid "Overview & setup"
+#~ msgstr "Overview & setup"
 
-#: ../portal/src/lib/components/DocsSidebar.svelte
-msgid "Connecting Apps"
-msgstr "Connecting Apps"
+#~ msgid "Connecting Apps"
+#~ msgstr "Connecting Apps"
 
-#: ../portal/src/lib/components/DocsSidebar.svelte
-msgid "App authorization (PKCE)"
-msgstr "App authorization (PKCE)"
+#~ msgid "App authorization (PKCE)"
+#~ msgstr "App authorization (PKCE)"
 
-#: ../portal/src/lib/components/DocsSidebar.svelte
-msgid "Mobile & device flow"
-msgstr "Mobile & device flow"
+#~ msgid "Mobile & device flow"
+#~ msgstr "Mobile & device flow"
 
-#: ../portal/src/lib/components/DocsSidebar.svelte
-msgid "SDKs"
-msgstr "SDKs"
+#~ msgid "SDKs"
+#~ msgstr "SDKs"
 
-#: ../portal/src/lib/components/DocsSidebar.svelte
-msgid "Official SDKs"
-msgstr "Official SDKs"
+#~ msgid "Official SDKs"
+#~ msgstr "Official SDKs"
 
-#: ../portal/src/lib/components/DocsSidebar.svelte
-msgid "Interactive API Docs"
-msgstr "Interactive API Docs"
+#~ msgid "Interactive API Docs"
+#~ msgstr "Interactive API Docs"
 
 #: ../portal/src/lib/components/docs/CopyButton.svelte
 msgid "Copy to clipboard"
@@ -20611,9 +20516,8 @@ msgstr "Built by volunteers"
 msgid "Devices & apps connected"
 msgstr "Devices & apps connected"
 
-#: ../portal/src/routes/get-involved/+page.svelte
-msgid "Ads, trackers, or paywalls"
-msgstr "Ads, trackers, or paywalls"
+#~ msgid "Ads, trackers, or paywalls"
+#~ msgstr "Ads, trackers, or paywalls"
 
 #: ../portal/src/routes/get-involved/+page.svelte
 msgid "Community support"
@@ -21215,30 +21119,24 @@ msgstr "Two files and a domain name. <0>That's the install.</0>"
 msgid "05 · Community"
 msgstr "05 · Community"
 
-#: ../portal/src/lib/components/DocsSidebar.svelte
 #: ../portal/src/routes/docs/installation/+page.svelte
 msgid "Bring Your Own Reverse Proxy"
 msgstr "Bring Your Own Reverse Proxy"
 
-#: ../portal/src/lib/components/DocsSidebar.svelte
-msgid "Passkeys & fallbacks"
-msgstr "Passkeys & fallbacks"
+#~ msgid "Passkeys & fallbacks"
+#~ msgstr "Passkeys & fallbacks"
 
-#: ../portal/src/lib/components/DocsSidebar.svelte
-msgid "Public share link"
-msgstr "Public share link"
+#~ msgid "Public share link"
+#~ msgstr "Public share link"
 
-#: ../portal/src/lib/components/DocsSidebar.svelte
-msgid "Member accounts & invites"
-msgstr "Member accounts & invites"
+#~ msgid "Member accounts & invites"
+#~ msgstr "Member accounts & invites"
 
-#: ../portal/src/lib/components/DocsSidebar.svelte
-msgid "Temporary guest links"
-msgstr "Temporary guest links"
+#~ msgid "Temporary guest links"
+#~ msgstr "Temporary guest links"
 
-#: ../portal/src/lib/components/DocsSidebar.svelte
-msgid "Clocks"
-msgstr "Clocks"
+#~ msgid "Clocks"
+#~ msgstr "Clocks"
 
 #: ../portal/src/routes/demo/+page.svelte
 msgid "Live demo"
@@ -21366,9 +21264,8 @@ msgstr "Nocturne is API-compatible with Nightscout (v1, v2, and v3), so your exi
 msgid "Nocturne is dual-licensed. For individuals and community self-hosters, it is available under the AGPL-3.0: free to use, modify, and self-host, with the requirement that any modifications you distribute are also open source. For organisations that need to integrate Nocturne into proprietary products or services without those source-disclosure obligations (clinics, device manufacturers, or diabetes management platforms, for example) a commercial license is available. This model lets us build a sustainable revenue stream with partnering organisations while fully protecting the rights of individual users and the broader diabetes community."
 msgstr "Nocturne is dual-licensed. For individuals and community self-hosters, it is available under the AGPL-3.0: free to use, modify, and self-host, with the requirement that any modifications you distribute are also open source. For organisations that need to integrate Nocturne into proprietary products or services without those source-disclosure obligations (clinics, device manufacturers, or diabetes management platforms, for example) a commercial license is available. This model lets us build a sustainable revenue stream with partnering organisations while fully protecting the rights of individual users and the broader diabetes community."
 
-#: ../portal/src/routes/faq/+page.svelte
-msgid "Nocturne runs in Docker, so any system that runs Docker (Linux, Windows, macOS) can host it. For a single user, a small VPS with 1 GB of RAM is enough. For families or several users, 2 GB or more is recommended. You also need a domain name pointed at the server."
-msgstr "Nocturne runs in Docker, so any system that runs Docker (Linux, Windows, macOS) can host it. For a single user, a small VPS with 1 GB of RAM is enough. For families or several users, 2 GB or more is recommended. You also need a domain name pointed at the server."
+#~ msgid "Nocturne runs in Docker, so any system that runs Docker (Linux, Windows, macOS) can host it. For a single user, a small VPS with 1 GB of RAM is enough. For families or several users, 2 GB or more is recommended. You also need a domain name pointed at the server."
+#~ msgstr "Nocturne runs in Docker, so any system that runs Docker (Linux, Windows, macOS) can host it. For a single user, a small VPS with 1 GB of RAM is enough. For families or several users, 2 GB or more is recommended. You also need a domain name pointed at the server."
 
 #: ../portal/src/routes/faq/+page.svelte
 msgid "Yes. Nocturne runs on Raspberry Pi 4 and newer with 64-bit Raspberry Pi OS; the Docker images are published for ARM64 as well as x86_64."
@@ -21600,14 +21497,13 @@ msgstr "<0/> Last updated {0}"
 msgid "<0>{0} readings</0> from {0} to {1} <1/>"
 msgstr "<0>{0} readings</0> from {0} to {1} <1/>"
 
-#. 0: formatDate(new Date())
+#. 0: formatMediumDateTime(new Date())
 #: src/routes/(authenticated)/reports/+layout.svelte
 msgid "<0/>Generated {0}"
 msgstr "<0/>Generated {0}"
 
-#: src/routes/(authenticated)/settings/+page.svelte
-msgid "Review people asking to join this instance."
-msgstr "Review people asking to join this instance."
+#~ msgid "Review people asking to join this instance."
+#~ msgstr "Review people asking to join this instance."
 
 #: src/routes/(unauthenticated)/join/+page.svelte
 msgid "We couldn't add you to this instance. Please try again in a moment."
@@ -21817,6 +21713,7 @@ msgid "Carbohydrates"
 msgstr "Carbohydrates"
 
 #: ../portal/src/lib/components/features/ReportsDemo.svelte
+#: src/lib/components/reports/year-overview/ColorFocusRange.svelte
 msgid "Average glucose"
 msgstr "Average glucose"
 
@@ -22222,19 +22119,14 @@ msgstr "Select sex"
 msgid "Prefer not to say"
 msgstr "Prefer not to say"
 
-#: src/lib/components/members/PublicAccessCard.svelte
-msgid "Your link is only shown when you create it"
-msgstr "Your link is only shown when you create it"
+#~ msgid "Your link is only shown when you create it"
+#~ msgstr "Your link is only shown when you create it"
 
-#. 0: formatDate(share?.lastAccessedAt)
-#: src/lib/components/members/PublicAccessCard.svelte
-msgid "Anyone you send this link to can open the read-only view — no sign-in needed. Copy it now: it isn't shown again after you leave this page. Last viewed {0}."
-msgstr "Anyone you send this link to can open the read-only view — no sign-in needed. Copy it now: it isn't shown again after you leave this page. Last viewed {0}."
+#~ msgid "Anyone you send this link to can open the read-only view — no sign-in needed. Copy it now: it isn't shown again after you leave this page. Last viewed {0}."
+#~ msgstr "Anyone you send this link to can open the read-only view — no sign-in needed. Copy it now: it isn't shown again after you leave this page. Last viewed {0}."
 
-#. 0: formatDate( share?.lastAccessedAt, )
-#: src/lib/components/members/PublicAccessCard.svelte
-msgid "Anyone who already has your link can open the read-only view — no sign-in needed. To get a link you can send, regenerate it; that also stops the previous one from working. Last viewed {0}."
-msgstr "Anyone who already has your link can open the read-only view — no sign-in needed. To get a link you can send, regenerate it; that also stops the previous one from working. Last viewed {0}."
+#~ msgid "Anyone who already has your link can open the read-only view — no sign-in needed. To get a link you can send, regenerate it; that also stops the previous one from working. Last viewed {0}."
+#~ msgstr "Anyone who already has your link can open the read-only view — no sign-in needed. To get a link you can send, regenerate it; that also stops the previous one from working. Last viewed {0}."
 
 #: src/lib/components/patient/state.svelte.ts
 msgid "We couldn't save your patient record. Your changes are still here — please try again."
@@ -22443,8 +22335,8 @@ msgstr "Consensus target: {0}"
 msgid "The percentile bands above show when in the day variation and excursions occur. Discuss any patterns with your care team."
 msgstr "The percentile bands above show when in the day variation and excursions occur. Discuss any patterns with your care team."
 
-#. 0: formatDate(new Date(lastUpdated))
-#. 0: formatDate(new Date(lastUpdated))
+#. 0: formatMediumDateTime(new Date(lastUpdated))
+#. 0: formatMediumDateTime(new Date(lastUpdated))
 #: src/routes/(authenticated)/reports/agp/+page.svelte
 #: src/routes/(authenticated)/reports/idp/+page.svelte
 msgid "Last updated {0}."
@@ -22774,15 +22666,15 @@ msgstr "This list may be out of date. Reload the page to see the latest."
 msgid "We couldn't start this sync. Please try again."
 msgstr "We couldn't start this sync. Please try again."
 
-#: src/routes/(authenticated)/settings/connectors/+page.svelte
+#: src/lib/components/settings/DataMaintenanceCard.svelte
 msgid "Remove Demo Data"
 msgstr "Remove Demo Data"
 
-#: src/routes/(authenticated)/settings/connectors/+page.svelte
+#: src/lib/components/settings/DataMaintenanceCard.svelte
 msgid "Delete the sample readings and treatments that were generated to show you around. Your own data is not affected."
 msgstr "Delete the sample readings and treatments that were generated to show you around. Your own data is not affected."
 
-#: src/routes/(authenticated)/settings/connectors/+page.svelte
+#: src/lib/components/settings/DataMaintenanceCard.svelte
 msgid "<0/> Remove Demo Data"
 msgstr "<0/> Remove Demo Data"
 
@@ -23393,3 +23285,800 @@ msgstr "Stage"
 #: src/lib/components/reports/sleep/single-night/Hypnogram.svelte
 msgid "No stage data recorded for this session."
 msgstr "No stage data recorded for this session."
+
+#: src/routes/(authenticated)/AuthenticatedLayoutHarness.test.svelte
+msgid "page content"
+msgstr "page content"
+
+#: src/lib/coach-marks/OverlayContinuityStarter.test.svelte
+msgid "Start tour"
+msgstr "Start tour"
+
+#: src/lib/api/fake-remote-query.svelte.ts
+msgid "This query was not created in a reactive context and cannot be awaited. Use `.run()` to execute the query instead."
+msgstr "This query was not created in a reactive context and cannot be awaited. Use `.run()` to execute the query instead."
+
+#: src/lib/coach-marks/OverlayContinuityHarness.test.svelte
+#: src/lib/coach-marks/OverlayContinuityHarness.test.svelte
+msgid "Alpha"
+msgstr "Alpha"
+
+#: src/lib/coach-marks/OverlayContinuityHarness.test.svelte
+#: src/lib/coach-marks/OverlayContinuityHarness.test.svelte
+msgid "First stop."
+msgstr "First stop."
+
+#: src/lib/coach-marks/OverlayContinuityHarness.test.svelte
+msgid "Alpha again"
+msgstr "Alpha again"
+
+#: src/lib/coach-marks/OverlayContinuityHarness.test.svelte
+msgid "First stop, part two."
+msgstr "First stop, part two."
+
+#: src/lib/coach-marks/OverlayContinuityHarness.test.svelte
+msgid "Alpha target"
+msgstr "Alpha target"
+
+#: src/lib/coach-marks/OverlayContinuityHarness.test.svelte
+msgid "Bravo target"
+msgstr "Bravo target"
+
+#: src/lib/coach-marks/OverlayContinuityHarness.test.svelte
+msgid "Charlie target"
+msgstr "Charlie target"
+
+#: src/lib/components/WebSocketStatus.svelte
+#: src/lib/components/dashboard/widgets/ConnectionStatusWidget.svelte
+msgid "Starting"
+msgstr "Starting"
+
+#: src/lib/components/WebSocketStatus.svelte
+#: src/lib/components/dashboard/widgets/ConnectionStatusWidget.svelte
+msgid "Waiting to connect"
+msgstr "Waiting to connect"
+
+#: src/lib/components/WebSocketStatus.svelte
+#: src/lib/components/dashboard/widgets/ConnectionStatusWidget.svelte
+msgid "Not available"
+msgstr "Not available"
+
+#: src/lib/components/WebSocketStatus.svelte
+#: src/lib/components/dashboard/widgets/ConnectionStatusWidget.svelte
+msgid "Live updates are not permitted for this view"
+msgstr "Live updates are not permitted for this view"
+
+#: src/lib/test-stubs/CurrentBgDisplay.test-stub.svelte
+msgid "current bg"
+msgstr "current bg"
+
+#: src/lib/test-stubs/GlucoseChartCard.test-stub.svelte
+msgid "glucose chart"
+msgstr "glucose chart"
+
+#: src/lib/test-stubs/RecentEntriesCard.test-stub.svelte
+msgid "recent entries"
+msgstr "recent entries"
+
+#: src/lib/test-stubs/RecentTreatmentsCard.test-stub.svelte
+msgid "recent treatments"
+msgstr "recent treatments"
+
+#: src/lib/websocket/websocket-client.svelte.ts
+msgid "Realtime handshake could not be authorized"
+msgstr "Realtime handshake could not be authorized"
+
+#: ../portal/src/lib/components/SiteFooter.svelte
+#: ../portal/src/lib/components/SiteFooter.svelte
+#: ../portal/src/routes/demo/+page.svelte
+#: ../portal/src/routes/get-involved/+page.svelte
+#: ../portal/src/routes/get-involved/+page.svelte
+#: ../portal/src/routes/get-involved/+page.svelte
+#: ../portal/src/routes/get-involved/+page.svelte
+#: ../portal/src/routes/get-involved/+page.svelte
+#: ../portal/src/routes/get-involved/+page.svelte
+msgid "Outbound Click"
+msgstr "Outbound Click"
+
+#: ../portal/src/routes/get-involved/+page.svelte
+msgid "Ads, cookies, or paywalls"
+msgstr "Ads, cookies, or paywalls"
+
+#: ../portal/src/routes/get-involved/+page.svelte
+msgid "Get Involved Lane"
+msgstr "Get Involved Lane"
+
+#: ../portal/src/lib/components/docs/SupportNocturne.svelte
+#: ../portal/src/routes/get-involved/+page.svelte
+msgid "Donate Click"
+msgstr "Donate Click"
+
+#: ../portal/src/routes/faq/+page.svelte
+msgid "Nocturne runs in Docker, so any system that runs Docker (Linux, Windows, macOS) can host it. For a single user, 2 GB of RAM and one CPU core will run it, though 4 GB is more comfortable because PostgreSQL uses the spare memory as disk cache. Allow 10 GB of storage, most of which is the container images. For families or several sites, 4 GB or more is recommended. You also need a domain name pointed at the server."
+msgstr "Nocturne runs in Docker, so any system that runs Docker (Linux, Windows, macOS) can host it. For a single user, 2 GB of RAM and one CPU core will run it, though 4 GB is more comfortable because PostgreSQL uses the spare memory as disk cache. Allow 10 GB of storage, most of which is the container images. For families or several sites, 4 GB or more is recommended. You also need a domain name pointed at the server."
+
+#: src/routes/(authenticated)/alerts/+page.svelte
+msgid "Where alerts reach you"
+msgstr "Where alerts reach you"
+
+#: ../portal/src/lib/components/DocsSidebar.svelte
+msgid "Docs Nav"
+msgstr "Docs Nav"
+
+#: src/lib/components/members/PublicAccessCard.svelte
+msgid "Couldn't show the link. Please try again."
+msgstr "Couldn't show the link. Please try again."
+
+#: src/lib/components/members/PublicAccessCard.svelte
+msgid "Fetching your link..."
+msgstr "Fetching your link..."
+
+#: src/lib/components/members/PublicAccessCard.svelte
+msgid "Hide the link"
+msgstr "Hide the link"
+
+#: src/lib/components/members/PublicAccessCard.svelte
+msgid "Show the link"
+msgstr "Show the link"
+
+#. 0: formatDate(share?.lastAccessedAt)
+#: src/lib/components/members/PublicAccessCard.svelte
+msgid "Anyone you send this link to can open the read-only view without signing in. It stays hidden here until you show or copy it. Last viewed {0}."
+msgstr "Anyone you send this link to can open the read-only view without signing in. It stays hidden here until you show or copy it. Last viewed {0}."
+
+#. 0: formatDate(share?.lastAccessedAt)
+#: src/lib/components/members/PublicAccessCard.svelte
+msgid "Anyone who already has your link can still open the read-only view without signing in, but Nocturne can no longer show you what it is. To get a link you can send, regenerate it; that stops the current one from working. Last viewed {0}."
+msgstr "Anyone who already has your link can still open the read-only view without signing in, but Nocturne can no longer show you what it is. To get a link you can send, regenerate it; that stops the current one from working. Last viewed {0}."
+
+#: src/lib/components/settings/ApiTokens.svelte
+msgid "Your tokens couldn't be loaded, so this list may be incomplete. Refresh the page to try again."
+msgstr "Your tokens couldn't be loaded, so this list may be incomplete. Refresh the page to try again."
+
+#: src/lib/components/support/IssueCreatorDialog.svelte
+msgid "No failed requests recorded this session"
+msgstr "No failed requests recorded this session"
+
+#. 0: recentFailureCount; 1: recentFailureCount === 1 ? "request" \\: "requests"
+#: src/lib/components/support/IssueCreatorDialog.svelte
+msgid "{0} failed {1} — time, status, page and message"
+msgstr "{0} failed {1} — time, status, page and message"
+
+#: src/lib/components/support/IssueCreatorDialog.svelte
+msgid "Recent errors"
+msgstr "Recent errors"
+
+#: src/lib/components/support/IssueCreatorDialog.svelte
+msgid "Collecting…"
+msgstr "Collecting…"
+
+#: src/lib/components/support/IssueCreatorDialog.svelte
+msgid "Units, timezone, CGM sources and connector names. Never passwords, tokens or glucose values."
+msgstr "Units, timezone, CGM sources and connector names. Never passwords, tokens or glucose values."
+
+#: src/lib/components/support/IssueCreatorDialog.svelte
+msgid "Your report is filed as a public issue on GitHub. Anything you turn on here is published with it and can be read by anyone — check the preview before you send."
+msgstr "Your report is filed as a public issue on GitHub. Anything you turn on here is published with it and can be read by anyone — check the preview before you send."
+
+#: ../portal/src/routes/docs/installation/+page.svelte
+#: ../portal/src/routes/docs/installation/oracle-cloud/+page.svelte
+msgid "Oracle Cloud"
+msgstr "Oracle Cloud"
+
+#: ../portal/src/routes/docs/installation/+page.svelte
+msgid "One command in the browser sets up a free server, HTTPS and Nocturne. No SSH or Docker knowledge needed."
+msgstr "One command in the browser sets up a free server, HTTPS and Nocturne. No SSH or Docker knowledge needed."
+
+#: src/routes/(authenticated)/reports/ehba1c/+page.svelte
+msgid "Non-diabetic range"
+msgstr "Non-diabetic range"
+
+#: src/routes/(authenticated)/reports/ehba1c/+page.svelte
+msgid "Type 1 diabetes target"
+msgstr "Type 1 diabetes target"
+
+#: src/routes/(authenticated)/reports/ehba1c/+page.svelte
+msgid "Elevated"
+msgstr "Elevated"
+
+#: src/routes/(authenticated)/reports/ehba1c/+page.svelte
+msgid "Very high"
+msgstr "Very high"
+
+#: src/routes/(authenticated)/reports/ehba1c/+page.svelte
+msgid "Failed to save lab result"
+msgstr "Failed to save lab result"
+
+#: src/routes/(authenticated)/reports/ehba1c/+page.svelte
+msgid "Failed to delete lab result"
+msgstr "Failed to delete lab result"
+
+#: src/routes/(authenticated)/reports/ehba1c/+page.svelte
+msgid "<0/> Estimated HbA1c (eHbA1c)"
+msgstr "<0/> Estimated HbA1c (eHbA1c)"
+
+#: src/routes/(authenticated)/reports/ehba1c/+page.svelte
+msgid "eHbA1c estimates what a lab HbA1c test would read on a given day. For each day, it takes the average glucose from every reading in the trailing 90 days and weights each day's contribution by recency — the most recent ~30 days count for roughly half the estimate, tapering off exponentially for older days, similar to how glycated hemoglobin reflects glucose exposure over a red blood cell's ~90–120 day lifespan. That weighted average glucose is then converted to %HbA1c with the ADAG formula: HbA1c (%) = (average glucose in mg/dL + 46.7) / 28.7."
+msgstr "eHbA1c estimates what a lab HbA1c test would read on a given day. For each day, it takes the average glucose from every reading in the trailing 90 days and weights each day's contribution by recency — the most recent ~30 days count for roughly half the estimate, tapering off exponentially for older days, similar to how glycated hemoglobin reflects glucose exposure over a red blood cell's ~90–120 day lifespan. That weighted average glucose is then converted to %HbA1c with the ADAG formula: HbA1c (%) = (average glucose in mg/dL + 46.7) / 28.7."
+
+#: src/routes/(authenticated)/reports/ehba1c/+page.svelte
+msgid "Show as percent"
+msgstr "Show as percent"
+
+#: src/routes/(authenticated)/reports/ehba1c/+page.svelte
+msgid "Show as mmol/mol"
+msgstr "Show as mmol/mol"
+
+#: src/routes/(authenticated)/reports/ehba1c/+page.svelte
+msgid "mmol/mol"
+msgstr "mmol/mol"
+
+#: src/routes/(authenticated)/reports/ehba1c/+page.svelte
+msgid "<0/> Loading eHbA1c timeline..."
+msgstr "<0/> Loading eHbA1c timeline..."
+
+#: src/routes/(authenticated)/reports/ehba1c/+page.svelte
+msgid "Failed to load eHbA1c data. Please try again later."
+msgstr "Failed to load eHbA1c data. Please try again later."
+
+#: src/routes/(authenticated)/reports/ehba1c/+page.svelte
+msgid "Not enough glucose history yet — each point needs at least a month of readings within the trailing 90 days."
+msgstr "Not enough glucose history yet — each point needs at least a month of readings within the trailing 90 days."
+
+#. 0: formatLongDate(latest.date)
+#: src/routes/(authenticated)/reports/ehba1c/+page.svelte
+msgid "latest estimate ({0})"
+msgstr "latest estimate ({0})"
+
+#. 0: bg(latest.weightedAverageGlucoseMgdl); 1: bgLabel()
+#: src/routes/(authenticated)/reports/ehba1c/+page.svelte
+msgid "Weighted mean glucose: {0} {1}"
+msgstr "Weighted mean glucose: {0} {1}"
+
+#. 0: formatLongDate(extremes.highest.date)
+#: src/routes/(authenticated)/reports/ehba1c/+page.svelte
+msgid "Highest: <0/> ({0})"
+msgstr "Highest: <0/> ({0})"
+
+#. 0: formatLongDate(extremes.lowest.date)
+#: src/routes/(authenticated)/reports/ehba1c/+page.svelte
+msgid "Lowest: <0/> ({0})"
+msgstr "Lowest: <0/> ({0})"
+
+#: src/routes/(authenticated)/reports/ehba1c/+page.svelte
+msgid "Lab result (not included in the calculation)"
+msgstr "Lab result (not included in the calculation)"
+
+#: src/routes/(authenticated)/reports/ehba1c/+page.svelte
+msgid "Lab results"
+msgstr "Lab results"
+
+#: src/routes/(authenticated)/reports/ehba1c/+page.svelte
+msgid "Enter a lab HbA1c result here — shown as a triangle marker on the chart above, so you can see how closely the eHbA1c estimate tracks an actual lab draw. Lab results are not included in the eHbA1c calculation itself. The date below is the date the blood was drawn, not the date you enter it here."
+msgstr "Enter a lab HbA1c result here — shown as a triangle marker on the chart above, so you can see how closely the eHbA1c estimate tracks an actual lab draw. Lab results are not included in the eHbA1c calculation itself. The date below is the date the blood was drawn, not the date you enter it here."
+
+#: src/routes/(authenticated)/reports/ehba1c/+page.svelte
+msgid "No lab results added yet."
+msgstr "No lab results added yet."
+
+#: src/routes/(authenticated)/reports/ehba1c/+page.svelte
+msgid "Delete lab result"
+msgstr "Delete lab result"
+
+#: src/routes/(authenticated)/reports/ehba1c/+page.svelte
+msgid "Date of blood draw"
+msgstr "Date of blood draw"
+
+#. 0: a1cUnit === "percent" ? "%" \\: "mmol/mol"
+#: src/routes/(authenticated)/reports/ehba1c/+page.svelte
+msgid "Result ({0})"
+msgstr "Result ({0})"
+
+#: src/routes/(authenticated)/reports/ehba1c/+page.svelte
+msgid "<0/> Add lab result"
+msgstr "<0/> Add lab result"
+
+#. 0: formatA1c(point.data.valuePercent); 1: formatLongDate(point.data.date); 2: point.data.note ? ` — ${point.data.note}` \\: ""
+#: src/routes/(authenticated)/reports/ehba1c/+page.svelte
+msgid "Lab result: {0} ({1}){2}"
+msgstr "Lab result: {0} ({1}){2}"
+
+#: src/routes/(authenticated)/reports/ehba1c/+page.svelte
+msgid "Delete this lab result?"
+msgstr "Delete this lab result?"
+
+#. 0: formatA1c(pendingDeleteLabResult.valuePercent ?? 0); 1: formatLongDate(toDate(pendingDeleteLabResult.measuredAt))
+#: src/routes/(authenticated)/reports/ehba1c/+page.svelte
+msgid "Delete the {0} lab result from {1}."
+msgstr "Delete the {0} lab result from {1}."
+
+#: src/routes/(authenticated)/settings/access/+page.svelte
+msgid "The browsers signed in to this account, and where to find everything else that can reach your data."
+msgstr "The browsers signed in to this account, and where to find everything else that can reach your data."
+
+#: src/routes/(authenticated)/settings/access/+page.svelte
+msgid "What else can reach your data"
+msgstr "What else can reach your data"
+
+#: src/routes/(authenticated)/settings/access/+page.svelte
+msgid "Each of these is granted, and taken away again, on its own page."
+msgstr "Each of these is granted, and taken away again, on its own page."
+
+#: ../portal/src/lib/components/docs/DocsScrollDepth.svelte
+msgid "Docs Scroll"
+msgstr "Docs Scroll"
+
+#: ../portal/src/lib/components/docs/SystemRequirements.svelte
+msgid "2 GB"
+msgstr "2 GB"
+
+#: ../portal/src/lib/components/docs/SystemRequirements.svelte
+msgid "4 GB+"
+msgstr "4 GB+"
+
+#: ../portal/src/lib/components/docs/SystemRequirements.svelte
+msgid "CPU"
+msgstr "CPU"
+
+#: ../portal/src/lib/components/docs/SystemRequirements.svelte
+msgid "1 core"
+msgstr "1 core"
+
+#: ../portal/src/lib/components/docs/SystemRequirements.svelte
+msgid "2 cores+"
+msgstr "2 cores+"
+
+#: ../portal/src/lib/components/docs/SystemRequirements.svelte
+msgid "Measured on a production deployment serving 76 sites, then scaled down to a single-site install. The stack is six containers: PostgreSQL, the API, the web frontend, the gateway, the TLS proxy and the updater."
+msgstr "Measured on a production deployment serving 76 sites, then scaled down to a single-site install. The stack is six containers: PostgreSQL, the API, the web frontend, the gateway, the TLS proxy and the updater."
+
+#: ../portal/src/lib/components/docs/SystemRequirements.svelte
+msgid "<0>Memory.</0> Those six use roughly 1 to 1.5 GB between them at rest, most of it PostgreSQL and the API. 2 GB leaves little spare once the operating system is accounted for, which is why it is the floor rather than a comfortable target; the extra memory at 4 GB is used by PostgreSQL as disk cache and is the single cheapest thing you can give it."
+msgstr "<0>Memory.</0> Those six use roughly 1 to 1.5 GB between them at rest, most of it PostgreSQL and the API. 2 GB leaves little spare once the operating system is accounted for, which is why it is the floor rather than a comfortable target; the extra memory at 4 GB is used by PostgreSQL as disk cache and is the single cheapest thing you can give it."
+
+#: ../portal/src/lib/components/docs/SystemRequirements.svelte
+msgid "<0>CPU.</0> The API is the only component that does sustained work. One core is enough for a single site, and the whole 76-site deployment above draws about 1.3 cores in total, so headroom here matters less than it looks."
+msgstr "<0>CPU.</0> The API is the only component that does sustained work. One core is enough for a single site, and the whole 76-site deployment above draws about 1.3 cores in total, so headroom here matters less than it looks."
+
+#: ../portal/src/lib/components/docs/SystemRequirements.svelte
+msgid "<0>Storage.</0> The container images account for about 2.5 GB before any data. A single CGM writes roughly 105,000 glucose readings a year, which with indexes and write-ahead logs comes to well under 1 GB per year. 10 GB fits the images and several years of one person's data; 20 GB is for households, longer history, or an imported Nightscout database."
+msgstr "<0>Storage.</0> The container images account for about 2.5 GB before any data. A single CGM writes roughly 105,000 glucose readings a year, which with indexes and write-ahead logs comes to well under 1 GB per year. 10 GB fits the images and several years of one person's data; 20 GB is for households, longer history, or an imported Nightscout database."
+
+#: ../portal/src/lib/components/docs/SystemRequirements.svelte
+msgid "Where these numbers come from"
+msgstr "Where these numbers come from"
+
+#: ../portal/src/lib/components/docs/CopyButton.svelte
+msgid "Docs Copy"
+msgstr "Docs Copy"
+
+#: ../portal/src/lib/components/docs/SupportNocturne.svelte
+msgid "Support Tier Click"
+msgstr "Support Tier Click"
+
+#: src/lib/components/reports/year-overview/ColorFocusPreview.test-harness.svelte
+msgid "<0/> No data"
+msgstr "<0/> No data"
+
+#: src/lib/components/reports/year-overview/ColorFocusPreview.test-harness.svelte
+msgid "Average glucose — Year Overview"
+msgstr "Average glucose — Year Overview"
+
+#: src/lib/components/reports/year-overview/ColorFocusRange.svelte
+msgid "Point 1"
+msgstr "Point 1"
+
+#: src/lib/components/reports/year-overview/ColorFocusRange.svelte
+msgid "Point 2"
+msgstr "Point 2"
+
+#: src/lib/components/reports/year-overview/ColorFocusRange.svelte
+msgid "Point 3"
+msgstr "Point 3"
+
+#: src/lib/components/reports/year-overview/ColorFocusRange.svelte
+msgid "Point 4"
+msgstr "Point 4"
+
+#: src/lib/components/reports/year-overview/ColorFocusRange.svelte
+msgid "Reset average glucose color boundaries"
+msgstr "Reset average glucose color boundaries"
+
+#. 0: metricLabel
+#: src/lib/components/reports/year-overview/ColorFocusRange.svelte
+msgid "Reset {0} color range to automatic"
+msgstr "Reset {0} color range to automatic"
+
+#. 0: metricLabel; 1: index === 0 ? "low" \\: "high"
+#: src/lib/components/reports/year-overview/ColorFocusRange.svelte
+msgid "{0} {1} color point"
+msgstr "{0} {1} color point"
+
+#. 0: metricLabel; 1: labels[index]; 2: glucose ? "boundary" \\: "value"
+#: src/lib/components/reports/year-overview/ColorFocusRange.svelte
+msgid "{0} {1} color {2}"
+msgstr "{0} {1} color {2}"
+
+#. 0: metricLabel
+#: src/lib/components/reports/year-overview/ColorFocusRange.svelte
+msgid "{0} focus lines"
+msgstr "{0} focus lines"
+
+#: src/lib/components/reports/year-overview/ColorFocusRange.svelte
+msgid "Focus minimum line"
+msgstr "Focus minimum line"
+
+#: src/lib/components/reports/year-overview/ColorFocusRange.svelte
+msgid "Focus maximum line"
+msgstr "Focus maximum line"
+
+#: src/lib/components/reports/year-overview/ColorFocusRange.svelte
+msgid "Average glucose color boundaries"
+msgstr "Average glucose color boundaries"
+
+#. 0: metricLabel
+#: src/lib/components/reports/year-overview/ColorFocusRange.svelte
+msgid "{0} color focus"
+msgstr "{0} color focus"
+
+#. 0: metricLabel; 1: formatted(minimum); 2: formatted(maximum); 3: unitLabel
+#: src/lib/components/reports/year-overview/ColorFocusRange.svelte
+msgid "{0} color scale from {1} to {2} {3}"
+msgstr "{0} color scale from {1} to {2} {3}"
+
+#: src/lib/components/reports/year-overview/ColorFocusRange.svelte
+msgid "<0/> Low"
+msgstr "<0/> Low"
+
+#: src/lib/components/reports/year-overview/ColorFocusRange.svelte
+msgid "<0/> High"
+msgstr "<0/> High"
+
+#: src/lib/components/reports/year-overview/ColorFocusRange.svelte
+msgid "<0/> Color Boundaries"
+msgstr "<0/> Color Boundaries"
+
+#. 0: metricLabel
+#: src/lib/components/reports/year-overview/ColorFocusRange.svelte
+msgid "{0} focus minimum value"
+msgstr "{0} focus minimum value"
+
+#. 0: metricLabel
+#: src/lib/components/reports/year-overview/ColorFocusRange.svelte
+msgid "{0} focus maximum value"
+msgstr "{0} focus maximum value"
+
+#: src/lib/components/reports/year-overview/ColorFocusRange.svelte
+#: src/lib/components/reports/year-overview/ColorFocusRange.svelte
+msgid "Dim:"
+msgstr "Dim:"
+
+#: src/lib/components/reports/year-overview/ColorFocusRange.svelte
+#: src/lib/components/reports/year-overview/ColorFocusRange.svelte
+msgid "<0/> Focus Window"
+msgstr "<0/> Focus Window"
+
+#: src/lib/components/reports/year-overview/ColorFocusRange.svelte
+#: src/lib/components/reports/year-overview/ColorFocusRange.svelte
+msgid "Color palette presets"
+msgstr "Color palette presets"
+
+#: src/lib/components/reports/year-overview/ColorFocusRange.svelte
+msgid "Theme colors are fixed; pick a palette to invert"
+msgstr "Theme colors are fixed; pick a palette to invert"
+
+#: src/lib/components/reports/year-overview/ColorFocusRange.svelte
+#: src/lib/components/reports/year-overview/ColorFocusRange.svelte
+msgid "Invert"
+msgstr "Invert"
+
+#: src/lib/components/reports/year-overview/ColorFocusRange.svelte
+msgid "<0/> Color Range"
+msgstr "<0/> Color Range"
+
+#: src/lib/components/reports/year-overview/ColorFocusRange.svelte
+msgid "Enter a dim percentage between 0 and 100."
+msgstr "Enter a dim percentage between 0 and 100."
+
+#: src/lib/components/reports/year-overview/ColorFocusRange.svelte
+msgid "Enter four strictly increasing glucose color boundaries."
+msgstr "Enter four strictly increasing glucose color boundaries."
+
+#: src/lib/components/reports/year-overview/ColorFocusRange.svelte
+#: src/lib/components/reports/year-overview/ColorFocusRange.svelte
+msgid "Enter valid focus line boundaries (min < max)."
+msgstr "Enter valid focus line boundaries (min < max)."
+
+#: src/lib/components/reports/year-overview/ColorFocusRange.svelte
+msgid "Enter valid color scale boundaries (min < max)."
+msgstr "Enter valid color scale boundaries (min < max)."
+
+#. 0: metricLabel; 1: glucose ? "boundaries" \\: "focus"; 2: values.map(formatted).join(" / "); 3: unitLabel
+#: src/lib/components/reports/year-overview/ColorFocusRange.svelte
+msgid "{0}: color {1} {2} {3}"
+msgstr "{0}: color {1} {2} {3}"
+
+#: src/lib/components/reports/year-overview/HeatmapLegend.svelte
+msgid "Theme"
+msgstr "Theme"
+
+#: src/lib/components/reports/year-overview/HeatmapLegend.svelte
+msgid "Viridis"
+msgstr "Viridis"
+
+#: src/lib/components/reports/year-overview/HeatmapLegend.svelte
+msgid "Plasma"
+msgstr "Plasma"
+
+#: src/lib/components/reports/year-overview/HeatmapLegend.svelte
+msgid "Inferno"
+msgstr "Inferno"
+
+#: src/lib/components/reports/year-overview/HeatmapLegend.svelte
+msgid "Magma"
+msgstr "Magma"
+
+#: src/lib/components/reports/year-overview/HeatmapLegend.svelte
+msgid "Cividis"
+msgstr "Cividis"
+
+#: src/lib/components/reports/year-overview/HeatmapLegend.svelte
+msgid "Turbo"
+msgstr "Turbo"
+
+#: src/lib/components/reports/year-overview/HeatmapLegend.svelte
+msgid "Mako"
+msgstr "Mako"
+
+#: src/lib/components/reports/year-overview/HeatmapLegend.svelte
+msgid "Rocket"
+msgstr "Rocket"
+
+#: src/lib/components/reports/year-overview/HeatmapLegend.svelte
+msgid "Return panel to the page"
+msgstr "Return panel to the page"
+
+#: src/lib/components/reports/year-overview/HeatmapLegend.svelte
+msgid "Float panel in the top-right corner"
+msgstr "Float panel in the top-right corner"
+
+#: src/lib/components/reports/year-overview/HeatmapLegend.svelte
+msgid "Dock"
+msgstr "Dock"
+
+#: src/lib/components/reports/year-overview/HeatmapLegend.svelte
+msgid "Float"
+msgstr "Float"
+
+#: src/lib/components/reports/year-overview/HeatmapLegend.svelte
+msgid "Default scale"
+msgstr "Default scale"
+
+#. 0: metricLabel
+#: src/lib/components/reports/year-overview/HeatmapLegend.svelte
+msgid "{0} default scale"
+msgstr "{0} default scale"
+
+#: ../portal/src/routes/docs/installation/oracle-cloud/+page.svelte
+msgid "BASE_DOMAIN=nocturne.example.com bash <(curl -fsSL https://github.com/nightscout/nocturne/releases/latest/download/oracle-cloud-install.sh)"
+msgstr "BASE_DOMAIN=nocturne.example.com bash <(curl -fsSL https://github.com/nightscout/nocturne/releases/latest/download/oracle-cloud-install.sh)"
+
+#: ../portal/src/routes/docs/installation/oracle-cloud/+page.svelte
+msgid "An <0>Oracle Cloud account</0>. Sign-up asks for a payment card to verify your identity. Always Free gives you 2 Ampere cores, 12 GB of memory and 200 GB of storage; this guide uses half the processor and memory and a quarter of the storage, so nothing is charged. Oracle reduced that allowance in June 2026, so older guides quoting 4 cores and 24 GB are out of date."
+msgstr "An <0>Oracle Cloud account</0>. Sign-up asks for a payment card to verify your identity. Always Free gives you 2 Ampere cores, 12 GB of memory and 200 GB of storage; this guide uses half the processor and memory and a quarter of the storage, so nothing is charged. Oracle reduced that allowance in June 2026, so older guides quoting 4 cores and 24 GB are out of date."
+
+#: ../portal/src/routes/docs/installation/oracle-cloud/+page.svelte
+msgid "A domain name. Nocturne gives every site its own subdomain, so the DNS provider must support wildcard records. If you do not have a domain, a free one from deSEC works well; see below."
+msgstr "A domain name. Nocturne gives every site its own subdomain, so the DNS provider must support wildcard records. If you do not have a domain, a free one from deSEC works well; see below."
+
+#: ../portal/src/routes/docs/installation/oracle-cloud/+page.svelte
+msgid "A decision about how to keep the server from being reclaimed as idle. It changes the command you run, so make it before you start."
+msgstr "A decision about how to keep the server from being reclaimed as idle. It changes the command you run, so make it before you start."
+
+#: ../portal/src/routes/docs/installation/oracle-cloud/+page.svelte
+msgid "Create an account at desec.io and confirm your email address."
+msgstr "Create an account at desec.io and confirm your email address."
+
+#: ../portal/src/routes/docs/installation/oracle-cloud/+page.svelte
+msgid "Under <0>Domains</0>, add a dynDNS domain and pick a name. Your domain is then <1/>."
+msgstr "Under <0>Domains</0>, add a dynDNS domain and pick a name. Your domain is then <1/>."
+
+#: ../portal/src/routes/docs/installation/oracle-cloud/+page.svelte
+msgid "Under <0>Token management</0>, create a token and copy the long secret it shows you once — not the name you gave the token. You can delete the token afterwards."
+msgstr "Under <0>Token management</0>, create a token and copy the long secret it shows you once — not the name you gave the token. You can delete the token afterwards."
+
+#: ../portal/src/routes/docs/installation/oracle-cloud/+page.svelte
+msgid "Which one should you pick?"
+msgstr "Which one should you pick?"
+
+#: ../portal/src/routes/docs/installation/oracle-cloud/+page.svelte
+msgid "Option 1: upgrade the account to Pay As You Go (recommended)"
+msgstr "Option 1: upgrade the account to Pay As You Go (recommended)"
+
+#: ../portal/src/routes/docs/installation/oracle-cloud/+page.svelte
+msgid "In the Oracle console, open <0>Billing & Cost Management</0>, then <1>Upgrade and Manage Payment</1>, and choose Pay As You Go. Your card is already on file from sign-up. Always Free resources stay free after the upgrade, and Oracle's own terms exempt Pay As You Go accounts from idle reclamation. Everything this installer creates is within the free allowance, so the upgrade does not by itself cost anything."
+msgstr "In the Oracle console, open <0>Billing & Cost Management</0>, then <1>Upgrade and Manage Payment</1>, and choose Pay As You Go. Your card is already on file from sign-up. Always Free resources stay free after the upgrade, and Oracle's own terms exempt Pay As You Go accounts from idle reclamation. Everything this installer creates is within the free allowance, so the upgrade does not by itself cost anything."
+
+#: ../portal/src/routes/docs/installation/oracle-cloud/+page.svelte
+msgid "What changes is that the card can now be charged if something outside the free tier is ever created. The installer closes that off from both ends: it refuses a server size above the free allowance, and it writes an Oracle quota policy that stops the account creating anything outside the Always Free compute shapes at all, whether or not you have upgraded. That policy is a real limit rather than a warning: Oracle refuses the request instead of billing you for it. On top of that it sets a spending alert that emails you the moment the account is billed one unit of your currency. Nothing needs adding to the command in Step 2."
+msgstr "What changes is that the card can now be charged if something outside the free tier is ever created. The installer closes that off from both ends: it refuses a server size above the free allowance, and it writes an Oracle quota policy that stops the account creating anything outside the Always Free compute shapes at all, whether or not you have upgraded. That policy is a real limit rather than a warning: Oracle refuses the request instead of billing you for it. On top of that it sets a spending alert that emails you the moment the account is billed one unit of your currency. Nothing needs adding to the command in Step 2."
+
+#: ../portal/src/routes/docs/installation/oracle-cloud/+page.svelte
+msgid "Option 2: stay on the trial and donate spare time to Folding@home"
+msgstr "Option 2: stay on the trial and donate spare time to Folding@home"
+
+#: ../portal/src/routes/docs/installation/oracle-cloud/+page.svelte
+msgid "<0>Folding@home</0> is a research project that simulates how proteins fold, to help understand diseases such as Alzheimer's, cancer and, yes, diabetes. With this option the installer adds its client to the server and runs it from 02:00 to 04:00 UTC each night. Two hours a day of real computation is well above Oracle's idle threshold, so the server is never a candidate for reclamation, and the time goes to something useful."
+msgstr "<0>Folding@home</0> is a research project that simulates how proteins fold, to help understand diseases such as Alzheimer's, cancer and, yes, diabetes. With this option the installer adds its client to the server and runs it from 02:00 to 04:00 UTC each night. Two hours a day of real computation is well above Oracle's idle threshold, so the server is never a candidate for reclamation, and the time goes to something useful."
+
+#: ../portal/src/routes/docs/installation/oracle-cloud/+page.svelte
+msgid "The client runs at the lowest priority the system has, so Nocturne and its alarms always come first. To choose this option, add <0/> to the command in Step 2:"
+msgstr "The client runs at the lowest priority the system has, so Nocturne and its alarms always come first. To choose this option, add <0/> to the command in Step 2:"
+
+#: ../portal/src/routes/docs/installation/oracle-cloud/+page.svelte
+msgid "Work is contributed anonymously by default. To count it towards a team, add <0/> as well. Trial accounts cannot be charged, but the installer still creates the spending alert in case the account is upgraded later."
+msgstr "Work is contributed anonymously by default. To count it towards a team, add <0/> as well. Trial accounts cannot be charged, but the installer still creates the spending alert in case the account is upgraded later."
+
+#: ../portal/src/routes/docs/installation/oracle-cloud/+page.svelte
+msgid "Keep the run alive if Cloud Shell disconnects"
+msgstr "Keep the run alive if Cloud Shell disconnects"
+
+#: ../portal/src/routes/docs/installation/oracle-cloud/+page.svelte
+msgid "Cloud Shell closes idle sessions, which stops the installer part-way. Run <0/> first and the run survives a dropped connection. Detach with Ctrl-B then D, and come back to it with <1/>."
+msgstr "Cloud Shell closes idle sessions, which stops the installer part-way. Run <0/> first and the run survives a dropped connection. Detach with Ctrl-B then D, and come back to it with <1/>."
+
+#: ../portal/src/routes/docs/installation/oracle-cloud/+page.svelte
+msgid "Sets up a spending alert that emails you if the account is ever charged, and a quota policy that stops the account creating anything outside the Always Free compute shapes"
+msgstr "Sets up a spending alert that emails you if the account is ever charged, and a quota policy that stops the account creating anything outside the Always Free compute shapes"
+
+#: ../portal/src/routes/docs/installation/oracle-cloud/+page.svelte
+msgid "Creates a virtual network with ports 80 and 443 open, in your home region"
+msgstr "Creates a virtual network with ports 80 and 443 open, in your home region"
+
+#: ../portal/src/routes/docs/installation/oracle-cloud/+page.svelte
+msgid "Reserves a public IP address so it never changes"
+msgstr "Reserves a public IP address so it never changes"
+
+#: ../portal/src/routes/docs/installation/oracle-cloud/+page.svelte
+msgid "Generates an SSH key in your Cloud Shell home if you do not have one"
+msgstr "Generates an SSH key in your Cloud Shell home if you do not have one"
+
+#: ../portal/src/routes/docs/installation/oracle-cloud/+page.svelte
+msgid "Starts an Ampere A1 server with 1 core and 6 GB of memory, half the Always Free allowance, retrying when Oracle has no free capacity"
+msgstr "Starts an Ampere A1 server with 1 core and 6 GB of memory, half the Always Free allowance, retrying when Oracle has no free capacity"
+
+#: ../portal/src/routes/docs/installation/oracle-cloud/+page.svelte
+msgid "Installs Folding@home on a nightly schedule if you asked for it above"
+msgstr "Installs Folding@home on a nightly schedule if you asked for it above"
+
+#: ../portal/src/routes/docs/installation/oracle-cloud/+page.svelte
+msgid "On the server: opens the firewall, installs Docker, downloads the Nocturne release bundle, generates the database passwords and starts everything once DNS resolves, checking each of these again on every run"
+msgstr "On the server: opens the firewall, installs Docker, downloads the Nocturne release bundle, generates the database passwords and starts everything once DNS resolves, checking each of these again on every run"
+
+#: ../portal/src/routes/docs/installation/oracle-cloud/+page.svelte
+msgid "What the script does"
+msgstr "What the script does"
+
+#: ../portal/src/routes/docs/installation/oracle-cloud/+page.svelte
+msgid "If Oracle has no free capacity"
+msgstr "If Oracle has no free capacity"
+
+#: ../portal/src/routes/docs/installation/oracle-cloud/+page.svelte
+msgid "Ampere A1 servers are popular and regions often run out. The installer tries every availability domain in your region and keeps retrying for 30 minutes. It already asks for the smallest size the installer offers, 1 core and 6 GB, so there is nothing smaller to fall back to. If it gives up, run the command again later: it remembers your domain, so the command no longer needs it, and everything already created is reused. Upgrading to Pay As You Go also tends to end these errors, since paying accounts are served first when servers are scarce."
+msgstr "Ampere A1 servers are popular and regions often run out. The installer tries every availability domain in your region and keeps retrying for 30 minutes. It already asks for the smallest size the installer offers, 1 core and 6 GB, so there is nothing smaller to fall back to. If it gives up, run the command again later: it remembers your domain, so the command no longer needs it, and everything already created is reused. Upgrading to Pay As You Go also tends to end these errors, since paying accounts are served first when servers are scarce."
+
+#: ../portal/src/routes/docs/installation/oracle-cloud/+page.svelte
+msgid "To have it keep trying for longer instead of re-running by hand:"
+msgstr "To have it keep trying for longer instead of re-running by hand:"
+
+#: ../portal/src/routes/docs/installation/oracle-cloud/+page.svelte
+msgid "If anything goes wrong, run it again"
+msgstr "If anything goes wrong, run it again"
+
+#: ../portal/src/routes/docs/installation/oracle-cloud/+page.svelte
+msgid "Running the installer a second time is the fix for almost any failure. It looks every resource up before creating it, and checks the server itself on every run, so a run that was interrupted or stopped part-way carries on from where it got to rather than starting over. It remembers your domain, so the command on its own is enough."
+msgstr "Running the installer a second time is the fix for almost any failure. It looks every resource up before creating it, and checks the server itself on every run, so a run that was interrupted or stopped part-way carries on from where it got to rather than starting over. It remembers your domain, so the command on its own is enough."
+
+#: ../portal/src/routes/docs/installation/oracle-cloud/+page.svelte
+msgid "The script ends by printing your <0>instance key</0>. It is the master credential for this installation, used for administrative API access and account recovery. Save it in a password manager. Running the script again shows it again."
+msgstr "The script ends by printing your <0>instance key</0>. It is the master credential for this installation, used for administrative API access and account recovery. Save it in a password manager. Running the script again shows it again."
+
+#: ../portal/src/routes/docs/installation/oracle-cloud/+page.svelte
+msgid "Download the SSH key the script created. It lives only in your Cloud Shell home, which Oracle deletes after six months without a Cloud Shell session. Use the Cloud Shell menu, <0>Download</0>, and enter <1/>. Nocturne keeps running without it, but it is your only way onto the server."
+msgstr "Download the SSH key the script created. It lives only in your Cloud Shell home, which Oracle deletes after six months without a Cloud Shell session. Use the Cloud Shell menu, <0>Download</0>, and enter <1/>. Nocturne keeps running without it, but it is your only way onto the server."
+
+#: ../portal/src/routes/docs/installation/oracle-cloud/+page.svelte
+msgid "Updates are automatic. Watchtower checks for new Nocturne images daily."
+msgstr "Updates are automatic. Watchtower checks for new Nocturne images daily."
+
+#: ../portal/src/routes/docs/installation/oracle-cloud/+page.svelte
+msgid "Nocturne starts again by itself when the server reboots."
+msgstr "Nocturne starts again by itself when the server reboots."
+
+#: ../portal/src/routes/docs/installation/oracle-cloud/+page.svelte
+msgid "To get a shell on the server, run the SSH command the script printed. Everything lives in <0/>."
+msgstr "To get a shell on the server, run the SSH command the script printed. Everything lives in <0/>."
+
+#: ../portal/src/routes/docs/installation/oracle-cloud/+page.svelte
+msgid "Nothing backs up your data automatically. In the Oracle console, under Block Storage, you can take a backup of the server's boot volume at any time. The free tier includes five volume backups, so take them by hand and delete old ones rather than attaching a scheduled policy."
+msgstr "Nothing backs up your data automatically. In the Oracle console, under Block Storage, you can take a backup of the server's boot volume at any time. The free tier includes five volume backups, so take them by hand and delete old ones rather than attaching a scheduled policy."
+
+#: ../portal/src/routes/docs/installation/oracle-cloud/+page.svelte
+msgid "To remove everything, terminate the instance in the Oracle console, then delete the reserved public IP and the <0>nocturne</0> virtual cloud network."
+msgstr "To remove everything, terminate the instance in the Oracle console, then delete the reserved public IP and the <0>nocturne</0> virtual cloud network."
+
+#: ../portal/src/routes/docs/installation/oracle-cloud/+page.svelte
+msgid "Run Nocturne on Oracle Cloud's Always Free tier. One command in the browser sets up the server, the network, HTTPS and Nocturne itself. No SSH or Docker knowledge needed."
+msgstr "Run Nocturne on Oracle Cloud's Always Free tier. One command in the browser sets up the server, the network, HTTPS and Nocturne itself. No SSH or Docker knowledge needed."
+
+#: ../portal/src/routes/docs/installation/oracle-cloud/+page.svelte
+msgid "What you need"
+msgstr "What you need"
+
+#: ../portal/src/routes/docs/installation/oracle-cloud/+page.svelte
+msgid "No domain yet? Get one from deSEC"
+msgstr "No domain yet? Get one from deSEC"
+
+#: ../portal/src/routes/docs/installation/oracle-cloud/+page.svelte
+msgid "<0>deSEC</0> is a non-profit DNS provider that gives out free names under <1>dedyn.io</1>. With one of those, the installer creates the DNS records for you and there is nothing to configure by hand."
+msgstr "<0>deSEC</0> is a non-profit DNS provider that gives out free names under <1>dedyn.io</1>. With one of those, the installer creates the DNS records for you and there is nothing to configure by hand."
+
+#: ../portal/src/routes/docs/installation/oracle-cloud/+page.svelte
+msgid "The same works for a domain you already own if its DNS is hosted at deSEC. If it is hosted elsewhere, you add two records by hand in Step 3."
+msgstr "The same works for a domain you already own if its DNS is hosted at deSEC. If it is hosted elsewhere, you add two records by hand in Step 3."
+
+#: ../portal/src/routes/docs/installation/oracle-cloud/+page.svelte
+msgid "Before you start: keeping it free"
+msgstr "Before you start: keeping it free"
+
+#: ../portal/src/routes/docs/installation/oracle-cloud/+page.svelte
+msgid "Oracle switches off Always Free servers on trial accounts that it judges idle for seven days in a row. Its measure is whether the processor, network and memory each stayed below 20 percent of capacity for nearly all of that week. A Nocturne server for one person does very little work by that yardstick, so left alone it is likely to be stopped after its first quiet week. There are two ways to prevent that, and one of them changes the command in Step 2, so pick now rather than later."
+msgstr "Oracle switches off Always Free servers on trial accounts that it judges idle for seven days in a row. Its measure is whether the processor, network and memory each stayed below 20 percent of capacity for nearly all of that week. A Nocturne server for one person does very little work by that yardstick, so left alone it is likely to be stopped after its first quiet week. There are two ways to prevent that, and one of them changes the command in Step 2, so pick now rather than later."
+
+#: ../portal/src/routes/docs/installation/oracle-cloud/+page.svelte
+msgid "Pay As You Go suits most people: it is a single change in the Oracle console, adds nothing to the server, and paying accounts are served first when Ampere capacity is scarce. The trade-off is that the card already on file <0>can</0> be charged if anything outside the free allowance is ever created. Choose Folding@home instead if you would rather the account stay a trial that cannot be billed at all, and you do not mind a second piece of software with network access on the server that holds your health data."
+msgstr "Pay As You Go suits most people: it is a single change in the Oracle console, adds nothing to the server, and paying accounts are served first when Ampere capacity is scarce. The trade-off is that the card already on file <0>can</0> be charged if anything outside the free allowance is ever created. Choose Folding@home instead if you would rather the account stay a trial that cannot be billed at all, and you do not mind a second piece of software with network access on the server that holds your health data."
+
+#: ../portal/src/routes/docs/installation/oracle-cloud/+page.svelte
+msgid "Step 1: Open Cloud Shell"
+msgstr "Step 1: Open Cloud Shell"
+
+#: ../portal/src/routes/docs/installation/oracle-cloud/+page.svelte
+msgid "Sign in to the <0>Oracle Cloud console</0> and click the terminal icon in the top-right toolbar, labelled <1>Developer tools</1>, then <2>Cloud Shell</2>. A terminal opens at the bottom of the page. It is already signed in as you, so there is nothing to install or configure."
+msgstr "Sign in to the <0>Oracle Cloud console</0> and click the terminal icon in the top-right toolbar, labelled <1>Developer tools</1>, then <2>Cloud Shell</2>. A terminal opens at the bottom of the page. It is already signed in as you, so there is nothing to install or configure."
+
+#: ../portal/src/routes/docs/installation/oracle-cloud/+page.svelte
+msgid "Step 2: Run the installer"
+msgstr "Step 2: Run the installer"
+
+#: ../portal/src/routes/docs/installation/oracle-cloud/+page.svelte
+msgid "Paste this into Cloud Shell, replacing <0/> with your domain. Nocturne will answer on that name and every site you create gets a subdomain under it, so pick something you are happy to keep. If you chose Folding@home above, add <1/> in front."
+msgstr "Paste this into Cloud Shell, replacing <0/> with your domain. Nocturne will answer on that name and every site you create gets a subdomain under it, so pick something you are happy to keep. If you chose Folding@home above, add <1/> in front."
+
+#: ../portal/src/routes/docs/installation/oracle-cloud/+page.svelte
+msgid "Early on it asks for a deSEC token. <0>Nothing appears on screen as you paste it</0> — the token is hidden, and the installer tells you how many characters it read so you can see the paste landed. If deSEC does not accept it you can paste another. Press Enter with nothing pasted and it prints two records for you to create by hand instead. Either way it keeps working while the server boots, and waits for the records before it requests certificates."
+msgstr "Early on it asks for a deSEC token. <0>Nothing appears on screen as you paste it</0> — the token is hidden, and the installer tells you how many characters it read so you can see the paste landed. If deSEC does not accept it you can paste another. Press Enter with nothing pasted and it prints two records for you to create by hand instead. Either way it keeps working while the server boots, and waits for the records before it requests certificates."
+
+#: ../portal/src/routes/docs/installation/oracle-cloud/+page.svelte
+msgid "Step 3: Add the DNS records"
+msgstr "Step 3: Add the DNS records"
+
+#: ../portal/src/routes/docs/installation/oracle-cloud/+page.svelte
+msgid "Skip this step if you gave the installer a deSEC token. Otherwise, at your domain provider, create two <0>A</0> records pointing at the IP address the script printed:"
+msgstr "Skip this step if you gave the installer a deSEC token. Otherwise, at your domain provider, create two <0>A</0> records pointing at the IP address the script printed:"
+
+#: ../portal/src/routes/docs/installation/oracle-cloud/+page.svelte
+msgid "The second one is a wildcard. It makes every site's subdomain resolve without a record each. If you use Cloudflare, leave the proxy off for both records, shown as a grey cloud. Cloudflare's proxy cannot carry the certificates Nocturne issues for its own subdomains."
+msgstr "The second one is a wildcard. It makes every site's subdomain resolve without a record each. If you use Cloudflare, leave the proxy off for both records, shown as a grey cloud. Cloudflare's proxy cannot carry the certificates Nocturne issues for its own subdomains."
+
+#: ../portal/src/routes/docs/installation/oracle-cloud/+page.svelte
+msgid "Step 4: Create your first site"
+msgstr "Step 4: Create your first site"
+
+#: ../portal/src/routes/docs/installation/oracle-cloud/+page.svelte
+msgid "Once the script reports that Nocturne is answering, open <0/> in a browser. You are taken to the setup page to name your first site and register a passkey, which is your phone's or computer's built-in unlock. Register a second device as soon as you can, because there is no password to fall back on."
+msgstr "Once the script reports that Nocturne is answering, open <0/> in a browser. You are taken to the setup page to name your first site and register a passkey, which is your phone's or computer's built-in unlock. Register a second device as soon as you can, because there is no password to fall back on."
+
+#: ../portal/src/routes/docs/installation/oracle-cloud/+page.svelte
+msgid "Afterwards"
+msgstr "Afterwards"

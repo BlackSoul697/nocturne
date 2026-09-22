@@ -131,6 +131,11 @@ public abstract class BaseConnectorService<TConfig> : IConnectorService<TConfig>
     ///     <see cref="SyncResult.Errors"/> and the summary in <see cref="SyncResult.Message"/>
     ///     because the terminal progress message reads the former and the tenant's sync card the latter.
     /// </summary>
+    /// <remarks>
+    ///     A reason recorded through <see cref="TrackFailedAuthentication"/> names the failure
+    ///     instead. A connector that never reached its source has no credential to fix; telling
+    ///     that person their secret was rejected sends them after the wrong thing.
+    /// </remarks>
     protected SyncResult AuthenticationFailedResult()
     {
         var now = DateTimeOffset.UtcNow;
@@ -139,8 +144,8 @@ public abstract class BaseConnectorService<TConfig> : IConnectorService<TConfig>
             Success = false,
             StartTime = now,
             EndTime = now,
-            Message = "Authentication failed",
-            Errors = { $"Authentication failed for {ConnectorSource}" },
+            Message = _authenticationFailureReason ?? "Authentication failed",
+            Errors = { _authenticationFailureReason ?? $"Authentication failed for {ConnectorSource}" },
         };
     }
 
@@ -1098,6 +1103,60 @@ public abstract class BaseConnectorService<TConfig> : IConnectorService<TConfig>
     }
 
     /// <summary>
+    ///     Submits body-weight measurements to the API (upserted by deterministic Id).
+    /// </summary>
+    protected virtual async Task<bool> PublishBodyWeightDataAsync(
+        IEnumerable<BodyWeight> records,
+        TConfig config,
+        CancellationToken cancellationToken = default
+    )
+    {
+        if (_publisher == null || !_publisher.IsAvailable)
+        {
+            _logger?.LogWarning("Publisher not available for BodyWeight submission");
+            return false;
+        }
+
+        return await _publisher.Metadata.PublishBodyWeightsAsync(records, ConnectorSource, cancellationToken);
+    }
+
+    /// <summary>
+    ///     Submits step-count records to the API (upserted by deterministic Id).
+    /// </summary>
+    protected virtual async Task<bool> PublishStepCountDataAsync(
+        IEnumerable<StepCount> records,
+        TConfig config,
+        CancellationToken cancellationToken = default
+    )
+    {
+        if (_publisher == null || !_publisher.IsAvailable)
+        {
+            _logger?.LogWarning("Publisher not available for StepCount submission");
+            return false;
+        }
+
+        return await _publisher.Metadata.PublishStepCountsAsync(records, ConnectorSource, cancellationToken);
+    }
+
+    /// <summary>
+    ///     Submits heart-rate records to the API (upserted by deterministic Id).
+    /// </summary>
+    protected virtual async Task<bool> PublishHeartRateDataAsync(
+        IEnumerable<HeartRate> records,
+        TConfig config,
+        CancellationToken cancellationToken = default
+    )
+    {
+        if (_publisher == null || !_publisher.IsAvailable)
+        {
+            _logger?.LogWarning("Publisher not available for HeartRate submission");
+            return false;
+        }
+
+        return await _publisher.Metadata.PublishHeartRatesAsync(records, ConnectorSource, cancellationToken);
+    }
+
+    /// <summary>
     ///     Submits V4 DeviceEvent data directly to the API
     /// </summary>
     protected virtual async Task<bool> PublishDeviceEventDataAsync(
@@ -1361,6 +1420,23 @@ public abstract class BaseConnectorService<TConfig> : IConnectorService<TConfig>
 
     private int _failedRequestCount;
 
+    private string? _authenticationFailureReason;
+
+    /// <summary>
+    ///     Records a failed authentication along with what the tenant has to fix, for
+    ///     <see cref="AuthenticationFailedResult"/> to report in place of the generic wording.
+    /// </summary>
+    /// <remarks>
+    ///     Separate from <see cref="TrackFailedRequest"/>: most reasons recorded there are written
+    ///     for the log — "HTTP Unauthorized", "JSON parsing error". Those must not become what a
+    ///     tenant is told to go and do, so only a reason passed here is user-facing.
+    /// </remarks>
+    protected void TrackFailedAuthentication(string reason)
+    {
+        _authenticationFailureReason = reason;
+        TrackFailedRequest(reason);
+    }
+
     protected void TrackFailedRequest(string? reason = null)
     {
         var newCount = Interlocked.Increment(ref _failedRequestCount);
@@ -1383,6 +1459,7 @@ public abstract class BaseConnectorService<TConfig> : IConnectorService<TConfig>
                 previousCount
             );
             Interlocked.Exchange(ref _failedRequestCount, 0);
+            _authenticationFailureReason = null;
         }
     }
 

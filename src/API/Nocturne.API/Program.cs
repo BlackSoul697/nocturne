@@ -158,7 +158,9 @@ builder.Services.AddControllers(options =>
 {
     options.Filters.Add<NightscoutJsonFilter>();
     options.Filters.Add<TenantCacheVaryFilter>();
+    options.Filters.Add<RecreationBlockedFilter>();
     options.Filters.AddService<ReadAccessAuditFilter>();
+    options.AddNocturneBindingConventions();
 })
 .ConfigureApplicationPartManager(manager =>
     AuthorizationConfiguration.ConfigureControllerDiscovery(
@@ -557,7 +559,7 @@ if (!isNSwagGeneration && !app.Environment.IsEnvironment("Testing"))
         await DatabaseInitializationExtensions.MarkInterruptedJobsAsync(migratorConnectionString, logger);
     }
 
-    // Validate RLS, ownership, default privileges, and NoResetOnClose under the app role.
+    // Validate RLS, ownership, default privileges, and pool reset-on-close under the app role.
     await app.Services.ValidateDatabaseConfigurationAsync();
 
     // Sync config-managed OIDC providers to the database (satisfies FK constraints)
@@ -646,7 +648,7 @@ internal class NSwagStartup
 {
     public void ConfigureServices(IServiceCollection services)
     {
-        services.AddControllers()
+        services.AddControllers(options => options.AddNocturneBindingConventions())
             .AddApplicationPart(typeof(Nocturne.API.Program).Assembly);
 
         services.AddOpenApiDocument(NSwagDocumentConfiguration.Configure);

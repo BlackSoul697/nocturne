@@ -1248,6 +1248,10 @@ namespace Nocturne.Infrastructure.Data.Migrations
                         .HasColumnType("jsonb")
                         .HasColumnName("secrets");
 
+                    b.Property<string>("SyncCursorsJson")
+                        .HasColumnType("jsonb")
+                        .HasColumnName("sync_cursors");
+
                     b.Property<DateTime>("SysCreatedAt")
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("sys_created_at");
@@ -1268,7 +1272,10 @@ namespace Nocturne.Infrastructure.Data.Migrations
                         .IsUnique()
                         .HasDatabaseName("ix_connector_configurations_connector_name_tenant");
 
-                    b.ToTable("connector_configurations");
+                    b.ToTable("connector_configurations", t =>
+                        {
+                            t.HasCheckConstraint("ck_connector_configurations_connector_name_lower", "connector_name = lower(connector_name)");
+                        });
                 });
 
             modelBuilder.Entity("Nocturne.Infrastructure.Data.Entities.ConnectorFoodEntryEntity", b =>
@@ -1516,6 +1523,10 @@ namespace Nocturne.Infrastructure.Data.Migrations
                     b.Property<DateTime>("LastReconciledLinkCreatedAt")
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("last_reconciled_link_created_at");
+
+                    b.Property<Guid?>("LastReconciledLinkId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("last_reconciled_link_id");
 
                     b.HasKey("TenantId");
 
@@ -2136,6 +2147,51 @@ namespace Nocturne.Infrastructure.Data.Migrations
                         .HasDatabaseName("ix_in_app_notifications_user_type_source_archived");
 
                     b.ToTable("in_app_notifications");
+                });
+
+            modelBuilder.Entity("Nocturne.Infrastructure.Data.Entities.LabHbA1cResultEntity", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<DateTime?>("DeletedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("deleted_at");
+
+                    b.Property<bool>("DeletedByUser")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(false)
+                        .HasColumnName("deleted_by_user");
+
+                    b.Property<DateTime>("MeasuredAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("measured_at");
+
+                    b.Property<string>("Note")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)")
+                        .HasColumnName("note");
+
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("tenant_id");
+
+                    b.Property<double>("ValuePercent")
+                        .HasColumnType("double precision")
+                        .HasColumnName("value_percent");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("TenantId");
+
+                    b.ToTable("lab_hba1c_results");
                 });
 
             modelBuilder.Entity("Nocturne.Infrastructure.Data.Entities.LinkedRecordEntity", b =>
@@ -2959,6 +3015,15 @@ namespace Nocturne.Infrastructure.Data.Migrations
                         .HasColumnType("character varying(128)")
                         .HasColumnName("legacy_secret_hash");
 
+                    b.Property<string>("LegacyTokenDigest")
+                        .HasMaxLength(40)
+                        .HasColumnType("character varying(40)")
+                        .HasColumnName("legacy_token_digest");
+
+                    b.Property<bool>("LimitTo24Hours")
+                        .HasColumnType("boolean")
+                        .HasColumnName("limit_to_24_hours");
+
                     b.Property<DateTime?>("RevokedAt")
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("revoked_at");
@@ -2988,6 +3053,12 @@ namespace Nocturne.Infrastructure.Data.Migrations
 
                     b.HasIndex("CreatedBySubjectId");
 
+                    b.HasIndex("LegacyTokenDigest")
+                        .HasDatabaseName("ix_oauth_grants_legacy_token_digest")
+                        .HasFilter("legacy_token_digest IS NOT NULL");
+
+                    NpgsqlIndexBuilderExtensions.HasOperators(b.HasIndex("LegacyTokenDigest"), new[] { "varchar_pattern_ops" });
+
                     b.HasIndex("RevokedAt")
                         .HasDatabaseName("ix_oauth_grants_revoked_at")
                         .HasFilter("revoked_at IS NULL");
@@ -3000,6 +3071,10 @@ namespace Nocturne.Infrastructure.Data.Migrations
 
                     b.HasIndex("TenantId", "SubjectId")
                         .HasDatabaseName("ix_oauth_grants_tenant_subject");
+
+                    b.HasIndex("TenantId", "TokenHash")
+                        .HasDatabaseName("ix_oauth_grants_tenant_token_hash")
+                        .HasFilter("token_hash IS NOT NULL");
 
                     b.ToTable("oauth_grants");
                 });
@@ -4152,16 +4227,6 @@ namespace Nocturne.Infrastructure.Data.Migrations
                         .HasColumnType("character varying(500)")
                         .HasColumnName("access_request_message");
 
-                    b.Property<string>("AccessTokenHash")
-                        .HasMaxLength(64)
-                        .HasColumnType("character varying(64)")
-                        .HasColumnName("access_token_hash");
-
-                    b.Property<string>("AccessTokenPrefix")
-                        .HasMaxLength(50)
-                        .HasColumnType("character varying(50)")
-                        .HasColumnName("access_token_prefix");
-
                     b.Property<string>("ApprovalStatus")
                         .IsRequired()
                         .HasMaxLength(20)
@@ -4206,11 +4271,6 @@ namespace Nocturne.Infrastructure.Data.Migrations
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("last_login_at");
 
-                    b.Property<string>("LegacyTokenDigest")
-                        .HasMaxLength(40)
-                        .HasColumnType("character varying(40)")
-                        .HasColumnName("legacy_token_digest");
-
                     b.Property<string>("Name")
                         .IsRequired()
                         .HasMaxLength(255)
@@ -4248,16 +4308,8 @@ namespace Nocturne.Infrastructure.Data.Migrations
 
                     b.HasKey("Id");
 
-                    b.HasIndex("AccessTokenHash")
-                        .IsUnique()
-                        .HasDatabaseName("ix_subjects_access_token_hash");
-
                     b.HasIndex("Email")
                         .HasDatabaseName("ix_subjects_email");
-
-                    b.HasIndex("LegacyTokenDigest")
-                        .HasDatabaseName("ix_subjects_legacy_token_digest")
-                        .HasFilter("legacy_token_digest IS NOT NULL");
 
                     b.HasIndex("Name")
                         .HasDatabaseName("ix_subjects_name");
@@ -4638,6 +4690,10 @@ namespace Nocturne.Infrastructure.Data.Migrations
                         .HasMaxLength(64)
                         .HasColumnType("character varying(64)")
                         .HasColumnName("share_token");
+
+                    b.Property<string>("ShareTokenEncrypted")
+                        .HasColumnType("text")
+                        .HasColumnName("share_token_encrypted");
 
                     b.Property<DateTime?>("ShareTokenSetAt")
                         .HasColumnType("timestamp with time zone")
@@ -8609,6 +8665,15 @@ namespace Nocturne.Infrastructure.Data.Migrations
                 });
 
             modelBuilder.Entity("Nocturne.Infrastructure.Data.Entities.InAppNotificationEntity", b =>
+                {
+                    b.HasOne("Nocturne.Infrastructure.Data.Entities.TenantEntity", null)
+                        .WithMany()
+                        .HasForeignKey("TenantId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("Nocturne.Infrastructure.Data.Entities.LabHbA1cResultEntity", b =>
                 {
                     b.HasOne("Nocturne.Infrastructure.Data.Entities.TenantEntity", null)
                         .WithMany()

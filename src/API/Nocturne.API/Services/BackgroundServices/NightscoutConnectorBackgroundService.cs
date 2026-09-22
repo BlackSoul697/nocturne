@@ -41,12 +41,16 @@ public class NightscoutConnectorBackgroundService
     private static readonly TimeSpan ConnectTimeout = TimeSpan.FromSeconds(10);
 
     /// <param name="serviceProvider">Service provider used to create a DI scope per sync cycle.</param>
+    /// <param name="budget">The process-wide budget.</param>
     /// <param name="logger">Logger instance for this background service.</param>
+    /// <param name="nudge">Delivers configuration writes for this connector.</param>
     public NightscoutConnectorBackgroundService(
         IServiceProvider serviceProvider,
-        ILogger<NightscoutConnectorBackgroundService> logger
+        ConnectorSyncBudget budget,
+        ILogger<NightscoutConnectorBackgroundService> logger,
+        ConnectorPollerNudge? nudge = null
     )
-        : base(serviceProvider, logger) { }
+        : base(serviceProvider, budget, logger, nudge) { }
 
     /// <inheritdoc />
     protected override async Task StartRealtimeListenersAsync(CancellationToken cancellationToken)
@@ -121,9 +125,16 @@ public class NightscoutConnectorBackgroundService
         if (!config.Enabled || string.IsNullOrWhiteSpace(config.Url))
             return;
 
-        // Tenants may store a bare host with no scheme. Normalise through the same helper the sync
-        // path uses so a URL that polls fine does not fail here on Uri parsing.
-        if (ResolveListenerBaseUrl(config.Url, tenantSlug) is not { } socketUrl)
+        // A deployment may expose bounded REST reads through an adapter while the original
+        // Nightscout origin still provides Socket.IO. Keep Url as the polling source and use the
+        // optional real-time origin only for the listener. Existing configurations fall back to
+        // Url unchanged. Both values may be bare hosts, so normalise through the same helper the
+        // sync path uses rather than parsing them directly.
+        var realtimeUrl = string.IsNullOrWhiteSpace(config.RealtimeUrl)
+            ? config.Url
+            : config.RealtimeUrl;
+
+        if (ResolveListenerBaseUrl(realtimeUrl, tenantSlug) is not { } socketUrl)
             return;
 
         var client = new SocketIO(new Uri(socketUrl), new SocketIOOptions

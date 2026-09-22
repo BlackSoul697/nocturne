@@ -20,10 +20,18 @@ export type WebSocketEventsMetadata = {
 
 // WebSocket connection states
 export type WebSocketConnectionStatus =
+  // No connection has been attempted yet. Distinct from 'disconnected', which
+  // is a connection that was attempted and is now down: the store connects only
+  // after its historical fetch resolves, and reporting that wait as a drop is
+  // what made the dashboard flash "Connection Error" on a slow page load.
+  | 'idle'
   | 'connecting'
   | 'connected'
   | 'disconnected'
   | 'reconnecting'
+  // The API's read policy denied this viewer realtime for the tenant. Terminal,
+  // and not a fault: the UI shows "no live updates" rather than an error.
+  | 'unauthorized'
   | 'error';
 
 // WebSocket client configuration

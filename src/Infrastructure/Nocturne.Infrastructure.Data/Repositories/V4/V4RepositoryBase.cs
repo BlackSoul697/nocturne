@@ -2,6 +2,7 @@ using Microsoft.EntityFrameworkCore;
 using Nocturne.Core.Contracts.Audit;
 using Nocturne.Core.Contracts.Events;
 using Nocturne.Core.Contracts.V4;
+using Nocturne.Core.Contracts.V4.Repositories;
 using Nocturne.Core.Models;
 using Nocturne.Core.Models.V4;
 using Nocturne.Infrastructure.Data.Entities;
@@ -99,7 +100,27 @@ public abstract class V4RepositoryBase<TModel, TEntity>
         await V4RecordBroadcast.RaiseAsync(
             _broadcaster, created, updated, deleted.Select(m => m.Id).ToList(), origin, ct);
         await RaiseEntriesProjectionAsync(created, updated, deleted, origin, ct);
+        await RaiseLiveCreatedAsync(created, origin, ct);
     }
+
+    /// <summary>
+    /// Runs the type's domain reaction to just-created records, sharing the <see cref="WriteOrigin.Live"/>
+    /// gate with the broadcast and the legacy projection so backfill imports stay inert here too.
+    /// </summary>
+    private async Task RaiseLiveCreatedAsync(IReadOnlyList<TModel> created, WriteOrigin origin, CancellationToken ct)
+    {
+        if (origin != WriteOrigin.Live || created.Count == 0)
+            return;
+
+        await OnLiveCreatedAsync(created, ct);
+    }
+
+    /// <summary>
+    /// Hook for a post-commit domain reaction to live creates. Default is a no-op; only types that own a
+    /// reaction override it (device events advance tracker instances). Runs after the write has committed,
+    /// so an override that throws faults the caller on work the write itself no longer depends on.
+    /// </summary>
+    protected virtual Task OnLiveCreatedAsync(IReadOnlyList<TModel> created, CancellationToken ct) => Task.CompletedTask;
 
     /// <summary>
     /// The coarse substitute for per-record delete events when a delete matched more rows than
@@ -218,7 +239,27 @@ public abstract class V4RepositoryBase<TModel, TEntity>
     public virtual async Task<TModel> CreateAsync(TModel model, WriteOrigin origin, CancellationToken ct = default)
     {
         await using var ctx = await ContextFactory.CreateAsync(ct);
-        var entity = ToEntity(model);
+        return await InsertAsync(ctx, ToEntity(model), origin, ct);
+    }
+
+    /// <summary>
+    /// The insert tail both single-create paths share: the LegacyId guard
+    /// <see cref="BulkCreateAsync"/> applies to its insert set, the insert itself, and the create
+    /// broadcast.
+    /// </summary>
+    /// <exception cref="RecreationBlockedException">
+    /// The LegacyId is held by a stored row, per
+    /// <see cref="SoftDeleteDedupExtensions.GetBlockingLegacyIdsAsync{TEntity}"/>.
+    /// </exception>
+    protected async Task<TModel> InsertAsync(
+        NocturneDbContext ctx, TEntity entity, WriteOrigin origin, CancellationToken ct)
+    {
+        if (!string.IsNullOrEmpty(entity.LegacyId)
+            && (await ctx.GetBlockingLegacyIdsAsync<TEntity>([entity.LegacyId], ct)).Count > 0)
+        {
+            throw new RecreationBlockedException(typeof(TModel).Name, $"legacy id '{entity.LegacyId}'");
+        }
+
         ctx.Set<TEntity>().Add(entity);
         await ctx.SaveChangesAsync(ct);
         var created = ToDomain(entity);
@@ -248,6 +289,108 @@ public abstract class V4RepositoryBase<TModel, TEntity>
         if (materiallyChanged)
             await RaiseBroadcastAsync([], [updated], [], origin, ct);
         return updated;
+    }
+
+    /// <inheritdoc cref="ILegacyKeyedRepository{T}.BulkUpsertByLegacyIdAsync" />
+    /// <remarks>
+    /// The batch twin of <see cref="GetByLegacyIdAsync"/> followed by <see cref="CreateAsync"/> or
+    /// <see cref="UpdateAsync"/> per record, with the same soft-delete visibility (the stored-row query
+    /// runs under the context's filters), the same recreation guard, and the same
+    /// <see cref="HasMaterialChange"/> gate on the update broadcast. The gate decides the broadcast
+    /// only: the save always runs, because a change the gate does not count — a correlation id
+    /// converging onto its anchor's — still has to reach the row. Change detection runs once over the
+    /// batch and stays off through the save, the contract
+    /// <see cref="NocturneDbContext.SaveChangesAsync(CancellationToken)"/> honours for a caller that
+    /// has already detected. Inserted rows go through <see cref="PostCommitDedupAsync"/> as
+    /// <see cref="BulkCreateAsync"/>'s do, so the dedup participants keyed by legacy id alone link
+    /// their canonical groups on this path too.
+    /// </remarks>
+    public virtual async Task<IReadOnlyDictionary<string, LegacyUpsert<TModel>>> BulkUpsertByLegacyIdAsync(
+        IReadOnlyList<TModel> records,
+        WriteOrigin origin,
+        bool preserveStoredCorrelationId = false,
+        CancellationToken ct = default)
+    {
+        var byLegacyId = new Dictionary<string, TModel>(StringComparer.Ordinal);
+        foreach (var record in records)
+        {
+            if (!string.IsNullOrEmpty(record.LegacyId))
+                byLegacyId[record.LegacyId] = record;
+        }
+
+        var outcomes = new Dictionary<string, LegacyUpsert<TModel>>(StringComparer.Ordinal);
+        if (byLegacyId.Count == 0)
+            return outcomes;
+
+        await using var ctx = await ContextFactory.CreateAsync(ct);
+
+        var legacyIds = byLegacyId.Keys.ToList();
+        var stored = await ctx.Set<TEntity>()
+            .Where(e => e.LegacyId != null && legacyIds.Contains(e.LegacyId))
+            .ToListAsync(ct);
+        var storedByLegacyId = new Dictionary<string, TEntity>(StringComparer.Ordinal);
+        foreach (var entity in stored)
+            storedByLegacyId.TryAdd(entity.LegacyId!, entity);
+
+        var inserted = new List<(string LegacyId, TEntity Entity)>();
+        var updated = new List<(string LegacyId, TEntity Entity)>();
+        foreach (var (legacyId, model) in byLegacyId)
+        {
+            if (storedByLegacyId.TryGetValue(legacyId, out var entity))
+            {
+                if (preserveStoredCorrelationId
+                    && entity.CorrelationId is { } storedCorrelationId
+                    && storedCorrelationId != Guid.Empty)
+                {
+                    model.CorrelationId = storedCorrelationId;
+                }
+
+                model.Id = entity.Id;
+                ApplyUpdate(entity, model);
+                updated.Add((legacyId, entity));
+            }
+            else
+            {
+                inserted.Add((legacyId, ToEntity(model)));
+            }
+        }
+
+        if (inserted.Count > 0)
+        {
+            var blocked = await ctx.GetBlockingLegacyIdsAsync<TEntity>(
+                inserted.Select(i => i.LegacyId).ToHashSet(StringComparer.Ordinal), ct);
+            inserted.RemoveAll(i => blocked.Contains(i.LegacyId));
+            ctx.Set<TEntity>().AddRange(inserted.Select(i => i.Entity));
+        }
+
+        var materiallyChanged = new List<TEntity>();
+        var autoDetect = ctx.ChangeTracker.AutoDetectChangesEnabled;
+        ctx.ChangeTracker.DetectChanges();
+        ctx.ChangeTracker.AutoDetectChangesEnabled = false;
+        try
+        {
+            materiallyChanged.AddRange(updated.Select(u => u.Entity).Where(e => HasMaterialChange(ctx, e)));
+            await ctx.SaveChangesAsync(ct);
+        }
+        finally
+        {
+            ctx.ChangeTracker.AutoDetectChangesEnabled = autoDetect;
+        }
+
+        await PostCommitDedupAsync(ctx, inserted.Select(i => i.Entity).ToList(), origin, ct);
+
+        foreach (var (legacyId, entity) in inserted)
+            outcomes[legacyId] = new LegacyUpsert<TModel>(ToDomain(entity), Created: true);
+        foreach (var (legacyId, entity) in updated)
+            outcomes[legacyId] = new LegacyUpsert<TModel>(ToDomain(entity), Created: false);
+
+        await RaiseBroadcastAsync(
+            inserted.Select(i => outcomes[i.LegacyId].Record).ToList(),
+            materiallyChanged.Select(ToDomain).ToList(),
+            [],
+            origin, ct);
+
+        return outcomes;
     }
 
     /// <inheritdoc cref="Core.Contracts.V4.Repositories.IV4Repository{T}.DeleteAsync" />

@@ -1,5 +1,4 @@
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.AspNetCore.Mvc.ModelBinding;
 using Microsoft.AspNetCore.RateLimiting;
 using Nocturne.API.Attributes;
 using Nocturne.API.Extensions;
@@ -369,8 +368,8 @@ public class StatisticsController : ControllerBase
     [RemoteQuery]
     [ResponseCache(Duration = 60, VaryByQueryKeys = new[] { "*" })]
     public async Task<ActionResult<ReportAnalysisResult>> GetRangeAnalytics(
-        [FromQuery, BindRequired] DateTime startDate,
-        [FromQuery, BindRequired] DateTime endDate,
+        [FromQuery] DateTime startDate,
+        [FromQuery] DateTime endDate,
         [FromQuery] DiabetesPopulation population = DiabetesPopulation.Type1Adult,
         [FromQuery] Guid? patientDeviceId = null,
         CancellationToken cancellationToken = default
@@ -459,8 +458,8 @@ public class StatisticsController : ControllerBase
     [RemoteQuery]
     [ResponseCache(Duration = 60, VaryByQueryKeys = new[] { "*" })]
     public async Task<ActionResult<IEnumerable<WeekdayGlucoseSlot>>> GetWeekdayAverages(
-        [FromQuery, BindRequired] DateTime startDate,
-        [FromQuery, BindRequired] DateTime endDate,
+        [FromQuery] DateTime startDate,
+        [FromQuery] DateTime endDate,
         CancellationToken cancellationToken = default
     )
     {
@@ -915,8 +914,8 @@ public class StatisticsController : ControllerBase
     [RequireScope(Scope.ReportsRead)]
     [RemoteQuery]
     public async Task<ActionResult<DailyBasalBolusRatioResponse>> GetDailyBasalBolusRatios(
-        [FromQuery, BindRequired] DateTime startDate,
-        [FromQuery, BindRequired] DateTime endDate
+        [FromQuery] DateTime startDate,
+        [FromQuery] DateTime endDate
     )
     {
         var startDt = DateTime.SpecifyKind(startDate, DateTimeKind.Utc);
@@ -953,8 +952,8 @@ public class StatisticsController : ControllerBase
     [RequireScope(Scope.GlucoseRead)]
     [RemoteQuery]
     public async Task<ActionResult<PunchCardResponse>> GetPunchCardData(
-        [FromQuery, BindRequired] DateTime startDate,
-        [FromQuery, BindRequired] DateTime endDate,
+        [FromQuery] DateTime startDate,
+        [FromQuery] DateTime endDate,
         CancellationToken cancellationToken = default
     )
     {
@@ -1148,8 +1147,8 @@ public class StatisticsController : ControllerBase
     [RequireScope(Scope.ReportsRead)]
     [RemoteQuery]
     public async Task<ActionResult<InsulinDeliveryStatistics>> GetInsulinDeliveryStatistics(
-        [FromQuery, BindRequired] DateTime startDate,
-        [FromQuery, BindRequired] DateTime endDate
+        [FromQuery] DateTime startDate,
+        [FromQuery] DateTime endDate
     )
     {
         var startDt = DateTime.SpecifyKind(startDate, DateTimeKind.Utc);
@@ -1193,8 +1192,8 @@ public class StatisticsController : ControllerBase
     [RequireScope(Scope.ReportsRead)]
     [RemoteQuery]
     public async Task<ActionResult<BasalAnalysisResponse>> GetBasalAnalysis(
-        [FromQuery, BindRequired] DateTime startDate,
-        [FromQuery, BindRequired] DateTime endDate
+        [FromQuery] DateTime startDate,
+        [FromQuery] DateTime endDate
     )
     {
         // Force UTC kind to avoid DateTimeOffset throwing when the server's local
@@ -1240,8 +1239,8 @@ public class StatisticsController : ControllerBase
     [RequireScope(Scope.ReportsRead)]
     [RemoteQuery]
     public async Task<ActionResult<HourlyInsulinDeliveryResponse>> GetHourlyInsulinDelivery(
-        [FromQuery, BindRequired] DateTime startDate,
-        [FromQuery, BindRequired] DateTime endDate
+        [FromQuery] DateTime startDate,
+        [FromQuery] DateTime endDate
     )
     {
         var startUtc = DateTime.SpecifyKind(startDate, DateTimeKind.Utc);
@@ -1274,26 +1273,30 @@ public class StatisticsController : ControllerBase
     /// </summary>
     /// <param name="startDate">Inclusive start of the analysis period (UTC).</param>
     /// <param name="endDate">Inclusive end of the analysis period (UTC).</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
     /// <returns>An <see cref="AidSystemMetrics"/> object containing loop-on time, site-change counts,
     /// CGM active percent, and per-algorithm segment breakdowns.</returns>
     /// <remarks>
     /// Fetches APS snapshots, temp basals, device events, glucose readings, and target-range schedules
-    /// from their respective repositories. CGM metrics are derived from <see cref="IStatisticsService.AnalyzeGlucoseData"/>.
+    /// from their respective repositories. CGM active time comes from
+    /// <see cref="IStatisticsService.CalculateCgmActivePercent"/>, measured against the registered
+    /// CGMs' windows where the tenant has registered any.
     /// Target range is optional; the method continues without it if the repository throws.
     /// </remarks>
     [HttpGet("aid-system-metrics")]
     [RequireScope(Scope.ReportsRead)]
     [RemoteQuery]
     public async Task<ActionResult<AidSystemMetrics>> GetAidSystemMetrics(
-        [FromQuery, BindRequired] DateTime startDate,
-        [FromQuery, BindRequired] DateTime endDate
+        [FromQuery] DateTime startDate,
+        [FromQuery] DateTime endDate,
+        CancellationToken cancellationToken = default
     )
     {
         var startDt = DateTime.SpecifyKind(startDate, DateTimeKind.Utc);
         var endDt = DateTime.SpecifyKind(endDate, DateTimeKind.Utc);
 
         // Fetch patient devices overlapping the date range
-        var devices = await _patientDeviceRepository.GetByDateRangeAsync(startDt, endDt);
+        var devices = await _patientDeviceRepository.GetByDateRangeAsync(startDt, endDt, ct: cancellationToken);
 
         // Map patient devices to segment inputs
         var deviceSegments = devices
@@ -1312,17 +1315,18 @@ public class StatisticsController : ControllerBase
             })
             .ToList();
 
-        var apsTask     = _apsSnapshotRepository.GetAsync(startDt, endDt, null, null, 50000, descending: false);
-        var basalTask   = _tempBasalRepository.GetAsync(startDt, endDt, null, null, 50000, descending: false);
-        var eventTask   = _deviceEventRepository.GetAsync(startDt, endDt, null, null, 10000, descending: false);
-        var glucoseTask = _sensorGlucoseRepository.GetAsync(startDt, endDt, null, null, 50000, descending: false);
+        // Limits follow <see cref="GetRangeAnalytics"/>.
+        var apsTask     = _apsSnapshotRepository.GetAsync(startDt, endDt, null, null, int.MaxValue, descending: false, ct: cancellationToken);
+        var basalTask   = _tempBasalRepository.GetAsync(startDt, endDt, null, null, int.MaxValue, descending: false, ct: cancellationToken);
+        var eventTask   = _deviceEventRepository.GetAsync(startDt, endDt, null, null, int.MaxValue, descending: false, ct: cancellationToken);
+        var glucoseTask = _sensorGlucoseRepository.GetAsync(startDt, endDt, null, null, int.MaxValue, descending: false, ct: cancellationToken);
 
         await Task.WhenAll(apsTask, basalTask, eventTask, glucoseTask);
 
         var apsSnapshots = (await apsTask).ToList();
         var tempBasals   = (await basalTask).ToList();
         var deviceEvents = (await eventTask).ToList();
-        var glucose      = (await glucoseTask).ToList();
+        var glucose      = await _canonicalGlucose.SelectAsync((await glucoseTask).ToList(), cancellationToken);
 
         // Count site changes
         var siteChangeCount = deviceEvents.Count(e =>
@@ -1339,80 +1343,43 @@ public class StatisticsController : ControllerBase
             : null;
 
         // Resolve pump device names
-        var pumpDeviceNames = deviceSegments.Count > 0
-            ? string.Join(", ", devices
-                .Where(d => d.DeviceCategory == DeviceCategory.InsulinPump)
-                .Select(d => d.CatalogId != null ? DeviceCatalog.GetById(d.CatalogId)?.Name : null)
-                .Where(n => n != null)
-                .Distinct())
-            : null;
+        var pumpDevices = devices.Where(d => d.DeviceCategory == DeviceCategory.InsulinPump).ToList();
+        var pumpCatalogNames = pumpDevices
+            .Select(d => d.CatalogId != null ? DeviceCatalog.GetById(d.CatalogId)?.Name : null)
+            .Where(n => !string.IsNullOrWhiteSpace(n))
+            .Distinct()
+            .ToList();
+        var pumpDeviceNames = pumpCatalogNames.Count > 0
+            ? string.Join(", ", pumpCatalogNames)
+            : pumpDevices
+                .Select(d => !string.IsNullOrWhiteSpace(d.Model) ? d.Model : d.Manufacturer)
+                .FirstOrDefault(n => !string.IsNullOrWhiteSpace(n));
 
-        // Calculate per-device CGM active time
-        double? cgmActivePercent = null;
-        if (glucose.Count > 0)
-        {
-            if (cgmDevices.Count > 0)
-            {
-                double totalExpected = 0;
-                double totalActual = 0;
-
-                foreach (var cgm in cgmDevices)
-                {
-                    var catalogEntry = cgm.CatalogId != null ? DeviceCatalog.GetById(cgm.CatalogId) : null;
-                    var interval = catalogEntry?.Cgm?.UpdateIntervalMinutes ?? 5;
-                    var deviceStart = cgm.StartDate.HasValue
-                        ? DateTime.SpecifyKind(cgm.StartDate.Value.ToDateTime(TimeOnly.MinValue), DateTimeKind.Utc)
-                        : startDt;
-                    var deviceEnd = cgm.EndDate.HasValue
-                        ? DateTime.SpecifyKind(cgm.EndDate.Value.ToDateTime(new TimeOnly(23, 59, 59)), DateTimeKind.Utc)
-                        : endDt;
-                    var windowStart = deviceStart > startDt ? deviceStart : startDt;
-                    var windowEnd = deviceEnd < endDt ? deviceEnd : endDt;
-                    var windowMinutes = (windowEnd - windowStart).TotalMinutes;
-
-                    if (windowMinutes <= 0) continue;
-
-                    totalExpected += windowMinutes / interval;
-                    totalActual += glucose.Count(r => r.PatientDeviceId == cgm.Id);
-                }
-
-                // Count unattributed readings with fallback interval
-                var unattributed = glucose.Count(r => r.PatientDeviceId == null);
-                if (unattributed > 0 && cgmDevices.Count == 0)
-                {
-                    var fallbackSource = glucose.FirstOrDefault(r => r.PatientDeviceId == null)?.DataSource;
-                    var fallbackInterval = DataSources.GetDefaultUpdateIntervalMinutes(fallbackSource);
-                    totalExpected += (endDt - startDt).TotalMinutes / fallbackInterval;
-                    totalActual += unattributed;
-                }
-
-                cgmActivePercent = totalExpected > 0
-                    ? Math.Min(Math.Round(totalActual / totalExpected * 100.0, 1), 100.0)
-                    : null;
-            }
-            else
-            {
-                // No device registered — use AnalyzeGlucoseData with defaults
-                var analytics = _statisticsService.AnalyzeGlucoseData(
-                    glucose, Enumerable.Empty<Bolus>(), Enumerable.Empty<CarbIntake>(),
-                    startDate: startDt, endDate: endDt);
-                cgmActivePercent = analytics.DataQuality.CgmActivePercent;
-            }
-        }
+        var cgmActivePercent = _statisticsService.CalculateCgmActivePercent(
+            glucose,
+            startDt,
+            endDt,
+            cgmDevices
+                .Select(d => new CgmDeviceWindow(
+                    d.Id,
+                    d.StartDate?.ToDateTime(TimeOnly.MinValue, DateTimeKind.Utc),
+                    d.EndDate?.ToDateTime(new TimeOnly(23, 59, 59), DateTimeKind.Utc),
+                    d.CatalogId != null ? DeviceCatalog.GetById(d.CatalogId)?.Cgm?.UpdateIntervalMinutes : null))
+                .ToList());
 
         // Get target range from target range schedule repository
         double? targetLow = null;
         double? targetHigh = null;
         try
         {
-            var activeSchedule = await GetActiveTargetRangeScheduleAsync(HttpContext.RequestAborted);
+            var activeSchedule = await GetActiveTargetRangeScheduleAsync(cancellationToken);
             if (activeSchedule?.Entries.Count > 0)
             {
                 targetLow = activeSchedule.Entries.Min(e => e.Low);
                 targetHigh = activeSchedule.Entries.Max(e => e.High);
             }
         }
-        catch
+        catch (Exception ex) when (ex is not OperationCanceledException)
         {
             // Target range is optional — continue without it
         }

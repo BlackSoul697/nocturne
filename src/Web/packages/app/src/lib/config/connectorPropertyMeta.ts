@@ -173,6 +173,11 @@ export const connectorPropertyMeta = {
     description: 'Site URL (e.g., https://yoursite.herokuapp.com)',
     category: 'General',
   },
+  RealtimeUrl: {
+    label: 'Realtime URL',
+    description: 'Optional Nightscout origin used for live Socket.IO updates when the data URL is an adapter',
+    category: 'Advanced',
+  },
   ApiSecret: {
     label: 'API Secret',
     description: 'Nightscout API_SECRET for authentication',
@@ -188,6 +193,12 @@ export const connectorPropertyMeta = {
   UseV3Api: {
     label: 'Use V3 API',
     description: 'Use the newer Glooko V3 API for data retrieval',
+    category: 'Advanced',
+  },
+  UseSsv2Sync: {
+    label: 'Use Granular Sync (Experimental)',
+    description:
+      'Sync each kind of data from its own Glooko feed, resuming where the last sync stopped instead of re-reading a date window. Imports pen injections, app-logged doses, extended boluses and more. Replaces the V3 API setting when on.',
     category: 'Advanced',
   },
   V3IncludeCgmBackfill: {
@@ -228,10 +239,10 @@ export const connectorPropertyMeta = {
     category: 'Advanced',
   },
 
-  // MyFitnessPal-specific
+  // MyFitnessPal and Glooko
   LookbackDays: {
     label: 'Lookback Days',
-    description: 'Number of days of historical data to retrieve',
+    description: 'How many days back each sync reaches',
     category: 'Sync',
   },
   LastFullWalkAt: {

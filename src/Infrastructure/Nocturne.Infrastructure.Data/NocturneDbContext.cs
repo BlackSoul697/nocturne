@@ -263,6 +263,9 @@ public class NocturneDbContext : DbContext, IDataProtectionKeyContext
 
     public DbSet<NoteEntity> Notes { get; set; }
 
+    /// <summary>Manually-entered lab HbA1c results, compared against the computed eHbA1c estimate.</summary>
+    public DbSet<LabHbA1cResultEntity> LabHbA1cResults { get; set; }
+
     public DbSet<DeviceEventEntity> DeviceEvents { get; set; }
 
     public DbSet<BolusCalculationEntity> BolusCalculations { get; set; }
@@ -991,20 +994,6 @@ public class NocturneDbContext : DbContext, IDataProtectionKeyContext
 
         modelBuilder
             .Entity<SubjectEntity>()
-            .HasIndex(s => s.AccessTokenHash)
-            .HasDatabaseName("ix_subjects_access_token_hash")
-            .IsUnique();
-
-        // Legacy Nightscout digest is prefix-matched (not equality), so this index only
-        // narrows the candidate set; it is filtered to the small migrated-subject population.
-        modelBuilder
-            .Entity<SubjectEntity>()
-            .HasIndex(s => s.LegacyTokenDigest)
-            .HasDatabaseName("ix_subjects_legacy_token_digest")
-            .HasFilter("legacy_token_digest IS NOT NULL");
-
-        modelBuilder
-            .Entity<SubjectEntity>()
             .HasIndex(s => s.Email)
             .HasDatabaseName("ix_subjects_email");
 
@@ -1411,6 +1400,17 @@ public class NocturneDbContext : DbContext, IDataProtectionKeyContext
             .HasDatabaseName("ix_connector_configurations_connector_name_tenant")
             .IsUnique();
 
+        // The index above is case-sensitive, so it only means "one row per connector per tenant"
+        // while the column holds one spelling of each name. Enforced here rather than trusted to
+        // the writers: a writer that predates the rule — an instance still serving during a rolling
+        // deploy, or an operator's own SQL — would otherwise insert a row that satisfies the index
+        // and that no lookup can ever find again.
+        modelBuilder
+            .Entity<ConnectorConfigurationEntity>()
+            .ToTable(t => t.HasCheckConstraint(
+                "ck_connector_configurations_connector_name_lower",
+                "connector_name = lower(connector_name)"));
+
         modelBuilder.Entity<PlatformSettingsEntity>()
             .HasIndex(ps => ps.Category)
             .HasDatabaseName("ix_platform_settings_category")
@@ -1497,6 +1497,28 @@ public class NocturneDbContext : DbContext, IDataProtectionKeyContext
             .HasIndex(g => g.RevokedAt)
             .HasDatabaseName("ix_oauth_grants_revoked_at")
             .HasFilter("revoked_at IS NULL");
+
+        // Every request carrying an opaque credential hashes it and looks for this, so without the
+        // index each one scans the tenant's grants. Mirrors ix_oauth_grants_tenant_legacy_secret_hash,
+        // which answers the same question for the api-secret spelling of the same credential.
+        // Not unique: one Nightscout token imported into two tenants is two grants sharing a hash,
+        // and the lookup is tenant-scoped anyway.
+        modelBuilder
+            .Entity<OAuthGrantEntity>()
+            .HasIndex(g => new { g.TenantId, g.TokenHash })
+            .HasDatabaseName("ix_oauth_grants_tenant_token_hash")
+            .HasFilter("token_hash IS NOT NULL");
+
+        // A legacy Nightscout subject token is matched by digest prefix, not equality. A default
+        // btree on a collated text column cannot answer LIKE 'abc%', so without varchar_pattern_ops
+        // this index is unusable and an unauthenticated ?token= miss becomes a sequential scan of
+        // every grant on the instance. Filtered to the small imported-token population.
+        modelBuilder
+            .Entity<OAuthGrantEntity>()
+            .HasIndex(g => g.LegacyTokenDigest)
+            .HasDatabaseName("ix_oauth_grants_legacy_token_digest")
+            .HasOperators("varchar_pattern_ops")
+            .HasFilter("legacy_token_digest IS NOT NULL");
 
         modelBuilder
             .Entity<OAuthRefreshTokenEntity>()
@@ -2484,8 +2506,16 @@ public class NocturneDbContext : DbContext, IDataProtectionKeyContext
     /// <returns>The number of state entries written to the database</returns>
     public override int SaveChanges()
     {
-        UpdateTimestamps();
-        return base.SaveChanges();
+        var autoDetectChanges = DetectChangesOnceForSave();
+        try
+        {
+            UpdateTimestamps();
+            return base.SaveChanges();
+        }
+        finally
+        {
+            ChangeTracker.AutoDetectChangesEnabled = autoDetectChanges;
+        }
     }
 
     /// <summary>
@@ -2495,8 +2525,41 @@ public class NocturneDbContext : DbContext, IDataProtectionKeyContext
     /// <returns>A task that represents the asynchronous save operation. The task result contains the number of state entries written to the database</returns>
     public override async Task<int> SaveChangesAsync(CancellationToken cancellationToken = default)
     {
-        UpdateTimestamps();
-        return await base.SaveChangesAsync(cancellationToken);
+        var autoDetectChanges = DetectChangesOnceForSave();
+        try
+        {
+            UpdateTimestamps();
+            return await base.SaveChangesAsync(cancellationToken);
+        }
+        finally
+        {
+            ChangeTracker.AutoDetectChangesEnabled = autoDetectChanges;
+        }
+    }
+
+    /// <summary>
+    /// Runs the single change-detection pass a save needs, then disables auto-detection for the
+    /// rest of it. Enabled, detection repeats for every <c>ChangeTracker.Entries()</c> call in the
+    /// pipeline — <see cref="UpdateTimestamps"/>, then
+    /// <see cref="Interceptors.MutationAuditInterceptor"/>, then EF's own pass — and every pass
+    /// re-parses two <c>JsonDocument</c>s per jsonb column of every entity whose value keeps
+    /// comparing equal, through <see cref="JsonbStringComparer"/>. The cost of detecting once is
+    /// that a modification made after this point must be recorded through the change tracker;
+    /// see <see cref="Stamp"/>.
+    /// A caller that has already disabled detection keeps its own contract: nothing is detected on
+    /// its behalf and its value is what gets restored.
+    /// </summary>
+    /// <returns>The value <c>AutoDetectChangesEnabled</c> must be restored to once the save ends.</returns>
+    private bool DetectChangesOnceForSave()
+    {
+        var wasEnabled = ChangeTracker.AutoDetectChangesEnabled;
+        if (wasEnabled)
+        {
+            ChangeTracker.DetectChanges();
+            ChangeTracker.AutoDetectChangesEnabled = false;
+        }
+
+        return wasEnabled;
     }
 
     /// <summary>
@@ -2526,9 +2589,9 @@ public class NocturneDbContext : DbContext, IDataProtectionKeyContext
             {
                 systemCreated.SysCreatedAt = utcNow;
             }
-            if (stampUpdated && entry.Entity is ISystemTimestamped systemTimestamped)
+            if (stampUpdated && entry.Entity is ISystemTimestamped)
             {
-                systemTimestamped.SysUpdatedAt = utcNow;
+                Stamp(entry, nameof(ISystemTimestamped.SysUpdatedAt), utcNow);
             }
 
             // Auth/identity tables use the created_at / updated_at convention instead.
@@ -2536,14 +2599,23 @@ public class NocturneDbContext : DbContext, IDataProtectionKeyContext
             {
                 entityCreated.CreatedAt = utcNow;
             }
-            if (stampUpdated && entry.Entity is IEntityTimestamped entityTimestamped)
+            if (stampUpdated && entry.Entity is IEntityTimestamped)
             {
-                entityTimestamped.UpdatedAt = utcNow;
+                Stamp(entry, nameof(IEntityTimestamped.UpdatedAt), utcNow);
             }
 
-            ApplyEntitySpecificTimestamps(entry.Entity, isAdded, stampUpdated, utcNow);
+            ApplyEntitySpecificTimestamps(entry, isAdded, stampUpdated, utcNow);
         }
     }
+
+    /// <summary>
+    /// Writes a timestamp through the change tracker, which is how a modified row's stamp reaches
+    /// the UPDATE now that <see cref="DetectChangesOnceForSave"/> has turned auto-detection off.
+    /// Only the modify path needs it: an added row is inserted from its CLR values whatever the
+    /// modified flags say, so those stamps are plain assignments.
+    /// </summary>
+    private static void Stamp(EntityEntry entry, string propertyName, object value)
+        => entry.Property(propertyName).CurrentValue = value;
 
     /// <summary>
     /// True if the entry has a modified property other than the update-timestamp bookkeeping
@@ -2651,13 +2723,13 @@ public class NocturneDbContext : DbContext, IDataProtectionKeyContext
     /// Applies timestamps for the few entities whose columns do not follow either the
     /// sys_* or created_at/updated_at conventions covered by the marker interfaces.
     /// </summary>
-    private static void ApplyEntitySpecificTimestamps(object entity, bool isAdded, bool stampUpdated, DateTime utcNow)
+    private static void ApplyEntitySpecificTimestamps(EntityEntry entry, bool isAdded, bool stampUpdated, DateTime utcNow)
     {
-        switch (entity)
+        switch (entry.Entity)
         {
             // Nullable updated_at, set alongside its ISystemTimestamped stamps.
-            case ClockFaceEntity clockFace when stampUpdated:
-                clockFace.UpdatedAt = utcNow;
+            case ClockFaceEntity when stampUpdated:
+                Stamp(entry, nameof(ClockFaceEntity.UpdatedAt), utcNow);
                 break;
             // Mirror of sys_created_at on a DateTimeOffset column, set on insert only.
             case ConnectorConfigurationEntity connectorConfig when isAdded:
