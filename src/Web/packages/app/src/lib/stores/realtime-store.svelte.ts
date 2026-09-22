@@ -153,7 +153,7 @@ export class RealtimeStore {
 
   /** Connection state (with safe initialization) */
   connectionStatus = $derived(
-    this.websocketClient?.connectionStatus || "disconnected"
+    this.websocketClient?.connectionStatus || "idle"
   );
   isConnected = $derived(this.websocketClient?.isConnected || false);
   connectionError = $derived(this.websocketClient?.lastError || null);
