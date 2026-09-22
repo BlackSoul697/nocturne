@@ -20,11 +20,11 @@ namespace Nocturne.API.Middleware;
 /// </summary>
 /// <remarks>
 /// <para>
-/// Pipeline order (position 4 of 7 custom middleware):
+/// Pipeline order (position 4 of 6 custom middleware):
 /// <see cref="JsonExtensionMiddleware"/>,
 /// <see cref="OidcCallbackRedirectMiddleware"/>, <see cref="Multitenancy.TenantResolutionMiddleware"/>,
 /// <b>TenantSetupMiddleware</b>, <see cref="AuthenticationMiddleware"/>,
-/// <see cref="MemberScopeMiddleware"/>, <see cref="SiteSecurityMiddleware"/>.
+/// <see cref="MemberScopeMiddleware"/>.
 /// </para>
 /// <para>
 /// Endpoints decorated with <see cref="AllowDuringSetupAttribute"/> bypass both the
@@ -211,25 +211,14 @@ public class TenantSetupMiddleware
             return SetupGate.SetupRequired;
         }
 
-        // Check 2: Does this tenant have any orphaned subjects?
-        // Subjects are not tenant-scoped — join through TenantMembers to scope to this tenant.
-        var orphanedSubjects = await db.TenantMembers
-            .Where(tm => tm.TenantId == tenantId)
-            .Join(
-                db.Subjects.Where(s => s.IsActive && !s.IsSystemSubject),
-                tm => tm.SubjectId,
-                s => s.Id,
-                (tm, s) => s)
-            .Where(s =>
-                !db.SubjectOidcIdentities.Any(i => i.SubjectId == s.Id) &&
-                !db.PasskeyCredentials.Any(p => p.SubjectId == s.Id))
+        var orphanedSubjects = await db.OrphanedSubjectsOf(tenantId)
             .Select(s => new { s.Id, s.Name, s.Username })
             .ToListAsync(ct);
 
         if (orphanedSubjects.Count > 0)
         {
             _logger.LogWarning(
-                "Tenant {TenantId} has orphaned subjects — returning 503 recovery_mode. " +
+                "Tenant {TenantId} has orphaned subjects, returning 503 recovery_mode. " +
                 "Path={Path}, OrphanedSubjects={@OrphanedSubjects}",
                 tenantId, path, orphanedSubjects);
 

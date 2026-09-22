@@ -10,6 +10,7 @@
   import { STALE_THRESHOLD_MS } from "$lib/constants/staleness";
   import { GlucoseValueIndicator } from "$lib/components/shared";
   import * as Sidebar from "$lib/components/ui/sidebar";
+  import { createConnectionIndicator } from "$lib/stores/connection-indicator.svelte";
 
   const realtimeStore = tryGetRealtimeStore();
 
@@ -21,7 +22,7 @@
   let scrollThreshold = 10; // Minimum scroll amount to trigger hide/show
 
   // Get direction info for arrow display
-  const directionInfo = $derived(getDirectionInfo(realtimeStore?.direction ?? "NONE"));
+  const directionInfo = $derived(getDirectionInfo(realtimeStore?.direction));
 
   // This header is the only glucose surface on a phone — CurrentBGDisplay hides
   // itself below @md — so it carries the same stale/disconnected states.
@@ -30,7 +31,10 @@
   const now = $derived(realtimeStore?.now ?? Date.now());
   const displayCurrentBG = $derived(formatGlucoseValue(rawCurrentBG, units));
   const isStale = $derived(now - lastUpdated > STALE_THRESHOLD_MS);
-  const isDisconnected = $derived(!(realtimeStore?.isConnected ?? false));
+  const connection = createConnectionIndicator(
+    () => realtimeStore?.connectionStatus ?? "idle"
+  );
+  const isDisconnected = $derived(connection.isDisconnected);
   // No reading yet: show the skeleton rather than rendering the 0 sentinel as a
   // glucose value.
   const isLoading = $derived(rawCurrentBG <= 0);

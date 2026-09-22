@@ -1,7 +1,6 @@
 using Microsoft.AspNetCore.SignalR.Client;
 using Microsoft.EntityFrameworkCore;
 using Nocturne.Connectors.Core.Interfaces;
-using Nocturne.Connectors.Core.Models;
 using Nocturne.Connectors.NocturneRemote.Configurations;
 using Nocturne.Connectors.NocturneRemote.Services;
 using Nocturne.Core.Contracts.Multitenancy;
@@ -16,26 +15,22 @@ namespace Nocturne.API.Services.BackgroundServices;
 /// Optionally connects to each tenant's Nocturne SignalR hub to trigger
 /// immediate syncs when upstream data changes.
 /// </summary>
-/// <seealso cref="ConnectorBackgroundService{TConfig}"/>
-public class NocturneRemoteConnectorBackgroundService : ConnectorBackgroundService<NocturneRemoteConnectorConfiguration>
+public class NocturneRemoteConnectorBackgroundService
+    : ConnectorBackgroundService<NocturneRemoteConnectorService, NocturneRemoteConnectorConfiguration>
 {
     private readonly ConcurrentDictionary<Guid, HubConnection> _hubConnections = new();
 
     /// <param name="serviceProvider">Service provider used to create a DI scope per sync cycle.</param>
+    /// <param name="budget">The process-wide budget.</param>
     /// <param name="logger">Logger instance for this background service.</param>
+    /// <param name="nudge">Delivers configuration writes for this connector.</param>
     public NocturneRemoteConnectorBackgroundService(
         IServiceProvider serviceProvider,
-        ILogger<NocturneRemoteConnectorBackgroundService> logger
+        ConnectorSyncBudget budget,
+        ILogger<NocturneRemoteConnectorBackgroundService> logger,
+        ConnectorPollerNudge? nudge = null
     )
-        : base(serviceProvider, logger) { }
-
-    protected override string ConnectorName => "NocturneRemote";
-
-    protected override async Task<SyncResult> PerformSyncAsync(IServiceProvider scopeProvider, NocturneRemoteConnectorConfiguration config, CancellationToken cancellationToken, ISyncProgressReporter? progressReporter = null)
-    {
-        var connectorService = scopeProvider.GetRequiredService<NocturneRemoteConnectorService>();
-        return await connectorService.SyncDataAsync(config, cancellationToken, since: null, progressReporter);
-    }
+        : base(serviceProvider, budget, logger, nudge) { }
 
     /// <inheritdoc />
     protected override async Task StartRealtimeListenersAsync(CancellationToken cancellationToken)
@@ -84,13 +79,16 @@ public class NocturneRemoteConnectorBackgroundService : ConnectorBackgroundServi
                 if (!config.Enabled || string.IsNullOrWhiteSpace(config.Url))
                     continue;
 
-                var hubUrl = $"{config.Url.TrimEnd('/')}/hubs/data";
+                if (ResolveListenerBaseUrl(config.Url, tenant.Slug) is not { } baseUrl)
+                    continue;
+
+                var hubUrl = $"{baseUrl}/hubs/data";
                 var tenantId = tenant.Id;
 
                 var connection = new HubConnectionBuilder()
                     .WithUrl(hubUrl, options =>
                     {
-                        options.Headers.Add("Authorization", $"Bearer {config.Token}");
+                        options.Headers.Add("Authorization", $"Bearer {config.AccessToken}");
                     })
                     .WithAutomaticReconnect(new InfiniteRetryPolicy())
                     .Build();

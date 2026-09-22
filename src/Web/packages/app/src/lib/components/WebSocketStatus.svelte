@@ -24,6 +24,13 @@
           text: 'Connected',
           description: 'Real-time data active'
         };
+      case 'idle':
+        return {
+          variant: 'outline' as const,
+          color: 'bg-gray-500',
+          text: 'Starting',
+          description: 'Waiting to connect'
+        };
       case 'connecting':
         return {
           variant: 'secondary' as const,
@@ -44,6 +51,13 @@
           color: 'bg-gray-500',
           text: 'Disconnected',
           description: 'Using cached data'
+        };
+      case 'unauthorized':
+        return {
+          variant: 'outline' as const,
+          color: 'bg-gray-500',
+          text: 'Not available',
+          description: 'Live updates are not permitted for this view'
         };
       case 'error':
         return {

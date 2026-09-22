@@ -216,27 +216,31 @@ static string GenerateEnvExample(EnvVarGroups groups, EnvVarMeta[] metadata)
         .ToDictionary(m => m.Name, m => $"# {m.Description}");
 
     var sb = new System.Text.StringBuilder();
+
+    void AppendVar(string name, string value)
+    {
+        if (varComments.TryGetValue(name, out var comment))
+            sb.AppendLine(comment);
+        sb.AppendLine($"{name}={value}");
+    }
+
     sb.AppendLine("# Nocturne Production Environment");
     sb.AppendLine("# See: https://github.com/nightscout/nocturne/releases");
     sb.AppendLine("#");
     sb.AppendLine("# Copy this file to .env and fill in the required values.");
     sb.AppendLine("# Passwords are only used on first database initialization.");
     sb.AppendLine();
-    sb.AppendLine("# -- Configuration ---------------------------------------------");
-    sb.AppendLine();
-    foreach (var (name, value) in groups.Config)
-        sb.AppendLine($"{name}={value}");
-    sb.AppendLine();
     sb.AppendLine("# -- Required (set these before first run) ----------------------");
     sb.AppendLine();
     foreach (var (name, _) in groups.RequiredConfig)
-    {
-        if (varComments.TryGetValue(name, out var comment))
-            sb.AppendLine(comment);
-        sb.AppendLine($"{name}=");
-    }
+        AppendVar(name, "");
     foreach (var (name, _) in groups.Secrets)
-        sb.AppendLine($"{name}=");
+        AppendVar(name, "");
+    sb.AppendLine();
+    sb.AppendLine("# -- Configuration (defaults work; change if you need to) --------");
+    sb.AppendLine();
+    foreach (var (name, value) in groups.Config)
+        AppendVar(name, value);
     sb.AppendLine();
     sb.AppendLine("# -- Optional --------------------------------------------------");
     sb.AppendLine();

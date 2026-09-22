@@ -12,43 +12,13 @@
   import { updateLanguagePreference } from "$api/user-preferences.remote";
   import { hasLanguagePreference } from "$lib/stores/appearance-store.svelte";
   import { getMyTenants } from "$lib/api/generated/myTenants.generated.remote";
+  import { ChevronDown, Shield, Eye } from "lucide-svelte";
+  import { buildAppNavigation, type NavItem } from "$lib/navigation/app-navigation";
   import {
-    Home,
-    BarChart3,
-    PieChart,
-    Settings,
-    Clock,
-    User,
-    ChevronDown,
-    Syringe,
-    Apple,
-    Utensils,
-    Bell,
-    BellOff,
-    HeartHandshake,
-    Plug,
-    Calendar,
-    CheckCircle,
-    Terminal,
-    TestTube,
-    Palette,
-    Timer,
-    Layers,
-    ShieldCheck,
-    Building2,
-    Wrench,
-    HeartPulse,
-    ListChecks,
-    Shield,
-    Eye,
-    Users,
-    KeyRound,
-    PlayCircle,
-    History as HistoryIcon,
-  } from "lucide-svelte";
-  import { getSidebarReportItems } from "$lib/navigation/report-navigation";
-  import { filterTenantlessNav } from "$lib/navigation/tenantless-navigation";
-  import { tenantUrl } from "$lib/utils/tenant-host";
+    goToTenant,
+    resolveTenantSwitcher,
+    type TenantSwitcherTarget,
+  } from "$lib/utils/tenant-host";
   import type { AuthUser } from "$lib/stores/auth-store.svelte";
 
   interface Props {
@@ -90,15 +60,8 @@
   });
 
   // Tenant switcher state
-  interface TenantTarget {
-    id: string;
-    slug: string;
-    displayName: string | null;
-  }
-  let tenantTargets = $state<TenantTarget[]>([]);
+  let tenantTargets = $state<TenantSwitcherTarget[]>([]);
   let totalTenantCount = $state(0);
-  let selectedTenantSlug = $state<string | null>(null);
-  let defaultTenantSlug = $state<string | null>(null);
 
   /**
    * Platform-admin "access" mode: the session is a short-lived platform-access grant on a
@@ -117,23 +80,20 @@
       : null,
   );
 
-  // Available tenants for the subdomain switcher.
+  // Available tenants for the subdomain switcher. The switcher is valued by slug, so a host that
+  // names no tenant needs a sentinel; a slug can never be one, having no underscores.
+  const TENANTLESS = "__self__";
   const myTenantsQuery = getMyTenants();
 
   function handleTenantChange(value: string | undefined) {
-    if (!value || !baseDomain) return;
-
-    const targetSlug: string | null =
-      value === "__self__"
-        ? currentSlug
-        : (tenantTargets.find((t) => t.id === value)?.slug ?? null);
-
-    if (targetSlug && targetSlug !== currentSlug) {
-      window.location.href = tenantUrl(targetSlug, baseDomain);
+    if (!value || !baseDomain || value === TENANTLESS || value === currentSlug) {
+      return;
     }
+
+    goToTenant(value, baseDomain);
   }
 
-  function formatTenantLabel(target: TenantTarget): string {
+  function formatTenantLabel(target: TenantSwitcherTarget): string {
     return target.displayName
       ? `${target.displayName} (${target.slug})`
       : target.slug;
@@ -146,195 +106,32 @@
     const tenants = myTenantsQuery.current;
     if (tenants === undefined) return;
 
-    totalTenantCount = (tenants ?? []).length;
-    defaultTenantSlug = (tenants ?? [])[0]?.slug ?? null;
-
-    tenantTargets = (tenants ?? [])
-      .filter(
-        (t): t is typeof t & { id: string; slug: string } =>
-          !!t.id && !!t.slug && t.slug !== currentSlug,
-      )
-      .map((t) => ({
-        id: t.id,
-        slug: t.slug,
-        displayName: t.displayName ?? null,
-      }));
-
-    // Pre-select based on current subdomain
-    selectedTenantSlug =
-      currentSlug && currentSlug !== defaultTenantSlug ? currentSlug : null;
+    const switcher = resolveTenantSwitcher(tenants);
+    totalTenantCount = switcher.totalCount;
+    tenantTargets = switcher.targets;
   });
 
-  type NavItem = {
-    title: string;
-    href?: string;
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    icon: any;
-    strict?: boolean;
-    isActive?: boolean;
-    children?: NavItem[];
-  };
-
-  /** Read-only navigation items shown to guest sessions. */
-  const guestNavTitles = new Set(["Dashboard", "Calendar", "Time Spans", "Reports", "Clock"]);
-
-  const navigation: NavItem[] = $derived.by(() => {
-    const items: NavItem[] = [
-    {
-      title: "Dashboard",
-      href: "/",
-      icon: Home,
-      strict: true,
-    },
-    {
-      title: "Calendar",
-      href: "/calendar",
-      icon: Calendar,
-    },
-    {
-      title: "Time Spans",
-      href: "/time-spans",
-      icon: Layers,
-    },
-    {
-      title: "Reports",
-      icon: BarChart3,
-      children: [
-        { title: "Overview", href: "/reports", icon: PieChart, strict: true },
-        ...getSidebarReportItems(!user),
-      ],
-    },
-    {
-      title: "Clock",
-      href: "/clock",
-      icon: Clock,
-    },
-    ];
-
-    // Guest sessions only see read-only navigation
-    if (isGuestSession) {
-      return items.filter((i) => guestNavTitles.has(i.title));
-    }
-
-    if (totalTenantCount > 1) {
-      items.push({
-        title: "Tenants",
-        href: "/tenants",
-        icon: Users,
-      });
-    }
-
-    items.push(
-    {
-      title: "Food",
-      href: "/food",
-      icon: Apple,
-    },
-    {
-      title: "Meals",
-      href: "/meals",
-      icon: Utensils,
-    },
-    {
-      title: "Tools",
-      icon: Wrench,
-      children: [
-        { title: "Packing", href: "/tools/packing", icon: Wrench },
-      ],
-    },
-    );
-
-    items.push(
-    {
-      title: "Alerts",
-      icon: Bell,
-      children: [
-        { title: "Rules", href: "/alerts", icon: Bell, strict: true },
-        { title: "Simulator", href: "/alerts/simulator", icon: PlayCircle },
-        { title: "Do Not Disturb", href: "/alerts/dnd", icon: BellOff },
-        { title: "History", href: "/alerts/history", icon: HistoryIcon },
-      ],
-    },
-    {
-      title: "Dev Tools",
-      icon: Terminal,
-      children: [
-        {
-          title: "Compatibility",
-          href: "/compatibility",
-          icon: CheckCircle,
-          strict: true,
-        },
-        {
-          title: "Test Endpoint Compatibility",
-          href: "/compatibility/test",
-          icon: TestTube,
-        },
-      ],
-    },
-    {
-      title: "Settings",
-      icon: Settings,
-      children: [
-        { title: "Setup", href: "/setup", icon: ListChecks },
-        { title: "Account", href: "/settings/account", icon: User },
-        {
-          title: "Patient Record",
-          href: "/settings/patient",
-          icon: HeartPulse,
-        },
-        { title: "Appearance", href: "/settings/appearance", icon: Palette },
-        { title: "Therapy", href: "/settings/profile", icon: Syringe },
-        {
-          title: "Data Quality",
-          href: "/settings/data-quality",
-          icon: ShieldCheck,
-        },
-        {
-          title: "Notifications & Trackers",
-          href: "/settings/trackers",
-          icon: Timer,
-        },
-        { title: "Active Access", href: "/settings/access", icon: KeyRound },
-        { title: "Connectors & Apps", href: "/settings/connectors", icon: Plug },
-        { title: "Sharing & Privacy", href: "/settings/members", icon: Users },
-        {
-          title: "Support & Community",
-          href: "/settings/support",
-          icon: HeartHandshake,
-        },
-        ...(isPlatformAdmin
-          ? [
-              { title: "Tenant Management", href: "/settings/admin/tenants", icon: Building2 },
-            ]
-          : []),
-      ],
-    });
-
-    // See tenantless-navigation for why the tenant-scoped pages come out.
-    if (tenantless) {
-      return filterTenantlessNav(items);
-    }
-
-    return items;
+  // A platform-access grant views a tenant the operator is not a member of, so the host's slug
+  // can name a tenant the list does not carry.
+  const viewedTenantLabel = $derived.by(() => {
+    if (!currentSlug) return "My Data";
+    const viewed = tenantTargets.find((t) => t.slug === currentSlug);
+    return viewed ? formatTenantLabel(viewed) : currentSlug;
   });
+
+  const navigation: NavItem[] = $derived(
+    buildAppNavigation({
+      user,
+      isGuestSession,
+      isPlatformAdmin,
+      grantedScopes: page.data.effectivePermissions ?? [],
+      tenantCount: totalTenantCount,
+      tenantless,
+    }),
+  );
 
   // Track which collapsible menus are open
   let openMenus = $state<Record<string, boolean>>({});
-
-  // Check if current path matches or starts with a nav item path
-  // const isActive = (item: NavItem): boolean => {
-  //   if (item.href) {
-  //     if (item.href === "/") {
-  //       return page.url.pathname === "/";
-  //     }
-  //     return page.url.pathname.startsWith(item.href);
-  //   }
-  //   if (item.children) {
-  //     return item.children.some((child) => isActive(child));
-  //   }
-  //   return false;
-  // };
 
   const isActive = (item: NavItem): boolean => {
     if (item.href && item?.strict) {
@@ -436,27 +233,18 @@
       </p>
       <Select.Root
         type="single"
-        value={selectedTenantSlug
-          ? (tenantTargets.find((t) => t.slug === selectedTenantSlug)?.id ??
-            "__self__")
-          : "__self__"}
+        value={currentSlug ?? TENANTLESS}
         onValueChange={handleTenantChange}
       >
         <Select.Trigger size="sm" class="w-full">
-          {#if !selectedTenantSlug}
-            My Data
-          {:else}
-            {#each tenantTargets as target (target.id)}
-              {#if target.slug === selectedTenantSlug}
-                {formatTenantLabel(target)}
-              {/if}
-            {/each}
-          {/if}
+          {viewedTenantLabel}
         </Select.Trigger>
         <Select.Content>
-          <Select.Item value="__self__">My Data</Select.Item>
-          {#each tenantTargets as target (target.id)}
-            <Select.Item value={target.id}>
+          {#if !currentSlug}
+            <Select.Item value={TENANTLESS}>My Data</Select.Item>
+          {/if}
+          {#each tenantTargets as target (target.slug)}
+            <Select.Item value={target.slug}>
               {formatTenantLabel(target)}
             </Select.Item>
           {/each}
@@ -542,11 +330,8 @@
     <Sidebar.Menu>
       {#if !langPrefKnown}
         <Sidebar.MenuItem class="group-data-[collapsible=icon]:hidden">
-          <!-- The language choice still applies to this page; only persisting it needs a tenant
-               (the preferences write is tenant-scoped), so a tenantless host keeps the selector
-               and drops the write rather than losing the control entirely. -->
           <LanguageSelector
-            onLanguageChange={user && !tenantless
+            onLanguageChange={user
               ? (locale: string) =>
                   updateLanguagePreference({ preferredLanguage: locale })
               : undefined}

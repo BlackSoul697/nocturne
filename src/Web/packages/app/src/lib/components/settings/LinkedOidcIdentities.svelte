@@ -11,11 +11,12 @@
     AlertTriangle,
     Check,
   } from "lucide-svelte";
-  import { formatDate } from "$lib/utils/formatting";
+  import { formatMediumDateTime } from "$lib/utils/formatting";
   import {
     getLinkedIdentities,
     unlinkIdentity,
   } from "$lib/api/generated/oidcs.generated.remote";
+  import { describeSubmitError } from "$lib/forms/submit-error";
   import { getProvidersInfo } from "$routes/(unauthenticated)/auth/auth.remote";
 
   interface Props {
@@ -88,8 +89,7 @@
         errorMessage =
           "Cannot remove your only sign-in method. Add another first.";
       } else {
-        errorMessage =
-          err instanceof Error ? err.message : "Failed to remove sign-in method.";
+        errorMessage = describeSubmitError(err, "Failed to remove sign-in method.");
       }
       clearMessagesSoon();
     } finally {
@@ -191,13 +191,13 @@
               {#if identity.linkedAt}
                 <span class="flex items-center gap-1">
                   <Clock class="h-3 w-3" />
-                  Linked {formatDate(identity.linkedAt)}
+                  Linked {formatMediumDateTime(identity.linkedAt)}
                 </span>
               {/if}
               {#if identity.lastUsedAt}
                 <span class="flex items-center gap-1">
                   <Clock class="h-3 w-3" />
-                  Last used {formatDate(identity.lastUsedAt)}
+                  Last used {formatMediumDateTime(identity.lastUsedAt)}
                 </span>
               {/if}
             </div>

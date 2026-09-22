@@ -42,23 +42,6 @@ public class ConnectorConfigurationService : IConnectorConfigurationService
         WriteIndented = false
     };
 
-    private static readonly Dictionary<string, SyncDataType> SyncPropertyToDataType =
-        new(StringComparer.OrdinalIgnoreCase)
-        {
-            ["SyncGlucose"] = SyncDataType.Glucose,
-            ["SyncManualBG"] = SyncDataType.ManualBG,
-            ["SyncBoluses"] = SyncDataType.Boluses,
-            ["SyncCarbIntake"] = SyncDataType.CarbIntake,
-            ["SyncBolusCalculations"] = SyncDataType.BolusCalculations,
-            ["SyncNotes"] = SyncDataType.Notes,
-            ["SyncDeviceEvents"] = SyncDataType.DeviceEvents,
-            ["SyncStateSpans"] = SyncDataType.StateSpans,
-            ["SyncProfiles"] = SyncDataType.Profiles,
-            ["SyncDeviceStatus"] = SyncDataType.DeviceStatus,
-            ["SyncActivity"] = SyncDataType.Activity,
-            ["SyncFood"] = SyncDataType.Food,
-        };
-
     public ConnectorConfigurationService(
         NocturneDbContext context,
         ISecretEncryptionService encryptionService,
@@ -84,10 +67,10 @@ public class ConnectorConfigurationService : IConnectorConfigurationService
         string connectorName,
         CancellationToken ct = default)
     {
-        var connectorNameLower = connectorName.ToLowerInvariant();
+        var canonicalName = ConnectorNames.Canonical(connectorName);
         var entity = await _context.ConnectorConfigurations
             .AsNoTracking()
-            .FirstOrDefaultAsync(c => c.ConnectorName.ToLower() == connectorNameLower, ct);
+            .FirstOrDefaultAsync(c => c.ConnectorName == canonicalName, ct);
 
         if (entity == null)
         {
@@ -170,9 +153,9 @@ public class ConnectorConfigurationService : IConnectorConfigurationService
     {
         await EnsureNotDemoSubjectAsync(connectorName, ct);
 
-        var connectorNameLower = connectorName.ToLowerInvariant();
+        var canonicalName = ConnectorNames.Canonical(connectorName);
         var entity = await _context.ConnectorConfigurations
-            .FirstOrDefaultAsync(c => c.ConnectorName.ToLower() == connectorNameLower, ct);
+            .FirstOrDefaultAsync(c => c.ConnectorName == canonicalName, ct);
 
         var configJson = configuration.RootElement.GetRawText();
 
@@ -183,7 +166,7 @@ public class ConnectorConfigurationService : IConnectorConfigurationService
         {
             entity = new ConnectorConfigurationEntity
             {
-                ConnectorName = connectorName,
+                ConnectorName = canonicalName,
                 ConfigurationJson = configJson,
                 SecretsJson = "{}",
                 LastModified = DateTimeOffset.UtcNow,
@@ -201,16 +184,12 @@ public class ConnectorConfigurationService : IConnectorConfigurationService
         }
 
         await _context.SaveChangesAsync(ct);
-
-        // Invalidate cached auth tokens so the next sync uses fresh credentials
-        var tenantId = _context.TenantId;
-        foreach (var invalidator in _cacheInvalidators)
-            invalidator.Invalidate(connectorName, tenantId);
+        InvalidateCaches(canonicalName);
 
         // Broadcast configuration change
         await _broadcastService.BroadcastConfigChangeAsync(new ConfigurationChangeEvent
         {
-            ConnectorName = connectorName,
+            ConnectorName = canonicalName,
             ChangeType = "updated",
             ModifiedBy = modifiedBy
         });
@@ -241,9 +220,9 @@ public class ConnectorConfigurationService : IConnectorConfigurationService
                 "Secret encryption is not configured. Ensure api-secret is set in configuration.");
         }
 
-        var connectorNameLower = connectorName.ToLowerInvariant();
+        var canonicalName = ConnectorNames.Canonical(connectorName);
         var entity = await _context.ConnectorConfigurations
-            .FirstOrDefaultAsync(c => c.ConnectorName.ToLower() == connectorNameLower, ct);
+            .FirstOrDefaultAsync(c => c.ConnectorName == canonicalName, ct);
 
         var encryptedSecrets = _encryptionService.EncryptSecrets(secrets);
         var secretsJson = JsonSerializer.Serialize(encryptedSecrets, _jsonOptions);
@@ -252,7 +231,7 @@ public class ConnectorConfigurationService : IConnectorConfigurationService
         {
             entity = new ConnectorConfigurationEntity
             {
-                ConnectorName = connectorName,
+                ConnectorName = canonicalName,
                 ConfigurationJson = "{}",
                 SecretsJson = secretsJson,
                 LastModified = DateTimeOffset.UtcNow,
@@ -270,6 +249,7 @@ public class ConnectorConfigurationService : IConnectorConfigurationService
         }
 
         await _context.SaveChangesAsync(ct);
+        InvalidateCaches(canonicalName);
 
         // When saving Nightscout connector secrets that include an API secret,
         // create a DirectGrant with the SHA-1 hash so existing uploaders keep working.
@@ -278,7 +258,7 @@ public class ConnectorConfigurationService : IConnectorConfigurationService
         // Broadcast secrets update (note: doesn't reveal actual secrets)
         await _broadcastService.BroadcastConfigChangeAsync(new ConfigurationChangeEvent
         {
-            ConnectorName = connectorName,
+            ConnectorName = canonicalName,
             ChangeType = "secrets_updated",
             ModifiedBy = modifiedBy
         });
@@ -329,21 +309,11 @@ public class ConnectorConfigurationService : IConnectorConfigurationService
             return;
         }
 
-        var normalizedScopes = OAuthScopes.Normalize([OAuthScopes.HealthReadWrite]).ToList();
-
-        var grant = new OAuthGrantEntity
-        {
-            Id = Guid.CreateVersion7(),
-            ClientEntityId = null,
-            SubjectId = subjectId.Value,
-            GrantType = OAuthGrantTypes.Direct,
-            Scopes = normalizedScopes,
-            Label = "Nightscout (migrated)",
-            TokenHash = null,
-            LegacySecretHash = sha1Hash,
-            IsMigrated = true,
-            CreatedAt = DateTime.UtcNow,
-        };
+        var grant = OAuthGrantEntity.AdoptedLegacyCredential(
+            subjectId.Value,
+            "Nightscout (migrated)",
+            [Scope.HealthReadWrite],
+            legacySecretHash: sha1Hash);
 
         _context.OAuthGrants.Add(grant);
         await _context.SaveChangesAsync(ct);
@@ -364,10 +334,10 @@ public class ConnectorConfigurationService : IConnectorConfigurationService
             return new Dictionary<string, string>();
         }
 
-        var connectorNameLower = connectorName.ToLowerInvariant();
+        var canonicalName = ConnectorNames.Canonical(connectorName);
         var entity = await _context.ConnectorConfigurations
             .AsNoTracking()
-            .FirstOrDefaultAsync(c => c.ConnectorName.ToLower() == connectorNameLower, ct);
+            .FirstOrDefaultAsync(c => c.ConnectorName == canonicalName, ct);
 
         if (entity == null || string.IsNullOrEmpty(entity.SecretsJson) || entity.SecretsJson == "{}")
         {
@@ -391,7 +361,7 @@ public class ConnectorConfigurationService : IConnectorConfigurationService
         }
 
         // Find the configuration class type
-        var configType = FindConfigurationType(connectorName);
+        var configType = FindConfigurationType(connectorName, _logger);
         if (configType == null)
         {
             _logger.LogWarning("Could not find configuration type for connector {ConnectorName}", connectorName);
@@ -471,9 +441,9 @@ public class ConnectorConfigurationService : IConnectorConfigurationService
     {
         await EnsureNotDemoSubjectAsync(connectorName, ct);
 
-        var connectorNameLower = connectorName.ToLowerInvariant();
+        var canonicalName = ConnectorNames.Canonical(connectorName);
         var entity = await _context.ConnectorConfigurations
-            .FirstOrDefaultAsync(c => c.ConnectorName.ToLower() == connectorNameLower, ct);
+            .FirstOrDefaultAsync(c => c.ConnectorName == canonicalName, ct);
 
         // Create the config JSON with the enabled field
         var configWithEnabled = CreateConfigWithEnabled(entity?.ConfigurationJson ?? "{}", isActive);
@@ -482,7 +452,7 @@ public class ConnectorConfigurationService : IConnectorConfigurationService
         {
             entity = new ConnectorConfigurationEntity
             {
-                ConnectorName = connectorName,
+                ConnectorName = canonicalName,
                 ConfigurationJson = configWithEnabled,
                 SecretsJson = "{}",
                 LastModified = DateTimeOffset.UtcNow,
@@ -498,15 +468,27 @@ public class ConnectorConfigurationService : IConnectorConfigurationService
         }
 
         await _context.SaveChangesAsync(ct);
+        InvalidateCaches(canonicalName);
         _logger.LogInformation("Set connector {ConnectorName} active={IsActive}", connectorName, isActive);
 
         // Broadcast enable/disable change
         await _broadcastService.BroadcastConfigChangeAsync(new ConfigurationChangeEvent
         {
-            ConnectorName = connectorName,
+            ConnectorName = canonicalName,
             ChangeType = isActive ? "enabled" : "disabled",
             ModifiedBy = modifiedBy
         });
+    }
+
+    /// <summary>
+    /// Tells every tenant-keyed cache — auth tokens, sessions, the pollers' schedules — that this
+    /// connector's stored configuration changed, so the next sync reads it afresh and runs now.
+    /// </summary>
+    private void InvalidateCaches(string connectorName)
+    {
+        var tenantId = _context.TenantId;
+        foreach (var invalidator in _cacheInvalidators)
+            invalidator.Invalidate(connectorName, tenantId);
     }
 
     /// <summary>
@@ -536,9 +518,9 @@ public class ConnectorConfigurationService : IConnectorConfigurationService
     {
         await EnsureNotDemoSubjectAsync(connectorName, ct);
 
-        var connectorNameLower = connectorName.ToLowerInvariant();
+        var canonicalName = ConnectorNames.Canonical(connectorName);
         var entity = await _context.ConnectorConfigurations
-            .FirstOrDefaultAsync(c => c.ConnectorName.ToLower() == connectorNameLower, ct);
+            .FirstOrDefaultAsync(c => c.ConnectorName == canonicalName, ct);
 
         if (entity == null)
         {
@@ -547,12 +529,13 @@ public class ConnectorConfigurationService : IConnectorConfigurationService
 
         _context.ConnectorConfigurations.Remove(entity);
         await _context.SaveChangesAsync(ct);
+        InvalidateCaches(canonicalName);
         _logger.LogInformation("Deleted configuration for connector {ConnectorName}", connectorName);
 
         // Broadcast deletion
         await _broadcastService.BroadcastConfigChangeAsync(new ConfigurationChangeEvent
         {
-            ConnectorName = connectorName,
+            ConnectorName = canonicalName,
             ChangeType = "deleted"
         });
 
@@ -564,7 +547,7 @@ public class ConnectorConfigurationService : IConnectorConfigurationService
         string connectorName,
         CancellationToken ct = default)
     {
-        var configType = FindConfigurationType(connectorName);
+        var configType = FindConfigurationType(connectorName, _logger);
         if (configType == null)
         {
             _logger.LogWarning("Unknown connector {ConnectorName} for effective config", connectorName);
@@ -591,7 +574,7 @@ public class ConnectorConfigurationService : IConnectorConfigurationService
     /// <summary>
     /// Finds the configuration class Type for a given connector name.
     /// </summary>
-    private static Type? FindConfigurationType(string connectorName)
+    private static Type? FindConfigurationType(string connectorName, ILogger logger)
     {
         var assemblies = AppDomain.CurrentDomain.GetAssemblies()
             .Where(a => a.FullName?.Contains("Nocturne.Connectors") == true)
@@ -599,21 +582,13 @@ public class ConnectorConfigurationService : IConnectorConfigurationService
 
         foreach (var assembly in assemblies)
         {
-            try
+            foreach (var type in assembly.LoadableTypes(logger))
             {
-                var types = assembly.GetTypes();
-                foreach (var type in types)
+                var attr = type.GetCustomAttribute<ConnectorRegistrationAttribute>();
+                if (attr != null && attr.ConnectorName.Equals(connectorName, StringComparison.OrdinalIgnoreCase))
                 {
-                    var attr = type.GetCustomAttribute<ConnectorRegistrationAttribute>();
-                    if (attr != null && attr.ConnectorName.Equals(connectorName, StringComparison.OrdinalIgnoreCase))
-                    {
-                        return type;
-                    }
+                    return type;
                 }
-            }
-            catch (ReflectionTypeLoadException)
-            {
-                // Some types may not be loadable, skip them
             }
         }
 
@@ -655,11 +630,9 @@ public class ConnectorConfigurationService : IConnectorConfigurationService
                 continue;
 
             // Skip sync toggle properties for data types this connector doesn't support
-            if (SyncPropertyToDataType.TryGetValue(property.Name, out var requiredDataType))
-            {
-                if (!supportedDataTypes.Contains(requiredDataType))
-                    continue;
-            }
+            if (ConnectorSyncToggles.ByPropertyKey.TryGetValue(connectorPropAttr.Key, out var gatedDataType)
+                && !supportedDataTypes.Contains(gatedDataType))
+                continue;
 
             var propName = ToCamelCase(connectorPropAttr.GetKeyName());
 
@@ -760,11 +733,9 @@ public class ConnectorConfigurationService : IConnectorConfigurationService
                 continue;
 
             // Skip sync toggle properties for data types this connector doesn't support
-            if (SyncPropertyToDataType.TryGetValue(property.Name, out var requiredDataType))
-            {
-                if (!supportedDataTypes.Contains(requiredDataType))
-                    continue;
-            }
+            if (ConnectorSyncToggles.ByPropertyKey.TryGetValue(connectorPropAttr.Key, out var gatedDataType)
+                && !supportedDataTypes.Contains(gatedDataType))
+                continue;
 
             object? value = null;
             try
@@ -913,10 +884,10 @@ public class ConnectorConfigurationService : IConnectorConfigurationService
         CancellationToken ct = default
     )
     {
-        var connectorNameLower = connectorName.ToLowerInvariant();
+        var canonicalName = ConnectorNames.Canonical(connectorName);
         var config = await _context.ConnectorConfigurations
             .AsNoTracking()
-            .FirstOrDefaultAsync(c => c.ConnectorName.ToLower() == connectorNameLower, ct);
+            .FirstOrDefaultAsync(c => c.ConnectorName == canonicalName, ct);
 
         if (config == null)
             return null;
@@ -947,9 +918,9 @@ public class ConnectorConfigurationService : IConnectorConfigurationService
         CancellationToken ct = default
     )
     {
-        var connectorNameLower = connectorName.ToLowerInvariant();
+        var canonicalName = ConnectorNames.Canonical(connectorName);
         var config = await _context.ConnectorConfigurations
-            .FirstOrDefaultAsync(c => c.ConnectorName.ToLower() == connectorNameLower, ct);
+            .FirstOrDefaultAsync(c => c.ConnectorName == canonicalName, ct);
 
         if (config == null)
         {
@@ -972,7 +943,7 @@ public class ConnectorConfigurationService : IConnectorConfigurationService
             if (lastErrorMessage == string.Empty)
                 config.LastErrorMessage = null; // Explicit clear
             else
-                config.LastErrorMessage = lastErrorMessage;
+                config.LastErrorMessage = FitErrorMessageToColumn(lastErrorMessage);
         }
 
         if (lastErrorAt.HasValue)
@@ -995,5 +966,25 @@ public class ConnectorConfigurationService : IConnectorConfigurationService
             connectorName,
             config.IsHealthy
         );
+    }
+
+    /// <summary>
+    ///     Fits a health error message to
+    ///     <see cref="ConnectorConfigurationEntity.LastErrorMessageMaxLength"/>, marking the cut so a
+    ///     reader can tell the message is incomplete.
+    /// </summary>
+    private static string FitErrorMessageToColumn(string message)
+    {
+        const string marker = "... (truncated)";
+        const int max = ConnectorConfigurationEntity.LastErrorMessageMaxLength;
+
+        if (message.Length <= max)
+            return message;
+
+        var cut = max - marker.Length;
+        if (char.IsHighSurrogate(message[cut - 1]))
+            cut--;
+
+        return string.Concat(message.AsSpan(0, cut), marker);
     }
 }

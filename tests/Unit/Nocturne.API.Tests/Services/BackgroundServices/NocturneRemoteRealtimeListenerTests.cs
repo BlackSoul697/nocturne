@@ -1,12 +1,15 @@
+using FluentAssertions;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
 using Moq;
 using Nocturne.API.Services.BackgroundServices;
+using Nocturne.API.Tests.TestDoubles;
 using Nocturne.Connectors.Core.Interfaces;
 using Nocturne.Connectors.NocturneRemote.Configurations;
 using Nocturne.Core.Contracts.Multitenancy;
 using Nocturne.Infrastructure.Data;
+using Nocturne.Tests.Shared.Mocks;
 using Xunit;
 
 namespace Nocturne.API.Tests.Services.BackgroundServices;
@@ -27,6 +30,7 @@ public class NocturneRemoteRealtimeListenerTests
         var serviceProvider = BuildServiceProvider(connectionString);
         var sut = new NocturneRemoteConnectorBackgroundService(
             serviceProvider,
+            new ConnectorSyncBudget(),
             NullLogger<NocturneRemoteConnectorBackgroundService>.Instance);
 
         // Act & Assert — should not throw
@@ -47,6 +51,7 @@ public class NocturneRemoteRealtimeListenerTests
         var serviceProvider = BuildServiceProvider(connectionString);
         var sut = new NocturneRemoteConnectorBackgroundService(
             serviceProvider,
+            new ConnectorSyncBudget(),
             NullLogger<NocturneRemoteConnectorBackgroundService>.Instance);
 
         // Act & Assert — should not throw
@@ -66,6 +71,7 @@ public class NocturneRemoteRealtimeListenerTests
         var serviceProvider = BuildServiceProvider(connectionString);
         var sut = new NocturneRemoteConnectorBackgroundService(
             serviceProvider,
+            new ConnectorSyncBudget(),
             NullLogger<NocturneRemoteConnectorBackgroundService>.Instance);
 
         // Act & Assert — should not throw on repeated calls
@@ -88,12 +94,13 @@ public class NocturneRemoteRealtimeListenerTests
         {
             Enabled = false,
             Url = "http://remote.example.com",
-            Token = "test-token",
+            AccessToken = "test-token",
         };
 
         var serviceProvider = BuildServiceProvider(connectionString, config);
         var sut = new NocturneRemoteConnectorBackgroundService(
             serviceProvider,
+            new ConnectorSyncBudget(),
             NullLogger<NocturneRemoteConnectorBackgroundService>.Instance);
 
         // Act & Assert — should skip the tenant without throwing
@@ -115,16 +122,77 @@ public class NocturneRemoteRealtimeListenerTests
         {
             Enabled = true,
             Url = "",
-            Token = "test-token",
+            AccessToken = "test-token",
         };
 
         var serviceProvider = BuildServiceProvider(connectionString, config);
         var sut = new NocturneRemoteConnectorBackgroundService(
             serviceProvider,
+            new ConnectorSyncBudget(),
             NullLogger<NocturneRemoteConnectorBackgroundService>.Instance);
 
         // Act & Assert — should skip the tenant without throwing
         await InvokeStartRealtimeListenersAsync(sut, CancellationToken.None);
+    }
+
+    /// <summary>
+    /// Pins the listener's own call site: a tenant storing a bare host must reach the connect
+    /// step against the resolved absolute hub URI, rather than being turned away by the
+    /// absolute-URI guard in front of it.
+    /// </summary>
+    [Fact]
+    public async Task StartRealtimeListenersAsync_SchemelessUrl_ConnectsToResolvedHubUri()
+    {
+        var (cleanup, connectionString) = CreateSqliteDb(addTenant: true);
+        using var _ = cleanup;
+
+        var config = new NocturneRemoteConnectorConfiguration
+        {
+            Enabled = true,
+            Url = "127.0.0.1:9",
+            AccessToken = "test-token",
+        };
+
+        var logger = new ListLogger<NocturneRemoteConnectorBackgroundService>();
+        var sut = new NocturneRemoteConnectorBackgroundService(
+            BuildServiceProvider(connectionString, config), new ConnectorSyncBudget(), logger);
+
+        await InvokeStartRealtimeListenersAsync(sut, CancellationToken.None);
+
+        logger.Entries.Should().Contain(e =>
+            e.Message.Contains("Failed to connect SignalR")
+            && e.Message.Contains("https://127.0.0.1:9/hubs/data"));
+    }
+
+    /// <summary>
+    /// A stored URL the resolver refuses is the listener's to report: it cannot connect, and
+    /// letting the rejection reach the per-tenant catch would file it as an unexpected error.
+    /// </summary>
+    [Fact]
+    public async Task StartRealtimeListenersAsync_UnresolvableUrl_ReportsItAndSkipsTenant()
+    {
+        var (cleanup, connectionString) = CreateSqliteDb(addTenant: true);
+        using var _ = cleanup;
+
+        var config = new NocturneRemoteConnectorConfiguration
+        {
+            Enabled = true,
+            Url = "ftp://x",
+            AccessToken = "test-token",
+        };
+
+        var logger = new ListLogger<NocturneRemoteConnectorBackgroundService>();
+        var sut = new NocturneRemoteConnectorBackgroundService(
+            BuildServiceProvider(connectionString, config), new ConnectorSyncBudget(), logger);
+
+        await InvokeStartRealtimeListenersAsync(sut, CancellationToken.None);
+
+        logger.Entries.Should().Contain(e =>
+            e.Message.Contains("cannot be resolved to an absolute http(s) URL")
+            && e.Message.Contains("test-tenant"));
+        logger.Entries.Should().NotContain(e =>
+            e.Message.Contains("Unexpected error starting real-time listener"));
+        logger.Entries.Should().NotContain(e => e.Message.Contains("Failed to connect SignalR"));
     }
 
     #region Helpers
@@ -215,9 +283,7 @@ public class NocturneRemoteRealtimeListenerTests
 
         services.AddScoped<ITenantAccessor>(_ =>
         {
-            var mock = new Mock<ITenantAccessor>();
-            mock.Setup(t => t.IsResolved).Returns(true);
-            mock.Setup(t => t.TenantId).Returns(Guid.NewGuid());
+            var mock = MockTenantAccessor.Create(Guid.NewGuid());
             mock.Setup(t => t.SetTenant(It.IsAny<TenantContext>()));
             return mock.Object;
         });

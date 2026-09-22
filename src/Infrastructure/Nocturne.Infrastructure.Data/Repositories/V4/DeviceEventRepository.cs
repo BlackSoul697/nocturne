@@ -8,6 +8,7 @@ using Nocturne.Core.Models;
 using Nocturne.Core.Models.V4;
 using Nocturne.Infrastructure.Data.Entities.V4;
 using Nocturne.Infrastructure.Data.Extensions;
+using Nocturne.Infrastructure.Data.Mappers;
 using Nocturne.Infrastructure.Data.Mappers.V4;
 using Nocturne.Infrastructure.Data.Services;
 using Nocturne.Core.Contracts.V4;
@@ -15,16 +16,16 @@ using Nocturne.Core.Contracts.V4;
 namespace Nocturne.Infrastructure.Data.Repositories.V4;
 
 /// <summary>
-/// Repository for managing device event records in the database. A DeduplicationService participant,
-/// so it inherits the shared CRUD/soft-delete surface from
-/// <see cref="V4RepositoryBase{TModel,TEntity}"/> and keeps only the dedup-specific behaviour as
-/// overrides (extended <c>GetAsync</c> with the non-primary LinkedRecords filter, dedup
-/// <c>BulkCreateAsync</c>, audited soft-deletes) plus the event-type query helpers.
+/// Repository for managing device event records in the database. A DeduplicationService participant on
+/// top of the keyed delete of <see cref="SyncKeyedRepositoryBase{TModel,TEntity}"/>, so it keeps only
+/// the extended <c>GetAsync</c> (non-primary LinkedRecords filter), the read-visibility filter behind
+/// <c>CountAsync</c>, the post-commit dedup linking, and the event-type query helpers.
 /// </summary>
-public class DeviceEventRepository : V4RepositoryBase<DeviceEvent, DeviceEventEntity>, IDeviceEventRepository
+public class DeviceEventRepository : SyncKeyedRepositoryBase<DeviceEvent, DeviceEventEntity>, IDeviceEventRepository
 {
     private readonly IDeduplicationService _deduplicationService;
     private readonly ILogger<DeviceEventRepository> _logger;
+    private readonly IDeviceEventReactor? _reactor;
 
     /// <summary>
     /// Initializes a new instance of the <see cref="DeviceEventRepository"/> class.
@@ -33,16 +34,43 @@ public class DeviceEventRepository : V4RepositoryBase<DeviceEvent, DeviceEventEn
     /// <param name="deduplicationService">The deduplication service.</param>
     /// <param name="auditContext">The audit context for tracking mutations.</param>
     /// <param name="logger">The logger instance.</param>
+    /// <param name="broadcaster">Optional realtime broadcaster for native V4 record shapes.</param>
+    /// <param name="reactor">Optional domain reaction to live creates — the tracker trigger. Null when
+    /// the repository is constructed without DI, in which case creates simply run no reaction.</param>
     public DeviceEventRepository(
         ITenantDbContextFactory contextFactory,
         IDeduplicationService deduplicationService,
         IAuditContext auditContext,
         ILogger<DeviceEventRepository> logger,
-        IV4RecordBroadcaster<DeviceEvent>? broadcaster = null)
+        IV4RecordBroadcaster<DeviceEvent>? broadcaster = null,
+        IDeviceEventReactor? reactor = null)
         : base(contextFactory, auditContext, broadcaster)
     {
         _deduplicationService = deduplicationService;
         _logger = logger;
+        _reactor = reactor;
+    }
+
+    /// <inheritdoc />
+    /// <remarks>
+    /// Device events are the one V4 type carrying a domain reaction: a site or sensor change advances
+    /// the tracker instances configured to trigger on it. Failures are logged and swallowed — the event
+    /// itself is already committed, and a tracker that misses a change is recoverable in a way that
+    /// failing the ingest of the underlying record is not.
+    /// </remarks>
+    protected override async Task OnLiveCreatedAsync(IReadOnlyList<DeviceEvent> created, CancellationToken ct)
+    {
+        if (_reactor is null)
+            return;
+
+        try
+        {
+            await _reactor.OnCreatedAsync(created, ct);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            _logger.LogError(ex, "Device event reaction failed for {Count} created event(s)", created.Count);
+        }
     }
 
     /// <inheritdoc />
@@ -54,12 +82,8 @@ public class DeviceEventRepository : V4RepositoryBase<DeviceEvent, DeviceEventEn
     /// <inheritdoc />
     protected override void ApplyUpdate(DeviceEventEntity target, DeviceEvent source) => DeviceEventMapper.UpdateEntity(target, source);
 
-    /// <summary>
-    /// Excludes non-primary cross-connector duplicates so <see cref="V4RepositoryBase{TModel,TEntity}.CountAsync"/>
-    /// matches the rows <c>GetAsync</c> returns. Mirrors the inline filter in the extended <c>GetAsync</c>.
-    /// </summary>
-    protected override IQueryable<DeviceEventEntity> ApplyReadVisibility(IQueryable<DeviceEventEntity> query, NocturneDbContext ctx) =>
-        query.Where(b => !ctx.LinkedRecords.Any(lr => lr.RecordType == "deviceevent" && !lr.IsPrimary && lr.RecordId == b.Id));
+    /// <inheritdoc />
+    protected internal override RecordType? DedupRecordType => RecordType.DeviceEvent;
 
     /// <summary>
     /// Routes the base 7-arg form through the extended device-event query (non-primary LinkedRecords
@@ -114,9 +138,7 @@ public class DeviceEventRepository : V4RepositoryBase<DeviceEvent, DeviceEventEn
         if (patientDeviceId.HasValue)
             query = query.Where(e => e.PatientDeviceId == patientDeviceId.Value);
 
-        // Exclude non-primary duplicates from cross-connector deduplication
-        query = query.Where(b => !ctx.LinkedRecords
-            .Any(lr => lr.RecordType == "deviceevent" && !lr.IsPrimary && lr.RecordId == b.Id));
+        query = ApplyReadVisibility(query, ctx);
 
         query = descending ? query.OrderByDescending(e => e.Timestamp) : query.OrderBy(e => e.Timestamp);
         var entities = await query.Skip(offset).Take(limit).ToListAsync(ct);
@@ -143,21 +165,6 @@ public class DeviceEventRepository : V4RepositoryBase<DeviceEvent, DeviceEventEn
     }
 
     /// <summary>
-    /// Deletes device event records matching the given data source and sync identifier.
-    /// </summary>
-    /// <param name="dataSource">The external data source name.</param>
-    /// <param name="syncIdentifier">The external sync identifier.</param>
-    /// <param name="ct">The cancellation token.</param>
-    /// <returns>The number of deleted records.</returns>
-    public async Task<int> DeleteBySyncIdentifierAsync(string dataSource, string syncIdentifier, WriteOrigin origin, CancellationToken ct = default)
-    {
-        await using var ctx = await ContextFactory.CreateAsync(ct);
-        return await ctx.AuditedSoftDeleteAsync(
-            ctx.DeviceEvents.Where(e => e.DataSource == dataSource && e.SyncIdentifier == syncIdentifier),
-            AuditContext, ct);
-    }
-
-    /// <summary>
     /// Insert-time deduplication: link saved records to canonical groups (runs after commit).
     /// </summary>
     protected override async Task PostCommitDedupAsync(
@@ -172,7 +179,7 @@ public class DeviceEventRepository : V4RepositoryBase<DeviceEvent, DeviceEventEn
                 RecordId: e.Id,
                 Mills: new DateTimeOffset(e.Timestamp, TimeSpan.Zero).ToUnixTimeMilliseconds(),
                 DataSource: e.DataSource ?? DeduplicationInput.UnknownDataSource,
-                Criteria: new MatchCriteria { EventType = e.EventType }
+                Criteria: MatchCriteriaMapper.From(e)
             )).ToList();
 
             await _deduplicationService.DeduplicateBatchAsync(RecordType.DeviceEvent, dedupInputs, ct);

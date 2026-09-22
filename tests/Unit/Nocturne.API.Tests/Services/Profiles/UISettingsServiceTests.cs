@@ -1,0 +1,613 @@
+using System.Reflection;
+using System.Text.Json;
+using System.Text.Json.Serialization;
+using FluentAssertions;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging.Abstractions;
+using Nocturne.API.Services.Profiles;
+using Nocturne.Core.Contracts.Profiles;
+using Nocturne.Core.Models.Configuration;
+using Nocturne.Infrastructure.Data;
+using Nocturne.Infrastructure.Data.Entities;
+using Xunit;
+
+namespace Nocturne.API.Tests.Services.Profiles;
+
+/// <summary>
+/// Coverage for the storage layout of <see cref="UISettingsService"/>: one owning row per value, the
+/// aggregate assembled on read, and rows written by the earlier layout (a whole-document
+/// <c>ui:settings:complete</c> blob plus a mirrored copy of the alarm configuration) still read
+/// correctly.
+/// </summary>
+[Trait("Category", "Unit")]
+public class UISettingsServiceTests
+{
+    private const string LegacyAggregateKey = "ui:settings:complete";
+    private const string NotificationsKey = "ui:settings:notifications";
+    private const string AlarmsKey = "ui:settings:notifications:alarms";
+    private const string ServicesKey = "ui:settings:services";
+    private const string FeaturesKey = "ui:settings:features";
+    private const string DevicesKey = "ui:settings:devices";
+
+    private static readonly Guid TenantId = Guid.Parse("33333333-3333-3333-3333-333333333333");
+
+    private static readonly JsonSerializerOptions JsonOptions = new()
+    {
+        PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
+    };
+
+    [Fact]
+    public async Task SaveAlarmConfigurationAsync_isVisibleThroughEveryReadPath()
+    {
+        var context = NewContext();
+        var service = NewService(context);
+
+        await service.SaveAlarmConfigurationAsync(AlarmConfiguration("fresh", 123));
+
+        foreach (var config in await EveryAlarmReadPath(service))
+        {
+            config.Profiles.Should().ContainSingle().Which.Threshold.Should().Be(123);
+        }
+    }
+
+    [Fact]
+    public async Task SaveAlarmConfigurationAsync_preservesTheEmergencyContactVisualSettings()
+    {
+        var context = NewContext();
+        var service = NewService(context);
+        var config = AlarmConfiguration("fresh", 123);
+        config.Profiles[0].Visual = new AlarmVisualSettings
+        {
+            ShowEmergencyContacts = true,
+            EmergencyInstructions = "Spare key is under the mat",
+        };
+
+        await service.SaveAlarmConfigurationAsync(config);
+
+        foreach (var stored in await EveryAlarmReadPath(service))
+        {
+            var visual = stored.Profiles.Should().ContainSingle().Subject.Visual;
+            visual.ShowEmergencyContacts.Should().BeTrue();
+            visual.EmergencyInstructions.Should().Be("Spare key is under the mat");
+        }
+    }
+
+    [Fact]
+    public async Task SaveAlarmConfigurationAsync_winsOverCopiesLeftByTheEarlierLayout()
+    {
+        var context = NewContext();
+        var stale = AlarmConfiguration("stale", 55);
+        Seed(context, LegacyAggregateKey, LegacyAggregate(stale));
+        Seed(context, NotificationsKey, new NotificationSettings { AlarmConfiguration = stale });
+        Seed(context, AlarmsKey, stale);
+        await context.SaveChangesAsync();
+
+        var service = NewService(context);
+        await service.SaveAlarmConfigurationAsync(AlarmConfiguration("fresh", 123));
+
+        foreach (var config in await EveryAlarmReadPath(service))
+        {
+            config.Profiles.Should().ContainSingle().Which.Threshold.Should().Be(123);
+        }
+    }
+
+    [Fact]
+    public async Task SaveNotificationSettingsAsync_replacesTheAlarmConfigurationForEveryReadPath()
+    {
+        var context = NewContext();
+        var service = NewService(context);
+
+        await service.SaveAlarmConfigurationAsync(AlarmConfiguration("first", 55));
+        await service.SaveNotificationSettingsAsync(
+            new NotificationSettings { AlarmConfiguration = AlarmConfiguration("second", 123) }
+        );
+
+        foreach (var config in await EveryAlarmReadPath(service))
+        {
+            config.Profiles.Should().ContainSingle().Which.Threshold.Should().Be(123);
+        }
+    }
+
+    [Fact]
+    public async Task SaveSettingsAsync_replacesTheAlarmConfigurationForEveryReadPath()
+    {
+        var context = NewContext();
+        var service = NewService(context);
+
+        await service.SaveAlarmConfigurationAsync(AlarmConfiguration("first", 55));
+
+        var settings = (await service.GetSettingsAsync())!;
+        settings.Notifications.AlarmConfiguration = AlarmConfiguration("second", 123);
+        await service.SaveSettingsAsync(settings);
+
+        foreach (var config in await EveryAlarmReadPath(service))
+        {
+            config.Profiles.Should().ContainSingle().Which.Threshold.Should().Be(123);
+        }
+    }
+
+    [Fact]
+    public async Task WholeDocumentRoundTrip_preservesTheAlarmConfiguration()
+    {
+        var context = NewContext();
+        var service = NewService(context);
+
+        await service.SaveAlarmConfigurationAsync(AlarmConfiguration("fresh", 123));
+        await service.SaveSettingsAsync((await service.GetSettingsAsync())!);
+
+        foreach (var config in await EveryAlarmReadPath(service))
+        {
+            config.Profiles.Should().ContainSingle().Which.Threshold.Should().Be(123);
+        }
+    }
+
+    [Fact]
+    public async Task SaveSettingsAsync_storesTheAlarmConfigurationInOneRowOnly()
+    {
+        var context = NewContext();
+        var service = NewService(context);
+
+        await service.SaveSettingsAsync(
+            new UISettingsConfiguration
+            {
+                Notifications = new NotificationSettings
+                {
+                    AlarmConfiguration = AlarmConfiguration("fresh", 123),
+                },
+            }
+        );
+
+        StoredRows(context)
+            .Where(r => r.Value!.Contains("alarmConfiguration", StringComparison.Ordinal))
+            .Should()
+            .BeEmpty();
+        StoredRows(context).Select(r => r.Key).Should().Contain(AlarmsKey);
+        StoredRows(context).Select(r => r.Key).Should().NotContain(LegacyAggregateKey);
+    }
+
+    [Fact]
+    public async Task SaveSettingsAsync_roundTripsEverySection()
+    {
+        var context = NewContext();
+        var service = NewService(context);
+
+        await service.SaveSettingsAsync(
+            new UISettingsConfiguration
+            {
+                Devices = new DeviceSettings { AutoConnect = false },
+                Algorithm = new AlgorithmSettings
+                {
+                    Prediction = new PredictionSettings { Minutes = 45 },
+                },
+                Features = new FeatureSettings
+                {
+                    Display = new DisplaySettings { Units = "mmol/L" },
+                },
+                Notifications = new NotificationSettings
+                {
+                    AlarmConfiguration = AlarmConfiguration("fresh", 123),
+                },
+                Services = new ServicesSettings
+                {
+                    SyncSettings = new SyncSettings { AutoSync = false },
+                },
+                DataQuality = new DataQualitySettings
+                {
+                    SleepSchedule = new SleepScheduleSettings { BedtimeHour = 1 },
+                },
+            }
+        );
+
+        var stored = (await service.GetSettingsAsync())!;
+
+        stored.Devices.AutoConnect.Should().BeFalse();
+        stored.Algorithm.Prediction.Minutes.Should().Be(45);
+        stored.Features.Display.Units.Should().Be("mmol/L");
+        stored.Notifications.AlarmConfiguration.Profiles.Should().ContainSingle()
+            .Which.Threshold.Should().Be(123);
+        stored.Services.SyncSettings.AutoSync.Should().BeFalse();
+        stored.DataQuality.SleepSchedule.BedtimeHour.Should().Be(1);
+    }
+
+    [Fact]
+    public async Task GetSettingsAsync_readsSectionsWrittenByTheEarlierLayout()
+    {
+        var context = NewContext();
+        var legacy = LegacyAggregate(AlarmConfiguration("legacy", 88));
+        legacy.Devices.AutoConnect = false;
+        legacy.DataQuality.SleepSchedule.BedtimeHour = 1;
+        Seed(context, LegacyAggregateKey, legacy);
+        await context.SaveChangesAsync();
+
+        var service = NewService(context);
+        var stored = (await service.GetSettingsAsync())!;
+
+        stored.Devices.AutoConnect.Should().BeFalse();
+        stored.DataQuality.SleepSchedule.BedtimeHour.Should().Be(1);
+
+        foreach (var config in await EveryAlarmReadPath(service))
+        {
+            config.Profiles.Should().ContainSingle().Which.Threshold.Should().Be(88);
+        }
+    }
+
+    [Fact]
+    public async Task GetAlarmConfigurationAsync_prefersTheOwningRowOverTheEarlierLayoutsCopies()
+    {
+        var context = NewContext();
+        Seed(context, LegacyAggregateKey, LegacyAggregate(AlarmConfiguration("aggregate", 44)));
+        Seed(
+            context,
+            NotificationsKey,
+            new NotificationSettings { AlarmConfiguration = AlarmConfiguration("section", 55) }
+        );
+        Seed(context, AlarmsKey, AlarmConfiguration("owned", 123));
+        await context.SaveChangesAsync();
+
+        var service = NewService(context);
+
+        foreach (var config in await EveryAlarmReadPath(service))
+        {
+            config.Profiles.Should().ContainSingle().Which.Threshold.Should().Be(123);
+        }
+    }
+
+    [Fact]
+    public async Task SaveSectionAsync_leavesTheOtherSectionsOfTheEarlierLayoutReadable()
+    {
+        var context = NewContext();
+        var legacy = LegacyAggregate(AlarmConfiguration("legacy", 88));
+        legacy.Devices.AutoConnect = false;
+        legacy.DataQuality.SleepSchedule.BedtimeHour = 1;
+        Seed(context, LegacyAggregateKey, legacy);
+        await context.SaveChangesAsync();
+
+        var service = NewService(context);
+        await service.SaveSectionAsync(
+            "features",
+            new FeatureSettings { Display = new DisplaySettings { Units = "mmol/L" } }
+        );
+
+        var stored = (await service.GetSettingsAsync())!;
+        stored.Features.Display.Units.Should().Be("mmol/L");
+        stored.Devices.AutoConnect.Should().BeFalse();
+        stored.DataQuality.SleepSchedule.BedtimeHour.Should().Be(1);
+    }
+
+    [Fact]
+    public async Task SaveSectionAsync_refusesANameNoSectionOwns()
+    {
+        var context = NewContext();
+        var service = NewService(context);
+
+        var save = () => service.SaveSectionAsync("dataQaulity", new DataQualitySettings());
+
+        await save.Should().ThrowAsync<ArgumentException>();
+        StoredRows(context).Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task SaveSectionAsync_acceptsEveryRegisteredSection()
+    {
+        var context = NewContext();
+        var service = NewService(context);
+
+        foreach (var section in UISettingsSections.All)
+        {
+            var save = () =>
+                service.SaveSectionAsync(
+                    section.Name,
+                    Activator.CreateInstance(section.Type)!,
+                    CancellationToken.None
+                );
+
+            await save.Should().NotThrowAsync($"section {section.Name} should be writable");
+        }
+
+        await service.SaveSectionAsync(
+            "DATAQUALITY",
+            new DataQualitySettings
+            {
+                SleepSchedule = new SleepScheduleSettings { BedtimeHour = 1 },
+            }
+        );
+
+        (await service.GetSettingsAsync())!.DataQuality.SleepSchedule.BedtimeHour.Should().Be(1);
+    }
+
+    [Theory]
+    [InlineData("alarms")]
+    [InlineData("alarmConfiguration")]
+    [InlineData("AlarmConfiguration")]
+    [InlineData("ALARMS")]
+    public async Task SaveSectionAsync_routesEveryAlarmAliasToTheOwningRow(string alias)
+    {
+        var context = NewContext();
+        var service = NewService(context);
+
+        await service.SaveSectionAsync(alias, AlarmConfiguration("aliased", 123));
+
+        foreach (var config in await EveryAlarmReadPath(service))
+        {
+            config.Profiles.Should().ContainSingle().Which.Threshold.Should().Be(123);
+        }
+
+        StoredRows(context).Select(r => r.Key).Should().Equal([AlarmsKey]);
+    }
+
+    [Fact]
+    public async Task SaveAlarmConfigurationAsync_revivesADeactivatedRow()
+    {
+        var context = NewContext();
+        var row = Seed(context, AlarmsKey, AlarmConfiguration("stale", 55));
+        row.IsActive = false;
+        await context.SaveChangesAsync();
+
+        var service = NewService(context);
+        await service.SaveAlarmConfigurationAsync(AlarmConfiguration("fresh", 123));
+
+        foreach (var config in await EveryAlarmReadPath(service))
+        {
+            config.Profiles.Should().ContainSingle().Which.Threshold.Should().Be(123);
+        }
+    }
+
+    [Fact]
+    public async Task GetSettingsAsync_returnsDefaults_whenNothingIsStored()
+    {
+        var service = NewService(NewContext());
+
+        var stored = (await service.GetSettingsAsync())!;
+
+        stored.Should().NotBeNull();
+        stored.Should().BeEquivalentTo(new UISettingsConfiguration());
+    }
+
+    [Fact]
+    public async Task SaveSettingsAsync_doesNotStoreTheConnectorCatalog()
+    {
+        var context = NewContext();
+        var service = NewService(context);
+
+        await service.SaveSettingsAsync(
+            new UISettingsConfiguration
+            {
+                Services = new ServicesSettings
+                {
+                    AvailableServices = [Catalogued("dexcom-connector")],
+                    SyncSettings = new SyncSettings { AutoSync = false },
+                },
+            }
+        );
+
+        StoredRows(context).Select(r => r.Key).Should().Contain(ServicesKey);
+        StoredRows(context)
+            .Where(r => r.Value!.Contains("availableServices", StringComparison.Ordinal))
+            .Should()
+            .BeEmpty();
+        StoredRows(context)
+            .Where(r => r.Value!.Contains("dexcom-connector", StringComparison.Ordinal))
+            .Should()
+            .BeEmpty();
+
+        var stored = (await service.GetSettingsAsync())!;
+        stored.Services.AvailableServices.Should().BeEmpty();
+        stored.Services.SyncSettings.AutoSync.Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task SaveSectionAsync_doesNotStoreTheConnectorCatalog()
+    {
+        var context = NewContext();
+        var service = NewService(context);
+
+        await service.SaveSectionAsync(
+            "services",
+            new ServicesSettings { AvailableServices = [Catalogued("dexcom-connector")] }
+        );
+
+        StoredRows(context).Select(r => r.Key).Should().Contain(ServicesKey);
+        StoredRows(context)
+            .Where(r => r.Value!.Contains("availableServices", StringComparison.Ordinal))
+            .Should()
+            .BeEmpty();
+    }
+
+    [Fact]
+    public async Task SaveSettingsAsync_dropsACatalogSnapshotAnEarlierVersionStored()
+    {
+        var context = NewContext();
+        Seed(
+            context,
+            ServicesKey,
+            new ServicesSettings { AvailableServices = [Catalogued("retired-connector")] }
+        );
+        await context.SaveChangesAsync();
+
+        var service = NewService(context);
+        await service.SaveSettingsAsync((await service.GetSettingsAsync())!);
+
+        StoredRows(context)
+            .Where(r => r.Value!.Contains("retired-connector", StringComparison.Ordinal))
+            .Should()
+            .BeEmpty();
+    }
+
+    [Fact]
+    public async Task GetSettingsAsync_dropsTheTopGridRowsAnEarlierVersionStored()
+    {
+        var context = NewContext();
+        Seed(
+            context,
+            FeaturesKey,
+            new FeatureSettings
+            {
+                Widgets =
+                [
+                    new()
+                    {
+                        Id = WidgetId.BgDelta,
+                        Enabled = true,
+                        Placement = WidgetPlacement.Top,
+                    },
+                    new()
+                    {
+                        Id = WidgetId.Statistics,
+                        Enabled = false,
+                        Placement = WidgetPlacement.Main,
+                    },
+                ],
+            }
+        );
+        await context.SaveChangesAsync();
+
+        var stored = (await NewService(context).GetSettingsAsync())!;
+
+        stored
+            .Features.Widgets.Should()
+            .ContainSingle()
+            .Which.Should()
+            .BeEquivalentTo(new { Id = WidgetId.Statistics, Enabled = false });
+    }
+
+    /// <summary>
+    /// A features row whose widget list is an explicit JSON null binds over the property
+    /// initialiser, so the narrowing on read has to survive it: the aggregate is assembled in one
+    /// try block, and anything thrown there costs the caller every section, not just this one.
+    /// </summary>
+    [Fact]
+    public async Task GetSettingsAsync_readsAFeaturesRowWithNoWidgetListAtAll()
+    {
+        var context = NewContext();
+        Seed(context, FeaturesKey, new { widgets = (object?)null });
+        Seed(context, DevicesKey, new DeviceSettings { AutoConnect = false });
+        await context.SaveChangesAsync();
+
+        var stored = (await NewService(context).GetSettingsAsync())!;
+
+        stored.Features.Widgets.Should().BeEmpty();
+        stored.Devices.AutoConnect.Should().BeFalse();
+    }
+
+    [Fact]
+    public void OmittedProperties_nameJsonPropertiesTheirSectionDeclares()
+    {
+        foreach (var section in UISettingsSections.All)
+        {
+            var declared = section
+                .Type.GetProperties()
+                .Select(p => p.GetCustomAttribute<JsonPropertyNameAttribute>()?.Name)
+                .Where(name => name != null)
+                .ToList();
+
+            section
+                .OmittedProperties.Should()
+                .BeSubsetOf(declared!, $"section {section.Name} can only omit what it declares");
+        }
+    }
+
+    /// <summary>
+    /// A failed read and a tenant that has saved nothing are different answers, as
+    /// <see cref="IUISettingsService.GetAlarmConfigurationAsync"/> already has them: a caller that
+    /// cannot run on defaults has to be able to tell the two apart.
+    /// </summary>
+    [Fact]
+    public async Task GetSettingsAsync_returnsNullWhenTheReadFails()
+    {
+        var context = NewContext();
+        var service = NewService(context);
+        await context.DisposeAsync();
+
+        (await service.GetSettingsAsync()).Should().BeNull();
+    }
+
+    // ----- helpers -----
+
+    private static AvailableService Catalogued(string id)
+    {
+        return new AvailableService
+        {
+            Id = id,
+            Name = id,
+            Type = "cgm",
+            Icon = id,
+        };
+    }
+
+    /// <summary>
+    /// The alarm configuration as returned by every public read path, so a copy that goes stale
+    /// behind any one of them fails the assertion.
+    /// </summary>
+    private static async Task<IReadOnlyList<UserAlarmConfiguration>> EveryAlarmReadPath(
+        UISettingsService service
+    )
+    {
+        return
+        [
+            (await service.GetAlarmConfigurationAsync())!,
+            (await service.GetSettingsAsync())!.Notifications.AlarmConfiguration,
+            (await service.GetNotificationSettingsAsync()).AlarmConfiguration,
+            (await service.GetSectionAsync<NotificationSettings>("notifications"))!
+                .AlarmConfiguration,
+            (await service.GetSectionAsync<UserAlarmConfiguration>("alarms"))!,
+        ];
+    }
+
+    private static UserAlarmConfiguration AlarmConfiguration(string profileId, int threshold)
+    {
+        return new UserAlarmConfiguration
+        {
+            Profiles =
+            [
+                new AlarmProfileConfiguration
+                {
+                    Id = profileId,
+                    Name = profileId,
+                    AlarmType = AlarmTriggerType.Low,
+                    Threshold = threshold,
+                },
+            ],
+        };
+    }
+
+    private static UISettingsConfiguration LegacyAggregate(UserAlarmConfiguration alarms)
+    {
+        return new UISettingsConfiguration
+        {
+            Notifications = new NotificationSettings { AlarmConfiguration = alarms },
+        };
+    }
+
+    private static SettingsEntity Seed(NocturneDbContext context, string key, object value)
+    {
+        var entity = new SettingsEntity
+        {
+            Id = Guid.CreateVersion7(),
+            Key = key,
+            Value = JsonSerializer.Serialize(value, JsonOptions),
+            IsActive = true,
+        };
+
+        context.Settings.Add(entity);
+        return entity;
+    }
+
+    private static List<SettingsEntity> StoredRows(NocturneDbContext context)
+    {
+        return context.Settings.AsNoTracking().Where(s => s.Value != null).ToList();
+    }
+
+    private static NocturneDbContext NewContext()
+    {
+        var options = new DbContextOptionsBuilder<NocturneDbContext>()
+            .UseInMemoryDatabase(Guid.NewGuid().ToString())
+            .Options;
+
+        return new NocturneDbContext(options) { TenantId = TenantId };
+    }
+
+    private static UISettingsService NewService(NocturneDbContext context)
+    {
+        return new UISettingsService(context, NullLogger<UISettingsService>.Instance);
+    }
+}
