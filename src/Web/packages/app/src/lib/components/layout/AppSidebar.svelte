@@ -53,8 +53,11 @@
   // Defer localStorage check to after hydration so SSR and client initial render
   // both produce the same DOM (avoids hydration mismatch from conditional rendering).
   // $derived would read localStorage during hydration and reintroduce the mismatch.
+  // Starts true so the picker stays out of the server render and the pre-hydration
+  // DOM: shown there it is a control nobody can click yet, and it disappears again
+  // for everyone who already has a preference.
   // eslint-disable-next-line svelte/prefer-writable-derived -- $effect defers the localStorage read past hydration; $derived would not
-  let langPrefKnown = $state(false);
+  let langPrefKnown = $state(true);
   $effect(() => {
     langPrefKnown = hasLanguagePreference();
   });

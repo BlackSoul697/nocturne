@@ -613,6 +613,8 @@ msgstr ""
 #: src/routes/(authenticated)/settings/admin/tenants/+page.svelte
 #: src/routes/(authenticated)/settings/admin/tenants/+page.svelte
 #: src/routes/(authenticated)/settings/trackers/+page.svelte
+#: src/routes/(authenticated)/settings/translations/[locale]/+page.svelte
+#: src/routes/(authenticated)/settings/translations/[locale]/+page.svelte
 msgid "Cancel"
 msgstr ""
 
@@ -857,6 +859,7 @@ msgstr ""
 #: src/lib/components/treatments/FoodNutritionalForm.svelte
 #: src/routes/(authenticated)/alerts/[id]/+page.svelte
 #: src/routes/(authenticated)/food/Composer.svelte
+#: src/routes/(authenticated)/settings/translations/[locale]/+page.svelte
 msgid "Name"
 msgstr ""
 
@@ -1726,6 +1729,7 @@ msgid "Display name"
 msgstr ""
 
 #: src/lib/components/auth/PasskeyRegistrationForm.svelte
+#: src/routes/(authenticated)/settings/translations/[locale]/+page.svelte
 #: src/routes/(unauthenticated)/auth/recovery/+page.svelte
 #: src/routes/(unauthenticated)/setup/steps/AccountCreation.svelte
 msgid "Your name"
@@ -3217,6 +3221,7 @@ msgstr ""
 #: src/lib/components/members/GuestLinksSection.svelte
 #: src/lib/components/settings/ApiTokens.svelte
 #: src/routes/(authenticated)/settings/account/+page.svelte
+#: src/routes/(authenticated)/settings/translations/[locale]/+page.svelte
 #: src/routes/(unauthenticated)/setup/+page@.svelte
 #: src/routes/(unauthenticated)/setup/+page@.svelte
 msgid "Done"
@@ -19388,10 +19393,8 @@ msgstr ""
 msgid "{0} days {1} hours"
 msgstr ""
 
-#. 0: SIDEBAR_COOKIE_NAME; 1: open; 2: SIDEBAR_COOKIE_MAX_AGE
-#: src/lib/components/ui/sidebar/sidebar-provider.svelte
-msgid "{0}={1}; path=/; max-age={2}"
-msgstr ""
+#~ msgid "{0}={1}; path=/; max-age={2}"
+#~ msgstr ""
 
 #: src/routes/(authenticated)/settings/admin/tenants/+page.svelte
 msgid "Tenant created"
@@ -24084,4 +24087,131 @@ msgstr ""
 
 #: ../portal/src/routes/docs/installation/oracle-cloud/+page.svelte
 msgid "Afterwards"
+msgstr ""
+
+#: src/routes/(authenticated)/settings/translations/+page.svelte
+msgid "Translations - Settings"
+msgstr ""
+
+#: src/routes/(authenticated)/settings/translations/+page.svelte
+#: src/routes/(authenticated)/settings/translations/[locale]/+page.svelte
+msgid "<0/> Translations"
+msgstr ""
+
+#: src/routes/(authenticated)/settings/translations/+page.svelte
+msgid "Translate Nocturne into your language. Drafts are saved to your account, and submissions are proposed to the Nocturne project as a pull request with your name attached."
+msgstr ""
+
+#: src/routes/(authenticated)/settings/translations/[locale]/+page.svelte
+msgid "Failed to load catalogs"
+msgstr ""
+
+#: src/routes/(authenticated)/settings/translations/[locale]/+page.svelte
+msgid "Some drafts failed to save. Try again."
+msgstr ""
+
+#: src/routes/(authenticated)/settings/translations/[locale]/+page.svelte
+msgid "Failed to submit the contribution."
+msgstr ""
+
+#: src/routes/(authenticated)/settings/translations/[locale]/+page.svelte
+msgid "Failed to clear drafts."
+msgstr ""
+
+#. 0: localeValid ? getLanguageLabel(locale as SupportedLocale) \\: ""
+#: src/routes/(authenticated)/settings/translations/[locale]/+page.svelte
+msgid "Translate {0} - Settings"
+msgstr ""
+
+#: src/routes/(authenticated)/settings/translations/[locale]/+page.svelte
+msgid "Unknown locale."
+msgstr ""
+
+#: src/routes/(authenticated)/settings/translations/[locale]/+page.svelte
+msgid "Saving…"
+msgstr ""
+
+#: src/routes/(authenticated)/settings/translations/[locale]/+page.svelte
+msgid "Draft save failed — edits retry on next change"
+msgstr ""
+
+#: src/routes/(authenticated)/settings/translations/[locale]/+page.svelte
+msgid "<0/> Clear drafts"
+msgstr ""
+
+#. 0: drafts.size || ""; 1: drafts.size === 1 ? "" \\: "s"
+#: src/routes/(authenticated)/settings/translations/[locale]/+page.svelte
+msgid "<0/> Submit {0} draft{1}"
+msgstr ""
+
+#: src/routes/(authenticated)/settings/translations/[locale]/+page.svelte
+msgid "<0/> Loading catalogs…"
+msgstr ""
+
+#. 0: submitResult.remaining; 1: submitResult.remaining === 1 ? "" \\: "s"
+#: src/routes/(authenticated)/settings/translations/[locale]/+page.svelte
+msgid "· {0} draft{1} kept"
+msgstr ""
+
+#: src/routes/(authenticated)/settings/translations/[locale]/+page.svelte
+msgid "Contribution submitted"
+msgstr ""
+
+#. 0: submitResult.applied; 1: submitResult.applied === 1 ? "" \\: "s"
+#: src/routes/(authenticated)/settings/translations/[locale]/+page.svelte
+msgid "{0} translation{1} proposed <0/>"
+msgstr ""
+
+#: src/routes/(authenticated)/settings/translations/[locale]/+page.svelte
+msgid "View the pull request"
+msgstr ""
+
+#: src/routes/(authenticated)/settings/translations/[locale]/+page.svelte
+msgid "Submit translations"
+msgstr ""
+
+#: src/routes/(authenticated)/settings/translations/[locale]/+page.svelte
+msgid "Your drafts are proposed to the Nocturne project as a pull request. Your name appears in the commit credit."
+msgstr ""
+
+#: src/routes/(authenticated)/settings/translations/[locale]/+page.svelte
+msgid "GitHub username (optional)"
+msgstr ""
+
+#: src/routes/(authenticated)/settings/translations/[locale]/+page.svelte
+msgid "Used for commit co-author credit."
+msgstr ""
+
+#: src/routes/(authenticated)/settings/translations/[locale]/+page.svelte
+msgid "Email (optional)"
+msgstr ""
+
+#: src/routes/(authenticated)/settings/translations/[locale]/+page.svelte
+msgid "Note to reviewers (optional)"
+msgstr ""
+
+#: src/routes/(authenticated)/settings/translations/[locale]/+page.svelte
+msgid "<0/> Submit"
+msgstr ""
+
+#: src/routes/(authenticated)/settings/translations/[locale]/+page.svelte
+msgid "Clear all drafts?"
+msgstr ""
+
+#. 0: drafts.size; 1: drafts.size === 1 ? "" \\: "s"; 2: getLanguageLabel(locale as SupportedLocale)
+#: src/routes/(authenticated)/settings/translations/[locale]/+page.svelte
+msgid "All {0} draft{1} for {2} will be deleted. This cannot be undone."
+msgstr ""
+
+#: src/routes/(authenticated)/settings/translations/[locale]/+page.svelte
+msgid "Clear drafts"
+msgstr ""
+
+#: src/routes/(authenticated)/settings/translations/[locale]/+page.svelte
+msgid "Failed to load the translation catalog source."
+msgstr ""
+
+#. 0: name
+#: src/lib/test-fixtures/LazyInitContextProvider.svelte
+msgid "{0}=set; path=/; max-age=1"
 msgstr ""

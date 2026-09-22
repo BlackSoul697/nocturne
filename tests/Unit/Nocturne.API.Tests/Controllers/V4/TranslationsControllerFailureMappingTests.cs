@@ -7,6 +7,8 @@ using Microsoft.Extensions.Options;
 using Moq;
 using Nocturne.API.Controllers.V4.Platform;
 using Nocturne.API.Services;
+using Nocturne.Core.Contracts.Translations;
+using Nocturne.Core.Models.Translations;
 
 namespace Nocturne.API.Tests.Controllers.V4;
 
@@ -36,9 +38,13 @@ public class TranslationsControllerFailureMappingTests
             Options.Create(new GitHubTranslationOptions()),
             NullLogger<GitHubTranslationService>.Instance);
 
-        return new TranslationsController(service, NullLogger<TranslationsController>.Instance)
+        return new TranslationsController(
+            service,
+            Mock.Of<ITranslationDraftService>(),
+            NullLogger<TranslationsController>.Instance)
         {
             ProblemDetailsFactory = new TestProblemDetailsFactory(),
+            ControllerContext = new ControllerContext { HttpContext = new DefaultHttpContext() },
         };
     }
 

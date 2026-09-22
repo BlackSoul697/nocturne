@@ -5332,6 +5332,58 @@ namespace Nocturne.Infrastructure.Data.Migrations
                     b.ToTable("tracker_presets");
                 });
 
+            modelBuilder.Entity("Nocturne.Infrastructure.Data.Entities.TranslationDraftEntity", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<string>("Context")
+                        .IsRequired()
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)")
+                        .HasColumnName("msgctxt");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<string>("Locale")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("character varying(16)")
+                        .HasColumnName("locale");
+
+                    b.Property<string>("MsgId")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("msgid");
+
+                    b.Property<Guid>("SubjectId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("subject_id");
+
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("tenant_id");
+
+                    b.PrimitiveCollection<string>("Translations")
+                        .IsRequired()
+                        .HasColumnType("jsonb")
+                        .HasColumnName("translations");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("TenantId", "SubjectId", "Locale");
+
+                    b.ToTable("translation_drafts");
+                });
+
             modelBuilder.Entity("Nocturne.Infrastructure.Data.Entities.TreatmentFoodEntity", b =>
                 {
                     b.Property<Guid>("Id")
@@ -9235,6 +9287,15 @@ namespace Nocturne.Infrastructure.Data.Migrations
                         .IsRequired();
 
                     b.Navigation("Definition");
+                });
+
+            modelBuilder.Entity("Nocturne.Infrastructure.Data.Entities.TranslationDraftEntity", b =>
+                {
+                    b.HasOne("Nocturne.Infrastructure.Data.Entities.TenantEntity", null)
+                        .WithMany()
+                        .HasForeignKey("TenantId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
                 });
 
             modelBuilder.Entity("Nocturne.Infrastructure.Data.Entities.TreatmentFoodEntity", b =>
