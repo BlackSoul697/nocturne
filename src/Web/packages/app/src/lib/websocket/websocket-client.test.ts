@@ -151,6 +151,36 @@ describe("WebSocketClient handshake ticket handling", () => {
     expect(socket.disconnectCalls).toBe(0);
   });
 
+  it("does not let an abandoned socket's denial condemn its replacement", async () => {
+    let releaseStale: (() => void) | undefined;
+    const stale = new Promise<unknown>((resolve) => {
+      // A definitive denial: no ticket and no `retry` flag.
+      releaseStale = () => resolve({ token: null });
+    });
+    stubTicketSequence([stale, Promise.resolve({ token: "a-verifiable-ticket" })]);
+
+    const client = new WebSocketClient(config);
+    client.connect();
+    const abandoned = lastSocket!;
+    void abandoned.sendHandshake();
+
+    // A second connect() replaces the socket while the first ticket is still
+    // in flight.
+    client.connect();
+    const current = lastSocket!;
+    await current.sendHandshake();
+
+    releaseStale!();
+    await flush();
+
+    // The bridge refuses this handshake for an unrelated reason. A denial
+    // carried over from the abandoned socket would report it as a terminal
+    // policy refusal instead, silently and with no retry.
+    current.handlers.get("connect_error")?.(new Error("tenant_unresolved"));
+
+    expect(client.connectionStatus).toBe("error");
+  });
+
   it("reports connected once a ticket is accepted", async () => {
     stubTicketEndpoint({ token: "a-verifiable-ticket" });
     const client = new WebSocketClient(config);
