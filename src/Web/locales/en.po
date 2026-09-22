@@ -24208,7 +24208,5 @@ msgstr "Clear drafts"
 msgid "Failed to load the translation catalog source."
 msgstr "Failed to load the translation catalog source."
 
-#. 0: name
-#: src/lib/test-fixtures/LazyInitContextProvider.svelte
-msgid "{0}=set; path=/; max-age=1"
-msgstr "{0}=set; path=/; max-age=1"
+#~ msgid "{0}=set; path=/; max-age=1"
+#~ msgstr "{0}=set; path=/; max-age=1"

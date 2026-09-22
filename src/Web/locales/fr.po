@@ -24211,7 +24211,5 @@ msgstr ""
 msgid "Failed to load the translation catalog source."
 msgstr ""
 
-#. 0: name
-#: src/lib/test-fixtures/LazyInitContextProvider.svelte
-msgid "{0}=set; path=/; max-age=1"
-msgstr ""
+#~ msgid "{0}=set; path=/; max-age=1"
+#~ msgstr ""
