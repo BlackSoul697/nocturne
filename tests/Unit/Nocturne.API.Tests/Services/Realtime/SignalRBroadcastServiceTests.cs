@@ -28,10 +28,12 @@ public class SignalRBroadcastServiceTests
     private readonly Mock<IHubClients> _mockAlarmClients;
     private readonly Mock<IHubClients> _mockConfigClients;
     private readonly Mock<IHubClients> _mockAlertClients;
+    private readonly Mock<IHubClients> _mockHaClients;
     private readonly Mock<IClientProxy> _mockDataGroupProxy;
     private readonly Mock<IClientProxy> _mockAlarmGroupProxy;
     private readonly Mock<IClientProxy> _mockConfigGroupProxy;
     private readonly Mock<IClientProxy> _mockAlertGroupProxy;
+    private readonly Mock<IClientProxy> _mockHaProxy;
     private readonly Mock<IHubClients> _mockOverviewClients;
     private readonly Mock<IClientProxy> _mockOverviewGroupProxy;
     private readonly SignalRBroadcastService _service;
@@ -69,10 +71,10 @@ public class SignalRBroadcastServiceTests
         _mockAlertClients
             .Setup(x => x.Group(It.IsAny<string>()))
             .Returns(_mockAlertGroupProxy.Object);
-        var mockHaClients = new Mock<IHubClients>();
-        var mockHaProxy = new Mock<IClientProxy>();
-        _mockHomeAssistantHubContext.Setup(x => x.Clients).Returns(mockHaClients.Object);
-        mockHaClients.Setup(x => x.Group(It.IsAny<string>())).Returns(mockHaProxy.Object);
+        _mockHaClients = new Mock<IHubClients>();
+        _mockHaProxy = new Mock<IClientProxy>();
+        _mockHomeAssistantHubContext.Setup(x => x.Clients).Returns(_mockHaClients.Object);
+        _mockHaClients.Setup(x => x.Group(It.IsAny<string>())).Returns(_mockHaProxy.Object);
 
         _mockOverviewHubContext = new Mock<IHubContext<OverviewHub>>();
         _mockOverviewClients = new Mock<IHubClients>();
@@ -148,6 +150,24 @@ public class SignalRBroadcastServiceTests
         var act = () => _service.BroadcastDataUpdateAsync(new { test = "data" });
 
         await act();
+    }
+
+    [Fact]
+    public async Task BroadcastDataUpdateAsync_DataHubFailure_StillRelaysToHomeAssistant()
+    {
+        var testData = new { test = "data" };
+        _mockDataGroupProxy
+            .Setup(x => x.SendCoreAsync("dataUpdate", It.IsAny<object[]>(), default))
+            .ThrowsAsync(new Exception("data hub down"));
+
+        await _service.BroadcastDataUpdateAsync(testData);
+
+        _mockHaProxy.Verify(
+            x => x.SendCoreAsync(
+                "glucose_reading",
+                It.Is<object[]>(args => args.Length == 1 && args[0] == testData),
+                default),
+            Times.Once);
     }
 
     [Fact]
