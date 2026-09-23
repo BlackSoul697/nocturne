@@ -38,8 +38,9 @@ data:
 
     # Pass passwords to psql as -v variables, never interpolated into SQL
     # text, and never written to disk. files/bootstrap-roles.sql explains how
-    # they reach the DO block and why nothing it runs echoes them back.
-    exec psql -v ON_ERROR_STOP=1 \
+    # they reach the DO block and why nothing it runs echoes them back. -X
+    # skips any psqlrc, which could otherwise turn on ECHO and print them.
+    exec psql -X -v ON_ERROR_STOP=1 \
       -v migrator_password="$MIGRATOR_PASSWORD" \
       -v app_password="$APP_PASSWORD" \
       -v web_password="$WEB_PASSWORD" \

@@ -18,12 +18,6 @@
 
 \set ON_ERROR_STOP on
 
--- Keep PL/pgSQL error CONTEXT out of the Job's output. When an EXECUTE below
--- fails (e.g. the admin role lacks CREATEROLE), psql would otherwise print
--- the failing statement -- including its PASSWORD '...' literal -- to stderr,
--- i.e. into `kubectl logs`, on every retry.
-\set SHOW_CONTEXT never
-
 -- Passwords arrive via psql -v variables. Unlike the compose bundle and
 -- docs/postgres/container-init/00-init.sh, which use :'var' directly in the
 -- DDL, this copy needs a DO block for idempotency (CREATE vs ALTER), and
@@ -45,39 +39,58 @@ DECLARE
     app_password text := current_setting('nocturne.app_password');
     web_password text := current_setting('nocturne.web_password');
     current_db text := current_database();
+    err_state text;
+    err_message text;
+    err_detail text;
 BEGIN
-    -- nocturne_migrator: owns the schema, runs migrations
-    IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'nocturne_migrator') THEN
-        EXECUTE format(
-            'CREATE ROLE nocturne_migrator LOGIN NOSUPERUSER NOBYPASSRLS NOCREATEDB NOCREATEROLE PASSWORD %L',
-            migrator_password);
-    ELSE
-        EXECUTE format(
-            'ALTER ROLE nocturne_migrator LOGIN NOSUPERUSER NOBYPASSRLS NOCREATEDB NOCREATEROLE PASSWORD %L',
-            migrator_password);
-    END IF;
+    -- The role DDL below carries each password as a PASSWORD '...' literal,
+    -- and an error raised by it would repeat that statement: as CONTEXT, and
+    -- as QUERY/LINE for errors with a position, both in psql's output (the
+    -- Job's pod logs, on every retry) and in the server log. Catch it and
+    -- re-raise the same error without the statement.
+    BEGIN
+        -- nocturne_migrator: owns the schema, runs migrations
+        IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'nocturne_migrator') THEN
+            EXECUTE format(
+                'CREATE ROLE nocturne_migrator LOGIN NOSUPERUSER NOBYPASSRLS NOCREATEDB NOCREATEROLE PASSWORD %L',
+                migrator_password);
+        ELSE
+            EXECUTE format(
+                'ALTER ROLE nocturne_migrator LOGIN NOSUPERUSER NOBYPASSRLS NOCREATEDB NOCREATEROLE PASSWORD %L',
+                migrator_password);
+        END IF;
 
-    -- nocturne_app: runtime-only, owns nothing
-    IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'nocturne_app') THEN
-        EXECUTE format(
-            'CREATE ROLE nocturne_app LOGIN NOSUPERUSER NOBYPASSRLS NOCREATEDB NOCREATEROLE PASSWORD %L',
-            app_password);
-    ELSE
-        EXECUTE format(
-            'ALTER ROLE nocturne_app LOGIN NOSUPERUSER NOBYPASSRLS NOCREATEDB NOCREATEROLE PASSWORD %L',
-            app_password);
-    END IF;
+        -- nocturne_app: runtime-only, owns nothing
+        IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'nocturne_app') THEN
+            EXECUTE format(
+                'CREATE ROLE nocturne_app LOGIN NOSUPERUSER NOBYPASSRLS NOCREATEDB NOCREATEROLE PASSWORD %L',
+                app_password);
+        ELSE
+            EXECUTE format(
+                'ALTER ROLE nocturne_app LOGIN NOSUPERUSER NOBYPASSRLS NOCREATEDB NOCREATEROLE PASSWORD %L',
+                app_password);
+        END IF;
 
-    -- nocturne_web: SvelteKit bot-framework state storage.
-    IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'nocturne_web') THEN
-        EXECUTE format(
-            'CREATE ROLE nocturne_web LOGIN NOSUPERUSER NOBYPASSRLS NOCREATEDB NOCREATEROLE PASSWORD %L',
-            web_password);
-    ELSE
-        EXECUTE format(
-            'ALTER ROLE nocturne_web LOGIN NOSUPERUSER NOBYPASSRLS NOCREATEDB NOCREATEROLE PASSWORD %L',
-            web_password);
-    END IF;
+        -- nocturne_web: SvelteKit bot-framework state storage.
+        IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'nocturne_web') THEN
+            EXECUTE format(
+                'CREATE ROLE nocturne_web LOGIN NOSUPERUSER NOBYPASSRLS NOCREATEDB NOCREATEROLE PASSWORD %L',
+                web_password);
+        ELSE
+            EXECUTE format(
+                'ALTER ROLE nocturne_web LOGIN NOSUPERUSER NOBYPASSRLS NOCREATEDB NOCREATEROLE PASSWORD %L',
+                web_password);
+        END IF;
+    EXCEPTION WHEN OTHERS THEN
+        GET STACKED DIAGNOSTICS
+            err_state = RETURNED_SQLSTATE,
+            err_message = MESSAGE_TEXT,
+            err_detail = PG_EXCEPTION_DETAIL;
+        IF err_detail <> '' THEN
+            RAISE EXCEPTION USING ERRCODE = err_state, MESSAGE = err_message, DETAIL = err_detail;
+        END IF;
+        RAISE EXCEPTION USING ERRCODE = err_state, MESSAGE = err_message;
+    END;
 
     -- Hand ownership of the database and public schema to the migrator
     EXECUTE format('ALTER DATABASE %I OWNER TO nocturne_migrator', current_db);

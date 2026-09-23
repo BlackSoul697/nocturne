@@ -10,7 +10,10 @@
 #     syntax and a trailing newline are stored byte-for-byte: each role
 #     authenticates with its exact password, and not with a trimmed one
 #   - no password ever appears in the Job's output (stdout + stderr), on
-#     success or on failure -- that output is what `kubectl logs` shows
+#     success or on failure -- that output is what `kubectl logs` shows --
+#     nor in the Postgres server log. Failures covered: admin without
+#     CREATEROLE, a password policy rejecting a password, an error with a
+#     position inside the role DDL; plus a psqlrc that echoes queries
 #   - re-running with rotated passwords (pre-upgrade) takes the ALTER path:
 #     new passwords work, old ones stop working
 #   - the roles get the attributes and grants the rest of the stack relies on
@@ -88,13 +91,16 @@ done
 docker exec "$pg" pg_isready -h 127.0.0.1 -U postgres >/dev/null || fail "postgres did not start"
 
 # Runs the rendered run.sh the way the Job does. Output lands in $work/out.
+scripts_dir="$work/scripts"
+extra_env=()
 run_bootstrap() { # admin_user admin_password migrator app web
   set +e
   docker run --rm --network "$net" --user 1000:1000 --read-only \
-    -v "$work/scripts:/scripts:ro" \
+    -v "$scripts_dir:/scripts:ro" \
     -e PGHOST="$pg" -e PGPORT=5432 -e PGDATABASE=nocturne \
     -e PGUSER="$1" -e PGPASSWORD="$2" \
     -e MIGRATOR_PASSWORD="$3" -e APP_PASSWORD="$4" -e WEB_PASSWORD="$5" \
+    ${extra_env[@]+"${extra_env[@]}"} \
     "$image" /bin/sh /scripts/run.sh > "$work/out" 2>&1
   status=$?
   set -e
@@ -178,6 +184,16 @@ assert_no_login nocturne_migrator "$mig1" "re-run (old password must stop workin
 assert_no_login nocturne_app "$app1" "re-run (old password must stop working)"
 assert_no_login nocturne_web "$web1" "re-run (old password must stop working)"
 
+# --- 2b. A psqlrc that echoes queries (e.g. baked into a custom image) -------
+
+printf '%s\n' '\set ECHO queries' > "$work/scripts/psqlrc"
+chmod 444 "$work/scripts/psqlrc"
+extra_env=(-e PSQLRC=/scripts/psqlrc)
+run_bootstrap postgres admin "$mig2" "$app2" "$web2"
+extra_env=()
+[ "$status" -eq 0 ] || { cat "$work/out" >&2; fail "psqlrc: bootstrap exited $status"; }
+assert_no_leak "psqlrc" "$mig2" "$app2" "$web2"
+
 # --- 3. Failing bootstrap: admin without CREATEROLE ---------------------------
 # A failing statement inside the DO block carries the password literal; the
 # error must not print it, and the Job must fail.
@@ -192,11 +208,49 @@ grep -q "ERROR:  permission denied" "$work/out" \
 assert_no_leak "failing bootstrap" "$mig3" "$app3" "$web3"
 assert_login nocturne_migrator "$mig2" "failing bootstrap (existing password must be untouched)"
 
-# --- 4. Missing password: fails before touching the database -----------------
+# --- 4. Failing bootstrap: password policy rejects a password ----------------
+# Managed Postgres often enforces one. passwordcheck rejects < 8 characters.
+
+sql "alter role postgres set session_preload_libraries = 'passwordcheck'" >/dev/null
+run_bootstrap postgres admin "CANARY1" "$app2" "$web2"
+sql "alter role postgres reset session_preload_libraries" >/dev/null
+[ "$status" -ne 0 ] || { cat "$work/out" >&2; fail "password policy: exited 0"; }
+grep -q "ERROR:  password is too short" "$work/out" \
+  || { cat "$work/out" >&2; fail "password policy: did not fail the way this test expects"; }
+assert_no_leak "password policy" "CANARY1" "$app2" "$web2"
+
+# --- 5. Failing bootstrap: error with a position inside the role DDL ----------
+# The shipped DDL doesn't hit one on PostgreSQL 17, but a server that rejects
+# one of its options would report QUERY/LINE, i.e. the statement with its
+# password literal. Simulate that by breaking one statement.
+
+mkdir -p "$work/broken"
+chmod 755 "$work/broken"
+sed 's/NOCREATEROLE PASSWORD %L/NOCREATEROLE BOGUS PASSWORD %L/' "$work/scripts/bootstrap-roles.sql" > "$work/broken/bootstrap-roles.sql"
+cp "$work/scripts/run.sh" "$work/broken/run.sh"
+chmod 555 "$work/broken"/*
+scripts_dir="$work/broken"
+run_bootstrap postgres admin "CANARY-positional-mig" "CANARY-positional-app" "CANARY-positional-web"
+scripts_dir="$work/scripts"
+[ "$status" -ne 0 ] || { cat "$work/out" >&2; fail "positional error: exited 0"; }
+grep -q 'ERROR:  unrecognized role option "bogus"' "$work/out" \
+  || { cat "$work/out" >&2; fail "positional error: did not fail the way this test expects"; }
+assert_no_leak "positional error" "CANARY-positional-mig" "CANARY-positional-app" "CANARY-positional-web"
+assert_login nocturne_migrator "$mig2" "positional error (existing password must be untouched)"
+
+# --- 6. Missing password: fails before touching the database -----------------
 
 run_bootstrap postgres admin "CANARY-m" "" "CANARY-w"
 [ "$status" -ne 0 ] || fail "missing password: exited 0"
 grep -q "APP_PASSWORD is required" "$work/out" || { cat "$work/out" >&2; fail "missing password: wrong error"; }
 assert_login nocturne_app "$app2" "missing password (existing password must be untouched)"
 
-echo "OK: helm bootstrap password handling (fresh install, rotation, failure, missing password) against $image"
+# --- Server log ---------------------------------------------------------------
+# The failures above were each logged by the server too.
+
+docker logs "$pg" > "$work/server.log" 2>&1
+if grep CANARY "$work/server.log" >&2; then
+  fail "a password appears in the Postgres server log"
+fi
+
+echo "OK: helm bootstrap password handling (fresh install, rotation, failures, missing password) against $image"
