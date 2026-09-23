@@ -149,24 +149,67 @@ public class SignalRBroadcastServiceTests
 
         var act = () => _service.BroadcastDataUpdateAsync(new { test = "data" });
 
-        await act();
+        await act.Should().NotThrowAsync();
     }
 
     [Fact]
-    public async Task BroadcastDataUpdateAsync_DataHubFailure_StillRelaysToHomeAssistant()
+    public async Task BroadcastDataUpdateAsync_ShouldRelayGlucoseReadingToTenantHomeAssistantGroup()
+    {
+        var testData = new { test = "data" };
+
+        await _service.BroadcastDataUpdateAsync(testData);
+
+        _mockHaClients.Verify(x => x.Group("00000000-0000-0000-0000-000000000001:ha-glucose"), Times.Once);
+        _mockHaClients.Verify(x => x.Group("ha-glucose"), Times.Never);
+        _mockHaProxy.Verify(
+            x => x.SendCoreAsync(
+                "glucose_reading",
+                It.Is<object[]>(args => args.Length == 1 && args[0] == testData),
+                default),
+            Times.Once);
+    }
+
+    [Fact]
+    public async Task BroadcastDataUpdateAsync_DataHubFailure_StillRelaysToHomeAssistantAndOverview()
     {
         var testData = new { test = "data" };
         _mockDataGroupProxy
             .Setup(x => x.SendCoreAsync("dataUpdate", It.IsAny<object[]>(), default))
             .ThrowsAsync(new Exception("data hub down"));
 
-        await _service.BroadcastDataUpdateAsync(testData);
+        var act = () => _service.BroadcastDataUpdateAsync(testData);
 
+        await act.Should().NotThrowAsync();
         _mockHaProxy.Verify(
             x => x.SendCoreAsync(
                 "glucose_reading",
                 It.Is<object[]>(args => args.Length == 1 && args[0] == testData),
                 default),
+            Times.Once);
+        _mockOverviewGroupProxy.Verify(
+            x => x.SendCoreAsync("overviewUpdate", It.IsAny<object[]>(), default),
+            Times.Once);
+    }
+
+    [Fact]
+    public async Task BroadcastDataUpdateAsync_HomeAssistantFailure_StillSendsDataUpdateAndOverview()
+    {
+        var testData = new { test = "data" };
+        _mockHaProxy
+            .Setup(x => x.SendCoreAsync("glucose_reading", It.IsAny<object[]>(), default))
+            .ThrowsAsync(new Exception("home assistant hub down"));
+
+        var act = () => _service.BroadcastDataUpdateAsync(testData);
+
+        await act.Should().NotThrowAsync();
+        _mockDataGroupProxy.Verify(
+            x => x.SendCoreAsync(
+                "dataUpdate",
+                It.Is<object[]>(args => args[0] == testData),
+                default),
+            Times.Once);
+        _mockOverviewGroupProxy.Verify(
+            x => x.SendCoreAsync("overviewUpdate", It.IsAny<object[]>(), default),
             Times.Once);
     }
 
