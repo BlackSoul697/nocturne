@@ -18,14 +18,26 @@
 
 \set ON_ERROR_STOP on
 
--- Passwords arrive via psql -v variables and are placed into session
--- custom-GUCs here, OUTSIDE the dollar-quoted DO block (psql :'var'
--- substitution doesn't reach inside DO blocks, psql 14+). This matches the
--- compose bundle's `psql -v ... :'var'` pattern: psql quotes the values
--- safely regardless of embedded quotes, dollar signs or backslashes.
-SELECT set_config('nocturne.migrator_password', :'migrator_password', false);
-SELECT set_config('nocturne.app_password',      :'app_password',      false);
-SELECT set_config('nocturne.web_password',      :'web_password',      false);
+-- Keep PL/pgSQL error CONTEXT out of the Job's output. When an EXECUTE below
+-- fails (e.g. the admin role lacks CREATEROLE), psql would otherwise print
+-- the failing statement -- including its PASSWORD '...' literal -- to stderr,
+-- i.e. into `kubectl logs`, on every retry.
+\set SHOW_CONTEXT never
+
+-- Passwords arrive via psql -v variables. Unlike the compose bundle and
+-- docs/postgres/container-init/00-init.sh, which use :'var' directly in the
+-- DDL, this copy needs a DO block for idempotency (CREATE vs ALTER), and
+-- psql's :'var' substitution doesn't reach inside dollar-quoted bodies. So the
+-- values are handed over through session custom-GUCs set here, outside the
+-- block; psql's :'var' quoting makes that safe for any embedded quote, dollar
+-- sign, backslash or newline.
+--
+-- set_config() returns the value it sets, so each result is discarded with
+-- \g /dev/null -- a bare `SELECT set_config(...);` prints the plaintext
+-- password to the Job's pod logs.
+SELECT set_config('nocturne.migrator_password', :'migrator_password', false) \g /dev/null
+SELECT set_config('nocturne.app_password',      :'app_password',      false) \g /dev/null
+SELECT set_config('nocturne.web_password',      :'web_password',      false) \g /dev/null
 
 DO $$
 DECLARE

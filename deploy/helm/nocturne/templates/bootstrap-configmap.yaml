@@ -36,17 +36,12 @@ data:
 
     echo "Running Nocturne role bootstrap against ${PGHOST}:${PGPORT}/${PGDATABASE} as ${PGUSER}"
 
-    # Pass passwords to psql via -v variables (never shell-interpolated into
-    # the SQL text), matching the compose bundle's bootstrap pattern. psql's
-    # :'var' quoting handles values containing quotes, dollar signs or
-    # backslashes safely; files/bootstrap-roles.sql places them into session
-    # custom-GUCs via set_config(...) OUTSIDE the dollar-quoted DO block
-    # (psql :'var' substitution doesn't reach inside DO blocks). No temp
-    # files: passwords never touch disk, and the `exec` below replaces this
-    # shell so no EXIT trap would fire anyway.
+    # Pass passwords to psql as -v variables, never interpolated into SQL
+    # text, and never written to disk. files/bootstrap-roles.sql explains how
+    # they reach the DO block and why nothing it runs echoes them back.
     exec psql -v ON_ERROR_STOP=1 \
       -v migrator_password="$MIGRATOR_PASSWORD" \
       -v app_password="$APP_PASSWORD" \
       -v web_password="$WEB_PASSWORD" \
-      -f "${SCRIPTS_DIR:-/scripts}/bootstrap-roles.sql"
+      -f /scripts/bootstrap-roles.sql
 {{- end }}
