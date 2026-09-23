@@ -28,6 +28,20 @@ public sealed class TenantlessDashboardPathsTests
     [InlineData("/api/v4/me/permissions")]
     // The login page's provider buttons — the only sign-in affordance on a tenantless host.
     [InlineData("/api/auth/oidc/providers")]
+    [InlineData("/api/v4/user/preferences")]
+    // The caller's own sign-in factors and linked identities, all keyed on SubjectId.
+    [InlineData("/api/auth/passkey/credentials")]
+    [InlineData("/api/auth/passkey/register/options")]
+    [InlineData("/api/auth/passkey/register/complete")]
+    [InlineData("/api/auth/passkey/recovery/status")]
+    [InlineData("/api/auth/passkey/recovery/regenerate")]
+    [InlineData("/api/auth/totp")]
+    [InlineData("/api/auth/totp/setup")]
+    [InlineData("/api/auth/totp/verify-setup")]
+    [InlineData("/api/auth/oidc/link/identities")]
+    [InlineData("/api/auth/oidc/link")]
+    [InlineData("/api/auth/oidc/link/callback")]
+    [InlineData("/api/v4/me/avatar")]
     public void The_tenantless_dashboard_paths_are_allowed(string path)
     {
         TenantResolutionMiddleware.IsTenantlessAllowed(path).Should().BeTrue();
@@ -40,9 +54,56 @@ public sealed class TenantlessDashboardPathsTests
     [InlineData("/api/v4/chart-data/dashboard")]
     [InlineData("/api/v4/me/tenants/overview/extra")]
     [InlineData("/api/v4/me/permissions/grant")]
+    // The tenant's display configuration, a different endpoint to the subject's preferences.
+    [InlineData("/api/v4/ui-settings")]
+    [InlineData("/api/v4/settings/glucose-processing")]
     public void Tenant_scoped_paths_stay_gated(string path)
     {
         TenantResolutionMiddleware.IsTenantlessAllowed(path).Should().BeFalse();
+    }
+
+    [Fact]
+    public void The_sign_in_ceremonies_stay_gated()
+    {
+        // Asserted against POST, the only method each is served under: the DELETE that revokes an
+        // authenticator is matched as a prefix, so asking "under any method" would answer for that
+        // instead.
+        foreach (var path in new[]
+                 {
+                     "/api/auth/totp/login",
+                     "/api/auth/passkey/login/options",
+                     "/api/auth/passkey/login/complete",
+                     "/api/auth/passkey/login/discoverable/options",
+                 })
+        {
+            TenantResolutionMiddleware.IsTenantlessAllowed(path, HttpMethods.Post)
+                .Should().BeFalse(path);
+        }
+    }
+
+    [Fact]
+    public void Revoking_an_authenticator_is_admitted_without_admitting_its_sibling_login()
+    {
+        var totpCredential = "/api/auth/totp/0198f4a0-0000-7000-8000-000000000000";
+
+        TenantResolutionMiddleware.IsTenantlessAllowed(totpCredential, HttpMethods.Delete)
+            .Should().BeTrue();
+        TenantResolutionMiddleware.IsTenantlessAllowed("/api/auth/totp/login", HttpMethods.Post)
+            .Should().BeFalse();
+        TenantResolutionMiddleware.IsTenantlessAllowed(totpCredential, HttpMethods.Post)
+            .Should().BeFalse();
+    }
+
+    [Fact]
+    public void Passkey_credentials_admit_the_id_route_and_nothing_outside_them()
+    {
+        TenantResolutionMiddleware
+            .IsTenantlessAllowed("/api/auth/passkey/credentials/0198f4a0-0000-7000-8000-000000000000")
+            .Should().BeTrue();
+        TenantResolutionMiddleware.IsTenantlessAllowed("/api/auth/passkey/recovery/verify")
+            .Should().BeFalse();
+        TenantResolutionMiddleware.IsTenantlessAllowed("/api/auth/passkey/onboarding/complete")
+            .Should().BeFalse();
     }
 
     [Fact]

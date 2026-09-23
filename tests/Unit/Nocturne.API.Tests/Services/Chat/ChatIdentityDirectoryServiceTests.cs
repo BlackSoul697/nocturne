@@ -1,4 +1,3 @@
-using System.Data.Common;
 using FluentAssertions;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
@@ -7,6 +6,7 @@ using Moq;
 using Nocturne.API.Services.Chat;
 using Nocturne.Infrastructure.Data;
 using Nocturne.Infrastructure.Data.Entities;
+using Nocturne.Tests.Shared.Infrastructure;
 using Npgsql;
 using Xunit;
 
@@ -19,32 +19,21 @@ public class ChatIdentityDirectoryServiceTests : IDisposable
     private const string UserA = "discord-user-a";
     private const string UserB = "discord-user-b";
 
-    private readonly DbConnection _connection;
-    private readonly DbContextOptions<NocturneDbContext> _options;
-    private readonly TestDbContextFactory _factory;
+    private readonly SqliteTestDatabase _db;
+    private readonly IDbContextFactory<NocturneDbContext> _factory;
     private readonly ChatIdentityDirectoryService _service;
 
     public ChatIdentityDirectoryServiceTests()
     {
-        _connection = new SqliteConnection("DataSource=:memory:");
-        _connection.Open();
+        _db = TestDbContextFactory.CreateSqlite();
 
-        _options = new DbContextOptionsBuilder<NocturneDbContext>()
-            .UseSqlite(_connection)
-            .Options;
-
-        using (var db = new NocturneDbContext(_options))
-        {
-            db.Database.EnsureCreated();
-        }
-
-        _factory = new TestDbContextFactory(_options);
+        _factory = _db.ContextFactory;
         _service = new ChatIdentityDirectoryService(
             _factory,
             Mock.Of<ILogger<ChatIdentityDirectoryService>>());
     }
 
-    public void Dispose() => _connection.Dispose();
+    public void Dispose() => _db.Dispose();
 
     /// <summary>
     /// Inserts a tenant and returns its id. chat_identity_directory.tenant_id is a real FK with
@@ -53,7 +42,7 @@ public class ChatIdentityDirectoryServiceTests : IDisposable
     private Guid NewTenant()
     {
         var id = Guid.CreateVersion7();
-        using var db = new NocturneDbContext(_options);
+        using var db = _db.CreateContext();
         db.Tenants.Add(new TenantEntity
         {
             Id = id,
@@ -71,18 +60,10 @@ public class ChatIdentityDirectoryServiceTests : IDisposable
     private Guid NewSubject()
     {
         var id = Guid.CreateVersion7();
-        using var db = new NocturneDbContext(_options);
+        using var db = _db.CreateContext();
         db.Subjects.Add(new SubjectEntity { Id = id, Name = $"s-{id:n}"[..20] });
         db.SaveChanges();
         return id;
-    }
-
-    private sealed class TestDbContextFactory(DbContextOptions<NocturneDbContext> options)
-        : IDbContextFactory<NocturneDbContext>
-    {
-        public NocturneDbContext CreateDbContext() => new(options);
-        public Task<NocturneDbContext> CreateDbContextAsync(CancellationToken ct = default)
-            => Task.FromResult(CreateDbContext());
     }
 
     /// <summary>
@@ -194,7 +175,7 @@ public class ChatIdentityDirectoryServiceTests : IDisposable
     /// <summary>Hard-deletes a directory row by label, bypassing the service.</summary>
     private void DeleteLink(string platformUserId, string label)
     {
-        using var db = new NocturneDbContext(_options);
+        using var db = _db.CreateContext();
         db.ChatIdentityDirectory
             .Where(d => d.Platform == Platform && d.PlatformUserId == platformUserId && d.Label == label)
             .ExecuteDelete();
@@ -203,7 +184,7 @@ public class ChatIdentityDirectoryServiceTests : IDisposable
     /// <summary>Writes a directory row directly, bypassing the service.</summary>
     private void InsertLink(string platformUserId, Guid tenantId, string label, bool isDefault)
     {
-        using var db = new NocturneDbContext(_options);
+        using var db = _db.CreateContext();
         db.ChatIdentityDirectory.Add(new ChatIdentityDirectoryEntry
         {
             Id = Guid.CreateVersion7(),
@@ -259,7 +240,7 @@ public class ChatIdentityDirectoryServiceTests : IDisposable
         await _service.CreateLinkAsync(Platform, UserA, NewTenant(), NewSubject(), "oliver", "Oliver", default);
         await _service.CreateLinkAsync(Platform, UserB, NewTenant(), subjectId, "lily-b", "Lily", default);
 
-        await using (var db = new NocturneDbContext(_options))
+        await using (var db = _db.CreateContext())
         {
             await db.Subjects.Where(s => s.Id == subjectId).ExecuteDeleteAsync();
         }
@@ -325,7 +306,7 @@ public class ChatIdentityDirectoryServiceTests : IDisposable
         await _service.CreateLinkAsync(Platform, UserA, owned, NewSubject(), "other", "Other", default);
 
         var factory = new InterloperDbContextFactory(
-            _options,
+            _db.Options,
             pending => InsertLink(UserA, stolen, pending.Label, isDefault: false),
             interlopeCount: 1);
         var service = new ChatIdentityDirectoryService(
@@ -348,7 +329,7 @@ public class ChatIdentityDirectoryServiceTests : IDisposable
         var tenantId = NewTenant();
 
         var factory = new InterloperDbContextFactory(
-            _options,
+            _db.Options,
             _ => InsertLink(UserA, tenantId, "winner", isDefault: true),
             interlopeCount: 1);
         var service = new ChatIdentityDirectoryService(
@@ -372,7 +353,7 @@ public class ChatIdentityDirectoryServiceTests : IDisposable
         // Two chat users linking their very first tenant at once: both compute IsDefault = true and
         // collide on ux_directory_user_one_default alone — different tenants, different labels.
         var factory = new InterloperDbContextFactory(
-            _options,
+            _db.Options,
             _ => InsertLink(UserA, theirs, "theirs", isDefault: true),
             interlopeCount: 1);
         var service = new ChatIdentityDirectoryService(
@@ -404,7 +385,7 @@ public class ChatIdentityDirectoryServiceTests : IDisposable
         await _service.CreateLinkAsync(Platform, UserA, owned, NewSubject(), "other", "Other", default);
 
         var factory = new InterloperDbContextFactory(
-            _options,
+            _db.Options,
             pending => InsertLink(UserA, stolen, pending.Label, isDefault: false),
             interlopeCount: 1,
             beforeRetry: () => DeleteLink(UserA, "lily"));
@@ -424,7 +405,7 @@ public class ChatIdentityDirectoryServiceTests : IDisposable
     [Fact]
     public async Task CreateLinkAsync_surfaces_a_rejection_a_re_read_cannot_fix()
     {
-        var factory = new BarrenFailureDbContextFactory(_options);
+        var factory = new BarrenFailureDbContextFactory(_db.Options);
         var service = new ChatIdentityDirectoryService(
             factory, Mock.Of<ILogger<ChatIdentityDirectoryService>>());
 
@@ -442,7 +423,7 @@ public class ChatIdentityDirectoryServiceTests : IDisposable
     public async Task CreateLinkAsync_surfaces_the_rejection_when_every_attempt_loses()
     {
         var factory = new InterloperDbContextFactory(
-            _options,
+            _db.Options,
             pending => InsertLink(UserA, NewTenant(), pending.Label, isDefault: false),
             interlopeCount: int.MaxValue);
         var service = new ChatIdentityDirectoryService(
@@ -465,10 +446,10 @@ public class ChatIdentityDirectoryServiceTests : IDisposable
         a.IsDefault.Should().BeTrue();
         b.IsDefault.Should().BeFalse();
 
-        await _service.SetDefaultAsync(b.Id, tenantScope: null, ct: default);
+        await _service.SetDefaultAsync(b.Id, ChatLinkScope.Unscoped, ct: default);
 
-        var aAfter = await _service.GetByIdAsync(a.Id, tenantScope: null, ct: default);
-        var bAfter = await _service.GetByIdAsync(b.Id, tenantScope: null, ct: default);
+        var aAfter = await _service.GetByIdAsync(a.Id, ChatLinkScope.Unscoped, ct: default);
+        var bAfter = await _service.GetByIdAsync(b.Id, ChatLinkScope.Unscoped, ct: default);
         aAfter!.IsDefault.Should().BeFalse();
         bAfter!.IsDefault.Should().BeTrue();
     }
@@ -476,7 +457,7 @@ public class ChatIdentityDirectoryServiceTests : IDisposable
     [Fact]
     public async Task SetDefaultAsync_throws_when_link_not_found()
     {
-        var act = async () => await _service.SetDefaultAsync(Guid.CreateVersion7(), tenantScope: null, ct: default);
+        var act = async () => await _service.SetDefaultAsync(Guid.CreateVersion7(), ChatLinkScope.Unscoped, ct: default);
         await act.Should().ThrowAsync<KeyNotFoundException>();
     }
 
@@ -486,8 +467,8 @@ public class ChatIdentityDirectoryServiceTests : IDisposable
     public async Task RenameLabelAsync_updates_label()
     {
         var a = await _service.CreateLinkAsync(Platform, UserA, NewTenant(), NewSubject(), "lily", "Lily", default);
-        await _service.RenameLabelAsync(a.Id, tenantScope: null, "rose", ct: default);
-        var after = await _service.GetByIdAsync(a.Id, tenantScope: null, ct: default);
+        await _service.RenameLabelAsync(a.Id, ChatLinkScope.Unscoped, "rose", ct: default);
+        var after = await _service.GetByIdAsync(a.Id, ChatLinkScope.Unscoped, ct: default);
         after!.Label.Should().Be("rose");
     }
 
@@ -497,7 +478,7 @@ public class ChatIdentityDirectoryServiceTests : IDisposable
         await _service.CreateLinkAsync(Platform, UserA, NewTenant(), NewSubject(), "lily", "Lily", default);
         var b = await _service.CreateLinkAsync(Platform, UserA, NewTenant(), NewSubject(), "oliver", "Oliver", default);
 
-        var act = async () => await _service.RenameLabelAsync(b.Id, tenantScope: null, "lily", ct: default);
+        var act = async () => await _service.RenameLabelAsync(b.Id, ChatLinkScope.Unscoped, "lily", ct: default);
         await act.Should().ThrowAsync<InvalidOperationException>();
     }
 
@@ -507,8 +488,8 @@ public class ChatIdentityDirectoryServiceTests : IDisposable
     public async Task UpdateDisplayNameAsync_updates_display_name()
     {
         var a = await _service.CreateLinkAsync(Platform, UserA, NewTenant(), NewSubject(), "lily", "Lily", default);
-        await _service.UpdateDisplayNameAsync(a.Id, tenantScope: null, "Lily Renamed", ct: default);
-        var after = await _service.GetByIdAsync(a.Id, tenantScope: null, ct: default);
+        await _service.UpdateDisplayNameAsync(a.Id, ChatLinkScope.Unscoped, "Lily Renamed", ct: default);
+        var after = await _service.GetByIdAsync(a.Id, ChatLinkScope.Unscoped, ct: default);
         after!.DisplayName.Should().Be("Lily Renamed");
     }
 
@@ -518,9 +499,58 @@ public class ChatIdentityDirectoryServiceTests : IDisposable
     public async Task RevokeAsync_hard_deletes_row()
     {
         var a = await _service.CreateLinkAsync(Platform, UserA, NewTenant(), NewSubject(), "lily", "Lily", default);
-        await _service.RevokeAsync(a.Id, tenantScope: null, ct: default);
-        var after = await _service.GetByIdAsync(a.Id, tenantScope: null, ct: default);
+        await _service.RevokeAsync(a.Id, ChatLinkScope.Unscoped, ct: default);
+        var after = await _service.GetByIdAsync(a.Id, ChatLinkScope.Unscoped, ct: default);
         after.Should().BeNull();
+    }
+
+    [Fact]
+    public async Task RevokeAsync_promotes_the_sole_survivor_when_the_default_is_deleted()
+    {
+        var tenantA = NewTenant();
+        var subjectA = NewSubject();
+        var a = await _service.CreateLinkAsync(Platform, UserA, tenantA, subjectA, "lily", "Lily", default);
+        var b = await _service.CreateLinkAsync(Platform, UserA, NewTenant(), NewSubject(), "oliver", "Oliver", default);
+        var elsewhere = await _service.CreateLinkAsync(Platform, UserB, NewTenant(), NewSubject(), "rose", "Rose", default);
+        a.IsDefault.Should().BeTrue();
+        b.IsDefault.Should().BeFalse();
+
+        await _service.RevokeAsync(a.Id, ChatLinkScope.ForOwner(tenantA, subjectA), ct: default);
+
+        var bAfter = await _service.GetByIdAsync(b.Id, ChatLinkScope.Unscoped, ct: default);
+        bAfter!.IsDefault.Should().BeTrue(
+            "the survivor is in another tenant than the revoked link, so a tenant-scoped promotion would miss it");
+        var elsewhereAfter = await _service.GetByIdAsync(elsewhere.Id, ChatLinkScope.Unscoped, ct: default);
+        elsewhereAfter!.IsDefault.Should().BeTrue("another chat account's links are not survivors of this one");
+    }
+
+    [Fact]
+    public async Task RevokeAsync_promotes_the_sole_survivor_of_an_account_that_held_no_default()
+    {
+        InsertLink(UserA, NewTenant(), "lily", isDefault: false);
+        InsertLink(UserA, NewTenant(), "oliver", isDefault: false);
+        var before = await _service.GetCandidatesAsync(Platform, UserA, default);
+
+        await _service.RevokeAsync(before.Single(d => d.Label == "lily").Id, ChatLinkScope.Unscoped, ct: default);
+
+        var survivors = await _service.GetCandidatesAsync(Platform, UserA, default);
+        survivors.Should().ContainSingle().Which.IsDefault.Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task RevokeAsync_leaves_no_default_when_more_than_one_link_survives()
+    {
+        var tenantA = NewTenant();
+        var subjectA = NewSubject();
+        var a = await _service.CreateLinkAsync(Platform, UserA, tenantA, subjectA, "lily", "Lily", default);
+        await _service.CreateLinkAsync(Platform, UserA, NewTenant(), NewSubject(), "oliver", "Oliver", default);
+        await _service.CreateLinkAsync(Platform, UserA, NewTenant(), NewSubject(), "rose", "Rose", default);
+
+        await _service.RevokeAsync(a.Id, ChatLinkScope.ForOwner(tenantA, subjectA), ct: default);
+
+        var survivors = await _service.GetCandidatesAsync(Platform, UserA, default);
+        survivors.Should().HaveCount(2);
+        survivors.Should().OnlyContain(d => !d.IsDefault, "choosing between two tenants belongs to the user");
     }
 
     // ---- GetByTenantAsync ----
@@ -538,61 +568,31 @@ public class ChatIdentityDirectoryServiceTests : IDisposable
         result[0].TenantId.Should().Be(t1);
     }
 
-    // ---- GetByPlatformAndUserAsync ----
+    // ---- GetDefaultAsync ----
 
     [Fact]
-    public async Task GetByPlatformAndUserAsync_returns_exact_match_when_label_provided()
+    public async Task GetDefaultAsync_returns_the_holder_from_whichever_tenant_holds_it()
     {
-        await _service.CreateLinkAsync(Platform, UserA, NewTenant(), NewSubject(), "lily", "Lily", default);
-        await _service.CreateLinkAsync(Platform, UserA, NewTenant(), NewSubject(), "oliver", "Oliver", default);
+        var a = await _service.CreateLinkAsync(Platform, UserA, NewTenant(), NewSubject(), "lily", "Lily", default);
+        var b = await _service.CreateLinkAsync(Platform, UserA, NewTenant(), NewSubject(), "oliver", "Oliver", default);
+        await _service.SetDefaultAsync(b.Id, ChatLinkScope.Unscoped, ct: default);
+        await _service.CreateLinkAsync(Platform, UserB, NewTenant(), NewSubject(), "rose", "Rose", default);
 
-        var result = await _service.GetByPlatformAndUserAsync(Platform, UserA, "oliver", default);
+        var result = await _service.GetDefaultAsync(Platform, UserA, default);
+
         result.Should().NotBeNull();
-        result!.Label.Should().Be("oliver");
+        result!.Id.Should().Be(b.Id);
+        result.TenantId.Should().NotBe(a.TenantId);
     }
 
     [Fact]
-    public async Task GetByPlatformAndUserAsync_returns_default_when_label_null_and_multiple_exist()
+    public async Task GetDefaultAsync_returns_null_when_no_link_holds_the_default()
     {
-        var a = await _service.CreateLinkAsync(Platform, UserA, NewTenant(), NewSubject(), "lily", "Lily", default);
-        await _service.CreateLinkAsync(Platform, UserA, NewTenant(), NewSubject(), "oliver", "Oliver", default);
+        InsertLink(UserA, NewTenant(), "lily", isDefault: false);
+        await _service.CreateLinkAsync(Platform, UserB, NewTenant(), NewSubject(), "rose", "Rose", default);
 
-        var result = await _service.GetByPlatformAndUserAsync(Platform, UserA, null, default);
-        result.Should().NotBeNull();
-        result!.Id.Should().Be(a.Id);
-    }
+        var result = await _service.GetDefaultAsync(Platform, UserA, default);
 
-    [Fact]
-    public async Task GetByPlatformAndUserAsync_returns_single_when_only_one_exists()
-    {
-        var a = await _service.CreateLinkAsync(Platform, UserA, NewTenant(), NewSubject(), "lily", "Lily", default);
-        // Force IsDefault=false to simulate "no default"
-        using (var db = _factory.CreateDbContext())
-        {
-            var entity = await db.ChatIdentityDirectory.FirstAsync(d => d.Id == a.Id);
-            entity.IsDefault = false;
-            await db.SaveChangesAsync();
-        }
-
-        var result = await _service.GetByPlatformAndUserAsync(Platform, UserA, null, default);
-        result.Should().NotBeNull();
-        result!.Id.Should().Be(a.Id);
-    }
-
-    [Fact]
-    public async Task GetByPlatformAndUserAsync_returns_null_when_label_null_and_ambiguous()
-    {
-        var a = await _service.CreateLinkAsync(Platform, UserA, NewTenant(), NewSubject(), "lily", "Lily", default);
-        await _service.CreateLinkAsync(Platform, UserA, NewTenant(), NewSubject(), "oliver", "Oliver", default);
-        // Clear default flag without setting another
-        using (var db = _factory.CreateDbContext())
-        {
-            var entity = await db.ChatIdentityDirectory.FirstAsync(d => d.Id == a.Id);
-            entity.IsDefault = false;
-            await db.SaveChangesAsync();
-        }
-
-        var result = await _service.GetByPlatformAndUserAsync(Platform, UserA, null, default);
         result.Should().BeNull();
     }
 
@@ -602,7 +602,7 @@ public class ChatIdentityDirectoryServiceTests : IDisposable
     public async Task GetByIdAsync_returns_link_or_null()
     {
         var a = await _service.CreateLinkAsync(Platform, UserA, NewTenant(), NewSubject(), "lily", "Lily", default);
-        (await _service.GetByIdAsync(a.Id, tenantScope: null, ct: default)).Should().NotBeNull();
-        (await _service.GetByIdAsync(Guid.CreateVersion7(), tenantScope: null, ct: default)).Should().BeNull();
+        (await _service.GetByIdAsync(a.Id, ChatLinkScope.Unscoped, ct: default)).Should().NotBeNull();
+        (await _service.GetByIdAsync(Guid.CreateVersion7(), ChatLinkScope.Unscoped, ct: default)).Should().BeNull();
     }
 }

@@ -1,5 +1,6 @@
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
+using Nocturne.Core.Contracts.Connectors;
 
 namespace Nocturne.Infrastructure.Data.Entities;
 
@@ -27,12 +28,23 @@ public class ConnectorConfigurationEntity : ITenantScoped, ISystemTimestamped
     public Guid Id { get; set; }
 
     /// <summary>
-    /// The connector name (e.g., "Dexcom", "Glooko", "LibreLinkUp")
+    /// The connector name (e.g., "dexcom", "glooko", "librelinkup").
     /// </summary>
+    /// <remarks>
+    /// Stored canonical whatever spelling the writer had, because the unique index over
+    /// (connector_name, tenant_id) is case-sensitive: two spellings of one connector are two rows
+    /// for the same tenant, and every later read picks one of them arbitrarily.
+    /// </remarks>
     [Column("connector_name")]
     [Required]
     [MaxLength(100)]
-    public string ConnectorName { get; set; } = string.Empty;
+    public string ConnectorName
+    {
+        get => _connectorName;
+        set => _connectorName = ConnectorNames.Canonical(value);
+    }
+
+    private string _connectorName = string.Empty;
 
     /// <summary>
     /// Runtime configuration as JSON (non-secret properties marked with [RuntimeConfigurable])
@@ -91,10 +103,19 @@ public class ConnectorConfigurationEntity : ITenantScoped, ISystemTimestamped
     public DateTime? LastSuccessfulSync { get; set; }
 
     /// <summary>
+    /// Maximum stored length of <see cref="LastErrorMessage"/>. Writers must fit the message to it,
+    /// and must not cut inside a surrogate pair: a connector reports one error per failing type per
+    /// chunk, so a long backfill against a persistently failing publisher joins a multi-KB string,
+    /// and either an over-length value or a lone surrogate fails the very write that was recording
+    /// the failure.
+    /// </summary>
+    public const int LastErrorMessageMaxLength = 1000;
+
+    /// <summary>
     /// The error message from the most recent failure
     /// </summary>
     [Column("last_error_message")]
-    [MaxLength(1000)]
+    [MaxLength(LastErrorMessageMaxLength)]
     public string? LastErrorMessage { get; set; }
 
     /// <summary>
@@ -108,6 +129,14 @@ public class ConnectorConfigurationEntity : ITenantScoped, ISystemTimestamped
     /// </summary>
     [Column("is_healthy")]
     public bool IsHealthy { get; set; } = true;
+
+    /// <summary>
+    /// Per-resource incremental-sync cursors as a JSON object keyed by resource name
+    /// (e.g. <c>{"cgm/egvs":{"lastUpdatedAt":"...","lastGuid":"..."}}</c>). Connector runtime state,
+    /// written after each successful sync; null until a connector runs its first cursor-based sync.
+    /// </summary>
+    [Column("sync_cursors", TypeName = "jsonb")]
+    public string? SyncCursorsJson { get; set; }
 
     /// <summary>
     /// Per-collection backfill low-water marks, serialized as a JSON map of collection key

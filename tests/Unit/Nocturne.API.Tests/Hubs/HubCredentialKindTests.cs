@@ -48,7 +48,6 @@ public class HubCredentialKindTests
         { AuthType.InstanceKey, HubCredentialKind.Infrastructure },
         { AuthType.OidcToken, HubCredentialKind.Subject },
         { AuthType.LegacyJwt, HubCredentialKind.Subject },
-        { AuthType.LegacyAccessToken, HubCredentialKind.Subject },
         { AuthType.ApiKey, HubCredentialKind.Subject },
         { AuthType.SessionCookie, HubCredentialKind.Subject },
         { AuthType.OAuthAccessToken, HubCredentialKind.Subject },
@@ -137,7 +136,7 @@ public class HubCredentialKindTests
     {
         var (hub, groups) = CreateHub(new HubAuthorization(
             Tenant,
-            OAuthScopes.Normalize([OAuthScopes.FullAccess]),
+            Scope.Normalize([Scope.FullAccess]),
             HubCredentialKind.Infrastructure,
             SubjectId: null));
 
@@ -248,7 +247,7 @@ public class HubCredentialKindTests
     }
 
     private static HubAuthorization Authorization(HubCredentialKind kind) => new(
-        Tenant, OAuthScopes.Normalize([OAuthScopes.GlucoseRead]), kind, Subject);
+        Tenant, Scope.Normalize([Scope.GlucoseRead]), kind, Subject);
 
     private static string Group(string name) => TenantAwareHub.FormatTenantGroup(Tenant.ToString(), name);
 
@@ -357,7 +356,9 @@ public class HubCredentialKindTests
             Mock.Of<IHubContext<ConfigHub>>(),
             Mock.Of<IHubContext<AlertHub>>(),
             Mock.Of<IHubContext<HomeAssistantHub>>(),
+            Mock.Of<IHubContext<OverviewHub>>(),
             tenantAccessor.Object,
+            Options.Create(new JsonHubProtocolOptions()),
             Mock.Of<ILogger<SignalRBroadcastService>>());
 
         return (service, sends);

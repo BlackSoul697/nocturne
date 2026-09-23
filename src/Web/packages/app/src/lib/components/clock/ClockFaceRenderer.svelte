@@ -1,16 +1,19 @@
 <script lang="ts">
   import { browser } from "$app/environment";
   import { getClockGlucoseSource } from "$lib/stores/realtime-store.svelte";
-  import { glucoseUnits } from "$lib/stores/appearance-store.svelte";
   import {
-    formatGlucoseValue,
-    formatGlucoseDelta,
-    bgLabel,
-  } from "$lib/utils/formatting";
-  import { isUnwiredElementType } from "$lib/clock-builder/types";
+    buildCustomCssString,
+    buildStyleString,
+    clockBackgroundStyle,
+    elementSize,
+    getElementColor,
+    getFontClass,
+    getFontWeightClass,
+    getTrackerDefinition,
+    isUnwiredElementType,
+  } from "$lib/clock-builder";
   import { renderClockElementValue } from "$lib/components/clock/element-value";
-  import { formatClockTime } from "$lib/components/clock/clock-time";
-  import { ArrowUp } from "lucide-svelte";
+  import TrendArrow from "$lib/components/clock/TrendArrow.svelte";
   import { createChartDataEngine } from "$lib/components/dashboard/glucose-chart/engine/chart-data-engine.svelte";
   import GlucoseChartShell from "$lib/components/dashboard/glucose-chart/GlucoseChartShell.svelte";
   import GlucoseTrack from "$lib/components/dashboard/glucose-chart/tracks/GlucoseTrack.svelte";
@@ -22,12 +25,7 @@
   import TrackerMarkers from "$lib/components/dashboard/glucose-chart/markers/TrackerMarkers.svelte";
   import ChartTooltip from "$lib/components/dashboard/glucose-chart/ChartTooltip.svelte";
   import TrackerCategoryIcon from "$lib/components/icons/TrackerCategoryIcon.svelte";
-  import type {
-    ClockFaceConfig,
-    ClockElement,
-    ClockElementStyle,
-    TrackerDefinitionDto,
-  } from "$lib/api";
+  import type { ClockFaceConfig, TrackerDefinitionDto } from "$lib/api";
   import { getDefinitions } from "$api/generated/trackers.generated.remote";
   import {
     advance,
@@ -37,10 +35,7 @@
     type Vec2,
   } from "$lib/components/clock/screensaver-math";
   import ScreensaverPulse, { PULSE_DURATION_MS } from "$lib/components/clock/ScreensaverPulse.svelte";
-  import {
-    isClockReadingStale,
-    readingAgeLabel,
-  } from "$lib/components/clock/staleness";
+  import { isClockReadingStale } from "$lib/components/clock/staleness";
 
   interface Props {
     config: ClockFaceConfig;
@@ -74,14 +69,8 @@
   const glucose = getClockGlucoseSource();
 
   const currentBG = $derived(glucose.currentBG);
-  const bgDelta = $derived(glucose.bgDelta);
   const direction = $derived(glucose.direction);
   const lastUpdated = $derived(glucose.lastUpdated);
-
-  // Format for display based on user's unit preference
-  const units = $derived(glucoseUnits.current);
-  const displayBG = $derived(formatGlucoseValue(currentBG, units));
-  const displayDelta = $derived(formatGlucoseDelta(bgDelta, units));
 
   // Current time state
   let currentTime = $state(new Date());
@@ -93,7 +82,6 @@
     return () => clearInterval(interval);
   });
 
-  // Reading age, driven by the ticker above so it advances while the CGM is silent.
   const isStale = $derived(
     isClockReadingStale(
       config?.settings?.staleMinutes,
@@ -101,126 +89,12 @@
       currentTime.getTime()
     )
   );
-  const timeSince = $derived(
-    readingAgeLabel(lastUpdated, currentTime.getTime())
-  );
-
-  // Resolve CSS variable to its computed value
-  function resolveCssVar(name: string): string {
-    if (!browser) return "#000000"; // fallback for SSR
-    return getComputedStyle(document.documentElement).getPropertyValue(name).trim();
-  }
-
-  // Get BG color based on value
-  function getBgColor(bg: number): string {
-    if (bg < 70) return resolveCssVar("--glucose-very-low");
-    if (bg < 80) return resolveCssVar("--glucose-low");
-    if (bg > 250) return resolveCssVar("--glucose-very-high");
-    if (bg > 180) return resolveCssVar("--glucose-high");
-    return resolveCssVar("--glucose-in-range");
-  }
-
-  // Get rotation degrees for Lucide arrow based on direction
-  function getDirectionRotation(dir: string): number {
-    const rotations: Record<string, number> = {
-      DoubleUp: 0,
-      SingleUp: 0,
-      FortyFiveUp: 45,
-      Flat: 90,
-      FortyFiveDown: 135,
-      SingleDown: 180,
-      DoubleDown: 180,
-    };
-    return rotations[dir] ?? 90;
-  }
-
-  // Check if direction is double arrow
-  function isDoubleArrow(dir: string): boolean {
-    return dir === "DoubleUp" || dir === "DoubleDown";
-  }
 
   // Tracker definitions (skipped on the anonymous public clock — see loadTrackerDefinitions)
   const definitionsQuery = loadTrackerDefinitions ? getDefinitions({}) : null;
   const trackerDefinitions = $derived<TrackerDefinitionDto[]>(
     definitionsQuery?.current ?? [],
   );
-
-  // Get tracker definition by ID
-  function getTrackerDefinition(definitionId: string | undefined) {
-    if (!definitionId) return null;
-    return trackerDefinitions.find((d) => d.id === definitionId) ?? null;
-  }
-
-  // Font class helpers
-  function getFontClass(font: string | undefined): string {
-    switch (font) {
-      case "mono":
-        return "font-mono";
-      case "serif":
-        return "font-serif";
-      case "sans":
-        return "font-sans";
-      default:
-        return "";
-    }
-  }
-
-  function getFontWeightClass(weight: string | undefined): string {
-    switch (weight) {
-      case "normal":
-        return "font-normal";
-      case "medium":
-        return "font-medium";
-      case "semibold":
-        return "font-semibold";
-      case "bold":
-        return "font-bold";
-      default:
-        return "font-medium";
-    }
-  }
-
-  // Get element color
-  function getElementColor(style: ClockElementStyle | undefined): string {
-    const color = style?.color;
-    if (color === "dynamic") return getBgColor(currentBG);
-    return color || "#ffffff";
-  }
-
-  // Build custom CSS properties string from element.style.custom
-  function buildCustomCssString(element: ClockElement): string {
-    const custom = element.style?.custom;
-    if (!custom) return "";
-    return Object.entries(custom)
-      .map(([key, value]) => `${key}: ${value}`)
-      .join("; ");
-  }
-
-  // Build inline style string
-  function buildStyleString(element: ClockElement): string {
-    const style = element.style;
-    const parts: string[] = [];
-    const size = (element.size || 20) * scale;
-    parts.push(`font-size: ${size}px`);
-    parts.push(`color: ${getElementColor(style)}`);
-    parts.push(`opacity: ${style?.opacity ?? 1.0}`);
-    const customCss = buildCustomCssString(element);
-    if (customCss) {
-      parts.push(customCss);
-    }
-    return parts.join("; ");
-  }
-
-  // Render element value (for text-based elements, not arrow/tracker)
-  function renderElementValue(element: ClockElement): string {
-    return renderClockElementValue(element, {
-      displayBG: String(displayBG),
-      displayDelta,
-      unitLabel: bgLabel(),
-      age: timeSince,
-      time: formatClockTime(currentTime, element.format),
-    });
-  }
 
   // Background chart element
   const backgroundChart = $derived.by(() => {
@@ -235,17 +109,9 @@
     return null;
   });
 
-  // Preview background style
-  const bgStyle = $derived.by(() => {
-    if (!config?.settings) return "background-color: var(--background);";
-    if (config.settings.backgroundImage) {
-      return `background-image: url(${config.settings.backgroundImage}); background-size: cover; background-position: center;`;
-    }
-    if (config.settings.bgColor) {
-      return `background-color: ${getBgColor(currentBG)};`;
-    }
-    return "background-color: var(--background);";
-  });
+  const bgStyle = $derived(
+    clockBackgroundStyle(config?.settings, currentBG, "var(--background)")
+  );
 
   const overlayOpacity = $derived(
     config?.settings?.backgroundImage
@@ -410,6 +276,7 @@
       {@const bgChartEngine = createChartDataEngine({
         focusHours: backgroundChart.hours || 3,
         enablePredictions: backgroundChart.chartConfig?.showPredictions ?? false,
+        dataWindow: "display",
       })}
       <div class="absolute inset-0 z-0">
         <GlucoseChartShell engine={bgChartEngine} heightClass="h-full">
@@ -418,7 +285,7 @@
               <BasalTrack />
             {/if}
             <ThresholdRules />
-            <GlucoseTrack />
+            <GlucoseTrack showPoints={false} />
             {#if backgroundChart.chartConfig?.showPredictions ?? false}
               <PredictionTrack />
             {/if}
@@ -456,6 +323,7 @@
 
   <!-- Rows -->
   <div
+    data-testid="clock-face-rows"
     class="relative z-10 flex flex-col items-center p-2"
     style="gap: {3 * scale}px;"
   >
@@ -468,6 +336,7 @@
                 {@const inlineEngine = createChartDataEngine({
                   focusHours: element.hours || 3,
                   enablePredictions: element.chartConfig?.showPredictions ?? false,
+                  dataWindow: "display",
                 })}
                 <div
                   class="overflow-hidden rounded"
@@ -479,7 +348,7 @@
                         <BasalTrack />
                       {/if}
                       <ThresholdRules />
-                      <GlucoseTrack />
+                      <GlucoseTrack showPoints={false} />
                       {#if element.chartConfig?.showPredictions ?? false}
                         <PredictionTrack />
                       {/if}
@@ -517,33 +386,22 @@
                 </div>
               {/if}
             {:else if element.type === "arrow"}
-              <!-- Arrow element using Lucide icon with rotation -->
-              {@const size = (element.size || 25) * scale}
-              {@const rotation = getDirectionRotation(direction)}
-              {@const isDouble = isDoubleArrow(direction)}
+              {@const size = elementSize(element) * scale}
               {@const customCss = buildCustomCssString(element)}
               <div
                 class="flex items-center"
-                style="color: {getElementColor(element.style)}; opacity: {element.style?.opacity ?? 1.0};{customCss ? ` ${customCss}` : ''}"
+                style="color: {getElementColor(element, currentBG)}; opacity: {element.style?.opacity ?? 1.0};{customCss ? ` ${customCss}` : ''}"
               >
-                {#if isDouble}
-                  <ArrowUp
-                    style="width: {size}px; height: {size}px; transform: rotate({rotation}deg); margin-right: -{size * 0.3}px;"
-                  />
-                {/if}
-                <ArrowUp
-                  style="width: {size}px; height: {size}px; transform: rotate({rotation}deg);"
-                />
+                <TrendArrow {direction} {size} />
               </div>
             {:else if element.type === "tracker"}
-              <!-- Tracker element with icon and time remaining -->
-              {@const def = getTrackerDefinition(element.definitionId)}
-              {@const size = (element.size || 14) * scale}
-              {@const showOptions = element.show ?? ["name", "remaining"]}
+              {@const def = getTrackerDefinition(element.definitionId, trackerDefinitions)}
+              {@const size = elementSize(element) * scale}
+              {@const showOptions = element.show ?? ["name"]}
               {@const customCss = buildCustomCssString(element)}
               <div
                 class="flex items-center gap-1 {getFontClass(element.style?.font)} {getFontWeightClass(element.style?.fontWeight)}"
-                style="color: {getElementColor(element.style)}; opacity: {element.style?.opacity ?? 1.0}; font-size: {size}px;{customCss ? ` ${customCss}` : ''}"
+                style="color: {getElementColor(element, currentBG)}; opacity: {element.style?.opacity ?? 1.0}; font-size: {size}px;{customCss ? ` ${customCss}` : ''}"
               >
                 {#if showOptions.includes("icon") && def?.category}
                   <TrackerCategoryIcon
@@ -555,16 +413,13 @@
                 {#if showOptions.includes("name")}
                   <span class="leading-none">{def?.name ?? "Tracker"}</span>
                 {/if}
-                {#if showOptions.includes("remaining")}
-                  <span class="leading-none tabular-nums opacity-70">2d 4h</span>
-                {/if}
               </div>
             {:else if element.type !== "chart"}
               <span
                 class="leading-none tabular-nums {getFontClass(element.style?.font)} {getFontWeightClass(element.style?.fontWeight)} {isStale && element.type === 'sg' ? 'line-through opacity-60' : ''}"
-                style={buildStyleString(element)}
+                style={buildStyleString(element, currentBG, scale)}
               >
-                {renderElementValue(element)}
+                {renderClockElementValue(element, glucose, currentTime)}
               </span>
             {/if}
           {/if}

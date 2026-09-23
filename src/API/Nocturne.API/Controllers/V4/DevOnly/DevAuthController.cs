@@ -11,6 +11,7 @@ using Nocturne.Core.Contracts.Auth;
 using Nocturne.Core.Models.Configuration;
 using Nocturne.Infrastructure.Data;
 using Nocturne.Infrastructure.Data.Entities;
+using Nocturne.Infrastructure.Data.Extensions;
 
 namespace Nocturne.API.Controllers.V4.DevOnly;
 
@@ -146,9 +147,7 @@ public class DevAuthController : ControllerBase
         var slug = tenantSlug;
         if (string.IsNullOrWhiteSpace(slug))
         {
-            var host = Request.Headers["X-Forwarded-Host"].FirstOrDefault()?.Split(':')[0]
-                ?? Request.Host.Host;
-            slug = SubdomainParser.Extract(host, _baseDomainOptions.Value.BaseDomain);
+            slug = SubdomainParser.Extract(Request.Host.Host, _baseDomainOptions.Value.BaseDomain);
         }
 
         TenantEntity? tenant;
@@ -161,15 +160,12 @@ public class DevAuthController : ControllerBase
         }
         else
         {
-            // Apex request with no explicit slug: unambiguous only when a single
-            // tenant exists.
-            var tenants = await _db.Tenants.AsNoTracking().Take(2).ToListAsync(ct);
-            if (tenants.Count != 1)
+            tenant = await _db.Tenants.SoleTenantAsync(ct);
+            if (tenant is null)
                 return (BadRequest(new
                 {
                     error = "Tenant could not be resolved from the host. Pass ?tenant=<slug>.",
                 }), null);
-            tenant = tenants[0];
         }
 
         // tenant_members/tenant_roles carry no RLS policies today, but set the
@@ -203,7 +199,7 @@ public class DevAuthController : ControllerBase
         }
         else
         {
-            member = DevTenantMemberSelection.PickOwnerOrFirst(candidates);
+            member = DevTenantMemberSelection.PickOwnerOrFirst(candidates, tenant.Id);
         }
 
         var session = await _sessionService.IssueSessionAsync(

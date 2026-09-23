@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Options;
 using OpenApi.Remote.Attributes;
 using Nocturne.API.Attributes;
+using Nocturne.API.Extensions;
 using Nocturne.API.Models;
 using Nocturne.API.Multitenancy;
 using Nocturne.API.Services.Connectors;
@@ -332,9 +333,9 @@ public class ServicesController : ControllerBase
             var result = await _dataSourceService.DeleteDataSourceDataAsync(id, cancellationToken);
             if (!result.Success)
             {
-                if (result.Error?.Contains("not found") == true)
+                if (result.ErrorCode == DataSourceDeleteError.NotFound)
                 {
-                    return NotFound(result);
+                    return Problem(detail: $"Data source not found: {id}", statusCode: 404, title: "Not Found");
                 }
                 return StatusCode(500, result);
             }
@@ -406,9 +407,9 @@ public class ServicesController : ControllerBase
 
             if (!result.Success)
             {
-                if (result.Error?.Contains("not found") == true)
+                if (result.ErrorCode == DataSourceDeleteError.NotFound)
                 {
-                    return NotFound(result);
+                    return Problem(detail: $"Connector not found: {id}", statusCode: 404, title: "Not Found");
                 }
                 return StatusCode(500, result);
             }
@@ -639,7 +640,7 @@ public class ServicesController : ControllerBase
         }
 
         var request = HttpContext.Request;
-        return $"{request.Scheme}://{request.Host}";
+        return $"{request.PublicScheme()}://{request.Host}";
     }
 
 }

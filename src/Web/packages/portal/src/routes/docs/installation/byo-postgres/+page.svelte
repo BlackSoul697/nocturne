@@ -26,15 +26,15 @@
         </p>
         <ul class="list-disc pl-5 mt-2 space-y-1 text-muted-foreground">
             <li>
-                <code class="text-xs bg-muted/50 px-1 py-0.5 rounded">nocturne_migrator</code> —
+                <code class="text-xs bg-muted/50 px-1 py-0.5 rounded">nocturne_migrator</code>:
                 owns the schema and runs migrations.
             </li>
             <li>
-                <code class="text-xs bg-muted/50 px-1 py-0.5 rounded">nocturne_app</code> —
+                <code class="text-xs bg-muted/50 px-1 py-0.5 rounded">nocturne_app</code>:
                 runtime connection for the .NET API. Cannot bypass RLS and has no DDL privileges.
             </li>
             <li>
-                <code class="text-xs bg-muted/50 px-1 py-0.5 rounded">nocturne_web</code> —
+                <code class="text-xs bg-muted/50 px-1 py-0.5 rounded">nocturne_web</code>:
                 used by the SvelteKit web app's bot framework to store chat-platform state. Owns
                 only its own <code class="text-xs bg-muted/50 px-1 py-0.5 rounded">chat_state_*</code>
                 tables (not tenant-scoped, no PHI).
@@ -69,15 +69,15 @@
             <ul class="list-disc pl-5 mt-2 space-y-1">
                 <li>
                     <code class="text-xs bg-muted/50 px-1.5 py-0.5 rounded font-mono">ConnectionStrings__nocturne-postgres</code>
-                    — use the <code class="text-xs bg-muted/50 px-1 py-0.5 rounded">nocturne_app</code> role.
+                    using the <code class="text-xs bg-muted/50 px-1 py-0.5 rounded">nocturne_app</code> role.
                 </li>
                 <li>
                     <code class="text-xs bg-muted/50 px-1.5 py-0.5 rounded font-mono">ConnectionStrings__nocturne-postgres-migrator</code>
-                    — use the <code class="text-xs bg-muted/50 px-1 py-0.5 rounded">nocturne_migrator</code> role.
+                    using the <code class="text-xs bg-muted/50 px-1 py-0.5 rounded">nocturne_migrator</code> role.
                 </li>
                 <li>
-                    <code class="text-xs bg-muted/50 px-1.5 py-0.5 rounded font-mono">NOCTURNE_POSTGRES_URI</code>
-                    — a <code class="text-xs bg-muted/50 px-1 py-0.5 rounded">postgresql://</code>
+                    <code class="text-xs bg-muted/50 px-1.5 py-0.5 rounded font-mono">NOCTURNE_POSTGRES_URI</code>:
+                    a <code class="text-xs bg-muted/50 px-1 py-0.5 rounded">postgresql://</code>
                     URL for the <code class="text-xs bg-muted/50 px-1 py-0.5 rounded">nocturne_web</code>
                     role (consumed by the SvelteKit bot state adapter).
                 </li>
@@ -105,6 +105,14 @@
             On managed PostgreSQL services (RDS, Cloud SQL, Supabase, Neon), run the script as the
             database owner your provider gave you rather than the literal
             <code class="text-xs bg-muted/50 px-1 py-0.5 rounded">postgres</code> user.
+        </li>
+        <li>
+            At startup Nocturne sets
+            <code class="text-xs bg-muted/50 px-1 py-0.5 rounded">autovacuum_analyze_scale_factor = 0.01</code>
+            on each of its tenant-scoped tables, so a newly added tenant's rows reach the query
+            planner's statistics once they exceed about 1% of the table rather than a tenth of it.
+            The value is a ceiling: a lower value set by hand on those tables is kept, a higher or
+            missing one is replaced on the next start.
         </li>
     </ul>
 

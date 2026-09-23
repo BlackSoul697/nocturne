@@ -15,6 +15,7 @@
   import { Tween, prefersReducedMotion } from "svelte/motion";
   import { cubicOut } from "svelte/easing";
   import ArrowRight from "lucide-svelte/icons/arrow-right";
+  import { createConnectionIndicator } from "$lib/stores/connection-indicator.svelte";
 
   const realtimeStore = tryGetRealtimeStore();
 
@@ -23,6 +24,7 @@
   const sidebarEngine = createChartDataEngine({
     enablePredictions: false,
     focusHours: 3,
+    dataWindow: "display",
   });
 
   // Glucose-only layout — no space reserved for basal/IOB/swim lanes
@@ -48,24 +50,12 @@
   const rawCurrentBG = $derived(realtimeStore?.currentBG ?? 0);
   const lastUpdated = $derived(realtimeStore?.lastUpdated ?? 0);
   const now = $derived(realtimeStore?.now ?? Date.now());
-  const isConnected = $derived(realtimeStore?.isConnected ?? false);
   const isStale = $derived(now - lastUpdated > STALE_THRESHOLD_MS);
 
-  // Debounce the connected→disconnected transition so a brief blip (e.g. the
-  // socket reconnecting during page load) doesn't flash the "Connection error"
-  // state. Reconnecting clears it immediately; dropping waits this long first.
-  const DISCONNECT_GRACE_MS = 3000;
-  let isDisconnected = $state(false);
-  $effect(() => {
-    if (isConnected) {
-      isDisconnected = false;
-      return;
-    }
-    const timeout = setTimeout(() => {
-      isDisconnected = true;
-    }, DISCONNECT_GRACE_MS);
-    return () => clearTimeout(timeout);
-  });
+  const connection = createConnectionIndicator(
+    () => realtimeStore?.connectionStatus ?? "idle"
+  );
+  const isDisconnected = $derived(connection.isDisconnected);
   const isLoading = $derived(
     rawCurrentBG === 0 && (realtimeStore?.entries.length ?? 0) === 0
   );
@@ -74,7 +64,7 @@
 
   // Trend metadata
   const bgDelta = $derived(realtimeStore?.bgDelta ?? 0);
-  const direction = $derived(realtimeStore?.direction ?? "Flat");
+  const direction = $derived(realtimeStore?.direction ?? "");
   const timeSinceReading = $derived(realtimeStore?.timeSinceReading ?? "");
   const displayDelta = $derived(formatGlucoseDelta(bgDelta, units));
   const hasData = $derived(!isLoading && rawCurrentBG > 0);
@@ -129,7 +119,10 @@
         >
           {#snippet tracks(_ctx)}
             <ThresholdRules />
-            <GlucoseTrack showAxis={false} />
+            <!-- The density heuristic would show a dot per reading now that the
+                 series is the displayed window rather than the 48-hour buffer.
+                 A 120px sparkline reads as a line. -->
+            <GlucoseTrack showAxis={false} showPoints={false} />
           {/snippet}
         </GlucoseChartShell>
       </a>

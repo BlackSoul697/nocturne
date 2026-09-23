@@ -2,6 +2,9 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import type { Chat } from "chat";
 import { AlertDeliveryHandler } from "./deliver.js";
 import type { AlertDispatchEvent, BotApiClient } from "../types.js";
+import { cardButtons } from "../cards/card.test-utils.js";
+import { encodeActionValue } from "../lib/action-value.js";
+import { currentAlertAccent } from "../lib/severity.js";
 
 vi.mock("../lib/logger.js", () => ({
   createLogger: () => ({
@@ -12,7 +15,13 @@ vi.mock("../lib/logger.js", () => ({
   }),
 }));
 
+const buttonValue = (node: unknown, id: string) =>
+  cardButtons(node).find((b) => b.id === id)?.value;
+
 const ADAPTERS_WITH_DM = ["discord", "slack", "telegram", "whatsapp", "resend"];
+
+const TENANT = "11111111-1111-1111-1111-111111111111";
+const EXCURSION = "33333333-3333-3333-3333-333333333333";
 
 function createBot(options: { adaptersWithDm?: string[] } = {}) {
   const withDm = options.adaptersWithDm ?? ADAPTERS_WITH_DM;
@@ -48,13 +57,15 @@ function createEvent(
     destination,
     tenantSlug: "acme",
     payload: {
-      tenantId: "11111111-1111-1111-1111-111111111111",
+      tenantId: TENANT,
+      excursionId: EXCURSION,
       ruleName: "Urgent low",
       subjectName: "Alex",
       glucoseValue: 54,
       trend: "SingleDown",
       trendRate: -1.4,
       readingTimestamp: "2026-01-01T00:00:00.000Z",
+      severity: "critical",
     } as AlertDispatchEvent["payload"],
   };
 }
@@ -174,6 +185,34 @@ describe("AlertDeliveryHandler adapter routing", () => {
   });
 });
 
+describe("AlertDeliveryHandler card actions", () => {
+  it("addresses the ack_alert button at the tenant and the excursion", async () => {
+    const bits = createBot();
+    const apiBits = createApi();
+
+    await new AlertDeliveryHandler(bits.bot, apiBits.api).deliver(
+      createEvent("discord_dm", "123456789012345678"),
+    );
+
+    expect(buttonValue(bits.post.mock.calls[0]?.[0], "ack_alert")).toBe(
+      encodeActionValue({ tenantId: TENANT, excursionId: EXCURSION }),
+    );
+  });
+
+  it("delivers no button the bot cannot act on", async () => {
+    const bits = createBot();
+    const apiBits = createApi();
+
+    await new AlertDeliveryHandler(bits.bot, apiBits.api).deliver(
+      createEvent("discord_dm", "123456789012345678"),
+    );
+
+    expect(cardButtons(bits.post.mock.calls[0]?.[0]).map((b) => b.id)).toEqual([
+      "ack_alert",
+    ]);
+  });
+});
+
 describe("AlertDeliveryHandler outcome reporting", () => {
   it("reports an undefined platform message id when the post returns nothing", async () => {
     const bits = createBot();
@@ -232,5 +271,77 @@ describe("AlertDeliveryHandler outcome reporting", () => {
         createEvent("slack_channel", "C01234ABCDE"),
       ),
     ).resolves.toBeUndefined();
+  });
+});
+
+describe("AlertDeliveryHandler severity accent", () => {
+  /** The adapters read the colour off this scope; see `../lib/severity.ts`. */
+  const accentSeenByAdapter = async (channelType: string, severity: unknown) => {
+    const bits = createBot();
+    let seen: unknown;
+    bits.post.mockImplementation(async () => {
+      seen = currentAlertAccent();
+      return { id: "platform-message-1" };
+    });
+
+    const event = createEvent(channelType, "C01234ABCDE");
+    // Assigned rather than passed so an absent severity stays absent.
+    (event.payload as { severity?: unknown }).severity = severity;
+
+    await new AlertDeliveryHandler(bits.bot, createApi().api).deliver(event);
+
+    return seen;
+  };
+
+  it("carries the alert's colour to the adapter that posts it", async () => {
+    expect(await accentSeenByAdapter("slack_channel", "critical")).toEqual({
+      hex: "#e7000b",
+      rgb: 0xe7000b,
+    });
+    expect(await accentSeenByAdapter("slack_channel", "warning")).toEqual({
+      hex: "#f54900",
+      rgb: 0xf54900,
+    });
+  });
+
+  it("closes the accent once the post is done", async () => {
+    const bits = createBot();
+    const apiBits = createApi();
+    let duringMarkDelivered: unknown = "not called";
+    apiBits.markDelivered.mockImplementation(async () => {
+      duringMarkDelivered = currentAlertAccent();
+    });
+
+    await new AlertDeliveryHandler(bits.bot, apiBits.api).deliver(
+      createEvent("slack_channel", "C01234ABCDE"),
+    );
+
+    expect(duringMarkDelivered).toBeUndefined();
+  });
+
+  it("opens no accent for a severity it does not recognise", async () => {
+    expect(await accentSeenByAdapter("slack_channel", "meltdown")).toBeUndefined();
+    expect(await accentSeenByAdapter("slack_channel", undefined)).toBeUndefined();
+  });
+
+  it("delivers on the colourless platforms exactly as before", async () => {
+    for (const [channelType, destination] of [
+      ["telegram_dm", "12345"],
+      ["whatsapp_dm", "+15551234567"],
+      ["resend_email", "carer@example.com"],
+    ]) {
+      const bits = createBot();
+      const apiBits = createApi();
+
+      await new AlertDeliveryHandler(bits.bot, apiBits.api).deliver(
+        createEvent(channelType!, destination!),
+      );
+
+      expect(bits.post).toHaveBeenCalledOnce();
+      expect(apiBits.markDelivered).toHaveBeenCalledExactlyOnceWith("delivery-1", {
+        platformMessageId: "platform-message-1",
+      });
+      expect(apiBits.markFailed).not.toHaveBeenCalled();
+    }
   });
 });

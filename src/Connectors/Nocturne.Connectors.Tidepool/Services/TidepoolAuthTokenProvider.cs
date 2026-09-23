@@ -31,12 +31,10 @@ public class TidepoolAuthTokenProvider(
     /// </summary>
     protected override int TokenLifetimeBufferMinutes => 60;
 
-    protected override string ConnectorName => "Tidepool";
-
     protected override async Task<(string? Token, DateTime ExpiresAt, IReadOnlyDictionary<string, string>? Metadata)> AcquireTokenAsync(
         TidepoolConnectorConfiguration config, CancellationToken cancellationToken)
     {
-        const int maxRetries = 3;
+        var maxRetries = LoginAttempts(config);
         string? authUserId = null;
 
         var sessionToken = await ExecuteWithRetryAsync(

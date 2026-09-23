@@ -10,7 +10,12 @@ using Moq;
 using Nocturne.API.Multitenancy;
 using Nocturne.API.Services.Auth;
 using Nocturne.API.Tests.Infrastructure;
+using Microsoft.Extensions.Configuration;
+using Nocturne.Core.Constants;
+using Nocturne.Core.Contracts.Auth;
 using Nocturne.Core.Models.Authorization;
+using Nocturne.Core.Models.Configuration;
+using Nocturne.Infrastructure.Shared.Services;
 using Nocturne.Infrastructure.Data;
 using Nocturne.Infrastructure.Data.Entities;
 using Nocturne.Infrastructure.Data.Security;
@@ -25,10 +30,26 @@ public sealed class ShareLinkServiceTests : IDisposable
 
     private readonly NocturneDbContext _db;
     private readonly ShareLinkService _service;
+    private readonly string _dbName;
+
+    /// <summary>
+    /// The real AES-GCM service over a fixed instance key, so the reveal tests exercise an actual
+    /// round trip rather than a mock that would pass whatever it was handed.
+    /// </summary>
+    private static ISecretEncryptionService Encryption(string? instanceKey = "test-instance-key") =>
+        new SecretEncryptionService(
+            new ConfigurationBuilder()
+                .AddInMemoryCollection(new Dictionary<string, string?>
+                {
+                    [ServiceNames.ConfigKeys.InstanceKey] = instanceKey,
+                })
+                .Build(),
+            NullLogger<SecretEncryptionService>.Instance);
 
     public ShareLinkServiceTests()
     {
         var dbName = $"sharelink_{Guid.NewGuid()}";
+        _dbName = dbName;
         _db = TestDbContextFactory.CreateInMemoryContext(dbName);
         TestDatabaseSeeder.Seed(_db);
 
@@ -39,25 +60,33 @@ public sealed class ShareLinkServiceTests : IDisposable
             Id = Guid.NewGuid(),
             TenantId = TenantId,
             Name = "Viewer",
-            Slug = TenantPermissions.SeedRoles.Viewer,
-            Permissions = TenantPermissions.SeedRolePermissions[TenantPermissions.SeedRoles.Viewer],
+            Slug = RoleSeeds.Viewer,
+            Permissions = RoleSeeds.Permissions[RoleSeeds.Viewer],
             IsSystem = true,
             SysCreatedAt = DateTime.UtcNow,
             SysUpdatedAt = DateTime.UtcNow,
         });
         _db.SaveChanges();
 
+        _service = CreateService(_db, Encryption());
+    }
+
+    /// <summary>A service over <paramref name="db"/> with the given encryption available to it.</summary>
+    private ShareLinkService CreateService(NocturneDbContext db, ISecretEncryptionService secrets)
+    {
         var factory = new Mock<IDbContextFactory<NocturneDbContext>>();
         factory.Setup(f => f.CreateDbContextAsync(It.IsAny<CancellationToken>()))
-            .ReturnsAsync(() => TestDbContextFactory.CreateInMemoryContext(dbName));
+            .ReturnsAsync(() => TestDbContextFactory.CreateInMemoryContext(_dbName));
 
-        _service = new ShareLinkService(
-            _db,
+        return new ShareLinkService(
+            db,
             new ShareTokenGenerator(),
             new ShareTokenCacheService(
                 new MemoryCache(new MemoryCacheOptions()), factory.Object, NullLogger<ShareTokenCacheService>.Instance),
             new PublicAccessCacheService(
                 new MemoryCache(new MemoryCacheOptions()), factory.Object, NullLogger<PublicAccessCacheService>.Instance),
+            secrets,
+            NullLogger<ShareLinkService>.Instance,
             Options.Create(new BaseDomainOptions { BaseDomain = "nocturne.run" }));
     }
 
@@ -102,7 +131,96 @@ public sealed class ShareLinkServiceTests : IDisposable
         var dto = await _service.GetAsync(TenantId);
 
         dto.Enabled.Should().BeTrue();
-        dto.Url.Should().BeNull("the token is not stored, so the URL cannot be reproduced");
+        dto.Url.Should().BeNull("the secret travels only when the owner asks for it");
+        dto.RedactedUrl.Should().Be("https://••••••••••••••••.share.nocturne.run");
+        dto.CanReveal.Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task Rotate_keeps_a_copy_the_owner_can_be_shown_again()
+    {
+        var url = (await _service.RotateAsync(TenantId)).Url;
+        var token = new Uri(url!).Host.Split('.')[0];
+
+        var tenant = await _db.Tenants.AsNoTracking().FirstAsync(t => t.Id == TenantId);
+        tenant.ShareTokenEncrypted.Should().NotBeNull().And.NotBe(token,
+            "the column holds ciphertext, not the token");
+        Encryption().Decrypt(tenant.ShareTokenEncrypted!).Should().Be(token);
+    }
+
+    [Fact]
+    public async Task Reveal_returns_the_live_url_rather_than_a_new_one()
+    {
+        var minted = (await _service.RotateAsync(TenantId)).Url;
+
+        var dto = await _service.RevealAsync(TenantId);
+
+        dto.Url.Should().Be(minted, "revealing must not invalidate the link people already hold");
+        dto.Enabled.Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task Reveal_reports_a_link_it_cannot_reproduce_without_breaking_it()
+    {
+        await _service.RotateAsync(TenantId);
+
+        // What a link minted before the recoverable copy existed looks like.
+        var stored = await _db.Tenants.FirstAsync(t => t.Id == TenantId);
+        stored.ShareTokenEncrypted = null;
+        await _db.SaveChangesAsync();
+
+        var dto = await _service.RevealAsync(TenantId);
+
+        dto.Url.Should().BeNull();
+        dto.CanReveal.Should().BeFalse();
+        dto.Enabled.Should().BeTrue("the link still resolves; only showing it is impossible");
+        dto.RedactedUrl.Should().NotBeNull("the owner should still see that a link exists");
+    }
+
+    [Fact]
+    public async Task Reveal_survives_a_stored_copy_that_no_longer_decrypts()
+    {
+        await _service.RotateAsync(TenantId);
+
+        // What a changed instance key leaves behind.
+        var stored = await _db.Tenants.FirstAsync(t => t.Id == TenantId);
+        stored.ShareTokenEncrypted = Convert.ToBase64String(new byte[48]);
+        await _db.SaveChangesAsync();
+
+        var dto = await _service.RevealAsync(TenantId);
+
+        dto.Url.Should().BeNull();
+        dto.CanReveal.Should().BeFalse("only the attempt can tell this case from a healthy one");
+        dto.Enabled.Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task Get_cannot_tell_a_stale_ciphertext_from_a_good_one()
+    {
+        await _service.RotateAsync(TenantId);
+        var stored = await _db.Tenants.FirstAsync(t => t.Id == TenantId);
+        stored.ShareTokenEncrypted = Convert.ToBase64String(new byte[48]);
+        await _db.SaveChangesAsync();
+
+        // Pins the asymmetry the card is built around: the plain read sees a ciphertext and says
+        // so, and only the reveal that tries to use it can correct that.
+        (await _service.GetAsync(TenantId)).CanReveal.Should().BeTrue();
+        (await _service.RevealAsync(TenantId)).CanReveal.Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task Rotate_still_mints_a_link_on_an_instance_with_no_key()
+    {
+        var service = CreateService(_db, Encryption(instanceKey: null));
+
+        var dto = await service.RotateAsync(TenantId);
+
+        dto.Url.Should().NotBeNull("a missing key must not stop someone sharing");
+        dto.CanReveal.Should().BeFalse();
+
+        var tenant = await _db.Tenants.AsNoTracking().FirstAsync(t => t.Id == TenantId);
+        tenant.ShareToken.Should().NotBeNull();
+        tenant.ShareTokenEncrypted.Should().BeNull();
     }
 
     [Fact]
@@ -112,10 +230,10 @@ public sealed class ShareLinkServiceTests : IDisposable
 
         var dto = await _service.RotateAsync(TenantId);
 
-        dto.Scopes.Should().BeEquivalentTo(TenantPermissions.DefaultPublicShareScopes);
+        dto.Scopes.Should().BeEquivalentTo(Scope.DefaultPublicShareScopes);
 
         var member = await GetPublicMemberAsync();
-        member.DirectPermissions.Should().BeEquivalentTo(TenantPermissions.DefaultPublicShareScopes);
+        member.DirectPermissions.Should().BeEquivalentTo(Scope.DefaultPublicShareScopes);
         member.MemberRoles.Should().BeEmpty("rotation seeds direct permissions rather than a role");
     }
 
@@ -141,6 +259,7 @@ public sealed class ShareLinkServiceTests : IDisposable
 
         var tenant = await _db.Tenants.AsNoTracking().FirstAsync(t => t.Id == TenantId);
         tenant.ShareToken.Should().BeNull();
+        tenant.ShareTokenEncrypted.Should().BeNull("a turned-off link leaves nothing to decrypt");
 
         var member = await GetPublicMemberAsync();
         member.MemberRoles.Should().BeEmpty();
@@ -173,10 +292,10 @@ public sealed class ShareLinkServiceTests : IDisposable
         var dto = await _service.GetAsync(TenantId);
 
         dto.Scopes.Should().Contain([
-            TenantPermissions.GlucoseRead,
-            TenantPermissions.TreatmentsRead,
+            Scope.GlucoseRead,
+            Scope.TreatmentsRead,
         ]);
-        dto.Scopes.Should().OnlyContain(s => TenantPermissions.PublicShareScopes.Contains(s));
+        dto.Scopes.Should().OnlyContain(s => Scope.PublicShareScopes.Contains(s));
     }
 
     [Fact]
@@ -195,11 +314,11 @@ public sealed class ShareLinkServiceTests : IDisposable
     {
         await ResetPublicMemberAccessAsync();
         await _service.RotateAsync(TenantId);
-        await _service.SetScopesAsync(TenantId, [TenantPermissions.GlucoseRead]);
+        await _service.SetScopesAsync(TenantId, [Scope.GlucoseRead]);
 
         var dto = await _service.RotateAsync(TenantId);
 
-        dto.Scopes.Should().BeEquivalentTo([TenantPermissions.GlucoseRead]);
+        dto.Scopes.Should().BeEquivalentTo([Scope.GlucoseRead]);
     }
 
     [Fact]
@@ -209,13 +328,13 @@ public sealed class ShareLinkServiceTests : IDisposable
         await _service.RotateAsync(TenantId);
 
         var dto = await _service.SetScopesAsync(TenantId,
-            [TenantPermissions.GlucoseRead, TenantPermissions.TreatmentsRead]);
+            [Scope.GlucoseRead, Scope.TreatmentsRead]);
 
-        dto.Scopes.Should().BeEquivalentTo([TenantPermissions.GlucoseRead, TenantPermissions.TreatmentsRead]);
+        dto.Scopes.Should().BeEquivalentTo([Scope.GlucoseRead, Scope.TreatmentsRead]);
 
         var member = await GetPublicMemberAsync();
         member.MemberRoles.Should().BeEmpty("choosing scopes migrates the link onto direct permissions");
-        member.DirectPermissions.Should().BeEquivalentTo([TenantPermissions.GlucoseRead, TenantPermissions.TreatmentsRead]);
+        member.DirectPermissions.Should().BeEquivalentTo([Scope.GlucoseRead, Scope.TreatmentsRead]);
     }
 
     [Fact]
@@ -238,8 +357,8 @@ public sealed class ShareLinkServiceTests : IDisposable
     {
         await _service.RotateAsync(TenantId);
 
-        var setReadWrite = async () => await _service.SetScopesAsync(TenantId, [TenantPermissions.GlucoseReadWrite]);
-        var setAdmin = async () => await _service.SetScopesAsync(TenantId, [TenantPermissions.MembersManage]);
+        var setReadWrite = async () => await _service.SetScopesAsync(TenantId, [Scope.GlucoseReadWrite]);
+        var setAdmin = async () => await _service.SetScopesAsync(TenantId, [Scope.MembersManage]);
 
         await setReadWrite.Should().ThrowAsync<ArgumentException>();
         await setAdmin.Should().ThrowAsync<ArgumentException>();
@@ -262,4 +381,149 @@ public sealed class ShareLinkServiceTests : IDisposable
         dto.Enabled.Should().BeFalse();
         (await _db.Tenants.AsNoTracking().FirstAsync(t => t.Id == TenantId)).ShareToken.Should().BeNull();
     }
+
+    /// <summary>Stores display preferences against the seeded owner subject.</summary>
+    private async Task GiveTheOwnerPreferencesAsync(UserDisplayPreferences preferences)
+    {
+        var owner = await _db.Subjects.FirstAsync(s => s.Id == TestDatabaseSeeder.TestSubjectId);
+        owner.Preferences = preferences.Serialize();
+        await _db.SaveChangesAsync();
+    }
+
+    /// <summary>
+    /// Adds a second owner of the tenant, joining <paramref name="joinedAfter"/> the seeded one.
+    /// </summary>
+    private Task AddOwnerAsync(
+        UserDisplayPreferences preferences,
+        DateTime joinedAfter,
+        bool isSystemSubject = false,
+        bool isActiveSubject = true) =>
+        TestDatabaseSeeder.SeedMemberAsync(
+            _db, TenantId,
+            isActive: isActiveSubject,
+            isSystemSubject: isSystemSubject,
+            joinedAt: joinedAfter,
+            preferences: preferences.Serialize());
+
+    /// <summary>Backdates the seeded owner's membership so later arrivals sort after it.</summary>
+    private async Task<DateTime> BackdateTheSeededOwnerAsync()
+    {
+        var joined = new DateTime(2020, 1, 1, 0, 0, 0, DateTimeKind.Utc);
+        var member = await _db.TenantMembers
+            .FirstAsync(m => m.SubjectId == TestDatabaseSeeder.TestSubjectId);
+        member.SysCreatedAt = joined;
+        await _db.SaveChangesAsync();
+        return joined;
+    }
+
+    [Fact]
+    public async Task SharedAppearance_is_the_owners_presentation_settings()
+    {
+        await GiveTheOwnerPreferencesAsync(new UserDisplayPreferences
+        {
+            GlucoseUnits = "mmol",
+            TimeFormat = "24",
+            RegionFormat = "en-GB",
+            ColorTheme = "trio",
+            Chart = new ChartPreferences { LineColorMode = "threshold", Lookback = 6 },
+            Prediction = new PredictionPreferences { Enabled = true, Minutes = 45 },
+        });
+
+        var appearance = await _service.GetSharedAppearanceAsync(TenantId);
+
+        appearance.GlucoseUnits.Should().Be("mmol");
+        appearance.TimeFormat.Should().Be("24");
+        appearance.RegionFormat.Should().Be("en-GB");
+        appearance.ColorTheme.Should().Be("trio");
+        appearance.Chart!.LineColorMode.Should().Be("threshold");
+        appearance.Chart.Lookback.Should().Be(6);
+        appearance.Prediction!.Minutes.Should().Be(45);
+    }
+
+    [Fact]
+    public async Task SharedAppearance_withholds_what_the_owner_does_rather_than_how_it_looks()
+    {
+        await GiveTheOwnerPreferencesAsync(new UserDisplayPreferences
+        {
+            GlucoseUnits = "mmol",
+            DashboardTopWidgets = [WidgetId.Tdd, WidgetId.Meals],
+            NightModeSchedule = true,
+        });
+
+        var appearance = await _service.GetSharedAppearanceAsync(TenantId);
+
+        appearance.GlucoseUnits.Should().Be("mmol");
+        appearance.DashboardTopWidgets.Should().BeNull(
+            "the widgets an owner pins describe what they track, not how it looks");
+        appearance.NightModeSchedule.Should().BeNull(
+            "it tells a stranger holding the link roughly when the owner sleeps");
+    }
+
+    [Fact]
+    public async Task SharedAppearance_is_empty_when_the_tenant_has_no_owner_left()
+    {
+        await GiveTheOwnerPreferencesAsync(new UserDisplayPreferences { GlucoseUnits = "mmol" });
+
+        var owner = await _db.TenantMembers.FirstAsync(m => m.SubjectId == TestDatabaseSeeder.TestSubjectId);
+        owner.RevokedAt = DateTime.UtcNow;
+        await _db.SaveChangesAsync();
+
+        var appearance = await _service.GetSharedAppearanceAsync(TenantId);
+
+        appearance.GlucoseUnits.Should().BeNull("a revoked member no longer speaks for the tenant");
+    }
+
+    [Fact]
+    public async Task SharedAppearance_ignores_another_tenants_owner()
+    {
+        await GiveTheOwnerPreferencesAsync(new UserDisplayPreferences { GlucoseUnits = "mmol" });
+
+        var appearance = await _service.GetSharedAppearanceAsync(Guid.NewGuid());
+
+        appearance.GlucoseUnits.Should().BeNull();
+    }
+
+    [Fact]
+    public async Task SharedAppearance_settles_on_the_longest_standing_of_several_owners()
+    {
+        var seededJoined = await BackdateTheSeededOwnerAsync();
+        await GiveTheOwnerPreferencesAsync(new UserDisplayPreferences { GlucoseUnits = "mmol" });
+        await AddOwnerAsync(
+            new UserDisplayPreferences { GlucoseUnits = "mg/dl" }, seededJoined.AddYears(1));
+
+        var appearance = await _service.GetSharedAppearanceAsync(TenantId);
+
+        appearance.GlucoseUnits.Should().Be("mmol", "a later co-owner does not restyle the link");
+    }
+
+    [Fact]
+    public async Task SharedAppearance_ignores_a_system_subject_holding_the_owner_role()
+    {
+        var seededJoined = await BackdateTheSeededOwnerAsync();
+        await GiveTheOwnerPreferencesAsync(new UserDisplayPreferences { GlucoseUnits = "mmol" });
+        await AddOwnerAsync(
+            new UserDisplayPreferences { GlucoseUnits = "mg/dl" },
+            seededJoined.AddYears(-1),
+            isSystemSubject: true);
+
+        var appearance = await _service.GetSharedAppearanceAsync(TenantId);
+
+        appearance.GlucoseUnits.Should().Be("mmol", "no person is behind a system subject");
+    }
+
+    [Fact]
+    public async Task SharedAppearance_ignores_an_owner_whose_subject_is_deactivated()
+    {
+        var seededJoined = await BackdateTheSeededOwnerAsync();
+        await GiveTheOwnerPreferencesAsync(new UserDisplayPreferences { GlucoseUnits = "mmol" });
+        await AddOwnerAsync(
+            new UserDisplayPreferences { GlucoseUnits = "mg/dl" },
+            seededJoined.AddYears(-1),
+            isActiveSubject: false);
+
+        var appearance = await _service.GetSharedAppearanceAsync(TenantId);
+
+        appearance.GlucoseUnits.Should().Be("mmol", "a deactivated subject cannot sign in either");
+    }
+
 }

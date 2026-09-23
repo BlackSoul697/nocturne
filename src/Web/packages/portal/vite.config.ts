@@ -1,7 +1,6 @@
 import { sveltekit } from '@sveltejs/kit/vite';
 import tailwindcss from '@tailwindcss/vite';
-// WUCHALE-DISABLED: wuchale temporarily disabled
-// import { wuchale } from '@wuchale/vite-plugin';
+import { wuchale } from 'wuchale/vite';
 import lingo from 'vite-plugin-lingo';
 import { blogManifest } from '@nocturne/cms/blog/vite-plugin';
 import { resolve } from 'node:path';
@@ -78,6 +77,14 @@ function releaseAssets(): Plugin {
         }
       }
 
+      const oracleInstaller = resolve(deployRoot, 'oracle-cloud/oracle-cloud-install.sh');
+      if (existsSync(oracleInstaller)) {
+        mkdirSync(resolve(dest, 'oracle-cloud'), { recursive: true });
+        cpSync(oracleInstaller, resolve(dest, 'oracle-cloud/oracle-cloud-install.sh'));
+      } else {
+        this.warn(`release-assets: oracle-cloud-install.sh not found at ${oracleInstaller}; skipping`);
+      }
+
       // Copy standalone docs assets (e.g. BYO Postgres bootstrap script)
       const docsRoot = resolve(__dirname, '../../../../docs');
       const bootstrapSql = resolve(docsRoot, 'postgres/bootstrap-roles.sql');
@@ -96,6 +103,7 @@ export default defineConfig({
     sharedFonts(),
     releaseAssets(),
     tailwindcss(),
+    wuchale(),
     lingo({
       route: '/_translations',
       localesDir: '../../locales',

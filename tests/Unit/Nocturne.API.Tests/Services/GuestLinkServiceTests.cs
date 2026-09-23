@@ -81,21 +81,21 @@ public class GuestLinkServiceTests : IDisposable
     {
         var act = () => _service.CreateGuestLinkAsync(
             _dataOwnerId, _creatorId, "Bad Scopes", "https://example.com",
-            [OAuthScopes.GlucoseReadWrite]);
+            [Scope.GlucoseReadWrite]);
 
         await act.Should().ThrowAsync<ArgumentException>()
             .WithMessage("*not allowed*");
     }
 
     [Theory]
-    [InlineData(TenantPermissions.MembersManage)]
-    [InlineData(TenantPermissions.MembersInvite)]
-    [InlineData(TenantPermissions.RolesManage)]
-    [InlineData(TenantPermissions.TenantSettings)]
-    [InlineData(TenantPermissions.SharingManage)]
-    [InlineData(TenantPermissions.SharingGuest)]
-    [InlineData(TenantPermissions.AuditRead)]
-    [InlineData(TenantPermissions.AuditManage)]
+    [InlineData(Scope.MembersManage)]
+    [InlineData(Scope.MembersInvite)]
+    [InlineData(Scope.RolesManage)]
+    [InlineData(Scope.TenantSettings)]
+    [InlineData(Scope.SharingManage)]
+    [InlineData(Scope.SharingGuest)]
+    [InlineData(Scope.AuditRead)]
+    [InlineData(Scope.AuditManage)]
     public async Task CreateGuestLink_RejectsTenantAdministrationScopes(string scope)
     {
         var act = () => _service.CreateGuestLinkAsync(
@@ -128,9 +128,9 @@ public class GuestLinkServiceTests : IDisposable
     {
         var result = await _service.CreateGuestLinkAsync(_dataOwnerId, _creatorId, "Defaults", "https://example.com");
 
-        result.Info.Scopes.Should().Contain(OAuthScopes.HealthRead);
-        result.Info.Scopes.Should().Contain(OAuthScopes.TherapyRead);
-        result.Info.Scopes.Should().Contain(OAuthScopes.ReportsRead);
+        result.Info.Scopes.Should().Contain(Scope.HealthRead);
+        result.Info.Scopes.Should().Contain(Scope.TherapyRead);
+        result.Info.Scopes.Should().Contain(Scope.ReportsRead);
         result.Info.Scopes.Should().NotContain(s => s.Contains("readwrite", StringComparison.OrdinalIgnoreCase));
     }
 
@@ -384,6 +384,77 @@ public class GuestLinkServiceTests : IDisposable
             .IgnoreQueryFilters()
             .FirstAsync(g => g.Id == created.Info.Id);
         grant.DismissedAt.Should().BeNull();
+    }
+
+    [Fact]
+    public async Task HasRedeemableCodeAsync_NoLinks_ReturnsFalse()
+    {
+        (await _service.HasRedeemableCodeAsync()).Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task HasRedeemableCodeAsync_UnusedLink_ReturnsTrue()
+    {
+        await _service.CreateGuestLinkAsync(_dataOwnerId, _creatorId, "Unused", "https://example.com");
+
+        (await _service.HasRedeemableCodeAsync()).Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task HasRedeemableCodeAsync_ActivatedLink_ReturnsFalse()
+    {
+        var created = await _service.CreateGuestLinkAsync(_dataOwnerId, _creatorId, "Used", "https://example.com");
+        await _service.ActivateAsync(created.Code, "1.2.3.4", "Agent");
+
+        (await _service.HasRedeemableCodeAsync()).Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task HasRedeemableCodeAsync_RevokedLink_ReturnsFalse()
+    {
+        var created = await _service.CreateGuestLinkAsync(_dataOwnerId, _creatorId, "Revoked", "https://example.com");
+        await _service.RevokeAsync(created.Info.Id, _dataOwnerId);
+
+        (await _service.HasRedeemableCodeAsync()).Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task HasRedeemableCodeAsync_ExpiredLink_ReturnsFalse()
+    {
+        var created = await _service.CreateGuestLinkAsync(_dataOwnerId, _creatorId, "Expired", "https://example.com");
+        var grant = await _dbContext.OAuthGrants
+            .IgnoreQueryFilters()
+            .FirstAsync(g => g.Id == created.Info.Id);
+        grant.ExpiresAt = DateTime.UtcNow.AddHours(-1);
+        await _dbContext.SaveChangesAsync();
+
+        (await _service.HasRedeemableCodeAsync()).Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task HasRedeemableCodeAsync_NonGuestGrant_ReturnsFalse()
+    {
+        _dbContext.OAuthGrants.Add(new OAuthGrantEntity
+        {
+            Id = Guid.CreateVersion7(),
+            SubjectId = _dataOwnerId,
+            GrantType = OAuthGrantTypes.Direct,
+            Scopes = [Scope.HealthRead],
+            ExpiresAt = DateTime.UtcNow.AddHours(1),
+        });
+        await _dbContext.SaveChangesAsync();
+
+        (await _service.HasRedeemableCodeAsync()).Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task HasRedeemableCodeAsync_OtherTenantsLink_ReturnsFalse()
+    {
+        await _service.CreateGuestLinkAsync(_dataOwnerId, _creatorId, "Tenant A", "https://example.com");
+
+        _dbContext.TenantId = Guid.CreateVersion7();
+
+        (await _service.HasRedeemableCodeAsync()).Should().BeFalse();
     }
 
     [Fact]

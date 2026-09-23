@@ -9,6 +9,11 @@
 
     let { label = "password", length = 32 }: Props = $props();
 
+    // Charset for generation, not user-facing text; if extracted as a
+    // message, a missing catalog entry makes the sampling loop below spin
+    // forever during prerender (ALPHABET.length becomes 0). The directive
+    // comment must be exactly "@wc-ignore" on its own.
+    // @wc-ignore
     const ALPHABET =
         "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!@#%^&*-_=+";
 
@@ -36,7 +41,7 @@
 
     let refreshKey = $state(0);
     // Derived so password regenerates whenever length or refreshKey changes.
-    // The generatePassword call reads neither reactive state nor props directly —
+    // The generatePassword call reads neither reactive state nor props directly,
     // refreshKey and length are the only tracked dependencies here.
     let password = $derived.by(() => {
         // Track both dependencies explicitly.
@@ -69,11 +74,11 @@
                 <RefreshCw class="h-4 w-4" />
             </button>
 
-            <CopyButton text={password} label="Copy {label} to clipboard" />
+            <CopyButton text={password} kind="password" label="Copy {label} to clipboard" />
         </div>
     </div>
 
     <p class="mt-1.5 text-xs text-muted-foreground">
-        Generated locally in your browser — never sent anywhere.
+        Generated locally in your browser and never sent anywhere.
     </p>
 </div>

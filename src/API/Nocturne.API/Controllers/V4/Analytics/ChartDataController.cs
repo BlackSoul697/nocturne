@@ -58,17 +58,18 @@ public class ChartDataController : ControllerBase
     [HttpGet("dashboard")]
     [RemoteQuery]
     [RequireScope(
-        OAuthScopes.GlucoseRead,
-        OAuthScopes.TreatmentsRead,
-        OAuthScopes.DevicesRead,
-        OAuthScopes.TherapyRead,
-        OAuthScopes.HeartRateRead,
-        OAuthScopes.StepCountRead,
-        OAuthScopes.SleepRead)]
+        Scope.GlucoseRead,
+        Scope.TreatmentsRead,
+        Scope.DevicesRead,
+        Scope.TherapyRead,
+        Scope.HeartRateRead,
+        Scope.StepCountRead,
+        Scope.SleepRead)]
     [ResponseCache(Duration = 60, Location = ResponseCacheLocation.Client)]
     [ProducesResponseType(typeof(DashboardChartData), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status500InternalServerError)]
+    [ErrorEnvelope]
     public async Task<ActionResult<DashboardChartData>> GetDashboardChartData(
         [FromQuery] long startTime,
         [FromQuery] long endTime,
@@ -76,28 +77,20 @@ public class ChartDataController : ControllerBase
         CancellationToken cancellationToken = default
     )
     {
-        try
-        {
-            if (endTime <= startTime)
-                return Problem(detail: "endTime must be greater than startTime", statusCode: 400, title: "Bad Request");
+        if (endTime <= startTime)
+            return Problem(detail: "endTime must be greater than startTime", statusCode: 400, title: "Bad Request");
 
-            if (intervalMinutes < 1 || intervalMinutes > 60)
-                return Problem(detail: "intervalMinutes must be between 1 and 60", statusCode: 400, title: "Bad Request");
+        if (intervalMinutes < 1 || intervalMinutes > 60)
+            return Problem(detail: "intervalMinutes must be between 1 and 60", statusCode: 400, title: "Bad Request");
 
-            var result = await _chartDataService.GetDashboardChartDataAsync(
-                startTime,
-                endTime,
-                intervalMinutes,
-                cancellationToken
-            );
+        var result = await _chartDataService.GetDashboardChartDataAsync(
+            startTime,
+            endTime,
+            intervalMinutes,
+            cancellationToken
+        );
 
-            return Ok(ChartDataReadScopeGuard.Redact(result, HttpContext.GetGrantedScopes()));
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Error calculating dashboard chart data");
-            return Problem(detail: "Internal server error", statusCode: 500, title: "Internal Server Error");
-        }
+        return Ok(ChartDataReadScopeGuard.Redact(result, HttpContext.GetGrantedScopes()));
     }
 
     /// <summary>
@@ -112,30 +105,23 @@ public class ChartDataController : ControllerBase
     /// <returns>A list of <see cref="BasalPoint"/> representing basal delivery over time.</returns>
     [HttpGet("basal-series")]
     [RemoteQuery]
-    [RequireScope(OAuthScopes.TreatmentsRead)]
+    [RequireScope(Scope.TreatmentsRead)]
     [ResponseCache(Duration = 60, VaryByQueryKeys = new[] { "*" })]
     [ProducesResponseType(typeof(List<BasalPoint>), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status500InternalServerError)]
+    [ErrorEnvelope]
     public async Task<ActionResult<List<BasalPoint>>> GetBasalSeries(
         [FromQuery] long startTime,
         [FromQuery] long endTime,
         CancellationToken cancellationToken = default
     )
     {
-        try
-        {
-            if (endTime <= startTime)
-                return Problem(detail: "endTime must be greater than startTime", statusCode: 400, title: "Bad Request");
+        if (endTime <= startTime)
+            return Problem(detail: "endTime must be greater than startTime", statusCode: 400, title: "Bad Request");
 
-            var basalSeries = await _chartDataService.GetBasalSeriesAsync(startTime, endTime, cancellationToken);
+        var basalSeries = await _chartDataService.GetBasalSeriesAsync(startTime, endTime, cancellationToken);
 
-            return Ok(basalSeries);
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Error calculating basal series");
-            return Problem(detail: "Internal server error", statusCode: 500, title: "Internal Server Error");
-        }
+        return Ok(basalSeries);
     }
 }

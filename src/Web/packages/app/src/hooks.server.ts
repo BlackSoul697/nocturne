@@ -19,21 +19,29 @@ import { sequence } from "@sveltejs/kit/hooks";
 import type { AuthUser } from "./app.d";
 import { AUTH_COOKIE_NAMES } from "$lib/config/auth-cookies";
 import { buildProxyHeaders } from "$lib/server/api-proxy-headers";
+import { clientAddressHeaders } from "$lib/server/client-address";
 import { getOriginalProto, getEffectiveHost, getOriginalHost, isShareHost } from "$lib/server/request-host";
-import { STATIC_ASSET_PREFIXES, isPublicRoute } from "$lib/server/public-routes";
+import {
+  STATIC_ASSET_PREFIXES,
+  TENANT_INACTIVE_PATH,
+  statusProbeRedirect,
+} from "$lib/server/public-routes";
+import { SHARE_UNAVAILABLE_PATH } from "$lib/share-host";
 import {
   installRequestScopedBitsIdCounter,
   withFreshBitsIdCounter,
 } from "$lib/server/bits-id";
-// WUCHALE-DISABLED: wuchale temporarily disabled
-// import { runWithLocale, loadLocales } from 'wuchale/load-utils/server';
-// import * as main from '../../../locales/main.loader.server.svelte.js'
-// import * as js from '../../../locales/js.loader.server.js'
-// import { locales } from '../../../locales/data.js'
+import { runWithLocale, loadLocales } from 'wuchale/load-utils/server';
+import * as main from '../../../locales/main.loader.server.svelte.js'
+import * as js from '../../../locales/js.loader.server.js'
+import { locales } from '../../../locales/data.js'
 import supportedLocales from '../../../supportedLocales.json';
 import { LANGUAGE_COOKIE_NAME } from "$lib/stores/appearance-store.svelte";
 
-// WUCHALE-DISABLED: wuchale temporarily disabled — locale catalogs not loaded at startup
+// Await so no request can render before catalogs are registered: a lookup
+// against an unloaded runtime silently renders every message as ''.
+await loadLocales(main.key, main.loadCount, main.loadCatalog, locales)
+await loadLocales(js.key, js.loadCount, js.loadCatalog, locales)
 
 // Turn off SSL validation during development for self-signed certs
 if (dev) {
@@ -170,10 +178,14 @@ const authHandle: Handle = async ({ event, resolve }) => {
 };
 
 /**
- * Site security handler - enforces authentication when required, detects setup/recovery mode.
- * Uses shared public route list to determine which paths bypass all gates.
+ * Readiness handler - detects setup/recovery mode and an unresolvable host, and redirects to the
+ * destination each calls for.
+ *
+ * It does not gate on authentication: the API requires it unconditionally for tenant data (the
+ * default-deny fallback policy, plus the anonymous public subject being granted only on a share
+ * host), so there is no site-wide setting for this to mirror.
  */
-const siteSecurityHandle: Handle = async ({ event, resolve }) => {
+const readinessHandle: Handle = async ({ event, resolve }) => {
   const apiBaseUrl = getApiBaseUrl();
 
   if (!apiBaseUrl) {
@@ -183,12 +195,14 @@ const siteSecurityHandle: Handle = async ({ event, resolve }) => {
   const pathname = event.url.pathname;
 
   // Skip the status probe entirely for static assets, for pages that ARE
-  // the setup/recovery/auth destinations (probing those would cause infinite
+  // the setup/recovery/auth/share-unavailable/tenant-inactive destinations (probing those would cause infinite
   // redirect loops), and for external webhook/bot endpoints that must respond
   // regardless of setup state — third-party services like Discord cannot
   // follow HTML redirects and will treat any non-2xx as a hard failure.
   const skipProbe =
     STATIC_ASSET_PREFIXES.some((p) => pathname.startsWith(p)) ||
+    pathname.startsWith(SHARE_UNAVAILABLE_PATH) ||
+    pathname.startsWith(TENANT_INACTIVE_PATH) ||
     pathname.startsWith("/setup") ||
     pathname.startsWith("/auth") ||
     pathname.startsWith("/api/v4/webhooks") ||
@@ -199,9 +213,10 @@ const siteSecurityHandle: Handle = async ({ event, resolve }) => {
     return resolve(event);
   }
 
-  // Probe the API for setup/recovery mode and site-level requireAuthentication.
+  // Probe the API for setup/recovery mode. The probe's answer is the failure it throws: a
+  // successful status means the instance is ready and this gate has nothing to do.
   try {
-    if (!event.locals.siteSecurityChecked) {
+    if (!event.locals.statusProbed) {
       const probeHost = getEffectiveHost(event.request, event.cookies);
       const probeHeaders: Record<string, string> = { "X-Forwarded-Proto": getOriginalProto(event.request) };
       if (probeHost) probeHeaders["X-Forwarded-Host"] = probeHost;
@@ -210,78 +225,39 @@ const siteSecurityHandle: Handle = async ({ event, resolve }) => {
       // sees 200 and can never detect setup_required/recovery_mode — leaving the
       // authenticated page load to run and 503 instead of redirecting to /setup. Probing
       // as an unprivileged visitor makes this gate observe the same 503 a real user gets.
-      // The status endpoint is [AllowAnonymous] and still returns requireAuthentication
-      // once setup is complete, so the auth-enforcement check below is unaffected.
       const apiClient = createServerApiClient(apiBaseUrl, fetch, {
         extraHeaders: probeHeaders,
       });
 
-      const status = await apiClient.status.getStatus();
-      const requireAuth = status?.settings?.["requireAuthentication"] === true;
+      await apiClient.status.getStatus();
 
-      event.locals.requireAuthentication = requireAuth;
-      event.locals.siteSecurityChecked = true;
-    }
-
-    // Only enforce requireAuthentication on non-public routes
-    if (!isPublicRoute(pathname) && event.locals.requireAuthentication && !event.locals.isAuthenticated) {
-      const returnUrl = encodeURIComponent(pathname + event.url.search);
-      return new Response(null, {
-        status: 303,
-        headers: {
-          Location: `/auth/login?returnUrl=${returnUrl}`,
-        },
-      });
+      event.locals.statusProbed = true;
     }
   } catch (error) {
     if (error && typeof error === "object" && "status" in error) {
-      const status = (error as any).status;
-
-      if (status === 503) {
-        let body: any = {};
-        try {
-          body = JSON.parse((error as any).response ?? "{}");
-        } catch {
-          // Couldn't parse — treat as setup required (API isn't ready)
-        }
-
-        if (body.recoveryMode) {
-          return new Response(null, {
-            status: 303,
-            headers: { Location: "/auth/recovery" },
-          });
-        }
-
-        // Any 503 from the API (setup_required, no tenants, or unparseable)
-        // means the instance isn't ready — redirect to setup
-        return new Response(null, {
-          status: 303,
-          headers: { Location: "/setup" },
-        });
+      let body: any = {};
+      try {
+        body = JSON.parse((error as any).response ?? "{}");
+      } catch {
+        // Couldn't parse — leave recoveryMode unset, which reads as "not ready"
       }
 
-      // Tenant not found (404) — either no tenant for this subdomain,
-      // or apex domain with no tenants set up yet.
-      if (status === 404) {
-        // If a marketing site is configured, redirect there (SaaS apex landing)
-        const marketingUrl = env.MARKETING_URL;
-        if (marketingUrl) {
-          return new Response(null, {
-            status: 302,
-            headers: { Location: marketingUrl },
-          });
-        }
+      const redirect = statusProbeRedirect({
+        isShareHost: event.locals.isShareHost,
+        apiStatus: (error as any).status,
+        recoveryMode: body.recoveryMode === true,
+        errorCode: typeof body.error === "string" ? body.error : undefined,
+        marketingUrl: env.MARKETING_URL,
+      });
 
-        // No marketing site — this is likely a self-hosted install.
-        // Check if this is an apex domain request (no tenant subdomain).
-        // If so, redirect to setup so the user can create their first tenant.
+      if (redirect) {
         return new Response(null, {
-          status: 303,
-          headers: { Location: "/setup" },
+          status: redirect.status,
+          headers: { Location: redirect.location },
         });
       }
     }
-    console.error("Failed to check site security settings:", error);
+    console.error("Failed to probe API readiness:", error);
   }
 
   return resolve(event);
@@ -325,7 +301,6 @@ const proxyHandle: Handle = async ({ event, resolve }) => {
       redirect: "manual",
     });
 
-
     // Return the proxied response
     return new Response(proxyResponse.body, {
       status: proxyResponse.status,
@@ -353,9 +328,11 @@ const apiClientHandle: Handle = async ({ event, resolve }) => {
   const refreshToken = onShareHost ? undefined : event.cookies.get(AUTH_COOKIE_NAMES.refreshToken);
   const guestSessionToken = onShareHost ? undefined : event.cookies.get(AUTH_COOKIE_NAMES.guestSession);
   const platformAccessToken = onShareHost ? undefined : event.cookies.get(AUTH_COOKIE_NAMES.platformAccess);
+  const recoverySessionToken = onShareHost ? undefined : event.cookies.get(AUTH_COOKIE_NAMES.recoverySession);
 
   const extraHeaders: Record<string, string> = {
     "X-Forwarded-Proto": getOriginalProto(event.request),
+    ...clientAddressHeaders(event),
   };
 
   // Forward the original Host for tenant resolution behind reverse proxies.
@@ -379,6 +356,7 @@ const apiClientHandle: Handle = async ({ event, resolve }) => {
     refreshToken,
     guestSessionToken,
     platformAccessToken,
+    recoverySessionToken,
     extraHeaders,
     responseCookies: event.cookies,
     rawSetCookies: event.locals.rawSetCookies,
@@ -498,13 +476,9 @@ function resolveLocale(event: Parameters<Handle>[0]["event"]): string {
   return "en";
 }
 
-// WUCHALE-DISABLED: wuchale temporarily disabled — resolveLocale still runs (so cookie-driven
-// locale selection logic stays exercised and helpers stay referenced) but
-// no runWithLocale wrapping happens. Re-enabling wuchale only requires
-// restoring the runWithLocale call below.
 export const locale: Handle = async ({ event, resolve }) => {
-  resolveLocale(event);
-  return resolve(event);
+  const locale = resolveLocale(event);
+  return await runWithLocale(locale, () => resolve(event));
 }
 
 installRequestScopedBitsIdCounter();
@@ -563,4 +537,4 @@ const healthHandle: Handle = async ({ event, resolve }) => {
 // Chain the auth handler, site security handler, proxy handler, and API client handler.
 // requestContextHandle comes first of the request-serving handlers: everything after it reads
 // the facts it establishes.
-export const handle: Handle = sequence(healthHandle, requestContextHandle, shareHostSecurityHandle, resetBitsId, authHandle, siteSecurityHandle, proxyHandle, apiClientHandle, locale);
+export const handle: Handle = sequence(healthHandle, requestContextHandle, shareHostSecurityHandle, resetBitsId, authHandle, readinessHandle, proxyHandle, apiClientHandle, locale);

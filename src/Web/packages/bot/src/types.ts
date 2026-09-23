@@ -17,7 +17,15 @@ export interface BotApiClient {
     ): Promise<PaginatedSensorGlucose>;
   };
   alerts: {
+    /** Null when the response body is empty or its status is unmapped. */
+    getActiveAlerts(signal?: AbortSignal): Promise<ActiveExcursion[] | null>;
+    /** Acknowledges every active excursion for the tenant. */
     acknowledge(request: AcknowledgeRequest, signal?: AbortSignal): Promise<void>;
+    acknowledgeExcursion(
+      excursionId: string,
+      request: AcknowledgeRequest,
+      signal?: AbortSignal,
+    ): Promise<void>;
     markDelivered(deliveryId: string, request: MarkDeliveredRequest, signal?: AbortSignal): Promise<void>;
     markFailed(deliveryId: string, request: MarkFailedRequest, signal?: AbortSignal): Promise<void>;
     getPendingDeliveries(channelType?: string[], signal?: AbortSignal): Promise<PendingDeliveryResponse[]>;
@@ -72,6 +80,13 @@ export interface AcknowledgeRequest {
   acknowledgedBy?: string;
 }
 
+export interface ActiveExcursion {
+  id?: string;
+  ruleName?: string;
+  startedAt?: Date;
+  acknowledgedAt?: Date | null;
+}
+
 export interface MarkDeliveredRequest {
   platformMessageId?: string;
   platformThreadId?: string;
@@ -98,12 +113,20 @@ export interface DirectoryCandidate {
   nocturneUserId: string;
   label: string;
   displayName: string;
+  /**
+   * The link a bare, label-less invocation resolves to. At most one of a
+   * platform user's links carries it (`ux_directory_user_one_default`).
+   */
+  isDefault: boolean;
 }
 
 export interface HeartbeatRequest {
   platforms?: string[];
   service?: string;
 }
+
+/** Wire form of `AlertRuleSeverity` (Core), which serialises as these lowercase names. */
+export type AlertSeverity = "critical" | "warning" | "info";
 
 export interface AlertPayload {
   alertType: string;
@@ -117,6 +140,7 @@ export interface AlertPayload {
   tenantId: string;
   subjectName: string;
   activeExcursionCount: number;
+  severity: AlertSeverity;
 }
 
 export interface AlertDispatchEvent {

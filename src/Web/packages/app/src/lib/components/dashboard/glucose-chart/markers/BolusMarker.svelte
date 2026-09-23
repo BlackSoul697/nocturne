@@ -1,4 +1,11 @@
 <script lang="ts">
+  import {
+    bolusMarkerPoints,
+    BOLUS_LABEL_Y,
+    MARKER_HEIGHT,
+    MARKER_HEIGHT_OVERRIDE,
+  } from "$lib/components/icons/marker-shapes";
+
   interface Props {
     xPos: number;
     yPos: number;
@@ -8,6 +15,11 @@
     bolusType?: string;
     treatmentId: string;
     onMarkerClick: (treatmentId: string) => void;
+    /**
+     * Whether to draw the units label. The track turns it off where the text
+     * would collide with a neighbour's; the glyph itself always draws.
+     */
+    showLabel?: boolean;
   }
 
   let {
@@ -18,14 +30,22 @@
     bolusType,
     treatmentId,
     onMarkerClick,
+    showLabel = true,
   }: Props = $props();
 
-  // Algorithm-delivered doses (SMBs / auto-boluses) render as an outlined dome so
-  // they read distinctly from a user-initiated (filled) bolus. Category comes from
-  // the backend; the frontend only picks the shape.
+  // Algorithm-delivered doses (SMBs / auto-boluses) render outlined so they read
+  // distinctly from a user-initiated (filled) bolus. Category comes from the
+  // backend; the frontend only picks the shape.
+  //
+  // Fill and height are independent: a dose that is both automatic and a manual
+  // override draws outlined *and* tall, where the two used to be exclusive
+  // branches and the override silhouette won.
   const isAutomatic = $derived(
     bolusType === "AutomaticBolus" || bolusType === "Smb",
   );
+
+  const height = $derived(isOverride ? MARKER_HEIGHT_OVERRIDE : MARKER_HEIGHT);
+  const points = $derived(bolusMarkerPoints(height));
 </script>
 
 <!-- svelte-ignore a11y_click_events_have_key_events -->
@@ -35,33 +55,28 @@
   onclick={() => onMarkerClick(treatmentId)}
   class="cursor-pointer"
 >
-  {#if isOverride}
-    <!-- Triangle for manual override -->
+  {#if isAutomatic}
     <polygon
-      points="0,12 -8,0 8,0"
-      class="opacity-90 fill-insulin-bolus hover:opacity-100 transition-opacity"
-    />
-  {:else if isAutomatic}
-    <!-- Outlined dome for algorithm-delivered doses (SMB / auto-bolus) -->
-    <path
-      d="M -8,0 A 8,8 0 0,1 8,0 Z"
+      {points}
       fill="none"
       class="stroke-insulin-bolus opacity-90 hover:opacity-100 transition-opacity"
       stroke-width="1.5"
     />
   {:else}
-    <!-- Hemisphere (dome shape - curves above baseline) -->
-    <path
-      d="M -8,0 A 8,8 0 0,1 8,0 Z"
+    <polygon
+      {points}
       class="opacity-90 fill-insulin-bolus hover:opacity-100 transition-opacity"
     />
   {/if}
-  <text
-    y={-14}
-    dy="-0.355em"
-    text-anchor="middle"
-    class="text-[8px] fill-insulin-bolus font-medium"
-  >
-    {insulin.toFixed(1)}U
-  </text>
+  {#if showLabel}
+    <text
+      y={BOLUS_LABEL_Y}
+      dy="-0.355em"
+      text-anchor="middle"
+      pointer-events="none"
+      class="text-[8px] fill-insulin-bolus font-medium"
+    >
+      {insulin.toFixed(1)}U
+    </text>
+  {/if}
 </g>

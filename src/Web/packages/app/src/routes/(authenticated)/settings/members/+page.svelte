@@ -13,9 +13,7 @@
     Globe,
     Lock,
     ScrollText,
-    ChevronRight,
   } from "lucide-svelte";
-  import { resolve } from "$app/paths";
   import { getRoles } from "$lib/api/generated/roles.generated.remote";
   import { getShareLink } from "$api/generated/shareLinks.generated.remote";
   import {
@@ -41,6 +39,8 @@
   import PublicAccessCard from "$lib/components/members/PublicAccessCard.svelte";
   import MembershipRequestsCard from "$lib/components/members/MembershipRequestsCard.svelte";
   import RolesSection from "$lib/components/members/RolesSection.svelte";
+  import SettingsLinkCard from "$lib/components/settings/SettingsLinkCard.svelte";
+  import { retainQuery } from "$lib/api/retain-query.svelte";
 
   const effectivePermissions: string[] = $derived(
     (page.data as any).effectivePermissions ?? [],
@@ -80,6 +80,9 @@
   const rolesQuery = getRoles();
   const pendingRequestsQuery = $derived(canManageMembers ? getPendingRequests() : null);
   const shareQuery = $derived(canManageSharing ? getShareLink() : null);
+  retainQuery(() => invitesQuery);
+  retainQuery(() => pendingRequestsQuery);
+  retainQuery(() => shareQuery);
 
   // Data
   const allMembers = $derived(membersQuery.current ?? []);
@@ -167,8 +170,8 @@
       await membersQuery.refresh();
       successMessage = "Membership request approved.";
       clearMessages();
-    } catch {
-      errorMessage = "Failed to approve request. Please try again.";
+    } catch (err) {
+      errorMessage = describeSubmitError(err, "Failed to approve request. Please try again.");
       clearMessages();
     }
   }
@@ -179,8 +182,8 @@
       await denyRequest(requestId);
       successMessage = "Membership request denied.";
       clearMessages();
-    } catch {
-      errorMessage = "Failed to deny request. Please try again.";
+    } catch (err) {
+      errorMessage = describeSubmitError(err, "Failed to deny request. Please try again.");
       clearMessages();
     }
   }
@@ -359,8 +362,11 @@
               await revokeInvite(inviteId);
               successMessage = "Invite revoked successfully.";
               clearMessages();
-            } catch {
-              errorMessage = "Failed to revoke invite. Please try again.";
+            } catch (err) {
+              errorMessage = describeSubmitError(
+                err,
+                "Failed to revoke invite. Please try again."
+              );
               clearMessages();
             } finally {
               isRevokingInvite = null;
@@ -380,26 +386,16 @@
     <RolesSection />
   {/if}
 
-  <!-- Audit Log (lives under Sharing & Privacy — access and change history is a privacy concern) -->
+  <!-- Lives here because who reached the data, and when, is the question this page answers. -->
   {#if canViewAudit}
-    <a href={resolve("/settings/audit")} class="group block">
-      <Card.Root class="transition-colors hover:border-primary/40 hover:bg-muted/40">
-        <Card.Content class="flex items-center gap-4 p-4">
-          <div class="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-primary/10">
-            <ScrollText class="h-5 w-5 text-primary" />
-          </div>
-          <div class="min-w-0 flex-1">
-            <p class="font-medium">Audit Log</p>
-            <p class="text-sm text-muted-foreground">
-              Review changes and access history.
-            </p>
-          </div>
-          <ChevronRight
-            class="h-4 w-4 shrink-0 text-muted-foreground transition-transform group-hover:translate-x-0.5"
-          />
-        </Card.Content>
-      </Card.Root>
-    </a>
+    <SettingsLinkCard
+      link={{
+        title: "Audit Log",
+        description: "Review changes and access history.",
+        href: "/settings/audit",
+        icon: ScrollText,
+      }}
+    />
   {/if}
 
   {#if !canInvite && !canManageMembers && !canManageSharing && !canManageRoles && !canCreateGuestLinks && !canViewAudit}

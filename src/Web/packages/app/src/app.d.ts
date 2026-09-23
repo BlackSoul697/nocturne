@@ -1,6 +1,7 @@
 // See https://svelte.dev/docs/kit/types#app
 // for information about these interfaces
 import { ApiClient, UserDisplayPreferences } from "$lib/api";
+import type { LastSignIn } from "$lib/components/auth/last-sign-in";
 
 
 export interface ServerSettings {
@@ -65,13 +66,9 @@ declare global {
 			 */
 			isAuthenticated: boolean;
 			/**
-			 * Whether site security has been checked for this request
+			 * Whether the API readiness probe has already run for this request
 			 */
-			siteSecurityChecked?: boolean;
-			/**
-			 * Whether site requires authentication (lockdown mode)
-			 */
-			requireAuthentication?: boolean;
+			statusProbed?: boolean;
 			/**
 			 * Effective permissions (granted scopes) for the current user on the current tenant
 			 */
@@ -109,6 +106,8 @@ declare global {
 				history: number;
 				focusHours: number;
 			};
+			/** Resolved by the root layout from the hint cookie the API writes. */
+			lastSignIn: LastSignIn | null;
 		}
 
 		// Main PageData interface that allows additional properties for reports

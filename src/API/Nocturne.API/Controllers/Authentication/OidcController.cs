@@ -114,15 +114,14 @@ public class OidcController : ControllerBase
         [FromQuery] string? returnUrl = null
     )
     {
-        // Validate return URL to prevent open redirect attacks
-        if (!string.IsNullOrEmpty(returnUrl) && !IsValidReturnUrl(returnUrl))
+        if (!string.IsNullOrEmpty(returnUrl) && !_baseDomain.IsValidReturnUrl(returnUrl))
         {
             return BadRequest(new { error = "invalid_return_url", message = "Invalid return URL" });
         }
 
         try
         {
-            var tenantSlug = (HttpContext.Items["TenantContext"] as TenantContext)?.Slug;
+            var tenantSlug = (HttpContext.GetTenantContext())?.Slug;
             var authRequest = await _authService.GenerateAuthorizationUrlAsync(provider, returnUrl, tenantSlug: tenantSlug);
 
             // Store state in a secure cookie for verification on callback
@@ -206,7 +205,7 @@ public class OidcController : ControllerBase
         // The callback runs on the tenant subdomain (OidcCallbackRedirectMiddleware has already
         // bounced apex callbacks to {slug}.{baseDomain}), so the resolved tenant is the one being
         // logged into. Pass it through so a session is only issued to a member of that tenant.
-        var currentTenantId = (HttpContext.Items["TenantContext"] as TenantContext)?.TenantId;
+        var currentTenantId = (HttpContext.GetTenantContext())?.TenantId;
 
         // Handle the callback
         var result = await _authService.HandleCallbackAsync(
@@ -253,6 +252,10 @@ public class OidcController : ControllerBase
 
         // Set session cookies
         SetSessionCookies(result.Tokens!);
+        Response.SetLastSignInCookie(
+            SessionCookieExtensions.SignInMethods.Oidc,
+            result.ProviderId?.ToString(),
+            _options);
 
         await _auditService.LogAsync(AuthAuditEventType.Login, result.Tokens?.SubjectId, success: true,
             ipAddress: GetClientIpAddress(), userAgent: Request.Headers.UserAgent,
@@ -287,12 +290,12 @@ public class OidcController : ControllerBase
         if (auth == null || !auth.IsAuthenticated || !auth.SubjectId.HasValue)
             return Unauthorized(new { error = "not_authenticated", message = "Authentication required" });
 
-        if (!string.IsNullOrEmpty(returnUrl) && !IsValidReturnUrl(returnUrl))
+        if (!string.IsNullOrEmpty(returnUrl) && !_baseDomain.IsValidReturnUrl(returnUrl))
             return BadRequest(new { error = "invalid_return_url", message = "Invalid return URL" });
 
         try
         {
-            var tenantSlug = (HttpContext.Items["TenantContext"] as TenantContext)?.Slug;
+            var tenantSlug = (HttpContext.GetTenantContext())?.Slug;
             var req = await _authService.GenerateLinkAuthorizationUrlAsync(
                 provider, auth.SubjectId.Value, returnUrl, tenantSlug);
             SetLinkStateCookie(req.State, req.ExpiresAt);
@@ -316,6 +319,7 @@ public class OidcController : ControllerBase
     /// Does NOT issue new session cookies.
     /// </summary>
     [HttpGet("link/callback")]
+    [DenyDemoSubject]
     [ProducesResponseType(StatusCodes.Status302Found)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     public async Task<IActionResult> LinkCallback(
@@ -423,6 +427,12 @@ public class OidcController : ControllerBase
     /// Factor-count enforcement is handled atomically inside <see cref="ISubjectService.TryRemoveOidcIdentityAsync"/>
     /// using a serializable transaction to prevent TOCTOU races between concurrent removals.
     /// Returns <see cref="FactorRemovalResult"/> to distinguish between not-found, last-factor, and success.
+    /// <para>
+    /// Dropping a primary factor also changes the factor count that
+    /// <see cref="PasskeyController.ListCredentials"/> reports, which is what the account page reads to
+    /// decide whether a Remove is offered at all. That read lives under another OpenAPI tag, so it is
+    /// named by its full operationId — a bare name resolves only within the declaring operation's own tag.
+    /// </para>
     /// </remarks>
     /// <response code="204">Identity unlinked successfully.</response>
     /// <response code="401">Not authenticated.</response>
@@ -430,7 +440,7 @@ public class OidcController : ControllerBase
     /// <response code="409">Cannot remove the last primary sign-in method.</response>
     [HttpDelete("link/identities/{identityId:guid}")]
     [DenyDemoSubject]
-    [RemoteCommand(Invalidates = ["GetLinkedIdentities"])]
+    [RemoteCommand(Invalidates = ["GetLinkedIdentities", "Passkey_ListCredentials"])]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     [ProducesResponseType(StatusCodes.Status401Unauthorized)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
@@ -658,30 +668,6 @@ public class OidcController : ControllerBase
 
     #region Private Helper Methods
 
-    /// <summary>
-    /// Validate that a return URL is safe (prevents open redirect attacks)
-    /// </summary>
-    private bool IsValidReturnUrl(string returnUrl)
-    {
-        // Site-local path: starts with "/" but not "//" or "/\", which browsers
-        // resolve as scheme-relative — "Location: //evil.com" leaves the site.
-        if (returnUrl.StartsWith('/'))
-        {
-            return returnUrl.Length == 1 || (returnUrl[1] != '/' && returnUrl[1] != '\\');
-        }
-
-        // Absolute URL: parse and compare scheme + authority against the public
-        // origin, so neither "https://example.com.evil.com" (prefix) nor
-        // "https://example.com@evil.com" (userinfo) can pass a string match.
-        var origin = _baseDomain.PublicOrigin;
-        return !string.IsNullOrEmpty(origin)
-            && Uri.TryCreate(returnUrl, UriKind.Absolute, out var target)
-            && Uri.TryCreate(origin, UriKind.Absolute, out var expected)
-            && target.Scheme == expected.Scheme
-            && string.Equals(target.Authority, expected.Authority, StringComparison.OrdinalIgnoreCase)
-            && string.IsNullOrEmpty(target.UserInfo);
-    }
-
     private void SetStateCookie(string state, DateTimeOffset expiresAt) =>
         Response.SetStateCookie(_options.Cookie.StateCookieName, state, expiresAt, _options);
 
@@ -713,32 +699,14 @@ public class OidcController : ControllerBase
         }
 
         // Then try from Authorization header (for API clients)
-        var authHeader = Request.Headers.Authorization.FirstOrDefault();
-        if (
-            !string.IsNullOrEmpty(authHeader)
-            && authHeader.StartsWith("Refresh ", StringComparison.OrdinalIgnoreCase)
-        )
-        {
-            return authHeader["Refresh ".Length..].Trim();
-        }
-
-        return null;
+        return Request.GetAuthorizationCredential("Refresh");
     }
 
     /// <summary>
     /// Get the client IP address
     /// </summary>
-    private string? GetClientIpAddress()
-    {
-        // Check for forwarded headers first (when behind a reverse proxy)
-        var forwarded = Request.Headers["X-Forwarded-For"].FirstOrDefault();
-        if (!string.IsNullOrEmpty(forwarded))
-        {
-            return forwarded.Split(',').First().Trim();
-        }
-
-        return HttpContext.Connection.RemoteIpAddress?.ToString();
-    }
+    private string? GetClientIpAddress() =>
+        HttpContext.Connection.RemoteIpAddress?.ToString();
 
     /// <summary>
     /// Redirect to an error page

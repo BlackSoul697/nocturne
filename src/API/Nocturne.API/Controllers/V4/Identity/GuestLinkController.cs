@@ -42,7 +42,7 @@ public class GuestLinkController : ControllerBase
     [RemoteCommand(Invalidates = ["GetGuestLinks"])]
     [ProducesResponseType(typeof(GuestLinkCreationResult), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status403Forbidden)]
-    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
     public async Task<IActionResult> CreateGuestLink(
         [FromBody] CreateGuestLinkRequest request,
         CancellationToken ct)
@@ -51,12 +51,12 @@ public class GuestLinkController : ControllerBase
         if (auth is not { IsAuthenticated: true, SubjectId: not null })
             return Unauthorized();
 
-        if (!HasPermission(TenantPermissions.SharingGuest)
+        if (!HttpContext.HasScope(Scope.SharingGuest)
             && auth.SubjectId != auth.EffectiveSubjectId)
             return Forbid();
 
         var effectiveSubjectId = auth.EffectiveSubjectId!.Value;
-        var baseUrl = $"{Request.Scheme}://{Request.Host}";
+        var baseUrl = $"{Request.PublicScheme()}://{Request.Host}";
 
         try
         {
@@ -72,11 +72,11 @@ public class GuestLinkController : ControllerBase
         }
         catch (ArgumentException ex)
         {
-            return BadRequest(new { error = ex.Message });
+            return Problem(detail: ex.Message, statusCode: StatusCodes.Status400BadRequest, title: "Bad Request");
         }
         catch (InvalidOperationException ex)
         {
-            return BadRequest(new { error = ex.Message });
+            return Problem(detail: ex.Message, statusCode: StatusCodes.Status400BadRequest, title: "Bad Request");
         }
     }
 
@@ -157,7 +157,7 @@ public class GuestLinkController : ControllerBase
     [AllowAnonymous]
     [EnableRateLimiting("guest-activate")]
     [ProducesResponseType(typeof(ActivateGuestLinkResponse), StatusCodes.Status200OK)]
-    [ProducesResponseType(typeof(ActivateGuestLinkResponse), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
     public async Task<IActionResult> ActivateGuestLink(
         [FromBody] ActivateGuestLinkRequest request,
         CancellationToken ct)
@@ -168,21 +168,30 @@ public class GuestLinkController : ControllerBase
         var result = await _guestLinkService.ActivateAsync(request.Code, ip, userAgent, ct);
 
         if (!result.Success || result.Session is null)
-            return BadRequest(new ActivateGuestLinkResponse(null, result.Error));
+            return Problem(
+                detail: result.Error ?? "That code could not be redeemed.",
+                statusCode: StatusCodes.Status400BadRequest,
+                title: "Bad Request");
 
         _guestSessionHandler.SetGuestSessionCookie(
             HttpContext,
             result.Session.GrantId,
             result.Session.ExpiresAt);
 
-        return Ok(new ActivateGuestLinkResponse(result.Session.ExpiresAt, null));
+        return Ok(new ActivateGuestLinkResponse(result.Session.ExpiresAt));
     }
 
-    private bool HasPermission(string permission)
+    /// <summary>
+    /// Whether this tenant has a guest code waiting to be redeemed, so the sign-in page can open
+    /// on code entry. Answers only yes or no: nothing about the code, its label or its owner.
+    /// </summary>
+    [HttpGet("pending")]
+    [AllowAnonymous]
+    [ProducesResponseType(typeof(GuestCodePendingResponse), StatusCodes.Status200OK)]
+    public async Task<IActionResult> GetGuestCodePending(CancellationToken ct)
     {
-        var grantedScopes = HttpContext.Items["GrantedScopes"] as IReadOnlySet<string>;
-        if (grantedScopes == null) return false;
-        return TenantPermissions.HasPermission(grantedScopes, permission);
+        var pending = await _guestLinkService.HasRedeemableCodeAsync(ct);
+        return Ok(new GuestCodePendingResponse(pending));
     }
 }
 
@@ -197,6 +206,13 @@ public record CreateGuestLinkRequest(string Label, List<string>? Scopes = null);
 public record ActivateGuestLinkRequest(string Code);
 
 /// <summary>
-/// Response from guest link activation.
+/// Response from a successful guest link activation. A refusal answers with
+/// <see cref="ProblemDetails"/>, so the caller reads the status rather than
+/// sniffing this shape for an error field.
 /// </summary>
-public record ActivateGuestLinkResponse(DateTime? ExpiresAt, string? Error);
+public record ActivateGuestLinkResponse(DateTime? ExpiresAt);
+
+/// <summary>
+/// Whether the tenant has an unredeemed guest code.
+/// </summary>
+public record GuestCodePendingResponse(bool Pending);

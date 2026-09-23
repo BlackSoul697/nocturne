@@ -98,7 +98,7 @@ public class UserDisplayPreferences
             return "chart.lookback: must be greater than 0";
         }
 
-        return null;
+        return YearOverviewColors?.Validate();
 
         static string? Check(string field, string? value, HashSet<string> allowed) =>
             value != null && !allowed.Contains(value)
@@ -119,6 +119,8 @@ public class UserDisplayPreferences
         ColorTheme = incoming.ColorTheme ?? ColorTheme;
         NightModeSchedule = incoming.NightModeSchedule ?? NightModeSchedule;
         DashboardTopWidgets = incoming.DashboardTopWidgets ?? DashboardTopWidgets;
+        // Replace the whole color selection: an empty object resets every metric to automatic.
+        YearOverviewColors = incoming.YearOverviewColors ?? YearOverviewColors;
 
         if (incoming.Prediction is { } prediction)
         {
@@ -142,6 +144,30 @@ public class UserDisplayPreferences
             Chart.Lookback = chart.Lookback ?? Chart.Lookback;
         }
     }
+
+    /// <summary>
+    /// A copy carrying only the fields that describe how data is drawn, for disclosure to a
+    /// viewer who is not the owner (the anonymous public share). Each top-level field is named
+    /// individually, so one added later is withheld until someone decides it is presentation
+    /// rather than a fact about the owner. <see cref="Prediction"/> and <see cref="Chart"/> are
+    /// carried whole and carry no such guarantee: a field added inside either is disclosed on
+    /// the next build. Their contents are pinned by a test instead.
+    /// <para>
+    /// <see cref="DashboardTopWidgets"/> is withheld: the widgets an owner pins say what they
+    /// treat and track. <see cref="NightModeSchedule"/> is withheld: it reports when the owner
+    /// sleeps, and when a viewer's own screen dims is the viewer's setting.
+    /// </para>
+    /// </summary>
+    public UserDisplayPreferences ToPresentationOnly() => new()
+    {
+        GlucoseUnits = GlucoseUnits,
+        TimeFormat = TimeFormat,
+        RegionFormat = RegionFormat,
+        ColorTheme = ColorTheme,
+        Prediction = Prediction,
+        Chart = Chart,
+        YearOverviewColors = YearOverviewColors,
+    };
 
     /// <summary>Glucose units: "mg/dl" or "mmol".</summary>
     [JsonPropertyName("glucoseUnits")]
@@ -174,6 +200,9 @@ public class UserDisplayPreferences
     /// <summary>Glucose-chart visual style preferences.</summary>
     [JsonPropertyName("chart")]
     public ChartPreferences? Chart { get; set; }
+
+    [JsonPropertyName("yearOverviewColors")]
+    public YearOverviewColorPreferences? YearOverviewColors { get; set; }
 
     /// <summary>Ordered widget IDs shown in the dashboard top-widget grid.</summary>
     [JsonPropertyName("dashboardTopWidgets")]

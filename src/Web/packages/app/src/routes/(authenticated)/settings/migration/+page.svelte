@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { formatMediumDateTime } from "$lib/utils/formatting";
   import {
     Card,
     CardContent,
@@ -30,6 +31,7 @@
     Info,
   } from "lucide-svelte";
   import * as migrationRemote from "$api/generated/migrations.generated.remote";
+  import { describeSubmitError } from "$lib/forms/submit-error";
   import {
     type MigrationJobInfo,
     type MigrationJobStatus,
@@ -171,26 +173,12 @@
       pollingActive = false;
       await loadData();
     } catch (err) {
-      error = err instanceof Error ? err.message : "Failed to cancel migration";
+      error = describeSubmitError(err, "Failed to cancel migration");
     } finally {
       cancellingMigration = false;
     }
   }
 
-  // Format date
-  function formatDate(dateStr: Date | string | undefined): string {
-    if (!dateStr) return "N/A";
-    const date = new Date(dateStr);
-    return date.toLocaleDateString(undefined, {
-      month: "short",
-      day: "numeric",
-      year: "numeric",
-      hour: "2-digit",
-      minute: "2-digit",
-    });
-  }
-
-  // Get state badge
   function getStateBadge(state: MigrationJobState | undefined) {
     switch (state) {
       case MigrationJobState.Pending:
@@ -641,10 +629,16 @@
                           </Badge>
                         </div>
                         <div class="text-sm text-muted-foreground">
-                          Started: {formatDate(job.startedAt)}
+                          Started: {formatMediumDateTime(job.startedAt)}
                         </div>
                         {#if job.errorMessage}
-                          <div class="text-sm text-destructive mt-1">
+                          <div
+                            class="text-sm mt-1 {job.hasFailures ||
+                            job.state === MigrationJobState.Failed ||
+                            job.state === MigrationJobState.Cancelled
+                              ? 'text-destructive'
+                              : 'text-muted-foreground'}"
+                          >
                             {job.errorMessage}
                           </div>
                         {/if}
@@ -652,7 +646,7 @@
                     </div>
                     <div class="text-right text-sm text-muted-foreground">
                       {#if job.completedAt}
-                        <div>Completed: {formatDate(job.completedAt)}</div>
+                        <div>Completed: {formatMediumDateTime(job.completedAt)}</div>
                       {/if}
                     </div>
                   </div>
@@ -693,7 +687,7 @@
                             "Unknown"}
                         </div>
                         <div class="text-sm text-muted-foreground">
-                          Last migration: {formatDate(source.lastMigrationAt)}
+                          Last migration: {formatMediumDateTime(source.lastMigrationAt)}
                         </div>
                       </div>
                     </div>
