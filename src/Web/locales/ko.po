@@ -1696,9 +1696,9 @@ msgstr ""
 msgid "Recovery code"
 msgstr ""
 
+#: src/lib/components/auth/GuestCodeForm.svelte
 #: src/lib/components/auth/LoginForm.svelte
 #: src/lib/components/auth/LoginForm.svelte
-#: src/routes/(unauthenticated)/guest/[[code]]/+page.svelte
 msgid "<0/> Verifying..."
 msgstr ""
 
@@ -14579,7 +14579,7 @@ msgstr ""
 msgid "Enter guest code"
 msgstr ""
 
-#: src/routes/(unauthenticated)/guest/[[code]]/+page.svelte
+#: src/lib/components/auth/GuestCodeForm.svelte
 msgid "<0/> Access Data"
 msgstr ""
 
@@ -22749,11 +22749,11 @@ msgstr ""
 msgid "Signing you in"
 msgstr ""
 
-#: src/routes/(unauthenticated)/guest/[[code]]/+page.svelte
+#: src/lib/components/auth/GuestCodeForm.svelte
 msgid "We couldn't check that code just now. Please try again."
 msgstr ""
 
-#: src/routes/(unauthenticated)/guest/[[code]]/+page.svelte
+#: src/lib/components/auth/GuestCodeForm.svelte
 msgid "Guest code"
 msgstr ""
 
@@ -24210,3 +24210,19 @@ msgstr ""
 
 #~ msgid "{0}=set; path=/; max-age=1"
 #~ msgstr ""
+
+#: src/routes/(unauthenticated)/auth/login/+page.svelte
+msgid "Enter your guest code"
+msgstr ""
+
+#: src/routes/(unauthenticated)/auth/login/+page.svelte
+msgid "Enter the code you were given to view health data. The code works once — this device stays signed in for 48 hours."
+msgstr ""
+
+#: src/routes/(unauthenticated)/auth/login/+page.svelte
+msgid "<0/> Not signing in with a one-time guest code"
+msgstr ""
+
+#: src/routes/(unauthenticated)/auth/login/+page.svelte
+msgid "<0/> Have a one-time guest code?"
+msgstr ""
