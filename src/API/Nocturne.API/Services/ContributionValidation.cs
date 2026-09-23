@@ -18,6 +18,13 @@ public static partial class ContributionValidation
     public const int MaxNoteLength = 2000;
     public const int MaxPathLength = 512;
 
+    /// <summary>
+    /// Strips the line breaks a contributor-supplied value would otherwise
+    /// carry into a log, where each one reads as an entry of its own.
+    /// </summary>
+    public static string ForLog(string value) =>
+        value.Replace("\r", string.Empty).Replace("\n", string.Empty);
+
     // GitHub's username grammar: alphanumeric and single hyphens, no
     // leading/trailing hyphen, max 39 chars. Anchored with \z, not $: in .NET
     // $ also matches before a trailing newline.

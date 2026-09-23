@@ -77,7 +77,7 @@ public partial class GitHubContentService(
 
         logger.LogInformation(
             "Opened content PR #{PrNumber} for {Path} ({Mode})",
-            prNumber, request.Path, existing is null ? "create" : "update");
+            prNumber, ContributionValidation.ForLog(request.Path), existing is null ? "create" : "update");
 
         return new ContentContributionResponse
         {
@@ -96,7 +96,8 @@ public partial class GitHubContentService(
         if (!response.IsSuccessStatusCode)
         {
             var error = await response.Content.ReadAsStringAsync(ct);
-            logger.LogError("Content relay error: {StatusCode} {Error}", response.StatusCode, error);
+            logger.LogError("Content relay error: {StatusCode} {Error}",
+                response.StatusCode, ContributionValidation.ForLog(error));
             if (response.StatusCode == System.Net.HttpStatusCode.UnprocessableEntity)
                 // Forward the relay's own reason so the contributor can tell
                 // "identical to published" from "path not allowed".

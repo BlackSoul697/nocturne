@@ -357,10 +357,30 @@ public class GitHubTranslationServiceTests : IDisposable
             NullLogger<GitHubTranslationService>.Instance);
     }
 
+    /// <summary>
+    /// Owns the responses it hands out: the caller is an HttpClient that
+    /// disposes what it receives, but the analyzer cannot see that hand-off,
+    /// and disposing here before returning would empty the body.
+    /// </summary>
     private sealed class StubHandler(HttpStatusCode status, string body) : HttpMessageHandler
     {
+        private readonly List<HttpResponseMessage> _issued = [];
+
         protected override Task<HttpResponseMessage> SendAsync(
-            HttpRequestMessage request, CancellationToken cancellationToken) =>
-            Task.FromResult(new HttpResponseMessage(status) { Content = new StringContent(body) });
+            HttpRequestMessage request, CancellationToken cancellationToken)
+        {
+            var response = new HttpResponseMessage(status) { Content = new StringContent(body) };
+            _issued.Add(response);
+            return Task.FromResult(response);
+        }
+
+        protected override void Dispose(bool disposing)
+        {
+            if (disposing)
+                foreach (var response in _issued)
+                    response.Dispose();
+
+            base.Dispose(disposing);
+        }
     }
 }

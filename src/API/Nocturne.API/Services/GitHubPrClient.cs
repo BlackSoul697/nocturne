@@ -28,7 +28,8 @@ public class GitHubPrClient(IHttpClientFactory httpClientFactory, ILogger<GitHub
         if (!response.IsSuccessStatusCode)
         {
             var error = await response.Content.ReadAsStringAsync(ct);
-            logger.LogError("GitHub API error fetching {Path}: {StatusCode} {Error}", path, response.StatusCode, error);
+            logger.LogError("GitHub API error fetching {Path}: {StatusCode} {Error}",
+                ContributionValidation.ForLog(path), response.StatusCode, ContributionValidation.ForLog(error));
             throw new InvalidOperationException($"GitHub API error: {response.StatusCode}");
         }
 
@@ -57,7 +58,8 @@ public class GitHubPrClient(IHttpClientFactory httpClientFactory, ILogger<GitHub
         if (!response.IsSuccessStatusCode)
         {
             var error = await response.Content.ReadAsStringAsync(ct);
-            logger.LogError("GitHub API error creating branch: {StatusCode} {Error}", response.StatusCode, error);
+            logger.LogError("GitHub API error creating branch: {StatusCode} {Error}",
+                response.StatusCode, ContributionValidation.ForLog(error));
             throw new InvalidOperationException($"GitHub API error: {response.StatusCode}");
         }
     }
@@ -80,7 +82,8 @@ public class GitHubPrClient(IHttpClientFactory httpClientFactory, ILogger<GitHub
         if (!response.IsSuccessStatusCode)
         {
             var error = await response.Content.ReadAsStringAsync(ct);
-            logger.LogError("GitHub API error committing {Path}: {StatusCode} {Error}", path, response.StatusCode, error);
+            logger.LogError("GitHub API error committing {Path}: {StatusCode} {Error}",
+                ContributionValidation.ForLog(path), response.StatusCode, ContributionValidation.ForLog(error));
             throw new InvalidOperationException($"GitHub API error: {response.StatusCode}");
         }
     }
@@ -103,7 +106,8 @@ public class GitHubPrClient(IHttpClientFactory httpClientFactory, ILogger<GitHub
         if (!response.IsSuccessStatusCode)
         {
             var error = await response.Content.ReadAsStringAsync(ct);
-            logger.LogError("GitHub API error opening PR: {StatusCode} {Error}", response.StatusCode, error);
+            logger.LogError("GitHub API error opening PR: {StatusCode} {Error}",
+                response.StatusCode, ContributionValidation.ForLog(error));
             throw new InvalidOperationException($"GitHub API error: {response.StatusCode}");
         }
 
@@ -111,13 +115,6 @@ public class GitHubPrClient(IHttpClientFactory httpClientFactory, ILogger<GitHub
             ?? throw new InvalidOperationException("Failed to deserialize GitHub PR response");
         return (pr.Number, pr.HtmlUrl);
     }
-
-    /// <summary>
-    /// Strips the line breaks a caller-supplied value could carry into a log
-    /// line, where they would read as separate entries.
-    /// </summary>
-    private static string SanitizeForLog(string value) =>
-        value.Replace("\r", string.Empty).Replace("\n", string.Empty);
 
     public async Task TryDeleteBranchAsync(HttpClient client, string owner, string repo, string branch)
     {
@@ -127,7 +124,7 @@ public class GitHubPrClient(IHttpClientFactory httpClientFactory, ILogger<GitHub
         }
         catch (Exception ex) when (ex is HttpRequestException or OperationCanceledException)
         {
-            logger.LogWarning(ex, "Failed to clean up branch {Branch} after error", SanitizeForLog(branch));
+            logger.LogWarning(ex, "Failed to clean up branch {Branch} after error", ContributionValidation.ForLog(branch));
         }
     }
 
