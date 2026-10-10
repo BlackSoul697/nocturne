@@ -1,3 +1,4 @@
+using System.Text.Json;
 using System.Text.Json.Serialization;
 using Nocturne.Core.Models.Attributes;
 using Nocturne.Core.Models.Serializers;
@@ -13,9 +14,10 @@ namespace Nocturne.Core.Models;
 /// <para>Follows the mills-first timestamp pattern: <see cref="Mills"/> is computed from
 /// <see cref="Created_at"/> if not explicitly set. <see cref="Created_at"/> is likewise
 /// computed from Mills when not set.</para>
-/// <para><see cref="Insulin"/>, <see cref="Rate"/>, and <see cref="Duration"/> form a
-/// computed triangle: any two can derive the third. <see cref="Absolute"/> and
-/// <see cref="Amount"/> are synonyms for Rate and Insulin respectively.</para>
+/// <para><see cref="Rate"/> derives from Insulin ÷ Duration and <see cref="Duration"/> from
+/// Insulin ÷ Rate when not set; <see cref="Insulin"/> is never derived from the other two (see its
+/// remarks). <see cref="Absolute"/> and <see cref="Amount"/> are synonyms for Rate and Insulin
+/// respectively.</para>
 /// </remarks>
 /// <seealso cref="ProcessableDocumentBase"/>
 /// <seealso cref="Entry"/>
@@ -102,28 +104,18 @@ public class Treatment : ProcessableDocumentBase
     private double? _insulin;
 
     /// <summary>
-    /// Gets or sets the insulin amount in units.
-    /// Derives from Amount if null, or calculates from Rate * Duration.
+    /// Gets or sets the insulin amount in units. Derives from Amount if null.
     /// </summary>
+    /// <remarks>
+    /// Never derived from <see cref="Rate"/> × <see cref="Duration"/>: that is what a temp basal
+    /// delivers, not a dose, and AAPS classifies any served record carrying <c>insulin &gt; 0</c> as a
+    /// bolus before it looks at <c>eventType</c> (nssdk TreatmentMapper.toTreatment), so a temp basal
+    /// served with it comes back as a phantom bolus under the temp basal's identifier.
+    /// </remarks>
     [JsonPropertyName("insulin")]
     public double? Insulin
     {
-        get
-        {
-            if (_insulin.HasValue)
-                return _insulin;
-            if (_amount.HasValue)
-                return _amount;
-
-            // Try to calculate from Rate * Duration
-            // resolving synonyms for Rate
-            var r = _rate ?? _absolute;
-            if (r.HasValue && _duration.HasValue && _duration.Value > 0)
-            {
-                return r.Value * (_duration.Value / 60.0);
-            }
-            return null;
-        }
+        get => _insulin ?? _amount;
         set => _insulin = value;
     }
 
@@ -369,11 +361,34 @@ public class Treatment : ProcessableDocumentBase
     private double? _rate;
 
     /// <summary>
-    /// Gets or sets the timestamp as an ISO 8601 string - optional field
+    /// The <c>timestamp</c> exactly as uploaded, a JSON string or number, served back with the same
+    /// JSON type as Nightscout does. AAPS's v1 client uploads a temporary target's as epoch
+    /// milliseconds; LoopFollow reads <c>timestamp as? String ?? created_at</c>, so a number falls back
+    /// to <c>created_at</c> while the same digits as a string fail its date parse.
     /// </summary>
     [JsonPropertyName("timestamp")]
-    [JsonConverter(typeof(FlexibleStringConverter))]
-    public string? Timestamp { get; set; }
+    public JsonElement? RawTimestamp { get; set; }
+
+    /// <summary>
+    /// <see cref="RawTimestamp"/> as text: a string's value, or a number's or boolean's literal.
+    /// Setting the text it already holds keeps the uploaded JSON type, so a property-by-property copy
+    /// does not turn a number into a string.
+    /// </summary>
+    [JsonIgnore]
+    public string? Timestamp
+    {
+        get => RawTimestamp switch
+        {
+            { ValueKind: JsonValueKind.String } s => s.GetString(),
+            { ValueKind: JsonValueKind.Number or JsonValueKind.True or JsonValueKind.False } v => v.GetRawText(),
+            _ => null,
+        };
+        set
+        {
+            if (value != Timestamp)
+                RawTimestamp = value is null ? null : JsonSerializer.SerializeToElement(value);
+        }
+    }
 
     /// <summary>
     /// Calculates Mills from Created_at if Mills is not set - for API compatibility

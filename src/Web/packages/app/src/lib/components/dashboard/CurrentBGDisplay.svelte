@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { lazyComponent } from "$lib/utils/lazy-component.svelte";
   import { TrackerCategory } from "$lib/api";
   import { Badge } from "$lib/components/ui/badge";
   import {
@@ -10,8 +11,6 @@
     TrackerPillBar,
   } from "$lib/components/status-pills";
   import { GlucoseValueIndicator } from "$lib/components/shared";
-  import { TrackerCompletionDialog } from "$lib/components/trackers";
-  import { EntryEditDialog } from "$lib/components/entries";
   import { getRealtimeStore } from "$lib/stores/realtime-store.svelte";
   import { glucoseUnits } from "$lib/stores/appearance-store.svelte";
   import { getSettingsStore } from "$lib/stores/settings-store.svelte";
@@ -24,8 +23,7 @@
     prefersHour12,
   } from "$lib/utils/formatting";
   import Clock from "@lucide/svelte/icons/clock";
-  import { createConnectionIndicator } from "$lib/stores/connection-indicator.svelte";
-  import { currentGlucoseStatus } from "$lib/stores/current-glucose-status.svelte";
+  import { displayedGlucose } from "$lib/stores/current-glucose-status.svelte";
   import { getGlucoseTileVariant } from "$lib/utils/glucose-status";
 
   interface ComponentProps {
@@ -43,15 +41,13 @@
     settingsStore.features?.trackerPills?.enabled ?? true
   );
 
-  const rawCurrentBG = $derived(realtimeStore.currentBG);
-  const rawBgDelta = $derived(realtimeStore.bgDelta);
+  const glucose = displayedGlucose(realtimeStore);
+  const rawCurrentBG = $derived(glucose.currentBG);
+  const rawBgDelta = $derived(glucose.bgDelta);
   const lastUpdated = $derived(realtimeStore.lastUpdated);
   const tileVariant = $derived(
-    getGlucoseTileVariant(currentGlucoseStatus(realtimeStore.currentEntry?.mills))
+    getGlucoseTileVariant(glucose.status)
   );
-
-  const connection = createConnectionIndicator(() => realtimeStore.connectionStatus);
-
 
   // Format values based on user's unit preference
   const units = $derived(glucoseUnits.current);
@@ -66,7 +62,7 @@
   const isStale = $derived(
     currentTime.getTime() - lastUpdated > STALE_THRESHOLD_MS
   );
-  const isDisconnected = $derived(connection.isDisconnected);
+  const isDisconnected = $derived(realtimeStore.connectionUnavailable);
 
   // Loading state - no data received yet
   const isLoading = $derived(
@@ -94,11 +90,10 @@
     })
   );
 
-  // Entry Dialog State
-  let showEntryDialog = $state(false);
-
   // Tracker Completion Dialog State
-  let showCompletionDialog = $state(false);
+  const trackerCompletionDialog = lazyComponent(
+    () => import("$lib/components/trackers/TrackerCompletionDialog.svelte"),
+  );
   let completingInstanceId = $state<string | null>(null);
   let completingInstanceName = $state("");
   let completingCategory = $state<TrackerCategory | undefined>(undefined);
@@ -117,11 +112,11 @@
     completingCategory = category;
     completingDefinitionId = definitionId;
     completingCompletionEventType = completionEventType;
-    showCompletionDialog = true;
+    trackerCompletionDialog.open = true;
   }
 
   function handleCompletionDialogClose() {
-    showCompletionDialog = false;
+    trackerCompletionDialog.open = false;
     completingInstanceId = null;
     completingInstanceName = "";
     completingCategory = undefined;
@@ -194,18 +189,14 @@
   </div>
 {/if}
 
-<EntryEditDialog
-  bind:open={showEntryDialog}
-  entry={null}
-  onClose={() => (showEntryDialog = false)}
-/>
-
-<TrackerCompletionDialog
-  bind:open={showCompletionDialog}
-  instanceId={completingInstanceId}
-  instanceName={completingInstanceName}
-  category={completingCategory}
-  definitionId={completingDefinitionId}
-  completionEventType={completingCompletionEventType}
-  onClose={handleCompletionDialogClose}
-/>
+{#if trackerCompletionDialog.component}
+  <trackerCompletionDialog.component
+    bind:open={trackerCompletionDialog.open}
+    instanceId={completingInstanceId}
+    instanceName={completingInstanceName}
+    category={completingCategory}
+    definitionId={completingDefinitionId}
+    completionEventType={completingCompletionEventType}
+    onClose={handleCompletionDialogClose}
+  />
+{/if}

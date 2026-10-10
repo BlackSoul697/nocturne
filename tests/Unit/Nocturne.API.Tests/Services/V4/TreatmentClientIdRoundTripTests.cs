@@ -52,7 +52,7 @@ public class TreatmentClientIdRoundTripTests : IDisposable
 
     public TreatmentClientIdRoundTripTests()
     {
-        _db = TestDbContextFactory.CreateSqliteWithTenant(TenantId);
+        _db = TestDbContextFactory.CreateSqliteWithTenant(TenantId, SqliteNpgsqlJson.Translate);
         _context = _db.CreateContext();
 
         IAuditContext apiSecretCaller = new AuditContext
@@ -103,7 +103,6 @@ public class TreatmentClientIdRoundTripTests : IDisposable
             Mock.Of<IActiveProfileResolver>(),
             Mock.Of<IPatientInsulinRepository>(),
             apiSecretCaller,
-            dedup,
             NullLogger<TreatmentDecomposer>.Instance);
 
         var projection = new V4ToLegacyProjectionService(
@@ -121,6 +120,7 @@ public class TreatmentClientIdRoundTripTests : IDisposable
         var store = new TreatmentReadService(
             projection, decomposer, pipeline,
             tempBasalRepo.Object, bolusRepo, carbRepo, bgCheckRepo, noteRepo, deviceEventRepo, bolusCalcRepo,
+            Mock.Of<IStateSpanService>(),
             NullLogger<TreatmentReadService>.Instance);
 
         _service = new TreatmentService(

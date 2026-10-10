@@ -1,7 +1,7 @@
 <script lang="ts">
   import { createRealtimeStore } from "$lib/stores/realtime-store.svelte";
   import {
-    currentGlucoseStatus,
+    displayedGlucose,
     refreshSummaryOnNewReading,
   } from "$lib/stores/current-glucose-status.svelte";
   import { getGlucoseTileVariant } from "$lib/utils/glucose-status";
@@ -11,7 +11,8 @@
   import { remoteErrorMessage } from "$lib/api/remote-error";
   import { onMount, onDestroy, type Snippet } from "svelte";
   import * as Sidebar from "$lib/components/ui/sidebar";
-  import { AppSidebar, MobileHeader } from "$lib/components/layout";
+  import AppSidebar from "$lib/components/layout/AppSidebar.svelte";
+  import MobileHeader from "$lib/components/layout/MobileHeader.svelte";
   import type { LayoutData } from "./$types";
   import { getTitleFaviconService } from "$lib/services/title-favicon-service.svelte";
   import { getDefaultSettings } from "$lib/components/settings/constants";
@@ -23,11 +24,12 @@
   import { Button } from "$lib/components/ui/button";
   import AlertSurfaces from "$lib/components/alerts/AlertSurfaces.svelte";
   import DemoBanner from "$lib/components/layout/DemoBanner.svelte";
+  import InitialReadsPrefetch from "$lib/components/layout/InitialReadsPrefetch.svelte";
   import GuestBanner from "$lib/components/layout/GuestBanner.svelte";
   import BackupSignInPrompt from "$lib/components/layout/BackupSignInPrompt.svelte";
   import SessionExpiryWatcher from "$lib/components/layout/SessionExpiryWatcher.svelte";
   import MembershipRequestAutoSubmit from "$lib/components/members/MembershipRequestAutoSubmit.svelte";
-  import { CommandPalette } from "$lib/components/command-palette";
+  import { lazyComponent } from "$lib/utils/lazy-component.svelte";
   import { CoachMarkProvider, type CoachRouter } from "@nocturne/coach";
   import "@nocturne/coach/theme.css";
   import "../../styles/coach-theme-overrides.css";
@@ -36,7 +38,6 @@
   import CoachParamHandler from "$lib/coach-marks/CoachParamHandler.svelte";
   import { STALE_THRESHOLD_MS } from "$lib/constants/staleness";
   import ChartPrintPatterns from "$lib/components/charts/print/ChartPrintPatterns.svelte";
-  import { createConnectionIndicator } from "$lib/stores/connection-indicator.svelte";
 
   // LocalStorage key for title/favicon settings
   const SETTINGS_STORAGE_KEY = "nocturne-title-favicon-settings";
@@ -64,7 +65,14 @@
   const tenantless: boolean = data.tenantless === true;
 
   const realtimeStore = createRealtimeStore(config);
-  refreshSummaryOnNewReading(() => realtimeStore.currentEntry?.mills);
+  // Started while this layout initialises, ahead of the page beneath it: effects run only once
+  // the whole tree has hydrated, so the effect below would issue these reads a long task later.
+  // svelte-ignore state_referenced_locally
+  if (browser && data.canViewRealtimeData) realtimeStore.initialize();
+  refreshSummaryOnNewReading(
+    () => realtimeStore.currentEntry?.mills,
+    () => data.canViewRealtimeData
+  );
   createAuthStore(); // Initialize auth store in context
 
   // Suppress the auth interceptor's login redirect for guest and public
@@ -77,7 +85,10 @@
   // This makes feature settings available on all pages including the main dashboard.
   createSettingsStore(!tenantless);
 
-  let commandPaletteOpen = $state(false);
+  const commandPalette = lazyComponent(
+    () => import("$lib/components/command-palette/CommandPalette.svelte"),
+  );
+  let bannerStripHeight = $state(0);
 
   const coachMarkAdapter = createCoachMarkAdapter(tenantless);
   const coachRouter: CoachRouter = { beforeNavigate, goto };
@@ -108,7 +119,7 @@
   function handleCommandPaletteKeydown(e: KeyboardEvent) {
     if ((e.metaKey || e.ctrlKey) && e.key === "k") {
       e.preventDefault();
-      commandPaletteOpen = !commandPaletteOpen;
+      commandPalette.open = !commandPalette.open;
     }
   }
 
@@ -155,25 +166,20 @@
   const lastUpdated = $derived(realtimeStore.lastUpdated);
   const timeSinceReading = $derived(realtimeStore.timeSinceReading);
 
-  const connection = createConnectionIndicator(
-    () => realtimeStore.connectionStatus
-  );
-  const isDisconnected = $derived(connection.isDisconnected);
+  const isDisconnected = $derived(realtimeStore.connectionUnavailable);
   const isStale = $derived(now - lastUpdated > STALE_THRESHOLD_MS);
-  const glucoseStatus = $derived(
-    currentGlucoseStatus(realtimeStore.currentEntry?.mills)
-  );
-  const glucoseVariant = $derived(getGlucoseTileVariant(glucoseStatus));
+  const glucose = displayedGlucose(realtimeStore);
 
   $effect(() => {
     // Determine if we should update
     const enabled = titleFaviconSettings.enabled;
-    const bg = realtimeStore.currentBG;
+    const bg = glucose.currentBG;
 
     // Explicit dependencies for visual updates
     const title = timeSinceReading;
-    const delta = realtimeStore.bgDelta;
-    const dir = realtimeStore.direction;
+    const delta = glucose.bgDelta;
+    const dir = glucose.direction;
+    const variant = getGlucoseTileVariant(glucose.status);
 
     if (enabled && bg > 0) {
       titleFaviconService.update(
@@ -181,7 +187,7 @@
         dir,
         delta,
         titleFaviconSettings,
-        glucoseVariant,
+        variant,
         isDisconnected,
         isStale,
         title
@@ -199,25 +205,36 @@
   };
 
   $effect(() => {
-    const bg = realtimeStore.currentBG;
+    const bg = glucose.currentBG;
     if (
       bg &&
       titleFaviconSettings.enabled &&
       titleFaviconSettings.flashOnAlarm
     ) {
-      titleFaviconService.syncAlarmFlash(glucoseStatus, alarmVisual);
+      titleFaviconService.syncAlarmFlash(glucose.status, alarmVisual);
     }
   });
 </script>
+
+<InitialReadsPrefetch enabled={data.canViewRealtimeData} />
 
 <CoachMarkProvider adapter={coachMarkAdapter} {sequences} router={coachRouter}>
   <CoachParamHandler />
   <ChartPrintPatterns />
   <Sidebar.Provider>
     <AppSidebar user={data.user} isPlatformAdmin={data.isPlatformAdmin} isPlatformAccessGrant={data.isPlatformAccessGrant} isGuestSession={data.isGuestSession} currentSlug={data.tenantSlug} baseDomain={data.baseDomain} tenantless={data.tenantless} />
-    <Sidebar.Inset>
+    <!-- --app-sticky-top is the top of the usable viewport below the app chrome (the visible
+         MobileHeader plus the banner strip); page-level sticky bars pin to it with the
+         header's 300ms transition. -->
+    <Sidebar.Inset
+      class="min-w-0 [--app-sticky-top:calc(var(--mobile-header-offset,0px)_+_var(--app-banner-height))] md:[--app-sticky-top:var(--app-banner-height)]"
+      style="--app-banner-height: {bannerStripHeight}px"
+    >
       <MobileHeader />
-      <div class="sticky top-(--mobile-header-offset,0px) z-40 transition-all duration-300 md:top-0">
+      <div
+        class="sticky top-(--mobile-header-offset,0px) z-40 transition-all duration-300 md:top-0"
+        bind:offsetHeight={bannerStripHeight}
+      >
           {#if data.isDemo}
             <DemoBanner nextResetAt={data.nextResetAt} />
           {/if}
@@ -238,7 +255,7 @@
         />
         <AlertSurfaces />
       {/if}
-      <main class="flex-1 overflow-auto">
+      <main class="flex-1 overflow-x-clip">
         <svelte:boundary>
           {@render children()}
 
@@ -265,5 +282,7 @@
       </main>
     </Sidebar.Inset>
   </Sidebar.Provider>
-  <CommandPalette bind:open={commandPaletteOpen} {tenantless} />
+  {#if commandPalette.component}
+    <commandPalette.component bind:open={commandPalette.open} {tenantless} />
+  {/if}
 </CoachMarkProvider>

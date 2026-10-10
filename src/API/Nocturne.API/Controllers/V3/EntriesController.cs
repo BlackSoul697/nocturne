@@ -177,9 +177,9 @@ public class EntriesController : BaseV3Controller<Entry>
     /// <param name="cancellationToken">Cancellation token.</param>
     /// <returns>The created <see cref="Entry"/> in V3 format.</returns>
     /// <remarks>
-    /// Supports AAPS deduplication: if an entry with the same device, type, SGV value,
-    /// and timestamp (within a 1-minute window) already exists, returns a 200 response
-    /// with <c>isDeduplication: true</c> instead of creating a duplicate.
+    /// Supports AAPS deduplication: if an entry with the same device, type and timestamp already
+    /// exists, returns a 200 response with <c>isDeduplication: true</c> instead of creating a
+    /// duplicate.
     /// After creation, alerts are evaluated via <see cref="IAlertOrchestrator"/> for the new reading.
     /// </remarks>
     /// <response code="201">Entry created successfully.</response>
@@ -218,10 +218,8 @@ public class EntriesController : BaseV3Controller<Entry>
                 var existingEntry = await _entryService.CheckForDuplicateEntryAsync(
                     entry.Device,
                     entry.Type ?? "sgv",
-                    entry.Sgv,
                     entry.Mills,
-                    windowMinutes: 1,
-                    cancellationToken: cancellationToken
+                    cancellationToken
                 );
                 if (existingEntry != null)
                 {
@@ -599,55 +597,6 @@ public class EntriesController : BaseV3Controller<Entry>
             _logger.LogWarning(ex, "Failed to convert V3 filter to V1 find query");
             return null;
         }
-    }
-
-    /// <summary>
-    /// Convert V3 filter criteria (field$op=value format) to MongoDB-style JSON query
-    /// </summary>
-    /// <param name="filterCriteria">List of parsed filter criteria</param>
-    /// <returns>MongoDB-style JSON query string, or null if no criteria</returns>
-    private string? ConvertFilterCriteriaToFindQuery(List<V3FilterCriteria>? filterCriteria)
-    {
-        if (filterCriteria == null || filterCriteria.Count == 0)
-            return null;
-
-        var conditions = new Dictionary<string, object>();
-
-        foreach (var criteria in filterCriteria)
-        {
-            var mongoOp = criteria.Operator switch
-            {
-                "eq" => null, // Direct equality doesn't need operator
-                "ne" => "$ne",
-                "gt" => "$gt",
-                "gte" => "$gte",
-                "lt" => "$lt",
-                "lte" => "$lte",
-                "in" => "$in",
-                "nin" => "$nin",
-                "re" => "$regex",
-                _ => null,
-            };
-
-            if (mongoOp == null && criteria.Operator == "eq")
-            {
-                // Direct equality: { "field": "value" }
-                conditions[criteria.Field] = criteria.Value ?? "";
-            }
-            else if (mongoOp != null)
-            {
-                // Operator form: { "field": { "$op": "value" } }
-                conditions[criteria.Field] = new Dictionary<string, object?>
-                {
-                    [mongoOp] = criteria.Value,
-                };
-            }
-        }
-
-        if (conditions.Count == 0)
-            return null;
-
-        return JsonSerializer.Serialize(conditions);
     }
 
     private DateTimeOffset GetLastModified(List<Entry> entries)
