@@ -26,7 +26,7 @@ namespace Nocturne.API.Services.Analytics;
 /// <seealso cref="ChartDataContext"/>
 public class ChartDataService : IChartDataService
 {
-    private const int TempBasalQueryLimit = 131072;
+    internal const int TempBasalQueryLimit = 131072;
 
     private readonly IEnumerable<IChartDataStage> _pipeline;
     private readonly IChartDataAssembler _assembler;
@@ -154,7 +154,7 @@ public class ChartDataService : IChartDataService
             .ToList(); // Already sorted
 
         var maxSgv = glucoseData.Any() ? glucoseData.Max(g => g.Sgv) : 280;
-        var glucoseYMax = Math.Min(400, Math.Max(280, maxSgv) + 20);
+        var glucoseYMax = Math.Min(ChartThresholdsBuilder.GlucoseYMaxCap, Math.Max(280, maxSgv) + 20);
 
         return (glucoseData, glucoseYMax);
     }
