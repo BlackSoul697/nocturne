@@ -16897,7 +16897,7 @@ msgid "{0} not linked — connect it in Connectors & Apps to enable delivery."
 msgstr "{0} no está vinculado; conéctalo en Conectores y aplicaciones para habilitar la entrega."
 
 #: src/lib/components/alerts/ChannelsSection.svelte
-#: src/lib/components/dashboard/WidgetGrid.svelte
+#: src/lib/components/dashboard/widgets/WidgetPlaceholder.svelte
 msgid "Loading"
 msgstr "Cargando"
 
@@ -25868,4 +25868,8 @@ msgstr ""
 
 #: src/routes/(authenticated)/clock/config/[id]/+page.svelte
 msgid "Failed to reset clock face"
+msgstr ""
+
+#: src/lib/components/layout/UserMenuHarness.test.svelte
+msgid "Guest User"
 msgstr ""
