@@ -158,10 +158,12 @@ export class EngineHost {
    * The adapter is asked for before the module is fetched, so a machine
    * without one downloads and compiles nothing.
    *
-   * Does nothing while the presentation is `off`: nothing will be drawn.
+   * Does nothing unless the presentation is `animated`: `off` draws nothing,
+   * and `still` draws assets, booting the engine only for a generated scene
+   * that has none, and only when one mounts.
    */
   async warm(): Promise<boolean> {
-    if (getPresentation() === 'off') return false;
+    if (getPresentation() !== 'animated') return false;
     try {
       await this.acquire();
       return true;

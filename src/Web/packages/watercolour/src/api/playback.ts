@@ -1121,6 +1121,8 @@ export function autoplayAction(
 
 type Listener = (payload?: unknown) => void;
 
+const NO_GPU: Capabilities = { webgpu: false, adapter: false, reducedMotion: true, offscreenCanvas: false, reason: 'not probed for a still' };
+
 class Player implements ArtworkPlayer {
   private backend: Backend | undefined;
   private disposed = false;
@@ -1285,15 +1287,20 @@ class Player implements ArtworkPlayer {
     this.viewportWait = waitNearViewport(this.currentCanvas);
     await this.viewportWait.ready;
     if (this.disposed) return;
-    const capabilities = await (this.options.capabilities ?? detectCapabilities)();
-    if (this.disposed) return;
-    const motionRequest = presentation === 'still' ? 'reduced' : (this.options.motion ?? 'auto');
-    this.motion = resolveMotion(motionRequest, capabilities.reducedMotion);
+    const still = presentation === 'still';
     // A baked icon source resolves to its `lucide-<name>` set like any
     // artwork; an unbaked one has no assets, so its plain-SVG fallback is the
     // guaranteed last rung below `live`.
     const hasBaked = this.bakedServesSize() && this.assetOk('strip') && this.assetOk('manifest');
     const hasStatic = this.icon ? true : this.assetOk('final');
+    // A still drawn from an asset never asks for an adapter: the probe is a
+    // round trip to the GPU process that the asset does not need.
+    const capabilities = still && (hasStatic || hasBaked)
+      ? NO_GPU
+      : await (this.options.capabilities ?? detectCapabilities)();
+    if (this.disposed) return;
+    const motionRequest = still ? 'reduced' : (this.options.motion ?? 'auto');
+    this.motion = resolveMotion(motionRequest, capabilities.reducedMotion);
     const first = resolveMode({
       requested: this.options.mode ?? 'auto',
       motion: motionRequest,
@@ -1303,12 +1310,13 @@ class Player implements ArtworkPlayer {
       hasStatic,
       releaseAfterFinish: this.options.releaseAfterFinish,
       customised: this.customised(),
+      still,
     });
     if (first !== 'live') {
       // An explicit `live` request that resolveMode downgraded (usually the
       // instance cap) is a real fallback: report why instead of silently
-      // drawing the baked asset.
-      if (this.options.mode === 'live') {
+      // drawing the baked asset. A still is not one: the viewer chose it.
+      if (this.options.mode === 'live' && !still) {
         const capReached = this.host.capReached;
         const gpuOk = capabilities.webgpu && capabilities.adapter;
         const error = new WatercolourError(
@@ -1323,13 +1331,15 @@ class Player implements ArtworkPlayer {
         this.emit('fallback', { from: 'live', error } satisfies FallbackDetail);
       }
       if (import.meta.env.DEV && !(this.options.mode !== undefined && this.options.mode !== 'auto' && first === this.options.mode)) {
-        const reason = !capabilities.webgpu || !capabilities.adapter
-          ? 'no WebGPU adapter'
-          : this.host.capReached
-            ? `instance cap reached (${this.host.maxLiveInstances})`
-            : this.motion === 'reduced'
-              ? 'reduced motion'
-              : 'no assets';
+        const reason = still
+          ? 'still presentation'
+          : !capabilities.webgpu || !capabilities.adapter
+            ? 'no WebGPU adapter'
+            : this.host.capReached
+              ? `instance cap reached (${this.host.maxLiveInstances})`
+              : this.motion === 'reduced'
+                ? 'reduced motion'
+                : 'no assets';
         console.warn(`[watercolour] ${this.assetKey()?.id ?? 'player'} resolved ${this.options.mode ?? 'auto'} -> ${first} (${reason})`);
       }
     }
