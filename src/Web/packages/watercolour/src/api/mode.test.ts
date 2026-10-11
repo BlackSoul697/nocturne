@@ -11,7 +11,7 @@ const resolve = (
   requested: ArtworkMode,
   capabilities: typeof gpu,
   assets: { baked: boolean; static: boolean },
-  extra: { motion?: ArtworkMotion; capReached?: boolean; releaseAfterFinish?: boolean; customised?: boolean; still?: boolean; liveStill?: boolean } = {},
+  extra: { motion?: ArtworkMotion; capReached?: boolean; releaseAfterFinish?: boolean; customised?: boolean; still?: boolean; liveStill?: boolean; engineReady?: boolean } = {},
 ) =>
   resolveMode({
     requested,
@@ -24,6 +24,7 @@ const resolve = (
     customised: extra.customised,
     still: extra.still,
     liveStill: extra.liveStill,
+    engineReady: extra.engineReady,
   });
 
 const all = { baked: true, static: true };
@@ -88,6 +89,23 @@ describe('resolveMode', () => {
     expect(resolve('auto', gpu, none, { ...still, capReached: true })).toBe('none');
     expect(resolve('auto', gpu, none, { ...still, liveStill: false })).toBe('none');
     expect(resolve('auto', gpu, { baked: false, static: true }, { ...still, liveStill: false })).toBe('static');
+  });
+
+  it('auto before the engine is ready: the still when one exists, live otherwise', () => {
+    const cold = { engineReady: false };
+    expect(resolve('auto', gpu, all, cold)).toBe('static');
+    expect(resolve('auto', gpu, { baked: false, static: true }, cold)).toBe('static');
+    expect(resolve('auto', reduced, all, { ...cold, releaseAfterFinish: true, customised: true })).toBe('static');
+    expect(resolve('auto', gpu, { baked: true, static: false }, cold)).toBe('live');
+    expect(resolve('auto', gpu, none, cold)).toBe('live');
+    expect(resolve('auto', gpu, all, { engineReady: true })).toBe('live');
+    expect(resolve('auto', noGpu, all, cold)).toBe('static');
+  });
+
+  it('an explicit mode ignores whether the engine is ready', () => {
+    const cold = { engineReady: false };
+    expect(resolve('live', gpu, all, cold)).toBe('live');
+    expect(resolve('baked', gpu, all, cold)).toBe('baked');
   });
 
   it('explicit modes fall down the chain when unavailable', () => {

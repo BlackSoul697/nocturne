@@ -177,7 +177,13 @@ draws its still. The `still` presentation (`setPresentation('still')`) goes
 further: whatever the seed or the requested `mode`, it draws the static asset
 whenever one exists, without probing the GPU, then the strip's last frame, and
 only a generated scene with neither renders one live frame; `EngineHost.warm()`
-does nothing under it. No player resolves its mode, decodes an asset or takes a live
+does nothing under it. Under `animated`, `mode: 'auto'` draws the still in
+place of live while the engine host is not ready (no device yet, or one being
+built), so no artwork waits on or starts the boot, which stalls frame
+presentation for most of a second; players created once it is ready run live,
+and one already showing its still keeps it. A source with no still, and an
+explicit `mode: 'live'`, go live as before; `stillUntilReady: false` opts a
+player out. No player resolves its mode, decodes an asset or takes a live
 slot until its canvas is within 200 px of the viewport. The
 accent components (`PaintedUnderline`, `SelectionEdge`) set it too,
 so a one-shot accent does not pin a slot for as long as it is mounted. `autoplay: 'once'` starts on first appearance (the shared

@@ -41,11 +41,14 @@ afterEach(() => vi.unstubAllGlobals());
 
 describe('the bundled-asset URL map', () => {
   it('is not loaded for an artwork that resolves live whatever its assets', async () => {
+    // A cold engine host would draw the still first, which reads the map.
     const { createArtworkPlayer, EngineHost } = await load();
     const booting = { WatercolourEngine: { create: () => new Promise(() => {}) } };
     const host = new EngineHost({ loadModule: async () => booting as never, capabilities: gpu });
     const acquire = vi.spyOn(host, 'acquire');
-    const player = createArtworkPlayer(canvas(), { id: 'suitcase' }, { capabilities: gpu, scheduler, engineHost: host, width: 32, height: 32, dpr: 1 });
+    const player = createArtworkPlayer(canvas(), { id: 'suitcase' }, {
+      stillUntilReady: false, capabilities: gpu, scheduler, engineHost: host, width: 32, height: 32, dpr: 1,
+    });
     await vi.waitFor(() => expect(acquire).toHaveBeenCalledOnce());
     await new Promise((resolve) => setTimeout(resolve, 0));
     expect(bundleLoads).toBe(0);

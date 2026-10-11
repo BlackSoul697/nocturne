@@ -22,6 +22,12 @@ export interface ModeInputs {
   still?: boolean;
   /** Under `still`, a source with no asset may render one live frame; default true. */
   liveStill?: boolean;
+  /**
+   * False while the engine host has no device, or is building one. `auto`
+   * then draws the still where one exists rather than wait on or start the
+   * boot. Absent counts as ready.
+   */
+  engineReady?: boolean;
 }
 
 export function resolveMotion(motion: ArtworkMotion, systemReducedMotion: boolean): 'full' | 'reduced' {
@@ -58,6 +64,7 @@ export function resolveMode(inputs: ModeInputs): ResolvedMode {
     case 'static':
       return inputs.hasStatic ? 'static' : inputs.hasBaked ? 'baked' : 'none';
     case 'auto':
+      if (inputs.engineReady === false && inputs.hasStatic) return 'static';
       if (reduced) {
         if (inputs.releaseAfterFinish && inputs.customised) {
           if (liveAvailable) return 'live';
