@@ -87,6 +87,13 @@ export interface PlayerOptions extends ArtworkOptions, AssetOptions {
    * Default true.
    */
   liveStill?: boolean;
+  /**
+   * With `mode: 'auto'`, draws the still instead of booting the engine when
+   * the engine host is not ready (no device yet, or one being built) and a
+   * still exists: the boot stalls frame presentation for most of a second.
+   * A player created once the host is ready runs live. Default true.
+   */
+  stillUntilReady?: boolean;
   /** Skips the reveal: finishes on first appearance whatever the motion, as a repaint of a finished artwork does. */
   startFinished?: boolean;
   /**
@@ -1306,13 +1313,16 @@ class Player implements ArtworkPlayer {
     const still = presentation === 'still';
     // A still draws assets, so it reads their availability first; anything
     // else reads it only when the mode depends on it (see `resolveFirst`).
-    let assets = still ? await this.availability() : undefined;
+    const engineReady = this.host.ready && !this.host.booting;
+    const stillFirst = !still && !engineReady && (this.options.mode ?? 'auto') === 'auto' && this.options.stillUntilReady !== false;
+    let assets = still || stillFirst ? await this.availability() : undefined;
     if (this.disposed) return;
     // A still that will not run live never asks for an adapter: the probe is
     // a round trip to the GPU process that an asset, or nothing, does not need.
-    const capabilities = assets && (assets.hasStatic || assets.hasBaked || this.options.liveStill === false)
-      ? NO_GPU
-      : await (this.options.capabilities ?? detectCapabilities)();
+    const drawsAsset = still
+      ? assets!.hasStatic || assets!.hasBaked || this.options.liveStill === false
+      : stillFirst && assets!.hasStatic;
+    const capabilities = drawsAsset ? NO_GPU : await (this.options.capabilities ?? detectCapabilities)();
     if (this.disposed) return;
     const motionRequest = still ? 'reduced' : (this.options.motion ?? 'auto');
     this.motion = resolveMotion(motionRequest, capabilities.reducedMotion);
@@ -1327,6 +1337,7 @@ class Player implements ArtworkPlayer {
         customised: this.customised(),
         still,
         liveStill: this.options.liveStill,
+        engineReady: stillFirst ? false : undefined,
       });
     // Live whatever the assets: the bundled-asset map is left unloaded until
     // live fails, so a page of live artwork never fetches it.
@@ -1357,7 +1368,9 @@ class Player implements ArtworkPlayer {
       if (import.meta.env.DEV && !(this.options.mode !== undefined && this.options.mode !== 'auto' && first === this.options.mode)) {
         const reason = still
           ? 'still presentation'
-          : !capabilities.webgpu || !capabilities.adapter
+          : drawsAsset
+            ? 'engine not ready'
+            : !capabilities.webgpu || !capabilities.adapter
             ? 'no WebGPU adapter'
             : this.host.capReached
               ? `instance cap reached (${this.host.maxLiveInstances})`

@@ -156,6 +156,7 @@ function player(instance: ReturnType<typeof fakeInstance>, scheduler: Scheduler,
     engineHost: fakeHost(instance),
     scheduler,
     capabilities: gpu,
+    stillUntilReady: false,
     ...options,
   });
 }

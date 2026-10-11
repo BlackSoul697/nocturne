@@ -172,20 +172,91 @@ describe('playback under a presentation', () => {
     });
   });
 
-  it('animated with a GPU still takes the engine over an existing static asset', async () => {
-    const host = new EngineHost({ loadModule: () => Promise.reject(new Error('no engine')), capabilities: gpu });
-    const acquire = vi.spyOn(host, 'acquire');
-    const player = createArtworkPlayer(canvas(), { id: 'suitcase' }, {
-      capabilities: gpu,
-      scheduler,
-      engineHost: host,
-      assets: { final: '/final-512.webp' },
-      width: 32,
-      height: 32,
-      dpr: 1,
+  describe('animated: still first, live once the engine is ready', () => {
+    const noopContext = new Proxy({}, { get: () => () => {}, set: () => true });
+    const drawable = () =>
+      ({ clientWidth: 32, clientHeight: 32, width: 32, height: 32, getContext: () => noopContext }) as unknown as HTMLCanvasElement;
+    const assets = { final: '/final-512.webp', 'final-small': '/final-128.webp', strip: '/strip.webp', manifest: '/strip.json' };
+    const engine = {
+      maxLiveInstances: 4,
+      onDeviceLost() {},
+      stats: () => ({ liveInstances: 0, maxLiveInstances: 4 }),
+      createInstance: () => {
+        throw new Error('stop at the instance');
+      },
+    };
+    const module = { WatercolourEngine: { create: async () => engine } } as never;
+    const stubStill = () => {
+      const fetched: string[] = [];
+      vi.stubGlobal('fetch', async (url: string) => {
+        fetched.push(url);
+        return new Response(new Blob([]));
+      });
+      vi.stubGlobal('createImageBitmap', async () => ({ width: 128, height: 128, close() {} }));
+      return fetched;
+    };
+
+    it('draws the still before the engine is ready, probing and acquiring nothing', async () => {
+      const fetched = stubStill();
+      const capabilities = vi.fn(gpu);
+      const host = new EngineHost({ loadModule: async () => module, capabilities: gpu });
+      const acquire = vi.spyOn(host, 'acquire');
+      const player = createArtworkPlayer(drawable(), { id: 'suitcase' }, { capabilities, scheduler, engineHost: host, assets, width: 32, height: 32, dpr: 1 });
+      await player.ready;
+      expect(player.state.mode).toBe('static');
+      expect(fetched).toEqual(['/final-128.webp']);
+      expect(capabilities).not.toHaveBeenCalled();
+      expect(acquire).not.toHaveBeenCalled();
     });
-    await player.ready;
-    expect(acquire).toHaveBeenCalledOnce();
+
+    it('treats a boot in progress as not ready', async () => {
+      stubStill();
+      const host = new EngineHost({ loadModule: () => new Promise(() => {}), capabilities: gpu });
+      void host.acquire();
+      const acquire = vi.spyOn(host, 'acquire');
+      const player = createArtworkPlayer(drawable(), { id: 'suitcase' }, { capabilities: gpu, scheduler, engineHost: host, assets, width: 32, height: 32, dpr: 1 });
+      await player.ready;
+      expect(player.state.mode).toBe('static');
+      expect(acquire).not.toHaveBeenCalled();
+    });
+
+    it('goes live for a player created once warm() has made the engine ready', async () => {
+      stubStill();
+      const host = new EngineHost({ loadModule: async () => module, capabilities: gpu });
+      expect(await host.warm()).toBe(true);
+      const acquire = vi.spyOn(host, 'acquire');
+      const player = createArtworkPlayer(drawable(), { id: 'suitcase' }, { capabilities: gpu, scheduler, engineHost: host, assets, width: 32, height: 32, dpr: 1 });
+      await player.ready;
+      expect(acquire).toHaveBeenCalledOnce();
+    });
+
+    it('still boots the engine for a source with no still', async () => {
+      const host = new EngineHost({ loadModule: () => Promise.reject(new Error('no engine')), capabilities: gpu });
+      const acquire = vi.spyOn(host, 'acquire');
+      const player = createArtworkPlayer(drawable(), { sceneJson: '{"version":1}' }, { capabilities: gpu, scheduler, engineHost: host, width: 32, height: 32, dpr: 1 });
+      await player.ready;
+      expect(acquire).toHaveBeenCalledOnce();
+    });
+
+    it('leaves an explicit live request alone', async () => {
+      stubStill();
+      const host = new EngineHost({ loadModule: () => Promise.reject(new Error('no engine')), capabilities: gpu });
+      const acquire = vi.spyOn(host, 'acquire');
+      const player = createArtworkPlayer(drawable(), { id: 'suitcase' }, { mode: 'live', capabilities: gpu, scheduler, engineHost: host, assets, width: 32, height: 32, dpr: 1 });
+      await player.ready;
+      expect(acquire).toHaveBeenCalledOnce();
+    });
+
+    it('can be turned off, so a cold engine boots for the reveal', async () => {
+      stubStill();
+      const host = new EngineHost({ loadModule: () => Promise.reject(new Error('no engine')), capabilities: gpu });
+      const acquire = vi.spyOn(host, 'acquire');
+      const player = createArtworkPlayer(drawable(), { id: 'suitcase' }, {
+        stillUntilReady: false, capabilities: gpu, scheduler, engineHost: host, assets, width: 32, height: 32, dpr: 1,
+      });
+      await player.ready;
+      expect(acquire).toHaveBeenCalledOnce();
+    });
   });
 
   it('warm does nothing while off', async () => {
