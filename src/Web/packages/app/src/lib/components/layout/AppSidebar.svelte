@@ -17,7 +17,7 @@
   import ChevronDown from "@lucide/svelte/icons/chevron-down";
   import Shield from "@lucide/svelte/icons/shield";
   import Eye from "@lucide/svelte/icons/eye";
-  import { deferredArtwork } from "$lib/watercolour-deferral.svelte";
+  import { stillArtwork } from "$lib/watercolour-deferral.svelte";
   import { buildAppNavigation, type NavItem, type NavLink } from "$lib/navigation/app-navigation.svelte";
   import {
     goToTenant,
@@ -56,7 +56,7 @@
   const sidebar = Sidebar.useSidebar();
 
   // Absolutely positioned over the item, so the menu lays out the same before it arrives.
-  const selectionEdge = deferredArtwork(() => import("$lib/watercolour/selection-edge"));
+  const selectionEdge = stillArtwork(() => import("$lib/watercolour/selection-edge"));
 
   // Defer localStorage check to after hydration so SSR and client initial render
   // both produce the same DOM (avoids hydration mismatch from conditional rendering).

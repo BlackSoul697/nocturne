@@ -1,7 +1,7 @@
 import { render } from "vitest-browser-svelte";
 import { page } from "vitest/browser";
-import { beforeEach, describe, expect, it, vi } from "vitest";
-import { releaseWatercolour, resetWatercolour } from "$lib/test-stubs/watercolour-deferral.svelte";
+import { describe, expect, it, vi } from "vitest";
+import { resetWatercolour } from "$lib/test-stubs/watercolour-deferral.svelte";
 import UserAvatar, { initialsOf } from "./UserAvatar.svelte";
 
 vi.mock("$lib/watercolour-deferral.svelte", () => import("$lib/test-stubs/watercolour-deferral.svelte"));
@@ -22,19 +22,11 @@ describe("initialsOf", () => {
 });
 
 describe("UserAvatar", () => {
-  beforeEach(() => {
-    releaseWatercolour();
-  });
-
-  it("draws the initials at once and the wash once deferred watercolour comes due", async () => {
+  it("draws the initials and the wash at once, without waiting for the engine window", async () => {
     resetWatercolour();
     const { container } = render(UserAvatar, { props: { name: "Sam Lee" } });
 
     await expect.element(page.getByText("SL")).toBeVisible();
-    expect(container.querySelector("canvas")).toBeNull();
-
-    releaseWatercolour();
-
     await vi.waitFor(() => expect(container.querySelector("[data-slot='avatar-fallback'] canvas")).not.toBeNull());
   });
 

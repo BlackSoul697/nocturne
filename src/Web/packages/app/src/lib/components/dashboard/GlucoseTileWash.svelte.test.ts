@@ -1,9 +1,12 @@
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { render } from "vitest-browser-svelte";
 import { page } from "vitest/browser";
 import { engine } from "$lib/test-stubs/Watercolour.test-stub.svelte";
 import { illustrations } from "$lib/stores/illustrations.svelte";
+import { releaseWatercolour, resetWatercolour } from "$lib/test-stubs/watercolour-deferral.svelte";
 import GlucoseTileWashHarness from "./GlucoseTileWashHarness.test.svelte";
+
+vi.mock("$lib/watercolour-deferral.svelte", () => import("$lib/test-stubs/watercolour-deferral.svelte"));
 
 vi.mock("@nocturne/watercolour", async (importOriginal) => {
   const fake = await import("$lib/test-stubs/Watercolour.test-stub.svelte");
@@ -36,6 +39,10 @@ async function settledTile(variant: "high" | "low") {
   paintBloom(0.7);
   return view;
 }
+
+beforeEach(() => {
+  releaseWatercolour();
+});
 
 afterEach(() => {
   illustrations.current = "animated";
@@ -71,6 +78,25 @@ describe("GlucoseTileWash", () => {
 
     await expect.element(bloom()).toBeInTheDocument();
     await expect.element(priorFill()).toHaveClass("bg-glucose-high");
+  });
+
+  it("takes the grey wash for a range change inside the first-interaction window, and blooms after it", async () => {
+    resetWatercolour();
+    const view = render(GlucoseTileWashHarness, { mills: undefined, variant: "neutral", isLoading: true });
+    await view.rerender({ mills: newReading(), variant: "high", isLoading: false });
+    await expect.element(greyWash()).toBeInTheDocument();
+    await view.rerender({ mills: newReading(), variant: "low" });
+
+    await expect.element(greyWash()).toBeInTheDocument();
+    await expect.element(bloom()).not.toBeInTheDocument();
+    await expect.element(priorFill()).not.toBeInTheDocument();
+
+    releaseWatercolour();
+    await expect.element(bloom()).not.toBeInTheDocument();
+    await view.rerender({ mills: newReading(), variant: "high" });
+
+    await expect.element(bloom()).toBeInTheDocument();
+    await expect.element(priorFill()).toHaveClass("bg-glucose-low");
   });
 
   it("fades the grey wash out once it settles, leaving the flat range fill", async () => {

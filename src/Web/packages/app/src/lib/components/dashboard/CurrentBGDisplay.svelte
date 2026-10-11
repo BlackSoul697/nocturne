@@ -29,7 +29,7 @@
   import { displayedGlucose } from "$lib/stores/current-glucose-status.svelte";
   import { getGlucoseTileVariant } from "$lib/utils/glucose-status";
   import { trackUnwashedFill } from "./glucose-tile-wash-state.svelte";
-  import { deferredArtwork } from "$lib/watercolour-deferral.svelte";
+  import { stillArtwork } from "$lib/watercolour-deferral.svelte";
   import { showsCurrentGlucoseWidget } from "./top-widget-ids";
 
   interface ComponentProps {
@@ -79,7 +79,7 @@
     rawCurrentBG === 0 && realtimeStore.entries.length === 0
   );
   // Over the flat range fill, so the tile reads the same until it arrives.
-  const tileWash = deferredArtwork(() => import("./GlucoseTileWash.svelte"));
+  const tileWash = stillArtwork(() => import("./GlucoseTileWash.svelte"));
   trackUnwashedFill(() => ({
     loading: isLoading,
     stale: isStale,

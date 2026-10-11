@@ -79,19 +79,15 @@ describe("EmptyState", () => {
     await expect.element(page.getByRole("button", { name: "Create a token" })).toBeVisible();
   });
 
-  it("renders its text at once and its painting, in a slot held at size, once deferred watercolour is due", async () => {
+  it("renders its painting at once, without waiting for the engine window, in the slot held for it", async () => {
     resetWatercolour();
     const { container } = render(EmptyState, { art: "key", title: "No API tokens yet" });
 
     await expect.element(page.getByText("No API tokens yet")).toBeVisible();
-    const slot = container.querySelector<HTMLElement>("[aria-hidden='true']")!;
-    const held = slot.getBoundingClientRect();
-    expect(container.querySelector("canvas")).toBeNull();
-
-    releaseWatercolour();
+    const slot = container.querySelector<HTMLElement>("[aria-hidden='true']")!.getBoundingClientRect();
 
     const painted = (await artCanvas(container)).parentElement!.getBoundingClientRect();
-    expect([painted.width, painted.height]).toEqual([held.width, held.height]);
+    expect([painted.width, painted.height]).toEqual([slot.width, slot.height]);
   });
 
   it("paints a still at once, without waiting for the first-interaction window", async () => {

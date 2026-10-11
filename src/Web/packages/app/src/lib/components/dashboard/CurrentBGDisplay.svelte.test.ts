@@ -5,7 +5,7 @@ import { WidgetId } from "$lib/api/generated/nocturne-api-client";
 import { dashboardTopWidgets } from "$lib/stores/appearance-store.svelte";
 import { GlucoseStatus } from "$lib/api/generated/nocturne-api-client";
 import { remoteQuery } from "$lib/test-stubs/remote-resource";
-import { releaseWatercolour, resetWatercolour } from "$lib/test-stubs/watercolour-deferral.svelte";
+import { resetWatercolour } from "$lib/test-stubs/watercolour-deferral.svelte";
 
 const { now, store, settings } = vi.hoisted(() => {
   const now = Date.UTC(2026, 5, 14, 9, 30, 0);
@@ -71,15 +71,11 @@ describe("CurrentBGDisplay", () => {
     resetWatercolour();
   });
 
-  it("shows the flat range fill until the deferred wash arrives, then the settling wash over it", async () => {
+  it("lays the wash's still over the reading on screen at once, with no bloom", async () => {
+    resetWatercolour();
     dashboardTopWidgets.hydrate([WidgetId.TirChart, WidgetId.Tdd]);
     summary.current = { mills: now, status: GlucoseStatus.High };
-    const { container } = render(CurrentBGDisplay, { showPills: false });
-
-    await vi.waitFor(() => expect(container.innerHTML).toContain("bg-glucose-high"));
-    expect(page.getByTestId("glucose-tile-bloom").elements()).toHaveLength(0);
-
-    releaseWatercolour();
+    render(CurrentBGDisplay, { showPills: false });
 
     await expect.element(page.getByTestId("artwork-wash")).toBeInTheDocument();
     expect(page.getByTestId("glucose-tile-bloom").elements()).toHaveLength(0);

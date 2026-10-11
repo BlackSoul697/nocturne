@@ -1,7 +1,7 @@
 <script lang="ts">
   import WidgetCard from "./WidgetCard.svelte";
   import { trackUnwashedFill } from "../glucose-tile-wash-state.svelte";
-  import { deferredArtwork } from "$lib/watercolour-deferral.svelte";
+  import { stillArtwork } from "$lib/watercolour-deferral.svelte";
   import { GlucoseValueIndicator } from "$lib/components/shared";
   import { getRealtimeStore } from "$lib/stores/realtime-store.svelte";
   import { glucoseUnits } from "$lib/stores/appearance-store.svelte";
@@ -42,7 +42,7 @@
   const directionInfo = $derived(getDirectionInfo(glucose.direction));
   const DirectionIcon = $derived(directionInfo.icon);
   // Over the flat range fill, so the tile reads the same until it arrives.
-  const tileWash = deferredArtwork(() => import("../GlucoseTileWash.svelte"));
+  const tileWash = stillArtwork(() => import("../GlucoseTileWash.svelte"));
   trackUnwashedFill(() => ({ loading: isLoading, stale: isStale, disconnected: isDisconnected, variant: tileVariant, washed: tileWash.component !== null }));
 
   const batteryStatusPromise = getCurrentBatteryStatus({ recentMinutes: 30 });

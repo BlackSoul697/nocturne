@@ -62,7 +62,8 @@ const tile = () => page.getByTestId("current-glucose-tile");
 
 describe("CurrentGlucoseWidget", () => {
   beforeEach(() => {
-    store.currentEntry.mills = now - 2 * 60_000;
+    store.currentBG = 123;
+    store.currentEntry = { mills: now - 2 * 60_000 };
     store.lastUpdated = now - 2 * 60_000;
     store.now = now;
     battery.status = undefined;
@@ -96,20 +97,23 @@ describe("CurrentGlucoseWidget", () => {
     expect(page.getByTestId("glucose-tile-bloom").elements()).toHaveLength(0);
   });
 
-  it("shows the flat range fill until the deferred wash arrives, then the settling wash over it", async () => {
+  it("lays the wash's still over the reading on screen at once, and blooms the next reading once the engine window is over", async () => {
     resetWatercolour();
     summary.current = { mills: store.currentEntry.mills, status: GlucoseStatus.High };
     render(CurrentGlucoseWidget);
 
-    const indicator = () => tile().element().querySelector('[data-slot="glucose-value-indicator"]');
-    await expect.element(tile()).toHaveTextContent(/^123/);
-    await vi.waitFor(() => expect(indicator()?.innerHTML).toContain("bg-glucose-high"));
+    await expect.element(page.getByTestId("artwork-wash")).toBeInTheDocument();
     expect(page.getByTestId("glucose-tile-bloom").elements()).toHaveLength(0);
 
     releaseWatercolour();
+    const next = store.currentEntry.mills + 5 * 60_000;
+    store.currentEntry = { mills: next };
+    store.currentBG = 60;
+    store.lastUpdated = next;
+    store.now = next + 60_000;
+    summary.current = { mills: next, status: GlucoseStatus.Low };
 
-    await expect.element(page.getByTestId("artwork-wash")).toBeInTheDocument();
-    expect(page.getByTestId("glucose-tile-bloom").elements()).toHaveLength(0);
+    await expect.element(page.getByTestId("glucose-tile-bloom")).toBeInTheDocument();
   });
 
   it("shows the reading with its unit, trend, change and age", async () => {

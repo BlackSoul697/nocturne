@@ -55,7 +55,7 @@
 <script lang="ts">
   import { onMount, type Snippet } from "svelte";
   import type { ArtworkId, IconArtworkSource, PaletteId } from "@nocturne/watercolour";
-  import { deferredArtwork } from "$lib/watercolour-deferral.svelte";
+  import { stillArtwork } from "$lib/watercolour-deferral.svelte";
   import { watercolourWanted } from "$lib/stores/illustrations.svelte";
   import EmptyStatePlainIcon, { hasPlainGlyph } from "./EmptyStatePlainIcon.svelte";
   import * as Card from "$lib/components/ui/card";
@@ -107,9 +107,9 @@
     "data-testid": testId,
   }: Props = $props();
 
-  // Most cards that can be empty are not, so their pages never load the watercolour, and a
-  // painting boots the engine as it mounts. The art slot keeps its size until it arrives.
-  const painting = deferredArtwork(() => import("./EmptyStateArtwork.svelte"));
+  // Most cards that can be empty are not, so their pages never load the watercolour. The art slot
+  // keeps its size until the painting arrives.
+  const painting = stillArtwork(() => import("./EmptyStateArtwork.svelte"));
   // After hydration: the server renders the held slot whatever the device's preference.
   let hydrated = $state(false);
   onMount(() => {

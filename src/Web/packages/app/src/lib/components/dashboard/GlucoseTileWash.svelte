@@ -7,6 +7,8 @@
   import { illustrations } from "$lib/stores/illustrations.svelte";
   import GlucoseTileBloom from "./GlucoseTileBloom.svelte";
   import type { PlayerState } from "@nocturne/watercolour";
+  import { untrack } from "svelte";
+  import { deferredWatercolour } from "$lib/watercolour-deferral.svelte";
 
   interface Props {
     mills: number | undefined;
@@ -19,12 +21,19 @@
   // Reduced motion and the Still preference keep one settled wash per range: a stroke per reading
   // that fades is animation they opted out of.
   const washPerReading = $derived(illustrations.current === "animated" && !prefersReducedMotion.current);
+  // A bloom is a scene with no still, so it boots the engine as it mounts; inside the
+  // first-interaction window a reading that changes range takes the grey wash instead.
+  const engineWindow = deferredWatercolour();
   // Each reading paints its own stroke, over the fill that was on screen when it arrived or when
-  // strokes came back on. Keyed by the derived seed, so it is not retaken on every store update.
-  const reading = $derived({ seed: washSeed, priorFill: washPerReading ? unwashed.fill : variant });
+  // strokes came back on. Keyed by the derived seed, so it is not retaken on every store update,
+  // nor when the window ends mid-reading.
+  const reading = $derived.by(() => {
+    const bloomable = washPerReading && untrack(() => engineWindow.due);
+    return { seed: washSeed, bloomable, priorFill: bloomable ? unwashed.fill : variant };
+  });
   // The settled wash shows the flat range fill.
   $effect(() => {
-    if (!washPerReading) unwashed.fill = variant;
+    if (!reading.bloomable) unwashed.fill = variant;
   });
   const recolours = $derived(reading.priorFill !== variant);
   // With a 50% tail, this progress is past covered tick 140 for every stagger seed.
