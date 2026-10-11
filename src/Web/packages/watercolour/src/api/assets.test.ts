@@ -1,8 +1,8 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import manifest from '../../scripts/bake-manifest.json';
 import { ARTWORK_ASPECT, type ArtworkId, type PaletteId } from '../types';
 import { bundledUrl } from './bundled-assets';
-import { bundledArtworkIds, defaultPaletteFor, hasBundledAsset, iconAssetKey, DEFAULT_PALETTE } from './assets';
+import { assetUrl, bundledArtworkIds, defaultPaletteFor, hasBundledAsset, iconAssetKey, imageFormat, resetImageFormat, DEFAULT_PALETTE } from './assets';
 
 /** Manifest ids are `lucide:<name>`; the bundled dirs and DEFAULT_PALETTE keys are `lucide-<name>`. */
 const assetId = (id: string) => id.replace(/^lucide:/, 'lucide-');
@@ -56,12 +56,16 @@ describe('curated bundle', () => {
     ).map((id): [ArtworkId, undefined] => [id, undefined]),
   ];
 
-  it('has both stills on both surfaces for every artwork the app draws, so the still presentation never boots the engine', async () => {
+  it('has both stills on both surfaces, the 512 px one in both formats, for every artwork the app draws, so the still presentation never boots the engine', async () => {
     const missing: string[] = [];
     for (const [id, palette] of DRAWN_BY_THE_APP) {
       for (const surface of ['light', 'dark'] as const) {
         for (const variant of ['final', 'final-small'] as const) {
-          if (!(await hasBundledAsset({ id, palette, surface }, variant))) missing.push(`${id}/${palette ?? 'default'}/${surface}/${variant}`);
+          for (const format of variant === 'final' ? (['avif', 'webp'] as const) : (['webp'] as const)) {
+            if (!(await hasBundledAsset({ id, palette, surface }, variant, format))) {
+              missing.push(`${id}/${palette ?? 'default'}/${surface}/${variant}.${format}`);
+            }
+          }
         }
       }
     }
@@ -113,5 +117,46 @@ describe('bake manifest aspect', () => {
       }
     }
     expect(wrong).toEqual([]);
+  });
+});
+
+describe('image format', () => {
+  afterEach(() => {
+    resetImageFormat();
+    vi.unstubAllGlobals();
+  });
+
+  it('asks for the AVIF final where the browser decodes the probe, and WebP for what ships only as WebP', async () => {
+    vi.stubGlobal('createImageBitmap', async () => ({ width: 1, height: 1, close() {} }));
+    expect(await assetUrl({ id: 'crescent-moon' }, 'final')).toMatch(/final-512[^/]*\.avif/);
+    expect(await assetUrl({ id: 'crescent-moon' }, 'final', { assetBaseUrl: 'https://cdn.example/' })).toBe('https://cdn.example/crescent-moon/moonlight/final-512.avif');
+    expect(await assetUrl({ id: 'crescent-moon' }, 'final-small')).toMatch(/final-128[^/]*\.webp/);
+    expect(await assetUrl({ id: 'crescent-moon' }, 'strip', { assetBaseUrl: 'https://cdn.example/' })).toBe('https://cdn.example/crescent-moon/moonlight/strip.webp');
+    expect(await assetUrl({ id: 'crescent-moon' }, 'manifest')).toMatch(/strip[^/]*\.json/);
+  });
+
+  it('falls back to WebP where the probe does not decode', async () => {
+    vi.stubGlobal('createImageBitmap', async () => {
+      throw new DOMException('unsupported', 'InvalidStateError');
+    });
+    expect(await assetUrl({ id: 'crescent-moon' }, 'final')).toMatch(/final-512[^/]*\.webp/);
+    expect(await assetUrl({ id: 'crescent-moon' }, 'final', { assetBaseUrl: '/art' })).toBe('/art/crescent-moon/moonlight/final-512.webp');
+  });
+
+  it('falls back to WebP with no createImageBitmap at all', async () => {
+    expect(await imageFormat()).toBe('webp');
+  });
+
+  it('probes once per page', async () => {
+    const decode = vi.fn(async () => ({ width: 1, height: 1, close() {} }));
+    vi.stubGlobal('createImageBitmap', decode);
+    await Promise.all([imageFormat(), assetUrl({ id: 'crescent-moon' }, 'final'), assetUrl({ id: 'wash' }, 'final')]);
+    expect(await imageFormat()).toBe('avif');
+    expect(decode).toHaveBeenCalledOnce();
+  });
+
+  it('leaves explicit URLs alone', async () => {
+    vi.stubGlobal('createImageBitmap', async () => ({ width: 1, height: 1, close() {} }));
+    expect(await assetUrl({ id: 'crescent-moon' }, 'final', { assets: { final: '/mine.png' } })).toBe('/mine.png');
   });
 });

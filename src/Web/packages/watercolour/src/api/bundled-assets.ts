@@ -14,7 +14,7 @@ import type { AssetKey } from './assets';
  * keeps the files under Vite's inline limit (most 128 px stills and every
  * manifest) out of the map as data URLs, which would make it 180 KB gzip.
  */
-const bundled = import.meta.glob('../../assets/*/*/*.{webp,json}', {
+const bundled = import.meta.glob('../../assets/*/*/*.{avif,webp,json}', {
   query: '?url&no-inline',
   import: 'default',
   eager: true,
