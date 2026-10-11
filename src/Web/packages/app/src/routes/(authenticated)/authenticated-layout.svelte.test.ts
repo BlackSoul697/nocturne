@@ -129,6 +129,10 @@ describe("authenticated layout", () => {
     window.dispatchEvent(new KeyboardEvent("keydown", { key: "k", ctrlKey: true }));
 
     await expect.element(search).toBeVisible();
+
+    // Closed before teardown: left open, its command list throws once the next test mounts.
+    window.dispatchEvent(new KeyboardEvent("keydown", { key: "k", ctrlKey: true }));
+    await expect.element(search).not.toBeInTheDocument();
   });
 
   it("loads the join welcome only for an arrival carrying its marker", async () => {

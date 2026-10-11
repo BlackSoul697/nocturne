@@ -16,7 +16,7 @@
     import Filter from "@lucide/svelte/icons/funnel";
     import Calendar from "@lucide/svelte/icons/calendar";
     import ChevronDown from "@lucide/svelte/icons/chevron-down";
-    import {ReportHeaderWash} from "@nocturne/watercolour";
+    import ReportHeaderWashDeferred from "$lib/components/reports/ReportHeaderWashDeferred.svelte";
     import { toast } from "svelte-sonner";
     import { onMount } from "svelte";
     import {useDateParams, setDateParamsContext, createSharedRangeUse} from "$lib/hooks/date-params.svelte";
@@ -148,7 +148,7 @@
                 class="sticky top-(--app-sticky-top,0px) z-20 transition-all duration-300 border-b border-border bg-card/95 backdrop-blur supports-backdrop-filter:bg-card/60 print:hidden"
         >
             <!-- At 35% the darkest wash keeps the bar's text above 9:1 in either theme. -->
-            <ReportHeaderWash name={page.url.pathname} position="absolute" class="inset-0 opacity-35"/>
+            <ReportHeaderWashDeferred name={page.url.pathname} class="inset-0 opacity-35"/>
             <div class="relative flex h-14 items-center justify-between gap-2 px-3 @md:px-6">
                 <!-- Report info -->
                 <div class="flex items-center gap-3">

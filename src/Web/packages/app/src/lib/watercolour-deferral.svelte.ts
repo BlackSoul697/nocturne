@@ -1,3 +1,4 @@
+import { browser } from "$app/environment";
 import { WARM_IDLE_TIMEOUT_MS } from "@nocturne/watercolour";
 import { watercolourDue } from "$lib/stores/illustrations.svelte";
 import { lazyComponent, type AnyComponent } from "$lib/utils/lazy-component.svelte";
@@ -19,15 +20,16 @@ export interface DeferredWatercolour {
  * so the engine warm-up and the decorative artwork that would boot it both wait for this.
  *
  * The window is counted from navigation start, so every caller on a page comes due together, and
- * one created after it is due at the next idle period. Under the still presentation nothing boots
+ * one created after it is due at once, as on a soft navigation. Under the still presentation nothing boots
  * the engine, so a still is due at once.
  *
  * Call during component initialisation.
  */
 export function deferredWatercolour(): DeferredWatercolour {
-  let passed = $state(false);
+  let passed = $state(browser && performance.now() >= WATERCOLOUR_DEFER_MS);
 
   $effect(() => {
+    if (passed) return;
     let cancelIdle: (() => void) | undefined;
     const timer = setTimeout(
       () => {
