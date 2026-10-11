@@ -1,6 +1,11 @@
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { EngineHost, answeringAdapterRequest } from './engine-host';
 import type { WasmEngine, WasmModule } from './wasm-types';
+
+afterEach(() => {
+  vi.useRealTimers();
+  vi.unstubAllGlobals();
+});
 
 const gpu = async () => ({ webgpu: true, adapter: true, reducedMotion: false, offscreenCanvas: false });
 
@@ -99,6 +104,95 @@ describe('EngineHost.warmWhenIdle', () => {
     expect(await warmed).toBe(true);
     expect(created()).toBe(1);
     vi.unstubAllGlobals();
+  });
+
+  it('starts the idle wait only after delayMs, so the boot stays out of the first interactions', async () => {
+    vi.useFakeTimers();
+    const { module, created } = fakeModule();
+    const asked: number[] = [];
+    let idle: (() => void) | undefined;
+    vi.stubGlobal('requestIdleCallback', (cb: () => void, options: { timeout: number }) => {
+      asked.push(options.timeout);
+      idle = cb;
+    });
+    const host = new EngineHost({ loadModule: async () => module, capabilities: gpu });
+
+    const warmed = host.warmWhenIdle(500, { delayMs: 4000 });
+    await vi.advanceTimersByTimeAsync(3999);
+    expect(asked).toEqual([]);
+    await vi.advanceTimersByTimeAsync(1);
+    expect(asked).toEqual([500]);
+    expect(created()).toBe(0);
+
+    idle!();
+    expect(await warmed).toBe(true);
+    expect(created()).toBe(1);
+  });
+});
+
+describe('EngineHost.booting', () => {
+  function deferredModule() {
+    let resolve!: (module: WasmModule) => void;
+    let reject!: (error: Error) => void;
+    const pending = new Promise<WasmModule>((res, rej) => {
+      resolve = res;
+      reject = rej;
+    });
+    return { loadModule: () => pending, resolve, reject };
+  }
+  const settle = () => new Promise((resolve) => setTimeout(resolve, 0));
+
+  it('is null with no boot in progress, and whenNotBooting resolves at once', async () => {
+    const host = new EngineHost({ loadModule: async () => fakeModule().module, capabilities: gpu });
+    expect(host.booting).toBeNull();
+    await host.whenNotBooting();
+  });
+
+  it('holds a promise from the first acquire until the engine is created', async () => {
+    const deferred = deferredModule();
+    const host = new EngineHost({ loadModule: deferred.loadModule, capabilities: gpu });
+    const lease = host.acquire();
+    expect(host.booting).not.toBeNull();
+    let waited = false;
+    const wait = host.whenNotBooting().then(() => (waited = true));
+    await settle();
+    expect(waited).toBe(false);
+
+    deferred.resolve(fakeModule().module);
+    await lease;
+    await wait;
+    expect(host.booting).toBeNull();
+    host.acquire();
+    expect(host.booting).toBeNull();
+  });
+
+  it('resolves rather than rejects when the boot fails, and clears', async () => {
+    const deferred = deferredModule();
+    const host = new EngineHost({ loadModule: deferred.loadModule, capabilities: gpu });
+    const lease = host.acquire().catch(() => 'failed');
+    const booting = host.booting!;
+    deferred.reject(new Error('no device'));
+    expect(await lease).toBe('failed');
+    await expect(booting).resolves.toBeUndefined();
+    await host.whenNotBooting();
+    expect(host.booting).toBeNull();
+  });
+
+  it('waits through a boot that starts while it is waiting', async () => {
+    const first = deferredModule();
+    const second = deferredModule();
+    const loadModule = vi.fn<() => Promise<WasmModule>>().mockImplementationOnce(first.loadModule).mockImplementationOnce(second.loadModule);
+    const host = new EngineHost({ loadModule, capabilities: gpu });
+    void host.acquire().catch(() => void host.acquire());
+    let waited = false;
+    const wait = host.whenNotBooting().then(() => (waited = true));
+    first.reject(new Error('lost'));
+    await settle();
+    expect(loadModule).toHaveBeenCalledTimes(2);
+    expect(waited).toBe(false);
+    second.resolve(fakeModule().module);
+    await wait;
+    expect(waited).toBe(true);
   });
 });
 

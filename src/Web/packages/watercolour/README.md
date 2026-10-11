@@ -93,7 +93,8 @@ last `tail` of the duration.
 `statechange`, `finished` and `fallback`, or poll on your own timer.
 
 Other exports: `EngineHost` (`getEngineHost()`, `configureEngineHost({ maxLiveInstances })`,
-`stats()`), `Scheduler` (`getScheduler().stats()` for the frame-time histogram),
+`stats()`, and `booting` / `whenNotBooting()` for a host that must defer a GPU
+readback, such as a 2D canvas `toDataURL`, past the device boot, which stalls it), `Scheduler` (`getScheduler().stats()` for the frame-time histogram),
 `resolveMode` / `fallbackOrder`, the baked helpers (`parseBakedManifest`,
 `stripFramePosition`, `loadStrip`, `drawStripFrame`), `assetUrl`, and the types
 from the component contract (`ArtworkId`, `PaletteId`, `ArtworkOptions`,
@@ -172,7 +173,11 @@ so it can let go. Such stills take their live turn one at a time
 slot rather than the whole cap. Under reduced motion it lets `auto` pick live over
 the baked still only when the caller set a `seed` or `intensity` the bake cannot
 show, which is what gives `AvatarWash` its per-name wash; an unseeded artwork
-draws its still. No player resolves its mode, decodes an asset or takes a live
+draws its still. The `still` presentation (`setPresentation('still')`) goes
+further: whatever the seed or the requested `mode`, it draws the static asset
+whenever one exists, without probing the GPU, then the strip's last frame, and
+only a generated scene with neither renders one live frame; `EngineHost.warm()`
+does nothing under it. No player resolves its mode, decodes an asset or takes a live
 slot until its canvas is within 200 px of the viewport. The
 accent components (`PaintedUnderline`, `SelectionEdge`) set it too,
 so a one-shot accent does not pin a slot for as long as it is mounted. `autoplay: 'once'` starts on first appearance (the shared

@@ -18,6 +18,10 @@ export interface ModeInputs {
    * simulating under reduced motion instead of drawing the still.
    */
   customised?: boolean;
+  /** The presentation is `still`; see {@link resolveMode}. */
+  still?: boolean;
+  /** Under `still`, a source with no asset may render one live frame; default true. */
+  liveStill?: boolean;
 }
 
 export function resolveMotion(motion: ArtworkMotion, systemReducedMotion: boolean): 'full' | 'reduced' {
@@ -29,9 +33,21 @@ export function resolveMotion(motion: ArtworkMotion, systemReducedMotion: boolea
 /**
  * Under reduced motion the static asset outranks a live engine. The engine
  * would only ever be asked for its last frame, at the cost of a GPU device.
+ *
+ * Under the `still` presentation that holds whatever was requested and
+ * whatever the seed: the still asset, else the strip's last frame, and only
+ * a source with neither (a generated scene) renders one live frame, unless
+ * `liveStill` is false, when it draws nothing. Booting
+ * the device freezes frame presentation for most of a second, which a
+ * viewer who asked for stills should never pay for one.
  */
 export function resolveMode(inputs: ModeInputs): ResolvedMode {
   const liveAvailable = inputs.capabilities.webgpu && inputs.capabilities.adapter && !inputs.capReached;
+  if (inputs.still) {
+    if (inputs.hasStatic) return 'static';
+    if (inputs.hasBaked) return 'baked';
+    return liveAvailable && inputs.liveStill !== false ? 'live' : 'none';
+  }
   const reduced = resolveMotion(inputs.motion, inputs.capabilities.reducedMotion) === 'reduced';
   switch (inputs.requested) {
     case 'live':

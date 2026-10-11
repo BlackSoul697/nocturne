@@ -11,7 +11,7 @@ const resolve = (
   requested: ArtworkMode,
   capabilities: typeof gpu,
   assets: { baked: boolean; static: boolean },
-  extra: { motion?: ArtworkMotion; capReached?: boolean; releaseAfterFinish?: boolean; customised?: boolean } = {},
+  extra: { motion?: ArtworkMotion; capReached?: boolean; releaseAfterFinish?: boolean; customised?: boolean; still?: boolean; liveStill?: boolean } = {},
 ) =>
   resolveMode({
     requested,
@@ -22,6 +22,8 @@ const resolve = (
     hasStatic: assets.static,
     releaseAfterFinish: extra.releaseAfterFinish,
     customised: extra.customised,
+    still: extra.still,
+    liveStill: extra.liveStill,
   });
 
 const all = { baked: true, static: true };
@@ -65,6 +67,27 @@ describe('resolveMode', () => {
     expect(resolve('auto', reduced, all, { releaseAfterFinish: true })).toBe('static');
     expect(resolve('auto', reduced, { baked: true, static: false }, { releaseAfterFinish: true })).toBe('live');
     expect(resolve('auto', gpu, all, { releaseAfterFinish: true })).toBe('live');
+  });
+
+  it('still: the static asset whenever one exists, whatever was requested, customised or not', () => {
+    const still = { still: true };
+    for (const requested of ['auto', 'live', 'baked', 'static'] as const) {
+      expect(resolve(requested, gpu, all, still)).toBe('static');
+      expect(resolve(requested, gpu, { baked: false, static: true }, { ...still, releaseAfterFinish: true, customised: true })).toBe('static');
+      expect(resolve(requested, gpu, all, { ...still, motion: 'full' })).toBe('static');
+    }
+  });
+
+  it('still without a static asset: the strip`s last frame, then one live frame, then none', () => {
+    const still = { still: true };
+    expect(resolve('auto', gpu, { baked: true, static: false }, still)).toBe('baked');
+    expect(resolve('live', gpu, { baked: true, static: false }, still)).toBe('baked');
+    expect(resolve('auto', gpu, none, still)).toBe('live');
+    expect(resolve('live', gpu, none, still)).toBe('live');
+    expect(resolve('auto', noGpu, none, still)).toBe('none');
+    expect(resolve('auto', gpu, none, { ...still, capReached: true })).toBe('none');
+    expect(resolve('auto', gpu, none, { ...still, liveStill: false })).toBe('none');
+    expect(resolve('auto', gpu, { baked: false, static: true }, { ...still, liveStill: false })).toBe('static');
   });
 
   it('explicit modes fall down the chain when unavailable', () => {

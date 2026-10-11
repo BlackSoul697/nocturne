@@ -56,6 +56,7 @@ async function importBindings(): Promise<WasmModule> {
  */
 export class EngineHost {
   private lease: Promise<EngineLease> | undefined;
+  private boot: Promise<void> | null = null;
   private module: WasmModule | undefined;
   private engine: WasmEngine | undefined;
   private leases = 0;
@@ -109,13 +110,42 @@ export class EngineHost {
       this.engine = undefined;
       this.lostFlag = false;
     }
-    this.lease ??= this.create().catch((error) => {
-      // Not cached: a GPU process restart can make the next attempt succeed.
-      this.lease = undefined;
-      throw toWatercolourError(error);
-    });
+    if (!this.lease) {
+      const lease = this.create().catch((error) => {
+        // Not cached: a GPU process restart can make the next attempt succeed.
+        this.lease = undefined;
+        throw toWatercolourError(error);
+      });
+      const boot: Promise<void> = lease.then(
+        () => {},
+        () => {},
+      ).then(() => {
+        if (this.boot === boot) this.boot = null;
+      });
+      this.lease = lease;
+      this.boot = boot;
+    }
     this.leases += 1;
     return this.lease;
+  }
+
+  /**
+   * The engine boot in progress, or null. It settles, always resolving, once
+   * the module is loaded and the device and its pipelines are created, or the
+   * attempt has failed.
+   *
+   * Device and pipeline creation runs in the GPU process with almost nothing
+   * on the main thread, yet frame presentation stalls for its whole length
+   * (measured at 800 ms on a desktop GPU), and so does any other GPU readback
+   * issued in that window, such as a 2D canvas `toDataURL`.
+   */
+  get booting(): Promise<void> | null {
+    return this.boot;
+  }
+
+  /** Resolves once no boot is in progress, including one that starts while waiting on another. */
+  async whenNotBooting(): Promise<void> {
+    while (this.boot) await this.boot;
   }
 
   release(): void {
@@ -158,10 +188,12 @@ export class EngineHost {
    * The adapter is asked for before the module is fetched, so a machine
    * without one downloads and compiles nothing.
    *
-   * Does nothing while the presentation is `off`: nothing will be drawn.
+   * Does nothing unless the presentation is `animated`: `off` draws nothing,
+   * and `still` draws assets, booting the engine only for a generated scene
+   * that has none, and only when one mounts.
    */
   async warm(): Promise<boolean> {
-    if (getPresentation() === 'off') return false;
+    if (getPresentation() !== 'animated') return false;
     try {
       await this.acquire();
       return true;
@@ -175,12 +207,23 @@ export class EngineHost {
   /**
    * {@link warm} in the browser's next idle period, or after `timeoutMs` if
    * the page never goes idle, so the boot does not compete with first paint.
+   *
+   * `delayMs` holds off the idle wait itself. The first idle period after
+   * hydration tends to be when the viewer starts to interact, and the boot
+   * stalls frame presentation for most of a second; a host picks how long to
+   * keep it clear of that window.
    */
-  warmWhenIdle(timeoutMs = WARM_IDLE_TIMEOUT_MS): Promise<boolean> {
-    return new Promise<void>((resolve) => {
-      if (typeof requestIdleCallback === 'function') requestIdleCallback(() => resolve(), { timeout: timeoutMs });
-      else setTimeout(resolve, 0);
-    }).then(() => this.warm());
+  warmWhenIdle(timeoutMs = WARM_IDLE_TIMEOUT_MS, { delayMs = 0 }: { delayMs?: number } = {}): Promise<boolean> {
+    const delay = delayMs > 0 ? new Promise<void>((resolve) => setTimeout(resolve, delayMs)) : Promise.resolve();
+    return delay
+      .then(
+        () =>
+          new Promise<void>((resolve) => {
+            if (typeof requestIdleCallback === 'function') requestIdleCallback(() => resolve(), { timeout: timeoutMs });
+            else setTimeout(resolve, 0);
+          }),
+      )
+      .then(() => this.warm());
   }
 
   onLost(listener: (message: string) => void): () => void {

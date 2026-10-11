@@ -5,7 +5,7 @@ import { bakedServesEdge, type BakedManifest, type StripBitmap, drawStill, drawS
 import { type Capabilities, detectCapabilities } from './capabilities';
 import { type EngineHost, type EngineLease, type WasmInstance, getEngineHost } from './engine-host';
 import { WatercolourError, toWatercolourError } from './errors';
-import { type ResolvedMode, fallbackOrder, resolveMode, resolveMotion } from './mode';
+import { type ModeInputs, type ResolvedMode, fallbackOrder, resolveMode, resolveMotion } from './mode';
 import { getPresentation } from './presentation';
 import { type ArtworkRef, type IconRef, type InstanceArgs, type SceneSource, authoredSceneJson, createRefInstance, iconSvg, isArtworkRef, isIconRef, parseSceneDocument } from './scenes';
 import { type Scheduler, type SchedulerHandle, getScheduler } from './scheduler';
@@ -80,6 +80,13 @@ export interface PlayerOptions extends ArtworkOptions, AssetOptions {
    * accents that would otherwise pin a slot for as long as they are mounted.
    */
   releaseAfterFinish?: boolean;
+  /**
+   * Under the `still` presentation, a source with no still asset or strip (a
+   * generated scene) renders its finished frame live, booting the engine for
+   * it. `false` settles on `none` instead, for a scene that is decoration.
+   * Default true.
+   */
+  liveStill?: boolean;
   /** Skips the reveal: finishes on first appearance whatever the motion, as a repaint of a finished artwork does. */
   startFinished?: boolean;
   /**
@@ -1121,6 +1128,17 @@ export function autoplayAction(
 
 type Listener = (payload?: unknown) => void;
 
+type Availability = Pick<ModeInputs, 'hasBaked' | 'hasStatic'>;
+
+const ASSET_CASES: readonly Availability[] = [
+  { hasBaked: false, hasStatic: false },
+  { hasBaked: true, hasStatic: false },
+  { hasBaked: false, hasStatic: true },
+  { hasBaked: true, hasStatic: true },
+];
+
+const NO_GPU: Capabilities = { webgpu: false, adapter: false, reducedMotion: true, offscreenCanvas: false, reason: 'not probed for a still' };
+
 class Player implements ArtworkPlayer {
   private backend: Backend | undefined;
   private disposed = false;
@@ -1285,30 +1303,44 @@ class Player implements ArtworkPlayer {
     this.viewportWait = waitNearViewport(this.currentCanvas);
     await this.viewportWait.ready;
     if (this.disposed) return;
-    const capabilities = await (this.options.capabilities ?? detectCapabilities)();
+    const still = presentation === 'still';
+    // A still draws assets, so it reads their availability first; anything
+    // else reads it only when the mode depends on it (see `resolveFirst`).
+    let assets = still ? await this.availability() : undefined;
     if (this.disposed) return;
-    const motionRequest = presentation === 'still' ? 'reduced' : (this.options.motion ?? 'auto');
+    // A still that will not run live never asks for an adapter: the probe is
+    // a round trip to the GPU process that an asset, or nothing, does not need.
+    const capabilities = assets && (assets.hasStatic || assets.hasBaked || this.options.liveStill === false)
+      ? NO_GPU
+      : await (this.options.capabilities ?? detectCapabilities)();
+    if (this.disposed) return;
+    const motionRequest = still ? 'reduced' : (this.options.motion ?? 'auto');
     this.motion = resolveMotion(motionRequest, capabilities.reducedMotion);
-    // A baked icon source resolves to its `lucide-<name>` set like any
-    // artwork; an unbaked one has no assets, so its plain-SVG fallback is the
-    // guaranteed last rung below `live`.
-    const hasBaked = this.bakedServesSize() && this.assetOk('strip') && this.assetOk('manifest');
-    const hasStatic = this.icon ? true : this.assetOk('final');
-    const first = resolveMode({
-      requested: this.options.mode ?? 'auto',
-      motion: motionRequest,
-      capabilities,
-      capReached: this.host.capReached,
-      hasBaked,
-      hasStatic,
-      releaseAfterFinish: this.options.releaseAfterFinish,
-      customised: this.customised(),
-    });
+    const resolveFirst = (available: Availability) =>
+      resolveMode({
+        requested: this.options.mode ?? 'auto',
+        motion: motionRequest,
+        capabilities,
+        capReached: this.host.capReached,
+        ...available,
+        releaseAfterFinish: this.options.releaseAfterFinish,
+        customised: this.customised(),
+        still,
+        liveStill: this.options.liveStill,
+      });
+    // Live whatever the assets: the bundled-asset map is left unloaded until
+    // live fails, so a page of live artwork never fetches it.
+    const liveRegardless = !assets && ASSET_CASES.every((available) => resolveFirst(available) === 'live');
+    if (!assets && !liveRegardless) {
+      assets = await this.availability();
+      if (this.disposed) return;
+    }
+    const first = assets ? resolveFirst(assets) : 'live';
     if (first !== 'live') {
       // An explicit `live` request that resolveMode downgraded (usually the
       // instance cap) is a real fallback: report why instead of silently
-      // drawing the baked asset.
-      if (this.options.mode === 'live') {
+      // drawing the baked asset. A still is not one: the viewer chose it.
+      if (this.options.mode === 'live' && !still) {
         const capReached = this.host.capReached;
         const gpuOk = capabilities.webgpu && capabilities.adapter;
         const error = new WatercolourError(
@@ -1323,17 +1355,30 @@ class Player implements ArtworkPlayer {
         this.emit('fallback', { from: 'live', error } satisfies FallbackDetail);
       }
       if (import.meta.env.DEV && !(this.options.mode !== undefined && this.options.mode !== 'auto' && first === this.options.mode)) {
-        const reason = !capabilities.webgpu || !capabilities.adapter
-          ? 'no WebGPU adapter'
-          : this.host.capReached
-            ? `instance cap reached (${this.host.maxLiveInstances})`
-            : this.motion === 'reduced'
-              ? 'reduced motion'
-              : 'no assets';
+        const reason = still
+          ? 'still presentation'
+          : !capabilities.webgpu || !capabilities.adapter
+            ? 'no WebGPU adapter'
+            : this.host.capReached
+              ? `instance cap reached (${this.host.maxLiveInstances})`
+              : this.motion === 'reduced'
+                ? 'reduced motion'
+                : 'no assets';
         console.warn(`[watercolour] ${this.assetKey()?.id ?? 'player'} resolved ${this.options.mode ?? 'auto'} -> ${first} (${reason})`);
       }
     }
-    await this.start([first, ...fallbackOrder(first, { hasBaked, hasStatic })]);
+    const known = assets;
+    await this.start([first], async () => fallbackOrder(first, known ?? (await this.availability())));
+  }
+
+  /**
+   * A baked icon source resolves to its `lucide-<name>` set like any artwork;
+   * an unbaked one has no assets, so its plain-SVG fallback is the guaranteed
+   * last rung below `live`.
+   */
+  private async availability(): Promise<Availability> {
+    const [strip, manifest, final] = await Promise.all([this.assetOk('strip'), this.assetOk('manifest'), this.assetOk('final')]);
+    return { hasBaked: this.bakedServesSize() && strip && manifest, hasStatic: this.icon ? true : final };
   }
 
   private customised(): boolean {
@@ -1352,17 +1397,26 @@ class Player implements ArtworkPlayer {
     return bakedServesEdge(sourceEdge(this.size, this.options.crop));
   }
 
-  private assetOk(variant: AssetVariant): boolean {
+  private async assetOk(variant: AssetVariant): Promise<boolean> {
     const key = this.assetKey();
     if (key) return assetAvailable(key, variant, this.options);
     return Boolean(this.options.assets?.[variant]);
   }
 
-  private async start(chain: ResolvedMode[]): Promise<void> {
+  /** `fallbacks` extends the chain once, when every mode in it has failed. */
+  private async start(chain: ResolvedMode[], fallbacks?: () => Promise<ResolvedMode[]>): Promise<void> {
     let lastError: WatercolourError | undefined;
-    for (const mode of chain) {
+    const modes = [...chain];
+    let more = fallbacks;
+    for (let i = 0; ; i++) {
       if (this.disposed) return;
-      if (mode === 'none') break;
+      if (i === modes.length && more) {
+        modes.push(...(await more()));
+        more = undefined;
+        if (this.disposed) return;
+      }
+      const mode = modes[i];
+      if (mode === undefined || mode === 'none') break;
       try {
         this.backend = await this.createBackend(mode);
         if (this.disposed) {
@@ -1436,17 +1490,18 @@ class Player implements ArtworkPlayer {
           BakedBackend.create(this.currentCanvas, { manifest, strip }, this.durationMs, this.size, this.scheduler, callbacks, this.options),
         );
       case 'static':
-        if (iconStaticBackend(this.icon, this.assetOk('final')) === 'svg') {
-          return IconSvgBackend.create(this.currentCanvas, this.icon!, this.size, callbacks);
-        }
-        return this.createStatic(callbacks);
+        return this.assetOk('final').then((hasFinal): Promise<Backend> =>
+          iconStaticBackend(this.icon, hasFinal) === 'svg'
+            ? IconSvgBackend.create(this.currentCanvas, this.icon!, this.size, callbacks)
+            : this.createStatic(callbacks),
+        );
       case 'none':
         return Promise.reject(new WatercolourError('AssetMissing', 'no asset available for this artwork'));
     }
   }
 
   private async createStatic(callbacks: BackendCallbacks): Promise<Backend> {
-    const variant = stillVariant(sourceEdge(this.size, this.options.crop), this.assetOk('final-small'));
+    const variant = stillVariant(sourceEdge(this.size, this.options.crop), await this.assetOk('final-small'));
     const [url] = await this.resolveUrls([variant]);
     const larger = variant === 'final-small' ? () => this.resolveUrls(['final']).then(([full]) => full!) : undefined;
     return StaticBackend.create(this.currentCanvas, url!, this.size, callbacks, larger, this.options.crop);
@@ -1471,9 +1526,9 @@ class Player implements ArtworkPlayer {
     this.backend = undefined;
     this.fallbackReason = `${from}: ${error.code}: ${error.message}`;
     this.emit('fallback', { from, error } satisfies FallbackDetail);
-    const hasBaked = this.assetOk('strip') && this.assetOk('manifest');
-    const hasStatic = this.assetOk('final');
-    void this.start(fallbackOrder(from, { hasBaked, hasStatic }));
+    void Promise.all([this.assetOk('strip'), this.assetOk('manifest'), this.assetOk('final')]).then(([strip, manifest, final]) =>
+      this.start(fallbackOrder(from, { hasBaked: strip && manifest, hasStatic: final })),
+    );
   }
 
   private fail(error: WatercolourError): void {

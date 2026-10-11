@@ -113,6 +113,12 @@ player; a finished reveal does not replay. `onStateChange` also reports `none`,
 which has no `ready` event. `crop` may be a function of the measured box, for a
 `scene` authored to match it.
 
+Under the `still` presentation a `scene` mounted this way draws nothing and
+settles on `none`: `liveStill` (a player option) defaults to false for a
+`scene`, so a decorative wash never boots the engine for one frame. The glucose
+tile's host keeps its flat range fill there; pass `liveStill: true` for a
+scene that must show its finished frame.
+
 ## Generated report wash
 
 `reportWashScene(module, width, height, { seed?, surface?, dpr? })` paints a
@@ -139,8 +145,9 @@ mountPlayer(frame, canvas, {
 });
 ```
 
-It is live only, with no baked or static fallback: presentation `off` paints
-nothing, and reduced motion or `still` paints the finished wash.
+It is live only, with no baked or static fallback: presentation `off` or
+`still` paints nothing (a still would boot the engine for one frame), and
+reduced motion under `animated` paints the finished wash.
 
 ## `detectCapabilities`
 
@@ -210,6 +217,12 @@ per artwork is bundled; a missing palette falls back to it (see
 import { assetUrl, defaultPaletteFor, hasBundledAsset } from '@nocturne/watercolour';
 ```
 
+`assetUrl`, `assetAvailable`, `hasBundledAsset` and `bundledArtworkIds` are
+async. The map of bundled asset URLs is a chunk of its own, imported on the
+first resolve that may draw a baked or static asset: a player whose mode is
+`live` whatever its assets does not read it unless live fails, and an `off`
+presentation never does.
+
 ## Icon sources
 
 `Artwork` also renders a Lucide icon as a watercolour scene. The `icon` prop
@@ -268,11 +281,11 @@ disposal.
 | Component | Artwork id it renders | Extra props | Notes |
 |---|---|---|---|
 | `Artwork` | the `artwork` prop, or the `icon` prop (a Lucide element list, takes precedence) | `artwork: ArtworkId`, `icon?: IconArtworkSource`, `assetBaseUrl` | Renders `detailForEdge` from its rendered box's backing long edge (below 64 px small, below 192 px medium, below 320 px large, 320 px and above extraLarge; sim grids 96/160/256/384, the tier's own whatever the canvas size); `surface` defaults from the host theme: a `.dark`/`.light` class on `<html>`, then `<html>`'s computed `color-scheme`, then `prefers-color-scheme`. `releaseAfterFinish` defaults on unless `autoplay="never"`, so a mounted reveal frees its live slot and GPU memory once its last frame is presented; a host that drives the player with `seek` sets `autoplay="never"`. A released artwork resized past 1.5x (or 1/1.5x) repaints, finished, at its new size once the resize settles; a smaller change only rescales. |
-| `PaintedUnderline` | `tab-underline` | `active: boolean` | `opacity-0` unless `active`; plays once on activation, then releases its live slot. A 6px strip along the bottom of a tab. |
+| `PaintedUnderline` | `tab-underline` | `active: boolean` | `opacity-0` unless `active`; plays once on activation, then releases its live slot; under the `still` presentation it draws the baked still. A 6px strip along the bottom of a tab. |
 | `SelectionEdge` | `selection-edge` | `active: boolean`, `side: 'left' \| 'top'` | A 16px vertical or horizontal edge strip, `fit: 'fill'` by default so the stroke runs the item's full length; plays once on activation, then releases its live slot. |
 | `AvatarWash` | `avatar-wash` | `name: string`, `size = 32` | Seed derives from `name` via `seedFromName` unless given. Defaults to `motion: 'reduced'` with `releaseAfterFinish`, so each head paints one frame live once it nears the viewport, spread over a few frames, and releases the engine (the canvas keeps the pixels) - a member list holds dozens of avatars and a live slot per head would exhaust the cap. |
 | `ConfirmationBackground` | `confirmation-background` | - | Fills a container 2.4:1 or wider, so its horizontal washes span it; a taller container gets `contain` anchored bottom-left, so the washes are not squashed. On dark surfaces the canvas runs at CSS opacity 0.45 because Luminous alpha saturates. Plays once, then releases its live slot. |
-| `ReportHeaderWash` | a wash generated for the box (`reportWashScene`) | `name: string`, `position = 'relative'` | Takes only `name`, `position`, `onready` and `class`. Fills its box; the seed derives from `name` via `seedFromName`, so one name always paints the same wash. Repaints on a theme change; plays once, then releases its live slot. |
+| `ReportHeaderWash` | a wash generated for the box (`reportWashScene`) | `name: string`, `position = 'relative'` | Takes only `name`, `position`, `onready` and `class`. Fills its box; the seed derives from `name` via `seedFromName`, so one name always paints the same wash. Repaints on a theme change; plays once, then releases its live slot. Paints nothing under the `still` presentation. |
 | `DropSurface` | a stroke generated for the surface (`fitStroke`, `dropScene`) | see [Paint drops](#paint-drops) | Wraps arbitrary content and paints one brush stroke in its empty space on hover, selection or focus. Live only. |
 | `DropGroup` | - | `name?: string` | Hands each `DropSurface` inside it an index and a shared seed, so a run varies by seed. |
 
@@ -412,8 +425,9 @@ dry with an edge.
 ### Live only
 
 A generated stroke has no baked asset, so there is no strip and no still. The
-player is asked for `live` outright, and where it cannot have it - no WebGPU, or the
-page is already at its cap of `DEFAULT_MAX_LIVE_INSTANCES` (4) - the surface shows
+player is asked for `live` outright, and where it cannot have it - no WebGPU, the
+page already at its cap of `DEFAULT_MAX_LIVE_INSTANCES` (4), or the `still`
+presentation, which never boots the engine for a mark - the surface shows
 its ordinary hover state and **no mark**. That is the intended behaviour, not an
 error; the old catalogue fallback was judged not worth keeping alongside. One
 surface is one instance, whatever its size, and hover rarely holds more than one

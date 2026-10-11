@@ -35,6 +35,12 @@ export interface MountOptions extends ArtworkOptions {
   fitAnchor?: FitAnchor;
   /** Live renders one frame then releases the engine instance, keeping the pixels. */
   releaseAfterFinish?: boolean;
+  /**
+   * See `PlayerOptions.liveStill`. Defaults to false for a `scene`: a
+   * generated scene is decoration, and under `still` it draws nothing rather
+   * than boot the engine for one frame.
+   */
+  liveStill?: boolean;
 }
 
 /** The page background the artwork sits on; matches Artwork.svelte's default. */
@@ -252,6 +258,7 @@ export function mountPlayer(frame: HTMLElement, canvas: HTMLCanvasElement, optio
       mode: options.mode,
       autoplay: options.autoplay,
       releaseAfterFinish: options.releaseAfterFinish,
+      liveStill: options.liveStill ?? (options.scene ? false : undefined),
       startFinished,
       onProgress: options.onProgress,
       blendTicks: options.blendTicks,
