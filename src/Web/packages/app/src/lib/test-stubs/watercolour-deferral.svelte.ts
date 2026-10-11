@@ -1,9 +1,10 @@
 /**
- * Stand-in for `$lib/watercolour-deferral.svelte` that comes due only when the test calls
- * `releaseWatercolour`, so a test can assert what a page shows before its deferred watercolour
+ * Stand-in for `$lib/watercolour-deferral.svelte` whose first-interaction window passes only when
+ * the test calls `releaseWatercolour`, so a test can assert what a page shows before its deferred watercolour
  * and after. Install with
  * `vi.mock("$lib/watercolour-deferral.svelte", () => import("$lib/test-stubs/watercolour-deferral.svelte"))`.
  */
+import { watercolourDue } from "$lib/stores/illustrations.svelte";
 import { lazyComponent, type AnyComponent } from "$lib/utils/lazy-component.svelte";
 
 const deferral = $state({ due: false });
@@ -13,7 +14,7 @@ export const WATERCOLOUR_DEFER_MS = 5000;
 export function deferredWatercolour(): { readonly due: boolean } {
   return {
     get due() {
-      return deferral.due;
+      return watercolourDue(deferral.due);
     },
   };
 }
@@ -24,7 +25,7 @@ export function deferredArtwork<C extends AnyComponent>(
 ): { readonly component: C | null } {
   const lazy = lazyComponent(loader);
   $effect(() => {
-    if (deferral.due && wanted()) lazy.open = true;
+    if (watercolourDue(deferral.due) && wanted()) lazy.open = true;
   });
   return {
     get component() {

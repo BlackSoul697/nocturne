@@ -1,6 +1,6 @@
 import { render } from "vitest-browser-svelte";
 import { page } from "vitest/browser";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { remoteQuery } from "$lib/test-stubs/remote-resource";
 import { GlucoseStatus } from "$lib/api/generated/nocturne-api-client";
 import { releaseWatercolour, resetWatercolour } from "$lib/test-stubs/watercolour-deferral.svelte";
@@ -55,6 +55,7 @@ const summary = $state<{ current?: { mills: number; status: GlucoseStatus } }>({
 mocked.summary = summary;
 
 import { setGlucoseUnits } from "$lib/stores/appearance-store.svelte";
+import { illustrations } from "$lib/stores/illustrations.svelte";
 import CurrentGlucoseWidget from "./CurrentGlucoseWidget.svelte";
 
 const tile = () => page.getByTestId("current-glucose-tile");
@@ -68,6 +69,31 @@ describe("CurrentGlucoseWidget", () => {
     summary.current = undefined;
     setGlucoseUnits("mg/dl");
     releaseWatercolour();
+  });
+
+  afterEach(() => {
+    illustrations.current = "animated";
+  });
+
+  it("lays the still wash over the range fill at once under the Still preference", async () => {
+    resetWatercolour();
+    illustrations.current = "still";
+    summary.current = { mills: store.currentEntry.mills, status: GlucoseStatus.High };
+    render(CurrentGlucoseWidget);
+
+    await expect.element(page.getByTestId("artwork-wash")).toBeInTheDocument();
+  });
+
+  it("keeps the flat range fill with illustrations off", async () => {
+    illustrations.current = "off";
+    summary.current = { mills: store.currentEntry.mills, status: GlucoseStatus.High };
+    render(CurrentGlucoseWidget);
+
+    const indicator = () => tile().element().querySelector('[data-slot="glucose-value-indicator"]');
+    await vi.waitFor(() => expect(indicator()?.innerHTML).toContain("bg-glucose-high"));
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    expect(page.getByTestId("artwork-wash").elements()).toHaveLength(0);
+    expect(page.getByTestId("glucose-tile-bloom").elements()).toHaveLength(0);
   });
 
   it("shows the flat range fill until the deferred wash arrives, then the settling wash over it", async () => {

@@ -1,5 +1,5 @@
 import { WARM_IDLE_TIMEOUT_MS } from "@nocturne/watercolour";
-import { watercolourWanted } from "$lib/stores/illustrations.svelte";
+import { watercolourDue } from "$lib/stores/illustrations.svelte";
 import { lazyComponent, type AnyComponent } from "$lib/utils/lazy-component.svelte";
 import { whenIdle } from "$lib/utils/when-idle";
 
@@ -7,7 +7,7 @@ import { whenIdle } from "$lib/utils/when-idle";
 export const WATERCOLOUR_DEFER_MS = 5000;
 
 export interface DeferredWatercolour {
-  /** True once the first-interaction window is over and watercolour is wanted at all. */
+  /** See {@link watercolourDue}. */
   readonly due: boolean;
 }
 
@@ -19,7 +19,8 @@ export interface DeferredWatercolour {
  * so the engine warm-up and the decorative artwork that would boot it both wait for this.
  *
  * The window is counted from navigation start, so every caller on a page comes due together, and
- * one created after it is due at the next idle period.
+ * one created after it is due at the next idle period. Under the still presentation nothing boots
+ * the engine, so a still is due at once.
  *
  * Call during component initialisation.
  */
@@ -42,7 +43,7 @@ export function deferredWatercolour(): DeferredWatercolour {
 
   return {
     get due() {
-      return passed && watercolourWanted();
+      return watercolourDue(passed);
     },
   };
 }

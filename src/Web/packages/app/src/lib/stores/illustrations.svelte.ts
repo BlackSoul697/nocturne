@@ -50,6 +50,16 @@ export const illustrations = new Illustrations();
  */
 export function watercolourWanted(): boolean {
   if (illustrations.current === "off") return false;
+  if (typeof navigator === "undefined") return true;
   const connection: { saveData?: boolean } | undefined = Reflect.get(navigator, "connection");
   return !connection?.saveData;
+}
+
+/**
+ * Whether deferred watercolour may load: wanted at all, and either past the first-interaction
+ * window or a still, which draws its asset and boots no engine. Reactive on the preference.
+ */
+export function watercolourDue(windowPassed: boolean): boolean {
+  if (!watercolourWanted()) return false;
+  return windowPassed || illustrations.current === "still";
 }

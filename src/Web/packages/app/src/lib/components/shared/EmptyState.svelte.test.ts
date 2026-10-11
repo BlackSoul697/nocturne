@@ -5,6 +5,7 @@ import { createRawSnippet } from "svelte";
 import { Clock } from "lucide";
 import { resetCapabilitiesCache, type IconArtworkSource } from "@nocturne/watercolour";
 import { releaseWatercolour, resetWatercolour } from "$lib/test-stubs/watercolour-deferral.svelte";
+import { illustrations } from "$lib/stores/illustrations.svelte";
 import EmptyState from "./EmptyState.svelte";
 
 vi.mock("$lib/watercolour-deferral.svelte", () => import("$lib/test-stubs/watercolour-deferral.svelte"));
@@ -59,6 +60,7 @@ describe("EmptyState", () => {
   });
 
   afterEach(() => {
+    illustrations.current = "animated";
     vi.restoreAllMocks();
     Reflect.deleteProperty(navigator, "gpu");
     resetCapabilitiesCache();
@@ -90,6 +92,28 @@ describe("EmptyState", () => {
 
     const painted = (await artCanvas(container)).parentElement!.getBoundingClientRect();
     expect([painted.width, painted.height]).toEqual([held.width, held.height]);
+  });
+
+  it("paints a still at once, without waiting for the first-interaction window", async () => {
+    resetWatercolour();
+    illustrations.current = "still";
+    const { container } = render(EmptyState, { art: "key", title: "No API tokens yet" });
+
+    expect(await artCanvas(container)).toBeInstanceOf(HTMLCanvasElement);
+  });
+
+  it.each([
+    { name: "a catalogue artwork", art: "key" as const },
+    { name: "an icon source", art: unbakedIcon },
+  ])("shows $name as its plain glyph, at the painting's size, with illustrations off", async ({ art }) => {
+    illustrations.current = "off";
+    const { container } = render(EmptyState, { art, title: "No API tokens yet" });
+
+    const glyph = page.getByTestId("empty-state-glyph");
+    await expect.element(glyph).toBeVisible();
+    const box = glyph.element().getBoundingClientRect();
+    expect([box.width, box.height]).toEqual([160, 160]);
+    expect(container.querySelector("canvas")).toBeNull();
   });
 
   it("renders no action row without an action", async () => {
