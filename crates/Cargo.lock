@@ -889,11 +889,14 @@ name = "nocturne-watercolour-infra"
 version = "0.1.0"
 dependencies = [
  "bytemuck",
+ "js-sys",
  "nocturne-watercolour-core",
  "png",
  "pollster",
  "serde",
  "serde_json",
+ "wasm-bindgen",
+ "wasm-bindgen-futures",
  "web-sys",
  "wgpu",
 ]
