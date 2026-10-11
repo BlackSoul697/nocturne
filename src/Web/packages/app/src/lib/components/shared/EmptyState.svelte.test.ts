@@ -4,7 +4,10 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createRawSnippet } from "svelte";
 import { Clock } from "lucide";
 import { resetCapabilitiesCache, type IconArtworkSource } from "@nocturne/watercolour";
+import { releaseWatercolour, resetWatercolour } from "$lib/test-stubs/watercolour-deferral.svelte";
 import EmptyState from "./EmptyState.svelte";
+
+vi.mock("$lib/watercolour-deferral.svelte", () => import("$lib/test-stubs/watercolour-deferral.svelte"));
 
 // No `lucide-hourglass-test` set is baked, so without a GPU this can only reach the plain-SVG rung.
 const unbakedIcon = { icon: Clock, name: "hourglass-test" } satisfies IconArtworkSource;
@@ -51,6 +54,10 @@ async function artCanvas(container: HTMLElement): Promise<HTMLCanvasElement> {
 const action = createRawSnippet(() => ({ render: () => "<button>Create a token</button>" }));
 
 describe("EmptyState", () => {
+  beforeEach(() => {
+    releaseWatercolour();
+  });
+
   afterEach(() => {
     vi.restoreAllMocks();
     Reflect.deleteProperty(navigator, "gpu");
@@ -70,11 +77,19 @@ describe("EmptyState", () => {
     await expect.element(page.getByRole("button", { name: "Create a token" })).toBeVisible();
   });
 
-  it("renders its painting once the painting's module loads", async () => {
+  it("renders its text at once and its painting, in a slot held at size, once deferred watercolour is due", async () => {
+    resetWatercolour();
     const { container } = render(EmptyState, { art: "key", title: "No API tokens yet" });
 
     await expect.element(page.getByText("No API tokens yet")).toBeVisible();
-    expect(await artCanvas(container)).toBeInstanceOf(HTMLCanvasElement);
+    const slot = container.querySelector<HTMLElement>("[aria-hidden='true']")!;
+    const held = slot.getBoundingClientRect();
+    expect(container.querySelector("canvas")).toBeNull();
+
+    releaseWatercolour();
+
+    const painted = (await artCanvas(container)).parentElement!.getBoundingClientRect();
+    expect([painted.width, painted.height]).toEqual([held.width, held.height]);
   });
 
   it("renders no action row without an action", async () => {

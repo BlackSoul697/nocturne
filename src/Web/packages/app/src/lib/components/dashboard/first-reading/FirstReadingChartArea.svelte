@@ -2,7 +2,7 @@
   import type { Snippet } from "svelte";
   import { fade } from "svelte/transition";
   import { prefersReducedMotion } from "@nocturne/watercolour";
-  import { lazyComponent } from "$lib/utils/lazy-component.svelte";
+  import { deferredArtwork } from "$lib/watercolour-deferral.svelte";
   import FirstReadingEmptyStateLoader from "./FirstReadingEmptyStateLoader.svelte";
 
   interface Props {
@@ -44,11 +44,9 @@
   // The sunrise mounts as the reading lands and is released straight away, so
   // all it plays is its fade off the chart already in place beneath it.
   let arrivalShown = $state(true);
-  // Loaded with the empty state, so it is in hand when the reading lands.
-  const arrivalArtwork = lazyComponent(() => import("$lib/watercolour/artwork"));
-  $effect(() => {
-    if (emptyStateShown) arrivalArtwork.open = true;
-  });
+  // Loaded while the empty state shows, so it is in hand when the reading lands; a reading that
+  // lands before deferred watercolour comes due plays no sunrise.
+  const arrivalArtwork = deferredArtwork(() => import("$lib/watercolour/artwork"), () => emptyStateShown);
   $effect(() => {
     if (firstReadingArrived) arrivalShown = false;
   });

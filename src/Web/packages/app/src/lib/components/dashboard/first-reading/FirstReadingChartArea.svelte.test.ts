@@ -1,11 +1,12 @@
 import { render } from "vitest-browser-svelte";
 import { page } from "vitest/browser";
-import { describe, it, expect, vi } from "vitest";
+import { beforeEach, describe, it, expect, vi } from "vitest";
 import { createRawSnippet } from "svelte";
 import { remoteQuery } from "$lib/test-stubs/remote-resource";
 import type { ConnectorStatusDto } from "$lib/api/generated/nocturne-api-client";
 import FirstReadingChartArea from "./FirstReadingChartArea.svelte";
 import CoachHarness from "./FirstReadingCoachHarness.test.svelte";
+import { releaseWatercolour, resetWatercolour } from "$lib/test-stubs/watercolour-deferral.svelte";
 
 const state = vi.hoisted(() => {
   const connectors: ConnectorStatusDto[] = [];
@@ -17,6 +18,8 @@ vi.mock("@nocturne/watercolour", async (importOriginal) => ({
   prefersReducedMotion: () => state.reducedMotion,
 }));
 
+vi.mock("$lib/watercolour-deferral.svelte", () => import("$lib/test-stubs/watercolour-deferral.svelte"));
+
 vi.mock("$api/generated/connectorStatus.generated.remote", () => ({
   getStatus: () => remoteQuery(() => state.connectors),
 }));
@@ -26,6 +29,10 @@ const chart = createRawSnippet(() => ({
 }));
 
 describe("FirstReadingChartArea", () => {
+  beforeEach(() => {
+    releaseWatercolour();
+  });
+
   it("shows the chart and no empty state when data is already present", async () => {
     state.connectors = [];
 
@@ -138,6 +145,10 @@ describe("FirstReadingChartArea", () => {
       await expect
         .element(page.getByTestId("first-reading-empty-state"))
         .toBeVisible();
+      // The painting and the sunrise load together once deferred watercolour is due.
+      await expect
+        .poll(() => document.querySelector('[data-testid="first-reading-empty-state"] canvas'))
+        .not.toBeNull();
       return screen;
     }
 
@@ -157,6 +168,24 @@ describe("FirstReadingChartArea", () => {
       await expect
         .element(page.getByTestId("first-reading-arrival"), { timeout: 3000 })
         .not.toBeInTheDocument();
+    });
+
+    it("plays no sunrise for a reading that lands before deferred watercolour is due", async () => {
+      state.reducedMotion = false;
+      resetWatercolour();
+      state.connectors = [waiting];
+      const screen = render(FirstReadingChartArea, {
+        chart,
+        bypass: false,
+        recentHistoryReady: true,
+        hasRecentHistory: false,
+      });
+      await expect.element(page.getByTestId("first-reading-empty-state")).toBeVisible();
+
+      await screen.rerender({ bypass: true });
+
+      await expect.element(page.getByText("CHART SHOWN")).toBeVisible();
+      expect(document.querySelector('[data-testid="first-reading-arrival"]')).toBeNull();
     });
 
     it("swaps straight to the chart under reduced motion", async () => {

@@ -55,7 +55,7 @@
 <script lang="ts">
   import type { Snippet } from "svelte";
   import type { ArtworkId, IconArtworkSource, PaletteId } from "@nocturne/watercolour";
-  import { lazyComponent } from "$lib/utils/lazy-component.svelte";
+  import { deferredArtwork } from "$lib/watercolour-deferral.svelte";
   import * as Card from "$lib/components/ui/card";
   import { cn } from "$lib/utils";
 
@@ -103,10 +103,9 @@
     "data-testid": testId,
   }: Props = $props();
 
-  // Most cards that can be empty are not, so their pages never load the watercolour. The art
-  // slot keeps its size while the painting loads.
-  const painting = lazyComponent(() => import("./EmptyStateArtwork.svelte"));
-  painting.open = true;
+  // Most cards that can be empty are not, so their pages never load the watercolour, and a
+  // painting boots the engine as it mounts. The art slot keeps its size until it arrives.
+  const painting = deferredArtwork(() => import("./EmptyStateArtwork.svelte"));
   const inCard = $derived(variant === "card" || variant === "dashed");
   const styles = $derived(
     emptyStateVariants({
