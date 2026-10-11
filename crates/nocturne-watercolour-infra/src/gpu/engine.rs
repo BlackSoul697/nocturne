@@ -335,15 +335,9 @@ struct RenderUniform {
 struct SimPipelines {
     layout: wgpu::BindGroupLayout,
     velocity_divergence: wgpu::ComputePipeline,
-    jacobi_a: wgpu::ComputePipeline,
-    jacobi_b: wgpu::ComputePipeline,
-    jacobi_pair_a: wgpu::ComputePipeline,
-    jacobi_pair_b: wgpu::ComputePipeline,
-    project: wgpu::ComputePipeline,
-    project_q2: wgpu::ComputePipeline,
-    blur_h: wgpu::ComputePipeline,
-    blur_v: wgpu::ComputePipeline,
-    blur: wgpu::ComputePipeline,
+    /// By `SolverPass as usize`; only the passes [`solver_passes`] runs for
+    /// the engine's params are built.
+    solver: [Option<wgpu::ComputePipeline>; SolverPass::ALL.len()],
     advect: wgpu::ComputePipeline,
     swirl_distance_h: wgpu::ComputePipeline,
     swirl_distance_v: wgpu::ComputePipeline,
@@ -740,18 +734,101 @@ const PRESENCE_LAYOUT: usize = 2;
 const PRESENT_LAYOUT: usize = 3;
 const PAPER_LAYOUT: usize = 4;
 
-/// The compute entry points of the sim module.
-const SIM_ENTRY_POINTS: [&str; 24] = [
+/// The pressure solve and velocity blur passes, whose choice depends on
+/// `SimParams`.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum SolverPass {
+    JacobiPairA,
+    JacobiPairB,
+    JacobiA,
+    JacobiB,
+    Project,
+    ProjectQ2,
+    Blur,
+    BlurH,
+    BlurV,
+}
+
+impl SolverPass {
+    const ALL: [SolverPass; 9] = [
+        SolverPass::JacobiPairA,
+        SolverPass::JacobiPairB,
+        SolverPass::JacobiA,
+        SolverPass::JacobiB,
+        SolverPass::Project,
+        SolverPass::ProjectQ2,
+        SolverPass::Blur,
+        SolverPass::BlurH,
+        SolverPass::BlurV,
+    ];
+
+    fn entry_point(self) -> &'static str {
+        match self {
+            SolverPass::JacobiPairA => "jacobi_pair_a",
+            SolverPass::JacobiPairB => "jacobi_pair_b",
+            SolverPass::JacobiA => "jacobi_a",
+            SolverPass::JacobiB => "jacobi_b",
+            SolverPass::Project => "project",
+            SolverPass::ProjectQ2 => "project_q2",
+            SolverPass::Blur => "blur",
+            SolverPass::BlurH => "blur_h",
+            SolverPass::BlurV => "blur_v",
+        }
+    }
+
+    /// One workgroup per 16x16 tile rather than per [`WORKGROUP`] cells.
+    fn tiled(self) -> bool {
+        matches!(
+            self,
+            SolverPass::JacobiPairA | SolverPass::JacobiPairB | SolverPass::Blur
+        )
+    }
+}
+
+/// Calls `pass` with one tick's solver passes in dispatch order. The
+/// correction alternates between q and q2, and a pair of iterations moves it
+/// once, as a single iteration does.
+fn solver_passes(params: &SimParams, mut pass: impl FnMut(SolverPass)) {
+    let mut in_q = true;
+    for _ in 0..params.jacobi_iterations / 2 {
+        pass(if in_q {
+            SolverPass::JacobiPairA
+        } else {
+            SolverPass::JacobiPairB
+        });
+        in_q = !in_q;
+    }
+    if params.jacobi_iterations % 2 == 1 {
+        pass(if in_q {
+            SolverPass::JacobiA
+        } else {
+            SolverPass::JacobiB
+        });
+        in_q = !in_q;
+    }
+    pass(if in_q {
+        SolverPass::Project
+    } else {
+        SolverPass::ProjectQ2
+    });
+    if params.blur_radius <= BLUR_MAX_RADIUS {
+        pass(SolverPass::Blur);
+    } else {
+        pass(SolverPass::BlurH);
+        pass(SolverPass::BlurV);
+    }
+}
+
+/// Which [`SolverPass`]es `params` runs, by `SolverPass as usize`.
+fn solver_passes_used(params: &SimParams) -> [bool; SolverPass::ALL.len()] {
+    let mut used = [false; SolverPass::ALL.len()];
+    solver_passes(params, |pass| used[pass as usize] = true);
+    used
+}
+
+/// The sim module's entry points other than the [`SolverPass`]es.
+const SIM_ENTRY_POINTS: [&str; 15] = [
     "velocity_divergence",
-    "jacobi_a",
-    "jacobi_b",
-    "jacobi_pair_a",
-    "jacobi_pair_b",
-    "project",
-    "project_q2",
-    "blur_h",
-    "blur_v",
-    "blur",
     "advect",
     "swirl_distance_h",
     "swirl_distance_v",
@@ -775,9 +852,9 @@ const PRESENT: FullscreenDesc = FullscreenDesc {
     fragment: "fs_render",
 };
 
-/// Everything `GpuEngine::build` creates, plus the present pipeline in each
-/// of `present_formats`.
-fn plan(present_formats: &[wgpu::TextureFormat]) -> Plan {
+/// Everything `GpuEngine::build` creates for `params`, plus the present
+/// pipeline in each of `present_formats`.
+fn plan(params: &SimParams, present_formats: &[wgpu::TextureFormat]) -> Plan {
     let mut sim_source = String::from(COMMON);
     for s in SIM_SOURCES {
         sim_source.push('\n');
@@ -872,9 +949,15 @@ fn plan(present_formats: &[wgpu::TextureFormat]) -> Plan {
             vec![uniform_entry(0), storage_entry(1, false)],
         ),
     ];
+    let used = solver_passes_used(params);
+    let solver = SolverPass::ALL
+        .into_iter()
+        .filter(|&pass| used[pass as usize])
+        .map(SolverPass::entry_point);
     let mut compute: Vec<ComputeDesc> = SIM_ENTRY_POINTS
-        .iter()
-        .map(|&entry| ComputeDesc {
+        .into_iter()
+        .chain(solver)
+        .map(|entry| ComputeDesc {
             entry,
             module: SIM_MODULE,
             layout: SIM_LAYOUT,
@@ -967,7 +1050,7 @@ impl GpuEngine {
             .collect();
         #[cfg(not(target_arch = "wasm32"))]
         let present_formats: Vec<wgpu::TextureFormat> = Vec::new();
-        let plan = plan(&present_formats);
+        let plan = plan(&params, &present_formats);
         #[cfg(target_arch = "wasm32")]
         let warmed = {
             let blend = surface_format.map(super::interpolation::blend_plan);
@@ -989,7 +1072,7 @@ impl GpuEngine {
                 (c.entry, pipeline)
             })
             .collect();
-        #[allow(clippy::expect_used)]
+        let solver = SolverPass::ALL.map(|pass| compute.remove(pass.entry_point()));
         let mut take = |entry: &str| {
             compute
                 .remove(entry)
@@ -999,15 +1082,7 @@ impl GpuEngine {
 
         let sim = SimPipelines {
             velocity_divergence: take("velocity_divergence"),
-            jacobi_a: take("jacobi_a"),
-            jacobi_b: take("jacobi_b"),
-            jacobi_pair_a: take("jacobi_pair_a"),
-            jacobi_pair_b: take("jacobi_pair_b"),
-            project: take("project"),
-            project_q2: take("project_q2"),
-            blur_h: take("blur_h"),
-            blur_v: take("blur_v"),
-            blur: take("blur"),
+            solver,
             advect: take("advect"),
             swirl_distance_h: take("swirl_distance_h"),
             swirl_distance_v: take("swirl_distance_v"),
@@ -1414,32 +1489,13 @@ impl GpuEngine {
         let sim = &self.sim;
 
         dispatch(&sim.velocity_divergence, tiles);
-        // The correction alternates between q and q2, and a pair of
-        // iterations moves it once, as a single iteration does.
-        let mut in_q = true;
-        for _ in 0..self.params.jacobi_iterations / 2 {
-            dispatch(
-                if in_q {
-                    &sim.jacobi_pair_a
-                } else {
-                    &sim.jacobi_pair_b
-                },
-                tiles,
-            );
-            in_q = !in_q;
-        }
-        if self.params.jacobi_iterations % 2 == 1 {
-            dispatch(if in_q { &sim.jacobi_a } else { &sim.jacobi_b }, cells);
-            in_q = !in_q;
-        }
-        dispatch(if in_q { &sim.project } else { &sim.project_q2 }, cells);
-
-        if self.params.blur_radius <= BLUR_MAX_RADIUS {
-            dispatch(&sim.blur, tiles);
-        } else {
-            dispatch(&sim.blur_h, cells);
-            dispatch(&sim.blur_v, cells);
-        }
+        solver_passes(&self.params, |solver| {
+            #[allow(clippy::expect_used)]
+            let pipeline = sim.solver[solver as usize]
+                .as_ref()
+                .expect("build creates every solver pass the params run");
+            dispatch(pipeline, if solver.tiled() { tiles } else { cells });
+        });
         dispatch(&sim.advect, cells);
 
         let mut g_in_scratch = true;
@@ -3032,5 +3088,86 @@ impl std::fmt::Debug for GpuEngine {
             .field("adapter", &self.ctx.adapter_name())
             .field("loaded", &self.loaded.is_some())
             .finish()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn passes(params: &SimParams) -> Vec<SolverPass> {
+        let mut passes = Vec::new();
+        solver_passes(params, |pass| passes.push(pass));
+        passes
+    }
+
+    fn with(jacobi_iterations: u32, blur_radius: u32) -> SimParams {
+        SimParams {
+            jacobi_iterations,
+            blur_radius,
+            ..SimParams::default()
+        }
+    }
+
+    #[test]
+    fn default_params_run_the_paired_solve_and_the_one_dispatch_blur() {
+        use SolverPass::*;
+        assert_eq!(
+            passes(&SimParams::default()),
+            [
+                JacobiPairA,
+                JacobiPairB,
+                JacobiPairA,
+                JacobiPairB,
+                Project,
+                Blur
+            ]
+        );
+    }
+
+    #[test]
+    fn an_odd_count_ends_on_a_single_iteration_and_projects_from_where_it_lands() {
+        use SolverPass::*;
+        assert_eq!(passes(&with(1, 5)), [JacobiA, ProjectQ2, Blur]);
+        assert_eq!(passes(&with(2, 5)), [JacobiPairA, ProjectQ2, Blur]);
+        assert_eq!(
+            passes(&with(7, 5)),
+            [
+                JacobiPairA,
+                JacobiPairB,
+                JacobiPairA,
+                JacobiB,
+                Project,
+                Blur
+            ]
+        );
+    }
+
+    #[test]
+    fn a_blur_wider_than_workgroup_memory_runs_separably() {
+        use SolverPass::*;
+        assert_eq!(
+            passes(&with(8, BLUR_MAX_RADIUS + 1))[4..],
+            [Project, BlurH, BlurV]
+        );
+        assert_eq!(passes(&with(8, BLUR_MAX_RADIUS))[4..], [Project, Blur]);
+    }
+
+    #[test]
+    fn the_plan_builds_only_the_solver_passes_the_params_run() {
+        let entries = |params: &SimParams| -> Vec<&str> {
+            plan(params, &[]).compute.iter().map(|c| c.entry).collect()
+        };
+        let default = entries(&SimParams::default());
+        assert_eq!(default.len(), 22);
+        for unused in ["jacobi_a", "jacobi_b", "project_q2", "blur_h", "blur_v"] {
+            assert!(!default.contains(&unused), "{unused} is built");
+        }
+        let odd = entries(&with(7, BLUR_MAX_RADIUS + 1));
+        for used in ["jacobi_b", "project", "blur_h", "blur_v"] {
+            assert!(odd.contains(&used), "{used} is not built");
+        }
+        assert!(!odd.contains(&"blur"));
+        assert!(!odd.contains(&"jacobi_a"));
     }
 }
