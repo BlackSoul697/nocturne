@@ -207,12 +207,23 @@ export class EngineHost {
   /**
    * {@link warm} in the browser's next idle period, or after `timeoutMs` if
    * the page never goes idle, so the boot does not compete with first paint.
+   *
+   * `delayMs` holds off the idle wait itself. The first idle period after
+   * hydration tends to be when the viewer starts to interact, and the boot
+   * stalls frame presentation for most of a second; a host picks how long to
+   * keep it clear of that window.
    */
-  warmWhenIdle(timeoutMs = WARM_IDLE_TIMEOUT_MS): Promise<boolean> {
-    return new Promise<void>((resolve) => {
-      if (typeof requestIdleCallback === 'function') requestIdleCallback(() => resolve(), { timeout: timeoutMs });
-      else setTimeout(resolve, 0);
-    }).then(() => this.warm());
+  warmWhenIdle(timeoutMs = WARM_IDLE_TIMEOUT_MS, { delayMs = 0 }: { delayMs?: number } = {}): Promise<boolean> {
+    const delay = delayMs > 0 ? new Promise<void>((resolve) => setTimeout(resolve, delayMs)) : Promise.resolve();
+    return delay
+      .then(
+        () =>
+          new Promise<void>((resolve) => {
+            if (typeof requestIdleCallback === 'function') requestIdleCallback(() => resolve(), { timeout: timeoutMs });
+            else setTimeout(resolve, 0);
+          }),
+      )
+      .then(() => this.warm());
   }
 
   onLost(listener: (message: string) => void): () => void {

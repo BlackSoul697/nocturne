@@ -1,6 +1,11 @@
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { EngineHost, answeringAdapterRequest } from './engine-host';
 import type { WasmEngine, WasmModule } from './wasm-types';
+
+afterEach(() => {
+  vi.useRealTimers();
+  vi.unstubAllGlobals();
+});
 
 const gpu = async () => ({ webgpu: true, adapter: true, reducedMotion: false, offscreenCanvas: false });
 
@@ -99,6 +104,29 @@ describe('EngineHost.warmWhenIdle', () => {
     expect(await warmed).toBe(true);
     expect(created()).toBe(1);
     vi.unstubAllGlobals();
+  });
+
+  it('starts the idle wait only after delayMs, so the boot stays out of the first interactions', async () => {
+    vi.useFakeTimers();
+    const { module, created } = fakeModule();
+    const asked: number[] = [];
+    let idle: (() => void) | undefined;
+    vi.stubGlobal('requestIdleCallback', (cb: () => void, options: { timeout: number }) => {
+      asked.push(options.timeout);
+      idle = cb;
+    });
+    const host = new EngineHost({ loadModule: async () => module, capabilities: gpu });
+
+    const warmed = host.warmWhenIdle(500, { delayMs: 4000 });
+    await vi.advanceTimersByTimeAsync(3999);
+    expect(asked).toEqual([]);
+    await vi.advanceTimersByTimeAsync(1);
+    expect(asked).toEqual([500]);
+    expect(created()).toBe(0);
+
+    idle!();
+    expect(await warmed).toBe(true);
+    expect(created()).toBe(1);
   });
 });
 
