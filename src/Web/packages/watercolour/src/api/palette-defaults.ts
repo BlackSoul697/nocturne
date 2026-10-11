@@ -13,6 +13,7 @@ export const DEFAULT_PALETTE: Record<string, PaletteId> = {
   'magnifying-glass': 'water',
   'confirmation-mark': 'moss',
   'avatar-wash': 'water',
+  wash: 'slate',
   'tab-underline': 'ember',
   'selection-edge': 'water',
   'confirmation-background': 'moss',

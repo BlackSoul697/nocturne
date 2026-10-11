@@ -545,6 +545,16 @@
       ],
       "stripWidth": 160,
       "stripHeight": 160
+    },
+    {
+      "id": "wash",
+      "palette": "slate",
+      "surfaces": [
+        "light",
+        "dark"
+      ],
+      "stripWidth": 160,
+      "stripHeight": 160
     }
   ]
 }

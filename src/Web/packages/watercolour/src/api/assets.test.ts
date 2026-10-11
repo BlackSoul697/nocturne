@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import manifest from '../../scripts/bake-manifest.json';
-import { ARTWORK_ASPECT, type ArtworkId } from '../types';
+import { ARTWORK_ASPECT, type ArtworkId, type PaletteId } from '../types';
 import { bundledUrl } from './bundled-assets';
 import { bundledArtworkIds, defaultPaletteFor, hasBundledAsset, iconAssetKey, DEFAULT_PALETTE } from './assets';
 
@@ -35,11 +35,37 @@ describe('curated bundle', () => {
     }
   });
 
-  it('has both stills of the tab underline on each surface, so the still presentation draws it without the engine', async () => {
-    for (const surface of ['light', 'dark'] as const) {
-      expect(await hasBundledAsset({ id: 'tab-underline', surface }, 'final')).toBe(true);
-      expect(await hasBundledAsset({ id: 'tab-underline', surface }, 'final-small')).toBe(true);
+  /**
+   * The artworks the app draws through `<Artwork artwork=...>`, with the palette
+   * it asks for (undefined: the default). Under the `still` presentation one
+   * without a still falls through to a live frame and boots the engine on
+   * every page that shows it. `cgm-sensor`, an empty-state artwork on
+   * feat/watercolour-presentation, joins this list with its bake.
+   */
+  const DRAWN_BY_THE_APP: ReadonlyArray<[ArtworkId, PaletteId | undefined]> = [
+    ['wash', 'slate'],
+    ['avatar-wash', 'water'],
+    ['selection-edge', 'water'],
+    ['tab-underline', 'ember'],
+    ...(
+      [
+        'report-pages', 'clock', 'plug', 'stopwatch', 'chat-bubble', 'shield', 'phone', 'people-group',
+        'magnifying-glass', 'key', 'confirmation-mark', 'apple', 'world-globe', 'sunrise', 'suitcase',
+        'linked-rings', 'crescent-moon', 'calendar', 'alarm-bell',
+      ] as const
+    ).map((id): [ArtworkId, undefined] => [id, undefined]),
+  ];
+
+  it('has both stills on both surfaces for every artwork the app draws, so the still presentation never boots the engine', async () => {
+    const missing: string[] = [];
+    for (const [id, palette] of DRAWN_BY_THE_APP) {
+      for (const surface of ['light', 'dark'] as const) {
+        for (const variant of ['final', 'final-small'] as const) {
+          if (!(await hasBundledAsset({ id, palette, surface }, variant))) missing.push(`${id}/${palette ?? 'default'}/${surface}/${variant}`);
+        }
+      }
     }
+    expect(missing).toEqual([]);
   });
 
   it('holds each URL itself rather than a loader, so no JS chunk stands in front of an asset fetch', () => {
