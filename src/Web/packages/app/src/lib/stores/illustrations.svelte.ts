@@ -43,3 +43,13 @@ class Illustrations {
 }
 
 export const illustrations = new Illustrations();
+
+/**
+ * Whether watercolour the page could do without is worth loading or booting: not with
+ * illustrations off, nor when the browser asks to save data. Reactive on the preference.
+ */
+export function watercolourWanted(): boolean {
+  if (illustrations.current === "off") return false;
+  const connection: { saveData?: boolean } | undefined = Reflect.get(navigator, "connection");
+  return !connection?.saveData;
+}

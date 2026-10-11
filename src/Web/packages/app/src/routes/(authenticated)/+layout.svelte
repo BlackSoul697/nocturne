@@ -31,6 +31,8 @@
   import MembershipRequestAutoSubmit from "$lib/components/members/MembershipRequestAutoSubmit.svelte";
   import JoinWelcome from "$lib/components/members/JoinWelcome.svelte";
   import { lazyComponent } from "$lib/utils/lazy-component.svelte";
+  import { getEngineHost } from "@nocturne/watercolour";
+  import { deferredWatercolour } from "$lib/watercolour-deferral.svelte";
   import { CoachMarkProvider, type CoachRouter } from "@nocturne/coach";
   import "@nocturne/coach/theme.css";
   import "../../styles/coach-theme-overrides.css";
@@ -158,6 +160,25 @@
       window.removeEventListener("storage", handleStorageChange);
       window.removeEventListener("keydown", handleCommandPaletteKeydown);
     }
+  });
+
+  /**
+   * The first engine acquire blocks the main thread for a few hundred ms while the wasm loads.
+   * Paid on a pointer-enter it freezes the transition that pointer started, and a paint drop's
+   * backend is settled within 90 ms of the hover or it falls back to a still. It waits for the
+   * current reading as well as {@link deferredWatercolour}, then for idle.
+   *
+   * Resolves false where there is no GPU, which needs no handling: that is the case the baked
+   * and static paths exist for. Artwork that needs the engine sooner boots it on demand; the
+   * unauthenticated pages render theirs on mount, so a warm-up there would gain nothing.
+   */
+  const engineWarmDeferral = deferredWatercolour();
+  let engineWarmScheduled = false;
+  $effect(() => {
+    if (engineWarmScheduled || !engineWarmDeferral.due) return;
+    if (data.canViewRealtimeData && !realtimeStore.currentReadingLoaded) return;
+    engineWarmScheduled = true;
+    void getEngineHost().warmWhenIdle();
   });
 
   // Track current time for stale calculation - use shared store
