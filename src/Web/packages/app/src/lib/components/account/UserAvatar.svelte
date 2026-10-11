@@ -13,7 +13,7 @@
 
 <script lang="ts">
   import * as Avatar from "$lib/components/ui/avatar";
-  import { AvatarWash } from "@nocturne/watercolour";
+  import { deferredArtwork } from "$lib/watercolour-deferral.svelte";
 
   interface Props {
     name: string | null | undefined;
@@ -30,6 +30,7 @@
   let status = $state<"loading" | "loaded" | "error">("loading");
   // A wash behind a loaded photo would be simulated for nothing.
   const showWash = $derived(!src || status === "error");
+  const avatarWash = deferredArtwork(() => import("$lib/watercolour/avatar-wash"), () => showWash);
 </script>
 
 <Avatar.Root {size} onLoadingStatusChange={(next) => (status = next)}>
@@ -38,9 +39,9 @@
     <!-- The painted disc covers about two thirds of its square, so the wash is
          drawn at 1.5x the avatar and clipped to the circle. Half opacity keeps
          foreground initials above 4.5:1 on either theme's wash. -->
-    {#if showWash}
+    {#if showWash && avatarWash.component}
       <span class="absolute inset-0 flex items-center justify-center opacity-50">
-        <AvatarWash name={name || initials} size={WASH_PX[size]} />
+        <avatarWash.component name={name || initials} size={WASH_PX[size]} />
       </span>
     {/if}
     <span class="relative">{initials}</span>

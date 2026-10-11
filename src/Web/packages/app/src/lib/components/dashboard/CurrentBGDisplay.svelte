@@ -28,7 +28,8 @@
   import Clock from "@lucide/svelte/icons/clock";
   import { displayedGlucose } from "$lib/stores/current-glucose-status.svelte";
   import { getGlucoseTileVariant } from "$lib/utils/glucose-status";
-  import GlucoseTileWash, { trackUnwashedFill } from "./GlucoseTileWash.svelte";
+  import { trackUnwashedFill } from "./glucose-tile-wash-state.svelte";
+  import { deferredArtwork } from "$lib/watercolour-deferral.svelte";
   import { showsCurrentGlucoseWidget } from "./top-widget-ids";
 
   interface ComponentProps {
@@ -77,6 +78,8 @@
   const isLoading = $derived(
     rawCurrentBG === 0 && realtimeStore.entries.length === 0
   );
+  // Over the flat range fill, so the tile reads the same until it arrives.
+  const tileWash = deferredArtwork(() => import("./GlucoseTileWash.svelte"));
   trackUnwashedFill(() => ({
     loading: isLoading,
     stale: isStale,
@@ -141,7 +144,9 @@
 </script>
 
 {#snippet rangeWash()}
-  <GlucoseTileWash mills={glucose.mills} variant={tileVariant} delta={rawBgDelta} />
+  {#if tileWash.component}
+    <tileWash.component mills={glucose.mills} variant={tileVariant} delta={rawBgDelta} />
+  {/if}
 {/snippet}
 
 <!-- Desktop only: on mobile, MobileHeader carries the reading. -->
@@ -159,7 +164,7 @@
           {statusText}
           {statusTooltip}
           size="lg"
-          background={rangeWash}
+          background={tileWash.component ? rangeWash : undefined}
         />
         <div class="text-sm text-muted-foreground tabular-nums">
           {displayBgDelta}

@@ -4,6 +4,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { remoteQuery } from "$lib/test-stubs/remote-resource";
 import { engine } from "$lib/test-stubs/Watercolour.test-stub.svelte";
 import { GlucoseStatus } from "$lib/api/generated/nocturne-api-client";
+import { releaseWatercolour, resetWatercolour } from "$lib/test-stubs/watercolour-deferral.svelte";
 
 const now = Date.UTC(2026, 5, 14, 9, 30, 0);
 
@@ -36,6 +37,8 @@ vi.mock("@nocturne/watercolour", async (importOriginal) => {
   };
 });
 
+vi.mock("$lib/watercolour-deferral.svelte", () => import("$lib/test-stubs/watercolour-deferral.svelte"));
+
 const store = $state({
   currentBG: 123,
   currentEntry: { mills: 0 },
@@ -65,6 +68,22 @@ describe("CurrentGlucoseWidget", () => {
     battery.status = undefined;
     summary.current = undefined;
     setGlucoseUnits("mg/dl");
+    releaseWatercolour();
+  });
+
+  it("shows the flat range fill until the deferred wash arrives, then the wash over it", async () => {
+    resetWatercolour();
+    summary.current = { mills: store.currentEntry.mills, status: GlucoseStatus.High };
+    render(CurrentGlucoseWidget);
+
+    const indicator = () => tile().element().querySelector('[data-slot="glucose-value-indicator"]');
+    await expect.element(tile()).toHaveTextContent(/^123/);
+    await vi.waitFor(() => expect(indicator()?.innerHTML).toContain("bg-glucose-high"));
+    expect(page.getByTestId("glucose-tile-bloom").elements()).toHaveLength(0);
+
+    releaseWatercolour();
+
+    await expect.element(page.getByTestId("glucose-tile-bloom")).toBeInTheDocument();
   });
 
   it("shows the reading with its unit, trend, change and age", async () => {

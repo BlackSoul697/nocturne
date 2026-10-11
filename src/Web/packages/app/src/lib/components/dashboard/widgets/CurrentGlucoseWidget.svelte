@@ -1,6 +1,7 @@
 <script lang="ts">
   import WidgetCard from "./WidgetCard.svelte";
-  import GlucoseTileWash, { trackUnwashedFill } from "../GlucoseTileWash.svelte";
+  import { trackUnwashedFill } from "../glucose-tile-wash-state.svelte";
+  import { deferredArtwork } from "$lib/watercolour-deferral.svelte";
   import { GlucoseValueIndicator } from "$lib/components/shared";
   import { getRealtimeStore } from "$lib/stores/realtime-store.svelte";
   import { glucoseUnits } from "$lib/stores/appearance-store.svelte";
@@ -40,6 +41,8 @@
   const isDisconnected = $derived(realtimeStore.connectionUnavailable);
   const directionInfo = $derived(getDirectionInfo(glucose.direction));
   const DirectionIcon = $derived(directionInfo.icon);
+  // Over the flat range fill, so the tile reads the same until it arrives.
+  const tileWash = deferredArtwork(() => import("../GlucoseTileWash.svelte"));
   trackUnwashedFill(() => ({ loading: isLoading, stale: isStale, disconnected: isDisconnected, variant: tileVariant }));
 
   const batteryStatusPromise = getCurrentBatteryStatus({ recentMinutes: 30 });
@@ -54,7 +57,9 @@
 </script>
 
 {#snippet rangeWash()}
-  <GlucoseTileWash mills={glucose.mills} variant={tileVariant} delta={glucose.bgDelta} />
+  {#if tileWash.component}
+    <tileWash.component mills={glucose.mills} variant={tileVariant} delta={glucose.bgDelta} />
+  {/if}
 {/snippet}
 
 <!-- Unit under the arrow, in the tile's own foreground. The trend is dropped while stale: it
@@ -154,7 +159,7 @@
         {isDisconnected}
         size="xl"
         class="w-full"
-        background={rangeWash}
+        background={tileWash.component ? rangeWash : undefined}
         trailing={isLoading ? undefined : trend}
       />
     </div>

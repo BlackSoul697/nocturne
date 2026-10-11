@@ -39,10 +39,13 @@ async function paintedPixels(canvas: HTMLCanvasElement): Promise<number> {
   return count;
 }
 
-function artCanvas(container: HTMLElement): HTMLCanvasElement {
-  const canvas = container.querySelector("canvas");
-  if (!canvas) throw new Error("EmptyState rendered no artwork canvas");
-  return canvas;
+/** The painting is imported on first render, so it arrives after the text. */
+async function artCanvas(container: HTMLElement): Promise<HTMLCanvasElement> {
+  return vi.waitFor(() => {
+    const canvas = container.querySelector("canvas");
+    if (!canvas) throw new Error("EmptyState rendered no artwork canvas");
+    return canvas;
+  });
 }
 
 const action = createRawSnippet(() => ({ render: () => "<button>Create a token</button>" }));
@@ -67,6 +70,13 @@ describe("EmptyState", () => {
     await expect.element(page.getByRole("button", { name: "Create a token" })).toBeVisible();
   });
 
+  it("renders its painting once the painting's module loads", async () => {
+    const { container } = render(EmptyState, { art: "key", title: "No API tokens yet" });
+
+    await expect.element(page.getByText("No API tokens yet")).toBeVisible();
+    expect(await artCanvas(container)).toBeInstanceOf(HTMLCanvasElement);
+  });
+
   it("renders no action row without an action", async () => {
     render(EmptyState, { art: "key", title: "No API tokens yet" });
 
@@ -77,15 +87,15 @@ describe("EmptyState", () => {
   it("keeps the painting out of the accessibility tree", async () => {
     const { container } = render(EmptyState, { art: "key", title: "No API tokens yet" });
 
-    expect(artCanvas(container).parentElement?.getAttribute("aria-hidden")).toBe("true");
+    expect((await artCanvas(container)).parentElement?.getAttribute("aria-hidden")).toBe("true");
   });
 
   it("draws a smaller painting at the compact size", async () => {
     const { container } = render(EmptyState, { art: "clock", title: "No history yet", size: "compact" });
-    const compact = artCanvas(container).parentElement!.getBoundingClientRect().width;
+    const compact = (await artCanvas(container)).parentElement!.getBoundingClientRect().width;
 
     const { container: full } = render(EmptyState, { art: "clock", title: "No history yet" });
-    const standard = artCanvas(full).parentElement!.getBoundingClientRect().width;
+    const standard = (await artCanvas(full)).parentElement!.getBoundingClientRect().width;
 
     expect(compact).toBeGreaterThan(0);
     expect(compact).toBeLessThan(standard);
@@ -146,13 +156,13 @@ describe("EmptyState", () => {
         it("paints a catalogue artwork from its baked asset", async () => {
           const { container } = render(EmptyState, { art: "key", title: "No API tokens yet" });
 
-          expect(await paintedPixels(artCanvas(container))).toBeGreaterThan(0);
+          expect(await paintedPixels(await artCanvas(container))).toBeGreaterThan(0);
         });
 
         it("draws an unbaked icon source as the plain Lucide icon", async () => {
           const { container } = render(EmptyState, { art: unbakedIcon, title: "No history yet" });
 
-          expect(await paintedPixels(artCanvas(container))).toBeGreaterThan(0);
+          expect(await paintedPixels(await artCanvas(container))).toBeGreaterThan(0);
         });
       });
     }

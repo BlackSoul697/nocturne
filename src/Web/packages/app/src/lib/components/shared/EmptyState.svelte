@@ -54,13 +54,8 @@
 
 <script lang="ts">
   import type { Snippet } from "svelte";
-  import {
-    Artwork,
-    defaultPaletteFor,
-    type ArtworkId,
-    type IconArtworkSource,
-    type PaletteId,
-  } from "@nocturne/watercolour";
+  import type { ArtworkId, IconArtworkSource, PaletteId } from "@nocturne/watercolour";
+  import { lazyComponent } from "$lib/utils/lazy-component.svelte";
   import * as Card from "$lib/components/ui/card";
   import { cn } from "$lib/utils";
 
@@ -108,11 +103,10 @@
     "data-testid": testId,
   }: Props = $props();
 
-  const icon = $derived(typeof art === "string" ? undefined : art);
-  const artwork = $derived(typeof art === "string" ? art : undefined);
-  const resolvedPalette = $derived(
-    palette ?? defaultPaletteFor(typeof art === "string" ? art : `lucide-${art.name}`)
-  );
+  // Most cards that can be empty are not, so their pages never load the watercolour. The art
+  // slot keeps its size while the painting loads.
+  const painting = lazyComponent(() => import("./EmptyStateArtwork.svelte"));
+  painting.open = true;
   const inCard = $derived(variant === "card" || variant === "dashed");
   const styles = $derived(
     emptyStateVariants({
@@ -125,14 +119,11 @@
 
 {#snippet content()}
   <div class={cn(styles.root(), !inCard && className)} data-testid={inCard ? undefined : testId}>
-    <Artwork
-      {artwork}
-      {icon}
-      palette={resolvedPalette}
-      motion="auto"
-      autoplay="once"
-      class={styles.art()}
-    />
+    {#if painting.component}
+      <painting.component {art} {palette} class={styles.art()} />
+    {:else}
+      <div class={styles.art()} aria-hidden="true"></div>
+    {/if}
     <svelte:element this={headingLevel ? `h${headingLevel}` : "p"} class={styles.title()}>
       {title}
     </svelte:element>

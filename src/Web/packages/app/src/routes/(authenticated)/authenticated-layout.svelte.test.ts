@@ -27,6 +27,7 @@ import { RealtimeStore } from "$lib/stores/realtime-store.svelte";
 import ToolsLayout from "./tools/+layout.svelte";
 import { EngineHost } from "@nocturne/watercolour";
 import { illustrations } from "$lib/stores/illustrations.svelte";
+import * as appState from "$app/state";
 
 const BASE = new Date("2026-09-21T12:00:00Z").getTime();
 
@@ -128,6 +129,22 @@ describe("authenticated layout", () => {
     window.dispatchEvent(new KeyboardEvent("keydown", { key: "k", ctrlKey: true }));
 
     await expect.element(search).toBeVisible();
+  });
+
+  it("loads the join welcome only for an arrival carrying its marker", async () => {
+    appState.page.url = new URL("http://localhost/") as typeof appState.page.url;
+    const { unmount } = render(AuthenticatedLayoutHarness, { props: { data: layoutData({ tenantless: false }) } });
+    await expect.element(page.getByText("page content")).toBeVisible();
+    expect(page.getByTestId("join-welcome").elements()).toHaveLength(0);
+    unmount();
+
+    appState.page.url = new URL("http://localhost/?welcome=1") as typeof appState.page.url;
+    Object.assign(appState.page.data, { effectivePermissions: ["glucose.read"] });
+    render(AuthenticatedLayoutHarness, { props: { data: layoutData({ tenantless: false }) } });
+
+    await expect.element(page.getByTestId("join-welcome")).toBeVisible();
+    appState.page.url = new URL("http://localhost") as typeof appState.page.url;
+    delete appState.page.data.effectivePermissions;
   });
 
   it("starts the realtime store before the page beneath it initialises", async () => {

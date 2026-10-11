@@ -1,42 +1,6 @@
-<script module lang="ts">
-  import { glucoseTileFill, type GlucoseTileVariant } from "@nocturne/ui/glucose";
-
-  /** What the tile showed before this wash: a range fill, or the loading skeleton. */
-  type PriorFill = GlucoseTileVariant | "skeleton";
-
-  // Module state, not instance state: the tile unmounts this wash whenever it shows a flat fill,
-  // and the reading can move between the header tile and the Current Glucose widget, so it must
-  // outlive any one mount. That also means one live wash at a time.
-  let settledSeed = $state<number | null>(null);
-  let fadedSeed = $state<number | null>(null);
-  let shownFill: PriorFill = "skeleton";
-
-  interface TileFill {
-    loading: boolean;
-    stale: boolean;
-    disconnected: boolean;
-    variant: GlucoseTileVariant;
-  }
-
-  /**
-   * Records the flat fill a host's tile shows while it paints no wash (the skeleton, or what
-   * `glucoseTileFill` leaves unpainted), so the next wash blooms over what was on screen. Call
-   * during component initialisation.
-   */
-  export function trackUnwashedFill(tile: () => TileFill): void {
-    $effect(() => {
-      const { loading, variant, ...state } = tile();
-      if (loading) {
-        shownFill = "skeleton";
-        return;
-      }
-      const { fill, painted } = glucoseTileFill(variant, state);
-      if (!painted) shownFill = fill;
-    });
-  }
-</script>
-
 <script lang="ts">
+  import type { GlucoseTileVariant } from "@nocturne/ui/glucose";
+  import { unwashed, washSeeds, type PriorFill } from "./glucose-tile-wash-state.svelte";
   import { washInterior } from '$lib/watercolour-wash';
   import { prefersReducedMotion } from "svelte/motion";
   import { Artwork } from "@nocturne/watercolour";
@@ -57,10 +21,10 @@
   const washPerReading = $derived(illustrations.current === "animated" && !prefersReducedMotion.current);
   // Each reading paints its own stroke, over the fill that was on screen when it arrived or when
   // strokes came back on. Keyed by the derived seed, so it is not retaken on every store update.
-  const reading = $derived({ seed: washSeed, priorFill: washPerReading ? shownFill : variant });
+  const reading = $derived({ seed: washSeed, priorFill: washPerReading ? unwashed.fill : variant });
   // The settled wash shows the flat range fill.
   $effect(() => {
-    if (!washPerReading) shownFill = variant;
+    if (!washPerReading) unwashed.fill = variant;
   });
   const recolours = $derived(reading.priorFill !== variant);
   // With a 50% tail, this progress is past covered tick 140 for every stagger seed.
@@ -74,16 +38,16 @@
   function markSpread() {
     if (spreadSeed === reading.seed) return;
     spreadSeed = reading.seed;
-    shownFill = variant;
+    unwashed.fill = variant;
   }
 
   function onWashState(state: PlayerState) {
-    if (state.finished) settledSeed = reading.seed;
+    if (state.finished) washSeeds.settled = reading.seed;
     if (state.mode === "none" || state.error !== undefined) markSpread();
   }
 
   function onBloomState(state: PlayerState) {
-    if (state.finished) settledSeed = reading.seed;
+    if (state.finished) washSeeds.settled = reading.seed;
     if (state.mode === "none" || state.error !== undefined) noBloomSeed = reading.seed;
     if (noBloom || state.finished || state.progress >= BLOOM_COVERED) markSpread();
   }
@@ -92,18 +56,18 @@
   }
   const faded = $derived(
     recolours
-      ? spread && (settledSeed === reading.seed || noBloom)
-      : settledSeed === reading.seed
+      ? spread && (washSeeds.settled === reading.seed || noBloom)
+      : washSeeds.settled === reading.seed
   );
 
   function markFaded(event: TransitionEvent) {
-    if (event.target === event.currentTarget && faded) fadedSeed = reading.seed;
+    if (event.target === event.currentTarget && faded) washSeeds.faded = reading.seed;
   }
   // A settled reading unmounted mid-fade must not replay on its next mount.
   function fadedOnUnmount(_node: HTMLElement) {
     return {
       destroy: () => {
-        if (faded) fadedSeed = reading.seed;
+        if (faded) washSeeds.faded = reading.seed;
       },
     };
   }
@@ -127,7 +91,7 @@
 
 {#if washPerReading}
   {#key reading.seed}
-    {#if fadedSeed !== reading.seed}
+    {#if washSeeds.faded !== reading.seed}
       {#if recolours}
         <span
           class="absolute inset-0 prior-fill {priorFillClass[reading.priorFill]}"

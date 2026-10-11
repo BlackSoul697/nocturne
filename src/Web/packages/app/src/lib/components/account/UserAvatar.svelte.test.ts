@@ -1,7 +1,10 @@
 import { render } from "vitest-browser-svelte";
 import { page } from "vitest/browser";
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+import { releaseWatercolour, resetWatercolour } from "$lib/test-stubs/watercolour-deferral.svelte";
 import UserAvatar, { initialsOf } from "./UserAvatar.svelte";
+
+vi.mock("$lib/watercolour-deferral.svelte", () => import("$lib/test-stubs/watercolour-deferral.svelte"));
 
 describe("initialsOf", () => {
   it("takes the first letter of the first two words", () => {
@@ -19,11 +22,27 @@ describe("initialsOf", () => {
 });
 
 describe("UserAvatar", () => {
+  beforeEach(() => {
+    releaseWatercolour();
+  });
+
+  it("draws the initials at once and the wash once deferred watercolour comes due", async () => {
+    resetWatercolour();
+    const { container } = render(UserAvatar, { props: { name: "Sam Lee" } });
+
+    await expect.element(page.getByText("SL")).toBeVisible();
+    expect(container.querySelector("canvas")).toBeNull();
+
+    releaseWatercolour();
+
+    await vi.waitFor(() => expect(container.querySelector("[data-slot='avatar-fallback'] canvas")).not.toBeNull());
+  });
+
   it("draws the initials over a wash when there is no picture", async () => {
     const { container } = render(UserAvatar, { props: { name: "Sam Lee" } });
 
     await expect.element(page.getByText("SL")).toBeVisible();
-    expect(container.querySelector("[data-slot='avatar-fallback'] canvas")).not.toBeNull();
+    await vi.waitFor(() => expect(container.querySelector("[data-slot='avatar-fallback'] canvas")).not.toBeNull());
   });
   it("paints no wash behind a picture that loaded", async () => {
     const pixel =

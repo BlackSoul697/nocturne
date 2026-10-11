@@ -3,6 +3,9 @@ import { page } from "vitest/browser";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { WidgetId } from "$lib/api/generated/nocturne-api-client";
 import { dashboardTopWidgets } from "$lib/stores/appearance-store.svelte";
+import { GlucoseStatus } from "$lib/api/generated/nocturne-api-client";
+import { remoteQuery } from "$lib/test-stubs/remote-resource";
+import { releaseWatercolour, resetWatercolour } from "$lib/test-stubs/watercolour-deferral.svelte";
 
 const { now, store, settings } = vi.hoisted(() => {
   const now = Date.UTC(2026, 5, 14, 9, 30, 0);
@@ -37,6 +40,24 @@ vi.mock("$lib/stores/settings-store.svelte", () => ({
   getSettingsStore: () => settings,
 }));
 
+const summary = vi.hoisted(() => ({ current: undefined as { mills: number; status: string } | undefined }));
+
+vi.mock("$api/generated/summaries.generated.remote", () => ({
+  getSummary: () => remoteQuery(() => ({ current: summary.current })),
+}));
+
+vi.mock("$lib/watercolour-deferral.svelte", () => import("$lib/test-stubs/watercolour-deferral.svelte"));
+
+vi.mock("@nocturne/watercolour", async (importOriginal) => {
+  const fake = await import("$lib/test-stubs/Watercolour.test-stub.svelte");
+  return {
+    ...(await importOriginal<typeof import("@nocturne/watercolour")>()),
+    Artwork: fake.default,
+    mountPlayer: fake.mountPlayer,
+    bloomScene: fake.bloomScene,
+  };
+});
+
 // The value indicator uses Tooltip.Root, whose provider Sidebar.Provider supplies in the
 // app layout; the wrapper stands in for it.
 import CurrentBGDisplay from "./current-bg-display-test-wrapper.svelte";
@@ -46,6 +67,21 @@ describe("CurrentBGDisplay", () => {
     store.trackerInstances = [];
     store.trackerDefinitions = [];
     settings.features.trackerPills.enabled = false;
+    summary.current = undefined;
+    resetWatercolour();
+  });
+
+  it("shows the flat range fill until the deferred wash arrives, then the wash over it", async () => {
+    dashboardTopWidgets.hydrate([WidgetId.TirChart, WidgetId.Tdd]);
+    summary.current = { mills: now, status: GlucoseStatus.High };
+    const { container } = render(CurrentBGDisplay, { showPills: false });
+
+    await vi.waitFor(() => expect(container.innerHTML).toContain("bg-glucose-high"));
+    expect(page.getByTestId("glucose-tile-bloom").elements()).toHaveLength(0);
+
+    releaseWatercolour();
+
+    await expect.element(page.getByTestId("glucose-tile-bloom")).toBeInTheDocument();
   });
 
   it("renders status text without reading a Symbol timeSinceReading value", () => {

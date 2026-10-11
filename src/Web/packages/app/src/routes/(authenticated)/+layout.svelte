@@ -29,7 +29,8 @@
   import BackupSignInPrompt from "$lib/components/layout/BackupSignInPrompt.svelte";
   import SessionExpiryWatcher from "$lib/components/layout/SessionExpiryWatcher.svelte";
   import MembershipRequestAutoSubmit from "$lib/components/members/MembershipRequestAutoSubmit.svelte";
-  import JoinWelcome from "$lib/components/members/JoinWelcome.svelte";
+  import { WELCOME_PARAM } from "$lib/components/members/welcome";
+  import { page } from "$app/state";
   import { lazyComponent } from "$lib/utils/lazy-component.svelte";
   import { getEngineHost } from "@nocturne/watercolour";
   import { deferredWatercolour } from "$lib/watercolour-deferral.svelte";
@@ -91,6 +92,11 @@
   const commandPalette = lazyComponent(
     () => import("$lib/components/command-palette/CommandPalette.svelte"),
   );
+  // Kept once loaded: the greeting strips the marker it was loaded for.
+  const joinWelcome = lazyComponent(() => import("$lib/components/members/JoinWelcome.svelte"));
+  $effect(() => {
+    if (!tenantless && page.url.searchParams.has(WELCOME_PARAM)) joinWelcome.open = true;
+  });
   let bannerStripHeight = $state(0);
 
   const coachMarkAdapter = createCoachMarkAdapter(tenantless);
@@ -278,8 +284,8 @@
         <AlertSurfaces />
       {/if}
       <main class="flex-1 overflow-x-clip">
-        {#if !tenantless}
-          <JoinWelcome />
+        {#if joinWelcome.component}
+          <joinWelcome.component />
         {/if}
         <svelte:boundary>
           {@render children()}

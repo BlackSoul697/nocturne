@@ -52,6 +52,22 @@ describe("GlucoseTileWash", () => {
     await expect.element(greyWash()).not.toBeInTheDocument();
   });
 
+  it("blooms the first reading when the wash arrives after it", async () => {
+    const view = render(GlucoseTileWashHarness, {
+      mills: undefined,
+      variant: "neutral",
+      isLoading: true,
+      washLoaded: false,
+    });
+    await view.rerender({ mills: newReading(), variant: "high", isLoading: false });
+    await expect.element(bloom()).not.toBeInTheDocument();
+
+    await view.rerender({ washLoaded: true });
+
+    await expect.element(bloom()).toBeInTheDocument();
+    await expect.element(priorFill()).toHaveClass("bg-accent");
+  });
+
   it("blooms over the neutral fill when the first reading showed before its status", async () => {
     const view = render(GlucoseTileWashHarness, { mills: undefined, variant: "neutral", isLoading: true });
     const mills = newReading();
