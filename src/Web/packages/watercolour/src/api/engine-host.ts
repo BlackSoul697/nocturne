@@ -56,6 +56,7 @@ async function importBindings(): Promise<WasmModule> {
  */
 export class EngineHost {
   private lease: Promise<EngineLease> | undefined;
+  private boot: Promise<void> | null = null;
   private module: WasmModule | undefined;
   private engine: WasmEngine | undefined;
   private leases = 0;
@@ -109,13 +110,42 @@ export class EngineHost {
       this.engine = undefined;
       this.lostFlag = false;
     }
-    this.lease ??= this.create().catch((error) => {
-      // Not cached: a GPU process restart can make the next attempt succeed.
-      this.lease = undefined;
-      throw toWatercolourError(error);
-    });
+    if (!this.lease) {
+      const lease = this.create().catch((error) => {
+        // Not cached: a GPU process restart can make the next attempt succeed.
+        this.lease = undefined;
+        throw toWatercolourError(error);
+      });
+      const boot: Promise<void> = lease.then(
+        () => {},
+        () => {},
+      ).then(() => {
+        if (this.boot === boot) this.boot = null;
+      });
+      this.lease = lease;
+      this.boot = boot;
+    }
     this.leases += 1;
     return this.lease;
+  }
+
+  /**
+   * The engine boot in progress, or null. It settles, always resolving, once
+   * the module is loaded and the device and its pipelines are created, or the
+   * attempt has failed.
+   *
+   * Device and pipeline creation runs in the GPU process with almost nothing
+   * on the main thread, yet frame presentation stalls for its whole length
+   * (measured at 800 ms on a desktop GPU), and so does any other GPU readback
+   * issued in that window, such as a 2D canvas `toDataURL`.
+   */
+  get booting(): Promise<void> | null {
+    return this.boot;
+  }
+
+  /** Resolves once no boot is in progress, including one that starts while waiting on another. */
+  async whenNotBooting(): Promise<void> {
+    while (this.boot) await this.boot;
   }
 
   release(): void {

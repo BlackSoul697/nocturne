@@ -102,6 +102,72 @@ describe('EngineHost.warmWhenIdle', () => {
   });
 });
 
+describe('EngineHost.booting', () => {
+  function deferredModule() {
+    let resolve!: (module: WasmModule) => void;
+    let reject!: (error: Error) => void;
+    const pending = new Promise<WasmModule>((res, rej) => {
+      resolve = res;
+      reject = rej;
+    });
+    return { loadModule: () => pending, resolve, reject };
+  }
+  const settle = () => new Promise((resolve) => setTimeout(resolve, 0));
+
+  it('is null with no boot in progress, and whenNotBooting resolves at once', async () => {
+    const host = new EngineHost({ loadModule: async () => fakeModule().module, capabilities: gpu });
+    expect(host.booting).toBeNull();
+    await host.whenNotBooting();
+  });
+
+  it('holds a promise from the first acquire until the engine is created', async () => {
+    const deferred = deferredModule();
+    const host = new EngineHost({ loadModule: deferred.loadModule, capabilities: gpu });
+    const lease = host.acquire();
+    expect(host.booting).not.toBeNull();
+    let waited = false;
+    const wait = host.whenNotBooting().then(() => (waited = true));
+    await settle();
+    expect(waited).toBe(false);
+
+    deferred.resolve(fakeModule().module);
+    await lease;
+    await wait;
+    expect(host.booting).toBeNull();
+    host.acquire();
+    expect(host.booting).toBeNull();
+  });
+
+  it('resolves rather than rejects when the boot fails, and clears', async () => {
+    const deferred = deferredModule();
+    const host = new EngineHost({ loadModule: deferred.loadModule, capabilities: gpu });
+    const lease = host.acquire().catch(() => 'failed');
+    const booting = host.booting!;
+    deferred.reject(new Error('no device'));
+    expect(await lease).toBe('failed');
+    await expect(booting).resolves.toBeUndefined();
+    await host.whenNotBooting();
+    expect(host.booting).toBeNull();
+  });
+
+  it('waits through a boot that starts while it is waiting', async () => {
+    const first = deferredModule();
+    const second = deferredModule();
+    const loadModule = vi.fn<() => Promise<WasmModule>>().mockImplementationOnce(first.loadModule).mockImplementationOnce(second.loadModule);
+    const host = new EngineHost({ loadModule, capabilities: gpu });
+    void host.acquire().catch(() => void host.acquire());
+    let waited = false;
+    const wait = host.whenNotBooting().then(() => (waited = true));
+    first.reject(new Error('lost'));
+    await settle();
+    expect(loadModule).toHaveBeenCalledTimes(2);
+    expect(waited).toBe(false);
+    second.resolve(fakeModule().module);
+    await wait;
+    expect(waited).toBe(true);
+  });
+});
+
 describe('EngineHost.stillTurn', () => {
   it('hands out one turn at a time, in the order asked', async () => {
     const host = new EngineHost();

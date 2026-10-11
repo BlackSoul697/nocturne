@@ -93,7 +93,8 @@ last `tail` of the duration.
 `statechange`, `finished` and `fallback`, or poll on your own timer.
 
 Other exports: `EngineHost` (`getEngineHost()`, `configureEngineHost({ maxLiveInstances })`,
-`stats()`), `Scheduler` (`getScheduler().stats()` for the frame-time histogram),
+`stats()`, and `booting` / `whenNotBooting()` for a host that must defer a GPU
+readback, such as a 2D canvas `toDataURL`, past the device boot, which stalls it), `Scheduler` (`getScheduler().stats()` for the frame-time histogram),
 `resolveMode` / `fallbackOrder`, the baked helpers (`parseBakedManifest`,
 `stripFramePosition`, `loadStrip`, `drawStripFrame`), `assetUrl`, and the types
 from the component contract (`ArtworkId`, `PaletteId`, `ArtworkOptions`,
