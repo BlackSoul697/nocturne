@@ -59,7 +59,7 @@ describe('resolveSceneJson', () => {
     resolveSceneJson(module, { id: 'wash' });
     expect(calls).toEqual([
       ['crescent-moon', 42, 'dusk', 0.9, 'small', 'dark', 0],
-      ['wash', 0, 'moonlight', 0.7, 'large', 'light', 0],
+      ['wash', 0, 'slate', 0.7, 'large', 'light', 0],
     ]);
   });
 
@@ -76,7 +76,7 @@ describe('resolveSceneJson', () => {
     resolveSceneJson(module, { id: 'wash' }, { simResolution: 512 });
     expect(calls).toEqual([
       ['moonlit-shoreline', 0, 'moonlight', 0.7, 'extraLarge', 'light', 480],
-      ['wash', 0, 'moonlight', 0.7, 'large', 'light', 512],
+      ['wash', 0, 'slate', 0.7, 'large', 'light', 512],
     ]);
   });
 
