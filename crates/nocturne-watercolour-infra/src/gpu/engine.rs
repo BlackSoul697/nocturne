@@ -27,6 +27,9 @@ use nocturne_watercolour_core::domain::{
 use super::context::GpuContext;
 use super::interpolation::{BlendPipelines, Interpolation};
 use super::layout::StateLayout;
+use super::pipelines::{
+    ComputeDesc, FullscreenDesc, GroupDesc, LayoutDesc, ModuleDesc, Plan, RenderDesc,
+};
 use super::surface::PresentSurface;
 use super::timer::GpuTimer;
 
@@ -332,15 +335,9 @@ struct RenderUniform {
 struct SimPipelines {
     layout: wgpu::BindGroupLayout,
     velocity_divergence: wgpu::ComputePipeline,
-    jacobi_a: wgpu::ComputePipeline,
-    jacobi_b: wgpu::ComputePipeline,
-    jacobi_pair_a: wgpu::ComputePipeline,
-    jacobi_pair_b: wgpu::ComputePipeline,
-    project: wgpu::ComputePipeline,
-    project_q2: wgpu::ComputePipeline,
-    blur_h: wgpu::ComputePipeline,
-    blur_v: wgpu::ComputePipeline,
-    blur: wgpu::ComputePipeline,
+    /// By `SolverPass as usize`; only the passes [`solver_passes`] runs for
+    /// the engine's params are built.
+    solver: [Option<wgpu::ComputePipeline>; SolverPass::ALL.len()],
     advect: wgpu::ComputePipeline,
     swirl_distance_h: wgpu::ComputePipeline,
     swirl_distance_v: wgpu::ComputePipeline,
@@ -728,6 +725,278 @@ fn render_band_rows(width: u32, height: u32) -> u32 {
     whole_groups.max(16).min(height.max(1))
 }
 
+const SIM_MODULE: usize = 0;
+const RENDER_MODULE: usize = 1;
+const PAPER_MODULE: usize = 2;
+const SIM_LAYOUT: usize = 0;
+const RENDER_LAYOUT: usize = 1;
+const PRESENCE_LAYOUT: usize = 2;
+const PRESENT_LAYOUT: usize = 3;
+const PAPER_LAYOUT: usize = 4;
+
+/// The pressure solve and velocity blur passes, whose choice depends on
+/// `SimParams`.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum SolverPass {
+    JacobiPairA,
+    JacobiPairB,
+    JacobiA,
+    JacobiB,
+    Project,
+    ProjectQ2,
+    Blur,
+    BlurH,
+    BlurV,
+}
+
+impl SolverPass {
+    const ALL: [SolverPass; 9] = [
+        SolverPass::JacobiPairA,
+        SolverPass::JacobiPairB,
+        SolverPass::JacobiA,
+        SolverPass::JacobiB,
+        SolverPass::Project,
+        SolverPass::ProjectQ2,
+        SolverPass::Blur,
+        SolverPass::BlurH,
+        SolverPass::BlurV,
+    ];
+
+    fn entry_point(self) -> &'static str {
+        match self {
+            SolverPass::JacobiPairA => "jacobi_pair_a",
+            SolverPass::JacobiPairB => "jacobi_pair_b",
+            SolverPass::JacobiA => "jacobi_a",
+            SolverPass::JacobiB => "jacobi_b",
+            SolverPass::Project => "project",
+            SolverPass::ProjectQ2 => "project_q2",
+            SolverPass::Blur => "blur",
+            SolverPass::BlurH => "blur_h",
+            SolverPass::BlurV => "blur_v",
+        }
+    }
+
+    /// One workgroup per 16x16 tile rather than per [`WORKGROUP`] cells.
+    fn tiled(self) -> bool {
+        matches!(
+            self,
+            SolverPass::JacobiPairA | SolverPass::JacobiPairB | SolverPass::Blur
+        )
+    }
+}
+
+/// Calls `pass` with one tick's solver passes in dispatch order. The
+/// correction alternates between q and q2, and a pair of iterations moves it
+/// once, as a single iteration does.
+fn solver_passes(params: &SimParams, mut pass: impl FnMut(SolverPass)) {
+    let mut in_q = true;
+    for _ in 0..params.jacobi_iterations / 2 {
+        pass(if in_q {
+            SolverPass::JacobiPairA
+        } else {
+            SolverPass::JacobiPairB
+        });
+        in_q = !in_q;
+    }
+    if params.jacobi_iterations % 2 == 1 {
+        pass(if in_q {
+            SolverPass::JacobiA
+        } else {
+            SolverPass::JacobiB
+        });
+        in_q = !in_q;
+    }
+    pass(if in_q {
+        SolverPass::Project
+    } else {
+        SolverPass::ProjectQ2
+    });
+    if params.blur_radius <= BLUR_MAX_RADIUS {
+        pass(SolverPass::Blur);
+    } else {
+        pass(SolverPass::BlurH);
+        pass(SolverPass::BlurV);
+    }
+}
+
+/// Which [`SolverPass`]es `params` runs, by `SolverPass as usize`.
+fn solver_passes_used(params: &SimParams) -> [bool; SolverPass::ALL.len()] {
+    let mut used = [false; SolverPass::ALL.len()];
+    solver_passes(params, |pass| used[pass as usize] = true);
+    used
+}
+
+/// The sim module's entry points other than the [`SolverPass`]es.
+const SIM_ENTRY_POINTS: [&str; 15] = [
+    "velocity_divergence",
+    "advect",
+    "swirl_distance_h",
+    "swirl_distance_v",
+    "swirl_stream",
+    "swirl_from_scratch",
+    "swirl_from_state",
+    "transfer",
+    "transfer_g_scratch",
+    "capillary",
+    "capillary_wet",
+    "apply_brush",
+    "apply_water",
+    "apply_lift",
+    "dry_all",
+];
+
+/// `fs_render` in `render.wgsl`; see [`PresentPipeline`].
+const PRESENT: FullscreenDesc = FullscreenDesc {
+    label: "watercolour-present",
+    vertex: "vs_fullscreen",
+    fragment: "fs_render",
+};
+
+/// Everything `GpuEngine::build` creates for `params`, plus the present
+/// pipeline in each of `present_formats`.
+fn plan(params: &SimParams, present_formats: &[wgpu::TextureFormat]) -> Plan {
+    let mut sim_source = String::from(COMMON);
+    for s in SIM_SOURCES {
+        sim_source.push('\n');
+        sim_source.push_str(s);
+    }
+    let fragment = |binding: u32, ty: wgpu::BufferBindingType| wgpu::BindGroupLayoutEntry {
+        binding,
+        visibility: wgpu::ShaderStages::FRAGMENT,
+        ty: wgpu::BindingType::Buffer {
+            ty,
+            has_dynamic_offset: false,
+            min_binding_size: None,
+        },
+        count: None,
+    };
+    let read_only = wgpu::BufferBindingType::Storage { read_only: true };
+    let single = |label: &'static str, entries: Vec<wgpu::BindGroupLayoutEntry>| LayoutDesc {
+        label,
+        groups: vec![GroupDesc { label, entries }],
+    };
+    let modules = vec![
+        ModuleDesc {
+            label: "watercolour-sim",
+            source: sim_source,
+        },
+        ModuleDesc {
+            label: "watercolour-render",
+            source: format!("{}\n{RENDER_SOURCE}", include_str!("shaders/canvas.wgsl")),
+        },
+        ModuleDesc {
+            label: "watercolour-paper",
+            source: PAPER_SOURCE.into(),
+        },
+    ];
+    let layouts = vec![
+        single(
+            "watercolour-sim",
+            vec![
+                uniform_entry(0),
+                storage_entry(1, false),
+                storage_entry(2, false),
+                storage_entry(3, true),
+                wgpu::BindGroupLayoutEntry {
+                    binding: 4,
+                    visibility: wgpu::ShaderStages::COMPUTE,
+                    ty: wgpu::BindingType::Buffer {
+                        ty: wgpu::BufferBindingType::Uniform,
+                        has_dynamic_offset: true,
+                        min_binding_size: None,
+                    },
+                    count: None,
+                },
+                storage_entry(5, true),
+            ],
+        ),
+        single(
+            "watercolour-render",
+            vec![
+                uniform_entry(0),
+                storage_entry(1, true),
+                storage_entry(2, true),
+                storage_entry(3, true),
+                storage_entry(4, false),
+                storage_entry(5, true),
+            ],
+        ),
+        LayoutDesc {
+            label: "watercolour-presence",
+            groups: vec![
+                GroupDesc {
+                    label: "watercolour-presence-inputs",
+                    entries: vec![uniform_entry(0), storage_entry(1, true)],
+                },
+                GroupDesc {
+                    label: "watercolour-presence-output",
+                    entries: vec![storage_entry(0, false)],
+                },
+            ],
+        },
+        single(
+            "watercolour-present",
+            vec![
+                fragment(0, wgpu::BufferBindingType::Uniform),
+                fragment(1, read_only),
+                fragment(2, read_only),
+                fragment(3, read_only),
+                fragment(5, read_only),
+            ],
+        ),
+        single(
+            "watercolour-paper",
+            vec![uniform_entry(0), storage_entry(1, false)],
+        ),
+    ];
+    let used = solver_passes_used(params);
+    let solver = SolverPass::ALL
+        .into_iter()
+        .filter(|&pass| used[pass as usize])
+        .map(SolverPass::entry_point);
+    let mut compute: Vec<ComputeDesc> = SIM_ENTRY_POINTS
+        .into_iter()
+        .chain(solver)
+        .map(|entry| ComputeDesc {
+            entry,
+            module: SIM_MODULE,
+            layout: SIM_LAYOUT,
+        })
+        .collect();
+    compute.extend([
+        ComputeDesc {
+            entry: "render",
+            module: RENDER_MODULE,
+            layout: RENDER_LAYOUT,
+        },
+        ComputeDesc {
+            entry: "presence_taps",
+            module: RENDER_MODULE,
+            layout: PRESENCE_LAYOUT,
+        },
+        ComputeDesc {
+            entry: "generate_paper",
+            module: PAPER_MODULE,
+            layout: PAPER_LAYOUT,
+        },
+    ]);
+    let render = present_formats
+        .iter()
+        .map(|&format| RenderDesc {
+            pipeline: &PRESENT,
+            module: RENDER_MODULE,
+            layout: PRESENT_LAYOUT,
+            format,
+        })
+        .collect();
+    Plan {
+        modules,
+        layouts,
+        compute,
+        render,
+    }
+}
+
 impl GpuEngine {
     #[cfg(not(target_arch = "wasm32"))]
     pub fn new(ctx: GpuContext) -> Result<GpuEngine, EngineError> {
@@ -754,7 +1023,7 @@ impl GpuEngine {
         params: SimParams,
         render_params: RenderParams,
     ) -> Result<GpuEngine, EngineError> {
-        let (engine, validation) = Self::build(ctx, params, render_params);
+        let (engine, validation) = Self::build(ctx, params, render_params).await;
         if let Some(err) = validation.await {
             return Err(EngineError::new(format!(
                 "shader/pipeline validation: {err}"
@@ -763,217 +1032,108 @@ impl GpuEngine {
         Ok(engine)
     }
 
-    /// Creates every pipeline inside one validation scope and hands back the
-    /// scope's pending result, so sync and async constructors share the work.
-    fn build(
+    /// Creates every pipeline of [`plan`] and hands back the validation
+    /// result, so sync and async constructors share the work. In the browser
+    /// the pipelines are first compiled asynchronously (see [`super::warm`]),
+    /// and each create then runs in a task of its own: a browser whose cache
+    /// misses compiles on the presenting thread, and one create per batch
+    /// holds a frame for one compile, not for all of them. Scopes are pushed
+    /// and popped around each create, never across a yield, since other code
+    /// on the device runs in between and wgpu pops scopes in stack order.
+    async fn build(
         ctx: GpuContext,
         params: SimParams,
         render_params: RenderParams,
     ) -> (GpuEngine, impl Future<Output = Option<wgpu::Error>>) {
+        #[cfg(target_arch = "wasm32")]
+        let surface_format = super::warm::preferred_canvas_format();
+        #[cfg(target_arch = "wasm32")]
+        let present_formats: Vec<wgpu::TextureFormat> = surface_format
+            .into_iter()
+            .chain(surface_format.map(|_| wgpu::TextureFormat::Rgba16Float))
+            .collect();
+        #[cfg(not(target_arch = "wasm32"))]
+        let present_formats: Vec<wgpu::TextureFormat> = Vec::new();
+        let plan = plan(&params, &present_formats);
+        #[cfg(target_arch = "wasm32")]
+        let warmed = {
+            let blend = surface_format.map(super::interpolation::blend_plan);
+            let plans: Vec<&Plan> = std::iter::once(&plan).chain(blend.as_ref()).collect();
+            super::warm::warm(ctx.device(), &plans).await
+        };
+
         let device = ctx.device();
-        let error_scope = device.push_error_scope(wgpu::ErrorFilter::Validation);
-
-        let mut sim_source = String::from(COMMON);
-        for s in SIM_SOURCES {
-            sim_source.push('\n');
-            sim_source.push_str(s);
+        let mut checks = Vec::new();
+        let scope = device.push_error_scope(wgpu::ErrorFilter::Validation);
+        let modules: Vec<wgpu::ShaderModule> =
+            plan.modules.iter().map(|m| m.create(device)).collect();
+        let mut layouts: Vec<(Vec<wgpu::BindGroupLayout>, wgpu::PipelineLayout)> =
+            plan.layouts.iter().map(|l| l.create(device)).collect();
+        checks.push(scope.pop());
+        let mut compute: HashMap<&str, wgpu::ComputePipeline> = HashMap::new();
+        for c in &plan.compute {
+            #[cfg(target_arch = "wasm32")]
+            super::warm::next_task().await;
+            let scope = device.push_error_scope(wgpu::ErrorFilter::Validation);
+            let pipeline = c.create(device, &modules[c.module], &layouts[c.layout].1);
+            checks.push(scope.pop());
+            compute.insert(c.entry, pipeline);
         }
-        let sim_module = device.create_shader_module(wgpu::ShaderModuleDescriptor {
-            label: Some("watercolour-sim"),
-            source: wgpu::ShaderSource::Wgsl(sim_source.into()),
-        });
-        let sim_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-            label: Some("watercolour-sim"),
-            entries: &[
-                uniform_entry(0),
-                storage_entry(1, false),
-                storage_entry(2, false),
-                storage_entry(3, true),
-                wgpu::BindGroupLayoutEntry {
-                    binding: 4,
-                    visibility: wgpu::ShaderStages::COMPUTE,
-                    ty: wgpu::BindingType::Buffer {
-                        ty: wgpu::BufferBindingType::Uniform,
-                        has_dynamic_offset: true,
-                        min_binding_size: None,
-                    },
-                    count: None,
-                },
-                storage_entry(5, true),
-            ],
-        });
-        let sim_pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
-            label: Some("watercolour-sim"),
-            bind_group_layouts: &[Some(&sim_layout)],
-            ..Default::default()
-        });
-        let make = |entry: &str| {
-            device.create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
-                label: Some(entry),
-                layout: Some(&sim_pipeline_layout),
-                module: &sim_module,
-                entry_point: Some(entry),
-                compilation_options: Default::default(),
-                cache: None,
-            })
+        let solver = SolverPass::ALL.map(|pass| compute.remove(pass.entry_point()));
+        let mut take = |entry: &str| {
+            compute
+                .remove(entry)
+                .expect("every entry point taken is in the plan")
         };
+        let mut groups = |layout: usize| std::mem::take(&mut layouts[layout].0);
+
         let sim = SimPipelines {
-            velocity_divergence: make("velocity_divergence"),
-            jacobi_a: make("jacobi_a"),
-            jacobi_b: make("jacobi_b"),
-            jacobi_pair_a: make("jacobi_pair_a"),
-            jacobi_pair_b: make("jacobi_pair_b"),
-            project: make("project"),
-            project_q2: make("project_q2"),
-            blur_h: make("blur_h"),
-            blur_v: make("blur_v"),
-            blur: make("blur"),
-            advect: make("advect"),
-            swirl_distance_h: make("swirl_distance_h"),
-            swirl_distance_v: make("swirl_distance_v"),
-            swirl_stream: make("swirl_stream"),
-            swirl_from_scratch: make("swirl_from_scratch"),
-            swirl_from_state: make("swirl_from_state"),
-            transfer: make("transfer"),
-            transfer_g_scratch: make("transfer_g_scratch"),
-            capillary: make("capillary"),
-            capillary_wet: make("capillary_wet"),
-            apply_brush: make("apply_brush"),
-            apply_water: make("apply_water"),
-            apply_lift: make("apply_lift"),
-            dry_all: make("dry_all"),
-            layout: sim_layout,
+            velocity_divergence: take("velocity_divergence"),
+            solver,
+            advect: take("advect"),
+            swirl_distance_h: take("swirl_distance_h"),
+            swirl_distance_v: take("swirl_distance_v"),
+            swirl_stream: take("swirl_stream"),
+            swirl_from_scratch: take("swirl_from_scratch"),
+            swirl_from_state: take("swirl_from_state"),
+            transfer: take("transfer"),
+            transfer_g_scratch: take("transfer_g_scratch"),
+            capillary: take("capillary"),
+            capillary_wet: take("capillary_wet"),
+            apply_brush: take("apply_brush"),
+            apply_water: take("apply_water"),
+            apply_lift: take("apply_lift"),
+            dry_all: take("dry_all"),
+            layout: groups(SIM_LAYOUT).remove(0),
+        };
+        let mut presence = groups(PRESENCE_LAYOUT);
+        let render = RenderPipeline {
+            layout: groups(RENDER_LAYOUT).remove(0),
+            pipeline: take("render"),
+            presence_output: presence.remove(1),
+            presence_inputs: presence.remove(0),
+            presence: take("presence_taps"),
+        };
+        let paper = PaperPipeline {
+            layout: groups(PAPER_LAYOUT).remove(0),
+            pipeline: take("generate_paper"),
+        };
+        let present = PresentPipeline {
+            layout: groups(PRESENT_LAYOUT).remove(0),
+            pipeline_layout: layouts[PRESENT_LAYOUT].1.clone(),
+            module: modules[RENDER_MODULE].clone(),
+            cached: Arc::default(),
         };
 
-        let render_module = device.create_shader_module(wgpu::ShaderModuleDescriptor {
-            label: Some("watercolour-render"),
-            source: wgpu::ShaderSource::Wgsl(
-                format!("{}\n{RENDER_SOURCE}", include_str!("shaders/canvas.wgsl")).into(),
-            ),
-        });
-        let render_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-            label: Some("watercolour-render"),
-            entries: &[
-                uniform_entry(0),
-                storage_entry(1, true),
-                storage_entry(2, true),
-                storage_entry(3, true),
-                storage_entry(4, false),
-                storage_entry(5, true),
-            ],
-        });
-        let render_pipeline_layout =
-            device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
-                label: Some("watercolour-render"),
-                bind_group_layouts: &[Some(&render_layout)],
-                ..Default::default()
-            });
-        let render_pipeline = device.create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
-            label: Some("render"),
-            layout: Some(&render_pipeline_layout),
-            module: &render_module,
-            entry_point: Some("render"),
-            compilation_options: Default::default(),
-            cache: None,
-        });
-        let presence_inputs = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-            label: Some("watercolour-presence-inputs"),
-            entries: &[uniform_entry(0), storage_entry(1, true)],
-        });
-        let presence_output = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-            label: Some("watercolour-presence-output"),
-            entries: &[storage_entry(0, false)],
-        });
-        let presence_pipeline_layout =
-            device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
-                label: Some("watercolour-presence"),
-                bind_group_layouts: &[Some(&presence_inputs), Some(&presence_output)],
-                ..Default::default()
-            });
-        let presence_pipeline = device.create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
-            label: Some("presence_taps"),
-            layout: Some(&presence_pipeline_layout),
-            module: &render_module,
-            entry_point: Some("presence_taps"),
-            compilation_options: Default::default(),
-            cache: None,
-        });
-
-        let fragment = |binding: u32, ty: wgpu::BufferBindingType| wgpu::BindGroupLayoutEntry {
-            binding,
-            visibility: wgpu::ShaderStages::FRAGMENT,
-            ty: wgpu::BindingType::Buffer {
-                ty,
-                has_dynamic_offset: false,
-                min_binding_size: None,
-            },
-            count: None,
-        };
-        let read_only = wgpu::BufferBindingType::Storage { read_only: true };
-        let present_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-            label: Some("watercolour-present"),
-            entries: &[
-                fragment(0, wgpu::BufferBindingType::Uniform),
-                fragment(1, read_only),
-                fragment(2, read_only),
-                fragment(3, read_only),
-                fragment(5, read_only),
-            ],
-        });
-        let present_pipeline_layout =
-            device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
-                label: Some("watercolour-present"),
-                bind_group_layouts: &[Some(&present_layout)],
-                ..Default::default()
-            });
-
-        let paper_module = device.create_shader_module(wgpu::ShaderModuleDescriptor {
-            label: Some("watercolour-paper"),
-            source: wgpu::ShaderSource::Wgsl(PAPER_SOURCE.into()),
-        });
-        let paper_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-            label: Some("watercolour-paper"),
-            entries: &[uniform_entry(0), storage_entry(1, false)],
-        });
-        let paper_pipeline_layout =
-            device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
-                label: Some("watercolour-paper"),
-                bind_group_layouts: &[Some(&paper_layout)],
-                ..Default::default()
-            });
-        let paper_pipeline = device.create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
-            label: Some("generate_paper"),
-            layout: Some(&paper_pipeline_layout),
-            module: &paper_module,
-            entry_point: Some("generate_paper"),
-            compilation_options: Default::default(),
-            cache: None,
-        });
-
-        let validation = error_scope.pop();
         let timers = Timers::new(&ctx);
         let engine = GpuEngine {
             ctx,
             params,
             render_params,
             sim,
-            render: RenderPipeline {
-                layout: render_layout,
-                pipeline: render_pipeline,
-                presence_inputs,
-                presence_output,
-                presence: presence_pipeline,
-            },
-            present: PresentPipeline {
-                layout: present_layout,
-                pipeline_layout: present_pipeline_layout,
-                module: render_module,
-                cached: Arc::default(),
-            },
-            paper: PaperPipeline {
-                layout: paper_layout,
-                pipeline: paper_pipeline,
-            },
+            render,
+            present,
+            paper,
             loaded: None,
             next_checkpoint: 1,
             checkpoint_budget: CHECKPOINT_BUDGET_BYTES,
@@ -986,6 +1146,37 @@ impl GpuEngine {
             blend: BlendPipelines::default(),
             interpolation: None,
             crop: WHOLE_PAINTING,
+        };
+        // The first frame would build these; the warm-up has compiled them.
+        for desc in &plan.render {
+            #[cfg(target_arch = "wasm32")]
+            super::warm::next_task().await;
+            let scope = engine
+                .ctx
+                .device()
+                .push_error_scope(wgpu::ErrorFilter::Validation);
+            engine.present_pipeline(desc.format);
+            checks.push(scope.pop());
+        }
+        #[cfg(target_arch = "wasm32")]
+        if let Some(format) = surface_format {
+            super::warm::next_task().await;
+            let scope = engine
+                .ctx
+                .device()
+                .push_error_scope(wgpu::ErrorFilter::Validation);
+            engine.blend.get(engine.ctx.device(), format);
+            checks.push(scope.pop());
+        }
+        #[cfg(target_arch = "wasm32")]
+        drop(warmed);
+        let validation = async move {
+            for check in checks {
+                if let Some(err) = check.await {
+                    return Some(err);
+                }
+            }
+            None
         };
         (engine, validation)
     }
@@ -1325,32 +1516,13 @@ impl GpuEngine {
         let sim = &self.sim;
 
         dispatch(&sim.velocity_divergence, tiles);
-        // The correction alternates between q and q2, and a pair of
-        // iterations moves it once, as a single iteration does.
-        let mut in_q = true;
-        for _ in 0..self.params.jacobi_iterations / 2 {
-            dispatch(
-                if in_q {
-                    &sim.jacobi_pair_a
-                } else {
-                    &sim.jacobi_pair_b
-                },
-                tiles,
-            );
-            in_q = !in_q;
-        }
-        if self.params.jacobi_iterations % 2 == 1 {
-            dispatch(if in_q { &sim.jacobi_a } else { &sim.jacobi_b }, cells);
-            in_q = !in_q;
-        }
-        dispatch(if in_q { &sim.project } else { &sim.project_q2 }, cells);
-
-        if self.params.blur_radius <= BLUR_MAX_RADIUS {
-            dispatch(&sim.blur, tiles);
-        } else {
-            dispatch(&sim.blur_h, cells);
-            dispatch(&sim.blur_v, cells);
-        }
+        solver_passes(&self.params, |solver| {
+            #[allow(clippy::expect_used)]
+            let pipeline = sim.solver[solver as usize]
+                .as_ref()
+                .expect("build creates every solver pass the params run");
+            dispatch(pipeline, if solver.tiled() { tiles } else { cells });
+        });
         dispatch(&sim.advect, cells);
 
         let mut g_in_scratch = true;
@@ -2363,33 +2535,12 @@ impl GpuEngine {
     }
 
     fn build_present_pipeline(&self, format: wgpu::TextureFormat) -> wgpu::RenderPipeline {
-        self.ctx
-            .device()
-            .create_render_pipeline(&wgpu::RenderPipelineDescriptor {
-                label: Some("watercolour-present"),
-                layout: Some(&self.present.pipeline_layout),
-                vertex: wgpu::VertexState {
-                    module: &self.present.module,
-                    entry_point: Some("vs_fullscreen"),
-                    compilation_options: Default::default(),
-                    buffers: &[],
-                },
-                primitive: wgpu::PrimitiveState::default(),
-                depth_stencil: None,
-                multisample: wgpu::MultisampleState::default(),
-                fragment: Some(wgpu::FragmentState {
-                    module: &self.present.module,
-                    entry_point: Some("fs_render"),
-                    compilation_options: Default::default(),
-                    targets: &[Some(wgpu::ColorTargetState {
-                        format,
-                        blend: None,
-                        write_mask: wgpu::ColorWrites::ALL,
-                    })],
-                }),
-                multiview_mask: None,
-                cache: None,
-            })
+        PRESENT.create(
+            self.ctx.device(),
+            &self.present.module,
+            &self.present.pipeline_layout,
+            format,
+        )
     }
 
     /// Zero when the budget is below one checkpoint: a playback then holds
@@ -2964,5 +3115,86 @@ impl std::fmt::Debug for GpuEngine {
             .field("adapter", &self.ctx.adapter_name())
             .field("loaded", &self.loaded.is_some())
             .finish()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn passes(params: &SimParams) -> Vec<SolverPass> {
+        let mut passes = Vec::new();
+        solver_passes(params, |pass| passes.push(pass));
+        passes
+    }
+
+    fn with(jacobi_iterations: u32, blur_radius: u32) -> SimParams {
+        SimParams {
+            jacobi_iterations,
+            blur_radius,
+            ..SimParams::default()
+        }
+    }
+
+    #[test]
+    fn default_params_run_the_paired_solve_and_the_one_dispatch_blur() {
+        use SolverPass::*;
+        assert_eq!(
+            passes(&SimParams::default()),
+            [
+                JacobiPairA,
+                JacobiPairB,
+                JacobiPairA,
+                JacobiPairB,
+                Project,
+                Blur
+            ]
+        );
+    }
+
+    #[test]
+    fn an_odd_count_ends_on_a_single_iteration_and_projects_from_where_it_lands() {
+        use SolverPass::*;
+        assert_eq!(passes(&with(1, 5)), [JacobiA, ProjectQ2, Blur]);
+        assert_eq!(passes(&with(2, 5)), [JacobiPairA, ProjectQ2, Blur]);
+        assert_eq!(
+            passes(&with(7, 5)),
+            [
+                JacobiPairA,
+                JacobiPairB,
+                JacobiPairA,
+                JacobiB,
+                Project,
+                Blur
+            ]
+        );
+    }
+
+    #[test]
+    fn a_blur_wider_than_workgroup_memory_runs_separably() {
+        use SolverPass::*;
+        assert_eq!(
+            passes(&with(8, BLUR_MAX_RADIUS + 1))[4..],
+            [Project, BlurH, BlurV]
+        );
+        assert_eq!(passes(&with(8, BLUR_MAX_RADIUS))[4..], [Project, Blur]);
+    }
+
+    #[test]
+    fn the_plan_builds_only_the_solver_passes_the_params_run() {
+        let entries = |params: &SimParams| -> Vec<&str> {
+            plan(params, &[]).compute.iter().map(|c| c.entry).collect()
+        };
+        let default = entries(&SimParams::default());
+        assert_eq!(default.len(), 22);
+        for unused in ["jacobi_a", "jacobi_b", "project_q2", "blur_h", "blur_v"] {
+            assert!(!default.contains(&unused), "{unused} is built");
+        }
+        let odd = entries(&with(7, BLUR_MAX_RADIUS + 1));
+        for used in ["jacobi_b", "project", "blur_h", "blur_v"] {
+            assert!(odd.contains(&used), "{used} is not built");
+        }
+        assert!(!odd.contains(&"blur"));
+        assert!(!odd.contains(&"jacobi_a"));
     }
 }

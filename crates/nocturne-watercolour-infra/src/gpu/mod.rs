@@ -7,8 +7,11 @@ mod context;
 mod engine;
 mod interpolation;
 mod layout;
+mod pipelines;
 mod surface;
 mod timer;
+#[cfg(target_arch = "wasm32")]
+mod warm;
 
 pub use context::GpuContext;
 pub use engine::{

@@ -5,7 +5,7 @@ See [docs/watercolour/](../../../../docs/watercolour/README.md) for the full dev
 Watercolour artwork for the Nocturne UI. A WebGPU simulation (Rust, compiled to
 wasm) paints each artwork on in front of the viewer; where WebGPU is missing,
 capped or refused, the same artwork plays from a baked frame strip or shows as a
-still PNG. The public API is plain TypeScript; `Artwork.svelte` is a thin wrapper
+baked still. The public API is plain TypeScript; `Artwork.svelte` is a thin wrapper
 over it.
 
 The engine itself lives in `crates/nocturne-watercolour-{core,infra,wasm}`. Read
@@ -194,7 +194,7 @@ after live ran replaces the element in place (`player.canvas` is the current one
 
 ## Baked format
 
-`strip.png` holds `frames` equal frames stacked vertically, evenly spaced in
+`strip.webp` holds `frames` equal frames stacked vertically, evenly spaced in
 artistic progress with the last frame finished and dry; `strip.json` describes it:
 
 ```json
@@ -210,8 +210,15 @@ linear blend; at 12 frames the difference is not visible. `durationMs` in the
 manifest is the artwork's suggested reveal length; the player's option wins.
 
 The shipped assets live under `assets/<artwork>/<palette>[_dark]/` as
-`final-512.png`, `final-128.png`, `strip.png`, `strip.json`, one set per
-catalogue artwork. The full catalogue is too large to check in (17 artworks x
+`final-512.avif`, `final-512.webp`, `final-128.webp`, `strip.webp` and
+`strip.json`, one set per catalogue artwork. The bake writes PNGs;
+`scripts/to-avif.mjs` encodes the 512 px final as AVIF (q90, 4:4:4: alpha
+within 7/255 of the PNG, colour PSNR at least 51.9 dB, 36 % smaller than its
+WebP) and `scripts/to-webp.mjs` encodes every image as WebP with a lossless
+alpha plane, then deletes the PNGs. The 128 px finals and the strips ship only
+as WebP: as AVIF they came out 10 % and 75 % larger. The loader asks for the
+AVIF final where `createImageBitmap` decodes a probe AVIF (`imageFormat()`,
+once per page), else the WebP. The full catalogue is too large to check in (17 artworks x
 6 palettes x 2 surfaces is ~100 MB), so the bundle ships a **curated subset**:
 each artwork in one default palette x both surfaces, baked at seed 1610,
 intensity 0.7 and `large` detail by

@@ -221,7 +221,9 @@ import { assetUrl, defaultPaletteFor, hasBundledAsset } from '@nocturne/watercol
 async. The map of bundled asset URLs is a chunk of its own, imported on the
 first resolve that may draw a baked or static asset: a player whose mode is
 `live` whatever its assets does not read it unless live fails, and an `off`
-presentation never does.
+presentation never does. `assetUrl` asks for the AVIF of the 512 px final where `createImageBitmap`
+decodes a probe AVIF (`imageFormat()`, probed once per page), else the WebP;
+every other image ships only as WebP.
 
 ## Icon sources
 

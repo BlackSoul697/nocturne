@@ -76,8 +76,8 @@ export { authoredSceneJson } from './api/scenes';
 
 export { ICON_HINTS } from './api/icon-hints';
 
-export { assetUrl, assetAvailable, hasBundledAsset, loadManifest, bundledArtworkIds, defaultPaletteFor, DEFAULT_PALETTE } from './api/assets';
-export type { AssetVariant, AssetOptions, AssetKey } from './api/assets';
+export { assetUrl, assetAvailable, hasBundledAsset, loadManifest, bundledArtworkIds, defaultPaletteFor, imageFormat, AVIF_VARIANTS, DEFAULT_PALETTE } from './api/assets';
+export type { AssetVariant, AssetOptions, AssetKey, ImageFormat } from './api/assets';
 
 export { fitMark, fitStroke, fitDrops, fitSplotch, borderMark, washStroke, glazeStroke, mergeReserves, clearanceField, strokeStep, bleedFor, MAX_THICKNESS, MAX_RADIUS, MAX_DROP_RADIUS } from './api/drop-stroke';
 export type { DropMark, DropKind, MarkOptions, DropStroke, StrokeOptions, StrokeSide, ClearanceField, Dab, Pt } from './api/drop-stroke';

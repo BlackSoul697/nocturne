@@ -1,5 +1,7 @@
 use std::sync::{Arc, Mutex};
 
+use super::pipelines::{FullscreenDesc, GroupDesc, LayoutDesc, ModuleDesc, Plan, RenderDesc};
+
 /// Tick-blend pipelines by target format, built on first use and shared by an
 /// engine's forks; an [`Interpolation`] owns only its textures.
 #[derive(Clone, Default)]
@@ -24,79 +26,72 @@ impl BlendPipelines {
     }
 }
 
+const BLEND: FullscreenDesc = FullscreenDesc {
+    label: "tick-blend",
+    vertex: "vertex",
+    fragment: "fragment",
+};
+
+/// The tick-blend module, layout and pipeline into `format`.
+pub(super) fn blend_plan(format: wgpu::TextureFormat) -> Plan {
+    let texture_entry = |binding| wgpu::BindGroupLayoutEntry {
+        binding,
+        visibility: wgpu::ShaderStages::FRAGMENT,
+        ty: wgpu::BindingType::Texture {
+            sample_type: wgpu::TextureSampleType::Float { filterable: false },
+            view_dimension: wgpu::TextureViewDimension::D2,
+            multisampled: false,
+        },
+        count: None,
+    };
+    Plan {
+        modules: vec![ModuleDesc {
+            label: "tick-blend",
+            source: format!(
+                "{}\n{}",
+                include_str!("shaders/canvas.wgsl"),
+                include_str!("shaders/interpolation.wgsl")
+            ),
+        }],
+        layouts: vec![LayoutDesc {
+            label: "tick-blend",
+            groups: vec![GroupDesc {
+                label: "tick-blend",
+                entries: vec![
+                    texture_entry(0),
+                    texture_entry(1),
+                    wgpu::BindGroupLayoutEntry {
+                        binding: 2,
+                        visibility: wgpu::ShaderStages::FRAGMENT,
+                        ty: wgpu::BindingType::Buffer {
+                            ty: wgpu::BufferBindingType::Uniform,
+                            has_dynamic_offset: false,
+                            min_binding_size: None,
+                        },
+                        count: None,
+                    },
+                ],
+            }],
+        }],
+        compute: Vec::new(),
+        render: vec![RenderDesc {
+            pipeline: &BLEND,
+            module: 0,
+            layout: 0,
+            format,
+        }],
+    }
+}
+
 impl BlendPipeline {
     fn new(device: &wgpu::Device, format: wgpu::TextureFormat) -> Self {
-        let texture_entry = |binding| wgpu::BindGroupLayoutEntry {
-            binding,
-            visibility: wgpu::ShaderStages::FRAGMENT,
-            ty: wgpu::BindingType::Texture {
-                sample_type: wgpu::TextureSampleType::Float { filterable: false },
-                view_dimension: wgpu::TextureViewDimension::D2,
-                multisampled: false,
-            },
-            count: None,
-        };
-        let layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-            label: Some("tick-blend"),
-            entries: &[
-                texture_entry(0),
-                texture_entry(1),
-                wgpu::BindGroupLayoutEntry {
-                    binding: 2,
-                    visibility: wgpu::ShaderStages::FRAGMENT,
-                    ty: wgpu::BindingType::Buffer {
-                        ty: wgpu::BufferBindingType::Uniform,
-                        has_dynamic_offset: false,
-                        min_binding_size: None,
-                    },
-                    count: None,
-                },
-            ],
-        });
-        let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
-            label: Some("tick-blend"),
-            bind_group_layouts: &[Some(&layout)],
-            immediate_size: 0,
-        });
-        let module = device.create_shader_module(wgpu::ShaderModuleDescriptor {
-            label: Some("tick-blend"),
-            source: wgpu::ShaderSource::Wgsl(
-                format!(
-                    "{}\n{}",
-                    include_str!("shaders/canvas.wgsl"),
-                    include_str!("shaders/interpolation.wgsl")
-                )
-                .into(),
-            ),
-        });
-        let pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
-            label: Some("tick-blend"),
-            layout: Some(&pipeline_layout),
-            vertex: wgpu::VertexState {
-                module: &module,
-                entry_point: Some("vertex"),
-                compilation_options: Default::default(),
-                buffers: &[],
-            },
-            primitive: Default::default(),
-            depth_stencil: None,
-            multisample: Default::default(),
-            fragment: Some(wgpu::FragmentState {
-                module: &module,
-                entry_point: Some("fragment"),
-                compilation_options: Default::default(),
-                targets: &[Some(wgpu::ColorTargetState {
-                    format,
-                    blend: None,
-                    write_mask: wgpu::ColorWrites::ALL,
-                })],
-            }),
-            multiview_mask: None,
-            cache: None,
-        });
+        let plan = blend_plan(format);
+        let module = plan.modules[0].create(device);
+        let (mut groups, pipeline_layout) = plan.layouts[0].create(device);
+        let pipeline = BLEND.create(device, &module, &pipeline_layout, format);
         Self {
             format,
-            layout,
+            layout: groups.remove(0),
             pipeline,
         }
     }
