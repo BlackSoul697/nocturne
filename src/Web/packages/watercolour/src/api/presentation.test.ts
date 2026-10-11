@@ -143,6 +143,27 @@ describe('playback under a presentation', () => {
       expect(player.state.motion).toBe('reduced');
     });
 
+    it('settles a scene that opted out of a live still on none, probing and acquiring nothing', async () => {
+      setPresentation('still');
+      const capabilities = vi.fn(gpu);
+      const host = new EngineHost({ loadModule: vi.fn(), capabilities: gpu });
+      const acquire = vi.spyOn(host, 'acquire');
+      const player = createArtworkPlayer(drawable(), { sceneJson: '{"version":1}' }, {
+        capabilities,
+        scheduler,
+        engineHost: host,
+        liveStill: false,
+        width: 32,
+        height: 32,
+        dpr: 1,
+      });
+      await player.ready;
+      expect(player.state.mode).toBe('none');
+      expect(player.state.error).toBeUndefined();
+      expect(capabilities).not.toHaveBeenCalled();
+      expect(acquire).not.toHaveBeenCalled();
+    });
+
     it('makes warm a no-op, so nothing boots the engine ahead of a still', async () => {
       setPresentation('still');
       const loadModule = vi.fn();

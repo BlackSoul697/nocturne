@@ -20,6 +20,8 @@ export interface ModeInputs {
   customised?: boolean;
   /** The presentation is `still`; see {@link resolveMode}. */
   still?: boolean;
+  /** Under `still`, a source with no asset may render one live frame; default true. */
+  liveStill?: boolean;
 }
 
 export function resolveMotion(motion: ArtworkMotion, systemReducedMotion: boolean): 'full' | 'reduced' {
@@ -34,7 +36,8 @@ export function resolveMotion(motion: ArtworkMotion, systemReducedMotion: boolea
  *
  * Under the `still` presentation that holds whatever was requested and
  * whatever the seed: the still asset, else the strip's last frame, and only
- * a source with neither (a generated scene) renders one live frame. Booting
+ * a source with neither (a generated scene) renders one live frame, unless
+ * `liveStill` is false, when it draws nothing. Booting
  * the device freezes frame presentation for most of a second, which a
  * viewer who asked for stills should never pay for one.
  */
@@ -43,7 +46,7 @@ export function resolveMode(inputs: ModeInputs): ResolvedMode {
   if (inputs.still) {
     if (inputs.hasStatic) return 'static';
     if (inputs.hasBaked) return 'baked';
-    return liveAvailable ? 'live' : 'none';
+    return liveAvailable && inputs.liveStill !== false ? 'live' : 'none';
   }
   const reduced = resolveMotion(inputs.motion, inputs.capabilities.reducedMotion) === 'reduced';
   switch (inputs.requested) {

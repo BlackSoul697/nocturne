@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-type CreatedOptions = { width: number; height: number; startFinished?: boolean };
+type CreatedOptions = { width: number; height: number; startFinished?: boolean; liveStill?: boolean };
 
 const created: Array<{ source: { surface?: string }; options: CreatedOptions; disposed: boolean }> = [];
 let released = false;
@@ -83,6 +83,13 @@ describe('mountPlayer', () => {
     const onProgress = vi.fn();
     mount(fakeFrame(160, 60), canvas, { scene: () => '{}', blendTicks: true, onProgress });
     expect(created[0].options).toMatchObject({ blendTicks: true, onProgress });
+  });
+
+  it('draws nothing for a generated scene under still unless asked, and leaves catalogue artwork to its asset', () => {
+    mount(fakeFrame(160, 60), canvas, { scene: () => '{}' });
+    mount(fakeFrame(160, 60), canvas, { scene: () => '{}', liveStill: true });
+    mount(fakeFrame(160, 60), canvas, { artwork: 'tab-underline' });
+    expect(created.map((entry) => entry.options.liveStill)).toEqual([false, true, undefined]);
   });
 
   it('builds a generated scene at the measured size and repaints a released scene after resize', () => {

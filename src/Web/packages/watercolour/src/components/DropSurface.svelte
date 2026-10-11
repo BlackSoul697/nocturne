@@ -30,8 +30,8 @@
    * still scaled up, and the palette is exact instead of pushed through a
    * filter. There is no baked or still fallback for a generated stroke. A host
    * that wants the marks calls `getEngineHost().warm()` so the first pointer
-   * does not pay the engine boot; a machine with no WebGPU, or one past the
-   * live cap, shows nothing.
+   * does not pay the engine boot; a machine with no WebGPU, one past the
+   * live cap, or a viewer on the `still` presentation sees nothing.
    */
   let {
     as = 'div',
@@ -364,6 +364,7 @@
       { scene: (module) => dropScene(module, current, w, h, options).sceneJson },
       {
         mode: 'live',
+        liveStill: false,
         durationMs: engineMs,
         // The pen's share of the clock: what the drawn stroke takes at its
         // pace, and never less than the default brushwork a laydown gets.

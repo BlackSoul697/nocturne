@@ -80,6 +80,13 @@ export interface PlayerOptions extends ArtworkOptions, AssetOptions {
    * accents that would otherwise pin a slot for as long as they are mounted.
    */
   releaseAfterFinish?: boolean;
+  /**
+   * Under the `still` presentation, a source with no still asset or strip (a
+   * generated scene) renders its finished frame live, booting the engine for
+   * it. `false` settles on `none` instead, for a scene that is decoration.
+   * Default true.
+   */
+  liveStill?: boolean;
   /** Skips the reveal: finishes on first appearance whatever the motion, as a repaint of a finished artwork does. */
   startFinished?: boolean;
   /**
@@ -1293,9 +1300,9 @@ class Player implements ArtworkPlayer {
     // guaranteed last rung below `live`.
     const hasBaked = this.bakedServesSize() && this.assetOk('strip') && this.assetOk('manifest');
     const hasStatic = this.icon ? true : this.assetOk('final');
-    // A still drawn from an asset never asks for an adapter: the probe is a
-    // round trip to the GPU process that the asset does not need.
-    const capabilities = still && (hasStatic || hasBaked)
+    // A still that will not run live never asks for an adapter: the probe is
+    // a round trip to the GPU process that an asset, or nothing, does not need.
+    const capabilities = still && (hasStatic || hasBaked || this.options.liveStill === false)
       ? NO_GPU
       : await (this.options.capabilities ?? detectCapabilities)();
     if (this.disposed) return;
@@ -1311,6 +1318,7 @@ class Player implements ArtworkPlayer {
       releaseAfterFinish: this.options.releaseAfterFinish,
       customised: this.customised(),
       still,
+      liveStill: this.options.liveStill,
     });
     if (first !== 'live') {
       // An explicit `live` request that resolveMode downgraded (usually the

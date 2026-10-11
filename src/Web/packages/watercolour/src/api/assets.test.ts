@@ -34,6 +34,13 @@ describe('curated bundle', () => {
     }
   });
 
+  it('has both stills of the tab underline on each surface, so the still presentation draws it without the engine', () => {
+    for (const surface of ['light', 'dark'] as const) {
+      expect(hasBundledAsset({ id: 'tab-underline', surface }, 'final')).toBe(true);
+      expect(hasBundledAsset({ id: 'tab-underline', surface }, 'final-small')).toBe(true);
+    }
+  });
+
   it('defaults unknown artworks to moonlight', () => {
     expect(defaultPaletteFor('no-such-artwork')).toBe('moonlight');
   });

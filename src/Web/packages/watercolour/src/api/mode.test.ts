@@ -11,7 +11,7 @@ const resolve = (
   requested: ArtworkMode,
   capabilities: typeof gpu,
   assets: { baked: boolean; static: boolean },
-  extra: { motion?: ArtworkMotion; capReached?: boolean; releaseAfterFinish?: boolean; customised?: boolean; still?: boolean } = {},
+  extra: { motion?: ArtworkMotion; capReached?: boolean; releaseAfterFinish?: boolean; customised?: boolean; still?: boolean; liveStill?: boolean } = {},
 ) =>
   resolveMode({
     requested,
@@ -23,6 +23,7 @@ const resolve = (
     releaseAfterFinish: extra.releaseAfterFinish,
     customised: extra.customised,
     still: extra.still,
+    liveStill: extra.liveStill,
   });
 
 const all = { baked: true, static: true };
@@ -85,6 +86,8 @@ describe('resolveMode', () => {
     expect(resolve('live', gpu, none, still)).toBe('live');
     expect(resolve('auto', noGpu, none, still)).toBe('none');
     expect(resolve('auto', gpu, none, { ...still, capReached: true })).toBe('none');
+    expect(resolve('auto', gpu, none, { ...still, liveStill: false })).toBe('none');
+    expect(resolve('auto', gpu, { baked: false, static: true }, { ...still, liveStill: false })).toBe('static');
   });
 
   it('explicit modes fall down the chain when unavailable', () => {
