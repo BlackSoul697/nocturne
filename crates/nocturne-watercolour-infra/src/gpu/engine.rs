@@ -1032,10 +1032,14 @@ impl GpuEngine {
         Ok(engine)
     }
 
-    /// Creates every pipeline of [`plan`] inside one validation scope and
-    /// hands back the scope's pending result, so sync and async constructors
-    /// share the work. In the browser the pipelines are first compiled
-    /// asynchronously; see [`super::warm`].
+    /// Creates every pipeline of [`plan`] and hands back the validation
+    /// result, so sync and async constructors share the work. In the browser
+    /// the pipelines are first compiled asynchronously (see [`super::warm`]),
+    /// and each create then runs in a task of its own: a browser whose cache
+    /// misses compiles on the presenting thread, and one create per batch
+    /// holds a frame for one compile, not for all of them. Scopes are pushed
+    /// and popped around each create, never across a yield, since other code
+    /// on the device runs in between and wgpu pops scopes in stack order.
     async fn build(
         ctx: GpuContext,
         params: SimParams,
@@ -1059,19 +1063,22 @@ impl GpuEngine {
         };
 
         let device = ctx.device();
-        let error_scope = device.push_error_scope(wgpu::ErrorFilter::Validation);
+        let mut checks = Vec::new();
+        let scope = device.push_error_scope(wgpu::ErrorFilter::Validation);
         let modules: Vec<wgpu::ShaderModule> =
             plan.modules.iter().map(|m| m.create(device)).collect();
         let mut layouts: Vec<(Vec<wgpu::BindGroupLayout>, wgpu::PipelineLayout)> =
             plan.layouts.iter().map(|l| l.create(device)).collect();
-        let mut compute: HashMap<&str, wgpu::ComputePipeline> = plan
-            .compute
-            .iter()
-            .map(|c| {
-                let pipeline = c.create(device, &modules[c.module], &layouts[c.layout].1);
-                (c.entry, pipeline)
-            })
-            .collect();
+        checks.push(scope.pop());
+        let mut compute: HashMap<&str, wgpu::ComputePipeline> = HashMap::new();
+        for c in &plan.compute {
+            #[cfg(target_arch = "wasm32")]
+            super::warm::next_task().await;
+            let scope = device.push_error_scope(wgpu::ErrorFilter::Validation);
+            let pipeline = c.create(device, &modules[c.module], &layouts[c.layout].1);
+            checks.push(scope.pop());
+            compute.insert(c.entry, pipeline);
+        }
         let solver = SolverPass::ALL.map(|pass| compute.remove(pass.entry_point()));
         let mut take = |entry: &str| {
             compute
@@ -1142,15 +1149,35 @@ impl GpuEngine {
         };
         // The first frame would build these; the warm-up has compiled them.
         for desc in &plan.render {
+            #[cfg(target_arch = "wasm32")]
+            super::warm::next_task().await;
+            let scope = engine
+                .ctx
+                .device()
+                .push_error_scope(wgpu::ErrorFilter::Validation);
             engine.present_pipeline(desc.format);
+            checks.push(scope.pop());
         }
         #[cfg(target_arch = "wasm32")]
         if let Some(format) = surface_format {
+            super::warm::next_task().await;
+            let scope = engine
+                .ctx
+                .device()
+                .push_error_scope(wgpu::ErrorFilter::Validation);
             engine.blend.get(engine.ctx.device(), format);
+            checks.push(scope.pop());
         }
-        let validation = error_scope.pop();
         #[cfg(target_arch = "wasm32")]
         drop(warmed);
+        let validation = async move {
+            for check in checks {
+                if let Some(err) = check.await {
+                    return Some(err);
+                }
+            }
+            None
+        };
         (engine, validation)
     }
 

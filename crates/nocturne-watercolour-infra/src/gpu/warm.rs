@@ -208,6 +208,26 @@ pub(super) fn preferred_canvas_format() -> Option<wgpu::TextureFormat> {
     }
 }
 
+/// Resolves in a later task (`setTimeout(0)`), so the device calls made
+/// before it reach the GPU process as a command batch of their own.
+pub(super) async fn next_task() {
+    let promise = js_sys::Promise::new(&mut |resolve, _reject| {
+        let global = js_sys::global();
+        let scheduled = Reflect::get(&global, &JsValue::from_str("setTimeout"))
+            .ok()
+            .and_then(|f| f.dyn_into::<Function>().ok())
+            .is_some_and(|set_timeout| {
+                set_timeout
+                    .call2(&global, &resolve, &JsValue::from(0))
+                    .is_ok()
+            });
+        if !scheduled {
+            let _ = resolve.call0(&JsValue::UNDEFINED);
+        }
+    });
+    let _ = JsFuture::from(promise).await;
+}
+
 fn format_name(format: wgpu::TextureFormat) -> Option<&'static str> {
     match format {
         wgpu::TextureFormat::Bgra8Unorm => Some("bgra8unorm"),
