@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import manifest from '../../scripts/bake-manifest.json';
 import { ARTWORK_ASPECT, type ArtworkId } from '../types';
+import { bundledUrl } from './bundled-assets';
 import { bundledArtworkIds, defaultPaletteFor, hasBundledAsset, iconAssetKey, DEFAULT_PALETTE } from './assets';
 
 /** Manifest ids are `lucide:<name>`; the bundled dirs and DEFAULT_PALETTE keys are `lucide-<name>`. */
@@ -39,6 +40,11 @@ describe('curated bundle', () => {
       expect(await hasBundledAsset({ id: 'tab-underline', surface }, 'final')).toBe(true);
       expect(await hasBundledAsset({ id: 'tab-underline', surface }, 'final-small')).toBe(true);
     }
+  });
+
+  it('holds each URL itself rather than a loader, so no JS chunk stands in front of an asset fetch', () => {
+    expect(bundledUrl({ id: 'crescent-moon' }, 'final-128.webp')).toMatch(/final-128[^/]*\.webp/);
+    expect(bundledUrl({ id: 'crescent-moon' }, 'strip.json')).toMatch(/strip[^/]*\.json/);
   });
 
   it('defaults unknown artworks to moonlight', () => {

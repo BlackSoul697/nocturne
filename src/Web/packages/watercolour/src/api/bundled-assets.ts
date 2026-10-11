@@ -3,18 +3,22 @@ import { paletteKey } from './scenes';
 import type { AssetKey } from './assets';
 
 /**
- * Bundled assets laid out as `assets/<artwork>/<paletteKey>/<file>`. Vite
- * rewrites each entry to a hashed URL at build time; nothing is fetched until
- * a loader is called.
+ * Bundled assets laid out as `assets/<artwork>/<paletteKey>/<file>`, each
+ * rewritten by Vite to its hashed URL. Nothing is fetched until a URL is.
  *
  * The map's keys alone are a third of the library's static weight, so this
  * module is only ever imported dynamically, by `assets.ts`, on the first
- * resolve that may draw a baked or static asset.
+ * resolve that may draw a baked or static asset. Within it the URLs are
+ * eager: a lazy entry is a JS chunk of its own holding one string, a round
+ * trip in front of every still, strip and manifest fetched. `no-inline`
+ * keeps the files under Vite's inline limit (most 128 px stills and every
+ * manifest) out of the map as data URLs, which would make it 180 KB gzip.
  */
 const bundled = import.meta.glob('../../assets/*/*/*.{webp,json}', {
-  query: '?url',
+  query: '?url&no-inline',
   import: 'default',
-}) as Record<string, () => Promise<string>>;
+  eager: true,
+}) as Record<string, string>;
 
 function bundledPath(key: AssetKey, file: string): string {
   const exact = `../../assets/${key.id}/${paletteKey(sourcePalette(key.id, key.palette), key.surface)}/${file}`;
@@ -27,8 +31,8 @@ export function hasBundled(key: AssetKey, file: string): boolean {
   return bundledPath(key, file) in bundled;
 }
 
-export function bundledUrl(key: AssetKey, file: string): Promise<string> | undefined {
-  return bundled[bundledPath(key, file)]?.();
+export function bundledUrl(key: AssetKey, file: string): string | undefined {
+  return bundled[bundledPath(key, file)];
 }
 
 export function bundledIds(): string[] {
