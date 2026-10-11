@@ -73,7 +73,6 @@ public class TreatmentDecomposerTests : IDisposable
             _activeProfileResolverMock.Object,
             _insulinRepoMock.Object,
             Mock.Of<IAuditContext>(),
-            Mock.Of<IDeduplicationService>(),
             NullLogger<TreatmentDecomposer>.Instance);
     }
 
@@ -1065,6 +1064,152 @@ public class TreatmentDecomposerTests : IDisposable
         TreatmentDecomposer.MapCalculationType(null).Should().BeNull();
     }
 
+    [Theory]
+    [InlineData(true, "loop://Test Phone", null, V4Models.TempBasalOrigin.Algorithm)]
+    [InlineData(false, "loop://Test Phone", null, V4Models.TempBasalOrigin.Manual)]
+    [InlineData(null, "loop://Test Phone", null, V4Models.TempBasalOrigin.Algorithm)]
+    [InlineData(true, "loop://Test Phone", "suspend", V4Models.TempBasalOrigin.Suspended)]
+    [InlineData(false, "loop://Test Phone", "suspend", V4Models.TempBasalOrigin.Suspended)]
+    [InlineData(true, "openaps://AndroidAPS", null, V4Models.TempBasalOrigin.Algorithm)]
+    [InlineData(null, "openaps://AndroidAPS", null, V4Models.TempBasalOrigin.Manual)]
+    [InlineData(null, "Trio", null, V4Models.TempBasalOrigin.Manual)]
+    [InlineData(null, null, null, V4Models.TempBasalOrigin.Manual)]
+    public void MapToTempBasal_OriginFollowsReasonThenAutomaticFlag(
+        bool? automatic, string? enteredBy, string? reason, V4Models.TempBasalOrigin expected)
+    {
+        var treatment = new Treatment
+        {
+            Id = "tb-origin-1",
+            EventType = "Temp Basal",
+            Mills = 1760529600000,
+            Absolute = 0.4,
+            Duration = 30,
+            Automatic = automatic,
+            EnteredBy = enteredBy,
+            Reason = reason,
+        };
+
+        TreatmentDecomposer.MapToTempBasal(treatment, correlationId: null).Origin.Should().Be(expected);
+    }
+
+    [Theory]
+    [InlineData("suspend", false, "Algorithm", "loop://Test Phone", V4Models.TempBasalOrigin.Suspended)]
+    [InlineData(null, true, "Manual", null, V4Models.TempBasalOrigin.Algorithm)]
+    [InlineData(null, false, "Algorithm", "loop://Test Phone", V4Models.TempBasalOrigin.Manual)]
+    [InlineData(null, null, "Scheduled", "loop://Test Phone", V4Models.TempBasalOrigin.Scheduled)]
+    [InlineData(null, null, null, "loop://Test Phone", V4Models.TempBasalOrigin.Algorithm)]
+    [InlineData(null, null, null, "Trio", V4Models.TempBasalOrigin.Manual)]
+    public void MapToTempBasal_EachOriginRuleBeatsTheRulesBelowIt(
+        string? reason, bool? automatic, string? basalOrigin, string? enteredBy, V4Models.TempBasalOrigin expected)
+    {
+        var treatment = TempBasalForOrigin(reason, automatic, basalOrigin, enteredBy);
+
+        TreatmentDecomposer.MapToTempBasal(treatment, correlationId: null).Origin.Should().Be(expected);
+    }
+
+    [Theory]
+    [InlineData("SUSPEND", null, "loop://Test Phone", V4Models.TempBasalOrigin.Suspended)]
+    [InlineData("", null, "loop://Test Phone", V4Models.TempBasalOrigin.Algorithm)]
+    [InlineData("Low glucose", null, null, V4Models.TempBasalOrigin.Manual)]
+    [InlineData(null, "scheduled", null, V4Models.TempBasalOrigin.Scheduled)]
+    [InlineData(null, "99", "loop://Test Phone", V4Models.TempBasalOrigin.Algorithm)]
+    [InlineData(null, "unknown", "loop://Test Phone", V4Models.TempBasalOrigin.Algorithm)]
+    [InlineData(null, "", null, V4Models.TempBasalOrigin.Manual)]
+    [InlineData(null, 2, null, V4Models.TempBasalOrigin.Manual)]
+    [InlineData(null, null, "", V4Models.TempBasalOrigin.Manual)]
+    public void MapToTempBasal_UnusableReasonOrBasalOriginFallsThrough(
+        string? reason, object? basalOrigin, string? enteredBy, V4Models.TempBasalOrigin expected)
+    {
+        var treatment = TempBasalForOrigin(reason, automatic: null, basalOrigin, enteredBy);
+
+        TreatmentDecomposer.MapToTempBasal(treatment, correlationId: null).Origin.Should().Be(expected);
+    }
+
+    private static Treatment TempBasalForOrigin(
+        string? reason, bool? automatic, object? basalOrigin, string? enteredBy) => new()
+    {
+        Id = "tb-origin-2",
+        EventType = "Temp Basal",
+        Mills = 1789905600000,
+        Absolute = 0.4,
+        Duration = 30,
+        Reason = reason,
+        Automatic = automatic,
+        EnteredBy = enteredBy,
+        AdditionalProperties = basalOrigin is null
+            ? null
+            : new Dictionary<string, object> { ["basalOrigin"] = basalOrigin },
+    };
+
+    [Theory]
+    [InlineData(V4Models.TempBasalOrigin.Algorithm, "openaps://AndroidAPS")]
+    [InlineData(V4Models.TempBasalOrigin.Manual, "loop://Test Phone")]
+    [InlineData(V4Models.TempBasalOrigin.Scheduled, "loop://Test Phone")]
+    [InlineData(V4Models.TempBasalOrigin.Suspended, "Glooko")]
+    [InlineData(V4Models.TempBasalOrigin.Inferred, "loop://Test Phone")]
+    public void MapToTempBasal_OriginSurvivesTreatmentRoundTrip(V4Models.TempBasalOrigin origin, string app)
+    {
+        var tempBasal = new V4Models.TempBasal
+        {
+            Id = Guid.CreateVersion7(),
+            StartTimestamp = new DateTime(2025, 10, 15, 12, 0, 0, DateTimeKind.Utc),
+            EndTimestamp = new DateTime(2025, 10, 15, 12, 30, 0, DateTimeKind.Utc),
+            Rate = origin == V4Models.TempBasalOrigin.Suspended ? 0 : 0.4,
+            Origin = origin,
+            App = app,
+        };
+
+        var mapped = Nocturne.Infrastructure.Data.Mappers.TempBasalToTreatmentMapper.ToTreatment(tempBasal);
+        var treatment = JsonSerializer.Deserialize<Treatment>(JsonSerializer.Serialize(mapped))!;
+
+        treatment.AdditionalProperties!["basalOrigin"].Should().BeOfType<JsonElement>();
+        TreatmentDecomposer.MapToTempBasal(treatment, correlationId: null).Origin.Should().Be(origin);
+    }
+
+    [Theory]
+    [InlineData(V4Models.TempBasalOrigin.Algorithm, "automatic", "false", V4Models.TempBasalOrigin.Manual)]
+    [InlineData(V4Models.TempBasalOrigin.Algorithm, "reason", "\"suspend\"", V4Models.TempBasalOrigin.Suspended)]
+    [InlineData(V4Models.TempBasalOrigin.Manual, "automatic", "true", V4Models.TempBasalOrigin.Algorithm)]
+    [InlineData(V4Models.TempBasalOrigin.Scheduled, "automatic", "true", V4Models.TempBasalOrigin.Algorithm)]
+    public void MapToTempBasal_EditedFieldBeatsEchoedBasalOrigin(
+        V4Models.TempBasalOrigin stored, string field, string json, V4Models.TempBasalOrigin expected)
+    {
+        var tempBasal = new V4Models.TempBasal
+        {
+            Id = Guid.CreateVersion7(),
+            StartTimestamp = new DateTime(2026, 9, 20, 12, 0, 0, DateTimeKind.Utc),
+            EndTimestamp = new DateTime(2026, 9, 20, 12, 30, 0, DateTimeKind.Utc),
+            Rate = 0.4,
+            Origin = stored,
+            App = "loop://Test Phone",
+        };
+        var mapped = Nocturne.Infrastructure.Data.Mappers.TempBasalToTreatmentMapper.ToTreatment(tempBasal);
+        var body = System.Text.Json.Nodes.JsonNode.Parse(JsonSerializer.Serialize(mapped))!.AsObject();
+        body[field] = System.Text.Json.Nodes.JsonNode.Parse(json);
+
+        var treatment = body.Deserialize<Treatment>()!;
+
+        TreatmentDecomposer.MapToTempBasal(treatment, correlationId: null).Origin.Should().Be(expected);
+    }
+
+    [Theory]
+    [InlineData(true, "loop://Test Phone")]
+    [InlineData(false, "loop://Test Phone")]
+    [InlineData(null, "loop://Test Phone")]
+    [InlineData(null, "Trio")]
+    [InlineData(null, "openaps://AndroidAPS")]
+    public void MapToTempBasal_ReadBackReturnsOnlyTheUploadedAutomaticFlag(bool? automatic, string enteredBy)
+    {
+        var upload = TempBasalForOrigin(reason: null, automatic, basalOrigin: null, enteredBy);
+
+        var record = TreatmentDecomposer.MapToTempBasal(upload, correlationId: null);
+        record.AdditionalProperties = JsonSerializer.Deserialize<Dictionary<string, object?>>(
+            JsonSerializer.Serialize(record.AdditionalProperties));
+
+        Nocturne.Infrastructure.Data.Mappers.TempBasalToTreatmentMapper.ToTreatment(record)
+            .Automatic.Should().Be(automatic);
+    }
+
     #endregion
 
     #region Event Type Case Insensitivity
@@ -1592,10 +1737,103 @@ public class TreatmentDecomposerTests : IDisposable
         result.CreatedRecords.OfType<V4Models.CarbIntake>().Should().HaveCount(1);
     }
 
-    [Fact]
-    public async Task DecomposeAsync_MealBolusWithNullInsulinAndNullCarbs_ProducesNothing()
+    [Theory]
+    [InlineData("Meal Bolus")]
+    [InlineData("Snack Bolus")]
+    [InlineData("Combo Bolus")]
+    public async Task DecomposeAsync_MealBolusCarryingOnlyCarbs_ProducesCarbIntakeOnly(string eventType)
     {
-        // Arrange - Meal Bolus sets both flags, but the mapped values default to 0
+        // AAPS uploads the carbs half of a meal as a "Meal Bolus" with no insulin field
+        var treatment = new Treatment
+        {
+            Id = "meal-carbs-only",
+            EventType = eventType,
+            Mills = 1700000000000,
+            Carbs = 60,
+            EnteredBy = "AAPS",
+        };
+
+        var result = await _decomposer.DecomposeAsync(treatment, WriteOrigin.Live);
+
+        result.CreatedRecords.OfType<V4Models.Bolus>().Should().BeEmpty("a zero-unit bolus is not a dose");
+        result.CreatedRecords.OfType<V4Models.CarbIntake>().Should().ContainSingle().Which.Carbs.Should().Be(60);
+    }
+
+    [Theory]
+    [InlineData("Meal Bolus")]
+    [InlineData("Snack Bolus")]
+    [InlineData("Combo Bolus")]
+    public async Task DecomposeAsync_MealBolusCarryingOnlyInsulin_ProducesBolusOnly(string eventType)
+    {
+        // AAPS uploads the insulin half of a meal as a "Meal Bolus" with no carbs field
+        var treatment = new Treatment
+        {
+            Id = "meal-insulin-only",
+            EventType = eventType,
+            Mills = 1700000000000,
+            Insulin = 5.85,
+            EnteredBy = "AAPS",
+        };
+
+        var result = await _decomposer.DecomposeAsync(treatment, WriteOrigin.Live);
+
+        result.CreatedRecords.OfType<V4Models.CarbIntake>().Should().BeEmpty("a zero-gram carb intake is not a meal");
+        result.CreatedRecords.OfType<V4Models.Bolus>().Should().ContainSingle().Which.Insulin.Should().Be(5.85);
+    }
+
+    [Fact]
+    public async Task DecomposeAsync_MealBolusResentAsOneHalf_DropsTheStoredTwin()
+    {
+        // A meal stored before meals were decomposed by content: a 0 U bolus beside the carbs
+        var stored = new Treatment { Id = "meal-pre-fix", EventType = "Meal Bolus", Mills = 1700000000000, Carbs = 60 };
+        await _context.Boluses.AddAsync(new BolusEntity
+        {
+            Id = Guid.CreateVersion7(), TenantId = _context.TenantId, LegacyId = "meal-pre-fix",
+            Timestamp = DateTimeOffset.FromUnixTimeMilliseconds(1700000000000).UtcDateTime, Insulin = 0,
+            CorrelationId = Guid.CreateVersion7(),
+        });
+        await _context.CarbIntakes.AddAsync(new CarbIntakeEntity
+        {
+            Id = Guid.CreateVersion7(), TenantId = _context.TenantId, LegacyId = "meal-pre-fix",
+            Timestamp = DateTimeOffset.FromUnixTimeMilliseconds(1700000000000).UtcDateTime, Carbs = 60,
+            CorrelationId = Guid.CreateVersion7(),
+        });
+        await _context.SaveChangesAsync();
+
+        var result = await _decomposer.DecomposeAsync(stored, WriteOrigin.Live);
+
+        result.UpdatedRecords.OfType<V4Models.CarbIntake>().Should().ContainSingle().Which.Carbs.Should().Be(60);
+        result.CreatedRecords.Should().BeEmpty();
+        _context.ChangeTracker.Clear();
+        _context.Boluses.IgnoreQueryFilters().AsNoTracking().Where(b => b.LegacyId == "meal-pre-fix")
+            .Should().ContainSingle().Which.DeletedAt.Should().NotBeNull("the zero-unit twin is no longer part of the record");
+    }
+
+    [Fact]
+    public async Task DecomposeAsync_MealBolusUnderATempBasalLegacyId_WritesNothing()
+    {
+        // AAPS holds a temp basal it read with insulin as a bolus under the temp basal's identifier
+        _tempBasalRepoMock
+            .Setup(r => r.GetByLegacyIdAsync("syn-temp-basal", It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new V4Models.TempBasal { Id = Guid.CreateVersion7(), LegacyId = "syn-temp-basal", Rate = 1.25 });
+        var phantom = new Treatment
+        {
+            Id = "syn-temp-basal", EventType = "Meal Bolus", Mills = 1700000000000, Insulin = 0.0014756944, BolusType = "NORMAL",
+        };
+
+        var result = await _decomposer.DecomposeAsync(phantom, WriteOrigin.Live);
+
+        result.CreatedRecords.Should().BeEmpty();
+        result.UpdatedRecords.Should().BeEmpty();
+        result.SkippedUnsupported.Should().Be(1);
+        _context.Boluses.Should().BeEmpty();
+        _context.CarbIntakes.Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task DecomposeAsync_MealBolusWithNullInsulinAndNullCarbs_ProducesBothZeroed()
+    {
+        // Arrange - a Meal Bolus carrying neither half keeps both, so the record still round-trips
         var treatment = new Treatment
         {
             Id = "meal-no-data",
@@ -1604,10 +1842,8 @@ public class TreatmentDecomposerTests : IDisposable
             // Insulin=null, Carbs=null
         };
 
-        // Act
         var result = await _decomposer.DecomposeAsync(treatment, WriteOrigin.Live);
 
-        // Assert - Meal Bolus always produces Bolus+CarbIntake by EventType match
         result.CreatedRecords.OfType<V4Models.Bolus>().Should().HaveCount(1);
         result.CreatedRecords.OfType<V4Models.CarbIntake>().Should().HaveCount(1);
 
@@ -1902,6 +2138,61 @@ public class TreatmentDecomposerTests : IDisposable
                     ss.EndMills == 1700000000000 + (60 * 60 * 1000)),
                 It.IsAny<CancellationToken>()),
             Times.Once);
+    }
+
+    #endregion
+
+    #region Served span fields
+
+    [Theory]
+    [InlineData("Temporary Override")]
+    [InlineData("Temporary Target")]
+    [InlineData("Profile Switch")]
+    public async Task DecomposeAsync_SpanTreatmentWithNotes_KeepsThemOnTheSpanAndWritesNoNote(string eventType)
+    {
+        var treatment = new Treatment
+        {
+            Id = $"span-notes-{eventType}",
+            EventType = eventType,
+            Mills = 1700000000000,
+            Duration = 30,
+            Profile = "Weekend",
+            Reason = "Synthetic",
+            Notes = "Synthetic note",
+            SyncIdentifier = "synthetic-sync",
+        };
+        StateSpan? written = null;
+        _stateSpanServiceMock
+            .Setup(s => s.UpsertStateSpanAsync(It.IsAny<StateSpan>(), It.IsAny<CancellationToken>()))
+            .Callback<StateSpan, CancellationToken>((span, _) => written = span)
+            .ReturnsAsync((StateSpan span, CancellationToken _) => span);
+
+        var result = await _decomposer.DecomposeAsync(treatment, WriteOrigin.Live);
+
+        result.CreatedRecords.Should().ContainSingle().Which.Should().BeOfType<StateSpan>();
+        result.CreatedRecords.OfType<V4Models.Note>().Should().BeEmpty();
+        written!.Metadata!["notes"].Should().Be("Synthetic note");
+        written.Metadata!["syncIdentifier"].Should().Be("synthetic-sync");
+    }
+
+    [Fact]
+    public async Task DecomposeAsync_LoopOverride_KeepsCorrectionRangeAndRemoteAddressAsUploaded()
+    {
+        var treatment = JsonSerializer.Deserialize<Treatment>(
+            """
+            {"_id":"loop-override","eventType":"Temporary Override","mills":1700000000000,"duration":60,
+             "reason":"Running","correctionRange":[140,160],"remoteAddress":"synthetic-remote"}
+            """)!;
+        StateSpan? written = null;
+        _stateSpanServiceMock
+            .Setup(s => s.UpsertStateSpanAsync(It.IsAny<StateSpan>(), It.IsAny<CancellationToken>()))
+            .Callback<StateSpan, CancellationToken>((span, _) => written = span)
+            .ReturnsAsync((StateSpan span, CancellationToken _) => span);
+
+        await _decomposer.DecomposeAsync(treatment, WriteOrigin.Live);
+
+        JsonSerializer.Serialize(written!.Metadata!["correctionRange"]).Should().Be("[140,160]");
+        JsonSerializer.Serialize(written.Metadata!["remoteAddress"]).Should().Be("\"synthetic-remote\"");
     }
 
     #endregion

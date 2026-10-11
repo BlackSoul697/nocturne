@@ -105,11 +105,13 @@
     return "text-3xl px-3 py-1.5";
   });
 
+  // Below xl, each height is the tile's line height plus its vertical padding above, so the row
+  // does not grow when the value replaces the skeleton.
   const skeletonSizeClasses = $derived.by(() => {
     if (size === "xl") return "h-28 flex-1";
-    if (size === "lg") return "h-12 w-20";
+    if (size === "lg") return "h-14 w-20";
     if (size === "xs") return "h-8 w-10";
-    return "h-10 w-16";
+    return "h-12 w-16";
   });
 </script>
 

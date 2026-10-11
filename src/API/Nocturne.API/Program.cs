@@ -12,7 +12,9 @@ using Nocturne.API.Services.Auth;
 using Nocturne.API.Services.BackgroundServices;
 using Nocturne.API.Services.DevOnly;
 using Nocturne.API.Services.Docs;
+using Nocturne.API.Services.Health.GoogleHealth;
 using Nocturne.API.Services.Seeding;
+using Nocturne.Core.Contracts.Health;
 using Nocturne.Core.Models.Authorization;
 using Nocturne.Core.Contracts.Audit;
 using Nocturne.API.Extensions;
@@ -139,6 +141,13 @@ builder.Services.AddHttpContextAccessor();
 builder.Services.AddScoped<IAuditContext, AuditContext>();
 builder.Services.AddHostedService<AuditRetentionService>();
 builder.Services.AddHostedService<SoftDeleteCleanupService>();
+builder.Services.AddSingleton<GoogleHealthCoordinator>();
+builder.Services.AddSingleton<IGoogleHealthSyncCoordinator>(provider =>
+    provider.GetRequiredService<GoogleHealthCoordinator>());
+builder.Services.AddScoped<IGoogleHealthService, GoogleHealthService>();
+builder.Services.AddScoped<IGoogleHealthReadingWriter, GoogleHealthReadingWriter>();
+builder.Services.AddHostedService<GoogleHealthWorker>();
+builder.Services.AddDevOnlyGoogleHealthMock(builder.Environment, builder.Configuration);
 
 // Consumed by the dev-only admin controllers (Development) and the demo admin
 // controller's seed-extras endpoint (demo container, all environments).
@@ -342,6 +351,11 @@ app.UseResponseCaching();
 // the TreatmentsController route /api/v1/treatments. Must run before
 // UseRouting so the rewritten path is what the router sees.
 app.UseMiddleware<JsonExtensionMiddleware>();
+
+// Serve v1 under /api/v2 wherever v2 has no route of its own, as Nightscout does. After the
+// .json strip so /api/v2/entries.json is judged as /api/v2/entries, and before UseRouting so
+// the rewritten path is what the router sees.
+app.UseMiddleware<V2FallbackMiddleware>();
 
 // Routing must run here, not where minimal hosting would insert it, so that
 // TenantSetupMiddleware below can read endpoint metadata such as [AllowDuringSetup].

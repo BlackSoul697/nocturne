@@ -91,6 +91,20 @@ public class TherapySettingsRepository : V4RepositoryBase<TherapySettings, Thera
             AuditContext, $"legacy_id_prefix={prefix}", ct);
     }
 
+    /// <inheritdoc />
+    public async Task<IEnumerable<TherapySettings>> GetByLegacyIdPrefixAsync(
+        string prefix, CancellationToken ct = default)
+    {
+        await using var ctx = await ContextFactory.CreateAsync(ct);
+        var entities = await ctx
+            .TherapySettings.AsNoTracking()
+            .Where(e => e.LegacyId != null && e.LegacyId.StartsWith(prefix))
+            .OrderByDescending(e => e.Timestamp)
+            .ThenByDescending(e => e.Id)
+            .ToListAsync(ct);
+        return entities.Select(TherapySettingsMapper.ToDomainModel);
+    }
+
     /// <summary>
     /// Gets therapy settings by correlation identifier.
     /// </summary>
@@ -133,6 +147,44 @@ public class TherapySettingsRepository : V4RepositoryBase<TherapySettings, Thera
             .ThenByDescending(e => e.Id)
             .FirstOrDefaultAsync(ct);
         return entity is null ? null : TherapySettingsMapper.ToDomainModel(entity);
+    }
+
+    /// <inheritdoc />
+    public async Task<IReadOnlyList<string>> GetDocumentIdsAsync(CancellationToken ct = default)
+    {
+        await using var ctx = await ContextFactory.CreateAsync(ct);
+        var rows = await ctx
+            .TherapySettings.AsNoTracking()
+            .Where(e => !e.ProfileName.Contains(TherapySettings.ProfileSwitchStoreMarker))
+            .Select(e => new TherapySettings { Id = e.Id, LegacyId = e.LegacyId, Timestamp = e.Timestamp })
+            .ToListAsync(ct);
+
+        return rows
+            .GroupBy(TherapySettings.DocumentIdOf, StringComparer.Ordinal)
+            .OrderByDescending(g => g.Max(r => r.Timestamp))
+            .ThenByDescending(g => g.Key, StringComparer.Ordinal)
+            .Select(g => g.Key)
+            .ToList();
+    }
+
+    /// <inheritdoc />
+    public async Task<IReadOnlyList<TherapySettings>> GetDocumentRowsAsync(
+        string documentId,
+        CancellationToken ct = default
+    )
+    {
+        var prefix = documentId + ":";
+        Guid? rowId = Guid.TryParse(documentId, out var parsed) ? parsed : null;
+
+        await using var ctx = await ContextFactory.CreateAsync(ct);
+        var entities = await ctx
+            .TherapySettings.AsNoTracking()
+            .Where(e => !e.ProfileName.Contains(TherapySettings.ProfileSwitchStoreMarker))
+            .Where(e => e.LegacyId != null
+                ? e.LegacyId.StartsWith(prefix) || e.LegacyId == documentId
+                : e.Id == rowId)
+            .ToListAsync(ct);
+        return entities.Select(TherapySettingsMapper.ToDomainModel).ToList();
     }
 
     /// <inheritdoc />

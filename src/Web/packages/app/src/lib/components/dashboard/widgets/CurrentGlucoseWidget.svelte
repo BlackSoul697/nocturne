@@ -4,7 +4,6 @@
   import { GlucoseValueIndicator } from "$lib/components/shared";
   import { getRealtimeStore } from "$lib/stores/realtime-store.svelte";
   import { glucoseUnits } from "$lib/stores/appearance-store.svelte";
-  import { createConnectionIndicator } from "$lib/stores/connection-indicator.svelte";
   import { displayedGlucose } from "$lib/stores/current-glucose-status.svelte";
   import { STALE_THRESHOLD_MS } from "$lib/constants/staleness";
   import { getGlucoseTileVariant } from "$lib/utils/glucose-status";
@@ -28,7 +27,6 @@
   import WifiOff from "@lucide/svelte/icons/wifi-off";
 
   const realtimeStore = getRealtimeStore();
-  const connection = createConnectionIndicator(() => realtimeStore.connectionStatus);
 
   const units = $derived(glucoseUnits.current);
   const unitLabel = $derived(getUnitLabel(units));
@@ -39,7 +37,7 @@
 
   const isLoading = $derived(glucose.currentBG === 0 && realtimeStore.entries.length === 0);
   const isStale = $derived(now - lastUpdated > STALE_THRESHOLD_MS);
-  const isDisconnected = $derived(connection.isDisconnected);
+  const isDisconnected = $derived(realtimeStore.connectionUnavailable);
   const directionInfo = $derived(getDirectionInfo(glucose.direction));
   const DirectionIcon = $derived(directionInfo.icon);
   trackUnwashedFill(() => ({ loading: isLoading, stale: isStale, disconnected: isDisconnected, variant: tileVariant }));

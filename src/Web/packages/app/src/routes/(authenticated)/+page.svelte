@@ -34,7 +34,7 @@
   const hasRecentHistory = $derived(
     realtimeStore?.entries.length ? true : false
   );
-  const recentHistoryReady = $derived(realtimeStore?.isReady ?? true);
+  const recentHistoryReady = $derived(realtimeStore?.currentReadingLoaded ?? true);
   const hasDataNow = $derived(
     hasInitialGlucose ||
       hasRecentHistory ||
@@ -114,6 +114,8 @@
               ) && predictionEnabled}
               defaultFocusHours={focusHours}
               initialChartData={data.initialChartData}
+              deferDrawing={data.canViewRealtimeData && !recentHistoryReady}
+              initialWindowStart={data.initialWindowStart}
               streamedHistoricalData={data.streamed?.historicalChartData}
             />
           </div>

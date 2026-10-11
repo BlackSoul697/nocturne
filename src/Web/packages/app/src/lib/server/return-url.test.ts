@@ -57,4 +57,25 @@ describe("safeReturnUrl", () => {
       "/auth/login"
     );
   });
+
+  it("falls back for mixed-case and backslash dot-segment variants", () => {
+    expect(safeReturnUrl("/%2e%2E//evil.test")).toBe("/");
+    expect(safeReturnUrl("/.%2e//evil.test")).toBe("/");
+    expect(safeReturnUrl("/a/%2e%2e//evil.test")).toBe("/");
+    expect(safeReturnUrl("/.\\/evil.test")).toBe("/");
+    expect(safeReturnUrl("/..\\\\evil.test")).toBe("/");
+  });
+
+  it("keeps rooted paths whose separators are only percent-encoded", () => {
+    expect(safeReturnUrl("/%2F/evil.test")).toBe("/%2F/evil.test");
+    expect(safeReturnUrl("/%5C%5Cevil.test")).toBe("/%5C%5Cevil.test");
+  });
+
+  it("keeps legitimate paths verbatim", () => {
+    expect(safeReturnUrl("/reports/../settings")).toBe("/reports/../settings");
+    expect(safeReturnUrl("/join?token=a%2Fb")).toBe("/join?token=a%2Fb");
+    expect(safeReturnUrl("/reports?range=7d&next=//x#section")).toBe(
+      "/reports?range=7d&next=//x#section"
+    );
+  });
 });

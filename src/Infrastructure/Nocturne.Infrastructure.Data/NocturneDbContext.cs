@@ -528,9 +528,11 @@ public class NocturneDbContext : DbContext, IDataProtectionKeyContext
         [.. V4LegacyIdRecordEntities, typeof(DeviceStatusExtrasEntity)];
 
     /// <summary>
-    /// Tables a v3 history endpoint pages through <see cref="HistoryPage"/>: the treatment
-    /// projection's <c>LegacyTreatmentTables.All</c>, the device-status projection's APS snapshots,
-    /// the three glucose types the entry projection reads and the five profile-decomposition tables.
+    /// Tables a v3 history endpoint pages through <see cref="HistoryPage"/> on <c>sys_updated_at</c>:
+    /// the V4 record tables of the treatment projection's <c>LegacyTreatmentTables.All</c> (its state
+    /// spans page on <c>ix_state_spans_tenant_category_updated_at</c>), the device-status
+    /// projection's APS snapshots, the three glucose types the entry projection reads and the five
+    /// profile-decomposition tables.
     /// </summary>
     internal static readonly Type[] V4HistoryPagedEntities =
     [
@@ -736,16 +738,16 @@ public class NocturneDbContext : DbContext, IDataProtectionKeyContext
                 .HasFilter("legacy_id IS NOT NULL AND deleted_by_user");
         }
 
-        // Matches HistoryPage's (sys_updated_at, id) order under the tenant and soft-delete filters,
-        // so a poll reads its page off the index instead of sorting the tenant's whole table.
+        // Matches HistoryPage's (sys_updated_at, id) order under the tenant filter, so a poll reads
+        // its page off the index instead of sorting the tenant's whole table. Not partial on
+        // deleted_at: a history read returns soft-deleted rows too (HistoryPage.IncludingDeleted).
         foreach (var entity in V4HistoryPagedEntities.Select(t => modelBuilder.Entity(t)))
         {
             entity.HasIndex(
                     nameof(ITenantScoped.TenantId),
                     nameof(ISystemTimestamped.SysUpdatedAt),
                     nameof(IIdentified.Id))
-                .HasDatabaseName($"ix_{entity.Metadata.GetTableName()}_tenant_sys_updated_at")
-                .HasFilter("deleted_at IS NULL");
+                .HasDatabaseName($"ix_{entity.Metadata.GetTableName()}_tenant_history");
         }
 
         foreach (var entity in V4CorrelationIndexedEntities.Select(t => modelBuilder.Entity(t)))
@@ -831,8 +833,7 @@ public class NocturneDbContext : DbContext, IDataProtectionKeyContext
             .HasIndex(f => f.SysCreatedAt)
             .HasDatabaseName("ix_foods_sys_created_at");
 
-        // The v3 food history page; see the V4HistoryPagedEntities index. Foods are hard-deleted,
-        // so there is no deleted_at filter.
+        // The v3 food history page; see the V4HistoryPagedEntities index.
         modelBuilder
             .Entity<FoodEntity>()
             .HasIndex(f => new { f.TenantId, f.SysUpdatedAt, f.Id })
@@ -954,6 +955,20 @@ public class NocturneDbContext : DbContext, IDataProtectionKeyContext
             .HasIndex(s => new { s.TenantId, s.DataSource, s.Timestamp })
             .HasDatabaseName("ix_step_counts_tenant_source_timestamp")
             .IsDescending(false, false, true);
+
+        // The activity id a heart rate or step count was decomposed from, read (tombstones included)
+        // on every activity write and connector reconcile.
+        modelBuilder
+            .Entity<StepCountEntity>()
+            .HasIndex(s => new { s.TenantId, s.OriginalId })
+            .HasDatabaseName("ix_step_counts_tenant_original_id")
+            .HasFilter("original_id IS NOT NULL");
+
+        modelBuilder
+            .Entity<HeartRateEntity>()
+            .HasIndex(h => new { h.TenantId, h.OriginalId })
+            .HasDatabaseName("ix_heart_rates_tenant_original_id")
+            .HasFilter("original_id IS NOT NULL");
 
         modelBuilder
             .Entity<HeartRateEntity>()
@@ -1277,6 +1292,14 @@ public class NocturneDbContext : DbContext, IDataProtectionKeyContext
             .HasIndex(s => new { s.TenantId, s.Source, s.Category, s.StartTimestamp })
             .HasDatabaseName("ix_state_spans_tenant_source_category_start")
             .IsDescending(false, false, false, true);
+
+        // HistoryPage's (updated_at, id) order for the legacy treatment projection's state-span
+        // categories, as the sys_updated_at history index serves the V4 record tables.
+        modelBuilder
+            .Entity<StateSpanEntity>()
+            .HasIndex(s => new { s.TenantId, s.Category, s.UpdatedAt, s.Id })
+            .HasDatabaseName("ix_state_spans_tenant_category_updated_at")
+            .HasFilter("deleted_at IS NULL");
 
         modelBuilder
             .Entity<StateSpanEntity>()

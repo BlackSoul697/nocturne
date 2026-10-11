@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { lazyComponent } from "$lib/utils/lazy-component.svelte";
   import * as Popover from "$lib/components/ui/popover";
   import { Button } from "$lib/components/ui/button";
   import Bell from "@lucide/svelte/icons/bell";
@@ -19,7 +20,6 @@
   } from "$lib/api/generated/nocturne-api-client";
   import { EmptyState } from "$lib/components/shared";
   import NotificationItem from "./NotificationItem.svelte";
-  import { MealMatchReviewDialog } from "$lib/components/meal-matching";
   import DndPanel from "$lib/components/alerts/DndPanel.svelte";
 
   // Get the realtime store for reactive notification data
@@ -27,7 +27,9 @@
 
   // State
   let isOpen = $state(false);
-  let reviewDialogOpen = $state(false);
+  const mealMatchReviewDialog = lazyComponent(
+    () => import("$lib/components/meal-matching/MealMatchReviewDialog.svelte"),
+  );
   let reviewNotification = $state<InAppNotificationDto | null>(null);
 
   // Sort notifications by urgency (Urgent > Hazard > Warn > Info), then by timestamp
@@ -83,7 +85,7 @@
       actionId === "review"
     ) {
       reviewNotification = notification;
-      reviewDialogOpen = true;
+      mealMatchReviewDialog.open = true;
       return;
     }
 
@@ -221,15 +223,17 @@
     </Popover.Content>
   </Popover.Root>
 
-  <MealMatchReviewDialog
-    bind:open={reviewDialogOpen}
-    onOpenChange={(value) => {
-      reviewDialogOpen = value;
-      if (!value) reviewNotification = null;
-    }}
-    notification={reviewNotification}
-    onComplete={handleReviewComplete}
-  />
+  {#if mealMatchReviewDialog.component}
+    <mealMatchReviewDialog.component
+      bind:open={mealMatchReviewDialog.open}
+      onOpenChange={(value) => {
+        mealMatchReviewDialog.open = value;
+        if (!value) reviewNotification = null;
+      }}
+      notification={reviewNotification}
+      onComplete={handleReviewComplete}
+    />
+  {/if}
 
   {#snippet failed()}
     <Button

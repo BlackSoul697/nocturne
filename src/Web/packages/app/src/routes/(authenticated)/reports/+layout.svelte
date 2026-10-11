@@ -10,12 +10,15 @@
     import {
         createReportPrintContext,
         installPrintFitFallback,
+        printReport,
     } from "$lib/components/reports/print/report-print.svelte";
     import {reportCategories} from "$lib/navigation/report-navigation.svelte";
     import Filter from "@lucide/svelte/icons/funnel";
     import Calendar from "@lucide/svelte/icons/calendar";
     import ChevronDown from "@lucide/svelte/icons/chevron-down";
     import {ReportHeaderWash} from "@nocturne/watercolour";
+    import { toast } from "svelte-sonner";
+    import { onMount } from "svelte";
     import {useDateParams, setDateParamsContext, createSharedRangeUse} from "$lib/hooks/date-params.svelte";
     import {createResourceContext} from "$lib/hooks/resource-context.svelte";
 
@@ -47,6 +50,38 @@
     const useResourceGuard = $derived(page.url.pathname !== "/reports");
 
     const printCtx = createReportPrintContext();
+
+    /** Resolves true once the print dialog has run, false when it never opened. */
+    async function handlePrint(): Promise<boolean> {
+        if (printCtx.printing) return false;
+        printCtx.printing = true;
+        const url = page.url.href;
+        const preparationVersion = printCtx.preparationVersion;
+        try {
+            await printReport(
+                () => printCtx.prepare(),
+                () => page.url.href === url && printCtx.preparationVersion === preparationVersion,
+            );
+            return true;
+        } catch (error) {
+            console.error("Failed to prepare report for printing:", error);
+            toast.error("Unable to load the complete report. Please try again before printing.");
+            return false;
+        } finally {
+            printCtx.printing = false;
+        }
+    }
+
+    onMount(() => {
+        const keydown = (event: KeyboardEvent) => {
+            if ((event.ctrlKey || event.metaKey) && !event.altKey && !event.shiftKey && event.key.toLowerCase() === "p") {
+                event.preventDefault();
+                void handlePrint();
+            }
+        };
+        window.addEventListener("keydown", keydown);
+        return () => window.removeEventListener("keydown", keydown);
+    });
 
     let reportRoot = $state<HTMLElement | null>(null);
     $effect(() => installPrintFitFallback(() => reportRoot));
@@ -105,15 +140,12 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
 </svelte:head>
 
-<div class="relative min-h-full bg-background" bind:this={reportRoot} data-report-root>
+<div class="@container relative min-h-full bg-background" bind:this={reportRoot} data-report-root>
     {#if page.url.pathname !== "/reports"}
         <ReportPrintHeader title={reportName} period={printPeriod} />
 
-        <!-- top-0 at every width: <main> (overflow-auto) is the sticky container and already
-             starts below the fixed MobileHeader, so an extra top-14 pushed this bar onto the
-             page heading on phones. -->
         <div
-                class="sticky top-0 z-20 border-b border-border bg-card/95 backdrop-blur supports-backdrop-filter:bg-card/60 print:hidden"
+                class="sticky top-(--app-sticky-top,0px) z-20 transition-all duration-300 border-b border-border bg-card/95 backdrop-blur supports-backdrop-filter:bg-card/60 print:hidden"
         >
             <!-- At 35% the darkest wash keeps the bar's text above 9:1 in either theme. -->
             <ReportHeaderWash name={page.url.pathname} position="absolute" class="inset-0 opacity-35"/>
@@ -137,7 +169,7 @@
                 </div>
 
                 <div class="flex items-center gap-2">
-                    <PrintReportButton/>
+                    <PrintReportButton print={handlePrint} disabled={printCtx.printing}/>
                     {#if showFilters}
                         <Button
                                 variant="outline"
@@ -157,7 +189,7 @@
     <HistoryLimitNotice class="mx-3 mt-3 w-auto @md:mx-6 print:hidden" />
 
     <!-- Main Content -->
-    <div class="relative">
+    <div class={useResourceGuard ? "relative mx-auto w-full max-w-7xl p-3 @md:p-6 print:max-w-none print:p-3" : "relative"}>
         {#if useResourceGuard}
             <ResourceGuard
                 loading={resourceCtx.loading}

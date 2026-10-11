@@ -16,17 +16,17 @@
   import { Tween, prefersReducedMotion } from "svelte/motion";
   import { cubicOut } from "svelte/easing";
   import ArrowRight from "@lucide/svelte/icons/arrow-right";
-  import { createConnectionIndicator } from "$lib/stores/connection-indicator.svelte";
   import { displayedGlucose } from "$lib/stores/current-glucose-status.svelte";
   import { getGlucoseTileVariant } from "$lib/utils/glucose-status";
 
   const realtimeStore = tryGetRealtimeStore();
 
-  // Engine for the sidebar chart — no predictions, no inspection
+  // Engine for the sidebar chart — no predictions, no inspection, no request of its own
   const sidebarEngine = createChartDataEngine({
     enablePredictions: false,
     focusHours: 3,
     dataWindow: "display",
+    glucoseSource: "realtime",
   });
 
   // Glucose-only layout — no space reserved for basal/IOB/swim lanes
@@ -58,10 +58,7 @@
   const now = $derived(realtimeStore?.now ?? Date.now());
   const isStale = $derived(now - lastUpdated > STALE_THRESHOLD_MS);
 
-  const connection = createConnectionIndicator(
-    () => realtimeStore?.connectionStatus ?? "idle"
-  );
-  const isDisconnected = $derived(connection.isDisconnected);
+  const isDisconnected = $derived(realtimeStore?.connectionUnavailable ?? false);
   const isLoading = $derived(
     rawCurrentBG === 0 && (realtimeStore?.entries.length ?? 0) === 0
   );

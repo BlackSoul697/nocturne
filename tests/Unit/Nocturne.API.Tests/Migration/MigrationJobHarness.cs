@@ -102,8 +102,8 @@ internal static class MigrationJobHarness
         RunAsync(provider, onCreated: null, collections);
 
     /// <summary>A tenant to run several jobs under, so their runs share one migration source row.</summary>
-    public static TenantContext NewTenant() => new(
-        Guid.CreateVersion7(), "migrated", "Migrated Tenant", true, IsDemo: false);
+    public static TenantContext NewTenant(Guid? tenantId = null) => new(
+        tenantId ?? Guid.CreateVersion7(), "migrated", "Migrated Tenant", true, IsDemo: false);
 
     /// <summary>
     /// <paramref name="onCreated"/> receives the job before it starts, so a test's stub source can
@@ -115,9 +115,10 @@ internal static class MigrationJobHarness
         string[] collections,
         ILogger? logger = null,
         string nightscoutUrl = "https://example-nightscout.invalid",
-        TenantContext? owner = null)
+        TenantContext? owner = null,
+        Guid? tenantId = null)
     {
-        var tenant = owner ?? NewTenant();
+        var tenant = owner ?? NewTenant(tenantId);
 
         var job = new MigrationJob(
             Guid.CreateVersion7(),
