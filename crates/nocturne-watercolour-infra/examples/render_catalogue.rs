@@ -76,7 +76,7 @@ fn upscale_nearest(image: &Image, factor: u32) -> Image {
 fn contact_sheet(images: &[Image], long: u32, columns: u32, ground: Rgb) -> Image {
     let rows = (images.len() as u32).div_ceil(columns).max(1);
     let mut sheet = Image::new(columns * long, rows * long);
-    for px in sheet.rgba.chunks_exact_mut(4) {
+    for px in sheet.rgba.as_chunks_mut::<4>().0 {
         px.copy_from_slice(&[ground.0[0], ground.0[1], ground.0[2], 1.0]);
     }
     for (i, img) in images.iter().enumerate() {

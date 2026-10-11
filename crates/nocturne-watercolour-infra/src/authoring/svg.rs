@@ -333,7 +333,12 @@ fn parse_points(s: &str) -> Result<Vec<(f32, f32)>, IconParseError> {
             "odd number of coordinates in {s:?}"
         )));
     }
-    Ok(nums.chunks_exact(2).map(|c| (c[0], c[1])).collect())
+    Ok(nums
+        .as_chunks::<2>()
+        .0
+        .iter()
+        .map(|&[x, y]| (x, y))
+        .collect())
 }
 
 fn circle(cx: f32, cy: f32, r: f32, n: usize) -> Vec<(f32, f32)> {
@@ -487,7 +492,7 @@ fn flatten_path(d: &str, tolerance: f32) -> Vec<SubPath> {
             'm' => {
                 finish_subpath(&mut out, &mut points, explicit_closed);
                 explicit_closed = false;
-                let mut it = nums.chunks_exact(2).map(|c| [c[0], c[1]]);
+                let mut it = nums.as_chunks::<2>().0.iter().copied();
                 if let Some([x, y]) = it.next() {
                     cur = if abs { (x, y) } else { (cur.0 + x, cur.1 + y) };
                     start = cur;
@@ -520,7 +525,7 @@ fn flatten_path(d: &str, tolerance: f32) -> Vec<SubPath> {
                 }
                 match raw.to_ascii_lowercase() {
                     'l' => {
-                        for [x, y] in nums.chunks_exact(2).map(|c| [c[0], c[1]]) {
+                        for &[x, y] in nums.as_chunks::<2>().0 {
                             cur = if abs { (x, y) } else { (cur.0 + x, cur.1 + y) };
                             points.push(cur);
                         }
@@ -538,10 +543,7 @@ fn flatten_path(d: &str, tolerance: f32) -> Vec<SubPath> {
                         }
                     }
                     'c' => {
-                        for [x1, y1, x2, y2, x, y] in nums
-                            .chunks_exact(6)
-                            .map(|c| [c[0], c[1], c[2], c[3], c[4], c[5]])
-                        {
+                        for &[x1, y1, x2, y2, x, y] in nums.as_chunks::<6>().0 {
                             let p0 = cur;
                             let c1 = if abs {
                                 (x1, y1)
@@ -559,8 +561,7 @@ fn flatten_path(d: &str, tolerance: f32) -> Vec<SubPath> {
                         }
                     }
                     's' => {
-                        for [x2, y2, x, y] in nums.chunks_exact(4).map(|c| [c[0], c[1], c[2], c[3]])
-                        {
+                        for &[x2, y2, x, y] in nums.as_chunks::<4>().0 {
                             let p0 = cur;
                             let c1 = reflect(last_cubic_ctrl, p0);
                             let c2 = if abs {
@@ -574,8 +575,7 @@ fn flatten_path(d: &str, tolerance: f32) -> Vec<SubPath> {
                         }
                     }
                     'q' => {
-                        for [x1, y1, x, y] in nums.chunks_exact(4).map(|c| [c[0], c[1], c[2], c[3]])
-                        {
+                        for &[x1, y1, x, y] in nums.as_chunks::<4>().0 {
                             let p0 = cur;
                             let q = if abs {
                                 (x1, y1)
@@ -588,7 +588,7 @@ fn flatten_path(d: &str, tolerance: f32) -> Vec<SubPath> {
                         }
                     }
                     't' => {
-                        for [x, y] in nums.chunks_exact(2).map(|c| [c[0], c[1]]) {
+                        for &[x, y] in nums.as_chunks::<2>().0 {
                             let p0 = cur;
                             let q = reflect(last_quad_ctrl, p0);
                             cur = if abs { (x, y) } else { (p0.0 + x, p0.1 + y) };
@@ -597,10 +597,7 @@ fn flatten_path(d: &str, tolerance: f32) -> Vec<SubPath> {
                         }
                     }
                     'a' => {
-                        for [rx, ry, rot, large, sweep, x, y] in nums
-                            .chunks_exact(7)
-                            .map(|c| [c[0], c[1], c[2], c[3], c[4], c[5], c[6]])
-                        {
+                        for &[rx, ry, rot, large, sweep, x, y] in nums.as_chunks::<7>().0 {
                             let p0 = cur;
                             cur = if abs { (x, y) } else { (p0.0 + x, p0.1 + y) };
                             let arc = arc_points(p0, rx, ry, rot, large, sweep, cur);

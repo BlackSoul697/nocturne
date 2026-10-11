@@ -152,7 +152,7 @@ fn make_sheet(frames: &[Image], ground: Rgb) -> Image {
         GRID_COLUMNS * cell_w + GUTTER * (GRID_COLUMNS - 1),
         rows * cell_h + GUTTER * (rows - 1),
     );
-    for px in sheet.rgba.chunks_exact_mut(4) {
+    for px in sheet.rgba.as_chunks_mut::<4>().0 {
         px.copy_from_slice(&[ground.0[0], ground.0[1], ground.0[2], 1.0]);
     }
     for (i, cell) in cells.iter().enumerate() {
@@ -177,7 +177,9 @@ fn make_sheet(frames: &[Image], ground: Rgb) -> Image {
 fn area(image: &Image) -> f32 {
     let n = image
         .rgba
-        .chunks_exact(4)
+        .as_chunks::<4>()
+        .0
+        .iter()
         .filter(|px| px[3] > AREA_THRESHOLD)
         .count();
     n as f32 / (image.width * image.height) as f32
@@ -377,7 +379,13 @@ fn read_reference_final(dir: &Path, count: u32) -> Option<Result<Image, String>>
         )));
     }
     let mut image = Image::new(info.width, info.height);
-    for (dst, px) in image.rgba.chunks_exact_mut(4).zip(buf.chunks_exact(4)) {
+    for (dst, px) in image
+        .rgba
+        .as_chunks_mut::<4>()
+        .0
+        .iter_mut()
+        .zip(buf.as_chunks::<4>().0)
+    {
         let a = px[3] as f32 / 255.0;
         for (c, p) in px[..3].iter().enumerate() {
             dst[c] = srgb_to_linear(*p as f32 / 255.0) * a;

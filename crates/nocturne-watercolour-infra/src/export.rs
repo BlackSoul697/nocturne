@@ -35,7 +35,7 @@ pub fn srgb_to_linear(v: f32) -> f32 {
 /// Premultiplied linear RGBA to straight sRGB 8-bit RGBA.
 pub fn to_srgb8_straight(image: &Image) -> Vec<u8> {
     let mut out = Vec::with_capacity(image.rgba.len());
-    for px in image.rgba.chunks_exact(4) {
+    for px in image.rgba.as_chunks::<4>().0 {
         let a = px[3].clamp(0.0, 1.0);
         if a < MIN_ALPHA {
             out.extend_from_slice(&[0, 0, 0, 0]);

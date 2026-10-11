@@ -14,7 +14,7 @@
   },
   "scripts": {
     "build:wasm": "node scripts/build-wasm.mjs",
-    "bake": "node scripts/lucide-icons.mjs && cargo run -p nocturne-watercolour-wasm --example bake_catalogue --release --manifest-path ../../../../crates/Cargo.toml -- ./assets ./scripts/bake-manifest.json && node scripts/to-avif.mjs && node scripts/to-webp.mjs",
+    "bake": "node scripts/lucide-icons.mjs && node scripts/bake.mjs && node scripts/to-avif.mjs && node scripts/to-webp.mjs",
     "check": "svelte-check --tsconfig ./tsconfig.json",
     "test": "vitest run",
     "bench": "node bench/run.mjs"
