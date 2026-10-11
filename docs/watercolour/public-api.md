@@ -217,6 +217,12 @@ per artwork is bundled; a missing palette falls back to it (see
 import { assetUrl, defaultPaletteFor, hasBundledAsset } from '@nocturne/watercolour';
 ```
 
+`assetUrl`, `assetAvailable`, `hasBundledAsset` and `bundledArtworkIds` are
+async. The map of bundled asset URLs is a chunk of its own, imported on the
+first resolve that may draw a baked or static asset: a player whose mode is
+`live` whatever its assets does not read it unless live fails, and an `off`
+presentation never does.
+
 ## Icon sources
 
 `Artwork` also renders a Lucide icon as a watercolour scene. The `icon` prop

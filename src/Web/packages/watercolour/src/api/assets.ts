@@ -1,7 +1,7 @@
 import type { ArtworkId, PaletteId, Surface } from '../types';
 import { type BakedManifest, parseBakedManifest } from './baked';
 import { WatercolourError } from './errors';
-import { defaultPaletteFor, iconAssetId, sourcePalette } from './palette-defaults';
+import { iconAssetId, sourcePalette } from './palette-defaults';
 import { paletteKey } from './scenes';
 
 export { DEFAULT_PALETTE, defaultPaletteFor } from './palette-defaults';
@@ -28,16 +28,6 @@ export function iconAssetKey(name: string, palette?: PaletteId, surface?: Surfac
   return { id: iconAssetId(name), palette, surface };
 }
 
-/**
- * Bundled assets laid out as `assets/<artwork>/<paletteKey>/<file>`. Vite
- * rewrites each entry to a hashed URL at build time; nothing is fetched until
- * a loader is called.
- */
-const bundled = import.meta.glob('../../assets/*/*/*.{webp,json}', {
-  query: '?url',
-  import: 'default',
-}) as Record<string, () => Promise<string>>;
-
 export interface AssetOptions {
   /** Serve assets from `<assetBaseUrl>/<artwork>/<paletteKey>/<file>` instead of the bundle. */
   assetBaseUrl?: string;
@@ -51,19 +41,23 @@ export interface AssetKey {
   surface?: Surface;
 }
 
-function bundledPath(key: AssetKey, variant: AssetVariant): string {
-  const exact = `../../assets/${key.id}/${paletteKey(sourcePalette(key.id, key.palette), key.surface)}/${FILE_NAMES[variant]}`;
-  if (exact in bundled) return exact;
-  const fallback = `../../assets/${key.id}/${paletteKey(defaultPaletteFor(key.id), key.surface)}/${FILE_NAMES[variant]}`;
-  return fallback in bundled ? fallback : exact;
+let bundle: Promise<typeof import('./bundled-assets')> | undefined;
+
+/** The bundled-asset URL map; see `bundled-assets.ts` for why it loads on demand. */
+function loadBundle(): Promise<typeof import('./bundled-assets')> {
+  bundle ??= import('./bundled-assets');
+  return bundle;
 }
 
-export function hasBundledAsset(key: AssetKey, variant: AssetVariant): boolean {
-  return bundledPath(key, variant) in bundled;
+export async function hasBundledAsset(key: AssetKey, variant: AssetVariant): Promise<boolean> {
+  return (await loadBundle()).hasBundled(key, FILE_NAMES[variant]);
 }
 
-/** Whether a fallback of this kind can be attempted at all; a base URL is trusted without probing. */
-export function assetAvailable(key: AssetKey, variant: AssetVariant, options: AssetOptions = {}): boolean {
+/**
+ * Whether a fallback of this kind can be attempted at all; a base URL is
+ * trusted without probing. Only a bundled asset loads the URL map to answer.
+ */
+export async function assetAvailable(key: AssetKey, variant: AssetVariant, options: AssetOptions = {}): Promise<boolean> {
   if (options.assets?.[variant]) return true;
   if (options.assetBaseUrl) return true;
   return hasBundledAsset(key, variant);
@@ -76,8 +70,7 @@ export async function assetUrl(key: AssetKey, variant: AssetVariant, options: As
     const base = options.assetBaseUrl.replace(/\/+$/, '');
     return `${base}/${key.id}/${paletteKey(sourcePalette(key.id, key.palette), key.surface)}/${FILE_NAMES[variant]}`;
   }
-  const loader = bundled[bundledPath(key, variant)];
-  return loader ? loader() : undefined;
+  return (await loadBundle()).bundledUrl(key, FILE_NAMES[variant]);
 }
 
 export async function loadManifest(url: string): Promise<BakedManifest> {
@@ -87,11 +80,6 @@ export async function loadManifest(url: string): Promise<BakedManifest> {
 }
 
 /** Artworks with at least one bundled asset set, for galleries and tests. */
-export function bundledArtworkIds(): string[] {
-  const ids = new Set<string>();
-  for (const path of Object.keys(bundled)) {
-    const match = /^\.\.\/\.\.\/assets\/([^/]+)\//.exec(path);
-    if (match) ids.add(match[1]!);
-  }
-  return Array.from(ids).sort();
+export async function bundledArtworkIds(): Promise<string[]> {
+  return (await loadBundle()).bundledIds();
 }

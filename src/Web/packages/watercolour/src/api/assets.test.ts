@@ -7,21 +7,21 @@ import { bundledArtworkIds, defaultPaletteFor, hasBundledAsset, iconAssetKey, DE
 const assetId = (id: string) => id.replace(/^lucide:/, 'lucide-');
 
 describe('curated bundle', () => {
-  it('falls back to the default palette when the requested one is not baked', () => {
-    expect(hasBundledAsset({ id: 'crescent-moon', palette: 'moonlight', surface: 'light' }, 'final')).toBe(true);
-    expect(hasBundledAsset({ id: 'crescent-moon', palette: 'ember', surface: 'light' }, 'final')).toBe(true);
-    expect(hasBundledAsset({ id: 'crescent-moon', palette: 'ember', surface: 'dark' }, 'final')).toBe(true);
-    expect(hasBundledAsset({ id: 'confirmation-background', palette: 'dusk', surface: 'dark' }, 'strip')).toBe(true);
+  it('falls back to the default palette when the requested one is not baked', async () => {
+    expect(await hasBundledAsset({ id: 'crescent-moon', palette: 'moonlight', surface: 'light' }, 'final')).toBe(true);
+    expect(await hasBundledAsset({ id: 'crescent-moon', palette: 'ember', surface: 'light' }, 'final')).toBe(true);
+    expect(await hasBundledAsset({ id: 'crescent-moon', palette: 'ember', surface: 'dark' }, 'final')).toBe(true);
+    expect(await hasBundledAsset({ id: 'confirmation-background', palette: 'dusk', surface: 'dark' }, 'strip')).toBe(true);
   });
 
-  it('still reports missing assets for unknown artworks', () => {
-    expect(hasBundledAsset({ id: 'does-not-exist' }, 'final')).toBe(false);
-    expect(hasBundledAsset({ id: 'crescent-moon', palette: 'moonlight', surface: 'light' }, 'manifest')).toBe(true);
+  it('still reports missing assets for unknown artworks', async () => {
+    expect(await hasBundledAsset({ id: 'does-not-exist' }, 'final')).toBe(false);
+    expect(await hasBundledAsset({ id: 'crescent-moon', palette: 'moonlight', surface: 'light' }, 'manifest')).toBe(true);
   });
 
-  it('bakes exactly the artworks the manifest lists', () => {
+  it('bakes exactly the artworks the manifest lists', async () => {
     const manifestIds = manifest.artworks.map((a) => assetId(a.id)).sort();
-    expect(bundledArtworkIds()).toEqual(manifestIds);
+    expect(await bundledArtworkIds()).toEqual(manifestIds);
     for (const id of manifestIds) {
       expect(DEFAULT_PALETTE[id]).toBeDefined();
       expect(defaultPaletteFor(id)).toBe(DEFAULT_PALETTE[id]);
@@ -34,10 +34,10 @@ describe('curated bundle', () => {
     }
   });
 
-  it('has both stills of the tab underline on each surface, so the still presentation draws it without the engine', () => {
+  it('has both stills of the tab underline on each surface, so the still presentation draws it without the engine', async () => {
     for (const surface of ['light', 'dark'] as const) {
-      expect(hasBundledAsset({ id: 'tab-underline', surface }, 'final')).toBe(true);
-      expect(hasBundledAsset({ id: 'tab-underline', surface }, 'final-small')).toBe(true);
+      expect(await hasBundledAsset({ id: 'tab-underline', surface }, 'final')).toBe(true);
+      expect(await hasBundledAsset({ id: 'tab-underline', surface }, 'final-small')).toBe(true);
     }
   });
 
@@ -47,17 +47,17 @@ describe('curated bundle', () => {
 });
 
 describe('baked lucide icons', () => {
-  it('resolves a baked icon to its default-palette assets, with the same fallback rule', () => {
-    expect(hasBundledAsset(iconAssetKey('database', 'slate', 'light'), 'final')).toBe(true);
-    expect(hasBundledAsset(iconAssetKey('database', 'slate', 'light'), 'strip')).toBe(true);
-    expect(hasBundledAsset(iconAssetKey('database', 'ember', 'light'), 'final')).toBe(true);
-    expect(hasBundledAsset(iconAssetKey('database', 'ember', 'dark'), 'final')).toBe(true);
+  it('resolves a baked icon to its default-palette assets, with the same fallback rule', async () => {
+    expect(await hasBundledAsset(iconAssetKey('database', 'slate', 'light'), 'final')).toBe(true);
+    expect(await hasBundledAsset(iconAssetKey('database', 'slate', 'light'), 'strip')).toBe(true);
+    expect(await hasBundledAsset(iconAssetKey('database', 'ember', 'light'), 'final')).toBe(true);
+    expect(await hasBundledAsset(iconAssetKey('database', 'ember', 'dark'), 'final')).toBe(true);
     expect(defaultPaletteFor('lucide-database')).toBe('slate');
   });
 
-  it('reports no bundled assets for an icon that is not baked, so it falls to the SVG backend', () => {
-    expect(hasBundledAsset(iconAssetKey('clock'), 'final')).toBe(false);
-    expect(hasBundledAsset(iconAssetKey('clock'), 'strip')).toBe(false);
+  it('reports no bundled assets for an icon that is not baked, so it falls to the SVG backend', async () => {
+    expect(await hasBundledAsset(iconAssetKey('clock'), 'final')).toBe(false);
+    expect(await hasBundledAsset(iconAssetKey('clock'), 'strip')).toBe(false);
   });
 });
 describe('bake manifest aspect', () => {
