@@ -32,7 +32,7 @@ impl Image {
     /// Standard "over" onto an opaque linear background; result is opaque.
     pub fn composite_over(&self, background: Rgb) -> Image {
         let mut out = self.clone();
-        for px in out.rgba.chunks_exact_mut(4) {
+        for px in out.rgba.as_chunks_mut::<4>().0 {
             let a = px[3].clamp(0.0, 1.0);
             for (p, b) in px.iter_mut().zip(background.0) {
                 *p += b * (1.0 - a);
