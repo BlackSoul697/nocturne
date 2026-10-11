@@ -43,7 +43,7 @@
   const DirectionIcon = $derived(directionInfo.icon);
   // Over the flat range fill, so the tile reads the same until it arrives.
   const tileWash = deferredArtwork(() => import("../GlucoseTileWash.svelte"));
-  trackUnwashedFill(() => ({ loading: isLoading, stale: isStale, disconnected: isDisconnected, variant: tileVariant }));
+  trackUnwashedFill(() => ({ loading: isLoading, stale: isStale, disconnected: isDisconnected, variant: tileVariant, washed: tileWash.component !== null }));
 
   const batteryStatusPromise = getCurrentBatteryStatus({ recentMinutes: 30 });
 

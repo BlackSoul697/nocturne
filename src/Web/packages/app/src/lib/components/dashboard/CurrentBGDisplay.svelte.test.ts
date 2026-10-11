@@ -71,7 +71,7 @@ describe("CurrentBGDisplay", () => {
     resetWatercolour();
   });
 
-  it("shows the flat range fill until the deferred wash arrives, then the wash over it", async () => {
+  it("shows the flat range fill until the deferred wash arrives, then the settling wash over it", async () => {
     dashboardTopWidgets.hydrate([WidgetId.TirChart, WidgetId.Tdd]);
     summary.current = { mills: now, status: GlucoseStatus.High };
     const { container } = render(CurrentBGDisplay, { showPills: false });
@@ -81,7 +81,8 @@ describe("CurrentBGDisplay", () => {
 
     releaseWatercolour();
 
-    await expect.element(page.getByTestId("glucose-tile-bloom")).toBeInTheDocument();
+    await expect.element(page.getByTestId("artwork-wash")).toBeInTheDocument();
+    expect(page.getByTestId("glucose-tile-bloom").elements()).toHaveLength(0);
   });
 
   it("renders status text without reading a Symbol timeSinceReading value", () => {

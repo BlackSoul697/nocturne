@@ -85,6 +85,7 @@
     stale: isStale,
     disconnected: isDisconnected,
     variant: tileVariant,
+    washed: tileWash.component !== null,
   }));
 
   function formatTimeSinceLastReading(): string {

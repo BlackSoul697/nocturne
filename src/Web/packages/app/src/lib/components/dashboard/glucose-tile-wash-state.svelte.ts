@@ -20,21 +20,24 @@ interface TileFill {
   stale: boolean;
   disconnected: boolean;
   variant: GlucoseTileVariant;
+  /** Whether the host has its wash to paint; until then a painted tile shows its flat fill. */
+  washed: boolean;
 }
 
 /**
- * Records the flat fill a host's tile shows while it paints no wash (the skeleton, or what
- * `glucoseTileFill` leaves unpainted), so the next wash blooms over what was on screen. Call
- * during component initialisation.
+ * Records the flat fill a host's tile shows while it paints no wash (the skeleton, what
+ * `glucoseTileFill` leaves unpainted, or a painted fill before the wash module arrives), so the
+ * next wash blooms over what was on screen. A reading already on screen when the wash arrives
+ * therefore plays no bloom. Call during component initialisation.
  */
 export function trackUnwashedFill(tile: () => TileFill): void {
   $effect(() => {
-    const { loading, variant, ...state } = tile();
+    const { loading, variant, washed, ...state } = tile();
     if (loading) {
       unwashed.fill = "skeleton";
       return;
     }
     const { fill, painted } = glucoseTileFill(variant, state);
-    if (!painted) unwashed.fill = fill;
+    if (!painted || !washed) unwashed.fill = fill;
   });
 }

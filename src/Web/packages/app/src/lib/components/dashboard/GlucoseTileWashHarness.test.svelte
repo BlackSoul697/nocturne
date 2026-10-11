@@ -16,7 +16,7 @@
 
   let { mills, variant, isLoading = false, isStale = false, isDisconnected = false, washLoaded = true }: Props =
     $props();
-  trackUnwashedFill(() => ({ loading: isLoading, stale: isStale, disconnected: isDisconnected, variant }));
+  trackUnwashedFill(() => ({ loading: isLoading, stale: isStale, disconnected: isDisconnected, variant, washed: washLoaded }));
 </script>
 
 {#snippet wash()}

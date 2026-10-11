@@ -52,7 +52,7 @@ describe("GlucoseTileWash", () => {
     await expect.element(greyWash()).not.toBeInTheDocument();
   });
 
-  it("blooms the first reading when the wash arrives after it", async () => {
+  it("plays no bloom for the reading on screen when the wash arrives, and blooms the next", async () => {
     const view = render(GlucoseTileWashHarness, {
       mills: undefined,
       variant: "neutral",
@@ -60,12 +60,27 @@ describe("GlucoseTileWash", () => {
       washLoaded: false,
     });
     await view.rerender({ mills: newReading(), variant: "high", isLoading: false });
-    await expect.element(bloom()).not.toBeInTheDocument();
 
     await view.rerender({ washLoaded: true });
 
+    await expect.element(greyWash()).toBeInTheDocument();
+    await expect.element(bloom()).not.toBeInTheDocument();
+    await expect.element(priorFill()).not.toBeInTheDocument();
+
+    await view.rerender({ mills: newReading(), variant: "low" });
+
     await expect.element(bloom()).toBeInTheDocument();
-    await expect.element(priorFill()).toHaveClass("bg-accent");
+    await expect.element(priorFill()).toHaveClass("bg-glucose-high");
+  });
+
+  it("fades the grey wash out once it settles, leaving the flat range fill", async () => {
+    const view = await settledTile("high");
+    await view.rerender({ mills: newReading(), variant: "high" });
+    await expect.element(greyWash()).toBeInTheDocument();
+
+    for (const painting of engine.live()) painting.paint(1, true);
+
+    await expect.element(page.getByTestId("artwork-wash").element().parentElement!).toHaveClass("faded");
   });
 
   it("blooms over the neutral fill when the first reading showed before its status", async () => {
