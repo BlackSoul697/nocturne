@@ -1,11 +1,14 @@
+using System.Data.Common;
 using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using Microsoft.AspNetCore.Http;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Storage;
 using Nocturne.API.Authorization;
 using Nocturne.API.Extensions;
 using Nocturne.API.Services.Auth;
+using Nocturne.API.Services.Glucose;
 using Nocturne.Core.Constants;
 using Nocturne.Core.Contracts.Platform;
 using Nocturne.Core.Contracts.Multitenancy;
@@ -43,7 +46,24 @@ public class StatusService : IStatusService
     private readonly IHttpContextAccessor _httpContextAccessor;
     private readonly ITenantAccessor _tenantAccessor;
     private readonly PublicAccessCacheService _publicAccessCacheService;
+    private readonly IShareAppearanceReader _appearanceReader;
+    private readonly IGlucoseStatusClassifier _thresholdClassifier;
+    private readonly ICategoryReadContext _categoryReadContext;
     private readonly ILogger<StatusService> _logger;
+
+    /// <summary>
+    /// Whether the caller may see thresholds derived from the tenant's alert rules. A share cannot
+    /// read <c>alert_rules</c> and an anonymous caller is held to the same view, so both resolve
+    /// the configured defaults. Also the cache's one caller-dependent dimension.
+    /// </summary>
+    private bool ReadsAlertRules =>
+        !_categoryReadContext.IsShare && _httpContextAccessor.HttpContext?.IsAuthenticated() == true;
+
+    /// <summary>
+    /// Set when the thresholds fell back to the defaults because <c>alert_rules</c> could not be
+    /// read, so the response is returned but not cached and the next request tries again.
+    /// </summary>
+    private bool _thresholdsDegraded;
 
     private string TenantCacheId => _tenantAccessor.Context?.TenantId.ToString()
         ?? throw new InvalidOperationException("Tenant context is not resolved");
@@ -58,6 +78,9 @@ public class StatusService : IStatusService
         IHttpContextAccessor httpContextAccessor,
         ITenantAccessor tenantAccessor,
         PublicAccessCacheService publicAccessCacheService,
+        IShareAppearanceReader appearanceReader,
+        IGlucoseStatusClassifier thresholdClassifier,
+        ICategoryReadContext categoryReadContext,
         ILogger<StatusService> logger
     )
     {
@@ -70,6 +93,9 @@ public class StatusService : IStatusService
         _httpContextAccessor = httpContextAccessor;
         _tenantAccessor = tenantAccessor;
         _publicAccessCacheService = publicAccessCacheService;
+        _appearanceReader = appearanceReader;
+        _thresholdClassifier = thresholdClassifier;
+        _categoryReadContext = categoryReadContext;
         _logger = logger;
     }
 
@@ -92,7 +118,8 @@ public class StatusService : IStatusService
 
         // Include demo mode in cache key to ensure correct status is returned
         var demoSuffix = _demoModeService.IsEnabled ? ":demo" : "";
-        var cacheKey = $"status:system:{TenantCacheId}" + demoSuffix;
+        var rulesSuffix = ReadsAlertRules ? "" : ":defaults";
+        var cacheKey = $"status:system:{TenantCacheId}" + demoSuffix + rulesSuffix;
         var cacheTtl = TimeSpan.FromMinutes(2);
 
         var cachedStatus = await _cacheService.GetAsync<StatusResponse>(cacheKey);
@@ -109,10 +136,16 @@ public class StatusService : IStatusService
             "Cache MISS for system status (demoMode: {DemoMode}), generating response",
             _demoModeService.IsEnabled
         );
+        _thresholdsDegraded = false;
         var status = await GenerateSystemStatusAsync();
 
         if (status != null)
         {
+            if (_thresholdsDegraded)
+            {
+                return status;
+            }
+
             await _cacheService.SetAsync(cacheKey, status, cacheTtl);
             _logger.LogDebug("Cached system status with {TTL}min TTL", cacheTtl.TotalMinutes);
             return status;
@@ -390,7 +423,8 @@ public class StatusService : IStatusService
         var settings = new Dictionary<string, object>();
 
         // Core display settings
-        settings["units"] = _configuration[ServiceNames.ConfigKeys.DisplayUnits] ?? "mg/dl";
+        var appearance = await _appearanceReader.GetSharedAppearanceAsync(_tenantAccessor.TenantId);
+        settings["units"] = appearance.GlucoseUnits ?? "mg/dl";
         settings["timeFormat"] = _configuration.GetValue<int>("Display:TimeFormat", 12);
         settings["dayStart"] = _configuration.GetValue<int>("Display:DayStart", 7);
         settings["dayEnd"] = _configuration.GetValue<int>("Display:DayEnd", 21);
@@ -437,13 +471,13 @@ public class StatusService : IStatusService
         // required for tenant data unconditionally rather than by setting.
         settings["requireAuthentication"] = false;
 
-        // Threshold values
+        var thresholds = await ResolveThresholdsAsync();
         settings["thresholds"] = new Dictionary<string, object>
         {
-            ["bgHigh"] = _configuration.GetValue("Thresholds:BgHigh", ApplicationConstants.Web.Thresholds.BgHigh),
-            ["bgTargetTop"] = _configuration.GetValue("Thresholds:BgTargetTop", ApplicationConstants.Web.Thresholds.BgTargetTop),
-            ["bgTargetBottom"] = _configuration.GetValue("Thresholds:BgTargetBottom", ApplicationConstants.Web.Thresholds.BgTargetBottom),
-            ["bgLow"] = _configuration.GetValue("Thresholds:BgLow", ApplicationConstants.Web.Thresholds.BgLow),
+            ["bgHigh"] = thresholds.UrgentHigh,
+            ["bgTargetTop"] = thresholds.High,
+            ["bgTargetBottom"] = thresholds.Low,
+            ["bgLow"] = thresholds.UrgentLow,
         };
 
         // Security settings
@@ -473,9 +507,37 @@ public class StatusService : IStatusService
         settings["alarmTypes"] = _configuration.GetSection("Alarms:Types").Get<string[]>() ?? new[] { "predict" };
         settings["enable"] = GetEnabledFeaturesArray();
 
-        await Task.CompletedTask; // For future async operations
-
         return settings;
+    }
+
+    /// <summary>
+    /// Resolves the thresholds in mg/dL. An unreadable <c>alert_rules</c> degrades to the configured
+    /// defaults so the status endpoint keeps answering.
+    /// </summary>
+    private async Task<TenantOverviewThresholds> ResolveThresholdsAsync()
+    {
+        if (!ReadsAlertRules)
+        {
+            return _thresholdClassifier.Defaults;
+        }
+
+        var ct = _httpContextAccessor.HttpContext?.RequestAborted ?? CancellationToken.None;
+        try
+        {
+            await using var db = await _tenantDbContextFactory.CreateAsync(ct);
+            return await _thresholdClassifier.ResolveThresholdsAsync(db, ct);
+        }
+        catch (DbException ex)
+        {
+            _logger.LogWarning(ex, "Failed to read alert rules for status thresholds; using the defaults");
+        }
+        catch (RetryLimitExceededException ex)
+        {
+            _logger.LogWarning(ex, "Failed to read alert rules for status thresholds; using the defaults");
+        }
+
+        _thresholdsDegraded = true;
+        return _thresholdClassifier.Defaults;
     }
 
     /// <summary>
