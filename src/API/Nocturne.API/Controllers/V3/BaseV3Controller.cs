@@ -739,37 +739,6 @@ public abstract class BaseV3Controller<T> : ControllerBase
     }
 
     /// <summary>
-    /// Parse create request from request body
-    /// </summary>
-    /// <typeparam name="TRequest">Type of the request object</typeparam>
-    /// <returns>Parsed request object or null</returns>
-    protected async Task<TRequest?> ParseCreateRequest<TRequest>()
-        where TRequest : class
-    {
-        try
-        {
-            if (Request.ContentLength == 0)
-                return null;
-
-            using var reader = new StreamReader(Request.Body);
-            var body = await reader.ReadToEndAsync();
-
-            if (string.IsNullOrEmpty(body))
-                return null;
-
-            return JsonSerializer.Deserialize<TRequest>(
-                body,
-                new JsonSerializerOptions { PropertyNameCaseInsensitive = true }
-            );
-        }
-        catch (Exception ex)
-        {
-            _logger.LogWarning(ex, "Failed to parse create request");
-            return null;
-        }
-    }
-
-    /// <summary>
     /// Create V3 collection response
     /// </summary>
     /// <typeparam name="TData">Type of the data</typeparam>

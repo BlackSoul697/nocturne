@@ -2,6 +2,7 @@ using System.Text.Json;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Nocturne.API.Attributes;
+using Nocturne.API.Configuration;
 using Nocturne.API.Authorization;
 using Nocturne.Core.Models.Authorization;
 using Nocturne.Core.Contracts.Legacy;
@@ -430,10 +431,7 @@ public class FoodController : BaseV3Controller<Food>
                 return validationError;
             }
 
-            var food = JsonSerializer.Deserialize<Food>(
-                foodData.GetRawText(),
-                new JsonSerializerOptions { PropertyNameCaseInsensitive = true }
-            );
+            var food = NightscoutJsonBody.ReadObject<Food>(foodData);
 
             if (food == null)
             {
@@ -460,6 +458,11 @@ public class FoodController : BaseV3Controller<Food>
             _logger.LogDebug("Successfully updated food with ID {Id}", id);
 
             return Ok(updatedFood);
+        }
+        catch (JsonException ex)
+        {
+            _logger.LogWarning(ex, "Invalid JSON in V3 food update request for ID {Id}", id);
+            return CreateV3ErrorResponse(400, "Invalid request data", ex.Message);
         }
         catch (ArgumentException ex)
         {
@@ -632,43 +635,15 @@ public class FoodController : BaseV3Controller<Food>
     /// <returns>Collection of Food objects</returns>
     private IEnumerable<Food> ParseCreateRequestFromJsonElement(JsonElement jsonElement)
     {
-        var foodRecords = new List<Food>();
-
         try
         {
-            if (jsonElement.ValueKind == JsonValueKind.Array)
-            {
-                foreach (var element in jsonElement.EnumerateArray())
-                {
-                    var food = JsonSerializer.Deserialize<Food>(
-                        element.GetRawText(),
-                        new JsonSerializerOptions { PropertyNameCaseInsensitive = true }
-                    );
-                    if (food != null)
-                    {
-                        foodRecords.Add(food);
-                    }
-                }
-            }
-            else if (jsonElement.ValueKind == JsonValueKind.Object)
-            {
-                var food = JsonSerializer.Deserialize<Food>(
-                    jsonElement.GetRawText(),
-                    new JsonSerializerOptions { PropertyNameCaseInsensitive = true }
-                );
-                if (food != null)
-                {
-                    foodRecords.Add(food);
-                }
-            }
+            return NightscoutJsonBody.ReadObjects<Food>(jsonElement) ?? [];
         }
         catch (JsonException ex)
         {
             _logger.LogWarning(ex, "Failed to parse food data from JsonElement");
             throw new ArgumentException("Invalid food data format", ex);
         }
-
-        return foodRecords;
     }
 
     /// <summary>

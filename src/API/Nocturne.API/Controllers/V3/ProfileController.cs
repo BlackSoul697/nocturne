@@ -2,12 +2,12 @@ using System.Text.Json;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Nocturne.API.Attributes;
+using Nocturne.API.Configuration;
 using Nocturne.API.Authorization;
 using Nocturne.Core.Models.Authorization;
 using Nocturne.Core.Contracts.Legacy;
 using Nocturne.Core.Contracts.Profiles;
 using Nocturne.Core.Models;
-using Nocturne.Core.Models.Serializers;
 
 namespace Nocturne.API.Controllers.V3;
 
@@ -424,43 +424,15 @@ public class ProfileController : BaseV3Controller<Profile>
     /// <returns>Collection of Profile objects</returns>
     private IEnumerable<Profile> ParseCreateRequestFromJsonElement(JsonElement jsonElement)
     {
-        var profileRecords = new List<Profile>();
-
         try
         {
-            if (jsonElement.ValueKind == JsonValueKind.Array)
-            {
-                foreach (var element in jsonElement.EnumerateArray())
-                {
-                    var profile = JsonSerializer.Deserialize<Profile>(
-                        element.GetRawText(),
-                        UploaderIdJsonModifier.CaseInsensitiveReadOptions
-                    );
-                    if (profile != null)
-                    {
-                        profileRecords.Add(profile);
-                    }
-                }
-            }
-            else if (jsonElement.ValueKind == JsonValueKind.Object)
-            {
-                var profile = JsonSerializer.Deserialize<Profile>(
-                    jsonElement.GetRawText(),
-                    UploaderIdJsonModifier.CaseInsensitiveReadOptions
-                );
-                if (profile != null)
-                {
-                    profileRecords.Add(profile);
-                }
-            }
+            return NightscoutJsonBody.ReadObjects<Profile>(jsonElement) ?? [];
         }
         catch (JsonException ex)
         {
             _logger.LogWarning(ex, "Failed to parse profile data from JsonElement");
             throw new ArgumentException("Invalid profile data format", ex);
         }
-
-        return profileRecords;
     }
 
 }

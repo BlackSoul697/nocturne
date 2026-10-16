@@ -2,11 +2,11 @@ using System.Text.Json;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Nocturne.API.Attributes;
+using Nocturne.API.Configuration;
 using Nocturne.API.Authorization;
 using Nocturne.Core.Models.Authorization;
 using Nocturne.Core.Contracts.Legacy;
 using Nocturne.Core.Models;
-using Nocturne.Core.Models.Serializers;
 using Nocturne.Core.Contracts.Repositories;
 
 namespace Nocturne.API.Controllers.V3;
@@ -349,43 +349,15 @@ public class SettingsController : BaseV3Controller<Settings>
     /// <returns>Collection of Settings objects</returns>
     private IEnumerable<Settings> ParseCreateRequestFromJsonElement(JsonElement jsonElement)
     {
-        var settingsRecords = new List<Settings>();
-
         try
         {
-            if (jsonElement.ValueKind == JsonValueKind.Array)
-            {
-                foreach (var element in jsonElement.EnumerateArray())
-                {
-                    var settings = JsonSerializer.Deserialize<Settings>(
-                        element.GetRawText(),
-                        UploaderIdJsonModifier.CaseInsensitiveReadOptions
-                    );
-                    if (settings != null)
-                    {
-                        settingsRecords.Add(settings);
-                    }
-                }
-            }
-            else if (jsonElement.ValueKind == JsonValueKind.Object)
-            {
-                var settings = JsonSerializer.Deserialize<Settings>(
-                    jsonElement.GetRawText(),
-                    UploaderIdJsonModifier.CaseInsensitiveReadOptions
-                );
-                if (settings != null)
-                {
-                    settingsRecords.Add(settings);
-                }
-            }
+            return NightscoutJsonBody.ReadObjects<Settings>(jsonElement) ?? [];
         }
         catch (JsonException ex)
         {
             _logger.LogWarning(ex, "Failed to parse settings data from JsonElement");
             throw new ArgumentException("Invalid settings data format", ex);
         }
-
-        return settingsRecords;
     }
 
     /// <summary>

@@ -2,6 +2,7 @@ using System.Text.Json;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Nocturne.API.Attributes;
+using Nocturne.API.Configuration;
 using Nocturne.API.Authorization;
 using Nocturne.Core.Models.Authorization;
 using Nocturne.API.Services.Devices;
@@ -10,7 +11,6 @@ using Nocturne.Core.Contracts.Events;
 using Nocturne.Core.Contracts.Legacy;
 using Nocturne.Core.Contracts.V4;
 using Nocturne.Core.Models;
-using Nocturne.Core.Models.Serializers;
 
 namespace Nocturne.API.Controllers.V3;
 
@@ -345,10 +345,7 @@ public class DeviceStatusController : BaseV3Controller<DeviceStatus>
         DeviceStatus? deviceStatus;
         try
         {
-            deviceStatus = JsonSerializer.Deserialize<DeviceStatus>(
-                request.GetRawText(),
-                UploaderIdJsonModifier.CaseInsensitiveReadOptions
-            );
+            deviceStatus = NightscoutJsonBody.ReadObject<DeviceStatus>(request);
         }
         catch (JsonException)
         {
@@ -528,58 +525,31 @@ public class DeviceStatusController : BaseV3Controller<DeviceStatus>
         out ActionResult? validationError
     )
     {
-        var deviceStatusRecords = new List<DeviceStatus>();
         validationError = null;
+
+        var elements = jsonElement.ValueKind switch
+        {
+            JsonValueKind.Array => jsonElement.EnumerateArray().ToList(),
+            JsonValueKind.Object => [jsonElement],
+            _ => [],
+        };
+
+        // Nightscout V3 Strict Validation: the 'app' field is required in the JSON payload
+        if (elements.Any(element => element.ValueKind != JsonValueKind.Object || !element.TryGetProperty("app", out _)))
+        {
+            validationError = CreateV3ErrorResponse(400, "Bad or missing app field");
+            return Enumerable.Empty<DeviceStatus>();
+        }
 
         try
         {
-            if (jsonElement.ValueKind == JsonValueKind.Array)
-            {
-                foreach (var element in jsonElement.EnumerateArray())
-                {
-                    // Nightscout V3 Strict Validation: 'app' field is required in the JSON payload
-                    if (!element.TryGetProperty("app", out _))
-                    {
-                        validationError = CreateV3ErrorResponse(400, "Bad or missing app field");
-                        return Enumerable.Empty<DeviceStatus>();
-                    }
-
-                    var deviceStatus = JsonSerializer.Deserialize<DeviceStatus>(
-                        element.GetRawText(),
-                        UploaderIdJsonModifier.CaseInsensitiveReadOptions
-                    );
-                    if (deviceStatus != null)
-                    {
-                        deviceStatusRecords.Add(deviceStatus);
-                    }
-                }
-            }
-            else if (jsonElement.ValueKind == JsonValueKind.Object)
-            {
-                // Nightscout V3 Strict Validation: 'app' field is required
-                if (!jsonElement.TryGetProperty("app", out _))
-                {
-                    validationError = CreateV3ErrorResponse(400, "Bad or missing app field");
-                    return Enumerable.Empty<DeviceStatus>();
-                }
-
-                var deviceStatus = JsonSerializer.Deserialize<DeviceStatus>(
-                    jsonElement.GetRawText(),
-                    UploaderIdJsonModifier.CaseInsensitiveReadOptions
-                );
-                if (deviceStatus != null)
-                {
-                    deviceStatusRecords.Add(deviceStatus);
-                }
-            }
+            return NightscoutJsonBody.ReadObjects<DeviceStatus>(jsonElement) ?? [];
         }
         catch (JsonException ex)
         {
             _logger.LogWarning(ex, "Failed to parse device status data from JsonElement");
             throw new ArgumentException("Invalid device status data format", ex);
         }
-
-        return deviceStatusRecords;
     }
 
     internal static object MapToV3Dto(DeviceStatus status)

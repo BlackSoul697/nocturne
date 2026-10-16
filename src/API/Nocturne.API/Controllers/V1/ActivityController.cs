@@ -2,6 +2,7 @@ using System.Text.Json;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Nocturne.API.Attributes;
+using Nocturne.API.Configuration;
 using Nocturne.API.Authorization;
 using Nocturne.API.Extensions;
 using Nocturne.API.Helpers;
@@ -201,7 +202,9 @@ public class ActivityController : ControllerBase
             if (activities == null)
                 return BadRequest(new { error = "Activity data is required" });
 
-            var activityList = ReadActivities(activities);
+            var activityList = activities is JsonElement body
+                ? NightscoutJsonBody.ReadObjects<Activity>(body)
+                : null;
             if (activityList is null)
                 return BadRequest(new { error = "Invalid activity data format" });
 
@@ -221,6 +224,11 @@ public class ActivityController : ControllerBase
 
             // Nightscout returns 200 OK for POST, not 201 Created
             return Ok(result);
+        }
+        catch (JsonException ex)
+        {
+            _logger.LogWarning(ex, "Invalid JSON in create activities request");
+            return BadRequest(new { error = "Invalid activity data format" });
         }
         catch (Exception ex)
         {
@@ -254,7 +262,7 @@ public class ActivityController : ControllerBase
         Activity toSave;
         try
         {
-            toSave = JsonSerializer.Deserialize<Activity>(activity.GetRawText())!;
+            toSave = NightscoutJsonBody.ReadObject<Activity>(activity)!;
         }
         catch (JsonException ex)
         {
@@ -375,15 +383,6 @@ public class ActivityController : ControllerBase
                 new { error = "An error occurred while saving the activity" }
             );
     }
-
-    private static List<Activity>? ReadActivities(object body) => body switch
-    {
-        JsonElement { ValueKind: JsonValueKind.Array } array =>
-            JsonSerializer.Deserialize<List<Activity>>(array.GetRawText()) ?? [],
-        JsonElement single =>
-            JsonSerializer.Deserialize<Activity>(single.GetRawText()) is { } activity ? [activity] : [],
-        _ => null,
-    };
 
     private ObjectResult ForbiddenForScope(string scope) => StatusCode(
         StatusCodes.Status403Forbidden,

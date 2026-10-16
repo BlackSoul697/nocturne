@@ -2,6 +2,7 @@ using System.Text.Json;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Nocturne.API.Attributes;
+using Nocturne.API.Configuration;
 using Nocturne.API.Authorization;
 using Nocturne.API.Extensions;
 using Nocturne.API.Helpers;
@@ -201,7 +202,7 @@ public class TreatmentsController : ControllerBase
 
         try
         {
-            var treatmentsToCreate = ReadTreatments(treatments);
+            var treatmentsToCreate = NightscoutJsonBody.ReadObjects<Treatment>(treatments);
             if (treatmentsToCreate is null)
             {
                 _logger.LogWarning("Invalid JSON format for treatments");
@@ -264,7 +265,7 @@ public class TreatmentsController : ControllerBase
 
         try
         {
-            var toSave = JsonSerializer.Deserialize<Treatment>(treatment.GetRawText())!;
+            var toSave = NightscoutJsonBody.ReadObject<Treatment>(treatment)!;
             if (treatment.TryGetProperty("identifier", out var identifier)
                 && identifier.ValueKind == JsonValueKind.String
                 && !string.IsNullOrWhiteSpace(identifier.GetString()))
@@ -508,15 +509,6 @@ public class TreatmentsController : ControllerBase
         _logger.LogDebug("Refused save of treatment {Id}: the user deleted it", id);
         return Ok(Array.Empty<Treatment>());
     }
-
-    private static List<Treatment>? ReadTreatments(JsonElement body) => body.ValueKind switch
-    {
-        JsonValueKind.Array => JsonSerializer.Deserialize<List<Treatment>>(body.GetRawText()) ?? [],
-        JsonValueKind.Object => JsonSerializer.Deserialize<Treatment>(body.GetRawText()) is { } single
-            ? [single]
-            : [],
-        _ => null,
-    };
 
     private List<Treatment> PrepareTreatments(List<Treatment> treatments)
     {
