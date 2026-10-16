@@ -1,7 +1,7 @@
 import { Server as SocketIOServerClass, Socket, Namespace, type DefaultEventsMap } from 'socket.io';
 import { Server as HttpServer } from 'http';
 import logger from './logger.js';
-import type { ClientInfo, AlarmData, ServerStats } from '../types.js';
+import type { ClientInfo, AlarmData, AlarmEvent, ServerStats } from '../types.js';
 import {
   verifyHandshakeTicket,
   normalizeHandshakeHost,
@@ -509,28 +509,27 @@ class SocketIOServer {
     }
   }
 
-  broadcastAlarm(alarm: AlarmData, tenantSlug?: string): void {
+  broadcastAlarm(event: AlarmEvent, alarm: AlarmData, tenantSlug?: string): void {
     const target = this.emitTarget(tenantSlug);
     if (!target) return;
 
-    const eventName = alarm.level === 'urgent' ? 'urgent_alarm' : 'alarm';
-    logger.debug(`Broadcasting ${eventName}${tenantSlug ? ` to tenant ${tenantSlug}` : ''}`);
-    target.emit(eventName, alarm);
+    logger.debug(`Broadcasting ${event}${tenantSlug ? ` to tenant ${tenantSlug}` : ''}`);
+    target.emit(event, alarm);
 
     if (this.alarmNsp && tenantSlug) {
-      this.alarmNsp.to(alarmRoom(tenantSlug)).emit(eventName, alarm);
+      this.alarmNsp.to(alarmRoom(tenantSlug)).emit(event, alarm);
     }
   }
 
-  broadcastClearAlarm(tenantSlug?: string): void {
+  broadcastClearAlarm(clear: unknown, tenantSlug?: string): void {
     const target = this.emitTarget(tenantSlug);
     if (!target) return;
 
     logger.debug(`Broadcasting clear_alarm${tenantSlug ? ` to tenant ${tenantSlug}` : ''}`);
-    target.emit('clear_alarm');
+    target.emit('clear_alarm', clear);
 
     if (this.alarmNsp && tenantSlug) {
-      this.alarmNsp.to(alarmRoom(tenantSlug)).emit('clear_alarm');
+      this.alarmNsp.to(alarmRoom(tenantSlug)).emit('clear_alarm', clear);
     }
   }
 

@@ -3,6 +3,7 @@ import { describe, it, expect, vi, afterEach } from 'vitest';
 import { createServer } from 'http';
 import SocketIOServer, { pickHandshakeHost, resolveTenantSlug } from './socketio-server.js';
 import { signHandshakeTicket } from './handshake-ticket.js';
+import MessageTranslator from './message-translator.js';
 
 const SECRET = 'test-instance-key-0123456789';
 
@@ -954,25 +955,94 @@ describe('SocketIOServer v3 /alarm broadcast fan-out', () => {
     return server;
   }
 
-  it('fans an alarm out to the /alarm tenant room', async () => {
+  function relayTo(server: SocketIOServer) {
+    const io = server.getIO()!;
+    const tenantEmit = vi.fn();
+    const alarmEmit = vi.fn();
+    const tenantTo = vi.spyOn(io, 'to').mockReturnValue({ emit: tenantEmit } as never);
+    const alarmTo = vi.spyOn(io.of('/alarm'), 'to').mockReturnValue({ emit: alarmEmit } as never);
+    const expectRooms = () => {
+      expect(tenantTo).toHaveBeenCalledExactlyOnceWith('tenant:rhys');
+      expect(alarmTo).toHaveBeenCalledExactlyOnceWith('alarm:rhys');
+    };
+    return {
+      translator: new MessageTranslator(server, 'rhys'),
+      tenantEmit,
+      alarmEmit,
+      expectRooms,
+    };
+  }
+
+  const urgentNotification = {
+    level: 2,
+    title: 'Urgent High',
+    message: 'BG 15.1',
+    group: 'default',
+    plugin: 'simplealarms',
+    timestamp: 1700000000000,
+    clear: false,
+  };
+
+  it('relays an urgent notification as urgent_alarm with its numeric level on both namespaces', async () => {
     const server = await startedServer();
-    const alarmNsp = server.getIO()!.of('/alarm');
-    const toSpy = vi.spyOn(alarmNsp, 'to');
+    const { translator, tenantEmit, alarmEmit, expectRooms } = relayTo(server);
 
-    server.broadcastAlarm({ level: 'urgent', message: 'HIGH' }, 'rhys');
+    translator.handleAlarm('urgent_alarm', urgentNotification);
 
-    expect(toSpy).toHaveBeenCalledWith('alarm:rhys');
+    for (const emit of [tenantEmit, alarmEmit]) {
+      expect(emit).toHaveBeenCalledExactlyOnceWith(
+        'urgent_alarm',
+        expect.objectContaining({ level: 2, title: 'Urgent High', group: 'default' }),
+      );
+    }
+    expectRooms();
     server.getIO()!.close();
   });
 
-  it('fans a clear_alarm out to the /alarm tenant room', async () => {
+  it('relays a warn notification as alarm with its numeric level on both namespaces', async () => {
     const server = await startedServer();
-    const alarmNsp = server.getIO()!.of('/alarm');
-    const toSpy = vi.spyOn(alarmNsp, 'to');
+    const { translator, tenantEmit, alarmEmit, expectRooms } = relayTo(server);
 
-    server.broadcastClearAlarm('rhys');
+    translator.handleAlarm('alarm', { ...urgentNotification, level: 1, title: 'Warning High' });
 
-    expect(toSpy).toHaveBeenCalledWith('alarm:rhys');
+    for (const emit of [tenantEmit, alarmEmit]) {
+      expect(emit).toHaveBeenCalledExactlyOnceWith(
+        'alarm',
+        expect.objectContaining({ level: 1, title: 'Warning High' }),
+      );
+    }
+    expectRooms();
+    server.getIO()!.close();
+  });
+
+  it('gives a level-less alarm the numeric level of the event it arrived on', async () => {
+    const server = await startedServer();
+    const { translator, tenantEmit } = relayTo(server);
+
+    translator.handleAlarm('urgent_alarm', { title: 'No level' });
+    translator.handleAlarm('alarm', { title: 'No level' });
+
+    expect(tenantEmit).toHaveBeenNthCalledWith(1, 'urgent_alarm', expect.objectContaining({ level: 2 }));
+    expect(tenantEmit).toHaveBeenNthCalledWith(2, 'alarm', expect.objectContaining({ level: 1 }));
+    server.getIO()!.close();
+  });
+
+  it('relays clear_alarm with the clearing notification on both namespaces', async () => {
+    const server = await startedServer();
+    const { translator, tenantEmit, alarmEmit, expectRooms } = relayTo(server);
+    const clear = {
+      clear: true,
+      title: 'Alarm Cleared - default',
+      message: 'Level 2 alarm has been acknowledged and cleared',
+      group: 'default',
+      level: 2,
+    };
+
+    translator.handleClearAlarm(clear);
+
+    expect(tenantEmit).toHaveBeenCalledExactlyOnceWith('clear_alarm', clear);
+    expect(alarmEmit).toHaveBeenCalledExactlyOnceWith('clear_alarm', clear);
+    expectRooms();
     server.getIO()!.close();
   });
 

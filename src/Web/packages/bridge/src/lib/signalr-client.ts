@@ -298,17 +298,17 @@ class SignalRClient {
 
     this.alarmConnection.on("alarm", (alarm: unknown) => {
       logger.debug("Received alarm from SignalR:", alarm);
-      this.messageHandler.handleAlarm(alarm);
+      this.messageHandler.handleAlarm("alarm", alarm);
     });
 
     this.alarmConnection.on("urgent_alarm", (alarm: unknown) => {
       logger.debug("Received urgent_alarm from SignalR:", alarm);
-      this.messageHandler.handleAlarm(alarm);
+      this.messageHandler.handleAlarm("urgent_alarm", alarm);
     });
 
-    this.alarmConnection.on("clear_alarm", () => {
-      logger.debug("Received clear_alarm from SignalR");
-      this.messageHandler.handleClearAlarm();
+    this.alarmConnection.on("clear_alarm", (clear: unknown) => {
+      logger.debug("Received clear_alarm from SignalR:", clear);
+      this.messageHandler.handleClearAlarm(clear);
     });
   }
 
