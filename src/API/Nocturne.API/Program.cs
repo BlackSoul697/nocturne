@@ -8,6 +8,7 @@ using Microsoft.IdentityModel.Tokens;
 using Nocturne.API.Authorization;
 using Nocturne.API.Configuration;
 using Nocturne.API.Services.Audit;
+using Nocturne.API.Services.Platform;
 using Nocturne.API.Services.Auth;
 using Nocturne.API.Services.BackgroundServices;
 using Nocturne.API.Services.DevOnly;
@@ -519,7 +520,7 @@ app.MapGet(
             new
             {
                 name = "Nocturne API",
-                version = "1.0.0",
+                version = AppVersion.Current,
                 description = "Modern C# rewrite of Nightscout API",
                 api_documentation = "/openapi/v1.json",
                 aspire_dashboard_note = "API documentation is available via Scalar in the Aspire dashboard",

@@ -457,6 +457,48 @@ public class StatusServiceTests
         result.Extended.UptimeMs.Should().BeGreaterThanOrEqualTo(0);
     }
 
+    [Fact]
+    public async Task GetV3SystemStatusAsync_ReportsTheV3ApiLevelNotTheGitHead()
+    {
+        _mockCacheService
+            .Setup(x => x.GetAsync<StatusResponse>("status:system:00000000-0000-0000-0000-000000000001", default))
+            .ReturnsAsync((StatusResponse?)null);
+
+        var result = await _statusService.GetV3SystemStatusAsync();
+
+        result.ApiVersion.Should().Be("3.0.5");
+        result.ApiVersion.Should().NotBe(result.Head);
+    }
+
+    [Fact]
+    public async Task GetV3SystemStatusAsync_SrvDateTracksTheClockInsideTheStatusCacheWindow()
+    {
+        _mockCacheService
+            .Setup(x => x.GetAsync<StatusResponse>("status:system:00000000-0000-0000-0000-000000000001", default))
+            .ReturnsAsync(new StatusResponse { Status = "ok", Name = "Cached", ServerTime = DateTime.UtcNow.AddMinutes(-1) });
+
+        var first = await _statusService.GetV3SystemStatusAsync();
+        await Task.Delay(25);
+        var second = await _statusService.GetV3SystemStatusAsync();
+
+        second.SrvDate.Should().BeGreaterThan(first.SrvDate);
+        first.SrvDate.Should().BeGreaterThan(
+            new DateTimeOffset(DateTime.UtcNow.AddSeconds(-30)).ToUnixTimeMilliseconds());
+        second.ServerTime.Should().BeAfter(first.ServerTime);
+    }
+
+    [Fact]
+    public async Task GetSystemStatusAsync_ReportsTheAppVersion()
+    {
+        _mockCacheService
+            .Setup(x => x.GetAsync<StatusResponse>("status:system:00000000-0000-0000-0000-000000000001", default))
+            .ReturnsAsync((StatusResponse?)null);
+
+        var result = await _statusService.GetSystemStatusAsync();
+
+        result.Version.Should().Be(AppVersion.Current);
+    }
+
     #endregion
 
     #region GetLastModifiedAsync Tests

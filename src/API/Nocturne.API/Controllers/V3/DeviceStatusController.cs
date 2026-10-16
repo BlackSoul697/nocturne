@@ -302,7 +302,7 @@ public class DeviceStatusController : BaseV3Controller<DeviceStatus>
             return CreatedAtAction(
                 nameof(GetDeviceStatusById),
                 new { id = projectedResults.First().Id },
-                new { status = 200, result = projectedResults.Select(MapToV3Dto) }
+                new V3Envelope<object> { Result = projectedResults.Select(MapToV3Dto).ToList() }
             );
         }
         catch (ArgumentException ex)

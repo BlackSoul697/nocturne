@@ -1,7 +1,6 @@
 using System.Diagnostics;
 using System.IO;
 using System.Linq;
-using System.Reflection;
 using Microsoft.AspNetCore.Http;
 using Microsoft.EntityFrameworkCore;
 using Nocturne.API.Extensions;
@@ -30,6 +29,8 @@ public class StatusService : IStatusService
 {
     /// <summary>Process start time, captured once, used to report real server uptime.</summary>
     private static readonly DateTime ProcessStartUtc = Process.GetCurrentProcess().StartTime.ToUniversalTime();
+
+    private static string? _postgresVersion;
 
     private readonly IConfiguration _configuration;
     private readonly ICacheService _cacheService;
@@ -78,7 +79,7 @@ public class StatusService : IStatusService
             {
                 Status = "setup_required",
                 Name = "Nocturne",
-                Version = GetVersionString(),
+                Version = AppVersion.Current,
                 ServerTime = DateTime.UtcNow,
                 ApiEnabled = false,
             };
@@ -117,7 +118,7 @@ public class StatusService : IStatusService
         {
             Status = "error",
             Name = "Nocturne",
-            Version = "unknown",
+            Version = AppVersion.Current,
             ServerTime = DateTime.UtcNow,
             ApiEnabled = true,
         };
@@ -130,7 +131,7 @@ public class StatusService : IStatusService
     {
         _logger.LogDebug("Generating system status response");
 
-        var version = GetVersionString();
+        var version = AppVersion.Current;
         var serverTime = DateTime.UtcNow;
         var settings = await GetPublicSettingsAsync();
 
@@ -230,16 +231,6 @@ public class StatusService : IStatusService
     /// </summary>
     private static bool GrantsReadAccess(IEnumerable<string> permissions)
         => permissions.Any(p => ReadPermissions.Contains(p));
-
-    /// <summary>
-    /// Get the application version string
-    /// </summary>
-    private static string GetVersionString()
-    {
-        var assembly = Assembly.GetExecutingAssembly();
-        var version = assembly.GetName().Version;
-        return version?.ToString() ?? "1.0.0";
-    }
 
     /// <summary>
     /// Get the build timestamp stamped into the image at build time, or null if unstamped
@@ -555,6 +546,7 @@ public class StatusService : IStatusService
         var basicStatus = await GetSystemStatusAsync();
 
         var storageVersion = await GetPostgresVersionAsync();
+        var serverTime = DateTime.UtcNow;
 
         var response = new V3StatusResponse
         {
@@ -564,12 +556,12 @@ public class StatusService : IStatusService
                 Version = storageVersion,
             },
             ApiPermissions = GetV3ApiPermissions(),
-            ApiVersion = basicStatus.Head ?? "unknown",
+            ApiVersion = ApplicationConstants.NightscoutApi.V3Version,
             Status = basicStatus.Status,
             Name = basicStatus.Name ?? "Nocturne",
-            Version = basicStatus.Version ?? "unknown",
-            ServerTime = basicStatus.ServerTime,
-            SrvDate = new DateTimeOffset(basicStatus.ServerTime).ToUnixTimeMilliseconds(),
+            Version = basicStatus.Version ?? AppVersion.Current,
+            ServerTime = serverTime,
+            SrvDate = new DateTimeOffset(serverTime).ToUnixTimeMilliseconds(),
             ApiEnabled = basicStatus.ApiEnabled,
             CareportalEnabled = basicStatus.CareportalEnabled ?? false,
             Head = basicStatus.Head ?? "unknown",
@@ -750,18 +742,20 @@ public class StatusService : IStatusService
     }
 
     /// <summary>
-    /// Get the PostgreSQL server version string (cached with basic status)
+    /// Get the PostgreSQL server version string, read once per process
     /// </summary>
     private async Task<string> GetPostgresVersionAsync()
     {
+        if (_postgresVersion is { } cached)
+            return cached;
+
         try
         {
             await using var ctx = await _dbContextFactory.CreateDbContextAsync();
-            var version = await ctx.Database.ExecuteSqlRawAsync("SELECT 1");
             var conn = ctx.Database.GetDbConnection();
             if (conn.State != System.Data.ConnectionState.Open)
                 await conn.OpenAsync();
-            return conn.ServerVersion;
+            return _postgresVersion = conn.ServerVersion;
         }
         catch (Exception ex)
         {

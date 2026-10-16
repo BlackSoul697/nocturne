@@ -451,7 +451,7 @@ public abstract class BaseV3Controller<T> : ControllerBase
     /// <returns>Nightscout-compatible success response</returns>
     protected ActionResult CreateV3SuccessResponse(object result)
     {
-        return Ok(new { status = 200, result });
+        return Ok(new V3Envelope<object> { Result = result });
     }
 
     /// <summary>
