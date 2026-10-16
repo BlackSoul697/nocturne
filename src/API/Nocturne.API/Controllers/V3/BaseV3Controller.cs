@@ -455,6 +455,15 @@ public abstract class BaseV3Controller<T> : ControllerBase
     }
 
     /// <summary>
+    /// Create the V3 success response for a delete: <c>{"status": 200}</c> with no result.
+    /// AAPS treats any other success status on DELETE as unknown and stops syncing the collection.
+    /// </summary>
+    protected ActionResult CreateV3DeleteResponse()
+    {
+        return Ok(new { status = 200 });
+    }
+
+    /// <summary>
     /// Set <c>Last-Modified</c> and <c>ETag</c> on a V3 <c>history/{lastModified}</c> response.
     /// AAPS advances its incremental-sync cursor from these headers; without them the cursor
     /// stays put and the same page is requested repeatedly.
