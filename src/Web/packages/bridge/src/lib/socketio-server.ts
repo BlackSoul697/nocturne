@@ -539,6 +539,10 @@ class SocketIOServer {
 
     logger.debug(`Broadcasting notification${tenantSlug ? ` to tenant ${tenantSlug}` : ''}`);
     target.emit('notification', notification);
+
+    if (this.alarmNsp && tenantSlug) {
+      this.alarmNsp.to(alarmRoom(tenantSlug)).emit('notification', notification);
+    }
   }
 
   broadcastStatusUpdate(status: unknown, tenantSlug?: string): void {

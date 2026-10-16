@@ -215,16 +215,6 @@ class SignalRClient {
       this.messageHandler.handleDataUpdate(data);
     });
 
-    this.dataConnection.on("announcement", (message: unknown) => {
-      logger.debug("Received announcement from SignalR:", message);
-      this.messageHandler.handleAnnouncement(message);
-    });
-
-    this.dataConnection.on("notification", (notification: unknown) => {
-      logger.debug("Received notification from SignalR:", notification);
-      this.messageHandler.handleNotification(notification);
-    });
-
     this.dataConnection.on("statusUpdate", (status: unknown) => {
       logger.debug("Received statusUpdate from SignalR:", status);
       this.messageHandler.handleStatusUpdate(status);
@@ -294,6 +284,16 @@ class SignalRClient {
       this.reconnectAttempts = 0;
 
       await this.subscribeToAlarmHub();
+    });
+
+    this.alarmConnection.on("announcement", (message: unknown) => {
+      logger.debug("Received announcement from SignalR:", message);
+      this.messageHandler.handleAnnouncement(message);
+    });
+
+    this.alarmConnection.on("notification", (notification: unknown) => {
+      logger.debug("Received notification from SignalR:", notification);
+      this.messageHandler.handleNotification(notification);
     });
 
     this.alarmConnection.on("alarm", (alarm: unknown) => {

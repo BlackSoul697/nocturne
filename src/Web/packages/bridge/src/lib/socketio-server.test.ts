@@ -1046,14 +1046,56 @@ describe('SocketIOServer v3 /alarm broadcast fan-out', () => {
     server.getIO()!.close();
   });
 
-  it('fans an announcement out to the /alarm tenant room', async () => {
+  const apiAnnouncement = {
+    level: 0,
+    title: 'Sensor change',
+    message: 'Change the sensor',
+    group: 'default',
+    plugin: 'announcement',
+    timestamp: 1700000000000,
+    isAnnouncement: true,
+  };
+
+  it('relays an announcement with its numeric level to the tenant room and /alarm', async () => {
     const server = await startedServer();
-    const alarmNsp = server.getIO()!.of('/alarm');
-    const toSpy = vi.spyOn(alarmNsp, 'to');
+    const { translator, tenantEmit, alarmEmit, expectRooms } = relayTo(server);
 
-    server.broadcastAnnouncement({ message: 'sensor change' }, 'rhys');
+    translator.handleAnnouncement(apiAnnouncement);
 
-    expect(toSpy).toHaveBeenCalledWith('alarm:rhys');
+    for (const emit of [tenantEmit, alarmEmit]) {
+      expect(emit).toHaveBeenCalledExactlyOnceWith(
+        'announcement',
+        expect.objectContaining({ level: 0, title: 'Sensor change', isAnnouncement: true }),
+      );
+    }
+    expectRooms();
+    server.getIO()!.close();
+  });
+
+  it('relays a notification with its numeric level to /alarm', async () => {
+    const server = await startedServer();
+    const { translator, alarmEmit } = relayTo(server);
+
+    translator.handleNotification({ ...apiAnnouncement, level: 1, isAnnouncement: false });
+
+    expect(alarmEmit).toHaveBeenCalledExactlyOnceWith(
+      'notification',
+      expect.objectContaining({ level: 1, title: 'Sensor change', group: 'default' }),
+    );
+    server.getIO()!.close();
+  });
+
+  it('keeps relaying a notification to the tenant room', async () => {
+    const server = await startedServer();
+    const { translator, tenantEmit, expectRooms } = relayTo(server);
+
+    translator.handleNotification({ ...apiAnnouncement, level: 1, isAnnouncement: false });
+
+    expect(tenantEmit).toHaveBeenCalledExactlyOnceWith(
+      'notification',
+      expect.objectContaining({ level: 1, title: 'Sensor change' }),
+    );
+    expectRooms();
     server.getIO()!.close();
   });
 });

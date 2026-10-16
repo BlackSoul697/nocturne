@@ -95,7 +95,10 @@ it("recovers all real hubs after partial handshake failure and a prolonged outag
   };
   for (const [event, handler] of Object.entries(received))
     consumer.on(event, handler);
-  const client = new SignalRClient(new MessageTranslator(relay, "test"), {
+  const translator = new MessageTranslator(relay, "test");
+  const handleAnnouncement = vi.spyOn(translator, "handleAnnouncement");
+  const handleNotification = vi.spyOn(translator, "handleNotification");
+  const client = new SignalRClient(translator, {
     hubUrl: `${url}/hubs/data`,
     alarmHubUrl: `${url}/hubs/alarms`,
     configHubUrl: `${url}/hubs/config`,
@@ -147,6 +150,15 @@ it("recovers all real hubs after partial handshake failure and a prolonged outag
       level: 2,
     };
     emit("/hubs/alarms", "clear_alarm", clear);
+    const announcement = {
+      level: 0,
+      title: "Sensor change",
+      message: "Change the sensor",
+      group: "default",
+      isAnnouncement: true,
+    };
+    emit("/hubs/alarms", "announcement", announcement);
+    emit("/hubs/alarms", "notification", { ...announcement, level: 1 });
     emit("/hubs/config", "configChanged", { key: "threshold" });
     await vi.waitFor(() => {
       expect(received.create).toHaveBeenCalledExactlyOnceWith(
@@ -158,6 +170,11 @@ it("recovers all real hubs after partial handshake failure and a prolonged outag
       expect(received.clear_alarm).toHaveBeenCalledExactlyOnceWith(
         expect.objectContaining(clear),
       );
+      expect(handleAnnouncement).toHaveBeenCalledExactlyOnceWith(announcement);
+      expect(handleNotification).toHaveBeenCalledExactlyOnceWith({
+        ...announcement,
+        level: 1,
+      });
       expect(received.configChanged).toHaveBeenCalledExactlyOnceWith({
         key: "threshold",
       });
