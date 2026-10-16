@@ -1,4 +1,3 @@
-using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Nocturne.API.Attributes;
 using Nocturne.API.Services.Platform;
@@ -18,7 +17,6 @@ namespace Nocturne.API.Controllers.V3;
 [ApiController]
 [Tags("V3")]
 [Route("api/v3/[controller]")]
-[AllowAnonymous]
 public class StatusController : ControllerBase
 {
     private readonly IStatusService _statusService;
@@ -36,9 +34,10 @@ public class StatusController : ControllerBase
     /// <returns>A <see cref="V3StatusResponse"/> containing authorization, permissions, and API version details.</returns>
     /// <remarks>
     /// On error, returns a minimal <see cref="V3StatusResponse"/> with <c>Status = "error"</c> to maintain
-    /// compatibility with clients that depend on this endpoint always returning 200.
+    /// compatibility with clients that depend on this endpoint returning 200.
     /// </remarks>
-    /// <response code="200">System status (always returns 200, even on internal errors).</response>
+    /// <response code="200">System status, also on internal errors.</response>
+    /// <response code="401">No credential, or one that was rejected.</response>
     [HttpGet]
     [NightscoutEndpoint("/api/v3/status")]
     [ProducesResponseType(typeof(V3Envelope<V3StatusResponse>), 200)]

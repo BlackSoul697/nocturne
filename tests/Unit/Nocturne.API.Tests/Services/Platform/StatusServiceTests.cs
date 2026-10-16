@@ -6,6 +6,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using Moq;
+using Nocturne.API.Extensions;
 using Nocturne.API.Services.Platform;
 using Nocturne.API.Tests.Infrastructure;
 using Nocturne.Core.Contracts.Platform;
@@ -14,6 +15,7 @@ using Nocturne.Core.Models.Authorization;
 using Nocturne.Tests.Shared.Mocks;
 using Nocturne.Infrastructure.Cache.Abstractions;
 using Nocturne.Infrastructure.Data;
+using Nocturne.Infrastructure.Data.Services;
 using Nocturne.Infrastructure.Data.Entities;
 using Nocturne.Infrastructure.Data.Entities.V4;
 using Nocturne.Tests.Shared.Infrastructure;
@@ -54,6 +56,7 @@ public class StatusServiceTests
             Scopes = new List<string> { "api:*:read" },
             SubjectName = "test-user",
         };
+        httpContext.SetGrantedScopes(ScopeTranslator.FromPermissions(["api:*:read"]));
         _httpContextAccessor = new HttpContextAccessor { HttpContext = httpContext };
 
         // Setup default configuration values using real ConfigurationBuilder
@@ -189,6 +192,7 @@ public class StatusServiceTests
             _mockDemoModeService.Object,
             ctx,
             mockFactory.Object,
+            new Mock<ITenantDbContextFactory>().Object,
             _httpContextAccessor,
             MockTenantAccessor.Create(tenantId: tenantId, slug: "t", isDemo: isDemo).Object,
             TestPublicAccessCache.Create(),
@@ -624,6 +628,88 @@ public class StatusServiceTests
         var result = await service.GetLastModifiedAsync();
 
         result.Entries.Should().Be(calibrationStamp);
+    }
+
+    [Fact]
+    public async Task GetLastModifiedAsync_ReportsOnlyTheCollectionsTheCallerCanRead()
+    {
+        var now = DateTime.UtcNow;
+        var dbName = $"nocturne_lastmod_{Guid.NewGuid()}";
+        await using var context = TestDbContextFactory.CreateInMemoryContext(dbName);
+        SeedLastModifiedData(context, now);
+        var service = CreateStatusService(
+            _configuration, context, dbName, httpContextAccessor: Caller(authenticated: true, Scope.GlucoseRead));
+
+        var result = await service.GetLastModifiedAsync();
+
+        result.Entries.Should().NotBeNull();
+        result.Treatments.Should().BeNull();
+        result.Profile.Should().BeNull();
+        result.DeviceStatus.Should().BeNull();
+        result.Food.Should().BeNull();
+        result.Settings.Should().BeNull();
+    }
+
+    [Fact]
+    public async Task GetLastModifiedAsync_OnAShare_ReportsOnlyTheSharedCategories()
+    {
+        var now = DateTime.UtcNow;
+        var dbName = $"nocturne_lastmod_{Guid.NewGuid()}";
+        await using var context = TestDbContextFactory.CreateInMemoryContext(dbName);
+        SeedLastModifiedData(context, now);
+        var service = CreateStatusService(
+            _configuration, context, dbName,
+            httpContextAccessor: Caller(authenticated: false, Scope.GlucoseRead, Scope.TreatmentsRead));
+
+        var result = await service.GetLastModifiedAsync();
+
+        result.Entries.Should().NotBeNull();
+        result.Treatments.Should().NotBeNull();
+        result.Profile.Should().BeNull();
+        result.DeviceStatus.Should().BeNull();
+        result.Food.Should().BeNull();
+        result.Settings.Should().BeNull();
+    }
+
+    [Fact]
+    public async Task GetV3SystemStatusAsync_AnAuthenticatedCaller_IsToldCrudOnEveryCollection()
+    {
+        // See StatusService.GetV3ApiPermissions: AAPS stops uploading unless all six read "crud".
+        var service = CreateStatusService(
+            _configuration, httpContextAccessor: Caller(authenticated: true, Scope.GlucoseReadWrite));
+
+        var result = await service.GetV3SystemStatusAsync();
+
+        result.ApiPermissions.Should().BeEquivalentTo(new Dictionary<string, string>
+        {
+            ["devicestatus"] = "crud",
+            ["entries"] = "crud",
+            ["food"] = "crud",
+            ["profile"] = "crud",
+            ["settings"] = "crud",
+            ["treatments"] = "crud",
+        });
+    }
+
+    [Fact]
+    public async Task GetV3SystemStatusAsync_OnAShare_IsToldReadOnlyOnTheSharedCollections()
+    {
+        var service = CreateStatusService(
+            _configuration, httpContextAccessor: Caller(authenticated: false, Scope.GlucoseRead));
+
+        var result = await service.GetV3SystemStatusAsync();
+
+        result.ApiPermissions.Should().BeEquivalentTo(new Dictionary<string, string> { ["entries"] = "r" });
+    }
+
+    private static IHttpContextAccessor Caller(bool authenticated, params string[] scopes)
+    {
+        var httpContext = new DefaultHttpContext();
+        httpContext.SetAuthContext(new AuthContext { IsAuthenticated = authenticated });
+        httpContext.SetGrantedScopes(Scope.Normalize(scopes));
+        if (!authenticated)
+            httpContext.SetShareAccess();
+        return new HttpContextAccessor { HttpContext = httpContext };
     }
 
     #endregion
@@ -1121,27 +1207,34 @@ public class StatusServiceTests
         IConfiguration configuration,
         NocturneDbContext? context = null,
         string? databaseName = null,
-        ITenantAccessor? tenantAccessor = null
+        ITenantAccessor? tenantAccessor = null,
+        IHttpContextAccessor? httpContextAccessor = null
     )
     {
         var dbName = databaseName ?? $"nocturne_status_tests_{Guid.NewGuid()}";
         var ctx = context ?? TestDbContextFactory.CreateInMemoryContext(dbName);
+        NocturneDbContext FactoryContext()
+        {
+            var factoryCtx = TestDbContextFactory.CreateInMemoryContext(dbName);
+            factoryCtx.TenantId = ctx.TenantId;
+            return factoryCtx;
+        }
         var mockDbContextFactory = new Mock<IDbContextFactory<NocturneDbContext>>();
         mockDbContextFactory
             .Setup(f => f.CreateDbContextAsync(It.IsAny<CancellationToken>()))
-            .ReturnsAsync(() =>
-            {
-                var factoryCtx = TestDbContextFactory.CreateInMemoryContext(dbName);
-                factoryCtx.TenantId = ctx.TenantId;
-                return factoryCtx;
-            });
+            .ReturnsAsync(FactoryContext);
+        var mockTenantDbContextFactory = new Mock<ITenantDbContextFactory>();
+        mockTenantDbContextFactory
+            .Setup(f => f.CreateAsync(It.IsAny<CancellationToken>()))
+            .ReturnsAsync(FactoryContext);
         return new StatusService(
             configuration,
             _mockCacheService.Object,
             _mockDemoModeService.Object,
             ctx,
             mockDbContextFactory.Object,
-            _httpContextAccessor,
+            mockTenantDbContextFactory.Object,
+            httpContextAccessor ?? _httpContextAccessor,
             tenantAccessor ?? _mockTenantAccessor.Object,
             TestPublicAccessCache.Create(),
             _mockLogger.Object

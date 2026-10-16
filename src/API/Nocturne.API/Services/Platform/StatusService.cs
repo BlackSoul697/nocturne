@@ -3,6 +3,7 @@ using System.IO;
 using System.Linq;
 using Microsoft.AspNetCore.Http;
 using Microsoft.EntityFrameworkCore;
+using Nocturne.API.Authorization;
 using Nocturne.API.Extensions;
 using Nocturne.API.Services.Auth;
 using Nocturne.Core.Constants;
@@ -11,6 +12,7 @@ using Nocturne.Core.Contracts.Multitenancy;
 using Nocturne.Core.Models;
 using Nocturne.Infrastructure.Cache.Abstractions;
 using Nocturne.Infrastructure.Data;
+using Nocturne.Infrastructure.Data.Services;
 
 namespace Nocturne.API.Services.Platform;
 
@@ -37,6 +39,7 @@ public class StatusService : IStatusService
     private readonly IDemoModeService _demoModeService;
     private readonly NocturneDbContext _dbContext;
     private readonly IDbContextFactory<NocturneDbContext> _dbContextFactory;
+    private readonly ITenantDbContextFactory _tenantDbContextFactory;
     private readonly IHttpContextAccessor _httpContextAccessor;
     private readonly ITenantAccessor _tenantAccessor;
     private readonly PublicAccessCacheService _publicAccessCacheService;
@@ -51,6 +54,7 @@ public class StatusService : IStatusService
         IDemoModeService demoModeService,
         NocturneDbContext dbContext,
         IDbContextFactory<NocturneDbContext> dbContextFactory,
+        ITenantDbContextFactory tenantDbContextFactory,
         IHttpContextAccessor httpContextAccessor,
         ITenantAccessor tenantAccessor,
         PublicAccessCacheService publicAccessCacheService,
@@ -62,6 +66,7 @@ public class StatusService : IStatusService
         _demoModeService = demoModeService;
         _dbContext = dbContext;
         _dbContextFactory = dbContextFactory;
+        _tenantDbContextFactory = tenantDbContextFactory;
         _httpContextAccessor = httpContextAccessor;
         _tenantAccessor = tenantAccessor;
         _publicAccessCacheService = publicAccessCacheService;
@@ -587,16 +592,28 @@ public class StatusService : IStatusService
     /// <remarks>
     /// Deleted rows count, as Nightscout counts its <c>isValid: false</c> documents: a delete moves
     /// the stamp, and a client only reads the history once the collection's stamp has moved.
+    /// <para>
+    /// A collection the caller holds no read scope for (<see cref="LegacyStorageReadScopes"/>) is
+    /// left null. The stamps are read through <see cref="ITenantDbContextFactory"/>, so share RLS and
+    /// the history clamp narrow each table as they narrow every other read: a share or a clamped
+    /// member learns nothing of a row it cannot read, not even when it changed.
+    /// </para>
     /// </remarks>
     public async Task<LastModifiedResponse> GetLastModifiedAsync()
     {
         _logger.LogDebug("Generating last modified timestamps response");
 
         var serverTime = DateTime.UtcNow;
+        var grantedScopes = _httpContextAccessor.HttpContext?.GetGrantedScopes() ?? new HashSet<string>();
+
+        Task<DateTime?> ReadableLastModifiedAsync(string collection, Func<NocturneDbContext, Task<DateTime?>> query) =>
+            LegacyStorageReadScopes.CanRead(grantedScopes, collection)
+                ? LastModifiedAsync(query)
+                : Task.FromResult<DateTime?>(null);
 
         // Each query gets its own short-lived DbContext via the factory so they can
         // run concurrently — a single DbContext is not thread-safe.
-        var entriesTask = LastModifiedAsync(async ctx =>
+        var entriesTask = ReadableLastModifiedAsync("entries", async ctx =>
         {
             var timestamps = new[]
             {
@@ -607,7 +624,7 @@ public class StatusService : IStatusService
             return timestamps.Where(d => d.HasValue).Max();
         });
 
-        var treatmentsTask = LastModifiedAsync(async ctx =>
+        var treatmentsTask = ReadableLastModifiedAsync("treatments", async ctx =>
         {
             var timestamps = new[]
             {
@@ -622,7 +639,7 @@ public class StatusService : IStatusService
             return timestamps.Where(d => d.HasValue).Max();
         });
 
-        var profileTask = LastModifiedAsync(async ctx =>
+        var profileTask = ReadableLastModifiedAsync("profile", async ctx =>
         {
             var timestamps = new[]
             {
@@ -635,17 +652,17 @@ public class StatusService : IStatusService
             return timestamps.Where(d => d.HasValue).Max();
         });
 
-        var deviceStatusTask = LastModifiedAsync(ctx => ctx.ApsSnapshots.IncludingDeleted().AsNoTracking()
+        var deviceStatusTask = ReadableLastModifiedAsync("devicestatus", ctx => ctx.ApsSnapshots.IncludingDeleted().AsNoTracking()
             .OrderByDescending(d => d.SysUpdatedAt)
             .Select(d => (DateTime?)d.SysUpdatedAt)
             .FirstOrDefaultAsync());
 
-        var foodTask = LastModifiedAsync(ctx => ctx.Foods.IncludingDeleted().AsNoTracking()
+        var foodTask = ReadableLastModifiedAsync("food", ctx => ctx.Foods.IncludingDeleted().AsNoTracking()
             .OrderByDescending(f => f.SysUpdatedAt)
             .Select(f => (DateTime?)f.SysUpdatedAt)
             .FirstOrDefaultAsync());
 
-        var settingsTask = LastModifiedAsync(ctx => ctx.Settings.AsNoTracking()
+        var settingsTask = ReadableLastModifiedAsync("settings", ctx => ctx.Settings.AsNoTracking()
             .OrderByDescending(s => s.SrvModified ?? s.SysUpdatedAt)
             .Select(s =>
                 (DateTime?)(s.SrvModified.HasValue ? s.SrvModified.Value.UtcDateTime : s.SysUpdatedAt))
@@ -768,24 +785,26 @@ public class StatusService : IStatusService
     /// Get per-collection CRUD permission strings matching legacy Nightscout apiPermissions format.
     /// </summary>
     /// <remarks>
-    /// Deliberately caller-independent. AAPS reduces this map to a single boolean — every one of the
-    /// six collections must read "crud" or <c>hasWritePermission</c> is false and its uploader stops
-    /// syncing entirely — so a token scoped to the categories AAPS actually uses would be answered
-    /// with a narrower map and lose upload, not just delete. The per-action
-    /// <see cref="Attributes.RequireScopeAttribute"/> remains the enforcement point; this map
-    /// advertises the collections the API serves, not one credential's grant.
+    /// Deliberately independent of an authenticated caller's grant. AAPS reduces this map to a single
+    /// boolean: every one of the six collections must read "crud" or <c>hasWritePermission</c> is
+    /// false and its uploader stops syncing entirely. So a token scoped to the categories AAPS
+    /// actually uses would be answered with a narrower map and lose upload, not just delete. The
+    /// per-action <see cref="Attributes.RequireScopeAttribute"/> remains the enforcement point; this
+    /// map advertises the collections the API serves, not one credential's grant. A public share can
+    /// never write, so it is told "r" for the collections it can read and nothing else.
     /// </remarks>
-    private static Dictionary<string, string> GetV3ApiPermissions()
+    private Dictionary<string, string> GetV3ApiPermissions()
     {
-        return new Dictionary<string, string>
+        var httpContext = _httpContextAccessor.HttpContext;
+        if (httpContext?.IsAuthenticated() == true)
         {
-            ["devicestatus"] = "crud",
-            ["entries"] = "crud",
-            ["food"] = "crud",
-            ["profile"] = "crud",
-            ["settings"] = "crud",
-            ["treatments"] = "crud",
-        };
+            return LegacyStorageReadScopes.Collections.ToDictionary(collection => collection, _ => "crud");
+        }
+
+        var grantedScopes = httpContext?.GetGrantedScopes() ?? new HashSet<string>();
+        return LegacyStorageReadScopes.Collections
+            .Where(collection => LegacyStorageReadScopes.CanRead(grantedScopes, collection))
+            .ToDictionary(collection => collection, _ => "r");
     }
 
     /// <summary>
@@ -843,12 +862,7 @@ public class StatusService : IStatusService
 
     private async Task<DateTime?> LastModifiedAsync(Func<NocturneDbContext, Task<DateTime?>> query)
     {
-        await using var ctx = await _dbContextFactory.CreateDbContextAsync();
-        // Pooled contexts do not reset TenantId, so a context leased from the factory carries
-        // the previous lessee's tenant. Pin the resolved tenant before querying so the
-        // tenant-scoped collections (entries/treatments/profile/devicestatus/food/settings) and
-        // RLS scope to this tenant rather than leaking another tenant's last-modified timestamps.
-        ctx.TenantId = _tenantAccessor.Context?.TenantId ?? Guid.Empty;
+        await using var ctx = await _tenantDbContextFactory.CreateAsync();
         return await query(ctx);
     }
 

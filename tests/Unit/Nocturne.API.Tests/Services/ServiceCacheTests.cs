@@ -15,6 +15,7 @@ using Nocturne.Core.Models.Authorization;
 using Nocturne.Infrastructure.Cache.Abstractions;
 using Nocturne.Infrastructure.Cache.Configuration;
 using Nocturne.Infrastructure.Data;
+using Nocturne.Infrastructure.Data.Services;
 using Nocturne.Core.Contracts.V4;
 using Nocturne.Tests.Shared.Infrastructure;
 using Nocturne.Tests.Shared.Mocks;
@@ -196,6 +197,7 @@ public class ServiceCacheTests
             _mockDemoModeService.Object,
             dbContext,
             mockDbContextFactory.Object,
+            new Mock<ITenantDbContextFactory>().Object,
             httpContextAccessor,
             _mockTenantAccessor.Object,
             TestPublicAccessCache.Create(),
@@ -277,6 +279,7 @@ public class ServiceCacheTests
             _mockDemoModeService.Object,
             dbContext,
             mockDbContextFactory.Object,
+            new Mock<ITenantDbContextFactory>().Object,
             httpContextAccessor,
             _mockTenantAccessor.Object,
             TestPublicAccessCache.Create(),
