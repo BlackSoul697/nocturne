@@ -618,9 +618,39 @@ describe('SocketIOServer v3 /storage namespace', () => {
 
     expect(ack).toHaveBeenCalledWith({
       success: true,
-      collections: ['devicestatus', 'entries', 'profile', 'treatments', 'foods', 'settings'],
+      collections: ['devicestatus', 'entries', 'profile', 'treatments', 'food', 'settings'],
     });
     expect(socket.join).toHaveBeenCalledTimes(6);
+  });
+
+  it.each([
+    [['food'], ['food']],
+    [['foods'], ['foods']],
+    [['food', 'entries'], ['food', 'entries']],
+    [['foods', 'food'], ['foods']],
+    [['food', 'foods'], ['food']],
+  ])('subscribes %j, acks %j and joins only those rooms', async (requested, acked) => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: true, status: 200 }));
+    const server = makeStorageServer();
+    const socket = storageSocket('rhys');
+    const ack = vi.fn();
+
+    await server.handleStorageSubscribe(socket as never, { accessToken: 'tok', collections: requested }, ack);
+
+    expect(ack).toHaveBeenCalledWith({ success: true, collections: acked });
+    expect(socket.join.mock.calls.map(([room]) => room)).toEqual(acked.map((name) => `storage:rhys:${name}`));
+  });
+
+  it('authorises food against the food read endpoint', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({ ok: false, status: 403 });
+    vi.stubGlobal('fetch', fetchMock);
+    const server = makeStorageServer();
+    const socket = storageSocket('rhys');
+
+    await server.handleStorageSubscribe(socket as never, { accessToken: 'tok', collections: ['food'] });
+
+    expect(String(fetchMock.mock.calls[0][0])).toContain('/api/v3/food');
+    expect(socket.disconnect).toHaveBeenCalledWith(true);
   });
 
   it('filters out unknown collection names', async () => {
@@ -784,18 +814,21 @@ describe('SocketIOServer v3 /storage broadcast fan-out', () => {
     server.getIO()!.close();
   });
 
-  it('amends the payload colName for food -> foods', async () => {
+  it.each(['food', 'foods'])('delivers a %s broadcast to each spelling room under that spelling', async (broadcast) => {
     const server = await startedServer();
     const storageNsp = server.getIO()!.of('/storage');
 
-    const emitted: { event: string; payload: unknown }[] = [];
-    vi.spyOn(storageNsp, 'to').mockReturnValue({
-      emit: (event: string, payload: unknown) => emitted.push({ event, payload }),
-    } as never);
+    const emitted: { room: string; payload: { colName: string } }[] = [];
+    vi.spyOn(storageNsp, 'to').mockImplementation(((room: string) => ({
+      emit: (_event: string, payload: { colName: string }) => emitted.push({ room, payload }),
+    })) as never);
 
-    server.broadcastStorageEvent('create', { colName: 'food', doc: {} }, 'rhys');
+    server.broadcastStorageEvent('create', { colName: broadcast, doc: {} }, 'rhys');
 
-    expect((emitted[0].payload as { colName: string }).colName).toBe('foods');
+    expect(emitted).toEqual([
+      { room: 'storage:rhys:food', payload: { colName: 'food', doc: {} } },
+      { room: 'storage:rhys:foods', payload: { colName: 'foods', doc: {} } },
+    ]);
     server.getIO()!.close();
   });
 
