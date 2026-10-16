@@ -54,7 +54,7 @@ public class TreatmentsController : ControllerBase
     /// Get treatments with optional filtering and pagination
     /// </summary>
     /// <param name="find">MongoDB-style query filter for date range filtering</param>
-    /// <param name="count">Maximum number of treatments to return (default: 10)</param>
+    /// <param name="count">Maximum number of treatments to return (default: 100, or 1000 when a find is given)</param>
     /// <param name="skip">Number of treatments to skip for pagination (default: 0)</param>
     /// <param name="format">Output format (json, csv, tsv, txt)</param>
     /// <param name="cancellationToken">Cancellation token</param>
@@ -67,7 +67,7 @@ public class TreatmentsController : ControllerBase
     [RequireScope(Scope.TreatmentsRead)]
     public async Task<ActionResult> GetTreatments(
         [FromQuery] string? find = null,
-        [FromQuery] int count = 10,
+        [FromQuery] int? count = null,
         [FromQuery] int skip = 0,
         [FromQuery] string? format = null,
         CancellationToken cancellationToken = default
@@ -100,8 +100,8 @@ public class TreatmentsController : ControllerBase
             }
 
             var treatments = await _treatmentService.GetTreatmentsAsync(
-                find: LegacyFindDateWindow.Apply(findQuery, _timeProvider.GetUtcNow()),
-                count: LegacyReadLimits.ClampCount(count),
+                find: LegacyTreatmentDateWindow.Apply(findQuery, _timeProvider.GetUtcNow()),
+                count: count is { } requested ? LegacyReadLimits.ClampCount(requested) : null,
                 skip: skip,
                 cancellationToken: cancellationToken
             );

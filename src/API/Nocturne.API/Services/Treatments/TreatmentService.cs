@@ -27,6 +27,9 @@ namespace Nocturne.API.Services.Treatments;
 /// <seealso cref="CobCalculator"/>
 public class TreatmentService : ITreatmentService
 {
+    private const int DefaultCount = 100;
+    private const int DefaultFindCount = 1000;
+
     private readonly ITreatmentStore _store;
     private readonly ITreatmentDecomposer _decomposer;
     private readonly ITreatmentCache _cache;
@@ -87,7 +90,7 @@ public class TreatmentService : ITreatmentService
         var query = new TreatmentQuery
         {
             Find = find,
-            Count = count ?? 10,
+            Count = count ?? (string.IsNullOrEmpty(find) ? DefaultCount : DefaultFindCount),
             Skip = skip ?? 0
         };
 
