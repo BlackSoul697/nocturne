@@ -4,6 +4,7 @@ using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.DataProtection;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Tokens;
 using Nocturne.API.Authorization;
 using Nocturne.API.Configuration;
@@ -27,6 +28,7 @@ using Nocturne.API.OpenApi;
 using Scalar.AspNetCore;
 using Nocturne.Aspire.Scalar;
 using Nocturne.Core.Constants;
+using Nocturne.Core.Models;
 using Nocturne.Core.Models.Configuration;
 using Nocturne.Infrastructure.Cache.Extensions;
 using Nocturne.Core.Contracts.Entries;
@@ -287,7 +289,7 @@ builder.Services.AddCors(options =>
 
 var app = builder.Build();
 
-var loopApnsKeyId = app.Configuration["Loop:ApnsKeyId"];
+var loopApnsKeyId = app.Services.GetRequiredService<IOptions<LoopConfiguration>>().Value.ApnsKeyId;
 app.Logger.LogInformation(
     "Loop configuration loaded - APNS Key ID: {LoopApnsKeyId}",
     string.IsNullOrEmpty(loopApnsKeyId) ? "Not configured" : $"{loopApnsKeyId[..Math.Min(4, loopApnsKeyId.Length)]}****");
