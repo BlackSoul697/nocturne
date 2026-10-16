@@ -99,7 +99,7 @@ public class TreatmentsController : ControllerBase
             }
 
             var treatments = await _treatmentService.GetTreatmentsAsync(
-                find: LegacyTreatmentDateWindow.Apply(findQuery, _timeProvider.GetUtcNow()),
+                find: LegacyFindDateWindow.Apply(findQuery, _timeProvider.GetUtcNow()),
                 count: LegacyReadLimits.ClampCount(count),
                 skip: skip,
                 cancellationToken: cancellationToken
@@ -425,7 +425,7 @@ public class TreatmentsController : ControllerBase
             }
 
             var deletedCount = await _treatmentService.DeleteTreatmentsAsync(
-                LegacyTreatmentDateWindow.Apply(queryString, _timeProvider.GetUtcNow()),
+                LegacyFindDateWindow.Apply(queryString, _timeProvider.GetUtcNow()),
                 cancellationToken
             );
 
