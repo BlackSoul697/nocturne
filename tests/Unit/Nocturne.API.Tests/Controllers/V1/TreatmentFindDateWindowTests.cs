@@ -86,6 +86,16 @@ public class TreatmentFindDateWindowTests
         FindQuery.Parse(windowed).FromMills.Should().Be(WindowStartMills);
     }
 
+    [Fact]
+    public void WindowingUnfilteredFinds_KeepsAnUnreadableFindKey()
+    {
+        var windowed = LegacyFindDateWindow.Apply("find[a][b][c][d]=x", Now, windowUnfiltered: true);
+
+        windowed.Should().StartWith("find[a][b][c][d]=x&");
+        FindQuery.Parse(windowed).Matches(new Treatment { CreatedAt = Now.ToString("o") })
+            .Should().BeFalse();
+    }
+
     [Theory]
     [InlineData("find[created_at][$gte]=2020-01-01")]
     [InlineData("find[dateString][$lte]=2020-01-01")]
