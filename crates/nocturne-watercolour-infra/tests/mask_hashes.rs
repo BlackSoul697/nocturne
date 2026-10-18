@@ -1,56 +1,150 @@
-//! Bit-identity snapshot of every `SetMask` in the catalogue. For each detail
-//! level, every catalogue id on both grounds is built, every `SetMask` in it
-//! is rasterised at the scene's own simulation resolution and aspect, and the
-//! outputs are folded (FNV-1a over the `f32::to_bits` of every element) into
-//! one hash per detail, asserted against literals captured from the original
-//! implementation.
+//! Bit-identity of every `SetMask` in the catalogue against the original,
+//! unaccelerated rasteriser, kept below as `reference_rasterize`. For each
+//! detail level, every catalogue id on both grounds is built and every
+//! `SetMask` in it is rasterised at the scene's own simulation resolution and
+//! aspect by both.
+//!
+//! The comparison is against a reference rather than stored hashes because the
+//! catalogue authors its outlines with `f32::sin` and `f32::cos`, which call
+//! the platform libm: glibc and the MSVC CRT round some angles to neighbouring
+//! ulps, so the masks, and any hash of them, differ between platforms.
+//! `nocturne-watercolour-core/tests/mask_raster.rs` holds portable hashes.
 
 use nocturne_watercolour_core::domain::paint::rasterize_mask_aspect;
-use nocturne_watercolour_core::domain::{Background, Operation, Palette, Seed};
+use nocturne_watercolour_core::domain::scene::isotropic_scale;
+use nocturne_watercolour_core::domain::{Background, Mask, Operation, Palette, Point, Seed};
 use nocturne_watercolour_infra::authoring::{ArtworkCatalogue, DetailLevel};
 
-fn fold(state: &mut u64, out: &[f32]) {
-    for v in out {
-        for byte in v.to_bits().to_le_bytes() {
-            *state ^= byte as u64;
-            *state = state.wrapping_mul(0x0000_0100_0000_01b3);
-        }
-    }
+fn distance_to_segment(px: f32, py: f32, a: Point, b: Point) -> f32 {
+    let abx = b.x - a.x;
+    let aby = b.y - a.y;
+    let len2 = abx * abx + aby * aby;
+    let t = if len2 < 1e-12 {
+        0.0
+    } else {
+        (((px - a.x) * abx + (py - a.y) * aby) / len2).clamp(0.0, 1.0)
+    };
+    let cx = a.x + abx * t;
+    let cy = a.y + aby * t;
+    ((px - cx).powi(2) + (py - cy).powi(2)).sqrt()
 }
 
-fn combined(detail: DetailLevel) -> u64 {
+fn polyline_distance(px: f32, py: f32, points: &[Point], closed: bool) -> f32 {
+    if points.is_empty() {
+        return f32::MAX;
+    }
+    if points.len() == 1 {
+        return distance_to_segment(px, py, points[0], points[0]);
+    }
+    let mut best = f32::MAX;
+    for pair in points.windows(2) {
+        best = best.min(distance_to_segment(px, py, pair[0], pair[1]));
+    }
+    if closed {
+        best = best.min(distance_to_segment(
+            px,
+            py,
+            points[points.len() - 1],
+            points[0],
+        ));
+    }
+    best
+}
+
+fn point_in_polygon(px: f32, py: f32, points: &[Point]) -> bool {
+    let mut inside = false;
+    let n = points.len();
+    if n < 3 {
+        return false;
+    }
+    let mut j = n - 1;
+    for i in 0..n {
+        let (a, b) = (points[i], points[j]);
+        if (a.y > py) != (b.y > py) {
+            let x_at = a.x + (py - a.y) / (b.y - a.y) * (b.x - a.x);
+            if px < x_at {
+                inside = !inside;
+            }
+        }
+        j = i;
+    }
+    inside
+}
+
+/// Every cell against every segment, as `rasterize_mask_aspect` did before it
+/// was bucketed and banded.
+fn reference_rasterize(mask: &Mask, width: u32, height: u32, aspect: f32) -> Vec<f32> {
+    let mut out = vec![0.0f32; (width as usize) * (height as usize)];
+    let (w, h) = (width as f32, height as f32);
+    let (ax, ay) = isotropic_scale(aspect);
+    let iso_points: Vec<Point> = mask
+        .points()
+        .iter()
+        .map(|p| Point::new(p.x * ax, p.y * ay))
+        .collect();
+    let feather = mask.feather();
+    for y in 0..height {
+        for x in 0..width {
+            let pu = (x as f32 + 0.5) / w;
+            let pv = (y as f32 + 0.5) / h;
+            let (iu, iv) = (pu * ax, pv * ay);
+            let outside = match mask {
+                Mask::Polygon { points, .. } => {
+                    if point_in_polygon(pu, pv, points) {
+                        0.0
+                    } else {
+                        polyline_distance(iu, iv, &iso_points, true)
+                    }
+                }
+                Mask::Path { radius, .. } => {
+                    (polyline_distance(iu, iv, &iso_points, false) - radius).max(0.0)
+                }
+            };
+            out[(y as usize) * (width as usize) + x as usize] = if outside <= 0.0 {
+                1.0
+            } else if feather <= 1e-6 {
+                0.0
+            } else {
+                let t = (outside / feather).min(1.0);
+                1.0 - t * t * (3.0 - 2.0 * t)
+            };
+        }
+    }
+    out
+}
+
+#[test]
+fn catalogue_masks_match_the_reference_rasteriser() {
     let palette = Palette::moonlight();
-    let mut state = 0xcbf2_9ce4_8422_2325u64;
-    for &id in ArtworkCatalogue::ids() {
-        for background in [Background::Transparent, Background::TransparentOnDark] {
-            let scene = ArtworkCatalogue::by_id_for(id, Seed(7), &palette, 0.7, detail, background)
-                .expect("catalogue id");
-            let res = scene.sim_resolution.0;
-            let aspect = scene.aspect();
-            for ev in &scene.timeline.events {
-                if let Operation::SetMask(m) = &ev.op {
-                    fold(&mut state, &rasterize_mask_aspect(m, res, res, aspect));
+    let mut compared = 0;
+    for detail in DetailLevel::ALL {
+        for &id in ArtworkCatalogue::ids() {
+            for background in [Background::Transparent, Background::TransparentOnDark] {
+                let scene =
+                    ArtworkCatalogue::by_id_for(id, Seed(7), &palette, 0.7, detail, background)
+                        .expect("catalogue id");
+                let res = scene.sim_resolution.0;
+                let aspect = scene.aspect();
+                for ev in &scene.timeline.events {
+                    if let Operation::SetMask(m) = &ev.op {
+                        let got: Vec<u32> = rasterize_mask_aspect(m, res, res, aspect)
+                            .iter()
+                            .map(|v| v.to_bits())
+                            .collect();
+                        let want: Vec<u32> = reference_rasterize(m, res, res, aspect)
+                            .iter()
+                            .map(|v| v.to_bits())
+                            .collect();
+                        assert!(
+                            got == want,
+                            "{id} ({:?}, {background:?}) mask differs from the reference",
+                            detail.name()
+                        );
+                        compared += 1;
+                    }
                 }
             }
         }
     }
-    state
-}
-
-#[test]
-fn catalogue_mask_hashes_match_the_snapshot() {
-    let expected: [(&str, u64); 4] = [
-        ("small", 0xb0476cba7e0f815d),
-        ("medium", 0xd8272ea9af5f8fcd),
-        ("large", 0x45e13f96dfc3a5bb),
-        ("extralarge", 0xe3a35e760922ec06),
-    ];
-    for detail in DetailLevel::ALL {
-        let want = expected
-            .iter()
-            .find(|(name, _)| *name == detail.name())
-            .unwrap()
-            .1;
-        assert_eq!(combined(detail), want, "detail {:?}", detail.name());
-    }
+    assert!(compared > 0, "the catalogue has no SetMask to compare");
 }

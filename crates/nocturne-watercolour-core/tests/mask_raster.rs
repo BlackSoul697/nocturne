@@ -6,11 +6,30 @@
 use nocturne_watercolour_core::domain::paint::rasterize_mask_aspect;
 use nocturne_watercolour_core::domain::{Mask, Point};
 
+/// `f32::sin` and `f32::cos` call the platform libm, and glibc and the MSVC CRT
+/// round some of these angles to neighbouring ulps, which moves the outlines
+/// and so the hashes. A Taylor series in plain `f64` arithmetic gives every
+/// platform the same bits.
+fn sin_cos(a: f64) -> (f32, f32) {
+    let (mut sin, mut cos) = (0.0f64, 0.0f64);
+    let mut term = 1.0f64;
+    for k in 0..40 {
+        match k % 4 {
+            0 => cos += term,
+            1 => sin += term,
+            2 => cos -= term,
+            _ => sin -= term,
+        }
+        term *= a / (k + 1) as f64;
+    }
+    (sin as f32, cos as f32)
+}
+
 fn circle(centre: (f32, f32), radius: f32, samples: usize) -> Vec<Point> {
     (0..samples)
         .map(|i| {
-            let a = i as f32 / samples as f32 * std::f32::consts::TAU;
-            Point::new(centre.0 + radius * a.cos(), centre.1 + radius * a.sin())
+            let (sin, cos) = sin_cos(i as f64 / samples as f64 * std::f64::consts::TAU);
+            Point::new(centre.0 + radius * cos, centre.1 + radius * sin)
         })
         .collect()
 }
@@ -20,8 +39,9 @@ fn star() -> Vec<Point> {
     (0..10)
         .map(|i| {
             let r = if i % 2 == 0 { 0.3 } else { 0.12 };
-            let a = i as f32 / 10.0 * std::f32::consts::TAU + std::f32::consts::FRAC_PI_2;
-            Point::new(0.5 + r * a.cos(), 0.5 + r * a.sin())
+            let (sin, cos) =
+                sin_cos(i as f64 / 10.0 * std::f64::consts::TAU + std::f64::consts::FRAC_PI_2);
+            Point::new(0.5 + r * cos, 0.5 + r * sin)
         })
         .collect()
 }
@@ -79,14 +99,14 @@ const EXPECTED: [(&str, u32, f32, u64); 64] = [
     ("circle16", 128, 2.0, 0xbbe1eca670988e05),
     ("circle16", 384, 1.0, 0xf527adafc9350058),
     ("circle16", 384, 2.0, 0xcb27e085f8ae5e55),
-    ("circle16", 128, 1.0, 0x377245954fea4bb3),
-    ("circle16", 128, 2.0, 0xd7ac1b2e89877b31),
-    ("circle16", 384, 1.0, 0x29ad06c40cdac11c),
-    ("circle16", 384, 2.0, 0x70f14dd2319f3276),
-    ("circle16", 128, 1.0, 0x081ed526ae124a10),
-    ("circle16", 128, 2.0, 0x7ed56edd039db624),
-    ("circle16", 384, 1.0, 0x171299a3791a4826),
-    ("circle16", 384, 2.0, 0xd98069f5add928a1),
+    ("circle16", 128, 1.0, 0x86dc75eddb06bcff),
+    ("circle16", 128, 2.0, 0x3b2c76ab733a46fe),
+    ("circle16", 384, 1.0, 0x001961aca8e9c482),
+    ("circle16", 384, 2.0, 0xf77d8bc52e5336c3),
+    ("circle16", 128, 1.0, 0x8f9c5a92c0eb8e72),
+    ("circle16", 128, 2.0, 0x0d4009e11278ace4),
+    ("circle16", 384, 1.0, 0x89dcfc24fb3fdcfc),
+    ("circle16", 384, 2.0, 0xbc095a34a101a921),
     ("circle96", 128, 1.0, 0xc7b1b22d5a1c4ae5),
     ("circle96", 128, 2.0, 0xc7b1b22d5a1c4ae5),
     ("circle96", 384, 1.0, 0x78ea7f68ff2eea85),
@@ -95,14 +115,14 @@ const EXPECTED: [(&str, u32, f32, u64); 64] = [
     ("circle96", 128, 2.0, 0xbcb1815c002ab5a5),
     ("circle96", 384, 1.0, 0x593310d762a90125),
     ("circle96", 384, 2.0, 0xbc0e3453747d83c5),
-    ("circle96", 128, 1.0, 0x79a5227056399f7c),
-    ("circle96", 128, 2.0, 0x7489478ed5ea0051),
-    ("circle96", 384, 1.0, 0x1f933297fce0302c),
-    ("circle96", 384, 2.0, 0x12af334b2f27256c),
-    ("circle96", 128, 1.0, 0xf9fdc0343318f63d),
-    ("circle96", 128, 2.0, 0xbd216f0cf781a23e),
-    ("circle96", 384, 1.0, 0xd597baf029cc73b8),
-    ("circle96", 384, 2.0, 0x2b4b8521dfcb8c75),
+    ("circle96", 128, 1.0, 0x77a740dafaf97595),
+    ("circle96", 128, 2.0, 0xc56c8866cb29b8a7),
+    ("circle96", 384, 1.0, 0xd6011ff83410de40),
+    ("circle96", 384, 2.0, 0x1a89bdfad0f75e60),
+    ("circle96", 128, 1.0, 0xdf020dd52933127d),
+    ("circle96", 128, 2.0, 0x95f1d47b60a6b683),
+    ("circle96", 384, 1.0, 0x8b206be1459dcf2f),
+    ("circle96", 384, 2.0, 0x68beffa5a16e31cd),
     ("circle400", 128, 1.0, 0x461a833a202763a5),
     ("circle400", 128, 2.0, 0x461a833a202763a5),
     ("circle400", 384, 1.0, 0xbdba3422289afd85),
@@ -111,14 +131,14 @@ const EXPECTED: [(&str, u32, f32, u64); 64] = [
     ("circle400", 128, 2.0, 0xa4dc3709200e8a05),
     ("circle400", 384, 1.0, 0xfb031e46da4dcc25),
     ("circle400", 384, 2.0, 0xba5fb504850489e5),
-    ("circle400", 128, 1.0, 0xead56233100c94b4),
-    ("circle400", 128, 2.0, 0xc492b72306d4a362),
-    ("circle400", 384, 1.0, 0xa69a6b129aa4cfeb),
-    ("circle400", 384, 2.0, 0xd23f2fc53ab39501),
-    ("circle400", 128, 1.0, 0xc6fa2687e0f65277),
-    ("circle400", 128, 2.0, 0x57a256a4c27afa54),
-    ("circle400", 384, 1.0, 0xb1ab9cb7872ad89c),
-    ("circle400", 384, 2.0, 0xa3eaeeeeb9993664),
+    ("circle400", 128, 1.0, 0x77b44f1d48578173),
+    ("circle400", 128, 2.0, 0x1137da919c7d91dc),
+    ("circle400", 384, 1.0, 0x30a624b1a2e0a899),
+    ("circle400", 384, 2.0, 0x76d7992826d9d9fc),
+    ("circle400", 128, 1.0, 0x57121845c318403f),
+    ("circle400", 128, 2.0, 0x5f4e845a6f648680),
+    ("circle400", 384, 1.0, 0x25945b6b7de4bee1),
+    ("circle400", 384, 2.0, 0x6a9c849e1261fa17),
     ("star", 128, 1.0, 0xba60ebc86ea352f5),
     ("star", 128, 2.0, 0xba60ebc86ea352f5),
     ("star", 384, 1.0, 0x7bb366f9c93144c5),
@@ -127,14 +147,14 @@ const EXPECTED: [(&str, u32, f32, u64); 64] = [
     ("star", 128, 2.0, 0x86e878335674fd85),
     ("star", 384, 1.0, 0xcee77770aac529f8),
     ("star", 384, 2.0, 0xf034f48ad23b3a48),
-    ("star", 128, 1.0, 0x3e1a281bdaffb522),
-    ("star", 128, 2.0, 0x4e83d5750af6117a),
-    ("star", 384, 1.0, 0x6e7336aedc7be18b),
-    ("star", 384, 2.0, 0x083a83d1f27057f7),
-    ("star", 128, 1.0, 0x668a50662623d30c),
-    ("star", 128, 2.0, 0xf167ab7ff422ddc0),
-    ("star", 384, 1.0, 0x207e70e115f016e8),
-    ("star", 384, 2.0, 0x9645f0a998b121b1),
+    ("star", 128, 1.0, 0x8e81c356d5df19b9),
+    ("star", 128, 2.0, 0x5667beb7032d3776),
+    ("star", 384, 1.0, 0xf8a954e537793337),
+    ("star", 384, 2.0, 0x9ac91381ea184caf),
+    ("star", 128, 1.0, 0xb2cabb4b454da4e4),
+    ("star", 128, 2.0, 0x7b1bd52ab14234e9),
+    ("star", 384, 1.0, 0xad9073d62516a9c1),
+    ("star", 384, 2.0, 0x55a4686af5f88879),
 ];
 
 /// A polygon with fewer than three points has an empty row-edge table but a
