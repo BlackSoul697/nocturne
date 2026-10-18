@@ -9,7 +9,6 @@ const SESSION_JOB_KEY = "nocturne.setup.migration-job-id";
 const IN_FLIGHT_STATES: MigrationJobState[] = [
   MigrationJobState.Running,
   MigrationJobState.Pending,
-  MigrationJobState.Validating,
 ];
 
 function readSessionJobId(): string | undefined {
