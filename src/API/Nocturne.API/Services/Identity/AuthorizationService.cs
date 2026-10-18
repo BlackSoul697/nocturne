@@ -42,8 +42,6 @@ public class AuthorizationService : IAuthorizationService, IDisposable
     private readonly Dictionary<string, Permission> _seenPermissions = new();
     private readonly object _permissionsLock = new();
 
-    // Memory protection for _seenPermissions
-    private const int MAX_PERMISSIONS_CACHE_SIZE = 5000;
     private bool _disposed;
 
     /// <summary>
@@ -295,49 +293,6 @@ public class AuthorizationService : IAuthorizationService, IDisposable
             );
             return false;
         }
-    }
-
-    /// <summary>
-    /// Record a permission usage for statistics
-    /// </summary>
-    /// <param name="permission">Permission that was used</param>
-    public Task RecordPermissionUsageAsync(string permission)
-    {
-        try
-        {
-            lock (_permissionsLock)
-            {
-                var now = DateTime.UtcNow;
-
-                if (_seenPermissions.ContainsKey(permission))
-                {
-                    _seenPermissions[permission].Count++;
-                    _seenPermissions[permission].LastSeen = now;
-                }
-                else
-                {
-                    _seenPermissions[permission] = new Permission
-                    {
-                        Name = permission,
-                        Count = 1,
-                        FirstSeen = now,
-                        LastSeen = now,
-                    };
-                }
-
-                // Periodically clean up old permissions to prevent memory leaks
-                if (_seenPermissions.Count % 100 == 0)
-                {
-                    CleanupOldPermissions();
-                }
-            }
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Error recording permission usage for {Permission}", permission);
-        }
-
-        return Task.CompletedTask;
     }
 
     // A Nightscout "subject" is an API token, not a person: a name, a set of roles and an access
@@ -893,55 +848,6 @@ public class AuthorizationService : IAuthorizationService, IDisposable
         }
 
         return root;
-    }
-
-    /// <summary>
-    /// Clean up old permissions from the cache to prevent unbounded memory growth
-    /// </summary>
-    private void CleanupOldPermissions()
-    {
-        try
-        {
-            if (_seenPermissions.Count <= MAX_PERMISSIONS_CACHE_SIZE)
-                return;
-
-            var now = DateTime.UtcNow;
-            var cutoffTime = now.AddDays(-30); // Remove permissions not seen in 30 days
-
-            var permissionsToRemove = _seenPermissions
-                .Where(kvp => kvp.Value.LastSeen < cutoffTime)
-                .Select(kvp => kvp.Key)
-                .ToList();
-
-            foreach (var permission in permissionsToRemove)
-            {
-                _seenPermissions.Remove(permission);
-            }
-
-            // If still too many, remove the least recently used
-            if (_seenPermissions.Count > MAX_PERMISSIONS_CACHE_SIZE)
-            {
-                var lruPermissions = _seenPermissions
-                    .OrderBy(kvp => kvp.Value.LastSeen)
-                    .Take(_seenPermissions.Count - (MAX_PERMISSIONS_CACHE_SIZE * 3 / 4))
-                    .Select(kvp => kvp.Key)
-                    .ToList();
-
-                foreach (var permission in lruPermissions)
-                {
-                    _seenPermissions.Remove(permission);
-                }
-            }
-
-            _logger.LogDebug(
-                "Cleaned up permissions cache, current size: {Count}",
-                _seenPermissions.Count
-            );
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Error cleaning up permissions cache");
-        }
     }
 
     /// <summary>

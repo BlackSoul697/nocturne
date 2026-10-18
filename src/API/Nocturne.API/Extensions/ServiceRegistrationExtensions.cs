@@ -312,11 +312,6 @@ public static class ServiceRegistrationExtensions
                 break;
             case PredictionSource.OrefWasm:
                 services.AddScoped<IPredictionService, PredictionService>();
-                services.AddOrefService(options =>
-                {
-                    options.WasmPath = "oref.wasm";
-                    options.Enabled = true;
-                });
                 break;
             case PredictionSource.None:
             default:
