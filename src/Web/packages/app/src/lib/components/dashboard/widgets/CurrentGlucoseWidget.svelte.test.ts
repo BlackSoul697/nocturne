@@ -72,8 +72,10 @@ describe("CurrentGlucoseWidget", () => {
     releaseWatercolour();
   });
 
+  // The units persist to localStorage, which later test files in the browser run share.
   afterEach(() => {
     illustrations.current = "animated";
+    setGlucoseUnits("mg/dl");
   });
 
   it("lays the still wash over the range fill at once under the Still preference", async () => {
