@@ -90,10 +90,16 @@ public class ProfileDeletionService : IProfileDeletionService
 
         _logger.LogInformation(
             "Deleted therapy profile {ProfileName}: {Count} records across five tables",
-            profileName,
+            SanitizeForLog(profileName),
             deleted
         );
 
         return new ProfileDeletionResult(ProfileDeletionRefusal.None, deleted);
     }
+
+    /// <summary>
+    /// The profile name arrives from the route; stripping CR/LF keeps it from forging log lines.
+    /// </summary>
+    private static string SanitizeForLog(string value) =>
+        value.Replace("\r", string.Empty).Replace("\n", string.Empty);
 }

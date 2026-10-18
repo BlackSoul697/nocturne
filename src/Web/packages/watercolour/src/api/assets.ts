@@ -107,11 +107,18 @@ export async function assetUrl(key: AssetKey, variant: AssetVariant, options: As
   if (explicit) return explicit;
   const preferred = fileName(variant, AVIF_VARIANTS.has(variant) ? await imageFormat() : 'webp');
   if (options.assetBaseUrl) {
-    const base = options.assetBaseUrl.replace(/\/+$/, '');
+    const base = trimTrailingSlashes(options.assetBaseUrl);
     return `${base}/${key.id}/${paletteKey(sourcePalette(key.id, key.palette), key.surface)}/${preferred}`;
   }
   const bundle = await loadBundle();
   return bundle.bundledUrl(key, preferred) ?? bundle.bundledUrl(key, fileName(variant, 'webp'));
+}
+
+/** A scan, not `/\/+$/`: that pattern backtracks quadratically on a long run of interior slashes. */
+function trimTrailingSlashes(url: string): string {
+  let end = url.length;
+  while (end > 0 && url[end - 1] === '/') end--;
+  return url.slice(0, end);
 }
 
 export async function loadManifest(url: string): Promise<BakedManifest> {
