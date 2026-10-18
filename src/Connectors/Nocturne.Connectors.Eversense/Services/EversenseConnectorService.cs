@@ -3,6 +3,7 @@ using Microsoft.Extensions.Logging;
 using Nocturne.Connectors.Core.Interfaces;
 using Nocturne.Connectors.Core.Models;
 using Nocturne.Connectors.Core.Services;
+using Nocturne.Connectors.Core.Utilities;
 using Nocturne.Connectors.Eversense.Configurations;
 using Nocturne.Connectors.Eversense.Mappers;
 using Nocturne.Connectors.Eversense.Models;
@@ -158,11 +159,9 @@ public class EversenseConnectorService : BaseConnectorService<EversenseConnector
             await PublishRecordTypeAsync(result, SyncDataType.Glucose, activeTypes,
                 [sg], PublishSensorGlucoseDataAsync, config, cancellationToken);
         }
-        catch (Exception ex)
+        catch (Exception ex) when (ex is not OperationCanceledException || !cancellationToken.IsCancellationRequested)
         {
-            _logger.LogError(ex, "[{ConnectorSource}] Error during Eversense sync", ConnectorSource);
-            result.Success = false;
-            result.Errors.Add($"Sync error: {ex.Message}");
+            RecordSyncError(result, ex);
         }
 
         return result;
@@ -175,7 +174,7 @@ public class EversenseConnectorService : BaseConnectorService<EversenseConnector
         EversenseConnectorConfiguration config,
         CancellationToken cancellationToken)
     {
-        var token = await _tokenProvider.GetValidTokenAsync(config);
+        var token = await _tokenProvider.GetValidTokenAsync(config, cancellationToken);
         if (string.IsNullOrEmpty(token))
         {
             _logger.LogWarning("[{ConnectorSource}] No valid token available for data fetch", ConnectorSource);
@@ -202,19 +201,13 @@ public class EversenseConnectorService : BaseConnectorService<EversenseConnector
                 }
 
                 var patients = await DeserializeResponseAsync<List<EversensePatientDatum>>(response, cancellationToken);
-                return patients ?? [];
+                return ConnectorFaults.NonNullRecords(patients, _logger, ConnectorSource, "Eversense patient").ToList();
             },
             _retryDelayStrategy,
-            reAuthenticateOnUnauthorized: async () =>
-            {
-                _tokenProvider.InvalidateToken();
-                var newToken = await _tokenProvider.GetValidTokenAsync(config);
-                if (string.IsNullOrEmpty(newToken)) return false;
-                token = newToken;
-                return true;
-            },
+            reAuthenticateOnUnauthorized: ReauthenticateWith(_tokenProvider, config, t => token = t, cancellationToken),
             maxRetries: config.MaxRetryAttempts,
-            operationName: "FetchEversensePatientList"
+            operationName: "FetchEversensePatientList",
+            cancellationToken: cancellationToken
         );
 
         return result;
