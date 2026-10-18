@@ -107,8 +107,8 @@ fn main() {
         }
         let (w, h) = (columns[0][0].width, columns[0][0].height);
         let mut sheet = Image::new(2 * w + 3 * GUTTER, (stops + 1) * (h + GUTTER) + GUTTER);
-        for px in sheet.rgba.chunks_exact_mut(4) {
-            px.copy_from_slice(&[0.5, 0.5, 0.5, 1.0]);
+        for px in sheet.rgba.as_chunks_mut::<4>().0 {
+            *px = [0.5, 0.5, 0.5, 1.0];
         }
         for (c, frames) in columns.iter().enumerate() {
             for (r, img) in frames.iter().enumerate() {
