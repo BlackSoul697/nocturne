@@ -192,7 +192,7 @@ public class MigrationJobService : IMigrationJobService
             "Started migration job {JobId} in {Mode} mode from {Source}",
             jobId,
             request.Mode,
-            sourceDesc
+            SanitizeForLog(sourceDesc)
         );
 
         return jobInfo;
@@ -453,6 +453,13 @@ public class MigrationJobService : IMigrationJobService
 
         return sources;
     }
+
+    /// <summary>
+    /// The source description carries the caller's Nightscout URL or Mongo database name;
+    /// stripping CR/LF keeps it from forging log lines.
+    /// </summary>
+    private static string? SanitizeForLog(string? value) =>
+        value?.Replace("\r", string.Empty).Replace("\n", string.Empty);
 }
 
 /// <summary>
