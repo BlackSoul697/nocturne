@@ -402,6 +402,33 @@ public class ActiveProfileResolverTests : IDisposable
         }
 
         [Fact]
+        public async Task BoundsQueryByOverlapWindow_AndKeepsLongRunningSpan()
+        {
+            var longRunning = MakeProfileSpan(
+                startMills: MorningMills - 90L * 24 * 3_600_000,
+                endMills: null,
+                profileName: "Winter");
+            SetupSpans(longRunning);
+
+            var result = await _sut.GetActiveProfileSpansForRangeAsync(MorningMills, EveningMills);
+
+            result.Should().ContainSingle().Which.ProfileName.Should().Be("Winter");
+            _stateSpanService.Verify(
+                s => s.GetStateSpansAsync(
+                    StateSpanCategory.Profile,
+                    It.IsAny<string?>(),
+                    DateTimeOffset.FromUnixTimeMilliseconds(MorningMills).UtcDateTime,
+                    DateTimeOffset.FromUnixTimeMilliseconds(EveningMills).UtcDateTime,
+                    It.IsAny<string?>(),
+                    It.IsAny<bool?>(),
+                    It.IsAny<int>(),
+                    It.IsAny<int>(),
+                    It.IsAny<bool>(),
+                    It.IsAny<CancellationToken>()),
+                Times.Once);
+        }
+
+        [Fact]
         public async Task IssuesOneDbQuery_RegardlessOfRangeSize()
         {
             SetupSpans();
@@ -499,6 +526,33 @@ public class ActiveProfileResolverTests : IDisposable
 
             late.Should().Be("New");
             early.Should().BeNull();
+        }
+
+        /// <summary>
+        /// The minute's candidates are shared by every lookup in it, so the overlap bound is the
+        /// minute's start, not the lookup time: a later lookup must not drop a span that ended
+        /// mid-minute and an earlier lookup still needs.
+        /// </summary>
+        [Fact]
+        public async Task QueriesSpansOverlappingTheWholeMinute()
+        {
+            SetupSpansStartedBy(SwitchAtHalfPast());
+
+            await _sut.GetActiveProfileNameAsync(NoonMills + 45_000);
+
+            _stateSpanService.Verify(
+                s => s.GetStateSpansAsync(
+                    StateSpanCategory.Profile,
+                    It.IsAny<string?>(),
+                    DateTimeOffset.FromUnixTimeMilliseconds(NoonMills).UtcDateTime,
+                    DateTimeOffset.FromUnixTimeMilliseconds(NoonMills + 59_999).UtcDateTime,
+                    It.IsAny<string?>(),
+                    It.IsAny<bool?>(),
+                    It.IsAny<int>(),
+                    It.IsAny<int>(),
+                    It.IsAny<bool>(),
+                    It.IsAny<CancellationToken>()),
+                Times.Once);
         }
 
         [Fact]

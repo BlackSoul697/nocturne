@@ -55,13 +55,13 @@ internal sealed class ActiveProfileResolver : IActiveProfileResolver
     public async Task<IReadOnlyList<ProfileSpan>> GetActiveProfileSpansForRangeAsync(
         long fromMs, long toMs, CancellationToken ct = default)
     {
+        var fromDateTime = DateTimeOffset.FromUnixTimeMilliseconds(fromMs).UtcDateTime;
         var toDateTime = DateTimeOffset.FromUnixTimeMilliseconds(toMs).UtcDateTime;
 
-        // Fetch all profile spans that started at or before range end.
-        // Includes spans that started before [fromMs] but are still active during the range.
-        // No `from:` filter for this reason — same pattern as TherapyTimelineResolver.
+        // from: is an overlap bound, so spans that started before the range but are still running stay in.
         var rawSpans = await _stateSpanService.GetStateSpansAsync(
             category: StateSpanCategory.Profile,
+            from: fromDateTime,
             to: toDateTime,
             count: 1000,
             cancellationToken: ct);
@@ -84,7 +84,7 @@ internal sealed class ActiveProfileResolver : IActiveProfileResolver
     }
 
     /// <remarks>
-    /// The cache holds the newest spans that started by the end of the minute, so the active span is picked at
+    /// The cache holds the newest spans that overlap the minute, so the active span is picked at
     /// the exact time and the answer does not depend on which lookup in the minute came first. It is keyed
     /// by tenant, not history window, so a history-clamped request, which sees only the last 24 hours of
     /// <c>state_spans</c>, neither reads nor writes it.
@@ -98,9 +98,11 @@ internal sealed class ActiveProfileResolver : IActiveProfileResolver
 
         if (!useCache || !_cache.TryGetValue(cacheKey, out IReadOnlyList<StateSpan>? candidates) || candidates is null)
         {
+            var minuteFrom = DateTimeOffset.FromUnixTimeMilliseconds(minuteStart).UtcDateTime;
             var minuteEnd = DateTimeOffset.FromUnixTimeMilliseconds(minuteStart + MillisPerMinute - 1).UtcDateTime;
             candidates = (await _stateSpanService.GetStateSpansAsync(
                 category: StateSpanCategory.Profile,
+                from: minuteFrom,
                 to: minuteEnd,
                 count: 100,
                 cancellationToken: ct)).ToList();
