@@ -33,9 +33,9 @@ public class TenantAlertSettingsController : ControllerBase
 {
     private const string ManualSource = "web";
 
-    private readonly ITenantDbContextFactory _contextFactory;
+    private readonly INocturneDbContextFactory _contextFactory;
 
-    public TenantAlertSettingsController(ITenantDbContextFactory contextFactory)
+    public TenantAlertSettingsController(INocturneDbContextFactory contextFactory)
     {
         _contextFactory = contextFactory;
     }

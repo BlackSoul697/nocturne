@@ -70,7 +70,7 @@ public class TreatmentClientIdRoundTripTests : IDisposable
         };
 
         var dedup = new Mock<IDeduplicationService>().Object;
-        var ctxFactory = new TestTenantDbContextFactory(_context);
+        var ctxFactory = new TestNocturneDbContextFactory(_context);
         var bolusRepo = new BolusRepository(ctxFactory, dedup, apiSecretCaller, NullLogger<BolusRepository>.Instance);
         var carbRepo = _carbRepo = new CarbIntakeRepository(ctxFactory, dedup, apiSecretCaller, NullLogger<CarbIntakeRepository>.Instance);
         var bgCheckRepo = new BGCheckRepository(ctxFactory, dedup, apiSecretCaller, NullLogger<BGCheckRepository>.Instance);

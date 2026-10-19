@@ -1,3 +1,4 @@
+using Nocturne.API.Multitenancy;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Nocturne.Core.Contracts.Infrastructure;
@@ -20,6 +21,8 @@ internal sealed class DeduplicationReconciliationBackgroundService : BackgroundS
     private static readonly int MaxBatchesPerTick = 4;
     private static readonly int PruneBatchSize = 10_000;
     private static readonly int MaxPruneBatchesPerTick = 10;
+
+    private const string AuditEndpoint = "service:dedup-reconciliation";
 
     private readonly IServiceProvider _serviceProvider;
     private readonly ActiveTenantSnapshot _activeTenants;
@@ -84,10 +87,10 @@ internal sealed class DeduplicationReconciliationBackgroundService : BackgroundS
         {
             try
             {
-                using var scope = _serviceProvider.CreateScope();
-
-                var tenantAccessor = scope.ServiceProvider.GetRequiredService<ITenantAccessor>();
-                tenantAccessor.SetTenant(new TenantContext(tenant.Id, tenant.Slug, tenant.DisplayName, true, IsDemo: false));
+                await using var scope = TenantJobScope.Open(
+                    _serviceProvider,
+                    new TenantContext(tenant.Id, tenant.Slug, tenant.DisplayName, true, IsDemo: false),
+                    AuditEndpoint);
 
                 var dedup = scope.ServiceProvider.GetRequiredService<IDeduplicationService>();
                 var result = await dedup.ReconcileNewLinksAsync(BatchSize, MaxBatchesPerTick, ct);

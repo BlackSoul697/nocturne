@@ -63,7 +63,7 @@ public class DemoDataPurgeParityTests : IDisposable
     }
 
     private DemoAdminController CreateController() =>
-        new(Mock.Of<ITenantService>(), null!, new ContextFactory(_db.Options));
+        new(Mock.Of<ITenantService>(), null!, (new ContextFactory(_db.Options)).AsNocturneFactory());
 
     private DataSourceService CreateService(NocturneDbContext context) => new(
         context,

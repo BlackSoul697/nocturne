@@ -29,7 +29,7 @@ public class BolusRepository : SyncUpsertRepositoryBase<Bolus, BolusEntity>, IBo
     /// Initializes a new instance of the <see cref="BolusRepository"/> class.
     /// </summary>
     public BolusRepository(
-        ITenantDbContextFactory contextFactory,
+        INocturneDbContextFactory contextFactory,
         IDeduplicationService deduplicationService,
         IAuditContext auditContext,
         ILogger<BolusRepository> logger,

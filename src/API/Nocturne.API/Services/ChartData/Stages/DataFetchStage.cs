@@ -12,7 +12,7 @@ namespace Nocturne.API.Services.ChartData.Stages;
 
 /// <summary>
 /// Chart data pipeline stage that fetches all raw data required for the dashboard chart.
-/// Repositories that open their own context per call through <c>ITenantDbContextFactory</c> run
+/// Repositories that open their own context per call through <c>INocturneDbContextFactory</c> run
 /// concurrently; the ones that share the request-scoped
 /// <see cref="Microsoft.EntityFrameworkCore.DbContext"/>, which is not thread-safe, run one after
 /// another alongside them.

@@ -30,7 +30,7 @@ public class CarbIntakeRepository : SyncUpsertRepositoryBase<CarbIntake, CarbInt
     /// Initializes a new instance of the <see cref="CarbIntakeRepository"/> class.
     /// </summary>
     public CarbIntakeRepository(
-        ITenantDbContextFactory contextFactory,
+        INocturneDbContextFactory contextFactory,
         IDeduplicationService deduplicationService,
         IAuditContext auditContext,
         ILogger<CarbIntakeRepository> logger,

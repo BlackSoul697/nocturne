@@ -37,7 +37,7 @@ public class TreatmentPublisherTests
     private readonly Mock<IPatientInsulinRepository> _mockPatientInsulinRepository;
     private readonly Mock<IBasalRateResolver> _mockBasalRateResolver;
     private readonly Mock<ITherapySettingsResolver> _mockTherapySettingsResolver;
-    private Mock<ITenantDbContextFactory> _mockContextFactory = null!;
+    private Mock<INocturneDbContextFactory> _mockContextFactory = null!;
     private readonly TreatmentPublisher _publisher;
 
     private static readonly Guid TestTenantId = Guid.NewGuid();
@@ -79,7 +79,7 @@ public class TreatmentPublisherTests
 
     private TreatmentPublisher CreatePublisher(IAuditContext auditContext)
     {
-        _mockContextFactory = new Mock<ITenantDbContextFactory>();
+        _mockContextFactory = new Mock<INocturneDbContextFactory>();
         _mockContextFactory
             .Setup(f => f.CreateAsync(It.IsAny<CancellationToken>()))
             .Returns(() => new ValueTask<NocturneDbContext>(NewDbContext()));

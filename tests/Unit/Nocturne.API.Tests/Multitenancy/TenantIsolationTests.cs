@@ -1,3 +1,4 @@
+using Nocturne.Infrastructure.Data.Extensions;
 using FluentAssertions;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Http.Connections.Features;
@@ -841,6 +842,7 @@ public class TenantIsolationTests
             // Register an in-memory DbContext factory so the middleware can query for tenants
             services.AddDbContextFactory<Nocturne.Infrastructure.Data.NocturneDbContext>(options =>
                 options.UseInMemoryDatabase($"TenantTest_{Guid.NewGuid()}"));
+            services.AddDataServices();
         }
 
         context.RequestServices = services.BuildServiceProvider();

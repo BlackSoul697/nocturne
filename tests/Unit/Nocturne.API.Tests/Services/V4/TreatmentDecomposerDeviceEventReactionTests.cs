@@ -42,7 +42,7 @@ public class TreatmentDecomposerDeviceEventReactionTests : IDisposable
     {
         _db = TestDbContextFactory.CreateSqliteWithTenant(TenantId, SqliteNpgsqlJson.Translate);
         _context = _db.CreateContext();
-        var factory = new TestTenantDbContextFactory(_context);
+        var factory = new TestNocturneDbContextFactory(_context);
         var audit = Mock.Of<IAuditContext>();
         var dedup = Mock.Of<IDeduplicationService>();
 

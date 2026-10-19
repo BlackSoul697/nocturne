@@ -44,7 +44,7 @@ public class TrackersController : ControllerBase, IWriteScopedController
     private readonly ITrackerRepository _repository;
     private readonly ISignalRBroadcastService _broadcast;
     private readonly ITrackerAlertRuleSyncService _ruleSync;
-    private readonly ITenantDbContextFactory _contextFactory;
+    private readonly INocturneDbContextFactory _contextFactory;
     private readonly IAlertAcknowledgementService _acknowledgementService;
     private readonly ILogger<TrackersController> _logger;
 
@@ -61,7 +61,7 @@ public class TrackersController : ControllerBase, IWriteScopedController
         ITrackerRepository repository,
         ISignalRBroadcastService broadcast,
         ITrackerAlertRuleSyncService ruleSync,
-        ITenantDbContextFactory contextFactory,
+        INocturneDbContextFactory contextFactory,
         IAlertAcknowledgementService acknowledgementService,
         ILogger<TrackersController> logger
     )

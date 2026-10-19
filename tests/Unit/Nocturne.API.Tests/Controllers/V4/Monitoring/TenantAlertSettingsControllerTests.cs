@@ -202,7 +202,7 @@ public class TenantAlertSettingsControllerTests
             .UseInMemoryDatabase(Guid.NewGuid().ToString())
             .Options;
         var seed = new NocturneDbContext(options) { TenantId = Tenant };
-        var factory = new TestTenantDbContextFactory(seed);
+        var factory = new TestNocturneDbContextFactory(seed);
         return (new TenantAlertSettingsController(factory), options);
     }
 

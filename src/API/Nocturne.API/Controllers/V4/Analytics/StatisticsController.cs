@@ -30,7 +30,7 @@ namespace Nocturne.API.Controllers.V4.Analytics;
 /// <c>GET /range-analytics</c>, <c>GET /weekday-averages</c> and <c>GET /hourly-patterns</c>
 /// carry a 60-second client-only <see cref="ResponseCacheAttribute"/>. No other action caches.
 ///
-/// Repositories create their own DbContext per call from <c>ITenantDbContextFactory</c>, so
+/// Repositories create their own DbContext per call from <c>INocturneDbContextFactory</c>, so
 /// independent reads within one request are issued together under <c>Task.WhenAll</c>.
 /// </remarks>
 /// <seealso cref="IStatisticsService"/>

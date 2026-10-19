@@ -1,3 +1,4 @@
+using Nocturne.API.Multitenancy;
 using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
@@ -62,6 +63,8 @@ public sealed record SampleDataSeedResult(
 /// </summary>
 public class SampleDataSeeder
 {
+    private const string AuditEndpoint = "service:sample-data-seeder";
+
     private readonly ITenantAccessor _tenantAccessor;
     private readonly NocturneDbContext _db;
     private readonly IEntryService _entryService;
@@ -142,6 +145,25 @@ public class SampleDataSeeder
     }
 
     /// <summary>
+    /// Runs <see cref="SeedAsync"/> in a DI scope of <paramref name="tenant"/>'s own, so the calling
+    /// request's tenant is left as it was. Dev-only and demo-admin routes bypass tenant resolution,
+    /// so the caller's scope has no tenant of its own to seed under.
+    /// </summary>
+    public static async Task<SampleDataSeedResult> SeedInTenantScopeAsync(
+        IServiceProvider services,
+        TenantContext tenant,
+        int days,
+        Guid? ownerSubjectId,
+        string dataSource = DevSampleDataSource,
+        bool includeGlucose = true,
+        CancellationToken ct = default)
+    {
+        await using var scope = TenantJobScope.Open(services, tenant, AuditEndpoint);
+        return await scope.ServiceProvider.GetRequiredService<SampleDataSeeder>()
+            .SeedAsync(tenant, days, ownerSubjectId, dataSource, includeGlucose, ct);
+    }
+
+    /// <summary>
     /// Generates and persists <paramref name="days"/> days of sample data.
     /// <paramref name="ownerSubjectId"/> owns the seeded tracker definitions,
     /// clock faces, food favorites, and notifications; when null, those
@@ -161,13 +183,9 @@ public class SampleDataSeeder
     {
         days = Math.Clamp(days, 1, MaxDays);
 
-        // Ingestion services resolve the tenant through ITenantAccessor for
-        // factory-created contexts, and through the request-scoped context's
-        // TenantId (normally pinned by tenant resolution middleware, which
-        // dev-only and demo-admin routes bypass) for entity stamping and the
-        // RLS GUC.
-        _tenantAccessor.SetTenant(tenant);
-        _db.TenantId = tenant.TenantId;
+        if (_tenantAccessor.TenantId != tenant.TenantId)
+            throw new InvalidOperationException(
+                $"Seed {tenant.Slug} from a scope of its own; see {nameof(SeedInTenantScopeAsync)}.");
 
         var config = new DemoModeConfiguration { BackfillDays = days };
 

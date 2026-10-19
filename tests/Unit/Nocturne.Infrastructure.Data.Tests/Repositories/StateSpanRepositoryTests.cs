@@ -46,11 +46,11 @@ public class StateSpanRepositoryTests : IDisposable
         httpContextAccessor.Setup(x => x.HttpContext).Returns((HttpContext)null!);
 
         _db = TestDbContextFactory.CreateSqliteWithTenant(
-                TestTenantId, "test", new MutationAuditInterceptor(httpContextAccessor.Object), _saves)
+                TestTenantId, "test", new MutationAuditInterceptor(), _saves)
             .SeedTenant(OtherTenantId, "other");
 
         _context = _db.CreateContext();
-        _context.AuditContext = _auditContext;
+        _context.AttributedTo(_auditContext);
         _mockDedup = new Mock<IDeduplicationService>();
         _logger.Setup(l => l.IsEnabled(It.IsAny<LogLevel>())).Returns(true);
         _repository = new StateSpanRepository(
