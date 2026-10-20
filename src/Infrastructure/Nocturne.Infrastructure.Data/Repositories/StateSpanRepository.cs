@@ -4,7 +4,9 @@ using Microsoft.Extensions.Logging;
 using Nocturne.Core.Contracts.Audit;
 using Nocturne.Core.Contracts.Infrastructure;
 using Nocturne.Core.Contracts.Repositories;
+using Nocturne.Core.Contracts.V4;
 using Nocturne.Core.Models;
+using Nocturne.Core.Models.V4;
 using Nocturne.Infrastructure.Data.Entities;
 using Nocturne.Infrastructure.Data.Extensions;
 using Nocturne.Infrastructure.Data.Mappers;
@@ -565,12 +567,54 @@ public class StateSpanRepository : IStateSpanRepository
     private async Task<IReadOnlyList<StateSpan>> SoftDeleteWithCopiesAsync(
         StateSpanEntity entity, CancellationToken cancellationToken)
     {
-        var (saved, copies) = await DuplicateGroupPrimaries.SoftDeleteAsync(
-            _context, entity, RecordType.StateSpan, cancellationToken);
-        return saved > 0
-            ? [StateSpanMapper.ToDomainModel(entity), .. copies.Select(StateSpanMapper.ToDomainModel)]
-            : [];
+        return await _context.ExecuteInTransactionAsync<IReadOnlyList<StateSpan>>(async token =>
+        {
+            var (saved, copies) = await DuplicateGroupPrimaries.SoftDeleteAsync(
+                _context, entity, RecordType.StateSpan, token);
+            if (saved == 0)
+                return [];
+
+            await _context.ClearSupersededByAsync([entity.Id, .. copies.Select(c => c.Id)], token);
+            return [StateSpanMapper.ToDomainModel(entity), .. copies.Select(StateSpanMapper.ToDomainModel)];
+        }, ct: cancellationToken);
     }
+
+    /// <inheritdoc />
+    public async Task<IReadOnlyDictionary<Guid, DeletedStateSpan>> ResolveDeletedAsync(
+        IReadOnlyCollection<string> ids,
+        CancellationToken cancellationToken = default)
+    {
+        var rowIds = ids.Select(id => Guid.TryParse(id, out var rowId) ? rowId : (Guid?)null).ToList();
+        var deleted = await _context.StateSpans.IgnoreQueryFilters().AsNoTracking()
+            .Where(s => s.TenantId == _context.TenantId
+                        && s.DeletedAt != null
+                        && ((s.OriginalId != null && ids.Contains(s.OriginalId)) || rowIds.Contains(s.Id)))
+            .Select(s => new { s.Id, s.OriginalId, s.Category, s.DeletedAt })
+            .ToListAsync(cancellationToken);
+
+        var resolved = new Dictionary<Guid, DeletedStateSpan>();
+        foreach (var id in ids.Distinct())
+        {
+            var named = deleted.Where(s => s.OriginalId == id).MaxBy(s => s.DeletedAt)
+                        ?? deleted.FirstOrDefault(s => Guid.TryParse(id, out var rowId) && s.Id == rowId);
+            if (named is not null)
+                resolved[named.Id] = new DeletedStateSpan(id, StateSpanMapper.ParseCategory(named.Category));
+        }
+
+        return resolved;
+    }
+
+    /// <inheritdoc />
+    public async Task<StateSpan> RestoreAsync(
+        Guid id, WriteOrigin origin, CancellationToken cancellationToken = default) =>
+        StateSpanMapper.ToDomainModel(
+            await _context.RestoreDeletedAsync<StateSpanEntity>(id, nameof(StateSpan), cancellationToken));
+
+    /// <inheritdoc />
+    public async Task<BulkRestoreResult<StateSpan>> BulkRestoreAsync(
+        IEnumerable<Guid> ids, WriteOrigin origin, CancellationToken cancellationToken = default) =>
+        (await _context.RestoreDeletedAsync<StateSpanEntity>(ids, nameof(StateSpan), cancellationToken))
+            .Map(StateSpanMapper.ToDomainModel);
 
     /// <summary>
     /// Delete all state spans with the specified data source

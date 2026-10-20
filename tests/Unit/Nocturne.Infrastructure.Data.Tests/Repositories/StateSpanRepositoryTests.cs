@@ -5,6 +5,9 @@ using Microsoft.Extensions.Logging;
 using Moq;
 using Nocturne.Core.Contracts.Audit;
 using Nocturne.Core.Contracts.Infrastructure;
+using Nocturne.Core.Contracts.Repositories;
+using Nocturne.Core.Contracts.V4;
+using Nocturne.Core.Contracts.V4.Repositories;
 using Nocturne.Core.Models;
 using Nocturne.Infrastructure.Data.Entities;
 using Nocturne.Infrastructure.Data.Interceptors;
@@ -1545,5 +1548,178 @@ public class StateSpanRepositoryTests : IDisposable
         created.Select(s => s.OriginalId).Should().Equal("act-stored", "act-a", "act-b");
         created[0].EndTimestamp.Should().Be(BatchDay.AddHours(9));
         (await RowsForAsync("act-stored")).Should().ContainSingle();
+    }
+
+    // --- Restore and supersession ---
+
+    private async Task<Guid> RowIdAsync(string originalId) => (await RowsForAsync(originalId)).Single().Id;
+
+    private Task<bool> DeletedByUserAsync(Guid id) =>
+        _context.StateSpans.IgnoreQueryFilters().AsNoTracking()
+            .Where(s => s.Id == id)
+            .Select(s => EF.Property<bool>(s, "DeletedByUser"))
+            .SingleAsync();
+
+    [Fact]
+    public async Task RestoreAsync_BringsBackAUserDeletedSpan_AndALaterSyncUpsertsIt()
+    {
+        await _repository.UpsertStateSpanAsync(ConnectorSpan());
+        var id = await RowIdAsync("glooko-exercise-1");
+        await _repository.DeleteStateSpanAsync("glooko-exercise-1");
+        (await DeletedByUserAsync(id)).Should().BeTrue();
+
+        var restored = await _repository.RestoreAsync(id, WriteOrigin.Live);
+
+        restored.OriginalId.Should().Be("glooko-exercise-1");
+        (await _repository.GetStateSpanByIdAsync("glooko-exercise-1")).Should().NotBeNull();
+        (await DeletedByUserAsync(id)).Should().BeFalse();
+
+        var resync = ConnectorSpan();
+        resync.State = "Cycling";
+        await _repository.UpsertStateSpanAsync(resync);
+
+        var rows = await RowsForAsync("glooko-exercise-1");
+        rows.Should().ContainSingle().Which.State.Should().Be("Cycling");
+        rows[0].DeletedAt.Should().BeNull();
+    }
+
+    [Fact]
+    public async Task RestoreAsync_OfASpanThatIsNotDeleted_Throws()
+    {
+        await _repository.UpsertStateSpanAsync(ConnectorSpan());
+
+        var id = await RowIdAsync("glooko-exercise-1");
+        var act = () => _repository.RestoreAsync(id, WriteOrigin.Live);
+
+        await act.Should().ThrowAsync<KeyNotFoundException>();
+    }
+
+    [Fact]
+    public async Task RestoreAsync_RefusesASpanWhoseOriginalIdALiveSpanNowHolds()
+    {
+        await _repository.UpsertStateSpanAsync(ConnectorSpan());
+        var swept = await RowIdAsync("glooko-exercise-1");
+        _auditContext.IsSystem = true;
+        await _repository.DeleteStateSpanAsync("glooko-exercise-1");
+        _auditContext.IsSystem = false;
+        await _repository.UpsertStateSpanAsync(ConnectorSpan());
+
+        var act = () => _repository.RestoreAsync(swept, WriteOrigin.Live);
+
+        await act.Should().ThrowAsync<RecreationBlockedException>().WithMessage("*glooko-exercise-1*");
+        (await RowsForAsync("glooko-exercise-1")).Should().ContainSingle(r => r.Id == swept && r.DeletedAt != null);
+    }
+
+    [Fact]
+    public async Task BulkRestoreAsync_ReportsALiveHeldOriginalIdAsAConflict_AndRestoresTheRest()
+    {
+        await _repository.UpsertStateSpanAsync(ConnectorSpan());
+        await _repository.UpsertStateSpanAsync(Span(StateSpanCategory.Illness, "Flu", 10, "act-b"));
+        var clashing = await RowIdAsync("glooko-exercise-1");
+        var clear = await RowIdAsync("act-b");
+        _auditContext.IsSystem = true;
+        await _repository.DeleteStateSpanAsync("glooko-exercise-1");
+        _auditContext.IsSystem = false;
+        await _repository.DeleteStateSpanAsync("act-b");
+        await _repository.UpsertStateSpanAsync(ConnectorSpan());
+
+        var result = await _repository.BulkRestoreAsync([clashing, clear], WriteOrigin.Live);
+
+        result.Conflicts.Should().Equal(clashing);
+        result.Restored.Select(s => s.OriginalId).Should().Equal("act-b");
+        (await RowsForAsync("act-b")).Should().ContainSingle().Which.DeletedAt.Should().BeNull();
+        (await RowsForAsync("glooko-exercise-1")).Should().ContainSingle(r => r.Id == clashing && r.DeletedAt != null);
+    }
+
+    [Fact]
+    public async Task ResolveDeletedAsync_NamesADeletedSpanByTheIdReadsReturnForIt()
+    {
+        await _repository.UpsertStateSpanAsync(ConnectorSpan());
+        await _repository.UpsertStateSpanAsync(Span(StateSpanCategory.Illness, "Flu", 10, "act-live"));
+        var deleted = await RowIdAsync("glooko-exercise-1");
+        await _repository.DeleteStateSpanAsync("glooko-exercise-1");
+
+        var byOriginalId = await _repository.ResolveDeletedAsync(["glooko-exercise-1", "act-live", "nope"]);
+        var byRowId = await _repository.ResolveDeletedAsync([deleted.ToString()]);
+
+        byOriginalId.Should().ContainSingle().Which.Should().Be(
+            new KeyValuePair<Guid, DeletedStateSpan>(deleted, new("glooko-exercise-1", StateSpanCategory.Exercise)));
+        byRowId.Keys.Should().Equal(byOriginalId.Keys);
+        byRowId[deleted].SentId.Should().Be(deleted.ToString());
+    }
+
+    [Fact]
+    public async Task ResolveDeletedAsync_NamesTheLatestDeletedOfSpansSharingAnOriginalId()
+    {
+        await _repository.UpsertStateSpanAsync(ConnectorSpan());
+        var swept = await RowIdAsync("glooko-exercise-1");
+        _auditContext.IsSystem = true;
+        await _repository.DeleteStateSpanAsync("glooko-exercise-1");
+        _auditContext.IsSystem = false;
+        await _repository.UpsertStateSpanAsync(ConnectorSpan());
+        var second = (await RowsForAsync("glooko-exercise-1")).Single(r => r.Id != swept).Id;
+        await _repository.DeleteStateSpanAsync("glooko-exercise-1");
+
+        var named = await _repository.ResolveDeletedAsync(["glooko-exercise-1"]);
+
+        named.Keys.Should().Equal(second);
+    }
+
+    [Fact]
+    public async Task RestoreAsync_ByTheResolvedIdOfASpanWithAnOriginalId_BringsItBack()
+    {
+        await _repository.UpsertStateSpanAsync(ConnectorSpan());
+        await _repository.DeleteStateSpanAsync("glooko-exercise-1");
+
+        var rowId = (await _repository.ResolveDeletedAsync(["glooko-exercise-1"])).Keys.Single();
+        await _repository.RestoreAsync(rowId, WriteOrigin.Live);
+
+        (await _repository.GetStateSpanByIdAsync("glooko-exercise-1")).Should().NotBeNull();
+    }
+
+    private async Task<(Guid Superseded, Guid Supersessor)> SupersededPairAsync(string supersessorSource)
+    {
+        await _repository.UpsertStateSpanAsync(Span(StateSpanCategory.Override, "Custom", 8, "first"));
+        var second = Span(StateSpanCategory.Override, "Custom", 9, "second");
+        second.Source = supersessorSource;
+        await _repository.UpsertStateSpanAsync(second);
+
+        var first = (await LiveRowsAsync())["first"];
+        var supersessor = await RowIdAsync("second");
+        first.SupersededById.Should().Be(supersessor);
+        return (first.Id, supersessor);
+    }
+
+    [Fact]
+    public async Task DeleteStateSpanAsync_ClearsTheSupersededByOfALiveSpanPointingAtIt()
+    {
+        await SupersededPairAsync("connector");
+
+        await _repository.DeleteStateSpanAsync("second");
+
+        var first = (await LiveRowsAsync())["first"];
+        first.SupersededById.Should().BeNull();
+        first.EndTimestamp.Should().Be(BatchDay.AddHours(9));
+    }
+
+    [Fact]
+    public async Task DeleteBySourceAsync_ClearsTheSupersededByOfALiveSpanPointingAtADeletedOne()
+    {
+        await SupersededPairAsync("other-connector");
+
+        await _repository.DeleteBySourceAsync("other-connector");
+
+        (await LiveRowsAsync()).Should().ContainSingle().Which.Value.SupersededById.Should().BeNull();
+    }
+
+    [Fact]
+    public async Task DeleteStateSpanAsync_LeavesAnUnrelatedSpansSupersededByAlone()
+    {
+        var (_, supersessor) = await SupersededPairAsync("connector");
+        await _repository.UpsertStateSpanAsync(Span(StateSpanCategory.Exercise, "Running", 7, "bystander"));
+
+        await _repository.DeleteStateSpanAsync("bystander");
+
+        (await LiveRowsAsync())["first"].SupersededById.Should().Be(supersessor);
     }
 }
