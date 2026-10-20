@@ -489,6 +489,62 @@ public class StateSpanRepositoryTests : IDisposable
         spans.Should().ContainSingle().Which.Source.Should().Be("primary");
     }
 
+    [Fact]
+    public async Task GetActiveAtAsync_ExcludesNonPrimaryDeduplicatedSpans()
+    {
+        var primaryEntity = SpanEntity(_context.TenantId, StateSpanCategory.Override, "Custom",
+            new DateTime(2026, 1, 1, 9, 0, 0, DateTimeKind.Utc), null);
+        primaryEntity.Source = "primary";
+        var duplicateEntity = SpanEntity(_context.TenantId, StateSpanCategory.Override, "Custom",
+            new DateTime(2026, 1, 1, 9, 0, 20, DateTimeKind.Utc), null);
+        duplicateEntity.Source = "duplicate";
+
+        _context.StateSpans.AddRange(primaryEntity, duplicateEntity);
+        var canonicalId = Guid.NewGuid();
+        _context.LinkedRecords.AddRange(
+            Link(canonicalId, primaryEntity.Id, isPrimary: true),
+            Link(canonicalId, duplicateEntity.Id, isPrimary: false));
+        await _context.SaveChangesAsync();
+
+        var active = await _repository.GetActiveAtAsync(
+            StateSpanCategory.Override, null, new DateTime(2026, 1, 1, 12, 0, 0, DateTimeKind.Utc));
+
+        active.Should().NotBeNull();
+        active!.Source.Should().Be("primary");
+    }
+
+    [Fact]
+    public async Task GetByCategories_ExcludesNonPrimaryDeduplicatedSpans()
+    {
+        var from = new DateTime(2026, 5, 1, 0, 0, 0, DateTimeKind.Utc);
+        var carriedPrimary = SpanEntity(TestTenantId, StateSpanCategory.Override, "Custom", from.AddHours(-2), null);
+        carriedPrimary.Source = "primary";
+        var carriedDuplicate = SpanEntity(TestTenantId, StateSpanCategory.Override, "Custom", from.AddHours(-1), null);
+        carriedDuplicate.Source = "duplicate";
+        var windowPrimary = SpanEntity(
+            TestTenantId, StateSpanCategory.PumpMode, "Automatic", from.AddHours(1), null);
+        windowPrimary.Source = "primary";
+        var windowDuplicate = SpanEntity(
+            TestTenantId, StateSpanCategory.PumpMode, "Automatic", from.AddHours(1).AddSeconds(10), null);
+        windowDuplicate.Source = "duplicate";
+
+        _context.StateSpans.AddRange(carriedPrimary, carriedDuplicate, windowPrimary, windowDuplicate);
+        var carriedGroup = Guid.NewGuid();
+        var windowGroup = Guid.NewGuid();
+        _context.LinkedRecords.AddRange(
+            Link(carriedGroup, carriedPrimary.Id, isPrimary: true),
+            Link(carriedGroup, carriedDuplicate.Id, isPrimary: false),
+            Link(windowGroup, windowPrimary.Id, isPrimary: true),
+            Link(windowGroup, windowDuplicate.Id, isPrimary: false));
+        await _context.SaveChangesAsync();
+
+        var result = await _repository.GetByCategories(
+            [StateSpanCategory.Override, StateSpanCategory.PumpMode], from, from.AddDays(1));
+
+        result[StateSpanCategory.Override].Should().ContainSingle().Which.Source.Should().Be("primary");
+        result[StateSpanCategory.PumpMode].Should().ContainSingle().Which.Source.Should().Be("primary");
+    }
+
     private static LinkedRecordEntity Link(Guid canonicalId, Guid recordId, bool isPrimary) => new()
     {
         Id = Guid.NewGuid(),

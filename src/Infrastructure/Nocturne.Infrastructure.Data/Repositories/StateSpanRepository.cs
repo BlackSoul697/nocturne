@@ -640,6 +640,7 @@ public class StateSpanRepository : IStateSpanRepository
                         && (state == null || s.State == state)
                         && s.StartTimestamp <= at
                         && (s.EndTimestamp == null || s.EndTimestamp > at))
+            .ExcludeNonPrimary(_context, RecordType.StateSpan)
             .OrderByDescending(s => s.StartTimestamp)
             .FirstOrDefaultAsync(cancellationToken);
         return entity is null ? null : StateSpanMapper.ToDomainModel(entity);
@@ -663,7 +664,9 @@ public class StateSpanRepository : IStateSpanRepository
     {
         var categoryStrings = categories.Select(c => c.ToString()).ToList();
 
-        var query = _context.StateSpans.AsNoTracking().Where(s => categoryStrings.Contains(s.Category));
+        var query = _context.StateSpans.AsNoTracking()
+            .Where(s => categoryStrings.Contains(s.Category))
+            .ExcludeNonPrimary(_context, RecordType.StateSpan);
 
         if (to.HasValue)
             query = query.Where(s => s.StartTimestamp <= to.Value);
