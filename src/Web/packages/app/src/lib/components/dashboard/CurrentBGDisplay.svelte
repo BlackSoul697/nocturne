@@ -15,7 +15,7 @@
   import { GlucoseValueIndicator } from "$lib/components/shared";
   import { getRealtimeStore } from "$lib/stores/realtime-store.svelte";
   import { glucoseUnits } from "$lib/stores/appearance-store.svelte";
-  import { getSettingsStore } from "$lib/stores/settings-store.svelte";
+  import { getUiSettings } from "$api/ui-settings.remote";
   import { STALE_THRESHOLD_MS } from "$lib/constants/staleness";
   import {
     formatGlucoseValue,
@@ -36,11 +36,11 @@
   let { showPills = true }: ComponentProps = $props();
 
   const realtimeStore = getRealtimeStore();
-  const settingsStore = getSettingsStore();
+  const uiSettingsQuery = getUiSettings();
 
   // Tracker pills global enable setting (visibility is now per-tracker-definition)
   const trackerPillsEnabled = $derived(
-    settingsStore.features?.trackerPills?.enabled ?? true
+    uiSettingsQuery.current?.features?.trackerPills?.enabled ?? true
   );
 
   const glucose = displayedGlucose(realtimeStore);

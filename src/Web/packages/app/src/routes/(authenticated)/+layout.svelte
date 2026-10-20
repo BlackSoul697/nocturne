@@ -5,7 +5,6 @@
     refreshSummaryOnNewReading,
   } from "$lib/stores/current-glucose-status.svelte";
   import { getGlucoseTileVariant } from "$lib/utils/glucose-status";
-  import { createSettingsStore } from "$lib/stores/settings-store.svelte";
   import { createAuthStore } from "$lib/stores/auth-store.svelte";
   import { authInterceptorState } from "$lib/api/auth-interceptor";
   import { remoteErrorMessage } from "$lib/api/remote-error";
@@ -99,10 +98,6 @@
   $effect(() => {
     authInterceptorState.setGuestSession(data.isGuestSession || !data.isAuthenticated);
   });
-
-  // Create settings store in context for the entire app
-  // This makes feature settings available on all pages including the main dashboard.
-  createSettingsStore(!tenantless);
 
   const commandPalette = lazyComponent(
     () => import("$lib/components/command-palette/CommandPalette.svelte"),
