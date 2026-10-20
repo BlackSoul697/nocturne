@@ -158,6 +158,7 @@ builder.Services.AddDevOnlyEversenseMock(builder.Environment, builder.Configurat
 // controller's seed-extras endpoint (demo container, all environments).
 builder.Services.AddScoped<SampleDataSeeder>();
 
+builder.Services.AddSingleton<ReadAccessLogWriter>();
 builder.Services.AddScoped<ReadAccessAuditFilter>();
 builder.Services.AddControllers(options =>
 {

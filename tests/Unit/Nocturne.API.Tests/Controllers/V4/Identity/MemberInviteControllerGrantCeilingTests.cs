@@ -136,7 +136,7 @@ public sealed class MemberInviteControllerGrantCeilingTests : IDisposable
             new TenantRoleService(
                 _dbContext,
                 // Only SeedRolesForTenantAsync takes a context of its own, and nothing here seeds.
-                Mock.Of<IDbContextFactory<NocturneDbContext>>()),
+                Mock.Of<IDbContextFactory<NocturneDbContext>>().AsNocturneFactory()),
             Mock.Of<ITenantMemberService>(),
             tenantAccessor.Object,
             _dbContext)

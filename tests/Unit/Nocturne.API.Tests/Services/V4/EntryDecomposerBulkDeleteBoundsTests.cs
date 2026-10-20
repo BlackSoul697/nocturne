@@ -39,7 +39,7 @@ public class EntryDecomposerBulkDeleteBoundsTests : IDisposable
 
     private EntryDecomposer CreateDecomposer()
     {
-        var factory = new TestTenantDbContextFactory(_context);
+        var factory = new TestNocturneDbContextFactory(_context);
         var audit = Mock.Of<IAuditContext>();
         return new EntryDecomposer(
             _context,

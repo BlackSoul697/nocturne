@@ -40,7 +40,7 @@ public class DeviceStatusDecomposerOverrideSpanTests : IDisposable
 
         _decomposer = new DeviceStatusDecomposer(
             MicrosecondPrecision<IApsSnapshotRepository>.Wrap(new ApsSnapshotRepository(
-                new TestTenantDbContextFactory(_context), new SystemAuditContext(),
+                new TestNocturneDbContextFactory(_context), new SystemAuditContext(),
                 NullLogger<ApsSnapshotRepository>.Instance)),
             Mock.Of<IPumpSnapshotRepository>(),
             Mock.Of<IUploaderSnapshotRepository>(),

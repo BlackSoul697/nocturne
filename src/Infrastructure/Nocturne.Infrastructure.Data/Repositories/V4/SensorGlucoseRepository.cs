@@ -32,7 +32,7 @@ public class SensorGlucoseRepository : SyncUpsertRepositoryBase<SensorGlucose, S
     /// Initializes a new instance of the <see cref="SensorGlucoseRepository"/> class.
     /// </summary>
     public SensorGlucoseRepository(
-        ITenantDbContextFactory contextFactory,
+        INocturneDbContextFactory contextFactory,
         IDeduplicationService deduplicationService,
         IAuditContext auditContext,
         ILogger<SensorGlucoseRepository> logger,

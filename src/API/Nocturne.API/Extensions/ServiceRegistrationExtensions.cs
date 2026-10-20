@@ -657,6 +657,7 @@ public static class ServiceRegistrationExtensions
         services.AddScoped<IProfileWriteService, ProfileWriteService>();
         services.AddScoped<IProfileDeletionService, ProfileDeletionService>();
         services.AddScoped<IActiveProfileResolver, ActiveProfileResolver>();
+        services.AddScoped<ProfileVersionCache>();
         services.AddScoped<IBasalRateResolver, BasalRateResolver>();
         services.AddScoped<IBasalSegmentService, BasalSegmentService>();
         services.AddScoped<ISensitivityResolver, SensitivityResolver>();
