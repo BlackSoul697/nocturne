@@ -45,7 +45,7 @@ import type {
   TrackerUpdateEvent,
   WebSocketConnectionStatus,
 } from "$lib/websocket/types";
-import type { SensorGlucose, TrackerInstanceDto } from "$lib/api";
+import { TrackerRealtimeAction, type SensorGlucose, type TrackerInstanceDto } from "$lib/api";
 
 /** The realtime/backfill entry points, which the class keeps private. */
 interface StoreInternals {
@@ -961,7 +961,7 @@ describe("RealtimeStore tracker updates", () => {
       lastAckedAt: "2026-09-21T09:00:00Z",
       ackSnoozeMins: 30,
     });
-    emit(store, { action: "ack", instance: acked });
+    emit(store, { action: TrackerRealtimeAction.Ack, instance: acked });
 
     expect(store.trackerInstances).toEqual([acked, trackerInstance("sensor")]);
 
@@ -973,8 +973,8 @@ describe("RealtimeStore tracker updates", () => {
     store.trackerInstances = [trackerInstance("sensor")];
     vi.mocked(toast.info).mockClear();
 
-    emit(store, { action: "reopen", instance: trackerInstance("site") });
-    emit(store, { action: "reopen", instance: trackerInstance("site") });
+    emit(store, { action: TrackerRealtimeAction.Reopen, instance: trackerInstance("site") });
+    emit(store, { action: TrackerRealtimeAction.Reopen, instance: trackerInstance("site") });
 
     expect(store.trackerInstances).toEqual([
       trackerInstance("site"),
@@ -989,7 +989,7 @@ describe("RealtimeStore tracker updates", () => {
     const store = makeStore();
     store.trackerInstances = [trackerInstance("site")];
 
-    emit(store, { action: "ack", instance: trackerInstance("unknown") });
+    emit(store, { action: TrackerRealtimeAction.Ack, instance: trackerInstance("unknown") });
 
     expect(store.trackerInstances).toEqual([trackerInstance("site")]);
 
@@ -1004,7 +1004,7 @@ describe("RealtimeStore tracker updates", () => {
     ];
 
     emit(store, {
-      action: "complete",
+      action: TrackerRealtimeAction.Complete,
       instance: trackerInstance("site", {
         completedAt: "2026-09-21T10:00:00Z",
         isActive: false,

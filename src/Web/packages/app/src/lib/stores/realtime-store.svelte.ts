@@ -46,7 +46,7 @@ export interface DeviceStatus extends PillsDeviceStatus {
   _id?: string;
   uploader?: Record<string, unknown>;
 }
-import { NotificationUrgency } from "$lib/api";
+import { NotificationUrgency, TrackerRealtimeAction } from "$lib/api";
 import { reachedStep } from "$lib/components/trackers/schedule";
 import {
   mergeEntryRecords,
@@ -842,7 +842,7 @@ export class RealtimeStore {
     const { action, instance } = event;
 
     switch (action) {
-      case "create":
+      case TrackerRealtimeAction.Create:
         // Add new instance if not exists
         if (!this.trackerInstances.some((i) => i.id === instance.id)) {
           this.trackerInstances = [instance, ...this.trackerInstances];
@@ -850,14 +850,14 @@ export class RealtimeStore {
         }
         break;
 
-      case "reopen":
+      case TrackerRealtimeAction.Reopen:
         // A run resumed because the change that replaced it was deleted: no new start to announce.
         if (!this.trackerInstances.some((i) => i.id === instance.id)) {
           this.trackerInstances = [instance, ...this.trackerInstances];
         }
         break;
 
-      case "ack": {
+      case TrackerRealtimeAction.Ack: {
         const index = this.trackerInstances.findIndex((i) => i.id === instance.id);
         if (index !== -1) {
           this.trackerInstances = this.trackerInstances.with(index, instance);
@@ -865,11 +865,11 @@ export class RealtimeStore {
         break;
       }
 
-      case "complete":
-      case "delete":
+      case TrackerRealtimeAction.Complete:
+      case TrackerRealtimeAction.Delete:
         // Remove from active instances
         this.trackerInstances = this.trackerInstances.filter((i) => i.id !== instance.id);
-        if (action === "complete") {
+        if (action === TrackerRealtimeAction.Complete) {
           toast.success(`Tracker completed: ${instance.definitionName}`);
         }
         break;

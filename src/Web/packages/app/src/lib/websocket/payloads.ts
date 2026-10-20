@@ -1,4 +1,4 @@
-import type { InAppNotificationDto } from "$lib/api/generated/nocturne-api-client";
+import { TrackerRealtimeAction, type InAppNotificationDto } from "$lib/api/generated/nocturne-api-client";
 import { isOneOf, isRecord, nonEmptyString } from "$lib/utils/type-guards";
 import { isoNow } from "$lib/utils/now";
 import { toIsoString } from "$lib/utils/api-date";
@@ -115,19 +115,11 @@ export function parseNotification(data: unknown): InAppNotificationDto | null {
   return isRecord(data) && typeof data.id === "string" ? data : null;
 }
 
-const TRACKER_ACTIONS = [
-  "create",
-  "reopen",
-  "delete",
-  "complete",
-  "ack",
-] as const satisfies readonly TrackerUpdateEvent["action"][];
-
 /** A tracker event needs both a known action and an identifiable instance, since
  *  the store keys every action on `instance.id`. */
 export function parseTrackerUpdate(data: unknown): TrackerUpdateEvent | null {
   const fields = fieldsOf(data);
-  if (!isOneOf(TRACKER_ACTIONS, fields.action)) return null;
+  if (!isOneOf(Object.values(TrackerRealtimeAction), fields.action)) return null;
 
   const instance = fields.instance;
   if (!isRecord(instance) || nonEmptyString(instance.id) === undefined) return null;
