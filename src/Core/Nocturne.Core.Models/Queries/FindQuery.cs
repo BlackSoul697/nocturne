@@ -201,6 +201,83 @@ public sealed class FindQuery
     }
 
     /// <summary>
+    /// This method gives a query object with the search conditions.
+    /// The query object keeps the AND and OR groups and the query values.
+    /// The regex text does not change before the search.
+    /// </summary>
+    public Dictionary<string, object> ToQueryObject() {
+        return ToQueryObject(_root);
+    }
+
+    private static Dictionary<string, object> ToQueryObject(Group group) {
+        if (group.Children.Count == 0) {
+            return new Dictionary<string, object>();
+        }
+
+        var childQueries = new Dictionary<string, object>[group.Children.Count];
+
+        for (int i = 0; i < group.Children.Count; i++) {
+            object child = group.Children[i];
+
+            if (child is Group) {
+                childQueries[i] = ToQueryObject((Group)child);
+            } else {
+                childQueries[i] = ToQueryObject((Condition)child);
+            }
+        }
+
+        string groupOperator = group.IsAnd ? "$and" : "$or";
+        return new Dictionary<string, object> { [groupOperator] = childQueries };
+    }
+
+    private static Dictionary<string, object> ToQueryObject(Condition condition) {
+        string operatorName = condition.Op;
+
+        bool isSupportedOperator =
+            operatorName == "$eq" || operatorName == "$ne" ||
+            operatorName == "$gt" || operatorName == "$gte" ||
+            operatorName == "$lt" || operatorName == "$lte" ||
+            operatorName == "$in" || operatorName == "$nin" ||
+            operatorName == "$exists" || operatorName == "$regex";
+
+        if (!isSupportedOperator) {
+            // These filters must give no matches, also for documents without an _id.
+            return new Dictionary<string, object> {
+                ["_id"] = new Dictionary<string, object> { ["$in"] = Array.Empty<string>() }
+            };
+        }
+
+        var operators = new Dictionary<string, object> { [operatorName] = ToQueryOperand(condition) };
+
+        if (operatorName == "$regex" && condition.RegexOptions != null) {
+            operators["$options"] = condition.RegexOptions;
+        }
+
+        return new Dictionary<string, object> { [condition.Path] = operators };
+    }
+
+    private static object ToQueryOperand(Condition condition) {
+        object operand = condition.StringValue;
+
+        if (condition.JsonValue.HasValue) {
+            operand = condition.JsonValue.Value;
+        }
+
+        bool isListOperator = condition.Op == "$in" || condition.Op == "$nin";
+
+        if (isListOperator) {
+            bool isJsonArray = condition.JsonValue.HasValue &&
+                condition.JsonValue.Value.ValueKind == JsonValueKind.Array;
+
+            if (!isJsonArray) {
+                operand = condition.StringValue.Split('|', StringSplitOptions.RemoveEmptyEntries);
+            }
+        }
+
+        return operand;
+    }
+
+    /// <summary>
     /// Evaluates the query against a document's serialized wire shape.
     /// </summary>
     public bool Matches<T>(T document)
