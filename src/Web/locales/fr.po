@@ -21645,9 +21645,8 @@ msgstr ""
 msgid "Add a backup way to sign in"
 msgstr ""
 
-#: src/lib/components/layout/BackupSignInPrompt.svelte
-msgid "There is one way into this account. Add a second passkey, link a sign-in method, or save recovery codes — one-time codes you can type in if you lose your device."
-msgstr ""
+#~ msgid "There is one way into this account. Add a second passkey, link a sign-in method, or save recovery codes — one-time codes you can type in if you lose your device."
+#~ msgstr ""
 
 #: src/lib/components/layout/BackupSignInPrompt.svelte
 msgid "Account settings"
@@ -23851,17 +23850,17 @@ msgstr ""
 msgid "Glucose target range {0}"
 msgstr ""
 
-#. 0: bg(FALLBACK_GLUCOSE_THRESHOLDS.low)
+#. 0: bg(thresholds.low)
 #: src/lib/components/ambulatory-glucose-profile/AmbulatoryGlucoseProfile.svelte
 msgid "Low {0}"
 msgstr ""
 
-#. 0: bg(FALLBACK_GLUCOSE_THRESHOLDS.high)
+#. 0: bg(thresholds.high)
 #: src/lib/components/ambulatory-glucose-profile/AmbulatoryGlucoseProfile.svelte
 msgid "High {0}"
 msgstr ""
 
-#. 0: bgRange(FALLBACK_GLUCOSE_THRESHOLDS.low, FALLBACK_GLUCOSE_THRESHOLDS.high)
+#. 0: bgRange(thresholds.low, thresholds.high)
 #: src/lib/components/ambulatory-glucose-profile/AmbulatoryGlucoseProfile.svelte
 msgid "Target range {0}"
 msgstr ""
@@ -27029,4 +27028,8 @@ msgstr ""
 #. 0: text; 1: value; 2: border; 3: value
 #: ../cms/src/lib/components/edra/shadcn/components/toolbar/QuickColors.svelte
 msgid "{0} background-color: {1}50; border: {2} {3};"
+msgstr ""
+
+#: src/lib/components/layout/BackupSignInPrompt.svelte
+msgid "There is one way into this account. Add a second passkey, link a sign-in method, or save recovery codes, which are one-time codes you can type in if you lose your device."
 msgstr ""
