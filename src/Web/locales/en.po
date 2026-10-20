@@ -3010,10 +3010,8 @@ msgstr "{0} is syncing..."
 #~ msgid "Sync completed successfully"
 #~ msgstr "Sync completed successfully"
 
-#. 0: manualSyncResult.successfulConnectors; 1: manualSyncResult.totalConnectors; 2: elapsedSeconds
-#: src/lib/components/connectors/ManualSyncDialog.svelte
-msgid "{0} of {1} connectors synced in {2}s"
-msgstr "{0} of {1} connectors synced in {2}s"
+#~ msgid "{0} of {1} connectors synced in {2}s"
+#~ msgstr "{0} of {1} connectors synced in {2}s"
 
 #: src/lib/components/connectors/ManualSyncDialog.svelte
 msgid "Connector Results"
@@ -13107,7 +13105,6 @@ msgid "Failed to load services"
 msgstr "Failed to load services"
 
 #: src/routes/(authenticated)/alerts/+page.svelte
-#: src/routes/(authenticated)/settings/connectors/+page.svelte
 msgid "Unknown error"
 msgstr "Unknown error"
 
@@ -21580,7 +21577,6 @@ msgstr "The desktop app opens the CareLink sign-in in its own window and capture
 
 #: src/lib/components/connectors/ConnectorDetailsDialog.svelte
 #: src/routes/(authenticated)/settings/connectors/+page.svelte
-#: src/routes/(authenticated)/settings/connectors/+page.svelte
 msgid "We couldn't start the sync. Please try again."
 msgstr "We couldn't start the sync. Please try again."
 
@@ -21588,7 +21584,7 @@ msgstr "We couldn't start the sync. Please try again."
 msgid "We couldn't download the food data. Please try again."
 msgstr "We couldn't download the food data. Please try again."
 
-#. 0: manualSyncResult.failedConnectors
+#. 0: failedConnectors
 #: src/lib/components/connectors/ManualSyncDialog.svelte
 msgid "Sync finished with {0} failed"
 msgstr "Sync finished with {0} failed"
@@ -21601,9 +21597,8 @@ msgstr "Nothing to sync"
 msgid "No enabled connectors were found."
 msgstr "No enabled connectors were found."
 
-#: src/lib/components/connectors/ManualSyncDialog.svelte
-msgid "The sync could not be started."
-msgstr "The sync could not be started."
+#~ msgid "The sync could not be started."
+#~ msgstr "The sync could not be started."
 
 #: src/lib/components/connectors/DataSourceManageDialog.svelte
 msgid "This data source has no data left to delete."
@@ -27030,3 +27025,13 @@ msgstr "{0} background-color: {1}50; border: {2} {3};"
 #: src/lib/components/layout/BackupSignInPrompt.svelte
 msgid "There is one way into this account. Add a second passkey, link a sign-in method, or save recovery codes, which are one-time codes you can type in if you lose your device."
 msgstr "There is one way into this account. Add a second passkey, link a sign-in method, or save recovery codes, which are one-time codes you can type in if you lose your device."
+
+#. 0: successfulConnectors; 1: totalConnectors
+#: src/lib/components/connectors/ManualSyncDialog.svelte
+msgid "{0} of {1} connectors synced"
+msgstr "{0} of {1} connectors synced"
+
+#. 0: result.durationMs
+#: src/lib/components/connectors/ManualSyncDialog.svelte
+msgid "{0}ms"
+msgstr "{0}ms"

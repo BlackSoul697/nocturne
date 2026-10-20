@@ -3010,10 +3010,8 @@ msgstr ""
 #~ msgid "Sync completed successfully"
 #~ msgstr ""
 
-#. 0: manualSyncResult.successfulConnectors; 1: manualSyncResult.totalConnectors; 2: elapsedSeconds
-#: src/lib/components/connectors/ManualSyncDialog.svelte
-msgid "{0} of {1} connectors synced in {2}s"
-msgstr ""
+#~ msgid "{0} of {1} connectors synced in {2}s"
+#~ msgstr ""
 
 #: src/lib/components/connectors/ManualSyncDialog.svelte
 msgid "Connector Results"
@@ -13107,7 +13105,6 @@ msgid "Failed to load services"
 msgstr ""
 
 #: src/routes/(authenticated)/alerts/+page.svelte
-#: src/routes/(authenticated)/settings/connectors/+page.svelte
 msgid "Unknown error"
 msgstr ""
 
@@ -21580,7 +21577,6 @@ msgstr ""
 
 #: src/lib/components/connectors/ConnectorDetailsDialog.svelte
 #: src/routes/(authenticated)/settings/connectors/+page.svelte
-#: src/routes/(authenticated)/settings/connectors/+page.svelte
 msgid "We couldn't start the sync. Please try again."
 msgstr ""
 
@@ -21588,7 +21584,7 @@ msgstr ""
 msgid "We couldn't download the food data. Please try again."
 msgstr ""
 
-#. 0: manualSyncResult.failedConnectors
+#. 0: failedConnectors
 #: src/lib/components/connectors/ManualSyncDialog.svelte
 msgid "Sync finished with {0} failed"
 msgstr ""
@@ -21601,9 +21597,8 @@ msgstr ""
 msgid "No enabled connectors were found."
 msgstr ""
 
-#: src/lib/components/connectors/ManualSyncDialog.svelte
-msgid "The sync could not be started."
-msgstr ""
+#~ msgid "The sync could not be started."
+#~ msgstr ""
 
 #: src/lib/components/connectors/DataSourceManageDialog.svelte
 msgid "This data source has no data left to delete."
@@ -27029,4 +27024,14 @@ msgstr ""
 
 #: src/lib/components/layout/BackupSignInPrompt.svelte
 msgid "There is one way into this account. Add a second passkey, link a sign-in method, or save recovery codes, which are one-time codes you can type in if you lose your device."
+msgstr ""
+
+#. 0: successfulConnectors; 1: totalConnectors
+#: src/lib/components/connectors/ManualSyncDialog.svelte
+msgid "{0} of {1} connectors synced"
+msgstr ""
+
+#. 0: result.durationMs
+#: src/lib/components/connectors/ManualSyncDialog.svelte
+msgid "{0}ms"
 msgstr ""
