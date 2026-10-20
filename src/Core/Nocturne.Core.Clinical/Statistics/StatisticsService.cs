@@ -642,6 +642,29 @@ public class StatisticsService : IStatisticsService
     public const int ClinicalMinimumDays = 14;
 
     /// <summary>
+    /// The analysis config a caller who passed none gets: the target range
+    /// <paramref name="population"/> is graded against, so that its time in range is measured over
+    /// the same range its target is a percentage of. The hypoglycaemia and hyperglycaemia
+    /// boundaries outside that range, and the 70-140 tight range, are population-independent.
+    /// </summary>
+    /// <seealso cref="ClinicalTargets.ForPopulation"/>
+    private static ExtendedAnalysisConfig ConfigForPopulation(DiabetesPopulation population)
+    {
+        var targets = ClinicalTargets.ForPopulation(population);
+
+        return new ExtendedAnalysisConfig
+        {
+            Thresholds = new GlycemicThresholds
+            {
+                Low = targets.TargetLow,
+                TargetBottom = targets.TargetLow,
+                TargetTop = targets.TargetHigh,
+                High = targets.TargetHigh,
+            },
+        };
+    }
+
+    /// <summary>
     /// Calculate extended glucose analytics including GMI, GRI, and clinical assessment
     /// </summary>
     public ExtendedGlucoseAnalytics AnalyzeGlucoseDataExtended(
@@ -664,7 +687,7 @@ public class StatisticsService : IStatisticsService
             bolusesList,
             carbIntakesList,
             windowDays,
-            config,
+            config ?? ConfigForPopulation(population),
             timeZone: timeZone
         );
 
