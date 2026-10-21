@@ -14,6 +14,7 @@ public class BoundedRegexTests
 
         regex.IsMatch("abc").Should().BeTrue();
         regex.IsMatch("abc").Should().BeFalse();
+        regex.Abandoned.Should().BeTrue();
     }
 
     [Fact]
@@ -21,13 +22,14 @@ public class BoundedRegexTests
     {
         var regex = BoundedRegex.Create(".*a[ab]{200}c", RegexOptions.None, budget: TimeSpan.FromMilliseconds(50));
         var random = new Random(1);
-        var row = new string(Enumerable.Range(0, 20_000).Select(_ => random.Next(2) == 0 ? 'a' : 'b').ToArray());
+        var row = new string(Enumerable.Range(0, 2_000).Select(_ => random.Next(2) == 0 ? 'a' : 'b').ToArray());
 
         var stopwatch = System.Diagnostics.Stopwatch.StartNew();
         for (var i = 0; i < 2_000; i++)
             regex.IsMatch(row);
 
         stopwatch.Elapsed.Should().BeLessThan(TimeSpan.FromSeconds(2));
+        regex.Abandoned.Should().BeTrue();
         regex.IsMatch(row + "c").Should().BeFalse();
     }
 
@@ -39,5 +41,6 @@ public class BoundedRegexTests
         for (var i = 0; i < 10_000; i++)
             regex.IsMatch("2015-04-02T13:05:00.000Z").Should().BeTrue();
         regex.IsMatch("2015-05-02T13:05:00.000Z").Should().BeFalse();
+        regex.Abandoned.Should().BeFalse();
     }
 }

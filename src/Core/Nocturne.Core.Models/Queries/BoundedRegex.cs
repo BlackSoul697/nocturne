@@ -40,6 +40,12 @@ public sealed class BoundedRegex
     /// <summary><c>false</c> when the pattern did not compile, so every match is false.</summary>
     public bool IsCompiled => _regex is not null;
 
+    /// <summary>
+    /// <c>true</c> once a timeout or the spent budget has stopped matching, so a scan that read
+    /// through this instance may have under-matched.
+    /// </summary>
+    public bool Abandoned => _abandoned;
+
     public static BoundedRegex Create(string pattern, RegexOptions options = RegexOptions.None) =>
         Create(pattern, options, DefaultBudget);
 
@@ -76,7 +82,7 @@ public sealed class BoundedRegex
         }
         finally
         {
-            if (Interlocked.Add(ref _spentTicks, Stopwatch.GetTimestamp() - started) > _budgetTicks)
+            if (Interlocked.Add(ref _spentTicks, Stopwatch.GetTimestamp() - started) >= _budgetTicks)
                 _abandoned = true;
         }
     }

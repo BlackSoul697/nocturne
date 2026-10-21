@@ -221,6 +221,8 @@ public class FoodController : BaseV3Controller<Food>
 
             var regex = filter is { Operator: "re", Value: string pattern } ? BoundedRegex.Create(pattern) : null;
             foods = foods.Where(f => MatchesFilter(f, filter, regex)).ToList();
+            if (regex?.Abandoned == true)
+                _logger.LogWarning("A food $re filter ran out of its time budget; matches may be incomplete");
         }
 
         return foods;

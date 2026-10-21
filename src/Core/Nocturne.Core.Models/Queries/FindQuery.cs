@@ -135,6 +135,12 @@ public sealed class FindQuery
         || (cond.Op != "$exists" && TimeFields.Contains(cond.Path) && !TryConvertToInstant(cond, out _, out _)));
 
     /// <summary>
+    /// <c>true</c> when a <c>$regex</c> was abandoned mid-scan (see <see cref="BoundedRegex.Abandoned"/>),
+    /// so the rows matched so far may be fewer than the query asks for.
+    /// </summary>
+    public bool HasAbandonedRegex => EnumerateAll(_root).Any(cond => cond.Op == "$regex" && cond.Pattern.Abandoned);
+
+    /// <summary>
     /// The presence an <c>$exists</c> asks for, or <c>null</c> for an operand that is not a boolean.
     /// MongoDB reads such an operand by its truthiness and Nightscout passes a query-string one on
     /// as a string, so no reading of it here is safe to act on: it matches nothing.
