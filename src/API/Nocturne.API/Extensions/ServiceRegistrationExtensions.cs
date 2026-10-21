@@ -656,6 +656,8 @@ public static class ServiceRegistrationExtensions
         });
         services.AddScoped<IBatteryService, BatteryService>();
         services.AddScoped<IProfileWriteService, ProfileWriteService>();
+        services.AddScoped<IProfileActivationResolver, Services.ProfileActivations.ProfileActivationResolver>();
+        services.AddScoped<Services.ProfileActivations.ProfileActivationWriter>();
         services.AddScoped<IActiveProfileResolver, ActiveProfileResolver>();
         services.AddScoped<ProfileVersionCache>();
         services.AddScoped<IBasalRateResolver, BasalRateResolver>();
@@ -788,6 +790,7 @@ public static class ServiceRegistrationExtensions
         services.AddScoped<IBolusRepository, BolusRepository>();
         services.AddScoped<IBasalInjectionRepository, BasalInjectionRepository>();
         services.AddScoped<ITempBasalRepository, TempBasalRepository>();
+        services.AddScoped<IProfileActivationRepository, ProfileActivationRepository>();
         services.AddScoped<ICarbIntakeRepository, CarbIntakeRepository>();
         services.AddScoped<IBGCheckRepository, BGCheckRepository>();
         services.AddScoped<INoteRepository, NoteRepository>();
@@ -880,6 +883,9 @@ public static class ServiceRegistrationExtensions
         });
         services.AddSingleton<Nocturne.API.Hubs.TenantHubFilter>();
         services.AddSingleton<Nocturne.API.Hubs.HubAuthorizationFilter>();
+        services.TryAddSingleton(TimeProvider.System);
+        services.AddSingleton<Nocturne.API.Hubs.HubConnectionRevalidator>();
+        services.AddHostedService(sp => sp.GetRequiredService<Nocturne.API.Hubs.HubConnectionRevalidator>());
         services.AddScoped<ISignalRBroadcastService, SignalRBroadcastService>();
         services.AddScoped<ISyncProgressReporter, SignalRSyncProgressReporter>();
 
@@ -1008,6 +1014,7 @@ public static class ServiceRegistrationExtensions
         services.AddScoped<Nocturne.API.Services.Alerts.Providers.WebhookProvider>();
         services.AddScoped<Nocturne.API.Services.Alerts.Providers.ChatBotProvider>();
         services.AddScoped<Nocturne.API.Services.Alerts.Providers.HomeAssistantProvider>();
+        services.AddSingleton<Nocturne.API.Hubs.HomeAssistantConnections>();
         services.AddScoped<Nocturne.API.Services.Alerts.Providers.DeviceActionProvider>();
         services.AddHttpClient("ChatBot");
 
