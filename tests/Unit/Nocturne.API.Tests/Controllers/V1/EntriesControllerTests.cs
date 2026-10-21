@@ -42,6 +42,7 @@ public class EntriesControllerTests
             _mockEntryService.Object,
             _mockDocumentProcessingService.Object,
             _mockAlertEvaluator.Object,
+            TimeProvider.System,
             _mockLogger.Object
         );
 
