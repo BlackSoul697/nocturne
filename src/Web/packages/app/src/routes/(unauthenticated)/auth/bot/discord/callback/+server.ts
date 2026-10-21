@@ -1,6 +1,7 @@
 import type { RequestHandler } from "./$types";
 import { error, redirect } from "@sveltejs/kit";
 import { z } from "zod";
+import { platformHandle } from "@nocturne/bot";
 import { signDiscordLinkClaim, verifyOAuthLinkState } from "$lib/server/bot/oauth-state";
 import { getDiscordOAuthConfig } from "$lib/server/bot/platform-credentials";
 
@@ -77,7 +78,7 @@ export const GET: RequestHandler = async ({ url, fetch }) => {
 
 	const claim = signDiscordLinkClaim(payload, {
 		id: discordUser.id,
-		username: discordUser.username ?? discordUser.id,
+		username: platformHandle("discord", discordUser.username),
 	});
 	throw redirect(
 		302,

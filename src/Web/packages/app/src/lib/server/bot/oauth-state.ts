@@ -34,7 +34,8 @@ const LinkClaimSchema = z.object({
 	subjectId: z.string(),
 	nonce: z.string(),
 	discordUserId: z.string(),
-	discordUsername: z.string(),
+	/** The account's unique handle, or null when Discord reported none in that form. */
+	discordUsername: z.string().nullable(),
 	exp: z.number(),
 });
 
@@ -120,7 +121,7 @@ export function verifyOAuthLinkState(state: string): OAuthLinkState | null {
 
 export function signDiscordLinkClaim(
 	state: OAuthLinkState,
-	discordUser: { id: string; username: string },
+	discordUser: { id: string; username: string | null },
 ): string {
 	return sign({
 		purpose: "discord-link-claim",

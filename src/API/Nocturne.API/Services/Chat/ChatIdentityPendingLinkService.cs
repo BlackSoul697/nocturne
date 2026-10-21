@@ -1,4 +1,6 @@
+using System.Globalization;
 using System.Security.Cryptography;
+using System.Text;
 using Microsoft.EntityFrameworkCore;
 using Nocturne.Infrastructure.Data.Services;
 using Nocturne.Infrastructure.Data.Entities;
@@ -61,9 +63,7 @@ public sealed class ChatIdentityPendingLinkService(
             Token = token,
             Platform = platform,
             PlatformUserId = platformUserId,
-            PlatformUserName = platformUserName is { Length: > MaxPlatformUserNameLength }
-                ? platformUserName[..MaxPlatformUserNameLength]
-                : platformUserName,
+            PlatformUserName = SanitizePlatformUserName(platformUserName),
             TenantSlug = tenantSlug,
             Source = source,
             CreatedAt = now,
@@ -81,6 +81,28 @@ public sealed class ChatIdentityPendingLinkService(
             source);
 
         return token;
+    }
+
+    /// <summary>
+    /// Drops control, format (bidi overrides, zero-width) and unassigned characters so the name
+    /// renders as what it is, and cuts it to the column length on a whole character.
+    /// </summary>
+    internal static string? SanitizePlatformUserName(string? name)
+    {
+        if (name is null) return null;
+
+        var kept = new StringBuilder();
+        foreach (var rune in name.EnumerateRunes())
+        {
+            if (Rune.GetUnicodeCategory(rune) is UnicodeCategory.Control or UnicodeCategory.Format
+                or UnicodeCategory.PrivateUse or UnicodeCategory.OtherNotAssigned)
+                continue;
+            if (kept.Length + rune.Utf16SequenceLength > MaxPlatformUserNameLength) break;
+            kept.Append(rune.ToString());
+        }
+
+        var sanitized = kept.ToString().Trim();
+        return sanitized.Length == 0 ? null : sanitized;
     }
 
     /// <summary>

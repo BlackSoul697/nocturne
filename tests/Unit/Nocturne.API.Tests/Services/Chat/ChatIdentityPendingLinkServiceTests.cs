@@ -36,6 +36,34 @@ public class ChatIdentityPendingLinkServiceTests : IDisposable
     // ---- CreateAsync ----
 
     [Fact]
+    public async Task CreateAsync_stores_the_chat_account_name_without_control_or_bidi_characters()
+    {
+        var token = await _service.CreateAsync(
+            Platform, UserA, "ali‮ce​\u0007", null, "connect-slash", default);
+
+        await using var db = await _factory.CreateDbContextAsync();
+        var row = await db.ChatIdentityPendingLinks.SingleAsync(p => p.Token == token);
+        row.PlatformUserName.Should().Be("alice");
+    }
+
+    [Theory]
+    [InlineData("‮​")]
+    [InlineData("   ")]
+    public void A_name_with_nothing_printable_left_is_stored_as_none(string name)
+    {
+        ChatIdentityPendingLinkService.SanitizePlatformUserName(name).Should().BeNull();
+    }
+
+    [Fact]
+    public void A_long_name_is_cut_on_a_whole_character()
+    {
+        ChatIdentityPendingLinkService.SanitizePlatformUserName(new string('a', 255) + "\U0001F600")
+            .Should().Be(new string('a', 255));
+        ChatIdentityPendingLinkService.SanitizePlatformUserName(new string('a', 254) + "\U0001F600")
+            .Should().EndWith("\U0001F600").And.HaveLength(256);
+    }
+
+    [Fact]
     public async Task CreateAsync_returns_64_char_hex_token()
     {
         var token = await _service.CreateAsync(Platform, UserA, null, null, "connect-slash", default);

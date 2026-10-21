@@ -72,7 +72,11 @@
 	{:else if pending}
 		<h1 class="text-2xl font-bold">Link Discord account</h1>
 		<p class="text-muted-foreground max-w-md">
-			Link the Discord account <strong>@{pending.discordUsername}</strong> to your Nocturne account?
+			{#if pending.discordUsername}
+				Link the Discord account <strong>@{pending.discordUsername}</strong> to your Nocturne account?
+			{:else}
+				Link the Discord account you just signed in with to your Nocturne account?
+			{/if}
 			It will be able to read your glucose and acknowledge your alerts.
 		</p>
 		{#if confirmError}
