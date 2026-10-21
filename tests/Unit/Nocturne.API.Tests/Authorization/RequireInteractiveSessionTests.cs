@@ -7,7 +7,6 @@ using Microsoft.AspNetCore.Mvc.Filters;
 using Microsoft.AspNetCore.Routing;
 using Nocturne.API.Authorization;
 using Nocturne.API.Controllers.Authentication;
-using Nocturne.API.Controllers.V4.Connectors;
 using Nocturne.API.Controllers.V4.Identity;
 using Nocturne.Core.Models.Authorization;
 using Xunit;
@@ -49,10 +48,11 @@ public class RequireInteractiveSessionTests
         { typeof(OidcController), nameof(OidcController.LinkCallback) },
         { typeof(OidcController), nameof(OidcController.UnlinkIdentity) },
 
-        { typeof(ConfigurationController), nameof(ConfigurationController.SaveSecrets) },
         { typeof(GuestLinkController), nameof(GuestLinkController.CreateGuestLink) },
         { typeof(ShareLinkController), nameof(ShareLinkController.RevealShareLink) },
         { typeof(ShareLinkController), nameof(ShareLinkController.RotateShareLink) },
+        { typeof(ShareLinkController), nameof(ShareLinkController.SetShareLinkScopes) },
+        { typeof(ShareLinkController), nameof(ShareLinkController.SetShareLinkFullHistory) },
         { typeof(MemberInviteController), nameof(MemberInviteController.CreateInvite) },
     };
 

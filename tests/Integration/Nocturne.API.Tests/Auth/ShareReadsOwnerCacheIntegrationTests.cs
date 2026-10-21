@@ -123,9 +123,9 @@ public class ShareReadsOwnerCacheIntegrationTests(ApiIntegrationTestFixture fixt
             Fixture, await AuthTestHelpers.IssueSessionTokenAsync(Fixture, Fixture.OwnerSubjectId));
         var link = await (await owner.PostAsync("/api/v4/share/rotate", null))
             .EnsureSuccessStatusCode().Content.ReadFromJsonAsync<ShareLinkDto>();
-        (await AuthenticatedClient.PutAsJsonAsync("/api/v4/share/scopes", new { scopes }))
+        (await owner.PutAsJsonAsync("/api/v4/share/scopes", new { scopes }))
             .EnsureSuccessStatusCode();
-        (await AuthenticatedClient.PutAsJsonAsync("/api/v4/share/full-history", new { fullHistory = true }))
+        (await owner.PutAsJsonAsync("/api/v4/share/full-history", new { fullHistory = true }))
             .EnsureSuccessStatusCode();
 
         var client = Fixture.CreateApexClient();

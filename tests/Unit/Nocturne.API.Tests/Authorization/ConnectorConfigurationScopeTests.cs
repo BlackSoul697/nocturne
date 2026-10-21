@@ -172,24 +172,17 @@ public class ConnectorConfigurationScopeTests
     [Theory]
     [InlineData(AuthType.ApiKey)]
     [InlineData(AuthType.InstanceKey)]
-    public void WildcardGrant_KeepsTheWholeConnectorSurfaceButSecrets(AuthType authType)
+    [InlineData(AuthType.PlatformAccess)]
+    public void WildcardGrant_KeepsTheWholeConnectorSurface(AuthType authType)
     {
-        // A legacy api-secret and an instance-key service credential both normalise to "*". Saving
-        // secrets can adopt a working credential, which is the account holder's own decision
-        // (RequireInteractiveSessionAttribute).
+        // A legacy api-secret and an instance-key service credential both normalise to "*", and the
+        // provisioning paths that configure a connector for a tenant authenticate that way.
         var wildcard = new HashSet<string> { Scope.FullAccess };
 
         foreach (var (controller, action) in GatedActions())
         {
-            var result = Evaluate(controller, action, authenticated: true, wildcard, authType);
-            if (action.Name == nameof(ConfigurationController.SaveSecrets))
-            {
-                result.Should().BeOfType<ForbidResult>();
-            }
-            else
-            {
-                result.Should().BeNull($"a full-access grant must keep {controller.Name}.{action.Name}");
-            }
+            Evaluate(controller, action, authenticated: true, wildcard, authType)
+                .Should().BeNull($"a full-access grant must keep {controller.Name}.{action.Name}");
         }
     }
 

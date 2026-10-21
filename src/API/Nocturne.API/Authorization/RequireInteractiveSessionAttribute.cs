@@ -25,10 +25,17 @@ public sealed class RequireInteractiveSessionAttribute : Attribute, IAuthorizati
 {
     public void OnAuthorization(AuthorizationFilterContext context)
     {
-        if (context.HttpContext.GetAuthContext() is { IsAuthenticated: true } auth
-            && !MemberScopeResolver.UnscopedCredentialTypes.Contains(auth.AuthType))
+        if (Refuses(context.HttpContext))
         {
             context.Result = new ForbidResult();
         }
     }
+
+    /// <summary>
+    /// Whether this filter refuses the request's caller, for an action that only sometimes mints a
+    /// credential and so checks in its body instead.
+    /// </summary>
+    public static bool Refuses(HttpContext httpContext) =>
+        httpContext.GetAuthContext() is { IsAuthenticated: true } auth
+        && !MemberScopeResolver.UnscopedCredentialTypes.Contains(auth.AuthType);
 }

@@ -5,6 +5,7 @@ using Microsoft.AspNetCore.RateLimiting;
 using Nocturne.API.Attributes;
 using Nocturne.API.Authorization;
 using Nocturne.API.Extensions;
+using Nocturne.API.Services.Connectors;
 using Nocturne.Connectors.Core.Utilities;
 using OpenApi.Remote.Attributes;
 using Nocturne.Connectors.Core.Interfaces;
@@ -353,16 +354,24 @@ public class ConfigurationController : ControllerBase
     /// <param name="secrets">Dictionary of secret property names to plaintext values</param>
     /// <param name="ct">Cancellation token</param>
     [HttpPut("{connectorName}/secrets")]
-    [RequireInteractiveSession]
     [RemoteCommand(Invalidates = ["GetConfiguration", "GetAllConnectorStatus"])]
     [RequireScope(Scope.TenantSettings)]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
     public async Task<IActionResult> SaveSecrets(
         string connectorName,
         [FromBody] Dictionary<string, string> secrets,
         CancellationToken ct)
     {
+        // Saving a Nightscout API secret adopts it as a working credential (see
+        // RequireInteractiveSessionAttribute); other connector credentials hand out nothing.
+        if (ConnectorConfigurationService.AdoptedSecret(connectorName, secrets) is not null
+            && RequireInteractiveSessionAttribute.Refuses(HttpContext))
+        {
+            return Forbid();
+        }
+
         var modifiedBy = User.Identity?.Name ?? "api";
         _logger.LogInformation("Saving secrets for connector {ConnectorName} by {ModifiedBy}",
             connectorName, modifiedBy);

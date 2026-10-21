@@ -268,6 +268,22 @@ public class ConnectorConfigurationService : IConnectorConfigurationService
     }
 
     /// <summary>
+    /// The Nightscout API secret a save would adopt as a working api-secret credential, or null
+    /// when it adopts none. The key is the <c>ApiSecret</c> connector property in either casing.
+    /// </summary>
+    public static string? AdoptedSecret(string connectorName, IReadOnlyDictionary<string, string> secrets)
+    {
+        if (!connectorName.Equals("nightscout", StringComparison.OrdinalIgnoreCase))
+            return null;
+
+        if (!secrets.TryGetValue("ApiSecret", out var apiSecret)
+            && !secrets.TryGetValue("apiSecret", out apiSecret))
+            return null;
+
+        return string.IsNullOrWhiteSpace(apiSecret) ? null : apiSecret;
+    }
+
+    /// <summary>
     /// When a Nightscout connector's API secret is saved, creates a DirectGrant with the
     /// SHA-1 hash of the secret so that legacy uploaders authenticated via the old
     /// <c>api-secret</c> header continue to work without reconfiguration.
@@ -278,16 +294,7 @@ public class ConnectorConfigurationService : IConnectorConfigurationService
         Dictionary<string, string> secrets,
         CancellationToken ct)
     {
-        // Only applies to the Nightscout connector
-        if (!connectorName.Equals("nightscout", StringComparison.OrdinalIgnoreCase))
-            return;
-
-        // The secret key is "ApiSecret" (ConnectorPropertyKey enum name)
-        if (!secrets.TryGetValue("ApiSecret", out var apiSecret)
-            && !secrets.TryGetValue("apiSecret", out apiSecret))
-            return;
-
-        if (string.IsNullOrWhiteSpace(apiSecret))
+        if (AdoptedSecret(connectorName, secrets) is not { } apiSecret)
             return;
 
         // Adopting a credential is a person's decision, made by saving it from the connector page;
