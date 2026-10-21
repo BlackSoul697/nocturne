@@ -3,8 +3,8 @@ import { errorStatus } from "$lib/forms/submit-error";
 import {
 	DISCORD_LINK_COOKIE,
 	signDiscordLinkClaim,
-	signOAuthLinkState,
-	verifyOAuthLinkState,
+	signDiscordLinkState,
+	verifyDiscordLinkState,
 } from "$lib/server/bot/oauth-state";
 
 let event: Record<string, unknown>;
@@ -44,8 +44,8 @@ function browser(cookie: string | undefined, subjectId = "member-a") {
 }
 
 function startFlow(subjectId = "member-a") {
-	const { state, nonce } = signOAuthLinkState("sleepy", subjectId);
-	return { nonce, claim: signDiscordLinkClaim(verifyOAuthLinkState(state)!, discord_user) };
+	const { state, nonce } = signDiscordLinkState("sleepy", subjectId);
+	return { nonce, claim: signDiscordLinkClaim(verifyDiscordLinkState(state)!, discord_user) };
 }
 
 async function rejectionStatus(call: () => Promise<unknown>): Promise<number | undefined> {

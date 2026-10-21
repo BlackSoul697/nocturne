@@ -10,7 +10,7 @@ import { error } from "@sveltejs/kit";
 import {
   DISCORD_LINK_COOKIE,
   DISCORD_LINK_LIFETIME_MS,
-  signOAuthLinkState,
+  signDiscordLinkState,
 } from "$lib/server/bot/oauth-state";
 import { getDiscordOAuthConfig } from "$lib/server/bot/platform-credentials";
 import { extractTenantSlug } from "$lib/server/request-host";
@@ -34,7 +34,7 @@ export const getDiscordConfig = query(async () => {
   };
 });
 
-/** Starts the Discord OAuth2 link flow for the signed-in member; see {@link signOAuthLinkState}. */
+/** Starts the Discord OAuth2 link flow for the signed-in member; see {@link signDiscordLinkState}. */
 export const initiateDiscordLink = command(async () => {
   const { url, fetch, locals, cookies } = getRequestEvent();
   const subjectId = locals.isAuthenticated ? locals.user?.subjectId : undefined;
@@ -51,7 +51,7 @@ export const initiateDiscordLink = command(async () => {
     return { error: "Could not determine tenant slug from current host." };
   }
 
-  const { state, nonce } = signOAuthLinkState(slug, subjectId);
+  const { state, nonce } = signDiscordLinkState(slug, subjectId);
   cookies.set(DISCORD_LINK_COOKIE, nonce, {
     path: "/",
     httpOnly: true,

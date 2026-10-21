@@ -39,7 +39,7 @@ const LinkClaimSchema = z.object({
 	exp: z.number(),
 });
 
-export type OAuthLinkState = z.infer<typeof LinkStateSchema>;
+export type DiscordLinkState = z.infer<typeof LinkStateSchema>;
 export type DiscordLinkClaim = z.infer<typeof LinkClaimSchema>;
 
 /** Who is finalizing, and from which browser and tenant. */
@@ -100,7 +100,7 @@ function verify<T extends { exp: number }>(token: string, schema: z.ZodType<T>):
 }
 
 /** Signs the state for a member starting the flow; `nonce` goes into {@link DISCORD_LINK_COOKIE}. */
-export function signOAuthLinkState(
+export function signDiscordLinkState(
 	slug: string,
 	subjectId: string,
 ): { state: string; nonce: string } {
@@ -111,16 +111,16 @@ export function signOAuthLinkState(
 		subjectId,
 		nonce,
 		exp: Date.now() + DISCORD_LINK_LIFETIME_MS,
-	} satisfies OAuthLinkState);
+	} satisfies DiscordLinkState);
 	return { state, nonce };
 }
 
-export function verifyOAuthLinkState(state: string): OAuthLinkState | null {
+export function verifyDiscordLinkState(state: string): DiscordLinkState | null {
 	return verify(state, LinkStateSchema);
 }
 
 export function signDiscordLinkClaim(
-	state: OAuthLinkState,
+	state: DiscordLinkState,
 	discordUser: { id: string; username: string | null },
 ): string {
 	return sign({

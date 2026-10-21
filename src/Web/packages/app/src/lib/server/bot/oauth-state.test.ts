@@ -2,9 +2,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
 	DISCORD_LINK_LIFETIME_MS,
 	signDiscordLinkClaim,
-	signOAuthLinkState,
+	signDiscordLinkState,
 	verifyDiscordLinkClaim,
-	verifyOAuthLinkState,
+	verifyDiscordLinkState,
 } from "./oauth-state";
 
 const discord_user = { id: "123456789012345678", username: "sleepy" };
@@ -19,8 +19,8 @@ afterEach(() => {
 });
 
 function startedBy(subjectId: string, slug = "sleepy") {
-	const { state, nonce } = signOAuthLinkState(slug, subjectId);
-	const claim = signDiscordLinkClaim(verifyOAuthLinkState(state)!, discord_user);
+	const { state, nonce } = signDiscordLinkState(slug, subjectId);
+	const claim = signDiscordLinkClaim(verifyDiscordLinkState(state)!, discord_user);
 	return { state, nonce, claim };
 }
 

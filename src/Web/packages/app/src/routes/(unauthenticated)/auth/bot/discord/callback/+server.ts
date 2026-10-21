@@ -2,7 +2,7 @@ import type { RequestHandler } from "./$types";
 import { error, redirect } from "@sveltejs/kit";
 import { z } from "zod";
 import { platformHandle } from "@nocturne/bot";
-import { signDiscordLinkClaim, verifyOAuthLinkState } from "$lib/server/bot/oauth-state";
+import { signDiscordLinkClaim, verifyDiscordLinkState } from "$lib/server/bot/oauth-state";
 import { getDiscordOAuthConfig } from "$lib/server/bot/platform-credentials";
 
 const DiscordTokenSchema = z.object({ access_token: z.string().optional() });
@@ -23,7 +23,7 @@ export const GET: RequestHandler = async ({ url, fetch }) => {
 		throw error(400, "Missing code or state parameter.");
 	}
 
-	const payload = verifyOAuthLinkState(state);
+	const payload = verifyDiscordLinkState(state);
 	if (!payload) {
 		throw error(400, "Invalid or expired state.");
 	}

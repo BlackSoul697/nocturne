@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { errorStatus } from "$lib/forms/submit-error";
-import { DISCORD_LINK_COOKIE, verifyOAuthLinkState } from "$lib/server/bot/oauth-state";
+import { DISCORD_LINK_COOKIE, verifyDiscordLinkState } from "$lib/server/bot/oauth-state";
 
 let event: Record<string, unknown>;
 
@@ -54,7 +54,7 @@ describe("initiateDiscordLink", () => {
 
 		const result = await initiateDiscordLink();
 		const state = new URL((result as { redirectUrl: string }).redirectUrl).searchParams.get("state")!;
-		const payload = verifyOAuthLinkState(state);
+		const payload = verifyDiscordLinkState(state);
 
 		expect(payload).toMatchObject({ slug: "sleepy", subjectId: "member-a" });
 		expect(set_cookie).toHaveBeenCalledExactlyOnceWith(
