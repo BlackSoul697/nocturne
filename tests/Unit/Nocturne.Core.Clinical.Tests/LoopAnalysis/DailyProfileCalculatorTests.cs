@@ -1,0 +1,333 @@
+using Nocturne.Core.Clinical.LoopAnalysis;
+using Nocturne.Core.Clinical.Treatments;
+using Nocturne.Core.Models.LoopAnalysis;
+using Nocturne.Core.Models.V4;
+
+namespace Nocturne.Core.Clinical.Tests.LoopAnalysis;
+
+public class DailyProfileCalculatorTests
+{
+    private static readonly TimeZoneInfo Sydney = TimeZoneInfo.FindSystemTimeZoneById("Australia/Sydney");
+    private static readonly TimeZoneInfo Darwin = TimeZoneInfo.FindSystemTimeZoneById("Australia/Darwin");
+    private const long Minute = 60_000;
+    private const long Hour = 60 * Minute;
+
+    private static long Utc(int y, int mo, int d, int h, int mi = 0) =>
+        new DateTimeOffset(y, mo, d, h, mi, 0, TimeSpan.Zero).ToUnixTimeMilliseconds();
+
+    private static long Local(TimeZoneInfo tz, int y, int mo, int d, int h, int mi = 0) =>
+        new DateTimeOffset(new DateTime(y, mo, d, h, mi, 0), tz.GetUtcOffset(new DateTime(y, mo, d, h, mi, 0)))
+            .ToUnixTimeMilliseconds();
+
+    private static int SlotAt(int hour, int minute) => (hour * 60 + minute) / 5;
+
+    private static DailyProfileRange Calculate(
+        TimeZoneInfo tz,
+        long from,
+        long to,
+        IEnumerable<DeliveredBasalSegment>? delivered = null,
+        IEnumerable<RateSegment>? scheduled = null,
+        IEnumerable<InsulinDose>? doses = null,
+        IEnumerable<GlucoseSample>? glucose = null,
+        IEnumerable<CarbEvent>? carbs = null,
+        IEnumerable<IobCobTick>? iobCob = null,
+        LoopAnalysisFilter? filter = null,
+        LoopAnalysisMaskSources? sources = null)
+    {
+        var inputs = new DailyProfileInputs
+        {
+            Zone = tz,
+            Insulin = new NetInsulinAboveSchedule(delivered ?? [], scheduled ?? [], doses ?? []),
+            Glucose = [.. glucose ?? []],
+            Carbs = [.. carbs ?? []],
+            IobCob = [.. iobCob ?? []],
+        };
+        var mask = LoopAnalysisMask.Build(filter ?? new LoopAnalysisFilter(), from, to, tz, sources ?? new LoopAnalysisMaskSources());
+        return DailyProfileCalculator.Calculate(inputs, mask, from, to);
+    }
+
+    private static IEnumerable<GlucoseSample> EveryFiveMinutes(long from, long to, double mgdl)
+    {
+        for (var t = from; t < to; t += 5 * Minute)
+            yield return new GlucoseSample(t, mgdl);
+    }
+
+    [Fact]
+    public void FallBackDay_RepeatedSlotsAreDurationNormalised()
+    {
+        // 2024-04-07 in Sydney is 25 hours long: 03:00 AEDT falls back to 02:00 AEST.
+        var from = Utc(2024, 4, 6, 13);
+        var to = Utc(2024, 4, 7, 14);
+        var firstPass = Utc(2024, 4, 6, 15);
+        var secondPass = Utc(2024, 4, 6, 16);
+
+        var result = Calculate(Sydney, from, to,
+            delivered: [new(from, to, 2.0, BasalDeliveryOrigin.Algorithm)],
+            scheduled: [new(from, to, 1.0)],
+            doses: [new(firstPass + Minute, 1, false), new(secondPass + Minute, 1, false)],
+            glucose: EveryFiveMinutes(from, to, 120));
+
+        var repeated = result.Slots[SlotAt(2, 0)];
+        repeated.NetLoopCorrection!.Mean.Should().Be(1.0);
+        repeated.NetLoopCorrection.Rate.N.Should().Be(1);
+        repeated.DeliveredBasal!.P50.Should().Be(2.0);
+        repeated.Glucose!.N.Should().Be(2, "both passes through 02:00-02:05 are pooled");
+        repeated.ManualBoluses!.EventsPerDay.Should().Be(1.0, "two boluses over ten minutes is one per five-minute slot");
+        repeated.ManualBoluses.MeanPerDay.Should().Be(1.0);
+
+        result.Slots[SlotAt(1, 55)].Glucose!.N.Should().Be(1);
+
+        var day = result.Days.Should().ContainSingle().Which;
+        day.Date.Should().Be("2024-04-07");
+        day.NetLoopCorrection.Should().Be(25.0, "the day is 25 hours of +1 U/h");
+        result.Summary.NetLoopCorrectionPerDay.Should().Be(25.0);
+        result.Summary.DeliveredToScheduledRatio.Should().Be(2.0);
+    }
+
+    [Fact]
+    public void SpringForwardDay_SkippedSlotsContributeNothing()
+    {
+        // 2024-10-06 in Sydney is 23 hours long: 02:00 AEST springs to 03:00 AEDT.
+        var from = Utc(2024, 10, 5, 14);
+        var to = Utc(2024, 10, 6, 13);
+
+        var result = Calculate(Sydney, from, to,
+            delivered: [new(from, to, 1.5, BasalDeliveryOrigin.Algorithm)],
+            scheduled: [new(from, to, 1.0)],
+            glucose: EveryFiveMinutes(from, to, 110));
+
+        for (var slot = SlotAt(2, 0); slot < SlotAt(3, 0); slot++)
+        {
+            result.Slots[slot].DeliveredBasal.Should().BeNull();
+            result.Slots[slot].NetLoopCorrection.Should().BeNull();
+            result.Slots[slot].Glucose.Should().BeNull();
+        }
+        result.Slots[SlotAt(1, 55)].DeliveredBasal!.N.Should().Be(1);
+        result.Slots[SlotAt(3, 0)].DeliveredBasal!.N.Should().Be(1);
+
+        var day = result.Days.Should().ContainSingle().Which;
+        day.NetLoopCorrection.Should().Be(11.5, "the day is 23 hours of +0.5 U/h");
+        Bit(day.Coverage.DeliveredBasal!, SlotAt(2, 30)).Should().BeFalse();
+        Bit(day.Coverage.DeliveredBasal!, SlotAt(3, 0)).Should().BeTrue();
+    }
+
+    [Fact]
+    public void HalfHourZone_SlotsFollowTheLocalClock()
+    {
+        // Darwin is UTC+9:30, so 00:00Z is 09:30 local.
+        var from = Local(Darwin, 2024, 6, 3, 0);
+        var to = Local(Darwin, 2024, 6, 4, 0);
+
+        var result = Calculate(Darwin, from, to,
+            delivered: [new(Utc(2024, 6, 3, 0), Utc(2024, 6, 3, 0, 30), 2.0, BasalDeliveryOrigin.Algorithm)],
+            scheduled: [new(from, to, 1.0)]);
+
+        result.Slots[SlotAt(9, 25)].DeliveredBasal.Should().BeNull();
+        for (var slot = SlotAt(9, 30); slot < SlotAt(10, 0); slot++)
+            result.Slots[slot].DeliveredBasal!.P50.Should().Be(2.0);
+        result.Slots[SlotAt(10, 0)].DeliveredBasal.Should().BeNull();
+        result.Slots[SlotAt(9, 30)].ScheduledBasal!.P50.Should().Be(1.0);
+    }
+
+    [Fact]
+    public void ReadingOnASlotBoundary_BelongsToTheSlotItStarts()
+    {
+        var from = Local(Darwin, 2024, 6, 3, 0);
+        var to = Local(Darwin, 2024, 6, 4, 0);
+
+        var result = Calculate(Darwin, from, to,
+            glucose: [new(Local(Darwin, 2024, 6, 3, 10, 5), 150)]);
+
+        result.Slots[SlotAt(10, 0)].Glucose.Should().BeNull();
+        result.Slots[SlotAt(10, 5)].Glucose!.P50.Should().Be(150);
+        result.Slots[SlotAt(10, 5)].Glucose!.N.Should().Be(1);
+    }
+
+    [Fact]
+    public void AllZeroSlot_IsAZeroNotAGap()
+    {
+        var from = Local(Darwin, 2024, 6, 3, 0);
+        var to = Local(Darwin, 2024, 6, 8, 0);
+        var suspends = Enumerable.Range(0, 5).Select(d =>
+            new DeliveredBasalSegment(from + d * 24 * Hour + 10 * Hour, from + d * 24 * Hour + 11 * Hour, 0, BasalDeliveryOrigin.Suspended));
+
+        var result = Calculate(Darwin, from, to, delivered: suspends, scheduled: [new(from, to, 1.0)]);
+
+        var slot = result.Slots[SlotAt(10, 30)];
+        slot.DeliveredBasal!.P50.Should().Be(0);
+        slot.DeliveredBasal.Mean.Should().Be(0);
+        slot.DeliveredBasal.N.Should().Be(5);
+        slot.DeliveredBasal.Sparse.Should().BeFalse();
+        slot.Suspend!.P50.Should().Be(-1.0);
+        slot.NetLoopCorrection!.Mean.Should().Be(0, "a suspend is not the algorithm's correction");
+    }
+
+    [Fact]
+    public void Gap_IsAbsentNotZero()
+    {
+        var from = Local(Darwin, 2024, 6, 3, 0);
+        var to = Local(Darwin, 2024, 6, 4, 0);
+
+        var result = Calculate(Darwin, from, to,
+            delivered: [new(from, from + 10 * Hour, 1.0, BasalDeliveryOrigin.Inferred)],
+            scheduled: [new(from, to, 1.0)],
+            glucose: EveryFiveMinutes(from, from + 10 * Hour, 100));
+
+        var gap = result.Slots[SlotAt(12, 0)];
+        gap.DeliveredBasal.Should().BeNull();
+        gap.NetLoopCorrection.Should().BeNull();
+        gap.Glucose.Should().BeNull();
+        gap.ScheduledBasal!.P50.Should().Be(1.0, "the schedule is known through the gap");
+
+        result.Slots[SlotAt(9, 55)].NetLoopCorrection!.Mean.Should().Be(0);
+        result.HourlyNetLoopCorrection[12].Mean.Should().BeNull();
+        result.HourlyNetLoopCorrection[12].N.Should().Be(0);
+    }
+
+    [Fact]
+    public void AutomaticBoluses_CountTowardNetLoopCorrectionAndNotManualBoluses()
+    {
+        var from = Local(Darwin, 2024, 6, 3, 0);
+        var to = Local(Darwin, 2024, 6, 4, 0);
+        var at = Local(Darwin, 2024, 6, 3, 10, 2);
+
+        var result = Calculate(Darwin, from, to,
+            delivered: [new(from, to, 1.0, BasalDeliveryOrigin.Algorithm)],
+            scheduled: [new(from, to, 1.0)],
+            doses: [new(at, 0.5, true)]);
+
+        var slot = result.Slots[SlotAt(10, 0)];
+        slot.NetLoopCorrection!.AutomaticBolusMean.Should().Be(6.0, "0.5 U over five minutes is 6 U/h");
+        slot.NetLoopCorrection.Mean.Should().Be(6.0);
+        slot.NetLoopCorrection.Rate.P50.Should().Be(0, "the percentiles are on the temp delta alone");
+        slot.ManualBoluses!.MeanPerDay.Should().Be(0);
+        result.HourlyNetLoopCorrection[10].Mean.Should().Be(0.5, "0.5 U in the hour");
+        result.Days.Single().NetLoopCorrection.Should().Be(0.5);
+    }
+
+    [Fact]
+    public void ManualTempAndSuspend_StayOutOfNetLoopCorrection()
+    {
+        var from = Local(Darwin, 2024, 6, 3, 0);
+        var to = Local(Darwin, 2024, 6, 4, 0);
+        var ten = Local(Darwin, 2024, 6, 3, 10);
+
+        var result = Calculate(Darwin, from, to,
+            delivered:
+            [
+                new(ten, ten + 30 * Minute, 3.0, BasalDeliveryOrigin.Manual),
+                new(ten + 30 * Minute, ten + Hour, 0, BasalDeliveryOrigin.Suspended),
+            ],
+            scheduled: [new(from, to, 1.0)]);
+
+        result.Slots[SlotAt(10, 0)].NetLoopCorrection!.Mean.Should().Be(0);
+        result.Slots[SlotAt(10, 0)].ManualTemp!.P50.Should().Be(2.0);
+        result.Slots[SlotAt(10, 30)].NetLoopCorrection!.Mean.Should().Be(0);
+        result.Slots[SlotAt(10, 30)].Suspend!.P50.Should().Be(-1.0);
+        result.Days.Single().NetLoopCorrection.Should().Be(0);
+    }
+
+    [Theory]
+    [InlineData(2, true)]
+    [InlineData(3, false)]
+    public void PartiallyMaskedSlot_CountsOnlyWhenHalfIsAnalysed(int maskedMinutes, bool counts)
+    {
+        var from = Local(Darwin, 2024, 6, 3, 0);
+        var to = Local(Darwin, 2024, 6, 4, 0);
+        var ten = Local(Darwin, 2024, 6, 3, 10);
+
+        var result = Calculate(Darwin, from, to,
+            delivered:
+            [
+                new(ten, ten + maskedMinutes * Minute, 5.0, BasalDeliveryOrigin.Algorithm),
+                new(ten + maskedMinutes * Minute, to, 2.0, BasalDeliveryOrigin.Algorithm),
+            ],
+            scheduled: [new(from, to, 1.0)],
+            filter: new LoopAnalysisFilter { ExcludeOverrides = true },
+            sources: new LoopAnalysisMaskSources { Overrides = [new(ten, ten + maskedMinutes * Minute)] });
+
+        var slot = result.Slots[SlotAt(10, 0)];
+        if (counts)
+        {
+            slot.DeliveredBasal!.P50.Should().Be(2.0, "the masked minutes and their 5 U/h are left out");
+            slot.NetLoopCorrection!.Mean.Should().Be(1.0);
+        }
+        else
+        {
+            slot.DeliveredBasal.Should().BeNull();
+            slot.NetLoopCorrection.Should().BeNull();
+        }
+        Bit(result.Days.Single().Coverage.Analysed, SlotAt(10, 0)).Should().Be(counts);
+    }
+
+    [Fact]
+    public void DataExclusion_RemovesGlucoseButNotInsulin()
+    {
+        var from = Local(Darwin, 2024, 6, 3, 0);
+        var to = Local(Darwin, 2024, 6, 4, 0);
+        var three = Local(Darwin, 2024, 6, 3, 3);
+
+        var result = Calculate(Darwin, from, to,
+            delivered: [new(from, to, 1.0, BasalDeliveryOrigin.Algorithm)],
+            scheduled: [new(from, to, 1.0)],
+            glucose: EveryFiveMinutes(from, to, 60),
+            filter: new LoopAnalysisFilter { ExcludeIllness = false, ExcludeOpenLoop = false },
+            sources: new LoopAnalysisMaskSources { DataExclusions = [new(three, three + 30 * Minute)] });
+
+        result.Slots[SlotAt(3, 0)].Glucose.Should().BeNull();
+        result.Slots[SlotAt(3, 30)].Glucose!.N.Should().Be(1);
+        result.Slots[SlotAt(3, 0)].DeliveredBasal!.P50.Should().Be(1.0);
+    }
+
+    [Fact]
+    public void IobCob_TakesTheDominantSourcePerSlot()
+    {
+        var from = Local(Darwin, 2024, 6, 3, 0);
+        var to = Local(Darwin, 2024, 6, 4, 0);
+        var ticks = new List<IobCobTick>();
+        for (var t = from; t < to; t += 5 * Minute)
+            ticks.Add(new IobCobTick(t, 1.5, t < from + 12 * Hour ? IobCobSource.Device : IobCobSource.Calculated, 0, IobCobSource.Calculated));
+
+        var result = Calculate(Darwin, from, to, iobCob: ticks);
+
+        result.Slots[SlotAt(6, 0)].Iob!.P50.Should().Be(1.5);
+        result.Slots[SlotAt(6, 0)].IobSource.Should().Be(IobCobSource.Device);
+        result.Slots[SlotAt(18, 0)].IobSource.Should().Be(IobCobSource.Calculated);
+        result.Slots[SlotAt(18, 0)].Cob!.P50.Should().Be(0, "zero COB is a value");
+    }
+
+    [Fact]
+    public void Glucose_IsSparseBelowTheDayThreshold()
+    {
+        var from = Local(Darwin, 2024, 6, 3, 0);
+        var to = Local(Darwin, 2024, 6, 3 + SlotSummary.SparseDayThreshold, 0);
+
+        var result = Calculate(Darwin, from, to, glucose: EveryFiveMinutes(from, from + 24 * Hour, 100)
+            .Concat(EveryFiveMinutes(from + 24 * Hour, to, 200)));
+
+        var slot = result.Slots[0].Glucose!;
+        slot.N.Should().Be(SlotSummary.SparseDayThreshold);
+        slot.Sparse.Should().BeFalse();
+        slot.P10.Should().Be(140);
+        slot.P50.Should().Be(200);
+        result.Summary.DaysWithData.Should().Be(SlotSummary.SparseDayThreshold);
+    }
+
+    [Fact]
+    public void WeekdayFilter_KeepsOnlyThoseLocalDays()
+    {
+        // 2024-06-03 is a Monday.
+        var from = Local(Darwin, 2024, 6, 3, 0);
+        var to = Local(Darwin, 2024, 6, 10, 0);
+
+        var result = Calculate(Darwin, from, to,
+            glucose: EveryFiveMinutes(from, to, 100),
+            filter: new LoopAnalysisFilter { Days = [DayOfWeek.Monday, DayOfWeek.Wednesday] });
+
+        result.Days.Select(d => d.Date).Should().Equal("2024-06-03", "2024-06-05");
+        result.Slots[0].Glucose!.N.Should().Be(2);
+    }
+
+    private static bool Bit(string base64, int slot) =>
+        (Convert.FromBase64String(base64)[slot / 8] & (1 << (slot % 8))) != 0;
+}

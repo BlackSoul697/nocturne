@@ -26,7 +26,17 @@ public static class LocalSlotBinning
         long endMills,
         TimeZoneInfo tz,
         int slotMinutes,
-        Action<DateTime, long> addSlice)
+        Action<DateTime, long> addSlice) =>
+        Distribute(startMills, endMills, tz, slotMinutes, (_, local, sliceMs) => addSlice(local, sliceMs));
+
+    /// <inheritdoc cref="Distribute(long, long, TimeZoneInfo, int, Action{DateTime, long})"/>
+    /// <param name="addSlice">Takes the slice's start instant as well as its local start and length.</param>
+    public static void Distribute(
+        long startMills,
+        long endMills,
+        TimeZoneInfo tz,
+        int slotMinutes,
+        Action<long, DateTime, long> addSlice)
     {
         var slotMs = slotMinutes * MinuteMs;
         long cursor = startMills;
@@ -36,7 +46,7 @@ public static class LocalSlotBinning
             var offsetMs = (long)tz.GetUtcOffset(utcDt).TotalMilliseconds;
             long nextLocalBoundary = ((cursor + offsetMs) / slotMs + 1) * slotMs - offsetMs;
             long sliceEnd = Math.Min(nextLocalBoundary, endMills);
-            addSlice(TimeZoneInfo.ConvertTimeFromUtc(utcDt.UtcDateTime, tz), sliceEnd - cursor);
+            addSlice(cursor, TimeZoneInfo.ConvertTimeFromUtc(utcDt.UtcDateTime, tz), sliceEnd - cursor);
             cursor = sliceEnd;
         }
     }
@@ -48,4 +58,19 @@ public static class LocalSlotBinning
 
     /// <summary>The slot of the day <paramref name="local"/> falls in, counted from local midnight.</summary>
     public static int SlotOf(DateTime local, int slotMinutes) => (local.Hour * 60 + local.Minute) / slotMinutes;
+
+    /// <summary>
+    /// The UTC instant local <paramref name="day"/> begins in <paramref name="tz"/>. A zone whose
+    /// midnight is skipped by a DST transition begins the day at the first instant after it.
+    /// </summary>
+    public static long DayStartMills(DateOnly day, TimeZoneInfo tz)
+    {
+        var local = day.ToDateTime(TimeOnly.MinValue, DateTimeKind.Unspecified);
+        while (tz.IsInvalidTime(local))
+            local = local.AddMinutes(1);
+        var offset = tz.IsAmbiguousTime(local)
+            ? tz.GetAmbiguousTimeOffsets(local).Max()
+            : tz.GetUtcOffset(local);
+        return new DateTimeOffset(local, offset).ToUnixTimeMilliseconds();
+    }
 }
