@@ -30,13 +30,13 @@ public class ProfileDeletionServiceRecreationTests : IDisposable
 
     private readonly SqliteTestDatabase _db;
     private readonly NocturneDbContext _context;
-    private readonly TestTenantDbContextFactory _factory;
+    private readonly TestNocturneDbContextFactory _factory;
 
     public ProfileDeletionServiceRecreationTests()
     {
         _db = TestDbContextFactory.CreateSqliteWithTenant(TestTenantId);
         _context = _db.CreateContext();
-        _factory = new TestTenantDbContextFactory(_context);
+        _factory = new TestNocturneDbContextFactory(_context);
     }
 
     public void Dispose()

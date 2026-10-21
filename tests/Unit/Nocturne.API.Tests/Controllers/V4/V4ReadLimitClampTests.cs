@@ -541,7 +541,7 @@ public class V4ReadLimitClampTests
             repo.Object,
             Mock.Of<ISignalRBroadcastService>(),
             Mock.Of<ITrackerAlertRuleSyncService>(),
-            Mock.Of<ITenantDbContextFactory>(),
+            Mock.Of<INocturneDbContextFactory>(),
             Mock.Of<IAlertAcknowledgementService>(),
             Mock.Of<ILogger<TrackersController>>())
         {

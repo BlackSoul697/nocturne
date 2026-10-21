@@ -12,9 +12,9 @@ namespace Nocturne.Infrastructure.Data.Repositories.V4;
 /// <inheritdoc cref="IDeviceStatusGroupRepository"/>
 public class DeviceStatusGroupRepository : IDeviceStatusGroupRepository
 {
-    private readonly ITenantDbContextFactory _contextFactory;
+    private readonly INocturneDbContextFactory _contextFactory;
 
-    public DeviceStatusGroupRepository(ITenantDbContextFactory contextFactory)
+    public DeviceStatusGroupRepository(INocturneDbContextFactory contextFactory)
     {
         _contextFactory = contextFactory;
     }

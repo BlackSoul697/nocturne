@@ -155,14 +155,7 @@
         <CopyInvitationMessageButton
           url={createdInviteUrl}
           inviterName={createdByName}
-          onCopied={() => (errorMessage = null)}
-          onCopyFailed={() =>
-            (errorMessage = "Couldn't copy the message to the clipboard. Copy the link manually instead.")}
         />
-
-        {#if errorMessage}
-          <p class="text-sm text-destructive">{errorMessage}</p>
-        {/if}
 
         <Button variant="outline" class="w-full" onclick={handleDone}>
           Done

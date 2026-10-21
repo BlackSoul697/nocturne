@@ -95,8 +95,8 @@ public class AuthorizationService : IAuthorizationService, IDisposable
     /// so the minted JWT carries the grant's scopes, tenant pin and 24-hour limit rather than the
     /// subject's roles/permissions, and downstream requests authenticate through
     /// <see cref="Middleware.Handlers.OAuthAccessTokenHandler"/>.
-    /// The grants query relies on the tenant-pinned scoped context's global query
-    /// filter, matching how subject lookups are tenant-scoped on this endpoint.
+    /// The grants query relies on the scoped context's global query filter, which reads the
+    /// request's resolved tenant, matching how subject lookups are tenant-scoped on this endpoint.
     /// </summary>
     private async Task<AuthorizationResponse?> GenerateJwtFromDirectGrantAsync(string accessToken)
     {

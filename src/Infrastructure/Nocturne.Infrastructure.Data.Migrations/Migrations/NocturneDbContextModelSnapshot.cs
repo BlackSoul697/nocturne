@@ -1182,6 +1182,11 @@ namespace Nocturne.Infrastructure.Data.Migrations
                         .HasColumnType("bigint")
                         .HasColumnName("created_at");
 
+                    b.Property<string>("DataSource")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)")
+                        .HasColumnName("data_source");
+
                     b.Property<double?>("DropRate")
                         .HasColumnType("double precision")
                         .HasColumnName("drop_rate");
@@ -8570,6 +8575,10 @@ namespace Nocturne.Infrastructure.Data.Migrations
                         .HasMaxLength(100)
                         .HasColumnType("character varying(100)")
                         .HasColumnName("entered_by");
+
+                    b.Property<bool?>("IsApnsProduction")
+                        .HasColumnType("boolean")
+                        .HasColumnName("is_apns_production");
 
                     b.Property<bool>("IsDefault")
                         .HasColumnType("boolean")

@@ -32,7 +32,8 @@ public class MembershipRequestServiceTests : IDisposable
     {
         _db = TestDbContextFactory.CreateSqlite();
 
-        _dbContext = _db.CreateContext();
+        // The request's scoped context: the service always works for the request's own tenant.
+        _dbContext = _db.CreateContext(_tenantId);
 
         _tenantService = new Mock<ITenantService>();
         _notificationService = new Mock<IInAppNotificationService>();
@@ -53,7 +54,7 @@ public class MembershipRequestServiceTests : IDisposable
             new TenantRoleService(
                 _dbContext,
                 // Only SeedRolesForTenantAsync takes a context of its own, and nothing here seeds.
-                Mock.Of<IDbContextFactory<NocturneDbContext>>()),
+                Mock.Of<IDbContextFactory<NocturneDbContext>>().AsNocturneFactory()),
             _notificationService.Object,
             NullLogger<MembershipRequestService>.Instance);
 

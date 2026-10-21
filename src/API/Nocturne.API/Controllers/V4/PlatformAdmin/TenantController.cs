@@ -1,6 +1,5 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.EntityFrameworkCore;
 using OpenApi.Remote.Attributes;
 using Nocturne.API.Authorization;
 using Nocturne.API.Services.Auth;
@@ -8,8 +7,7 @@ using Nocturne.Core.Contracts.Auth;
 using Nocturne.Core.Contracts.Multitenancy;
 using Nocturne.Core.Models.Authorization;
 using Nocturne.API.Extensions;
-using Nocturne.Infrastructure.Data;
-using Nocturne.Infrastructure.Data.Extensions;
+using Nocturne.Infrastructure.Data.Services;
 
 namespace Nocturne.API.Controllers.V4.PlatformAdmin;
 
@@ -280,7 +278,7 @@ public class TenantController : ControllerBase
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status409Conflict)]
     public async Task<IActionResult> IssueLoginCode(
         Guid id, Guid subjectId,
-        [FromServices] IDbContextFactory<NocturneDbContext> dbContextFactory,
+        [FromServices] INocturneDbContextFactory dbContextFactory,
         [FromServices] ILoginCodeService loginCodeService,
         CancellationToken ct)
     {
@@ -294,7 +292,7 @@ public class TenantController : ControllerBase
         if (!tenant.IsActive)
             return Problem(detail: "Tenant is not active", statusCode: 409, title: "Conflict");
 
-        await using var dbContext = await dbContextFactory.CreateTenantPinnedContextAsync(id, ct);
+        await using var dbContext = await dbContextFactory.CreateForTenantAsync(id, ct);
 
         var issued = await loginCodeService.IssueAsync(
             dbContext, subjectId,
