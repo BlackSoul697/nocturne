@@ -2,6 +2,7 @@ import { isInternalOnlyApiPath } from "$lib/server/internal-only-api-paths";
 import { type Handle } from "@sveltejs/kit";
 import { randomUUID } from "$lib/utils";
 import { isRecord, nonEmptyString } from "$lib/utils/type-guards";
+import { applySecurityHeaders } from "$lib/server/security-headers";
 import type { HandleServerError } from "@sveltejs/kit";
 import { env } from "$env/dynamic/private";
 import { env as publicEnv } from "$env/dynamic/public";
@@ -531,14 +532,13 @@ const requestContextHandle: Handle = async ({ event, resolve }) => {
   return response;
 };
 
-// Public share host: keep the token-bearing URL out of Referer headers and search indexes on
-// every response (SSR page, /api proxy, realtime ticket), not just the page document.
-const shareHostSecurityHandle: Handle = async ({ event, resolve }) => {
+// Wraps every response (SSR page, /api proxy, realtime ticket), not just the page document.
+const securityHeadersHandle: Handle = async ({ event, resolve }) => {
   const response = await resolve(event);
-  if (event.locals.isShareHost) {
-    response.headers.set("Referrer-Policy", "no-referrer");
-    response.headers.set("X-Robots-Tag", "noindex, nofollow");
-  }
+  applySecurityHeaders(response.headers, {
+    isShareHost: event.locals.isShareHost,
+    pathname: event.url.pathname,
+  });
   return response;
 };
 
@@ -562,4 +562,4 @@ const healthHandle: Handle = async ({ event, resolve }) => {
 // none of the locals they set and the API authenticates it and answers its setup/recovery state
 // itself, so running them first cost every browser /api call three serial API round-trips, and let
 // a session refresh in authHandle rotate the refresh token the proxy then forwarded stale.
-export const handle: Handle = sequence(healthHandle, requestContextHandle, shareHostSecurityHandle, proxyHandle, resetBitsId, statusProbeHandle, authHandle, readinessHandle, apiClientHandle, locale);
+export const handle: Handle = sequence(healthHandle, requestContextHandle, securityHeadersHandle, proxyHandle, resetBitsId, statusProbeHandle, authHandle, readinessHandle, apiClientHandle, locale);

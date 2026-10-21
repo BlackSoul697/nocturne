@@ -45,7 +45,14 @@
 	}
 }
 
+# HSTS goes on each site Caddy serves, never with includeSubDomains or preload: BASE_DOMAIN may be
+# the operator's own domain, and its other hosts are not Nocturne's to pin to HTTPS. nosniff also
+# covers the static assets the web app serves before its own headers apply.
 (to_gateway) {
+	header {
+		Strict-Transport-Security "max-age=31536000"
+		X-Content-Type-Options nosniff
+	}
 	reverse_proxy gateway:5000 {
 		header_up X-Forwarded-For {http.request.client_ip}
 	}

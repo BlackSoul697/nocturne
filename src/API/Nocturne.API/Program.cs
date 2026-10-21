@@ -340,6 +340,7 @@ else
 }
 
 // Configure middleware pipeline
+app.UseSecurityHeaders();
 app.UseExceptionHandler();
 app.UseStatusCodePages();
 // Documentation paths get the any-origin policy, foreign origins on the legacy API get
