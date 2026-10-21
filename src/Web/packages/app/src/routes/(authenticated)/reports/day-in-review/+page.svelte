@@ -208,10 +208,18 @@
   const hasApsSnapshots = $derived(apsSnapshots.length > 0);
 
   // Scrubber time state
-  // `time` (HH:mm on the day) starts the scrubber at the moment a link pointed to.
-  let scrubberTime = $state(
-    timeOnDay(page.url.searchParams.get("date"), page.url.searchParams.get("time")) ?? new Date()
-  );
+  let scrubberTime = $state(new Date());
+
+  // Each day that loads starts the scrubber afresh: at `time` (HH:mm) when a link gave one, read
+  // in the zone the day was loaded in, else now.
+  // Primitives, so a refetch of the same day leaves a scrubbed position alone.
+  const timeParam = $derived(page.url.searchParams.get("time"));
+  const loadedDay = $derived(dayData?.date === dateParam ? dayData.date : null);
+  const loadedZone = $derived(dayData?.timeZone);
+  $effect(() => {
+    if (!loadedDay) return;
+    scrubberTime = timeOnDay(loadedDay, timeParam, loadedZone) ?? new Date();
+  });
 
   // Find the nearest APS snapshot to the scrubber time
   const selectedSnapshot = $derived.by(() => {
