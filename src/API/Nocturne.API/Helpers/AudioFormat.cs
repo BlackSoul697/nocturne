@@ -8,8 +8,8 @@ namespace Nocturne.API.Helpers;
 internal static class AudioFormat
 {
     /// <summary>
-    /// The MIME type for <paramref name="data"/>, or <c>null</c> when it is not MP3, WAV, Ogg, WebM,
-    /// MP4/M4A or ADTS AAC.
+    /// The MIME type for <paramref name="data"/>, or <c>null</c> when it is not MP3, WAV, Ogg, FLAC,
+    /// WebM, MP4/M4A or ADTS AAC.
     /// </summary>
     public static string? Detect(ReadOnlySpan<byte> data)
     {
@@ -22,6 +22,8 @@ internal static class AudioFormat
             return "audio/wav";
         if (data.StartsWith("OggS"u8))
             return "audio/ogg";
+        if (data.StartsWith("fLaC"u8))
+            return "audio/flac";
         if (data.StartsWith((ReadOnlySpan<byte>)[0x1A, 0x45, 0xDF, 0xA3]))
             return "audio/webm";
         if (data.Length >= 8 && data[4..8].SequenceEqual("ftyp"u8))

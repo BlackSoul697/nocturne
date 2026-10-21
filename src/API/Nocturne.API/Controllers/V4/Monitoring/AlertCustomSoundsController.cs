@@ -63,7 +63,7 @@ public class AlertCustomSoundsController : ControllerBase
         var data = ms.ToArray();
 
         if (AudioFormat.Detect(data) is not { } mimeType)
-            return Problem(detail: "File must be MP3, WAV, Ogg, WebM, M4A or AAC audio", statusCode: 400, title: "Bad Request");
+            return Problem(detail: "File must be MP3, WAV, Ogg, FLAC, WebM, M4A or AAC audio", statusCode: 400, title: "Bad Request");
 
         await using var db = await _contextFactory.CreateAsync(ct);
 
