@@ -470,6 +470,29 @@ public class FindQueryTests
 
     #endregion
 
+    #region Fields
+
+    [Fact]
+    public void Fields_NamesEveryFieldIncludingThoseInsideLogicalGroups()
+    {
+        var query = FindQuery.Parse("find[name]=apple&find[$or][0][category]=fruit&find[$or][1][carbs][$gt]=5");
+
+        query.Fields.Should().BeEquivalentTo("name", "category", "carbs");
+    }
+
+    [Theory]
+    [InlineData("find[name]=apple&find[a]]=b")]
+    [InlineData("find[name]=apple&find[category][$options]=i")]
+    public void Fields_LeavesOutAConditionTheParserCouldNotRead(string find)
+    {
+        var query = FindQuery.Parse(find);
+
+        query.HasInexactCondition.Should().BeTrue();
+        query.Fields.Should().NotContain("");
+    }
+
+    #endregion
+
     #region GetEqualityValue / HasFieldFiltersExcept
 
     [Fact]

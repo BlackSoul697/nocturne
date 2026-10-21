@@ -146,6 +146,13 @@ public sealed class FindQuery
         _ => null,
     };
 
+    /// <summary>
+    /// The field paths the query's conditions name, so a caller that can filter only some fields can
+    /// refuse the rest instead of dropping them.
+    /// </summary>
+    public IReadOnlySet<string> Fields =>
+        EnumerateAll(_root).Where(cond => cond.Op != UnsupportedOp).Select(cond => cond.Path).ToHashSet(StringComparer.Ordinal);
+
     private static IEnumerable<Condition> EnumerateAll(Group group) =>
         group.Children.SelectMany(child => child switch
         {
