@@ -38,6 +38,14 @@ public interface IApsSnapshotRepository : ILegacyKeyedRepository<ApsSnapshot>
     /// <param name="to">Inclusive end of the time window.</param>
     Task<IReadOnlyList<ApsIobCobPoint>> GetIobCobPointsAsync(DateTime from, DateTime to, CancellationToken ct = default);
 
+    /// <summary>
+    /// Every <see cref="ApsLoopCycle"/> within a time window, ordered oldest-first, read without
+    /// the snapshots' JSON blob columns.
+    /// </summary>
+    /// <param name="from">Inclusive start of the time window.</param>
+    /// <param name="to">Inclusive end of the time window.</param>
+    Task<IReadOnlyList<ApsLoopCycle>> GetLoopCyclesAsync(DateTime from, DateTime to, CancellationToken ct = default);
+
     /// <summary>Retrieve <see cref="ApsSnapshot"/> records matching any of the given correlation IDs.</summary>
     /// <param name="correlationIds">Correlation IDs to match.</param>
     Task<IEnumerable<ApsSnapshot>> GetByCorrelationIdsAsync(IEnumerable<Guid> correlationIds, CancellationToken ct = default);

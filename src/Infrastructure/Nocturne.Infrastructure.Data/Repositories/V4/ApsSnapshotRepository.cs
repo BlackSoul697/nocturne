@@ -57,6 +57,68 @@ public class ApsSnapshotRepository : SyncUpsertRepositoryBase<ApsSnapshot, ApsSn
             .ToListAsync(ct);
     }
 
+    /// <inheritdoc />
+    public async Task<IReadOnlyList<ApsLoopCycle>> GetLoopCyclesAsync(
+        DateTime from, DateTime to, CancellationToken ct = default)
+    {
+        await using var ctx = await ContextFactory.CreateAsync(ct);
+        var rows = await ctx.ApsSnapshots.AsNoTracking()
+            .Where(e => e.Timestamp >= from && e.Timestamp <= to)
+            .OrderBy(e => e.Timestamp)
+            .Select(e => new
+            {
+                e.Timestamp,
+                e.Device,
+                e.AidAlgorithm,
+                e.Enacted,
+                e.EnactedRate,
+                e.EnactedDuration,
+                e.EnactedBolusVolume,
+                e.Iob,
+                e.SensitivityRatio,
+                HasSuggestion = e.SuggestedJson != null,
+                SuggestedChange = e.SuggestedJson == null
+                    ? (bool?)null
+                    : Jsonb.Text(e.SuggestedJson, "duration") != null || Jsonb.Text(e.SuggestedJson, "units") != null,
+                LimitReason = Jsonb.Text(e.SuggestedJson, "reason")!.Contains("maxSafeBasal")
+                    || Jsonb.Text(e.SuggestedJson, "reason")!.Contains("max_iob")
+                        ? Jsonb.Text(e.SuggestedJson, "reason")
+                        : null,
+                MaxIob = Jsonb.Text(e.SuggestedJson, "max_iob"),
+                MaxBasal = Jsonb.Text(e.SuggestedJson, "max_basal"),
+                MaxDailySafetyMultiplier = Jsonb.Text(e.SuggestedJson, "max_daily_safety_multiplier"),
+                CurrentBasalSafetyMultiplier = Jsonb.Text(e.SuggestedJson, "current_basal_safety_multiplier"),
+            })
+            .ToListAsync(ct);
+
+        return [.. rows.Select(r => new ApsLoopCycle
+        {
+            Timestamp = r.Timestamp,
+            Device = r.Device,
+            AidAlgorithm = Enum.TryParse<AidAlgorithm>(r.AidAlgorithm, out var algorithm) ? algorithm : AidAlgorithm.Unknown,
+            Enacted = r.Enacted,
+            EnactedRate = r.EnactedRate,
+            EnactedDuration = r.EnactedDuration,
+            EnactedBolusVolume = r.EnactedBolusVolume,
+            Iob = r.Iob,
+            SensitivityRatio = r.SensitivityRatio,
+            HasSuggestion = r.HasSuggestion,
+            SuggestedChange = r.SuggestedChange,
+            LimitReason = r.LimitReason,
+            MaxIob = Number(r.MaxIob),
+            MaxBasal = Number(r.MaxBasal),
+            MaxDailySafetyMultiplier = Number(r.MaxDailySafetyMultiplier),
+            CurrentBasalSafetyMultiplier = Number(r.CurrentBasalSafetyMultiplier),
+        })];
+    }
+
+    /// <summary>A jsonb member's text as a number; null where it is absent or not a number.</summary>
+    private static double? Number(string? text) =>
+        double.TryParse(text, System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var value)
+            && double.IsFinite(value)
+            ? value
+            : null;
+
     /// <summary>
     /// Gets APS snapshots by correlation IDs.
     /// </summary>
