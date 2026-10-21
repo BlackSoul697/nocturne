@@ -3,6 +3,10 @@
     <ManagePackageVersionsCentrally>true</ManagePackageVersionsCentrally>
     <NuGetAudit>true</NuGetAudit>
     <NuGetAuditMode>all</NuGetAuditMode>
+  </PropertyGroup>
+  <!-- Errors only where asked for (pull-request CI and the scheduled audit): an advisory published
+       after a release must not stop that tag, or a release build, from building. -->
+  <PropertyGroup Condition="'$(NuGetAuditAsErrors)' == 'true'">
     <WarningsAsErrors>$(WarningsAsErrors);NU1902;NU1903;NU1904</WarningsAsErrors>
   </PropertyGroup>
   <ItemGroup>
