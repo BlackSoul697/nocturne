@@ -1058,7 +1058,7 @@ public class OAuthController : ControllerBase
         GrantType = info.GrantType,
         ClientId = info.ClientId,
         ClientDisplayName = info.ClientDisplayName,
-        IsVerifiedClient = info.IsVerifiedClient,
+        ClientIdentity = info.ClientIdentity,
         Scopes = info.Scopes,
         Label = info.Label,
         CreatedAt = info.CreatedAt,

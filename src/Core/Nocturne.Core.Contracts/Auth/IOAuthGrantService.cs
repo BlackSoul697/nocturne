@@ -121,11 +121,8 @@ public class OAuthGrantInfo
     /// <summary>Logo URI of the client, if any.</summary>
     public string? LogoUri { get; set; }
 
-    /// <summary>
-    /// Whether the client comes from the bundled known-app directory and no device-code approval
-    /// has added to the grant, the device flow being unable to show which software it serves.
-    /// </summary>
-    public bool IsVerifiedClient { get; set; }
+    /// <summary>How far the grant's tokens are known to belong to the app its client names.</summary>
+    public OAuthClientIdentity ClientIdentity { get; set; }
 
     /// <summary>The subject (user) who granted access.</summary>
     public Guid SubjectId { get; set; }

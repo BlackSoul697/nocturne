@@ -133,17 +133,19 @@ public class OAuthGrantServiceTests : IDisposable
     }
 
     // ---------------------------------------------------------------
-    // IsVerifiedClient
+    // ClientIdentity
     // ---------------------------------------------------------------
 
     [Theory]
-    [InlineData(false, true)]
-    [InlineData(true, false)]
-    public async Task AKnownClientIsVerifiedOnlyWhenNoDeviceCodeApprovedTheGrant(
-        bool approvedByDeviceCode, bool verified)
+    [InlineData(true, false, OAuthClientIdentity.Verified)]
+    [InlineData(true, true, OAuthClientIdentity.Unverified)]
+    [InlineData(false, false, OAuthClientIdentity.SelfRegistered)]
+    [InlineData(false, true, OAuthClientIdentity.SelfRegistered)]
+    public async Task OnlyAKnownClientNoDeviceCodeApprovedIsVerified(
+        bool isKnown, bool approvedByDeviceCode, OAuthClientIdentity identity)
     {
         using var db = CreateDbContext();
-        await SeedClientAsync(db, isKnown: true);
+        await SeedClientAsync(db, isKnown: isKnown);
         await SeedSubjectAsync(db, _ownerSubjectId, "Owner");
         var service = CreateService(db);
 
@@ -152,8 +154,8 @@ public class OAuthGrantServiceTests : IDisposable
             approvedByDeviceCode: approvedByDeviceCode);
         var listed = await service.GetGrantsForSubjectAsync(_ownerSubjectId);
 
-        created.IsVerifiedClient.Should().Be(verified);
-        listed.Should().ContainSingle().Which.IsVerifiedClient.Should().Be(verified);
+        created.ClientIdentity.Should().Be(identity);
+        listed.Should().ContainSingle().Which.ClientIdentity.Should().Be(identity);
     }
 
     [Fact]
@@ -169,21 +171,7 @@ public class OAuthGrantServiceTests : IDisposable
         var consented = await service.CreateOrUpdateGrantAsync(
             _testClientEntityId, _ownerSubjectId, [Scope.TreatmentsRead]);
 
-        consented.IsVerifiedClient.Should().BeFalse();
-    }
-
-    [Fact]
-    public async Task AnUnknownClientIsNeverVerified()
-    {
-        using var db = CreateDbContext();
-        await SeedClientAsync(db);
-        await SeedSubjectAsync(db, _ownerSubjectId, "Owner");
-        var service = CreateService(db);
-
-        var grant = await service.CreateOrUpdateGrantAsync(
-            _testClientEntityId, _ownerSubjectId, [Scope.GlucoseRead]);
-
-        grant.IsVerifiedClient.Should().BeFalse();
+        consented.ClientIdentity.Should().Be(OAuthClientIdentity.Unverified);
     }
 
     // ---------------------------------------------------------------

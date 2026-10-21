@@ -255,7 +255,7 @@ public class OAuthGrantService : IOAuthGrantService
             ClientDisplayName = entity.Client?.DisplayName,
             ClientUri = entity.Client?.ClientUri,
             LogoUri = entity.Client?.LogoUri,
-            IsVerifiedClient = entity.HasVerifiedClient,
+            ClientIdentity = entity.ClientIdentity,
             SubjectId = entity.SubjectId,
             GrantType = entity.GrantType,
             Scopes = entity.Scopes,

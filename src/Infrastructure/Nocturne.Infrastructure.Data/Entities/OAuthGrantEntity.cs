@@ -206,11 +206,14 @@ public class OAuthGrantEntity : ITenantScoped, IAuditable, IEntityCreated
     public bool ApprovedByDeviceCode { get; set; }
 
     /// <summary>
-    /// Whether the grant's tokens are known to belong to the known-directory app its client names.
+    /// How far the grant's tokens are known to belong to the app its client names.
     /// </summary>
     /// <seealso cref="ApprovedByDeviceCode"/>
     [NotMapped]
-    public bool HasVerifiedClient => Client?.IsKnown == true && !ApprovedByDeviceCode;
+    public OAuthClientIdentity ClientIdentity =>
+        Client?.IsKnown != true ? OAuthClientIdentity.SelfRegistered
+        : ApprovedByDeviceCode ? OAuthClientIdentity.Unverified
+        : OAuthClientIdentity.Verified;
 
     /// <summary>
     /// Whether this grant has been revoked
