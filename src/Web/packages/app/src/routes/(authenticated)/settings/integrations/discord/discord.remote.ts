@@ -34,10 +34,7 @@ export const getDiscordConfig = query(async () => {
   };
 });
 
-/**
- * Initiate the Discord OAuth2 link flow for the signed-in member. The state and the cookie are
- * bound together (see oauth-state.ts) so only this browser can finalize the link.
- */
+/** Starts the Discord OAuth2 link flow for the signed-in member; see {@link signOAuthLinkState}. */
 export const initiateDiscordLink = command(async () => {
   const { url, fetch, locals, cookies } = getRequestEvent();
   const subjectId = locals.isAuthenticated ? locals.user?.subjectId : undefined;
