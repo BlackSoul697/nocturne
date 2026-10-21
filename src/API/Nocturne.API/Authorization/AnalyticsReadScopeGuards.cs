@@ -2,6 +2,7 @@ using Nocturne.API.Controllers.V4.Analytics;
 using Nocturne.API.Services.Glucose;
 using Nocturne.Core.Models;
 using Nocturne.Core.Models.Authorization;
+using Nocturne.Core.Models.LoopAnalysis;
 using Nocturne.Core.Models.Widget;
 
 namespace Nocturne.API.Authorization;
@@ -389,4 +390,96 @@ internal static class StatisticsReadScopeGuard
                 Time = analytics.Time,
                 ClinicalAssessment = analytics.ClinicalAssessment,
             };
+}
+
+/// <summary>
+/// Per-category read scopes for Loop Analysis, admitted on <c>reports.read</c>: glucose is the
+/// glucose category; delivered basal, the insulin above schedule, IOB/COB, boluses and carbs are
+/// treatments; the profile names and the schedule values (scheduled basal, target range) are
+/// therapy settings.
+/// </summary>
+/// <remarks>The response is built per request and never cached, so it is narrowed in place.</remarks>
+/// <seealso cref="AnalyticsReadScopes"/>
+internal static class LoopAnalysisReadScopeGuard
+{
+    public const string AdmissionScope = Scope.ReportsRead;
+
+    public static DailyProfileResponse Redact(DailyProfileResponse data, IReadOnlySet<string> grantedScopes)
+    {
+        var glucose = AnalyticsReadScopes.Allows(grantedScopes, Scope.GlucoseRead);
+        var treatments = AnalyticsReadScopes.Allows(grantedScopes, Scope.TreatmentsRead);
+        var therapy = AnalyticsReadScopes.Allows(grantedScopes, Scope.TherapyRead);
+
+        if (glucose && treatments && therapy)
+            return data;
+
+        Narrow(data.Primary, glucose, treatments, therapy);
+        if (data.Comparison is { } comparison)
+            Narrow(comparison, glucose, treatments, therapy);
+        return data;
+    }
+
+    private static void Narrow(DailyProfileRange range, bool glucose, bool treatments, bool therapy)
+    {
+        foreach (var slot in range.Slots)
+        {
+            if (!glucose)
+                slot.Glucose = null;
+
+            if (!treatments)
+            {
+                slot.DeliveredBasal = null;
+                slot.NetLoopCorrection = null;
+                slot.ManualTemp = null;
+                slot.Suspend = null;
+                slot.Inferred = null;
+                slot.Iob = null;
+                slot.IobSource = null;
+                slot.Cob = null;
+                slot.CobSource = null;
+                slot.ManualBoluses = null;
+                slot.Carbs = null;
+            }
+
+            if (!therapy)
+            {
+                slot.ScheduledBasal = null;
+                slot.TargetLow = null;
+                slot.TargetHigh = null;
+            }
+        }
+
+        foreach (var day in range.Days)
+        {
+            if (!glucose)
+                day.Coverage.Glucose = null;
+
+            if (!treatments)
+            {
+                day.Coverage.DeliveredBasal = null;
+                day.Coverage.NetLoopCorrection = null;
+                day.Coverage.Iob = null;
+                day.Coverage.Cob = null;
+                day.NetLoopCorrection = null;
+                day.TotalInsulin = null;
+            }
+
+            if (!therapy)
+                day.Coverage.ScheduledBasal = null;
+        }
+
+        if (!treatments)
+        {
+            range.HourlyNetLoopCorrection = [];
+            range.Summary.NetLoopCorrectionPerDay = null;
+            range.Summary.NetLoopCorrectionTddPercent = null;
+            range.Summary.NetLoopCorrectionDays = 0;
+        }
+
+        if (!treatments || !therapy)
+            range.Summary.DeliveredToScheduledRatio = null;
+
+        if (!therapy)
+            range.ProfileNames = [];
+    }
 }

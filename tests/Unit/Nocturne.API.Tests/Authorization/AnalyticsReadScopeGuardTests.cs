@@ -17,6 +17,7 @@ using Nocturne.Core.Contracts.Treatments;
 using Nocturne.Core.Contracts.V4.Repositories;
 using Nocturne.Core.Models;
 using Nocturne.Core.Models.Authorization;
+using Nocturne.Core.Models.LoopAnalysis;
 using Nocturne.Core.Models.V4;
 using Nocturne.Core.Models.Widget;
 using Xunit;
@@ -1046,5 +1047,182 @@ public class AnalyticsReadScopeGuardTests
         var redacted = StatisticsReadScopeGuard.Redact(cached, Granted(Scope.GlucoseRead));
 
         redacted.LastDay.Analytics.Should().BeNull();
+    }
+
+    // ── Loop Analysis ───────────────────────────────────────────────────────────────────────
+
+    private static LoopAnalysisAggregate Aggregate(double value) => new() { P50 = value, Mean = value, N = 1 };
+
+    private static DailyProfileRange DailyProfileRange() => new()
+    {
+        Slots =
+        [
+            new DailyProfileSlot
+            {
+                Glucose = Aggregate(120),
+                ScheduledBasal = Aggregate(1),
+                DeliveredBasal = Aggregate(1.5),
+                NetLoopCorrection = new NetLoopCorrectionAggregate { Mean = 0.5, Rate = Aggregate(0.5) },
+                ManualTemp = Aggregate(0),
+                Suspend = Aggregate(0),
+                Inferred = Aggregate(0),
+                Iob = Aggregate(2),
+                IobSource = IobCobSource.Device,
+                Cob = Aggregate(10),
+                CobSource = IobCobSource.Calculated,
+                ManualBoluses = new DailyProfileEventSeries { MeanPerDay = 1, N = 1 },
+                Carbs = new DailyProfileEventSeries { MeanPerDay = 10, N = 1 },
+                TargetLow = Aggregate(90),
+                TargetHigh = Aggregate(140),
+            },
+        ],
+        HourlyNetLoopCorrection = [new LoopAnalysisHourlyValue { Hour = 0, Mean = 0.5, N = 1 }],
+        Days =
+        [
+            new DailyProfileDay
+            {
+                Date = "2024-06-03",
+                Coverage = new DailyProfileDayCoverage
+                {
+                    Analysed = "a", Glucose = "g", ScheduledBasal = "s", DeliveredBasal = "d",
+                    NetLoopCorrection = "n", Iob = "i", Cob = "c",
+                },
+                NetLoopCorrection = 12,
+                TotalInsulin = 40,
+            },
+        ],
+        Summary = new DailyProfileSummary
+        {
+            DaysWithData = 1,
+            DeliveredToScheduledRatio = 1.2,
+            NetLoopCorrectionPerDay = 12,
+            NetLoopCorrectionTddPercent = 30,
+            NetLoopCorrectionDays = 1,
+        },
+        ProfileNames = ["Default"],
+    };
+
+    private static DailyProfileResponse DailyProfile() => new()
+    {
+        Primary = DailyProfileRange(),
+        Comparison = DailyProfileRange(),
+    };
+
+    [Fact]
+    public void LoopAnalysis_WithoutTreatments_DropsEveryTreatmentDerivedSeries()
+    {
+        var data = LoopAnalysisReadScopeGuard.Redact(DailyProfile(), Granted(Scope.GlucoseRead, Scope.TherapyRead));
+
+        foreach (var range in new[] { data.Primary, data.Comparison! })
+        {
+            var slot = range.Slots.Single();
+            slot.Glucose.Should().NotBeNull();
+            slot.ScheduledBasal.Should().NotBeNull();
+            slot.TargetLow.Should().NotBeNull();
+            slot.DeliveredBasal.Should().BeNull();
+            slot.NetLoopCorrection.Should().BeNull();
+            slot.ManualTemp.Should().BeNull();
+            slot.Suspend.Should().BeNull();
+            slot.Inferred.Should().BeNull();
+            slot.Iob.Should().BeNull();
+            slot.IobSource.Should().BeNull();
+            slot.Cob.Should().BeNull();
+            slot.CobSource.Should().BeNull();
+            slot.ManualBoluses.Should().BeNull();
+            slot.Carbs.Should().BeNull();
+            range.HourlyNetLoopCorrection.Should().BeEmpty();
+
+            var day = range.Days.Single();
+            day.NetLoopCorrection.Should().BeNull();
+            day.TotalInsulin.Should().BeNull();
+            day.Coverage.DeliveredBasal.Should().BeNull();
+            day.Coverage.NetLoopCorrection.Should().BeNull();
+            day.Coverage.Iob.Should().BeNull();
+            day.Coverage.Cob.Should().BeNull();
+            day.Coverage.Glucose.Should().Be("g");
+            day.Coverage.ScheduledBasal.Should().Be("s");
+
+            range.Summary.DeliveredToScheduledRatio.Should().BeNull();
+            range.Summary.NetLoopCorrectionPerDay.Should().BeNull();
+            range.Summary.NetLoopCorrectionTddPercent.Should().BeNull();
+            range.ProfileNames.Should().Equal("Default");
+        }
+    }
+
+    [Fact]
+    public void LoopAnalysis_WithoutTherapy_DropsProfileNamesAndScheduleValues()
+    {
+        var data = LoopAnalysisReadScopeGuard.Redact(DailyProfile(), Granted(Scope.GlucoseRead, Scope.TreatmentsRead));
+
+        var slot = data.Primary.Slots.Single();
+        slot.ScheduledBasal.Should().BeNull();
+        slot.TargetLow.Should().BeNull();
+        slot.TargetHigh.Should().BeNull();
+        slot.DeliveredBasal.Should().NotBeNull();
+        slot.NetLoopCorrection.Should().NotBeNull();
+        slot.Iob.Should().NotBeNull();
+        data.Primary.ProfileNames.Should().BeEmpty();
+        data.Primary.Days.Single().Coverage.ScheduledBasal.Should().BeNull();
+        data.Primary.Summary.DeliveredToScheduledRatio.Should().BeNull();
+        data.Primary.Summary.NetLoopCorrectionPerDay.Should().Be(12);
+        data.Comparison!.ProfileNames.Should().BeEmpty();
+    }
+
+    [Fact]
+    public void LoopAnalysis_WithoutGlucose_DropsTheGlucoseSeries()
+    {
+        var data = LoopAnalysisReadScopeGuard.Redact(DailyProfile(), Granted(Scope.TreatmentsRead, Scope.TherapyRead));
+
+        data.Primary.Slots.Single().Glucose.Should().BeNull();
+        data.Primary.Days.Single().Coverage.Glucose.Should().BeNull();
+        data.Primary.Slots.Single().Iob.Should().NotBeNull();
+    }
+
+    [Fact]
+    public void LoopAnalysis_FullAccess_KeepsEverything()
+    {
+        var original = DailyProfile();
+        var data = LoopAnalysisReadScopeGuard.Redact(
+            original, Granted(Scope.GlucoseRead, Scope.TreatmentsRead, Scope.TherapyRead));
+
+        data.Should().BeSameAs(original);
+        data.Primary.Slots.Single().ScheduledBasal.Should().NotBeNull();
+        data.Primary.ProfileNames.Should().Equal("Default");
+    }
+
+    [Fact]
+    public void LoopAnalysis_GateIsReportsRead()
+    {
+        var gate = GateOn<LoopAnalysisController>(nameof(LoopAnalysisController.GetDailyProfile));
+
+        gate!.RequiredScopes.Should().BeEquivalentTo([LoopAnalysisReadScopeGuard.AdmissionScope]);
+        LoopAnalysisReadScopeGuard.AdmissionScope.Should().Be(Scope.ReportsRead);
+    }
+
+    [Fact]
+    public async Task LoopAnalysis_Handler_RedactsTheCategoriesTheCallerLacks()
+    {
+        var service = new Mock<ILoopAnalysisService>();
+        service
+            .Setup(s => s.GetDailyProfileAsync(It.IsAny<LoopAnalysisFilter>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(DailyProfile());
+
+        var controller = new LoopAnalysisController(service.Object)
+        {
+            ControllerContext = ContextWith(Granted(Scope.ReportsRead, Scope.GlucoseRead)),
+        };
+
+        var result = await controller.GetDailyProfile(new LoopAnalysisFilter
+        {
+            From = new DateTime(2024, 6, 1, 0, 0, 0, DateTimeKind.Utc),
+            To = new DateTime(2024, 6, 8, 0, 0, 0, DateTimeKind.Utc),
+        });
+
+        var data = result.Result.Should().BeOfType<OkObjectResult>()
+            .Which.Value.Should().BeOfType<DailyProfileResponse>().Subject;
+        data.Primary.Slots.Single().Glucose.Should().NotBeNull();
+        data.Primary.Slots.Single().Iob.Should().BeNull();
+        data.Primary.Slots.Single().ScheduledBasal.Should().BeNull();
+        data.Primary.ProfileNames.Should().BeEmpty();
     }
 }
