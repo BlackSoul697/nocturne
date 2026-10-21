@@ -27,7 +27,6 @@ public interface ITherapySettingsRepository : IProfileScopedRepository<TherapySe
     /// <param name="limit">Maximum number of records to return (default 100).</param>
     /// <param name="offset">Number of records to skip for pagination (default 0).</param>
     /// <param name="descending">When <c>true</c>, results are ordered newest-first (default).</param>
-    /// <param name="ct">Cancellation token.</param>
     new Task<IEnumerable<TherapySettings>> GetAsync(
         DateTime? from,
         DateTime? to,
@@ -40,14 +39,12 @@ public interface ITherapySettingsRepository : IProfileScopedRepository<TherapySe
     );
 
     /// <summary>The rows currently flagged <see cref="TherapySettings.IsDefault"/>, newest first.</summary>
-    /// <param name="ct">Cancellation token.</param>
     Task<IReadOnlyList<TherapySettings>> GetDefaultsAsync(CancellationToken ct = default);
 
     /// <summary>
     /// The newest row decomposed from a profile document, leaving out profile-switch snapshots
     /// (see <see cref="TherapySettings.ProfileSwitchStoreMarker"/>).
     /// </summary>
-    /// <param name="ct">Cancellation token.</param>
     Task<TherapySettings?> GetNewestDocumentRowAsync(CancellationToken ct = default);
 
     /// <summary>
@@ -55,11 +52,9 @@ public interface ITherapySettingsRepository : IProfileScopedRepository<TherapySe
     /// first as Nightscout sorts them: by time descending, then by <c>_id</c> descending. Profile-switch
     /// snapshots are not documents and are left out.
     /// </summary>
-    /// <param name="ct">Cancellation token.</param>
     Task<IReadOnlyList<string>> GetDocumentIdsAsync(CancellationToken ct = default);
 
     /// <summary>The number of stored profile documents <see cref="GetDocumentIdsAsync"/> lists.</summary>
-    /// <param name="ct">Cancellation token.</param>
     Task<long> CountDocumentsAsync(CancellationToken ct = default);
 
     /// <summary>
@@ -70,7 +65,6 @@ public interface ITherapySettingsRepository : IProfileScopedRepository<TherapySe
     /// <param name="limit">Maximum number of documents to return.</param>
     /// <param name="offset">Number of documents to skip.</param>
     /// <param name="descending">Whether the newest document comes first.</param>
-    /// <param name="ct">Cancellation token.</param>
     Task<IReadOnlyList<IReadOnlyList<TherapySettings>>> GetDocumentsAsync(
         int limit, int offset, bool descending, CancellationToken ct = default);
 
@@ -80,7 +74,6 @@ public interface ITherapySettingsRepository : IProfileScopedRepository<TherapySe
     /// snapshots.
     /// </summary>
     /// <param name="documentId">The document's <c>_id</c>.</param>
-    /// <param name="ct">Cancellation token.</param>
     Task<IReadOnlyList<TherapySettings>> GetDocumentRowsAsync(string documentId, CancellationToken ct = default);
 
     /// <summary>
@@ -88,6 +81,5 @@ public interface ITherapySettingsRepository : IProfileScopedRepository<TherapySe
     /// or clears the flag on every row when <paramref name="id"/> is <c>null</c>.
     /// </summary>
     /// <param name="id">The therapy settings row to flag, or <c>null</c> for none.</param>
-    /// <param name="ct">Cancellation token.</param>
     Task SetDefaultAsync(Guid? id, CancellationToken ct = default);
 }

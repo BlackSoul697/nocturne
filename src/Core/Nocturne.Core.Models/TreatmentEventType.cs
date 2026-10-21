@@ -4,7 +4,7 @@ using System.Text.Json.Serialization;
 namespace Nocturne.Core.Models;
 
 /// <summary>
-/// Represents the type of treatment event.
+/// Type of treatment event.
 /// 1:1 compatibility with Nightscout event types.
 /// <para>
 /// The <see cref="EnumMemberAttribute"/> values on each member define the exact string representation
@@ -29,27 +29,15 @@ public enum TreatmentEventType
     [EnumMember(Value = "BG Check")]
     BgCheck,
 
-    /// <summary>
-    /// Snack bolus
-    /// </summary>
     [EnumMember(Value = "Snack Bolus")]
     SnackBolus,
 
-    /// <summary>
-    /// Meal bolus
-    /// </summary>
     [EnumMember(Value = "Meal Bolus")]
     MealBolus,
 
-    /// <summary>
-    /// Correction bolus
-    /// </summary>
     [EnumMember(Value = "Correction Bolus")]
     CorrectionBolus,
 
-    /// <summary>
-    /// Carbohydrate correction
-    /// </summary>
     [EnumMember(Value = "Carb Correction")]
     CarbCorrection,
 
@@ -59,33 +47,19 @@ public enum TreatmentEventType
     [EnumMember(Value = "Combo Bolus")]
     ComboBolus,
 
-    /// <summary>
-    /// Announcement
-    /// </summary>
     [EnumMember(Value = "Announcement")]
     Announcement,
 
-    /// <summary>
-    /// Note
-    /// </summary>
     [EnumMember(Value = "Note")]
     Note,
 
-    /// <summary>
-    /// Question
-    /// </summary>
     [EnumMember(Value = "Question")]
     Question,
 
-    /// <summary>
-    /// Pump site change
-    /// </summary>
+    /// <summary>Pump infusion site changed</summary>
     [EnumMember(Value = "Site Change")]
     SiteChange,
 
-    /// <summary>
-    /// CGM sensor start
-    /// </summary>
     [EnumMember(Value = "Sensor Start")]
     SensorStart,
 
@@ -95,21 +69,13 @@ public enum TreatmentEventType
     [EnumMember(Value = "Sensor Change")]
     SensorChange,
 
-    /// <summary>
-    /// CGM sensor stop
-    /// </summary>
     [EnumMember(Value = "Sensor Stop")]
     SensorStop,
 
-    /// <summary>
-    /// Pump battery change
-    /// </summary>
     [EnumMember(Value = "Pump Battery Change")]
     PumpBatteryChange,
 
-    /// <summary>
-    /// Insulin cartridge change
-    /// </summary>
+    /// <summary>Insulin cartridge changed</summary>
     [EnumMember(Value = "Insulin Change")]
     InsulinChange,
 
@@ -125,9 +91,6 @@ public enum TreatmentEventType
     [EnumMember(Value = "Temp Basal End")]
     TempBasalEnd,
 
-    /// <summary>
-    /// Profile switch
-    /// </summary>
     [EnumMember(Value = "Profile Switch")]
     ProfileSwitch,
 
@@ -143,51 +106,27 @@ public enum TreatmentEventType
     [EnumMember(Value = "Temp Basal")]
     TempBasal,
 
-    /// <summary>
-    /// Exercise event
-    /// </summary>
     [EnumMember(Value = "Exercise")]
     Exercise,
 
-    /// <summary>
-    /// OpenAPS offline event
-    /// </summary>
     [EnumMember(Value = "OpenAPS Offline")]
     OpenApsOffline,
 
-    /// <summary>
-    /// Suspend pump event
-    /// </summary>
     [EnumMember(Value = "Suspend Pump")]
     SuspendPump,
 
-    /// <summary>
-    /// Resume pump event
-    /// </summary>
     [EnumMember(Value = "Resume Pump")]
     ResumePump,
 
-    /// <summary>
-    /// Bolus wizard event
-    /// </summary>
     [EnumMember(Value = "Bolus Wizard")]
     BolusWizard,
 
-    /// <summary>
-    /// Calibration event
-    /// </summary>
     [EnumMember(Value = "Calibration")]
     Calibration,
 
-    /// <summary>
-    /// Transmitter sensor insert
-    /// </summary>
     [EnumMember(Value = "Transmitter Sensor Insert")]
     TransmitterSensorInsert,
 
-    /// <summary>
-    /// Pod change
-    /// </summary>
     [EnumMember(Value = "Pod Change")]
     PodChange,
 

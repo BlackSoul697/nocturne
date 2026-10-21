@@ -17,7 +17,6 @@ public interface IProfileProjectionService
     /// <summary>
     /// The newest stored profile document, as <see cref="GetProfilesAsync"/> ranks them.
     /// </summary>
-    /// <param name="ct">Cancellation token.</param>
     /// <returns>The newest profile document, or <c>null</c> when none is stored.</returns>
     Task<Profile?> GetCurrentProfileAsync(CancellationToken ct = default);
 
@@ -25,7 +24,6 @@ public interface IProfileProjectionService
     /// The whole profile document <paramref name="id"/> resolves to through <see cref="ResolveDocumentIdAsync"/>.
     /// </summary>
     /// <param name="id">Legacy MongoDB ObjectId or GUID identifier.</param>
-    /// <param name="ct">Cancellation token.</param>
     /// <returns>The matching profile, or <c>null</c> if not found.</returns>
     Task<Profile?> GetProfileByIdAsync(string id, CancellationToken ct = default);
 
@@ -45,7 +43,6 @@ public interface IProfileProjectionService
     /// <param name="count">Maximum number of documents to return.</param>
     /// <param name="skip">Number of documents to skip.</param>
     /// <param name="descending">Whether the newest document comes first.</param>
-    /// <param name="ct">Cancellation token.</param>
     Task<IEnumerable<Profile>> GetProfilesAsync(int count = 10, int skip = 0, bool descending = true, CancellationToken ct = default);
 
     /// <summary>
@@ -55,7 +52,6 @@ public interface IProfileProjectionService
     /// </summary>
     /// <param name="cursorMills">The client's cursor, in Unix milliseconds.</param>
     /// <param name="limit">The page size; a page may exceed it to finish its last millisecond.</param>
-    /// <param name="ct">Cancellation token.</param>
     Task<ModifiedSincePage<Profile>> GetProfilesModifiedSinceAsync(
         long cursorMills, int limit, CancellationToken ct = default);
 
@@ -63,6 +59,5 @@ public interface IProfileProjectionService
     /// The number of stored profile documents <see cref="GetProfilesAsync"/> pages through.
     /// </summary>
     /// <param name="find">Optional filter string (reserved for future use).</param>
-    /// <param name="ct">Cancellation token.</param>
     Task<long> CountProfilesAsync(string? find = null, CancellationToken ct = default);
 }

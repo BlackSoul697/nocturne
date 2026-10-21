@@ -432,8 +432,6 @@ public sealed class FindQuery
             skipCapturedBounds: true, andReachable: true);
     }
 
-    #region Condition tree
-
     private sealed record Group(bool IsAnd, List<object> Children, bool IsLogical = false);
 
     /// <summary>
@@ -441,10 +439,6 @@ public sealed class FindQuery
     /// <see cref="JsonValue"/> the JSON-form operand (needed for typed arrays under $in/$nin).
     /// </summary>
     private sealed record Condition(string Path, string Op, string StringValue, JsonElement? JsonValue, string? RegexOptions);
-
-    #endregion
-
-    #region Parsing — querystring form
 
     private static Group ParseQueryString(string queryString, IReadOnlySet<string>? bareRegexFields)
     {
@@ -589,10 +583,6 @@ public sealed class FindQuery
         return true;
     }
 
-    #endregion
-
-    #region Parsing — JSON form
-
     private const int MaxDepth = 10;
 
     private static Group ParseJsonObject(JsonElement element, string? path, int depth)
@@ -692,10 +682,6 @@ public sealed class FindQuery
             _ => element.GetRawText(),
         };
     }
-
-    #endregion
-
-    #region Time bound extraction
 
     /// <remarks>
     /// A document's time is its whole millisecond, so a strict or sub-millisecond operand rounds
@@ -842,10 +828,6 @@ public sealed class FindQuery
             && DateTimeOffset.TryParse(
                 string.Concat(value.AsSpan(0, space), "+", value.AsSpan(space + 1)),
                 CultureInfo.InvariantCulture, DateTimeStyles.AssumeUniversal, out parsed));
-
-    #endregion
-
-    #region Evaluation
 
     private static bool EvaluateGroup(
         Group group, JsonElement document, IReadOnlySet<string> boundFields,
@@ -1079,6 +1061,4 @@ public sealed class FindQuery
             return false;
         }
     }
-
-    #endregion
 }
