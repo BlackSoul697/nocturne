@@ -1,3 +1,4 @@
+using Nocturne.API.Authorization;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using OpenApi.Remote.Attributes;
@@ -56,6 +57,7 @@ public class ShareLinkController : ControllerBase
     /// <see cref="TenantEntity.ShareTokenEncrypted"/> lists.
     /// </summary>
     [HttpPost("reveal")]
+    [RequireInteractiveSession]
     [RemoteCommand]
     [ProducesResponseType(typeof(ShareLinkDto), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status403Forbidden)]
@@ -89,6 +91,7 @@ public class ShareLinkController : ControllerBase
     /// stops working immediately.
     /// </summary>
     [HttpPost("rotate")]
+    [RequireInteractiveSession]
     [RemoteCommand(Invalidates = ["GetShareLink"])]
     [ProducesResponseType(typeof(ShareLinkDto), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status403Forbidden)]

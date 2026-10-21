@@ -169,17 +169,27 @@ public class ConnectorConfigurationScopeTests
         }
     }
 
-    [Fact]
-    public void WildcardGrant_KeepsTheWholeConnectorSurface()
+    [Theory]
+    [InlineData(AuthType.ApiKey)]
+    [InlineData(AuthType.InstanceKey)]
+    public void WildcardGrant_KeepsTheWholeConnectorSurfaceButSecrets(AuthType authType)
     {
-        // A legacy api-secret and an instance-key service credential both normalise to "*", and the
-        // provisioning paths that configure a connector for a tenant authenticate that way.
+        // A legacy api-secret and an instance-key service credential both normalise to "*". Saving
+        // secrets can adopt a working credential, which is the account holder's own decision
+        // (RequireInteractiveSessionAttribute).
         var wildcard = new HashSet<string> { Scope.FullAccess };
 
         foreach (var (controller, action) in GatedActions())
         {
-            Evaluate(controller, action, authenticated: true, wildcard)
-                .Should().BeNull($"a full-access grant must keep {controller.Name}.{action.Name}");
+            var result = Evaluate(controller, action, authenticated: true, wildcard, authType);
+            if (action.Name == nameof(ConfigurationController.SaveSecrets))
+            {
+                result.Should().BeOfType<ForbidResult>();
+            }
+            else
+            {
+                result.Should().BeNull($"a full-access grant must keep {controller.Name}.{action.Name}");
+            }
         }
     }
 
@@ -297,10 +307,11 @@ public class ConnectorConfigurationScopeTests
     /// them. Returns the short-circuit result, or null when the request would reach the handler.
     /// </summary>
     private static IActionResult? Evaluate(
-        Type controller, MethodInfo action, bool authenticated, IReadOnlySet<string> grantedScopes)
+        Type controller, MethodInfo action, bool authenticated, IReadOnlySet<string> grantedScopes,
+        AuthType authType = AuthType.SessionCookie)
     {
         var actionContext = new ActionContext(
-            NewHttpContext(authenticated, grantedScopes, credentialScopes: []),
+            NewHttpContext(authenticated, grantedScopes, credentialScopes: [], authType),
             new RouteData(),
             new ActionDescriptor());
 
@@ -316,7 +327,8 @@ public class ConnectorConfigurationScopeTests
     }
 
     private static DefaultHttpContext NewHttpContext(
-        bool authenticated, IReadOnlySet<string> grantedScopes, string[] credentialScopes)
+        bool authenticated, IReadOnlySet<string> grantedScopes, string[] credentialScopes,
+        AuthType authType = AuthType.SessionCookie)
     {
         var httpContext = new DefaultHttpContext();
         if (authenticated)
@@ -324,6 +336,7 @@ public class ConnectorConfigurationScopeTests
             httpContext.Items["AuthContext"] = new AuthContext
             {
                 IsAuthenticated = true,
+                AuthType = authType,
                 SubjectId = Guid.CreateVersion7(),
                 Scopes = [.. credentialScopes],
             };

@@ -290,6 +290,14 @@ public class ConnectorConfigurationService : IConnectorConfigurationService
         if (string.IsNullOrWhiteSpace(apiSecret))
             return;
 
+        // Adopting a credential is a person's decision, made by saving it from the connector page;
+        // a job that writes the connector's secrets on its own does not hand out a working key.
+        if (_auditContext.SubjectId is null)
+        {
+            _logger.LogWarning("Not adopting the Nightscout API secret: no authenticated subject saved it");
+            return;
+        }
+
         // SHA-1 is required here: the Nightscout `api-secret` protocol hashes the secret
         // with SHA-1, so legacy clients (xDrip, etc.) send that hash and we must match it.
         var sha1Hash = HashUtils.Sha1Hex(apiSecret);

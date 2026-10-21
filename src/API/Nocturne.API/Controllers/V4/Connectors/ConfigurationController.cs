@@ -353,6 +353,7 @@ public class ConfigurationController : ControllerBase
     /// <param name="secrets">Dictionary of secret property names to plaintext values</param>
     /// <param name="ct">Cancellation token</param>
     [HttpPut("{connectorName}/secrets")]
+    [RequireInteractiveSession]
     [RemoteCommand(Invalidates = ["GetConfiguration", "GetAllConnectorStatus"])]
     [RequireScope(Scope.TenantSettings)]
     [ProducesResponseType(StatusCodes.Status204NoContent)]

@@ -13,9 +13,9 @@ namespace Nocturne.API.Hubs;
 /// is what decides access to the groups that carry more than one category.
 /// </summary>
 /// <remarks>
-/// "Belongs to the tenant" is what the handshake proved: a tenant-membership row for every type but
-/// platform access, since <see cref="Middleware.AuthenticationMiddleware"/> rejects a subject that has
-/// none.
+/// "Belongs to the tenant" is what the handshake proved: a tenant-membership row, which
+/// <see cref="Middleware.AuthenticationMiddleware"/> requires of every credential except the
+/// instance key and platform access.
 /// </remarks>
 /// <seealso cref="HubAuthorization.CanJoinTenantRelay"/>
 public enum HubCredentialKind

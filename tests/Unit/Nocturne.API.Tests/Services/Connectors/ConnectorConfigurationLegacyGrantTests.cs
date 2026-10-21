@@ -152,6 +152,16 @@ public class ConnectorConfigurationLegacyGrantTests : IDisposable
     }
 
     [Fact]
+    public async Task SaveSecrets_NightscoutWithNoAuthenticatedSubject_DoesNotCreateGrant()
+    {
+        _auditContext.Setup(a => a.SubjectId).Returns((Guid?)null);
+
+        await _service.SaveSecretsAsync("Nightscout", new Dictionary<string, string> { ["ApiSecret"] = "s" });
+
+        (await _dbContext.OAuthGrants.AnyAsync()).Should().BeFalse();
+    }
+
+    [Fact]
     public async Task SaveSecrets_NightscoutCaseInsensitive_CreatesLegacyGrant()
     {
         var secrets = new Dictionary<string, string> { ["apiSecret"] = "test-secret" };
