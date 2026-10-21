@@ -397,7 +397,8 @@ internal static class StatisticsReadScopeGuard
 /// glucose category; delivered basal, the insulin above schedule, IOB/COB, boluses and carbs are
 /// treatments; the profile names and the separate schedule series (scheduled basal, target range)
 /// are therapy settings. Both of those series also carry treatments (the scheduled basal is scaled
-/// by any override, the target range overlays temporary targets), so they need treatments too. The masks follow the categories of the spans they are drawn from, as
+/// by any override, the target range overlays temporary targets), so they need treatments too.
+/// The masks follow the categories of the spans they are drawn from, as
 /// <see cref="ChartDataReadScopeGuard"/> serves them: overrides, temporary targets, exercise and
 /// illness are treatments, pump mode and the registered pumps are devices.
 /// </summary>

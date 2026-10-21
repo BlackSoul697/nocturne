@@ -235,6 +235,10 @@ public sealed class NetInsulinAboveSchedule
     /// point holds only within <see cref="BasalEvidence.Recorded"/> and a schedule-filled one only
     /// within <see cref="BasalEvidence.Inferable"/>; everywhere else delivery is absent.
     /// </summary>
+    /// <remarks>
+    /// A fill that straddles <paramref name="end"/> relies on <c>IBasalSeriesBuilder</c> clamping
+    /// temps to its end, so evidence fetched past it bounds the gap but never counts as delivery.
+    /// </remarks>
     /// <param name="end">Where the last point stops.</param>
     public static List<DeliveredBasalSegment> DeliveredFromSeries(
         IEnumerable<BasalPoint> series, long end, BasalEvidence evidence)
