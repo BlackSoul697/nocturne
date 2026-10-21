@@ -7,10 +7,13 @@ using Microsoft.Extensions.Options;
 using Moq;
 using FluentAssertions;
 using Nocturne.API.Configuration;
+using Nocturne.API.Extensions;
 using Nocturne.API.Middleware;
 using Nocturne.API.Models.Compatibility;
+using Nocturne.API.Multitenancy;
 using Nocturne.API.Services.Compatibility;
 using Nocturne.API.Tests.TestDoubles;
+using Nocturne.Core.Contracts.Multitenancy;
 using Microsoft.Extensions.Hosting;
 
 namespace Nocturne.API.Tests.Middleware;
@@ -22,6 +25,12 @@ public class CompatibilityProxyMiddlewareTests
     private readonly Mock<IResponseComparisonService> _comparisonServiceMock;
     private readonly Mock<IDiscrepancyPersistenceService> _persistenceServiceMock;
     private readonly ILogger<CompatibilityProxyMiddleware> _logger;
+
+    private static readonly TenantContext DefaultTenant =
+        new(Guid.CreateVersion7(), "acme", "Acme", IsActive: true, IsDemo: false);
+
+    private static readonly TenantContext NoTenant =
+        new(Guid.Empty, "none", "None", IsActive: false, IsDemo: false);
 
     public CompatibilityProxyMiddlewareTests()
     {
@@ -62,8 +71,11 @@ public class CompatibilityProxyMiddlewareTests
         bool proxyEnabled,
         RequestDelegate? next = null,
         string method = "GET",
-        string path = "/api/v1/entries.json")
+        string path = "/api/v1/entries.json",
+        TenantContext? tenant = null,
+        Action<IServiceProvider>? onPersistenceResolved = null)
     {
+        tenant ??= DefaultTenant;
         var config = Options.Create(new CompatibilityProxyConfiguration { Enabled = proxyEnabled });
 
         // Build a service collection that mimics DI
@@ -78,7 +90,12 @@ public class CompatibilityProxyMiddlewareTests
         services.AddSingleton<IOptions<CompatibilityProxyConfiguration>>(config);
         services.AddScoped<IRequestForwardingService>(_ => _forwardingServiceMock.Object);
         services.AddScoped<IResponseComparisonService>(_ => _comparisonServiceMock.Object);
-        services.AddScoped<IDiscrepancyPersistenceService>(_ => _persistenceServiceMock.Object);
+        services.AddScoped<ITenantAccessor, HttpContextTenantAccessor>();
+        services.AddScoped<IDiscrepancyPersistenceService>(sp =>
+        {
+            onPersistenceResolved?.Invoke(sp);
+            return _persistenceServiceMock.Object;
+        });
 
         var serviceProvider = services.BuildServiceProvider();
 
@@ -96,6 +113,8 @@ public class CompatibilityProxyMiddlewareTests
         {
             RequestServices = serviceProvider,
         };
+        if (!ReferenceEquals(tenant, NoTenant))
+            context.SetTenantContext(tenant);
         context.Request.Method = method;
         context.Request.Path = path;
         context.Response.Body = new MemoryStream();
@@ -156,6 +175,43 @@ public class CompatibilityProxyMiddlewareTests
                 It.IsAny<TargetResponse?>(),
                 It.IsAny<string>(),
                 It.Is<string?>(p => p != null && p.Contains("noc_"))),
+            Times.Never);
+    }
+
+    [Fact]
+    public async Task BackgroundComparison_StoresTheAnalysisInAScopeForTheRequestsTenant()
+    {
+        var tenant = new TenantContext(Guid.CreateVersion7(), "sleepy", "Sleepy", IsActive: true, IsDemo: false);
+        var storingTenant = new TaskCompletionSource<Guid>();
+        _persistenceServiceMock
+            .Setup(s => s.StoreAnalysisAsync(
+                It.IsAny<ResponseComparisonResult>(),
+                It.IsAny<CompatibilityProxyResponse>(),
+                It.IsAny<string>(),
+                It.IsAny<string>(),
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync(Guid.NewGuid());
+        var (middleware, context) = CreateMiddleware(
+            proxyEnabled: true,
+            tenant: tenant,
+            onPersistenceResolved: sp =>
+                storingTenant.TrySetResult(sp.GetRequiredService<ITenantAccessor>().TenantId));
+
+        await middleware.InvokeAsync(context);
+
+        (await storingTenant.Task.WaitAsync(TimeSpan.FromSeconds(5))).Should().Be(tenant.TenantId);
+    }
+
+    [Fact]
+    public async Task RequestWithNoTenant_SkipsTheBackgroundComparison()
+    {
+        var (middleware, context) = CreateMiddleware(proxyEnabled: true, tenant: NoTenant);
+
+        await middleware.InvokeAsync(context);
+        await Task.Delay(200);
+
+        _forwardingServiceMock.Verify(
+            s => s.ForwardToNightscoutAsync(It.IsAny<ClonedRequest>(), It.IsAny<CancellationToken>()),
             Times.Never);
     }
 
