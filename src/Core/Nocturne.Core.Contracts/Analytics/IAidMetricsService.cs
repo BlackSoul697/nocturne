@@ -11,7 +11,7 @@ namespace Nocturne.Core.Contracts.Analytics;
 /// <seealso cref="IAidDetectionStrategy"/>
 /// <seealso cref="AidSystemMetrics"/>
 /// <seealso cref="TempBasal"/>
-/// <seealso cref="ApsSnapshot"/>
+/// <seealso cref="ApsLoopCycle"/>
 public interface IAidMetricsService
 {
     /// <summary>
@@ -31,7 +31,7 @@ public interface IAidMetricsService
     /// <returns>Computed <see cref="AidSystemMetrics"/>.</returns>
     AidSystemMetrics Calculate(
         IReadOnlyList<DeviceSegmentInput> deviceSegments,
-        IReadOnlyList<ApsSnapshot> apsSnapshots,
+        IReadOnlyList<ApsLoopCycle> apsSnapshots,
         IReadOnlyList<TempBasal> tempBasals,
         int siteChangeCount,
         string? cgmDeviceNames,

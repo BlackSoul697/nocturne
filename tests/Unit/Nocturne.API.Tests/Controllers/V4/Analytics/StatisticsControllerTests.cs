@@ -59,6 +59,9 @@ public class StatisticsControllerTests
             .Setup(r => r.GetAllCopiesAsync(
                 It.IsAny<DateTime>(), It.IsAny<DateTime>(), It.IsAny<IReadOnlyCollection<DeviceEventType>>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync([]);
+        _apsSnapshotRepoMock
+            .Setup(r => r.GetLoopCyclesAsync(It.IsAny<DateTime>(), It.IsAny<DateTime>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync([]);
 
         var controller = new StatisticsController(
             statisticsService ?? _statsServiceMock.Object,
@@ -1923,7 +1926,7 @@ public class StatisticsControllerTests
         _aidMetricsServiceMock
             .Setup(s => s.Calculate(
                 It.IsAny<IReadOnlyList<DeviceSegmentInput>>(),
-                It.IsAny<IReadOnlyList<ApsSnapshot>>(),
+                It.IsAny<IReadOnlyList<ApsLoopCycle>>(),
                 It.IsAny<IReadOnlyList<TempBasal>>(),
                 It.IsAny<int>(),
                 It.IsAny<string?>(),
@@ -1935,7 +1938,7 @@ public class StatisticsControllerTests
                 It.IsAny<DateTime>()))
             .Returns((
                 IReadOnlyList<DeviceSegmentInput> _,
-                IReadOnlyList<ApsSnapshot> _,
+                IReadOnlyList<ApsLoopCycle> _,
                 IReadOnlyList<TempBasal> _,
                 int _,
                 string? cgmNames,
@@ -1996,10 +1999,8 @@ public class StatisticsControllerTests
 
         await CreateController().GetAidSystemMetrics(start, start.AddDays(90), CancellationToken.None);
 
-        _apsSnapshotRepoMock.Verify(r => r.GetAsync(
-            It.IsAny<DateTime?>(), It.IsAny<DateTime?>(),
-            It.IsAny<string?>(), It.IsAny<string?>(),
-            int.MaxValue, It.IsAny<int>(), false, It.IsAny<CancellationToken>()), Times.Once);
+        _apsSnapshotRepoMock.Verify(r => r.GetLoopCyclesAsync(
+            It.IsAny<DateTime>(), It.IsAny<DateTime>(), It.IsAny<CancellationToken>()), Times.Once);
 
         _tempBasalRepoMock.Verify(r => r.GetAsync(
             It.IsAny<DateTime?>(), It.IsAny<DateTime?>(),
@@ -2192,10 +2193,8 @@ public class StatisticsControllerTests
         _patientDeviceRepoMock.Verify(r => r.GetByDateRangeAsync(
             It.IsAny<DateTime>(), It.IsAny<DateTime>(), token), Times.Once);
 
-        _apsSnapshotRepoMock.Verify(r => r.GetAsync(
-            It.IsAny<DateTime?>(), It.IsAny<DateTime?>(),
-            It.IsAny<string?>(), It.IsAny<string?>(),
-            It.IsAny<int>(), It.IsAny<int>(), It.IsAny<bool>(), token), Times.Once);
+        _apsSnapshotRepoMock.Verify(r => r.GetLoopCyclesAsync(
+            It.IsAny<DateTime>(), It.IsAny<DateTime>(), token), Times.Once);
 
         _tempBasalRepoMock.Verify(r => r.GetAsync(
             It.IsAny<DateTime?>(), It.IsAny<DateTime?>(),

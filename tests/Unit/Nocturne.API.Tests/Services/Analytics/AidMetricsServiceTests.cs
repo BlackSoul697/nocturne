@@ -80,7 +80,7 @@ public class AidMetricsServiceTests
         var start = new DateTime(2024, 1, 1, 0, 0, 0, DateTimeKind.Utc);
         var end = new DateTime(2024, 1, 1, 1, 0, 0, DateTimeKind.Utc);
 
-        var snapshots = Enumerable.Range(0, 12).Select(i => new ApsSnapshot
+        var snapshots = Enumerable.Range(0, 12).Select(i => new ApsLoopCycle
         {
             Timestamp = start.AddMinutes(i * 5),
             Enacted = true,
@@ -109,7 +109,7 @@ public class AidMetricsServiceTests
         var start = new DateTime(2024, 1, 1, 0, 0, 0, DateTimeKind.Utc);
         var end = new DateTime(2024, 1, 1, 1, 0, 0, DateTimeKind.Utc);
 
-        var snapshots = Enumerable.Range(0, 12).Select(i => new ApsSnapshot
+        var snapshots = Enumerable.Range(0, 12).Select(i => new ApsLoopCycle
         {
             Timestamp = start.AddMinutes(i * 5),
             Enacted = i % 2 == 0,
@@ -266,7 +266,7 @@ public class AidMetricsServiceTests
         };
 
         // 288 snapshots = 24 hours * 12 per hour, all enacted
-        var snapshots = Enumerable.Range(0, 288).Select(i => new ApsSnapshot
+        var snapshots = Enumerable.Range(0, 288).Select(i => new ApsLoopCycle
         {
             Timestamp = start.AddMinutes(i * 5),
             Enacted = true,
@@ -301,7 +301,7 @@ public class AidMetricsServiceTests
         };
 
         // 144 snapshots for first 12 hours, all enacted
-        var snapshots = Enumerable.Range(0, 144).Select(i => new ApsSnapshot
+        var snapshots = Enumerable.Range(0, 144).Select(i => new ApsLoopCycle
         {
             Timestamp = start.AddMinutes(i * 5),
             Enacted = true,
@@ -356,7 +356,7 @@ public class AidMetricsServiceTests
         };
 
         // 288 snapshots within report bounds
-        var snapshots = Enumerable.Range(0, 288).Select(i => new ApsSnapshot
+        var snapshots = Enumerable.Range(0, 288).Select(i => new ApsLoopCycle
         {
             Timestamp = start.AddMinutes(i * 5),
             Enacted = true,

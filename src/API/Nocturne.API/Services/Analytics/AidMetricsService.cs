@@ -41,7 +41,7 @@ public class AidMetricsService : IAidMetricsService
 
     public AidSystemMetrics Calculate(
         IReadOnlyList<DeviceSegmentInput> deviceSegments,
-        IReadOnlyList<ApsSnapshot> apsSnapshots,
+        IReadOnlyList<ApsLoopCycle> apsSnapshots,
         IReadOnlyList<TempBasal> tempBasals,
         int siteChangeCount,
         string? cgmDeviceNames,

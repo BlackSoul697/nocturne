@@ -12,7 +12,7 @@ namespace Nocturne.API.Services.Analytics;
 /// <param name="Glucose">Canonical readings (<see cref="ICanonicalGlucoseService"/>).</param>
 public sealed record AidSystemMetricsRecords(
     IReadOnlyList<PatientDevice> Devices,
-    IReadOnlyList<ApsSnapshot> ApsSnapshots,
+    IReadOnlyList<ApsLoopCycle> LoopCycles,
     IReadOnlyList<TempBasal> TempBasals,
     IReadOnlyList<DeviceEvent> DeviceEvents,
     IReadOnlyList<SensorGlucose> Glucose,
@@ -21,7 +21,7 @@ public sealed record AidSystemMetricsRecords(
 
 /// <summary>
 /// Reads and assembles the inputs of <see cref="IAidMetricsService"/>: the pumps' algorithm
-/// segments, the APS snapshots and temp basals, the site changes, the CGM active time and the
+/// segments, the APS loop cycles and temp basals, the site changes, the CGM active time and the
 /// device names, for a reader that has already fetched them (<see cref="Calculate"/>) or one that
 /// has not (<see cref="ReadAsync"/>).
 /// </summary>
@@ -49,7 +49,7 @@ public sealed class AidSystemMetricsReader(
     {
         var devices = await patientDeviceRepository.GetByDateRangeAsync(start, end, ct: ct);
 
-        var apsTask = apsSnapshotRepository.GetAsync(start, end, null, null, int.MaxValue, descending: false, ct: ct);
+        var apsTask = apsSnapshotRepository.GetLoopCyclesAsync(start, end, ct);
         var basalTask = tempBasalRepository.GetAsync(start, end, null, null, int.MaxValue, descending: false, ct: ct);
         var eventTask = deviceEventRepository.GetAsync(start, end, null, null, int.MaxValue, descending: false, ct: ct);
         var glucoseTask = sensorGlucoseRepository.GetForAnalyticsAsync(start, end, null, null, int.MaxValue, descending: false, ct: ct);
@@ -138,7 +138,7 @@ public sealed class AidSystemMetricsReader(
 
         return aidMetricsService.Calculate(
             deviceSegments,
-            records.ApsSnapshots,
+            records.LoopCycles,
             records.TempBasals,
             siteChangeCount,
             cgmDeviceNames,
