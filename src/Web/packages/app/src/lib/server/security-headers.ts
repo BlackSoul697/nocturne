@@ -4,8 +4,18 @@
  */
 const FRAMEABLE_PATH = /^\/clock\/[^/]+\/?$/;
 
+const SCHEME = /^[a-z][a-z0-9+.-]*$/i;
+const HOST = /^[a-z0-9*.-]+$/i;
+const PORT = /^(\d+|\*)$/;
+
 /** A CSP host or scheme source (`https://ha.example.com:8123`, `*.example.com`, `https:`). */
-const FRAME_ANCESTOR = /^(?:[a-z][a-z0-9+.-]*:\/\/)?[a-z0-9*.-]+(?::(?:\d+|\*))?$|^[a-z][a-z0-9+.-]*:$/i;
+function isFrameAncestor(source: string): boolean {
+  if (source.endsWith(":") && SCHEME.test(source.slice(0, -1))) return true;
+  const separator = source.indexOf("://");
+  if (separator !== -1 && !SCHEME.test(source.slice(0, separator))) return false;
+  const [host, port, ...rest] = source.slice(separator === -1 ? 0 : separator + 3).split(":");
+  return rest.length === 0 && HOST.test(host) && (port === undefined || PORT.test(port));
+}
 
 /**
  * Reads `ALLOWED_FRAME_ANCESTORS`: whitespace- or comma-separated sources allowed to frame the
@@ -13,7 +23,7 @@ const FRAME_ANCESTOR = /^(?:[a-z][a-z0-9+.-]*:\/\/)?[a-z0-9*.-]+(?::(?:\d+|\*))?
  * source is dropped, so the setting cannot smuggle other directives into the header.
  */
 export function parseFrameAncestors(raw: string | undefined): string[] {
-  return (raw ?? "").split(/[\s,]+/).filter((source) => FRAME_ANCESTOR.test(source));
+  return (raw ?? "").split(/[\s,]+/).filter(isFrameAncestor);
 }
 
 /**
