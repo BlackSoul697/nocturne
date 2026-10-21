@@ -15396,9 +15396,8 @@ msgstr "Replay your enabled rules against historical glucose. Nothing is deliver
 #~ msgid "Critical channels unreachable. Alerts may not deliver."
 #~ msgstr "Critical channels unreachable. Alerts may not deliver."
 
-#: src/lib/components/alerts/DndNoticeStrip.svelte
-msgid "Do Not Disturb is on. Only critical rules will fire."
-msgstr "Do Not Disturb is on. Only critical rules will fire."
+#~ msgid "Do Not Disturb is on. Only critical rules will fire."
+#~ msgstr "Do Not Disturb is on. Only critical rules will fire."
 
 #: src/routes/(authenticated)/alerts/dnd/+page.svelte
 msgid "Failed to save DND settings"
@@ -27174,3 +27173,7 @@ msgstr "Energy <0>optional</0>"
 #: src/routes/(authenticated)/food/FoodFields.svelte
 msgid "Portion <0/>"
 msgstr "Portion <0/>"
+
+#: src/lib/components/alerts/DndNoticeStrip.svelte
+msgid "Do Not Disturb is on. Only critical rules and rules allowed through Do Not Disturb will fire."
+msgstr "Do Not Disturb is on. Only critical rules and rules allowed through Do Not Disturb will fire."

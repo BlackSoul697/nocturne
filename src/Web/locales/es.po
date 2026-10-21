@@ -15396,9 +15396,8 @@ msgstr "Reproduce tus reglas activadas sobre datos históricos. No se envía nin
 #~ msgid "Critical channels unreachable. Alerts may not deliver."
 #~ msgstr ""
 
-#: src/lib/components/alerts/DndNoticeStrip.svelte
-msgid "Do Not Disturb is on. Only critical rules will fire."
-msgstr "No molestar está activado. Solo se activarán las reglas críticas."
+#~ msgid "Do Not Disturb is on. Only critical rules will fire."
+#~ msgstr "No molestar está activado. Solo se activarán las reglas críticas."
 
 #: src/routes/(authenticated)/alerts/dnd/+page.svelte
 msgid "Failed to save DND settings"
@@ -27173,4 +27172,8 @@ msgstr ""
 
 #: src/routes/(authenticated)/food/FoodFields.svelte
 msgid "Portion <0/>"
+msgstr ""
+
+#: src/lib/components/alerts/DndNoticeStrip.svelte
+msgid "Do Not Disturb is on. Only critical rules and rules allowed through Do Not Disturb will fire."
 msgstr ""
