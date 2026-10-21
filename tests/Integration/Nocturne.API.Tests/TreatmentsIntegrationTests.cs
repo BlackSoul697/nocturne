@@ -510,11 +510,16 @@ public class TreatmentsIntegrationTests : ApiIntegrationTestBase
         return carb;
     }
 
-    /// <summary>A millisecond no other test in the fixture writes a treatment at.</summary>
-    private static string DistinctTime() => DateTimeOffset.UtcNow
-        .AddMinutes(-Random.Shared.Next(30, 6 * 60))
-        .AddMilliseconds(Random.Shared.Next(1, 60_000))
-        .ToString("yyyy-MM-ddTHH:mm:ss.fffZ");
+    private static readonly DateTimeOffset TimeBase = DateTimeOffset.UtcNow.AddMinutes(-30);
+    private static int _timeSlot;
+
+    /// <summary>
+    /// A millisecond no other test in the fixture writes a treatment at: 1.001 s before the last,
+    /// so no two calls share a second or a millisecond.
+    /// </summary>
+    private static string DistinctTime() => TimeBase
+        .AddMilliseconds(-1_001L * Interlocked.Increment(ref _timeSlot))
+        .ToString("yyyy-MM-ddTHH:mm:ss.fffZ", CultureInfo.InvariantCulture);
 
     private Task<IReadOnlyList<Treatment>> TreatmentsAtAsync(string at)
     {
