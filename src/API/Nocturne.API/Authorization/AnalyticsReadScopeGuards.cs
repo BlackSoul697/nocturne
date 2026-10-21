@@ -400,7 +400,8 @@ internal static class StatisticsReadScopeGuard
 /// by any override, the target range overlays temporary targets), so they need treatments too.
 /// The masks follow the categories of the spans they are drawn from, as
 /// <see cref="ChartDataReadScopeGuard"/> serves them: overrides, temporary targets, exercise and
-/// illness are treatments, pump mode and the registered pumps are devices.
+/// illness are treatments, pump mode and the registered pumps are devices. Each tab's payload has
+/// its own <c>Redact</c>.
 /// </summary>
 /// <remarks>
 /// <para>
@@ -464,6 +465,50 @@ internal static class LoopAnalysisReadScopeGuard
         if (data.Comparison is { } comparison)
             Narrow(comparison, glucose, treatments, therapy);
         return data;
+    }
+
+    /// <summary>
+    /// Prediction accuracy compares the APS snapshots' curves, which are devices, with the sensor
+    /// readings, which are glucose, so a curve needs both. Its context is drawn from carbs, boluses,
+    /// overrides and exercise, which are treatments: without them the context breakdowns go, and so
+    /// does every curve reported only in some contexts.
+    /// </summary>
+    public static PredictionAccuracyResponse Redact(PredictionAccuracyResponse data, IReadOnlySet<string> grantedScopes)
+    {
+        var glucose = AnalyticsReadScopes.Allows(grantedScopes, Scope.GlucoseRead);
+        var devices = AnalyticsReadScopes.Allows(grantedScopes, Scope.DevicesRead);
+        var treatments = AnalyticsReadScopes.Allows(grantedScopes, Scope.TreatmentsRead);
+
+        if (glucose && devices && treatments)
+            return data;
+
+        Narrow(data.Primary, glucose, devices, treatments);
+        if (data.Comparison is { } comparison)
+            Narrow(comparison, glucose, devices, treatments);
+        return data;
+    }
+
+    private static void Narrow(PredictionAccuracyRange range, bool glucose, bool devices, bool treatments)
+    {
+        if (!devices)
+        {
+            range.Predictions = 0;
+            range.Algorithms = [];
+        }
+
+        if (!glucose || !devices)
+        {
+            range.Curves = [];
+            return;
+        }
+
+        if (treatments)
+            return;
+
+        var everyContext = Enum.GetValues<PredictionContext>().Length;
+        range.Curves.RemoveAll(c => c.Contexts.Count < everyContext);
+        foreach (var curve in range.Curves)
+            curve.ByContext = [];
     }
 
     private static void Narrow(DailyProfileRange range, bool glucose, bool treatments, bool therapy)

@@ -69,20 +69,8 @@ public class LoopAnalysisController(ILoopAnalysisService service, TimeProvider t
         CancellationToken cancellationToken = default)
     {
         if (TryBuildFilter(
-                new LoopAnalysisFilter
-                {
-                    From = from,
-                    To = to,
-                    CompareFrom = compareFrom,
-                    CompareTo = compareTo,
-                    Days = days?.ToList(),
-                    ExcludeOverrides = excludeOverrides,
-                    ExcludeTemporaryTargets = excludeTemporaryTargets,
-                    ExcludeExercise = excludeExercise,
-                    ExcludeIllness = excludeIllness,
-                    ExcludeOpenLoop = excludeOpenLoop,
-                    ProfileName = profileName,
-                },
+                FilterOf(from, to, compareFrom, compareTo, days, excludeOverrides, excludeTemporaryTargets,
+                    excludeExercise, excludeIllness, excludeOpenLoop, profileName),
                 out var request) is { } invalid)
             return invalid;
 
@@ -91,6 +79,85 @@ public class LoopAnalysisController(ILoopAnalysisService service, TimeProvider t
         result.IgnoredFilters = request.IgnoredFilters;
         return Ok(LoopAnalysisReadScopeGuard.Redact(result, HttpContext.GetGrantedScopes()));
     }
+
+    /// <summary>
+    /// How far each prediction curve's values at +30, +60, +90 and +120 minutes landed from the
+    /// sensor reading nearest the time they predicted, overall, by local hour of day and by context.
+    /// </summary>
+    /// <remarks>
+    /// Only the +30 and +60 minute bias is a sign of the settings a prediction ran on: the reading at
+    /// a longer horizon follows everything the loop did after the prediction, which the prediction
+    /// assumed would not happen. Error is predicted minus actual, so a positive bias is a prediction
+    /// that ran high. A horizon with no reading within 2.5 minutes is counted as unmatched, never
+    /// paired with an imputed value. Needs glucose.read and devices.read for any curve, the
+    /// readings and the APS snapshots the curves come from; without treatments.read the context
+    /// breakdowns and oref's curves, each reported only in its context, are withheld.
+    /// </remarks>
+    /// <param name="from">Start of the range (inclusive, UTC).</param>
+    /// <param name="to">
+    /// End of the range (exclusive, UTC), at most 90 days of elapsed time after
+    /// <paramref name="from"/>. A range of 90 local days that crosses a fall-back transition is 90
+    /// days and an hour long, and is rejected.
+    /// </param>
+    /// <param name="compareFrom">Start of the comparison range; given together with <paramref name="compareTo"/>.</param>
+    /// <param name="compareTo">End of the comparison range, under the same limit as <paramref name="to"/>.</param>
+    /// <param name="days">Local weekdays to analyse; every day when empty.</param>
+    /// <param name="excludeOverrides">Mask override time; ignored without treatments.read.</param>
+    /// <param name="excludeTemporaryTargets">Mask temporary target time; ignored without treatments.read.</param>
+    /// <param name="excludeExercise">Mask exercise time; ignored without treatments.read.</param>
+    /// <param name="excludeIllness">Mask illness time; ignored without treatments.read. On by default.</param>
+    /// <param name="excludeOpenLoop">Mask time the pump was in manual mode or had no AID algorithm; ignored without devices.read. On by default.</param>
+    /// <param name="profileName">Analyse only time this profile was active; ignored without therapy.read.</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    [HttpGet("prediction-accuracy")]
+    [RemoteQuery]
+    [RequireScope(LoopAnalysisReadScopeGuard.AdmissionScope)]
+    [ResponseCache(Duration = 60, Location = ResponseCacheLocation.Client)]
+    [ProducesResponseType(typeof(PredictionAccuracyResponse), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    public async Task<ActionResult<PredictionAccuracyResponse>> GetPredictionAccuracy(
+        [FromQuery] DateTime from,
+        [FromQuery] DateTime to,
+        [FromQuery] DateTime? compareFrom = null,
+        [FromQuery] DateTime? compareTo = null,
+        [FromQuery] DayOfWeek[]? days = null,
+        [FromQuery] bool excludeOverrides = false,
+        [FromQuery] bool excludeTemporaryTargets = false,
+        [FromQuery] bool excludeExercise = false,
+        [FromQuery] bool excludeIllness = true,
+        [FromQuery] bool excludeOpenLoop = true,
+        [FromQuery] string? profileName = null,
+        CancellationToken cancellationToken = default)
+    {
+        if (TryBuildFilter(
+                FilterOf(from, to, compareFrom, compareTo, days, excludeOverrides, excludeTemporaryTargets,
+                    excludeExercise, excludeIllness, excludeOpenLoop, profileName),
+                out var request) is { } invalid)
+            return invalid;
+
+        var result = await service.GetPredictionAccuracyAsync(request.Filter, cancellationToken);
+        result.HistoryClamped = request.HistoryClamped;
+        result.IgnoredFilters = request.IgnoredFilters;
+        return Ok(LoopAnalysisReadScopeGuard.Redact(result, HttpContext.GetGrantedScopes()));
+    }
+
+    private static LoopAnalysisFilter FilterOf(
+        DateTime from, DateTime to, DateTime? compareFrom, DateTime? compareTo, DayOfWeek[]? days,
+        bool excludeOverrides, bool excludeTemporaryTargets, bool excludeExercise, bool excludeIllness,
+        bool excludeOpenLoop, string? profileName) => new()
+    {
+        From = from,
+        To = to,
+        CompareFrom = compareFrom,
+        CompareTo = compareTo,
+        Days = days?.ToList(),
+        ExcludeOverrides = excludeOverrides,
+        ExcludeTemporaryTargets = excludeTemporaryTargets,
+        ExcludeExercise = excludeExercise,
+        ExcludeIllness = excludeIllness,
+        ExcludeOpenLoop = excludeOpenLoop,
+        ProfileName = profileName,
+    };
 
     private sealed record FilterRequest(LoopAnalysisFilter Filter, List<string> IgnoredFilters, bool HistoryClamped);
 

@@ -13,4 +13,7 @@ public interface ILoopAnalysisService
     /// to the reader's scopes and states the reader's history ceiling.
     /// </remarks>
     Task<DailyProfileResponse> GetDailyProfileAsync(LoopAnalysisFilter filter, CancellationToken ct = default);
+
+    /// <remarks>Unredacted, and without <see cref="PredictionAccuracyResponse.HistoryClamped"/>, as above.</remarks>
+    Task<PredictionAccuracyResponse> GetPredictionAccuracyAsync(LoopAnalysisFilter filter, CancellationToken ct = default);
 }

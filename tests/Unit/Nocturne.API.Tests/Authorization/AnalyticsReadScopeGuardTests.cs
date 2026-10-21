@@ -1286,6 +1286,9 @@ public class AnalyticsReadScopeGuardTests
         service
             .Setup(s => s.GetDailyProfileAsync(It.IsAny<LoopAnalysisFilter>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(DailyProfile);
+        service
+            .Setup(s => s.GetPredictionAccuracyAsync(It.IsAny<LoopAnalysisFilter>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(PredictionAccuracy);
 
         var context = ContextWith(scopes);
         context.HttpContext.Request.QueryString = new QueryString(query);
@@ -1345,6 +1348,108 @@ public class AnalyticsReadScopeGuardTests
             It.Is<LoopAnalysisFilter>(f =>
                 f.From == LoopAnalysisNow.AddHours(-24) && f.To == LoopAnalysisNow
                 && f.CompareFrom == wholeComparisonHidden && f.CompareTo == wholeComparisonHidden),
+            It.IsAny<CancellationToken>()));
+    }
+
+    private static PredictionHorizonAccuracy[] Horizons() =>
+        [new PredictionHorizonAccuracy { Minutes = 30, Error = Aggregate(5), Mae = 5, Mard = 4, SettingsSignal = true }];
+
+    private static PredictionCurveAccuracy Curve(PredictionCurve curve, params PredictionContext[] contexts) => new()
+    {
+        Curve = curve,
+        Contexts = [.. contexts],
+        Horizons = [.. Horizons()],
+        ByHour = [new PredictionHourAccuracy { Hour = 0, Horizons = [.. Horizons()] }],
+        ByContext = [.. contexts.Select(c => new PredictionContextAccuracy { Context = c, Horizons = [.. Horizons()] })],
+    };
+
+    private static PredictionAccuracyRange PredictionAccuracyRange() => new()
+    {
+        Predictions = 2,
+        Algorithms = [AidAlgorithm.Loop, AidAlgorithm.AndroidAps],
+        Curves =
+        [
+            Curve(PredictionCurve.Default, Enum.GetValues<PredictionContext>()),
+            Curve(PredictionCurve.Iob, PredictionContext.PostCorrection, PredictionContext.Fasting),
+            Curve(PredictionCurve.Cob, PredictionContext.PostMeal),
+        ],
+    };
+
+    private static PredictionAccuracyResponse PredictionAccuracy() => new()
+    {
+        Primary = PredictionAccuracyRange(),
+        Comparison = PredictionAccuracyRange(),
+    };
+
+    [Fact]
+    public void LoopAnalysis_Predictions_WithEveryCategory_AreUntouched()
+    {
+        var data = LoopAnalysisReadScopeGuard.Redact(PredictionAccuracy(), Granted(AllLoopAnalysisCategories));
+
+        data.Primary.Curves.Should().HaveCount(3);
+        data.Primary.Curves.Should().OnlyContain(c => c.ByContext.Count > 0);
+    }
+
+    [Theory]
+    [InlineData(Scope.TreatmentsRead, Scope.DevicesRead)]
+    [InlineData(Scope.GlucoseRead, Scope.TreatmentsRead)]
+    public void LoopAnalysis_Predictions_NeedBothTheReadingsAndTheSnapshots(params string[] scopes)
+    {
+        var data = LoopAnalysisReadScopeGuard.Redact(PredictionAccuracy(), Granted(scopes));
+
+        foreach (var range in new[] { data.Primary, data.Comparison! })
+            range.Curves.Should().BeEmpty();
+        (data.Primary.Predictions == 0).Should().Be(!scopes.Contains(Scope.DevicesRead), "the count is of APS snapshots");
+        (data.Primary.Algorithms.Count == 0).Should().Be(!scopes.Contains(Scope.DevicesRead));
+    }
+
+    [Fact]
+    public void LoopAnalysis_Predictions_WithoutTreatments_DropTheContextsAndTheCurvesReportedInSome()
+    {
+        var data = LoopAnalysisReadScopeGuard.Redact(
+            PredictionAccuracy(), Granted(Scope.GlucoseRead, Scope.DevicesRead, Scope.TherapyRead));
+
+        foreach (var range in new[] { data.Primary, data.Comparison! })
+        {
+            var curve = range.Curves.Should().ContainSingle().Subject;
+            curve.Curve.Should().Be(PredictionCurve.Default);
+            curve.Horizons.Should().NotBeEmpty();
+            curve.ByHour.Should().NotBeEmpty();
+            curve.ByContext.Should().BeEmpty();
+        }
+    }
+
+    [Fact]
+    public async Task LoopAnalysis_PredictionHandler_RedactsAndReportsTheIgnoredFilters()
+    {
+        var (controller, service) = LoopAnalysisHandler(
+            Granted(Scope.ReportsRead, Scope.GlucoseRead, Scope.DevicesRead), query: "?excludeExercise=true");
+
+        var result = await controller.GetPredictionAccuracy(
+            LoopAnalysisNow.AddDays(-7), LoopAnalysisNow, excludeExercise: true);
+
+        var data = result.Result.Should().BeOfType<OkObjectResult>()
+            .Which.Value.Should().BeOfType<PredictionAccuracyResponse>().Subject;
+        data.Primary.Curves.Should().ContainSingle().Which.ByContext.Should().BeEmpty();
+        data.IgnoredFilters.Should().Equal("excludeExercise");
+        service.Verify(s => s.GetPredictionAccuracyAsync(
+            It.Is<LoopAnalysisFilter>(f => !f.ExcludeExercise && !f.ExcludeIllness),
+            It.IsAny<CancellationToken>()));
+    }
+
+    [Fact]
+    public async Task LoopAnalysis_PredictionHandler_ClampsTheRangeToAClampedCallersHistory()
+    {
+        var (controller, service) = LoopAnalysisHandler(
+            Granted([Scope.ReportsRead, .. AllLoopAnalysisCategories]), historyClamped: true);
+
+        var result = await controller.GetPredictionAccuracy(LoopAnalysisNow.AddDays(-7), LoopAnalysisNow);
+
+        result.Result.Should().BeOfType<OkObjectResult>()
+            .Which.Value.Should().BeOfType<PredictionAccuracyResponse>().Subject
+            .HistoryClamped.Should().BeTrue();
+        service.Verify(s => s.GetPredictionAccuracyAsync(
+            It.Is<LoopAnalysisFilter>(f => f.From == LoopAnalysisNow.AddHours(-24)),
             It.IsAny<CancellationToken>()));
     }
 }
