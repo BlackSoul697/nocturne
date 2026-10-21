@@ -13,8 +13,8 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace Nocturne.Infrastructure.Data.Migrations
 {
     [DbContext(typeof(NocturneDbContext))]
-    [Migration("20261021055630_MoveMigratedSecretsOfNonMembersToDeviceSubject")]
-    partial class MoveMigratedSecretsOfNonMembersToDeviceSubject
+    [Migration("20261021055630_MoveAdoptedSecretsToDeviceSubject")]
+    partial class MoveAdoptedSecretsToDeviceSubject
     {
         /// <inheritdoc />
         protected override void BuildTargetModel(ModelBuilder modelBuilder)

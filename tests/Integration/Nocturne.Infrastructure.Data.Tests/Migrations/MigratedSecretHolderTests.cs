@@ -8,7 +8,7 @@ using Npgsql;
 namespace Nocturne.Infrastructure.Data.Tests.Migrations;
 
 /// <summary>
-/// Runs <c>MoveMigratedSecretsOfNonMembersToDeviceSubject</c> over seeded rows on a real PostgreSQL.
+/// Runs <c>MoveAdoptedSecretsToDeviceSubject</c> over seeded rows on a real PostgreSQL.
 /// </summary>
 /// <remarks>
 /// One run against one seed, as in <see cref="SubjectTokenConversionFixture"/>: each tenant below is
@@ -115,8 +115,8 @@ public class MigratedSecretHolderFixture : IAsyncLifetime
             """);
 
         await ExecuteAsync(LeftAlone, $"""
-            INSERT INTO oauth_grants (id, tenant_id, subject_id, grant_type, scopes, label, legacy_secret_hash, is_migrated, created_at)
-            VALUES (gen_random_uuid(), '{LeftAlone}', '{Owner}', 'direct', ARRAY['*'], 'OwnersOwn', repeat('6',40), true, now());
+            INSERT INTO oauth_grants (id, tenant_id, subject_id, grant_type, scopes, label, legacy_secret_hash, token_hash, is_migrated, created_at)
+            VALUES (gen_random_uuid(), '{LeftAlone}', '{Owner}', 'direct', ARRAY['*'], 'Minted', repeat('6',40), repeat('6',64), false, now());
             """);
     }
 }
@@ -164,9 +164,10 @@ public class MigratedSecretHolderTests(MigratedSecretHolderFixture fixture)
     }
 
     [Fact]
-    public async Task A_members_own_secret_stays_with_them()
+    public async Task A_secret_a_member_saved_moves_too()
     {
-        (await HolderAsync(Creates, "OwnersOwn")).Should().Be(MigratedSecretHolderFixture.Owner);
+        // Left with the member, removing them would stop every uploader on the site.
+        (await HolderAsync(Creates, "OwnersOwn")).Should().Be(await DevicesOfAsync(Creates));
     }
 
     [Fact]

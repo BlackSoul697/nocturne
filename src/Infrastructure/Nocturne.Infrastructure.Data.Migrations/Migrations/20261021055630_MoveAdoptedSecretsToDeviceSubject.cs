@@ -5,19 +5,20 @@
 namespace Nocturne.Infrastructure.Data.Migrations
 {
     /// <inheritdoc />
-    public partial class MoveMigratedSecretsOfNonMembersToDeviceSubject : Migration
+    public partial class MoveAdoptedSecretsToDeviceSubject : Migration
     {
         /// <summary>
-        /// An api-secret authenticates only while its grant's subject is a member of the tenant. A
-        /// Nightscout secret adopted on behalf of someone who is not (a platform admin who saved the
-        /// connector, or a member since removed) would stop every uploader using it, so those grants
-        /// move to the tenant's device subject, created where a tenant has none. See
-        /// <c>DeviceSubjectFilter</c> for why the holder is not a person.
+        /// An adopted Nightscout API secret belongs to the site, not to the person who happened to
+        /// save it or run the migration. Held by a person it would stop every uploader when that
+        /// person is removed, and an api-secret authenticates only while its holder is a member, so
+        /// every live one moves to the tenant's device subject, created where a tenant has none.
+        /// See <c>DeviceSubjectFilter</c> for why the holder is not a person.
         /// </summary>
         /// <remarks>
-        /// Only adopted secrets move. A minted <c>noc_</c> grant also carries a
-        /// <c>legacy_secret_hash</c>, but it belongs to the person it was issued to and stops with
-        /// their membership. Only <c>oauth_grants</c> is tenant-scoped, hence the per-tenant GUC.
+        /// Adopted secrets are the migrated grants with a <c>legacy_secret_hash</c> and no
+        /// <c>token_hash</c>. A minted <c>noc_</c> grant carries both hashes and belongs to the
+        /// person it was issued to. Only <c>oauth_grants</c> is tenant-scoped, hence the per-tenant
+        /// GUC.
         /// </remarks>
         protected override void Up(MigrationBuilder migrationBuilder)
         {
@@ -31,21 +32,20 @@ namespace Nocturne.Infrastructure.Data.Migrations
                     LOOP
                         PERFORM set_config('app.current_tenant_id', r.tenant_id::text, true);
 
-                        CREATE TEMP TABLE orphaned_secrets AS
+                        CREATE TEMP TABLE adopted_secrets AS
                             SELECT g.id
                               FROM oauth_grants g
+                              JOIN subjects s ON s.id = g.subject_id
                              WHERE g.tenant_id = r.tenant_id
                                AND g.grant_type = 'direct'
                                AND g.is_migrated
                                AND g.legacy_secret_hash IS NOT NULL
+                               AND g.token_hash IS NULL
                                AND g.revoked_at IS NULL
-                               AND NOT EXISTS (
-                                     SELECT 1 FROM tenant_members tm
-                                      WHERE tm.tenant_id = r.tenant_id
-                                        AND tm.subject_id = g.subject_id);
+                               AND NOT (s.is_system_subject AND s.name = 'Devices');
 
-                        IF NOT EXISTS (SELECT 1 FROM orphaned_secrets) THEN
-                            DROP TABLE orphaned_secrets;
+                        IF NOT EXISTS (SELECT 1 FROM adopted_secrets) THEN
+                            DROP TABLE adopted_secrets;
                             CONTINUE;
                         END IF;
 
@@ -81,17 +81,16 @@ namespace Nocturne.Infrastructure.Data.Migrations
 
                         UPDATE oauth_grants
                            SET subject_id = device_subject_id
-                         WHERE id IN (SELECT id FROM orphaned_secrets);
+                         WHERE id IN (SELECT id FROM adopted_secrets);
 
-                        DROP TABLE orphaned_secrets;
+                        DROP TABLE adopted_secrets;
                     END LOOP;
                 END $$;
                 """);
         }
 
         /// <remarks>
-        /// Not reversed: the grants' previous holders are not recorded, and putting a secret back on
-        /// a non-member would only make it refuse every request again.
+        /// Not reversed: the grants' previous holders are not recorded.
         /// </remarks>
         protected override void Down(MigrationBuilder migrationBuilder)
         {
