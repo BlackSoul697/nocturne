@@ -86,8 +86,7 @@ export const REALTIME_ADMISSION_PATH = '/api/v4/me/realtime-admission';
 
 /**
  * Tickets are short-lived. The client fetches a fresh one on every (re)connect,
- * and the bridge asks an admitted socket for another as its ticket expires, so
- * a socket's admission is never older than one lifetime.
+ * and the bridge asks an admitted socket for another as its ticket expires.
  */
 export const HANDSHAKE_TICKET_LIFETIME_MS = 2 * 60 * 1000; // 2 minutes
 

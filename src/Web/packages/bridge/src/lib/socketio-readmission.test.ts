@@ -163,8 +163,10 @@ describe('SocketIOServer re-admission of a browser socket admitted on a ticket',
     return { server, port: (http.address() as AddressInfo).port };
   }
 
+  type TicketReply = { token: string | null; denied: boolean };
+
   /** A browser admitted on `admitted` that answers each request for a fresh ticket with `answer()`. */
-  async function browser(port: number, admitted: RealtimeGrant, answer: () => string | null) {
+  async function browser(port: number, admitted: RealtimeGrant, answer: () => TicketReply) {
     const client = connectClient(`http://127.0.0.1:${port}`, {
       transports: ['websocket'],
       reconnection: false,
@@ -172,7 +174,7 @@ describe('SocketIOServer re-admission of a browser socket admitted on a ticket',
       auth: { token: signHandshakeTicket(SECRET, HOST, admitted) },
     });
     clients.push(client);
-    client.on('realtime_ticket', (ack: (token: string | null) => void) => ack(answer()));
+    client.on('realtime_ticket', (ack: (reply: TicketReply) => void) => ack(answer()));
     await new Promise<void>((resolve) => client.once('connect_ack', () => resolve()));
     return client;
   }
@@ -185,8 +187,10 @@ describe('SocketIOServer re-admission of a browser socket admitted on a ticket',
 
   it('moves the socket onto the rooms of the fresh ticket', async () => {
     const { server, port } = await listening();
-    const client = await browser(port, grant({ categories: ['entries', 'care'] }), () =>
-      signHandshakeTicket(SECRET, HOST, grant({ categories: ['entries'] })));
+    const client = await browser(port, grant({ categories: ['entries', 'care'] }), () => ({
+      token: signHandshakeTicket(SECRET, HOST, grant({ categories: ['entries'] })),
+      denied: false,
+    }));
     const socket = serverSocket(server, client);
 
     await server.readmit(socket);
@@ -198,9 +202,9 @@ describe('SocketIOServer re-admission of a browser socket admitted on a ticket',
   });
 
   it.each([
-    ['no ticket', () => null],
-    ['a ticket minted for another host', () => signHandshakeTicket(SECRET, 'other.nocturne.run', grant())],
-    ['a tampered ticket', () => signHandshakeTicket('another-key', HOST, grant())],
+    ['a denial', () => ({ token: null, denied: true })],
+    ['a ticket minted for another host', () => ({ token: signHandshakeTicket(SECRET, 'other.nocturne.run', grant()), denied: false })],
+    ['a tampered ticket', () => ({ token: signHandshakeTicket('another-key', HOST, grant()), denied: false })],
   ])('closes the transport of a socket that answers with %s', async (_case, answer) => {
     const { server, port } = await listening();
     const client = await browser(port, grant({ categories: ['entries'] }), answer);
@@ -211,6 +215,25 @@ describe('SocketIOServer re-admission of a browser socket admitted on a ticket',
 
     expect(await disconnected).toBe('transport close');
     expect(socket.connected).toBe(false);
+    await server.stop();
+  });
+
+  it('keeps a socket whose browser could not fetch a ticket, until one more ticket lifetime has passed', async () => {
+    const { server, port } = await listening();
+    const client = await browser(port, grant({ categories: ['entries'] }), () => ({ token: null, denied: false }));
+    const socket = serverSocket(server, client);
+    const rooms = [...socket.rooms].sort();
+
+    await server.readmit(socket);
+
+    expect(socket.connected).toBe(true);
+    expect([...socket.rooms].sort()).toEqual(rooms);
+
+    const disconnected = new Promise<string>((resolve) => client.once('disconnect', resolve));
+    socket.data.ticketGraceUntil = Date.now() - 1;
+    await server.readmit(socket);
+
+    expect(await disconnected).toBe('transport close');
     await server.stop();
   });
 });

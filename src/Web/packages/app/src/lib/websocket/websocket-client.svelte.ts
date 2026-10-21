@@ -362,11 +362,11 @@ export class WebSocketClient {
       this.reconnectAttempts++;
     });
 
-    // The bridge asks for a fresh ticket before the one it admitted this socket
-    // on lapses. Answering with none closes the transport, and the reconnect's
-    // own ticket fetch decides what happens next.
-    this.socket.on("realtime_ticket", (ack: (token: string | null) => void) => {
-      void this.fetchTicket().then(({ token }) => ack(token));
+    // The bridge asks for a fresh ticket as the one it admitted this socket on
+    // lapses. A denial ends the admission; a transient failure leaves the bridge
+    // to ask again.
+    this.socket.on("realtime_ticket", (ack: (reply: TicketResult) => void) => {
+      void this.fetchTicket().then(ack);
     });
 
     this.socket.on("connect_ack", (info: ConnectionInfo) => {

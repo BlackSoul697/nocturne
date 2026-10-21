@@ -267,16 +267,18 @@ describe("WebSocketClient handshake ticket handling", () => {
 
 describe("WebSocketClient fresh ticket requests", () => {
   it.each([
-    ["a fresh ticket", { token: "a-fresh-ticket" }, "a-fresh-ticket"],
-    ["no ticket once realtime is denied", { token: null }, null],
-  ])("answers the bridge's request with %s", async (_case, body, answered) => {
+    ["a fresh ticket", { token: "a-fresh-ticket" }, true, { token: "a-fresh-ticket", denied: false }],
+    ["a denial once realtime is denied", { token: null }, true, { token: null, denied: true }],
+    ["no ticket and no denial when the endpoint flags a retry", { token: null, retry: true }, true, { token: null, denied: false }],
+    ["no ticket and no denial when the endpoint fails", {}, false, { token: null, denied: false }],
+  ])("answers the bridge's request with %s", async (_case, body, ok, answered) => {
     stubTicketEndpoint({ token: "a-verifiable-ticket" });
     const client = new WebSocketClient(config);
     client.connect();
     const socket = lastSocket!;
     await socket.handshake();
 
-    stubTicketEndpoint(body);
+    stubTicketEndpoint(body, ok);
     const ack = vi.fn();
     socket.handlers.get("realtime_ticket")!(ack);
     await flush();

@@ -6,6 +6,7 @@ import {
   verifyHandshakeTicket,
   normalizeHandshakeHost,
   REALTIME_ADMISSION_PATH,
+  HANDSHAKE_TICKET_LIFETIME_MS,
   readRealtimeGrant,
   type RealtimeGrant,
 } from './handshake-ticket.js';
@@ -35,6 +36,8 @@ interface BridgeSocketData {
   readmission?: Readmission;
   /** The pending re-check of the socket's admission. */
   readmissionTimer?: ReturnType<typeof setTimeout>;
+  /** Until when a browser that could not produce a fresh ticket keeps its admission. */
+  ticketGraceUntil?: number;
 }
 
 /**
@@ -58,6 +61,9 @@ export const ADMISSION_RECHECK_INTERVAL_MS = 60_000;
 
 /** How long a browser has to answer a request for a fresh ticket. */
 export const TICKET_REFRESH_TIMEOUT_MS = 10_000;
+
+/** How soon a browser that could not produce a fresh ticket is asked again. */
+export const TICKET_RETRY_MS = 30_000;
 
 /** A probe the API did not answer: unreachable, timed out, or failing itself. */
 const UNANSWERED = 'unanswered';
@@ -495,16 +501,26 @@ class SocketIOServer {
   ): Promise<number | null> {
     switch (readmission.kind) {
       case 'ticket': {
-        const ticket = await this.requestFreshTicket(socket);
-        if (!ticket) {
+        const answer = await this.requestFreshTicket(socket);
+        if (answer === 'retry') {
+          // A browser that could not reach its ticket endpoint, or a bundle that
+          // predates the request and never answers, keeps its admission for one
+          // more ticket lifetime: a transient outage does not drop every
+          // dashboard, and a socket's admission is still never older than two
+          // ticket lifetimes.
+          socket.data.ticketGraceUntil ??= Date.now() + HANDSHAKE_TICKET_LIFETIME_MS;
+          if (Date.now() < socket.data.ticketGraceUntil) return TICKET_RETRY_MS;
+        }
+        if (answer === 'retry' || answer === 'refused') {
           // Closing the transport sends the browser back through its handshake,
-          // whose ticket fetch asks the API afresh.
+          // whose ticket fetch asks the API afresh and ends a denied session.
           logger.info(`Client ${socket.id} gave no fresh ticket; closing its transport`);
           socket.conn.close();
           return null;
         }
-        this.regrant(socket, tenantSlug, ticket);
-        return ticket.exp - Date.now();
+        socket.data.ticketGraceUntil = undefined;
+        this.regrant(socket, tenantSlug, answer);
+        return answer.exp - Date.now();
       }
       case 'credential': {
         const admission = await this.probeRealtimeAdmission(tenantSlug, readmission);
@@ -546,18 +562,23 @@ class SocketIOServer {
     }
   }
 
-  /** Asks a browser socket for a fresh handshake ticket and returns it once it
-   *  verifies for the host the socket arrived on, else null. */
+  /** Asks a browser socket for a fresh handshake ticket. Resolves to the
+   *  ticket once it verifies for the host the socket arrived on; `refused` for
+   *  a denial or a ticket that does not verify; `retry` when the browser gave no
+   *  ticket and no denial, or no answer at all. */
   private async requestFreshTicket(socket: BridgeSocket) {
-    let token: unknown;
+    let reply: unknown;
     try {
-      token = await socket.timeout(TICKET_REFRESH_TIMEOUT_MS).emitWithAck('realtime_ticket');
+      reply = await socket.timeout(TICKET_REFRESH_TIMEOUT_MS).emitWithAck('realtime_ticket');
     } catch {
-      return null;
+      return 'retry';
     }
+    const token = stringField(reply, 'token');
+    if (!token) return isRecord(reply) && reply.denied === true ? 'refused' : 'retry';
+
     const host = pickHandshakeHost(socket.handshake.headers);
-    const ticket = typeof token === 'string' ? verifyHandshakeTicket(this.signingSecret, token) : null;
-    return ticket && host && ticket.h === normalizeHandshakeHost(host) ? ticket : null;
+    const ticket = verifyHandshakeTicket(this.signingSecret, token);
+    return ticket && host && ticket.h === normalizeHandshakeHost(host) ? ticket : 'refused';
   }
 
   /** Handle the classic Nightscout `authorize` message.
