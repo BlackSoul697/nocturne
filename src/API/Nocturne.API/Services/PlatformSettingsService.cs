@@ -57,6 +57,8 @@ public class PlatformSettingsService
         ["telegram"] =
         [
             new("botToken", "Bot Token", true),
+            // Must match the secret_token passed to Telegram's setWebhook.
+            new("webhookSecretToken", "Webhook Secret Token", true),
         ],
         ["whatsapp"] =
         [
