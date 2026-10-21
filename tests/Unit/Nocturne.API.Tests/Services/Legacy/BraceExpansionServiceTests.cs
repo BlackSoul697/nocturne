@@ -190,4 +190,63 @@ public class BraceExpansionServiceTests
         patterns.Should().Contain(p => p.Contains("T13:00"));
         patterns.Should().Contain(p => p.Contains("T18:15"));
     }
+    [Fact]
+    public void ExpandBraces_RangeEndingAtIntMaxValue_StopsAtTheEnd()
+    {
+        _service.ExpandBraces("{2147483646..2147483647}").Should().Equal("2147483646", "2147483647");
+    }
+
+    [Fact]
+    public void ExpandBraces_DescendingRange_CountsDown()
+    {
+        _service.ExpandBraces("T{03..01}").Should().Equal("T03", "T02", "T01");
+    }
+
+    [Fact]
+    public void ExpandBraces_RangeAtTheSizeLimit_Expands()
+    {
+        _service.ExpandBraces("{1..1000}").Should().HaveCount(TimePatternLimits.MaxRangeSize);
+    }
+
+    [Theory]
+    [InlineData("{1..1001}")]
+    [InlineData("{0..2147483647}")]
+    [InlineData("{2147483647..0}")]
+    public void ExpandBraces_RangePastTheSizeLimit_IsRejected(string pattern)
+    {
+        var expand = () => _service.ExpandBraces(pattern).ToList();
+
+        expand.Should().Throw<TimePatternRejectedException>();
+    }
+
+    [Fact]
+    public void ExpandBraces_NestedGroupsPastTheResultLimit_AreRejected()
+    {
+        static string Groups(int count) => string.Concat(Enumerable.Range(0, count).Select(i => $"{{a{i},b{i}}}"));
+        var withinLimit = Groups(9);
+        var pastLimit = Groups(30);
+
+        _service.ExpandBraces(withinLimit).Should().HaveCount(512);
+        var expand = () => _service.ExpandBraces(pastLimit).ToList();
+        expand.Should().Throw<TimePatternRejectedException>();
+    }
+
+    [Fact]
+    public void ExpandBraces_PatternPastTheLengthLimit_IsRejected()
+    {
+        var pattern = new string('a', TimePatternLimits.MaxPatternLength + 1);
+
+        var expand = () => _service.ExpandBraces(pattern).ToList();
+
+        expand.Should().Throw<TimePatternRejectedException>();
+        _service.ExpandBraces(pattern[..^1]).Should().ContainSingle();
+    }
+
+    [Fact]
+    public void PrepareTimePatterns_WithAnOversizedRegexRange_IsRejected()
+    {
+        var prepare = () => _service.PrepareTimePatterns("2015-04", "T{0..99999}");
+
+        prepare.Should().Throw<TimePatternRejectedException>();
+    }
 }
