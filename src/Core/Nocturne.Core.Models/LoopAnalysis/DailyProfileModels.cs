@@ -31,8 +31,8 @@ public class DailyProfileResponse
     public bool HistoryClamped { get; set; }
 
     /// <summary>
-    /// Why no tenant timezone resolved. When set, no range carries slots, days or a summary: a
-    /// local day cannot be placed without the zone.
+    /// Why no tenant timezone resolved. When set, no range carries slots or days: a local day
+    /// cannot be placed without the zone.
     /// </summary>
     public TimeZoneUnavailableReason? TimeZoneUnavailableReason { get; set; }
 }
