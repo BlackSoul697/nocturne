@@ -104,10 +104,51 @@ public class CredentialAuthorityIntegrationTests : ApiIntegrationTestBase
         (await key.GetAsync("/api/oauth/grants")).StatusCode.Should().Be(HttpStatusCode.Forbidden);
         (await key.PostAsync("/api/auth/passkey/recovery/regenerate", null))
             .StatusCode.Should().Be(HttpStatusCode.Forbidden);
-        (await key.PostAsJsonAsync("/api/auth/passkey/register/options", new { username = "taken-over" }))
+        (await key.PostAsJsonAsync("/api/auth/passkey/register/options", new { username = "second-device" }))
             .StatusCode.Should().Be(HttpStatusCode.Forbidden);
         (await key.DeleteAsync($"/api/auth/totp/{Guid.CreateVersion7()}"))
             .StatusCode.Should().Be(HttpStatusCode.Forbidden);
+    }
+
+    /// <summary>
+    /// A grant with no scopes mints an exchange JWT with no scope claim. It must still read as the
+    /// grant it came from, never as a session carrying the member's whole role.
+    /// </summary>
+    [Fact]
+    public async Task ExchangeJwt_OfAGrantWithNoScopes_IsNotASession()
+    {
+        var (grantId, token) = await MintGrantAsync(_ownerSession, "glucose.read");
+        using var owner = AuthTestHelpers.CreateBearerClient(Fixture, _ownerSession);
+
+        (await owner.PatchAsJsonAsync($"/api/oauth/grants/{grantId}", new { scopes = Array.Empty<string>() }))
+            .StatusCode.Should().Be(HttpStatusCode.BadRequest);
+
+        // A row left with no scopes by an older release.
+        await using (var conn = new NpgsqlConnection(await GetPostgresConnectionStringAsync()))
+        {
+            await conn.OpenAsync();
+            await using var cmd = conn.CreateCommand();
+            cmd.CommandText = """
+                SELECT set_config('app.current_tenant_id', @t, false);
+                UPDATE oauth_grants SET scopes = ARRAY[]::text[] WHERE id = @g;
+                """;
+            cmd.Parameters.AddWithValue("t", _tenantId.ToString());
+            cmd.Parameters.AddWithValue("g", grantId);
+            await cmd.ExecuteNonQueryAsync();
+        }
+
+        using var anonymous = Fixture.CreateHttpClient("nocturne-api", "http");
+        var exchange = await anonymous.GetAsync($"/api/v2/authorization/request/{token}");
+        var body = await exchange.Content.ReadAsStringAsync();
+        exchange.StatusCode.Should().Be(HttpStatusCode.OK, body);
+        var jwt = JsonSerializer.Deserialize<JsonElement>(body).GetProperty("token").GetString()!;
+
+        using var exchanged = AuthTestHelpers.CreateBearerClient(Fixture, jwt);
+        (await exchanged.PostAsJsonAsync("/api/auth/direct-grants", new { label = "wider", scopes = new[] { "*" } }))
+            .StatusCode.Should().BeOneOf(HttpStatusCode.Unauthorized, HttpStatusCode.Forbidden);
+        (await exchanged.PostAsync("/api/auth/passkey/recovery/regenerate", null))
+            .StatusCode.Should().BeOneOf(HttpStatusCode.Unauthorized, HttpStatusCode.Forbidden);
+        (await exchanged.GetAsync("/api/v1/entries/current")).StatusCode.Should().Be(HttpStatusCode.Unauthorized);
     }
 
     [Fact]
@@ -140,13 +181,17 @@ public class CredentialAuthorityIntegrationTests : ApiIntegrationTestBase
             "the site's secret belongs to the site, not to whoever saved it");
     }
 
-    private async Task<string> MintAsync(string session, params string[] scopes)
+    private async Task<string> MintAsync(string session, params string[] scopes) =>
+        (await MintGrantAsync(session, scopes)).Token;
+
+    private async Task<(Guid Id, string Token)> MintGrantAsync(string session, params string[] scopes)
     {
         using var client = AuthTestHelpers.CreateBearerClient(Fixture, session);
         var response = await client.PostAsJsonAsync("/api/auth/direct-grants", new { label = "key", scopes });
         var body = await response.Content.ReadAsStringAsync();
         response.StatusCode.Should().Be(HttpStatusCode.OK, body);
-        return JsonSerializer.Deserialize<JsonElement>(body).GetProperty("token").GetString()!;
+        var created = JsonSerializer.Deserialize<JsonElement>(body);
+        return (created.GetProperty("id").GetGuid(), created.GetProperty("token").GetString()!);
     }
 
     private HttpClient ApiSecretClient(string secret)
