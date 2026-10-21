@@ -3137,6 +3137,10 @@ namespace Nocturne.Infrastructure.Data.Migrations
                         .HasColumnType("text")
                         .HasColumnName("activated_user_agent");
 
+                    b.Property<bool>("ApprovedByDeviceCode")
+                        .HasColumnType("boolean")
+                        .HasColumnName("approved_by_device_code");
+
                     b.Property<Guid?>("ClientEntityId")
                         .HasColumnType("uuid")
                         .HasColumnName("client_id");
