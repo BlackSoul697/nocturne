@@ -2,7 +2,7 @@ import { isInternalOnlyApiPath } from "$lib/server/internal-only-api-paths";
 import { type Handle } from "@sveltejs/kit";
 import { randomUUID } from "$lib/utils";
 import { isRecord, nonEmptyString } from "$lib/utils/type-guards";
-import { applySecurityHeaders } from "$lib/server/security-headers";
+import { applySecurityHeaders, parseFrameAncestors } from "$lib/server/security-headers";
 import type { HandleServerError } from "@sveltejs/kit";
 import { env } from "$env/dynamic/private";
 import { env as publicEnv } from "$env/dynamic/public";
@@ -538,6 +538,7 @@ const securityHeadersHandle: Handle = async ({ event, resolve }) => {
   applySecurityHeaders(response.headers, {
     isShareHost: event.locals.isShareHost,
     pathname: event.url.pathname,
+    frameAncestors: parseFrameAncestors(env.ALLOWED_FRAME_ANCESTORS),
   });
   return response;
 };
