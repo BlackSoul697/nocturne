@@ -6,7 +6,12 @@
  * $lib/api/generated/chatIdentities.generated.remote.ts.
  */
 import { getRequestEvent, query, command } from "$app/server";
-import { signOAuthLinkState } from "$lib/server/bot/oauth-state";
+import { error } from "@sveltejs/kit";
+import {
+  DISCORD_LINK_COOKIE,
+  DISCORD_LINK_LIFETIME_MS,
+  signOAuthLinkState,
+} from "$lib/server/bot/oauth-state";
 import { getDiscordOAuthConfig } from "$lib/server/bot/platform-credentials";
 import { extractTenantSlug } from "$lib/server/request-host";
 
@@ -30,11 +35,13 @@ export const getDiscordConfig = query(async () => {
 });
 
 /**
- * Initiate the Discord OAuth2 link flow.
- * Needs server-only crypto (HMAC signing) and process.env access.
+ * Initiate the Discord OAuth2 link flow for the signed-in member. The state and the cookie are
+ * bound together (see oauth-state.ts) so only this browser can finalize the link.
  */
 export const initiateDiscordLink = command(async () => {
-  const { url, fetch } = getRequestEvent();
+  const { url, fetch, locals, cookies } = getRequestEvent();
+  const subjectId = locals.isAuthenticated ? locals.user?.subjectId : undefined;
+  if (!subjectId) throw error(401, "Unauthorized");
 
   const { applicationId: clientId } = await getDiscordOAuthConfig(fetch);
   const baseDomain = process.env.BASE_DOMAIN;
@@ -47,7 +54,13 @@ export const initiateDiscordLink = command(async () => {
     return { error: "Could not determine tenant slug from current host." };
   }
 
-  const state = signOAuthLinkState(slug);
+  const { state, nonce } = signOAuthLinkState(slug, subjectId);
+  cookies.set(DISCORD_LINK_COOKIE, nonce, {
+    path: "/",
+    httpOnly: true,
+    sameSite: "lax",
+    maxAge: DISCORD_LINK_LIFETIME_MS / 1000,
+  });
   const redirectUri = `https://${baseDomain}/auth/bot/discord/callback`;
   const authorizeUrl = new URL("https://discord.com/api/oauth2/authorize");
   authorizeUrl.searchParams.set("client_id", clientId);
