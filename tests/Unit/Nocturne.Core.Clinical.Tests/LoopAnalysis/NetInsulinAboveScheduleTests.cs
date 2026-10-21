@@ -152,6 +152,45 @@ public class NetInsulinAboveScheduleTests
                 "a 2-hour gap between temps ran the schedule; before the first temp, the 8-hour outage and after the last there is no evidence");
     }
 
+    [Theory]
+    [InlineData(0, true)]
+    [InlineData(1, false)]
+    public void ScheduleFill_NeedsEvidenceNoMoreThanTheBoundApart(long extraMs, bool filled)
+    {
+        var resume = T0Mills + 10 * Minute + NetInsulinAboveSchedule.MaxInferredGapMs + extraMs;
+        var (_, evidence) = NetInsulinAboveSchedule.ClipTempBasals(
+            [Temp(0, 10, 2.0), TempAt(resume, 10, 2.0)], []);
+
+        evidence.Inferable.Contains(T0Mills + 60 * Minute).Should().Be(filled);
+    }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void ScheduleFill_AtTheRangeEnd_IsClosedByEvidenceAfterIt(bool evidenceAfterTheEnd)
+    {
+        var to = T0Mills + 2 * Hour;
+        List<TempBasal> temps = [Temp(0, 60, 2.0)];
+        if (evidenceAfterTheEnd)
+            temps.Add(TempAt(T0Mills + 4 * Hour, 30, 2.0));
+        var (_, evidence) = NetInsulinAboveSchedule.ClipTempBasals(temps, []);
+
+        var delivered = NetInsulinAboveSchedule.DeliveredFromSeries(
+            [Point(0, 2.0, BasalDeliveryOrigin.Algorithm), Point(60, 1.0, BasalDeliveryOrigin.Inferred)], to, evidence);
+
+        delivered.Where(d => d.Origin == BasalDeliveryOrigin.Inferred).Sum(d => d.End - d.Start)
+            .Should().Be(evidenceAfterTheEnd ? Hour : 0);
+    }
+
+    private static TempBasal TempAt(long startMills, int durationMinutes, double rate) => new()
+    {
+        StartTimestamp = DateTimeOffset.FromUnixTimeMilliseconds(startMills).UtcDateTime,
+        EndTimestamp = DateTimeOffset.FromUnixTimeMilliseconds(startMills + durationMinutes * Minute).UtcDateTime,
+        Rate = rate,
+        Origin = TempBasalOrigin.Algorithm,
+        Device = "pump",
+    };
+
     [Fact]
     public void ApsSnapshots_AreEvidenceTheScheduleRan()
     {

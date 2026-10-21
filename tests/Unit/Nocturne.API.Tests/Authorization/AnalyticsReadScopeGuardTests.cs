@@ -1,10 +1,9 @@
-using Nocturne.Core.Contracts.Multitenancy;
-using Microsoft.Extensions.DependencyInjection;
 using System.Reflection;
 using FluentAssertions;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
 using Moq;
 using Nocturne.API.Attributes;
@@ -14,6 +13,7 @@ using Nocturne.API.Services.Glucose;
 using Nocturne.Core.Contracts.Analytics;
 using Nocturne.Core.Contracts.Entries;
 using Nocturne.Core.Contracts.Glucose;
+using Nocturne.Core.Contracts.Multitenancy;
 using Nocturne.Core.Contracts.Profiles.Resolvers;
 using Nocturne.Core.Contracts.Treatments;
 using Nocturne.Core.Contracts.V4.Repositories;
@@ -1123,7 +1123,7 @@ public class AnalyticsReadScopeGuardTests
         {
             var slot = range.Slots.Single();
             slot.Glucose.Should().NotBeNull();
-            slot.ScheduledBasal.Should().NotBeNull();
+            slot.ScheduledBasal.Should().BeNull("the baseline is scaled by overrides, which are treatments");
             slot.TargetLow.Should().BeNull("the range in force carries temporary targets, which are treatments");
             slot.DeliveredBasal.Should().BeNull();
             slot.NetLoopCorrection.Should().BeNull();
@@ -1144,9 +1144,9 @@ public class AnalyticsReadScopeGuardTests
             day.Coverage.DeliveredBasal.Should().BeNull();
             day.Coverage.NetLoopCorrection.Should().BeNull();
             day.Coverage.IobCob.Should().BeNull();
-            day.Coverage.Analysed.Should().BeNull("the analysed time would show where the treatment masks fell");
+            day.Coverage.Analysed.Should().Be("a", "the masks it cannot read were dropped from its filter");
             day.Coverage.Glucose.Should().Be("g");
-            day.Coverage.ScheduledBasal.Should().Be("s");
+            day.Coverage.ScheduledBasal.Should().BeNull();
 
             range.Summary.DeliveredToScheduledRatio.Should().BeNull();
             range.Summary.NetLoopCorrectionPerDay.Should().BeNull();
@@ -1178,13 +1178,13 @@ public class AnalyticsReadScopeGuardTests
     }
 
     [Fact]
-    public void LoopAnalysis_WithoutDevices_DropsTheAnalysedCoverage()
+    public void LoopAnalysis_TherapyWithoutTreatments_DropsTheOverrideScaledSchedule()
     {
-        var data = LoopAnalysisReadScopeGuard.Redact(
-            DailyProfile(), Granted(Scope.GlucoseRead, Scope.TreatmentsRead, Scope.TherapyRead));
+        var data = LoopAnalysisReadScopeGuard.Redact(DailyProfile(), Granted(Scope.GlucoseRead, Scope.TherapyRead));
 
-        data.Primary.Days.Single().Coverage.Analysed.Should().BeNull();
-        data.Primary.Slots.Single().DeliveredBasal.Should().NotBeNull();
+        data.Primary.Slots.Single().ScheduledBasal.Should().BeNull();
+        data.Primary.Days.Single().Coverage.ScheduledBasal.Should().BeNull();
+        data.Primary.ProfileNames.Should().Equal("Default");
     }
 
     [Fact]
@@ -1280,7 +1280,7 @@ public class AnalyticsReadScopeGuardTests
     private static readonly DateTime LoopAnalysisNow = new(2024, 6, 8, 12, 0, 0, DateTimeKind.Utc);
 
     private static (LoopAnalysisController Controller, Mock<ILoopAnalysisService> Service) LoopAnalysisHandler(
-        IReadOnlySet<string> scopes, bool historyClamped = false)
+        IReadOnlySet<string> scopes, bool historyClamped = false, string query = "")
     {
         var service = new Mock<ILoopAnalysisService>();
         service
@@ -1288,6 +1288,7 @@ public class AnalyticsReadScopeGuardTests
             .ReturnsAsync(DailyProfile);
 
         var context = ContextWith(scopes);
+        context.HttpContext.Request.QueryString = new QueryString(query);
         var readContext = new Nocturne.Infrastructure.Data.Services.CategoryReadContext();
         if (historyClamped)
             readContext.ClampMemberHistory();
@@ -1306,7 +1307,8 @@ public class AnalyticsReadScopeGuardTests
     [Fact]
     public async Task LoopAnalysis_Handler_RedactsAndReportsTheIgnoredFilters()
     {
-        var (controller, service) = LoopAnalysisHandler(Granted(Scope.ReportsRead, Scope.GlucoseRead));
+        var (controller, service) = LoopAnalysisHandler(
+            Granted(Scope.ReportsRead, Scope.GlucoseRead), query: "?profileName=Default&ExcludeOverrides=true");
 
         var result = await controller.GetDailyProfile(
             LoopAnalysisNow.AddDays(-7), LoopAnalysisNow, profileName: "Default", excludeOverrides: true);
@@ -1318,7 +1320,8 @@ public class AnalyticsReadScopeGuardTests
         data.Primary.Slots.Single().ScheduledBasal.Should().BeNull();
         data.Primary.ProfileNames.Should().BeEmpty();
         data.HistoryClamped.Should().BeFalse();
-        data.IgnoredFilters.Should().BeEquivalentTo("profileName", "excludeOverrides", "excludeIllness", "excludeOpenLoop");
+        data.IgnoredFilters.Should().BeEquivalentTo(
+            ["profileName", "excludeOverrides"], "the masks on by default are dropped too, but the caller never asked for them");
         service.Verify(s => s.GetDailyProfileAsync(
             It.Is<LoopAnalysisFilter>(f => f.ProfileName == null && !f.ExcludeOverrides && !f.ExcludeOpenLoop),
             It.IsAny<CancellationToken>()));
@@ -1333,6 +1336,7 @@ public class AnalyticsReadScopeGuardTests
         var result = await controller.GetDailyProfile(
             LoopAnalysisNow.AddDays(-7), LoopAnalysisNow,
             compareFrom: LoopAnalysisNow.AddDays(-14), compareTo: LoopAnalysisNow.AddDays(-7));
+        var wholeComparisonHidden = LoopAnalysisNow.AddDays(-7);
 
         result.Result.Should().BeOfType<OkObjectResult>()
             .Which.Value.Should().BeOfType<DailyProfileResponse>().Subject
@@ -1340,7 +1344,7 @@ public class AnalyticsReadScopeGuardTests
         service.Verify(s => s.GetDailyProfileAsync(
             It.Is<LoopAnalysisFilter>(f =>
                 f.From == LoopAnalysisNow.AddHours(-24) && f.To == LoopAnalysisNow
-                && f.CompareFrom == LoopAnalysisNow.AddHours(-24) && f.CompareTo == LoopAnalysisNow.AddDays(-7)),
+                && f.CompareFrom == wholeComparisonHidden && f.CompareTo == wholeComparisonHidden),
             It.IsAny<CancellationToken>()));
     }
 }

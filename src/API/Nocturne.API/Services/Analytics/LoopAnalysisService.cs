@@ -22,8 +22,10 @@ namespace Nocturne.API.Services.Analytics;
 /// A primary and comparison range that touch or overlap are served from one fetch over both;
 /// apart, each gets its own. Every collection is read uncapped, for the reason given on
 /// <c>StatisticsController.FetchInsulinRecordsAsync</c>, and treatments are read from
-/// <see cref="ChartDataService.BufferMs"/> before the window so IOB and COB at its start see the
-/// doses still acting.
+/// <see cref="DailyProfileCalculator.ActingMs"/> before the window so IOB and COB at its start see
+/// the doses still acting. Temp basals and APS snapshots are read to
+/// <see cref="NetInsulinAboveSchedule.MaxInferredGapMs"/> past it, so a gap that straddles its end
+/// is bounded by the evidence that closes it.
 /// </remarks>
 internal sealed class LoopAnalysisService(
     ISensorGlucoseRepository glucoseRepository,
@@ -107,13 +109,14 @@ internal sealed class LoopAnalysisService(
         var to = window.To;
         var fromUtc = ToUtc(from);
         var toUtc = ToUtc(to);
-        var lookbackUtc = ToUtc(from - ChartDataService.BufferMs);
+        var lookbackUtc = ToUtc(from - DailyProfileCalculator.ActingMs);
 
         var glucoseTask = glucoseRepository.GetForAnalyticsAsync(fromUtc, toUtc, null, null, int.MaxValue, descending: false, ct: ct);
         var bolusTask = bolusRepository.GetAsync(lookbackUtc, toUtc, null, null, int.MaxValue, descending: false, ct: ct);
         var carbTask = carbIntakeRepository.GetAsync(lookbackUtc, toUtc, null, null, int.MaxValue, descending: false, ct: ct);
-        var tempBasalTask = tempBasalRepository.GetAsync(lookbackUtc, toUtc, null, null, int.MaxValue, descending: false, ct: ct);
-        var apsTask = apsSnapshotRepository.GetIobCobPointsAsync(lookbackUtc, toUtc, ct);
+        var evidenceEndUtc = ToUtc(to + NetInsulinAboveSchedule.MaxInferredGapMs);
+        var tempBasalTask = tempBasalRepository.GetAsync(lookbackUtc, evidenceEndUtc, null, null, int.MaxValue, descending: false, ct: ct);
+        var apsTask = apsSnapshotRepository.GetIobCobPointsAsync(lookbackUtc, evidenceEndUtc, ct);
         var spanTask = stateSpanRepository.GetByCategories(MaskCategories, fromUtc, toUtc, ct);
         var deviceTask = patientDeviceRepository.GetByDateRangeAsync(fromUtc, toUtc, ct);
         await Task.WhenAll(glucoseTask, bolusTask, carbTask, tempBasalTask, apsTask, spanTask, deviceTask);
@@ -171,8 +174,7 @@ internal sealed class LoopAnalysisService(
             CalculatedIobCobTime = DailyProfileCalculator.CalculableIobCobTime(
                 evidence,
                 boluses.Where(b => b.Insulin > 0).Select(b => b.Mills)
-                    .Concat(carbs.Where(c => c.Carbs > 0).Select(c => c.Mills)),
-                ChartDataService.BufferMs),
+                    .Concat(carbs.Where(c => c.Carbs > 0).Select(c => c.Mills))),
             TargetAt = await TargetRangesAsync(hasTherapy ? profiles : [], temporaryTargets, zone, to, ct),
             Profiles = profileIntervals,
         };
@@ -249,7 +251,11 @@ internal sealed class LoopAnalysisService(
         return (bottom ?? top, top ?? bottom) is (double low, double high) ? (low, high) : null;
     }
 
-    /// <summary><see cref="LoopAnalysisMask.OpenLoop"/> from the pump mode spans and the registered pumps.</summary>
+    /// <summary>
+    /// <see cref="LoopAnalysisMask.OpenLoop"/> from the pump mode spans and the registered pumps. A
+    /// pump whose algorithm is <see cref="AidAlgorithm.Unknown"/> is neither: it says nothing about
+    /// whether the loop was closed.
+    /// </summary>
     private static IntervalSet OpenLoop(
         Dictionary<StateSpanCategory, List<StateSpan>> spans,
         IEnumerable<PatientDevice> devices,
@@ -257,7 +263,9 @@ internal sealed class LoopAnalysisService(
         TimeZoneInfo zone,
         long to)
     {
-        var pumps = devices.Where(d => d.DeviceCategory == DeviceCategory.InsulinPump && d.AidAlgorithm.HasValue).ToList();
+        var pumps = devices
+            .Where(d => d.DeviceCategory == DeviceCategory.InsulinPump && d.AidAlgorithm is { } algorithm && algorithm != AidAlgorithm.Unknown)
+            .ToList();
         MillsInterval Window(PatientDevice pump) => LoopAnalysisMask.DeviceWindow(pump.StartDate, pump.EndDate, zone, to);
 
         return LoopAnalysisMask.OpenLoop(

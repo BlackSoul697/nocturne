@@ -58,11 +58,16 @@ public static class DailyProfileCalculator
     private const int SlotsPerHour = 60 / SlotMinutes;
     private const long SlotMs = SlotMinutes * LocalSlotBinning.MinuteMs;
 
-    /// <param name="actingMs">How long after a dose or carb entry it is taken to still act.</param>
-    public static IntervalSet CalculableIobCobTime(
-        BasalEvidence evidence, IEnumerable<long> doseAndCarbMills, long actingMs) =>
+    /// <summary>
+    /// How long after a dose or carb entry it is taken to still act. Eight hours covers the
+    /// longest DIA an AID profile commonly runs (Loop's and the oref systems' curves end by 6 to 8
+    /// hours) and the six hours <see cref="IobCobSeries"/> lets a carb entry absorb over.
+    /// </summary>
+    public const long ActingMs = 8 * LocalSlotBinning.HourMs;
+
+    public static IntervalSet CalculableIobCobTime(BasalEvidence evidence, IEnumerable<long> doseAndCarbMills) =>
         evidence.Recorded.Union(evidence.Inferable)
-            .Union(IntervalSet.Of(doseAndCarbMills.Select(m => new MillsInterval(m, m + actingMs))));
+            .Union(IntervalSet.Of(doseAndCarbMills.Select(m => new MillsInterval(m, m + ActingMs))));
 
     public static DailyProfileRange Calculate(DailyProfileInputs inputs, LoopAnalysisMask mask, long from, long to)
     {

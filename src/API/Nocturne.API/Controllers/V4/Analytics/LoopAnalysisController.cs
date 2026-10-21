@@ -4,6 +4,7 @@ using Nocturne.API.Authorization;
 using Nocturne.API.Controllers.V4.Base;
 using Nocturne.API.Extensions;
 using Nocturne.Core.Contracts.Analytics;
+using Nocturne.Core.Models.Authorization;
 using Nocturne.Core.Models.LoopAnalysis;
 using OpenApi.Remote.Attributes;
 
@@ -26,9 +27,6 @@ namespace Nocturne.API.Controllers.V4.Analytics;
 [Produces("application/json")]
 public class LoopAnalysisController(ILoopAnalysisService service, TimeProvider timeProvider) : ControllerBase
 {
-    /// <summary>The span of history a clamped reader may read, as the row level security policies clamp it.</summary>
-    private static readonly TimeSpan HistoryClampWindow = TimeSpan.FromHours(24);
-
     /// <summary>
     /// Every series in 288 local five-minute slots of the day: glucose, scheduled and delivered
     /// basal, net loop correction and its components, IOB/COB, manual boluses, carbs and the
@@ -46,8 +44,8 @@ public class LoopAnalysisController(ILoopAnalysisService service, TimeProvider t
     /// <param name="excludeOverrides">Mask override time; ignored without treatments.read.</param>
     /// <param name="excludeTemporaryTargets">Mask temporary target time; ignored without treatments.read.</param>
     /// <param name="excludeExercise">Mask exercise time; ignored without treatments.read.</param>
-    /// <param name="excludeIllness">Mask illness time; ignored without treatments.read.</param>
-    /// <param name="excludeOpenLoop">Mask time the pump was in manual mode or had no AID algorithm; ignored without devices.read.</param>
+    /// <param name="excludeIllness">Mask illness time; ignored without treatments.read. On by default.</param>
+    /// <param name="excludeOpenLoop">Mask time the pump was in manual mode or had no AID algorithm; ignored without devices.read. On by default.</param>
     /// <param name="profileName">Analyse only time this profile was active; ignored without therapy.read.</param>
     /// <param name="cancellationToken">Cancellation token.</param>
     [HttpGet("daily-profile")]
@@ -125,22 +123,30 @@ public class LoopAnalysisController(ILoopAnalysisService service, TimeProvider t
                 return overlongComparison;
         }
 
-        var ignored = LoopAnalysisReadScopeGuard.NarrowFilter(filter, HttpContext.GetGrantedScopes());
+        var passed = Request.Query.Keys.ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var ignored = LoopAnalysisReadScopeGuard.NarrowFilter(filter, HttpContext.GetGrantedScopes())
+            .Where(passed.Contains)
+            .ToList();
 
         var clamped = HttpContext.IsCallerHistoryClamped();
         if (clamped)
         {
-            var floor = timeProvider.GetUtcNow().UtcDateTime - HistoryClampWindow;
-            filter.From = Max(filter.From, floor);
-            if (filter.CompareFrom is { } clampedStart)
-                filter.CompareFrom = Max(clampedStart, floor);
+            var floor = timeProvider.GetUtcNow().UtcDateTime - HistoryClamp.Window;
+            filter.From = ClampStart(filter.From, filter.To, floor);
+            if (filter.CompareFrom is { } clampedStart && filter.CompareTo is { } clampedEnd)
+                filter.CompareFrom = ClampStart(clampedStart, clampedEnd, floor);
         }
 
         request = new FilterRequest(filter, ignored, clamped);
         return null;
     }
 
-    private static DateTime Max(DateTime a, DateTime b) => a > b ? a : b;
+    /// <summary>
+    /// The later of <paramref name="start"/> and <paramref name="floor"/>, but never past
+    /// <paramref name="end"/>: a range wholly before the floor becomes empty at its end.
+    /// </summary>
+    private static DateTime ClampStart(DateTime start, DateTime end, DateTime floor) =>
+        start >= floor ? start : floor <= end ? floor : end;
 
     private ObjectResult BadRange(string detail) => Problem(detail: detail, statusCode: 400, title: "Bad Request");
 

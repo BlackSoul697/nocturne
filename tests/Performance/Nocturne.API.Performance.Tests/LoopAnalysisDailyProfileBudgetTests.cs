@@ -88,7 +88,7 @@ public class LoopAnalysisDailyProfileBudgetTests(ITestOutputHelper output)
             Carbs = [.. carbs.Select(c => new CarbEvent(c.Mills, c.Carbs))],
             IobCob = ticks,
             CalculatedIobCobTime = DailyProfileCalculator.CalculableIobCobTime(
-                evidence, boluses.Select(b => b.Mills).Concat(carbs.Select(c => c.Mills)), 8 * 60 * Minute),
+                evidence, boluses.Select(b => b.Mills).Concat(carbs.Select(c => c.Mills))),
             TargetAt = _ => (90, 140),
         };
         var sources = new LoopAnalysisMaskSources { Overrides = [.. overrides.Select(o => new MillsInterval(o.Start, o.End))] };

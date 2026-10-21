@@ -81,7 +81,6 @@ public sealed record BasalEvidence(IntervalSet Recorded, IntervalSet Unknown, In
 /// </remarks>
 public sealed class NetInsulinAboveSchedule
 {
-
     /// <summary>
     /// The longest stretch with no temp basal record that the schedule is taken to have run
     /// through, and then only with pump evidence (a temp basal record or an APS snapshot) on both
