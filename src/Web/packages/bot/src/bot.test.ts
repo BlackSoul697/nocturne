@@ -90,10 +90,27 @@ describe("the Telegram webhook", () => {
     expect((await telegram.handleWebhook(update("a-guess"))).status).toBe(401);
   });
 
-  it("refuses every update when the stored settings carry no secret token", async () => {
+  it("refuses every update when neither the stored settings nor the environment carry a secret token", async () => {
+    vi.stubEnv("TELEGRAM_WEBHOOK_SECRET_TOKEN", "");
     const telegram = telegramWith({ enabled: true, botToken: "not-a-token" });
 
     expect((await telegram.handleWebhook(update())).status).toBe(401);
+  });
+
+  it("falls back to the environment's secret token when the stored settings carry none", async () => {
+    vi.stubEnv("TELEGRAM_WEBHOOK_SECRET_TOKEN", "env-secret");
+    const telegram = telegramWith({ enabled: true, botToken: "not-a-token" });
+
+    expect((await telegram.handleWebhook(update())).status).toBe(401);
+    expect((await telegram.handleWebhook(update("env-secret"))).status).toBe(200);
+  });
+
+  it("prefers the stored secret token over the environment's", async () => {
+    vi.stubEnv("TELEGRAM_WEBHOOK_SECRET_TOKEN", "env-secret");
+    const telegram = telegramWith({ enabled: true, botToken: "not-a-token", webhookSecretToken: "the-secret" });
+
+    expect((await telegram.handleWebhook(update("env-secret"))).status).toBe(401);
+    expect((await telegram.handleWebhook(update("the-secret"))).status).toBe(200);
   });
 
   it("refuses every update when the environment carries no secret token", async () => {

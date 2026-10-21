@@ -90,7 +90,7 @@ export function createBot(options: BotOptions): Chat {
     adapters.telegram = createTelegramAdapter({
       botToken: configured?.botToken,
       secretToken: telegramWebhookSecretToken(
-        configured ? configured.webhookSecretToken : process.env.TELEGRAM_WEBHOOK_SECRET_TOKEN,
+        configured?.webhookSecretToken || process.env.TELEGRAM_WEBHOOK_SECRET_TOKEN,
       ),
     });
   }
