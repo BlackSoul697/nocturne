@@ -717,10 +717,10 @@ public class DDataService : IDDataService
                     ["$lte"] = DateTimeOffset.FromUnixTimeMilliseconds(timestamp).UtcDateTime.ToString("o"),
                 },
             };
-            var deviceStatuses = await _projectionService.GetAsync(
+            var deviceStatuses = await _projectionService.GetMatchingAsync(
+                DeviceStatusProjectionService.ParseFind(JsonSerializer.Serialize(window)),
                 count: 1000,
                 skip: 0,
-                find: JsonSerializer.Serialize(window),
                 ct: cancellationToken
             );
             ddata.DeviceStatus = deviceStatuses.ToList();
