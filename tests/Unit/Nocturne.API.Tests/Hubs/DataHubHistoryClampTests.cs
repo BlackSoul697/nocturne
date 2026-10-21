@@ -243,8 +243,8 @@ public class DataHubHistoryClampTests
     {
         var (hub, httpContext, _, _) = CreateHub();
 
-        HubTestGrants.Grant(hub.Context, InBand(historyClamped: true));
-        HubTestGrants.Grant(hub.Context, InBand(historyClamped: false));
+        HubAuthorizationState.Grant(hub.Context, InBand(historyClamped: true));
+        HubAuthorizationState.Grant(hub.Context, InBand(historyClamped: false));
 
         httpContext.RequestServices.GetRequiredService<ICategoryReadContext>()
             .IsHistoryClamped.Should().BeTrue();
@@ -262,7 +262,7 @@ public class DataHubHistoryClampTests
             .Throws(new ObjectDisposedException("handshake scope"));
         httpContext.RequestServices = failing.Object;
 
-        var grant = () => HubTestGrants.Grant(hub.Context, InBand(historyClamped: true));
+        var grant = () => HubAuthorizationState.Grant(hub.Context, InBand(historyClamped: true));
 
         grant.Should().Throw<ObjectDisposedException>();
         hub.Context.Items.Should().BeEmpty();

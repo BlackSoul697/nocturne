@@ -51,13 +51,11 @@ public class DataHub : TenantAwareHub
             // and scoped; otherwise authenticate from the in-band payload.
             var authorization = HubAuthorizationState.Resolve(Context);
 
-            HubCredentialCheck? recheck = null;
             if (authorization is null && !string.IsNullOrEmpty(authData.Token))
             {
                 // OAuth JWT (validated + tenant-pinned + scope-checked) or legacy opaque access
                 // token. Glucose read is the gate: the authorized group receives the tenant's live
                 // data broadcasts.
-                recheck = HubTokenAuthorizer.TokenCheck(authData.Token, TenantContext?.TenantId, Scope.GlucoseRead);
                 authorization = await _tokenAuthorizer.AuthorizeTokenAsync(
                     authData.Token,
                     TenantContext?.TenantId,
@@ -66,7 +64,6 @@ public class DataHub : TenantAwareHub
             }
             else if (authorization is null && !string.IsNullOrEmpty(authData.Secret))
             {
-                recheck = HubTokenAuthorizer.InstanceKeyCheck(authData.Secret, TenantContext?.TenantId);
                 authorization = _tokenAuthorizer.AuthorizeInstanceKey(
                     authData.Secret,
                     TenantContext?.TenantId
@@ -87,8 +84,7 @@ public class DataHub : TenantAwareHub
                 };
             }
 
-            if (recheck is not null)
-                HubAuthorizationState.Grant(Context, authorization, recheck);
+            HubAuthorizationState.Grant(Context, authorization);
 
             // The tenant-wide groups carry more than the glucose read this method gates on —
             // tracker state, device action intents, arbitrary dataUpdate payloads — so only a

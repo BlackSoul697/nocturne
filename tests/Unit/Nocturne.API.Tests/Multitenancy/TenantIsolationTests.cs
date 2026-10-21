@@ -927,7 +927,7 @@ public class TenantIsolationTests
 
         // Subscribe requires an authorized connection; these tests are about group naming, so grant
         // full access on the connection's own tenant.
-        Nocturne.API.Tests.Hubs.HubTestGrants.Grant(
+        Nocturne.API.Hubs.HubAuthorizationState.Grant(
             mockCallerContext.Object,
             new Nocturne.API.Hubs.HubAuthorization(
                 tenantContext.TenantId,

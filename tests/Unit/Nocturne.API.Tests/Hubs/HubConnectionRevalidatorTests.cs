@@ -7,16 +7,14 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
 using Nocturne.API.Extensions;
 using Nocturne.API.Hubs;
-using Nocturne.API.Multitenancy;
 using Nocturne.Core.Contracts.Multitenancy;
 using Nocturne.Core.Models.Authorization;
 
 namespace Nocturne.API.Tests.Hubs;
 
 /// <summary>
-/// A hub connection keeps its access only while its credential, proven again from the same source,
-/// still covers what it connected with. A removed member, a revoked grant, an expired token, a
-/// narrowed scope or a new history clamp closes the connection within one sweep.
+/// The sweep closes a connection whose credential no longer covers what it connected with, and
+/// one connection it cannot check, or cannot close, never stops it checking the rest.
 /// </summary>
 [Trait("Category", "Unit")]
 public class HubConnectionRevalidatorTests
@@ -24,29 +22,31 @@ public class HubConnectionRevalidatorTests
     private static readonly Guid Tenant = Guid.Parse("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa");
     private static readonly Guid Subject = Guid.Parse("bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb");
 
-    private static readonly TenantContext TenantContext =
-        new(Tenant, "default", "Default", IsActive: true, IsDemo: false);
-
     private sealed class TestHttpContextFeature : IHttpContextFeature
     {
         public HttpContext? HttpContext { get; set; }
     }
 
     private readonly HubConnectionRevalidator _revalidator = new(
-        new ServiceCollection()
-            .AddScoped<ITenantAccessor, HttpContextTenantAccessor>()
-            .BuildServiceProvider()
-            .GetRequiredService<IServiceScopeFactory>(),
+        new ServiceCollection().BuildServiceProvider().GetRequiredService<IServiceScopeFactory>(),
         TimeProvider.System,
         NullLogger<HubConnectionRevalidator>.Instance);
 
     private static HubAuthorization Member(bool historyClamped = false, params string[] scopes) => new(
         Tenant, Scope.Normalize(scopes), HubCredentialKind.Subject, Subject, historyClamped);
 
-    private static Mock<HubCallerContext> Connection(string connectionId = "conn-1")
+    /// <summary>A credential proven without any server-side read, so it stays covered.</summary>
+    private static HubAuthorization InstanceKey() =>
+        new(Tenant, new HashSet<string> { Scope.FullAccess }, HubCredentialKind.Infrastructure, null, false)
+        {
+            Source = new HubCredentialSource(
+                AuthType.InstanceKey, null, null, new HashSet<string> { Scope.FullAccess }, false, null),
+        };
+
+    private static Mock<HubCallerContext> Connection(string connectionId, HubAuthorization? granted = null)
     {
         var httpContext = new DefaultHttpContext { RequestServices = new ServiceCollection().BuildServiceProvider() };
-        httpContext.SetTenantContext(TenantContext);
+        httpContext.SetTenantContext(new TenantContext(Tenant, "default", "Default", IsActive: true, IsDemo: false));
         var features = new FeatureCollection();
         features.Set<IHttpContextFeature>(new TestHttpContextFeature { HttpContext = httpContext });
 
@@ -54,19 +54,78 @@ public class HubConnectionRevalidatorTests
         context.SetupGet(c => c.ConnectionId).Returns(connectionId);
         context.SetupGet(c => c.Features).Returns(features);
         context.SetupGet(c => c.Items).Returns(new Dictionary<object, object?>());
+        if (granted is not null)
+            HubAuthorizationState.Grant(context.Object, granted);
         return context;
     }
 
-    private Mock<HubCallerContext> Tracked(HubAuthorization granted, HubCredentialCheck recheck)
+    private Mock<HubCallerContext> Tracked(string connectionId, HubAuthorization granted)
     {
-        var connection = Connection();
-        HubAuthorizationState.Grant(connection.Object, granted, recheck);
+        var connection = Connection(connectionId, granted);
         _revalidator.Track(connection.Object);
         return connection;
     }
 
-    private static HubCredentialCheck Proves(HubAuthorization? current) =>
-        (_, _) => Task.FromResult(current);
+    [Fact]
+    public async Task A_connection_still_covered_stays_open_and_one_that_cannot_be_proven_is_closed()
+    {
+        var covered = Tracked("covered", InstanceKey());
+        var unprovable = Tracked("unprovable", Member(false, Scope.GlucoseRead));
+
+        await _revalidator.RevalidateAsync(CancellationToken.None);
+
+        covered.Verify(c => c.Abort(), Times.Never);
+        unprovable.Verify(c => c.Abort(), Times.Once);
+    }
+
+    [Fact]
+    public async Task A_closed_connection_is_checked_no_further()
+    {
+        var connection = Tracked("conn", Member(false, Scope.GlucoseRead));
+
+        await _revalidator.RevalidateAsync(CancellationToken.None);
+        await _revalidator.RevalidateAsync(CancellationToken.None);
+
+        connection.Verify(c => c.Abort(), Times.Once);
+    }
+
+    [Fact]
+    public async Task A_connection_that_throws_does_not_stop_the_sweep()
+    {
+        var throwing = new Mock<HubCallerContext>();
+        throwing.SetupGet(c => c.ConnectionId).Returns("throwing");
+        throwing.SetupGet(c => c.Items).Throws(new InvalidOperationException());
+        _revalidator.Track(throwing.Object);
+        var next = Tracked("next", Member(false, Scope.GlucoseRead));
+
+        await _revalidator.RevalidateAsync(CancellationToken.None);
+
+        next.Verify(c => c.Abort(), Times.Once);
+    }
+
+    [Fact]
+    public async Task A_connection_whose_abort_throws_does_not_stop_the_sweep()
+    {
+        var failing = Tracked("failing", Member(false, Scope.GlucoseRead));
+        failing.Setup(c => c.Abort()).Throws(new ObjectDisposedException("connection"));
+        var next = Tracked("next", Member(false, Scope.GlucoseRead));
+
+        await _revalidator.RevalidateAsync(CancellationToken.None);
+
+        next.Verify(c => c.Abort(), Times.Once);
+    }
+
+    [Fact]
+    public async Task An_already_closed_connection_is_forgotten_unchecked()
+    {
+        var closed = Connection("closed", Member(false, Scope.GlucoseRead));
+        closed.SetupGet(c => c.ConnectionAborted).Returns(new CancellationToken(canceled: true));
+        _revalidator.Track(closed.Object);
+
+        await _revalidator.RevalidateAsync(CancellationToken.None);
+
+        closed.Verify(c => c.Abort(), Times.Never);
+    }
 
     public static TheoryData<string, HubAuthorization?> Withdrawn => new()
     {
@@ -80,14 +139,10 @@ public class HubConnectionRevalidatorTests
 
     [Theory]
     [MemberData(nameof(Withdrawn))]
-    public async Task A_connection_whose_credential_no_longer_covers_it_is_closed(
+    public void A_credential_that_no_longer_grants_what_it_did_does_not_cover_the_connection(
         string because, HubAuthorization? current)
     {
-        var connection = Tracked(Member(false, Scope.GlucoseRead, Scope.TreatmentsRead), Proves(current));
-
-        await _revalidator.RevalidateAsync(CancellationToken.None);
-
-        connection.Verify(c => c.Abort(), Times.Once, because);
+        Member(false, Scope.GlucoseRead, Scope.TreatmentsRead).IsCoveredBy(current).Should().BeFalse(because);
     }
 
     public static TheoryData<string, HubAuthorization, HubAuthorization> StillCovered => new()
@@ -99,55 +154,10 @@ public class HubConnectionRevalidatorTests
 
     [Theory]
     [MemberData(nameof(StillCovered))]
-    public async Task A_connection_whose_credential_still_covers_it_stays_open(
+    public void A_credential_that_still_grants_what_it_did_covers_the_connection(
         string because, HubAuthorization granted, HubAuthorization current)
     {
-        var connection = Tracked(granted, Proves(current));
-
-        await _revalidator.RevalidateAsync(CancellationToken.None);
-
-        connection.Verify(c => c.Abort(), Times.Never, because);
-    }
-
-    [Fact]
-    public async Task A_closed_connection_is_checked_no_further()
-    {
-        var checks = 0;
-        Tracked(Member(false, Scope.GlucoseRead), (_, _) =>
-        {
-            checks++;
-            return Task.FromResult<HubAuthorization?>(null);
-        });
-
-        await _revalidator.RevalidateAsync(CancellationToken.None);
-        await _revalidator.RevalidateAsync(CancellationToken.None);
-
-        checks.Should().Be(1);
-    }
-
-    [Fact]
-    public async Task A_check_that_cannot_answer_keeps_the_connection_until_the_next_sweep()
-    {
-        var connection = Tracked(Member(false, Scope.GlucoseRead), (_, _) => throw new InvalidOperationException());
-
-        await _revalidator.RevalidateAsync(CancellationToken.None);
-
-        connection.Verify(c => c.Abort(), Times.Never);
-    }
-
-    [Fact]
-    public async Task The_check_runs_in_a_scope_pinned_to_the_connections_tenant()
-    {
-        TenantContext? seen = null;
-        Tracked(Member(false, Scope.GlucoseRead), (services, _) =>
-        {
-            seen = services.GetRequiredService<ITenantAccessor>().Context;
-            return Task.FromResult<HubAuthorization?>(Member(false, Scope.GlucoseRead));
-        });
-
-        await _revalidator.RevalidateAsync(CancellationToken.None);
-
-        seen.Should().Be(TenantContext);
+        granted.IsCoveredBy(current).Should().BeTrue(because);
     }
 
     private static HubInvocationContext Invocation(HubCallerContext context) => new(
@@ -163,16 +173,14 @@ public class HubConnectionRevalidatorTests
     public async Task The_filter_hands_an_authorized_connection_to_the_revalidator_and_takes_it_back_on_disconnect()
     {
         var filter = new HubAuthorizationFilter(_revalidator);
-        var connection = Connection();
-        HubAuthorizationState.Grant(connection.Object, Member(false, Scope.AlertsRead), Proves(null));
+        var connection = Connection("conn-1", Member(false, Scope.AlertsRead));
 
         await filter.InvokeMethodAsync(Invocation(connection.Object), _ => ValueTask.FromResult<object?>(null));
         await _revalidator.RevalidateAsync(CancellationToken.None);
 
         connection.Verify(c => c.Abort(), Times.Once);
 
-        var disconnected = Connection("conn-2");
-        HubAuthorizationState.Grant(disconnected.Object, Member(false, Scope.AlertsRead), Proves(null));
+        var disconnected = Connection("conn-2", Member(false, Scope.AlertsRead));
         await filter.InvokeMethodAsync(Invocation(disconnected.Object), _ => ValueTask.FromResult<object?>(null));
         await filter.OnDisconnectedAsync(
             new HubLifetimeContext(disconnected.Object, Mock.Of<IServiceProvider>(), new StubHub()),
@@ -184,12 +192,21 @@ public class HubConnectionRevalidatorTests
     }
 
     [Fact]
-    public void A_handshake_replay_never_carries_the_refresh_token_cookie()
+    public async Task The_filter_does_not_hand_over_a_connection_that_has_already_closed()
     {
-        var header = new Microsoft.Extensions.Primitives.StringValues(
-            ".Nocturne.AccessToken=abc; .Nocturne.RefreshToken=def; other=1");
+        var filter = new HubAuthorizationFilter(_revalidator);
+        var closing = Connection("closing", Member(false, Scope.AlertsRead));
+        var aborted = new CancellationTokenSource();
+        closing.SetupGet(c => c.ConnectionAborted).Returns(aborted.Token);
 
-        HandshakeCredential.WithoutCookie(header, ".Nocturne.RefreshToken")
-            .Should().Be(".Nocturne.AccessToken=abc; other=1");
+        await filter.InvokeMethodAsync(Invocation(closing.Object), _ =>
+        {
+            aborted.Cancel();
+            return ValueTask.FromResult<object?>(null);
+        });
+        closing.SetupGet(c => c.ConnectionAborted).Returns(CancellationToken.None);
+        await _revalidator.RevalidateAsync(CancellationToken.None);
+
+        closing.Verify(c => c.Abort(), Times.Never);
     }
 }

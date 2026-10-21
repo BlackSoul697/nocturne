@@ -55,21 +55,6 @@ public interface IHubTokenAuthorizer
 /// <inheritdoc cref="IHubTokenAuthorizer"/>
 public class HubTokenAuthorizer : IHubTokenAuthorizer
 {
-    /// <summary>
-    /// The <see cref="HubCredentialCheck"/> for a token authorized by <see cref="AuthorizeTokenAsync"/>.
-    /// </summary>
-    public static HubCredentialCheck TokenCheck(string token, Guid? connectionTenantId, string requiredScope) =>
-        (services, _) => services.GetRequiredService<IHubTokenAuthorizer>()
-            .AuthorizeTokenAsync(token, connectionTenantId, requiredScope);
-
-    /// <summary>
-    /// The <see cref="HubCredentialCheck"/> for an instance key authorized by
-    /// <see cref="AuthorizeInstanceKey"/>.
-    /// </summary>
-    public static HubCredentialCheck InstanceKeyCheck(string presentedHash, Guid? connectionTenantId) =>
-        (services, _) => Task.FromResult(services.GetRequiredService<IHubTokenAuthorizer>()
-            .AuthorizeInstanceKey(presentedHash, connectionTenantId));
-
     private readonly IJwtCredentialValidator _credentialValidator;
     private readonly ITenantMemberService _memberService;
     private readonly INocturneDbContextFactory _dbContextFactory;
@@ -145,7 +130,12 @@ public class HubTokenAuthorizer : IHubTokenAuthorizer
             new HashSet<string> { Scope.FullAccess },
             HubCredentialKind.Infrastructure,
             SubjectId: null,
-            HistoryClamped: false);
+            HistoryClamped: false)
+        {
+            Source = new HubCredentialSource(
+                AuthType.InstanceKey, SubjectId: null, GrantId: null, new HashSet<string> { Scope.FullAccess },
+                LimitTo24Hours: false, ExpiresAt: null),
+        };
     }
 
     private async Task<HubAuthorization?> AuthorizeJwtAsync(
@@ -212,6 +202,9 @@ public class HubTokenAuthorizer : IHubTokenAuthorizer
                 claims.LimitTo24Hours, membership.LimitTo24Hours, membership.EffectivePermissions))
         {
             ClientId = claims.ClientId,
+            Source = new HubCredentialSource(
+                AuthType.OAuthAccessToken, claims.SubjectId, claims.GrantId,
+                Scope.Normalize(claims.Scopes), claims.LimitTo24Hours, ExpiresAt: null),
         };
     }
 
@@ -266,6 +259,11 @@ public class HubTokenAuthorizer : IHubTokenAuthorizer
             HubCredentialKind.Subject,
             grant.SubjectId,
             MemberScopeResolver.IsHistoryClamped(
-                grant.LimitTo24Hours, membership.LimitTo24Hours, membership.EffectivePermissions));
+                grant.LimitTo24Hours, membership.LimitTo24Hours, membership.EffectivePermissions))
+        {
+            Source = new HubCredentialSource(
+                AuthType.DirectGrant, grant.SubjectId, grant.Id, grant.Scopes.ToHashSet(),
+                grant.LimitTo24Hours, ExpiresAt: null),
+        };
     }
 }

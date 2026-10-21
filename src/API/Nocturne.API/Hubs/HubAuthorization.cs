@@ -83,6 +83,13 @@ public sealed record HubAuthorization(
     /// </summary>
     public string? ClientId { get; init; }
 
+    /// <summary>
+    /// What the credential was proven from, so <see cref="HubCredentialVerifier"/> can prove it
+    /// again from server-side state. Null only where no credential source exists (a test double),
+    /// and such a credential is withdrawn at the first re-check.
+    /// </summary>
+    public HubCredentialSource? Source { get; init; }
+
     /// <summary>Whether the credential satisfies <paramref name="scope"/>.</summary>
     public bool Satisfies(string scope) => Scope.Satisfies(Scopes, scope);
 
@@ -208,23 +215,15 @@ public sealed class HubScopeAttribute(params string[] scopes) : Attribute
 public sealed class HubTenantGroupAttribute : Attribute;
 
 /// <summary>
-/// Re-derives a connection's credential from the source it was first proven from, through the same
-/// checks, in <paramref name="services"/>: a fresh scope pinned to the connection's tenant. Null when
-/// the source no longer authorizes anything.
-/// </summary>
-/// <seealso cref="HubConnectionRevalidator"/>
-public delegate Task<HubAuthorization?> HubCredentialCheck(IServiceProvider services, CancellationToken ct);
-
-/// <summary>
 /// Reads and writes the <see cref="HubAuthorization"/> carried by a SignalR connection.
 /// </summary>
 public static class HubAuthorizationState
 {
-    /// <summary>Key the grant is stored under in <see cref="HubCallerContext.Items"/>.</summary>
+    /// <summary>Key the authorization is stored under in <see cref="HubCallerContext.Items"/>.</summary>
     private const string ItemKey = "HubAuthorization";
 
-    /// <summary>A connection's credential and how to prove it again.</summary>
-    internal sealed record ConnectionGrant(HubAuthorization Authorization, HubCredentialCheck Recheck);
+    /// <summary>Key an <see cref="OverviewGrant"/> is stored under.</summary>
+    private const string OverviewItemKey = "OverviewGrant";
 
     /// <summary>
     /// Records the result of a successful in-band authentication on the connection. Only an
@@ -241,18 +240,21 @@ public static class HubAuthorizationState
     /// </remarks>
     /// <param name="context">The connection to record the credential on.</param>
     /// <param name="authorization">The verified credential.</param>
-    /// <param name="recheck">
-    /// Proves the same credential again. Required, so no connection holds a credential that
-    /// <see cref="HubConnectionRevalidator"/> cannot withdraw.
-    /// </param>
-    public static HubAuthorization Grant(
-        HubCallerContext context, HubAuthorization authorization, HubCredentialCheck recheck)
+    public static HubAuthorization Grant(HubCallerContext context, HubAuthorization authorization)
     {
         if (authorization.HistoryClamped)
             context.GetHttpContext()?.ClampMemberHistory();
-        context.Items[ItemKey] = new ConnectionGrant(authorization, recheck);
+        context.Items[ItemKey] = authorization;
         return authorization;
     }
+
+    /// <summary>Records the tenants an <see cref="OverviewHub"/> connection was admitted to.</summary>
+    public static void GrantOverview(HubCallerContext context, OverviewGrant grant) =>
+        context.Items[OverviewItemKey] = grant;
+
+    /// <summary>The <see cref="OverviewHub"/> admission the connection holds, if any.</summary>
+    public static OverviewGrant? Overview(HubCallerContext context) =>
+        context.Items.TryGetValue(OverviewItemKey, out var value) ? value as OverviewGrant : null;
 
     /// <summary>
     /// The connection's proven credential, or null when it has none.
@@ -264,20 +266,14 @@ public static class HubAuthorizationState
     /// <see cref="Middleware.MemberScopeMiddleware"/>, so it needs no in-band handshake. Clients that
     /// present their credential only after the connection is up authenticate in-band instead.
     /// </remarks>
-    public static HubAuthorization? Resolve(HubCallerContext context) => Current(context)?.Authorization;
-
-    /// <inheritdoc cref="Resolve"/>
-    internal static ConnectionGrant? Current(HubCallerContext context)
+    public static HubAuthorization? Resolve(HubCallerContext context)
     {
-        if (context.Items.TryGetValue(ItemKey, out var existing) && existing is ConnectionGrant granted)
+        if (context.Items.TryGetValue(ItemKey, out var existing) && existing is HubAuthorization granted)
             return granted;
 
-        if (context.GetHttpContext() is not { } httpContext || FromRequest(httpContext) is not { } authorization)
-            return null;
-
-        var recheck = HandshakeCredential.Capture(httpContext);
-        Grant(context, authorization, recheck);
-        return new ConnectionGrant(authorization, recheck);
+        return context.GetHttpContext() is { } httpContext && FromRequest(httpContext) is { } authorization
+            ? Grant(context, authorization)
+            : null;
     }
 
     /// <summary>
@@ -313,6 +309,13 @@ public static class HubAuthorizationState
             authContext.LimitTo24Hours)
         {
             ClientId = authContext.ClientId,
+            Source = new HubCredentialSource(
+                authContext.AuthType,
+                authContext.SubjectId,
+                authContext.TokenId,
+                Middleware.AuthenticationMiddleware.CredentialScopes(authContext),
+                authContext.LimitTo24Hours,
+                authContext.ExpiresAt),
         };
     }
 }
@@ -347,8 +350,13 @@ public sealed class HubAuthorizationFilter(HubConnectionRevalidator revalidator)
         }
         finally
         {
-            if (HubAuthorizationState.Current(invocationContext.Context) is not null)
-                revalidator.Track(invocationContext.Context);
+            var context = invocationContext.Context;
+            if (!context.ConnectionAborted.IsCancellationRequested
+                && (HubAuthorizationState.Resolve(context) is not null
+                    || HubAuthorizationState.Overview(context) is not null))
+            {
+                revalidator.Track(context);
+            }
         }
     }
 

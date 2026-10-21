@@ -47,10 +47,8 @@ public class AlarmHub : TenantAwareHub
             // through IHubTokenAuthorizer so the tenant pin and scope check match DataHub's.
             var authorization = HubAuthorizationState.Resolve(Context);
 
-            HubCredentialCheck? recheck = null;
             if (authorization is null && !string.IsNullOrEmpty(authData.JwtToken))
             {
-                recheck = HubTokenAuthorizer.TokenCheck(authData.JwtToken, TenantContext?.TenantId, Scope.GlucoseRead);
                 authorization = await _tokenAuthorizer.AuthorizeTokenAsync(
                     authData.JwtToken,
                     TenantContext?.TenantId,
@@ -59,7 +57,6 @@ public class AlarmHub : TenantAwareHub
             }
             else if (authorization is null && !string.IsNullOrEmpty(authData.Secret))
             {
-                recheck = HubTokenAuthorizer.InstanceKeyCheck(authData.Secret, TenantContext?.TenantId);
                 authorization = _tokenAuthorizer.AuthorizeInstanceKey(
                     authData.Secret,
                     TenantContext?.TenantId
@@ -81,8 +78,7 @@ public class AlarmHub : TenantAwareHub
                 return new { read = false, success = false };
             }
 
-            if (recheck is not null)
-                HubAuthorizationState.Grant(Context, authorization, recheck);
+            HubAuthorizationState.Grant(Context, authorization);
 
             // Add connection to tenant-scoped alarm subscribers group
             await Groups.AddToGroupAsync(

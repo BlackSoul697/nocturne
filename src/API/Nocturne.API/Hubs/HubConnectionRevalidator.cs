@@ -1,15 +1,16 @@
 using System.Collections.Concurrent;
 using Microsoft.AspNetCore.SignalR;
 using Nocturne.API.Extensions;
-using Nocturne.Core.Contracts.Multitenancy;
 
 namespace Nocturne.API.Hubs;
 
 /// <summary>
-/// Proves every authorized hub connection's credential again each <see cref="Interval"/>, and closes
-/// a connection whose credential no longer covers what it connected with
-/// (<see cref="HubAuthorization.IsCoveredBy"/>): a removed member, a revoked grant or guest link, an
-/// expired token, narrowed scopes or a new history clamp.
+/// Proves every authorized hub connection's credential again each <see cref="Interval"/> through
+/// <see cref="HubCredentialVerifier"/>, and closes a connection whose credential no longer covers
+/// what it connected with (<see cref="HubAuthorization.IsCoveredBy"/>): a removed member, a revoked
+/// grant or guest link, a deactivated subject, a session logged out, narrowed scopes or a new
+/// history clamp. An <see cref="OverviewHub"/> connection is closed once any tenant it receives is
+/// out of its reach.
 /// </summary>
 /// <remarks>
 /// A connection is closed rather than narrowed in place because the groups it joined were chosen
@@ -34,21 +35,45 @@ public sealed class HubConnectionRevalidator(
     public void Forget(HubCallerContext context) => _connections.TryRemove(context.ConnectionId, out _);
 
     /// <summary>Re-checks every tracked connection once, closing each that fails.</summary>
-    public Task RevalidateAsync(CancellationToken ct) =>
-        Parallel.ForEachAsync(
-            _connections.Values,
-            new ParallelOptions { MaxDegreeOfParallelism = 4, CancellationToken = ct },
-            async (context, token) =>
+    /// <remarks>
+    /// Connections are checked one after another: the verifier memoizes per sweep, so connections
+    /// sharing a subject, grant or tenant cost one read between them, and its scoped services are
+    /// never used concurrently. A connection whose check throws is kept until the next sweep.
+    /// </remarks>
+    public async Task RevalidateAsync(CancellationToken ct)
+    {
+        await using var scope = scopeFactory.CreateAsyncScope();
+        var verifier = new HubCredentialVerifier(scope.ServiceProvider, timeProvider);
+
+        foreach (var context in _connections.Values)
+        {
+            try
             {
-                if (await StillCoveredAsync(context, token))
-                    return;
+                if (context.ConnectionAborted.IsCancellationRequested)
+                {
+                    Forget(context);
+                    continue;
+                }
+
+                if (await StillCoveredAsync(verifier, context))
+                    continue;
 
                 logger.LogInformation(
                     "Closing hub connection {ConnectionId}: its credential no longer authorizes it",
                     context.ConnectionId);
                 Forget(context);
                 context.Abort();
-            });
+            }
+            catch (OperationCanceledException) when (ct.IsCancellationRequested)
+            {
+                throw;
+            }
+            catch (Exception ex)
+            {
+                logger.LogWarning(ex, "Could not re-check hub connection {ConnectionId}", context.ConnectionId);
+            }
+        }
+    }
 
     /// <inheritdoc />
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
@@ -57,34 +82,31 @@ public sealed class HubConnectionRevalidator(
         try
         {
             while (await timer.WaitForNextTickAsync(stoppingToken))
-                await RevalidateAsync(stoppingToken);
+            {
+                try
+                {
+                    await RevalidateAsync(stoppingToken);
+                }
+                catch (Exception ex) when (ex is not OperationCanceledException || !stoppingToken.IsCancellationRequested)
+                {
+                    logger.LogError(ex, "Hub connection re-check sweep failed");
+                }
+            }
         }
         catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
         {
         }
     }
 
-    /// <remarks>
-    /// A check that throws keeps the connection until the next sweep: it says nothing about the
-    /// credential, and the handlers it replays turn a refused credential into a null, not a throw.
-    /// </remarks>
-    private async Task<bool> StillCoveredAsync(HubCallerContext context, CancellationToken ct)
+    private static async Task<bool> StillCoveredAsync(HubCredentialVerifier verifier, HubCallerContext context)
     {
-        if (HubAuthorizationState.Current(context) is not { } grant)
+        if (HubAuthorizationState.Overview(context) is { } overview && !await verifier.StillHoldsAsync(overview))
+            return false;
+
+        if (HubAuthorizationState.Resolve(context) is not { } granted)
             return true;
 
-        await using var scope = scopeFactory.CreateAsyncScope();
-        if (context.GetHttpContext()?.GetTenantContext() is { } tenant)
-            scope.ServiceProvider.GetRequiredService<ITenantAccessor>().SetTenant(tenant);
-
-        try
-        {
-            return grant.Authorization.IsCoveredBy(await grant.Recheck(scope.ServiceProvider, ct));
-        }
-        catch (Exception ex) when (ex is not OperationCanceledException)
-        {
-            logger.LogWarning(ex, "Could not re-check hub connection {ConnectionId}", context.ConnectionId);
-            return true;
-        }
+        return context.GetHttpContext()?.GetTenantContext() is { } tenant
+            && granted.IsCoveredBy(await verifier.ProveAsync(granted, tenant));
     }
 }

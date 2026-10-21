@@ -280,7 +280,7 @@ public class HomeAssistantHubTests
         var admittedSubject = Guid.NewGuid();
         var service = Decides(excursionId, "Kitchen", AlertAcknowledgementOutcome.Muted);
         var connection = Connect("kitchen-ha", [Scope.AlertsReadWrite], acknowledgementService: service.Object);
-        HubTestGrants.Grant(connection.Context, new HubAuthorization(
+        HubAuthorizationState.Grant(connection.Context, new HubAuthorization(
             Tenant, new HashSet<string> { Scope.DeviceNotify }, HubCredentialKind.Subject, admittedSubject,
             HistoryClamped: false));
 

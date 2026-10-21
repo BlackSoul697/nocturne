@@ -54,7 +54,7 @@ public class HubAuthorizationFilterTests
 
         if (authorization is not null)
         {
-            HubTestGrants.Grant(callerContext.Object, authorization);
+            HubAuthorizationState.Grant(callerContext.Object, authorization);
         }
 
         var method = hubType.GetMethod(methodName, BindingFlags.Public | BindingFlags.Instance)!;
