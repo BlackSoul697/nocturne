@@ -964,6 +964,11 @@ namespace Nocturne.Infrastructure.Data.Migrations
                         .HasColumnType("character varying(256)")
                         .HasColumnName("platform_user_id");
 
+                    b.Property<string>("PlatformUserName")
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)")
+                        .HasColumnName("platform_user_name");
+
                     b.Property<string>("Source")
                         .IsRequired()
                         .HasMaxLength(32)
