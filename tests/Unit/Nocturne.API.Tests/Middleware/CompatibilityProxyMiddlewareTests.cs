@@ -22,7 +22,7 @@ public class CompatibilityProxyMiddlewareTests
     private readonly Mock<IResponseComparisonService> _comparisonServiceMock;
     private readonly Mock<IDiscrepancyPersistenceService> _persistenceServiceMock;
     private readonly ILogger<CompatibilityProxyMiddleware> _logger;
-    private RecordingServiceProvider? _requestServices;
+    private ScopeFactoryRecordingServiceProvider? _requestServices;
 
     public CompatibilityProxyMiddlewareTests()
     {
@@ -81,7 +81,7 @@ public class CompatibilityProxyMiddlewareTests
         services.AddScoped<IResponseComparisonService>(_ => _comparisonServiceMock.Object);
         services.AddScoped<IDiscrepancyPersistenceService>(_ => _persistenceServiceMock.Object);
 
-        var serviceProvider = new RecordingServiceProvider(services.BuildServiceProvider());
+        var serviceProvider = new ScopeFactoryRecordingServiceProvider(services.BuildServiceProvider());
         _requestServices = serviceProvider;
 
         next ??= async ctx =>
@@ -306,25 +306,6 @@ public class CompatibilityProxyMiddlewareTests
         return stored.Task;
     }
 
-    /// <summary>
-    /// The middleware resolves the scope factory on the request thread, just before it hands the
-    /// comparison to the thread pool, so a request that never resolved it never started one. The
-    /// forwarding test pins that resolution, which keeps this check from passing vacuously.
-    /// </summary>
     private void AssertNoBackgroundComparisonStarted() =>
         _requestServices!.ScopeFactoryRequested.Should().BeFalse();
-
-    private sealed class RecordingServiceProvider(IServiceProvider inner) : IServiceProvider
-    {
-        private int _scopeFactoryRequests;
-
-        public bool ScopeFactoryRequested => Volatile.Read(ref _scopeFactoryRequests) > 0;
-
-        public object? GetService(Type serviceType)
-        {
-            if (serviceType == typeof(IServiceScopeFactory))
-                Interlocked.Increment(ref _scopeFactoryRequests);
-            return inner.GetService(serviceType);
-        }
-    }
 }
