@@ -1149,8 +1149,8 @@ public class GlookoConnectorService : BaseConnectorService<GlookoConnectorConfig
     ///     incremental mode each resource omits <c>startDate</c> and relies solely on its stored cursor;
     ///     a backfill passes the clinical floor and bypasses the cursor.
     ///     Each resource is fetched in isolation: if one feed fails (network, server error, malformed
-    ///     page) it is logged and skipped so the rest of the pass still imports, mirroring the
-    ///     per-endpoint resilience of the windowed batch path.
+    ///     page) its data types are reported as failed fetches in <paramref name="result"/> and the rest
+    ///     of the pass still imports.
     /// </summary>
     private async Task FetchAndMapViaSsv2Async(
         GlookoSyncContext context,
@@ -1173,6 +1173,9 @@ public class GlookoConnectorService : BaseConnectorService<GlookoConnectorConfig
             var egvGlucose = await FetchSsv2SafelyAsync(
                 context,
                 GlookoConstants.Ssv2EgvsPath,
+                result,
+                activeTypes,
+                [SyncDataType.Glucose],
                 () => FetchSsv2EgvsAsync(context, incremental, batchStart),
                 new List<SensorGlucose>());
             await CommitSsv2CursorsAsync(context,
@@ -1185,17 +1188,41 @@ public class GlookoConnectorService : BaseConnectorService<GlookoConnectorConfig
         var batchData = new GlookoBatchData
         {
             NormalBoluses = await FetchSsv2BatchResourceAsync<GlookoNormalBolusPage, GlookoBolus>(
-                context, GlookoConstants.NormalBolusesPath, p => p.NormalBoluses, incremental, batchStart),
+                context,
+                result,
+                activeTypes,
+                [SyncDataType.Boluses, SyncDataType.CarbIntake],
+                GlookoConstants.NormalBolusesPath, p => p.NormalBoluses, incremental, batchStart),
             ScheduledBasals = await FetchSsv2BatchResourceAsync<GlookoScheduledBasalPage, GlookoBasal>(
-                context, GlookoConstants.ScheduledBasalsPath, p => p.ScheduledBasals, incremental, batchStart),
+                context,
+                result,
+                activeTypes,
+                [SyncDataType.TempBasals],
+                GlookoConstants.ScheduledBasalsPath, p => p.ScheduledBasals, incremental, batchStart),
             TempBasals = await FetchSsv2BatchResourceAsync<GlookoTemporaryBasalPage, GlookoTempBasal>(
-                context, GlookoConstants.TemporaryBasalsPath, p => p.TemporaryBasals, incremental, batchStart),
+                context,
+                result,
+                activeTypes,
+                [SyncDataType.TempBasals],
+                GlookoConstants.TemporaryBasalsPath, p => p.TemporaryBasals, incremental, batchStart),
             SuspendBasals = await FetchSsv2BatchResourceAsync<GlookoSuspendBasalPage, GlookoSuspendBasal>(
-                context, GlookoConstants.SuspendBasalsPath, p => p.SuspendBasals, incremental, batchStart),
+                context,
+                result,
+                activeTypes,
+                [SyncDataType.StateSpans, SyncDataType.TempBasals],
+                GlookoConstants.SuspendBasalsPath, p => p.SuspendBasals, incremental, batchStart),
             MeterReadings = await FetchSsv2BatchResourceAsync<GlookoMeterReadingPage, GlookoMeterReading>(
-                context, GlookoConstants.MeterReadingsPath, p => p.Readings, incremental, batchStart),
+                context,
+                result,
+                activeTypes,
+                [SyncDataType.ManualBG],
+                GlookoConstants.MeterReadingsPath, p => p.Readings, incremental, batchStart),
             Foods = await FetchSsv2BatchResourceAsync<GlookoFoodPage, GlookoFood>(
-                context, GlookoConstants.FoodsPath, p => p.Foods, incremental, batchStart),
+                context,
+                result,
+                activeTypes,
+                [SyncDataType.CarbIntake, SyncDataType.Food],
+                GlookoConstants.FoodsPath, p => p.Foods, incremental, batchStart),
         };
 
         await CommitSsv2CursorsAsync(context,
@@ -1232,12 +1259,18 @@ public class GlookoConnectorService : BaseConnectorService<GlookoConnectorConfig
             var injectionBoluses = await FetchSsv2SafelyAsync(
                 context,
                 GlookoConstants.Ssv2InjectionBolusesPath,
+                result,
+                activeTypes,
+                [SyncDataType.Boluses],
                 () => FetchSsv2Async<GlookoInjectionBolusPage, GlookoInjectionInsulin>(
                     context, GlookoConstants.Ssv2InjectionBolusesPath, p => p.InjectionBoluses, incremental, batchStart),
                 new List<GlookoInjectionInsulin>());
             var injectionBasals = await FetchSsv2SafelyAsync(
                 context,
                 GlookoConstants.Ssv2InjectionBasalsPath,
+                result,
+                activeTypes,
+                [SyncDataType.BasalInjections],
                 () => FetchSsv2Async<GlookoInjectionBasalPage, GlookoInjectionInsulin>(
                     context, GlookoConstants.Ssv2InjectionBasalsPath, p => p.InjectionBasals, incremental, batchStart),
                 new List<GlookoInjectionInsulin>());
@@ -1263,6 +1296,9 @@ public class GlookoConnectorService : BaseConnectorService<GlookoConnectorConfig
             var insulinEvents = await FetchSsv2SafelyAsync(
                 context,
                 GlookoConstants.Ssv2InsulinEventsPath,
+                result,
+                activeTypes,
+                [SyncDataType.Boluses, SyncDataType.BasalInjections],
                 () => FetchSsv2Async<GlookoInsulinEventPage, GlookoSsv2InsulinEvent>(
                     context, GlookoConstants.Ssv2InsulinEventsPath, p => p.InsulinEvents, incremental, batchStart),
                 new List<GlookoSsv2InsulinEvent>());
@@ -1285,6 +1321,9 @@ public class GlookoConnectorService : BaseConnectorService<GlookoConnectorConfig
             var extended = await FetchSsv2SafelyAsync(
                 context,
                 GlookoConstants.Ssv2ExtendedBolusesPath,
+                result,
+                activeTypes,
+                [SyncDataType.Boluses],
                 () => FetchSsv2Async<GlookoExtendedBolusPage, GlookoExtendedBolus>(
                     context, GlookoConstants.Ssv2ExtendedBolusesPath, p => p.ExtendedBoluses, incremental, batchStart),
                 new List<GlookoExtendedBolus>());
@@ -1304,6 +1343,9 @@ public class GlookoConnectorService : BaseConnectorService<GlookoConnectorConfig
             var carbsEvents = await FetchSsv2SafelyAsync(
                 context,
                 GlookoConstants.Ssv2CarbsEventsPath,
+                result,
+                activeTypes,
+                [SyncDataType.CarbIntake],
                 () => FetchSsv2Async<GlookoCarbsEventPage, GlookoSsv2CarbsEvent>(
                     context, GlookoConstants.Ssv2CarbsEventsPath, p => p.CarbsEvents, incremental, batchStart),
                 new List<GlookoSsv2CarbsEvent>());
@@ -1321,6 +1363,9 @@ public class GlookoConnectorService : BaseConnectorService<GlookoConnectorConfig
             var rawNotes = await FetchSsv2SafelyAsync(
                 context,
                 GlookoConstants.Ssv2NotesPath,
+                result,
+                activeTypes,
+                [SyncDataType.Notes],
                 () => FetchSsv2Async<GlookoNotePage, GlookoSsv2Note>(
                     context, GlookoConstants.Ssv2NotesPath, p => p.Notes, incremental, batchStart),
                 new List<GlookoSsv2Note>());
@@ -1340,6 +1385,9 @@ public class GlookoConnectorService : BaseConnectorService<GlookoConnectorConfig
             var rawExercises = await FetchSsv2SafelyAsync(
                 context,
                 GlookoConstants.Ssv2ExercisesPath,
+                result,
+                activeTypes,
+                [SyncDataType.Activity],
                 () => FetchSsv2Async<GlookoExercisePage, GlookoSsv2Exercise>(
                     context, GlookoConstants.Ssv2ExercisesPath, p => p.Exercises, incremental, batchStart),
                 new List<GlookoSsv2Exercise>());
@@ -1353,6 +1401,9 @@ public class GlookoConnectorService : BaseConnectorService<GlookoConnectorConfig
             var rawExerciseEvents = await FetchSsv2SafelyAsync(
                 context,
                 GlookoConstants.Ssv2ExerciseEventsPath,
+                result,
+                activeTypes,
+                [SyncDataType.Activity],
                 () => FetchSsv2Async<GlookoExerciseEventPage, GlookoSsv2ExerciseEvent>(
                     context, GlookoConstants.Ssv2ExerciseEventsPath, p => p.ExerciseEvents, incremental, batchStart),
                 new List<GlookoSsv2ExerciseEvent>());
@@ -1373,12 +1424,18 @@ public class GlookoConnectorService : BaseConnectorService<GlookoConnectorConfig
             var weights = await FetchSsv2SafelyAsync(
                 context,
                 GlookoConstants.Ssv2WeightsPath,
+                result,
+                activeTypes,
+                [SyncDataType.Activity],
                 () => FetchSsv2Async<GlookoWeightPage, GlookoSsv2Weight>(
                     context, GlookoConstants.Ssv2WeightsPath, p => p.Weights, incremental, batchStart),
                 new List<GlookoSsv2Weight>());
             var validicWeights = await FetchSsv2SafelyAsync(
                 context,
                 GlookoConstants.Ssv2ValidicWeightsPath,
+                result,
+                activeTypes,
+                [SyncDataType.Activity],
                 () => FetchSsv2Async<GlookoValidicWeightPage, GlookoSsv2ValidicWeight>(
                     context, GlookoConstants.Ssv2ValidicWeightsPath, p => p.Weights, incremental, batchStart),
                 new List<GlookoSsv2ValidicWeight>());
@@ -1393,6 +1450,9 @@ public class GlookoConnectorService : BaseConnectorService<GlookoConnectorConfig
             var routines = await FetchSsv2SafelyAsync(
                 context,
                 GlookoConstants.Ssv2RoutinesPath,
+                result,
+                activeTypes,
+                [SyncDataType.Activity],
                 () => FetchSsv2Async<GlookoRoutinePage, GlookoSsv2Routine>(
                     context, GlookoConstants.Ssv2RoutinesPath, p => p.Routines, incremental, batchStart),
                 new List<GlookoSsv2Routine>());
@@ -1406,6 +1466,9 @@ public class GlookoConnectorService : BaseConnectorService<GlookoConnectorConfig
             var biometrics = await FetchSsv2SafelyAsync(
                 context,
                 GlookoConstants.Ssv2BiometricMeasurementsPath,
+                result,
+                activeTypes,
+                [SyncDataType.Activity],
                 () => FetchSsv2Async<GlookoBiometricMeasurementPage, GlookoSsv2BiometricMeasurement>(
                     context, GlookoConstants.Ssv2BiometricMeasurementsPath, p => p.BiometricMeasurements, incremental, batchStart),
                 new List<GlookoSsv2BiometricMeasurement>());
@@ -1425,6 +1488,9 @@ public class GlookoConnectorService : BaseConnectorService<GlookoConnectorConfig
             var pumpEvents = await FetchSsv2SafelyAsync(
                 context,
                 GlookoConstants.Ssv2PumpEventsPath,
+                result,
+                activeTypes,
+                [SyncDataType.DeviceEvents],
                 () => FetchSsv2Async<GlookoPumpEventPage, GlookoPumpEvent>(
                     context, GlookoConstants.Ssv2PumpEventsPath, p => p.Events, incremental, batchStart),
                 new List<GlookoPumpEvent>());
@@ -1440,6 +1506,9 @@ public class GlookoConnectorService : BaseConnectorService<GlookoConnectorConfig
             var alarms = await FetchSsv2SafelyAsync(
                 context,
                 GlookoConstants.Ssv2AlarmsPath,
+                result,
+                activeTypes,
+                [SyncDataType.DeviceEvents],
                 () => FetchSsv2Async<GlookoSsv2AlarmPage, GlookoSsv2Alarm>(
                     context, GlookoConstants.Ssv2AlarmsPath, p => p.Alarms, incremental, batchStart),
                 new List<GlookoSsv2Alarm>());
@@ -1462,12 +1531,18 @@ public class GlookoConnectorService : BaseConnectorService<GlookoConnectorConfig
             var pumpDevices = await FetchSsv2SafelyAsync(
                 context,
                 GlookoConstants.Ssv2PumpsPath,
+                result,
+                activeTypes,
+                [SyncDataType.DeviceEvents],
                 () => FetchSsv2Async<GlookoPumpDevicePage, GlookoSsv2Device>(
                     context, GlookoConstants.Ssv2PumpsPath, p => p.Pumps, incremental, batchStart),
                 new List<GlookoSsv2Device>());
             var cgmDevices = await FetchSsv2SafelyAsync(
                 context,
                 GlookoConstants.Ssv2CgmDevicesPath,
+                result,
+                activeTypes,
+                [SyncDataType.DeviceEvents],
                 () => FetchSsv2Async<GlookoCgmDevicePage, GlookoSsv2Device>(
                     context, GlookoConstants.Ssv2CgmDevicesPath, p => p.CgmDevices, incremental, batchStart),
                 new List<GlookoSsv2Device>());
@@ -1491,6 +1566,9 @@ public class GlookoConnectorService : BaseConnectorService<GlookoConnectorConfig
             var settings = await FetchSsv2SafelyAsync(
                 context,
                 GlookoConstants.Ssv2PumpSettingsPath,
+                result,
+                activeTypes,
+                [SyncDataType.Profiles],
                 () => FetchSsv2Async<GlookoSsv2PumpSettingsPage, GlookoSsv2PumpSettings>(
                     context, GlookoConstants.Ssv2PumpSettingsPath, p => p.Settings, incremental, batchStart),
                 new List<GlookoSsv2PumpSettings>());
@@ -1510,25 +1588,37 @@ public class GlookoConnectorService : BaseConnectorService<GlookoConnectorConfig
 
     /// <summary>
     ///     Fetches one SSV2 batch resource and returns its records as an array, or an empty array if the
-    ///     fetch fails (logged and skipped — see <see cref="FetchSsv2SafelyAsync{T}"/>).
+    ///     fetch fails (reported and skipped, see <see cref="FetchSsv2SafelyAsync{T}"/>).
     /// </summary>
     private Task<TRecord[]> FetchSsv2BatchResourceAsync<TPage, TRecord>(
         GlookoSyncContext context,
+        SyncResult result,
+        HashSet<SyncDataType> activeTypes,
+        SyncDataType[] dataTypes,
         string resource, Func<TPage, TRecord[]?> selectRecords, bool incremental, DateTime? startDate)
         where TPage : GlookoSsv2Page
         => FetchSsv2SafelyAsync(
             context,
             resource,
+            result,
+            activeTypes,
+            dataTypes,
             async () => (await FetchSsv2Async<TPage, TRecord>(context, resource, selectRecords, incremental, startDate)).ToArray(),
             Array.Empty<TRecord>());
 
     /// <summary>
-    ///     Runs an SSV2 fetch and returns its result, or — if it throws — logs a warning and returns
-    ///     <paramref name="fallback"/> so one failing feed degrades to "no records this pass" instead of
-    ///     aborting the whole sync. Mirrors the per-endpoint resilience of the windowed batch path.
+    ///     Runs an SSV2 fetch and returns its result, or, if it throws, records a fetch failure against
+    ///     each of <paramref name="dataTypes"/> as the windowed batch path does and returns
+    ///     <paramref name="fallback"/>, so one failing feed costs its types and the pass still runs.
     /// </summary>
     private async Task<T> FetchSsv2SafelyAsync<T>(
-        GlookoSyncContext context, string resource, Func<Task<T>> fetch, T fallback)
+        GlookoSyncContext context,
+        string resource,
+        SyncResult result,
+        HashSet<SyncDataType> activeTypes,
+        SyncDataType[] dataTypes,
+        Func<Task<T>> fetch,
+        T fallback)
     {
         try
         {
@@ -1540,8 +1630,12 @@ public class GlookoConnectorService : BaseConnectorService<GlookoConnectorConfig
         catch (Exception ex) when (ConnectorFaults.IsSourceFailure(ex, context.CancellationToken))
         {
             _logger.LogWarning(ex,
-                "[{ConnectorSource}] SSV2 fetch for {Resource} failed; skipping it and continuing with the rest of the sync",
+                "[{ConnectorSource}] SSV2 fetch for {Resource} failed; continuing with the rest of the sync",
                 ConnectorSource, resource);
+
+            context.PendingSsv2Cursors.Remove(resource);
+            foreach (var type in dataTypes)
+                RecordFetchFailure(result, type, activeTypes);
             return fallback;
         }
     }
