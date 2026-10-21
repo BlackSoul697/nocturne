@@ -18483,15 +18483,11 @@ msgstr ""
 msgid "Point color mode"
 msgstr ""
 
-#: src/routes/(authenticated)/settings/appearance/+page.svelte
-#: src/routes/(authenticated)/settings/appearance/+page.svelte
-msgid "Baseline"
-msgstr ""
+#~ msgid "Baseline"
+#~ msgstr ""
 
-#: src/routes/(authenticated)/settings/appearance/+page.svelte
-#: src/routes/(authenticated)/settings/appearance/+page.svelte
-msgid "Deviation"
-msgstr ""
+#~ msgid "Deviation"
+#~ msgstr ""
 
 #: src/routes/(authenticated)/settings/appearance/+page.svelte
 msgid "Area fill"
@@ -27124,4 +27120,35 @@ msgstr ""
 
 #: src/lib/components/patient/DeviceNameCombobox.svelte
 msgid "No devices found."
+msgstr ""
+
+#: src/routes/(authenticated)/settings/appearance/+page.svelte
+#: src/routes/(authenticated)/settings/appearance/+page.svelte
+msgid "Full"
+msgstr ""
+
+#: src/routes/(authenticated)/settings/appearance/+page.svelte
+#: src/routes/(authenticated)/settings/appearance/+page.svelte
+msgid "Fade (Trio style)"
+msgstr ""
+
+#: src/routes/(authenticated)/settings/appearance/+page.svelte
+#: src/routes/(authenticated)/settings/appearance/+page.svelte
+msgid "Outside target only"
+msgstr ""
+
+#: src/routes/(authenticated)/settings/appearance/+page.svelte
+msgid "No fill under the glucose line."
+msgstr ""
+
+#: src/routes/(authenticated)/settings/appearance/+page.svelte
+msgid "Fills from the glucose line to the bottom of the chart at one opacity."
+msgstr ""
+
+#: src/routes/(authenticated)/settings/appearance/+page.svelte
+msgid "Fills from the glucose line to the bottom of the chart, fading out toward the bottom."
+msgstr ""
+
+#: src/routes/(authenticated)/settings/appearance/+page.svelte
+msgid "Fills only between the glucose line and the target range when it is out of range."
 msgstr ""

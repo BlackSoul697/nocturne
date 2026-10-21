@@ -18483,15 +18483,11 @@ msgstr "Show data points"
 msgid "Point color mode"
 msgstr "Point color mode"
 
-#: src/routes/(authenticated)/settings/appearance/+page.svelte
-#: src/routes/(authenticated)/settings/appearance/+page.svelte
-msgid "Baseline"
-msgstr "Baseline"
+#~ msgid "Baseline"
+#~ msgstr "Baseline"
 
-#: src/routes/(authenticated)/settings/appearance/+page.svelte
-#: src/routes/(authenticated)/settings/appearance/+page.svelte
-msgid "Deviation"
-msgstr "Deviation"
+#~ msgid "Deviation"
+#~ msgstr "Deviation"
 
 #: src/routes/(authenticated)/settings/appearance/+page.svelte
 msgid "Area fill"
@@ -27125,3 +27121,34 @@ msgstr "<0/> Use \"{0}\""
 #: src/lib/components/patient/DeviceNameCombobox.svelte
 msgid "No devices found."
 msgstr "No devices found."
+
+#: src/routes/(authenticated)/settings/appearance/+page.svelte
+#: src/routes/(authenticated)/settings/appearance/+page.svelte
+msgid "Full"
+msgstr "Full"
+
+#: src/routes/(authenticated)/settings/appearance/+page.svelte
+#: src/routes/(authenticated)/settings/appearance/+page.svelte
+msgid "Fade (Trio style)"
+msgstr "Fade (Trio style)"
+
+#: src/routes/(authenticated)/settings/appearance/+page.svelte
+#: src/routes/(authenticated)/settings/appearance/+page.svelte
+msgid "Outside target only"
+msgstr "Outside target only"
+
+#: src/routes/(authenticated)/settings/appearance/+page.svelte
+msgid "No fill under the glucose line."
+msgstr "No fill under the glucose line."
+
+#: src/routes/(authenticated)/settings/appearance/+page.svelte
+msgid "Fills from the glucose line to the bottom of the chart at one opacity."
+msgstr "Fills from the glucose line to the bottom of the chart at one opacity."
+
+#: src/routes/(authenticated)/settings/appearance/+page.svelte
+msgid "Fills from the glucose line to the bottom of the chart, fading out toward the bottom."
+msgstr "Fills from the glucose line to the bottom of the chart, fading out toward the bottom."
+
+#: src/routes/(authenticated)/settings/appearance/+page.svelte
+msgid "Fills only between the glucose line and the target range when it is out of range."
+msgstr "Fills only between the glucose line and the target range when it is out of range."
