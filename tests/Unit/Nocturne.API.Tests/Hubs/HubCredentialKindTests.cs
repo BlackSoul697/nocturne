@@ -332,6 +332,22 @@ public class HubCredentialKindTests
     }
 
     /// <summary>A broadcast service recording the group name of every send.</summary>
+    [Fact]
+    public void A_session_logins_hub_credential_names_the_session_it_belongs_to()
+    {
+        var httpContext = new DefaultHttpContext();
+        httpContext.Items[AuthContextKeys.AuthContext] = new AuthContext
+        {
+            IsAuthenticated = true,
+            AuthType = AuthType.SessionCookie,
+            SubjectId = Subject,
+            SessionId = "laptop",
+        };
+        httpContext.SetTenantContext(new TenantContext(Tenant, "default", "Default", IsActive: true, IsDemo: false));
+
+        HubAuthorizationState.FromRequest(httpContext)!.Source!.SessionId.Should().Be("laptop");
+    }
+
     private static (ISignalRBroadcastService Service, List<string> Sends) CreateBroadcastService()
     {
         var sends = new List<string>();

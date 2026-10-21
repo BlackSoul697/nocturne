@@ -183,6 +183,30 @@ public class RefreshTokenServiceTests
             default));
     }
 
+    [Theory]
+    [Trait("Category", "Unit")]
+    [InlineData("session-a")]
+    [InlineData(null)]
+    public async Task RotateRefreshTokenAsync_SuccessorBelongsToANamedSession(string? oldSession)
+    {
+        var oldTokenId = Guid.CreateVersion7();
+        _jwtService.Setup(j => j.HashRefreshToken("old-token")).Returns("hash-old");
+        _jwtService.Setup(j => j.GenerateRefreshToken()).Returns("new-token");
+        _jwtService.Setup(j => j.HashRefreshToken("new-token")).Returns("hash-new");
+        _repository.Setup(r => r.FindByHashAsync("hash-old", default))
+            .ReturnsAsync(MakeRecord(id: oldTokenId, oidcSessionId: oldSession));
+        _repository.Setup(r => r.TryMarkRotatedAsync(oldTokenId, It.IsAny<Guid>(), default))
+            .ReturnsAsync(true);
+
+        await CreateService().RotateRefreshTokenAsync("old-token");
+
+        _repository.Verify(r => r.CreateAsync(
+            It.Is<RefreshTokenRecord>(rec =>
+                !string.IsNullOrEmpty(rec.OidcSessionId)
+                && (oldSession == null || rec.OidcSessionId == oldSession)),
+            default));
+    }
+
     [Fact]
     [Trait("Category", "Unit")]
     public async Task RotateRefreshTokenAsync_LostAtomicClaim_ThrowsRaceWithoutForkingOrNuking()

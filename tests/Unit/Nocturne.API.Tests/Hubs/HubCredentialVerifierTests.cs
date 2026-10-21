@@ -373,10 +373,12 @@ public class HubCredentialVerifierTests
     private OverviewGrant Overview(params Guid[] tenants) =>
         new(_subject, AuthType.OAuthAccessToken, new HashSet<string> { Scope.GlucoseRead }, tenants);
 
-    private void Reaches(params Guid[] tenants) =>
+    private void Reaches(params Guid[] tenants) => Reaches(AuthType.OAuthAccessToken, tenants);
+
+    private void Reaches(AuthType authType, params Guid[] tenants) =>
         _overview
             .Setup(o => o.GetGlucoseReadTenantsAsync(
-                _subject, It.IsAny<IReadOnlySet<string>>(), It.IsAny<AuthType>(), It.IsAny<CancellationToken>()))
+                _subject, It.IsAny<IReadOnlySet<string>>(), authType, It.IsAny<CancellationToken>()))
             .ReturnsAsync(tenants
                 .Select(id => new GlucoseReadTenant(new TenantEntity { Id = id }, new HashSet<string>(), false, new HashSet<string>()))
                 .ToList());
@@ -406,7 +408,7 @@ public class HubCredentialVerifierTests
     public async Task Signing_out_one_session_ends_only_that_sessions_overview_connection()
     {
         await SeedAsync(sessions: ["laptop", "phone"]);
-        Reaches(Tenant);
+        Reaches(AuthType.SessionCookie, Tenant);
         var laptop = Overview(Tenant) with { AuthType = AuthType.SessionCookie, SessionId = "laptop" };
         var phone = laptop with { SessionId = "phone" };
 
