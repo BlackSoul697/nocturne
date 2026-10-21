@@ -398,6 +398,15 @@ public class TreatmentDecomposer : DecomposerBase, ITreatmentDecomposer, IDecomp
     ];
 
     /// <inheritdoc />
+    public string? ServedBolusCarbEventType(Treatment treatment)
+    {
+        var c = ClassifyTreatment(treatment);
+        return c.DelegateToStateSpan || c.ProduceBolusCalc
+            ? null
+            : LegacyTreatmentTables.ServedBolusCarbEventType(c.ProduceBolus, c.ProduceCarbIntake);
+    }
+
+    /// <inheritdoc />
     public async Task<V4Models.DecompositionResult> DecomposeAsync(Treatment treatment, WriteOrigin origin, CancellationToken ct = default)
     {
         NormalizeIdentity(treatment);

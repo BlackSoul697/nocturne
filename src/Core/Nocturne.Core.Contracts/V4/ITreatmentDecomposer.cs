@@ -27,6 +27,13 @@ public interface ITreatmentDecomposer
     Task<DecompositionResult> DecomposeAsync(Treatment treatment, WriteOrigin origin, CancellationToken ct = default);
 
     /// <summary>
+    /// The eventType <paramref name="treatment"/> is served as once decomposed, when it becomes a bolus,
+    /// a carb intake or both: <c>Meal Bolus</c>, <c>Correction Bolus</c> or <c>Carb Correction</c>
+    /// whatever type was uploaded. Null for any other treatment, which is served as it was sent.
+    /// </summary>
+    string? ServedBolusCarbEventType(Treatment treatment);
+
+    /// <summary>
     /// Decomposes a batch of legacy Treatments into v4 records using bulk-insert operations,
     /// eliminating per-record DB round-trips. State span treatments (TempBasal, ProfileSwitch,
     /// Override, TemporaryTarget) are upserted individually since they require idempotent semantics.

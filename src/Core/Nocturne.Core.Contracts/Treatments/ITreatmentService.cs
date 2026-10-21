@@ -62,6 +62,14 @@ public interface ITreatmentService
     );
 
     /// <summary>
+    /// The id of the stored treatment at <paramref name="treatment"/>'s time with its event type, or
+    /// <see langword="null"/> when none is stored: Nightscout's upsert key for a document with neither
+    /// <c>identifier</c> nor <c>_id</c>. A stored treatment served under the event type
+    /// <paramref name="treatment"/> itself will be served as also matches, when none matches the sent type.
+    /// </summary>
+    Task<string?> FindSameEventIdAsync(Treatment treatment, CancellationToken cancellationToken = default);
+
+    /// <summary>
     /// Get treatments modified since a given timestamp, including StateSpan-derived temp basals.
     /// Used by the v3 incremental sync endpoint.
     /// </summary>

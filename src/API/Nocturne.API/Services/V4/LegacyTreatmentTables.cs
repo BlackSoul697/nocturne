@@ -840,13 +840,26 @@ internal static class LegacyTreatmentTables
         return treatment;
     }
 
+    /// <summary>
+    /// The eventType a treatment is served as, given whether it holds a bolus and a carb intake:
+    /// boluses and carb intakes keep no uploaded eventType, so a meal is a <c>Meal Bolus</c>, a bolus
+    /// alone a <c>Correction Bolus</c> and carbs alone a <c>Carb Correction</c>. Null when it holds neither.
+    /// </summary>
+    internal static string? ServedBolusCarbEventType(bool bolus, bool carbs) => (bolus, carbs) switch
+    {
+        (true, true) => TreatmentTypes.MealBolus,
+        (true, false) => TreatmentTypes.CorrectionBolus,
+        (false, true) => TreatmentTypes.CarbCorrection,
+        _ => null,
+    };
+
     private static Treatment ProjectMealBolus(Bolus bolus, CarbIntake carb, List<TreatmentFood> foods) =>
         new()
         {
             Id = bolus.Id.ToString(),
             AdditionalProperties = TreatmentClientId.ToTreatment(bolus.AdditionalProperties),
             RawTimestamp = TreatmentUploadedTimestamp.Of(bolus.AdditionalProperties),
-            EventType = TreatmentTypes.MealBolus,
+            EventType = ServedBolusCarbEventType(bolus: true, carbs: true)!,
             Mills = bolus.Mills,
             Insulin = bolus.Insulin,
             Carbs = carb.Carbs,
@@ -869,7 +882,7 @@ internal static class LegacyTreatmentTables
             Id = bolus.Id.ToString(),
             AdditionalProperties = TreatmentClientId.ToTreatment(bolus.AdditionalProperties),
             RawTimestamp = TreatmentUploadedTimestamp.Of(bolus.AdditionalProperties),
-            EventType = TreatmentTypes.CorrectionBolus,
+            EventType = ServedBolusCarbEventType(bolus: true, carbs: false)!,
             Mills = bolus.Mills,
             Insulin = bolus.Insulin,
             EnteredBy = bolus.Device,
@@ -890,7 +903,7 @@ internal static class LegacyTreatmentTables
             Id = carb.Id.ToString(),
             AdditionalProperties = TreatmentClientId.ToTreatment(carb.AdditionalProperties),
             RawTimestamp = TreatmentUploadedTimestamp.Of(carb.AdditionalProperties),
-            EventType = TreatmentTypes.CarbCorrection,
+            EventType = ServedBolusCarbEventType(bolus: false, carbs: true)!,
             Mills = carb.Mills,
             Carbs = carb.Carbs,
             FoodType = DeriveFoodType(foods),

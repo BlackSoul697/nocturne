@@ -135,6 +135,23 @@ public class TreatmentService : ITreatmentService
     }
 
     /// <inheritdoc />
+    public async Task<string?> FindSameEventIdAsync(
+        Treatment treatment, CancellationToken cancellationToken = default)
+    {
+        if (treatment.Mills <= 0)
+            return null;
+
+        var servedAs = _decomposer.ServedBolusCarbEventType(treatment);
+        var atSameTime = (await _store.GetByRangeAsync(treatment.Mills, treatment.Mills, cancellationToken))
+            .Where(stored => !string.IsNullOrEmpty(stored.Id))
+            .ToList();
+        return (atSameTime.FirstOrDefault(stored => string.Equals(stored.EventType, treatment.EventType, StringComparison.Ordinal))
+                ?? atSameTime.FirstOrDefault(stored =>
+                    servedAs is not null && string.Equals(stored.EventType, servedAs, StringComparison.Ordinal)))
+            ?.Id;
+    }
+
+    /// <inheritdoc />
     public async Task<IEnumerable<Treatment>> GetTreatmentsModifiedSinceAsync(
         long lastModifiedMills, int limit = 500, CancellationToken cancellationToken = default)
     {
