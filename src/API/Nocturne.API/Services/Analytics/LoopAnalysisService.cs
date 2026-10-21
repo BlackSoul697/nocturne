@@ -4,7 +4,6 @@ using Nocturne.Core.Clinical.Schedules;
 using Nocturne.Core.Clinical.Treatments;
 using Nocturne.Core.Contracts.Analytics;
 using Nocturne.Core.Contracts.Glucose;
-using Nocturne.Core.Contracts.Multitenancy;
 using Nocturne.Core.Contracts.Profiles.Resolvers;
 using Nocturne.Core.Contracts.Repositories;
 using Nocturne.Core.Contracts.Treatments;
@@ -43,8 +42,7 @@ internal sealed class LoopAnalysisService(
     IBasalSegmentService basalSegmentService,
     IIobCalculator iobCalculator,
     ICobCalculator cobCalculator,
-    ICategoryReadContext categoryReadContext,
-    ILogger<LoopAnalysisService> logger
+    TenantClockResolver tenantClock
 ) : ILoopAnalysisService
 {
     private const long TickMs = DailyProfileCalculator.SlotMinutes * LocalSlotBinning.MinuteMs;
@@ -66,7 +64,7 @@ internal sealed class LoopAnalysisService(
             ? Window.Of(compareFrom, compareTo)
             : (Window?)null;
 
-        var (zone, reason) = await ResolveZoneAsync(ct);
+        var (zone, reason) = await tenantClock.ResolveAsync(ct);
         var response = new DailyProfileResponse { TimeZoneUnavailableReason = reason };
         if (zone is null)
         {
@@ -242,30 +240,6 @@ internal sealed class LoopAnalysisService(
         spans.TryGetValue(category, out var list)
             ? [.. list.Select(s => (s, new MillsInterval(s.StartMills, s.EndMills ?? to)))]
             : [];
-
-    /// <summary>
-    /// The tenant's zone, or none and why. A share gets none whatever the settings say: Loop
-    /// Analysis is for members, and the therapy settings the zone lives in are hidden from shares.
-    /// </summary>
-    private async Task<(TimeZoneInfo? Zone, TimeZoneUnavailableReason? Reason)> ResolveZoneAsync(CancellationToken ct)
-    {
-        if (categoryReadContext.IsShare)
-            return (null, TimeZoneUnavailableReason.Share);
-        try
-        {
-            var id = await therapySettingsResolver.GetTimezoneAsync(ct: ct);
-            if (TimeZoneHelper.TryGetTimeZoneInfoFromId(id, out var tz))
-                return (tz, null);
-            return (null, string.IsNullOrWhiteSpace(id)
-                ? TimeZoneUnavailableReason.NotConfigured
-                : TimeZoneUnavailableReason.Unrecognised);
-        }
-        catch (Exception ex) when (ex is not OperationCanceledException)
-        {
-            logger.LogWarning(ex, "Tenant timezone lookup failed; Loop Analysis returns no slots");
-            return (null, TimeZoneUnavailableReason.LookupFailed);
-        }
-    }
 
     private static DateTime ToUtc(long mills) => DateTimeOffset.FromUnixTimeMilliseconds(mills).UtcDateTime;
 
