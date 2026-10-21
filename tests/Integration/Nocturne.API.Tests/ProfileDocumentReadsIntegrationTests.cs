@@ -224,7 +224,7 @@ public class ProfileDocumentReadsIntegrationTests : ApiIntegrationTestBase
         await PostAsync(client, "/api/v1/profile", Document(NewerId, "Night", now.AddDays(-1), "Day", "Night"));
 
         var first = await GetAsync(client, "/api/v1/profile?count=1");
-        var second = await GetAsync(client, "/api/v3/profile?limit=1&skip=1");
+        var second = await GetAsync(client, "/api/v3/profile?limit=1&skip=1&sort$desc=created_at");
 
         ShouldBeTheSeededDocument(first.EnumerateArray().Should().ContainSingle().Subject);
         var older = second.EnumerateArray().Should().ContainSingle().Subject;

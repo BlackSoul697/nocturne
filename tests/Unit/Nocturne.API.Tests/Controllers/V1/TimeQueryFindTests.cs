@@ -300,19 +300,17 @@ public class TimeQueryFindTests
         var entries = entryService ?? FakeEntries();
         var treatments = new Mock<ITreatmentService>();
         treatments
-            .Setup(t => t.GetTreatmentsWithAdvancedFilterAsync(
-                It.IsAny<int>(), It.IsAny<int>(), It.IsAny<string?>(), It.IsAny<bool>(),
-                It.IsAny<CancellationToken>()))
-            .ReturnsAsync((int _, int _, string? find, bool _, CancellationToken _) =>
+            .Setup(t => t.QueryTreatmentsAsync(It.IsAny<TreatmentQuery>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync((TreatmentQuery query, CancellationToken _) =>
             {
-                var parsed = FindQuery.Parse(find);
+                var parsed = FindQuery.Parse(query.Find);
                 return Treatments.Where(parsed.Matches).ToList().AsEnumerable();
             });
 
         var deviceStatuses = new DeviceStatusProjectionService(
             Mock.Of<IDeviceStatusGroupRepository>(r => r.GetAsync(
                     It.IsAny<DateTime?>(), It.IsAny<DateTime?>(), It.IsAny<string?>(),
-                    It.IsAny<int>(), It.IsAny<int>(), It.IsAny<CancellationToken>())
+                    It.IsAny<int>(), It.IsAny<int>(), It.IsAny<bool>(), It.IsAny<CancellationToken>())
                 == Task.FromResult<IReadOnlyList<Nocturne.Core.Models.V4.DeviceStatusGroup>>(
                     Array.Empty<Nocturne.Core.Models.V4.DeviceStatusGroup>())),
             new Mock<IApsSnapshotRepository>().Object,

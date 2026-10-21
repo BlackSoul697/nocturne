@@ -63,14 +63,16 @@ public interface ITherapySettingsRepository : IProfileScopedRepository<TherapySe
     Task<long> CountDocumentsAsync(CancellationToken ct = default);
 
     /// <summary>
-    /// A page of the stored profile documents, ranked as <see cref="GetDocumentIdsAsync"/> ranks them,
-    /// each as its live rows, one per named store.
+    /// A page of the stored profile documents, ranked as <see cref="GetDocumentIdsAsync"/> ranks them
+    /// or, when <paramref name="descending"/> is <c>false</c>, in the reverse of that order, each as
+    /// its live rows, one per named store.
     /// </summary>
     /// <param name="limit">Maximum number of documents to return.</param>
     /// <param name="offset">Number of documents to skip.</param>
+    /// <param name="descending">Whether the newest document comes first.</param>
     /// <param name="ct">Cancellation token.</param>
     Task<IReadOnlyList<IReadOnlyList<TherapySettings>>> GetDocumentsAsync(
-        int limit, int offset, CancellationToken ct = default);
+        int limit, int offset, bool descending, CancellationToken ct = default);
 
     /// <summary>
     /// The live rows of the profile document <paramref name="documentId"/>, one per named store,

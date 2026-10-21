@@ -10,6 +10,7 @@ using Nocturne.API.Authorization;
 using Nocturne.API.Controllers.V4.Analytics;
 using Nocturne.API.Services.Glucose;
 using Nocturne.Core.Contracts.Analytics;
+using Nocturne.Core.Contracts.Entries;
 using Nocturne.Core.Contracts.Glucose;
 using Nocturne.Core.Contracts.Profiles.Resolvers;
 using Nocturne.Core.Contracts.Treatments;
@@ -359,9 +360,7 @@ public class AnalyticsReadScopeGuardTests
     {
         var entries = new Mock<IEntryService>();
         entries
-            .Setup(s => s.GetEntriesWithAdvancedFilterAsync(
-                It.IsAny<string?>(), It.IsAny<int>(), It.IsAny<int>(), It.IsAny<string?>(),
-                It.IsAny<string?>(), It.IsAny<bool>(), It.IsAny<CancellationToken>()))
+            .Setup(s => s.QueryEntriesAsync(It.IsAny<EntryQuery>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync([new Entry { Mills = 1_000, Sgv = 120, Direction = "Flat" }]);
 
         var boluses = new Mock<IBolusRepository>();

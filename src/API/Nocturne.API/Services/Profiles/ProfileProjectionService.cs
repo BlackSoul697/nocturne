@@ -36,7 +36,7 @@ public class ProfileProjectionService : IProfileProjectionService
 
     /// <inheritdoc />
     public async Task<Profile?> GetCurrentProfileAsync(CancellationToken ct = default) =>
-        (await GetProfilesAsync(count: 1, skip: 0, ct)).FirstOrDefault();
+        (await GetProfilesAsync(count: 1, skip: 0, ct: ct)).FirstOrDefault();
 
     /// <inheritdoc />
     public async Task<Profile?> GetProfileByIdAsync(string id, CancellationToken ct = default) =>
@@ -74,10 +74,10 @@ public class ProfileProjectionService : IProfileProjectionService
 
     /// <inheritdoc />
     public async Task<IEnumerable<Profile>> GetProfilesAsync(
-        int count = 10, int skip = 0, CancellationToken ct = default)
+        int count = 10, int skip = 0, bool descending = true, CancellationToken ct = default)
     {
         var profiles = new List<Profile>();
-        foreach (var rows in await _therapyRepo.GetDocumentsAsync(count, skip, ct))
+        foreach (var rows in await _therapyRepo.GetDocumentsAsync(count, skip, descending, ct))
             profiles.Add(await AssembleDocumentAsync(rows, ct));
 
         return profiles;

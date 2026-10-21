@@ -152,10 +152,10 @@ public class TherapySettingsRepository : V4RepositoryBase<TherapySettings, Thera
 
     /// <inheritdoc />
     public async Task<IReadOnlyList<IReadOnlyList<TherapySettings>>> GetDocumentsAsync(
-        int limit, int offset, CancellationToken ct = default)
+        int limit, int offset, bool descending, CancellationToken ct = default)
     {
         await using var ctx = await ContextFactory.CreateAsync(ct);
-        var page = await RankedDocumentIds(ctx).Skip(offset).Take(limit).ToListAsync(ct);
+        var page = await RankedDocumentIds(ctx, descending).Skip(offset).Take(limit).ToListAsync(ct);
 
         var rows = (await DocumentRows(ctx).Where(d => page.Contains(d.DocumentId)).ToListAsync(ct))
             .ToLookup(d => d.DocumentId, d => TherapySettingsMapper.ToDomainModel(d.Row), StringComparer.Ordinal);
@@ -188,15 +188,25 @@ public class TherapySettingsRepository : V4RepositoryBase<TherapySettings, Thera
 
     /// <summary>
     /// The document ids, newest first as Nightscout sorts them: by the document's newest row, then by
-    /// id descending, compared bytewise as <see cref="StringComparer.Ordinal"/> compares them.
+    /// id descending, compared bytewise as <see cref="StringComparer.Ordinal"/> compares them. When
+    /// <paramref name="descending"/> is <c>false</c>, the reverse of that order.
     /// </summary>
-    private static IQueryable<string> RankedDocumentIds(NocturneDbContext ctx) =>
-        DocumentRows(ctx)
+    private static IQueryable<string> RankedDocumentIds(NocturneDbContext ctx, bool descending = true)
+    {
+        var documents = DocumentRows(ctx)
             .GroupBy(d => d.DocumentId)
-            .Select(g => new { DocumentId = g.Key, Newest = g.Max(d => d.Row.Timestamp) })
-            .OrderByDescending(d => d.Newest)
-            .ThenByDescending(d => EF.Functions.Collate(d.DocumentId, "C"))
-            .Select(d => d.DocumentId);
+            .Select(g => new { DocumentId = g.Key, Newest = g.Max(d => d.Row.Timestamp) });
+
+        var ordered = descending
+            ? documents
+                .OrderByDescending(d => d.Newest)
+                .ThenByDescending(d => EF.Functions.Collate(d.DocumentId, "C"))
+            : documents
+                .OrderBy(d => d.Newest)
+                .ThenBy(d => EF.Functions.Collate(d.DocumentId, "C"));
+
+        return ordered.Select(d => d.DocumentId);
+    }
 
     private sealed class DocumentRow
     {

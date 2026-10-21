@@ -286,16 +286,17 @@ public class EntriesController : ControllerBase
             : string.IsNullOrEmpty(find) ? null
             : find;
 
-        // reverseResults stays false (newest-first): legacy Nightscout ignores the cache-busting
+        // ReverseResults stays false (newest-first): legacy Nightscout ignores the cache-busting
         // "rr" query parameter, so a nonzero "rr" value must never flip the sort order.
-        var entries = await _entryService.GetEntriesWithAdvancedFilterAsync(
-            type: type,
-            count: LegacyReadLimits.ClampCount(count ?? 10),
-            skip: 0,
-            findQuery: findQuery,
-            dateString: dateString,
-            reverseResults: false,
-            cancellationToken: cancellationToken
+        var entries = await _entryService.QueryEntriesAsync(
+            new EntryQuery
+            {
+                Type = type,
+                Count = LegacyReadLimits.ClampCount(count ?? 10),
+                Find = findQuery,
+                DateString = dateString,
+            },
+            cancellationToken
         );
         return entries.ToArray();
     }

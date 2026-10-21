@@ -163,6 +163,11 @@ public class EntryService : IEntryService
     }
 
     /// <inheritdoc />
+    public async Task<IEnumerable<Entry>> QueryEntriesAsync(
+        EntryQuery query, CancellationToken cancellationToken = default) =>
+        await _store.QueryAsync(query, cancellationToken);
+
+    /// <inheritdoc />
     /// <remarks>
     /// Validates entry types, then decomposes the batch to V4 tables via
     /// <see cref="IEntryDecomposer.DecomposeBatchAsync"/>. The repository chokepoint fires the

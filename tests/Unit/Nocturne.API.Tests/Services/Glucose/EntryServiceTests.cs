@@ -304,6 +304,41 @@ public class EntryServiceTests
         Assert.Single(result);
     }
 
+    [Fact]
+    [Trait("Category", "Unit")]
+    [Trait("Category", "Parity")]
+    public async Task QueryEntriesAsync_PassesTheQueryToTheStore()
+    {
+        // Arrange
+        var type = "sgv";
+        var findQuery = "{\"sgv\":{\"$gte\":100}}";
+        var dateString = "2022-01-01T12:00:00.000Z";
+        var expectedEntries = new List<Entry> { new() { Id = "1" } };
+
+        _store
+            .Setup(x => x.QueryAsync(
+                It.Is<EntryQuery>(q =>
+                    q.Type == type &&
+                    q.Find == findQuery &&
+                    q.Count == 20 &&
+                    q.Skip == 10 &&
+                    q.DateString == dateString &&
+                    q.ReverseResults == true),
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync(expectedEntries);
+
+        // Act
+        var result = await _sut.QueryEntriesAsync(
+            new EntryQuery
+            {
+                Type = type, Find = findQuery, Count = 20, Skip = 10, DateString = dateString, ReverseResults = true,
+            },
+            CancellationToken.None);
+
+        // Assert
+        Assert.Single(result);
+    }
+
     #endregion
 
     #region Create

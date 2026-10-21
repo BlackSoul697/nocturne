@@ -192,4 +192,7 @@ public interface IEntryService
         bool reverseResults,
         CancellationToken cancellationToken = default
     );
+
+    /// <summary>Entries matching <paramref name="query"/>, in the order it asks for.</summary>
+    Task<IEnumerable<Entry>> QueryEntriesAsync(EntryQuery query, CancellationToken cancellationToken = default);
 }

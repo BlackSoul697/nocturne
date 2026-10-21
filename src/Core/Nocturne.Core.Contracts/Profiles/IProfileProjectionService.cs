@@ -38,13 +38,15 @@ public interface IProfileProjectionService
     Task<string?> ResolveDocumentIdAsync(string id, CancellationToken ct = default);
 
     /// <summary>
-    /// A page of the stored profile documents, newest first, each carrying every one of its stores.
-    /// Profile-switch snapshots are not documents and are left out.
+    /// A page of the stored profile documents, each carrying every one of its stores: newest first
+    /// when <paramref name="descending"/> is <c>true</c>, otherwise oldest first, the page cut from
+    /// that order. Profile-switch snapshots are not documents and are left out.
     /// </summary>
     /// <param name="count">Maximum number of documents to return.</param>
     /// <param name="skip">Number of documents to skip.</param>
+    /// <param name="descending">Whether the newest document comes first.</param>
     /// <param name="ct">Cancellation token.</param>
-    Task<IEnumerable<Profile>> GetProfilesAsync(int count = 10, int skip = 0, CancellationToken ct = default);
+    Task<IEnumerable<Profile>> GetProfilesAsync(int count = 10, int skip = 0, bool descending = true, CancellationToken ct = default);
 
     /// <summary>
     /// Profiles whose <c>srvModified</c> — the newest write stamp among the therapy settings and the
