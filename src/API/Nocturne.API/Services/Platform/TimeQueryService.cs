@@ -65,9 +65,12 @@ public class TimeQueryService : ITimeQueryService
         return storage.ToLowerInvariant() switch
         {
             "entries" => await _entries.GetEntriesWithAdvancedFilterAsync(
-                findQuery,
+                type: null,
                 count: 1000,
                 skip: 0,
+                findQuery: findQuery,
+                dateString: null,
+                reverseResults: false,
                 cancellationToken: cancellationToken
             ),
             "treatments" => (
@@ -119,9 +122,12 @@ public class TimeQueryService : ITimeQueryService
         return storage.ToLowerInvariant() switch
         {
             "entries" => await _entries.GetEntriesWithAdvancedFilterAsync(
-                findQuery,
+                type: null,
                 count: 1000,
                 skip: 0,
+                findQuery: findQuery,
+                dateString: null,
+                reverseResults: false,
                 cancellationToken: cancellationToken
             ),
             "treatments" => (

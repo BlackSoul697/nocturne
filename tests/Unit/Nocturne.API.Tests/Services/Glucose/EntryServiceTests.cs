@@ -276,38 +276,6 @@ public class EntryServiceTests
     [Fact]
     [Trait("Category", "Unit")]
     [Trait("Category", "Parity")]
-    public async Task GetEntriesWithAdvancedFilterAsync_DelegatesToStore()
-    {
-        // Arrange
-        var find = "{\"type\":\"sgv\",\"sgv\":{\"$gte\":100}}";
-        var expectedEntries = new List<Entry>
-        {
-            new() { Id = "1", Type = "sgv", Sgv = 120, Mills = 1234567890 },
-            new() { Id = "2", Type = "sgv", Sgv = 110, Mills = 1234567880 },
-        };
-
-        _store
-            .Setup(x => x.QueryAsync(
-                It.Is<EntryQuery>(q => q.Find == find && q.Count == 50 && q.Skip == 10),
-                It.IsAny<CancellationToken>()))
-            .ReturnsAsync(expectedEntries);
-
-        // Act
-        var result = await _sut.GetEntriesWithAdvancedFilterAsync(find, 50, 10, CancellationToken.None);
-
-        // Assert
-        Assert.Equal(2, result.Count());
-        _cache.Verify(
-            x => x.GetOrComputeAsync(
-                It.IsAny<EntryQuery>(),
-                It.IsAny<Func<Task<IReadOnlyList<Entry>>>>(),
-                It.IsAny<CancellationToken>()),
-            Times.Never);
-    }
-
-    [Fact]
-    [Trait("Category", "Unit")]
-    [Trait("Category", "Parity")]
     public async Task GetEntriesWithAdvancedFilterAsync_WithFullParameterSet_PassesAllParams()
     {
         // Arrange
