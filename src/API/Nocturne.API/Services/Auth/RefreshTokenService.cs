@@ -87,7 +87,7 @@ public class RefreshTokenService : IRefreshTokenService
     }
 
     /// <inheritdoc />
-    public async Task<Guid?> ValidateRefreshTokenAsync(string refreshToken)
+    public async Task<RefreshTokenSession?> ValidateRefreshTokenAsync(string refreshToken)
     {
         var tokenHash = _jwtService.HashRefreshToken(refreshToken);
 
@@ -113,7 +113,7 @@ public class RefreshTokenService : IRefreshTokenService
             return null;
         }
 
-        return record.SubjectId;
+        return new RefreshTokenSession(record.SubjectId, record.OidcSessionId);
     }
 
     /// <summary>

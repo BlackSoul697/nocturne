@@ -62,7 +62,7 @@ public class RefreshTokenServiceTests
         // Arrange
         _jwtService.Setup(j => j.HashRefreshToken("valid-token")).Returns("hash-valid");
         _repository.Setup(r => r.FindByHashAsync("hash-valid", default))
-            .ReturnsAsync(MakeRecord(revokedAt: null, expiresAt: DateTime.UtcNow.AddHours(1)));
+            .ReturnsAsync(MakeRecord(revokedAt: null, expiresAt: DateTime.UtcNow.AddHours(1), oidcSessionId: "family"));
 
         var service = CreateService();
 
@@ -70,7 +70,7 @@ public class RefreshTokenServiceTests
         var result = await service.ValidateRefreshTokenAsync("valid-token");
 
         // Assert
-        result.Should().Be(_subjectId);
+        result.Should().Be(new RefreshTokenSession(_subjectId, "family"));
     }
 
     [Fact]

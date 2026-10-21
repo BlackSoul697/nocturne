@@ -311,7 +311,8 @@ public static class HubAuthorizationState
                 authContext.TokenId,
                 Middleware.AuthenticationMiddleware.CredentialScopes(authContext),
                 authContext.LimitTo24Hours,
-                authContext.ExpiresAt),
+                authContext.ExpiresAt,
+                authContext.SessionId),
         };
     }
 }
