@@ -814,23 +814,8 @@ public class StatisticsService : IStatisticsService
     /// <param name="sortedValues">Pre-sorted collection of values</param>
     /// <param name="percentile">Percentile to calculate (0-100)</param>
     /// <returns>Value at the specified percentile</returns>
-    public double CalculatePercentile(IList<double> sortedValues, double percentile)
-    {
-        if (sortedValues.Count == 0)
-            return 0;
-
-        var index = (percentile / 100) * (sortedValues.Count - 1);
-        var lower = (int)Math.Floor(index);
-        var upper = (int)Math.Ceiling(index);
-
-        if (lower == upper)
-        {
-            return sortedValues[lower];
-        }
-
-        var weight = index - lower;
-        return sortedValues[lower] * (1 - weight) + sortedValues[upper] * weight;
-    }
+    public double CalculatePercentile(IList<double> sortedValues, double percentile) =>
+        GlucoseStatistics.Percentile(sortedValues, percentile);
 
     /// <summary>
     /// Extract glucose values from entries
