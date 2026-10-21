@@ -84,6 +84,7 @@ describe("finalizing a Discord link", () => {
 		expect(create_pending).toHaveBeenCalledExactlyOnceWith(
 			"discord",
 			discord_user.id,
+			discord_user.username,
 			"sleepy",
 			"oauth2-finalize",
 		);

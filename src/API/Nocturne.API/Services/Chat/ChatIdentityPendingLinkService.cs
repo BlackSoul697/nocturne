@@ -35,17 +35,21 @@ public sealed class ChatIdentityPendingLinkService(
     /// </summary>
     public static readonly TimeSpan TokenLifetime = TimeSpan.FromMinutes(10);
 
+    private const int MaxPlatformUserNameLength = 256;
+
     /// <summary>
     /// Creates a new pending link row with a cryptographically random 64-char hex token.
     /// </summary>
     /// <param name="platform">The chat platform (e.g. "discord").</param>
     /// <param name="platformUserId">The chat platform's user id.</param>
+    /// <param name="platformUserName">The chat account's username, shown when the member confirms.</param>
     /// <param name="tenantSlug">Optional tenant slug hint; null means any tenant.</param>
     /// <param name="source">Either "connect-slash" or "oauth2-finalize".</param>
     /// <param name="ct">Cancellation token.</param>
     public async Task<string> CreateAsync(
         string platform,
         string platformUserId,
+        string? platformUserName,
         string? tenantSlug,
         string source,
         CancellationToken ct)
@@ -57,6 +61,9 @@ public sealed class ChatIdentityPendingLinkService(
             Token = token,
             Platform = platform,
             PlatformUserId = platformUserId,
+            PlatformUserName = platformUserName is { Length: > MaxPlatformUserNameLength }
+                ? platformUserName[..MaxPlatformUserNameLength]
+                : platformUserName,
             TenantSlug = tenantSlug,
             Source = source,
             CreatedAt = now,

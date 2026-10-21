@@ -26,6 +26,7 @@ export function registerAccountCommands(bot: Chat, baseDomain: string) {
       const { token } = await api.pendingLinks.create(
         platform,
         event.user.userId,
+        event.user.userName || null,
         slugArg,
         "connect-slash",
       );

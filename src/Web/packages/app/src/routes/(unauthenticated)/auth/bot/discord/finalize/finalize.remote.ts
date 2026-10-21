@@ -32,6 +32,7 @@ export const confirmDiscordLink = command(z.string(), async (claim) => {
 	const { token } = await buildScopedBotApiClient(fetch, payload.slug).pendingLinks.create(
 		"discord",
 		payload.discordUserId,
+		payload.discordUsername,
 		payload.slug,
 		"oauth2-finalize",
 	);
