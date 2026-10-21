@@ -4,11 +4,13 @@ using Microsoft.Extensions.Logging.Abstractions;
 using Moq;
 using Nocturne.API.Services.Devices;
 using Nocturne.API.Services.V4;
+using Nocturne.Core.Clinical.LoopAnalysis;
 using Nocturne.Core.Contracts.Audit;
 using Nocturne.Core.Contracts.Devices;
 using Nocturne.Core.Contracts.Glucose;
 using Nocturne.Core.Contracts.V4.Repositories;
 using Nocturne.Core.Models;
+using Nocturne.Core.Models.LoopAnalysis;
 using Nocturne.Infrastructure.Data;
 using Nocturne.Infrastructure.Data.Repositories.V4;
 using Nocturne.Infrastructure.Data.Services;
@@ -3242,6 +3244,103 @@ public class DeviceStatusDecomposerTests : IDisposable
 
         Canonical(projected.OpenAps!.Suggested).Should().Be(Canonical(suggested));
         Canonical(projected.OpenAps.Enacted).Should().Be(Canonical(enacted));
+    }
+
+    #endregion
+
+    #region Prediction accuracy reads the stored curves
+
+    private static PredictionSnapshot? ParseStored(V4Models.ApsSnapshot aps) =>
+        PredictionAccuracyCalculator.Parse(new V4Models.ApsPredictionPoint(
+            aps.PredictedStartTimestamp!.Value, aps.Device, aps.Enacted, aps.AidAlgorithm,
+            aps.PredictedDefaultJson, aps.PredictedIobJson, aps.PredictedZtJson, aps.PredictedCobJson, aps.PredictedUamJson));
+
+    private static double?[]? CurveOf(PredictionSnapshot snapshot, PredictionCurve curve) =>
+        snapshot.Curves[(int)curve];
+
+    [Fact]
+    public async Task PredictionAccuracy_ReadsLoopsStoredCurveAsTheDefault()
+    {
+        var ds = new DeviceStatus
+        {
+            Id = "loop-prediction-shape",
+            Mills = 1700000000000,
+            Device = "loop://iPhone",
+            Loop = new LoopStatus
+            {
+                Predicted = new LoopPredicted { Values = [130, 125.5, 120], StartDate = "2023-11-14T12:00:00Z" },
+            },
+        };
+
+        var snapshot = ParseStored(await DecomposeApsAsync(ds))!;
+
+        snapshot.StartMills.Should().Be(new DateTimeOffset(2023, 11, 14, 12, 0, 0, TimeSpan.Zero).ToUnixTimeMilliseconds());
+        CurveOf(snapshot, PredictionCurve.Default).Should().Equal(130, 125.5, 120);
+        snapshot.Curves.Count(c => c is not null).Should().Be(1);
+    }
+
+    [Fact]
+    public async Task PredictionAccuracy_ReadsAapsStoredCurves_WithoutTheDefaultCopyOfIob()
+    {
+        var ds = new DeviceStatus
+        {
+            Id = "aaps-prediction-shape",
+            Mills = 1700000000000,
+            Device = "openaps://samsung",
+            OpenAps = new OpenApsStatus
+            {
+                Suggested = new OpenApsSuggested
+                {
+                    Bg = 120.0,
+                    Timestamp = "2023-11-14T12:00:00Z",
+                    PredBGs = new OpenApsPredBGs
+                    {
+                        IOB = [120, 115, null, 105],
+                        ZT = [120, 110],
+                        UAM = [120, 130, 135],
+                    },
+                },
+            },
+            Uploader = new UploaderStatus { Name = "AndroidAPS" },
+        };
+
+        var aps = await DecomposeApsAsync(ds);
+        var snapshot = ParseStored(aps)!;
+
+        aps.PredictedDefaultJson.Should().Be(aps.PredictedIobJson, "the decomposer copies oref's IOB curve into the default column");
+        CurveOf(snapshot, PredictionCurve.Default).Should().BeNull();
+        CurveOf(snapshot, PredictionCurve.Iob).Should().Equal(120, 115, null, 105);
+        CurveOf(snapshot, PredictionCurve.ZeroTemp).Should().Equal(120, 110);
+        CurveOf(snapshot, PredictionCurve.Cob).Should().BeNull();
+        CurveOf(snapshot, PredictionCurve.Uam).Should().Equal(120, 130, 135);
+    }
+
+    [Fact]
+    public async Task PredictionAccuracy_ReadsTriosStoredCurves()
+    {
+        var ds = new DeviceStatus
+        {
+            Id = "trio-prediction-shape",
+            Mills = 1700000000000,
+            Device = "trio://iPhone",
+            OpenAps = new OpenApsStatus
+            {
+                Version = "0.2.1",
+                Suggested = new OpenApsSuggested
+                {
+                    Bg = 120.0,
+                    Timestamp = "2023-11-14T12:00:00Z",
+                    PredBGs = new OpenApsPredBGs { IOB = [120, 115], COB = [120, 125] },
+                },
+            },
+        };
+
+        var snapshot = ParseStored(await DecomposeApsAsync(ds))!;
+
+        snapshot.Algorithm.Should().Be(V4Models.AidAlgorithm.Trio);
+        CurveOf(snapshot, PredictionCurve.Iob).Should().Equal(120, 115);
+        CurveOf(snapshot, PredictionCurve.Cob).Should().Equal(120, 125);
+        CurveOf(snapshot, PredictionCurve.Default).Should().BeNull();
     }
 
     #endregion
