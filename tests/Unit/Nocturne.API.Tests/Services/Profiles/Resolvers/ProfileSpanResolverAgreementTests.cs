@@ -3,8 +3,8 @@ using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Logging.Abstractions;
 using Moq;
 using Nocturne.API.Services.Profiles.Resolvers;
+using Nocturne.API.Tests.Infrastructure;
 using Nocturne.Core.Contracts.Glucose;
-using Nocturne.Core.Contracts.Multitenancy;
 using Nocturne.Core.Contracts.Profiles.Resolvers;
 using Nocturne.Core.Contracts.V4.Repositories;
 using Nocturne.Core.Models;
@@ -25,12 +25,10 @@ public sealed class ProfileSpanResolverAgreementTests : IDisposable
 
     private readonly Mock<IStateSpanService> _stateSpans = new();
     private readonly Mock<IBasalScheduleRepository> _schedules = new();
-    private readonly Mock<ITenantAccessor> _tenant = new();
     private readonly MemoryCache _cache = new(new MemoryCacheOptions());
 
     public ProfileSpanResolverAgreementTests()
     {
-        _tenant.Setup(t => t.TenantId).Returns(Guid.Parse("aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee"));
         _schedules
             .Setup(r => r.GetByProfileNameAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync([]);
@@ -109,11 +107,9 @@ public sealed class ProfileSpanResolverAgreementTests : IDisposable
     {
         SetupSpan(metadata);
         var active = new ActiveProfileResolver(
-            _stateSpans.Object, _tenant.Object, _cache, Mock.Of<ICategoryReadContext>(),
-            NullLogger<ActiveProfileResolver>.Instance);
+            _stateSpans.Object, TestTenantCache.Create(_cache), NullLogger<ActiveProfileResolver>.Instance);
         var basal = new BasalSegmentService(
-            _stateSpans.Object, _schedules.Object, Mock.Of<ITherapySettingsRepository>(), _tenant.Object,
-            _cache, Mock.Of<ICategoryReadContext>());
+            _stateSpans.Object, _schedules.Object, Mock.Of<ITherapySettingsRepository>(), TestTenantCache.Create(_cache));
 
         var name = await active.GetActiveProfileNameAsync(From + 60_000);
         var adjustment = await active.GetCircadianAdjustmentAsync(From + 60_000);
