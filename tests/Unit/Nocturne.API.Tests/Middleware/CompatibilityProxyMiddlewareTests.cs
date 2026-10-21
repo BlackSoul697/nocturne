@@ -22,6 +22,7 @@ public class CompatibilityProxyMiddlewareTests
     private readonly Mock<IResponseComparisonService> _comparisonServiceMock;
     private readonly Mock<IDiscrepancyPersistenceService> _persistenceServiceMock;
     private readonly ILogger<CompatibilityProxyMiddleware> _logger;
+    private RecordingServiceProvider? _requestServices;
 
     public CompatibilityProxyMiddlewareTests()
     {
@@ -80,7 +81,8 @@ public class CompatibilityProxyMiddlewareTests
         services.AddScoped<IResponseComparisonService>(_ => _comparisonServiceMock.Object);
         services.AddScoped<IDiscrepancyPersistenceService>(_ => _persistenceServiceMock.Object);
 
-        var serviceProvider = services.BuildServiceProvider();
+        var serviceProvider = new RecordingServiceProvider(services.BuildServiceProvider());
+        _requestServices = serviceProvider;
 
         next ??= async ctx =>
         {
@@ -107,15 +109,13 @@ public class CompatibilityProxyMiddlewareTests
     public async Task GetRequest_OnV1Path_ForwardsToNightscoutInBackground()
     {
         // Arrange
+        var stored = SignalOnStore();
         var (middleware, context) = CreateMiddleware(proxyEnabled: true);
 
-        // Act
         await middleware.InvokeAsync(context);
 
-        // Allow background task to complete
-        await Task.Delay(500);
-
-        // Assert — the forwarding service should have been called
+        await stored.WaitAsync(TimeSpan.FromSeconds(10));
+        _requestServices!.ScopeFactoryRequested.Should().BeTrue();
         _forwardingServiceMock.Verify(
             s => s.ForwardToNightscoutAsync(It.IsAny<ClonedRequest>(), It.IsAny<CancellationToken>()),
             Times.Once);
@@ -167,9 +167,9 @@ public class CompatibilityProxyMiddlewareTests
 
         // Act
         await middleware.InvokeAsync(context);
-        await Task.Delay(200);
 
         // Assert
+        AssertNoBackgroundComparisonStarted();
         _forwardingServiceMock.Verify(
             s => s.ForwardToNightscoutAsync(It.IsAny<ClonedRequest>(), It.IsAny<CancellationToken>()),
             Times.Never);
@@ -183,9 +183,9 @@ public class CompatibilityProxyMiddlewareTests
 
         // Act
         await middleware.InvokeAsync(context);
-        await Task.Delay(200);
 
         // Assert
+        AssertNoBackgroundComparisonStarted();
         _forwardingServiceMock.Verify(
             s => s.ForwardToNightscoutAsync(It.IsAny<ClonedRequest>(), It.IsAny<CancellationToken>()),
             Times.Never);
@@ -199,9 +199,9 @@ public class CompatibilityProxyMiddlewareTests
 
         // Act
         await middleware.InvokeAsync(context);
-        await Task.Delay(200);
 
         // Assert
+        AssertNoBackgroundComparisonStarted();
         _forwardingServiceMock.Verify(
             s => s.ForwardToNightscoutAsync(It.IsAny<ClonedRequest>(), It.IsAny<CancellationToken>()),
             Times.Never);
@@ -223,9 +223,9 @@ public class CompatibilityProxyMiddlewareTests
 
         // Act
         await middleware.InvokeAsync(context);
-        await Task.Delay(200);
 
         // Assert
+        AssertNoBackgroundComparisonStarted();
         _forwardingServiceMock.Verify(
             s => s.ForwardToNightscoutAsync(It.IsAny<ClonedRequest>(), It.IsAny<CancellationToken>()),
             Times.Never);
@@ -261,11 +261,7 @@ public class CompatibilityProxyMiddlewareTests
     [Fact]
     public async Task ForwardingFailure_DoesNotAffectResponse()
     {
-        // Arrange — make the forwarding service throw
-        _forwardingServiceMock
-            .Setup(s => s.ForwardToNightscoutAsync(It.IsAny<ClonedRequest>(), It.IsAny<CancellationToken>()))
-            .ThrowsAsync(new InvalidOperationException("Nightscout is down"));
-
+        // Arrange
         var expectedBody = "{\"status\":\"ok\"}";
         RequestDelegate next = async ctx =>
         {
@@ -276,9 +272,15 @@ public class CompatibilityProxyMiddlewareTests
 
         var (middleware, context) = CreateMiddleware(proxyEnabled: true, next: next);
 
+        var forwarded = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        _forwardingServiceMock
+            .Setup(s => s.ForwardToNightscoutAsync(It.IsAny<ClonedRequest>(), It.IsAny<CancellationToken>()))
+            .Callback(() => forwarded.TrySetResult())
+            .ThrowsAsync(new InvalidOperationException("Nightscout is down"));
+
         // Act — should not throw
         await middleware.InvokeAsync(context);
-        await Task.Delay(500); // let background task fail gracefully
+        await forwarded.Task.WaitAsync(TimeSpan.FromSeconds(10));
 
         // Assert — response is still correct
         context.Response.Body.Seek(0, SeekOrigin.Begin);
@@ -287,5 +289,42 @@ public class CompatibilityProxyMiddlewareTests
 
         actualBody.Should().Be(expectedBody);
         context.Response.StatusCode.Should().Be(200);
+    }
+
+    private Task SignalOnStore()
+    {
+        var stored = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        _persistenceServiceMock
+            .Setup(s => s.StoreAnalysisAsync(
+                It.IsAny<ResponseComparisonResult>(),
+                It.IsAny<CompatibilityProxyResponse>(),
+                It.IsAny<string>(),
+                It.IsAny<string>(),
+                It.IsAny<CancellationToken>()))
+            .Callback(() => stored.TrySetResult())
+            .ReturnsAsync(Guid.NewGuid());
+        return stored.Task;
+    }
+
+    /// <summary>
+    /// The middleware resolves the scope factory on the request thread, just before it hands the
+    /// comparison to the thread pool, so a request that never resolved it never started one. The
+    /// forwarding test pins that resolution, which keeps this check from passing vacuously.
+    /// </summary>
+    private void AssertNoBackgroundComparisonStarted() =>
+        _requestServices!.ScopeFactoryRequested.Should().BeFalse();
+
+    private sealed class RecordingServiceProvider(IServiceProvider inner) : IServiceProvider
+    {
+        private int _scopeFactoryRequests;
+
+        public bool ScopeFactoryRequested => Volatile.Read(ref _scopeFactoryRequests) > 0;
+
+        public object? GetService(Type serviceType)
+        {
+            if (serviceType == typeof(IServiceScopeFactory))
+                Interlocked.Increment(ref _scopeFactoryRequests);
+            return inner.GetService(serviceType);
+        }
     }
 }
