@@ -241,14 +241,24 @@ public sealed class GoogleHealthService(
                 .Distinct(StringComparer.Ordinal).ToArray();
             var token = await oauth.ExchangeAuthorizationCodeAsync(
                 callback.Code, flow.Verifier, requestedScopes, ct);
-            var account = await oauth.AccountKeyAsync(token.AccessToken!, ct);
-            if (await sessions.AccountKeyAsync(ct) is { } priorAccount && priorAccount != account)
+            var stored = false;
+            try
             {
-                await sessions.TryRevokeAsync(token.RefreshToken, ct);
-                throw new GoogleHealthException("account_mismatch");
-            }
+                var account = await oauth.AccountKeyAsync(token.AccessToken!, ct);
+                if (await sessions.AccountKeyAsync(ct) is { } priorAccount && priorAccount != account)
+                    throw new GoogleHealthException("account_mismatch");
 
-            await sessions.SaveAsync(token, account, subject, ct);
+                await sessions.StoreAsync(token, account, subject, ct);
+                stored = true;
+            }
+            finally
+            {
+                // StartAsync refuses while a refresh token is stored, so this grant is not one the
+                // tenant still relies on, and unrevoked it would stay live at Google.
+                if (!stored && !await sessions.TryRevokeAsync(token.RefreshToken, CancellationToken.None))
+                    logger.LogWarning("Google Health could not revoke an unstored grant for tenant {TenantId}", TenantId);
+            }
+            await sessions.ActivateAsync(token, subject);
             await ForgetInventoryAsync(ct);
             await connectorConfigurations.UpdateHealthStateAsync(
                 ConnectorName,

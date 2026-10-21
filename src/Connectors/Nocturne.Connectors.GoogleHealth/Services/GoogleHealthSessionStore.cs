@@ -118,7 +118,8 @@ public sealed class GoogleHealthSessionStore(
         }
     }
 
-    public async Task SaveAsync(GoogleHealthTokenSession session, string accountKey, Guid subject, CancellationToken ct)
+    /// <summary>Once this returns, the grant is stored and must not be revoked by a later failure.</summary>
+    public async Task StoreAsync(GoogleHealthTokenSession session, string accountKey, Guid subject, CancellationToken ct)
     {
         var secrets = await configurations.GetSecretsAsync(ConnectorName, ct);
         secrets.Remove(LegacyClientSecretKey);
@@ -127,7 +128,15 @@ public sealed class GoogleHealthSessionStore(
         secrets[GrantedScopesKey] = string.Join(' ', session.Scopes.Distinct(StringComparer.Ordinal));
         secrets[AccountKey] = accountKey;
         await configurations.SaveSecretsAsync(ConnectorName, secrets, subject.ToString(), ct);
-        await SetEnabledAsync(true, subject.ToString(), ct);
+    }
+
+    /// <summary>
+    /// Enables the connector and caches the access token of a session <see cref="StoreAsync"/> has
+    /// stored. Not cancellable: the stored session is already live.
+    /// </summary>
+    public async Task ActivateAsync(GoogleHealthTokenSession session, Guid subject)
+    {
+        await SetEnabledAsync(true, subject.ToString(), CancellationToken.None);
         await oauth.StoreSessionAsync(session);
     }
 

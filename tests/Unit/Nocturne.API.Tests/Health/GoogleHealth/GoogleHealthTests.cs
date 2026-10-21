@@ -34,8 +34,12 @@ using Xunit;
 
 namespace Nocturne.API.Tests.Health.GoogleHealth;
 
-public class GoogleHealthTests
+public class GoogleHealthTests : IDisposable
 {
+    private readonly List<HttpClient> _httpClients = [];
+
+    public void Dispose() => _httpClients.ForEach(client => client.Dispose());
+
     [Fact]
     public void Dedicated_connection_preserves_data_source_password_without_enabling_security_info()
     {
@@ -1062,11 +1066,14 @@ public class GoogleHealthTests
         Assert.Equal(code, Assert.IsType<ProblemDetails>(response.Value).Detail);
     }
 
-    [Fact]
-    public async Task A_rate_limited_request_tells_the_caller_when_to_retry()
+    [Theory]
+    [InlineData("rate_limited", 29.2, 429, "30")]
+    [InlineData("google_unavailable", 30, 502, null)]
+    public async Task Only_a_rate_limit_tells_the_caller_when_to_retry(
+        string code, double retryAfterSeconds, int status, string? retryAfter)
     {
         var controller = new GoogleHealthController(
-            new ThrowingGoogleHealthService(new GoogleHealthException("rate_limited", TimeSpan.FromSeconds(29.2))),
+            new ThrowingGoogleHealthService(new GoogleHealthException(code, TimeSpan.FromSeconds(retryAfterSeconds))),
             Microsoft.Extensions.Options.Options.Create(new BaseDomainOptions()))
         {
             ControllerContext = new ControllerContext { HttpContext = new Microsoft.AspNetCore.Http.DefaultHttpContext() }
@@ -1074,8 +1081,8 @@ public class GoogleHealthTests
 
         var result = await controller.SyncGoogleHealth(default);
 
-        Assert.Equal(429, Assert.IsType<ObjectResult>(result.Result).StatusCode);
-        Assert.Equal("30", controller.Response.Headers.RetryAfter.ToString());
+        Assert.Equal(status, Assert.IsType<ObjectResult>(result.Result).StatusCode);
+        Assert.Equal(retryAfter, controller.Response.Headers.TryGetValue("Retry-After", out var header) ? header.ToString() : null);
     }
 
     [Theory]
@@ -1333,19 +1340,64 @@ public class GoogleHealthTests
     }
 
     [Fact]
-    public async Task Only_a_rate_limit_tells_the_caller_when_to_retry()
+    public async Task A_grant_the_cancelled_callback_never_stored_is_revoked()
     {
-        var controller = new GoogleHealthController(
-            new ThrowingGoogleHealthService(new GoogleHealthException("google_unavailable", TimeSpan.FromSeconds(30))),
-            Microsoft.Extensions.Options.Options.Create(new BaseDomainOptions()))
+        using var cancellation = new CancellationTokenSource();
+        var revoked = new List<string>();
+        var store = new TestConnectorStore();
+        var service = Service(store, Google(revoked, lookup => $"account-{lookup}", lookup =>
         {
-            ControllerContext = new ControllerContext { HttpContext = new Microsoft.AspNetCore.Http.DefaultHttpContext() }
-        };
+            if (lookup == 2) cancellation.Cancel();
+        }), Guid.NewGuid());
+        await ConnectAsync(service);
+        await service.DisconnectAsync(Guid.NewGuid(), default);
+        revoked.Clear();
 
-        var result = await controller.SyncGoogleHealth(default);
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => ConnectAsync(service, cancellation.Token));
 
-        Assert.Equal(502, Assert.IsType<ObjectResult>(result.Result).StatusCode);
-        Assert.False(controller.Response.Headers.ContainsKey("Retry-After"));
+        Assert.Contains(revoked, body => body.Contains("token=refresh-2"));
+        Assert.DoesNotContain("refresh-2", store.Secrets.Values);
+    }
+
+    [Fact]
+    public async Task A_stored_grant_is_not_revoked_when_enabling_the_connector_fails()
+    {
+        var revoked = new List<string>();
+        var store = new TestConnectorStore();
+        var service = Service(store, Google(revoked, _ => "account", _ => store.FailConfigurationSaves = true), Guid.NewGuid());
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() => ConnectAsync(service));
+
+        Assert.Empty(revoked);
+        Assert.Equal("refresh-1", store.Secrets["refreshToken"]);
+    }
+
+    /// <summary>
+    /// Google's token, userinfo and revoke endpoints. Each exchange issues the next
+    /// <c>refresh-N</c>; <paramref name="onAccountLookup"/> runs before the Nth userinfo answer.
+    /// </summary>
+    private static AsyncHandler Google(
+        List<string> revoked, Func<int, string> accountFor, Action<int>? onAccountLookup = null)
+    {
+        var exchanges = 0;
+        var lookups = 0;
+        return new AsyncHandler((request, ct) =>
+        {
+            ct.ThrowIfCancellationRequested();
+            return Task.FromResult(request.RequestUri!.AbsolutePath switch
+            {
+                "/token" => Json($$"""{"access_token":"access","refresh_token":"refresh-{{++exchanges}}","expires_in":3600,"token_type":"Bearer","scope":"openid {{GoogleHealthClient.MetricsScope}}"}"""),
+                "/v1/userinfo" => UserInfo(++lookups),
+                "/revoke" => Revoked(request, revoked),
+                _ => Json("{}")
+            });
+        });
+
+        HttpResponseMessage UserInfo(int lookup)
+        {
+            onAccountLookup?.Invoke(lookup);
+            return Json($$"""{"sub":"{{accountFor(lookup)}}"}""");
+        }
     }
 
     private static HttpResponseMessage Revoked(HttpRequestMessage request, List<string> revoked)
@@ -1354,13 +1406,13 @@ public class GoogleHealthTests
         return Json("{}");
     }
 
-    private static async Task ConnectAsync(GoogleHealthService service)
+    private static async Task ConnectAsync(GoogleHealthService service, CancellationToken callbackCancellation = default)
     {
         var subject = Guid.NewGuid();
         await service.SaveAsync(Options(), subject, default);
         var authorization = await service.StartAsync(subject, null, default);
         var state = QueryHelpers.ParseQuery(new Uri(authorization.Url).Query)["state"].ToString();
-        await service.CompleteAsync(new GoogleHealthCallback { State = state, Code = "code" }, subject, default);
+        await service.CompleteAsync(new GoogleHealthCallback { State = state, Code = "code" }, subject, callbackCancellation);
     }
 
     [Fact]
@@ -1426,7 +1478,7 @@ public class GoogleHealthTests
         protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken ct) => responder(request, ct);
     }
 
-    private static GoogleHealthService Service(
+    private GoogleHealthService Service(
         TestConnectorStore store,
         HttpMessageHandler handler,
         Guid tenantId,
@@ -1440,8 +1492,10 @@ public class GoogleHealthTests
         var tenant = new Mock<ITenantAccessor>();
         tenant.SetupGet(value => value.IsResolved).Returns(true);
         tenant.SetupGet(value => value.TenantId).Returns(tenantId);
+        var http = new HttpClient(handler, false);
+        _httpClients.Add(http);
         var oauth = new GoogleHealthAuthTokenProvider(
-            new HttpClient(handler, false),
+            http,
             tokenCache ?? new ConnectorTokenCache(),
             new ConnectorServerResolver<GoogleHealthConnectorConfiguration>(null, null, null),
             tenant.Object,
@@ -1452,7 +1506,7 @@ public class GoogleHealthTests
             .ReturnsAsync(sex is null ? null : new Nocturne.Core.Models.V4.PatientRecord { Sex = sex });
         return new GoogleHealthService(
             coordinator ?? InMemoryGoogleHealthCoordinatorStore.Coordinator(),
-            new GoogleHealthClient(new HttpClient(handler, false)),
+            new GoogleHealthClient(http),
             oauth,
             new GoogleHealthSessionStore(store.Configurations, oauth, platformOptions),
             store.Configurations,
@@ -1495,6 +1549,7 @@ public class GoogleHealthTests
         private ConnectorConfigurationResponse? response;
         public bool? IsActive => response?.IsActive;
         public Action? OnSave { get; set; }
+        public bool FailConfigurationSaves { get; set; }
 
         private ConnectorSyncCursor? runtimeCursor;
         public IConnectorSyncCursorStore Cursors { get; }
@@ -1517,6 +1572,7 @@ public class GoogleHealthTests
                     It.IsAny<CancellationToken>()))
                 .Callback<string, JsonDocument, string?, CancellationToken>((_, document, _, _) =>
                 {
+                    if (FailConfigurationSaves) throw new InvalidOperationException("configuration store unavailable");
                     configuration?.Dispose();
                     configuration = JsonDocument.Parse(document.RootElement.GetRawText());
                     response ??= new ConnectorConfigurationResponse
@@ -1531,12 +1587,17 @@ public class GoogleHealthTests
                 .ReturnsAsync(() => response!);
             configurations.Setup(value => value.GetSecretsAsync(
                     "GoogleHealth", It.IsAny<CancellationToken>()))
-                .ReturnsAsync(() => new Dictionary<string, string>(secrets, StringComparer.OrdinalIgnoreCase));
+                .Returns<string, CancellationToken>((_, ct) =>
+                {
+                    ct.ThrowIfCancellationRequested();
+                    return Task.FromResult(new Dictionary<string, string>(secrets, StringComparer.OrdinalIgnoreCase));
+                });
             configurations.Setup(value => value.SaveSecretsAsync(
                     "GoogleHealth", It.IsAny<Dictionary<string, string>>(), It.IsAny<string?>(),
                     It.IsAny<CancellationToken>()))
-                .Callback<string, Dictionary<string, string>, string?, CancellationToken>((_, values, _, _) =>
+                .Callback<string, Dictionary<string, string>, string?, CancellationToken>((_, values, _, ct) =>
                 {
+                    ct.ThrowIfCancellationRequested();
                     secrets = new Dictionary<string, string>(values, StringComparer.OrdinalIgnoreCase);
                     OnSave?.Invoke();
                 })
