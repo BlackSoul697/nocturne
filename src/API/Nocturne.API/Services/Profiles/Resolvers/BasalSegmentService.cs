@@ -232,44 +232,14 @@ internal sealed class BasalSegmentService : IBasalSegmentService
         return idx;
     }
 
-    private static string? ExtractProfileName(StateSpan span)
-    {
-        if (span.Metadata is null) return null;
-        if (!span.Metadata.TryGetValue("profileName", out var value)) return null;
-        return value switch
-        {
-            null => null,
-            string s => s,
-            System.Text.Json.JsonElement { ValueKind: System.Text.Json.JsonValueKind.String } je => je.GetString(),
-            _ => value.ToString(),
-        };
-    }
+    private static string? ExtractProfileName(StateSpan span) =>
+        ProfileSpanMetadata.Parse(span.Metadata).BaseProfileName;
 
     private static (double Percentage, long TimeshiftMs) ExtractCcp(StateSpan span)
     {
-        if (span.Metadata is null) return (100, 0);
-        if (!span.Metadata.TryGetValue("percentage", out var pctRaw)) return (100, 0);
-        var pct = ToDouble(pctRaw) ?? 100;
-
-        long timeshiftMs = 0;
-        if (span.Metadata.TryGetValue("timeshift", out var tsRaw))
-        {
-            var hours = ToDouble(tsRaw) ?? 0;
-            timeshiftMs = (long)(hours % 24 * 3_600_000);
-        }
-        return (pct, timeshiftMs);
+        var metadata = ProfileSpanMetadata.Parse(span.Metadata);
+        return metadata.Percentage is { } percentage ? (percentage, metadata.TimeshiftMs) : (100, 0);
     }
-
-    private static double? ToDouble(object? v) => v switch
-    {
-        null => null,
-        double d => d,
-        int i => i,
-        long l => l,
-        float f => f,
-        System.Text.Json.JsonElement { ValueKind: System.Text.Json.JsonValueKind.Number } je => je.GetDouble(),
-        _ => double.TryParse(v.ToString(), out var d) ? d : null,
-    };
 
     private sealed record ProfileResources(List<BasalSchedule> Schedules, string? TimeZoneId);
 }

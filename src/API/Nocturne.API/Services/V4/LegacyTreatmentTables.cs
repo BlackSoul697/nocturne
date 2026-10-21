@@ -411,22 +411,7 @@ internal static class LegacyTreatmentTables
         new(StateSpanCategory.Profile,
             s => s.OriginalId != null
                 && EF.Functions.JsonExists(s.MetadataJson!, StateSpanMetadataExtensions.UtcOffsetKey),
-            // A later switch ends an open switch by supersession; the upload was permanent, and a
-            // non-zero duration would read as a temporary switch.
-            (s, metadata) => EffectiveProfileSwitch.IsSpan(metadata)
-                ? EffectiveProfileSwitch.Project(metadata)
-                : new Treatment
-                {
-                    EventType = TreatmentTypes.ProfileSwitch,
-                    Duration = UploadedDuration(metadata) ?? (s.SupersededById != null ? 0 : DurationMinutes(s)),
-                    Profile = metadata.TryReadString("profileName"),
-                    ProfileJson = metadata.TryReadString("profileJson"),
-                    Percentage = (double?)metadata.TryReadDecimal("percentage"),
-                    Timeshift = (double?)metadata.TryReadDecimal("timeshift"),
-                    Reason = metadata.TryReadString("reason"),
-                    OriginalProfileName = metadata.TryReadString(EffectiveProfileSwitch.OriginalProfileNameKey),
-                    OriginalDuration = (int?)metadata.TryReadDecimal(EffectiveProfileSwitch.OriginalDurationKey),
-                }),
+            ProjectProfileSpan),
     ];
 
     /// <summary>The treatment ids of every state span <see cref="StateSpanTables"/> serves.</summary>
@@ -522,6 +507,47 @@ internal static class LegacyTreatmentTables
             (r, _) => ProjectBolusCalculation(r)),
         .. StateSpanTables,
     ];
+
+    /// <summary>A Profile span as the treatment it was uploaded as.</summary>
+    /// <remarks>
+    /// A later switch ends an open switch by supersession; the upload was permanent, and a non-zero
+    /// duration would read as a temporary switch. AAPS reads a v3 switch's length from
+    /// <c>durationInMilliseconds</c> before <c>duration</c> (<c>TreatmentMapper.kt</c>), so both are served.
+    /// </remarks>
+    private static Treatment ProjectProfileSpan(StateSpanEntity s, IDictionary<string, object>? metadata)
+    {
+        var span = ProfileSpanMetadata.Parse(metadata);
+        Treatment treatment;
+        if (span.IsEffective)
+        {
+            treatment = EffectiveProfileSwitch.Project(span, HistoryPage.ToMilliseconds(s.StartTimestamp));
+        }
+        else
+        {
+            var duration = UploadedDuration(metadata) ?? (s.SupersededById != null ? 0 : DurationMinutes(s));
+            treatment = new Treatment
+            {
+                EventType = TreatmentTypes.ProfileSwitch,
+                Duration = duration,
+                DurationInMilliseconds = span.DurationInMilliseconds
+                    ?? (duration is { } minutes ? (long)Math.Round(minutes * 60_000) : null),
+                Profile = span.ProfileName,
+                ProfileJson = span.ProfileJson,
+                Percentage = span.Percentage,
+                Timeshift = span.UploadedTimeshift,
+                Reason = metadata.TryReadString("reason"),
+                OriginalProfileName = span.OriginalProfileName,
+                OriginalDuration = (int?)span.OriginalDuration,
+            };
+        }
+
+        treatment.PumpId = span.PumpId;
+        treatment.PumpType = span.PumpType;
+        treatment.PumpSerial = span.PumpSerial;
+        if (span.App is { } app)
+            treatment.AdditionalProperties = new Dictionary<string, object> { [ProfileSpanMetadata.AppKey] = app };
+        return treatment;
+    }
 
     /// <summary>The tables whose records pair into a Meal Bolus.</summary>
     internal static readonly IReadOnlyList<ILegacyTreatmentTable> MealTables =
