@@ -18,6 +18,7 @@
   import Trash2 from "@lucide/svelte/icons/trash-2";
   import { toast } from "svelte-sonner";
   import type { PlatformSettingsSummary } from "$api";
+  import { errorMessage } from "$lib/forms/submit-error";
 
   const DISPLAY_NAMES: Record<string, string> = {
     discord: "Discord",
@@ -87,12 +88,8 @@
         state.fieldValues[key] = "";
       }
       toast.success("Settings saved. Restart the frontend for changes to take effect.");
-    } catch {
-      toast.error(
-        state.enabled
-          ? "Failed to save settings. An enabled integration needs every required field; turn it off to save without them."
-          : "Failed to save settings"
-      );
+    } catch (err) {
+      toast.error("Failed to save settings", { description: errorMessage(err) });
     } finally {
       state.saving = false;
     }
