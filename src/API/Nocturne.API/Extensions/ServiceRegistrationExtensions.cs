@@ -876,6 +876,9 @@ public static class ServiceRegistrationExtensions
         // of that itself, since it reads the credential out of HttpContext.Items.
         services.AddSignalR(options =>
         {
+            // One call at a time per connection, so the reader and actor an in-band grant records
+            // reach every later call and never race one in flight (TenantHubFilter).
+            options.MaximumParallelInvocationsPerClient = 1;
             Microsoft.AspNetCore.SignalR.HubOptionsExtensions
                 .AddFilter<Nocturne.API.Hubs.TenantHubFilter>(options);
             Microsoft.AspNetCore.SignalR.HubOptionsExtensions
@@ -948,9 +951,7 @@ public static class ServiceRegistrationExtensions
         services.AddScoped<ICompressionLowRepository, CompressionLowRepository>();
         services.AddScoped<ICompressionLowService, CompressionLowService>();
         services.AddSingleton<CompressionLowDetectionService>();
-        services.AddSingleton<ICompressionLowDetectionService>(sp =>
-            sp.GetRequiredService<CompressionLowDetectionService>()
-        );
+        services.AddScoped<ICompressionLowDetectionService, CompressionLowDetection>();
         services.AddHostedService(sp => sp.GetRequiredService<CompressionLowDetectionService>());
 
         // Webhook infrastructure (reused by new alert engine)
