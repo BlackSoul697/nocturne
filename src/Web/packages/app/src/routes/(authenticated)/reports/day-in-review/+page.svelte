@@ -40,7 +40,7 @@
   import { GlucoseChartCard } from "$lib/components/dashboard/glucose-chart";
   import { contextResource } from "$lib/hooks/resource-context.svelte";
   import { apsSnapshotToPrediction } from "$lib/utils/aps-snapshot-to-prediction";
-  import { isDayString, startOfDay, toDayString } from "$lib/utils/date-range";
+  import { isDayString, startOfDay, timeOnDay, toDayString } from "$lib/utils/date-range";
   import { setReportPrintMeta } from "$lib/components/reports/print/report-print.svelte";
 
   // Get date from URL search params. The default is the local calendar day —
@@ -208,7 +208,10 @@
   const hasApsSnapshots = $derived(apsSnapshots.length > 0);
 
   // Scrubber time state
-  let scrubberTime = $state(new Date());
+  // `time` (HH:mm on the day) starts the scrubber at the moment a link pointed to.
+  let scrubberTime = $state(
+    timeOnDay(page.url.searchParams.get("date"), page.url.searchParams.get("time")) ?? new Date()
+  );
 
   // Find the nearest APS snapshot to the scrubber time
   const selectedSnapshot = $derived.by(() => {
