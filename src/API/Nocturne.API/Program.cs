@@ -145,10 +145,12 @@ builder.Services.AddHttpContextAccessor();
 builder.Services.AddScoped<IAuditContext, AuditContext>();
 builder.Services.AddHostedService<AuditRetentionService>();
 builder.Services.AddHostedService<SoftDeleteCleanupService>();
+builder.Services.AddSingleton<IGoogleHealthCoordinatorStore, PostgresGoogleHealthCoordinatorStore>();
 builder.Services.AddSingleton<GoogleHealthCoordinator>();
 builder.Services.AddSingleton<IGoogleHealthSyncCoordinator>(provider =>
     provider.GetRequiredService<GoogleHealthCoordinator>());
 builder.Services.AddScoped<IGoogleHealthService, GoogleHealthService>();
+builder.Services.AddGoogleHealthPlatform();
 builder.Services.AddScoped<IGoogleHealthReadingWriter, GoogleHealthReadingWriter>();
 builder.Services.AddHostedService<GoogleHealthWorker>();
 builder.Services.AddDevOnlyGoogleHealthMock(builder.Environment, builder.Configuration);
@@ -378,8 +380,8 @@ app.UseRateLimiter();
 
 app.UseMiddleware<PublicDocsMiddleware>();
 
-// Redirect OIDC callbacks from apex to the originating tenant subdomain
-app.UseMiddleware<OidcCallbackRedirectMiddleware>();
+// Relay OAuth callbacks from the apex to the originating tenant subdomain
+app.UseMiddleware<ApexCallbackRelayMiddleware>();
 
 // Resolve tenant from subdomain (must run before authentication)
 app.UseMiddleware<TenantResolutionMiddleware>();
