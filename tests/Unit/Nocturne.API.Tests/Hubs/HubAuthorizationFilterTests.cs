@@ -4,6 +4,8 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Http.Connections.Features;
 using Microsoft.AspNetCore.Http.Features;
 using Microsoft.AspNetCore.SignalR;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging.Abstractions;
 using Nocturne.API.Hubs;
 using Nocturne.Core.Contracts.Multitenancy;
 using Nocturne.Core.Models.Authorization;
@@ -52,7 +54,7 @@ public class HubAuthorizationFilterTests
 
         if (authorization is not null)
         {
-            HubAuthorizationState.Grant(callerContext.Object, authorization);
+            HubTestGrants.Grant(callerContext.Object, authorization);
         }
 
         var method = hubType.GetMethod(methodName, BindingFlags.Public | BindingFlags.Instance)!;
@@ -86,7 +88,8 @@ public class HubAuthorizationFilterTests
 
     private static async Task<bool> InvokeAsync(HubInvocationContext invocation)
     {
-        var filter = new HubAuthorizationFilter();
+        var filter = new HubAuthorizationFilter(new HubConnectionRevalidator(
+            Mock.Of<IServiceScopeFactory>(), TimeProvider.System, NullLogger<HubConnectionRevalidator>.Instance));
         var reached = false;
         await filter.InvokeMethodAsync(invocation, _ =>
         {

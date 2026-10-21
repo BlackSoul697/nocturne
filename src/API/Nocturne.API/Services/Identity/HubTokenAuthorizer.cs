@@ -55,6 +55,21 @@ public interface IHubTokenAuthorizer
 /// <inheritdoc cref="IHubTokenAuthorizer"/>
 public class HubTokenAuthorizer : IHubTokenAuthorizer
 {
+    /// <summary>
+    /// The <see cref="HubCredentialCheck"/> for a token authorized by <see cref="AuthorizeTokenAsync"/>.
+    /// </summary>
+    public static HubCredentialCheck TokenCheck(string token, Guid? connectionTenantId, string requiredScope) =>
+        (services, _) => services.GetRequiredService<IHubTokenAuthorizer>()
+            .AuthorizeTokenAsync(token, connectionTenantId, requiredScope);
+
+    /// <summary>
+    /// The <see cref="HubCredentialCheck"/> for an instance key authorized by
+    /// <see cref="AuthorizeInstanceKey"/>.
+    /// </summary>
+    public static HubCredentialCheck InstanceKeyCheck(string presentedHash, Guid? connectionTenantId) =>
+        (services, _) => Task.FromResult(services.GetRequiredService<IHubTokenAuthorizer>()
+            .AuthorizeInstanceKey(presentedHash, connectionTenantId));
+
     private readonly IJwtCredentialValidator _credentialValidator;
     private readonly ITenantMemberService _memberService;
     private readonly INocturneDbContextFactory _dbContextFactory;
@@ -194,7 +209,10 @@ public class HubTokenAuthorizer : IHubTokenAuthorizer
             HubCredentialKind.Subject,
             claims.SubjectId,
             MemberScopeResolver.IsHistoryClamped(
-                claims.LimitTo24Hours, membership.LimitTo24Hours, membership.EffectivePermissions));
+                claims.LimitTo24Hours, membership.LimitTo24Hours, membership.EffectivePermissions))
+        {
+            ClientId = claims.ClientId,
+        };
     }
 
     /// <summary>

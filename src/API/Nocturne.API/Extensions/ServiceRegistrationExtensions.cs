@@ -880,6 +880,9 @@ public static class ServiceRegistrationExtensions
         });
         services.AddSingleton<Nocturne.API.Hubs.TenantHubFilter>();
         services.AddSingleton<Nocturne.API.Hubs.HubAuthorizationFilter>();
+        services.TryAddSingleton(TimeProvider.System);
+        services.AddSingleton<Nocturne.API.Hubs.HubConnectionRevalidator>();
+        services.AddHostedService(sp => sp.GetRequiredService<Nocturne.API.Hubs.HubConnectionRevalidator>());
         services.AddScoped<ISignalRBroadcastService, SignalRBroadcastService>();
         services.AddScoped<ISyncProgressReporter, SignalRSyncProgressReporter>();
 
@@ -1008,6 +1011,7 @@ public static class ServiceRegistrationExtensions
         services.AddScoped<Nocturne.API.Services.Alerts.Providers.WebhookProvider>();
         services.AddScoped<Nocturne.API.Services.Alerts.Providers.ChatBotProvider>();
         services.AddScoped<Nocturne.API.Services.Alerts.Providers.HomeAssistantProvider>();
+        services.AddSingleton<Nocturne.API.Hubs.HomeAssistantConnections>();
         services.AddScoped<Nocturne.API.Services.Alerts.Providers.DeviceActionProvider>();
         services.AddHttpClient("ChatBot");
 

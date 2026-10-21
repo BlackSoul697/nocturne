@@ -77,8 +77,31 @@ public sealed record HubAuthorization(
     Guid? SubjectId,
     bool HistoryClamped)
 {
+    /// <summary>
+    /// The OAuth client an access token was issued to, or null for any other credential. A Home
+    /// Assistant instance is addressed by it (see <see cref="HomeAssistantHub.Subscribe"/>).
+    /// </summary>
+    public string? ClientId { get; init; }
+
     /// <summary>Whether the credential satisfies <paramref name="scope"/>.</summary>
     public bool Satisfies(string scope) => Scope.Satisfies(Scopes, scope);
+
+    /// <summary>
+    /// Whether <paramref name="current"/>, the credential re-derived from the same source, still
+    /// grants everything this one does: the same principal, every scope, and no new history clamp.
+    /// </summary>
+    /// <remarks>
+    /// A widened credential passes too, and keeps the narrower access it connected with until it
+    /// reconnects.
+    /// </remarks>
+    public bool IsCoveredBy(HubAuthorization? current) =>
+        current is not null
+        && current.TenantId == TenantId
+        && current.Kind == Kind
+        && current.SubjectId == SubjectId
+        && current.ClientId == ClientId
+        && (HistoryClamped || !current.HistoryClamped)
+        && Scopes.All(current.Satisfies);
 
     /// <summary>
     /// Whether the credential may receive the live broadcasts of <paramref name="category"/>, one of
@@ -185,12 +208,23 @@ public sealed class HubScopeAttribute(params string[] scopes) : Attribute
 public sealed class HubTenantGroupAttribute : Attribute;
 
 /// <summary>
+/// Re-derives a connection's credential from the source it was first proven from, through the same
+/// checks, in <paramref name="services"/>: a fresh scope pinned to the connection's tenant. Null when
+/// the source no longer authorizes anything.
+/// </summary>
+/// <seealso cref="HubConnectionRevalidator"/>
+public delegate Task<HubAuthorization?> HubCredentialCheck(IServiceProvider services, CancellationToken ct);
+
+/// <summary>
 /// Reads and writes the <see cref="HubAuthorization"/> carried by a SignalR connection.
 /// </summary>
 public static class HubAuthorizationState
 {
-    /// <summary>Key the authorization is stored under in <see cref="HubCallerContext.Items"/>.</summary>
+    /// <summary>Key the grant is stored under in <see cref="HubCallerContext.Items"/>.</summary>
     private const string ItemKey = "HubAuthorization";
+
+    /// <summary>A connection's credential and how to prove it again.</summary>
+    internal sealed record ConnectionGrant(HubAuthorization Authorization, HubCredentialCheck Recheck);
 
     /// <summary>
     /// Records the result of a successful in-band authentication on the connection. Only an
@@ -207,11 +241,16 @@ public static class HubAuthorizationState
     /// </remarks>
     /// <param name="context">The connection to record the credential on.</param>
     /// <param name="authorization">The verified credential.</param>
-    public static HubAuthorization Grant(HubCallerContext context, HubAuthorization authorization)
+    /// <param name="recheck">
+    /// Proves the same credential again. Required, so no connection holds a credential that
+    /// <see cref="HubConnectionRevalidator"/> cannot withdraw.
+    /// </param>
+    public static HubAuthorization Grant(
+        HubCallerContext context, HubAuthorization authorization, HubCredentialCheck recheck)
     {
         if (authorization.HistoryClamped)
             context.GetHttpContext()?.ClampMemberHistory();
-        context.Items[ItemKey] = authorization;
+        context.Items[ItemKey] = new ConnectionGrant(authorization, recheck);
         return authorization;
     }
 
@@ -225,19 +264,20 @@ public static class HubAuthorizationState
     /// <see cref="Middleware.MemberScopeMiddleware"/>, so it needs no in-band handshake. Clients that
     /// present their credential only after the connection is up authenticate in-band instead.
     /// </remarks>
-    public static HubAuthorization? Resolve(HubCallerContext context)
-    {
-        if (context.Items.TryGetValue(ItemKey, out var existing)
-            && existing is HubAuthorization granted)
-        {
-            return granted;
-        }
+    public static HubAuthorization? Resolve(HubCallerContext context) => Current(context)?.Authorization;
 
-        // Scopes come from the handshake, which is where membership and token scopes were resolved;
-        // they cannot change for the life of the connection.
-        return context.GetHttpContext() is { } httpContext && FromRequest(httpContext) is { } authorization
-            ? Grant(context, authorization)
-            : null;
+    /// <inheritdoc cref="Resolve"/>
+    internal static ConnectionGrant? Current(HubCallerContext context)
+    {
+        if (context.Items.TryGetValue(ItemKey, out var existing) && existing is ConnectionGrant granted)
+            return granted;
+
+        if (context.GetHttpContext() is not { } httpContext || FromRequest(httpContext) is not { } authorization)
+            return null;
+
+        var recheck = HandshakeCredential.Capture(httpContext);
+        Grant(context, authorization, recheck);
+        return new ConnectionGrant(authorization, recheck);
     }
 
     /// <summary>
@@ -270,7 +310,10 @@ public static class HubAuthorizationState
             httpContext.GetGrantedScopes(),
             HubAuthorization.Classify(authContext.AuthType),
             authContext.SubjectId,
-            authContext.LimitTo24Hours);
+            authContext.LimitTo24Hours)
+        {
+            ClientId = authContext.ClientId,
+        };
     }
 }
 
@@ -285,11 +328,41 @@ public static class HubAuthorizationState
 /// any connection whose tenant resolves and is active. Authorization therefore has to happen at the
 /// method boundary. It lives in a filter rather than in each method so a method added later is
 /// denied unless it explicitly opts out with <see cref="HubAuthenticationMethodAttribute"/>.
+/// <para>
+/// A connection that holds a credential once an invocation returns is handed to
+/// <see cref="HubConnectionRevalidator"/>, which closes it when the credential no longer proves what
+/// it did.
+/// </para>
 /// </remarks>
-public sealed class HubAuthorizationFilter : IHubFilter
+public sealed class HubAuthorizationFilter(HubConnectionRevalidator revalidator) : IHubFilter
 {
     /// <inheritdoc />
     public async ValueTask<object?> InvokeMethodAsync(
+        HubInvocationContext invocationContext,
+        Func<HubInvocationContext, ValueTask<object?>> next)
+    {
+        try
+        {
+            return await AuthorizeAndInvokeAsync(invocationContext, next);
+        }
+        finally
+        {
+            if (HubAuthorizationState.Current(invocationContext.Context) is not null)
+                revalidator.Track(invocationContext.Context);
+        }
+    }
+
+    /// <inheritdoc />
+    public Task OnDisconnectedAsync(
+        HubLifetimeContext context,
+        Exception? exception,
+        Func<HubLifetimeContext, Exception?, Task> next)
+    {
+        revalidator.Forget(context.Context);
+        return next(context, exception);
+    }
+
+    private static async ValueTask<object?> AuthorizeAndInvokeAsync(
         HubInvocationContext invocationContext,
         Func<HubInvocationContext, ValueTask<object?>> next)
     {
