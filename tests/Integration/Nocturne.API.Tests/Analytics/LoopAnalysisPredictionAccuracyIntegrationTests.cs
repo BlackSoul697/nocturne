@@ -22,21 +22,21 @@ public class LoopAnalysisPredictionAccuracyIntegrationTests(ApiIntegrationTestFi
     private const string Path = "/api/v4/loop-analysis/prediction-accuracy";
     private const int SnapshotsPerWeek = 7 * 288;
 
-    private static string Query(DateTime from, DateTime to, DateTime? compareFrom = null, DateTime? compareTo = null) =>
-        $"{Path}?from={from:O}&to={to:O}"
-        + (compareFrom is { } cf ? $"&compareFrom={cf:O}&compareTo={compareTo:O}" : "");
+    private static string Query(string query) => $"{Path}?{query}";
 
     [Fact]
-    public async Task Returns_the_primary_and_the_adjacent_comparison()
+    public async Task Returns_the_primary_and_the_previous_week()
     {
         await SeedProfileAsync("Australia/Sydney");
         await SeedWeekAsync(PreviousWeekStart, predicted: 110);
         await SeedWeekAsync(WeekStart, predicted: 130);
 
-        var body = await GetOkAsync(AuthenticatedClient, Query(WeekStart, WeekEnd, PreviousWeekStart, WeekStart));
+        var body = await GetOkAsync(AuthenticatedClient, Query($"{Week}&compare=previous"));
 
         body.GetProperty("historyClamped").GetBoolean().Should().BeFalse();
         Absent(body, "timeZoneUnavailableReason").Should().BeTrue();
+        body.GetProperty("withheldSeries").GetArrayLength().Should().Be(0);
+        body.GetProperty("comparisonRange").GetProperty("startDate").GetString().Should().Be("2024-06-03");
 
         var primary = body.GetProperty("primary");
         primary.GetProperty("predictions").GetInt32().Should().Be(SnapshotsPerWeek, "the unenacted twin in each bucket is thinned away");
@@ -62,9 +62,9 @@ public class LoopAnalysisPredictionAccuracyIntegrationTests(ApiIntegrationTestFi
     }
 
     [Fact]
-    public async Task Rejects_a_range_longer_than_ninety_days()
+    public async Task Rejects_dates_that_do_not_make_a_range()
     {
-        var response = await AuthenticatedClient.GetAsync(Query(WeekStart.AddDays(-91), WeekStart));
+        var response = await AuthenticatedClient.GetAsync(Query("startDate=2024-06-16&endDate=2024-06-10"));
 
         response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
     }
@@ -80,7 +80,11 @@ public class LoopAnalysisPredictionAccuracyIntegrationTests(ApiIntegrationTestFi
         await SeedWeekAsync(WeekStart, predicted: 130);
         using var client = await CreateTokenClientAsync(scopes);
 
-        var body = await GetOkAsync(client, Query(WeekStart, WeekEnd));
+        var body = await GetOkAsync(client, Query(Week));
+
+        var withheld = body.GetProperty("withheldSeries").EnumerateArray().Select(s => s.GetString()).ToList();
+        withheld.Contains("PredictionCurves").Should().Be(!curves);
+        withheld.Contains("PredictionContexts").Should().Be(!scopes.Contains(Scope.TreatmentsRead));
 
         var reported = body.GetProperty("primary").GetProperty("curves");
         (reported.GetArrayLength() > 0).Should().Be(curves);
@@ -89,17 +93,18 @@ public class LoopAnalysisPredictionAccuracyIntegrationTests(ApiIntegrationTestFi
     }
 
     [Fact]
-    public async Task A_history_clamped_member_is_analysed_over_its_last_24_hours_only()
+    public async Task A_history_clamped_member_is_analysed_over_its_last_24_hours_whatever_it_asks_for()
     {
         await SeedProfileAsync("Australia/Sydney");
         using var clamped = await CreateHistoryClampedClientAsync();
         var now = DateTime.UtcNow;
 
-        var body = await GetOkAsync(clamped, Query(now.AddDays(-7), now));
+        var body = await GetOkAsync(clamped, Query($"{Week}&compare=previous"));
 
         body.GetProperty("historyClamped").GetBoolean().Should().BeTrue();
-        body.GetProperty("primary").GetProperty("from").GetDateTime().ToUniversalTime()
+        body.GetProperty("primaryRange").GetProperty("from").GetDateTime().ToUniversalTime()
             .Should().BeCloseTo(now.AddHours(-24), TimeSpan.FromMinutes(5));
+        Absent(body, "comparison").Should().BeTrue();
     }
 
     [Fact]
@@ -107,12 +112,13 @@ public class LoopAnalysisPredictionAccuracyIntegrationTests(ApiIntegrationTestFi
     {
         await SeedWeekAsync(WeekStart, predicted: 130);
 
-        var body = await GetOkAsync(AuthenticatedClient, Query(WeekStart, WeekEnd, PreviousWeekStart, WeekStart));
+        var body = await GetOkAsync(AuthenticatedClient, Query($"{Week}&compare=previous"));
 
         body.GetProperty("timeZoneUnavailableReason").GetString().Should().Be("NotConfigured");
+        Absent(body, "primaryRange").Should().BeTrue();
         body.GetProperty("primary").GetProperty("curves").GetArrayLength().Should().Be(0);
         body.GetProperty("primary").GetProperty("predictions").GetInt32().Should().Be(0);
-        body.GetProperty("comparison").GetProperty("curves").GetArrayLength().Should().Be(0);
+        Absent(body, "comparison").Should().BeTrue();
     }
 
     [Fact]
@@ -122,7 +128,7 @@ public class LoopAnalysisPredictionAccuracyIntegrationTests(ApiIntegrationTestFi
         await SeedWeekAsync(WeekStart, predicted: 130);
         using var share = await CreateShareClientAsync();
 
-        var body = await GetOkAsync(share, Query(WeekStart, WeekEnd));
+        var body = await GetOkAsync(share, Query(Week));
 
         body.GetProperty("timeZoneUnavailableReason").GetString().Should().Be("Share");
         body.GetProperty("primary").GetProperty("curves").GetArrayLength().Should().Be(0);

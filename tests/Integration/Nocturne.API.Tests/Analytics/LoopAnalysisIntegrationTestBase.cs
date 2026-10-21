@@ -15,10 +15,12 @@ namespace Nocturne.API.Tests.Integration.Analytics;
 public abstract class LoopAnalysisIntegrationTestBase(ApiIntegrationTestFixture fixture, ITestOutputHelper output)
     : ApiIntegrationTestBase(fixture, output)
 {
-    /// <summary>Midnight 2024-06-10 in Sydney (UTC+10, no DST in June).</summary>
+    /// <summary>2024-06-10 in Sydney (UTC+10, no DST in June) begins at this instant.</summary>
     protected static readonly DateTime WeekStart = new(2024, 6, 9, 14, 0, 0, DateTimeKind.Utc);
-    protected static readonly DateTime WeekEnd = WeekStart.AddDays(7);
     protected static readonly DateTime PreviousWeekStart = WeekStart.AddDays(-7);
+
+    /// <summary>The local week from <see cref="WeekStart"/>, as query parameters.</summary>
+    protected const string Week = "startDate=2024-06-10&endDate=2024-06-16";
 
     /// <summary>A scope whose database contexts write as the fixture's tenant.</summary>
     protected IServiceScope TenantScope()

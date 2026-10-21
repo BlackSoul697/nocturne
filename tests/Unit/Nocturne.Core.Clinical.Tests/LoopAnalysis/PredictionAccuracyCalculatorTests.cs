@@ -51,7 +51,7 @@ public class PredictionAccuracyCalculatorTests
         IEnumerable<long>? manualBoluses = null,
         IntervalSet? exerciseOrOverride = null,
         IntervalSet? exclusions = null,
-        LoopAnalysisFilter? filter = null,
+        LoopAnalysisMasks? filter = null,
         LoopAnalysisMaskSources? sources = null)
     {
         from = from == 0 ? From : from;
@@ -66,7 +66,7 @@ public class PredictionAccuracyCalculatorTests
             ExerciseOrOverride = exerciseOrOverride ?? IntervalSet.Empty,
             GlucoseExclusions = exclusions ?? IntervalSet.Empty,
         };
-        var mask = LoopAnalysisMask.Build(filter ?? new LoopAnalysisFilter(), from, to, Sydney, sources ?? new LoopAnalysisMaskSources());
+        var mask = LoopAnalysisMask.Build(filter ?? new LoopAnalysisMasks(), from, to, Sydney, sources ?? new LoopAnalysisMaskSources());
         return PredictionAccuracyCalculator.Calculate(inputs, mask, from, to);
     }
 
@@ -314,7 +314,7 @@ public class PredictionAccuracyCalculatorTests
             [LoopFixture(Midnight + 10 * Hour, Flat(120)), LoopFixture(Midnight + 14 * Hour, Flat(130))],
             Readings(Midnight, To + 3 * Hour, 110),
             exerciseOrOverride: IntervalSet.Of([overrideSpan]),
-            filter: new LoopAnalysisFilter { ExcludeOverrides = true },
+            filter: new LoopAnalysisMasks { ExcludeOverrides = true },
             sources: new LoopAnalysisMaskSources { Overrides = [overrideSpan] });
 
         range.Predictions.Should().Be(1);

@@ -66,7 +66,7 @@ public class LoopAnalysisPredictionAccuracyBudgetTests(ITestOutputHelper output)
             CarbMills = carbs,
             ManualBolusMills = boluses,
         };
-        var filter = new LoopAnalysisFilter();
+        var filter = new LoopAnalysisMasks();
         var sources = new LoopAnalysisMaskSources();
         var primary = PredictionAccuracyCalculator.Calculate(
             inputs, LoopAnalysisMask.Build(filter, from, to, Zone, sources), from, to);

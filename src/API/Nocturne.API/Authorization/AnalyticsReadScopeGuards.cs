@@ -400,8 +400,7 @@ internal static class StatisticsReadScopeGuard
 /// by any override, the target range overlays temporary targets), so they need treatments too.
 /// The masks follow the categories of the spans they are drawn from, as
 /// <see cref="ChartDataReadScopeGuard"/> serves them: overrides, temporary targets, exercise and
-/// illness are treatments, pump mode and the registered pumps are devices. Each tab's payload has
-/// its own <c>Redact</c>.
+/// illness are treatments, pump mode and the registered pumps are devices.
 /// </summary>
 /// <remarks>
 /// <para>
@@ -419,12 +418,12 @@ internal static class LoopAnalysisReadScopeGuard
     public const string AdmissionScope = Scope.ReportsRead;
 
     /// <summary>
-    /// Drops from <paramref name="filter"/> every part the caller could not otherwise see: a profile
+    /// Drops from <paramref name="masks"/> every part the caller could not otherwise see: a profile
     /// name without <c>therapy.read</c>, and each mask drawn from a category the caller lacks, which
     /// would otherwise show where those spans fell through the analysed time.
     /// </summary>
     /// <returns>The query parameter names that were ignored, for the response to report.</returns>
-    public static List<string> NarrowFilter(LoopAnalysisFilter filter, IReadOnlySet<string> grantedScopes)
+    public static List<string> NarrowFilter(LoopAnalysisMasks masks, IReadOnlySet<string> grantedScopes)
     {
         var ignored = new List<string>();
         void Ignore(bool set, string name, Action clear)
@@ -436,106 +435,156 @@ internal static class LoopAnalysisReadScopeGuard
         }
 
         if (!AnalyticsReadScopes.Allows(grantedScopes, Scope.TherapyRead))
-            Ignore(filter.ProfileName is not null, "profileName", () => filter.ProfileName = null);
+            Ignore(masks.ProfileName is not null, "profileName", () => masks.ProfileName = null);
 
         if (!AnalyticsReadScopes.Allows(grantedScopes, Scope.TreatmentsRead))
         {
-            Ignore(filter.ExcludeOverrides, "excludeOverrides", () => filter.ExcludeOverrides = false);
-            Ignore(filter.ExcludeTemporaryTargets, "excludeTemporaryTargets", () => filter.ExcludeTemporaryTargets = false);
-            Ignore(filter.ExcludeExercise, "excludeExercise", () => filter.ExcludeExercise = false);
-            Ignore(filter.ExcludeIllness, "excludeIllness", () => filter.ExcludeIllness = false);
+            Ignore(masks.ExcludeOverrides, "excludeOverrides", () => masks.ExcludeOverrides = false);
+            Ignore(masks.ExcludeTemporaryTargets, "excludeTemporaryTargets", () => masks.ExcludeTemporaryTargets = false);
+            Ignore(masks.ExcludeExercise, "excludeExercise", () => masks.ExcludeExercise = false);
+            Ignore(masks.ExcludeIllness, "excludeIllness", () => masks.ExcludeIllness = false);
         }
 
         if (!AnalyticsReadScopes.Allows(grantedScopes, Scope.DevicesRead))
-            Ignore(filter.ExcludeOpenLoop, "excludeOpenLoop", () => filter.ExcludeOpenLoop = false);
+            Ignore(masks.ExcludeOpenLoop, "excludeOpenLoop", () => masks.ExcludeOpenLoop = false);
 
         return ignored;
     }
 
-    public static DailyProfileResponse Redact(DailyProfileResponse data, IReadOnlySet<string> grantedScopes)
+    /// <summary>
+    /// The series the caller's scopes withhold. <see cref="Redact"/> empties exactly these, so the
+    /// response's <see cref="LoopAnalysisResponse.WithheldSeries"/> and its nulls cannot disagree.
+    /// </summary>
+    public static HashSet<LoopAnalysisSeries> Withheld(IReadOnlySet<string> grantedScopes)
     {
         var glucose = AnalyticsReadScopes.Allows(grantedScopes, Scope.GlucoseRead);
         var treatments = AnalyticsReadScopes.Allows(grantedScopes, Scope.TreatmentsRead);
         var therapy = AnalyticsReadScopes.Allows(grantedScopes, Scope.TherapyRead);
 
-        if (glucose && treatments && therapy)
+        var withheld = new HashSet<LoopAnalysisSeries>();
+        void Withhold(bool hidden, params LoopAnalysisSeries[] series)
+        {
+            if (hidden)
+                withheld.UnionWith(series);
+        }
+
+        Withhold(!glucose, LoopAnalysisSeries.Glucose);
+        Withhold(!treatments,
+            LoopAnalysisSeries.DeliveredBasal,
+            LoopAnalysisSeries.NetLoopCorrection,
+            LoopAnalysisSeries.NetLoopCorrectionComponents,
+            LoopAnalysisSeries.HourlyNetLoopCorrection,
+            LoopAnalysisSeries.Iob,
+            LoopAnalysisSeries.Cob,
+            LoopAnalysisSeries.ManualBoluses,
+            LoopAnalysisSeries.Carbs,
+            LoopAnalysisSeries.InsulinSummary,
+            LoopAnalysisSeries.NetLoopCorrectionSummary);
+        Withhold(!therapy || !treatments,
+            LoopAnalysisSeries.ScheduledBasal,
+            LoopAnalysisSeries.Target,
+            LoopAnalysisSeries.DeliveredToScheduledRatio);
+        Withhold(!therapy, LoopAnalysisSeries.ProfileNames);
+        return withheld;
+    }
+
+    public static DailyProfileResponse Redact(DailyProfileResponse data, IReadOnlySet<string> grantedScopes)
+    {
+        var withheld = Withheld(grantedScopes);
+        data.WithheldSeries = [.. withheld.Order()];
+        if (withheld.Count == 0)
             return data;
 
-        Narrow(data.Primary, glucose, treatments, therapy);
+        Narrow(data.Primary, withheld);
         if (data.Comparison is { } comparison)
-            Narrow(comparison, glucose, treatments, therapy);
+            Narrow(comparison, withheld);
         return data;
     }
 
     /// <summary>
-    /// Prediction accuracy compares the APS snapshots' curves, which are devices, with the sensor
-    /// readings, which are glucose, so a curve needs both. Its context is drawn from carbs, boluses,
-    /// overrides and exercise, which are treatments: without them the context breakdowns go, and so
-    /// does every curve reported only in some contexts.
+    /// The prediction figures the caller's scopes withhold, as <see cref="Withheld"/> is for the
+    /// Daily profile. A curve's accuracy compares the APS snapshots, which are devices, with the
+    /// sensor readings, which are glucose, so it needs both. Its context is drawn from treatments.
     /// </summary>
-    public static PredictionAccuracyResponse Redact(PredictionAccuracyResponse data, IReadOnlySet<string> grantedScopes)
+    public static HashSet<LoopAnalysisSeries> WithheldPredictions(IReadOnlySet<string> grantedScopes)
     {
         var glucose = AnalyticsReadScopes.Allows(grantedScopes, Scope.GlucoseRead);
         var devices = AnalyticsReadScopes.Allows(grantedScopes, Scope.DevicesRead);
         var treatments = AnalyticsReadScopes.Allows(grantedScopes, Scope.TreatmentsRead);
 
-        if (glucose && devices && treatments)
+        var withheld = new HashSet<LoopAnalysisSeries>();
+        if (!devices)
+            withheld.Add(LoopAnalysisSeries.PredictionCount);
+        if (!glucose || !devices)
+            withheld.Add(LoopAnalysisSeries.PredictionCurves);
+        if (!treatments)
+            withheld.Add(LoopAnalysisSeries.PredictionContexts);
+        return withheld;
+    }
+
+    public static PredictionAccuracyResponse Redact(PredictionAccuracyResponse data, IReadOnlySet<string> grantedScopes)
+    {
+        var withheld = WithheldPredictions(grantedScopes);
+        data.WithheldSeries = [.. withheld.Order()];
+        if (withheld.Count == 0)
             return data;
 
-        Narrow(data.Primary, glucose, devices, treatments);
+        Narrow(data.Primary, withheld);
         if (data.Comparison is { } comparison)
-            Narrow(comparison, glucose, devices, treatments);
+            Narrow(comparison, withheld);
         return data;
     }
 
-    private static void Narrow(PredictionAccuracyRange range, bool glucose, bool devices, bool treatments)
+    private static void Narrow(PredictionAccuracyRange range, HashSet<LoopAnalysisSeries> withheld)
     {
-        if (!devices)
+        if (withheld.Contains(LoopAnalysisSeries.PredictionCount))
         {
             range.Predictions = 0;
             range.Algorithms = [];
         }
 
-        if (!glucose || !devices)
-        {
+        if (withheld.Contains(LoopAnalysisSeries.PredictionCurves))
             range.Curves = [];
-            return;
+
+        if (withheld.Contains(LoopAnalysisSeries.PredictionContexts))
+        {
+            var everyContext = Enum.GetValues<PredictionContext>().Length;
+            range.Curves.RemoveAll(c => c.Contexts.Count < everyContext);
+            foreach (var curve in range.Curves)
+                curve.ByContext = [];
         }
-
-        if (treatments)
-            return;
-
-        var everyContext = Enum.GetValues<PredictionContext>().Length;
-        range.Curves.RemoveAll(c => c.Contexts.Count < everyContext);
-        foreach (var curve in range.Curves)
-            curve.ByContext = [];
     }
 
-    private static void Narrow(DailyProfileRange range, bool glucose, bool treatments, bool therapy)
+    private static void Narrow(DailyProfileRange range, HashSet<LoopAnalysisSeries> withheld)
     {
+        bool Hidden(LoopAnalysisSeries series) => withheld.Contains(series);
+
         foreach (var slot in range.Slots)
         {
-            if (!glucose)
-                slot.Glucose = null;
-
-            if (!treatments)
+            if (Hidden(LoopAnalysisSeries.Glucose)) slot.Glucose = null;
+            if (Hidden(LoopAnalysisSeries.ScheduledBasal)) slot.ScheduledBasal = null;
+            if (Hidden(LoopAnalysisSeries.DeliveredBasal)) slot.DeliveredBasal = null;
+            if (Hidden(LoopAnalysisSeries.NetLoopCorrection)) slot.NetLoopCorrection = null;
+            if (Hidden(LoopAnalysisSeries.NetLoopCorrectionComponents))
             {
-                slot.DeliveredBasal = null;
-                slot.NetLoopCorrection = null;
                 slot.ManualTemp = null;
                 slot.Suspend = null;
                 slot.Inferred = null;
+            }
+            if (Hidden(LoopAnalysisSeries.Iob))
+            {
                 slot.Iob = null;
                 slot.IobSource = null;
+            }
+            if (Hidden(LoopAnalysisSeries.Cob))
+            {
                 slot.Cob = null;
                 slot.CobSource = null;
-                slot.ManualBoluses = null;
-                slot.Carbs = null;
             }
-
-            if (!therapy || !treatments)
+            if (Hidden(LoopAnalysisSeries.ManualBoluses)) slot.ManualBoluses = null;
+            if (Hidden(LoopAnalysisSeries.Carbs)) slot.Carbs = null;
+            if (Hidden(LoopAnalysisSeries.Target))
             {
-                slot.ScheduledBasal = null;
                 slot.TargetLow = null;
                 slot.TargetHigh = null;
             }
@@ -543,34 +592,33 @@ internal static class LoopAnalysisReadScopeGuard
 
         foreach (var day in range.Days)
         {
-            if (!glucose)
-                day.Coverage.Glucose = null;
-
-            if (!treatments)
+            if (Hidden(LoopAnalysisSeries.Glucose)) day.Coverage.Glucose = null;
+            if (Hidden(LoopAnalysisSeries.ScheduledBasal)) day.Coverage.ScheduledBasal = null;
+            if (Hidden(LoopAnalysisSeries.DeliveredBasal)) day.Coverage.DeliveredBasal = null;
+            if (Hidden(LoopAnalysisSeries.NetLoopCorrection))
             {
-                day.Coverage.DeliveredBasal = null;
                 day.Coverage.NetLoopCorrection = null;
-                day.Coverage.IobCob = null;
                 day.NetLoopCorrection = null;
-                day.TotalInsulin = null;
             }
-
-            if (!therapy || !treatments)
-                day.Coverage.ScheduledBasal = null;
+            if (Hidden(LoopAnalysisSeries.Iob) || Hidden(LoopAnalysisSeries.Cob)) day.Coverage.IobCob = null;
+            if (Hidden(LoopAnalysisSeries.InsulinSummary))
+            {
+                day.TotalInsulin = null;
+                day.DeliveredBasal = null;
+                day.AutomaticBolus = null;
+                day.ManualBolus = null;
+            }
         }
 
-        if (!treatments)
+        if (Hidden(LoopAnalysisSeries.HourlyNetLoopCorrection)) range.HourlyNetLoopCorrection = [];
+        if (Hidden(LoopAnalysisSeries.NetLoopCorrectionSummary))
         {
-            range.HourlyNetLoopCorrection = [];
             range.Summary.NetLoopCorrectionPerDay = null;
             range.Summary.NetLoopCorrectionTddPercent = null;
             range.Summary.NetLoopCorrectionDays = 0;
         }
-
-        if (!treatments || !therapy)
-            range.Summary.DeliveredToScheduledRatio = null;
-
-        if (!therapy)
-            range.ProfileNames = [];
+        if (Hidden(LoopAnalysisSeries.InsulinSummary)) range.Summary.Insulin = null;
+        if (Hidden(LoopAnalysisSeries.DeliveredToScheduledRatio)) range.Summary.DeliveredToScheduledRatio = null;
+        if (Hidden(LoopAnalysisSeries.ProfileNames)) range.ProfileNames = [];
     }
 }

@@ -47,23 +47,11 @@ public enum PredictionContext
 }
 
 /// <summary>The Predictions tab: the primary range and, when asked for, a comparison range.</summary>
-public class PredictionAccuracyResponse
+public class PredictionAccuracyResponse : LoopAnalysisResponse
 {
     public PredictionAccuracyRange Primary { get; set; } = new();
 
     public PredictionAccuracyRange? Comparison { get; set; }
-
-    /// <inheritdoc cref="DailyProfileResponse.HistoryClamped"/>
-    public bool HistoryClamped { get; set; }
-
-    /// <summary>
-    /// Why no tenant timezone resolved. When set, no range carries curves: the hour of day and the
-    /// weekday filter cannot be placed without the zone.
-    /// </summary>
-    public TimeZoneUnavailableReason? TimeZoneUnavailableReason { get; set; }
-
-    /// <inheritdoc cref="DailyProfileResponse.IgnoredFilters"/>
-    public List<string> IgnoredFilters { get; set; } = [];
 }
 
 /// <summary>

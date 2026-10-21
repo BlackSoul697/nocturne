@@ -43,8 +43,7 @@ internal sealed class LoopAnalysisService(
     IBasalSeriesBuilder basalSeriesBuilder,
     IBasalSegmentService basalSegmentService,
     IIobCalculator iobCalculator,
-    ICobCalculator cobCalculator,
-    TenantClockResolver tenantClock
+    ICobCalculator cobCalculator
 ) : ILoopAnalysisService
 {
     private const long TickMs = DailyProfileCalculator.SlotMinutes * LocalSlotBinning.MinuteMs;
@@ -59,41 +58,34 @@ internal sealed class LoopAnalysisService(
         StateSpanCategory.PumpMode,
     ];
 
-    public async Task<DailyProfileResponse> GetDailyProfileAsync(LoopAnalysisFilter filter, CancellationToken ct = default)
+    public async Task<DailyProfileResponse> GetDailyProfileAsync(
+        LoopAnalysisFilter filter, TimeZoneInfo zone, CancellationToken ct = default)
     {
-        var (primary, comparison, reason) = await ForRangesAsync(
+        var (primary, comparison) = await ForRangesAsync(
             filter,
-            LoadAsync,
+            window => LoadAsync(window, zone, ct),
             (loaded, window) => DailyProfileCalculator.Calculate(
-                loaded.Inputs, Mask(filter, window, loaded.Inputs.Zone, loaded.Sources), window.From, window.To),
-            window => window.EmptyDailyProfile(),
-            ct);
-        return new DailyProfileResponse { Primary = primary, Comparison = comparison, TimeZoneUnavailableReason = reason };
+                loaded.Inputs, Mask(filter, window, zone, loaded.Sources), window.From, window.To));
+        return new DailyProfileResponse { Primary = primary, Comparison = comparison };
     }
 
-    public async Task<PredictionAccuracyResponse> GetPredictionAccuracyAsync(LoopAnalysisFilter filter, CancellationToken ct = default)
+    public async Task<PredictionAccuracyResponse> GetPredictionAccuracyAsync(
+        LoopAnalysisFilter filter, TimeZoneInfo zone, CancellationToken ct = default)
     {
-        var (primary, comparison, reason) = await ForRangesAsync(
+        var (primary, comparison) = await ForRangesAsync(
             filter,
-            (window, zone, token) => LoadPredictionsAsync(window, zone, filter.ProfileName is not null, token),
+            window => LoadPredictionsAsync(window, zone, filter.Masks.ProfileName is not null, ct),
             (loaded, window) => PredictionAccuracyCalculator.Calculate(
-                loaded.Inputs, Mask(filter, window, loaded.Inputs.Zone, loaded.Sources), window.From, window.To),
-            window => window.EmptyPredictionAccuracy(),
-            ct);
-        return new PredictionAccuracyResponse { Primary = primary, Comparison = comparison, TimeZoneUnavailableReason = reason };
+                loaded.Inputs, Mask(filter, window, zone, loaded.Sources), window.From, window.To));
+        return new PredictionAccuracyResponse { Primary = primary, Comparison = comparison };
     }
 
     /// <summary>
     /// Computes the primary range and the comparison: from one load over both where they touch or
-    /// overlap, else one load each. A range a history clamp has emptied has nothing to load, and
-    /// without a tenant zone neither range is computed.
+    /// overlap, else one load each.
     /// </summary>
-    private async Task<(TRange Primary, TRange? Comparison, TimeZoneUnavailableReason? Reason)> ForRangesAsync<TLoaded, TRange>(
-        LoopAnalysisFilter filter,
-        Func<Window, TimeZoneInfo, CancellationToken, Task<TLoaded>> load,
-        Func<TLoaded, Window, TRange> calculate,
-        Func<Window, TRange> empty,
-        CancellationToken ct)
+    private static async Task<(TRange Primary, TRange? Comparison)> ForRangesAsync<TLoaded, TRange>(
+        LoopAnalysisFilter filter, Func<Window, Task<TLoaded>> load, Func<TLoaded, Window, TRange> calculate)
         where TRange : class
     {
         var primary = Window.Of(filter.From, filter.To);
@@ -101,25 +93,19 @@ internal sealed class LoopAnalysisService(
             ? Window.Of(compareFrom, compareTo)
             : (Window?)null;
 
-        var (zone, reason) = await tenantClock.ResolveAsync(ct);
-        if (zone is null)
-            return (empty(primary), comparison is { } unzoned ? empty(unzoned) : null, reason);
-
-        if (comparison is { IsEmpty: false } other && !primary.IsEmpty && primary.Touches(other))
+        if (comparison is { } other && primary.Touches(other))
         {
-            var both = await load(primary.Hull(other), zone, ct);
-            return (calculate(both, primary), calculate(both, other), null);
+            var both = await load(primary.Hull(other));
+            return (calculate(both, primary), calculate(both, other));
         }
 
-        async Task<TRange> One(Window window) =>
-            window.IsEmpty ? empty(window) : calculate(await load(window, zone, ct), window);
-
-        return (await One(primary), comparison is { } separate ? await One(separate) : null, null);
+        var first = calculate(await load(primary), primary);
+        return (first, comparison is { } separate ? calculate(await load(separate), separate) : null);
     }
 
     private static LoopAnalysisMask Mask(
         LoopAnalysisFilter filter, Window window, TimeZoneInfo zone, LoopAnalysisMaskSources sources) =>
-        LoopAnalysisMask.Build(filter, window.From, window.To, zone, sources);
+        LoopAnalysisMask.Build(filter.Masks, window.From, window.To, zone, sources);
 
     private sealed record Loaded(DailyProfileInputs Inputs, LoopAnalysisMaskSources Sources);
 
@@ -370,21 +356,13 @@ internal sealed class LoopAnalysisService(
 
     private readonly record struct Window(long From, long To)
     {
-        public static Window Of(DateTime from, DateTime to) => new(ToMills(from), ToMills(to));
-
-        public bool IsEmpty => To <= From;
+        public static Window Of(DateTime from, DateTime to) =>
+            to > from
+                ? new(ToMills(from), ToMills(to))
+                : throw new ArgumentOutOfRangeException(nameof(to), "A Loop Analysis range must end after it starts.");
 
         public bool Touches(Window other) => From <= other.To && other.From <= To;
 
         public Window Hull(Window other) => new(Math.Min(From, other.From), Math.Max(To, other.To));
-
-        public DailyProfileRange EmptyDailyProfile() => new()
-        {
-            From = ToUtc(From),
-            To = ToUtc(To),
-            SlotMinutes = DailyProfileCalculator.SlotMinutes,
-        };
-
-        public PredictionAccuracyRange EmptyPredictionAccuracy() => new() { From = ToUtc(From), To = ToUtc(To) };
     }
 }
