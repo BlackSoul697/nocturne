@@ -833,6 +833,7 @@ public static class ServiceRegistrationExtensions
         services.AddSingleton<IAidDetectionStrategy, TbrBasedStrategy>();
         services.AddSingleton<IAidDetectionStrategy, NoAidStrategy>();
         services.AddScoped<IAidMetricsService, AidMetricsService>();
+        services.AddScoped<AidSystemMetricsReader>();
 
         // V4 Decomposers
         services.AddScoped<IEntryDecomposer, EntryDecomposer>();

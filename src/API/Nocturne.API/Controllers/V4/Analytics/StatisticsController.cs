@@ -39,7 +39,7 @@ namespace Nocturne.API.Controllers.V4.Analytics;
 /// <seealso cref="IBolusRepository"/>
 /// <seealso cref="ICarbIntakeRepository"/>
 /// <seealso cref="ITempBasalRepository"/>
-/// <seealso cref="IAidMetricsService"/>
+/// <seealso cref="AidSystemMetricsReader"/>
 [ApiController]
 [Tags("Analytics")]
 [Route("api/v4/[controller]")]
@@ -65,9 +65,8 @@ public class StatisticsController : ControllerBase
     private readonly IBolusRepository _bolusRepository;
     private readonly ICarbIntakeRepository _carbIntakeRepository;
     private readonly ITempBasalRepository _tempBasalRepository;
-    private readonly IAidMetricsService _aidMetricsService;
+    private readonly AidSystemMetricsReader _aidSystemMetrics;
     private readonly IPatientDeviceRepository _patientDeviceRepository;
-    private readonly IApsSnapshotRepository _apsSnapshotRepository;
     private readonly IDeviceEventRepository _deviceEventRepository;
     private readonly ITargetRangeScheduleRepository _targetRangeScheduleRepository;
     private readonly IBasalInjectionRepository _basalInjectionRepository;
@@ -88,9 +87,8 @@ public class StatisticsController : ControllerBase
         IBolusRepository bolusRepository,
         ICarbIntakeRepository carbIntakeRepository,
         ITempBasalRepository tempBasalRepository,
-        IAidMetricsService aidMetricsService,
+        AidSystemMetricsReader aidSystemMetrics,
         IPatientDeviceRepository patientDeviceRepository,
-        IApsSnapshotRepository apsSnapshotRepository,
         IDeviceEventRepository deviceEventRepository,
         ITargetRangeScheduleRepository targetRangeScheduleRepository,
         IBasalInjectionRepository basalInjectionRepository,
@@ -111,9 +109,8 @@ public class StatisticsController : ControllerBase
         _bolusRepository = bolusRepository;
         _carbIntakeRepository = carbIntakeRepository;
         _tempBasalRepository = tempBasalRepository;
-        _aidMetricsService = aidMetricsService;
+        _aidSystemMetrics = aidSystemMetrics;
         _patientDeviceRepository = patientDeviceRepository;
-        _apsSnapshotRepository = apsSnapshotRepository;
         _deviceEventRepository = deviceEventRepository;
         _targetRangeScheduleRepository = targetRangeScheduleRepository;
         _basalInjectionRepository = basalInjectionRepository;
@@ -565,22 +562,6 @@ public class StatisticsController : ControllerBase
     }
 
     /// <summary>
-    /// Returns the target range schedule active for the tenant's active profile right now, or null
-    /// when none is configured. Shared selection policy for report statistics and AID metrics, kept
-    /// in step with the alert engine and <c>TargetRangeResolver</c> (active profile, newest schedule
-    /// at the point in time) so reports evaluate the same range alerts fire against — rather than the
-    /// globally-newest record, which could belong to a different, inactive profile.
-    /// </summary>
-    private async Task<TargetRangeSchedule?> GetActiveTargetRangeScheduleAsync(CancellationToken ct)
-    {
-        var nowMills = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
-        var profileName = await _activeProfileResolver.GetProfileNameAsync(nowMills, ct);
-        // Before the store's first version, its newest, as ProfileVersionCache.ActiveAt reads it.
-        return await _targetRangeScheduleRepository.GetActiveAtAsync(profileName, DateTime.UtcNow, ct)
-            ?? (await _targetRangeScheduleRepository.GetByProfileNameAsync(profileName, ct)).MaxBy(s => s.Timestamp);
-    }
-
-    /// <summary>
     /// Computes time in the tenant's personal target range for the report window. Failure-isolated:
     /// the personal range is optional garnish on the report, so a missing schedule or a failed
     /// fetch returns null rather than failing the base analytics.
@@ -593,7 +574,7 @@ public class StatisticsController : ControllerBase
     {
         try
         {
-            var schedule = await GetActiveTargetRangeScheduleAsync(ct);
+            var schedule = await ActiveTargetRange.ScheduleAsync(_activeProfileResolver, _targetRangeScheduleRepository, ct);
             if (schedule is null || schedule.Entries.Count == 0)
                 return null;
 
@@ -1322,7 +1303,7 @@ public class StatisticsController : ControllerBase
     /// <summary>
     /// Calculates AID (Automated Insulin Delivery) system metrics for a date range.
     /// Uses patient device records to segment the period by algorithm and compute time-weighted metrics
-    /// via <see cref="IAidMetricsService"/>.
+    /// via <see cref="AidSystemMetricsReader"/>.
     /// </summary>
     /// <param name="startDate">Inclusive start of the analysis period (UTC).</param>
     /// <param name="endDate">Inclusive end of the analysis period (UTC).</param>
@@ -1330,11 +1311,9 @@ public class StatisticsController : ControllerBase
     /// <returns>An <see cref="AidSystemMetrics"/> object containing loop-on time, site-change counts,
     /// CGM active percent, and per-algorithm segment breakdowns.</returns>
     /// <remarks>
-    /// Fetches APS snapshots, temp basals, device events, glucose readings, and target-range schedules
-    /// from their respective repositories. CGM active time comes from
-    /// <see cref="IStatisticsService.CalculateCgmActivePercent"/>, measured against the registered
-    /// CGMs' windows where the tenant has registered any.
-    /// Target range is optional; the method continues without it if the repository throws.
+    /// CGM active time comes from <see cref="IStatisticsService.CalculateCgmActivePercent"/>,
+    /// measured against the registered CGMs' windows where the tenant has registered any. The target
+    /// range is optional; the report goes without it if it cannot be read.
     /// </remarks>
     [HttpGet("aid-system-metrics")]
     [RequireScope(Scope.ReportsRead)]
@@ -1347,111 +1326,7 @@ public class StatisticsController : ControllerBase
     {
         var startDt = DateTime.SpecifyKind(startDate, DateTimeKind.Utc);
         var endDt = DateTime.SpecifyKind(endDate, DateTimeKind.Utc);
-
-        // Fetch patient devices overlapping the date range
-        var devices = await _patientDeviceRepository.GetByDateRangeAsync(startDt, endDt, ct: cancellationToken);
-
-        // Map patient devices to segment inputs
-        var deviceSegments = devices
-            .Where(d =>
-                d.DeviceCategory == DeviceCategory.InsulinPump && d.AidAlgorithm.HasValue
-            )
-            .Select(d => new DeviceSegmentInput
-            {
-                Algorithm = d.AidAlgorithm!.Value,
-                StartDate = d.StartDate.HasValue
-                    ? d.StartDate.Value.ToDateTime(TimeOnly.MinValue, DateTimeKind.Utc)
-                    : startDt,
-                EndDate = d.EndDate.HasValue
-                    ? d.EndDate.Value.ToDateTime(new TimeOnly(23, 59, 59), DateTimeKind.Utc)
-                    : endDt,
-            })
-            .ToList();
-
-        // Limits follow <see cref="GetRangeAnalytics"/>.
-        var apsTask     = _apsSnapshotRepository.GetAsync(startDt, endDt, null, null, int.MaxValue, descending: false, ct: cancellationToken);
-        var basalTask   = _tempBasalRepository.GetAsync(startDt, endDt, null, null, int.MaxValue, descending: false, ct: cancellationToken);
-        var eventTask   = _deviceEventRepository.GetAsync(startDt, endDt, null, null, int.MaxValue, descending: false, ct: cancellationToken);
-        var glucoseTask = _sensorGlucoseRepository.GetForAnalyticsAsync(startDt, endDt, null, null, int.MaxValue, descending: false, ct: cancellationToken);
-
-        await Task.WhenAll(apsTask, basalTask, eventTask, glucoseTask);
-
-        var apsSnapshots = (await apsTask).ToList();
-        var tempBasals   = (await basalTask).ToList();
-        var deviceEvents = (await eventTask).ToList();
-        var glucose      = await _canonicalGlucose.SelectAsync((await glucoseTask).ToList(), cancellationToken);
-
-        // Count site changes
-        var siteChangeCount = deviceEvents.Count(e =>
-            e.EventType == DeviceEventType.SiteChange
-        );
-
-        // Resolve CGM device names
-        var cgmDevices = devices.Where(d => d.DeviceCategory == DeviceCategory.CGM).ToList();
-        var cgmDeviceNames = cgmDevices.Count > 0
-            ? string.Join(", ", cgmDevices
-                .Select(d => d.CatalogId != null ? DeviceCatalog.GetById(d.CatalogId)?.Name : null)
-                .Where(n => n != null)
-                .DefaultIfEmpty(cgmDevices.First().Model ?? cgmDevices.First().Manufacturer))
-            : null;
-
-        // Resolve pump device names
-        var pumpDevices = devices.Where(d => d.DeviceCategory == DeviceCategory.InsulinPump).ToList();
-        var pumpCatalogNames = pumpDevices
-            .Select(d => d.CatalogId != null ? DeviceCatalog.GetById(d.CatalogId)?.Name : null)
-            .Where(n => !string.IsNullOrWhiteSpace(n))
-            .Distinct()
-            .ToList();
-        var pumpDeviceNames = pumpCatalogNames.Count > 0
-            ? string.Join(", ", pumpCatalogNames)
-            : pumpDevices
-                .Select(d => !string.IsNullOrWhiteSpace(d.Model) ? d.Model : d.Manufacturer)
-                .FirstOrDefault(n => !string.IsNullOrWhiteSpace(n));
-
-        var cgmActivePercent = _statisticsService.CalculateCgmActivePercent(
-            glucose,
-            startDt,
-            endDt,
-            cgmDevices
-                .Select(d => new CgmDeviceWindow(
-                    d.Id,
-                    d.StartDate?.ToDateTime(TimeOnly.MinValue, DateTimeKind.Utc),
-                    d.EndDate?.ToDateTime(new TimeOnly(23, 59, 59), DateTimeKind.Utc),
-                    d.CatalogId != null ? DeviceCatalog.GetById(d.CatalogId)?.Cgm?.UpdateIntervalMinutes : null))
-                .ToList());
-
-        // Get target range from target range schedule repository
-        double? targetLow = null;
-        double? targetHigh = null;
-        try
-        {
-            var activeSchedule = await GetActiveTargetRangeScheduleAsync(cancellationToken);
-            if (activeSchedule?.Entries.Count > 0)
-            {
-                targetLow = activeSchedule.Entries.Min(e => e.Low);
-                targetHigh = activeSchedule.Entries.Max(e => e.High);
-            }
-        }
-        catch (Exception ex) when (ex is not OperationCanceledException)
-        {
-            // Target range is optional — continue without it
-        }
-
-        var result = _aidMetricsService.Calculate(
-            deviceSegments,
-            apsSnapshots,
-            tempBasals,
-            siteChangeCount,
-            cgmDeviceNames,
-            pumpDeviceNames,
-            cgmActivePercent,
-            targetLow,
-            targetHigh,
-            startDt,
-            endDt
-        );
-
-        return Ok(result);
+        return Ok(await _aidSystemMetrics.ReadAsync(startDt, endDt, cancellationToken));
     }
 }
 
