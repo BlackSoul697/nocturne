@@ -57,6 +57,61 @@ public class ApsSnapshotRepository : SyncUpsertRepositoryBase<ApsSnapshot, ApsSn
             .ToListAsync(ct);
     }
 
+    /// <inheritdoc />
+    /// <remarks>
+    /// Raw SQL because <c>DISTINCT ON</c> over a five-minute bucket has no LINQ translation; it
+    /// states the tenant and soft-delete predicates the query filters would otherwise add.
+    /// </remarks>
+    public async Task<IReadOnlyList<ApsPredictionPoint>> GetPredictionsAsync(
+        DateTime from, DateTime to, CancellationToken ct = default)
+    {
+        await using var ctx = await ContextFactory.CreateAsync(ct);
+        var tenantId = ctx.TenantId;
+        var rows = await ctx.Database.SqlQuery<PredictionRow>($"""
+            SELECT DISTINCT ON (s.device, floor(extract(epoch FROM s.predicted_start_timestamp) / 300))
+                s.predicted_start_timestamp AS "PredictedStart",
+                s.device AS "Device",
+                s.enacted AS "Enacted",
+                s.aps_system AS "AidAlgorithm",
+                s.predicted_default_json::text AS "DefaultJson",
+                s.predicted_iob_json::text AS "IobJson",
+                s.predicted_zt_json::text AS "ZtJson",
+                s.predicted_cob_json::text AS "CobJson",
+                s.predicted_uam_json::text AS "UamJson"
+            FROM aps_snapshots s
+            WHERE s.tenant_id = {tenantId}
+              AND s.deleted_at IS NULL
+              AND s.timestamp >= {from} AND s.timestamp < {to}
+              AND s.predicted_start_timestamp IS NOT NULL
+              AND num_nonnulls(s.predicted_default_json, s.predicted_iob_json, s.predicted_zt_json,
+                               s.predicted_cob_json, s.predicted_uam_json) > 0
+            ORDER BY s.device, floor(extract(epoch FROM s.predicted_start_timestamp) / 300),
+                     s.enacted DESC, s.timestamp DESC, s.id DESC
+            """).ToListAsync(ct);
+
+        return [.. rows
+            .Select(r => new ApsPredictionPoint(
+                DateTime.SpecifyKind(r.PredictedStart, DateTimeKind.Utc),
+                r.Device,
+                r.Enacted,
+                Enum.TryParse<AidAlgorithm>(r.AidAlgorithm, out var algorithm) ? algorithm : AidAlgorithm.Unknown,
+                r.DefaultJson, r.IobJson, r.ZtJson, r.CobJson, r.UamJson))
+            .OrderBy(p => p.PredictedStart)];
+    }
+
+    private sealed class PredictionRow
+    {
+        public DateTime PredictedStart { get; init; }
+        public string? Device { get; init; }
+        public bool Enacted { get; init; }
+        public string AidAlgorithm { get; init; } = "";
+        public string? DefaultJson { get; init; }
+        public string? IobJson { get; init; }
+        public string? ZtJson { get; init; }
+        public string? CobJson { get; init; }
+        public string? UamJson { get; init; }
+    }
+
     /// <summary>
     /// Gets APS snapshots by correlation IDs.
     /// </summary>

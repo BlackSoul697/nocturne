@@ -38,6 +38,18 @@ public interface IApsSnapshotRepository : ILegacyKeyedRepository<ApsSnapshot>
     /// <param name="to">Inclusive end of the time window.</param>
     Task<IReadOnlyList<ApsIobCobPoint>> GetIobCobPointsAsync(DateTime from, DateTime to, CancellationToken ct = default);
 
+    /// <summary>
+    /// The prediction curves of the snapshots within a time window, thinned to at most one per
+    /// device per five minutes of <see cref="ApsSnapshot.PredictedStartTimestamp"/>, ordered by it.
+    /// </summary>
+    /// <remarks>
+    /// Within a five-minute bucket an enacted snapshot wins over one that was not, then the newest.
+    /// Snapshots with no prediction start or no curve are left out.
+    /// </remarks>
+    /// <param name="from">Inclusive start of the window, on the snapshot timestamp.</param>
+    /// <param name="to">Exclusive end of the window.</param>
+    Task<IReadOnlyList<ApsPredictionPoint>> GetPredictionsAsync(DateTime from, DateTime to, CancellationToken ct = default);
+
     /// <summary>Retrieve <see cref="ApsSnapshot"/> records matching any of the given correlation IDs.</summary>
     /// <param name="correlationIds">Correlation IDs to match.</param>
     Task<IEnumerable<ApsSnapshot>> GetByCorrelationIdsAsync(IEnumerable<Guid> correlationIds, CancellationToken ct = default);
