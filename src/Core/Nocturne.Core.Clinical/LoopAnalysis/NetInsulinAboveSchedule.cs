@@ -81,7 +81,6 @@ public sealed record BasalEvidence(IntervalSet Recorded, IntervalSet Unknown, In
 /// </remarks>
 public sealed class NetInsulinAboveSchedule
 {
-
     /// <summary>
     /// The longest stretch with no temp basal record that the schedule is taken to have run
     /// through, and then only with pump evidence (a temp basal record or an APS snapshot) on both
@@ -236,6 +235,10 @@ public sealed class NetInsulinAboveSchedule
     /// point holds only within <see cref="BasalEvidence.Recorded"/> and a schedule-filled one only
     /// within <see cref="BasalEvidence.Inferable"/>; everywhere else delivery is absent.
     /// </summary>
+    /// <remarks>
+    /// A fill that straddles <paramref name="end"/> relies on <c>IBasalSeriesBuilder</c> clamping
+    /// temps to its end, so evidence fetched past it bounds the gap but never counts as delivery.
+    /// </remarks>
     /// <param name="end">Where the last point stops.</param>
     public static List<DeliveredBasalSegment> DeliveredFromSeries(
         IEnumerable<BasalPoint> series, long end, BasalEvidence evidence)

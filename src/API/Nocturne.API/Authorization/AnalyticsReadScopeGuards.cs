@@ -396,8 +396,9 @@ internal static class StatisticsReadScopeGuard
 /// Per-category read scopes for Loop Analysis, admitted on <c>reports.read</c>: glucose is the
 /// glucose category; delivered basal, the insulin above schedule, IOB/COB, boluses and carbs are
 /// treatments; the profile names and the separate schedule series (scheduled basal, target range)
-/// are therapy settings, and the target range also carries temporary targets, so it needs
-/// treatments too. The masks follow the categories of the spans they are drawn from, as
+/// are therapy settings. Both of those series also carry treatments (the scheduled basal is scaled
+/// by any override, the target range overlays temporary targets), so they need treatments too.
+/// The masks follow the categories of the spans they are drawn from, as
 /// <see cref="ChartDataReadScopeGuard"/> serves them: overrides, temporary targets, exercise and
 /// illness are treatments, pump mode and the registered pumps are devices.
 /// </summary>
@@ -455,18 +456,17 @@ internal static class LoopAnalysisReadScopeGuard
         var glucose = AnalyticsReadScopes.Allows(grantedScopes, Scope.GlucoseRead);
         var treatments = AnalyticsReadScopes.Allows(grantedScopes, Scope.TreatmentsRead);
         var therapy = AnalyticsReadScopes.Allows(grantedScopes, Scope.TherapyRead);
-        var devices = AnalyticsReadScopes.Allows(grantedScopes, Scope.DevicesRead);
 
-        if (glucose && treatments && therapy && devices)
+        if (glucose && treatments && therapy)
             return data;
 
-        Narrow(data.Primary, glucose, treatments, therapy, devices);
+        Narrow(data.Primary, glucose, treatments, therapy);
         if (data.Comparison is { } comparison)
-            Narrow(comparison, glucose, treatments, therapy, devices);
+            Narrow(comparison, glucose, treatments, therapy);
         return data;
     }
 
-    private static void Narrow(DailyProfileRange range, bool glucose, bool treatments, bool therapy, bool devices)
+    private static void Narrow(DailyProfileRange range, bool glucose, bool treatments, bool therapy)
     {
         foreach (var slot in range.Slots)
         {
@@ -488,11 +488,9 @@ internal static class LoopAnalysisReadScopeGuard
                 slot.Carbs = null;
             }
 
-            if (!therapy)
-                slot.ScheduledBasal = null;
-
             if (!therapy || !treatments)
             {
+                slot.ScheduledBasal = null;
                 slot.TargetLow = null;
                 slot.TargetHigh = null;
             }
@@ -500,9 +498,6 @@ internal static class LoopAnalysisReadScopeGuard
 
         foreach (var day in range.Days)
         {
-            if (!treatments || !devices)
-                day.Coverage.Analysed = null;
-
             if (!glucose)
                 day.Coverage.Glucose = null;
 
@@ -515,7 +510,7 @@ internal static class LoopAnalysisReadScopeGuard
                 day.TotalInsulin = null;
             }
 
-            if (!therapy)
+            if (!therapy || !treatments)
                 day.Coverage.ScheduledBasal = null;
         }
 

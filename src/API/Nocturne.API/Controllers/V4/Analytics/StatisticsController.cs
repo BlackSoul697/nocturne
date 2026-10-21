@@ -295,7 +295,7 @@ public class StatisticsController : ControllerBase
         CancellationToken cancellationToken = default
     )
     {
-        var clock = await ResolveTenantTimeZoneAsync(cancellationToken);
+        var clock = await _tenantClock.ResolveAsync(cancellationToken);
         return Ok(_statisticsService.CalculateAveragedStats(entries, clock.Zone));
     }
 
@@ -374,7 +374,7 @@ public class StatisticsController : ControllerBase
         CancellationToken cancellationToken = default
     )
     {
-        var clock = await ResolveTenantTimeZoneAsync(cancellationToken);
+        var clock = await _tenantClock.ResolveAsync(cancellationToken);
         var result = _statisticsService.AnalyzeGlucoseDataExtended(
             request.Entries,
             request.Boluses ?? Enumerable.Empty<Bolus>(),
@@ -475,7 +475,7 @@ public class StatisticsController : ControllerBase
             });
         }
 
-        var clock = await ResolveTenantTimeZoneAsync(cancellationToken);
+        var clock = await _tenantClock.ResolveAsync(cancellationToken);
 
         var result = new ReportAnalysisResult
         {
@@ -557,19 +557,12 @@ public class StatisticsController : ControllerBase
         var rawGlucose = (await _sensorGlucoseRepository.GetForAnalyticsAsync(startDt, endDt, null, null, int.MaxValue, descending: false, ct: cancellationToken)).ToList();
         var entries = await _canonicalGlucose.SelectAsync(rawGlucose, cancellationToken);
 
-        var clock = await ResolveTenantTimeZoneAsync(cancellationToken);
+        var clock = await _tenantClock.ResolveAsync(cancellationToken);
 
         var patterns = _statisticsService.CalculateHourlyPatterns(entries, clock.Zone);
         patterns.TimeZoneUnavailableReason = clock.Reason;
         return Ok(patterns);
     }
-
-    /// <summary>
-    /// The tenant's zone, or none and why (<see cref="TenantClockResolver"/>). No zone rather than
-    /// UTC, so the hourly statistics fall back to each reading's own offset instead of shifting
-    /// every hour.
-    /// </summary>
-    private Task<TenantClock> ResolveTenantTimeZoneAsync(CancellationToken ct) => _tenantClock.ResolveAsync(ct);
 
     /// <summary>
     /// Returns the target range schedule active for the tenant's active profile right now, or null
@@ -813,7 +806,7 @@ public class StatisticsController : ControllerBase
         var allGlucose = (await glucoseTask).ToList();
         var allCarbs = (await carbTask).ToList();
         var allDeviceEvents = await sessionTask;
-        var clock = await ResolveTenantTimeZoneAsync(cancellationToken);
+        var clock = await _tenantClock.ResolveAsync(cancellationToken);
 
         foreach (var days in periods)
         {

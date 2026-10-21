@@ -113,16 +113,16 @@ public class LoopAnalysisDailyProfileIntegrationTests(ApiIntegrationTestFixture 
         await SeedWeekAsync(WeekStart, tempRate: 1.5);
         using var client = await CreateTokenClientAsync(scopes);
 
-        var body = await GetOkAsync(client, Query(WeekStart, WeekEnd));
+        var body = await GetOkAsync(client, Query(WeekStart, WeekEnd) + "&excludeIllness=true");
 
         var ten = body.GetProperty("primary").GetProperty("slots")[120];
         Absent(ten, "glucose").Should().Be(!glucose);
         Absent(ten, "deliveredBasal").Should().Be(!treatments);
         Absent(ten, "iob").Should().Be(!treatments);
-        Absent(ten, "scheduledBasal").Should().Be(!therapy);
+        Absent(ten, "scheduledBasal").Should().Be(!(therapy && treatments));
         Absent(ten, "targetLow").Should().Be(!(therapy && treatments));
         var ignored = body.GetProperty("ignoredFilters").EnumerateArray().Select(f => f.GetString()).ToList();
-        ignored.Contains("excludeIllness").Should().Be(!treatments);
+        ignored.Should().Equal(treatments ? [] : ["excludeIllness"], "only a parameter the caller sent is reported");
     }
 
     [Fact]

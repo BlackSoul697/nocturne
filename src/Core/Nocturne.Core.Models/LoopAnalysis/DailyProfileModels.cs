@@ -193,10 +193,7 @@ public class DailyProfileDay
 /// </summary>
 public class DailyProfileDayCoverage
 {
-    /// <summary>
-    /// At least half the slot was analysed, after the filter's masks. Null when the caller cannot
-    /// read every category a mask is drawn from, since the bitmap would show where those masks fell.
-    /// </summary>
+    /// <summary>At least half the slot was analysed, after the filter's masks.</summary>
     public string? Analysed { get; set; }
 
     public string? Glucose { get; set; }
