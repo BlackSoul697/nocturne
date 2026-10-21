@@ -42,6 +42,12 @@ public sealed class ApsLoopCycle
     public bool HasSuggestion { get; init; }
 
     /// <summary>
+    /// The suggestion carries a <c>reason</c>, so <see cref="LimitReason"/> being null says no limit
+    /// cut it.
+    /// </summary>
+    public bool HasReason { get; init; }
+
+    /// <summary>
     /// The suggestion asked for a temp basal (it carries a <c>duration</c>) or a microbolus (it
     /// carries <c>units</c>); null without a suggestion.
     /// </summary>

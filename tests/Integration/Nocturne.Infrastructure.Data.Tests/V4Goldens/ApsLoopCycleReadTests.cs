@@ -39,6 +39,7 @@ public class ApsLoopCycleReadTests(V4GoldenFixture fixture)
         withLimits.Iob.Should().Be(1.5);
         withLimits.SensitivityRatio.Should().Be(1.1);
         withLimits.HasSuggestion.Should().BeTrue();
+        withLimits.HasReason.Should().BeTrue();
         withLimits.SuggestedChange.Should().BeTrue();
         withLimits.LimitReason.Should().Be(CappedReason);
         withLimits.MaxIob.Should().Be(3.5);
@@ -60,6 +61,7 @@ public class ApsLoopCycleReadTests(V4GoldenFixture fixture)
         var loop = cycles[3];
         loop.AidAlgorithm.Should().Be(AidAlgorithm.Loop);
         loop.HasSuggestion.Should().BeFalse();
+        loop.HasReason.Should().BeFalse();
         loop.SuggestedChange.Should().BeNull();
         loop.EnactedBolusVolume.Should().Be(0.3);
     }

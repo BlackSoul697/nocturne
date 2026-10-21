@@ -8,8 +8,10 @@ using Nocturne.Core.Models.V4;
 
 namespace Nocturne.API.Services.Analytics;
 
-/// <summary>The records <see cref="AidSystemMetrics"/> is assembled from, read for one window.</summary>
-/// <param name="Glucose">Canonical readings (<see cref="ICanonicalGlucoseService"/>).</param>
+/// <summary>
+/// The records <see cref="AidSystemMetrics"/> is assembled from, read for one window; the glucose
+/// readings are the canonical ones (<see cref="ICanonicalGlucoseService"/>).
+/// </summary>
 public sealed record AidSystemMetricsRecords(
     IReadOnlyList<PatientDevice> Devices,
     IReadOnlyList<ApsLoopCycle> LoopCycles,

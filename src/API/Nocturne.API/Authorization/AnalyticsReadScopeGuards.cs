@@ -410,6 +410,12 @@ internal static class StatisticsReadScopeGuard
 /// its scheduled rate under that scope. <c>therapy.read</c> gates the schedule and target series
 /// served in their own right, and the profile names.
 /// </para>
+/// <para>
+/// Loop health reads the APS loop cycles, which are devices: the loop gaps, the cap and
+/// <c>max_iob</c> shares, the suggestions and the sensitivity ratio. Zero delivery and the
+/// automatic boluses are treatments; the closed-loop and pump shares, and the unrecorded delivery
+/// gaps, draw on both. The limits are therapy settings, and oref's are reported by the cycles.
+/// </para>
 /// <para>The response is built per request and never cached server-side, so it is narrowed in place.</para>
 /// </remarks>
 /// <seealso cref="AnalyticsReadScopes"/>
@@ -464,6 +470,66 @@ internal static class LoopAnalysisReadScopeGuard
         if (data.Comparison is { } comparison)
             Narrow(comparison, glucose, treatments, therapy);
         return data;
+    }
+
+    public static LoopHealthResponse Redact(LoopHealthResponse data, IReadOnlySet<string> grantedScopes)
+    {
+        var glucose = AnalyticsReadScopes.Allows(grantedScopes, Scope.GlucoseRead);
+        var treatments = AnalyticsReadScopes.Allows(grantedScopes, Scope.TreatmentsRead);
+        var devices = AnalyticsReadScopes.Allows(grantedScopes, Scope.DevicesRead);
+        var therapy = AnalyticsReadScopes.Allows(grantedScopes, Scope.TherapyRead);
+
+        if (glucose && treatments && devices && therapy)
+            return data;
+
+        Narrow(data.Primary, glucose, treatments, devices, therapy);
+        if (data.Comparison is { } comparison)
+            Narrow(comparison, glucose, treatments, devices, therapy);
+        return data;
+    }
+
+    private static void Narrow(LoopHealthRange range, bool glucose, bool treatments, bool devices, bool therapy)
+    {
+        if (!glucose)
+        {
+            range.Activity.Cgm = null;
+            range.Activity.CgmActivePercent = null;
+        }
+
+        if (!treatments || !devices)
+        {
+            range.Activity.ClosedLoop = null;
+            range.Activity.Pump = null;
+            range.Activity.AidActivePercent = null;
+            range.Activity.PumpUsePercent = null;
+            range.Cadence.UnrecordedDelivery = null;
+        }
+
+        if (!treatments)
+        {
+            range.ZeroDelivery = null;
+            range.AutomaticBoluses = null;
+        }
+
+        if (!devices)
+        {
+            range.Cadence.LoopGaps = null;
+            range.MaxBasal = null;
+            range.AtMaxIob = null;
+            range.SuggestedNotEnacted = null;
+            range.SensitivityRatio = null;
+        }
+
+        if (!therapy)
+            range.Limits.LoopMaximumBasalRate = null;
+
+        if (!therapy || !devices)
+        {
+            range.Limits.OrefMaxIob = null;
+            range.Limits.OrefMaxBasal = null;
+            range.Limits.OrefMaxDailySafetyMultiplier = null;
+            range.Limits.OrefCurrentBasalSafetyMultiplier = null;
+        }
     }
 
     private static void Narrow(DailyProfileRange range, bool glucose, bool treatments, bool therapy)

@@ -69,20 +69,8 @@ public class LoopAnalysisController(ILoopAnalysisService service, TimeProvider t
         CancellationToken cancellationToken = default)
     {
         if (TryBuildFilter(
-                new LoopAnalysisFilter
-                {
-                    From = from,
-                    To = to,
-                    CompareFrom = compareFrom,
-                    CompareTo = compareTo,
-                    Days = days?.ToList(),
-                    ExcludeOverrides = excludeOverrides,
-                    ExcludeTemporaryTargets = excludeTemporaryTargets,
-                    ExcludeExercise = excludeExercise,
-                    ExcludeIllness = excludeIllness,
-                    ExcludeOpenLoop = excludeOpenLoop,
-                    ProfileName = profileName,
-                },
+                Filter(from, to, compareFrom, compareTo, days, excludeOverrides, excludeTemporaryTargets,
+                    excludeExercise, excludeIllness, excludeOpenLoop, profileName),
                 out var request) is { } invalid)
             return invalid;
 
@@ -91,6 +79,71 @@ public class LoopAnalysisController(ILoopAnalysisService service, TimeProvider t
         result.IgnoredFilters = request.IgnoredFilters;
         return Ok(LoopAnalysisReadScopeGuard.Redact(result, HttpContext.GetGrantedScopes()));
     }
+
+    /// <summary>
+    /// How the loop ran, each figure for the range and by local hour of the day: closed-loop, pump
+    /// and CGM time, gaps between loop cycles and in the pump's delivery records, zero delivery by
+    /// origin, time at the effective maximum basal rate and which cap bound it, time at oref's
+    /// <c>max_iob</c>, automatic boluses, suggestions not enacted and the sensitivity ratio.
+    /// </summary>
+    /// <inheritdoc cref="GetDailyProfile" path="/param"/>
+    [HttpGet("loop-health")]
+    [RemoteQuery]
+    [RequireScope(LoopAnalysisReadScopeGuard.AdmissionScope)]
+    [ResponseCache(Duration = 60, Location = ResponseCacheLocation.Client)]
+    [ProducesResponseType(typeof(LoopHealthResponse), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    public async Task<ActionResult<LoopHealthResponse>> GetLoopHealth(
+        [FromQuery] DateTime from,
+        [FromQuery] DateTime to,
+        [FromQuery] DateTime? compareFrom = null,
+        [FromQuery] DateTime? compareTo = null,
+        [FromQuery] DayOfWeek[]? days = null,
+        [FromQuery] bool excludeOverrides = false,
+        [FromQuery] bool excludeTemporaryTargets = false,
+        [FromQuery] bool excludeExercise = false,
+        [FromQuery] bool excludeIllness = true,
+        [FromQuery] bool excludeOpenLoop = true,
+        [FromQuery] string? profileName = null,
+        CancellationToken cancellationToken = default)
+    {
+        if (TryBuildFilter(
+                Filter(from, to, compareFrom, compareTo, days, excludeOverrides, excludeTemporaryTargets,
+                    excludeExercise, excludeIllness, excludeOpenLoop, profileName),
+                out var request) is { } invalid)
+            return invalid;
+
+        var result = await service.GetLoopHealthAsync(request.Filter, cancellationToken);
+        result.HistoryClamped = request.HistoryClamped;
+        result.IgnoredFilters = request.IgnoredFilters;
+        return Ok(LoopAnalysisReadScopeGuard.Redact(result, HttpContext.GetGrantedScopes()));
+    }
+
+    private static LoopAnalysisFilter Filter(
+        DateTime from,
+        DateTime to,
+        DateTime? compareFrom,
+        DateTime? compareTo,
+        DayOfWeek[]? days,
+        bool excludeOverrides,
+        bool excludeTemporaryTargets,
+        bool excludeExercise,
+        bool excludeIllness,
+        bool excludeOpenLoop,
+        string? profileName) => new()
+    {
+        From = from,
+        To = to,
+        CompareFrom = compareFrom,
+        CompareTo = compareTo,
+        Days = days?.ToList(),
+        ExcludeOverrides = excludeOverrides,
+        ExcludeTemporaryTargets = excludeTemporaryTargets,
+        ExcludeExercise = excludeExercise,
+        ExcludeIllness = excludeIllness,
+        ExcludeOpenLoop = excludeOpenLoop,
+        ProfileName = profileName,
+    };
 
     private sealed record FilterRequest(LoopAnalysisFilter Filter, List<string> IgnoredFilters, bool HistoryClamped);
 

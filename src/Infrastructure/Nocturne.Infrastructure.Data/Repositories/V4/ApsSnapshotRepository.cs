@@ -77,6 +77,7 @@ public class ApsSnapshotRepository : SyncUpsertRepositoryBase<ApsSnapshot, ApsSn
                 e.Iob,
                 e.SensitivityRatio,
                 HasSuggestion = e.SuggestedJson != null,
+                HasReason = Jsonb.Text(e.SuggestedJson, "reason") != null,
                 SuggestedChange = e.SuggestedJson == null
                     ? (bool?)null
                     : Jsonb.Text(e.SuggestedJson, "duration") != null || Jsonb.Text(e.SuggestedJson, "units") != null,
@@ -103,6 +104,7 @@ public class ApsSnapshotRepository : SyncUpsertRepositoryBase<ApsSnapshot, ApsSn
             Iob = r.Iob,
             SensitivityRatio = r.SensitivityRatio,
             HasSuggestion = r.HasSuggestion,
+            HasReason = r.HasReason,
             SuggestedChange = r.SuggestedChange,
             LimitReason = r.LimitReason,
             MaxIob = Number(r.MaxIob),
