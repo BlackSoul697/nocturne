@@ -204,7 +204,7 @@ public class HubTokenAuthorizer : IHubTokenAuthorizer
             ClientId = claims.ClientId,
             Source = new HubCredentialSource(
                 AuthType.OAuthAccessToken, claims.SubjectId, claims.GrantId,
-                Scope.Normalize(claims.Scopes), claims.LimitTo24Hours, ExpiresAt: null),
+                Scope.Normalize(claims.Scopes), claims.LimitTo24Hours, claims.ExpiresAt),
         };
     }
 

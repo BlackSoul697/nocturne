@@ -85,7 +85,15 @@ public sealed class HubConnectionRevalidator(
             {
                 try
                 {
+                    var started = timeProvider.GetTimestamp();
                     await RevalidateAsync(stoppingToken);
+                    var elapsed = timeProvider.GetElapsedTime(started);
+                    if (elapsed > Interval)
+                    {
+                        logger.LogWarning(
+                            "Hub connection re-check sweep of {Count} connections took {Elapsed}, longer than its {Interval} interval",
+                            _connections.Count, elapsed, Interval);
+                    }
                 }
                 catch (Exception ex) when (ex is not OperationCanceledException || !stoppingToken.IsCancellationRequested)
                 {

@@ -18,9 +18,10 @@ namespace Nocturne.API.Hubs;
 /// <param name="CredentialScopes">Its own scopes, before a membership intersects them.</param>
 /// <param name="LimitTo24Hours">Its own history limit, before a membership's is combined.</param>
 /// <param name="ExpiresAt">
-/// When it lapses. Read only for <see cref="Core.Models.Authorization.AuthType.PlatformAccess"/>,
-/// whose token is the time-boxed grant itself; every other access token is short-lived and renewed,
-/// so its lifetime says nothing about whether the access behind it still stands.
+/// When the presented token lapses. Read only for a credential with no server-side record to prove
+/// it by (a grant-less token) and for platform access, whose token is the time-boxed grant itself.
+/// A grant-backed token or a session login is renewed while its record stands, so its token's
+/// lifetime says nothing about whether the access behind it does.
 /// </param>
 public sealed record HubCredentialSource(
     AuthType AuthType,
@@ -106,6 +107,10 @@ public sealed class HubCredentialVerifier(IServiceProvider services, TimeProvide
             return await scope.ServiceProvider.GetRequiredService<IGuestLinkService>().ValidateSessionAsync(grantId);
         });
 
+    private async Task<bool> IsTokenRevokedAsync(Guid jti) =>
+        await Memo<object>(("jti", jti), async () =>
+            await services.GetRequiredService<IOAuthTokenRevocationCache>().IsRevokedAsync(jti.ToString())) is true;
+
     private bool IsLive(GrantState? grant) =>
         grant is { RevokedAt: null } && (grant.ExpiresAt is null || grant.ExpiresAt > _now);
 
@@ -145,6 +150,7 @@ public sealed class HubCredentialVerifier(IServiceProvider services, TimeProvide
                 return source.SubjectId is { } admin
                        && await SubjectAsync(admin) is { IsActive: true, IsPlatformAdmin: true }
                        && (source.ExpiresAt is null || source.ExpiresAt > timeProvider.GetUtcNow())
+                       && !(source.GrantId is { } jti && await IsTokenRevokedAsync(jti))
                     ? granted
                     : null;
         }
@@ -172,11 +178,18 @@ public sealed class HubCredentialVerifier(IServiceProvider services, TimeProvide
         }
         else if (source.GrantId is { } tokenGrant)
         {
-            if (await GrantAsync(tenant.TenantId, tokenGrant) is not { RevokedAt: null })
+            if (!IsLive(await GrantAsync(tenant.TenantId, tokenGrant)))
                 return null;
         }
-        else if (source.AuthType is AuthType.SessionCookie && !await HasSessionAsync(subjectId))
+        else if (source.AuthType is AuthType.SessionCookie)
         {
+            if (!await HasSessionAsync(subjectId))
+                return null;
+        }
+        else if (source.ExpiresAt is not { } expiresAt || expiresAt <= timeProvider.GetUtcNow())
+        {
+            // Nothing server-side stands behind a grant-less token, so it lasts only as long as
+            // the token itself.
             return null;
         }
 

@@ -42,6 +42,7 @@ public class HubCredentialVerifierTests
     private readonly Mock<ITenantMemberService> _members = new();
     private readonly Mock<IGuestLinkService> _guestLinks = new();
     private readonly Mock<ITenantOverviewService> _overview = new();
+    private readonly Mock<IOAuthTokenRevocationCache> _revokedTokens = new();
 
     private static readonly IReadOnlySet<string> MemberPermissions =
         new HashSet<string> { Scope.GlucoseRead, Scope.AlertsRead };
@@ -102,12 +103,14 @@ public class HubCredentialVerifierTests
             .AddSingleton(_members.Object)
             .AddSingleton(_guestLinks.Object)
             .AddSingleton(_overview.Object)
+            .AddSingleton(_revokedTokens.Object)
             .AddScoped<ITenantAccessor, HttpContextTenantAccessor>()
             .BuildServiceProvider();
         return new HubCredentialVerifier(services, TimeProvider.System);
     }
 
-    private HubAuthorization Credential(AuthType authType, Guid? grantId, HubCredentialKind kind = HubCredentialKind.Subject) =>
+    private HubAuthorization Credential(
+        AuthType authType, Guid? grantId, HubCredentialKind kind = HubCredentialKind.Subject, TimeSpan? expiresIn = null) =>
         new(Tenant, new HashSet<string>(), kind, authType is AuthType.Guest ? null : _subject, HistoryClamped: false)
         {
             Source = new HubCredentialSource(
@@ -116,7 +119,7 @@ public class HubCredentialVerifierTests
                 grantId,
                 Scope.Normalize([Scope.GlucoseRead, Scope.AlertsRead]),
                 LimitTo24Hours: false,
-                ExpiresAt: DateTimeOffset.UtcNow.AddMinutes(-30)),
+                ExpiresAt: DateTimeOffset.UtcNow + (expiresIn ?? TimeSpan.FromMinutes(-30))),
         };
 
     /// <summary>The credential as the connection was admitted with it, proven from the seeded state.</summary>
@@ -177,10 +180,47 @@ public class HubCredentialVerifierTests
     public async Task A_removed_member_loses_the_credential(AuthType authType)
     {
         await SeedAsync();
-        var admitted = await AdmittedAsync(Credential(authType, authType is AuthType.LegacyJwt ? null : _grant));
+        var admitted = await AdmittedAsync(
+            Credential(authType, authType is AuthType.LegacyJwt ? null : _grant, expiresIn: TimeSpan.FromMinutes(5)));
 
         Member(null, limitTo24Hours: false);
 
+        (await StillCoveredAsync(admitted)).Should().BeFalse();
+    }
+
+    [Theory]
+    [InlineData(AuthType.OAuthAccessToken)]
+    [InlineData(AuthType.LegacyJwt)]
+    [InlineData(AuthType.OidcToken)]
+    public async Task A_token_with_no_grant_behind_it_lasts_only_as_long_as_the_token(AuthType authType)
+    {
+        await SeedAsync();
+        var live = Credential(authType, null, expiresIn: TimeSpan.FromMinutes(5));
+        var admitted = await AdmittedAsync(live);
+        (await StillCoveredAsync(admitted)).Should().BeTrue();
+
+        var lapsed = admitted with { Source = admitted.Source! with { ExpiresAt = DateTimeOffset.UtcNow.AddSeconds(-1) } };
+
+        (await Verifier().ProveAsync(lapsed, TenantContext)).Should().BeNull();
+    }
+
+    [Theory]
+    [InlineData(AuthType.LegacyJwt)]
+    [InlineData(AuthType.OAuthAccessToken)]
+    public async Task A_token_minted_from_a_grant_ends_when_the_grant_is_revoked_or_expires(AuthType authType)
+    {
+        await SeedAsync();
+        var admitted = await AdmittedAsync(Credential(authType, _grant));
+
+        await UpdateAsync(db => db.OAuthGrants.Single().ExpiresAt = DateTime.UtcNow.AddMinutes(-1));
+        (await StillCoveredAsync(admitted)).Should().BeFalse();
+
+        await UpdateAsync(db =>
+        {
+            var grant = db.OAuthGrants.Single();
+            grant.ExpiresAt = null;
+            grant.RevokedAt = DateTime.UtcNow;
+        });
         (await StillCoveredAsync(admitted)).Should().BeFalse();
     }
 
@@ -268,6 +308,23 @@ public class HubCredentialVerifierTests
         (await StillCoveredAsync(credential)).Should().BeTrue();
 
         await UpdateAsync(db => db.Subjects.Single().IsPlatformAdmin = false);
+
+        (await StillCoveredAsync(credential)).Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task Platform_access_ends_when_its_token_is_revoked()
+    {
+        await SeedAsync(platformAdmin: true);
+        var jti = Guid.NewGuid();
+        var credential = Credential(AuthType.PlatformAccess, jti) with
+        {
+            Scopes = new HashSet<string> { Scope.FullAccess },
+            Source = Credential(AuthType.PlatformAccess, jti).Source! with { ExpiresAt = DateTimeOffset.UtcNow.AddHours(1) },
+        };
+        (await StillCoveredAsync(credential)).Should().BeTrue();
+
+        _revokedTokens.Setup(r => r.IsRevokedAsync(jti.ToString(), It.IsAny<CancellationToken>())).ReturnsAsync(true);
 
         (await StillCoveredAsync(credential)).Should().BeFalse();
     }
