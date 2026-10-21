@@ -21,6 +21,10 @@ public interface IOAuthGrantService
     /// Whether tokens minted from the grant may read only the last 24 hours. The latest consent
     /// sets it, as it does the label.
     /// </param>
+    /// <param name="approvedByDeviceCode">
+    /// Whether a device-code approval is creating or updating the grant. Once set it stays set, and
+    /// the grant's client is no longer reported as verified.
+    /// </param>
     Task<OAuthGrantInfo> CreateOrUpdateGrantAsync(
         Guid clientEntityId,
         Guid subjectId,
@@ -28,6 +32,7 @@ public interface IOAuthGrantService
         string grantType = OAuthGrantTypes.App,
         string? label = null,
         bool limitTo24Hours = false,
+        bool approvedByDeviceCode = false,
         CancellationToken ct = default
     );
 
@@ -116,8 +121,11 @@ public class OAuthGrantInfo
     /// <summary>Logo URI of the client, if any.</summary>
     public string? LogoUri { get; set; }
 
-    /// <summary>Whether the client comes from the bundled known-app directory.</summary>
-    public bool IsKnownClient { get; set; }
+    /// <summary>
+    /// Whether the client comes from the bundled known-app directory and no device-code approval
+    /// has added to the grant, the device flow being unable to show which software it serves.
+    /// </summary>
+    public bool IsVerifiedClient { get; set; }
 
     /// <summary>The subject (user) who granted access.</summary>
     public Guid SubjectId { get; set; }

@@ -80,14 +80,15 @@ public class OAuthGrantServiceTests : IDisposable
         return _db.CreateContext();
     }
 
-    private async Task SeedClientAsync(NocturneDbContext db, Guid? id = null, string? clientId = null)
+    private async Task SeedClientAsync(
+        NocturneDbContext db, Guid? id = null, string? clientId = null, bool isKnown = false)
     {
         db.OAuthClients.Add(new OAuthClientEntity
         {
             Id = id ?? _testClientEntityId,
             ClientId = clientId ?? TestClientId,
             DisplayName = "Test App",
-            IsKnown = false,
+            IsKnown = isKnown,
             RedirectUris = "[]",
             CreatedAt = DateTime.UtcNow,
             UpdatedAt = DateTime.UtcNow,
@@ -129,6 +130,60 @@ public class OAuthGrantServiceTests : IDisposable
         });
         await db.SaveChangesAsync();
         return id;
+    }
+
+    // ---------------------------------------------------------------
+    // IsVerifiedClient
+    // ---------------------------------------------------------------
+
+    [Theory]
+    [InlineData(false, true)]
+    [InlineData(true, false)]
+    public async Task AKnownClientIsVerifiedOnlyWhenNoDeviceCodeApprovedTheGrant(
+        bool approvedByDeviceCode, bool verified)
+    {
+        using var db = CreateDbContext();
+        await SeedClientAsync(db, isKnown: true);
+        await SeedSubjectAsync(db, _ownerSubjectId, "Owner");
+        var service = CreateService(db);
+
+        var created = await service.CreateOrUpdateGrantAsync(
+            _testClientEntityId, _ownerSubjectId, [Scope.GlucoseRead],
+            approvedByDeviceCode: approvedByDeviceCode);
+        var listed = await service.GetGrantsForSubjectAsync(_ownerSubjectId);
+
+        created.IsVerifiedClient.Should().Be(verified);
+        listed.Should().ContainSingle().Which.IsVerifiedClient.Should().Be(verified);
+    }
+
+    [Fact]
+    public async Task AGrantADeviceCodeApprovedStaysUnverifiedAfterALaterConsent()
+    {
+        using var db = CreateDbContext();
+        await SeedClientAsync(db, isKnown: true);
+        await SeedSubjectAsync(db, _ownerSubjectId, "Owner");
+        var service = CreateService(db);
+
+        await service.CreateOrUpdateGrantAsync(
+            _testClientEntityId, _ownerSubjectId, [Scope.GlucoseRead], approvedByDeviceCode: true);
+        var consented = await service.CreateOrUpdateGrantAsync(
+            _testClientEntityId, _ownerSubjectId, [Scope.TreatmentsRead]);
+
+        consented.IsVerifiedClient.Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task AnUnknownClientIsNeverVerified()
+    {
+        using var db = CreateDbContext();
+        await SeedClientAsync(db);
+        await SeedSubjectAsync(db, _ownerSubjectId, "Owner");
+        var service = CreateService(db);
+
+        var grant = await service.CreateOrUpdateGrantAsync(
+            _testClientEntityId, _ownerSubjectId, [Scope.GlucoseRead]);
+
+        grant.IsVerifiedClient.Should().BeFalse();
     }
 
     // ---------------------------------------------------------------

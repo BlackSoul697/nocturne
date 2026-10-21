@@ -75,7 +75,7 @@ public class ConnectedAppsController : ControllerBase
                 ClientName = g.ClientDisplayName,
                 ClientUri = g.ClientUri,
                 LogoUri = g.LogoUri,
-                IsVerified = g.IsKnownClient,
+                IsVerified = g.IsVerifiedClient,
                 Scopes = g.Scopes,
                 Label = g.Label,
                 CreatedAt = g.CreatedAt,

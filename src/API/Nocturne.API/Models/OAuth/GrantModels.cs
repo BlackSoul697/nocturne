@@ -25,10 +25,8 @@ public class OAuthGrantDto
     /// </summary>
     public string? ClientDisplayName { get; set; }
 
-    /// <summary>
-    /// Whether the associated client is a recognized/trusted application.
-    /// </summary>
-    public bool IsKnownClient { get; set; }
+    /// <inheritdoc cref="Nocturne.Core.Contracts.Auth.OAuthGrantInfo.IsVerifiedClient"/>
+    public bool IsVerifiedClient { get; set; }
 
     /// <summary>
     /// OAuth scopes authorized by this grant.
