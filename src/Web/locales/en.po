@@ -5136,10 +5136,8 @@ msgstr "Device Category"
 msgid "Manufacturer"
 msgstr "Manufacturer"
 
-#: src/lib/components/patient/PatientDeviceManager.svelte
-#: src/lib/components/patient/PatientDeviceManager.svelte
-msgid "Model"
-msgstr "Model"
+#~ msgid "Model"
+#~ msgstr "Model"
 
 #: src/lib/components/patient/PatientDeviceManager.svelte
 #: src/lib/components/patient/PatientDeviceManager.svelte
@@ -7006,6 +7004,8 @@ msgstr "Add a rule to set processing defaults based on the uploading client."
 msgid "App"
 msgstr "App"
 
+#: src/lib/components/patient/PatientDeviceManager.svelte
+#: src/lib/components/patient/PatientDeviceManager.svelte
 #: src/lib/components/settings/GlucoseSourceDefaultsDialog.svelte
 #: src/lib/components/settings/GlucoseSourceDefaultsDialog.svelte
 #: src/lib/components/status-pills/IOBPill.svelte
@@ -27108,3 +27108,20 @@ msgstr "Creates an API key for {0} with read and write access to health data."
 #: src/lib/components/connectors/UploaderSetupDialog.svelte
 msgid "In AAPS, open Config Builder, then Synchronization, and select NSClient V3. In its settings, paste the URL into Nightscout URL and the API key into NS access token."
 msgstr "In AAPS, open Config Builder, then Synchronization, and select NSClient V3. In its settings, paste the URL into Nightscout URL and the API key into NS access token."
+
+#: src/lib/components/patient/DeviceNameCombobox.svelte
+msgid "Search devices..."
+msgstr "Search devices..."
+
+#: src/lib/components/patient/DeviceNameCombobox.svelte
+msgid "Search or type a device name..."
+msgstr "Search or type a device name..."
+
+#. 0: typed
+#: src/lib/components/patient/DeviceNameCombobox.svelte
+msgid "<0/> Use \"{0}\""
+msgstr "<0/> Use \"{0}\""
+
+#: src/lib/components/patient/DeviceNameCombobox.svelte
+msgid "No devices found."
+msgstr "No devices found."

@@ -5136,10 +5136,8 @@ msgstr ""
 msgid "Manufacturer"
 msgstr ""
 
-#: src/lib/components/patient/PatientDeviceManager.svelte
-#: src/lib/components/patient/PatientDeviceManager.svelte
-msgid "Model"
-msgstr ""
+#~ msgid "Model"
+#~ msgstr ""
 
 #: src/lib/components/patient/PatientDeviceManager.svelte
 #: src/lib/components/patient/PatientDeviceManager.svelte
@@ -7006,6 +7004,8 @@ msgstr ""
 msgid "App"
 msgstr ""
 
+#: src/lib/components/patient/PatientDeviceManager.svelte
+#: src/lib/components/patient/PatientDeviceManager.svelte
 #: src/lib/components/settings/GlucoseSourceDefaultsDialog.svelte
 #: src/lib/components/settings/GlucoseSourceDefaultsDialog.svelte
 #: src/lib/components/status-pills/IOBPill.svelte
@@ -27107,4 +27107,21 @@ msgstr ""
 
 #: src/lib/components/connectors/UploaderSetupDialog.svelte
 msgid "In AAPS, open Config Builder, then Synchronization, and select NSClient V3. In its settings, paste the URL into Nightscout URL and the API key into NS access token."
+msgstr ""
+
+#: src/lib/components/patient/DeviceNameCombobox.svelte
+msgid "Search devices..."
+msgstr ""
+
+#: src/lib/components/patient/DeviceNameCombobox.svelte
+msgid "Search or type a device name..."
+msgstr ""
+
+#. 0: typed
+#: src/lib/components/patient/DeviceNameCombobox.svelte
+msgid "<0/> Use \"{0}\""
+msgstr ""
+
+#: src/lib/components/patient/DeviceNameCombobox.svelte
+msgid "No devices found."
 msgstr ""
