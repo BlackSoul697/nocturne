@@ -189,13 +189,13 @@ public class ProfileDecomposer : DecomposerBase, IProfileDecomposer, IDecomposer
         var newest = entries
             .Select(e => e.Profile)
             .Distinct()
-            .OrderByDescending(p => p.Mills)
+            .OrderByDescending(VersionStart)
             .ThenByDescending(p => p.Id, StringComparer.Ordinal)
             .First();
 
         var storedNewest = await _therapySettingsRepo.GetNewestDocumentRowAsync(ct);
         var claims = storedNewest is null
-            || storedNewest.Mills <= newest.Mills
+            || storedNewest.Timestamp <= VersionStart(newest)
             || storedNewest.LegacyId?.StartsWith($"{newest.Id}:", StringComparison.Ordinal) == true;
         if (!claims)
             return new DefaultClaim(false, null);
@@ -235,6 +235,30 @@ public class ProfileDecomposer : DecomposerBase, IProfileDecomposer, IDecomposer
 
     #region Mapping Methods
 
+    /// <summary>
+    /// The instant every version decomposed from <paramref name="profile"/> starts: its <c>startDate</c>,
+    /// else its <c>mills</c>, else its <c>created_at</c>, else the epoch.
+    /// </summary>
+    /// <remarks>
+    /// <c>startDate</c> leads as in Nightscout, which sets a document's <c>mills</c> from it on load
+    /// (profilefunctions.js), so an editor that changes it and echoes the <c>mills</c> it read moves
+    /// the document.
+    /// </remarks>
+    internal static DateTime VersionStart(Profile profile)
+    {
+        if (UploaderTimestamp.ParseUtcDateTime(profile.StartDate) is { } start)
+            return start;
+
+        // NIGHTSCOUT-COMPAT: Nightscout gives a document with no readable startDate no time (NaN), so it
+        // is never in force at a time and is read only when it heads the list. Its mills or created_at
+        // place it where its client meant it instead. A zone-less startDate is read as UTC where
+        // Nightscout reads it in the server's zone, which is UTC in its container image.
+        if (profile.Mills != 0)
+            return DateTimeOffset.FromUnixTimeMilliseconds(profile.Mills).UtcDateTime;
+
+        return UploaderTimestamp.ParseUtcDateTime(profile.CreatedAt) ?? DateTime.UnixEpoch;
+    }
+
     internal static V4Models.TherapySettings MapToTherapySettings(
         Profile profile,
         ProfileData profileData,
@@ -246,7 +270,7 @@ public class ProfileDecomposer : DecomposerBase, IProfileDecomposer, IDecomposer
         return new V4Models.TherapySettings
         {
             LegacyId = legacyId,
-            Timestamp = DateTimeOffset.FromUnixTimeMilliseconds(profile.Mills).UtcDateTime,
+            Timestamp = VersionStart(profile),
             ProfileName = storeName,
             Timezone = profileData.Timezone,
             Units = profileData.Units ?? profile.Units,
@@ -282,7 +306,7 @@ public class ProfileDecomposer : DecomposerBase, IProfileDecomposer, IDecomposer
         return new V4Models.BasalSchedule
         {
             LegacyId = legacyId,
-            Timestamp = DateTimeOffset.FromUnixTimeMilliseconds(profile.Mills).UtcDateTime,
+            Timestamp = VersionStart(profile),
             ProfileName = storeName,
             Entries = ConvertTimeValues(profileData.Basal),
             Device = profile.EnteredBy,
@@ -300,7 +324,7 @@ public class ProfileDecomposer : DecomposerBase, IProfileDecomposer, IDecomposer
         return new V4Models.CarbRatioSchedule
         {
             LegacyId = legacyId,
-            Timestamp = DateTimeOffset.FromUnixTimeMilliseconds(profile.Mills).UtcDateTime,
+            Timestamp = VersionStart(profile),
             ProfileName = storeName,
             Entries = ConvertTimeValues(profileData.CarbRatio),
             Device = profile.EnteredBy,
@@ -318,7 +342,7 @@ public class ProfileDecomposer : DecomposerBase, IProfileDecomposer, IDecomposer
         return new V4Models.SensitivitySchedule
         {
             LegacyId = legacyId,
-            Timestamp = DateTimeOffset.FromUnixTimeMilliseconds(profile.Mills).UtcDateTime,
+            Timestamp = VersionStart(profile),
             ProfileName = storeName,
             Entries = ConvertSensitivityValues(profileData.Sens, profileData.Units ?? profile.Units),
             Device = profile.EnteredBy,
@@ -347,7 +371,7 @@ public class ProfileDecomposer : DecomposerBase, IProfileDecomposer, IDecomposer
         return new V4Models.TargetRangeSchedule
         {
             LegacyId = legacyId,
-            Timestamp = DateTimeOffset.FromUnixTimeMilliseconds(profile.Mills).UtcDateTime,
+            Timestamp = VersionStart(profile),
             ProfileName = storeName,
             Entries = entries,
             Device = profile.EnteredBy,
