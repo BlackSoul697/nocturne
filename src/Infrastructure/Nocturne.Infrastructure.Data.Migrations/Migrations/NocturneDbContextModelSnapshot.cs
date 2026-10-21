@@ -8626,14 +8626,22 @@ namespace Nocturne.Infrastructure.Data.Migrations
                         .HasColumnType("uuid")
                         .HasColumnName("patient_device_id");
 
+                    b.Property<double?>("Percent")
+                        .HasColumnType("double precision")
+                        .HasColumnName("percent");
+
                     b.Property<string>("PumpRecordId")
                         .HasMaxLength(256)
                         .HasColumnType("character varying(256)")
                         .HasColumnName("pump_record_id");
 
-                    b.Property<double>("Rate")
+                    b.Property<double?>("Rate")
                         .HasColumnType("double precision")
                         .HasColumnName("rate");
+
+                    b.Property<bool>("RateFromSchedule")
+                        .HasColumnType("boolean")
+                        .HasColumnName("rate_from_schedule");
 
                     b.Property<double?>("ScheduledRate")
                         .HasColumnType("double precision")

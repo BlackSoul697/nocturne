@@ -67,6 +67,7 @@ public class TreatmentDecomposer : DecomposerBase, ITreatmentDecomposer, IDecomp
     private readonly IProfileDecomposer _profileDecomposer;
     private readonly IActiveProfileResolver _activeProfileResolver;
     private readonly IPatientInsulinRepository _insulinRepo;
+    private readonly RelativeTempBasalRates _relativeTempBasalRates;
     private readonly IAuditContext _auditContext;
 
     /// <summary>
@@ -97,6 +98,7 @@ public class TreatmentDecomposer : DecomposerBase, ITreatmentDecomposer, IDecomp
         IProfileDecomposer profileDecomposer,
         IActiveProfileResolver activeProfileResolver,
         IPatientInsulinRepository insulinRepo,
+        RelativeTempBasalRates relativeTempBasalRates,
         IAuditContext auditContext,
         ILogger<TreatmentDecomposer> logger,
         IDeviceEventReactor? deviceEventReactor = null)
@@ -120,6 +122,7 @@ public class TreatmentDecomposer : DecomposerBase, ITreatmentDecomposer, IDecomp
         _profileDecomposer = profileDecomposer;
         _activeProfileResolver = activeProfileResolver;
         _insulinRepo = insulinRepo;
+        _relativeTempBasalRates = relativeTempBasalRates;
         _auditContext = auditContext;
     }
 
@@ -164,6 +167,12 @@ public class TreatmentDecomposer : DecomposerBase, ITreatmentDecomposer, IDecomp
     /// (event type, exact time, source, and all dose/value fields), so only byte-identical
     /// re-uploads of the same event collapse — distinct events never share an id.
     /// </summary>
+    /// <summary>
+    /// <see cref="Treatment.Absolute"/> as it read before it stopped reading through
+    /// <see cref="Treatment.Rate"/> beside a percent, so ids and fingerprints already stored still match.
+    /// </summary>
+    private static double? HashedAbsolute(Treatment t) => t.Absolute ?? t.Rate;
+
     internal static string ComputeSyntheticId(Treatment t)
     {
         var canonical = string.Join(
@@ -176,7 +185,7 @@ public class TreatmentDecomposer : DecomposerBase, ITreatmentDecomposer, IDecomp
             Fmt(t.Glucose),
             t.GlucoseType,
             Fmt(t.Duration),
-            Fmt(t.Absolute),
+            Fmt(HashedAbsolute(t)),
             Fmt(t.Rate),
             Fmt(t.Percent),
             t.Notes);
@@ -727,8 +736,13 @@ public class TreatmentDecomposer : DecomposerBase, ITreatmentDecomposer, IDecomp
 
         await UpsertByLegacyIdAsync(
             _tempBasalRepository, treatment.Id, model, result, origin, ct,
-            beforeWrite: existing => StampAttributionAsync(
-                _patientDeviceStamper, model, existing, V4Models.DeviceAttributionCategories.TempBasal, ct));
+            beforeWrite: async existing =>
+            {
+                RelativeTempBasalRates.ForgetEchoedRate(model, existing);
+                await _relativeTempBasalRates.ResolveAsync([model], ct);
+                await StampAttributionAsync(
+                    _patientDeviceStamper, model, existing, V4Models.DeviceAttributionCategories.TempBasal, ct);
+            });
     }
 
     private async Task DecomposeProfileSwitchAsync(Treatment treatment, V4Models.DecompositionResult result, WriteOrigin origin, CancellationToken ct)
@@ -866,6 +880,7 @@ public class TreatmentDecomposer : DecomposerBase, ITreatmentDecomposer, IDecomp
     {
         var startTimestamp = DateTimeOffset.FromUnixTimeMilliseconds(treatment.Mills).UtcDateTime;
         var durationMs = (treatment.DurationInMilliseconds ?? (long?)((treatment.Duration ?? 0) * 60 * 1000)) ?? 0;
+        var percent = treatment.Absolute is null ? treatment.Percent : null;
 
         return new V4Models.TempBasal
         {
@@ -880,8 +895,12 @@ public class TreatmentDecomposer : DecomposerBase, ITreatmentDecomposer, IDecomp
             App = treatment.EnteredBy,
             DataSource = treatment.DataSource,
             CorrelationId = correlationId,
-            Rate = treatment.Absolute ?? treatment.Rate ?? 0,
-            ScheduledRate = null, // Not available from legacy treatments
+            Rate = percent is null ? treatment.Absolute ?? 0 : treatment.Rate,
+            // An uploaded rate is the scheduled rate the uploader saw, changed by the percent
+            ScheduledRate = percent is { } p && treatment.Rate is { } rate && p > -100
+                ? rate * 100 / (100 + p)
+                : null,
+            Percent = percent,
             Origin = MapTempBasalOrigin(treatment),
             PumpRecordId = treatment.PumpId?.ToString(),
         };
@@ -1662,6 +1681,17 @@ public class TreatmentDecomposer : DecomposerBase, ITreatmentDecomposer, IDecomp
                 batchInsulinTimeline[treatment.Mills] = icfg;
         }
 
+        var echoedRates = tempBasalList
+            .Where(t => t is { Percent: not null, Rate: not null, LegacyId: not null })
+            .Select(t => t.LegacyId!)
+            .ToList();
+        var storedRelative = (echoedRates.Count == 0 ? [] : await _tempBasalRepository.GetRelativeByLegacyIdsAsync(echoedRates, ct))
+            .GroupBy(t => t.LegacyId!, StringComparer.Ordinal)
+            .ToDictionary(g => g.Key, g => g.First(), StringComparer.Ordinal);
+        foreach (var tb in tempBasalList)
+            RelativeTempBasalRates.ForgetEchoedRate(tb, tb.LegacyId is { } legacyId ? storedRelative.GetValueOrDefault(legacyId) : null);
+        await _relativeTempBasalRates.ResolveAsync(tempBasalList, ct);
+
         // Resolve insulin context for each temp basal
         // primaryInsulin is fetched at most once lazily if the third tier is ever needed.
         V4Models.PatientInsulin? primaryInsulin = null;
@@ -2146,7 +2176,7 @@ public class TreatmentDecomposer : DecomposerBase, ITreatmentDecomposer, IDecomp
         var canonical = JsonSerializer.Serialize(new object?[]
         {
             t.EventType, t.CreatedAt, t.Mills, t.EnteredBy, t.Insulin, t.Carbs, t.Protein, t.Fat,
-            t.AbsorptionTime, t.Glucose, t.GlucoseType, t.Units, t.Duration, t.Absolute, t.Rate,
+            t.AbsorptionTime, t.Glucose, t.GlucoseType, t.Units, t.Duration, HashedAbsolute(t), t.Rate,
             t.Percent, t.Notes, t.Reason, t.TargetTop, t.TargetBottom, t.Profile, t.PreBolus,
             t.SplitNow, t.SplitExt, t.BolusType, t.Automatic, t.InsulinDelivered, t.InsulinProgrammed,
         });
