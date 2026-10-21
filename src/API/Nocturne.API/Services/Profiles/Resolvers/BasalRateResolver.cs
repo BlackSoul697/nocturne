@@ -39,26 +39,16 @@ internal sealed class BasalRateResolver : IBasalRateResolver
 
     public async Task<double> GetBasalRateAsync(long timeMills, string? specProfile = null, CancellationToken ct = default)
     {
-        var profileName = specProfile
-            ?? await _activeProfileResolver.GetActiveProfileNameAsync(timeMills, ct)
-            ?? "Default";
-
-        var timestamp = DateTimeOffset.FromUnixTimeMilliseconds(timeMills).UtcDateTime;
-
-        var schedule = await GetCachedScheduleAsync(profileName, timestamp, ct);
+        var schedule = await ActiveSchedule.ResolveAsync(
+            timeMills, specProfile, _activeProfileResolver, _repo, _versions,
+            s => s.Entries, s => s.Basal, _therapyRepo, _patientRecordRepo, ct);
         if (schedule is null)
             return DefaultBasalRate;
 
-        var adjustment = await _activeProfileResolver.GetCircadianAdjustmentAsync(timeMills, ct);
-        var shiftedMills = timeMills + (adjustment?.TimeshiftMs ?? 0);
-
-        var secondsFromMidnight = await ScheduleTimeHelper.GetSecondsFromMidnightAsync(
-            shiftedMills, profileName, timestamp, _therapyRepo, _patientRecordRepo, ct);
-
-        var value = ScheduleResolution.FindValueAtTime(schedule.Entries, secondsFromMidnight)
+        var value = ScheduleResolution.FindValueAtTime(schedule.Entries, schedule.SecondsFromMidnight)
             ?? DefaultBasalRate;
 
-        if (adjustment is not null)
+        if (schedule.Adjustment is { } adjustment)
             value = value * adjustment.Percentage / 100.0;
 
         return value;
@@ -114,16 +104,30 @@ internal sealed class BasalRateResolver : IBasalRateResolver
             var adjustment   = active?.Adjustment;
             var shiftedMills = timeMills + (adjustment?.TimeshiftMs ?? 0);
 
-            if (!schedules.TryGetValue(profileName, out var schedule) || schedule is null)
+            List<Core.Models.V4.ScheduleEntry>? entries;
+            TimeZoneInfo? tz;
+            if (active?.Schedules is { } snapshot)
+            {
+                entries = snapshot.Basal;
+                tz = TimeZoneHelper.TryGetTimeZoneInfoFromId(snapshot.Timezone, out var snapshotTz)
+                    ? snapshotTz
+                    : timezones.GetValueOrDefault(profileName);
+            }
+            else
+            {
+                entries = schedules.GetValueOrDefault(profileName)?.Entries;
+                tz = timezones.GetValueOrDefault(profileName);
+            }
+
+            if (entries is null)
                 return DefaultBasalRate;
 
-            var tz  = timezones.GetValueOrDefault(profileName);
             var dto = DateTimeOffset.FromUnixTimeMilliseconds(shiftedMills);
             if (tz is not null)
                 dto = TimeZoneInfo.ConvertTime(dto, tz);
 
             var secondsFromMidnight = (int)dto.TimeOfDay.TotalSeconds;
-            var value = ScheduleResolution.FindValueAtTime(schedule.Entries, secondsFromMidnight)
+            var value = ScheduleResolution.FindValueAtTime(entries, secondsFromMidnight)
                 ?? DefaultBasalRate;
 
             return adjustment is not null

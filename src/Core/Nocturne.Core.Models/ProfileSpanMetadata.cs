@@ -8,8 +8,9 @@ public enum ProfileTimeshiftUnit
 }
 
 /// <summary>
-/// The metadata of a <see cref="StateSpanCategory.Profile"/> span, read one way by every consumer:
-/// the profile resolvers and the legacy treatment projection.
+/// The metadata of a <see cref="StateSpanCategory.Profile"/> span, read one way by every consumer: a
+/// profile switch's upload as it becomes a <see cref="V4.ProfileActivation"/>, and the activation as
+/// it is read back as that upload.
 /// </summary>
 /// <remarks>
 /// <see cref="TimeshiftKey"/> holds the shift in hours. A span written before the uploaded unit was

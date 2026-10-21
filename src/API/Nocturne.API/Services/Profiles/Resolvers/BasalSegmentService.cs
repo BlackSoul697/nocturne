@@ -11,14 +11,14 @@ namespace Nocturne.API.Services.Profiles.Resolvers;
 
 /// <summary>
 /// Builds the per-tenant <see cref="ScheduleAssignment"/> timeline for a query window by combining
-/// Profile state-spans, schedule-version history, CCP metadata, and timezone, then delegates the
+/// the profile activations, schedule-version history, CCP adjustment, and timezone, then delegates the
 /// segment math to the pure <see cref="BasalCalculator"/>.
 /// </summary>
 /// <remarks>
-/// Sub-divides each profile-span at every <see cref="BasalSchedule"/> version boundary so mid-window
-/// schedule edits are reflected (matching the per-instant behavior of <see cref="IBasalRateResolver"/>).
-/// Gaps in profile-span coverage are filled with the implicit "Default" profile, also sub-divided by
-/// schedule version. When neither named profile spans nor any default schedule rows exist, an
+/// Sub-divides each activation's stretch at every <see cref="BasalSchedule"/> version boundary so
+/// mid-window schedule edits are reflected (matching the per-instant behavior of <see cref="IBasalRateResolver"/>).
+/// An activation that carries its own schedules is one assignment. Gaps in activation coverage are
+/// filled with the implicit "Default" profile, also sub-divided by schedule version. When neither named profile spans nor any default schedule rows exist, an
 /// assignment with no entries is emitted: <see cref="BasalCalculator"/> renders that as a constant
 /// 1.0 U/hr fallback, identical to <c>BasalRateResolver</c>'s point fallback.
 ///
@@ -27,7 +27,7 @@ namespace Nocturne.API.Services.Profiles.Resolvers;
 /// </remarks>
 internal sealed class BasalSegmentService : IBasalSegmentService
 {
-    private readonly IStateSpanService _stateSpanService;
+    private readonly IActiveProfileResolver _activeProfileResolver;
     private readonly IBasalScheduleRepository _scheduleRepo;
     private readonly ITherapySettingsRepository _therapyRepo;
     private readonly ITenantCache _cache;
@@ -36,12 +36,12 @@ internal sealed class BasalSegmentService : IBasalSegmentService
     private const int CacheTtlSeconds = 5;
 
     public BasalSegmentService(
-        IStateSpanService stateSpanService,
+        IActiveProfileResolver activeProfileResolver,
         IBasalScheduleRepository scheduleRepo,
         ITherapySettingsRepository therapyRepo,
         ITenantCache cache)
     {
-        _stateSpanService = stateSpanService;
+        _activeProfileResolver = activeProfileResolver;
         _scheduleRepo = scheduleRepo;
         _therapyRepo = therapyRepo;
         _cache = cache;
@@ -79,31 +79,20 @@ internal sealed class BasalSegmentService : IBasalSegmentService
         BasalWindow window,
         CancellationToken ct)
     {
-        var fromUtc = DateTimeOffset.FromUnixTimeMilliseconds(window.StartMills).UtcDateTime;
         var toUtc = DateTimeOffset.FromUnixTimeMilliseconds(window.EndMills).UtcDateTime;
 
-        // 1. Profile state-spans overlapping the window.
-        var spans = (await _stateSpanService.GetStateSpansAsync(
-            category: StateSpanCategory.Profile,
-            from: fromUtc,
-            to: toUtc,
-            count: 1000,
-            descending: false,
-            cancellationToken: ct))
-            .Where(s => s.StartMills < window.EndMills && (!s.EndMills.HasValue || s.EndMills.Value > window.StartMills))
-            .OrderBy(s => s.StartMills)
-            .ToList();
+        var spans = await _activeProfileResolver.GetActiveProfileSpansForRangeAsync(
+            window.StartMills, window.EndMills, ct);
 
-        // 2. Distinct profile names referenced by spans, plus "Default" for gap-fill.
         var spanProfileNames = spans
-            .Select(s => ExtractProfileName(s) ?? DefaultProfileName)
+            .Select(s => s.ProfileName)
             .Distinct()
             .ToList();
         var profileNames = spanProfileNames.Contains(DefaultProfileName)
             ? spanProfileNames
             : spanProfileNames.Append(DefaultProfileName).ToList();
 
-        // 3. For each profile name, load schedule-version history and timezone.
+        // For each profile name, load schedule-version history and timezone.
         var byProfile = new Dictionary<string, ProfileResources>(StringComparer.Ordinal);
         foreach (var name in profileNames)
         {
@@ -115,10 +104,6 @@ internal sealed class BasalSegmentService : IBasalSegmentService
             byProfile[name] = new ProfileResources(schedules, therapy?.Timezone);
         }
 
-        // 4. Stitch named-profile assignments and gap-filling Default assignments together.
-        // Spans may overlap (e.g. concurrent override + base profile); we clamp each span's
-        // start to the running cursor so overlap regions don't get emitted twice and the
-        // last-starting span wins.
         var result = new List<ScheduleAssignment>();
         long cursor = window.StartMills;
         foreach (var span in spans)
@@ -131,9 +116,19 @@ internal sealed class BasalSegmentService : IBasalSegmentService
             if (cursor < spanStart)
                 result.AddRange(BuildAssignmentsForRange(cursor, spanStart, DefaultProfileName, byProfile, percentage: 100, timeshiftMs: 0));
 
-            var profileName = ExtractProfileName(span) ?? DefaultProfileName;
-            var (percentage, timeshiftMs) = ExtractCcp(span);
-            result.AddRange(BuildAssignmentsForRange(spanStart, spanEnd, profileName, byProfile, percentage, timeshiftMs));
+            var (percentage, timeshiftMs) = span.Adjustment is { } adjustment
+                ? (adjustment.Percentage, adjustment.TimeshiftMs)
+                : (100, 0L);
+            if (span.Schedules is { } snapshot)
+            {
+                result.Add(new ScheduleAssignment(
+                    spanStart, spanEnd, span.ProfileName, snapshot.Basal ?? [], percentage, timeshiftMs,
+                    snapshot.Timezone ?? byProfile.GetValueOrDefault(span.ProfileName)?.TimeZoneId));
+            }
+            else
+            {
+                result.AddRange(BuildAssignmentsForRange(spanStart, spanEnd, span.ProfileName, byProfile, percentage, timeshiftMs));
+            }
 
             cursor = spanEnd;
         }
@@ -230,15 +225,6 @@ internal sealed class BasalSegmentService : IBasalSegmentService
             else break;
         }
         return idx;
-    }
-
-    private static string? ExtractProfileName(StateSpan span) =>
-        ProfileSpanMetadata.Parse(span.Metadata).BaseProfileName;
-
-    private static (double Percentage, long TimeshiftMs) ExtractCcp(StateSpan span)
-    {
-        var metadata = ProfileSpanMetadata.Parse(span.Metadata);
-        return metadata.Percentage is { } percentage ? (percentage, metadata.TimeshiftMs) : (100, 0);
     }
 
     private sealed record ProfileResources(List<BasalSchedule> Schedules, string? TimeZoneId);

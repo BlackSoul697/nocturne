@@ -31,6 +31,7 @@ public class SensitivityResolverTests : IDisposable
             _patientRecordRepo.Object,
             _activeProfileResolver.Object,
             new ProfileVersionCache(TestTenantCache.Create(_cache)),
+            Mock.Of<IProfileActivationResolver>(),
             NullLogger<SensitivityResolver>.Instance);
     }
 

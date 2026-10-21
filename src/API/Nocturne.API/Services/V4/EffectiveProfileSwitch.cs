@@ -12,12 +12,10 @@ namespace Nocturne.API.Services.V4;
 /// <c>originalProfileName</c> (<c>TreatmentMapper.kt</c> in AAPS core/nssdk), and so does this.
 /// </summary>
 /// <remarks>
-/// It decomposes into a Profile span rather than a Note, and that span is read back as the Note
-/// document it was uploaded as (<see cref="LegacyTreatmentTables.StateSpanTables"/>). The span names
-/// the base profile with its percentage and timeshift, as a Profile Switch span does, since its
-/// <c>profileJson</c> already has them applied. It ends whatever span of its source was still
-/// running when it took effect, so the Profile Switch it confirms and the effective switch it
-/// becomes do not both stand over the same time.
+/// It decomposes into an effective <see cref="Core.Models.V4.ProfileActivation"/> rather than a
+/// Note, read back as the Note document it was uploaded as (<see cref="LegacyProfileActivationTable"/>).
+/// The activation names the base profile with its percentage and timeshift, as a Profile Switch's
+/// does, and keeps the effective <c>profileJson</c>, which already has them applied, as its snapshot.
 /// </remarks>
 internal static class EffectiveProfileSwitch
 {
@@ -28,13 +26,10 @@ internal static class EffectiveProfileSwitch
         string.Equals(treatment.EventType?.Trim(), NoteEventType, StringComparison.OrdinalIgnoreCase)
         && !string.IsNullOrEmpty(treatment.OriginalProfileName);
 
-    /// <summary>Whether a Profile span's metadata is that of an effective profile switch.</summary>
-    internal static bool IsSpan(IDictionary<string, object>? metadata) =>
-        ProfileSpanMetadata.Parse(metadata).IsEffective;
-
     /// <summary>
-    /// The span metadata of an effective profile switch: what the profile resolvers read, and every
-    /// uploaded field the Note document is read back with.
+    /// The span metadata of an effective profile switch, which
+    /// <see cref="ProfileActivations.ProfileActivationLegacyFields.FromSpanMetadata"/> converts: the
+    /// activation's fields, and every uploaded field the Note document is read back with.
     /// </summary>
     internal static Dictionary<string, object> Metadata(Treatment treatment)
     {
@@ -73,7 +68,7 @@ internal static class EffectiveProfileSwitch
         return metadata;
     }
 
-    /// <summary>The Note document an effective profile switch span was uploaded as.</summary>
+    /// <summary>The Note document an effective profile switch was uploaded as.</summary>
     /// <remarks>
     /// AAPS drops an effective switch read back without any one of its <c>original*</c> fields
     /// (<c>TreatmentMapper.kt</c> in AAPS core/nssdk), so each is served, defaulted to an unchanged

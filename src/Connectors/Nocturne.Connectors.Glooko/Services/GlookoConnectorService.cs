@@ -582,11 +582,9 @@ public class GlookoConnectorService : BaseConnectorService<GlookoConnectorConfig
                         PublishProfileDataAsync, context.Config, cancellationToken,
                         "from device settings");
 
-                    // The spans derive from the device settings but are state spans, so they gate and
-                    // count under StateSpans like every other state-span publish, not under Profiles.
                     await PublishRecordTypeAsync(result, SyncDataType.StateSpans, activeTypes,
-                        context.ProfileMapper.TransformDeviceSettingsToStateSpans(deviceSettings),
-                        PublishStateSpanDataAsync, context.Config, cancellationToken,
+                        context.ProfileMapper.TransformDeviceSettingsToProfileActivations(deviceSettings),
+                        PublishProfileActivationDataAsync, context.Config, cancellationToken,
                         "device settings");
                 }
             }
@@ -774,6 +772,9 @@ public class GlookoConnectorService : BaseConnectorService<GlookoConnectorConfig
         stateSpans.AddRange(context.StateSpanMapper.TransformV3PumpModeToStateSpans(v3Data));
         await PublishRecordTypeAsync(result, SyncDataType.StateSpans, activeTypes,
             stateSpans, PublishStateSpanDataAsync, config, cancellationToken);
+        await PublishRecordTypeAsync(result, SyncDataType.StateSpans, activeTypes,
+            context.StateSpanMapper.TransformV3ToProfileActivations(v3Data),
+            PublishProfileActivationDataAsync, config, cancellationToken, "profile changes");
 
         await PublishRecordTypeAsync(result, SyncDataType.TempBasals, activeTypes,
             context.TempBasalMapper.TransformV3ToTempBasals(v3Data),
