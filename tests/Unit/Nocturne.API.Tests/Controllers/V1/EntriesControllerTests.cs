@@ -467,8 +467,7 @@ public class EntriesControllerTests
 
         var result = await _controller.BulkDeleteEntries(boundFind);
 
-        var body = JsonSerializer.SerializeToElement(result.Should().BeOfType<OkObjectResult>().Subject.Value);
-        body.GetProperty("deletedCount").GetInt64().Should().Be(4);
+        AssertDeleteStatus(result, 4);
     }
 
     [Theory]
@@ -488,8 +487,7 @@ public class EntriesControllerTests
 
         var result = await controller.DeleteEntry(spec);
 
-        var body = JsonSerializer.SerializeToElement(result.Should().BeOfType<OkObjectResult>().Subject.Value);
-        body.GetProperty("deletedCount").GetInt64().Should().Be(4);
+        AssertDeleteStatus(result, 4);
         _mockEntryService.Verify(
             x => x.DeleteEntryAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()),
             Times.Never
