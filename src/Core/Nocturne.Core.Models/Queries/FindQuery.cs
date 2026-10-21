@@ -39,9 +39,10 @@ public sealed class FindQuery
     /// </summary>
     private static readonly JsonSerializerOptions WireOptions = new(JsonSerializerDefaults.Web);
 
-    private static readonly TimeSpan RegexTimeout = TimeSpan.FromSeconds(1);
+    /// <summary>The longest <c>$regex</c> operand evaluated; a longer one matches nothing.</summary>
+    public const int MaxRegexLength = 16_384;
 
-    private static readonly Regex RegexLiteral = new("^/(.*)/([a-z]*)$", RegexOptions.None, RegexTimeout);
+    private static readonly Regex RegexLiteral = new("^/(.*)/([a-z]*)$", RegexOptions.NonBacktracking);
 
     /// <summary>
     /// Treatment fields on which legacy Nightscout reads a bare <c>/pattern/flags</c> value as a
@@ -125,12 +126,14 @@ public sealed class FindQuery
     /// <summary>
     /// <c>true</c> when a condition cannot be evaluated as legacy Nightscout evaluates it: a find key,
     /// operator, empty operand object, <c>$options</c> without a <c>$regex</c> or <c>$and</c>/<c>$or</c>
-    /// value the parser could not read, an <c>$exists</c> whose operand is not a boolean, or a
+    /// value the parser could not read, a <c>$regex</c> that does not compile (see
+    /// <see cref="CompiledRegex"/>), an <c>$exists</c> whose operand is not a boolean, or a
     /// condition on a time field whose operand is not an instant, which Nightscout refuses. A read may
     /// serve such a query; a delete must refuse it.
     /// </summary>
     public bool HasInexactCondition => EnumerateAll(_root).Any(cond =>
         !KnownOps.Contains(cond.Op)
+        || (cond.Op == "$regex" && cond.Pattern.Regex is null)
         || (cond.Op == "$exists" && TryReadExists(cond) is null)
         || (cond.Op != "$exists" && TimeFields.Contains(cond.Path) && !TryConvertToInstant(cond, out _, out _)));
 
@@ -438,7 +441,91 @@ public sealed class FindQuery
     /// A single field condition. <see cref="StringValue"/> carries the querystring-form operand;
     /// <see cref="JsonValue"/> the JSON-form operand (needed for typed arrays under $in/$nin).
     /// </summary>
-    private sealed record Condition(string Path, string Op, string StringValue, JsonElement? JsonValue, string? RegexOptions);
+    private sealed record Condition(string Path, string Op, string StringValue, JsonElement? JsonValue, string? RegexOptions)
+    {
+        private CompiledRegex? _pattern;
+
+        /// <summary>
+        /// The <c>$regex</c> operand, compiled on first use. A <c>with</c> copies it, so a condition is
+        /// only rewritten while parsing, before anything reads it.
+        /// </summary>
+        public CompiledRegex Pattern => _pattern ??= CompiledRegex.Create(StringValue, RegexOptions);
+    }
+
+    /// <summary>
+    /// A <c>$regex</c> operand compiled once per query for the linear-time engine, so matching costs
+    /// time proportional to the input whatever the pattern's shape. A pattern that does not compile
+    /// matches nothing: invalid syntax, longer than <see cref="MaxRegexLength"/>, a backreference or
+    /// lookaround, or an automaton past the engine's size limit. A match that still overruns
+    /// <see cref="Timeout"/> abandons the pattern for the rest of the query, so one scan spends at
+    /// most one timeout on it.
+    /// </summary>
+    private sealed class CompiledRegex
+    {
+        private static readonly TimeSpan Timeout = TimeSpan.FromMilliseconds(250);
+
+        private bool _abandoned;
+
+        private CompiledRegex(Regex? regex) => Regex = regex;
+
+        public Regex? Regex { get; }
+
+        public static CompiledRegex Create(string pattern, string? flags)
+        {
+            var literal = RegexLiteral.Match(pattern);
+            if (literal.Success)
+            {
+                pattern = literal.Groups[1].Value;
+                flags = literal.Groups[2].Value;
+            }
+
+            var options = RegexOptions.None;
+            if (flags?.Contains('i') == true)
+                options |= RegexOptions.IgnoreCase;
+            if (flags?.Contains('m') == true)
+                options |= RegexOptions.Multiline;
+
+            return new CompiledRegex(TryCompile(pattern, options));
+        }
+
+        public static Regex? TryCompile(string pattern, RegexOptions options)
+        {
+            if (pattern.Length > MaxRegexLength)
+                return null;
+
+            try
+            {
+                return new Regex(pattern, options | RegexOptions.NonBacktracking, Timeout);
+            }
+            catch (Exception ex) when (ex is ArgumentException or NotSupportedException)
+            {
+                return null;
+            }
+        }
+
+        public bool IsMatch(string input)
+        {
+            if (Regex is null || _abandoned)
+                return false;
+
+            try
+            {
+                return Regex.IsMatch(input);
+            }
+            catch (RegexMatchTimeoutException)
+            {
+                _abandoned = true;
+                return false;
+            }
+        }
+    }
+
+    /// <summary>
+    /// <c>true</c> when <paramref name="pattern"/> compiles as a <c>$regex</c> operand; one that does
+    /// not matches nothing (see <see cref="CompiledRegex"/>).
+    /// </summary>
+    public static bool IsEvaluableRegex(string pattern) =>
+        CompiledRegex.TryCompile(pattern, RegexOptions.None) is not null;
 
     private static Group ParseQueryString(string queryString, IReadOnlySet<string>? bareRegexFields)
     {
@@ -1031,34 +1118,6 @@ public sealed class FindQuery
             JsonValueKind.Number => field.GetRawText(),
             _ => null,
         };
-        if (input is null)
-            return false;
-
-        var pattern = cond.StringValue;
-        var flags = cond.RegexOptions ?? string.Empty;
-
-        // Accept the /pattern/flags literal form
-        var literal = RegexLiteral.Match(pattern);
-        if (literal.Success)
-        {
-            pattern = literal.Groups[1].Value;
-            flags = literal.Groups[2].Value;
-        }
-
-        var options = RegexOptions.None;
-        if (flags.Contains('i'))
-            options |= RegexOptions.IgnoreCase;
-        if (flags.Contains('m'))
-            options |= RegexOptions.Multiline;
-
-        try
-        {
-            return Regex.IsMatch(input, pattern, options, RegexTimeout);
-        }
-        catch (Exception ex) when (ex is ArgumentException or RegexMatchTimeoutException)
-        {
-            // Invalid pattern or timeout: no match, never an error (legacy behavior)
-            return false;
-        }
+        return input is not null && cond.Pattern.IsMatch(input);
     }
 }
