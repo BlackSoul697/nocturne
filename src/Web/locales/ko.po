@@ -3258,10 +3258,8 @@ msgstr ""
 msgid "<0/> Generate API key"
 msgstr ""
 
-#. 0: getUploaderName(selectedUploader)
-#: src/lib/components/connectors/UploaderSetupDialog.svelte
-msgid "Creates an API token pre-configured for {0}"
-msgstr ""
+#~ msgid "Creates an API token pre-configured for {0}"
+#~ msgstr ""
 
 #. 0: getUploaderName(selectedUploader)
 #: src/lib/components/connectors/UploaderSetupDialog.svelte
@@ -3410,6 +3408,7 @@ msgstr ""
 msgid "<0/> Generating API key..."
 msgstr ""
 
+#: src/lib/components/connectors/UploaderSetupDialog.svelte
 #: src/lib/components/connectors/UploaderSetupView.svelte
 msgid "Copy this now. It cannot be shown again."
 msgstr ""
@@ -27091,4 +27090,21 @@ msgstr ""
 
 #: src/routes/(authenticated)/settings/connectors/google-health/google-health-page.svelte
 msgid "If a historical import stops or needs to be repeated, reset the Google Health connector from a chosen date. The reset runs in the background, re-reads the range and keeps the normal duplicate protection; platform administrators can monitor or cancel it."
+msgstr ""
+
+#: src/lib/components/connectors/UploaderSetupDialog.svelte
+msgid "Failed to generate API key. You can create one in the API tokens section."
+msgstr ""
+
+#: src/lib/components/connectors/UploaderSetupDialog.svelte
+msgid "Copy API key"
+msgstr ""
+
+#. 0: getUploaderName(selectedUploader)
+#: src/lib/components/connectors/UploaderSetupDialog.svelte
+msgid "Creates an API key for {0} with read and write access to health data."
+msgstr ""
+
+#: src/lib/components/connectors/UploaderSetupDialog.svelte
+msgid "In AAPS, open Config Builder, then Synchronization, and select NSClient V3. In its settings, paste the URL into Nightscout URL and the API key into NS access token."
 msgstr ""
