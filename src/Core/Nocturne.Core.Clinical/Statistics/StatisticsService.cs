@@ -2672,7 +2672,7 @@ public class StatisticsService : IStatisticsService
             var dia = bi.InsulinContext?.Dia ?? 0.0;
             var coverageHours = dia > 0 ? Math.Min(dia, 72.0) : 24.0;
             var ratePerHour = bi.Units / coverageHours;
-            var endMills = bi.Mills + (long)(coverageHours * HourMs);
+            var endMills = bi.Mills + (long)(coverageHours * LocalSlotBinning.HourMs);
             DistributeInsulinAcrossHourOfDay(
                 bi.Mills, endMills, ratePerHour, tz, scheduledBasal, basalDays);
             counts[LocalHourOfDay(bi.Mills, tz)]++;
@@ -2729,12 +2729,10 @@ public class StatisticsService : IStatisticsService
     {
         LocalSlotBinning.Distribute(startMills, endMills, tz, 60, (localStart, sliceMs) =>
         {
-            insulinBuckets[localStart.Hour] += rate * sliceMs / HourMs;
+            insulinBuckets[localStart.Hour] += rate * sliceMs / LocalSlotBinning.HourMs;
             localDays.Add(DateOnly.FromDateTime(localStart));
         });
     }
-
-    private const long HourMs = 3_600_000L;
 
     private static int LocalHourOfDay(long mills, TimeZoneInfo tz) => LocalSlotBinning.LocalTime(mills, tz).Hour;
 

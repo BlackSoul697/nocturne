@@ -69,12 +69,12 @@ public class LoopAnalysisDailyProfileBudgetTests(ITestOutputHelper output)
 
         var stopwatch = Stopwatch.StartNew();
 
-        var (clipped, recorded, unknown) = NetInsulinAboveSchedule.ClipTempBasals(temps);
+        var (clipped, evidence) = NetInsulinAboveSchedule.ClipTempBasals(temps, []);
         var series = clipped.Select(tb => new BasalPoint
         {
             Timestamp = tb.StartMills, Rate = tb.Rate!.Value, Origin = BasalDeliveryOrigin.Algorithm,
         });
-        var delivered = NetInsulinAboveSchedule.DeliveredFromSeries(series, to, recorded, unknown);
+        var delivered = NetInsulinAboveSchedule.DeliveredFromSeries(series, to, evidence);
         var scheduled = NetInsulinAboveSchedule.ScheduledBaseline(
             [new BasalSegment(compareFrom, to, 0.8, 0.8, "Default")], overrides);
         var ticks = IobCobSeries.Build(iob, cob, boluses, carbs, temps, timeline, null, compareFrom, to - 1, 5 * Minute);
@@ -87,6 +87,8 @@ public class LoopAnalysisDailyProfileBudgetTests(ITestOutputHelper output)
                 delivered, scheduled, boluses.Select(b => new InsulinDose(b.Mills, b.Insulin, b.Kind == BolusKind.Algorithm))),
             Carbs = [.. carbs.Select(c => new CarbEvent(c.Mills, c.Carbs))],
             IobCob = ticks,
+            CalculatedIobCobTime = DailyProfileCalculator.CalculableIobCobTime(
+                evidence, boluses.Select(b => b.Mills).Concat(carbs.Select(c => c.Mills)), 8 * 60 * Minute),
             TargetAt = _ => (90, 140),
         };
         var sources = new LoopAnalysisMaskSources { Overrides = [.. overrides.Select(o => new MillsInterval(o.Start, o.End))] };
@@ -97,6 +99,11 @@ public class LoopAnalysisDailyProfileBudgetTests(ITestOutputHelper output)
 
         stopwatch.Stop();
         output.WriteLine($"180 days ({temps.Count} temps, {ticks.Count} IOB/COB ticks): {stopwatch.Elapsed.TotalMilliseconds:F0} ms");
+
+        var payload = System.Text.Json.JsonSerializer.SerializeToUtf8Bytes(
+            new DailyProfileResponse { Primary = primary, Comparison = comparison },
+            new System.Text.Json.JsonSerializerOptions(System.Text.Json.JsonSerializerDefaults.Web));
+        output.WriteLine($"payload: {payload.Length} bytes");
 
         Assert.Equal(90, primary.Days.Count);
         Assert.Equal(90, comparison.Days.Count);

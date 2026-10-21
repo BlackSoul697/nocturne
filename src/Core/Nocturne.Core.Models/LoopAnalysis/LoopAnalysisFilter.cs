@@ -10,7 +10,7 @@ public class LoopAnalysisFilter
     /// <summary>Start of the range (inclusive, UTC).</summary>
     public DateTime From { get; set; }
 
-    /// <summary>End of the range (exclusive, UTC). At most 90 days after <see cref="From"/>.</summary>
+    /// <summary>End of the range (exclusive, UTC).</summary>
     public DateTime To { get; set; }
 
     /// <summary>Start of the comparison range (inclusive, UTC); set together with <see cref="CompareTo"/>.</summary>

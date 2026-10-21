@@ -73,25 +73,24 @@ internal sealed class LoopAnalysisService(
             return response;
         }
 
-        if (comparison is not { } other)
-        {
-            response.Primary = Calculate(await LoadAsync(primary, zone, ct), filter, primary);
-            return response;
-        }
-
-        if (primary.Touches(other))
+        if (comparison is { IsEmpty: false } other && !primary.IsEmpty && primary.Touches(other))
         {
             var both = await LoadAsync(primary.Hull(other), zone, ct);
             response.Primary = Calculate(both, filter, primary);
             response.Comparison = Calculate(both, filter, other);
+            return response;
         }
-        else
-        {
-            response.Primary = Calculate(await LoadAsync(primary, zone, ct), filter, primary);
-            response.Comparison = Calculate(await LoadAsync(other, zone, ct), filter, other);
-        }
+
+        response.Primary = await CalculateAsync(primary, zone, filter, ct);
+        if (comparison is { } separate)
+            response.Comparison = await CalculateAsync(separate, zone, filter, ct);
         return response;
     }
+
+    /// <summary>A range a history clamp has emptied has nothing to fetch.</summary>
+    private async Task<DailyProfileRange> CalculateAsync(
+        Window window, TimeZoneInfo zone, LoopAnalysisFilter filter, CancellationToken ct) =>
+        window.IsEmpty ? window.Empty() : Calculate(await LoadAsync(window, zone, ct), filter, window);
 
     private static DailyProfileRange Calculate(Loaded loaded, LoopAnalysisFilter filter, Window window) =>
         DailyProfileCalculator.Calculate(
@@ -123,7 +122,11 @@ internal sealed class LoopAnalysisService(
         var boluses = (await bolusTask).ToList();
         var carbs = (await carbTask).ToList();
         var tempBasals = (await tempBasalTask).ToList();
+        var apsPoints = await apsTask;
         var spans = await spanTask;
+        var snapshotMills = apsPoints
+            .Select(p => ToMills(DateTime.SpecifyKind(p.Timestamp, DateTimeKind.Utc)))
+            .ToList();
 
         var hasTherapy = await therapySettingsResolver.HasDataAsync(ct);
         var profiles = await activeProfileResolver.GetProfileSpansForRangeAsync(from, to, ct);
@@ -137,18 +140,21 @@ internal sealed class LoopAnalysisService(
                 overrides.Select(o => new ScaleFactorInterval(o.Interval.Start, o.Interval.End,(double)(o.Span.Metadata?.OverrideScaleFactor() ?? 1m))))
             : [];
 
-        var (clipped, recorded, unknown) = NetInsulinAboveSchedule.ClipTempBasals(tempBasals);
+        var (clipped, evidence) = NetInsulinAboveSchedule.ClipTempBasals(tempBasals, snapshotMills);
         var series = await basalSeriesBuilder.BuildAsync(
             clipped, tickStart, to, timeline.SnapshotAt(from).BasalRateAt(from), timeline, ct);
-        var delivered = NetInsulinAboveSchedule.DeliveredFromSeries(series, to, recorded, unknown);
+        var delivered = NetInsulinAboveSchedule.DeliveredFromSeries(series, to, evidence);
 
         var doses = boluses
             .Where(b => b.Mills >= from && b.Mills < to)
             .Select(b => new InsulinDose(b.Mills, b.Insulin, b.Kind == BolusKind.Algorithm));
 
         var iobCob = IobCobSeries.Build(
-            iobCalculator, cobCalculator, boluses, carbs, tempBasals, timeline, await apsTask,
+            iobCalculator, cobCalculator, boluses, carbs, tempBasals, timeline, apsPoints,
             tickStart, to - 1, TickMs, ct);
+        var temporaryTargets = SpansOf(spans, StateSpanCategory.TemporaryTarget, to)
+            .Where(s => s.Span.State != nameof(TemporaryTargetState.Cancelled))
+            .ToList();
 
         var profileIntervals = profiles
             .Select(p => new ProfileInterval(p.ProfileName, p.StartMills, p.EndMills ?? to))
@@ -162,20 +168,23 @@ internal sealed class LoopAnalysisService(
             Carbs = [.. carbs.Where(c => c.Mills >= from && c.Mills < to).Select(c => new CarbEvent(c.Mills, c.Carbs))],
             IobCob = iobCob,
             IobCobIntervalMs = TickMs,
-            TargetAt = hasTherapy ? await TargetRangesAsync(profiles, zone, ct) : null,
+            CalculatedIobCobTime = DailyProfileCalculator.CalculableIobCobTime(
+                evidence,
+                boluses.Where(b => b.Insulin > 0).Select(b => b.Mills)
+                    .Concat(carbs.Where(c => c.Carbs > 0).Select(c => c.Mills)),
+                ChartDataService.BufferMs),
+            TargetAt = await TargetRangesAsync(hasTherapy ? profiles : [], temporaryTargets, zone, to, ct),
             Profiles = profileIntervals,
         };
 
         var sources = new LoopAnalysisMaskSources
         {
             Overrides = [.. overrides.Select(o => o.Interval)],
-            TemporaryTargets = [.. SpansOf(spans, StateSpanCategory.TemporaryTarget, to)
-                .Where(s => s.Span.State != nameof(TemporaryTargetState.Cancelled))
-                .Select(s => s.Interval)],
+            TemporaryTargets = [.. temporaryTargets.Select(s => s.Interval)],
             Exercise = [.. SpansOf(spans, StateSpanCategory.Exercise, to).Select(s => s.Interval)],
             Illness = [.. SpansOf(spans, StateSpanCategory.Illness, to).Select(s => s.Interval)],
             DataExclusions = [.. SpansOf(spans, StateSpanCategory.DataExclusion, to).Select(s => s.Interval)],
-            OpenLoop = [.. OpenLoop(spans, await deviceTask, to)],
+            OpenLoop = OpenLoop(spans, await deviceTask, snapshotMills, zone, to).Intervals,
             Profiles = profileIntervals,
         };
 
@@ -191,23 +200,35 @@ internal sealed class LoopAnalysisService(
     }
 
     /// <summary>
-    /// The scheduled target range at an instant: the activation's own targets when it carries them,
-    /// else the profile's stored version in force, as <see cref="ActiveSchedule"/> reads it for one
-    /// instant, from schedules read once per profile.
+    /// The target range in force at an instant: a running temporary target, read in mg/dL as
+    /// <see cref="TemporaryTargetUnits"/> reads it, else the schedule. The schedule is the
+    /// activation's own targets when it carries them, else the profile's stored version in force, as
+    /// <see cref="ActiveSchedule"/> reads it for one instant, from versions read once per profile.
     /// </summary>
     private async Task<Func<long, (double Low, double High)?>> TargetRangesAsync(
-        IReadOnlyList<ProfileSpan> profiles, TimeZoneInfo zone, CancellationToken ct)
+        IReadOnlyList<ProfileSpan> profiles,
+        IEnumerable<(StateSpan Span, MillsInterval Interval)> temporaryTargets,
+        TimeZoneInfo zone,
+        long to,
+        CancellationToken ct)
     {
         var versions = new Dictionary<string, TargetRangeSchedule[]>(StringComparer.Ordinal);
         foreach (var name in profiles.Select(p => p.ProfileName).Distinct(StringComparer.Ordinal))
             versions[name] = [.. (await targetRangeScheduleRepository.GetByProfileNameAsync(name, ct))
                 .OrderByDescending(v => v.Timestamp)];
 
-        var ordered = profiles.OrderBy(p => p.StartMills).ToArray();
+        var temporary = StepTimeline<(double Low, double High)>.LatestStartedWins(temporaryTargets
+            .Select(t => (t.Interval, Range: TemporaryTargetRange(t.Span)))
+            .Where(t => t.Range is not null)
+            .Select(t => new Step<(double Low, double High)>(t.Interval.Start, t.Interval.End, t.Range!.Value)));
+        var scheduled = StepTimeline<ProfileSpan>.LatestStartedWins(
+            profiles.Select(p => new Step<ProfileSpan>(p.StartMills, p.EndMills ?? to, p)));
+
         return mills =>
         {
-            var span = ordered.LastOrDefault(p => p.StartMills <= mills && (p.EndMills ?? long.MaxValue) > mills);
-            if (span is null)
+            if (temporary.TryAt(mills, out var target))
+                return target;
+            if (!scheduled.TryAt(mills, out var span))
                 return null;
             var entries = span.Schedules?.Targets
                 ?? ProfileVersionCache.ActiveAt(
@@ -219,20 +240,33 @@ internal sealed class LoopAnalysisService(
         };
     }
 
-    private static IEnumerable<MillsInterval> OpenLoop(
-        Dictionary<StateSpanCategory, List<StateSpan>> spans, IEnumerable<PatientDevice> devices, long to)
+    private static (double Low, double High)? TemporaryTargetRange(StateSpan span)
     {
-        foreach (var mode in SpansOf(spans, StateSpanCategory.PumpMode, to)
-                     .Where(s => s.Span.State is nameof(PumpModeState.Manual) or nameof(PumpModeState.Off)))
-            yield return mode.Interval;
+        var (top, bottom) = TemporaryTargetUnits.ToMgdl(
+            (double?)span.Metadata.TryReadDecimal("targetTop"),
+            (double?)span.Metadata.TryReadDecimal("targetBottom"),
+            span.Metadata.TryReadString("units"));
+        return (bottom ?? top, top ?? bottom) is (double low, double high) ? (low, high) : null;
+    }
 
-        foreach (var pump in devices.Where(d =>
-                     d.DeviceCategory == DeviceCategory.InsulinPump && d.AidAlgorithm == AidAlgorithm.None))
-        {
-            yield return new MillsInterval(
-                pump.StartDate is { } start ? ToMills(start.ToDateTime(TimeOnly.MinValue, DateTimeKind.Utc)) : long.MinValue,
-                pump.EndDate is { } end ? ToMills(end.AddDays(1).ToDateTime(TimeOnly.MinValue, DateTimeKind.Utc)) : to);
-        }
+    /// <summary><see cref="LoopAnalysisMask.OpenLoop"/> from the pump mode spans and the registered pumps.</summary>
+    private static IntervalSet OpenLoop(
+        Dictionary<StateSpanCategory, List<StateSpan>> spans,
+        IEnumerable<PatientDevice> devices,
+        IReadOnlyList<long> snapshotMills,
+        TimeZoneInfo zone,
+        long to)
+    {
+        var pumps = devices.Where(d => d.DeviceCategory == DeviceCategory.InsulinPump && d.AidAlgorithm.HasValue).ToList();
+        MillsInterval Window(PatientDevice pump) => LoopAnalysisMask.DeviceWindow(pump.StartDate, pump.EndDate, zone, to);
+
+        return LoopAnalysisMask.OpenLoop(
+            SpansOf(spans, StateSpanCategory.PumpMode, to)
+                .Where(s => s.Span.State is nameof(PumpModeState.Manual) or nameof(PumpModeState.Off))
+                .Select(s => s.Interval),
+            pumps.Where(p => p.AidAlgorithm == AidAlgorithm.None).Select(Window),
+            pumps.Where(p => p.AidAlgorithm != AidAlgorithm.None).Select(Window),
+            snapshotMills);
     }
 
     private static List<(StateSpan Span, MillsInterval Interval)> SpansOf(
@@ -248,6 +282,8 @@ internal sealed class LoopAnalysisService(
     private readonly record struct Window(long From, long To)
     {
         public static Window Of(DateTime from, DateTime to) => new(ToMills(from), ToMills(to));
+
+        public bool IsEmpty => To <= From;
 
         public bool Touches(Window other) => From <= other.To && other.From <= To;
 

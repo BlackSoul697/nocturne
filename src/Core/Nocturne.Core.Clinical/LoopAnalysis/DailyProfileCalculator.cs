@@ -21,7 +21,15 @@ public sealed record DailyProfileInputs
     public IReadOnlyList<IobCobTick> IobCob { get; init; } = [];
     public long IobCobIntervalMs { get; init; } = DailyProfileCalculator.SlotMinutes * LocalSlotBinning.MinuteMs;
 
-    /// <summary>The scheduled target range in force at an instant, mg/dL; null where none is.</summary>
+    /// <summary>
+    /// Where a calculated IOB or COB is a value: time the pump's records cover or let the schedule
+    /// be inferred for, and time a recorded dose or carb entry is still acting. Elsewhere a
+    /// calculated zero only says nothing was recorded, so a tick there with no device-reported
+    /// value is absent. See <see cref="CalculableIobCobTime"/>.
+    /// </summary>
+    public IntervalSet CalculatedIobCobTime { get; init; } = IntervalSet.Empty;
+
+    /// <summary>The target range in force at an instant, mg/dL; null where none is.</summary>
     public Func<long, (double Low, double High)?>? TargetAt { get; init; }
 
     public IReadOnlyList<ProfileInterval> Profiles { get; init; } = [];
@@ -49,7 +57,12 @@ public static class DailyProfileCalculator
     public const int SlotsPerDay = 24 * 60 / SlotMinutes;
     private const int SlotsPerHour = 60 / SlotMinutes;
     private const long SlotMs = SlotMinutes * LocalSlotBinning.MinuteMs;
-    private const double HourMs = 3_600_000d;
+
+    /// <param name="actingMs">How long after a dose or carb entry it is taken to still act.</param>
+    public static IntervalSet CalculableIobCobTime(
+        BasalEvidence evidence, IEnumerable<long> doseAndCarbMills, long actingMs) =>
+        evidence.Recorded.Union(evidence.Inferable)
+            .Union(IntervalSet.Of(doseAndCarbMills.Select(m => new MillsInterval(m, m + actingMs))));
 
     public static DailyProfileRange Calculate(DailyProfileInputs inputs, LoopAnalysisMask mask, long from, long to)
     {
@@ -177,6 +190,9 @@ public static class DailyProfileCalculator
     {
         foreach (var tick in inputs.IobCob)
         {
+            if (tick.IobSource == IobCobSource.Calculated && tick.CobSource == IobCobSource.Calculated
+                && !inputs.CalculatedIobCobTime.Contains(tick.Mills))
+                continue;
             mask.Analysed.ForEachOverlap(tick.Mills, tick.Mills + inputs.IobCobIntervalMs, (start, end) =>
                 LocalSlotBinning.Distribute(start, end, tz, SlotMinutes, (local, ms) =>
                 {
@@ -234,7 +250,7 @@ public static class DailyProfileCalculator
             if (acc.Counts(i, acc.BothMs[i]))
             {
                 var algorithmRate = acc.AlgorithmW[i] / acc.BothMs[i];
-                var automaticRate = acc.AutomaticBolusU[i] / (acc.Analysed[i] / HourMs);
+                var automaticRate = acc.AutomaticBolusU[i] / (acc.Analysed[i] / LocalSlotBinning.HourMs);
                 algorithm.Add(algorithmRate);
                 automatic.Add(automaticRate);
                 headline.Add(algorithmRate + automaticRate);
@@ -289,9 +305,17 @@ public static class DailyProfileCalculator
             CobSource = Dominant(acc.CobDeviceMs[slot], acc.CobCalculatedMs[slot]),
             ManualBoluses = Events(manualU, manualN),
             Carbs = Events(carbG, carbN),
-            TargetLow = SlotSummary.Of(targetLow),
-            TargetHigh = SlotSummary.Of(targetHigh),
+            TargetLow = Median(targetLow),
+            TargetHigh = Median(targetHigh),
         };
+    }
+
+    private static double? Median(List<double> values)
+    {
+        if (values.Count == 0)
+            return null;
+        values.Sort();
+        return SlotSummary.Round(GlucoseStatistics.Median(values));
     }
 
     private static IobCobSource? Dominant(double deviceMs, double calculatedMs) =>
@@ -318,7 +342,7 @@ public static class DailyProfileCalculator
                     automaticU += acc.AutomaticBolusU[i];
                 }
                 if (wall > 0 && both >= SlotSummary.MinimumSlotCoverage * wall)
-                    values.Add(algorithmW / both + automaticU / (analysed / HourMs));
+                    values.Add(algorithmW / both + automaticU / (analysed / LocalSlotBinning.HourMs));
             }
             hours.Add(new LoopAnalysisHourlyValue
             {
@@ -341,7 +365,7 @@ public static class DailyProfileCalculator
         for (var d = 0; d < dayCount; d++)
         {
             double wall = 0, analysed = 0, both = 0, deliveredMs = 0, deliveredW = 0, algorithmW = 0,
-                automaticU = 0, manualU = 0, bothScheduledW = 0, deltaW = 0;
+                automaticU = 0, manualU = 0, carbG = 0, bothScheduledW = 0, deltaW = 0;
             var glucose = false;
             var coverage = new CoverageBits();
             for (var s = 0; s < SlotsPerDay; s++)
@@ -355,6 +379,7 @@ public static class DailyProfileCalculator
                 algorithmW += acc.AlgorithmW[i];
                 automaticU += acc.AutomaticBolusU[i];
                 manualU += acc.ManualBolusU[i];
+                carbG += acc.CarbG[i];
                 bothScheduledW += acc.BothScheduledW[i];
                 deltaW += acc.AlgorithmW[i] + acc.ManualTempW[i] + acc.SuspendW[i] + acc.InferredW[i];
                 glucose |= acc.GlucoseN[i] > 0;
@@ -375,14 +400,14 @@ public static class DailyProfileCalculator
             ratioScheduledW += bothScheduledW;
             ratioDeltaW += deltaW;
 
-            double? net = both > 0 ? algorithmW / HourMs + automaticU : null;
-            double? total = deliveredMs > 0 ? deliveredW / HourMs + automaticU + manualU : null;
-            if (glucose || deliveredMs > 0)
+            double? net = both > 0 ? algorithmW / LocalSlotBinning.HourMs + automaticU : null;
+            double? total = deliveredMs > 0 ? deliveredW / LocalSlotBinning.HourMs + automaticU + manualU : null;
+            if (glucose || deliveredMs > 0 || automaticU > 0 || manualU > 0 || carbG > 0)
                 daysWithData++;
             if (both >= SlotSummary.MinimumSlotCoverage * wall && net is not null && total is not null)
             {
                 netDays++;
-                netPerDaySum += (algorithmW / both + automaticU / (analysed / HourMs)) * (wall / HourMs);
+                netPerDaySum += (algorithmW / both + automaticU / (analysed / LocalSlotBinning.HourMs)) * (wall / LocalSlotBinning.HourMs);
                 netShareU += net.Value;
                 tddShareU += total.Value;
             }
@@ -463,8 +488,7 @@ public static class DailyProfileCalculator
             ScheduledBasal = Convert.ToBase64String(_bits[Scheduled]),
             DeliveredBasal = Convert.ToBase64String(_bits[Delivered]),
             NetLoopCorrection = Convert.ToBase64String(_bits[NetLoopCorrection]),
-            Iob = Convert.ToBase64String(_bits[IobCob]),
-            Cob = Convert.ToBase64String(_bits[IobCob]),
+            IobCob = Convert.ToBase64String(_bits[IobCob]),
         };
     }
 }

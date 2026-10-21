@@ -395,31 +395,78 @@ internal static class StatisticsReadScopeGuard
 /// <summary>
 /// Per-category read scopes for Loop Analysis, admitted on <c>reports.read</c>: glucose is the
 /// glucose category; delivered basal, the insulin above schedule, IOB/COB, boluses and carbs are
-/// treatments; the profile names and the schedule values (scheduled basal, target range) are
-/// therapy settings.
+/// treatments; the profile names and the separate schedule series (scheduled basal, target range)
+/// are therapy settings, and the target range also carries temporary targets, so it needs
+/// treatments too. The masks follow the categories of the spans they are drawn from, as
+/// <see cref="ChartDataReadScopeGuard"/> serves them: overrides, temporary targets, exercise and
+/// illness are treatments, pump mode and the registered pumps are devices.
 /// </summary>
-/// <remarks>The response is built per request and never cached, so it is narrowed in place.</remarks>
+/// <remarks>
+/// <para>
+/// The schedule can be worked back from the delivered basal and the components of insulin above
+/// schedule. That is not a disclosure past <c>treatments.read</c>: a schedule value carried inside
+/// delivery is treatment data, as <see cref="ChartDataReadScopeGuard"/> serves the basal series and
+/// its scheduled rate under that scope. <c>therapy.read</c> gates the schedule and target series
+/// served in their own right, and the profile names.
+/// </para>
+/// <para>The response is built per request and never cached server-side, so it is narrowed in place.</para>
+/// </remarks>
 /// <seealso cref="AnalyticsReadScopes"/>
 internal static class LoopAnalysisReadScopeGuard
 {
     public const string AdmissionScope = Scope.ReportsRead;
+
+    /// <summary>
+    /// Drops from <paramref name="filter"/> every part the caller could not otherwise see: a profile
+    /// name without <c>therapy.read</c>, and each mask drawn from a category the caller lacks, which
+    /// would otherwise show where those spans fell through the analysed time.
+    /// </summary>
+    /// <returns>The query parameter names that were ignored, for the response to report.</returns>
+    public static List<string> NarrowFilter(LoopAnalysisFilter filter, IReadOnlySet<string> grantedScopes)
+    {
+        var ignored = new List<string>();
+        void Ignore(bool set, string name, Action clear)
+        {
+            if (!set)
+                return;
+            clear();
+            ignored.Add(name);
+        }
+
+        if (!AnalyticsReadScopes.Allows(grantedScopes, Scope.TherapyRead))
+            Ignore(filter.ProfileName is not null, "profileName", () => filter.ProfileName = null);
+
+        if (!AnalyticsReadScopes.Allows(grantedScopes, Scope.TreatmentsRead))
+        {
+            Ignore(filter.ExcludeOverrides, "excludeOverrides", () => filter.ExcludeOverrides = false);
+            Ignore(filter.ExcludeTemporaryTargets, "excludeTemporaryTargets", () => filter.ExcludeTemporaryTargets = false);
+            Ignore(filter.ExcludeExercise, "excludeExercise", () => filter.ExcludeExercise = false);
+            Ignore(filter.ExcludeIllness, "excludeIllness", () => filter.ExcludeIllness = false);
+        }
+
+        if (!AnalyticsReadScopes.Allows(grantedScopes, Scope.DevicesRead))
+            Ignore(filter.ExcludeOpenLoop, "excludeOpenLoop", () => filter.ExcludeOpenLoop = false);
+
+        return ignored;
+    }
 
     public static DailyProfileResponse Redact(DailyProfileResponse data, IReadOnlySet<string> grantedScopes)
     {
         var glucose = AnalyticsReadScopes.Allows(grantedScopes, Scope.GlucoseRead);
         var treatments = AnalyticsReadScopes.Allows(grantedScopes, Scope.TreatmentsRead);
         var therapy = AnalyticsReadScopes.Allows(grantedScopes, Scope.TherapyRead);
+        var devices = AnalyticsReadScopes.Allows(grantedScopes, Scope.DevicesRead);
 
-        if (glucose && treatments && therapy)
+        if (glucose && treatments && therapy && devices)
             return data;
 
-        Narrow(data.Primary, glucose, treatments, therapy);
+        Narrow(data.Primary, glucose, treatments, therapy, devices);
         if (data.Comparison is { } comparison)
-            Narrow(comparison, glucose, treatments, therapy);
+            Narrow(comparison, glucose, treatments, therapy, devices);
         return data;
     }
 
-    private static void Narrow(DailyProfileRange range, bool glucose, bool treatments, bool therapy)
+    private static void Narrow(DailyProfileRange range, bool glucose, bool treatments, bool therapy, bool devices)
     {
         foreach (var slot in range.Slots)
         {
@@ -442,8 +489,10 @@ internal static class LoopAnalysisReadScopeGuard
             }
 
             if (!therapy)
-            {
                 slot.ScheduledBasal = null;
+
+            if (!therapy || !treatments)
+            {
                 slot.TargetLow = null;
                 slot.TargetHigh = null;
             }
@@ -451,6 +500,9 @@ internal static class LoopAnalysisReadScopeGuard
 
         foreach (var day in range.Days)
         {
+            if (!treatments || !devices)
+                day.Coverage.Analysed = null;
+
             if (!glucose)
                 day.Coverage.Glucose = null;
 
@@ -458,8 +510,7 @@ internal static class LoopAnalysisReadScopeGuard
             {
                 day.Coverage.DeliveredBasal = null;
                 day.Coverage.NetLoopCorrection = null;
-                day.Coverage.Iob = null;
-                day.Coverage.Cob = null;
+                day.Coverage.IobCob = null;
                 day.NetLoopCorrection = null;
                 day.TotalInsulin = null;
             }

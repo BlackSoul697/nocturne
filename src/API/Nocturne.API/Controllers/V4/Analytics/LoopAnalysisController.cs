@@ -4,7 +4,6 @@ using Nocturne.API.Authorization;
 using Nocturne.API.Controllers.V4.Base;
 using Nocturne.API.Extensions;
 using Nocturne.Core.Contracts.Analytics;
-using Nocturne.Core.Models.Authorization;
 using Nocturne.Core.Models.LoopAnalysis;
 using OpenApi.Remote.Attributes;
 
@@ -12,24 +11,45 @@ namespace Nocturne.API.Controllers.V4.Analytics;
 
 /// <summary>
 /// The Loop Analysis report: every tab is computed server-side from one fetch per request and
-/// returned as <c>{ primary, comparison? }</c> for the ranges a <see cref="LoopAnalysisFilter"/> names.
+/// returned as <c>{ primary, comparison? }</c> for the ranges its <see cref="LoopAnalysisFilter"/> names.
 /// </summary>
 /// <remarks>
-/// Responses carry a 60-second client-only cache and nothing is cached server-side, because
-/// <see cref="LoopAnalysisReadScopeGuard"/> narrows each response to its caller.
+/// Every action takes the filter as the same query parameters and builds it with
+/// <see cref="TryBuildFilter"/>. Responses carry a 60-second client-only cache and nothing is
+/// cached server-side, because <see cref="LoopAnalysisReadScopeGuard"/> narrows each response to
+/// its caller.
 /// </remarks>
 /// <seealso cref="ILoopAnalysisService"/>
 [ApiController]
 [Tags("Analytics")]
 [Route("api/v4/loop-analysis")]
 [Produces("application/json")]
-public class LoopAnalysisController(ILoopAnalysisService service) : ControllerBase
+public class LoopAnalysisController(ILoopAnalysisService service, TimeProvider timeProvider) : ControllerBase
 {
+    /// <summary>The span of history a clamped reader may read, as the row level security policies clamp it.</summary>
+    private static readonly TimeSpan HistoryClampWindow = TimeSpan.FromHours(24);
+
     /// <summary>
     /// Every series in 288 local five-minute slots of the day: glucose, scheduled and delivered
     /// basal, net loop correction and its components, IOB/COB, manual boluses, carbs and the
     /// target range, with the days behind them.
     /// </summary>
+    /// <param name="from">Start of the range (inclusive, UTC).</param>
+    /// <param name="to">
+    /// End of the range (exclusive, UTC), at most 90 days of elapsed time after
+    /// <paramref name="from"/>. A range of 90 local days that crosses a fall-back transition is 90
+    /// days and an hour long, and is rejected.
+    /// </param>
+    /// <param name="compareFrom">Start of the comparison range; given together with <paramref name="compareTo"/>.</param>
+    /// <param name="compareTo">End of the comparison range, under the same limit as <paramref name="to"/>.</param>
+    /// <param name="days">Local weekdays to analyse; every day when empty.</param>
+    /// <param name="excludeOverrides">Mask override time; ignored without treatments.read.</param>
+    /// <param name="excludeTemporaryTargets">Mask temporary target time; ignored without treatments.read.</param>
+    /// <param name="excludeExercise">Mask exercise time; ignored without treatments.read.</param>
+    /// <param name="excludeIllness">Mask illness time; ignored without treatments.read.</param>
+    /// <param name="excludeOpenLoop">Mask time the pump was in manual mode or had no AID algorithm; ignored without devices.read.</param>
+    /// <param name="profileName">Analyse only time this profile was active; ignored without therapy.read.</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
     [HttpGet("daily-profile")]
     [RemoteQuery]
     [RequireScope(LoopAnalysisReadScopeGuard.AdmissionScope)]
@@ -37,23 +57,54 @@ public class LoopAnalysisController(ILoopAnalysisService service) : ControllerBa
     [ProducesResponseType(typeof(DailyProfileResponse), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     public async Task<ActionResult<DailyProfileResponse>> GetDailyProfile(
-        [FromQuery] LoopAnalysisFilter filter,
+        [FromQuery] DateTime from,
+        [FromQuery] DateTime to,
+        [FromQuery] DateTime? compareFrom = null,
+        [FromQuery] DateTime? compareTo = null,
+        [FromQuery] DayOfWeek[]? days = null,
+        [FromQuery] bool excludeOverrides = false,
+        [FromQuery] bool excludeTemporaryTargets = false,
+        [FromQuery] bool excludeExercise = false,
+        [FromQuery] bool excludeIllness = true,
+        [FromQuery] bool excludeOpenLoop = true,
+        [FromQuery] string? profileName = null,
         CancellationToken cancellationToken = default)
     {
-        if (Reject(filter) is { } invalid)
+        if (TryBuildFilter(
+                new LoopAnalysisFilter
+                {
+                    From = from,
+                    To = to,
+                    CompareFrom = compareFrom,
+                    CompareTo = compareTo,
+                    Days = days?.ToList(),
+                    ExcludeOverrides = excludeOverrides,
+                    ExcludeTemporaryTargets = excludeTemporaryTargets,
+                    ExcludeExercise = excludeExercise,
+                    ExcludeIllness = excludeIllness,
+                    ExcludeOpenLoop = excludeOpenLoop,
+                    ProfileName = profileName,
+                },
+                out var request) is { } invalid)
             return invalid;
 
-        var result = await service.GetDailyProfileAsync(filter, cancellationToken);
-        result.HistoryClamped = HttpContext.IsCallerHistoryClamped();
+        var result = await service.GetDailyProfileAsync(request.Filter, cancellationToken);
+        result.HistoryClamped = request.HistoryClamped;
+        result.IgnoredFilters = request.IgnoredFilters;
         return Ok(LoopAnalysisReadScopeGuard.Redact(result, HttpContext.GetGrantedScopes()));
     }
 
+    private sealed record FilterRequest(LoopAnalysisFilter Filter, List<string> IgnoredFilters, bool HistoryClamped);
+
     /// <summary>
-    /// Normalises the filter's bounds to UTC and rejects a range that is empty, inverted or longer
-    /// than <see cref="V4ReadLimits.MaxAnalyticsSpanDays"/>, and a comparison given by one bound.
+    /// Validates <paramref name="filter"/>, drops the parts the caller may not use
+    /// (<see cref="LoopAnalysisReadScopeGuard.NarrowFilter"/>) and starts each range no earlier
+    /// than a history-clamped caller can read.
     /// </summary>
-    private ObjectResult? Reject(LoopAnalysisFilter filter)
+    /// <returns>The error response, or null with <paramref name="request"/> set.</returns>
+    private ObjectResult? TryBuildFilter(LoopAnalysisFilter filter, out FilterRequest request)
     {
+        request = null!;
         filter.From = AsUtc(filter.From);
         filter.To = AsUtc(filter.To);
         filter.CompareFrom = filter.CompareFrom is { } compareFrom ? AsUtc(compareFrom) : null;
@@ -74,8 +125,22 @@ public class LoopAnalysisController(ILoopAnalysisService service) : ControllerBa
                 return overlongComparison;
         }
 
+        var ignored = LoopAnalysisReadScopeGuard.NarrowFilter(filter, HttpContext.GetGrantedScopes());
+
+        var clamped = HttpContext.IsCallerHistoryClamped();
+        if (clamped)
+        {
+            var floor = timeProvider.GetUtcNow().UtcDateTime - HistoryClampWindow;
+            filter.From = Max(filter.From, floor);
+            if (filter.CompareFrom is { } clampedStart)
+                filter.CompareFrom = Max(clampedStart, floor);
+        }
+
+        request = new FilterRequest(filter, ignored, clamped);
         return null;
     }
+
+    private static DateTime Max(DateTime a, DateTime b) => a > b ? a : b;
 
     private ObjectResult BadRange(string detail) => Problem(detail: detail, statusCode: 400, title: "Bad Request");
 

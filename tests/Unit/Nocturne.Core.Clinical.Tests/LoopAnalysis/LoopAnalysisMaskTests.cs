@@ -55,6 +55,43 @@ public class LoopAnalysisMaskTests
     }
 
     [Fact]
+    public void OpenLoop_TakesManualModesAndNonAidPumpsExceptWhereAidEvidenceExists()
+    {
+        const long Minute = 60_000;
+        var openLoop = LoopAnalysisMask.OpenLoop(
+            manualPumpModes: [new(0, 10 * Minute)],
+            nonAidPumps: [new(0, 300 * Minute)],
+            aidPumps: [new(200 * Minute, 300 * Minute)],
+            apsSnapshotMills: [100 * Minute]);
+
+        openLoop.Intervals.Should().Equal(
+            new MillsInterval(0, 100 * Minute),
+            new MillsInterval(130 * Minute, 200 * Minute));
+    }
+
+    [Fact]
+    public void DeviceWindow_SpansItsLocalCalendarDates()
+    {
+        var window = LoopAnalysisMask.DeviceWindow(new DateOnly(2024, 6, 3), new DateOnly(2024, 6, 4), Sydney, openEnd: 0);
+
+        window.Should().Be(new MillsInterval(
+            new DateTimeOffset(2024, 6, 2, 14, 0, 0, TimeSpan.Zero).ToUnixTimeMilliseconds(),
+            new DateTimeOffset(2024, 6, 4, 14, 0, 0, TimeSpan.Zero).ToUnixTimeMilliseconds()));
+        LoopAnalysisMask.DeviceWindow(null, null, Sydney, openEnd: 42).Should().Be(new MillsInterval(long.MinValue, 42));
+    }
+
+    [Fact]
+    public void StepTimeline_LatestStartedWins()
+    {
+        var timeline = StepTimeline<int>.LatestStartedWins([new(0, 100, 1), new(20, 40, 2), new(30, 120, 3)]);
+
+        timeline.Steps.Should().Equal(new Step<int>(0, 20, 1), new Step<int>(20, 30, 2), new Step<int>(30, 120, 3));
+        timeline.TryAt(25, out var value).Should().BeTrue();
+        value.Should().Be(2);
+        timeline.TryAt(120, out _).Should().BeFalse();
+    }
+
+    [Fact]
     public void DayStart_FollowsTheZonesMidnightAcrossDst()
     {
         LocalSlotBinning.DayStartMills(new DateOnly(2024, 4, 7), Sydney)

@@ -2,11 +2,12 @@ namespace Nocturne.Core.Clinical.LoopAnalysis;
 
 /// <summary>
 /// Places instants and half-open intervals on a zone's local wall clock, in N-minute time-of-day
-/// slots. Every time-of-day distribution goes through here.
+/// slots.
 /// </summary>
 public static class LocalSlotBinning
 {
     public const long MinuteMs = 60_000L;
+    public const long HourMs = 60 * MinuteMs;
 
     /// <summary>
     /// Walks <c>[startMills, endMills)</c> in slices that end on <paramref name="tz"/>'s local

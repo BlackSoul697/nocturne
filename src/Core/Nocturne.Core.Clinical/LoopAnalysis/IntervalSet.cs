@@ -114,17 +114,5 @@ public sealed class IntervalSet
             piece(cursor, end);
     }
 
-    private int FirstEndingAfter(long mills)
-    {
-        int lo = 0, hi = _intervals.Length;
-        while (lo < hi)
-        {
-            var mid = (lo + hi) >>> 1;
-            if (_intervals[mid].End <= mills)
-                lo = mid + 1;
-            else
-                hi = mid;
-        }
-        return lo;
-    }
+    private int FirstEndingAfter(long mills) => SortedSearch.FirstEndingAfter(_intervals, mills, static i => i.End);
 }

@@ -1,3 +1,4 @@
+using Nocturne.Core.Clinical.Treatments;
 using Nocturne.Core.Models;
 using Nocturne.Core.Models.LoopAnalysis;
 
@@ -51,6 +52,31 @@ public sealed record LoopAnalysisMask(IntervalSet Analysed, IntervalSet Glucose)
 
         return new LoopAnalysisMask(analysed, analysed.Subtract(IntervalSet.Of(sources.DataExclusions)));
     }
+
+    /// <summary>
+    /// Time not in closed loop: a pump mode of manual or off, and the time a pump registered with
+    /// no AID algorithm was in use, except where AID evidence exists. A registered pump's window is
+    /// a span of calendar dates and often outlives the pump's use, so an AID pump's window or an
+    /// APS snapshot no older than <see cref="DeviceReportedValues.RecencyThresholdMs"/> wins over it.
+    /// </summary>
+    public static IntervalSet OpenLoop(
+        IEnumerable<MillsInterval> manualPumpModes,
+        IEnumerable<MillsInterval> nonAidPumps,
+        IEnumerable<MillsInterval> aidPumps,
+        IEnumerable<long> apsSnapshotMills)
+    {
+        var aidEvidence = IntervalSet.Of(aidPumps.Concat(
+            apsSnapshotMills.Select(s => new MillsInterval(s, s + DeviceReportedValues.RecencyThresholdMs))));
+        return IntervalSet.Of(manualPumpModes).Union(IntervalSet.Of(nonAidPumps).Subtract(aidEvidence));
+    }
+
+    /// <summary>
+    /// A registered device's window, whose dates are local calendar dates: from the start of its
+    /// first day to the end of its last, open-ended on either side a date does not bound.
+    /// </summary>
+    public static MillsInterval DeviceWindow(DateOnly? start, DateOnly? end, TimeZoneInfo tz, long openEnd) => new(
+        start is { } first ? LocalSlotBinning.DayStartMills(first, tz) : long.MinValue,
+        end is { } last ? LocalSlotBinning.DayStartMills(last.AddDays(1), tz) : openEnd);
 
     private static IntervalSet LocalWeekdays(long from, long to, TimeZoneInfo tz, HashSet<DayOfWeek> days)
     {

@@ -61,6 +61,15 @@ public readonly record struct BasalPiece(
     public bool HasDelta => Delivered.HasValue && Scheduled.HasValue;
 }
 
+/// <summary>What the pump's records say about basal delivery over a window.</summary>
+/// <param name="Recorded">Time a temp basal record covers.</param>
+/// <param name="Unknown">Recorded time whose delivery is unknown: a relative temp with no rate.</param>
+/// <param name="Inferable">
+/// Unrecorded time the schedule is taken to have run through; see
+/// <see cref="NetInsulinAboveSchedule.MaxInferredGapMs"/>.
+/// </param>
+public sealed record BasalEvidence(IntervalSet Recorded, IntervalSet Unknown, IntervalSet Inferable);
+
 /// <summary>
 /// Delivered basal minus scheduled basal, plus every bolus, over any interval, split by
 /// <see cref="NetInsulinOrigin"/>. The definition every Loop Analysis tab reads its insulin from.
@@ -72,7 +81,16 @@ public readonly record struct BasalPiece(
 /// </remarks>
 public sealed class NetInsulinAboveSchedule
 {
-    private const double HourMs = 3_600_000d;
+
+    /// <summary>
+    /// The longest stretch with no temp basal record that the schedule is taken to have run
+    /// through, and then only with pump evidence (a temp basal record or an APS snapshot) on both
+    /// sides of it. Loop and the oref systems let a temp lapse back to the schedule between
+    /// decisions, and a pump that reports only its temps leaves scheduled stretches between them;
+    /// past a few hours with no evidence at all, an upload outage or time before the pump is the
+    /// likelier story, and delivery there is unknown rather than scheduled.
+    /// </summary>
+    public const long MaxInferredGapMs = 3 * LocalSlotBinning.HourMs;
 
     private readonly BasalPiece[] _pieces;
     private readonly InsulinDose[] _doses;
@@ -100,7 +118,7 @@ public sealed class NetInsulinAboveSchedule
         double algorithm = 0, manualTemp = 0, suspend = 0, inferred = 0, automaticBolus = 0, manualBolus = 0;
         long covered = 0;
 
-        for (var i = FirstPieceEndingAfter(start); i < _pieces.Length && _pieces[i].Start < end; i++)
+        for (var i = SortedSearch.FirstEndingAfter(_pieces, start, static p => p.End); i < _pieces.Length && _pieces[i].Start < end; i++)
         {
             var piece = _pieces[i];
             if (!piece.HasDelta)
@@ -109,7 +127,7 @@ public sealed class NetInsulinAboveSchedule
             if (ms <= 0)
                 continue;
             covered += ms;
-            var units = (piece.Delivered!.Value - piece.Scheduled!.Value) * ms / HourMs;
+            var units = (piece.Delivered!.Value - piece.Scheduled!.Value) * ms / LocalSlotBinning.HourMs;
             switch (piece.Origin)
             {
                 case NetInsulinOrigin.AlgorithmTemp: algorithm += units; break;
@@ -119,7 +137,7 @@ public sealed class NetInsulinAboveSchedule
             }
         }
 
-        for (var i = FirstDoseAtOrAfter(start); i < _doses.Length && _doses[i].Mills < end; i++)
+        for (var i = SortedSearch.FirstEndingAfter(_doses, start - 1, static d => d.Mills); i < _doses.Length && _doses[i].Mills < end; i++)
         {
             if (_doses[i].Automatic)
                 automaticBolus += _doses[i].Units;
@@ -146,39 +164,34 @@ public sealed class NetInsulinAboveSchedule
     public static List<RateSegment> ScheduledBaseline(
         IEnumerable<BasalSegment> schedule, IEnumerable<ScaleFactorInterval> overrides)
     {
-        var factors = overrides.Where(o => o.End > o.Start && o.Factor != 1).OrderBy(o => o.Start).ToList();
+        var factors = StepTimeline<double>.LatestStartedWins(
+            overrides.Select(o => new Step<double>(o.Start, o.End, o.Factor)));
+        var steps = factors.Steps;
         var result = new List<RateSegment>();
         foreach (var segment in schedule.Where(s => s.EndMills > s.StartMills).OrderBy(s => s.StartMills))
         {
-            var bounds = new SortedSet<long> { segment.StartMills, segment.EndMills };
-            foreach (var factor in factors)
+            var cursor = segment.StartMills;
+            for (var i = factors.FirstEndingAfter(cursor); i < steps.Count && steps[i].Start < segment.EndMills; i++)
             {
-                if (factor.Start > segment.StartMills && factor.Start < segment.EndMills) bounds.Add(factor.Start);
-                if (factor.End > segment.StartMills && factor.End < segment.EndMills) bounds.Add(factor.End);
+                if (steps[i].Start > cursor)
+                    result.Add(new RateSegment(cursor, steps[i].Start, segment.UnitsPerHour));
+                var stepEnd = Math.Min(steps[i].End, segment.EndMills);
+                result.Add(new RateSegment(Math.Max(cursor, steps[i].Start), stepEnd, segment.UnitsPerHour * steps[i].Value));
+                cursor = stepEnd;
             }
-
-            long? previous = null;
-            foreach (var bound in bounds)
-            {
-                if (previous is { } pieceStart)
-                {
-                    var active = factors.LastOrDefault(f => f.Start <= pieceStart && f.End > pieceStart);
-                    var scale = active.End > active.Start ? active.Factor : 1;
-                    result.Add(new RateSegment(pieceStart, bound, segment.UnitsPerHour * scale));
-                }
-                previous = bound;
-            }
+            if (cursor < segment.EndMills)
+                result.Add(new RateSegment(cursor, segment.EndMills, segment.UnitsPerHour));
         }
         return result;
     }
 
     /// <summary>
     /// Temp basals as delivered: each ends where the next from the same device starts
-    /// (<see cref="StatisticsService.ClipOverlappingTempBasals"/>), with the time they cover and the
-    /// part of it whose delivery is unknown, for <see cref="DeliveredFromSeries"/>.
+    /// (<see cref="StatisticsService.ClipOverlappingTempBasals"/>), with what they and the APS
+    /// snapshots say about delivery, for <see cref="DeliveredFromSeries"/>.
     /// </summary>
-    public static (List<TempBasal> Clipped, IntervalSet Recorded, IntervalSet Unknown) ClipTempBasals(
-        IEnumerable<TempBasal> tempBasals)
+    public static (List<TempBasal> Clipped, BasalEvidence Evidence) ClipTempBasals(
+        IEnumerable<TempBasal> tempBasals, IEnumerable<long> apsSnapshotMills)
     {
         var clipped = new List<TempBasal>();
         var recorded = new List<MillsInterval>();
@@ -203,24 +216,29 @@ public sealed class NetInsulinAboveSchedule
             if (tb.Rate is null && tb.Origin != TempBasalOrigin.Suspended)
                 unknown.Add(new MillsInterval(tb.StartMills, effectiveEnd));
         }
-        return (clipped, IntervalSet.Of(recorded), IntervalSet.Of(unknown));
+
+        var recordedSet = IntervalSet.Of(recorded);
+        var evidence = recorded.SelectMany(r => new[] { r.Start, r.End }).Concat(apsSnapshotMills).Order().ToArray();
+        var inferable = new List<MillsInterval>();
+        for (var i = 0; i + 1 < evidence.Length; i++)
+        {
+            if (evidence[i + 1] - evidence[i] <= MaxInferredGapMs)
+                inferable.Add(new MillsInterval(evidence[i], evidence[i + 1]));
+        }
+
+        return (clipped, new BasalEvidence(
+            recordedSet, IntervalSet.Of(unknown), IntervalSet.Of(inferable).Subtract(recordedSet)));
     }
 
     /// <summary>
     /// Delivered basal from a step series in which each point holds until the next, as
-    /// <c>IBasalSeriesBuilder</c> builds it from temp basals with schedule-filled gaps.
+    /// <c>IBasalSeriesBuilder</c> builds it from temp basals with schedule-filled gaps. A recorded
+    /// point holds only within <see cref="BasalEvidence.Recorded"/> and a schedule-filled one only
+    /// within <see cref="BasalEvidence.Inferable"/>; everywhere else delivery is absent.
     /// </summary>
     /// <param name="end">Where the last point stops.</param>
-    /// <param name="recorded">
-    /// Time the temp basal records cover. A recorded point holds only within it, so a gap the series
-    /// left unfilled (no schedule to fill it from) reads as unknown rather than as the temp before it.
-    /// </param>
-    /// <param name="unknown">
-    /// Time whose delivery is unknown though a temp covered it: a relative temp with no rate. The
-    /// series shows the schedule there; it is removed.
-    /// </param>
     public static List<DeliveredBasalSegment> DeliveredFromSeries(
-        IEnumerable<BasalPoint> series, long end, IntervalSet recorded, IntervalSet unknown)
+        IEnumerable<BasalPoint> series, long end, BasalEvidence evidence)
     {
         var points = series.OrderBy(p => p.Timestamp).ToList();
         var result = new List<DeliveredBasalSegment>();
@@ -233,13 +251,11 @@ public sealed class NetInsulinAboveSchedule
 
             var point = points[i];
             void Add(long pieceStart, long pieceEnd) =>
-                unknown.ForEachGap(pieceStart, pieceEnd, (knownStart, knownEnd) =>
+                evidence.Unknown.ForEachGap(pieceStart, pieceEnd, (knownStart, knownEnd) =>
                     result.Add(new DeliveredBasalSegment(knownStart, knownEnd, point.Rate, point.Origin)));
 
-            if (point.Origin == BasalDeliveryOrigin.Inferred)
-                Add(start, stop);
-            else
-                recorded.ForEachOverlap(start, stop, Add);
+            (point.Origin == BasalDeliveryOrigin.Inferred ? evidence.Inferable : evidence.Recorded)
+                .ForEachOverlap(start, stop, Add);
         }
         return result;
     }
@@ -267,27 +283,5 @@ public sealed class NetInsulinAboveSchedule
             }
             previous = bound;
         }
-    }
-
-    private int FirstPieceEndingAfter(long mills)
-    {
-        int lo = 0, hi = _pieces.Length;
-        while (lo < hi)
-        {
-            var mid = (lo + hi) >>> 1;
-            if (_pieces[mid].End <= mills) lo = mid + 1; else hi = mid;
-        }
-        return lo;
-    }
-
-    private int FirstDoseAtOrAfter(long mills)
-    {
-        int lo = 0, hi = _doses.Length;
-        while (lo < hi)
-        {
-            var mid = (lo + hi) >>> 1;
-            if (_doses[mid].Mills < mills) lo = mid + 1; else hi = mid;
-        }
-        return lo;
     }
 }

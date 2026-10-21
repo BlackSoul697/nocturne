@@ -32,7 +32,9 @@ public class DailyProfileCalculatorTests
         IEnumerable<CarbEvent>? carbs = null,
         IEnumerable<IobCobTick>? iobCob = null,
         LoopAnalysisFilter? filter = null,
-        LoopAnalysisMaskSources? sources = null)
+        LoopAnalysisMaskSources? sources = null,
+        IntervalSet? calculatedIobCobTime = null,
+        Func<long, (double Low, double High)?>? targetAt = null)
     {
         var inputs = new DailyProfileInputs
         {
@@ -41,6 +43,8 @@ public class DailyProfileCalculatorTests
             Glucose = [.. glucose ?? []],
             Carbs = [.. carbs ?? []],
             IobCob = [.. iobCob ?? []],
+            CalculatedIobCobTime = calculatedIobCobTime ?? IntervalSet.Empty,
+            TargetAt = targetAt,
         };
         var mask = LoopAnalysisMask.Build(filter ?? new LoopAnalysisFilter(), from, to, tz, sources ?? new LoopAnalysisMaskSources());
         return DailyProfileCalculator.Calculate(inputs, mask, from, to);
@@ -288,7 +292,7 @@ public class DailyProfileCalculatorTests
         for (var t = from; t < to; t += 5 * Minute)
             ticks.Add(new IobCobTick(t, 1.5, t < from + 12 * Hour ? IobCobSource.Device : IobCobSource.Calculated, 0, IobCobSource.Calculated));
 
-        var result = Calculate(Darwin, from, to, iobCob: ticks);
+        var result = Calculate(Darwin, from, to, iobCob: ticks, calculatedIobCobTime: IntervalSet.Of(from, to));
 
         result.Slots[SlotAt(6, 0)].Iob!.P50.Should().Be(1.5);
         result.Slots[SlotAt(6, 0)].IobSource.Should().Be(IobCobSource.Device);
@@ -328,6 +332,106 @@ public class DailyProfileCalculatorTests
         result.Slots[0].Glucose!.N.Should().Be(2);
     }
 
-    private static bool Bit(string base64, int slot) =>
-        (Convert.FromBase64String(base64)[slot / 8] & (1 << (slot % 8))) != 0;
+    [Fact]
+    public void CalculatedIobCob_WithNothingRecorded_IsAbsentNotZero()
+    {
+        var from = Local(Darwin, 2024, 6, 3, 0);
+        var to = Local(Darwin, 2024, 6, 4, 0);
+        var ticks = new List<IobCobTick>();
+        for (var t = from; t < to; t += 5 * Minute)
+            ticks.Add(new IobCobTick(t, 0, IobCobSource.Calculated, 0, IobCobSource.Calculated));
+
+        var result = Calculate(Darwin, from, to, iobCob: ticks, calculatedIobCobTime: IntervalSet.Of(from, from + 6 * Hour));
+
+        result.Slots[SlotAt(3, 0)].Iob!.P50.Should().Be(0);
+        result.Slots[SlotAt(12, 0)].Iob.Should().BeNull();
+        result.Slots[SlotAt(12, 0)].Cob.Should().BeNull();
+    }
+
+    [Fact]
+    public void DaysWithNoPumpRecords_AreNotFilledWithTheSchedule()
+    {
+        // The reviewer's probe: one day of +1 U/h, then nine days with no record at all, which the
+        // series builder fills from the schedule.
+        var from = Utc(2024, 6, 9, 14);
+        var to = from + 10 * 24 * Hour;
+        var at = DateTimeOffset.FromUnixTimeMilliseconds(from).UtcDateTime;
+        var (_, evidence) = NetInsulinAboveSchedule.ClipTempBasals(
+        [
+            new TempBasal { StartTimestamp = at, EndTimestamp = at.AddDays(1), Rate = 2, Origin = TempBasalOrigin.Algorithm, Device = "p" },
+        ], []);
+        var delivered = NetInsulinAboveSchedule.DeliveredFromSeries(
+        [
+            new BasalPoint { Timestamp = from, Rate = 2, Origin = BasalDeliveryOrigin.Algorithm },
+            new BasalPoint { Timestamp = from + 24 * Hour, Rate = 1, Origin = BasalDeliveryOrigin.Inferred },
+        ], to, evidence);
+
+        var result = Calculate(Sydney, from, to, delivered: delivered, scheduled: [new(from, to, 1.0)]);
+
+        result.Summary.DaysWithData.Should().Be(1);
+        result.Summary.NetLoopCorrectionDays.Should().Be(1);
+        result.Summary.NetLoopCorrectionPerDay.Should().Be(24);
+        result.Slots[120].NetLoopCorrection!.Rate.N.Should().Be(1);
+        result.Slots[120].NetLoopCorrection!.Rate.P50.Should().Be(1);
+        result.Slots[120].DeliveredBasal!.N.Should().Be(1);
+    }
+
+    [Fact]
+    public void PreAidTime_IsAbsent()
+    {
+        var from = Local(Darwin, 2024, 6, 3, 0);
+        var to = Local(Darwin, 2024, 6, 13, 0);
+        var aidStart = from + 5 * 24 * Hour;
+        var temps = new List<TempBasal>();
+        for (var t = aidStart; t < to; t += 5 * Minute)
+        {
+            var at = DateTimeOffset.FromUnixTimeMilliseconds(t).UtcDateTime;
+            temps.Add(new TempBasal { StartTimestamp = at, EndTimestamp = at.AddMinutes(30), Rate = 1.5, Origin = TempBasalOrigin.Algorithm, Device = "p" });
+        }
+        var (clipped, evidence) = NetInsulinAboveSchedule.ClipTempBasals(temps, []);
+        var series = new List<BasalPoint> { new() { Timestamp = from, Rate = 1, Origin = BasalDeliveryOrigin.Inferred } };
+        series.AddRange(clipped.Select(t => new BasalPoint { Timestamp = t.StartMills, Rate = 1.5, Origin = BasalDeliveryOrigin.Algorithm }));
+
+        var result = Calculate(Darwin, from, to,
+            delivered: NetInsulinAboveSchedule.DeliveredFromSeries(series, to, evidence),
+            scheduled: [new(from, to, 1.0)]);
+
+        result.Summary.DaysWithData.Should().Be(5);
+        result.Slots[SlotAt(10, 0)].NetLoopCorrection!.Rate.N.Should().Be(5);
+        result.Slots[SlotAt(10, 0)].NetLoopCorrection!.Rate.P50.Should().Be(0.5);
+        result.Summary.NetLoopCorrectionPerDay.Should().Be(12);
+    }
+
+    [Fact]
+    public void ExactlyHalfAnalysedSlot_Counts()
+    {
+        var from = Local(Darwin, 2024, 6, 3, 0);
+        var to = Local(Darwin, 2024, 6, 4, 0);
+        var ten = Local(Darwin, 2024, 6, 3, 10);
+
+        var result = Calculate(Darwin, from, to,
+            delivered: [new(from, to, 2.0, BasalDeliveryOrigin.Algorithm)],
+            scheduled: [new(from, to, 1.0)],
+            filter: new LoopAnalysisFilter { ExcludeOverrides = true },
+            sources: new LoopAnalysisMaskSources { Overrides = [new(ten, ten + 150_000)] });
+
+        result.Slots[SlotAt(10, 0)].NetLoopCorrection!.Mean.Should().Be(1.0, "2.5 of 5 minutes is half the slot");
+    }
+
+    [Fact]
+    public void Target_IsTheMedianAcrossDaysOfTheRangeInForce()
+    {
+        var from = Local(Darwin, 2024, 6, 3, 0);
+        var to = Local(Darwin, 2024, 6, 6, 0);
+        var temporaryTargetDay = from + 24 * Hour;
+
+        var result = Calculate(Darwin, from, to,
+            targetAt: t => t >= temporaryTargetDay && t < temporaryTargetDay + 24 * Hour ? (150, 150) : (90, 140));
+
+        result.Slots[0].TargetLow.Should().Be(90);
+        result.Slots[0].TargetHigh.Should().Be(140);
+    }
+
+    private static bool Bit(string? base64, int slot) =>
+        (Convert.FromBase64String(base64!)[slot / 8] & (1 << (slot % 8))) != 0;
 }

@@ -35,6 +35,12 @@ public class DailyProfileResponse
     /// cannot be placed without the zone.
     /// </summary>
     public TimeZoneUnavailableReason? TimeZoneUnavailableReason { get; set; }
+
+    /// <summary>
+    /// Query parameters the caller's scopes do not let it use, which were ignored: a profile name
+    /// without therapy.read, and the masks drawn from treatments or devices without those scopes.
+    /// </summary>
+    public List<string> IgnoredFilters { get; set; } = [];
 }
 
 /// <summary>288 local five-minute slots of one range, and the days that went into them.</summary>
@@ -104,11 +110,14 @@ public class DailyProfileSlot
     /// <summary>g.</summary>
     public DailyProfileEventSeries? Carbs { get; set; }
 
-    /// <summary>mg/dL, the scheduled target range's lower bound.</summary>
-    public LoopAnalysisAggregate? TargetLow { get; set; }
+    /// <summary>
+    /// mg/dL, the lower bound of the target range in force: a temporary target where one ran, else
+    /// the schedule. The median across the days the slot was analysed on.
+    /// </summary>
+    public double? TargetLow { get; set; }
 
-    /// <summary>mg/dL.</summary>
-    public LoopAnalysisAggregate? TargetHigh { get; set; }
+    /// <summary>mg/dL, as <see cref="TargetLow"/>.</summary>
+    public double? TargetHigh { get; set; }
 }
 
 /// <summary>
@@ -184,8 +193,11 @@ public class DailyProfileDay
 /// </summary>
 public class DailyProfileDayCoverage
 {
-    /// <summary>At least half the slot was analysed, after the filter's masks.</summary>
-    public string Analysed { get; set; } = "";
+    /// <summary>
+    /// At least half the slot was analysed, after the filter's masks. Null when the caller cannot
+    /// read every category a mask is drawn from, since the bitmap would show where those masks fell.
+    /// </summary>
+    public string? Analysed { get; set; }
 
     public string? Glucose { get; set; }
 
@@ -195,9 +207,8 @@ public class DailyProfileDayCoverage
 
     public string? NetLoopCorrection { get; set; }
 
-    public string? Iob { get; set; }
-
-    public string? Cob { get; set; }
+    /// <summary>IOB and COB, which come from the same ticks and so cover the same slots.</summary>
+    public string? IobCob { get; set; }
 }
 
 /// <summary>
@@ -206,7 +217,10 @@ public class DailyProfileDayCoverage
 /// </summary>
 public class DailyProfileSummary
 {
-    /// <summary>Days with any analysed glucose or delivered basal.</summary>
+    /// <summary>
+    /// Days with any analysed glucose reading, dose or carb entry, or basal delivery the pump's
+    /// records account for.
+    /// </summary>
     public int DaysWithData { get; set; }
 
     /// <summary>Delivered over scheduled basal, over the time both are known.</summary>
