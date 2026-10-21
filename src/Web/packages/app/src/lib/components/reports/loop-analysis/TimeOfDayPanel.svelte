@@ -1,10 +1,11 @@
 <!--
   One panel of a stack sharing a local time-of-day x axis of 288 five-minute slots. The x domain is
-  slot units, so a mark at slot i spans [i, i + 1). Pointer and arrow keys move the shared cursor;
-  a click or Enter picks the slot for the drill-down.
+  slot units, so a mark at slot i spans [i, i + 1). The stack is one tab stop: left and right (with
+  Home and End) move along the day, up and down move between panels, a click or Enter picks the slot
+  for the day list and Escape closes it.
 -->
 <script lang="ts">
-  import type { Snippet } from "svelte";
+  import { untrack, type Snippet } from "svelte";
   import { Axis, Chart, Rule, Svg } from "layerchart";
   import ChartKey, { type ChartKeyItem } from "$lib/components/charts/print/ChartKey.svelte";
   import { hourLabel, time } from "$lib/utils/formatting";
@@ -25,6 +26,8 @@
     legend?: ChartKeyItem[];
     marks: Snippet;
     tooltip: Snippet<[number]>;
+    /** The slot's headline value and n, read out with its time as the slider's value. */
+    describe: (slot: number) => string;
   }
 
   let {
@@ -40,6 +43,7 @@
     legend = [],
     marks,
     tooltip,
+    describe,
   }: Props = $props();
 
   // Left and right are written into the tooltip's position classes too.
@@ -73,14 +77,30 @@
   }
 
   function onkeydown(event: KeyboardEvent) {
-    const current = cursor.panel === id && cursor.slot != null ? cursor.slot : (cursor.selected ?? 0);
     const action = slotKeyAction(event);
     if (action == null) return;
-    if (action === "select") cursor.select(current);
-    else cursor.hover(id, Math.min(SLOTS_PER_DAY - 1, Math.max(0, current + action)));
+    if (action.kind === "close") {
+      if (cursor.selected == null) return;
+      cursor.selected = null;
+    } else if (action.kind === "select") cursor.select(current);
+    else if (action.kind === "step") cursor.hover(id, current + action.by);
+    else if (action.kind === "to") cursor.hover(id, action.slot);
+    else cursor.focusNeighbour(id, action.by);
     event.preventDefault();
   }
 
+  function onfocus() {
+    cursor.tabStop = id;
+    cursor.hover(id, current);
+  }
+
+  let element = $state<HTMLElement | null>(null);
+  $effect(() => {
+    const target = element;
+    if (target) return untrack(() => cursor.register(id, target));
+  });
+
+  const current = $derived(cursor.slot ?? cursor.selected ?? 0);
   const tooltipSlot = $derived(cursor.panel === id ? cursor.slot : null);
   const slotText = (slot: number) =>
     `${time(atMinute(slot * SLOT_MINUTES))}–${time(atMinute((slot + 1) * SLOT_MINUTES))}`;
@@ -101,15 +121,17 @@
   {:else}
     <div
       class="relative {heightClass} w-full cursor-crosshair touch-pan-y rounded-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"
+      bind:this={element}
       role="slider"
-      tabindex="0"
+      tabindex={cursor.tabStop === id ? 0 : -1}
       aria-label={title}
       aria-valuemin={0}
       aria-valuemax={SLOTS_PER_DAY - 1}
-      aria-valuenow={tooltipSlot ?? cursor.selected ?? 0}
-      aria-valuetext={slotText(tooltipSlot ?? cursor.selected ?? 0)}
+      aria-valuenow={current}
+      aria-valuetext={`${slotText(current)}: ${describe(current)}`}
       {onpointermove}
       onpointerleave={() => cursor.leave(id)}
+      {onfocus}
       onblur={() => cursor.leave(id)}
       {onclick}
       {onkeydown}

@@ -11,6 +11,18 @@ export const GLUCOSE_BANDS: BandColors = {
   median: "var(--chart-1)",
 };
 
+export const IOB_BANDS: BandColors = {
+  outer: "color-mix(in oklab, var(--insulin) 22%, transparent)",
+  inner: "color-mix(in oklab, var(--insulin) 45%, transparent)",
+  median: "var(--insulin)",
+};
+
+export const COB_BANDS: BandColors = {
+  outer: "color-mix(in oklab, var(--carbs) 22%, transparent)",
+  inner: "color-mix(in oklab, var(--carbs) 45%, transparent)",
+  median: "var(--carbs)",
+};
+
 /** Tints of the one basal hue; texture tells them apart in print. */
 export const BASAL_BANDS: BandColors = {
   outer: "color-mix(in oklab, var(--basal) 45%, var(--background))",

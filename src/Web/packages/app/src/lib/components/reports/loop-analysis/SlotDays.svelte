@@ -12,6 +12,7 @@
     atMinute,
     clockTime,
     contributingDays,
+    isEscape,
     SLOT_MINUTES,
     type CoverageSeries,
   } from "./daily-profile-view";
@@ -35,6 +36,20 @@
     ]
   );
 
+  let section = $state<HTMLElement | null>(null);
+  let heading = $state<HTMLElement | null>(null);
+
+  // Each slot picked moves focus to the list it opened.
+  const focusHeading = (_picked: number) => heading?.focus();
+  $effect(() => focusHeading(slot));
+
+  function onkeydown(event: KeyboardEvent) {
+    if (isEscape(event) && section?.contains(document.activeElement)) {
+      event.preventDefault();
+      onclose();
+    }
+  }
+
   const seriesLabels = $derived<Record<CoverageSeries, string>>({
     glucose: "Glucose",
     scheduledBasal: "Scheduled basal",
@@ -44,14 +59,22 @@
   });
 </script>
 
-<section class="space-y-3 rounded-lg border bg-card p-4" aria-labelledby="slot-days-heading">
+<svelte:window {onkeydown} />
+
+<section
+  bind:this={section}
+  class="space-y-3 rounded-lg border bg-card p-4"
+  aria-labelledby="slot-days-heading"
+>
   <div class="flex items-start justify-between gap-2">
     <div>
-      <h3 id="slot-days-heading" class="font-medium">
+      <h3 id="slot-days-heading" bind:this={heading} tabindex="-1" class="font-medium outline-none">
+
         Days behind {time(atMinute(minute))}–{time(atMinute(minute + SLOT_MINUTES))}
       </h3>
       <p class="text-sm text-muted-foreground">
-        Each day whose data counted in this slot. Open one to see it in Day in Review at this time.
+        Each day whose data counted in this slot. Open one to see it in Day in Review at this time,
+        or press Escape to return to the chart.
       </p>
     </div>
     <Button variant="ghost" size="icon-sm" onclick={onclose} aria-label="Close the day list">

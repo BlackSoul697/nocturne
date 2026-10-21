@@ -4,10 +4,6 @@
   import { resolve } from "$app/paths";
   import * as Tabs from "$lib/components/ui/tabs";
   import { getDailyProfile } from "$api/generated/loopAnalysis.generated.remote";
-  import {
-    getDailyBasalBolusRatios,
-    getInsulinDeliveryStatistics,
-  } from "$api/generated/statistics.generated.remote";
   import { requireDateParamsContext } from "$lib/hooks/date-params.svelte";
   import { contextResource } from "$lib/hooks/resource-context.svelte";
   import LoopAnalysisFilterBar from "$lib/components/reports/loop-analysis/LoopAnalysisFilterBar.svelte";
@@ -34,11 +30,14 @@
     });
   }
 
+  // Read once, so a clamped viewer's range does not move, and refetch, on every recomputation.
+  const openedAt = new Date();
+
   const request = $derived(
     dailyProfileRequest(
       filter,
       { fromDay: reportsParams.fromDay, toDay: reportsParams.toDay, dayCount: reportsParams.dayCount },
-      { limitTo24Hours: page.data.limitTo24Hours ?? false, now: new Date() }
+      { limitTo24Hours: page.data.limitTo24Hours ?? false, now: openedAt }
     )
   );
 
@@ -46,16 +45,12 @@
     errorTitle: "Error Loading Loop Analysis",
   });
 
-  // The strip composes the existing insulin reports over the same instants; their end is inclusive.
-  const statisticsDates = $derived({
-    startDate: request.primary.from.toISOString(),
-    endDate: new Date(request.primary.to.getTime() - 1).toISOString(),
-  });
-  const insulinResource = contextResource(() => getInsulinDeliveryStatistics(statisticsDates), {
-    errorTitle: "Error Loading Loop Analysis",
-  });
-  const ratiosResource = contextResource(() => getDailyBasalBolusRatios(statisticsDates), {
-    errorTitle: "Error Loading Loop Analysis",
+  const insulinDeliveryHref = $derived.by(() => {
+    const range = ["days", "from", "to", "isDefault"]
+      .filter((name) => page.url.searchParams.has(name))
+      .map((name) => `${name}=${encodeURIComponent(page.url.searchParams.get(name) ?? "")}`)
+      .join("&");
+    return resolve(`/reports/insulin-delivery?${range}`);
   });
 
   const tabs = $derived<{ value: LoopAnalysisTab; label: string }[]>([
@@ -100,11 +95,7 @@
     </Tabs.List>
     <Tabs.Content value="daily-profile" class="mt-4">
       {#if profileResource.current}
-        <DailyProfileTab
-          response={profileResource.current}
-          insulinStats={insulinResource.current}
-          ratios={ratiosResource.current}
-        />
+        <DailyProfileTab response={profileResource.current} {insulinDeliveryHref} />
       {/if}
     </Tabs.Content>
   </Tabs.Root>

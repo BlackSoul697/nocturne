@@ -1,23 +1,31 @@
 <!--
   The Daily profile tab: every series on one local time-of-day axis, stacked so a single crosshair
-  reads them all at once. Everything drawn is as the API returned it; the tab only lays it out.
+  reads them all at once. Values come from the API as they are; the tab picks only the axes, splits
+  series where they are absent or change sparseness, and lays the panels out.
 -->
 <script lang="ts">
   import { Area, Rule } from "layerchart";
   import { curveStepAfter } from "d3-shape";
   import {
     IobCobSource,
-    type DailyBasalBolusRatioResponse,
     type DailyProfileResponse,
     type DailyProfileSlot,
-    type InsulinDeliveryStatistics,
+    type LoopAnalysisAggregate,
   } from "$lib/api";
   import * as Alert from "$lib/components/ui/alert";
   import { Switch } from "$lib/components/ui/switch";
   import { Label } from "$lib/components/ui/label";
   import FigureStrip, { type Figure } from "$lib/components/reports/FigureStrip.svelte";
-  import { CHART_TEXTURES, patternClass } from "$lib/components/charts/print/chart-print-patterns";
-  import { BASAL_BANDS, GLUCOSE_BANDS } from "$lib/components/reports/percentile-band-colors";
+  import { Button } from "$lib/components/ui/button";
+  import { CHART_TEXTURES, dashClass, patternClass } from "$lib/components/charts/print/chart-print-patterns";
+  import {
+    BASAL_BANDS,
+    COB_BANDS as COB,
+    GLUCOSE_BANDS,
+    IOB_BANDS as IOB,
+  } from "$lib/components/reports/percentile-band-colors";
+  import { plural } from "$lib/utils/plural";
+  import ArrowRight from "@lucide/svelte/icons/arrow-right";
   import { tenantChartThresholds } from "$lib/stores/realtime-store.svelte";
   import { glucoseUnits } from "$lib/stores/appearance-store.svelte";
   import { bg, bgLabel, convertToDisplayUnits, hourLabel } from "$lib/utils/formatting";
@@ -37,11 +45,11 @@
 
   interface Props {
     response: DailyProfileResponse;
-    insulinStats?: InsulinDeliveryStatistics | null;
-    ratios?: DailyBasalBolusRatioResponse | null;
+    /** Insulin Delivery over the same range, for its whole-range figures. */
+    insulinDeliveryHref?: string | null;
   }
 
-  let { response, insulinStats = null, ratios = null }: Props = $props();
+  let { response, insulinDeliveryHref = null }: Props = $props();
 
   const primary = $derived(response.primary);
   const comparisonRange = $derived(response.comparison ?? null);
@@ -153,54 +161,72 @@
   };
   const CORRECTION_LINE = "var(--insulin)";
   const CORRECTION_BAND = "color-mix(in oklab, var(--insulin) 28%, transparent)";
-  const IOB = { outer: "color-mix(in oklab, var(--insulin) 22%, transparent)", inner: "color-mix(in oklab, var(--insulin) 45%, transparent)", median: "var(--insulin)" };
-  const COB = { outer: "color-mix(in oklab, var(--carbs) 22%, transparent)", inner: "color-mix(in oklab, var(--carbs) 45%, transparent)", median: "var(--carbs)" };
-  const SCHEDULED = { color: "var(--foreground)", dash: "5 3" };
+  const SCHEDULED = "var(--foreground)";
   const TARGET_EDGE = CHART_TEXTURES["target-range-limit"].color;
 
   const summary = $derived(primary?.summary);
   const figures = $derived.by<Figure[]>(() => {
+    const days = summary?.daysWithData ?? 0;
     const list: Figure[] = [
-      { label: "Days with data", value: String(summary?.daysWithData ?? 0), unit: "days" },
+      { label: "Days with data", value: String(days), unit: plural(days, ["day", "days"]) },
     ];
-    if (insulinStats?.tdd != null)
-      list.push({
-        label: "Total daily dose",
-        value: u1(insulinStats.tdd),
-        unit: "U/day",
-        note: "Whole range, as Insulin Delivery reports it",
-      });
-    if (ratios?.averageBasalPercent != null && ratios.averageBolusPercent != null)
-      list.push({
-        label: "Basal / bolus",
-        value: `${ratios.averageBasalPercent.toFixed(0)}% / ${ratios.averageBolusPercent.toFixed(0)}%`,
-        note: "Whole range, as Insulin Delivery reports it",
-      });
     if (summary?.deliveredToScheduledRatio != null)
       list.push({
         label: "Delivered vs scheduled basal",
         value: `${summary.deliveredToScheduledRatio.toFixed(2)}×`,
         note: "Observed delivered basal over scheduled",
       });
-    if (summary?.netLoopCorrectionPerDay != null)
+    if (summary?.netLoopCorrectionPerDay != null) {
+      const correctionDays = summary.netLoopCorrectionDays ?? 0;
       list.push({
         label: "Net loop correction",
         value: signed(summary.netLoopCorrectionPerDay),
         unit: "U/day",
         note:
           summary.netLoopCorrectionTddPercent != null
-            ? `${summary.netLoopCorrectionTddPercent.toFixed(0)}% of total insulin over ${summary.netLoopCorrectionDays ?? 0} days`
-            : `Over ${summary.netLoopCorrectionDays ?? 0} days`,
+            ? `${summary.netLoopCorrectionTddPercent.toFixed(0)}% of total insulin, ${plural(correctionDays, ["over # day", "over # days"])}`
+            : plural(correctionDays, ["Over # day", "Over # days"]),
       });
-    if (insulinStats?.microBolusInsulin != null)
-      list.push({
-        label: "Automatic boluses",
-        value: u1(insulinStats.microBolusInsulin),
-        unit: "U in range",
-        note: `${insulinStats.microBolusCount ?? 0} boluses over the whole range`,
-      });
+    }
     return list;
   });
+
+  const daysText = (n: number | undefined) => plural(n ?? 0, ["# day", "# days"]);
+  const readingsText = (n: number | undefined) => plural(n ?? 0, ["# reading", "# readings"]);
+
+  /** A slot's headline and n, as the slider reads them out. */
+  function describeSpread(
+    value: LoopAnalysisAggregate | null | undefined,
+    format: (v: number) => string,
+    unit: string,
+    counts: "days" | "readings"
+  ): string {
+    if (!value) return "No data in this slot";
+    const n = counts === "days" ? daysText(value.n) : readingsText(value.n);
+    return `Median ${format(value.p50 ?? 0)} ${unit}, ${n}`;
+  }
+
+  function describeEvents(series: DailyProfileSlot["carbs"], unit: string): string {
+    if (!series) return "No data in this slot";
+    return `${u2(series.meanPerDay ?? 0)} ${unit} per day, ${daysText(series.n)}`;
+  }
+
+  function describeCorrection(slot: number): string {
+    const value = at(slots, slot)?.netLoopCorrection;
+    if (!value) return "No data in this slot";
+    return `Net loop correction ${signed(value.mean ?? 0)} U/h, ${daysText(value.rate?.n)}`;
+  }
+
+  function describeHour(slot: number): string {
+    const hour = primary?.hourlyNetLoopCorrection?.find((h) => h.hour === hourOf(slot));
+    if (hour?.mean == null) return "No data in this hour";
+    return `Net loop correction ${signed(hour.mean)} U, ${daysText(hour.n)}`;
+  }
+
+  function closeDays() {
+    cursor.selected = null;
+    cursor.restoreFocus();
+  }
 </script>
 
 {#snippet eventReadout(series: DailyProfileSlot["carbs"], comparisonSeries: DailyProfileSlot["carbs"], unit: string)}
@@ -213,7 +239,7 @@
       <dt class="text-muted-foreground">Events per day</dt>
       <dd class="text-right">{u2(series.eventsPerDay ?? 0)}</dd>
       <dt class="text-muted-foreground">n</dt>
-      <dd class="text-right">{series.n ?? 0} days</dd>
+      <dd class="text-right">{daysText(series.n)}</dd>
       {#if comparing}
         <dt class="text-muted-foreground">Compared, mean per day</dt>
         <dd class="text-right">{comparisonSeries ? `${u2(comparisonSeries.meanPerDay ?? 0)} ${unit}` : "–"}</dd>
@@ -251,7 +277,15 @@
       </Alert.Root>
     {/if}
 
-    <FigureStrip {figures} />
+    <div class="space-y-2">
+      <FigureStrip {figures} />
+      {#if insulinDeliveryHref}
+        <Button href={insulinDeliveryHref} variant="link" size="inline">
+          Total daily dose and the basal and bolus split for the whole range are in Insulin Delivery
+          <ArrowRight />
+        </Button>
+      {/if}
+    </div>
 
     {#if !hasDays}
       <div class="rounded-lg border border-dashed p-8 text-center text-muted-foreground">
@@ -262,12 +296,13 @@
       <div class="space-y-5 rounded-lg border bg-card p-3 @md:p-4">
         {#if comparing}
           <p class="text-xs text-muted-foreground">
-            The comparison range is drawn muted and dashed under each series.
+            The comparison range is drawn as dashed outlines over each series.
           </p>
         {/if}
 
         <TimeOfDayPanel
           id="glucose"
+          describe={(slot) => describeSpread(at(slots, slot)?.glucose, glucoseText, bgLabel(), "readings")}
           title="Glucose"
           unit={bgLabel()}
           {cursor}
@@ -324,6 +359,7 @@
 
         <TimeOfDayPanel
           id="basal"
+          describe={(slot) => describeSpread(at(slots, slot)?.deliveredBasal, u2, "U/h", "days")}
           title="Basal"
           unit="U/h"
           {cursor}
@@ -335,7 +371,7 @@
             { texture: "percentile-median", label: "Delivered median", color: BASAL_BANDS.median, shape: "line" },
             ...(scheduleWithheld
               ? []
-              : [{ texture: "insulin-scheduled-basal" as const, label: "Scheduled", color: SCHEDULED.color, shape: "line" as const }]),
+              : [{ texture: "insulin-scheduled-basal" as const, label: "Scheduled", color: SCHEDULED, shape: "line" as const }]),
           ]}
         >
           {#snippet marks()}
@@ -348,16 +384,16 @@
               lineColor={BASAL_BANDS.median}
             />
             {#if comparisonSlots}
-              <SlotLine slots={comparisonSlots} value={(s) => s.scheduledBasal?.p50} stroke={SCHEDULED.color} dash="2 3" width={1} step muted />
+              <SlotLine slots={comparisonSlots} value={(s) => s.scheduledBasal?.p50} stroke={SCHEDULED} step comparison />
             {/if}
             <SlotLine
               {slots}
               value={(s) => s.scheduledBasal?.p50}
               sparse={(s) => s.scheduledBasal?.sparse ?? false}
-              stroke={SCHEDULED.color}
-              dash={SCHEDULED.dash}
+              stroke={SCHEDULED}
               width={1.5}
               step
+              class={dashClass("insulin-scheduled-basal")}
             />
           {/snippet}
           {#snippet tooltip(slot)}
@@ -382,6 +418,7 @@
         <div class="space-y-2">
           <TimeOfDayPanel
             id="correction"
+            describe={describeCorrection}
             title="Net loop correction"
             unit="U/h above schedule"
             {cursor}
@@ -407,7 +444,7 @@
                 innerColor={CORRECTION_BAND}
               />
               {#if comparisonSlots}
-                <SlotLine slots={comparisonSlots} value={(s) => s.netLoopCorrection?.mean} stroke={CORRECTION_LINE} dash="4 3" width={1.5} muted />
+                <SlotLine slots={comparisonSlots} value={(s) => s.netLoopCorrection?.mean} stroke={CORRECTION_LINE} comparison />
               {/if}
               <SlotLine
                 {slots}
@@ -473,6 +510,7 @@
 
         <TimeOfDayPanel
           id="hourly-correction"
+          describe={describeHour}
           title="Net loop correction by hour"
           unit="U per hour"
           {cursor}
@@ -493,7 +531,7 @@
               <dt class="text-muted-foreground">Mean</dt>
               <dd class="text-right">{h?.mean != null ? `${signed(h.mean)} U` : "–"}</dd>
               <dt class="text-muted-foreground">n</dt>
-              <dd class="text-right">{h?.n ?? 0} days</dd>
+              <dd class="text-right">{daysText(h?.n)}</dd>
               {#if comparing}
                 <dt class="text-muted-foreground">Compared</dt>
                 <dd class="text-right">{c?.mean != null ? `${signed(c.mean)} U` : "–"}</dd>
@@ -507,6 +545,7 @@
 
         <TimeOfDayPanel
           id="iob"
+          describe={(slot) => describeSpread(at(slots, slot)?.iob, u2, "U", "days")}
           title="Insulin on board"
           unit="U"
           {cursor}
@@ -534,6 +573,7 @@
 
         <TimeOfDayPanel
           id="cob"
+          describe={(slot) => describeSpread(at(slots, slot)?.cob, u1, "g", "days")}
           title="Carbs on board"
           unit="g"
           {cursor}
@@ -561,6 +601,7 @@
 
         <TimeOfDayPanel
           id="boluses"
+          describe={(slot) => describeEvents(at(slots, slot)?.manualBoluses, "U")}
           title="Manual boluses"
           unit="U per day"
           {cursor}
@@ -578,6 +619,7 @@
 
         <TimeOfDayPanel
           id="carbs"
+          describe={(slot) => describeEvents(at(slots, slot)?.carbs, "g")}
           title="Carbs"
           unit="g per day"
           {cursor}
@@ -597,7 +639,8 @@
         <p class="flex items-center gap-1.5 px-1 text-xs text-muted-foreground">
           <EyeOff class="size-3.5" />
           Faded stretches rest on too few days to read as a pattern. Click a time, or press Enter on
-          it, to list the days behind it.
+          it, to list the days behind it. With the keyboard, the arrow keys move along the day and
+          between charts, and Home and End go to either end of the day.
         </p>
       </div>
 
@@ -606,7 +649,7 @@
           slot={cursor.selected}
           primary={primary}
           comparison={comparisonRange}
-          onclose={() => (cursor.selected = null)}
+          onclose={closeDays}
         />
       {/if}
     {/if}

@@ -14,7 +14,9 @@
     width?: number;
     /** Hold each value across its slot, for a schedule. */
     step?: boolean;
-    muted?: boolean;
+    /** Drawn as the comparison range is everywhere: dashed, in the foreground ink. */
+    comparison?: boolean;
+    class?: string;
   }
 
   let {
@@ -25,7 +27,8 @@
     dash,
     width = 2,
     step = false,
-    muted = false,
+    comparison = false,
+    class: className,
   }: Props = $props();
 
   const runs = $derived(slotRuns(slots, value, (_, slot) => sparse(slot)));
@@ -48,10 +51,11 @@
     {x}
     {y}
     curve={step ? curveStepAfter : undefined}
-    stroke={muted ? "var(--muted-foreground)" : stroke}
-    stroke-width={width}
-    stroke-dasharray={dash}
-    stroke-opacity={run.sparse ? 0.35 : 1}
+    stroke={comparison ? "var(--foreground)" : stroke}
+    stroke-width={comparison ? 1.5 : width}
+    stroke-dasharray={comparison ? "5 3" : dash}
+    stroke-opacity={comparison ? 0.85 : run.sparse ? 0.35 : 1}
     fill="none"
+    class={className}
   />
 {/each}

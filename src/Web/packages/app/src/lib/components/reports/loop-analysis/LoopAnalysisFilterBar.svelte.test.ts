@@ -43,6 +43,28 @@ describe("LoopAnalysisFilterBar", () => {
     await expect.element(page.getByText("No comparison")).toBeVisible();
   });
 
+  it("says why an incomplete or reversed custom comparison compares nothing", async () => {
+    const props = {
+      onchange: vi.fn(),
+      primary,
+      comparison: null,
+      limitedTo24Hours: false,
+      profileNames: [],
+    };
+    const { rerender } = render(LoopAnalysisFilterBar, {
+      props: { ...props, filter: { ...DEFAULT_FILTER, compare: "custom", compareFrom: "2026-06-01" } },
+    });
+    await expect.element(page.getByText("Pick both dates to compare.")).toBeVisible();
+
+    await rerender({
+      ...props,
+      filter: { ...DEFAULT_FILTER, compare: "custom", compareFrom: "2026-07-15", compareTo: "2026-06-01" },
+    });
+    await expect
+      .element(page.getByText("The comparison has to end on or after the day it starts."))
+      .toBeVisible();
+  });
+
   it("says when a range was held to its most recent 90 days", async () => {
     render(LoopAnalysisFilterBar, {
       props: {

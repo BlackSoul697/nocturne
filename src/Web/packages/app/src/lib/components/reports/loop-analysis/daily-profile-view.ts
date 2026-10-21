@@ -9,22 +9,11 @@ import type {
 export const SLOTS_PER_DAY = 288;
 export const SLOT_MINUTES = 5;
 
-const decoded = new Map<string, Uint8Array>();
-
-function bitmap(base64: string): Uint8Array {
-  let bytes = decoded.get(base64);
-  if (!bytes) {
-    bytes = Uint8Array.from(atob(base64), (c) => c.charCodeAt(0));
-    decoded.set(base64, bytes);
-  }
-  return bytes;
-}
-
 /** Reads one slot of a coverage bitmap, laid out as `DailyProfileDayCoverage` documents. */
 export function covers(base64: string | undefined | null, slot: number): boolean {
   if (!base64) return false;
-  const bytes = bitmap(base64);
-  return ((bytes[slot >> 3] ?? 0) & (1 << (slot & 7))) !== 0;
+  const byte = atob(base64).charCodeAt(slot >> 3) || 0;
+  return (byte & (1 << (slot & 7))) !== 0;
 }
 
 export type CoverageSeries = Exclude<keyof DailyProfileDayCoverage, "analysed">;
@@ -114,23 +103,46 @@ export function aggregateRuns(
   return slotRuns(slots, pick, (value) => value.sparse ?? false);
 }
 
+export type SlotKeyAction =
+  | { kind: "step"; by: number }
+  | { kind: "to"; slot: number }
+  | { kind: "panel"; by: number }
+  | { kind: "select" }
+  | { kind: "close" };
+
 /**
- * What a key does on a time-of-day panel: move the cursor by a number of slots (an hour with
- * Shift), or pick the slot. Kept out of the component so wuchale does not translate the key names.
+ * What a key does on a time-of-day panel: move along the day (an hour at a time with Shift, or
+ * to either end), move to the panel above or below, pick the slot, or close the day list. Kept out
+ * of the component so wuchale does not translate the key names.
  */
-export function slotKeyAction(event: KeyboardEvent): number | "select" | null {
+export function slotKeyAction(event: KeyboardEvent): SlotKeyAction | null {
   const step = event.shiftKey ? 12 : 1;
   switch (event.key) {
     case "ArrowRight":
-      return step;
+      return { kind: "step", by: step };
     case "ArrowLeft":
-      return -step;
+      return { kind: "step", by: -step };
+    case "Home":
+      return { kind: "to", slot: 0 };
+    case "End":
+      return { kind: "to", slot: SLOTS_PER_DAY - 1 };
+    case "ArrowDown":
+      return { kind: "panel", by: 1 };
+    case "ArrowUp":
+      return { kind: "panel", by: -1 };
     case "Enter":
     case " ":
-      return "select";
+      return { kind: "select" };
+    case "Escape":
+      return { kind: "close" };
     default:
       return null;
   }
+}
+
+/** Whether a key closes the day list. */
+export function isEscape(event: KeyboardEvent): boolean {
+  return event.key === "Escape";
 }
 
 /** `HH:mm` for a minute of the local day, as Day in Review's `time` parameter reads it. */

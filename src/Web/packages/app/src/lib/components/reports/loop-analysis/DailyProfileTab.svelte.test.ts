@@ -5,8 +5,7 @@ import { TimeZoneUnavailableReason } from "$lib/api";
 import DailyProfileTab from "./DailyProfileTab.svelte";
 import { profileResponse } from "./daily-profile.test-fixtures";
 
-const insulinStats = { tdd: 30.2, microBolusInsulin: 120.5, microBolusCount: 640 };
-const ratios = { averageBasalPercent: 48, averageBolusPercent: 52 };
+const focused = () => document.activeElement?.getAttribute("aria-label");
 
 async function hoverSlot(panel: string, steps: number) {
   const slider = page.getByRole("slider", { name: panel });
@@ -17,7 +16,9 @@ async function hoverSlot(panel: string, steps: number) {
 
 describe("DailyProfileTab", () => {
   it("lays every series out on the shared time-of-day axis with the summary strip", async () => {
-    render(DailyProfileTab, { props: { response: profileResponse(), insulinStats, ratios } });
+    render(DailyProfileTab, {
+      props: { response: profileResponse(), insulinDeliveryHref: "/reports/insulin-delivery?days=14" },
+    });
 
     for (const title of [
       "Glucose",
@@ -32,11 +33,63 @@ describe("DailyProfileTab", () => {
       await expect.element(page.getByRole("slider", { name: title, exact: true })).toBeVisible();
 
     await expect.element(page.getByText("Days with data")).toBeVisible();
-    await expect.element(page.getByText("30.2")).toBeVisible();
-    await expect.element(page.getByText("48% / 52%")).toBeVisible();
     await expect.element(page.getByText("0.88×")).toBeVisible();
     await expect.element(page.getByText("+9.60")).toBeVisible();
-    await expect.element(page.getByText("32% of total insulin over 14 days")).toBeVisible();
+    await expect.element(page.getByText("32% of total insulin, over 14 days")).toBeVisible();
+    await expect
+      .element(page.getByRole("link", { name: /are in Insulin Delivery/ }))
+      .toHaveAttribute("href", "/reports/insulin-delivery?days=14");
+  });
+
+  it("is one tab stop, and the arrows move between panels keeping the slot", async () => {
+    render(DailyProfileTab, { props: { response: profileResponse() } });
+
+    const sliders = page.getByRole("slider").elements();
+    expect(sliders.filter((s) => s.getAttribute("tabindex") === "0")).toHaveLength(1);
+    expect(sliders[0].getAttribute("tabindex")).toBe("0");
+
+    await hoverSlot("Glucose", 2);
+    await userEvent.keyboard("{ArrowDown}");
+    expect(focused()).toBe("Basal");
+    await expect.element(page.getByRole("slider", { name: "Basal" })).toHaveAttribute("aria-valuenow", "24");
+    expect(page.getByRole("slider").elements().filter((s) => s.getAttribute("tabindex") === "0")).toHaveLength(1);
+    await expect.element(page.getByRole("slider", { name: "Basal" })).toHaveAttribute("tabindex", "0");
+
+    await userEvent.keyboard("{ArrowUp}");
+    expect(focused()).toBe("Glucose");
+  });
+
+  it("reads the slot's headline value and n as the slider's value", async () => {
+    render(DailyProfileTab, { props: { response: profileResponse() } });
+
+    await hoverSlot("Insulin on board", 1);
+    await expect
+      .element(page.getByRole("slider", { name: "Insulin on board" }))
+      .toHaveAttribute("aria-valuetext", expect.stringContaining("Median 1.50 U, 14 days"));
+  });
+
+  it("goes to either end of the day with Home and End", async () => {
+    render(DailyProfileTab, { props: { response: profileResponse() } });
+    const slider = page.getByRole("slider", { name: "Glucose" });
+
+    await hoverSlot("Glucose", 1);
+    await userEvent.keyboard("{End}");
+    await expect.element(slider).toHaveAttribute("aria-valuenow", "287");
+    await userEvent.keyboard("{Home}");
+    await expect.element(slider).toHaveAttribute("aria-valuenow", "0");
+  });
+
+  it("moves focus to the day list it opens, and back to the panel when Escape closes it", async () => {
+    render(DailyProfileTab, { props: { response: profileResponse() } });
+
+    await hoverSlot("Carbs on board", 3);
+    await userEvent.keyboard("{Enter}");
+    const heading = page.getByRole("heading", { name: /^Days behind/ });
+    await expect.element(heading).toHaveFocus();
+
+    await userEvent.keyboard("{Escape}");
+    expect(heading.elements()).toHaveLength(0);
+    expect(focused()).toBe("Carbs on board");
   });
 
   it("shows the slot's percentiles and n in the tooltip", async () => {
@@ -63,7 +116,7 @@ describe("DailyProfileTab", () => {
     render(DailyProfileTab, { props: { response: profileResponse({ comparison: true }) } });
 
     await expect
-      .element(page.getByText("The comparison range is drawn muted and dashed under each series."))
+      .element(page.getByText("The comparison range is drawn as dashed outlines over each series."))
       .toBeVisible();
     const tooltip = await hoverSlot("Insulin on board", 2);
     await expect.element(tooltip.getByText("Compared")).toBeVisible();

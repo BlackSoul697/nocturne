@@ -49,7 +49,8 @@
     {...b}
     rx="1"
     fill="none"
-    stroke="var(--muted-foreground)"
+    stroke="var(--foreground)"
+    stroke-opacity="0.85"
     stroke-width="1.25"
     stroke-dasharray="3 2"
   />

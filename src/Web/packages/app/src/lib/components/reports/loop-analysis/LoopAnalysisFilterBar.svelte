@@ -104,6 +104,7 @@
           <Input
             id="loop-analysis-compare-from"
             type="date"
+            aria-describedby="loop-analysis-compare-problem"
             size="sm" class="w-40"
             value={filter.compareFrom ?? ""}
             onchange={(e) => update({ compareFrom: e.currentTarget.value || null })}
@@ -114,11 +115,19 @@
           <Input
             id="loop-analysis-compare-to"
             type="date"
+            aria-describedby="loop-analysis-compare-problem"
             size="sm" class="w-40"
             value={filter.compareTo ?? ""}
             onchange={(e) => update({ compareTo: e.currentTarget.value || null })}
           />
         </div>
+        <p id="loop-analysis-compare-problem" class="pb-1.5 text-xs text-warning" aria-live="polite">
+          {#if !filter.compareFrom || !filter.compareTo}
+            Pick both dates to compare.
+          {:else if filter.compareFrom > filter.compareTo}
+            The comparison has to end on or after the day it starts.
+          {/if}
+        </p>
       </div>
     {/if}
 

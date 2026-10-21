@@ -1,6 +1,7 @@
 <!-- A slot's spread as the tooltip reads it: percentiles, mean and n, with the comparison beside it. -->
 <script lang="ts">
   import type { LoopAnalysisAggregate } from "$lib/api";
+  import { plural } from "$lib/utils/plural";
 
   interface Props {
     label?: string | null;
@@ -37,7 +38,10 @@
 </script>
 
 {#snippet count(n: number | undefined)}
-  {#if counts === "days"}{n ?? 0} days{:else}{n ?? 0} readings{/if}
+  {#if counts === "days"}{plural(n ?? 0, ["# day", "# days"])}{:else}{plural(n ?? 0, [
+      "# reading",
+      "# readings",
+    ])}{/if}
 {/snippet}
 
 <div class="space-y-1">
