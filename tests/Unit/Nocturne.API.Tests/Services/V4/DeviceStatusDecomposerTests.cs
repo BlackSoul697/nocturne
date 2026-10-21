@@ -3309,10 +3309,10 @@ public class DeviceStatusDecomposerTests : IDisposable
 
         aps.PredictedDefaultJson.Should().Be(aps.PredictedIobJson, "the decomposer copies oref's IOB curve into the default column");
         CurveOf(snapshot, PredictionCurve.Default).Should().BeNull();
-        CurveOf(snapshot, PredictionCurve.Iob).Should().Equal(120, 115, null, 105);
-        CurveOf(snapshot, PredictionCurve.ZeroTemp).Should().Equal(120, 110);
+        CurveOf(snapshot, PredictionCurve.Iob).Should().StartWith([120, 115, null, 105]).And.HaveCount(25, "oref's levelled-off tail is read back").And.EndWith(105);
+        CurveOf(snapshot, PredictionCurve.ZeroTemp).Should().StartWith([120, 110]);
         CurveOf(snapshot, PredictionCurve.Cob).Should().BeNull();
-        CurveOf(snapshot, PredictionCurve.Uam).Should().Equal(120, 130, 135);
+        CurveOf(snapshot, PredictionCurve.Uam).Should().StartWith([120, 130, 135]);
     }
 
     [Fact]
@@ -3338,8 +3338,8 @@ public class DeviceStatusDecomposerTests : IDisposable
         var snapshot = ParseStored(await DecomposeApsAsync(ds))!;
 
         snapshot.Algorithm.Should().Be(V4Models.AidAlgorithm.Trio);
-        CurveOf(snapshot, PredictionCurve.Iob).Should().Equal(120, 115);
-        CurveOf(snapshot, PredictionCurve.Cob).Should().Equal(120, 125);
+        CurveOf(snapshot, PredictionCurve.Iob).Should().StartWith([120, 115]);
+        CurveOf(snapshot, PredictionCurve.Cob).Should().StartWith([120, 125]);
         CurveOf(snapshot, PredictionCurve.Default).Should().BeNull();
     }
 

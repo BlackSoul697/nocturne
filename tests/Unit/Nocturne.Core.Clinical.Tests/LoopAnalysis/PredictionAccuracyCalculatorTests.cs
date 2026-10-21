@@ -275,6 +275,19 @@ public class PredictionAccuracyCalculatorTests
     }
 
     [Fact]
+    public void AnOrefCurveCutShort_HoldsItsLastValue()
+    {
+        var start = Midnight + 10 * Hour;
+        var levelled = Json(Enumerable.Range(0, 13).Select(i => 120.0 + i));
+
+        var curve = Calculate(
+            [OrefFixture(start, levelled, levelled, null, levelled)], Readings(start, start + 3 * Hour, 110)).Curves.First();
+
+        At(curve, 60).Error!.Mean.Should().Be(22);
+        At(curve, 120).Error!.Mean.Should().Be(22, "oref dropped the tail once the curve levelled off at 132");
+    }
+
+    [Fact]
     public void ANullValueInACurve_MakesNoPredictionThere()
     {
         var start = Midnight + 10 * Hour;

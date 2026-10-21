@@ -86,14 +86,19 @@ public static class PredictionAccuracyCalculator
     /// default curve the decomposer fills with a copy of the IOB curve (Trio's it leaves empty), so
     /// its default is dropped rather than counted twice.
     /// </summary>
+    /// <remarks>
+    /// oref drops the trailing values of a curve that has levelled off, keeping at least 13 (7 of the
+    /// zero-temp curve), so an oref curve that ends before the last horizon is read as holding its
+    /// last value from there. Loop's curve is never shortened that way and is read as it is.
+    /// </remarks>
     /// <returns>Null when the snapshot carries no readable curve.</returns>
     public static PredictionSnapshot? Parse(ApsPredictionPoint point)
     {
         var curves = new double?[]?[CurveCount];
-        curves[(int)PredictionCurve.Iob] = ParseCurve(point.IobJson);
-        curves[(int)PredictionCurve.ZeroTemp] = ParseCurve(point.ZtJson);
-        curves[(int)PredictionCurve.Cob] = ParseCurve(point.CobJson);
-        curves[(int)PredictionCurve.Uam] = ParseCurve(point.UamJson);
+        curves[(int)PredictionCurve.Iob] = ExtendFlatTail(ParseCurve(point.IobJson));
+        curves[(int)PredictionCurve.ZeroTemp] = ExtendFlatTail(ParseCurve(point.ZtJson));
+        curves[(int)PredictionCurve.Cob] = ExtendFlatTail(ParseCurve(point.CobJson));
+        curves[(int)PredictionCurve.Uam] = ExtendFlatTail(ParseCurve(point.UamJson));
         if (curves.All(c => c is null))
             curves[(int)PredictionCurve.Default] = ParseCurve(point.DefaultJson);
         if (curves.All(c => c is null))
@@ -140,6 +145,16 @@ public static class PredictionAccuracyCalculator
     }
 
     private static readonly int LastIndex = HorizonMinutes[^1] / StepMinutes;
+
+    private static double?[]? ExtendFlatTail(double?[]? curve)
+    {
+        if (curve is null || curve.Length > LastIndex || curve[^1] is not { } last)
+            return curve;
+        var extended = new double?[LastIndex + 1];
+        curve.CopyTo(extended, 0);
+        Array.Fill(extended, last, curve.Length, extended.Length - curve.Length);
+        return extended;
+    }
 
     public static PredictionAccuracyRange Calculate(PredictionAccuracyInputs inputs, LoopAnalysisMask mask, long from, long to)
     {
