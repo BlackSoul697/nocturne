@@ -23,7 +23,7 @@ public interface ICobCalculator
     /// carb ratio from the in-memory <paramref name="snapshot"/>, and derives insulin activity for
     /// the dynamic carb-delay calculation directly from boluses (the only treatments that carry
     /// activity) via the snapshot-based IOB path — so no profile resolver or device-snapshot DB
-    /// query is issued per carb per tick. See IobCobComputeStage.
+    /// query is issued per carb per tick. See IobCobSeries.
     /// </summary>
     CobResult FromCarbIntakes(
         List<CarbIntake> carbIntakes,
