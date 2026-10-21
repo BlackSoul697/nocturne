@@ -249,7 +249,7 @@ class Program
         var instanceKey = builder.AddParameter(ServiceNames.Parameters.InstanceKey, secret: true)
             .WithPublishMetadata(
                 "Instance key",
-                "Minimum 12 characters: used for JWT signing and service authentication");
+                "Minimum 32 characters: used for JWT signing and service authentication");
 
         // Discord bot credentials. Optional — only required if Discord bot
         // features are enabled for a deployment. Empty-string defaults let

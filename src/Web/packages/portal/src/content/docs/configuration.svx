@@ -52,7 +52,7 @@ These have no default and must be set before the first start:
   `example.com`, or `nocturne.example.com` if Nocturne itself lives under a
   subdomain). At least two labels, and not an IP address. Each tenant gets a
   subdomain generated from this.
-- **`INSTANCE_KEY`**: minimum 12 characters. Used for JWT signing and
+- **`INSTANCE_KEY`**: minimum 32 characters. Used for JWT signing and
   service-to-service authentication. Treat it like a password and keep it stable;
   changing it invalidates existing sessions.
 - **The four PostgreSQL passwords**: `POSTGRES_PASSWORD`,
