@@ -91,7 +91,8 @@ public class LoopAnalysisController(ILoopAnalysisService service, TimeProvider t
     /// that ran high. A horizon with no reading within 2.5 minutes is counted as unmatched, never
     /// paired with an imputed value. Needs glucose.read and devices.read for any curve, the
     /// readings and the APS snapshots the curves come from; without treatments.read the context
-    /// breakdowns and oref's curves, each reported only in its context, are withheld.
+    /// breakdowns are withheld, and so are oref's IOB, zero-temp and COB curves, each reported only
+    /// in the contexts the algorithm relies on it in.
     /// </remarks>
     /// <param name="from">Start of the range (inclusive, UTC).</param>
     /// <param name="to">

@@ -98,11 +98,11 @@ public class PredictionCurveAccuracy
     public PredictionCurve Curve { get; set; }
 
     /// <summary>
-    /// The contexts the curve is reported in. The default curve is the one its system acts on
-    /// everywhere, so it is reported in every context. oref acts on its IOB and zero-temp curves
-    /// without carbs on board and on its COB and UAM curves after a meal, so each is reported only
-    /// where it is the curve the algorithm relies on: IOB and zero-temp in fasting and
-    /// post-correction time, COB and UAM in post-meal time.
+    /// The contexts the curve is reported in: where the algorithm relies on it. The default curve
+    /// is the one its system acts on everywhere, and oref acts on its UAM curve wherever it sees a
+    /// deviation, announced meal or not, so both are reported in every context. oref's IOB and
+    /// zero-temp curves are reported in fasting and post-correction time, and its COB curve in
+    /// post-meal time.
     /// </summary>
     public List<PredictionContext> Contexts { get; set; } = [];
 

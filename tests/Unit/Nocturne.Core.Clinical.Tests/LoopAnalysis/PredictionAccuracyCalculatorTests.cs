@@ -145,7 +145,11 @@ public class PredictionAccuracyCalculatorTests
         var cob = range.Curves.Single(c => c.Curve == PredictionCurve.Cob);
         cob.Contexts.Should().Equal(PredictionContext.PostMeal);
         At(cob, 30).Error!.Mean.Should().Be(50, "only the post-meal prediction counts");
-        At(range.Curves.Single(c => c.Curve == PredictionCurve.Uam), 30).Error!.Mean.Should().Be(60);
+        var uam = range.Curves.Single(c => c.Curve == PredictionCurve.Uam);
+        uam.Contexts.Should().Equal(Enum.GetValues<PredictionContext>());
+        At(uam, 30).Error!.Mean.Should().Be(40, "UAM counts with and without announced carbs");
+        uam.ByContext.Single(c => c.Context == PredictionContext.Fasting).Horizons[0].Error!.Mean.Should().Be(20);
+        uam.ByContext.Single(c => c.Context == PredictionContext.PostMeal).Horizons[0].Error!.Mean.Should().Be(60);
         At(range.Curves.Single(c => c.Curve == PredictionCurve.ZeroTemp), 30).Error!.Mean.Should().Be(-10);
     }
 

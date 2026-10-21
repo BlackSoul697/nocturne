@@ -1372,6 +1372,7 @@ public class AnalyticsReadScopeGuardTests
             Curve(PredictionCurve.Default, Enum.GetValues<PredictionContext>()),
             Curve(PredictionCurve.Iob, PredictionContext.PostCorrection, PredictionContext.Fasting),
             Curve(PredictionCurve.Cob, PredictionContext.PostMeal),
+            Curve(PredictionCurve.Uam, Enum.GetValues<PredictionContext>()),
         ],
     };
 
@@ -1386,7 +1387,7 @@ public class AnalyticsReadScopeGuardTests
     {
         var data = LoopAnalysisReadScopeGuard.Redact(PredictionAccuracy(), Granted(AllLoopAnalysisCategories));
 
-        data.Primary.Curves.Should().HaveCount(3);
+        data.Primary.Curves.Should().HaveCount(4);
         data.Primary.Curves.Should().OnlyContain(c => c.ByContext.Count > 0);
     }
 
@@ -1411,11 +1412,14 @@ public class AnalyticsReadScopeGuardTests
 
         foreach (var range in new[] { data.Primary, data.Comparison! })
         {
-            var curve = range.Curves.Should().ContainSingle().Subject;
-            curve.Curve.Should().Be(PredictionCurve.Default);
-            curve.Horizons.Should().NotBeEmpty();
-            curve.ByHour.Should().NotBeEmpty();
-            curve.ByContext.Should().BeEmpty();
+            range.Curves.Select(c => c.Curve).Should().Equal(
+                [PredictionCurve.Default, PredictionCurve.Uam], "a curve reported in every context reads no treatment");
+            foreach (var curve in range.Curves)
+            {
+                curve.Horizons.Should().NotBeEmpty();
+                curve.ByHour.Should().NotBeEmpty();
+                curve.ByContext.Should().BeEmpty();
+            }
         }
     }
 
@@ -1430,7 +1434,7 @@ public class AnalyticsReadScopeGuardTests
 
         var data = result.Result.Should().BeOfType<OkObjectResult>()
             .Which.Value.Should().BeOfType<PredictionAccuracyResponse>().Subject;
-        data.Primary.Curves.Should().ContainSingle().Which.ByContext.Should().BeEmpty();
+        data.Primary.Curves.Should().HaveCount(2).And.OnlyContain(c => c.ByContext.Count == 0);
         data.IgnoredFilters.Should().Equal("excludeExercise");
         service.Verify(s => s.GetPredictionAccuracyAsync(
             It.Is<LoopAnalysisFilter>(f => !f.ExcludeExercise && !f.ExcludeIllness),

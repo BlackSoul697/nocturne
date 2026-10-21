@@ -78,7 +78,7 @@ public static class PredictionAccuracyCalculator
         [PredictionContext.PostCorrection, PredictionContext.Fasting],
         [PredictionContext.PostCorrection, PredictionContext.Fasting],
         [PredictionContext.PostMeal],
-        [PredictionContext.PostMeal],
+        AllContexts,
     ];
 
     /// <summary>
