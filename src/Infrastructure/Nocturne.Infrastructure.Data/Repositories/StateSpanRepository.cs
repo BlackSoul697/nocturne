@@ -386,7 +386,7 @@ public class StateSpanRepository : IStateSpanRepository
 
         // PumpMode mixes independent dimensions (Automatic/Manual loop mode vs Suspended
         // delivery) which can legitimately overlap, so only the SAME state is mutually exclusive
-        // there. Other exclusive categories (Override, TemporaryTarget, Profile) supersede any
+        // there. Other exclusive categories (Override, TemporaryTarget, Motion) supersede any
         // open span regardless of state.
         var sameStateOnly = string.Equals(
             entity.Category, nameof(StateSpanCategory.PumpMode), StringComparison.OrdinalIgnoreCase);

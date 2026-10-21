@@ -50,7 +50,7 @@ public class RemoveLegacyProfileSpansAndSwitchSnapshotsServingTests : ApiIntegra
         using var context = new NocturneDbContext(options);
         var assembly = context.GetService<IMigrationsAssembly>();
         var migration = assembly.CreateMigration(assembly.Migrations[MigrationUnderTest], context.Database.ProviderName!);
-        return migration.UpOperations.OfType<SqlOperation>().Single().Sql;
+        return string.Join(";\n", migration.UpOperations.OfType<SqlOperation>().Select(o => o.Sql));
     }
 
     private static async Task ExecuteAsync(NpgsqlConnection conn, string sql)
