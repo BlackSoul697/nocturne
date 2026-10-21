@@ -2395,25 +2395,27 @@ public class StatisticsService : IStatisticsService
     }
 
     /// <summary>
-    /// Calculate daily basal/bolus ratio breakdown using TempBasals and algorithm boluses for basal data
+    /// Calculate daily basal/bolus ratio breakdown using TempBasals and algorithm boluses for basal data,
+    /// with each day's carbohydrate total when <paramref name="carbIntakes"/> is given
     /// </summary>
     public DailyBasalBolusRatioResponse CalculateDailyBasalBolusRatios(
         IEnumerable<Bolus> boluses,
         IEnumerable<Bolus> algorithmBoluses,
         IEnumerable<TempBasal> tempBasals,
         TimeZoneInfo? userTimeZone = null,
-        IEnumerable<BasalInjection>? basalInjections = null
+        IEnumerable<BasalInjection>? basalInjections = null,
+        IEnumerable<CarbIntake>? carbIntakes = null
     )
     {
         var tz = userTimeZone ?? TimeZoneInfo.Utc;
         var bolusList = boluses.ToList();
-        var dailyData = new Dictionary<string, (double Basal, double Bolus)>();
+        var dailyData = new Dictionary<string, (double Basal, double Bolus, double Carbs)>();
 
-        void Accumulate(long mills, double basal, double bolus)
+        void Accumulate(long mills, double basal, double bolus, double carbs = 0)
         {
             var dateKey = MillsToLocalDateString(mills, tz);
             dailyData.TryGetValue(dateKey, out var current);
-            dailyData[dateKey] = (current.Basal + basal, current.Bolus + bolus);
+            dailyData[dateKey] = (current.Basal + basal, current.Bolus + bolus, current.Carbs + carbs);
         }
 
         // Process boluses (all Bolus records are bolus insulin)
@@ -2455,12 +2457,25 @@ public class StatisticsService : IStatisticsService
             }
         }
 
+        // Process carb intakes. A day with carbs but no insulin still gets a row, so the carb
+        // line has no gaps, but it doesn't count towards DaysWithData or the averages.
+        if (carbIntakes != null)
+        {
+            foreach (var carb in carbIntakes)
+            {
+                if (carb.Carbs <= 0 || carb.Mills <= 0)
+                    continue;
+
+                Accumulate(carb.Mills, 0, 0, carb.Carbs);
+            }
+        }
+
         // Build response
         var sortedDates = dailyData.Keys.OrderBy(d => d).ToList();
         var result = new DailyBasalBolusRatioResponse
         {
             DailyData = new List<DailyBasalBolusRatioData>(),
-            DaysWithData = sortedDates.Count,
+            DaysWithData = sortedDates.Count(d => dailyData[d].Basal + dailyData[d].Bolus > 0),
         };
 
         double totalBasal = 0;
@@ -2468,7 +2483,7 @@ public class StatisticsService : IStatisticsService
 
         foreach (var dateKey in sortedDates)
         {
-            var (basal, bolus) = dailyData[dateKey];
+            var (basal, bolus, carbs) = dailyData[dateKey];
             var total = basal + bolus;
             var basalPercent = total > 0 ? (basal / total) * 100 : 0;
             var bolusPercent = total > 0 ? (bolus / total) * 100 : 0;
@@ -2487,6 +2502,7 @@ public class StatisticsService : IStatisticsService
                     Total = Math.Round(total * 100) / 100,
                     BasalPercent = Math.Round(basalPercent * 10) / 10,
                     BolusPercent = Math.Round(bolusPercent * 10) / 10,
+                    Carbs = Math.Round(carbs * 10) / 10,
                 }
             );
 

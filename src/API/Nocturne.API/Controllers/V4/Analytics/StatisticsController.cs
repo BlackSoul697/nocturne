@@ -986,9 +986,9 @@ public class StatisticsController : ControllerBase
     }
 
     /// <summary>
-    /// Calculate daily basal/bolus ratio statistics for a date range
+    /// Calculate daily basal/bolus ratio statistics for a date range, with each day's carbs
     /// </summary>
-    /// <returns>Daily basal/bolus ratio breakdown with averages</returns>
+    /// <returns>Daily basal/bolus ratio breakdown and carb totals, with averages</returns>
     [HttpGet("daily-basal-bolus-ratios")]
     [RequireScope(Scope.ReportsRead)]
     [RemoteQuery]
@@ -1001,8 +1001,11 @@ public class StatisticsController : ControllerBase
         var startDt = DateTime.SpecifyKind(startDate, DateTimeKind.Utc);
         var endDt = DateTime.SpecifyKind(endDate, DateTimeKind.Utc);
 
+        var carbTask = _carbIntakeRepository.GetAsync(startDt, endDt, null, null, int.MaxValue, descending: false, ct: cancellationToken);
+
         var (boluses, algorithmBoluses, tempBasals, basalInjections) =
-            await FetchInsulinRecordsAsync(startDt, endDt, cancellationToken);
+            await FetchInsulinRecordsAsync(startDt, endDt, cancellationToken, carbTask);
+        var carbs = await carbTask;
 
         var tzId = await _therapySettingsResolver.GetTimezoneAsync(ct: cancellationToken);
         var tz = !string.IsNullOrEmpty(tzId)
@@ -1014,7 +1017,8 @@ public class StatisticsController : ControllerBase
             algorithmBoluses,
             tempBasals,
             tz,
-            basalInjections
+            basalInjections,
+            carbs
         );
         return Ok(result);
     }

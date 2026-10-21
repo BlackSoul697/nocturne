@@ -141,7 +141,8 @@ public class StatisticsControllerTests
                 It.IsAny<IEnumerable<Bolus>>(),
                 It.IsAny<IEnumerable<TempBasal>>(),
                 It.IsAny<TimeZoneInfo?>(),
-                It.IsAny<IEnumerable<BasalInjection>?>()))
+                It.IsAny<IEnumerable<BasalInjection>?>(),
+                It.IsAny<IEnumerable<CarbIntake>?>()))
             .Returns(new DailyBasalBolusRatioResponse());
     }
 
@@ -1074,7 +1075,7 @@ public class StatisticsControllerTests
     }
 
     [Fact]
-    public async Task GetDailyBasalBolusRatios_CountsInsulinPastTheOldLimitUnderTheRequestToken()
+    public async Task GetDailyBasalBolusRatios_CountsInsulinAndCarbsPastTheOldLimitUnderTheRequestToken()
     {
         SetupHistoryPastTheOldLimits();
         using var cts = new CancellationTokenSource();
@@ -1087,8 +1088,9 @@ public class StatisticsControllerTests
         var lateDay = payload.DailyData.Should().ContainSingle(d => d.Date == LateRecordDate).Subject;
         lateDay.Bolus.Should().Be(5);
         lateDay.Basal.Should().BeApproximately(12.3, 1e-9);
+        lateDay.Carbs.Should().Be(40);
 
-        _repositoryTokens.Should().HaveCount(4).And.OnlyContain(t => t == cts.Token);
+        _repositoryTokens.Should().HaveCount(5).And.OnlyContain(t => t == cts.Token);
         _therapySettingsResolverMock.Verify(r => r.GetTimezoneAsync(null, cts.Token), Times.Once);
     }
 

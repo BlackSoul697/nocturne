@@ -1714,6 +1714,11 @@ public class DailyBasalBolusRatioData
     /// Bolus as percentage of total (0-100)
     /// </summary>
     public double BolusPercent { get; set; }
+
+    /// <summary>
+    /// Carbohydrates logged that day in grams
+    /// </summary>
+    public double Carbs { get; set; }
 }
 
 public class DailyBasalBolusRatioResponse
