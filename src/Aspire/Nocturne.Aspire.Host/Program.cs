@@ -350,8 +350,9 @@ class Program
         // pinned so the generated compose bakes a concrete
         // http://nocturne-api:8080 (mirrors the web service's fixed internal
         // port) instead of an empty NOCTURNE_API_PORT placeholder. This port is
-        // never host-published — YARP is the only entry point. Production images
-        // default to Production.
+        // never host-published — YARP is the only entry point. The bundle pins
+        // Production rather than leaving it to the image default: the Development-only
+        // surface must never be one stray variable away in a deployed stack.
         IResourceBuilder<IResourceWithServiceDiscovery> api;
         if (builder.ExecutionContext.IsRunMode)
         {
@@ -378,6 +379,7 @@ class Program
             api = builder
                 .AddProject<Projects.Nocturne_API>(ServiceNames.NocturneApi, launchProfileName: null)
                 .WithHttpEndpoint(name: "http", targetPort: 8080)
+                .WithEnvironment("ASPNETCORE_ENVIRONMENT", "Production")
                 .PublishAsDockerComposeService((_, _) => { })
                 .WithRemoteImageName("ghcr.io/nightscout/nocturne/nocturne-api")
                 .WithRemoteImageTag("latest")
