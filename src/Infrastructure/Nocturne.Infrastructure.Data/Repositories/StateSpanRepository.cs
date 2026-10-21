@@ -49,8 +49,6 @@ public class StateSpanRepository : IStateSpanRepository
     /// </summary>
     private const int OpenCarryInLimit = 10;
 
-    private static readonly string ProfileCategory = nameof(StateSpanCategory.Profile);
-
     /// <summary>
     /// Exclusive categories whose open spans exclude each other only within a partition.
     /// </summary>
@@ -165,8 +163,7 @@ public class StateSpanRepository : IStateSpanRepository
         string? source,
         bool? active)
     {
-        // A Profile span is listed as nothing: a profile switch is a ProfileActivation.
-        var query = db.StateSpans.AsNoTracking().Where(s => s.Category != ProfileCategory);
+        var query = db.StateSpans.AsNoTracking();
 
         if (category.HasValue)
             query = query.Where(s => s.Category == category.Value.ToString());

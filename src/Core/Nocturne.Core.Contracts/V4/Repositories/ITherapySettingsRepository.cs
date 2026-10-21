@@ -41,16 +41,12 @@ public interface ITherapySettingsRepository : IProfileScopedRepository<TherapySe
     /// <summary>The rows currently flagged <see cref="TherapySettings.IsDefault"/>, newest first.</summary>
     Task<IReadOnlyList<TherapySettings>> GetDefaultsAsync(CancellationToken ct = default);
 
-    /// <summary>
-    /// The newest row decomposed from a profile document, leaving out profile-switch snapshots
-    /// (see <see cref="TherapySettings.ProfileSwitchStoreMarker"/>).
-    /// </summary>
+    /// <summary>The newest row decomposed from a profile document.</summary>
     Task<TherapySettings?> GetNewestDocumentRowAsync(CancellationToken ct = default);
 
     /// <summary>
     /// The ids of the stored profile documents (see <see cref="TherapySettings.DocumentIdOf"/>), newest
-    /// first as Nightscout sorts them: by time descending, then by <c>_id</c> descending. Profile-switch
-    /// snapshots are not documents and are left out.
+    /// first as Nightscout sorts them: by time descending, then by <c>_id</c> descending.
     /// </summary>
     Task<IReadOnlyList<string>> GetDocumentIdsAsync(CancellationToken ct = default);
 

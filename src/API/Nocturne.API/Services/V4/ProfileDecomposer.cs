@@ -164,7 +164,6 @@ public class ProfileDecomposer : DecomposerBase, IProfileDecomposer, IDecomposer
     /// Nightscout finds none, and so does a claim whose store row was not written. A batch that does
     /// not claim keeps the stored flags as they are, so re-syncing an older document neither takes
     /// the default nor drops a user's choice.
-    /// Profile-switch snapshots are not documents, so they neither claim nor count as stored newer.
     /// </remarks>
     private async Task<DefaultClaim> ResolveDefaultClaimAsync(List<StoreEntry> entries, CancellationToken ct)
     {

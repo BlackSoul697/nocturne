@@ -35,7 +35,6 @@ public class TreatmentDecomposerBatchTests : IDisposable
     private readonly Mock<IStateSpanService> _stateSpanServiceMock;
     private readonly Mock<ITreatmentFoodService> _treatmentFoodServiceMock;
     private readonly Mock<IDeviceService> _deviceServiceMock;
-    private readonly Mock<IProfileDecomposer> _profileDecomposerMock;
     private readonly Mock<IActiveProfileResolver> _activeProfileResolverMock;
     private readonly Mock<IPatientInsulinRepository> _insulinRepoMock;
     private readonly TreatmentDecomposer _decomposer;
@@ -55,7 +54,6 @@ public class TreatmentDecomposerBatchTests : IDisposable
         _stateSpanServiceMock = new Mock<IStateSpanService>();
         _treatmentFoodServiceMock = new Mock<ITreatmentFoodService>();
         _deviceServiceMock = new Mock<IDeviceService>();
-        _profileDecomposerMock = new Mock<IProfileDecomposer>();
         _activeProfileResolverMock = new Mock<IActiveProfileResolver>();
         _insulinRepoMock = new Mock<IPatientInsulinRepository>();
 
@@ -117,7 +115,6 @@ public class TreatmentDecomposerBatchTests : IDisposable
             _treatmentFoodServiceMock.Object,
             deviceService,
             Mock.Of<IPatientDeviceStamper>(),
-            _profileDecomposerMock.Object,
             _activeProfileResolverMock.Object,
             _insulinRepoMock.Object,
             Mock.Of<IAuditContext>(),

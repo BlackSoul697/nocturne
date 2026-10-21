@@ -273,7 +273,6 @@ public class ProfileDecomposerTests
             therapyMock
                 .Setup(x => x.GetNewestDocumentRowAsync(It.IsAny<CancellationToken>()))
                 .ReturnsAsync(stored
-                    .Where(s => !s.ProfileName.Contains(TherapySettings.ProfileSwitchStoreMarker))
                     .OrderByDescending(s => s.Timestamp)
                     .FirstOrDefault());
             therapyMock
