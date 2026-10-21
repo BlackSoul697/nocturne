@@ -302,10 +302,12 @@ internal sealed class SensorContextEnricher : ISensorContextEnricher
             var dict = new Dictionary<(StateSpanCategory, string?), StateSpanSnapshot>(needs.ReferencedStateSpans.Count);
             foreach (var key in needs.ReferencedStateSpans)
             {
-                var span = await _deps.StateSpans.GetActiveAtAsync(key.Category, key.State, now, ct);
-                if (span is not null)
+                var startedAt = key.Category == StateSpanCategory.Profile
+                    ? await ActiveProfileStartAsync(key.State, now, ct)
+                    : (await _deps.StateSpans.GetActiveAtAsync(key.Category, key.State, now, ct))?.StartTimestamp;
+                if (startedAt is { } start)
                 {
-                    dict[key] = new StateSpanSnapshot(key.Category, key.State, span.StartTimestamp);
+                    dict[key] = new StateSpanSnapshot(key.Category, key.State, start);
                 }
             }
             enriched = enriched with { ActiveStateSpans = dict };
@@ -659,6 +661,25 @@ internal sealed class SensorContextEnricher : ISensorContextEnricher
     {
         var evt = await _deps.DeviceEvents.GetLatestByEventTypeAsync(eventType, asOf, ct);
         return evt?.Timestamp;
+    }
+
+    /// <summary>
+    /// When the profile activation in force at <paramref name="now"/> started, for a
+    /// <see cref="StateSpanCategory.Profile"/> leaf. Its state matches any activation when null or
+    /// <see cref="ProfileState.Active"/>, the one state a profile span carried; otherwise it names the
+    /// profile.
+    /// </summary>
+    private async Task<DateTime?> ActiveProfileStartAsync(string? state, DateTime now, CancellationToken ct)
+    {
+        var nowMills = new DateTimeOffset(DateTime.SpecifyKind(now, DateTimeKind.Utc)).ToUnixTimeMilliseconds();
+        var resolved = await _deps.ProfileActivations.GetAtAsync(nowMills, ct);
+        if (resolved is null)
+            return null;
+
+        var matches = state is null
+            || string.Equals(state, nameof(ProfileState.Active), StringComparison.OrdinalIgnoreCase)
+            || string.Equals(state, resolved.ProfileName, StringComparison.OrdinalIgnoreCase);
+        return matches ? resolved.Activation.StartTimestamp : null;
     }
 
     /// <summary>

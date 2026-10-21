@@ -148,7 +148,7 @@ public class AapsProfileSwitchReadbackIntegrationTests : ApiIntegrationTestBase
         await PostV3Async(client, ProfileSwitchV3(mills));
         var snapshot = Uri.EscapeDataString($"Rhys (110%,1h)@@@@@{mills}");
         (await GetArrayAsync(client, $"/api/v4/profile/settings/by-name/{snapshot}"))
-            .Should().ContainSingle("the switch's inline profile is kept under its snapshot name");
+            .Should().BeEmpty("the switch's inline profile is its activation's snapshot, not a stored profile");
 
         foreach (var url in new[]
                  {

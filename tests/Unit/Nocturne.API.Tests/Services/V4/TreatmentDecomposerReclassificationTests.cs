@@ -1,3 +1,4 @@
+using Nocturne.API.Tests.Infrastructure;
 using FluentAssertions;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -69,9 +70,6 @@ public class TreatmentDecomposerReclassificationTests : IDisposable
                 _context.Entry(entity).State = EntityState.Detached;
                 return true;
             });
-        _profileDecomposer
-            .Setup(d => d.DecomposeProfileSwitchAsync(It.IsAny<Profile>(), It.IsAny<WriteOrigin>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new Nocturne.Core.Models.V4.DecompositionResult());
     }
 
     public void Dispose()
@@ -116,6 +114,8 @@ public class TreatmentDecomposerReclassificationTests : IDisposable
             new DeviceEventRepository(_factory, _dedup, _audit, NullLogger<DeviceEventRepository>.Instance),
             new BolusCalculationRepository(_factory, _dedup, _audit, NullLogger<BolusCalculationRepository>.Instance),
             _stateSpans.Object,
+            ProfileActivationTestDeps.Repository(_context),
+            ProfileActivationTestDeps.Writer(_context),
             foods.Object,
             Mock.Of<IDeviceService>(),
             Mock.Of<IPatientDeviceStamper>(),
@@ -172,7 +172,7 @@ public class TreatmentDecomposerReclassificationTests : IDisposable
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
-    public async Task A_note_reuploaded_as_an_effective_profile_switch_becomes_the_span_alone(bool batch)
+    public async Task A_note_reuploaded_as_an_effective_profile_switch_becomes_the_activation_alone(bool batch)
     {
         await DecomposeAsync(PlainNote(), batch);
         (await _context.Notes.CountAsync()).Should().Be(1);
@@ -180,9 +180,9 @@ public class TreatmentDecomposerReclassificationTests : IDisposable
         await DecomposeAsync(EffectiveSwitch(), batch);
 
         (await _context.Notes.CountAsync()).Should().Be(0, "the note it was first read as is no longer the treatment");
-        var span = await _context.StateSpans.AsNoTracking().SingleAsync(s => s.OriginalId == "aaps-1");
-        span.Category.Should().Be(nameof(StateSpanCategory.Profile));
-        span.DeletedAt.Should().BeNull();
+        var activation = await _context.ProfileActivations.AsNoTracking().SingleAsync(a => a.LegacyId == "aaps-1");
+        activation.Phase.Should().Be(nameof(Nocturne.Core.Models.V4.ProfileActivationPhase.Effective));
+        activation.DeletedAt.Should().BeNull();
     }
 
     [Fact]
@@ -196,7 +196,7 @@ public class TreatmentDecomposerReclassificationTests : IDisposable
     }
 
     [Fact]
-    public async Task A_profile_switch_reuploaded_as_a_note_loses_its_span_and_snapshot()
+    public async Task A_profile_switch_reuploaded_as_a_note_loses_its_activation_and_snapshot()
     {
         await DecomposeAsync(new Treatment
         {
@@ -206,7 +206,11 @@ public class TreatmentDecomposerReclassificationTests : IDisposable
 
         await DecomposeAsync(new Treatment { Id = "ps-1", EventType = "Note", Mills = At, Notes = "Weekend" }, batch: false);
 
-        _stateSpans.Verify(s => s.DeleteStateSpanAsync("ps-1", It.IsAny<CancellationToken>()), Times.Once);
+        (await _context.ProfileActivations.CountAsync()).Should().Be(0);
+        (await _context.ProfileActivations.IgnoreQueryFilters().SingleAsync())
+            .Should().Match<ProfileActivationEntity>(a => a.LegacyId == "ps-1" && a.DeletedAt != null);
+        (await _context.GetBlockingLegacyIdsAsync<ProfileActivationEntity>(["ps-1"])).Held.Should().BeEmpty(
+            "a reclassification is not the user deleting the switch");
         _profileDecomposer.Verify(d => d.DeleteByLegacyIdAsync("ps-1", It.IsAny<WriteOrigin>(), It.IsAny<CancellationToken>()), Times.Once);
         (await _context.Notes.SingleAsync()).Text.Should().Be("Weekend");
     }
