@@ -43,8 +43,7 @@ internal sealed class LoopAnalysisService(
     IBasalSeriesBuilder basalSeriesBuilder,
     IBasalSegmentService basalSegmentService,
     IIobCalculator iobCalculator,
-    ICobCalculator cobCalculator,
-    TenantClockResolver tenantClock
+    ICobCalculator cobCalculator
 ) : ILoopAnalysisService
 {
     private const long TickMs = DailyProfileCalculator.SlotMinutes * LocalSlotBinning.MinuteMs;
@@ -59,23 +58,16 @@ internal sealed class LoopAnalysisService(
         StateSpanCategory.PumpMode,
     ];
 
-    public async Task<DailyProfileResponse> GetDailyProfileAsync(LoopAnalysisFilter filter, CancellationToken ct = default)
+    public async Task<DailyProfileResponse> GetDailyProfileAsync(
+        LoopAnalysisFilter filter, TimeZoneInfo zone, CancellationToken ct = default)
     {
         var primary = Window.Of(filter.From, filter.To);
         var comparison = filter.CompareFrom is { } compareFrom && filter.CompareTo is { } compareTo
             ? Window.Of(compareFrom, compareTo)
             : (Window?)null;
 
-        var (zone, reason) = await tenantClock.ResolveAsync(ct);
-        var response = new DailyProfileResponse { TimeZoneUnavailableReason = reason };
-        if (zone is null)
-        {
-            response.Primary = primary.Empty();
-            response.Comparison = comparison?.Empty();
-            return response;
-        }
-
-        if (comparison is { IsEmpty: false } other && !primary.IsEmpty && primary.Touches(other))
+        var response = new DailyProfileResponse();
+        if (comparison is { } other && primary.Touches(other))
         {
             var both = await LoadAsync(primary.Hull(other), zone, ct);
             response.Primary = Calculate(both, filter, primary);
@@ -83,21 +75,16 @@ internal sealed class LoopAnalysisService(
             return response;
         }
 
-        response.Primary = await CalculateAsync(primary, zone, filter, ct);
+        response.Primary = Calculate(await LoadAsync(primary, zone, ct), filter, primary);
         if (comparison is { } separate)
-            response.Comparison = await CalculateAsync(separate, zone, filter, ct);
+            response.Comparison = Calculate(await LoadAsync(separate, zone, ct), filter, separate);
         return response;
     }
-
-    /// <summary>A range a history clamp has emptied has nothing to fetch.</summary>
-    private async Task<DailyProfileRange> CalculateAsync(
-        Window window, TimeZoneInfo zone, LoopAnalysisFilter filter, CancellationToken ct) =>
-        window.IsEmpty ? window.Empty() : Calculate(await LoadAsync(window, zone, ct), filter, window);
 
     private static DailyProfileRange Calculate(Loaded loaded, LoopAnalysisFilter filter, Window window) =>
         DailyProfileCalculator.Calculate(
             loaded.Inputs,
-            LoopAnalysisMask.Build(filter, window.From, window.To, loaded.Inputs.Zone, loaded.Sources),
+            LoopAnalysisMask.Build(filter.Masks, window.From, window.To, loaded.Inputs.Zone, loaded.Sources),
             window.From,
             window.To);
 
@@ -289,19 +276,13 @@ internal sealed class LoopAnalysisService(
 
     private readonly record struct Window(long From, long To)
     {
-        public static Window Of(DateTime from, DateTime to) => new(ToMills(from), ToMills(to));
-
-        public bool IsEmpty => To <= From;
+        public static Window Of(DateTime from, DateTime to) =>
+            to > from
+                ? new(ToMills(from), ToMills(to))
+                : throw new ArgumentOutOfRangeException(nameof(to), "A Loop Analysis range must end after it starts.");
 
         public bool Touches(Window other) => From <= other.To && other.From <= To;
 
         public Window Hull(Window other) => new(Math.Min(From, other.From), Math.Max(To, other.To));
-
-        public DailyProfileRange Empty() => new()
-        {
-            From = ToUtc(From),
-            To = ToUtc(To),
-            SlotMinutes = DailyProfileCalculator.SlotMinutes,
-        };
     }
 }
