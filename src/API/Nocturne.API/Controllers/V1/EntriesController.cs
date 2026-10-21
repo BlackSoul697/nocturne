@@ -831,7 +831,7 @@ public class EntriesController : ControllerBase
     /// </summary>
     /// <param name="id">The entry ID to delete, an entry type, or <c>*</c> for every type</param>
     /// <param name="cancellationToken">Cancellation token for async operations</param>
-    /// <returns>The <see cref="LegacyDeleteStatus"/> body for an id, the <see cref="BulkDeleteEntries"/> body for a type</returns>
+    /// <returns>The <see cref="LegacyDeleteStatus"/> body</returns>
     /// <remarks>
     /// A type spec is the bulk delete with the path type replacing any <c>find[type]</c>.
     /// </remarks>
@@ -895,7 +895,7 @@ public class EntriesController : ControllerBase
     /// </summary>
     /// <param name="find">MongoDB-style find query filters (JSON format)</param>
     /// <param name="cancellationToken">Cancellation token for async operations</param>
-    /// <returns>Confirmation of bulk deletion</returns>
+    /// <returns>The <see cref="LegacyDeleteStatus"/> body</returns>
     [HttpDelete]
     [Authorize]
     [RequireScope(Scope.FullAccess)]
@@ -964,14 +964,6 @@ public class EntriesController : ControllerBase
         var deletedCount = await _entryService.DeleteEntriesAsync(deleteFind, cancellationToken);
 
         _logger.LogDebug("Successfully deleted {Count} entries with query", deletedCount);
-        return Ok(
-            new
-            {
-                status = 200,
-                message = $"Deleted {deletedCount} entries",
-                type = "success",
-                deletedCount = deletedCount,
-            }
-        );
+        return Ok(LegacyDeleteStatus.For(deletedCount));
     }
 }
