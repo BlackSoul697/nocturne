@@ -35,7 +35,7 @@ public class LoopAnalysisMaskTests
             DataExclusions = [new(50, 60)],
         };
 
-        var mask = LoopAnalysisMask.Build(new LoopAnalysisFilter(), 0, 100, TimeZoneInfo.Utc, sources);
+        var mask = LoopAnalysisMask.Build(new LoopAnalysisMasks(), 0, 100, TimeZoneInfo.Utc, sources);
 
         mask.Analysed.Intervals.Should().Equal(new MillsInterval(0, 20), new MillsInterval(40, 100));
         mask.Glucose.Intervals.Should().Equal(new MillsInterval(0, 20), new MillsInterval(40, 50), new MillsInterval(60, 100));
@@ -49,7 +49,7 @@ public class LoopAnalysisMaskTests
             Profiles = [new("Default", 0, 50), new("Weekend", 50, 100)],
         };
 
-        var mask = LoopAnalysisMask.Build(new LoopAnalysisFilter { ProfileName = "Weekend" }, 0, 100, TimeZoneInfo.Utc, sources);
+        var mask = LoopAnalysisMask.Build(new LoopAnalysisMasks { ProfileName = "Weekend" }, 0, 100, TimeZoneInfo.Utc, sources);
 
         mask.Analysed.Intervals.Should().Equal(new MillsInterval(50, 100));
     }

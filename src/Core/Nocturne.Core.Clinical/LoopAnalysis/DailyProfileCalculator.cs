@@ -365,6 +365,8 @@ public static class DailyProfileCalculator
     {
         var days = new List<DailyProfileDay>(dayCount);
         double ratioScheduledW = 0, ratioDeltaW = 0, netPerDaySum = 0, netShareU = 0, tddShareU = 0;
+        double basalPerDaySum = 0, automaticPerDaySum = 0, manualPerDaySum = 0;
+        var totalPerDay = new List<double>();
         int daysWithData = 0, netDays = 0;
 
         for (var d = 0; d < dayCount; d++)
@@ -417,6 +419,17 @@ public static class DailyProfileCalculator
                 tddShareU += total.Value;
             }
 
+            if (deliveredMs >= SlotSummary.MinimumSlotCoverage * wall && deliveredMs > 0)
+            {
+                var basal = deliveredW / deliveredMs * (wall / LocalSlotBinning.HourMs);
+                var automatic = automaticU * wall / analysed;
+                var manual = manualU * wall / analysed;
+                basalPerDaySum += basal;
+                automaticPerDaySum += automatic;
+                manualPerDaySum += manual;
+                totalPerDay.Add(basal + automatic + manual);
+            }
+
             var date = firstDay.AddDays(d);
             days.Add(new DailyProfileDay
             {
@@ -426,6 +439,9 @@ public static class DailyProfileCalculator
                 Coverage = coverage.ToCoverage(),
                 NetLoopCorrection = net is { } n ? SlotSummary.Round(n) : null,
                 TotalInsulin = total is { } t ? SlotSummary.Round(t) : null,
+                DeliveredBasal = deliveredMs > 0 ? SlotSummary.Round(deliveredW / LocalSlotBinning.HourMs) : null,
+                AutomaticBolus = SlotSummary.Round(automaticU),
+                ManualBolus = SlotSummary.Round(manualU),
             });
         }
 
@@ -438,8 +454,31 @@ public static class DailyProfileCalculator
             NetLoopCorrectionPerDay = netDays > 0 ? SlotSummary.Round(netPerDaySum / netDays) : null,
             NetLoopCorrectionTddPercent = tddShareU > 0 ? SlotSummary.Round(netShareU / tddShareU * 100) : null,
             NetLoopCorrectionDays = netDays,
+            Insulin = InsulinSummary(totalPerDay, basalPerDaySum, automaticPerDaySum, manualPerDaySum),
         };
         return days;
+    }
+
+    private static DailyInsulinSummary? InsulinSummary(
+        List<double> totalPerDay, double basalSum, double automaticSum, double manualSum)
+    {
+        if (SlotSummary.Of(totalPerDay) is not { } total)
+            return null;
+        var days = total.N;
+        var all = basalSum + automaticSum + manualSum;
+        double Percent(double part) => all > 0 ? SlotSummary.Round(part / all * 100) : 0;
+        return new DailyInsulinSummary
+        {
+            Total = total,
+            DeliveredBasal = SlotSummary.Round(basalSum / days),
+            AutomaticBolus = SlotSummary.Round(automaticSum / days),
+            ManualBolus = SlotSummary.Round(manualSum / days),
+            Bolus = SlotSummary.Round((automaticSum + manualSum) / days),
+            DeliveredBasalPercent = Percent(basalSum),
+            BolusPercent = Percent(automaticSum + manualSum),
+            AutomaticBolusPercent = Percent(automaticSum),
+            ManualBolusPercent = Percent(manualSum),
+        };
     }
 
     private sealed class Accumulators(int size)

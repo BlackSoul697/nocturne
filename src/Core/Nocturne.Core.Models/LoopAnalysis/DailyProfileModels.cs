@@ -21,26 +21,11 @@ public class LoopAnalysisAggregate
 }
 
 /// <summary>The Daily profile tab: the primary range and, when asked for, a comparison range.</summary>
-public class DailyProfileResponse
+public class DailyProfileResponse : LoopAnalysisResponse
 {
     public DailyProfileRange Primary { get; set; } = new();
 
     public DailyProfileRange? Comparison { get; set; }
-
-    /// <summary>The caller's reads are clamped to recent history, so the ranges hold less than they span.</summary>
-    public bool HistoryClamped { get; set; }
-
-    /// <summary>
-    /// Why no tenant timezone resolved. When set, no range carries slots or days: a local day
-    /// cannot be placed without the zone.
-    /// </summary>
-    public TimeZoneUnavailableReason? TimeZoneUnavailableReason { get; set; }
-
-    /// <summary>
-    /// Query parameters the caller's scopes do not let it use, which were ignored: a profile name
-    /// without therapy.read, and the masks drawn from treatments or devices without those scopes.
-    /// </summary>
-    public List<string> IgnoredFilters { get; set; } = [];
 }
 
 /// <summary>288 local five-minute slots of one range, and the days that went into them.</summary>
@@ -184,6 +169,15 @@ public class DailyProfileDay
 
     /// <summary>U, delivered basal and every bolus.</summary>
     public double? TotalInsulin { get; set; }
+
+    /// <summary>U, the basal the pump's records account for.</summary>
+    public double? DeliveredBasal { get; set; }
+
+    /// <summary>U.</summary>
+    public double? AutomaticBolus { get; set; }
+
+    /// <summary>U.</summary>
+    public double? ManualBolus { get; set; }
 }
 
 /// <summary>
@@ -231,4 +225,46 @@ public class DailyProfileSummary
 
     /// <summary>Days that counted toward the two net loop correction figures.</summary>
     public int NetLoopCorrectionDays { get; set; }
+
+    /// <summary>Total insulin per day and its split; null when no day's basal was covered.</summary>
+    public DailyInsulinSummary? Insulin { get; set; }
+}
+
+/// <summary>
+/// Insulin per day over the days whose delivered basal covers at least half the day. Each day is
+/// scaled up to its full length from the share of it covered, as
+/// <see cref="DailyProfileSummary.NetLoopCorrectionPerDay"/> is, so a masked or partly recorded
+/// day counts as a whole one.
+/// </summary>
+/// <remarks>
+/// In the basal/bolus split an automatic bolus (SMB) is bolus, as Trio and AAPS count it in their
+/// total daily dose; basal is only the basal delivered. Net loop correction is a different measure
+/// and still adds automatic boluses to the algorithm's temp delta.
+/// </remarks>
+public class DailyInsulinSummary
+{
+    /// <summary>U/day, spread across days.</summary>
+    public LoopAnalysisAggregate Total { get; set; } = new();
+
+    /// <summary>U/day.</summary>
+    public double DeliveredBasal { get; set; }
+
+    /// <summary>U/day.</summary>
+    public double AutomaticBolus { get; set; }
+
+    /// <summary>U/day.</summary>
+    public double ManualBolus { get; set; }
+
+    /// <summary>U/day, automatic and manual boluses together.</summary>
+    public double Bolus { get; set; }
+
+    /// <summary>Percent of <see cref="LoopAnalysisAggregate.Mean"/> total; with <see cref="BolusPercent"/>, the basal/bolus split.</summary>
+    public double DeliveredBasalPercent { get; set; }
+
+    /// <summary>Percent of total; <see cref="AutomaticBolusPercent"/> plus <see cref="ManualBolusPercent"/>.</summary>
+    public double BolusPercent { get; set; }
+
+    public double AutomaticBolusPercent { get; set; }
+
+    public double ManualBolusPercent { get; set; }
 }
