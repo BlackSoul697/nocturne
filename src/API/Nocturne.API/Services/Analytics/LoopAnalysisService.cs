@@ -16,18 +16,18 @@ using Nocturne.Core.Models.V4;
 namespace Nocturne.API.Services.Analytics;
 
 /// <summary>
-/// Fetches one window of everything a Loop Analysis tab reads and hands it to the Core calculators.
+/// Fetches one window of everything Loop Analysis reads and hands it to the Core calculators.
 /// </summary>
 /// <remarks>
 /// A primary and comparison range that touch or overlap are served from one fetch over both;
 /// apart, each gets its own. Every collection is read uncapped, for the reason given on
-/// <c>StatisticsController.FetchInsulinRecordsAsync</c>, and treatments and loop cycles are read
-/// from <see cref="DailyProfileCalculator.ActingMs"/> before the window so IOB and COB at its start
-/// see the doses still acting and a gap or temp that straddles it is bounded. Temp basals and loop
-/// cycles are read to <see cref="NetInsulinAboveSchedule.MaxInferredGapMs"/> past it, so a gap that
-/// straddles its end is bounded by the evidence that closes it.
+/// <c>StatisticsController.FetchInsulinRecordsAsync</c>, and treatments are read from
+/// <see cref="DailyProfileCalculator.ActingMs"/> before the window so IOB and COB at its start see
+/// the doses still acting. Temp basals and APS snapshots or loop cycles are read to
+/// <see cref="NetInsulinAboveSchedule.MaxInferredGapMs"/> past it, so a gap that straddles its end
+/// is bounded by the evidence that closes it.
 /// </remarks>
-internal sealed class LoopAnalysisService(
+internal sealed partial class LoopAnalysisService(
     ISensorGlucoseRepository glucoseRepository,
     ICanonicalGlucoseService canonicalGlucose,
     IBolusRepository bolusRepository,
@@ -37,7 +37,6 @@ internal sealed class LoopAnalysisService(
     IStateSpanRepository stateSpanRepository,
     IPatientDeviceRepository patientDeviceRepository,
     ITargetRangeScheduleRepository targetRangeScheduleRepository,
-    ITherapySettingsRepository therapySettingsRepository,
     ITherapyTimelineResolver therapyTimelineResolver,
     ITherapySettingsResolver therapySettingsResolver,
     IActiveProfileResolver activeProfileResolver,
@@ -45,8 +44,8 @@ internal sealed class LoopAnalysisService(
     IBasalSegmentService basalSegmentService,
     IIobCalculator iobCalculator,
     ICobCalculator cobCalculator,
-    AidSystemMetricsReader aidSystemMetrics,
-    TenantClockResolver tenantClock
+    ITherapySettingsRepository therapySettingsRepository,
+    AidSystemMetricsReader aidSystemMetrics
 ) : ILoopAnalysisService
 {
     private const long TickMs = DailyProfileCalculator.SlotMinutes * LocalSlotBinning.MinuteMs;
@@ -61,44 +60,23 @@ internal sealed class LoopAnalysisService(
         StateSpanCategory.PumpMode,
     ];
 
-    public async Task<DailyProfileResponse> GetDailyProfileAsync(LoopAnalysisFilter filter, CancellationToken ct = default)
+    public async Task<DailyProfileResponse> GetDailyProfileAsync(
+        LoopAnalysisFilter filter, TimeZoneInfo zone, CancellationToken ct = default)
     {
-        var (primary, comparison, reason) = await ComputeAsync(
+        var (primary, comparison) = await ForRangesAsync(
             filter,
-            LoadDailyProfileAsync,
+            window => LoadDailyProfileAsync(window, zone, ct),
             (loaded, window) => DailyProfileCalculator.Calculate(
-                loaded.Inputs, Mask(filter, window, loaded.Inputs.Zone, loaded.Sources), window.From, window.To),
-            window => new DailyProfileRange
-            {
-                From = ToUtc(window.From),
-                To = ToUtc(window.To),
-                SlotMinutes = DailyProfileCalculator.SlotMinutes,
-            },
-            ct);
-        return new DailyProfileResponse { Primary = primary, Comparison = comparison, TimeZoneUnavailableReason = reason };
+                loaded.Inputs,
+                LoopAnalysisMask.Build(filter.Masks, window.From, window.To, zone, loaded.Sources),
+                window.From,
+                window.To));
+        return new DailyProfileResponse { Primary = primary, Comparison = comparison };
     }
 
-    public async Task<LoopHealthResponse> GetLoopHealthAsync(LoopAnalysisFilter filter, CancellationToken ct = default)
-    {
-        var (primary, comparison, reason) = await ComputeAsync(
-            filter,
-            LoadLoopHealthAsync,
-            (loaded, window) => CalculateLoopHealth(loaded, filter, window),
-            window => new LoopHealthRange { From = ToUtc(window.From), To = ToUtc(window.To) },
-            ct);
-        return new LoopHealthResponse { Primary = primary, Comparison = comparison, TimeZoneUnavailableReason = reason };
-    }
-
-    /// <summary>
-    /// Resolves the tenant's zone and computes the primary and comparison ranges, from one fetch
-    /// where they touch. A range a history clamp has emptied has nothing to fetch.
-    /// </summary>
-    private async Task<(TRange Primary, TRange? Comparison, TimeZoneUnavailableReason? Reason)> ComputeAsync<TLoaded, TRange>(
-        LoopAnalysisFilter filter,
-        Func<Window, TimeZoneInfo, CancellationToken, Task<TLoaded>> load,
-        Func<TLoaded, Window, TRange> calculate,
-        Func<Window, TRange> empty,
-        CancellationToken ct)
+    /// <summary>The primary and comparison ranges, from one load where they touch.</summary>
+    private static async Task<(TRange Primary, TRange? Comparison)> ForRangesAsync<TLoaded, TRange>(
+        LoopAnalysisFilter filter, Func<Window, Task<TLoaded>> load, Func<TLoaded, Window, TRange> calculate)
         where TRange : class
     {
         var primary = Window.Of(filter.From, filter.To);
@@ -106,24 +84,15 @@ internal sealed class LoopAnalysisService(
             ? Window.Of(compareFrom, compareTo)
             : (Window?)null;
 
-        var (zone, reason) = await tenantClock.ResolveAsync(ct);
-        if (zone is null)
-            return (empty(primary), comparison is { } unzoned ? empty(unzoned) : null, reason);
-
-        if (comparison is { IsEmpty: false } other && !primary.IsEmpty && primary.Touches(other))
+        if (comparison is { } other && primary.Touches(other))
         {
-            var both = await load(primary.Hull(other), zone, ct);
-            return (calculate(both, primary), calculate(both, other), reason);
+            var both = await load(primary.Hull(other));
+            return (calculate(both, primary), calculate(both, other));
         }
 
-        async Task<TRange> One(Window window) =>
-            window.IsEmpty ? empty(window) : calculate(await load(window, zone, ct), window);
-
-        return (await One(primary), comparison is { } separate ? await One(separate) : null, reason);
+        return (calculate(await load(primary), primary),
+            comparison is { } separate ? calculate(await load(separate), separate) : null);
     }
-
-    private static LoopAnalysisMask Mask(LoopAnalysisFilter filter, Window window, TimeZoneInfo zone, LoopAnalysisMaskSources sources) =>
-        LoopAnalysisMask.Build(filter, window.From, window.To, zone, sources);
 
     private sealed record DailyProfileLoaded(DailyProfileInputs Inputs, LoopAnalysisMaskSources Sources);
 
@@ -132,9 +101,8 @@ internal sealed class LoopAnalysisService(
         var from = window.From;
         var to = window.To;
         var lookbackUtc = ToUtc(from - DailyProfileCalculator.ActingMs);
-        var toUtc = ToUtc(to);
 
-        var carbTask = carbIntakeRepository.GetAsync(lookbackUtc, toUtc, null, null, int.MaxValue, descending: false, ct: ct);
+        var carbTask = carbIntakeRepository.GetAsync(lookbackUtc, ToUtc(to), null, null, int.MaxValue, descending: false, ct: ct);
         var apsTask = apsSnapshotRepository.GetIobCobPointsAsync(lookbackUtc, ToUtc(to + NetInsulinAboveSchedule.MaxInferredGapMs), ct);
         var commonTask = LoadCommonAsync(window, ct);
         await Task.WhenAll(carbTask, apsTask, commonTask);
@@ -150,7 +118,6 @@ internal sealed class LoopAnalysisService(
         var iobCob = IobCobSeries.Build(
             iobCalculator, cobCalculator, common.Boluses, carbs, common.TempBasals, delivery.Timeline, apsPoints,
             delivery.TickStart, to - 1, TickMs, ct);
-        var temporaryTargets = TemporaryTargets(common.Spans, to);
 
         var inputs = new DailyProfileInputs
         {
@@ -164,78 +131,15 @@ internal sealed class LoopAnalysisService(
                 delivery.Evidence,
                 common.Boluses.Where(b => b.Insulin > 0).Select(b => b.Mills)
                     .Concat(carbs.Where(c => c.Carbs > 0).Select(c => c.Mills))),
-            TargetAt = await TargetRangesAsync(delivery.HasTherapy ? common.Profiles : [], temporaryTargets, zone, to, ct),
+            TargetAt = await TargetRangesAsync(
+                delivery.HasTherapy ? common.Profiles : [], TemporaryTargets(common.Spans, to), zone, to, ct),
             Profiles = common.ProfileIntervals,
         };
 
         return new DailyProfileLoaded(inputs, Sources(common, snapshotMills, zone, to));
     }
 
-    private sealed record LoopHealthLoaded(
-        LoopHealthInputs Inputs,
-        LoopAnalysisMaskSources Sources,
-        IReadOnlyList<PatientDevice> Devices,
-        IReadOnlyList<TempBasal> TempBasals);
-
-    private async Task<LoopHealthLoaded> LoadLoopHealthAsync(Window window, TimeZoneInfo zone, CancellationToken ct)
-    {
-        var to = window.To;
-        var cyclesTask = apsSnapshotRepository.GetLoopCyclesAsync(
-            ToUtc(window.From - DailyProfileCalculator.ActingMs), ToUtc(to + NetInsulinAboveSchedule.MaxInferredGapMs), ct);
-        var commonTask = LoadCommonAsync(window, ct);
-        await Task.WhenAll(cyclesTask, commonTask);
-
-        var cycles = await cyclesTask;
-        var snapshotMills = cycles.Select(c => c.Mills).ToList();
-        var common = await commonTask;
-        var delivery = await DeliveryAsync(common, window, snapshotMills, ct);
-
-        var inputs = new LoopHealthInputs
-        {
-            Zone = zone,
-            Cycles = cycles,
-            Insulin = delivery.Insulin,
-            Evidence = delivery.Evidence,
-            Scheduled = delivery.Scheduled,
-            Glucose = common.Glucose,
-            LoopMaximumBasalRate = cycles.Any(c => c.AidAlgorithm == AidAlgorithm.Loop)
-                ? await LoopMaximumBasalRateAsync(common.Profiles, to, ct)
-                : null,
-        };
-
-        return new LoopHealthLoaded(inputs, Sources(common, snapshotMills, zone, to), common.Devices, common.TempBasals);
-    }
-
-    /// <summary>
-    /// <see cref="LoopHealthCalculator"/> over the window, with the overall activity percentages from
-    /// <see cref="AidSystemMetricsReader"/> over the same records, unmasked.
-    /// </summary>
-    private LoopHealthRange CalculateLoopHealth(LoopHealthLoaded loaded, LoopAnalysisFilter filter, Window window)
-    {
-        var inputs = loaded.Inputs;
-        var range = LoopHealthCalculator.Calculate(
-            inputs, Mask(filter, window, inputs.Zone, loaded.Sources), window.From, window.To);
-
-        var start = ToUtc(window.From);
-        var end = ToUtc(window.To);
-        var overall = aidSystemMetrics.Calculate(
-            new AidSystemMetricsRecords(
-                loaded.Devices,
-                [.. inputs.Cycles.Where(c => c.Timestamp >= start && c.Timestamp < end)],
-                [.. loaded.TempBasals.Where(t => t.StartTimestamp < end && (t.EndTimestamp ?? t.StartTimestamp) >= start)],
-                [],
-                [.. inputs.Glucose.Where(g => g.Mills >= window.From && g.Mills < window.To)],
-                null,
-                null),
-            start,
-            end);
-        range.Activity.AidActivePercent = overall.AidActivePercent;
-        range.Activity.PumpUsePercent = overall.PumpUsePercent;
-        range.Activity.CgmActivePercent = overall.CgmActivePercent;
-        return range;
-    }
-
-    /// <summary>The reads both tabs share, issued together.</summary>
+    /// <summary>The reads every tab shares, issued together.</summary>
     private sealed record Common(
         IReadOnlyList<SensorGlucose> Glucose,
         List<Bolus> Boluses,
@@ -337,41 +241,6 @@ internal sealed class LoopAnalysisService(
     }
 
     /// <summary>
-    /// Loop's maximum basal rate setting over time: the version of each active profile's settings
-    /// in force, read once per profile, where it records one.
-    /// </summary>
-    private async Task<StepTimeline<double>> LoopMaximumBasalRateAsync(
-        IReadOnlyList<ProfileSpan> profiles, long to, CancellationToken ct)
-    {
-        var versions = new Dictionary<string, TherapySettings[]>(StringComparer.Ordinal);
-        foreach (var name in profiles.Select(p => p.ProfileName).Distinct(StringComparer.Ordinal))
-            versions[name] = [.. (await therapySettingsRepository.GetByProfileNameAsync(name, ct))
-                .OrderByDescending(v => v.Timestamp)];
-
-        var steps = new List<Step<double>>();
-        foreach (var profile in profiles)
-        {
-            var start = profile.StartMills;
-            var end = profile.EndMills ?? to;
-            var bounds = versions[profile.ProfileName]
-                .Select(v => ToMills(DateTime.SpecifyKind(v.Timestamp, DateTimeKind.Utc)))
-                .Where(m => m > start && m < end)
-                .Append(start)
-                .Append(end)
-                .Distinct()
-                .Order()
-                .ToList();
-            for (var i = 0; i + 1 < bounds.Count; i++)
-            {
-                var settings = ProfileVersionCache.ActiveAt(versions[profile.ProfileName], ToUtc(bounds[i]));
-                if (settings?.LoopSettings?.MaximumBasalRatePerHour is { } maximum)
-                    steps.Add(new Step<double>(bounds[i], bounds[i + 1], maximum));
-            }
-        }
-        return StepTimeline<double>.LatestStartedWins(steps);
-    }
-
-    /// <summary>
     /// The target range in force at an instant: a running temporary target, read in mg/dL as
     /// <see cref="TemporaryTargetUnits"/> reads it, else the schedule. The schedule is the
     /// activation's own targets when it carries them, else the profile's stored version in force, as
@@ -459,9 +328,10 @@ internal sealed class LoopAnalysisService(
 
     private readonly record struct Window(long From, long To)
     {
-        public static Window Of(DateTime from, DateTime to) => new(ToMills(from), ToMills(to));
-
-        public bool IsEmpty => To <= From;
+        public static Window Of(DateTime from, DateTime to) =>
+            to > from
+                ? new(ToMills(from), ToMills(to))
+                : throw new ArgumentOutOfRangeException(nameof(to), "A Loop Analysis range must end after it starts.");
 
         public bool Touches(Window other) => From <= other.To && other.From <= To;
 

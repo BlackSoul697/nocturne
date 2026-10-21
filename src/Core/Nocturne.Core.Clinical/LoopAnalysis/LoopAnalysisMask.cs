@@ -4,7 +4,7 @@ using Nocturne.Core.Models.LoopAnalysis;
 
 namespace Nocturne.Core.Clinical.LoopAnalysis;
 
-/// <summary>The time each <see cref="LoopAnalysisFilter"/> exclusion can take out of a range.</summary>
+/// <summary>The time each <see cref="LoopAnalysisMasks"/> exclusion can take out of a range.</summary>
 public sealed record LoopAnalysisMaskSources
 {
     public IReadOnlyList<MillsInterval> Overrides { get; init; } = [];
@@ -22,7 +22,7 @@ public sealed record LoopAnalysisMaskSources
 public readonly record struct ProfileInterval(string ProfileName, long Start, long End);
 
 /// <summary>
-/// The time a range is analysed over once a <see cref="LoopAnalysisFilter"/> is applied, which every
+/// The time a range is analysed over once its <see cref="LoopAnalysisMasks"/> are applied, which every
 /// Loop Analysis calculator consumes.
 /// </summary>
 /// <param name="Analysed">The range, less the masked time.</param>
@@ -30,12 +30,13 @@ public readonly record struct ProfileInterval(string ProfileName, long Start, lo
 public sealed record LoopAnalysisMask(IntervalSet Analysed, IntervalSet Glucose)
 {
     public static LoopAnalysisMask Build(
-        LoopAnalysisFilter filter, long from, long to, TimeZoneInfo tz, LoopAnalysisMaskSources sources)
+        LoopAnalysisMasks filter, long from, long to, TimeZoneInfo tz, LoopAnalysisMaskSources sources)
     {
         var analysed = IntervalSet.Of(from, to);
 
-        if (filter.Days is { Count: > 0 } days)
-            analysed = analysed.Intersect(LocalWeekdays(from, to, tz, days.ToHashSet()));
+        var days = filter.Days.ToHashSet();
+        if (days.Count is > 0 and < 7)
+            analysed = analysed.Intersect(LocalWeekdays(from, to, tz, days));
 
         if (filter.ProfileName is { } profileName)
             analysed = analysed.Intersect(IntervalSet.Of(sources.Profiles

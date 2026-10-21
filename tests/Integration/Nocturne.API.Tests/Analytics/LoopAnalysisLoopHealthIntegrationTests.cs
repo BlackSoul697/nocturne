@@ -24,16 +24,15 @@ public class LoopAnalysisLoopHealthIntegrationTests(ApiIntegrationTestFixture fi
 
     // Midnight 2024-06-10 in Sydney (UTC+10, no DST in June).
     private static readonly DateTime WeekStart = new(2024, 6, 9, 14, 0, 0, DateTimeKind.Utc);
-    private static readonly DateTime WeekEnd = WeekStart.AddDays(7);
     private static readonly DateTime PreviousWeekStart = WeekStart.AddDays(-7);
 
     // Local 23:30 on the third day to 01:00 on the fourth.
     private static readonly DateTime GapStart = WeekStart.AddDays(2).AddHours(23.5);
     private static readonly DateTime GapEnd = WeekStart.AddDays(3).AddHours(1);
 
-    private static string Query(DateTime from, DateTime to, DateTime? compareFrom = null, DateTime? compareTo = null) =>
-        $"{Path}?from={from:O}&to={to:O}"
-        + (compareFrom is { } cf ? $"&compareFrom={cf:O}&compareTo={compareTo:O}" : "");
+    private const string Week = "startDate=2024-06-10&endDate=2024-06-16";
+
+    private static string Query(string query) => $"{Path}?{query}";
 
     [Fact]
     public async Task Returns_the_primary_and_the_adjacent_comparison()
@@ -42,10 +41,12 @@ public class LoopAnalysisLoopHealthIntegrationTests(ApiIntegrationTestFixture fi
         await SeedWeekAsync(PreviousWeekStart, gap: false);
         await SeedWeekAsync(WeekStart, gap: true);
 
-        var body = await GetOkAsync(AuthenticatedClient, Query(WeekStart, WeekEnd, PreviousWeekStart, WeekStart));
+        var body = await GetOkAsync(AuthenticatedClient, Query($"{Week}&compare=previous"));
 
         body.GetProperty("historyClamped").GetBoolean().Should().BeFalse();
         Absent(body, "timeZoneUnavailableReason").Should().BeTrue();
+        body.GetProperty("withheldSeries").GetArrayLength().Should().Be(0);
+        body.GetProperty("comparisonRange").GetProperty("startDate").GetString().Should().Be("2024-06-03");
         var primary = body.GetProperty("primary");
         primary.GetProperty("days").GetArrayLength().Should().Be(7);
 
@@ -89,9 +90,20 @@ public class LoopAnalysisLoopHealthIntegrationTests(ApiIntegrationTestFixture fi
     }
 
     [Fact]
-    public async Task Rejects_a_range_longer_than_ninety_days()
+    public async Task Keeps_the_most_recent_ninety_days_of_a_longer_range()
     {
-        var response = await AuthenticatedClient.GetAsync(Query(WeekStart.AddDays(-91), WeekStart));
+        await SeedProfileAsync("Australia/Sydney");
+
+        var body = await GetOkAsync(AuthenticatedClient, Query("startDate=2024-01-01&endDate=2024-06-30"));
+
+        body.GetProperty("primaryRange").GetProperty("shortened").GetBoolean().Should().BeTrue();
+        body.GetProperty("primaryRange").GetProperty("startDate").GetString().Should().Be("2024-04-02");
+    }
+
+    [Fact]
+    public async Task Rejects_dates_that_do_not_make_a_range()
+    {
+        var response = await AuthenticatedClient.GetAsync(Query("startDate=2024-06-16&endDate=2024-06-10"));
 
         response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
     }
@@ -103,8 +115,10 @@ public class LoopAnalysisLoopHealthIntegrationTests(ApiIntegrationTestFixture fi
         await SeedWeekAsync(WeekStart, gap: true);
         using var client = await CreateTokenClientAsync(Scope.ReportsRead, Scope.GlucoseRead, Scope.TreatmentsRead);
 
-        var body = await GetOkAsync(client, Query(WeekStart, WeekEnd));
+        var body = await GetOkAsync(client, Query(Week));
 
+        body.GetProperty("withheldSeries").EnumerateArray().Select(s => s.GetString())
+            .Should().Contain(["LoopGaps", "MaxBasal", "SensitivityRatio"]).And.NotContain("ZeroDelivery");
         var primary = body.GetProperty("primary");
         Absent(primary.GetProperty("cadence"), "loopGaps").Should().BeTrue("the loop cycles are devices");
         Absent(primary, "maxBasal").Should().BeTrue();
@@ -120,9 +134,10 @@ public class LoopAnalysisLoopHealthIntegrationTests(ApiIntegrationTestFixture fi
         using var clamped = await CreateHistoryClampedClientAsync();
         var now = DateTime.UtcNow;
 
-        var body = await GetOkAsync(clamped, Query(now.AddDays(-7), now));
+        var body = await GetOkAsync(clamped, Query($"{Week}&compare=previous"));
 
         body.GetProperty("historyClamped").GetBoolean().Should().BeTrue();
+        Absent(body, "comparison").Should().BeTrue();
         body.GetProperty("primary").GetProperty("from").GetDateTime().ToUniversalTime()
             .Should().BeCloseTo(now.AddHours(-24), TimeSpan.FromMinutes(5));
     }
@@ -134,7 +149,7 @@ public class LoopAnalysisLoopHealthIntegrationTests(ApiIntegrationTestFixture fi
         await SeedWeekAsync(WeekStart, gap: false);
         using var share = await CreateShareClientAsync();
 
-        var body = await GetOkAsync(share, Query(WeekStart, WeekEnd));
+        var body = await GetOkAsync(share, Query(Week));
 
         body.GetProperty("timeZoneUnavailableReason").GetString().Should().Be("Share");
         body.GetProperty("primary").GetProperty("days").GetArrayLength().Should().Be(0);
@@ -145,14 +160,14 @@ public class LoopAnalysisLoopHealthIntegrationTests(ApiIntegrationTestFixture fi
     {
         await SeedWeekAsync(WeekStart, gap: true);
 
-        var body = await GetOkAsync(AuthenticatedClient, Query(WeekStart, WeekEnd, PreviousWeekStart, WeekStart));
+        var body = await GetOkAsync(AuthenticatedClient, Query($"{Week}&compare=previous"));
 
         body.GetProperty("timeZoneUnavailableReason").GetString().Should().Be("NotConfigured");
+        Absent(body, "primaryRange").Should().BeTrue();
         var primary = body.GetProperty("primary");
         primary.GetProperty("days").GetArrayLength().Should().Be(0);
         Absent(primary, "maxBasal").Should().BeTrue();
         Absent(primary.GetProperty("cadence"), "loopGaps").Should().BeTrue();
-        body.GetProperty("comparison").GetProperty("days").GetArrayLength().Should().Be(0);
     }
 
     /// <summary>

@@ -24,7 +24,7 @@ public class LoopHealthCalculatorTests
         IEnumerable<InsulinDose>? doses = null,
         IntervalSet? recorded = null,
         StepTimeline<double>? loopMaximum = null,
-        LoopAnalysisFilter? filter = null,
+        LoopAnalysisMasks? masks = null,
         LoopAnalysisMaskSources? sources = null)
     {
         var scheduledList = (scheduled ?? []).ToList();
@@ -38,7 +38,7 @@ public class LoopHealthCalculatorTests
             LoopMaximumBasalRate = loopMaximum,
         };
         var mask = LoopAnalysisMask.Build(
-            filter ?? new LoopAnalysisFilter { ExcludeIllness = false, ExcludeOpenLoop = false },
+            masks ?? new LoopAnalysisMasks { ExcludeIllness = false, ExcludeOpenLoop = false },
             from, to, Sydney, sources ?? new LoopAnalysisMaskSources());
         return LoopHealthCalculator.Calculate(inputs, mask, from, to);
     }
@@ -348,7 +348,7 @@ public class LoopHealthCalculatorTests
         var to = Day0 + 2 * Hour;
         var result = Calculate(from, to,
             cycles: EveryFiveMinutes(from, to, t => Cycle(t, sensitivity: 1.0)),
-            filter: new LoopAnalysisFilter { ExcludeIllness = true, ExcludeOpenLoop = false },
+            masks: new LoopAnalysisMasks { ExcludeIllness = true, ExcludeOpenLoop = false },
             sources: new LoopAnalysisMaskSources { Illness = [new MillsInterval(from, from + Hour)] });
 
         result.Activity.Pump!.Hours[0].Percent.Should().BeNull();

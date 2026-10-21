@@ -65,7 +65,7 @@ public class LoopAnalysisDailyProfileBudgetTests(ITestOutputHelper output)
         var overrides = Enumerable.Range(0, 26)
             .Select(w => new ScaleFactorInterval(compareFrom + w * 7 * Day, compareFrom + w * 7 * Day + 3 * 60 * Minute, 0.8))
             .ToList();
-        var filter = new LoopAnalysisFilter { ExcludeOverrides = true };
+        var filter = new LoopAnalysisMasks { ExcludeOverrides = true };
 
         var stopwatch = Stopwatch.StartNew();
 

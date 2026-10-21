@@ -72,7 +72,7 @@ public class LoopAnalysisLoopHealthBudgetTests(ITestOutputHelper output)
             Scheduled = scheduled,
             Glucose = glucose,
         };
-        var filter = new LoopAnalysisFilter();
+        var filter = new LoopAnalysisMasks();
         var primary = LoopHealthCalculator.Calculate(
             inputs, LoopAnalysisMask.Build(filter, from, to, Zone, new LoopAnalysisMaskSources()), from, to);
         var comparison = LoopHealthCalculator.Calculate(

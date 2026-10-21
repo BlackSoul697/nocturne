@@ -9,11 +9,14 @@ namespace Nocturne.Core.Contracts.Analytics;
 public interface ILoopAnalysisService
 {
     /// <remarks>
-    /// Unredacted, and without <see cref="DailyProfileResponse.HistoryClamped"/>: the caller narrows it
-    /// to the reader's scopes and states the reader's history ceiling.
+    /// <paramref name="filter"/> is resolved: its ranges are instants in <paramref name="zone"/>
+    /// that end after they start. The result is unredacted and carries none of the
+    /// <see cref="LoopAnalysisResponse"/> envelope, which the caller fills.
     /// </remarks>
-    Task<DailyProfileResponse> GetDailyProfileAsync(LoopAnalysisFilter filter, CancellationToken ct = default);
+    Task<DailyProfileResponse> GetDailyProfileAsync(
+        LoopAnalysisFilter filter, TimeZoneInfo zone, CancellationToken ct = default);
 
-    /// <remarks>Unredacted and without the history ceiling, as <see cref="GetDailyProfileAsync"/>.</remarks>
-    Task<LoopHealthResponse> GetLoopHealthAsync(LoopAnalysisFilter filter, CancellationToken ct = default);
+    /// <remarks>As <see cref="GetDailyProfileAsync"/>.</remarks>
+    Task<LoopHealthResponse> GetLoopHealthAsync(
+        LoopAnalysisFilter filter, TimeZoneInfo zone, CancellationToken ct = default);
 }

@@ -14,7 +14,7 @@ namespace Nocturne.API.Tests.Integration.Analytics;
 
 /// <summary>
 /// <c>GET /api/v4/loop-analysis/daily-profile</c> end to end on PostgreSQL: a week of algorithm
-/// temp basals at 1.5 U/h against a 1.0 U/h schedule in Sydney, compared with the week before.
+/// temp basals at 1.5 U/h against a 1.0 U/h schedule in Sydney, compared with another week.
 /// </summary>
 [Trait("Category", "Integration")]
 public class LoopAnalysisDailyProfileIntegrationTests(ApiIntegrationTestFixture fixture, ITestOutputHelper output)
@@ -22,27 +22,42 @@ public class LoopAnalysisDailyProfileIntegrationTests(ApiIntegrationTestFixture 
 {
     private const string Path = "/api/v4/loop-analysis/daily-profile";
 
-    // Midnight 2024-06-10 in Sydney (UTC+10, no DST in June).
+    // 2024-06-10 in Sydney (UTC+10, no DST in June) begins at this instant.
     private static readonly DateTime WeekStart = new(2024, 6, 9, 14, 0, 0, DateTimeKind.Utc);
-    private static readonly DateTime WeekEnd = WeekStart.AddDays(7);
     private static readonly DateTime PreviousWeekStart = WeekStart.AddDays(-7);
+    private const string Week = "startDate=2024-06-10&endDate=2024-06-16";
 
-    private static string Query(DateTime from, DateTime to, DateTime? compareFrom = null, DateTime? compareTo = null) =>
-        $"{Path}?from={from:O}&to={to:O}"
-        + (compareFrom is { } cf ? $"&compareFrom={cf:O}&compareTo={compareTo:O}" : "");
+    private static string Query(string query) => $"{Path}?{query}";
 
     [Fact]
-    public async Task Returns_the_primary_and_the_adjacent_comparison()
+    public async Task Returns_the_primary_and_the_previous_week()
     {
         await SeedProfileAsync("Australia/Sydney");
         await SeedWeekAsync(PreviousWeekStart, tempRate: 0.5);
         await SeedWeekAsync(WeekStart, tempRate: 1.5);
         await SeedTemporaryTargetsAsync(WeekStart);
 
-        var body = await GetOkAsync(AuthenticatedClient, Query(WeekStart, WeekEnd, PreviousWeekStart, WeekStart));
+        var body = await GetOkAsync(AuthenticatedClient, Query($"{Week}&compare=previous"));
 
         body.GetProperty("historyClamped").GetBoolean().Should().BeFalse();
         Absent(body, "timeZoneUnavailableReason").Should().BeTrue();
+        body.GetProperty("ignoredFilters").GetArrayLength().Should().Be(0);
+        body.GetProperty("withheldSeries").GetArrayLength().Should().Be(0);
+
+        var primaryRange = body.GetProperty("primaryRange");
+        primaryRange.GetProperty("startDate").GetString().Should().Be("2024-06-10");
+        primaryRange.GetProperty("endDate").GetString().Should().Be("2024-06-16");
+        primaryRange.GetProperty("from").GetDateTime().ToUniversalTime().Should().Be(WeekStart);
+        primaryRange.GetProperty("shortened").GetBoolean().Should().BeFalse();
+        var comparisonRange = body.GetProperty("comparisonRange");
+        comparisonRange.GetProperty("startDate").GetString().Should().Be("2024-06-03");
+        comparisonRange.GetProperty("endDate").GetString().Should().Be("2024-06-09");
+
+        var applied = body.GetProperty("appliedFilters");
+        applied.GetProperty("days").GetArrayLength().Should().Be(7);
+        applied.GetProperty("excludeIllness").GetBoolean().Should().BeTrue();
+        applied.GetProperty("excludeOpenLoop").GetBoolean().Should().BeTrue();
+        applied.GetProperty("excludeOverrides").GetBoolean().Should().BeFalse();
 
         var primary = body.GetProperty("primary");
         primary.GetProperty("slots").GetArrayLength().Should().Be(288);
@@ -57,16 +72,21 @@ public class LoopAnalysisDailyProfileIntegrationTests(ApiIntegrationTestFixture 
         ten.GetProperty("netLoopCorrection").GetProperty("mean").GetDouble().Should().Be(0.5);
         ten.GetProperty("targetLow").GetDouble().Should().Be(144.146, "an 8 mmol/L temporary target ran at 10:00 every day");
         primary.GetProperty("slots")[132].GetProperty("targetLow").GetDouble().Should().Be(90);
-        primary.GetProperty("summary").GetProperty("daysWithData").GetInt32().Should().Be(7);
-        body.GetProperty("ignoredFilters").GetArrayLength().Should().Be(0);
 
         var three = primary.GetProperty("slots")[36];
         three.GetProperty("netLoopCorrection").GetProperty("automaticBolusMean").GetDouble()
             .Should().Be(2.4, "0.2 U over five minutes every day");
         primary.GetProperty("slots")[96].GetProperty("manualBoluses").GetProperty("meanPerDay").GetDouble().Should().Be(3);
 
-        primary.GetProperty("summary").GetProperty("deliveredToScheduledRatio").GetDouble().Should().Be(1.5);
-        primary.GetProperty("summary").GetProperty("netLoopCorrectionPerDay").GetDouble().Should().Be(12.2);
+        var summary = primary.GetProperty("summary");
+        summary.GetProperty("daysWithData").GetInt32().Should().Be(7);
+        summary.GetProperty("deliveredToScheduledRatio").GetDouble().Should().Be(1.5);
+        summary.GetProperty("netLoopCorrectionPerDay").GetDouble().Should().Be(12.2);
+        var insulin = summary.GetProperty("insulin");
+        insulin.GetProperty("total").GetProperty("mean").GetDouble().Should().Be(39.2, "36 U basal, 0.2 U automatic and 3 U manual a day");
+        insulin.GetProperty("total").GetProperty("n").GetInt32().Should().Be(7);
+        insulin.GetProperty("deliveredBasal").GetDouble().Should().Be(36);
+        insulin.GetProperty("bolus").GetDouble().Should().Be(3.2);
 
         var comparison = body.GetProperty("comparison");
         comparison.GetProperty("slots")[120].GetProperty("netLoopCorrection").GetProperty("mean").GetDouble().Should().Be(-0.5);
@@ -74,14 +94,14 @@ public class LoopAnalysisDailyProfileIntegrationTests(ApiIntegrationTestFixture 
     }
 
     [Fact]
-    public async Task Fetches_a_comparison_that_does_not_touch_the_primary_on_its_own()
+    public async Task Fetches_a_custom_comparison_that_does_not_touch_the_primary_on_its_own()
     {
         await SeedProfileAsync("Australia/Sydney");
-        var twoWeeksBack = PreviousWeekStart.AddDays(-7);
-        await SeedWeekAsync(twoWeeksBack, tempRate: 0.5);
+        await SeedWeekAsync(PreviousWeekStart.AddDays(-7), tempRate: 0.5);
         await SeedWeekAsync(WeekStart, tempRate: 1.5);
 
-        var body = await GetOkAsync(AuthenticatedClient, Query(WeekStart, WeekEnd, twoWeeksBack, PreviousWeekStart));
+        var body = await GetOkAsync(AuthenticatedClient,
+            Query($"{Week}&compare=custom&compareStartDate=2024-05-27&compareEndDate=2024-06-02"));
 
         body.GetProperty("primary").GetProperty("slots")[120].GetProperty("netLoopCorrection")
             .GetProperty("mean").GetDouble().Should().Be(0.5);
@@ -91,14 +111,42 @@ public class LoopAnalysisDailyProfileIntegrationTests(ApiIntegrationTestFixture 
     }
 
     [Fact]
-    public async Task Rejects_a_range_longer_than_ninety_days()
+    public async Task Keeps_the_most_recent_ninety_days_of_a_longer_range()
     {
-        var response = await AuthenticatedClient.GetAsync(Query(WeekStart.AddDays(-91), WeekStart));
+        await SeedProfileAsync("Australia/Sydney");
+
+        var body = await GetOkAsync(AuthenticatedClient, Query("startDate=2024-01-01&endDate=2024-06-30&compare=previous"));
+
+        var primaryRange = body.GetProperty("primaryRange");
+        primaryRange.GetProperty("shortened").GetBoolean().Should().BeTrue();
+        primaryRange.GetProperty("startDate").GetString().Should().Be("2024-04-02");
+        body.GetProperty("comparisonRange").GetProperty("endDate").GetString().Should().Be("2024-04-01");
+        body.GetProperty("primary").GetProperty("days").GetArrayLength().Should().Be(90);
+    }
+
+    [Fact]
+    public async Task Accepts_ninety_local_days_across_a_fall_back_transition()
+    {
+        await SeedProfileAsync("Australia/Sydney");
+
+        var body = await GetOkAsync(AuthenticatedClient, Query("startDate=2024-03-01&endDate=2024-05-29"));
+
+        var primaryRange = body.GetProperty("primaryRange");
+        primaryRange.GetProperty("shortened").GetBoolean().Should().BeFalse();
+        (primaryRange.GetProperty("to").GetDateTime() - primaryRange.GetProperty("from").GetDateTime())
+            .Should().Be(TimeSpan.FromDays(90) + TimeSpan.FromHours(1));
+        body.GetProperty("primary").GetProperty("days").GetArrayLength().Should().Be(90);
+    }
+
+    [Theory]
+    [InlineData("startDate=2024-06-16&endDate=2024-06-10")]
+    [InlineData("startDate=2024-06-10&endDate=2024-06-16&compare=custom")]
+    [InlineData("startDate=2024-06-10&endDate=2024-06-16&compareStartDate=2024-06-01&compareEndDate=2024-06-07")]
+    public async Task Rejects_dates_that_do_not_make_a_range(string query)
+    {
+        var response = await AuthenticatedClient.GetAsync(Query(query));
 
         response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
-
-        var comparison = await AuthenticatedClient.GetAsync(Query(WeekStart, WeekEnd, WeekStart.AddDays(-100), WeekStart));
-        comparison.StatusCode.Should().Be(HttpStatusCode.BadRequest);
     }
 
     [Theory]
@@ -111,7 +159,7 @@ public class LoopAnalysisDailyProfileIntegrationTests(ApiIntegrationTestFixture 
         await SeedWeekAsync(WeekStart, tempRate: 1.5);
         using var client = await CreateTokenClientAsync(scopes);
 
-        var body = await GetOkAsync(client, Query(WeekStart, WeekEnd) + "&excludeIllness=true");
+        var body = await GetOkAsync(client, Query($"{Week}&excludeIllness=true"));
 
         var ten = body.GetProperty("primary").GetProperty("slots")[120];
         Absent(ten, "glucose").Should().Be(!glucose);
@@ -119,22 +167,37 @@ public class LoopAnalysisDailyProfileIntegrationTests(ApiIntegrationTestFixture 
         Absent(ten, "iob").Should().Be(!treatments);
         Absent(ten, "scheduledBasal").Should().Be(!(therapy && treatments));
         Absent(ten, "targetLow").Should().Be(!(therapy && treatments));
+        Absent(body.GetProperty("primary").GetProperty("summary"), "insulin").Should().Be(!treatments);
+
+        var withheld = body.GetProperty("withheldSeries").EnumerateArray().Select(s => s.GetString()).ToList();
+        withheld.Contains("Glucose").Should().Be(!glucose);
+        withheld.Contains("DeliveredBasal").Should().Be(!treatments);
+        withheld.Contains("InsulinSummary").Should().Be(!treatments);
+        withheld.Contains("ScheduledBasal").Should().Be(!(therapy && treatments));
+        withheld.Contains("ProfileNames").Should().Be(!therapy);
+
         var ignored = body.GetProperty("ignoredFilters").EnumerateArray().Select(f => f.GetString()).ToList();
         ignored.Should().Equal(treatments ? [] : ["excludeIllness"], "only a parameter the caller sent is reported");
+        body.GetProperty("appliedFilters").GetProperty("excludeIllness").GetBoolean().Should().Be(treatments);
     }
 
     [Fact]
-    public async Task A_history_clamped_member_is_analysed_over_its_last_24_hours_only()
+    public async Task A_history_clamped_member_is_analysed_over_its_last_24_hours_whatever_it_asks_for()
     {
         await SeedProfileAsync("Australia/Sydney");
         using var clamped = await CreateHistoryClampedClientAsync();
         var now = DateTime.UtcNow;
 
-        var body = await GetOkAsync(clamped, Query(now.AddDays(-7), now));
+        var body = await GetOkAsync(clamped, Query($"{Week}&compare=previous"));
 
         body.GetProperty("historyClamped").GetBoolean().Should().BeTrue();
-        var from = body.GetProperty("primary").GetProperty("from").GetDateTime().ToUniversalTime();
-        from.Should().BeCloseTo(now.AddHours(-24), TimeSpan.FromMinutes(5));
+        var primaryRange = body.GetProperty("primaryRange");
+        primaryRange.GetProperty("from").GetDateTime().ToUniversalTime().Should().BeCloseTo(now.AddHours(-24), TimeSpan.FromMinutes(5));
+        primaryRange.GetProperty("to").GetDateTime().ToUniversalTime().Should().BeCloseTo(now, TimeSpan.FromMinutes(5));
+        Absent(body, "comparisonRange").Should().BeTrue();
+        Absent(body, "comparison").Should().BeTrue();
+        body.GetProperty("ignoredFilters").EnumerateArray().Select(f => f.GetString())
+            .Should().BeEquivalentTo("startDate", "endDate", "compare");
         body.GetProperty("primary").GetProperty("days").GetArrayLength().Should().BeLessThanOrEqualTo(2);
     }
 
@@ -145,47 +208,25 @@ public class LoopAnalysisDailyProfileIntegrationTests(ApiIntegrationTestFixture 
         await SeedWeekAsync(WeekStart, tempRate: 1.5);
         using var share = await CreateShareClientAsync();
 
-        var body = await GetOkAsync(share, Query(WeekStart, WeekEnd));
+        var body = await GetOkAsync(share, Query(Week));
 
         body.GetProperty("timeZoneUnavailableReason").GetString().Should().Be("Share");
+        Absent(body, "primaryRange").Should().BeTrue();
         body.GetProperty("primary").GetProperty("slots").GetArrayLength().Should().Be(0);
-    }
-
-    [Fact]
-    public async Task Narrows_the_response_to_the_callers_scopes()
-    {
-        await SeedProfileAsync("Australia/Sydney");
-        await SeedWeekAsync(WeekStart, tempRate: 1.5);
-        using var glucoseOnly = await CreateTokenClientAsync(Scope.ReportsRead, Scope.GlucoseRead);
-
-        var body = await GetOkAsync(glucoseOnly, Query(WeekStart, WeekEnd));
-
-        var primary = body.GetProperty("primary");
-        var ten = primary.GetProperty("slots")[120];
-        ten.GetProperty("glucose").GetProperty("p50").GetDouble().Should().Be(120);
-        Absent(ten, "deliveredBasal").Should().BeTrue();
-        Absent(ten, "netLoopCorrection").Should().BeTrue();
-        Absent(ten, "iob").Should().BeTrue();
-        Absent(ten, "manualBoluses").Should().BeTrue();
-        Absent(ten, "scheduledBasal").Should().BeTrue();
-        Absent(ten, "targetLow").Should().BeTrue();
-        primary.GetProperty("profileNames").GetArrayLength().Should().Be(0);
-        primary.GetProperty("hourlyNetLoopCorrection").GetArrayLength().Should().Be(0);
-        Absent(primary.GetProperty("days")[0], "totalInsulin").Should().BeTrue();
     }
 
     [Fact]
     public async Task Returns_no_slots_without_a_tenant_timezone()
     {
         await SeedWeekAsync(WeekStart, tempRate: 1.5);
-        await SeedTemporaryTargetsAsync(WeekStart);
 
-        var body = await GetOkAsync(AuthenticatedClient, Query(WeekStart, WeekEnd, PreviousWeekStart, WeekStart));
+        var body = await GetOkAsync(AuthenticatedClient, Query($"{Week}&compare=previous"));
 
         body.GetProperty("timeZoneUnavailableReason").GetString().Should().Be("NotConfigured");
+        Absent(body, "primaryRange").Should().BeTrue();
         body.GetProperty("primary").GetProperty("slots").GetArrayLength().Should().Be(0);
         body.GetProperty("primary").GetProperty("days").GetArrayLength().Should().Be(0);
-        body.GetProperty("comparison").GetProperty("slots").GetArrayLength().Should().Be(0);
+        Absent(body, "comparison").Should().BeTrue();
     }
 
     /// <summary>

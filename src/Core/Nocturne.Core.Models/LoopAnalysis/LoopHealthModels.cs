@@ -3,20 +3,11 @@ using System.Text.Json.Serialization;
 namespace Nocturne.Core.Models.LoopAnalysis;
 
 /// <summary>The Loop health tab: the primary range and, when asked for, a comparison range.</summary>
-public class LoopHealthResponse
+public class LoopHealthResponse : LoopAnalysisResponse
 {
     public LoopHealthRange Primary { get; set; } = new();
 
     public LoopHealthRange? Comparison { get; set; }
-
-    /// <inheritdoc cref="DailyProfileResponse.HistoryClamped"/>
-    public bool HistoryClamped { get; set; }
-
-    /// <summary>Why no tenant timezone resolved. When set, no range carries figures or days.</summary>
-    public TimeZoneUnavailableReason? TimeZoneUnavailableReason { get; set; }
-
-    /// <inheritdoc cref="DailyProfileResponse.IgnoredFilters"/>
-    public List<string> IgnoredFilters { get; set; } = [];
 }
 
 /// <summary>

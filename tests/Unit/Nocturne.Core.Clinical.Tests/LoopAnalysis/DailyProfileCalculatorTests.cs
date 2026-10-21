@@ -31,7 +31,7 @@ public class DailyProfileCalculatorTests
         IEnumerable<GlucoseSample>? glucose = null,
         IEnumerable<CarbEvent>? carbs = null,
         IEnumerable<IobCobTick>? iobCob = null,
-        LoopAnalysisFilter? filter = null,
+        LoopAnalysisMasks? filter = null,
         LoopAnalysisMaskSources? sources = null,
         IntervalSet? calculatedIobCobTime = null,
         Func<long, (double Low, double High)?>? targetAt = null)
@@ -46,7 +46,7 @@ public class DailyProfileCalculatorTests
             CalculatedIobCobTime = calculatedIobCobTime ?? IntervalSet.Empty,
             TargetAt = targetAt,
         };
-        var mask = LoopAnalysisMask.Build(filter ?? new LoopAnalysisFilter(), from, to, tz, sources ?? new LoopAnalysisMaskSources());
+        var mask = LoopAnalysisMask.Build(filter ?? new LoopAnalysisMasks(), from, to, tz, sources ?? new LoopAnalysisMaskSources());
         return DailyProfileCalculator.Calculate(inputs, mask, from, to);
     }
 
@@ -247,7 +247,7 @@ public class DailyProfileCalculatorTests
                 new(ten + maskedMinutes * Minute, to, 2.0, BasalDeliveryOrigin.Algorithm),
             ],
             scheduled: [new(from, to, 1.0)],
-            filter: new LoopAnalysisFilter { ExcludeOverrides = true },
+            filter: new LoopAnalysisMasks { ExcludeOverrides = true },
             sources: new LoopAnalysisMaskSources { Overrides = [new(ten, ten + maskedMinutes * Minute)] });
 
         var slot = result.Slots[SlotAt(10, 0)];
@@ -275,7 +275,7 @@ public class DailyProfileCalculatorTests
             delivered: [new(from, to, 1.0, BasalDeliveryOrigin.Algorithm)],
             scheduled: [new(from, to, 1.0)],
             glucose: EveryFiveMinutes(from, to, 60),
-            filter: new LoopAnalysisFilter { ExcludeIllness = false, ExcludeOpenLoop = false },
+            filter: new LoopAnalysisMasks { ExcludeIllness = false, ExcludeOpenLoop = false },
             sources: new LoopAnalysisMaskSources { DataExclusions = [new(three, three + 30 * Minute)] });
 
         result.Slots[SlotAt(3, 0)].Glucose.Should().BeNull();
@@ -326,7 +326,7 @@ public class DailyProfileCalculatorTests
 
         var result = Calculate(Darwin, from, to,
             glucose: EveryFiveMinutes(from, to, 100),
-            filter: new LoopAnalysisFilter { Days = [DayOfWeek.Monday, DayOfWeek.Wednesday] });
+            filter: new LoopAnalysisMasks { Days = [DayOfWeek.Monday, DayOfWeek.Wednesday] });
 
         result.Days.Select(d => d.Date).Should().Equal("2024-06-03", "2024-06-05");
         result.Slots[0].Glucose!.N.Should().Be(2);
@@ -412,7 +412,7 @@ public class DailyProfileCalculatorTests
         var result = Calculate(Darwin, from, to,
             delivered: [new(from, to, 2.0, BasalDeliveryOrigin.Algorithm)],
             scheduled: [new(from, to, 1.0)],
-            filter: new LoopAnalysisFilter { ExcludeOverrides = true },
+            filter: new LoopAnalysisMasks { ExcludeOverrides = true },
             sources: new LoopAnalysisMaskSources { Overrides = [new(ten, ten + 150_000)] });
 
         result.Slots[SlotAt(10, 0)].NetLoopCorrection!.Mean.Should().Be(1.0, "2.5 of 5 minutes is half the slot");
@@ -430,6 +430,36 @@ public class DailyProfileCalculatorTests
 
         result.Slots[0].TargetLow.Should().Be(90);
         result.Slots[0].TargetHigh.Should().Be(140);
+    }
+
+    [Fact]
+    public void InsulinSummary_SplitsEachWholeDayAndScalesAMaskedOne()
+    {
+        var from = Local(Darwin, 2024, 6, 3, 0);
+        var to = Local(Darwin, 2024, 6, 5, 0);
+        var secondDay = from + 24 * Hour;
+
+        var result = Calculate(Darwin, from, to,
+            delivered: [new(from, to, 1.0, BasalDeliveryOrigin.Algorithm)],
+            scheduled: [new(from, to, 1.0)],
+            doses: [new(from + 3 * Hour, 0.5, true), new(from + 8 * Hour, 3, false), new(secondDay + 8 * Hour, 3, false)],
+            filter: new LoopAnalysisMasks { ExcludeIllness = true },
+            sources: new LoopAnalysisMaskSources { Illness = [new(secondDay + 12 * Hour, secondDay + 24 * Hour)] });
+
+        var insulin = result.Summary.Insulin!;
+        insulin.Total.N.Should().Be(2);
+        insulin.Total.Mean.Should().Be(28.75, "day one is 24 + 0.5 + 3; day two is 24 + its 3 U over 12 analysed hours scaled to 6");
+        insulin.DeliveredBasal.Should().Be(24);
+        insulin.AutomaticBolus.Should().Be(0.25);
+        insulin.ManualBolus.Should().Be(4.5);
+        insulin.ManualBolusPercent.Should().Be(15.652);
+        insulin.Bolus.Should().Be(4.75);
+        insulin.BolusPercent.Should().Be(16.522, "an automatic bolus is bolus in the split, as Trio and AAPS count it");
+        insulin.DeliveredBasalPercent.Should().Be(83.478);
+        result.Days[0].TotalInsulin.Should().Be(27.5);
+        result.Days[0].DeliveredBasal.Should().Be(24);
+        result.Days[0].AutomaticBolus.Should().Be(0.5);
+        result.Days[0].ManualBolus.Should().Be(3);
     }
 
     private static bool Bit(string? base64, int slot) =>
