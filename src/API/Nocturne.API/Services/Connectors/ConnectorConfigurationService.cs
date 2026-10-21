@@ -16,6 +16,7 @@ using Nocturne.Core.Models.Authorization;
 using Nocturne.Core.Models.Configuration;
 using Nocturne.Infrastructure.Data;
 using Nocturne.Infrastructure.Data.Entities;
+using Nocturne.Infrastructure.Data.Extensions;
 using Nocturne.API.Services.Realtime;
 using Nocturne.Infrastructure.Data.Services;
 
@@ -289,13 +290,6 @@ public class ConnectorConfigurationService : IConnectorConfigurationService
         if (string.IsNullOrWhiteSpace(apiSecret))
             return;
 
-        var subjectId = _auditContext.SubjectId;
-        if (subjectId == null)
-        {
-            _logger.LogWarning("Cannot create legacy grant: no authenticated subject in audit context");
-            return;
-        }
-
         // SHA-1 is required here: the Nightscout `api-secret` protocol hashes the secret
         // with SHA-1, so legacy clients (xDrip, etc.) send that hash and we must match it.
         var sha1Hash = HashUtils.Sha1Hex(apiSecret);
@@ -312,8 +306,9 @@ public class ConnectorConfigurationService : IConnectorConfigurationService
             return;
         }
 
+        // A site's secret, not the saver's: see DeviceSubjectFilter.
         var grant = OAuthGrantEntity.AdoptedLegacyCredential(
-            subjectId.Value,
+            await db.DeviceSubjectOf(db.TenantId, ct),
             "Nightscout (migrated)",
             [Scope.HealthReadWrite],
             legacySecretHash: sha1Hash);

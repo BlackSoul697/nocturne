@@ -13,13 +13,9 @@ namespace Nocturne.API.Hubs;
 /// is what decides access to the groups that carry more than one category.
 /// </summary>
 /// <remarks>
-/// "Belongs to the tenant" is what the handshake proved, which for most types is a tenant-membership
-/// row — <see cref="Middleware.AuthenticationMiddleware"/> rejects a subject that has none.
-/// <see cref="AuthType.ApiKey"/> is the type it exempts from that check (see
-/// <see cref="Middleware.MemberScopeMiddleware"/>: an api-secret grant row is matched on TenantId and
-/// keeps the grant's own scopes), so an api-secret credential whose subject is not a member of the
-/// tenant still classifies as <see cref="Subject"/> and reaches the tenant-wide and subject groups on
-/// its grant alone.
+/// "Belongs to the tenant" is what the handshake proved: a tenant-membership row for every type but
+/// platform access, since <see cref="Middleware.AuthenticationMiddleware"/> rejects a subject that has
+/// none.
 /// </remarks>
 /// <seealso cref="HubAuthorization.CanJoinTenantRelay"/>
 public enum HubCredentialKind
