@@ -265,6 +265,26 @@ describe("WebSocketClient handshake ticket handling", () => {
   });
 });
 
+describe("WebSocketClient fresh ticket requests", () => {
+  it.each([
+    ["a fresh ticket", { token: "a-fresh-ticket" }, "a-fresh-ticket"],
+    ["no ticket once realtime is denied", { token: null }, null],
+  ])("answers the bridge's request with %s", async (_case, body, answered) => {
+    stubTicketEndpoint({ token: "a-verifiable-ticket" });
+    const client = new WebSocketClient(config);
+    client.connect();
+    const socket = lastSocket!;
+    await socket.handshake();
+
+    stubTicketEndpoint(body);
+    const ack = vi.fn();
+    socket.handlers.get("realtime_ticket")!(ack);
+    await flush();
+
+    expect(ack).toHaveBeenCalledWith(answered);
+  });
+});
+
 describe("WebSocketClient.connect with a socket already open", () => {
   it("opens one socket when called twice", () => {
     stubTicketEndpoint({ token: "a-verifiable-ticket" });

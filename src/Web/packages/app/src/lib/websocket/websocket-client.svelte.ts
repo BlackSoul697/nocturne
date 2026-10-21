@@ -362,6 +362,13 @@ export class WebSocketClient {
       this.reconnectAttempts++;
     });
 
+    // The bridge asks for a fresh ticket before the one it admitted this socket
+    // on lapses. Answering with none closes the transport, and the reconnect's
+    // own ticket fetch decides what happens next.
+    this.socket.on("realtime_ticket", (ack: (token: string | null) => void) => {
+      void this.fetchTicket().then(({ token }) => ack(token));
+    });
+
     this.socket.on("connect_ack", (info: ConnectionInfo) => {
       this.eventHandlers.connect_ack?.(info);
     });
