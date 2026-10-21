@@ -397,6 +397,9 @@ public class ApiIntegrationTestFixture : IAsyncLifetime
         "step_counts",
         "sleep_sessions",
         "compression_low_suggestions",
+        // Health records a test may write directly through the v4 endpoints.
+        "lab_hba1c_results",
+        "body_weights",
         // A Nightscout import records what it has run, which a second import reads.
         "migration_runs",
         "migration_sources",
