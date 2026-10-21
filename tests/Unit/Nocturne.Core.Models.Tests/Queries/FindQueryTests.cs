@@ -433,18 +433,18 @@ public class FindQueryTests
 
         query.Matches(Doc("""{"notes":"aa"}""")).Should().BeFalse();
         query.HasInexactCondition.Should().BeTrue();
-        FindQuery.IsEvaluableRegex(pattern).Should().BeFalse();
+        BoundedRegex.Create(pattern).IsCompiled.Should().BeFalse();
     }
 
     [Fact]
     public void Regex_LongerThanTheCap_MatchesNothing()
     {
         const string letter = "[a-z]";
-        var underCap = string.Concat(Enumerable.Repeat(letter, FindQuery.MaxRegexLength / letter.Length));
+        var underCap = string.Concat(Enumerable.Repeat(letter, BoundedRegex.MaxLength / letter.Length));
         var pastCap = underCap + letter;
 
-        FindQuery.IsEvaluableRegex(underCap).Should().BeTrue();
-        FindQuery.IsEvaluableRegex(pastCap).Should().BeFalse();
+        BoundedRegex.Create(underCap).IsCompiled.Should().BeTrue();
+        BoundedRegex.Create(pastCap).IsCompiled.Should().BeFalse();
         var value = new string('a', pastCap.Length / letter.Length);
         FindQuery.Parse($"find[notes][$regex]={Uri.EscapeDataString(pastCap)}").Matches(Doc($$"""{"notes":"{{value}}"}"""))
             .Should().BeFalse();

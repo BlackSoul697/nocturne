@@ -190,10 +190,14 @@ public class BraceExpansionServiceTests
         patterns.Should().Contain(p => p.Contains("T13:00"));
         patterns.Should().Contain(p => p.Contains("T18:15"));
     }
+
     [Fact]
-    public void ExpandBraces_RangeEndingAtIntMaxValue_StopsAtTheEnd()
+    public async Task ExpandBraces_RangeEndingAtIntMaxValue_StopsAtTheEnd()
     {
-        _service.ExpandBraces("{2147483646..2147483647}").Should().Equal("2147483646", "2147483647");
+        var expanded = await Task.Run(() => _service.ExpandBraces("{2147483646..2147483647}").ToList())
+            .WaitAsync(TimeSpan.FromSeconds(5));
+
+        expanded.Should().Equal("2147483646", "2147483647");
     }
 
     [Fact]
@@ -240,6 +244,46 @@ public class BraceExpansionServiceTests
 
         expand.Should().Throw<TimePatternRejectedException>();
         _service.ExpandBraces(pattern[..^1]).Should().ContainSingle();
+    }
+
+    [Fact]
+    public void ExpandBraces_TooManyGroups_AreRejected()
+    {
+        var groups = string.Concat(Enumerable.Range(0, TimePatternLimits.MaxGroups + 1).Select(i => $"{{{i}}}"));
+
+        var expand = () => _service.ExpandBraces(groups).ToList();
+
+        expand.Should().Throw<TimePatternRejectedException>();
+        _service.ExpandBraces(groups[(groups.IndexOf('}') + 1)..]).Should().ContainSingle();
+    }
+
+    [Fact]
+    public void ExpandBraces_PastTheExpandedLength_IsRejected()
+    {
+        var pattern = new string('a', 100) + "{0..999}";
+
+        var expand = () => _service.ExpandBraces(pattern).ToList();
+
+        expand.Should().Throw<TimePatternRejectedException>();
+    }
+
+    [Fact]
+    public void PrepareTimePatterns_DeepestPatternWithinTheLimits_StaysCheap()
+    {
+        var emptyGroups = string.Concat(
+            Enumerable.Range(1, TimePatternLimits.MaxGroups - 1).Select(width => $"{{{new string(' ', width)}}}"));
+        var regex = emptyGroups + "{0..999}";
+
+        _service.PrepareTimePatterns("2015-04", regex).Patterns.Should().HaveCount(1000);
+
+        var fastest = Enumerable.Range(0, 5).Min(_ =>
+        {
+            var stopwatch = System.Diagnostics.Stopwatch.StartNew();
+            _service.PrepareTimePatterns("2015-04", regex);
+            return stopwatch.Elapsed;
+        });
+
+        fastest.Should().BeLessThan(TimeSpan.FromMilliseconds(250));
     }
 
     [Fact]

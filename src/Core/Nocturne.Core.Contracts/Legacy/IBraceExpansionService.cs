@@ -1,3 +1,5 @@
+using Nocturne.Core.Models.Queries;
+
 namespace Nocturne.Core.Contracts.Legacy;
 
 /// <summary>
@@ -16,9 +18,7 @@ public interface IBraceExpansionService
     /// <param name="pattern">Brace pattern to expand (e.g., <c>"20{14..16}-{01..12}"</c>).</param>
     /// <returns>All expanded string permutations.</returns>
     /// <exception cref="TimePatternRejectedException">
-    /// The pattern is longer than <see cref="TimePatternLimits.MaxPatternLength"/>, a range spans more than
-    /// <see cref="TimePatternLimits.MaxRangeSize"/> values, or it expands to more than
-    /// <see cref="TimePatternLimits.MaxExpansions"/> strings.
+    /// The pattern exceeds a <see cref="TimePatternLimits"/> bound.
     /// </exception>
     IEnumerable<string> ExpandBraces(string pattern);
 
@@ -50,14 +50,18 @@ public class TimePatternQuery
 }
 
 /// <summary>
-/// Bounds on brace expansion. Upstream's <c>braces</c> refuses a range past 1000 values; the total
-/// and length caps keep nested groups from multiplying past it.
+/// Bounds on brace expansion. Upstream's <c>braces</c> refuses a range past 1000 values; the other
+/// caps keep nested groups from multiplying past it. Expansion visits at most
+/// <see cref="MaxExpansions"/> times <see cref="MaxGroups"/> patterns, and the expansions are joined
+/// into one <c>$regex</c>, so together they must fit <see cref="BoundedRegex.MaxLength"/>.
 /// </summary>
 public static class TimePatternLimits
 {
     public const int MaxPatternLength = 512;
+    public const int MaxGroups = 16;
     public const int MaxRangeSize = 1000;
     public const int MaxExpansions = 1000;
+    public const int MaxExpandedLength = BoundedRegex.MaxLength;
 }
 
 /// <summary>A time pattern the API will not evaluate. Its message is safe to return to the caller.</summary>

@@ -214,7 +214,7 @@ public class TimeQueryService : ITimeQueryService
         if (expanded.Length > 0)
             patterns.Add(string.Join('|', expanded));
 
-        if (patterns.Any(p => !FindQuery.IsEvaluableRegex(p)))
+        if (patterns.Any(p => !BoundedRegex.Create(p).IsCompiled))
             throw new TimePatternRejectedException(
                 "The time pattern is not a supported regular expression: it may not use backreferences "
                     + "or lookarounds, or expand to too large a pattern");

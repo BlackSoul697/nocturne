@@ -18,8 +18,8 @@ public class BraceExpansionService : IBraceExpansionService
     /// <remarks>
     /// Supports numeric ranges (e.g. <c>{14..16}</c>, or descending <c>{16..14}</c>) and
     /// comma-separated alternatives (e.g. <c>{foo,bar}</c>). Nested braces and leading-zero padding
-    /// are also handled. Every group yields at least one string, so the work done is bounded by
-    /// <see cref="TimePatternLimits.MaxExpansions"/> times the number of groups.
+    /// are also handled. Every group yields at least one string, which is what bounds the work by
+    /// <see cref="TimePatternLimits"/>.
     /// </remarks>
     public IEnumerable<string> ExpandBraces(string pattern)
     {
@@ -30,12 +30,22 @@ public class BraceExpansionService : IBraceExpansionService
             throw new TimePatternRejectedException(
                 $"A time pattern may be at most {TimePatternLimits.MaxPatternLength} characters");
 
-        var results = new List<string>();
+        if (pattern.Count(c => c == '{') > TimePatternLimits.MaxGroups)
+            throw new TimePatternRejectedException(
+                $"A time pattern may have at most {TimePatternLimits.MaxGroups} brace groups");
+
+        var results = new Expansion();
         Expand(pattern, results);
-        return results;
+        return results.Patterns;
     }
 
-    private static void Expand(string pattern, List<string> results)
+    private sealed class Expansion
+    {
+        public List<string> Patterns { get; } = [];
+        public int Length { get; set; }
+    }
+
+    private static void Expand(string pattern, Expansion results)
     {
         var range = NumericRange.Match(pattern);
         if (range.Success
@@ -65,11 +75,16 @@ public class BraceExpansionService : IBraceExpansionService
             return;
         }
 
-        if (results.Count == TimePatternLimits.MaxExpansions)
+        if (results.Patterns.Count == TimePatternLimits.MaxExpansions)
             throw new TimePatternRejectedException(
                 $"A time pattern may expand to at most {TimePatternLimits.MaxExpansions} patterns");
 
-        results.Add(pattern);
+        results.Length += pattern.Length + 1;
+        if (results.Length > TimePatternLimits.MaxExpandedLength)
+            throw new TimePatternRejectedException(
+                $"A time pattern may expand to at most {TimePatternLimits.MaxExpandedLength} characters");
+
+        results.Patterns.Add(pattern);
     }
 
     /// <summary>
