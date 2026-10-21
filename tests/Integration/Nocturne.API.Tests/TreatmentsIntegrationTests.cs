@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
@@ -29,16 +30,24 @@ public class TreatmentsIntegrationTests : ApiIntegrationTestBase
     )
         : base(fixture, output) { }
 
-    private static Treatment CreateTestTreatment(string? notes = null) => new()
+    /// <remarks>
+    /// <c>mills</c> and <c>created_at</c> come from one clock read: the stored time is the posted
+    /// <c>mills</c>, so a <c>created_at</c> read a millisecond later would not find the treatment.
+    /// </remarks>
+    private static Treatment CreateTestTreatment(string? notes = null)
     {
-        Mills = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(),
-        Created_at = DateTime.UtcNow.ToString("yyyy-MM-ddTHH:mm:ss.fffZ"),
-        EventType = "Meal Bolus",
-        Insulin = 3.5,
-        Carbs = 45.0,
-        Notes = notes ?? "Test treatment",
-        EnteredBy = "test-user",
-    };
+        var now = DateTimeOffset.FromUnixTimeMilliseconds(DateTimeOffset.UtcNow.ToUnixTimeMilliseconds());
+        return new()
+        {
+            Mills = now.ToUnixTimeMilliseconds(),
+            Created_at = now.ToString("yyyy-MM-ddTHH:mm:ss.fffZ", CultureInfo.InvariantCulture),
+            EventType = "Meal Bolus",
+            Insulin = 3.5,
+            Carbs = 45.0,
+            Notes = notes ?? "Test treatment",
+            EnteredBy = "test-user",
+        };
+    }
 
     #region POST /api/v1/treatments
 
