@@ -281,7 +281,8 @@ public class MultitenantIsolationIntegrationTests : ApiIntegrationTestBase
     public async Task CrossTenant_DirectGrant_NotUsable()
     {
         // Arrange - create a direct grant token in tenant A
-        using var clientA = AuthTestHelpers.CreateAuthenticatedTenantClient(Fixture, _slugA, _baseDomain, _accessTokenA);
+        using var clientA = AuthTestHelpers.CreateAuthenticatedTenantClient(
+            Fixture, _slugA, _baseDomain, await AuthTestHelpers.IssueSessionTokenAsync(Fixture, _subjectAId));
         var createResponse = await clientA.PostAsJsonAsync("/api/auth/direct-grants", new
         {
             label = "cross-tenant-test",
