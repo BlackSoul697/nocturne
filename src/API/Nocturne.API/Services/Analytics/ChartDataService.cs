@@ -108,17 +108,7 @@ public class ChartDataService : IChartDataService
         if (hasData)
             defaultBasalRate = await _basalRateResolver.GetBasalRateAsync(endTime, ct: cancellationToken);
 
-        var tempBasals = (await _tempBasalRepository.GetAsync(
-            from: DateTimeOffset.FromUnixTimeMilliseconds(startTime - BufferMs).UtcDateTime,
-            to: DateTimeOffset.FromUnixTimeMilliseconds(endTime).UtcDateTime,
-            device: null,
-            source: null,
-            limit: TempBasalQueryLimit,
-            offset: 0,
-            descending: false,
-            ct: cancellationToken
-        )).ToList();
-        tempBasals = SelectDisplayTempBasals(tempBasals, startTime, endTime);
+        var tempBasals = await GetDisplayTempBasalsAsync(startTime, endTime, cancellationToken);
 
         var timeline = await _therapyTimelineResolver.BuildAsync(
             startTime,
@@ -136,7 +126,33 @@ public class ChartDataService : IChartDataService
         );
     }
 
+    /// <inheritdoc />
+    public async Task<List<BasalDeliverySpanDto>> GetBasalDeliverySpansAsync(
+        long startTime,
+        long endTime,
+        CancellationToken cancellationToken = default
+    ) => MapBasalDeliverySpans(await GetDisplayTempBasalsAsync(startTime, endTime, cancellationToken));
+
     #region Internal Helpers
+
+    private async Task<List<TempBasal>> GetDisplayTempBasalsAsync(
+        long startTime,
+        long endTime,
+        CancellationToken cancellationToken
+    )
+    {
+        var tempBasals = (await _tempBasalRepository.GetAsync(
+            from: DateTimeOffset.FromUnixTimeMilliseconds(startTime - BufferMs).UtcDateTime,
+            to: DateTimeOffset.FromUnixTimeMilliseconds(endTime).UtcDateTime,
+            device: null,
+            source: null,
+            limit: TempBasalQueryLimit,
+            offset: 0,
+            descending: false,
+            ct: cancellationToken
+        )).ToList();
+        return SelectDisplayTempBasals(tempBasals, startTime, endTime);
+    }
 
     /// <summary>
     /// Temp basals overlapping the window. A row that began before it must carry an end inside it:

@@ -152,13 +152,27 @@ public class V4ReadLimitClampTests
         VerifyActivityCategoriesFetched(service, 0);
     }
 
-    /// <summary>The categories <c>/state-spans/activities</c> merges.</summary>
-    private const int ActivityCategoryCount = 3;
+    [Fact]
+    public async Task StateSpanActivities_ReadsExactlyTheDrawnActivityCategories()
+    {
+        var service = new Mock<IStateSpanService>();
+        var controller = new StateSpansController(service.Object);
+
+        await controller.GetActivities(limit: 100, offset: 0);
+
+        foreach (var category in Enum.GetValues<StateSpanCategory>())
+        {
+            var expected = StateSpanCategories.DrawnActivities.Contains(category) ? Times.Once() : Times.Never();
+            service.Verify(s => s.GetStateSpansAsync(
+                category, null, null, null, null, null,
+                It.IsAny<int>(), 0, true, It.IsAny<CancellationToken>()), expected);
+        }
+    }
 
     private static void VerifyActivityCategoriesFetched(Mock<IStateSpanService> service, int count) =>
         service.Verify(s => s.GetStateSpansAsync(
             It.IsAny<StateSpanCategory?>(), null, null, null, null, null,
-            count, 0, true, It.IsAny<CancellationToken>()), Times.Exactly(ActivityCategoryCount));
+            count, 0, true, It.IsAny<CancellationToken>()), Times.Exactly(StateSpanCategories.DrawnActivities.Count));
 
     /// <summary>The <c>/state-spans</c> sub-routes that pre-filter by a single category.</summary>
     private const int CategorySubRouteCount = 7;

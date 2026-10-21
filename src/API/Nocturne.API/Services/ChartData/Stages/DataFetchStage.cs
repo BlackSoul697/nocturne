@@ -204,14 +204,12 @@ internal sealed class DataFetchStage(
 
         async Task<ChartDataContext> FetchScopedContextReadsAsync()
         {
-            var stateSpanCategories = new[]
-            {
+            StateSpanCategory[] stateSpanCategories =
+            [
                 StateSpanCategory.PumpMode,
                 StateSpanCategory.Override,
-                StateSpanCategory.Exercise,
-                StateSpanCategory.Illness,
-                StateSpanCategory.Travel,
-            };
+                .. StateSpanCategories.DrawnActivities,
+            ];
 
             var allStateSpans = await stateSpanRepository.GetByCategories(
                 stateSpanCategories,
