@@ -204,10 +204,11 @@ public class AuthenticationMiddleware
         var resolvedAuth = context.GetAuthContext();
         if (resolvedAuth is { IsAuthenticated: true, SubjectId: not null, TenantId: not null })
         {
-            // Skip membership check for ApiSecret and InstanceKey auth (grants admin on the resolved
-            // tenant), and for PlatformAccess grants (PlatformAccessCookieHandler already proved the
-            // grant is platform-access-marked and pinned to this tenant).
-            if (resolvedAuth.AuthType is not (AuthType.ApiKey or AuthType.InstanceKey or AuthType.PlatformAccess))
+            // InstanceKey is infrastructure auth with no membership behind it, and a PlatformAccess
+            // grant was already proven platform-access-marked and pinned to this tenant by
+            // PlatformAccessCookieHandler. An api-secret is another presentation of a direct grant,
+            // so it is held to its subject's membership exactly as the bearer form is.
+            if (resolvedAuth.AuthType is not (AuthType.InstanceKey or AuthType.PlatformAccess))
             {
                 var tenantMemberService = context.RequestServices.GetRequiredService<ITenantMemberService>();
                 var isMember = await tenantMemberService.IsMemberAsync(

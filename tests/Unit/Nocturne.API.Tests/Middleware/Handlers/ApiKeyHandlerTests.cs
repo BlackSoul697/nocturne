@@ -1,3 +1,5 @@
+using Nocturne.Infrastructure.Data.Extensions;
+using Nocturne.Core.Contracts.Identity;
 using Microsoft.AspNetCore.Http;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
@@ -604,6 +606,38 @@ public class ApiKeyHandlerTests : IDisposable
     }
 
     [Fact]
+    public async Task AuthenticateAsync_SiteSecretOnTheDeviceSubject_NudgesTheOwner()
+    {
+        var sha1Hash = HashUtils.Sha1Hex("sitesecret");
+        var ownerId = Guid.CreateVersion7();
+
+        await using (var ctx = _db.CreateContext(_testTenantId))
+        {
+            var devices = await ctx.DeviceSubjectOf(_testTenantId);
+            ctx.OAuthGrants.Add(OAuthGrantEntity.AdoptedLegacyCredential(
+                devices, "Nightscout (migrated)", [Scope.HealthReadWrite], legacySecretHash: sha1Hash));
+            await ctx.SaveChangesAsync();
+        }
+
+        var mockNotificationService = new Mock<IInAppNotificationService>();
+        var context = CreateHttpContextWithServices(mockNotificationService.Object, ownerId);
+        context.Request.Headers["api-secret"] = sha1Hash;
+
+        var result = await _handler.AuthenticateAsync(context);
+
+        Assert.True(result.Succeeded);
+        await Task.Delay(200);
+
+        mockNotificationService.Verify(s => s.CreateNotificationAsync(
+            ownerId.ToString(), "api-key-rotation", It.IsAny<string>(),
+            It.IsAny<NotificationCategory?>(), It.IsAny<NotificationUrgency?>(),
+            It.IsAny<string?>(), It.IsAny<string?>(), It.IsAny<string?>(),
+            It.IsAny<string?>(), It.IsAny<List<NotificationActionDto>?>(),
+            It.IsAny<ResolutionConditions?>(), It.IsAny<Dictionary<string, object>?>(),
+            It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+    [Fact]
     public async Task AuthenticateAsync_LegacyGrant_AlreadyUsed_DoesNotSendNudge()
     {
         var legacySecret = "alreadyusedsecret";
@@ -648,10 +682,14 @@ public class ApiKeyHandlerTests : IDisposable
 
     private Guid? _nudgeTenantId;
 
-    private DefaultHttpContext CreateHttpContextWithServices(IInAppNotificationService notificationService)
+    private DefaultHttpContext CreateHttpContextWithServices(
+        IInAppNotificationService notificationService, Guid? ownerSubjectId = null)
     {
         var services = new ServiceCollection();
         services.AddScoped<ITenantAccessor, HttpContextTenantAccessor>();
+        var owner = ownerSubjectId?.ToString();
+        services.AddScoped(_ => Mock.Of<ITenantOwnerResolver>(r =>
+            r.GetOwnerSubjectIdAsync(_testTenantId, It.IsAny<CancellationToken>()) == Task.FromResult(owner)));
         services.AddScoped(sp =>
         {
             _nudgeTenantId = sp.GetRequiredService<ITenantAccessor>().TenantId;

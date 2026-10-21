@@ -34,6 +34,8 @@ public class OAuthDeviceCodeServiceTests : IDisposable
     private readonly Guid _testSubjectId = Guid.CreateVersion7();
     private readonly Guid _testGrantId = Guid.CreateVersion7();
 
+    private static readonly IReadOnlySet<string> FullAccess = new HashSet<string> { Scope.FullAccess };
+
     public OAuthDeviceCodeServiceTests()
     {
         _db = TestDbContextFactory.CreateSqliteWithTenant(_testTenantId);
@@ -312,7 +314,7 @@ public class OAuthDeviceCodeServiceTests : IDisposable
         var service = CreateService(db);
 
         // Act
-        var result = await service.ApproveDeviceCodeAsync("PNDNG001", _testSubjectId);
+        var result = await service.ApproveDeviceCodeAsync("PNDNG001", _testSubjectId, FullAccess);
 
         // Assert
         Assert.True(result);
@@ -336,6 +338,52 @@ public class OAuthDeviceCodeServiceTests : IDisposable
     }
 
     [Fact]
+    public async Task ApproveDeviceCodeAsync_GrantsOnlyWhatTheApproverHolds()
+    {
+        using var db = CreateDbContext();
+        await SeedClientAsync(db);
+        await SeedSubjectAsync(db);
+        await SeedGrantAsync(db);
+        await SeedDeviceCodeAsync(db, userCode: "CAPPED01",
+            scopes: [Scope.FullAccess, Scope.GlucoseRead, Scope.TreatmentsReadWrite]);
+
+        var service = CreateService(db);
+
+        var result = await service.ApproveDeviceCodeAsync(
+            "CAPPED01", _testSubjectId, new HashSet<string> { Scope.GlucoseRead });
+
+        Assert.True(result);
+        _mockGrantService.Verify(g => g.CreateOrUpdateGrantAsync(
+            _testClientEntityId,
+            _testSubjectId,
+            It.Is<IEnumerable<string>>(s => s.SequenceEqual(new[] { Scope.GlucoseRead })),
+            It.IsAny<string>(),
+            It.IsAny<string?>(),
+            It.IsAny<bool>(),
+            It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+    [Fact]
+    public async Task ApproveDeviceCodeAsync_ApproverHoldingNoneOfTheRequest_ReturnsFalse()
+    {
+        using var db = CreateDbContext();
+        await SeedClientAsync(db);
+        await SeedSubjectAsync(db);
+        await SeedDeviceCodeAsync(db, userCode: "NOSCOPE1", scopes: [Scope.TreatmentsReadWrite]);
+
+        var service = CreateService(db);
+
+        var result = await service.ApproveDeviceCodeAsync(
+            "NOSCOPE1", _testSubjectId, new HashSet<string> { Scope.GlucoseRead });
+
+        Assert.False(result);
+        _mockGrantService.Verify(g => g.CreateOrUpdateGrantAsync(
+            It.IsAny<Guid>(), It.IsAny<Guid>(), It.IsAny<IEnumerable<string>>(),
+            It.IsAny<string>(), It.IsAny<string?>(), It.IsAny<bool>(),
+            It.IsAny<CancellationToken>()), Times.Never);
+    }
+
+    [Fact]
     public async Task ApproveDeviceCodeAsync_ExpiredCode_ReturnsFalse()
     {
         // Arrange
@@ -346,7 +394,7 @@ public class OAuthDeviceCodeServiceTests : IDisposable
         var service = CreateService(db);
 
         // Act
-        var result = await service.ApproveDeviceCodeAsync("EXPRD001", _testSubjectId);
+        var result = await service.ApproveDeviceCodeAsync("EXPRD001", _testSubjectId, FullAccess);
 
         // Assert
         Assert.False(result);
@@ -363,7 +411,7 @@ public class OAuthDeviceCodeServiceTests : IDisposable
         var service = CreateService(db);
 
         // Act
-        var result = await service.ApproveDeviceCodeAsync("APRVD001", _testSubjectId);
+        var result = await service.ApproveDeviceCodeAsync("APRVD001", _testSubjectId, FullAccess);
 
         // Assert
         Assert.False(result);
@@ -380,7 +428,7 @@ public class OAuthDeviceCodeServiceTests : IDisposable
         var service = CreateService(db);
 
         // Act
-        var result = await service.ApproveDeviceCodeAsync("DEND0001", _testSubjectId);
+        var result = await service.ApproveDeviceCodeAsync("DEND0001", _testSubjectId, FullAccess);
 
         // Assert
         Assert.False(result);
