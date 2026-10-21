@@ -478,7 +478,6 @@ public class Treatment : ProcessableDocumentBase
     /// </summary>
     [JsonPropertyName("profileJson")]
     [Sanitizable]
-    [NocturneOnly]
     public string? ProfileJson { get; set; }
 
     [JsonPropertyName("endprofile")]
@@ -579,7 +578,8 @@ public class Treatment : ProcessableDocumentBase
     public double? Percentage { get; set; }
 
     /// <summary>
-    /// Timeshift for CircadianPercentageProfile (in hours)
+    /// The timeshift for CircadianPercentageProfile, in the unit it was uploaded in: hours from
+    /// Nightscout's careportal, milliseconds from AAPS (<see cref="ProfileSpanMetadata.UnitOfUploadedTimeshift"/>).
     /// </summary>
     [JsonPropertyName("timeshift")]
     // AAPS parses timeshift as a Long; a fractional value crashes its sync loop

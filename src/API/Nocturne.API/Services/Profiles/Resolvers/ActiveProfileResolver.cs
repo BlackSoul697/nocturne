@@ -105,45 +105,18 @@ internal sealed class ActiveProfileResolver : IActiveProfileResolver
             .FirstOrDefault();
     }
 
-    /// <remarks>
-    /// The profile an AAPS switch customizes, where it names one: AAPS names the switch itself after
-    /// the customization (<c>"Rhys (110%)"</c>), which no stored profile is called, and the
-    /// customization is applied from the span's percentage and timeshift.
-    /// </remarks>
-    private static string? ExtractProfileName(StateSpan? span)
-    {
-        if (span?.Metadata is null)
-            return null;
-
-        if (span.Metadata.TryGetValue("originalProfileName", out var original) && ConvertToString(original) is { Length: > 0 } name)
-            return name;
-
-        if (span.Metadata.TryGetValue("profileName", out var value))
-            return ConvertToString(value);
-
-        return null;
-    }
+    private static string? ExtractProfileName(StateSpan? span) =>
+        span?.Metadata is null ? null : ProfileSpanMetadata.Parse(span.Metadata).BaseProfileName;
 
     private static CircadianAdjustment? ExtractCircadianAdjustment(StateSpan? span)
     {
         if (span?.Metadata is null)
             return null;
 
-        if (!span.Metadata.TryGetValue("percentage", out var pctValue))
-            return null;
-
-        var percentage = ConvertToDouble(pctValue);
-        if (percentage is null)
-            return null;
-
-        long timeshiftMs = 0;
-        if (span.Metadata.TryGetValue("timeshift", out var tsValue))
-        {
-            var timeshiftHours = ConvertToDouble(tsValue) ?? 0;
-            timeshiftMs = (long)(timeshiftHours % 24 * 3_600_000);
-        }
-
-        return new CircadianAdjustment(percentage.Value, timeshiftMs);
+        var metadata = ProfileSpanMetadata.Parse(span.Metadata);
+        return metadata.Percentage is { } percentage
+            ? new CircadianAdjustment(percentage, metadata.TimeshiftMs)
+            : null;
     }
 
     private static TreatmentInsulinContext? ExtractInsulinContext(StateSpan? span)

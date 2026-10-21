@@ -296,4 +296,104 @@ public class TreatmentDecomposerEffectiveProfileSwitchTests : IDisposable
         profileSwitch.EndTimestamp.Should().Be(DateTimeOffset.FromUnixTimeMilliseconds(SwitchMills + 3_600_000).UtcDateTime);
         profileSwitch.SupersededById.Should().BeNull();
     }
+
+    [Fact]
+    public async Task AnAapsV1ProfileSwitchShiftIsStoredInHoursAndServedInMilliseconds()
+    {
+        await _decomposer.DecomposeAsync(TemporarySwitch(), WriteOrigin.Live);
+
+        var span = _written.Single();
+        span.Metadata.TryReadDecimal("timeshift").Should().Be(1);
+        span.Metadata.TryReadString("timeshiftUnit").Should().Be("ms");
+        ProfileSpanMetadata.Parse(span.Metadata).TimeshiftMs.Should().Be(3_600_000);
+        Project(StateSpanMapper.ToEntity(span)).Timeshift.Should().Be(3_600_000);
+    }
+
+    [Fact]
+    public async Task AnAapsV3ProfileSwitchRoundTripsItsShiftLengthAndPumpRecord()
+    {
+        var treatment = TemporarySwitch();
+        treatment.EnteredBy = null;
+        treatment.Timeshift = -7_200_000;
+        treatment.DurationInMilliseconds = 3_600_000;
+        treatment.PumpId = 4102;
+        treatment.PumpType = "OMNIPOD_DASH";
+        treatment.PumpSerial = "33013206";
+        treatment.AdditionalProperties = new() { ["app"] = JsonSerializer.SerializeToElement("AAPS") };
+
+        await _decomposer.DecomposeAsync(treatment, WriteOrigin.Live);
+
+        var span = _written.Single();
+        ProfileSpanMetadata.Parse(span.Metadata).TimeshiftHours.Should().Be(-2);
+        var projected = Project(StateSpanMapper.ToEntity(span));
+        projected.Timeshift.Should().Be(-7_200_000);
+        projected.Duration.Should().Be(60);
+        projected.DurationInMilliseconds.Should().Be(3_600_000);
+        projected.OriginalDuration.Should().Be(3_600_000);
+        projected.PumpId.Should().Be(4102);
+        projected.PumpType.Should().Be("OMNIPOD_DASH");
+        projected.PumpSerial.Should().Be("33013206");
+        projected.AdditionalProperties.Should().ContainKey("app").WhoseValue.Should().Be("AAPS");
+    }
+
+    [Fact]
+    public async Task ACareportalProfileSwitchShiftIsHours()
+    {
+        await _decomposer.DecomposeAsync(new Treatment
+        {
+            Id = "ps-careportal",
+            EventType = "Profile Switch",
+            Mills = SwitchMills,
+            EnteredBy = "careportal",
+            Profile = "Weekend",
+            Percentage = 90,
+            Timeshift = 2,
+            Duration = 30,
+        }, WriteOrigin.Live);
+
+        var span = _written.Single();
+        span.Metadata.TryReadString("timeshiftUnit").Should().Be("h");
+        ProfileSpanMetadata.Parse(span.Metadata).TimeshiftMs.Should().Be(7_200_000);
+        var projected = Project(StateSpanMapper.ToEntity(span));
+        projected.Timeshift.Should().Be(2);
+        projected.DurationInMilliseconds.Should().Be(1_800_000, "a switch uploaded with minutes alone is served its length in both");
+    }
+
+    [Fact]
+    public async Task AnEffectiveProfileSwitchMissingOriginalFieldsIsServedEveryOneAapsRequires()
+    {
+        var treatment = EffectiveSwitch();
+        treatment.OriginalCustomizedName = null;
+        treatment.OriginalTimeshift = null;
+        treatment.OriginalPercentage = null;
+        treatment.OriginalDuration = null;
+        treatment.OriginalEnd = null;
+
+        await _decomposer.DecomposeAsync(treatment, WriteOrigin.Live);
+
+        var projected = Project(StateSpanMapper.ToEntity(_written.Single()));
+        projected.ProfileJson.Should().Be(EffectiveProfileJson);
+        projected.OriginalProfileName.Should().Be("Rhys");
+        projected.OriginalCustomizedName.Should().Be("Rhys");
+        projected.OriginalTimeshift.Should().Be(0);
+        projected.OriginalPercentage.Should().Be(100);
+        projected.OriginalDuration.Should().Be(0);
+        projected.OriginalEnd.Should().Be(ConfirmedMills);
+    }
+
+    [Fact]
+    public async Task AnEffectiveProfileSwitchKeepsItsPumpRecord()
+    {
+        var treatment = EffectiveSwitch();
+        treatment.PumpId = 77;
+        treatment.PumpType = "OMNIPOD_DASH";
+        treatment.PumpSerial = "33013206";
+
+        await _decomposer.DecomposeAsync(treatment, WriteOrigin.Live);
+
+        var projected = Project(StateSpanMapper.ToEntity(_written.Single()));
+        projected.PumpId.Should().Be(77);
+        projected.PumpType.Should().Be("OMNIPOD_DASH");
+        projected.PumpSerial.Should().Be("33013206");
+    }
 }

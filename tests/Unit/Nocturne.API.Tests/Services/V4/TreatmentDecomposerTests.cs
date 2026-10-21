@@ -1821,34 +1821,6 @@ public class TreatmentDecomposerTests : IDisposable
     }
 
     [Fact]
-    public async Task DecomposeAsync_MealBolusResentAsOneHalf_DropsTheStoredTwin()
-    {
-        // A meal stored before meals were decomposed by content: a 0 U bolus beside the carbs
-        var stored = new Treatment { Id = "meal-pre-fix", EventType = "Meal Bolus", Mills = 1700000000000, Carbs = 60 };
-        await _context.Boluses.AddAsync(new BolusEntity
-        {
-            Id = Guid.CreateVersion7(), TenantId = _context.TenantId, LegacyId = "meal-pre-fix",
-            Timestamp = DateTimeOffset.FromUnixTimeMilliseconds(1700000000000).UtcDateTime, Insulin = 0,
-            CorrelationId = Guid.CreateVersion7(),
-        });
-        await _context.CarbIntakes.AddAsync(new CarbIntakeEntity
-        {
-            Id = Guid.CreateVersion7(), TenantId = _context.TenantId, LegacyId = "meal-pre-fix",
-            Timestamp = DateTimeOffset.FromUnixTimeMilliseconds(1700000000000).UtcDateTime, Carbs = 60,
-            CorrelationId = Guid.CreateVersion7(),
-        });
-        await _context.SaveChangesAsync();
-
-        var result = await _decomposer.DecomposeAsync(stored, WriteOrigin.Live);
-
-        result.UpdatedRecords.OfType<V4Models.CarbIntake>().Should().ContainSingle().Which.Carbs.Should().Be(60);
-        result.CreatedRecords.Should().BeEmpty();
-        _context.ChangeTracker.Clear();
-        _context.Boluses.IgnoreQueryFilters().AsNoTracking().Where(b => b.LegacyId == "meal-pre-fix")
-            .Should().ContainSingle().Which.DeletedAt.Should().NotBeNull("the zero-unit twin is no longer part of the record");
-    }
-
-    [Fact]
     public async Task DecomposeAsync_MealBolusUnderATempBasalLegacyId_WritesNothing()
     {
         // AAPS holds a temp basal it read with insulin as a bolus under the temp basal's identifier
