@@ -16,6 +16,7 @@ import HeartPulse from "@lucide/svelte/icons/heart-pulse";
 import Layers from "@lucide/svelte/icons/layers";
 import Moon from "@lucide/svelte/icons/moon";
 import PieChart from "@lucide/svelte/icons/chart-pie";
+import Repeat from "@lucide/svelte/icons/repeat";
 import Sunrise from "@lucide/svelte/icons/sunrise";
 import SunMoon from "@lucide/svelte/icons/sun-moon";
 import Syringe from "@lucide/svelte/icons/syringe";
@@ -292,6 +293,16 @@ export function reportCategories(): ReportCategory[] {
           scopes: [READ.reports],
           icon: PieChart,
           status: "available",
+        },
+        {
+          title: "Loop Analysis",
+          description: "What your loop does at each time of day",
+          href: "/reports/loop-analysis",
+          keywords: ["loopalyzer", "closed loop", "aid", "smb", "temp basal", "iob", "cob", "daily profile"],
+          scopes: [READ.glucose, READ.treatments, READ.reports],
+          icon: Repeat,
+          status: "available",
+          memberOnly: true,
         },
         {
           title: "Site Change Impact",
