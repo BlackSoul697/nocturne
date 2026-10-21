@@ -331,7 +331,6 @@ public class HubCredentialKindTests
         public HttpContext? HttpContext { get; set; }
     }
 
-    /// <summary>A broadcast service recording the group name of every send.</summary>
     [Fact]
     public void A_session_logins_hub_credential_names_the_session_it_belongs_to()
     {
@@ -348,6 +347,7 @@ public class HubCredentialKindTests
         HubAuthorizationState.FromRequest(httpContext)!.Source!.SessionId.Should().Be("laptop");
     }
 
+    /// <summary>A broadcast service recording the group name of every send.</summary>
     private static (ISignalRBroadcastService Service, List<string> Sends) CreateBroadcastService()
     {
         var sends = new List<string>();

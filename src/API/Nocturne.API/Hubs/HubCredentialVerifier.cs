@@ -94,8 +94,9 @@ public sealed class HubCredentialVerifier(IServiceProvider services, TimeProvide
     /// Whether the session a login belongs to still has a live refresh token. A connection admitted
     /// on a session token that names no session (<paramref name="sessionId"/> null: minted before
     /// the claim, or from a chain not yet tagged) can only be matched to the subject, so any live
-    /// session of the subject keeps it for as long as the connection stays open. Rotation tags an
-    /// untagged chain, so such tokens stop being minted within one refresh.
+    /// session of the subject keeps it for as long as the connection stays open. With refresh-token
+    /// rotation on, rotation tags an untagged chain, so such tokens stop being minted within one
+    /// refresh.
     /// </summary>
     private async Task<bool> HasSessionAsync(Guid subjectId, string? sessionId) =>
         await Memo<object>(("session", subjectId, sessionId), async () =>
