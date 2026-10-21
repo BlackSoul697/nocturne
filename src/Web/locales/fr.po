@@ -27183,3 +27183,7 @@ msgstr ""
 #: ../portal/src/routes/docs/installation/portainer/+page.svelte
 msgid "Fill in the configuration form. Set a strong password for each PostgreSQL role and a unique <0/> (minimum 32 characters). Use the generator below for each secret field."
 msgstr ""
+
+#: src/routes/(authenticated)/oauth/consent/+page.svelte
+msgid "Approving sends access to <0/>"
+msgstr ""
