@@ -1352,17 +1352,117 @@ public class TreatmentDecomposerTests : IDisposable
         TreatmentDecomposer.MapToTempBasal(treatment, correlationId: null).Origin.Should().Be(expected);
     }
 
-    // Documents the current fallback: algorithm uploads that omit the automatic flag read as Manual
-    // because there is no Unknown origin to record them under.
     [Theory]
-    [InlineData("openaps://AndroidAPS")]
-    [InlineData("Trio")]
-    public void MapToTempBasal_AlgorithmUploadWithoutAutomaticFlag_CurrentlyFallsBackToManual(string enteredBy)
+    [InlineData("Trio", null, V4Models.TempBasalOrigin.Algorithm)]
+    [InlineData("iAPS", null, V4Models.TempBasalOrigin.Algorithm)]
+    [InlineData("freeaps-x", null, V4Models.TempBasalOrigin.Algorithm)]
+    [InlineData("openaps://Lotus", null, V4Models.TempBasalOrigin.Algorithm)]
+    [InlineData("openaps://AndroidAPS", null, V4Models.TempBasalOrigin.Algorithm)]
+    [InlineData("loop://Test Phone", null, V4Models.TempBasalOrigin.Algorithm)]
+    [InlineData(null, "AAPS", V4Models.TempBasalOrigin.Algorithm)]
+    [InlineData("xdrip", null, V4Models.TempBasalOrigin.Manual)]
+    [InlineData(null, null, V4Models.TempBasalOrigin.Manual)]
+    public void MapToTempBasal_UnflaggedTempDefaultsByUploaderAndAwaitsCorroboration(
+        string? enteredBy, string? app, V4Models.TempBasalOrigin expected)
     {
         var treatment = TempBasalForOrigin(reason: null, automatic: null, basalOrigin: null, enteredBy);
+        if (app is not null)
+            treatment.AdditionalProperties = new Dictionary<string, object> { ["app"] = app };
 
-        TreatmentDecomposer.MapToTempBasal(treatment, correlationId: null).Origin
-            .Should().Be(V4Models.TempBasalOrigin.Manual);
+        var tempBasal = TreatmentDecomposer.MapToTempBasal(treatment, correlationId: null);
+
+        tempBasal.Origin.Should().Be(expected);
+        tempBasal.OriginEvidence.Should().Be(V4Models.TempBasalOriginEvidence.Uploader);
+    }
+
+    [Theory]
+    [InlineData("suspend", null, null)]
+    [InlineData(null, true, null)]
+    [InlineData(null, false, null)]
+    [InlineData(null, null, "PUMP_SUSPEND")]
+    [InlineData(null, null, "EMULATED_PUMP_SUSPEND")]
+    public void MapToTempBasal_OriginTheUploadStatesIsReported(string? reason, bool? automatic, string? type)
+    {
+        var treatment = TempBasalForOrigin(reason, automatic, basalOrigin: null, "openaps://AndroidAPS");
+        treatment.BolusType = type;
+
+        TreatmentDecomposer.MapToTempBasal(treatment, correlationId: null).OriginEvidence
+            .Should().Be(V4Models.TempBasalOriginEvidence.Reported);
+    }
+
+    [Theory]
+    [InlineData("PUMP_SUSPEND", V4Models.TempBasalOrigin.Suspended)]
+    [InlineData("EMULATED_PUMP_SUSPEND", V4Models.TempBasalOrigin.Suspended)]
+    [InlineData("NORMAL", V4Models.TempBasalOrigin.Algorithm)]
+    public void MapToTempBasal_AapsTypeNamesItsSuspends(string type, V4Models.TempBasalOrigin expected)
+    {
+        var treatment = TempBasalForOrigin(reason: null, automatic: null, basalOrigin: null, "openaps://AndroidAPS");
+        treatment.BolusType = type;
+
+        TreatmentDecomposer.MapToTempBasal(treatment, correlationId: null).Origin.Should().Be(expected);
+    }
+
+    [Fact]
+    public void MapToTempBasal_KeepsTheAapsFieldsAndServesThemBack()
+    {
+        var upload = TempBasalForOrigin(reason: null, automatic: null, basalOrigin: null, "openaps://AndroidAPS");
+        upload.BolusType = "NORMAL";
+        upload.IsValid = true;
+        upload.PumpType = "OMNIPOD_DASH";
+        upload.PumpSerial = "4241";
+
+        var record = TreatmentDecomposer.MapToTempBasal(upload, correlationId: null);
+        record.AdditionalProperties = JsonSerializer.Deserialize<Dictionary<string, object?>>(
+            JsonSerializer.Serialize(record.AdditionalProperties));
+        var served = Nocturne.Infrastructure.Data.Mappers.TempBasalToTreatmentMapper.ToTreatment(record);
+
+        served.BolusType.Should().Be("NORMAL");
+        served.IsValid.Should().BeTrue();
+        served.PumpType.Should().Be("OMNIPOD_DASH");
+        served.PumpSerial.Should().Be("4241");
+    }
+
+    [Theory]
+    [InlineData(V4Models.TempBasalOrigin.Manual, null, "Trio", V4Models.TempBasalOrigin.Algorithm)]
+    [InlineData(V4Models.TempBasalOrigin.Manual, null, "loop://Test Phone", V4Models.TempBasalOrigin.Algorithm)]
+    [InlineData(V4Models.TempBasalOrigin.Manual, V4Models.TempBasalOriginEvidence.Uploader, "Trio", V4Models.TempBasalOrigin.Algorithm)]
+    [InlineData(V4Models.TempBasalOrigin.Manual, V4Models.TempBasalOriginEvidence.Snapshot, "Trio", V4Models.TempBasalOrigin.Algorithm)]
+    [InlineData(V4Models.TempBasalOrigin.Algorithm, V4Models.TempBasalOriginEvidence.Uncorroborated, "xdrip", V4Models.TempBasalOrigin.Manual)]
+    [InlineData(V4Models.TempBasalOrigin.Manual, V4Models.TempBasalOriginEvidence.Reported, "Trio", V4Models.TempBasalOrigin.Manual)]
+    public void MapToTempBasal_AnEditLocksInOnlyAReportedOrigin(
+        V4Models.TempBasalOrigin stored,
+        V4Models.TempBasalOriginEvidence? evidence,
+        string app,
+        V4Models.TempBasalOrigin expected)
+    {
+        var tempBasal = new V4Models.TempBasal
+        {
+            Id = Guid.CreateVersion7(),
+            StartTimestamp = new DateTime(2026, 9, 20, 12, 0, 0, DateTimeKind.Utc),
+            EndTimestamp = new DateTime(2026, 9, 20, 12, 30, 0, DateTimeKind.Utc),
+            Rate = 0.4,
+            Origin = stored,
+            OriginEvidence = evidence,
+            App = app,
+        };
+        var mapped = Nocturne.Infrastructure.Data.Mappers.TempBasalToTreatmentMapper.ToTreatment(tempBasal);
+        var treatment = JsonSerializer.Deserialize<Treatment>(JsonSerializer.Serialize(mapped))!;
+
+        var edited = TreatmentDecomposer.MapToTempBasal(treatment, correlationId: null);
+
+        edited.Origin.Should().Be(expected);
+        edited.OriginEvidence.Should().Be(evidence == V4Models.TempBasalOriginEvidence.Reported
+            ? V4Models.TempBasalOriginEvidence.Reported
+            : V4Models.TempBasalOriginEvidence.Uploader);
+    }
+
+    [Fact]
+    public void MapTempBasalSpans_DrawsNoManualBandForAnUnflaggedLoopTemp()
+    {
+        var tempBasal = TreatmentDecomposer.MapToTempBasal(
+            TempBasalForOrigin(reason: null, automatic: null, basalOrigin: null, "Trio"), correlationId: null);
+
+        Nocturne.API.Services.Analytics.ChartDataService.MapTempBasalSpans([tempBasal]).Should().BeEmpty();
     }
 
     [Theory]
@@ -1409,7 +1509,7 @@ public class TreatmentDecomposerTests : IDisposable
     [InlineData(V4Models.TempBasalOrigin.Scheduled, "loop://Test Phone")]
     [InlineData(V4Models.TempBasalOrigin.Suspended, "Glooko")]
     [InlineData(V4Models.TempBasalOrigin.Inferred, "loop://Test Phone")]
-    public void MapToTempBasal_OriginSurvivesTreatmentRoundTrip(V4Models.TempBasalOrigin origin, string app)
+    public void MapToTempBasal_ReportedOriginSurvivesTreatmentRoundTrip(V4Models.TempBasalOrigin origin, string app)
     {
         var tempBasal = new V4Models.TempBasal
         {
@@ -1418,6 +1518,7 @@ public class TreatmentDecomposerTests : IDisposable
             EndTimestamp = new DateTime(2025, 10, 15, 12, 30, 0, DateTimeKind.Utc),
             Rate = origin == V4Models.TempBasalOrigin.Suspended ? 0 : 0.4,
             Origin = origin,
+            OriginEvidence = V4Models.TempBasalOriginEvidence.Reported,
             App = app,
         };
 

@@ -171,6 +171,7 @@ public class TempBasalController(
         Rate = request.Rate,
         ScheduledRate = request.ScheduledRate,
         Origin = request.Origin ?? TempBasalOrigin.Manual,
+        OriginEvidence = request.Origin is null ? TempBasalOriginEvidence.Uploader : TempBasalOriginEvidence.Reported,
         PumpRecordId = request.PumpRecordId,
         ApsSnapshotId = request.ApsSnapshotId,
         AdditionalProperties = request.Origin is { } origin
