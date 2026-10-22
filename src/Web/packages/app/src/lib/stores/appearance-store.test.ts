@@ -18,6 +18,7 @@ const {
   a1cUnits,
   timeFormat,
   colorTheme,
+  glucoseRangePalette,
   predictionMinutes,
   predictionEnabled,
   chartLineColor,
@@ -39,6 +40,7 @@ describe("appearance-store preference sync", () => {
       a1cUnits: "percent",
       timeFormat: "12",
       colorTheme: "nocturne",
+      glucoseRangePalette: "theme",
       prediction: { enabled: true, minutes: 30 },
       chart: { lineColor: "#22c55e", lookback: 12 },
     });
@@ -71,6 +73,23 @@ describe("appearance-store preference sync", () => {
     expect(predictionMinutes.current).toBe(45);
     expect(chartLineColor.current).toBe("#abcdef");
     expect(glucoseChartLookback.current).toBe(6);
+  });
+
+  it("applyPreferences hydrates the glucose range palette and collectPreferences returns it", () => {
+    applyPreferences({ glucoseRangePalette: "clarity" });
+
+    expect(glucoseRangePalette.current).toBe("clarity");
+    expect(collectPreferences().glucoseRangePalette).toBe("clarity");
+  });
+
+  it("an unset or unknown glucose range palette leaves the current choice alone", () => {
+    applyPreferences({ glucoseRangePalette: "clarity" });
+
+    applyPreferences({ glucoseRangePalette: undefined });
+    expect(glucoseRangePalette.current).toBe("clarity");
+
+    applyPreferences({ glucoseRangePalette: "rainbow" });
+    expect(glucoseRangePalette.current).toBe("clarity");
   });
 
   it("applyPreferences leaves unset fields untouched (partial payload)", () => {

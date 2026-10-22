@@ -4,6 +4,8 @@
   import {
     getColorTheme,
     setColorTheme,
+    glucoseRangePalette,
+    setGlucoseRangePalette,
     type ColorTheme,
   } from "$lib/stores/appearance-store.svelte";
   import {
@@ -33,6 +35,7 @@
   import { getRealtimeStore } from "$lib/stores/realtime-store.svelte";
   import TitleFaviconSettings from "$lib/components/settings/TitleFaviconSettings.svelte";
   import DashboardWidgetConfigurator from "$lib/components/settings/DashboardWidgetConfigurator.svelte";
+  import TextureSwatch from "$lib/components/charts/print/TextureSwatch.svelte";
   import LanguageSelector from "$lib/components/LanguageSelector.svelte";
   import { updateLanguagePreference } from "$api/user-preferences.remote";
   import {
@@ -387,6 +390,55 @@
             </div>
           </RadioGroup.Card>
         </RadioGroup.Root>
+
+        <Separator />
+
+        <div class="space-y-2">
+          <Label>Glucose range colors</Label>
+          <RadioGroup.Root
+            class="grid @xl:grid-cols-2"
+            aria-label="Glucose range colors"
+            value={glucoseRangePalette.current}
+            onValueChange={(palette) => {
+              if (palette === "theme" || palette === "clarity") setGlucoseRangePalette(palette);
+            }}
+          >
+            <RadioGroup.Card value="theme">
+              <div class="font-semibold">Theme</div>
+              <p class="text-sm text-muted-foreground">
+                The range colors of the selected color theme
+              </p>
+            </RadioGroup.Card>
+            <RadioGroup.Card value="clarity">
+              <div class="font-semibold">Distinct</div>
+              <p class="text-sm text-muted-foreground">
+                Maroon, red, yellow and orange for the four out-of-range bands on every theme
+              </p>
+            </RadioGroup.Card>
+          </RadioGroup.Root>
+          <ul class="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm" aria-label="Range color preview">
+            <li class="flex items-center gap-1.5">
+              <TextureSwatch texture="very-high" />
+              Very high
+            </li>
+            <li class="flex items-center gap-1.5">
+              <TextureSwatch texture="high" />
+              High
+            </li>
+            <li class="flex items-center gap-1.5">
+              <TextureSwatch texture="in-range" />
+              In range
+            </li>
+            <li class="flex items-center gap-1.5">
+              <TextureSwatch texture="low" />
+              Low
+            </li>
+            <li class="flex items-center gap-1.5">
+              <TextureSwatch texture="very-low" />
+              Very low
+            </li>
+          </ul>
+        </div>
 
         <Separator />
 

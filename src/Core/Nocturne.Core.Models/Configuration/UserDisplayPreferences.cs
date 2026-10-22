@@ -62,6 +62,7 @@ public class UserDisplayPreferences
     };
 
     private static readonly HashSet<string> AllowedColorThemes = new(StringComparer.Ordinal) { "nocturne", "trio", "aaps", "classic" };
+    private static readonly HashSet<string> AllowedGlucoseRangePalettes = new(StringComparer.Ordinal) { "theme", "clarity" };
     private static readonly HashSet<string> AllowedPredictionModes = new(StringComparer.Ordinal) { "cone", "lines", "main", "iob", "zt", "uam", "cob" };
     private static readonly HashSet<string> AllowedColorModes = new(StringComparer.Ordinal) { "single", "threshold", "continuous" };
     private static readonly HashSet<string> AllowedAreaModes = new(StringComparer.Ordinal) { "off", "full", "baseline", "deviation" };
@@ -80,6 +81,7 @@ public class UserDisplayPreferences
             ?? Check("timeFormat", TimeFormat, AllowedTimeFormats)
             ?? Check("regionFormat", RegionFormat, AllowedRegionFormats)
             ?? Check("colorTheme", ColorTheme, AllowedColorThemes)
+            ?? Check("glucoseRangePalette", GlucoseRangePalette, AllowedGlucoseRangePalettes)
             ?? Check("prediction.displayMode", Prediction?.DisplayMode, AllowedPredictionModes)
             ?? Check("chart.lineColorMode", Chart?.LineColorMode, AllowedColorModes)
             ?? Check("chart.pointColorMode", Chart?.PointColorMode, AllowedColorModes)
@@ -123,6 +125,7 @@ public class UserDisplayPreferences
         TimeFormat = incoming.TimeFormat ?? TimeFormat;
         RegionFormat = incoming.RegionFormat ?? RegionFormat;
         ColorTheme = incoming.ColorTheme ?? ColorTheme;
+        GlucoseRangePalette = incoming.GlucoseRangePalette ?? GlucoseRangePalette;
         NightModeSchedule = incoming.NightModeSchedule ?? NightModeSchedule;
         DashboardTopWidgets = incoming.DashboardTopWidgets ?? DashboardTopWidgets;
         // Replace the whole color selection: an empty object resets every metric to automatic.
@@ -172,6 +175,7 @@ public class UserDisplayPreferences
         TimeFormat = TimeFormat,
         RegionFormat = RegionFormat,
         ColorTheme = ColorTheme,
+        GlucoseRangePalette = GlucoseRangePalette,
         Prediction = Prediction,
         Chart = Chart,
         YearOverviewColors = YearOverviewColors,
@@ -199,6 +203,13 @@ public class UserDisplayPreferences
     /// <summary>Color theme: "nocturne", "trio", "aaps", or "classic".</summary>
     [JsonPropertyName("colorTheme")]
     public string? ColorTheme { get; set; }
+
+    /// <summary>
+    /// Glucose range palette: "theme" (the colour theme's own range colours) or "clarity"
+    /// (distinct colours for each of the four out-of-range bands). Null means "theme".
+    /// </summary>
+    [JsonPropertyName("glucoseRangePalette")]
+    public string? GlucoseRangePalette { get; set; }
 
     /// <summary>Whether the automatic night-mode schedule is enabled.</summary>
     [JsonPropertyName("nightModeSchedule")]

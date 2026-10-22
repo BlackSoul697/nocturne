@@ -1122,8 +1122,10 @@ public class StatisticsController : ControllerBase
 
             var pct = tir?.Percentages;
             var inRangePct = pct?.Target ?? 0;
-            var lowPct = (pct?.VeryLow ?? 0) + (pct?.Low ?? 0);
-            var highPct = (pct?.VeryHigh ?? 0) + (pct?.High ?? 0);
+            var veryLowPct = pct?.VeryLow ?? 0;
+            var lowPct = pct?.Low ?? 0;
+            var highPct = pct?.High ?? 0;
+            var veryHighPct = pct?.VeryHigh ?? 0;
 
             var dateStr = day.ToString("yyyy-MM-dd");
             var totals = treatment?.Totals;
@@ -1144,8 +1146,10 @@ public class StatisticsController : ControllerBase
             var totalReadings = entries.Count;
             var avgGlucose = totalReadings > 0 ? entries.Average(e => e.Mgdl) : 0;
             var inRangeCount = (int)Math.Round(inRangePct / 100.0 * totalReadings);
+            var veryLowCount = (int)Math.Round(veryLowPct / 100.0 * totalReadings);
             var lowCount = (int)Math.Round(lowPct / 100.0 * totalReadings);
             var highCount = (int)Math.Round(highPct / 100.0 * totalReadings);
+            var veryHighCount = (int)Math.Round(veryHighPct / 100.0 * totalReadings);
 
             var dayStats = new PunchCardDay
             {
@@ -1153,11 +1157,15 @@ public class StatisticsController : ControllerBase
                 Timestamp = dayStartMs,
                 TotalReadings = totalReadings,
                 InRangeCount = inRangeCount,
+                VeryLowCount = veryLowCount,
                 LowCount = lowCount,
                 HighCount = highCount,
+                VeryHighCount = veryHighCount,
                 InRangePercent = inRangePct,
+                VeryLowPercent = veryLowPct,
                 LowPercent = lowPct,
                 HighPercent = highPct,
+                VeryHighPercent = veryHighPct,
                 AverageGlucose = avgGlucose,
                 TotalCarbs = totalCarbs,
                 TotalInsulin = totalInsulin,
@@ -1186,8 +1194,10 @@ public class StatisticsController : ControllerBase
             }
 
             var totalIR = daysWithData.Sum(d => d.InRangeCount);
+            var totalVeryLow = daysWithData.Sum(d => d.VeryLowCount);
             var totalLow = daysWithData.Sum(d => d.LowCount);
             var totalHigh = daysWithData.Sum(d => d.HighCount);
+            var totalVeryHigh = daysWithData.Sum(d => d.VeryHighCount);
             var totalReadings = daysWithData.Sum(d => d.TotalReadings);
             var totalInsulin = month.Days.Sum(d => d.TotalInsulin);
             var totalCarbs = month.Days.Sum(d => d.TotalCarbs);
@@ -1198,8 +1208,10 @@ public class StatisticsController : ControllerBase
                 DayCount = daysWithData.Count,
                 TotalReadings = totalReadings,
                 InRangePercent = totalReadings > 0 ? (double)totalIR / totalReadings * 100 : 0,
+                VeryLowPercent = totalReadings > 0 ? (double)totalVeryLow / totalReadings * 100 : 0,
                 LowPercent = totalReadings > 0 ? (double)totalLow / totalReadings * 100 : 0,
                 HighPercent = totalReadings > 0 ? (double)totalHigh / totalReadings * 100 : 0,
+                VeryHighPercent = totalReadings > 0 ? (double)totalVeryHigh / totalReadings * 100 : 0,
                 AvgGlucose = daysWithData.Sum(d => d.AverageGlucose * d.TotalReadings) / totalReadings,
                 Tdd = totalInsulin > 0 ? totalInsulin / elapsedDays : null,
                 AvgDailyCarbs = totalCarbs > 0 ? totalCarbs / elapsedDays : null,
