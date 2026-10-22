@@ -51,15 +51,30 @@ public class ApsSnapshotPredictionProjectionTests(RlsCompletenessFixture fx)
     }
 
     [Fact]
-    public async Task Buckets_on_the_prediction_start()
+    public async Task Windows_and_buckets_on_the_prediction_start()
     {
         var tenant = await SeedAsync(
-            new Row(Start.AddMinutes(1), Iob: "[1]", PredictedStart: Start.AddMinutes(1)),
-            new Row(Start.AddMinutes(2), Iob: "[2]", PredictedStart: Start.AddMinutes(-1)));
+            new Row(Start.AddMinutes(6), Iob: "[1]", PredictedStart: Start.AddMinutes(4)),
+            new Row(Start.AddMinutes(7), Iob: "[2]", PredictedStart: Start.AddMinutes(7)),
+            new Row(Start.AddMinutes(8), Iob: "[3]", PredictedStart: Start.AddMinutes(3)),
+            new Row(Start.AddMinutes(1), Iob: "[4]", PredictedStart: Start.AddMinutes(-1)),
+            new Row(Start.AddHours(1).AddMinutes(2), Iob: "[5]", PredictedStart: Start.AddMinutes(58)));
 
         var (points, _) = await ReadAsync(tenant);
 
-        points.Select(p => p.IobJson).Should().Equal("[2]", "[1]");
+        points.Select(p => p.IobJson).Should().Equal(
+            ["[3]", "[2]", "[5]"],
+            "[3] shares [1]'s bucket by start though not by timestamp, [4] started before the window, and [5] within it though stored after");
+    }
+
+    [Fact]
+    public async Task Drops_the_default_copy_beside_orefs_curves()
+    {
+        var tenant = await SeedAsync(new Row(Start.AddMinutes(1), Iob: "[120]", Default: "[120]"));
+
+        var (points, _) = await ReadAsync(tenant);
+
+        points.Should().ContainSingle().Which.DefaultJson.Should().BeNull();
     }
 
     [Fact]

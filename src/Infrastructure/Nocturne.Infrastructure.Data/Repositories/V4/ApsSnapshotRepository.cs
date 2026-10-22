@@ -59,34 +59,52 @@ public class ApsSnapshotRepository : SyncUpsertRepositoryBase<ApsSnapshot, ApsSn
 
     /// <inheritdoc />
     /// <remarks>
+    /// <para>
     /// Raw SQL because <c>DISTINCT ON</c> over a five-minute bucket has no LINQ translation; it
-    /// states the tenant and soft-delete predicates the query filters would otherwise add.
+    /// states the tenant and soft-delete predicates the query filters would otherwise add. The
+    /// winners are picked over the narrow key columns and only their curves read, so the sort
+    /// never carries the JSON.
+    /// </para>
+    /// <para>
+    /// The window is on the prediction start. The snapshot timestamp, which the index leads on,
+    /// bounds the scan: a snapshot is stored no earlier than the command it carries, and within
+    /// <see cref="PredictionUploadLagMs"/> of it.
+    /// </para>
     /// </remarks>
     public async Task<IReadOnlyList<ApsPredictionPoint>> GetPredictionsAsync(
         DateTime from, DateTime to, CancellationToken ct = default)
     {
         await using var ctx = await ContextFactory.CreateAsync(ct);
         var tenantId = ctx.TenantId;
+        var timestampEnd = to.AddMilliseconds(PredictionUploadLagMs);
         var rows = await ctx.Database.SqlQuery<PredictionRow>($"""
-            SELECT DISTINCT ON (s.device, floor(extract(epoch FROM s.predicted_start_timestamp) / 300))
-                s.predicted_start_timestamp AS "PredictedStart",
-                s.device AS "Device",
-                s.enacted AS "Enacted",
-                s.aps_system AS "AidAlgorithm",
-                s.predicted_default_json::text AS "DefaultJson",
-                s.predicted_iob_json::text AS "IobJson",
-                s.predicted_zt_json::text AS "ZtJson",
-                s.predicted_cob_json::text AS "CobJson",
-                s.predicted_uam_json::text AS "UamJson"
-            FROM aps_snapshots s
-            WHERE s.tenant_id = {tenantId}
-              AND s.deleted_at IS NULL
-              AND s.timestamp >= {from} AND s.timestamp < {to}
-              AND s.predicted_start_timestamp IS NOT NULL
-              AND num_nonnulls(s.predicted_default_json, s.predicted_iob_json, s.predicted_zt_json,
-                               s.predicted_cob_json, s.predicted_uam_json) > 0
-            ORDER BY s.device, floor(extract(epoch FROM s.predicted_start_timestamp) / 300),
-                     s.enacted DESC, s.timestamp DESC, s.id DESC
+            WITH winners AS (
+                SELECT DISTINCT ON (s.device, floor(extract(epoch FROM s.predicted_start_timestamp) / 300)) s.id
+                FROM aps_snapshots s
+                WHERE s.tenant_id = {tenantId}
+                  AND s.deleted_at IS NULL
+                  AND s.timestamp >= {from} AND s.timestamp < {timestampEnd}
+                  AND s.predicted_start_timestamp >= {from} AND s.predicted_start_timestamp < {to}
+                  AND num_nonnulls(s.predicted_default_json, s.predicted_iob_json, s.predicted_zt_json,
+                                   s.predicted_cob_json, s.predicted_uam_json) > 0
+                ORDER BY s.device, floor(extract(epoch FROM s.predicted_start_timestamp) / 300),
+                         s.enacted DESC, s.timestamp DESC, s.id DESC
+            )
+            SELECT
+                p.predicted_start_timestamp AS "PredictedStart",
+                p.device AS "Device",
+                p.enacted AS "Enacted",
+                p.aps_system AS "AidAlgorithm",
+                CASE WHEN num_nonnulls(p.predicted_iob_json, p.predicted_zt_json, p.predicted_cob_json,
+                                       p.predicted_uam_json) = 0
+                     THEN p.predicted_default_json::text END AS "DefaultJson",
+                p.predicted_iob_json::text AS "IobJson",
+                p.predicted_zt_json::text AS "ZtJson",
+                p.predicted_cob_json::text AS "CobJson",
+                p.predicted_uam_json::text AS "UamJson"
+            FROM aps_snapshots p
+            JOIN winners w ON w.id = p.id
+            WHERE p.tenant_id = {tenantId}
             """).ToListAsync(ct);
 
         return [.. rows
@@ -98,6 +116,8 @@ public class ApsSnapshotRepository : SyncUpsertRepositoryBase<ApsSnapshot, ApsSn
                 r.DefaultJson, r.IobJson, r.ZtJson, r.CobJson, r.UamJson))
             .OrderBy(p => p.PredictedStart)];
     }
+
+    private const long PredictionUploadLagMs = 60 * 60 * 1000;
 
     private sealed class PredictionRow
     {
