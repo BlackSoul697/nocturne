@@ -39,7 +39,8 @@ internal sealed partial class LoopAnalysisService(
     ICobCalculator cobCalculator,
     ITherapySettingsRepository therapySettingsRepository,
     AidSystemMetricsReader aidSystemMetrics,
-    TimeProvider timeProvider
+    TimeProvider timeProvider,
+    IDeviceEventRepository deviceEventRepository
 ) : ILoopAnalysisService
 {
     private const long TickMs = DailyProfileCalculator.SlotMinutes * LocalSlotBinning.MinuteMs;
@@ -67,8 +68,18 @@ internal sealed partial class LoopAnalysisService(
     /// overlap, else one load each. The profile names are those of the loaded
     /// <see cref="LoopAnalysisMaskSources.Profiles"/> active in either range, oldest first.
     /// </summary>
-    private static async Task<Ranges<TRange>> ForRangesAsync<TLoaded, TRange>(
+    private static Task<Ranges<TRange>> ForRangesAsync<TLoaded, TRange>(
         LoopAnalysisFilter filter, Func<Window, Task<TLoaded>> load, Func<TLoaded, Window, TRange> calculate)
+        where TLoaded : ILoaded
+        where TRange : class =>
+        ForRangesAsync(filter, load, (loaded, window, _) => calculate(loaded, window));
+
+    /// <summary>
+    /// As the overload above, with <paramref name="calculate"/> also told whether it is computing the
+    /// primary range.
+    /// </summary>
+    private static async Task<Ranges<TRange>> ForRangesAsync<TLoaded, TRange>(
+        LoopAnalysisFilter filter, Func<Window, Task<TLoaded>> load, Func<TLoaded, Window, bool, TRange> calculate)
         where TLoaded : ILoaded
         where TRange : class
     {
@@ -78,18 +89,19 @@ internal sealed partial class LoopAnalysisService(
             : (Window?)null;
 
         var computed = new List<(TLoaded Loaded, Window Window, TRange Range)>();
-        void Calculate(TLoaded loaded, Window window) => computed.Add((loaded, window, calculate(loaded, window)));
+        void Calculate(TLoaded loaded, Window window, bool isPrimary) =>
+            computed.Add((loaded, window, calculate(loaded, window, isPrimary)));
         if (comparison is { } other && primary.Touches(other))
         {
             var both = await load(primary.Hull(other));
-            Calculate(both, primary);
-            Calculate(both, other);
+            Calculate(both, primary, true);
+            Calculate(both, other, false);
         }
         else
         {
-            Calculate(await load(primary), primary);
+            Calculate(await load(primary), primary, true);
             if (comparison is { } separate)
-                Calculate(await load(separate), separate);
+                Calculate(await load(separate), separate, false);
         }
 
         List<string> names =

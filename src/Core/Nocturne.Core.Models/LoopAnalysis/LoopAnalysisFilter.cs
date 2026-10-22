@@ -139,6 +139,17 @@ public enum LoopAnalysisSeries
 
     /// <summary>oref's <c>max_iob</c>, as its loop cycles report it where it bound.</summary>
     OrefMaxIob,
+
+    /// <summary>The Meals &amp; events glucose series and figures.</summary>
+    EventGlucose,
+
+    /// <summary>The Meals &amp; events net loop correction, net insulin above schedule and insulin figures.</summary>
+    EventNetInsulin,
+    EventIob,
+    EventCob,
+
+    /// <summary>The Meals &amp; events list of events, which places each meal, bolus and start in time.</summary>
+    EventList,
 }
 
 /// <summary>

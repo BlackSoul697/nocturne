@@ -34,7 +34,7 @@ namespace Nocturne.API.Tests.Authorization;
 /// driven once to prove it actually calls the guard.
 /// </summary>
 [Trait("Category", "Unit")]
-public class AnalyticsReadScopeGuardTests
+public partial class AnalyticsReadScopeGuardTests
 {
     private static IReadOnlySet<string> Granted(params string[] scopes) => new HashSet<string>(scopes);
 
@@ -1242,6 +1242,7 @@ public class AnalyticsReadScopeGuardTests
                 {
                     "Primary", "Comparison", "HistoryClamped", "TimeZoneUnavailableReason", "PrimaryRange",
                     "ComparisonRange", "AppliedFilters", "IgnoredFilters", "WithheldSeries", "UnavailableFilters",
+                    "Definition", "SlotMinutes", "UnavailableAnchors",
                 }.Select(p => $"{response.Name}.{p}"),
             ]);
     }

@@ -1,0 +1,363 @@
+<!--
+  The Meals & events tab: each cohort's events aligned on their anchors, every series on one shared
+  axis of minutes from the event, stacked so a single crosshair reads them all; then each cohort's
+  figures side by side and the events themselves. Values come from the API as they are.
+-->
+<script lang="ts">
+  import { Rule } from "layerchart";
+  import {
+    LoopAnalysisSeries,
+    type EventCohortResult,
+    type EventResponseReport,
+    type EventResponseSlot,
+    type LoopAnalysisAggregate,
+  } from "$lib/api";
+  import * as Alert from "$lib/components/ui/alert";
+  import { Switch } from "$lib/components/ui/switch";
+  import { Label } from "$lib/components/ui/label";
+  import { plural } from "$lib/utils/plural";
+  import { tenantChartThresholds } from "$lib/stores/realtime-store.svelte";
+  import { glucoseUnits } from "$lib/stores/appearance-store.svelte";
+  import { bg, bgDelta, bgLabel, convertToDisplayUnits } from "$lib/utils/formatting";
+  import Clock from "@lucide/svelte/icons/clock";
+  import Info from "@lucide/svelte/icons/info";
+  import FilterX from "@lucide/svelte/icons/funnel-x";
+  import TimeOfDayPanel from "./TimeOfDayPanel.svelte";
+  import PercentileBands from "./PercentileBands.svelte";
+  import AggregateReadout from "./AggregateReadout.svelte";
+  import EventMetricsTable from "./EventMetricsTable.svelte";
+  import EventList from "./EventList.svelte";
+  import EventSlotEvents from "./EventSlotEvents.svelte";
+  import NoTimeZone from "./NoTimeZone.svelte";
+  import CohortDot from "./CohortDot.svelte";
+  import { TimeOfDayCursor } from "./time-of-day-cursor.svelte";
+  import { axisEnd } from "./daily-profile-view";
+  import { cohortBands, hourTicks, slotMinute } from "./event-response-view";
+  import { cohortLabel, eventIgnoredFilterLabel, relativeHours, relativeMinutes } from "./event-labels.svelte";
+
+  interface Props {
+    response: EventResponseReport;
+  }
+
+  let { response }: Props = $props();
+
+  const cohorts = $derived(response.definition?.cohorts ?? []);
+  const primary = $derived(response.primary?.cohorts ?? []);
+  const comparison = $derived(response.comparison?.cohorts ?? null);
+  const comparing = $derived(comparison != null);
+  const minutes = $derived(response.slotMinutes ?? []);
+  const anyEvents = $derived([...primary, ...(comparison ?? [])].some((c) => (c.events ?? 0) > 0));
+
+  // The axis is fixed per response; a cursor per slot count keeps the stack's tab stop and crosshair.
+  const cursor = $derived(new TimeOfDayCursor(Math.max(1, minutes.length)));
+  let algorithmOnly = $state(false);
+
+  const units = $derived(glucoseUnits.current);
+  const toDisplay = $derived((mgdl: number) => convertToDisplayUnits(mgdl, units));
+  const thresholds = tenantChartThresholds();
+
+  const withheld = $derived(new Set(response.withheldSeries ?? []));
+  const hidden = (series: LoopAnalysisSeries) => withheld.has(series);
+  const hiddenText = () => "Hidden: your access does not include this data";
+
+  const resultFor = (list: EventCohortResult[] | null, cohort: number | undefined) =>
+    list?.find((r) => r.cohort === cohort);
+
+  // Under the clamp the range parameters are always ignored; the clamp notice says so instead.
+  const RANGE_PARAMETERS = new Set(["startDate", "endDate", "compare", "compareStartDate", "compareEndDate"]);
+  const ignoredFilters = $derived((response.ignoredFilters ?? []).filter((name) => !RANGE_PARAMETERS.has(name)));
+
+  interface Panel {
+    id: string;
+    title: string;
+    unit: string;
+    series: LoopAnalysisSeries;
+    pick: (slot: EventResponseSlot) => LoopAnalysisAggregate | undefined;
+    format: (value: number) => string;
+    scale?: (value: number) => number;
+    domain: [number, number];
+    zero?: boolean;
+    yFormat?: (value: number) => string;
+  }
+
+  const allSlots = $derived([...primary, ...(comparison ?? [])].flatMap((c) => c.slots ?? []));
+  const spread = (pick: Panel["pick"]) => allSlots.flatMap((s) => [pick(s)?.p10, pick(s)?.p90]);
+  const signedDomain = (values: (number | null | undefined)[], floor: number): [number, number] => [
+    -axisEnd(values.map((v) => (v == null ? null : -v)), floor),
+    axisEnd(values, floor),
+  ];
+
+  const glucoseChange = (s: EventResponseSlot) => s.glucoseChange;
+  const cumulative = $derived((s: EventResponseSlot) =>
+    algorithmOnly ? s.netLoopCorrectionSinceAnchor : s.netInsulinSinceAnchor
+  );
+  const u2 = (v: number) => v.toFixed(2);
+  const signedUnits = (v: number) => `${v > 0 ? "+" : ""}${v.toFixed(2)}`;
+  /** Whole numbers in mg/dL; in mmol/L, as many decimals as the axis span needs so ticks stay distinct. */
+  const axisGlucose = (domain: [number, number]) => (v: number) =>
+    units === "mmol" ? v.toFixed(domain[1] - domain[0] < 6 ? 1 : 0) : String(Math.round(v));
+
+  const changeDomain = $derived(
+    signedDomain(spread(glucoseChange).map((v) => (v == null ? null : toDisplay(v))), units === "mmol" ? 1 : 20)
+  );
+  const glucoseDomain = $derived<[number, number]>([0, toDisplay(thresholds.current.glucoseYMax)]);
+
+  const panels = $derived<Panel[]>([
+    {
+      id: "glucose-change",
+      title: "Glucose change from the event",
+      unit: bgLabel(),
+      series: LoopAnalysisSeries.EventGlucose,
+      pick: glucoseChange,
+      format: (v) => bgDelta(v),
+      scale: toDisplay,
+      domain: changeDomain,
+      zero: true,
+      yFormat: axisGlucose(changeDomain),
+    },
+    {
+      id: "glucose",
+      title: "Glucose",
+      unit: bgLabel(),
+      series: LoopAnalysisSeries.EventGlucose,
+      pick: (s) => s.glucose,
+      format: (v) => String(bg(v)),
+      scale: toDisplay,
+      domain: glucoseDomain,
+      yFormat: axisGlucose(glucoseDomain),
+    },
+    {
+      id: "correction",
+      title: "Net loop correction",
+      unit: "U/h above schedule",
+      series: LoopAnalysisSeries.EventNetInsulin,
+      pick: (s) => s.netLoopCorrection,
+      format: signedUnits,
+      domain: signedDomain(spread((s) => s.netLoopCorrection), 0.25),
+      zero: true,
+    },
+    {
+      id: "cumulative",
+      title: algorithmOnly ? "Loop correction since the event" : "Net insulin above schedule since the event",
+      unit: "U",
+      series: LoopAnalysisSeries.EventNetInsulin,
+      pick: cumulative,
+      format: signedUnits,
+      domain: signedDomain(spread(cumulative), 0.5),
+      zero: true,
+    },
+    {
+      id: "iob",
+      title: "Insulin on board",
+      unit: "U",
+      series: LoopAnalysisSeries.EventIob,
+      pick: (s) => s.iob,
+      format: u2,
+      domain: [0, axisEnd(spread((s) => s.iob), 1)],
+    },
+    {
+      id: "cob",
+      title: "Carbs on board",
+      unit: "g",
+      series: LoopAnalysisSeries.EventCob,
+      pick: (s) => s.cob,
+      format: (v) => v.toFixed(1),
+      domain: [0, axisEnd(spread((s) => s.cob), 10)],
+    },
+  ]);
+
+  const ticks = $derived(hourTicks(minutes));
+  const slotLabel = (slot: number) =>
+    `${relativeMinutes(slotMinute(minutes, slot))} to ${relativeMinutes(slotMinute(minutes, slot + 1))}`;
+  const zeroSlot = $derived(Math.max(0, minutes.indexOf(0)));
+  const slotOf = (list: EventCohortResult[] | null, cohort: number | undefined, slot: number) =>
+    resultFor(list, cohort)?.slots?.[slot] ?? {};
+
+  function describe(panel: Panel, slot: number): string {
+    return cohorts
+      .map((cohort) => {
+        const value = panel.pick(slotOf(primary, cohort.cohort, slot));
+        const label = cohortLabel(cohort);
+        return value
+          ? `${label}: median ${panel.format(value.p50 ?? 0)}, ${plural(value.n ?? 0, ["# event", "# events"])}`
+          : `${label}: no data`;
+      })
+      .join("; ");
+  }
+
+  const emptyText = (panel: Panel) =>
+    hidden(panel.series)
+      ? hiddenText()
+      : allSlots.some((s) => panel.pick(s) != null)
+        ? null
+        : "Nothing recorded around these events";
+
+  const listed = $derived(!hidden(LoopAnalysisSeries.EventList));
+
+  function closeEvents() {
+    cursor.selected = null;
+    cursor.restoreFocus();
+  }
+</script>
+
+{#if response.timeZoneUnavailableReason}
+  <NoTimeZone reason={response.timeZoneUnavailableReason} />
+{:else}
+  <div class="space-y-6">
+    {#if response.historyClamped}
+      <Alert.Root variant="info">
+        <Clock />
+        <Alert.Title>Only the last 24 hours are included</Alert.Title>
+        <Alert.Description>
+          You can read only the most recent 24 hours of this data, so the events are those of the
+          last 24 hours whatever range is picked, and nothing is compared.
+        </Alert.Description>
+      </Alert.Root>
+    {/if}
+
+    {#if ignoredFilters.length > 0}
+      <Alert.Root variant="info">
+        <FilterX />
+        <Alert.Title>Some choices were not applied</Alert.Title>
+        <Alert.Description>
+          Your access does not include the data these are drawn from, so they were ignored:
+          {ignoredFilters.map(eventIgnoredFilterLabel).join(", ")}.
+        </Alert.Description>
+      </Alert.Root>
+    {/if}
+
+    {#if cohorts.length === 0}
+      <div class="rounded-lg border border-dashed p-8 text-center text-muted-foreground">
+        <p class="font-medium">No events to align</p>
+        <p class="text-sm">Pick an event your access includes.</p>
+      </div>
+    {:else}
+      <ul class="space-y-1.5 text-sm" aria-label="Cohorts">
+        {#each cohorts as cohort, i (cohort.cohort)}
+          {@const result = resultFor(primary, cohort.cohort)}
+          {@const compared = resultFor(comparison, cohort.cohort)}
+          <li class="flex items-start gap-2">
+            <CohortDot index={i} class="mt-1.5" />
+            <span>
+              <span class="font-medium">{cohortLabel(cohort)}</span>:
+              {plural(result?.events ?? 0, ["# event", "# events"])}
+              {#if comparing}<span class="text-muted-foreground">(compared {compared?.events ?? 0})</span>{/if}
+              {#if (result?.notIsolated ?? 0) > 0 || (result?.missingAnchorGlucose ?? 0) > 0}
+                <span class="block text-xs text-muted-foreground">
+                  {#if (result?.notIsolated ?? 0) > 0}{plural(result?.notIsolated ?? 0, ["# left out for another event in its window", "# left out for another event in their window"])}{/if}
+                  {#if (result?.notIsolated ?? 0) > 0 && (result?.missingAnchorGlucose ?? 0) > 0}; {/if}
+                  {#if (result?.missingAnchorGlucose ?? 0) > 0}{plural(result?.missingAnchorGlucose ?? 0, ["# without a glucose reading at the time", "# without a glucose reading at the time"])}{/if}
+                </span>
+              {/if}
+            </span>
+          </li>
+        {/each}
+      </ul>
+
+      {#if !anyEvents}
+        <div class="rounded-lg border border-dashed p-8 text-center text-muted-foreground">
+          <p class="font-medium">No events like these in this range</p>
+          <p class="text-sm">Pick a longer range, widen the cohorts, or relax the filters.</p>
+        </div>
+      {:else}
+        <div class="space-y-5 rounded-lg border bg-card p-3 @md:p-4">
+          {#if comparing}
+            <p class="text-xs text-muted-foreground">
+              The comparison range is drawn as dashed outlines in each cohort's colour.
+            </p>
+          {/if}
+
+          {#each panels as panel, p (panel.id)}
+            <TimeOfDayPanel
+              id={panel.id}
+              title={panel.title}
+              unit={panel.unit}
+              {cursor}
+              yDomain={panel.domain}
+              yFormat={panel.yFormat}
+              heightClass={p < 2 ? "h-44" : "h-32"}
+              showTimeAxis={p === panels.length - 1}
+              {ticks}
+              tickLabel={(slot) => relativeHours(slotMinute(minutes, slot))}
+              {slotLabel}
+              empty={emptyText(panel)}
+              describe={(slot) => describe(panel, slot)}
+            >
+              {#snippet marks()}
+                <Rule x={zeroSlot} class="stroke-foreground/50" stroke-dasharray="2 2" />
+                {#if panel.zero}<Rule y={0} class="stroke-foreground/40" />{/if}
+                {#each cohorts as cohort, i (cohort.cohort)}
+                  {@const bands = cohortBands(i)}
+                  <PercentileBands
+                    slots={resultFor(primary, cohort.cohort)?.slots ?? []}
+                    comparison={resultFor(comparison, cohort.cohort)?.slots ?? null}
+                    pick={panel.pick}
+                    scale={panel.scale}
+                    outer={cohorts.length === 1}
+                    outerColor={bands.outer}
+                    innerColor={bands.inner}
+                    lineColor={bands.median}
+                    comparisonColor={bands.median}
+                  />
+                {/each}
+              {/snippet}
+              {#snippet tooltip(slot)}
+                <div class="space-y-2">
+                  {#each cohorts as cohort (cohort.cohort)}
+                    <AggregateReadout
+                      label={cohortLabel(cohort)}
+                      value={panel.pick(slotOf(primary, cohort.cohort, slot))}
+                      comparison={panel.pick(slotOf(comparison, cohort.cohort, slot))}
+                      showComparison={comparing}
+                      format={panel.format}
+                      counts="events"
+                    />
+                  {/each}
+                </div>
+              {/snippet}
+            </TimeOfDayPanel>
+            {#if panel.id === "cumulative" && !hidden(panel.series)}
+              <div class="flex items-center gap-2 px-1">
+                <Switch id="event-algorithm-only" bind:checked={algorithmOnly} />
+                <Label for="event-algorithm-only">The loop's own correction only</Label>
+              </div>
+            {/if}
+          {/each}
+
+          <p class="flex items-center gap-1.5 px-1 text-xs text-muted-foreground">
+            <Info class="size-3.5" />
+            Each band is a cohort's events lined up on the event, at 0. Faded stretches rest on too
+            few events to read as a pattern. {#if listed}Click a time, or press Enter on it, to list
+              the events with a glucose reading there.{/if} With the keyboard, the arrow keys move along the window and
+            between charts, and Home and End go to either end.
+          </p>
+        </div>
+
+        {#if listed && cursor.selected != null}
+          <EventSlotEvents
+            slot={cursor.selected}
+            label={slotLabel(cursor.selected)}
+            events={response.primary?.events ?? []}
+            {cohorts}
+            focusOnPick={cursor.selectedByKeyboard}
+            onclose={closeEvents}
+          />
+        {/if}
+
+        <section class="space-y-2" aria-labelledby="event-metrics-heading">
+          <h3 id="event-metrics-heading" class="text-sm font-medium">What happened after each event</h3>
+          <EventMetricsTable {cohorts} {primary} {comparison} />
+        </section>
+
+        <section class="space-y-2" aria-labelledby="event-list-heading">
+          <h3 id="event-list-heading" class="text-sm font-medium">Events</h3>
+          {#if !listed}
+            <p class="text-sm text-muted-foreground">{hiddenText()}</p>
+          {:else}
+            <EventList events={response.primary?.events ?? []} {cohorts} />
+          {/if}
+        </section>
+      {/if}
+    {/if}
+  </div>
+{/if}

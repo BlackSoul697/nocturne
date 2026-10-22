@@ -3,16 +3,16 @@
   stays a gap and a sparse run is faded. The comparison range is drawn over them as dashed outlines
   of its P25-P75 band and its centre, since a muted fill under strong bands disappears.
 -->
-<script lang="ts">
+<script lang="ts" generics="S extends object">
   import { Area, Spline } from "layerchart";
-  import type { DailyProfileSlot, LoopAnalysisAggregate } from "$lib/api";
+  import type { LoopAnalysisAggregate } from "$lib/api";
   import { patternClass } from "$lib/components/charts/print/chart-print-patterns";
   import { aggregateRuns, type AggregatePoint } from "./daily-profile-view";
 
   interface Props {
-    slots: DailyProfileSlot[];
-    comparison?: DailyProfileSlot[] | null;
-    pick: (slot: DailyProfileSlot) => LoopAnalysisAggregate | undefined;
+    slots: S[];
+    comparison?: S[] | null;
+    pick: (slot: S) => LoopAnalysisAggregate | undefined;
     /** Display-unit conversion applied to every value before it is drawn. */
     scale?: (value: number) => number;
     outerColor: string;
@@ -22,6 +22,8 @@
     outer?: boolean;
     /** The centre line: the median, or none where the caller draws its own headline. */
     centre?: "p50" | null;
+    /** The comparison's ink; the foreground by default, a series' own colour where several share a panel. */
+    comparisonColor?: string;
   }
 
   let {
@@ -34,6 +36,7 @@
     lineColor = "currentColor",
     outer = true,
     centre = "p50",
+    comparisonColor = "var(--foreground)",
   }: Props = $props();
 
   const runs = $derived(aggregateRuns(slots, pick));
@@ -43,7 +46,6 @@
   const at = (key: keyof LoopAnalysisAggregate) => (p: AggregatePoint) =>
     scale(Number(p.value[key] ?? 0));
 
-  const COMPARISON = "var(--foreground)";
   const EDGES: ("p25" | "p75")[] = ["p25", "p75"];
   const SPARSE_OPACITY = 0.35;
 </script>
@@ -89,7 +91,7 @@
       data={run.points}
       {x}
       y={at(edge)}
-      stroke={COMPARISON}
+      stroke={comparisonColor}
       stroke-width={1}
       stroke-opacity={0.55}
       stroke-dasharray="2 3"
@@ -101,7 +103,7 @@
       data={run.points}
       {x}
       y={at(centre)}
-      stroke={COMPARISON}
+      stroke={comparisonColor}
       stroke-width={1.5}
       stroke-opacity={0.85}
       stroke-dasharray="5 3"

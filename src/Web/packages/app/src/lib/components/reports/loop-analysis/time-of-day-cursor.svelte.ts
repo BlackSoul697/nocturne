@@ -16,6 +16,13 @@ export class TimeOfDayCursor {
 
   #panels: { id: string; element: HTMLElement }[] = [];
 
+  /** How many slots the stack's axis has: a day's by default. */
+  readonly slotCount: number;
+
+  constructor(slotCount = SLOTS_PER_DAY) {
+    this.slotCount = slotCount;
+  }
+
   /** Adds a panel in document order. Returns the call that removes it. */
   register(id: string, element: HTMLElement): () => void {
     this.#panels = [...this.#panels.filter((p) => p.id !== id), { id, element }].sort((a, b) =>
@@ -31,7 +38,7 @@ export class TimeOfDayCursor {
 
   hover(panel: string, slot: number) {
     this.panel = panel;
-    this.slot = Math.min(SLOTS_PER_DAY - 1, Math.max(0, slot));
+    this.slot = Math.min(this.slotCount - 1, Math.max(0, slot));
   }
 
   leave(panel: string) {

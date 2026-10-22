@@ -1,0 +1,119 @@
+using System.ComponentModel.DataAnnotations;
+using Microsoft.AspNetCore.Mvc;
+using Nocturne.Core.Models.LoopAnalysis;
+
+namespace Nocturne.API.Controllers.V4.Analytics;
+
+/// <summary>
+/// The Meals &amp; events cohorts and window, bound beside <see cref="LoopAnalysisQuery"/> as
+/// camelCase scalars. Each of up to <see cref="EventResponseDefinition.MaxCohorts"/> cohorts is
+/// its parameters suffixed with its number: <c>anchor1</c>, <c>fromMinute1</c>, <c>minGrams1</c>.
+/// With no anchor named, cohort 1 is every meal.
+/// </summary>
+public sealed class EventResponseQuery
+{
+    [FromQuery(Name = "anchor1")] public EventAnchorKind? Anchor1 { get; set; }
+    [FromQuery(Name = "anchor2")] public EventAnchorKind? Anchor2 { get; set; }
+    [FromQuery(Name = "anchor3")] public EventAnchorKind? Anchor3 { get; set; }
+
+    /// <summary>Start of cohort 1's local time-of-day window, minutes after midnight; see <see cref="EventCohortDefinition.FromMinute"/>.</summary>
+    [FromQuery(Name = "fromMinute1"), Range(0, MinuteOfDayMax)] public int? FromMinute1 { get; set; }
+    [FromQuery(Name = "fromMinute2"), Range(0, MinuteOfDayMax)] public int? FromMinute2 { get; set; }
+    [FromQuery(Name = "fromMinute3"), Range(0, MinuteOfDayMax)] public int? FromMinute3 { get; set; }
+
+    /// <summary>End of cohort 1's window, exclusive; before the start, the window wraps past midnight.</summary>
+    [FromQuery(Name = "toMinute1"), Range(0, MinuteOfDayMax)] public int? ToMinute1 { get; set; }
+    [FromQuery(Name = "toMinute2"), Range(0, MinuteOfDayMax)] public int? ToMinute2 { get; set; }
+    [FromQuery(Name = "toMinute3"), Range(0, MinuteOfDayMax)] public int? ToMinute3 { get; set; }
+
+    /// <summary>Smallest meal in cohort 1, g; for a meal cohort only.</summary>
+    [FromQuery(Name = "minGrams1"), Range(0, GramsMax)] public double? MinGrams1 { get; set; }
+    [FromQuery(Name = "minGrams2"), Range(0, GramsMax)] public double? MinGrams2 { get; set; }
+    [FromQuery(Name = "minGrams3"), Range(0, GramsMax)] public double? MinGrams3 { get; set; }
+
+    /// <summary>Largest meal in cohort 1, g; for a meal cohort only.</summary>
+    [FromQuery(Name = "maxGrams1"), Range(0, GramsMax)] public double? MaxGrams1 { get; set; }
+    [FromQuery(Name = "maxGrams2"), Range(0, GramsMax)] public double? MaxGrams2 { get; set; }
+    [FromQuery(Name = "maxGrams3"), Range(0, GramsMax)] public double? MaxGrams3 { get; set; }
+
+    /// <summary>Drop events with another meal, correction bolus or rise in their window; ignored without treatments.read.</summary>
+    [FromQuery(Name = "isolatedOnly")] public bool IsolatedOnly { get; set; }
+
+    /// <summary>Count an unannounced rise only where the loop answered it with its own correction; ignored without treatments.read.</summary>
+    [FromQuery(Name = "requireCorroboration")] public bool RequireCorroboration { get; set; }
+
+    /// <summary>Minutes of window before the anchor: 0 to 120, a multiple of 5.</summary>
+    [FromQuery(Name = "minutesBefore"), Range(0, EventResponseDefinition.MaxMinutesBefore)] public int MinutesBefore { get; set; } = EventResponseDefinition.DefaultMinutesBefore;
+
+    /// <summary>Minutes of window after the anchor: 60 to 480, a multiple of 5.</summary>
+    [FromQuery(Name = "minutesAfter"), Range(EventResponseDefinition.MinMinutesAfter, EventResponseDefinition.MaxMinutesAfter)] public int MinutesAfter { get; set; } = EventResponseDefinition.DefaultMinutesAfter;
+
+    /// <summary>The last minute of the day a time-of-day window may name.</summary>
+    private const int MinuteOfDayMax = 24 * 60 - 1;
+
+    /// <summary>A bound no meal reaches, so a typing slip is refused rather than read.</summary>
+    private const double GramsMax = 1000;
+
+    private IEnumerable<(int Cohort, EventAnchorKind? Anchor, int? From, int? To, double? MinGrams, double? MaxGrams)> Cohorts() =>
+    [
+        (1, Anchor1, FromMinute1, ToMinute1, MinGrams1, MaxGrams1),
+        (2, Anchor2, FromMinute2, ToMinute2, MinGrams2, MaxGrams2),
+        (3, Anchor3, FromMinute3, ToMinute3, MinGrams3, MaxGrams3),
+    ];
+
+    /// <summary>The cohort's anchor: the one named, or every meal for cohort 1 when none is.</summary>
+    private EventAnchorKind? KindOf(int cohort, EventAnchorKind? anchor) =>
+        anchor ?? (cohort == 1 && Anchor1 is null && Anchor2 is null && Anchor3 is null ? EventAnchorKind.Meal : null);
+
+    /// <summary>
+    /// Why the parameters do not make a definition, or null when they do. The ranges are the
+    /// <see cref="RangeAttribute"/>s'; what is left is what no reading could make sense of.
+    /// </summary>
+    public string? Problem()
+    {
+        if (MinutesBefore % EventResponseDefinition.SlotMinutes != 0 || MinutesAfter % EventResponseDefinition.SlotMinutes != 0)
+            return "minutesBefore and minutesAfter must be multiples of 5.";
+
+        foreach (var (n, anchor, from, to, min, max) in Cohorts())
+        {
+            var kind = KindOf(n, anchor);
+            if (kind is null && (from ?? to ?? min ?? max) is not null)
+                return $"Cohort {n}'s filters need anchor{n}.";
+            if ((min ?? max) is not null && kind != EventAnchorKind.Meal)
+                return $"minGrams{n} and maxGrams{n} apply only to a meal cohort.";
+        }
+        return null;
+    }
+
+    /// <summary>
+    /// The definition asked for, before the caller's scopes narrow it. A window whose start and end
+    /// are the same minute is the whole day, and grams given the wrong way round are swapped.
+    /// </summary>
+    public EventResponseDefinition ToDefinition() => new()
+    {
+        Cohorts =
+        [
+            .. Cohorts()
+                .Select(c => c with { Anchor = KindOf(c.Cohort, c.Anchor) })
+                .Where(c => c.Anchor is not null)
+                .Select(c =>
+                {
+                    var allDay = c.From is not null && c.From == c.To;
+                    var swap = c.MinGrams > c.MaxGrams;
+                    return new EventCohortDefinition
+                    {
+                        Cohort = c.Cohort,
+                        Anchor = c.Anchor!.Value,
+                        FromMinute = allDay ? null : c.From,
+                        ToMinute = allDay ? null : c.To,
+                        MinGrams = swap ? c.MaxGrams : c.MinGrams,
+                        MaxGrams = swap ? c.MinGrams : c.MaxGrams,
+                    };
+                }),
+        ],
+        MinutesBefore = MinutesBefore,
+        MinutesAfter = MinutesAfter,
+        IsolatedOnly = IsolatedOnly,
+        RequireCorroboration = RequireCorroboration,
+    };
+}

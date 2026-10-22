@@ -29,6 +29,11 @@ public sealed record DailyProfileInputs
     /// </summary>
     public IntervalSet CalculatedIobCobTime { get; init; } = IntervalSet.Empty;
 
+    /// <summary>Whether a tick's IOB and COB are values; see <see cref="CalculatedIobCobTime"/>.</summary>
+    public bool Stands(IobCobTick tick) =>
+        tick.IobSource != IobCobSource.Calculated || tick.CobSource != IobCobSource.Calculated
+        || CalculatedIobCobTime.Contains(tick.Mills);
+
     /// <summary>The target range in force at an instant, mg/dL; null where none is.</summary>
     public Func<long, (double Low, double High)?>? TargetAt { get; init; }
 }
@@ -197,8 +202,7 @@ public static class DailyProfileCalculator
     {
         foreach (var tick in inputs.IobCob)
         {
-            if (tick.IobSource == IobCobSource.Calculated && tick.CobSource == IobCobSource.Calculated
-                && !inputs.CalculatedIobCobTime.Contains(tick.Mills))
+            if (!inputs.Stands(tick))
                 continue;
             mask.Analysed.ForEachOverlap(tick.Mills, tick.Mills + inputs.IobCobIntervalMs, (start, end) =>
                 LocalSlotBinning.Distribute(start, end, tz, SlotMinutes, (local, ms) =>

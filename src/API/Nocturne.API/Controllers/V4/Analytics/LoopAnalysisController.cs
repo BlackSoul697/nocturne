@@ -102,6 +102,57 @@ public class LoopAnalysisController(
         ServeAsync(query, service.GetLoopHealthAsync, cancellationToken);
 
     /// <summary>
+    /// Glucose, net loop correction, net insulin above schedule, IOB and COB aligned on up to three
+    /// cohorts of events (meals, correction boluses, unannounced rises, and the starts of sensors,
+    /// exercise, overrides and temporary targets), each spread across its events in five-minute
+    /// slots from the anchor, with each event's figures and their spread.
+    /// </summary>
+    /// <remarks>
+    /// An event is dropped and counted when no reading lies within 5 minutes of its anchor. Every
+    /// cohort needs glucose.read, and the read scope its anchor is drawn from; one the caller lacks
+    /// them for is dropped before anything is computed and its <c>anchor{n}</c> reported as ignored.
+    /// Without treatments.read the event list and every insulin, IOB and COB series and figure are
+    /// withheld. Equal start and end times of day mean all day, and grams given the wrong way round
+    /// are swapped.
+    /// </remarks>
+    /// <param name="query">The range, comparison and masks (<see cref="LoopAnalysisQuery"/>).</param>
+    /// <param name="events">The cohorts and window (<see cref="EventResponseQuery"/>).</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    [HttpGet("event-response")]
+    [RemoteQuery]
+    [RequireScope(LoopAnalysisReadScopeGuard.AdmissionScope)]
+    [ResponseCache(Duration = 60, Location = ResponseCacheLocation.Client)]
+    [ProducesResponseType(typeof(EventResponseReport), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    public async Task<ActionResult<EventResponseReport>> GetEventResponse(
+        [FromQuery] LoopAnalysisQuery query,
+        [FromQuery] EventResponseQuery events,
+        CancellationToken cancellationToken = default)
+    {
+        if (events.Problem() is { } problem)
+            return BadRange(problem);
+
+        var granted = HttpContext.GetGrantedScopes();
+        var definition = events.ToDefinition();
+        var ignored = LoopAnalysisReadScopeGuard.NarrowEvents(definition, granted);
+        var passed = Request.Query.Keys.ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+        var served = await ServeAsync(
+            query,
+            (filter, zone, ct) => service.GetEventResponseAsync(filter, definition, zone, ct),
+            cancellationToken);
+        if (served.Result is OkObjectResult { Value: EventResponseReport report })
+        {
+            report.Definition = definition;
+            report.SlotMinutes = EventResponseCalculator.SlotMinutes(definition);
+            report.IgnoredFilters.AddRange(ignored.Where(passed.Contains));
+            report.UnavailableFilters.AddRange(LoopAnalysisReadScopeGuard.UnavailableEventFilters(granted));
+            report.UnavailableAnchors = LoopAnalysisReadScopeGuard.UnavailableAnchors(granted);
+        }
+        return served;
+    }
+
+    /// <summary>
     /// Resolves <paramref name="query"/>, computes the tab when the tenant has a zone, fills the
     /// envelope and narrows the result to the caller.
     /// </summary>

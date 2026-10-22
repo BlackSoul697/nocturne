@@ -40,7 +40,7 @@
   import AggregateReadout from "./AggregateReadout.svelte";
   import SlotDays from "./SlotDays.svelte";
   import { TimeOfDayCursor } from "./time-of-day-cursor.svelte";
-  import { atMinute } from "./daily-profile-view";
+  import { atMinute, axisEnd } from "./daily-profile-view";
   import { ignoredFilterLabel } from "./filter-labels.svelte";
   import NoTimeZone from "./NoTimeZone.svelte";
 
@@ -72,13 +72,6 @@
     list?.[slot]?.slot === slot ? list[slot] : list?.find((s) => s.slot === slot);
 
   const has = (pick: (s: DailyProfileSlot) => unknown) => slots.some((s) => pick(s) != null);
-
-  /** A rounded-up axis end, so the tallest mark never touches the top. */
-  function axisEnd(values: (number | null | undefined)[], floor: number): number {
-    const max = Math.max(floor, ...values.filter((v): v is number => v != null && Number.isFinite(v)));
-    const step = max <= 1 ? 0.25 : max <= 5 ? 1 : max <= 20 ? 5 : max <= 100 ? 10 : 50;
-    return Math.ceil((max * 1.05) / step) * step;
-  }
 
   const both = $derived([...slots, ...(comparisonSlots ?? [])]);
 
