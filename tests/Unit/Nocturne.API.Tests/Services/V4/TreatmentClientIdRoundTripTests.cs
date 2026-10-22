@@ -1,3 +1,4 @@
+using Nocturne.API.Tests.Infrastructure;
 using System.Text.Json;
 using FluentAssertions;
 using Microsoft.AspNetCore.Http;
@@ -98,16 +99,19 @@ public class TreatmentClientIdRoundTripTests : IDisposable
             .ReturnsAsync((Guid?)null);
 
         var decomposer = new TreatmentDecomposer(
-            _context,
+            _context.AsFactory(),
             bolusRepo, tempBasalRepo.Object,
             carbRepo, bgCheckRepo, noteRepo, deviceEventRepo, bolusCalcRepo,
             Mock.Of<IStateSpanService>(),
+            ProfileActivationTestDeps.Repository(_context),
+            ProfileActivationTestDeps.Writer(_context),
             foods.Object,
             devices.Object,
             Mock.Of<IPatientDeviceStamper>(),
             Mock.Of<IProfileDecomposer>(),
             Mock.Of<IActiveProfileResolver>(),
             Mock.Of<IPatientInsulinRepository>(),
+            TempBasalTestDeps.Unscheduled(),
             apiSecretCaller,
             NullLogger<TreatmentDecomposer>.Instance);
 
@@ -115,7 +119,7 @@ public class TreatmentClientIdRoundTripTests : IDisposable
             bolusRepo, carbRepo, bgCheckRepo, noteRepo, deviceEventRepo,
             tempBasalRepo.Object, bolusCalcRepo,
             foods.Object,
-            _context,
+            _context.AsFactory(),
             NullLogger<V4ToLegacyProjectionService>.Instance);
 
         var pipeline = new DecompositionPipeline(
@@ -125,6 +129,7 @@ public class TreatmentClientIdRoundTripTests : IDisposable
         var store = new TreatmentReadService(
             projection, decomposer, pipeline,
             tempBasalRepo.Object, bolusRepo, carbRepo, bgCheckRepo, noteRepo, deviceEventRepo, bolusCalcRepo,
+            Mock.Of<IProfileActivationRepository>(),
             Mock.Of<IStateSpanService>(),
             NullLogger<TreatmentReadService>.Instance);
 

@@ -1,4 +1,5 @@
 using Microsoft.AspNetCore.WebUtilities;
+using Nocturne.Core.Contracts.Entries;
 using Nocturne.Core.Contracts.Glucose;
 using Nocturne.Core.Contracts.Legacy;
 using Nocturne.Core.Contracts.Platform;
@@ -64,19 +65,14 @@ public class TimeQueryService : ITimeQueryService
 
         return storage.ToLowerInvariant() switch
         {
-            "entries" => await _entries.GetEntriesWithAdvancedFilterAsync(
-                findQuery,
-                count: 1000,
-                skip: 0,
-                cancellationToken: cancellationToken
+            "entries" => await _entries.QueryEntriesAsync(
+                new EntryQuery { Count = 1000, Find = findQuery },
+                cancellationToken
             ),
             "treatments" => (
-                await _treatments.GetTreatmentsWithAdvancedFilterAsync(
-                    count: 1000,
-                    skip: 0,
-                    findQuery: findQuery,
-                    reverseResults: false,
-                    cancellationToken: cancellationToken
+                await _treatments.QueryTreatmentsAsync(
+                    new TreatmentQuery { Count = 1000, Find = findQuery },
+                    cancellationToken
                 )
             ).Select(t => ConvertTreatmentToEntry(t)),
             "devicestatus" => (
@@ -118,19 +114,14 @@ public class TimeQueryService : ITimeQueryService
 
         return storage.ToLowerInvariant() switch
         {
-            "entries" => await _entries.GetEntriesWithAdvancedFilterAsync(
-                findQuery,
-                count: 1000,
-                skip: 0,
-                cancellationToken: cancellationToken
+            "entries" => await _entries.QueryEntriesAsync(
+                new EntryQuery { Count = 1000, Find = findQuery },
+                cancellationToken
             ),
             "treatments" => (
-                await _treatments.GetTreatmentsWithAdvancedFilterAsync(
-                    count: 1000,
-                    skip: 0,
-                    findQuery: findQuery,
-                    reverseResults: false,
-                    cancellationToken: cancellationToken
+                await _treatments.QueryTreatmentsAsync(
+                    new TreatmentQuery { Count = 1000, Find = findQuery },
+                    cancellationToken
                 )
             ).Select(t => ConvertTreatmentToEntry(t)),
             "devicestatus" => (
@@ -205,6 +196,9 @@ public class TimeQueryService : ITimeQueryService
     /// <c>$in</c> compares literally. Repeated <c>$regex</c> keys on one field stay separate
     /// conditions in <see cref="Nocturne.Core.Models.Queries.FindQuery"/>.
     /// </summary>
+    /// <exception cref="TimePatternRejectedException">
+    /// A composed pattern would not compile as a <c>$regex</c>, so it would silently match nothing.
+    /// </exception>
     private static string BuildFind(
         string? find,
         string field,
@@ -219,6 +213,11 @@ public class TimeQueryService : ITimeQueryService
         var expanded = (timePatterns.InPatterns ?? []).Where(p => p.Length > 0).ToArray();
         if (expanded.Length > 0)
             patterns.Add(string.Join('|', expanded));
+
+        if (patterns.Any(p => !BoundedRegex.Create(p).IsCompiled))
+            throw new TimePatternRejectedException(
+                "The time pattern is not a supported regular expression: it may not use backreferences "
+                    + "or lookarounds, or expand to too large a pattern");
 
         var terms = patterns
             .Select(p => $"find[{field}][$regex]={Uri.EscapeDataString(p)}")

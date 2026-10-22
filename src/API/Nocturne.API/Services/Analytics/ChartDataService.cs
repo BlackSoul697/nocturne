@@ -272,6 +272,7 @@ public class ChartDataService : IChartDataService
     )
     {
         return tempBasals
+            .Where(tb => tb.Origin == TempBasalOrigin.Suspended || tb.Rate is not null)
             .Select(tb =>
             {
                 var origin = BasalSeriesBuilder.MapTempBasalOrigin(tb.Origin);
@@ -280,7 +281,7 @@ public class ChartDataService : IChartDataService
                     Id = tb.LegacyId ?? tb.Id.ToString(),
                     StartMills = tb.StartMills,
                     EndMills = tb.EndMills,
-                    Rate = origin == BasalDeliveryOrigin.Suspended ? 0 : tb.Rate,
+                    Rate = origin == BasalDeliveryOrigin.Suspended ? 0 : tb.Rate!.Value,
                     Origin = origin,
                     Source = tb.DataSource,
                     FillColor = ChartColorMapper.FillFromBasalOrigin(origin),
@@ -288,6 +289,35 @@ public class ChartDataService : IChartDataService
                 };
             })
             .ToList();
+    }
+
+    /// <summary>
+    /// The later of the newest pump status's pump clock (its upload time when it reports none) and
+    /// the end of the newest temp basal, or the start of an open one. A pump running its scheduled
+    /// basal has no temp basal to show for it, which AAPS leaves for long stretches while its
+    /// devicestatus keeps reporting the pump every loop, so the temp basals alone date the pump's
+    /// last contact to whenever the last one ended.
+    /// </summary>
+    internal static long? LastPumpSyncMills(IEnumerable<TempBasal> tempBasals, PumpSnapshot? latestPump)
+    {
+        long? latest = null;
+        foreach (var tb in tempBasals)
+        {
+            var end = tb.EndMills ?? tb.StartMills;
+            if (latest is null || end > latest)
+                latest = end;
+        }
+
+        if (latestPump is not null)
+        {
+            var contact = UploaderTimestamp.ParseUtcDateTime(latestPump.Clock) is { } clock
+                ? new DateTimeOffset(DateTime.SpecifyKind(clock, DateTimeKind.Utc)).ToUnixTimeMilliseconds()
+                : latestPump.Mills;
+            if (latest is null || contact > latest)
+                latest = contact;
+        }
+
+        return latest;
     }
 
     internal static List<ChartStateSpanDto> MapTempBasalSpans(
