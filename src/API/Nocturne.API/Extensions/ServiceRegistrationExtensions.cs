@@ -840,6 +840,7 @@ public static class ServiceRegistrationExtensions
         services.AddScoped<ITreatmentDecomposer, TreatmentDecomposer>();
         services.AddScoped<IDeviceStatusDecomposer, DeviceStatusDecomposer>();
         services.AddHostedService<ApsSnapshotCurvesBackfillService>();
+        services.AddHostedService<TempBasalOriginCorroborationService>();
         services.AddScoped<IActivityDecomposer, ActivityDecomposer>();
         services.AddScoped<IProfileDecomposer, ProfileDecomposer>();
 
