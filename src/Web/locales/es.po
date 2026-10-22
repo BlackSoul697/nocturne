@@ -1409,6 +1409,7 @@ msgstr "Zona horaria"
 #: ../cms/src/editor/ComponentPropsEditor.svelte
 #: ../cms/src/lib/components/edra/shadcn/components/SlashCommandList.svelte
 #: src/lib/components/dashboard/RecentTreatmentsCard.svelte
+#: src/lib/components/reports/InsulinDonutChart.svelte
 #: src/lib/components/reports/sleep/SleepCompositionChart.svelte
 #: src/routes/(authenticated)/food/Composer.svelte
 #: src/routes/(authenticated)/food/FoodRow.svelte
@@ -1783,6 +1784,7 @@ msgid "{0}g"
 msgstr "{0} g"
 
 #: src/lib/components/calendar/CalendarDayCell.svelte
+#: src/lib/components/reports/InsulinDonutChart.svelte
 msgid "Bolus:"
 msgstr "Bolo:"
 
@@ -1816,6 +1818,7 @@ msgid "{0}U"
 msgstr "{0} U"
 
 #: src/lib/components/calendar/CalendarDayCell.svelte
+#: src/lib/components/reports/InsulinDonutChart.svelte
 msgid "Basal:"
 msgstr "Basal:"
 
@@ -2908,6 +2911,7 @@ msgstr "<0/> Aplicaciones del teléfono"
 
 #: src/lib/components/connectors/DataSourceSelectionView.svelte
 #: src/lib/components/meals/MealsFilterBar.svelte
+#: src/lib/components/reports/InsulinDonutChart.svelte
 #: src/lib/components/treatments/TreatmentCategoryTabs.svelte
 #: src/routes/(authenticated)/compatibility/+page.svelte
 #: src/routes/(authenticated)/compatibility/+page.svelte
@@ -3568,6 +3572,8 @@ msgstr "Últimas 24 horas"
 #: src/lib/components/dashboard/glucose-chart/ChartTooltip.svelte
 #: src/lib/components/dashboard/widgets/TddWidget.svelte
 #: src/lib/components/icons/TreatmentTypeIcon.svelte
+#: src/lib/components/reports/InsulinDonutChart.svelte
+#: src/lib/components/reports/InsulinDonutChart.svelte
 #: src/lib/components/reports/year-overview/YearHeatmap.svelte
 #: src/lib/components/treatments/TreatmentEditDialog.svelte
 #: src/lib/components/treatments/TreatmentsDataTable.svelte
@@ -4185,6 +4191,7 @@ msgstr "Automático"
 #: src/lib/components/dashboard/glucose-chart/dialogs/DeliveryInspectionDialog.svelte
 #: src/lib/components/icons/PumpModeIcon.svelte
 #: src/lib/components/meals/MealBolusDialog.svelte
+#: src/lib/components/reports/InsulinDonutChart.svelte
 #: src/routes/(authenticated)/alerts/dnd/+page.svelte
 #: src/routes/(authenticated)/reports/sleep/+page.svelte
 msgid "Manual"
@@ -4259,6 +4266,8 @@ msgstr "Tentempié"
 #: src/lib/components/icons/TreatmentTypeIcon.svelte
 #: src/lib/components/profile/ProfileEditDialog.svelte
 #: src/lib/components/reports/InsulinDeliveryChart.svelte
+#: src/lib/components/reports/InsulinDonutChart.svelte
+#: src/lib/components/reports/InsulinDonutChart.svelte
 #: src/lib/components/reports/RetrospectiveStats.svelte
 #: src/lib/components/reports/sleep/single-night/Hypnogram.svelte
 #: src/lib/components/reports/sleep/single-night/Hypnogram.svelte
@@ -6017,7 +6026,7 @@ msgstr "No se encontraron tratamientos en este periodo"
 msgid "Source: {0}"
 msgstr "Fuente: {0}"
 
-#. 0: bolusTime ? ` @ ${bolusTime}` \\: ""
+#. 0: time ? ` @ ${time}` \\: ""
 #: src/lib/components/reports/InsulinDonutChart.svelte
 msgid "Bolus{0}"
 msgstr "Bolo{0}"
@@ -23770,15 +23779,11 @@ msgstr "Los puntos fuera de los ejes se dibujan en el borde."
 #~ msgid "Bolus {0}U"
 #~ msgstr "Bolo {0} U"
 
-#. 0: scheduledBasal.toFixed(1)
-#: src/lib/components/reports/InsulinDonutChart.svelte
-msgid "Scheduled basal {0}U"
-msgstr "Basal programada {0} U"
+#~ msgid "Scheduled basal {0}U"
+#~ msgstr "Basal programada {0} U"
 
-#. 0: additionalBasal.toFixed(1)
-#: src/lib/components/reports/InsulinDonutChart.svelte
-msgid "Additional basal {0}U"
-msgstr "Basal adicional {0} U"
+#~ msgid "Additional basal {0}U"
+#~ msgstr "Basal adicional {0} U"
 
 #: src/lib/components/reports/ScheduleFooter.svelte
 msgid "<0/> Changed during this period"
@@ -27569,18 +27574,15 @@ msgstr ""
 
 #: src/lib/components/reports/InsulinDeliveryChart.svelte
 #: src/lib/components/reports/InsulinDonutChart.svelte
+#: src/lib/components/reports/InsulinDonutChart.svelte
 msgid "Manual Bolus"
 msgstr ""
 
-#. 0: manualBolus.toFixed(1)
-#: src/lib/components/reports/InsulinDonutChart.svelte
-msgid "Manual bolus {0}U"
-msgstr ""
+#~ msgid "Manual bolus {0}U"
+#~ msgstr ""
 
-#. 0: automaticBolus.toFixed(1)
-#: src/lib/components/reports/InsulinDonutChart.svelte
-msgid "Automatic bolus {0}U"
-msgstr ""
+#~ msgid "Automatic bolus {0}U"
+#~ msgstr ""
 
 #. 0: (insulinStats?.manualBolus ?? 0).toFixed(1); 1: (insulinStats?.automaticBolus ?? 0).toFixed(1)
 #: src/routes/(authenticated)/reports/idp/+page.svelte
@@ -27662,4 +27664,12 @@ msgstr ""
 
 #: src/routes/(authenticated)/settings/appearance/+page.svelte
 msgid "Food energy units"
+msgstr ""
+
+#: src/lib/components/reports/InsulinDonutChart.svelte
+msgid "Manual:"
+msgstr ""
+
+#: src/lib/components/reports/InsulinDonutChart.svelte
+msgid "Click to expand"
 msgstr ""
