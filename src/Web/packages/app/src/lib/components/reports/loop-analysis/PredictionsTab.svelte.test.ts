@@ -151,7 +151,7 @@ describe("PredictionsTab", () => {
 
     await expect.element(slider("UAM")).toBeVisible();
     expect(slider("IOB").elements()).toHaveLength(0);
-    await expect.element(page.getByText(/The IOB, zero-temp and COB curves are hidden/)).toBeVisible();
+    await expect.element(page.getByText(/These curves are hidden:\s+IOB, Zero temp, COB\./)).toBeVisible();
     await expect.element(page.getByText(/your access does not include treatments/)).toBeVisible();
     expect(page.getByText("After a correction").elements()).toHaveLength(0);
     expect(page.getByText("Interrupted", { exact: true }).elements()).toHaveLength(0);
@@ -164,7 +164,7 @@ describe("PredictionsTab", () => {
 
     await expect.element(page.getByText("Interrupted", { exact: true }).first()).toBeVisible();
     await expect.element(page.getByText(/Interrupted counts are left out of the bias/)).toBeVisible();
-    expect(page.getByText(/The IOB, zero-temp and COB curves are hidden/).elements()).toHaveLength(0);
+    expect(page.getByText(/curves? (is|are) hidden/).elements()).toHaveLength(0);
   });
 
   it("names the filters the caller's access ignored", async () => {

@@ -80,6 +80,7 @@ export function predictionRange(options: PredictionOptions = {}): PredictionAccu
     predictions: options.sparse ? 12 : 4032,
     algorithms: [curves.includes(PredictionCurve.Default) ? AidAlgorithm.Loop : AidAlgorithm.Trio],
     curves: curves.map((c) => curve(c, options)),
+    hiddenCurves: [],
   };
 }
 
@@ -105,7 +106,9 @@ function narrow(range: PredictionAccuracyRange, withheld: Set<LoopAnalysisSeries
   }
   if (withheld.has(S.PredictionCurves)) range.curves = [];
   if (withheld.has(S.PredictionContexts)) {
-    range.curves = (range.curves ?? []).filter((c) => (c.contexts ?? []).length === ALL_CONTEXTS.length);
+    const partial = (c: PredictionCurveAccuracy) => (c.contexts ?? []).length < ALL_CONTEXTS.length;
+    range.hiddenCurves = (range.curves ?? []).filter(partial).map((c) => c.curve!);
+    range.curves = (range.curves ?? []).filter((c) => !partial(c));
     for (const c of range.curves) {
       c.byContext = [];
       for (const h of [...(c.horizons ?? []), ...(c.byHour ?? []).flatMap((x) => x.horizons ?? [])]) h.interrupted = undefined;

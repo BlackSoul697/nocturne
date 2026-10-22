@@ -85,6 +85,12 @@ public class PredictionAccuracyRange
     /// curve is a copy of its IOB curve, so a snapshot with oref's curves reports those alone.
     /// </summary>
     public List<PredictionCurveAccuracy> Curves { get; set; } = [];
+
+    /// <summary>
+    /// The curves left out of <see cref="Curves"/> because the caller's access withholds the
+    /// contexts they are reported in, in <see cref="PredictionCurve"/> order. Empty where none were.
+    /// </summary>
+    public List<PredictionCurve> HiddenCurves { get; set; } = [];
 }
 
 public class PredictionCurveAccuracy

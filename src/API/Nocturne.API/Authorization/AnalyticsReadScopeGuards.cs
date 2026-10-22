@@ -609,11 +609,15 @@ internal static partial class LoopAnalysisReadScopeGuard
         }
 
         if (withheld.Contains(LoopAnalysisSeries.PredictionCurves))
+        {
             range.Curves = [];
+            range.HiddenCurves = [];
+        }
 
         if (withheld.Contains(LoopAnalysisSeries.PredictionContexts))
         {
             var everyContext = Enum.GetValues<PredictionContext>().Length;
+            range.HiddenCurves = [.. range.Curves.Where(c => c.Contexts.Count < everyContext).Select(c => c.Curve)];
             range.Curves.RemoveAll(c => c.Contexts.Count < everyContext);
             foreach (var curve in range.Curves)
             {

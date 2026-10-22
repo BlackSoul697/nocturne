@@ -1718,6 +1718,7 @@ public partial class AnalyticsReadScopeGuardTests
         {
             range.Curves.Select(c => c.Curve).Should().Equal(
                 [PredictionCurve.Default, PredictionCurve.Uam], "a curve reported in every context reads no treatment");
+            range.HiddenCurves.Should().Equal(PredictionCurve.Iob, PredictionCurve.Cob);
             foreach (var curve in range.Curves)
             {
                 curve.Horizons.Should().NotBeEmpty();

@@ -5,7 +5,6 @@
 -->
 <script lang="ts">
   import {
-    AidAlgorithm,
     LoopAnalysisSeries,
     PredictionContext,
     PredictionCurve,
@@ -93,8 +92,7 @@
   const anySparse = $derived(curves.some((c) => horizonsOf(c).some((h) => h.error?.sparse)));
   const anyInterrupted = $derived(curves.some((c) => horizonsOf(c).some((h) => (h.interrupted ?? 0) > 0)));
 
-  const OREF = new Set([AidAlgorithm.OpenAps, AidAlgorithm.AndroidAps, AidAlgorithm.Trio, AidAlgorithm.IAPS]);
-  const orefCurvesHidden = $derived(contextsHidden && (primary?.algorithms ?? []).some((a) => OREF.has(a)));
+  const hiddenCurves = $derived(primary?.hiddenCurves ?? []);
 
   const key = $derived.by<ChartKeyItem[]>(() => [
     { texture: "percentile-outer", label: "10–90%", color: "color-mix(in oklab, var(--muted-foreground) 28%, transparent)" },
@@ -155,12 +153,12 @@
     {:else}
       <FigureStrip {figures} />
 
-      {#if orefCurvesHidden}
+      {#if hiddenCurves.length > 0}
         <p class="flex items-start gap-1.5 px-1 text-sm text-muted-foreground">
           <EyeOff class="mt-0.5 size-4 shrink-0" />
-          The IOB, zero-temp and COB curves are hidden: each is read only in the contexts the
-          algorithm relies on it in, and those come from treatments, which your access does not
-          include.
+          {plural(hiddenCurves.length, ["This curve is hidden", "These curves are hidden"])}:
+          {hiddenCurves.map(curveLabel).join(", ")}. Each is read only in the contexts the algorithm
+          relies on it in, and those come from treatments, which your access does not include.
         </p>
       {/if}
 
