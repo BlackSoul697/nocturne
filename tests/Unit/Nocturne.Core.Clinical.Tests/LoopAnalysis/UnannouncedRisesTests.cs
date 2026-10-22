@@ -232,7 +232,7 @@ public class UnannouncedRisesTests
     }
 
     [Fact]
-    public void AMealThatPlateausAndClimbsAgain_IsAnnouncedByItsCarbs()
+    public void ATwoStepMeal_IsAnnouncedByItsCarbs_AndBothStepsAreItsOwn()
     {
         var glucose = Trace(-120, 300, m => m switch
         {
@@ -245,8 +245,7 @@ public class UnannouncedRisesTests
         var search = Search(glucose, carbs: [new CarbEvent(T0, 50)]);
 
         search.Anchors.Should().BeEmpty();
-        search.Climbs.Should().ContainSingle("the first climb is the meal's own; the second is a further intake")
-            .Which.Should().BeGreaterThan(At(60));
+        search.Climbs.Should().BeEmpty("the meal caused the first step, and the second is merged into it");
     }
 
     [Fact]
@@ -292,7 +291,7 @@ public class UnannouncedRisesTests
     }
 
     [Fact]
-    public void AClimbMergedIntoAnEarlierOne_IsStillAClimb()
+    public void AClimbMergedIntoAnEarlierOne_IsPartOfIt()
     {
         var glucose = Trace(-60, 300, m => m switch
         {
@@ -305,6 +304,35 @@ public class UnannouncedRisesTests
         var search = Search(glucose);
 
         search.Anchors.Should().ContainSingle().Which.Mills.Should().Be(T0);
-        search.Climbs.Should().HaveCount(2);
+        search.Climbs.Should().Equal(T0);
+    }
+
+    [Theory]
+    [InlineData(60)]
+    [InlineData(150)]
+    public void ASnackAfterAMealThatDidNotClimb_IsAFurtherIntake(int snackMinute)
+    {
+        var glucose = Trace(-120, snackMinute + 120, m => m <= snackMinute ? 110 : Math.Min(200, 110 + 2 * (m - snackMinute)));
+
+        var search = Search(glucose, carbs: [new CarbEvent(T0, 50)]);
+
+        search.Anchors.Should().BeEmpty("the meal's carbs still announce the snack's climb");
+        search.Climbs.Should().Equal(At(snackMinute));
+    }
+
+    [Theory]
+    [InlineData(new double[] { 135 })]
+    [InlineData(new double[] { 110, 135 })]
+    public void AShallowFalseLowSteppingBack_IsNotARise(double[] steps)
+    {
+        // Steady at 135, a false low at 85 for 40 minutes, then back in one or two readings.
+        var glucose = Trace(-120, 120, m => m switch
+        {
+            >= -40 and < 0 => 85,
+            >= 0 when m / 5 < steps.Length => steps[(int)m / 5],
+            _ => 135,
+        });
+
+        Find(glucose).Should().BeEmpty();
     }
 }

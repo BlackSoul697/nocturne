@@ -348,6 +348,31 @@ public class EventResponseCalculatorTests
     }
 
     [Fact]
+    public void ATwoStepMeal_KeepsItsGramsPerUnit()
+    {
+        // Lunch climbs, plateaus for an hour, then climbs again as its fat and protein absorb.
+        var lunch = Local(2024, 6, 11, 12, 0);
+        double Shape(long t) => ((t - lunch) / (double)Minute) switch
+        {
+            <= 0 => 110,
+            <= 25 => 110 + 2 * (t - lunch) / (double)Minute,
+            <= 90 => 160,
+            var m => Math.Min(220, 160 + 1.5 * (m - 90)),
+        };
+
+        var range = Calculate(
+            [Cohort(1)],
+            glucose: Readings(From, To, Shape),
+            carbs: [new(lunch, 60)],
+            doses: [new(lunch, 4, false)],
+            delivered: [new(From - Day, To + Day, 1.0, BasalDeliveryOrigin.Algorithm)],
+            scheduled: [new(From - Day, To + Day, 1.0)]);
+
+        range.Cohorts.Single().GramsPerUnitNotIsolated.Should().Be(0);
+        range.Events.Single().Metrics.GramsPerUnit.Should().Be(15, "60 g over its 4 U bolus");
+    }
+
+    [Fact]
     public void AMealWhoseWindowThePumpDidNotRecord_IsCountedAsUncovered()
     {
         var dinner = Local(2024, 6, 12, 18, 0);

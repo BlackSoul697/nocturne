@@ -7,9 +7,11 @@ namespace Nocturne.Core.Clinical.LoopAnalysis;
 /// <param name="Anchors">The rises that qualify as <see cref="EventAnchorKind.UnannouncedRise"/>, in time order.</param>
 /// <param name="Climbs">
 /// The start of every meal-like climb that is an intake of its own, whether it qualified or not: one
-/// merged into an earlier climb, one the loop did not answer, and one a carb entry announced after
-/// that entry's first climb. The first climb after a carb entry is that meal's and is left out, the
-/// entry standing for it. An episode with any of these in its window is not isolated.
+/// no carb entry announced, answered by the loop or not, and one a carb entry announced but did not
+/// cause (<see cref="UnannouncedRises.CarbAttributionMs"/>). A climb a carb entry caused is that
+/// meal's, which the entry already stands for, and a climb merged into an earlier one is part of it
+/// (<see cref="UnannouncedRises.MergeMs"/>); both are left out. An episode with any of these in its
+/// window is not isolated.
 /// </param>
 public sealed record RiseSearch(List<EventAnchor> Anchors, List<long> Climbs);
 
@@ -30,13 +32,18 @@ public sealed record RiseSearch(List<EventAnchor> Anchors, List<long> Climbs);
 /// <para>
 /// A climb is announced, and so not a rise, by a carb entry from <see cref="CarbsBeforeMs"/> before
 /// its anchor to <see cref="EventAnchors.CarbFreeMs"/> after it, or by carbs on board at the anchor
-/// where those are known. A climb within <see cref="MergeMs"/> of an earlier one is part of it.
+/// where those are known; the entry caused it only when the climb starts within
+/// <see cref="CarbAttributionMs"/> of it. A climb within <see cref="MergeMs"/> of an earlier one is
+/// part of it.
 /// </para>
 /// <para>
-/// Readings under a <c>DataExclusion</c> span are dropped before the search, a stretch or climb
-/// is not read across a gap of more than <see cref="MaxGapMs"/>, and a climb faster than
-/// <see cref="MaxRiseRateMgdlPerMinute"/> over <see cref="RateSpanMs"/> is not physiological, so a
-/// compression low's recovery qualifies neither when it is excluded nor when it is not.
+/// Readings under a <c>DataExclusion</c> span are dropped before the search, and a stretch or climb
+/// is not read across a gap of more than <see cref="MaxGapMs"/>. A sensor's step is told from glucose
+/// by its speed: a climb faster than <see cref="MaxRiseRateMgdlPerMinute"/> over
+/// <see cref="RateSpanMs"/>, or one that reaches <see cref="RiseMgdl"/> within
+/// <see cref="MinimumClimbMs"/> of its anchor, is not physiological. A compression low that is not
+/// excluded can still pass where its recovery is slower than that and the low sits at or above
+/// <see cref="MinimumFloorMgdl"/>; excluding it is what keeps it out.
 /// </para>
 /// </remarks>
 public static class UnannouncedRises
@@ -117,6 +124,21 @@ public static class UnannouncedRises
     public const long CarbsBeforeMs = 3 * LocalSlotBinning.HourMs;
 
     /// <summary>
+    /// How long after a carb entry a climb may start and still be that meal's own. A meal's glucose
+    /// leaves its floor within the hour, however slowly it absorbs; a climb that starts later is a
+    /// further intake, a snack or a second course, even while the meal's carbs are still on board, so
+    /// the meal's insulin no longer belongs to it alone.
+    /// </summary>
+    public const long CarbAttributionMs = LocalSlotBinning.HourMs;
+
+    /// <summary>
+    /// How long a climb must take to reach <see cref="RiseMgdl"/> from its anchor: longer than ten
+    /// minutes. A sensor stepping back from a false low gets there in one or two readings; carbs
+    /// absorb at no more than 3 to 4 mg/dL a minute, so they take longer.
+    /// </summary>
+    public const long MinimumClimbMs = 10 * LocalSlotBinning.MinuteMs;
+
+    /// <summary>
     /// How long after one climb's anchor another is taken to be the same intake: a meal that stalls
     /// and climbs again within two hours is one meal, not two.
     /// </summary>
@@ -167,7 +189,6 @@ public static class UnannouncedRises
         var anchors = new List<EventAnchor>();
         var climbs = new List<long>();
         var last = long.MinValue;
-        var climbedCarbs = new HashSet<long>();
 
         var stableStart = 0;
         for (var i = 0; i < readings.Length; i++)
@@ -185,13 +206,10 @@ public static class UnannouncedRises
             var merged = last != long.MinValue && at < last + MergeMs;
             last = at;
             if (merged)
-            {
-                climbs.Add(at);
                 continue;
-            }
             if (AnnouncingCarbs(carbMills, at) is { } entry)
             {
-                if (!climbedCarbs.Add(entry))
+                if (at - entry >= CarbAttributionMs)
                     climbs.Add(at);
                 continue;
             }
@@ -207,8 +225,7 @@ public static class UnannouncedRises
 
     /// <summary>
     /// The latest carb entry from <see cref="CarbsBeforeMs"/> before <paramref name="at"/> to
-    /// <see cref="EventAnchors.CarbFreeMs"/> after it, or null. Its first climb is its own meal's, which
-    /// the entry already stands for; a later climb it announces is a further intake.
+    /// <see cref="EventAnchors.CarbFreeMs"/> after it, or null.
     /// </summary>
     private static long? AnnouncingCarbs(long[] carbMills, long at)
     {
@@ -267,7 +284,7 @@ public static class UnannouncedRises
             if (readings[j].Mills - readings[anchor].Mills > RiseWindowMs)
                 return null;
             if (readings[j].Mgdl - floor >= RiseMgdl)
-                return anchor;
+                return readings[j].Mills - readings[anchor].Mills > MinimumClimbMs ? anchor : null;
         }
         return null;
     }
