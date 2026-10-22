@@ -2,21 +2,31 @@ import { render } from "vitest-browser-svelte";
 import { page } from "vitest/browser";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { page as pageState } from "$app/state";
-import type { DailyProfileResponse } from "$lib/api";
+import type { DailyProfileResponse, LoopHealthResponse } from "$lib/api";
 import { remoteQuery } from "$lib/test-stubs/remote-resource";
 import {
   ALL_SCOPES,
   profileResponse,
 } from "$lib/components/reports/loop-analysis/daily-profile.test-fixtures";
+import { loopHealthResponse } from "$lib/components/reports/loop-analysis/loop-health.test-fixtures";
 
-const calls = vi.hoisted(() => ({ query: [] as unknown[], goto: [] as [string, unknown][] }));
+const calls = vi.hoisted(() => ({
+  query: [] as unknown[],
+  loopHealth: [] as unknown[],
+  goto: [] as [string, unknown][],
+}));
 let response: DailyProfileResponse;
+let healthResponse: LoopHealthResponse;
 let resourceState: { stale?: boolean; error?: unknown } = {};
 
 vi.mock("$api/generated/loopAnalysis.generated.remote", () => ({
   getDailyProfile: (input: unknown) => {
     calls.query.push(input);
     return remoteQuery(() => response);
+  },
+  getLoopHealth: (input: unknown) => {
+    calls.loopHealth.push(input);
+    return remoteQuery(() => healthResponse);
   },
 }));
 
@@ -59,8 +69,10 @@ const lastQuery = () => calls.query.at(-1);
 describe("Loop Analysis page", () => {
   beforeEach(() => {
     calls.query.length = 0;
+    calls.loopHealth.length = 0;
     calls.goto.length = 0;
     response = profileResponse();
+    healthResponse = loopHealthResponse();
     resourceState = {};
   });
 
@@ -171,5 +183,37 @@ describe("Loop Analysis page", () => {
     await expect.element(page.getByText("Only the last 24 hours are included")).toBeVisible();
     expect(page.getByText(/Mar 1/).elements()).toHaveLength(0);
     expect(page.getByText("Some filters were not applied").elements()).toHaveLength(0);
+  });
+
+  it("fetches only Loop health on its tab, with the same filter", async () => {
+    open("?tab=loop-health&weekdays=6&excludeIllness=false");
+
+    await expect.element(page.getByRole("tab", { name: "Loop health", selected: true })).toBeVisible();
+    await expect.element(page.getByRole("slider", { name: "Closed loop by hour" })).toBeVisible();
+    expect(calls.query).toHaveLength(0);
+    expect(calls.loopHealth.at(-1)).toEqual({
+      startDate: "2026-10-09",
+      endDate: "2026-10-22",
+      days: [6],
+      excludeIllness: false,
+    });
+  });
+
+  it("drops a filter Loop health says the viewer cannot use", async () => {
+    healthResponse = loopHealthResponse({ scopes: ["glucose.read", "treatments.read", "therapy.read", "reports.read"] });
+    open("?tab=loop-health&excludeOpenLoop=true");
+
+    await expect.poll(() => calls.goto.length).toBeGreaterThan(0);
+    const search = new URL(calls.goto.at(-1)![0], "http://localhost").searchParams;
+    expect(search.has("excludeOpenLoop")).toBe(false);
+    expect(search.get("tab")).toBe("loop-health");
+  });
+
+  it("switches to Loop health through the URL", async () => {
+    open("");
+    await page.getByRole("tab", { name: "Loop health" }).click();
+
+    const search = new URL(calls.goto.at(-1)![0], "http://localhost").searchParams;
+    expect(search.get("tab")).toBe("loop-health");
   });
 });

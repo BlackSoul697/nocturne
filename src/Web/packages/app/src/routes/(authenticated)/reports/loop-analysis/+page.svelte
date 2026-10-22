@@ -3,11 +3,13 @@
   import { goto } from "$app/navigation";
   import { resolve } from "$app/paths";
   import * as Tabs from "$lib/components/ui/tabs";
-  import { getDailyProfile } from "$api/generated/loopAnalysis.generated.remote";
+  import type { DailyProfileResponse, LoopAnalysisResponse, LoopHealthResponse } from "$lib/api";
+  import { getDailyProfile, getLoopHealth } from "$api/generated/loopAnalysis.generated.remote";
   import { requireDateParamsContext } from "$lib/hooks/date-params.svelte";
-  import { contextResource } from "$lib/hooks/resource-context.svelte";
   import LoopAnalysisFilterBar from "$lib/components/reports/loop-analysis/LoopAnalysisFilterBar.svelte";
   import DailyProfileTab from "$lib/components/reports/loop-analysis/DailyProfileTab.svelte";
+  import LoopHealthTab from "$lib/components/reports/loop-analysis/LoopHealthTab.svelte";
+  import TabResource from "$lib/components/reports/loop-analysis/TabResource.svelte";
   import {
     dailyProfileQuery,
     isLoopAnalysisTab,
@@ -34,14 +36,18 @@
   const requested = $derived({ startDate: reportsParams.fromDay, endDate: reportsParams.toDay });
   const query = $derived(dailyProfileQuery(filter, requested));
 
-  const profileResource = contextResource(() => getDailyProfile(query), {
-    errorTitle: "Error Loading Loop Analysis",
-  });
-  const response = $derived(profileResource.current);
+  // Only the tab on screen is fetched; its response answers the filter bar as well.
+  let dailyProfile = $state<DailyProfileResponse>();
+  let loopHealth = $state<LoopHealthResponse>();
+  let stale = $state(false);
+  let failed = $state(false);
+
+  const response = $derived<LoopAnalysisResponse | undefined>(
+    filter.tab === "loop-health" ? loopHealth : dailyProfile
+  );
   // A failed request is settled too, so the bar shows what was picked rather than loading forever;
   // its echoes are then the last response's, which no longer answer the request on screen.
-  const failed = $derived(profileResource.error != null);
-  const settled = $derived(failed || (response != null && !profileResource.stale));
+  const settled = $derived(failed || (response != null && !stale));
   const echo = $derived(settled && !failed ? response : null);
   const clamped = $derived(response?.historyClamped ?? page.data.limitTo24Hours ?? false);
 
@@ -63,6 +69,7 @@
 
   const tabs = $derived<{ value: LoopAnalysisTab; label: string }[]>([
     { value: "daily-profile", label: "Daily profile" },
+    { value: "loop-health", label: "Loop health" },
   ]);
 </script>
 
@@ -73,6 +80,24 @@
     content="How your automated insulin delivery behaves across the day: glucose, basal, loop corrections, IOB and COB by time of day"
   />
 </svelte:head>
+
+{#if filter.tab === "loop-health"}
+  <TabResource
+    load={() => getLoopHealth(query)}
+    onupdate={(state) => {
+      loopHealth = state.current;
+      ({ stale, failed } = state);
+    }}
+  />
+{:else}
+  <TabResource
+    load={() => getDailyProfile(query)}
+    onupdate={(state) => {
+      dailyProfile = state.current;
+      ({ stale, failed } = state);
+    }}
+  />
+{/if}
 
 <div class="@container space-y-6">
   <p class="text-muted-foreground print:hidden">
@@ -91,7 +116,7 @@
     {settled}
     {clamped}
     unavailable={response?.unavailableFilters}
-    profileNames={response?.primary?.profileNames ?? []}
+    profileNames={dailyProfile?.primary?.profileNames ?? []}
   />
 
   <Tabs.Root
@@ -106,8 +131,13 @@
       {/each}
     </Tabs.List>
     <Tabs.Content value="daily-profile" class="mt-4">
-      {#if response}
-        <DailyProfileTab {response} {insulinDeliveryHref} />
+      {#if dailyProfile}
+        <DailyProfileTab response={dailyProfile} {insulinDeliveryHref} />
+      {/if}
+    </Tabs.Content>
+    <Tabs.Content value="loop-health" class="mt-4">
+      {#if loopHealth}
+        <LoopHealthTab response={loopHealth} />
       {/if}
     </Tabs.Content>
   </Tabs.Root>

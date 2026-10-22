@@ -13,7 +13,6 @@
     type DailyProfileSlot,
     type LoopAnalysisAggregate,
   } from "$lib/api";
-  import * as Alert from "$lib/components/ui/alert";
   import { Switch } from "$lib/components/ui/switch";
   import { Label } from "$lib/components/ui/label";
   import FigureStrip, { type Figure } from "$lib/components/reports/FigureStrip.svelte";
@@ -30,9 +29,7 @@
   import { tenantChartThresholds } from "$lib/stores/realtime-store.svelte";
   import { glucoseUnits } from "$lib/stores/appearance-store.svelte";
   import { bg, bgLabel, convertToDisplayUnits, hourLabel } from "$lib/utils/formatting";
-  import Clock from "@lucide/svelte/icons/clock";
   import EyeOff from "@lucide/svelte/icons/eye-off";
-  import FilterX from "@lucide/svelte/icons/funnel-x";
   import TimeOfDayPanel from "./TimeOfDayPanel.svelte";
   import PercentileBands from "./PercentileBands.svelte";
   import SlotLine from "./SlotLine.svelte";
@@ -41,8 +38,8 @@
   import SlotDays from "./SlotDays.svelte";
   import { TimeOfDayCursor } from "./time-of-day-cursor.svelte";
   import { atMinute } from "./daily-profile-view";
-  import { ignoredFilterLabel } from "./filter-labels.svelte";
   import NoTimeZone from "./NoTimeZone.svelte";
+  import LoopAnalysisNotices from "./LoopAnalysisNotices.svelte";
 
   interface Props {
     response: DailyProfileResponse;
@@ -229,12 +226,6 @@
     return list;
   });
 
-  // Under the clamp the range parameters are always ignored; the clamp notice says so instead.
-  const RANGE_PARAMETERS = new Set(["startDate", "endDate", "compare", "compareStartDate", "compareEndDate"]);
-  const ignoredFilters = $derived(
-    (response.ignoredFilters ?? []).filter((name) => !RANGE_PARAMETERS.has(name))
-  );
-
   const daysText = (n: number | undefined) => plural(n ?? 0, ["# day", "# days"]);
   const readingsText = (n: number | undefined) => plural(n ?? 0, ["# reading", "# readings"]);
 
@@ -299,28 +290,7 @@
   <NoTimeZone reason={response.timeZoneUnavailableReason} />
 {:else}
   <div class="space-y-6">
-    {#if response.historyClamped}
-      <Alert.Root variant="info">
-        <Clock />
-        <Alert.Title>Only the last 24 hours are included</Alert.Title>
-        <Alert.Description>
-          You can read only the most recent 24 hours of this data, so the report covers those 24
-          hours whatever range is picked, compares nothing, and each time of day rests on at most
-          one day.
-        </Alert.Description>
-      </Alert.Root>
-    {/if}
-
-    {#if ignoredFilters.length > 0}
-      <Alert.Root variant="info">
-        <FilterX />
-        <Alert.Title>Some filters were not applied</Alert.Title>
-        <Alert.Description>
-          Your access does not include the data these filters are drawn from, so they were ignored:
-          {ignoredFilters.map(ignoredFilterLabel).join(", ")}.
-        </Alert.Description>
-      </Alert.Root>
-    {/if}
+    <LoopAnalysisNotices {response} />
 
     <div class="space-y-2">
       <FigureStrip {figures} />
