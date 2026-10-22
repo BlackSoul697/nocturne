@@ -65,14 +65,22 @@ internal sealed partial class LoopAnalysisService(
         var (primary, comparison) = await ForRangesAsync(
             filter,
             window => LoadAsync(window, zone, ct),
-            (loaded, window, _) => DailyProfileCalculator.Calculate(
+            (loaded, window) => DailyProfileCalculator.Calculate(
                 loaded.Inputs, Mask(filter, window, zone, loaded.Sources), window.From, window.To));
         return new DailyProfileResponse { Primary = primary, Comparison = comparison };
     }
 
     /// <summary>
     /// Computes the primary range and the comparison: from one load over both where they touch or
-    /// overlap, else one load each. <paramref name="calculate"/> is told whether it is computing the
+    /// overlap, else one load each.
+    /// </summary>
+    private static Task<(TRange Primary, TRange? Comparison)> ForRangesAsync<TLoaded, TRange>(
+        LoopAnalysisFilter filter, Func<Window, Task<TLoaded>> load, Func<TLoaded, Window, TRange> calculate)
+        where TRange : class =>
+        ForRangesAsync(filter, load, (loaded, window, _) => calculate(loaded, window));
+
+    /// <summary>
+    /// As the overload above, with <paramref name="calculate"/> also told whether it is computing the
     /// primary range.
     /// </summary>
     private static async Task<(TRange Primary, TRange? Comparison)> ForRangesAsync<TLoaded, TRange>(
