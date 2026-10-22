@@ -15,8 +15,8 @@ public interface IAlexaService
     /// Process an Alexa request and generate appropriate response
     /// Handles LaunchRequest, IntentRequest, and SessionEndedRequest types
     /// </summary>
-    /// <returns>Alexa response with speech output</returns>
-    Task<AlexaResponse> ProcessRequestAsync(
+    /// <returns>Alexa response with speech output, or null for a session-ended request, which is answered with an empty string</returns>
+    Task<AlexaResponse?> ProcessRequestAsync(
         AlexaRequest request,
         CancellationToken cancellationToken = default
     );
@@ -27,12 +27,6 @@ public interface IAlexaService
     /// <param name="locale">User's locale for localized responses</param>
     /// <returns>Welcome response for the skill</returns>
     Task<AlexaResponse> HandleLaunchRequestAsync(string locale);
-
-    /// <summary>
-    /// Handle session ended request when user exits the skill
-    /// </summary>
-    /// <returns>Empty response to end session</returns>
-    Task<AlexaResponse> HandleSessionEndedRequestAsync();
 
     /// <summary>
     /// Handle intent request with specific user intent and slots

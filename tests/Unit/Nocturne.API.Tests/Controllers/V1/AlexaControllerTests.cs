@@ -131,6 +131,21 @@ public class AlexaControllerTests
             { "default public share", [.. Scope.DefaultPublicShareScopes] },
         };
 
+    [Fact]
+    public async Task HandleAlexaRequest_ServiceAnswersNothing_RespondsWithAnEmptyJsonString()
+    {
+        var request = ValidRequest();
+        GrantLegacy("api:*:read");
+        _mockAlexaService
+            .Setup(x => x.ProcessRequestAsync(request, It.IsAny<CancellationToken>()))
+            .ReturnsAsync((AlexaResponse?)null);
+
+        var result = await _controller.HandleAlexaRequest(request, CancellationToken.None);
+
+        var json = Assert.IsType<JsonResult>(result.Result);
+        Assert.Equal(string.Empty, json.Value);
+    }
+
     [Theory]
     [MemberData(nameof(CredentialsThatReadGlucose))]
     public async Task HandleAlexaRequest_CredentialThatReadsGlucose_ReturnsOk(

@@ -28,8 +28,8 @@ public class AlexaServiceTests
 {
     private static readonly DateTimeOffset Now = new(2026, 1, 1, 12, 0, 0, TimeSpan.Zero);
 
-    private const string UnknownIntentText =
-        "I'm sorry, I didn't understand that request. Please try again.";
+    private const string UnknownIntentText = "I'm sorry, I don't know what you're asking for.";
+    private const string LaunchText = "What would you like to check on Nightscout?";
     private const string UnknownValueText =
         "That value is unknown at the moment. Please see your Nightscout site for more details.";
 
@@ -193,18 +193,26 @@ public class AlexaServiceTests
         await Process(new AlexaIntent { Name = name });
 
     private async Task<AlexaResponse> Process(AlexaIntent intent) =>
-        await _alexaService.ProcessRequestAsync(
-            new AlexaRequest
-            {
-                Request = new AlexaRequestDetails
+        (
+            await _alexaService.ProcessRequestAsync(
+                new AlexaRequest
                 {
-                    Type = "IntentRequest",
-                    Locale = "en-US",
-                    Intent = intent,
+                    Request = new AlexaRequestDetails
+                    {
+                        Type = "IntentRequest",
+                        Locale = "en-US",
+                        Intent = intent,
+                    },
                 },
-            },
-            CancellationToken.None
-        );
+                CancellationToken.None
+            )
+        )!;
+
+    private static void AssertEmptyReprompt(AlexaResponse response)
+    {
+        Assert.Equal("PlainText", response.Response.Reprompt?.OutputSpeech?.Type);
+        Assert.Equal(string.Empty, response.Response.Reprompt?.OutputSpeech?.Text);
+    }
 
     private static string? Speech(AlexaResponse response) => response.Response.OutputSpeech?.Text;
 
@@ -220,13 +228,29 @@ public class AlexaServiceTests
 
         Assert.NotNull(result);
         Assert.Equal("1.0", result.Version);
-        Assert.NotNull(result.Response);
         Assert.False(result.Response.ShouldEndSession);
-        Assert.Contains("Hello", result.Response.OutputSpeech?.Text ?? "");
+        Assert.Equal(LaunchText, result.Response.OutputSpeech?.Text);
+        Assert.Equal("Welcome to Nightscout", result.Response.Card?.Title);
+        Assert.Equal(LaunchText, result.Response.Card?.Content);
+        Assert.Equal(LaunchText, result.Response.Reprompt?.OutputSpeech?.Text);
     }
 
     [Fact]
-    public async Task ProcessRequestAsync_SessionEndedRequest_ReturnsEmptyResponse()
+    public async Task ProcessRequestAsync_IntentRequestWithoutAnIntent_AnswersTheLaunchResponse()
+    {
+        var request = new AlexaRequest
+        {
+            Request = new AlexaRequestDetails { Type = "IntentRequest", Locale = "en-US" },
+        };
+
+        var result = await _alexaService.ProcessRequestAsync(request, CancellationToken.None);
+
+        Assert.Equal(LaunchText, result?.Response.OutputSpeech?.Text);
+        Assert.Equal("Welcome to Nightscout", result?.Response.Card?.Title);
+    }
+
+    [Fact]
+    public async Task ProcessRequestAsync_SessionEndedRequest_AnswersNothing()
     {
         var request = new AlexaRequest
         {
@@ -235,10 +259,7 @@ public class AlexaServiceTests
 
         var result = await _alexaService.ProcessRequestAsync(request, CancellationToken.None);
 
-        Assert.NotNull(result);
-        Assert.Equal("1.0", result.Version);
-        Assert.True(result.Response.ShouldEndSession);
-        Assert.Null(result.Response.OutputSpeech);
+        Assert.Null(result);
     }
 
     [Fact]
@@ -251,6 +272,7 @@ public class AlexaServiceTests
         Assert.Equal("120 and holding as of 5 minutes ago.", Speech(result));
         Assert.Equal("Current BG", result.Response.Card?.Title);
         Assert.True(result.Response.ShouldEndSession);
+        AssertEmptyReprompt(result);
     }
 
     [Theory]
@@ -911,7 +933,7 @@ public class AlexaServiceTests
 
         var result = await _alexaService.ProcessRequestAsync(request, CancellationToken.None);
 
-        Assert.Equal("120 and holding as of 5 minutes ago.", Speech(result));
+        Assert.Equal("120 and holding as of 5 minutes ago.", Speech(result!));
     }
 
     [Fact]
@@ -928,6 +950,7 @@ public class AlexaServiceTests
         );
         Assert.Equal("Full Status", result.Response.Card?.Title);
         Assert.True(result.Response.ShouldEndSession);
+        AssertEmptyReprompt(result);
     }
 
     [Fact]
@@ -1070,7 +1093,10 @@ public class AlexaServiceTests
         Assert.Equal("1.0", result.Version);
         Assert.NotNull(result.Response);
         Assert.True(result.Response.ShouldEndSession);
-        Assert.Contains("I didn't understand", result.Response.OutputSpeech?.Text ?? "");
+        Assert.Equal(UnknownIntentText, result.Response.OutputSpeech?.Text);
+        Assert.Equal("Unknown Intent", result.Response.Card?.Title);
+        Assert.Equal(UnknownIntentText, result.Response.Card?.Content);
+        AssertEmptyReprompt(result);
     }
 
     [Fact]
@@ -1117,18 +1143,19 @@ public class AlexaServiceTests
         Assert.Equal(reprompt, result.Response.Reprompt.OutputSpeech?.Text);
     }
 
-    [Fact]
-    public void BuildSpeechletResponse_WithEndSession_NoReprompt()
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void BuildSpeechletResponse_WithoutRepromptText_SendsAnEmptyReprompt(bool shouldEndSession)
     {
         var result = _alexaService.BuildSpeechletResponse(
             "Test Title",
             "Test output speech",
-            "Test reprompt",
-            true
+            string.Empty,
+            shouldEndSession
         );
 
-        Assert.NotNull(result);
-        Assert.True(result.Response.ShouldEndSession);
-        Assert.Null(result.Response.Reprompt);
+        Assert.Equal(shouldEndSession, result.Response.ShouldEndSession);
+        AssertEmptyReprompt(result);
     }
 }
