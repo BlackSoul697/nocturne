@@ -15,4 +15,9 @@ public interface ILoopAnalysisService
     /// </remarks>
     Task<DailyProfileResponse> GetDailyProfileAsync(
         LoopAnalysisFilter filter, TimeZoneInfo zone, CancellationToken ct = default);
+
+    /// <inheritdoc cref="GetDailyProfileAsync"/>
+    /// <param name="definition">The cohorts and window, already narrowed to the caller.</param>
+    Task<EventResponseReport> GetEventResponseAsync(
+        LoopAnalysisFilter filter, EventResponseDefinition definition, TimeZoneInfo zone, CancellationToken ct = default);
 }

@@ -27,7 +27,7 @@ namespace Nocturne.API.Services.Analytics;
 /// <see cref="NetInsulinAboveSchedule.MaxInferredGapMs"/> past it, so a gap that straddles its end
 /// is bounded by the record that closes it.
 /// </remarks>
-internal sealed class LoopAnalysisService(
+internal sealed partial class LoopAnalysisService(
     ISensorGlucoseRepository glucoseRepository,
     ICanonicalGlucoseService canonicalGlucose,
     IBolusRepository bolusRepository,
@@ -43,7 +43,8 @@ internal sealed class LoopAnalysisService(
     IBasalSeriesBuilder basalSeriesBuilder,
     IBasalSegmentService basalSegmentService,
     IIobCalculator iobCalculator,
-    ICobCalculator cobCalculator
+    ICobCalculator cobCalculator,
+    IDeviceEventRepository deviceEventRepository
 ) : ILoopAnalysisService
 {
     private const long TickMs = DailyProfileCalculator.SlotMinutes * LocalSlotBinning.MinuteMs;
@@ -61,32 +62,40 @@ internal sealed class LoopAnalysisService(
     public async Task<DailyProfileResponse> GetDailyProfileAsync(
         LoopAnalysisFilter filter, TimeZoneInfo zone, CancellationToken ct = default)
     {
+        var (primary, comparison) = await ForRangesAsync(
+            filter,
+            window => LoadAsync(window, zone, ct),
+            (loaded, window) => DailyProfileCalculator.Calculate(
+                loaded.Inputs, Mask(filter, window, zone, loaded.Sources), window.From, window.To));
+        return new DailyProfileResponse { Primary = primary, Comparison = comparison };
+    }
+
+    /// <summary>
+    /// Computes the primary range and the comparison: from one load over both where they touch or
+    /// overlap, else one load each.
+    /// </summary>
+    private static async Task<(TRange Primary, TRange? Comparison)> ForRangesAsync<TLoaded, TRange>(
+        LoopAnalysisFilter filter, Func<Window, Task<TLoaded>> load, Func<TLoaded, Window, TRange> calculate)
+        where TRange : class
+    {
         var primary = Window.Of(filter.From, filter.To);
         var comparison = filter.CompareFrom is { } compareFrom && filter.CompareTo is { } compareTo
             ? Window.Of(compareFrom, compareTo)
             : (Window?)null;
 
-        var response = new DailyProfileResponse();
         if (comparison is { } other && primary.Touches(other))
         {
-            var both = await LoadAsync(primary.Hull(other), zone, ct);
-            response.Primary = Calculate(both, filter, primary);
-            response.Comparison = Calculate(both, filter, other);
-            return response;
+            var both = await load(primary.Hull(other));
+            return (calculate(both, primary), calculate(both, other));
         }
 
-        response.Primary = Calculate(await LoadAsync(primary, zone, ct), filter, primary);
-        if (comparison is { } separate)
-            response.Comparison = Calculate(await LoadAsync(separate, zone, ct), filter, separate);
-        return response;
+        var first = calculate(await load(primary), primary);
+        return (first, comparison is { } separate ? calculate(await load(separate), separate) : null);
     }
 
-    private static DailyProfileRange Calculate(Loaded loaded, LoopAnalysisFilter filter, Window window) =>
-        DailyProfileCalculator.Calculate(
-            loaded.Inputs,
-            LoopAnalysisMask.Build(filter.Masks, window.From, window.To, loaded.Inputs.Zone, loaded.Sources),
-            window.From,
-            window.To);
+    private static LoopAnalysisMask Mask(
+        LoopAnalysisFilter filter, Window window, TimeZoneInfo zone, LoopAnalysisMaskSources sources) =>
+        LoopAnalysisMask.Build(filter.Masks, window.From, window.To, zone, sources);
 
     private sealed record Loaded(DailyProfileInputs Inputs, LoopAnalysisMaskSources Sources);
 

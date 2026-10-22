@@ -101,6 +101,17 @@ public enum LoopAnalysisSeries
     /// <summary>The summary's net loop correction per day and share of total insulin.</summary>
     NetLoopCorrectionSummary,
     DeliveredToScheduledRatio,
+
+    /// <summary>The Meals &amp; events glucose series and figures.</summary>
+    EventGlucose,
+
+    /// <summary>The Meals &amp; events net loop correction, net insulin above schedule and insulin figures.</summary>
+    EventNetInsulin,
+    EventIob,
+    EventCob,
+
+    /// <summary>The Meals &amp; events list of events, which places each meal, bolus and start in time.</summary>
+    EventList,
 }
 
 /// <summary>

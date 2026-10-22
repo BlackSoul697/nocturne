@@ -1,0 +1,265 @@
+using System.Text.Json.Serialization;
+
+namespace Nocturne.Core.Models.LoopAnalysis;
+
+/// <summary>What an event-aligned response curve is aligned on.</summary>
+[JsonConverter(typeof(JsonStringEnumConverter<EventAnchorKind>))]
+public enum EventAnchorKind
+{
+    /// <summary>A carb entry; entries at the same instant are one meal.</summary>
+    Meal,
+
+    /// <summary>A manual bolus with no carb entry within 30 minutes either side.</summary>
+    CorrectionBolus,
+
+    /// <summary>A CGM sensor start or change.</summary>
+    SensorStart,
+
+    ExerciseStart,
+    OverrideStart,
+    TemporaryTargetStart,
+
+    /// <summary>
+    /// A meal-like glucose rise with no carb entry near it, for a loop run without announcing meals;
+    /// see <c>UnannouncedRises</c>.
+    /// </summary>
+    UnannouncedRise,
+}
+
+/// <summary>One cohort of events: an anchor kind, narrowed by time of day and, for meals, by size.</summary>
+public class EventCohortDefinition
+{
+    /// <summary>The cohort's number, 1 to 3, as its query parameters are suffixed.</summary>
+    public int Cohort { get; set; }
+
+    public EventAnchorKind Anchor { get; set; }
+
+    /// <summary>
+    /// Start of the local time-of-day window the anchor must fall in, in minutes after midnight;
+    /// with <see cref="ToMinute"/> before it, the window wraps past midnight. Null for all day.
+    /// </summary>
+    public int? FromMinute { get; set; }
+
+    /// <summary>End of the window, exclusive.</summary>
+    public int? ToMinute { get; set; }
+
+    /// <summary>Smallest meal, g, inclusive; meals only.</summary>
+    public double? MinGrams { get; set; }
+
+    /// <summary>Largest meal, g, inclusive; meals only.</summary>
+    public double? MaxGrams { get; set; }
+}
+
+/// <summary>The cohorts and window an event response was computed for.</summary>
+public class EventResponseDefinition
+{
+    public const int SlotMinutes = 5;
+    public const int DefaultMinutesBefore = 60;
+    public const int MaxMinutesBefore = 120;
+    public const int DefaultMinutesAfter = 300;
+    public const int MinMinutesAfter = 60;
+    public const int MaxMinutesAfter = 480;
+    public const int MaxCohorts = 3;
+
+    public List<EventCohortDefinition> Cohorts { get; set; } = [];
+
+    /// <summary>Minutes of the window before the anchor, a multiple of <see cref="SlotMinutes"/>.</summary>
+    public int MinutesBefore { get; set; } = DefaultMinutesBefore;
+
+    /// <summary>Minutes of the window after the anchor, a multiple of <see cref="SlotMinutes"/>.</summary>
+    public int MinutesAfter { get; set; } = DefaultMinutesAfter;
+
+    /// <summary>
+    /// Drop an event when another meal or correction bolus falls inside its window, so its curve is
+    /// its own.
+    /// </summary>
+    public bool IsolatedOnly { get; set; }
+
+    /// <summary>
+    /// Count an unannounced rise only where the loop answered it with automatic boluses; see
+    /// <c>UnannouncedRises.ClusterUnits</c>.
+    /// </summary>
+    public bool RequireBolusCluster { get; set; }
+
+    [JsonIgnore]
+    public int SlotCount => (MinutesBefore + MinutesAfter) / SlotMinutes;
+}
+
+/// <summary>An anchor kind the caller's scopes do not let it ask for, and the scope it would need.</summary>
+public class EventUnavailableAnchor
+{
+    public EventAnchorKind Anchor { get; set; }
+
+    public string RequiredScope { get; set; } = "";
+}
+
+/// <summary>The Meals &amp; events tab: each cohort's response curves, for the primary range and a comparison.</summary>
+public class EventResponseReport : LoopAnalysisResponse
+{
+    /// <summary>The cohorts and window as applied, after the defaults and the caller's scopes.</summary>
+    public EventResponseDefinition Definition { get; set; } = new();
+
+    /// <summary>Anchor kinds the caller cannot ask for; a cohort that asks for one is dropped.</summary>
+    public List<EventUnavailableAnchor> UnavailableAnchors { get; set; } = [];
+
+    public EventResponseRange Primary { get; set; } = new();
+
+    public EventResponseRange? Comparison { get; set; }
+}
+
+public class EventResponseRange
+{
+    public DateTime From { get; set; }
+
+    public DateTime To { get; set; }
+
+    /// <summary>One result per cohort of <see cref="EventResponseReport.Definition"/>, in its order.</summary>
+    public List<EventCohortResult> Cohorts { get; set; } = [];
+
+    /// <summary>Every event counted in some cohort, oldest first; each appears once.</summary>
+    public List<EventResponseEvent> Events { get; set; } = [];
+}
+
+public class EventCohortResult
+{
+    public int Cohort { get; set; }
+
+    /// <summary>Anchors of the cohort's kind and filters in the range's analysed time.</summary>
+    public int Anchors { get; set; }
+
+    /// <summary>Anchors dropped because another meal or correction bolus fell inside the window.</summary>
+    public int NotIsolated { get; set; }
+
+    /// <summary>Anchors dropped for want of a glucose reading within 5 minutes of the anchor.</summary>
+    public int MissingAnchorGlucose { get; set; }
+
+    /// <summary>Anchors counted: the events behind every slot and metric.</summary>
+    public int Events { get; set; }
+
+    /// <summary>
+    /// The window in <see cref="EventResponseDefinition.SlotMinutes"/>-minute slots from the
+    /// anchor's exact time, earliest first.
+    /// </summary>
+    public List<EventResponseSlot> Slots { get; set; } = [];
+
+    public EventMetricsSummary Metrics { get; set; } = new();
+}
+
+/// <summary>
+/// One relative slot of a cohort, each series spread across the cohort's events: n is events.
+/// </summary>
+public class EventResponseSlot
+{
+    public int Slot { get; set; }
+
+    /// <summary>Minutes from the anchor to the slot's start; negative before it.</summary>
+    public int Minute { get; set; }
+
+    /// <summary>mg/dL, the slot's mean reading minus the anchor glucose.</summary>
+    public LoopAnalysisAggregate? GlucoseChange { get; set; }
+
+    /// <summary>mg/dL.</summary>
+    public LoopAnalysisAggregate? Glucose { get; set; }
+
+    /// <summary>U/h, the algorithm's temp delta plus its automatic boluses over the slot.</summary>
+    public LoopAnalysisAggregate? NetLoopCorrection { get; set; }
+
+    /// <summary>U, net insulin above schedule from the anchor to the slot's end; absent before the anchor.</summary>
+    public LoopAnalysisAggregate? NetInsulinSinceAnchor { get; set; }
+
+    /// <summary>U, as <see cref="NetInsulinSinceAnchor"/> for the algorithm's components alone.</summary>
+    public LoopAnalysisAggregate? NetLoopCorrectionSinceAnchor { get; set; }
+
+    /// <summary>U.</summary>
+    public LoopAnalysisAggregate? Iob { get; set; }
+
+    /// <summary>g.</summary>
+    public LoopAnalysisAggregate? Cob { get; set; }
+}
+
+/// <summary>One event, for the event list.</summary>
+public class EventResponseEvent
+{
+    public DateTime At { get; set; }
+
+    /// <summary>The local date, yyyy-MM-dd, as Day in Review's <c>date</c> parameter reads it.</summary>
+    public string Date { get; set; } = "";
+
+    /// <summary>The local time, HH:mm, as Day in Review's <c>time</c> parameter reads it.</summary>
+    public string Time { get; set; } = "";
+
+    public EventAnchorKind Anchor { get; set; }
+
+    /// <summary>g, for a meal.</summary>
+    public double? Grams { get; set; }
+
+    /// <summary>The cohorts that counted it.</summary>
+    public List<int> Cohorts { get; set; } = [];
+
+    public EventMetrics Metrics { get; set; } = new();
+}
+
+/// <summary>
+/// What one event did. Each figure is null where the data to observe it is missing; glucose
+/// figures are mg/dL, insulin figures U.
+/// </summary>
+public class EventMetrics
+{
+    /// <summary>The reading nearest the anchor, within 5 minutes.</summary>
+    public double? StartGlucose { get; set; }
+
+    /// <summary>The highest reading after the anchor minus <see cref="StartGlucose"/>; negative if glucose only fell.</summary>
+    public double? PeakRise { get; set; }
+
+    public double? MinutesToPeak { get; set; }
+
+    /// <summary>The reading nearest two hours after the anchor, within 5 minutes.</summary>
+    public double? GlucoseAt2Hours { get; set; }
+
+    public double? GlucoseAt4Hours { get; set; }
+
+    /// <summary>
+    /// Minutes from the anchor until glucose came back within 20 mg/dL of the start after its
+    /// furthest excursion; 0 if it never left that band, null if it had not come back by the window's end.
+    /// </summary>
+    public double? MinutesBackToStart { get; set; }
+
+    /// <summary>Delivered basal and every bolus over the whole window.</summary>
+    public double? TotalInsulin { get; set; }
+
+    /// <summary>Net insulin above schedule over the whole window.</summary>
+    public double? NetInsulin { get; set; }
+
+    public double? IobAtAnchor { get; set; }
+
+    public double? IobAtEnd { get; set; }
+
+    /// <summary>A meal's grams over the net insulin above schedule in the window; null where that was not positive.</summary>
+    public double? GramsPerUnit { get; set; }
+
+    /// <summary>Net insulin above schedule in the first 30 minutes after the anchor.</summary>
+    public double? NetInsulinFirst30 { get; set; }
+
+    public double? NetInsulinFirst60 { get; set; }
+
+    public double? NetInsulinFirst120 { get; set; }
+}
+
+/// <summary>Each <see cref="EventMetrics"/> figure spread across a cohort's events.</summary>
+public class EventMetricsSummary
+{
+    public LoopAnalysisAggregate? StartGlucose { get; set; }
+    public LoopAnalysisAggregate? PeakRise { get; set; }
+    public LoopAnalysisAggregate? MinutesToPeak { get; set; }
+    public LoopAnalysisAggregate? GlucoseAt2Hours { get; set; }
+    public LoopAnalysisAggregate? GlucoseAt4Hours { get; set; }
+    public LoopAnalysisAggregate? MinutesBackToStart { get; set; }
+    public LoopAnalysisAggregate? TotalInsulin { get; set; }
+    public LoopAnalysisAggregate? NetInsulin { get; set; }
+    public LoopAnalysisAggregate? IobAtAnchor { get; set; }
+    public LoopAnalysisAggregate? IobAtEnd { get; set; }
+    public LoopAnalysisAggregate? GramsPerUnit { get; set; }
+    public LoopAnalysisAggregate? NetInsulinFirst30 { get; set; }
+    public LoopAnalysisAggregate? NetInsulinFirst60 { get; set; }
+    public LoopAnalysisAggregate? NetInsulinFirst120 { get; set; }
+}

@@ -413,7 +413,7 @@ internal static class StatisticsReadScopeGuard
 /// <para>The response is built per request and never cached server-side, so it is narrowed in place.</para>
 /// </remarks>
 /// <seealso cref="AnalyticsReadScopes"/>
-internal static class LoopAnalysisReadScopeGuard
+internal static partial class LoopAnalysisReadScopeGuard
 {
     public const string AdmissionScope = Scope.ReportsRead;
 
