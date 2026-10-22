@@ -348,6 +348,27 @@ public class EventResponseCalculatorTests
     }
 
     [Fact]
+    public void AFastUnloggedSnackBesideALoggedMeal_TakesTheMealsGramsPerUnit()
+    {
+        // Lunch is bolused well and does not climb; an unlogged snack 90 minutes later climbs at
+        // 4.5 mg/dL a minute, inside lunch's window.
+        var lunch = Local(2024, 6, 11, 12, 0);
+        var snack = lunch + 90 * Minute;
+        double Shape(long t) => t <= snack ? 110 : Math.Min(240, 110 + 4.5 * (t - snack) / Minute);
+
+        var range = Calculate(
+            [Cohort(1)],
+            glucose: Readings(From, To, Shape),
+            carbs: [new(lunch, 60)],
+            doses: [new(lunch, 4, false)],
+            delivered: [new(From - Day, To + Day, 1.0, BasalDeliveryOrigin.Algorithm)],
+            scheduled: [new(From - Day, To + Day, 1.0)]);
+
+        range.Cohorts.Single().GramsPerUnitNotIsolated.Should().Be(1);
+        range.Events.Single().Metrics.GramsPerUnit.Should().BeNull();
+    }
+
+    [Fact]
     public void ATwoStepMeal_KeepsItsGramsPerUnit()
     {
         // Lunch climbs, plateaus for an hour, then climbs again as its fat and protein absorb.

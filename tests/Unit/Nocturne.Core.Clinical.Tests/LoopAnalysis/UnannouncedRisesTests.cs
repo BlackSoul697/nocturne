@@ -323,6 +323,7 @@ public class UnannouncedRisesTests
     [Theory]
     [InlineData(new double[] { 135 })]
     [InlineData(new double[] { 110, 135 })]
+    [InlineData(new double[] { 100, 118, 135 })]
     public void AShallowFalseLowSteppingBack_IsNotARise(double[] steps)
     {
         // Steady at 135, a false low at 85 for 40 minutes, then back in one or two readings.
@@ -334,5 +335,32 @@ public class UnannouncedRisesTests
         });
 
         Find(glucose).Should().BeEmpty();
+    }
+
+    [Theory]
+    [InlineData(4.0, 5)]
+    [InlineData(4.5, 5)]
+    [InlineData(4.0, 1)]
+    [InlineData(4.5, 1)]
+    public void AFastMeal_IsFound(double rate, int step)
+    {
+        var glucose = Trace(-120, 120, m => m <= 0 ? 110 : Math.Min(250, 110 + rate * m), step);
+
+        Find(glucose).Should().ContainSingle().Which.Mills.Should().BeInRange(T0, At(5));
+    }
+
+    [Fact]
+    public void AMealAfterACorrectionBroughtGlucoseDownGradually_IsFound()
+    {
+        // From 180 down to 110 at 2 mg/dL a minute, resting there an hour, then a meal.
+        var glucose = Trace(-180, 120, m => m switch
+        {
+            < -130 => 180,
+            < -95 => 180 - 2 * (m + 130),
+            <= 0 => 110,
+            _ => Math.Min(220, 110 + 3 * m),
+        });
+
+        Find(glucose).Should().ContainSingle().Which.Mills.Should().Be(T0);
     }
 }

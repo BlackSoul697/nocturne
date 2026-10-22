@@ -38,12 +38,12 @@ public sealed record RiseSearch(List<EventAnchor> Anchors, List<long> Climbs);
 /// </para>
 /// <para>
 /// Readings under a <c>DataExclusion</c> span are dropped before the search, and a stretch or climb
-/// is not read across a gap of more than <see cref="MaxGapMs"/>. A sensor's step is told from glucose
-/// by its speed: a climb faster than <see cref="MaxRiseRateMgdlPerMinute"/> over
-/// <see cref="RateSpanMs"/>, or one that reaches <see cref="RiseMgdl"/> within
-/// <see cref="MinimumClimbMs"/> of its anchor, is not physiological. A compression low that is not
-/// excluded can still pass where its recovery is slower than that and the low sits at or above
-/// <see cref="MinimumFloorMgdl"/>; excluding it is what keeps it out.
+/// is not read across a gap of more than <see cref="MaxGapMs"/>. A climb faster than
+/// <see cref="MaxRiseRateMgdlPerMinute"/> over <see cref="RateSpanMs"/>, or with one reading
+/// <see cref="StepMgdl"/> above the one before (<see cref="StepMs"/>), is not physiological. A
+/// compression low is told by its shape, a sudden drop from a level the climb then returns to
+/// (<see cref="IsCompressionRecovery"/>), so one that is not excluded still qualifies only where
+/// glucose came down to it gradually.
 /// </para>
 /// </remarks>
 public static class UnannouncedRises
@@ -132,11 +132,39 @@ public static class UnannouncedRises
     public const long CarbAttributionMs = LocalSlotBinning.HourMs;
 
     /// <summary>
-    /// How long a climb must take to reach <see cref="RiseMgdl"/> from its anchor: longer than ten
-    /// minutes. A sensor stepping back from a false low gets there in one or two readings; carbs
-    /// absorb at no more than 3 to 4 mg/dL a minute, so they take longer.
+    /// The most glucose may climb between two readings at most <see cref="StepMs"/> apart. Carbs at
+    /// their fastest, about 4.5 mg/dL a minute, add 22 in five minutes, and a CGM's noise a further 10
+    /// or so; 30 is a sensor stepping back from a false low.
     /// </summary>
-    public const long MinimumClimbMs = 10 * LocalSlotBinning.MinuteMs;
+    public const double StepMgdl = 30;
+
+    /// <summary>The longest interval <see cref="StepMgdl"/> is read over: one five-minute reading.</summary>
+    public const long StepMs = 5 * LocalSlotBinning.MinuteMs;
+
+    /// <summary>
+    /// How far above the floor the level before a sudden drop must be for the floor to read as a
+    /// compression low rather than glucose: well past the <see cref="StableRangeMgdl"/> a resting
+    /// level moves within, and as far as a pressed sensor commonly reads low.
+    /// </summary>
+    public const double CompressionDropMgdl = 30;
+
+    /// <summary>
+    /// The fastest glucose falls in fact, mg/dL a minute: a correction or exercise brings it down at
+    /// 1 to 2. A sensor pressed on reads low within one or two readings, far faster.
+    /// </summary>
+    public const double CompressionDropRateMgdlPerMinute = 3;
+
+    /// <summary>
+    /// How long before the floor's stretch began the level it dropped from is looked for: three
+    /// readings, enough to see a drop over one or two.
+    /// </summary>
+    public const long CompressionLookbackMs = 15 * LocalSlotBinning.MinuteMs;
+
+    /// <summary>
+    /// How near the level it dropped from a climb must come back to read as the sensor recovering
+    /// rather than a meal: within the <see cref="StableRangeMgdl"/> glucose rests within.
+    /// </summary>
+    public const double CompressionReturnMgdl = StableRangeMgdl;
 
     /// <summary>
     /// How long after one climb's anchor another is taken to be the same intake: a meal that stalls
@@ -197,7 +225,8 @@ public static class UnannouncedRises
                 stableStart++;
             if (StableFloor(readings, stableStart, i) is not { } floor
                 || Math.Abs(readings[i].Mgdl - floor) > FloorToleranceMgdl
-                || ClimbFrom(readings, i, floor) is not { } anchor)
+                || ClimbFrom(readings, i, floor) is not { } anchor
+                || IsCompressionRecovery(readings, stableStart, anchor, floor))
                 continue;
 
             var at = readings[anchor].Mills;
@@ -272,6 +301,7 @@ public static class UnannouncedRises
         {
             if (readings[j].Mills - readings[j - 1].Mills > MaxGapMs
                 || TooFast(readings, j)
+                || (readings[j].Mills - readings[j - 1].Mills <= StepMs && readings[j].Mgdl - readings[j - 1].Mgdl >= StepMgdl)
                 || readings[j].Mgdl < floor - StableRangeMgdl)
                 return null;
             if (readings[j].Mgdl <= floor + FloorToleranceMgdl)
@@ -284,9 +314,46 @@ public static class UnannouncedRises
             if (readings[j].Mills - readings[anchor].Mills > RiseWindowMs)
                 return null;
             if (readings[j].Mgdl - floor >= RiseMgdl)
-                return readings[j].Mills - readings[anchor].Mills > MinimumClimbMs ? anchor : null;
+                return anchor;
         }
         return null;
+    }
+
+    /// <summary>
+    /// Whether the floor is a compression low and the climb from <paramref name="anchor"/> its
+    /// recovery: glucose dropped onto the floor's plateau at least <see cref="CompressionDropMgdl"/>
+    /// at <see cref="CompressionDropRateMgdlPerMinute"/> or faster, from a level seen within
+    /// <see cref="CompressionLookbackMs"/> before the plateau began, and the climb comes back within
+    /// <see cref="CompressionReturnMgdl"/> of that level within <see cref="RiseWindowMs"/>.
+    /// </summary>
+    /// <param name="stableStart">The first reading of the stretch the floor was read from.</param>
+    private static bool IsCompressionRecovery(GlucoseSample[] readings, int stableStart, int anchor, double floor)
+    {
+        var plateau = stableStart;
+        while (plateau > 0
+            && readings[plateau].Mills - readings[plateau - 1].Mills <= MaxGapMs
+            && Math.Abs(readings[plateau - 1].Mgdl - floor) <= StableRangeMgdl)
+            plateau--;
+
+        GlucoseSample? before = null;
+        for (var k = plateau - 1; k >= 0 && readings[k].Mills >= readings[plateau].Mills - CompressionLookbackMs; k--)
+        {
+            if (before is null || readings[k].Mgdl > before.Value.Mgdl)
+                before = readings[k];
+        }
+        if (before is not { } level || level.Mgdl - floor < CompressionDropMgdl)
+            return false;
+
+        var minutes = (readings[plateau].Mills - level.Mills) / (double)LocalSlotBinning.MinuteMs;
+        if ((level.Mgdl - readings[plateau].Mgdl) / minutes < CompressionDropRateMgdlPerMinute)
+            return false;
+
+        for (var j = anchor + 1; j < readings.Length && readings[j].Mills <= readings[anchor].Mills + RiseWindowMs; j++)
+        {
+            if (readings[j].Mgdl >= level.Mgdl - CompressionReturnMgdl)
+                return true;
+        }
+        return false;
     }
 
     /// <summary>
