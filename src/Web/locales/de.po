@@ -3575,8 +3575,6 @@ msgstr "Letzte 24 Stunden"
 #: src/lib/components/dashboard/glucose-chart/ChartTooltip.svelte
 #: src/lib/components/dashboard/widgets/TddWidget.svelte
 #: src/lib/components/icons/TreatmentTypeIcon.svelte
-#: src/lib/components/reports/InsulinDeliveryChart.svelte
-#: src/lib/components/reports/InsulinDonutChart.svelte
 #: src/lib/components/reports/year-overview/YearHeatmap.svelte
 #: src/lib/components/treatments/TreatmentEditDialog.svelte
 #: src/lib/components/treatments/TreatmentsDataTable.svelte
@@ -5708,10 +5706,8 @@ msgstr "Daten werden geladen..."
 msgid "Basal (U)"
 msgstr "Basal (U)"
 
-#: src/lib/components/reports/BasalBolusRatioChart.svelte
-#: src/lib/components/reports/BasalBolusRatioChart.svelte
-msgid "Bolus (U)"
-msgstr "Bolus (U)"
+#~ msgid "Bolus (U)"
+#~ msgstr "Bolus (U)"
 
 #: src/lib/components/reports/BasalBolusRatioChart.svelte
 msgid "No insulin data available"
@@ -11355,10 +11351,8 @@ msgstr "Bericht zur Insulinabgabe <0/>"
 msgid "Treatment Log"
 msgstr "Behandlungsprotokoll"
 
-#. 0: formatNumber(insulinStats.bolusCount); 1: formatNumericDate(startDate); 2: formatNumericDate(endDate)
-#: src/routes/(authenticated)/reports/insulin-delivery/+page.svelte
-msgid "Report generated from {0} boluses between {1} and {2}"
-msgstr "Bericht erstellt aus {0} Boli zwischen {1} und {2}"
+#~ msgid "Report generated from {0} boluses between {1} and {2}"
+#~ msgstr "Bericht erstellt aus {0} Boli zwischen {1} und {2}"
 
 #: src/routes/(authenticated)/reports/battery/+page.svelte
 msgid "Error Loading Battery Report"
@@ -11917,9 +11911,8 @@ msgstr "Deine <0>tägliche Gesamtdosis (TDD)</0> verteilt sich auf zwei Insulint
 msgid "<0>Basal insulin:</0> Continuous background insulin that covers your body's baseline needs"
 msgstr "<0>Basalinsulin:</0> Kontinuierliches Hintergrundinsulin, das den Grundbedarf deines Körpers abdeckt"
 
-#: src/routes/(authenticated)/reports/insulin-delivery/+page.svelte
-msgid "<0>Bolus insulin:</0> Insulin taken for meals and to correct high glucose"
-msgstr "<0>Bolusinsulin:</0> Insulin für Mahlzeiten und zur Korrektur hoher Glukosewerte"
+#~ msgid "<0>Bolus insulin:</0> Insulin taken for meals and to correct high glucose"
+#~ msgstr "<0>Bolusinsulin:</0> Insulin für Mahlzeiten und zur Korrektur hoher Glukosewerte"
 
 #~ msgid "units/day"
 #~ msgstr "Einheiten/Tag"
@@ -11958,9 +11951,8 @@ msgstr "Sieh, wie dein Insulin jeden Tag aufgeteilt wurde"
 msgid "<0/> Hourly Insulin Delivery"
 msgstr "<0/> Stündliche Insulinabgabe"
 
-#: src/routes/(authenticated)/reports/insulin-delivery/+page.svelte
-msgid "Average insulin delivered by hour of day, split by basal and bolus"
-msgstr "Durchschnittliche Insulinabgabe pro Stunde des Tages, aufgeteilt nach Basal und Bolus"
+#~ msgid "Average insulin delivered by hour of day, split by basal and bolus"
+#~ msgstr "Durchschnittliche Insulinabgabe pro Stunde des Tages, aufgeteilt nach Basal und Bolus"
 
 #: src/routes/(authenticated)/reports/insulin-delivery/+page.svelte
 msgid "<0/> Bolus Breakdown"
@@ -11985,8 +11977,8 @@ msgstr "Über {0} Tage"
 msgid "Meal Boluses"
 msgstr "Mahlzeiten-Boli"
 
-#. 0: (insulinStats.bolusCount ?? 0) > 0 ? ( ((insulinStats.mealBoluses ?? 0) / (insulinStats.bolusCount ?? 1)) * 100 ).toFixed(0) \\: 0
-#. 0: (insulinStats.bolusCount ?? 0) > 0 ? ( ((insulinStats.correctionBoluses ?? 0) / (insulinStats.bolusCount ?? 1)) * 100 ).toFixed(0) \\: 0
+#. 0: (insulinStats.manualBolusCount ?? 0) > 0 ? ( ((insulinStats.mealBoluses ?? 0) / (insulinStats.manualBolusCount ?? 1)) * 100 ).toFixed(0) \\: 0
+#. 0: (insulinStats.manualBolusCount ?? 0) > 0 ? ( ((insulinStats.correctionBoluses ?? 0) / (insulinStats.manualBolusCount ?? 1)) * 100 ).toFixed(0) \\: 0
 #: src/routes/(authenticated)/reports/insulin-delivery/+page.svelte
 #: src/routes/(authenticated)/reports/insulin-delivery/+page.svelte
 msgid "{0}% of boluses"
@@ -23757,6 +23749,8 @@ msgstr ""
 msgid "Remove element"
 msgstr ""
 
+#: src/lib/components/reports/InsulinDeliveryChart.svelte
+#: src/lib/components/reports/InsulinDonutChart.svelte
 #: src/lib/components/status-pills/LoopPill.svelte
 msgid "Automatic Bolus"
 msgstr ""
@@ -23825,10 +23819,8 @@ msgstr ""
 msgid "Points beyond the axes are drawn at the edge."
 msgstr ""
 
-#. 0: totalBolus.toFixed(1)
-#: src/lib/components/reports/InsulinDonutChart.svelte
-msgid "Bolus {0}U"
-msgstr ""
+#~ msgid "Bolus {0}U"
+#~ msgstr ""
 
 #. 0: scheduledBasal.toFixed(1)
 #: src/lib/components/reports/InsulinDonutChart.svelte
@@ -27615,4 +27607,47 @@ msgstr ""
 
 #: src/routes/(unauthenticated)/auth/recovery/LockedOutMembers.svelte
 msgid "Copy recovery link"
+msgstr ""
+
+#: src/lib/components/reports/BasalBolusRatioChart.svelte
+#: src/lib/components/reports/BasalBolusRatioChart.svelte
+msgid "Manual bolus (U)"
+msgstr ""
+
+#: src/lib/components/reports/BasalBolusRatioChart.svelte
+#: src/lib/components/reports/BasalBolusRatioChart.svelte
+msgid "Automatic bolus (U)"
+msgstr ""
+
+#: src/lib/components/reports/InsulinDeliveryChart.svelte
+#: src/lib/components/reports/InsulinDonutChart.svelte
+msgid "Manual Bolus"
+msgstr ""
+
+#. 0: manualBolus.toFixed(1)
+#: src/lib/components/reports/InsulinDonutChart.svelte
+msgid "Manual bolus {0}U"
+msgstr ""
+
+#. 0: automaticBolus.toFixed(1)
+#: src/lib/components/reports/InsulinDonutChart.svelte
+msgid "Automatic bolus {0}U"
+msgstr ""
+
+#. 0: (insulinStats?.manualBolus ?? 0).toFixed(1); 1: (insulinStats?.automaticBolus ?? 0).toFixed(1)
+#: src/routes/(authenticated)/reports/idp/+page.svelte
+msgid "Bolus total: manual {0} U / automatic {1} U"
+msgstr ""
+
+#: src/routes/(authenticated)/reports/insulin-delivery/+page.svelte
+msgid "<0>Bolus insulin:</0> Insulin taken for meals and to correct high glucose, plus automatic boluses delivered by a loop"
+msgstr ""
+
+#: src/routes/(authenticated)/reports/insulin-delivery/+page.svelte
+msgid "Average insulin delivered by hour of day, split by basal, manual bolus and automatic bolus"
+msgstr ""
+
+#. 0: formatNumber(insulinStats.manualBolusCount); 1: formatNumericDate(startDate); 2: formatNumericDate(endDate)
+#: src/routes/(authenticated)/reports/insulin-delivery/+page.svelte
+msgid "Report generated from {0} manual boluses between {1} and {2}"
 msgstr ""
