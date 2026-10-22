@@ -162,6 +162,20 @@ public class LoopHealthCalculatorTests
     }
 
     [Fact]
+    public void ATempRecordedAfterTheNextCycleRan_IsJudgedByTheCycleAtItsRate()
+    {
+        var from = Day0;
+        var to = Day0 + Hour;
+        var result = Calculate(from, to,
+            [Cycle(from, rate: 2.4, limitReason: Capped), Cycle(from + 5 * Minute, rate: 1.0)],
+            [new(from + 4 * Minute, from + 5 * Minute + 30 * 1000, 2.4, BasalDeliveryOrigin.Algorithm),
+             new(from + 5 * Minute + 30 * 1000, to, 1.0, BasalDeliveryOrigin.Algorithm)]);
+
+        result.MaxBasal!.CapKnown.Percent.Should().Be(100);
+        result.MaxBasal.AtCap.Percent.Should().Be(SlotSummary.Round(150.0 / 56));
+    }
+
+    [Fact]
     public void ATempWhoseSetterIsMissing_IsNotJudgedByAnOlderCycleAtTheSameRate()
     {
         var from = Day0;

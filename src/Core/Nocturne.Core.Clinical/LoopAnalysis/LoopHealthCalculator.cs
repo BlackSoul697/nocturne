@@ -297,11 +297,12 @@ public static class LoopHealthCalculator
 
     /// <summary>
     /// Whether a temp of <paramref name="rate"/> that began at <paramref name="tempStart"/> was at
-    /// its cap; null where the cap is unknown. An oref temp is judged by the cycle that set it: the
-    /// enacted cycle nearest its start within <see cref="SetterWindowMs"/>, whose rate is within
-    /// <see cref="PumpStepUph"/> of the delivered one. With no such cycle the cap is unknown: an
-    /// older cycle that set the same rate set a different temp, and its reason says nothing of this
-    /// one.
+    /// its cap; null where the cap is unknown. An oref temp is judged by the cycle that set it: of
+    /// the enacted cycles within <see cref="SetterWindowMs"/> of its start whose rate is within
+    /// <see cref="PumpStepUph"/> of the delivered one, the nearest. The rate decides before the
+    /// time does: the record is often stamped after the next cycle has run and enacted another
+    /// rate. With no such cycle the cap is unknown: an older cycle that set the same rate set a
+    /// different temp, and its reason says nothing of this one.
     /// </summary>
     private static bool? AtCap(
         long tempStart,
@@ -327,13 +328,12 @@ public static class LoopHealthCalculator
              i < enacted.Count && enacted[i].Mills <= tempStart + SetterWindowMs;
              i++)
         {
-            if (setter is null || Math.Abs(enacted[i].Mills - tempStart) < Math.Abs(setter.Mills - tempStart))
+            if (Math.Abs(enacted[i].EnactedRate!.Value - rate) <= PumpStepUph
+                && (setter is null || Math.Abs(enacted[i].Mills - tempStart) < Math.Abs(setter.Mills - tempStart)))
                 setter = enacted[i];
         }
 
-        return setter is { HasReason: true } && Math.Abs(setter.EnactedRate!.Value - rate) <= PumpStepUph
-            ? OrefReason.Parse(setter.LimitReason).CappedAtMaxSafeBasal
-            : null;
+        return setter is { HasReason: true } ? OrefReason.Parse(setter.LimitReason).CappedAtMaxSafeBasal : null;
     }
 
     /// <summary>
