@@ -7,6 +7,7 @@ using Nocturne.API.Extensions;
 using Nocturne.API.Services.Auth;
 using Nocturne.API.Services.Devices;
 using Nocturne.API.Services.Glucose;
+using Nocturne.Core.Constants;
 using Nocturne.Core.Contracts.Glucose;
 using Nocturne.Core.Contracts.Multitenancy;
 using Nocturne.Core.Contracts.Treatments;
@@ -205,7 +206,7 @@ public class PebbleController : ControllerBase
     {
         if (useMmol)
         {
-            return (mgdl / 18.0).ToString("F1");
+            return (mgdl / GlucoseConstants.MgdlPerMmol).ToString("F1");
         }
         return mgdl.ToString("F0");
     }

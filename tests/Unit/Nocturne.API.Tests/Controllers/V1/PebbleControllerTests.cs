@@ -223,4 +223,24 @@ public class PebbleControllerTests
 
         bg.GetProperty("bgdelta").GetString().Should().Be("0.0");
     }
+
+    [Fact]
+    public async Task SgvInMmol_RoundsAtTheBoundaryWithTheCoreFactor()
+    {
+        var controller = NewController("mmol", Sgv(100, 0));
+
+        var bg = FirstBg(await Get(controller));
+
+        bg.GetProperty("sgv").GetString().Should().Be("5.5");
+    }
+
+    [Fact]
+    public async Task BgdeltaInMmol_RoundsAtTheBoundaryWithTheCoreFactor()
+    {
+        var controller = NewController("mmol", Sgv(209, 0), Sgv(100, 5));
+
+        var bg = FirstBg(await Get(controller));
+
+        bg.GetProperty("bgdelta").GetString().Should().Be("6.0");
+    }
 }
