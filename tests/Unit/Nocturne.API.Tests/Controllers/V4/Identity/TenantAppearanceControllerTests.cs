@@ -9,23 +9,31 @@ using Nocturne.API.Controllers.V4.Identity;
 using Nocturne.API.Extensions;
 using Nocturne.API.Services.Auth;
 using Nocturne.Core.Contracts.Multitenancy;
+using Nocturne.Core.Models.Authorization;
 using Nocturne.Core.Models.Configuration;
 using Xunit;
 
 namespace Nocturne.API.Tests.Controllers.V4.Identity;
 
 /// <summary>
-/// The share appearance endpoint is reachable without credentials, so two things have to hold:
-/// it answers only on a share host, and what it answers with is presentation, never identity.
+/// The tenant appearance endpoint is reachable without credentials, so two things have to hold:
+/// it answers only a share or a guest, and what it answers with is presentation, never identity.
 /// </summary>
-public sealed class ShareAppearanceControllerTests
+public sealed class TenantAppearanceControllerTests
 {
     // The narrow interface, not IShareLinkService: mocking the wide one would still compile if
     // the controller took a dependency that can hand out the share token, which is the thing this
     // seam exists to prevent.
-    private readonly Mock<IShareAppearanceReader> _service = new();
+    private readonly Mock<ITenantAppearanceReader> _service = new();
 
-    private ShareAppearanceController BuildController(bool onShareHost)
+    public TenantAppearanceControllerTests()
+    {
+        _service
+            .Setup(s => s.GetTenantAppearanceAsync(It.IsAny<Guid>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new UserDisplayPreferences { GlucoseUnits = "mmol", TimeFormat = "24" });
+    }
+
+    private TenantAppearanceController BuildController(bool onShareHost = false, AuthContext? auth = null)
     {
         var tenantAccessor = new Mock<ITenantAccessor>();
         tenantAccessor.SetupGet(t => t.TenantId).Returns(Guid.NewGuid());
@@ -33,40 +41,68 @@ public sealed class ShareAppearanceControllerTests
         var httpContext = new DefaultHttpContext();
         if (onShareHost)
             httpContext.SetShareAccess();
+        if (auth is not null)
+            httpContext.SetAuthContext(auth);
 
-        return new ShareAppearanceController(_service.Object, tenantAccessor.Object)
+        return new TenantAppearanceController(_service.Object, tenantAccessor.Object)
         {
             ControllerContext = new ControllerContext { HttpContext = httpContext },
         };
     }
 
-    [Fact]
-    public async Task GetShareAppearance_off_a_share_host_is_not_found_and_reads_nothing()
+    private async Task ShouldAnswerWithTheOwnersPresentation(TenantAppearanceController controller)
     {
-        var controller = BuildController(onShareHost: false);
-
-        var result = await controller.GetShareAppearance(CancellationToken.None);
-
-        result.Result.Should().BeOfType<NotFoundResult>();
-        _service.Verify(
-            s => s.GetSharedAppearanceAsync(It.IsAny<Guid>(), It.IsAny<CancellationToken>()), Times.Never);
-    }
-
-    [Fact]
-    public async Task GetShareAppearance_on_a_share_host_returns_the_owners_presentation_settings()
-    {
-        _service
-            .Setup(s => s.GetSharedAppearanceAsync(It.IsAny<Guid>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new UserDisplayPreferences { GlucoseUnits = "mmol", TimeFormat = "24" });
-        var controller = BuildController(onShareHost: true);
-
-        var result = await controller.GetShareAppearance(CancellationToken.None);
+        var result = await controller.GetTenantAppearance(CancellationToken.None);
 
         var value = result.Result.Should().BeOfType<OkObjectResult>().Subject
             .Value.Should().BeOfType<UserDisplayPreferences>().Subject;
         value.GlucoseUnits.Should().Be("mmol");
         value.TimeFormat.Should().Be("24");
     }
+
+    private async Task ShouldBeNotFoundAndReadNothing(TenantAppearanceController controller)
+    {
+        var result = await controller.GetTenantAppearance(CancellationToken.None);
+
+        result.Result.Should().BeOfType<NotFoundResult>();
+        _service.Verify(
+            s => s.GetTenantAppearanceAsync(It.IsAny<Guid>(), It.IsAny<CancellationToken>()), Times.Never);
+    }
+
+    [Fact]
+    public Task A_share_viewer_gets_the_owners_presentation_settings() =>
+        ShouldAnswerWithTheOwnersPresentation(BuildController(onShareHost: true));
+
+    [Fact]
+    public Task A_guest_gets_the_owners_presentation_settings() =>
+        ShouldAnswerWithTheOwnersPresentation(BuildController(auth: new AuthContext
+        {
+            IsAuthenticated = true,
+            AuthType = AuthType.Guest,
+            ActingAsSubjectId = Guid.NewGuid(),
+            Scopes = ["glucose.read"],
+        }));
+
+    [Fact]
+    public Task An_anonymous_caller_off_a_share_host_is_not_found() =>
+        ShouldBeNotFoundAndReadNothing(BuildController(auth: AuthContext.Unauthenticated()));
+
+    [Fact]
+    public Task A_member_is_not_found_because_they_read_their_own_settings() =>
+        ShouldBeNotFoundAndReadNothing(BuildController(auth: new AuthContext
+        {
+            IsAuthenticated = true,
+            AuthType = AuthType.SessionCookie,
+            SubjectId = Guid.NewGuid(),
+        }));
+
+    [Fact]
+    public Task A_guest_session_the_auth_middleware_rejected_is_not_found() =>
+        ShouldBeNotFoundAndReadNothing(BuildController(auth: new AuthContext
+        {
+            IsAuthenticated = false,
+            AuthType = AuthType.Guest,
+        }));
 
     /// <summary>
     /// The disclosure boundary, pinned by shape rather than by one response: an anonymous viewer

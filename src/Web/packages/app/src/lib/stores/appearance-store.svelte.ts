@@ -99,6 +99,8 @@ const PREFS_COOKIE_MAX_AGE = 31536000; // 1 year
 /** The type-independent face of a `SyncedPref`, so prefs of every type share one registry. */
 interface SyncedEntry {
   hydrateFrom(prefs: UserDisplayPreferences): void;
+  presentFrom(prefs: UserDisplayPreferences): void;
+  fallBackTo(prefs: UserDisplayPreferences): void;
   hydrateJson(json: string): void;
 }
 
@@ -242,11 +244,11 @@ function parseJson(json: string): unknown {
   }
 }
 
-function readInitial<T>(key: string, fallback: T, parse: PrefParser<T>): T {
-  if (!browser) return fallback;
+function readInitial<T>(key: string, parse: PrefParser<T>): T | undefined {
+  if (!browser) return undefined;
   const raw = localStorage.getItem(key);
-  if (raw === null) return fallback;
-  return parse(parseJson(raw)) ?? fallback;
+  if (raw === null) return undefined;
+  return parse(parseJson(raw));
 }
 
 function persistLocal<T>(key: string, value: T): void {
@@ -268,7 +270,12 @@ function persistLocal<T>(key: string, value: T): void {
  */
 class SyncedPref<T> implements SyncedEntry {
   private _value: T;
+  /** Whether this device holds a value of its own, as opposed to showing the default. */
+  private _held: boolean;
+  /** The tenant's presentation, shown in place of the default while this device stores no value. */
+  private _fallback: T | undefined = $state(undefined);
   private _key: string;
+  private _initial: T;
   private _select: (prefs: UserDisplayPreferences) => unknown;
   private _parse: PrefParser<T>;
 
@@ -279,9 +286,12 @@ class SyncedPref<T> implements SyncedEntry {
     parse: PrefParser<T>
   ) {
     this._key = key;
+    this._initial = initial;
     this._select = select;
     this._parse = parse;
-    this._value = $state(readInitial(key, initial, parse));
+    const stored = readInitial(key, parse);
+    this._held = stored !== undefined;
+    this._value = $state(stored ?? initial);
     syncedRegistry.set(key, this);
   }
 
@@ -296,11 +306,18 @@ class SyncedPref<T> implements SyncedEntry {
         if (value !== undefined && value !== null) return value;
       }
     }
-    return this._value;
+    return this._fallback ?? this._value;
+  }
+
+  /** What this device holds for the preference: never the default, never a fallback. */
+  get stored(): T | undefined {
+    return this._held ? this._value : undefined;
   }
 
   set current(value: T) {
     this._value = value;
+    this._held = true;
+    this._fallback = undefined;
     persistLocal(this._key, value);
     schedulePersist();
   }
@@ -313,6 +330,8 @@ class SyncedPref<T> implements SyncedEntry {
    */
   hydrate(value: T): void {
     this._value = value;
+    this._held = true;
+    this._fallback = undefined;
     persistLocal(this._key, value);
   }
 
@@ -320,6 +339,26 @@ class SyncedPref<T> implements SyncedEntry {
   hydrateFrom(prefs: UserDisplayPreferences): void {
     const value = this._read(prefs);
     if (value !== undefined && value !== null) this.hydrate(value);
+  }
+
+  /**
+   * Show a payload's value in place of the hard-coded default while this device holds no value of
+   * its own. It is kept apart from the stored value, so nothing persists it. Browser-only, as
+   * {@link hydrate}.
+   */
+  fallBackTo(prefs: UserDisplayPreferences): void {
+    if (this._held) return;
+    this._fallback = this._read(prefs) ?? undefined;
+  }
+
+  /**
+   * Show a payload's value, or the default where it has none, over whatever this device holds,
+   * without storing it. Browser-only, as {@link hydrate}.
+   */
+  presentFrom(prefs: UserDisplayPreferences): void {
+    this._value = this._read(prefs) ?? this._initial;
+    this._held = false;
+    this._fallback = undefined;
   }
 
   /** Hydrate from another tab's localStorage write, ignoring a malformed one. */
@@ -759,37 +798,38 @@ export const chartAlwaysShowPatterns = new SyncedPref<boolean>(
 // ==========================================
 
 /**
- * Assemble the full per-user preference payload from the current store values.
- * Shape mirrors the backend `UserDisplayPreferences` (nested prediction/chart).
+ * Assemble the per-user preference payload from what this device holds, leaving out any field
+ * still on its default or showing the tenant's presentation. Shape mirrors the backend `UserDisplayPreferences` (nested
+ * prediction/chart).
  */
 export function collectPreferences(): UserDisplayPreferences {
   return {
-    yearOverviewColors: yearOverviewColors.current,
-    glucoseUnits: glucoseUnits.current,
-    a1cName: a1cName.current,
-    a1cUnits: a1cUnits.current,
-    timeFormat: timeFormat.current,
-    regionFormat: regionFormat.current,
-    energyUnit: energyUnit.current ?? undefined,
-    colorTheme: colorTheme.current,
-    glucoseRangePalette: glucoseRangePalette.current,
-    nightModeSchedule: nightModeSchedule.current,
-    dashboardTopWidgets: dashboardTopWidgets.current,
+    yearOverviewColors: yearOverviewColors.stored,
+    glucoseUnits: glucoseUnits.stored,
+    a1cName: a1cName.stored,
+    a1cUnits: a1cUnits.stored,
+    timeFormat: timeFormat.stored,
+    regionFormat: regionFormat.stored,
+    energyUnit: energyUnit.stored ?? undefined,
+    colorTheme: colorTheme.stored,
+    glucoseRangePalette: glucoseRangePalette.stored,
+    nightModeSchedule: nightModeSchedule.stored,
+    dashboardTopWidgets: dashboardTopWidgets.stored,
     prediction: {
-      enabled: predictionEnabled.current,
-      minutes: predictionMinutes.current,
-      displayMode: predictionDisplayMode.current,
+      enabled: predictionEnabled.stored,
+      minutes: predictionMinutes.stored,
+      displayMode: predictionDisplayMode.stored,
     },
     chart: {
-      lineColorMode: chartLineColorMode.current,
-      lineColor: chartLineColor.current,
-      pointColorMode: chartPointColorMode.current,
-      pointColor: chartPointColor.current,
-      showPoints: chartShowPoints.current,
-      areaMode: chartAreaMode.current,
-      areaOpacity: chartAreaOpacity.current,
-      alwaysShowPatterns: chartAlwaysShowPatterns.current,
-      lookback: glucoseChartLookback.current,
+      lineColorMode: chartLineColorMode.stored,
+      lineColor: chartLineColor.stored,
+      pointColorMode: chartPointColorMode.stored,
+      pointColor: chartPointColor.stored,
+      showPoints: chartShowPoints.stored,
+      areaMode: chartAreaMode.stored,
+      areaOpacity: chartAreaOpacity.stored,
+      alwaysShowPatterns: chartAlwaysShowPatterns.stored,
+      lookback: glucoseChartLookback.stored,
     },
   };
 }
@@ -813,6 +853,21 @@ export function applyPreferences(
     applyGlucoseRangePalette(glucoseRangePalette.current);
   }
   if (options.refreshCookie) writePrefsCookie(collectPreferences());
+}
+
+/**
+ * Draw a guest with the tenant's presentation wherever the guest has set nothing themselves. The
+ * values are shown, not stored, so the tenant's never become the guest's own and a later change
+ * of the owner's reaches them.
+ */
+export function applyTenantPresentation(prefs: UserDisplayPreferences | null | undefined): void {
+  if (!browser) return;
+
+  // An empty presentation clears the fallbacks, so a guest who signs in on this tab stops seeing
+  // the tenant's values.
+  if (prefs) hydrateResolvedEnergyUnit(prefs);
+  for (const pref of syncedRegistry.values()) pref.fallBackTo(prefs ?? {});
+  applyColorTheme(colorTheme.current);
 }
 
 /**
@@ -855,6 +910,22 @@ export function reconcilePreferences(serverPrefs: UserDisplayPreferences | null 
     writePrefsCookie(prefs);
     writeThroughReporting(prefs);
   }
+}
+
+/**
+ * Draw a share as its owner draws it: the owner's presentation, and the default for every field
+ * the owner left unset, never the viewer's own preferences, which the base-domain cookie still
+ * carries onto the share host. Nothing is stored, so the owner's values never become the viewer's.
+ * Once per document load, as {@link reconcilePreferences}, so a change the viewer makes in-session
+ * is not reverted on navigation.
+ */
+export function presentOwnerPreferences(prefs: UserDisplayPreferences | null | undefined): void {
+  if (!browser || preferencesReconciled) return;
+  preferencesReconciled = true;
+
+  if (prefs) hydrateResolvedEnergyUnit(prefs);
+  for (const pref of syncedRegistry.values()) pref.presentFrom(prefs ?? {});
+  applyColorTheme(colorTheme.current);
 }
 
 /** True if any synced preference has a stored value on this device (legacy localStorage / prior sync). */
