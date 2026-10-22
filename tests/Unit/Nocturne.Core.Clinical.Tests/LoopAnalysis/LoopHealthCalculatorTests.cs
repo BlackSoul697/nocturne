@@ -540,6 +540,20 @@ public class LoopHealthCalculatorTests
     }
 
     [Fact]
+    public void Days_ListsEveryDayOfTheRange_EvenOneTheMasksEmptied()
+    {
+        var from = Day0;
+        var to = Day0 + 2 * 24 * Hour;
+        var result = Calculate(from, to,
+            cycles: EveryFiveMinutes(from, to, t => Cycle(t)),
+            masks: new LoopAnalysisMasks { ExcludeIllness = true, ExcludeOpenLoop = false },
+            sources: new LoopAnalysisMaskSources { Illness = [new MillsInterval(from, from + 24 * Hour)] });
+
+        result.Days.Select(d => d.Date).Should().Equal("2024-06-10", "2024-06-11");
+        result.Activity.Pump!.Daily!.N.Should().Be(1, "only the second day was analysed");
+    }
+
+    [Fact]
     public void FallBackDay_WeighsTheRepeatedHourByItsLength()
     {
         // 2024-04-07 in Sydney is 25 hours long: 03:00 AEDT falls back to 02:00 AEST.

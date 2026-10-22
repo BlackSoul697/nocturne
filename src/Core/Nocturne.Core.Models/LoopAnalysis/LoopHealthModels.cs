@@ -19,7 +19,10 @@ public class LoopHealthRange
 
     public DateTime To { get; set; }
 
-    /// <summary>Every local day of the range with analysed time, oldest first.</summary>
+    /// <summary>
+    /// Every local day of the range, oldest first, analysed or not: which days the masks emptied
+    /// would show where spans of a category the caller may lack fell.
+    /// </summary>
     public List<LoopHealthDay> Days { get; set; } = [];
 
     public LoopHealthActivity Activity { get; set; } = new();

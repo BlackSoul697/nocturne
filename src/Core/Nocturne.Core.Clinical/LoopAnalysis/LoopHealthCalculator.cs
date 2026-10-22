@@ -496,8 +496,6 @@ public static class LoopHealthCalculator
             var days = new List<LoopHealthDay>();
             for (var d = 0; d < _dayCount; d++)
             {
-                if (Sum(Analysed, d) == 0)
-                    continue;
                 var date = _firstDay.AddDays(d);
                 days.Add(new LoopHealthDay
                 {
