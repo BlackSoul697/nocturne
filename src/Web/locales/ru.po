@@ -27695,3 +27695,7 @@ msgstr ""
 #: src/lib/components/dashboard/widgets/TddWidget.svelte
 msgid "No data in the last 24h"
 msgstr ""
+
+#: src/lib/components/calendar/CalendarHeader.svelte
+msgid "Show TIR %"
+msgstr ""
