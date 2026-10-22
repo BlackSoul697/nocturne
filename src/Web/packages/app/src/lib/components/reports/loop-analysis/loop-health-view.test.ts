@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { dayInReviewSearch, gapRows, hourOfSlot, shareBars } from "./loop-health-view";
+import { beganIn, dayInReviewSearch, hourOfSlot, hourSpan, longestFirst, shareBars } from "./loop-health-view";
 
 describe("loop-health-view", () => {
-  it("draws each measured hour over its twelve slots, keeping a zero and skipping an unmeasured hour", () => {
+  it("draws each measured hour as a bar, keeping a zero and skipping an unmeasured hour", () => {
     const bars = shareBars({
       hours: [
         { hour: 0, percent: 0, daily: { n: 14, sparse: false } },
@@ -12,21 +12,27 @@ describe("loop-health-view", () => {
     });
 
     expect(bars).toEqual([
-      { start: 0, end: 12, value: 0, sparse: false },
-      { start: 276, end: 288, value: 50, sparse: true },
+      { hour: 0, value: 0, sparse: false },
+      { hour: 23, value: 50, sparse: true },
     ]);
   });
 
-  it("puts both kinds of gap in one list, longest first", () => {
-    const rows = gapRows(
-      { gaps: [{ date: "2026-10-03", startMinuteOfDay: 1410, minutes: 90 }] },
-      { gaps: [{ date: "2026-10-08", startMinuteOfDay: 360, minutes: 300 }] }
-    );
+  it("places an hour over its twelve slots", () => {
+    expect(hourSpan(0)).toEqual({ start: 0, end: 12 });
+    expect(hourSpan(23)).toEqual({ start: 276, end: 288 });
+  });
 
-    expect(rows.map((r) => [r.kind, r.gap.minutes])).toEqual([
-      ["unrecorded", 300],
-      ["loop", 90],
-    ]);
+  it("lists a kind of gap longest first, and narrows it to the hour it began in", () => {
+    const gaps = longestFirst({
+      gaps: [
+        { date: "2026-10-05", startMinuteOfDay: 190, minutes: 25 },
+        { date: "2026-10-03", startMinuteOfDay: 1410, minutes: 90 },
+      ],
+    });
+
+    expect(gaps.map((g) => g.minutes)).toEqual([90, 25]);
+    expect(beganIn(gaps, 3).map((g) => g.minutes)).toEqual([25]);
+    expect(beganIn(gaps, null)).toHaveLength(2);
   });
 
   it("opens Day in Review on the local day and time a gap began", () => {

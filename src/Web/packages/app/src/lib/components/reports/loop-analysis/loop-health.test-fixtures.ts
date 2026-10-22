@@ -55,10 +55,17 @@ export interface LoopHealthOptions {
   capUnknown?: boolean;
   days?: number;
   sparse?: boolean;
+  /** No loop cycle ran: closed loop is unmeasured and both gap kinds count nothing, as the API sends it today. */
+  noCycles?: boolean;
+  /** This many loop gaps, from 20 minutes up, in place of the usual two. */
+  loopGapCount?: number;
+  /** Figures the API left unmeasured. */
+  unmeasured?: ("atMaxIob" | "suggestedNotEnacted" | "zeroDelivery" | "automaticBoluses")[];
 }
 
 export function loopHealthRange(options: LoopHealthOptions = {}): LoopHealthRange {
-  const { system = "oref", scale = 1, capUnknown = false, days = 14, sparse = false } = options;
+  const { system = "oref", scale = 1, capUnknown = false, days = 14, sparse = false, noCycles = false, loopGapCount } = options;
+  const unmeasured = new Set(options.unmeasured ?? []);
   const oref = system === "oref";
   const n = sparse ? 2 : days;
   return {
@@ -73,32 +80,42 @@ export function loopHealthRange(options: LoopHealthOptions = {}): LoopHealthRang
       aidActivePercent: 97.5 * scale,
       pumpUsePercent: 98 * scale,
       cgmActivePercent: 99.2 * scale,
-      closedLoop: share(91.1 * scale, n, sparse),
+      closedLoop: share(noCycles ? null : 91.1 * scale, n, sparse),
       pump: share(92.4 * scale, n, sparse),
       cgm: share(98.7 * scale, n, sparse),
     },
     cadence: {
-      loopGaps: gaps([
-        { date: "2026-10-03", startMinuteOfDay: 23 * 60 + 30, minutes: 90 },
-        { date: "2026-10-05", startMinuteOfDay: 3 * 60 + 10, minutes: 25 },
-      ]),
-      unrecordedDelivery: gaps([{ date: "2026-10-08", startMinuteOfDay: 6 * 60, minutes: 300 }]),
+      loopGaps: gaps(
+        noCycles
+          ? []
+          : loopGapCount != null
+            ? Array.from({ length: loopGapCount }, (_, i) => ({ date: "2026-10-04", startMinuteOfDay: i * 60, minutes: 20 + i }))
+            : [
+                { date: "2026-10-03", startMinuteOfDay: 23 * 60 + 30, minutes: 90 },
+                { date: "2026-10-05", startMinuteOfDay: 3 * 60 + 10, minutes: 25 },
+              ]
+      ),
+      unrecordedDelivery: gaps(noCycles ? [] : [{ date: "2026-10-08", startMinuteOfDay: 6 * 60, minutes: 300 }]),
     },
-    zeroDelivery: {
-      algorithmZeroTemp: share(41 * scale, n, sparse),
-      manualZeroTemp: share(0, n, sparse),
-      suspended: share(1.2, n, sparse),
-    },
+    zeroDelivery: unmeasured.has("zeroDelivery")
+      ? { algorithmZeroTemp: share(null, n, sparse), manualZeroTemp: share(null, n, sparse), suspended: share(null, n, sparse) }
+      : {
+          algorithmZeroTemp: share(41 * scale, n, sparse),
+          manualZeroTemp: share(0, n, sparse),
+          suspended: share(1.2, n, sparse),
+        },
     maxBasal: capUnknown
       ? { atCap: share(null, n, sparse), capKnown: share(0, n, sparse) }
       : { atCap: share(2.5 * scale, n, sparse), capKnown: share(76.7, n, sparse) },
-    atMaxIob: oref ? share(0.1 * scale, n, sparse) : undefined,
-    automaticBoluses: {
-      perDay: distribution(54 * scale, n, sparse),
-      unitsPerDay: distribution(12.3, n, sparse),
-      size: distribution(0.2, n, sparse),
-    },
-    suggestedNotEnacted: oref ? share(0.2 * scale, n, sparse) : undefined,
+    atMaxIob: oref && !unmeasured.has("atMaxIob") ? share(0.1 * scale, n, sparse) : share(null, n, sparse),
+    automaticBoluses: unmeasured.has("automaticBoluses")
+      ? { perDay: { hours: [] }, unitsPerDay: { hours: [] }, size: { hours: [] } }
+      : {
+          perDay: distribution(54 * scale, n, sparse),
+          unitsPerDay: distribution(12.3, n, sparse),
+          size: distribution(0.2, n, sparse),
+        },
+    suggestedNotEnacted: oref && !unmeasured.has("suggestedNotEnacted") ? share(0.2 * scale, n, sparse) : share(null, n, sparse),
     sensitivityRatio: oref ? distribution(1.1, n, sparse) : { hours: HOURS.map((hour) => ({ hour })) },
     limits: oref ? { orefMaxIob: 15 } : { loopMaximumBasalRate: 3 },
   };

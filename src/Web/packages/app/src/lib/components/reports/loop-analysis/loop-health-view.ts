@@ -6,13 +6,14 @@ import type {
   LoopHealthShare,
   LoopHealthShareHour,
 } from "$lib/api";
-import type { SlotBar } from "./SlotBars.svelte";
-import { clockTime } from "./daily-profile-view";
+import { clockTime, SLOT_MINUTES } from "./daily-profile-view";
 
-/** Five-minute slots in an hour: the hour strips share the slot axis of the Daily profile. */
-export const SLOTS_PER_HOUR = 12;
+const SLOTS_PER_HOUR = 60 / SLOT_MINUTES;
 
 export const hourOfSlot = (slot: number) => Math.floor(slot / SLOTS_PER_HOUR);
+
+/** The slot span an hour covers on the shared time-of-day axis. */
+export const hourSpan = (hour: number) => ({ start: hour * SLOTS_PER_HOUR, end: (hour + 1) * SLOTS_PER_HOUR });
 
 export function shareHour(share: LoopHealthShare | null | undefined, hour: number): LoopHealthShareHour | undefined {
   return share?.hours?.find((h) => h.hour === hour);
@@ -25,31 +26,27 @@ export function distributionHour(
   return distribution?.hours?.find((h) => h.hour === hour);
 }
 
-/** A share's hours as bars over each hour's twelve slots; an hour with nothing measured has none. */
-export function shareBars(share: LoopHealthShare | null | undefined): SlotBar[] {
+export interface HourBar {
+  hour: number;
+  value: number;
+  sparse: boolean;
+}
+
+/** A share's hours as bars; an hour with nothing measured has none, and a zero is a bar. */
+export function shareBars(share: LoopHealthShare | null | undefined): HourBar[] {
   return (share?.hours ?? [])
     .filter((h) => h.percent != null)
-    .map((h) => ({
-      start: (h.hour ?? 0) * SLOTS_PER_HOUR,
-      end: ((h.hour ?? 0) + 1) * SLOTS_PER_HOUR,
-      value: h.percent!,
-      sparse: h.daily?.sparse ?? true,
-    }));
+    .map((h) => ({ hour: h.hour ?? 0, value: h.percent!, sparse: h.daily?.sparse ?? true }));
 }
 
-export type GapKind = "loop" | "unrecorded";
-
-export interface GapRow {
-  kind: GapKind;
-  gap: LoopHealthGap;
+/** A kind of gap's list, longest first, as the API reported it. */
+export function longestFirst(gaps: LoopHealthGaps | null | undefined): LoopHealthGap[] {
+  return [...(gaps?.gaps ?? [])].sort((a, b) => (b.minutes ?? 0) - (a.minutes ?? 0));
 }
 
-/** Both kinds of gap in one list, longest first, as the API reported each. */
-export function gapRows(loopGaps: LoopHealthGaps | null | undefined, unrecorded: LoopHealthGaps | null | undefined): GapRow[] {
-  return [
-    ...(loopGaps?.gaps ?? []).map((gap) => ({ kind: "loop" as const, gap })),
-    ...(unrecorded?.gaps ?? []).map((gap) => ({ kind: "unrecorded" as const, gap })),
-  ].sort((a, b) => (b.gap.minutes ?? 0) - (a.gap.minutes ?? 0));
+/** The gaps that began in a local hour of the day. */
+export function beganIn(gaps: LoopHealthGap[], hour: number | null): LoopHealthGap[] {
+  return hour == null ? gaps : gaps.filter((g) => g.startMinuteOfDay != null && Math.floor(g.startMinuteOfDay / 60) === hour);
 }
 
 /** The Day in Review search for the local day and time a gap began at. */

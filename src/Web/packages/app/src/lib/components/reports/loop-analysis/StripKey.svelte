@@ -1,0 +1,33 @@
+<!-- The key under an hour strip, each swatch drawn as its mark is: a bar, a line, a dashed outline or a faded bar. -->
+<script lang="ts" module>
+  export interface StripKeyItem {
+    mark: "bar" | "band" | "line" | "reference" | "compared" | "sparse";
+    label: string;
+    color?: string;
+  }
+</script>
+
+<script lang="ts">
+  let { items }: { items: StripKeyItem[] } = $props();
+</script>
+
+<ul class="flex flex-wrap items-center gap-x-4 gap-y-1 px-1 text-xs text-muted-foreground">
+  {#each items as item (item.label)}
+    <li class="flex items-center gap-1.5">
+      <svg viewBox="0 0 16 12" aria-hidden="true" class="inline-block h-3 w-4 shrink-0">
+        {#if item.mark === "line"}
+          <line x1="0" y1="6" x2="16" y2="6" stroke={item.color} stroke-width="2" />
+        {:else if item.mark === "reference"}
+          <line x1="0" y1="6" x2="16" y2="6" stroke="var(--foreground)" stroke-opacity="0.4" stroke-width="1" />
+        {:else if item.mark === "compared"}
+          <rect x="1" y="1" width="14" height="10" rx="1" fill="none" stroke="var(--foreground)" stroke-opacity="0.85" stroke-width="1.25" stroke-dasharray="3 2" />
+        {:else if item.mark === "sparse"}
+          <rect x="1" y="1" width="14" height="10" rx="1" fill={item.color} fill-opacity="0.25" stroke={item.color} stroke-width="1" />
+        {:else}
+          <rect x="1" y="1" width="14" height="10" rx="1" fill={item.color} fill-opacity={item.mark === "band" ? 0.3 : 1} />
+        {/if}
+      </svg>
+      <span>{item.label}</span>
+    </li>
+  {/each}
+</ul>
