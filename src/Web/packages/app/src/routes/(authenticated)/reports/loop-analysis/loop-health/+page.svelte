@@ -6,7 +6,7 @@
   import LoopHealthTab from "$lib/components/reports/loop-analysis/LoopHealthTab.svelte";
 
   const analysis = getLoopAnalysis();
-  const resource = contextResource(() => getLoopHealth(analysis.query), { errorTitle: "Error Loading the Loop Health" });
+  const resource = contextResource(() => getLoopHealth(analysis.query), { errorTitle: "Cannot load the loop health" });
 </script>
 
 <svelte:head>

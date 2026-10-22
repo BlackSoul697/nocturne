@@ -8,7 +8,7 @@
   import DailyProfileTab from "$lib/components/reports/loop-analysis/DailyProfileTab.svelte";
 
   const analysis = getLoopAnalysis();
-  const resource = contextResource(() => getDailyProfile(analysis.query), { errorTitle: "Error Loading the Daily Profile" });
+  const resource = contextResource(() => getDailyProfile(analysis.query), { errorTitle: "Cannot load the daily profile" });
 
   /** The Insulin Delivery report over the same range. */
   const insulinDeliveryHref = $derived.by(() => {

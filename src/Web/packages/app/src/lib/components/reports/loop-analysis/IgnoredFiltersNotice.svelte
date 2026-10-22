@@ -19,7 +19,7 @@
     <FilterX />
     <Alert.Title>Some filters were not applied</Alert.Title>
     <Alert.Description>
-      Your access does not include the data these filters are drawn from, so they were ignored:
+      Your access does not include the data for these filters, so the report did not apply them:
       {filters.map(ignoredFilterLabel).join(", ")}.
     </Alert.Description>
   </Alert.Root>

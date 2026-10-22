@@ -18,7 +18,7 @@
 
   const analysis = getLoopAnalysis();
   const events = $derived(readEventResponse(page.url.searchParams));
-  const resource = contextResource(() => getEventResponse(eventResponseQuery(analysis.query, events)), { errorTitle: "Error Loading the Meals and Events" });
+  const resource = contextResource(() => getEventResponse(eventResponseQuery(analysis.query, events)), { errorTitle: "Cannot load the meals and events" });
 
   const setEvents = (next: EventResponseState) =>
     // eslint-disable-next-line svelte/no-navigation-without-resolve -- loopAnalysisPath resolves the path

@@ -88,7 +88,7 @@
     </table>
     {#if value?.sparse}
       <p class="text-muted-foreground">
-        {#if counts === "events"}Too few events to read as a pattern{:else}Too few days to read as a pattern{/if}
+        {#if counts === "events"}Too few events to show a pattern{:else}Too few days to show a pattern{/if}
       </p>
     {/if}
   {/if}

@@ -43,7 +43,7 @@
   <div class="overflow-x-auto">
     <table class="w-full border-separate border-spacing-0.5 text-xs tabular-nums">
       <caption class="sr-only">
-        {curveLabel(curve.curve)} bias by hour of day and horizon, in {unit}; positive where the prediction ran high
+        {curveLabel(curve.curve)} bias by hour of day and horizon, in {unit}. A positive value means that the prediction was too high.
       </caption>
       <thead>
         <tr>
@@ -94,7 +94,7 @@
       <span class="swatch-high inline-block size-3 rounded-sm"></span>
       Predicted too high
     </span>
-    <span><span class="italic">Italic</span>, paler: too few days to read as a pattern</span>
+    <span><span class="italic">Italic</span>, paler: too few days to show a pattern</span>
   </div>
 </div>
 

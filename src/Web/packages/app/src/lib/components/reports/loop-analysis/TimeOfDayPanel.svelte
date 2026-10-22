@@ -158,8 +158,9 @@
       {onkeydown}
     >
       <span id={keysId} class="sr-only">
-        Left and right arrows move along the axis, Home and End go to its ends, up and down move to the
-        next panel, Enter lists the days behind the slot and Escape closes the list.
+        Use the left and right arrows to move along the axis. Use Home and End to go to its ends. Use
+        the up and down arrows to go to the next panel. Press Enter to list the days for the slot. Press
+        Escape to close the list.
       </span>
       <Chart data={[]} xDomain={[0, slotCount]} {yDomain} {padding}>
         <Svg>

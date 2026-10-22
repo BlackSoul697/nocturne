@@ -34,7 +34,7 @@ describe("EventResponseTab", () => {
     await expect
       .element(page.getByRole("slider", { name: "Glucose", exact: true }))
       .toHaveAttribute("aria-valuemax", "71");
-    await expect.element(page.getByText(/1 left out for another event in its window/).first()).toBeVisible();
+    await expect.element(page.getByText(/1 not included because of another event in its window/).first()).toBeVisible();
     await expect.element(page.getByText(/1 without a glucose reading at the time/).first()).toBeVisible();
   });
 
@@ -88,12 +88,12 @@ describe("EventResponseTab", () => {
   it("compares each cohort's figures side by side, with how many came back and why grams per unit is missing", async () => {
     render(EventResponseTab, { props: { response: eventResponse({ comparison: true }) } });
 
-    await expect.element(page.getByText("The comparison range is drawn as dashed outlines in each cohort's colour.")).toBeVisible();
+    await expect.element(page.getByText("The charts show the comparison range as dashed outlines in the colour of each cohort.")).toBeVisible();
     await expect.element(page.getByRole("rowheader", { name: "Observed grams per unit" })).toBeVisible();
     await expect.element(page.getByText("9.5 g/U").first()).toBeVisible();
     await expect.element(page.getByText(/Compared 9.5 g\/U/).first()).toBeVisible();
-    await expect.element(page.getByText("8 of 12 events came back")).toBeVisible();
-    const note = page.getByText(/grams per unit is read only off a meal/);
+    await expect.element(page.getByText("8 of 12 events returned")).toBeVisible();
+    const note = page.getByText(/grams per unit comes only from a meal/);
     await expect.element(note).toHaveTextContent(/2 meals had another intake;\s*3 had too little of their basal recorded;\s*1 had no insulin above schedule/);
 
     const links = page.getByRole("link", { name: /in Day in Review/ }).elements();
@@ -120,7 +120,7 @@ describe("EventResponseTab", () => {
     await expect.element(page.getByText("Hidden: your access does not include this data").first()).toBeVisible();
     expect(page.getByRole("link", { name: /in Day in Review/ }).elements()).toHaveLength(0);
     expect(page.getByRole("rowheader", { name: "Observed grams per unit" }).elements()).toHaveLength(0);
-    expect(page.getByText(/grams per unit is read only/).elements()).toHaveLength(0);
+    expect(page.getByText(/grams per unit comes only/).elements()).toHaveLength(0);
     await expect.element(page.getByRole("rowheader", { name: "Peak rise" })).toBeVisible();
     expect(page.getByText(/list the events with a glucose reading there/).elements()).toHaveLength(0);
   });

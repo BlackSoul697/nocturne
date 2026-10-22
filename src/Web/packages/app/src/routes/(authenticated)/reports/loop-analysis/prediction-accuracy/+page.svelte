@@ -6,7 +6,7 @@
   import PredictionsTab from "$lib/components/reports/loop-analysis/PredictionsTab.svelte";
 
   const analysis = getLoopAnalysis();
-  const resource = contextResource(() => getPredictionAccuracy(analysis.query), { errorTitle: "Error Loading the Prediction Accuracy" });
+  const resource = contextResource(() => getPredictionAccuracy(analysis.query), { errorTitle: "Cannot load the prediction accuracy" });
 </script>
 
 <svelte:head>

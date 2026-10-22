@@ -24,13 +24,13 @@ export function curveCaption(curve: PredictionCurve | undefined): string {
     case PredictionCurve.Iob:
       return "Insulin on board alone, no carbs";
     case PredictionCurve.ZeroTemp:
-      return "Insulin on board with basal stopped from the prediction on";
+      return "Insulin on board, with basal stopped from the time of the prediction";
     case PredictionCurve.Cob:
-      return "Announced carbs absorbing";
+      return "Absorption of announced carbs";
     case PredictionCurve.Uam:
-      return "The rise it sees continuing, announced or not";
+      return "The rise that the loop sees continues, announced or not";
     default:
-      return "The single curve the loop acts on";
+      return "The one curve that the loop uses for its decisions";
   }
 }
 
@@ -50,9 +50,9 @@ export function contextLabel(context: PredictionContext | undefined): string {
 export function contextCaption(context: PredictionContext | undefined): string {
   switch (context) {
     case PredictionContext.Adjusted:
-      return "An override, temporary target or exercise was running";
+      return "An override, temporary target or exercise was active";
     case PredictionContext.PostMeal:
-      return "Carbs entered in the 3 hours before";
+      return "Carbs were entered in the 3 hours before";
     case PredictionContext.PostCorrection:
       return "A manual bolus in the 3 hours before, no carbs";
     default:

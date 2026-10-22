@@ -67,7 +67,7 @@
               {/if}
               {#if metric.key === "minutesBackToStart"}
                 <span class="block text-xs text-muted-foreground">
-                  {value?.n ?? 0} of {plural(events, ["# event", "# events"])} came back
+                  {value?.n ?? 0} of {plural(events, ["# event", "# events"])} returned
                 </span>
               {/if}
               {#if comparison}
@@ -84,14 +84,15 @@
 </div>
 <div class="space-y-1 px-1 text-xs text-muted-foreground">
   <p>
-    Medians, with the middle half of events below each. Faded figures rest on too few events to read
-    as a pattern. These are observations of what happened, not settings to change.
+    The figures are medians, with the middle half of events below each median. Faded figures have too
+    few events to show a pattern. These figures are observations of what occurred, not settings to
+    change.
   </p>
   {#each missingGramsPerUnit as r (r.cohort)}
     {@const cohort = cohorts.find((c) => c.cohort === r.cohort)}
     <p>
-      {cohort ? cohortLabel(cohort) : ""}: grams per unit is read only off a meal with no other meal,
-      correction or rise in its window, and whose window's insulin the pump's records account for.
+      {cohort ? cohortLabel(cohort) : ""}: grams per unit comes only from a meal with no other meal,
+      correction or rise in its window. The pump records must also show all the insulin in that window.
       {plural(r.gramsPerUnitNotIsolated ?? 0, ["# meal had another intake", "# meals had another intake"])};
       {plural(r.gramsPerUnitUncovered ?? 0, [
         "# had too little of its basal recorded",

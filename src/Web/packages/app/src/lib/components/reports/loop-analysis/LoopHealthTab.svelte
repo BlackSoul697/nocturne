@@ -80,15 +80,15 @@
       case LoopHealthUnknownReason.NoCyclesInRange:
         return "No loop cycles in this range";
       case LoopHealthUnknownReason.NoReasonRecorded:
-        return "No loop cycle in this range recorded what this needs";
+        return "No loop cycle in this range recorded the data that this figure needs";
       case LoopHealthUnknownReason.MaskedOut:
-        return "Everything this is measured on falls in time the filters leave out";
+        return "All the data for this figure is in time that the filters exclude";
       case LoopHealthUnknownReason.SettingNotUploaded:
-        return "The profile in force records no maximum basal rate";
+        return "The active profile does not record a maximum basal rate";
       case LoopHealthUnknownReason.NoAlgorithmTemps:
-        return "The loop set no temp basal in this range";
+        return "The loop did not set a temp basal in this range";
       case LoopHealthUnknownReason.SetterNotFound:
-        return "No loop cycle in this range set the temps this needs";
+        return "No loop cycle in this range set the temp basals that this figure needs";
       default:
         return "Nothing measured in this range";
     }
@@ -149,12 +149,12 @@
     return {
       label,
       value: String(count),
-      unit: plural(count, ["stretch", "stretches"]),
+      unit: plural(count, ["period", "periods"]),
       note: noted(
-        count > 0 ? `${duration(gaps.totalMinutes)} in all, longest ${duration(gaps.longestMinutes)}` : none,
+        count > 0 ? `${duration(gaps.totalMinutes)} in total, longest ${duration(gaps.longestMinutes)}` : none,
         compared == null
           ? null
-          : `${plural(compared.count ?? 0, ["# stretch", "# stretches"])}, ${duration(compared.totalMinutes)} in all`
+          : `${plural(compared.count ?? 0, ["# period", "# periods"])}, ${duration(compared.totalMinutes)} in total`
       ),
     };
   }
@@ -165,27 +165,27 @@
     list.push(
       hidden(LoopAnalysisSeries.LoopActivity)
         ? hiddenFigure("Closed loop")
-        : shareFigure("Closed loop", (r) => r?.activity?.closedLoop, "Of analysed time, with the loop in control")
+        : shareFigure("Closed loop", (r) => r?.activity?.closedLoop, "Percent of the analysed time when the loop was in control")
     );
     list.push(
       hidden(LoopAnalysisSeries.CgmActivity)
         ? hiddenFigure("CGM active")
-        : shareFigure("CGM active", (r) => r?.activity?.cgm, "Of analysed time, with glucose readings arriving")
+        : shareFigure("CGM active", (r) => r?.activity?.cgm, "Percent of the analysed time when glucose readings arrived")
     );
     list.push(
       hidden(LoopAnalysisSeries.LoopActivity)
         ? hiddenFigure("Pump active")
-        : shareFigure("Pump active", (r) => r?.activity?.pump, "Of analysed time, with the pump reporting")
+        : shareFigure("Pump active", (r) => r?.activity?.pump, "Percent of the analysed time when the pump sent reports")
     );
     list.push(
-      gapsFigure("Loop gaps", LoopAnalysisSeries.LoopGaps, "loopGaps", "No stretch of more than 15 minutes between loop cycles")
+      gapsFigure("Loop gaps", LoopAnalysisSeries.LoopGaps, "loopGaps", "No gap of more than 15 minutes between loop cycles")
     );
     list.push(
       gapsFigure(
         "Unrecorded delivery",
         LoopAnalysisSeries.UnrecordedDelivery,
         "unrecordedDelivery",
-        "The pump's records say what it delivered all the time the loop ran"
+        "The pump records show the delivery for all the time that the loop ran"
       )
     );
 
@@ -198,8 +198,8 @@
         value: maybePct(value),
         note: noted(
           value == null
-            ? "No delivery is known in this range"
-            : `Of time delivery is known, the loop set basal to zero. Suspended ${maybePct(zero?.suspended?.percent)}, manual zero temps ${maybePct(zero?.manualZeroTemp?.percent)}`,
+            ? "The delivery is not known for this range"
+            : `Percent of the time with known delivery when the loop set basal to zero. Suspended ${maybePct(zero?.suspended?.percent)}, manual zero temps ${maybePct(zero?.manualZeroTemp?.percent)}`,
           maybeComparedPct(comparison?.zeroDelivery?.algorithmZeroTemp?.percent)
         ),
       });
@@ -216,7 +216,7 @@
           label: "At max basal",
           value: pct(value),
           note: noted(
-            `Of algorithm temp time where the limit is known (${maybePct(known)})`,
+            `Percent of the algorithm temp basal time with a known limit (${maybePct(known)})`,
             maybeComparedPct(comparison?.maxBasal?.atCap?.percent)
           ),
         });
@@ -230,7 +230,7 @@
         shareFigure(
           "At max IOB",
           (r) => r?.atMaxIob,
-          "Of loop time with a recorded reason, the loop held back insulin it wanted because IOB was at or near its max IOB"
+          "Percent of the loop time with a recorded reason when the loop gave less insulin than it wanted, because insulin on board (IOB) was at or near max IOB"
         )
       );
 
@@ -262,7 +262,7 @@
         shareFigure(
           "Suggested, not enacted",
           (r) => r?.suggestedNotEnacted,
-          "Of the changes the loop asked for, those that were not carried out (open loop, or the pump didn't respond)"
+          "Percent of the changes that the loop requested but that did not occur (open loop, or the pump did not respond)"
         )
       );
 
@@ -285,7 +285,7 @@
         unknownFigure(
           "Max IOB",
           primary?.unknown?.orefMaxIob === LoopHealthUnknownReason.NoReasonRecorded
-            ? "Shown only when the loop reports max IOB limited a dose, and it didn't in this range"
+            ? "Shown only when the loop reports that max IOB limited a dose. The loop did not report this in this range."
             : unknown("orefMaxIob")
         )
       );
@@ -407,7 +407,7 @@
       {
         key: "unrecorded-delivery",
         title: "Unrecorded delivery",
-        explanation: "Time the loop ran while the pump's records do not say what it delivered.",
+        explanation: "Time when the loop ran but the pump records do not show what the pump delivered.",
         series: LoopAnalysisSeries.UnrecordedDelivery,
         reason: "unrecordedDelivery" as const,
         gaps: primary?.cadence?.unrecordedDelivery,
@@ -439,9 +439,9 @@
         <dd class="text-right">{maybePct(other?.percent)}</dd>
       {/if}
     </dl>
-    <p class="mt-1 text-muted-foreground">All days pools every day's time in this hour; median day is the middle day's share.</p>
+    <p class="mt-1 text-muted-foreground">All days adds the time of every day in this hour. Median day is the share of the middle day.</p>
     {#if hour.daily?.sparse ?? true}
-      <p class="text-muted-foreground">Too few days to read as a pattern</p>
+      <p class="text-muted-foreground">Too few days to show a pattern</p>
     {/if}
   {/if}
 {/snippet}
@@ -455,9 +455,9 @@
         <Clock />
         <Alert.Title>Only the last 24 hours are included</Alert.Title>
         <Alert.Description>
-          You can read only the most recent 24 hours of this data, so the report covers those 24
-          hours whatever range is picked, compares nothing, and each hour of the day rests on at
-          most one day.
+          You can see only the most recent 24 hours of this data. The report shows only those 24
+          hours for all ranges that you select. It does not compare ranges. Each hour of the day uses
+          data from one day at most.
         </Alert.Description>
       </Alert.Root>
     {/if}
@@ -467,10 +467,10 @@
     {#if !hasData}
       <div class="rounded-lg border border-dashed p-8 text-center text-muted-foreground">
         {#if everythingHidden}
-          <p class="font-medium">Your access does not include the data this tab is drawn from</p>
+          <p class="font-medium">Your access does not include the data for this page</p>
         {:else}
           <p class="font-medium">No data in this range</p>
-          <p class="text-sm">Pick a longer range, or relax the filters.</p>
+          <p class="text-sm">Select a longer range, or use fewer filters.</p>
         {/if}
       </div>
     {:else}
@@ -508,12 +508,12 @@
             slotHeading={false}
             id="zero-delivery"
             title="Algorithm zero temps by hour"
-            unit="Share of time the pump's records say what it delivered, %"
+            unit="Share of time with known delivery, %"
             {cursor}
             yDomain={zeroDomain}
             heightClass="h-28"
             describe={(slot) => describeShare(primary?.zeroDelivery?.algorithmZeroTemp, slot)}
-            empty={emptyText(LoopAnalysisSeries.ZeroDelivery, zeroBars.length > 0, "No delivery is known in this range")}
+            empty={emptyText(LoopAnalysisSeries.ZeroDelivery, zeroBars.length > 0, "The delivery is not known for this range")}
           >
             {#snippet marks()}
               <HourBars bars={zeroBars} comparison={zeroComparison} color={ZERO} />
@@ -539,7 +539,7 @@
             slotHeading={false}
             id="max-basal"
             title="At max basal by hour"
-            unit="Share of algorithm temp time whose cap is known, %"
+            unit="Share of algorithm temp basal time with a known cap, %"
             {cursor}
             yDomain={capDomain}
             heightClass="h-28"
@@ -567,7 +567,7 @@
             slotHeading={false}
             id="sensitivity"
             title="Sensitivity ratio by hour"
-            unit="Autosens or dynamic ISF; above 1 means more insulin needed"
+            unit="Autosens or dynamic ISF. Above 1 means that more insulin is necessary."
             {cursor}
             yDomain={sensitivityDomain}
             yFormat={sensitivityTick}
@@ -577,7 +577,7 @@
             empty={emptyText(
               LoopAnalysisSeries.SensitivityRatio,
               sensitivityHours.some((h) => h.value?.p50 != null),
-              "No sensitivity ratio reported in this range"
+              "The loop did not report a sensitivity ratio in this range"
             )}
           >
             {#snippet marks()}
@@ -613,9 +613,9 @@
 
         <p class="flex items-center gap-1.5 px-1 text-xs text-muted-foreground">
           <EyeOff class="size-3.5" />
-          Pale hours rest on too few days to read as a pattern. Click an hour, or press Enter on it,
-          to list only the gaps that began in it. With the keyboard, the arrow keys move along the
-          day and between charts.
+          Pale hours have too few days to show a pattern. To list only the gaps that started in an
+          hour, click the hour or press Enter on it. Use the arrow keys to move along the day and
+          between charts.
         </p>
       </div>
 
@@ -623,14 +623,14 @@
         <div class="flex flex-wrap items-baseline justify-between gap-2">
           <h3 id="loop-health-gaps" class="font-medium">Gaps, longest first</h3>
           {#if pickedHour != null}
-            <Button variant="link" size="inline" onclick={() => (cursor.selected = null)}>Show every hour</Button>
+            <Button variant="link" size="inline" onclick={() => (cursor.selected = null)}>Show all hours</Button>
           {/if}
         </div>
         {#if pickedHour != null}
-          <p class="text-sm text-muted-foreground">Only those that began {hourText(pickedHour)}.</p>
+          <p class="text-sm text-muted-foreground">Only the gaps that started in {hourText(pickedHour)}.</p>
         {/if}
         <p class="sr-only" aria-live="polite">
-          {#if pickedHour != null}{plural(pickedCount, ["# gap began in this hour", "# gaps began in this hour"])}{/if}
+          {#if pickedHour != null}{plural(pickedCount, ["# gap started in this hour", "# gaps started in this hour"])}{/if}
         </p>
 
         {#each gapLists as list (list.key)}
@@ -645,7 +645,7 @@
               {#if list.all.length === 0}
                 <p class="text-sm text-muted-foreground">None</p>
               {:else}
-                <ul id={`${list.key}-list`} class="max-h-96 divide-y overflow-y-auto rounded-md border">
+                <ul id={`${list.key}-list`} class="divide-y rounded-md border">
                   {#each list.shown as gap, i (`${gap.start}${i}`)}
                     <li>
                       <a

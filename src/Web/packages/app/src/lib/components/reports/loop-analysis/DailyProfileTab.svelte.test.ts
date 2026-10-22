@@ -42,7 +42,7 @@ describe("DailyProfileTab", () => {
     await expect.element(page.getByText("+9.60")).toBeVisible();
     await expect.element(page.getByText("32% of total insulin, over 14 days")).toBeVisible();
     await expect
-      .element(page.getByRole("link", { name: /Insulin Delivery has the whole range/ }))
+      .element(page.getByRole("link", { name: /Insulin Delivery shows the totals for the full range/ }))
       .toHaveAttribute("href", "/reports/insulin-delivery?days=14");
   });
 
@@ -53,7 +53,7 @@ describe("DailyProfileTab", () => {
     await expect.element(slider).toBeVisible();
     const [unit, keys] = slider.element().getAttribute("aria-describedby")!.split(" ").map((id) => document.getElementById(id));
     expect(unit?.textContent).toBeTruthy();
-    expect(keys?.textContent).toMatch(/Left and right arrows/);
+    expect(keys?.textContent).toMatch(/Use the left and right arrows/);
     expect(page.getByRole("region", { name: "Glucose", exact: true }).elements()).toHaveLength(0);
   });
 
@@ -99,7 +99,7 @@ describe("DailyProfileTab", () => {
     render(DailyProfileTab, { props: { response: profileResponse() } });
 
     await page.getByRole("slider", { name: "Glucose" }).click();
-    const heading = page.getByRole("heading", { name: /^Days behind/ });
+    const heading = page.getByRole("heading", { name: /^Days for/ });
     await expect.element(heading).toBeVisible();
     await expect.element(heading).not.toHaveFocus();
   });
@@ -109,7 +109,7 @@ describe("DailyProfileTab", () => {
 
     await hoverSlot("Carbs on board", 3);
     await userEvent.keyboard("{Enter}");
-    const heading = page.getByRole("heading", { name: /^Days behind/ });
+    const heading = page.getByRole("heading", { name: /^Days for/ });
     await expect.element(heading).toHaveFocus();
 
     await userEvent.keyboard("{Escape}");
@@ -126,22 +126,22 @@ describe("DailyProfileTab", () => {
     await expect.element(tooltip.getByText("2.50")).toBeVisible();
     await expect.element(tooltip.getByText("14 days")).toBeVisible();
     await expect.element(tooltip.getByText("Mostly as the loop reported it")).toBeVisible();
-    expect(tooltip.getByText("Too few days to read as a pattern").elements()).toHaveLength(0);
+    expect(tooltip.getByText("Too few days to show a pattern").elements()).toHaveLength(0);
   });
 
   it("marks sparse slots as too thin to read as a pattern", async () => {
     render(DailyProfileTab, { props: { response: profileResponse({ sparse: true }) } });
 
     const tooltip = await hoverSlot("Glucose", 1);
-    await expect.element(tooltip.getByText("Too few days to read as a pattern")).toBeVisible();
-    await expect.element(page.getByText(/Faded stretches rest on too few days/)).toBeVisible();
+    await expect.element(tooltip.getByText("Too few days to show a pattern")).toBeVisible();
+    await expect.element(page.getByText(/Faded areas have too few days/)).toBeVisible();
   });
 
   it("draws the comparison and reads it beside the primary range", async () => {
     render(DailyProfileTab, { props: { response: profileResponse({ comparison: true }) } });
 
     await expect
-      .element(page.getByText("The comparison range is drawn as dashed outlines over each series."))
+      .element(page.getByText("The charts show the comparison range as dashed outlines on each series."))
       .toBeVisible();
     const tooltip = await hoverSlot("Insulin on board", 2);
     await expect.element(tooltip.getByText("Compared")).toBeVisible();
@@ -154,7 +154,7 @@ describe("DailyProfileTab", () => {
     await hoverSlot("Glucose", 8);
     await userEvent.keyboard("{Enter}");
 
-    await expect.element(page.getByRole("heading", { name: /^Days behind/ })).toBeVisible();
+    await expect.element(page.getByRole("heading", { name: /^Days for/ })).toBeVisible();
     await expect.element(page.getByRole("heading", { name: "Comparison range" })).toBeVisible();
     const link = page.getByRole("link").first();
     await expect.element(link).toHaveAttribute("href", "/reports/day-in-review?date=2026-10-01&time=08:00");
@@ -184,7 +184,7 @@ describe("DailyProfileTab", () => {
     for (const figure of ["Total insulin", "Delivered vs scheduled basal", "Net loop correction"])
       await expect.element(page.getByText(figure, { exact: true }).first()).toBeVisible();
     await expect.element(page.getByText("Target range hidden: your access does not include it")).toBeVisible();
-    expect(page.getByText("Target range in force").elements()).toHaveLength(0);
+    expect(page.getByText("Active target range").elements()).toHaveLength(0);
     await expect.element(page.getByRole("switch", { name: "Manual temps" })).toBeDisabled();
   });
 
@@ -215,7 +215,7 @@ describe("DailyProfileTab", () => {
     });
 
     await expect.element(page.getByText("This report needs a time zone")).toBeVisible();
-    await expect.element(page.getByText(/No time zone is set in the profile settings/)).toBeVisible();
+    await expect.element(page.getByText(/The profile settings do not have a time zone/)).toBeVisible();
     expect(page.getByRole("slider").elements()).toHaveLength(0);
   });
 

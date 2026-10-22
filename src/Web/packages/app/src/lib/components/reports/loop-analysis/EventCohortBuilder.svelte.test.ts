@@ -48,7 +48,7 @@ describe("EventCohortBuilder", () => {
       },
     });
 
-    await expect.element(page.getByLabelText("Only rises the loop answered with its own correction")).toBeVisible();
+    await expect.element(page.getByLabelText("Only rises that the loop corrected by itself")).toBeVisible();
     await expect.element(page.getByLabelText("Isolated events only")).toBeDisabled();
     await expect.element(page.getByText("(Needs access to treatments)")).toBeVisible();
   });
@@ -67,7 +67,7 @@ describe("EventCohortBuilder", () => {
 
     change("Cohort 1 to", "05:00");
     expect(onchange).not.toHaveBeenCalled();
-    await expect.element(page.getByText("Pick a start and an end that differ, or clear both for all day.")).toBeVisible();
+    await expect.element(page.getByText("Select a start and an end that are different. To use all of the day, clear both.")).toBeVisible();
 
     change("At most (g)", "20");
     const written = onchange.mock.lastCall![0].cohorts![0];
@@ -85,7 +85,7 @@ describe("EventCohortBuilder", () => {
       },
     });
 
-    await expect.element(page.getByText("Your access includes none of the events this tab aligns on.")).toBeVisible();
+    await expect.element(page.getByText("Your access does not include the events that this page aligns.")).toBeVisible();
     expect(page.getByRole("button", { name: "Add cohort" }).elements()).toHaveLength(0);
   });
 });

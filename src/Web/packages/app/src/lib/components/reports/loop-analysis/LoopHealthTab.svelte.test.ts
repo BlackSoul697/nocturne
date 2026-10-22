@@ -32,17 +32,17 @@ describe("LoopHealthTab", () => {
     await tile("Closed loop").not.toContain("AID active");
     await tile("CGM active").toContain("98.7%");
     await tile("Pump active").toContain("92.4%");
-    await tile("Loop gaps").toMatch(/2\s*stretches/);
-    await tile("Loop gaps").toContain("1 h 55 min in all, longest 1 h 30 min");
-    await tile("Unrecorded delivery").toContain("5 h in all");
+    await tile("Loop gaps").toMatch(/2\s*periods/);
+    await tile("Loop gaps").toContain("1 h 55 min in total, longest 1 h 30 min");
+    await tile("Unrecorded delivery").toContain("5 h in total");
     await tile("Algorithm zero temps").toContain("41.0%");
-    await tile("Algorithm zero temps").toContain("Of time delivery is known");
+    await tile("Algorithm zero temps").toContain("Percent of the time with known delivery");
     await tile("Algorithm zero temps").toContain("Suspended 1.2%, manual zero temps 0.0%");
     await tile("At max basal").toContain("2.5%");
-    await tile("At max basal").toMatch(/^At max basal\s*2\.5%\s*Of algorithm temp time where the limit is known/);
-    await tile("At max basal").toContain("where the limit is known (76.7%)");
+    await tile("At max basal").toMatch(/^At max basal\s*2\.5%\s*Percent of the algorithm temp basal time with a known limit/);
+    await tile("At max basal").toContain("with a known limit (76.7%)");
     await tile("At max IOB").toContain("0.1%");
-    await tile("At max IOB").toContain("at or near its max IOB");
+    await tile("At max IOB").toContain("at or near max IOB");
     await tile("Automatic boluses a day").toContain("54.0");
     await tile("Automatic boluses a day").toContain("Median size 0.20 U, P10–P90 0.00–0.40 U");
     await tile("Suggested, not enacted").toContain("0.2%");
@@ -82,12 +82,12 @@ describe("LoopHealthTab", () => {
     render(LoopHealthTab, { props: { response: loopHealthResponse() } });
     await pickHour("Closed loop by hour", 3);
 
-    await expect.element(page.getByText("1 gap began in this hour")).toBeInTheDocument();
+    await expect.element(page.getByText("1 gap started in this hour")).toBeInTheDocument();
     await expect.poll(() => page.getByRole("link").elements().length).toBe(1);
     await expect.element(page.getByRole("link")).toHaveAttribute("href", expect.stringContaining("time=03:10"));
     await expect.element(page.getByRole("heading", { name: "Unrecorded delivery" })).toBeVisible();
 
-    await page.getByRole("button", { name: "Show every hour" }).click();
+    await page.getByRole("button", { name: "Show all hours" }).click();
     await expect.poll(() => page.getByRole("link").elements().length).toBe(3);
   });
 
@@ -97,7 +97,7 @@ describe("LoopHealthTab", () => {
     for (const label of ["Loop gaps", "Unrecorded delivery"]) {
       await tile(label).toContain("Unknown");
       await tile(label).toContain("No loop cycles in this range");
-      await tile(label).not.toMatch(/0\s*stretches/);
+      await tile(label).not.toMatch(/0\s*periods/);
     }
     await expect.poll(() => page.getByText("Unknown: No loop cycles in this range").elements().length).toBe(2);
     await expect.poll(() => page.getByRole("link").elements().length).toBe(0);
@@ -107,8 +107,8 @@ describe("LoopHealthTab", () => {
     render(LoopHealthTab, { props: { response: loopHealthResponse({ capUnknown: true }) } });
 
     await tile("At max basal").toContain("Unknown");
-    await tile("At max basal").toContain("No loop cycle in this range recorded what this needs");
-    await expect.element(page.getByText("Unknown: No loop cycle in this range recorded what this needs")).toBeVisible();
+    await tile("At max basal").toContain("No loop cycle in this range recorded the data that this figure needs");
+    await expect.element(page.getByText("Unknown: No loop cycle in this range recorded the data that this figure needs")).toBeVisible();
   });
 
   it("says when filters left out everything a figure is measured on", async () => {
@@ -116,7 +116,7 @@ describe("LoopHealthTab", () => {
     response.primary!.unknown!.maxBasal = LoopHealthUnknownReason.MaskedOut;
     render(LoopHealthTab, { props: { response } });
 
-    await tile("At max basal").toContain("Everything this is measured on falls in time the filters leave out");
+    await tile("At max basal").toContain("All the data for this figure is in time that the filters exclude");
   });
 
   it("reads figures a system did not record as unknown, without naming the system", async () => {
@@ -130,7 +130,7 @@ describe("LoopHealthTab", () => {
       await tile(label).toContain("The system that ran the loop does not record this");
       await tile(label).not.toMatch(/oref|AAPS|Trio|Loop\b/);
     }
-    await expect.element(page.getByText("No sensitivity ratio reported in this range")).toBeVisible();
+    await expect.element(page.getByText("The loop did not report a sensitivity ratio in this range")).toBeVisible();
   });
 
   it("reads an oref range's unmeasured max IOB and suggestions as unknown with a neutral reason", async () => {
@@ -138,8 +138,8 @@ describe("LoopHealthTab", () => {
       props: { response: loopHealthResponse({ unmeasured: ["atMaxIob", "suggestedNotEnacted"] }) },
     });
 
-    await tile("At max IOB").toContain("No loop cycle in this range recorded what this needs");
-    await tile("Suggested, not enacted").toContain("No loop cycle in this range recorded what this needs");
+    await tile("At max IOB").toContain("No loop cycle in this range recorded the data that this figure needs");
+    await tile("Suggested, not enacted").toContain("No loop cycle in this range recorded the data that this figure needs");
     await tile("Loop's max basal rate setting").toContain("Only Loop uploads this setting");
   });
 
@@ -149,8 +149,8 @@ describe("LoopHealthTab", () => {
     response.primary!.unknown!.orefMaxIob = LoopHealthUnknownReason.NoReasonRecorded;
     render(LoopHealthTab, { props: { response } });
 
-    await tile("Max IOB").toContain("Shown only when the loop reports max IOB limited a dose, and it didn't in this range");
-    await tile("Suggested, not enacted").toContain("(open loop, or the pump didn't respond)");
+    await tile("Max IOB").toContain("Shown only when the loop reports that max IOB limited a dose. The loop did not report this in this range.");
+    await tile("Suggested, not enacted").toContain("(open loop, or the pump did not respond)");
   });
 
   it("counts the loop cycles behind each hour's sensitivity ratio", async () => {
@@ -167,11 +167,11 @@ describe("LoopHealthTab", () => {
     });
 
     await tile("Algorithm zero temps").toMatch(/^Algorithm zero temps\s*–/);
-    await tile("Algorithm zero temps").toContain("No delivery is known in this range");
+    await tile("Algorithm zero temps").toContain("The delivery is not known for this range");
     await tile("Algorithm zero temps").not.toContain("0.0%");
     await tile("Automatic boluses a day").toMatch(/^Automatic boluses a day\s*–/);
     await tile("Automatic boluses a day").toContain("Nothing measured in this range");
-    await expect.element(page.getByText("No delivery is known in this range").last()).toBeVisible();
+    await expect.element(page.getByText("The delivery is not known for this range").last()).toBeVisible();
   });
 
   it("hides what the caller's access withholds, and says so", async () => {
@@ -187,7 +187,7 @@ describe("LoopHealthTab", () => {
     await expect.element(page.getByRole("slider", { name: "CGM active by hour" })).toBeVisible();
     await expect.element(page.getByRole("slider", { name: "Pump active by hour" })).not.toBeInTheDocument();
     await expect.poll(() => page.getByRole("link").elements().length).toBe(0);
-    await expect.element(page.getByText("Time the loop ran while the pump's records")).not.toBeInTheDocument();
+    await expect.element(page.getByText("Time when the loop ran but the pump records")).not.toBeInTheDocument();
   });
 
   it("hides unrecorded delivery on its own, leaving the loop gaps", async () => {
@@ -197,9 +197,9 @@ describe("LoopHealthTab", () => {
     render(LoopHealthTab, { props: { response } });
 
     await tile("Unrecorded delivery").toContain(HIDDEN);
-    await tile("Loop gaps").toMatch(/2\s*stretches/);
+    await tile("Loop gaps").toMatch(/2\s*periods/);
     await expect.poll(() => page.getByRole("link").elements().length).toBe(2);
-    await expect.element(page.getByText("Time the loop ran while the pump's records")).not.toBeInTheDocument();
+    await expect.element(page.getByText("Time when the loop ran but the pump records")).not.toBeInTheDocument();
   });
 
   it("withholds max basal without therapy settings, since Loop's hours at its cap show the setting", async () => {
@@ -208,7 +208,7 @@ describe("LoopHealthTab", () => {
     });
 
     await tile("At max basal").toContain(HIDDEN);
-    await tile("Loop gaps").toMatch(/2\s*stretches/);
+    await tile("Loop gaps").toMatch(/2\s*periods/);
   });
 
   it("puts the comparison beside each figure and over each hour, with a key", async () => {
@@ -216,7 +216,7 @@ describe("LoopHealthTab", () => {
 
     await tile("Closed loop").toContain("Compared: 45.5%");
     await tile("Automatic boluses a day").toContain("Compared: 27.0");
-    await tile("Loop gaps").toContain("Compared: 2 stretches, 1 h 55 min in all");
+    await tile("Loop gaps").toContain("Compared: 2 periods, 1 h 55 min in total");
     await expect.poll(() => page.getByText("Compared range", { exact: true }).elements().length).toBe(6);
     await expect.poll(() => page.getByTestId("compared-hour").elements().length).toBeGreaterThan(0);
 

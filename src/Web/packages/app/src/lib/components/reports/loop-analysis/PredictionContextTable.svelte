@@ -87,6 +87,6 @@
     </table>
   </div>
   {#if anySparse}
-    <p class="px-1 text-xs text-muted-foreground"><span class="italic">Italic</span>: too few days to read as a pattern</p>
+    <p class="px-1 text-xs text-muted-foreground"><span class="italic">Italic</span>: too few days to show a pattern</p>
   {/if}
 </div>

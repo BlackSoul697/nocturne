@@ -172,7 +172,7 @@
         {/if}
         {#if sameTimesCohort === i}
           <p class="basis-full text-xs text-warning" role="status">
-            Pick a start and an end that differ, or clear both for all day.
+            Select a start and an end that are different. To use all of the day, clear both.
           </p>
         {/if}
       </li>
@@ -180,7 +180,7 @@
   </ul>
   {#if cohorts.length === 0}
     <p class="text-sm text-muted-foreground">
-      {available.length > 0 ? "Add a cohort of events to align." : "Your access includes none of the events this tab aligns on."}
+      {available.length > 0 ? "Add a cohort of events to align." : "Your access does not include the events that this page aligns."}
     </p>
   {/if}
 
@@ -243,7 +243,7 @@
           disabled={filterScope.has(REQUIRE_CORROBORATION)}
           onCheckedChange={(checked) => update({ requireCorroboration: checked === true })}
         />
-        <Label for="event-cluster" variant="option">Only rises the loop answered with its own correction</Label>
+        <Label for="event-cluster" variant="option">Only rises that the loop corrected by itself</Label>
         {#if filterScope.has(REQUIRE_CORROBORATION)}
           <span class="text-xs text-muted-foreground">({missingScopeReason(filterScope.get(REQUIRE_CORROBORATION) ?? "")})</span>
         {/if}
@@ -251,7 +251,7 @@
     {/if}
   </div>
   <p class="text-xs text-muted-foreground">
-    Isolated events have no other meal, correction bolus or unannounced rise inside their window. A
-    window across midnight, such as 22:00 to 02:00, wraps to the next day.
+    Isolated events have no other meal, correction bolus or unannounced rise in their window. A
+    window across midnight, for example 22:00 to 02:00, continues into the next day.
   </p>
 </section>

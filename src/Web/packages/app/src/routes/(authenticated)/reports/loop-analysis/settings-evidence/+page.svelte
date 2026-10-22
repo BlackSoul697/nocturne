@@ -6,7 +6,7 @@
   import SettingsEvidenceTab from "$lib/components/reports/loop-analysis/SettingsEvidenceTab.svelte";
 
   const analysis = getLoopAnalysis();
-  const resource = contextResource(() => getSettingsEvidence(analysis.query), { errorTitle: "Error Loading the Settings Evidence" });
+  const resource = contextResource(() => getSettingsEvidence(analysis.query), { errorTitle: "Cannot load the settings evidence" });
 </script>
 
 <svelte:head>

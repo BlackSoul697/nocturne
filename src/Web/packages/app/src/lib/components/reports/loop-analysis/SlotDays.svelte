@@ -74,11 +74,11 @@
     <div>
       <h3 id="slot-days-heading" bind:this={heading} tabindex="-1" class="font-medium outline-none">
 
-        Days behind {time(atMinute(minute))}–{time(atMinute(minute + SLOT_MINUTES))}
+        Days for {time(atMinute(minute))}–{time(atMinute(minute + SLOT_MINUTES))}
       </h3>
       <p class="text-sm text-muted-foreground">
-        Each day whose data counted in this slot. Open one to see it in Day in Review at this time,
-        or press Escape to return to the chart.
+        These are the days whose data this slot uses. Open a day to see it in Day in Review at this
+        time. Press Escape to go back to the chart.
       </p>
     </div>
     <Button variant="ghost" size="icon-sm" onclick={onclose} aria-label="Close the day list">
@@ -92,9 +92,9 @@
         <h4 class="text-xs font-medium text-muted-foreground">{group.label}</h4>
       {/if}
       {#if group.days.length === 0}
-        <p class="text-sm text-muted-foreground">No day contributed to this slot.</p>
+        <p class="text-sm text-muted-foreground">No day has data in this slot.</p>
       {:else}
-        <ul class="max-h-96 divide-y overflow-y-auto rounded-md border">
+        <ul class="divide-y rounded-md border">
           {#each group.days as entry (entry.day.date)}
             <li>
               <a

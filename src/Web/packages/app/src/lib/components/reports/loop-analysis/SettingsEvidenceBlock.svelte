@@ -110,8 +110,8 @@
         <Stethoscope class="mt-0.5 size-4 shrink-0 text-info" aria-hidden="true" />
         <span>
           Your data points to more insulin here than your profile gives. This is an observation, not
-          a setting to copy: settings are usually changed in small steps, one at a time, and with
-          your care team.
+          a setting to copy. Usually, settings are changed in small steps, one at a time, with your
+          care team.
         </span>
       </p>
     {:else if figure.observed != null}
@@ -163,10 +163,10 @@
       <div class="space-y-1">
         <h4 class="font-medium">{plural(episodes.length, ["# episode", "# episodes"])}</h4>
         <Tooltip.Provider>
-        <div class="max-h-80 overflow-auto rounded-md border">
+        <div class="overflow-x-auto rounded-md border">
           <table class="w-full text-xs tabular-nums">
-            <caption class="sr-only">Episodes behind the {span} figure; open one in Day in Review</caption>
-            <thead class="sticky top-0 bg-card">
+            <caption class="sr-only">Episodes for the {span} figure. Open an episode in Day in Review.</caption>
+            <thead>
               <tr class="border-b text-muted-foreground">
                 <th scope="col" class="px-2 py-1.5 text-left font-medium">When</th>
                 {#each columns as column (column.label)}

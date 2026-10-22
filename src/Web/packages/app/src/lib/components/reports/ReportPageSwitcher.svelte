@@ -16,15 +16,15 @@
 </script>
 
 {#if family}
-  <div class="overflow-x-auto border-t border-border px-3 @md:px-6 print:hidden">
-    <nav aria-label="{family.title} pages" class="flex gap-1 py-1.5 whitespace-nowrap" data-testid="report-pages">
+  <div class="border-t border-border px-3 @md:px-6 print:hidden">
+    <nav aria-label="{family.title} pages" class="flex flex-wrap gap-1 py-1.5" data-testid="report-pages">
       {#each family.reports as report (report.href)}
         {@const current = report.href === page.url.pathname}
         <!-- eslint-disable-next-line svelte/no-navigation-without-resolve -- report.href is a literal in-app path from report-navigation.svelte.ts -->
         <a href="{report.href}{page.url.search}"
           aria-current={current ? "page" : undefined}
           class={cn(
-            "rounded-md px-2.5 py-1 text-sm font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground",
+            "rounded-md px-2.5 py-1 text-sm font-medium whitespace-nowrap text-muted-foreground transition-colors hover:bg-muted hover:text-foreground",
             current && "bg-muted text-foreground"
           )}
         >

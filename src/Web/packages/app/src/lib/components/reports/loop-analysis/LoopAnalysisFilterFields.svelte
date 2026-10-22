@@ -185,7 +185,7 @@
   <Separator />
 
   <fieldset class="space-y-3">
-    <legend class="text-sm font-medium">Leave out the time of</legend>
+    <legend class="text-sm font-medium">Exclude the time of</legend>
     {#each MASK_KEYS as key (key)}
       {@const enabled = usable(key)}
       <div class="flex items-start gap-2">

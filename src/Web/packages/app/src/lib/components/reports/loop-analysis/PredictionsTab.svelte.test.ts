@@ -27,11 +27,11 @@ describe("PredictionsTab", () => {
     for (const curve of ["IOB", "Zero temp", "COB", "UAM"]) await expect.element(slider(curve)).toBeVisible();
     await expect.element(page.getByText("4,032")).toBeVisible();
     await expect.element(page.getByText("Trio", { exact: true })).toBeVisible();
-    await expect.element(page.getByText(/Only the bias at \+30 min and \+60 min is a sign/)).toBeVisible();
-    await expect.element(page.getByText(/the average size of the miss,\s+whichever way it went/)).toBeVisible();
-    await expect.element(page.getByText(/oref emits its UAM curve only while/)).toBeVisible();
-    await expect.element(page.getByText(/oref cuts its zero-temp curve/)).toBeVisible();
-    await expect.element(page.getByText(/counted as interrupted and left out of every bias/)).toBeVisible();
+    await expect.element(page.getByText(/Only the bias at \+30 min and \+60 min gives information/)).toBeVisible();
+    await expect.element(page.getByText(/the average size of the\s+error, in either direction/)).toBeVisible();
+    await expect.element(page.getByText(/oref gives its unannounced meal \(UAM\) curve only when/)).toBeVisible();
+    await expect.element(page.getByText(/oref stops its zero-temp curve/)).toBeVisible();
+    await expect.element(page.getByText(/Interrupted predictions are not included in any bias/)).toBeVisible();
     expect(page.getByText(/Faded horizons/).elements()).toHaveLength(0);
   });
 
@@ -91,9 +91,9 @@ describe("PredictionsTab", () => {
     const cell = heatmapCell("-16").element() as HTMLElement;
     expect(cell.className).toContain("italic");
     expect(cell.className).not.toContain("text-muted-foreground");
-    await expect.element(page.getByText(/Faded horizons rest on too few days/)).toBeVisible();
+    await expect.element(page.getByText(/Faded horizons have too few days/)).toBeVisible();
     const tooltip = await focusHorizon("UAM", 0);
-    await expect.element(tooltip.getByText("Too few days to read as a pattern")).toBeVisible();
+    await expect.element(tooltip.getByText("Too few days to show a pattern")).toBeVisible();
   });
 
   it("lists each context for the curve picked, with the Adjusted note", async () => {
@@ -134,7 +134,7 @@ describe("PredictionsTab", () => {
     render(PredictionsTab, { props: { response: predictionResponse({ scopes: NO_DEVICES }) } });
 
     await expect.element(page.getByText("Prediction accuracy is hidden")).toBeVisible();
-    await expect.element(page.getByText(/your access does not include\s+device data/)).toBeVisible();
+    await expect.element(page.getByText(/Your access does not include\s+device data/)).toBeVisible();
     expect(page.getByRole("slider").elements()).toHaveLength(0);
   });
 
@@ -142,7 +142,7 @@ describe("PredictionsTab", () => {
     render(PredictionsTab, { props: { response: predictionResponse({ scopes: NO_GLUCOSE }) } });
 
     await expect.element(page.getByText("Prediction accuracy is hidden")).toBeVisible();
-    await expect.element(page.getByText(/your access does not\s+include glucose/)).toBeVisible();
+    await expect.element(page.getByText(/Your access does not include\s+glucose/)).toBeVisible();
     expect(page.getByText(/device data/).elements()).toHaveLength(0);
   });
 
@@ -152,7 +152,7 @@ describe("PredictionsTab", () => {
     await expect.element(slider("UAM")).toBeVisible();
     expect(slider("IOB").elements()).toHaveLength(0);
     await expect.element(page.getByText(/These curves are hidden:\s+IOB, Zero temp, COB\./)).toBeVisible();
-    await expect.element(page.getByText(/your access does not include treatments/)).toBeVisible();
+    await expect.element(page.getByText(/your access does not\s+include treatments/)).toBeVisible();
     expect(page.getByText("After a correction").elements()).toHaveLength(0);
     expect(page.getByText("Interrupted", { exact: true }).elements()).toHaveLength(0);
   });
@@ -163,7 +163,7 @@ describe("PredictionsTab", () => {
     });
 
     await expect.element(page.getByText("Interrupted", { exact: true }).first()).toBeVisible();
-    await expect.element(page.getByText(/Interrupted counts are left out of the bias/)).toBeVisible();
+    await expect.element(page.getByText(/The bias, MAE and n do not include interrupted predictions/)).toBeVisible();
     expect(page.getByText(/curves? (is|are) hidden/).elements()).toHaveLength(0);
   });
 
@@ -171,7 +171,7 @@ describe("PredictionsTab", () => {
     render(PredictionsTab, { props: { response: { ...predictionResponse(), ignoredFilters: ["excludeExercise", "startDate"] } } });
 
     await expect.element(page.getByText("Some filters were not applied")).toBeVisible();
-    await expect.element(page.getByText(/so they were ignored:\s+Exercise\./)).toBeVisible();
+    await expect.element(page.getByText(/so the report did not apply them:\s+Exercise\./)).toBeVisible();
   });
 
   it("explains a missing time zone in place of the figures", async () => {
@@ -193,17 +193,17 @@ describe("PredictionsTab", () => {
     render(PredictionsTab, { props: { response: predictionResponse({ historyClamped: true }) } });
 
     await expect.element(page.getByText("Only the last 24 hours are included")).toBeVisible();
-    await expect.element(page.getByText(/left out until their readings arrive/)).toBeVisible();
+    await expect.element(page.getByText(/not included until their readings arrive/)).toBeVisible();
   });
 
   it("says when the range has no predictions, without suggesting a longer range to a clamped viewer", async () => {
     const view = render(PredictionsTab, { props: { response: predictionResponse({ curves: [] }) } });
     await expect.element(page.getByText("No predictions in this range")).toBeVisible();
-    await expect.element(page.getByText(/Pick a longer range/)).toBeVisible();
+    await expect.element(page.getByText(/Select a longer range/)).toBeVisible();
     view.unmount();
 
     render(PredictionsTab, { props: { response: predictionResponse({ curves: [], historyClamped: true }) } });
-    await expect.element(page.getByText(/which hold none yet/)).toBeVisible();
-    expect(page.getByText(/Pick a longer range/).elements()).toHaveLength(0);
+    await expect.element(page.getByText(/there are no predictions in them yet/)).toBeVisible();
+    expect(page.getByText(/Select a longer range/).elements()).toHaveLength(0);
   });
 });

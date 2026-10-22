@@ -65,7 +65,7 @@
 <div class="overflow-x-auto rounded-lg border bg-card">
   <table class="w-full text-sm tabular-nums">
     <caption class="sr-only">
-      {plural(events.length, ["# event", "# events"])}; sort by a column, or open one in Day in Review
+      {plural(events.length, ["# event", "# events"])}. Sort by a column, or open an event in Day in Review.
     </caption>
     <thead>
       <tr class="border-b text-xs text-muted-foreground">

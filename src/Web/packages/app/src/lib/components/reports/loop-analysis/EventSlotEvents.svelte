@@ -62,9 +62,9 @@
         Events with a glucose reading in {label}
       </h3>
       <p class="text-sm text-muted-foreground">
-        Whichever chart the stretch was picked on, these are the events with a glucose reading in it;
-        an insulin or carbs figure there may rest on a few more or fewer. Open one to see it in Day
-        in Review, or press Escape to return to the chart.
+        These are the events with a glucose reading in this period, on all charts. An insulin or carbs
+        figure in this period can use slightly more or fewer events. Open an event to see it in Day in
+        Review. Press Escape to go back to the chart.
       </p>
     </div>
     <Button variant="ghost" size="icon-sm" onclick={onclose} aria-label="Close the event list">
@@ -81,7 +81,7 @@
       {#if group.events.length === 0}
         <p class="text-sm text-muted-foreground">No event of this cohort has a reading here.</p>
       {:else}
-        <ul class="max-h-80 divide-y overflow-y-auto rounded-md border">
+        <ul class="divide-y rounded-md border">
           {#each group.events as event (`${event.at}-${event.anchor}`)}
             <li>
               <a

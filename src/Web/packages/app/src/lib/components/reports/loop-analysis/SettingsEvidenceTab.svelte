@@ -72,7 +72,7 @@
   const cursor = new TimeOfDayCursor();
 
   const iobHint = () =>
-    "Insulin on board counts delivery against the schedule, so it is negative when the loop gave less basal than scheduled.";
+    "Insulin on board here compares delivery with the schedule. It is negative when the loop gave less basal than the schedule.";
 
   const basalColumns: EpisodeColumn<BasalEvidenceDay>[] = $derived([
     { label: "Need, U/h", value: (d) => u(d.value) },
@@ -82,7 +82,7 @@
     {
       label: "Carried insulin, U/h",
       value: (d) => u(d.carriedInsulin),
-      hint: "Insulin carried in from earlier, against the schedule. It is negative when less than the schedule was delivered before the stretch.",
+      hint: "Insulin carried in from earlier, compared with the schedule. It is negative when the delivery before the period was less than the schedule.",
     },
     { label: `Glucose change, ${bgLabel()}`, value: (d) => change(d.glucoseChange) },
   ]);
@@ -142,7 +142,7 @@
             key: "basal",
             title: "Basal",
             caption:
-              "Fasting stretches, in two-hour blocks: the schedule, plus what the loop added, plus insulin carried in from earlier, adjusted for whether glucose rose or fell.",
+              "Fasting periods, in two-hour blocks. Each figure adds the schedule, the insulin that the loop added and the insulin carried in from earlier. It then adjusts for a glucose increase or decrease.",
             direction: "A higher basal rate means more insulin every hour.",
             unit: "U/h",
             blocks: primary.basal ?? [],
@@ -154,8 +154,8 @@
           {
             key: "isf",
             title: "Insulin sensitivity (ISF)",
-            caption: `Correction boluses given with glucose high and steady and no carbs logged around them: the drop over the next ${(rules?.isfMinimumWindowMs ?? 0) / 3_600_000} to ${hoursText(rules?.isfWindowMs)} per unit that acted.`,
-            direction: "A higher ISF means each unit lowers glucose more, so less insulin for the same correction.",
+            caption: `Correction boluses given when glucose was high and steady, with no carbs logged near them. The figure is the glucose decrease in the next ${(rules?.isfMinimumWindowMs ?? 0) / 3_600_000} to ${hoursText(rules?.isfWindowMs)}, per unit of insulin that acted.`,
+            direction: "A higher ISF means that each unit decreases glucose more, so less insulin is necessary for the same correction.",
             unit: isfUnit,
             blocks: primary.isf ?? [],
             compared: comparison?.isf ?? null,
@@ -166,7 +166,7 @@
           {
             key: "carbRatio",
             title: "Carb ratio",
-            caption: `Meals logged with carbs and nothing else nearby: grams per unit of insulin the meal needed over ${hoursText(rules?.carbRatioWindowMs)}.`,
+            caption: `Meals logged with carbs and no other event near them. The figure is the grams for each unit of insulin that the meal needed in ${hoursText(rules?.carbRatioWindowMs)}.`,
             direction: "A higher carb ratio means less insulin for the same meal.",
             unit: "g/U",
             blocks: primary.carbRatio ?? [],
@@ -188,7 +188,7 @@
     if (block == null) return "No block";
     if (block.observed == null) return unavailableText(block.unavailableReason, section.key);
     const read = `Observed ${section.format(block.observed)} ${section.unit}, profile ${block.profile == null ? "–" : section.format(block.profile)}, ${confidenceLabel(block.confidence)}, n ${block.n ?? 0}`;
-    return block.towardsMoreInsulin ? `${read}. More insulin than your profile; see the note.` : read;
+    return block.towardsMoreInsulin ? `${read}. More insulin than your profile. See the note.` : read;
   }
 
   function key(section: Section): StripKeyItem[] {
@@ -217,8 +217,8 @@
       <Stethoscope />
       <Alert.Title>Observations, not advice</Alert.Title>
       <Alert.Description>
-        These figures are read from your own data, and each says how sure it can be. They are not
-        medical advice. Talk any change to your settings through with your diabetes care team.
+        These figures come from your own data. Each figure shows its confidence. They are not medical
+        advice. Speak to your diabetes care team before you change a setting.
       </Alert.Description>
     </Alert.Root>
 
@@ -229,18 +229,18 @@
         <Clock class="size-10 opacity-50" />
         <p class="font-medium text-foreground">Settings evidence needs more than the last 24 hours of history</p>
         <p class="max-w-prose text-sm">
-          You can read only the most recent 24 hours of this data. Every figure here is checked
-          against the hours before it, such as whether anything was eaten, and those hours are out
-          of reach, so nothing is shown rather than figures that cannot be checked.
+          You can see only the most recent 24 hours of this data. Each figure on this page is checked
+          against the hours before it, for example whether food was eaten. You cannot see those hours.
+          Thus this page does not show figures that it cannot check.
         </p>
       </div>
     {:else if withheld || primary == null}
       <div class="flex flex-col items-center gap-3 rounded-lg border border-dashed px-6 py-10 text-center text-muted-foreground">
         <EyeOff class="size-10 opacity-50" />
-        <p class="font-medium text-foreground">Your access does not include the data this tab is drawn from</p>
+        <p class="font-medium text-foreground">Your access does not include the data for this page</p>
         <p class="max-w-prose text-sm">
-          Settings evidence reads glucose, the insulin delivered and the profile's settings together,
-          so it is shown only with access to all three.
+          Settings evidence uses glucose, the delivered insulin and the profile settings together. It
+          shows only if you have access to all three.
         </p>
       </div>
     {:else}
@@ -301,7 +301,7 @@
                     {#if block.towardsMoreInsulin}
                       <p class="mt-1 flex items-center gap-1">
                         <Stethoscope class="size-3.5 shrink-0 text-info" aria-hidden="true" />
-                        More insulin than your profile; see the note.
+                        More insulin than your profile. See the note.
                       </p>
                     {/if}
                   {/if}
@@ -314,7 +314,7 @@
 
           {#if section.key === "carbRatio" && noMealsLogged}
             <p class="rounded-md border px-3 py-2 text-sm text-muted-foreground">
-              Carb ratio needs meals logged with carbs; none were logged in this range.
+              Carb ratio needs meals logged with carbs. No meals were logged with carbs in this range.
             </p>
           {:else}
           <div class="@container rounded-md border" role="list" aria-label="{section.title} by block">
@@ -375,8 +375,9 @@
 
       <p class="flex items-center gap-1.5 px-1 text-xs text-muted-foreground">
         <Info class="size-3.5" />
-        Hollow dots are low-confidence figures. Open a block to see why, what was set aside, and the
-        episodes behind it. With the keyboard, the arrow keys move along the day and between charts.
+        Hollow dots show figures with low confidence. Open a block to see the reasons, the candidates
+        that were set aside and the episodes for the figure. Use the arrow keys to move along the day
+        and between charts.
       </p>
     {/if}
   </div>

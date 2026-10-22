@@ -68,15 +68,15 @@
     const n = (count: number | undefined) => count ?? 0;
     return [
       n(result?.notIsolated) > 0
-        ? plural(n(result?.notIsolated), ["# left out for another event in its window", "# left out for another event in their window"])
+        ? plural(n(result?.notIsolated), ["# not included because of another event in its window", "# not included because of another event in their window"])
         : null,
       n(result?.missingAnchorGlucose) > 0
         ? plural(n(result?.missingAnchorGlucose), ["# without a glucose reading at the time", "# without a glucose reading at the time"])
         : null,
       n(result?.beforeVisibleHistory) > 0
         ? plural(n(result?.beforeVisibleHistory), [
-            "# left out because what came before it is outside the last 24 hours",
-            "# left out because what came before them is outside the last 24 hours",
+            "# not included because the time before it is outside the last 24 hours",
+            "# not included because the time before them is outside the last 24 hours",
           ])
         : null,
     ]
@@ -207,7 +207,7 @@
       ? hiddenText()
       : allSlots.some((s) => panel.pick(s) != null)
         ? null
-        : "Nothing recorded around these events";
+        : "No data recorded near these events";
 
   const listed = $derived(!hidden(LoopAnalysisSeries.EventList));
 
@@ -226,8 +226,8 @@
         <Clock />
         <Alert.Title>Only the last 24 hours are included</Alert.Title>
         <Alert.Description>
-          You can read only the most recent 24 hours of this data, so the events are those of the
-          last 24 hours whatever range is picked, and nothing is compared.
+          You can see only the most recent 24 hours of this data. The events are from the last 24
+          hours for all ranges that you select. There is no comparison.
         </Alert.Description>
       </Alert.Root>
     {/if}
@@ -237,7 +237,7 @@
     {#if cohorts.length === 0}
       <div class="rounded-lg border border-dashed p-8 text-center text-muted-foreground">
         <p class="font-medium">No events to align</p>
-        <p class="text-sm">Pick an event your access includes.</p>
+        <p class="text-sm">Select an event that your access includes.</p>
       </div>
     {:else}
       <ul class="space-y-1.5 text-sm" aria-label="Cohorts">
@@ -261,13 +261,13 @@
       {#if !anyEvents}
         <div class="rounded-lg border border-dashed p-8 text-center text-muted-foreground">
           <p class="font-medium">No events like these in this range</p>
-          <p class="text-sm">Pick a longer range, widen the cohorts, or relax the filters.</p>
+          <p class="text-sm">Select a longer range, make the cohorts wider, or use fewer filters.</p>
         </div>
       {:else}
         <div class="space-y-5 rounded-lg border bg-card p-3 @md:p-4">
           {#if comparing}
             <p class="text-xs text-muted-foreground">
-              The comparison range is drawn as dashed outlines in each cohort's colour.
+              The charts show the comparison range as dashed outlines in the colour of each cohort.
             </p>
           {/if}
 
@@ -330,10 +330,10 @@
 
           <p class="flex items-center gap-1.5 px-1 text-xs text-muted-foreground">
             <Info class="size-3.5" />
-            Each band is a cohort's events lined up on the event, at 0. Faded stretches rest on too
-            few events to read as a pattern. {#if listed}Click a time, or press Enter on it, to list
-              the events with a glucose reading there.{/if} With the keyboard, the arrow keys move along the window and
-            between charts, and Home and End go to either end.
+            Each band shows the events of a cohort, aligned on the event at 0. Faded areas have too few
+            events to show a pattern. {#if listed}To list the events with a glucose reading at a time,
+              click the time or press Enter on it.{/if} Use the arrow keys to move along the window and
+            between charts. Use Home and End to go to the start and the end.
           </p>
         </div>
 

@@ -166,10 +166,10 @@
           {/if}
         </dl>
         {#if axis[shown].settingsSignal}
-          <p class="mt-1 text-muted-foreground">A settings signal: early enough that the loop has not acted on it yet</p>
+          <p class="mt-1 text-muted-foreground">A settings signal. At this horizon, the loop has not yet acted on the prediction.</p>
         {/if}
         {#if h?.error?.sparse}
-          <p class="mt-1 text-muted-foreground">Too few days to read as a pattern</p>
+          <p class="mt-1 text-muted-foreground">Too few days to show a pattern</p>
         {/if}
       </div>
     {/if}

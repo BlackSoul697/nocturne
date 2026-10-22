@@ -31,51 +31,54 @@ export function confidenceLabel(confidence: SettingsEvidenceConfidence | undefin
 export function reasonText(reason: SettingsEvidenceConfidenceReason | undefined): { why: string; raise: string } {
   switch (reason) {
     case SettingsEvidenceConfidenceReason.FewEpisodes:
-      return { why: "Few episodes are behind it.", raise: "It firms up when the range holds more of them." };
+      return {
+        why: "Only a small number of episodes give this figure.",
+        raise: "Confidence increases when the range has more episodes.",
+      };
     case SettingsEvidenceConfidenceReason.WideSpread:
       return {
-        why: "The episodes disagree widely with one another.",
-        raise: "It firms up when more episodes show whether the figure settles.",
+        why: "The episodes are very different from each other.",
+        raise: "Confidence increases when more episodes show if the figure becomes stable.",
       };
     case SettingsEvidenceConfidenceReason.IsfDependent:
       return {
-        why: "Glucose changes were converted with the profile's ISF, not one seen in your data.",
-        raise: "It firms up when your data includes correction boluses at this time of day, given with glucose steady and no carbs logged around them.",
+        why: "The glucose changes were converted with the ISF from the profile, not with an ISF from your data.",
+        raise: "Confidence increases when your data has correction boluses at this time of day, given when glucose was steady and no carbs were logged near them.",
       };
     case SettingsEvidenceConfidenceReason.BasalDependent:
       return {
         why: "The insulin was measured against basal that was not checked for this time of day.",
-        raise: "It firms up when your data includes times without food at this time of day.",
+        raise: "Confidence increases when your data has times without food at this time of day.",
       };
     case SettingsEvidenceConfidenceReason.ResidualIob:
       return {
-        why: "Much of the insulin was still active when the window ended, so the insulin curve carries the figure.",
-        raise: "It firms up when your data includes episodes with less insulin still active at their end.",
+        why: "Much of the insulin was still active at the end of the window, so the figure depends on the insulin curve.",
+        raise: "Confidence increases when your data has episodes with less insulin still active at their end.",
       };
     case SettingsEvidenceConfidenceReason.MostNotIsolated:
       return {
-        why: "Most candidates overlapped other meals, boluses or rises, so the few that did not may not be typical.",
-        raise: "It firms up when your data includes more stretches without overlaps.",
+        why: "Most candidates overlapped other meals, boluses or rises. The few that did not overlap are possibly not typical.",
+        raise: "Confidence increases when your data has more periods without overlaps.",
       };
     case SettingsEvidenceConfidenceReason.FastingUnverifiable:
       return {
-        why: "Carbs are logged on few days, so fasting time is told from glucose alone.",
-        raise: "It firms up when your data includes carbs logged on more days, so fasting time can be told from meals.",
+        why: "Carbs are logged on only a few days, so the fasting time comes from glucose only.",
+        raise: "Confidence increases when your data has carbs logged on more days, so that the fasting time can come from meals.",
       };
     case SettingsEvidenceConfidenceReason.MoreInsulinOnBorrowedInput:
       return {
-        why: "It points towards more insulin, and part of it rests on something this block cannot check by itself: another figure, the profile, or the insulin curve's estimate.",
-        raise: "Evidence from this block alone would make it firmer.",
+        why: "This figure points to more insulin. Part of it depends on something that this block cannot check by itself: another figure, the profile, or the estimate of the insulin curve.",
+        raise: "Confidence increases with evidence from this block only.",
       };
     case SettingsEvidenceConfidenceReason.StillMovingAtEnd:
       return {
-        why: "Glucose was usually still moving when the window closed, so part of the response was missed.",
-        raise: "It firms up when your data includes episodes whose glucose settles before the window closes.",
+        why: "Glucose usually still changed at the end of the window, so the figure does not include all of the response.",
+        raise: "Confidence increases when your data has episodes where glucose becomes stable before the end of the window.",
       };
     case SettingsEvidenceConfidenceReason.CarriedInsulinMaterial:
       return {
-        why: "Much of it rests on insulin carried in from earlier, as the insulin curve estimates it.",
-        raise: "It firms up when your data includes times without food that start with little insulin still active.",
+        why: "Much of the figure depends on insulin carried in from earlier, as the insulin curve estimates it.",
+        raise: "Confidence increases when your data has times without food that start with little insulin still active.",
       };
     default:
       return { why: "", raise: "" };
@@ -97,11 +100,11 @@ export function unavailableText(
     case SettingsEvidenceUnavailableReason.NoneIsolated:
       return "Every meal in this block overlapped another meal, bolus or rise";
     case SettingsEvidenceUnavailableReason.NoneQualified:
-      return "Every candidate was set aside; open the block to see why";
+      return "All candidates were set aside. Open the block to see why.";
     case SettingsEvidenceUnavailableReason.TooFew:
       return "Too few episodes to show a figure";
     case SettingsEvidenceUnavailableReason.SteepTrend:
-      return "Glucose moved too much across this block to read basal from it";
+      return "Glucose changed too much in this block to calculate basal from it";
     case SettingsEvidenceUnavailableReason.Inconsistent:
       return "The loop adjusted in different directions on different days";
     default:
@@ -125,7 +128,7 @@ export function ruleText(rule: SettingsEvidenceRule | undefined, rules: Settings
     case SettingsEvidenceRule.Filtered:
       return "Outside the report's filters";
     case SettingsEvidenceRule.OutsideRange:
-      return "Ran past the edge of the range";
+      return "Not fully inside the range";
     case SettingsEvidenceRule.CarbsBefore:
       return `Carbs within ${hoursText(rules?.basalCarbFreeMs)} before, or during`;
     case SettingsEvidenceRule.RiseBefore:
@@ -145,7 +148,7 @@ export function ruleText(rule: SettingsEvidenceRule | undefined, rules: Settings
     case SettingsEvidenceRule.NotAboveTarget:
       return "Glucose was not above the target range";
     case SettingsEvidenceRule.IobAtBolus:
-      return "More insulin was already active than the bolus itself";
+      return "The active insulin was already more than the bolus";
     case SettingsEvidenceRule.IobUnknown:
       return "Insulin on board is not known";
     case SettingsEvidenceRule.IobSourceChanged:
@@ -163,7 +166,7 @@ export function ruleText(rule: SettingsEvidenceRule | undefined, rules: Settings
     case SettingsEvidenceRule.InsulinUncovered:
       return "The pump's records were incomplete";
     case SettingsEvidenceRule.TooLittleInsulin:
-      return "Too little insulin to read a ratio from";
+      return "Too little insulin to calculate a ratio";
     default:
       return "Set aside";
   }

@@ -126,9 +126,9 @@
         <Clock />
         <Alert.Title>Only the last 24 hours are included</Alert.Title>
         <Alert.Description>
-          You can read only the most recent 24 hours of this data, so these figures cover the
-          predictions made in those 24 hours whatever range is picked, and compare nothing. The most
-          recent predictions are left out until their readings arrive.
+          You can see only the most recent 24 hours of this data. These figures show only the
+          predictions from those 24 hours, for all ranges that you select. There is no comparison.
+          The most recent predictions are not included until their readings arrive.
         </Alert.Description>
       </Alert.Root>
     {/if}
@@ -141,13 +141,13 @@
         <h2 class="font-medium">Prediction accuracy is hidden</h2>
         <p class="max-w-prose text-sm text-muted-foreground">
           {#if devicesHidden}
-            The predictions come from your loop's device status, and your access does not include
+            The predictions come from the device status of your loop. Your access does not include
             device data.
           {:else}
-            The predictions are compared with your glucose readings, and your access does not
-            include glucose.
+            The predictions are compared with your glucose readings. Your access does not include
+            glucose.
           {/if}
-          Someone who manages this account can grant it.
+          A person who manages this account can give you access.
         </p>
       </div>
     {:else}
@@ -157,8 +157,9 @@
         <p class="flex items-start gap-1.5 px-1 text-sm text-muted-foreground">
           <EyeOff class="mt-0.5 size-4 shrink-0" />
           {plural(hiddenCurves.length, ["This curve is hidden", "These curves are hidden"])}:
-          {hiddenCurves.map(curveLabel).join(", ")}. Each is read only in the contexts the algorithm
-          relies on it in, and those come from treatments, which your access does not include.
+          {hiddenCurves.map(curveLabel).join(", ")}. The report reads each curve only in the contexts
+          where the algorithm uses it. These contexts come from treatments, and your access does not
+          include treatments.
         </p>
       {/if}
 
@@ -166,47 +167,47 @@
         <div class="rounded-lg border border-dashed p-8 text-center text-muted-foreground">
           <p class="font-medium">No predictions in this range</p>
           <p class="text-sm">
-            Prediction accuracy needs the predictions your loop uploads with its device status.
+            Prediction accuracy needs the predictions that your loop uploads with its device status.
             {#if response.historyClamped}
-              Your access covers only the last 24 hours, which hold none yet.
+              Your access includes only the last 24 hours, and there are no predictions in them yet.
             {:else}
-              Pick a longer range, or relax the filters.
+              Select a longer range, or use fewer filters.
             {/if}
           </p>
         </div>
       {:else}
         <Alert.Root variant="info">
           <Info />
-          <Alert.Title>Reading these figures</Alert.Title>
+          <Alert.Title>How to read these figures</Alert.Title>
           <Alert.Description>
             <ul class="list-disc space-y-1 pl-4">
               <li>
-                Bias is the prediction minus the reading that followed: positive where the
-                prediction ran high. MAE, the mean absolute error, is the average size of the miss,
-                whichever way it went.
+                Bias is the prediction minus the reading that followed it. A positive bias means that
+                the prediction was too high. MAE (mean absolute error) is the average size of the
+                error, in either direction.
               </li>
               {#if settingsSignal}
                 <li>
-                  Only the bias at {settingsSignal} is a sign of your settings. The readings at longer
-                  horizons include everything the loop did after the prediction, which the
-                  prediction assumed would not happen.
+                  Only the bias at {settingsSignal} gives information about your settings. The
+                  readings at longer horizons include all the actions of the loop after the
+                  prediction. The prediction assumed that these actions would not occur.
                 </li>
               {/if}
               <li>
-                Predictions followed by a carb entry or manual bolus before their horizon are
-                counted as interrupted and left out of every bias figure, since the reading then
-                measures that action.
+                A prediction is interrupted if a carb entry or manual bolus occurs before its
+                horizon. Interrupted predictions are not included in any bias figure, because the
+                reading then measures that action.
               </li>
               {#if has(PredictionCurve.Uam)}
                 <li>
-                  oref emits its UAM curve only while it sees glucose rising faster than insulin
-                  alone predicts, so UAM accuracy is measured only in that time.
+                  oref gives its unannounced meal (UAM) curve only when glucose increases faster than
+                  insulin alone predicts. Thus the report measures UAM accuracy only during that time.
                 </li>
               {/if}
               {#if has(PredictionCurve.ZeroTemp)}
                 <li>
-                  oref cuts its zero-temp curve where it turns up above target, so its long
-                  horizons come only from predictions that stayed low.
+                  oref stops its zero-temp curve where the curve goes up above the target. Thus its
+                  long horizons come only from predictions that stayed low.
                 </li>
               {/if}
             </ul>
@@ -217,8 +218,8 @@
           <div class="space-y-1 px-1">
             <h2 id="prediction-error-title" class="font-medium">Error by horizon</h2>
             <p class="text-xs text-muted-foreground">
-              The spread of prediction minus reading, in {unit}, at each horizon: the bias as the
-              bold line, with the MAE and the number of predictions above.
+              The spread of prediction minus reading, in {unit}, at each horizon. The bold line is the
+              bias. The MAE and the number of predictions are above each horizon.
             </p>
           </div>
           <div class="flex flex-wrap items-center gap-x-4 gap-y-1 px-1">
@@ -250,11 +251,12 @@
           {#if anySparse}
             <p class="flex items-center gap-1.5 px-1 text-xs text-muted-foreground">
               <EyeOff class="size-3.5" />
-              Faded horizons rest on too few days to read as a pattern.
+              Faded horizons have too few days to show a pattern.
             </p>
           {/if}
           <p class="px-1 text-xs text-muted-foreground">
-            With the keyboard, the arrow keys move between horizons, and Home and End go to either end.
+            Use the arrow keys to move between horizons. Use Home and End to go to the first or the
+            last horizon.
           </p>
         </section>
 
@@ -284,7 +286,7 @@
             <div class="space-y-2">
               <h3 class="px-1 text-sm font-medium">{curveLabel(detail.curve)} bias by hour of day</h3>
               <p class="px-1 text-xs text-muted-foreground">
-                By the local hour the prediction was made in, in {unit}.
+                By the local hour of the prediction, in {unit}.
                 {#if comparing}The compared range is in the charts above.{/if}
               </p>
               <PredictionBiasHeatmap curve={detail} formatError={signed} {unit} />
@@ -294,18 +296,19 @@
               <h3 class="px-1 text-sm font-medium">{curveLabel(detail.curve)} by context</h3>
               {#if contextsHidden}
                 <p class="px-1 text-sm text-muted-foreground">
-                  Hidden: the contexts and the interrupted counts are drawn from carbs, boluses,
-                  overrides and exercise, and your access does not include treatments.
+                  Hidden. The contexts and the interrupted counts come from carbs, boluses, overrides
+                  and exercise. Your access does not include treatments.
                 </p>
               {:else}
                 <p class="px-1 text-xs text-muted-foreground">
-                  Each prediction's context is what was going on in the three hours up to it.
+                  The context of a prediction is what occurred in the three hours before it.
                   {#if (detail.contexts ?? []).includes(PredictionContext.Adjusted)}
-                    Override, temp target or exercise includes low "eating soon" temporary targets,
-                    so some predictions made just before a meal sit there rather than after a meal.
+                    Override, temp target or exercise includes low "eating soon" temporary targets.
+                    Thus some predictions made just before a meal are in that context, not in After a
+                    meal.
                   {/if}
                   {#if anyInterrupted}
-                    Interrupted counts are left out of the bias, MAE and n.
+                    The bias, MAE and n do not include interrupted predictions.
                   {/if}
                 </p>
                 <PredictionContextTable
@@ -321,9 +324,9 @@
         {/if}
 
         <p class="px-1 text-xs text-muted-foreground">
-          {plural(kinds.length, ["# curve", "# curves"])} from the predictions your loop uploaded,
-          each paired with the reading within 2.5 minutes of its horizon. Unmatched horizons had no
-          reading; excluded ones fell in a sensor error or compression low.
+          {plural(kinds.length, ["# curve", "# curves"])} from the predictions that your loop uploaded.
+          Each prediction is paired with the reading within 2.5 minutes of its horizon. Unmatched
+          horizons had no reading. Excluded horizons were in a sensor error or a compression low.
         </p>
       {/if}
     {/if}

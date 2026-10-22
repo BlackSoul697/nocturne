@@ -201,7 +201,7 @@
       list.push({
         label: "Delivered vs scheduled basal",
         value: `${summary.deliveredToScheduledRatio.toFixed(2)}×`,
-        note: "Observed delivered basal over scheduled",
+        note: "Delivered basal divided by scheduled basal",
       });
 
     if (hidden(LoopAnalysisSeries.NetLoopCorrectionSummary)) {
@@ -276,7 +276,7 @@
       {/if}
     </dl>
     {#if series.sparse}
-      <p class="text-muted-foreground">Too few days to read as a pattern</p>
+      <p class="text-muted-foreground">Too few days to show a pattern</p>
     {/if}
   {/if}
 {/snippet}
@@ -290,9 +290,9 @@
         <Clock />
         <Alert.Title>Only the last 24 hours are included</Alert.Title>
         <Alert.Description>
-          You can read only the most recent 24 hours of this data, so the report covers those 24
-          hours whatever range is picked, compares nothing, and each time of day rests on at most
-          one day.
+          You can see only the most recent 24 hours of this data. The report shows only those 24
+          hours for all ranges that you select. It does not compare ranges. Each time of day uses
+          data from one day at most.
         </Alert.Description>
       </Alert.Root>
     {/if}
@@ -303,7 +303,7 @@
       <FigureStrip {figures} />
       {#if insulinDeliveryHref}
         <Button href={insulinDeliveryHref} variant="link" size="inline">
-          Insulin Delivery has the whole range's totals, without these filters
+          Insulin Delivery shows the totals for the full range, without these filters
           <ArrowRight />
         </Button>
       {/if}
@@ -312,13 +312,13 @@
     {#if !hasDays}
       <div class="rounded-lg border border-dashed p-8 text-center text-muted-foreground">
         <p class="font-medium">No data in this range</p>
-        <p class="text-sm">Pick a longer range, or relax the filters.</p>
+        <p class="text-sm">Select a longer range, or use fewer filters.</p>
       </div>
     {:else}
       <div class="space-y-5 rounded-lg border bg-card p-3 @md:p-4">
         {#if comparing}
           <p class="text-xs text-muted-foreground">
-            The comparison range is drawn as dashed outlines over each series.
+            The charts show the comparison range as dashed outlines on each series.
           </p>
         {/if}
 
@@ -336,7 +336,7 @@
             { texture: "percentile-outer", label: "10–90%", color: GLUCOSE_BANDS.outer },
             { texture: "percentile-inner", label: "25–75%", color: GLUCOSE_BANDS.inner },
             { texture: "percentile-median", label: "Median", color: GLUCOSE_BANDS.median, shape: "line" },
-            ...(hidden(LoopAnalysisSeries.Target) ? [] : [{ texture: "target-band" as const, label: "Target range in force" }]),
+            ...(hidden(LoopAnalysisSeries.Target) ? [] : [{ texture: "target-band" as const, label: "Active target range" }]),
           ]}
           hiddenNote={hidden(LoopAnalysisSeries.Target) ? "Target range hidden: your access does not include it" : null}
         >
@@ -569,7 +569,7 @@
               {/if}
             </dl>
             {#if h?.sparse}
-              <p class="text-muted-foreground">Too few days to read as a pattern</p>
+              <p class="text-muted-foreground">Too few days to show a pattern</p>
             {/if}
           {/snippet}
         </TimeOfDayPanel>
@@ -669,9 +669,9 @@
 
         <p class="flex items-center gap-1.5 px-1 text-xs text-muted-foreground">
           <EyeOff class="size-3.5" />
-          Faded stretches rest on too few days to read as a pattern. Click a time, or press Enter on
-          it, to list the days behind it. With the keyboard, the arrow keys move along the day and
-          between charts, and Home and End go to either end of the day.
+          Faded areas have too few days to show a pattern. To list the days for a time, click the time
+          or press Enter on it. Use the arrow keys to move along the day and between charts. Use Home
+          and End to go to the start and the end of the day.
         </p>
       </div>
 

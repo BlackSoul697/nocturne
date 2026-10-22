@@ -10,17 +10,17 @@
   <Globe class="size-10 text-muted-foreground/50" />
   <h2 class="font-medium">This report needs a time zone</h2>
   <p class="max-w-prose text-sm text-muted-foreground">
-    Loop Analysis lines days up by local time of day, and a day cannot be placed without the time
-    zone the data belongs to.
+    Loop Analysis aligns days by local time of day. It needs the time zone of the data to do this.
     {#if reason === TimeZoneUnavailableReason.Share}
       A shared link cannot see that time zone, so this report is not available here.
     {:else if reason === TimeZoneUnavailableReason.LookupFailed}
-      The time zone could not be loaded just now. Reloading the report later may fix this.
+      The time zone did not load. To try again, reload the report later.
     {:else if reason === TimeZoneUnavailableReason.Unrecognised}
-      The time zone in the profile settings is not one this server recognises. Correcting it in
-      the profile settings fixes this.
+      This server does not recognise the time zone in the profile settings. To fix this, correct the
+      time zone in the profile settings.
     {:else}
-      No time zone is set in the profile settings. Setting one there fixes this.
+      The profile settings do not have a time zone. To fix this, set a time zone in the profile
+      settings.
     {/if}
   </p>
 </div>
