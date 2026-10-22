@@ -338,13 +338,15 @@ public interface IStatisticsService
 
     /// <summary>
     /// The share of a report period a CGM was delivering readings, from readings a canonical
-    /// selection has already reduced to one stream per instant. Where
+    /// selection has already reduced to one stream per instant. Each reading covers the time from
+    /// it to the next reading of its stream, up to one cadence: its device's catalogue cadence or,
+    /// for a reading no given device claims, the cadence its own stream keeps across all of its
+    /// readings. Covered time is counted once however many readings cover it. Where
     /// <paramref name="cgmDevices"/> is given the period is the union of their windows clipped to
-    /// the report — sensors worn at once are one stretch of time — and only readings falling
-    /// inside it count, at their device's catalogue cadence or, for a reading no given device
-    /// claims, at the cadence its own stream keeps across all of its readings. Where no devices
-    /// are given the period is the report itself, which runs from the first reading to the last where
-    /// <paramref name="reportStart"/> or <paramref name="reportEnd"/> is absent.
+    /// the report (sensors worn at once are one stretch of time), and only covered time inside it
+    /// counts. Where no devices are given the period is the report itself, which runs from the
+    /// first reading to the last where <paramref name="reportStart"/> or
+    /// <paramref name="reportEnd"/> is absent.
     /// </summary>
     /// <returns><c>null</c> without readings, or without a period to measure them against.</returns>
     double? CalculateCgmActivePercent(
