@@ -1655,22 +1655,13 @@ public class ChartDataServiceTests
                 .ReturnsAsync([cancel, running]);
             var settings = new Mock<ITherapySettingsResolver>();
             settings.Setup(s => s.HasDataAsync(It.IsAny<CancellationToken>())).ReturnsAsync(false);
-            var timelineResolver = new Mock<ITherapyTimelineResolver>();
-            timelineResolver
-                .Setup(t => t.BuildAsync(It.IsAny<long>(), It.IsAny<long>(), It.IsAny<string?>(), It.IsAny<CancellationToken>()))
-                .ReturnsAsync(new TherapyTimeline([
-                    new TherapySegment(Start, End + 1,
-                        new TherapySnapshot(3.0, TherapySnapshot.DefaultPeakMinutes, TherapySnapshot.DefaultCarbsPerHour,
-                            null, null, 0, null, null, null))
-                ]));
             var service = new ChartDataService(
                 [],
                 Mock.Of<IChartDataAssembler>(),
-                new BasalSeriesBuilder(settings.Object, NullLogger<BasalSeriesBuilder>.Instance),
+                new BasalSeriesBuilder(settings.Object, Mock.Of<IBasalSegmentService>(), NullLogger<BasalSeriesBuilder>.Instance),
                 repository.Object,
                 settings.Object,
                 Mock.Of<IBasalRateResolver>(),
-                timelineResolver.Object,
                 NullLogger<ChartDataService>.Instance);
 
             var series = await service.GetBasalSeriesAsync(Start, End);

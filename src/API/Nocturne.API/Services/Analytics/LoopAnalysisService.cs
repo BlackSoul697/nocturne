@@ -191,7 +191,7 @@ internal sealed partial class LoopAnalysisService(
 
         var (clipped, evidence) = NetInsulinAboveSchedule.ClipTempBasals(common.TempBasals);
         var series = await basalSeriesBuilder.BuildAsync(
-            clipped, tickStart, to, timeline.SnapshotAt(from).BasalRateAt(from), timeline, ct);
+            clipped, tickStart, to, timeline.SnapshotAt(from).BasalRateAt(from), ct);
         var delivered = NetInsulinAboveSchedule.DeliveredFromSeries(series, to, evidence);
 
         var doses = common.Boluses

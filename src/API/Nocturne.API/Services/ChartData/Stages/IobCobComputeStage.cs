@@ -28,8 +28,8 @@ namespace Nocturne.API.Services.ChartData.Stages;
 /// <para>
 /// Basal series construction is delegated to <see cref="IBasalSeriesBuilder"/>, which uses
 /// v4 <see cref="TempBasal"/> records as the source of truth and fills any gaps with
-/// profile-inferred rates at 5-minute resolution. When no TempBasal records exist the
-/// entire series is inferred from the profile. The y-axis maximum is clamped to at least
+/// profile-inferred rates at the schedule's exact boundaries. When no TempBasal records
+/// exist the entire series is inferred from the profile. The y-axis maximum is clamped to at least
 /// 2.5× the default basal rate so the chart always shows meaningful scale.
 /// </para>
 /// <para>
@@ -60,8 +60,6 @@ internal sealed class IobCobComputeStage(
         var intervalMinutes = context.IntervalMinutes;
         var defaultBasalRate = context.DefaultBasalRate;
 
-        // Build once, then thread through both IOB/COB and the basal series so the resolver
-        // is hit a single time per chart-data request.
         var timeline = await therapyTimelineResolver.BuildAsync(startTime, endTime + 1, ct: cancellationToken);
 
         var (iobSeries, cobSeries, maxIob, maxCob) = BuildIobCobSeries(
@@ -69,7 +67,13 @@ internal sealed class IobCobComputeStage(
             context.ApsSnapshotList, cancellationToken
         );
 
-        var basalSeries = await basalSeriesBuilder.BuildAsync(context.DisplayTempBasals.ToList(), startTime, endTime, defaultBasalRate, timeline, cancellationToken);
+        var basalSeries = await basalSeriesBuilder.BuildAsync(
+            context.DisplayTempBasals.ToList(),
+            startTime,
+            endTime,
+            defaultBasalRate,
+            cancellationToken
+        );
 
         var maxBasalRate = Math.Max(
             defaultBasalRate * 2.5,
