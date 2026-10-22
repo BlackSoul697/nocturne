@@ -113,6 +113,26 @@ public enum LoopAnalysisSeries
     /// drawn from carbs, boluses, overrides and exercise.
     /// </summary>
     PredictionContexts,
+
+    /// <summary>Loop health: the closed-loop and pump shares and percentages.</summary>
+    LoopActivity,
+
+    /// <summary>Loop health: the CGM share and percentage.</summary>
+    CgmActivity,
+    LoopGaps,
+    UnrecordedDelivery,
+    ZeroDelivery,
+    MaxBasal,
+    AtMaxIob,
+    AutomaticBoluses,
+    SuggestedNotEnacted,
+    SensitivityRatio,
+
+    /// <summary>Loop's maximum basal rate setting.</summary>
+    LoopLimits,
+
+    /// <summary>oref's <c>max_iob</c>, as its loop cycles report it where it bound.</summary>
+    OrefMaxIob,
 }
 
 /// <summary>

@@ -131,6 +131,69 @@ public class ApsSnapshotRepository : SyncUpsertRepositoryBase<ApsSnapshot, ApsSn
         public string? UamJson { get; init; }
     }
 
+    /// <inheritdoc />
+    public async Task<IReadOnlyList<ApsLoopCycle>> GetLoopCyclesAsync(
+        DateTime from, DateTime to, CancellationToken ct = default)
+    {
+        await using var ctx = await ContextFactory.CreateAsync(ct);
+        var snapshots = ctx.ApsSnapshots.AsNoTracking();
+        var rows = await snapshots.Where(e => e.Timestamp < from).OrderByDescending(e => e.Timestamp).Take(1).Select(LoopCycleRow)
+            .Concat(snapshots.Where(e => e.Timestamp >= from && e.Timestamp <= to).Select(LoopCycleRow))
+            .Concat(snapshots.Where(e => e.Timestamp > to).OrderBy(e => e.Timestamp).Take(1).Select(LoopCycleRow))
+            .ToListAsync(ct);
+
+        // Sorted here: in SQL the sort of every row's reason over a 90-day union spills to disk.
+        return [.. rows.OrderBy(r => r.Timestamp).Select(r =>
+        {
+            var reason = string.IsNullOrEmpty(r.Reason) ? null : r.Reason;
+            return new ApsLoopCycle
+            {
+                Timestamp = r.Timestamp,
+                AidAlgorithm = Enum.TryParse<AidAlgorithm>(r.AidAlgorithm, out var algorithm) ? algorithm : AidAlgorithm.Unknown,
+                Enacted = r.Enacted,
+                EnactedRate = r.EnactedRate,
+                Iob = r.Iob,
+                SensitivityRatio = r.SensitivityRatio,
+                HasReason = reason is not null,
+                SuggestedChange = r.SuggestedChange,
+                LimitReason = reason is not null
+                    && (reason.Contains("maxSafeBasal", StringComparison.Ordinal) || reason.Contains("max_iob", StringComparison.Ordinal))
+                        ? reason
+                        : null,
+            };
+        })];
+    }
+
+    /// <summary>Set by member initialisation, which EF can translate on both sides of a union.</summary>
+    private sealed class LoopCycleColumns
+    {
+        public DateTime Timestamp { get; init; }
+        public string AidAlgorithm { get; init; } = "";
+        public bool Enacted { get; init; }
+        public double? EnactedRate { get; init; }
+        public double? Iob { get; init; }
+        public double? SensitivityRatio { get; init; }
+        public string? Reason { get; init; }
+        public bool? SuggestedChange { get; init; }
+    }
+
+    /// <summary>
+    /// The suggestion is read twice, for its reason and for whether it asked for a change, and the
+    /// reason is matched here rather than in SQL: each read of a jsonb column detoasts it again.
+    /// </summary>
+    private static readonly System.Linq.Expressions.Expression<Func<ApsSnapshotEntity, LoopCycleColumns>> LoopCycleRow =
+        e => new LoopCycleColumns
+        {
+            Timestamp = e.Timestamp,
+            AidAlgorithm = e.AidAlgorithm,
+            Enacted = e.Enacted,
+            EnactedRate = e.EnactedRate,
+            Iob = e.Iob,
+            SensitivityRatio = e.SensitivityRatio,
+            Reason = Jsonb.Text(e.SuggestedJson, "reason"),
+            SuggestedChange = e.SuggestedJson == null ? null : EF.Functions.JsonExistAny(e.SuggestedJson, "duration", "units"),
+        };
+
     /// <summary>
     /// Gets APS snapshots by correlation IDs.
     /// </summary>

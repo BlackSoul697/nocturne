@@ -1721,4 +1721,150 @@ public class AnalyticsReadScopeGuardTests
         data.Primary.Curves.Should().BeEmpty();
         service.VerifyNoOtherCalls();
     }
+
+    // ── Loop health ─────────────────────────────────────────────────────────────────────────
+
+    private static LoopHealthShare Share(double percent) => new() { Percent = percent, Daily = Aggregate(percent) };
+
+    private static LoopHealthRange LoopHealthRange() => new()
+    {
+        Days = [new LoopHealthDay { Date = "2024-06-03" }],
+        Activity = new LoopHealthActivity
+        {
+            AidActivePercent = 90, PumpUsePercent = 95, CgmActivePercent = 98,
+            ClosedLoop = Share(90), Pump = Share(95), Cgm = Share(98),
+        },
+        Cadence = new LoopHealthCadence { LoopGaps = new LoopHealthGaps { Count = 1 }, UnrecordedDelivery = new LoopHealthGaps() },
+        ZeroDelivery = new LoopHealthZeroDelivery(),
+        MaxBasal = new LoopHealthMaxBasal { AtCap = Share(5) },
+        AtMaxIob = Share(1),
+        AutomaticBoluses = new LoopHealthAutomaticBoluses(),
+        SuggestedNotEnacted = Share(0.1),
+        SensitivityRatio = new LoopHealthDistribution { Overall = Aggregate(1) },
+        Limits = new LoopHealthLimits { LoopMaximumBasalRate = 3, OrefMaxIob = 4 },
+    };
+
+    private static LoopHealthResponse LoopHealth() => new() { Primary = LoopHealthRange(), Comparison = LoopHealthRange() };
+
+    [Fact]
+    public void LoopHealth_WithoutDevices_DropsWhatTheLoopCyclesReport()
+    {
+        var data = LoopAnalysisReadScopeGuard.Redact(
+            LoopHealth(), Granted(Scope.GlucoseRead, Scope.TreatmentsRead, Scope.TherapyRead));
+
+        data.WithheldSeries.Should().BeEquivalentTo([
+            LoopAnalysisSeries.LoopActivity, LoopAnalysisSeries.UnrecordedDelivery, LoopAnalysisSeries.LoopGaps,
+            LoopAnalysisSeries.MaxBasal, LoopAnalysisSeries.AtMaxIob, LoopAnalysisSeries.SuggestedNotEnacted,
+            LoopAnalysisSeries.SensitivityRatio, LoopAnalysisSeries.OrefMaxIob,
+        ]);
+        foreach (var range in new[] { data.Primary, data.Comparison! })
+        {
+            range.Cadence.LoopGaps.Should().BeNull();
+            range.Cadence.UnrecordedDelivery.Should().BeNull();
+            range.Activity.ClosedLoop.Should().BeNull();
+            range.Activity.Pump.Should().BeNull();
+            range.Activity.AidActivePercent.Should().BeNull();
+            range.Activity.PumpUsePercent.Should().BeNull();
+            range.MaxBasal.Should().BeNull();
+            range.AtMaxIob.Should().BeNull();
+            range.SuggestedNotEnacted.Should().BeNull();
+            range.SensitivityRatio.Should().BeNull();
+            range.Limits.OrefMaxIob.Should().BeNull();
+            range.Limits.LoopMaximumBasalRate.Should().Be(3, "Loop's setting is a therapy setting");
+            range.ZeroDelivery.Should().NotBeNull();
+            range.AutomaticBoluses.Should().NotBeNull();
+            range.Activity.Cgm.Should().NotBeNull();
+        }
+    }
+
+    [Fact]
+    public void LoopHealth_WithoutTreatments_DropsDeliveryAndBoluses()
+    {
+        var data = LoopAnalysisReadScopeGuard.Redact(
+            LoopHealth(), Granted(Scope.GlucoseRead, Scope.DevicesRead, Scope.TherapyRead));
+
+        data.WithheldSeries.Should().BeEquivalentTo([
+            LoopAnalysisSeries.LoopActivity, LoopAnalysisSeries.UnrecordedDelivery, LoopAnalysisSeries.MaxBasal,
+            LoopAnalysisSeries.ZeroDelivery, LoopAnalysisSeries.AutomaticBoluses,
+        ]);
+        data.Primary.ZeroDelivery.Should().BeNull();
+        data.Primary.AutomaticBoluses.Should().BeNull();
+        data.Primary.Activity.ClosedLoop.Should().BeNull("without cycles it is read off the algorithm's temps");
+        data.Primary.Cadence.UnrecordedDelivery.Should().BeNull();
+        data.Primary.Cadence.LoopGaps.Should().NotBeNull();
+        data.Primary.MaxBasal.Should().BeNull("time at the cap is measured on delivered basal");
+        data.Primary.Limits.OrefMaxIob.Should().Be(4);
+    }
+
+    [Fact]
+    public void LoopHealth_WithoutTherapyOrGlucose_DropsTheLimitsAndTheCgm()
+    {
+        var data = LoopAnalysisReadScopeGuard.Redact(
+            LoopHealth(), Granted(Scope.TreatmentsRead, Scope.DevicesRead));
+
+        data.WithheldSeries.Should().BeEquivalentTo([
+            LoopAnalysisSeries.CgmActivity, LoopAnalysisSeries.LoopLimits, LoopAnalysisSeries.OrefMaxIob,
+            LoopAnalysisSeries.MaxBasal,
+        ]);
+        data.Primary.Limits.Should().BeEquivalentTo(new LoopHealthLimits());
+        data.Primary.Activity.Cgm.Should().BeNull();
+        data.Primary.Activity.CgmActivePercent.Should().BeNull();
+        data.Primary.MaxBasal.Should().BeNull("the hours at Loop's cap show where its setting sits");
+    }
+
+    [Fact]
+    public void LoopHealth_FullAccess_KeepsEverything()
+    {
+        var original = LoopHealth();
+
+        var data = LoopAnalysisReadScopeGuard.Redact(original, Granted(AllLoopAnalysisCategories));
+
+        data.Should().BeSameAs(original);
+        data.WithheldSeries.Should().BeEmpty();
+        data.Primary.MaxBasal.Should().NotBeNull();
+    }
+
+    [Fact]
+    public void LoopHealth_WithholdingEveryCategory_LeavesNothingButTheDays()
+    {
+        var data = LoopAnalysisReadScopeGuard.Redact(RedactionCoverage.Populated<LoopHealthResponse>(), Granted());
+
+        RedactionCoverage.AssertWithheld(
+            data,
+            [typeof(LoopHealthRange), typeof(LoopHealthActivity), typeof(LoopHealthCadence), typeof(LoopHealthLimits)],
+            [
+                "LoopHealthRange.From", "LoopHealthRange.To", "LoopHealthRange.Days",
+                "LoopHealthRange.Activity", "LoopHealthRange.Cadence", "LoopHealthRange.Limits",
+            ]);
+    }
+
+    [Fact]
+    public void LoopHealth_GateIsReportsRead() =>
+        GateOn<LoopAnalysisController>(nameof(LoopAnalysisController.GetLoopHealth))!
+            .RequiredScopes.Should().BeEquivalentTo([LoopAnalysisReadScopeGuard.AdmissionScope]);
+
+    [Fact]
+    public async Task LoopHealth_Handler_RedactsClampsAndReportsTheIgnoredFilters()
+    {
+        var (controller, service) = LoopAnalysisHandler(
+            Granted(Scope.ReportsRead, Scope.GlucoseRead), historyClamped: true, query: "?excludeOpenLoop=true");
+        service
+            .Setup(s => s.GetLoopHealthAsync(It.IsAny<LoopAnalysisFilter>(), It.IsAny<TimeZoneInfo>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(LoopHealth);
+
+        var result = await controller.GetLoopHealth(Week(q => q.ExcludeOpenLoop = true));
+
+        var data = result.Result.Should().BeOfType<OkObjectResult>()
+            .Which.Value.Should().BeOfType<LoopHealthResponse>().Subject;
+        data.HistoryClamped.Should().BeTrue();
+        data.IgnoredFilters.Should().Equal("excludeOpenLoop");
+        data.WithheldSeries.Should().Contain(LoopAnalysisSeries.LoopGaps);
+        data.Primary.Cadence.LoopGaps.Should().BeNull();
+        data.Primary.Activity.Cgm.Should().NotBeNull();
+        data.PrimaryRange!.From.Should().Be(LoopAnalysisNow.AddHours(-24));
+        service.Verify(s => s.GetLoopHealthAsync(
+            It.Is<LoopAnalysisFilter>(f => f.From == LoopAnalysisNow.AddHours(-24) && !f.Masks.ExcludeOpenLoop),
+            It.IsAny<TimeZoneInfo>(),
+            It.IsAny<CancellationToken>()));
+    }
 }

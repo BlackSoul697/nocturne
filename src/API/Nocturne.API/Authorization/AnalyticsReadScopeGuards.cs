@@ -410,6 +410,14 @@ internal static class StatisticsReadScopeGuard
 /// its scheduled rate under that scope. <c>therapy.read</c> gates the schedule and target series
 /// served in their own right, and the profile names.
 /// </para>
+/// <para>
+/// Loop health reads the APS loop cycles, which are devices: the loop gaps, the <c>max_iob</c>
+/// share, the suggestions and the sensitivity ratio. Zero delivery and the automatic boluses are
+/// treatments; the closed-loop and pump shares, and the unrecorded delivery gaps, draw on both.
+/// The limits are therapy settings, and oref's are reported by the cycles. Time at the maximum
+/// basal rate is measured on delivered basal against the cap the cycles say was in force, and for
+/// Loop the hours at the cap show where its setting sits, so it needs all three.
+/// </para>
 /// <para>The response is built per request and never cached server-side, so it is narrowed in place.</para>
 /// </remarks>
 /// <seealso cref="AnalyticsReadScopes"/>
@@ -468,7 +476,7 @@ internal static class LoopAnalysisReadScopeGuard
     /// The Daily profile series the caller's scopes withhold. <see cref="Redact{T}"/> empties exactly these, so the
     /// response's <see cref="LoopAnalysisResponse.WithheldSeries"/> and its nulls cannot disagree.
     /// </summary>
-    public static HashSet<LoopAnalysisSeries> Withheld(IReadOnlySet<string> grantedScopes)
+    public static HashSet<LoopAnalysisSeries> WithheldDailyProfile(IReadOnlySet<string> grantedScopes)
     {
         var glucose = AnalyticsReadScopes.Allows(grantedScopes, Scope.GlucoseRead);
         var treatments = AnalyticsReadScopes.Allows(grantedScopes, Scope.TreatmentsRead);
@@ -513,9 +521,11 @@ internal static class LoopAnalysisReadScopeGuard
     private static readonly Dictionary<Type, Tab> Tabs = new()
     {
         [typeof(DailyProfileResponse)] = TabOf<DailyProfileResponse, DailyProfileRange>(
-            Withheld, r => [r.Primary, r.Comparison], Narrow),
+            WithheldDailyProfile, r => [r.Primary, r.Comparison], Narrow),
         [typeof(PredictionAccuracyResponse)] = TabOf<PredictionAccuracyResponse, PredictionAccuracyRange>(
             WithheldPredictions, r => [r.Primary, r.Comparison], Narrow),
+        [typeof(LoopHealthResponse)] = TabOf<LoopHealthResponse, LoopHealthRange>(
+            WithheldLoopHealth, r => [r.Primary, r.Comparison], Narrow),
     };
 
     private static Tab TabOf<TResponse, TRange>(
@@ -551,7 +561,7 @@ internal static class LoopAnalysisReadScopeGuard
     }
 
     /// <summary>
-    /// The prediction figures the caller's scopes withhold, as <see cref="Withheld"/> is for the
+    /// The prediction figures the caller's scopes withhold, as <see cref="WithheldDailyProfile"/> is for the
     /// Daily profile. A curve's accuracy compares the APS snapshots, which are devices, with the
     /// sensor readings, which are glucose, so it needs both. Its context and its interrupted counts
     /// are drawn from treatments.
@@ -599,6 +609,66 @@ internal static class LoopAnalysisReadScopeGuard
                     horizon.Interrupted = null;
             }
         }
+    }
+
+    /// <summary>
+    /// The Loop health figures the caller's scopes withhold, as <see cref="WithheldDailyProfile"/> is for the
+    /// Daily profile.
+    /// </summary>
+    public static HashSet<LoopAnalysisSeries> WithheldLoopHealth(IReadOnlySet<string> grantedScopes)
+    {
+        var glucose = AnalyticsReadScopes.Allows(grantedScopes, Scope.GlucoseRead);
+        var treatments = AnalyticsReadScopes.Allows(grantedScopes, Scope.TreatmentsRead);
+        var devices = AnalyticsReadScopes.Allows(grantedScopes, Scope.DevicesRead);
+        var therapy = AnalyticsReadScopes.Allows(grantedScopes, Scope.TherapyRead);
+
+        var withheld = new HashSet<LoopAnalysisSeries>();
+        void Withhold(bool hidden, params LoopAnalysisSeries[] series)
+        {
+            if (hidden)
+                withheld.UnionWith(series);
+        }
+
+        Withhold(!glucose, LoopAnalysisSeries.CgmActivity);
+        Withhold(!treatments || !devices, LoopAnalysisSeries.LoopActivity, LoopAnalysisSeries.UnrecordedDelivery);
+        Withhold(!treatments, LoopAnalysisSeries.ZeroDelivery, LoopAnalysisSeries.AutomaticBoluses);
+        Withhold(!devices || !treatments || !therapy, LoopAnalysisSeries.MaxBasal);
+        Withhold(!devices,
+            LoopAnalysisSeries.LoopGaps,
+            LoopAnalysisSeries.AtMaxIob,
+            LoopAnalysisSeries.SuggestedNotEnacted,
+            LoopAnalysisSeries.SensitivityRatio);
+        Withhold(!therapy, LoopAnalysisSeries.LoopLimits);
+        Withhold(!therapy || !devices, LoopAnalysisSeries.OrefMaxIob);
+        return withheld;
+    }
+
+    private static void Narrow(LoopHealthRange range, HashSet<LoopAnalysisSeries> withheld)
+    {
+        bool Hidden(LoopAnalysisSeries series) => withheld.Contains(series);
+
+        if (Hidden(LoopAnalysisSeries.CgmActivity))
+        {
+            range.Activity.Cgm = null;
+            range.Activity.CgmActivePercent = null;
+        }
+        if (Hidden(LoopAnalysisSeries.LoopActivity))
+        {
+            range.Activity.ClosedLoop = null;
+            range.Activity.Pump = null;
+            range.Activity.AidActivePercent = null;
+            range.Activity.PumpUsePercent = null;
+        }
+        if (Hidden(LoopAnalysisSeries.LoopGaps)) range.Cadence.LoopGaps = null;
+        if (Hidden(LoopAnalysisSeries.UnrecordedDelivery)) range.Cadence.UnrecordedDelivery = null;
+        if (Hidden(LoopAnalysisSeries.ZeroDelivery)) range.ZeroDelivery = null;
+        if (Hidden(LoopAnalysisSeries.MaxBasal)) range.MaxBasal = null;
+        if (Hidden(LoopAnalysisSeries.AtMaxIob)) range.AtMaxIob = null;
+        if (Hidden(LoopAnalysisSeries.AutomaticBoluses)) range.AutomaticBoluses = null;
+        if (Hidden(LoopAnalysisSeries.SuggestedNotEnacted)) range.SuggestedNotEnacted = null;
+        if (Hidden(LoopAnalysisSeries.SensitivityRatio)) range.SensitivityRatio = null;
+        if (Hidden(LoopAnalysisSeries.LoopLimits)) range.Limits.LoopMaximumBasalRate = null;
+        if (Hidden(LoopAnalysisSeries.OrefMaxIob)) range.Limits.OrefMaxIob = null;
     }
 
     private static void Narrow(DailyProfileRange range, HashSet<LoopAnalysisSeries> withheld)

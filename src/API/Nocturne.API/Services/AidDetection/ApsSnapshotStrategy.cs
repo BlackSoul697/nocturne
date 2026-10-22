@@ -5,7 +5,7 @@ namespace Nocturne.API.Services.AidDetection;
 
 /// <summary>
 /// Calculates <see cref="AidSegmentMetrics"/> for APS-based closed-loop algorithms
-/// by counting <see cref="AidDetectionContext.ApsSnapshots"/> within the evaluation window.
+/// by counting <see cref="AidDetectionContext.LoopCycles"/> within the evaluation window.
 /// </summary>
 /// <remarks>
 /// Assumes a fixed 5-minute loop cycle interval. AID-active percentage is derived from
@@ -33,7 +33,7 @@ public class ApsSnapshotStrategy : IAidDetectionStrategy
     /// </remarks>
     public AidSegmentMetrics CalculateMetrics(AidDetectionContext context)
     {
-        var snapshots = context.ApsSnapshots;
+        var snapshots = context.LoopCycles;
 
         if (snapshots.Count == 0)
         {

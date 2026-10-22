@@ -128,7 +128,7 @@ export function profileRange(options: RangeOptions = {}): DailyProfileRange {
 
 const S = LoopAnalysisSeries;
 
-/** The series `LoopAnalysisReadScopeGuard.Withheld` withholds for these scopes. */
+/** The series `LoopAnalysisReadScopeGuard.WithheldDailyProfile` withholds for these scopes. */
 export function withheldFor(scopes: readonly string[]): LoopAnalysisSeries[] {
   const glucose = scopes.includes("glucose.read");
   const treatments = scopes.includes("treatments.read");

@@ -2043,8 +2043,8 @@ public class AidDetectionContext
 
     public DateTime EndDate { get; set; }
 
-    /// <summary>APS snapshots within the segment window (for OS AID strategies)</summary>
-    public IReadOnlyList<V4.ApsSnapshot> ApsSnapshots { get; set; } = [];
+    /// <summary>APS loop cycles within the segment window (for OS AID strategies)</summary>
+    public IReadOnlyList<V4.ApsLoopCycle> LoopCycles { get; set; } = [];
 
     /// <summary>Temp basals within the segment window (for TBR-based strategies)</summary>
     public IReadOnlyList<V4.TempBasal> TempBasals { get; set; } = [];

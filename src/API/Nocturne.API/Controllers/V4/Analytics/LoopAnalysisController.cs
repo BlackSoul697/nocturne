@@ -83,6 +83,25 @@ public class LoopAnalysisController(
         ServeAsync(query, service.GetPredictionAccuracyAsync, cancellationToken);
 
     /// <summary>
+    /// How the loop ran, each figure for the range and by local hour of the day: closed-loop, pump
+    /// and CGM time, gaps between loop cycles and in the pump's delivery records, zero delivery by
+    /// origin, time at the effective maximum basal rate and which cap bound it, time at oref's
+    /// <c>max_iob</c>, automatic boluses, suggestions not enacted and the sensitivity ratio.
+    /// </summary>
+    /// <param name="query">The range, comparison and masks (<see cref="LoopAnalysisQuery"/>).</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    [HttpGet("loop-health")]
+    [RemoteQuery]
+    [RequireScope(LoopAnalysisReadScopeGuard.AdmissionScope)]
+    [ResponseCache(Duration = 60, Location = ResponseCacheLocation.Client)]
+    [ProducesResponseType(typeof(LoopHealthResponse), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    public Task<ActionResult<LoopHealthResponse>> GetLoopHealth(
+        [FromQuery] LoopAnalysisQuery query,
+        CancellationToken cancellationToken = default) =>
+        ServeAsync(query, service.GetLoopHealthAsync, cancellationToken);
+
+    /// <summary>
     /// Resolves <paramref name="query"/>, computes the tab when the tenant has a zone, fills the
     /// envelope and narrows the result to the caller.
     /// </summary>
