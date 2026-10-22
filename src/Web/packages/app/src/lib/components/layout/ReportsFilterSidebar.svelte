@@ -4,9 +4,11 @@
   import { Label } from "$lib/components/ui/label";
   import { Separator } from "$lib/components/ui/separator";
   import { ScrollArea } from "$lib/components/ui/scroll-area";
+  import { tick, untrack } from "svelte";
   import { getLocalTimeZone, parseDate, today } from "@internationalized/date";
   import type { DateRange } from "bits-ui";
   import { requireDateParamsContext } from "$lib/hooks/date-params.svelte";
+  import { getReportSlots } from "$lib/hooks/report-slots.svelte";
   import { RangeCalendar } from "$lib/components/ui/range-calendar";
   import { dayCount } from "$lib/utils/date-range";
   import { formatLocale, formatMediumDateRange } from "$lib/utils/formatting";
@@ -23,6 +25,8 @@
 
   // Get shared date params from context (set by reports layout)
   const params = requireDateParamsContext();
+  const slots = getReportSlots();
+  const extension = $derived(slots?.filters ?? null);
 
   // Quick day presets
   const dayPresets = [
@@ -46,6 +50,7 @@
   $effect(() => {
     if (!open) return;
 
+    untrack(() => extension?.begin());
     draftCalendarValue = {
       start: parseDate(params.fromDay),
       end: parseDate(params.toDay),
@@ -87,15 +92,28 @@
    * Resetting to a fixed 7 days shortened 30-day reports and pinned the result
    * as a user choice.
    */
-  function resetFilters() {
-    params.reset();
+  async function resetFilters() {
     open = false;
     onOpenChange?.(false);
+    // The report's own filters go first: each write navigates, and the date range's write keeps
+    // every parameter the URL holds once the report's has landed.
+    if (extension) {
+      await extension.reset();
+      await tick();
+    }
+    params.reset();
   }
 
-  function applyFilters() {
+  async function applyFilters() {
     const start = draftCalendarValue?.start;
     const end = draftCalendarValue?.end;
+
+    open = false;
+    onOpenChange?.(false);
+    if (extension) {
+      await extension.apply();
+      await tick();
+    }
 
     if (start && end) {
       // A range matching a "last N days" preset commits as a relative range so it
@@ -106,10 +124,6 @@
         params.setCustomRange(start.toString(), end.toString());
       }
     }
-
-    // Close the sidebar
-    open = false;
-    onOpenChange?.(false);
   }
 
   const dateRangeText = $derived.by(() => {
@@ -133,7 +147,11 @@
         </Sheet.Title>
       </div>
       <Sheet.Description>
-        Adjust the date range for your report.
+        {#if extension}
+          Set the date range and the filters for this report.
+        {:else}
+          Adjust the date range for your report.
+        {/if}
       </Sheet.Description>
     </Sheet.Header>
 
@@ -175,6 +193,11 @@
             />
           </div>
         </div>
+
+        {#if extension}
+          <Separator />
+          {@render extension.fields()}
+        {/if}
       </div>
     </ScrollArea>
 

@@ -1,6 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { render } from "svelte/server";
+import type { Component } from "svelte";
 import { page as pageState } from "$app/state";
+import { ALL_SCOPES } from "$lib/components/reports/loop-analysis/daily-profile.test-fixtures";
 
 const calls = vi.hoisted(() => ({ fetched: [] as string[] }));
 
@@ -10,15 +12,16 @@ vi.mock("$api/generated/loopAnalysis.generated.remote", () => {
     return { loading: true, error: null, current: undefined, refresh: () => {} };
   };
   return {
+    getEnvelope: remote("envelope"),
     getDailyProfile: remote("daily-profile"),
-    getEventResponse: remote("meals-events"),
-    getPredictionAccuracy: remote("predictions"),
+    getEventResponse: remote("meals-and-events"),
+    getPredictionAccuracy: remote("prediction-accuracy"),
     getLoopHealth: remote("loop-health"),
     getSettingsEvidence: remote("settings-evidence"),
   };
 });
 
-// The tabs' charts are not rendered without data, and their chart library does not load in node.
+// The pages' charts are not rendered without data, and their chart library does not load in node.
 vi.mock("$lib/components/reports/loop-analysis/DailyProfileTab.svelte", async () => ({
   default: (await import("$lib/test-stubs/Empty.test-stub.svelte")).default,
 }));
@@ -37,9 +40,6 @@ vi.mock("$lib/components/reports/loop-analysis/LoopHealthTab.svelte", async () =
 vi.mock("$lib/components/reports/loop-analysis/SettingsEvidenceTab.svelte", async () => ({
   default: (await import("$lib/test-stubs/Empty.test-stub.svelte")).default,
 }));
-vi.mock("$lib/components/reports/loop-analysis/LoopAnalysisFilterBar.svelte", async () => ({
-  default: (await import("$lib/test-stubs/Empty.test-stub.svelte")).default,
-}));
 
 vi.mock("$app/paths", () => ({ resolve: (path: string) => path }));
 
@@ -54,23 +54,31 @@ vi.mock("$lib/hooks/resource-context.svelte", () => ({
   },
 }));
 
-import LoopAnalysisPage from "./+page.svelte";
+import Harness from "./LoopAnalysisHarness.test.svelte";
 
-describe("Loop Analysis page on the server", () => {
+const PAGES: Record<string, () => Promise<{ default: Component }>> = {
+  "daily-profile": () => import("./daily-profile/+page.svelte"),
+  "meals-and-events": () => import("./meals-and-events/+page.svelte"),
+  "prediction-accuracy": () => import("./prediction-accuracy/+page.svelte"),
+  "loop-health": () => import("./loop-health/+page.svelte"),
+  "settings-evidence": () => import("./settings-evidence/+page.svelte"),
+};
+
+describe("Loop Analysis pages on the server", () => {
   beforeEach(() => {
     calls.fetched.length = 0;
   });
 
-  it.each(["daily-profile", "meals-events", "predictions", "loop-health", "settings-evidence"])(
-    "fetches the %s tab it opens on while rendering, and no other",
-    (tab) => {
-      pageState.url = new URL(`http://localhost/reports/loop-analysis${tab === "daily-profile" ? "" : `?tab=${tab}`}`) as typeof pageState.url;
+  it.each(Object.keys(PAGES))("%s fetches the envelope and its own data while rendering, and no other", async (name) => {
+    pageState.url = new URL(`http://localhost/reports/loop-analysis/${name}?days=14`) as typeof pageState.url;
+    Object.assign(pageState.data, { effectivePermissions: ALL_SCOPES, user: { id: "member" } });
+    const { default: report } = await PAGES[name]();
 
-      // Reading the body runs the render.
-      const { body } = render(LoopAnalysisPage);
+    // Reading the body runs the render.
+    const { body } = render(Harness, { props: { report } });
 
-      expect(body).toContain('role="tablist"');
-      expect(calls.fetched).toEqual([tab]);
-    }
-  );
+    expect(body).toContain(`aria-current="page"`);
+    expect(body).toContain(`data-testid="report-pages"`);
+    expect(calls.fetched).toEqual(["envelope", name]);
+  });
 });

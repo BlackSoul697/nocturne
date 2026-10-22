@@ -4,9 +4,6 @@ import { isDayString } from "$lib/utils/date-range";
 
 type DailyProfileQuery = Parameters<typeof getDailyProfile>[0];
 
-export const LOOP_ANALYSIS_TABS = ["daily-profile", "meals-events", "predictions", "loop-health", "settings-evidence"] as const;
-export type LoopAnalysisTab = (typeof LOOP_ANALYSIS_TABS)[number];
-
 export type MaskKey =
   | "excludeOverrides"
   | "excludeTemporaryTargets"
@@ -29,7 +26,6 @@ export const MASK_KEYS: MaskKey[] = [
  * says what it was.
  */
 export interface LoopAnalysisFilterState {
-  tab: LoopAnalysisTab;
   compare: LoopAnalysisComparison;
   /** yyyy-MM-dd, inclusive; read only when {@link compare} is custom. */
   compareFrom: string | null;
@@ -41,7 +37,6 @@ export interface LoopAnalysisFilterState {
 
 /** Every query parameter this filter owns; a write clears them all before setting its own. */
 const FILTER_PARAM_NAMES = [
-  "tab",
   "compare",
   "compareFrom",
   "compareTo",
@@ -54,10 +49,6 @@ const COMPARISONS: Record<string, LoopAnalysisComparison> = {
   previous: LoopAnalysisComparison.Previous,
   custom: LoopAnalysisComparison.Custom,
 };
-
-export function isLoopAnalysisTab(value: string): value is LoopAnalysisTab {
-  return LOOP_ANALYSIS_TABS.some((tab) => tab === value);
-}
 
 export function toComparison(value: string): LoopAnalysisComparison | null {
   return Object.values(LoopAnalysisComparison).find((c) => c === value) ?? null;
@@ -80,7 +71,6 @@ export function toWeekdays(values: readonly (string | number)[]): DayOfWeek[] {
 }
 
 export function readLoopAnalysisFilter(search: URLSearchParams): LoopAnalysisFilterState {
-  const tab = search.get("tab");
   const compareFrom = search.get("compareFrom");
   const compareTo = search.get("compareTo");
 
@@ -91,7 +81,6 @@ export function readLoopAnalysisFilter(search: URLSearchParams): LoopAnalysisFil
   }
 
   return {
-    tab: tab && isLoopAnalysisTab(tab) ? tab : "daily-profile",
     compare: COMPARISONS[search.get("compare") ?? ""] ?? LoopAnalysisComparison.None,
     compareFrom: isDayString(compareFrom) ? compareFrom : null,
     compareTo: isDayString(compareTo) ? compareTo : null,
@@ -112,7 +101,6 @@ export function writeLoopAnalysisFilter(
   const next = new URLSearchParams(search);
   for (const name of FILTER_PARAM_NAMES) next.delete(name);
 
-  if (filter.tab !== "daily-profile") next.set("tab", filter.tab);
   if (filter.compare !== LoopAnalysisComparison.None) next.set("compare", filter.compare.toLowerCase());
   if (filter.compare === LoopAnalysisComparison.Custom) {
     if (filter.compareFrom) next.set("compareFrom", filter.compareFrom);

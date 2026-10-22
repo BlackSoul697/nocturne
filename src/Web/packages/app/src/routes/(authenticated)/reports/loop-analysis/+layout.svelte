@@ -1,0 +1,113 @@
+<!--
+  The five Loop Analysis pages as one report: the filters in the reports Filters panel and the
+  envelope every page shares, both kept while the pages change below them.
+-->
+<script lang="ts">
+  import { page } from "$app/state";
+  import { goto } from "$app/navigation";
+  import { LoopAnalysisComparison } from "$lib/api";
+  import { requireDateParamsContext } from "$lib/hooks/date-params.svelte";
+  import { useReportFilters } from "$lib/hooks/report-slots.svelte";
+  import { formatMediumDateRange } from "$lib/utils/formatting";
+  import { startOfDay } from "$lib/utils/date-range";
+  import Info from "@lucide/svelte/icons/info";
+  import LoopAnalysisFilterFields from "$lib/components/reports/loop-analysis/LoopAnalysisFilterFields.svelte";
+  import { LoopAnalysisState, setLoopAnalysis } from "$lib/components/reports/loop-analysis/loop-analysis-context.svelte";
+  import {
+    MASK_KEYS,
+    readLoopAnalysisFilter,
+    withoutUnavailable,
+    writeLoopAnalysisFilter,
+    type LoopAnalysisFilterState,
+  } from "$lib/components/reports/loop-analysis/loop-analysis-filter";
+  import { loopAnalysisPageIntros, loopAnalysisPath } from "$lib/components/reports/loop-analysis/loop-analysis-pages.svelte";
+
+  let { children } = $props();
+
+  const analysis = setLoopAnalysis(new LoopAnalysisState(requireDateParamsContext(14)));
+  const intros = $derived(loopAnalysisPageIntros());
+
+  async function navigate(next: LoopAnalysisFilterState) {
+    if (!analysis.current) return;
+    // eslint-disable-next-line svelte/no-navigation-without-resolve -- loopAnalysisPath resolves the path
+    await goto(loopAnalysisPath(analysis.current, writeLoopAnalysisFilter(next, page.url.searchParams)), {
+      replaceState: true,
+      noScroll: true,
+      keepFocus: true,
+    });
+  }
+
+  // The panel shows the filters in force: what the URL sets, else what the API applied by default.
+  let draft = $state<LoopAnalysisFilterState>(readLoopAnalysisFilter(new URLSearchParams()));
+
+  function begin() {
+    const applied = analysis.settled?.appliedFilters;
+    const filter = analysis.filter;
+    const masks = { ...filter.masks };
+    for (const key of MASK_KEYS) masks[key] ??= applied?.[key] ?? undefined;
+    draft = { ...filter, profileName: filter.profileName ?? applied?.profileName ?? null, masks };
+  }
+
+  // A filter the URL left out stays out while the draft still holds the API's default for it.
+  async function apply() {
+    const applied = analysis.settled?.appliedFilters;
+    const filter = analysis.filter;
+    const masks = { ...draft.masks };
+    for (const key of MASK_KEYS) {
+      if (filter.masks[key] == null && masks[key] === (applied?.[key] ?? undefined)) delete masks[key];
+    }
+    const profileName =
+      filter.profileName == null && draft.profileName === (applied?.profileName ?? null) ? null : draft.profileName;
+    await navigate({ ...draft, profileName, masks });
+  }
+
+  const reset = () => navigate(readLoopAnalysisFilter(new URLSearchParams()));
+
+  useReportFilters({ fields, begin, apply, reset });
+
+  // A shared link may carry a filter this viewer cannot use. Once the API has said which those
+  // are, they leave the URL, and so the request, rather than standing as an ignored filter.
+  $effect(() => {
+    const unavailable = analysis.envelope?.unavailableFilters?.map((f) => f.filter ?? "") ?? [];
+    const next = withoutUnavailable(analysis.filter, unavailable);
+    if (next) void navigate(next);
+  });
+
+  const dayRange = (start: string | undefined, end: string | undefined) =>
+    start && end ? formatMediumDateRange(startOfDay(start), startOfDay(end)) : "";
+  const comparison = $derived(analysis.settled?.comparisonRange);
+  const shortened = $derived(
+    !analysis.clamped && (analysis.settled?.primaryRange?.shortened || comparison?.shortened)
+  );
+</script>
+
+{#snippet fields()}
+  <LoopAnalysisFilterFields
+    value={draft}
+    onchange={(next) => (draft = next)}
+    unavailable={analysis.envelope?.unavailableFilters}
+    profileNames={analysis.envelope?.profileNames ?? []}
+    clamped={analysis.clamped}
+  />
+{/snippet}
+
+<div class="@container space-y-6">
+  {#if analysis.current}
+    <div class="space-y-1 print:hidden">
+      <p class="text-muted-foreground">{intros[analysis.current]}</p>
+      {#if comparison && analysis.filter.compare !== LoopAnalysisComparison.None}
+        <p class="text-sm text-muted-foreground" data-testid="loop-analysis-compared-range">
+          Compared with {dayRange(comparison.startDate, comparison.endDate)}.
+        </p>
+      {/if}
+      {#if shortened}
+        <p class="flex items-start gap-2 text-sm text-muted-foreground">
+          <Info class="mt-0.5 size-4 shrink-0" />
+          Loop Analysis uses a maximum of 90 days. For a longer range, it uses only the most recent 90 days.
+        </p>
+      {/if}
+    </div>
+  {/if}
+
+  {@render children()}
+</div>

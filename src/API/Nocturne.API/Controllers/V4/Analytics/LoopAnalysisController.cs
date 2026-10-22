@@ -137,17 +137,31 @@ public class LoopAnalysisController(
         var served = await ServeAsync<SettingsEvidenceReport>(
             query,
             withheld is { } reason
-                ? async (filter, _, ct) => new SettingsEvidenceReport
-                {
-                    WithheldReason = reason,
-                    ProfileNames = filter.ReadProfileNames ? await service.GetProfileNamesAsync(filter, ct) : [],
-                }
+                ? (filter, _, ct) => EnvelopeOnlyAsync(new SettingsEvidenceReport { WithheldReason = reason }, filter, ct)
                 : service.GetSettingsEvidenceAsync,
             cancellationToken);
         if (served.Result is OkObjectResult { Value: SettingsEvidenceReport report })
             report.Rules = SettingsEvidenceCalculator.Rules();
         return served;
     }
+
+    /// <summary>
+    /// What every Loop Analysis page shares about a request, without any page's figures: the
+    /// resolved ranges, the filters applied and the ones the caller cannot use, the history clamp,
+    /// the time-zone state and the profiles the <c>profileName</c> filter can be set to.
+    /// </summary>
+    /// <param name="query">The range, comparison and masks (<see cref="LoopAnalysisQuery"/>).</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    [HttpGet("envelope")]
+    [RemoteQuery]
+    [RequireScope(LoopAnalysisReadScopeGuard.AdmissionScope)]
+    [ResponseCache(Duration = 60, Location = ResponseCacheLocation.Client)]
+    [ProducesResponseType(typeof(LoopAnalysisResponse), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    public Task<ActionResult<LoopAnalysisResponse>> GetEnvelope(
+        [FromQuery] LoopAnalysisQuery query,
+        CancellationToken cancellationToken = default) =>
+        ServeAsync(query, (filter, _, ct) => EnvelopeOnlyAsync(new LoopAnalysisResponse(), filter, ct), cancellationToken);
 
     /// <summary>
     /// Glucose, net loop correction, net insulin above schedule, IOB and COB aligned on up to three
@@ -216,6 +230,15 @@ public class LoopAnalysisController(
 
         var result = request!.Zone is { } zone ? await compute(request.Filter!, zone, ct) : new T();
         return Ok(LoopAnalysisReadScopeGuard.Redact(request.Fill(result), HttpContext.GetGrantedScopes()));
+    }
+
+    /// <summary><paramref name="response"/> with only the envelope's profile names computed.</summary>
+    private async Task<T> EnvelopeOnlyAsync<T>(T response, LoopAnalysisFilter filter, CancellationToken ct)
+        where T : LoopAnalysisResponse
+    {
+        if (filter.ReadProfileNames)
+            response.ProfileNames = await service.GetProfileNamesAsync(filter, ct);
+        return response;
     }
 
     /// <summary>A request resolved against the tenant clock and the caller.</summary>

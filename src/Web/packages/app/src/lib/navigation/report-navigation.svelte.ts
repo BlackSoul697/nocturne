@@ -6,6 +6,7 @@ import BarChart3 from "@lucide/svelte/icons/chart-column";
 import BatteryFull from "@lucide/svelte/icons/battery-full";
 import ArrowLeftRight from "@lucide/svelte/icons/arrow-left-right";
 import Calendar from "@lucide/svelte/icons/calendar";
+import ChartLine from "@lucide/svelte/icons/chart-line";
 import CalendarDays from "@lucide/svelte/icons/calendar-days";
 import Clock from "@lucide/svelte/icons/clock";
 import Dumbbell from "@lucide/svelte/icons/dumbbell";
@@ -21,6 +22,8 @@ import Sunrise from "@lucide/svelte/icons/sunrise";
 import SunMoon from "@lucide/svelte/icons/sun-moon";
 import Syringe from "@lucide/svelte/icons/syringe";
 import Utensils from "@lucide/svelte/icons/utensils";
+import SlidersHorizontal from "@lucide/svelte/icons/sliders-horizontal";
+import Target from "@lucide/svelte/icons/target";
 import SiteChangeIcon from "$lib/components/icons/SiteChangeIcon.svelte";
 import { satisfiesAllScopes } from "$lib/authorization/scopes";
 
@@ -51,11 +54,16 @@ export interface ReportItem {
 }
 
 export interface ReportCategory {
-  id: "overview" | "patterns" | "lifestyle" | "treatment";
+  id: "overview" | "patterns" | "lifestyle" | "treatment" | "loop";
   title: string;
   subtitle: string;
   icon: IconComponent;
   reports: ReportItem[];
+  /**
+   * The reports are the pages of one report and share its filters: the report header links
+   * between them (`ReportPageSwitcher`).
+   */
+  pages?: boolean;
 }
 
 /** Read scopes, spelled as the API's `OAuthScopes` spells them. */
@@ -63,6 +71,7 @@ const READ = {
   glucose: "glucose.read",
   treatments: "treatments.read",
   devices: "devices.read",
+  therapy: "therapy.read",
   heartRate: "heartrate.read",
   stepCount: "stepcount.read",
   sleep: "sleep.read",
@@ -295,16 +304,6 @@ export function reportCategories(): ReportCategory[] {
           status: "available",
         },
         {
-          title: "Loop Analysis",
-          description: "What your loop does at each time of day",
-          href: "/reports/loop-analysis",
-          keywords: ["loopalyzer", "closed loop", "aid", "smb", "temp basal", "iob", "cob", "daily profile"],
-          scopes: [READ.glucose, READ.treatments, READ.reports],
-          icon: Repeat,
-          status: "available",
-          memberOnly: true,
-        },
-        {
           title: "Site Change Impact",
           description: "How site changes affect control",
           href: "/reports/site-change-impact",
@@ -332,6 +331,65 @@ export function reportCategories(): ReportCategory[] {
           scopes: [READ.devices],
           icon: BatteryFull,
           status: "available",
+        },
+      ],
+    },
+    {
+      id: "loop",
+      title: "Loop Analysis",
+      subtitle: "What your automated insulin delivery does",
+      icon: Repeat,
+      pages: true,
+      reports: [
+        {
+          title: "Daily profile",
+          description: "Glucose, insulin and carbs at each time of day",
+          href: "/reports/loop-analysis/daily-profile",
+          keywords: ["loopalyzer", "closed loop", "aid", "smb", "temp basal", "iob", "cob"],
+          scopes: [READ.glucose, READ.treatments, READ.reports],
+          icon: ChartLine,
+          status: "available",
+          memberOnly: true,
+        },
+        {
+          title: "Meals and events",
+          description: "Glucose and insulin before and after each event",
+          href: "/reports/loop-analysis/meals-and-events",
+          keywords: ["loop analysis", "meal response", "corrections", "unannounced meals"],
+          scopes: [READ.glucose, READ.treatments, READ.reports],
+          icon: Utensils,
+          status: "available",
+          memberOnly: true,
+        },
+        {
+          title: "Prediction accuracy",
+          description: "The loop's predictions compared with the readings that followed",
+          href: "/reports/loop-analysis/prediction-accuracy",
+          keywords: ["loop analysis", "predictions", "forecast", "uam", "zt"],
+          scopes: [READ.glucose, READ.treatments, READ.devices, READ.reports],
+          icon: Target,
+          status: "available",
+          memberOnly: true,
+        },
+        {
+          title: "Loop health",
+          description: "How much of the time the loop was closed",
+          href: "/reports/loop-analysis/loop-health",
+          keywords: ["loop analysis", "closed loop", "open loop", "limits", "sensitivity ratio"],
+          scopes: [READ.glucose, READ.treatments, READ.reports],
+          icon: Repeat,
+          status: "available",
+          memberOnly: true,
+        },
+        {
+          title: "Settings evidence",
+          description: "Your profile settings compared with your data",
+          href: "/reports/loop-analysis/settings-evidence",
+          keywords: ["loop analysis", "basal", "isf", "carb ratio", "profile settings"],
+          scopes: [READ.glucose, READ.treatments, READ.therapy, READ.reports],
+          icon: SlidersHorizontal,
+          status: "available",
+          memberOnly: true,
         },
       ],
     },

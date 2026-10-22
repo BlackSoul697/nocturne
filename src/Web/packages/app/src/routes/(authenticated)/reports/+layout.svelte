@@ -4,6 +4,7 @@
     import { Button } from "$lib/components/ui/button";
     import {ReportsFilterSidebar} from "$lib/components/layout";
     import ResourceGuard from "$lib/components/reports/ResourceGuard.svelte";
+    import ReportPageSwitcher from "$lib/components/reports/ReportPageSwitcher.svelte";
     import HistoryLimitNotice from "$lib/components/layout/HistoryLimitNotice.svelte";
     import ReportPrintHeader from "$lib/components/reports/print/ReportPrintHeader.svelte";
     import {
@@ -20,6 +21,7 @@
     import { onMount } from "svelte";
     import {useDateParams, setDateParamsContext, createSharedRangeUse} from "$lib/hooks/date-params.svelte";
     import {createResourceContext} from "$lib/hooks/resource-context.svelte";
+    import {createReportSlots} from "$lib/hooks/report-slots.svelte";
 
     let {children} = $props();
 
@@ -44,6 +46,9 @@
 
     // Create resource context for layout-level loading/error handling
     const resourceCtx = createResourceContext();
+
+    // Filters a report adds to the Filters panel, below the date range.
+    createReportSlots();
 
     // Whether to use the ResourceGuard (skip for main reports page which has custom design)
     const useResourceGuard = $derived(page.url.pathname !== "/reports");
@@ -188,6 +193,7 @@
                     {/if}
                 </div>
             </div>
+            <ReportPageSwitcher />
         </div>
     {/if}
 

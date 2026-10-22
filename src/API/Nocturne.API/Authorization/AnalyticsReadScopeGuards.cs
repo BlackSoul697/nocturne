@@ -509,12 +509,14 @@ internal static partial class LoopAnalysisReadScopeGuard
         Action<LoopAnalysisResponse, HashSet<LoopAnalysisSeries>> Narrow);
 
     /// <summary>
-    /// Every tab, by its response type. Every <see cref="LoopAnalysisSeries"/> belongs to exactly
-    /// one tab or to the envelope (<see cref="WithheldEnvelope"/>), so a tab's response never lists
-    /// another's series; a new tab adds one entry here.
+    /// Every tab, by its response type, and the envelope served on its own, which carries no
+    /// series. Every <see cref="LoopAnalysisSeries"/> belongs to exactly one tab or to the envelope
+    /// (<see cref="WithheldEnvelope"/>), so a tab's response never lists another's series; a new
+    /// tab adds one entry here.
     /// </summary>
     private static readonly Dictionary<Type, Tab> Tabs = new()
     {
+        [typeof(LoopAnalysisResponse)] = new(_ => [], (_, _) => { }),
         [typeof(DailyProfileResponse)] = TabOf<DailyProfileResponse, DailyProfileRange>(
             WithheldDailyProfile, r => [r.Primary, r.Comparison], Narrow),
         [typeof(PredictionAccuracyResponse)] = TabOf<PredictionAccuracyResponse, PredictionAccuracyRange>(

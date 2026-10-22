@@ -19,7 +19,6 @@ function roundTrip(filter: LoopAnalysisFilterState, base = "") {
 describe("loop analysis filter URL", () => {
   it("reads a bare URL as no comparison, every day and no masks set", () => {
     expect(bare()).toEqual({
-      tab: "daily-profile",
       compare: LoopAnalysisComparison.None,
       compareFrom: null,
       compareTo: null,
@@ -35,7 +34,6 @@ describe("loop analysis filter URL", () => {
 
   it("round-trips every filter, a mask set false included", () => {
     const filter: LoopAnalysisFilterState = {
-      tab: "daily-profile",
       compare: LoopAnalysisComparison.Custom,
       compareFrom: "2026-06-01",
       compareTo: "2026-07-15",
@@ -67,9 +65,8 @@ describe("loop analysis filter URL", () => {
 
   it("drops malformed values rather than passing them to the API", () => {
     const filter = readLoopAnalysisFilter(
-      new URLSearchParams("tab=nope&compare=sideways&compareFrom=yesterday&weekdays=1,9,x,1&excludeIllness=maybe")
+      new URLSearchParams("compare=sideways&compareFrom=yesterday&weekdays=1,9,x,1&excludeIllness=maybe")
     );
-    expect(filter.tab).toBe("daily-profile");
     expect(filter.compare).toBe(LoopAnalysisComparison.None);
     expect(filter.compareFrom).toBeNull();
     expect(filter.weekdays).toEqual([DayOfWeek.Monday]);

@@ -1,6 +1,6 @@
 <!--
-  A tab's body while its first response loads: the figure strip and two panels, so the filter bar
-  and the tab list above stay where they are.
+  A Loop Analysis page's body while its first response loads: the figure strip and two panels.
+  The shared filters and page links above it stay on screen.
 -->
 <script lang="ts">
   import { Skeleton } from "$lib/components/ui/skeleton";
