@@ -32,7 +32,6 @@
   import { bg, bgLabel, convertToDisplayUnits, hourLabel } from "$lib/utils/formatting";
   import Clock from "@lucide/svelte/icons/clock";
   import EyeOff from "@lucide/svelte/icons/eye-off";
-  import FilterX from "@lucide/svelte/icons/funnel-x";
   import TimeOfDayPanel from "./TimeOfDayPanel.svelte";
   import PercentileBands from "./PercentileBands.svelte";
   import SlotLine from "./SlotLine.svelte";
@@ -40,9 +39,9 @@
   import AggregateReadout from "./AggregateReadout.svelte";
   import SlotDays from "./SlotDays.svelte";
   import { TimeOfDayCursor } from "./time-of-day-cursor.svelte";
-  import { atMinute } from "./daily-profile-view";
-  import { ignoredFilterLabel } from "./filter-labels.svelte";
+  import { atMinute, axisEnd } from "./daily-profile-view";
   import NoTimeZone from "./NoTimeZone.svelte";
+  import IgnoredFiltersNotice from "./IgnoredFiltersNotice.svelte";
 
   interface Props {
     response: DailyProfileResponse;
@@ -72,13 +71,6 @@
     list?.[slot]?.slot === slot ? list[slot] : list?.find((s) => s.slot === slot);
 
   const has = (pick: (s: DailyProfileSlot) => unknown) => slots.some((s) => pick(s) != null);
-
-  /** A rounded-up axis end, so the tallest mark never touches the top. */
-  function axisEnd(values: (number | null | undefined)[], floor: number): number {
-    const max = Math.max(floor, ...values.filter((v): v is number => v != null && Number.isFinite(v)));
-    const step = max <= 1 ? 0.25 : max <= 5 ? 1 : max <= 20 ? 5 : max <= 100 ? 10 : 50;
-    return Math.ceil((max * 1.05) / step) * step;
-  }
 
   const both = $derived([...slots, ...(comparisonSlots ?? [])]);
 
@@ -229,12 +221,6 @@
     return list;
   });
 
-  // Under the clamp the range parameters are always ignored; the clamp notice says so instead.
-  const RANGE_PARAMETERS = new Set(["startDate", "endDate", "compare", "compareStartDate", "compareEndDate"]);
-  const ignoredFilters = $derived(
-    (response.ignoredFilters ?? []).filter((name) => !RANGE_PARAMETERS.has(name))
-  );
-
   const daysText = (n: number | undefined) => plural(n ?? 0, ["# day", "# days"]);
   const readingsText = (n: number | undefined) => plural(n ?? 0, ["# reading", "# readings"]);
 
@@ -311,16 +297,7 @@
       </Alert.Root>
     {/if}
 
-    {#if ignoredFilters.length > 0}
-      <Alert.Root variant="info">
-        <FilterX />
-        <Alert.Title>Some filters were not applied</Alert.Title>
-        <Alert.Description>
-          Your access does not include the data these filters are drawn from, so they were ignored:
-          {ignoredFilters.map(ignoredFilterLabel).join(", ")}.
-        </Alert.Description>
-      </Alert.Root>
-    {/if}
+    <IgnoredFiltersNotice ignored={response.ignoredFilters} />
 
     <div class="space-y-2">
       <FigureStrip {figures} />

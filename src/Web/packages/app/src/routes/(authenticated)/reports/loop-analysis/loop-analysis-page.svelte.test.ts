@@ -2,21 +2,27 @@ import { render } from "vitest-browser-svelte";
 import { page } from "vitest/browser";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { page as pageState } from "$app/state";
-import type { DailyProfileResponse } from "$lib/api";
+import type { DailyProfileResponse, PredictionAccuracyResponse } from "$lib/api";
 import { remoteQuery } from "$lib/test-stubs/remote-resource";
 import {
   ALL_SCOPES,
   profileResponse,
 } from "$lib/components/reports/loop-analysis/daily-profile.test-fixtures";
+import { predictionResponse } from "$lib/components/reports/loop-analysis/prediction-accuracy.test-fixtures";
 
-const calls = vi.hoisted(() => ({ query: [] as unknown[], goto: [] as [string, unknown][] }));
+const calls = vi.hoisted(() => ({ query: [] as unknown[], predictions: [] as unknown[], goto: [] as [string, unknown][] }));
 let response: DailyProfileResponse;
+let predictions: PredictionAccuracyResponse;
 let resourceState: { stale?: boolean; error?: unknown } = {};
 
 vi.mock("$api/generated/loopAnalysis.generated.remote", () => ({
   getDailyProfile: (input: unknown) => {
     calls.query.push(input);
     return remoteQuery(() => response);
+  },
+  getPredictionAccuracy: (input: unknown) => {
+    calls.predictions.push(input);
+    return remoteQuery(() => predictions);
   },
 }));
 
@@ -59,8 +65,10 @@ const lastQuery = () => calls.query.at(-1);
 describe("Loop Analysis page", () => {
   beforeEach(() => {
     calls.query.length = 0;
+    calls.predictions.length = 0;
     calls.goto.length = 0;
     response = profileResponse();
+    predictions = predictionResponse();
     resourceState = {};
   });
 
@@ -171,5 +179,30 @@ describe("Loop Analysis page", () => {
     await expect.element(page.getByText("Only the last 24 hours are included")).toBeVisible();
     expect(page.getByText(/Mar 1/).elements()).toHaveLength(0);
     expect(page.getByText("Some filters were not applied").elements()).toHaveLength(0);
+  });
+
+  it("fetches only the Predictions tab when it is on screen, with the shared filter", async () => {
+    open("?tab=predictions&compare=previous&excludeExercise=true");
+
+    await expect.element(page.getByRole("slider", { name: "UAM", exact: true })).toBeVisible();
+    expect(calls.query).toHaveLength(0);
+    expect(calls.predictions.at(-1)).toEqual({
+      startDate: "2026-10-09",
+      endDate: "2026-10-22",
+      compare: "Previous",
+      excludeExercise: true,
+    });
+  });
+
+  it("drops from the URL a filter the Predictions tab's viewer cannot use", async () => {
+    const scopes = ["glucose.read", "treatments.read", "therapy.read", "reports.read"];
+    predictions = predictionResponse({ scopes });
+    open("?tab=predictions&excludeOpenLoop=true");
+
+    await expect.element(page.getByText("Prediction accuracy is hidden")).toBeVisible();
+    await expect.poll(() => calls.goto.length).toBeGreaterThan(0);
+    const search = new URL(calls.goto.at(-1)![0], "http://localhost").searchParams;
+    expect(search.has("excludeOpenLoop")).toBe(false);
+    expect(search.get("tab")).toBe("predictions");
   });
 });

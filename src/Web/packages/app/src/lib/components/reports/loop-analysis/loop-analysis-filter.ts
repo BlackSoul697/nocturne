@@ -4,7 +4,7 @@ import { isDayString } from "$lib/utils/date-range";
 
 type DailyProfileQuery = Parameters<typeof getDailyProfile>[0];
 
-export const LOOP_ANALYSIS_TABS = ["daily-profile"] as const;
+export const LOOP_ANALYSIS_TABS = ["daily-profile", "predictions"] as const;
 export type LoopAnalysisTab = (typeof LOOP_ANALYSIS_TABS)[number];
 
 export type MaskKey =
