@@ -304,11 +304,6 @@ public class TreatmentService : ITreatmentService
         foreach (var prop in patchData.EnumerateObject())
             merged[prop.Name] = prop.Value.Clone();
 
-        // A patch that names a temp basal's origin states it; the stored evidence must not mark it a default.
-        if (patchData.TryGetProperty(TempBasalOriginProvenance.OriginField, out _)
-            && !patchData.TryGetProperty(TempBasalOriginProvenance.EvidenceField, out _))
-            merged.Remove(TempBasalOriginProvenance.EvidenceField);
-
         var mergedJson = JsonSerializer.Serialize(merged);
         var patched = JsonSerializer.Deserialize<Treatment>(mergedJson);
         if (patched == null) return;
