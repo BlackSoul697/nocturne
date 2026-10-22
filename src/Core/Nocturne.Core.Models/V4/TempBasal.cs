@@ -136,6 +136,12 @@ public class TempBasal : IV4Record, IDeviceAttributed
     public TempBasalOrigin Origin { get; set; }
 
     /// <summary>
+    /// How <see cref="Origin"/> was decided. Null on a record stored before it was recorded; see
+    /// <see cref="TempBasalOriginProvenance.EvidenceOf(TempBasal)"/>.
+    /// </summary>
+    public TempBasalOriginEvidence? OriginEvidence { get; set; }
+
+    /// <summary>
     /// Foreign key to the <see cref="Device"/> table.
     /// </summary>
     public Guid? DeviceId { get; set; }

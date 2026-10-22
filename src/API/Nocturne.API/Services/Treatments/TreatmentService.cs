@@ -287,7 +287,7 @@ public class TreatmentService : ITreatmentService
         return served;
     }
 
-    private static void ApplyJsonPatch(Treatment treatment, JsonElement patchData)
+    internal static void ApplyJsonPatch(Treatment treatment, JsonElement patchData)
     {
         // The identity used to upsert (LegacyId matching) must survive the round-trip. Serializing
         // rewrites _id to its 24-hex ObjectId form, so capture the real Id and restore it after the
@@ -303,6 +303,11 @@ public class TreatmentService : ITreatmentService
             merged[prop.Name] = prop.Value.Clone();
         foreach (var prop in patchData.EnumerateObject())
             merged[prop.Name] = prop.Value.Clone();
+
+        // A patch that names a temp basal's origin states it; the stored evidence must not mark it a default.
+        if (patchData.TryGetProperty(TempBasalOriginProvenance.OriginField, out _)
+            && !patchData.TryGetProperty(TempBasalOriginProvenance.EvidenceField, out _))
+            merged.Remove(TempBasalOriginProvenance.EvidenceField);
 
         var mergedJson = JsonSerializer.Serialize(merged);
         var patched = JsonSerializer.Deserialize<Treatment>(mergedJson);

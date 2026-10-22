@@ -2468,6 +2468,12 @@ namespace Nocturne.Infrastructure.Data.Migrations
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("expires_at");
 
+                    b.Property<string>("Purpose")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("character varying(16)")
+                        .HasColumnName("purpose");
+
                     b.Property<Guid>("SubjectId")
                         .HasColumnType("uuid")
                         .HasColumnName("subject_id");
@@ -5308,6 +5314,14 @@ namespace Nocturne.Infrastructure.Data.Migrations
                         .HasColumnType("uuid")
                         .HasColumnName("id");
 
+                    b.Property<bool>("AdmittedByInvite")
+                        .HasColumnType("boolean")
+                        .HasColumnName("admitted_by_invite");
+
+                    b.Property<Guid?>("BoundTenantId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("bound_tenant_id");
+
                     b.Property<DateTime?>("ConsumedAt")
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("consumed_at");
@@ -7958,6 +7972,15 @@ namespace Nocturne.Infrastructure.Data.Migrations
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("end_timestamp");
 
+                    b.Property<DateTime?>("EndedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("ended_at");
+
+                    b.Property<string>("EndedBy")
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)")
+                        .HasColumnName("ended_by");
+
                     b.Property<string>("EnteredBy")
                         .HasMaxLength(256)
                         .HasColumnType("character varying(256)")
@@ -8724,6 +8747,11 @@ namespace Nocturne.Infrastructure.Data.Migrations
                         .HasMaxLength(32)
                         .HasColumnType("character varying(32)")
                         .HasColumnName("origin");
+
+                    b.Property<string>("OriginEvidence")
+                        .HasMaxLength(16)
+                        .HasColumnType("character varying(16)")
+                        .HasColumnName("origin_evidence");
 
                     b.Property<Guid?>("PatientDeviceId")
                         .HasColumnType("uuid")
