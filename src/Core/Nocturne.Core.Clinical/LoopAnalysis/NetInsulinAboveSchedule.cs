@@ -83,11 +83,13 @@ public sealed class NetInsulinAboveSchedule
 {
     /// <summary>
     /// The longest stretch with no temp basal record that the schedule is taken to have run
-    /// through, and then only with pump evidence (a temp basal record or an APS snapshot) on both
-    /// sides of it. Loop and the oref systems let a temp lapse back to the schedule between
-    /// decisions, and a pump that reports only its temps leaves scheduled stretches between them;
-    /// past a few hours with no evidence at all, an upload outage or time before the pump is the
-    /// likelier story, and delivery there is unknown rather than scheduled.
+    /// through, and then only with a temp basal record on both sides of it. Loop and the oref
+    /// systems let a temp lapse back to the schedule between decisions, and a pump that reports
+    /// only its temps leaves scheduled stretches between them; past a few hours without a record,
+    /// an upload outage or time before the pump is the likelier story, and delivery there is
+    /// unknown rather than scheduled. An APS snapshot does not bound such a stretch: it shows the
+    /// loop ran, not what the pump delivered, and snapshots arriving every five minutes while the
+    /// temp records are missing would otherwise fill weeks with the schedule.
     /// </summary>
     public const long MaxInferredGapMs = 3 * LocalSlotBinning.HourMs;
 
@@ -186,11 +188,10 @@ public sealed class NetInsulinAboveSchedule
 
     /// <summary>
     /// Temp basals as delivered: each ends where the next from the same device starts
-    /// (<see cref="StatisticsService.ClipOverlappingTempBasals"/>), with what they and the APS
-    /// snapshots say about delivery, for <see cref="DeliveredFromSeries"/>.
+    /// (<see cref="StatisticsService.ClipOverlappingTempBasals"/>), with what they say about
+    /// delivery, for <see cref="DeliveredFromSeries"/>.
     /// </summary>
-    public static (List<TempBasal> Clipped, BasalEvidence Evidence) ClipTempBasals(
-        IEnumerable<TempBasal> tempBasals, IEnumerable<long> apsSnapshotMills)
+    public static (List<TempBasal> Clipped, BasalEvidence Evidence) ClipTempBasals(IEnumerable<TempBasal> tempBasals)
     {
         var clipped = new List<TempBasal>();
         var recorded = new List<MillsInterval>();
@@ -217,7 +218,7 @@ public sealed class NetInsulinAboveSchedule
         }
 
         var recordedSet = IntervalSet.Of(recorded);
-        var evidence = recorded.SelectMany(r => new[] { r.Start, r.End }).Concat(apsSnapshotMills).Order().ToArray();
+        var evidence = recorded.SelectMany(r => new[] { r.Start, r.End }).Order().ToArray();
         var inferable = new List<MillsInterval>();
         for (var i = 0; i + 1 < evidence.Length; i++)
         {

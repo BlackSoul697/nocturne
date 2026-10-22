@@ -40,7 +40,7 @@ internal sealed partial class LoopAnalysisService
         var cycles = await cyclesTask;
         var snapshotMills = cycles.Select(c => c.Mills).ToList();
         var common = await commonTask;
-        var delivery = await DeliveryAsync(common, window, snapshotMills, ct);
+        var delivery = await DeliveryAsync(common, window, ct);
 
         var inputs = new LoopHealthInputs
         {

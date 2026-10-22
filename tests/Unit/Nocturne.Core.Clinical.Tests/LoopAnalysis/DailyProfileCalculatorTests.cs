@@ -359,7 +359,7 @@ public class DailyProfileCalculatorTests
         var (_, evidence) = NetInsulinAboveSchedule.ClipTempBasals(
         [
             new TempBasal { StartTimestamp = at, EndTimestamp = at.AddDays(1), Rate = 2, Origin = TempBasalOrigin.Algorithm, Device = "p" },
-        ], []);
+        ]);
         var delivered = NetInsulinAboveSchedule.DeliveredFromSeries(
         [
             new BasalPoint { Timestamp = from, Rate = 2, Origin = BasalDeliveryOrigin.Algorithm },
@@ -377,6 +377,44 @@ public class DailyProfileCalculatorTests
     }
 
     [Fact]
+    public void ALongStretchWithoutTempRecords_IsAbsentHoweverDenseTheApsSnapshots()
+    {
+        // A day of temps, 47 days of APS snapshots (the loop ran) with no temp record, then a day
+        // of temps. The series fills the stretch from the schedule.
+        var from = Local(Darwin, 2024, 6, 1, 0);
+        var stretchStart = from + 24 * Hour;
+        var stretchEnd = stretchStart + 47 * 24 * Hour;
+        var to = stretchEnd + 24 * Hour;
+        var temps = new List<TempBasal>();
+        foreach (var dayStart in new[] { from, stretchEnd })
+            for (var t = dayStart; t < dayStart + 24 * Hour; t += 5 * Minute)
+            {
+                var at = DateTimeOffset.FromUnixTimeMilliseconds(t).UtcDateTime;
+                temps.Add(new TempBasal { StartTimestamp = at, EndTimestamp = at.AddMinutes(5), Rate = 1.5, Origin = TempBasalOrigin.Algorithm, Device = "p" });
+            }
+        var (clipped, evidence) = NetInsulinAboveSchedule.ClipTempBasals(temps);
+        var series = clipped.Select(t => new BasalPoint { Timestamp = t.StartMills, Rate = 1.5, Origin = BasalDeliveryOrigin.Algorithm })
+            .Append(new BasalPoint { Timestamp = stretchStart, Rate = 1, Origin = BasalDeliveryOrigin.Inferred });
+        var snapshots = new List<IobCobTick>();
+        for (var t = stretchStart; t < stretchEnd; t += 5 * Minute)
+            snapshots.Add(new IobCobTick(t, 1.2, IobCobSource.Device, 10, IobCobSource.Device));
+
+        var result = Calculate(Darwin, from, to,
+            delivered: NetInsulinAboveSchedule.DeliveredFromSeries(series, to, evidence),
+            scheduled: [new(from, to, 1.0)],
+            iobCob: snapshots);
+
+        result.Summary.NetLoopCorrectionDays.Should().Be(2);
+        result.Summary.Insulin!.Total.N.Should().Be(2);
+        result.Slots[SlotAt(10, 0)].DeliveredBasal!.N.Should().Be(2, "only the two days of temps carry delivery");
+        result.Slots[SlotAt(10, 0)].NetLoopCorrection!.Rate.N.Should().Be(2);
+        result.Slots[SlotAt(10, 0)].Iob!.N.Should().Be(47, "the snapshots still report IOB");
+        result.Days.Where(d => d.Start >= DateTimeOffset.FromUnixTimeMilliseconds(stretchStart).UtcDateTime
+                && d.Start < DateTimeOffset.FromUnixTimeMilliseconds(stretchEnd).UtcDateTime)
+            .Should().HaveCount(47).And.OnlyContain(d => d.NetLoopCorrection == null && d.DeliveredBasal == null);
+    }
+
+    [Fact]
     public void PreAidTime_IsAbsent()
     {
         var from = Local(Darwin, 2024, 6, 3, 0);
@@ -388,7 +426,7 @@ public class DailyProfileCalculatorTests
             var at = DateTimeOffset.FromUnixTimeMilliseconds(t).UtcDateTime;
             temps.Add(new TempBasal { StartTimestamp = at, EndTimestamp = at.AddMinutes(30), Rate = 1.5, Origin = TempBasalOrigin.Algorithm, Device = "p" });
         }
-        var (clipped, evidence) = NetInsulinAboveSchedule.ClipTempBasals(temps, []);
+        var (clipped, evidence) = NetInsulinAboveSchedule.ClipTempBasals(temps);
         var series = new List<BasalPoint> { new() { Timestamp = from, Rate = 1, Origin = BasalDeliveryOrigin.Inferred } };
         series.AddRange(clipped.Select(t => new BasalPoint { Timestamp = t.StartMills, Rate = 1.5, Origin = BasalDeliveryOrigin.Algorithm }));
 

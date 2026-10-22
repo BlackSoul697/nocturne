@@ -23,9 +23,9 @@ namespace Nocturne.API.Services.Analytics;
 /// apart, each gets its own. Every collection is read uncapped, for the reason given on
 /// <c>StatisticsController.FetchInsulinRecordsAsync</c>, and treatments are read from
 /// <see cref="DailyProfileCalculator.ActingMs"/> before the window so IOB and COB at its start see
-/// the doses still acting. Temp basals and APS snapshots or loop cycles are read to
+/// the doses still acting. Temp basals are read to
 /// <see cref="NetInsulinAboveSchedule.MaxInferredGapMs"/> past it, so a gap that straddles its end
-/// is bounded by the evidence that closes it.
+/// is bounded by the record that closes it.
 /// </remarks>
 internal sealed partial class LoopAnalysisService(
     ISensorGlucoseRepository glucoseRepository,
@@ -103,7 +103,7 @@ internal sealed partial class LoopAnalysisService(
         var lookbackUtc = ToUtc(from - DailyProfileCalculator.ActingMs);
 
         var carbTask = carbIntakeRepository.GetAsync(lookbackUtc, ToUtc(to), null, null, int.MaxValue, descending: false, ct: ct);
-        var apsTask = apsSnapshotRepository.GetIobCobPointsAsync(lookbackUtc, ToUtc(to + NetInsulinAboveSchedule.MaxInferredGapMs), ct);
+        var apsTask = apsSnapshotRepository.GetIobCobPointsAsync(lookbackUtc, ToUtc(to), ct);
         var commonTask = LoadCommonAsync(window, ct);
         await Task.WhenAll(carbTask, apsTask, commonTask);
 
@@ -113,7 +113,7 @@ internal sealed partial class LoopAnalysisService(
             .Select(p => ToMills(DateTime.SpecifyKind(p.Timestamp, DateTimeKind.Utc)))
             .ToList();
         var common = await commonTask;
-        var delivery = await DeliveryAsync(common, window, snapshotMills, ct);
+        var delivery = await DeliveryAsync(common, window, ct);
 
         var iobCob = IobCobSeries.Build(
             iobCalculator, cobCalculator, common.Boluses, carbs, common.TempBasals, delivery.Timeline, apsPoints,
@@ -188,7 +188,7 @@ internal sealed partial class LoopAnalysisService(
     /// Basal delivered against the schedule (scaled by any override) and every bolus in the window,
     /// as <see cref="NetInsulinAboveSchedule"/> defines them.
     /// </summary>
-    private async Task<Delivery> DeliveryAsync(Common common, Window window, IReadOnlyList<long> snapshotMills, CancellationToken ct)
+    private async Task<Delivery> DeliveryAsync(Common common, Window window, CancellationToken ct)
     {
         var from = window.From;
         var to = window.To;
@@ -203,7 +203,7 @@ internal sealed partial class LoopAnalysisService(
                     .Select(o => new ScaleFactorInterval(o.Interval.Start, o.Interval.End, (double)(o.Span.Metadata?.OverrideScaleFactor() ?? 1m))))
             : [];
 
-        var (clipped, evidence) = NetInsulinAboveSchedule.ClipTempBasals(common.TempBasals, snapshotMills);
+        var (clipped, evidence) = NetInsulinAboveSchedule.ClipTempBasals(common.TempBasals);
         var series = await basalSeriesBuilder.BuildAsync(
             clipped, tickStart, to, timeline.SnapshotAt(from).BasalRateAt(from), timeline, ct);
         var delivered = NetInsulinAboveSchedule.DeliveredFromSeries(series, to, evidence);
