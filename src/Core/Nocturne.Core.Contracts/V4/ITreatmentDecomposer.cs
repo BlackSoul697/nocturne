@@ -27,9 +27,9 @@ public interface ITreatmentDecomposer
     Task<DecompositionResult> DecomposeAsync(Treatment treatment, WriteOrigin origin, CancellationToken ct = default);
 
     /// <summary>
-    /// The eventType <paramref name="treatment"/> is served as once decomposed, when it becomes a bolus,
-    /// a carb intake or both: <c>Meal Bolus</c>, <c>Correction Bolus</c> or <c>Carb Correction</c>
-    /// whatever type was uploaded. Null for any other treatment, which is served as it was sent.
+    /// The eventType <paramref name="treatment"/> is served as once decomposed when its uploaded eventType
+    /// is not kept and it becomes a bolus, a carb intake or both: <c>Meal Bolus</c>, <c>Correction Bolus</c>
+    /// or <c>Carb Correction</c>. Null for any other treatment, which is served as it was sent.
     /// </summary>
     string? ServedBolusCarbEventType(Treatment treatment);
 

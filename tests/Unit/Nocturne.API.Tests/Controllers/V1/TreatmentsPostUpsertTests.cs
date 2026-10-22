@@ -93,6 +93,7 @@ public class TreatmentsPostUpsertTests : IDisposable
             Mock.Of<IProfileDecomposer>(),
             Mock.Of<IActiveProfileResolver>(),
             Mock.Of<IPatientInsulinRepository>(),
+            TempBasalTestDeps.Unscheduled(),
             audit,
             NullLogger<TreatmentDecomposer>.Instance);
 
@@ -223,14 +224,15 @@ public class TreatmentsPostUpsertTests : IDisposable
     }
 
     [Fact]
-    public async Task Post_CarbCorrectionAtTheTimeOfACarbsOnlyMealBolus_ReplacesItBecauseBothAreServedAsCarbCorrection()
+    public async Task Post_CarbCorrectionAtTheTimeOfACarbsOnlyMealBolus_KeepsBothBecauseEachIsServedAsUploaded()
     {
         await PostAsync(Carbs("Meal Bolus", 30));
         await PostAsync(Carbs("Carb Correction", 45));
 
-        var stored = (await StoredAsync()).Should().ContainSingle().Subject;
-        stored.EventType.Should().Be("Carb Correction");
-        stored.Carbs.Should().Be(45);
+        var stored = await StoredAsync();
+        stored.Should().HaveCount(2);
+        stored.Single(t => t.EventType == "Meal Bolus").Carbs.Should().Be(30);
+        stored.Single(t => t.EventType == "Carb Correction").Carbs.Should().Be(45);
     }
 
     [Fact]

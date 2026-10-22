@@ -10,6 +10,7 @@ using Nocturne.Core.Models.Authorization;
 using Nocturne.Core.Contracts.Legacy;
 using Nocturne.Core.Contracts.Treatments;
 using Nocturne.Core.Models;
+using Nocturne.Infrastructure.Data;
 
 namespace Nocturne.API.Controllers.V1;
 
@@ -200,9 +201,19 @@ public class TreatmentsController : ControllerBase
             HttpContext?.Connection?.RemoteIpAddress?.ToString() ?? "unknown"
         );
 
+        List<Treatment>? treatmentsToCreate;
         try
         {
-            var treatmentsToCreate = ReadTreatments(treatments);
+            treatmentsToCreate = ReadTreatments(treatments);
+        }
+        catch (JsonException ex)
+        {
+            _logger.LogWarning(ex, "Invalid JSON in create treatments request");
+            return BadRequest("Invalid JSON format");
+        }
+
+        try
+        {
             if (treatmentsToCreate is null)
             {
                 _logger.LogWarning("Invalid JSON format for treatments");
@@ -224,10 +235,10 @@ public class TreatmentsController : ControllerBase
             // Return 200 OK to match Nightscout behavior (not 201 Created)
             return Ok(resultArray);
         }
-        catch (JsonException ex)
+        catch (TreatmentBatchFailedException ex)
         {
-            _logger.LogWarning(ex, "Invalid JSON in create treatments request");
-            return BadRequest("Invalid JSON format");
+            // cgm-remote-monitor answers a failed insert with sendJSONStatus(res, 500, 'Mongo Error', err).
+            return StatusCode(500, new { status = 500, message = "Mongo Error", description = ex.Message });
         }
         catch (Exception ex)
         {
@@ -442,6 +453,22 @@ public class TreatmentsController : ControllerBase
     )
     {
         var prepared = PrepareTreatments([treatment]).Single();
+        try
+        {
+            return await SavePreparedAsync(prepared, cancellationToken);
+        }
+        catch (TreatmentRefusedException ex)
+        {
+            // NIGHTSCOUT-COMPAT: as for a refused create, see TreatmentEcho.
+            return Ok(TreatmentEcho.Refused(prepared, ex.Message));
+        }
+    }
+
+    private async Task<ActionResult<Treatment>> SavePreparedAsync(
+        Treatment prepared,
+        CancellationToken cancellationToken
+    )
+    {
         var keys = new[] { prepared.Id, prepared.SyncIdentifier }
             .OfType<string>()
             .Where(key => !string.IsNullOrWhiteSpace(key))
@@ -469,9 +496,11 @@ public class TreatmentsController : ControllerBase
         if (created.SkippedDeleted > 0)
             return NothingSaved(prepared.Id);
 
-        return created.FirstOrDefault() is { } saved
-            ? Ok(saved)
-            : StatusCode(500, "Internal server error while saving treatment");
+        // NIGHTSCOUT-COMPAT: Nightscout stores any document, so v1 clients take any 2xx as stored
+        // and a 4xx or 5xx as a reason to resend forever. A treatment Nocturne cannot store is
+        // answered 200 with the treatment echoed under TreatmentEcho's marker and kept in the
+        // rejected uploads for the owner to see.
+        return Ok(TreatmentEcho.InSubmittedOrder(created)[0]);
     }
 
     /// <summary>
@@ -495,7 +524,8 @@ public class TreatmentsController : ControllerBase
             if (withIdentity.Count == 0)
                 return;
 
-            results.AddRange(await _treatmentService.CreateTreatmentsAsync(withIdentity, cancellationToken));
+            results.AddRange(TreatmentEcho.InSubmittedOrder(
+                await _treatmentService.CreateTreatmentsAsync(withIdentity, cancellationToken)));
             withIdentity.Clear();
         }
 
@@ -516,19 +546,13 @@ public class TreatmentsController : ControllerBase
                 continue;
             }
 
-            results.AddRange(await _treatmentService.CreateTreatmentsAsync([treatment], cancellationToken));
+            results.AddRange(TreatmentEcho.InSubmittedOrder(
+                await _treatmentService.CreateTreatmentsAsync([treatment], cancellationToken)));
         }
 
         await FlushAsync();
         return results.ToArray();
     }
-
-    /// <summary>
-    /// The documents of an object or array body, each keyed on its <c>identifier</c> when it has one;
-    /// null for any other body.
-    /// </summary>
-    private static List<Treatment>? ReadTreatments(JsonElement body) =>
-        NightscoutJsonBody.ReadObjects(body, ReadTreatment);
 
     private static Treatment? ReadTreatment(JsonElement document)
     {
@@ -547,6 +571,25 @@ public class TreatmentsController : ControllerBase
     {
         _logger.LogDebug("Refused save of treatment {Id}: the user deleted it", id);
         return Ok(Array.Empty<Treatment>());
+    }
+
+    /// <summary>
+    /// The documents of an object or array body, each keyed on its <c>identifier</c> when it has one;
+    /// null for any other body. A string escaping an unpaired surrogate, which Nightscout's JSON.parse
+    /// accepts and System.Text.Json cannot read, is read with the escape replaced by U+FFFD rather
+    /// than answered as invalid JSON, which an uploader would resend forever.
+    /// </summary>
+    private static List<Treatment>? ReadTreatments(JsonElement body)
+    {
+        try
+        {
+            return NightscoutJsonBody.ReadObjects(body, ReadTreatment);
+        }
+        catch (JsonException ex) when (ex.InnerException is InvalidOperationException)
+        {
+            using var repaired = JsonDocument.Parse(StorableText.RepairJsonEscapes(body.GetRawText()));
+            return NightscoutJsonBody.ReadObjects(repaired.RootElement.Clone(), ReadTreatment);
+        }
     }
 
     private List<Treatment> PrepareTreatments(List<Treatment> treatments)
