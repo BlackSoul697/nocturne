@@ -3674,6 +3674,9 @@ msgstr "Crea un nuevo alimento con información nutricional."
 
 #: src/lib/components/entries/CarbIntakeSection.svelte
 #: src/lib/components/meal-matching/MealMatchReviewDialog.svelte
+#: src/lib/components/reports/BasalBolusRatioChart.svelte
+#: src/lib/components/reports/BasalBolusRatioChart.svelte
+#: src/lib/components/reports/BasalBolusRatioChart.svelte
 #: src/lib/components/treatments/TreatmentFoodEntryEditDialog.svelte
 #: src/lib/components/treatments/TreatmentPortionsForm.svelte
 msgid "Carbs (g)"
@@ -5665,6 +5668,7 @@ msgstr "No hay permisos concedidos por roles"
 msgid "Loading data..."
 msgstr "Cargando datos..."
 
+#: src/lib/components/reports/BasalBolusRatioChart.svelte
 #: src/lib/components/reports/BasalBolusRatioChart.svelte
 #: src/lib/components/reports/BasalBolusRatioChart.svelte
 msgid "Basal (U)"
@@ -11892,9 +11896,8 @@ msgstr "I:C media"
 msgid "<0/> Daily Basal/Bolus Breakdown"
 msgstr "<0/> Desglose diario basal/bolo"
 
-#: src/routes/(authenticated)/reports/insulin-delivery/+page.svelte
-msgid "See how your insulin was split each day"
-msgstr "Consulta cómo se repartió tu insulina cada día"
+#~ msgid "See how your insulin was split each day"
+#~ msgstr "Consulta cómo se repartió tu insulina cada día"
 
 #: src/routes/(authenticated)/reports/insulin-delivery/+page.svelte
 msgid "<0/> Hourly Insulin Delivery"
@@ -27559,9 +27562,11 @@ msgstr ""
 
 #: src/lib/components/reports/BasalBolusRatioChart.svelte
 #: src/lib/components/reports/BasalBolusRatioChart.svelte
+#: src/lib/components/reports/BasalBolusRatioChart.svelte
 msgid "Manual bolus (U)"
 msgstr ""
 
+#: src/lib/components/reports/BasalBolusRatioChart.svelte
 #: src/lib/components/reports/BasalBolusRatioChart.svelte
 #: src/lib/components/reports/BasalBolusRatioChart.svelte
 msgid "Automatic bolus (U)"
@@ -27730,4 +27735,12 @@ msgstr ""
 
 #: src/routes/(authenticated)/reports/executive-summary/+page.svelte
 msgid "Lower means steadier glucose with fewer ups and downs."
+msgstr ""
+
+#: src/lib/components/reports/BasalBolusRatioChart.svelte
+msgid "Total (U)"
+msgstr ""
+
+#: src/routes/(authenticated)/reports/insulin-delivery/+page.svelte
+msgid "See how your insulin was split each day, against the carbs you logged"
 msgstr ""
