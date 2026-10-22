@@ -91,7 +91,7 @@
     {settled}
     {clamped}
     unavailable={response?.unavailableFilters}
-    profileNames={response?.primary?.profileNames ?? []}
+    profileNames={response?.profileNames ?? []}
   />
 
   <Tabs.Root

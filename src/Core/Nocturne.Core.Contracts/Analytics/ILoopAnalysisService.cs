@@ -23,4 +23,7 @@ public interface ILoopAnalysisService
     /// <remarks>Takes and returns as <see cref="GetDailyProfileAsync"/> does.</remarks>
     Task<LoopHealthResponse> GetLoopHealthAsync(
         LoopAnalysisFilter filter, TimeZoneInfo zone, CancellationToken ct = default);
+
+    /// <summary>The envelope's <see cref="LoopAnalysisResponse.ProfileNames"/> for <paramref name="filter"/>'s ranges.</summary>
+    Task<List<string>> GetProfileNamesAsync(LoopAnalysisFilter filter, CancellationToken ct = default);
 }

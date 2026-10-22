@@ -1109,13 +1109,13 @@ public class AnalyticsReadScopeGuardTests
             NetLoopCorrectionDays = 1,
             Insulin = new DailyInsulinSummary { Total = Aggregate(40), DeliveredBasal = 20 },
         },
-        ProfileNames = ["Default"],
     };
 
     private static DailyProfileResponse DailyProfile() => new()
     {
         Primary = DailyProfileRange(),
         Comparison = DailyProfileRange(),
+        ProfileNames = ["Default"],
     };
 
     private static readonly LoopAnalysisSeries[] TreatmentSeries =
@@ -1146,6 +1146,7 @@ public class AnalyticsReadScopeGuardTests
         var data = LoopAnalysisReadScopeGuard.Redact(DailyProfile(), Granted(scopes));
 
         data.WithheldSeries.Should().BeEquivalentTo(expected);
+        (data.ProfileNames.Count == 0).Should().Be(expected.Contains(LoopAnalysisSeries.ProfileNames));
         foreach (var range in new[] { data.Primary, data.Comparison! })
         {
             var slot = range.Slots.Single();
@@ -1165,7 +1166,6 @@ public class AnalyticsReadScopeGuardTests
             (slot.ManualBoluses is null).Should().Be(Withheld(LoopAnalysisSeries.ManualBoluses));
             (slot.Carbs is null).Should().Be(Withheld(LoopAnalysisSeries.Carbs));
             (slot.TargetLow is null).Should().Be(Withheld(LoopAnalysisSeries.Target));
-            (range.ProfileNames.Count == 0).Should().Be(Withheld(LoopAnalysisSeries.ProfileNames));
             (range.Summary.Insulin is null).Should().Be(Withheld(LoopAnalysisSeries.InsulinSummary));
             (day.TotalInsulin is null).Should().Be(Withheld(LoopAnalysisSeries.InsulinSummary));
             (range.Summary.NetLoopCorrectionPerDay is null).Should().Be(Withheld(LoopAnalysisSeries.NetLoopCorrectionSummary));
@@ -1212,14 +1212,38 @@ public class AnalyticsReadScopeGuardTests
     }
 
     [Fact]
-    public void LoopAnalysis_EverySeriesCanBeWithheld_ByExactlyOneTab()
+    public void LoopAnalysis_EverySeriesCanBeWithheld_ByExactlyOneTabOrTheEnvelope()
     {
-        var byTab = LoopAnalysisReadScopeGuard.TabResponses
-            .ToDictionary(t => t, t => LoopAnalysisReadScopeGuard.WithheldFrom(t, Granted()));
+        var byOwner = LoopAnalysisReadScopeGuard.TabResponses
+            .ToDictionary(t => t.Name, t => LoopAnalysisReadScopeGuard.WithheldFrom(t, Granted()));
+        byOwner["envelope"] = LoopAnalysisReadScopeGuard.WithheldEnvelope(Granted());
 
         foreach (var series in Enum.GetValues<LoopAnalysisSeries>())
-            byTab.Where(t => t.Value.Contains(series)).Select(t => t.Key)
-                .Should().ContainSingle($"{series} is withheld by exactly one tab");
+            byOwner.Where(t => t.Value.Contains(series)).Select(t => t.Key)
+                .Should().ContainSingle($"{series} is withheld by exactly one tab or the envelope");
+    }
+
+    public static TheoryData<Type> LoopAnalysisTabResponses => [.. LoopAnalysisReadScopeGuard.TabResponses];
+
+    [Theory]
+    [MemberData(nameof(LoopAnalysisTabResponses))]
+    public void LoopAnalysis_WithholdingEveryCategory_LeavesTheEnvelopeOnlyWhatItSaysOfTheRequest(Type response)
+    {
+        var populated = typeof(RedactionCoverage).GetMethod(nameof(RedactionCoverage.Populated))!
+            .MakeGenericMethod(response).Invoke(null, null)!;
+        var redacted = typeof(LoopAnalysisReadScopeGuard).GetMethod(nameof(LoopAnalysisReadScopeGuard.Redact))!
+            .MakeGenericMethod(response).Invoke(null, [populated, Granted()])!;
+
+        RedactionCoverage.AssertWithheld(
+            redacted,
+            [response],
+            [
+                .. new[]
+                {
+                    "Primary", "Comparison", "HistoryClamped", "TimeZoneUnavailableReason", "PrimaryRange",
+                    "ComparisonRange", "AppliedFilters", "IgnoredFilters", "WithheldSeries", "UnavailableFilters",
+                }.Select(p => $"{response.Name}.{p}"),
+            ]);
     }
 
     [Fact]
@@ -1385,6 +1409,12 @@ public class AnalyticsReadScopeGuardTests
         service
             .Setup(s => s.GetPredictionAccuracyAsync(It.IsAny<LoopAnalysisFilter>(), It.IsAny<TimeZoneInfo>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(PredictionAccuracy);
+        service
+            .Setup(s => s.GetLoopHealthAsync(It.IsAny<LoopAnalysisFilter>(), It.IsAny<TimeZoneInfo>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(LoopHealth);
+        service
+            .Setup(s => s.GetProfileNamesAsync(It.IsAny<LoopAnalysisFilter>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(() => ["Default", "Weekend"]);
 
         var context = ContextWith(scopes);
         context.HttpContext.Request.QueryString = new QueryString(query);
@@ -1450,6 +1480,34 @@ public class AnalyticsReadScopeGuardTests
         service.Verify(s => s.GetDailyProfileAsync(
             It.Is<LoopAnalysisFilter>(f => f.Masks.ProfileName == null && !f.Masks.ExcludeOverrides && f.CompareFrom == null),
             It.Is<TimeZoneInfo>(z => z.Id == "Australia/Sydney"),
+            It.IsAny<CancellationToken>()));
+    }
+
+    [Theory]
+    [InlineData(nameof(LoopAnalysisController.GetDailyProfile), true)]
+    [InlineData(nameof(LoopAnalysisController.GetDailyProfile), false)]
+    [InlineData(nameof(LoopAnalysisController.GetPredictionAccuracy), true)]
+    [InlineData(nameof(LoopAnalysisController.GetPredictionAccuracy), false)]
+    [InlineData(nameof(LoopAnalysisController.GetLoopHealth), true)]
+    [InlineData(nameof(LoopAnalysisController.GetLoopHealth), false)]
+    public async Task LoopAnalysis_EveryTab_CarriesTheProfileNames_OnlyWithTherapy(string action, bool therapy)
+    {
+        var scopes = therapy ? AllLoopAnalysisCategories : AllLoopAnalysisCategories.Except([Scope.TherapyRead]);
+        var (controller, service) = LoopAnalysisHandler(Granted([Scope.ReportsRead, .. scopes]));
+
+        var data = action switch
+        {
+            nameof(LoopAnalysisController.GetDailyProfile) =>
+                (LoopAnalysisResponse)Ok(await controller.GetDailyProfile(Week())),
+            nameof(LoopAnalysisController.GetPredictionAccuracy) => Ok(await controller.GetPredictionAccuracy(Week())),
+            _ => (await controller.GetLoopHealth(Week())).Result.Should().BeOfType<OkObjectResult>()
+                .Which.Value.Should().BeAssignableTo<LoopAnalysisResponse>().Subject,
+        };
+
+        data.ProfileNames.Should().Equal(therapy ? ["Default", "Weekend"] : []);
+        data.WithheldSeries.Contains(LoopAnalysisSeries.ProfileNames).Should().Be(!therapy);
+        service.Verify(s => s.GetProfileNamesAsync(
+            It.Is<LoopAnalysisFilter>(f => f.From == new DateTime(2024, 5, 31, 14, 0, 0, DateTimeKind.Utc)),
             It.IsAny<CancellationToken>()));
     }
 
@@ -1641,8 +1699,8 @@ public class AnalyticsReadScopeGuardTests
 
         var devices = scopes.Contains(Scope.DevicesRead);
         data.WithheldSeries.Should().Equal(devices
-            ? [LoopAnalysisSeries.PredictionCurves]
-            : [LoopAnalysisSeries.PredictionCurves, LoopAnalysisSeries.PredictionCount]);
+            ? [LoopAnalysisSeries.ProfileNames, LoopAnalysisSeries.PredictionCurves]
+            : [LoopAnalysisSeries.ProfileNames, LoopAnalysisSeries.PredictionCurves, LoopAnalysisSeries.PredictionCount]);
         foreach (var range in new[] { data.Primary, data.Comparison! })
         {
             range.Curves.Should().BeEmpty();
@@ -1684,7 +1742,7 @@ public class AnalyticsReadScopeGuardTests
             Week(q => { q.Compare = LoopAnalysisComparison.Previous; q.ExcludeExercise = true; })));
 
         data.Primary.Curves.Should().HaveCount(2).And.OnlyContain(c => c.ByContext.Count == 0);
-        data.WithheldSeries.Should().Equal(LoopAnalysisSeries.PredictionContexts);
+        data.WithheldSeries.Should().Equal(LoopAnalysisSeries.ProfileNames, LoopAnalysisSeries.PredictionContexts);
         data.IgnoredFilters.Should().Equal("excludeExercise");
         data.UnavailableFilters.Should().BeEquivalentTo(new[]
         {
@@ -1811,7 +1869,7 @@ public class AnalyticsReadScopeGuardTests
             LoopHealth(), Granted(Scope.TreatmentsRead, Scope.DevicesRead));
 
         data.WithheldSeries.Should().BeEquivalentTo([
-            LoopAnalysisSeries.CgmActivity, LoopAnalysisSeries.LoopLimits, LoopAnalysisSeries.OrefMaxIob,
+            LoopAnalysisSeries.ProfileNames, LoopAnalysisSeries.CgmActivity, LoopAnalysisSeries.LoopLimits, LoopAnalysisSeries.OrefMaxIob,
             LoopAnalysisSeries.MaxBasal,
         ]);
         data.Primary.Limits.Should().BeEquivalentTo(new LoopHealthLimits());

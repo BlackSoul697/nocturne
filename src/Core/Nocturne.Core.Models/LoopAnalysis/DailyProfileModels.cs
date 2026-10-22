@@ -48,9 +48,6 @@ public class DailyProfileRange
     public List<DailyProfileDay> Days { get; set; } = [];
 
     public DailyProfileSummary Summary { get; set; } = new();
-
-    /// <summary>Profiles active at some point in the range.</summary>
-    public List<string> ProfileNames { get; set; } = [];
 }
 
 public class DailyProfileSlot

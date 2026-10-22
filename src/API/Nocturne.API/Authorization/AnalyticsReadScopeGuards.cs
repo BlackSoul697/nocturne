@@ -499,7 +499,6 @@ internal static class LoopAnalysisReadScopeGuard
             LoopAnalysisSeries.ScheduledBasal,
             LoopAnalysisSeries.Target,
             LoopAnalysisSeries.DeliveredToScheduledRatio);
-        Withhold(withheld, !therapy, LoopAnalysisSeries.ProfileNames);
         return withheld;
     }
 
@@ -510,7 +509,8 @@ internal static class LoopAnalysisReadScopeGuard
 
     /// <summary>
     /// Every tab, by its response type. Every <see cref="LoopAnalysisSeries"/> belongs to exactly
-    /// one tab, so a tab's response never lists another's series; a new tab adds one entry here.
+    /// one tab or to the envelope (<see cref="WithheldEnvelope"/>), so a tab's response never lists
+    /// another's series; a new tab adds one entry here.
     /// </summary>
     private static readonly Dictionary<Type, Tab> Tabs = new()
     {
@@ -548,10 +548,24 @@ internal static class LoopAnalysisReadScopeGuard
     {
         var tab = Tabs[typeof(T)];
         var withheld = tab.Withheld(grantedScopes);
+        withheld.UnionWith(WithheldEnvelope(grantedScopes));
         data.WithheldSeries = [.. withheld.Order()];
+        if (withheld.Contains(LoopAnalysisSeries.ProfileNames))
+            data.ProfileNames = [];
         if (withheld.Count > 0)
             tab.Narrow(data, withheld);
         return data;
+    }
+
+    /// <summary>
+    /// The series of the envelope every tab carries, which <see cref="Redact{T}"/> withholds whatever
+    /// the tab: the profile names are therapy settings.
+    /// </summary>
+    public static HashSet<LoopAnalysisSeries> WithheldEnvelope(IReadOnlySet<string> grantedScopes)
+    {
+        var withheld = new HashSet<LoopAnalysisSeries>();
+        Withhold(withheld, !AnalyticsReadScopes.Allows(grantedScopes, Scope.TherapyRead), LoopAnalysisSeries.ProfileNames);
+        return withheld;
     }
 
     /// <summary>
@@ -726,7 +740,6 @@ internal static class LoopAnalysisReadScopeGuard
         }
         if (Hidden(LoopAnalysisSeries.InsulinSummary)) range.Summary.Insulin = null;
         if (Hidden(LoopAnalysisSeries.DeliveredToScheduledRatio)) range.Summary.DeliveredToScheduledRatio = null;
-        if (Hidden(LoopAnalysisSeries.ProfileNames)) range.ProfileNames = [];
 
         range.Summary.DaysWithData = range.Days.Count(day =>
             (day.HasGlucose && !Hidden(LoopAnalysisSeries.Glucose))

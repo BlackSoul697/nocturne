@@ -31,8 +31,6 @@ public sealed record DailyProfileInputs
 
     /// <summary>The target range in force at an instant, mg/dL; null where none is.</summary>
     public Func<long, (double Low, double High)?>? TargetAt { get; init; }
-
-    public IReadOnlyList<ProfileInterval> Profiles { get; init; } = [];
 }
 
 /// <summary>
@@ -129,11 +127,6 @@ public static class DailyProfileCalculator
             HourlyNetLoopCorrection = Hourly(dayCount, acc),
             Days = days,
             Summary = summary,
-            ProfileNames = [.. inputs.Profiles
-                .Where(p => p.Start < to && p.End > from)
-                .OrderBy(p => p.Start)
-                .Select(p => p.ProfileName)
-                .Distinct(StringComparer.Ordinal)],
         };
     }
 

@@ -77,6 +77,19 @@ internal sealed partial class LoopAnalysisService(
         return (first, comparison is { } separate ? calculate(await load(separate), separate) : null);
     }
 
+    public async Task<List<string>> GetProfileNamesAsync(LoopAnalysisFilter filter, CancellationToken ct = default)
+    {
+        var windows = new List<Window> { Window.Of(filter.From, filter.To) };
+        if (filter.CompareFrom is { } compareFrom && filter.CompareTo is { } compareTo)
+            windows.Add(Window.Of(compareFrom, compareTo));
+
+        var profiles = new List<ProfileSpan>();
+        foreach (var window in windows)
+            profiles.AddRange((await activeProfileResolver.GetProfileSpansForRangeAsync(window.From, window.To, ct))
+                .Where(p => p.StartMills < window.To && (p.EndMills ?? window.To) > window.From));
+        return [.. profiles.OrderBy(p => p.StartMills).Select(p => p.ProfileName).Distinct(StringComparer.Ordinal)];
+    }
+
     private static LoopAnalysisMask Mask(
         LoopAnalysisFilter filter, Window window, TimeZoneInfo zone, LoopAnalysisMaskSources sources) =>
         LoopAnalysisMask.Build(filter.Masks, window.From, window.To, zone, sources);

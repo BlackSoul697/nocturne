@@ -173,6 +173,13 @@ public class LoopAnalysisResponse
     public List<LoopAnalysisSeries> WithheldSeries { get; set; } = [];
 
     /// <summary>
+    /// Profiles active at some point in the primary or the comparison range, the oldest activation
+    /// first: what the <c>profileName</c> filter can be set to. Empty without a timezone, and
+    /// withheld as <see cref="LoopAnalysisSeries.ProfileNames"/>.
+    /// </summary>
+    public List<string> ProfileNames { get; set; } = [];
+
+    /// <summary>
     /// Every filter the caller's scopes do not let it use, whether or not it was sent, so a client
     /// can offer only the filters that will apply.
     /// </summary>

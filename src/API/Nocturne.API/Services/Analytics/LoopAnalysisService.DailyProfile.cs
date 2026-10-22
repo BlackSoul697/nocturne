@@ -61,7 +61,6 @@ internal sealed partial class LoopAnalysisService
                     .Concat(carbs.Where(c => c.Carbs > 0).Select(c => c.Mills))),
             TargetAt = await TargetRangesAsync(
                 delivery.HasTherapy ? common.Profiles : [], ActiveTemporaryTargets(common.Spans, to), zone, to, ct),
-            Profiles = common.ProfileIntervals,
         };
 
         return new DailyProfileLoaded(inputs, Sources(common, snapshotMills, zone, to));
