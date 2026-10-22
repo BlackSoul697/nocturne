@@ -180,20 +180,19 @@ public class StatisticsController : ControllerBase
     /// <paramref name="recordedBasal"/> is basal delivered by a route other than TempBasals. A
     /// non-empty one suppresses the fallback: a profile baseline on top of MDI injections would
     /// double-count the day's coverage. <c>null</c> where the caller does not read injections.
+    /// <paramref name="profileSegments"/> is the schedule when the caller already read it.
     /// </remarks>
     private async Task AddScheduledBasalFallbackAsync(
         List<TempBasal> tempBasals,
         DateTime startUtc,
         DateTime endUtc,
         IReadOnlyCollection<BasalInjection>? recordedBasal,
-        CancellationToken ct)
+        CancellationToken ct,
+        IReadOnlyList<BasalSegment>? profileSegments = null)
     {
         if (tempBasals.Count > 0 || recordedBasal is { Count: > 0 }) return;
-        if (!await _therapySettingsResolver.HasDataAsync(ct)) return;
 
-        var fromMs = new DateTimeOffset(startUtc, TimeSpan.Zero).ToUnixTimeMilliseconds();
-        var toMs = new DateTimeOffset(endUtc, TimeSpan.Zero).ToUnixTimeMilliseconds();
-        await foreach (var seg in _basalSegments.GetSegmentsAsync(fromMs, toMs, ct))
+        foreach (var seg in profileSegments ?? await ReadProfileBasalSegmentsAsync(startUtc, endUtc, ct))
         {
             tempBasals.Add(new TempBasal
             {
@@ -203,6 +202,21 @@ public class StatisticsController : ControllerBase
                 Origin = TempBasalOrigin.Scheduled,
             });
         }
+    }
+
+    /// <summary>
+    /// Reads the profile's basal schedule over the window, none when the tenant has no therapy
+    /// settings: <see cref="IBasalSegmentService"/> would otherwise answer with its constant 1.0 U/h
+    /// fallback.
+    /// </summary>
+    private async Task<IReadOnlyList<BasalSegment>> ReadProfileBasalSegmentsAsync(
+        DateTime startUtc, DateTime endUtc, CancellationToken ct)
+    {
+        if (!await _therapySettingsResolver.HasDataAsync(ct)) return [];
+
+        var fromMs = new DateTimeOffset(startUtc, TimeSpan.Zero).ToUnixTimeMilliseconds();
+        var toMs = new DateTimeOffset(endUtc, TimeSpan.Zero).ToUnixTimeMilliseconds();
+        return await _basalSegments.GetSegmentsAsync(fromMs, toMs, ct).ToListAsync(ct);
     }
 
     /// <summary>
@@ -1328,12 +1342,13 @@ public class StatisticsController : ControllerBase
     /// basal, temp adjustments, and boluses, from pump-confirmed delivery records.
     /// Basal insulin is duration-weighted across the user-local hours each TempBasal
     /// overlaps, and averages are taken over the days that have delivery data — a
-    /// window that extends before the first record does not distort the pattern.
+    /// window that extends before the first record does not distort the pattern. Also serves the
+    /// profile's scheduled rate per hour and the period totals of total and basal delivery.
     /// </summary>
     /// <param name="startDate">Start date of the analysis period (UTC)</param>
     /// <param name="endDate">End date of the analysis period (UTC)</param>
     /// <param name="cancellationToken">Cancellation token.</param>
-    /// <returns>24 hourly averages plus the number of days with data</returns>
+    /// <returns>24 hourly averages, the period totals and the number of days with data</returns>
     [HttpGet("hourly-insulin-delivery")]
     [RequireScope(Scope.ReportsRead)]
     [RemoteQuery]
@@ -1346,10 +1361,13 @@ public class StatisticsController : ControllerBase
         var startUtc = DateTime.SpecifyKind(startDate, DateTimeKind.Utc);
         var endUtc = DateTime.SpecifyKind(endDate, DateTimeKind.Utc);
 
+        var profileSegmentsTask = ReadProfileBasalSegmentsAsync(startUtc, endUtc, cancellationToken);
         var (boluses, algorithmBoluses, tempBasals, basalInjections) =
-            await FetchInsulinRecordsAsync(startUtc, endUtc, cancellationToken);
+            await FetchInsulinRecordsAsync(startUtc, endUtc, cancellationToken, profileSegmentsTask);
 
-        await AddScheduledBasalFallbackAsync(tempBasals, startUtc, endUtc, basalInjections, cancellationToken);
+        var profileSegments = await profileSegmentsTask;
+        await AddScheduledBasalFallbackAsync(
+            tempBasals, startUtc, endUtc, basalInjections, cancellationToken, profileSegments);
 
         var tzId = await _therapySettingsResolver.GetTimezoneAsync(ct: cancellationToken);
         var userTz = string.IsNullOrEmpty(tzId) ? null : TimeZoneHelper.GetTimeZoneInfoFromId(tzId);
@@ -1361,7 +1379,8 @@ public class StatisticsController : ControllerBase
             startUtc,
             endUtc,
             userTz,
-            basalInjections
+            basalInjections,
+            profileSegments
         );
         return Ok(result);
     }

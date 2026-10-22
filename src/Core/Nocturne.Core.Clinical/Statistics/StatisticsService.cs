@@ -3,6 +3,7 @@ using Nocturne.Core.Clinical.Schedules;
 using Nocturne.Core.Constants;
 using Nocturne.Core.Contracts.Analytics;
 using Nocturne.Core.Models;
+using Nocturne.Core.Models.Basal;
 using Nocturne.Core.Models.V4;
 
 namespace Nocturne.Core.Clinical.Statistics;
@@ -2600,7 +2601,8 @@ public class StatisticsService : IStatisticsService
         DateTime startDate,
         DateTime endDate,
         TimeZoneInfo? userTimeZone = null,
-        IEnumerable<BasalInjection>? basalInjections = null)
+        IEnumerable<BasalInjection>? basalInjections = null,
+        IEnumerable<BasalSegment>? profileBasalSegments = null)
     {
         var tz = userTimeZone ?? TimeZoneInfo.Utc;
 
@@ -2665,6 +2667,17 @@ public class StatisticsService : IStatisticsService
             counts[LocalHourOfDay(bi.Mills, tz)]++;
         }
 
+        var profileUnits = new double[24];
+        var profileHours = new double[24];
+        foreach (var segment in profileBasalSegments ?? [])
+        {
+            DistributeAcrossLocalHours(segment.StartMills, segment.EndMills, tz, (localStart, sliceMs) =>
+            {
+                profileUnits[localStart.Hour] += segment.UnitsPerHour * sliceMs / HourMs;
+                profileHours[localStart.Hour] += (double)sliceMs / HourMs;
+            });
+        }
+
         // Average each component over the days that actually have its data, not
         // the requested window: a period extending before the first record must
         // not dilute (or, combined with gap-fill, distort) the daily pattern.
@@ -2672,8 +2685,13 @@ public class StatisticsService : IStatisticsService
         var bolusDayCount = Math.Max(1, bolusDays.Count);
 
         var hours = new List<HourlyInsulinDeliveryPoint>(24);
+        var exactBasal = new double[24];
+        var exactTotal = new double[24];
         for (int hour = 0; hour < 24; hour++)
         {
+            exactBasal[hour] = (scheduledBasal[hour] + tempBasal[hour]) / basalDayCount;
+            exactTotal[hour] = exactBasal[hour]
+                + (manualBolus[hour] + automaticBolus[hour]) / bolusDayCount;
             var avgScheduled = Math.Round(scheduledBasal[hour] / basalDayCount * 100) / 100;
             var avgTemp = Math.Round(tempBasal[hour] / basalDayCount * 100) / 100;
             var avgManual = Math.Round(manualBolus[hour] / bolusDayCount * 100) / 100;
@@ -2688,6 +2706,9 @@ public class StatisticsService : IStatisticsService
                 AutomaticBolus = avgAutomatic,
                 Total = Math.Round((avgScheduled + avgTemp + avgManual + avgAutomatic) * 100) / 100,
                 Count = counts[hour],
+                ProfileBasalRate = profileHours[hour] > 0
+                    ? Math.Round(profileUnits[hour] / profileHours[hour] * 100) / 100
+                    : 0,
             });
         }
 
@@ -2697,9 +2718,37 @@ public class StatisticsService : IStatisticsService
         return new HourlyInsulinDeliveryResponse
         {
             Hours = hours,
+            TotalDeliveryPeriods = BuildPeriodBreakdown(exactTotal),
+            BasalPeriods = BuildPeriodBreakdown(exactBasal),
             DaysWithData = allDays.Count,
             StartDate = startDate.ToString("yyyy-MM-dd"),
             EndDate = endDate.ToString("yyyy-MM-dd"),
+        };
+    }
+
+    /// <summary>
+    /// Takes the unrounded hourly averages: summing the rounded points would drift by up to half a
+    /// hundredth per hour. Rounds once, at each block.
+    /// </summary>
+    private static InsulinDeliveryPeriodBreakdown BuildPeriodBreakdown(double[] hourly)
+    {
+        var morning = hourly[6..12].Sum();
+        var afternoon = hourly[12..18].Sum();
+        var eveningNight = hourly[18..].Sum() + hourly[..6].Sum();
+        var daily = morning + afternoon + eveningNight;
+
+        static InsulinDeliveryPeriodTotal Period(double units, double daily) => new()
+        {
+            Units = Math.Round(units * 100) / 100,
+            Percent = daily > 0 ? Math.Round(units / daily * 1000) / 10 : 0,
+        };
+
+        return new InsulinDeliveryPeriodBreakdown
+        {
+            Morning = Period(morning, daily),
+            Afternoon = Period(afternoon, daily),
+            EveningNight = Period(eveningNight, daily),
+            DailyTotal = Math.Round(daily * 100) / 100,
         };
     }
 

@@ -1924,6 +1924,48 @@ public class HourlyInsulinDeliveryPoint
     /// Number of delivery records contributing to this hour
     /// </summary>
     public int Count { get; set; }
+
+    /// <summary>
+    /// Rate (U/h) the profile schedules for this hour, averaged over the requested range weighted by
+    /// the time each schedule was in effect. Independent of delivery: a zero temp basal leaves it
+    /// unchanged. <see cref="ScheduledBasal"/> is the scheduled-origin insulin actually delivered.
+    /// </summary>
+    public double ProfileBasalRate { get; set; }
+}
+
+/// <summary>
+/// One of the three parts the day is split into for <see cref="HourlyInsulinDeliveryResponse"/>:
+/// morning (06:00 to 12:00), afternoon (12:00 to 18:00) and evening/night (18:00 to 06:00 the next
+/// morning), in the user's profile timezone.
+/// </summary>
+public class InsulinDeliveryPeriodTotal
+{
+    /// <summary>
+    /// Units over the period's hours, summed from the hourly averages
+    /// </summary>
+    public double Units { get; set; }
+
+    /// <summary>
+    /// Percentage (0-100) of the daily total
+    /// </summary>
+    public double Percent { get; set; }
+}
+
+/// <summary>
+/// The three day periods and their sum, for one measure of delivery
+/// </summary>
+public class InsulinDeliveryPeriodBreakdown
+{
+    public InsulinDeliveryPeriodTotal Morning { get; set; } = new();
+
+    public InsulinDeliveryPeriodTotal Afternoon { get; set; } = new();
+
+    public InsulinDeliveryPeriodTotal EveningNight { get; set; } = new();
+
+    /// <summary>
+    /// Units over all 24 hours
+    /// </summary>
+    public double DailyTotal { get; set; }
 }
 
 /// <summary>
@@ -1936,6 +1978,16 @@ public class HourlyInsulinDeliveryResponse
     /// One entry per hour of day (0-23)
     /// </summary>
     public List<HourlyInsulinDeliveryPoint> Hours { get; set; } = new();
+
+    /// <summary>
+    /// Periods over <see cref="HourlyInsulinDeliveryPoint.Total"/>, what the stacked chart plots
+    /// </summary>
+    public InsulinDeliveryPeriodBreakdown TotalDeliveryPeriods { get; set; } = new();
+
+    /// <summary>
+    /// Periods over <see cref="HourlyInsulinDeliveryPoint.Basal"/>, what the basal-only chart plots
+    /// </summary>
+    public InsulinDeliveryPeriodBreakdown BasalPeriods { get; set; } = new();
 
     /// <summary>
     /// Distinct local days this response attributes delivered insulin to. Not the length of the

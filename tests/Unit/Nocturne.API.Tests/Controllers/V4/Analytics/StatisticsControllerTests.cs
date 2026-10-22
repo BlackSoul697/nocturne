@@ -819,18 +819,68 @@ public class StatisticsControllerTests
             .Setup(s => s.CalculateHourlyInsulinDelivery(
                 It.IsAny<IEnumerable<TempBasal>>(), It.IsAny<IEnumerable<Bolus>>(),
                 It.IsAny<IEnumerable<Bolus>>(), It.IsAny<DateTime>(), It.IsAny<DateTime>(),
-                It.IsAny<TimeZoneInfo?>(), It.IsAny<IEnumerable<BasalInjection>?>()))
-            .Callback<IEnumerable<TempBasal>, IEnumerable<Bolus>, IEnumerable<Bolus>, DateTime, DateTime, TimeZoneInfo?, IEnumerable<BasalInjection>?>(
-                (tempBasals, _, _, _, _, _, _) => passed = tempBasals.ToList())
+                It.IsAny<TimeZoneInfo?>(), It.IsAny<IEnumerable<BasalInjection>?>(),
+                It.IsAny<IEnumerable<BasalSegment>?>()))
+            .Callback<IEnumerable<TempBasal>, IEnumerable<Bolus>, IEnumerable<Bolus>, DateTime, DateTime, TimeZoneInfo?, IEnumerable<BasalInjection>?, IEnumerable<BasalSegment>?>(
+                (tempBasals, _, _, _, _, _, _, _) => passed = tempBasals.ToList())
             .Returns(new HourlyInsulinDeliveryResponse());
 
         await CreateController().GetHourlyInsulinDelivery(start, start.AddDays(1));
 
         passed.Should().BeEmpty(
             "MDI injections are already the day's basal, so a profile baseline on top would double-count it");
-        _basalSegmentsMock.Verify(
-            s => s.GetSegmentsAsync(It.IsAny<long>(), It.IsAny<long>(), It.IsAny<CancellationToken>()),
-            Times.Never);
+    }
+
+    [Fact]
+    public async Task GetHourlyInsulinDelivery_PassesTheProfileScheduleToTheService()
+    {
+        var start = new DateTime(2026, 3, 1, 0, 0, 0, DateTimeKind.Utc);
+        var schedule = new BasalSegment(Mills(start), Mills(start.AddDays(1)), 0.9, 0.9, "Default");
+
+        SetupEmptyTreatments();
+        _therapySettingsResolverMock
+            .Setup(r => r.HasDataAsync(It.IsAny<CancellationToken>()))
+            .ReturnsAsync(true);
+        _basalSegmentsMock
+            .Setup(s => s.GetSegmentsAsync(It.IsAny<long>(), It.IsAny<long>(), It.IsAny<CancellationToken>()))
+            .Returns(() => AsAsync([schedule]));
+
+        List<BasalSegment>? passed = null;
+        _statsServiceMock
+            .Setup(s => s.CalculateHourlyInsulinDelivery(
+                It.IsAny<IEnumerable<TempBasal>>(), It.IsAny<IEnumerable<Bolus>>(),
+                It.IsAny<IEnumerable<Bolus>>(), It.IsAny<DateTime>(), It.IsAny<DateTime>(),
+                It.IsAny<TimeZoneInfo?>(), It.IsAny<IEnumerable<BasalInjection>?>(),
+                It.IsAny<IEnumerable<BasalSegment>?>()))
+            .Callback<IEnumerable<TempBasal>, IEnumerable<Bolus>, IEnumerable<Bolus>, DateTime, DateTime, TimeZoneInfo?, IEnumerable<BasalInjection>?, IEnumerable<BasalSegment>?>(
+                (_, _, _, _, _, _, _, segments) => passed = segments?.ToList())
+            .Returns(new HourlyInsulinDeliveryResponse());
+
+        await CreateController().GetHourlyInsulinDelivery(start, start.AddDays(1));
+
+        passed.Should().Equal(schedule);
+    }
+
+    [Fact]
+    public async Task GetHourlyInsulinDelivery_WithNoTherapySettings_PassesNoProfileSchedule()
+    {
+        var start = new DateTime(2026, 3, 1, 0, 0, 0, DateTimeKind.Utc);
+        SetupEmptyTreatments();
+
+        List<BasalSegment>? passed = null;
+        _statsServiceMock
+            .Setup(s => s.CalculateHourlyInsulinDelivery(
+                It.IsAny<IEnumerable<TempBasal>>(), It.IsAny<IEnumerable<Bolus>>(),
+                It.IsAny<IEnumerable<Bolus>>(), It.IsAny<DateTime>(), It.IsAny<DateTime>(),
+                It.IsAny<TimeZoneInfo?>(), It.IsAny<IEnumerable<BasalInjection>?>(),
+                It.IsAny<IEnumerable<BasalSegment>?>()))
+            .Callback<IEnumerable<TempBasal>, IEnumerable<Bolus>, IEnumerable<Bolus>, DateTime, DateTime, TimeZoneInfo?, IEnumerable<BasalInjection>?, IEnumerable<BasalSegment>?>(
+                (_, _, _, _, _, _, _, segments) => passed = segments?.ToList())
+            .Returns(new HourlyInsulinDeliveryResponse());
+
+        await CreateController().GetHourlyInsulinDelivery(start, start.AddDays(1));
+
+        passed.Should().BeEmpty();
     }
 
     [Fact]
@@ -958,7 +1008,8 @@ public class StatisticsControllerTests
             .Setup(s => s.CalculateHourlyInsulinDelivery(
                 It.IsAny<IEnumerable<TempBasal>>(), It.IsAny<IEnumerable<Bolus>>(),
                 It.IsAny<IEnumerable<Bolus>>(), It.IsAny<DateTime>(), It.IsAny<DateTime>(),
-                It.IsAny<TimeZoneInfo?>(), It.IsAny<IEnumerable<BasalInjection>?>()))
+                It.IsAny<TimeZoneInfo?>(), It.IsAny<IEnumerable<BasalInjection>?>(),
+                It.IsAny<IEnumerable<BasalSegment>?>()))
             .Returns(new HourlyInsulinDeliveryResponse());
 
         await CreateController().GetHourlyInsulinDelivery(start, start.AddDays(90));

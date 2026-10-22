@@ -1,4 +1,5 @@
 using Nocturne.Core.Models;
+using Nocturne.Core.Models.Basal;
 using Nocturne.Core.Models.V4;
 
 namespace Nocturne.Core.Contracts.Analytics;
@@ -400,6 +401,8 @@ public interface IStatisticsService
     /// Defaults to UTC hour-of-day when <paramref name="userTimeZone"/> is null.
     /// Long-acting basal injections (MDI) are spread evenly across the 24 hours
     /// following each injection and counted as scheduled basal.
+    /// <paramref name="profileBasalSegments"/> is the profile's schedule over the window; it fills
+    /// <see cref="HourlyInsulinDeliveryPoint.ProfileBasalRate"/> and is left at zero when absent.
     /// </summary>
     HourlyInsulinDeliveryResponse CalculateHourlyInsulinDelivery(
         IEnumerable<TempBasal> tempBasals,
@@ -408,7 +411,8 @@ public interface IStatisticsService
         DateTime startDate,
         DateTime endDate,
         TimeZoneInfo? userTimeZone = null,
-        IEnumerable<BasalInjection>? basalInjections = null);
+        IEnumerable<BasalInjection>? basalInjections = null,
+        IEnumerable<BasalSegment>? profileBasalSegments = null);
 }
 
 /// <summary>
