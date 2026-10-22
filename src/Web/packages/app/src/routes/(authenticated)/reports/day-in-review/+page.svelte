@@ -363,16 +363,20 @@
 
       <Card.Root>
       <Card.Content class="p-4 flex flex-col items-center gap-4">
-        <InsulinDonutChart
-          boluses={delivery?.manualBoluses ?? []}
-          manualBolus={delivery?.manualBolus ?? 0}
-          automaticBolus={delivery?.automaticBolus ?? 0}
-          scheduledBasal={delivery?.scheduledBasal ?? 0}
-          additionalBasal={delivery?.additionalBasal ?? 0}
-          totalInsulin={delivery?.totalInsulin ?? 0}
-          carbIntakes={dayData?.carbIntakes ?? []}
-          onBolusClick={openBolusDialog}
-        />
+        {#key dateParam}
+          <InsulinDonutChart
+            boluses={delivery?.manualBoluses ?? []}
+            totalBasal={delivery?.totalBasal ?? 0}
+            totalBolus={delivery?.totalBolus ?? 0}
+            manualBolus={delivery?.manualBolus ?? 0}
+            automaticBolus={delivery?.automaticBolus ?? 0}
+            scheduledBasal={delivery?.scheduledBasal ?? 0}
+            additionalBasal={delivery?.additionalBasal ?? 0}
+            totalInsulin={delivery?.totalInsulin ?? 0}
+            carbIntakes={dayData?.carbIntakes ?? []}
+            onBolusClick={openBolusDialog}
+          />
+        {/key}
         <div class="grid grid-cols-2 gap-x-6 gap-y-2 text-sm w-full">
           <div>
             <div class="text-muted-foreground">Total Carbs</div>
