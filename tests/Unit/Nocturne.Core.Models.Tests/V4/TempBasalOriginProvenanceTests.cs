@@ -12,6 +12,119 @@ namespace Nocturne.Core.Models.Tests.V4;
 [Trait("Category", "Unit")]
 public class TempBasalOriginProvenanceTests
 {
+    private static readonly Guid Snapshot = Guid.Parse("11111111-1111-1111-1111-111111111111");
+
+    private static readonly DateTime Start = new(2026, 9, 1, 10, 0, 0, DateTimeKind.Utc);
+
+    private static TempBasalOriginState State(
+        TempBasalOrigin origin,
+        TempBasalOriginEvidence? evidence,
+        Guid? snapshot,
+        DateTime? start = null,
+        double? rate = 1.2) =>
+        new(origin, evidence, snapshot, new DateTimeOffset(start ?? Start).ToUnixTimeMilliseconds(), rate);
+
+    [Theory]
+    [InlineData(TempBasalOriginEvidence.Reported, TempBasalOriginEvidence.Uploader)]
+    [InlineData(TempBasalOriginEvidence.Reported, null)]
+    [InlineData(TempBasalOriginEvidence.Snapshot, TempBasalOriginEvidence.Uploader)]
+    [InlineData(TempBasalOriginEvidence.Snapshot, null)]
+    public void OnUpdate_IncomingDefaultKeepsAStoredStatementOrJudgement(
+        TempBasalOriginEvidence stored, TempBasalOriginEvidence? incoming)
+    {
+        var kept = State(TempBasalOrigin.Manual, stored, Snapshot);
+
+        var result = TempBasalOriginProvenance.OnUpdate(kept, State(TempBasalOrigin.Algorithm, incoming, null));
+
+        result.Should().Be(kept);
+    }
+
+    [Fact]
+    public void OnUpdate_AJudgementStaysThroughFloatingPointNoiseInTheRateAndSubMillisecondStart()
+    {
+        var kept = State(TempBasalOrigin.Manual, TempBasalOriginEvidence.Snapshot, Snapshot);
+
+        var result = TempBasalOriginProvenance.OnUpdate(
+            kept,
+            State(
+                TempBasalOrigin.Algorithm,
+                TempBasalOriginEvidence.Uploader,
+                null,
+                start: Start.AddTicks(4567),
+                rate: 1.2 + 1e-9));
+
+        result.Should().Be(kept);
+    }
+
+    [Theory]
+    [InlineData(0.4)]
+    [InlineData(1.21)]
+    [InlineData(1.25)]
+    [InlineData(null)]
+    public void OnUpdate_AJudgementIsTakenAgainWhenTheRateChanges(double? incomingRate)
+    {
+        var incoming = State(TempBasalOrigin.Algorithm, TempBasalOriginEvidence.Uploader, null, rate: incomingRate);
+
+        var result = TempBasalOriginProvenance.OnUpdate(
+            State(TempBasalOrigin.Manual, TempBasalOriginEvidence.Snapshot, Snapshot), incoming);
+
+        result.Should().Be(incoming);
+    }
+
+    [Fact]
+    public void OnUpdate_AJudgementIsTakenAgainWhenTheStartChanges()
+    {
+        var incoming = State(
+            TempBasalOrigin.Algorithm, TempBasalOriginEvidence.Uploader, null, start: Start.AddMinutes(1));
+
+        var result = TempBasalOriginProvenance.OnUpdate(
+            State(TempBasalOrigin.Manual, TempBasalOriginEvidence.Snapshot, Snapshot), incoming);
+
+        result.Should().Be(incoming);
+    }
+
+    [Fact]
+    public void OnUpdate_AStatementStaysWhenTheStartAndRateChange()
+    {
+        var kept = State(TempBasalOrigin.Manual, TempBasalOriginEvidence.Reported, null);
+
+        var result = TempBasalOriginProvenance.OnUpdate(
+            kept,
+            State(TempBasalOrigin.Algorithm, TempBasalOriginEvidence.Uploader, null, start: Start.AddMinutes(1), rate: 0.4));
+
+        result.Should().Be(kept);
+    }
+
+    [Theory]
+    [InlineData(TempBasalOriginEvidence.Reported)]
+    [InlineData(TempBasalOriginEvidence.Snapshot)]
+    public void OnUpdate_IncomingStatementOverwritesAllThreeFields(TempBasalOriginEvidence stored)
+    {
+        var incoming = State(TempBasalOrigin.Manual, TempBasalOriginEvidence.Reported, null);
+
+        var result = TempBasalOriginProvenance.OnUpdate(
+            State(TempBasalOrigin.Algorithm, stored, Snapshot), incoming);
+
+        result.Should().Be(incoming);
+    }
+
+    [Theory]
+    [InlineData(TempBasalOriginEvidence.Uploader, TempBasalOriginEvidence.Snapshot)]
+    [InlineData(TempBasalOriginEvidence.Uploader, TempBasalOriginEvidence.Uncorroborated)]
+    [InlineData(TempBasalOriginEvidence.Uncorroborated, TempBasalOriginEvidence.Uploader)]
+    [InlineData(TempBasalOriginEvidence.Uploader, TempBasalOriginEvidence.Uploader)]
+    [InlineData(null, TempBasalOriginEvidence.Uploader)]
+    public void OnUpdate_OtherwiseTakesTheIncomingState(
+        TempBasalOriginEvidence? stored, TempBasalOriginEvidence incomingEvidence)
+    {
+        var incoming = State(TempBasalOrigin.Manual, incomingEvidence, Snapshot);
+
+        var result = TempBasalOriginProvenance.OnUpdate(
+            State(TempBasalOrigin.Algorithm, stored, null), incoming);
+
+        result.Should().Be(incoming);
+    }
+
     [Theory]
     [InlineData(TempBasalOrigin.Manual, null, "Trio", null, TempBasalOriginEvidence.Uploader)]
     [InlineData(TempBasalOrigin.Algorithm, null, "loop://iPhone", null, TempBasalOriginEvidence.Uploader)]

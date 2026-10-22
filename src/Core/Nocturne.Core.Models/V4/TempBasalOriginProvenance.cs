@@ -55,6 +55,42 @@ public static class TempBasalOriginProvenance
             ? TempBasalOriginEvidence.Uploader
             : TempBasalOriginEvidence.Reported);
 
+    /// <summary>
+    /// How near two rates must be to count as the same rate: just under the 0.05 U/h step of the
+    /// coarsest pumps, which deliver a proposed rate rounded to their step, so a rate one whole step
+    /// away is a different rate.
+    /// </summary>
+    public const double RateTolerance = 0.0495;
+
+    /// <summary>
+    /// The origin a write leaves on a stored temp basal. An incoming statement
+    /// (<see cref="TempBasalOriginEvidence.Reported"/>) wins. An incoming default
+    /// (<see cref="TempBasalOriginEvidence.Uploader"/> or none) leaves a stored statement as it is, and
+    /// a stored snapshot judgement as it is while the temp's start and rate are the ones it was judged
+    /// on, with its snapshot link, since a re-upload carries no evidence of its own. A temp that moved
+    /// or changed rate takes the incoming default, so it is judged again. Anything else is taken as sent.
+    /// </summary>
+    public static TempBasalOriginState OnUpdate(TempBasalOriginState stored, TempBasalOriginState incoming) =>
+        incoming.Evidence is null or TempBasalOriginEvidence.Uploader && KeepsStored(stored, incoming)
+            ? stored
+            : incoming;
+
+    private static bool KeepsStored(TempBasalOriginState stored, TempBasalOriginState incoming) =>
+        stored.Evidence is TempBasalOriginEvidence.Reported
+        || stored.Evidence is TempBasalOriginEvidence.Snapshot && SameTemp(stored, incoming);
+
+    private static bool SameTemp(TempBasalOriginState stored, TempBasalOriginState incoming) =>
+        stored.StartMills == incoming.StartMills
+        && (stored.Rate is { } storedRate && incoming.Rate is { } incomingRate
+            ? Math.Abs(storedRate - incomingRate) < SameRateEpsilon
+            : stored.Rate is null && incoming.Rate is null);
+
+    /// <summary>
+    /// Floating-point noise only, not <see cref="RateTolerance"/>: two rates within a pump step of each
+    /// other can fall on opposite sides of a proposal's tolerance, so any real change is judged again.
+    /// </summary>
+    private const double SameRateEpsilon = 1e-6;
+
     /// <inheritdoc cref="EvidenceOf(TempBasalOrigin, TempBasalOriginEvidence?, bool?, string?, string?)"/>
     public static TempBasalOriginEvidence EvidenceOf(TempBasal tempBasal) =>
         EvidenceOf(
@@ -79,3 +115,14 @@ public static class TempBasalOriginProvenance
         DataSources.TwiistConnector,
     };
 }
+
+/// <summary>
+/// The three fields that together state a temp basal's origin, with the start and rate a snapshot
+/// judgement of it rests on.
+/// </summary>
+public readonly record struct TempBasalOriginState(
+    TempBasalOrigin Origin,
+    TempBasalOriginEvidence? Evidence,
+    Guid? ApsSnapshotId,
+    long StartMills,
+    double? Rate);

@@ -4,6 +4,7 @@ using Microsoft.EntityFrameworkCore.Storage;
 using Nocturne.Core.Models;
 using Nocturne.Core.Models.V4;
 using Nocturne.Infrastructure.Data.Extensions;
+using Nocturne.Infrastructure.Data.Mappers.V4;
 using Npgsql;
 using NpgsqlTypes;
 
@@ -42,12 +43,6 @@ public static class TempBasalOriginCorroborator
     /// snapshots after the one that made it.
     /// </summary>
     private static readonly TimeSpan RepeatedEnactment = TimeSpan.FromMinutes(10);
-
-    /// <summary>
-    /// Just under the 0.05 U/h step of the coarsest pumps, which deliver a proposed rate rounded to
-    /// their step: a rate one whole step from the proposal is a different rate.
-    /// </summary>
-    private const double RateTolerance = 0.0495;
 
     private const string PageSql = """
         SELECT id, start_timestamp, rate, device, app, data_source, origin, origin_evidence,
@@ -142,7 +137,7 @@ public static class TempBasalOriginCorroborator
             return new Verdict(uploaderDefault, TempBasalOriginEvidence.Uncorroborated, null);
 
         var match = rated
-            .Where(p => p.Rates.Any(proposed => Math.Abs(proposed - r) < RateTolerance))
+            .Where(p => p.Rates.Any(proposed => Math.Abs(proposed - r) < TempBasalOriginProvenance.RateTolerance))
             .OrderBy(p => p.Distance)
             .Select(p => p.Proposal)
             .FirstOrDefault();
@@ -339,7 +334,7 @@ public static class TempBasalOriginCorroborator
 
     private static Verdict Settle(Row row, ILookup<string, Proposal> proposals)
     {
-        var stored = Enum.TryParse<TempBasalOriginEvidence>(row.Evidence, out var parsed) ? parsed : (TempBasalOriginEvidence?)null;
+        var stored = TempBasalOriginColumns.EvidenceOf(row.Evidence);
         var evidence = TempBasalOriginProvenance.EvidenceOf(
             row.Origin, stored, row.AutomaticFlag, row.EnteredBy, row.DataSource);
         if (evidence == TempBasalOriginEvidence.Reported)
@@ -398,7 +393,7 @@ public static class TempBasalOriginCorroborator
                 reader.IsDBNull(3) ? null : reader.GetString(3),
                 reader.IsDBNull(4) ? null : reader.GetString(4),
                 reader.IsDBNull(5) ? null : reader.GetString(5),
-                Enum.TryParse<TempBasalOrigin>(reader.GetString(6), out var origin) ? origin : TempBasalOrigin.Inferred,
+                TempBasalOriginColumns.OriginOf(reader.GetString(6)),
                 reader.IsDBNull(7) ? null : reader.GetString(7),
                 reader.IsDBNull(8) ? null : bool.TryParse(reader.GetString(8), out var flag) ? flag : null,
                 reader.IsDBNull(9) ? null : reader.GetGuid(9),
