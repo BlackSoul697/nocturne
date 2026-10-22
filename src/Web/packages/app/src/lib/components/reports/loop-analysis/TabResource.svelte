@@ -1,24 +1,17 @@
 <!--
-  Fetches one tab's response, registered with the report's resource guard, and hands it to the page.
-  The page mounts one for the tab on screen only, so a tab not shown is never fetched.
+  Fetches one tab's response into its state for as long as the page shows the tab or keeps it.
+  Only the tab on screen reports to the report's resource guard.
 -->
-<script lang="ts" generics="T">
-  import { untrack } from "svelte";
-  import { contextResource } from "$lib/hooks/resource-context.svelte";
-
+<script lang="ts">
   interface Props {
-    load: () => { loading: boolean; error: unknown; current: T | undefined; refresh: () => void };
-    /** `stale`: `current` answers a superseded request. */
-    onupdate: (state: { current: T | undefined; stale: boolean; failed: boolean }) => void;
+    tab: { mount: (active: () => boolean) => void };
+    /** Whether the tab is on screen. */
+    active: boolean;
   }
 
-  let { load, onupdate }: Props = $props();
+  let { tab, active }: Props = $props();
 
-  const resource = contextResource(() => load(), { errorTitle: "Error Loading Loop Analysis" });
-
-  $effect.pre(() => {
-    const state = { current: resource.current, stale: resource.stale, failed: resource.error != null };
-    // The page's handler is not a dependency: only the resource's state is.
-    untrack(() => onupdate(state));
-  });
+  // The page keys one per tab, so `tab` never changes under it.
+  // svelte-ignore state_referenced_locally
+  tab.mount(() => active);
 </script>

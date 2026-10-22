@@ -21,7 +21,6 @@
   import { bg, bgDelta, bgLabel, convertToDisplayUnits } from "$lib/utils/formatting";
   import Clock from "@lucide/svelte/icons/clock";
   import Info from "@lucide/svelte/icons/info";
-  import FilterX from "@lucide/svelte/icons/funnel-x";
   import TimeOfDayPanel from "./TimeOfDayPanel.svelte";
   import PercentileBands from "./PercentileBands.svelte";
   import AggregateReadout from "./AggregateReadout.svelte";
@@ -33,7 +32,8 @@
   import { TimeOfDayCursor } from "./time-of-day-cursor.svelte";
   import { axisEnd } from "./daily-profile-view";
   import { cohortBands, hourTicks, slotMinute } from "./event-response-view";
-  import { cohortLabel, eventIgnoredFilterLabel, relativeHours, relativeMinutes } from "./event-labels.svelte";
+  import { cohortLabel, relativeHours, relativeMinutes } from "./event-labels.svelte";
+  import IgnoredFiltersNotice from "./IgnoredFiltersNotice.svelte";
 
   interface Props {
     response: EventResponseReport;
@@ -64,8 +64,6 @@
     list?.find((r) => r.cohort === cohort);
 
   // Under the clamp the range parameters are always ignored; the clamp notice says so instead.
-  const RANGE_PARAMETERS = new Set(["startDate", "endDate", "compare", "compareStartDate", "compareEndDate"]);
-  const ignoredFilters = $derived((response.ignoredFilters ?? []).filter((name) => !RANGE_PARAMETERS.has(name)));
 
   interface Panel {
     id: string;
@@ -215,16 +213,7 @@
       </Alert.Root>
     {/if}
 
-    {#if ignoredFilters.length > 0}
-      <Alert.Root variant="info">
-        <FilterX />
-        <Alert.Title>Some choices were not applied</Alert.Title>
-        <Alert.Description>
-          Your access does not include the data these are drawn from, so they were ignored:
-          {ignoredFilters.map(eventIgnoredFilterLabel).join(", ")}.
-        </Alert.Description>
-      </Alert.Root>
-    {/if}
+    <IgnoredFiltersNotice ignored={response.ignoredFilters} />
 
     {#if cohorts.length === 0}
       <div class="rounded-lg border border-dashed p-8 text-center text-muted-foreground">

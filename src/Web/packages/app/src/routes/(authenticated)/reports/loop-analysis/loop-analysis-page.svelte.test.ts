@@ -2,18 +2,32 @@ import { render } from "vitest-browser-svelte";
 import { page } from "vitest/browser";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { page as pageState } from "$app/state";
-import type { DailyProfileResponse, PredictionAccuracyResponse } from "$lib/api";
+import {
+  EventAnchorKind,
+  type DailyProfileResponse,
+  type EventResponseReport,
+  type LoopHealthResponse,
+  type PredictionAccuracyResponse,
+} from "$lib/api";
 import { remoteQuery } from "$lib/test-stubs/remote-resource";
 import {
   ALL_SCOPES,
   profileResponse,
 } from "$lib/components/reports/loop-analysis/daily-profile.test-fixtures";
+import { eventResponse } from "$lib/components/reports/loop-analysis/event-response.test-fixtures";
 import { predictionResponse } from "$lib/components/reports/loop-analysis/prediction-accuracy.test-fixtures";
+import { loopHealthResponse } from "$lib/components/reports/loop-analysis/loop-health.test-fixtures";
+
+type Registration = { current: () => unknown; active: () => boolean };
 
 const calls = vi.hoisted(() => ({
   query: [] as unknown[],
+  events: [] as unknown[],
   predictions: [] as unknown[],
+  loopHealth: [] as unknown[],
   goto: [] as [string, unknown][],
+  /** Every resource the page created, and whether it reports to the guard. */
+  resources: [] as Registration[],
   /** Whether a goto moves the page's URL, as SvelteKit's does, rather than only being recorded. */
   navigate: false,
 }));
@@ -25,17 +39,28 @@ vi.mock("$app/state", async () => {
   return { ...stub, page: reactiveFields({ ...stub.page }) };
 });
 let response: DailyProfileResponse;
+let events: EventResponseReport;
 let predictions: PredictionAccuracyResponse;
-let resourceState: { stale?: boolean; error?: unknown } = {};
+let health: LoopHealthResponse;
+/** `failing`: the one response whose request failed, when only one did. */
+let resourceState: { stale?: boolean; error?: unknown; failing?: unknown } = {};
 
 vi.mock("$api/generated/loopAnalysis.generated.remote", () => ({
   getDailyProfile: (input: unknown) => {
     calls.query.push(input);
     return remoteQuery(() => response);
   },
+  getEventResponse: (input: unknown) => {
+    calls.events.push(input);
+    return remoteQuery(() => events);
+  },
   getPredictionAccuracy: (input: unknown) => {
     calls.predictions.push(input);
     return remoteQuery(() => predictions);
+  },
+  getLoopHealth: (input: unknown) => {
+    calls.loopHealth.push(input);
+    return remoteQuery(() => health);
   },
 }));
 
@@ -55,17 +80,22 @@ vi.mock("$lib/hooks/date-params.svelte", () => ({
 }));
 
 vi.mock("$lib/hooks/resource-context.svelte", () => ({
-  contextResource: <T>(create: () => { current: T | undefined }) => ({
-    get current() {
-      return create().current;
-    },
-    get stale() {
-      return resourceState.stale ?? false;
-    },
-    get error() {
-      return resourceState.error;
-    },
-  }),
+  contextResource: <T>(create: () => { current: T | undefined }, options?: { active?: () => boolean }) => {
+    const current = () => create().current;
+    calls.resources.push({ current, active: options?.active ?? (() => true) });
+    const failed = () => resourceState.error ?? (resourceState.failing === current() ? new Error("Request rejected") : null);
+    return {
+      get current() {
+        return current();
+      },
+      get stale() {
+        return resourceState.stale ?? false;
+      },
+      get error() {
+        return failed();
+      },
+    };
+  },
 }));
 
 import LoopAnalysisPage from "./+page.svelte";
@@ -78,15 +108,21 @@ function open(search: string, data: Record<string, unknown> = {}) {
 }
 
 const lastQuery = () => calls.query.at(-1);
+const searchOf = (url: string) => new URL(url, "http://localhost").searchParams;
 
 describe("Loop Analysis page", () => {
   beforeEach(() => {
     calls.query.length = 0;
+    calls.events.length = 0;
     calls.predictions.length = 0;
+    calls.loopHealth.length = 0;
+    calls.resources.length = 0;
     calls.navigate = false;
     calls.goto.length = 0;
     response = profileResponse();
+    events = eventResponse();
     predictions = predictionResponse();
+    health = loopHealthResponse();
     resourceState = {};
   });
 
@@ -113,7 +149,7 @@ describe("Loop Analysis page", () => {
     await page.getByLabelText("Exercise").click();
     const target = calls.goto.at(-1);
     expect(target).toBeDefined();
-    const search = new URL(target![0], "http://localhost").searchParams;
+    const search = searchOf(target![0]);
     expect(search.get("excludeExercise")).toBe("true");
     expect(search.get("days")).toBe("14");
     expect(search.get("weekdays")).toBe("6");
@@ -165,7 +201,7 @@ describe("Loop Analysis page", () => {
 
     await expect.poll(() => calls.goto.length).toBeGreaterThan(0);
     const [url, options] = calls.goto.at(-1)!;
-    const search = new URL(url, "http://localhost").searchParams;
+    const search = searchOf(url);
     expect(search.has("excludeOpenLoop")).toBe(false);
     expect(search.get("excludeIllness")).toBe("false");
     expect(search.get("days")).toBe("14");
@@ -199,6 +235,64 @@ describe("Loop Analysis page", () => {
     expect(page.getByText("Some filters were not applied").elements()).toHaveLength(0);
   });
 
+  it("lists all four tabs", async () => {
+    open("");
+
+    await expect.element(page.getByRole("tab", { name: "Daily profile", selected: true })).toBeVisible();
+    for (const name of ["Meals & events", "Predictions", "Loop health"])
+      await expect.element(page.getByRole("tab", { name })).toBeVisible();
+  });
+
+  it("fetches only the Meals & events tab when it is on screen, with its cohorts", async () => {
+    open("?tab=meals-events&anchor1=Meal&fromMinute1=300&toMinute1=600&anchor2=UnannouncedRise&minutesAfter=480");
+
+    await expect.element(page.getByRole("slider", { name: "Glucose change from the event" })).toBeVisible();
+    expect(calls.query).toHaveLength(0);
+    expect(calls.events.at(-1)).toEqual({
+      startDate: "2026-10-09",
+      endDate: "2026-10-22",
+      anchor1: EventAnchorKind.Meal,
+      fromMinute1: 300,
+      toMinute1: 600,
+      anchor2: EventAnchorKind.UnannouncedRise,
+      minutesAfter: 480,
+    });
+    await expect.element(page.getByLabelText("Cohort 1 from")).toHaveValue("05:00");
+  });
+
+  it("writes a builder change into the URL beside the shared filter", async () => {
+    open("?tab=meals-events&days=14&excludeExercise=true");
+
+    await page.getByLabelText("Isolated events only").click();
+    const search = searchOf(calls.goto.at(-1)![0]);
+    expect(search.get("isolatedOnly")).toBe("true");
+    expect(search.get("anchor1")).toBe("Meal");
+    expect(search.get("anchor2")).toBe("UnannouncedRise");
+    expect(search.get("excludeExercise")).toBe("true");
+    expect(search.get("tab")).toBe("meals-events");
+  });
+
+  it("drops from the URL a cohort whose events the viewer cannot read", async () => {
+    events = {
+      ...eventResponse(),
+      unavailableAnchors: [{ anchor: EventAnchorKind.Meal, requiredScope: "treatments.read" }],
+    };
+    open("?tab=meals-events&anchor1=Meal&anchor2=SensorStart");
+
+    await expect.poll(() => calls.goto.length).toBeGreaterThan(0);
+    const search = searchOf(calls.goto.at(-1)![0]);
+    expect(search.get("anchor1")).toBe("SensorStart");
+    expect(search.has("anchor2")).toBe(false);
+  });
+
+  it("waits for a loading tab's echo before the bar settles", async () => {
+    resourceState = { stale: true };
+    open("?tab=meals-events&days=14&anchor1=Meal");
+
+    await expect.element(page.getByRole("group", { name: "Exclude" })).toHaveAttribute("aria-busy", "true");
+    expect(calls.query).toHaveLength(0);
+  });
+
   it("fetches only the Predictions tab when it is on screen, with the shared filter", async () => {
     open("?tab=predictions&compare=previous&excludeExercise=true");
 
@@ -219,9 +313,43 @@ describe("Loop Analysis page", () => {
 
     await expect.element(page.getByText("Prediction accuracy is hidden")).toBeVisible();
     await expect.poll(() => calls.goto.length).toBeGreaterThan(0);
-    const search = new URL(calls.goto.at(-1)![0], "http://localhost").searchParams;
+    const search = searchOf(calls.goto.at(-1)![0]);
     expect(search.has("excludeOpenLoop")).toBe(false);
     expect(search.get("tab")).toBe("predictions");
+  });
+
+  it("fetches only Loop health on its tab, with the same filter", async () => {
+    open("?tab=loop-health&weekdays=6&excludeIllness=false");
+
+    await expect.element(page.getByRole("tab", { name: "Loop health", selected: true })).toBeVisible();
+    await expect.element(page.getByRole("slider", { name: "Closed loop by hour" })).toBeVisible();
+    expect(calls.query).toHaveLength(0);
+    expect(calls.loopHealth.at(-1)).toEqual({
+      startDate: "2026-10-09",
+      endDate: "2026-10-22",
+      days: [6],
+      excludeIllness: false,
+    });
+  });
+
+  it("drops a filter Loop health says the viewer cannot use", async () => {
+    health = loopHealthResponse({ scopes: ["glucose.read", "treatments.read", "therapy.read", "reports.read"] });
+    open("?tab=loop-health&excludeOpenLoop=true");
+
+    await expect.poll(() => calls.goto.length).toBeGreaterThan(0);
+    const search = searchOf(calls.goto.at(-1)![0]);
+    expect(search.has("excludeOpenLoop")).toBe(false);
+    expect(search.get("tab")).toBe("loop-health");
+  });
+
+  it("offers the profiles of a tab opened straight from its URL", async () => {
+    predictions = { ...predictionResponse(), profileNames: ["Default", "Weekend"] };
+    open("?tab=predictions");
+
+    await expect.element(page.getByRole("slider", { name: "UAM", exact: true })).toBeVisible();
+    expect(calls.query).toHaveLength(0);
+    await page.elementLocator(document.getElementById("loop-analysis-profile")!).click();
+    await expect.element(page.getByRole("option", { name: "Weekend" })).toBeVisible();
   });
 
   it("keeps a tab's response across a switch away and back, and never fetches a tab off screen", async () => {
@@ -251,5 +379,19 @@ describe("Loop Analysis page", () => {
     await page.getByRole("tab", { name: "Predictions" }).click();
     await expect.element(page.getByRole("slider", { name: "UAM", exact: true })).toBeVisible();
     expect(distinct(calls.predictions).size).toBe(asked);
+  });
+
+  it("keeps the tab on screen when a tab left behind failed, and only it reports to the guard", async () => {
+    calls.navigate = true;
+    resourceState = { failing: predictions };
+    open("?tab=predictions");
+    await expect.poll(() => calls.resources.length).toBeGreaterThan(0);
+
+    await page.getByRole("tab", { name: "Daily profile" }).click();
+    await expect.element(page.getByRole("slider", { name: "Glucose", exact: true })).toBeVisible();
+    await expect.element(page.getByRole("group", { name: "Exclude" })).toHaveAttribute("aria-busy", "false");
+
+    const reporting = calls.resources.filter((r) => r.active()).map((r) => r.current());
+    expect(reporting).toEqual([response]);
   });
 });

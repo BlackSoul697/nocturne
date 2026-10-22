@@ -87,6 +87,8 @@
         return "The profile in force records no maximum basal rate";
       case LoopHealthUnknownReason.NoAlgorithmTemps:
         return "The loop set no temp basal in this range";
+      case LoopHealthUnknownReason.SetterNotFound:
+        return "No loop cycle in this range set the temps this needs";
       default:
         return "Nothing measured in this range";
     }
@@ -478,6 +480,7 @@
         {#each activityStrips as strip (strip.id)}
           <div class="space-y-1">
             <TimeOfDayPanel
+              slotHeading={false}
               id={strip.id}
               title={strip.title}
               unit="Share of analysed time, %"
@@ -502,6 +505,7 @@
 
         <div class="space-y-1">
           <TimeOfDayPanel
+            slotHeading={false}
             id="zero-delivery"
             title="Algorithm zero temps by hour"
             unit="Share of time the pump's records say what it delivered, %"
@@ -532,6 +536,7 @@
 
         <div class="space-y-1">
           <TimeOfDayPanel
+            slotHeading={false}
             id="max-basal"
             title="At max basal by hour"
             unit="Share of algorithm temp time whose cap is known, %"
@@ -559,6 +564,7 @@
 
         <div class="space-y-1">
           <TimeOfDayPanel
+            slotHeading={false}
             id="sensitivity"
             title="Sensitivity ratio by hour"
             unit="Autosens or dynamic ISF; above 1 means more insulin needed"

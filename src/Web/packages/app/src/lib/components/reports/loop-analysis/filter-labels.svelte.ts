@@ -25,9 +25,13 @@ export function missingScopeReason(scope: string): string {
   }
 }
 
-/** A name from a response's `ignoredFilters`, as the filter bar labels it. */
+/** A name from a response's `ignoredFilters`, as the filter bar and the event builder label it. */
 export function ignoredFilterLabel(name: string): string {
   if (name === "profileName") return "Profile";
+  const cohort = /^anchor(\d)$/.exec(name);
+  if (cohort) return `Cohort ${cohort[1]}`;
+  if (name === "isolatedOnly") return "Isolated events only";
+  if (name === "requireCorroboration") return "Only rises the loop answered";
   const masks: Record<string, string> = maskLabels();
   return masks[name] ?? name;
 }

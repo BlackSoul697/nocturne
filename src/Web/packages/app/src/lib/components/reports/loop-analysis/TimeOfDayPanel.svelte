@@ -3,7 +3,8 @@
   of the local day, or any other run of slots whose labels and ticks the caller gives. The x domain
   is slot units, so a mark at slot i spans [i, i + 1). The stack is one tab stop: left and right
   (with Home and End) move along the axis, up and down move between panels, a click or Enter picks
-  the slot for the list it opens and Escape closes it.
+  the slot for the list it opens and Escape closes it. The readout opens below the plot, beside the
+  crosshair, so it covers neither the plot nor the marks under the pointer.
 -->
 <script lang="ts">
   import { untrack, type Snippet } from "svelte";
@@ -37,6 +38,8 @@
     tickLabel?: (slot: number) => string;
     /** A slot's span, as the tooltip and the slider name it; its time of day by default. */
     slotLabel?: (slot: number) => string;
+    /** Heads the readout with the slot's span; off for a panel whose readout names its own hour. */
+    slotHeading?: boolean;
   }
 
   let {
@@ -58,7 +61,11 @@
     tickLabel = (slot: number) => hourLabel(atMinute(slot * SLOT_MINUTES)),
     slotLabel = (slot: number) =>
       `${time(atMinute(slot * SLOT_MINUTES))}–${time(atMinute((slot + 1) * SLOT_MINUTES))}`,
+    slotHeading = true,
   }: Props = $props();
+
+  const unitId = $derived(`time-of-day-${id}-unit`);
+  const keysId = $derived(`time-of-day-${id}-keys`);
 
   const slotCount = $derived(cursor.slotCount);
 
@@ -119,10 +126,10 @@
   const tooltipSlot = $derived(cursor.panel === id ? cursor.slot : null);
 </script>
 
-<section class="space-y-1" aria-label={title}>
+<div class="space-y-1">
   <div class="flex items-baseline justify-between gap-2 px-1">
     <h3 class="text-sm font-medium">{title}</h3>
-    <span class="text-xs text-muted-foreground">{unit}</span>
+    <span id={unitId} class="text-xs text-muted-foreground">{unit}</span>
   </div>
 
   {#if empty}
@@ -138,6 +145,7 @@
       role="slider"
       tabindex={cursor.tabStop === id ? 0 : -1}
       aria-label={title}
+      aria-describedby="{unitId} {keysId}"
       aria-valuemin={0}
       aria-valuemax={slotCount - 1}
       aria-valuenow={current}
@@ -149,6 +157,10 @@
       {onclick}
       {onkeydown}
     >
+      <span id={keysId} class="sr-only">
+        Left and right arrows move along the axis, Home and End go to its ends, up and down move to the
+        next panel, Enter lists the days behind the slot and Escape closes the list.
+      </span>
       <Chart data={[]} xDomain={[0, slotCount]} {yDomain} {padding}>
         <Svg>
           <Axis
@@ -177,16 +189,18 @@
 
       {#if tooltipSlot != null}
         {@const fraction = (tooltipSlot + 0.5) / slotCount}
-        <!-- Beside the crosshair, on whichever side has room; the offsets are the plot padding. -->
+        <!-- Below the plot, beside the crosshair on whichever side has room; the offsets are the plot padding. -->
         <div
-          class="pointer-events-none absolute top-1 z-10 min-w-44 rounded-md border bg-popover px-3 py-2 text-xs text-popover-foreground shadow-md {fraction <
+          class="pointer-events-none absolute top-full z-10 mt-1 min-w-44 rounded-md border bg-popover px-3 py-2 text-xs text-popover-foreground shadow-md {fraction <
           0.6
             ? 'left-[calc(56px_+_(100%_-_56px)_*_var(--tip-at))]'
             : 'right-[calc(24px_+_(100%_-_56px)_*_(1_-_var(--tip-at)))]'}"
           style:--tip-at={fraction}
           role="tooltip"
         >
-          <p class="mb-1 font-medium">{slotLabel(tooltipSlot)}</p>
+          {#if slotHeading}
+            <p class="mb-1 font-medium">{slotLabel(tooltipSlot)}</p>
+          {/if}
           {@render tooltip(tooltipSlot)}
         </div>
       {/if}
@@ -198,4 +212,4 @@
       <p class="px-1 text-xs text-muted-foreground">{hiddenNote}</p>
     {/if}
   {/if}
-</section>
+</div>

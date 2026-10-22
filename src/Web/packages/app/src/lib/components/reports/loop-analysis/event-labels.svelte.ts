@@ -1,7 +1,6 @@
 import { EventAnchorKind, type EventCohortDefinition } from "$lib/api";
 import { bg, bgDelta, bgLabel, time } from "$lib/utils/formatting";
 import type { EventMetricKey, MetricKind } from "./event-response-view";
-import { ignoredFilterLabel } from "./filter-labels.svelte";
 import { atMinute } from "./daily-profile-view";
 
 /** Built per call so wuchale reads them in the current locale. */
@@ -86,15 +85,6 @@ export function metricDefinitions(): MetricDefinition[] {
     { key: "iobAtEnd", label: "IOB at window end", kind: "units" },
     { key: "gramsPerUnit", label: "Observed grams per unit", kind: "gramsPerUnit" },
   ];
-}
-
-/** A name from the response's `ignoredFilters`, including the builder's parameters. */
-export function eventIgnoredFilterLabel(name: string): string {
-  const cohort = /^anchor(\d)$/.exec(name);
-  if (cohort) return `Cohort ${cohort[1]}`;
-  if (name === "isolatedOnly") return "Isolated events only";
-  if (name === "requireCorroboration") return "Only rises the loop answered";
-  return ignoredFilterLabel(name);
 }
 
 /** Minutes from the event, signed, as the relative axis and its tooltip read them. */

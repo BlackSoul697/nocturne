@@ -46,6 +46,17 @@ describe("DailyProfileTab", () => {
       .toHaveAttribute("href", "/reports/insulin-delivery?days=14");
   });
 
+  it("describes each panel's slider by its unit and the keys it takes, with no region per panel", async () => {
+    render(DailyProfileTab, { props: { response: profileResponse() } });
+
+    const slider = page.getByRole("slider", { name: "Glucose", exact: true });
+    await expect.element(slider).toBeVisible();
+    const [unit, keys] = slider.element().getAttribute("aria-describedby")!.split(" ").map((id) => document.getElementById(id));
+    expect(unit?.textContent).toBeTruthy();
+    expect(keys?.textContent).toMatch(/Left and right arrows/);
+    expect(page.getByRole("region", { name: "Glucose", exact: true }).elements()).toHaveLength(0);
+  });
+
   it("is one tab stop, and the arrows move between panels keeping the slot", async () => {
     render(DailyProfileTab, { props: { response: profileResponse() } });
 
@@ -164,10 +175,12 @@ describe("DailyProfileTab", () => {
       "Carbs on board",
       "Manual boluses",
       "Carbs",
-    ])
-      await expect
-        .element(page.getByRole("region", { name: title, exact: true }).getByText("Hidden: your access does not include this data"))
-        .toBeVisible();
+    ]) {
+      const heading = page.getByRole("heading", { name: title, exact: true });
+      await expect.element(heading).toBeVisible();
+      const panel = heading.element().parentElement!.parentElement!;
+      expect(panel.textContent).toContain("Hidden: your access does not include this data");
+    }
     for (const figure of ["Total insulin", "Delivered vs scheduled basal", "Net loop correction"])
       await expect.element(page.getByText(figure, { exact: true }).first()).toBeVisible();
     await expect.element(page.getByText("Target range hidden: your access does not include it")).toBeVisible();
