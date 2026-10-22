@@ -43,12 +43,14 @@
   const isfDisplay = $derived((mgdlPerUnit: number) => convertToDisplayUnits(mgdlPerUnit, units));
   const isfFormat = $derived((v: number) => (units === "mmol" ? isfDisplay(v).toFixed(1) : String(Math.round(v))));
   const isfUnit = $derived(`${bgLabel()} per U`);
-  const rate = (v: number) => v.toFixed(2);
+  /** Two decimals, with a value that rounds to zero read as 0.00 rather than -0.00. */
+  const twoPlaces = (v: number) => (Math.round(v * 100) === 0 ? 0 : v).toFixed(2);
+  const rate = twoPlaces;
   const ratio = (v: number) => v.toFixed(1);
-  const u = (v: number | null | undefined) => (v == null ? "–" : v.toFixed(2));
+  const u = (v: number | null | undefined) => (v == null ? "–" : twoPlaces(v));
   const glucose = (v: number | null | undefined) => (v == null ? "–" : String(bg(v)));
   const change = (v: number | null | undefined) => (v == null ? "–" : bgDelta(v));
-  const signed = (v: number) => `${v > 0 ? "+" : ""}${v.toFixed(2)}`;
+  const signed = (v: number) => `${Math.round(v * 100) > 0 ? "+" : ""}${twoPlaces(v)}`;
 
   const COLOR = "var(--chart-2)";
   const cursor = new TimeOfDayCursor();
