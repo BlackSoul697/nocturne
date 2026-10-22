@@ -149,9 +149,9 @@ function requestPreferences(): RequestPreferences | null {
  */
 let writeThrough: ((prefs: UserDisplayPreferences) => unknown) | null = null;
 
-/** Register the backend write-through used to persist synced preferences per-user. */
+/** Register the backend write-through used to persist synced preferences per-user; null withdraws it. */
 export function registerPreferencesWriteThrough(
-  fn: (prefs: UserDisplayPreferences) => unknown
+  fn: ((prefs: UserDisplayPreferences) => unknown) | null
 ): void {
   writeThrough = fn;
 }
