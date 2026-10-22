@@ -39,8 +39,10 @@ public class LoopAnalysisLoopHealthBudgetTests(ITestOutputHelper output)
             var at = DateTimeOffset.FromUnixTimeMilliseconds(t).UtcDateTime;
             var step = t / (5 * Minute);
             var rate = 0.4 + step % 7 * 0.2;
+            var id = Guid.NewGuid();
             cycles.Add(new ApsLoopCycle
             {
+                Id = id,
                 Timestamp = at, AidAlgorithm = AidAlgorithm.Trio, Enacted = step % 50 != 0, EnactedRate = rate,
                 Iob = step % 40 * 0.1, SensitivityRatio = 0.8 + step % 5 * 0.1,
                 HasReason = true, SuggestedChange = true,
@@ -49,7 +51,8 @@ public class LoopAnalysisLoopHealthBudgetTests(ITestOutputHelper output)
             temps.Add(new TempBasal
             {
                 StartTimestamp = at, EndTimestamp = at.AddMinutes(30), Rate = rate,
-                Origin = TempBasalOrigin.Algorithm, Device = "pump",
+                Origin = TempBasalOrigin.Algorithm, OriginEvidence = TempBasalOriginEvidence.Snapshot,
+                ApsSnapshotId = id, Device = "pump",
             });
             glucose.Add(new SensorGlucose { Timestamp = at, Mgdl = 90 + step % 120 });
             if (step % 3 == 0)

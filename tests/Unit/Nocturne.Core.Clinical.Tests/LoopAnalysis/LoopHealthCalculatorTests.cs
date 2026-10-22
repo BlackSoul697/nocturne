@@ -261,6 +261,45 @@ public class LoopHealthCalculatorTests
         MaxBasal(Guid.NewGuid()).AtCap.Percent.Should().Be(100, "a setter outside the cycles read falls back to the window");
     }
 
+    [Fact]
+    public void ATempNamingACycleThatWasDroppedAsADuplicate_FallsBackToTheNearest()
+    {
+        // Two uploaders posted the cycle at 00:00; the one that saw it enacted is kept.
+        var from = Day0;
+        var to = Day0 + Hour;
+        var dropped = Guid.NewGuid();
+        var cycles = new[]
+        {
+            Cycle(from, rate: 2.4, limitReason: Capped),
+            Cycle(from, enacted: false, rate: 2.4, limitReason: "temp 1.2 < 2.4U/hr.", id: dropped),
+        };
+
+        var maxBasal = Calculate(from, to, cycles,
+            [new(from, to, 2.4, BasalDeliveryOrigin.Algorithm)],
+            temps: [TempAt(from, setter: dropped)]).MaxBasal!;
+
+        maxBasal.AtCap.Percent.Should().Be(100);
+    }
+
+    [Fact]
+    public void AnUnknownCap_IsExplainedByEachTempsOwnSystem()
+    {
+        // Loop for the first ten minutes, then Trio for fifty with no stored reasons.
+        var from = Day0;
+        var to = Day0 + Hour;
+        var switched = from + 10 * Minute;
+        var result = Calculate(from, to,
+            cycles:
+            [
+                .. EveryFiveMinutes(from, switched, t => Cycle(t, AidAlgorithm.Loop, rate: 1.0)),
+                .. EveryFiveMinutes(switched, to, t => Cycle(t, rate: 1.0, hasReason: false)),
+            ],
+            delivered: [new(from, switched, 1.0, BasalDeliveryOrigin.Algorithm), new(switched, to, 1.0, BasalDeliveryOrigin.Algorithm)]);
+
+        result.MaxBasal!.CapKnown.Percent.Should().Be(0);
+        result.Unknown.MaxBasal.Should().Be(LoopHealthUnknownReason.NoReasonRecorded, "most of the temp time was Trio's");
+    }
+
     [Theory]
     [InlineData(TempBasalOriginEvidence.Reported, 100)]
     [InlineData(TempBasalOriginEvidence.Snapshot, 100)]
@@ -319,11 +358,12 @@ public class LoopHealthCalculatorTests
 
         result.Cadence.LoopGaps.Should().BeNull();
         result.Cadence.UnrecordedDelivery.Should().BeNull();
+        // The temp's cap is judged by the system of the newest cycle by its start, here Trio's before the range.
         result.Unknown.Should().BeEquivalentTo(new LoopHealthUnknown
         {
             LoopGaps = LoopHealthUnknownReason.NoCyclesInRange,
             UnrecordedDelivery = LoopHealthUnknownReason.NoCyclesInRange,
-            MaxBasal = LoopHealthUnknownReason.NoCyclesInRange,
+            MaxBasal = LoopHealthUnknownReason.NoReasonRecorded,
             AtMaxIob = LoopHealthUnknownReason.NoCyclesInRange,
             SuggestedNotEnacted = LoopHealthUnknownReason.NoCyclesInRange,
             LoopMaximumBasalRate = LoopHealthUnknownReason.NoCyclesInRange,

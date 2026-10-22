@@ -102,7 +102,7 @@ public static class LoopHealthCalculator
                     Looping(cycles).Subtract(inputs.Evidence.Recorded.Union(inputs.Evidence.Inferable)).Intervals, from, to),
             },
             ZeroDelivery = ZeroDelivery(inputs.Insulin, grid),
-            MaxBasal = MaxBasal(inputs, cycles, grid, from, to, out var algorithmTempsUnanalysed),
+            MaxBasal = MaxBasal(inputs, cycles, grid, from, to, out var capUnknown),
             AtMaxIob = AtMaxIob(cycles, grid),
             AutomaticBoluses = AutomaticBoluses(inputs.Insulin, grid),
             SuggestedNotEnacted = SuggestedNotEnacted(cycles, grid),
@@ -111,7 +111,7 @@ public static class LoopHealthCalculator
                 .Select(c => (c.Mills, c.SensitivityRatio!.Value))),
             Limits = Limits(inputs, cycles, from, to),
         };
-        range.Unknown = Unknown(range, inRange, algorithmTempsUnanalysed);
+        range.Unknown = Unknown(range, inRange, capUnknown);
         return range;
     }
 
@@ -121,7 +121,7 @@ public static class LoopHealthCalculator
     /// time the masks left out.
     /// </summary>
     private static LoopHealthUnknown Unknown(
-        LoopHealthRange range, List<ApsLoopCycle> inRange, bool algorithmTempsUnanalysed)
+        LoopHealthRange range, List<ApsLoopCycle> inRange, LoopHealthUnknownReason? capUnknown)
     {
         var none = inRange.Count == 0;
         var oref = inRange.Where(c => IsOref(c.AidAlgorithm)).ToList();
@@ -136,13 +136,7 @@ public static class LoopHealthCalculator
         {
             LoopGaps = none ? LoopHealthUnknownReason.NoCyclesInRange : null,
             UnrecordedDelivery = none ? LoopHealthUnknownReason.NoCyclesInRange : null,
-            MaxBasal = range.MaxBasal!.AtCap.Percent is not null ? null
-                : range.MaxBasal.CapKnown.Percent is null
-                    ? algorithmTempsUnanalysed ? LoopHealthUnknownReason.MaskedOut : LoopHealthUnknownReason.NoAlgorithmTemps
-                : none ? LoopHealthUnknownReason.NoCyclesInRange
-                : loop ? LoopHealthUnknownReason.SettingNotUploaded
-                : oref.Count > 0 ? LoopHealthUnknownReason.NoReasonRecorded
-                : LoopHealthUnknownReason.NotRecordedByThisSystem,
+            MaxBasal = capUnknown,
             AtMaxIob = range.AtMaxIob is null ? Oref(c => c.HasReason) : null,
             SuggestedNotEnacted = range.SuggestedNotEnacted is null ? Oref(c => c.SuggestedChange == true) : null,
             LoopMaximumBasalRate = range.Limits.LoopMaximumBasalRate is not null ? null
@@ -314,12 +308,20 @@ public static class LoopHealthCalculator
     /// setting at the time, or for oref, whether the cycle that set the temp cut it to
     /// <c>maxSafeBasal</c>.
     /// </summary>
-    /// <param name="unanalysed">An algorithm temp ran in the range, but only outside the analysed time.</param>
+    /// <param name="unknown">
+    /// Where no temp's cap is known, why: no algorithm temps, or only in masked time, else the reason
+    /// that held for the most algorithm temp time, judged by each temp's own system.
+    /// </param>
     private static LoopHealthMaxBasal MaxBasal(
-        LoopHealthInputs inputs, List<ApsLoopCycle> cycles, HourGrid grid, long from, long to, out bool unanalysed)
+        LoopHealthInputs inputs, List<ApsLoopCycle> cycles, HourGrid grid, long from, long to,
+        out LoopHealthUnknownReason? unknown)
     {
-        unanalysed = false;
+        var unanalysed = false;
+        var uncapped = new Dictionary<LoopHealthUnknownReason, double>();
         var enacted = cycles.Where(c => c.Enacted && c.EnactedRate is not null).ToList();
+        var byId = new Dictionary<Guid, ApsLoopCycle>(cycles.Count);
+        foreach (var cycle in cycles)
+            byId.TryAdd(cycle.Id, cycle);
         var algorithmTime = grid.New();
         var known = grid.New();
         var atCap = grid.New();
@@ -328,31 +330,42 @@ public static class LoopHealthCalculator
         {
             if (piece.Origin != NetInsulinOrigin.AlgorithmTemp || piece.Delivered is not { } rate)
                 continue;
-            if (grid.AddTime(algorithmTime, piece.Start, piece.End) == 0)
+            var analysedMs = grid.AddTime(algorithmTime, piece.Start, piece.End);
+            if (analysedMs == 0)
             {
                 unanalysed |= piece.Start < to && piece.End > from;
                 continue;
             }
             var temp = TempOf(inputs, piece.Start);
-            if (AtCap(temp?.StartMills ?? piece.Start, temp?.ApsSnapshotId, rate, cycles, enacted, inputs.LoopMaximumBasalRate)
+            var setter = temp?.ApsSnapshotId is { } id ? byId.GetValueOrDefault(id) : null;
+            if (AtCap(temp?.StartMills ?? piece.Start, setter, rate, cycles, enacted, inputs.LoopMaximumBasalRate, out var why)
                 is not { } capped)
+            {
+                uncapped[why] = uncapped.GetValueOrDefault(why) + analysedMs;
                 continue;
+            }
             grid.AddTime(known, piece.Start, piece.End);
             if (capped)
                 grid.AddTime(atCap, piece.Start, piece.End);
         }
 
-        return new LoopHealthMaxBasal
+        var result = new LoopHealthMaxBasal
         {
             AtCap = grid.Share(atCap, known),
             CapKnown = grid.Share(known, algorithmTime),
         };
+        unknown = result.AtCap.Percent is not null ? null
+            : uncapped.Count > 0 ? uncapped.MaxBy(u => u.Value).Key
+            : unanalysed ? LoopHealthUnknownReason.MaskedOut
+            : LoopHealthUnknownReason.NoAlgorithmTemps;
+        return result;
     }
 
     /// <summary>
     /// Whether a temp of <paramref name="rate"/> that began at <paramref name="tempStart"/> was at
-    /// its cap; null where the cap is unknown. An oref temp is judged by the cycle that set it: the
-    /// snapshot <paramref name="setterId"/> names where it was read, else, of
+    /// its cap; null where the cap is unknown, with <paramref name="why"/>. The temp's system is that
+    /// of the newest cycle by its start. An oref temp is judged by the cycle that set it:
+    /// <paramref name="recordedSetter"/>, the snapshot the temp names, where it was read and kept, else, of
     /// the enacted cycles within <see cref="SetterWindowMs"/> of its start whose rate is within
     /// <see cref="PumpStepUph"/> of the delivered one, the nearest. The rate decides before the
     /// time does: the record is often stamped after the next cycle has run and enacted another
@@ -361,26 +374,32 @@ public static class LoopHealthCalculator
     /// </summary>
     private static bool? AtCap(
         long tempStart,
-        Guid? setterId,
+        ApsLoopCycle? recordedSetter,
         double rate,
         List<ApsLoopCycle> cycles,
         List<ApsLoopCycle> enacted,
-        StepTimeline<double>? loopMaximum)
+        StepTimeline<double>? loopMaximum,
+        out LoopHealthUnknownReason why)
     {
+        why = LoopHealthUnknownReason.NoCyclesInRange;
         var latest = SortedSearch.FirstEndingAfter(cycles, tempStart + SetterWindowMs, static c => c.Mills) - 1;
         if (latest < 0)
             return null;
 
         if (cycles[latest].AidAlgorithm == AidAlgorithm.Loop)
+        {
+            why = LoopHealthUnknownReason.SettingNotUploaded;
             return loopMaximum is not null && loopMaximum.TryAt(tempStart, out var maximum)
                 ? rate >= maximum - MaxBasalToleranceUph
                 : null;
+        }
 
+        why = LoopHealthUnknownReason.NotRecordedByThisSystem;
         if (!IsOref(cycles[latest].AidAlgorithm))
             return null;
 
-        var setter = (setterId is { } id ? cycles.Find(c => c.Id == id) : null)
-            ?? NearestSetter(tempStart, rate, enacted);
+        why = LoopHealthUnknownReason.NoReasonRecorded;
+        var setter = recordedSetter ?? NearestSetter(tempStart, rate, enacted);
         return setter is { HasReason: true } ? OrefReason.Parse(setter.LimitReason).CappedAtMaxSafeBasal : null;
     }
 
