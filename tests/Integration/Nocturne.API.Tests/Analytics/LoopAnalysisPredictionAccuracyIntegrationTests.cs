@@ -32,6 +32,7 @@ public class LoopAnalysisPredictionAccuracyIntegrationTests(ApiIntegrationTestFi
         await SeedWeekAsync(WeekStart, predicted: 130);
 
         var body = await GetOkAsync(AuthenticatedClient, Query($"{Week}&compare=previous"));
+        body.GetProperty("profileNames").EnumerateArray().Select(n => n.GetString()).Should().Equal("Default");
 
         body.GetProperty("historyClamped").GetBoolean().Should().BeFalse();
         Absent(body, "timeZoneUnavailableReason").Should().BeTrue();

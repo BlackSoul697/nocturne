@@ -115,7 +115,12 @@ public class LoopAnalysisController(
         if (invalid is not null)
             return invalid;
 
-        var result = request!.Zone is { } zone ? await compute(request.Filter!, zone, ct) : new T();
+        var result = new T();
+        if (request!.Zone is { } zone)
+        {
+            result = await compute(request.Filter!, zone, ct);
+            result.ProfileNames = await service.GetProfileNamesAsync(request.Filter!, ct);
+        }
         return Ok(LoopAnalysisReadScopeGuard.Redact(request.Fill(result), HttpContext.GetGrantedScopes()));
     }
 

@@ -56,7 +56,7 @@ public class LoopAnalysisDailyProfileIntegrationTests(ApiIntegrationTestFixture 
         var primary = body.GetProperty("primary");
         primary.GetProperty("slots").GetArrayLength().Should().Be(288);
         primary.GetProperty("days").GetArrayLength().Should().Be(7);
-        primary.GetProperty("profileNames").EnumerateArray().Select(n => n.GetString()).Should().Equal("Default");
+        body.GetProperty("profileNames").EnumerateArray().Select(n => n.GetString()).Should().Equal("Default");
 
         var ten = primary.GetProperty("slots")[120];
         ten.GetProperty("glucose").GetProperty("p50").GetDouble().Should().Be(120);

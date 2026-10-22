@@ -483,14 +483,8 @@ internal static class LoopAnalysisReadScopeGuard
         var therapy = AnalyticsReadScopes.Allows(grantedScopes, Scope.TherapyRead);
 
         var withheld = new HashSet<LoopAnalysisSeries>();
-        void Withhold(bool hidden, params LoopAnalysisSeries[] series)
-        {
-            if (hidden)
-                withheld.UnionWith(series);
-        }
-
-        Withhold(!glucose, LoopAnalysisSeries.Glucose);
-        Withhold(!treatments,
+        Withhold(withheld, !glucose, LoopAnalysisSeries.Glucose);
+        Withhold(withheld, !treatments,
             LoopAnalysisSeries.DeliveredBasal,
             LoopAnalysisSeries.NetLoopCorrection,
             LoopAnalysisSeries.NetLoopCorrectionComponents,
@@ -501,11 +495,10 @@ internal static class LoopAnalysisReadScopeGuard
             LoopAnalysisSeries.Carbs,
             LoopAnalysisSeries.InsulinSummary,
             LoopAnalysisSeries.NetLoopCorrectionSummary);
-        Withhold(!therapy || !treatments,
+        Withhold(withheld, !therapy || !treatments,
             LoopAnalysisSeries.ScheduledBasal,
             LoopAnalysisSeries.Target,
             LoopAnalysisSeries.DeliveredToScheduledRatio);
-        Withhold(!therapy, LoopAnalysisSeries.ProfileNames);
         return withheld;
     }
 
@@ -516,7 +509,8 @@ internal static class LoopAnalysisReadScopeGuard
 
     /// <summary>
     /// Every tab, by its response type. Every <see cref="LoopAnalysisSeries"/> belongs to exactly
-    /// one tab, so a tab's response never lists another's series; a new tab adds one entry here.
+    /// one tab or to the envelope (<see cref="WithheldEnvelope"/>), so a tab's response never lists
+    /// another's series; a new tab adds one entry here.
     /// </summary>
     private static readonly Dictionary<Type, Tab> Tabs = new()
     {
@@ -554,10 +548,24 @@ internal static class LoopAnalysisReadScopeGuard
     {
         var tab = Tabs[typeof(T)];
         var withheld = tab.Withheld(grantedScopes);
+        withheld.UnionWith(WithheldEnvelope(grantedScopes));
         data.WithheldSeries = [.. withheld.Order()];
+        if (withheld.Contains(LoopAnalysisSeries.ProfileNames))
+            data.ProfileNames = [];
         if (withheld.Count > 0)
             tab.Narrow(data, withheld);
         return data;
+    }
+
+    /// <summary>
+    /// The series of the envelope every tab carries, which <see cref="Redact{T}"/> withholds whatever
+    /// the tab: the profile names are therapy settings.
+    /// </summary>
+    public static HashSet<LoopAnalysisSeries> WithheldEnvelope(IReadOnlySet<string> grantedScopes)
+    {
+        var withheld = new HashSet<LoopAnalysisSeries>();
+        Withhold(withheld, !AnalyticsReadScopes.Allows(grantedScopes, Scope.TherapyRead), LoopAnalysisSeries.ProfileNames);
+        return withheld;
     }
 
     /// <summary>
@@ -578,13 +586,16 @@ internal static class LoopAnalysisReadScopeGuard
         var treatments = AnalyticsReadScopes.Allows(grantedScopes, Scope.TreatmentsRead);
 
         var withheld = new HashSet<LoopAnalysisSeries>();
-        if (!devices)
-            withheld.Add(LoopAnalysisSeries.PredictionCount);
-        if (!glucose || !devices)
-            withheld.Add(LoopAnalysisSeries.PredictionCurves);
-        if (!treatments)
-            withheld.Add(LoopAnalysisSeries.PredictionContexts);
+        Withhold(withheld, !devices, LoopAnalysisSeries.PredictionCount);
+        Withhold(withheld, !glucose || !devices, LoopAnalysisSeries.PredictionCurves);
+        Withhold(withheld, !treatments, LoopAnalysisSeries.PredictionContexts);
         return withheld;
+    }
+
+    private static void Withhold(HashSet<LoopAnalysisSeries> withheld, bool hidden, params LoopAnalysisSeries[] series)
+    {
+        if (hidden)
+            withheld.UnionWith(series);
     }
 
     private static void Narrow(PredictionAccuracyRange range, HashSet<LoopAnalysisSeries> withheld)
@@ -623,23 +634,17 @@ internal static class LoopAnalysisReadScopeGuard
         var therapy = AnalyticsReadScopes.Allows(grantedScopes, Scope.TherapyRead);
 
         var withheld = new HashSet<LoopAnalysisSeries>();
-        void Withhold(bool hidden, params LoopAnalysisSeries[] series)
-        {
-            if (hidden)
-                withheld.UnionWith(series);
-        }
-
-        Withhold(!glucose, LoopAnalysisSeries.CgmActivity);
-        Withhold(!treatments || !devices, LoopAnalysisSeries.LoopActivity, LoopAnalysisSeries.UnrecordedDelivery);
-        Withhold(!treatments, LoopAnalysisSeries.ZeroDelivery, LoopAnalysisSeries.AutomaticBoluses);
-        Withhold(!devices || !treatments || !therapy, LoopAnalysisSeries.MaxBasal);
-        Withhold(!devices,
+        Withhold(withheld, !glucose, LoopAnalysisSeries.CgmActivity);
+        Withhold(withheld, !treatments || !devices, LoopAnalysisSeries.LoopActivity, LoopAnalysisSeries.UnrecordedDelivery);
+        Withhold(withheld, !treatments, LoopAnalysisSeries.ZeroDelivery, LoopAnalysisSeries.AutomaticBoluses);
+        Withhold(withheld, !devices || !treatments || !therapy, LoopAnalysisSeries.MaxBasal);
+        Withhold(withheld, !devices,
             LoopAnalysisSeries.LoopGaps,
             LoopAnalysisSeries.AtMaxIob,
             LoopAnalysisSeries.SuggestedNotEnacted,
             LoopAnalysisSeries.SensitivityRatio);
-        Withhold(!therapy, LoopAnalysisSeries.LoopLimits);
-        Withhold(!therapy || !devices, LoopAnalysisSeries.OrefMaxIob);
+        Withhold(withheld, !therapy, LoopAnalysisSeries.LoopLimits);
+        Withhold(withheld, !therapy || !devices, LoopAnalysisSeries.OrefMaxIob);
         return withheld;
     }
 
@@ -669,6 +674,16 @@ internal static class LoopAnalysisReadScopeGuard
         if (Hidden(LoopAnalysisSeries.SensitivityRatio)) range.SensitivityRatio = null;
         if (Hidden(LoopAnalysisSeries.LoopLimits)) range.Limits.LoopMaximumBasalRate = null;
         if (Hidden(LoopAnalysisSeries.OrefMaxIob)) range.Limits.OrefMaxIob = null;
+
+        var unknown = range.Unknown;
+        if (Hidden(LoopAnalysisSeries.LoopGaps)) unknown.LoopGaps = null;
+        if (Hidden(LoopAnalysisSeries.UnrecordedDelivery)) unknown.UnrecordedDelivery = null;
+        if (Hidden(LoopAnalysisSeries.MaxBasal)) unknown.MaxBasal = null;
+        if (Hidden(LoopAnalysisSeries.AtMaxIob)) unknown.AtMaxIob = null;
+        if (Hidden(LoopAnalysisSeries.SuggestedNotEnacted)) unknown.SuggestedNotEnacted = null;
+        if (Hidden(LoopAnalysisSeries.OrefMaxIob)) unknown.OrefMaxIob = null;
+        // Read off which system's cycles were recorded, which are devices, as LoopGaps is.
+        if (Hidden(LoopAnalysisSeries.LoopLimits) || Hidden(LoopAnalysisSeries.LoopGaps)) unknown.LoopMaximumBasalRate = null;
     }
 
     private static void Narrow(DailyProfileRange range, HashSet<LoopAnalysisSeries> withheld)
@@ -735,7 +750,6 @@ internal static class LoopAnalysisReadScopeGuard
         }
         if (Hidden(LoopAnalysisSeries.InsulinSummary)) range.Summary.Insulin = null;
         if (Hidden(LoopAnalysisSeries.DeliveredToScheduledRatio)) range.Summary.DeliveredToScheduledRatio = null;
-        if (Hidden(LoopAnalysisSeries.ProfileNames)) range.ProfileNames = [];
 
         range.Summary.DaysWithData = range.Days.Count(day =>
             (day.HasGlucose && !Hidden(LoopAnalysisSeries.Glucose))

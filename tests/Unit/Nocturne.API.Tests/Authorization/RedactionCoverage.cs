@@ -87,10 +87,14 @@ internal static class RedactionCoverage
         _ => true,
     };
 
+    /// <summary>
+    /// Every property the serialiser can write out: get-only and computed ones included, and those
+    /// ignored only when null or default, which are served whenever they hold something.
+    /// </summary>
     private static IEnumerable<PropertyInfo> Served(Type type) =>
         type.GetProperties(BindingFlags.Public | BindingFlags.Instance)
-            .Where(p => p.CanRead && p.CanWrite && p.GetIndexParameters().Length == 0
-                && p.GetCustomAttribute<JsonIgnoreAttribute>() is null);
+            .Where(p => p.CanRead && p.GetIndexParameters().Length == 0
+                && p.GetCustomAttribute<JsonIgnoreAttribute>()?.Condition is not JsonIgnoreCondition.Always);
 
     /// <remarks>
     /// A type it cannot fill throws rather than returning null, which would leave every property
@@ -155,8 +159,11 @@ internal static class RedactionCoverage
                 ? Activator.CreateInstance(type)!
                 : throw new InvalidOperationException($"Cannot populate {type.Name}: it has no public constructor.")
             : constructor.Invoke([.. constructor.GetParameters().Select(p => Populate(p.ParameterType, depth + 1))]);
-        foreach (var property in Served(type))
+        foreach (var property in Served(type).Where(p => p.CanWrite))
             property.SetValue(instance, Populate(property.PropertyType, depth + 1));
+        foreach (var property in Served(type).Where(p => !p.CanWrite && !Holds(p.GetValue(instance))))
+            throw new InvalidOperationException(
+                $"Cannot populate {type.Name}.{property.Name}: it has no setter and is empty once the rest is set.");
         return instance;
     }
 

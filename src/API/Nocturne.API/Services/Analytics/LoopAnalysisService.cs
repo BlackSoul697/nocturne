@@ -1,3 +1,4 @@
+using Nocturne.API.Services.Profiles.Resolvers;
 using Nocturne.Core.Clinical.LoopAnalysis;
 using Nocturne.Core.Clinical.Treatments;
 using Nocturne.Core.Contracts.Analytics;
@@ -16,17 +17,9 @@ namespace Nocturne.API.Services.Analytics;
 /// <summary>
 /// Fetches one window of everything Loop Analysis reads and hands it to the Core calculators.
 /// Each tab's load and calculation is in its own part (<c>LoopAnalysisService.&lt;Tab&gt;.cs</c>);
-/// this one holds what the tabs share.
+/// this one holds what the tabs share. Every collection is read uncapped, for the reason given on
+/// <c>StatisticsController.FetchInsulinRecordsAsync</c>.
 /// </summary>
-/// <remarks>
-/// A primary and comparison range that touch or overlap are served from one fetch over both;
-/// apart, each gets its own. Every collection is read uncapped, for the reason given on
-/// <c>StatisticsController.FetchInsulinRecordsAsync</c>, and treatments are read from
-/// <see cref="DailyProfileCalculator.ActingMs"/> before the window so IOB and COB at its start see
-/// the doses still acting. Temp basals are read to
-/// <see cref="NetInsulinAboveSchedule.MaxInferredGapMs"/> past it, so a gap that straddles its end
-/// is bounded by the record that closes it.
-/// </remarks>
 internal sealed partial class LoopAnalysisService(
     ISensorGlucoseRepository glucoseRepository,
     ICanonicalGlucoseService canonicalGlucose,
@@ -84,11 +77,30 @@ internal sealed partial class LoopAnalysisService(
         return (first, comparison is { } separate ? calculate(await load(separate), separate) : null);
     }
 
+    public async Task<List<string>> GetProfileNamesAsync(LoopAnalysisFilter filter, CancellationToken ct = default)
+    {
+        var windows = new List<Window> { Window.Of(filter.From, filter.To) };
+        if (filter.CompareFrom is { } compareFrom && filter.CompareTo is { } compareTo)
+            windows.Add(Window.Of(compareFrom, compareTo));
+
+        var profiles = new List<ProfileSpan>();
+        foreach (var window in windows)
+            profiles.AddRange((await activeProfileResolver.GetProfileSpansForRangeAsync(window.From, window.To, ct))
+                .Where(p => p.StartMills < window.To && (p.EndMills ?? window.To) > window.From));
+        return [.. profiles.OrderBy(p => p.StartMills).Select(p => p.ProfileName).Distinct(StringComparer.Ordinal)];
+    }
+
     private static LoopAnalysisMask Mask(
         LoopAnalysisFilter filter, Window window, TimeZoneInfo zone, LoopAnalysisMaskSources sources) =>
         LoopAnalysisMask.Build(filter.Masks, window.From, window.To, zone, sources);
 
     /// <summary>The reads the Daily profile and Loop health tabs share, issued together.</summary>
+    /// <remarks>
+    /// Boluses and temp basals are read from <see cref="DailyProfileCalculator.ActingMs"/> before the
+    /// window so IOB and COB at its start see the doses still acting, and temp basals to
+    /// <see cref="NetInsulinAboveSchedule.MaxInferredGapMs"/> past it, so a gap that straddles its end
+    /// is bounded by the record that closes it.
+    /// </remarks>
     private sealed record Common(
         IReadOnlyList<SensorGlucose> Glucose,
         List<Bolus> Boluses,
@@ -122,13 +134,13 @@ internal sealed partial class LoopAnalysisService(
             await spanTask,
             [.. await deviceTask],
             profiles,
-            [.. profiles.Select(p => new ProfileInterval(p.ProfileName, p.StartMills, p.EndMills ?? to))]);
+            ProfileIntervals(profiles, to));
     }
 
     private sealed record Delivery(
         NetInsulinAboveSchedule Insulin,
         BasalEvidence Evidence,
-        IReadOnlyList<long> TempStarts,
+        IReadOnlyList<TempBasal> Temps,
         TherapyTimeline Timeline,
         long TickStart,
         bool HasTherapy);
@@ -164,10 +176,27 @@ internal sealed partial class LoopAnalysisService(
         return new Delivery(
             new NetInsulinAboveSchedule(delivered, scheduled, doses),
             evidence,
-            [.. clipped.Select(t => t.StartMills).Order()],
+            [.. clipped.OrderBy(t => t.StartMills)],
             timeline,
             tickStart,
             hasTherapy);
+    }
+
+    private static List<ProfileInterval> ProfileIntervals(IEnumerable<ProfileSpan> profiles, long to) =>
+        [.. profiles.Select(p => new ProfileInterval(p.ProfileName, p.StartMills, p.EndMills ?? to))];
+
+    /// <summary>
+    /// Each profile's stored versions, newest first, read once per profile name, for
+    /// <see cref="ProfileVersionCache.ActiveAt"/>.
+    /// </summary>
+    private static async Task<Dictionary<string, T[]>> VersionsByProfileAsync<T>(
+        IEnumerable<ProfileSpan> profiles, IProfileScopedRepository<T> repository, CancellationToken ct)
+        where T : class, IV4Record, IProfileScoped
+    {
+        var versions = new Dictionary<string, T[]>(StringComparer.Ordinal);
+        foreach (var name in profiles.Select(p => p.ProfileName).Distinct(StringComparer.Ordinal))
+            versions[name] = [.. (await repository.GetByProfileNameAsync(name, ct)).OrderByDescending(v => v.Timestamp)];
+        return versions;
     }
 
     private async Task<List<BasalSegment>> ScheduleAsync(long from, long to, CancellationToken ct)
@@ -202,8 +231,8 @@ internal sealed partial class LoopAnalysisService(
     };
 
     private static List<(StateSpan Span, MillsInterval Interval)> ActiveTemporaryTargets(
-        Dictionary<StateSpanCategory, List<StateSpan>> spans, long to) =>
-        [.. SpansOf(spans, StateSpanCategory.TemporaryTarget, to)
+        Dictionary<StateSpanCategory, List<StateSpan>> spans, long openEnd) =>
+        [.. SpansOf(spans, StateSpanCategory.TemporaryTarget, openEnd)
             .Where(s => s.Span.State != nameof(TemporaryTargetState.Cancelled))];
 
     /// <summary>

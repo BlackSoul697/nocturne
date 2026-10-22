@@ -13,6 +13,9 @@ namespace Nocturne.Core.Models.V4;
 /// </remarks>
 public sealed class ApsLoopCycle
 {
+    /// <summary>The snapshot's id, which <see cref="TempBasal.ApsSnapshotId"/> names.</summary>
+    public Guid Id { get; init; }
+
     public DateTime Timestamp { get; init; }
 
     public long Mills => new DateTimeOffset(Timestamp, TimeSpan.Zero).ToUnixTimeMilliseconds();

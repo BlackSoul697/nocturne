@@ -189,7 +189,9 @@ public sealed class NetInsulinAboveSchedule
     /// <summary>
     /// Temp basals as delivered: each ends where the next from the same device starts
     /// (<see cref="StatisticsService.ClipOverlappingTempBasals"/>), with what they say about
-    /// delivery, for <see cref="DeliveredFromSeries"/>.
+    /// delivery, for <see cref="DeliveredFromSeries"/>. Each keeps the evidence its origin rests on,
+    /// resolved (<see cref="TempBasalOriginProvenance.EvidenceOf(TempBasal)"/>), and the snapshot that
+    /// set it.
     /// </summary>
     public static (List<TempBasal> Clipped, BasalEvidence Evidence) ClipTempBasals(IEnumerable<TempBasal> tempBasals)
     {
@@ -209,6 +211,8 @@ public sealed class NetInsulinAboveSchedule
                 ScheduledRate = tb.ScheduledRate,
                 Percent = tb.Percent,
                 Origin = tb.Origin,
+                OriginEvidence = TempBasalOriginProvenance.EvidenceOf(tb),
+                ApsSnapshotId = tb.ApsSnapshotId,
                 DeviceId = tb.DeviceId,
                 Device = tb.Device,
             });

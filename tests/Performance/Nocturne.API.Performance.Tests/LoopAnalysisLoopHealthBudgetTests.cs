@@ -69,7 +69,7 @@ public class LoopAnalysisLoopHealthBudgetTests(ITestOutputHelper output)
             Cycles = cycles,
             Insulin = new NetInsulinAboveSchedule(delivered, scheduled, doses),
             Evidence = evidence,
-            TempStarts = [.. clipped.Select(t => t.StartMills).Order()],
+            Temps = [.. clipped.OrderBy(t => t.StartMills)],
             Glucose = glucose,
         };
         var filter = new LoopAnalysisMasks();

@@ -122,7 +122,6 @@ export function profileRange(options: RangeOptions = {}): DailyProfileRange {
         manualBolusPercent: 20,
       },
     },
-    profileNames: ["Default"],
   };
 }
 
@@ -208,7 +207,6 @@ function narrow(range: DailyProfileRange, withheld: Set<LoopAnalysisSeries>): Da
   }
   if (hide(S.InsulinSummary)) summary.insulin = undefined;
   if (hide(S.DeliveredToScheduledRatio)) summary.deliveredToScheduledRatio = undefined;
-  if (hide(S.ProfileNames)) range.profileNames = [];
   return range;
 }
 
@@ -253,5 +251,6 @@ export function profileResponse(
     ignoredFilters: [],
     withheldSeries: withheld,
     unavailableFilters: unavailableFor(options.scopes ?? ALL_SCOPES),
+    profileNames: set.has(S.ProfileNames) ? [] : ["Default"],
   };
 }

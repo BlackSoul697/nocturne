@@ -20,8 +20,11 @@ public sealed record LoopHealthInputs
 
     public required BasalEvidence Evidence { get; init; }
 
-    /// <summary>When each recorded temp basal began, ascending: the temps the delivered pieces belong to.</summary>
-    public IReadOnlyList<long> TempStarts { get; init; } = [];
+    /// <summary>
+    /// The recorded temp basals as <see cref="NetInsulinAboveSchedule.ClipTempBasals"/> clips them,
+    /// ascending by start: the temps the delivered pieces belong to.
+    /// </summary>
+    public IReadOnlyList<TempBasal> Temps { get; init; } = [];
 
     /// <summary>Canonical readings.</summary>
     public IReadOnlyList<SensorGlucose> Glucose { get; init; } = [];
@@ -85,22 +88,21 @@ public static class LoopHealthCalculator
     {
         var grid = new HourGrid(inputs.Zone, from, to, mask.Analysed);
         var cycles = Distinct(inputs.Cycles);
-        var looping = Looping(cycles);
-
-        return new LoopHealthRange
+        var inRange = cycles.Where(c => c.Mills >= from && c.Mills < to).ToList();
+        var range = new LoopHealthRange
         {
             From = DateTimeOffset.FromUnixTimeMilliseconds(from).UtcDateTime,
             To = DateTimeOffset.FromUnixTimeMilliseconds(to).UtcDateTime,
             Days = grid.Days(),
             Activity = Activity(inputs, cycles, grid, from, to),
-            Cadence = new LoopHealthCadence
+            Cadence = inRange.Count == 0 ? new LoopHealthCadence() : new LoopHealthCadence
             {
                 LoopGaps = LoopGaps(inputs, cycles, grid, from, to),
                 UnrecordedDelivery = grid.Gaps(
-                    looping.Subtract(inputs.Evidence.Recorded.Union(inputs.Evidence.Inferable)).Intervals, from, to),
+                    Looping(cycles).Subtract(inputs.Evidence.Recorded.Union(inputs.Evidence.Inferable)).Intervals, from, to),
             },
             ZeroDelivery = ZeroDelivery(inputs.Insulin, grid),
-            MaxBasal = MaxBasal(inputs, cycles, grid),
+            MaxBasal = MaxBasal(inputs, cycles, grid, from, to, out var algorithmTempsUnanalysed),
             AtMaxIob = AtMaxIob(cycles, grid),
             AutomaticBoluses = AutomaticBoluses(inputs.Insulin, grid),
             SuggestedNotEnacted = SuggestedNotEnacted(cycles, grid),
@@ -108,6 +110,49 @@ public static class LoopHealthCalculator
                 .Where(c => c.SensitivityRatio is not null && grid.IsAnalysed(c.Mills))
                 .Select(c => (c.Mills, c.SensitivityRatio!.Value))),
             Limits = Limits(inputs, cycles, from, to),
+        };
+        range.Unknown = Unknown(range, inRange, algorithmTempsUnanalysed);
+        return range;
+    }
+
+    /// <summary>
+    /// Why each figure left null is unknown, read off the cycles recorded in the range: none at all,
+    /// none of a system that reports it (iAPS is oref), none whose suggestion names it, or only in
+    /// time the masks left out.
+    /// </summary>
+    private static LoopHealthUnknown Unknown(
+        LoopHealthRange range, List<ApsLoopCycle> inRange, bool algorithmTempsUnanalysed)
+    {
+        var none = inRange.Count == 0;
+        var oref = inRange.Where(c => IsOref(c.AidAlgorithm)).ToList();
+        var loop = inRange.Any(c => c.AidAlgorithm == AidAlgorithm.Loop);
+        LoopHealthUnknownReason Oref(Func<ApsLoopCycle, bool> recorded) =>
+            none ? LoopHealthUnknownReason.NoCyclesInRange
+            : oref.Count == 0 ? LoopHealthUnknownReason.NotRecordedByThisSystem
+            : !oref.Any(recorded) ? LoopHealthUnknownReason.NoReasonRecorded
+            : LoopHealthUnknownReason.MaskedOut;
+
+        return new LoopHealthUnknown
+        {
+            LoopGaps = none ? LoopHealthUnknownReason.NoCyclesInRange : null,
+            UnrecordedDelivery = none ? LoopHealthUnknownReason.NoCyclesInRange : null,
+            MaxBasal = range.MaxBasal!.AtCap.Percent is not null ? null
+                : range.MaxBasal.CapKnown.Percent is null
+                    ? algorithmTempsUnanalysed ? LoopHealthUnknownReason.MaskedOut : LoopHealthUnknownReason.NoAlgorithmTemps
+                : none ? LoopHealthUnknownReason.NoCyclesInRange
+                : loop ? LoopHealthUnknownReason.SettingNotUploaded
+                : oref.Count > 0 ? LoopHealthUnknownReason.NoReasonRecorded
+                : LoopHealthUnknownReason.NotRecordedByThisSystem,
+            AtMaxIob = range.AtMaxIob is null ? Oref(c => c.HasReason) : null,
+            SuggestedNotEnacted = range.SuggestedNotEnacted is null ? Oref(c => c.SuggestedChange == true) : null,
+            LoopMaximumBasalRate = range.Limits.LoopMaximumBasalRate is not null ? null
+                : none ? LoopHealthUnknownReason.NoCyclesInRange
+                : !loop ? LoopHealthUnknownReason.NotRecordedByThisSystem
+                : LoopHealthUnknownReason.SettingNotUploaded,
+            OrefMaxIob = range.Limits.OrefMaxIob is not null ? null
+                : none ? LoopHealthUnknownReason.NoCyclesInRange
+                : oref.Count == 0 ? LoopHealthUnknownReason.NotRecordedByThisSystem
+                : LoopHealthUnknownReason.NoReasonRecorded,
         };
     }
 
@@ -183,7 +228,8 @@ public static class LoopHealthCalculator
         {
             foreach (var piece in inputs.Insulin.Pieces.Where(p => p.Delivered.HasValue))
             {
-                if (piece.Origin is NetInsulinOrigin.AlgorithmTemp)
+                if (piece.Origin is NetInsulinOrigin.AlgorithmTemp
+                    && TempOf(inputs, piece.Start)?.OriginEvidence is TempBasalOriginEvidence.Reported or TempBasalOriginEvidence.Snapshot)
                     grid.AddTime(closed, piece.Start, piece.End);
                 if (piece.Origin is NetInsulinOrigin.AlgorithmTemp or NetInsulinOrigin.ManualTemp or NetInsulinOrigin.Suspend)
                     grid.AddTime(pump, piece.Start, piece.End);
@@ -268,8 +314,11 @@ public static class LoopHealthCalculator
     /// setting at the time, or for oref, whether the cycle that set the temp cut it to
     /// <c>maxSafeBasal</c>.
     /// </summary>
-    private static LoopHealthMaxBasal MaxBasal(LoopHealthInputs inputs, List<ApsLoopCycle> cycles, HourGrid grid)
+    /// <param name="unanalysed">An algorithm temp ran in the range, but only outside the analysed time.</param>
+    private static LoopHealthMaxBasal MaxBasal(
+        LoopHealthInputs inputs, List<ApsLoopCycle> cycles, HourGrid grid, long from, long to, out bool unanalysed)
     {
+        unanalysed = false;
         var enacted = cycles.Where(c => c.Enacted && c.EnactedRate is not null).ToList();
         var algorithmTime = grid.New();
         var known = grid.New();
@@ -279,11 +328,14 @@ public static class LoopHealthCalculator
         {
             if (piece.Origin != NetInsulinOrigin.AlgorithmTemp || piece.Delivered is not { } rate)
                 continue;
-            grid.AddTime(algorithmTime, piece.Start, piece.End);
-            var tempStart = SortedSearch.FirstEndingAfter(inputs.TempStarts, piece.Start, static m => m) - 1 is var i and >= 0
-                ? inputs.TempStarts[i]
-                : piece.Start;
-            if (AtCap(tempStart, rate, cycles, enacted, inputs.LoopMaximumBasalRate) is not { } capped)
+            if (grid.AddTime(algorithmTime, piece.Start, piece.End) == 0)
+            {
+                unanalysed |= piece.Start < to && piece.End > from;
+                continue;
+            }
+            var temp = TempOf(inputs, piece.Start);
+            if (AtCap(temp?.StartMills ?? piece.Start, temp?.ApsSnapshotId, rate, cycles, enacted, inputs.LoopMaximumBasalRate)
+                is not { } capped)
                 continue;
             grid.AddTime(known, piece.Start, piece.End);
             if (capped)
@@ -299,7 +351,8 @@ public static class LoopHealthCalculator
 
     /// <summary>
     /// Whether a temp of <paramref name="rate"/> that began at <paramref name="tempStart"/> was at
-    /// its cap; null where the cap is unknown. An oref temp is judged by the cycle that set it: of
+    /// its cap; null where the cap is unknown. An oref temp is judged by the cycle that set it: the
+    /// snapshot <paramref name="setterId"/> names where it was read, else, of
     /// the enacted cycles within <see cref="SetterWindowMs"/> of its start whose rate is within
     /// <see cref="PumpStepUph"/> of the delivered one, the nearest. The rate decides before the
     /// time does: the record is often stamped after the next cycle has run and enacted another
@@ -308,6 +361,7 @@ public static class LoopHealthCalculator
     /// </summary>
     private static bool? AtCap(
         long tempStart,
+        Guid? setterId,
         double rate,
         List<ApsLoopCycle> cycles,
         List<ApsLoopCycle> enacted,
@@ -325,6 +379,13 @@ public static class LoopHealthCalculator
         if (!IsOref(cycles[latest].AidAlgorithm))
             return null;
 
+        var setter = (setterId is { } id ? cycles.Find(c => c.Id == id) : null)
+            ?? NearestSetter(tempStart, rate, enacted);
+        return setter is { HasReason: true } ? OrefReason.Parse(setter.LimitReason).CappedAtMaxSafeBasal : null;
+    }
+
+    private static ApsLoopCycle? NearestSetter(long tempStart, double rate, List<ApsLoopCycle> enacted)
+    {
         ApsLoopCycle? setter = null;
         for (var i = SortedSearch.FirstEndingAfter(enacted, tempStart - SetterWindowMs - 1, static c => c.Mills);
              i < enacted.Count && enacted[i].Mills <= tempStart + SetterWindowMs;
@@ -334,9 +395,14 @@ public static class LoopHealthCalculator
                 && (setter is null || Math.Abs(enacted[i].Mills - tempStart) < Math.Abs(setter.Mills - tempStart)))
                 setter = enacted[i];
         }
-
-        return setter is { HasReason: true } ? OrefReason.Parse(setter.LimitReason).CappedAtMaxSafeBasal : null;
+        return setter;
     }
+
+    /// <summary>The temp a delivered piece starting at <paramref name="mills"/> belongs to.</summary>
+    private static TempBasal? TempOf(LoopHealthInputs inputs, long mills) =>
+        SortedSearch.FirstEndingAfter(inputs.Temps, mills, static t => t.StartMills) - 1 is var i and >= 0
+            ? inputs.Temps[i]
+            : null;
 
     /// <summary>
     /// Each oref cycle with a reason stands until the next, or for <see cref="LoopGapMs"/>.
@@ -367,21 +433,18 @@ public static class LoopHealthCalculator
     private static LoopHealthAutomaticBoluses AutomaticBoluses(NetInsulinAboveSchedule insulin, HourGrid grid)
     {
         var count = grid.New();
-        var units = grid.New();
         var sizes = new List<(long, double)>();
         foreach (var dose in insulin.Doses)
         {
             if (!dose.Automatic || !grid.IsAnalysed(dose.Mills) || grid.IndexAt(dose.Mills) is not (var i and >= 0))
                 continue;
             count[i]++;
-            units[i] += dose.Units;
             sizes.Add((dose.Mills, dose.Units));
         }
 
         return new LoopHealthAutomaticBoluses
         {
             PerDay = grid.PerDay(count),
-            UnitsPerDay = grid.PerDay(units),
             Size = grid.Pooled(sizes),
         };
     }
@@ -479,8 +542,6 @@ public static class LoopHealthCalculator
             var days = new List<LoopHealthDay>();
             for (var d = 0; d < _dayCount; d++)
             {
-                if (Sum(Analysed, d) == 0)
-                    continue;
                 var date = _firstDay.AddDays(d);
                 days.Add(new LoopHealthDay
                 {
@@ -600,7 +661,6 @@ public static class LoopHealthCalculator
         public LoopHealthGaps Gaps(IEnumerable<MillsInterval> gaps, long from, long to)
         {
             var inGap = New();
-            var byStartHour = new int[HoursPerDay];
             var kept = new List<LoopHealthGap>();
             foreach (var gap in gaps.OrderBy(g => g.Start))
             {
@@ -609,7 +669,6 @@ public static class LoopHealthCalculator
                 if (end <= start || AddTime(inGap, start, end) == 0)
                     continue;
                 var local = LocalSlotBinning.LocalTime(start, _zone);
-                byStartHour[local.Hour]++;
                 kept.Add(new LoopHealthGap
                 {
                     Start = DateTimeOffset.FromUnixTimeMilliseconds(start).UtcDateTime,
@@ -625,8 +684,6 @@ public static class LoopHealthCalculator
                 Count = kept.Count,
                 TotalMinutes = SlotSummary.Round(kept.Sum(g => g.Minutes)),
                 LongestMinutes = kept.Count > 0 ? kept.Max(g => g.Minutes) : null,
-                CountByStartHour = [.. byStartHour],
-                Time = Share(inGap, Analysed),
                 Gaps = kept,
             };
         }
