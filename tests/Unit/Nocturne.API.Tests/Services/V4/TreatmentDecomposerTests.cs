@@ -2015,6 +2015,50 @@ public class TreatmentDecomposerTests : IDisposable
     }
 
     [Fact]
+    public async Task DecomposeAsync_AutomaticCorrectionBolus_ProducesAlgorithmBolus()
+    {
+        var treatment = new Treatment
+        {
+            Id = "loop-auto",
+            EventType = "Correction Bolus",
+            Mills = 1700000000000,
+            Insulin = 0.35,
+            Automatic = true,
+            EnteredBy = "loop://iPhone"
+        };
+
+        var result = await _decomposer.DecomposeAsync(treatment, WriteOrigin.Live);
+
+        var bolus = result.CreatedRecords.Should().ContainSingle()
+            .Which.Should().BeOfType<V4Models.Bolus>().Subject;
+        bolus.Kind.Should().Be(V4Models.BolusKind.Algorithm);
+        bolus.Automatic.Should().BeTrue();
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(null)]
+    public async Task DecomposeAsync_NonAutomaticCorrectionBolus_StaysManual(bool? automatic)
+    {
+        var treatment = new Treatment
+        {
+            Id = "loop-manual",
+            EventType = "Correction Bolus",
+            Mills = 1700000000000,
+            Insulin = 1.5,
+            Automatic = automatic,
+            EnteredBy = "loop://iPhone"
+        };
+
+        var result = await _decomposer.DecomposeAsync(treatment, WriteOrigin.Live);
+
+        var bolus = result.CreatedRecords.Should().ContainSingle()
+            .Which.Should().BeOfType<V4Models.Bolus>().Subject;
+        bolus.Kind.Should().Be(V4Models.BolusKind.Manual);
+        bolus.Automatic.Should().BeFalse();
+    }
+
+    [Fact]
     public async Task DecomposeAsync_GenericBolus_ProducesRegularBolus()
     {
         var treatment = new Treatment
