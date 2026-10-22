@@ -40,7 +40,7 @@ vi.mock("$app/state", async () => {
 });
 let response: DailyProfileResponse;
 let events: EventResponseReport;
-let predictions: PredictionAccuracyResponse;
+let predictions: PredictionAccuracyResponse | undefined;
 let health: LoopHealthResponse;
 /** `failing`: the one response whose request failed, when only one did. */
 let resourceState: { stale?: boolean; error?: unknown; failing?: unknown } = {};
@@ -83,7 +83,7 @@ vi.mock("$lib/hooks/resource-context.svelte", () => ({
   contextResource: <T>(create: () => { current: T | undefined }, options?: { active?: () => boolean }) => {
     const current = () => create().current;
     calls.resources.push({ current, active: options?.active ?? (() => true) });
-    const failed = () => resourceState.error ?? (resourceState.failing === current() ? new Error("Request rejected") : null);
+    const failed = () => resourceState.error ?? (resourceState.failing !== undefined && resourceState.failing === current() ? new Error("Request rejected") : null);
     return {
       get current() {
         return current();
@@ -379,6 +379,16 @@ describe("Loop Analysis page", () => {
     await page.getByRole("tab", { name: "Predictions" }).click();
     await expect.element(page.getByRole("slider", { name: "UAM", exact: true })).toBeVisible();
     expect(distinct(calls.predictions).size).toBe(asked);
+  });
+
+  it("loads a tab's first response inside the tab, leaving the filter bar and the tabs in place", async () => {
+    predictions = undefined;
+    open("?tab=predictions");
+
+    await expect.element(page.getByRole("status", { name: "Loading" })).toBeVisible();
+    await expect.element(page.getByRole("tab", { name: "Predictions", selected: true })).toBeVisible();
+    await expect.element(page.getByLabelText("Exercise")).toBeVisible();
+    expect(calls.resources.filter((r) => r.active())).toHaveLength(0);
   });
 
   it("keeps the tab on screen when a tab left behind failed, and only it reports to the guard", async () => {

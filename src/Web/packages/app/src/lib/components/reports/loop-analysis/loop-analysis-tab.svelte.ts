@@ -3,6 +3,7 @@ import type { LoopAnalysisResponse } from "$lib/api";
 import { contextResource } from "$lib/hooks/resource-context.svelte";
 
 type Loaded<R> = { loading: boolean; error: unknown; current: R | undefined; refresh: () => void };
+type Resource<R> = { readonly current: R | undefined; readonly stale: boolean; readonly error: unknown };
 
 /**
  * One Loop Analysis tab: the request the filter makes of it, the query it last fetched with, and
@@ -12,10 +13,7 @@ type Loaded<R> = { loading: boolean; error: unknown; current: R | undefined; ref
 export class LoopAnalysisTabState<Q, R extends LoopAnalysisResponse> {
   /** The query last asked for; undefined until the tab has been on screen. */
   query = $state.raw<Q>();
-  response = $state.raw<R>();
-  /** `response` answers a superseded query. */
-  stale = $state(false);
-  failed = $state(false);
+  #resource = $state.raw<Resource<R>>();
 
   constructor(
     readonly label: string,
@@ -23,34 +21,37 @@ export class LoopAnalysisTabState<Q, R extends LoopAnalysisResponse> {
     private readonly fetch: (query: Q) => Loaded<R>
   ) {}
 
+  get response(): R | undefined {
+    return this.#resource?.current;
+  }
+
+  /** `response` answers a superseded query. */
+  get stale(): boolean {
+    return this.#resource?.stale ?? false;
+  }
+
+  get failed(): boolean {
+    return this.#resource?.error != null;
+  }
+
   /** Takes up the filter's request while the tab is on screen; a request equal to the last is kept. */
   follow(): void {
     const next = this.request();
     untrack(() => {
       if (this.query !== undefined && JSON.stringify(this.query) === JSON.stringify(next)) return;
       this.query = next;
-      if (this.response !== undefined || this.failed) this.stale = true;
     });
   }
 
   /**
-   * Fetches the tab's query for the component that calls it, reporting to the report's resource
-   * guard only while `active`, so a hidden tab's failure never blanks the one shown.
+   * Fetches the tab's query for the component that calls it. It reports to the report's resource
+   * guard only while `active` and once it has a response or an error, so neither a hidden tab's
+   * failure nor a tab's first load blanks the page: the tab shows its own loading state instead.
    */
   mount(active: () => boolean): void {
-    const resource = contextResource(() => this.fetch(this.query ?? this.request()), {
+    this.#resource = contextResource(() => this.fetch(this.query ?? this.request()), {
       errorTitle: "Error Loading Loop Analysis",
-      active,
-    });
-    $effect.pre(() => {
-      const current = resource.current;
-      const stale = resource.stale;
-      const failed = resource.error != null;
-      untrack(() => {
-        this.response = current;
-        this.stale = stale;
-        this.failed = failed;
-      });
+      active: () => active() && (this.response !== undefined || this.failed),
     });
   }
 }
