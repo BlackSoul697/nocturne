@@ -130,7 +130,7 @@ public class StatisticsServiceHourlyDeliveryTests
     }
 
     [Fact]
-    public void Boluses_BucketByHour_AlgorithmBolusesCountAsTempBasal()
+    public void Boluses_BucketByHour_AlgorithmBolusesAreAutomaticBolusNotBasal()
     {
         var boluses = new[] { MakeBolus(5.0, Utc(2024, 1, 1, 8, 15)) };
         var algorithmBoluses = new[] { MakeBolus(0.4, Utc(2024, 1, 1, 9, 5)) };
@@ -138,10 +138,14 @@ public class StatisticsServiceHourlyDeliveryTests
         var result = _sut.CalculateHourlyInsulinDelivery(
             [], boluses, algorithmBoluses, StartDate, EndDate);
 
-        result.Hours[8].Bolus.Should().Be(5.0);
-        result.Hours[9].Bolus.Should().Be(0);
-        result.Hours[9].TempBasal.Should().Be(0.4);
+        result.Hours[8].ManualBolus.Should().Be(5.0);
+        result.Hours[8].AutomaticBolus.Should().Be(0);
+        result.Hours[9].ManualBolus.Should().Be(0);
+        result.Hours[9].AutomaticBolus.Should().Be(0.4);
+        result.Hours[9].TempBasal.Should().Be(0);
+        result.Hours[9].Basal.Should().Be(0);
         result.Hours[8].Total.Should().Be(5.0);
+        result.Hours[9].Total.Should().Be(0.4);
     }
 
     [Fact]
@@ -157,7 +161,7 @@ public class StatisticsServiceHourlyDeliveryTests
             [], boluses, [], StartDate, EndDate);
 
         result.DaysWithData.Should().Be(2);
-        result.Hours[12].Bolus.Should().Be(3.0);
+        result.Hours[12].ManualBolus.Should().Be(3.0);
         result.Hours[12].Count.Should().Be(2);
     }
 
@@ -184,7 +188,7 @@ public class StatisticsServiceHourlyDeliveryTests
             tempBasals, boluses, [], StartDate, EndDate);
 
         result.Hours[12].ScheduledBasal.Should().Be(0.5, "basal averages over its 30 covered days");
-        result.Hours[12].Bolus.Should().Be(3.0, "boluses average over their own 2 data days");
+        result.Hours[12].ManualBolus.Should().Be(3.0, "boluses average over their own 2 data days");
         result.DaysWithData.Should().Be(30);
     }
 

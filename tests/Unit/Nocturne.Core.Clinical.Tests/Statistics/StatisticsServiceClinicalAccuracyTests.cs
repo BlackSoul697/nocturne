@@ -607,7 +607,7 @@ public class StatisticsServiceClinicalAccuracyTests
         // Total = 15.5
         result.TotalInsulin.Should().Be(15.5);
         // 4 bolus records
-        result.BolusCount.Should().Be(4);
+        result.ManualBolusCount.Should().Be(4);
         // Day count = 7
         result.WindowDays.Should().Be(7);
         // TDD = 15.5 / 7 ≈ 2.2
@@ -629,7 +629,7 @@ public class StatisticsServiceClinicalAccuracyTests
         result.TotalBolus.Should().Be(0);
         result.TotalBasal.Should().Be(0);
         result.TotalInsulin.Should().Be(0);
-        result.BolusCount.Should().Be(0);
+        result.ManualBolusCount.Should().Be(0);
         result.BasalPercent.Should().Be(0);
         result.BolusPercent.Should().Be(0);
     }
@@ -686,7 +686,7 @@ public class StatisticsServiceClinicalAccuracyTests
             new DateTime(2024, 1, 3)
         );
 
-        result.BolusCount.Should().Be(10);
+        result.ManualBolusCount.Should().Be(10);
         result.BasalCount.Should().Be(0);
         result.TotalBolus.Should().Be(10);
     }

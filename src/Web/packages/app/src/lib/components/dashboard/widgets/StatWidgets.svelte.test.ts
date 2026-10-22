@@ -41,7 +41,7 @@ const stats = {
         percentages: { veryLow: 1, low: 3, target: 70, high: 20, veryHigh: 6 },
       },
     },
-    insulinDelivery: { totalBolus: 18, totalBasal: 22, microBolusInsulin: 0, tdd: 40 },
+    insulinDelivery: { totalBolus: 18, manualBolus: 18, automaticBolus: 0, totalBasal: 22, tdd: 40 },
     treatmentSummary: { totals: { food: { carbs: 120 } } },
   },
   last90Days: {
@@ -52,14 +52,14 @@ const stats = {
         percentages: { veryLow: 1, low: 2, target: 68, high: 22, veryHigh: 7 },
       },
     },
-    insulinDelivery: { totalBolus: 1600, totalBasal: 2000, microBolusInsulin: 0, tdd: 40 },
+    insulinDelivery: { totalBolus: 1600, manualBolus: 1600, automaticBolus: 0, totalBasal: 2000, tdd: 40 },
     treatmentSummary: { totals: { food: { carbs: 10000 } } },
   },
 };
 
 const withMicroboluses = structuredClone(stats);
-withMicroboluses.lastDay.insulinDelivery.microBolusInsulin = 6;
-withMicroboluses.last90Days.insulinDelivery.microBolusInsulin = 500;
+withMicroboluses.lastDay.insulinDelivery.automaticBolus = 6;
+withMicroboluses.last90Days.insulinDelivery.automaticBolus = 500;
 
 const cellHeight = (container: HTMLElement) =>
   container.querySelector("section")!.getBoundingClientRect().height;
@@ -97,6 +97,21 @@ describe("stat widgets", () => {
     render(TddWidget);
     statistics.resolve(withMicroboluses);
     await expect.element(page.getByText("Auto", { exact: true })).toBeVisible();
+  });
+
+  it("Total Daily Dose shows the backend's manual bolus, automatic bolus and basal as given", async () => {
+    await page.viewport(1440, 900);
+    const delivery = { totalBolus: 14, manualBolus: 8, automaticBolus: 6, totalBasal: 22, tdd: 36 };
+    render(TddWidget);
+    statistics.resolve({
+      lastDay: { ...stats.lastDay, insulinDelivery: delivery },
+      last90Days: { ...stats.last90Days, insulinDelivery: delivery },
+    });
+
+    await expect.element(page.getByText("8.0 U", { exact: true })).toBeVisible();
+    await expect.element(page.getByText("6.0 U", { exact: true })).toBeVisible();
+    await expect.element(page.getByText("22.0 U", { exact: true })).toBeVisible();
+    await expect.element(page.getByText("36.0", { exact: true })).toBeVisible();
   });
 
   it("Today's Summary keeps its height when the day's readings arrive, in three columns and in one", async () => {
