@@ -17,6 +17,20 @@ public static class EventAnchors
     public const long CarbFreeMs = 30 * LocalSlotBinning.MinuteMs;
 
     /// <summary>
+    /// Which way glucose is expected to go after an anchor of <paramref name="kind"/>. A sensor start
+    /// has no expected direction and keeps the rise figures. Exercise is a fall, since a low after it
+    /// is the risk. Every override is a fall: the anchor carries no insulin percentage, so one that
+    /// asks for less insulin cannot be told apart here; carrying that percentage is where to split it.
+    /// </summary>
+    public static EventResponseKind ResponseOf(EventAnchorKind kind) => kind switch
+    {
+        EventAnchorKind.Meal or EventAnchorKind.UnannouncedRise or EventAnchorKind.SensorStart => EventResponseKind.Rise,
+        EventAnchorKind.CorrectionBolus or EventAnchorKind.ExerciseStart
+            or EventAnchorKind.OverrideStart or EventAnchorKind.TemporaryTargetStart => EventResponseKind.Fall,
+        _ => throw new ArgumentOutOfRangeException(nameof(kind), kind, null),
+    };
+
+    /// <summary>
     /// One anchor per instant with carbs: entries at the same instant, such as a meal logged food by
     /// food, are one meal of their summed grams.
     /// </summary>

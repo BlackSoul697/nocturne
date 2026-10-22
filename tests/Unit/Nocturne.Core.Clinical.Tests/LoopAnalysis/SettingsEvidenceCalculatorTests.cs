@@ -139,7 +139,13 @@ public class SettingsEvidenceCalculatorTests
     {
         var range = Recover(DayPlan() with
         {
-            TrueBasal = _ => 1.2, TrueIsf = 40, TrueCr = 8, ProfileBasal = 1.0, ProfileIsf = 50, ProfileCr = 10, Smb = smb,
+            TrueBasal = _ => 1.2,
+            TrueIsf = 40,
+            TrueCr = 8,
+            ProfileBasal = 1.0,
+            ProfileIsf = 50,
+            ProfileCr = 10,
+            Smb = smb,
         });
 
         foreach (var hour in new[] { 2, 4 })
@@ -330,7 +336,10 @@ public class SettingsEvidenceCalculatorTests
 
         public long At(int day, int hour, int minute = 0) => From + day * Day + hour * Hour + minute * Minute;
 
-        public SettingsEvidenceRange Run(bool listEpisodes = true)
+        public SettingsEvidenceRange Run(bool listEpisodes = true) =>
+            Calculate(Series(), Therapy(From - Day, To + Day), From, To, Sources, Masks, listEpisodes);
+
+        public DailyProfileInputs Series()
         {
             var (start, end) = (From - Day, To + Day);
             var glucose = new List<GlucoseSample>();
@@ -345,22 +354,15 @@ public class SettingsEvidenceCalculatorTests
                 if (Basal(t) is { } basal)
                     delivered.Add(new DeliveredBasalSegment(t, t + 5 * Minute, basal.Rate, basal.Origin));
             }
-            return Calculate(
-                new DailyProfileInputs
-                {
-                    Zone = Sydney,
-                    Glucose = glucose,
-                    Insulin = new NetInsulinAboveSchedule(delivered, [new RateSegment(start, end, 1)], Doses),
-                    Carbs = Carbs,
-                    IobCob = ticks,
-                    TargetAt = Target,
-                },
-                Therapy(start, end),
-                From,
-                To,
-                Sources,
-                Masks,
-                listEpisodes);
+            return new DailyProfileInputs
+            {
+                Zone = Sydney,
+                Glucose = glucose,
+                Insulin = new NetInsulinAboveSchedule(delivered, [new RateSegment(start, end, 1)], Doses),
+                Carbs = Carbs,
+                IobCob = ticks,
+                TargetAt = Target,
+            };
         }
 
         private double DoseIob(long t) =>
@@ -596,6 +598,30 @@ public class SettingsEvidenceCalculatorTests
         episode.InsulinActed.Should().Be(2);
         (episode.End - episode.At).Should().Be(TimeSpan.FromHours(4));
         Isf(range, SettingsEvidenceBlock.Morning).UnavailableReason.Should().Be(SettingsEvidenceUnavailableReason.NoCandidates);
+    }
+
+    [Fact]
+    public void ACorrectionsDrop_IsTheSameOnTheEventsPage_OverTheSameWindow()
+    {
+        var week = Corrections();
+        var isf = Isf(week.Run(), SettingsEvidenceBlock.Midday).Episodes;
+        var definition = new EventResponseDefinition
+        {
+            Cohorts = [new EventCohortDefinition { Cohort = 1, Anchor = EventAnchorKind.CorrectionBolus }],
+            MinutesAfter = (int)(ObservedIsf.WindowMs / Minute),
+        };
+
+        var events = EventResponseCalculator.Calculate(
+            new EventResponseInputs { Series = week.Series() },
+            LoopAnalysisMask.Build(new LoopAnalysisMasks(), week.From, week.To, Sydney, new LoopAnalysisMaskSources()),
+            week.From,
+            week.To,
+            definition).Events;
+
+        isf.Should().HaveCount(7);
+        events.Select(e => e.Metrics.Drop).Should().Equal(isf.Select(e => (double?)e.Drop));
+        events.Should().OnlyContain(e => e.Metrics.Drop == 80 && e.Metrics.Nadir <= e.Metrics.StartGlucose - e.Metrics.Drop,
+            "the lowest glucose takes in the reading the drop ends at");
     }
 
     [Fact]
@@ -871,6 +897,22 @@ public class SettingsEvidenceCalculatorTests
 
         midday.N.Should().Be(7, "ending at 120 under a 125 target is a drop like any other");
         Rejected(midday, SettingsEvidenceRule.WentLow).Should().Be(0);
+    }
+
+    [Fact]
+    public void ACorrectionWhoseDropEndsBelow70JustAfterTheWindow_WentLow()
+    {
+        var week = Corrections();
+        var bolus = week.At(3, 14);
+        week.Doses.RemoveAll(d => d.Mills == bolus);
+        week.Doses.Add(new InsulinDose(bolus + 3 * Minute, 2, Automatic: false));
+        var glucose = week.Glucose;
+        week.Glucose = t => t == bolus + 4 * Hour + 5 * Minute ? 65 : glucose(t);
+
+        var midday = Isf(week.Run(), SettingsEvidenceBlock.Midday);
+
+        Rejected(midday, SettingsEvidenceRule.WentLow).Should().Be(1, "65 at 18:05 is the reading nearest a window ending at 18:03");
+        midday.N.Should().Be(6);
     }
 
     [Fact]

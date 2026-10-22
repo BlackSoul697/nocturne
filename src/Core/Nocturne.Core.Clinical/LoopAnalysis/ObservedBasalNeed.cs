@@ -139,7 +139,7 @@ public static class ObservedBasalNeed
         var (acted, rejected) = context.InsulinActed(start, end);
         if (acted is not { } insulin)
             return (null, rejected);
-        if (context.GlucoseAt(start) is not { } startGlucose || context.GlucoseAt(end) is not { } endGlucose)
+        if (context.Series.GlucoseAt(start) is not { } startGlucose || context.Series.GlucoseAt(end) is not { } endGlucose)
             return (null, SettingsEvidenceRule.MissingGlucose);
 
         var hours = (end - start) / (double)LocalSlotBinning.HourMs;

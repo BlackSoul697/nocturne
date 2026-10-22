@@ -41,7 +41,9 @@ public class EventResponseCalculatorTests
     {
         var definition = new EventResponseDefinition
         {
-            Cohorts = [.. cohorts], IsolatedOnly = isolatedOnly, RequireCorroboration = requireCorroboration,
+            Cohorts = [.. cohorts],
+            IsolatedOnly = isolatedOnly,
+            RequireCorroboration = requireCorroboration,
         };
         var inputs = new EventResponseInputs
         {
@@ -229,6 +231,12 @@ public class EventResponseCalculatorTests
         m.NetInsulinFirst60.Should().Be(5.5);
         m.IobAtAnchor.Should().Be(4.5);
         m.IobAtEnd.Should().BeNull("no IOB reached the window's end");
+        range.Events.Single().Response.Should().Be(EventResponseKind.Rise);
+        m.Drop.Should().BeNull("a meal is a rise, so it carries no fall figures");
+        m.Nadir.Should().BeNull();
+        m.MinutesToNadir.Should().BeNull();
+        m.WentBelowRange.Should().BeNull();
+        m.DropPerUnit.Should().BeNull();
 
         var slot = range.Cohorts.Single().Slots;
         slot[12].NetLoopCorrection!.P50.Should().Be(0.5);
@@ -439,5 +447,169 @@ public class EventResponseCalculatorTests
         e.Metrics.NetInsulinFirst30.Should().BeApproximately(1.5, 0.001, "five of the 0.3 U boluses land in the first half hour");
         e.Metrics.NetInsulinFirst60.Should().BeApproximately(1.8, 0.001);
         range.Cohorts[1].Anchors.Should().Be(0);
+    }
+
+    public static TheoryData<EventAnchorKind, EventResponseKind> ResponseKinds => new()
+    {
+        { EventAnchorKind.Meal, EventResponseKind.Rise },
+        { EventAnchorKind.UnannouncedRise, EventResponseKind.Rise },
+        { EventAnchorKind.SensorStart, EventResponseKind.Rise },
+        { EventAnchorKind.CorrectionBolus, EventResponseKind.Fall },
+        { EventAnchorKind.ExerciseStart, EventResponseKind.Fall },
+        { EventAnchorKind.OverrideStart, EventResponseKind.Fall },
+        { EventAnchorKind.TemporaryTargetStart, EventResponseKind.Fall },
+    };
+
+    [Fact]
+    public void EveryAnchorKind_IsGivenAResponseKindBelow()
+    {
+        ResponseKinds.Select(row => (EventAnchorKind)row[0]).Should().BeEquivalentTo(Enum.GetValues<EventAnchorKind>());
+    }
+
+    [Theory]
+    [MemberData(nameof(ResponseKinds))]
+    public void EachAnchorKind_HasTheResponseItsCohortAndEventsCarry(EventAnchorKind anchor, EventResponseKind expected)
+    {
+        var at = Local(2024, 6, 11, 15, 0);
+
+        var range = Calculate(
+            [Cohort(1, anchor)],
+            glucose: Readings(From, To, t => t <= at + 25 * Minute ? 120 : Math.Min(200, 120 + 3 * (t - at - 25 * Minute) / (double)Minute)),
+            carbs: anchor == EventAnchorKind.Meal ? [new(at, 40)] : [],
+            doses: anchor == EventAnchorKind.CorrectionBolus ? [new(at, 2, false)] : [],
+            sources: new LoopAnalysisMaskSources
+            {
+                Exercise = anchor == EventAnchorKind.ExerciseStart ? [new(at, at + Hour)] : [],
+                Overrides = anchor == EventAnchorKind.OverrideStart ? [new(at, at + Hour)] : [],
+                TemporaryTargets = anchor == EventAnchorKind.TemporaryTargetStart ? [new(at, at + Hour)] : [],
+            },
+            sensorStarts: anchor == EventAnchorKind.SensorStart ? [at] : []);
+
+        EventAnchors.ResponseOf(anchor).Should().Be(expected);
+        var cohort = range.Cohorts.Single();
+        cohort.Response.Should().Be(expected);
+        cohort.Events.Should().Be(1);
+        range.Events.Single().Response.Should().Be(expected);
+        (range.Events.Single().Metrics.PeakRise is null).Should().Be(expected == EventResponseKind.Fall);
+        (range.Events.Single().Metrics.Drop is null).Should().Be(expected == EventResponseKind.Rise);
+    }
+
+    [Fact]
+    public void ACorrectionsFallFigures_AreReadOffItsWindow()
+    {
+        var correction = Local(2024, 6, 11, 15, 0);
+        // 200 at the bolus, down to 60 by +120, back up to 90 by +240 and staying there.
+        double Shape(long t) => ((t - correction) / (double)Minute) switch
+        {
+            < 0 => 200,
+            var m and <= 120 => 200 - m * 140 / 120,
+            var m and <= 240 => 60 + (m - 120) * 30 / 120,
+            _ => 90,
+        };
+
+        var range = Calculate(
+            [Cohort(1, EventAnchorKind.CorrectionBolus)],
+            glucose: Readings(From, To, Shape),
+            doses: [new(correction, 2, false)],
+            delivered: [new(From - Day, To + Day, 1.0, BasalDeliveryOrigin.Algorithm)],
+            scheduled: [new(From - Day, To + Day, 1.0)]);
+
+        var e = range.Events.Single();
+        e.Response.Should().Be(EventResponseKind.Fall);
+        var m = e.Metrics;
+        m.StartGlucose.Should().Be(200);
+        m.Drop.Should().Be(110, "the start minus 90 at the window's end, not minus the nadir");
+        m.Nadir.Should().Be(60);
+        m.MinutesToNadir.Should().Be(120);
+        m.WentBelowRange.Should().BeTrue("60 is below 70");
+        m.NetInsulin.Should().Be(2, "the bolus, with the loop on schedule");
+        m.DropPerUnit.Should().BeNull("a window that went below 70 is cut short by treatment, as observed ISF rejects it");
+        m.GlucoseAt2Hours.Should().Be(60);
+        m.GlucoseAt4Hours.Should().Be(90);
+        m.PeakRise.Should().BeNull("a correction is a fall, so it carries no rise figures");
+        m.MinutesToPeak.Should().BeNull();
+        m.MinutesBackToStart.Should().BeNull();
+
+        var cohort = range.Cohorts.Single();
+        cohort.Response.Should().Be(EventResponseKind.Fall);
+        cohort.WentBelowRange.Should().Be(1);
+        cohort.WentBelowRangeObserved.Should().Be(1);
+        cohort.Metrics.Drop!.P50.Should().Be(110);
+        cohort.Metrics.Nadir!.P50.Should().Be(60);
+        cohort.Metrics.MinutesToNadir!.P50.Should().Be(120);
+        cohort.Metrics.DropPerUnit.Should().BeNull();
+        cohort.Metrics.PeakRise.Should().BeNull();
+    }
+
+    [Theory]
+    [InlineData(75.0, 55.0)]
+    [InlineData(70.0, 55.0)]
+    [InlineData(69.0, null)]
+    public void DropPerUnit_IsNull_WhereAnIsolatedCorrectionWentBelow70(double nadir, double? expected)
+    {
+        var correction = Local(2024, 6, 11, 15, 0);
+        double Shape(long t) => ((t - correction) / (double)Minute) switch
+        {
+            < 0 => 200,
+            var m and <= 120 => 200 - m * (200 - nadir) / 120,
+            var m and <= 240 => nadir + (m - 120) * (90 - nadir) / 120,
+            _ => 90,
+        };
+
+        var range = Calculate(
+            [Cohort(1, EventAnchorKind.CorrectionBolus)],
+            glucose: Readings(From, To, Shape),
+            doses: [new(correction, 2, false)],
+            delivered: [new(From - Day, To + Day, 1.0, BasalDeliveryOrigin.Algorithm)],
+            scheduled: [new(From - Day, To + Day, 1.0)]);
+
+        var m = range.Events.Single().Metrics;
+        m.Drop.Should().Be(110);
+        m.NetInsulin.Should().Be(2);
+        m.Nadir.Should().Be(nadir);
+        m.DropPerUnit.Should().Be(expected);
+        (range.Cohorts.Single().Metrics.DropPerUnit?.P50).Should().Be(expected);
+    }
+
+    [Theory]
+    [InlineData(0, 125.0, 300.0)]
+    [InlineData(3, 124.5, 302.0)]
+    public void AFallsLowestGlucose_TakesInTheReadingTheDropEndsAt(int offGridMinutes, double nadir, double minutesToNadir)
+    {
+        var correction = Local(2024, 6, 11, 15, 0) + offGridMinutes * Minute;
+
+        var range = Calculate(
+            [Cohort(1, EventAnchorKind.CorrectionBolus)],
+            glucose: Readings(From, To, t => t < correction ? 200 : 200 - (t - correction) / (double)Minute / 4),
+            doses: [new(correction, 2, false)]);
+
+        var m = range.Events.Single().Metrics;
+        m.Drop.Should().Be(75);
+        m.Nadir.Should().BeLessThanOrEqualTo(m.StartGlucose!.Value - m.Drop!.Value);
+        m.Nadir.Should().Be(nadir, "the reading nearest the window's end is the drop's end and the lowest");
+        m.MinutesToNadir.Should().Be(minutesToNadir);
+    }
+
+    [Fact]
+    public void DropPerUnit_IsReadOnlyOffAnIsolatedFallWithHalfAUnitAboveSchedule()
+    {
+        var small = Local(2024, 6, 11, 15, 0);
+        var first = Local(2024, 6, 13, 15, 0);
+        var second = first + 30 * Minute;
+
+        var range = Calculate(
+            [Cohort(1, EventAnchorKind.CorrectionBolus)],
+            glucose: Flat(180),
+            doses: [new(small, 0.4, false), new(first, 2, false), new(second, 1, false)],
+            delivered: [new(From - Day, To + Day, 1.0, BasalDeliveryOrigin.Algorithm)],
+            scheduled: [new(From - Day, To + Day, 1.0)]);
+
+        range.Events.Should().HaveCount(3);
+        range.Events.Should().OnlyContain(e => e.Metrics.Drop == 0 && e.Metrics.WentBelowRange == false);
+        range.Events.Single(e => e.At == DateTimeOffset.FromUnixTimeMilliseconds(small).UtcDateTime)
+            .Metrics.Should().Match<EventMetrics>(m => m.NetInsulin == 0.4 && m.DropPerUnit == null, "0.4 U is too little to divide by");
+        range.Events.Where(e => e.At != DateTimeOffset.FromUnixTimeMilliseconds(small).UtcDateTime)
+            .Should().OnlyContain(e => e.Metrics.NetInsulin >= 0.5 && e.Metrics.DropPerUnit == null, "each has the other in its window");
+        range.Cohorts.Single().WentBelowRange.Should().Be(0);
     }
 }

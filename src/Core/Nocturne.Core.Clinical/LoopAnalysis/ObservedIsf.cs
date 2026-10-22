@@ -5,14 +5,14 @@ namespace Nocturne.Core.Clinical.LoopAnalysis;
 
 /// <summary>
 /// Observed ISF per local block, from correction boluses: the drop from the bolus to the end of its
-/// window over the insulin that acted in it (<see cref="SettingsEvidenceContext.InsulinActed"/>).
+/// window (<see cref="GlucoseDrop"/>) over the insulin that acted in it
+/// (<see cref="SettingsEvidenceContext.InsulinActed"/>).
 /// </summary>
 /// <remarks>
-/// The drop is start minus end, not start minus nadir: the nadir is the lowest of many noisy
-/// readings, so it is biased low, and the drop with it high. A correction is one of
-/// <see cref="EventAnchors.CorrectionBoluses"/>, the Meals &amp; events correction anchor, isolated
-/// (<see cref="SettingsEvidenceContext.Isolating"/>) over its window: a further bolus or an
-/// unannounced climb after it would be read as the correction's own insulin or resistance.
+/// A correction is one of <see cref="EventAnchors.CorrectionBoluses"/>, the Meals &amp; events
+/// correction anchor, isolated (<see cref="SettingsEvidenceContext.Isolating"/>) over its window: a
+/// further bolus or an unannounced climb after it would be read as the correction's own insulin or
+/// resistance.
 /// </remarks>
 public static class ObservedIsf
 {
@@ -118,10 +118,10 @@ public static class ObservedIsf
             return (null, activity);
         if (context.Outside(start, end) is { } outside)
             return (null, outside);
-        if (context.GlucoseAt(start - SettingsEvidenceCalculator.StableSpanMs) is not { } beforeGlucose
-            || context.GlucoseAt(start) is not { } startGlucose
-            || context.GlucoseAt(end) is not { } endGlucose)
+        if (context.Series.GlucoseAt(start - SettingsEvidenceCalculator.StableSpanMs) is not { } beforeGlucose
+            || GlucoseDrop.Over(context.Series, start, end) is not { } drop)
             return (null, SettingsEvidenceRule.MissingGlucose);
+        var (startGlucose, endGlucose) = drop;
         if (context.Inputs.Series.TargetAt?.Invoke(start) is not { } startTarget)
             return (null, SettingsEvidenceRule.NoTarget);
         if (startGlucose <= startTarget.High)
@@ -140,12 +140,11 @@ public static class ObservedIsf
         if (insulin.Acted < SettingsEvidenceCalculator.MinimumInsulinUnits)
             return (null, SettingsEvidenceRule.TooLittleInsulin);
 
-        var drop = startGlucose - endGlucose;
         var episode = context.Episode<IsfEvidenceEpisode>(
-            start, end, drop / insulin.Acted, context.TherapyAt(start).SensitivityAt(start));
+            start, end, drop.Mgdl / insulin.Acted, context.TherapyAt(start).SensitivityAt(start));
         context.Fill(episode, end, startGlucose, endGlucose, insulin, iobBefore);
         episode.Units = SlotSummary.Round(units);
-        episode.Drop = SlotSummary.Round(drop);
+        episode.Drop = SlotSummary.Round(drop.Mgdl);
         return (episode, null);
     }
 }

@@ -63,8 +63,11 @@ export interface MetricDefinition {
   kind: MetricKind;
 }
 
-/** Every figure of an event, in the order the table and the list show them. */
-export function metricDefinitions(): MetricDefinition[] {
+/**
+ * Every figure of an event, in the order the table and the list show them.
+ * @param backToStartMgdl The response's band around the start glucose that counts as back to start.
+ */
+export function metricDefinitions(backToStartMgdl?: number): MetricDefinition[] {
   return [
     { key: "startGlucose", label: "Start glucose", kind: "glucose" },
     { key: "peakRise", label: "Peak rise", kind: "glucoseChange" },
@@ -73,9 +76,13 @@ export function metricDefinitions(): MetricDefinition[] {
     { key: "glucoseAt4Hours", label: "Glucose at 4 h", kind: "glucose" },
     {
       key: "minutesBackToStart",
-      label: `Back within ${bg(20)} ${bgLabel()} of start`,
+      label:
+        backToStartMgdl == null ? "Back to start" : `Back within ${bg(backToStartMgdl)} ${bgLabel()} of start`,
       kind: "minutes",
     },
+    { key: "drop", label: "Drop to window end", kind: "glucoseDrop" },
+    { key: "nadir", label: "Lowest glucose", kind: "glucose" },
+    { key: "minutesToNadir", label: "Time to lowest glucose", kind: "minutes" },
     { key: "totalInsulin", label: "Total insulin in window", kind: "units" },
     { key: "netInsulin", label: "Net insulin above schedule in window", kind: "units" },
     { key: "netInsulinFirst30", label: "Above schedule, first 30 min", kind: "units" },
@@ -84,6 +91,7 @@ export function metricDefinitions(): MetricDefinition[] {
     { key: "iobAtAnchor", label: "IOB at the event", kind: "units" },
     { key: "iobAtEnd", label: "IOB at window end", kind: "units" },
     { key: "gramsPerUnit", label: "Observed grams per unit", kind: "gramsPerUnit" },
+    { key: "dropPerUnit", label: "Drop per unit above schedule", kind: "glucosePerUnit" },
   ];
 }
 
@@ -101,12 +109,16 @@ export function formatMetric(kind: MetricKind, value: number | null | undefined)
       return `${bg(value)} ${bgLabel()}`;
     case "glucoseChange":
       return `${bgDelta(value)} ${bgLabel()}`;
+    case "glucoseDrop":
+      return `${bgDelta(value, false)} ${bgLabel()}`;
     case "minutes":
       return `${Math.round(value)} min`;
     case "units":
       return `${value.toFixed(2)} U`;
     case "gramsPerUnit":
       return `${value.toFixed(1)} g/U`;
+    case "glucosePerUnit":
+      return `${bgDelta(value, false)} ${bgLabel()}/U`;
   }
 }
 

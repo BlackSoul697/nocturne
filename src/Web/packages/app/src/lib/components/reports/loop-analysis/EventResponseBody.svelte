@@ -350,7 +350,7 @@
 
         <section class="space-y-2" aria-labelledby="event-metrics-heading">
           <h3 id="event-metrics-heading" class="text-sm font-medium">What happened after each event</h3>
-          <EventMetricsTable {cohorts} {primary} {comparison} />
+          <EventMetricsTable {cohorts} {primary} {comparison} backToStartMgdl={response.backToStartMgdl} />
         </section>
 
         <section class="space-y-2" aria-labelledby="event-list-heading">
@@ -358,7 +358,7 @@
           {#if !listed}
             <p class="text-sm text-muted-foreground">{hiddenText()}</p>
           {:else}
-            <EventList events={response.primary?.events ?? []} {cohorts} />
+            <EventList events={response.primary?.events ?? []} {cohorts} backToStartMgdl={response.backToStartMgdl} />
           {/if}
         </section>
       {/if}

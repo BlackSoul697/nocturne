@@ -33,7 +33,6 @@ public sealed record EventResponseInputs
 /// </remarks>
 public static class EventResponseCalculator
 {
-    /// <param name="listEvents">Whether to list the events; the comparison range's are not shown.</param>
     /// <summary>
     /// How far before an anchor what decides it reaches: the window shown before it, the carbs
     /// that announce a rise, and the carbs that make a bolus a meal's rather than a correction.
@@ -41,6 +40,7 @@ public static class EventResponseCalculator
     public static long HistoryLookbackMs(EventWindow window) =>
         Math.Max(window.BeforeMs, Math.Max(UnannouncedRises.CarbsBeforeMs, EventAnchors.CarbFreeMs));
 
+    /// <param name="listEvents">Whether to list the events; the comparison range's are not shown.</param>
     public static EventResponseRange Calculate(
         EventResponseInputs inputs,
         LoopAnalysisMask mask,
@@ -70,7 +70,7 @@ public static class EventResponseCalculator
 
         foreach (var cohort in definition.Cohorts)
         {
-            var result = new EventCohortResult { Cohort = cohort.Cohort };
+            var result = new EventCohortResult { Cohort = cohort.Cohort, Response = EventAnchors.ResponseOf(cohort.Anchor) };
             var counted = new List<EventEpisode>();
             foreach (var anchor in anchors.Of(cohort.Anchor))
             {
@@ -111,6 +111,8 @@ public static class EventResponseCalculator
             }
 
             result.Events = counted.Count;
+            result.WentBelowRange = counted.Count(e => e.Metrics.WentBelowRange == true);
+            result.WentBelowRangeObserved = counted.Count(e => e.Metrics.WentBelowRange != null);
             result.Slots = Slots(counted, window);
             result.Metrics = Summarise(counted);
             cohorts.Add(result);
@@ -160,6 +162,7 @@ public static class EventResponseCalculator
             Date = date,
             Time = time,
             Anchor = episode.Anchor.Kind,
+            Response = EventAnchors.ResponseOf(episode.Anchor.Kind),
             Grams = episode.Anchor.Grams is { } grams ? SlotSummary.Round(grams) : null,
             Cohorts = cohorts,
             GlucoseCoverage = GlucoseCoverage(episode),
@@ -198,7 +201,10 @@ public static class EventResponseCalculator
         return slots;
     }
 
-    /// <summary>Every <see cref="EventMetrics"/> figure with its <see cref="EventMetricsSummary"/> counterpart.</summary>
+    /// <summary>
+    /// Every numeric <see cref="EventMetrics"/> figure with its <see cref="EventMetricsSummary"/>
+    /// counterpart; <see cref="EventMetrics.WentBelowRange"/> is counted on the cohort instead.
+    /// </summary>
     private static readonly (Func<EventMetrics, double?> Get, Action<EventMetrics, double?> Set, Action<EventMetricsSummary, LoopAnalysisAggregate?> Summary)[] MetricFields =
     [
         (m => m.StartGlucose, (m, v) => m.StartGlucose = v, (s, v) => s.StartGlucose = v),
@@ -207,11 +213,15 @@ public static class EventResponseCalculator
         (m => m.GlucoseAt2Hours, (m, v) => m.GlucoseAt2Hours = v, (s, v) => s.GlucoseAt2Hours = v),
         (m => m.GlucoseAt4Hours, (m, v) => m.GlucoseAt4Hours = v, (s, v) => s.GlucoseAt4Hours = v),
         (m => m.MinutesBackToStart, (m, v) => m.MinutesBackToStart = v, (s, v) => s.MinutesBackToStart = v),
+        (m => m.Drop, (m, v) => m.Drop = v, (s, v) => s.Drop = v),
+        (m => m.Nadir, (m, v) => m.Nadir = v, (s, v) => s.Nadir = v),
+        (m => m.MinutesToNadir, (m, v) => m.MinutesToNadir = v, (s, v) => s.MinutesToNadir = v),
         (m => m.TotalInsulin, (m, v) => m.TotalInsulin = v, (s, v) => s.TotalInsulin = v),
         (m => m.NetInsulin, (m, v) => m.NetInsulin = v, (s, v) => s.NetInsulin = v),
         (m => m.IobAtAnchor, (m, v) => m.IobAtAnchor = v, (s, v) => s.IobAtAnchor = v),
         (m => m.IobAtEnd, (m, v) => m.IobAtEnd = v, (s, v) => s.IobAtEnd = v),
         (m => m.GramsPerUnit, (m, v) => m.GramsPerUnit = v, (s, v) => s.GramsPerUnit = v),
+        (m => m.DropPerUnit, (m, v) => m.DropPerUnit = v, (s, v) => s.DropPerUnit = v),
         (m => m.NetInsulinFirst30, (m, v) => m.NetInsulinFirst30 = v, (s, v) => s.NetInsulinFirst30 = v),
         (m => m.NetInsulinFirst60, (m, v) => m.NetInsulinFirst60 = v, (s, v) => s.NetInsulinFirst60 = v),
         (m => m.NetInsulinFirst120, (m, v) => m.NetInsulinFirst120 = v, (s, v) => s.NetInsulinFirst120 = v),
@@ -227,7 +237,7 @@ public static class EventResponseCalculator
 
     private static EventMetrics Rounded(EventMetrics metrics)
     {
-        var rounded = new EventMetrics();
+        var rounded = new EventMetrics { WentBelowRange = metrics.WentBelowRange };
         foreach (var (get, set, _) in MetricFields)
             set(rounded, get(metrics) is { } value ? SlotSummary.Round(value) : null);
         return rounded;

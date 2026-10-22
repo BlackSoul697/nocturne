@@ -92,13 +92,44 @@ describe("EventResponseBody", () => {
     await expect.element(page.getByRole("rowheader", { name: "Observed grams per unit" })).toBeVisible();
     await expect.element(page.getByText("9.5 g/U").first()).toBeVisible();
     await expect.element(page.getByText(/Compared 9.5 g\/U/).first()).toBeVisible();
-    await expect.element(page.getByText("8 of 12 events returned to within 20 mg/dL of the start glucose")).toBeVisible();
+    await expect.element(page.getByText("8 of 12 events returned to within 25 mg/dL of the start glucose")).toBeVisible();
     const note = page.getByText(/grams per unit comes only from a meal/);
     await expect.element(note).toHaveTextContent(/2 meals had another event in their window;\s*3 had too little of their basal recorded;\s*1 had no insulin above schedule/);
 
     const links = page.getByRole("link", { name: /in Day in Review/ }).elements();
     expect(links).toHaveLength(3);
     expect(links[0].getAttribute("href")).toBe("/reports/day-in-review?date=2026-10-10&time=07:30");
+  });
+
+  it("shows the fall figures for a cohort of corrections and the rise figures for a cohort of meals", async () => {
+    render(EventResponseBody, { props: { response: eventResponse({ fall: true, comparison: true }) } });
+
+    await expect.element(page.getByRole("rowheader", { name: "Drop to window end" })).toBeVisible();
+    await expect.element(page.getByRole("rowheader", { name: "Time to lowest glucose" })).toBeVisible();
+    await expect.element(page.getByRole("rowheader", { name: "Drop per unit above schedule" })).toBeVisible();
+    await expect.element(page.getByRole("rowheader", { name: "Peak rise" })).toBeVisible();
+    const below = page.getByRole("row", { name: /^Went below range/ });
+    await expect.element(below).toHaveTextContent(/1 of 3 events/);
+    await expect.element(below).toHaveTextContent(/Compared 1 of 3/);
+    await expect.element(page.getByText(/The drop is the start glucose minus the glucose at the end of the window/)).toBeVisible();
+
+    await expect.element(page.getByRole("columnheader", { name: "Peak rise" })).toBeVisible();
+    await expect.element(page.getByRole("columnheader", { name: "Drop to window end" })).toBeVisible();
+    await expect.element(page.getByRole("columnheader", { name: "Below range" })).toBeVisible();
+    const rows = page.getByRole("row", { name: /in Day in Review/ });
+    await expect.element(rows.filter({ hasText: "Unannounced rise" })).toHaveTextContent(/\+95 mg\/dL.*–/);
+    await expect.element(rows.filter({ hasText: "Correction bolus" }).first()).toHaveTextContent(/90 mg\/dL.*45 mg\/dL\/U\s*No/);
+    await expect.element(rows.filter({ hasText: "Correction bolus" }).last()).toHaveTextContent(/150 mg\/dL.*75 mg\/dL\/U\s*Yes/);
+  });
+
+  it("shows no fall figure when every cohort is a rise", async () => {
+    render(EventResponseBody, { props: { response: eventResponse() } });
+
+    await expect.element(page.getByRole("rowheader", { name: "Peak rise" })).toBeVisible();
+    expect(page.getByRole("rowheader", { name: "Drop to window end" }).elements()).toHaveLength(0);
+    expect(page.getByRole("row", { name: /^Went below range/ }).elements()).toHaveLength(0);
+    expect(page.getByRole("columnheader", { name: "Below range" }).elements()).toHaveLength(0);
+    expect(page.getByRole("columnheader", { name: "Drop to window end" }).elements()).toHaveLength(0);
   });
 
   it("sorts the event list by a figure", async () => {

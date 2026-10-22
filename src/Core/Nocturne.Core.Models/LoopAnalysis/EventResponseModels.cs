@@ -26,6 +26,17 @@ public enum EventAnchorKind
     UnannouncedRise,
 }
 
+/// <summary>Which way glucose is expected to go after an anchor, and so which figures describe it.</summary>
+[JsonConverter(typeof(JsonStringEnumConverter<EventResponseKind>))]
+public enum EventResponseKind
+{
+    /// <summary>Glucose is expected to rise: the peak, its time, and the return to the start.</summary>
+    Rise,
+
+    /// <summary>Glucose is expected to fall: the drop, the nadir, and whether it went below range.</summary>
+    Fall,
+}
+
 /// <summary>One cohort of events: an anchor kind, narrowed by time of day and, for meals, by size.</summary>
 public class EventCohortDefinition
 {
@@ -105,6 +116,12 @@ public class EventResponseReport : LoopAnalysisResponse
     /// </summary>
     public List<int> SlotMinutes { get; set; } = [];
 
+    /// <summary>
+    /// mg/dL: how near the start glucose counts as back to start, for
+    /// <see cref="EventMetrics.MinutesBackToStart"/>.
+    /// </summary>
+    public double BackToStartMgdl { get; set; }
+
     public EventResponseRange Primary { get; set; } = new();
 
     public EventResponseRange? Comparison { get; set; }
@@ -129,6 +146,9 @@ public class EventResponseRange
 public class EventCohortResult
 {
     public int Cohort { get; set; }
+
+    /// <summary>The expected response of the cohort's anchor kind, which decides the figures it carries.</summary>
+    public EventResponseKind Response { get; set; }
 
     /// <summary>Anchors of the cohort's kind and filters in the range's analysed time.</summary>
     public int Anchors { get; set; }
@@ -166,6 +186,18 @@ public class EventCohortResult
     /// window's basal to total its insulin.
     /// </summary>
     public int GramsPerUnitUncovered { get; set; }
+
+    /// <summary>
+    /// Events whose window held a reading below range (<see cref="EventMetrics.WentBelowRange"/>);
+    /// 0 for a <see cref="EventResponseKind.Rise"/> cohort.
+    /// </summary>
+    public int WentBelowRange { get; set; }
+
+    /// <summary>
+    /// Events with a reading after the anchor, so whether they went below range is known: the
+    /// denominator of <see cref="WentBelowRange"/>.
+    /// </summary>
+    public int WentBelowRangeObserved { get; set; }
 
     /// <summary>
     /// The window in <see cref="EventResponseDefinition.SlotMinutes"/>-minute slots from the
@@ -216,6 +248,9 @@ public class EventResponseEvent
 
     public EventAnchorKind Anchor { get; set; }
 
+    /// <summary>The expected response of <see cref="Anchor"/>, which decides the figures the event carries.</summary>
+    public EventResponseKind Response { get; set; }
+
     /// <summary>g, for a meal.</summary>
     public double? Grams { get; set; }
 
@@ -233,17 +268,21 @@ public class EventResponseEvent
 }
 
 /// <summary>
-/// What one event did. Each figure is null where the data to observe it is missing; glucose
-/// figures are mg/dL, insulin figures U.
+/// What one event did. Each figure is null where the data to observe it is missing, or where it
+/// belongs to the other <see cref="EventResponseKind"/>; glucose figures are mg/dL, insulin figures U.
 /// </summary>
 public class EventMetrics
 {
     /// <summary>The reading nearest the anchor, within 5 minutes.</summary>
     public double? StartGlucose { get; set; }
 
-    /// <summary>The highest reading after the anchor minus <see cref="StartGlucose"/>; negative if glucose only fell.</summary>
+    /// <summary>
+    /// The highest reading after the anchor minus <see cref="StartGlucose"/>; negative if glucose
+    /// only fell. Rise only.
+    /// </summary>
     public double? PeakRise { get; set; }
 
+    /// <summary>Rise only.</summary>
     public double? MinutesToPeak { get; set; }
 
     /// <summary>The reading nearest two hours after the anchor, within 5 minutes.</summary>
@@ -252,10 +291,29 @@ public class EventMetrics
     public double? GlucoseAt4Hours { get; set; }
 
     /// <summary>
-    /// Minutes from the anchor until glucose came back within 20 mg/dL of the start after its
-    /// furthest excursion; 0 if it never left that band, null if it had not come back by the window's end.
+    /// Minutes from the anchor until glucose came back within
+    /// <see cref="EventResponseReport.BackToStartMgdl"/> of the start after its
+    /// furthest excursion; 0 if it never left that band, null if it had not come back by the
+    /// window's end. Rise only.
     /// </summary>
     public double? MinutesBackToStart { get; set; }
+
+    /// <summary>
+    /// <see cref="StartGlucose"/> minus the reading nearest the window's end, within 5 minutes, as
+    /// observed ISF reads a correction's drop. Fall only.
+    /// </summary>
+    public double? Drop { get; set; }
+
+    /// <summary>The lowest reading after the anchor, up to and including the window's end. Fall only.</summary>
+    public double? Nadir { get; set; }
+
+    /// <summary>Fall only.</summary>
+    public double? MinutesToNadir { get; set; }
+
+    /// <summary>
+    /// Whether <see cref="Nadir"/> was below range, 70 mg/dL; null where no reading came. Fall only.
+    /// </summary>
+    public bool? WentBelowRange { get; set; }
 
     /// <summary>Delivered basal and every bolus over the whole window.</summary>
     public double? TotalInsulin { get; set; }
@@ -269,6 +327,13 @@ public class EventMetrics
 
     /// <summary>A meal's grams over the net insulin above schedule in the window; null where that was not positive.</summary>
     public double? GramsPerUnit { get; set; }
+
+    /// <summary>
+    /// mg/dL per U, <see cref="Drop"/> over <see cref="NetInsulin"/>; read, as grams per unit is, only
+    /// off an isolated event, and null where net insulin is under 0.5 U or the event went below
+    /// 70 mg/dL, where treatment and a suspended loop shrink the drop. Fall only.
+    /// </summary>
+    public double? DropPerUnit { get; set; }
 
     /// <summary>Net insulin above schedule in the first 30 minutes after the anchor.</summary>
     public double? NetInsulinFirst30 { get; set; }
@@ -287,11 +352,15 @@ public class EventMetricsSummary
     public LoopAnalysisAggregate? GlucoseAt2Hours { get; set; }
     public LoopAnalysisAggregate? GlucoseAt4Hours { get; set; }
     public LoopAnalysisAggregate? MinutesBackToStart { get; set; }
+    public LoopAnalysisAggregate? Drop { get; set; }
+    public LoopAnalysisAggregate? Nadir { get; set; }
+    public LoopAnalysisAggregate? MinutesToNadir { get; set; }
     public LoopAnalysisAggregate? TotalInsulin { get; set; }
     public LoopAnalysisAggregate? NetInsulin { get; set; }
     public LoopAnalysisAggregate? IobAtAnchor { get; set; }
     public LoopAnalysisAggregate? IobAtEnd { get; set; }
     public LoopAnalysisAggregate? GramsPerUnit { get; set; }
+    public LoopAnalysisAggregate? DropPerUnit { get; set; }
     public LoopAnalysisAggregate? NetInsulinFirst30 { get; set; }
     public LoopAnalysisAggregate? NetInsulinFirst60 { get; set; }
     public LoopAnalysisAggregate? NetInsulinFirst120 { get; set; }

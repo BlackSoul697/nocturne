@@ -1,5 +1,6 @@
 using Nocturne.Core.Clinical.Statistics;
 using Nocturne.Core.Clinical.Treatments;
+using Nocturne.Core.Constants;
 using Nocturne.Core.Models.LoopAnalysis;
 
 namespace Nocturne.Core.Clinical.LoopAnalysis;
@@ -42,22 +43,29 @@ public sealed class EventSeries
 
     public NetInsulinAboveSchedule Insulin => _inputs.Insulin;
 
-    /// <summary>The reading nearest <paramref name="mills"/>, no further than <paramref name="toleranceMs"/> from it.</summary>
-    public double? GlucoseNear(long mills, long toleranceMs)
+    /// <summary>
+    /// The reading nearest <paramref name="mills"/>, no further than
+    /// <see cref="EventEpisode.ReadingToleranceMs"/> from it.
+    /// </summary>
+    public GlucoseSample? ReadingAt(long mills)
     {
-        double? nearest = null;
+        const long tolerance = EventEpisode.ReadingToleranceMs;
+        GlucoseSample? nearest = null;
         var best = long.MaxValue;
-        for (var i = FirstReadingFrom(mills - toleranceMs); i < _readings.Length && _readings[i].Mills <= mills + toleranceMs; i++)
+        for (var i = FirstReadingFrom(mills - tolerance); i < _readings.Length && _readings[i].Mills <= mills + tolerance; i++)
         {
             var distance = Math.Abs(_readings[i].Mills - mills);
             if (distance < best)
             {
                 best = distance;
-                nearest = _readings[i].Mgdl;
+                nearest = _readings[i];
             }
         }
         return nearest;
     }
+
+    /// <summary>The glucose of <see cref="ReadingAt"/>.</summary>
+    public double? GlucoseAt(long mills) => ReadingAt(mills)?.Mgdl;
 
     /// <summary>The mean reading in <c>[start, end)</c>.</summary>
     public double? MeanGlucose(long start, long end)
@@ -154,6 +162,29 @@ public sealed class EventSeries
     }
 }
 
+/// <summary>
+/// How far glucose fell over a window: the reading nearest its start minus the reading nearest its
+/// end, each within <see cref="EventEpisode.ReadingToleranceMs"/>. Start minus end, not start minus
+/// nadir: the nadir is the lowest of many noisy readings, so it is biased low, and the drop with it high.
+/// </summary>
+public readonly record struct GlucoseDrop(double Start, double End)
+{
+    public double Mgdl => Start - End;
+
+    /// <returns>Null where no reading stands for either end.</returns>
+    public static GlucoseDrop? Over(EventSeries series, long start, long end) =>
+        series.GlucoseAt(start) is { } first && series.GlucoseAt(end) is { } last
+            ? new GlucoseDrop(first, last)
+            : null;
+
+    /// <summary>
+    /// When the reading <see cref="Over"/> takes for <paramref name="end"/> came: the one nearest it,
+    /// which can fall after it. <paramref name="end"/> itself where there is none.
+    /// </summary>
+    public static long EndReadingMills(EventSeries series, long end) =>
+        Math.Max(end, series.ReadingAt(end)?.Mills ?? end);
+}
+
 /// <summary>One relative slot of one episode; each value null where its data is missing.</summary>
 public readonly record struct EpisodeSlot(
     double? GlucoseChange,
@@ -179,8 +210,8 @@ public readonly record struct EpisodeSlot(
 public sealed class EventEpisode
 {
     /// <summary>
-    /// How far from the anchor, or from two and four hours after it, a reading may be and still
-    /// stand for glucose then: one five-minute CGM interval.
+    /// How far from an instant a reading may be and still stand for glucose then: one five-minute
+    /// CGM interval.
     /// </summary>
     public const long ReadingToleranceMs = 5 * LocalSlotBinning.MinuteMs;
 
@@ -217,7 +248,7 @@ public sealed class EventEpisode
     {
         var startGlucose = anchor.Kind == EventAnchorKind.SensorStart
             ? series.FirstGlucose(anchor.Mills, anchor.Mills + SensorWarmUpMs)
-            : series.GlucoseNear(anchor.Mills, ReadingToleranceMs);
+            : series.GlucoseAt(anchor.Mills);
         if (startGlucose is not { } start)
             return null;
 
@@ -278,23 +309,19 @@ public sealed class EventEpisode
         var a = anchor.Mills;
         var end = a + window.AfterMs;
         var coverage = DailyProfileCalculator.InsulinSummaryMinimumCoverage;
-        var (peak, peakAt, back) = Excursion(a, end, start, series);
         var net = series.NetInsulinOver(a - window.BeforeMs, end, coverage)?.Total;
         double? First(long minutes) => minutes * LocalSlotBinning.MinuteMs <= window.AfterMs
             ? series.NetInsulinOver(a, a + minutes * LocalSlotBinning.MinuteMs, coverage)?.Total
             : null;
         double? GlucoseAfter(long hours) => hours * LocalSlotBinning.HourMs <= window.AfterMs
-            ? series.GlucoseNear(a + hours * LocalSlotBinning.HourMs, ReadingToleranceMs)
+            ? series.GlucoseAt(a + hours * LocalSlotBinning.HourMs)
             : null;
 
-        return new EventMetrics
+        var metrics = new EventMetrics
         {
             StartGlucose = start,
-            PeakRise = peak - start,
-            MinutesToPeak = Minutes(a, peakAt),
             GlucoseAt2Hours = GlucoseAfter(2),
             GlucoseAt4Hours = GlucoseAfter(4),
-            MinutesBackToStart = Minutes(a, back),
             TotalInsulin = series.TotalInsulin(a - window.BeforeMs, end, coverage),
             NetInsulin = net,
             IobAtAnchor = series.IobAt(a),
@@ -304,18 +331,44 @@ public sealed class EventEpisode
             NetInsulinFirst60 = First(60),
             NetInsulinFirst120 = First(120),
         };
+
+        if (EventAnchors.ResponseOf(anchor.Kind) == EventResponseKind.Rise)
+        {
+            var excursion = Excursion(a, end, start, series);
+            metrics.PeakRise = excursion.Peak - start;
+            metrics.MinutesToPeak = Minutes(a, excursion.PeakAt);
+            metrics.MinutesBackToStart = Minutes(a, excursion.Back);
+        }
+        else
+        {
+            var excursion = Excursion(a, GlucoseDrop.EndReadingMills(series, end) + 1, start, series);
+            var drop = GlucoseDrop.Over(series, a, end)?.Mgdl;
+            metrics.Drop = drop;
+            metrics.Nadir = excursion.Nadir;
+            metrics.MinutesToNadir = Minutes(a, excursion.NadirAt);
+            metrics.WentBelowRange = excursion.Nadir is { } nadir ? nadir < GlucoseConstants.TargetBottomMgdl : null;
+            metrics.DropPerUnit = isolated
+                && excursion.Nadir is not < ObservedIsf.LowMgdl
+                && drop is { } d
+                && net >= SettingsEvidenceCalculator.MinimumInsulinUnits
+                    ? d / net
+                    : null;
+        }
+        return metrics;
     }
 
+    private readonly record struct ExcursionFigures(double? Peak, long? PeakAt, double? Nadir, long? NadirAt, long? Back);
+
     /// <summary>
-    /// The highest reading after the anchor and when it came, and when glucose was back within
-    /// <see cref="BackToStartMgdl"/> of the start after its furthest excursion either way: the
-    /// anchor itself if it never left, null if it had not come back by <paramref name="end"/>.
+    /// The highest and lowest readings after the anchor and when each first came, and when glucose
+    /// was back within <see cref="BackToStartMgdl"/> of the start after its furthest excursion either
+    /// way: the anchor itself if it never left, null if it had not come back by <paramref name="end"/>.
     /// </summary>
-    private static (double? Peak, long? PeakAt, long? Back) Excursion(long anchor, long end, double start, EventSeries series)
+    private static ExcursionFigures Excursion(long anchor, long end, double start, EventSeries series)
     {
         var readings = series.Readings;
-        double? peak = null;
-        long? peakAt = null;
+        double? peak = null, nadir = null;
+        long? peakAt = null, nadirAt = null;
         var furthest = -1;
         double furthestDistance = 0;
         var first = series.FirstReadingFrom(anchor + 1);
@@ -326,6 +379,11 @@ public sealed class EventEpisode
                 peak = readings[i].Mgdl;
                 peakAt = readings[i].Mills;
             }
+            if (nadir is null || readings[i].Mgdl < nadir)
+            {
+                nadir = readings[i].Mgdl;
+                nadirAt = readings[i].Mills;
+            }
             var distance = Math.Abs(readings[i].Mgdl - start);
             if (distance > furthestDistance)
             {
@@ -335,15 +393,15 @@ public sealed class EventEpisode
         }
 
         if (peak is null)
-            return (null, null, null);
+            return default;
         if (furthestDistance <= BackToStartMgdl)
-            return (peak, peakAt, anchor);
+            return new(peak, peakAt, nadir, nadirAt, anchor);
         for (var i = furthest + 1; i < readings.Count && readings[i].Mills < end; i++)
         {
             if (Math.Abs(readings[i].Mgdl - start) <= BackToStartMgdl)
-                return (peak, peakAt, readings[i].Mills);
+                return new(peak, peakAt, nadir, nadirAt, readings[i].Mills);
         }
-        return (peak, peakAt, null);
+        return new(peak, peakAt, nadir, nadirAt, null);
     }
 
     private static double? Minutes(long from, long? to) =>
