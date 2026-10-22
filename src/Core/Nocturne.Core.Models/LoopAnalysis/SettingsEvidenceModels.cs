@@ -87,6 +87,12 @@ public enum SettingsEvidenceRule
     /// <summary>Basal: carbs in the window or the hours before it.</summary>
     CarbsBefore,
 
+    /// <summary>
+    /// Basal: a meal-like glucose climb no carb entry caused, in the window or the hours before it:
+    /// an intake that was not logged.
+    /// </summary>
+    RiseBefore,
+
     /// <summary>Basal: a manual bolus in the window or within DIA before it.</summary>
     ManualBolus,
 
@@ -114,13 +120,13 @@ public enum SettingsEvidenceRule
     /// <summary>ISF: glucose ended below the target range, so a low cut the drop short.</summary>
     EndedBelowTarget,
 
-    /// <summary>Carb ratio: another meal, bolus or rise fell in the window.</summary>
+    /// <summary>Another meal, correction bolus or meal-like climb fell in the window.</summary>
     NotIsolated,
 
     /// <summary>Carb ratio: glucose at the meal was out of range.</summary>
     StartOutOfRange,
 
-    /// <summary>Carb ratio: glucose was moving at the meal.</summary>
+    /// <summary>Glucose was moving in the quarter-hour before the meal or correction.</summary>
     StartUnstable,
 
     /// <summary>No reading stands for glucose at the start or end of the window.</summary>

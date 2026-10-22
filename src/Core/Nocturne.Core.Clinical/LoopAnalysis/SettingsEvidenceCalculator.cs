@@ -83,6 +83,17 @@ public static class SettingsEvidenceCalculator
     /// </summary>
     public const int Passes = 2;
 
+    /// <summary>The span before a correction or meal its glucose must be stable over.</summary>
+    public const long StableSpanMs = 15 * LocalSlotBinning.MinuteMs;
+
+    /// <summary>
+    /// The fastest glucose may move over <see cref="StableSpanMs"/> before a correction or meal and
+    /// still count as stable: 1 mg/dL a minute, where a CGM's trend arrow turns from flat. Faster,
+    /// and the window's glucose change is partly a trend already under way: a correction given
+    /// while glucose still climbs is answering food still absorbing.
+    /// </summary>
+    public const double MaxStartTrendMgdlPerMinute = 1;
+
     /// <summary>A reading stands for glucose at an instant within one CGM interval of it.</summary>
     public const long ReadingToleranceMs = EventEpisode.ReadingToleranceMs;
 
@@ -111,6 +122,10 @@ public static class SettingsEvidenceCalculator
             CarbRatio = ObservedCarbRatio.Calculate(context, conversion, baseline),
         };
     }
+
+    /// <summary>Whether glucose moved from <paramref name="before"/> to <paramref name="at"/>, <see cref="StableSpanMs"/> apart, slowly enough to be stable.</summary>
+    internal static bool Stable(double before, double at) =>
+        Math.Abs(at - before) <= MaxStartTrendMgdlPerMinute * StableSpanMs / LocalSlotBinning.MinuteMs;
 
     public static SettingsEvidenceBlock BlockOf(int localHour) => localHour switch
     {
@@ -205,6 +220,29 @@ internal sealed class SettingsEvidenceContext
     public EventSeries Series { get; }
     public long[] CarbMills { get; }
     public TimeZoneInfo Zone => Inputs.Series.Zone;
+
+    /// <summary>
+    /// Every intake or dose that keeps an episode around it from being isolated, sorted: the
+    /// meals, correction boluses and meal-like climbs, announced or not, the Meals &amp; events tab
+    /// isolates its events by (<see cref="EventAnchors.IsIsolated"/>).
+    /// </summary>
+    public IReadOnlyList<long> Isolating => _isolating ??=
+    [
+        .. EventAnchors.Meals(Inputs.Series.Carbs).Select(m => m.Mills)
+            .Concat(EventAnchors.CorrectionBoluses(Insulin.Doses, Inputs.Series.Carbs).Select(c => c.Mills))
+            .Concat(Climbs)
+            .Order(),
+    ];
+
+    /// <summary>
+    /// The start of every meal-like climb a carb entry did not cause, sorted
+    /// (<see cref="RiseSearch.Climbs"/>): an intake of its own, logged or not.
+    /// </summary>
+    public IReadOnlyList<long> Climbs => _climbs ??=
+        [.. UnannouncedRises.Find(Series.Readings, Exclusions, Inputs.Series.Carbs, Insulin, requireCorroboration: false, Series.CobAt).Climbs];
+
+    private long[]? _isolating;
+    private long[]? _climbs;
     public NetInsulinAboveSchedule Insulin => Series.Insulin;
     public TherapySnapshot TherapyAt(long mills) => Inputs.Therapy.SnapshotAt(mills);
 

@@ -9,7 +9,9 @@ namespace Nocturne.Core.Clinical.LoopAnalysis;
 /// <remarks>
 /// The drop is start minus end, not start minus nadir: the nadir is the lowest of many noisy
 /// readings, so it is biased low, and the drop with it high. A correction is one of
-/// <see cref="EventAnchors.CorrectionBoluses"/>, the Meals &amp; events correction anchor.
+/// <see cref="EventAnchors.CorrectionBoluses"/>, the Meals &amp; events correction anchor, isolated
+/// (<see cref="SettingsEvidenceContext.Isolating"/>) over its window: a further bolus or an
+/// unannounced climb after it would be read as the correction's own insulin or resistance.
 /// </remarks>
 public static class ObservedIsf
 {
@@ -40,6 +42,7 @@ public static class ObservedIsf
     private static readonly SettingsEvidenceRule[] Rules =
     [
         SettingsEvidenceRule.CarbsNear,
+        SettingsEvidenceRule.NotIsolated,
         SettingsEvidenceRule.Override,
         SettingsEvidenceRule.TemporaryTarget,
         SettingsEvidenceRule.Exercise,
@@ -48,6 +51,7 @@ public static class ObservedIsf
         SettingsEvidenceRule.MissingGlucose,
         SettingsEvidenceRule.NoTarget,
         SettingsEvidenceRule.NotAboveTarget,
+        SettingsEvidenceRule.StartUnstable,
         SettingsEvidenceRule.IobUnknown,
         SettingsEvidenceRule.IobAtBolus,
         SettingsEvidenceRule.InsulinUncovered,
@@ -94,18 +98,24 @@ public static class ObservedIsf
         var end = EventAnchors.AnyWithin(context.CarbMills, start + MinimumWindowMs, start + WindowMs - 1)
             ? context.CarbMills[SortedSearch.FirstEndingAfter(context.CarbMills, start + MinimumWindowMs - 1, static m => m)]
             : start + WindowMs;
+        if (!EventAnchors.IsIsolated(new EventAnchor(start, EventAnchorKind.CorrectionBolus), context.Isolating, 0, end - start))
+            return (null, SettingsEvidenceRule.NotIsolated);
 
         if (context.Activity(start, end, openLoop: false) is { } activity)
             return (null, activity);
         if (context.Filtered(start, end))
             return (null, SettingsEvidenceRule.Filtered);
-        if (context.GlucoseAt(start) is not { } startGlucose || context.GlucoseAt(end) is not { } endGlucose)
+        if (context.GlucoseAt(start - SettingsEvidenceCalculator.StableSpanMs) is not { } beforeGlucose
+            || context.GlucoseAt(start) is not { } startGlucose
+            || context.GlucoseAt(end) is not { } endGlucose)
             return (null, SettingsEvidenceRule.MissingGlucose);
         if (context.Inputs.Series.TargetAt?.Invoke(start) is not { } startTarget
             || context.Inputs.Series.TargetAt?.Invoke(end) is not { } endTarget)
             return (null, SettingsEvidenceRule.NoTarget);
         if (startGlucose <= startTarget.High)
             return (null, SettingsEvidenceRule.NotAboveTarget);
+        if (!SettingsEvidenceCalculator.Stable(beforeGlucose, startGlucose))
+            return (null, SettingsEvidenceRule.StartUnstable);
         if (context.Series.IobAt(start - 1) is not { } iobBefore)
             return (null, SettingsEvidenceRule.IobUnknown);
         if (Math.Abs(iobBefore) > MaxIobShareOfBolus * units)

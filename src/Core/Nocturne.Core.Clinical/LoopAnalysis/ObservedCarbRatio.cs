@@ -10,9 +10,8 @@ namespace Nocturne.Core.Clinical.LoopAnalysis;
 /// was missing or spare.
 /// </summary>
 /// <remarks>
-/// A meal is one of <see cref="EventAnchors.Meals"/>, isolated as the Meals &amp; events tab isolates
-/// one (<see cref="EventAnchors.IsIsolated"/>): no other meal, correction bolus or meal-like climb,
-/// announced or not, falls in its window. The glucose change is converted as
+/// A meal is one of <see cref="EventAnchors.Meals"/>, isolated
+/// (<see cref="SettingsEvidenceContext.Isolating"/>) over its window. The glucose change is converted as
 /// <see cref="IsfConversion"/> says, so a wrong profile ISF does not pass into the carb ratio.
 /// </remarks>
 public static class ObservedCarbRatio
@@ -22,13 +21,6 @@ public static class ObservedCarbRatio
 
     /// <summary>Four hours: a mixed meal has absorbed by then, and its bolus mostly acted.</summary>
     public const long WindowAfterMs = 4 * LocalSlotBinning.HourMs;
-
-    /// <summary>
-    /// The fastest glucose may move over the quarter-hour before the meal and still count as
-    /// stable: 1 mg/dL a minute, where a CGM's trend arrow turns from flat. Faster, and the window's
-    /// glucose change is partly a trend already under way.
-    /// </summary>
-    public const double MaxStartTrendMgdlPerMinute = 1;
 
     private static readonly SettingsEvidenceRule[] Rules =
     [
@@ -53,25 +45,14 @@ public static class ObservedCarbRatio
         var tallies = blocks.Select(_ => new RejectionTally(Rules)).ToArray();
         var episodes = blocks.Select(_ => new List<CarbRatioEvidenceEpisode>()).ToArray();
 
-        var carbs = context.Inputs.Series.Carbs;
-        var meals = EventAnchors.Meals(carbs);
-        long[] isolating =
-        [
-            .. meals.Select(m => m.Mills)
-                .Concat(EventAnchors.CorrectionBoluses(context.Insulin.Doses, carbs).Select(c => c.Mills))
-                .Concat(UnannouncedRises.Find(
-                    context.Series.Readings, context.Exclusions, carbs, context.Insulin,
-                    requireCorroboration: false, context.Series.CobAt).Climbs)
-                .Order(),
-        ];
-
+        var meals = EventAnchors.Meals(context.Inputs.Series.Carbs);
         foreach (var meal in meals)
         {
             if (meal.Mills < context.From || meal.Mills >= context.To)
                 continue;
             var block = (int)SettingsEvidenceCalculator.BlockOf(LocalSlotBinning.LocalTime(meal.Mills, context.Zone).Hour);
             tallies[block].Candidate();
-            var (episode, rule) = EventAnchors.IsIsolated(meal, isolating, WindowBeforeMs, WindowAfterMs)
+            var (episode, rule) = EventAnchors.IsIsolated(meal, context.Isolating, WindowBeforeMs, WindowAfterMs)
                 ? Measure(context, meal, conversion, baseline)
                 : (null, SettingsEvidenceRule.NotIsolated);
             if (rule is { } rejected)
@@ -112,7 +93,7 @@ public static class ObservedCarbRatio
             return (null, SettingsEvidenceRule.MissingGlucose);
         if (startGlucose is < GlucoseConstants.TargetBottomMgdl or > GlucoseConstants.TargetTopMgdl)
             return (null, SettingsEvidenceRule.StartOutOfRange);
-        if (Math.Abs(mealGlucose - startGlucose) > MaxStartTrendMgdlPerMinute * WindowBeforeMs / LocalSlotBinning.MinuteMs)
+        if (!SettingsEvidenceCalculator.Stable(startGlucose, mealGlucose))
             return (null, SettingsEvidenceRule.StartUnstable);
         var (acted, uncovered) = context.InsulinActed(start, end, baseline);
         if (acted is not { } insulin)

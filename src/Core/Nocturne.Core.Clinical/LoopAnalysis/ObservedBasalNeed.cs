@@ -19,8 +19,8 @@ public static class ObservedBasalNeed
     public const int BlockHours = 2;
 
     /// <summary>
-    /// How long before a block carbs keep it from being fasting: a mixed meal absorbs over two to
-    /// four hours, and its glucose would be read as basal need.
+    /// How long before a block carbs, or a climb no carb entry caused, keep it from being fasting: a
+    /// mixed meal absorbs over two to four hours, and its glucose would be read as basal need.
     /// </summary>
     public const long CarbFreeMs = 4 * LocalSlotBinning.HourMs;
 
@@ -59,6 +59,7 @@ public static class ObservedBasalNeed
         SettingsEvidenceRule.Exercise,
         SettingsEvidenceRule.Illness,
         SettingsEvidenceRule.CarbsBefore,
+        SettingsEvidenceRule.RiseBefore,
         SettingsEvidenceRule.ManualBolus,
         SettingsEvidenceRule.CarbsOnBoard,
         SettingsEvidenceRule.Filtered,
@@ -105,6 +106,8 @@ public static class ObservedBasalNeed
             return (null, activity);
         if (EventAnchors.AnyWithin(context.CarbMills, start - CarbFreeMs, end - 1))
             return (null, SettingsEvidenceRule.CarbsBefore);
+        if (EventAnchors.AnyWithin(context.Climbs, start - CarbFreeMs, end - 1))
+            return (null, SettingsEvidenceRule.RiseBefore);
         var dia = (long)(context.TherapyAt(start).Dia * LocalSlotBinning.HourMs);
         if (context.Insulin.Over(start - dia, end).ManualBolus > 0)
             return (null, SettingsEvidenceRule.ManualBolus);

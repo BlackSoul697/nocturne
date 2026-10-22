@@ -286,7 +286,7 @@ public class SettingsEvidenceCalculatorTests
         block.Consistency.Should().Be(1, "a correction of zero agrees with either sign");
         block.Confidence.Should().Be(SettingsEvidenceConfidence.Low);
         block.ConfidenceReasons.Should().Equal(SettingsEvidenceConfidenceReason.FewEpisodes, SettingsEvidenceConfidenceReason.IsfDependent);
-        block.Rejections.Select(r => r.Rule).Should().HaveCount(13).And.OnlyHaveUniqueItems();
+        block.Rejections.Select(r => r.Rule).Should().HaveCount(14).And.OnlyHaveUniqueItems();
         block.Rejections.Should().OnlyContain(r => r.Count == 0);
         var day = block.Days.First();
         day.Date.Should().Be("2024-06-03");
@@ -297,7 +297,7 @@ public class SettingsEvidenceCalculatorTests
     public static TheoryData<SettingsEvidenceRule> BasalRules =>
     [
         SettingsEvidenceRule.OpenLoop, SettingsEvidenceRule.Override, SettingsEvidenceRule.TemporaryTarget,
-        SettingsEvidenceRule.Exercise, SettingsEvidenceRule.Illness, SettingsEvidenceRule.CarbsBefore,
+        SettingsEvidenceRule.Exercise, SettingsEvidenceRule.Illness, SettingsEvidenceRule.CarbsBefore, SettingsEvidenceRule.RiseBefore,
         SettingsEvidenceRule.ManualBolus, SettingsEvidenceRule.CarbsOnBoard, SettingsEvidenceRule.Filtered,
         SettingsEvidenceRule.ManualDelivery, SettingsEvidenceRule.InsulinUncovered, SettingsEvidenceRule.IobUnknown,
         SettingsEvidenceRule.MissingGlucose,
@@ -318,6 +318,7 @@ public class SettingsEvidenceCalculatorTests
             case SettingsEvidenceRule.Exercise: week.Sources = new() { Exercise = Span(inside, inside + Hour) }; break;
             case SettingsEvidenceRule.Illness: week.Sources = new() { Illness = Span(inside, inside + Hour) }; break;
             case SettingsEvidenceRule.CarbsBefore: week.Carbs.Add(new CarbEvent(start - 3 * Hour - 50 * Minute, 20)); break;
+            case SettingsEvidenceRule.RiseBefore: week.Glucose = t => t >= start - Hour && t < start - 15 * Minute ? 120 + 80.0 * (t - start + Hour) / (45 * Minute) : t >= start - 15 * Minute && t < start + 30 * Minute ? 200 : 120; break;
             case SettingsEvidenceRule.ManualBolus: week.Doses.Add(new InsulinDose(start - 3 * Hour - 50 * Minute, 1, Automatic: false)); break;
             case SettingsEvidenceRule.CarbsOnBoard: week.Cob = t => t >= inside && t < inside + Hour ? 5 : 0; break;
             case SettingsEvidenceRule.Filtered: week.Masks = new() { Days = AllButThursday }; break;
@@ -451,9 +452,9 @@ public class SettingsEvidenceCalculatorTests
 
     public static TheoryData<SettingsEvidenceRule> IsfRules =>
     [
-        SettingsEvidenceRule.CarbsNear, SettingsEvidenceRule.Override, SettingsEvidenceRule.TemporaryTarget,
+        SettingsEvidenceRule.CarbsNear, SettingsEvidenceRule.NotIsolated, SettingsEvidenceRule.Override, SettingsEvidenceRule.TemporaryTarget,
         SettingsEvidenceRule.Exercise, SettingsEvidenceRule.Illness, SettingsEvidenceRule.Filtered,
-        SettingsEvidenceRule.MissingGlucose, SettingsEvidenceRule.NoTarget, SettingsEvidenceRule.NotAboveTarget,
+        SettingsEvidenceRule.MissingGlucose, SettingsEvidenceRule.NoTarget, SettingsEvidenceRule.NotAboveTarget, SettingsEvidenceRule.StartUnstable,
         SettingsEvidenceRule.IobUnknown, SettingsEvidenceRule.IobAtBolus, SettingsEvidenceRule.InsulinUncovered,
         SettingsEvidenceRule.EndedBelowTarget, SettingsEvidenceRule.TooLittleInsulin,
     ];
@@ -470,6 +471,7 @@ public class SettingsEvidenceCalculatorTests
         switch (rule)
         {
             case SettingsEvidenceRule.CarbsNear: week.Carbs.Add(new CarbEvent(bolus + 2 * Hour, 15)); break;
+            case SettingsEvidenceRule.NotIsolated: week.Doses.Add(new InsulinDose(bolus + 3 * Hour + 30 * Minute, 1, Automatic: false)); break;
             case SettingsEvidenceRule.Override: week.Sources = new() { Overrides = Span(inside, inside + Hour) }; break;
             case SettingsEvidenceRule.TemporaryTarget: week.Sources = new() { TemporaryTargets = Span(inside, inside + Hour) }; break;
             case SettingsEvidenceRule.Exercise: week.Sources = new() { Exercise = Span(inside, inside + Hour) }; break;
@@ -478,6 +480,7 @@ public class SettingsEvidenceCalculatorTests
             case SettingsEvidenceRule.MissingGlucose: week.Reading = t => Math.Abs(t - end) > 5 * Minute; break;
             case SettingsEvidenceRule.NoTarget: week.Target = t => t == bolus ? null : target(t); break;
             case SettingsEvidenceRule.NotAboveTarget: week.Target = t => t == bolus ? (80, 200) : target(t); break;
+            case SettingsEvidenceRule.StartUnstable: { var glucose = week.Glucose; week.Glucose = t => Math.Abs(t - (bolus - 15 * Minute)) <= 5 * Minute ? 170 : glucose(t); break; }
             case SettingsEvidenceRule.IobUnknown: week.Tick = t => t != bolus; break;
             case SettingsEvidenceRule.IobAtBolus: week.Iob = t => t == bolus - 5 * Minute ? 2.1 : null; break;
             case SettingsEvidenceRule.InsulinUncovered: week.Basal = t => t >= inside && t < inside + Hour ? null : (1, BasalDeliveryOrigin.Algorithm); break;
