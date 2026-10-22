@@ -270,16 +270,15 @@ msgstr "Dringend hoch"
 #: src/lib/components/calendar/CalendarHeader.svelte
 #: src/lib/components/dashboard/glucose-chart/ChartLegend.svelte
 #: src/lib/components/dashboard/glucose-chart/dialogs/GlucoseInspectionDialog.svelte
+#: src/lib/components/food/GiLabel.svelte
 #: src/lib/components/reports/TIRStackedChart.svelte
 #: src/lib/components/reports/sleep/single-night/OvernightLowsCard.svelte
 #: src/lib/components/settings/alarm-profile/AlarmGeneralTab.svelte
 #: src/lib/components/settings/alarm-profile/AlarmGeneralTab.svelte
-#: src/lib/components/treatments/FoodNutritionalForm.svelte
 #: src/lib/stores/alarm-state.svelte.ts
 #: src/lib/stores/alarm-state.svelte.ts
 #: src/lib/stores/alarm-state.svelte.ts
 #: src/lib/stores/alarm-state.svelte.ts
-#: src/routes/(authenticated)/food/GiLabel.svelte
 #: src/routes/(authenticated)/reports/data-quality/compression-lows/+page.svelte
 #: src/routes/(authenticated)/reports/executive-summary/+page.svelte
 #: src/routes/(authenticated)/reports/glucose-distribution/+page.svelte
@@ -291,13 +290,12 @@ msgstr "Niedrig"
 #: src/lib/components/calendar/CalendarHeader.svelte
 #: src/lib/components/dashboard/glucose-chart/ChartLegend.svelte
 #: src/lib/components/dashboard/glucose-chart/dialogs/GlucoseInspectionDialog.svelte
+#: src/lib/components/food/GiLabel.svelte
 #: src/lib/components/reports/TIRStackedChart.svelte
 #: src/lib/components/settings/alarm-profile/AlarmGeneralTab.svelte
 #: src/lib/components/settings/alarm-profile/AlarmGeneralTab.svelte
-#: src/lib/components/treatments/FoodNutritionalForm.svelte
 #: src/lib/stores/alarm-state.svelte.ts
 #: src/lib/stores/alarm-state.svelte.ts
-#: src/routes/(authenticated)/food/GiLabel.svelte
 #: src/routes/(authenticated)/reports/data-quality/compression-lows/+page.svelte
 #: src/routes/(authenticated)/reports/executive-summary/+page.svelte
 #: src/routes/(authenticated)/reports/glucose-distribution/+page.svelte
@@ -553,7 +551,6 @@ msgstr "Verifizierungscode"
 #: src/lib/components/dashboard/glucose-chart/dialogs/PointInspectionPicker.svelte
 #: src/lib/components/dashboard/glucose-chart/dialogs/TreatmentDisambiguationDialog.svelte
 #: src/lib/components/entries/EntryEditDialog.svelte
-#: src/lib/components/food/AddFoodDialog.svelte
 #: src/lib/components/food/AddFoodDialog.svelte
 #: src/lib/components/meal-matching/MealMatchReviewDialog.svelte
 #: src/lib/components/meals/MealBolusDialog.svelte
@@ -843,12 +840,9 @@ msgstr "Rollendetails und Berechtigungen aktualisieren."
 #: src/lib/components/admin/OidcProviderDialog.svelte
 #: src/lib/components/admin/RoleDialog.svelte
 #: src/lib/components/admin/SubjectEditDialog.svelte
-#: src/lib/components/food/AddFoodDialog.svelte
-#: src/lib/components/food/AddFoodDialog.svelte
 #: src/lib/components/members/RolesSection.svelte
 #: src/lib/components/members/RolesSection.svelte
 #: src/lib/components/trackers/TrackerEditorDialog.svelte
-#: src/lib/components/treatments/FoodNutritionalForm.svelte
 #: src/routes/(authenticated)/alerts/[id]/+page.svelte
 #: src/routes/(authenticated)/settings/translations/[locale]/+page.svelte
 msgid "Name"
@@ -879,9 +873,9 @@ msgstr "Benutzerdefinierte Berechtigung"
 
 #: ../cms/src/editor/ComponentPropsEditor.svelte
 #: src/lib/components/admin/RoleDialog.svelte
+#: src/lib/components/food/FoodFields.svelte
 #: src/lib/components/patient/PatientDeviceManager.svelte
 #: src/lib/components/patient/PatientInsulinManager.svelte
-#: src/routes/(authenticated)/food/FoodFields.svelte
 #: src/routes/(authenticated)/tools/packing/list/+page.svelte
 #: src/routes/(authenticated)/tools/packing/list/+page.svelte
 msgid "Add"
@@ -2224,8 +2218,7 @@ msgstr "Schriftstärke"
 
 #: ../cms/src/lib/components/edra/shadcn/components/toolbar/FontSize.svelte
 #: src/lib/components/clock-builder/TextStyleControls.svelte
-#: src/lib/components/treatments/FoodNutritionalForm.svelte
-#: src/routes/(authenticated)/food/GiLabel.svelte
+#: src/lib/components/food/GiLabel.svelte
 #: src/routes/(authenticated)/reports/data-quality/compression-lows/+page.svelte
 #: src/routes/(authenticated)/settings/nightscout-transition/+page.svelte
 msgid "Medium"
@@ -3587,10 +3580,10 @@ msgstr "Bolus"
 
 #: src/lib/components/dashboard/glucose-chart/ChartLegend.svelte
 #: src/lib/components/dashboard/glucose-chart/ChartTooltip.svelte
+#: src/lib/components/food/FoodFields.svelte
 #: src/lib/components/meals/MealsTable.svelte
 #: src/lib/components/reports/year-overview/YearHeatmap.svelte
 #: src/lib/components/treatments/TreatmentStatsCard.svelte
-#: src/routes/(authenticated)/food/FoodFields.svelte
 #: src/routes/(authenticated)/reports/day-in-review/+page.svelte
 #: src/routes/(authenticated)/reports/year-overview/+page.svelte
 #: src/routes/(authenticated)/settings/appearance/+page.svelte
@@ -3668,68 +3661,42 @@ msgstr "Aktualisiere die Nährwertangaben des Lebensmittels."
 msgid "Create a new food with nutritional information."
 msgstr "Erstelle ein neues Lebensmittel mit Nährwertangaben."
 
-#: src/lib/components/food/AddFoodDialog.svelte
-#: src/lib/components/food/AddFoodDialog.svelte
-#: src/lib/components/treatments/FoodNutritionalForm.svelte
-msgid "Category & Subcategory"
-msgstr "Kategorie & Unterkategorie"
+#~ msgid "Category & Subcategory"
+#~ msgstr "Kategorie & Unterkategorie"
 
-#: src/lib/components/food/AddFoodDialog.svelte
-#: src/lib/components/food/AddFoodDialog.svelte
-msgid "Key Nutritional Info"
-msgstr "Wichtige Nährwertangaben"
+#~ msgid "Key Nutritional Info"
+#~ msgstr "Wichtige Nährwertangaben"
 
 #: src/lib/components/entries/CarbIntakeSection.svelte
-#: src/lib/components/food/AddFoodDialog.svelte
-#: src/lib/components/food/AddFoodDialog.svelte
 #: src/lib/components/meal-matching/MealMatchReviewDialog.svelte
-#: src/lib/components/treatments/FoodNutritionalForm.svelte
 #: src/lib/components/treatments/TreatmentFoodEntryEditDialog.svelte
 #: src/lib/components/treatments/TreatmentPortionsForm.svelte
 msgid "Carbs (g)"
 msgstr "Kohlenhydrate (g)"
 
-#: src/lib/components/food/AddFoodDialog.svelte
-#: src/lib/components/food/AddFoodDialog.svelte
-#: src/routes/(authenticated)/food/FoodFields.svelte
+#: src/lib/components/food/FoodFields.svelte
 msgid "Glycemic Index"
 msgstr "Glykämischer Index"
 
-#: src/lib/components/food/AddFoodDialog.svelte
-#: src/lib/components/food/AddFoodDialog.svelte
 #: src/routes/(authenticated)/food/FoodListHeader.svelte
 msgid "Portion"
 msgstr "Portion"
 
-#: src/lib/components/food/AddFoodDialog.svelte
-#: src/lib/components/food/AddFoodDialog.svelte
-#: src/lib/components/treatments/FoodNutritionalForm.svelte
-#: src/routes/(authenticated)/food/FoodFields.svelte
+#: src/lib/components/food/FoodFields.svelte
 msgid "Unit"
 msgstr "Einheit"
 
-#: src/lib/components/food/AddFoodDialog.svelte
-#: src/lib/components/food/AddFoodDialog.svelte
-msgid "Additional Macros"
-msgstr "Zusätzliche Makros"
+#~ msgid "Additional Macros"
+#~ msgstr "Zusätzliche Makros"
 
-#: src/lib/components/food/AddFoodDialog.svelte
-#: src/lib/components/food/AddFoodDialog.svelte
-#: src/lib/components/treatments/FoodNutritionalForm.svelte
-msgid "Fat (g)"
-msgstr "Fett (g)"
+#~ msgid "Fat (g)"
+#~ msgstr "Fett (g)"
 
-#: src/lib/components/food/AddFoodDialog.svelte
-#: src/lib/components/food/AddFoodDialog.svelte
-#: src/lib/components/treatments/FoodNutritionalForm.svelte
-msgid "Protein (g)"
-msgstr "Eiweiß (g)"
+#~ msgid "Protein (g)"
+#~ msgstr "Eiweiß (g)"
 
-#: src/lib/components/food/AddFoodDialog.svelte
-#: src/lib/components/food/AddFoodDialog.svelte
-#: src/lib/components/treatments/FoodNutritionalForm.svelte
-msgid "Energy (kJ)"
-msgstr "Energie (kJ)"
+#~ msgid "Energy (kJ)"
+#~ msgstr "Energie (kJ)"
 
 #: src/lib/components/food/CategorySubcategoryCombobox.svelte
 msgid "Select category/subcategory..."
@@ -3780,34 +3747,23 @@ msgstr "<0/> \"{0}\" als neue Kategorie erstellen"
 msgid "<0/> Add to {0}"
 msgstr "<0/> Zu {0} hinzufügen"
 
-#: src/lib/components/food/GiCombobox.svelte
-#: src/lib/components/treatments/FoodNutritionalForm.svelte
-msgid "Select GI..."
-msgstr "GI auswählen..."
+#~ msgid "Select GI..."
+#~ msgstr "GI auswählen..."
 
-#: src/lib/components/food/GiCombobox.svelte
-#: src/lib/components/treatments/FoodNutritionalForm.svelte
-msgid "Search GI..."
-msgstr "GI durchsuchen..."
+#~ msgid "Search GI..."
+#~ msgstr "GI durchsuchen..."
 
-#: src/lib/components/food/GiCombobox.svelte
-msgid "No GI level found."
-msgstr "Kein GI-Wert gefunden."
+#~ msgid "No GI level found."
+#~ msgstr "Kein GI-Wert gefunden."
 
-#: src/lib/components/food/UnitCombobox.svelte
-#: src/lib/components/treatments/FoodNutritionalForm.svelte
-msgid "Select unit..."
-msgstr "Einheit auswählen..."
+#~ msgid "Select unit..."
+#~ msgstr "Einheit auswählen..."
 
-#: src/lib/components/food/UnitCombobox.svelte
-#: src/lib/components/treatments/FoodNutritionalForm.svelte
-msgid "Search units..."
-msgstr "Einheiten durchsuchen..."
+#~ msgid "Search units..."
+#~ msgstr "Einheiten durchsuchen..."
 
-#: src/lib/components/food/UnitCombobox.svelte
-#: src/lib/components/treatments/FoodNutritionalForm.svelte
-msgid "No unit found."
-msgstr "Keine Einheit gefunden."
+#~ msgid "No unit found."
+#~ msgstr "Keine Einheit gefunden."
 
 #: src/lib/components/entries/BGCheckSection.svelte
 msgid "Finger"
@@ -3910,7 +3866,7 @@ msgstr "Verknüpfe Lebensmittel mit dieser Kohlenhydratzufuhr."
 #. 0: foodEntry.carbs
 #. 0: d.linkedCarbs
 #. 0: food.carbs
-#. 0: foodCarbs
+#. 0: draft.carbs
 #. 0: food.carbs
 #. 0: food.carbs
 #. 0: food.carbs
@@ -4997,11 +4953,11 @@ msgstr "Wie du angesprochen werden möchtest"
 msgid "Pronouns"
 msgstr "Pronomen"
 
+#: src/lib/components/food/FoodFields.svelte
 #: src/lib/components/patient/InsulinFormFields.svelte
 #: src/lib/components/patient/PatientDeviceManager.svelte
 #: src/lib/components/trackers/TrackerEditorDialog.svelte
 #: src/routes/(authenticated)/food/+page.svelte
-#: src/routes/(authenticated)/food/FoodFields.svelte
 msgid "Category"
 msgstr "Kategorie"
 
@@ -6158,10 +6114,10 @@ msgstr "Basal: {0}U"
 msgid "COB"
 msgstr "COB"
 
+#: src/lib/components/food/FoodFields.svelte
+#: src/lib/components/food/FoodFields.svelte
+#: src/lib/components/food/FoodFields.svelte
 #: src/lib/components/reports/RetrospectiveStats.svelte
-#: src/routes/(authenticated)/food/FoodFields.svelte
-#: src/routes/(authenticated)/food/FoodFields.svelte
-#: src/routes/(authenticated)/food/FoodFields.svelte
 msgid "g"
 msgstr "g"
 
@@ -7968,28 +7924,24 @@ msgstr "<0/> Protokollieren, ohne Lebensmittel zu speichern"
 msgid "No additional matches found."
 msgstr "Keine weiteren Übereinstimmungen gefunden."
 
-#. 0: foodFat; 1: foodProtein
+#. 0: draft.fat ?? 0; 1: draft.protein ?? 0
 #: src/lib/components/treatments/FoodNutritionalForm.svelte
 msgid "{0}g fat • {1}g protein"
 msgstr "{0}g Fett • {1}g Protein"
 
-#: src/lib/components/treatments/FoodNutritionalForm.svelte
-msgid "Nutritional Details"
-msgstr "Nährwertangaben"
+#~ msgid "Nutritional Details"
+#~ msgstr "Nährwertangaben"
 
-#: src/lib/components/treatments/FoodNutritionalForm.svelte
-msgid "Portion Size"
-msgstr "Portionsgröße"
+#~ msgid "Portion Size"
+#~ msgstr "Portionsgröße"
 
-#: src/lib/components/treatments/FoodNutritionalForm.svelte
 #: src/routes/(authenticated)/food/+page.svelte
 #: src/routes/(authenticated)/food/FoodListHeader.svelte
 msgid "GI"
 msgstr "GI"
 
-#: src/lib/components/treatments/FoodNutritionalForm.svelte
-msgid "No GI found."
-msgstr "Kein GI gefunden."
+#~ msgid "No GI found."
+#~ msgstr "Kein GI gefunden."
 
 #. 0: activeCategory.name.toLowerCase()
 #: src/lib/components/treatments/TreatmentEditDialog.svelte
@@ -8594,15 +8546,15 @@ msgstr "Lebensmittel hinzufügen"
 #~ msgid "Per"
 #~ msgstr "Pro"
 
+#: src/lib/components/food/FoodFields.svelte
 #: src/lib/components/members/GuestLinksSection.svelte
 #: src/lib/components/settings/alarm-profile/AlarmAudioTab.svelte
-#: src/routes/(authenticated)/food/FoodFields.svelte
 #: src/routes/(authenticated)/reports/glucose-distribution/+page.svelte
 msgid "Hide"
 msgstr "Ausblenden"
 
 #. 0: showDetails ? "Hide" \\: "Add"
-#: src/routes/(authenticated)/food/FoodFields.svelte
+#: src/lib/components/food/FoodFields.svelte
 msgid "<0/> {0} fat, protein, category..."
 msgstr "<0/> {0} Fett, Eiweiß, Kategorie..."
 
@@ -8612,17 +8564,14 @@ msgstr "<0/> {0} Fett, Eiweiß, Kategorie..."
 #~ msgid "Protein"
 #~ msgstr "Eiweiß"
 
-#: src/routes/(authenticated)/food/FoodListHeader.svelte
-msgid "Energy"
-msgstr "Energie"
+#~ msgid "Energy"
+#~ msgstr "Energie"
 
-#: src/routes/(authenticated)/food/FoodFields.svelte
-msgid "kcal"
-msgstr "kcal"
+#~ msgid "kcal"
+#~ msgstr "kcal"
 
-#: src/routes/(authenticated)/food/FoodFields.svelte
-msgid "Subcategory"
-msgstr "Unterkategorie"
+#~ msgid "Subcategory"
+#~ msgstr "Unterkategorie"
 
 #: src/routes/(authenticated)/food/Composer.svelte
 msgid "Save & add another <0>⌘+Enter</0>"
@@ -8666,7 +8615,7 @@ msgstr "Lebensmittel gelöscht"
 msgid "Failed to delete food"
 msgstr "Lebensmittel konnte nicht gelöscht werden"
 
-#: src/routes/(authenticated)/food/FoodFields.svelte
+#: src/lib/components/food/FoodFields.svelte
 #: src/routes/(authenticated)/food/FoodListHeader.svelte
 msgid "Name <0/>"
 msgstr "Name <0/>"
@@ -8697,15 +8646,13 @@ msgstr "Zu Favoriten hinzufügen"
 
 #. 0: draft.portion ?? 100; 1: draft.unit ?? "g"
 #. 0: food.portion ?? 0; 1: food.unit ?? 'g'
-#: src/routes/(authenticated)/food/FoodFields.svelte
+#: src/lib/components/food/FoodFields.svelte
 #: src/routes/(authenticated)/food/FoodRow.svelte
 msgid "per {0} {1}"
 msgstr "pro {0} {1}"
 
-#. 0: food.energy ?? 0
-#: src/routes/(authenticated)/food/FoodRow.svelte
-msgid "{0} kcal"
-msgstr "{0} kcal"
+#~ msgid "{0} kcal"
+#~ msgstr "{0} kcal"
 
 #. 0: attributionCount; 1: 'treatment' + (attributionCount === 1 ? '' \\: 's')
 #: src/routes/(authenticated)/food/InlineEditor.svelte
@@ -8731,15 +8678,11 @@ msgstr "Löschen <0/>? <1/>"
 #~ msgid "auto"
 #~ msgstr "auto"
 
-#: src/routes/(authenticated)/food/FoodFields.svelte
-#: src/routes/(authenticated)/food/FoodFields.svelte
-msgid "No category"
-msgstr "Keine Kategorie"
+#~ msgid "No category"
+#~ msgstr "Keine Kategorie"
 
-#: src/routes/(authenticated)/food/FoodFields.svelte
-#: src/routes/(authenticated)/food/FoodFields.svelte
-msgid "No subcategory"
-msgstr "Keine Unterkategorie"
+#~ msgid "No subcategory"
+#~ msgstr "Keine Unterkategorie"
 
 #: src/routes/(authenticated)/food/InlineEditor.svelte
 msgid "<0/> Save changes"
@@ -20950,8 +20893,8 @@ msgstr ""
 msgid "Error Loading Test Report"
 msgstr ""
 
+#: src/lib/components/food/FoodFields.svelte
 #: src/lib/forms/FormField.svelte
-#: src/routes/(authenticated)/food/FoodFields.svelte
 msgid "(required)"
 msgstr ""
 
@@ -23690,11 +23633,11 @@ msgstr ""
 msgid "<0/> Play Preview"
 msgstr ""
 
-#: src/routes/(authenticated)/food/FoodFields.svelte
+#: src/lib/components/food/FoodFields.svelte
 msgid "Fat <0>optional</0>"
 msgstr ""
 
-#: src/routes/(authenticated)/food/FoodFields.svelte
+#: src/lib/components/food/FoodFields.svelte
 msgid "Protein <0>optional</0>"
 msgstr ""
 
@@ -27144,11 +27087,11 @@ msgstr ""
 msgid "Deleted records are never imported again, even if this source sends them."
 msgstr ""
 
-#: src/routes/(authenticated)/food/FoodFields.svelte
+#: src/lib/components/food/FoodFields.svelte
 msgid "Energy <0>optional</0>"
 msgstr ""
 
-#: src/routes/(authenticated)/food/FoodFields.svelte
+#: src/lib/components/food/FoodFields.svelte
 msgid "Portion <0/>"
 msgstr ""
 
@@ -27696,4 +27639,27 @@ msgstr ""
 
 #: src/routes/(authenticated)/settings/appearance/+page.svelte
 msgid "<0/> Very low"
+msgstr ""
+
+#. 0: getEnergyUnit()
+#: src/lib/stores/appearance-ssr-reader.svelte
+msgid "energy:{0}"
+msgstr ""
+
+#: src/routes/(authenticated)/food/FoodListHeader.svelte
+msgid "Energy <0/>"
+msgstr ""
+
+#: src/routes/(authenticated)/settings/appearance/+page.svelte
+#: src/routes/(authenticated)/settings/appearance/+page.svelte
+msgid "Kilojoules (kJ)"
+msgstr ""
+
+#: src/routes/(authenticated)/settings/appearance/+page.svelte
+#: src/routes/(authenticated)/settings/appearance/+page.svelte
+msgid "Calories (kcal)"
+msgstr ""
+
+#: src/routes/(authenticated)/settings/appearance/+page.svelte
+msgid "Food energy units"
 msgstr ""
