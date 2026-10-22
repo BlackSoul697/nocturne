@@ -264,7 +264,7 @@
     bolus: "--chart-1",
     basal: "--chart-3",
     tdd: "--chart-4",
-    carbs: "--chart-5",
+    carbs: "--carbs",
   };
 
   function metricCssVar(metric: Exclude<HeatmapMetric, "avgGlucose">): string {
