@@ -35,10 +35,14 @@ public class EventResponseCalculatorTests
         LoopAnalysisMaskSources? sources = null,
         IReadOnlyList<long>? sensorStarts = null,
         bool isolatedOnly = false,
+        bool requireCorroboration = false,
         long? from = null,
         long? to = null)
     {
-        var definition = new EventResponseDefinition { Cohorts = [.. cohorts], IsolatedOnly = isolatedOnly };
+        var definition = new EventResponseDefinition
+        {
+            Cohorts = [.. cohorts], IsolatedOnly = isolatedOnly, RequireCorroboration = requireCorroboration,
+        };
         var inputs = new EventResponseInputs
         {
             Series = new DailyProfileInputs
@@ -310,6 +314,53 @@ public class EventResponseCalculatorTests
         cohort.Metrics.GramsPerUnit!.N.Should().Be(2);
         range.Events.Single(e => e.Grams == 60).Metrics.GramsPerUnit.Should().BeNull();
         range.Events.Single(e => e.Grams == 40).Metrics.GramsPerUnit.Should().BeApproximately(13.333, 0.001);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void AnUnansweredRiseInAMealsWindow_TakesItsGramsPerUnitWhateverCorroborationIsAskedFor(bool requireCorroboration)
+    {
+        // Lunch at 12:00 with its own climb, then a climb at 15:00 nobody logged and the loop did
+        // not answer: a second intake inside lunch's window.
+        var lunch = Local(2024, 6, 11, 12, 0);
+        double Shape(long t) => ((t - lunch) / (double)Minute) switch
+        {
+            < 0 => 110,
+            <= 30 => 110 + 2 * (t - lunch) / (double)Minute,
+            <= 120 => 170 - (((t - lunch) / (double)Minute) - 30) * 60 / 90,
+            < 180 => 110,
+            var m => Math.Min(180, 110 + 2 * (m - 180)),
+        };
+
+        var range = Calculate(
+            [Cohort(1)],
+            glucose: Readings(From, To, Shape),
+            carbs: [new(lunch, 60)],
+            doses: [new(lunch, 4, false)],
+            delivered: [new(From - Day, To + Day, 1.0, BasalDeliveryOrigin.Algorithm)],
+            scheduled: [new(From - Day, To + Day, 1.0)],
+            requireCorroboration: requireCorroboration);
+
+        var cohort = range.Cohorts.Single();
+        cohort.GramsPerUnitNotIsolated.Should().Be(1, "the climb at 15:00 is a second intake");
+        range.Events.Single().Metrics.GramsPerUnit.Should().BeNull();
+    }
+
+    [Fact]
+    public void AMealWhoseWindowThePumpDidNotRecord_IsCountedAsUncovered()
+    {
+        var dinner = Local(2024, 6, 12, 18, 0);
+
+        var cohort = Calculate(
+            [Cohort(1)],
+            glucose: Flat(120),
+            carbs: [new(dinner, 40)],
+            doses: [new(dinner, 3, false)]).Cohorts.Single();
+
+        cohort.GramsPerUnitUncovered.Should().Be(1);
+        cohort.GramsPerUnitNoNetInsulin.Should().Be(0);
+        cohort.GramsPerUnitNotIsolated.Should().Be(0);
     }
 
     [Fact]

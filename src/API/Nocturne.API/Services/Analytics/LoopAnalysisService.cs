@@ -65,17 +65,18 @@ internal sealed partial class LoopAnalysisService(
         var (primary, comparison) = await ForRangesAsync(
             filter,
             window => LoadAsync(window, zone, ct),
-            (loaded, window) => DailyProfileCalculator.Calculate(
+            (loaded, window, _) => DailyProfileCalculator.Calculate(
                 loaded.Inputs, Mask(filter, window, zone, loaded.Sources), window.From, window.To));
         return new DailyProfileResponse { Primary = primary, Comparison = comparison };
     }
 
     /// <summary>
     /// Computes the primary range and the comparison: from one load over both where they touch or
-    /// overlap, else one load each.
+    /// overlap, else one load each. <paramref name="calculate"/> is told whether it is computing the
+    /// primary range.
     /// </summary>
     private static async Task<(TRange Primary, TRange? Comparison)> ForRangesAsync<TLoaded, TRange>(
-        LoopAnalysisFilter filter, Func<Window, Task<TLoaded>> load, Func<TLoaded, Window, TRange> calculate)
+        LoopAnalysisFilter filter, Func<Window, Task<TLoaded>> load, Func<TLoaded, Window, bool, TRange> calculate)
         where TRange : class
     {
         var primary = Window.Of(filter.From, filter.To);
@@ -86,11 +87,11 @@ internal sealed partial class LoopAnalysisService(
         if (comparison is { } other && primary.Touches(other))
         {
             var both = await load(primary.Hull(other));
-            return (calculate(both, primary), calculate(both, other));
+            return (calculate(both, primary, true), calculate(both, other, false));
         }
 
-        var first = calculate(await load(primary), primary);
-        return (first, comparison is { } separate ? calculate(await load(separate), separate) : null);
+        var first = calculate(await load(primary), primary, true);
+        return (first, comparison is { } separate ? calculate(await load(separate), separate, false) : null);
     }
 
     private static LoopAnalysisMask Mask(

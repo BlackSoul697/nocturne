@@ -49,8 +49,8 @@ public static class EventResponseCalculator
         [
             .. anchors.Of(EventAnchorKind.Meal)
                 .Concat(anchors.Of(EventAnchorKind.CorrectionBolus))
-                .Concat(anchors.Of(EventAnchorKind.UnannouncedRise))
                 .Select(a => a.Mills)
+                .Concat(anchors.Climbs)
                 .Order(),
         ];
 
@@ -85,7 +85,9 @@ public static class EventResponseCalculator
                 {
                     if (!isolated)
                         result.GramsPerUnitNotIsolated++;
-                    else if (episode.Metrics.NetInsulin is <= 0)
+                    else if (episode.Metrics.NetInsulin is null)
+                        result.GramsPerUnitUncovered++;
+                    else
                         result.GramsPerUnitNoNetInsulin++;
                 }
                 if (!membership.TryGetValue(anchor.Mills, out var members))
@@ -221,6 +223,16 @@ public static class EventResponseCalculator
         EventResponseInputs inputs, EventSeries series, IntervalSet exclusions, bool requireCorroboration)
     {
         private readonly Dictionary<EventAnchorKind, List<EventAnchor>> _found = [];
+        private RiseSearch? _rises;
+
+        /// <summary>
+        /// Every meal-like climb, announced, merged and unanswered ones included, whatever
+        /// corroboration is asked for: an intake that makes an episode around it not isolated.
+        /// </summary>
+        public List<long> Climbs => Rises().Climbs;
+
+        private RiseSearch Rises() => _rises ??= UnannouncedRises.Find(
+            series.Readings, exclusions, inputs.Series.Carbs, series.Insulin, requireCorroboration, series.CobAt);
 
         public List<EventAnchor> Of(EventAnchorKind kind)
         {
@@ -241,9 +253,7 @@ public static class EventResponseCalculator
                 EventAnchorKind.ExerciseStart => EventAnchors.Starts(sources.Exercise, kind),
                 EventAnchorKind.OverrideStart => EventAnchors.Starts(sources.Overrides, kind),
                 EventAnchorKind.TemporaryTargetStart => EventAnchors.Starts(sources.TemporaryTargets, kind),
-                EventAnchorKind.UnannouncedRise => UnannouncedRises.Find(
-                    series.Readings, exclusions, carbs,
-                    series.Insulin, requireCorroboration),
+                EventAnchorKind.UnannouncedRise => Rises().Anchors,
                 _ => throw new ArgumentOutOfRangeException(nameof(kind), kind, null),
             };
         }

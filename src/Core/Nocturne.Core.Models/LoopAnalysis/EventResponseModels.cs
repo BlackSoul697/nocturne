@@ -155,6 +155,12 @@ public class EventCohortResult
     public int GramsPerUnitNoNetInsulin { get; set; }
 
     /// <summary>
+    /// Isolated meals given no grams per unit because the pump's records cover too little of the
+    /// window's basal to total its insulin.
+    /// </summary>
+    public int GramsPerUnitUncovered { get; set; }
+
+    /// <summary>
     /// The window in <see cref="EventResponseDefinition.SlotMinutes"/>-minute slots from the
     /// anchor's exact time, in the order of <see cref="EventResponseReport.SlotMinutes"/>.
     /// </summary>

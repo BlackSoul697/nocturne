@@ -108,11 +108,15 @@ public sealed class EventSeries
             : null;
     }
 
-    public double? IobAt(long mills)
+    public double? IobAt(long mills) => TickAt(mills)?.Iob;
+
+    public double? CobAt(long mills) => TickAt(mills)?.Cob;
+
+    private IobCobTick? TickAt(long mills)
     {
         var ticks = _inputs.IobCob;
         var i = SortedSearch.FirstEndingAfter(ticks, mills, t => t.Mills + _inputs.IobCobIntervalMs);
-        return i < ticks.Count && ticks[i].Mills <= mills && _inputs.Stands(ticks[i]) ? ticks[i].Iob : null;
+        return i < ticks.Count && ticks[i].Mills <= mills && _inputs.Stands(ticks[i]) ? ticks[i] : null;
     }
 
     /// <summary>

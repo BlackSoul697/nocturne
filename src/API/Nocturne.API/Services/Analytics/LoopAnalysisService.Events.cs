@@ -20,13 +20,12 @@ internal sealed partial class LoopAnalysisService
     {
         var window = EventWindow.Of(definition);
         var sensorStarts = definition.Cohorts.Any(c => c.Anchor == EventAnchorKind.SensorStart);
-        var primaryFrom = Window.Of(filter.From, filter.To).From;
         var (primary, comparison) = await ForRangesAsync(
             filter,
             range => LoadEventsAsync(range, window, zone, sensorStarts, ct),
-            (inputs, range) => EventResponseCalculator.Calculate(
+            (inputs, range, isPrimary) => EventResponseCalculator.Calculate(
                 inputs, Mask(filter, range, zone, inputs.Sources), range.From, range.To, definition,
-                listEvents: range.From == primaryFrom));
+                listEvents: isPrimary));
         return new EventResponseReport { Primary = primary, Comparison = comparison };
     }
 

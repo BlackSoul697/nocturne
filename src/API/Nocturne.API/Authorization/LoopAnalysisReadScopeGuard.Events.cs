@@ -127,6 +127,7 @@ internal static partial class LoopAnalysisReadScopeGuard
             {
                 cohort.GramsPerUnitNotIsolated = 0;
                 cohort.GramsPerUnitNoNetInsulin = 0;
+                cohort.GramsPerUnitUncovered = 0;
             }
             ClearMetrics(cohort.Metrics, Hidden);
         }

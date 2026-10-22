@@ -3,6 +3,16 @@ using Nocturne.Core.Models.LoopAnalysis;
 
 namespace Nocturne.Core.Clinical.LoopAnalysis;
 
+/// <summary>What a search for unannounced rises found.</summary>
+/// <param name="Anchors">The rises that qualify as <see cref="EventAnchorKind.UnannouncedRise"/>, in time order.</param>
+/// <param name="Climbs">
+/// The start of every meal-like climb that is an intake of its own, whether it qualified or not: one
+/// merged into an earlier climb, one the loop did not answer, and one a carb entry announced after
+/// that entry's first climb. The first climb after a carb entry is that meal's and is left out, the
+/// entry standing for it. An episode with any of these in its window is not isolated.
+/// </param>
+public sealed record RiseSearch(List<EventAnchor> Anchors, List<long> Climbs);
+
 /// <summary>
 /// Finds <see cref="EventAnchorKind.UnannouncedRise"/> anchors: the start of a meal-like glucose
 /// rise that no carb entry announced, for a loop run fully closed.
@@ -15,12 +25,17 @@ namespace Nocturne.Core.Clinical.LoopAnalysis;
 /// so a single noisy reading neither sets the anchor nor hides the meal. The anchor is the last
 /// reading within <see cref="FloorToleranceMgdl"/> of the floor before glucose climbs
 /// <see cref="RiseMgdl"/> above it within <see cref="RiseWindowMs"/>, without falling back to the
-/// floor on the way. No carb entry may fall within <see cref="EventAnchors.CarbFreeMs"/> of it.
+/// floor on the way.
+/// </para>
+/// <para>
+/// A climb is announced, and so not a rise, by a carb entry from <see cref="CarbsBeforeMs"/> before
+/// its anchor to <see cref="EventAnchors.CarbFreeMs"/> after it, or by carbs on board at the anchor
+/// where those are known. A climb within <see cref="MergeMs"/> of an earlier one is part of it.
 /// </para>
 /// <para>
 /// Readings under a <c>DataExclusion</c> span are dropped before the search, a stretch or climb
 /// is not read across a gap of more than <see cref="MaxGapMs"/>, and a climb faster than
-/// <see cref="MaxRiseRateMgdlPerMinute"/> between two readings is not physiological, so a
+/// <see cref="MaxRiseRateMgdlPerMinute"/> over <see cref="RateSpanMs"/> is not physiological, so a
 /// compression low's recovery qualifies neither when it is excluded nor when it is not.
 /// </para>
 /// </remarks>
@@ -34,10 +49,12 @@ public static class UnannouncedRises
     public const double RiseMgdl = 40;
 
     /// <summary>
-    /// How quickly, from the anchor: <see cref="RiseMgdl"/> in 45 minutes, about 0.9 mg/dL a minute,
-    /// the slow end of what a meal's carbs drive (1 to 3). The dawn phenomenon usually climbs at 0.2
-    /// to 0.5 and takes hours to rise as far; a steep one that passes this is what
-    /// corroboration (<see cref="CorroborationBasalHours"/>) tells from a meal.
+    /// How quickly, from the anchor: <see cref="RiseMgdl"/> above the floor in 45 minutes. The
+    /// anchor may already sit <see cref="FloorToleranceMgdl"/> above the floor, so the slowest climb
+    /// that qualifies is 35 mg/dL in 45 minutes, about 0.78 mg/dL a minute: below the 1 to 3 a
+    /// meal's carbs drive. The dawn phenomenon usually climbs at 0.2 to 0.5 and takes hours to rise
+    /// as far; a steep one that passes this is what corroboration
+    /// (<see cref="CorroborationBasalHours"/>) tells from a meal.
     /// </summary>
     public const long RiseWindowMs = 45 * LocalSlotBinning.MinuteMs;
 
@@ -78,14 +95,30 @@ public static class UnannouncedRises
     public const long MaxGapMs = 10 * LocalSlotBinning.MinuteMs;
 
     /// <summary>
-    /// The fastest climb between two readings read as glucose. Carbohydrate absorption peaks at
-    /// about 3 to 4 mg/dL a minute; faster is a sensor artefact, typically a compression low ending.
+    /// The fastest climb read as glucose, over <see cref="RateSpanMs"/>. Carbohydrate absorption
+    /// peaks at about 3 to 4 mg/dL a minute; faster is a sensor artefact, typically a compression
+    /// low ending.
     /// </summary>
     public const double MaxRiseRateMgdlPerMinute = 5;
 
     /// <summary>
-    /// How long after one rise's anchor another is taken to be the same rise: a meal that stalls and
-    /// climbs again within two hours is one meal, not two.
+    /// The span the climb's rate is measured over. Between neighbouring readings a CGM's noise alone
+    /// passes <see cref="MaxRiseRateMgdlPerMinute"/>: ±4 mg/dL a minute apart, or one reading 16 high
+    /// five minutes on. Over a quarter of an hour that noise is diluted below it while a sensor's
+    /// jump, which holds, is not.
+    /// </summary>
+    public const long RateSpanMs = 15 * LocalSlotBinning.MinuteMs;
+
+    /// <summary>
+    /// How long before a climb a carb entry still announces it. A mixed meal absorbs over two to
+    /// four hours, and its glucose often waits on the bolus, or climbs in two steps; a meal logged up
+    /// to three hours earlier is the likelier cause of a climb than a second, unlogged one.
+    /// </summary>
+    public const long CarbsBeforeMs = 3 * LocalSlotBinning.HourMs;
+
+    /// <summary>
+    /// How long after one climb's anchor another is taken to be the same intake: a meal that stalls
+    /// and climbs again within two hours is one meal, not two.
     /// </summary>
     public const long MergeMs = 2 * LocalSlotBinning.HourMs;
 
@@ -97,51 +130,90 @@ public static class UnannouncedRises
     public const long CorroborationMs = RiseWindowMs;
 
     /// <summary>
-    /// The net loop correction that corroborates a rise, in hours of the scheduled basal rate at the
-    /// anchor: half an hour's schedule delivered above it within <see cref="CorroborationMs"/>. Scaled
-    /// to the schedule so a low-dose user corroborates as easily as a high-dose one, and read off
-    /// net loop correction (algorithm temp delta plus automatic boluses) so a loop that corrects with
-    /// temp basals alone does as well as one that uses boluses. A slow dawn rise draws a trickle well
-    /// short of this.
+    /// The net loop correction that corroborates a rise, in hours of the user's mean scheduled basal
+    /// rate over the day before the anchor: half an hour's schedule delivered above it within
+    /// <see cref="CorroborationMs"/>. Scaled to the schedule so a low-dose user corroborates as easily
+    /// as a high-dose one, averaged over a whole day so the bar does not swing with the hour a rise
+    /// starts in (a zero-basal hour would otherwise corroborate anything), and read off net loop
+    /// correction (algorithm temp delta plus automatic boluses) so a loop that corrects with temp
+    /// basals alone does as well as one that uses boluses. A slow dawn rise draws a trickle short of it.
     /// </summary>
     public const double CorroborationBasalHours = 0.5;
+
+    /// <summary>
+    /// The least net loop correction that corroborates a rise whatever the schedule, U: the smallest
+    /// automatic bolus most pumps deliver is 0.05 to 0.1 U, so a few of them, not one, answer a meal.
+    /// </summary>
+    public const double MinimumCorroborationUnits = 0.2;
+
+    private const long DayMs = 24 * LocalSlotBinning.HourMs;
 
     /// <param name="glucose">Readings in time order.</param>
     /// <param name="exclusions">Time whose readings never qualify.</param>
     /// <param name="insulin">Read only with <paramref name="requireCorroboration"/>.</param>
-    public static List<EventAnchor> Find(
+    /// <param name="carbsOnBoard">Carbs on board at an instant, g, where known.</param>
+    public static RiseSearch Find(
         IReadOnlyList<GlucoseSample> glucose,
         IntervalSet exclusions,
         IReadOnlyList<CarbEvent> carbs,
         NetInsulinAboveSchedule insulin,
-        bool requireCorroboration)
+        bool requireCorroboration,
+        Func<long, double?>? carbsOnBoard = null)
     {
         var readings = glucose
             .Where(g => GlucoseStatistics.IsReading(g.Mgdl) && !exclusions.Contains(g.Mills))
             .ToArray();
         var carbMills = EventAnchors.CarbMills(carbs);
         var anchors = new List<EventAnchor>();
+        var climbs = new List<long>();
+        var last = long.MinValue;
+        var climbedCarbs = new HashSet<long>();
 
         var stableStart = 0;
         for (var i = 0; i < readings.Length; i++)
         {
             while (readings[stableStart].Mills < readings[i].Mills - StableMs)
                 stableStart++;
-            if (anchors.Count > 0 && readings[i].Mills < anchors[^1].Mills + MergeMs)
-                continue;
             if (StableFloor(readings, stableStart, i) is not { } floor
                 || Math.Abs(readings[i].Mgdl - floor) > FloorToleranceMgdl
                 || ClimbFrom(readings, i, floor) is not { } anchor)
                 continue;
 
             var at = readings[anchor].Mills;
-            if (EventAnchors.AnyWithin(carbMills, at - EventAnchors.CarbFreeMs, at + EventAnchors.CarbFreeMs))
+            if (at <= last)
+                continue;
+            var merged = last != long.MinValue && at < last + MergeMs;
+            last = at;
+            if (merged)
+            {
+                climbs.Add(at);
+                continue;
+            }
+            if (AnnouncingCarbs(carbMills, at) is { } entry)
+            {
+                if (!climbedCarbs.Add(entry))
+                    climbs.Add(at);
+                continue;
+            }
+            climbs.Add(at);
+            if (carbsOnBoard?.Invoke(at) is > 0)
                 continue;
             if (requireCorroboration && !Corroborated(insulin, at))
                 continue;
             anchors.Add(new EventAnchor(at, EventAnchorKind.UnannouncedRise));
         }
-        return anchors;
+        return new RiseSearch(anchors, climbs);
+    }
+
+    /// <summary>
+    /// The latest carb entry from <see cref="CarbsBeforeMs"/> before <paramref name="at"/> to
+    /// <see cref="EventAnchors.CarbFreeMs"/> after it, or null. Its first climb is its own meal's, which
+    /// the entry already stands for; a later climb it announces is a further intake.
+    /// </summary>
+    private static long? AnnouncingCarbs(long[] carbMills, long at)
+    {
+        var i = SortedSearch.FirstEndingAfter(carbMills, at + EventAnchors.CarbFreeMs, static m => m) - 1;
+        return i >= 0 && carbMills[i] >= at - CarbsBeforeMs ? carbMills[i] : null;
     }
 
     /// <summary>
@@ -181,9 +253,8 @@ public static class UnannouncedRises
         var anchor = start;
         for (var j = start + 1; j < readings.Length; j++)
         {
-            var minutes = (readings[j].Mills - readings[j - 1].Mills) / (double)LocalSlotBinning.MinuteMs;
             if (readings[j].Mills - readings[j - 1].Mills > MaxGapMs
-                || (readings[j].Mgdl - readings[j - 1].Mgdl) / minutes > MaxRiseRateMgdlPerMinute
+                || TooFast(readings, j)
                 || readings[j].Mgdl < floor - StableRangeMgdl)
                 return null;
             if (readings[j].Mgdl <= floor + FloorToleranceMgdl)
@@ -202,16 +273,42 @@ public static class UnannouncedRises
     }
 
     /// <summary>
-    /// Whether the loop answered the rise: net loop correction over <see cref="CorroborationMs"/> from
-    /// the anchor of at least <see cref="CorroborationBasalHours"/> of the scheduled rate there. With
-    /// no schedule known at the anchor, nothing corroborates it.
+    /// Whether glucose reached reading <paramref name="j"/> faster than
+    /// <see cref="MaxRiseRateMgdlPerMinute"/> from the last reading at least <see cref="RateSpanMs"/>
+    /// before it.
     /// </summary>
-    public static bool Corroborated(NetInsulinAboveSchedule insulin, long anchor)
+    private static bool TooFast(GlucoseSample[] readings, int j)
+    {
+        var k = SortedSearch.FirstEndingAfter(readings, readings[j].Mills - RateSpanMs, static r => r.Mills) - 1;
+        if (k < 0)
+            return false;
+        var minutes = (readings[j].Mills - readings[k].Mills) / (double)LocalSlotBinning.MinuteMs;
+        return (readings[j].Mgdl - readings[k].Mgdl) / minutes > MaxRiseRateMgdlPerMinute;
+    }
+
+    /// <summary>
+    /// Whether the loop answered the rise: net loop correction over <see cref="CorroborationMs"/> from
+    /// the anchor of at least <see cref="CorroborationBasalHours"/> of the mean scheduled rate over the
+    /// day before it, and never less than <see cref="MinimumCorroborationUnits"/>.
+    /// </summary>
+    internal static bool Corroborated(NetInsulinAboveSchedule insulin, long anchor) =>
+        insulin.Over(anchor, anchor + CorroborationMs).NetLoopCorrection
+            >= Math.Max(CorroborationBasalHours * MeanScheduledRate(insulin, anchor - DayMs, anchor), MinimumCorroborationUnits);
+
+    /// <summary>The mean scheduled rate over the time in <c>[from, to)</c> a schedule is known for, U/h; 0 where none is.</summary>
+    private static double MeanScheduledRate(NetInsulinAboveSchedule insulin, long from, long to)
     {
         var pieces = insulin.Pieces;
-        var i = SortedSearch.FirstEndingAfter(pieces, anchor, static p => p.End);
-        if (i >= pieces.Count || pieces[i].Start > anchor || pieces[i].Scheduled is not { } scheduled || scheduled <= 0)
-            return false;
-        return insulin.Over(anchor, anchor + CorroborationMs).NetLoopCorrection >= CorroborationBasalHours * scheduled;
+        double units = 0;
+        long known = 0;
+        for (var i = SortedSearch.FirstEndingAfter(pieces, from, static p => p.End); i < pieces.Count && pieces[i].Start < to; i++)
+        {
+            if (pieces[i].Scheduled is not { } rate)
+                continue;
+            var ms = Math.Min(to, pieces[i].End) - Math.Max(from, pieces[i].Start);
+            units += rate * ms;
+            known += ms;
+        }
+        return known > 0 ? units / known : 0;
     }
 }

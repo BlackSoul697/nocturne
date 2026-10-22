@@ -105,10 +105,11 @@ public class LoopAnalysisEventResponseBudgetTests(ITestOutputHelper output)
         var primary = EventResponseCalculator.Calculate(
             inputs, LoopAnalysisMask.Build(masks, from, to, Zone, inputs.Sources), from, to, definition);
         var comparison = EventResponseCalculator.Calculate(
-            inputs, LoopAnalysisMask.Build(masks, compareFrom, from, Zone, inputs.Sources), compareFrom, from, definition);
+            inputs, LoopAnalysisMask.Build(masks, compareFrom, from, Zone, inputs.Sources), compareFrom, from, definition,
+            listEvents: false);
 
         stopwatch.Stop();
-        output.WriteLine($"180 days ({glucose.Count} readings, {primary.Events.Count + comparison.Events.Count} events): {stopwatch.Elapsed.TotalMilliseconds:F0} ms");
+        output.WriteLine($"180 days ({glucose.Count} readings, {primary.Events.Count} listed events): {stopwatch.Elapsed.TotalMilliseconds:F0} ms");
 
         var payload = System.Text.Json.JsonSerializer.SerializeToUtf8Bytes(
             new EventResponseReport { Primary = primary, Comparison = comparison },
