@@ -1,3 +1,5 @@
+using System.Text.Json.Serialization;
+
 namespace Nocturne.Core.Models.LoopAnalysis;
 
 /// <summary>
@@ -178,6 +180,14 @@ public class DailyProfileDay
 
     /// <summary>U.</summary>
     public double? ManualBolus { get; set; }
+
+    /// <summary>Glucose readings were analysed on the day; read by the scope guard, not served.</summary>
+    [JsonIgnore]
+    public bool HasGlucose { get; set; }
+
+    /// <summary>Basal, doses or carbs were recorded on the day; read by the scope guard, not served.</summary>
+    [JsonIgnore]
+    public bool HasTreatments { get; set; }
 }
 
 /// <summary>
@@ -210,14 +220,18 @@ public class DailyProfileSummary
 {
     /// <summary>
     /// Days with any analysed glucose reading, dose or carb entry, or basal delivery the pump's
-    /// records account for.
+    /// records account for; for a caller who cannot read glucose or treatments, only the days with
+    /// data it can read.
     /// </summary>
     public int DaysWithData { get; set; }
 
     /// <summary>Delivered over scheduled basal, over the time both are known.</summary>
     public double? DeliveredToScheduledRatio { get; set; }
 
-    /// <summary>U per day, each day scaled up to its full length from the share of it covered.</summary>
+    /// <summary>
+    /// U per day, over the whole days <see cref="Insulin"/> counts that also had a schedule
+    /// throughout; nothing is scaled.
+    /// </summary>
     public double? NetLoopCorrectionPerDay { get; set; }
 
     /// <summary>Net loop correction as a percentage of total insulin, over the same days.</summary>
@@ -231,10 +245,10 @@ public class DailyProfileSummary
 }
 
 /// <summary>
-/// Insulin per day over the days whose delivered basal covers at least half the day. Each day is
-/// scaled up to its full length from the share of it covered, as
-/// <see cref="DailyProfileSummary.NetLoopCorrectionPerDay"/> is, so a masked or partly recorded
-/// day counts as a whole one.
+/// Insulin per day over the near-complete days only: those analysed, and covered by the basal the
+/// pump's records account for, through at least <c>DailyProfileCalculator.InsulinSummaryMinimumCoverage</c>
+/// of their length. Nothing is scaled; a masked or partly recorded day is left out rather than
+/// counted as a whole one.
 /// </summary>
 /// <remarks>
 /// In the basal/bolus split an automatic bolus (SMB) is bolus, as Trio and AAPS count it in their
@@ -243,7 +257,7 @@ public class DailyProfileSummary
 /// </remarks>
 public class DailyInsulinSummary
 {
-    /// <summary>U/day, spread across days.</summary>
+    /// <summary>U/day, spread across days; its N is the number of days counted.</summary>
     public LoopAnalysisAggregate Total { get; set; } = new();
 
     /// <summary>U/day.</summary>

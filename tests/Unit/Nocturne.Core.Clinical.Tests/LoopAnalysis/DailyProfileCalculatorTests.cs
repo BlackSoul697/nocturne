@@ -433,33 +433,39 @@ public class DailyProfileCalculatorTests
     }
 
     [Fact]
-    public void InsulinSummary_SplitsEachWholeDayAndScalesAMaskedOne()
+    public void InsulinSummary_CountsOnlyNearCompleteDaysAndScalesNothing()
     {
         var from = Local(Darwin, 2024, 6, 3, 0);
-        var to = Local(Darwin, 2024, 6, 5, 0);
+        var to = Local(Darwin, 2024, 6, 6, 0);
         var secondDay = from + 24 * Hour;
+        var thirdDay = from + 48 * Hour;
 
         var result = Calculate(Darwin, from, to,
-            delivered: [new(from, to, 1.0, BasalDeliveryOrigin.Algorithm)],
+            delivered: [new(from, thirdDay + 12 * Hour, 1.0, BasalDeliveryOrigin.Algorithm)],
             scheduled: [new(from, to, 1.0)],
-            doses: [new(from + 3 * Hour, 0.5, true), new(from + 8 * Hour, 3, false), new(secondDay + 8 * Hour, 3, false)],
+            doses:
+            [
+                new(from + 3 * Hour, 0.5, true), new(from + 8 * Hour, 3, false),
+                new(secondDay + 8 * Hour, 3, false), new(thirdDay + 8 * Hour, 3, false),
+            ],
             filter: new LoopAnalysisMasks { ExcludeIllness = true },
             sources: new LoopAnalysisMaskSources { Illness = [new(secondDay + 12 * Hour, secondDay + 24 * Hour)] });
 
         var insulin = result.Summary.Insulin!;
-        insulin.Total.N.Should().Be(2);
-        insulin.Total.Mean.Should().Be(28.75, "day one is 24 + 0.5 + 3; day two is 24 + its 3 U over 12 analysed hours scaled to 6");
+        insulin.Total.N.Should().Be(1, "the half-masked second day and the half-recorded third are left out, not scaled");
+        insulin.Total.Mean.Should().Be(27.5);
         insulin.DeliveredBasal.Should().Be(24);
-        insulin.AutomaticBolus.Should().Be(0.25);
-        insulin.ManualBolus.Should().Be(4.5);
-        insulin.ManualBolusPercent.Should().Be(15.652);
-        insulin.Bolus.Should().Be(4.75);
-        insulin.BolusPercent.Should().Be(16.522, "an automatic bolus is bolus in the split, as Trio and AAPS count it");
-        insulin.DeliveredBasalPercent.Should().Be(83.478);
+        insulin.AutomaticBolus.Should().Be(0.5);
+        insulin.ManualBolus.Should().Be(3);
+        insulin.Bolus.Should().Be(3.5);
+        insulin.BolusPercent.Should().Be(12.727, "an automatic bolus is bolus in the split, as Trio and AAPS count it");
+        insulin.DeliveredBasalPercent.Should().Be(87.273);
+        result.Summary.NetLoopCorrectionDays.Should().Be(1, "net loop correction counts the same whole days");
+        result.Summary.NetLoopCorrectionPerDay.Should().Be(0.5);
+        result.Summary.NetLoopCorrectionTddPercent.Should().Be(1.818);
         result.Days[0].TotalInsulin.Should().Be(27.5);
-        result.Days[0].DeliveredBasal.Should().Be(24);
-        result.Days[0].AutomaticBolus.Should().Be(0.5);
-        result.Days[0].ManualBolus.Should().Be(3);
+        result.Days[1].ManualBolus.Should().Be(3);
+        result.Days[2].DeliveredBasal.Should().Be(12);
     }
 
     private static bool Bit(string? base64, int slot) =>
