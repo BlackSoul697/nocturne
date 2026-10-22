@@ -61,9 +61,14 @@ public class ApsSnapshotRepository : SyncUpsertRepositoryBase<ApsSnapshot, ApsSn
     /// <remarks>
     /// <para>
     /// Raw SQL because <c>DISTINCT ON</c> over a five-minute bucket has no LINQ translation; it
-    /// states the tenant and soft-delete predicates the query filters would otherwise add. The
-    /// winners are picked over the narrow key columns and only their curves read, so the sort
-    /// never carries the JSON.
+    /// states the tenant and soft-delete predicates the query filters would otherwise add.
+    /// </para>
+    /// <para>
+    /// One pass, sorting the curves with their keys. Over 90 days of real Trio data (about 40,000
+    /// rows) the sort spills about 6 MB to disk and the query runs in 220-270 ms; picking the
+    /// winners over the key columns and joining back for their curves sorted in memory but ran in
+    /// 220-360 ms, and before the table was first analysed it planned badly enough to hit the
+    /// statement timeout.
     /// </para>
     /// <para>
     /// The window is on the prediction start. The snapshot timestamp, which the index leads on,
@@ -78,33 +83,27 @@ public class ApsSnapshotRepository : SyncUpsertRepositoryBase<ApsSnapshot, ApsSn
         var tenantId = ctx.TenantId;
         var timestampEnd = to.AddMilliseconds(PredictionUploadLagMs);
         var rows = await ctx.Database.SqlQuery<PredictionRow>($"""
-            WITH winners AS (
-                SELECT DISTINCT ON (s.device, floor(extract(epoch FROM s.predicted_start_timestamp) / 300)) s.id
-                FROM aps_snapshots s
-                WHERE s.tenant_id = {tenantId}
-                  AND s.deleted_at IS NULL
-                  AND s.timestamp >= {from} AND s.timestamp < {timestampEnd}
-                  AND s.predicted_start_timestamp >= {from} AND s.predicted_start_timestamp < {to}
-                  AND num_nonnulls(s.predicted_default_json, s.predicted_iob_json, s.predicted_zt_json,
-                                   s.predicted_cob_json, s.predicted_uam_json) > 0
-                ORDER BY s.device, floor(extract(epoch FROM s.predicted_start_timestamp) / 300),
-                         s.enacted DESC, s.timestamp DESC, s.id DESC
-            )
-            SELECT
-                p.predicted_start_timestamp AS "PredictedStart",
-                p.device AS "Device",
-                p.enacted AS "Enacted",
-                p.aps_system AS "AidAlgorithm",
-                CASE WHEN num_nonnulls(p.predicted_iob_json, p.predicted_zt_json, p.predicted_cob_json,
-                                       p.predicted_uam_json) = 0
-                     THEN p.predicted_default_json::text END AS "DefaultJson",
-                p.predicted_iob_json::text AS "IobJson",
-                p.predicted_zt_json::text AS "ZtJson",
-                p.predicted_cob_json::text AS "CobJson",
-                p.predicted_uam_json::text AS "UamJson"
-            FROM aps_snapshots p
-            JOIN winners w ON w.id = p.id
-            WHERE p.tenant_id = {tenantId}
+            SELECT DISTINCT ON (s.device, floor(extract(epoch FROM s.predicted_start_timestamp) / 300))
+                s.predicted_start_timestamp AS "PredictedStart",
+                s.device AS "Device",
+                s.enacted AS "Enacted",
+                s.aps_system AS "AidAlgorithm",
+                CASE WHEN num_nonnulls(s.predicted_iob_json, s.predicted_zt_json, s.predicted_cob_json,
+                                       s.predicted_uam_json) = 0
+                     THEN s.predicted_default_json::text END AS "DefaultJson",
+                s.predicted_iob_json::text AS "IobJson",
+                s.predicted_zt_json::text AS "ZtJson",
+                s.predicted_cob_json::text AS "CobJson",
+                s.predicted_uam_json::text AS "UamJson"
+            FROM aps_snapshots s
+            WHERE s.tenant_id = {tenantId}
+              AND s.deleted_at IS NULL
+              AND s.timestamp >= {from} AND s.timestamp < {timestampEnd}
+              AND s.predicted_start_timestamp >= {from} AND s.predicted_start_timestamp < {to}
+              AND num_nonnulls(s.predicted_default_json, s.predicted_iob_json, s.predicted_zt_json,
+                               s.predicted_cob_json, s.predicted_uam_json) > 0
+            ORDER BY s.device, floor(extract(epoch FROM s.predicted_start_timestamp) / 300),
+                     s.enacted DESC, s.timestamp DESC, s.id DESC
             """).ToListAsync(ct);
 
         return [.. rows
