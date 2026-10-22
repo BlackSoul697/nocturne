@@ -1,3 +1,4 @@
+using System.Text.Json.Serialization;
 using FluentAssertions;
 using Xunit;
 
@@ -14,6 +15,25 @@ public class RedactionCoverageTests
         public Dictionary<string, Positional>? Map { get; set; }
         public IReadOnlyList<Positional>? ReadOnlyList { get; set; }
         public HashSet<int>? Set { get; set; }
+    }
+
+    public sealed record Computed(string Name)
+    {
+        public int Length => Name.Length;
+    }
+
+    public sealed class Conditional
+    {
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        public string? Value { get; set; }
+
+        [JsonIgnore]
+        public string? Never { get; set; }
+    }
+
+    public sealed class Unsettable
+    {
+        public string? Value { get; }
     }
 
     public sealed class Opaque
@@ -49,5 +69,32 @@ public class RedactionCoverageTests
         var assert = () => RedactionCoverage.AssertWithheld(shapes, [typeof(Shapes), typeof(Positional)], ["Shapes.Map"]);
 
         assert.Should().Throw<Exception>().WithMessage("*Positional.Name*");
+    }
+
+    [Fact]
+    public void AssertWithheld_ChecksAComputedProperty()
+    {
+        var assert = () => RedactionCoverage.AssertWithheld(
+            new Computed("leak"), [typeof(Computed)], ["Computed.Name"]);
+
+        assert.Should().Throw<Exception>().WithMessage("*Computed.Length*");
+    }
+
+    [Fact]
+    public void AssertWithheld_ChecksAPropertyIgnoredOnlyWhenNull()
+    {
+        var conditional = RedactionCoverage.Populated<Conditional>();
+
+        conditional.Never.Should().BeNull("a property never served is not populated");
+        var assert = () => RedactionCoverage.AssertWithheld(conditional, [typeof(Conditional)], []);
+        assert.Should().Throw<Exception>().WithMessage("*Conditional.Value*").Which.Message.Should().NotContain("Never");
+    }
+
+    [Fact]
+    public void Populated_ThrowsOnAServedPropertyItCannotSet()
+    {
+        var populate = () => RedactionCoverage.Populated<Unsettable>();
+
+        populate.Should().Throw<InvalidOperationException>().WithMessage("*Unsettable.Value*");
     }
 }
