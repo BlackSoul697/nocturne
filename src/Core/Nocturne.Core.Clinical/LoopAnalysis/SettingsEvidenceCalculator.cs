@@ -1,3 +1,4 @@
+using Nocturne.Core.Clinical.Treatments;
 using Nocturne.Core.Models;
 using Nocturne.Core.Models.LoopAnalysis;
 
@@ -6,7 +7,8 @@ namespace Nocturne.Core.Clinical.LoopAnalysis;
 /// <summary>Everything the Settings evidence tab is computed from, fetched once for every range it covers.</summary>
 /// <remarks>
 /// The series must reach past each end of the range: a basal block looks back
-/// <see cref="ObservedBasalNeed.CarbFreeMs"/> for carbs and <see cref="ObservedBasalNeed.ManualBolusFreeMs"/> for boluses, and every window reads
+/// <see cref="ObservedBasalNeed.CarbFreeMs"/> for carbs, a climb's own length before that, and
+/// <see cref="ObservedBasalNeed.ManualBolusFreeMs"/> for boluses; every window reads
 /// <see cref="ObservedCarbRatio.WindowAfterMs"/> past its anchor.
 /// </remarks>
 public sealed record SettingsEvidenceInputs
@@ -48,15 +50,22 @@ public static class SettingsEvidenceCalculator
     public const int MinimumEpisodes = 3;
 
     /// <summary>
+    /// Below this many episodes a figure is <see cref="SettingsEvidenceConfidence.Low"/> whatever
+    /// else holds: with five or fewer, the quartiles sit on single episodes, so a narrow spread says
+    /// little about how far the median would move with the next one.
+    /// </summary>
+    public const int LowConfidenceBelowEpisodes = 6;
+
+    /// <summary>
     /// Episodes from which a figure's n no longer lowers its confidence: ten gives quartiles that
     /// one unusual day moves by no more than a neighbouring value.
     /// </summary>
     public const int ConfidentEpisodes = 10;
 
     /// <summary>
-    /// The widest interquartile range, as a share of the median, that does not lower confidence.
-    /// Half the median is the spread at which the lower and upper quartile would call for settings
-    /// apart by a factor of three, past any one adjustment a clinician would make.
+    /// The widest interquartile range, as a share of the observed value, that does not lower
+    /// confidence. Half the value is the spread at which the lower and upper quartile would call for
+    /// settings apart by a factor of three, past any one adjustment a clinician would make.
     /// </summary>
     public const double MaxRelativeIqr = 0.5;
 
@@ -68,11 +77,18 @@ public static class SettingsEvidenceCalculator
     public const double MinimumInsulinUnits = 0.5;
 
     /// <summary>
-    /// The least confidence a figure needs for another to be read with it: the observed basal need
-    /// the ISF and carb ratio measure insulin above, and the observed ISF a carb ratio converts
-    /// glucose at. Below it the profile's setting is used, and the figure says so.
+    /// The largest typical share of a window's insulin still on board at its end before the figure
+    /// is read as resting on the IOB curve: past 30%, the curve's shape, not the glucose, decides
+    /// much of what acted, and a DIA set long or short moves the figure with it.
     /// </summary>
-    public const SettingsEvidenceConfidence BorrowedConfidence = SettingsEvidenceConfidence.Moderate;
+    public const double MaxResidualIobShare = 0.3;
+
+    /// <summary>
+    /// The largest share of candidates rejected for another intake or bolus in their window before
+    /// the survivors are read as atypical: past half, the episodes that qualified are the quiet
+    /// exceptions, and their figure may not hold for the user's ordinary days.
+    /// </summary>
+    public const double MaxNotIsolatedShare = 0.5;
 
     /// <summary>
     /// How many times the basal need and the ISF are read in turn. Each is read with the other: the
@@ -123,6 +139,18 @@ public static class SettingsEvidenceCalculator
         };
     }
 
+    /// <summary>
+    /// Whether another figure may be read with this one: the basal need the ISF and carb ratio
+    /// measure insulin above, and the ISF a glucose change is converted at. A figure is lent only
+    /// when it is <see cref="SettingsEvidenceConfidence.High"/>, or
+    /// <see cref="SettingsEvidenceConfidence.Moderate"/> for some reason other than its n, so a
+    /// handful of episodes never moves another figure.
+    /// </summary>
+    internal static bool Lendable(SettingsEvidenceFigure figure) =>
+        figure.Observed is not null
+        && (figure.Confidence == SettingsEvidenceConfidence.High
+            || (figure.Confidence == SettingsEvidenceConfidence.Moderate && figure.N >= ConfidentEpisodes));
+
     /// <summary>Whether glucose moved from <paramref name="before"/> to <paramref name="at"/>, <see cref="StableSpanMs"/> apart, slowly enough to be stable.</summary>
     internal static bool Stable(double before, double at) =>
         Math.Abs(at - before) <= MaxStartTrendMgdlPerMinute * StableSpanMs / LocalSlotBinning.MinuteMs;
@@ -137,25 +165,52 @@ public static class SettingsEvidenceCalculator
 
     /// <summary>
     /// Sets an available figure's observed value, spread and confidence: one level below
-    /// <see cref="SettingsEvidenceConfidence.High"/> for each reason it falls short.
+    /// <see cref="SettingsEvidenceConfidence.High"/> for each reason it falls short, and
+    /// <see cref="SettingsEvidenceConfidence.Low"/> below <see cref="LowConfidenceBelowEpisodes"/>.
+    /// The spread is judged against the observed value, whether that is a median or, for a basal
+    /// rate, a mean.
     /// </summary>
+    /// <param name="higherMeansMoreInsulin">
+    /// True where an observed value above the profile's calls for more insulin (a basal rate); false
+    /// where below does (an ISF, a carb ratio).
+    /// </param>
+    /// <param name="borrowed">
+    /// A borrowed input contributed to the figure: an ISF from another figure or the profile, or a
+    /// basal need above or below the schedule. Such a figure pointing towards more insulin is held at
+    /// <see cref="SettingsEvidenceConfidence.Moderate"/>, since an error in the input it borrowed
+    /// would carry into a recommendation in the riskier direction.
+    /// </param>
     internal static void Rate(
-        SettingsEvidenceFigure figure, double observed, List<double> values, params SettingsEvidenceConfidenceReason[] extra)
+        SettingsEvidenceFigure figure,
+        double observed,
+        List<double> values,
+        bool higherMeansMoreInsulin,
+        bool borrowed,
+        IEnumerable<SettingsEvidenceConfidenceReason> reasons)
     {
         var spread = SlotSummary.Of(values)!;
         figure.Observed = SlotSummary.Round(observed);
         figure.Spread = spread;
         if (values.Count < ConfidentEpisodes)
             figure.ConfidenceReasons.Add(SettingsEvidenceConfidenceReason.FewEpisodes);
-        if (spread.P75 - spread.P25 > MaxRelativeIqr * Math.Abs(spread.P50))
+        if (spread.P75 - spread.P25 > MaxRelativeIqr * Math.Abs(observed))
             figure.ConfidenceReasons.Add(SettingsEvidenceConfidenceReason.WideSpread);
-        figure.ConfidenceReasons.AddRange(extra);
-        figure.Confidence = figure.ConfidenceReasons.Count switch
+        figure.ConfidenceReasons.AddRange(reasons);
+        figure.Confidence = values.Count < LowConfidenceBelowEpisodes
+            ? SettingsEvidenceConfidence.Low
+            : figure.ConfidenceReasons.Count switch
+            {
+                0 => SettingsEvidenceConfidence.High,
+                1 => SettingsEvidenceConfidence.Moderate,
+                _ => SettingsEvidenceConfidence.Low,
+            };
+
+        var moreInsulin = figure.Profile is { } profile && (higherMeansMoreInsulin ? observed > profile : observed < profile);
+        if (moreInsulin && borrowed && figure.Confidence == SettingsEvidenceConfidence.High)
         {
-            0 => SettingsEvidenceConfidence.High,
-            1 => SettingsEvidenceConfidence.Moderate,
-            _ => SettingsEvidenceConfidence.Low,
-        };
+            figure.Confidence = SettingsEvidenceConfidence.Moderate;
+            figure.ConfidenceReasons.Add(SettingsEvidenceConfidenceReason.MoreInsulinOnBorrowedInput);
+        }
     }
 
     /// <summary>The reason a figure of episodes has no value, when it has none.</summary>
@@ -177,14 +232,19 @@ internal sealed class RejectionTally(IReadOnlyList<SettingsEvidenceRule> rules)
 
     public void Reject(SettingsEvidenceRule rule) => _counts[rule]++;
 
-    public int this[SettingsEvidenceRule rule] => _counts[rule];
+    public int this[SettingsEvidenceRule rule] => _counts.GetValueOrDefault(rule);
 
     public List<SettingsEvidenceRejection> ToList() =>
         [.. rules.Select(r => new SettingsEvidenceRejection { Rule = r, Count = _counts[r] })];
 }
 
 /// <summary>Insulin that acted over a window, read between the IOB ticks at its ends.</summary>
-internal readonly record struct ActedInsulin(NetInsulin Net, double IobAtStart, double IobAtEnd, double BasalExcess)
+/// <param name="BasalDependent">
+/// For some of the window the basal need was not observed with confidence for its own time; see
+/// <see cref="BasalBaseline"/>.
+/// </param>
+internal readonly record struct ActedInsulin(
+    NetInsulin Net, double IobAtStart, double IobAtEnd, double BasalExcess, bool BasalDependent)
 {
     public double Acted => Net.Total + IobAtStart - IobAtEnd - BasalExcess;
 }
@@ -221,6 +281,9 @@ internal sealed class SettingsEvidenceContext
     public long[] CarbMills { get; }
     public TimeZoneInfo Zone => Inputs.Series.Zone;
 
+    /// <summary>The range holds no carb entry, so whether a block was fasting is read off glucose alone.</summary>
+    public bool NoCarbEntries => !EventAnchors.AnyWithin(CarbMills, From, To - 1);
+
     /// <summary>
     /// Every intake or dose that keeps an episode around it from being isolated, sorted: the
     /// meals, correction boluses and meal-like climbs, announced or not, the Meals &amp; events tab
@@ -230,19 +293,24 @@ internal sealed class SettingsEvidenceContext
     [
         .. EventAnchors.Meals(Inputs.Series.Carbs).Select(m => m.Mills)
             .Concat(EventAnchors.CorrectionBoluses(Insulin.Doses, Inputs.Series.Carbs).Select(c => c.Mills))
-            .Concat(Climbs)
+            .Concat(Climbs.Select(c => c.Start))
             .Order(),
     ];
 
     /// <summary>
-    /// The start of every meal-like climb a carb entry did not cause, sorted
-    /// (<see cref="RiseSearch.Climbs"/>): an intake of its own, logged or not.
+    /// Every meal-like climb a carb entry did not cause (<see cref="RiseSearch.Climbs"/>), an intake
+    /// of its own, logged or not, from its start to its peak: the highest reading within
+    /// <see cref="UnannouncedRises.MergeMs"/> of the start, the span a later climb would be merged into.
     /// </summary>
-    public IReadOnlyList<long> Climbs => _climbs ??=
-        [.. UnannouncedRises.Find(Series.Readings, Exclusions, Inputs.Series.Carbs, Insulin, requireCorroboration: false, Series.CobAt).Climbs];
+    public IReadOnlyList<MillsInterval> Climbs => _climbs ??=
+    [
+        .. UnannouncedRises.Find(Series.Readings, Exclusions, Inputs.Series.Carbs, Insulin, requireCorroboration: false, Series.CobAt)
+            .Climbs.Select(start => new MillsInterval(start, PeakAt(start, start + UnannouncedRises.MergeMs))),
+    ];
 
     private long[]? _isolating;
-    private long[]? _climbs;
+    private MillsInterval[]? _climbs;
+
     public NetInsulinAboveSchedule Insulin => Series.Insulin;
     public TherapySnapshot TherapyAt(long mills) => Inputs.Therapy.SnapshotAt(mills);
 
@@ -258,27 +326,49 @@ internal sealed class SettingsEvidenceContext
         : _illness.Overlaps(start, end) ? SettingsEvidenceRule.Illness
         : null;
 
-    public bool Filtered(long start, long end) => !Mask.Analysed.Covers(start, end);
+    /// <summary>
+    /// <see cref="SettingsEvidenceRule.OutsideRange"/> for a window reaching outside the range, else
+    /// <see cref="SettingsEvidenceRule.Filtered"/> for one reaching outside the report's filter.
+    /// </summary>
+    public SettingsEvidenceRule? Outside(long start, long end) =>
+        start < From || end > To ? SettingsEvidenceRule.OutsideRange
+        : !Mask.Analysed.Covers(start, end) ? SettingsEvidenceRule.Filtered
+        : null;
 
     public double? GlucoseAt(long mills) => Series.GlucoseNear(mills, SettingsEvidenceCalculator.ReadingToleranceMs);
+
+    /// <summary>The lowest reading in <c>[start, end]</c>, or null where there is none.</summary>
+    public double? LowestGlucose(long start, long end)
+    {
+        var readings = Series.Readings;
+        double? lowest = null;
+        for (var i = Series.FirstReadingFrom(start); i < readings.Count && readings[i].Mills <= end; i++)
+            lowest = lowest is { } low ? Math.Min(low, readings[i].Mgdl) : readings[i].Mgdl;
+        return lowest;
+    }
 
     /// <summary>
     /// IOB at the tick standing at <paramref name="start"/>, plus net insulin above schedule
     /// delivered after that tick up to and including the tick standing at <paramref name="end"/>,
     /// less IOB there, less what <paramref name="baseline"/> says the basal need exceeded the
-    /// schedule by meanwhile. A tick's IOB holds every dose up to and including its instant, so
-    /// reading the insulin between the ticks rather than between the instants counts each dose
-    /// exactly once.
+    /// schedule by meanwhile. A calculated tick's IOB holds every dose up to and including its
+    /// instant; a device tick's is the latest snapshot at or before it. Reading the insulin between
+    /// the ticks rather than between the instants counts each dose once, up to the age of a
+    /// device snapshot. The two ticks must come from the same source, or their difference is the
+    /// gap between two models rather than insulin that acted.
     /// </summary>
     public (ActedInsulin? Acted, SettingsEvidenceRule? Rejected) InsulinActed(long start, long end, BasalBaseline? baseline = null)
     {
         if (Series.TickAt(start) is not { } first || Series.TickAt(end) is not { } last)
             return (null, SettingsEvidenceRule.IobUnknown);
+        if (first.IobSource != last.IobSource)
+            return (null, SettingsEvidenceRule.IobSourceChanged);
         var (from, to) = (first.Mills + 1, last.Mills + 1);
         var net = Series.NetInsulinOver(from, to, DailyProfileCalculator.InsulinSummaryMinimumCoverage);
-        return net is null
-            ? (null, SettingsEvidenceRule.InsulinUncovered)
-            : (new ActedInsulin(net, first.Iob, last.Iob, baseline?.Excess(this, from, to) ?? 0), null);
+        if (net is null)
+            return (null, SettingsEvidenceRule.InsulinUncovered);
+        var (excess, borrowed) = baseline?.Excess(this, first.Mills, last.Mills) ?? (0, true);
+        return (new ActedInsulin(net, first.Iob, last.Iob, excess, borrowed), null);
     }
 
     /// <summary>Scheduled basal over the time in <c>[start, end)</c> both delivery and the schedule are known, U.</summary>
@@ -299,36 +389,47 @@ internal sealed class SettingsEvidenceContext
     /// rejections and, unless <paramref name="unavailable"/>, the median and its confidence.
     /// </summary>
     /// <param name="profileAt">The profile's setting in force at an instant.</param>
-    /// <param name="baseline">Null when insulin was measured above the schedule, which makes the figure basal-dependent.</param>
     /// <param name="isfDependent">Some episode converted glucose at an ISF from the profile.</param>
-    public T Finish<T>(
+    /// <param name="borrowed">See <see cref="SettingsEvidenceCalculator.Rate"/>.</param>
+    public T Finish<T, TEpisode>(
         T figure,
         SettingsEvidenceBlock block,
-        List<double> values,
+        List<TEpisode> episodes,
         RejectionTally tally,
         SettingsEvidenceUnavailableReason? unavailable,
         Func<long, double> profileAt,
-        BasalBaseline? baseline,
-        bool isfDependent = false)
+        bool isfDependent,
+        bool borrowed)
         where T : InsulinActedFigure
+        where TEpisode : InsulinActedEpisode
     {
         _namedBlocks ??= DayBlocks(hour => (int)SettingsEvidenceCalculator.BlockOf(hour));
-        figure.N = values.Count;
+        figure.N = episodes.Count;
         figure.Profile = ProfileOver(
             _namedBlocks.Where(t => t.Block == (int)block).Select(t => (t.Start, t.End)),
             t => profileAt(t)) is { } profile ? SlotSummary.Round(profile) : null;
         figure.UnavailableReason = unavailable;
         figure.Rejections = tally.ToList();
-        figure.BasalDependent = values.Count > 0 && baseline is null;
+        figure.BasalDependent = episodes.Any(e => e.BasalDependent);
         figure.IsfDependent = isfDependent;
         if (unavailable is not null)
             return figure;
+
         List<SettingsEvidenceConfidenceReason> reasons = [];
         if (isfDependent)
             reasons.Add(SettingsEvidenceConfidenceReason.IsfDependent);
         if (figure.BasalDependent)
             reasons.Add(SettingsEvidenceConfidenceReason.BasalDependent);
-        SettingsEvidenceCalculator.Rate(figure, SlotSummary.Of(values)!.P50, values, [.. reasons]);
+        if (SlotSummary.Of([.. episodes
+                .Where(e => e.InsulinActed + e.IobAtEnd > 0)
+                .Select(e => e.IobAtEnd / (e.InsulinActed + e.IobAtEnd))])?.P50 > SettingsEvidenceCalculator.MaxResidualIobShare)
+            reasons.Add(SettingsEvidenceConfidenceReason.ResidualIob);
+        if (tally[SettingsEvidenceRule.NotIsolated] > SettingsEvidenceCalculator.MaxNotIsolatedShare * tally.Candidates)
+            reasons.Add(SettingsEvidenceConfidenceReason.MostNotIsolated);
+
+        var values = episodes.Select(e => e.Value).ToList();
+        SettingsEvidenceCalculator.Rate(
+            figure, SlotSummary.Of(values)!.P50, values, higherMeansMoreInsulin: false, borrowed, reasons);
         return figure;
     }
 
@@ -410,6 +511,24 @@ internal sealed class SettingsEvidenceContext
         episode.IobAtStart = SlotSummary.Round(acted.IobAtStart);
         episode.IobAtEnd = SlotSummary.Round(acted.IobAtEnd);
         episode.BasalExcess = SlotSummary.Round(acted.BasalExcess);
+        episode.BasalDependent = acted.BasalDependent;
         episode.InsulinActed = SlotSummary.Round(acted.Acted);
+    }
+
+    /// <summary>When the highest reading in <c>[start, end)</c> came; <paramref name="start"/> where there is none.</summary>
+    private long PeakAt(long start, long end)
+    {
+        var readings = Series.Readings;
+        var peak = start;
+        double? highest = null;
+        for (var i = Series.FirstReadingFrom(start); i < readings.Count && readings[i].Mills < end; i++)
+        {
+            if (highest is null || readings[i].Mgdl > highest)
+            {
+                highest = readings[i].Mgdl;
+                peak = readings[i].Mills;
+            }
+        }
+        return peak;
     }
 }

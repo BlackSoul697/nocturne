@@ -29,11 +29,13 @@ public static class ObservedCarbRatio
         SettingsEvidenceRule.TemporaryTarget,
         SettingsEvidenceRule.Exercise,
         SettingsEvidenceRule.Illness,
+        SettingsEvidenceRule.OutsideRange,
         SettingsEvidenceRule.Filtered,
         SettingsEvidenceRule.MissingGlucose,
         SettingsEvidenceRule.StartOutOfRange,
         SettingsEvidenceRule.StartUnstable,
         SettingsEvidenceRule.IobUnknown,
+        SettingsEvidenceRule.IobSourceChanged,
         SettingsEvidenceRule.InsulinUncovered,
         SettingsEvidenceRule.TooLittleInsulin,
     ];
@@ -67,14 +69,14 @@ public static class ObservedCarbRatio
             return context.Finish(
                 new CarbRatioEvidenceBlock { Block = b, Episodes = context.ListEpisodes ? episodes[i] : [] },
                 b,
-                [.. episodes[i].Select(e => e.Value)],
+                episodes[i],
                 tally,
                 tally.Candidates == 0 ? SettingsEvidenceUnavailableReason.NoAnnouncedMeals
                     : tally[SettingsEvidenceRule.NotIsolated] == tally.Candidates ? SettingsEvidenceUnavailableReason.NoneIsolated
                     : SettingsEvidenceCalculator.Unavailable(tally.Candidates, episodes[i].Count),
                 t => context.TherapyAt(t).CarbRatioAt(t),
-                baseline,
-                episodes[i].Any(e => e.IsfDependent));
+                isfDependent: episodes[i].Any(e => e.IsfDependent),
+                borrowed: episodes[i].Any(e => e.BasalDependent || e.BasalExcess != 0 || e.EndGlucose != e.StartGlucose));
         })];
     }
 
@@ -85,8 +87,8 @@ public static class ObservedCarbRatio
         var end = meal.Mills + WindowAfterMs;
         if (context.Activity(start, end, openLoop: false) is { } activity)
             return (null, activity);
-        if (context.Filtered(start, end))
-            return (null, SettingsEvidenceRule.Filtered);
+        if (context.Outside(start, end) is { } outside)
+            return (null, outside);
         if (context.GlucoseAt(start) is not { } startGlucose
             || context.GlucoseAt(meal.Mills) is not { } mealGlucose
             || context.GlucoseAt(end) is not { } endGlucose)

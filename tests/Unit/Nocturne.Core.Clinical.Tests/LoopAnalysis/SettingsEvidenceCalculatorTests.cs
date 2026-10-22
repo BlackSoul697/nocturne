@@ -45,18 +45,16 @@ public class SettingsEvidenceCalculatorTests
     /// lunch at 12:00 is announced; on odd days a snack at 11:30 is eaten unannounced and corrected
     /// with a manual bolus at 15:30, which gives the midday block its ISF.
     /// </summary>
-    private static LoopSimulation Simulate(
-        double trueBasal, double trueIsf, double trueCr, double profileBasal, double profileIsf, double profileCr,
-        bool smb, bool corrections = true)
+    private static LoopSimulation DayPlan(bool corrections = true)
     {
         var meals = new List<SimulatedMeal>();
         var boluses = new List<(long, double)>();
         for (var d = -1; d <= SimulatedDays; d++)
         {
             var day = June + d * Day;
-            meals.Add(new(day + 7 * Hour, 40 + d % 3 * 10));
-            meals.Add(new(day + 19 * Hour + 30 * Minute, 50 + d % 4 * 5));
-            if (d % 2 == 0)
+            meals.Add(new(day + 7 * Hour, 40 + (d + 3) % 3 * 10));
+            meals.Add(new(day + 19 * Hour + 30 * Minute, 50 + (d + 4) % 4 * 5));
+            if ((d + 2) % 2 == 0)
                 meals.Add(new(day + 12 * Hour, 45));
             else
             {
@@ -65,20 +63,51 @@ public class SettingsEvidenceCalculatorTests
                     boluses.Add((day + 15 * Hour + 30 * Minute, 3));
             }
         }
-        return new LoopSimulation
-        {
-            Zone = Sydney,
-            TrueBasal = trueBasal, TrueIsf = trueIsf, TrueCr = trueCr,
-            ProfileBasal = profileBasal, ProfileIsf = profileIsf, ProfileCr = profileCr,
-            Smb = smb,
-            Meals = meals,
-            Corrections = boluses,
-        }.Run(June - Day, June + (SimulatedDays + 1) * Day);
+        return new LoopSimulation { Zone = Sydney, Meals = meals, Corrections = boluses };
     }
 
-    private static SettingsEvidenceRange Calculate(LoopSimulation sim)
+    /// <summary>
+    /// Five weeks on a three-night cycle, so the overnight block has its own basal need, ISF and
+    /// carb ratio: fasting nights, with breakfast at 10:00, give 02:00-08:00 its basal; on the next
+    /// night a 02:15 meal gives a carb ratio; on the third an unannounced snack at 22:00 is corrected
+    /// at 02:00. Dinner is at 19:00 throughout.
+    /// </summary>
+    private static LoopSimulation NightPlan(bool corrections = true)
     {
-        var (from, to) = (June, June + SimulatedDays * Day);
+        var meals = new List<SimulatedMeal>();
+        var boluses = new List<(long, double)>();
+        for (var d = -1; d <= NightDays; d++)
+        {
+            var day = June + d * Day;
+            meals.Add(new(day - 5 * Hour, 50 + (d + 4) % 4 * 5));
+            switch ((d + 3) % 3)
+            {
+                case 0:
+                    meals.Add(new(day + 10 * Hour, 40));
+                    break;
+                case 1:
+                    meals.Add(new(day + 2 * Hour + 15 * Minute, 30 + (d + 3) % 3 * 10));
+                    meals.Add(new(day + 7 * Hour, 40));
+                    break;
+                default:
+                    if (corrections)
+                    {
+                        meals.Add(new(day - 2 * Hour, 40, Announced: false));
+                        boluses.Add((day + 2 * Hour, 3));
+                    }
+                    meals.Add(new(day + 7 * Hour, 40));
+                    break;
+            }
+        }
+        return new LoopSimulation { Zone = Sydney, Meals = meals, Corrections = boluses };
+    }
+
+    private const int NightDays = 36;
+
+    private static SettingsEvidenceRange Recover(LoopSimulation plan, int days = SimulatedDays)
+    {
+        var (from, to) = (June, June + days * Day);
+        var sim = plan.Run(from - Day, to + Day);
         return Calculate(
             new DailyProfileInputs
             {
@@ -108,8 +137,10 @@ public class SettingsEvidenceCalculatorTests
     [InlineData(true)]
     public void AProfileWrongInAllThreeSettings_IsSeenThrough_ByATempLooperAndAnSmbLooper(bool smb)
     {
-        var range = Calculate(Simulate(
-            trueBasal: 1.2, trueIsf: 40, trueCr: 8, profileBasal: 1.0, profileIsf: 50, profileCr: 10, smb));
+        var range = Recover(DayPlan() with
+        {
+            TrueBasal = _ => 1.2, TrueIsf = 40, TrueCr = 8, ProfileBasal = 1.0, ProfileIsf = 50, ProfileCr = 10, Smb = smb,
+        });
 
         foreach (var hour in new[] { 2, 4 })
         {
@@ -124,47 +155,120 @@ public class SettingsEvidenceCalculatorTests
         var isf = Isf(range, SettingsEvidenceBlock.Midday);
         isf.Profile.Should().Be(50);
         isf.Observed.Should().BeApproximately(40, 2);
-        isf.BasalDependent.Should().BeFalse("the overnight blocks give the basal need the ISF is read above");
+        isf.BasalDependent.Should().BeTrue("the midday window borrows the overnight blocks' basal ratio");
 
         foreach (var block in new[] { SettingsEvidenceBlock.Morning, SettingsEvidenceBlock.Midday, SettingsEvidenceBlock.Evening })
         {
             var cr = CarbRatio(range, block);
             cr.Profile.Should().Be(10);
-            cr.Observed.Should().BeApproximately(8, 0.4, $"the true carb ratio is 8 g/U at {block}");
+            cr.Observed.Should().BeApproximately(8, 0.5, $"the true carb ratio is 8 g/U at {block}");
         }
     }
 
     [Fact]
-    public void AWrongProfileIsf_DoesNotPassIntoTheCarbRatio_WhereAnIsfIsObserved()
+    public void AWrongProfileIsf_DoesNotPassIntoTheCarbRatio_WhereTheBlockObservesItsOwn()
     {
-        SettingsEvidenceRange Run(bool corrections) => Calculate(Simulate(
-            trueBasal: 1, trueIsf: 40, trueCr: 8, profileBasal: 1, profileIsf: 80, profileCr: 14, smb: false, corrections));
+        SettingsEvidenceRange Run(bool corrections) => Recover(
+            NightPlan(corrections) with { TrueIsf = 40, TrueCr = 8, ProfileIsf = 80, ProfileCr = 14 },
+            NightDays);
 
-        var midday = CarbRatio(Run(corrections: true), SettingsEvidenceBlock.Midday);
-        midday.IsfDependent.Should().BeFalse();
-        midday.Episodes.Should().OnlyContain(e => e.Isf > 38 && e.Isf < 44);
-        midday.Observed.Should().BeApproximately(8, 0.4);
+        var observed = Run(corrections: true);
+        var isf = Isf(observed, SettingsEvidenceBlock.Overnight);
+        isf.Observed.Should().BeApproximately(40, 3);
+        SettingsEvidenceCalculator.Lendable(isf).Should().BeTrue();
+        var overnight = CarbRatio(observed, SettingsEvidenceBlock.Overnight);
+        overnight.IsfDependent.Should().BeFalse();
+        overnight.BasalDependent.Should().BeFalse("02:00 to 06:15 lies in blocks whose own basal need is observed");
+        overnight.Observed.Should().BeApproximately(8, 0.5);
 
-        var inherited = CarbRatio(Run(corrections: false), SettingsEvidenceBlock.Midday);
+        var inherited = CarbRatio(Run(corrections: false), SettingsEvidenceBlock.Overnight);
         inherited.IsfDependent.Should().BeTrue();
         inherited.ConfidenceReasons.Should().Contain(SettingsEvidenceConfidenceReason.IsfDependent);
         inherited.Episodes.Should().OnlyContain(e => e.Isf == 80);
-        Math.Abs(inherited.Observed!.Value - 8).Should().BeGreaterThan(Math.Abs(midday.Observed!.Value - 8) + 0.2,
+        Math.Abs(inherited.Observed!.Value - 8).Should().BeGreaterThan(Math.Abs(overnight.Observed!.Value - 8) + 0.2,
             "converting the meals' glucose change at the profile's ISF of 80 carries its error into the ratio");
+    }
+
+    [Fact]
+    public void ABasalNeedThatVariesThroughTheDay_FlagsTheFiguresThatBorrowItsMean()
+    {
+        // The night needs 1.25 U/h and the day 1.0, as the profile has it; only the night is fasting,
+        // so the daytime windows borrow the night's ratio and overstate the basal need under them.
+        var range = Recover(DayPlan() with { TrueBasal = h => h < 6 ? 1.25 : 1.0 });
+
+        BasalBlock(range, 2).Observed.Should().BeApproximately(1.25, 0.05);
+        foreach (var figure in new InsulinActedFigure[]
+                 {
+                     CarbRatio(range, SettingsEvidenceBlock.Morning),
+                     CarbRatio(range, SettingsEvidenceBlock.Midday),
+                     CarbRatio(range, SettingsEvidenceBlock.Evening),
+                 })
+        {
+            figure.BasalDependent.Should().BeTrue();
+            figure.ConfidenceReasons.Should().Contain(SettingsEvidenceConfidenceReason.BasalDependent);
+            figure.Confidence.Should().NotBe(SettingsEvidenceConfidence.High);
+            figure.Observed.Should().BeGreaterThan(11, "the night's higher need, lent to the day, is taken off the meal's insulin");
+        }
     }
 
     [Fact]
     public void ABasalBlockStillSettlingFromDinner_IsSuppressedForItsTrend()
     {
-        var range = Calculate(Simulate(
-            trueBasal: 1, trueIsf: 40, trueCr: 8, profileBasal: 1, profileIsf: 80, profileCr: 14, smb: false));
+        var range = Recover(DayPlan() with { TrueIsf = 40, TrueCr = 8, ProfileIsf = 80, ProfileCr = 14 });
 
-        var first = BasalBlock(range, 2);
-        first.UnavailableReason.Should().Be(SettingsEvidenceUnavailableReason.SteepTrend);
-        first.Observed.Should().BeNull();
-        first.GlucoseTrend!.Mean.Should().BeLessThan(-ObservedBasalNeed.MaxTrendMgdlPerHour);
-        first.MeanNetLoopCorrection.Should().NotBeNull("the block's correction and trend are reported even when its need is not");
+        var block = BasalBlock(range, 2);
+        block.UnavailableReason.Should().Be(SettingsEvidenceUnavailableReason.SteepTrend);
+        block.Observed.Should().BeNull();
+        block.GlucoseTrend!.Mean.Should().BeLessThan(-ObservedBasalNeed.MaxTrendMgdlPerHour);
+        block.MeanNetLoopCorrection.Should().NotBeNull("the block's correction and trend are reported even when its need is not");
     }
+
+    public static TheoryData<string> Departures => ["noise", "longModelDia", "shortModelDia", "slowAbsorption"];
+
+    /// <summary>
+    /// A body that departs from what the calculator assumes, with the profile right: CGM noise of
+    /// ±8 mg/dL, an IOB curve half as long again or half as long as the body's insulin acts, and
+    /// meals that absorb over five hours, past the four-hour window. Each figure must stay within an
+    /// honest tolerance of the truth, and any that strays far must not claim high confidence.
+    /// </summary>
+    [Theory]
+    [MemberData(nameof(Departures))]
+    public void ABodyThatDepartsFromTheModel_IsReadWithinTolerance_OrNotWithHighConfidence(string departure)
+    {
+        var plan = DayPlan() with { TrueIsf = 50, TrueCr = 10, ProfileIsf = 50, ProfileCr = 10 };
+        plan = departure switch
+        {
+            "noise" => plan with { NoiseMgdl = 8 },
+            "longModelDia" => plan with { ModelDiaSteps = 72, ModelPeakSteps = 18 },
+            "shortModelDia" => plan with { ModelDiaSteps = 24, ModelPeakSteps = 10 },
+            "slowAbsorption" => plan with { AbsorptionSteps = 60 },
+            _ => throw new ArgumentOutOfRangeException(nameof(departure)),
+        };
+
+        var range = Recover(plan);
+
+        var figures = range.Basal.Select(b => (Figure: (SettingsEvidenceFigure)b, Truth: 1.0))
+            .Concat(range.Isf.Select(b => (Figure: (SettingsEvidenceFigure)b, Truth: 50.0)))
+            .Concat(range.CarbRatio.Select(b => (Figure: (SettingsEvidenceFigure)b, Truth: 10.0)))
+            .Where(f => f.Figure.Observed is not null)
+            .ToList();
+        figures.Should().NotBeEmpty();
+        foreach (var (figure, truth) in figures)
+        {
+            var error = Math.Abs(figure.Observed!.Value - truth) / truth;
+            error.Should().BeLessThan(Tolerance[departure], $"{departure}: {figure.GetType().Name} read {figure.Observed} against {truth}");
+            if (error > 0.15)
+                figure.Confidence.Should().NotBe(SettingsEvidenceConfidence.High, $"{departure}: {figure.Observed} is {error:P0} off");
+        }
+    }
+
+    private static readonly Dictionary<string, double> Tolerance = new()
+    {
+        ["noise"] = 0.05,
+        ["longModelDia"] = 0.25,
+        ["shortModelDia"] = 0.2,
+        ["slowAbsorption"] = 0.3,
+    };
 
     #endregion
 
@@ -184,6 +288,7 @@ public class SettingsEvidenceCalculatorTests
         public Func<long, double?> Iob { get; set; } = _ => null;
         public Func<long, double> Cob { get; set; } = _ => 0;
         public Func<long, bool> Tick { get; set; } = _ => true;
+        public Func<long, IobCobSource> IobSource { get; set; } = _ => IobCobSource.Device;
         public Func<long, (double Rate, BasalDeliveryOrigin Origin)?> Basal { get; set; } = _ => (1, BasalDeliveryOrigin.Algorithm);
         public Func<long, (double Low, double High)?> Target { get; set; } = _ => (80, 140);
         public List<CarbEvent> Carbs { get; } = [];
@@ -204,7 +309,7 @@ public class SettingsEvidenceCalculatorTests
                 if (Reading(t))
                     glucose.Add(new GlucoseSample(t, Glucose(t)));
                 if (Tick(t))
-                    ticks.Add(new IobCobTick(t, Iob(t) ?? DoseIob(t), IobCobSource.Device, Cob(t), IobCobSource.Device));
+                    ticks.Add(new IobCobTick(t, Iob(t) ?? DoseIob(t), IobSource(t), Cob(t), IobCobSource.Device));
                 if (Basal(t) is { } basal)
                     delivered.Add(new DeliveredBasalSegment(t, t + 5 * Minute, basal.Rate, basal.Origin));
             }
@@ -236,7 +341,7 @@ public class SettingsEvidenceCalculatorTests
     /// </summary>
     private static Week Corrections(int days = 7)
     {
-        var week = new Week();
+        var week = new Week { Days = Math.Max(7, days) };
         var bolus = Enumerable.Range(0, days).Select(d => week.At(d, 14)).ToList();
         week.Doses.AddRange(bolus.Select(b => new InsulinDose(b, 2, Automatic: false)));
         week.Glucose = t =>
@@ -256,7 +361,7 @@ public class SettingsEvidenceCalculatorTests
     /// <summary>40 g at 08:00 every day, bolused 4 U, glucose flat throughout: a carb ratio of 10.</summary>
     private static Week Meals(int days = 7)
     {
-        var week = new Week();
+        var week = new Week { Days = Math.Max(7, days) };
         for (var d = 0; d < days; d++)
         {
             week.Carbs.Add(new CarbEvent(week.At(d, 8), 40));
@@ -285,8 +390,11 @@ public class SettingsEvidenceCalculatorTests
         block.MeanNetLoopCorrection.Should().Be(0);
         block.Consistency.Should().Be(1, "a correction of zero agrees with either sign");
         block.Confidence.Should().Be(SettingsEvidenceConfidence.Low);
-        block.ConfidenceReasons.Should().Equal(SettingsEvidenceConfidenceReason.FewEpisodes, SettingsEvidenceConfidenceReason.IsfDependent);
-        block.Rejections.Select(r => r.Rule).Should().HaveCount(14).And.OnlyHaveUniqueItems();
+        block.ConfidenceReasons.Should().Equal(
+            SettingsEvidenceConfidenceReason.FewEpisodes,
+            SettingsEvidenceConfidenceReason.IsfDependent,
+            SettingsEvidenceConfidenceReason.FastingUnverifiable);
+        block.Rejections.Select(r => r.Rule).Should().HaveCount(16).And.OnlyHaveUniqueItems();
         block.Rejections.Should().OnlyContain(r => r.Count == 0);
         var day = block.Days.First();
         day.Date.Should().Be("2024-06-03");
@@ -299,8 +407,8 @@ public class SettingsEvidenceCalculatorTests
         SettingsEvidenceRule.OpenLoop, SettingsEvidenceRule.Override, SettingsEvidenceRule.TemporaryTarget,
         SettingsEvidenceRule.Exercise, SettingsEvidenceRule.Illness, SettingsEvidenceRule.CarbsBefore, SettingsEvidenceRule.RiseBefore,
         SettingsEvidenceRule.ManualBolus, SettingsEvidenceRule.CarbsOnBoard, SettingsEvidenceRule.Filtered,
-        SettingsEvidenceRule.ManualDelivery, SettingsEvidenceRule.InsulinUncovered, SettingsEvidenceRule.IobUnknown,
-        SettingsEvidenceRule.MissingGlucose,
+        SettingsEvidenceRule.ManualDelivery, SettingsEvidenceRule.InferredDelivery, SettingsEvidenceRule.InsulinUncovered,
+        SettingsEvidenceRule.IobUnknown, SettingsEvidenceRule.IobSourceChanged, SettingsEvidenceRule.MissingGlucose,
     ];
 
     [Theory]
@@ -323,8 +431,10 @@ public class SettingsEvidenceCalculatorTests
             case SettingsEvidenceRule.CarbsOnBoard: week.Cob = t => t >= inside && t < inside + Hour ? 5 : 0; break;
             case SettingsEvidenceRule.Filtered: week.Masks = new() { Days = AllButThursday }; break;
             case SettingsEvidenceRule.ManualDelivery: week.Basal = t => (1.5, t >= inside && t < inside + Hour ? BasalDeliveryOrigin.Manual : BasalDeliveryOrigin.Algorithm); break;
+            case SettingsEvidenceRule.InferredDelivery: week.Basal = t => t >= inside && t < inside + Hour ? (1.5, BasalDeliveryOrigin.Inferred) : (1, BasalDeliveryOrigin.Algorithm); break;
             case SettingsEvidenceRule.InsulinUncovered: week.Basal = t => t >= inside && t < inside + Hour ? null : (1, BasalDeliveryOrigin.Algorithm); break;
             case SettingsEvidenceRule.IobUnknown: week.Tick = t => t < start - 10 * Minute || t > start; break;
+            case SettingsEvidenceRule.IobSourceChanged: week.IobSource = t => t == start ? IobCobSource.Calculated : IobCobSource.Device; break;
             case SettingsEvidenceRule.MissingGlucose: week.Reading = t => Math.Abs(t - end) > 5 * Minute; break;
         }
 
@@ -469,8 +579,8 @@ public class SettingsEvidenceCalculatorTests
         SettingsEvidenceRule.CarbsNear, SettingsEvidenceRule.NotIsolated, SettingsEvidenceRule.Override, SettingsEvidenceRule.TemporaryTarget,
         SettingsEvidenceRule.Exercise, SettingsEvidenceRule.Illness, SettingsEvidenceRule.Filtered,
         SettingsEvidenceRule.MissingGlucose, SettingsEvidenceRule.NoTarget, SettingsEvidenceRule.NotAboveTarget, SettingsEvidenceRule.StartUnstable,
-        SettingsEvidenceRule.IobUnknown, SettingsEvidenceRule.IobAtBolus, SettingsEvidenceRule.InsulinUncovered,
-        SettingsEvidenceRule.EndedBelowTarget, SettingsEvidenceRule.TooLittleInsulin,
+        SettingsEvidenceRule.IobUnknown, SettingsEvidenceRule.IobAtBolus, SettingsEvidenceRule.IobSourceChanged,
+        SettingsEvidenceRule.InsulinUncovered, SettingsEvidenceRule.WentLow, SettingsEvidenceRule.TooLittleInsulin,
     ];
 
     [Theory]
@@ -498,7 +608,8 @@ public class SettingsEvidenceCalculatorTests
             case SettingsEvidenceRule.IobUnknown: week.Tick = t => t != bolus; break;
             case SettingsEvidenceRule.IobAtBolus: week.Iob = t => t == bolus - 5 * Minute ? 2.1 : null; break;
             case SettingsEvidenceRule.InsulinUncovered: week.Basal = t => t >= inside && t < inside + Hour ? null : (1, BasalDeliveryOrigin.Algorithm); break;
-            case SettingsEvidenceRule.EndedBelowTarget: week.Target = t => t == end ? (125, 140) : target(t); break;
+            case SettingsEvidenceRule.IobSourceChanged: week.IobSource = t => t == end ? IobCobSource.Calculated : IobCobSource.Device; break;
+            case SettingsEvidenceRule.WentLow: { var glucose = week.Glucose; week.Glucose = t => Math.Abs(t - (bolus + 2 * Hour)) <= 5 * Minute ? 65 : glucose(t); break; }
             case SettingsEvidenceRule.TooLittleInsulin: week.Iob = t => t == end ? 1.6 : null; break;
         }
 
@@ -558,7 +669,8 @@ public class SettingsEvidenceCalculatorTests
         SettingsEvidenceRule.NotIsolated, SettingsEvidenceRule.Override, SettingsEvidenceRule.TemporaryTarget,
         SettingsEvidenceRule.Exercise, SettingsEvidenceRule.Illness, SettingsEvidenceRule.Filtered,
         SettingsEvidenceRule.MissingGlucose, SettingsEvidenceRule.StartOutOfRange, SettingsEvidenceRule.StartUnstable,
-        SettingsEvidenceRule.IobUnknown, SettingsEvidenceRule.InsulinUncovered, SettingsEvidenceRule.TooLittleInsulin,
+        SettingsEvidenceRule.IobUnknown, SettingsEvidenceRule.IobSourceChanged, SettingsEvidenceRule.InsulinUncovered,
+        SettingsEvidenceRule.TooLittleInsulin,
     ];
 
     [Theory]
@@ -581,6 +693,7 @@ public class SettingsEvidenceCalculatorTests
             case SettingsEvidenceRule.StartOutOfRange: week.Glucose = t => Math.Abs(t - start) <= 5 * Minute ? 190 : 120; break;
             case SettingsEvidenceRule.StartUnstable: week.Glucose = t => Math.Abs(t - start) <= 5 * Minute ? 100 : 120; break;
             case SettingsEvidenceRule.IobUnknown: week.Tick = t => t != start; break;
+            case SettingsEvidenceRule.IobSourceChanged: week.IobSource = t => t == start ? IobCobSource.Calculated : IobCobSource.Device; break;
             case SettingsEvidenceRule.InsulinUncovered: week.Basal = t => t >= inside && t < inside + Hour ? null : (1, BasalDeliveryOrigin.Algorithm); break;
             case SettingsEvidenceRule.TooLittleInsulin: week.Doses.RemoveAll(d => d.Mills == meal); break;
         }
@@ -676,6 +789,120 @@ public class SettingsEvidenceCalculatorTests
 
         Isf(range, SettingsEvidenceBlock.Overnight).Episodes.Single().Time.Should().Be("05:30");
         Isf(range, SettingsEvidenceBlock.Morning).UnavailableReason.Should().Be(SettingsEvidenceUnavailableReason.NoCandidates);
+    }
+
+    [Fact]
+    public void AClimbPeakingWithinFourHoursOfTheBlock_RejectsIt_ThoughItStartedEarlier()
+    {
+        var week = new Week();
+        var climb = week.At(3, 2) - 5 * Hour;
+        week.Glucose = t =>
+            t < climb || t >= climb + 3 * Hour ? 120
+            : t < climb + 45 * Minute ? 120 + 80.0 * (t - climb) / (45 * Minute)
+            : t < climb + 90 * Minute ? 200 + 30.0 * (t - climb - 45 * Minute) / (45 * Minute)
+            : 230 - 110.0 * (t - climb - 90 * Minute) / (90 * Minute);
+
+        var block = BasalBlock(week.Run(), 2);
+
+        Rejected(block, SettingsEvidenceRule.RiseBefore).Should().Be(1, "it started five hours before 02:00 but peaked three and a half before");
+    }
+
+    [Fact]
+    public void ARangeWithCarbEntries_IsNotFastingUnverifiable()
+    {
+        var week = new Week();
+        week.Carbs.Add(new CarbEvent(week.At(3, 12), 30));
+
+        BasalBlock(week.Run(), 2).ConfidenceReasons.Should().NotContain(SettingsEvidenceConfidenceReason.FastingUnverifiable);
+    }
+
+    [Fact]
+    public void ACorrectionEndingBelowTarget_StillCounts_ButOneThatWentLowDoesNot()
+    {
+        var week = Corrections();
+        var target = week.Target;
+        week.Target = t => LocalSlotBinning.LocalTime(t, Sydney).Hour == 18 ? (125, 140) : target(t);
+
+        var midday = Isf(week.Run(), SettingsEvidenceBlock.Midday);
+
+        midday.N.Should().Be(7, "ending at 120 under a 125 target is a drop like any other");
+        Rejected(midday, SettingsEvidenceRule.WentLow).Should().Be(0);
+    }
+
+    [Fact]
+    public void MuchIobLeftAtTheWindowsEnd_LowersConfidence()
+    {
+        var week = Corrections();
+        week.Iob = t => LocalSlotBinning.LocalTime(t, Sydney) is { Hour: 18, Minute: 0 } ? 0.9 : null;
+
+        var midday = Isf(week.Run(), SettingsEvidenceBlock.Midday);
+
+        midday.Episodes.Should().OnlyContain(e => e.InsulinActed == 1.1);
+        midday.ConfidenceReasons.Should().Contain(SettingsEvidenceConfidenceReason.ResidualIob, "0.9 of 2 U is still on board");
+    }
+
+    [Fact]
+    public void MostMealsNotIsolated_LowersConfidenceInTheFew_ThatWere()
+    {
+        var week = Meals(days: 14);
+        week.Doses.AddRange(Enumerable.Range(0, 8).Select(d => new InsulinDose(week.At(d, 10), 1, Automatic: false)));
+
+        var morning = CarbRatio(week.Run(), SettingsEvidenceBlock.Morning);
+
+        morning.N.Should().Be(6);
+        Rejected(morning, SettingsEvidenceRule.NotIsolated).Should().Be(8);
+        morning.ConfidenceReasons.Should().Contain(SettingsEvidenceConfidenceReason.MostNotIsolated);
+    }
+
+    [Fact]
+    public void AWindowReachingPastTheRange_IsOutsideIt_NotFiltered()
+    {
+        var week = Corrections();
+        week.Doses.Add(new InsulinDose(week.At(6, 22), 2, Automatic: false));
+        week.Carbs.Add(new CarbEvent(week.At(0, 0, 10), 30));
+        week.Doses.Add(new InsulinDose(week.At(0, 0, 10), 3, Automatic: false));
+
+        var range = week.Run();
+
+        Rejected(Isf(range, SettingsEvidenceBlock.Evening), SettingsEvidenceRule.OutsideRange).Should().Be(1);
+        Rejected(CarbRatio(range, SettingsEvidenceBlock.Overnight), SettingsEvidenceRule.OutsideRange).Should().Be(1);
+    }
+
+    private static SettingsEvidenceFigure Rated(int n, double observed, double profile, bool higherMeansMoreInsulin, bool borrowed,
+        params SettingsEvidenceConfidenceReason[] reasons)
+    {
+        var figure = new SettingsEvidenceFigure { Profile = profile, N = n };
+        SettingsEvidenceCalculator.Rate(
+            figure, observed, [.. Enumerable.Repeat(observed, n)], higherMeansMoreInsulin, borrowed, reasons);
+        return figure;
+    }
+
+    [Fact]
+    public void FewerThanSixEpisodes_AreLowConfidence_AndOnlyAWellFoundedFigureIsLent()
+    {
+        Rated(5, 10, 10, false, false).Confidence.Should().Be(SettingsEvidenceConfidence.Low);
+
+        var few = Rated(8, 10, 10, false, false);
+        few.Confidence.Should().Be(SettingsEvidenceConfidence.Moderate);
+        SettingsEvidenceCalculator.Lendable(few).Should().BeFalse("its one reason is its n");
+
+        var dependent = Rated(12, 10, 10, false, false, SettingsEvidenceConfidenceReason.BasalDependent);
+        dependent.Confidence.Should().Be(SettingsEvidenceConfidence.Moderate);
+        SettingsEvidenceCalculator.Lendable(dependent).Should().BeTrue();
+
+        SettingsEvidenceCalculator.Lendable(Rated(12, 10, 10, false, false)).Should().BeTrue();
+    }
+
+    [Fact]
+    public void AFigureTowardsMoreInsulin_IsHeldAtModerate_OnlyWhereItRestsOnABorrowedInput()
+    {
+        var capped = Rated(12, 8, 10, higherMeansMoreInsulin: false, borrowed: true);
+        capped.Confidence.Should().Be(SettingsEvidenceConfidence.Moderate);
+        capped.ConfidenceReasons.Should().Equal(SettingsEvidenceConfidenceReason.MoreInsulinOnBorrowedInput);
+
+        Rated(12, 8, 10, higherMeansMoreInsulin: false, borrowed: false).Confidence.Should().Be(SettingsEvidenceConfidence.High);
+        Rated(12, 12, 10, higherMeansMoreInsulin: false, borrowed: true).Confidence.Should().Be(SettingsEvidenceConfidence.High);
+        Rated(12, 1.2, 1.0, higherMeansMoreInsulin: true, borrowed: true).Confidence.Should().Be(SettingsEvidenceConfidence.Moderate);
     }
 
     #endregion

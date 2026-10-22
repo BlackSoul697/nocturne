@@ -33,14 +33,32 @@ public enum SettingsEvidenceConfidenceReason
 {
     FewEpisodes,
 
-    /// <summary>The interquartile range is wide against the median.</summary>
+    /// <summary>The interquartile range is wide against the observed value.</summary>
     WideSpread,
 
     /// <summary>Glucose change converted at an ISF from the profile, for want of a confident observed one.</summary>
     IsfDependent,
 
-    /// <summary>Insulin measured above the profile's basal schedule, for want of a confident observed basal need.</summary>
+    /// <summary>
+    /// Insulin measured above the profile's basal schedule, or above a basal need borrowed from other
+    /// blocks, for want of a confident observed basal need for the episode's own time.
+    /// </summary>
     BasalDependent,
+
+    /// <summary>Much of the window's insulin was still on board at its end, so the IOB curve carries the figure.</summary>
+    ResidualIob,
+
+    /// <summary>Most candidates had another intake or bolus in their window: those that qualified may not be typical.</summary>
+    MostNotIsolated,
+
+    /// <summary>The range holds no carb entries at all, so fasting rests on spotting unlogged meals by glucose alone.</summary>
+    FastingUnverifiable,
+
+    /// <summary>
+    /// The figure points towards more insulin than the profile and rests on a borrowed input, so it is
+    /// held at <see cref="SettingsEvidenceConfidence.Moderate"/>.
+    /// </summary>
+    MoreInsulinOnBorrowedInput,
 }
 
 /// <summary>Why a figure has no observed value.</summary>
@@ -84,6 +102,9 @@ public enum SettingsEvidenceRule
     /// <summary>Some of the window falls outside the report's filter: a weekday, a profile, or a masked span.</summary>
     Filtered,
 
+    /// <summary>Some of the window falls outside the range: before its start or past its end.</summary>
+    OutsideRange,
+
     /// <summary>Basal: carbs in the window or the hours before it.</summary>
     CarbsBefore,
 
@@ -102,10 +123,13 @@ public enum SettingsEvidenceRule
     /// <summary>Basal: a manual temp basal or a suspend in the window.</summary>
     ManualDelivery,
 
+    /// <summary>Basal: delivery in the window that was inferred rather than recorded differed from the schedule.</summary>
+    InferredDelivery,
+
     /// <summary>ISF: carbs from an hour before the bolus to three hours after it.</summary>
     CarbsNear,
 
-    /// <summary>No target range is known at the start or end of the window.</summary>
+    /// <summary>ISF: no target range is known at the bolus.</summary>
     NoTarget,
 
     /// <summary>ISF: glucose at the bolus was not above the target range.</summary>
@@ -117,8 +141,14 @@ public enum SettingsEvidenceRule
     /// <summary>No IOB is known at the start or end of the window.</summary>
     IobUnknown,
 
-    /// <summary>ISF: glucose ended below the target range, so a low cut the drop short.</summary>
-    EndedBelowTarget,
+    /// <summary>
+    /// The IOB at the window's start and the IOB at its end came from different sources, one the
+    /// device's and one calculated, so their difference is not insulin that acted.
+    /// </summary>
+    IobSourceChanged,
+
+    /// <summary>ISF: glucose went below 70 mg/dL in the window, so a low cut the drop short.</summary>
+    WentLow,
 
     /// <summary>Another meal, correction bolus or meal-like climb fell in the window.</summary>
     NotIsolated,
@@ -236,8 +266,8 @@ public class BasalEvidenceDay : SettingsEvidenceEpisode
     public double NetLoopCorrection { get; set; }
 
     /// <summary>
-    /// U/h: IOB at the block's start less IOB at its end, over its hours. Insulin delivered before the
-    /// block that acted in it, less insulin delivered in it that acts after.
+    /// U/h: the insulin that acted in the block less the correction delivered in it. Insulin
+    /// delivered before the block that acted in it, less insulin delivered in it that acts after.
     /// </summary>
     public double CarriedInsulin { get; set; }
 
@@ -255,8 +285,9 @@ public class BasalEvidenceDay : SettingsEvidenceEpisode
 public class InsulinActedFigure : SettingsEvidenceFigure
 {
     /// <summary>
-    /// The episodes' insulin was measured above the profile's basal schedule, for want of a confident
-    /// observed basal need: a schedule that is short credits the episodes with the loop's top-up.
+    /// Some episode's insulin was measured above the profile's basal schedule, or above a basal need
+    /// borrowed from other blocks, for want of a confident observed basal need for its own time: a
+    /// schedule that is short credits the episodes with the loop's top-up.
     /// </summary>
     public bool BasalDependent { get; set; }
 }
@@ -280,6 +311,12 @@ public class InsulinActedEpisode : SettingsEvidenceEpisode
 
     /// <summary>U, net insulin above schedule delivered over the window.</summary>
     public double NetInsulin { get; set; }
+
+    /// <summary>
+    /// The insulin was measured above the schedule, or above a basal need borrowed from other blocks,
+    /// for some of the window; see <see cref="SettingsEvidenceConfidenceReason.BasalDependent"/>.
+    /// </summary>
+    public bool BasalDependent { get; set; }
 
     public double IobAtStart { get; set; }
 

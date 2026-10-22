@@ -10,9 +10,12 @@ namespace Nocturne.Core.Clinical.LoopAnalysis;
 /// <remarks>
 /// A block on one day is an episode. Its correction is attributed by when it was delivered: loop
 /// insulin acts over the following hour or two, which is why blocks are two hours and not one. The
-/// carried term (IOB at the start less IOB at the end) turns delivered insulin into insulin that
-/// acted; it is zero where the loop holds steady, and otherwise is what keeps the tail of the
-/// evening's insulin from reading as the first overnight block's need.
+/// carried term, the insulin that acted in the block
+/// (<see cref="SettingsEvidenceContext.InsulinActed"/>) less the correction delivered in it, turns
+/// delivered insulin into insulin that acted; it is zero where the loop holds steady, and otherwise
+/// is what keeps the tail of the evening's insulin from reading as the first overnight block's need.
+/// The observed need is the mean across days, not the median the ISF and carb ratio report: a rate
+/// adds up over time, so the mean is the rate that would have delivered the days' insulin.
 /// </remarks>
 public static class ObservedBasalNeed
 {
@@ -74,8 +77,10 @@ public static class ObservedBasalNeed
         SettingsEvidenceRule.CarbsOnBoard,
         SettingsEvidenceRule.Filtered,
         SettingsEvidenceRule.ManualDelivery,
+        SettingsEvidenceRule.InferredDelivery,
         SettingsEvidenceRule.InsulinUncovered,
         SettingsEvidenceRule.IobUnknown,
+        SettingsEvidenceRule.IobSourceChanged,
         SettingsEvidenceRule.MissingGlucose,
     ];
 
@@ -116,17 +121,19 @@ public static class ObservedBasalNeed
             return (null, activity);
         if (EventAnchors.AnyWithin(context.CarbMills, start - CarbFreeMs, end - 1))
             return (null, SettingsEvidenceRule.CarbsBefore);
-        if (EventAnchors.AnyWithin(context.Climbs, start - CarbFreeMs, end - 1))
+        if (ClimbedBefore(context, start, end))
             return (null, SettingsEvidenceRule.RiseBefore);
         if (context.Insulin.Over(start - ManualBolusFreeMs, end).ManualBolus > 0)
             return (null, SettingsEvidenceRule.ManualBolus);
         if (context.Series.IobCobOver(start, end)?.Cob > 0)
             return (null, SettingsEvidenceRule.CarbsOnBoard);
-        if (context.Filtered(start, end))
-            return (null, SettingsEvidenceRule.Filtered);
+        if (context.Outside(start, end) is { } outside)
+            return (null, outside);
         var net = context.Insulin.Over(start, end);
         if (net.ManualTemp != 0 || net.Suspend != 0)
             return (null, SettingsEvidenceRule.ManualDelivery);
+        if (net.Inferred != 0)
+            return (null, SettingsEvidenceRule.InferredDelivery);
         if (net.CoveredMs < DailyProfileCalculator.InsulinSummaryMinimumCoverage * (end - start))
             return (null, SettingsEvidenceRule.InsulinUncovered);
         var (acted, rejected) = context.InsulinActed(start, end);
@@ -149,9 +156,27 @@ public static class ObservedBasalNeed
         var change = endGlucose - startGlucose;
         var scheduled = context.ScheduledUnits(start, end) * LocalSlotBinning.HourMs / net.CoveredMs;
         var correction = net.AlgorithmTemp * LocalSlotBinning.HourMs / net.CoveredMs + net.AutomaticBolus / hours;
-        var carried = (insulin.IobAtStart - insulin.IobAtEnd) / hours;
+        var carried = insulin.Acted / hours - correction;
         return (new Day(start, end, hours, scheduled, correction, carried, change, isf, isfDependent,
             scheduled + correction + carried + change / isf / hours), null);
+    }
+
+    /// <summary>
+    /// Whether a meal-like climb no carb entry caused was still under way within
+    /// <see cref="CarbFreeMs"/> before the block or during it: read off the climb's peak, not its
+    /// start, since its food is absorbing until glucose stops rising.
+    /// </summary>
+    private static bool ClimbedBefore(SettingsEvidenceContext context, long start, long end)
+    {
+        var climbs = context.Climbs;
+        for (var i = SortedSearch.FirstEndingAfter(climbs, start - CarbFreeMs - UnannouncedRises.MergeMs, static c => c.Start);
+             i < climbs.Count && climbs[i].Start < end;
+             i++)
+        {
+            if (climbs[i].End >= start - CarbFreeMs)
+                return true;
+        }
+        return false;
     }
 
     private static BasalEvidenceBlock Summarise(
@@ -191,10 +216,15 @@ public static class ObservedBasalNeed
 
         if (result.UnavailableReason is null)
         {
+            List<SettingsEvidenceConfidenceReason> reasons = [];
+            if (result.IsfDependent)
+                reasons.Add(SettingsEvidenceConfidenceReason.IsfDependent);
+            if (context.NoCarbEntries)
+                reasons.Add(SettingsEvidenceConfidenceReason.FastingUnverifiable);
             var needs = days.Select(d => d.Need).ToList();
             SettingsEvidenceCalculator.Rate(
-                result, needs.Average(), needs,
-                result.IsfDependent ? [SettingsEvidenceConfidenceReason.IsfDependent] : []);
+                result, needs.Average(), needs, higherMeansMoreInsulin: true,
+                borrowed: days.Any(d => d.Change != 0), reasons);
         }
 
         if (context.ListEpisodes)
@@ -227,10 +257,12 @@ public static class ObservedBasalNeed
 
 /// <summary>
 /// The basal need the ISF and carb ratio measure insulin above: the schedule, scaled in each
-/// two-hour block by that block's observed need over its profile rate where the need is at least
-/// <see cref="SettingsEvidenceCalculator.BorrowedConfidence"/>, and in every other block by the mean
-/// of those ratios. A schedule wrong by much the same share all day is the usual case, and a block
-/// with no fasting time of its own, as a daytime block often has none, has nothing better to go by.
+/// two-hour block by that block's observed need over its profile rate where the need is
+/// <see cref="SettingsEvidenceCalculator.Lendable"/>, and in every other block by the mean of those
+/// ratios. A schedule wrong by much the same share all day is the usual case, and a block with no
+/// fasting time of its own, as a daytime block often has none, has nothing better to go by; but a
+/// basal need that differs through the day, a dawn rise, say, makes the mean wrong, so an episode
+/// that borrows it is basal-dependent.
 /// </summary>
 internal sealed class BasalBaseline
 {
@@ -248,20 +280,28 @@ internal sealed class BasalBaseline
     {
         double?[] ratios =
         [
-            .. blocks.Select(b => b.Observed is { } observed && b.Profile is > 0 && b.Confidence >= SettingsEvidenceCalculator.BorrowedConfidence
-                ? observed / b.Profile.Value
+            .. blocks.Select(b => SettingsEvidenceCalculator.Lendable(b) && b.Profile is > 0
+                ? b.Observed!.Value / b.Profile.Value
                 : (double?)null),
         ];
         return ratios.Any(r => r is not null) ? new BasalBaseline(ratios) : null;
     }
 
-    /// <summary>The basal need above the schedule over <c>[start, end)</c>, U; negative where the schedule exceeds it.</summary>
-    public double Excess(SettingsEvidenceContext context, long start, long end)
+    /// <summary>
+    /// The basal need above the schedule over <c>[start, end)</c>, U, negative where the schedule
+    /// exceeds it; and whether any of it was scaled by the mean ratio, for want of the block's own.
+    /// </summary>
+    public (double Excess, bool Borrowed) Excess(SettingsEvidenceContext context, long start, long end)
     {
         double excess = 0;
+        var borrowed = false;
         LocalSlotBinning.Distribute(start, end, context.Zone, ObservedBasalNeed.BlockHours * 60, (sliceStart, local, ms) =>
-            excess += context.ScheduledUnits(sliceStart, sliceStart + ms)
-                * ((_ratios[local.Hour / ObservedBasalNeed.BlockHours] ?? _mean) - 1));
-        return excess;
+        {
+            var scheduled = context.ScheduledUnits(sliceStart, sliceStart + ms);
+            var own = _ratios[local.Hour / ObservedBasalNeed.BlockHours];
+            borrowed |= own is null && scheduled > 0;
+            excess += scheduled * ((own ?? _mean) - 1);
+        });
+        return (excess, borrowed);
     }
 }

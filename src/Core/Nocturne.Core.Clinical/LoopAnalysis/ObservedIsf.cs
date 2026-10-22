@@ -1,3 +1,4 @@
+using Nocturne.Core.Constants;
 using Nocturne.Core.Models.LoopAnalysis;
 
 namespace Nocturne.Core.Clinical.LoopAnalysis;
@@ -39,6 +40,13 @@ public static class ObservedIsf
     /// </summary>
     public const double MaxIobShareOfBolus = 1.0;
 
+    /// <summary>
+    /// The glucose below which a correction's window is cut short by a low: the hypoglycaemia
+    /// threshold, at which the loop suspends and the user treats, so the drop is no longer the
+    /// insulin's alone. Ending merely below target is a drop like any other.
+    /// </summary>
+    public const double LowMgdl = GlucoseConstants.TargetBottomMgdl;
+
     private static readonly SettingsEvidenceRule[] Rules =
     [
         SettingsEvidenceRule.CarbsNear,
@@ -47,6 +55,7 @@ public static class ObservedIsf
         SettingsEvidenceRule.TemporaryTarget,
         SettingsEvidenceRule.Exercise,
         SettingsEvidenceRule.Illness,
+        SettingsEvidenceRule.OutsideRange,
         SettingsEvidenceRule.Filtered,
         SettingsEvidenceRule.MissingGlucose,
         SettingsEvidenceRule.NoTarget,
@@ -54,8 +63,9 @@ public static class ObservedIsf
         SettingsEvidenceRule.StartUnstable,
         SettingsEvidenceRule.IobUnknown,
         SettingsEvidenceRule.IobAtBolus,
+        SettingsEvidenceRule.IobSourceChanged,
         SettingsEvidenceRule.InsulinUncovered,
-        SettingsEvidenceRule.EndedBelowTarget,
+        SettingsEvidenceRule.WentLow,
         SettingsEvidenceRule.TooLittleInsulin,
     ];
 
@@ -83,11 +93,12 @@ public static class ObservedIsf
         return [.. Blocks.Select((b, i) => context.Finish(
             new IsfEvidenceBlock { Block = b, Episodes = context.ListEpisodes ? episodes[i] : [] },
             b,
-            [.. episodes[i].Select(e => e.Value)],
+            episodes[i],
             tallies[i],
             SettingsEvidenceCalculator.Unavailable(tallies[i].Candidates, episodes[i].Count),
             t => context.TherapyAt(t).SensitivityAt(t),
-            baseline))];
+            isfDependent: false,
+            borrowed: episodes[i].Any(e => e.BasalDependent || e.BasalExcess != 0)))];
     }
 
     private static (IsfEvidenceEpisode? Episode, SettingsEvidenceRule? Rejected) Measure(
@@ -103,14 +114,13 @@ public static class ObservedIsf
 
         if (context.Activity(start, end, openLoop: false) is { } activity)
             return (null, activity);
-        if (context.Filtered(start, end))
-            return (null, SettingsEvidenceRule.Filtered);
+        if (context.Outside(start, end) is { } outside)
+            return (null, outside);
         if (context.GlucoseAt(start - SettingsEvidenceCalculator.StableSpanMs) is not { } beforeGlucose
             || context.GlucoseAt(start) is not { } startGlucose
             || context.GlucoseAt(end) is not { } endGlucose)
             return (null, SettingsEvidenceRule.MissingGlucose);
-        if (context.Inputs.Series.TargetAt?.Invoke(start) is not { } startTarget
-            || context.Inputs.Series.TargetAt?.Invoke(end) is not { } endTarget)
+        if (context.Inputs.Series.TargetAt?.Invoke(start) is not { } startTarget)
             return (null, SettingsEvidenceRule.NoTarget);
         if (startGlucose <= startTarget.High)
             return (null, SettingsEvidenceRule.NotAboveTarget);
@@ -123,8 +133,8 @@ public static class ObservedIsf
         var (acted, uncovered) = context.InsulinActed(start, end, baseline);
         if (acted is not { } insulin)
             return (null, uncovered);
-        if (endGlucose < endTarget.Low)
-            return (null, SettingsEvidenceRule.EndedBelowTarget);
+        if (context.LowestGlucose(start, end) < LowMgdl)
+            return (null, SettingsEvidenceRule.WentLow);
         if (insulin.Acted < SettingsEvidenceCalculator.MinimumInsulinUnits)
             return (null, SettingsEvidenceRule.TooLittleInsulin);
 
@@ -140,7 +150,7 @@ public static class ObservedIsf
 
 /// <summary>
 /// The ISF a glucose change is converted to insulin at: the block's observed ISF where it is at
-/// least <see cref="SettingsEvidenceCalculator.BorrowedConfidence"/>; elsewhere the profile's, scaled
+/// <see cref="SettingsEvidenceCalculator.Lendable"/>; elsewhere the profile's, scaled
 /// by the mean of the confident blocks' observed-to-profile ratios where any block is confident, on
 /// the same reading as <see cref="BasalBaseline"/>. Anything but the block's own observed ISF is
 /// ISF-dependent.
@@ -162,7 +172,7 @@ internal sealed class IsfConversion
         var ratios = new List<double>();
         foreach (var block in blocks)
         {
-            if (block.Observed is not { } value || block.Confidence < SettingsEvidenceCalculator.BorrowedConfidence)
+            if (!SettingsEvidenceCalculator.Lendable(block) || block.Observed is not { } value)
                 continue;
             observed[(int)block.Block] = value;
             if (block.Profile is > 0)

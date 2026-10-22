@@ -11,25 +11,21 @@ public readonly record struct SimulatedMeal(long Mills, double Grams, bool Annou
 
 /// <summary>
 /// A closed loop run in five-minute steps against a body with known true settings, while the profile
-/// the loop and the calculator read may be wrong. Insulin acts on a triangular curve over four hours
-/// (peak at 75 minutes), which is also the curve the loop and the reported IOB use, so IOB is exact;
-/// carbs absorb evenly over three hours. A steady basal of the true rate holds glucose flat.
+/// the loop and the calculator read may be wrong. Insulin acts on a triangular curve; the body's
+/// curve (<see cref="BodyDiaSteps"/>) may differ from the one the loop and the reported IOB use
+/// (<see cref="ModelDiaSteps"/>), and carbs absorb evenly over <see cref="AbsorptionSteps"/> while the
+/// loop's carbs on board assume three hours. A basal of the true rate holds glucose flat.
 /// </summary>
-public sealed class LoopSimulation
+public sealed record LoopSimulation
 {
     public const long StepMs = 5 * LocalSlotBinning.MinuteMs;
-    private const int DiaSteps = 48;
-    private const int PeakSteps = 15;
-    private const int AbsorptionSteps = 36;
     private const double StepHours = 5.0 / 60;
-
-    private static readonly double[] Activity = BuildActivity();
-
-    /// <summary>The share of a dose still to act <c>k</c> steps after it.</summary>
-    private static readonly double[] RemainingAfter = [.. Enumerable.Range(0, DiaSteps).Select(k => 1 - Activity.Take(k).Sum())];
+    private const int ModelAbsorptionSteps = 36;
 
     public required TimeZoneInfo Zone { get; init; }
-    public double TrueBasal { get; init; } = 1.0;
+
+    /// <summary>The body's basal need by local hour, U/h.</summary>
+    public Func<int, double> TrueBasal { get; init; } = _ => 1.0;
     public double TrueIsf { get; init; } = 50;
     public double TrueCr { get; init; } = 10;
     public double ProfileBasal { get; init; } = 1.0;
@@ -45,56 +41,66 @@ public sealed class LoopSimulation
     /// <summary>Uniform noise on each reading, ± this, mg/dL, from a fixed seed.</summary>
     public double NoiseMgdl { get; init; } = 2;
 
+    public int BodyDiaSteps { get; init; } = 48;
+    public int BodyPeakSteps { get; init; } = 15;
+    public int ModelDiaSteps { get; init; } = 48;
+    public int ModelPeakSteps { get; init; } = 15;
+    public int AbsorptionSteps { get; init; } = 36;
+
     public IReadOnlyList<SimulatedMeal> Meals { get; init; } = [];
     public IReadOnlyList<(long Mills, double Units)> Corrections { get; init; } = [];
 
-    public List<GlucoseSample> Glucose { get; } = [];
-    public List<CarbEvent> Carbs { get; } = [];
-    public List<InsulinDose> Doses { get; } = [];
-    public List<DeliveredBasalSegment> Delivered { get; } = [];
-    public List<IobCobTick> IobCob { get; } = [];
+    public List<GlucoseSample> Glucose { get; private set; } = [];
+    public List<CarbEvent> Carbs { get; private set; } = [];
+    public List<InsulinDose> Doses { get; private set; } = [];
+    public List<DeliveredBasalSegment> Delivered { get; private set; } = [];
+    public List<IobCobTick> IobCob { get; private set; } = [];
 
-    /// <summary>Runs from <paramref name="from"/> to <paramref name="to"/>, starting at the loop's target in steady state.</summary>
+    /// <summary>Runs from <paramref name="from"/> to <paramref name="to"/>, starting in steady state at the loop's target.</summary>
     public LoopSimulation Run(long from, long to)
     {
+        (Glucose, Carbs, Doses, Delivered, IobCob) = ([], [], [], [], []);
+        var body = Activity(BodyDiaSteps, BodyPeakSteps);
+        var modelRemaining = Remaining(Activity(ModelDiaSteps, ModelPeakSteps));
+        var history = Math.Max(BodyDiaSteps, ModelDiaSteps);
         var steps = (int)((to - from) / StepMs);
-        var absolute = new double[steps + 1];
-        var scheduled = new double[steps + 1];
+        var absolute = new double[steps + history + 1];
+        var scheduled = new double[steps + history + 1];
+        var steady = TrueBasal(LocalSlotBinning.LocalTime(from, Zone).Hour) * StepHours;
+        for (var i = 0; i <= history; i++)
+        {
+            absolute[i] = steady;
+            scheduled[i] = ProfileBasal * StepHours;
+        }
         var carbEffect = new double[steps + AbsorptionSteps + 1];
-        var cobGrams = new double[steps + AbsorptionSteps + 1];
+        var cob = new double[steps + ModelAbsorptionSteps + 1];
         var random = new Random(2392);
         var glucose = LoopTarget;
-
         var meals = Meals.ToLookup(m => (int)((m.Mills - from) / StepMs));
         var corrections = Corrections.ToLookup(c => (int)((c.Mills - from) / StepMs), c => c.Units);
-        // Steady state before the run: every step of the curve already carries a step's scheduled basal.
-        var history = TrueBasal * StepHours;
-        absolute[0] = history;
-        scheduled[0] = ProfileBasal * StepHours;
 
         for (var j = 0; j < steps; j++)
         {
             var t = from + j * StepMs;
+            var k = j + history;
             foreach (var meal in meals[j])
             {
-                for (var k = 0; k < AbsorptionSteps; k++)
-                {
-                    carbEffect[j + k] += TrueIsf / TrueCr * meal.Grams / AbsorptionSteps;
-                    if (meal.Announced)
-                        cobGrams[j + k] += meal.Grams * (AbsorptionSteps - k) / AbsorptionSteps;
-                }
-                if (meal.Announced)
-                {
-                    Carbs.Add(new CarbEvent(t, meal.Grams));
-                    Bolus(j, t, meal.Grams / ProfileCr, automatic: false, absolute);
-                }
+                for (var s = 0; s < AbsorptionSteps; s++)
+                    carbEffect[j + s] += TrueIsf / TrueCr * meal.Grams / AbsorptionSteps;
+                if (!meal.Announced)
+                    continue;
+                for (var s = 0; s < ModelAbsorptionSteps; s++)
+                    cob[j + s] += meal.Grams * (ModelAbsorptionSteps - s) / ModelAbsorptionSteps;
+                Carbs.Add(new CarbEvent(t, meal.Grams));
+                Bolus(t, meal.Grams / ProfileCr, automatic: false, absolute, k);
             }
             foreach (var units in corrections[j])
-                Bolus(j, t, units, automatic: false, absolute);
+                Bolus(t, units, automatic: false, absolute, k);
 
-            var iob = Remaining(absolute, j) - Remaining(scheduled, j)
-                + (TrueBasal - ProfileBasal) * StepHours * RemainingBefore(j);
-            var eventual = glucose - ProfileIsf * iob + ProfileIsf / ProfileCr * cobGrams[j];
+            double iob = 0;
+            for (var i = Math.Max(0, k - ModelDiaSteps + 1); i <= k; i++)
+                iob += (absolute[i] - scheduled[i]) * modelRemaining[k - i];
+            var eventual = glucose - ProfileIsf * iob + ProfileIsf / ProfileCr * cob[j];
             var required = (eventual - LoopTarget) / ProfileIsf;
             var rate = Math.Clamp(ProfileBasal + 2 * required, 0, 4 * ProfileBasal);
             if (Smb && required > 0)
@@ -102,22 +108,23 @@ public sealed class LoopSimulation
                 var smb = Math.Floor(Math.Min(0.5 * required, 1) / 0.05) * 0.05;
                 if (smb > 0)
                 {
-                    Bolus(j, t, smb, automatic: true, absolute);
+                    Bolus(t, smb, automatic: true, absolute, k);
                     iob += smb;
                 }
                 rate = ProfileBasal;
             }
 
             Glucose.Add(new GlucoseSample(t, Math.Round(glucose + (random.NextDouble() * 2 - 1) * NoiseMgdl, 1)));
-            IobCob.Add(new IobCobTick(t, iob, IobCobSource.Device, cobGrams[j], IobCobSource.Device));
+            IobCob.Add(new IobCobTick(t, iob, IobCobSource.Device, cob[j], IobCobSource.Device));
             Delivered.Add(new DeliveredBasalSegment(t, t + StepMs, rate, BasalDeliveryOrigin.Algorithm));
-            absolute[j + 1] += rate * StepHours;
-            scheduled[j + 1] += ProfileBasal * StepHours;
+            absolute[k + 1] += rate * StepHours;
+            scheduled[k + 1] += ProfileBasal * StepHours;
 
-            var acting = history * HistoryActivity(j);
-            for (var i = Math.Max(0, j - DiaSteps + 1); i <= j; i++)
-                acting += absolute[i] * Activity[j - i];
-            glucose += TrueIsf * (TrueBasal * StepHours - acting) + carbEffect[j];
+            double acting = 0;
+            for (var i = Math.Max(0, k - BodyDiaSteps + 1); i <= k; i++)
+                acting += absolute[i] * body[k - i];
+            var need = TrueBasal(LocalSlotBinning.LocalTime(t, Zone).Hour) * StepHours;
+            glucose = Math.Max(39, glucose + TrueIsf * (need - acting) + carbEffect[j]);
         }
         return this;
     }
@@ -125,8 +132,8 @@ public sealed class LoopSimulation
     public List<RateSegment> Schedule(long from, long to) => [new RateSegment(from, to, ProfileBasal)];
 
     public TherapyTimeline Therapy(long from, long to) => new([new TherapySegment(from, to, new TherapySnapshot(
-        dia: DiaSteps * StepHours,
-        peakMinutes: PeakSteps * 5,
+        dia: ModelDiaSteps * StepHours,
+        peakMinutes: ModelPeakSteps * 5,
         carbsPerHour: 30,
         timezone: Zone,
         ccpPercentage: null,
@@ -135,45 +142,23 @@ public sealed class LoopSimulation
         carbRatioEntries: [new ScheduleEntry { TimeAsSeconds = 0, Value = ProfileCr }],
         basalEntries: [new ScheduleEntry { TimeAsSeconds = 0, Value = ProfileBasal }]))]);
 
-    private void Bolus(int step, long mills, double units, bool automatic, double[] absolute)
+    private void Bolus(long mills, double units, bool automatic, double[] absolute, int step)
     {
         absolute[step] += units;
         Doses.Add(new InsulinDose(mills, units, automatic));
     }
 
-    /// <summary>Insulin of <paramref name="doses"/> still to act at step <paramref name="j"/>, doses at it included.</summary>
-    private static double Remaining(double[] doses, int j)
+    /// <summary>The share of a dose acting in each step after it, on a triangle peaking at <paramref name="peak"/>.</summary>
+    private static double[] Activity(int dia, int peak)
     {
-        double sum = 0;
-        for (var i = Math.Max(0, j - DiaSteps + 1); i <= j; i++)
-            sum += doses[i] * RemainingAfter[j - i];
-        return sum;
-    }
-
-    /// <summary>What the pre-run steady basal, one step's worth per step, still has to act at step <paramref name="j"/>.</summary>
-    private static double RemainingBefore(int j)
-    {
-        double sum = 0;
-        for (var age = j + 1; age < DiaSteps; age++)
-            sum += RemainingAfter[age];
-        return sum;
-    }
-
-    /// <summary>Of the pre-run steady basal, the share of one step's dose acting in step <paramref name="j"/>.</summary>
-    private static double HistoryActivity(int j)
-    {
-        double sum = 0;
-        for (var age = j + 1; age < DiaSteps; age++)
-            sum += Activity[age];
-        return sum;
-    }
-
-    private static double[] BuildActivity()
-    {
-        var weights = new double[DiaSteps];
-        for (var k = 0; k < DiaSteps; k++)
-            weights[k] = k < PeakSteps ? (k + 0.5) / PeakSteps : (DiaSteps - k - 0.5) / (DiaSteps - PeakSteps);
+        var weights = new double[dia];
+        for (var k = 0; k < dia; k++)
+            weights[k] = k < peak ? (k + 0.5) / peak : (dia - k - 0.5) / (dia - peak);
         var total = weights.Sum();
         return [.. weights.Select(w => w / total)];
     }
+
+    /// <summary>The share of a dose still to act <c>k</c> steps after it.</summary>
+    private static double[] Remaining(double[] activity) =>
+        [.. Enumerable.Range(0, activity.Length).Select(k => 1 - activity.Take(k).Sum())];
 }
