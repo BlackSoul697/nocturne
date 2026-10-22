@@ -134,7 +134,15 @@ public class GlycemicVariability
     public double EstimatedA1c { get; set; }
 
     public A1cDisplayValue EstimatedA1cDisplay => A1cDisplayValue.FromPercent(EstimatedA1c);
-    public A1cDisplayValue A1cTarget => A1cDisplayValue.FromPercent(7);
+    public A1cDisplayValue A1cTarget => A1cDisplayValue.FromPercent(GlucoseConstants.A1cTargetPercent);
+
+    /// <summary>
+    /// Judged per unit on the value as displayed in that unit, so each state agrees with the figure
+    /// shown in its own unit.
+    /// </summary>
+    public A1cTargetState EstimatedA1cMeetsTarget => A1cTargetState.Below(EstimatedA1cDisplay, A1cTarget);
+
+    public double CoefficientOfVariationTarget => GlucoseConstants.CoefficientOfVariationTargetPercent;
 
     /// <summary>
     /// Glucose Management Indicator - modern replacement for estimated A1c
@@ -277,6 +285,16 @@ public class TimeInRangePercentages
     /// Percentage of time in very high range (greater than 250 mg/dL)
     /// </summary>
     public double VeryHigh { get; set; }
+
+    /// <summary>
+    /// Percentage of time below the target range: very low plus low
+    /// </summary>
+    public double BelowRange => VeryLow + Low;
+
+    /// <summary>
+    /// Percentage of time above the target range: high plus very high
+    /// </summary>
+    public double AboveRange => High + VeryHigh;
 }
 
 /// <summary>
@@ -1075,7 +1093,7 @@ public class ClinicalTargets
                 MaxTBRVeryLow = 1,
                 MaxTAR = 25,
                 MaxTARVeryHigh = 5,
-                TargetCV = 36,
+                TargetCV = GlucoseConstants.CoefficientOfVariationTargetPercent,
                 TargetLow = GlucoseConstants.TargetBottomMgdl,
                 TargetHigh = GlucoseConstants.TargetTopMgdl,
             },
@@ -1086,7 +1104,7 @@ public class ClinicalTargets
                 MaxTBRVeryLow = 1,
                 MaxTAR = 25,
                 MaxTARVeryHigh = 5,
-                TargetCV = 36,
+                TargetCV = GlucoseConstants.CoefficientOfVariationTargetPercent,
                 TargetLow = GlucoseConstants.TargetBottomMgdl,
                 TargetHigh = GlucoseConstants.TargetTopMgdl,
             },
@@ -1097,7 +1115,7 @@ public class ClinicalTargets
                 MaxTBRVeryLow = 0,
                 MaxTAR = 50,
                 MaxTARVeryHigh = 10,
-                TargetCV = 36,
+                TargetCV = GlucoseConstants.CoefficientOfVariationTargetPercent,
                 TargetLow = GlucoseConstants.TargetBottomMgdl,
                 TargetHigh = GlucoseConstants.TargetTopMgdl,
             },
@@ -1108,7 +1126,7 @@ public class ClinicalTargets
                 MaxTBRVeryLow = 1,
                 MaxTAR = 25,
                 MaxTARVeryHigh = 5,
-                TargetCV = 36,
+                TargetCV = GlucoseConstants.CoefficientOfVariationTargetPercent,
                 TargetLow = 63,
                 TargetHigh = 140,
             },
@@ -1119,7 +1137,7 @@ public class ClinicalTargets
                 MaxTBRVeryLow = 1,
                 MaxTAR = 25,
                 MaxTARVeryHigh = 5,
-                TargetCV = 36,
+                TargetCV = GlucoseConstants.CoefficientOfVariationTargetPercent,
                 TargetLow = 63,
                 TargetHigh = 140,
             },

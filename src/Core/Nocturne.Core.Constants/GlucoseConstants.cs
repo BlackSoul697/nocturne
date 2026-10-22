@@ -42,6 +42,17 @@ public static class GlucoseConstants
     public const double MaxPlausibleMgdl = 600;
 
     /// <summary>
+    /// Estimated A1c in NGSP percent below which the report counts the target as met. A care team
+    /// sets an individual target; this is the general one.
+    /// </summary>
+    public const double A1cTargetPercent = 7;
+
+    /// <summary>
+    /// Coefficient of variation in percent at or below which glucose counts as stable.
+    /// </summary>
+    public const double CoefficientOfVariationTargetPercent = 36;
+
+    /// <summary>
     /// Tile fill per glucose status as <c>RRGGBB</c>, for the native surfaces that paint a reading
     /// directly — the desktop tray tile and the taskbar sparkline — instead of resolving the web
     /// theme's status tokens.
