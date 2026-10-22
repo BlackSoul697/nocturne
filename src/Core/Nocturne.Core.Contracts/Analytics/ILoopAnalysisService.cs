@@ -26,6 +26,10 @@ public interface ILoopAnalysisService
     Task<LoopHealthResponse> GetLoopHealthAsync(
         LoopAnalysisFilter filter, TimeZoneInfo zone, CancellationToken ct = default);
 
+    /// <remarks>Takes and returns as <see cref="GetDailyProfileAsync"/> does; lists episodes for the primary range only.</remarks>
+    Task<SettingsEvidenceReport> GetSettingsEvidenceAsync(
+        LoopAnalysisFilter filter, TimeZoneInfo zone, CancellationToken ct = default);
+
     /// <inheritdoc cref="GetDailyProfileAsync"/>
     /// <param name="definition">The cohorts and window, already narrowed to the caller.</param>
     Task<EventResponseReport> GetEventResponseAsync(

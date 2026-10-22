@@ -150,6 +150,12 @@ public enum LoopAnalysisSeries
 
     /// <summary>The Meals &amp; events list of events, which places each meal, bolus and start in time.</summary>
     EventList,
+
+    /// <summary>
+    /// The whole Settings evidence tab: every figure reads glucose, the insulin delivered and the
+    /// profile's settings, so without any of them there is nothing to serve.
+    /// </summary>
+    SettingsEvidence,
 }
 
 /// <summary>

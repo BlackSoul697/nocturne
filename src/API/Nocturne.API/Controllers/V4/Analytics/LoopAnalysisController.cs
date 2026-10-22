@@ -102,6 +102,38 @@ public class LoopAnalysisController(
         ServeAsync(query, service.GetLoopHealthAsync, cancellationToken);
 
     /// <summary>
+    /// The basal need, ISF and carb ratio the user's own data shows, beside the profile's: basal per
+    /// two-hour local block from fasting blocks, ISF from isolated correction boluses and carb ratio
+    /// from isolated announced meals, per local time-of-day block. Each figure carries its n, spread,
+    /// confidence and the reasons it is not higher, the episodes rejected by each rule, why it has no
+    /// value where it has none, and for the primary range the episodes it was read from. These are
+    /// observations, never instructions.
+    /// </summary>
+    /// <remarks>
+    /// Every figure reads glucose, the insulin delivered and the profile's settings, so without
+    /// glucose.read, treatments.read and therapy.read the tab is withheld whole: nothing is computed,
+    /// <c>primary</c> and <c>comparison</c> are null and <c>withheldSeries</c> holds
+    /// <c>SettingsEvidence</c>.
+    /// </remarks>
+    /// <param name="query">The range, comparison and masks (<see cref="LoopAnalysisQuery"/>).</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    [HttpGet("settings-evidence")]
+    [RemoteQuery]
+    [RequireScope(LoopAnalysisReadScopeGuard.AdmissionScope)]
+    [ResponseCache(Duration = 60, Location = ResponseCacheLocation.Client)]
+    [ProducesResponseType(typeof(SettingsEvidenceReport), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    public Task<ActionResult<SettingsEvidenceReport>> GetSettingsEvidence(
+        [FromQuery] LoopAnalysisQuery query,
+        CancellationToken cancellationToken = default) =>
+        ServeAsync<SettingsEvidenceReport>(
+            query,
+            LoopAnalysisReadScopeGuard.WithheldSettingsEvidence(HttpContext.GetGrantedScopes()).Count > 0
+                ? (_, _, _) => Task.FromResult(new SettingsEvidenceReport())
+                : service.GetSettingsEvidenceAsync,
+            cancellationToken);
+
+    /// <summary>
     /// Glucose, net loop correction, net insulin above schedule, IOB and COB aligned on up to three
     /// cohorts of events (meals, correction boluses, unannounced rises, and the starts of sensors,
     /// exercise, overrides and temporary targets), each spread across its events in five-minute

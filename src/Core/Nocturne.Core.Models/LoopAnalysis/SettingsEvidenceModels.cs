@@ -421,7 +421,11 @@ public class SettingsEvidenceRange
 /// <summary>The Settings evidence tab: the primary range and, when asked for, a comparison.</summary>
 public class SettingsEvidenceReport : LoopAnalysisResponse
 {
-    public SettingsEvidenceRange Primary { get; set; } = new();
+    /// <summary>
+    /// Null when the tab is withheld (<see cref="LoopAnalysisSeries.SettingsEvidence"/> in
+    /// <see cref="LoopAnalysisResponse.WithheldSeries"/>) or no timezone resolved.
+    /// </summary>
+    public SettingsEvidenceRange? Primary { get; set; }
 
     public SettingsEvidenceRange? Comparison { get; set; }
 }
