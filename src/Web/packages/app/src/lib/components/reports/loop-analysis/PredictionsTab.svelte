@@ -5,6 +5,7 @@
 -->
 <script lang="ts">
   import {
+    AidAlgorithm,
     LoopAnalysisSeries,
     PredictionContext,
     PredictionCurve,
@@ -14,7 +15,8 @@
   import * as Alert from "$lib/components/ui/alert";
   import * as ToggleGroup from "$lib/components/ui/toggle-group";
   import FigureStrip, { type Figure } from "$lib/components/reports/FigureStrip.svelte";
-  import ChartKey from "$lib/components/charts/print/ChartKey.svelte";
+  import ChartKey, { type ChartKeyItem } from "$lib/components/charts/print/ChartKey.svelte";
+  import { aidAlgorithmLabels } from "$lib/components/patient/labels";
   import { glucoseUnits } from "$lib/stores/appearance-store.svelte";
   import { bgDelta, bgLabel, convertToDisplayUnits } from "$lib/utils/formatting";
   import { plural } from "$lib/utils/plural";
@@ -28,7 +30,7 @@
   import IgnoredFiltersNotice from "./IgnoredFiltersNotice.svelte";
   import NoTimeZone from "./NoTimeZone.svelte";
   import { axisEnd } from "./daily-profile-view";
-  import { curveLabel } from "./prediction-labels.svelte";
+  import { curveLabel, horizonList } from "./prediction-labels.svelte";
 
   let { response }: { response: PredictionAccuracyResponse } = $props();
 
@@ -39,7 +41,7 @@
 
   const withheld = $derived(new Set(response.withheldSeries ?? []));
   const curvesHidden = $derived(withheld.has(LoopAnalysisSeries.PredictionCurves));
-  const countHidden = $derived(withheld.has(LoopAnalysisSeries.PredictionCount));
+  const devicesHidden = $derived(withheld.has(LoopAnalysisSeries.PredictionCount));
   const contextsHidden = $derived(withheld.has(LoopAnalysisSeries.PredictionContexts));
 
   const units = $derived(glucoseUnits.current);
@@ -48,6 +50,13 @@
   const signed = (mgdl: number) => bgDelta(mgdl);
   const unsigned = (mgdl: number) => bgDelta(mgdl, false);
 
+  const CURVE_ORDER = [
+    PredictionCurve.Default,
+    PredictionCurve.Iob,
+    PredictionCurve.ZeroTemp,
+    PredictionCurve.Cob,
+    PredictionCurve.Uam,
+  ];
   const CURVE_COLORS: Record<PredictionCurve, string> = {
     [PredictionCurve.Default]: "var(--pred-main)",
     [PredictionCurve.Iob]: "var(--pred-iob)",
@@ -55,10 +64,14 @@
     [PredictionCurve.Cob]: "var(--pred-cob)",
     [PredictionCurve.Uam]: "var(--pred-uam)",
   };
-  const colorOf = (curve: PredictionCurveAccuracy) => CURVE_COLORS[curve.curve ?? PredictionCurve.Default];
 
-  const comparisonOf = (curve: PredictionCurveAccuracy) =>
-    comparison?.curves?.find((c) => c.curve === curve.curve) ?? null;
+  const curveOf = (range: typeof primary | null, kind: PredictionCurve) =>
+    range?.curves?.find((c) => c.curve === kind) ?? null;
+
+  /** Every curve either range carried, so one only the comparison has still shows. */
+  const kinds = $derived(
+    CURVE_ORDER.filter((kind) => curveOf(primary, kind) != null || curveOf(comparison, kind) != null)
+  );
 
   /** One symmetric axis for every curve, so their spreads compare at a glance. */
   const yDomain = $derived.by<[number, number]>(() => {
@@ -72,25 +85,37 @@
   let picked = $state<PredictionCurve | null>(null);
   const detail = $derived(curves.find((c) => c.curve === picked) ?? curves[0] ?? null);
 
-  const has = (curve: PredictionCurve) => curves.some((c) => c.curve === curve);
-  const anyInterrupted = $derived(
-    !contextsHidden && curves.some((c) => (c.horizons ?? []).some((h) => (h.interrupted ?? 0) > 0))
+  const has = (kind: PredictionCurve) => kinds.includes(kind);
+  const horizonsOf = (c: PredictionCurveAccuracy) => c.horizons ?? [];
+  const settingsSignal = $derived(
+    horizonList((curves[0]?.horizons ?? []).filter((h) => h.settingsSignal).map((h) => h.minutes ?? 0))
   );
-  const anySparse = $derived(curves.some((c) => (c.horizons ?? []).some((h) => h.error?.sparse)));
+  const anySparse = $derived(curves.some((c) => horizonsOf(c).some((h) => h.error?.sparse)));
+  const anyInterrupted = $derived(curves.some((c) => horizonsOf(c).some((h) => (h.interrupted ?? 0) > 0)));
+
+  const OREF = new Set([AidAlgorithm.OpenAps, AidAlgorithm.AndroidAps, AidAlgorithm.Trio, AidAlgorithm.IAPS]);
+  const orefCurvesHidden = $derived(contextsHidden && (primary?.algorithms ?? []).some((a) => OREF.has(a)));
+
+  const key = $derived.by<ChartKeyItem[]>(() => [
+    { texture: "percentile-outer", label: "10–90%", color: "color-mix(in oklab, var(--muted-foreground) 28%, transparent)" },
+    { texture: "percentile-inner", label: "25–75%", color: "color-mix(in oklab, var(--muted-foreground) 55%, transparent)" },
+    { texture: "percentile-median", label: "Bias", color: "var(--foreground)", shape: "line" },
+    ...(settingsSignal ? [{ texture: "in-range" as const, label: "Settings signal", color: "var(--muted)" }] : []),
+    ...(comparing ? [{ texture: "percentile-outer" as const, label: "Compared range, dashed", color: "var(--foreground)", shape: "line" as const }] : []),
+  ]);
 
   const figures = $derived.by<Figure[]>(() => {
-    if (countHidden)
-      return [{ label: "Predictions analysed", value: "–", note: "Hidden: your access does not include this data" }];
-    const n = primary?.predictions ?? 0;
     const list: Figure[] = [
       {
         label: "Predictions analysed",
-        value: n.toLocaleString(),
-        note: comparing ? `${(comparison?.predictions ?? 0).toLocaleString()} in the compared range` : "One per device per five minutes",
+        value: (primary?.predictions ?? 0).toLocaleString(),
+        note: comparing
+          ? `${(comparison?.predictions ?? 0).toLocaleString()} in the compared range`
+          : "One per device per five minutes",
       },
     ];
     if ((primary?.algorithms?.length ?? 0) > 0)
-      list.push({ label: "From", value: (primary?.algorithms ?? []).join(", ") });
+      list.push({ label: "From", value: (primary?.algorithms ?? []).map((a) => aidAlgorithmLabels[a]).join(", ") });
     return list;
   });
 </script>
@@ -118,7 +143,7 @@
         <Lock class="size-10 text-muted-foreground/50" />
         <h2 class="font-medium">Prediction accuracy is hidden</h2>
         <p class="max-w-prose text-sm text-muted-foreground">
-          {#if countHidden}
+          {#if devicesHidden}
             The predictions come from your loop's device status, and your access does not include
             device data.
           {:else}
@@ -131,12 +156,25 @@
     {:else}
       <FigureStrip {figures} />
 
-      {#if curves.length === 0}
+      {#if orefCurvesHidden}
+        <p class="flex items-start gap-1.5 px-1 text-sm text-muted-foreground">
+          <EyeOff class="mt-0.5 size-4 shrink-0" />
+          The IOB, zero-temp and COB curves are hidden: each is read only in the contexts the
+          algorithm relies on it in, and those come from treatments, which your access does not
+          include.
+        </p>
+      {/if}
+
+      {#if kinds.length === 0}
         <div class="rounded-lg border border-dashed p-8 text-center text-muted-foreground">
           <p class="font-medium">No predictions in this range</p>
           <p class="text-sm">
-            Prediction accuracy needs the predictions your loop uploads with its device status. Pick a
-            longer range, or relax the filters.
+            Prediction accuracy needs the predictions your loop uploads with its device status.
+            {#if response.historyClamped}
+              Your access covers only the last 24 hours, which hold none yet.
+            {:else}
+              Pick a longer range, or relax the filters.
+            {/if}
           </p>
         </div>
       {:else}
@@ -147,10 +185,16 @@
             <ul class="list-disc space-y-1 pl-4">
               <li>
                 Bias is the prediction minus the reading that followed: positive where the
-                prediction ran high. Only the bias at +30 and +60 minutes is a sign of your
-                settings. The readings at longer horizons include everything the loop did after the
-                prediction, which the prediction assumed would not happen.
+                prediction ran high. MAE, the mean absolute error, is the average size of the miss,
+                whichever way it went.
               </li>
+              {#if settingsSignal}
+                <li>
+                  Only the bias at {settingsSignal} is a sign of your settings. The readings at longer
+                  horizons include everything the loop did after the prediction, which the
+                  prediction assumed would not happen.
+                </li>
+              {/if}
               <li>
                 Predictions followed by a carb entry or manual bolus before their horizon are
                 counted as interrupted and left out of every bias figure, since the reading then
@@ -176,69 +220,65 @@
           <div class="space-y-1 px-1">
             <h2 id="prediction-error-title" class="font-medium">Error by horizon</h2>
             <p class="text-xs text-muted-foreground">
-              The spread of prediction minus reading, in {unit}, at each horizon, with the bias as
-              the bold line and the mean absolute error above. Shaded columns are the settings
-              signal.
-              {#if comparing}The comparison range is drawn as dashed outlines.{/if}
+              The spread of prediction minus reading, in {unit}, at each horizon: the bias as the
+              bold line, with the MAE and the number of predictions above.
             </p>
           </div>
-          <ChartKey
-            class="justify-start px-1"
-            items={[
-              { texture: "percentile-outer", label: "10–90%", color: "color-mix(in oklab, var(--muted-foreground) 28%, transparent)" },
-              { texture: "percentile-inner", label: "25–75%", color: "color-mix(in oklab, var(--muted-foreground) 55%, transparent)" },
-              { texture: "percentile-median", label: "Bias", color: "var(--foreground)", shape: "line" },
-            ]}
-          />
-          <div class="grid gap-x-6 gap-y-5 @2xl:grid-cols-2">
-            {#each curves as curve (curve.curve)}
+          <ChartKey class="justify-start px-1" items={key} />
+          <div class="grid gap-x-6 gap-y-8 @2xl:grid-cols-2">
+            {#each kinds as kind (kind)}
               <HorizonErrorChart
-                {curve}
-                comparison={comparisonOf(curve)}
-                color={colorOf(curve)}
+                {kind}
+                curve={curveOf(primary, kind)}
+                comparison={curveOf(comparison, kind)}
+                color={CURVE_COLORS[kind]}
                 {yDomain}
                 scale={toDisplay}
                 formatError={signed}
                 formatMae={unsigned}
                 {unit}
-                showInterrupted={!contextsHidden}
               />
             {/each}
           </div>
-          <p class="flex items-center gap-1.5 px-1 text-xs text-muted-foreground">
-            <EyeOff class="size-3.5" />
-            {#if anySparse}Faded horizons rest on too few days to read as a pattern.{/if}
-            With the keyboard, the arrow keys move between horizons.
+          {#if anySparse}
+            <p class="flex items-center gap-1.5 px-1 text-xs text-muted-foreground">
+              <EyeOff class="size-3.5" />
+              Faded horizons rest on too few days to read as a pattern.
+            </p>
+          {/if}
+          <p class="px-1 text-xs text-muted-foreground">
+            With the keyboard, the arrow keys move between horizons, and Home and End go to either end.
           </p>
         </section>
 
-        <section class="space-y-4 rounded-lg border bg-card p-3 @md:p-4" aria-labelledby="prediction-detail-title">
-          <div class="flex flex-wrap items-center justify-between gap-2 px-1">
-            <h2 id="prediction-detail-title" class="font-medium">By hour and context</h2>
-            {#if curves.length > 1}
-              <ToggleGroup.Root
-                type="single"
-                variant="segmented"
-                size="xs"
-                aria-label="Curve"
-                value={detail?.curve ?? ""}
-                onValueChange={(next: string) => {
-                  const curve = curves.find((c) => c.curve === next)?.curve;
-                  if (curve) picked = curve;
-                }}
-              >
-                {#each curves as curve (curve.curve)}
-                  <ToggleGroup.Item value={curve.curve ?? ""}>{curveLabel(curve.curve)}</ToggleGroup.Item>
-                {/each}
-              </ToggleGroup.Root>
-            {/if}
-          </div>
+        {#if detail}
+          <section class="space-y-4 rounded-lg border bg-card p-3 @md:p-4" aria-labelledby="prediction-detail-title">
+            <div class="flex flex-wrap items-center justify-between gap-2 px-1">
+              <h2 id="prediction-detail-title" class="font-medium">By hour and context</h2>
+              {#if curves.length > 1}
+                <ToggleGroup.Root
+                  type="single"
+                  variant="segmented"
+                  size="xs"
+                  aria-label="Curve"
+                  value={detail.curve ?? ""}
+                  onValueChange={(next: string) => {
+                    const curve = curves.find((c) => c.curve === next)?.curve;
+                    if (curve) picked = curve;
+                  }}
+                >
+                  {#each curves as curve (curve.curve)}
+                    <ToggleGroup.Item value={curve.curve ?? ""}>{curveLabel(curve.curve)}</ToggleGroup.Item>
+                  {/each}
+                </ToggleGroup.Root>
+              {/if}
+            </div>
 
-          {#if detail}
             <div class="space-y-2">
               <h3 class="px-1 text-sm font-medium">{curveLabel(detail.curve)} bias by hour of day</h3>
               <p class="px-1 text-xs text-muted-foreground">
                 By the local hour the prediction was made in, in {unit}.
+                {#if comparing}The compared range is in the charts above.{/if}
               </p>
               <PredictionBiasHeatmap curve={detail} formatError={signed} {unit} />
             </div>
@@ -261,14 +301,20 @@
                     Interrupted counts are left out of the bias, MAE and n.
                   {/if}
                 </p>
-                <PredictionContextTable curve={detail} formatError={signed} formatMae={unsigned} {unit} />
+                <PredictionContextTable
+                  curve={detail}
+                  comparison={curveOf(comparison, detail.curve ?? PredictionCurve.Default)}
+                  formatError={signed}
+                  formatMae={unsigned}
+                  {unit}
+                />
               {/if}
             </div>
-          {/if}
-        </section>
+          </section>
+        {/if}
 
         <p class="px-1 text-xs text-muted-foreground">
-          {plural(curves.length, ["# curve", "# curves"])} from the predictions your loop uploaded,
+          {plural(kinds.length, ["# curve", "# curves"])} from the predictions your loop uploaded,
           each paired with the reading within 2.5 minutes of its horizon. Unmatched horizons had no
           reading; excluded ones fell in a sensor error or compression low.
         </p>

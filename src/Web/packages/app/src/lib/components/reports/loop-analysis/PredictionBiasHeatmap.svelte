@@ -19,23 +19,27 @@
 
   /** The bias, in mg/dL, at which a cell takes its full tint. */
   const FULL_TINT_MGDL = 30;
+  /** The strongest tint, in percent; text on it keeps at least 5:1 in every theme. */
   const MAX_TINT = 55;
+  /** A sparse cell's tint is this share of what its bias would give. */
+  const SPARSE_TINT = 0.4;
 
   const hours = $derived(curve.byHour ?? []);
-  const minutes = $derived((curve.horizons ?? []).map((h) => h.minutes ?? 0));
+  const columns = $derived(curve.horizons ?? []);
 
-  function tint(h: PredictionHorizonAccuracy | undefined): string | undefined {
+  /** The cell's tint as a CSS colour, or null for none. */
+  function tintOf(h: PredictionHorizonAccuracy | undefined): string | null {
     const bias = h?.error?.mean;
-    if (bias == null || bias === 0) return undefined;
-    const share = Math.round(Math.min(1, Math.abs(bias) / FULL_TINT_MGDL) * MAX_TINT);
-    return `color-mix(in oklab, var(${bias > 0 ? "--bias-high" : "--bias-low"}) ${share}%, transparent)`;
+    if (bias == null || bias === 0) return null;
+    const share = Math.min(1, Math.abs(bias) / FULL_TINT_MGDL) * MAX_TINT * (h?.error?.sparse ? SPARSE_TINT : 1);
+    return `color-mix(in oklab, var(${bias > 0 ? "--bias-high" : "--bias-low"}) ${Math.round(share)}%, transparent)`;
   }
 
-  const cellAt = (hour: number, minute: number) =>
+  const cellAt = (hour: number, minute: number | undefined) =>
     hours.find((h) => h.hour === hour)?.horizons?.find((h) => h.minutes === minute);
 </script>
 
-<div class="bias-heatmap space-y-2">
+<div class="space-y-2">
   <div class="overflow-x-auto">
     <table class="w-full border-separate border-spacing-0.5 text-xs tabular-nums">
       <caption class="sr-only">
@@ -43,9 +47,17 @@
       </caption>
       <thead>
         <tr>
-          <th scope="col" class="px-2 py-1 text-left font-normal text-muted-foreground">Hour</th>
-          {#each minutes as minute (minute)}
-            <th scope="col" class="px-2 py-1 text-right font-normal text-muted-foreground">{horizonLabel(minute)}</th>
+          <th scope="col" class="px-2 py-1 text-left align-bottom font-normal text-muted-foreground">Hour</th>
+          {#each columns as column (column.minutes)}
+            <th
+              scope="col"
+              class="rounded-sm px-2 py-1 text-right align-bottom font-normal {column.settingsSignal
+                ? 'bg-muted text-foreground'
+                : 'text-muted-foreground'}"
+            >
+              {#if column.settingsSignal}<span class="block text-2xs text-muted-foreground">Settings signal</span>{/if}
+              {horizonLabel(column.minutes)}
+            </th>
           {/each}
         </tr>
       </thead>
@@ -55,11 +67,11 @@
             <th scope="row" class="px-2 py-0.5 text-left font-normal text-muted-foreground">
               {hourLabel(atMinute((hour.hour ?? 0) * 60))}
             </th>
-            {#each minutes as minute (minute)}
-              {@const cell = cellAt(hour.hour ?? 0, minute)}
+            {#each columns as column (column.minutes)}
+              {@const cell = cellAt(hour.hour ?? 0, column.minutes)}
               <td
-                class="rounded-sm bg-(--tint) px-2 py-0.5 text-right {cell?.error?.sparse ? 'text-muted-foreground italic' : ''}"
-                style:--tint={tint(cell) ?? "transparent"}
+                class="rounded-sm bg-(--tint) px-2 py-0.5 text-right {cell?.error?.sparse ? 'italic' : ''}"
+                style:--tint={tintOf(cell) ?? "transparent"}
               >
                 {cell?.error ? formatError(cell.error.mean ?? 0) : "–"}
               </td>
@@ -82,21 +94,11 @@
       <span class="swatch-high inline-block size-3 rounded-sm"></span>
       Predicted too high
     </span>
-    <span class="italic">Italic: too few days to read as a pattern</span>
+    <span><span class="italic">Italic</span>, paler: too few days to read as a pattern</span>
   </div>
 </div>
 
 <style>
-  .bias-heatmap {
-    --bias-high: #3b7fd1;
-    --bias-low: #d04a3c;
-  }
-
-  :global(.dark) .bias-heatmap {
-    --bias-high: #5b97e0;
-    --bias-low: #e0665a;
-  }
-
   .swatch-low {
     background-color: color-mix(in oklab, var(--bias-low) 55%, transparent);
   }

@@ -1,4 +1,6 @@
 import { PredictionContext, PredictionCurve } from "$lib/api";
+import { plural } from "$lib/utils/plural";
+import { formatLocale } from "$lib/utils/formatting";
 
 /** Built per call so wuchale reads them in the current locale. */
 export function curveLabel(curve: PredictionCurve | undefined): string {
@@ -59,5 +61,10 @@ export function contextCaption(context: PredictionContext | undefined): string {
 }
 
 export function horizonLabel(minutes: number | undefined): string {
-  return `+${minutes ?? 0} min`;
+  return plural(minutes ?? 0, ["+# min", "+# min"]);
+}
+
+/** The served settings-signal horizons as a list, e.g. "+30 min and +60 min". */
+export function horizonList(minutes: number[]): string {
+  return new Intl.ListFormat(formatLocale(), { type: "conjunction" }).format(minutes.map(horizonLabel));
 }

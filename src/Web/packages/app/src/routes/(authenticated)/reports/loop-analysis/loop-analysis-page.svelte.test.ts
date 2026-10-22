@@ -10,7 +10,20 @@ import {
 } from "$lib/components/reports/loop-analysis/daily-profile.test-fixtures";
 import { predictionResponse } from "$lib/components/reports/loop-analysis/prediction-accuracy.test-fixtures";
 
-const calls = vi.hoisted(() => ({ query: [] as unknown[], predictions: [] as unknown[], goto: [] as [string, unknown][] }));
+const calls = vi.hoisted(() => ({
+  query: [] as unknown[],
+  predictions: [] as unknown[],
+  goto: [] as [string, unknown][],
+  /** Whether a goto moves the page's URL, as SvelteKit's does, rather than only being recorded. */
+  navigate: false,
+}));
+
+// The page reads `page.url` reactively; the shared stub's is a plain property.
+vi.mock("$app/state", async () => {
+  const stub = await vi.importActual<typeof import("$app/state")>("$app/state");
+  const { reactiveFields } = await import("$lib/test-stubs/reactive-fields.svelte");
+  return { ...stub, page: reactiveFields({ ...stub.page }) };
+});
 let response: DailyProfileResponse;
 let predictions: PredictionAccuracyResponse;
 let resourceState: { stale?: boolean; error?: unknown } = {};
@@ -26,12 +39,16 @@ vi.mock("$api/generated/loopAnalysis.generated.remote", () => ({
   },
 }));
 
-vi.mock("$app/navigation", () => ({
-  goto: (url: string, options?: unknown) => {
-    calls.goto.push([url, options]);
-    return Promise.resolve();
-  },
-}));
+vi.mock("$app/navigation", async () => {
+  const { page: state } = await import("$app/state");
+  return {
+    goto: (url: string, options?: unknown) => {
+      calls.goto.push([url, options]);
+      if (calls.navigate) state.url = new URL(url, "http://localhost") as typeof state.url;
+      return Promise.resolve();
+    },
+  };
+});
 
 vi.mock("$lib/hooks/date-params.svelte", () => ({
   requireDateParamsContext: () => ({ fromDay: "2026-10-09", toDay: "2026-10-22" }),
@@ -66,6 +83,7 @@ describe("Loop Analysis page", () => {
   beforeEach(() => {
     calls.query.length = 0;
     calls.predictions.length = 0;
+    calls.navigate = false;
     calls.goto.length = 0;
     response = profileResponse();
     predictions = predictionResponse();
@@ -204,5 +222,34 @@ describe("Loop Analysis page", () => {
     const search = new URL(calls.goto.at(-1)![0], "http://localhost").searchParams;
     expect(search.has("excludeOpenLoop")).toBe(false);
     expect(search.get("tab")).toBe("predictions");
+  });
+
+  it("keeps a tab's response across a switch away and back, and never fetches a tab off screen", async () => {
+    calls.navigate = true;
+    const distinct = (list: unknown[]) => new Set(list.map((q) => JSON.stringify(q)));
+    open("?tab=predictions");
+
+    await expect.element(page.getByRole("slider", { name: "UAM", exact: true })).toBeVisible();
+    expect(calls.query).toHaveLength(0);
+
+    await page.getByRole("tab", { name: "Daily profile" }).click();
+    await expect.element(page.getByRole("slider", { name: "Glucose", exact: true })).toBeVisible();
+    await expect.element(page.getByRole("group", { name: "Exclude" })).toHaveAttribute("aria-busy", "false");
+
+    // A filter changed off the Predictions tab is not fetched for it until it is back on screen.
+    await page.getByLabelText("Exercise").click();
+    expect(distinct(calls.predictions)).toEqual(new Set([JSON.stringify({ startDate: "2026-10-09", endDate: "2026-10-22" })]));
+
+    await page.getByRole("tab", { name: "Predictions" }).click();
+    await expect.element(page.getByRole("slider", { name: "UAM", exact: true })).toBeVisible();
+    await expect.element(page.getByRole("group", { name: "Exclude" })).toHaveAttribute("aria-busy", "false");
+    expect(calls.predictions.at(-1)).toEqual({ startDate: "2026-10-09", endDate: "2026-10-22", excludeExercise: true });
+
+    // Back and forth with the filter unchanged asks for nothing new.
+    const asked = distinct(calls.predictions).size;
+    await page.getByRole("tab", { name: "Daily profile" }).click();
+    await page.getByRole("tab", { name: "Predictions" }).click();
+    await expect.element(page.getByRole("slider", { name: "UAM", exact: true })).toBeVisible();
+    expect(distinct(calls.predictions).size).toBe(asked);
   });
 });

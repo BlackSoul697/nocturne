@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { untrack } from "svelte";
   import { page } from "$app/state";
   import { goto } from "$app/navigation";
   import { resolve } from "$app/paths";
@@ -36,11 +37,25 @@
   const requested = $derived({ startDate: reportsParams.fromDay, endDate: reportsParams.toDay });
   const query = $derived(dailyProfileQuery(filter, requested));
 
-  // Only the tab on screen is fetched; its response answers the filter bar as well.
+  // Only the tab on screen is fetched; its response answers the filter bar as well. Each tab keeps
+  // the query it last fetched with, so a tab left keeps its response and is not fetched again on
+  // return unless the filter changed meanwhile, and a tab off screen never fetches.
+  type TabQuery = typeof query;
+  type TabStatus = { stale: boolean; failed: boolean };
+  let queries = $state.raw<Partial<Record<LoopAnalysisTab, TabQuery>>>({});
+  let status = $state<Partial<Record<LoopAnalysisTab, TabStatus>>>({});
   let dailyProfile = $state<DailyProfileResponse>();
   let predictions = $state<PredictionAccuracyResponse>();
-  let stale = $state(false);
-  let failed = $state(false);
+
+  $effect.pre(() => {
+    const tab = filter.tab;
+    const next = query;
+    const last = untrack(() => queries[tab]);
+    if (!last || JSON.stringify(last) !== JSON.stringify(next)) queries = { ...untrack(() => queries), [tab]: next };
+  });
+
+  const stale = $derived(status[filter.tab]?.stale ?? false);
+  const failed = $derived(status[filter.tab]?.failed ?? false);
 
   const response = $derived<LoopAnalysisResponse | undefined>(
     filter.tab === "predictions" ? predictions : dailyProfile
@@ -77,34 +92,48 @@
   <title>Loop Analysis - Nocturne Reports</title>
   <meta
     name="description"
-    content="How your automated insulin delivery behaves across the day: glucose, basal, loop corrections, IOB and COB by time of day"
+    content="How your automated insulin delivery behaves: what it does at each time of day, and how well its predictions match what followed"
   />
 </svelte:head>
 
-{#if filter.tab === "predictions"}
+{#if queries["predictions"]}
+  {@const predictionsQuery = queries["predictions"]}
   <TabResource
-    load={() => getPredictionAccuracy(query)}
+    load={() => getPredictionAccuracy(predictionsQuery)}
     onupdate={(state) => {
       predictions = state.current;
-      ({ stale, failed } = state);
+      status["predictions"] = { stale: state.stale, failed: state.failed };
     }}
   />
-{:else}
+{/if}
+{#if queries["daily-profile"]}
+  {@const dailyQuery = queries["daily-profile"]}
   <TabResource
-    load={() => getDailyProfile(query)}
+    load={() => getDailyProfile(dailyQuery)}
     onupdate={(state) => {
       dailyProfile = state.current;
-      ({ stale, failed } = state);
+      status["daily-profile"] = { stale: state.stale, failed: state.failed };
     }}
   />
 {/if}
 
 <div class="@container space-y-6">
-  <p class="text-muted-foreground print:hidden">
-    What your loop did at each time of day: glucose, scheduled against delivered basal, the
-    correction the algorithm added on top, and insulin and carbs on board. Every figure is
-    observed from your data, with its spread and the number of days behind it.
-  </p>
+  <div class="space-y-1 text-muted-foreground print:hidden">
+    <p>
+      How your loop behaves, observed from your data. Every figure comes with its spread and the
+      number of days or predictions behind it.
+    </p>
+    <ul class="list-disc space-y-0.5 pl-5 text-sm">
+      <li>
+        <span class="font-medium text-foreground">Daily profile</span>: glucose, basal, the
+        correction the loop added and insulin and carbs on board, at each time of day.
+      </li>
+      <li>
+        <span class="font-medium text-foreground">Predictions</span>: how far each curve the loop
+        predicted with landed from the readings that followed.
+      </li>
+    </ul>
+  </div>
 
   <LoopAnalysisFilterBar
     {filter}
