@@ -1,5 +1,6 @@
 using Microsoft.Extensions.Logging;
 using Moq;
+using Nocturne.Core.Constants;
 using Nocturne.Core.Models;
 using Xunit;
 
@@ -169,7 +170,7 @@ public class BgNowService
             // Calculate interpolated BG value
             interpolatedValue = (int)Math.Round(previous.Mgdl + adjustedDelta);
         }
-        var scaledDelta = units == "mmol" ? adjustedDelta / 18.0 : adjustedDelta;
+        var scaledDelta = units == "mmol" ? adjustedDelta / GlucoseConstants.MgdlPerMmol : adjustedDelta;
         var displayDelta =
             units == "mmol"
                 ? $"{(scaledDelta >= 0 ? "+" : "")}{scaledDelta:F1}"
