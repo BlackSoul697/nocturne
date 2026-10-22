@@ -39,6 +39,7 @@ public class UserDisplayPreferencesTests
             ColorTheme = "trio",
             GlucoseRangePalette = "clarity",
             NightModeSchedule = true,
+            CalendarShowTirPercent = true,
             Prediction = new PredictionPreferences { Enabled = true, Minutes = 45, DisplayMode = "cone" },
             Chart = new ChartPreferences { LineColor = "#123456", AreaOpacity = 0.25, Lookback = 6 },
         };
@@ -50,6 +51,7 @@ public class UserDisplayPreferencesTests
         restored.ColorTheme.Should().Be("trio");
         restored.GlucoseRangePalette.Should().Be("clarity");
         restored.NightModeSchedule.Should().BeTrue();
+        restored.CalendarShowTirPercent.Should().BeTrue();
         restored.Prediction!.Minutes.Should().Be(45);
         restored.Chart!.LineColor.Should().Be("#123456");
         restored.Chart.AreaOpacity.Should().Be(0.25);
@@ -202,6 +204,25 @@ public class UserDisplayPreferencesTests
 
         existing.MergeWith(new UserDisplayPreferences { GlucoseRangePalette = "theme" });
         existing.GlucoseRangePalette.Should().Be("theme");
+    }
+
+    [Fact]
+    public void MergeWith_replaces_calendar_show_tir_percent_only_when_incoming_has_one()
+    {
+        var existing = new UserDisplayPreferences { CalendarShowTirPercent = true };
+
+        existing.MergeWith(new UserDisplayPreferences { GlucoseUnits = "mmol" });
+        existing.CalendarShowTirPercent.Should().BeTrue();
+
+        existing.MergeWith(new UserDisplayPreferences { CalendarShowTirPercent = false });
+        existing.CalendarShowTirPercent.Should().BeFalse();
+    }
+
+    [Fact]
+    public void ToPresentationOnly_carries_calendar_show_tir_percent()
+    {
+        new UserDisplayPreferences { CalendarShowTirPercent = true }
+            .ToPresentationOnly().CalendarShowTirPercent.Should().BeTrue();
     }
 
     [Fact]

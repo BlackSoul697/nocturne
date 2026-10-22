@@ -123,6 +123,7 @@ public sealed class TenantAppearanceControllerTests
             ColorTheme = "trio",
             GlucoseRangePalette = "clarity",
             NightModeSchedule = true,
+            CalendarShowTirPercent = true,
             Prediction = new PredictionPreferences { Enabled = true },
             Chart = new ChartPreferences { ShowPoints = true },
             YearOverviewColors = new YearOverviewColorPreferences { Tdd = [10, 70] },
@@ -133,7 +134,7 @@ public sealed class TenantAppearanceControllerTests
 
         SetPropertyNames(disclosed).Should().BeEquivalentTo(
             "GlucoseUnits", "A1cName", "A1cUnits", "TimeFormat", "RegionFormat", "EnergyUnit", "EffectiveEnergyUnit",
-            "ColorTheme", "GlucoseRangePalette", "Prediction", "Chart", "YearOverviewColors");
+            "ColorTheme", "GlucoseRangePalette", "CalendarShowTirPercent", "Prediction", "Chart", "YearOverviewColors");
 
         // Both are carried whole rather than field by field, so the projection cannot withhold a
         // field added inside them: everything these two types declare is disclosed. Pinning the

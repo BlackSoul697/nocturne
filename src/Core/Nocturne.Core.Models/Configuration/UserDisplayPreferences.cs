@@ -149,6 +149,7 @@ public class UserDisplayPreferences
         ColorTheme = incoming.ColorTheme ?? ColorTheme;
         GlucoseRangePalette = incoming.GlucoseRangePalette ?? GlucoseRangePalette;
         NightModeSchedule = incoming.NightModeSchedule ?? NightModeSchedule;
+        CalendarShowTirPercent = incoming.CalendarShowTirPercent ?? CalendarShowTirPercent;
         DashboardTopWidgets = incoming.DashboardTopWidgets ?? DashboardTopWidgets;
         // Replace the whole color selection: an empty object resets every metric to automatic.
         YearOverviewColors = incoming.YearOverviewColors ?? YearOverviewColors;
@@ -199,6 +200,7 @@ public class UserDisplayPreferences
         EnergyUnit = EnergyUnit,
         ColorTheme = ColorTheme,
         GlucoseRangePalette = GlucoseRangePalette,
+        CalendarShowTirPercent = CalendarShowTirPercent,
         Prediction = Prediction,
         Chart = Chart,
         YearOverviewColors = YearOverviewColors,
@@ -248,6 +250,10 @@ public class UserDisplayPreferences
     /// <summary>Whether the automatic night-mode schedule is enabled.</summary>
     [JsonPropertyName("nightModeSchedule")]
     public bool? NightModeSchedule { get; set; }
+
+    /// <summary>Whether each calendar day prints its in-range percentage over its time-in-range bar.</summary>
+    [JsonPropertyName("calendarShowTirPercent")]
+    public bool? CalendarShowTirPercent { get; set; }
 
     [JsonPropertyName("prediction")]
     public PredictionPreferences? Prediction { get; set; }

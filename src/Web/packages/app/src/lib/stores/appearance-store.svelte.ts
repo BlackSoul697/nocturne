@@ -454,6 +454,14 @@ export const nightModeSchedule = new SyncedPref<boolean>(
   booleanPref
 );
 
+/** Print each calendar day's in-range percentage over its time-in-range bar. */
+export const calendarShowTirPercent = new SyncedPref<boolean>(
+  "nocturne-calendar-show-tir-percent",
+  false,
+  (p) => p.calendarShowTirPercent,
+  booleanPref
+);
+
 export const yearOverviewColors = new SyncedPref<NonNullable<UserDisplayPreferences["yearOverviewColors"]>>(
   "nocturne-year-overview-colors",
   {},
@@ -814,6 +822,7 @@ export function collectPreferences(): UserDisplayPreferences {
     colorTheme: colorTheme.stored,
     glucoseRangePalette: glucoseRangePalette.stored,
     nightModeSchedule: nightModeSchedule.stored,
+    calendarShowTirPercent: calendarShowTirPercent.stored,
     dashboardTopWidgets: dashboardTopWidgets.stored,
     prediction: {
       enabled: predictionEnabled.stored,
