@@ -43,7 +43,8 @@ internal sealed class LoopAnalysisService(
     IBasalSeriesBuilder basalSeriesBuilder,
     IBasalSegmentService basalSegmentService,
     IIobCalculator iobCalculator,
-    ICobCalculator cobCalculator
+    ICobCalculator cobCalculator,
+    TimeProvider timeProvider
 ) : ILoopAnalysisService
 {
     private const long TickMs = DailyProfileCalculator.SlotMinutes * LocalSlotBinning.MinuteMs;
@@ -189,11 +190,13 @@ internal sealed class LoopAnalysisService(
     }
 
     /// <summary>
-    /// Every prediction made in the window, the readings up to
+    /// Every prediction made in the window; the readings up to
     /// <see cref="PredictionAccuracyCalculator.ReadingsAfterRangeMs"/> past it that the last of them
-    /// are paired with, and the carbs and manual boluses
-    /// <see cref="PredictionAccuracyCalculator.ContextLookbackMs"/> before it that set the context.
-    /// Snapshots with predictions are the AID evidence the open-loop mask weighs.
+    /// are paired with, and the spans over the same time, open ones closed at its end; and the
+    /// carbs and manual boluses that set the context, from
+    /// <see cref="PredictionAccuracyCalculator.ContextLookbackMs"/> before it to
+    /// <see cref="PredictionAccuracyCalculator.TreatmentsAfterRangeMs"/> after it. Snapshots with
+    /// predictions are the AID evidence the open-loop mask weighs.
     /// </summary>
     private async Task<LoadedPredictions> LoadPredictionsAsync(
         Window window, TimeZoneInfo zone, bool needsProfiles, CancellationToken ct)
@@ -201,13 +204,15 @@ internal sealed class LoopAnalysisService(
         var (from, to) = (window.From, window.To);
         var fromUtc = ToUtc(from);
         var toUtc = ToUtc(to);
-        var readingsEndUtc = ToUtc(to + PredictionAccuracyCalculator.ReadingsAfterRangeMs);
+        var readingsEnd = to + PredictionAccuracyCalculator.ReadingsAfterRangeMs;
+        var readingsEndUtc = ToUtc(readingsEnd);
         var lookbackUtc = ToUtc(from - PredictionAccuracyCalculator.ContextLookbackMs);
+        var treatmentsEndUtc = ToUtc(to + PredictionAccuracyCalculator.TreatmentsAfterRangeMs);
 
         var predictionTask = apsSnapshotRepository.GetPredictionsAsync(fromUtc, toUtc, ct);
         var glucoseTask = glucoseRepository.GetForAnalyticsAsync(fromUtc, readingsEndUtc, null, null, int.MaxValue, descending: false, ct: ct);
-        var bolusTask = bolusRepository.GetAsync(lookbackUtc, toUtc, null, null, int.MaxValue, descending: false, ct: ct);
-        var carbTask = carbIntakeRepository.GetAsync(lookbackUtc, toUtc, null, null, int.MaxValue, descending: false, ct: ct);
+        var bolusTask = bolusRepository.GetAsync(lookbackUtc, treatmentsEndUtc, null, null, int.MaxValue, descending: false, ct: ct);
+        var carbTask = carbIntakeRepository.GetAsync(lookbackUtc, treatmentsEndUtc, null, null, int.MaxValue, descending: false, ct: ct);
         var spanTask = stateSpanRepository.GetByCategories(MaskCategories, fromUtc, readingsEndUtc, ct);
         var deviceTask = patientDeviceRepository.GetByDateRangeAsync(fromUtc, toUtc, ct);
         await Task.WhenAll(predictionTask, glucoseTask, bolusTask, carbTask, spanTask, deviceTask);
@@ -223,7 +228,7 @@ internal sealed class LoopAnalysisService(
                 .Select(p => new ProfileInterval(p.ProfileName, p.StartMills, p.EndMills ?? to))
                 .ToList()
             : [];
-        var sources = MaskSources(spans, await deviceTask, [.. snapshots.Select(s => s.StartMills)], profiles, zone, to);
+        var sources = MaskSources(spans, await deviceTask, [.. snapshots.Select(s => s.StartMills)], profiles, zone, readingsEnd);
 
         var inputs = new PredictionAccuracyInputs
         {
@@ -231,27 +236,29 @@ internal sealed class LoopAnalysisService(
             Snapshots = snapshots,
             Glucose = [.. glucose.Select(g => new GlucoseSample(g.Mills, g.Mgdl)).Where(g => g.Mgdl > 0).OrderBy(g => g.Mills)],
             GlucoseExclusions = IntervalSet.Of(sources.DataExclusions),
+            ReadingsUntil = Math.Min(readingsEnd, timeProvider.GetUtcNow().ToUnixTimeMilliseconds()),
             CarbMills = [.. (await carbTask).Where(c => c.Carbs > 0).Select(c => c.Mills).Order()],
             ManualBolusMills = [.. (await bolusTask).Where(b => b.Kind != BolusKind.Algorithm && b.Insulin > 0).Select(b => b.Mills).Order()],
-            ExerciseOrOverride = IntervalSet.Of(sources.Overrides.Concat(sources.Exercise)),
+            Adjusted = IntervalSet.Of(sources.Overrides.Concat(sources.TemporaryTargets).Concat(sources.Exercise)),
         };
         return new LoadedPredictions(inputs, sources);
     }
 
+    /// <param name="openEnd">Where a span still open ends: the end of the time its readers look at.</param>
     private static LoopAnalysisMaskSources MaskSources(
         Dictionary<StateSpanCategory, List<StateSpan>> spans,
         IEnumerable<PatientDevice> devices,
         IReadOnlyList<long> snapshotMills,
         IReadOnlyList<ProfileInterval> profiles,
         TimeZoneInfo zone,
-        long to) => new()
+        long openEnd) => new()
     {
-        Overrides = [.. SpansOf(spans, StateSpanCategory.Override, to).Select(s => s.Interval)],
-        TemporaryTargets = [.. ActiveTemporaryTargets(spans, to).Select(s => s.Interval)],
-        Exercise = [.. SpansOf(spans, StateSpanCategory.Exercise, to).Select(s => s.Interval)],
-        Illness = [.. SpansOf(spans, StateSpanCategory.Illness, to).Select(s => s.Interval)],
-        DataExclusions = [.. SpansOf(spans, StateSpanCategory.DataExclusion, to).Select(s => s.Interval)],
-        OpenLoop = OpenLoop(spans, devices, snapshotMills, zone, to).Intervals,
+        Overrides = [.. SpansOf(spans, StateSpanCategory.Override, openEnd).Select(s => s.Interval)],
+        TemporaryTargets = [.. ActiveTemporaryTargets(spans, openEnd).Select(s => s.Interval)],
+        Exercise = [.. SpansOf(spans, StateSpanCategory.Exercise, openEnd).Select(s => s.Interval)],
+        Illness = [.. SpansOf(spans, StateSpanCategory.Illness, openEnd).Select(s => s.Interval)],
+        DataExclusions = [.. SpansOf(spans, StateSpanCategory.DataExclusion, openEnd).Select(s => s.Interval)],
+        OpenLoop = OpenLoop(spans, devices, snapshotMills, zone, openEnd).Intervals,
         Profiles = profiles,
     };
 

@@ -24,21 +24,28 @@ public enum PredictionCurve
 }
 
 /// <summary>
-/// What was going on when a prediction was made. Each prediction is in exactly one context, the
-/// first that applies in this order: exercise or override, post-meal, post-correction, fasting.
+/// What was going on around a predicted value. Each value is in exactly one context, the first
+/// that applies in this order: adjusted, post-meal, post-correction, fasting. A carb entry or bolus
+/// counts from three hours before the prediction up to the time the value predicted, so one taken
+/// after the prediction, which the prediction could not know of, takes its later horizons out of
+/// fasting.
 /// </summary>
 [JsonConverter(typeof(JsonStringEnumConverter<PredictionContext>))]
 public enum PredictionContext
 {
-    /// <summary>An exercise or override span was active.</summary>
-    ExerciseOrOverride,
+    /// <summary>
+    /// An override, temporary target or exercise span was active when the prediction was made: the
+    /// loop was told to run differently. In oref a high temporary target is exercise mode and
+    /// scales sensitivity.
+    /// </summary>
+    Adjusted,
 
-    /// <summary>Carbs were entered in the previous three hours.</summary>
+    /// <summary>Carbs were entered.</summary>
     PostMeal,
 
     /// <summary>
-    /// A manual bolus was given in the previous three hours with no carbs. Automatic boluses are
-    /// the loop's own dosing and do not count.
+    /// A manual bolus was given and no carbs entered. Automatic boluses are the loop's own dosing
+    /// and do not count.
     /// </summary>
     PostCorrection,
 
@@ -60,7 +67,7 @@ public class PredictionAccuracyResponse : LoopAnalysisResponse
 /// </summary>
 /// <remarks>
 /// A prediction belongs to the range its start falls in, and is paired with readings past the
-/// range's end. Snapshots are thinned to one per device per five minutes, an enacted one first.
+/// range's end. Snapshots are thinned as <c>IApsSnapshotRepository.GetPredictionsAsync</c> states.
 /// </remarks>
 public class PredictionAccuracyRange
 {
@@ -130,7 +137,7 @@ public class PredictionContextAccuracy
 /// </remarks>
 public class PredictionHorizonAccuracy
 {
-    /// <summary>Minutes after the prediction start.</summary>
+    /// <summary>Minutes after the prediction start; for Loop, after the start's five-minute grid point.</summary>
     public int Minutes { get; set; }
 
     /// <summary>
@@ -152,6 +159,12 @@ public class PredictionHorizonAccuracy
     /// They are counted, not paired with an imputed value.
     /// </summary>
     public int Unmatched { get; set; }
+
+    /// <summary>
+    /// Predictions whose horizon fell in a data exclusion (a compression low, a sensor error), where
+    /// the readings are known to be wrong. Neither paired nor unmatched.
+    /// </summary>
+    public int Excluded { get; set; }
 
     /// <summary>The horizon's bias is read as a settings signal; see the remarks.</summary>
     public bool SettingsSignal { get; set; }

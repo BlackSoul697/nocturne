@@ -8,10 +8,9 @@ using Nocturne.Core.Models.V4;
 namespace Nocturne.Core.Clinical.LoopAnalysis;
 
 /// <summary>
-/// One snapshot's prediction curves, mg/dL, indexed by <see cref="PredictionCurve"/>: value
-/// <c>i</c> of a curve is <see cref="PredictionAccuracyCalculator.StepMinutes"/> × <c>i</c> minutes
-/// after <see cref="StartMills"/>, up to the last horizon. A curve the snapshot did not carry is
-/// null, and so is a value it left out.
+/// One snapshot's prediction curves, mg/dL, indexed by <see cref="PredictionCurve"/>, up to the
+/// last horizon; where value <c>i</c> falls is <see cref="PredictionAccuracyCalculator.TargetMills"/>.
+/// A curve the snapshot did not carry is null, and so is a value it left out.
 /// </summary>
 public sealed record PredictionSnapshot(long StartMills, AidAlgorithm Algorithm, double?[]?[] Curves);
 
@@ -30,18 +29,30 @@ public sealed record PredictionAccuracyInputs
     public IReadOnlyList<GlucoseSample> Glucose { get; init; } = [];
 
     /// <summary>
-    /// <see cref="StateSpanCategory.DataExclusion"/> time. A horizon landing in it is not paired
-    /// and not counted unmatched: the readings there are known to be wrong, not missing.
+    /// <see cref="StateSpanCategory.DataExclusion"/> time, to the end of <see cref="Glucose"/>. A
+    /// horizon landing in it is counted excluded, neither paired nor unmatched: the readings there
+    /// are known to be wrong, not missing.
     /// </summary>
     public IntervalSet GlucoseExclusions { get; init; } = IntervalSet.Empty;
 
-    /// <summary>Carb entries of more than zero grams, ordered.</summary>
+    /// <summary>
+    /// The instant the readings are known up to: the end of <see cref="Glucose"/>, or now when that
+    /// is earlier. A horizon after it has not happened yet and is no prediction at all.
+    /// </summary>
+    public long ReadingsUntil { get; init; } = long.MaxValue;
+
+    /// <summary>
+    /// Carb entries of more than zero grams, ordered, from
+    /// <see cref="PredictionAccuracyCalculator.ContextLookbackMs"/> before the range to
+    /// <see cref="PredictionAccuracyCalculator.TreatmentsAfterRangeMs"/> after it.
+    /// </summary>
     public IReadOnlyList<long> CarbMills { get; init; } = [];
 
-    /// <summary>Manual boluses of more than zero units, ordered.</summary>
+    /// <summary>Manual boluses of more than zero units, ordered, over the same time as <see cref="CarbMills"/>.</summary>
     public IReadOnlyList<long> ManualBolusMills { get; init; } = [];
 
-    public IntervalSet ExerciseOrOverride { get; init; } = IntervalSet.Empty;
+    /// <summary>Override, temporary target and exercise time.</summary>
+    public IntervalSet Adjusted { get; init; } = IntervalSet.Empty;
 }
 
 /// <summary>
@@ -49,8 +60,9 @@ public sealed record PredictionAccuracyInputs
 /// predicted, and summarises the error by curve, horizon, local hour of day and context.
 /// </summary>
 /// <remarks>
-/// A prediction counts where its start is in the analysed time. Where it does not reach a horizon
-/// (the curve is shorter, or leaves the value out) that horizon is not a prediction at all.
+/// A prediction counts where its start is in the analysed time and not in a data exclusion. Where
+/// it does not reach a horizon (the curve is shorter, or leaves the value out), or the horizon is
+/// after <see cref="PredictionAccuracyInputs.ReadingsUntil"/>, that horizon is no prediction at all.
 /// </remarks>
 public static class PredictionAccuracyCalculator
 {
@@ -63,23 +75,47 @@ public static class PredictionAccuracyCalculator
 
     public const long MatchToleranceMs = 150_000;
 
-    /// <summary>How far back carbs or a manual bolus put a prediction in a post-meal or post-correction context.</summary>
+    /// <summary>
+    /// How far before a prediction carbs or a manual bolus put it in a post-meal or post-correction
+    /// context. One taken after the prediction does so for the horizons after it, which it moved
+    /// without the prediction knowing.
+    /// </summary>
     public const long ContextLookbackMs = 3 * LocalSlotBinning.HourMs;
 
     public static long ReadingsAfterRangeMs => HorizonMinutes[^1] * LocalSlotBinning.MinuteMs + MatchToleranceMs;
 
+    /// <summary>How long after the range a carb entry or bolus can still set a prediction's context.</summary>
+    public static long TreatmentsAfterRangeMs => HorizonMinutes[^1] * LocalSlotBinning.MinuteMs;
+
+    /// <summary>
+    /// The fewest values oref leaves when it drops a level tail from its IOB, COB and UAM curves:
+    /// oref0 <c>lib/determine-basal/determine-basal.js:653-690</c> at
+    /// <c>88cf032aa74ff25f69464a7d9cd601ee3940c0b3</c> pops trailing equal values while more than 13
+    /// remain. Its zero-temp curve is cut where it turns up above target instead, so that tail is not
+    /// level and is not held.
+    /// </summary>
+    private const int OrefTrimmedLength = 13;
+
+    private const long StepMs = StepMinutes * LocalSlotBinning.MinuteMs;
+
     private static readonly int CurveCount = Enum.GetValues<PredictionCurve>().Length;
+
+    private static readonly int LastIndex = HorizonMinutes[^1] / StepMinutes;
 
     private static readonly PredictionContext[] AllContexts = Enum.GetValues<PredictionContext>();
 
-    private static readonly PredictionContext[][] ContextsOf =
-    [
-        AllContexts,
-        [PredictionContext.PostCorrection, PredictionContext.Fasting],
-        [PredictionContext.PostCorrection, PredictionContext.Fasting],
-        [PredictionContext.PostMeal],
-        AllContexts,
-    ];
+    private static readonly PredictionContext[] CarbFree = [PredictionContext.PostCorrection, PredictionContext.Fasting];
+
+    private static readonly PredictionContext[] AfterMeal = [PredictionContext.PostMeal];
+
+    /// <summary>See <see cref="PredictionCurveAccuracy.Contexts"/>.</summary>
+    private static PredictionContext[] ContextsOf(PredictionCurve curve) => curve switch
+    {
+        PredictionCurve.Default or PredictionCurve.Uam => AllContexts,
+        PredictionCurve.Iob or PredictionCurve.ZeroTemp => CarbFree,
+        PredictionCurve.Cob => AfterMeal,
+        _ => throw new ArgumentOutOfRangeException(nameof(curve), curve, null),
+    };
 
     /// <summary>
     /// The curves of a stored snapshot. One carrying any of oref's curves is read as oref, whose
@@ -87,18 +123,18 @@ public static class PredictionAccuracyCalculator
     /// its default is dropped rather than counted twice.
     /// </summary>
     /// <remarks>
-    /// oref drops the trailing values of a curve that has levelled off, keeping at least 13 (7 of the
-    /// zero-temp curve), so an oref curve that ends before the last horizon is read as holding its
-    /// last value from there. Loop's curve is never shortened that way and is read as it is.
+    /// An oref IOB, COB or UAM curve that ends before the last horizon with at least
+    /// <see cref="OrefTrimmedLength"/> values had its level tail dropped, so it is read as holding its
+    /// last value from there. Any other short curve simply ends.
     /// </remarks>
     /// <returns>Null when the snapshot carries no readable curve.</returns>
     public static PredictionSnapshot? Parse(ApsPredictionPoint point)
     {
         var curves = new double?[]?[CurveCount];
-        curves[(int)PredictionCurve.Iob] = ExtendFlatTail(ParseCurve(point.IobJson));
-        curves[(int)PredictionCurve.ZeroTemp] = ExtendFlatTail(ParseCurve(point.ZtJson));
-        curves[(int)PredictionCurve.Cob] = ExtendFlatTail(ParseCurve(point.CobJson));
-        curves[(int)PredictionCurve.Uam] = ExtendFlatTail(ParseCurve(point.UamJson));
+        curves[(int)PredictionCurve.Iob] = ExtendLevelTail(ParseCurve(point.IobJson));
+        curves[(int)PredictionCurve.ZeroTemp] = ParseCurve(point.ZtJson);
+        curves[(int)PredictionCurve.Cob] = ExtendLevelTail(ParseCurve(point.CobJson));
+        curves[(int)PredictionCurve.Uam] = ExtendLevelTail(ParseCurve(point.UamJson));
         if (curves.All(c => c is null))
             curves[(int)PredictionCurve.Default] = ParseCurve(point.DefaultJson);
         if (curves.All(c => c is null))
@@ -144,16 +180,41 @@ public static class PredictionAccuracyCalculator
         }
     }
 
-    private static readonly int LastIndex = HorizonMinutes[^1] / StepMinutes;
-
-    private static double?[]? ExtendFlatTail(double?[]? curve)
+    private static double?[]? ExtendLevelTail(double?[]? curve)
     {
-        if (curve is null || curve.Length > LastIndex || curve[^1] is not { } last)
+        if (curve is null || curve.Length < OrefTrimmedLength || curve.Length > LastIndex || curve[^1] is not { } last)
             return curve;
         var extended = new double?[LastIndex + 1];
         curve.CopyTo(extended, 0);
         Array.Fill(extended, last, curve.Length, extended.Length - curve.Length);
         return extended;
+    }
+
+    /// <summary>
+    /// When value <paramref name="index"/> of a curve falls.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// oref's values are five minutes apart from the start. The start is when the command was
+    /// computed (<c>suggested.timestamp</c>), while its value 0 is the reading it ran on, which can
+    /// be a few minutes older.
+    /// </para>
+    /// <para>
+    /// Loop's value 0 is at the start, the glucose time, and its later values on the five-minute
+    /// grid its effects are computed on: LoopKit <c>LoopKit/LoopMath.swift:162-172</c>,
+    /// <c>LoopKit/LoopMath.swift:20-50</c> and <c>LoopKit/Extensions/Date.swift:13-19</c> at
+    /// <c>3e828cd22bb24098ec0fff5dd4e208f9c3ae0934</c>. NightscoutService uploads the first value's
+    /// date as the start (<c>NightscoutServiceKit/Extensions/StoredDosingDecision.swift:30-35</c> at
+    /// <c>2cef4896f0704fb112575ab34b596ee7de78e48d</c>).
+    /// </para>
+    /// </remarks>
+    public static long TargetMills(PredictionSnapshot snapshot, PredictionCurve curve, int index)
+    {
+        var start = snapshot.StartMills;
+        if (index == 0 || curve != PredictionCurve.Default || snapshot.Algorithm != AidAlgorithm.Loop)
+            return start + index * StepMs;
+        var gridStart = start - ((start % StepMs) + StepMs) % StepMs;
+        return gridStart + index * StepMs;
     }
 
     public static PredictionAccuracyRange Calculate(PredictionAccuracyInputs inputs, LoopAnalysisMask mask, long from, long to)
@@ -167,12 +228,11 @@ public static class PredictionAccuracyCalculator
         foreach (var snapshot in inputs.Snapshots)
         {
             var start = snapshot.StartMills;
-            if (start < from || start >= to || !mask.Analysed.Contains(start))
+            if (start < from || start >= to || !mask.Glucose.Contains(start))
                 continue;
 
             predictions++;
             algorithms.Add(snapshot.Algorithm);
-            var context = ContextAt(inputs, start);
             var local = LocalSlotBinning.LocalTime(start, inputs.Zone);
             var day = DateOnly.FromDateTime(local).DayNumber;
 
@@ -181,25 +241,27 @@ public static class PredictionAccuracyCalculator
                 if (snapshot.Curves[c] is not { } curve)
                     continue;
                 carried[c] = true;
-                if (Array.IndexOf(ContextsOf[c], context) < 0)
-                    continue;
+                var contexts = ContextsOf((PredictionCurve)c);
 
-                var curveCells = cells[c] ??= NewCells(c, horizons);
                 for (var h = 0; h < horizons; h++)
                 {
-                    var minutes = HorizonMinutes[h];
-                    var index = minutes / StepMinutes;
+                    var index = HorizonMinutes[h] / StepMinutes;
                     if (index >= curve.Length || curve[index] is not { } predicted || !double.IsFinite(predicted))
                         continue;
-
-                    var target = start + minutes * LocalSlotBinning.MinuteMs;
-                    if (inputs.GlucoseExclusions.Contains(target))
+                    var target = TargetMills(snapshot, (PredictionCurve)c, index);
+                    if (target > inputs.ReadingsUntil)
+                        continue;
+                    var contextIndex = Array.IndexOf(contexts, ContextAt(inputs, start, target));
+                    if (contextIndex < 0)
                         continue;
 
-                    var actual = NearestReading(inputs.Glucose, target);
-                    curveCells[OverallCell].Add(h, predicted, actual, day);
-                    curveCells[HourCell(local.Hour)].Add(h, predicted, actual, day);
-                    curveCells[ContextCell(Array.IndexOf(ContextsOf[c], context))].Add(h, predicted, actual, day);
+                    var outcome = inputs.GlucoseExclusions.Contains(target)
+                        ? Outcome.Excluded
+                        : new Outcome(NearestReading(inputs.Glucose, target), false);
+                    var curveCells = cells[c] ??= NewCells(contexts.Length, horizons);
+                    curveCells[OverallCell].Add(h, predicted, outcome, day);
+                    curveCells[HourCell(local.Hour)].Add(h, predicted, outcome, day);
+                    curveCells[ContextCell(contextIndex)].Add(h, predicted, outcome, day);
                 }
             }
         }
@@ -216,8 +278,8 @@ public static class PredictionAccuracyCalculator
         {
             if (!carried[c])
                 continue;
-            var curveCells = cells[c] ?? NewCells(c, horizons);
-            var contexts = ContextsOf[c];
+            var contexts = ContextsOf((PredictionCurve)c);
+            var curveCells = cells[c] ?? NewCells(contexts.Length, horizons);
             result.Curves.Add(new PredictionCurveAccuracy
             {
                 Curve = (PredictionCurve)c,
@@ -239,14 +301,17 @@ public static class PredictionAccuracyCalculator
         return result;
     }
 
-    /// <summary>The first context of <see cref="PredictionContext"/>'s order that applies at <paramref name="mills"/>.</summary>
-    public static PredictionContext ContextAt(PredictionAccuracyInputs inputs, long mills)
+    /// <summary>
+    /// The first context of <see cref="PredictionContext"/>'s order that applies to the value a
+    /// prediction made at <paramref name="start"/> gave for <paramref name="target"/>.
+    /// </summary>
+    public static PredictionContext ContextAt(PredictionAccuracyInputs inputs, long start, long target)
     {
-        if (inputs.ExerciseOrOverride.Contains(mills))
-            return PredictionContext.ExerciseOrOverride;
-        if (AnyWithin(inputs.CarbMills, mills - ContextLookbackMs, mills))
+        if (inputs.Adjusted.Contains(start))
+            return PredictionContext.Adjusted;
+        if (AnyWithin(inputs.CarbMills, start - ContextLookbackMs, target))
             return PredictionContext.PostMeal;
-        if (AnyWithin(inputs.ManualBolusMills, mills - ContextLookbackMs, mills))
+        if (AnyWithin(inputs.ManualBolusMills, start - ContextLookbackMs, target))
             return PredictionContext.PostCorrection;
         return PredictionContext.Fasting;
     }
@@ -282,12 +347,18 @@ public static class PredictionAccuracyCalculator
 
     private static int ContextCell(int index) => 1 + HoursPerDay + index;
 
-    private static Cell[] NewCells(int curve, int horizons)
+    private static Cell[] NewCells(int contexts, int horizons)
     {
-        var cells = new Cell[ContextCell(ContextsOf[curve].Length)];
+        var cells = new Cell[ContextCell(contexts)];
         for (var i = 0; i < cells.Length; i++)
             cells[i] = new Cell(horizons);
         return cells;
+    }
+
+    /// <summary>What a horizon's target found: a reading, no reading, or excluded time.</summary>
+    private readonly record struct Outcome(double? Actual, bool IsExcluded)
+    {
+        public static readonly Outcome Excluded = new(null, true);
     }
 
     private sealed class Cell(int horizons)
@@ -296,11 +367,17 @@ public static class PredictionAccuracyCalculator
         private readonly double[] _absolute = new double[horizons];
         private readonly double[] _relative = new double[horizons];
         private readonly int[] _unmatched = new int[horizons];
+        private readonly int[] _excluded = new int[horizons];
         private readonly HashSet<int>[] _days = [.. Enumerable.Range(0, horizons).Select(_ => new HashSet<int>())];
 
-        public void Add(int horizon, double predicted, double? actual, int day)
+        public void Add(int horizon, double predicted, Outcome outcome, int day)
         {
-            if (actual is not { } mgdl)
+            if (outcome.IsExcluded)
+            {
+                _excluded[horizon]++;
+                return;
+            }
+            if (outcome.Actual is not { } mgdl)
             {
                 _unmatched[horizon]++;
                 return;
@@ -326,6 +403,7 @@ public static class PredictionAccuracyCalculator
                     Mae = n == 0 ? null : SlotSummary.Round(_absolute[h] / n),
                     Mard = n == 0 ? null : SlotSummary.Round(100 * _relative[h] / n),
                     Unmatched = _unmatched[h],
+                    Excluded = _excluded[h],
                     SettingsSignal = SettingsSignalMinutes.Contains(HorizonMinutes[h]),
                 });
             }

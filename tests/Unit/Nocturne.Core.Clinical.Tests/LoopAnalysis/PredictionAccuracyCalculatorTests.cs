@@ -49,7 +49,8 @@ public class PredictionAccuracyCalculatorTests
         long to = 0,
         IEnumerable<long>? carbs = null,
         IEnumerable<long>? manualBoluses = null,
-        IntervalSet? exerciseOrOverride = null,
+        IntervalSet? adjusted = null,
+        long readingsUntil = long.MaxValue,
         IntervalSet? exclusions = null,
         LoopAnalysisMasks? filter = null,
         LoopAnalysisMaskSources? sources = null)
@@ -63,7 +64,8 @@ public class PredictionAccuracyCalculatorTests
             Glucose = [.. glucose.OrderBy(g => g.Mills)],
             CarbMills = [.. carbs ?? []],
             ManualBolusMills = [.. manualBoluses ?? []],
-            ExerciseOrOverride = exerciseOrOverride ?? IntervalSet.Empty,
+            Adjusted = adjusted ?? IntervalSet.Empty,
+            ReadingsUntil = readingsUntil,
             GlucoseExclusions = exclusions ?? IntervalSet.Empty,
         };
         var mask = LoopAnalysisMask.Build(filter ?? new LoopAnalysisMasks(), from, to, Sydney, sources ?? new LoopAnalysisMaskSources());
@@ -162,13 +164,95 @@ public class PredictionAccuracyCalculatorTests
             Zone = Sydney,
             CarbMills = [at - 3 * Hour],
             ManualBolusMills = [at - Hour],
-            ExerciseOrOverride = IntervalSet.Of(at + Hour, at + 2 * Hour),
+            Adjusted = IntervalSet.Of(at + Hour, at + 2 * Hour),
         };
 
-        PredictionAccuracyCalculator.ContextAt(inputs, at).Should().Be(PredictionContext.PostMeal, "carbs exactly three hours back still count");
-        PredictionAccuracyCalculator.ContextAt(inputs, at + 1).Should().Be(PredictionContext.PostCorrection);
-        PredictionAccuracyCalculator.ContextAt(inputs, at + Hour).Should().Be(PredictionContext.ExerciseOrOverride);
-        PredictionAccuracyCalculator.ContextAt(inputs, at + 5 * Hour).Should().Be(PredictionContext.Fasting);
+        PredictionAccuracyCalculator.ContextAt(inputs, at, at).Should().Be(PredictionContext.PostMeal, "carbs exactly three hours back still count");
+        PredictionAccuracyCalculator.ContextAt(inputs, at + 1, at + 1).Should().Be(PredictionContext.PostCorrection);
+        PredictionAccuracyCalculator.ContextAt(inputs, at + Hour, at + 2 * Hour).Should().Be(PredictionContext.Adjusted);
+        PredictionAccuracyCalculator.ContextAt(inputs, at + 5 * Hour, at + 6 * Hour).Should().Be(PredictionContext.Fasting);
+    }
+
+    [Fact]
+    public void APreBolusBeforeAMeal_IsPostMealFromTheHorizonTheCarbsReach()
+    {
+        var bolus = Midnight + 12 * Hour;
+        var meal = bolus + 15 * Minute;
+
+        var curve = Calculate(
+            [LoopFixture(bolus, Flat(120))], Readings(Midnight, To + 3 * Hour, 110),
+            carbs: [meal], manualBoluses: [bolus]).Curves.Single();
+
+        var postMeal = curve.ByContext.Single(c => c.Context == PredictionContext.PostMeal);
+        postMeal.Horizons.Should().OnlyContain(h => h.Error != null && h.Error.N == 1,
+            "every horizon is after the carbs, which moved it without the prediction knowing");
+        curve.ByContext.Single(c => c.Context == PredictionContext.PostCorrection).Horizons
+            .Should().OnlyContain(h => h.Error == null);
+    }
+
+    [Fact]
+    public void ThePredictionsBeforeAMeal_AreFastingOnlyUntilTheCarbs()
+    {
+        var meal = Midnight + 12 * Hour;
+        var start = meal - 45 * Minute;
+
+        var curve = Calculate(
+            [LoopFixture(start, Flat(120))], Readings(Midnight, To + 3 * Hour, 110), carbs: [meal]).Curves.Single();
+
+        curve.ByContext.Single(c => c.Context == PredictionContext.Fasting).Horizons.Select(h => h.Error?.N ?? 0)
+            .Should().Equal(1, 0, 0, 0);
+        curve.ByContext.Single(c => c.Context == PredictionContext.PostMeal).Horizons.Select(h => h.Error?.N ?? 0)
+            .Should().Equal(0, 1, 1, 1);
+    }
+
+    [Fact]
+    public void AHorizonNotYetReached_IsNoPrediction()
+    {
+        var start = To - 10 * Minute;
+        var now = To + 45 * Minute;
+
+        var curve = Calculate(
+            [LoopFixture(start, Flat(120))], Readings(To - Hour, now, 110), readingsUntil: now).Curves.Single();
+
+        curve.Horizons.Select(h => h.Error?.N ?? 0).Should().Equal(1, 0, 0, 0);
+        curve.Horizons.Should().OnlyContain(h => h.Unmatched == 0, "a reading that has not happened yet is not missing");
+    }
+
+    [Fact]
+    public void APredictionStartedInADataExclusion_IsNotAnalysed()
+    {
+        var compressionLow = new MillsInterval(Midnight + 2 * Hour, Midnight + 3 * Hour);
+
+        var range = Calculate(
+            [LoopFixture(Midnight + 2 * Hour + 30 * Minute, Flat(40)), LoopFixture(Midnight + 5 * Hour, Flat(120))],
+            Readings(Midnight, To, 110),
+            sources: new LoopAnalysisMaskSources { DataExclusions = [compressionLow] });
+
+        range.Predictions.Should().Be(1);
+        At(range.Curves.Single(), 30).Error!.Mean.Should().Be(10);
+    }
+
+    [Fact]
+    public void LoopsLaterValues_FallOnTheFiveMinuteGrid()
+    {
+        var start = Midnight + 10 * Hour + 2 * Minute + 30_000;
+        var gridThirty = Midnight + 10 * Hour + 30 * Minute;
+        var glucose = new[] { new GlucoseSample(gridThirty, 110), new GlucoseSample(start + 30 * Minute + 2 * Minute, 200) };
+
+        var horizon = At(Calculate([LoopFixture(start, Flat(120))], glucose).Curves.Single(), 30);
+
+        horizon.Error!.Mean.Should().Be(10, "value 6 is at the grid point 30 minutes after the start's, not 30 minutes after the start");
+    }
+
+    [Fact]
+    public void TargetMills_PlacesLoopOnTheGridAndOrefFromTheStart()
+    {
+        var snapshot = new PredictionSnapshot(Midnight + 7 * Minute, AidAlgorithm.Loop, []);
+
+        PredictionAccuracyCalculator.TargetMills(snapshot, PredictionCurve.Default, 0).Should().Be(Midnight + 7 * Minute);
+        PredictionAccuracyCalculator.TargetMills(snapshot, PredictionCurve.Default, 6).Should().Be(Midnight + 35 * Minute);
+        PredictionAccuracyCalculator.TargetMills(snapshot with { Algorithm = AidAlgorithm.Trio }, PredictionCurve.Iob, 6)
+            .Should().Be(Midnight + 37 * Minute);
     }
 
     [Fact]
@@ -292,6 +376,23 @@ public class PredictionAccuracyCalculatorTests
     }
 
     [Fact]
+    public void ACurveOrefCouldNotHaveCut_IsNotHeld()
+    {
+        var start = Midnight + 10 * Hour;
+        var twelve = Json(Enumerable.Range(0, 12).Select(i => 120.0 + i));
+        var zeroTempCut = Json(Enumerable.Range(0, 7).Select(i => 100.0 + i));
+
+        var range = Calculate(
+            [OrefFixture(start, twelve, zeroTempCut, null, twelve)], Readings(start, start + 3 * Hour, 110));
+
+        At(range.Curves.Single(c => c.Curve == PredictionCurve.Iob), 60).Error
+            .Should().BeNull("oref keeps at least 13 values, so a curve of 12 ended rather than levelled off");
+        var zeroTemp = range.Curves.Single(c => c.Curve == PredictionCurve.ZeroTemp);
+        At(zeroTemp, 30).Error!.N.Should().Be(1);
+        At(zeroTemp, 60).Error.Should().BeNull("oref cuts the zero-temp curve where it turns up, not where it levels off");
+    }
+
+    [Fact]
     public void ANullValueInACurve_MakesNoPredictionThere()
     {
         var start = Midnight + 10 * Hour;
@@ -313,7 +414,7 @@ public class PredictionAccuracyCalculatorTests
         var range = Calculate(
             [LoopFixture(Midnight + 10 * Hour, Flat(120)), LoopFixture(Midnight + 14 * Hour, Flat(130))],
             Readings(Midnight, To + 3 * Hour, 110),
-            exerciseOrOverride: IntervalSet.Of([overrideSpan]),
+            adjusted: IntervalSet.Of([overrideSpan]),
             filter: new LoopAnalysisMasks { ExcludeOverrides = true },
             sources: new LoopAnalysisMaskSources { Overrides = [overrideSpan] });
 
@@ -322,7 +423,7 @@ public class PredictionAccuracyCalculatorTests
     }
 
     [Fact]
-    public void AHorizonInADataExclusion_IsNeitherPairedNorUnmatched()
+    public void AHorizonInADataExclusion_IsCountedExcluded_NeitherPairedNorUnmatched()
     {
         var start = Midnight + 10 * Hour;
 
@@ -333,6 +434,8 @@ public class PredictionAccuracyCalculatorTests
 
         At(curve, 60).Error.Should().BeNull();
         At(curve, 60).Unmatched.Should().Be(0);
+        At(curve, 60).Excluded.Should().Be(1);
+        At(curve, 30).Excluded.Should().Be(0);
         At(curve, 30).Error!.N.Should().Be(1);
     }
 
