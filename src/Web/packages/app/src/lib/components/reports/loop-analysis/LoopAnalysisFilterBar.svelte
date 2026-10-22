@@ -40,7 +40,10 @@
     comparisonRange?: LoopAnalysisResolvedRange | null;
     /** The filters the last response applied, after the API's defaults and the caller's scopes. */
     applied?: LoopAnalysisMasks | null;
-    /** The echoes above answer the request on screen, not an earlier one. */
+    /**
+     * Nothing is loading: the echoes above answer the request on screen, or it failed and the bar
+     * shows only what was picked.
+     */
     settled: boolean;
     /** The caller reads only the last 24 hours, whatever range is picked. */
     clamped: boolean;
@@ -237,17 +240,19 @@
       {/if}
     </div>
 
-    <fieldset class="flex flex-wrap items-center gap-x-4 gap-y-2">
+    <fieldset class="flex flex-wrap items-center gap-x-4 gap-y-2" aria-busy={!settled}>
       <legend class="sr-only">Exclude</legend>
       <span aria-hidden="true" class="text-xs font-medium text-muted-foreground">Exclude</span>
+      {#if !settled}
+        <span class="sr-only">Loading the exclusions the report applied</span>
+      {/if}
       {#each MASK_KEYS as key (key)}
         {@const enabled = usable(key)}
         <div class="flex items-center gap-1.5">
           <Checkbox
             id="loop-analysis-{key}"
             checked={enabled && maskChecked(key)}
-            indeterminate={enabled && maskLoading(key)}
-            disabled={!enabled}
+            disabled={!enabled || maskLoading(key)}
             aria-describedby={enabled ? undefined : `loop-analysis-${key}-reason`}
             onCheckedChange={(checked) => update({ masks: { ...filter.masks, [key]: checked === true } })}
           />

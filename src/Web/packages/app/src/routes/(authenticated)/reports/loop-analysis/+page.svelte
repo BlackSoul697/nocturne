@@ -38,7 +38,11 @@
     errorTitle: "Error Loading Loop Analysis",
   });
   const response = $derived(profileResource.current);
-  const settled = $derived(response != null && !profileResource.stale);
+  // A failed request is settled too, so the bar shows what was picked rather than loading forever;
+  // its echoes are then the last response's, which no longer answer the request on screen.
+  const failed = $derived(profileResource.error != null);
+  const settled = $derived(failed || (response != null && !profileResource.stale));
+  const echo = $derived(settled && !failed ? response : null);
   const clamped = $derived(response?.historyClamped ?? page.data.limitTo24Hours ?? false);
 
   // A shared link may carry a filter this viewer cannot use. Once the API has said which those
@@ -81,9 +85,9 @@
     {filter}
     onchange={setFilter}
     {requested}
-    primaryRange={response?.primaryRange}
-    comparisonRange={response?.comparisonRange}
-    applied={response?.appliedFilters}
+    primaryRange={echo?.primaryRange}
+    comparisonRange={echo?.comparisonRange}
+    applied={echo?.appliedFilters}
     {settled}
     {clamped}
     unavailable={response?.unavailableFilters}

@@ -126,7 +126,12 @@ describe("LoopAnalysisFilterBar", () => {
       },
     });
 
-    await expect.element(page.getByLabelText("Illness")).toHaveAttribute("data-state", "indeterminate");
+    const illness = page.getByLabelText("Illness");
+    await expect.element(illness).not.toBeChecked();
+    await expect.element(illness).toBeDisabled();
+    expect(illness.element().getAttribute("aria-checked")).not.toBe("mixed");
+    await expect.element(page.getByRole("group", { name: "Exclude" })).toHaveAttribute("aria-busy", "true");
+    await expect.element(page.getByText("Loading the exclusions the report applied")).toBeInTheDocument();
     await expect.element(page.getByText("All profiles")).toBeVisible();
     await expect.element(page.getByText("Oct 9 – 22, 2026")).toBeVisible();
     expect(page.getByText(/covers at most 90 days/).elements()).toHaveLength(0);

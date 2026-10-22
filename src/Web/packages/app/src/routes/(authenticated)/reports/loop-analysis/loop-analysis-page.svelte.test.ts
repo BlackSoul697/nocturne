@@ -11,6 +11,7 @@ import {
 
 const calls = vi.hoisted(() => ({ query: [] as unknown[], goto: [] as [string, unknown][] }));
 let response: DailyProfileResponse;
+let resourceState: { stale?: boolean; error?: unknown } = {};
 
 vi.mock("$api/generated/loopAnalysis.generated.remote", () => ({
   getDailyProfile: (input: unknown) => {
@@ -35,6 +36,12 @@ vi.mock("$lib/hooks/resource-context.svelte", () => ({
     get current() {
       return create().current;
     },
+    get stale() {
+      return resourceState.stale ?? false;
+    },
+    get error() {
+      return resourceState.error;
+    },
   }),
 }));
 
@@ -54,6 +61,23 @@ describe("Loop Analysis page", () => {
     calls.query.length = 0;
     calls.goto.length = 0;
     response = profileResponse();
+    resourceState = {};
+  });
+
+  it("shows what was picked, not loading, when the newer request failed", async () => {
+    response = {
+      ...profileResponse(),
+      primaryRange: { startDate: "2026-07-25", endDate: "2026-10-22", shortened: true },
+    };
+    resourceState = { stale: true, error: new Error("Request rejected") };
+    open("?excludeIllness=false");
+
+    await expect.element(page.getByText("Oct 9 – 22, 2026")).toBeVisible();
+    await expect.element(page.getByRole("group", { name: "Exclude" })).toHaveAttribute("aria-busy", "false");
+    await expect.element(page.getByLabelText("Illness")).toBeEnabled();
+    await expect.element(page.getByLabelText("Illness")).not.toBeChecked();
+    await expect.element(page.getByLabelText("Exercise")).toBeEnabled();
+    expect(page.getByText(/covers at most 90 days/).elements()).toHaveLength(0);
   });
 
   it("round-trips the filters through the URL it navigates to", async () => {
