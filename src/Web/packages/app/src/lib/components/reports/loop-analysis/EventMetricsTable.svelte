@@ -1,6 +1,6 @@
 <!-- Each figure's spread across each cohort's events, cohorts side by side, the comparison beside each. -->
 <script lang="ts">
-  import type { EventCohortDefinition, EventCohortResult } from "$lib/api";
+  import { EventResponseKind, type EventCohortDefinition, type EventCohortResult } from "$lib/api";
   import { plural } from "$lib/utils/plural";
   import { bg, bgLabel } from "$lib/utils/formatting";
   import CohortDot from "./CohortDot.svelte";
@@ -10,19 +10,22 @@
     cohorts: EventCohortDefinition[];
     primary: EventCohortResult[];
     comparison?: EventCohortResult[] | null;
+    /** mg/dL around the start glucose that counts as back to start. */
+    backToStartMgdl?: number;
   }
 
-  let { cohorts, primary, comparison = null }: Props = $props();
+  let { cohorts, primary, comparison = null, backToStartMgdl }: Props = $props();
 
   const result = (list: EventCohortResult[] | null | undefined, cohort: number | undefined) =>
     list?.find((r) => r.cohort === cohort);
 
   // A figure the response carries for no cohort, withheld or never observed, is left out.
   const rows = $derived(
-    metricDefinitions().filter((m) =>
+    metricDefinitions(backToStartMgdl).filter((m) =>
       [...primary, ...(comparison ?? [])].some((r) => r.metrics?.[m.key] != null)
     )
   );
+  const falls = $derived(primary.some((r) => r.response === EventResponseKind.Fall));
   const missingGramsPerUnit = $derived(
     primary.filter(
       (r) => (r.gramsPerUnitNotIsolated ?? 0) + (r.gramsPerUnitNoNetInsulin ?? 0) + (r.gramsPerUnitUncovered ?? 0) > 0
@@ -68,7 +71,11 @@
               {/if}
               {#if metric.key === "minutesBackToStart"}
                 <span class="block text-xs text-muted-foreground">
-                  {value?.n ?? 0} of {plural(events, ["# event", "# events"])} returned to within {bg(20)} {bgLabel()} of the start glucose
+                  {#if backToStartMgdl == null}
+                    {value?.n ?? 0} of {plural(events, ["# event", "# events"])} returned to the start glucose
+                  {:else}
+                    {value?.n ?? 0} of {plural(events, ["# event", "# events"])} returned to within {bg(backToStartMgdl)} {bgLabel()} of the start glucose
+                  {/if}
                 </span>
               {/if}
               {#if comparison}
@@ -80,6 +87,27 @@
           {/each}
         </tr>
       {/each}
+      {#if falls}
+        <tr class="border-b last:border-0">
+          <th scope="row" class="px-3 py-2 text-left font-normal text-muted-foreground">Went below range</th>
+          {#each cohorts as cohort (cohort.cohort)}
+            {@const r = result(primary, cohort.cohort)}
+            {@const compared = result(comparison, cohort.cohort)}
+            <td class="px-3 py-2 text-right">
+              {#if r?.response === EventResponseKind.Fall}
+                <span class="font-medium">{r.wentBelowRange ?? 0} of {plural(r.wentBelowRangeObserved ?? 0, ["# event", "# events"])}</span>
+                {#if compared}
+                  <span class="block text-xs text-muted-foreground">
+                    Compared {compared.wentBelowRange ?? 0} of {compared.wentBelowRangeObserved ?? 0}
+                  </span>
+                {/if}
+              {:else}
+                –
+              {/if}
+            </td>
+          {/each}
+        </tr>
+      {/if}
     </tbody>
   </table>
 </div>
@@ -89,6 +117,13 @@
     few events to show a pattern. These figures are observations of what occurred, not settings to
     change.
   </p>
+  {#if falls}
+    <p>
+      The drop is the start glucose minus the glucose at the end of the window. Drop per unit shows only
+      for an event with no other meal, correction or rise in its window, with enough insulin above
+      schedule, and with no glucose below range.
+    </p>
+  {/if}
   {#each missingGramsPerUnit as r (r.cohort)}
     {@const cohort = cohorts.find((c) => c.cohort === r.cohort)}
     <p>

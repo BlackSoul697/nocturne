@@ -124,9 +124,9 @@ public static class ObservedCarbRatio
             return (null, activity);
         if (context.Outside(start, end) is { } outside)
             return (null, outside);
-        if (context.GlucoseAt(start) is not { } startGlucose
-            || context.GlucoseAt(meal.Mills) is not { } mealGlucose
-            || context.GlucoseAt(end) is not { } endGlucose)
+        if (context.Series.GlucoseAt(start) is not { } startGlucose
+            || context.Series.GlucoseAt(meal.Mills) is not { } mealGlucose
+            || context.Series.GlucoseAt(end) is not { } endGlucose)
             return (null, SettingsEvidenceRule.MissingGlucose);
         if (startGlucose is < StartLowMgdl or > StartHighMgdl)
             return (null, SettingsEvidenceRule.StartOutOfRange);

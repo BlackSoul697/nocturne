@@ -192,6 +192,28 @@ loop added at least half an hour of your usual basal (and at least 0.2 U) in the
 45 minutes after the rise began. This filters out rises your loop didn't treat
 as real.
 
+### Rises and falls
+
+Each kind of event has an expected direction. After a meal or an unannounced
+rise, glucose usually increases. After a correction bolus, the start of exercise,
+an override or a temporary target, glucose usually decreases. A sensor start
+uses the figures for a rise.
+
+For a rise, the table shows the **peak rise**, the **time to peak** and the
+time until glucose is near the start glucose again.
+
+For a fall, the table shows these figures:
+
+- **Drop to window end**: the start glucose minus the glucose at the end of the
+  window. Settings evidence uses the same method, over 4 hours. The lowest
+  reading is not used for the drop, because noise makes it too low.
+- **Lowest glucose** and the **time to lowest glucose**.
+- **Drop per unit above schedule**: the drop divided by the net insulin above
+  your schedule in the window. This figure is only for isolated events with at
+  least 0.5 U above schedule that did not go below range.
+- **Went below range**: how many events had a reading below 70 mg/dL in the
+  window.
+
 ### Isolated events
 
 An event is **isolated** when no other meal, correction or meal-like rise

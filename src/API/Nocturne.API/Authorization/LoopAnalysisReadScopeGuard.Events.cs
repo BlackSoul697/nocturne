@@ -143,6 +143,7 @@ internal static partial class LoopAnalysisReadScopeGuard
         (LoopAnalysisSeries.EventNetInsulin,
         [
             nameof(EventMetrics.TotalInsulin), nameof(EventMetrics.NetInsulin), nameof(EventMetrics.GramsPerUnit),
+            nameof(EventMetrics.DropPerUnit),
             nameof(EventMetrics.NetInsulinFirst30), nameof(EventMetrics.NetInsulinFirst60), nameof(EventMetrics.NetInsulinFirst120),
         ]),
         (LoopAnalysisSeries.EventIob, [nameof(EventMetrics.IobAtAnchor), nameof(EventMetrics.IobAtEnd)]),

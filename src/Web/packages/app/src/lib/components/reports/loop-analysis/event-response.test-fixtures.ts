@@ -1,5 +1,6 @@
 import {
   EventAnchorKind,
+  EventResponseKind,
   LoopAnalysisSeries,
   type EventCohortResult,
   type EventMetricsSummary,
@@ -40,6 +41,7 @@ function cohort(number: number, events: number, offset = 0): EventCohortResult {
   });
   return {
     cohort: number,
+    response: EventResponseKind.Rise,
     anchors: events + 2,
     notIsolated: 1,
     missingAnchorGlucose: 1,
@@ -76,31 +78,74 @@ const event = (
   date,
   time,
   anchor,
+  response: EventResponseKind.Rise,
   grams,
   cohorts,
   glucoseCoverage: MOSTLY_COVERED,
   metrics: { startGlucose: 110, peakRise, minutesToPeak: 50, netInsulin: 4, netInsulinFirst60: 1, iobAtAnchor: 3 },
 });
 
-function range(listEvents: boolean): EventResponseRange {
+/** A cohort of correction boluses: fall figures in place of the rise ones, one of its events below range and one unobserved. */
+function corrections(events: number): EventCohortResult {
   return {
-    cohorts: [cohort(1, 12), cohort(2, 3, 5)],
+    ...cohort(3, events),
+    response: EventResponseKind.Fall,
+    wentBelowRange: 1,
+    wentBelowRangeObserved: events - 1,
+    metrics: {
+      startGlucose: aggregate(220, events),
+      netInsulin: aggregate(2, events),
+      iobAtAnchor: aggregate(2.5, events),
+      drop: aggregate(90, events),
+      nadir: aggregate(115, events),
+      minutesToNadir: aggregate(170, events),
+      dropPerUnit: aggregate(45, events),
+    },
+  };
+}
+
+const correction = (date: string, time: string, drop: number, wentBelowRange: boolean): EventResponseEvent => ({
+  at: `${date}T${time}:00Z`,
+  date,
+  time,
+  anchor: EventAnchorKind.CorrectionBolus,
+  response: EventResponseKind.Fall,
+  cohorts: [3],
+  glucoseCoverage: MOSTLY_COVERED,
+  metrics: {
+    startGlucose: 220,
+    drop,
+    nadir: wentBelowRange ? 65 : 120,
+    minutesToNadir: 170,
+    wentBelowRange,
+    netInsulin: 2,
+    dropPerUnit: drop / 2,
+    iobAtAnchor: 2.5,
+  },
+});
+
+function range(listEvents: boolean, fall: boolean): EventResponseRange {
+  return {
+    cohorts: [cohort(1, 12), cohort(2, 3, 5), ...(fall ? [corrections(4)] : [])],
     events: listEvents
       ? [
           event("2026-10-10", "07:30", EventAnchorKind.Meal, [1], 80, 45),
           event("2026-10-11", "12:05", EventAnchorKind.Meal, [1], 40, 30),
           event("2026-10-12", "19:00", EventAnchorKind.UnannouncedRise, [2], 95),
+          ...(fall
+            ? [correction("2026-10-13", "15:00", 90, false), correction("2026-10-14", "15:00", 150, true)]
+            : []),
         ]
       : [],
   };
 }
 
 const INSULIN_FIGURES: (keyof EventMetricsSummary)[] = [
-  "totalInsulin", "netInsulin", "gramsPerUnit", "netInsulinFirst30", "netInsulinFirst60", "netInsulinFirst120",
+  "totalInsulin", "netInsulin", "gramsPerUnit", "dropPerUnit", "netInsulinFirst30", "netInsulinFirst60", "netInsulinFirst120",
 ];
 
 export function eventResponse(
-  options: { comparison?: boolean; withheld?: LoopAnalysisSeries[]; historyClamped?: boolean } = {}
+  options: { comparison?: boolean; withheld?: LoopAnalysisSeries[]; historyClamped?: boolean; fall?: boolean } = {}
 ): EventResponseReport {
   const withheld = new Set(options.withheld ?? []);
   const report: EventResponseReport = {
@@ -110,18 +155,20 @@ export function eventResponse(
     unavailableAnchors: [],
     withheldSeries: [...withheld],
     slotMinutes: SLOT_MINUTES,
+    backToStartMgdl: 25,
     definition: {
       cohorts: [
         { cohort: 1, anchor: EventAnchorKind.Meal, fromMinute: 300, toMinute: 600, minGrams: 30, maxGrams: 80 },
         { cohort: 2, anchor: EventAnchorKind.UnannouncedRise },
+        ...(options.fall ? [{ cohort: 3, anchor: EventAnchorKind.CorrectionBolus }] : []),
       ],
       minutesBefore: 60,
       minutesAfter: 300,
       isolatedOnly: false,
       requireCorroboration: false,
     },
-    primary: range(true),
-    comparison: options.comparison ? range(false) : undefined,
+    primary: range(true, options.fall ?? false),
+    comparison: options.comparison ? range(false, options.fall ?? false) : undefined,
   };
 
   // As the API's guard narrows: without glucose there is no event at all.

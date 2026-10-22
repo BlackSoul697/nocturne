@@ -19,12 +19,24 @@
     events: EventResponseEvent[];
     /** The cohorts the response applied, in order, for their colours and names. */
     cohorts: EventCohortDefinition[];
+    /** mg/dL around the start glucose that counts as back to start. */
+    backToStartMgdl?: number;
   }
 
-  let { events, cohorts }: Props = $props();
+  let { events, cohorts, backToStartMgdl }: Props = $props();
 
   const PAGE = 50;
-  const COLUMNS: EventMetricKey[] = ["startGlucose", "peakRise", "minutesToPeak", "netInsulin", "netInsulinFirst60", "iobAtAnchor"];
+  const COLUMNS: EventMetricKey[] = [
+    "startGlucose",
+    "peakRise",
+    "minutesToPeak",
+    "drop",
+    "minutesToNadir",
+    "netInsulin",
+    "netInsulinFirst60",
+    "iobAtAnchor",
+    "dropPerUnit",
+  ];
 
   let sortKey = $state<EventSortKey>("at");
   let descending = $state(false);
@@ -32,8 +44,11 @@
 
   // A figure no event carries, withheld or never observed, is left out.
   const columns = $derived(
-    metricDefinitions().filter((m) => COLUMNS.includes(m.key) && events.some((e) => e.metrics?.[m.key] != null))
+    metricDefinitions(backToStartMgdl).filter(
+      (m) => COLUMNS.includes(m.key) && events.some((e) => e.metrics?.[m.key] != null)
+    )
   );
+  const showBelowRange = $derived(events.some((e) => e.metrics?.wentBelowRange != null));
   const sorted = $derived(sortEvents(events, sortKey, descending));
   const showGrams = $derived(events.some((e) => e.grams != null));
   const cohortIndex = (cohort: number) => Math.max(0, cohorts.findIndex((c) => c.cohort === cohort));
@@ -75,6 +90,7 @@
         {#each columns as metric (metric.key)}
           {@render header(metric.key, metric.label, "text-right")}
         {/each}
+        {#if showBelowRange}<th scope="col" class="px-2 py-2 text-right font-medium">Below range</th>{/if}
         <th scope="col" class="px-2 py-2"><span class="sr-only">Open in Day in Review</span></th>
       </tr>
     </thead>
@@ -105,6 +121,10 @@
           {#each columns as metric (metric.key)}
             <td class="px-2 py-1.5 text-right">{formatMetric(metric.kind, event.metrics?.[metric.key])}</td>
           {/each}
+          {#if showBelowRange}
+            {@const below = event.metrics?.wentBelowRange}
+            <td class="px-2 py-1.5 text-right">{below == null ? "–" : below ? "Yes" : "No"}</td>
+          {/if}
           <td class="px-2 py-1.5 text-right">
             <a
               href={resolve(`/reports/day-in-review?date=${event.date}&time=${event.time}`)}

@@ -16,8 +16,8 @@ export function cohortBands(index: number): BandColors {
 
 export type EventMetricKey = keyof EventMetrics & keyof EventMetricsSummary;
 
-/** How a figure is shown: as glucose in the viewer's units, minutes, insulin units, or grams per unit. */
-export type MetricKind = "glucose" | "glucoseChange" | "minutes" | "units" | "gramsPerUnit";
+/** How a figure is shown: as glucose in the viewer's units, minutes, insulin units, or a ratio per unit. */
+export type MetricKind = "glucose" | "glucoseChange" | "glucoseDrop" | "minutes" | "units" | "gramsPerUnit" | "glucosePerUnit";
 
 /** The slots where the relative axis is ticked: each whole hour from the event. */
 export function hourTicks(minutes: readonly number[]): number[] {

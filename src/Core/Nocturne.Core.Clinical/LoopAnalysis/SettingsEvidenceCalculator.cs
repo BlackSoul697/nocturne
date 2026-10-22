@@ -152,9 +152,6 @@ public static class SettingsEvidenceCalculator
     /// </summary>
     public const double MaxStartTrendMgdlPerMinute = 1;
 
-    /// <summary>A reading stands for glucose at an instant within one CGM interval of it.</summary>
-    public const long ReadingToleranceMs = EventEpisode.ReadingToleranceMs;
-
     /// <summary>The thresholds this calculator's rules and windows apply.</summary>
     public static SettingsEvidenceRules Rules() => new()
     {
@@ -426,20 +423,22 @@ internal sealed class SettingsEvidenceContext
         : !Mask.Analysed.Covers(start, end) ? SettingsEvidenceRule.Filtered
         : null;
 
-    public double? GlucoseAt(long mills) => Series.GlucoseNear(mills, SettingsEvidenceCalculator.ReadingToleranceMs);
-
     /// <summary>Glucose's change over <see cref="SettingsEvidenceCalculator.EndTrendSpanMs"/> before <paramref name="end"/>, mg/dL a minute.</summary>
     public double? EndTrend(long end) =>
-        GlucoseAt(end) is { } last && GlucoseAt(end - SettingsEvidenceCalculator.EndTrendSpanMs) is { } before
+        Series.GlucoseAt(end) is { } last && Series.GlucoseAt(end - SettingsEvidenceCalculator.EndTrendSpanMs) is { } before
             ? (last - before) / (SettingsEvidenceCalculator.EndTrendSpanMs / (double)LocalSlotBinning.MinuteMs)
             : null;
 
-    /// <summary>The lowest reading in <c>[start, end]</c>, or null where there is none.</summary>
+    /// <summary>
+    /// The lowest reading from <paramref name="start"/> up to and including the drop's end reading
+    /// (<see cref="GlucoseDrop.EndReadingMills"/>), or null where there is none.
+    /// </summary>
     public double? LowestGlucose(long start, long end)
     {
         var readings = Series.Readings;
+        var last = GlucoseDrop.EndReadingMills(Series, end);
         double? lowest = null;
-        for (var i = Series.FirstReadingFrom(start); i < readings.Count && readings[i].Mills <= end; i++)
+        for (var i = Series.FirstReadingFrom(start); i < readings.Count && readings[i].Mills <= last; i++)
             lowest = lowest is { } low ? Math.Min(low, readings[i].Mgdl) : readings[i].Mgdl;
         return lowest;
     }

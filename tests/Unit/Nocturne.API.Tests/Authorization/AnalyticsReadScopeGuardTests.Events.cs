@@ -95,12 +95,13 @@ public partial class AnalyticsReadScopeGuardTests
             LoopAnalysisReadScopeGuard.Redact(RedactionCoverage.Populated<EventResponseReport>(), Granted(Scope.GlucoseRead, Scope.DevicesRead)),
             [typeof(EventCohortResult), typeof(EventResponseSlot), typeof(EventMetricsSummary)],
             [
-                "EventCohortResult.Cohort", "EventCohortResult.Anchors", "EventCohortResult.NotIsolated",
+                "EventCohortResult.Cohort", "EventCohortResult.Response", "EventCohortResult.Anchors", "EventCohortResult.NotIsolated",
                 "EventCohortResult.MissingAnchorGlucose", "EventCohortResult.BeforeVisibleHistory", "EventCohortResult.Events",
-                "EventCohortResult.Slots", "EventCohortResult.Metrics",
+                "EventCohortResult.WentBelowRange", "EventCohortResult.WentBelowRangeObserved", "EventCohortResult.Slots", "EventCohortResult.Metrics",
                 "EventResponseSlot.GlucoseChange", "EventResponseSlot.Glucose",
                 "EventMetricsSummary.StartGlucose", "EventMetricsSummary.PeakRise", "EventMetricsSummary.MinutesToPeak",
                 "EventMetricsSummary.GlucoseAt2Hours", "EventMetricsSummary.GlucoseAt4Hours", "EventMetricsSummary.MinutesBackToStart",
+                "EventMetricsSummary.Drop", "EventMetricsSummary.Nadir", "EventMetricsSummary.MinutesToNadir",
             ]);
     }
 
@@ -112,6 +113,7 @@ public partial class AnalyticsReadScopeGuardTests
 
         data.WithheldSeries.Should().Equal([LoopAnalysisSeries.ProfileNames], "only the envelope's profile names need therapy");
         data.Primary.Events.Single().Metrics.GramsPerUnit.Should().NotBeNull();
+        data.Primary.Events.Single().Metrics.DropPerUnit.Should().NotBeNull();
     }
 
     public static TheoryData<EventAnchorKind, string[], bool> AnchorAccess => new()
@@ -190,6 +192,7 @@ public partial class AnalyticsReadScopeGuardTests
         data.IgnoredFilters.Should().BeEquivalentTo(["anchor1", "isolatedOnly"]);
         data.Definition.Cohorts.Select(c => c.Anchor).Should().Equal(EventAnchorKind.SensorStart);
         data.SlotMinutes.Should().HaveCount(72).And.StartWith(-60);
+        data.BackToStartMgdl.Should().Be(20);
         data.UnavailableAnchors.Select(a => a.Anchor).Should().Contain(EventAnchorKind.Meal).And.NotContain(EventAnchorKind.SensorStart);
         data.UnavailableFilters.Select(f => f.Filter).Should().Contain(["isolatedOnly", "requireCorroboration", "excludeOverrides"]);
         data.Primary.Events.Should().BeEmpty();

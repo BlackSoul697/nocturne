@@ -207,6 +207,7 @@ public class LoopAnalysisController(
         {
             report.Definition = definition;
             report.SlotMinutes = EventResponseCalculator.SlotMinutes(definition);
+            report.BackToStartMgdl = EventEpisode.BackToStartMgdl;
             report.IgnoredFilters.AddRange(ignored.Where(passed.Contains));
             report.UnavailableFilters.AddRange(LoopAnalysisReadScopeGuard.UnavailableEventFilters(granted));
             report.UnavailableAnchors = LoopAnalysisReadScopeGuard.UnavailableAnchors(granted);
