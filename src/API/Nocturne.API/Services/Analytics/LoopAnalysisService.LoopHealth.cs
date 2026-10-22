@@ -87,7 +87,8 @@ internal sealed partial class LoopAnalysisService
                 null,
                 null),
             start,
-            end);
+            end,
+            zone);
         range.Activity.AidActivePercent = overall.AidActivePercent;
         range.Activity.PumpUsePercent = overall.PumpUsePercent;
         range.Activity.CgmActivePercent = overall.CgmActivePercent;

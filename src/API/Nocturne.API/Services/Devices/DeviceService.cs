@@ -1,7 +1,9 @@
 using System.Collections.Concurrent;
 using Nocturne.Core.Contracts.Devices;
 using Nocturne.Core.Contracts.Multitenancy;
+using Nocturne.Core.Contracts.Timezones;
 using Nocturne.Core.Contracts.V4.Repositories;
+using Nocturne.Core.Models.Timezones;
 using Nocturne.Core.Models.V4;
 using Nocturne.Core.Contracts.V4;
 
@@ -18,6 +20,8 @@ public class DeviceService : IDeviceService
     private readonly IDeviceRepository _repository;
     private readonly IPatientDeviceRepository _patientDeviceRepository;
     private readonly ITenantAccessor _tenantAccessor;
+    private readonly ITimezoneTimelineService _timezoneTimelineService;
+    private (string TenantId, TimezoneTimeline Timeline)? _timeline;
     private readonly ConcurrentDictionary<(string, string, string, string), Device> _cache = new();
     private readonly ConcurrentDictionary<(string, Guid), IReadOnlyList<PatientDevice>> _patientDeviceCache = new();
     private readonly Dictionary<Guid, (Device Device, DateTime FirstPersisted, DateTime LastPersisted)> _deferredSeen = [];
@@ -26,11 +30,14 @@ public class DeviceService : IDeviceService
     private string TenantCacheId => _tenantAccessor.Context?.TenantId.ToString()
         ?? throw new InvalidOperationException("Tenant context is not resolved");
 
-    public DeviceService(IDeviceRepository repository, IPatientDeviceRepository patientDeviceRepository, ITenantAccessor tenantAccessor)
+    public DeviceService(IDeviceRepository repository, IPatientDeviceRepository patientDeviceRepository,
+        ITenantAccessor tenantAccessor,
+        ITimezoneTimelineService timezoneTimelineService)
     {
         _repository = repository;
         _patientDeviceRepository = patientDeviceRepository;
         _tenantAccessor = tenantAccessor;
+        _timezoneTimelineService = timezoneTimelineService;
     }
 
     public async Task<Guid?> ResolveAsync(DeviceCategory category, string? type, string? serial, long mills, CancellationToken ct = default)
@@ -193,10 +200,23 @@ public class DeviceService : IDeviceService
             _patientDeviceCache[key] = patientDevices;
         }
 
-        var date = DateOnly.FromDateTime(DateTimeOffset.FromUnixTimeMilliseconds(mills).UtcDateTime);
+        if (!patientDevices.Any(pd => pd.StartDate is not null || pd.EndDate is not null))
+            return patientDevices.FirstOrDefault()?.Id;
 
-        return patientDevices.FirstOrDefault(pd =>
-            (pd.StartDate is null || pd.StartDate <= date) &&
-            (pd.EndDate is null || pd.EndDate >= date))?.Id;
+        var timeline = await TimelineAsync(tenantId, ct);
+        var date = PatientDeviceUsage.LocalDate(
+            DateTimeOffset.FromUnixTimeMilliseconds(mills).UtcDateTime, utcOffsetMinutes: null, timeline);
+
+        return patientDevices.FirstOrDefault(pd => PatientDeviceUsage.Covers(pd, date))?.Id;
+    }
+
+    private async Task<TimezoneTimeline> TimelineAsync(string tenantId, CancellationToken ct)
+    {
+        if (_timeline is { } cached && cached.TenantId == tenantId)
+            return cached.Timeline;
+
+        var timeline = await _timezoneTimelineService.GetResolverAsync(fallbackOffsetHours: null, ct);
+        _timeline = (tenantId, timeline);
+        return timeline;
     }
 }

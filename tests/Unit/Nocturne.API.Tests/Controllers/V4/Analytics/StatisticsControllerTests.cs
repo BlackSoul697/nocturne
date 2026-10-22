@@ -84,7 +84,11 @@ public class StatisticsControllerTests
                 _targetRangeScheduleRepoMock.Object,
                 _activeProfileResolverMock.Object,
                 statisticsService ?? _statsServiceMock.Object,
-                _aidMetricsServiceMock.Object),
+                _aidMetricsServiceMock.Object,
+                new TenantClockResolver(
+                    _therapySettingsResolverMock.Object,
+                    categoryReadContext ?? new CategoryReadContext(),
+                    _clockLoggerMock.Object)),
             _patientDeviceRepoMock.Object,
             _deviceEventRepoMock.Object,
             _targetRangeScheduleRepoMock.Object,
@@ -1956,6 +1960,7 @@ public class StatisticsControllerTests
     [Fact]
     public async Task GetAidSystemMetrics_MeasuresCgmActiveTimeOnTheCanonicalReadings()
     {
+        SetupAidMetricsEcho();
         var start = new DateTime(2026, 6, 1, 0, 0, 0, DateTimeKind.Utc);
         var raw = new[]
         {
@@ -1995,6 +2000,7 @@ public class StatisticsControllerTests
     [Fact]
     public async Task GetAidSystemMetrics_FetchesTheWholeWindowRatherThanACappedFirstPage()
     {
+        SetupAidMetricsEcho();
         var start = new DateTime(2026, 6, 1, 0, 0, 0, DateTimeKind.Utc);
 
         await CreateController().GetAidSystemMetrics(start, start.AddDays(90), CancellationToken.None);
@@ -2024,6 +2030,7 @@ public class StatisticsControllerTests
     [Fact]
     public async Task GetAidSystemMetrics_MeasuresGlucoseThroughToTheEndOfTheWindow()
     {
+        SetupAidMetricsEcho();
         // A one-minute sensor over 90 days: 129,600 readings, well past the 50,000 the
         // endpoint used to ask for. The stub honours the limit it is given, so a capped,
         // oldest-first fetch stops around day 35.
@@ -2184,6 +2191,7 @@ public class StatisticsControllerTests
     [Fact]
     public async Task GetAidSystemMetrics_PassesTheCallersCancellationTokenToEveryFetch()
     {
+        SetupAidMetricsEcho();
         var start = new DateTime(2026, 6, 1, 0, 0, 0, DateTimeKind.Utc);
         using var cts = new CancellationTokenSource();
         var token = cts.Token;
@@ -2244,6 +2252,110 @@ public class StatisticsControllerTests
         var ok = result.Result.Should().BeOfType<OkObjectResult>().Subject;
         var payload = ok.Value.Should().BeOfType<AidSystemMetrics>().Subject;
         payload.PumpDeviceNames.Should().Be("YpsoPump");
+    }
+
+    private async Task<(AidSystemMetrics Report, DeviceSegmentInput Segment, CgmDeviceWindow CgmWindow)> ReadDeviceWindows(
+        string? zoneId, DateOnly first, DateOnly last)
+    {
+        var start = new DateTime(2026, 3, 1, 0, 0, 0, DateTimeKind.Utc);
+        _therapySettingsResolverMock
+            .Setup(r => r.GetTimezoneAsync(null, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(zoneId);
+        _patientDeviceRepoMock
+            .Setup(r => r.GetByDateRangeAsync(
+                It.IsAny<DateTime>(), It.IsAny<DateTime>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new[]
+            {
+                new PatientDevice
+                {
+                    Id = Guid.NewGuid(),
+                    DeviceCategory = DeviceCategory.InsulinPump,
+                    AidAlgorithm = AidAlgorithm.Loop,
+                    StartDate = first,
+                    EndDate = last,
+                },
+                new PatientDevice
+                {
+                    Id = Guid.NewGuid(),
+                    DeviceCategory = DeviceCategory.CGM,
+                    StartDate = first,
+                    EndDate = last,
+                },
+            });
+
+        IReadOnlyList<DeviceSegmentInput>? segments = null;
+        _aidMetricsServiceMock
+            .Setup(s => s.Calculate(
+                It.IsAny<IReadOnlyList<DeviceSegmentInput>>(),
+                It.IsAny<IReadOnlyList<ApsLoopCycle>>(),
+                It.IsAny<IReadOnlyList<TempBasal>>(),
+                It.IsAny<int>(),
+                It.IsAny<string?>(),
+                It.IsAny<string?>(),
+                It.IsAny<double?>(),
+                It.IsAny<double?>(),
+                It.IsAny<double?>(),
+                It.IsAny<DateTime>(),
+                It.IsAny<DateTime>()))
+            .Callback((IReadOnlyList<DeviceSegmentInput> given, IReadOnlyList<ApsLoopCycle> _, IReadOnlyList<TempBasal> _,
+                int _, string? _, string? _, double? _, double? _, double? _, DateTime _, DateTime _) => segments = given)
+            .Returns(new AidSystemMetrics());
+
+        IReadOnlyCollection<CgmDeviceWindow>? cgmWindows = null;
+        _statsServiceMock
+            .Setup(s => s.CalculateCgmActivePercent(
+                It.IsAny<IEnumerable<SensorGlucose>>(), It.IsAny<DateTime?>(), It.IsAny<DateTime?>(),
+                It.IsAny<IReadOnlyCollection<CgmDeviceWindow>?>()))
+            .Callback((IEnumerable<SensorGlucose> _, DateTime? _, DateTime? _, IReadOnlyCollection<CgmDeviceWindow>? given) => cgmWindows = given);
+
+        var result = await CreateController().GetAidSystemMetrics(start, start.AddDays(60), CancellationToken.None);
+
+        var report = result.Result.Should().BeOfType<OkObjectResult>().Subject.Value.Should().BeOfType<AidSystemMetrics>().Subject;
+        return (report, segments!.Single(), cgmWindows!.Single());
+    }
+
+    [Fact]
+    public async Task GetAidSystemMetrics_BoundsADeviceAtLocalMidnightInAHalfHourZone()
+    {
+        var (report, segment, cgm) = await ReadDeviceWindows(
+            "Australia/Adelaide", new DateOnly(2026, 2, 3), new DateOnly(2026, 2, 5));
+
+        var from = new DateTime(2026, 2, 2, 13, 30, 0, DateTimeKind.Utc);
+        var to = new DateTime(2026, 2, 5, 13, 30, 0, DateTimeKind.Utc);
+        segment.StartDate.Should().Be(from);
+        segment.EndDate.Should().Be(to);
+        cgm.Start.Should().Be(from);
+        cgm.End.Should().Be(to);
+        report.TimeZoneUnavailableReason.Should().BeNull();
+    }
+
+    [Fact]
+    public async Task GetAidSystemMetrics_UsesEachEndOfADeviceWindowsOwnOffsetAcrossADstTransition()
+    {
+        var (_, segment, cgm) = await ReadDeviceWindows(
+            "Australia/Adelaide", new DateOnly(2026, 3, 30), new DateOnly(2026, 4, 5));
+
+        var from = new DateTime(2026, 3, 29, 13, 30, 0, DateTimeKind.Utc);
+        var to = new DateTime(2026, 4, 5, 14, 30, 0, DateTimeKind.Utc);
+        segment.StartDate.Should().Be(from);
+        segment.EndDate.Should().Be(to);
+        cgm.Start.Should().Be(from);
+        cgm.End.Should().Be(to);
+    }
+
+    [Fact]
+    public async Task GetAidSystemMetrics_ReadsDeviceDatesAsUtcDaysAndSaysSoWhenNoZoneIsConfigured()
+    {
+        var (report, segment, cgm) = await ReadDeviceWindows(
+            null, new DateOnly(2026, 2, 3), new DateOnly(2026, 2, 5));
+
+        var from = new DateTime(2026, 2, 3, 0, 0, 0, DateTimeKind.Utc);
+        var to = new DateTime(2026, 2, 6, 0, 0, 0, DateTimeKind.Utc);
+        segment.StartDate.Should().Be(from);
+        segment.EndDate.Should().Be(to);
+        cgm.Start.Should().Be(from);
+        cgm.End.Should().Be(to);
+        report.TimeZoneUnavailableReason.Should().Be(TimeZoneUnavailableReason.NotConfigured);
     }
 
     [Fact]

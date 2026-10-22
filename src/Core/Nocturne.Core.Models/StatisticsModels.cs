@@ -1992,6 +1992,12 @@ public class AidSystemMetrics
 
     /// <summary>Per-device time segments with individual metrics</summary>
     public List<AidTimeSegment> Segments { get; set; } = new();
+
+    /// <summary>
+    /// Why no tenant timezone was available, so device start and end dates were read as UTC days;
+    /// null when they followed the tenant's timezone.
+    /// </summary>
+    public TimeZoneUnavailableReason? TimeZoneUnavailableReason { get; set; }
 }
 
 /// <summary>
