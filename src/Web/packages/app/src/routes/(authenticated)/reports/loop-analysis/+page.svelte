@@ -221,6 +221,8 @@
     <Tabs.Content value="settings-evidence" class="mt-4">
       {#if settingsEvidence}
         <SettingsEvidenceTab response={settingsEvidence} />
+      {:else if !TABS["settings-evidence"].failed}
+        <TabLoading />
       {/if}
     </Tabs.Content>
   </Tabs.Root>

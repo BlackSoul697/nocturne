@@ -45,7 +45,7 @@ let response: DailyProfileResponse;
 let events: EventResponseReport;
 let predictions: PredictionAccuracyResponse | undefined;
 let health: LoopHealthResponse;
-let evidence: SettingsEvidenceReport;
+let evidence: SettingsEvidenceReport | undefined;
 /** `failing`: the one response whose request failed, when only one did. */
 let resourceState: { stale?: boolean; error?: unknown; failing?: unknown } = {};
 
@@ -414,6 +414,14 @@ describe("Loop Analysis page", () => {
     await expect.element(page.getByRole("tab", { name: "Predictions", selected: true })).toBeVisible();
     await expect.element(page.getByLabelText("Exercise")).toBeVisible();
     expect(calls.resources.filter((r) => r.active())).toHaveLength(0);
+  });
+
+  it("loads Settings evidence's first response inside its tab", async () => {
+    evidence = undefined;
+    open("?tab=settings-evidence");
+
+    await expect.element(page.getByRole("status", { name: "Loading" })).toBeVisible();
+    await expect.element(page.getByRole("tab", { name: "Settings evidence", selected: true })).toBeVisible();
   });
 
   it("keeps the tab on screen when a tab left behind failed, and only it reports to the guard", async () => {

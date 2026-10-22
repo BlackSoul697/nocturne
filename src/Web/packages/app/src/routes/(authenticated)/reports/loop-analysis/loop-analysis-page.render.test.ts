@@ -14,6 +14,7 @@ vi.mock("$api/generated/loopAnalysis.generated.remote", () => {
     getEventResponse: remote("meals-events"),
     getPredictionAccuracy: remote("predictions"),
     getLoopHealth: remote("loop-health"),
+    getSettingsEvidence: remote("settings-evidence"),
   };
 });
 
@@ -31,6 +32,9 @@ vi.mock("$lib/components/reports/loop-analysis/PredictionsTab.svelte", async () 
   default: (await import("$lib/test-stubs/Empty.test-stub.svelte")).default,
 }));
 vi.mock("$lib/components/reports/loop-analysis/LoopHealthTab.svelte", async () => ({
+  default: (await import("$lib/test-stubs/Empty.test-stub.svelte")).default,
+}));
+vi.mock("$lib/components/reports/loop-analysis/SettingsEvidenceTab.svelte", async () => ({
   default: (await import("$lib/test-stubs/Empty.test-stub.svelte")).default,
 }));
 vi.mock("$lib/components/reports/loop-analysis/LoopAnalysisFilterBar.svelte", async () => ({
@@ -57,7 +61,7 @@ describe("Loop Analysis page on the server", () => {
     calls.fetched.length = 0;
   });
 
-  it.each(["daily-profile", "meals-events", "predictions", "loop-health"])(
+  it.each(["daily-profile", "meals-events", "predictions", "loop-health", "settings-evidence"])(
     "fetches the %s tab it opens on while rendering, and no other",
     (tab) => {
       pageState.url = new URL(`http://localhost/reports/loop-analysis${tab === "daily-profile" ? "" : `?tab=${tab}`}`) as typeof pageState.url;
