@@ -1214,11 +1214,21 @@ public class AnalyticsReadScopeGuardTests
     [Fact]
     public void LoopAnalysis_EverySeriesCanBeWithheld_ByExactlyOneTab()
     {
-        var dailyProfile = LoopAnalysisReadScopeGuard.Withheld(Granted());
-        var predictions = LoopAnalysisReadScopeGuard.WithheldPredictions(Granted());
+        var byTab = LoopAnalysisReadScopeGuard.TabWithheld.ToDictionary(t => t.Key, t => t.Value(Granted()));
 
-        dailyProfile.Should().NotIntersectWith(predictions);
-        dailyProfile.Concat(predictions).Should().BeEquivalentTo(Enum.GetValues<LoopAnalysisSeries>());
+        foreach (var series in Enum.GetValues<LoopAnalysisSeries>())
+            byTab.Where(t => t.Value.Contains(series)).Select(t => t.Key)
+                .Should().ContainSingle($"{series} is withheld by exactly one tab");
+    }
+
+    [Fact]
+    public void LoopAnalysis_EveryTabIsRegistered()
+    {
+        var routes = typeof(LoopAnalysisController).GetMethods()
+            .Select(m => m.GetCustomAttribute<HttpGetAttribute>()?.Template)
+            .OfType<string>();
+
+        LoopAnalysisReadScopeGuard.TabWithheld.Keys.Should().BeEquivalentTo(routes);
     }
 
     [Fact]
@@ -1523,6 +1533,22 @@ public class AnalyticsReadScopeGuardTests
             data,
             [typeof(PredictionAccuracyRange)],
             ["PredictionAccuracyRange.From", "PredictionAccuracyRange.To"]);
+    }
+
+    [Fact]
+    public void LoopAnalysis_Predictions_WithoutTreatments_WithholdEveryContextField()
+    {
+        var data = RedactionCoverage.Populated<PredictionAccuracyResponse>();
+        foreach (var curve in data.Primary.Curves.Concat(data.Comparison!.Curves))
+            curve.Contexts = [.. Enum.GetValues<PredictionContext>()];
+
+        RedactionCoverage.AssertWithheld(
+            LoopAnalysisReadScopeGuard.Redact(data, Granted(Scope.GlucoseRead, Scope.DevicesRead)),
+            [typeof(PredictionCurveAccuracy)],
+            [
+                "PredictionCurveAccuracy.Curve", "PredictionCurveAccuracy.Contexts",
+                "PredictionCurveAccuracy.Horizons", "PredictionCurveAccuracy.ByHour",
+            ]);
     }
 
     [Fact]

@@ -502,6 +502,18 @@ internal static class LoopAnalysisReadScopeGuard
     }
 
     /// <summary>
+    /// Each tab's withheld series, by route. Every <see cref="LoopAnalysisSeries"/> belongs to
+    /// exactly one tab, so a tab's response never lists another's series; a new tab adds its entry
+    /// here.
+    /// </summary>
+    public static readonly IReadOnlyDictionary<string, Func<IReadOnlySet<string>, HashSet<LoopAnalysisSeries>>> TabWithheld =
+        new Dictionary<string, Func<IReadOnlySet<string>, HashSet<LoopAnalysisSeries>>>
+        {
+            ["daily-profile"] = Withheld,
+            ["prediction-accuracy"] = WithheldPredictions,
+        };
+
+    /// <summary>
     /// The prediction figures the caller's scopes withhold, as <see cref="Withheld"/> is for the
     /// Daily profile. A curve's accuracy compares the APS snapshots, which are devices, with the
     /// sensor readings, which are glucose, so it needs both. Its context is drawn from treatments.
