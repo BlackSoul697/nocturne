@@ -310,6 +310,7 @@
         <TIRStackedChart
           percentages={analysis?.timeInRange?.percentages}
           orientation="horizontal"
+          keyOnScreen
           compact
         />
         <div class="grid grid-cols-2 @lg:grid-cols-4 gap-x-6 gap-y-3 text-sm">
