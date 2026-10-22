@@ -10,6 +10,8 @@
   } from "$lib/stores/appearance-store.svelte";
   import {
     glucoseUnits,
+    energyUnit,
+    getEnergyUnit,
     a1cName,
     a1cUnits,
     timeFormat,
@@ -32,6 +34,7 @@
     type ColorScheme,
     type RegionFormat,
   } from "$lib/stores/appearance-store.svelte";
+  import { ENERGY_UNITS } from "@nocturne/ui/energy";
   import { getRealtimeStore } from "$lib/stores/realtime-store.svelte";
   import TitleFaviconSettings from "$lib/components/settings/TitleFaviconSettings.svelte";
   import DashboardWidgetConfigurator from "$lib/components/settings/DashboardWidgetConfigurator.svelte";
@@ -574,6 +577,28 @@
               <SelectContent>
                 <SelectItem value="mg/dl">mg/dL</SelectItem>
                 <SelectItem value="mmol">mmol/L</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div class="space-y-2">
+            <Label for="energy-unit">Food energy units</Label>
+            <Select
+              type="single"
+              value={getEnergyUnit()}
+              onValueChange={(value) => {
+                const unit = ENERGY_UNITS.find((u) => u === value);
+                if (unit) energyUnit.current = unit;
+              }}
+            >
+              <SelectTrigger id="energy-unit">
+                <span>
+                  {getEnergyUnit() === "kJ" ? "Kilojoules (kJ)" : "Calories (kcal)"}
+                </span>
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="kJ">Kilojoules (kJ)</SelectItem>
+                <SelectItem value="kcal">Calories (kcal)</SelectItem>
               </SelectContent>
             </Select>
           </div>
