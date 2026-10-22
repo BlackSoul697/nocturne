@@ -90,30 +90,35 @@ public class ApsSnapshotRepository : SyncUpsertRepositoryBase<ApsSnapshot, ApsSn
         })];
     }
 
-    private sealed record LoopCycleColumns(
-        DateTime Timestamp,
-        string AidAlgorithm,
-        bool Enacted,
-        double? EnactedRate,
-        double? Iob,
-        double? SensitivityRatio,
-        string? Reason,
-        bool? SuggestedChange);
+    /// <summary>Set by member initialisation, which EF can translate on both sides of a union.</summary>
+    private sealed class LoopCycleColumns
+    {
+        public DateTime Timestamp { get; init; }
+        public string AidAlgorithm { get; init; } = "";
+        public bool Enacted { get; init; }
+        public double? EnactedRate { get; init; }
+        public double? Iob { get; init; }
+        public double? SensitivityRatio { get; init; }
+        public string? Reason { get; init; }
+        public bool? SuggestedChange { get; init; }
+    }
 
     /// <summary>
     /// The suggestion is read twice, for its reason and for whether it asked for a change, and the
     /// reason is matched here rather than in SQL: each read of a jsonb column detoasts it again.
     /// </summary>
     private static readonly System.Linq.Expressions.Expression<Func<ApsSnapshotEntity, LoopCycleColumns>> LoopCycleRow =
-        e => new LoopCycleColumns(
-            e.Timestamp,
-            e.AidAlgorithm,
-            e.Enacted,
-            e.EnactedRate,
-            e.Iob,
-            e.SensitivityRatio,
-            Jsonb.Text(e.SuggestedJson, "reason"),
-            e.SuggestedJson == null ? null : EF.Functions.JsonExistAny(e.SuggestedJson, "duration", "units"));
+        e => new LoopCycleColumns
+        {
+            Timestamp = e.Timestamp,
+            AidAlgorithm = e.AidAlgorithm,
+            Enacted = e.Enacted,
+            EnactedRate = e.EnactedRate,
+            Iob = e.Iob,
+            SensitivityRatio = e.SensitivityRatio,
+            Reason = Jsonb.Text(e.SuggestedJson, "reason"),
+            SuggestedChange = e.SuggestedJson == null ? null : EF.Functions.JsonExistAny(e.SuggestedJson, "duration", "units"),
+        };
 
     /// <summary>
     /// Gets APS snapshots by correlation IDs.
