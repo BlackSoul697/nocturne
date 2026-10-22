@@ -92,6 +92,15 @@ public static class SettingsEvidenceCalculator
     public const double MaterialShare = 0.15;
 
     /// <summary>
+    /// What a carb ratio's glucose-change share is multiplied by before it is judged against
+    /// <see cref="MaterialShare"/>, where no ISF in the range is observed and every conversion is at
+    /// the profile's, unscaled. Such an ISF can be off by half or double with nothing in the range to
+    /// say so, and a share read at an ISF twice the truth looks half its size; weighing it double
+    /// flags a term at half the material share.
+    /// </summary>
+    public const double ProfileOnlyGlucoseWeight = 2.0;
+
+    /// <summary>
     /// The least share of the range's days with any carb entry for fasting to be read off the carb
     /// entries: below a fifth, entries are the exception, a snack logged now and then, and most
     /// meals are known only by the glucose they raise.

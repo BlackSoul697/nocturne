@@ -63,9 +63,7 @@ public static class ObservedCarbRatio
                 episodes[block].Add(episode!);
         }
 
-        // An unscaled profile ISF can be off by half or double with nothing in the range to say so; a
-        // glucose term read at it is weighed at twice its share, so half the material share flags it.
-        var glucoseWeight = conversion.ProfileOnly ? 2.0 : 1.0;
+        var glucoseWeight = conversion.ProfileOnly ? SettingsEvidenceCalculator.ProfileOnlyGlucoseWeight : 1.0;
         return [.. blocks.Select((b, i) =>
         {
             var tally = tallies[i];
