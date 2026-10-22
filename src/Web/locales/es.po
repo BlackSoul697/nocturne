@@ -1836,7 +1836,6 @@ msgid "Calendar"
 msgstr "Calendario"
 
 #: src/lib/components/calendar/CalendarHeader.svelte
-#: src/lib/components/dashboard/widgets/TddWidget.svelte
 #: src/lib/components/layout/ReportsFilterSidebar.svelte
 #: src/lib/components/ui/date-range-picker.svelte
 #: src/routes/(authenticated)/reports/+layout.svelte
@@ -9962,7 +9961,6 @@ msgid "{0} readings"
 msgstr "{0} lecturas"
 
 #: src/lib/components/dashboard/widgets/DailySummaryWidget.svelte
-#: src/lib/components/dashboard/widgets/TddWidget.svelte
 msgid "No data today"
 msgstr "Sin datos hoy"
 
@@ -10001,6 +9999,7 @@ msgstr "Glucosa en sangre <0/>"
 msgid "Trackers"
 msgstr "Seguimientos"
 
+#: src/lib/components/dashboard/widgets/TddWidget.svelte
 #: src/lib/components/dashboard/widgets/TirChartWidget.svelte
 msgid "Last 24h"
 msgstr "Últimas 24 h"
@@ -27691,4 +27690,8 @@ msgstr ""
 #. 0: (periods.dailyTotal ?? 0).toFixed(2)
 #: src/lib/components/reports/InsulinDeliveryChart.svelte
 msgid "Daily total {0} U"
+msgstr ""
+
+#: src/lib/components/dashboard/widgets/TddWidget.svelte
+msgid "No data in the last 24h"
 msgstr ""
