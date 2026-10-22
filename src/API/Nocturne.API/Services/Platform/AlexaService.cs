@@ -37,7 +37,7 @@ public class AlexaService : IAlexaService
     private readonly MetricAnswer _fullStatus;
     private readonly MetricAnswer _lastLoop;
 
-    // Translation mappings for supported locales (simplified implementation)
+    // Values for es and fr are Nightscout's own; a key missing from a locale falls back to en.
     private readonly Dictionary<string, Dictionary<string, string>> _translations = new()
     {
         ["en"] = new Dictionary<string, string>
@@ -90,21 +90,18 @@ public class AlexaService : IAlexaService
         },
         ["es"] = new Dictionary<string, string>
         {
-            ["virtAsstTitleLaunch"] = "Nightscout",
-            ["virtAsstLaunch"] =
-                "Hola, puedo ayudarte a verificar tu azúcar en sangre. ¿Qué te gustaría saber?",
-            ["virtAsstUnknownIntentTitle"] = "Solicitud Desconocida",
-            ["virtAsstUnknownIntentText"] =
-                "Lo siento, no entendí esa solicitud. Por favor, inténtalo de nuevo.",
+            ["virtAsstTitleLaunch"] = "Bienvenido a Nightscout",
+            ["virtAsstLaunch"] = "¿Qué quieres saber de Nightscout?",
+            ["virtAsstUnknownIntentTitle"] = "Intento desconocido",
+            ["virtAsstUnknownIntentText"] = "Lo siento, no sé lo que estás pidiendo.",
         },
         ["fr"] = new Dictionary<string, string>
         {
-            ["virtAsstTitleLaunch"] = "Nightscout",
-            ["virtAsstLaunch"] =
-                "Bonjour, je peux vous aider à vérifier votre glycémie. Que voulez-vous savoir?",
-            ["virtAsstUnknownIntentTitle"] = "Demande Inconnue",
+            ["virtAsstTitleLaunch"] = "Bienvenue dans Nightscout",
+            ["virtAsstLaunch"] = "Qu'est ce que vous voulez voir sur Nightscout?",
+            ["virtAsstUnknownIntentTitle"] = "Intentions inconnues",
             ["virtAsstUnknownIntentText"] =
-                "Désolé, je n'ai pas compris cette demande. Veuillez réessayer.",
+                "« Je suis désolée, je ne sais pas ce que vous demandez. ».",
         },
     };
 
@@ -244,12 +241,7 @@ public class AlexaService : IAlexaService
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Error processing intent {IntentName}", intent.Name);
-                return BuildSpeechletResponse(
-                    Translate("virtAsstUnknownIntentTitle", locale),
-                    "Sorry, I encountered an error processing your request.",
-                    string.Empty,
-                    true
-                );
+                return BuildErrorResponse();
             }
         }
         else
@@ -262,6 +254,16 @@ public class AlexaService : IAlexaService
             );
         }
     }
+
+    /// <inheritdoc/>
+    /// <remarks>Nightscout has no error answer, so the wording is English whatever the locale.</remarks>
+    public AlexaResponse BuildErrorResponse() =>
+        BuildSpeechletResponse(
+            "Error",
+            "Sorry, I'm having trouble right now. Please try again later.",
+            string.Empty,
+            true
+        );
 
     /// <summary>
     /// Builds an <see cref="AlexaResponse"/> in the legacy <c>buildSpeechletResponse</c> format.
@@ -532,14 +534,25 @@ public class AlexaService : IAlexaService
                 request.CancellationToken
             );
             // NIGHTSCOUT-COMPAT: Nightscout speaks "basal is NaN units per hour" and "0 units of insulin" here; Nocturne omits the basal sentence and says "no insulin" for zero.
-            if (wantsBasal && BasalSentence(properties, request) is { } basal)
+            var basal = wantsBasal ? BasalSentence(properties, request) : null;
+            var iobUnits = wantsIob ? IobUnits(properties, request.Locale) : null;
+
+            // virtAsstBasal has no full stop: Nightscout always follows it with the IOB clause.
+            if (basal is not null)
             {
-                parts.Add((1, basal));
+                parts.Add((1, iobUnits is null ? basal + "." : basal));
             }
 
-            if (wantsIob && IobUnits(properties, request.Locale) is { } iobUnits)
+            if (iobUnits is not null)
             {
-                parts.Add((2, Translate("virtAsstIob", request.Locale, iobUnits)));
+                parts.Add(
+                    (
+                        2,
+                        basal is not null
+                            ? Translate("virtAsstIob", request.Locale, iobUnits)
+                            : Translate("virtAsstIobIntent", request.Locale, iobUnits) + "."
+                    )
+                );
             }
         }
 

@@ -330,16 +330,7 @@ public class AlexaControllerTests
             .Setup(x => x.ProcessRequestAsync(request, It.IsAny<CancellationToken>()))
             .ThrowsAsync(new Exception("Something went wrong"));
 
-        _mockAlexaService
-            .Setup(x =>
-                x.BuildSpeechletResponse(
-                    It.IsAny<string>(),
-                    It.IsAny<string>(),
-                    It.IsAny<string>(),
-                    It.IsAny<bool>()
-                )
-            )
-            .Returns(errorResponse);
+        _mockAlexaService.Setup(x => x.BuildErrorResponse()).Returns(errorResponse);
 
         // Act
         var result = await _controller.HandleAlexaRequest(request, CancellationToken.None);
@@ -347,9 +338,6 @@ public class AlexaControllerTests
         // Assert
         var okResult = Assert.IsType<OkObjectResult>(result.Result);
         var response = Assert.IsType<AlexaResponse>(okResult.Value);
-        Assert.Contains(
-            "having trouble",
-            response.Response.OutputSpeech?.Text ?? string.Empty
-        );
+        Assert.Same(errorResponse, response);
     }
 }

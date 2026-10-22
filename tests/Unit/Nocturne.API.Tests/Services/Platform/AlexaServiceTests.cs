@@ -707,7 +707,7 @@ public class AlexaServiceTests
         var result = await Intent("NSStatus");
 
         Assert.Equal(
-            "120 and holding as of 5 minutes ago. and you have 1.25 units of insulin on board.",
+            "120 and holding as of 5 minutes ago. You have 1.25 units of insulin on board.",
             Speech(result)
         );
     }
@@ -731,7 +731,7 @@ public class AlexaServiceTests
         var result = await Intent("NSStatus");
 
         Assert.Equal(
-            "120 and holding as of 5 minutes ago. Your current basal is 0.9 units per hour",
+            "120 and holding as of 5 minutes ago. Your current basal is 0.9 units per hour.",
             Speech(result)
         );
     }
@@ -968,6 +968,49 @@ public class AlexaServiceTests
     }
 
     [Fact]
+    public async Task NSStatus_WithoutTheBasalSentence_StartsIobAsANewSentence()
+    {
+        LatestEntry(120, "Flat", minutesAgo: 5);
+        Properties(("iob", Reading("iob", 1.25)));
+
+        var result = await Intent("NSStatus");
+
+        Assert.Equal(
+            "120 and holding as of 5 minutes ago. You have 1.25 units of insulin on board.",
+            Speech(result)
+        );
+    }
+
+    [Fact]
+    public async Task NSStatus_WithoutGlucoseOrBasal_SpeaksIobAsASentence()
+    {
+        _mockEntryStore
+            .Setup(x => x.QueryAsync(It.IsAny<EntryQuery>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(Array.Empty<Entry>());
+        Properties(("iob", Reading("iob", 0)));
+
+        var result = await Intent("NSStatus");
+
+        Assert.Equal("You have no insulin on board.", Speech(result));
+    }
+
+    [Fact]
+    public async Task NSStatus_WithoutGlucoseButWithBasalAndIob_JoinsThemInOneSentence()
+    {
+        _mockEntryStore
+            .Setup(x => x.QueryAsync(It.IsAny<EntryQuery>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(Array.Empty<Entry>());
+        Properties(("basal", Basal(0.9)), ("iob", Reading("iob", 1.25)));
+
+        var result = await Intent("NSStatus");
+
+        Assert.Equal(
+            "Your current basal is 0.9 units per hour and you have 1.25 units of insulin on board.",
+            Speech(result)
+        );
+    }
+
+    [Fact]
     public async Task NSStatus_ForAGlucoseOnlyCredential_SpeaksOnlyGlucose()
     {
         Grant(Scope.GlucoseRead);
@@ -1099,22 +1142,79 @@ public class AlexaServiceTests
         AssertEmptyReprompt(result);
     }
 
-    [Fact]
-    public async Task ProcessRequestAsync_LocaleProcessing_ExtractsCorrectLocale()
+    [Theory]
+    [InlineData("es-ES", "Bienvenido a Nightscout", "¿Qué quieres saber de Nightscout?")]
+    [InlineData("fr-FR", "Bienvenue dans Nightscout", "Qu'est ce que vous voulez voir sur Nightscout?")]
+    public async Task ProcessRequestAsync_LaunchRequest_AnswersNightscoutsTranslation(
+        string locale,
+        string title,
+        string text
+    )
+    {
+        var request = new AlexaRequest
+        {
+            Request = new AlexaRequestDetails { Type = "LaunchRequest", Locale = locale },
+        };
+
+        var result = await _alexaService.ProcessRequestAsync(request, CancellationToken.None);
+
+        Assert.Equal(text, Speech(result!));
+        Assert.Equal(title, result!.Response.Card?.Title);
+        Assert.Equal(text, result.Response.Reprompt?.OutputSpeech?.Text);
+    }
+
+    [Theory]
+    [InlineData("es-ES", "Intento desconocido", "Lo siento, no sé lo que estás pidiendo.")]
+    [InlineData("fr-FR", "Intentions inconnues", "« Je suis désolée, je ne sais pas ce que vous demandez. ».")]
+    public async Task ProcessRequestAsync_UnknownIntent_AnswersNightscoutsTranslation(
+        string locale,
+        string title,
+        string text
+    )
     {
         var request = new AlexaRequest
         {
             Request = new AlexaRequestDetails
             {
-                Type = "LaunchRequest",
-                Locale = "es-ES", // Should be reduced to "es"
+                Type = "IntentRequest",
+                Locale = locale,
+                Intent = new AlexaIntent { Name = "UnknownIntent" },
             },
         };
 
         var result = await _alexaService.ProcessRequestAsync(request, CancellationToken.None);
 
-        Assert.NotNull(result);
-        Assert.NotNull(result.Response.OutputSpeech?.Text);
+        Assert.Equal(text, Speech(result!));
+        Assert.Equal(title, result!.Response.Card?.Title);
+        Assert.True(result.Response.ShouldEndSession);
+    }
+
+    [Fact]
+    public void BuildErrorResponse_EndsTheSessionWithTheErrorAnswer()
+    {
+        var result = _alexaService.BuildErrorResponse();
+
+        Assert.Equal("Sorry, I'm having trouble right now. Please try again later.", Speech(result));
+        Assert.Equal("Error", result.Response.Card?.Title);
+        Assert.True(result.Response.ShouldEndSession);
+        AssertEmptyReprompt(result);
+    }
+
+    [Fact]
+    public async Task Intent_WhenTheHandlerFails_AnswersTheSameAsTheErrorBuilder()
+    {
+        _mockProperties
+            .Setup(x =>
+                x.GetPropertiesAsync(
+                    It.IsAny<IEnumerable<string>>(),
+                    It.IsAny<CancellationToken>()
+                )
+            )
+            .ThrowsAsync(new InvalidOperationException("boom"));
+
+        var result = await Intent("NSStatus");
+
+        Assert.Equivalent(_alexaService.BuildErrorResponse(), result);
     }
 
     [Fact]
