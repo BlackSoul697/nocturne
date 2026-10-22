@@ -6,7 +6,7 @@ namespace Nocturne.Core.Clinical.LoopAnalysis;
 /// <summary>Everything the Settings evidence tab is computed from, fetched once for every range it covers.</summary>
 /// <remarks>
 /// The series must reach past each end of the range: a basal block looks back
-/// <see cref="ObservedBasalNeed.CarbFreeMs"/> for carbs and a DIA for boluses, and every window reads
+/// <see cref="ObservedBasalNeed.CarbFreeMs"/> for carbs and <see cref="ObservedBasalNeed.ManualBolusFreeMs"/> for boluses, and every window reads
 /// <see cref="ObservedCarbRatio.WindowAfterMs"/> past its anchor.
 /// </remarks>
 public sealed record SettingsEvidenceInputs
@@ -17,7 +17,7 @@ public sealed record SettingsEvidenceInputs
     /// <summary>The overrides, temporary targets, exercise, illness, open loop and data exclusions an episode is rejected for.</summary>
     public LoopAnalysisMaskSources Sources { get; init; } = new();
 
-    /// <summary>The ISF, carb ratio and DIA in force.</summary>
+    /// <summary>The ISF and carb ratio in force.</summary>
     public required TherapyTimeline Therapy { get; init; }
 }
 

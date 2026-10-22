@@ -25,6 +25,16 @@ public static class ObservedBasalNeed
     public const long CarbFreeMs = 4 * LocalSlotBinning.HourMs;
 
     /// <summary>
+    /// How long before a block a manual bolus keeps it from being fasting. Not the profile's DIA: the
+    /// carried-insulin term (IOB at the block's start less IOB at its end) already accounts for what
+    /// an earlier bolus still has on board, so the rule only has to keep out the meal a bolus was
+    /// likely given for, whose absorption <see cref="CarbFreeMs"/> bounds, plus an hour for a bolus
+    /// given ahead of eating. A full DIA, ten hours as Trio users commonly set it, rejects every
+    /// overnight block after any evening bolus.
+    /// </summary>
+    public const long ManualBolusFreeMs = 5 * LocalSlotBinning.HourMs;
+
+    /// <summary>
     /// The fewest fasting days a block's need is reported from: the day count below which
     /// <see cref="SlotSummary.SparseDayThreshold"/> reads no slot's spread as a pattern.
     /// </summary>
@@ -108,8 +118,7 @@ public static class ObservedBasalNeed
             return (null, SettingsEvidenceRule.CarbsBefore);
         if (EventAnchors.AnyWithin(context.Climbs, start - CarbFreeMs, end - 1))
             return (null, SettingsEvidenceRule.RiseBefore);
-        var dia = (long)(context.TherapyAt(start).Dia * LocalSlotBinning.HourMs);
-        if (context.Insulin.Over(start - dia, end).ManualBolus > 0)
+        if (context.Insulin.Over(start - ManualBolusFreeMs, end).ManualBolus > 0)
             return (null, SettingsEvidenceRule.ManualBolus);
         if (context.Series.IobCobOver(start, end)?.Cob > 0)
             return (null, SettingsEvidenceRule.CarbsOnBoard);

@@ -159,7 +159,7 @@ public class SettingsEvidenceCalculatorTests
         var range = Calculate(Simulate(
             trueBasal: 1, trueIsf: 40, trueCr: 8, profileBasal: 1, profileIsf: 80, profileCr: 14, smb: false));
 
-        var first = BasalBlock(range, 0);
+        var first = BasalBlock(range, 2);
         first.UnavailableReason.Should().Be(SettingsEvidenceUnavailableReason.SteepTrend);
         first.Observed.Should().BeNull();
         first.GlucoseTrend!.Mean.Should().BeLessThan(-ObservedBasalNeed.MaxTrendMgdlPerHour);
@@ -337,17 +337,31 @@ public class SettingsEvidenceCalculatorTests
     }
 
     [Fact]
-    public void TheCarbsAndBolusLookback_ReachFourHoursAndDiaBeforeTheBlock()
+    public void TheCarbsAndBolusLookback_ReachFourAndFiveHoursBeforeTheBlock_NotTheDia()
     {
         var week = new Week();
-        week.Carbs.Add(new CarbEvent(week.At(3, 2) - 4 * Hour - Minute, 20));
-        week.Doses.Add(new InsulinDose(week.At(3, 2) - 4 * Hour - Minute, 1, Automatic: false));
+        var block = week.At(3, 2);
+        week.Carbs.Add(new CarbEvent(block - 4 * Hour - Minute, 20));
+        week.Doses.Add(new InsulinDose(block - 5 * Hour - Minute, 1, Automatic: false));
 
         var range = week.Run();
 
         Rejected(BasalBlock(range, 2), SettingsEvidenceRule.CarbsBefore).Should().Be(0);
         Rejected(BasalBlock(range, 2), SettingsEvidenceRule.ManualBolus).Should().Be(0);
         Rejected(BasalBlock(range, 0), SettingsEvidenceRule.CarbsBefore).Should().Be(1);
+        Rejected(BasalBlock(range, 0), SettingsEvidenceRule.ManualBolus).Should().Be(0, "the carbs before it are counted first");
+    }
+
+    [Fact]
+    public void AnEveningBolus_DoesNotRejectTheNightsBlocks_UnderALongDia()
+    {
+        var week = new Week();
+        week.Doses.Add(new InsulinDose(week.At(2, 20), 1, Automatic: false));
+
+        var range = week.Run();
+
+        Rejected(BasalBlock(range, 0), SettingsEvidenceRule.ManualBolus).Should().Be(1, "20:00 is within five hours of 00:00");
+        Rejected(BasalBlock(range, 2), SettingsEvidenceRule.ManualBolus).Should().Be(0, "a ten-hour DIA would reach it; the lookback does not");
     }
 
     [Fact]

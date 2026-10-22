@@ -93,7 +93,7 @@ public enum SettingsEvidenceRule
     /// </summary>
     RiseBefore,
 
-    /// <summary>Basal: a manual bolus in the window or within DIA before it.</summary>
+    /// <summary>Basal: a manual bolus in the window or the hours before it.</summary>
     ManualBolus,
 
     /// <summary>Basal: carbs on board in the window.</summary>
