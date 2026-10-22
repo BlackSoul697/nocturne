@@ -108,6 +108,7 @@ function carbRatio(block: SettingsEvidenceBlock, start: number, end: number, mea
     block, startHour: start, endHour: end, profile: 10, n: 15,
     observed: 12.5, spread: spread(12.5, 1.5, 15), confidence: C.High, confidenceReasons: [],
     towardsMoreInsulin: false,
+    towardsLessInsulin: true,
     rejections: [{ rule: SettingsEvidenceRule.NotIsolated, count: 4 }],
     episodes: [
       {

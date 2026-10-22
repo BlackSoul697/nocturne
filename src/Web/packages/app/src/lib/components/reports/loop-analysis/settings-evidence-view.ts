@@ -7,6 +7,10 @@ const SLOTS_PER_HOUR = 60 / SLOT_MINUTES;
 export interface EpisodeColumn<T> {
   label: string;
   value: (episode: T) => string;
+  /** What the heading's values mean, where that needs saying, shown as the heading's tooltip. */
+  hint?: string;
+  /** Hidden on narrow widths. */
+  wide?: boolean;
 }
 
 /** The slots a block covers on the shared time-of-day axis, from the hours the API gave it. */

@@ -1,7 +1,7 @@
 import { render } from "vitest-browser-svelte";
-import { page } from "vitest/browser";
+import { page, userEvent } from "vitest/browser";
 import { afterEach, describe, expect, it } from "vitest";
-import { TimeZoneUnavailableReason } from "$lib/api";
+import { SettingsEvidenceConfidence, TimeZoneUnavailableReason } from "$lib/api";
 import { glucoseUnits } from "$lib/stores/appearance-store.svelte";
 import SettingsEvidenceTab from "./SettingsEvidenceTab.svelte";
 import {
@@ -13,6 +13,17 @@ import {
 /** A block's disclosure, by the hour span its summary begins with. */
 const block = (section: string, span: RegExp) =>
   page.getByRole("list", { name: `${section} by block` }).getByRole("listitem").filter({ hasText: span });
+
+/** The episode table's IOB columns need the block's @lg container, wider than the runner's 414px. */
+async function atWidth(width: number, body: () => Promise<void>) {
+  const original = [window.innerWidth, window.innerHeight] as const;
+  await page.viewport(width, 900);
+  try {
+    await body();
+  } finally {
+    await page.viewport(original[0], original[1]);
+  }
+}
 
 describe("SettingsEvidenceTab", () => {
   afterEach(() => {
@@ -57,32 +68,122 @@ describe("SettingsEvidenceTab", () => {
 
     await expect.element(night.getByText("Why the confidence is not higher")).toBeVisible();
     await expect.element(night.getByText(/Carbs are logged on few days/)).toBeVisible();
-    await expect.element(night.getByText("Logging carbs would let us tell fasting time from meals.")).toBeVisible();
+    await expect
+      .element(night.getByText("It firms up when your data includes carbs logged on more days, so fasting time can be told from meals."))
+      .toBeVisible();
+    await expect.element(night.getByText(/rests on something this block cannot check by itself/)).toBeVisible();
     await expect.element(night.getByText("Carbs within 4 hours before, or during")).toBeVisible();
     await expect.element(night.getByText("The loop's mean correction: +0.25 U/h")).toBeVisible();
     await expect.element(night.getByText("In the same direction on 93% of days")).toBeVisible();
   });
 
-  it("notes beside a figure towards more insulin that it is an observation to discuss, and not beside one that is not", async () => {
+  it("marks a figure towards more insulin on its closed summary row, in words", async () => {
+    render(SettingsEvidenceTab, { props: { response: settingsEvidenceResponse() } });
+
+    const isf = block("Insulin sensitivity (ISF)", /^\s*11/).first();
+    await expect.element(isf.getByText("More insulin than your profile")).toBeVisible();
+    await expect.element(isf.getByText(/not a setting to copy/)).not.toBeInTheDocument();
+    await expect.element(block("Carb ratio", /^\s*6/).first().getByText("More insulin than your profile")).not.toBeInTheDocument();
+  });
+
+  it("ends the chart's reading of a figure towards more insulin with the note", async () => {
+    render(SettingsEvidenceTab, { props: { response: settingsEvidenceResponse() } });
+
+    const slider = page.getByRole("slider", { name: "Basal by time of day" });
+    (slider.element() as HTMLElement).focus();
+    await userEvent.keyboard("{Shift>}{ArrowRight}{/Shift}");
+    await expect.element(slider).toHaveAttribute("aria-valuetext", expect.stringMatching(/More insulin than your profile; see the note\.$/));
+  });
+
+  it("opens a figure towards more insulin on the note, and says which way every other figure points", async () => {
+    const response = settingsEvidenceResponse();
+    response.primary!.basal![2] = { ...response.primary!.basal![2], towardsMoreInsulin: false, towardsLessInsulin: false };
+    render(SettingsEvidenceTab, { props: { response } });
+
+    const isf = block("Insulin sensitivity (ISF)", /^\s*11/).first();
+    await isf.getByText(/41/).first().click();
+    await expect
+      .element(
+        isf.getByText(
+          "Your data points to more insulin here than your profile gives. This is an observation, not a setting to copy: settings are usually changed in small steps, one at a time, and with your care team."
+        )
+      )
+      .toBeVisible();
+
+    const cr = block("Carb ratio", /^\s*6/).first();
+    await cr.getByText(/12\.5/).first().click();
+    await expect.element(cr.getByText("Your data points to less insulin here than your profile gives.")).toBeVisible();
+    await expect.element(cr.getByText(/not a setting to copy/)).not.toBeInTheDocument();
+
+    const close = block("Basal", /^\s*4/).first();
+    await close.getByText(/1\.05/).click();
+    await expect.element(close.getByText("Close to your profile.")).toBeVisible();
+  });
+
+  it("says which way a higher value points for every setting", async () => {
+    render(SettingsEvidenceTab, { props: { response: settingsEvidenceResponse() } });
+
+    await expect.element(page.getByText("A higher basal rate means more insulin every hour.")).toBeVisible();
+    await expect
+      .element(page.getByText("A higher ISF means each unit lowers glucose more, so less insulin for the same correction."))
+      .toBeVisible();
+    await expect.element(page.getByText("A higher carb ratio means less insulin for the same meal.")).toBeVisible();
+  });
+
+  it("draws a low-confidence figure quietly, and keys the observed mark even when every figure is low", async () => {
+    const response = settingsEvidenceResponse();
+    response.primary!.basal = response.primary!.basal!.map((b) => ({ ...b, confidence: SettingsEvidenceConfidence.Low }));
+    render(SettingsEvidenceTab, { props: { response } });
+
+    const low = block("Basal", /^\s*2/).first().getByTestId("observed-value");
+    await expect.element(low).not.toHaveClass("font-semibold");
+    await expect.element(low).toHaveClass("text-muted-foreground");
+    const basal = page.getByRole("region", { name: "Basal" });
+    await expect.element(basal.getByTestId("spread-low").first()).toHaveAttribute("stroke-dasharray", "3 2");
+    await expect.element(basal.getByTestId("spread")).not.toBeInTheDocument();
+    await expect.element(basal.getByText("Observed, middle half of episodes")).toBeVisible();
+    await expect.element(basal.getByText("Low confidence", { exact: true }).first()).toBeVisible();
+  });
+
+  it("says once that carb ratio needs logged meals when no block had any", async () => {
+    render(SettingsEvidenceTab, { props: { response: settingsEvidenceResponse({ primary: settingsEvidenceRange({ meals: false }) }) } });
+
+    await expect.element(page.getByText("Carb ratio needs meals logged with carbs; none were logged in this range.")).toBeVisible();
+    await expect.element(page.getByRole("list", { name: "Carb ratio by block" })).not.toBeInTheDocument();
+    await expect.element(page.getByRole("list", { name: "Basal by block" })).toBeVisible();
+  });
+
+  it("leads a narrow episode table with the figure's value and leaves out the IOB columns", async () => {
     render(SettingsEvidenceTab, { props: { response: settingsEvidenceResponse() } });
 
     const isf = block("Insulin sensitivity (ISF)", /^\s*11/).first();
     await isf.getByText(/41/).first().click();
-    await expect.element(isf.getByText(/This would mean more insulin than your profile gives/)).toBeVisible();
 
-    const cr = block("Carb ratio", /^\s*6/).first();
-    await cr.getByText(/12\.5/).first().click();
-    await expect.element(cr.getByText(/This would mean more insulin/)).not.toBeInTheDocument();
+    const headers = isf.getByRole("columnheader").elements().map((h) => h.textContent?.trim());
+    expect(headers.slice(0, 2)).toEqual(["When", "ISF, mg/dL per U"]);
+    await expect.element(isf.getByRole("columnheader", { name: "IOB start, U", exact: true })).not.toBeInTheDocument();
+    await expect.element(isf.getByRole("rowheader")).toHaveTextContent(/2:00\s*PM|14:00/);
   });
 
   it("lists a block's episodes with what acted, each opening Day in Review", async () => {
     render(SettingsEvidenceTab, { props: { response: settingsEvidenceResponse() } });
-
+    await atWidth(1280, async () => {
     const isf = block("Insulin sensitivity (ISF)", /^\s*11/).first();
     await isf.getByText(/41/).first().click();
 
-    for (const heading of ["Net insulin, U", "IOB start, U", "IOB end, U", "Residual IOB, U", "Basal excess, U", "Start", "End"])
+    for (const heading of [
+      "Net insulin, U",
+      "IOB start, U",
+      "IOB end, U",
+      "Residual IOB, U",
+      "Basal need above schedule, U",
+      "Insulin that acted, U",
+      "Start",
+      "End",
+    ])
       await expect.element(isf.getByRole("columnheader", { name: heading, exact: true })).toBeVisible();
+    await isf.getByRole("button", { name: "IOB start, U" }).hover();
+    await expect.element(page.getByText(/negative when the loop gave less basal than scheduled/).first()).toBeVisible();
     const link = isf.getByRole("link");
     await expect.element(link).toHaveAttribute("href", "/reports/day-in-review?date=2026-06-12&time=14:00");
     await expect.element(link).toHaveAccessibleName(/in Day in Review/);
@@ -90,6 +191,8 @@ describe("SettingsEvidenceTab", () => {
     const night = block("Basal", /^\s*2/).first();
     await night.getByText(/1\.05/).click();
     await expect.element(night.getByRole("columnheader", { name: "Carried insulin, U/h" })).toBeVisible();
+    await expect.element(night.getByRole("columnheader", { name: "Glucose change, mg/dL" })).toBeVisible();
+    });
   });
 
   it("shows ISF in the viewer's units", async () => {
@@ -104,7 +207,11 @@ describe("SettingsEvidenceTab", () => {
       props: { response: settingsEvidenceResponse({ comparison: settingsEvidenceRange({ shift: 0.2, meals: false }) }) },
     });
 
-    await expect.element(block("Basal", /^\s*2/).first()).toHaveTextContent("compared 1.25");
+    await expect.element(block("Basal", /^\s*2/).first()).toHaveTextContent(/compared 1\.25\s*\(n = 14, Moderate confidence\)/);
+    const basal = page.getByRole("region", { name: "Basal" });
+    await expect.element(basal.getByTestId("observed-compared-low")).toHaveAttribute("fill", "var(--background)");
+    await expect.element(basal.getByTestId("observed-compared").first()).toHaveAttribute("d", expect.stringMatching(/Z$/));
+    await expect.element(basal.getByText("Compared range, low confidence")).toBeVisible();
     await expect.element(block("Carb ratio", /^\s*6/).first()).toHaveTextContent("compared –");
     await expect.element(page.getByText("Compared range").first()).toBeVisible();
   });

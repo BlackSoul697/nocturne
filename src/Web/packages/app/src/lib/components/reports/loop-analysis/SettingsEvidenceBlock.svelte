@@ -2,8 +2,8 @@
   One block of a setting, as a disclosure: its summary row names the block, the observed value
   against the profile's (and the compared range's), n and the confidence; opened, it says why the
   confidence is what it is and what would raise it, why candidates were set aside, and lists the
-  episodes, each opening Day in Review. A figure towards more insulin carries the
-  observations-not-advice note beside it.
+  episodes, each opening Day in Review. A figure towards more insulin says so on its summary row,
+  and carries the observations-not-advice note in its body.
 -->
 <script lang="ts" generics="E extends SettingsEvidenceEpisode">
   import { resolve } from "$app/paths";
@@ -13,11 +13,13 @@
     type SettingsEvidenceFigure,
   } from "$lib/api";
   import { Badge } from "$lib/components/ui/badge";
+  import * as Tooltip from "$lib/components/ui/tooltip";
   import { formatWeekdayDate, hourLabel, time } from "$lib/utils/formatting";
   import { startOfDay } from "$lib/utils/date-range";
   import { plural } from "$lib/utils/plural";
   import ArrowUpRight from "@lucide/svelte/icons/arrow-up-right";
   import ChevronRight from "@lucide/svelte/icons/chevron-right";
+  import Info from "@lucide/svelte/icons/info";
   import ShieldCheck from "@lucide/svelte/icons/shield-check";
   import ShieldHalf from "@lucide/svelte/icons/shield-half";
   import ShieldAlert from "@lucide/svelte/icons/shield-alert";
@@ -46,6 +48,8 @@
   const value = (v: number | null | undefined) => (v == null ? "–" : format(v));
   const rejections = $derived((figure.rejections ?? []).filter((r) => (r.count ?? 0) > 0));
   const localTime = (clock: string | undefined) => time(atMinute(clockToMinute(clock ?? "") ?? 0));
+  let open = $state(false);
+  const low = $derived(figure.confidence === SettingsEvidenceConfidence.Low);
   const badgeVariant = (confidence: SettingsEvidenceConfidence | undefined) =>
     confidence === SettingsEvidenceConfidence.High ? "success" : confidence === SettingsEvidenceConfidence.Moderate ? "info" : "warning";
 </script>
@@ -63,7 +67,7 @@
   </Badge>
 {/snippet}
 
-<details class="group border-b last:border-0">
+<details class="group border-b last:border-0" bind:open>
   <summary
     class="grid cursor-pointer list-none grid-cols-[1.25rem_minmax(5rem,auto)_1fr] items-center gap-x-3 gap-y-1 px-3 py-2 text-sm hover:bg-muted/50 [&::-webkit-details-marker]:hidden @lg:grid-cols-[1.25rem_7rem_1fr_auto]"
   >
@@ -71,10 +75,18 @@
     <span class="font-medium tabular-nums">{span}</span>
     <span class="tabular-nums">
       {#if figure.observed != null}
-        <span class="font-semibold">{format(figure.observed)}</span>
+        <span class={low ? "text-muted-foreground" : "font-semibold"} data-testid="observed-value">{format(figure.observed)}</span>
         <span class="text-muted-foreground"> {unit}, profile {value(figure.profile)}</span>
         {#if comparing}
-          <span class="text-muted-foreground"> · compared {value(compared?.observed)}</span>
+          <span class="text-muted-foreground">
+            · compared {value(compared?.observed)}{#if compared?.observed != null}&nbsp;(n = {compared.n ?? 0}, {confidenceLabel(compared.confidence)}){/if}
+          </span>
+        {/if}
+        {#if figure.towardsMoreInsulin}
+          <span class="ml-1 inline-flex items-center gap-1 text-xs font-medium whitespace-nowrap text-foreground">
+            <Stethoscope class="size-3.5 shrink-0 text-info" aria-hidden="true" />
+            More insulin than your profile
+          </span>
         {/if}
       {:else}
         <span class="text-muted-foreground">{unavailableText(figure.unavailableReason, section)}</span>
@@ -89,14 +101,24 @@
     </span>
   </summary>
 
-  <div class="space-y-3 px-3 pt-1 pb-4 pl-11 text-sm">
+  {#if open}
+  <div class="space-y-3 px-3 pt-1 pb-4 text-sm @lg:pl-11">
     {#if figure.towardsMoreInsulin}
       <p class="flex items-start gap-2 rounded-md border border-info/40 bg-info/10 px-3 py-2">
         <Stethoscope class="mt-0.5 size-4 shrink-0 text-info" aria-hidden="true" />
         <span>
-          This would mean more insulin than your profile gives. It is an observation from your data,
-          not advice: talk any change through with your care team first.
+          Your data points to more insulin here than your profile gives. This is an observation, not
+          a setting to copy: settings are usually changed in small steps, one at a time, and with
+          your care team.
         </span>
+      </p>
+    {:else if figure.observed != null}
+      <p>
+        {#if figure.towardsLessInsulin}
+          Your data points to less insulin here than your profile gives.
+        {:else}
+          Close to your profile.
+        {/if}
       </p>
     {/if}
 
@@ -138,6 +160,7 @@
     {#if episodes.length > 0}
       <div class="space-y-1">
         <h4 class="font-medium">{plural(episodes.length, ["# episode", "# episodes"])}</h4>
+        <Tooltip.Provider>
         <div class="max-h-80 overflow-auto rounded-md border">
           <table class="w-full text-xs tabular-nums">
             <caption class="sr-only">Episodes behind the {span} figure; open one in Day in Review</caption>
@@ -145,7 +168,19 @@
               <tr class="border-b text-muted-foreground">
                 <th scope="col" class="px-2 py-1.5 text-left font-medium">When</th>
                 {#each columns as column (column.label)}
-                  <th scope="col" class="px-2 py-1.5 text-right font-medium whitespace-nowrap">{column.label}</th>
+                  <th scope="col" class={["px-2 py-1.5 text-right font-medium whitespace-nowrap", column.wide && "hidden @lg:table-cell"]}>
+                    {#if column.hint}
+                      <Tooltip.Root>
+                        <Tooltip.Trigger class="inline-flex items-center gap-1 underline decoration-dotted underline-offset-2">
+                          {column.label}
+                          <Info class="size-3" aria-hidden="true" />
+                        </Tooltip.Trigger>
+                        <Tooltip.Content class="max-w-64 text-left font-normal">{column.hint}</Tooltip.Content>
+                      </Tooltip.Root>
+                    {:else}
+                      {column.label}
+                    {/if}
+                  </th>
                 {/each}
                 <th scope="col" class="px-2 py-1.5"><span class="sr-only">Open in Day in Review</span></th>
               </tr>
@@ -153,11 +188,11 @@
             <tbody>
               {#each episodes as episode (episode.at)}
                 <tr class="border-b last:border-0 hover:bg-muted/50">
-                  <td class="px-2 py-1 whitespace-nowrap">
+                  <th scope="row" class="px-2 py-1 text-left font-normal whitespace-nowrap">
                     {formatWeekdayDate(startOfDay(episode.date ?? ""))}, {localTime(episode.time)}
-                  </td>
+                  </th>
                   {#each columns as column (column.label)}
-                    <td class="px-2 py-1 text-right">{column.value(episode)}</td>
+                    <td class={["px-2 py-1 text-right", column.wide && "hidden @lg:table-cell"]}>{column.value(episode)}</td>
                   {/each}
                   <td class="px-2 py-1 text-right">
                     <a
@@ -173,7 +208,9 @@
             </tbody>
           </table>
         </div>
+        </Tooltip.Provider>
       </div>
     {/if}
   </div>
+  {/if}
 </details>

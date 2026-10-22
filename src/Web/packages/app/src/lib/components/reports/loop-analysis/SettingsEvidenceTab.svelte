@@ -8,6 +8,7 @@
   import {
     LoopAnalysisSeries,
     SettingsEvidenceConfidence,
+    SettingsEvidenceUnavailableReason,
     type BasalEvidenceBlock,
     type BasalEvidenceDay,
     type CarbRatioEvidenceEpisode,
@@ -20,6 +21,7 @@
   import { bg, bgDelta, bgLabel, convertToDisplayUnits, hourLabel } from "$lib/utils/formatting";
   import Clock from "@lucide/svelte/icons/clock";
   import EyeOff from "@lucide/svelte/icons/eye-off";
+  import Info from "@lucide/svelte/icons/info";
   import Stethoscope from "@lucide/svelte/icons/stethoscope";
   import TimeOfDayPanel from "./TimeOfDayPanel.svelte";
   import StripKey, { type StripKeyItem } from "./StripKey.svelte";
@@ -55,39 +57,46 @@
   const COLOR = "var(--chart-2)";
   const cursor = new TimeOfDayCursor();
 
-  const basalColumns: EpisodeColumn<BasalEvidenceDay>[] = [
-    { label: "Hours", value: (d) => String(d.hours ?? "–") },
+  const iobHint = () =>
+    "Insulin on board counts delivery against the schedule, so it is negative when the loop gave less basal than scheduled.";
+
+  const basalColumns: EpisodeColumn<BasalEvidenceDay>[] = $derived([
     { label: "Need, U/h", value: (d) => u(d.value) },
+    { label: "Hours", value: (d) => String(d.hours ?? "–") },
     { label: "Scheduled, U/h", value: (d) => u(d.profile) },
     { label: "Loop correction, U/h", value: (d) => u(d.netLoopCorrection) },
-    { label: "Carried insulin, U/h", value: (d) => u(d.carriedInsulin) },
-    { label: "Glucose change", value: (d) => change(d.glucoseChange) },
-  ];
+    {
+      label: "Carried insulin, U/h",
+      value: (d) => u(d.carriedInsulin),
+      hint: "Insulin carried in from earlier, against the schedule. It is negative when less than the schedule was delivered before the stretch.",
+    },
+    { label: `Glucose change, ${bgLabel()}`, value: (d) => change(d.glucoseChange) },
+  ]);
   const isfColumns: EpisodeColumn<IsfEvidenceEpisode>[] = $derived([
+    { label: `ISF, ${isfUnit}`, value: (e) => (e.value == null ? "–" : isfFormat(e.value)) },
     { label: "Bolus, U", value: (e) => u(e.units) },
     { label: "Start", value: (e) => glucose(e.startGlucose) },
     { label: "End", value: (e) => glucose(e.endGlucose) },
     { label: "Net insulin, U", value: (e) => u(e.netInsulin) },
-    { label: "IOB start, U", value: (e) => u(e.iobAtStart) },
-    { label: "IOB end, U", value: (e) => u(e.iobAtEnd) },
-    { label: "Residual IOB, U", value: (e) => u(e.residualIob) },
-    { label: "Basal excess, U", value: (e) => u(e.basalExcess) },
-    { label: "Acted, U", value: (e) => u(e.insulinActed) },
-    { label: `ISF, ${isfUnit}`, value: (e) => (e.value == null ? "–" : isfFormat(e.value)) },
+    { label: "IOB start, U", value: (e) => u(e.iobAtStart), hint: iobHint(), wide: true },
+    { label: "IOB end, U", value: (e) => u(e.iobAtEnd), hint: iobHint(), wide: true },
+    { label: "Residual IOB, U", value: (e) => u(e.residualIob), hint: iobHint(), wide: true },
+    { label: "Basal need above schedule, U", value: (e) => u(e.basalExcess) },
+    { label: "Insulin that acted, U", value: (e) => u(e.insulinActed) },
   ]);
   const crColumns: EpisodeColumn<CarbRatioEvidenceEpisode>[] = $derived([
+    { label: "Carb ratio, g/U", value: (e) => (e.value == null ? "–" : ratio(e.value)) },
     { label: "Carbs, g", value: (e) => (e.grams == null ? "–" : String(e.grams)) },
     { label: "Start", value: (e) => glucose(e.startGlucose) },
     { label: "End", value: (e) => glucose(e.endGlucose) },
     { label: "Net insulin, U", value: (e) => u(e.netInsulin) },
-    { label: "IOB start, U", value: (e) => u(e.iobAtStart) },
-    { label: "IOB end, U", value: (e) => u(e.iobAtEnd) },
-    { label: "Residual IOB, U", value: (e) => u(e.residualIob) },
-    { label: "Basal excess, U", value: (e) => u(e.basalExcess) },
-    { label: "Acted, U", value: (e) => u(e.insulinActed) },
+    { label: "IOB start, U", value: (e) => u(e.iobAtStart), hint: iobHint(), wide: true },
+    { label: "IOB end, U", value: (e) => u(e.iobAtEnd), hint: iobHint(), wide: true },
+    { label: "Residual IOB, U", value: (e) => u(e.residualIob), hint: iobHint(), wide: true },
+    { label: "Basal need above schedule, U", value: (e) => u(e.basalExcess) },
+    { label: "Insulin that acted, U", value: (e) => u(e.insulinActed) },
     { label: "Needed, U", value: (e) => u(e.insulinNeeded) },
     { label: `ISF used, ${isfUnit}`, value: (e) => (e.isf == null ? "–" : isfFormat(e.isf)) },
-    { label: "Carb ratio, g/U", value: (e) => (e.value == null ? "–" : ratio(e.value)) },
   ]);
 
   function basalDetails(block: BasalEvidenceBlock): string[] {
@@ -102,6 +111,7 @@
     key: SettingsEvidenceSection;
     title: string;
     caption: string;
+    direction: string;
     unit: string;
     blocks: SettingsEvidenceFigure[];
     compared: SettingsEvidenceFigure[] | null;
@@ -117,7 +127,9 @@
           {
             key: "basal",
             title: "Basal",
-            caption: "Fasting stretches, in two-hour blocks: the schedule, what the loop added and what glucose's drift says was still missing.",
+            caption:
+              "Fasting stretches, in two-hour blocks: the schedule, plus what the loop added, plus insulin carried in from earlier, adjusted for whether glucose rose or fell.",
+            direction: "A higher basal rate means more insulin every hour.",
             unit: "U/h",
             blocks: primary.basal ?? [],
             compared: comparison?.basal ?? null,
@@ -128,7 +140,9 @@
           {
             key: "isf",
             title: "Insulin sensitivity (ISF)",
-            caption: "Correction boluses given with glucose high and steady and nothing eaten: the drop over four hours per unit that acted.",
+            caption:
+              "Correction boluses given with glucose high and steady and no carbs logged around them: the drop over the next three to four hours per unit that acted.",
+            direction: "A higher ISF means each unit lowers glucose more, so less insulin for the same correction.",
             unit: isfUnit,
             blocks: primary.isf ?? [],
             compared: comparison?.isf ?? null,
@@ -140,6 +154,7 @@
             key: "carbRatio",
             title: "Carb ratio",
             caption: "Meals logged with carbs and nothing else nearby: grams per unit of insulin the meal needed over four hours.",
+            direction: "A higher carb ratio means less insulin for the same meal.",
             unit: "g/U",
             blocks: primary.carbRatio ?? [],
             compared: comparison?.carbRatio ?? null,
@@ -150,20 +165,29 @@
         ]
   );
 
+  const noMealsLogged = $derived(
+    (primary?.carbRatio ?? []).length > 0 &&
+      (primary?.carbRatio ?? []).every((b) => b.unavailableReason === SettingsEvidenceUnavailableReason.NoAnnouncedMeals)
+  );
+
   function describe(section: Section, slot: number): string {
     const block = blockAt(section.blocks, slot);
     if (block == null) return "No block";
     if (block.observed == null) return unavailableText(block.unavailableReason, section.key);
-    return `Observed ${section.format(block.observed)} ${section.unit}, profile ${block.profile == null ? "–" : section.format(block.profile)}, ${confidenceLabel(block.confidence)}, n ${block.n ?? 0}`;
+    const read = `Observed ${section.format(block.observed)} ${section.unit}, profile ${block.profile == null ? "–" : section.format(block.profile)}, ${confidenceLabel(block.confidence)}, n ${block.n ?? 0}`;
+    return block.towardsMoreInsulin ? `${read}. More insulin than your profile; see the note.` : read;
   }
 
   function key(section: Section): StripKeyItem[] {
-    const blocks = section.blocks;
+    const observed = section.blocks.filter((b) => b.observed != null);
     return [
       { mark: "step", label: "Profile" },
-      ...(blocks.some((b) => b.observed != null && b.confidence !== SettingsEvidenceConfidence.Low) ? [{ mark: "dot" as const, label: "Observed, middle half of episodes", color: COLOR }] : []),
-      ...(blocks.some((b) => b.observed != null && b.confidence === SettingsEvidenceConfidence.Low) ? [{ mark: "dot-hollow" as const, label: "Low confidence", color: COLOR }] : []),
+      ...(observed.length > 0 ? [{ mark: "dot" as const, label: "Observed, middle half of episodes", color: COLOR }] : []),
+      ...(observed.some((b) => b.confidence === SettingsEvidenceConfidence.Low) ? [{ mark: "dot-hollow" as const, label: "Low confidence", color: COLOR }] : []),
       ...(comparing ? [{ mark: "dot-compared" as const, label: "Compared range" }] : []),
+      ...((section.compared ?? []).some((b) => b.observed != null && b.confidence === SettingsEvidenceConfidence.Low)
+        ? [{ mark: "dot-compared-hollow" as const, label: "Compared range, low confidence" }]
+        : []),
     ];
   }
 
@@ -213,6 +237,7 @@
           <div class="space-y-1 px-1">
             <h3 id="settings-evidence-{section.key}" class="font-medium">{section.title}</h3>
             <p class="text-sm text-muted-foreground">{section.caption}</p>
+            <p class="text-sm text-muted-foreground">{section.direction}</p>
           </div>
           <div class="space-y-1">
             <TimeOfDayPanel
@@ -249,10 +274,18 @@
                       <dd class="text-right">{block.n ?? 0}</dd>
                       {#if comparing}
                         <dt class="text-muted-foreground">Compared</dt>
-                        <dd class="text-right">{compared?.observed == null ? "–" : section.format(compared.observed)}</dd>
+                        <dd class="text-right">
+                          {#if compared?.observed == null}–{:else}{section.format(compared.observed)}, n {compared.n ?? 0}, {confidenceLabel(compared.confidence)}{/if}
+                        </dd>
                       {/if}
                     </dl>
                     <p class="mt-1">{confidenceLabel(block.confidence)}</p>
+                    {#if block.towardsMoreInsulin}
+                      <p class="mt-1 flex items-center gap-1">
+                        <Stethoscope class="size-3.5 shrink-0 text-info" aria-hidden="true" />
+                        More insulin than your profile; see the note.
+                      </p>
+                    {/if}
                   {/if}
                   <p class="text-muted-foreground">Profile {block.profile == null ? "–" : section.format(block.profile)} {section.unit}</p>
                 {/if}
@@ -261,6 +294,11 @@
             <StripKey items={key(section)} />
           </div>
 
+          {#if section.key === "carbRatio" && noMealsLogged}
+            <p class="rounded-md border px-3 py-2 text-sm text-muted-foreground">
+              Carb ratio needs meals logged with carbs; none were logged in this range.
+            </p>
+          {:else}
           <div class="@container rounded-md border" role="list" aria-label="{section.title} by block">
             {#if section.key === "basal"}
               {#each primary.basal ?? [] as block (`${block.startHour}`)}
@@ -310,11 +348,12 @@
               {/each}
             {/if}
           </div>
+          {/if}
         </section>
       {/each}
 
       <p class="flex items-center gap-1.5 px-1 text-xs text-muted-foreground">
-        <EyeOff class="size-3.5" />
+        <Info class="size-3.5" />
         Hollow dots are low-confidence figures. Open a block to see why, what was set aside, and the
         episodes behind it. With the keyboard, the arrow keys move along the day and between charts.
       </p>
