@@ -9,6 +9,7 @@
     getEventResponse,
     getLoopHealth,
     getPredictionAccuracy,
+    getSettingsEvidence,
   } from "$api/generated/loopAnalysis.generated.remote";
   import { requireDateParamsContext } from "$lib/hooks/date-params.svelte";
   import LoopAnalysisFilterBar from "$lib/components/reports/loop-analysis/LoopAnalysisFilterBar.svelte";
@@ -17,6 +18,7 @@
   import EventCohortBuilder from "$lib/components/reports/loop-analysis/EventCohortBuilder.svelte";
   import PredictionsTab from "$lib/components/reports/loop-analysis/PredictionsTab.svelte";
   import LoopHealthTab from "$lib/components/reports/loop-analysis/LoopHealthTab.svelte";
+  import SettingsEvidenceTab from "$lib/components/reports/loop-analysis/SettingsEvidenceTab.svelte";
   import TabResource from "$lib/components/reports/loop-analysis/TabResource.svelte";
   import { LoopAnalysisTabState } from "$lib/components/reports/loop-analysis/loop-analysis-tab.svelte";
   import {
@@ -63,6 +65,7 @@
     "meals-events": new LoopAnalysisTabState("Meals & events", () => eventResponseQuery(query, events), getEventResponse),
     predictions: new LoopAnalysisTabState("Predictions", () => query, getPredictionAccuracy),
     "loop-health": new LoopAnalysisTabState("Loop health", () => query, getLoopHealth),
+    "settings-evidence": new LoopAnalysisTabState("Settings evidence", () => query, getSettingsEvidence),
   } satisfies Record<LoopAnalysisTab, unknown>;
 
   // Only the tab on screen is fetched; its response answers the filter bar as well. A tab left
@@ -78,6 +81,7 @@
   const eventResponse = $derived(TABS["meals-events"].response);
   const predictions = $derived(TABS.predictions.response);
   const loopHealth = $derived(TABS["loop-health"].response);
+  const settingsEvidence = $derived(TABS["settings-evidence"].response);
 
   // A failed request is settled too, so the bar shows what was picked rather than loading forever;
   // its echoes are then the last response's, which no longer answer the request on screen.
@@ -145,6 +149,11 @@
         <span class="font-medium text-foreground">Loop health</span>: how much of the time the loop
         was closed, where it stopped, and how often it ran into its limits.
       </li>
+      <li>
+        <span class="font-medium text-foreground">Settings evidence</span>: the basal, insulin
+        sensitivity and carb ratio your data shows beside your profile's, as observations to discuss
+        with your care team.
+      </li>
     </ul>
   </div>
 
@@ -197,6 +206,11 @@
     <Tabs.Content value="loop-health" class="mt-4">
       {#if loopHealth}
         <LoopHealthTab response={loopHealth} />
+      {/if}
+    </Tabs.Content>
+    <Tabs.Content value="settings-evidence" class="mt-4">
+      {#if settingsEvidence}
+        <SettingsEvidenceTab response={settingsEvidence} />
       {/if}
     </Tabs.Content>
   </Tabs.Root>
