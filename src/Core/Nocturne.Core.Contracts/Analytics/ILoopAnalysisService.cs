@@ -11,7 +11,9 @@ public interface ILoopAnalysisService
     /// <remarks>
     /// <paramref name="filter"/> is resolved: its ranges are instants in <paramref name="zone"/>
     /// that end after they start. The result is unredacted and carries none of the
-    /// <see cref="LoopAnalysisResponse"/> envelope, which the caller fills.
+    /// <see cref="LoopAnalysisResponse"/> envelope, which the caller fills, but its
+    /// <see cref="LoopAnalysisResponse.ProfileNames"/>: every tab that loads the profiles gives them, and
+    /// one that does not reads them only with <see cref="LoopAnalysisFilter.ReadProfileNames"/>.
     /// </remarks>
     Task<DailyProfileResponse> GetDailyProfileAsync(
         LoopAnalysisFilter filter, TimeZoneInfo zone, CancellationToken ct = default);
@@ -23,7 +25,4 @@ public interface ILoopAnalysisService
     /// <remarks>Takes and returns as <see cref="GetDailyProfileAsync"/> does.</remarks>
     Task<LoopHealthResponse> GetLoopHealthAsync(
         LoopAnalysisFilter filter, TimeZoneInfo zone, CancellationToken ct = default);
-
-    /// <summary>The envelope's <see cref="LoopAnalysisResponse.ProfileNames"/> for <paramref name="filter"/>'s ranges.</summary>
-    Task<List<string>> GetProfileNamesAsync(LoopAnalysisFilter filter, CancellationToken ct = default);
 }

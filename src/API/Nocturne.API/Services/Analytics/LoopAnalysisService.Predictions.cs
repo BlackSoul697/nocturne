@@ -10,15 +10,15 @@ internal sealed partial class LoopAnalysisService
     public async Task<PredictionAccuracyResponse> GetPredictionAccuracyAsync(
         LoopAnalysisFilter filter, TimeZoneInfo zone, CancellationToken ct = default)
     {
-        var (primary, comparison) = await ForRangesAsync(
+        var (primary, comparison, names) = await ForRangesAsync(
             filter,
-            window => LoadPredictionsAsync(window, zone, filter.Masks.ProfileName is not null, ct),
+            window => LoadPredictionsAsync(window, zone, filter.Masks.ProfileName is not null || filter.ReadProfileNames, ct),
             (loaded, window) => PredictionAccuracyCalculator.Calculate(
                 loaded.Inputs, Mask(filter, window, zone, loaded.Sources), window.From, window.To));
-        return new PredictionAccuracyResponse { Primary = primary, Comparison = comparison };
+        return new PredictionAccuracyResponse { Primary = primary, Comparison = comparison, ProfileNames = names };
     }
 
-    private sealed record PredictionsLoaded(PredictionAccuracyInputs Inputs, LoopAnalysisMaskSources Sources);
+    private sealed record PredictionsLoaded(PredictionAccuracyInputs Inputs, LoopAnalysisMaskSources Sources) : ILoaded;
 
     /// <summary>
     /// Every prediction made in the window; the readings up to

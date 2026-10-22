@@ -54,12 +54,22 @@ internal sealed partial class LoopAnalysisService(
         StateSpanCategory.PumpMode,
     ];
 
+    /// <summary>What every tab loads for a window: at least the sources of its masks.</summary>
+    private interface ILoaded
+    {
+        LoopAnalysisMaskSources Sources { get; }
+    }
+
+    private sealed record Ranges<TRange>(TRange Primary, TRange? Comparison, List<string> ProfileNames);
+
     /// <summary>
     /// Computes the primary range and the comparison: from one load over both where they touch or
-    /// overlap, else one load each.
+    /// overlap, else one load each. The profile names are those of the loaded
+    /// <see cref="LoopAnalysisMaskSources.Profiles"/> active in either range, oldest first.
     /// </summary>
-    private static async Task<(TRange Primary, TRange? Comparison)> ForRangesAsync<TLoaded, TRange>(
+    private static async Task<Ranges<TRange>> ForRangesAsync<TLoaded, TRange>(
         LoopAnalysisFilter filter, Func<Window, Task<TLoaded>> load, Func<TLoaded, Window, TRange> calculate)
+        where TLoaded : ILoaded
         where TRange : class
     {
         var primary = Window.Of(filter.From, filter.To);
@@ -67,27 +77,30 @@ internal sealed partial class LoopAnalysisService(
             ? Window.Of(compareFrom, compareTo)
             : (Window?)null;
 
+        var computed = new List<(TLoaded Loaded, Window Window, TRange Range)>();
+        void Calculate(TLoaded loaded, Window window) => computed.Add((loaded, window, calculate(loaded, window)));
         if (comparison is { } other && primary.Touches(other))
         {
             var both = await load(primary.Hull(other));
-            return (calculate(both, primary), calculate(both, other));
+            Calculate(both, primary);
+            Calculate(both, other);
+        }
+        else
+        {
+            Calculate(await load(primary), primary);
+            if (comparison is { } separate)
+                Calculate(await load(separate), separate);
         }
 
-        var first = calculate(await load(primary), primary);
-        return (first, comparison is { } separate ? calculate(await load(separate), separate) : null);
-    }
-
-    public async Task<List<string>> GetProfileNamesAsync(LoopAnalysisFilter filter, CancellationToken ct = default)
-    {
-        var windows = new List<Window> { Window.Of(filter.From, filter.To) };
-        if (filter.CompareFrom is { } compareFrom && filter.CompareTo is { } compareTo)
-            windows.Add(Window.Of(compareFrom, compareTo));
-
-        var profiles = new List<ProfileSpan>();
-        foreach (var window in windows)
-            profiles.AddRange((await activeProfileResolver.GetProfileSpansForRangeAsync(window.From, window.To, ct))
-                .Where(p => p.StartMills < window.To && (p.EndMills ?? window.To) > window.From));
-        return [.. profiles.OrderBy(p => p.StartMills).Select(p => p.ProfileName).Distinct(StringComparer.Ordinal)];
+        List<string> names =
+        [
+            .. computed
+                .SelectMany(c => c.Loaded.Sources.Profiles.Where(p => p.Start < c.Window.To && p.End > c.Window.From))
+                .OrderBy(p => p.Start)
+                .Select(p => p.ProfileName)
+                .Distinct(StringComparer.Ordinal),
+        ];
+        return new Ranges<TRange>(computed[0].Range, computed.Count > 1 ? computed[1].Range : null, names);
     }
 
     private static LoopAnalysisMask Mask(

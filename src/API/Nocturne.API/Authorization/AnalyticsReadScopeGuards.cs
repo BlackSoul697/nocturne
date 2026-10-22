@@ -643,7 +643,7 @@ internal static class LoopAnalysisReadScopeGuard
             LoopAnalysisSeries.AtMaxIob,
             LoopAnalysisSeries.SuggestedNotEnacted,
             LoopAnalysisSeries.SensitivityRatio);
-        Withhold(withheld, !therapy, LoopAnalysisSeries.LoopLimits);
+        Withhold(withheld, !therapy || !devices, LoopAnalysisSeries.LoopLimits);
         Withhold(withheld, !therapy || !devices, LoopAnalysisSeries.OrefMaxIob);
         return withheld;
     }
@@ -682,8 +682,7 @@ internal static class LoopAnalysisReadScopeGuard
         if (Hidden(LoopAnalysisSeries.AtMaxIob)) unknown.AtMaxIob = null;
         if (Hidden(LoopAnalysisSeries.SuggestedNotEnacted)) unknown.SuggestedNotEnacted = null;
         if (Hidden(LoopAnalysisSeries.OrefMaxIob)) unknown.OrefMaxIob = null;
-        // Read off which system's cycles were recorded, which are devices, as LoopGaps is.
-        if (Hidden(LoopAnalysisSeries.LoopLimits) || Hidden(LoopAnalysisSeries.LoopGaps)) unknown.LoopMaximumBasalRate = null;
+        if (Hidden(LoopAnalysisSeries.LoopLimits)) unknown.LoopMaximumBasalRate = null;
     }
 
     private static void Narrow(DailyProfileRange range, HashSet<LoopAnalysisSeries> withheld)

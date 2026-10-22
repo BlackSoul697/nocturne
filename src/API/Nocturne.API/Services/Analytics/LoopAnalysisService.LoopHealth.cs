@@ -12,18 +12,18 @@ internal sealed partial class LoopAnalysisService
     public async Task<LoopHealthResponse> GetLoopHealthAsync(
         LoopAnalysisFilter filter, TimeZoneInfo zone, CancellationToken ct = default)
     {
-        var (primary, comparison) = await ForRangesAsync(
+        var (primary, comparison, names) = await ForRangesAsync(
             filter,
             window => LoadLoopHealthAsync(window, zone, ct),
             (loaded, window) => CalculateLoopHealth(loaded, filter, window, zone));
-        return new LoopHealthResponse { Primary = primary, Comparison = comparison };
+        return new LoopHealthResponse { Primary = primary, Comparison = comparison, ProfileNames = names };
     }
 
     private sealed record LoopHealthLoaded(
         LoopHealthInputs Inputs,
         LoopAnalysisMaskSources Sources,
         IReadOnlyList<PatientDevice> Devices,
-        IReadOnlyList<TempBasal> TempBasals);
+        IReadOnlyList<TempBasal> TempBasals) : ILoaded;
 
     /// <remarks>
     /// The loop cycles are read from <see cref="LoopHealthCalculator.TempLookbackMs"/> and

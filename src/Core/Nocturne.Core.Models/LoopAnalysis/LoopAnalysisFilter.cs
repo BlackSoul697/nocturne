@@ -43,6 +43,12 @@ public class LoopAnalysisFilter
     public DateTime? CompareTo { get; set; }
 
     public LoopAnalysisMasks Masks { get; set; } = new();
+
+    /// <summary>
+    /// The caller may see the profile names, so a tab that does not otherwise load the profiles reads
+    /// them for <see cref="LoopAnalysisResponse.ProfileNames"/>.
+    /// </summary>
+    public bool ReadProfileNames { get; set; }
 }
 
 [JsonConverter(typeof(JsonStringEnumConverter<LoopAnalysisComparison>))]

@@ -14,15 +14,15 @@ internal sealed partial class LoopAnalysisService
     public async Task<DailyProfileResponse> GetDailyProfileAsync(
         LoopAnalysisFilter filter, TimeZoneInfo zone, CancellationToken ct = default)
     {
-        var (primary, comparison) = await ForRangesAsync(
+        var (primary, comparison, names) = await ForRangesAsync(
             filter,
             window => LoadDailyProfileAsync(window, zone, ct),
             (loaded, window) => DailyProfileCalculator.Calculate(
                 loaded.Inputs, Mask(filter, window, zone, loaded.Sources), window.From, window.To));
-        return new DailyProfileResponse { Primary = primary, Comparison = comparison };
+        return new DailyProfileResponse { Primary = primary, Comparison = comparison, ProfileNames = names };
     }
 
-    private sealed record DailyProfileLoaded(DailyProfileInputs Inputs, LoopAnalysisMaskSources Sources);
+    private sealed record DailyProfileLoaded(DailyProfileInputs Inputs, LoopAnalysisMaskSources Sources) : ILoaded;
 
     private async Task<DailyProfileLoaded> LoadDailyProfileAsync(Window window, TimeZoneInfo zone, CancellationToken ct)
     {

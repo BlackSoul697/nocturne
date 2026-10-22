@@ -115,12 +115,7 @@ public class LoopAnalysisController(
         if (invalid is not null)
             return invalid;
 
-        var result = new T();
-        if (request!.Zone is { } zone)
-        {
-            result = await compute(request.Filter!, zone, ct);
-            result.ProfileNames = await service.GetProfileNamesAsync(request.Filter!, ct);
-        }
+        var result = request!.Zone is { } zone ? await compute(request.Filter!, zone, ct) : new T();
         return Ok(LoopAnalysisReadScopeGuard.Redact(request.Fill(result), HttpContext.GetGrantedScopes()));
     }
 
@@ -210,6 +205,7 @@ public class LoopAnalysisController(
             CompareFrom = comparison?.From,
             CompareTo = comparison?.To,
             Masks = masks,
+            ReadProfileNames = !LoopAnalysisReadScopeGuard.WithheldEnvelope(granted).Contains(LoopAnalysisSeries.ProfileNames),
         };
         return (null, new LoopAnalysisRequest(filter, zone, null, primary, comparison, masks, ignored, unavailable, clamped));
     }

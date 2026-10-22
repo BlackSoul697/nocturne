@@ -1412,9 +1412,6 @@ public class AnalyticsReadScopeGuardTests
         service
             .Setup(s => s.GetLoopHealthAsync(It.IsAny<LoopAnalysisFilter>(), It.IsAny<TimeZoneInfo>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(LoopHealth);
-        service
-            .Setup(s => s.GetProfileNamesAsync(It.IsAny<LoopAnalysisFilter>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync(() => ["Default", "Weekend"]);
 
         var context = ContextWith(scopes);
         context.HttpContext.Request.QueryString = new QueryString(query);
@@ -1504,11 +1501,10 @@ public class AnalyticsReadScopeGuardTests
                 .Which.Value.Should().BeAssignableTo<LoopAnalysisResponse>().Subject,
         };
 
-        data.ProfileNames.Should().Equal(therapy ? ["Default", "Weekend"] : []);
+        data.ProfileNames.Should().Equal(therapy ? ["Default"] : []);
         data.WithheldSeries.Contains(LoopAnalysisSeries.ProfileNames).Should().Be(!therapy);
-        service.Verify(s => s.GetProfileNamesAsync(
-            It.Is<LoopAnalysisFilter>(f => f.From == new DateTime(2024, 5, 31, 14, 0, 0, DateTimeKind.Utc)),
-            It.IsAny<CancellationToken>()));
+        var asked = service.Invocations.Single().Arguments.OfType<LoopAnalysisFilter>().Single();
+        asked.ReadProfileNames.Should().Be(therapy, "a tab that does not load the profiles reads them only for a caller who may see them");
     }
 
     [Fact]
@@ -1638,6 +1634,7 @@ public class AnalyticsReadScopeGuardTests
     {
         Primary = PredictionAccuracyRange(),
         Comparison = PredictionAccuracyRange(),
+        ProfileNames = ["Default"],
     };
 
     [Fact]
@@ -1810,7 +1807,8 @@ public class AnalyticsReadScopeGuardTests
         Limits = new LoopHealthLimits { LoopMaximumBasalRate = 3, OrefMaxIob = 4 },
     };
 
-    private static LoopHealthResponse LoopHealth() => new() { Primary = LoopHealthRange(), Comparison = LoopHealthRange() };
+    private static LoopHealthResponse LoopHealth() =>
+        new() { Primary = LoopHealthRange(), Comparison = LoopHealthRange(), ProfileNames = ["Default"] };
 
     [Fact]
     public void LoopHealth_WithoutDevices_DropsWhatTheLoopCyclesReport()
@@ -1821,7 +1819,7 @@ public class AnalyticsReadScopeGuardTests
         data.WithheldSeries.Should().BeEquivalentTo([
             LoopAnalysisSeries.LoopActivity, LoopAnalysisSeries.UnrecordedDelivery, LoopAnalysisSeries.LoopGaps,
             LoopAnalysisSeries.MaxBasal, LoopAnalysisSeries.AtMaxIob, LoopAnalysisSeries.SuggestedNotEnacted,
-            LoopAnalysisSeries.SensitivityRatio, LoopAnalysisSeries.OrefMaxIob,
+            LoopAnalysisSeries.SensitivityRatio, LoopAnalysisSeries.LoopLimits, LoopAnalysisSeries.OrefMaxIob,
         ]);
         foreach (var range in new[] { data.Primary, data.Comparison! })
         {
@@ -1836,7 +1834,7 @@ public class AnalyticsReadScopeGuardTests
             range.SuggestedNotEnacted.Should().BeNull();
             range.SensitivityRatio.Should().BeNull();
             range.Limits.OrefMaxIob.Should().BeNull();
-            range.Limits.LoopMaximumBasalRate.Should().Be(3, "Loop's setting is a therapy setting");
+            range.Limits.LoopMaximumBasalRate.Should().BeNull("a Loop setting shows the system was Loop, which the cycles say");
             range.ZeroDelivery.Should().NotBeNull();
             range.AutomaticBoluses.Should().NotBeNull();
             range.Activity.Cgm.Should().NotBeNull();
@@ -1917,7 +1915,6 @@ public class AnalyticsReadScopeGuardTests
 
         redacted.Primary.Unknown.Should().BeEquivalentTo(new LoopHealthUnknown(),
             "which system looped, and whether it looped at all, are read off the APS cycles");
-        redacted.Primary.Limits.LoopMaximumBasalRate.Should().NotBeNull("the setting itself is therapy");
     }
 
     [Fact]
