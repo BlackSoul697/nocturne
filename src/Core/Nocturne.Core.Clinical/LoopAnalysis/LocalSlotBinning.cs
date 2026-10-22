@@ -66,6 +66,21 @@ public static class LocalSlotBinning
 
     public static DateOnly LocalDay(long mills, TimeZoneInfo tz) => DateOnly.FromDateTime(LocalTime(mills, tz));
 
+    /// <summary>
+    /// The local days <paramref name="from"/> to <paramref name="to"/> (exclusive) touch, whole: day
+    /// <c>d</c> runs from <c>Starts[d]</c> to <c>Starts[d + 1]</c>, so <c>Starts</c> holds one more
+    /// entry than there are days. An empty range touches no day.
+    /// </summary>
+    public static (DateOnly FirstDay, long[] Starts) DayStarts(long from, long to, TimeZoneInfo tz)
+    {
+        var firstDay = LocalDay(from, tz);
+        var dayCount = to > from ? LocalDay(to - 1, tz).DayNumber - firstDay.DayNumber + 1 : 0;
+        var starts = new long[dayCount + 1];
+        for (var d = 0; d <= dayCount; d++)
+            starts[d] = DayStartMills(firstDay.AddDays(d), tz);
+        return (firstDay, starts);
+    }
+
     /// <summary>The slot of the day <paramref name="local"/> falls in, counted from local midnight.</summary>
     public static int SlotOf(DateTime local, int slotMinutes) => (local.Hour * 60 + local.Minute) / slotMinutes;
 

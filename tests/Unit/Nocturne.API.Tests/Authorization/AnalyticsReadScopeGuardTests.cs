@@ -1189,7 +1189,8 @@ public partial class AnalyticsReadScopeGuardTests
                 "DailyProfileRange.From", "DailyProfileRange.To", "DailyProfileRange.SlotMinutes",
                 "DailyProfileRange.Slots", "DailyProfileRange.Days", "DailyProfileRange.Summary",
                 "DailyProfileSlot.Slot", "DailyProfileSlot.MinuteOfDay",
-                "DailyProfileDay.Date", "DailyProfileDay.DayOfWeek", "DailyProfileDay.Start", "DailyProfileDay.Coverage",
+                "DailyProfileDay.Date", "DailyProfileDay.DayOfWeek", "DailyProfileDay.Start", "DailyProfileDay.Complete",
+                "DailyProfileDay.Coverage",
                 "DailyProfileDayCoverage.Analysed",
                 "DailyProfileSummary.DaysWithData",
             ]);
@@ -1544,13 +1545,13 @@ public partial class AnalyticsReadScopeGuardTests
 
         var data = Ok(await controller.GetDailyProfile(new LoopAnalysisQuery
         {
-            StartDate = new DateOnly(2024, 1, 1), EndDate = new DateOnly(2024, 6, 30), Compare = LoopAnalysisComparison.Previous,
+            StartDate = new DateOnly(2024, 1, 1), EndDate = new DateOnly(2024, 5, 31), Compare = LoopAnalysisComparison.Previous,
         }));
 
         data.PrimaryRange!.Shortened.Should().BeTrue();
-        data.PrimaryRange.StartDate.Should().Be(new DateOnly(2024, 4, 2));
-        data.ComparisonRange!.StartDate.Should().Be(new DateOnly(2024, 1, 3));
-        data.ComparisonRange.EndDate.Should().Be(new DateOnly(2024, 4, 1));
+        data.PrimaryRange.StartDate.Should().Be(new DateOnly(2024, 3, 3));
+        data.ComparisonRange!.StartDate.Should().Be(new DateOnly(2023, 12, 4));
+        data.ComparisonRange.EndDate.Should().Be(new DateOnly(2024, 3, 2));
         service.Verify(s => s.GetDailyProfileAsync(
             It.Is<LoopAnalysisFilter>(f => f.From == data.PrimaryRange.From && f.CompareTo == data.PrimaryRange.From),
             It.IsAny<TimeZoneInfo>(),
@@ -1616,6 +1617,60 @@ public partial class AnalyticsReadScopeGuardTests
 
         result.Result.Should().BeOfType<ObjectResult>().Which.StatusCode.Should().Be(400);
         service.VerifyNoOtherCalls();
+    }
+
+    [Fact]
+    public async Task LoopAnalysis_Handler_ReadsDatesAfterTodayAsTodaySoFar()
+    {
+        var (controller, service) = LoopAnalysisHandler(Granted([Scope.ReportsRead, .. AllLoopAnalysisCategories]));
+
+        var data = Ok(await controller.GetDailyProfile(new LoopAnalysisQuery
+        {
+            StartDate = new DateOnly(2024, 6, 9),
+            EndDate = new DateOnly(2024, 6, 15),
+            Compare = LoopAnalysisComparison.Custom,
+            CompareStartDate = new DateOnly(2024, 6, 9),
+            CompareEndDate = new DateOnly(2024, 6, 15),
+        }));
+
+        var startOfToday = new DateTime(2024, 6, 7, 14, 0, 0, DateTimeKind.Utc);
+        foreach (var range in new[] { data.PrimaryRange!, data.ComparisonRange! })
+        {
+            range.StartDate.Should().Be(new DateOnly(2024, 6, 8));
+            range.EndDate.Should().Be(new DateOnly(2024, 6, 8));
+            range.From.Should().Be(startOfToday);
+            range.To.Should().Be(LoopAnalysisNow);
+        }
+        service.Verify(s => s.GetDailyProfileAsync(
+            It.Is<LoopAnalysisFilter>(f => f.From == startOfToday && f.To == LoopAnalysisNow
+                && f.CompareFrom == startOfToday && f.CompareTo == LoopAnalysisNow),
+            It.IsAny<TimeZoneInfo>(),
+            It.IsAny<CancellationToken>()));
+    }
+
+    [Fact]
+    public async Task LoopAnalysis_Handler_EndsTheRangeAtNow_AndComparesTheSameTimeOfTheEarlierDays()
+    {
+        var (controller, service) = LoopAnalysisHandler(Granted([Scope.ReportsRead, .. AllLoopAnalysisCategories]));
+
+        var data = Ok(await controller.GetDailyProfile(new LoopAnalysisQuery
+        {
+            StartDate = new DateOnly(2024, 6, 2),
+            EndDate = new DateOnly(2024, 6, 14),
+            Compare = LoopAnalysisComparison.Previous,
+        }));
+
+        data.PrimaryRange!.EndDate.Should().Be(new DateOnly(2024, 6, 8));
+        data.PrimaryRange.From.Should().Be(new DateTime(2024, 6, 1, 14, 0, 0, DateTimeKind.Utc));
+        data.PrimaryRange.To.Should().Be(LoopAnalysisNow);
+        data.ComparisonRange!.StartDate.Should().Be(new DateOnly(2024, 5, 26));
+        data.ComparisonRange.EndDate.Should().Be(new DateOnly(2024, 6, 1));
+        data.ComparisonRange.To.Should().Be(new DateTime(2024, 6, 1, 2, 0, 0, DateTimeKind.Utc), "noon on 1 June, local");
+        (data.ComparisonRange.To - data.ComparisonRange.From).Should().Be(data.PrimaryRange.To - data.PrimaryRange.From);
+        service.Verify(s => s.GetDailyProfileAsync(
+            It.Is<LoopAnalysisFilter>(f => f.To == LoopAnalysisNow && f.CompareTo == data.ComparisonRange.To),
+            It.IsAny<TimeZoneInfo>(),
+            It.IsAny<CancellationToken>()));
     }
 
     // ── Loop Analysis predictions ───────────────────────────────────────────────────────────

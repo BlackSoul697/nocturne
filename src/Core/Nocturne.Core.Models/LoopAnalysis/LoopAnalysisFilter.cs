@@ -42,6 +42,12 @@ public class LoopAnalysisFilter
     /// <summary>End of the comparison range (exclusive, UTC).</summary>
     public DateTime? CompareTo { get; set; }
 
+    /// <summary>
+    /// When the request was resolved (UTC). No range runs past it, and nothing after it has
+    /// happened, so a calculation reads no outcome that ends later.
+    /// </summary>
+    public required DateTime Now { get; init; }
+
     public LoopAnalysisMasks Masks { get; set; } = new();
 
     /// <summary>
@@ -62,7 +68,10 @@ public enum LoopAnalysisComparison
 {
     None,
 
-    /// <summary>The period of the same number of days immediately before the primary range.</summary>
+    /// <summary>
+    /// The period of the same number of days immediately before the primary range. When the primary
+    /// range ends partway through today, this one ends the same time into its own last day.
+    /// </summary>
     Previous,
 
     /// <summary>The dates given as <c>compareStartDate</c> and <c>compareEndDate</c>.</summary>
@@ -75,13 +84,16 @@ public class LoopAnalysisResolvedRange
     /// <summary>First local date.</summary>
     public DateOnly StartDate { get; set; }
 
-    /// <summary>Last local date, inclusive.</summary>
+    /// <summary>Last local date, inclusive; never after today.</summary>
     public DateOnly EndDate { get; set; }
 
     /// <summary>When <see cref="StartDate"/> begins in the tenant zone.</summary>
     public DateTime From { get; set; }
 
-    /// <summary>When the day after <see cref="EndDate"/> begins, exclusive.</summary>
+    /// <summary>
+    /// When the day after <see cref="EndDate"/> begins, exclusive, or the time the request was
+    /// resolved when that is sooner: no range runs past now.
+    /// </summary>
     public DateTime To { get; set; }
 
     /// <summary>The dates asked for spanned more days than allowed, so only the most recent were kept.</summary>

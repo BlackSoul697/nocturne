@@ -160,6 +160,21 @@ describe("DailyProfileBody", () => {
     await expect.element(link).toHaveAttribute("href", "/reports/day-in-review?date=2026-10-01&time=08:00");
   });
 
+  it("marks the day that has not ended in each range of the day list", async () => {
+    const response = profileResponse({ comparison: true });
+    response.primary!.days!.at(-1)!.complete = false;
+    response.comparison!.days!.at(-1)!.complete = false;
+    render(DailyProfileBody, { props: { response } });
+
+    await hoverSlot("Glucose", 8);
+    await userEvent.keyboard("{Enter}");
+
+    const links = page.getByRole("link");
+    await expect.element(links.nth(13)).toHaveTextContent("Part of the day");
+    await expect.element(links.nth(27)).toHaveTextContent("Part of the day");
+    expect(page.getByText("Part of the day").elements()).toHaveLength(2);
+  });
+
   it("hides every series the response withholds from a caller with glucose access only", async () => {
     render(DailyProfileBody, {
       props: { response: profileResponse({ scopes: ["glucose.read", "reports.read"] }) },

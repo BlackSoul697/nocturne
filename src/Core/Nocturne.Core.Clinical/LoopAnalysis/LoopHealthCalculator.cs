@@ -517,11 +517,8 @@ public static class LoopHealthCalculator
         {
             _zone = zone;
             _analysed = analysed;
-            _firstDay = LocalSlotBinning.LocalDay(from, zone);
-            _dayCount = to > from ? LocalSlotBinning.LocalDay(to - 1, zone).DayNumber - _firstDay.DayNumber + 1 : 0;
-            _dayStarts = new long[_dayCount + 1];
-            for (var d = 0; d <= _dayCount; d++)
-                _dayStarts[d] = LocalSlotBinning.DayStartMills(_firstDay.AddDays(d), zone);
+            (_firstDay, _dayStarts) = LocalSlotBinning.DayStarts(from, to, zone);
+            _dayCount = _dayStarts.Length - 1;
 
             Wall = New();
             Analysed = New();

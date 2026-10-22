@@ -1,6 +1,5 @@
 using FluentAssertions;
 using Microsoft.Extensions.Logging.Abstractions;
-using Microsoft.Extensions.Time.Testing;
 using Moq;
 using Nocturne.API.Services.Analytics;
 using Nocturne.API.Services.Profiles.Resolvers;
@@ -123,11 +122,15 @@ public class LoopAnalysisLoopHealthZoneTests
             cobCalculator: Mock.Of<ICobCalculator>(),
             therapySettingsRepository: Mock.Of<ITherapySettingsRepository>(),
             aidSystemMetrics: reader,
-            timeProvider: new FakeTimeProvider(new DateTimeOffset(2026, 6, 20, 0, 0, 0, TimeSpan.Zero)),
             deviceEventRepository: Mock.Of<IDeviceEventRepository>());
 
         await service.GetLoopHealthAsync(
-            new LoopAnalysisFilter { From = new DateTime(2026, 6, 9, 14, 30, 0, DateTimeKind.Utc), To = new DateTime(2026, 6, 10, 14, 30, 0, DateTimeKind.Utc) },
+            new LoopAnalysisFilter
+            {
+                From = new DateTime(2026, 6, 9, 14, 30, 0, DateTimeKind.Utc),
+                To = new DateTime(2026, 6, 10, 14, 30, 0, DateTimeKind.Utc),
+                Now = new DateTime(2026, 6, 20, 0, 0, 0, DateTimeKind.Utc),
+            },
             Adelaide);
 
         var window = windows.Should().ContainSingle().Subject;

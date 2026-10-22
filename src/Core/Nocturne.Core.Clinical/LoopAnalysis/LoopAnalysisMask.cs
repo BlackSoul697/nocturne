@@ -81,13 +81,12 @@ public sealed record LoopAnalysisMask(IntervalSet Analysed, IntervalSet Glucose)
 
     private static IntervalSet LocalWeekdays(long from, long to, TimeZoneInfo tz, HashSet<DayOfWeek> days)
     {
+        var (firstDay, starts) = LocalSlotBinning.DayStarts(from, to, tz);
         var kept = new List<MillsInterval>();
-        var last = LocalSlotBinning.LocalDay(to - 1, tz);
-        for (var day = LocalSlotBinning.LocalDay(from, tz); day <= last; day = day.AddDays(1))
+        for (var d = 0; d < starts.Length - 1; d++)
         {
-            if (days.Contains(day.DayOfWeek))
-                kept.Add(new MillsInterval(
-                    LocalSlotBinning.DayStartMills(day, tz), LocalSlotBinning.DayStartMills(day.AddDays(1), tz)));
+            if (days.Contains(firstDay.AddDays(d).DayOfWeek))
+                kept.Add(new MillsInterval(starts[d], starts[d + 1]));
         }
         return IntervalSet.Of(kept);
     }

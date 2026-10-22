@@ -81,6 +81,7 @@ export function profileRange(options: RangeOptions = {}): DailyProfileRange {
       date,
       dayOfWeek: WEEK[(i + 4) % 7],
       start: `${date}T00:00:00Z`,
+      complete: true,
       netLoopCorrection: 9.6 * scale,
       totalInsulin: 30,
       deliveredBasal: 14,

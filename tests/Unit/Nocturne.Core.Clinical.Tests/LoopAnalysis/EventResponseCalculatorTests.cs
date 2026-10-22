@@ -37,7 +37,8 @@ public class EventResponseCalculatorTests
         bool isolatedOnly = false,
         bool requireCorroboration = false,
         long? from = null,
-        long? to = null)
+        long? to = null,
+        long? now = null)
     {
         var definition = new EventResponseDefinition
         {
@@ -57,6 +58,7 @@ public class EventResponseCalculatorTests
             },
             Sources = sources ?? new LoopAnalysisMaskSources(),
             SensorStarts = sensorStarts ?? [],
+            Now = now ?? long.MaxValue,
         };
         var start = from ?? From;
         var end = to ?? To;
@@ -72,6 +74,25 @@ public class EventResponseCalculatorTests
 
     private static IEnumerable<GlucoseSample> Flat(double mgdl) =>
         Readings(From - 12 * Hour, To + 12 * Hour, _ => mgdl);
+
+    [Fact]
+    public void AMealWhoseWindowHasNotEnded_IsNotCounted()
+    {
+        var now = Local(2024, 6, 16, 14);
+        var earlier = now - 6 * Hour;
+        var underWay = now - 30 * Minute;
+
+        var range = Calculate(
+            [Cohort(1)],
+            glucose: Readings(From - 12 * Hour, now, _ => 120),
+            carbs: [new(earlier, 40), new(underWay, 40)],
+            to: now,
+            now: now);
+
+        range.Cohorts.Single().Events.Should().Be(1);
+        range.Cohorts.Single().Anchors.Should().Be(1);
+        range.Events.Should().ContainSingle().Which.Time.Should().Be("08:00");
+    }
 
     [Fact]
     public void AMealAtMidnight_IsAnchoredOnTheDayItStarts()

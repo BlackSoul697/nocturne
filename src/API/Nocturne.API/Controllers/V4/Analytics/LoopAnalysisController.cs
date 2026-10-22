@@ -273,7 +273,7 @@ public class LoopAnalysisController(
     /// (<see cref="LoopAnalysisReadScopeGuard.NarrowFilter"/>) and resolves the local dates to
     /// instants in the tenant zone (<see cref="LoopAnalysisRanges"/>). A history-clamped caller is
     /// analysed over its last <see cref="HistoryClamp.Window"/> whatever dates it asked for, with
-    /// no comparison. Every resolved range ends after it starts.
+    /// no comparison. Every resolved range ends after it starts and no later than now.
     /// </summary>
     private async Task<(ObjectResult? Invalid, LoopAnalysisRequest? Request)> TryResolveAsync(
         LoopAnalysisQuery query, CancellationToken ct)
@@ -310,14 +310,16 @@ public class LoopAnalysisController(
             return (null, new LoopAnalysisRequest(null, null, reason, null, null, masks, ignored, unavailable, clamped));
 
         var maxDays = V4ReadLimits.MaxAnalyticsSpanDays;
+        var now = timeProvider.GetUtcNow().UtcDateTime;
         var primary = clamped
-            ? LoopAnalysisRanges.Clamped(timeProvider.GetUtcNow().UtcDateTime, HistoryClamp.Window, zone)
-            : LoopAnalysisRanges.Resolve(query.StartDate, query.EndDate, zone, maxDays);
+            ? LoopAnalysisRanges.Clamped(now, HistoryClamp.Window, zone)
+            : LoopAnalysisRanges.Resolve(query.StartDate, query.EndDate, zone, maxDays, now);
+
         var comparison = clamped ? null : query.Compare switch
         {
             LoopAnalysisComparison.Previous => LoopAnalysisRanges.Previous(primary, zone),
             LoopAnalysisComparison.Custom => LoopAnalysisRanges.Resolve(
-                query.CompareStartDate!.Value, query.CompareEndDate!.Value, zone, maxDays),
+                query.CompareStartDate!.Value, query.CompareEndDate!.Value, zone, maxDays, now),
             _ => null,
         };
 
@@ -327,6 +329,7 @@ public class LoopAnalysisController(
             To = primary.To,
             CompareFrom = comparison?.From,
             CompareTo = comparison?.To,
+            Now = now,
             Masks = masks,
             ReadProfileNames = !LoopAnalysisReadScopeGuard.WithheldEnvelope(granted).Contains(LoopAnalysisSeries.ProfileNames),
             HistoryVisibleFrom = clamped ? primary.From : null,

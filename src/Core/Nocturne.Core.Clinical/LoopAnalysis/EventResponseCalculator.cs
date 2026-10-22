@@ -18,6 +18,10 @@ public sealed record EventResponseInputs
 
     /// <inheritdoc cref="LoopAnalysisFilter.HistoryVisibleFrom"/>
     public long? HistoryVisibleFrom { get; init; }
+
+    /// <inheritdoc cref="LoopAnalysisFilter.Now"/>
+    /// <remarks>An event whose window ends after it is still under way, so it is not counted.</remarks>
+    public long Now { get; init; } = long.MaxValue;
 }
 
 /// <summary>
@@ -74,7 +78,8 @@ public static class EventResponseCalculator
             var counted = new List<EventEpisode>();
             foreach (var anchor in anchors.Of(cohort.Anchor))
             {
-                if (anchor.Mills < from || anchor.Mills >= to || !mask.Analysed.Contains(anchor.Mills) || !Matches(cohort, anchor, zone))
+                if (anchor.Mills < from || anchor.Mills >= to || anchor.Mills + window.AfterMs > inputs.Now
+                    || !mask.Analysed.Contains(anchor.Mills) || !Matches(cohort, anchor, zone))
                     continue;
                 result.Anchors++;
                 if (anchor.Mills < visibleFrom)
