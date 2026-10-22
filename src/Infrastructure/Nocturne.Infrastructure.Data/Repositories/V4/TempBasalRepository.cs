@@ -194,6 +194,9 @@ public class TempBasalRepository : SyncUpsertRepositoryBase<TempBasal, TempBasal
         return await ctx.TempBasals.AnyAsync(t => t.Percent != null && (t.Rate == null || t.RateFromSchedule), ct);
     }
 
+    private const string Uncorroborated = nameof(TempBasalOriginEvidence.Uncorroborated);
+    private const string Pending = nameof(TempBasalOriginEvidence.Uploader);
+
     /// <inheritdoc />
     public async Task<bool> SetScheduleDerivedRateAsync(
         Guid id, double percent, double? readRate, double? rate, double? scheduledRate, CancellationToken ct = default)
@@ -208,6 +211,7 @@ public class TempBasalRepository : SyncUpsertRepositoryBase<TempBasal, TempBasal
                 .SetProperty(t => t.Rate, rate)
                 .SetProperty(t => t.ScheduledRate, scheduledRate)
                 .SetProperty(t => t.RateFromSchedule, fromSchedule)
+                .SetProperty(t => t.OriginEvidence, t => t.OriginEvidence == Uncorroborated ? Pending : t.OriginEvidence) // judged without a rate, judged again with one
                 .SetProperty(t => t.SysUpdatedAt, stamp), ct);
         return updated > 0;
     }

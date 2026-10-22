@@ -62,6 +62,7 @@ public class ChildScopeGuardTests
         "src/API/Nocturne.API/Services/BackgroundServices/NightscoutConnectorBackgroundService.cs: NightscoutConnectorBackgroundService.StartListenerForTenantAsync",
         "src/API/Nocturne.API/Services/BackgroundServices/NocturneRemoteConnectorBackgroundService.cs: NocturneRemoteConnectorBackgroundService.StartRealtimeListenersAsync",
         "src/API/Nocturne.API/Services/BackgroundServices/NotificationCleanupService.cs: NotificationCleanupService.ExecuteAsync",
+        "src/API/Nocturne.API/Services/BackgroundServices/TempBasalOriginCorroborationService.cs: TempBasalOriginCorroborationService.RunAsync",
         "src/API/Nocturne.API/Services/BackgroundServices/TempBasalRateSweepService.cs: TempBasalRateSweepService.ExecuteAsync",
         "src/API/Nocturne.API/Services/Chat/ChatIdentityPendingLinkCleanupService.cs: ChatIdentityPendingLinkCleanupService.SweepAsync",
         "src/API/Nocturne.API/Services/Compatibility/DiscrepancyMaintenanceService.cs: DiscrepancyMaintenanceService.PerformMaintenanceAsync",

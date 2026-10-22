@@ -898,13 +898,16 @@ public class TreatmentDecomposer : DecomposerBase, ITreatmentDecomposer, IDecomp
         var startTimestamp = DateTimeOffset.FromUnixTimeMilliseconds(treatment.Mills).UtcDateTime;
         var durationMs = (treatment.DurationInMilliseconds ?? (long?)((treatment.Duration ?? 0) * 60 * 1000)) ?? 0;
         var percent = treatment.Absolute is null ? treatment.Percent : null;
+        var (origin, evidence) = MapTempBasalOrigin(treatment);
 
         return new V4Models.TempBasal
         {
             Id = Guid.CreateVersion7(),
             LegacyId = treatment.Id,
-            AdditionalProperties = TempBasalAutomaticFlag.Keep(
-                TreatmentUploadedTimestamp.AddTo(TreatmentClientId.ToRecord(treatment), treatment), treatment.Automatic),
+            AdditionalProperties = TempBasalUploadedFields.Keep(
+                TempBasalAutomaticFlag.Keep(
+                    TreatmentUploadedTimestamp.AddTo(TreatmentClientId.ToRecord(treatment), treatment), treatment.Automatic),
+                treatment),
             StartTimestamp = startTimestamp,
             EndTimestamp = durationMs > 0 ? DateTimeOffset.FromUnixTimeMilliseconds(treatment.Mills + durationMs).UtcDateTime : null,
             UtcOffset = treatment.UtcOffset,
@@ -918,29 +921,37 @@ public class TreatmentDecomposer : DecomposerBase, ITreatmentDecomposer, IDecomp
                 ? rate * 100 / (100 + p)
                 : null,
             Percent = percent,
-            Origin = MapTempBasalOrigin(treatment),
+            Origin = origin,
+            OriginEvidence = evidence,
             PumpRecordId = treatment.PumpId?.ToString(),
         };
     }
 
-    private static V4Models.TempBasalOrigin MapTempBasalOrigin(Treatment treatment)
+    private static (V4Models.TempBasalOrigin, V4Models.TempBasalOriginEvidence) MapTempBasalOrigin(Treatment treatment)
     {
+        const V4Models.TempBasalOriginEvidence reported = V4Models.TempBasalOriginEvidence.Reported;
+
         if (string.Equals(treatment.Reason, "suspend", StringComparison.OrdinalIgnoreCase))
-            return V4Models.TempBasalOrigin.Suspended;
+            return (V4Models.TempBasalOrigin.Suspended, reported);
 
         if (treatment.Automatic is { } automatic)
-            return automatic ? V4Models.TempBasalOrigin.Algorithm : V4Models.TempBasalOrigin.Manual;
+            return (automatic ? V4Models.TempBasalOrigin.Algorithm : V4Models.TempBasalOrigin.Manual, reported);
 
-        // Below reason and automatic: an edit echoes the stored basalOrigin
-        // back next to the field it changes
+        // An edit echoes the stored origin back next to the field it changes. An echoed default is
+        // not a statement, or the edit would lock it in.
         if (treatment.AdditionalProperties is { } props
-            && TryGetString(props, "basalOrigin", out var stored)
-            && TryParseDefinedName<V4Models.TempBasalOrigin>(stored, out var origin))
-            return origin;
+            && TryGetString(props, V4Models.TempBasalOriginProvenance.OriginField, out var stored)
+            && TryParseDefinedName<V4Models.TempBasalOrigin>(stored, out var origin)
+            && (!props.ContainsKey(V4Models.TempBasalOriginProvenance.EvidenceField)
+                || TryGetString(props, V4Models.TempBasalOriginProvenance.EvidenceField, out var evidence)
+                && string.Equals(evidence, nameof(V4Models.TempBasalOriginEvidence.Reported), StringComparison.OrdinalIgnoreCase)))
+            return (origin, reported);
 
-        return IsLoopUpload(treatment)
-            ? V4Models.TempBasalOrigin.Algorithm // Loop 2.x omits the flag, so its open-loop enactments also read as Algorithm
-            : V4Models.TempBasalOrigin.Manual;
+        if (treatment.BolusType is "PUMP_SUSPEND" or "EMULATED_PUMP_SUSPEND")
+            return (V4Models.TempBasalOrigin.Suspended, reported);
+
+        return (V4Models.TempBasalOriginProvenance.UploaderDefault(treatment.EnteredBy, UploadedString(treatment, "app")),
+            V4Models.TempBasalOriginEvidence.Uploader);
     }
 
     internal static V4Models.Bolus MapToBolus(Treatment treatment, Guid? correlationId, bool keepEventType = true)
@@ -1152,9 +1163,6 @@ public class TreatmentDecomposer : DecomposerBase, ITreatmentDecomposer, IDecomp
             JsonElement { ValueKind: JsonValueKind.String } je => je.GetString(),
             _ => null
         };
-
-    private static bool IsLoopUpload(Treatment treatment) =>
-        treatment.EnteredBy?.StartsWith("loop://", StringComparison.OrdinalIgnoreCase) == true;
 
     /// <summary>
     /// Extracts AAPS v4 insulin configuration from the <c>icfg</c> JSON field in
