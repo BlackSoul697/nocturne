@@ -92,7 +92,7 @@ public class AlexaController : ControllerBase
                 request.Request.Type
             );
 
-            return Ok(response);
+            return response == null ? new JsonResult(string.Empty) : Ok(response);
         }
         catch (ArgumentException ex)
         {
