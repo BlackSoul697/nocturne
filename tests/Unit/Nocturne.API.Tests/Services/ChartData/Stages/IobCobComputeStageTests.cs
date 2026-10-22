@@ -41,9 +41,8 @@ public class IobCobComputeStageTests
                 It.IsAny<long>(),
                 It.IsAny<long>(),
                 It.IsAny<double>(),
-                It.IsAny<TherapyTimeline>(),
                 It.IsAny<CancellationToken>()))
-            .ReturnsAsync((List<TempBasal> _, long start, long _, double rate, TherapyTimeline _, CancellationToken _) =>
+            .ReturnsAsync((List<TempBasal> _, long start, long _, double rate, CancellationToken _) =>
                 new List<BasalPoint>
                 {
                     new()
@@ -271,7 +270,7 @@ public class IobCobComputeStageTests
                 new TherapyTimeline(new[] { new TherapySegment(from, to, snapshot) }));
         var basalSeriesBuilder = new Mock<IBasalSeriesBuilder>();
         basalSeriesBuilder
-            .Setup(b => b.BuildAsync(It.IsAny<List<TempBasal>>(), It.IsAny<long>(), It.IsAny<long>(), It.IsAny<double>(), It.IsAny<TherapyTimeline>(), It.IsAny<CancellationToken>()))
+            .Setup(b => b.BuildAsync(It.IsAny<List<TempBasal>>(), It.IsAny<long>(), It.IsAny<long>(), It.IsAny<double>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(new List<BasalPoint>());
 
         var stage = new IobCobComputeStage(
@@ -630,7 +629,7 @@ public class IobCobComputeStageTests
         result.IobSeries[0].Value.Should().BeApproximately(0.4, 1e-9);
         _mockBasalSeriesBuilder.Verify(b => b.BuildAsync(
             It.Is<List<TempBasal>>(l => l.Count == 0),
-            startTime, endTime, It.IsAny<double>(), It.IsAny<TherapyTimeline>(), It.IsAny<CancellationToken>()),
+            startTime, endTime, It.IsAny<double>(), It.IsAny<CancellationToken>()),
             Times.Once);
     }
 }
