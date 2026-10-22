@@ -167,42 +167,57 @@ public class PredictionAccuracyCalculatorTests
             Adjusted = IntervalSet.Of(at + Hour, at + 2 * Hour),
         };
 
-        PredictionAccuracyCalculator.ContextAt(inputs, at, at).Should().Be(PredictionContext.PostMeal, "carbs exactly three hours back still count");
-        PredictionAccuracyCalculator.ContextAt(inputs, at + 1, at + 1).Should().Be(PredictionContext.PostCorrection);
-        PredictionAccuracyCalculator.ContextAt(inputs, at + Hour, at + 2 * Hour).Should().Be(PredictionContext.Adjusted);
-        PredictionAccuracyCalculator.ContextAt(inputs, at + 5 * Hour, at + 6 * Hour).Should().Be(PredictionContext.Fasting);
+        PredictionAccuracyCalculator.ContextAt(inputs, at).Should().Be(PredictionContext.PostMeal, "carbs exactly three hours back still count");
+        PredictionAccuracyCalculator.ContextAt(inputs, at + 1).Should().Be(PredictionContext.PostCorrection);
+        PredictionAccuracyCalculator.ContextAt(inputs, at + Hour).Should().Be(PredictionContext.Adjusted);
+        PredictionAccuracyCalculator.ContextAt(inputs, at + 5 * Hour).Should().Be(PredictionContext.Fasting);
+    }
+
+    private static int[] Matched(PredictionCurveAccuracy curve, PredictionContext context) =>
+        [.. curve.ByContext.Single(c => c.Context == context).Horizons.Select(h => h.Error?.N ?? 0)];
+
+    [Fact]
+    public void ACorrectionAfterAFastingPrediction_InterruptsTheHorizonsAfterIt()
+    {
+        var start = Midnight + 10 * Hour;
+
+        var curve = Calculate(
+            [LoopFixture(start, Flat(120))], Readings(Midnight, To + 3 * Hour, 110),
+            manualBoluses: [start + 40 * Minute]).Curves.Single();
+
+        Matched(curve, PredictionContext.Fasting).Should().Equal(1, 0, 0, 0);
+        Matched(curve, PredictionContext.PostCorrection).Should().OnlyContain(n => n == 0, "the correction came after the prediction");
+        curve.Horizons.Select(h => h.Interrupted).Should().Equal(0, 1, 1, 1);
+        curve.ByHour[10].Horizons.Select(h => h.Error?.N ?? 0).Should().Equal(1, 0, 0, 0);
     }
 
     [Fact]
-    public void APreBolusBeforeAMeal_IsPostMealFromTheHorizonTheCarbsReach()
+    public void APreBolusStillActing_IsPostCorrection_UntilTheCarbsInterrupt()
     {
         var bolus = Midnight + 12 * Hour;
-        var meal = bolus + 15 * Minute;
+        var start = bolus + 5 * Minute;
 
         var curve = Calculate(
-            [LoopFixture(bolus, Flat(120))], Readings(Midnight, To + 3 * Hour, 110),
-            carbs: [meal], manualBoluses: [bolus]).Curves.Single();
+            [LoopFixture(start, Flat(120))], Readings(Midnight, To + 3 * Hour, 110),
+            carbs: [bolus + 45 * Minute], manualBoluses: [bolus]).Curves.Single();
 
-        var postMeal = curve.ByContext.Single(c => c.Context == PredictionContext.PostMeal);
-        postMeal.Horizons.Should().OnlyContain(h => h.Error != null && h.Error.N == 1,
-            "every horizon is after the carbs, which moved it without the prediction knowing");
+        Matched(curve, PredictionContext.PostCorrection).Should().Equal(1, 0, 0, 0);
+        Matched(curve, PredictionContext.PostMeal).Should().OnlyContain(n => n == 0, "the carbs came after the prediction");
         curve.ByContext.Single(c => c.Context == PredictionContext.PostCorrection).Horizons
-            .Should().OnlyContain(h => h.Error == null);
+            .Select(h => h.Interrupted).Should().Equal(0, 1, 1, 1);
     }
 
     [Fact]
-    public void ThePredictionsBeforeAMeal_AreFastingOnlyUntilTheCarbs()
+    public void APredictionMadeBeforeTheCarbsWereEntered_IsNotPostMeal()
     {
         var meal = Midnight + 12 * Hour;
-        var start = meal - 45 * Minute;
 
         var curve = Calculate(
-            [LoopFixture(start, Flat(120))], Readings(Midnight, To + 3 * Hour, 110), carbs: [meal]).Curves.Single();
+            [LoopFixture(meal - 45 * Minute, Flat(120))], Readings(Midnight, To + 3 * Hour, 110), carbs: [meal]).Curves.Single();
 
-        curve.ByContext.Single(c => c.Context == PredictionContext.Fasting).Horizons.Select(h => h.Error?.N ?? 0)
-            .Should().Equal(1, 0, 0, 0);
-        curve.ByContext.Single(c => c.Context == PredictionContext.PostMeal).Horizons.Select(h => h.Error?.N ?? 0)
-            .Should().Equal(0, 1, 1, 1);
+        Matched(curve, PredictionContext.Fasting).Should().Equal(1, 0, 0, 0);
+        Matched(curve, PredictionContext.PostMeal).Should().Equal(0, 0, 0, 0);
+        curve.Horizons.Select(h => h.Interrupted).Should().Equal(0, 1, 1, 1);
     }
 
     [Fact]

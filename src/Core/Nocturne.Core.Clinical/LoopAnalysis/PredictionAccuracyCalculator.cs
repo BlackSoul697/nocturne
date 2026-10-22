@@ -37,7 +37,7 @@ public sealed record PredictionAccuracyInputs
 
     /// <summary>
     /// The instant the readings are known up to: the end of <see cref="Glucose"/>, or now when that
-    /// is earlier. A horizon after it has not happened yet and is no prediction at all.
+    /// is earlier. A horizon whose reading could still arrive after it is no prediction at all.
     /// </summary>
     public long ReadingsUntil { get; init; } = long.MaxValue;
 
@@ -60,9 +60,18 @@ public sealed record PredictionAccuracyInputs
 /// predicted, and summarises the error by curve, horizon, local hour of day and context.
 /// </summary>
 /// <remarks>
+/// <para>
 /// A prediction counts where its start is in the analysed time and not in a data exclusion. Where
-/// it does not reach a horizon (the curve is shorter, or leaves the value out), or the horizon is
-/// after <see cref="PredictionAccuracyInputs.ReadingsUntil"/>, that horizon is no prediction at all.
+/// it does not reach a horizon (the curve is shorter, or leaves the value out), or the reading for
+/// the horizon could not have arrived by <see cref="PredictionAccuracyInputs.ReadingsUntil"/>, that
+/// horizon is no prediction at all.
+/// </para>
+/// <para>
+/// The tab is read for what the settings a prediction ran on got wrong, so a horizon that a carb
+/// entry or manual bolus came before (<see cref="IsInterrupted"/>) is counted interrupted and kept
+/// out of every error figure: its reading measures that action, which the prediction could not
+/// have known of.
+/// </para>
 /// </remarks>
 public static class PredictionAccuracyCalculator
 {
@@ -75,16 +84,12 @@ public static class PredictionAccuracyCalculator
 
     public const long MatchToleranceMs = 150_000;
 
-    /// <summary>
-    /// How far before a prediction carbs or a manual bolus put it in a post-meal or post-correction
-    /// context. One taken after the prediction does so for the horizons after it, which it moved
-    /// without the prediction knowing.
-    /// </summary>
+    /// <summary>How far before a prediction carbs or a manual bolus put it in a post-meal or post-correction context.</summary>
     public const long ContextLookbackMs = 3 * LocalSlotBinning.HourMs;
 
     public static long ReadingsAfterRangeMs => HorizonMinutes[^1] * LocalSlotBinning.MinuteMs + MatchToleranceMs;
 
-    /// <summary>How long after the range a carb entry or bolus can still set a prediction's context.</summary>
+    /// <summary>How long after the range a carb entry or bolus can still interrupt a prediction (<see cref="IsInterrupted"/>).</summary>
     public static long TreatmentsAfterRangeMs => HorizonMinutes[^1] * LocalSlotBinning.MinuteMs;
 
     /// <summary>
@@ -235,6 +240,7 @@ public static class PredictionAccuracyCalculator
             algorithms.Add(snapshot.Algorithm);
             var local = LocalSlotBinning.LocalTime(start, inputs.Zone);
             var day = DateOnly.FromDateTime(local).DayNumber;
+            var context = ContextAt(inputs, start);
 
             for (var c = 0; c < CurveCount; c++)
             {
@@ -249,15 +255,15 @@ public static class PredictionAccuracyCalculator
                     if (index >= curve.Length || curve[index] is not { } predicted || !double.IsFinite(predicted))
                         continue;
                     var target = TargetMills(snapshot, (PredictionCurve)c, index);
-                    if (target > inputs.ReadingsUntil)
+                    if (target + MatchToleranceMs > inputs.ReadingsUntil)
                         continue;
-                    var contextIndex = Array.IndexOf(contexts, ContextAt(inputs, start, target));
+                    var contextIndex = Array.IndexOf(contexts, context);
                     if (contextIndex < 0)
                         continue;
 
-                    var outcome = inputs.GlucoseExclusions.Contains(target)
-                        ? Outcome.Excluded
-                        : new Outcome(NearestReading(inputs.Glucose, target), false);
+                    var outcome = inputs.GlucoseExclusions.Contains(target) ? Outcome.Excluded
+                        : IsInterrupted(inputs, start, target) ? Outcome.Interrupted
+                        : new Outcome(NearestReading(inputs.Glucose, target), Kind.Paired);
                     var curveCells = cells[c] ??= NewCells(contexts.Length, horizons);
                     curveCells[OverallCell].Add(h, predicted, outcome, day);
                     curveCells[HourCell(local.Hour)].Add(h, predicted, outcome, day);
@@ -301,20 +307,25 @@ public static class PredictionAccuracyCalculator
         return result;
     }
 
-    /// <summary>
-    /// The first context of <see cref="PredictionContext"/>'s order that applies to the value a
-    /// prediction made at <paramref name="start"/> gave for <paramref name="target"/>.
-    /// </summary>
-    public static PredictionContext ContextAt(PredictionAccuracyInputs inputs, long start, long target)
+    /// <summary>The first context of <see cref="PredictionContext"/>'s order that applies at <paramref name="start"/>.</summary>
+    public static PredictionContext ContextAt(PredictionAccuracyInputs inputs, long start)
     {
         if (inputs.Adjusted.Contains(start))
             return PredictionContext.Adjusted;
-        if (AnyWithin(inputs.CarbMills, start - ContextLookbackMs, target))
+        if (AnyWithin(inputs.CarbMills, start - ContextLookbackMs, start))
             return PredictionContext.PostMeal;
-        if (AnyWithin(inputs.ManualBolusMills, start - ContextLookbackMs, target))
+        if (AnyWithin(inputs.ManualBolusMills, start - ContextLookbackMs, start))
             return PredictionContext.PostCorrection;
         return PredictionContext.Fasting;
     }
+
+    /// <summary>
+    /// Whether a carb entry or manual bolus came in <c>(start, target]</c>. The reading at the
+    /// target then follows an action the prediction could not know of, so its error measures the
+    /// action, not the prediction.
+    /// </summary>
+    public static bool IsInterrupted(PredictionAccuracyInputs inputs, long start, long target) =>
+        AnyWithin(inputs.CarbMills, start + 1, target) || AnyWithin(inputs.ManualBolusMills, start + 1, target);
 
     private static bool AnyWithin(IReadOnlyList<long> sorted, long from, long to)
     {
@@ -355,10 +366,16 @@ public static class PredictionAccuracyCalculator
         return cells;
     }
 
-    /// <summary>What a horizon's target found: a reading, no reading, or excluded time.</summary>
-    private readonly record struct Outcome(double? Actual, bool IsExcluded)
+    private enum Kind { Paired, Excluded, Interrupted }
+
+    /// <summary>
+    /// What a horizon's target found: a reading or none (<see cref="Kind.Paired"/>), excluded time,
+    /// or an interrupting action.
+    /// </summary>
+    private readonly record struct Outcome(double? Actual, Kind Kind)
     {
-        public static readonly Outcome Excluded = new(null, true);
+        public static readonly Outcome Excluded = new(null, Kind.Excluded);
+        public static readonly Outcome Interrupted = new(null, Kind.Interrupted);
     }
 
     private sealed class Cell(int horizons)
@@ -368,13 +385,19 @@ public static class PredictionAccuracyCalculator
         private readonly double[] _relative = new double[horizons];
         private readonly int[] _unmatched = new int[horizons];
         private readonly int[] _excluded = new int[horizons];
+        private readonly int[] _interrupted = new int[horizons];
         private readonly HashSet<int>[] _days = [.. Enumerable.Range(0, horizons).Select(_ => new HashSet<int>())];
 
         public void Add(int horizon, double predicted, Outcome outcome, int day)
         {
-            if (outcome.IsExcluded)
+            if (outcome.Kind == Kind.Excluded)
             {
                 _excluded[horizon]++;
+                return;
+            }
+            if (outcome.Kind == Kind.Interrupted)
+            {
+                _interrupted[horizon]++;
                 return;
             }
             if (outcome.Actual is not { } mgdl)
@@ -404,6 +427,7 @@ public static class PredictionAccuracyCalculator
                     Mard = n == 0 ? null : SlotSummary.Round(100 * _relative[h] / n),
                     Unmatched = _unmatched[h],
                     Excluded = _excluded[h],
+                    Interrupted = _interrupted[h],
                     SettingsSignal = SettingsSignalMinutes.Contains(HorizonMinutes[h]),
                 });
             }

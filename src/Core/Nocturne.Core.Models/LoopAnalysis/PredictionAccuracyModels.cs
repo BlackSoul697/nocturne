@@ -24,11 +24,10 @@ public enum PredictionCurve
 }
 
 /// <summary>
-/// What was going on around a predicted value. Each value is in exactly one context, the first
-/// that applies in this order: adjusted, post-meal, post-correction, fasting. A carb entry or bolus
-/// counts from three hours before the prediction up to the time the value predicted, so one taken
-/// after the prediction, which the prediction could not know of, takes its later horizons out of
-/// fasting.
+/// What was going on when a prediction was made. Each prediction is in exactly one context, the
+/// first that applies in this order: adjusted, post-meal, post-correction, fasting. Carbs and
+/// boluses count from three hours before the prediction up to it; one after it interrupts the
+/// horizons it comes before (<see cref="PredictionHorizonAccuracy.Interrupted"/>).
 /// </summary>
 [JsonConverter(typeof(JsonStringEnumConverter<PredictionContext>))]
 public enum PredictionContext
@@ -165,6 +164,13 @@ public class PredictionHorizonAccuracy
     /// the readings are known to be wrong. Neither paired nor unmatched.
     /// </summary>
     public int Excluded { get; set; }
+
+    /// <summary>
+    /// Predictions whose horizon a carb entry or manual bolus came before. The reading measures that
+    /// action, which the prediction could not have known of, so these are kept out of every error
+    /// figure.
+    /// </summary>
+    public int Interrupted { get; set; }
 
     /// <summary>The horizon's bias is read as a settings signal; see the remarks.</summary>
     public bool SettingsSignal { get; set; }
