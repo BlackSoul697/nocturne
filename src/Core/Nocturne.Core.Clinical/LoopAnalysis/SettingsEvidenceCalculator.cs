@@ -205,6 +205,15 @@ public static class SettingsEvidenceCalculator
         _ => SettingsEvidenceBlock.Evening,
     };
 
+    /// <summary>The local hours a block spans, the end exclusive; the inverse of <see cref="BlockOf"/>.</summary>
+    public static (int Start, int End) HoursOf(SettingsEvidenceBlock block) => block switch
+    {
+        SettingsEvidenceBlock.Overnight => (0, 6),
+        SettingsEvidenceBlock.Morning => (6, 11),
+        SettingsEvidenceBlock.Midday => (11, 17),
+        _ => (17, 24),
+    };
+
     /// <summary>
     /// Sets an available figure's observed value, spread and confidence: one level below
     /// <see cref="SettingsEvidenceConfidence.High"/> for each reason it falls short, and
@@ -249,6 +258,7 @@ public static class SettingsEvidenceCalculator
         var moreInsulin = figure.Profile is > 0 and var profile
             && Math.Abs(observed / profile - 1) >= DirectionDeadband
             && (higherMeansMoreInsulin ? observed > profile : observed < profile);
+        figure.TowardsMoreInsulin = moreInsulin;
         if (moreInsulin && materialBorrowed)
         {
             figure.Confidence = figure.Confidence == SettingsEvidenceConfidence.High
@@ -483,6 +493,7 @@ internal sealed class SettingsEvidenceContext
         where TEpisode : InsulinActedEpisode
     {
         _namedBlocks ??= DayBlocks(hour => (int)SettingsEvidenceCalculator.BlockOf(hour));
+        (figure.StartHour, figure.EndHour) = SettingsEvidenceCalculator.HoursOf(block);
         figure.N = episodes.Count;
         figure.Profile = ProfileOver(
             _namedBlocks.Where(t => t.Block == (int)block).Select(t => (t.Start, t.End)),

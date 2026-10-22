@@ -575,6 +575,13 @@ public class SettingsEvidenceCalculatorTests
         var range = Corrections().Run();
 
         var midday = Isf(range, SettingsEvidenceBlock.Midday);
+        (midday.StartHour, midday.EndHour).Should().Be((11, 17));
+        range.CarbRatio.Select(b => (b.StartHour, b.EndHour)).Should().Equal((0, 6), (6, 11), (11, 17), (17, 24));
+        foreach (var hour in Enumerable.Range(0, 24))
+        {
+            var (start, end) = SettingsEvidenceCalculator.HoursOf(SettingsEvidenceCalculator.BlockOf(hour));
+            hour.Should().BeInRange(start, end - 1);
+        }
         midday.N.Should().Be(7);
         midday.Observed.Should().Be(40);
         midday.Profile.Should().Be(40);
@@ -947,6 +954,7 @@ public class SettingsEvidenceCalculatorTests
     public void AFigureTowardsMoreInsulin_IsLoweredALevel_OnlyWhereABorrowedInputIsMaterial()
     {
         var capped = Rated(12, 8, 10, higherMeansMoreInsulin: false, borrowed: true);
+        capped.TowardsMoreInsulin.Should().BeTrue();
         capped.Confidence.Should().Be(SettingsEvidenceConfidence.Moderate);
         capped.ConfidenceReasons.Should().Equal(SettingsEvidenceConfidenceReason.MoreInsulinOnBorrowedInput);
 
@@ -955,8 +963,10 @@ public class SettingsEvidenceCalculatorTests
         Rated(12, 1.2, 1.0, higherMeansMoreInsulin: true, borrowed: true).Confidence.Should().Be(SettingsEvidenceConfidence.Moderate);
         Rated(12, 8, 10, higherMeansMoreInsulin: false, borrowed: true, SettingsEvidenceConfidenceReason.BasalDependent)
             .Confidence.Should().Be(SettingsEvidenceConfidence.Low, "it is lowered a level from Moderate, not held there");
-        Rated(12, 9.5, 10, higherMeansMoreInsulin: false, borrowed: true).Confidence.Should().Be(
-            SettingsEvidenceConfidence.High, "5% from the profile is inside the direction deadband");
+        var close = Rated(12, 9.5, 10, higherMeansMoreInsulin: false, borrowed: true);
+        close.Confidence.Should().Be(SettingsEvidenceConfidence.High, "5% from the profile is inside the direction deadband");
+        close.TowardsMoreInsulin.Should().BeFalse();
+        Rated(12, 12, 10, higherMeansMoreInsulin: false, borrowed: true).TowardsMoreInsulin.Should().BeFalse();
     }
 
     [Fact]

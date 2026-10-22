@@ -203,6 +203,12 @@ public class SettingsEvidenceRejection
 /// </summary>
 public class SettingsEvidenceFigure
 {
+    /// <summary>Local hour the block starts at.</summary>
+    public int StartHour { get; set; }
+
+    /// <summary>Local hour the block ends at, exclusive.</summary>
+    public int EndHour { get; set; }
+
     /// <summary>The observed value; null when <see cref="UnavailableReason"/> is set.</summary>
     public double? Observed { get; set; }
 
@@ -221,6 +227,13 @@ public class SettingsEvidenceFigure
     public List<SettingsEvidenceConfidenceReason> ConfidenceReasons { get; set; } = [];
 
     public SettingsEvidenceUnavailableReason? UnavailableReason { get; set; }
+
+    /// <summary>
+    /// The observed value, read against the profile's, would mean more insulin: a basal above it,
+    /// an ISF or carb ratio below it, by at least the direction deadband. False where there is no
+    /// observed value.
+    /// </summary>
+    public bool TowardsMoreInsulin { get; set; }
 
     /// <summary>
     /// Some episode's glucose change was converted at the profile's ISF, scaled by what the other
@@ -259,12 +272,6 @@ public class SettingsEvidenceEpisode
 /// </summary>
 public class BasalEvidenceBlock : SettingsEvidenceFigure
 {
-    /// <summary>Local hour the block starts at.</summary>
-    public int StartHour { get; set; }
-
-    /// <summary>Local hour the block ends at, exclusive.</summary>
-    public int EndHour { get; set; }
-
     /// <summary>U/h: the algorithm's temp delta plus its automatic boluses, the mean across qualifying days.</summary>
     public double? MeanNetLoopCorrection { get; set; }
 
