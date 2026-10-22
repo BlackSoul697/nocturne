@@ -16829,6 +16829,7 @@ msgstr ""
 
 #: src/lib/components/alerts/ChannelsSection.svelte
 #: src/lib/components/dashboard/widgets/WidgetPlaceholder.svelte
+#: src/lib/components/reports/loop-analysis/TabLoading.svelte
 msgid "Loading"
 msgstr ""
 
@@ -27411,4 +27412,52 @@ msgstr ""
 
 #: src/routes/(unauthenticated)/auth/bot/discord/finalize/+page.svelte
 msgid "This link is expired or invalid. Please try again from Settings."
+msgstr ""
+
+#: src/routes/(authenticated)/reports/loop-analysis/+page.svelte
+msgid "Daily profile"
+msgstr ""
+
+#: src/routes/(authenticated)/reports/loop-analysis/+page.svelte
+msgid "Meals & events"
+msgstr ""
+
+#: src/routes/(authenticated)/reports/loop-analysis/+page.svelte
+msgid "Predictions"
+msgstr ""
+
+#: src/routes/(authenticated)/reports/loop-analysis/+page.svelte
+msgid "Loop health"
+msgstr ""
+
+#: src/routes/(authenticated)/reports/loop-analysis/+page.svelte
+msgid "How your automated insulin delivery behaves: what it does at each time of day and around meals and events, how well its predictions match what followed, and how steadily it ran"
+msgstr ""
+
+#: src/routes/(authenticated)/reports/loop-analysis/+page.svelte
+msgid "Loop Analysis - Nocturne Reports"
+msgstr ""
+
+#: src/routes/(authenticated)/reports/loop-analysis/+page.svelte
+msgid "<0>Daily profile</0>: glucose, basal, the correction the loop added and insulin and carbs on board, at each time of day."
+msgstr ""
+
+#: src/routes/(authenticated)/reports/loop-analysis/+page.svelte
+msgid "<0>Meals & events</0>: glucose and insulin lined up on meals, corrections, unannounced rises and other events, from before each to after it."
+msgstr ""
+
+#: src/routes/(authenticated)/reports/loop-analysis/+page.svelte
+msgid "<0>Predictions</0>: how far each curve the loop predicted with landed from the readings that followed."
+msgstr ""
+
+#: src/routes/(authenticated)/reports/loop-analysis/+page.svelte
+msgid "<0>Loop health</0>: how much of the time the loop was closed, where it stopped, and how often it ran into its limits."
+msgstr ""
+
+#: src/routes/(authenticated)/reports/loop-analysis/+page.svelte
+msgid "How your loop behaves, observed from your data. Every figure comes with its spread and the number of days, events or predictions behind it."
+msgstr ""
+
+#: src/lib/components/reports/loop-analysis/loop-analysis-tab.svelte.ts
+msgid "Error Loading Loop Analysis"
 msgstr ""

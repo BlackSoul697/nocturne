@@ -20,6 +20,7 @@
   import LoopHealthTab from "$lib/components/reports/loop-analysis/LoopHealthTab.svelte";
   import SettingsEvidenceTab from "$lib/components/reports/loop-analysis/SettingsEvidenceTab.svelte";
   import TabResource from "$lib/components/reports/loop-analysis/TabResource.svelte";
+  import TabLoading from "$lib/components/reports/loop-analysis/TabLoading.svelte";
   import { LoopAnalysisTabState } from "$lib/components/reports/loop-analysis/loop-analysis-tab.svelte";
   import {
     dailyProfileQuery,
@@ -120,8 +121,9 @@
   />
 </svelte:head>
 
+<!-- The tab on screen mounts at once, so the server renders it with its data; a tab left keeps its own. -->
 {#each LOOP_ANALYSIS_TABS as tab (tab)}
-  {#if TABS[tab].query !== undefined}
+  {#if filter.tab === tab || TABS[tab].query !== undefined}
     <TabResource tab={TABS[tab]} active={filter.tab === tab} />
   {/if}
 {/each}
@@ -184,6 +186,8 @@
     <Tabs.Content value="daily-profile" class="mt-4">
       {#if dailyProfile}
         <DailyProfileTab response={dailyProfile} {insulinDeliveryHref} />
+      {:else if !TABS["daily-profile"].failed}
+        <TabLoading />
       {/if}
     </Tabs.Content>
     <Tabs.Content value="meals-events" class="mt-4 space-y-6">
@@ -196,16 +200,22 @@
       />
       {#if eventResponse}
         <EventResponseTab response={eventResponse} />
+      {:else if !TABS["meals-events"].failed}
+        <TabLoading />
       {/if}
     </Tabs.Content>
     <Tabs.Content value="predictions" class="mt-4">
       {#if predictions}
         <PredictionsTab response={predictions} />
+      {:else if !TABS.predictions.failed}
+        <TabLoading />
       {/if}
     </Tabs.Content>
     <Tabs.Content value="loop-health" class="mt-4">
       {#if loopHealth}
         <LoopHealthTab response={loopHealth} />
+      {:else if !TABS["loop-health"].failed}
+        <TabLoading />
       {/if}
     </Tabs.Content>
     <Tabs.Content value="settings-evidence" class="mt-4">

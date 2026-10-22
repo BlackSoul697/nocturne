@@ -63,8 +63,6 @@
   const resultFor = (list: EventCohortResult[] | null, cohort: number | undefined) =>
     list?.find((r) => r.cohort === cohort);
 
-  // Under the clamp the range parameters are always ignored; the clamp notice says so instead.
-
   interface Panel {
     id: string;
     title: string;

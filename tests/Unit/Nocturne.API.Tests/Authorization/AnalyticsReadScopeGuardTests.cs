@@ -1248,6 +1248,20 @@ public partial class AnalyticsReadScopeGuardTests
     }
 
     [Fact]
+    public void LoopAnalysis_EveryModelEnumGoesOutByName()
+    {
+        var enums = typeof(LoopAnalysisResponse).Assembly.GetTypes()
+            .Where(t => t.IsEnum && t.Namespace == typeof(LoopAnalysisResponse).Namespace)
+            .ToList();
+
+        enums.Should().NotBeEmpty();
+        foreach (var type in enums)
+            type.GetCustomAttribute<System.Text.Json.Serialization.JsonConverterAttribute>()?.ConverterType
+                .Should().Be(typeof(System.Text.Json.Serialization.JsonStringEnumConverter<>).MakeGenericType(type),
+                    $"{type.Name} is read by name on the wire");
+    }
+
+    [Fact]
     public void LoopAnalysis_EveryRouteIsARegisteredTab()
     {
         var responses = typeof(LoopAnalysisController).GetMethods()
@@ -1708,6 +1722,43 @@ public partial class AnalyticsReadScopeGuardTests
     }
 
     [Fact]
+    public void LoopAnalysis_Predictions_WithoutTreatments_NameTheHiddenCurvesWhetherOrNotAnySnapshotCarriedThem()
+    {
+        // No COB curve was carried: oref uploads it only while carbs are absorbing.
+        var data = PredictionAccuracy();
+        data.Primary.Curves.RemoveAll(c => c.Curve == PredictionCurve.Cob);
+
+        var redacted = LoopAnalysisReadScopeGuard.Redact(data, Granted(Scope.GlucoseRead, Scope.DevicesRead, Scope.TherapyRead));
+
+        redacted.Primary.HiddenCurves.Should().Equal(
+            [PredictionCurve.Iob, PredictionCurve.ZeroTemp, PredictionCurve.Cob], "the list follows the algorithms, not the snapshots");
+        redacted.Primary.HiddenCurves.Should().Equal(redacted.Comparison!.HiddenCurves);
+    }
+
+    [Fact]
+    public void LoopAnalysis_Predictions_WithDevicesAlone_NameNoHiddenCurve()
+    {
+        var data = LoopAnalysisReadScopeGuard.Redact(PredictionAccuracy(), Granted(Scope.DevicesRead));
+
+        foreach (var range in new[] { data.Primary, data.Comparison! })
+        {
+            range.Curves.Should().BeEmpty();
+            range.HiddenCurves.Should().BeEmpty("every curve is withheld for want of glucose, not only some for treatments");
+            range.Algorithms.Should().NotBeEmpty();
+        }
+    }
+
+    [Fact]
+    public void LoopAnalysis_Predictions_ForLoopAlone_HideNoCurveWithoutTreatments()
+    {
+        var data = PredictionAccuracy();
+        data.Primary.Algorithms = [AidAlgorithm.Loop];
+
+        LoopAnalysisReadScopeGuard.Redact(data, Granted(Scope.GlucoseRead, Scope.DevicesRead, Scope.TherapyRead))
+            .Primary.HiddenCurves.Should().BeEmpty();
+    }
+
+    [Fact]
     public void LoopAnalysis_Predictions_WithoutTreatments_DropTheContextsAndTheCurvesReportedInSome()
     {
         var data = LoopAnalysisReadScopeGuard.Redact(
@@ -1718,7 +1769,7 @@ public partial class AnalyticsReadScopeGuardTests
         {
             range.Curves.Select(c => c.Curve).Should().Equal(
                 [PredictionCurve.Default, PredictionCurve.Uam], "a curve reported in every context reads no treatment");
-            range.HiddenCurves.Should().Equal(PredictionCurve.Iob, PredictionCurve.Cob);
+            range.HiddenCurves.Should().Equal(PredictionCurve.Iob, PredictionCurve.ZeroTemp, PredictionCurve.Cob);
             foreach (var curve in range.Curves)
             {
                 curve.Horizons.Should().NotBeEmpty();
