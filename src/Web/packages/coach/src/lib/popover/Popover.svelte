@@ -239,7 +239,7 @@
     <button
       type="button"
       class="coach-popover__close"
-      aria-label="Dismiss"
+      aria-label={ctx.labels.dismiss}
       onclick={handleDismiss}>&times;</button
     >
     <h3 class="coach-popover__title">{currentRegistration.title}</h3>

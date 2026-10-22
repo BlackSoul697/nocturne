@@ -26,6 +26,7 @@
     setMemberLimitTo24Hours,
   } from "$lib/api/generated/memberInvites.generated.remote";
   import { coachmark } from "@nocturne/coach";
+  import { coachFor } from "$lib/coach-marks/copy.svelte";
   import {
     getPendingRequests,
     approveRequest,
@@ -192,7 +193,7 @@
 
 <div
   class="@container container mx-auto max-w-4xl p-3 @md:p-6 space-y-6"
-  {@attach coachmark({ key: "onboarding.sharing", title: "Share with a caretaker", description: "Share your glucose data with a parent, partner, or clinician.", completedWhen: () => sharingConfigured })}
+  {@attach coachmark({ ...coachFor("onboarding.sharing"), completedWhen: () => sharingConfigured })}
 >
   <!-- Page header -->
   <div class="flex flex-col gap-4 @md:flex-row @md:items-start @md:justify-between">
@@ -325,9 +326,7 @@
             class="w-full"
             onclick={() => (showCreateInvite = true)}
             {@attach coachmark({
-              key: "setup-invite.create-link",
-              title: "Start here",
-              description: "Create a shareable link to invite a caretaker, partner, or clinician.",
+              ...coachFor("setup-invite.create-link"),
             })}
           >
             <Link class="h-4 w-4" />

@@ -37,6 +37,7 @@
   import "../../styles/coach-theme-overrides.css";
   import { createCoachMarkAdapter } from "$lib/coach-marks/adapter";
   import { sequences } from "$lib/coach-marks/sequences";
+  import { coachLabels } from "$lib/coach-marks/copy.svelte";
   import CoachParamHandler from "$lib/coach-marks/CoachParamHandler.svelte";
   import { STALE_THRESHOLD_MS } from "$lib/constants/staleness";
   import ChartPrintPatterns from "$lib/components/charts/print/ChartPrintPatterns.svelte";
@@ -238,7 +239,7 @@
 
 <InitialReadsPrefetch enabled={data.canViewRealtimeData} />
 
-<CoachMarkProvider adapter={coachMarkAdapter} {sequences} router={coachRouter}>
+<CoachMarkProvider adapter={coachMarkAdapter} labels={coachLabels()} {sequences} router={coachRouter}>
   <CoachParamHandler />
   <ChartPrintPatterns />
   <Sidebar.Provider>
