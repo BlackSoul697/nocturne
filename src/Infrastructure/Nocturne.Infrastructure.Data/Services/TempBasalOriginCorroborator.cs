@@ -18,14 +18,15 @@ namespace Nocturne.Infrastructure.Data.Services;
 /// <para>
 /// Devicestatus and treatments arrive separately, so this runs on stored rows once both have
 /// settled rather than at ingest. A row stored before evidence was recorded is classified first by
-/// <see cref="TempBasalOriginProvenance.EvidenceOf(TempBasalOrigin, TempBasalOriginEvidence?, bool?)"/>:
+/// <see cref="TempBasalOriginProvenance.EvidenceOf(TempBasalOrigin, TempBasalOriginEvidence?, bool?, string?, string?)"/>:
 /// a stated origin is marked <see cref="TempBasalOriginEvidence.Reported"/> and left as it is, and a
 /// default is replaced by its uploader's current default before it is judged.
 /// </para>
 /// <para>
 /// A tenant's pending rows (<c>ix_temp_basals_origin_pending</c>) are walked in pages along
 /// <c>(start_timestamp, id)</c>, and a judged row leaves that index, so a rerun reads only rows
-/// written since. Each row is written only if its <c>sys_updated_at</c> and evidence are those it
+/// written since. A row still settling is read and passed over; such rows are only those written in
+/// the last settling delay, so the cost is bounded by what an import writes in that time. Each row is written only if its <c>sys_updated_at</c> and evidence are those it
 /// was judged on, so an upload that rewrote it meanwhile stands and is judged on a later run.
 /// <c>sys_updated_at</c> is left alone, so v3 history does not resend every judged temp basal.
 /// </para>
@@ -48,7 +49,7 @@ public static class TempBasalOriginCorroborator
     private const double RateTolerance = 0.0495;
 
     private const string PageSql = """
-        SELECT id, start_timestamp, rate, device, app, origin, origin_evidence,
+        SELECT id, start_timestamp, rate, device, app, data_source, origin, origin_evidence,
                additional_properties ->> 'automatic', aps_snapshot_id, sys_updated_at
         FROM temp_basals
         WHERE tenant_id = @tenant
@@ -84,6 +85,30 @@ public static class TempBasalOriginCorroborator
           AND t.origin_evidence IS NOT DISTINCT FROM u.read_evidence
         """;
 
+    private const string FreshSnapshotsSql = """
+        SELECT min(timestamp), max(timestamp), max(sys_updated_at)
+        FROM aps_snapshots
+        WHERE tenant_id = @tenant AND sys_updated_at > @after AND deleted_at IS NULL
+        """;
+
+    private const string ReopenSql = """
+        WITH page AS (
+            SELECT id, start_timestamp
+            FROM temp_basals
+            WHERE tenant_id = @tenant AND deleted_at IS NULL AND origin_evidence = 'Uncorroborated'
+              AND start_timestamp >= @from AND start_timestamp <= @to
+              AND (start_timestamp, id) > (@after_at, @after_id)
+            ORDER BY start_timestamp, id
+            LIMIT @size),
+        reopened AS (
+            UPDATE temp_basals t SET origin_evidence = 'Uploader'
+            FROM page
+            WHERE t.id = page.id AND t.origin_evidence = 'Uncorroborated'
+            RETURNING 1)
+        SELECT (SELECT count(*) FROM reopened), last.start_timestamp, last.id
+        FROM (SELECT start_timestamp, id FROM page ORDER BY start_timestamp DESC, id DESC LIMIT 1) last
+        """;
+
     /// <summary>What a snapshot proposed, and when.</summary>
     /// <param name="SnapshotId">The snapshot.</param>
     /// <param name="Timestamp">The snapshot's time.</param>
@@ -98,22 +123,23 @@ public static class TempBasalOriginCorroborator
     /// <summary>
     /// Judges a temp basal against the proposals of its own device. One within <see cref="Window"/>
     /// of its start, by the snapshot's time or its enactment's, that enacted or suggested its rate
-    /// makes it the loop's, linked to the nearest such. Proposals nearby that all proposed another
-    /// rate mean the loop was running and the temp was set by hand. With none nearby, or no rate to
-    /// compare, <paramref name="uploaderDefault"/> stands.
+    /// makes it the loop's, linked to the nearest such. Proposals nearby that all named another rate
+    /// mean the loop was running and the temp was set by hand. A proposal that named no rate (oref's
+    /// "no temp required"), or an enactment repeated from outside the window, is no evidence either
+    /// way. With no evidence, or no rate to compare, <paramref name="uploaderDefault"/> stands.
     /// </summary>
     public static Verdict Judge(
         TempBasalOrigin uploaderDefault, DateTime start, double? rate, IEnumerable<Proposal> proposals)
     {
-        var near = proposals
-            .Select(p => (Proposal: p, Distance: DistanceFrom(p, start)))
-            .Where(p => p.Distance <= Window)
+        var rated = proposals
+            .Select(p => (Proposal: p, Distance: DistanceFrom(p, start), Rates: RatesOf(p, start)))
+            .Where(p => p.Distance <= Window && p.Rates.Length > 0)
             .ToList();
-        if (near.Count == 0 || rate is not { } r)
+        if (rated.Count == 0 || rate is not { } r)
             return new Verdict(uploaderDefault, TempBasalOriginEvidence.Uncorroborated, null);
 
-        var match = near
-            .Where(p => Same(p.Proposal.EnactedRate, r) || Same(p.Proposal.SuggestedRate, r))
+        var match = rated
+            .Where(p => p.Rates.Any(proposed => Math.Abs(proposed - r) < RateTolerance))
             .OrderBy(p => p.Distance)
             .Select(p => p.Proposal)
             .FirstOrDefault();
@@ -162,12 +188,80 @@ public static class TempBasalOriginCorroborator
         }
     }
 
+    /// <summary>
+    /// Sends the <see cref="TempBasalOriginEvidence.Uncorroborated"/> temps of the tenant
+    /// <paramref name="db"/> is pinned to back to pending when snapshots written after
+    /// <paramref name="snapshotsWrittenAfter"/> now lie near them, so a later
+    /// <see cref="CorroborateTenantAsync"/> judges them again. A Nightscout migration imports every
+    /// treatment before any devicestatus, so its temps settle with no snapshot to judge them by.
+    /// </summary>
+    /// <returns>
+    /// How many were reopened, and the latest <c>sys_updated_at</c> of the snapshots read, which is
+    /// where the next call starts; null when none were written.
+    /// </returns>
+    /// <remarks>
+    /// The temps are found through <c>ix_temp_basals_tenant_start_timestamp</c> over the span the new
+    /// snapshots cover, which between runs is minutes, and only an import makes long.
+    /// </remarks>
+    public static async Task<(int Reopened, DateTime? SnapshotsWrittenThrough)> ReopenNearNewSnapshotsAsync(
+        NocturneDbContext db,
+        Guid tenantId,
+        DateTime snapshotsWrittenAfter,
+        int pageSize,
+        CancellationToken ct)
+    {
+        var fresh = await db.ExecuteInTransactionAsync(
+            async attemptCt =>
+            {
+                await using var command = Command(db, FreshSnapshotsSql);
+                command.Parameters.AddWithValue("tenant", tenantId);
+                command.Parameters.AddWithValue("after", snapshotsWrittenAfter);
+                await using var reader = await command.ExecuteReaderAsync(attemptCt);
+                await reader.ReadAsync(attemptCt);
+                return reader.IsDBNull(0)
+                    ? ((DateTime From, DateTime To, DateTime Through)?)null
+                    : (reader.GetDateTime(0) - Window - RepeatedEnactment, reader.GetDateTime(1) + Window, reader.GetDateTime(2));
+            },
+            ct: ct);
+        if (fresh is not { } span)
+            return (0, null);
+
+        var afterAt = DateTime.UnixEpoch;
+        var afterId = Guid.Empty;
+        var reopened = 0;
+        while (true)
+        {
+            var page = await db.ExecuteInTransactionAsync(
+                async attemptCt =>
+                {
+                    await using var command = Command(db, ReopenSql);
+                    command.Parameters.AddWithValue("tenant", tenantId);
+                    command.Parameters.AddWithValue("from", span.From);
+                    command.Parameters.AddWithValue("to", span.To);
+                    command.Parameters.AddWithValue("after_at", afterAt);
+                    command.Parameters.AddWithValue("after_id", afterId);
+                    command.Parameters.AddWithValue("size", pageSize);
+                    await using var reader = await command.ExecuteReaderAsync(attemptCt);
+                    return await reader.ReadAsync(attemptCt)
+                        ? ((int Reopened, DateTime LastAt, Guid LastId)?)((int)reader.GetInt64(0), reader.GetDateTime(1), reader.GetGuid(2))
+                        : null;
+                },
+                ct: ct);
+            if (page is not { } done)
+                return (reopened, span.Through);
+
+            reopened += done.Reopened;
+            (afterAt, afterId) = (done.LastAt, done.LastId);
+        }
+    }
+
     private sealed record Row(
         Guid Id,
         DateTime Start,
         double? Rate,
         string? Device,
-        string? App,
+        string? EnteredBy,
+        string? DataSource,
         TempBasalOrigin Origin,
         string? Evidence,
         bool? AutomaticFlag,
@@ -197,15 +291,17 @@ public static class TempBasalOriginCorroborator
     private static Verdict Settle(Row row, ILookup<string, Proposal> proposals)
     {
         var stored = Enum.TryParse<TempBasalOriginEvidence>(row.Evidence, out var parsed) ? parsed : (TempBasalOriginEvidence?)null;
-        if (TempBasalOriginProvenance.EvidenceOf(row.Origin, stored, row.AutomaticFlag) == TempBasalOriginEvidence.Reported)
+        var evidence = TempBasalOriginProvenance.EvidenceOf(
+            row.Origin, stored, row.AutomaticFlag, row.EnteredBy, row.DataSource);
+        if (evidence == TempBasalOriginEvidence.Reported)
             return new Verdict(row.Origin, TempBasalOriginEvidence.Reported, row.SnapshotId);
 
-        // Its uploader named the snapshot that set it.
+        // Its uploader named the snapshot whose algorithm set it.
         if (row.SnapshotId is { } linked)
-            return new Verdict(row.Origin, TempBasalOriginEvidence.Snapshot, linked);
+            return new Verdict(TempBasalOrigin.Algorithm, TempBasalOriginEvidence.Snapshot, linked);
 
         var uploaderDefault = stored is null
-            ? TempBasalOriginProvenance.UploaderDefault(row.App, app: null)
+            ? TempBasalOriginProvenance.UploaderDefault(row.EnteredBy, app: null)
             : row.Origin;
         return Judge(uploaderDefault, row.Start, row.Rate, row.Device is null ? [] : proposals[row.Device]);
     }
@@ -218,8 +314,13 @@ public static class TempBasalOriginCorroborator
             : distance;
     }
 
-    private static bool Same(double? proposed, double rate) =>
-        proposed is { } p && Math.Abs(p - rate) < RateTolerance;
+    private static double[] RatesOf(Proposal proposal, DateTime start)
+    {
+        var enacted = proposal.EnactedAt is { } enactedAt && (enactedAt - start).Duration() > Window
+            ? null
+            : proposal.EnactedRate;
+        return new[] { enacted, proposal.SuggestedRate }.OfType<double>().ToArray();
+    }
 
     private static async Task<List<Row>> ReadPageAsync(
         NocturneDbContext db,
@@ -247,11 +348,12 @@ public static class TempBasalOriginCorroborator
                 reader.IsDBNull(2) ? null : reader.GetDouble(2),
                 reader.IsDBNull(3) ? null : reader.GetString(3),
                 reader.IsDBNull(4) ? null : reader.GetString(4),
-                Enum.TryParse<TempBasalOrigin>(reader.GetString(5), out var origin) ? origin : TempBasalOrigin.Inferred,
-                reader.IsDBNull(6) ? null : reader.GetString(6),
-                reader.IsDBNull(7) ? null : bool.TryParse(reader.GetString(7), out var flag) ? flag : null,
-                reader.IsDBNull(8) ? null : reader.GetGuid(8),
-                reader.GetDateTime(9)));
+                reader.IsDBNull(5) ? null : reader.GetString(5),
+                Enum.TryParse<TempBasalOrigin>(reader.GetString(6), out var origin) ? origin : TempBasalOrigin.Inferred,
+                reader.IsDBNull(7) ? null : reader.GetString(7),
+                reader.IsDBNull(8) ? null : bool.TryParse(reader.GetString(8), out var flag) ? flag : null,
+                reader.IsDBNull(9) ? null : reader.GetGuid(9),
+                reader.GetDateTime(10)));
         }
 
         return rows;

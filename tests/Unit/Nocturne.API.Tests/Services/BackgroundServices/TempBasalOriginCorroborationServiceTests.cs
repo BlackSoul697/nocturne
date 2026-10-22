@@ -62,4 +62,38 @@ public class TempBasalOriginCorroborationServiceTests
         logger.Entries.Should().ContainSingle(e => e.Level == LogLevel.Information)
             .Which.Message.Should().EndWith($"{Tenants.Length} failed");
     }
+
+    [Fact]
+    public void A_tenant_with_no_run_yet_looks_back_the_restart_lookback()
+    {
+        var now = new DateTime(2026, 10, 22, 12, 0, 0, DateTimeKind.Utc);
+
+        new SnapshotWatermarks().Since(Tenants[0], now).Should().Be(now - SnapshotWatermarks.RestartLookback);
+    }
+
+    [Fact]
+    public void A_run_that_read_snapshots_moves_only_its_own_tenants_watermark()
+    {
+        var now = new DateTime(2026, 10, 22, 12, 0, 0, DateTimeKind.Utc);
+        var through = now.AddMinutes(-3);
+        var watermarks = new SnapshotWatermarks();
+
+        watermarks.Advance(Tenants[0], through);
+
+        watermarks.Since(Tenants[0], now).Should().Be(through);
+        watermarks.Since(Tenants[1], now).Should().Be(now - SnapshotWatermarks.RestartLookback);
+    }
+
+    [Fact]
+    public void A_run_that_read_no_snapshots_keeps_the_watermark()
+    {
+        var now = new DateTime(2026, 10, 22, 12, 0, 0, DateTimeKind.Utc);
+        var through = now.AddMinutes(-3);
+        var watermarks = new SnapshotWatermarks();
+        watermarks.Advance(Tenants[0], through);
+
+        watermarks.Advance(Tenants[0], null);
+
+        watermarks.Since(Tenants[0], now).Should().Be(through);
+    }
 }

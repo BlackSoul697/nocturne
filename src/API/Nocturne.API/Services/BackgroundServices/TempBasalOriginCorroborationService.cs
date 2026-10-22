@@ -7,7 +7,9 @@ namespace Nocturne.API.Services.BackgroundServices;
 
 /// <summary>
 /// Runs <see cref="TempBasalOriginCorroborator"/> for every tenant after startup and every
-/// <see cref="Interval"/> after that, on the temp basals written at least <see cref="SettlingDelay"/> ago.
+/// <see cref="Interval"/> after that, on the temp basals written at least <see cref="SettlingDelay"/> ago,
+/// first reopening those that snapshots written since the last run now lie near
+/// (<see cref="TempBasalOriginCorroborator.ReopenNearNewSnapshotsAsync"/>).
 /// </summary>
 /// <remarks>
 /// Per tenant because <c>temp_basals</c> and <c>aps_snapshots</c> are RLS-scoped and the policy is
@@ -28,6 +30,8 @@ internal sealed class TempBasalOriginCorroborationService(
     internal static readonly TimeSpan SettlingDelay = TimeSpan.FromMinutes(30);
 
     private const string AuditEndpoint = "service:temp-basal-origin";
+
+    private readonly SnapshotWatermarks _watermarks = new();
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
@@ -69,8 +73,15 @@ internal sealed class TempBasalOriginCorroborationService(
                 try
                 {
                     int written;
+                    DateTime? snapshotsWrittenThrough;
                     await using (var db = await factory.CreateForTenantAsync(tenant.Id, ct))
                     {
+                        (_, snapshotsWrittenThrough) = await TempBasalOriginCorroborator.ReopenNearNewSnapshotsAsync(
+                            db,
+                            tenant.Id,
+                            _watermarks.Since(tenant.Id, timeProvider.GetUtcNow().UtcDateTime),
+                            ApsSnapshotCurvesBackfillService.PageSize,
+                            ct);
                         written = await TempBasalOriginCorroborator.CorroborateTenantAsync(
                             db,
                             tenant.Id,
@@ -81,6 +92,7 @@ internal sealed class TempBasalOriginCorroborationService(
                             ct);
                     }
 
+                    _watermarks.Advance(tenant.Id, snapshotsWrittenThrough);
                     if (written == 0)
                         continue;
 
@@ -113,5 +125,27 @@ internal sealed class TempBasalOriginCorroborationService(
         {
             logger.LogError(ex, "Error corroborating temp basal origins");
         }
+    }
+}
+
+/// <summary>Per tenant, the latest snapshot write a run has reopened temp basals for.</summary>
+internal sealed class SnapshotWatermarks
+{
+    /// <summary>
+    /// How far back the first run after a start looks for snapshot writes, the watermark being kept
+    /// in memory only. A week covers a restart in the middle of an import; a snapshot written longer
+    /// before a restart than that, beside a temp that had already settled, is not looked at again.
+    /// </summary>
+    internal static readonly TimeSpan RestartLookback = TimeSpan.FromDays(7);
+
+    private readonly Dictionary<Guid, DateTime> _writtenThrough = [];
+
+    public DateTime Since(Guid tenantId, DateTime now) =>
+        _writtenThrough.TryGetValue(tenantId, out var through) ? through : now - RestartLookback;
+
+    public void Advance(Guid tenantId, DateTime? writtenThrough)
+    {
+        if (writtenThrough is { } through)
+            _writtenThrough[tenantId] = through;
     }
 }

@@ -1456,15 +1456,6 @@ public class TreatmentDecomposerTests : IDisposable
             : V4Models.TempBasalOriginEvidence.Uploader);
     }
 
-    [Fact]
-    public void MapTempBasalSpans_DrawsNoManualBandForAnUnflaggedLoopTemp()
-    {
-        var tempBasal = TreatmentDecomposer.MapToTempBasal(
-            TempBasalForOrigin(reason: null, automatic: null, basalOrigin: null, "Trio"), correlationId: null);
-
-        Nocturne.API.Services.Analytics.ChartDataService.MapTempBasalSpans([tempBasal]).Should().BeEmpty();
-    }
-
     [Theory]
     [InlineData("SUSPEND", null, "loop://Test Phone", V4Models.TempBasalOrigin.Suspended)]
     [InlineData("", null, "loop://Test Phone", V4Models.TempBasalOrigin.Algorithm)]

@@ -1,3 +1,5 @@
+using Nocturne.Core.Constants;
+
 namespace Nocturne.Core.Models.V4;
 
 /// <summary>
@@ -34,16 +36,42 @@ public static class TempBasalOriginProvenance
 
     /// <summary>
     /// The evidence a stored origin rests on. A row stored before evidence was recorded holds a
-    /// default exactly when it is Manual or Algorithm without an uploaded <c>automatic</c> flag, since
-    /// every writer that states either keeps the flag (<see cref="TempBasalAutomaticFlag"/>).
+    /// default only when it is a Manual or Algorithm temp without an uploaded <c>automatic</c> flag
+    /// that the decomposer wrote for a closed-loop uploader; the flag was kept only from late 2026, so
+    /// a connector's older rows carry none and their origin is still the pump's statement.
     /// </summary>
+    /// <param name="enteredBy">The uploader, which the decomposer stores as the record's <c>app</c>.</param>
+    /// <param name="dataSource">The record's data source, which names the connector that wrote it, if one did.</param>
     public static TempBasalOriginEvidence EvidenceOf(
-        TempBasalOrigin origin, TempBasalOriginEvidence? stored, bool? automaticFlag) =>
-        stored ?? (origin is TempBasalOrigin.Manual or TempBasalOrigin.Algorithm && automaticFlag is null
+        TempBasalOrigin origin,
+        TempBasalOriginEvidence? stored,
+        bool? automaticFlag,
+        string? enteredBy,
+        string? dataSource) =>
+        stored ?? (origin is TempBasalOrigin.Manual or TempBasalOrigin.Algorithm
+                   && automaticFlag is null
+                   && IsAidUploader(enteredBy, app: null)
+                   && !ConnectorSources.Contains(dataSource ?? string.Empty)
             ? TempBasalOriginEvidence.Uploader
             : TempBasalOriginEvidence.Reported);
 
-    /// <inheritdoc cref="EvidenceOf(TempBasalOrigin, TempBasalOriginEvidence?, bool?)"/>
+    /// <inheritdoc cref="EvidenceOf(TempBasalOrigin, TempBasalOriginEvidence?, bool?, string?, string?)"/>
     public static TempBasalOriginEvidence EvidenceOf(TempBasal tempBasal) =>
-        EvidenceOf(tempBasal.Origin, tempBasal.OriginEvidence, TempBasalAutomaticFlag.Of(tempBasal.AdditionalProperties));
+        EvidenceOf(
+            tempBasal.Origin,
+            tempBasal.OriginEvidence,
+            TempBasalAutomaticFlag.Of(tempBasal.AdditionalProperties),
+            tempBasal.App,
+            tempBasal.DataSource);
+
+    /// <summary>The connectors that write temp basals themselves rather than through the decomposer.</summary>
+    private static readonly HashSet<string> ConnectorSources = new(StringComparer.OrdinalIgnoreCase)
+    {
+        DataSources.CareLinkConnector,
+        DataSources.MiniMedConnector,
+        DataSources.GlookoConnector,
+        DataSources.MyLifeConnector,
+        DataSources.TConnectSyncConnector,
+        DataSources.TwiistConnector,
+    };
 }

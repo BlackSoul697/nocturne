@@ -89,4 +89,24 @@ public class TempBasalOriginCorroboratorTests
     {
         Judge(null, At(TimeSpan.Zero, enacted: 1.2)).Evidence.Should().Be(TempBasalOriginEvidence.Uncorroborated);
     }
+
+    [Fact]
+    public void A_snapshot_that_named_no_rate_is_no_evidence_it_was_set_by_hand()
+    {
+        Judge(1.2, At(TimeSpan.FromMinutes(1))).Evidence.Should().Be(TempBasalOriginEvidence.Uncorroborated);
+    }
+
+    [Fact]
+    public void An_enactment_repeated_from_outside_the_window_is_no_evidence()
+    {
+        Judge(1.2, At(TimeSpan.FromMinutes(1), enacted: 0.5, enactedAt: Start.AddMinutes(-20)))
+            .Evidence.Should().Be(TempBasalOriginEvidence.Uncorroborated);
+    }
+
+    [Fact]
+    public void An_enactment_repeated_from_outside_the_window_does_not_link_it()
+    {
+        Judge(1.2, At(TimeSpan.FromMinutes(1), enacted: 1.2, suggested: 0.5, enactedAt: Start.AddMinutes(-20)))
+            .Should().Be(new TempBasalOriginCorroborator.Verdict(TempBasalOrigin.Manual, TempBasalOriginEvidence.Snapshot, null));
+    }
 }
