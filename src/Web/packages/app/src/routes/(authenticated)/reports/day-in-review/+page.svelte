@@ -40,7 +40,7 @@
   import { GlucoseChartCard } from "$lib/components/dashboard/glucose-chart";
   import { contextResource } from "$lib/hooks/resource-context.svelte";
   import { apsSnapshotToPrediction } from "$lib/utils/aps-snapshot-to-prediction";
-  import { isDayString, startOfDay, timeOnDay, toDayString } from "$lib/utils/date-range";
+  import { endOfDay, isDayString, startOfDay, timeOnDay, toDayString } from "$lib/utils/date-range";
   import { setReportPrintMeta } from "$lib/components/reports/print/report-print.svelte";
 
   // Get date from URL search params. The default is the local calendar day —
@@ -216,6 +216,12 @@
   const timeParam = $derived(page.url.searchParams.get("time"));
   const loadedDay = $derived(dayData?.date === dateParam ? dayData.date : null);
   const loadedZone = $derived(dayData?.timeZone);
+
+  // The day's boundaries in the zone its data was loaded in; `currentDate` stays the viewer's
+  // midnight, which only names the day.
+  const dayZone = $derived(loadedDay ? loadedZone : undefined);
+  const dayStart = $derived(startOfDay(dateParam, dayZone));
+  const dayEnd = $derived(endOfDay(dateParam, dayZone));
   $effect(() => {
     if (!loadedDay) return;
     scrubberTime = timeOnDay(loadedDay, timeParam, loadedZone) ?? new Date();
@@ -409,22 +415,8 @@
 
   <GlucoseChartCard
     dateRange={{
-      from:
-        dayData?.dateRange?.from ??
-        new Date(
-          currentDate.getFullYear(),
-          currentDate.getMonth(),
-          currentDate.getDate(),
-          0, 0, 0
-        ),
-      to:
-        dayData?.dateRange?.to ??
-        new Date(
-          currentDate.getFullYear(),
-          currentDate.getMonth(),
-          currentDate.getDate(),
-          23, 59, 59
-        ),
+      from: dayData?.dateRange?.from ?? dayStart,
+      to: dayData?.dateRange?.to ?? dayEnd,
     }}
     showPredictions={hasApsSnapshots && selectedPredictionData != null}
     externalPredictionData={selectedPredictionData}
@@ -434,7 +426,8 @@
   {#if hasApsSnapshots}
     <div class="space-y-6 print:hidden">
       <RetrospectiveTimeScrubber
-        date={currentDate}
+        date={dayStart}
+        timeZone={dayZone}
         bind:currentTime={scrubberTime}
         onTimeChange={handleScrubberTimeChange}
         stepMinutes={5}
