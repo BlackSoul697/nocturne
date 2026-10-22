@@ -540,8 +540,14 @@ internal static class LoopAnalysisReadScopeGuard
     /// <summary>
     /// The prediction figures the caller's scopes withhold, as <see cref="Withheld"/> is for the
     /// Daily profile. A curve's accuracy compares the APS snapshots, which are devices, with the
-    /// sensor readings, which are glucose, so it needs both. Its context is drawn from treatments.
+    /// sensor readings, which are glucose, so it needs both. Its context and its interrupted counts
+    /// are drawn from treatments.
     /// </summary>
+    /// <remarks>
+    /// Without treatments a curve kept for every context still leaves out its interrupted values, so
+    /// a lower n in an hour hints weakly at when meals and corrections happen. That residue is
+    /// accepted: the counts themselves, which would say it outright, are withheld.
+    /// </remarks>
     public static HashSet<LoopAnalysisSeries> WithheldPredictions(IReadOnlySet<string> grantedScopes)
     {
         var glucose = AnalyticsReadScopes.Allows(grantedScopes, Scope.GlucoseRead);
@@ -574,7 +580,11 @@ internal static class LoopAnalysisReadScopeGuard
             var everyContext = Enum.GetValues<PredictionContext>().Length;
             range.Curves.RemoveAll(c => c.Contexts.Count < everyContext);
             foreach (var curve in range.Curves)
+            {
                 curve.ByContext = [];
+                foreach (var horizon in curve.Horizons.Concat(curve.ByHour.SelectMany(h => h.Horizons)))
+                    horizon.Interrupted = null;
+            }
         }
     }
 

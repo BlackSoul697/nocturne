@@ -1541,14 +1541,22 @@ public class AnalyticsReadScopeGuardTests
     {
         var data = RedactionCoverage.Populated<PredictionAccuracyResponse>();
         foreach (var curve in data.Primary.Curves.Concat(data.Comparison!.Curves))
+        {
             curve.Contexts = [.. Enum.GetValues<PredictionContext>()];
+            curve.ByHour = [new PredictionHourAccuracy { Hour = 1, Horizons = [RedactionCoverage.Populated<PredictionHorizonAccuracy>()] }];
+        }
 
         RedactionCoverage.AssertWithheld(
             LoopAnalysisReadScopeGuard.Redact(data, Granted(Scope.GlucoseRead, Scope.DevicesRead)),
-            [typeof(PredictionCurveAccuracy)],
+            [typeof(PredictionCurveAccuracy), typeof(PredictionHourAccuracy), typeof(PredictionHorizonAccuracy)],
             [
                 "PredictionCurveAccuracy.Curve", "PredictionCurveAccuracy.Contexts",
                 "PredictionCurveAccuracy.Horizons", "PredictionCurveAccuracy.ByHour",
+                "PredictionHourAccuracy.Hour", "PredictionHourAccuracy.Horizons",
+                "PredictionHorizonAccuracy.Minutes", "PredictionHorizonAccuracy.Error",
+                "PredictionHorizonAccuracy.Mae", "PredictionHorizonAccuracy.Mard",
+                "PredictionHorizonAccuracy.Unmatched", "PredictionHorizonAccuracy.Excluded",
+                "PredictionHorizonAccuracy.SettingsSignal",
             ]);
     }
 

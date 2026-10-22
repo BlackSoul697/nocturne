@@ -168,9 +168,9 @@ public class PredictionHorizonAccuracy
     /// <summary>
     /// Predictions whose horizon a carb entry or manual bolus came before. The reading measures that
     /// action, which the prediction could not have known of, so these are kept out of every error
-    /// figure.
+    /// figure. Null when the caller may not read treatments, which it is counted from.
     /// </summary>
-    public int Interrupted { get; set; }
+    public int? Interrupted { get; set; }
 
     /// <summary>The horizon's bias is read as a settings signal; see the remarks.</summary>
     public bool SettingsSignal { get; set; }
