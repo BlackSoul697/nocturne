@@ -96,7 +96,7 @@ public partial class AnalyticsReadScopeGuardTests
             [typeof(EventCohortResult), typeof(EventResponseSlot), typeof(EventMetricsSummary)],
             [
                 "EventCohortResult.Cohort", "EventCohortResult.Anchors", "EventCohortResult.NotIsolated",
-                "EventCohortResult.MissingAnchorGlucose", "EventCohortResult.Events",
+                "EventCohortResult.MissingAnchorGlucose", "EventCohortResult.BeforeVisibleHistory", "EventCohortResult.Events",
                 "EventCohortResult.Slots", "EventCohortResult.Metrics",
                 "EventResponseSlot.GlucoseChange", "EventResponseSlot.Glucose",
                 "EventMetricsSummary.StartGlucose", "EventMetricsSummary.PeakRise", "EventMetricsSummary.MinutesToPeak",

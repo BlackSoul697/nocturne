@@ -16,6 +16,9 @@ public sealed record EventResponseInputs
     public LoopAnalysisMaskSources Sources { get; init; } = new();
 
     public IReadOnlyList<long> SensorStarts { get; init; } = [];
+
+    /// <inheritdoc cref="LoopAnalysisFilter.HistoryVisibleFrom"/>
+    public long? HistoryVisibleFrom { get; init; }
 }
 
 /// <summary>
@@ -32,6 +35,13 @@ public sealed record EventResponseInputs
 public static class EventResponseCalculator
 {
     /// <param name="listEvents">Whether to list the events; the comparison range's are not shown.</param>
+    /// <summary>
+    /// How far before an anchor what decides it reaches: the window shown before it, the carbs
+    /// that announce a rise, and the carbs that make a bolus a meal's rather than a correction.
+    /// </summary>
+    public static long HistoryLookbackMs(EventWindow window) =>
+        Math.Max(window.BeforeMs, Math.Max(UnannouncedRises.CarbsBeforeMs, EventAnchors.CarbFreeMs));
+
     public static EventResponseRange Calculate(
         EventResponseInputs inputs,
         LoopAnalysisMask mask,
@@ -42,6 +52,7 @@ public static class EventResponseCalculator
     {
         var zone = inputs.Series.Zone;
         var window = EventWindow.Of(definition);
+        var visibleFrom = inputs.HistoryVisibleFrom is { } edge ? edge + HistoryLookbackMs(window) : long.MinValue;
         var exclusions = IntervalSet.Of(inputs.Sources.DataExclusions);
         var series = new EventSeries(inputs.Series, exclusions);
         var anchors = new AnchorSource(inputs, series, exclusions, definition.RequireCorroboration);
@@ -67,6 +78,11 @@ public static class EventResponseCalculator
                 if (anchor.Mills < from || anchor.Mills >= to || !mask.Analysed.Contains(anchor.Mills) || !Matches(cohort, anchor, zone))
                     continue;
                 result.Anchors++;
+                if (anchor.Mills < visibleFrom)
+                {
+                    result.BeforeVisibleHistory++;
+                    continue;
+                }
                 var isolated = EventAnchors.IsIsolated(anchor, isolating, window.BeforeMs, window.AfterMs);
                 if (definition.IsolatedOnly && !isolated)
                 {

@@ -22,7 +22,7 @@ internal sealed partial class LoopAnalysisService
         var sensorStarts = definition.Cohorts.Any(c => c.Anchor == EventAnchorKind.SensorStart);
         var (primary, comparison, names) = await ForRangesAsync(
             filter,
-            range => LoadEventsAsync(range, window, zone, sensorStarts, ct),
+            range => LoadEventsAsync(range, window, zone, sensorStarts, filter.HistoryVisibleFrom, ct),
             (loaded, range, isPrimary) => EventResponseCalculator.Calculate(
                 loaded.Inputs, Mask(filter, range, zone, loaded.Sources), range.From, range.To, definition,
                 listEvents: isPrimary));
@@ -42,7 +42,7 @@ internal sealed partial class LoopAnalysisService
     /// merged with the change recorded just before it.
     /// </summary>
     private async Task<EventsLoaded> LoadEventsAsync(
-        Window range, EventWindow window, TimeZoneInfo zone, bool sensorStarts, CancellationToken ct)
+        Window range, EventWindow window, TimeZoneInfo zone, bool sensorStarts, DateTime? visibleFrom, CancellationToken ct)
     {
         var padded = new Window(range.From - window.BeforeMs - EventMarginMs, range.To + window.AfterMs + EventMarginMs);
         var sensorTask = sensorStarts
@@ -56,6 +56,7 @@ internal sealed partial class LoopAnalysisService
             Series = loaded.Inputs,
             Sources = loaded.Sources,
             SensorStarts = [.. (await sensorTask).Where(e => SensorStartTypes.Contains(e.EventType)).Select(e => e.Mills)],
+            HistoryVisibleFrom = visibleFrom is { } edge ? ToMills(edge) : null,
         });
     }
 }

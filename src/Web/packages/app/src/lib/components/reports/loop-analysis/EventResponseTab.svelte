@@ -63,6 +63,27 @@
   const resultFor = (list: EventCohortResult[] | null, cohort: number | undefined) =>
     list?.find((r) => r.cohort === cohort);
 
+  /** The events a cohort left out, by why. */
+  function droppedText(result: EventCohortResult | undefined): string {
+    const n = (count: number | undefined) => count ?? 0;
+    return [
+      n(result?.notIsolated) > 0
+        ? plural(n(result?.notIsolated), ["# left out for another event in its window", "# left out for another event in their window"])
+        : null,
+      n(result?.missingAnchorGlucose) > 0
+        ? plural(n(result?.missingAnchorGlucose), ["# without a glucose reading at the time", "# without a glucose reading at the time"])
+        : null,
+      n(result?.beforeVisibleHistory) > 0
+        ? plural(n(result?.beforeVisibleHistory), [
+            "# left out because what came before it is outside the last 24 hours",
+            "# left out because what came before them is outside the last 24 hours",
+          ])
+        : null,
+    ]
+      .filter((text) => text !== null)
+      .join("; ");
+  }
+
   interface Panel {
     id: string;
     title: string;
@@ -229,12 +250,8 @@
               <span class="font-medium">{cohortLabel(cohort)}</span>:
               {plural(result?.events ?? 0, ["# event", "# events"])}
               {#if comparing}<span class="text-muted-foreground">(compared {compared?.events ?? 0})</span>{/if}
-              {#if (result?.notIsolated ?? 0) > 0 || (result?.missingAnchorGlucose ?? 0) > 0}
-                <span class="block text-xs text-muted-foreground">
-                  {#if (result?.notIsolated ?? 0) > 0}{plural(result?.notIsolated ?? 0, ["# left out for another event in its window", "# left out for another event in their window"])}{/if}
-                  {#if (result?.notIsolated ?? 0) > 0 && (result?.missingAnchorGlucose ?? 0) > 0}; {/if}
-                  {#if (result?.missingAnchorGlucose ?? 0) > 0}{plural(result?.missingAnchorGlucose ?? 0, ["# without a glucose reading at the time", "# without a glucose reading at the time"])}{/if}
-                </span>
+              {#if droppedText(result)}
+                <span class="block text-xs text-muted-foreground">{droppedText(result)}</span>
               {/if}
             </span>
           </li>

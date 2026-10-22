@@ -142,6 +142,13 @@ public class EventCohortResult
     /// </summary>
     public int MissingAnchorGlucose { get; set; }
 
+    /// <summary>
+    /// Anchors dropped because what decides them reaches back before the history the caller may
+    /// read: a history-clamped caller sees no carbs or boluses there, so a rise could not be told
+    /// from a meal nor an event shown isolated.
+    /// </summary>
+    public int BeforeVisibleHistory { get; set; }
+
     /// <summary>Anchors counted: the events behind every slot and metric.</summary>
     public int Events { get; set; }
 

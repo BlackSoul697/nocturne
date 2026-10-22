@@ -108,6 +108,46 @@ public class LoopAnalysisEventResponseIntegrationTests(ApiIntegrationTestFixture
     }
 
     [Fact]
+    public async Task For_a_clamped_member_drops_a_rise_whose_carbs_fall_before_the_clamp()
+    {
+        await SeedProfileAsync("Australia/Sydney");
+        var now = DateTime.UtcNow;
+        var edge = new DateTime(now.Ticks - now.Ticks % TimeSpan.FromMinutes(5).Ticks, DateTimeKind.Utc).AddHours(-24);
+        var nearEdge = edge.AddHours(1);
+        var inside = edge.AddHours(8);
+
+        using (var scope = TenantScope())
+        {
+            await using var context = await scope.ServiceProvider.GetRequiredService<INocturneDbContextFactory>().CreateAsync();
+            // A climb of 3 mg/dL a minute to 170, held for half an hour, then back to 110 at 1 a minute.
+            static double Rise(DateTime t, DateTime from)
+            {
+                var minutes = (t - from).TotalMinutes;
+                return minutes <= 0 ? 110 : minutes <= 60 ? Math.Min(170, 110 + minutes * 3) : Math.Max(110, 170 - (minutes - 60));
+            }
+            for (var t = edge.AddHours(-3); t < now; t = t.AddMinutes(5))
+                context.SensorGlucose.Add(new SensorGlucoseEntity
+                {
+                    Id = Guid.NewGuid(), Timestamp = t, DataSource = "test",
+                    Mgdl = t < inside.AddHours(-2) ? Rise(t, nearEdge) : Rise(t, inside),
+                });
+            // Eaten for the first rise, but before the clamp edge, where the member cannot see it.
+            context.CarbIntakes.Add(new CarbIntakeEntity { Id = Guid.NewGuid(), Timestamp = edge.AddMinutes(-30), Carbs = 40, DataSource = "test" });
+            await context.SaveChangesAsync();
+        }
+
+        using var clamped = await CreateHistoryClampedClientAsync();
+        var body = await GetOkAsync(clamped, Query($"{Week}&anchor1=UnannouncedRise"));
+
+        body.GetProperty("historyClamped").GetBoolean().Should().BeTrue();
+        var cohort = body.GetProperty("primary").GetProperty("cohorts")[0];
+        cohort.GetProperty("beforeVisibleHistory").GetInt32().Should().Be(1, "the rise's carbs are hidden, not absent");
+        cohort.GetProperty("events").GetInt32().Should().Be(1, "a rise with all it needs inside the last 24 hours still counts");
+        var at = body.GetProperty("primary").GetProperty("events")[0].GetProperty("at").GetDateTime().ToUniversalTime();
+        at.Should().BeCloseTo(inside, TimeSpan.FromMinutes(5));
+    }
+
+    [Fact]
     public async Task Returns_no_cohorts_without_a_tenant_timezone()
     {
         await SeedWeekAsync(WeekStart);

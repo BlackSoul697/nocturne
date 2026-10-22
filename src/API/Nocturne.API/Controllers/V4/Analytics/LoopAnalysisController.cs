@@ -257,6 +257,7 @@ public class LoopAnalysisController(
             CompareTo = comparison?.To,
             Masks = masks,
             ReadProfileNames = !LoopAnalysisReadScopeGuard.WithheldEnvelope(granted).Contains(LoopAnalysisSeries.ProfileNames),
+            HistoryVisibleFrom = clamped ? primary.From : null,
         };
         return (null, new LoopAnalysisRequest(filter, zone, null, primary, comparison, masks, ignored, unavailable, clamped));
     }

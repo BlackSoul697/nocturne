@@ -49,6 +49,12 @@ public class LoopAnalysisFilter
     /// them for <see cref="LoopAnalysisResponse.ProfileNames"/>.
     /// </summary>
     public bool ReadProfileNames { get; set; }
+
+    /// <summary>
+    /// The earliest instant the caller may read, for a history-clamped caller: rows before it are
+    /// hidden, not absent. Null when the caller reads all history.
+    /// </summary>
+    public DateTime? HistoryVisibleFrom { get; set; }
 }
 
 [JsonConverter(typeof(JsonStringEnumConverter<LoopAnalysisComparison>))]
