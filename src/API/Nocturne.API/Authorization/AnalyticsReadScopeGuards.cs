@@ -447,6 +447,9 @@ internal static class LoopAnalysisReadScopeGuard
             .Select(rule => new LoopAnalysisUnavailableFilter { Filter = rule.Name, RequiredScope = rule.Scope }),
     ];
 
+    /// <summary>The query parameter of every filter the guard narrows.</summary>
+    public static IEnumerable<string> FilterNames => FilterRules.Select(rule => rule.Name);
+
     /// <summary>Each filter by its query parameter, the scope it is drawn from, and how to drop it.</summary>
     private sealed record FilterRule(
         string Name, string Scope, Func<LoopAnalysisMasks, bool> IsSet, Action<LoopAnalysisMasks> Clear);

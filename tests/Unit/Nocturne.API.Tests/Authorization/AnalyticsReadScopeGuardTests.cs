@@ -1312,6 +1312,28 @@ public class AnalyticsReadScopeGuardTests
     }
 
     [Fact]
+    public void LoopAnalysis_Filter_WithNoCategory_LeavesNoMaskSet()
+    {
+        var masks = RedactionCoverage.Populated<LoopAnalysisMasks>();
+
+        LoopAnalysisReadScopeGuard.NarrowFilter(masks, Granted());
+
+        RedactionCoverage.AssertWithheld(masks, [typeof(LoopAnalysisMasks)], ["LoopAnalysisMasks.Days"]);
+    }
+
+    [Fact]
+    public void LoopAnalysis_FilterNames_AreTheQueryParametersTheBinderReads()
+    {
+        var parameters = typeof(LoopAnalysisQuery).GetProperties()
+            .Select(p => p.GetCustomAttribute<FromQueryAttribute>()?.Name)
+            .OfType<string>()
+            .ToHashSet();
+
+        LoopAnalysisReadScopeGuard.FilterNames.Should().OnlyContain(
+            name => parameters.Contains(name), "the response names filters by the parameter a client sends");
+    }
+
+    [Fact]
     public void LoopAnalysis_UnavailableFilters_NameTheScopeEachNeeds()
     {
         LoopAnalysisReadScopeGuard.UnavailableFilters(Granted())
