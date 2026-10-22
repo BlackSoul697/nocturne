@@ -2,21 +2,27 @@ import { render } from "vitest-browser-svelte";
 import { page } from "vitest/browser";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { page as pageState } from "$app/state";
-import type { DailyProfileResponse } from "$lib/api";
+import { EventAnchorKind, type DailyProfileResponse, type EventResponseReport } from "$lib/api";
 import { remoteQuery } from "$lib/test-stubs/remote-resource";
 import {
   ALL_SCOPES,
   profileResponse,
 } from "$lib/components/reports/loop-analysis/daily-profile.test-fixtures";
+import { eventResponse } from "$lib/components/reports/loop-analysis/event-response.test-fixtures";
 
-const calls = vi.hoisted(() => ({ query: [] as unknown[], goto: [] as [string, unknown][] }));
+const calls = vi.hoisted(() => ({ query: [] as unknown[], events: [] as unknown[], goto: [] as [string, unknown][] }));
 let response: DailyProfileResponse;
+let events: EventResponseReport;
 let resourceState: { stale?: boolean; error?: unknown } = {};
 
 vi.mock("$api/generated/loopAnalysis.generated.remote", () => ({
   getDailyProfile: (input: unknown) => {
     calls.query.push(input);
     return remoteQuery(() => response);
+  },
+  getEventResponse: (input: unknown) => {
+    calls.events.push(input);
+    return remoteQuery(() => events);
   },
 }));
 
@@ -59,8 +65,10 @@ const lastQuery = () => calls.query.at(-1);
 describe("Loop Analysis page", () => {
   beforeEach(() => {
     calls.query.length = 0;
+    calls.events.length = 0;
     calls.goto.length = 0;
     response = profileResponse();
+    events = eventResponse();
     resourceState = {};
   });
 
@@ -171,5 +179,47 @@ describe("Loop Analysis page", () => {
     await expect.element(page.getByText("Only the last 24 hours are included")).toBeVisible();
     expect(page.getByText(/Mar 1/).elements()).toHaveLength(0);
     expect(page.getByText("Some filters were not applied").elements()).toHaveLength(0);
+  });
+
+  it("fetches only the Meals & events tab when it is on screen, with its cohorts", async () => {
+    open("?tab=meals-events&anchor1=Meal&fromMinute1=300&toMinute1=600&anchor2=UnannouncedRise&minutesAfter=480");
+
+    await expect.element(page.getByRole("slider", { name: "Glucose change from the event" })).toBeVisible();
+    expect(calls.query).toHaveLength(0);
+    expect(calls.events.at(-1)).toEqual({
+      startDate: "2026-10-09",
+      endDate: "2026-10-22",
+      anchor1: EventAnchorKind.Meal,
+      fromMinute1: 300,
+      toMinute1: 600,
+      anchor2: EventAnchorKind.UnannouncedRise,
+      minutesAfter: 480,
+    });
+    await expect.element(page.getByLabelText("From").first()).toHaveValue("05:00");
+  });
+
+  it("writes a builder change into the URL beside the shared filter", async () => {
+    open("?tab=meals-events&days=14&excludeExercise=true");
+
+    await page.getByLabelText("Isolated events only").click();
+    const search = new URL(calls.goto.at(-1)![0], "http://localhost").searchParams;
+    expect(search.get("isolatedOnly")).toBe("true");
+    expect(search.get("anchor1")).toBe("Meal");
+    expect(search.get("anchor2")).toBe("UnannouncedRise");
+    expect(search.get("excludeExercise")).toBe("true");
+    expect(search.get("tab")).toBe("meals-events");
+  });
+
+  it("drops from the URL a cohort whose events the viewer cannot read", async () => {
+    events = {
+      ...eventResponse(),
+      unavailableAnchors: [{ anchor: EventAnchorKind.Meal, requiredScope: "treatments.read" }],
+    };
+    open("?tab=meals-events&anchor1=Meal&anchor2=SensorStart");
+
+    await expect.poll(() => calls.goto.length).toBeGreaterThan(0);
+    const search = new URL(calls.goto.at(-1)![0], "http://localhost").searchParams;
+    expect(search.get("anchor1")).toBe("SensorStart");
+    expect(search.has("anchor2")).toBe(false);
   });
 });

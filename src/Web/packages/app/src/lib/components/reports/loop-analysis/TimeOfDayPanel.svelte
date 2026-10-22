@@ -1,15 +1,16 @@
 <!--
-  One panel of a stack sharing a local time-of-day x axis of 288 five-minute slots. The x domain is
-  slot units, so a mark at slot i spans [i, i + 1). The stack is one tab stop: left and right (with
-  Home and End) move along the day, up and down move between panels, a click or Enter picks the slot
-  for the day list and Escape closes it.
+  One panel of a stack sharing an x axis of the cursor's slots: by default the 288 five-minute slots
+  of the local day, or any other run of slots whose labels and ticks the caller gives. The x domain
+  is slot units, so a mark at slot i spans [i, i + 1). The stack is one tab stop: left and right
+  (with Home and End) move along the axis, up and down move between panels, a click or Enter picks
+  the slot for the list it opens and Escape closes it.
 -->
 <script lang="ts">
   import { untrack, type Snippet } from "svelte";
   import { Axis, Chart, Rule, Svg } from "layerchart";
   import ChartKey, { type ChartKeyItem } from "$lib/components/charts/print/ChartKey.svelte";
   import { hourLabel, time } from "$lib/utils/formatting";
-  import { atMinute, SLOT_MINUTES, SLOTS_PER_DAY, slotKeyAction } from "./daily-profile-view";
+  import { atMinute, SLOT_MINUTES, slotKeyAction } from "./daily-profile-view";
   import type { TimeOfDayCursor } from "./time-of-day-cursor.svelte";
 
   interface Props {
@@ -30,6 +31,12 @@
     tooltip: Snippet<[number]>;
     /** The slot's headline value and n, read out with its time as the slider's value. */
     describe: (slot: number) => string;
+    /** Where the x axis is ticked, in slots; every three hours of the day by default. */
+    ticks?: number[];
+    /** A tick's label; the hour of the day by default. */
+    tickLabel?: (slot: number) => string;
+    /** A slot's span, as the tooltip and the slider name it; its time of day by default. */
+    slotLabel?: (slot: number) => string;
   }
 
   let {
@@ -47,7 +54,13 @@
     marks,
     tooltip,
     describe,
+    ticks = [0, 3, 6, 9, 12, 15, 18, 21, 24].map((h) => h * 12),
+    tickLabel = (slot: number) => hourLabel(atMinute(slot * SLOT_MINUTES)),
+    slotLabel = (slot: number) =>
+      `${time(atMinute(slot * SLOT_MINUTES))}–${time(atMinute((slot + 1) * SLOT_MINUTES))}`,
   }: Props = $props();
+
+  const slotCount = $derived(cursor.slotCount);
 
   // Left and right are written into the tooltip's position classes too.
   const padding = $derived({ top: 8, right: 12, bottom: showTimeAxis ? 24 : 6, left: 44 });
@@ -57,7 +70,6 @@
     return span < 1.5 ? 2 : span < 6 ? 1 : 0;
   });
   const formatTick = $derived(yFormat ?? ((v: number) => v.toFixed(tickDigits)));
-  const HOUR_TICKS =[0, 3, 6, 9, 12, 15, 18, 21, 24].map((h) => h * 12);
 
   function slotAt(event: PointerEvent | MouseEvent, element: HTMLElement): number | null {
     const box = element.getBoundingClientRect();
@@ -65,7 +77,7 @@
     if (width <= 0) return null;
     const fraction = (event.clientX - box.left - padding.left) / width;
     if (fraction < 0 || fraction >= 1) return null;
-    return Math.floor(fraction * SLOTS_PER_DAY);
+    return Math.floor(fraction * slotCount);
   }
 
   function onpointermove(event: PointerEvent & { currentTarget: HTMLElement }) {
@@ -80,7 +92,7 @@
   }
 
   function onkeydown(event: KeyboardEvent) {
-    const action = slotKeyAction(event);
+    const action = slotKeyAction(event, slotCount - 1);
     if (action == null) return;
     if (action.kind === "close") {
       if (cursor.selected == null) return;
@@ -105,8 +117,6 @@
 
   const current = $derived(cursor.slot ?? cursor.selected ?? 0);
   const tooltipSlot = $derived(cursor.panel === id ? cursor.slot : null);
-  const slotText = (slot: number) =>
-    `${time(atMinute(slot * SLOT_MINUTES))}–${time(atMinute((slot + 1) * SLOT_MINUTES))}`;
 </script>
 
 <section class="space-y-1" aria-label={title}>
@@ -129,9 +139,9 @@
       tabindex={cursor.tabStop === id ? 0 : -1}
       aria-label={title}
       aria-valuemin={0}
-      aria-valuemax={SLOTS_PER_DAY - 1}
+      aria-valuemax={slotCount - 1}
       aria-valuenow={current}
-      aria-valuetext={`${slotText(current)}: ${describe(current)}`}
+      aria-valuetext={`${slotLabel(current)}: ${describe(current)}`}
       {onpointermove}
       onpointerleave={() => cursor.leave(id)}
       {onfocus}
@@ -139,7 +149,7 @@
       {onclick}
       {onkeydown}
     >
-      <Chart data={[]} xDomain={[0, SLOTS_PER_DAY]} {yDomain} {padding}>
+      <Chart data={[]} xDomain={[0, slotCount]} {yDomain} {padding}>
         <Svg>
           <Axis
             placement="left"
@@ -158,15 +168,15 @@
           <Axis
             placement="bottom"
             rule={{ class: "stroke-border" }}
-            ticks={HOUR_TICKS}
-            format={showTimeAxis ? (slot: number) => hourLabel(atMinute(slot * SLOT_MINUTES)) : () => ""}
+            {ticks}
+            format={showTimeAxis ? tickLabel : () => ""}
             tickLabelProps={{ class: "text-2xs fill-muted-foreground" }}
           />
         </Svg>
       </Chart>
 
       {#if tooltipSlot != null}
-        {@const fraction = (tooltipSlot + 0.5) / SLOTS_PER_DAY}
+        {@const fraction = (tooltipSlot + 0.5) / slotCount}
         <!-- Beside the crosshair, on whichever side has room; the offsets are the plot padding. -->
         <div
           class="pointer-events-none absolute top-1 z-10 min-w-44 rounded-md border bg-popover px-3 py-2 text-xs text-popover-foreground shadow-md {fraction <
@@ -176,7 +186,7 @@
           style:--tip-at={fraction}
           role="tooltip"
         >
-          <p class="mb-1 font-medium">{slotText(tooltipSlot)}</p>
+          <p class="mb-1 font-medium">{slotLabel(tooltipSlot)}</p>
           {@render tooltip(tooltipSlot)}
         </div>
       {/if}

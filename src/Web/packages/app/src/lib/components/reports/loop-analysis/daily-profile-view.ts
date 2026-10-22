@@ -2,7 +2,6 @@ import type {
   DailyProfileDay,
   DailyProfileDayCoverage,
   DailyProfileRange,
-  DailyProfileSlot,
   LoopAnalysisAggregate,
 } from "$lib/api";
 
@@ -46,6 +45,11 @@ export function contributingDays(range: DailyProfileRange | undefined, slot: num
   return result;
 }
 
+/** A slot of any series laid out in numbered slots: the time of day, or time from an event. */
+export interface Slotted {
+  slot?: number;
+}
+
 export interface SlotPoint<T> {
   slot: number;
   value: T;
@@ -63,10 +67,10 @@ export type AggregatePoint = SlotPoint<LoopAnalysisAggregate>;
  * where its sparse flag changes. A run ending at a sparseness change repeats the next run's first
  * point so the two meet instead of leaving a sliver.
  */
-export function slotRuns<T>(
-  slots: DailyProfileSlot[],
-  pick: (slot: DailyProfileSlot) => T | null | undefined,
-  isSparse: (value: T, slot: DailyProfileSlot) => boolean
+export function slotRuns<S extends Slotted, T>(
+  slots: S[],
+  pick: (slot: S) => T | null | undefined,
+  isSparse: (value: T, slot: S) => boolean
 ): SlotRun<T>[] {
   const runs: SlotRun<T>[] = [];
   let current: SlotRun<T> | null = null;
@@ -90,9 +94,9 @@ export function slotRuns<T>(
   return runs;
 }
 
-export function aggregateRuns(
-  slots: DailyProfileSlot[],
-  pick: (slot: DailyProfileSlot) => LoopAnalysisAggregate | undefined
+export function aggregateRuns<S extends Slotted>(
+  slots: S[],
+  pick: (slot: S) => LoopAnalysisAggregate | undefined
 ): SlotRun<LoopAnalysisAggregate>[] {
   return slotRuns(slots, pick, (value) => value.sparse ?? false);
 }
@@ -105,11 +109,11 @@ export type SlotKeyAction =
   | { kind: "close" };
 
 /**
- * What a key does on a time-of-day panel: move along the day (an hour at a time with Shift, or
- * to either end), move to the panel above or below, pick the slot, or close the day list. Kept out
- * of the component so wuchale does not translate the key names.
+ * What a key does on a slotted panel: move along the axis (an hour at a time with Shift, or to
+ * either end), move to the panel above or below, pick the slot, or close the list it opened. Kept
+ * out of the component so wuchale does not translate the key names.
  */
-export function slotKeyAction(event: KeyboardEvent): SlotKeyAction | null {
+export function slotKeyAction(event: KeyboardEvent, lastSlot = SLOTS_PER_DAY - 1): SlotKeyAction | null {
   const step = event.shiftKey ? 12 : 1;
   switch (event.key) {
     case "ArrowRight":
@@ -119,7 +123,7 @@ export function slotKeyAction(event: KeyboardEvent): SlotKeyAction | null {
     case "Home":
       return { kind: "to", slot: 0 };
     case "End":
-      return { kind: "to", slot: SLOTS_PER_DAY - 1 };
+      return { kind: "to", slot: lastSlot };
     case "ArrowDown":
       return { kind: "panel", by: 1 };
     case "ArrowUp":
@@ -144,6 +148,13 @@ export function clockTime(minuteOfDay: number): string {
   const h = Math.floor(minuteOfDay / 60) % 24;
   const m = minuteOfDay % 60;
   return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`;
+}
+
+/** A rounded-up axis end, so the tallest mark never touches the top. */
+export function axisEnd(values: (number | null | undefined)[], floor: number): number {
+  const max = Math.max(floor, ...values.filter((v): v is number => v != null && Number.isFinite(v)));
+  const step = max <= 1 ? 0.25 : max <= 5 ? 1 : max <= 20 ? 5 : max <= 100 ? 10 : 50;
+  return Math.ceil((max * 1.05) / step) * step;
 }
 
 /** A wall-clock instant on an arbitrary date, for formatting a slot's time with the viewer's clock format. */
