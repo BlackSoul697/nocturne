@@ -144,7 +144,7 @@ public static class LoopHealthCalculator
     /// The cycles the loop was closed at. oref enacts only a change: holding a temp ("temp X &gt;~
     /// req Y") or needing none, it enacts nothing while still in control, so its state is the
     /// outcome of the newest cycle that asked for a change, closed if that was enacted and open if
-    /// not. Loop records nothing it decided apart from what it enacted, so only an enacted cycle
+    /// not. An enacted cycle closes it whether or not its suggestion was stored. Loop records nothing it decided apart from what it enacted, so only an enacted cycle
     /// shows it closed.
     /// </summary>
     private static List<long> ClosedLoopCycles(List<ApsLoopCycle> cycles)
@@ -155,8 +155,10 @@ public static class LoopHealthCalculator
         {
             if (IsOref(cycle.AidAlgorithm))
             {
-                if (cycle.SuggestedChange == true)
-                    orefClosed = cycle.Enacted;
+                if (cycle.Enacted)
+                    orefClosed = true;
+                else if (cycle.SuggestedChange == true)
+                    orefClosed = false;
                 if (orefClosed)
                     closed.Add(cycle.Mills);
             }

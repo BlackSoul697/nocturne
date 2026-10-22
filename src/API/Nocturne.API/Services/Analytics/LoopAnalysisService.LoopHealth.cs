@@ -8,8 +8,9 @@ using Nocturne.Core.Models.V4;
 namespace Nocturne.API.Services.Analytics;
 
 /// <remarks>
-/// Loop health reads the loop cycles from <see cref="LoopHealthCalculator.TempLookbackMs"/> before
-/// a range, so the cycle that set a temp running at its start is read, and the repository adds the
+/// Loop health reads the loop cycles from <see cref="LoopHealthCalculator.TempLookbackMs"/> and
+/// <see cref="LoopHealthCalculator.SetterWindowMs"/> before a range, so the cycle that set a temp
+/// running at its start is read, and the repository adds the
 /// nearest cycle beyond each end, so a loop gap that straddles either end is bounded.
 /// </remarks>
 internal sealed partial class LoopAnalysisService
@@ -34,7 +35,7 @@ internal sealed partial class LoopAnalysisService
     {
         var to = window.To;
         var cyclesTask = apsSnapshotRepository.GetLoopCyclesAsync(
-            ToUtc(window.From - LoopHealthCalculator.TempLookbackMs), ToUtc(to), ct);
+            ToUtc(window.From - LoopHealthCalculator.TempLookbackMs - LoopHealthCalculator.SetterWindowMs), ToUtc(to), ct);
         var commonTask = LoadCommonAsync(window, ct);
         await Task.WhenAll(cyclesTask, commonTask);
 

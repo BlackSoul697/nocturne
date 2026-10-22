@@ -1,5 +1,3 @@
-using System.Text.Json.Serialization;
-
 namespace Nocturne.Core.Models.LoopAnalysis;
 
 /// <summary>The Loop health tab: the primary range and, when asked for, a comparison range.</summary>

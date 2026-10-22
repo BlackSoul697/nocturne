@@ -424,6 +424,16 @@ public class LoopHealthCalculatorTests
     }
 
     [Fact]
+    public void Activity_CountsAnEnactedOrefCycleWithNoStoredSuggestionAsClosed()
+    {
+        var from = Day0;
+        var to = Day0 + Hour;
+        var result = Calculate(from, to, cycles: EveryFiveMinutes(from, to, t => Cycle(t, rate: 1.0, suggestedChange: null)));
+
+        result.Activity.ClosedLoop!.Percent.Should().Be(100);
+    }
+
+    [Fact]
     public void Activity_CountsAnOrefChangeItDidNotEnactAsOpenUntilItEnactsOne()
     {
         var from = Day0;

@@ -30,7 +30,8 @@ public class ApsLoopCycleReadTests(V4GoldenFixture fixture)
 
         var cycles = await repo.GetLoopCyclesAsync(Start, Start.AddMinutes(20));
 
-        cycles.Select(c => c.Timestamp).Should().Equal(
+        cycles.Select(c => c.Timestamp).Should().BeInAscendingOrder("rows seeded newest-first come back oldest-first")
+            .And.Equal(
             Start.AddHours(-1), Start, Start.AddMinutes(5), Start.AddMinutes(10), Start.AddMinutes(15), Start.AddHours(2));
 
         var capped = cycles[1];
@@ -100,8 +101,26 @@ public class ApsLoopCycleReadTests(V4GoldenFixture fixture)
         var curve = JsonSerializer.Serialize(Enumerable.Range(0, 48).Select(i => 100 + i).ToArray());
         await repo.BulkCreateAsync(
         [
-            new ApsSnapshot { Timestamp = Start.AddHours(-2), AidAlgorithm = AidAlgorithm.AndroidAps, DataSource = "loop-cycle-test" },
-            new ApsSnapshot { Timestamp = Start.AddHours(-1), AidAlgorithm = AidAlgorithm.AndroidAps, DataSource = "loop-cycle-test" },
+            new ApsSnapshot { Timestamp = Start.AddHours(3), AidAlgorithm = AidAlgorithm.Loop, DataSource = "loop-cycle-test" },
+            new ApsSnapshot { Timestamp = Start.AddHours(2), AidAlgorithm = AidAlgorithm.Loop, DataSource = "loop-cycle-test" },
+            new ApsSnapshot
+            {
+                Timestamp = Start.AddMinutes(15), AidAlgorithm = AidAlgorithm.Loop, Enacted = true, EnactedRate = 0,
+                EnactedBolusVolume = 0.3, DataSource = "loop-cycle-test", LoopJson = "{\"enacted\":{\"received\":true}}",
+                PredictedDefaultJson = curve,
+            },
+            new ApsSnapshot
+            {
+                Timestamp = Start.AddMinutes(10), AidAlgorithm = AidAlgorithm.AndroidAps, Enacted = true,
+                DataSource = "loop-cycle-test",
+                SuggestedJson = "{\"reason\":\"\",\"duration\":30}",
+            },
+            new ApsSnapshot
+            {
+                Timestamp = Start.AddMinutes(5), AidAlgorithm = AidAlgorithm.AndroidAps, Enacted = false,
+                DataSource = "loop-cycle-test",
+                SuggestedJson = "{\"reason\":\"Eventual BG 110 > 100, temp 2.4 >~ req 2.3U/hr. \",\"bg\":110}",
+            },
             new ApsSnapshot
             {
                 Timestamp = Start, AidAlgorithm = AidAlgorithm.AndroidAps, Enacted = true, EnactedRate = 2.4,
@@ -114,26 +133,8 @@ public class ApsLoopCycleReadTests(V4GoldenFixture fixture)
                 EnactedJson = "{\"received\":true,\"rate\":2.4}",
                 PredictedIobJson = curve, PredictedZtJson = curve, PredictedCobJson = curve, PredictedUamJson = curve,
             },
-            new ApsSnapshot
-            {
-                Timestamp = Start.AddMinutes(5), AidAlgorithm = AidAlgorithm.AndroidAps, Enacted = false,
-                DataSource = "loop-cycle-test",
-                SuggestedJson = "{\"reason\":\"Eventual BG 110 > 100, temp 2.4 >~ req 2.3U/hr. \",\"bg\":110}",
-            },
-            new ApsSnapshot
-            {
-                Timestamp = Start.AddMinutes(10), AidAlgorithm = AidAlgorithm.AndroidAps, Enacted = true,
-                DataSource = "loop-cycle-test",
-                SuggestedJson = "{\"reason\":\"\",\"duration\":30}",
-            },
-            new ApsSnapshot
-            {
-                Timestamp = Start.AddMinutes(15), AidAlgorithm = AidAlgorithm.Loop, Enacted = true, EnactedRate = 0,
-                EnactedBolusVolume = 0.3, DataSource = "loop-cycle-test", LoopJson = "{\"enacted\":{\"received\":true}}",
-                PredictedDefaultJson = curve,
-            },
-            new ApsSnapshot { Timestamp = Start.AddHours(2), AidAlgorithm = AidAlgorithm.Loop, DataSource = "loop-cycle-test" },
-            new ApsSnapshot { Timestamp = Start.AddHours(3), AidAlgorithm = AidAlgorithm.Loop, DataSource = "loop-cycle-test" },
+            new ApsSnapshot { Timestamp = Start.AddHours(-1), AidAlgorithm = AidAlgorithm.AndroidAps, DataSource = "loop-cycle-test" },
+            new ApsSnapshot { Timestamp = Start.AddHours(-2), AidAlgorithm = AidAlgorithm.AndroidAps, DataSource = "loop-cycle-test" },
         ], WriteOrigin.Backfill);
     }
 }
