@@ -6,7 +6,8 @@ import LoopHealthTab from "./LoopHealthTab.svelte";
 import { loopHealthResponse } from "./loop-health.test-fixtures";
 
 /** The tile with this label, as the figure strip lays it out. */
-const tile = (label: string) => page.getByRole("term").getByText(label, { exact: true }).locator("..");
+const tile = (label: string) =>
+  page.elementLocator(page.getByRole("term").getByText(label, { exact: true }).element().parentElement!);
 
 const STRIPS = ["Closed loop by hour", "Algorithm zero temps by hour", "At max basal by hour", "Sensitivity ratio by hour"];
 

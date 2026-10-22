@@ -14,21 +14,23 @@
     type LoopHealthShare,
   } from "$lib/api";
   import FigureStrip, { type Figure } from "$lib/components/reports/FigureStrip.svelte";
+  import * as Alert from "$lib/components/ui/alert";
   import { Badge } from "$lib/components/ui/badge";
   import { Button } from "$lib/components/ui/button";
   import { plural } from "$lib/utils/plural";
   import { startOfDay } from "$lib/utils/date-range";
   import { formatWeekdayDate, hourLabel, time } from "$lib/utils/formatting";
   import ArrowUpRight from "@lucide/svelte/icons/arrow-up-right";
+  import Clock from "@lucide/svelte/icons/clock";
   import EyeOff from "@lucide/svelte/icons/eye-off";
   import TimeOfDayPanel from "./TimeOfDayPanel.svelte";
   import SlotBars from "./SlotBars.svelte";
   import HourBands from "./HourBands.svelte";
   import NoTimeZone from "./NoTimeZone.svelte";
-  import LoopAnalysisNotices from "./LoopAnalysisNotices.svelte";
+  import IgnoredFiltersNotice from "./IgnoredFiltersNotice.svelte";
   import AggregateReadout from "./AggregateReadout.svelte";
   import { TimeOfDayCursor } from "./time-of-day-cursor.svelte";
-  import { atMinute } from "./daily-profile-view";
+  import { atMinute, axisEnd } from "./daily-profile-view";
   import {
     dayInReviewSearch,
     distributionHour,
@@ -226,11 +228,7 @@
   const sensitivityHours = $derived(primary?.sensitivityRatio?.hours ?? []);
   const sensitivityComparison = $derived(comparison?.sensitivityRatio?.hours ?? []);
 
-  /** A rounded-up axis end, so the tallest bar never touches the top. */
-  function percentEnd(bars: { value: number }[]): number {
-    const max = Math.max(5, ...bars.map((b) => b.value));
-    return Math.min(100, Math.ceil((max * 1.05) / 5) * 5);
-  }
+  const percentEnd = (bars: { value: number }[]) => Math.min(100, axisEnd(bars.map((b) => b.value), 5));
   const zeroDomain = $derived<[number, number]>([0, percentEnd([...zeroBars, ...zeroComparison])]);
   const capDomain = $derived<[number, number]>([0, percentEnd([...capBars, ...capComparison])]);
   const sensitivityDomain = $derived.by<[number, number]>(() => {
@@ -299,7 +297,19 @@
   <NoTimeZone reason={response.timeZoneUnavailableReason} />
 {:else}
   <div class="space-y-6">
-    <LoopAnalysisNotices {response} />
+    {#if response.historyClamped}
+      <Alert.Root variant="info">
+        <Clock />
+        <Alert.Title>Only the last 24 hours are included</Alert.Title>
+        <Alert.Description>
+          You can read only the most recent 24 hours of this data, so the report covers those 24
+          hours whatever range is picked, compares nothing, and each hour of the day rests on at
+          most one day.
+        </Alert.Description>
+      </Alert.Root>
+    {/if}
+
+    <IgnoredFiltersNotice ignored={response.ignoredFilters} />
 
     <FigureStrip {figures} />
 

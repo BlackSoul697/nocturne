@@ -146,6 +146,13 @@ export function clockTime(minuteOfDay: number): string {
   return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`;
 }
 
+/** A rounded-up axis end, so the tallest mark never touches the top. */
+export function axisEnd(values: (number | null | undefined)[], floor: number): number {
+  const max = Math.max(floor, ...values.filter((v): v is number => v != null && Number.isFinite(v)));
+  const step = max <= 1 ? 0.25 : max <= 5 ? 1 : max <= 20 ? 5 : max <= 100 ? 10 : 50;
+  return Math.ceil((max * 1.05) / step) * step;
+}
+
 /** A wall-clock instant on an arbitrary date, for formatting a slot's time with the viewer's clock format. */
 export function atMinute(minuteOfDay: number): Date {
   return new Date(2000, 0, 1, 0, minuteOfDay);

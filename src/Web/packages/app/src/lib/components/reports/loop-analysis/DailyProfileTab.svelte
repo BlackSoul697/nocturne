@@ -13,6 +13,7 @@
     type DailyProfileSlot,
     type LoopAnalysisAggregate,
   } from "$lib/api";
+  import * as Alert from "$lib/components/ui/alert";
   import { Switch } from "$lib/components/ui/switch";
   import { Label } from "$lib/components/ui/label";
   import FigureStrip, { type Figure } from "$lib/components/reports/FigureStrip.svelte";
@@ -29,6 +30,7 @@
   import { tenantChartThresholds } from "$lib/stores/realtime-store.svelte";
   import { glucoseUnits } from "$lib/stores/appearance-store.svelte";
   import { bg, bgLabel, convertToDisplayUnits, hourLabel } from "$lib/utils/formatting";
+  import Clock from "@lucide/svelte/icons/clock";
   import EyeOff from "@lucide/svelte/icons/eye-off";
   import TimeOfDayPanel from "./TimeOfDayPanel.svelte";
   import PercentileBands from "./PercentileBands.svelte";
@@ -37,9 +39,9 @@
   import AggregateReadout from "./AggregateReadout.svelte";
   import SlotDays from "./SlotDays.svelte";
   import { TimeOfDayCursor } from "./time-of-day-cursor.svelte";
-  import { atMinute } from "./daily-profile-view";
+  import { atMinute, axisEnd } from "./daily-profile-view";
   import NoTimeZone from "./NoTimeZone.svelte";
-  import LoopAnalysisNotices from "./LoopAnalysisNotices.svelte";
+  import IgnoredFiltersNotice from "./IgnoredFiltersNotice.svelte";
 
   interface Props {
     response: DailyProfileResponse;
@@ -69,13 +71,6 @@
     list?.[slot]?.slot === slot ? list[slot] : list?.find((s) => s.slot === slot);
 
   const has = (pick: (s: DailyProfileSlot) => unknown) => slots.some((s) => pick(s) != null);
-
-  /** A rounded-up axis end, so the tallest mark never touches the top. */
-  function axisEnd(values: (number | null | undefined)[], floor: number): number {
-    const max = Math.max(floor, ...values.filter((v): v is number => v != null && Number.isFinite(v)));
-    const step = max <= 1 ? 0.25 : max <= 5 ? 1 : max <= 20 ? 5 : max <= 100 ? 10 : 50;
-    return Math.ceil((max * 1.05) / step) * step;
-  }
 
   const both = $derived([...slots, ...(comparisonSlots ?? [])]);
 
@@ -290,7 +285,19 @@
   <NoTimeZone reason={response.timeZoneUnavailableReason} />
 {:else}
   <div class="space-y-6">
-    <LoopAnalysisNotices {response} />
+    {#if response.historyClamped}
+      <Alert.Root variant="info">
+        <Clock />
+        <Alert.Title>Only the last 24 hours are included</Alert.Title>
+        <Alert.Description>
+          You can read only the most recent 24 hours of this data, so the report covers those 24
+          hours whatever range is picked, compares nothing, and each time of day rests on at most
+          one day.
+        </Alert.Description>
+      </Alert.Root>
+    {/if}
+
+    <IgnoredFiltersNotice ignored={response.ignoredFilters} />
 
     <div class="space-y-2">
       <FigureStrip {figures} />
