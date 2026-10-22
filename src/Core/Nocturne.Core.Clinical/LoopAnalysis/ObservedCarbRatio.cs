@@ -76,9 +76,20 @@ public static class ObservedCarbRatio
                     : SettingsEvidenceCalculator.Unavailable(tally.Candidates, episodes[i].Count),
                 t => context.TherapyAt(t).CarbRatioAt(t),
                 isfDependent: episodes[i].Any(e => e.IsfDependent),
-                borrowed: episodes[i].Any(e => e.BasalDependent || e.BasalExcess != 0 || e.EndGlucose != e.StartGlucose));
+                glucoseTermMaterial: SettingsEvidenceCalculator.Material(episodes[i].Select(GlucoseTermShare)),
+                materialBorrowed: SettingsEvidenceCalculator.Material(episodes[i].Select(e =>
+                    GlucoseTermShare(e) + SettingsEvidenceCalculator.Share(e.BasalExcess, e.InsulinActed))));
         })];
     }
+
+    /// <summary>
+    /// The share of a meal's insulin needed that the glucose-change term carries. A carb ratio rests
+    /// on both the ISF that converts it and the basal need its insulin is measured above, so the two
+    /// borrowed shares are added before they are judged: each can sit under
+    /// <see cref="SettingsEvidenceCalculator.MaterialShare"/> while together they move the figure past it.
+    /// </summary>
+    private static double GlucoseTermShare(CarbRatioEvidenceEpisode e) =>
+        SettingsEvidenceCalculator.Share((e.EndGlucose - e.StartGlucose) / e.Isf, e.InsulinNeeded);
 
     private static (CarbRatioEvidenceEpisode? Episode, SettingsEvidenceRule? Rejected) Measure(
         SettingsEvidenceContext context, EventAnchor meal, IsfConversion conversion, BasalBaseline? baseline)
@@ -109,7 +120,7 @@ public static class ObservedCarbRatio
         var grams = meal.Grams!.Value;
         var episode = context.Episode<CarbRatioEvidenceEpisode>(
             meal.Mills, end, grams / needed, context.TherapyAt(meal.Mills).CarbRatioAt(meal.Mills));
-        context.Fill(episode, startGlucose, endGlucose, insulin);
+        context.Fill(episode, startGlucose, endGlucose, insulin, insulin.IobAtStart);
         episode.Grams = SlotSummary.Round(grams);
         episode.InsulinNeeded = SlotSummary.Round(needed);
         episode.Isf = SlotSummary.Round(isf);

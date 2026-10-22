@@ -217,14 +217,16 @@ public static class ObservedBasalNeed
         if (result.UnavailableReason is null)
         {
             List<SettingsEvidenceConfidenceReason> reasons = [];
-            if (result.IsfDependent)
+            var driftMaterial = SettingsEvidenceCalculator.Material(
+                days.Select(d => SettingsEvidenceCalculator.Share(d.Change / d.Isf / d.Hours, d.Need)));
+            if (result.IsfDependent && driftMaterial)
                 reasons.Add(SettingsEvidenceConfidenceReason.IsfDependent);
-            if (context.NoCarbEntries)
+            if (context.FastingUnverifiable)
                 reasons.Add(SettingsEvidenceConfidenceReason.FastingUnverifiable);
             var needs = days.Select(d => d.Need).ToList();
             SettingsEvidenceCalculator.Rate(
                 result, needs.Average(), needs, higherMeansMoreInsulin: true,
-                borrowed: days.Any(d => d.Change != 0), reasons);
+                materialBorrowed: driftMaterial, reasons);
         }
 
         if (context.ListEpisodes)

@@ -98,7 +98,9 @@ public static class ObservedIsf
             SettingsEvidenceCalculator.Unavailable(tallies[i].Candidates, episodes[i].Count),
             t => context.TherapyAt(t).SensitivityAt(t),
             isfDependent: false,
-            borrowed: episodes[i].Any(e => e.BasalDependent || e.BasalExcess != 0)))];
+            glucoseTermMaterial: false,
+            materialBorrowed: SettingsEvidenceCalculator.Material(
+                episodes[i].Select(e => SettingsEvidenceCalculator.Share(e.BasalExcess, e.InsulinActed)))))];
     }
 
     private static (IsfEvidenceEpisode? Episode, SettingsEvidenceRule? Rejected) Measure(
@@ -141,7 +143,7 @@ public static class ObservedIsf
         var drop = startGlucose - endGlucose;
         var episode = context.Episode<IsfEvidenceEpisode>(
             start, end, drop / insulin.Acted, context.TherapyAt(start).SensitivityAt(start));
-        context.Fill(episode, startGlucose, endGlucose, insulin);
+        context.Fill(episode, startGlucose, endGlucose, insulin, iobBefore);
         episode.Units = SlotSummary.Round(units);
         episode.Drop = SlotSummary.Round(drop);
         return (episode, null);

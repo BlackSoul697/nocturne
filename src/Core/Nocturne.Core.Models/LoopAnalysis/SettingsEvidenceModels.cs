@@ -36,7 +36,10 @@ public enum SettingsEvidenceConfidenceReason
     /// <summary>The interquartile range is wide against the observed value.</summary>
     WideSpread,
 
-    /// <summary>Glucose change converted at an ISF from the profile, for want of a confident observed one.</summary>
+    /// <summary>
+    /// Glucose change converted at an ISF from the profile, for want of a confident observed one,
+    /// where that change carries a material share of the figure.
+    /// </summary>
     IsfDependent,
 
     /// <summary>
@@ -45,18 +48,24 @@ public enum SettingsEvidenceConfidenceReason
     /// </summary>
     BasalDependent,
 
-    /// <summary>Much of the window's insulin was still on board at its end, so the IOB curve carries the figure.</summary>
+    /// <summary>
+    /// Much of the insulin the window's own doses added was still on board at its end, so the IOB
+    /// curve carries the figure.
+    /// </summary>
     ResidualIob,
 
     /// <summary>Most candidates had another intake or bolus in their window: those that qualified may not be typical.</summary>
     MostNotIsolated,
 
-    /// <summary>The range holds no carb entries at all, so fasting rests on spotting unlogged meals by glucose alone.</summary>
+    /// <summary>
+    /// Few of the range's days hold a carb entry, so fasting rests on spotting unlogged meals by
+    /// glucose alone.
+    /// </summary>
     FastingUnverifiable,
 
     /// <summary>
-    /// The figure points towards more insulin than the profile and rests on a borrowed input, so it is
-    /// held at <see cref="SettingsEvidenceConfidence.Moderate"/>.
+    /// The figure points towards more insulin than the profile and a borrowed input carries a
+    /// material share of it, so its confidence is one level lower than its other reasons give.
     /// </summary>
     MoreInsulinOnBorrowedInput,
 }
@@ -321,6 +330,12 @@ public class InsulinActedEpisode : SettingsEvidenceEpisode
     public double IobAtStart { get; set; }
 
     public double IobAtEnd { get; set; }
+
+    /// <summary>
+    /// U: IOB at the window's end above what was on board before its own doses, the share of them
+    /// still to act; zero where IOB fell.
+    /// </summary>
+    public double ResidualIob { get; set; }
 
     /// <summary>
     /// U: the observed basal need above the schedule over the window, which the loop's top-up met

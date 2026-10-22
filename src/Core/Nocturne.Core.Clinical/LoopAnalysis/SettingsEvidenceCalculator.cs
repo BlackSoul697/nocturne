@@ -84,6 +84,21 @@ public static class SettingsEvidenceCalculator
     public const double MaxResidualIobShare = 0.3;
 
     /// <summary>
+    /// The least share of a figure a borrowed input must carry, as a median across its episodes,
+    /// for the figure to be read as resting on it: the glucose-change term converted at a borrowed
+    /// ISF, or a basal need borrowed from the basal figure. Below 15%, even an input 50% wrong moves
+    /// the figure by less than the spread a good figure already shows.
+    /// </summary>
+    public const double MaterialShare = 0.15;
+
+    /// <summary>
+    /// The least share of the range's days with any carb entry for fasting to be read off the carb
+    /// entries: below a fifth, entries are the exception, a snack logged now and then, and most
+    /// meals are known only by the glucose they raise.
+    /// </summary>
+    public const double MinimumCarbDayShare = 0.2;
+
+    /// <summary>
     /// The largest share of candidates rejected for another intake or bolus in their window before
     /// the survivors are read as atypical: past half, the episodes that qualified are the quiet
     /// exceptions, and their figure may not hold for the user's ordinary days.
@@ -174,18 +189,17 @@ public static class SettingsEvidenceCalculator
     /// True where an observed value above the profile's calls for more insulin (a basal rate); false
     /// where below does (an ISF, a carb ratio).
     /// </param>
-    /// <param name="borrowed">
-    /// A borrowed input contributed to the figure: an ISF from another figure or the profile, or a
-    /// basal need above or below the schedule. Such a figure pointing towards more insulin is held at
-    /// <see cref="SettingsEvidenceConfidence.Moderate"/>, since an error in the input it borrowed
-    /// would carry into a recommendation in the riskier direction.
+    /// <param name="materialBorrowed">
+    /// A borrowed input carries at least <see cref="MaterialShare"/> of the figure (<see cref="Material"/>).
+    /// Such a figure pointing towards more insulin is lowered one level, since an error in the input
+    /// it borrowed would carry into a figure in the riskier direction.
     /// </param>
     internal static void Rate(
         SettingsEvidenceFigure figure,
         double observed,
         List<double> values,
         bool higherMeansMoreInsulin,
-        bool borrowed,
+        bool materialBorrowed,
         IEnumerable<SettingsEvidenceConfidenceReason> reasons)
     {
         var spread = SlotSummary.Of(values)!;
@@ -206,12 +220,22 @@ public static class SettingsEvidenceCalculator
             };
 
         var moreInsulin = figure.Profile is { } profile && (higherMeansMoreInsulin ? observed > profile : observed < profile);
-        if (moreInsulin && borrowed && figure.Confidence == SettingsEvidenceConfidence.High)
+        if (moreInsulin && materialBorrowed)
         {
-            figure.Confidence = SettingsEvidenceConfidence.Moderate;
+            figure.Confidence = figure.Confidence == SettingsEvidenceConfidence.High
+                ? SettingsEvidenceConfidence.Moderate
+                : SettingsEvidenceConfidence.Low;
             figure.ConfidenceReasons.Add(SettingsEvidenceConfidenceReason.MoreInsulinOnBorrowedInput);
         }
     }
+
+    /// <summary>Whether the median of <paramref name="shares"/> reaches <see cref="MaterialShare"/>.</summary>
+    internal static bool Material(IEnumerable<double> shares) =>
+        SlotSummary.Of([.. shares.Where(double.IsFinite)])?.P50 >= MaterialShare;
+
+    /// <summary>|<paramref name="part"/>| as a share of |<paramref name="whole"/>|; infinite where the whole is zero.</summary>
+    internal static double Share(double part, double whole) =>
+        whole == 0 ? double.PositiveInfinity : Math.Abs(part) / Math.Abs(whole);
 
     /// <summary>The reason a figure of episodes has no value, when it has none.</summary>
     internal static SettingsEvidenceUnavailableReason? Unavailable(int candidates, int qualified) =>
@@ -232,7 +256,7 @@ internal sealed class RejectionTally(IReadOnlyList<SettingsEvidenceRule> rules)
 
     public void Reject(SettingsEvidenceRule rule) => _counts[rule]++;
 
-    public int this[SettingsEvidenceRule rule] => _counts.GetValueOrDefault(rule);
+    public int this[SettingsEvidenceRule rule] => _counts[rule];
 
     public List<SettingsEvidenceRejection> ToList() =>
         [.. rules.Select(r => new SettingsEvidenceRejection { Rule = r, Count = _counts[r] })];
@@ -281,8 +305,19 @@ internal sealed class SettingsEvidenceContext
     public long[] CarbMills { get; }
     public TimeZoneInfo Zone => Inputs.Series.Zone;
 
-    /// <summary>The range holds no carb entry, so whether a block was fasting is read off glucose alone.</summary>
-    public bool NoCarbEntries => !EventAnchors.AnyWithin(CarbMills, From, To - 1);
+    /// <summary>
+    /// Too few of the range's days hold a carb entry (<see cref="SettingsEvidenceCalculator.MinimumCarbDayShare"/>)
+    /// for whether a block was fasting to be read off them, rather than off glucose alone.
+    /// </summary>
+    public bool FastingUnverifiable
+    {
+        get
+        {
+            var days = LocalSlotBinning.LocalDay(To - 1, Zone).DayNumber - LocalSlotBinning.LocalDay(From, Zone).DayNumber + 1;
+            var withCarbs = CarbMills.Where(m => m >= From && m < To).Select(m => LocalSlotBinning.LocalDay(m, Zone)).Distinct().Count();
+            return withCarbs < SettingsEvidenceCalculator.MinimumCarbDayShare * days;
+        }
+    }
 
     /// <summary>
     /// Every intake or dose that keeps an episode around it from being isolated, sorted: the
@@ -390,7 +425,11 @@ internal sealed class SettingsEvidenceContext
     /// </summary>
     /// <param name="profileAt">The profile's setting in force at an instant.</param>
     /// <param name="isfDependent">Some episode converted glucose at an ISF from the profile.</param>
-    /// <param name="borrowed">See <see cref="SettingsEvidenceCalculator.Rate"/>.</param>
+    /// <param name="glucoseTermMaterial">
+    /// The glucose-change term carries a material share of the figure
+    /// (<see cref="SettingsEvidenceCalculator.Material"/>), so an ISF-dependent figure is less sure.
+    /// </param>
+    /// <param name="materialBorrowed">See <see cref="SettingsEvidenceCalculator.Rate"/>.</param>
     public T Finish<T, TEpisode>(
         T figure,
         SettingsEvidenceBlock block,
@@ -399,7 +438,8 @@ internal sealed class SettingsEvidenceContext
         SettingsEvidenceUnavailableReason? unavailable,
         Func<long, double> profileAt,
         bool isfDependent,
-        bool borrowed)
+        bool glucoseTermMaterial,
+        bool materialBorrowed)
         where T : InsulinActedFigure
         where TEpisode : InsulinActedEpisode
     {
@@ -416,20 +456,20 @@ internal sealed class SettingsEvidenceContext
             return figure;
 
         List<SettingsEvidenceConfidenceReason> reasons = [];
-        if (isfDependent)
+        if (isfDependent && glucoseTermMaterial)
             reasons.Add(SettingsEvidenceConfidenceReason.IsfDependent);
         if (figure.BasalDependent)
             reasons.Add(SettingsEvidenceConfidenceReason.BasalDependent);
         if (SlotSummary.Of([.. episodes
-                .Where(e => e.InsulinActed + e.IobAtEnd > 0)
-                .Select(e => e.IobAtEnd / (e.InsulinActed + e.IobAtEnd))])?.P50 > SettingsEvidenceCalculator.MaxResidualIobShare)
+                .Where(e => e.InsulinActed + e.ResidualIob > 0)
+                .Select(e => e.ResidualIob / (e.InsulinActed + e.ResidualIob))])?.P50 > SettingsEvidenceCalculator.MaxResidualIobShare)
             reasons.Add(SettingsEvidenceConfidenceReason.ResidualIob);
         if (tally[SettingsEvidenceRule.NotIsolated] > SettingsEvidenceCalculator.MaxNotIsolatedShare * tally.Candidates)
             reasons.Add(SettingsEvidenceConfidenceReason.MostNotIsolated);
 
         var values = episodes.Select(e => e.Value).ToList();
         SettingsEvidenceCalculator.Rate(
-            figure, SlotSummary.Of(values)!.P50, values, higherMeansMoreInsulin: false, borrowed, reasons);
+            figure, SlotSummary.Of(values)!.P50, values, higherMeansMoreInsulin: false, materialBorrowed, reasons);
         return figure;
     }
 
@@ -503,8 +543,10 @@ internal sealed class SettingsEvidenceContext
         };
     }
 
-    public void Fill(InsulinActedEpisode episode, double startGlucose, double endGlucose, ActedInsulin acted)
+    /// <param name="standingIob">IOB just before the window's own doses: what was already on board.</param>
+    public void Fill(InsulinActedEpisode episode, double startGlucose, double endGlucose, ActedInsulin acted, double standingIob)
     {
+        episode.ResidualIob = SlotSummary.Round(Math.Max(0, acted.IobAtEnd - standingIob));
         episode.StartGlucose = SlotSummary.Round(startGlucose);
         episode.EndGlucose = SlotSummary.Round(endGlucose);
         episode.NetInsulin = SlotSummary.Round(acted.Net.Total);
