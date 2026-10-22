@@ -1129,15 +1129,15 @@ public class StatisticsServiceClinicalAccuracyTests
     }
 
     [Fact]
-    public void CalculateJIndex_HighMeanAndVariability_ShouldBeElevated()
+    public void CalculateJIndex_HighMeanAndVariability_MatchesWojcicki()
     {
         var values = new double[] { 60, 100, 200, 250, 300 };
         var mean = values.Average(); // 182
 
         var result = _sut.CalculateJIndex(values, mean);
 
-        // Should be significantly elevated with high mean and high variance
-        result.Should().BeGreaterThan(10);
+        // Sample SD = sqrt(40480 / 4) = 100.598; 0.001 * (182 + 100.598)^2 = 79.862
+        result.Should().BeApproximately(79.86, 0.01);
     }
 
     #endregion
