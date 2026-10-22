@@ -343,10 +343,7 @@ export function useDateParams(defaultDays = 7) {
 
 export type ReportsParamsReturn = ReturnType<typeof useDateParams>;
 
-/**
- * Context key for shared date params instance.
- */
-const DATE_PARAMS_CONTEXT_KEY = Symbol("date-params");
+const DATE_PARAMS_CONTEXT_KEY = "nocturne:app:date-params";
 
 /**
  * Set the date params instance in Svelte context.
@@ -394,7 +391,7 @@ export class SharedRangeUse {
   }
 }
 
-const SHARED_RANGE_USE_KEY = Symbol("shared-range-use");
+const SHARED_RANGE_USE_KEY = "nocturne:app:shared-range-use";
 
 /** Create and provide the shared-range-use flag. Call this in the reports layout. */
 export function createSharedRangeUse(): SharedRangeUse {
