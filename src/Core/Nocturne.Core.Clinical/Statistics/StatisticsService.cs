@@ -767,8 +767,7 @@ public class StatisticsService : IStatisticsService
         var median = GlucoseStatistics.Median(sorted);
         var min = sorted[0];
         var max = sorted[count - 1];
-        var standardDeviation = GlucoseStatistics.StandardDeviation(
-            values, mean, VarianceMode.Sample);
+        var standardDeviation = GlucoseStatistics.StandardDeviation(values, mean);
 
         // Percentiles
         var percentiles = new GlucosePercentiles
@@ -855,6 +854,7 @@ public class StatisticsService : IStatisticsService
     /// </summary>
     /// <param name="values">Collection of glucose values</param>
     /// <param name="entries">Collection of glucose entries with timestamps</param>
+    /// <param name="timeZone">Tenant zone that bounds the days of <see cref="CalculateADRR"/>; null is UTC.</param>
     /// <returns>
     /// Comprehensive glycemic variability metrics, or null for fewer than two plausible readings.
     /// The individual metrics have differing data floors; this one governs all of them. Values
@@ -863,7 +863,8 @@ public class StatisticsService : IStatisticsService
     /// </returns>
     public GlycemicVariability? CalculateGlycemicVariability(
         IEnumerable<double> values,
-        IEnumerable<SensorGlucose> entries
+        IEnumerable<SensorGlucose> entries,
+        TimeZoneInfo? timeZone
     )
     {
         var valuesList = values.Where(IsPlausibleReading).ToList();
@@ -873,13 +874,12 @@ public class StatisticsService : IStatisticsService
             return null;
 
         var mean = valuesList.Average();
-        var standardDeviation = GlucoseStatistics.StandardDeviation(
-            valuesList, mean, VarianceMode.Sample);
+        var standardDeviation = GlucoseStatistics.StandardDeviation(valuesList, mean);
         var coefficientOfVariation = (standardDeviation / mean) * 100;
 
         var mage = CalculateMAGE(valuesList);
         var conga = CalculateCONGA(valuesList, 2);
-        var adrr = CalculateADRR(valuesList);
+        var adrr = CalculateADRR(entriesList, timeZone);
         var labilityIndex = CalculateLabilityIndex(entriesList);
         var jIndex = CalculateJIndex(valuesList, mean);
         var hbgi = CalculateHBGI(valuesList);
@@ -984,7 +984,7 @@ public class StatisticsService : IStatisticsService
         if (valuesList.Count < 3)
             return 0;
 
-        var sd = GlucoseStatistics.StandardDeviation(valuesList, VarianceMode.Population);
+        var sd = GlucoseStatistics.StandardDeviation(valuesList);
 
         var excursions = new List<double>();
         string? currentDirection = null;
@@ -1043,14 +1043,24 @@ public class StatisticsService : IStatisticsService
     }
 
     /// <summary>
-    /// Calculate ADRR (Average Daily Risk Range)
+    /// Average Daily Risk Range (Kovatchev et al., Diabetes Care 2006;29:2433): for each tenant-local
+    /// day, the largest hypoglycaemic risk plus the largest hyperglycaemic risk, averaged over every
+    /// day with at least one plausible reading. Zero when there is no such day.
     /// </summary>
-    /// <param name="values">Collection of glucose values</param>
-    /// <returns>ADRR value, or 0 if no data</returns>
-    public double CalculateADRR(IEnumerable<double> values)
+    /// <param name="entries">Glucose entries with timestamps.</param>
+    /// <param name="timeZone">Tenant zone the days are bounded in; null is UTC.</param>
+    public double CalculateADRR(IEnumerable<SensorGlucose> entries, TimeZoneInfo? timeZone)
     {
-        var logTransformed = values.Select(val => Math.Log(val)).ToList();
-        return GlucoseStatistics.StandardDeviation(logTransformed, VarianceMode.Population) * 100;
+        var tz = timeZone ?? TimeZoneInfo.Utc;
+        var dailyRanges = entries
+            .Where(entry => entry.Mills > 0 && IsPlausibleReading(entry))
+            .GroupBy(entry => LocalDay(entry.Mills, tz))
+            .Select(day =>
+                day.Max(entry => KovatchevSidedRisk(entry.Mgdl, keepPositive: false))
+                + day.Max(entry => KovatchevSidedRisk(entry.Mgdl, keepPositive: true)))
+            .ToList();
+
+        return dailyRanges.Count == 0 ? 0 : dailyRanges.Average();
     }
 
     /// <summary>
@@ -1076,7 +1086,7 @@ public class StatisticsService : IStatisticsService
     }
 
     /// <summary>
-    /// Calculate J-Index
+    /// J-Index (Wojcicki, Horm Metab Res 1995;27:41): <c>0.001 * (mean + SD)^2</c> in mg/dL.
     /// </summary>
     /// <param name="values">Collection of glucose values</param>
     /// <param name="mean">Mean glucose value</param>
@@ -1087,12 +1097,8 @@ public class StatisticsService : IStatisticsService
         if (valuesList.Count == 0)
             return 0;
 
-        const double targetMean = 112; // Target glucose level in mg/dL
-        var meanComponent = 0.324 * Math.Pow(mean - targetMean, 2);
-        var variance = GlucoseStatistics.Variance(valuesList, mean, VarianceMode.Population);
-        var variabilityComponent = 0.0018 * variance;
-
-        return meanComponent + variabilityComponent;
+        var sd = GlucoseStatistics.StandardDeviation(valuesList, mean);
+        return 0.001 * Math.Pow(mean + sd, 2);
     }
 
     /// <summary>
@@ -1136,16 +1142,20 @@ public class StatisticsService : IStatisticsService
         if (valuesList.Count == 0)
             return 0;
 
-        var riskSum = valuesList.Sum(glucose =>
-        {
-            var logBG = Math.Log(Math.Max(glucose, KovatchevFloorMgdl));
-            var fBG = 1.509 * (Math.Pow(logBG, 1.084) - 5.381);
+        return valuesList.Sum(glucose => KovatchevSidedRisk(glucose, keepPositive)) / valuesList.Count;
+    }
 
-            var onSide = keepPositive ? fBG > 0 : fBG < 0;
-            return onSide ? 10 * Math.Pow(fBG, 2) : 0;
-        });
+    /// <summary>
+    /// The risk <c>10 * f(BG)^2</c> of one reading in mg/dL when its <c>f(BG)</c> falls on the side
+    /// <paramref name="keepPositive"/> names, else zero. See <see cref="KovatchevRisk"/>.
+    /// </summary>
+    private static double KovatchevSidedRisk(double glucose, bool keepPositive)
+    {
+        var logBG = Math.Log(Math.Max(glucose, KovatchevFloorMgdl));
+        var fBG = 1.509 * (Math.Pow(logBG, 1.084) - 5.381);
 
-        return riskSum / valuesList.Count;
+        var onSide = keepPositive ? fBG > 0 : fBG < 0;
+        return onSide ? 10 * Math.Pow(fBG, 2) : 0;
     }
 
     /// <summary>
@@ -1500,7 +1510,7 @@ public class StatisticsService : IStatisticsService
 
         var mean = values.Average();
         var median = GlucoseStatistics.Median(GlucoseStatistics.Ascending(values));
-        var stdDev = GlucoseStatistics.StandardDeviation(values, mean, VarianceMode.Sample);
+        var stdDev = GlucoseStatistics.StandardDeviation(values, mean);
 
         return new PeriodMetrics
         {
@@ -3016,7 +3026,7 @@ public class StatisticsService : IStatisticsService
 
         var basicStats = CalculateBasicStats(glucoseValues);
         var timeInRange = CalculateTimeInRange(sortedEntries, config.Thresholds);
-        var glycemicVariability = CalculateGlycemicVariability(glucoseValues, sortedEntries);
+        var glycemicVariability = CalculateGlycemicVariability(glucoseValues, sortedEntries, timeZone);
         var dataQuality = AssessDataQuality(sortedEntries, startDate, endDate, deviceEvents);
 
         var timeStart = sortedEntries.FirstOrDefault()?.Mills ?? 0;
@@ -3331,7 +3341,7 @@ public class StatisticsService : IStatisticsService
 
             var sorted = GlucoseStatistics.Ascending(values);
             var mean = values.Average();
-            var stdDev = GlucoseStatistics.StandardDeviation(values, mean, VarianceMode.Population);
+            var stdDev = GlucoseStatistics.StandardDeviation(values, mean);
 
             dataPoints.Add(
                 new SiteChangeImpactDataPoint
@@ -3376,16 +3386,8 @@ public class StatisticsService : IStatisticsService
                 (double)afterValues.Count(v => v >= GlucoseConstants.TargetBottomMgdl && v <= GlucoseConstants.TargetTopMgdl) / afterValues.Count * 100;
 
             // Calculate CV (coefficient of variation)
-            var stdDevBefore = GlucoseStatistics.StandardDeviation(
-                beforeValues,
-                avgBefore,
-                VarianceMode.Population
-            );
-            var stdDevAfter = GlucoseStatistics.StandardDeviation(
-                afterValues,
-                avgAfter,
-                VarianceMode.Population
-            );
+            var stdDevBefore = GlucoseStatistics.StandardDeviation(beforeValues, avgBefore);
+            var stdDevAfter = GlucoseStatistics.StandardDeviation(afterValues, avgAfter);
             var cvBefore = avgBefore > 0 ? (stdDevBefore / avgBefore) * 100 : 0;
             var cvAfter = avgAfter > 0 ? (stdDevAfter / avgAfter) * 100 : 0;
 

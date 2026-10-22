@@ -237,17 +237,21 @@ public class StatisticsController : ControllerBase
     /// Calculate comprehensive glycemic variability metrics
     /// </summary>
     /// <param name="request">Request containing glucose values and entries</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
     /// <returns>Comprehensive glycemic variability metrics, or no content for fewer than two values</returns>
     [HttpPost("glycemic-variability")]
     [EnableRateLimiting(ServiceRegistrationExtensions.StatisticsComputeRateLimitPolicy)]
     [RequireScope(Scope.ReportsRead)]
-    public ActionResult<GlycemicVariability> CalculateGlycemicVariability(
-        [FromBody] GlycemicVariabilityRequest request
+    public async Task<ActionResult<GlycemicVariability>> CalculateGlycemicVariability(
+        [FromBody] GlycemicVariabilityRequest request,
+        CancellationToken cancellationToken = default
     )
     {
+        var clock = await ResolveTenantTimeZoneAsync(cancellationToken);
         var result = _statisticsService.CalculateGlycemicVariability(
             request.Values,
-            request.Entries
+            request.Entries,
+            clock.Zone
         );
         if (result == null)
         {
@@ -358,20 +362,24 @@ public class StatisticsController : ControllerBase
     /// Master glucose analytics function that calculates comprehensive metrics
     /// </summary>
     /// <param name="request">Request containing sensor glucose readings, boluses, carb intakes, and configuration</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
     /// <returns>Comprehensive glucose analytics</returns>
     [HttpPost("comprehensive-analytics")]
     [EnableRateLimiting(ServiceRegistrationExtensions.StatisticsComputeRateLimitPolicy)]
     [RequireScope(Scope.ReportsRead)]
-    public ActionResult<GlucoseAnalytics> AnalyzeGlucoseData(
-        [FromBody] GlucoseAnalyticsRequest request
+    public async Task<ActionResult<GlucoseAnalytics>> AnalyzeGlucoseData(
+        [FromBody] GlucoseAnalyticsRequest request,
+        CancellationToken cancellationToken = default
     )
     {
+        var clock = await ResolveTenantTimeZoneAsync(cancellationToken);
         var result = _statisticsService.AnalyzeGlucoseData(
             request.Entries,
             request.Boluses ?? Enumerable.Empty<Bolus>(),
             request.CarbIntakes ?? Enumerable.Empty<CarbIntake>(),
             StatisticsService.ClinicalMinimumDays,
-            request.Config
+            request.Config,
+            timeZone: clock.Zone
         );
         return Ok(result);
     }

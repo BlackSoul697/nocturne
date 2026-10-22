@@ -147,7 +147,7 @@ public class StatisticsServiceTests
         );
 
         // Act
-        var result = _statisticsService.CalculateGlycemicVariability(values, entries)!;
+        var result = _statisticsService.CalculateGlycemicVariability(values, entries, timeZone: null)!;
 
         // Assert
         result.Should().NotBeNull();
@@ -1498,7 +1498,7 @@ public class StatisticsServiceTests
         );
 
         // Act
-        var result = _statisticsService.CalculateGlycemicVariability(values, entries)!;
+        var result = _statisticsService.CalculateGlycemicVariability(values, entries, timeZone: null)!;
 
         // Assert
         result.Should().NotBeNull();

@@ -25,6 +25,12 @@ public static class GlucoseConstants
     public const double TargetTopMgdl = 180;
 
     /// <summary>
+    /// Top of the tight target band in mg/dL, which shares its bottom with
+    /// <see cref="TargetBottomMgdl"/>.
+    /// </summary>
+    public const double TightTargetTopMgdl = 140;
+
+    /// <summary>
     /// Clinically significant hypoglycaemia in mg/dL: the level-2 boundary the consensus reports
     /// time below, distinct from the level-1 boundary at <see cref="TargetBottomMgdl"/>.
     /// </summary>
