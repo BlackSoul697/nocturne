@@ -36,21 +36,25 @@ public static class TempBasalOriginProvenance
 
     /// <summary>
     /// The evidence a stored origin rests on. A row stored before evidence was recorded holds a
-    /// default only when it is a Manual or Algorithm temp without an uploaded <c>automatic</c> flag
-    /// that the decomposer wrote for a closed-loop uploader; the flag was kept only from late 2026, so
-    /// a connector's older rows carry none and their origin is still the pump's statement.
+    /// default only when the decomposer wrote it without an uploaded <c>automatic</c> flag: a Manual
+    /// or Algorithm temp from a closed-loop uploader, or a Manual temp from any other uploader, Manual
+    /// being the default it gave every upload that stated no origin. The flag was kept only from late
+    /// 2026, so a connector's older rows carry none and their origin is still the pump's statement,
+    /// and a V4 client's Manual stated without the flag is told apart by having no legacy id.
     /// </summary>
     /// <param name="enteredBy">The uploader, which the decomposer stores as the record's <c>app</c>.</param>
     /// <param name="dataSource">The record's data source, which names the connector that wrote it, if one did.</param>
+    /// <param name="legacyId">The treatment id the decomposer keeps on every row it writes.</param>
     public static TempBasalOriginEvidence EvidenceOf(
         TempBasalOrigin origin,
         TempBasalOriginEvidence? stored,
         bool? automaticFlag,
         string? enteredBy,
-        string? dataSource) =>
-        stored ?? (origin is TempBasalOrigin.Manual or TempBasalOrigin.Algorithm
+        string? dataSource,
+        string? legacyId) =>
+        stored ?? ((origin is TempBasalOrigin.Manual or TempBasalOrigin.Algorithm && IsAidUploader(enteredBy, app: null)
+                    || origin is TempBasalOrigin.Manual && legacyId is not null)
                    && automaticFlag is null
-                   && IsAidUploader(enteredBy, app: null)
                    && !ConnectorSources.Contains(dataSource ?? string.Empty)
             ? TempBasalOriginEvidence.Uploader
             : TempBasalOriginEvidence.Reported);
@@ -91,14 +95,15 @@ public static class TempBasalOriginProvenance
     /// </summary>
     private const double SameRateEpsilon = 1e-6;
 
-    /// <inheritdoc cref="EvidenceOf(TempBasalOrigin, TempBasalOriginEvidence?, bool?, string?, string?)"/>
+    /// <inheritdoc cref="EvidenceOf(TempBasalOrigin, TempBasalOriginEvidence?, bool?, string?, string?, string?)"/>
     public static TempBasalOriginEvidence EvidenceOf(TempBasal tempBasal) =>
         EvidenceOf(
             tempBasal.Origin,
             tempBasal.OriginEvidence,
             TempBasalAutomaticFlag.Of(tempBasal.AdditionalProperties),
             tempBasal.App,
-            tempBasal.DataSource);
+            tempBasal.DataSource,
+            tempBasal.LegacyId);
 
     /// <summary>
     /// The connectors that wrote temp basals themselves rather than through the decomposer: a closed

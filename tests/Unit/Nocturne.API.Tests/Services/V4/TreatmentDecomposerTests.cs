@@ -739,6 +739,26 @@ public class TreatmentDecomposerTests : IDisposable
             s => s.UpsertStateSpanAsync(It.IsAny<StateSpan>(), It.IsAny<CancellationToken>()), Times.Never);
     }
 
+    [Fact]
+    public async Task DecomposeAsync_ProfileSwitchWithNoUploader_IsNamedByTheUploadedDevice()
+    {
+        var treatment = new Treatment
+        {
+            Id = "profile-switch-device",
+            EventType = "Profile Switch",
+            Mills = 1700000000000,
+            Profile = "Day Profile",
+            Duration = 60,
+            AdditionalProperties = new Dictionary<string, object> { ["device"] = "openaps://SM-G991B" },
+        };
+
+        var result = await _decomposer.DecomposeAsync(treatment, WriteOrigin.Live);
+
+        result.CreatedRecords.Should().ContainSingle()
+            .Which.Should().BeOfType<V4Models.ProfileActivation>()
+            .Which.Device.Should().Be("openaps://SM-G991B");
+    }
+
     #endregion
 
     #region Bolus Wizard → BolusCalculation (+ Bolus if insulin)
@@ -1476,6 +1496,62 @@ public class TreatmentDecomposerTests : IDisposable
         var treatment = TempBasalForOrigin(reason, automatic: null, basalOrigin, enteredBy);
 
         TreatmentDecomposer.MapToTempBasal(treatment, correlationId: null).Origin.Should().Be(expected);
+    }
+
+    [Theory]
+    [InlineData("Manual", "Reported", false)]
+    [InlineData("Algorithm", "Reported", true)]
+    [InlineData("Manual", null, false)]
+    [InlineData("Manual", "Uploader", null)]
+    public void MapToTempBasal_AnEchoedStatementKeepsItsAutomaticFlag(string basalOrigin, string? evidence, bool? expected)
+    {
+        var treatment = TempBasalForOrigin(reason: null, automatic: null, basalOrigin, enteredBy: null);
+        if (evidence is not null)
+            treatment.AdditionalProperties![V4Models.TempBasalOriginProvenance.EvidenceField] = evidence;
+
+        var tempBasal = TreatmentDecomposer.MapToTempBasal(treatment, correlationId: null);
+
+        TempBasalAutomaticFlag.Of(tempBasal.AdditionalProperties).Should().Be(expected);
+    }
+
+    [Theory]
+    [InlineData(null, "omnipod-dash", "omnipod-dash")]
+    [InlineData("Trio", "omnipod-dash", "Trio")]
+    [InlineData("Trio", null, "Trio")]
+    [InlineData(null, null, null)]
+    public void MapToTempBasal_TheUploadedDeviceNamesOnlyATempWithNoUploader(
+        string? enteredBy, string? device, string? expected)
+    {
+        var treatment = TempBasalForOrigin(reason: null, automatic: null, basalOrigin: null, enteredBy);
+        if (device is not null)
+            treatment.AdditionalProperties = new Dictionary<string, object> { ["device"] = device };
+
+        var tempBasal = TreatmentDecomposer.MapToTempBasal(treatment, correlationId: null);
+
+        tempBasal.Device.Should().Be(expected);
+        tempBasal.App.Should().Be(enteredBy);
+    }
+
+    [Theory]
+    [InlineData(null, "omnipod-dash", "omnipod-dash")]
+    [InlineData("xDrip+", "omnipod-dash", "xDrip+")]
+    public void MapToBolus_TheUploadedDeviceNamesOnlyABolusWithNoUploader(
+        string? enteredBy, string device, string expected)
+    {
+        var treatment = new Treatment
+        {
+            Id = "bolus-device-1",
+            EventType = "Correction Bolus",
+            Mills = 1789905600000,
+            Insulin = 1.5,
+            EnteredBy = enteredBy,
+            AdditionalProperties = new Dictionary<string, object>
+            {
+                ["device"] = JsonSerializer.SerializeToElement(device),
+            },
+        };
+
+        TreatmentDecomposer.MapToBolus(treatment, correlationId: null).Device.Should().Be(expected);
     }
 
     private static Treatment TempBasalForOrigin(

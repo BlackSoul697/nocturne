@@ -135,7 +135,8 @@ public static class TempBasalMapper
             TempBasalAutomaticFlag.Of(
                 MapperHelpers.DeserializeJson<Dictionary<string, object?>>(entity.AdditionalPropertiesJson)),
             entity.App,
-            entity.DataSource);
+            entity.DataSource,
+            entity.LegacyId);
         return new TempBasalOriginState(origin, evidence, entity.ApsSnapshotId, new DateTimeOffset(entity.Timestamp, TimeSpan.Zero).ToUnixTimeMilliseconds(), entity.Rate);
     }
 }

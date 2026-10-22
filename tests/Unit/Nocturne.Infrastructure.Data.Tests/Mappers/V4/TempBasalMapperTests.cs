@@ -1,3 +1,4 @@
+using Nocturne.Core.Constants;
 using Nocturne.Core.Models.V4;
 using Nocturne.Infrastructure.Data.Entities.V4;
 using Nocturne.Infrastructure.Data.Mappers.V4;
@@ -383,7 +384,13 @@ public class TempBasalMapperTests
     public void UpdateEntity_ReUploadKeepsARowWithoutEvidenceThatInfersAsReported()
     {
         var start = DateTime.UtcNow;
-        var entity = new TempBasalEntity { Timestamp = start, Rate = 1.2, Origin = "Manual" };
+        var entity = new TempBasalEntity
+        {
+            Timestamp = start,
+            Rate = 1.2,
+            Origin = "Manual",
+            DataSource = DataSources.CareLinkConnector,
+        };
 
         TempBasalMapper.UpdateEntity(entity, new TempBasal
         {

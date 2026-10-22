@@ -12,14 +12,14 @@ namespace Nocturne.Infrastructure.Data.Services;
 
 /// <summary>
 /// Settles the temp basals whose origin is a default (<see cref="TempBasalOriginProvenance"/>)
-/// against the APS snapshots their device uploaded around their start, links the snapshot that
-/// proposed each, and records the <see cref="TempBasalOriginEvidence"/> it rests on.
+/// against the APS snapshots uploaded around their start (<see cref="ProposalsFor"/>), links the
+/// snapshot that proposed each, and records the <see cref="TempBasalOriginEvidence"/> it rests on.
 /// </summary>
 /// <remarks>
 /// <para>
 /// Devicestatus and treatments arrive separately, so this runs on stored rows once both have
 /// settled rather than at ingest. A row stored before evidence was recorded is classified first by
-/// <see cref="TempBasalOriginProvenance.EvidenceOf(TempBasalOrigin, TempBasalOriginEvidence?, bool?, string?, string?)"/>:
+/// <see cref="TempBasalOriginProvenance.EvidenceOf(TempBasalOrigin, TempBasalOriginEvidence?, bool?, string?, string?, string?)"/>:
 /// a stated origin is marked <see cref="TempBasalOriginEvidence.Reported"/> and left as it is, and a
 /// default is replaced by its uploader's current default before it is judged.
 /// </para>
@@ -46,7 +46,7 @@ public static class TempBasalOriginCorroborator
 
     private const string PageSql = """
         SELECT id, start_timestamp, rate, device, app, data_source, origin, origin_evidence,
-               additional_properties ->> 'automatic', aps_snapshot_id, sys_updated_at
+               additional_properties ->> 'automatic', aps_snapshot_id, sys_updated_at, legacy_id
         FROM temp_basals
         WHERE tenant_id = @tenant
           AND deleted_at IS NULL AND (origin_evidence IS NULL OR origin_evidence = 'Uploader')
@@ -63,9 +63,9 @@ public static class TempBasalOriginCorroborator
                COALESCE(a.suggested_json ->> 'rate',
                         a.loop_json #>> '{automaticDoseRecommendation,tempBasal,rate}',
                         a.loop_json #>> '{recommendedTempBasal,rate}')
-        FROM unnest(@starts, @devices) AS w(start, device)
+        FROM unnest(@starts) AS w(start)
         JOIN aps_snapshots a
-          ON a.device = w.device AND a.timestamp >= w.start - @before AND a.timestamp <= w.start + @after
+          ON a.timestamp >= w.start - @before AND a.timestamp <= w.start + @after
         WHERE a.tenant_id = @tenant AND a.deleted_at IS NULL
           AND a.timestamp >= @from AND a.timestamp <= @to
         ORDER BY a.id
@@ -119,12 +119,38 @@ public static class TempBasalOriginCorroborator
     public sealed record Verdict(TempBasalOrigin Origin, TempBasalOriginEvidence Evidence, Guid? SnapshotId);
 
     /// <summary>
-    /// Judges a temp basal against the proposals of its own device. One within <see cref="Window"/>
-    /// of its start, by the snapshot's time or its enactment's, that enacted or suggested its rate
-    /// makes it the loop's, linked to the nearest such. Proposals nearby that all named another rate
-    /// mean the loop was running and the temp was set by hand. A proposal that named no rate (oref's
-    /// "no temp required"), or an enactment repeated from outside the window, is no evidence either
-    /// way. With no evidence, or no rate to compare, <paramref name="uploaderDefault"/> stands.
+    /// The proposals a temp basal starting at <paramref name="start"/> is judged against: those of
+    /// its own device read within the window of its start. When it names no device, or its device
+    /// uploaded none there, those of the one device that did, since a temp mirrored through another
+    /// uploader (AAPS through Nightscout with no device, Trio through Tidepool) names no loop of its
+    /// own. Snapshots that name no device count as one device there, but a null device is the
+    /// absence of a name, so it never matches them as its own. With two or more devices there is no
+    /// telling which loop it belongs to, so none.
+    /// </summary>
+    public static IReadOnlyList<Proposal> ProposalsFor(
+        string? device, DateTime start, IEnumerable<(string? Device, Proposal Proposal)> read)
+    {
+        var nearby = read
+            .Where(p => p.Proposal.Timestamp >= start - Window && p.Proposal.Timestamp <= start + Window + RepeatedEnactment)
+            .ToList();
+        var own = device is null
+            ? []
+            : nearby.Where(p => string.Equals(p.Device, device, StringComparison.Ordinal)).ToList();
+        if (own.Count > 0)
+            return own.Select(p => p.Proposal).ToList();
+
+        return nearby.Select(p => p.Device).Distinct(StringComparer.Ordinal).Count() == 1
+            ? nearby.Select(p => p.Proposal).ToList()
+            : [];
+    }
+
+    /// <summary>
+    /// Judges a temp basal against the proposals of its loop (<see cref="ProposalsFor"/>). One within
+    /// <see cref="Window"/> of its start, by the snapshot's time or its enactment's, that enacted or
+    /// suggested its rate makes it the loop's, linked to the nearest such. Proposals nearby that all
+    /// named another rate mean the loop was running and the temp was set by hand. A proposal that
+    /// named no rate (oref's "no temp required"), or an enactment repeated from outside the window, is
+    /// no evidence either way. With no evidence, or no rate to compare, <paramref name="uploaderDefault"/> stands.
     /// </summary>
     public static Verdict Judge(
         TempBasalOrigin uploaderDefault, DateTime start, double? rate, IEnumerable<Proposal> proposals)
@@ -310,7 +336,8 @@ public static class TempBasalOriginCorroborator
         string? Evidence,
         bool? AutomaticFlag,
         Guid? SnapshotId,
-        DateTime ReadAt);
+        DateTime ReadAt,
+        string? LegacyId);
 
     private static async Task<(int Written, DateTime LastAt, Guid LastId)?> CorroboratePageAsync(
         NocturneDbContext db,
@@ -325,18 +352,18 @@ public static class TempBasalOriginCorroborator
         if (rows.Count == 0)
             return null;
 
-        var proposals = await ReadProposalsAsync(db, tenantId, rows.Where(r => r.Device is not null).ToList(), ct);
+        var proposals = await ReadProposalsAsync(db, tenantId, rows, ct);
 
         var verdicts = rows.Select(row => (Row: row, Verdict: Settle(row, proposals))).ToList();
         var written = await WriteAsync(db, tenantId, verdicts, ct);
         return (written, rows[^1].Start, rows[^1].Id);
     }
 
-    private static Verdict Settle(Row row, ILookup<string, Proposal> proposals)
+    private static Verdict Settle(Row row, List<(string? Device, Proposal Proposal)> proposals)
     {
         var stored = TempBasalOriginColumns.EvidenceOf(row.Evidence);
         var evidence = TempBasalOriginProvenance.EvidenceOf(
-            row.Origin, stored, row.AutomaticFlag, row.EnteredBy, row.DataSource);
+            row.Origin, stored, row.AutomaticFlag, row.EnteredBy, row.DataSource, row.LegacyId);
         if (evidence == TempBasalOriginEvidence.Reported)
             return new Verdict(row.Origin, TempBasalOriginEvidence.Reported, row.SnapshotId);
 
@@ -347,7 +374,7 @@ public static class TempBasalOriginCorroborator
         var uploaderDefault = stored is null
             ? TempBasalOriginProvenance.UploaderDefault(row.EnteredBy, app: null)
             : row.Origin;
-        return Judge(uploaderDefault, row.Start, row.Rate, row.Device is null ? [] : proposals[row.Device]);
+        return Judge(uploaderDefault, row.Start, row.Rate, ProposalsFor(row.Device, row.Start, proposals));
     }
 
     private static TimeSpan DistanceFrom(Proposal proposal, DateTime start)
@@ -397,35 +424,32 @@ public static class TempBasalOriginCorroborator
                 reader.IsDBNull(7) ? null : reader.GetString(7),
                 reader.IsDBNull(8) ? null : bool.TryParse(reader.GetString(8), out var flag) ? flag : null,
                 reader.IsDBNull(9) ? null : reader.GetGuid(9),
-                reader.GetDateTime(10)));
+                reader.GetDateTime(10),
+                reader.IsDBNull(11) ? null : reader.GetString(11)));
         }
 
         return rows;
     }
 
-    private static async Task<ILookup<string, Proposal>> ReadProposalsAsync(
+    private static async Task<List<(string? Device, Proposal Proposal)>> ReadProposalsAsync(
         NocturneDbContext db, Guid tenantId, List<Row> rows, CancellationToken ct)
     {
-        if (rows.Count == 0)
-            return Array.Empty<(string, Proposal)>().ToLookup(p => p.Item1, p => p.Item2);
-
         await using var command = Command(db, ProposalSql);
         command.Parameters.AddWithValue("tenant", tenantId);
         command.Parameters.Add(new NpgsqlParameter("starts", NpgsqlDbType.Array | NpgsqlDbType.TimestampTz)
         {
             Value = rows.Select(r => r.Start).ToArray(),
         });
-        command.Parameters.AddWithValue("devices", rows.Select(r => r.Device!).ToArray());
         command.Parameters.AddWithValue("before", Window);
         command.Parameters.AddWithValue("after", Window + RepeatedEnactment);
         command.Parameters.AddWithValue("from", rows[0].Start - Window);
         command.Parameters.AddWithValue("to", rows[^1].Start + Window + RepeatedEnactment);
 
-        var proposals = new List<(string Device, Proposal Proposal)>();
+        var proposals = new List<(string? Device, Proposal Proposal)>();
         await using var reader = await command.ExecuteReaderAsync(ct);
         while (await reader.ReadAsync(ct))
         {
-            proposals.Add((reader.GetString(1), new Proposal(
+            proposals.Add((reader.IsDBNull(1) ? null : reader.GetString(1), new Proposal(
                 reader.GetGuid(0),
                 reader.GetDateTime(2),
                 reader.IsDBNull(3) ? null : ParseInstant(reader.GetString(3)),
@@ -433,7 +457,7 @@ public static class TempBasalOriginCorroborator
                 reader.IsDBNull(5) ? null : ParseRate(reader.GetString(5)))));
         }
 
-        return proposals.ToLookup(p => p.Device, p => p.Proposal, StringComparer.Ordinal);
+        return proposals;
     }
 
     private static async Task<int> WriteAsync(
