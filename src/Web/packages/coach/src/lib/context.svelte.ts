@@ -10,7 +10,7 @@ import type {
 } from "./types.js";
 import { selectActiveMark, isSequenceDone, sequenceProgress, type SelectionResult } from "./sequencing.js";
 
-const COACH_CONTEXT_KEY = Symbol("coach-mark-context");
+const COACH_CONTEXT_KEY = "nocturne:coach:mark-context";
 const DISABLED_STORAGE_KEY = "nocturne:coach-marks-disabled";
 
 function readDisabledFlag(): boolean {

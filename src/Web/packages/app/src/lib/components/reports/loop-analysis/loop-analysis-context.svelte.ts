@@ -59,9 +59,7 @@ export class LoopAnalysisState {
   }
 }
 
-// A string, not a symbol: the dev server can evaluate this module twice on a route's first SSR, and a
-// symbol from the second copy would miss the layout's context.
-const LOOP_ANALYSIS_KEY = "loop-analysis";
+const LOOP_ANALYSIS_KEY = "nocturne:app:loop-analysis";
 
 /** Call from the Loop Analysis layout. */
 export function setLoopAnalysis(state: LoopAnalysisState): LoopAnalysisState {

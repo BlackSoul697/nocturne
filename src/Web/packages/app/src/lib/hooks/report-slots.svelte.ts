@@ -21,8 +21,7 @@ export class ReportSlots {
   filters = $state.raw<ReportFilterExtension | null>(null);
 }
 
-// A string for the reason given at LOOP_ANALYSIS_KEY in loop-analysis-context.svelte.ts.
-const REPORT_SLOTS_KEY = "report-slots";
+const REPORT_SLOTS_KEY = "nocturne:app:report-slots";
 
 /** Call from the reports layout. */
 export function createReportSlots(): ReportSlots {

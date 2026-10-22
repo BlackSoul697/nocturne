@@ -36,7 +36,7 @@ interface ContextResourceOptionsWithDate extends ContextResourceOptions {
   dateParams: ReportsParamsReturn;
 }
 
-const RESOURCE_CONTEXT_KEY = Symbol("resource-context");
+const RESOURCE_CONTEXT_KEY = "nocturne:app:resource-context";
 
 /** One panel's fetch state, as reported to the layout's ResourceGuard. */
 export interface ResourceRegistration {
