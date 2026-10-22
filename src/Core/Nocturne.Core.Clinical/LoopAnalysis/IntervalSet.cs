@@ -47,6 +47,20 @@ public sealed class IntervalSet
         return index < _intervals.Length && _intervals[index].Start <= mills;
     }
 
+    /// <summary>Whether any instant of <c>[start, end)</c> is in the set.</summary>
+    public bool Overlaps(long start, long end)
+    {
+        var index = FirstEndingAfter(start);
+        return end > start && index < _intervals.Length && _intervals[index].Start < end;
+    }
+
+    /// <summary>Whether every instant of <c>[start, end)</c> is in the set.</summary>
+    public bool Covers(long start, long end)
+    {
+        var index = FirstEndingAfter(start);
+        return index < _intervals.Length && _intervals[index].Start <= start && _intervals[index].End >= end;
+    }
+
     public IntervalSet Union(IntervalSet other) => Of(_intervals.Concat(other._intervals));
 
     public IntervalSet Intersect(IntervalSet other)
