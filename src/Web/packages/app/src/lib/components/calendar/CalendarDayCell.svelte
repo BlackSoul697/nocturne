@@ -25,6 +25,7 @@
   let {
     day,
     viewMode,
+    showTirPercent,
     currentYear,
     currentMonth,
     trackerEvents,
@@ -42,6 +43,7 @@
   }: {
     day: CalendarSlot;
     viewMode: "tir" | "profile";
+    showTirPercent: boolean;
     currentYear: number;
     currentMonth: number;
     trackerEvents: Map<string, CalendarTrackerEvent[]>;
@@ -181,6 +183,14 @@
                 veryHighPercent={stats.veryHighPercent}
                 onclick={() => handleDayClick(stats.source)}
               />
+              {#if showTirPercent}
+                <span
+                  data-testid="tir-percent"
+                  class="pointer-events-none absolute inset-x-0 top-1/2 mx-auto w-fit -translate-y-1/2 rounded bg-background/80 px-1 text-xs font-semibold text-foreground tabular-nums"
+                >
+                  {Math.round(stats.inRangePercent)}%
+                </span>
+              {/if}
             </div>
           {:else}
             <div {...props} class="absolute inset-0">

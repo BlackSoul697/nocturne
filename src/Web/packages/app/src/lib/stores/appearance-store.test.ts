@@ -19,6 +19,7 @@ const {
   timeFormat,
   colorTheme,
   glucoseRangePalette,
+  calendarShowTirPercent,
   predictionMinutes,
   predictionEnabled,
   chartLineColor,
@@ -90,6 +91,18 @@ describe("appearance-store preference sync", () => {
 
     applyPreferences({ glucoseRangePalette: "rainbow" });
     expect(glucoseRangePalette.current).toBe("clarity");
+  });
+
+  it("applyPreferences hydrates the calendar TIR percent flag, and a payload without it leaves it alone", () => {
+    applyPreferences({ calendarShowTirPercent: true });
+    expect(calendarShowTirPercent.current).toBe(true);
+    expect(collectPreferences().calendarShowTirPercent).toBe(true);
+
+    applyPreferences({ glucoseUnits: "mmol" });
+    expect(calendarShowTirPercent.current).toBe(true);
+
+    applyPreferences({ calendarShowTirPercent: false });
+    expect(calendarShowTirPercent.current).toBe(false);
   });
 
   it("applyPreferences leaves unset fields untouched (partial payload)", () => {

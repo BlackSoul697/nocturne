@@ -4,6 +4,8 @@
   import ChevronRight from "@lucide/svelte/icons/chevron-right";
   import { Button } from "$lib/components/ui/button";
   import * as ToggleGroup from "$lib/components/ui/toggle-group";
+  import { Switch } from "$lib/components/ui/switch";
+  import { Label } from "$lib/components/ui/label";
 
   type ViewMode = "tir" | "profile";
 
@@ -16,6 +18,8 @@
     nextMonth: () => void;
     goToToday: () => void;
     setViewMode: (mode: ViewMode) => void;
+    showTirPercent: boolean;
+    setShowTirPercent: (show: boolean) => void;
   }
 
   let {
@@ -27,6 +31,8 @@
     nextMonth,
     goToToday,
     setViewMode,
+    showTirPercent,
+    setShowTirPercent,
   }: Props = $props();
 
   const currentMonth = $derived(viewDate.getMonth());
@@ -81,6 +87,17 @@
           Profile
         </ToggleGroup.Item>
       </ToggleGroup.Root>
+
+      {#if viewMode === "tir"}
+        <div class="flex items-center gap-2">
+          <Switch
+            id="calendar-show-tir-percent"
+            checked={showTirPercent}
+            onCheckedChange={setShowTirPercent}
+          />
+          <Label for="calendar-show-tir-percent" variant="option">Show TIR %</Label>
+        </div>
+      {/if}
 
       <!-- Glucose colors -->
       <div class="flex flex-wrap items-center gap-x-3 gap-y-1">
