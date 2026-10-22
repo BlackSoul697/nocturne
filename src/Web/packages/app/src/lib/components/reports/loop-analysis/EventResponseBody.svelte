@@ -27,7 +27,8 @@
   import EventMetricsTable from "./EventMetricsTable.svelte";
   import EventList from "./EventList.svelte";
   import EventSlotEvents from "./EventSlotEvents.svelte";
-  import NoTimeZone from "./NoTimeZone.svelte";
+  import NoTimeZone from "$lib/components/reports/NoTimeZone.svelte";
+  import { loopAnalysisTimeZoneNeed } from "./time-zone-need.svelte";
   import CohortDot from "./CohortDot.svelte";
   import { TimeOfDayCursor } from "./time-of-day-cursor.svelte";
   import { axisEnd } from "./daily-profile-view";
@@ -218,7 +219,7 @@
 </script>
 
 {#if response.timeZoneUnavailableReason}
-  <NoTimeZone reason={response.timeZoneUnavailableReason} />
+  <NoTimeZone reason={response.timeZoneUnavailableReason}>{loopAnalysisTimeZoneNeed()}</NoTimeZone>
 {:else}
   <div class="space-y-6">
     {#if response.historyClamped}

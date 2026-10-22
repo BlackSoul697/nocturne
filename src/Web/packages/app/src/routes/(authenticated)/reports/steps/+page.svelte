@@ -84,7 +84,7 @@
   {#if noZoneReason}
     <p class="text-sm text-muted-foreground">
       <TimeZoneNote reason={noZoneReason}>
-        so this report cannot calculate the total steps for each local day.
+        This report cannot calculate the total steps for each local day.
       </TimeZoneNote>
     </p>
   {/if}

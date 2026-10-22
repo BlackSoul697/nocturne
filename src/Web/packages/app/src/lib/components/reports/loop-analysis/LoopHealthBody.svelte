@@ -28,7 +28,8 @@
   import HourBars from "./HourBars.svelte";
   import HourBands from "./HourBands.svelte";
   import StripKey, { type StripKeyItem } from "./StripKey.svelte";
-  import NoTimeZone from "./NoTimeZone.svelte";
+  import NoTimeZone from "$lib/components/reports/NoTimeZone.svelte";
+  import { loopAnalysisTimeZoneNeed } from "./time-zone-need.svelte";
   import IgnoredFiltersNotice from "./IgnoredFiltersNotice.svelte";
   import AggregateReadout from "./AggregateReadout.svelte";
   import { TimeOfDayCursor } from "./time-of-day-cursor.svelte";
@@ -447,7 +448,7 @@
 {/snippet}
 
 {#if response.timeZoneUnavailableReason}
-  <NoTimeZone reason={response.timeZoneUnavailableReason} />
+  <NoTimeZone reason={response.timeZoneUnavailableReason}>{loopAnalysisTimeZoneNeed()}</NoTimeZone>
 {:else}
   <div class="space-y-6">
     {#if response.historyClamped}

@@ -21,17 +21,18 @@ describe("AidSystemUseCard", () => {
   });
 
   it.each([
-    TimeZoneUnavailableReason.NotConfigured,
-    TimeZoneUnavailableReason.Share,
-    TimeZoneUnavailableReason.LookupFailed,
-    TimeZoneUnavailableReason.Unrecognised,
-  ])("shows the metrics and the UTC note for %s", async (reason) => {
+    [TimeZoneUnavailableReason.NotConfigured, /do not have a time zone/],
+    [TimeZoneUnavailableReason.Share, /A shared link does not show the time zone/],
+    [TimeZoneUnavailableReason.LookupFailed, /The time zone of this data did not load/],
+    [TimeZoneUnavailableReason.Unrecognised, /does not recognise the time zone/],
+  ])("shows the metrics and the UTC note for %s", async (reason, cause) => {
     render(AidSystemUseCard, { props: { metrics: { ...metrics, timeZoneUnavailableReason: reason } as AidSystemMetrics } });
 
     await expect.element(page.getByText("Dexcom G7")).toBeVisible();
     await expect.element(page.getByText("Omnipod 5")).toBeVisible();
     await expect.element(page.getByText("91%")).toBeVisible();
     await expect.element(page.getByText("5", { exact: true })).toBeVisible();
+    await expect.element(page.getByText(cause)).toBeVisible();
     await expect.element(page.getByText(/counts device use on UTC days/)).toBeVisible();
   });
 });

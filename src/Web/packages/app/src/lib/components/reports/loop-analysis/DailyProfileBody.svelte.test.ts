@@ -229,7 +229,7 @@ describe("DailyProfileBody", () => {
       },
     });
 
-    await expect.element(page.getByText(/A shared link cannot see that time zone/)).toBeVisible();
+    await expect.element(page.getByText(/A shared link does not show the time zone/)).toBeVisible();
   });
 
   it("says the ranges were clamped to the last 24 hours", async () => {

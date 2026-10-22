@@ -193,9 +193,8 @@
                   Hours follow the time zone set in the profile settings ({report.timeZone}).
                 {:else}
                   <TimeZoneNote reason={fallbackReason ?? TimeZoneUnavailableReason.NotConfigured}>
-                    so each reading is placed at the local time the device that recorded it
-                    reported. If readings came from devices set to different time zones, some
-                    hours may be off.
+                    This report places each reading at the local time that the device
+                    reported. If the devices use different time zones, some hours can be incorrect.
                   </TimeZoneNote>
                 {/if}
               </p>

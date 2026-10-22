@@ -27,7 +27,8 @@
   import PredictionBiasHeatmap from "./PredictionBiasHeatmap.svelte";
   import PredictionContextTable from "./PredictionContextTable.svelte";
   import IgnoredFiltersNotice from "./IgnoredFiltersNotice.svelte";
-  import NoTimeZone from "./NoTimeZone.svelte";
+  import NoTimeZone from "$lib/components/reports/NoTimeZone.svelte";
+  import { loopAnalysisTimeZoneNeed } from "./time-zone-need.svelte";
   import { axisEnd } from "./daily-profile-view";
   import { curveLabel, horizonList } from "./prediction-labels.svelte";
 
@@ -118,7 +119,7 @@
 </script>
 
 {#if response.timeZoneUnavailableReason}
-  <NoTimeZone reason={response.timeZoneUnavailableReason} />
+  <NoTimeZone reason={response.timeZoneUnavailableReason}>{loopAnalysisTimeZoneNeed()}</NoTimeZone>
 {:else}
   <div class="space-y-6">
     {#if response.historyClamped}

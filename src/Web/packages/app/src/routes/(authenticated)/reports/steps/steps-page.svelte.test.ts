@@ -46,10 +46,10 @@ describe("steps report", () => {
   });
 
   it.each([
-    [TimeZoneUnavailableReason.Share, /A shared link cannot see the time zone/],
-    [TimeZoneUnavailableReason.NotConfigured, /No time zone is set in the profile settings/],
-    [TimeZoneUnavailableReason.Unrecognised, /isn't one this server\s+recognises/],
-    [TimeZoneUnavailableReason.LookupFailed, /could not be loaded just now/],
+    [TimeZoneUnavailableReason.Share, /A shared link does not show the time zone/],
+    [TimeZoneUnavailableReason.NotConfigured, /do not have a time zone/],
+    [TimeZoneUnavailableReason.Unrecognised, /does not recognise the time zone/],
+    [TimeZoneUnavailableReason.LookupFailed, /did not load/],
   ])("keeps the bars and total steps but drops the row total for %s", async (reason, sentence) => {
     respond(reason);
     render(StepsPage);
