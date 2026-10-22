@@ -1,3 +1,7 @@
+<!--
+  Sticky content that scrolls away with the page and slides back in on scroll-up, pinned at
+  --headroom-top, which the surrounding layout sets beneath its own sticky chrome.
+-->
 <script lang="ts">
   import type { Snippet } from "svelte";
 
@@ -23,8 +27,16 @@
    */
   function travelled() {
     if (!sentinel || !panel) return 0;
-    const top = parseFloat(getComputedStyle(panel).top) || 0;
-    return Math.max(0, top - sentinel.getBoundingClientRect().top);
+    return Math.max(0, pinnedTop() - sentinel.getBoundingClientRect().top);
+  }
+
+  function pinnedTop() {
+    return panel ? parseFloat(getComputedStyle(panel).top) || 0 : 0;
+  }
+
+  /** Far enough to clear whatever it pins beneath, which may be translucent. */
+  function hideDistance() {
+    return (panel?.offsetHeight ?? 0) + pinnedTop();
   }
 
   function onscroll() {
@@ -32,16 +44,15 @@
     lastScrollY = window.scrollY;
     if (delta !== 0) scrollingDown = delta > 0;
     snapping = false;
-    const height = panel?.offsetHeight ?? 0;
-    hidden = Math.min(travelled(), Math.max(0, Math.min(height, hidden + delta)));
+    hidden = Math.min(travelled(), Math.max(0, Math.min(hideDistance(), hidden + delta)));
   }
 
   /** A panel left partly revealed when scrolling stops finishes the way the page was scrolling. */
   function onscrollend() {
-    const height = panel?.offsetHeight ?? 0;
-    if (hidden <= 0 || hidden >= height) return;
+    const distance = hideDistance();
+    if (hidden <= 0 || hidden >= distance) return;
     snapping = true;
-    hidden = scrollingDown ? Math.min(height, travelled()) : 0;
+    hidden = scrollingDown ? Math.min(distance, travelled()) : 0;
   }
 </script>
 
@@ -51,7 +62,7 @@
 <div
   bind:this={panel}
   class={[
-    "sticky top-[calc(var(--app-sticky-top,0px)+3.5rem)] z-10 translate-y-(--headroom-offset) print:static print:translate-y-0",
+    "sticky top-(--headroom-top,0px) z-10 translate-y-(--headroom-offset) print:static print:translate-y-0",
     snapping && "transition-transform duration-200 ease-out motion-reduce:transition-none",
     className,
   ]}

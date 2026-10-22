@@ -49,7 +49,8 @@ describe("year overview color focus", () => {
       await minimumInput().fill("10.25");
       await maximumInput().fill("70.75");
       await expect.element(maximumInput()).toHaveValue(70.75);
-      expect(precision.mock.calls.length).toBe(initialConversions);
+      // A rebuild costs one call per step, thousands here; a handful come from rounding the next boundary.
+      expect(precision.mock.calls.length).toBeLessThan(initialConversions + 100);
 
       await screen.rerender({ observedMax: 800 });
       await expect.element(maximumSlider()).toHaveAttribute("aria-valuemax", "800");
@@ -101,15 +102,27 @@ describe("year overview color focus", () => {
     expect(page.getByRole("slider").elements()).toHaveLength(4);
   });
 
-  it("freezes an automatic window when a boundary is added", async () => {
+  it("leaves an automatic window automatic when a boundary is added, so later data is not dimmed", async () => {
     const screen = render(Harness);
     await addBoundary().click();
-    await expect.element(selected("window")).toHaveTextContent("[0,500]");
+    await expect.element(selected("window")).toHaveTextContent("null");
+    await expect.element(selected("boundaries")).toHaveTextContent('[{"value":250,"position":0.5}]');
     await screen.rerender({ observedMax: 800 });
-    await expect.element(maximumInput()).toHaveValue(500);
+    await expect.element(maximumInput()).toHaveValue(800);
+    await expect.element(boundaryInput(1)).toHaveValue(250);
   });
 
-  it("keeps a boundary between its neighbours and the window around every boundary", async () => {
+  it("disables adding a boundary when none fits", async () => {
+    render(Harness, {
+      glucose: true,
+      metricLabel: "Avg Glucose",
+      initialWindow: [100, 102],
+      initialBoundaries: [{ value: 101, position: 0.2 }],
+    });
+    await expect.element(addBoundary()).toBeDisabled();
+  });
+
+  it("keeps a boundary between its neighbours, and lets the window move past boundaries", async () => {
     render(Harness, {
       initialWindow: [10, 70],
       initialBoundaries: [
@@ -117,17 +130,19 @@ describe("year overview color focus", () => {
         { value: 50, position: 0.6 },
       ],
     });
-    for (const value of ["", "50", "60", "5"]) {
+    for (const value of ["", "50", "60", "0"]) {
       await boundaryInput(1).fill(value);
       await expect.element(boundaryInput(1)).toHaveAttribute("aria-invalid", "true");
     }
-    await maximumInput().fill("45");
-    await expect.element(maximumInput()).toHaveAttribute("aria-invalid", "true");
-    await expect.element(page.getByRole("alert")).toHaveTextContent("around every color boundary");
-    await expect.element(selected("window")).toHaveTextContent("[10,70]");
     await expect
       .element(selected("boundaries"))
       .toHaveTextContent('[{"value":20,"position":0.3},{"value":50,"position":0.6}]');
+    await maximumInput().fill("45");
+    await expect.element(selected("window")).toHaveTextContent("[10,45]");
+    await expect
+      .element(selected("boundaries"))
+      .toHaveTextContent('[{"value":20,"position":0.3},{"value":50,"position":0.6}]');
+    await expect.element(boundarySlider(2)).toHaveAttribute("aria-valuenow", "50");
   });
 
   it("removes a boundary and clears the list with the last one", async () => {
@@ -234,5 +249,6 @@ describe("year overview color focus", () => {
     await addBoundary().click();
     await expect.element(boundaryInput(1, "Avg Glucose")).toHaveValue(11.7);
     await expect.element(selected("window")).toHaveTextContent("[70,350]");
+    await expect.element(boundaryInput(1, "Avg Glucose")).toHaveAttribute("step", "0.1");
   });
 });

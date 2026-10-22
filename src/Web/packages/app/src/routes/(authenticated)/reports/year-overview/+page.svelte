@@ -104,52 +104,42 @@
     band: `${selectedMetric}Band`,
     boundaries: `${selectedMetric}Boundaries`,
   });
-  const colorPreferences = $derived(yearOverviewColors.current);
+  /**
+   * The retired shape applied its bands and dimming only in advanced mode. A blob saved with
+   * advanced mode off carries settings its owner turned off, so they stay off.
+   */
+  const colorPreferences = $derived.by((): YearOverviewColorPreferences => {
+    const stored = yearOverviewColors.current;
+    if (!("advancedMode" in stored) || stored.advancedMode === true) return stored;
+    return Object.fromEntries(
+      Object.entries(stored).filter(
+        ([key]) => !key.endsWith("Band") && key !== "outOfBandTransparency"
+      )
+    );
+  });
   const dim = $derived(
     Math.max(0, Math.min(100, colorPreferences.outOfBandTransparency ?? 90))
   );
-  /** Compute max value for a metric across all loaded year data */
-  function getMetricMax(metric: HeatmapMetric): number {
+
+  /** The largest daily value of a dose or carb metric across the loaded years. */
+  const metricMax = $derived.by(() => {
     let max = 0;
     for (const days of yearData.values()) {
       for (const day of days) {
-        let val: number | undefined | null;
-        switch (metric) {
-          case "bolus":
-            val = day.totalBolusUnits;
-            break;
-          case "basal":
-            val = day.totalBasalUnits;
-            break;
-          case "tdd":
-            val = day.totalDailyDose;
-            break;
-          case "carbs":
-            val = day.totalCarbs;
-            break;
-          case "tir":
-            val = day.timeInRangePercent;
-            break;
-          default:
-            val = day.averageGlucoseMgdl;
-            break;
-        }
-        if (val != null && Number.isFinite(val) && val > max) max = val;
+        const value =
+          selectedMetric === "bolus"
+            ? day.totalBolusUnits
+            : selectedMetric === "basal"
+              ? day.totalBasalUnits
+              : selectedMetric === "tdd"
+                ? day.totalDailyDose
+                : selectedMetric === "carbs"
+                  ? day.totalCarbs
+                  : undefined;
+        if (value != null && Number.isFinite(value) && value > max) max = value;
       }
     }
-    return max || 1;
-  }
-
-  /**
-   * Memoized max for current metric — recomputed only when metric or data
-   * changes
-   */
-  const metricMaxCached = $derived.by(() => {
-    // Depend on yearData and selectedMetric
-    void yearData;
-    if (selectedMetric === "avgGlucose") return 1;
-    if (selectedMetric === "tir") return 100;
-    return getMetricMax(selectedMetric);
+    return max;
   });
 
   const scaleLimits = $derived<ColorFocusRange>(
@@ -167,7 +157,7 @@
       : intensityScale(
           METRIC_CSS_VARS[selectedMetric],
           scaleLimits,
-          metricMaxCached,
+          metricMax,
           colorPreferences[scaleKeys.band],
           colorPreferences[scaleKeys.boundaries],
           dim

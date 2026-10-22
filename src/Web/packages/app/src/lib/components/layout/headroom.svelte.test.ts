@@ -4,7 +4,7 @@ import { page } from "vitest/browser";
 import Harness from "./Headroom.test-harness.svelte";
 
 const panel = () => page.getByTestId("panel").element().getBoundingClientRect();
-/** The report header the panel pins beneath is 3.5rem tall. */
+/** The harness sets --headroom-top to this. */
 const pinnedTop = 56;
 
 async function scrollTo(y: number) {
@@ -23,11 +23,12 @@ describe("Headroom", () => {
     await scrollTo(40);
     expect(panel().top).toBeCloseTo(start - 40, 0);
 
+    // Fully hidden clears the header too, which may be translucent.
     await scrollTo(1000);
-    expect(panel().bottom).toBeLessThanOrEqual(pinnedTop);
+    expect(panel().bottom).toBeLessThanOrEqual(0);
 
     await scrollTo(970);
-    expect(panel().bottom).toBeCloseTo(pinnedTop + 30, 0);
+    expect(panel().bottom).toBeCloseTo(30, 0);
     // Stopped partway up, it finishes coming back.
     await expect.poll(() => panel().top, { timeout: 1000 }).toBeCloseTo(pinnedTop, 0);
 

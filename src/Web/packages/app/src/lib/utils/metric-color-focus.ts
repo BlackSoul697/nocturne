@@ -73,12 +73,20 @@ export function intensityScale(
       : 1;
   const automatic: ColorFocusRange = [limits[0], max];
   const window = resolveColorFocusRange(savedWindow, limits) ?? automatic;
+  // Checked against the limits, not the window: a boundary the window no longer reaches is
+  // kept, and only the ramp ignores it.
+  const boundaries = resolveColorBoundaries(savedBoundaries, limits) ?? [];
   return {
     ramp: metricRamp(cssVar),
     domain: window,
-    axis: [limits[0], Number.isFinite(limits[1]) ? limits[1] : Math.max(max, window[1])],
+    axis: [
+      limits[0],
+      Number.isFinite(limits[1])
+        ? limits[1]
+        : Math.max(max, window[1], boundaries.at(-1)?.value ?? 0),
+    ],
     window,
-    boundaries: resolveColorBoundaries(savedBoundaries, window) ?? [],
+    boundaries,
     dim,
   };
 }

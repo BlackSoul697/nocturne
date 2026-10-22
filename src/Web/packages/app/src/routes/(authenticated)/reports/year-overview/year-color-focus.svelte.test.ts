@@ -173,6 +173,23 @@ describe("year overview page color focus integration", () => {
     expect(stored()).toEqual({ tddBand: [5, 70] });
   });
 
+  it("leaves off the bands and dimming a retired blob saved with advanced mode off", async () => {
+    applyPreferences({
+      yearOverviewColors: {
+        advancedMode: false,
+        tddBand: [5, 10],
+        outOfBandTransparency: 40,
+      } as never,
+    });
+    render(YearOverviewPage);
+    await selectMetric("TDD");
+    await expect.element(minimum()).toHaveValue(0);
+    await expect.element(maximum()).toHaveValue(500);
+    await expect.element(page.getByRole("spinbutton", { name: "Dim outside" })).toHaveValue(90);
+    await maximum().fill("70");
+    expect(stored()).toEqual({ tddBand: [0, 70] });
+  });
+
   it("keeps a saved window when lazy loading introduces a larger outlier", async () => {
     applyPreferences({ yearOverviewColors: { tddBand: [10, 70] } });
     yearOverviewMocks.years.mockResolvedValue({

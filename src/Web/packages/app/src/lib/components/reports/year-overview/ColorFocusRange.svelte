@@ -19,7 +19,6 @@
     resolveColorBoundaries,
     resolveColorFocusRange,
     scaleGradient,
-    MAX_COLOR_BOUNDARIES,
     type ColorBoundary,
     type ColorFocusRange,
     type MetricScale,
@@ -89,10 +88,6 @@
   // Bits UI snaps even untouched values; insert exact selections into the cached steps.
   const sliderSteps = $derived(insertSliderSteps(baseSteps, [...sliderValues, ...scale.axis]));
 
-  // Derived, so the server renders the values too; typing overrides them until the scale changes.
-  let windowDrafts = $derived<(number | undefined)[]>(scale.window.map(display));
-  let boundaryDrafts = $derived<(number | undefined)[]>(scale.boundaries.map((b) => display(b.value)));
-  let dimDraft = $derived<number | undefined>(scale.dim);
   let invalid = $state<"window" | "boundary" | "dim" | null>(null);
 
   $effect(() => {
@@ -103,9 +98,6 @@
   function changeWindow(candidate: number[]): boolean {
     const next = resolveColorFocusRange(candidate, limits);
     if (!next) return false;
-    // A ramp that spans the window cannot shrink past a boundary it carries.
-    const inner = scale.boundaries;
-    if (!glucose && inner.length && (next[0] >= inner[0].value || next[1] <= inner.at(-1)!.value)) return false;
     onWindowChange(next);
     return true;
   }
@@ -113,7 +105,7 @@
   function changeBoundary(index: number, value: number): boolean {
     const next = resolveColorBoundaries(
       scale.boundaries.map((b, i) => (i === index ? { ...b, value } : b)),
-      scale.domain
+      limits
     );
     if (!next) return false;
     onBoundariesChange(next);
@@ -153,13 +145,8 @@
     onDimChange(value);
   }
 
-  function addBoundary() {
-    const next = addColorBoundary(scale, snap);
-    if (!next) return;
-    // Freeze an automatic window, so data loading later cannot slide the ramp out from under its boundaries.
-    if (!glucose) onWindowChange(scale.window);
-    onBoundariesChange(next);
-  }
+  /** Null when no boundary fits: at the cap, or the widest gap snaps onto an existing one. */
+  const added = $derived(addColorBoundary(scale, snap));
 
   function removeBoundary(index: number) {
     const next = scale.boundaries.filter((_, i) => i !== index);
@@ -186,7 +173,7 @@
         inputmode="numeric"
         min={0}
         max={100}
-        bind:value={dimDraft}
+        value={scale.dim}
         oninput={typeDim}
         aria-invalid={invalid === "dim"}
         size="xs"
@@ -207,8 +194,8 @@
             inputmode="decimal"
             min={display(limits[0])}
             max={Number.isFinite(limits[1]) ? display(limits[1]) : undefined}
-            {step}
-            bind:value={windowDrafts[index]}
+            step={step ?? "any"}
+            value={display(scale.window[index])}
             oninput={(event: Event & { currentTarget: HTMLInputElement }) => typeWindow(index, event)}
             aria-label={`${metricLabel} focus ${index === 0 ? "minimum" : "maximum"}`}
             aria-invalid={invalid === "window"}
@@ -298,8 +285,8 @@
           <Input
             type="number"
             inputmode="decimal"
-            {step}
-            bind:value={boundaryDrafts[index]}
+            step={step ?? "any"}
+            value={display(boundary.value)}
             oninput={(event: Event & { currentTarget: HTMLInputElement }) => typeBoundary(index, event)}
             aria-label={`${metricLabel} color boundary ${index + 1}`}
             aria-invalid={invalid === "boundary"}
@@ -319,8 +306,8 @@
       <Button
         variant="outline"
         size="xs"
-        disabled={scale.boundaries.length >= MAX_COLOR_BOUNDARIES}
-        onclick={addBoundary}
+        disabled={!added}
+        onclick={() => added && onBoundariesChange(added)}
       >
         <Plus />
         Color boundary
@@ -335,9 +322,11 @@
       {:else if invalid === "window"}
         Enter a focus window with its minimum below its maximum{Number.isFinite(limits[1])
           ? `, between ${formatted(limits[0])} and ${formatted(limits[1])} ${unitLabel}`
-          : ""}{!glucose && scale.boundaries.length ? ", around every color boundary" : ""}.
+          : ""}.
       {:else}
-        Keep each color boundary between its neighbours{glucose ? "" : " and inside the focus window"}.
+        Keep each color boundary between its neighbours{Number.isFinite(limits[1])
+          ? ` and inside ${formatted(limits[0])}–${formatted(limits[1])} ${unitLabel}`
+          : ` and above ${formatted(limits[0])} ${unitLabel}`}.
       {/if}
     </p>
   {/if}
