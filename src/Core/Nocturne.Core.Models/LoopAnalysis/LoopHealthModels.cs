@@ -1,3 +1,5 @@
+using System.Text.Json.Serialization;
+
 namespace Nocturne.Core.Models.LoopAnalysis;
 
 /// <summary>The Loop health tab: the primary range and, when asked for, a comparison range.</summary>
@@ -78,6 +80,7 @@ public class LoopHealthUnknown
     public LoopHealthUnknownReason? OrefMaxIob { get; set; }
 }
 
+[JsonConverter(typeof(JsonStringEnumConverter<LoopHealthUnknownReason>))]
 public enum LoopHealthUnknownReason
 {
     /// <summary>
