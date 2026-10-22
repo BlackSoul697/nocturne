@@ -85,6 +85,7 @@ public class DeviceStatusProjectionService
                 return new ModifiedSearch.Page<DeviceStatus>(page, page.Count == 0 ? null : page[^1].SrvModified, page.Count < limit);
             },
             status => status.IsValid == false || !find.Matches(status),
+            status => status.Id,
             after,
             ModifiedSearch.ArrivesInOrder(sort, descending) ? (long)count + skip : null,
             ModifiedSearch.MaxRead,
