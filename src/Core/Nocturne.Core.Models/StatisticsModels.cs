@@ -182,9 +182,9 @@ public class GlycemicThresholds
     public double TightTargetBottom { get; set; } = GlucoseConstants.TargetBottomMgdl;
 
     /// <summary>
-    /// Tight target range top threshold (default: 140 mg/dL)
+    /// Tight target range top threshold (defaults to <see cref="GlucoseConstants.TightTargetTopMgdl"/>)
     /// </summary>
-    public double TightTargetTop { get; set; } = 140;
+    public double TightTargetTop { get; set; } = GlucoseConstants.TightTargetTopMgdl;
 
     /// <summary>
     /// Threshold for high glucose (defaults to <see cref="GlucoseConstants.TargetTopMgdl"/>)

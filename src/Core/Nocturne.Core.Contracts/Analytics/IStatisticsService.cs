@@ -109,13 +109,15 @@ public interface IStatisticsService
     /// </summary>
     /// <param name="values">Glucose values in mg/dL.</param>
     /// <param name="entries"><see cref="SensorGlucose"/> entries with timestamps for time-dependent metrics.</param>
+    /// <param name="timeZone">Tenant zone that bounds the days of <see cref="CalculateADRR"/>; null is UTC.</param>
     /// <returns>
     /// A <see cref="GlycemicVariability"/> containing all variability metrics, or null for fewer
     /// than two plausible glucose values.
     /// </returns>
     GlycemicVariability? CalculateGlycemicVariability(
         IEnumerable<double> values,
-        IEnumerable<SensorGlucose> entries
+        IEnumerable<SensorGlucose> entries,
+        TimeZoneInfo? timeZone
     );
 
     /// <summary>
@@ -133,14 +135,15 @@ public interface IStatisticsService
     double CalculateMAGE(IEnumerable<double> values);
 
     /// <summary>
-    /// Calculate Average Daily Risk Range (ADRR).
+    /// Calculate Average Daily Risk Range (ADRR) over tenant-local days.
     /// </summary>
-    /// <param name="values">Glucose values in mg/dL.</param>
-    /// <returns>ADRR value.</returns>
-    double CalculateADRR(IEnumerable<double> values);
+    /// <param name="entries"><see cref="SensorGlucose"/> entries with timestamps.</param>
+    /// <param name="timeZone">Tenant zone the days are bounded in; null is UTC.</param>
+    /// <returns>ADRR value, or 0 when no day has a plausible reading.</returns>
+    double CalculateADRR(IEnumerable<SensorGlucose> entries, TimeZoneInfo? timeZone);
 
     /// <summary>
-    /// Calculate the J-Index (combines mean and variability).
+    /// Calculate the J-Index (Wojcicki 1995), combining mean and sample standard deviation.
     /// </summary>
     /// <param name="values">Glucose values in mg/dL.</param>
     /// <param name="mean">Pre-calculated mean glucose in mg/dL.</param>
