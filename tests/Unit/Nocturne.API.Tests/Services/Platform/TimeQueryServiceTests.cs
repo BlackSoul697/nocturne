@@ -13,7 +13,6 @@ using Nocturne.Core.Contracts.Treatments;
 using Nocturne.Core.Models.V4;
 using Nocturne.Core.Models.Queries;
 using Xunit;
-using TimePatternQuery = Nocturne.Core.Contracts.Legacy.TimePatternQuery;
 
 namespace Nocturne.API.Tests.Services.Platform;
 

@@ -198,7 +198,7 @@ public class TimeQueryService : ITimeQueryService
     private static Dictionary<string, object> BuildRequestFind(
         IEnumerable<KeyValuePair<string, Microsoft.Extensions.Primitives.StringValues>> findParameters,
         string field,
-        Nocturne.Core.Contracts.Legacy.TimePatternQuery timePatterns
+        TimePatternQuery timePatterns
     )
     {
         var find = new Dictionary<string, object>();
@@ -238,7 +238,7 @@ public class TimeQueryService : ITimeQueryService
         return find.ToDictionary(e => e.Key, e => IndexedKeysToArrays(e.Value));
     }
 
-    private static object[] InPatternEcho(Nocturne.Core.Contracts.Legacy.TimePatternQuery timePatterns) =>
+    private static object[] InPatternEcho(TimePatternQuery timePatterns) =>
         (timePatterns.InPatterns ?? []).Select(_ => (object)new Dictionary<string, object>()).ToArray();
 
     private const int MaxQsArrayIndex = 20;
@@ -268,7 +268,7 @@ public class TimeQueryService : ITimeQueryService
     private static string BuildFind(
         string? find,
         string field,
-        Nocturne.Core.Contracts.Legacy.TimePatternQuery timePatterns,
+        TimePatternQuery timePatterns,
         string? type
     )
     {
