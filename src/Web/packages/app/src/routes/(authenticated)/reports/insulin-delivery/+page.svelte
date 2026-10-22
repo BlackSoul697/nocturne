@@ -74,7 +74,7 @@
     () => getHourlyInsulinDelivery(statisticsDates),
     { errorTitle: "Error Loading Insulin Delivery Data" }
   );
-  const hourlyDelivery = $derived(hourlyDeliveryResource.current?.hours ?? []);
+  const hourlyDelivery = $derived(hourlyDeliveryResource.current);
 
   const emptyStats: InsulinDeliveryStatistics = {
     totalBolus: 0,
@@ -216,7 +216,7 @@
       </CardDescription>
     </CardHeader>
     <CardContent>
-      <InsulinDeliveryChart data={hourlyDelivery} showStacked={true} />
+      <InsulinDeliveryChart delivery={hourlyDelivery} showStacked={true} />
     </CardContent>
   </Card>
 

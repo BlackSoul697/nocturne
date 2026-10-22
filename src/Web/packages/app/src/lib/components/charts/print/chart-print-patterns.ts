@@ -88,6 +88,8 @@ export const CHART_TEXTURES = {
 		texture: lines(90, 5),
 		dash: "6 3",
 	},
+	/** The profile's scheduled basal rate, stepped over the delivery it is compared with. */
+	"scheduled-basal-rate": { color: "var(--basal)", texture: solid, dash: "6 3" },
 	"insulin-temp-basal": {
 		color: "var(--insulin-additional-basal)",
 		texture: lines(0, 5),
