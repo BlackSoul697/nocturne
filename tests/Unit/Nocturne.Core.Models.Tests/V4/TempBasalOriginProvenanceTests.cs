@@ -130,22 +130,43 @@ public class TempBasalOriginProvenanceTests
     [InlineData(TempBasalOrigin.Algorithm, null, "loop://iPhone", null, TempBasalOriginEvidence.Uploader)]
     [InlineData(TempBasalOrigin.Manual, null, "openaps://Lotus", DataSources.NightscoutConnector, TempBasalOriginEvidence.Uploader)]
     [InlineData(TempBasalOrigin.Manual, false, "Trio", null, TempBasalOriginEvidence.Reported)]
-    [InlineData(TempBasalOrigin.Manual, null, "xdrip", null, TempBasalOriginEvidence.Reported)]
-    [InlineData(TempBasalOrigin.Manual, null, null, null, TempBasalOriginEvidence.Reported)]
+    [InlineData(TempBasalOrigin.Manual, null, "xdrip", null, TempBasalOriginEvidence.Uploader)]
+    [InlineData(TempBasalOrigin.Manual, null, null, DataSources.NightscoutConnector, TempBasalOriginEvidence.Uploader)]
+    [InlineData(TempBasalOrigin.Manual, null, "tidepool", DataSources.NightscoutConnector, TempBasalOriginEvidence.Uploader)]
+    [InlineData(TempBasalOrigin.Manual, true, null, null, TempBasalOriginEvidence.Reported)]
+    [InlineData(TempBasalOrigin.Algorithm, null, null, null, TempBasalOriginEvidence.Reported)]
+    [InlineData(TempBasalOrigin.Algorithm, null, "tidepool", null, TempBasalOriginEvidence.Reported)]
     [InlineData(TempBasalOrigin.Algorithm, null, null, DataSources.CareLinkConnector, TempBasalOriginEvidence.Reported)]
+    [InlineData(TempBasalOrigin.Manual, null, null, DataSources.CareLinkConnector, TempBasalOriginEvidence.Reported)]
+    [InlineData(TempBasalOrigin.Manual, null, null, DataSources.GlookoConnector, TempBasalOriginEvidence.Reported)]
     [InlineData(TempBasalOrigin.Algorithm, null, "loop://iPhone", DataSources.TConnectSyncConnector, TempBasalOriginEvidence.Reported)]
     [InlineData(TempBasalOrigin.Suspended, null, "Trio", null, TempBasalOriginEvidence.Reported)]
-    public void A_row_stored_without_evidence_is_a_default_only_from_the_decomposer_for_a_loop(
+    [InlineData(TempBasalOrigin.Suspended, null, null, null, TempBasalOriginEvidence.Reported)]
+    public void A_row_stored_without_evidence_is_a_default_when_the_decomposer_gave_it_its_default(
         TempBasalOrigin origin, bool? flag, string? enteredBy, string? dataSource, TempBasalOriginEvidence expected)
     {
-        TempBasalOriginProvenance.EvidenceOf(origin, stored: null, flag, enteredBy, dataSource).Should().Be(expected);
+        TempBasalOriginProvenance.EvidenceOf(origin, stored: null, flag, enteredBy, dataSource, LegacyId).Should().Be(expected);
+    }
+
+    private const string LegacyId = "6527c1f2a8b4e90012345678";
+
+    [Theory]
+    [InlineData(null, TempBasalOriginEvidence.Reported)]
+    [InlineData("xdrip", TempBasalOriginEvidence.Reported)]
+    [InlineData("Trio", TempBasalOriginEvidence.Uploader)]
+    public void A_manual_temp_with_no_legacy_id_is_a_default_only_from_a_closed_loop_uploader(
+        string? enteredBy, TempBasalOriginEvidence expected)
+    {
+        TempBasalOriginProvenance.EvidenceOf(
+                TempBasalOrigin.Manual, stored: null, automaticFlag: null, enteredBy, dataSource: null, legacyId: null)
+            .Should().Be(expected);
     }
 
     [Fact]
     public void Stored_evidence_stands()
     {
         TempBasalOriginProvenance.EvidenceOf(
-                TempBasalOrigin.Manual, TempBasalOriginEvidence.Snapshot, automaticFlag: null, "xdrip", DataSources.CareLinkConnector)
+                TempBasalOrigin.Manual, TempBasalOriginEvidence.Snapshot, automaticFlag: null, "xdrip", DataSources.CareLinkConnector, LegacyId)
             .Should().Be(TempBasalOriginEvidence.Snapshot);
     }
 }
