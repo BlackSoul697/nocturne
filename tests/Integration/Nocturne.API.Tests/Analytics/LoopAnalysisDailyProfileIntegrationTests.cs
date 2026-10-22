@@ -182,6 +182,14 @@ public class LoopAnalysisDailyProfileIntegrationTests(ApiIntegrationTestFixture 
         var ignored = body.GetProperty("ignoredFilters").EnumerateArray().Select(f => f.GetString()).ToList();
         ignored.Should().Equal(treatments ? [] : ["excludeIllness"], "only a parameter the caller sent is reported");
         body.GetProperty("appliedFilters").GetProperty("excludeIllness").GetBoolean().Should().Be(treatments);
+
+        var unavailable = body.GetProperty("unavailableFilters").EnumerateArray()
+            .ToDictionary(f => f.GetProperty("filter").GetString()!, f => f.GetProperty("requiredScope").GetString());
+        unavailable.ContainsKey("excludeIllness").Should().Be(!treatments);
+        unavailable.ContainsKey("profileName").Should().Be(!therapy);
+        unavailable.ContainsKey("excludeOpenLoop").Should().Be(!scopes.Contains(Scope.DevicesRead));
+        if (!treatments)
+            unavailable["excludeOverrides"].Should().Be(Scope.TreatmentsRead);
     }
 
     [Fact]

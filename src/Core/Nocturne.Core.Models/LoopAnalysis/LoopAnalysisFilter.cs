@@ -139,4 +139,19 @@ public class LoopAnalysisResponse
 
     /// <summary>Series and figures the caller's scopes withheld.</summary>
     public List<LoopAnalysisSeries> WithheldSeries { get; set; } = [];
+
+    /// <summary>
+    /// Every filter the caller's scopes do not let it use, whether or not it was sent, so a client
+    /// can offer only the filters that will apply.
+    /// </summary>
+    public List<LoopAnalysisUnavailableFilter> UnavailableFilters { get; set; } = [];
+}
+
+/// <summary>A filter the caller cannot use, and the read scope it would need.</summary>
+public class LoopAnalysisUnavailableFilter
+{
+    /// <summary>The filter's query parameter, as <see cref="LoopAnalysisResponse.IgnoredFilters"/> names it.</summary>
+    public string Filter { get; set; } = "";
+
+    public string RequiredScope { get; set; } = "";
 }

@@ -426,30 +426,40 @@ internal static class LoopAnalysisReadScopeGuard
     public static List<string> NarrowFilter(LoopAnalysisMasks masks, IReadOnlySet<string> grantedScopes)
     {
         var ignored = new List<string>();
-        void Ignore(bool set, string name, Action clear)
+        foreach (var rule in FilterRules)
         {
-            if (!set)
-                return;
-            clear();
-            ignored.Add(name);
+            if (AnalyticsReadScopes.Allows(grantedScopes, rule.Scope) || !rule.IsSet(masks))
+                continue;
+            rule.Clear(masks);
+            ignored.Add(rule.Name);
         }
-
-        if (!AnalyticsReadScopes.Allows(grantedScopes, Scope.TherapyRead))
-            Ignore(masks.ProfileName is not null, "profileName", () => masks.ProfileName = null);
-
-        if (!AnalyticsReadScopes.Allows(grantedScopes, Scope.TreatmentsRead))
-        {
-            Ignore(masks.ExcludeOverrides, "excludeOverrides", () => masks.ExcludeOverrides = false);
-            Ignore(masks.ExcludeTemporaryTargets, "excludeTemporaryTargets", () => masks.ExcludeTemporaryTargets = false);
-            Ignore(masks.ExcludeExercise, "excludeExercise", () => masks.ExcludeExercise = false);
-            Ignore(masks.ExcludeIllness, "excludeIllness", () => masks.ExcludeIllness = false);
-        }
-
-        if (!AnalyticsReadScopes.Allows(grantedScopes, Scope.DevicesRead))
-            Ignore(masks.ExcludeOpenLoop, "excludeOpenLoop", () => masks.ExcludeOpenLoop = false);
-
         return ignored;
     }
+
+    /// <summary>
+    /// Every filter <see cref="NarrowFilter"/> would drop for this caller, set or not, with the
+    /// scope it needs.
+    /// </summary>
+    public static List<LoopAnalysisUnavailableFilter> UnavailableFilters(IReadOnlySet<string> grantedScopes) =>
+    [
+        .. FilterRules
+            .Where(rule => !AnalyticsReadScopes.Allows(grantedScopes, rule.Scope))
+            .Select(rule => new LoopAnalysisUnavailableFilter { Filter = rule.Name, RequiredScope = rule.Scope }),
+    ];
+
+    /// <summary>Each filter by its query parameter, the scope it is drawn from, and how to drop it.</summary>
+    private sealed record FilterRule(
+        string Name, string Scope, Func<LoopAnalysisMasks, bool> IsSet, Action<LoopAnalysisMasks> Clear);
+
+    private static readonly FilterRule[] FilterRules =
+    [
+        new("profileName", Scope.TherapyRead, m => m.ProfileName is not null, m => m.ProfileName = null),
+        new("excludeOverrides", Scope.TreatmentsRead, m => m.ExcludeOverrides, m => m.ExcludeOverrides = false),
+        new("excludeTemporaryTargets", Scope.TreatmentsRead, m => m.ExcludeTemporaryTargets, m => m.ExcludeTemporaryTargets = false),
+        new("excludeExercise", Scope.TreatmentsRead, m => m.ExcludeExercise, m => m.ExcludeExercise = false),
+        new("excludeIllness", Scope.TreatmentsRead, m => m.ExcludeIllness, m => m.ExcludeIllness = false),
+        new("excludeOpenLoop", Scope.DevicesRead, m => m.ExcludeOpenLoop, m => m.ExcludeOpenLoop = false),
+    ];
 
     /// <summary>
     /// The series the caller's scopes withhold. <see cref="Redact"/> empties exactly these, so the

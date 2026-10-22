@@ -74,6 +74,7 @@ public class LoopAnalysisController(
         LoopAnalysisResolvedRange? ComparisonRange,
         LoopAnalysisMasks Masks,
         List<string> IgnoredFilters,
+        List<LoopAnalysisUnavailableFilter> UnavailableFilters,
         bool HistoryClamped)
     {
         public T Fill<T>(T response) where T : LoopAnalysisResponse
@@ -84,6 +85,7 @@ public class LoopAnalysisController(
             response.ComparisonRange = ComparisonRange;
             response.AppliedFilters = Masks;
             response.IgnoredFilters = IgnoredFilters;
+            response.UnavailableFilters = UnavailableFilters;
             return response;
         }
     }
@@ -117,7 +119,9 @@ public class LoopAnalysisController(
 
         var masks = query.ToMasks();
         var passed = Request.Query.Keys.ToHashSet(StringComparer.OrdinalIgnoreCase);
-        var ignored = LoopAnalysisReadScopeGuard.NarrowFilter(masks, HttpContext.GetGrantedScopes());
+        var granted = HttpContext.GetGrantedScopes();
+        var ignored = LoopAnalysisReadScopeGuard.NarrowFilter(masks, granted);
+        var unavailable = LoopAnalysisReadScopeGuard.UnavailableFilters(granted);
         var clamped = HttpContext.IsCallerHistoryClamped();
         if (clamped)
             ignored.AddRange(["startDate", "endDate", "compare", "compareStartDate", "compareEndDate"]);
@@ -125,7 +129,7 @@ public class LoopAnalysisController(
 
         var (zone, reason) = await tenantClock.ResolveAsync(ct);
         if (zone is null)
-            return (null, new LoopAnalysisRequest(null, null, reason, null, null, masks, ignored, clamped));
+            return (null, new LoopAnalysisRequest(null, null, reason, null, null, masks, ignored, unavailable, clamped));
 
         var maxDays = V4ReadLimits.MaxAnalyticsSpanDays;
         var primary = clamped
@@ -147,7 +151,7 @@ public class LoopAnalysisController(
             CompareTo = comparison?.To,
             Masks = masks,
         };
-        return (null, new LoopAnalysisRequest(filter, zone, null, primary, comparison, masks, ignored, clamped));
+        return (null, new LoopAnalysisRequest(filter, zone, null, primary, comparison, masks, ignored, unavailable, clamped));
     }
 
     private static bool OutOfRange(DateOnly date) => date < EarliestDate || date > LatestDate;

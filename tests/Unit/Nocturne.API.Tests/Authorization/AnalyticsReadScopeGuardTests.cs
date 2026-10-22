@@ -1288,6 +1288,45 @@ public class AnalyticsReadScopeGuardTests
         masks.ProfileName.Should().Be("Default");
     }
 
+    public static TheoryData<string[], string[]> LoopAnalysisUnavailableCombinations => new()
+    {
+        { AllLoopAnalysisCategories, [] },
+        { [Scope.GlucoseRead, Scope.TreatmentsRead, Scope.DevicesRead], ["profileName"] },
+        { [Scope.GlucoseRead, Scope.TreatmentsRead, Scope.TherapyRead], ["excludeOpenLoop"] },
+        {
+            [Scope.GlucoseRead],
+            ["profileName", "excludeOverrides", "excludeTemporaryTargets", "excludeExercise", "excludeIllness", "excludeOpenLoop"]
+        },
+    };
+
+    [Theory]
+    [MemberData(nameof(LoopAnalysisUnavailableCombinations))]
+    public void LoopAnalysis_UnavailableFilters_AreExactlyTheOnesNarrowingDrops(string[] scopes, string[] expected)
+    {
+        var granted = Granted(scopes);
+
+        var unavailable = LoopAnalysisReadScopeGuard.UnavailableFilters(granted);
+
+        unavailable.Select(f => f.Filter).Should().Equal(expected);
+        LoopAnalysisReadScopeGuard.NarrowFilter(EveryMask(), granted).Should().Equal(expected);
+    }
+
+    [Fact]
+    public void LoopAnalysis_UnavailableFilters_NameTheScopeEachNeeds()
+    {
+        LoopAnalysisReadScopeGuard.UnavailableFilters(Granted())
+            .ToDictionary(f => f.Filter, f => f.RequiredScope)
+            .Should().BeEquivalentTo(new Dictionary<string, string>
+            {
+                ["profileName"] = Scope.TherapyRead,
+                ["excludeOverrides"] = Scope.TreatmentsRead,
+                ["excludeTemporaryTargets"] = Scope.TreatmentsRead,
+                ["excludeExercise"] = Scope.TreatmentsRead,
+                ["excludeIllness"] = Scope.TreatmentsRead,
+                ["excludeOpenLoop"] = Scope.DevicesRead,
+            });
+    }
+
     [Fact]
     public void LoopAnalysis_GateIsReportsRead()
     {
@@ -1355,6 +1394,9 @@ public class AnalyticsReadScopeGuardTests
         data.HistoryClamped.Should().BeFalse();
         data.IgnoredFilters.Should().BeEquivalentTo(
             ["profileName", "excludeOverrides"], "the masks on by default are dropped too, but the caller never sent them");
+        data.UnavailableFilters.Select(f => f.Filter).Should().BeEquivalentTo(
+            ["profileName", "excludeOverrides", "excludeTemporaryTargets", "excludeExercise", "excludeIllness", "excludeOpenLoop"],
+            "unavailability does not depend on what was sent");
         data.AppliedFilters.Should().BeEquivalentTo(new LoopAnalysisMasks
         {
             Days = [.. Enum.GetValues<DayOfWeek>()],
@@ -1384,6 +1426,7 @@ public class AnalyticsReadScopeGuardTests
         data.AppliedFilters.ExcludeOpenLoop.Should().BeTrue();
         data.AppliedFilters.ExcludeOverrides.Should().BeFalse();
         data.IgnoredFilters.Should().BeEmpty();
+        data.UnavailableFilters.Should().BeEmpty();
     }
 
     [Fact]
