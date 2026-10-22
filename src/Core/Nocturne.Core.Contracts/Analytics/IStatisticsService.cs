@@ -378,13 +378,16 @@ public interface IStatisticsService
     /// <summary>
     /// Calculate daily basal/bolus ratio breakdown.
     /// Algorithm boluses count as bolus insulin. Basal data comes from TempBasals and basalInjections (MDI); pass empty collections if none are available.
+    /// Carb intakes, when given, fill each day's <see cref="DailyBasalBolusRatioData.Carbs"/>. A day with carbs and no
+    /// insulin gets a row but is not counted in <see cref="DailyBasalBolusRatioResponse.DaysWithData"/>.
     /// </summary>
     DailyBasalBolusRatioResponse CalculateDailyBasalBolusRatios(
         IEnumerable<Bolus> boluses,
         IEnumerable<Bolus> algorithmBoluses,
         IEnumerable<TempBasal> tempBasals,
         TimeZoneInfo? userTimeZone = null,
-        IEnumerable<BasalInjection>? basalInjections = null);
+        IEnumerable<BasalInjection>? basalInjections = null,
+        IEnumerable<CarbIntake>? carbIntakes = null);
 
     /// <summary>
     /// Calculate comprehensive basal analysis statistics from TempBasals. Hourly percentiles are
