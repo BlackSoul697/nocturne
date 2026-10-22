@@ -65,7 +65,7 @@ public class GlycemicTargetStateTests
     [Fact]
     public void CalculateGlycemicVariability_SteadyLowGlucose_MeetsTheA1cTarget()
     {
-        var result = _service.CalculateGlycemicVariability([100d, 102d, 98d, 101d], [])!;
+        var result = _service.CalculateGlycemicVariability([100d, 102d, 98d, 101d], [], TimeZoneInfo.Utc)!;
 
         result.EstimatedA1cMeetsTarget.Percent.Should().BeTrue();
     }
@@ -73,7 +73,7 @@ public class GlycemicTargetStateTests
     [Fact]
     public void CalculateGlycemicVariability_HighGlucose_MissesTheA1cTarget()
     {
-        var result = _service.CalculateGlycemicVariability([60d, 300d, 80d, 320d], [])!;
+        var result = _service.CalculateGlycemicVariability([60d, 300d, 80d, 320d], [], TimeZoneInfo.Utc)!;
 
         result.EstimatedA1cMeetsTarget.Percent.Should().BeFalse();
     }
