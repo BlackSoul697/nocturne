@@ -1,7 +1,7 @@
 import { render } from "vitest-browser-svelte";
 import { page, userEvent } from "vitest/browser";
 import { describe, expect, it } from "vitest";
-import { LoopAnalysisSeries, TimeZoneUnavailableReason } from "$lib/api";
+import { LoopAnalysisSeries, LoopHealthUnknownReason, TimeZoneUnavailableReason } from "$lib/api";
 import LoopHealthTab from "./LoopHealthTab.svelte";
 import { loopHealthResponse } from "./loop-health.test-fixtures";
 
@@ -11,7 +11,11 @@ const tile = (label: string) =>
     () => page.getByRole("term").getByText(label, { exact: true }).element().parentElement!.textContent ?? ""
   );
 
-const STRIPS = ["Closed loop by hour", "Algorithm zero temps by hour", "At max basal by hour", "Sensitivity ratio by hour"];
+const STRIPS = [
+  "Closed loop by hour",
+  "CGM active by hour",
+  "Pump active by hour",
+  "Algorithm zero temps by hour", "At max basal by hour", "Sensitivity ratio by hour"];
 const HIDDEN = "Hidden: your access does not include this data";
 
 async function pickHour(strip: string, hour: number) {
@@ -95,16 +99,24 @@ describe("LoopHealthTab", () => {
       await tile(label).toContain("No loop cycles in this range");
       await tile(label).not.toMatch(/0\s*stretches/);
     }
-    await expect.poll(() => page.getByText("Unknown: no loop cycles in this range").elements().length).toBe(2);
+    await expect.poll(() => page.getByText("Unknown: No loop cycles in this range").elements().length).toBe(2);
     await expect.poll(() => page.getByRole("link").elements().length).toBe(0);
   });
 
-  it("reads a cap no cycle vouched for as unknown, never as zero", async () => {
+  it("reads a cap no cycle vouched for as unknown, never as zero, with the API's reason", async () => {
     render(LoopHealthTab, { props: { response: loopHealthResponse({ capUnknown: true }) } });
 
     await tile("At max basal").toContain("Unknown");
-    await tile("At max basal").toContain("No algorithm temp's cap is recorded in this range");
-    await expect.element(page.getByText("Unknown: no algorithm temp's cap is recorded in this range")).toBeVisible();
+    await tile("At max basal").toContain("No loop cycle in this range recorded what this needs");
+    await expect.element(page.getByText("Unknown: No loop cycle in this range recorded what this needs")).toBeVisible();
+  });
+
+  it("says when filters left out everything a figure is measured on", async () => {
+    const response = loopHealthResponse({ capUnknown: true });
+    response.primary!.unknown!.maxBasal = LoopHealthUnknownReason.MaskedOut;
+    render(LoopHealthTab, { props: { response } });
+
+    await tile("At max basal").toContain("Everything this is measured on falls in time the filters leave out");
   });
 
   it("reads figures a system did not record as unknown, without naming the system", async () => {
@@ -114,8 +126,10 @@ describe("LoopHealthTab", () => {
     await tile("Suggested, not enacted").toContain("Unknown");
     await tile("Max IOB").toContain("Unknown");
     await tile("Max basal rate setting").toMatch(/3\.00\s*U\/h/);
-    for (const label of ["At max IOB", "Suggested, not enacted", "Max IOB"])
+    for (const label of ["At max IOB", "Suggested, not enacted", "Max IOB"]) {
+      await tile(label).toContain("The system that ran the loop does not record this");
       await tile(label).not.toMatch(/oref|AAPS|Trio|Loop\b/);
+    }
     await expect.element(page.getByText("No sensitivity ratio reported in this range")).toBeVisible();
   });
 
@@ -124,9 +138,9 @@ describe("LoopHealthTab", () => {
       props: { response: loopHealthResponse({ unmeasured: ["atMaxIob", "suggestedNotEnacted"] }) },
     });
 
-    await tile("At max IOB").toContain("No loop cycle in this range says whether max IOB limited it");
-    await tile("Suggested, not enacted").toContain("The loop did not record its suggestions apart from what it enacted");
-    await tile("Max basal rate setting").toContain("Unknown");
+    await tile("At max IOB").toContain("No loop cycle in this range recorded what this needs");
+    await tile("Suggested, not enacted").toContain("No loop cycle in this range recorded what this needs");
+    await tile("Max basal rate setting").toContain("The system that ran the loop does not record this");
   });
 
   it("never reads unmeasured delivery or boluses as zero", async () => {
@@ -152,6 +166,8 @@ describe("LoopHealthTab", () => {
     await tile("CGM active").toContain("98.7%");
     await tile("Algorithm zero temps").toContain("41.0%");
     await expect.element(page.getByRole("slider", { name: "Algorithm zero temps by hour" })).toBeVisible();
+    await expect.element(page.getByRole("slider", { name: "CGM active by hour" })).toBeVisible();
+    await expect.element(page.getByRole("slider", { name: "Pump active by hour" })).not.toBeInTheDocument();
     await expect.poll(() => page.getByRole("link").elements().length).toBe(0);
     await expect.element(page.getByText("Time the loop ran while the pump's records")).not.toBeInTheDocument();
   });
@@ -183,7 +199,7 @@ describe("LoopHealthTab", () => {
     await tile("Closed loop").toContain("Compared: 45.5%");
     await tile("Automatic boluses a day").toContain("Compared: 27.0");
     await tile("Loop gaps").toContain("Compared: 2 stretches, 1 h 55 min in all");
-    await expect.poll(() => page.getByText("Compared range", { exact: true }).elements().length).toBe(4);
+    await expect.poll(() => page.getByText("Compared range", { exact: true }).elements().length).toBe(6);
     await expect.poll(() => page.getByTestId("compared-hour").elements().length).toBeGreaterThan(0);
 
     (page.getByRole("slider", { name: "Closed loop by hour" }).element() as HTMLElement).focus();
@@ -196,7 +212,7 @@ describe("LoopHealthTab", () => {
 
     await expect.poll(() => page.getByTestId("sparse-hour").elements().length).toBeGreaterThan(0);
     await expect.poll(() => page.getByTestId("hour").elements().length).toBe(0);
-    await expect.poll(() => page.getByText("Too few days", { exact: true }).elements().length).toBe(4);
+    await expect.poll(() => page.getByText("Too few days", { exact: true }).elements().length).toBe(6);
   });
 
   it("says there is nothing to show when no time was analysed", async () => {

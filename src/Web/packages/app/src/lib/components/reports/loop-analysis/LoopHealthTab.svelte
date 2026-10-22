@@ -8,11 +8,12 @@
   import { Rule } from "layerchart";
   import {
     LoopAnalysisSeries,
+    LoopHealthUnknownReason,
     type LoopHealthGap,
-    type LoopHealthGaps,
     type LoopHealthRange,
     type LoopHealthResponse,
     type LoopHealthShare,
+    type LoopHealthUnknown,
   } from "$lib/api";
   import FigureStrip, { type Figure } from "$lib/components/reports/FigureStrip.svelte";
   import * as Alert from "$lib/components/ui/alert";
@@ -71,12 +72,25 @@
     ].every(hidden)
   );
 
-  /**
-   * Whether the range held any loop cycles. Without cycles there are no gaps to count, so a gap
-   * count of zero would claim a loop that never ran.
-   */
-  const cycled = (range: LoopHealthRange | null | undefined, gaps: LoopHealthGaps | null | undefined) =>
-    gaps != null && (hidden(LoopAnalysisSeries.LoopActivity) || range?.activity?.closedLoop?.percent != null);
+  function reasonText(reason: LoopHealthUnknownReason | null | undefined): string {
+    switch (reason) {
+      case LoopHealthUnknownReason.NotRecordedByThisSystem:
+        return "The system that ran the loop does not record this";
+      case LoopHealthUnknownReason.NoCyclesInRange:
+        return "No loop cycles in this range";
+      case LoopHealthUnknownReason.NoReasonRecorded:
+        return "No loop cycle in this range recorded what this needs";
+      case LoopHealthUnknownReason.MaskedOut:
+        return "Everything this is measured on falls in time the filters leave out";
+      case LoopHealthUnknownReason.SettingNotUploaded:
+        return "The profile in force records no maximum basal rate";
+      case LoopHealthUnknownReason.NoAlgorithmTemps:
+        return "The loop set no temp basal in this range";
+      default:
+        return "Nothing measured in this range";
+    }
+  }
+  const unknown = (key: keyof LoopHealthUnknown) => reasonText(primary?.unknown?.[key]);
 
   const pct = (v: number) => `${v.toFixed(1)}%`;
   const maybePct = (v: number | null | undefined) => (v == null ? "–" : pct(v));
@@ -121,23 +135,23 @@
   function gapsFigure(
     label: string,
     series: LoopAnalysisSeries,
-    pick: (range: LoopHealthRange | null | undefined) => LoopHealthGaps | null | undefined,
+    key: "loopGaps" | "unrecordedDelivery",
     none: string
   ): Figure {
     if (hidden(series)) return hiddenFigure(label);
-    const gaps = pick(primary);
-    if (!cycled(primary, gaps)) return unknownFigure(label, "No loop cycles in this range");
-    const count = gaps!.count ?? 0;
-    const compared = pick(comparison);
+    const gaps = primary?.cadence?.[key];
+    if (gaps == null) return unknownFigure(label, unknown(key));
+    const count = gaps.count ?? 0;
+    const compared = comparison?.cadence?.[key];
     return {
       label,
       value: String(count),
       unit: plural(count, ["stretch", "stretches"]),
       note: noted(
-        count > 0 ? `${duration(gaps!.totalMinutes)} in all, longest ${duration(gaps!.longestMinutes)}` : none,
-        cycled(comparison, compared)
-          ? `${plural(compared!.count ?? 0, ["# stretch", "# stretches"])}, ${duration(compared!.totalMinutes)} in all`
-          : null
+        count > 0 ? `${duration(gaps.totalMinutes)} in all, longest ${duration(gaps.longestMinutes)}` : none,
+        compared == null
+          ? null
+          : `${plural(compared.count ?? 0, ["# stretch", "# stretches"])}, ${duration(compared.totalMinutes)} in all`
       ),
     };
   }
@@ -161,13 +175,13 @@
         : shareFigure("Pump active", (r) => r?.activity?.pump, "Of analysed time, with the pump reporting")
     );
     list.push(
-      gapsFigure("Loop gaps", LoopAnalysisSeries.LoopGaps, (r) => r?.cadence?.loopGaps, "No stretch of more than 15 minutes between loop cycles")
+      gapsFigure("Loop gaps", LoopAnalysisSeries.LoopGaps, "loopGaps", "No stretch of more than 15 minutes between loop cycles")
     );
     list.push(
       gapsFigure(
         "Unrecorded delivery",
         LoopAnalysisSeries.UnrecordedDelivery,
-        (r) => r?.cadence?.unrecordedDelivery,
+        "unrecordedDelivery",
         "The pump's records say what it delivered all the time the loop ran"
       )
     );
@@ -193,7 +207,7 @@
       const maxBasal = primary?.maxBasal;
       const value = maxBasal?.atCap?.percent;
       const known = maxBasal?.capKnown?.percent;
-      if (value == null) list.push(unknownFigure("At max basal", "No algorithm temp's cap is recorded in this range"));
+      if (value == null) list.push(unknownFigure("At max basal", unknown("maxBasal")));
       else
         list.push({
           label: "At max basal",
@@ -207,7 +221,7 @@
 
     if (hidden(LoopAnalysisSeries.AtMaxIob)) list.push(hiddenFigure("At max IOB"));
     else if (primary?.atMaxIob?.percent == null)
-      list.push(unknownFigure("At max IOB", "No loop cycle in this range says whether max IOB limited it"));
+      list.push(unknownFigure("At max IOB", unknown("atMaxIob")));
     else
       list.push(
         shareFigure(
@@ -239,7 +253,7 @@
 
     if (hidden(LoopAnalysisSeries.SuggestedNotEnacted)) list.push(hiddenFigure("Suggested, not enacted"));
     else if (primary?.suggestedNotEnacted?.percent == null)
-      list.push(unknownFigure("Suggested, not enacted", "The loop did not record its suggestions apart from what it enacted"));
+      list.push(unknownFigure("Suggested, not enacted", unknown("suggestedNotEnacted")));
     else
       list.push(
         shareFigure(
@@ -251,12 +265,12 @@
 
     if (hidden(LoopAnalysisSeries.LoopLimits)) list.push(hiddenFigure("Max basal rate setting"));
     else if (primary?.limits?.loopMaximumBasalRate == null)
-      list.push(unknownFigure("Max basal rate setting", "No maximum basal rate setting is recorded"));
+      list.push(unknownFigure("Max basal rate setting", unknown("loopMaximumBasalRate")));
     else list.push({ label: "Max basal rate setting", value: u2(primary.limits.loopMaximumBasalRate), unit: "U/h" });
 
     if (hidden(LoopAnalysisSeries.OrefMaxIob)) list.push(hiddenFigure("Max IOB"));
     else if (primary?.limits?.orefMaxIob == null)
-      list.push(unknownFigure("Max IOB", "No loop cycle in this range named its max IOB"));
+      list.push(unknownFigure("Max IOB", unknown("orefMaxIob")));
     else list.push({ label: "Max IOB", value: u1(primary.limits.orefMaxIob), unit: "U" });
 
     return list;
@@ -264,8 +278,38 @@
 
   const cursor = new TimeOfDayCursor();
 
-  const closedBars = $derived(shareBars(primary?.activity?.closedLoop));
-  const closedComparison = $derived(shareBars(comparison?.activity?.closedLoop));
+  const activityStrips = $derived(
+    [
+      {
+        id: "closed-loop",
+        title: "Closed loop by hour",
+        label: "Closed loop",
+        series: LoopAnalysisSeries.LoopActivity,
+        pick: (range: LoopHealthRange | null | undefined) => range?.activity?.closedLoop,
+        none: "No loop activity in this range",
+      },
+      {
+        id: "cgm-active",
+        title: "CGM active by hour",
+        label: "CGM active",
+        series: LoopAnalysisSeries.CgmActivity,
+        pick: (range: LoopHealthRange | null | undefined) => range?.activity?.cgm,
+        none: "No glucose readings in this range",
+      },
+      {
+        id: "pump-active",
+        title: "Pump active by hour",
+        label: "Pump active",
+        series: LoopAnalysisSeries.LoopActivity,
+        pick: (range: LoopHealthRange | null | undefined) => range?.activity?.pump,
+        none: "No pump activity in this range",
+      },
+    ].map((strip) => ({
+      ...strip,
+      bars: shareBars(strip.pick(primary)),
+      compared: shareBars(strip.pick(comparison)),
+    }))
+  );
   const zeroBars = $derived(shareBars(primary?.zeroDelivery?.algorithmZeroTemp));
   const zeroComparison = $derived(shareBars(comparison?.zeroDelivery?.algorithmZeroTemp));
   const capBars = $derived(shareBars(primary?.maxBasal?.atCap));
@@ -286,7 +330,7 @@
     return [Math.max(0, Math.floor((low - pad) * 10) / 10), Math.ceil((high + pad) * 10) / 10];
   });
 
-  const CLOSED = "var(--chart-2)";
+  const ACTIVITY = "var(--chart-2)";
   const ZERO = "var(--chart-3)";
   const CAP = "var(--chart-4)";
   const SENSITIVITY = "var(--chart-2)";
@@ -334,6 +378,7 @@
         title: "Loop gaps",
         explanation: "More than 15 minutes between loop cycles.",
         series: LoopAnalysisSeries.LoopGaps,
+        reason: "loopGaps" as const,
         gaps: primary?.cadence?.loopGaps,
       },
       {
@@ -341,6 +386,7 @@
         title: "Unrecorded delivery",
         explanation: "Time the loop ran while the pump's records do not say what it delivered.",
         series: LoopAnalysisSeries.UnrecordedDelivery,
+        reason: "unrecordedDelivery" as const,
         gaps: primary?.cadence?.unrecordedDelivery,
       },
     ].map((list) => {
@@ -408,28 +454,30 @@
       <FigureStrip {figures} />
 
       <div class="space-y-5 rounded-lg border bg-card p-3 @md:p-4">
-        <div class="space-y-1">
-          <TimeOfDayPanel
-            id="closed-loop"
-            title="Closed loop by hour"
-            unit="Share of analysed time, %"
-            {cursor}
-            yDomain={[0, 100]}
-            heightClass="h-28"
-            describe={(slot) => describeShare(primary?.activity?.closedLoop, slot)}
-            empty={emptyText(LoopAnalysisSeries.LoopActivity, closedBars.length > 0, "No loop activity in this range")}
-          >
-            {#snippet marks()}
-              <HourBars bars={closedBars} comparison={closedComparison} color={CLOSED} />
-            {/snippet}
-            {#snippet tooltip(slot)}
-              {@render shareReadout(primary?.activity?.closedLoop, comparison?.activity?.closedLoop, slot)}
-            {/snippet}
-          </TimeOfDayPanel>
-          {#if !hidden(LoopAnalysisSeries.LoopActivity)}
-            <StripKey items={barKey(CLOSED, "Closed loop", closedBars)} />
-          {/if}
-        </div>
+        {#each activityStrips as strip (strip.id)}
+          <div class="space-y-1">
+            <TimeOfDayPanel
+              id={strip.id}
+              title={strip.title}
+              unit="Share of analysed time, %"
+              {cursor}
+              yDomain={[0, 100]}
+              heightClass="h-24"
+              describe={(slot) => describeShare(strip.pick(primary), slot)}
+              empty={emptyText(strip.series, strip.bars.length > 0, strip.none)}
+            >
+              {#snippet marks()}
+                <HourBars bars={strip.bars} comparison={strip.compared} color={ACTIVITY} />
+              {/snippet}
+              {#snippet tooltip(slot)}
+                {@render shareReadout(strip.pick(primary), strip.pick(comparison), slot)}
+              {/snippet}
+            </TimeOfDayPanel>
+            {#if !hidden(strip.series)}
+              <StripKey items={barKey(ACTIVITY, strip.label, strip.bars)} />
+            {/if}
+          </div>
+        {/each}
 
         <div class="space-y-1">
           <TimeOfDayPanel
@@ -470,7 +518,7 @@
             yDomain={capDomain}
             heightClass="h-28"
             describe={(slot) => describeShare(primary?.maxBasal?.atCap, slot)}
-            empty={emptyText(LoopAnalysisSeries.MaxBasal, capBars.length > 0, "Unknown: no algorithm temp's cap is recorded in this range")}
+            empty={emptyText(LoopAnalysisSeries.MaxBasal, capBars.length > 0, `Unknown: ${unknown("maxBasal")}`)}
           >
             {#snippet marks()}
               <HourBars bars={capBars} comparison={capComparison} color={CAP} />
@@ -564,8 +612,8 @@
             <h4 class="text-sm font-medium">{list.title}</h4>
             {#if hidden(list.series)}
               <p class="text-sm text-muted-foreground">{hiddenText()}</p>
-            {:else if !cycled(primary, list.gaps)}
-              <p class="text-sm text-muted-foreground">Unknown: no loop cycles in this range</p>
+            {:else if list.gaps == null}
+              <p class="text-sm text-muted-foreground">Unknown: {unknown(list.reason)}</p>
             {:else}
               <p class="text-sm text-muted-foreground">{list.explanation}</p>
               {#if list.all.length === 0}

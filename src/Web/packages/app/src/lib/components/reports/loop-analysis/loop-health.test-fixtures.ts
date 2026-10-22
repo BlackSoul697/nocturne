@@ -1,6 +1,7 @@
 import {
   DayOfWeek,
   LoopAnalysisSeries,
+  LoopHealthUnknownReason,
   type LoopAnalysisAggregate,
   type LoopHealthDistribution,
   type LoopHealthGaps,
@@ -10,6 +11,7 @@ import {
 } from "$lib/api";
 import { ALL_SCOPES, unavailableFor } from "./daily-profile.test-fixtures";
 
+const R = LoopHealthUnknownReason;
 const HOURS = Array.from({ length: 24 }, (_, hour) => hour);
 
 function aggregate(centre: number, spread: number, n: number, sparse: boolean): LoopAnalysisAggregate {
@@ -40,8 +42,6 @@ function gaps(list: { date: string; startMinuteOfDay: number; minutes: number }[
     count: list.length,
     totalMinutes: list.reduce((sum, g) => sum + g.minutes, 0),
     longestMinutes: list.length > 0 ? Math.max(...list.map((g) => g.minutes)) : undefined,
-    countByStartHour: HOURS.map((hour) => list.filter((g) => Math.floor(g.startMinuteOfDay / 60) === hour).length),
-    time: share(list.length > 0 ? 3.5 : 0, 14, false),
     gaps: list.map((g) => ({ ...g, start: `${g.date}T00:00:00Z`, end: `${g.date}T01:00:00Z` })),
   };
 }
@@ -55,7 +55,7 @@ export interface LoopHealthOptions {
   capUnknown?: boolean;
   days?: number;
   sparse?: boolean;
-  /** No loop cycle ran: closed loop is unmeasured and both gap kinds count nothing, as the API sends it today. */
+  /** No loop cycle ran: closed loop is unmeasured and neither kind of gap is counted. */
   noCycles?: boolean;
   /** This many loop gaps, from 20 minutes up, in place of the usual two. */
   loopGapCount?: number;
@@ -85,17 +85,17 @@ export function loopHealthRange(options: LoopHealthOptions = {}): LoopHealthRang
       cgm: share(98.7 * scale, n, sparse),
     },
     cadence: {
-      loopGaps: gaps(
-        noCycles
-          ? []
-          : loopGapCount != null
+      loopGaps: noCycles
+        ? undefined
+        : gaps(
+          loopGapCount != null
             ? Array.from({ length: loopGapCount }, (_, i) => ({ date: "2026-10-04", startMinuteOfDay: i * 60, minutes: 20 + i }))
             : [
                 { date: "2026-10-03", startMinuteOfDay: 23 * 60 + 30, minutes: 90 },
                 { date: "2026-10-05", startMinuteOfDay: 3 * 60 + 10, minutes: 25 },
               ]
-      ),
-      unrecordedDelivery: gaps(noCycles ? [] : [{ date: "2026-10-08", startMinuteOfDay: 6 * 60, minutes: 300 }]),
+        ),
+      unrecordedDelivery: noCycles ? undefined : gaps([{ date: "2026-10-08", startMinuteOfDay: 6 * 60, minutes: 300 }]),
     },
     zeroDelivery: unmeasured.has("zeroDelivery")
       ? { algorithmZeroTemp: share(null, n, sparse), manualZeroTemp: share(null, n, sparse), suspended: share(null, n, sparse) }
@@ -107,17 +107,29 @@ export function loopHealthRange(options: LoopHealthOptions = {}): LoopHealthRang
     maxBasal: capUnknown
       ? { atCap: share(null, n, sparse), capKnown: share(0, n, sparse) }
       : { atCap: share(2.5 * scale, n, sparse), capKnown: share(76.7, n, sparse) },
-    atMaxIob: oref && !unmeasured.has("atMaxIob") ? share(0.1 * scale, n, sparse) : share(null, n, sparse),
+    atMaxIob: oref && !unmeasured.has("atMaxIob") ? share(0.1 * scale, n, sparse) : undefined,
     automaticBoluses: unmeasured.has("automaticBoluses")
-      ? { perDay: { hours: [] }, unitsPerDay: { hours: [] }, size: { hours: [] } }
+      ? { perDay: { hours: [] }, size: { hours: [] } }
       : {
           perDay: distribution(54 * scale, n, sparse),
-          unitsPerDay: distribution(12.3, n, sparse),
           size: distribution(0.2, n, sparse),
         },
-    suggestedNotEnacted: oref && !unmeasured.has("suggestedNotEnacted") ? share(0.2 * scale, n, sparse) : share(null, n, sparse),
+    suggestedNotEnacted: oref && !unmeasured.has("suggestedNotEnacted") ? share(0.2 * scale, n, sparse) : undefined,
     sensitivityRatio: oref ? distribution(1.1, n, sparse) : { hours: HOURS.map((hour) => ({ hour })) },
     limits: oref ? { orefMaxIob: 15 } : { loopMaximumBasalRate: 3 },
+    unknown: {
+      loopGaps: noCycles ? R.NoCyclesInRange : undefined,
+      unrecordedDelivery: noCycles ? R.NoCyclesInRange : undefined,
+      maxBasal: capUnknown ? (oref ? R.NoReasonRecorded : R.SettingNotUploaded) : undefined,
+      atMaxIob: !oref ? R.NotRecordedByThisSystem : unmeasured.has("atMaxIob") ? R.NoReasonRecorded : undefined,
+      suggestedNotEnacted: !oref
+        ? R.NotRecordedByThisSystem
+        : unmeasured.has("suggestedNotEnacted")
+          ? R.NoReasonRecorded
+          : undefined,
+      loopMaximumBasalRate: oref ? R.NotRecordedByThisSystem : undefined,
+      orefMaxIob: oref ? undefined : R.NotRecordedByThisSystem,
+    },
   };
 }
 
@@ -146,6 +158,7 @@ function narrow(range: LoopHealthRange, withheld: Set<LoopAnalysisSeries>): Loop
   const activity = range.activity ?? {};
   const cadence = range.cadence ?? {};
   const limits = range.limits ?? {};
+  const unknown = range.unknown ?? {};
   if (hide(S.CgmActivity)) {
     activity.cgm = undefined;
     activity.cgmActivePercent = undefined;
@@ -156,16 +169,17 @@ function narrow(range: LoopHealthRange, withheld: Set<LoopAnalysisSeries>): Loop
     activity.aidActivePercent = undefined;
     activity.pumpUsePercent = undefined;
   }
-  if (hide(S.LoopGaps)) cadence.loopGaps = undefined;
-  if (hide(S.UnrecordedDelivery)) cadence.unrecordedDelivery = undefined;
+  if (hide(S.LoopGaps)) cadence.loopGaps = unknown.loopGaps = undefined;
+  if (hide(S.UnrecordedDelivery)) cadence.unrecordedDelivery = unknown.unrecordedDelivery = undefined;
   if (hide(S.ZeroDelivery)) range.zeroDelivery = undefined;
-  if (hide(S.MaxBasal)) range.maxBasal = undefined;
-  if (hide(S.AtMaxIob)) range.atMaxIob = undefined;
+  if (hide(S.MaxBasal)) range.maxBasal = unknown.maxBasal = undefined;
+  if (hide(S.AtMaxIob)) range.atMaxIob = unknown.atMaxIob = undefined;
   if (hide(S.AutomaticBoluses)) range.automaticBoluses = undefined;
-  if (hide(S.SuggestedNotEnacted)) range.suggestedNotEnacted = undefined;
+  if (hide(S.SuggestedNotEnacted)) range.suggestedNotEnacted = unknown.suggestedNotEnacted = undefined;
   if (hide(S.SensitivityRatio)) range.sensitivityRatio = undefined;
   if (hide(S.LoopLimits)) limits.loopMaximumBasalRate = undefined;
-  if (hide(S.OrefMaxIob)) limits.orefMaxIob = undefined;
+  if (hide(S.LoopLimits) || hide(S.LoopGaps)) unknown.loopMaximumBasalRate = undefined;
+  if (hide(S.OrefMaxIob)) limits.orefMaxIob = unknown.orefMaxIob = undefined;
   return range;
 }
 
