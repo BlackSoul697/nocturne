@@ -554,12 +554,12 @@ internal sealed class SettingsEvidenceContext
     public List<(int Block, long Start, long End)> DayBlocks(Func<int, int> blockOf)
     {
         var blocks = new List<(int Block, long Start, long End)>();
-        var last = LocalSlotBinning.LocalDay(To - 1, Zone);
-        for (var day = LocalSlotBinning.LocalDay(From, Zone); day <= last; day = day.AddDays(1))
+        var (_, starts) = LocalSlotBinning.DayStarts(From, To, Zone);
+        for (var d = 0; d < starts.Length - 1; d++)
         {
             LocalSlotBinning.Distribute(
-                LocalSlotBinning.DayStartMills(day, Zone),
-                LocalSlotBinning.DayStartMills(day.AddDays(1), Zone),
+                starts[d],
+                starts[d + 1],
                 Zone,
                 60,
                 (start, local, ms) =>

@@ -33,7 +33,11 @@
     [
       { key: "primary", label: "This range", days: contributingDays(primary, slot) },
       ...(comparison
-        ? [{ key: "comparison", label: "Comparison range", days: contributingDays(comparison, slot) }]
+        ? [{
+            key: "comparison",
+            label: "Comparison range",
+            days: contributingDays(comparison, slot),
+          }]
         : []),
     ]
   );
@@ -102,6 +106,9 @@
                 class="flex flex-wrap items-center gap-x-3 gap-y-1 px-3 py-2 text-sm hover:bg-muted/50"
               >
                 <span class="min-w-32 font-medium">{formatWeekdayDate(startOfDay(entry.day.date ?? ""))}</span>
+                {#if entry.day.complete === false}
+                  <Badge variant="secondary">Part of the day</Badge>
+                {/if}
                 <span class="flex flex-1 flex-wrap gap-1">
                   {#each entry.series as series (series)}
                     <Badge variant="outline">{seriesLabels[series]}</Badge>

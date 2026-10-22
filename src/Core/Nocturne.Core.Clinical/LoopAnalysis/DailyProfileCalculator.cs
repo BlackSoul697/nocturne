@@ -84,9 +84,8 @@ public static class DailyProfileCalculator
     public static DailyProfileRange Calculate(DailyProfileInputs inputs, LoopAnalysisMask mask, long from, long to)
     {
         var tz = inputs.Zone;
-        var firstDay = LocalSlotBinning.LocalDay(from, tz);
-        var lastDay = LocalSlotBinning.LocalDay(to - 1, tz);
-        var dayCount = lastDay.DayNumber - firstDay.DayNumber + 1;
+        var (firstDay, dayStarts) = LocalSlotBinning.DayStarts(from, to, tz);
+        var dayCount = dayStarts.Length - 1;
         var acc = new Accumulators(dayCount * SlotsPerDay);
 
         int Index(DateTime local)
@@ -95,9 +94,6 @@ public static class DailyProfileCalculator
             return day < 0 || day >= dayCount ? -1 : day * SlotsPerDay + LocalSlotBinning.SlotOf(local, SlotMinutes);
         }
 
-        var dayStarts = new long[dayCount + 1];
-        for (var d = 0; d <= dayCount; d++)
-            dayStarts[d] = LocalSlotBinning.DayStartMills(firstDay.AddDays(d), tz);
         for (var d = 0; d < dayCount; d++)
             LocalSlotBinning.Distribute(dayStarts[d], dayStarts[d + 1], tz, SlotMinutes, (local, ms) =>
             {
@@ -121,7 +117,7 @@ public static class DailyProfileCalculator
         for (var s = 0; s < SlotsPerDay; s++)
             slots.Add(SummariseSlot(s, dayCount, acc, inputs.TargetAt));
 
-        var days = Days(firstDay, dayCount, dayStarts, acc, out var summary);
+        var days = Days(firstDay, dayCount, dayStarts, from, to, acc, out var summary);
 
         return new DailyProfileRange
         {
@@ -367,7 +363,7 @@ public static class DailyProfileCalculator
     }
 
     private static List<DailyProfileDay> Days(
-        DateOnly firstDay, int dayCount, long[] dayStarts, Accumulators acc, out DailyProfileSummary summary)
+        DateOnly firstDay, int dayCount, long[] dayStarts, long from, long to, Accumulators acc, out DailyProfileSummary summary)
     {
         var days = new List<DailyProfileDay>(dayCount);
         double ratioScheduledW = 0, ratioDeltaW = 0, netPerDaySum = 0, netShareU = 0, tddShareU = 0;
@@ -443,6 +439,7 @@ public static class DailyProfileCalculator
                 Date = date.ToString("yyyy-MM-dd"),
                 DayOfWeek = date.DayOfWeek,
                 Start = DateTimeOffset.FromUnixTimeMilliseconds(dayStarts[d]).UtcDateTime,
+                Complete = dayStarts[d] >= from && dayStarts[d + 1] <= to,
                 Coverage = coverage.ToCoverage(),
                 NetLoopCorrection = net is { } n ? SlotSummary.Round(n) : null,
                 TotalInsulin = total is { } t ? SlotSummary.Round(t) : null,

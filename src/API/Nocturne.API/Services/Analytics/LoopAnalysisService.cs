@@ -39,7 +39,6 @@ internal sealed partial class LoopAnalysisService(
     ICobCalculator cobCalculator,
     ITherapySettingsRepository therapySettingsRepository,
     AidSystemMetricsReader aidSystemMetrics,
-    TimeProvider timeProvider,
     IDeviceEventRepository deviceEventRepository
 ) : ILoopAnalysisService
 {

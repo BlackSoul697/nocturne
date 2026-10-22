@@ -12,7 +12,7 @@ internal sealed partial class LoopAnalysisService
     {
         var (primary, comparison, names) = await ForRangesAsync(
             filter,
-            window => LoadPredictionsAsync(window, zone, filter.Masks.ProfileName is not null || filter.ReadProfileNames, ct),
+            window => LoadPredictionsAsync(window, zone, filter.Masks.ProfileName is not null || filter.ReadProfileNames, ToMills(filter.Now), ct),
             (loaded, window) => PredictionAccuracyCalculator.Calculate(
                 loaded.Inputs, Mask(filter, window, zone, loaded.Sources), window.From, window.To));
         return new PredictionAccuracyResponse { Primary = primary, Comparison = comparison, ProfileNames = names };
@@ -30,7 +30,7 @@ internal sealed partial class LoopAnalysisService
     /// predictions are the AID evidence the open-loop mask weighs.
     /// </summary>
     private async Task<PredictionsLoaded> LoadPredictionsAsync(
-        Window window, TimeZoneInfo zone, bool needsProfiles, CancellationToken ct)
+        Window window, TimeZoneInfo zone, bool needsProfiles, long now, CancellationToken ct)
     {
         var (from, to) = (window.From, window.To);
         var fromUtc = ToUtc(from);
@@ -65,7 +65,7 @@ internal sealed partial class LoopAnalysisService
             Snapshots = snapshots,
             Glucose = [.. glucose.Select(g => new GlucoseSample(g.Mills, g.Mgdl)).Where(g => g.Mgdl > 0).OrderBy(g => g.Mills)],
             GlucoseExclusions = IntervalSet.Of(sources.DataExclusions),
-            ReadingsUntil = Math.Min(readingsEnd, timeProvider.GetUtcNow().ToUnixTimeMilliseconds()),
+            ReadingsUntil = Math.Min(readingsEnd, now),
             CarbMills = [.. (await carbTask).Where(c => c.Carbs > 0).Select(c => c.Mills).Order()],
             ManualBolusMills = [.. (await bolusTask).Where(b => b.Kind != BolusKind.Algorithm && b.Insulin > 0).Select(b => b.Mills).Order()],
             Adjusted = IntervalSet.Of(sources.Overrides.Concat(sources.TemporaryTargets).Concat(sources.Exercise)),

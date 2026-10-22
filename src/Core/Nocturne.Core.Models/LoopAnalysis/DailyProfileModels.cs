@@ -161,6 +161,12 @@ public class DailyProfileDay
     /// <summary>When the local day begins.</summary>
     public DateTime Start { get; set; }
 
+    /// <summary>
+    /// The range covers the whole day. False for a day cut short: today, analysed up to now, the same
+    /// part of a comparison day, or a first day a 24-hour clamp starts partway through.
+    /// </summary>
+    public bool Complete { get; set; }
+
     public DailyProfileDayCoverage Coverage { get; set; } = new();
 
     /// <summary>U, over the day's covered time.</summary>

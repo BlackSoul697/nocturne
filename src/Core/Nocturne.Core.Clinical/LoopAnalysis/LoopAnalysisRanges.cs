@@ -4,26 +4,48 @@ namespace Nocturne.Core.Clinical.LoopAnalysis;
 
 /// <summary>
 /// Resolves Loop Analysis ranges of tenant-local calendar dates to the instants they span. A day is
-/// a local day, so a DST day stays whole: 23 or 25 hours.
+/// a local day, so a DST day stays whole: 23 or 25 hours. No range runs past now: time that has not
+/// happened is not analysed, so the current day is a partial day.
 /// </summary>
 public static class LoopAnalysisRanges
 {
     /// <summary>
-    /// <paramref name="startDate"/> to <paramref name="endDate"/> inclusive, keeping only the most
-    /// recent <paramref name="maxDays"/> local days when it spans more.
+    /// <paramref name="startDate"/> to <paramref name="endDate"/> inclusive, ending at
+    /// <paramref name="nowUtc"/> when that is sooner, and keeping only the most recent
+    /// <paramref name="maxDays"/> local days when it spans more. Dates after today are read as
+    /// today: the viewer's today can be ahead of the tenant's.
     /// </summary>
     public static LoopAnalysisResolvedRange Resolve(
-        DateOnly startDate, DateOnly endDate, TimeZoneInfo tz, int maxDays)
+        DateOnly startDate, DateOnly endDate, TimeZoneInfo tz, int maxDays, DateTime nowUtc)
     {
-        var shortened = endDate.DayNumber - startDate.DayNumber + 1 > maxDays;
-        return Of(shortened ? endDate.AddDays(1 - maxDays) : startDate, endDate, tz, shortened);
+        var nowMills = new DateTimeOffset(nowUtc, TimeSpan.Zero).ToUnixTimeMilliseconds();
+        var today = LocalSlotBinning.LocalDay(nowMills - 1, tz);
+        var firstDate = startDate < today ? startDate : today;
+        var lastDate = endDate < today ? endDate : today;
+        var shortened = lastDate.DayNumber - firstDate.DayNumber + 1 > maxDays;
+        var range = Of(shortened ? lastDate.AddDays(1 - maxDays) : firstDate, lastDate, tz, shortened);
+        if (range.To > nowUtc)
+            range.To = nowUtc;
+        return range;
     }
 
-    /// <summary>The same number of days as <paramref name="primary"/>, ending the day before it starts.</summary>
+    /// <summary>
+    /// The same number of days as <paramref name="primary"/>, ending the day before it starts. When
+    /// <paramref name="primary"/>'s last day is partial, so is this range's, cut the same time into it.
+    /// </summary>
     public static LoopAnalysisResolvedRange Previous(LoopAnalysisResolvedRange primary, TimeZoneInfo tz)
     {
         var days = primary.EndDate.DayNumber - primary.StartDate.DayNumber + 1;
-        return Of(primary.StartDate.AddDays(-days), primary.StartDate.AddDays(-1), tz, shortened: false);
+        var previous = Of(primary.StartDate.AddDays(-days), primary.StartDate.AddDays(-1), tz, shortened: false);
+        var primaryLastDay = LocalSlotBinning.DayStartMills(primary.EndDate, tz);
+        var primaryTo = new DateTimeOffset(primary.To, TimeSpan.Zero).ToUnixTimeMilliseconds();
+        if (primaryTo < LocalSlotBinning.DayStartMills(primary.EndDate.AddDays(1), tz))
+        {
+            var partialTo = LocalSlotBinning.DayStartMills(previous.EndDate, tz) + (primaryTo - primaryLastDay);
+            if (partialTo < new DateTimeOffset(previous.To, TimeSpan.Zero).ToUnixTimeMilliseconds())
+                previous.To = DateTimeOffset.FromUnixTimeMilliseconds(partialTo).UtcDateTime;
+        }
+        return previous;
     }
 
     /// <summary>The last <paramref name="window"/> before <paramref name="nowUtc"/>, for a history-clamped caller.</summary>
