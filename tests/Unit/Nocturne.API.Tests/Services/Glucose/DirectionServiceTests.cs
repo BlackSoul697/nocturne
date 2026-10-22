@@ -206,6 +206,27 @@ public class DirectionServiceTests
         Assert.Equal($"+{expectedDelta}", result.Display);
     }
 
+    [Theory]
+    [InlineData(7)]
+    [InlineData(9)]
+    public void CalculateDelta_ShouldNotInterpolateWhenAtMostNineMinutesApart(int gapMinutes)
+    {
+        var now = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+        var entries = new List<Entry>
+        {
+            new() { Mills = now - (gapMinutes * 60 * 1000), Mgdl = 100 },
+            new() { Mills = now, Mgdl = 100 + gapMinutes },
+        };
+
+        var result = DirectionService.CalculateDelta(entries, "mg/dl");
+
+        Assert.NotNull(result);
+        Assert.False(result.Interpolated);
+        Assert.Equal(gapMinutes, result.Mgdl);
+        Assert.Equal($"+{gapMinutes}", result.Display);
+        Assert.Equal(100, result.Mean5MinsAgo);
+    }
+
     [Fact]
     public void CalculateDelta_ShouldConvertToMmolL()
     {
