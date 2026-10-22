@@ -651,5 +651,9 @@ internal static class LoopAnalysisReadScopeGuard
         if (Hidden(LoopAnalysisSeries.InsulinSummary)) range.Summary.Insulin = null;
         if (Hidden(LoopAnalysisSeries.DeliveredToScheduledRatio)) range.Summary.DeliveredToScheduledRatio = null;
         if (Hidden(LoopAnalysisSeries.ProfileNames)) range.ProfileNames = [];
+
+        range.Summary.DaysWithData = range.Days.Count(day =>
+            (day.HasGlucose && !Hidden(LoopAnalysisSeries.Glucose))
+            || (day.HasTreatments && !Hidden(LoopAnalysisSeries.DeliveredBasal)));
     }
 }

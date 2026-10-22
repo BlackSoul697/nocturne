@@ -1175,6 +1175,41 @@ public class AnalyticsReadScopeGuardTests
     }
 
     [Fact]
+    public void LoopAnalysis_WithholdingEveryCategory_LeavesNothingButTheAllowlist()
+    {
+        var data = LoopAnalysisReadScopeGuard.Redact(RedactionCoverage.Populated<DailyProfileResponse>(), Granted());
+
+        RedactionCoverage.AssertWithheld(
+            data,
+            [typeof(DailyProfileSlot), typeof(DailyProfileDay), typeof(DailyProfileDayCoverage), typeof(DailyProfileSummary)],
+            ["DailyProfileDayCoverage.Analysed"]);
+    }
+
+    [Theory]
+    [InlineData(new[] { Scope.GlucoseRead }, 1)]
+    [InlineData(new[] { Scope.GlucoseRead, Scope.TreatmentsRead }, 2)]
+    [InlineData(new[] { Scope.TreatmentsRead }, 1)]
+    public void LoopAnalysis_DaysWithData_CountsOnlyTheDataTheCallerCanRead(string[] scopes, int expected)
+    {
+        var data = DailyProfile();
+        var glucoseDay = data.Primary.Days.Single();
+        glucoseDay.HasGlucose = true;
+        data.Primary.Days.Add(new DailyProfileDay { Date = "2024-06-04", HasTreatments = true });
+        data.Primary.Summary.DaysWithData = 2;
+
+        LoopAnalysisReadScopeGuard.Redact(data, Granted([.. scopes, Scope.TherapyRead]))
+            .Primary.Summary.DaysWithData.Should().Be(expected);
+    }
+
+    [Fact]
+    public void LoopAnalysis_EverySeriesCanBeWithheld()
+    {
+        LoopAnalysisReadScopeGuard.Withheld(Granted())
+            .Concat(LoopAnalysisReadScopeGuard.LoopHealthWithheld(Granted()))
+            .Should().BeEquivalentTo(Enum.GetValues<LoopAnalysisSeries>());
+    }
+
+    [Fact]
     public void LoopAnalysis_FullAccess_KeepsEverything()
     {
         var original = DailyProfile();
@@ -1286,6 +1321,13 @@ public class AnalyticsReadScopeGuardTests
         return (controller, service);
     }
 
+    private static LoopAnalysisQuery Week(Action<LoopAnalysisQuery>? configure = null)
+    {
+        var query = new LoopAnalysisQuery { StartDate = new DateOnly(2024, 6, 1), EndDate = new DateOnly(2024, 6, 7) };
+        configure?.Invoke(query);
+        return query;
+    }
+
     private static DailyProfileResponse Ok(ActionResult<DailyProfileResponse> result) =>
         result.Result.Should().BeOfType<OkObjectResult>().Which.Value.Should().BeOfType<DailyProfileResponse>().Subject;
 
@@ -1296,7 +1338,7 @@ public class AnalyticsReadScopeGuardTests
             Granted(Scope.ReportsRead, Scope.GlucoseRead), query: "?profileName=Default&ExcludeOverrides=true");
 
         var data = Ok(await controller.GetDailyProfile(
-            new DateOnly(2024, 6, 1), new DateOnly(2024, 6, 7), profileName: "Default", excludeOverrides: true));
+            Week(q => { q.ProfileName = "Default"; q.ExcludeOverrides = true; })));
 
         data.Primary.Slots.Single().Glucose.Should().NotBeNull();
         data.Primary.Slots.Single().Iob.Should().BeNull();
@@ -1326,8 +1368,7 @@ public class AnalyticsReadScopeGuardTests
     {
         var (controller, _) = LoopAnalysisHandler(Granted([Scope.ReportsRead, .. AllLoopAnalysisCategories]));
 
-        var data = Ok(await controller.GetDailyProfile(
-            new DateOnly(2024, 6, 1), new DateOnly(2024, 6, 7), days: [DayOfWeek.Friday, DayOfWeek.Monday]));
+        var data = Ok(await controller.GetDailyProfile(Week(q => q.Days = [DayOfWeek.Friday, DayOfWeek.Monday])));
 
         data.AppliedFilters.Days.Should().Equal(DayOfWeek.Monday, DayOfWeek.Friday);
         data.AppliedFilters.ExcludeIllness.Should().BeTrue();
@@ -1341,8 +1382,10 @@ public class AnalyticsReadScopeGuardTests
     {
         var (controller, service) = LoopAnalysisHandler(Granted([Scope.ReportsRead, .. AllLoopAnalysisCategories]));
 
-        var data = Ok(await controller.GetDailyProfile(
-            new DateOnly(2024, 1, 1), new DateOnly(2024, 6, 30), LoopAnalysisComparison.Previous));
+        var data = Ok(await controller.GetDailyProfile(new LoopAnalysisQuery
+        {
+            StartDate = new DateOnly(2024, 1, 1), EndDate = new DateOnly(2024, 6, 30), Compare = LoopAnalysisComparison.Previous,
+        }));
 
         data.PrimaryRange!.Shortened.Should().BeTrue();
         data.PrimaryRange.StartDate.Should().Be(new DateOnly(2024, 4, 2));
@@ -1361,8 +1404,10 @@ public class AnalyticsReadScopeGuardTests
             Granted([Scope.ReportsRead, .. AllLoopAnalysisCategories]), historyClamped: true,
             query: "?startDate=2024-01-01&endDate=2024-01-07&compare=previous");
 
-        var data = Ok(await controller.GetDailyProfile(
-            new DateOnly(2024, 1, 1), new DateOnly(2024, 1, 7), LoopAnalysisComparison.Previous));
+        var data = Ok(await controller.GetDailyProfile(new LoopAnalysisQuery
+        {
+            StartDate = new DateOnly(2024, 1, 1), EndDate = new DateOnly(2024, 1, 7), Compare = LoopAnalysisComparison.Previous,
+        }));
 
         data.HistoryClamped.Should().BeTrue();
         data.ComparisonRange.Should().BeNull();
@@ -1382,7 +1427,7 @@ public class AnalyticsReadScopeGuardTests
         var (controller, service) = LoopAnalysisHandler(
             Granted([Scope.ReportsRead, .. AllLoopAnalysisCategories]), timezone: null);
 
-        var data = Ok(await controller.GetDailyProfile(new DateOnly(2024, 6, 1), new DateOnly(2024, 6, 7)));
+        var data = Ok(await controller.GetDailyProfile(Week()));
 
         data.TimeZoneUnavailableReason.Should().Be(TimeZoneUnavailableReason.NotConfigured);
         data.PrimaryRange.Should().BeNull();
@@ -1400,10 +1445,14 @@ public class AnalyticsReadScopeGuardTests
     {
         var (controller, service) = LoopAnalysisHandler(Granted([Scope.ReportsRead, .. AllLoopAnalysisCategories]));
 
-        var result = await controller.GetDailyProfile(
-            DateOnly.Parse(start), DateOnly.Parse(end), compare,
-            compareStart is null ? null : DateOnly.Parse(compareStart),
-            compareEnd is null ? null : DateOnly.Parse(compareEnd));
+        var result = await controller.GetDailyProfile(new LoopAnalysisQuery
+        {
+            StartDate = DateOnly.Parse(start),
+            EndDate = DateOnly.Parse(end),
+            Compare = compare,
+            CompareStartDate = compareStart is null ? null : DateOnly.Parse(compareStart),
+            CompareEndDate = compareEnd is null ? null : DateOnly.Parse(compareEnd),
+        });
 
         result.Result.Should().BeOfType<ObjectResult>().Which.StatusCode.Should().Be(400);
         service.VerifyNoOtherCalls();
@@ -1516,6 +1565,17 @@ public class AnalyticsReadScopeGuardTests
     }
 
     [Fact]
+    public void LoopHealth_WithholdingEveryCategory_LeavesNothingButTheDays()
+    {
+        var data = LoopAnalysisReadScopeGuard.Redact(RedactionCoverage.Populated<LoopHealthResponse>(), Granted());
+
+        RedactionCoverage.AssertWithheld(
+            data,
+            [typeof(LoopHealthRange), typeof(LoopHealthActivity), typeof(LoopHealthCadence), typeof(LoopHealthLimits)],
+            ["LoopHealthRange.Days"]);
+    }
+
+    [Fact]
     public void LoopHealth_GateIsReportsRead() =>
         GateOn<LoopAnalysisController>(nameof(LoopAnalysisController.GetLoopHealth))!
             .RequiredScopes.Should().BeEquivalentTo([LoopAnalysisReadScopeGuard.AdmissionScope]);
@@ -1529,7 +1589,7 @@ public class AnalyticsReadScopeGuardTests
             .Setup(s => s.GetLoopHealthAsync(It.IsAny<LoopAnalysisFilter>(), It.IsAny<TimeZoneInfo>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(LoopHealth);
 
-        var result = await controller.GetLoopHealth(new DateOnly(2024, 6, 1), new DateOnly(2024, 6, 7), excludeOpenLoop: true);
+        var result = await controller.GetLoopHealth(Week(q => q.ExcludeOpenLoop = true));
 
         var data = result.Result.Should().BeOfType<OkObjectResult>()
             .Which.Value.Should().BeOfType<LoopHealthResponse>().Subject;
