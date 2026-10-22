@@ -6006,9 +6006,8 @@ msgstr ""
 msgid "Afternoon (12pm-6pm)"
 msgstr ""
 
-#: src/lib/components/reports/InsulinDeliveryChart.svelte
-msgid "Evening/Night"
-msgstr ""
+#~ msgid "Evening/Night"
+#~ msgstr ""
 
 #: src/lib/components/reports/InsulinDeliveryChart.svelte
 msgid "No insulin delivery data"
@@ -16143,8 +16142,10 @@ msgstr ""
 msgid "Total: {0} records deleted"
 msgstr ""
 
+#. 0: (point.profileBasalRate ?? 0).toFixed(2)
 #. 0: d.basalRate.toFixed(2)
 #. 0: d.scheduledBasalRate.toFixed(2)
+#: src/lib/components/reports/InsulinDeliveryChart.svelte
 #: src/lib/components/reports/sleep/single-night/Hypnogram.svelte
 #: src/lib/components/reports/sleep/single-night/Hypnogram.svelte
 msgid "{0} U/h"
@@ -27675,4 +27676,22 @@ msgstr ""
 
 #: src/lib/components/reports/InsulinDonutChart.svelte
 msgid "Click to expand"
+msgstr ""
+
+#: src/lib/components/reports/InsulinDeliveryChart.svelte
+msgid "Total"
+msgstr ""
+
+#: src/lib/components/reports/InsulinDeliveryChart.svelte
+#: src/lib/components/reports/InsulinDeliveryChart.svelte
+msgid "Scheduled basal rate"
+msgstr ""
+
+#: src/lib/components/reports/InsulinDeliveryChart.svelte
+msgid "Evening/Night (6pm-6am)"
+msgstr ""
+
+#. 0: (periods.dailyTotal ?? 0).toFixed(2)
+#: src/lib/components/reports/InsulinDeliveryChart.svelte
+msgid "Daily total {0} U"
 msgstr ""

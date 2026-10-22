@@ -6006,9 +6006,8 @@ msgstr "Morning (6am-12pm)"
 msgid "Afternoon (12pm-6pm)"
 msgstr "Afternoon (12pm-6pm)"
 
-#: src/lib/components/reports/InsulinDeliveryChart.svelte
-msgid "Evening/Night"
-msgstr "Evening/Night"
+#~ msgid "Evening/Night"
+#~ msgstr "Evening/Night"
 
 #: src/lib/components/reports/InsulinDeliveryChart.svelte
 msgid "No insulin delivery data"
@@ -16140,8 +16139,10 @@ msgstr "Remove this connector's configuration. The connector will need to be set
 msgid "Total: {0} records deleted"
 msgstr "Total: {0} records deleted"
 
+#. 0: (point.profileBasalRate ?? 0).toFixed(2)
 #. 0: d.basalRate.toFixed(2)
 #. 0: d.scheduledBasalRate.toFixed(2)
+#: src/lib/components/reports/InsulinDeliveryChart.svelte
 #: src/lib/components/reports/sleep/single-night/Hypnogram.svelte
 #: src/lib/components/reports/sleep/single-night/Hypnogram.svelte
 msgid "{0} U/h"
@@ -27673,3 +27674,21 @@ msgstr "Manual:"
 #: src/lib/components/reports/InsulinDonutChart.svelte
 msgid "Click to expand"
 msgstr "Click to expand"
+
+#: src/lib/components/reports/InsulinDeliveryChart.svelte
+msgid "Total"
+msgstr "Total"
+
+#: src/lib/components/reports/InsulinDeliveryChart.svelte
+#: src/lib/components/reports/InsulinDeliveryChart.svelte
+msgid "Scheduled basal rate"
+msgstr "Scheduled basal rate"
+
+#: src/lib/components/reports/InsulinDeliveryChart.svelte
+msgid "Evening/Night (6pm-6am)"
+msgstr "Evening/Night (6pm-6am)"
+
+#. 0: (periods.dailyTotal ?? 0).toFixed(2)
+#: src/lib/components/reports/InsulinDeliveryChart.svelte
+msgid "Daily total {0} U"
+msgstr "Daily total {0} U"
