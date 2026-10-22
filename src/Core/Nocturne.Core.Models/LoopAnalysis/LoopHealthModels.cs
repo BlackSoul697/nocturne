@@ -51,6 +51,56 @@ public class LoopHealthRange
     public LoopHealthDistribution? SensitivityRatio { get; set; }
 
     public LoopHealthLimits Limits { get; set; } = new();
+
+    /// <summary>Why each figure that can be unknown is null, where it is and the scopes allow it.</summary>
+    public LoopHealthUnknown Unknown { get; set; } = new();
+}
+
+/// <summary>
+/// Why a Loop health figure is null. Each is set only where its figure is null for want of data,
+/// and is withheld with its figure.
+/// </summary>
+public class LoopHealthUnknown
+{
+    public LoopHealthUnknownReason? LoopGaps { get; set; }
+
+    public LoopHealthUnknownReason? UnrecordedDelivery { get; set; }
+
+    /// <summary>Why no algorithm temp's cap is known, so <see cref="LoopHealthMaxBasal.AtCap"/> has no figure.</summary>
+    public LoopHealthUnknownReason? MaxBasal { get; set; }
+
+    public LoopHealthUnknownReason? AtMaxIob { get; set; }
+
+    public LoopHealthUnknownReason? SuggestedNotEnacted { get; set; }
+
+    public LoopHealthUnknownReason? LoopMaximumBasalRate { get; set; }
+
+    public LoopHealthUnknownReason? OrefMaxIob { get; set; }
+}
+
+public enum LoopHealthUnknownReason
+{
+    /// <summary>
+    /// The system that looped does not report it: Loop records no <c>max_iob</c> and no
+    /// suggestion apart from what it enacted, and oref (OpenAPS, AAPS, Trio, iAPS) has no maximum
+    /// basal rate setting of Loop's kind.
+    /// </summary>
+    NotRecordedByThisSystem,
+
+    /// <summary>No APS loop cycle was recorded in the range.</summary>
+    NoCyclesInRange,
+
+    /// <summary>The cycles stored no oref suggestion, or none whose reason named the figure.</summary>
+    NoReasonRecorded,
+
+    /// <summary>What it is measured on fell only in time the filter's masks left out.</summary>
+    MaskedOut,
+
+    /// <summary>The profile in force records no Loop maximum basal rate.</summary>
+    SettingNotUploaded,
+
+    /// <summary>The algorithm set no temp basal in the range.</summary>
+    NoAlgorithmTemps,
 }
 
 public class LoopHealthDay
@@ -129,13 +179,17 @@ public class LoopHealthActivity
 
 public class LoopHealthCadence
 {
-    /// <summary>Stretches longer than fifteen minutes between two APS loop cycles.</summary>
+    /// <summary>
+    /// Stretches longer than fifteen minutes between two APS loop cycles; null, not none, where no
+    /// cycle was recorded in the range.
+    /// </summary>
     public LoopHealthGaps? LoopGaps { get; set; }
 
     /// <summary>
     /// Loop time (cycles no more than fifteen minutes apart) where delivery is unknown: no temp
     /// basal is recorded and none bounds a stretch the schedule can be taken to have run through,
-    /// so the pump's delivery records are missing while the loop was running.
+    /// so the pump's delivery records are missing while the loop was running. Null where no cycle was
+    /// recorded in the range.
     /// </summary>
     public LoopHealthGaps? UnrecordedDelivery { get; set; }
 }
@@ -151,12 +205,6 @@ public class LoopHealthGaps
     public double TotalMinutes { get; set; }
 
     public double? LongestMinutes { get; set; }
-
-    /// <summary>Gaps by the local hour they began in, midnight first.</summary>
-    public List<int> CountByStartHour { get; set; } = [];
-
-    /// <summary>Share of the analysed time inside a gap.</summary>
-    public LoopHealthShare Time { get; set; } = new();
 
     /// <summary>Oldest first.</summary>
     public List<LoopHealthGap> Gaps { get; set; } = [];
@@ -210,9 +258,6 @@ public class LoopHealthAutomaticBoluses
 {
     /// <summary>Count per day; by hour, per day in that hour.</summary>
     public LoopHealthDistribution PerDay { get; set; } = new();
-
-    /// <summary>U per day; by hour, per day in that hour.</summary>
-    public LoopHealthDistribution UnitsPerDay { get; set; } = new();
 
     /// <summary>U, every bolus pooled.</summary>
     public LoopHealthDistribution Size { get; set; } = new();

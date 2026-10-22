@@ -310,6 +310,79 @@ public class LoopHealthCalculatorTests
     }
 
     [Fact]
+    public void WithNoCyclesInTheRange_GapsAreUnknownNotNone()
+    {
+        var from = Day0;
+        var to = Day0 + Hour;
+        var result = Calculate(from, to, cycles: [Cycle(from - 30 * Minute)],
+            delivered: [new(from, to, 1.0, BasalDeliveryOrigin.Algorithm)]);
+
+        result.Cadence.LoopGaps.Should().BeNull();
+        result.Cadence.UnrecordedDelivery.Should().BeNull();
+        result.Unknown.Should().BeEquivalentTo(new LoopHealthUnknown
+        {
+            LoopGaps = LoopHealthUnknownReason.NoCyclesInRange,
+            UnrecordedDelivery = LoopHealthUnknownReason.NoCyclesInRange,
+            MaxBasal = LoopHealthUnknownReason.NoCyclesInRange,
+            AtMaxIob = LoopHealthUnknownReason.NoCyclesInRange,
+            SuggestedNotEnacted = LoopHealthUnknownReason.NoCyclesInRange,
+            LoopMaximumBasalRate = LoopHealthUnknownReason.NoCyclesInRange,
+            OrefMaxIob = LoopHealthUnknownReason.NoCyclesInRange,
+        });
+    }
+
+    [Fact]
+    public void ForLoop_TheOrefFiguresAreNotRecordedAndAMissingSettingIsSaid()
+    {
+        var from = Day0;
+        var to = Day0 + Hour;
+        var result = Calculate(from, to,
+            cycles: EveryFiveMinutes(from, to, t => Cycle(t, AidAlgorithm.Loop, rate: 1.0)),
+            delivered: [new(from, to, 1.0, BasalDeliveryOrigin.Algorithm)]);
+
+        result.Cadence.LoopGaps!.Count.Should().Be(0);
+        result.Unknown.Should().BeEquivalentTo(new LoopHealthUnknown
+        {
+            MaxBasal = LoopHealthUnknownReason.SettingNotUploaded,
+            AtMaxIob = LoopHealthUnknownReason.NotRecordedByThisSystem,
+            SuggestedNotEnacted = LoopHealthUnknownReason.NotRecordedByThisSystem,
+            LoopMaximumBasalRate = LoopHealthUnknownReason.SettingNotUploaded,
+            OrefMaxIob = LoopHealthUnknownReason.NotRecordedByThisSystem,
+        });
+    }
+
+    [Fact]
+    public void ForIaps_TheOrefFiguresAreReadAndUnknownOnlyWithoutAReason()
+    {
+        var from = Day0;
+        var to = Day0 + Hour;
+        var result = Calculate(from, to,
+            cycles: EveryFiveMinutes(from, to, t => Cycle(t, AidAlgorithm.IAPS, hasReason: false, suggestedChange: null)));
+
+        result.Unknown.AtMaxIob.Should().Be(LoopHealthUnknownReason.NoReasonRecorded);
+        result.Unknown.SuggestedNotEnacted.Should().Be(LoopHealthUnknownReason.NoReasonRecorded);
+        result.Unknown.OrefMaxIob.Should().Be(LoopHealthUnknownReason.NoReasonRecorded);
+        result.Unknown.LoopMaximumBasalRate.Should().Be(LoopHealthUnknownReason.NotRecordedByThisSystem);
+        result.Unknown.MaxBasal.Should().Be(LoopHealthUnknownReason.NoAlgorithmTemps);
+    }
+
+    [Fact]
+    public void AFigureMeasuredOnlyInMaskedTime_IsMaskedOut()
+    {
+        var from = Day0;
+        var to = Day0 + 2 * Hour;
+        var result = Calculate(from, to,
+            cycles: EveryFiveMinutes(from, from + Hour, t => Cycle(t, rate: 1.0)),
+            delivered: [new(from, from + Hour, 1.0, BasalDeliveryOrigin.Algorithm)],
+            masks: new LoopAnalysisMasks { ExcludeIllness = true, ExcludeOpenLoop = false },
+            sources: new LoopAnalysisMaskSources { Illness = [new MillsInterval(from, from + Hour + LoopHealthCalculator.LoopGapMs)] });
+
+        result.AtMaxIob.Should().BeNull();
+        result.Unknown.AtMaxIob.Should().Be(LoopHealthUnknownReason.MaskedOut);
+        result.Unknown.MaxBasal.Should().Be(LoopHealthUnknownReason.MaskedOut);
+    }
+
+    [Fact]
     public void AGapAcrossMidnight_CountsOnce()
     {
         var from = Day0;
@@ -326,12 +399,8 @@ public class LoopHealthCalculatorTests
         gaps.Count.Should().Be(1);
         gaps.TotalMinutes.Should().Be(90);
         gaps.LongestMinutes.Should().Be(90);
-        gaps.CountByStartHour[23].Should().Be(1);
-        gaps.CountByStartHour.Sum().Should().Be(1);
         gaps.Gaps.Single().Date.Should().Be("2024-06-10");
         gaps.Gaps.Single().StartMinuteOfDay.Should().Be(23 * 60 + 30);
-        gaps.Time.Hours[0].Percent.Should().Be(50, "the gap filled 00:00-01:00 on one of the two days");
-        gaps.Time.Hours[23].Percent.Should().Be(25);
     }
 
     [Fact]
@@ -382,7 +451,6 @@ public class LoopHealthCalculatorTests
         var boluses = result.AutomaticBoluses!;
         boluses.PerDay.Overall!.Mean.Should().Be(1.5);
         boluses.PerDay.Overall.N.Should().Be(2);
-        boluses.UnitsPerDay.Overall!.Mean.Should().Be(0.6);
         boluses.Size.Overall!.P50.Should().Be(0.4);
         boluses.Size.Overall.N.Should().Be(3);
         boluses.PerDay.Hours[3].Value!.Mean.Should().Be(1.5);

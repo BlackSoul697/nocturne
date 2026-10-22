@@ -47,7 +47,6 @@ public class LoopAnalysisLoopHealthIntegrationTests(ApiIntegrationTestFixture fi
         var gaps = primary.GetProperty("cadence").GetProperty("loopGaps");
         gaps.GetProperty("count").GetInt32().Should().Be(1, "the gap across midnight counts once");
         gaps.GetProperty("totalMinutes").GetDouble().Should().Be(90);
-        gaps.GetProperty("countByStartHour")[23].GetInt32().Should().Be(1);
         var gap = gaps.GetProperty("gaps")[0];
         gap.GetProperty("date").GetString().Should().Be("2024-06-12");
         gap.GetProperty("startMinuteOfDay").GetInt32().Should().Be(23 * 60 + 30);

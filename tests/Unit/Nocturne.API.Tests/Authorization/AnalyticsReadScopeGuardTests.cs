@@ -1897,11 +1897,37 @@ public class AnalyticsReadScopeGuardTests
 
         RedactionCoverage.AssertWithheld(
             data,
-            [typeof(LoopHealthRange), typeof(LoopHealthActivity), typeof(LoopHealthCadence), typeof(LoopHealthLimits)],
+            [
+                typeof(LoopHealthRange), typeof(LoopHealthActivity), typeof(LoopHealthCadence), typeof(LoopHealthLimits),
+                typeof(LoopHealthUnknown),
+            ],
             [
                 "LoopHealthRange.From", "LoopHealthRange.To", "LoopHealthRange.Days",
-                "LoopHealthRange.Activity", "LoopHealthRange.Cadence", "LoopHealthRange.Limits",
+                "LoopHealthRange.Activity", "LoopHealthRange.Cadence", "LoopHealthRange.Limits", "LoopHealthRange.Unknown",
             ]);
+    }
+
+    [Fact]
+    public void LoopHealth_WithoutDevices_DropsEveryReasonReadOffTheCycles()
+    {
+        var data = RedactionCoverage.Populated<LoopHealthResponse>();
+
+        var redacted = LoopAnalysisReadScopeGuard.Redact(
+            data, Granted(Scope.GlucoseRead, Scope.TreatmentsRead, Scope.TherapyRead));
+
+        redacted.Primary.Unknown.Should().BeEquivalentTo(new LoopHealthUnknown(),
+            "which system looped, and whether it looped at all, are read off the APS cycles");
+        redacted.Primary.Limits.LoopMaximumBasalRate.Should().NotBeNull("the setting itself is therapy");
+    }
+
+    [Fact]
+    public void LoopHealth_WithEveryCategory_KeepsTheReasons()
+    {
+        var data = LoopAnalysisReadScopeGuard.Redact(
+            RedactionCoverage.Populated<LoopHealthResponse>(), Granted(AllLoopAnalysisCategories));
+
+        data.Primary.Unknown.AtMaxIob.Should().NotBeNull();
+        data.Primary.Unknown.LoopMaximumBasalRate.Should().NotBeNull();
     }
 
     [Fact]
