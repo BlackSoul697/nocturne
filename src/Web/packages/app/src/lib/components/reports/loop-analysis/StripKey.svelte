@@ -4,10 +4,14 @@
     mark: "bar" | "band" | "line" | "reference" | "compared" | "sparse";
     label: string;
     color?: string;
+    /** The fill opacity of the mark it names, where that differs from the kind's usual. */
+    fill?: number;
   }
 </script>
 
 <script lang="ts">
+  import { BAND_FILL, SPARSE_BAR_FILL } from "./loop-health-view";
+
   let { items }: { items: StripKeyItem[] } = $props();
 </script>
 
@@ -22,9 +26,9 @@
         {:else if item.mark === "compared"}
           <rect x="1" y="1" width="14" height="10" rx="1" fill="none" stroke="var(--foreground)" stroke-opacity="0.85" stroke-width="1.25" stroke-dasharray="3 2" />
         {:else if item.mark === "sparse"}
-          <rect x="1" y="1" width="14" height="10" rx="1" fill={item.color} fill-opacity="0.25" stroke={item.color} stroke-width="1" />
+          <rect x="1" y="1" width="14" height="10" rx="1" fill={item.color} fill-opacity={item.fill ?? SPARSE_BAR_FILL} stroke={item.color} stroke-width="1" />
         {:else}
-          <rect x="1" y="1" width="14" height="10" rx="1" fill={item.color} fill-opacity={item.mark === "band" ? 0.3 : 1} />
+          <rect x="1" y="1" width="14" height="10" rx="1" fill={item.color} fill-opacity={item.fill ?? (item.mark === "band" ? BAND_FILL : 1)} />
         {/if}
       </svg>
       <span>{item.label}</span>

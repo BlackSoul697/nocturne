@@ -10,6 +10,11 @@ import { clockTime, SLOT_MINUTES } from "./daily-profile-view";
 
 const SLOTS_PER_HOUR = 60 / SLOT_MINUTES;
 
+/** Fill opacities the marks and their key share, so a swatch looks like the mark it names. */
+export const BAND_FILL = 0.3;
+export const SPARSE_BAR_FILL = 0.25;
+export const SPARSE_BAND_FILL = 0.08;
+
 export const hourOfSlot = (slot: number) => Math.floor(slot / SLOTS_PER_HOUR);
 
 /** The slot span an hour covers on the shared time-of-day axis. */

@@ -1,11 +1,12 @@
 <!--
   A share for each hour of the day as a bar over the hour's twelve slots, from zero. A sparse hour
   keeps its outline at full strength and fades only its fill, so it stays legible as a pale bar
-  rather than vanishing; the comparison is a dashed outline over the same hour.
+  rather than vanishing; the comparison is a dashed outline over the same hour, on a ring of the
+  background so it stays legible over a dark bar.
 -->
 <script lang="ts">
   import { getChartContext } from "layerchart";
-  import { hourSpan, type HourBar } from "./loop-health-view";
+  import { hourSpan, SPARSE_BAR_FILL, type HourBar } from "./loop-health-view";
 
   interface Props {
     bars: HourBar[];
@@ -19,7 +20,6 @@
   const xScale = $derived(ctx.xScale);
   const yScale = $derived(ctx.yScale);
   const GAP = 2;
-  const SPARSE_FILL = 0.25;
 
   function box(bar: HourBar) {
     const span = hourSpan(bar.hour);
@@ -35,13 +35,14 @@
     {...box(bar)}
     rx="1"
     fill={color}
-    fill-opacity={bar.sparse ? SPARSE_FILL : 1}
+    fill-opacity={bar.sparse ? SPARSE_BAR_FILL : 1}
     stroke={bar.sparse ? color : "none"}
     stroke-width="1"
     data-testid={bar.sparse ? "sparse-hour" : "hour"}
   />
 {/each}
 {#each comparison as bar (`c${bar.hour}`)}
+  <rect {...box(bar)} rx="1" fill="none" stroke="var(--background)" stroke-width="5.25" />
   <rect
     {...box(bar)}
     rx="1"

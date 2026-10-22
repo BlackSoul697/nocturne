@@ -10,7 +10,7 @@
     showComparison?: boolean;
     format: (value: number) => string;
     /** What n counts. */
-    counts: "days" | "readings";
+    counts: "days" | "readings" | "cycles";
     /** The headline the API gives in place of the median, e.g. net loop correction's mean. */
     headline?: { label: string; value: number | null | undefined; comparison?: number | null };
   }
@@ -38,7 +38,10 @@
 </script>
 
 {#snippet count(n: number | undefined)}
-  {#if counts === "days"}{plural(n ?? 0, ["# day", "# days"])}{:else}{plural(n ?? 0, [
+  {#if counts === "days"}{plural(n ?? 0, ["# day", "# days"])}{:else if counts === "cycles"}{plural(n ?? 0, [
+      "# loop cycle",
+      "# loop cycles",
+    ])}{:else}{plural(n ?? 0, [
       "# reading",
       "# readings",
     ])}{/if}

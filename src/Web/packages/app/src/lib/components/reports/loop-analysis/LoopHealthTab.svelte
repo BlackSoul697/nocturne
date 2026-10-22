@@ -41,6 +41,7 @@
     longestFirst,
     shareBars,
     shareHour,
+    SPARSE_BAND_FILL,
     type HourBar,
   } from "./loop-health-view";
 
@@ -213,7 +214,7 @@
           label: "At max basal",
           value: pct(value),
           note: noted(
-            `Of algorithm temp time whose cap is known: the cap is known when the loop recorded which limit applied, for ${maybePct(known)} of it`,
+            `Of algorithm temp time where the limit is known (${maybePct(known)})`,
             maybeComparedPct(comparison?.maxBasal?.atCap?.percent)
           ),
         });
@@ -227,7 +228,7 @@
         shareFigure(
           "At max IOB",
           (r) => r?.atMaxIob,
-          "Of loop time with a recorded reason, the loop held back insulin it wanted because IOB was at its limit"
+          "Of loop time with a recorded reason, the loop held back insulin it wanted because IOB was at or near its max IOB"
         )
       );
 
@@ -259,18 +260,33 @@
         shareFigure(
           "Suggested, not enacted",
           (r) => r?.suggestedNotEnacted,
-          "Of the changes the loop asked for, those the pump did not carry out"
+          "Of the changes the loop asked for, those that were not carried out (open loop, or the pump didn't respond)"
         )
       );
 
-    if (hidden(LoopAnalysisSeries.LoopLimits)) list.push(hiddenFigure("Max basal rate setting"));
+    if (hidden(LoopAnalysisSeries.LoopLimits)) list.push(hiddenFigure("Loop's max basal rate setting"));
     else if (primary?.limits?.loopMaximumBasalRate == null)
-      list.push(unknownFigure("Max basal rate setting", unknown("loopMaximumBasalRate")));
-    else list.push({ label: "Max basal rate setting", value: u2(primary.limits.loopMaximumBasalRate), unit: "U/h" });
+      list.push(
+        unknownFigure(
+          "Loop's max basal rate setting",
+          primary?.unknown?.loopMaximumBasalRate === LoopHealthUnknownReason.NotRecordedByThisSystem
+            ? "Only Loop uploads this setting"
+            : unknown("loopMaximumBasalRate")
+        )
+      );
+    else
+      list.push({ label: "Loop's max basal rate setting", value: u2(primary.limits.loopMaximumBasalRate), unit: "U/h" });
 
     if (hidden(LoopAnalysisSeries.OrefMaxIob)) list.push(hiddenFigure("Max IOB"));
     else if (primary?.limits?.orefMaxIob == null)
-      list.push(unknownFigure("Max IOB", unknown("orefMaxIob")));
+      list.push(
+        unknownFigure(
+          "Max IOB",
+          primary?.unknown?.orefMaxIob === LoopHealthUnknownReason.NoReasonRecorded
+            ? "Shown only when the loop reports max IOB limited a dose, and it didn't in this range"
+            : unknown("orefMaxIob")
+        )
+      );
     else list.push({ label: "Max IOB", value: u1(primary.limits.orefMaxIob), unit: "U" });
 
     return list;
@@ -329,6 +345,11 @@
     const pad = Math.max(0.05, (high - low) * 0.1);
     return [Math.max(0, Math.floor((low - pad) * 10) / 10), Math.ceil((high + pad) * 10) / 10];
   });
+  /** A tick in the bottom eighth of the plot would sit on the hour labels, so it goes unlabelled. */
+  const sensitivityTick = (v: number) => {
+    const [low, high] = sensitivityDomain;
+    return v - low < (high - low) / 8 ? "" : v.toFixed(1);
+  };
 
   const ACTIVITY = "var(--chart-2)";
   const ZERO = "var(--chart-3)";
@@ -543,7 +564,7 @@
             unit="Autosens or dynamic ISF; above 1 means more insulin needed"
             {cursor}
             yDomain={sensitivityDomain}
-            yFormat={(v) => v.toFixed(1)}
+            yFormat={sensitivityTick}
             heightClass="h-32"
             showTimeAxis
             describe={describeSensitivity}
@@ -565,9 +586,8 @@
                 comparison={distributionHour(comparison?.sensitivityRatio, hour)?.value}
                 showComparison={comparing}
                 format={u2}
-                counts="readings"
+                counts="cycles"
               />
-              <p class="mt-1 text-muted-foreground">n counts loop cycles, each reporting one ratio.</p>
             {/snippet}
           </TimeOfDayPanel>
           {#if !hidden(LoopAnalysisSeries.SensitivityRatio)}
@@ -578,7 +598,7 @@
                 { mark: "reference", label: "1.0 = usual sensitivity" },
                 ...(comparing ? [{ mark: "compared" as const, label: "Compared range" }] : []),
                 ...(sensitivityHours.some((h) => h.value != null && (h.value.sparse ?? true))
-                  ? [{ mark: "sparse" as const, label: "Too few days", color: SENSITIVITY }]
+                  ? [{ mark: "sparse" as const, label: "Too few days", color: SENSITIVITY, fill: SPARSE_BAND_FILL }]
                   : []),
               ]}
             />

@@ -39,10 +39,10 @@ describe("LoopHealthTab", () => {
     await tile("Algorithm zero temps").toContain("Of time delivery is known");
     await tile("Algorithm zero temps").toContain("Suspended 1.2%, manual zero temps 0.0%");
     await tile("At max basal").toContain("2.5%");
-    await tile("At max basal").toMatch(/^At max basal\s*2\.5%\s*Of algorithm temp time whose cap is known/);
-    await tile("At max basal").toContain("for 76.7% of it");
+    await tile("At max basal").toMatch(/^At max basal\s*2\.5%\s*Of algorithm temp time where the limit is known/);
+    await tile("At max basal").toContain("where the limit is known (76.7%)");
     await tile("At max IOB").toContain("0.1%");
-    await tile("At max IOB").toContain("IOB was at its limit");
+    await tile("At max IOB").toContain("at or near its max IOB");
     await tile("Automatic boluses a day").toContain("54.0");
     await tile("Automatic boluses a day").toContain("Median size 0.20 U, P10–P90 0.00–0.40 U");
     await tile("Suggested, not enacted").toContain("0.2%");
@@ -125,7 +125,7 @@ describe("LoopHealthTab", () => {
     await tile("At max IOB").toContain("Unknown");
     await tile("Suggested, not enacted").toContain("Unknown");
     await tile("Max IOB").toContain("Unknown");
-    await tile("Max basal rate setting").toMatch(/3\.00\s*U\/h/);
+    await tile("Loop's max basal rate setting").toMatch(/3\.00\s*U\/h/);
     for (const label of ["At max IOB", "Suggested, not enacted", "Max IOB"]) {
       await tile(label).toContain("The system that ran the loop does not record this");
       await tile(label).not.toMatch(/oref|AAPS|Trio|Loop\b/);
@@ -140,7 +140,25 @@ describe("LoopHealthTab", () => {
 
     await tile("At max IOB").toContain("No loop cycle in this range recorded what this needs");
     await tile("Suggested, not enacted").toContain("No loop cycle in this range recorded what this needs");
-    await tile("Max basal rate setting").toContain("The system that ran the loop does not record this");
+    await tile("Loop's max basal rate setting").toContain("Only Loop uploads this setting");
+  });
+
+  it("says max IOB is shown only once it limited a dose", async () => {
+    const response = loopHealthResponse();
+    response.primary!.limits!.orefMaxIob = undefined;
+    response.primary!.unknown!.orefMaxIob = LoopHealthUnknownReason.NoReasonRecorded;
+    render(LoopHealthTab, { props: { response } });
+
+    await tile("Max IOB").toContain("Shown only when the loop reports max IOB limited a dose, and it didn't in this range");
+    await tile("Suggested, not enacted").toContain("(open loop, or the pump didn't respond)");
+  });
+
+  it("counts the loop cycles behind each hour's sensitivity ratio", async () => {
+    render(LoopHealthTab, { props: { response: loopHealthResponse() } });
+
+    (page.getByRole("slider", { name: "Sensitivity ratio by hour" }).element() as HTMLElement).focus();
+    await expect.element(page.getByRole("tooltip")).toHaveTextContent("14 loop cycles");
+    await expect.element(page.getByRole("tooltip")).not.toHaveTextContent("readings");
   });
 
   it("never reads unmeasured delivery or boluses as zero", async () => {
@@ -161,7 +179,7 @@ describe("LoopHealthTab", () => {
       props: { response: loopHealthResponse({ scopes: ["glucose.read", "treatments.read", "reports.read"] }) },
     });
 
-    for (const label of ["Closed loop", "Pump active", "Loop gaps", "Unrecorded delivery", "At max basal", "At max IOB", "Max IOB", "Max basal rate setting"])
+    for (const label of ["Closed loop", "Pump active", "Loop gaps", "Unrecorded delivery", "At max basal", "At max IOB", "Max IOB", "Loop's max basal rate setting"])
       await tile(label).toContain(HIDDEN);
     await tile("CGM active").toContain("98.7%");
     await tile("Algorithm zero temps").toContain("41.0%");

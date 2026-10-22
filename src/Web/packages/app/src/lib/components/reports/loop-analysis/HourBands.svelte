@@ -1,12 +1,12 @@
 <!--
   A value's spread for each hour of the day on the slot axis: the P25-P75 band as a box over the
   hour's twelve slots and the median across it. A sparse hour fades only its box's fill and keeps
-  its outline and median at full strength; the comparison is a dashed outline of its box and median.
+  its outline and median at full strength; the comparison is a dashed outline of its box and median on a ring of the background.
 -->
 <script lang="ts">
   import { getChartContext } from "layerchart";
   import type { LoopHealthHourValue } from "$lib/api";
-  import { hourSpan } from "./loop-health-view";
+  import { BAND_FILL, hourSpan, SPARSE_BAND_FILL } from "./loop-health-view";
 
   interface Props {
     hours: LoopHealthHourValue[];
@@ -20,8 +20,6 @@
   const xScale = $derived(ctx.xScale);
   const yScale = $derived(ctx.yScale);
   const GAP = 2;
-  const FILL = 0.3;
-  const SPARSE_FILL = 0.08;
 
   function shape(hour: LoopHealthHourValue & { value: NonNullable<LoopHealthHourValue["value"]> }) {
     const { p25, p50, p75 } = hour.value;
@@ -48,7 +46,7 @@
       {...s.box}
       rx="1"
       fill={color}
-      fill-opacity={sparse ? SPARSE_FILL : FILL}
+      fill-opacity={sparse ? SPARSE_BAND_FILL : BAND_FILL}
       stroke={sparse ? color : "none"}
       stroke-width="1"
       data-testid={sparse ? "sparse-hour" : "hour"}
@@ -61,6 +59,7 @@
 {#each drawn(comparison) as hour (`c${hour.hour}`)}
   {@const s = shape(hour)}
   {#if s.box}
+    <rect x={s.x} width={s.width} {...s.box} rx="1" fill="none" stroke="var(--background)" stroke-width="5.25" />
     <rect
       x={s.x}
       width={s.width}
@@ -75,6 +74,7 @@
     />
   {/if}
   {#if s.median != null}
+    <line x1={s.x} x2={s.x + s.width} y1={s.median} y2={s.median} stroke="var(--background)" stroke-width="5.25" />
     <line x1={s.x} x2={s.x + s.width} y1={s.median} y2={s.median} stroke="var(--foreground)" stroke-width="1.25" stroke-dasharray="3 2" />
   {/if}
 {/each}
