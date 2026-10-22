@@ -162,6 +162,7 @@ internal static partial class LoopAnalysisReadScopeGuard
     ];
 
     /// <param name="metrics">An <see cref="EventMetrics"/> or an <see cref="EventMetricsSummary"/>.</param>
+    /// <param name="hidden">Whether a series is withheld.</param>
     private static void ClearMetrics(object metrics, Func<LoopAnalysisSeries, bool> hidden)
     {
         foreach (var (_, names) in MetricSeries.Where(m => hidden(m.Series)))

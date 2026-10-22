@@ -34,7 +34,7 @@ namespace Nocturne.API.Tests.Authorization;
 /// driven once to prove it actually calls the guard.
 /// </summary>
 [Trait("Category", "Unit")]
-public class AnalyticsReadScopeGuardTests
+public partial class AnalyticsReadScopeGuardTests
 {
     private static IReadOnlySet<string> Granted(params string[] scopes) => new HashSet<string>(scopes);
 
@@ -1212,10 +1212,13 @@ public class AnalyticsReadScopeGuardTests
     }
 
     [Fact]
-    public void LoopAnalysis_EverySeriesCanBeWithheld()
+    public void LoopAnalysis_EverySeriesCanBeWithheld_ByExactlyOneTab()
     {
-        LoopAnalysisReadScopeGuard.Withheld(Granted())
-            .Should().BeEquivalentTo(Enum.GetValues<LoopAnalysisSeries>());
+        var dailyProfile = LoopAnalysisReadScopeGuard.Withheld(Granted());
+        var events = LoopAnalysisReadScopeGuard.WithheldEvents(Granted());
+
+        dailyProfile.Should().NotIntersectWith(events);
+        dailyProfile.Concat(events).Should().BeEquivalentTo(Enum.GetValues<LoopAnalysisSeries>());
     }
 
     [Fact]

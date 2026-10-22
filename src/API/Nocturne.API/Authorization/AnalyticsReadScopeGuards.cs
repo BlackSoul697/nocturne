@@ -465,7 +465,8 @@ internal static partial class LoopAnalysisReadScopeGuard
     ];
 
     /// <summary>
-    /// The series the caller's scopes withhold. <see cref="Redact"/> empties exactly these, so the
+    /// The series the caller's scopes withhold.
+    /// <see cref="Redact(DailyProfileResponse, IReadOnlySet{string})"/> empties exactly these, so the
     /// response's <see cref="LoopAnalysisResponse.WithheldSeries"/> and its nulls cannot disagree.
     /// </summary>
     public static HashSet<LoopAnalysisSeries> Withheld(IReadOnlySet<string> grantedScopes)
