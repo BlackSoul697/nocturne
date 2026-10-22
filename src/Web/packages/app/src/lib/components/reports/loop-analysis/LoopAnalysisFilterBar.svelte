@@ -114,7 +114,7 @@
     start && end ? formatMediumDateRange(startOfDay(start), startOfDay(end)) : "";
 </script>
 
-<div class="space-y-3 rounded-lg border bg-card p-3 @md:p-4 print:hidden">
+<div class="space-y-3 rounded-lg border bg-card p-3 @md:p-4 print:hidden" data-testid="loop-analysis-filter-bar">
   <div class="flex flex-wrap items-end gap-x-6 gap-y-3">
     <div class="space-y-1.5">
       <span class="text-xs font-medium text-muted-foreground">Range</span>

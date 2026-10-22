@@ -169,19 +169,19 @@
       if (isLoopAnalysisTab(tab)) setFilter({ ...filter, tab });
     }}
   >
-    <Tabs.List class="print:hidden">
+    <Tabs.List class="print:hidden" data-testid="loop-analysis-tabs">
       {#each LOOP_ANALYSIS_TABS as tab (tab)}
         <Tabs.Trigger value={tab}>{TABS[tab].label}</Tabs.Trigger>
       {/each}
     </Tabs.List>
-    <Tabs.Content value="daily-profile" class="mt-4">
+    <Tabs.Content value="daily-profile" class="mt-4" data-testid="loop-analysis-daily-profile">
       {#if dailyProfile}
         <DailyProfileTab response={dailyProfile} {insulinDeliveryHref} />
-      {:else if !TABS["daily-profile"].failed}
+      {:else if filter.tab === "daily-profile" && !TABS["daily-profile"].failed}
         <TabLoading />
       {/if}
     </Tabs.Content>
-    <Tabs.Content value="meals-events" class="mt-4 space-y-6">
+    <Tabs.Content value="meals-events" class="mt-4 space-y-6" data-testid="loop-analysis-meals-events">
       <EventCohortBuilder
         value={events}
         onchange={setEvents}
@@ -191,21 +191,21 @@
       />
       {#if eventResponse}
         <EventResponseTab response={eventResponse} />
-      {:else if !TABS["meals-events"].failed}
+      {:else if filter.tab === "meals-events" && !TABS["meals-events"].failed}
         <TabLoading />
       {/if}
     </Tabs.Content>
-    <Tabs.Content value="predictions" class="mt-4">
+    <Tabs.Content value="predictions" class="mt-4" data-testid="loop-analysis-predictions">
       {#if predictions}
         <PredictionsTab response={predictions} />
-      {:else if !TABS.predictions.failed}
+      {:else if filter.tab === "predictions" && !TABS.predictions.failed}
         <TabLoading />
       {/if}
     </Tabs.Content>
-    <Tabs.Content value="loop-health" class="mt-4">
+    <Tabs.Content value="loop-health" class="mt-4" data-testid="loop-analysis-loop-health">
       {#if loopHealth}
         <LoopHealthTab response={loopHealth} />
-      {:else if !TABS["loop-health"].failed}
+      {:else if filter.tab === "loop-health" && !TABS["loop-health"].failed}
         <TabLoading />
       {/if}
     </Tabs.Content>
