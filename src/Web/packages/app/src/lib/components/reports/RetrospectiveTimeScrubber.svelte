@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { Key } from "@nocturne/ui/keys";
   import { Slider } from "$lib/components/ui/slider";
   import { Button } from "$lib/components/ui/button";
   import Play from "@lucide/svelte/icons/play";
@@ -127,16 +128,16 @@
 
   // Handle keyboard navigation
   function handleKeydown(event: KeyboardEvent) {
-    if (event.key === "ArrowLeft") {
+    if (event.key === Key.ArrowLeft) {
       event.preventDefault();
       stepBack();
-    } else if (event.key === "ArrowRight") {
+    } else if (event.key === Key.ArrowRight) {
       event.preventDefault();
       stepForward();
-    } else if (event.key === " ") {
+    } else if (event.key === Key.Space) {
       event.preventDefault();
       togglePlayback();
-    } else if (event.key === "Home") {
+    } else if (event.key === Key.Home) {
       event.preventDefault();
       goToStart();
     }

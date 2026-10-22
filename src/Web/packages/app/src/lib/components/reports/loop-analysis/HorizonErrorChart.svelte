@@ -5,6 +5,7 @@
   MAE and n only; the context table carries the counts behind them.
 -->
 <script lang="ts">
+  import { Key } from "@nocturne/ui/keys";
   import { Axis, Chart, Rule, Svg } from "layerchart";
   import type { PredictionCurve, PredictionCurveAccuracy, PredictionHorizonAccuracy } from "$lib/api";
   import { plural } from "$lib/utils/plural";
@@ -53,13 +54,13 @@
   function onkeydown(event: KeyboardEvent) {
     const last = axis.length - 1;
     const next =
-      event.key === "ArrowRight" || event.key === "ArrowUp"
+      event.key === Key.ArrowRight || event.key === Key.ArrowUp
         ? Math.min(last, current + 1)
-        : event.key === "ArrowLeft" || event.key === "ArrowDown"
+        : event.key === Key.ArrowLeft || event.key === Key.ArrowDown
           ? Math.max(0, current - 1)
-          : event.key === "Home"
+          : event.key === Key.Home
             ? 0
-            : event.key === "End"
+            : event.key === Key.End
               ? last
               : null;
     if (next == null) return;

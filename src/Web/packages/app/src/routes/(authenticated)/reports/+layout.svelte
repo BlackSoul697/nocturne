@@ -1,4 +1,5 @@
 <script lang="ts">
+    import { Key } from "@nocturne/ui/keys";
     import {page} from "$app/state";
     import {formatMediumDateRange} from "$lib/utils/formatting";
     import { Button } from "$lib/components/ui/button";
@@ -75,7 +76,7 @@
 
     onMount(() => {
         const keydown = (event: KeyboardEvent) => {
-            if ((event.ctrlKey || event.metaKey) && !event.altKey && !event.shiftKey && event.key.toLowerCase() === "p") {
+            if ((event.ctrlKey || event.metaKey) && !event.altKey && !event.shiftKey && event.key.toLowerCase() === Key.P) {
                 event.preventDefault();
                 void handlePrint();
             }

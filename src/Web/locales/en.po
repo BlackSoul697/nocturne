@@ -674,17 +674,6 @@ msgstr "<0/> Log Out"
 msgid "Glucose"
 msgstr "Glucose"
 
-#: ../cms/src/lib/components/edra/shadcn/components/SlashCommandList.svelte
-#: src/lib/components/actogram/Actogram.svelte
-#: src/lib/components/actogram/Actogram.svelte
-msgid "ArrowDown"
-msgstr "ArrowDown"
-
-#: ../cms/src/lib/components/edra/shadcn/components/SlashCommandList.svelte
-#: src/lib/components/actogram/Actogram.svelte
-msgid "ArrowUp"
-msgstr "ArrowUp"
-
 #: src/lib/components/actogram/Actogram.svelte
 msgid "Actogram with keyboard navigation"
 msgstr "Actogram with keyboard navigation"
@@ -1406,18 +1395,6 @@ msgstr "Timezone"
 
 #~ msgid "{0}m <0/>"
 #~ msgstr "{0}m <0/>"
-
-#: ../cms/src/editor/ComponentPropsEditor.svelte
-#: ../cms/src/lib/components/edra/shadcn/components/SlashCommandList.svelte
-#: src/lib/components/dashboard/RecentTreatmentsCard.svelte
-#: src/lib/components/reports/sleep/SleepCompositionChart.svelte
-#: src/routes/(authenticated)/food/Composer.svelte
-#: src/routes/(authenticated)/food/FoodRow.svelte
-#: src/routes/(authenticated)/tools/packing/list/+page.svelte
-#: src/routes/(authenticated)/tools/packing/list/+page.svelte
-#: src/routes/(authenticated)/tools/packing/list/+page.svelte
-msgid "Enter"
-msgstr "Enter"
 
 #~ msgid "Smart Snooze"
 #~ msgstr "Smart Snooze"
@@ -6198,18 +6175,6 @@ msgid "<0/> Try Again"
 msgstr "<0/> Try Again"
 
 #: src/lib/components/reports/RetrospectiveTimeScrubber.svelte
-msgid "ArrowLeft"
-msgstr "ArrowLeft"
-
-#: src/lib/components/reports/RetrospectiveTimeScrubber.svelte
-msgid "ArrowRight"
-msgstr "ArrowRight"
-
-#: src/lib/components/reports/RetrospectiveTimeScrubber.svelte
-msgid "Home"
-msgstr "Home"
-
-#: src/lib/components/reports/RetrospectiveTimeScrubber.svelte
 msgid "Time scrubber - use arrow keys to navigate, space to play/pause"
 msgstr "Time scrubber - use arrow keys to navigate, space to play/pause"
 
@@ -8579,11 +8544,6 @@ msgstr "Clear filters"
 #: src/routes/(authenticated)/food/CarbPill.svelte
 msgid "g carbs"
 msgstr "g carbs"
-
-#: ../portal/src/routes/docs/+layout.svelte
-#: src/routes/(authenticated)/food/Composer.svelte
-msgid "Escape"
-msgstr "Escape"
 
 #: src/routes/(authenticated)/food/Composer.svelte
 msgid "Add food"
@@ -15720,11 +15680,6 @@ msgstr "ack"
 #: src/routes/(authenticated)/alerts/[id]/+page.svelte
 msgid "Replay this alert (and any siblings) against historical glucose. Nothing is delivered."
 msgstr "Replay this alert (and any siblings) against historical glucose. Nothing is delivered."
-
-#: src/lib/components/alerts/RuleBuilder.svelte
-#: src/lib/components/alerts/RuleBuilder.svelte
-msgid "Shift"
-msgstr "Shift"
 
 #: ../portal/src/lib/components/docs/alert-simulator/ConditionEditor.svelte
 #: src/lib/components/alerts/OperatorToggle.svelte
@@ -26929,10 +26884,6 @@ msgstr "Unable to load the content"
 #: ../cms/src/lib/components/edra/shadcn/editor.svelte
 msgid "The content of this page might be corrupted."
 msgstr "The content of this page might be corrupted."
-
-#: ../cms/src/lib/components/edra/shadcn/components/SlashCommandList.svelte
-msgid "Tab"
-msgstr "Tab"
 
 #. 0: text; 1: value; 2: border; 3: value
 #: ../cms/src/lib/components/edra/shadcn/components/toolbar/QuickColors.svelte

@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { Key } from "@nocturne/ui/keys";
   import {
     computePosition,
     autoUpdate,
@@ -207,9 +208,9 @@
   }
 
   function handleKeydown(e: KeyboardEvent) {
-    if (e.key === "Escape") handleDismiss();
-    else if (e.key === "ArrowLeft") handleBack();
-    else if (e.key === "ArrowRight") handleNext();
+    if (e.key === Key.Escape) handleDismiss();
+    else if (e.key === Key.ArrowLeft) handleBack();
+    else if (e.key === Key.ArrowRight) handleNext();
   }
 
   $effect(() => {

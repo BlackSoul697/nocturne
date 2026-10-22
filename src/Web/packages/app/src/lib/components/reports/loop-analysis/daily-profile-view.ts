@@ -4,6 +4,7 @@ import type {
   DailyProfileRange,
   LoopAnalysisAggregate,
 } from "$lib/api";
+import { Key } from "@nocturne/ui/keys";
 
 export const SLOTS_PER_DAY = 288;
 export const SLOT_MINUTES = 5;
@@ -105,28 +106,27 @@ export type SlotKeyAction =
 
 /**
  * What a key does on a slotted panel: move along the axis (an hour at a time with Shift, or to
- * either end), move to the panel above or below, pick the slot, or close the list it opened. Kept
- * out of the component so wuchale does not translate the key names.
+ * either end), move to the panel above or below, pick the slot, or close the list it opened.
  */
 export function slotKeyAction(event: KeyboardEvent, lastSlot = SLOTS_PER_DAY - 1): SlotKeyAction | null {
   const step = event.shiftKey ? 12 : 1;
   switch (event.key) {
-    case "ArrowRight":
+    case Key.ArrowRight:
       return { kind: "step", by: step };
-    case "ArrowLeft":
+    case Key.ArrowLeft:
       return { kind: "step", by: -step };
-    case "Home":
+    case Key.Home:
       return { kind: "to", slot: 0 };
-    case "End":
+    case Key.End:
       return { kind: "to", slot: lastSlot };
-    case "ArrowDown":
+    case Key.ArrowDown:
       return { kind: "panel", by: 1 };
-    case "ArrowUp":
+    case Key.ArrowUp:
       return { kind: "panel", by: -1 };
-    case "Enter":
-    case " ":
+    case Key.Enter:
+    case Key.Space:
       return { kind: "select" };
-    case "Escape":
+    case Key.Escape:
       return { kind: "close" };
     default:
       return null;
@@ -135,7 +135,7 @@ export function slotKeyAction(event: KeyboardEvent, lastSlot = SLOTS_PER_DAY - 1
 
 /** Whether a key closes the day list. */
 export function isEscape(event: KeyboardEvent): boolean {
-  return event.key === "Escape";
+  return event.key === Key.Escape;
 }
 
 /** `HH:mm` for a minute of the local day, as Day in Review's `time` parameter reads it. */
