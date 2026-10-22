@@ -88,8 +88,8 @@ public class SampleDataSeeder
     private const int BatchSize = 500;
     private const int MaxDays = 90;
 
-    /// <summary>Device status cadence: one document per 15 minutes of history.</summary>
-    private const int DeviceStatusMinutes = 15;
+    /// <summary>A fixed seed, so seeding the same range again writes the same history.</summary>
+    private const int RandomSeed = 1;
 
     /// <summary>Most recent alarm episodes to materialize as excursions/instances.</summary>
     private const int MaxAlarmEpisodes = 40;
@@ -189,7 +189,7 @@ public class SampleDataSeeder
             throw new InvalidOperationException(
                 $"Seed {tenant.Slug} from a scope of its own; see {nameof(SeedInTenantScopeAsync)}.");
 
-        var config = new DemoModeConfiguration { BackfillDays = days };
+        var config = ConfigurationFor(days);
 
         // The episode tracker rides along with the glucose stream so alarm
         // history matches the lows/highs actually visible on the chart.
@@ -261,13 +261,15 @@ public class SampleDataSeeder
             {
                 ct.ThrowIfCancellationRequested();
 
-                foreach (var reading in DemoCoverageSeeds.CgmReadings(step))
+                var readings = DemoCoverageSeeds.CgmReadings(step);
+                foreach (var reading in readings)
                 {
                     reading.DataSource = dataSource;
                     entryBatch.Add(reading);
                 }
-                episodeTracker.Observe(
-                    DateTimeOffset.FromUnixTimeMilliseconds(step.Entry.Mills).UtcDateTime, step.Entry.Sgv);
+                if (readings.Count > 0)
+                    episodeTracker.Observe(
+                        DateTimeOffset.FromUnixTimeMilliseconds(step.Entry.Mills).UtcDateTime, step.Entry.Sgv);
                 foreach (var extra in step.ExtraEntries)
                 {
                     extra.DataSource = dataSource;
@@ -282,20 +284,8 @@ public class SampleDataSeeder
                         mealCarbLinks.Add((DateTimeOffset.FromUnixTimeMilliseconds(treatment.Mills).UtcDateTime, treatment.FoodType));
                 }
 
-                if (step.Time.Minute % DeviceStatusMinutes == 0)
+                if (DemoDeviceStatusGenerator.ForStep(step, config.TargetGlucose, config.BasalRate) is { } status)
                 {
-                    var status = DemoDeviceStatusGenerator.Create(
-                        step.Time,
-                        step.Entry.Sgv ?? step.Entry.Mgdl,
-                        step.Iob,
-                        step.Cob,
-                        step.TempBasalRate,
-                        step.TempBasalDuration,
-                        step.EffectiveIsf,
-                        step.EffectiveCarbRatio,
-                        config.TargetGlucose,
-                        DemoTherapyProfile.ScheduledRateAt(step.Time, config.BasalRate),
-                        step.Scenario);
                     // Deterministic legacy id, so a re-seed skips the statuses it already wrote.
                     status.Id = status.Mills.ToString("x24");
                     statusBatch.Add(status);
@@ -388,6 +378,10 @@ public class SampleDataSeeder
             alertRules, alertExcursions, deviceStatusCount, profilesCreated,
             foodCount, stateSpanCount, notificationCount);
     }
+
+    /// <summary>The simulation every seed of <paramref name="days"/> days runs.</summary>
+    internal static DemoModeConfiguration ConfigurationFor(int days) =>
+        new() { BackfillDays = days, RandomSeed = RandomSeed };
 
     /// <summary>
     /// Seeds the Nightscout profile document through the profile write service

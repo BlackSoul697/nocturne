@@ -69,6 +69,11 @@ public class DemoDataGenerator : IDemoDataGenerator
     private const double PumpBasalIncrementUnits = 0.05;
     private const double PumpMaxBolusUnits = 25.0;
     private const double PumpMaxBasalRateUnitsPerHour = 5.0;
+
+    /// <summary>The loop's maxSafeBasal as a multiple of the base rate.</summary>
+    private const double MaxSafeBasalMultiplier = 2.0;
+
+    private const int LoopTempMinutes = 30;
     private const int TrendStepsMin = 3;
     private const int TrendStepsMax = 8;
     private static readonly double[] TrendStepMultipliers = { 0.3, 0.6, 1.0, 1.3, 1.6, 2.0 };
@@ -168,9 +173,7 @@ public class DemoDataGenerator : IDemoDataGenerator
 
         if (glucose > targetGlucose + 10)
         {
-            var glucoseAboveTarget = glucose - targetGlucose;
-            var tempBasalMultiplier = 1.1 + Math.Min(0.3, glucoseAboveTarget / 150.0);
-            var highTempRate = NormalizeBasalRate(_config.BasalRate * tempBasalMultiplier);
+            var (_, highTempRate) = HighTempRate(glucose - targetGlucose);
             if (highTempRate > _config.BasalRate)
             {
                 yield return MarkTempBasal(entryTime, highTempRate, tempBasalDuration);
@@ -297,6 +300,9 @@ public class DemoDataGenerator : IDemoDataGenerator
                 var stepTreatments = new List<Treatment>();
                 double? tempRate = null;
                 int? tempDuration = null;
+                double? requestedRate = null;
+                (double Rate, double? Requested)? loopTemp = null;
+                var loop = DemoLoopInterruptions.StateAt(currentTime);
 
                 // Consume planned treatments due this step.
                 while (pending.Count > 0 && pending[0].Time < consumeUntil)
@@ -309,16 +315,17 @@ public class DemoDataGenerator : IDemoDataGenerator
                     Math.Abs((b.Time - currentTime).TotalMinutes) < 2.5
                 );
                 var adjustedRate = NormalizeBasalRate(basalAdj.Rate);
-                if (adjustedRate > 0 || basalAdj.Duration > 0)
+                var adjustedDuration = DemoLoopInterruptions.MinutesToNext(currentTime, basalAdj.Duration);
+                if (loop == DemoLoopState.Closed && adjustedDuration > 0 && (adjustedRate > 0 || basalAdj.Duration > 0))
                 {
-                    stepTreatments.Add(CreateTempBasalTreatment(currentTime, adjustedRate, basalAdj.Duration));
+                    stepTreatments.Add(CreateTempBasalTreatment(currentTime, adjustedRate, adjustedDuration));
                     tempRate = adjustedRate;
-                    tempDuration = basalAdj.Duration;
+                    tempDuration = adjustedDuration;
                     simulator.AddInsulinDose(
                         currentTime,
-                        adjustedRate * basalAdj.Duration / 60.0,
+                        adjustedRate * adjustedDuration / 60.0,
                         isTempBasal: true,
-                        duration: basalAdj.Duration
+                        duration: adjustedDuration
                     );
                 }
 
@@ -363,25 +370,8 @@ public class DemoDataGenerator : IDemoDataGenerator
                     var insulinNeeded = glucoseAboveTarget / effectiveIsf;
                     var insulinToDeliver = Math.Max(0, insulinNeeded - simulator.CalculateIob(currentTime));
 
-                    if (currentTime.Minute == 0 || currentTime.Minute == 30)
-                    {
-                        var tempBasalMultiplier = 1.1 + Math.Min(0.3, glucoseAboveTarget / 150.0);
-                        var highTempRate = NormalizeBasalRate(_config.BasalRate * tempBasalMultiplier);
-                        stepTreatments.Add(CreateTempBasalTreatment(currentTime, highTempRate, 30));
-                        tempRate = highTempRate;
-                        tempDuration = 30;
-                        var extraInsulin =
-                            Math.Max(0, highTempRate - _config.BasalRate) * (30 / 60.0);
-                        if (extraInsulin > 0)
-                        {
-                            simulator.AddInsulinDose(
-                                currentTime,
-                                extraInsulin,
-                                isTempBasal: true,
-                                duration: 30
-                            );
-                        }
-                    }
+                    var (requested, highTempRate) = HighTempRate(glucoseAboveTarget);
+                    loopTemp = (highTempRate, requested);
 
                     // MANUAL CORRECTION BOLUS. A person corrects a clear high, not a mild one.
                     // Nor within minutes of it: ~3% per step is one in ~2.5 hours.
@@ -426,21 +416,34 @@ public class DemoDataGenerator : IDemoDataGenerator
                         glucose < 75 ? 0.0
                         : glucose < 85 ? 0.2
                         : 0.4;
-                    var reducedRate = NormalizeBasalRate(_config.BasalRate * reductionFactor);
+                    loopTemp = (NormalizeBasalRate(_config.BasalRate * reductionFactor), null);
+                }
 
-                    if (currentTime.Minute == 0 || currentTime.Minute == 30)
+                if (loop == DemoLoopState.Manual)
+                {
+                    // Open loop: every cycle suggests a temp that the pump never runs.
+                    (tempRate, requestedRate) = loopTemp ?? (NormalizeBasalRate(_config.BasalRate), null);
+                    tempDuration = LoopTempMinutes;
+                }
+                else if (loop == DemoLoopState.Closed
+                         && loopTemp is { } temp
+                         && (currentTime.Minute == 0 || currentTime.Minute == 30)
+                         && tempRate is null
+                         && DemoLoopInterruptions.MinutesToNext(currentTime, LoopTempMinutes) is var minutes and > 0)
+                {
+                    stepTreatments.Add(CreateTempBasalTreatment(currentTime, temp.Rate, minutes));
+                    tempRate = temp.Rate;
+                    tempDuration = minutes;
+                    requestedRate = temp.Requested;
+                    // Below the scheduled rate the dose is negative: less insulin than scheduled.
+                    var extraInsulin = (temp.Rate - _config.BasalRate) * minutes / 60.0;
+                    if (Math.Abs(extraInsulin) > 0.001)
                     {
-                        stepTreatments.Add(CreateTempBasalTreatment(currentTime, reducedRate, 30));
-                        tempRate = reducedRate;
-                        tempDuration = 30;
-                        // Reduced basal means less insulin than scheduled (negative dose).
-                        var insulinReduction =
-                            -(Math.Max(0, _config.BasalRate - reducedRate)) * (30 / 60.0);
                         simulator.AddInsulinDose(
                             currentTime,
-                            insulinReduction,
+                            extraInsulin,
                             isTempBasal: true,
-                            duration: 30
+                            duration: minutes
                         );
                     }
                 }
@@ -470,6 +473,9 @@ public class DemoDataGenerator : IDemoDataGenerator
                     Cob = Math.Max(0, simulator.CalculateCob(currentTime)),
                     TempBasalRate = tempRate,
                     TempBasalDuration = tempDuration,
+                    RequestedBasalRate = requestedRate,
+                    MaxSafeBasalRate = MaxSafeBasalRate,
+                    Loop = loop,
                     EffectiveIsf = effectiveIsf,
                     EffectiveCarbRatio = scenarioParams.CarbRatio,
                     Scenario = dayScenario,
@@ -1044,7 +1050,7 @@ public class DemoDataGenerator : IDemoDataGenerator
             Duration = duration,
             Mills = new DateTimeOffset(time).ToUnixTimeMilliseconds(),
             Created_at = time.ToString("o"),
-            EnteredBy = "demo-pump",
+            EnteredBy = DemoDeviceStatusGenerator.DeviceName,
             DataSource = DataSources.DemoService,
         };
     }
@@ -1274,9 +1280,14 @@ public class DemoDataGenerator : IDemoDataGenerator
             var iob = Math.Max(0, _realtimeSimulator.CalculateIob(nowUtc));
             var cob = Math.Max(0, _realtimeSimulator.CalculateCob(nowUtc));
 
+            var glucose = entry.Sgv ?? entry.Mgdl;
+            double? requestedRate = tempRate > _config.BasalRate
+                ? HighTempRate(glucose - _config.TargetGlucose).Requested
+                : null;
+
             return DemoDeviceStatusGenerator.Create(
                 nowLocal,
-                entry.Sgv ?? entry.Mgdl,
+                glucose,
                 iob,
                 cob,
                 tempRate,
@@ -1285,7 +1296,9 @@ public class DemoDataGenerator : IDemoDataGenerator
                 _config.CarbRatio,
                 _config.TargetGlucose,
                 DemoTherapyProfile.ScheduledRateAt(nowLocal, _config.BasalRate),
-                DayScenarios.For(nowLocal.Date));
+                DayScenarios.For(nowLocal.Date),
+                requestedRate,
+                MaxSafeBasalRate);
         }
     }
 
@@ -1371,6 +1384,18 @@ public class DemoDataGenerator : IDemoDataGenerator
         var clamped = Math.Min(units, PumpMaxBolusUnits);
         var rounded = RoundToIncrement(clamped, PumpBolusIncrementUnits);
         return Math.Clamp(rounded, PumpBolusIncrementUnits, PumpMaxBolusUnits);
+    }
+
+    private double MaxSafeBasalRate => NormalizeBasalRate(_config.BasalRate * MaxSafeBasalMultiplier);
+
+    /// <summary>
+    /// The high temp the loop asks for at <paramref name="glucoseAboveTarget"/>, and what its
+    /// maxSafeBasal cuts that to.
+    /// </summary>
+    private (double Requested, double Capped) HighTempRate(double glucoseAboveTarget)
+    {
+        var requested = NormalizeBasalRate(_config.BasalRate * (1.1 + glucoseAboveTarget / 150.0));
+        return (requested, Math.Min(requested, MaxSafeBasalRate));
     }
 
     private double NormalizeBasalRate(double unitsPerHour)
