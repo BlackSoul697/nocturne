@@ -80,10 +80,7 @@ internal sealed partial class LoopAnalysisService
         long to,
         CancellationToken ct)
     {
-        var versions = new Dictionary<string, TargetRangeSchedule[]>(StringComparer.Ordinal);
-        foreach (var name in profiles.Select(p => p.ProfileName).Distinct(StringComparer.Ordinal))
-            versions[name] = [.. (await targetRangeScheduleRepository.GetByProfileNameAsync(name, ct))
-                .OrderByDescending(v => v.Timestamp)];
+        var versions = await VersionsByProfileAsync(profiles, targetRangeScheduleRepository, ct);
 
         var temporary = StepTimeline<(double Low, double High)>.LatestStartedWins(temporaryTargets
             .Select(t => (t.Interval, Range: TemporaryTargetRange(t.Span)))

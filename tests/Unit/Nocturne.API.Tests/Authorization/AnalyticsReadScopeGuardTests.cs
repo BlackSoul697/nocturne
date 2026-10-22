@@ -1686,6 +1686,14 @@ public class AnalyticsReadScopeGuardTests
         data.Primary.Curves.Should().HaveCount(2).And.OnlyContain(c => c.ByContext.Count == 0);
         data.WithheldSeries.Should().Equal(LoopAnalysisSeries.PredictionContexts);
         data.IgnoredFilters.Should().Equal("excludeExercise");
+        data.UnavailableFilters.Should().BeEquivalentTo(new[]
+        {
+            new LoopAnalysisUnavailableFilter { Filter = "profileName", RequiredScope = Scope.TherapyRead },
+            new LoopAnalysisUnavailableFilter { Filter = "excludeOverrides", RequiredScope = Scope.TreatmentsRead },
+            new LoopAnalysisUnavailableFilter { Filter = "excludeTemporaryTargets", RequiredScope = Scope.TreatmentsRead },
+            new LoopAnalysisUnavailableFilter { Filter = "excludeExercise", RequiredScope = Scope.TreatmentsRead },
+            new LoopAnalysisUnavailableFilter { Filter = "excludeIllness", RequiredScope = Scope.TreatmentsRead },
+        }, "every filter the caller's scopes would drop, set or not");
         data.AppliedFilters.ExcludeExercise.Should().BeFalse();
         data.ComparisonRange!.EndDate.Should().Be(new DateOnly(2024, 5, 31));
         service.Verify(s => s.GetPredictionAccuracyAsync(

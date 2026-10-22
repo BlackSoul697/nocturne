@@ -483,14 +483,8 @@ internal static class LoopAnalysisReadScopeGuard
         var therapy = AnalyticsReadScopes.Allows(grantedScopes, Scope.TherapyRead);
 
         var withheld = new HashSet<LoopAnalysisSeries>();
-        void Withhold(bool hidden, params LoopAnalysisSeries[] series)
-        {
-            if (hidden)
-                withheld.UnionWith(series);
-        }
-
-        Withhold(!glucose, LoopAnalysisSeries.Glucose);
-        Withhold(!treatments,
+        Withhold(withheld, !glucose, LoopAnalysisSeries.Glucose);
+        Withhold(withheld, !treatments,
             LoopAnalysisSeries.DeliveredBasal,
             LoopAnalysisSeries.NetLoopCorrection,
             LoopAnalysisSeries.NetLoopCorrectionComponents,
@@ -501,11 +495,11 @@ internal static class LoopAnalysisReadScopeGuard
             LoopAnalysisSeries.Carbs,
             LoopAnalysisSeries.InsulinSummary,
             LoopAnalysisSeries.NetLoopCorrectionSummary);
-        Withhold(!therapy || !treatments,
+        Withhold(withheld, !therapy || !treatments,
             LoopAnalysisSeries.ScheduledBasal,
             LoopAnalysisSeries.Target,
             LoopAnalysisSeries.DeliveredToScheduledRatio);
-        Withhold(!therapy, LoopAnalysisSeries.ProfileNames);
+        Withhold(withheld, !therapy, LoopAnalysisSeries.ProfileNames);
         return withheld;
     }
 
@@ -578,13 +572,16 @@ internal static class LoopAnalysisReadScopeGuard
         var treatments = AnalyticsReadScopes.Allows(grantedScopes, Scope.TreatmentsRead);
 
         var withheld = new HashSet<LoopAnalysisSeries>();
-        if (!devices)
-            withheld.Add(LoopAnalysisSeries.PredictionCount);
-        if (!glucose || !devices)
-            withheld.Add(LoopAnalysisSeries.PredictionCurves);
-        if (!treatments)
-            withheld.Add(LoopAnalysisSeries.PredictionContexts);
+        Withhold(withheld, !devices, LoopAnalysisSeries.PredictionCount);
+        Withhold(withheld, !glucose || !devices, LoopAnalysisSeries.PredictionCurves);
+        Withhold(withheld, !treatments, LoopAnalysisSeries.PredictionContexts);
         return withheld;
+    }
+
+    private static void Withhold(HashSet<LoopAnalysisSeries> withheld, bool hidden, params LoopAnalysisSeries[] series)
+    {
+        if (hidden)
+            withheld.UnionWith(series);
     }
 
     private static void Narrow(PredictionAccuracyRange range, HashSet<LoopAnalysisSeries> withheld)
@@ -623,23 +620,17 @@ internal static class LoopAnalysisReadScopeGuard
         var therapy = AnalyticsReadScopes.Allows(grantedScopes, Scope.TherapyRead);
 
         var withheld = new HashSet<LoopAnalysisSeries>();
-        void Withhold(bool hidden, params LoopAnalysisSeries[] series)
-        {
-            if (hidden)
-                withheld.UnionWith(series);
-        }
-
-        Withhold(!glucose, LoopAnalysisSeries.CgmActivity);
-        Withhold(!treatments || !devices, LoopAnalysisSeries.LoopActivity, LoopAnalysisSeries.UnrecordedDelivery);
-        Withhold(!treatments, LoopAnalysisSeries.ZeroDelivery, LoopAnalysisSeries.AutomaticBoluses);
-        Withhold(!devices || !treatments || !therapy, LoopAnalysisSeries.MaxBasal);
-        Withhold(!devices,
+        Withhold(withheld, !glucose, LoopAnalysisSeries.CgmActivity);
+        Withhold(withheld, !treatments || !devices, LoopAnalysisSeries.LoopActivity, LoopAnalysisSeries.UnrecordedDelivery);
+        Withhold(withheld, !treatments, LoopAnalysisSeries.ZeroDelivery, LoopAnalysisSeries.AutomaticBoluses);
+        Withhold(withheld, !devices || !treatments || !therapy, LoopAnalysisSeries.MaxBasal);
+        Withhold(withheld, !devices,
             LoopAnalysisSeries.LoopGaps,
             LoopAnalysisSeries.AtMaxIob,
             LoopAnalysisSeries.SuggestedNotEnacted,
             LoopAnalysisSeries.SensitivityRatio);
-        Withhold(!therapy, LoopAnalysisSeries.LoopLimits);
-        Withhold(!therapy || !devices, LoopAnalysisSeries.OrefMaxIob);
+        Withhold(withheld, !therapy, LoopAnalysisSeries.LoopLimits);
+        Withhold(withheld, !therapy || !devices, LoopAnalysisSeries.OrefMaxIob);
         return withheld;
     }
 

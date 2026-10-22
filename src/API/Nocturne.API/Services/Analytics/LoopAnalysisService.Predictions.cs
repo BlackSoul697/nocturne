@@ -55,9 +55,7 @@ internal sealed partial class LoopAnalysisService
         var glucose = await canonicalGlucose.SelectAsync([.. await glucoseTask], ct);
         var spans = await spanTask;
         var profiles = needsProfiles
-            ? (await activeProfileResolver.GetProfileSpansForRangeAsync(from, to, ct))
-                .Select(p => new ProfileInterval(p.ProfileName, p.StartMills, p.EndMills ?? to))
-                .ToList()
+            ? ProfileIntervals(await activeProfileResolver.GetProfileSpansForRangeAsync(from, to, ct), to)
             : [];
         var sources = MaskSources(spans, await deviceTask, [.. snapshots.Select(s => s.StartMills)], profiles, zone, readingsEnd);
 

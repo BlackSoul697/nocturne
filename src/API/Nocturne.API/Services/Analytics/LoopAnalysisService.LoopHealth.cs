@@ -7,12 +7,6 @@ using Nocturne.Core.Models.V4;
 
 namespace Nocturne.API.Services.Analytics;
 
-/// <remarks>
-/// Loop health reads the loop cycles from <see cref="LoopHealthCalculator.TempLookbackMs"/> and
-/// <see cref="LoopHealthCalculator.SetterWindowMs"/> before a range, so the cycle that set a temp
-/// running at its start is read, and the repository adds the
-/// nearest cycle beyond each end, so a loop gap that straddles either end is bounded.
-/// </remarks>
 internal sealed partial class LoopAnalysisService
 {
     public async Task<LoopHealthResponse> GetLoopHealthAsync(
@@ -31,6 +25,12 @@ internal sealed partial class LoopAnalysisService
         IReadOnlyList<PatientDevice> Devices,
         IReadOnlyList<TempBasal> TempBasals);
 
+    /// <remarks>
+    /// The loop cycles are read from <see cref="LoopHealthCalculator.TempLookbackMs"/> and
+    /// <see cref="LoopHealthCalculator.SetterWindowMs"/> before the window, so the cycle that set a
+    /// temp running at its start is read, and the repository adds the nearest cycle beyond each end,
+    /// so a loop gap that straddles either end is bounded.
+    /// </remarks>
     private async Task<LoopHealthLoaded> LoadLoopHealthAsync(Window window, TimeZoneInfo zone, CancellationToken ct)
     {
         var to = window.To;
@@ -101,10 +101,7 @@ internal sealed partial class LoopAnalysisService
     private async Task<StepTimeline<double>> LoopMaximumBasalRateAsync(
         IReadOnlyList<ProfileSpan> profiles, long to, CancellationToken ct)
     {
-        var versions = new Dictionary<string, TherapySettings[]>(StringComparer.Ordinal);
-        foreach (var name in profiles.Select(p => p.ProfileName).Distinct(StringComparer.Ordinal))
-            versions[name] = [.. (await therapySettingsRepository.GetByProfileNameAsync(name, ct))
-                .OrderByDescending(v => v.Timestamp)];
+        var versions = await VersionsByProfileAsync(profiles, therapySettingsRepository, ct);
 
         var steps = new List<Step<double>>();
         foreach (var profile in profiles)
