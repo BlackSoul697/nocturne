@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Mvc;
 using Moq;
 using Nocturne.API.Authorization;
 using Nocturne.API.Controllers.V4.Analytics;
+using Nocturne.Core.Clinical.LoopAnalysis;
 using Nocturne.Core.Models.Authorization;
 using Nocturne.Core.Models.LoopAnalysis;
 using Xunit;
@@ -45,7 +46,7 @@ public partial class AnalyticsReadScopeGuardTests
                 .. new[]
                 {
                     "HistoryClamped", "TimeZoneUnavailableReason", "PrimaryRange", "ComparisonRange", "AppliedFilters",
-                    "IgnoredFilters", "WithheldSeries", "UnavailableFilters", "ProfileNames",
+                    "IgnoredFilters", "WithheldSeries", "UnavailableFilters", "ProfileNames", "WithheldReason", "Rules",
                 }.Select(p => $"{nameof(SettingsEvidenceReport)}.{p}"),
             ]);
     }
@@ -63,11 +64,19 @@ public partial class AnalyticsReadScopeGuardTests
     {
         var (controller, service) = LoopAnalysisHandler(
             Granted([Scope.ReportsRead, .. AllLoopAnalysisCategories.Except([missing])]));
+        service
+            .Setup(s => s.GetProfileNamesAsync(It.IsAny<LoopAnalysisFilter>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(() => ["Default"]);
 
         var data = (await controller.GetSettingsEvidence(Week(q => q.Compare = LoopAnalysisComparison.Previous)))
             .Result.Should().BeOfType<OkObjectResult>().Which.Value.Should().BeOfType<SettingsEvidenceReport>().Subject;
 
         data.WithheldSeries.Should().Contain(LoopAnalysisSeries.SettingsEvidence);
+        data.WithheldReason.Should().Be(SettingsEvidenceWithheldReason.ReadScopes);
+        data.ProfileNames.Should().Equal(
+            missing == Scope.TherapyRead ? [] : ["Default"],
+            "the profile picker still lists what the caller may see");
+        data.Rules.CarbRatioWindowMs.Should().Be(ObservedCarbRatio.WindowAfterMs);
         data.Primary.Should().BeNull("an empty range would read as no evidence rather than none allowed");
         data.Comparison.Should().BeNull();
         data.PrimaryRange.Should().NotBeNull("the envelope still says what was asked for");

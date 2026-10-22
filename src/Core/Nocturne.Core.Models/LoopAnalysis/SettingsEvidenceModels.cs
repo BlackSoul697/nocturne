@@ -434,11 +434,61 @@ public class SettingsEvidenceRange
 /// <summary>The Settings evidence tab: the primary range and, when asked for, a comparison.</summary>
 public class SettingsEvidenceReport : LoopAnalysisResponse
 {
-    /// <summary>
-    /// Null when the tab is withheld (<see cref="LoopAnalysisSeries.SettingsEvidence"/> in
-    /// <see cref="LoopAnalysisResponse.WithheldSeries"/>) or no timezone resolved.
-    /// </summary>
+    /// <summary>Null when the tab is withheld (<see cref="WithheldReason"/>) or no timezone resolved.</summary>
     public SettingsEvidenceRange? Primary { get; set; }
 
     public SettingsEvidenceRange? Comparison { get; set; }
+
+    /// <summary>Why the tab is withheld whole, when it is; nothing is computed then.</summary>
+    public SettingsEvidenceWithheldReason? WithheldReason { get; set; }
+
+    /// <summary>The thresholds the rules and windows apply, for the copy that names them.</summary>
+    public SettingsEvidenceRules Rules { get; set; } = new();
+}
+
+/// <summary>Why the Settings evidence tab is withheld whole.</summary>
+[JsonConverter(typeof(JsonStringEnumConverter<SettingsEvidenceWithheldReason>))]
+public enum SettingsEvidenceWithheldReason
+{
+    /// <summary>
+    /// The caller lacks glucose.read, treatments.read or therapy.read;
+    /// <see cref="LoopAnalysisSeries.SettingsEvidence"/> is in <see cref="LoopAnalysisResponse.WithheldSeries"/>.
+    /// </summary>
+    ReadScopes,
+
+    /// <summary>
+    /// The caller reads only the last 24 hours. Every rule looks back hours before its window, and
+    /// before the clamp it would see nothing and qualify what it should reject.
+    /// </summary>
+    HistoryClamped,
+}
+
+/// <summary>The thresholds behind the rules' and windows' wording, in milliseconds and mg/dL.</summary>
+public class SettingsEvidenceRules
+{
+    /// <summary>Basal: how long before a block no carbs or meal-like rise may fall.</summary>
+    public long BasalCarbFreeMs { get; set; }
+
+    /// <summary>Basal: how long before a block no manual bolus may fall.</summary>
+    public long BasalManualBolusFreeMs { get; set; }
+
+    /// <summary>ISF: how long before a correction no carbs may fall.</summary>
+    public long IsfCarbFreeBeforeMs { get; set; }
+
+    /// <summary>ISF: the shortest window read, and how long after a correction no carbs may fall.</summary>
+    public long IsfMinimumWindowMs { get; set; }
+
+    /// <summary>ISF: the longest window read.</summary>
+    public long IsfWindowMs { get; set; }
+
+    /// <summary>Carb ratio: the window read after a meal.</summary>
+    public long CarbRatioWindowMs { get; set; }
+
+    /// <summary>Glucose below which an ISF episode is set aside.</summary>
+    public double LowMgdl { get; set; }
+
+    /// <summary>The range a carb ratio episode's glucose must start in.</summary>
+    public double StartLowMgdl { get; set; }
+
+    public double StartHighMgdl { get; set; }
 }

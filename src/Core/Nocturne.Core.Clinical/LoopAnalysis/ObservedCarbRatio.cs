@@ -22,6 +22,12 @@ public static class ObservedCarbRatio
     /// <summary>Four hours: a mixed meal has absorbed by then, and its bolus mostly acted.</summary>
     public const long WindowAfterMs = 4 * LocalSlotBinning.HourMs;
 
+    /// <summary>A meal's glucose must start in the target range, so the window's change is the meal's.</summary>
+    public const double StartLowMgdl = GlucoseConstants.TargetBottomMgdl;
+
+    /// <inheritdoc cref="StartLowMgdl"/>
+    public const double StartHighMgdl = GlucoseConstants.TargetTopMgdl;
+
     private static readonly SettingsEvidenceRule[] Rules =
     [
         SettingsEvidenceRule.NotIsolated,
@@ -122,7 +128,7 @@ public static class ObservedCarbRatio
             || context.GlucoseAt(meal.Mills) is not { } mealGlucose
             || context.GlucoseAt(end) is not { } endGlucose)
             return (null, SettingsEvidenceRule.MissingGlucose);
-        if (startGlucose is < GlucoseConstants.TargetBottomMgdl or > GlucoseConstants.TargetTopMgdl)
+        if (startGlucose is < StartLowMgdl or > StartHighMgdl)
             return (null, SettingsEvidenceRule.StartOutOfRange);
         if (!SettingsEvidenceCalculator.Stable(startGlucose, mealGlucose))
             return (null, SettingsEvidenceRule.StartUnstable);

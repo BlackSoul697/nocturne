@@ -83,6 +83,53 @@ public class LoopAnalysisSettingsEvidenceIntegrationTests(ApiIntegrationTestFixt
         midnight.N.Should().Be(6);
     }
 
+    [Fact]
+    public async Task Reads_back_to_the_start_of_a_climb_that_peaked_within_four_hours_of_the_first_night()
+    {
+        await SeedProfileAsync("Australia/Sydney");
+        await SeedDaysAsync(WeekStart.AddDays(-1), 8, Climb(WeekStart.AddHours(-5), WeekStart.AddHours(-3.5)));
+
+        var body = await GetOkAsync(AuthenticatedClient, Query(Week));
+
+        var midnight = Block(body.GetProperty("primary").GetProperty("basal"), "startHour", "0");
+        midnight.Rejected("RiseBefore").Should().Be(1, "the climb peaked 3.5 h before the range, though it started 5 h before");
+        midnight.N.Should().Be(6);
+    }
+
+    [Fact]
+    public async Task Reads_back_to_the_carbs_that_caused_a_climb_before_the_first_night()
+    {
+        await SeedProfileAsync("Australia/Sydney");
+        await SeedDaysAsync(WeekStart.AddDays(-1), 8, Climb(WeekStart.AddHours(-5.5), WeekStart.AddHours(-3.9)));
+        await SeedCarbsAsync(WeekStart.AddHours(-6.25), 10);
+
+        var body = await GetOkAsync(AuthenticatedClient, Query(Week));
+
+        var midnight = Block(body.GetProperty("primary").GetProperty("basal"), "startHour", "0");
+        midnight.Rejected("RiseBefore").Should().Be(0, "carbs 45 minutes before the climb caused it: it is that meal's, logged 6.25 h before the range");
+        midnight.Rejected("CarbsBefore").Should().Be(0);
+        midnight.N.Should().Be(7);
+    }
+
+    [Fact]
+    public async Task Withholds_the_whole_tab_from_a_history_clamped_member_rather_than_qualify_what_the_clamp_hides()
+    {
+        await SeedProfileAsync("Australia/Sydney");
+        var now = DateTime.UtcNow;
+        var start = now.AddDays(-2).AddTicks(-(now.AddDays(-2).Ticks % TimeSpan.TicksPerHour));
+        await SeedDaysAsync(start, 3);
+        await SeedCarbsAsync(now.AddHours(-24.5), 30);
+        using var clamped = await CreateHistoryClampedClientAsync();
+
+        var body = await GetOkAsync(clamped, Query($"{Week}&compare=previous"));
+
+        body.GetProperty("historyClamped").GetBoolean().Should().BeTrue();
+        body.GetProperty("withheldReason").GetString().Should().Be("HistoryClamped");
+        Absent(body, "primary").Should().BeTrue("a snack just before the clamp is hidden, so a night after it would qualify as fasting");
+        Absent(body, "comparison").Should().BeTrue();
+        body.GetProperty("rules").GetProperty("basalCarbFreeMs").GetInt64().Should().Be(4 * 3_600_000);
+    }
+
     [Theory]
     [InlineData(new[] { Scope.ReportsRead, Scope.GlucoseRead, Scope.TreatmentsRead, Scope.DevicesRead }, Scope.TherapyRead)]
     [InlineData(new[] { Scope.ReportsRead, Scope.GlucoseRead, Scope.TherapyRead }, Scope.TreatmentsRead)]
@@ -96,6 +143,9 @@ public class LoopAnalysisSettingsEvidenceIntegrationTests(ApiIntegrationTestFixt
         var body = await GetOkAsync(client, Query($"{Week}&compare=previous"));
 
         body.GetProperty("withheldSeries").EnumerateArray().Select(s => s.GetString()).Should().Contain("SettingsEvidence", $"without {missing}");
+        body.GetProperty("withheldReason").GetString().Should().Be("ReadScopes");
+        body.GetProperty("profileNames").EnumerateArray().Select(s => s.GetString()).Should().Equal(
+            missing == Scope.TherapyRead ? [] : ["Default"], "the profile picker lists what the caller may see");
         Absent(body, "primary").Should().BeTrue();
         Absent(body, "comparison").Should().BeTrue();
         Absent(body, "primaryRange").Should().BeFalse();
@@ -130,9 +180,9 @@ public class LoopAnalysisSettingsEvidenceIntegrationTests(ApiIntegrationTestFixt
     /// <paramref name="days"/> days from <paramref name="start"/>, local midnight: a reading every
     /// five minutes at 110, at 200 from 13:00 and falling evenly from 14:00 to 120 at 18:00, under a
     /// 2 U correction at 14:00; a 40 g breakfast with a 4 U bolus at 08:00; an algorithm temp at the
-    /// 1.0 U/h schedule throughout.
+    /// 1.0 U/h schedule throughout. <paramref name="glucose"/> overrides the reading where it gives one.
     /// </summary>
-    private async Task SeedDaysAsync(DateTime start, int days)
+    private async Task SeedDaysAsync(DateTime start, int days, Func<DateTime, double?>? glucose = null)
     {
         using var scope = TenantScope();
         await using var context = await scope.ServiceProvider.GetRequiredService<INocturneDbContextFactory>().CreateAsync();
@@ -148,7 +198,7 @@ public class LoopAnalysisSettingsEvidenceIntegrationTests(ApiIntegrationTestFixt
         {
             context.SensorGlucose.Add(new SensorGlucoseEntity
             {
-                Id = Guid.NewGuid(), Timestamp = t, Mgdl = Glucose((t - start).TotalMinutes % 1440), DataSource = "test",
+                Id = Guid.NewGuid(), Timestamp = t, Mgdl = glucose?.Invoke(t) ?? Glucose((t - start).TotalMinutes % 1440), DataSource = "test",
             });
             context.TempBasals.Add(new TempBasalEntity
             {
@@ -168,6 +218,24 @@ public class LoopAnalysisSettingsEvidenceIntegrationTests(ApiIntegrationTestFixt
         }
         await context.SaveChangesAsync();
     }
+
+    /// <summary>
+    /// A meal-like climb from the 110 resting level at <paramref name="start"/>: 50 mg/dL in its first
+    /// 40 minutes, on to 200 at <paramref name="peak"/>, then back down to 110 over 90 minutes.
+    /// </summary>
+    private static Func<DateTime, double?> Climb(DateTime start, DateTime peak) => t =>
+    {
+        var minutes = (t - start).TotalMinutes;
+        var toPeak = (peak - start).TotalMinutes;
+        return minutes switch
+        {
+            < 0 => null,
+            <= 40 => 110 + minutes * 50 / 40,
+            _ when minutes <= toPeak => 160 + (minutes - 40) * 40 / (toPeak - 40),
+            _ when minutes <= toPeak + 90 => 200 - (minutes - toPeak) * 90 / 90,
+            _ => null,
+        };
+    };
 
     private async Task SeedCarbsAsync(DateTime at, double grams)
     {

@@ -1242,7 +1242,7 @@ public partial class AnalyticsReadScopeGuardTests
                 {
                     "Primary", "Comparison", "HistoryClamped", "TimeZoneUnavailableReason", "PrimaryRange",
                     "ComparisonRange", "AppliedFilters", "IgnoredFilters", "WithheldSeries", "UnavailableFilters",
-                    "Definition", "SlotMinutes", "UnavailableAnchors",
+                    "Definition", "SlotMinutes", "UnavailableAnchors", "WithheldReason", "Rules",
                 }.Select(p => $"{response.Name}.{p}"),
             ]);
     }

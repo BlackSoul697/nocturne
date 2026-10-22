@@ -26,6 +26,12 @@ public interface ILoopAnalysisService
     Task<LoopHealthResponse> GetLoopHealthAsync(
         LoopAnalysisFilter filter, TimeZoneInfo zone, CancellationToken ct = default);
 
+    /// <summary>
+    /// The names of the profiles active in the filter's ranges, oldest first, as a tab's
+    /// <c>ProfileNames</c> holds them, without loading anything else: for a tab withheld whole.
+    /// </summary>
+    Task<List<string>> GetProfileNamesAsync(LoopAnalysisFilter filter, CancellationToken ct = default);
+
     /// <remarks>Takes and returns as <see cref="GetDailyProfileAsync"/> does; lists episodes for the primary range only.</remarks>
     Task<SettingsEvidenceReport> GetSettingsEvidenceAsync(
         LoopAnalysisFilter filter, TimeZoneInfo zone, CancellationToken ct = default);

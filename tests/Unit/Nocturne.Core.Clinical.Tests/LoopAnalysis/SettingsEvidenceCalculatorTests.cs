@@ -987,6 +987,30 @@ public class SettingsEvidenceCalculatorTests
     }
 
     [Fact]
+    public void TheDeadband_ReadsTheFigureAsShown_NotTheUnroundedValue()
+    {
+        var figure = Rated(12, 1.0999996, 1.0, higherMeansMoreInsulin: true, borrowed: false);
+
+        figure.Observed.Should().Be(1.1);
+        figure.TowardsMoreInsulin.Should().BeTrue("1.100 against 1.000 is the 10% the deadband allows");
+    }
+
+    [Fact]
+    public void TheRules_NameTheThresholdsTheCalculatorsApply()
+    {
+        var rules = SettingsEvidenceCalculator.Rules();
+
+        rules.BasalCarbFreeMs.Should().Be(ObservedBasalNeed.CarbFreeMs);
+        rules.BasalManualBolusFreeMs.Should().Be(ObservedBasalNeed.ManualBolusFreeMs);
+        rules.IsfCarbFreeBeforeMs.Should().Be(ObservedIsf.CarbFreeBeforeMs);
+        rules.IsfMinimumWindowMs.Should().Be(ObservedIsf.MinimumWindowMs);
+        rules.IsfWindowMs.Should().Be(ObservedIsf.WindowMs);
+        rules.CarbRatioWindowMs.Should().Be(ObservedCarbRatio.WindowAfterMs);
+        rules.LowMgdl.Should().Be(ObservedIsf.LowMgdl);
+        (rules.StartLowMgdl, rules.StartHighMgdl).Should().Be((ObservedCarbRatio.StartLowMgdl, ObservedCarbRatio.StartHighMgdl));
+    }
+
+    [Fact]
     public void GlucoseStillFallingAtTheWindowsEnd_SaysTheWindowMissedPartOfTheResponse()
     {
         var week = Corrections();

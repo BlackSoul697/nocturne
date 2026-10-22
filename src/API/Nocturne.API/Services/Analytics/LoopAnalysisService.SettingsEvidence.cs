@@ -1,4 +1,5 @@
 using Nocturne.Core.Clinical.LoopAnalysis;
+using Nocturne.Core.Contracts.Profiles.Resolvers;
 using Nocturne.Core.Models.LoopAnalysis;
 
 namespace Nocturne.API.Services.Analytics;
@@ -17,11 +18,12 @@ internal sealed partial class LoopAnalysisService
         ObservedBasalNeed.CarbFreeMs + UnannouncedRises.MergeMs + UnannouncedRises.StableMs + UnannouncedRises.CarbsBeforeMs;
 
     /// <summary>
-    /// How far past the range it reads: a meal or correction near the range's end reads its window,
-    /// <see cref="ObservedCarbRatio.WindowAfterMs"/>, past it, and <see cref="EventMarginMs"/> more
-    /// lets a climb starting near that window's end be seen for what it is.
+    /// How far past the range it reads, for climb detection alone: every window past the range's end
+    /// is rejected as <see cref="SettingsEvidenceRule.OutsideRange"/>, but a climb under way at the
+    /// end is found only with the <see cref="UnannouncedRises.RiseWindowMs"/> after its start that
+    /// shows it rising.
     /// </summary>
-    private const long SettingsEvidenceAfterMs = ObservedCarbRatio.WindowAfterMs + EventMarginMs;
+    private const long SettingsEvidenceAfterMs = UnannouncedRises.RiseWindowMs;
 
     public async Task<SettingsEvidenceReport> GetSettingsEvidenceAsync(
         LoopAnalysisFilter filter, TimeZoneInfo zone, CancellationToken ct = default)
@@ -32,6 +34,17 @@ internal sealed partial class LoopAnalysisService
             (loaded, range, isPrimary) => SettingsEvidenceCalculator.Calculate(
                 loaded.Inputs, Mask(filter, range, zone, loaded.Sources), range.From, range.To, listEpisodes: isPrimary));
         return new SettingsEvidenceReport { Primary = primary, Comparison = comparison, ProfileNames = names };
+    }
+
+    public async Task<List<string>> GetProfileNamesAsync(LoopAnalysisFilter filter, CancellationToken ct = default)
+    {
+        Window[] windows = filter.CompareFrom is { } compareFrom && filter.CompareTo is { } compareTo
+            ? [Window.Of(filter.From, filter.To), Window.Of(compareFrom, compareTo)]
+            : [Window.Of(filter.From, filter.To)];
+        var spans = new List<ProfileSpan>();
+        foreach (var window in windows)
+            spans.AddRange(await activeProfileResolver.GetProfileSpansForRangeAsync(window.From, window.To, ct));
+        return [.. spans.OrderBy(p => p.StartMills).Select(p => p.ProfileName).Distinct(StringComparer.Ordinal)];
     }
 
     private sealed record SettingsEvidenceLoaded(SettingsEvidenceInputs Inputs) : ILoaded

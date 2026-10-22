@@ -110,10 +110,12 @@ public class LoopAnalysisController(
     /// observations, never instructions.
     /// </summary>
     /// <remarks>
-    /// Every figure reads glucose, the insulin delivered and the profile's settings, so without
-    /// glucose.read, treatments.read and therapy.read the tab is withheld whole: nothing is computed,
-    /// <c>primary</c> and <c>comparison</c> are null and <c>withheldSeries</c> holds
-    /// <c>SettingsEvidence</c>.
+    /// The tab is withheld whole, with nothing computed, <c>primary</c> and <c>comparison</c> null
+    /// and the reason in <c>withheldReason</c>: without glucose.read, treatments.read and
+    /// therapy.read, since every figure reads all three (and <c>withheldSeries</c> then holds
+    /// <c>SettingsEvidence</c>), and for a history-clamped caller, since every rule looks back hours
+    /// before its window and would see nothing before the clamp. <c>rules</c> gives the thresholds
+    /// the rules apply.
     /// </remarks>
     /// <param name="query">The range, comparison and masks (<see cref="LoopAnalysisQuery"/>).</param>
     /// <param name="cancellationToken">Cancellation token.</param>
@@ -123,15 +125,29 @@ public class LoopAnalysisController(
     [ResponseCache(Duration = 60, Location = ResponseCacheLocation.Client)]
     [ProducesResponseType(typeof(SettingsEvidenceReport), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
-    public Task<ActionResult<SettingsEvidenceReport>> GetSettingsEvidence(
+    public async Task<ActionResult<SettingsEvidenceReport>> GetSettingsEvidence(
         [FromQuery] LoopAnalysisQuery query,
-        CancellationToken cancellationToken = default) =>
-        ServeAsync<SettingsEvidenceReport>(
-            query,
+        CancellationToken cancellationToken = default)
+    {
+        SettingsEvidenceWithheldReason? withheld =
             LoopAnalysisReadScopeGuard.WithheldSettingsEvidence(HttpContext.GetGrantedScopes()).Count > 0
-                ? (_, _, _) => Task.FromResult(new SettingsEvidenceReport())
+                ? SettingsEvidenceWithheldReason.ReadScopes
+                : HttpContext.IsCallerHistoryClamped() ? SettingsEvidenceWithheldReason.HistoryClamped : null;
+
+        var served = await ServeAsync<SettingsEvidenceReport>(
+            query,
+            withheld is { } reason
+                ? async (filter, _, ct) => new SettingsEvidenceReport
+                {
+                    WithheldReason = reason,
+                    ProfileNames = filter.ReadProfileNames ? await service.GetProfileNamesAsync(filter, ct) : [],
+                }
                 : service.GetSettingsEvidenceAsync,
             cancellationToken);
+        if (served.Result is OkObjectResult { Value: SettingsEvidenceReport report })
+            report.Rules = SettingsEvidenceCalculator.Rules();
+        return served;
+    }
 
     /// <summary>
     /// Glucose, net loop correction, net insulin above schedule, IOB and COB aligned on up to three

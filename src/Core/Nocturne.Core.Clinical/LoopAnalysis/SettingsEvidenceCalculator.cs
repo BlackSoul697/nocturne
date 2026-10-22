@@ -155,6 +155,20 @@ public static class SettingsEvidenceCalculator
     /// <summary>A reading stands for glucose at an instant within one CGM interval of it.</summary>
     public const long ReadingToleranceMs = EventEpisode.ReadingToleranceMs;
 
+    /// <summary>The thresholds this calculator's rules and windows apply.</summary>
+    public static SettingsEvidenceRules Rules() => new()
+    {
+        BasalCarbFreeMs = ObservedBasalNeed.CarbFreeMs,
+        BasalManualBolusFreeMs = ObservedBasalNeed.ManualBolusFreeMs,
+        IsfCarbFreeBeforeMs = ObservedIsf.CarbFreeBeforeMs,
+        IsfMinimumWindowMs = ObservedIsf.MinimumWindowMs,
+        IsfWindowMs = ObservedIsf.WindowMs,
+        CarbRatioWindowMs = ObservedCarbRatio.WindowAfterMs,
+        LowMgdl = ObservedIsf.LowMgdl,
+        StartLowMgdl = ObservedCarbRatio.StartLowMgdl,
+        StartHighMgdl = ObservedCarbRatio.StartHighMgdl,
+    };
+
     /// <param name="listEpisodes">Whether to list the episodes; the comparison range's are not shown.</param>
     public static SettingsEvidenceRange Calculate(
         SettingsEvidenceInputs inputs, LoopAnalysisMask mask, long from, long to, bool listEpisodes = true)
@@ -255,9 +269,11 @@ public static class SettingsEvidenceCalculator
                 _ => SettingsEvidenceConfidence.Low,
             };
 
+        // Against the rounded figure, as shown beside the profile's, so a figure reads the way it points.
+        var shown = figure.Observed.Value;
         var departs = figure.Profile is > 0 and var profile
-            && Math.Abs(observed / profile - 1) >= DirectionDeadband;
-        var moreInsulin = departs && (higherMeansMoreInsulin ? observed > figure.Profile : observed < figure.Profile);
+            && Math.Abs(shown / profile - 1) >= DirectionDeadband;
+        var moreInsulin = departs && (higherMeansMoreInsulin ? shown > figure.Profile : shown < figure.Profile);
         figure.TowardsMoreInsulin = moreInsulin;
         figure.TowardsLessInsulin = departs && !moreInsulin;
         if (moreInsulin && materialBorrowed)
