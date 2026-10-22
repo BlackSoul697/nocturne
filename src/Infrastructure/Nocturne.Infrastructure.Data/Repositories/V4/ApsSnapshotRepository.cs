@@ -62,64 +62,68 @@ public class ApsSnapshotRepository : SyncUpsertRepositoryBase<ApsSnapshot, ApsSn
         DateTime from, DateTime to, CancellationToken ct = default)
     {
         await using var ctx = await ContextFactory.CreateAsync(ct);
-        var rows = await ctx.ApsSnapshots.AsNoTracking()
-            .Where(e => e.Timestamp >= from && e.Timestamp <= to)
-            .OrderBy(e => e.Timestamp)
-            .Select(e => new
-            {
-                e.Timestamp,
-                e.Device,
-                e.AidAlgorithm,
-                e.Enacted,
-                e.EnactedRate,
-                e.EnactedDuration,
-                e.EnactedBolusVolume,
-                e.Iob,
-                e.SensitivityRatio,
-                HasSuggestion = e.SuggestedJson != null,
-                HasReason = Jsonb.Text(e.SuggestedJson, "reason") != null,
-                SuggestedChange = e.SuggestedJson == null
-                    ? (bool?)null
-                    : Jsonb.Text(e.SuggestedJson, "duration") != null || Jsonb.Text(e.SuggestedJson, "units") != null,
-                LimitReason = Jsonb.Text(e.SuggestedJson, "reason")!.Contains("maxSafeBasal")
-                    || Jsonb.Text(e.SuggestedJson, "reason")!.Contains("max_iob")
-                        ? Jsonb.Text(e.SuggestedJson, "reason")
-                        : null,
-                MaxIob = Jsonb.Text(e.SuggestedJson, "max_iob"),
-                MaxBasal = Jsonb.Text(e.SuggestedJson, "max_basal"),
-                MaxDailySafetyMultiplier = Jsonb.Text(e.SuggestedJson, "max_daily_safety_multiplier"),
-                CurrentBasalSafetyMultiplier = Jsonb.Text(e.SuggestedJson, "current_basal_safety_multiplier"),
-            })
-            .ToListAsync(ct);
+        var snapshots = ctx.ApsSnapshots.AsNoTracking();
+        var before = await snapshots.Where(e => e.Timestamp < from)
+            .OrderByDescending(e => e.Timestamp).Take(1).Select(LoopCycleRow).ToListAsync(ct);
+        var inside = await snapshots.Where(e => e.Timestamp >= from && e.Timestamp <= to)
+            .OrderBy(e => e.Timestamp).Select(LoopCycleRow).ToListAsync(ct);
+        var after = await snapshots.Where(e => e.Timestamp > to)
+            .OrderBy(e => e.Timestamp).Take(1).Select(LoopCycleRow).ToListAsync(ct);
 
-        return [.. rows.Select(r => new ApsLoopCycle
+        return [.. before.Concat(inside).Concat(after).Select(r =>
         {
-            Timestamp = r.Timestamp,
-            Device = r.Device,
-            AidAlgorithm = Enum.TryParse<AidAlgorithm>(r.AidAlgorithm, out var algorithm) ? algorithm : AidAlgorithm.Unknown,
-            Enacted = r.Enacted,
-            EnactedRate = r.EnactedRate,
-            EnactedDuration = r.EnactedDuration,
-            EnactedBolusVolume = r.EnactedBolusVolume,
-            Iob = r.Iob,
-            SensitivityRatio = r.SensitivityRatio,
-            HasSuggestion = r.HasSuggestion,
-            HasReason = r.HasReason,
-            SuggestedChange = r.SuggestedChange,
-            LimitReason = r.LimitReason,
-            MaxIob = Number(r.MaxIob),
-            MaxBasal = Number(r.MaxBasal),
-            MaxDailySafetyMultiplier = Number(r.MaxDailySafetyMultiplier),
-            CurrentBasalSafetyMultiplier = Number(r.CurrentBasalSafetyMultiplier),
+            var reason = string.IsNullOrEmpty(r.Reason) ? null : r.Reason;
+            return new ApsLoopCycle
+            {
+                Timestamp = r.Timestamp,
+                Device = r.Device,
+                AidAlgorithm = Enum.TryParse<AidAlgorithm>(r.AidAlgorithm, out var algorithm) ? algorithm : AidAlgorithm.Unknown,
+                Enacted = r.Enacted,
+                EnactedRate = r.EnactedRate,
+                EnactedDuration = r.EnactedDuration,
+                EnactedBolusVolume = r.EnactedBolusVolume,
+                Iob = r.Iob,
+                SensitivityRatio = r.SensitivityRatio,
+                HasReason = reason is not null,
+                SuggestedChange = r.SuggestedChange,
+                LimitReason = reason is not null
+                    && (reason.Contains("maxSafeBasal", StringComparison.Ordinal) || reason.Contains("max_iob", StringComparison.Ordinal))
+                        ? reason
+                        : null,
+            };
         })];
     }
 
-    /// <summary>A jsonb member's text as a number; null where it is absent or not a number.</summary>
-    private static double? Number(string? text) =>
-        double.TryParse(text, System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var value)
-            && double.IsFinite(value)
-            ? value
-            : null;
+    private sealed record LoopCycleColumns(
+        DateTime Timestamp,
+        string? Device,
+        string AidAlgorithm,
+        bool Enacted,
+        double? EnactedRate,
+        int? EnactedDuration,
+        double? EnactedBolusVolume,
+        double? Iob,
+        double? SensitivityRatio,
+        string? Reason,
+        bool? SuggestedChange);
+
+    /// <summary>
+    /// The suggestion is read twice, for its reason and for whether it asked for a change, and the
+    /// reason is matched here rather than in SQL: each read of a jsonb column detoasts it again.
+    /// </summary>
+    private static readonly System.Linq.Expressions.Expression<Func<ApsSnapshotEntity, LoopCycleColumns>> LoopCycleRow =
+        e => new LoopCycleColumns(
+            e.Timestamp,
+            e.Device,
+            e.AidAlgorithm,
+            e.Enacted,
+            e.EnactedRate,
+            e.EnactedDuration,
+            e.EnactedBolusVolume,
+            e.Iob,
+            e.SensitivityRatio,
+            Jsonb.Text(e.SuggestedJson, "reason"),
+            e.SuggestedJson == null ? null : EF.Functions.JsonExistAny(e.SuggestedJson, "duration", "units"));
 
     /// <summary>
     /// Gets APS snapshots by correlation IDs.

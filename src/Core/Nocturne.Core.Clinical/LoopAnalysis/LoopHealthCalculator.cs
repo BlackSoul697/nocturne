@@ -11,17 +11,14 @@ public sealed record LoopHealthInputs
     public required TimeZoneInfo Zone { get; init; }
 
     /// <summary>
-    /// Read past both ends of every range, so a gap or a temp that straddles an end is bounded by
-    /// the cycles either side of it.
+    /// Every cycle in the range and the temp lookback before it, with the nearest cycle beyond each
+    /// end, so a gap that straddles an end is bounded by the cycles either side of it.
     /// </summary>
     public IReadOnlyList<ApsLoopCycle> Cycles { get; init; } = [];
 
     public required NetInsulinAboveSchedule Insulin { get; init; }
 
     public required BasalEvidence Evidence { get; init; }
-
-    /// <summary>The scheduled basal the caps are multiples of; see <see cref="NetInsulinAboveSchedule.ScheduledBaseline"/>.</summary>
-    public IReadOnlyList<RateSegment> Scheduled { get; init; } = [];
 
     /// <summary>Canonical readings.</summary>
     public IReadOnlyList<SensorGlucose> Glucose { get; init; } = [];
@@ -46,19 +43,27 @@ public static class LoopHealthCalculator
     public const long LoopGapMs = 15 * LocalSlotBinning.MinuteMs;
 
     /// <summary>
-    /// The time one cycle stands for in the activity shares, as <c>ApsSnapshotStrategy</c> counts
-    /// cycles for <c>aid-system-metrics</c>.
+    /// The most time one cycle stands for in the activity shares, as <c>ApsSnapshotStrategy</c>
+    /// counts cycles for <c>aid-system-metrics</c>; a sooner cycle cuts it short.
     /// </summary>
     public const long CycleCreditMs = 5 * LocalSlotBinning.MinuteMs;
 
-    /// <summary>A temp this close below the cap is at it: pumps set rates in 0.05 U/h steps.</summary>
-    public const double MaxBasalToleranceUph = 0.05;
+    /// <summary>
+    /// How long before a temp basal piece the cycle that set it is looked for: the longest temp an
+    /// AID algorithm sets. The cycles are read from this far before a range.
+    /// </summary>
+    public const long TempLookbackMs = 2 * LocalSlotBinning.HourMs;
+
+    /// <summary>A temp this close below the cap is at it: half the 0.05 U/h step pumps set rates in.</summary>
+    public const double MaxBasalToleranceUph = 0.025;
 
     /// <summary>IOB this close below a reported <c>max_iob</c> is at it.</summary>
     public const double MaxIobToleranceU = 0.1;
 
     private const int HoursPerDay = 24;
-    private const long DefaultTempMs = 30 * LocalSlotBinning.MinuteMs;
+
+    /// <summary>How far a temp record's start and the snapshot of the cycle that set it can differ.</summary>
+    private const long CycleClockSkewMs = 2 * LocalSlotBinning.MinuteMs;
 
     public static bool IsOref(AidAlgorithm algorithm) =>
         algorithm is AidAlgorithm.OpenAps or AidAlgorithm.AndroidAps or AidAlgorithm.Trio or AidAlgorithm.IAPS;
@@ -67,6 +72,7 @@ public static class LoopHealthCalculator
     {
         var grid = new HourGrid(inputs.Zone, from, to, mask.Analysed);
         var cycles = Distinct(inputs.Cycles);
+        var looping = Looping(cycles);
 
         return new LoopHealthRange
         {
@@ -76,8 +82,9 @@ public static class LoopHealthCalculator
             Activity = Activity(inputs, cycles, grid, from, to),
             Cadence = new LoopHealthCadence
             {
-                LoopGaps = LoopGaps(cycles, grid, from, to),
-                UnrecordedDelivery = UnrecordedDelivery(cycles, inputs.Evidence, grid, from, to),
+                LoopGaps = LoopGaps(inputs, cycles, grid, from, to),
+                UnrecordedDelivery = grid.Gaps(
+                    looping.Subtract(inputs.Evidence.Recorded.Union(inputs.Evidence.Inferable)).Intervals, from, to),
             },
             ZeroDelivery = ZeroDelivery(inputs.Insulin, grid),
             MaxBasal = MaxBasal(inputs, cycles, grid),
@@ -91,24 +98,45 @@ public static class LoopHealthCalculator
         };
     }
 
-    /// <summary>One cycle per instant, oldest first: two uploaders can post the same cycle.</summary>
+    /// <summary>
+    /// One cycle per instant, oldest first: two uploaders can post the same cycle, and where only
+    /// one of them saw it enacted, it was.
+    /// </summary>
     private static List<ApsLoopCycle> Distinct(IEnumerable<ApsLoopCycle> cycles) =>
-        [.. cycles.GroupBy(c => c.Mills).OrderBy(g => g.Key).Select(g => g.First())];
+        [.. cycles.GroupBy(c => c.Mills).OrderBy(g => g.Key).Select(g => g.FirstOrDefault(c => c.Enacted) ?? g.First())];
+
+    /// <summary>Time between two cycles no further apart than <see cref="LoopGapMs"/>.</summary>
+    private static IntervalSet Looping(List<ApsLoopCycle> cycles) =>
+        IntervalSet.Of(cycles.Zip(cycles.Skip(1))
+            .Where(pair => pair.Second.Mills - pair.First.Mills <= LoopGapMs)
+            .Select(pair => new MillsInterval(pair.First.Mills, pair.Second.Mills)));
+
+    /// <summary>
+    /// Each instant credited for up to <paramref name="creditMs"/>, cut short by the next instant
+    /// in <paramref name="following"/> order, merged so overlapping credits count once.
+    /// </summary>
+    private static IntervalSet Credits(IReadOnlyList<long> instants, IReadOnlyList<long> following, long creditMs)
+    {
+        var credits = new List<MillsInterval>(instants.Count);
+        foreach (var at in instants)
+        {
+            var next = SortedSearch.FirstEndingAfter(following, at, static m => m);
+            var end = next < following.Count ? Math.Min(at + creditMs, following[next]) : at + creditMs;
+            credits.Add(new MillsInterval(at, end));
+        }
+        return IntervalSet.Of(credits);
+    }
 
     private static LoopHealthActivity Activity(
         LoopHealthInputs inputs, List<ApsLoopCycle> cycles, HourGrid grid, long from, long to)
     {
         var closed = grid.New();
         var pump = grid.New();
-        var inRange = cycles.Where(c => c.Mills >= from && c.Mills < to).ToList();
-        if (inRange.Count > 0)
+        if (cycles.Any(c => c.Mills >= from && c.Mills < to))
         {
-            foreach (var cycle in inRange)
-            {
-                grid.AddTime(pump, cycle.Mills, cycle.Mills + CycleCreditMs);
-                if (cycle.Enacted)
-                    grid.AddTime(closed, cycle.Mills, cycle.Mills + CycleCreditMs);
-            }
+            var all = cycles.Select(c => c.Mills).ToList();
+            grid.AddTime(pump, Credits(all, all, CycleCreditMs));
+            grid.AddTime(closed, Credits([.. cycles.Where(c => c.Enacted).Select(c => c.Mills)], all, CycleCreditMs));
         }
         else
         {
@@ -121,54 +149,48 @@ public static class LoopHealthCalculator
             }
         }
 
-        var cgm = grid.New();
+        var cgm = IntervalSet.Empty;
         foreach (var stream in inputs.Glucose.Where(g => GlucoseStatistics.IsReading(g.Mgdl))
                      .GroupBy(CanonicalGlucoseStream.StreamKey, StringComparer.Ordinal))
         {
             var ordered = stream.OrderBy(g => g.Mills).ToList();
             var creditMs = (long)(GlucoseCadence.SeriesCadenceMinutes(GlucoseCadence.ReadingIntervals(ordered))
                 * LocalSlotBinning.MinuteMs);
-            foreach (var reading in ordered)
-                grid.AddTime(cgm, reading.Mills, reading.Mills + creditMs);
+            var mills = ordered.Select(g => g.Mills).ToList();
+            cgm = cgm.Union(Credits(mills, mills, creditMs));
         }
+        var cgmTime = grid.New();
+        grid.AddTime(cgmTime, cgm);
 
         return new LoopHealthActivity
         {
             ClosedLoop = grid.Share(closed, grid.Analysed),
             Pump = grid.Share(pump, grid.Analysed),
-            Cgm = grid.Share(cgm, grid.Analysed),
+            Cgm = grid.Share(cgmTime, grid.Analysed),
         };
     }
 
-    private static LoopHealthGaps LoopGaps(List<ApsLoopCycle> cycles, HourGrid grid, long from, long to)
+    /// <summary>
+    /// Gaps of more than <see cref="LoopGapMs"/> between cycles. A loop that stops for good before
+    /// the range ends leaves a gap from its last cycle until the newest glucose reading or temp
+    /// basal record, whichever is later, within the range: past that the data ends, not the loop.
+    /// </summary>
+    private static LoopHealthGaps LoopGaps(LoopHealthInputs inputs, List<ApsLoopCycle> cycles, HourGrid grid, long from, long to)
     {
-        var gaps = new List<MillsInterval>();
-        for (var i = 0; i + 1 < cycles.Count; i++)
+        var gaps = cycles.Zip(cycles.Skip(1))
+            .Where(pair => pair.Second.Mills - pair.First.Mills > LoopGapMs)
+            .Select(pair => new MillsInterval(pair.First.Mills, pair.Second.Mills))
+            .ToList();
+
+        if (cycles.Count > 0 && cycles[^1].Mills < to)
         {
-            if (cycles[i + 1].Mills - cycles[i].Mills > LoopGapMs)
-                gaps.Add(new MillsInterval(cycles[i].Mills, cycles[i + 1].Mills));
+            var dataEnd = Math.Min(to, Math.Max(
+                inputs.Glucose.Count > 0 ? inputs.Glucose.Max(g => g.Mills) : long.MinValue,
+                inputs.Evidence.Recorded.IsEmpty ? long.MinValue : inputs.Evidence.Recorded.Intervals[^1].End));
+            if (dataEnd - cycles[^1].Mills > LoopGapMs)
+                gaps.Add(new MillsInterval(cycles[^1].Mills, dataEnd));
         }
         return grid.Gaps(gaps, from, to);
-    }
-
-    /// <summary>
-    /// Time the loop was cycling with no temp basal recorded, in stretches of at least
-    /// <see cref="NetInsulinAboveSchedule.MaxInferredGapMs"/>. The loop counts as cycling across a
-    /// gap no longer than that too, so one outage of the pump's records is one gap however often
-    /// the loop briefly stopped during it.
-    /// </summary>
-    private static LoopHealthGaps UnrecordedDelivery(
-        List<ApsLoopCycle> cycles, BasalEvidence evidence, HourGrid grid, long from, long to)
-    {
-        var looping = new List<MillsInterval>();
-        for (var i = 0; i + 1 < cycles.Count; i++)
-        {
-            if (cycles[i + 1].Mills - cycles[i].Mills <= NetInsulinAboveSchedule.MaxInferredGapMs)
-                looping.Add(new MillsInterval(cycles[i].Mills, cycles[i + 1].Mills));
-        }
-        var unrecorded = IntervalSet.Of(looping).Subtract(evidence.Recorded).Intervals
-            .Where(i => i.Length >= NetInsulinAboveSchedule.MaxInferredGapMs);
-        return grid.Gaps(unrecorded, from, to);
     }
 
     private static LoopHealthZeroDelivery ZeroDelivery(NetInsulinAboveSchedule insulin, HourGrid grid)
@@ -199,48 +221,30 @@ public static class LoopHealthCalculator
     }
 
     /// <summary>
-    /// Each enacted temp runs from its cycle until the next cycle or its own duration, whichever
-    /// comes first, and is measured against the cap in force when it was set.
+    /// Time the algorithm's temps were delivering at the effective cap, measured on the delivered
+    /// basal: a temp held through cycles that enacted nothing counts for as long as it ran. The
+    /// cycles judge which cap was in force: Loop's setting at the time, or for oref, whether the
+    /// cycle that set the temp (the newest enacted at its rate within
+    /// <see cref="TempLookbackMs"/>) cut it to <c>maxSafeBasal</c>.
     /// </summary>
     private static LoopHealthMaxBasal MaxBasal(LoopHealthInputs inputs, List<ApsLoopCycle> cycles, HourGrid grid)
     {
-        var scheduled = StepTimeline<double>.LatestStartedWins(
-            inputs.Scheduled.Select(s => new Step<double>(s.Start, s.End, s.Rate)));
-        var dayMax = new Dictionary<DateOnly, double?>();
-        double? HighestScheduledOn(long mills)
-        {
-            var day = LocalSlotBinning.LocalDay(mills, inputs.Zone);
-            if (dayMax.TryGetValue(day, out var max))
-                return max;
-            var start = LocalSlotBinning.DayStartMills(day, inputs.Zone);
-            var end = LocalSlotBinning.DayStartMills(day.AddDays(1), inputs.Zone);
-            var rates = scheduled.Steps.Where(s => s.Start < end && s.End > start).Select(s => s.Value).ToList();
-            return dayMax[day] = rates.Count > 0 ? rates.Max() : null;
-        }
-
+        var enacted = cycles.Where(c => c.Enacted && c.EnactedRate is not null).ToList();
         var algorithmTime = grid.New();
         var known = grid.New();
         var atCap = grid.New();
         var bindingMs = new Dictionary<LoopHealthCap, long>();
 
-        for (var i = 0; i < cycles.Count; i++)
+        foreach (var piece in inputs.Insulin.Pieces)
         {
-            var cycle = cycles[i];
-            if (!cycle.Enacted || cycle.EnactedRate is not { } rate)
+            if (piece.Origin != NetInsulinOrigin.AlgorithmTemp || piece.Delivered is not { } rate)
                 continue;
-            var end = Math.Min(
-                i + 1 < cycles.Count ? cycles[i + 1].Mills : long.MaxValue,
-                cycle.Mills + (cycle.EnactedDuration is { } minutes && minutes > 0 ? minutes * LocalSlotBinning.MinuteMs : DefaultTempMs));
-            grid.AddTime(algorithmTime, cycle.Mills, end);
-
-            if (!TryJudgeCap(cycle, rate, inputs.LoopMaximumBasalRate, scheduled, HighestScheduledOn, out var binding))
+            grid.AddTime(algorithmTime, piece.Start, piece.End);
+            if (!TryJudgeCap(piece.Start, rate, cycles, enacted, inputs.LoopMaximumBasalRate, out var binding))
                 continue;
-            grid.AddTime(known, cycle.Mills, end);
+            grid.AddTime(known, piece.Start, piece.End);
             if (binding is { } binder)
-            {
-                var ms = grid.AddTime(atCap, cycle.Mills, end);
-                bindingMs[binder] = bindingMs.GetValueOrDefault(binder) + ms;
-            }
+                bindingMs[binder] = bindingMs.GetValueOrDefault(binder) + grid.AddTime(atCap, piece.Start, piece.End);
         }
 
         var atCapMs = bindingMs.Values.Sum();
@@ -260,50 +264,48 @@ public static class LoopHealthCalculator
         };
     }
 
-    /// <summary>
-    /// Whether a temp of <paramref name="rate"/> set by <paramref name="cycle"/> was at its cap.
-    /// </summary>
-    /// <param name="binding">The cap it was at, or null where it was below every cap.</param>
+    /// <summary>Whether a temp delivering <paramref name="rate"/> from <paramref name="start"/> was at its cap.</summary>
+    /// <param name="binding">The cap it was at, or null where it was below it.</param>
     /// <returns>False where the cap is unknown.</returns>
     private static bool TryJudgeCap(
-        ApsLoopCycle cycle,
+        long start,
         double rate,
+        List<ApsLoopCycle> cycles,
+        List<ApsLoopCycle> enacted,
         StepTimeline<double>? loopMaximum,
-        StepTimeline<double> scheduled,
-        Func<long, double?> highestScheduledOn,
         out LoopHealthCap? binding)
     {
         binding = null;
-        if (cycle.AidAlgorithm == AidAlgorithm.Loop)
+        var latest = SortedSearch.FirstEndingAfter(cycles, start + CycleClockSkewMs, static c => c.Mills) - 1;
+        if (latest < 0)
+            return false;
+
+        if (cycles[latest].AidAlgorithm == AidAlgorithm.Loop)
         {
-            if (loopMaximum is null || !loopMaximum.TryAt(cycle.Mills, out var maximum))
+            if (loopMaximum is null || !loopMaximum.TryAt(start, out var maximum))
                 return false;
             if (rate >= maximum - MaxBasalToleranceUph)
                 binding = LoopHealthCap.LoopMaximumBasalRate;
             return true;
         }
 
-        if (!IsOref(cycle.AidAlgorithm) || !cycle.HasReason)
+        if (!IsOref(cycles[latest].AidAlgorithm))
             return false;
 
-        var reason = OrefReason.Parse(cycle.LimitReason);
-        if (cycle is { MaxBasal: { } maxBasal, MaxDailySafetyMultiplier: { } daily, CurrentBasalSafetyMultiplier: { } current }
-            && scheduled.TryAt(cycle.Mills, out var scheduledRate)
-            && highestScheduledOn(cycle.Mills) is { } highest)
+        ApsLoopCycle? setter = null;
+        for (var i = SortedSearch.FirstEndingAfter(enacted, start + CycleClockSkewMs, static c => c.Mills) - 1;
+             i >= 0 && enacted[i].Mills >= start - TempLookbackMs;
+             i--)
         {
-            (double Cap, LoopHealthCap Kind)[] caps =
-            [
-                (maxBasal, LoopHealthCap.OrefMaxBasal),
-                (daily * highest, LoopHealthCap.OrefMaxDailySafetyMultiplier),
-                (current * scheduledRate, LoopHealthCap.OrefCurrentBasalSafetyMultiplier),
-            ];
-            var lowest = caps.MinBy(c => c.Cap);
-            if (reason.CappedAtMaxSafeBasal || rate >= lowest.Cap - MaxBasalToleranceUph)
-                binding = lowest.Kind;
-            return true;
+            if (Math.Abs(enacted[i].EnactedRate!.Value - rate) <= MaxBasalToleranceUph)
+            {
+                setter = enacted[i];
+                break;
+            }
         }
-
-        if (reason.CappedAtMaxSafeBasal)
+        if (setter is not { HasReason: true })
+            return false;
+        if (OrefReason.Parse(setter.LimitReason).CappedAtMaxSafeBasal)
             binding = LoopHealthCap.OrefMaxSafeBasal;
         return true;
     }
@@ -311,7 +313,7 @@ public static class LoopHealthCalculator
     /// <summary>
     /// Each oref cycle with a reason stands until the next, or for <see cref="LoopGapMs"/>.
     /// It is at <c>max_iob</c> where its reason says so, or where IOB is within
-    /// <see cref="MaxIobToleranceU"/> of the newest <c>max_iob</c> reported so far.
+    /// <see cref="MaxIobToleranceU"/> of the newest <c>max_iob</c> a reason has reported so far.
     /// </summary>
     private static LoopHealthShare? AtMaxIob(List<ApsLoopCycle> cycles, HourGrid grid)
     {
@@ -325,7 +327,7 @@ public static class LoopHealthCalculator
             if (!IsOref(cycle.AidAlgorithm) || !cycle.HasReason)
                 continue;
             var reason = OrefReason.Parse(cycle.LimitReason);
-            maxIob = cycle.MaxIob ?? reason.MaxIob ?? maxIob;
+            maxIob = reason.MaxIob ?? maxIob;
             var end = Math.Min(i + 1 < cycles.Count ? cycles[i + 1].Mills : long.MaxValue, cycle.Mills + LoopGapMs);
             any |= grid.AddTime(oref, cycle.Mills, end) > 0;
             if (reason.AtMaxIob || cycle.Iob >= maxIob - MaxIobToleranceU)
@@ -376,17 +378,14 @@ public static class LoopHealthCalculator
 
     private static LoopHealthLimits Limits(LoopHealthInputs inputs, List<ApsLoopCycle> cycles, long from, long to)
     {
-        var oref = cycles.Where(c => c.Mills >= from && c.Mills < to && IsOref(c.AidAlgorithm)).ToList();
-        double? Newest(Func<ApsLoopCycle, double?> value) => oref.Select(value).LastOrDefault(v => v is not null);
         var loop = inputs.LoopMaximumBasalRate?.Steps.LastOrDefault(s => s.Start < to && s.End > from);
-
         return new LoopHealthLimits
         {
             LoopMaximumBasalRate = loop is { } step ? step.Value : null,
-            OrefMaxIob = Newest(c => c.MaxIob ?? OrefReason.Parse(c.LimitReason).MaxIob),
-            OrefMaxBasal = Newest(c => c.MaxBasal),
-            OrefMaxDailySafetyMultiplier = Newest(c => c.MaxDailySafetyMultiplier),
-            OrefCurrentBasalSafetyMultiplier = Newest(c => c.CurrentBasalSafetyMultiplier),
+            OrefMaxIob = cycles
+                .Where(c => c.Mills >= from && c.Mills < to && IsOref(c.AidAlgorithm))
+                .Select(c => OrefReason.Parse(c.LimitReason).MaxIob)
+                .LastOrDefault(v => v is not null),
         };
     }
 
@@ -426,6 +425,12 @@ public static class LoopHealthCalculator
         public bool IsAnalysed(long mills) => _analysed.Contains(mills);
 
         public int IndexAt(long mills) => Index(LocalSlotBinning.LocalTime(mills, _zone));
+
+        public void AddTime(double[] target, IntervalSet set)
+        {
+            foreach (var interval in set.Intervals)
+                AddTime(target, interval.Start, interval.End);
+        }
 
         /// <summary>Adds the analysed part of <c>[start, end)</c> to <paramref name="target"/>.</summary>
         /// <returns>The milliseconds added.</returns>

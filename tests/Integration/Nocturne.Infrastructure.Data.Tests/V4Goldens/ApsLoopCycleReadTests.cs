@@ -21,7 +21,7 @@ public class ApsLoopCycleReadTests(V4GoldenFixture fixture)
         + "Microbolusing 0.4U. adj. req. rate: 3.2 to maxSafeBasal: 2.4, temp 1.2 < 2.4U/hr.";
 
     [Fact]
-    public async Task Reads_each_cycle_and_the_limits_its_suggestion_names()
+    public async Task Reads_each_cycle_and_the_nearest_beyond_each_end()
     {
         var tenant = Guid.NewGuid();
         using var scope = await fixture.BeginTenantScopeAsync(tenant);
@@ -30,44 +30,36 @@ public class ApsLoopCycleReadTests(V4GoldenFixture fixture)
 
         var cycles = await repo.GetLoopCyclesAsync(Start, Start.AddMinutes(20));
 
-        cycles.Should().HaveCount(4);
-        var withLimits = cycles[0];
-        withLimits.AidAlgorithm.Should().Be(AidAlgorithm.AndroidAps);
-        withLimits.Enacted.Should().BeTrue();
-        withLimits.EnactedRate.Should().Be(2.4);
-        withLimits.EnactedDuration.Should().Be(30);
-        withLimits.Iob.Should().Be(1.5);
-        withLimits.SensitivityRatio.Should().Be(1.1);
-        withLimits.HasSuggestion.Should().BeTrue();
-        withLimits.HasReason.Should().BeTrue();
-        withLimits.SuggestedChange.Should().BeTrue();
-        withLimits.LimitReason.Should().Be(CappedReason);
-        withLimits.MaxIob.Should().Be(3.5);
-        withLimits.MaxBasal.Should().Be(2.4);
-        withLimits.MaxDailySafetyMultiplier.Should().Be(3);
-        withLimits.CurrentBasalSafetyMultiplier.Should().Be(4);
+        cycles.Select(c => c.Timestamp).Should().Equal(
+            Start.AddHours(-1), Start, Start.AddMinutes(5), Start.AddMinutes(10), Start.AddMinutes(15), Start.AddHours(2));
 
-        var withoutLimits = cycles[1];
-        withoutLimits.HasSuggestion.Should().BeTrue();
-        withoutLimits.SuggestedChange.Should().BeFalse("it asked for neither a temp nor a microbolus");
-        withoutLimits.LimitReason.Should().BeNull("its reason names no limit");
-        withoutLimits.MaxIob.Should().BeNull("a key the suggestion omits is unknown, not a default");
-        withoutLimits.MaxBasal.Should().BeNull();
-        withoutLimits.MaxDailySafetyMultiplier.Should().BeNull();
-        withoutLimits.CurrentBasalSafetyMultiplier.Should().BeNull();
+        var capped = cycles[1];
+        capped.AidAlgorithm.Should().Be(AidAlgorithm.AndroidAps);
+        capped.Enacted.Should().BeTrue();
+        capped.EnactedRate.Should().Be(2.4);
+        capped.EnactedDuration.Should().Be(30);
+        capped.Iob.Should().Be(1.5);
+        capped.SensitivityRatio.Should().Be(1.1);
+        capped.HasReason.Should().BeTrue();
+        capped.SuggestedChange.Should().BeTrue();
+        capped.LimitReason.Should().Be(CappedReason);
 
-        cycles[2].MaxIob.Should().BeNull("a limit that is not a number is unknown");
+        var held = cycles[2];
+        held.HasReason.Should().BeTrue();
+        held.SuggestedChange.Should().BeFalse("it asked for neither a temp nor a microbolus");
+        held.LimitReason.Should().BeNull("its reason names no limit");
 
-        var loop = cycles[3];
+        cycles[3].HasReason.Should().BeFalse("an empty reason says nothing");
+
+        var loop = cycles[4];
         loop.AidAlgorithm.Should().Be(AidAlgorithm.Loop);
-        loop.HasSuggestion.Should().BeFalse();
         loop.HasReason.Should().BeFalse();
         loop.SuggestedChange.Should().BeNull();
         loop.EnactedBolusVolume.Should().Be(0.3);
     }
 
     [Fact]
-    public async Task Reads_no_blob_column_and_only_the_named_members_of_the_suggestion()
+    public async Task Reads_no_blob_column_and_the_suggestion_only_for_its_reason_and_its_keys()
     {
         var tenant = Guid.NewGuid();
         using (var scope = await fixture.BeginTenantScopeAsync(tenant))
@@ -89,19 +81,22 @@ public class ApsLoopCycleReadTests(V4GoldenFixture fixture)
         var repo = new ApsSnapshotRepository(
             new TestNocturneDbContextFactory(ctx), new SystemAuditContext(), NullLogger<ApsSnapshotRepository>.Instance);
 
-        (await repo.GetLoopCyclesAsync(Start, Start.AddMinutes(20))).Should().HaveCount(4);
+        (await repo.GetLoopCyclesAsync(Start, Start.AddMinutes(20))).Should().HaveCount(6);
 
-        var select = statements.All.Should().ContainSingle(s => s.StartsWith("SELECT")).Subject;
-        foreach (var blob in new[]
-                 {
-                     "enacted_json", "predicted_default_json", "predicted_iob_json", "predicted_zt_json",
-                     "predicted_cob_json", "predicted_uam_json", "loop_json", "additional_properties",
-                 })
-            select.Should().NotContain(blob);
-        System.Text.RegularExpressions.Regex.Replace(select, @"jsonb_extract_path_text\(a\.suggested_json, '\w+'\)", "")
-            .Replace("a.suggested_json IS NULL", "")
-            .Replace("a.suggested_json IS NOT NULL", "")
-            .Should().NotContain("suggested_json", "the suggestion is read only through the members it names");
+        var selects = statements.All.Where(s => s.StartsWith("SELECT")).ToList();
+        selects.Should().HaveCount(3, "the cycles in the window and one beyond each end");
+        foreach (var select in selects)
+        {
+            foreach (var blob in new[]
+                     {
+                         "enacted_json", "predicted_default_json", "predicted_iob_json", "predicted_zt_json",
+                         "predicted_cob_json", "predicted_uam_json", "loop_json", "additional_properties",
+                     })
+                select.Should().NotContain(blob);
+            System.Text.RegularExpressions.Regex.Matches(select, "suggested_json").Count.Should().Be(
+                3, "the reason, the null test and the key test each read it once: {0}", select);
+            select.Should().Contain("jsonb_extract_path_text(a.suggested_json, 'reason')");
+        }
     }
 
     private static async Task SeedAsync(IApsSnapshotRepository repo)
@@ -109,6 +104,8 @@ public class ApsLoopCycleReadTests(V4GoldenFixture fixture)
         var curve = JsonSerializer.Serialize(Enumerable.Range(0, 48).Select(i => 100 + i).ToArray());
         await repo.BulkCreateAsync(
         [
+            new ApsSnapshot { Timestamp = Start.AddHours(-2), AidAlgorithm = AidAlgorithm.AndroidAps, DataSource = "loop-cycle-test" },
+            new ApsSnapshot { Timestamp = Start.AddHours(-1), AidAlgorithm = AidAlgorithm.AndroidAps, DataSource = "loop-cycle-test" },
             new ApsSnapshot
             {
                 Timestamp = Start, AidAlgorithm = AidAlgorithm.AndroidAps, Enacted = true, EnactedRate = 2.4,
@@ -116,7 +113,6 @@ public class ApsLoopCycleReadTests(V4GoldenFixture fixture)
                 SuggestedJson = JsonSerializer.Serialize(new
                 {
                     reason = CappedReason, rate = 2.4, duration = 30, units = 0.4,
-                    max_iob = 3.5, max_basal = 2.4, max_daily_safety_multiplier = 3, current_basal_safety_multiplier = 4,
                     predBGs = new { IOB = Enumerable.Range(0, 48).ToArray() },
                 }),
                 EnactedJson = "{\"received\":true,\"rate\":2.4}",
@@ -126,13 +122,13 @@ public class ApsLoopCycleReadTests(V4GoldenFixture fixture)
             {
                 Timestamp = Start.AddMinutes(5), AidAlgorithm = AidAlgorithm.AndroidAps, Enacted = false,
                 DataSource = "loop-cycle-test",
-                SuggestedJson = "{\"reason\":\"Eventual BG 110 > 100, temp 1.0 ~ req 1.0U/hr\",\"bg\":110}",
+                SuggestedJson = "{\"reason\":\"Eventual BG 110 > 100, temp 2.4 >~ req 2.3U/hr. \",\"bg\":110}",
             },
             new ApsSnapshot
             {
                 Timestamp = Start.AddMinutes(10), AidAlgorithm = AidAlgorithm.AndroidAps, Enacted = true,
                 DataSource = "loop-cycle-test",
-                SuggestedJson = "{\"reason\":\"\",\"duration\":30,\"max_iob\":\"lots\"}",
+                SuggestedJson = "{\"reason\":\"\",\"duration\":30}",
             },
             new ApsSnapshot
             {
@@ -140,6 +136,8 @@ public class ApsLoopCycleReadTests(V4GoldenFixture fixture)
                 EnactedBolusVolume = 0.3, DataSource = "loop-cycle-test", LoopJson = "{\"enacted\":{\"received\":true}}",
                 PredictedDefaultJson = curve,
             },
+            new ApsSnapshot { Timestamp = Start.AddHours(2), AidAlgorithm = AidAlgorithm.Loop, DataSource = "loop-cycle-test" },
+            new ApsSnapshot { Timestamp = Start.AddHours(3), AidAlgorithm = AidAlgorithm.Loop, DataSource = "loop-cycle-test" },
         ], WriteOrigin.Backfill);
     }
 }

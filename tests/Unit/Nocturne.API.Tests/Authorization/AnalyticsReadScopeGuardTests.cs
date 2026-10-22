@@ -1487,11 +1487,7 @@ public class AnalyticsReadScopeGuardTests
         AutomaticBoluses = new LoopHealthAutomaticBoluses(),
         SuggestedNotEnacted = Share(0.1),
         SensitivityRatio = new LoopHealthDistribution { Overall = Aggregate(1) },
-        Limits = new LoopHealthLimits
-        {
-            LoopMaximumBasalRate = 3, OrefMaxIob = 4, OrefMaxBasal = 2,
-            OrefMaxDailySafetyMultiplier = 3, OrefCurrentBasalSafetyMultiplier = 4,
-        },
+        Limits = new LoopHealthLimits { LoopMaximumBasalRate = 3, OrefMaxIob = 4 },
     };
 
     private static LoopHealthResponse LoopHealth() => new() { Primary = LoopHealthRange(), Comparison = LoopHealthRange() };
@@ -1520,7 +1516,6 @@ public class AnalyticsReadScopeGuardTests
             range.SuggestedNotEnacted.Should().BeNull();
             range.SensitivityRatio.Should().BeNull();
             range.Limits.OrefMaxIob.Should().BeNull();
-            range.Limits.OrefMaxBasal.Should().BeNull();
             range.Limits.LoopMaximumBasalRate.Should().Be(3, "Loop's setting is a therapy setting");
             range.ZeroDelivery.Should().NotBeNull();
             range.AutomaticBoluses.Should().NotBeNull();
@@ -1535,7 +1530,7 @@ public class AnalyticsReadScopeGuardTests
             LoopHealth(), Granted(Scope.GlucoseRead, Scope.DevicesRead, Scope.TherapyRead));
 
         data.WithheldSeries.Should().BeEquivalentTo([
-            LoopAnalysisSeries.LoopActivity, LoopAnalysisSeries.UnrecordedDelivery,
+            LoopAnalysisSeries.LoopActivity, LoopAnalysisSeries.UnrecordedDelivery, LoopAnalysisSeries.MaxBasal,
             LoopAnalysisSeries.ZeroDelivery, LoopAnalysisSeries.AutomaticBoluses,
         ]);
         data.Primary.ZeroDelivery.Should().BeNull();
@@ -1543,7 +1538,7 @@ public class AnalyticsReadScopeGuardTests
         data.Primary.Activity.ClosedLoop.Should().BeNull("without cycles it is read off the algorithm's temps");
         data.Primary.Cadence.UnrecordedDelivery.Should().BeNull();
         data.Primary.Cadence.LoopGaps.Should().NotBeNull();
-        data.Primary.MaxBasal.Should().NotBeNull();
+        data.Primary.MaxBasal.Should().BeNull("time at the cap is measured on delivered basal");
         data.Primary.Limits.OrefMaxIob.Should().Be(4);
     }
 
@@ -1555,11 +1550,12 @@ public class AnalyticsReadScopeGuardTests
 
         data.WithheldSeries.Should().BeEquivalentTo([
             LoopAnalysisSeries.CgmActivity, LoopAnalysisSeries.LoopLimits, LoopAnalysisSeries.OrefLimits,
+            LoopAnalysisSeries.MaxBasal,
         ]);
         data.Primary.Limits.Should().BeEquivalentTo(new LoopHealthLimits());
         data.Primary.Activity.Cgm.Should().BeNull();
         data.Primary.Activity.CgmActivePercent.Should().BeNull();
-        data.Primary.MaxBasal.Should().NotBeNull("the share at the cap discloses no setting");
+        data.Primary.MaxBasal.Should().BeNull("the hours at Loop's cap show where its setting sits");
     }
 
     [Fact]
@@ -1582,7 +1578,10 @@ public class AnalyticsReadScopeGuardTests
         RedactionCoverage.AssertWithheld(
             data,
             [typeof(LoopHealthRange), typeof(LoopHealthActivity), typeof(LoopHealthCadence), typeof(LoopHealthLimits)],
-            ["LoopHealthRange.Days"]);
+            [
+                "LoopHealthRange.From", "LoopHealthRange.To", "LoopHealthRange.Days",
+                "LoopHealthRange.Activity", "LoopHealthRange.Cadence", "LoopHealthRange.Limits",
+            ]);
     }
 
     [Fact]

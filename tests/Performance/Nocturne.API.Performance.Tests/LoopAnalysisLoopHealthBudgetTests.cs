@@ -43,7 +43,7 @@ public class LoopAnalysisLoopHealthBudgetTests(ITestOutputHelper output)
             {
                 Timestamp = at, AidAlgorithm = AidAlgorithm.Trio, Enacted = step % 50 != 0, EnactedRate = rate,
                 EnactedDuration = 30, Iob = step % 40 * 0.1, SensitivityRatio = 0.8 + step % 5 * 0.1,
-                HasSuggestion = true, HasReason = true, SuggestedChange = true,
+                HasReason = true, SuggestedChange = true,
                 LimitReason = step % 30 == 0 ? $"adj. req. rate: 3.1 to maxSafeBasal: {rate}" : null,
             });
             temps.Add(new TempBasal
@@ -69,7 +69,6 @@ public class LoopAnalysisLoopHealthBudgetTests(ITestOutputHelper output)
             Cycles = cycles,
             Insulin = new NetInsulinAboveSchedule(delivered, scheduled, doses),
             Evidence = evidence,
-            Scheduled = scheduled,
             Glucose = glucose,
         };
         var filter = new LoopAnalysisMasks();

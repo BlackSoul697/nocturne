@@ -64,7 +64,7 @@ public class LoopAnalysisLoopHealthIntegrationTests(ApiIntegrationTestFixture fi
         var binding = maxBasal.GetProperty("binding");
         binding.GetArrayLength().Should().Be(1);
         binding[0].GetProperty("cap").GetString().Should().Be("OrefMaxSafeBasal");
-        binding[0].GetProperty("minutes").GetDouble().Should().Be(35, "five minutes at the cap on each of seven days");
+        binding[0].GetProperty("minutes").GetDouble().Should().Be(210, "a capped temp held for half an hour on each of seven days");
 
         var limits = primary.GetProperty("limits");
         Absent(limits, "orefMaxBasal").Should().BeTrue("the suggestions omit the key, so the limit is unknown");
@@ -174,7 +174,8 @@ public class LoopAnalysisLoopHealthIntegrationTests(ApiIntegrationTestFixture fi
     /// Seven days from <paramref name="start"/>: a Trio cycle enacting a 1.2 U/h temp and a reading
     /// every five minutes, except, with <paramref name="gap"/>, between <see cref="GapStart"/> and
     /// <see cref="GapEnd"/>. At local 03:00 each day the cycle's temp was cut to maxSafeBasal and an
-    /// 0.2 U microbolus was given.
+    /// 0.2 U microbolus was given, and the cycles of the next half hour held that temp, enacting
+    /// nothing.
     /// </summary>
     private async Task SeedWeekAsync(DateTime start, bool gap)
     {
@@ -189,7 +190,19 @@ public class LoopAnalysisLoopHealthIntegrationTests(ApiIntegrationTestFixture fi
             if (gap && t > GapStart && t < GapEnd)
                 continue;
 
-            var capped = (t - start).TotalMinutes % (24 * 60) == 3 * 60;
+            var minuteOfDay = (t - start).TotalMinutes % (24 * 60);
+            var capped = minuteOfDay == 3 * 60;
+            if (minuteOfDay is > 3 * 60 and < 3 * 60 + 30)
+            {
+                context.ApsSnapshots.Add(new ApsSnapshotEntity
+                {
+                    Id = Guid.NewGuid(), Timestamp = t, AidAlgorithm = "Trio", Enacted = false, Iob = 1.0,
+                    SensitivityRatio = 1.1, DataSource = "test",
+                    SuggestedJson = """{"reason":"Eventual BG 170 >= 100, temp 2 >~ req 1.9U/hr. "}""",
+                });
+                continue;
+            }
+
             var rate = capped ? 2.0 : 1.2;
             var reason = capped
                 ? "Eventual BG 180 >= 100, insulinReq 0.9. Microbolusing 0.2U. adj. req. rate: 3.1 to maxSafeBasal: 2.0, temp 1.2 < 2.0U/hr."

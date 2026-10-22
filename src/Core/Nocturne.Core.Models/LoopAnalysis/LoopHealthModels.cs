@@ -188,11 +188,10 @@ public class LoopHealthZeroDelivery
 }
 
 /// <summary>
-/// Time an algorithm temp ran at the effective maximum basal rate. Loop's cap is its maximum basal
-/// rate setting; oref's is the lowest of <c>max_basal</c>,
-/// <c>max_daily_safety_multiplier</c> × the day's highest scheduled rate and
-/// <c>current_basal_safety_multiplier</c> × the scheduled rate in force, or the
-/// <c>maxSafeBasal</c> its reason gives where those are not recorded.
+/// Time the algorithm's temps delivered at the effective maximum basal rate. Loop's cap is its
+/// maximum basal rate setting. oref's is <c>maxSafeBasal</c>, the lowest of <c>max_basal</c> and
+/// two safety multiples of the schedule; none of those is stored, so a temp is at it where the
+/// cycle that set it says it cut the rate to it.
 /// </summary>
 public class LoopHealthMaxBasal
 {
@@ -212,18 +211,9 @@ public enum LoopHealthCap
     /// <summary>Loop's maximum basal rate setting.</summary>
     LoopMaximumBasalRate,
 
-    /// <summary>oref <c>max_basal</c>.</summary>
-    OrefMaxBasal,
-
-    /// <summary>oref <c>max_daily_safety_multiplier</c> × the day's highest scheduled rate.</summary>
-    OrefMaxDailySafetyMultiplier,
-
-    /// <summary>oref <c>current_basal_safety_multiplier</c> × the scheduled rate in force.</summary>
-    OrefCurrentBasalSafetyMultiplier,
-
     /// <summary>
-    /// oref's <c>maxSafeBasal</c> as its reason gives it, where the limits it is the lowest of are
-    /// not recorded, so which of them was binding is unknown.
+    /// oref's <c>maxSafeBasal</c>. Which of the limits it is the lowest of was binding is not
+    /// recorded.
     /// </summary>
     OrefMaxSafeBasal,
 }
@@ -257,13 +247,6 @@ public class LoopHealthLimits
     /// <summary>U/h.</summary>
     public double? LoopMaximumBasalRate { get; set; }
 
-    /// <summary>U, from the suggestion's key or its reason.</summary>
+    /// <summary>U, as an oref reason reported it when it bound.</summary>
     public double? OrefMaxIob { get; set; }
-
-    /// <summary>U/h.</summary>
-    public double? OrefMaxBasal { get; set; }
-
-    public double? OrefMaxDailySafetyMultiplier { get; set; }
-
-    public double? OrefCurrentBasalSafetyMultiplier { get; set; }
 }

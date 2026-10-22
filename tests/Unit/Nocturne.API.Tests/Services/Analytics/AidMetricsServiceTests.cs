@@ -92,7 +92,7 @@ public class AidMetricsServiceTests
             Algorithm = AidAlgorithm.Trio,
             StartDate = start,
             EndDate = end,
-            ApsSnapshots = snapshots
+            LoopCycles = snapshots
         };
 
         var metrics = strategy.CalculateMetrics(context);
@@ -121,7 +121,7 @@ public class AidMetricsServiceTests
             Algorithm = AidAlgorithm.Loop,
             StartDate = start,
             EndDate = end,
-            ApsSnapshots = snapshots
+            LoopCycles = snapshots
         };
 
         var metrics = strategy.CalculateMetrics(context);
@@ -143,7 +143,7 @@ public class AidMetricsServiceTests
             Algorithm = AidAlgorithm.Trio,
             StartDate = start,
             EndDate = end,
-            ApsSnapshots = []
+            LoopCycles = []
         };
 
         var metrics = strategy.CalculateMetrics(context);

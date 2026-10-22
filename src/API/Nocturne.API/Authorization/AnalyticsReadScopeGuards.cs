@@ -411,10 +411,12 @@ internal static class StatisticsReadScopeGuard
 /// served in their own right, and the profile names.
 /// </para>
 /// <para>
-/// Loop health reads the APS loop cycles, which are devices: the loop gaps, the cap and
-/// <c>max_iob</c> shares, the suggestions and the sensitivity ratio. Zero delivery and the
-/// automatic boluses are treatments; the closed-loop and pump shares, and the unrecorded delivery
-/// gaps, draw on both. The limits are therapy settings, and oref's are reported by the cycles.
+/// Loop health reads the APS loop cycles, which are devices: the loop gaps, the <c>max_iob</c>
+/// share, the suggestions and the sensitivity ratio. Zero delivery and the automatic boluses are
+/// treatments; the closed-loop and pump shares, and the unrecorded delivery gaps, draw on both.
+/// The limits are therapy settings, and oref's are reported by the cycles. Time at the maximum
+/// basal rate is measured on delivered basal against the cap the cycles say was in force, and for
+/// Loop the hours at the cap show where its setting sits, so it needs all three.
 /// </para>
 /// <para>The response is built per request and never cached server-side, so it is narrowed in place.</para>
 /// </remarks>
@@ -528,9 +530,9 @@ internal static class LoopAnalysisReadScopeGuard
         Withhold(!glucose, LoopAnalysisSeries.CgmActivity);
         Withhold(!treatments || !devices, LoopAnalysisSeries.LoopActivity, LoopAnalysisSeries.UnrecordedDelivery);
         Withhold(!treatments, LoopAnalysisSeries.ZeroDelivery, LoopAnalysisSeries.AutomaticBoluses);
+        Withhold(!devices || !treatments || !therapy, LoopAnalysisSeries.MaxBasal);
         Withhold(!devices,
             LoopAnalysisSeries.LoopGaps,
-            LoopAnalysisSeries.MaxBasal,
             LoopAnalysisSeries.AtMaxIob,
             LoopAnalysisSeries.SuggestedNotEnacted,
             LoopAnalysisSeries.SensitivityRatio);
@@ -577,13 +579,7 @@ internal static class LoopAnalysisReadScopeGuard
         if (Hidden(LoopAnalysisSeries.SuggestedNotEnacted)) range.SuggestedNotEnacted = null;
         if (Hidden(LoopAnalysisSeries.SensitivityRatio)) range.SensitivityRatio = null;
         if (Hidden(LoopAnalysisSeries.LoopLimits)) range.Limits.LoopMaximumBasalRate = null;
-        if (Hidden(LoopAnalysisSeries.OrefLimits))
-        {
-            range.Limits.OrefMaxIob = null;
-            range.Limits.OrefMaxBasal = null;
-            range.Limits.OrefMaxDailySafetyMultiplier = null;
-            range.Limits.OrefCurrentBasalSafetyMultiplier = null;
-        }
+        if (Hidden(LoopAnalysisSeries.OrefLimits)) range.Limits.OrefMaxIob = null;
     }
 
     private static void Narrow(DailyProfileRange range, HashSet<LoopAnalysisSeries> withheld)

@@ -20,21 +20,21 @@ public class LoopHealthCalculatorTests
         long to,
         IEnumerable<ApsLoopCycle>? cycles = null,
         IEnumerable<DeliveredBasalSegment>? delivered = null,
-        IEnumerable<RateSegment>? scheduled = null,
         IEnumerable<InsulinDose>? doses = null,
         IntervalSet? recorded = null,
+        IntervalSet? inferable = null,
+        IEnumerable<SensorGlucose>? glucose = null,
         StepTimeline<double>? loopMaximum = null,
         LoopAnalysisMasks? masks = null,
         LoopAnalysisMaskSources? sources = null)
     {
-        var scheduledList = (scheduled ?? []).ToList();
         var inputs = new LoopHealthInputs
         {
             Zone = Sydney,
             Cycles = [.. cycles ?? []],
-            Insulin = new NetInsulinAboveSchedule(delivered ?? [], scheduledList, doses ?? []),
-            Evidence = new BasalEvidence(recorded ?? IntervalSet.Empty, IntervalSet.Empty, IntervalSet.Empty),
-            Scheduled = scheduledList,
+            Insulin = new NetInsulinAboveSchedule(delivered ?? [], [], doses ?? []),
+            Evidence = new BasalEvidence(recorded ?? IntervalSet.Empty, IntervalSet.Empty, inferable ?? IntervalSet.Empty),
+            Glucose = [.. glucose ?? []],
             LoopMaximumBasalRate = loopMaximum,
         };
         var mask = LoopAnalysisMask.Build(
@@ -52,11 +52,7 @@ public class LoopHealthCalculatorTests
         bool hasReason = true,
         double? iob = null,
         double? sensitivity = null,
-        bool? suggestedChange = true,
-        double? maxIob = null,
-        double? maxBasal = null,
-        double? daily = null,
-        double? current = null) => new()
+        bool? suggestedChange = true) => new()
         {
             Timestamp = DateTimeOffset.FromUnixTimeMilliseconds(mills).UtcDateTime,
             AidAlgorithm = algorithm,
@@ -65,14 +61,9 @@ public class LoopHealthCalculatorTests
             EnactedDuration = rate is null ? null : 30,
             Iob = iob,
             SensitivityRatio = sensitivity,
-            HasSuggestion = algorithm != AidAlgorithm.Loop,
             HasReason = algorithm != AidAlgorithm.Loop && hasReason,
             SuggestedChange = algorithm != AidAlgorithm.Loop ? suggestedChange : null,
             LimitReason = limitReason,
-            MaxIob = maxIob,
-            MaxBasal = maxBasal,
-            MaxDailySafetyMultiplier = daily,
-            CurrentBasalSafetyMultiplier = current,
         };
 
     private static IEnumerable<ApsLoopCycle> EveryFiveMinutes(long from, long to, Func<long, ApsLoopCycle> cycle)
@@ -81,32 +72,42 @@ public class LoopHealthCalculatorTests
             yield return cycle(t);
     }
 
-    [Fact]
-    public void OrefReason_ReadsTheCapsItNames()
+    /// <summary>The algorithm temp each enacting cycle set, running until the next one did.</summary>
+    private static List<DeliveredBasalSegment> TempsSetBy(IReadOnlyList<ApsLoopCycle> cycles, long to)
     {
-        var capped = OrefReason.Parse("Eventual BG 180 >= 100, insulinReq 0.9. Microbolusing 0.4U. adj. req. rate: 3.2 to maxSafeBasal: 2.4, temp 1.2 < 2.4U/hr.");
-        capped.Should().Be(new OrefReason(true, 2.4, false, null));
-
-        OrefReason.Parse("Eventual BG 200 >= 100, IOB 3.21 > max_iob 3; setting current basal of 0.8 as temp.")
-            .Should().Be(new OrefReason(false, null, true, 3));
-        OrefReason.Parse("Eventual BG 200 >= 100, max_iob 3.5,  insulinReq 0.4; maxBolus 1")
-            .Should().Be(new OrefReason(false, null, true, 3.5));
-        OrefReason.Parse(null).Should().Be(default(OrefReason));
+        var setters = cycles.Where(c => c.Enacted && c.EnactedRate is not null).ToList();
+        return [.. setters.Select((c, i) => new DeliveredBasalSegment(
+            c.Mills, i + 1 < setters.Count ? setters[i + 1].Mills : to, c.EnactedRate!.Value, BasalDeliveryOrigin.Algorithm))];
     }
+
+    private const string Capped = "adj. req. rate: 3.2 to maxSafeBasal: 2.4, temp 1.2 < 2.4U/hr.";
+
+    // Shapes after oref0 lib/determine-basal/determine-basal.js, AAPS DetermineBasalSMB.kt (which
+    // formats numbers in the phone's locale) and Trio's determine-basal; the values are made up.
+    [Theory]
+    [InlineData("COB: 0, Dev: 25, BGI: -1.5, ISF: 45, CR: 9, minPredBG 128, minGuardBG 118, IOBpredBG 140; Eventual BG 156 >= 100, insulinReq 0.62. adj. req. rate: 3.24 to maxSafeBasal: 2.8, temp 1.2 < 2.8U/hr. ", true, false, null)]
+    [InlineData("COB: 0, Dev: 40, BGI: -0.8, ISF: 45, CR: 9, Target: 100; Eventual BG 210 >= 100, IOB 3.21 > max_iob 3; setting current basal of 0.9 as temp. ", false, true, 3.0)]
+    [InlineData("COB: 0, Dev: 31, BGI: -1,2, ISF: 2,5, CR: 9, Target: 5,6, minPredBG 7,1; Eventual BG 9,4 >= 5,6, max_iob 3,5, insulinReq 0,8; maxBolus 1,2. adj. req. rate: 3,2 to maxSafeBasal: 2,4, ", true, true, 3.5)]
+    [InlineData("COB: 0, Dev: 31, BGI: -1.2, ISF: 45, CR: 9, Target: 100; Eventual BG 170 >= 100, max_iob 2,  insulinReq 0.5; maxBolus 1; setting 30m low temp of 0.4U/h. ", false, true, 2.0)]
+    [InlineData("Autosens/Dynamic Limit: 1.2 (1.05), AF: 1, SMB Ratio: 0.5; Eventual BG 180 >= 100, insulinReq 0.9. Microbolusing 0.4U. adj. req. rate: 3.1 to maxSafeBasal: 2.6, temp 1.2 < 2.6U/hr. ", true, false, null)]
+    [InlineData("Autosens/Dynamic Limit: 1.2 (1.05), AF: 1, SMB Ratio: 0.5; Eventual BG 120 >= 100, temp 1.2 >~ req 1.15U/hr. ", false, false, null)]
+    public void OrefReason_ReadsTheLimitsEachSystemNames(string reason, bool capped, bool atMaxIob, double? maxIob) =>
+        OrefReason.Parse(reason).Should().Be(new OrefReason(capped, atMaxIob, maxIob));
 
     [Fact]
     public void UnknownLimits_AreReportedUnknownRatherThanDefaulted()
     {
         var from = Day0;
         var to = Day0 + 2 * Hour;
-        var result = Calculate(from, to, cycles:
+        List<ApsLoopCycle> cycles =
         [
             .. EveryFiveMinutes(from, from + Hour, t => Cycle(t, rate: 4.0, hasReason: false)),
             .. EveryFiveMinutes(from + Hour, to, t => Cycle(t, AidAlgorithm.Loop, rate: 4.0)),
-        ]);
+        ];
+        var result = Calculate(from, to, cycles, TempsSetBy(cycles, to));
 
         var maxBasal = result.MaxBasal!;
-        maxBasal.AtCap.Percent.Should().BeNull("no cycle's cap is known: no reason to read and no Loop setting");
+        maxBasal.AtCap.Percent.Should().BeNull("no temp's cap is known: no reason to read and no Loop setting");
         maxBasal.CapKnown.Percent.Should().Be(0);
         maxBasal.Binding.Should().BeEmpty();
         result.AtMaxIob.Should().BeNull("only oref cycles with a reason say whether max_iob bound");
@@ -114,43 +115,39 @@ public class LoopHealthCalculatorTests
     }
 
     [Fact]
-    public void OrefWithoutRecordedLimits_TakesTheCapItsReasonReports()
+    public void ATempHeldThroughCyclesThatEnactNothing_IsAtTheCapForAsLongAsItRuns()
+    {
+        // Enact at the cap, hold for half an hour, enact below it, hold again.
+        var from = Day0;
+        var to = Day0 + Hour;
+        List<ApsLoopCycle> cycles = [.. EveryFiveMinutes(from, to, t => (t - from) switch
+        {
+            0 => Cycle(t, rate: 2.4, limitReason: Capped),
+            30 * Minute => Cycle(t, rate: 1.0),
+            _ => Cycle(t, enacted: false),
+        })];
+        var result = Calculate(from, to, cycles, TempsSetBy(cycles, to));
+
+        var maxBasal = result.MaxBasal!;
+        maxBasal.CapKnown.Percent.Should().Be(100);
+        maxBasal.AtCap.Percent.Should().Be(50);
+        maxBasal.Binding.Should().ContainSingle().Which.Should().BeEquivalentTo(new LoopHealthCapShare
+        {
+            Cap = LoopHealthCap.OrefMaxSafeBasal, Minutes = 30, Percent = 100,
+        });
+    }
+
+    [Fact]
+    public void ATempWithNoCycleThatSetIt_HasNoKnownCap()
     {
         var from = Day0;
         var to = Day0 + Hour;
-        var result = Calculate(from, to, cycles: EveryFiveMinutes(from, to, t => t < from + 15 * Minute
-            ? Cycle(t, rate: 2.4, limitReason: "adj. req. rate: 3.2 to maxSafeBasal: 2.4, temp 1.2 < 2.4U/hr.")
-            : Cycle(t, rate: 1.0)));
+        var result = Calculate(from, to,
+            [Cycle(from, rate: 1.0)],
+            [new(from, from + 30 * Minute, 1.0, BasalDeliveryOrigin.Algorithm), new(from + 30 * Minute, to, 2.4, BasalDeliveryOrigin.Algorithm)]);
 
-        var maxBasal = result.MaxBasal!;
-        maxBasal.CapKnown.Percent.Should().Be(100, "a reason that names no cap says none was cut");
-        maxBasal.AtCap.Percent.Should().Be(25);
-        maxBasal.Binding.Should().ContainSingle().Which.Should().BeEquivalentTo(new LoopHealthCapShare
-        {
-            Cap = LoopHealthCap.OrefMaxSafeBasal, Minutes = 15, Percent = 100,
-        });
-        result.Limits.OrefMaxBasal.Should().BeNull();
-    }
-
-    [Theory]
-    [InlineData(1.5, 3, 4, 1.5, LoopHealthCap.OrefMaxBasal)]
-    [InlineData(5.0, 2, 5, 2.0, LoopHealthCap.OrefMaxDailySafetyMultiplier)]
-    [InlineData(5.0, 3, 2, 1.0, LoopHealthCap.OrefCurrentBasalSafetyMultiplier)]
-    public void OrefWithRecordedLimits_NamesTheLowestCapAsBinding(
-        double maxBasal, double daily, double current, double cap, LoopHealthCap binding)
-    {
-        // The schedule runs 0.5 U/h now and peaks at 1.0 U/h later in the day.
-        var from = Day0 + Hour;
-        var to = from + Hour;
-        RateSegment[] schedule = [new(Day0, Day0 + 12 * Hour, 0.5), new(Day0 + 12 * Hour, Day0 + 24 * Hour, 1.0)];
-        var result = Calculate(from, to, scheduled: schedule, cycles: EveryFiveMinutes(from, to, t =>
-            Cycle(t, rate: t < from + 30 * Minute ? cap : cap / 2, maxBasal: maxBasal, daily: daily, current: current)));
-
-        result.MaxBasal!.AtCap.Percent.Should().Be(50);
-        result.MaxBasal.Binding.Should().ContainSingle().Which.Cap.Should().Be(binding);
-        result.Limits.OrefMaxBasal.Should().Be(maxBasal);
-        result.Limits.OrefMaxDailySafetyMultiplier.Should().Be(daily);
-        result.Limits.OrefCurrentBasalSafetyMultiplier.Should().Be(current);
+        result.MaxBasal!.CapKnown.Percent.Should().Be(50);
+        result.MaxBasal.AtCap.Percent.Should().Be(0);
     }
 
     [Fact]
@@ -159,10 +156,11 @@ public class LoopHealthCalculatorTests
         var from = Day0;
         var to = Day0 + Hour;
         var maximum = StepTimeline<double>.LatestStartedWins([new Step<double>(Day0 - Hour, to, 2.0)]);
-        var result = Calculate(from, to, loopMaximum: maximum, cycles: EveryFiveMinutes(from, to, t =>
-            Cycle(t, AidAlgorithm.Loop, rate: t < from + 45 * Minute ? 1.98 : 1.0)));
+        List<ApsLoopCycle> cycles = [.. EveryFiveMinutes(from, to, t =>
+            Cycle(t, AidAlgorithm.Loop, rate: t < from + 30 * Minute ? 1.98 : t < from + 45 * Minute ? 1.97 : 1.0))];
+        var result = Calculate(from, to, cycles, TempsSetBy(cycles, to), loopMaximum: maximum);
 
-        result.MaxBasal!.AtCap.Percent.Should().Be(75, "1.98 U/h is within a pump step of the 2.0 U/h maximum");
+        result.MaxBasal!.AtCap.Percent.Should().Be(50, "1.98 U/h is within half a pump step of 2.0 U/h and 1.97 is not");
         result.MaxBasal.Binding.Should().ContainSingle().Which.Cap.Should().Be(LoopHealthCap.LoopMaximumBasalRate);
         result.Limits.LoopMaximumBasalRate.Should().Be(2.0);
         result.AtMaxIob.Should().BeNull();
@@ -296,18 +294,32 @@ public class LoopHealthCalculatorTests
     }
 
     [Fact]
-    public void UnrecordedDelivery_FindsALoopRunningWithNoTempRecords()
+    public void UnrecordedDelivery_IsLoopTimeWithDeliveryUnknown()
     {
         var from = Day0;
         var to = Day0 + 6 * Hour;
         var result = Calculate(from, to,
             cycles: EveryFiveMinutes(from, to + 5 * Minute, t => Cycle(t))
                 .Where(c => c.Mills <= from + 3 * Hour || c.Mills >= from + 3 * Hour + 30 * Minute),
-            recorded: IntervalSet.Of(from, from + Hour));
+            recorded: IntervalSet.Of(from, from + Hour),
+            inferable: IntervalSet.Of(from + Hour, from + 2 * Hour));
 
-        var gap = result.Cadence.UnrecordedDelivery!.Gaps.Should().ContainSingle("a half-hour loop gap does not split it").Subject;
-        gap.Minutes.Should().Be(300);
+        var gaps = result.Cadence.UnrecordedDelivery!;
+        gaps.Gaps.Select(g => g.Minutes).Should().Equal([60.0, 150.0],
+            "the schedule is inferred for the second hour, and the loop's own gap is not loop time");
         result.Cadence.LoopGaps!.Count.Should().Be(1);
+    }
+
+    [Fact]
+    public void ALoopThatStopsBeforeTheDataDoes_LeavesAGapToTheEndOfTheData()
+    {
+        var from = Day0;
+        var to = Day0 + 6 * Hour;
+        var result = Calculate(from, to,
+            cycles: EveryFiveMinutes(from, from + 2 * Hour + Minute, t => Cycle(t)),
+            glucose: [new SensorGlucose { Timestamp = DateTimeOffset.FromUnixTimeMilliseconds(from + 4 * Hour).UtcDateTime, Mgdl = 120 }]);
+
+        result.Cadence.LoopGaps!.Gaps.Should().ContainSingle().Which.Minutes.Should().Be(120);
     }
 
     [Fact]
@@ -322,6 +334,29 @@ public class LoopHealthCalculatorTests
         result.Activity.ClosedLoop!.Hours[0].Percent.Should().Be(50);
         result.Activity.ClosedLoop.Hours[1].Percent.Should().Be(0);
         result.Activity.ClosedLoop.Percent.Should().Be(25);
+    }
+
+    [Fact]
+    public void Activity_CountsCyclesFasterThanFiveMinutesOnce()
+    {
+        // Every two minutes for the first half hour: 33 minutes covered, not fifteen credits of five.
+        var from = Day0;
+        var to = Day0 + Hour;
+        var cycles = Enumerable.Range(0, 15).Select(i => Cycle(from + i * 2 * Minute));
+        var result = Calculate(from, to, cycles);
+
+        result.Activity.Pump!.Percent.Should().Be(55);
+        result.Activity.ClosedLoop!.Percent.Should().Be(55);
+    }
+
+    [Fact]
+    public void ACycleTwoUploadersPosted_IsEnactedWhereEitherSawItEnacted()
+    {
+        var from = Day0;
+        var to = Day0 + Hour;
+        var result = Calculate(from, to, cycles: [Cycle(from, enacted: false), Cycle(from, enacted: true)]);
+
+        result.Activity.ClosedLoop!.Percent.Should().Be(SlotSummary.Round(500.0 / 60));
     }
 
     [Fact]

@@ -67,14 +67,14 @@ internal sealed partial class LoopAnalysisService(
             filter,
             window => LoadDailyProfileAsync(window, zone, ct),
             (loaded, window) => DailyProfileCalculator.Calculate(
-                loaded.Inputs,
-                LoopAnalysisMask.Build(filter.Masks, window.From, window.To, zone, loaded.Sources),
-                window.From,
-                window.To));
+                loaded.Inputs, Mask(filter, window, zone, loaded.Sources), window.From, window.To));
         return new DailyProfileResponse { Primary = primary, Comparison = comparison };
     }
 
-    /// <summary>The primary and comparison ranges, from one load where they touch.</summary>
+    /// <summary>
+    /// Computes the primary range and the comparison: from one load over both where they touch or
+    /// overlap, else one load each.
+    /// </summary>
     private static async Task<(TRange Primary, TRange? Comparison)> ForRangesAsync<TLoaded, TRange>(
         LoopAnalysisFilter filter, Func<Window, Task<TLoaded>> load, Func<TLoaded, Window, TRange> calculate)
         where TRange : class
@@ -90,9 +90,13 @@ internal sealed partial class LoopAnalysisService(
             return (calculate(both, primary), calculate(both, other));
         }
 
-        return (calculate(await load(primary), primary),
-            comparison is { } separate ? calculate(await load(separate), separate) : null);
+        var first = calculate(await load(primary), primary);
+        return (first, comparison is { } separate ? calculate(await load(separate), separate) : null);
     }
+
+    private static LoopAnalysisMask Mask(
+        LoopAnalysisFilter filter, Window window, TimeZoneInfo zone, LoopAnalysisMaskSources sources) =>
+        LoopAnalysisMask.Build(filter.Masks, window.From, window.To, zone, sources);
 
     private sealed record DailyProfileLoaded(DailyProfileInputs Inputs, LoopAnalysisMaskSources Sources);
 
@@ -132,11 +136,12 @@ internal sealed partial class LoopAnalysisService(
                 common.Boluses.Where(b => b.Insulin > 0).Select(b => b.Mills)
                     .Concat(carbs.Where(c => c.Carbs > 0).Select(c => c.Mills))),
             TargetAt = await TargetRangesAsync(
-                delivery.HasTherapy ? common.Profiles : [], TemporaryTargets(common.Spans, to), zone, to, ct),
+                delivery.HasTherapy ? common.Profiles : [], ActiveTemporaryTargets(common.Spans, to), zone, to, ct),
             Profiles = common.ProfileIntervals,
         };
 
-        return new DailyProfileLoaded(inputs, Sources(common, snapshotMills, zone, to));
+        return new DailyProfileLoaded(
+            inputs, MaskSources(common.Spans, common.Devices, snapshotMills, common.ProfileIntervals, zone, to));
     }
 
     /// <summary>The reads every tab shares, issued together.</summary>
@@ -179,7 +184,6 @@ internal sealed partial class LoopAnalysisService(
     private sealed record Delivery(
         NetInsulinAboveSchedule Insulin,
         BasalEvidence Evidence,
-        List<RateSegment> Scheduled,
         TherapyTimeline Timeline,
         long TickStart,
         bool HasTherapy);
@@ -213,21 +217,27 @@ internal sealed partial class LoopAnalysisService(
             .Select(b => new InsulinDose(b.Mills, b.Insulin, b.Kind == BolusKind.Algorithm));
 
         return new Delivery(
-            new NetInsulinAboveSchedule(delivered, scheduled, doses), evidence, scheduled, timeline, tickStart, hasTherapy);
+            new NetInsulinAboveSchedule(delivered, scheduled, doses), evidence, timeline, tickStart, hasTherapy);
     }
 
-    private static LoopAnalysisMaskSources Sources(Common common, IReadOnlyList<long> snapshotMills, TimeZoneInfo zone, long to) => new()
+    private static LoopAnalysisMaskSources MaskSources(
+        Dictionary<StateSpanCategory, List<StateSpan>> spans,
+        IEnumerable<PatientDevice> devices,
+        IReadOnlyList<long> snapshotMills,
+        IReadOnlyList<ProfileInterval> profiles,
+        TimeZoneInfo zone,
+        long to) => new()
     {
-        Overrides = [.. SpansOf(common.Spans, StateSpanCategory.Override, to).Select(o => o.Interval)],
-        TemporaryTargets = [.. TemporaryTargets(common.Spans, to).Select(s => s.Interval)],
-        Exercise = [.. SpansOf(common.Spans, StateSpanCategory.Exercise, to).Select(s => s.Interval)],
-        Illness = [.. SpansOf(common.Spans, StateSpanCategory.Illness, to).Select(s => s.Interval)],
-        DataExclusions = [.. SpansOf(common.Spans, StateSpanCategory.DataExclusion, to).Select(s => s.Interval)],
-        OpenLoop = OpenLoop(common.Spans, common.Devices, snapshotMills, zone, to).Intervals,
-        Profiles = common.ProfileIntervals,
+        Overrides = [.. SpansOf(spans, StateSpanCategory.Override, to).Select(s => s.Interval)],
+        TemporaryTargets = [.. ActiveTemporaryTargets(spans, to).Select(s => s.Interval)],
+        Exercise = [.. SpansOf(spans, StateSpanCategory.Exercise, to).Select(s => s.Interval)],
+        Illness = [.. SpansOf(spans, StateSpanCategory.Illness, to).Select(s => s.Interval)],
+        DataExclusions = [.. SpansOf(spans, StateSpanCategory.DataExclusion, to).Select(s => s.Interval)],
+        OpenLoop = OpenLoop(spans, devices, snapshotMills, zone, to).Intervals,
+        Profiles = profiles,
     };
 
-    private static List<(StateSpan Span, MillsInterval Interval)> TemporaryTargets(
+    private static List<(StateSpan Span, MillsInterval Interval)> ActiveTemporaryTargets(
         Dictionary<StateSpanCategory, List<StateSpan>> spans, long to) =>
         [.. SpansOf(spans, StateSpanCategory.TemporaryTarget, to)
             .Where(s => s.Span.State != nameof(TemporaryTargetState.Cancelled))];

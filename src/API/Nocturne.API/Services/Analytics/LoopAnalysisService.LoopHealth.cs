@@ -8,8 +8,9 @@ using Nocturne.Core.Models.V4;
 namespace Nocturne.API.Services.Analytics;
 
 /// <remarks>
-/// Loop health reads loop cycles over the same lookback and evidence window as the temp basals, so
-/// a loop gap that straddles either end of a range is bounded by the cycles on both sides of it.
+/// Loop health reads the loop cycles from <see cref="LoopHealthCalculator.TempLookbackMs"/> before
+/// a range, so the cycle that set a temp running at its start is read, and the repository adds the
+/// nearest cycle beyond each end, so a loop gap that straddles either end is bounded.
 /// </remarks>
 internal sealed partial class LoopAnalysisService
 {
@@ -19,7 +20,7 @@ internal sealed partial class LoopAnalysisService
         var (primary, comparison) = await ForRangesAsync(
             filter,
             window => LoadLoopHealthAsync(window, zone, ct),
-            (loaded, window) => CalculateLoopHealth(loaded, filter, window));
+            (loaded, window) => CalculateLoopHealth(loaded, filter, window, zone));
         return new LoopHealthResponse { Primary = primary, Comparison = comparison };
     }
 
@@ -33,7 +34,7 @@ internal sealed partial class LoopAnalysisService
     {
         var to = window.To;
         var cyclesTask = apsSnapshotRepository.GetLoopCyclesAsync(
-            ToUtc(window.From - DailyProfileCalculator.ActingMs), ToUtc(to + NetInsulinAboveSchedule.MaxInferredGapMs), ct);
+            ToUtc(window.From - LoopHealthCalculator.TempLookbackMs), ToUtc(to), ct);
         var commonTask = LoadCommonAsync(window, ct);
         await Task.WhenAll(cyclesTask, commonTask);
 
@@ -48,28 +49,29 @@ internal sealed partial class LoopAnalysisService
             Cycles = cycles,
             Insulin = delivery.Insulin,
             Evidence = delivery.Evidence,
-            Scheduled = delivery.Scheduled,
             Glucose = common.Glucose,
             LoopMaximumBasalRate = cycles.Any(c => c.AidAlgorithm == AidAlgorithm.Loop)
                 ? await LoopMaximumBasalRateAsync(common.Profiles, to, ct)
                 : null,
         };
 
-        return new LoopHealthLoaded(inputs, Sources(common, snapshotMills, zone, to), common.Devices, common.TempBasals);
+        return new LoopHealthLoaded(
+            inputs,
+            MaskSources(common.Spans, common.Devices, snapshotMills, common.ProfileIntervals, zone, to),
+            common.Devices,
+            common.TempBasals);
     }
 
     /// <summary>
     /// <see cref="LoopHealthCalculator"/> over the window, with the overall activity percentages from
     /// <see cref="AidSystemMetricsReader"/> over the same records, unmasked.
     /// </summary>
-    private LoopHealthRange CalculateLoopHealth(LoopHealthLoaded loaded, LoopAnalysisFilter filter, Window window)
+    private LoopHealthRange CalculateLoopHealth(
+        LoopHealthLoaded loaded, LoopAnalysisFilter filter, Window window, TimeZoneInfo zone)
     {
         var inputs = loaded.Inputs;
         var range = LoopHealthCalculator.Calculate(
-            inputs,
-            LoopAnalysisMask.Build(filter.Masks, window.From, window.To, inputs.Zone, loaded.Sources),
-            window.From,
-            window.To);
+            inputs, Mask(filter, window, zone, loaded.Sources), window.From, window.To);
 
         var start = ToUtc(window.From);
         var end = ToUtc(window.To);
