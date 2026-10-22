@@ -11,6 +11,10 @@ namespace Nocturne.Infrastructure.Data.Services;
 /// </summary>
 public sealed class CategoryReadContext : ICategoryReadContext
 {
+    internal CategoryReadContext()
+    {
+    }
+
     public bool IsShare { get; private set; }
 
     public string? VisibleCategoriesCsv { get; private set; }
@@ -20,8 +24,6 @@ public sealed class CategoryReadContext : ICategoryReadContext
     private bool _memberHistoryClamped;
 
     public bool IsHistoryClamped => (IsShare && !FullHistory) || _memberHistoryClamped;
-
-    public bool BypassesTenantCaches => IsHistoryClamped || IsShare;
 
     public void MarkShare() => IsShare = true;
 

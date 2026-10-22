@@ -7,6 +7,7 @@ using Nocturne.Core.Contracts.Multitenancy;
 using Nocturne.Core.Contracts.Profiles.Resolvers;
 using Nocturne.Core.Contracts.V4.Repositories;
 using Nocturne.Core.Models.V4;
+using Nocturne.API.Tests.Infrastructure;
 
 namespace Nocturne.API.Tests.Services.Profiles.Resolvers;
 
@@ -15,27 +16,23 @@ public class BasalRateResolverTests : IDisposable
     private readonly Mock<IBasalScheduleRepository> _repo = new();
     private readonly Mock<ITherapySettingsRepository> _therapyRepo = new();
     private readonly Mock<IPatientRecordRepository> _patientRecordRepo = new();
-    private readonly Mock<IActiveProfileResolver> _activeProfileResolver = new();
-    private readonly Mock<ITenantAccessor> _tenantAccessor = new();
-    private readonly Mock<ICategoryReadContext> _categoryReadContext = new();
+    private readonly Mock<IActiveProfileResolver> _activeProfileResolver = ActiveProfileResolverMock.WithDefault();
     private readonly MemoryCache _cache = new(new MemoryCacheOptions());
     private readonly BasalRateResolver _sut;
 
-    private static readonly Guid TenantId = Guid.Parse("aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee");
 
     // 2024-01-15 12:00:00 UTC
     private const long NoonMills = 1705320000000;
 
     public BasalRateResolverTests()
     {
-        _tenantAccessor.Setup(t => t.TenantId).Returns(TenantId);
 
         _sut = new BasalRateResolver(
             _repo.Object,
             _therapyRepo.Object,
             _patientRecordRepo.Object,
             _activeProfileResolver.Object,
-            new ProfileVersionCache(_tenantAccessor.Object, _categoryReadContext.Object, _cache),
+            new ProfileVersionCache(TestTenantCache.Create(_cache)),
             NullLogger<BasalRateResolver>.Instance);
     }
 
@@ -126,7 +123,7 @@ public class BasalRateResolverTests : IDisposable
         private void SetupSpans(params ProfileSpan[] spans)
         {
             _activeProfileResolver
-                .Setup(r => r.GetActiveProfileSpansForRangeAsync(
+                .Setup(r => r.GetProfileSpansForRangeAsync(
                     It.IsAny<long>(), It.IsAny<long>(), It.IsAny<CancellationToken>()))
                 .ReturnsAsync(spans.ToList());
         }
@@ -207,7 +204,7 @@ public class BasalRateResolverTests : IDisposable
                 rateAt(MidnightMills + i * 300_000L);
 
             _activeProfileResolver.Verify(
-                r => r.GetActiveProfileSpansForRangeAsync(
+                r => r.GetProfileSpansForRangeAsync(
                     It.IsAny<long>(), It.IsAny<long>(), It.IsAny<CancellationToken>()),
                 Times.Once);
         }
@@ -221,12 +218,32 @@ public class BasalRateResolverTests : IDisposable
             // "Default" is NOT set up — returns null → DefaultBasalRate fallback
 
             var spanStart = MidnightMills + 3_600_000;
-            SetupSpans(new ProfileSpan("Profile2", spanStart, null, null));
+            SetupSpans(
+                new ProfileSpan("Default", MidnightMills, spanStart, null),
+                new ProfileSpan("Profile2", spanStart, EndOfDayMills, null));
 
             var rateAt = await _sut.BuildResolverAsync(MidnightMills, EndOfDayMills);
 
             rateAt(spanStart).Should().Be(2.0);      // exactly at start — Profile2 active
-            rateAt(spanStart - 1).Should().Be(1.0);  // one ms before — no span, Default schedule null → DefaultBasalRate
+            rateAt(spanStart - 1).Should().Be(1.0);  // one ms before — Default, whose schedule is null → DefaultBasalRate
+        }
+
+        [Fact]
+        public async Task AScheduleVersionInsideTheRange_AppliesFromItsOwnStart()
+        {
+            var noonMills = MidnightMills + 43_200_000;
+            var older = MakeSchedule((0, 0.8));
+            older.Timestamp = DateTimeOffset.FromUnixTimeMilliseconds(MidnightMills).UtcDateTime.AddDays(-1);
+            var newer = MakeSchedule((0, 1.4));
+            newer.Timestamp = DateTimeOffset.FromUnixTimeMilliseconds(noonMills).UtcDateTime;
+            _repo.Setup(r => r.GetByProfileNameAsync("Default", It.IsAny<CancellationToken>()))
+                .ReturnsAsync(new[] { newer, older });
+            SetupSpans(new ProfileSpan("Default", MidnightMills, EndOfDayMills, null));
+
+            var rateAt = await _sut.BuildResolverAsync(MidnightMills, EndOfDayMills);
+
+            rateAt(MidnightMills + 3_600_000).Should().Be(0.8);
+            rateAt(noonMills + 3_600_000).Should().Be(1.4);
         }
     }
 

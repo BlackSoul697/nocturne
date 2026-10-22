@@ -25,7 +25,6 @@ namespace Nocturne.API.Services.V4;
 /// <seealso cref="IDecomposer{T}"/>
 public class EntryDecomposer : DecomposerBase, IEntryDecomposer, IDecomposer<Entry>
 {
-    private readonly NocturneDbContext _dbContext;
     private readonly ISensorGlucoseRepository _sensorGlucoseRepository;
     private readonly IMeterGlucoseRepository _meterGlucoseRepository;
     private readonly ICalibrationRepository _calibrationRepository;
@@ -34,7 +33,6 @@ public class EntryDecomposer : DecomposerBase, IEntryDecomposer, IDecomposer<Ent
     private readonly IAuditContext _auditContext;
 
     public EntryDecomposer(
-        NocturneDbContext dbContext,
         ISensorGlucoseRepository sensorGlucoseRepository,
         IMeterGlucoseRepository meterGlucoseRepository,
         ICalibrationRepository calibrationRepository,
@@ -44,7 +42,6 @@ public class EntryDecomposer : DecomposerBase, IEntryDecomposer, IDecomposer<Ent
         ILogger<EntryDecomposer> logger)
         : base(logger)
     {
-        _dbContext = dbContext;
         _sensorGlucoseRepository = sensorGlucoseRepository;
         _meterGlucoseRepository = meterGlucoseRepository;
         _calibrationRepository = calibrationRepository;
@@ -349,6 +346,10 @@ public class EntryDecomposer : DecomposerBase, IEntryDecomposer, IDecomposer<Ent
             Direction = MapDirection(entry.Direction),
             TrendRate = entry.TrendRate,
             Noise = entry.Noise,
+            Filtered = entry.Filtered,
+            Unfiltered = entry.Unfiltered,
+            Delta = entry.Delta,
+            Rssi = entry.Rssi,
             Device = entry.Device,
             App = entry.App,
             DataSource = entry.DataSource,

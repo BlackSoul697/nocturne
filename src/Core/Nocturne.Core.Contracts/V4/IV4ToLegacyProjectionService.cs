@@ -15,13 +15,15 @@ public interface IV4ToLegacyProjectionService
     /// Returns a set of legacy <see cref="Treatment"/> objects synthesised from V4 treatment records
     /// (Bolus, CarbIntake, BGCheck, Note, DeviceEvent).
     /// These supplement the treatments already stored in the legacy treatments table for connectors
-    /// that write V4 directly.
+    /// that write V4 directly. The newest <paramref name="limit"/> treatments in the window newest
+    /// first, or, when <paramref name="descending"/> is <c>false</c>, the oldest oldest first.
     /// </summary>
     Task<IEnumerable<Treatment>> GetProjectedTreatmentsAsync(
         long? fromMills,
         long? toMills,
         int limit,
         bool nativeOnly = true,
+        bool descending = true,
         CancellationToken ct = default
     );
 
@@ -57,11 +59,20 @@ public interface IV4ToLegacyProjectionService
     Task<bool> IsStateSpanDeletedByUserAsync(string id, CancellationToken ct = default);
 
     /// <summary>
-    /// The treatments the state spans decomposed from treatments add to a count of the record tables
-    /// over the window, bounds inclusive: the spans that start inside it, less the Notes their
-    /// treatments wrote beside them, which a record count holds but are served as part of the span.
+    /// The treatments the state spans and profile activations decomposed from treatments are served
+    /// as over the window, bounds inclusive: those that start inside it.
     /// </summary>
     Task<long> CountProjectedStateSpanTreatmentsAsync(
+        long? fromMills,
+        long? toMills,
+        CancellationToken ct = default
+    );
+
+    /// <summary>
+    /// The Notes served as treatments of their own over the window, bounds inclusive: every Note but
+    /// those a treatment wrote beside another record, which serves it as its <c>notes</c>.
+    /// </summary>
+    Task<long> CountNotesServedApartAsync(
         long? fromMills,
         long? toMills,
         CancellationToken ct = default

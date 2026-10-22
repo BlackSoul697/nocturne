@@ -52,8 +52,7 @@ public class ProfileProjectionServiceTests
     [Fact]
     public async Task GetCurrentProfileAsync_NoSettings_ReturnsNull()
     {
-        _therapyRepo.Setup(r => r.GetAsync(null, null, null, null, 1, 0, true, default))
-            .ReturnsAsync(Enumerable.Empty<TherapySettings>());
+        _therapyRepo.Setup(r => r.GetDocumentsAsync(1, 0, true, default)).ReturnsAsync([]);
 
         var result = await _sut.GetCurrentProfileAsync();
 
@@ -100,6 +99,7 @@ public class ProfileProjectionServiceTests
 
         _therapyRepo.Setup(r => r.GetByLegacyIdAsync("abc123", default))
             .ReturnsAsync(settings);
+        SetupDocumentRows(settings);
         SetupCorrelationLookups(correlationId);
 
         var result = await _sut.GetProfileByIdAsync("abc123");
@@ -119,6 +119,7 @@ public class ProfileProjectionServiceTests
             .ReturnsAsync((TherapySettings?)null);
         _therapyRepo.Setup(r => r.GetByIdAsync(id, default))
             .ReturnsAsync(settings);
+        SetupDocumentRows(settings);
         SetupCorrelationLookups(correlationId);
 
         var result = await _sut.GetProfileByIdAsync(id.ToString());
@@ -131,6 +132,8 @@ public class ProfileProjectionServiceTests
     {
         _therapyRepo.Setup(r => r.GetByLegacyIdAsync("missing", default))
             .ReturnsAsync((TherapySettings?)null);
+        _therapyRepo.Setup(r => r.GetDocumentRowsAsync("missing", default))
+            .ReturnsAsync([]);
 
         var result = await _sut.GetProfileByIdAsync("missing");
 
@@ -149,8 +152,8 @@ public class ProfileProjectionServiceTests
         var settings1 = CreateTherapySettings(correlationId: corr1, profileName: "Default");
         var settings2 = CreateTherapySettings(correlationId: corr2, profileName: "Weekday");
 
-        _therapyRepo.Setup(r => r.GetAsync(null, null, null, null, 5, 0, true, default))
-            .ReturnsAsync([settings1, settings2]);
+        _therapyRepo.Setup(r => r.GetDocumentsAsync(5, 0, true, default))
+            .ReturnsAsync([[settings1], [settings2]]);
         SetupCorrelationLookups(corr1);
         SetupCorrelationLookups(corr2);
 
@@ -162,14 +165,70 @@ public class ProfileProjectionServiceTests
     }
 
     [Fact]
+    public async Task GetProfilesAsync_Ascending_PagesFromTheOldestProfile()
+    {
+        var corr = Guid.NewGuid();
+        _therapyRepo.Setup(r => r.GetDocumentsAsync(1, 0, false, default))
+            .ReturnsAsync([[CreateTherapySettings(correlationId: corr, profileName: "Oldest")]]);
+        SetupCorrelationLookups(corr);
+
+        var result = (await _sut.GetProfilesAsync(count: 1, skip: 0, descending: false)).ToList();
+
+        result.Should().ContainSingle().Which.DefaultProfile.Should().Be("Oldest");
+        _therapyRepo.Verify(r => r.GetDocumentsAsync(1, 0, true, default), Times.Never);
+    }
+
+    [Fact]
     public async Task GetProfilesAsync_EmptyRepo_ReturnsEmpty()
     {
-        _therapyRepo.Setup(r => r.GetAsync(null, null, null, null, 10, 0, true, default))
-            .ReturnsAsync(Enumerable.Empty<TherapySettings>());
+        _therapyRepo.Setup(r => r.GetDocumentsAsync(10, 0, true, default)).ReturnsAsync([]);
 
         var result = await _sut.GetProfilesAsync();
 
         result.Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task GetProfilesAsync_DocumentWithSeveralStores_IsOneProfileCarryingEveryStore_NamedByItsDefault()
+    {
+        var correlationId = Guid.NewGuid();
+        var day = CreateTherapySettings(correlationId: correlationId, profileName: "Day", legacyId: "doc1:Day");
+        var night = CreateTherapySettings(correlationId: correlationId, profileName: "Night", legacyId: "doc1:Night");
+        night.IsDefault = true;
+
+        _therapyRepo.Setup(r => r.GetDocumentsAsync(10, 0, true, default)).ReturnsAsync([[day, night]]);
+        SetupCorrelationLookups(
+            correlationId,
+            basals: [CreateBasalSchedule(correlationId, "Day"), CreateBasalSchedule(correlationId, "Night")]);
+
+        var result = (await _sut.GetProfilesAsync()).ToList();
+
+        var profile = result.Should().ContainSingle().Subject;
+        profile.Id.Should().Be("doc1");
+        profile.DefaultProfile.Should().Be("Night");
+        profile.Store.Keys.Should().BeEquivalentTo("Day", "Night");
+        profile.Store["Day"].Basal.Should().ContainSingle();
+        profile.Store["Night"].Basal.Should().ContainSingle();
+    }
+
+    [Fact]
+    public async Task GetProfilesAsync_DefaultStoreOlderThanItsSibling_StillNamesTheDocument()
+    {
+        var correlationId = Guid.NewGuid();
+        var night = CreateTherapySettings(correlationId: correlationId, profileName: "Night", legacyId: "doc1:Night");
+        night.IsDefault = true;
+        var day = CreateTherapySettings(correlationId: correlationId, profileName: "Day", legacyId: "doc1:Day");
+        day.Timestamp = night.Timestamp.AddDays(1);
+        day.StartDate = "2025-06-02T12:00:00.000Z";
+
+        _therapyRepo.Setup(r => r.GetDocumentsAsync(10, 0, true, default)).ReturnsAsync([[day, night]]);
+        SetupCorrelationLookups(correlationId);
+
+        var profile = (await _sut.GetProfilesAsync()).Should().ContainSingle().Subject;
+
+        profile.DefaultProfile.Should().Be("Night");
+        profile.Mills.Should().Be(night.Mills);
+        profile.Store.Keys.Should().BeEquivalentTo("Day", "Night");
     }
 
     #endregion
@@ -177,18 +236,36 @@ public class ProfileProjectionServiceTests
     #region CountProfilesAsync
 
     [Fact]
-    public async Task CountProfilesAsync_DelegatesToRepo()
+    public async Task CountProfilesAsync_CountsDocuments()
     {
-        _therapyRepo.Setup(r => r.CountAsync(null, null, default)).ReturnsAsync(42);
+        _therapyRepo.Setup(r => r.CountDocumentsAsync(default)).ReturnsAsync(2);
 
         var result = await _sut.CountProfilesAsync();
 
-        result.Should().Be(42);
+        result.Should().Be(2);
     }
 
     #endregion
 
     #region Profile Assembly
+
+    /// <summary>
+    /// A row decomposed before <c>startDate</c> led may record one its versions do not start at; the
+    /// document serves their start, so a client saving it back does not move them.
+    /// </summary>
+    [Fact]
+    public async Task ServesTheVersionsStart_WhenTheRecordedStartDateDisagrees()
+    {
+        var correlationId = Guid.NewGuid();
+        var settings = CreateTherapySettings(correlationId: correlationId, startDate: "2025-01-15T00:00:00.000Z");
+
+        SetupGetLatest(settings);
+        SetupCorrelationLookups(correlationId);
+
+        var result = await _sut.GetCurrentProfileAsync();
+
+        result!.StartDate.Should().Be("2025-06-01T12:00:00.000Z");
+    }
 
     [Fact]
     public async Task AssemblesScalarFieldsFromTherapySettings()
@@ -205,6 +282,7 @@ public class ProfileProjectionServiceTests
             enteredBy: "Loop",
             isExternallyManaged: true,
             startDate: "2025-01-15T00:00:00.000Z");
+        settings.Timestamp = new DateTime(2025, 1, 15, 0, 0, 0, DateTimeKind.Utc);
 
         SetupGetLatest(settings);
         SetupCorrelationLookups(correlationId);
@@ -304,8 +382,8 @@ public class ProfileProjectionServiceTests
         var settings1 = CreateTherapySettings(correlationId: corr1, profileName: "Default");
         var settings2 = CreateTherapySettings(correlationId: corr2, profileName: "Exercise");
 
-        _therapyRepo.Setup(r => r.GetAsync(null, null, null, null, 10, 0, true, default))
-            .ReturnsAsync([settings1, settings2]);
+        _therapyRepo.Setup(r => r.GetDocumentsAsync(10, 0, true, default))
+            .ReturnsAsync([[settings1], [settings2]]);
         SetupCorrelationLookups(corr1);
         SetupCorrelationLookups(corr2);
 
@@ -444,6 +522,7 @@ public class ProfileProjectionServiceTests
 
         _therapyRepo.Setup(r => r.GetByLegacyIdAsync("507f1f77bcf86cd799439011", default))
             .ReturnsAsync(settings);
+        SetupDocumentRows(settings);
         SetupCorrelationLookups(correlationId);
 
         var result = await _sut.GetProfileByIdAsync("507f1f77bcf86cd799439011");
@@ -718,7 +797,13 @@ public class ProfileProjectionServiceTests
 
     private void SetupGetLatest(TherapySettings settings)
     {
-        _therapyRepo.Setup(r => r.GetAsync(null, null, null, null, 1, 0, true, default))
+        _therapyRepo.Setup(r => r.GetDocumentsAsync(1, 0, true, default))
+            .ReturnsAsync([[settings]]);
+    }
+
+    private void SetupDocumentRows(TherapySettings settings)
+    {
+        _therapyRepo.Setup(r => r.GetDocumentRowsAsync(TherapySettings.DocumentIdOf(settings), default))
             .ReturnsAsync([settings]);
     }
 

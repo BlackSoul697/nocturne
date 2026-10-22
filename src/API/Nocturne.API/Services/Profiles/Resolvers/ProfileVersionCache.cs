@@ -1,59 +1,66 @@
-using Microsoft.Extensions.Caching.Memory;
-using Nocturne.Core.Contracts.Multitenancy;
+using Nocturne.API.Services.Caching;
 using Nocturne.Core.Contracts.V4.Repositories;
 using Nocturne.Core.Models.V4;
 
 namespace Nocturne.API.Services.Profiles.Resolvers;
 
 /// <summary>
-/// Caches every stored version of a profile's schedule and picks the version active at the asked
-/// time from the cached list, so the answer never depends on which time was looked up first.
-/// A share or history-clamped request bypasses the cache: the key carries only the tenant, and RLS
-/// hides these tables from a share, so a share must neither read the owner's versions nor leave an
-/// empty list for the owner to read.
+/// Caches every stored version of a profile's schedule in the local tier of
+/// <see cref="ITenantCache"/> and picks the version active at the asked time from the cached list,
+/// so the answer never depends on which time was looked up first.
 /// </summary>
 internal sealed class ProfileVersionCache
 {
     private static readonly TimeSpan Ttl = TimeSpan.FromSeconds(5);
 
-    private readonly ITenantAccessor _tenantAccessor;
-    private readonly ICategoryReadContext _categoryReadContext;
-    private readonly IMemoryCache _cache;
+    private readonly ITenantCache _cache;
 
-    public ProfileVersionCache(
-        ITenantAccessor tenantAccessor,
-        ICategoryReadContext categoryReadContext,
-        IMemoryCache cache)
+    public ProfileVersionCache(ITenantCache cache)
     {
-        _tenantAccessor = tenantAccessor;
-        _categoryReadContext = categoryReadContext;
         _cache = cache;
     }
 
-    /// <summary>
-    /// The newest version at-or-before <paramref name="timestamp"/>, matching
-    /// <see cref="IProfileScopedRepository{TRecord}.GetActiveAtAsync"/>.
-    /// </summary>
+    /// <summary>The version in force at <paramref name="timestamp"/>; see <see cref="ActiveAt{TRecord}"/>.</summary>
     public async Task<TRecord?> GetActiveAtAsync<TRecord>(
         IProfileScopedRepository<TRecord> repo,
         string profileName,
         DateTime timestamp,
         CancellationToken ct)
-        where TRecord : class, IV4Record, IProfileScoped
-    {
-        if (_categoryReadContext.IsShare || _categoryReadContext.IsHistoryClamped)
-            return await repo.GetActiveAtAsync(profileName, timestamp, ct);
+        where TRecord : class, IV4Record, IProfileScoped =>
+        ActiveAt(await GetVersionsAsync(repo, profileName, ct), timestamp);
 
-        var cacheKey = $"ProfileVersions:{typeof(TRecord).Name}:{_tenantAccessor.TenantId}:{profileName}";
+    /// <summary>Every stored version of <paramref name="profileName"/>, newest first.</summary>
+    public Task<TRecord[]> GetVersionsAsync<TRecord>(
+        IProfileScopedRepository<TRecord> repo,
+        string profileName,
+        CancellationToken ct)
+        where TRecord : class, IV4Record, IProfileScoped =>
+        _cache.GetOrCreateLocalAsync(Key<TRecord>(profileName), () => LoadAsync(repo, profileName, ct), Ttl);
 
-        if (!_cache.TryGetValue(cacheKey, out TRecord[]? versions) || versions is null)
-        {
-            versions = (await repo.GetByProfileNameAsync(profileName, ct))
-                .OrderByDescending(v => v.Timestamp)
-                .ToArray();
-            _cache.Set(cacheKey, versions, Ttl);
-        }
+    /// <summary>
+    /// Reloads the cached versions of <paramref name="profileName"/>, for a reader that must see a
+    /// version just written rather than wait out the TTL.
+    /// </summary>
+    public async Task RefreshAsync<TRecord>(
+        IProfileScopedRepository<TRecord> repo, string profileName, CancellationToken ct)
+        where TRecord : class, IV4Record, IProfileScoped =>
+        _cache.SetLocal(Key<TRecord>(profileName), await LoadAsync(repo, profileName, ct), Ttl);
 
-        return versions.FirstOrDefault(v => v.Timestamp <= timestamp);
-    }
+    private static string Key<TRecord>(string profileName) => $"profile-versions:{typeof(TRecord).Name}:{profileName}";
+
+    private static async Task<TRecord[]> LoadAsync<TRecord>(
+        IProfileScopedRepository<TRecord> repo, string profileName, CancellationToken ct)
+        where TRecord : class, IV4Record, IProfileScoped =>
+        (await repo.GetByProfileNameAsync(profileName, ct))
+            .OrderByDescending(v => v.Timestamp)
+            .ToArray();
+
+    /// <summary>
+    /// The newest of <paramref name="newestFirst"/> at-or-before <paramref name="timestamp"/>; before the
+    /// first, the newest, as Nightscout reads its newest profile document (<c>data[0]</c>) for a time
+    /// before every document.
+    /// </summary>
+    public static TRecord? ActiveAt<TRecord>(TRecord[] newestFirst, DateTime timestamp)
+        where TRecord : class, IV4Record =>
+        newestFirst.FirstOrDefault(v => v.Timestamp <= timestamp) ?? newestFirst.FirstOrDefault();
 }
