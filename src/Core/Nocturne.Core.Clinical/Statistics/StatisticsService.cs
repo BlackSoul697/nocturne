@@ -236,7 +236,8 @@ public class StatisticsService : IStatisticsService
     /// zero: every maximum target is met at zero, so a window with no readings would otherwise
     /// report its below-range, above-range and variability targets as met. The time-in-range
     /// targets need a reading (<see cref="BasicGlucoseStats.Count"/>), the CV target a
-    /// <see cref="GlucoseAnalytics.GlycemicVariability"/>, and the overall grade all six.
+    /// <see cref="GlucoseAnalytics.GlycemicVariability"/>, and the overall grade all six. The CV is
+    /// judged as a whole percent, the way the summary reports print it.
     /// </remarks>
     public ClinicalTargetAssessment AssessAgainstTargets(
         GlucoseAnalytics analytics,
@@ -246,7 +247,9 @@ public class StatisticsService : IStatisticsService
         var targets = ClinicalTargets.ForPopulation(population);
         TimeInRangePercentages? tir =
             analytics.BasicStats.Count > 0 ? analytics.TimeInRange.Percentages : null;
-        var cv = analytics.GlycemicVariability?.CoefficientOfVariation;
+        var cv = analytics.GlycemicVariability is { } variability
+            ? Math.Round(variability.CoefficientOfVariation, MidpointRounding.AwayFromZero)
+            : (double?)null;
 
         var assessment = new ClinicalTargetAssessment
         {
@@ -263,7 +266,7 @@ public class StatisticsService : IStatisticsService
 
         assessment.TBRAssessment = AssessMaximumTarget(
             "Time Below Range",
-            tir?.VeryLow + tir?.Low,
+            tir?.BelowRange,
             targets.MaxTBR
         );
 
@@ -275,7 +278,7 @@ public class StatisticsService : IStatisticsService
 
         assessment.TARAssessment = AssessMaximumTarget(
             "Time Above Range",
-            tir?.VeryHigh + tir?.High,
+            tir?.AboveRange,
             targets.MaxTAR
         );
 

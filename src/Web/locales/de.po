@@ -11086,11 +11086,8 @@ msgstr "GMI"
 msgid "CV"
 msgstr "CV"
 
-#: src/routes/(authenticated)/reports/agp/+page.svelte
-#: src/routes/(authenticated)/reports/executive-summary/+page.svelte
-#: src/routes/(authenticated)/reports/idp/+page.svelte
-msgid "Target: ≤33%"
-msgstr "Ziel: ≤33%"
+#~ msgid "Target: ≤33%"
+#~ msgstr "Ziel: ≤33%"
 
 #~ msgid "Below Range"
 #~ msgstr "Unterhalb des Zielbereichs"
@@ -18175,9 +18172,8 @@ msgstr ""
 #~ msgid "Calculated using the Nathan formula: eA1C = (GMI + 2.59) / 1.59. Based on mean glucose of {0} {1} over {2} days."
 #~ msgstr ""
 
-#: src/routes/(authenticated)/reports/executive-summary/+page.svelte
-msgid "Target: ≤33%. Lower means steadier glucose with fewer ups and downs."
-msgstr ""
+#~ msgid "Target: ≤33%. Lower means steadier glucose with fewer ups and downs."
+#~ msgstr ""
 
 #. 0: bg(70); 1: bgLabel()
 #: src/routes/(authenticated)/reports/executive-summary/+page.svelte
@@ -24186,6 +24182,7 @@ msgstr ""
 #~ msgstr ""
 
 #: src/routes/(authenticated)/reports/+page.svelte
+#: src/routes/(authenticated)/reports/executive-summary/+page.svelte
 msgid "Coefficient of variation"
 msgstr ""
 
@@ -26329,10 +26326,8 @@ msgstr ""
 msgid "Target: <{0}"
 msgstr ""
 
-#. 0: formatA1c(variability?.a1cTarget)
-#: src/routes/(authenticated)/reports/executive-summary/+page.svelte
-msgid "Target: below {0}. Your care team sets your individual target."
-msgstr ""
+#~ msgid "Target: below {0}. Your care team sets your individual target."
+#~ msgstr ""
 
 #. 0: a1cLabel(true); 1: bgOr(stats?.mean); 2: bgLabel(); 3: dayCount
 #: src/routes/(authenticated)/reports/executive-summary/+page.svelte
@@ -27698,4 +27693,41 @@ msgstr ""
 
 #: src/lib/components/calendar/CalendarHeader.svelte
 msgid "Show TIR %"
+msgstr ""
+
+#. 0: variability.coefficientOfVariationTarget
+#. 0: variability.coefficientOfVariationTarget
+#. 0: variability.coefficientOfVariationTarget
+#. 0: variability.coefficientOfVariationTarget
+#: src/routes/(authenticated)/reports/agp/+page.svelte
+#: src/routes/(authenticated)/reports/executive-summary/+page.svelte
+#: src/routes/(authenticated)/reports/executive-summary/+page.svelte
+#: src/routes/(authenticated)/reports/idp/+page.svelte
+msgid "Target: ≤{0}%"
+msgstr ""
+
+#. 0: variability.coefficientOfVariationTarget
+#: src/routes/(authenticated)/reports/agp/+page.svelte
+msgid "{0}% or below"
+msgstr ""
+
+#: src/routes/(authenticated)/reports/executive-summary/+page.svelte
+msgid "<0/> Target met"
+msgstr ""
+
+#: src/routes/(authenticated)/reports/executive-summary/+page.svelte
+msgid "<0/> Target not met"
+msgstr ""
+
+#. 0: formatA1c(variability.a1cTarget)
+#: src/routes/(authenticated)/reports/executive-summary/+page.svelte
+msgid "Target: below {0}"
+msgstr ""
+
+#: src/routes/(authenticated)/reports/executive-summary/+page.svelte
+msgid "Your care team sets your individual target."
+msgstr ""
+
+#: src/routes/(authenticated)/reports/executive-summary/+page.svelte
+msgid "Lower means steadier glucose with fewer ups and downs."
 msgstr ""

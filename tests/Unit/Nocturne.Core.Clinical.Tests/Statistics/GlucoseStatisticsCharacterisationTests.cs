@@ -141,7 +141,7 @@ public class GlucoseStatisticsCharacterisationTests
     private static IEnumerable<KeyValuePair<string, double>> Metrics(GlycemicVariability variability) =>
         typeof(GlycemicVariability)
             .GetProperties()
-            .Where(property => property.PropertyType == typeof(double))
+            .Where(property => property.PropertyType == typeof(double) && !property.Name.EndsWith("Target"))
             .Select(property =>
                 KeyValuePair.Create(property.Name, (double)property.GetValue(variability)!));
 
