@@ -1,4 +1,5 @@
 using System.Globalization;
+using Nocturne.Core.Clinical.Statistics;
 using Nocturne.Core.Contracts.Profiles.Resolvers;
 using Nocturne.Core.Contracts.Treatments;
 using Nocturne.Core.Contracts.V4.Repositories;
@@ -330,14 +331,12 @@ public class IobCalculator(
         var profileDia = new Lazy<double>(
             () => therapySettings.GetDIAAsync(currentTime, null).GetAwaiter().GetResult());
 
-        return FromTempBasalsCore(tempBasals, currentTime, tb => tb.EndMills.HasValue
-            ? CalcTempBasalCore(
-                tb,
-                tb.InsulinContext?.Dia ?? profileDia.Value,
-                tb.ScheduledRate
-                    ?? basalRate.GetBasalRateAsync(tb.StartMills, null).GetAwaiter().GetResult(),
-                currentTime)
-            : new IobContribution { IobContrib = 0, ActivityContrib = 0 });
+        return FromTempBasalsCore(StatisticsService.ClipOverlappingTempBasals(tempBasals ?? []), currentTime, tb => CalcTempBasalCore(
+            tb,
+            tb.InsulinContext?.Dia ?? profileDia.Value,
+            tb.ScheduledRate
+                ?? basalRate.GetBasalRateAsync(tb.StartMills, null).GetAwaiter().GetResult(),
+            currentTime));
     }
 
     /// <inheritdoc />

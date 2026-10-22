@@ -663,10 +663,11 @@ public class StatisticsServiceTDDTests
 
     #region ClipOverlappingTempBasals
 
+    private const long Minute = 60_000L;
+
     [Fact]
     public void Clip_NonOverlapping_ShouldBeUnchanged()
     {
-        // 3 hourly records, perfectly adjacent — clip is a no-op
         var records = new[]
         {
             MakeTempBasal(rate: 1.0, durationMinutes: 60, mills: Day1Mills),
@@ -676,10 +677,7 @@ public class StatisticsServiceTDDTests
 
         var clipped = StatisticsService.ClipOverlappingTempBasals(records);
 
-        clipped.Should().HaveCount(3);
-        for (int i = 0; i < clipped.Count; i++)
-            clipped[i].EffectiveEndMills.Should().Be(records[i].EndMills!.Value,
-                $"non-overlapping record {i} should be unchanged");
+        Spans(clipped).Should().Equal(records.Select(r => (r.StartMills, r.EndMills!.Value)));
     }
 
     [Fact]
@@ -689,17 +687,26 @@ public class StatisticsServiceTDDTests
 
         var clipped = StatisticsService.ClipOverlappingTempBasals(new[] { record });
 
-        clipped.Should().HaveCount(1);
-        clipped[0].EffectiveEndMills.Should().Be(record.EndMills!.Value);
+        Spans(clipped).Should().Equal((record.StartMills, record.EndMills!.Value));
+    }
+
+    [Fact]
+    public void Clip_RecordWithoutEnd_RunsFiveMinutes()
+    {
+        var record = MakeTempBasal(rate: 1.0, durationMinutes: 30, mills: Day1Mills);
+        record.EndTimestamp = null;
+
+        var clipped = StatisticsService.ClipOverlappingTempBasals(new[] { record });
+
+        Spans(clipped).Should().Equal((Day1Mills, Day1Mills + 5 * Minute));
     }
 
     [Fact]
     public void Clip_Overlapping_ShouldTruncateToNextStart()
     {
-        // 3 records starting every 5 min, each with 30-min duration
         var t0 = Day1Mills;
-        var t1 = Day1Mills + 5 * 60_000L;
-        var t2 = Day1Mills + 10 * 60_000L;
+        var t1 = Day1Mills + 5 * Minute;
+        var t2 = Day1Mills + 10 * Minute;
         var records = new[]
         {
             MakeTempBasal(rate: 1.0, durationMinutes: 30, mills: t0),
@@ -709,67 +716,181 @@ public class StatisticsServiceTDDTests
 
         var clipped = StatisticsService.ClipOverlappingTempBasals(records);
 
-        clipped.Should().HaveCount(3);
-        clipped[0].EffectiveEndMills.Should().Be(t1, "first record clipped to second's start");
-        clipped[1].EffectiveEndMills.Should().Be(t2, "second record clipped to third's start");
-        clipped[2].EffectiveEndMills.Should().Be(records[2].EndMills!.Value, "last record unchanged");
+        Spans(clipped).Should().Equal((t0, t1), (t1, t2), (t2, t2 + 30 * Minute));
     }
 
     [Fact]
-    public void Clip_MultipleDeviceGroups_ShouldClipWithinGroupOnly()
+    public void Clip_ExactSameStartInOneStream_CountsOnce()
     {
-        // Device A: one 60-min record at t0
-        // Device B: one 60-min record at t0 + 5 min
-        // Device A's record must NOT be clipped by Device B's record
-        var t0 = Day1Mills;
-        var tB = Day1Mills + 5 * 60_000L;
-
-        var recordA = new TempBasal
-        {
-            StartTimestamp = DateTimeOffset.FromUnixTimeMilliseconds(t0).UtcDateTime,
-            EndTimestamp   = DateTimeOffset.FromUnixTimeMilliseconds(t0 + 60 * 60_000L).UtcDateTime,
-            Rate           = 1.0,
-            Origin         = TempBasalOrigin.Algorithm,
-            Device         = "PumpA",
-        };
-        var recordB = new TempBasal
-        {
-            StartTimestamp = DateTimeOffset.FromUnixTimeMilliseconds(tB).UtcDateTime,
-            EndTimestamp   = DateTimeOffset.FromUnixTimeMilliseconds(tB + 60 * 60_000L).UtcDateTime,
-            Rate           = 1.0,
-            Origin         = TempBasalOrigin.Algorithm,
-            Device         = "PumpB",
-        };
-
-        var clipped = StatisticsService.ClipOverlappingTempBasals(new[] { recordA, recordB });
-
-        clipped.Should().HaveCount(2);
-        var a = clipped.Single(c => c.Tb.Device == "PumpA");
-        var b = clipped.Single(c => c.Tb.Device == "PumpB");
-
-        a.EffectiveEndMills.Should().Be(recordA.EndMills!.Value,
-            "device A is not clipped by device B");
-        b.EffectiveEndMills.Should().Be(recordB.EndMills!.Value,
-            "device B is not clipped by device A");
-    }
-
-    [Fact]
-    public void Clip_ExactSameStart_ZeroDuration()
-    {
-        // Two records with identical start (exact cross-source duplicate)
         var records = new[]
         {
             MakeTempBasal(rate: 1.0, durationMinutes: 30, mills: Day1Mills),
-            MakeTempBasal(rate: 1.0, durationMinutes: 30, mills: Day1Mills), // same device (null), same start
+            MakeTempBasal(rate: 1.0, durationMinutes: 30, mills: Day1Mills),
         };
 
         var clipped = StatisticsService.ClipOverlappingTempBasals(records);
 
-        clipped.Should().HaveCount(2);
-        // Whichever sorts first gets EffectiveEnd = Day1Mills (zero duration)
-        clipped.Should().Contain(c => c.EffectiveEndMills == c.Tb.StartMills,
-            "one duplicate collapses to zero duration");
+        Spans(clipped).Should().Equal((Day1Mills, Day1Mills + 30 * Minute));
     }
+
+    [Fact]
+    public void Clip_StreamsThatDoNotOverlap_AreBothKeptWhole()
+    {
+        var loop = Stream("openaps://Trio", Day1Mills, count: 3, everyMinutes: 5, durationMinutes: 30, loop: true);
+        var mirror = Stream("tidepool", Day1Mills + 60 * Minute, count: 3, everyMinutes: 5, durationMinutes: 30);
+
+        var clipped = StatisticsService.ClipOverlappingTempBasals([.. loop, .. mirror]);
+
+        Spans(clipped).Should().Equal(
+            (Day1Mills, Day1Mills + 5 * Minute),
+            (Day1Mills + 5 * Minute, Day1Mills + 10 * Minute),
+            (Day1Mills + 10 * Minute, Day1Mills + 40 * Minute),
+            (Day1Mills + 60 * Minute, Day1Mills + 65 * Minute),
+            (Day1Mills + 65 * Minute, Day1Mills + 70 * Minute),
+            (Day1Mills + 70 * Minute, Day1Mills + 100 * Minute));
+    }
+
+    [Fact]
+    public void Clip_MirrorOverlappingTheLoop_IsClippedWhereTheLoopRuns()
+    {
+        // The loop runs from 30 to 50 min; the mirror writes 30-min temps every 10 min from 0 to 60 min.
+        var loop = Stream("openaps://Trio", Day1Mills + 30 * Minute, count: 4, everyMinutes: 5, durationMinutes: 5, loop: true);
+        var mirror = Stream("tidepool", Day1Mills, count: 7, everyMinutes: 10, durationMinutes: 30);
+
+        var clipped = StatisticsService.ClipOverlappingTempBasals([.. mirror, .. loop]);
+
+        Spans(clipped.Where(tb => tb.Device == "tidepool")).Should().Equal(
+            (Day1Mills, Day1Mills + 10 * Minute),
+            (Day1Mills + 10 * Minute, Day1Mills + 20 * Minute),
+            (Day1Mills + 20 * Minute, Day1Mills + 30 * Minute),
+            (Day1Mills + 50 * Minute, Day1Mills + 60 * Minute),
+            (Day1Mills + 60 * Minute, Day1Mills + 90 * Minute));
+        Spans(clipped.Where(tb => tb.Device == "openaps://Trio")).Should().Equal(
+            (Day1Mills + 30 * Minute, Day1Mills + 35 * Minute),
+            (Day1Mills + 35 * Minute, Day1Mills + 40 * Minute),
+            (Day1Mills + 40 * Minute, Day1Mills + 45 * Minute),
+            (Day1Mills + 45 * Minute, Day1Mills + 50 * Minute));
+    }
+
+    [Fact]
+    public void Clip_MirrorRecordSpanningAGapInTheLoop_KeepsThePiecesTheLoopLeavesOpen()
+    {
+        var loop = new[]
+        {
+            Temp("openaps://Trio", Day1Mills, 10, loop: true),
+            Temp("openaps://Trio", Day1Mills + 20 * Minute, 10, loop: true),
+        };
+        var mirror = Temp("tidepool", Day1Mills - 5 * Minute, 40);
+
+        var clipped = StatisticsService.ClipOverlappingTempBasals([mirror, .. loop]);
+
+        Spans(clipped.Where(tb => tb.Device == "tidepool")).Should().Equal(
+            (Day1Mills - 5 * Minute, Day1Mills),
+            (Day1Mills + 10 * Minute, Day1Mills + 20 * Minute),
+            (Day1Mills + 30 * Minute, Day1Mills + 35 * Minute));
+    }
+
+    [Fact]
+    public void Clip_LoopStreamKnownOnlyByItsSnapshotLink_Wins()
+    {
+        var loop = Temp("openaps://Trio", Day1Mills, 30);
+        loop.ApsSnapshotId = Guid.NewGuid();
+        var mirror = Stream("tidepool", Day1Mills, count: 3, everyMinutes: 10, durationMinutes: 10);
+
+        var clipped = StatisticsService.ClipOverlappingTempBasals([.. mirror, loop]);
+
+        clipped.Should().ContainSingle().Which.Device.Should().Be("openaps://Trio");
+    }
+
+    [Fact]
+    public void Clip_NoSnapshotEvidence_TheAidUploaderWinsWithFewerRecords()
+    {
+        var loop = Temp("openaps://Trio", Day1Mills, 30);
+        var mirror = Stream("tidepool", Day1Mills, count: 3, everyMinutes: 10, durationMinutes: 10);
+
+        var clipped = StatisticsService.ClipOverlappingTempBasals([.. mirror, loop]);
+
+        clipped.Should().ContainSingle().Which.Device.Should().Be("openaps://Trio");
+    }
+
+    [Fact]
+    public void Clip_NoSnapshotEvidence_TwoOverlappingWindowsPickTheSameStream()
+    {
+        // The mirror outnumbers the loop in the first window and not in the second.
+        var loop = Stream("openaps://Trio", Day1Mills, count: 12, everyMinutes: 10, durationMinutes: 30);
+        var mirror = Stream("tidepool", Day1Mills, count: 12, everyMinutes: 5, durationMinutes: 5);
+        TempBasal[] all = [.. loop, .. mirror];
+        bool StartsIn(TempBasal tb, long from, long to) => tb.StartMills >= from && tb.StartMills < to;
+
+        var first = StatisticsService.ClipOverlappingTempBasals(
+            all.Where(tb => StartsIn(tb, Day1Mills, Day1Mills + 60 * Minute)));
+        var second = StatisticsService.ClipOverlappingTempBasals(
+            all.Where(tb => StartsIn(tb, Day1Mills + 30 * Minute, Day1Mills + 120 * Minute)));
+
+        bool InOverlap(TempBasal tb) => tb.StartMills < Day1Mills + 60 * Minute && tb.EndMills > Day1Mills + 30 * Minute;
+        first.Where(InOverlap).Select(tb => tb.Device).Should().OnlyContain(d => d == "openaps://Trio");
+        second.Where(InOverlap).Select(tb => tb.Device).Should().OnlyContain(d => d == "openaps://Trio");
+    }
+
+    [Fact]
+    public void Clip_NoLoopStream_TheStreamWithMoreRecordsWins()
+    {
+        var coarse = Temp("pump-a", Day1Mills, 30);
+        var fine = Stream("pump-b", Day1Mills + 10 * Minute, count: 2, everyMinutes: 5, durationMinutes: 5);
+
+        var clipped = StatisticsService.ClipOverlappingTempBasals([coarse, .. fine]);
+
+        Spans(clipped).Should().Equal(
+            (Day1Mills, Day1Mills + 10 * Minute),
+            (Day1Mills + 10 * Minute, Day1Mills + 15 * Minute),
+            (Day1Mills + 15 * Minute, Day1Mills + 20 * Minute),
+            (Day1Mills + 20 * Minute, Day1Mills + 30 * Minute));
+        clipped.Select(tb => tb.Device).Should().Equal("pump-a", "pump-b", "pump-b", "pump-a");
+    }
+
+    [Fact]
+    public void Clip_NoLoopStreamAndEqualCounts_TheEarlierStreamWins()
+    {
+        var earlier = Temp("pump-b", Day1Mills, 30);
+        var later = Temp("pump-a", Day1Mills + 10 * Minute, 30);
+
+        var clipped = StatisticsService.ClipOverlappingTempBasals([later, earlier]);
+
+        Spans(clipped).Should().Equal(
+            (Day1Mills, Day1Mills + 30 * Minute),
+            (Day1Mills + 30 * Minute, Day1Mills + 40 * Minute));
+        clipped.Select(tb => tb.Device).Should().Equal("pump-b", "pump-a");
+    }
+
+    [Fact]
+    public void InsulinDelivery_MirrorOverlappingTheLoop_CountsTheLoopOnce()
+    {
+        var loop = Stream("openaps://Trio", Day1Mills, count: 12, everyMinutes: 5, durationMinutes: 30, loop: true);
+        var mirror = Stream("tidepool", Day1Mills + 2 * Minute, count: 12, everyMinutes: 5, durationMinutes: 5);
+        foreach (var tb in mirror)
+            tb.Rate = 3.0;
+
+        var loopOnly = _sut.CalculateInsulinDeliveryStatistics([], [], loop, [], StartDate, EndDate);
+        var both = _sut.CalculateInsulinDeliveryStatistics([], [], [.. loop, .. mirror], [], StartDate, EndDate);
+
+        both.TotalBasal.Should().BeApproximately(loopOnly.TotalBasal, 1e-9);
+    }
+
+    private static IEnumerable<(long, long)> Spans(IEnumerable<TempBasal> clipped) =>
+        clipped.Select(tb => (tb.StartMills, tb.EndMills!.Value));
+
+    private static TempBasal Temp(string device, long mills, double durationMinutes, bool loop = false)
+    {
+        var tb = MakeTempBasal(rate: 1.5, durationMinutes, mills);
+        tb.Device = device;
+        if (loop)
+            tb.OriginEvidence = TempBasalOriginEvidence.Snapshot;
+        return tb;
+    }
+
+    private static TempBasal[] Stream(
+        string device, long from, int count, int everyMinutes, double durationMinutes, bool loop = false) =>
+        [.. Enumerable.Range(0, count).Select(i => Temp(device, from + i * everyMinutes * Minute, durationMinutes, loop))];
 
     #endregion
 

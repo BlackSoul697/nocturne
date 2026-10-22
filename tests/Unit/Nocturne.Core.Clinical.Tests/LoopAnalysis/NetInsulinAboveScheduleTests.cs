@@ -43,6 +43,35 @@ public class NetInsulinAboveScheduleTests
     }
 
     [Fact]
+    public void MirrorOverlappingTheLoop_CountsOnlyWhereTheLoopIsSilent()
+    {
+        var loop = Enumerable.Range(0, 6).Select(i => Temp(5 * i, 5, 2.0)).ToList();
+        foreach (var tb in loop)
+            tb.OriginEvidence = TempBasalOriginEvidence.Snapshot;
+        var mirror = new[] { Temp(10, 30, 3.0), Temp(40, 10, 3.0) };
+        foreach (var tb in mirror)
+            tb.Device = "tidepool";
+
+        var (clipped, evidence) = NetInsulinAboveSchedule.ClipTempBasals([.. mirror, .. loop]);
+
+        clipped.Where(t => t.Device == "tidepool").Select(t => (t.StartTimestamp, t.EndTimestamp)).Should().Equal(
+            (T0.AddMinutes(30), T0.AddMinutes(40)),
+            (T0.AddMinutes(40), T0.AddMinutes(50)));
+        evidence.Recorded.Intervals.Should().Equal(new MillsInterval(T0Mills, T0Mills + 50 * Minute));
+
+        // The series IBasalSeriesBuilder builds from the clipped temps: one point per temp.
+        var delivered = NetInsulinAboveSchedule.DeliveredFromSeries(
+            clipped.Select(t => new BasalPoint { Timestamp = t.StartMills, Rate = t.Rate!.Value, Origin = BasalDeliveryOrigin.Algorithm }),
+            T0Mills + Hour, evidence);
+        var net = new NetInsulinAboveSchedule(delivered, [new(T0Mills, T0Mills + Hour, 1.0)], [])
+            .Over(T0Mills, T0Mills + Hour);
+
+        net.AlgorithmTemp.Should().BeApproximately(0.5 + 2.0 / 3, 1e-9,
+            "+1 U/h from the loop for 30 min, then +2 U/h from the mirror for the 20 min the loop is silent");
+        net.CoveredMs.Should().Be(50 * Minute);
+    }
+
+    [Fact]
     public void ClippedTemps_KeepTheirResolvedEvidenceAndSetter()
     {
         var setter = Guid.NewGuid();

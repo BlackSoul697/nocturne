@@ -1,6 +1,7 @@
 using System.Text.Json;
 using Nocturne.API.Helpers;
 using Nocturne.API.Services.ChartData;
+using Nocturne.Core.Clinical.Statistics;
 using Nocturne.Core.Contracts.Analytics;
 using Nocturne.Core.Contracts.Profiles.Resolvers;
 using Nocturne.Core.Contracts.V4.Repositories;
@@ -114,10 +115,8 @@ public class ChartDataService : IChartDataService
             descending: false,
             ct: cancellationToken
         )).ToList();
-        tempBasals = SelectDisplayTempBasals(tempBasals, startTime, endTime);
-
         return await _basalSeriesBuilder.BuildAsync(
-            tempBasals,
+            SelectDisplayTempBasals(tempBasals, startTime, endTime),
             startTime,
             endTime,
             defaultBasalRate,
@@ -128,18 +127,17 @@ public class ChartDataService : IChartDataService
     #region Internal Helpers
 
     /// <summary>
-    /// Temp basals overlapping the window. A row that began before it must carry an end inside it:
-    /// an open-ended row is also how a duration-0 cancel is stored, so it cannot be told from a
-    /// running temp basal and would otherwise paint the whole window.
+    /// The delivered pieces (<see cref="StatisticsService.ClipOverlappingTempBasals"/>) that overlap
+    /// the window. <paramref name="tempBasals"/> must reach back before the window, so a record
+    /// cancelled before it is cut by the record that cancelled it.
     /// </summary>
     internal static List<TempBasal> SelectDisplayTempBasals(
         IEnumerable<TempBasal> tempBasals,
         long startTime,
         long endTime
     ) =>
-        tempBasals
-            .Where(tb => tb.StartMills <= endTime
-                && (tb.EndMills is { } end ? end > startTime : tb.StartMills >= startTime))
+        StatisticsService.ClipOverlappingTempBasals(tempBasals)
+            .Where(tb => tb.StartMills <= endTime && tb.EndMills > startTime)
             .ToList();
 
     internal static (List<GlucosePointDto> data, double yMax) BuildGlucoseData(
@@ -260,14 +258,14 @@ public class ChartDataService : IChartDataService
         List<TempBasal> tempBasals
     )
     {
-        return tempBasals
-            .Where(tb => tb.Origin == TempBasalOrigin.Suspended || tb.Rate is not null)
-            .Select(tb =>
+        return WithPieceIds(tempBasals.Where(tb => tb.Origin == TempBasalOrigin.Suspended || tb.Rate is not null))
+            .Select(piece =>
             {
+                var (tb, id) = piece;
                 var origin = BasalSeriesBuilder.MapTempBasalOrigin(tb.Origin);
                 return new BasalDeliverySpanDto
                 {
-                    Id = tb.LegacyId ?? tb.Id.ToString(),
+                    Id = id,
                     StartMills = tb.StartMills,
                     EndMills = tb.EndMills,
                     Rate = origin == BasalDeliveryOrigin.Suspended ? 0 : tb.Rate!.Value,
@@ -313,19 +311,33 @@ public class ChartDataService : IChartDataService
         List<TempBasal> tempBasals
     )
     {
-        return tempBasals
-            .Where(tb => tb.Origin == TempBasalOrigin.Manual)
-            .Select(tb => new ChartStateSpanDto
+        return WithPieceIds(tempBasals.Where(tb => tb.Origin == TempBasalOrigin.Manual))
+            .Select(piece => new ChartStateSpanDto
             {
-                Id = tb.LegacyId ?? tb.Id.ToString(),
+                Id = piece.Id,
                 Category = StateSpanCategory.PumpMode, // Rendered in dedicated tempBasalSpans list; category is informational
                 State = "TempBasal",
-                StartMills = tb.StartMills,
-                EndMills = tb.EndMills,
+                StartMills = piece.Tb.StartMills,
+                EndMills = piece.Tb.EndMills,
                 Color = ChartColor.InsulinTempBasal,
                 Metadata = null,
             })
             .ToList();
+    }
+
+    /// <summary>
+    /// Each delivered piece with its span id: the piece that starts its record gets the record's id,
+    /// and any later piece of a record that a winning stream interrupts gets that id with the piece's
+    /// start. The id depends only on the piece, not on the window it is served in, since the chart
+    /// joins responses by id.
+    /// </summary>
+    private static IEnumerable<(TempBasal Tb, string Id)> WithPieceIds(IEnumerable<TempBasal> pieces)
+    {
+        foreach (var tb in pieces)
+        {
+            var id = tb.LegacyId ?? tb.Id.ToString();
+            yield return (tb, tb.StartMills == tb.RecordStartMills ? id : $"{id}:{tb.StartMills}");
+        }
     }
 
     internal static List<SystemEventMarkerDto> MapSystemEvents(
