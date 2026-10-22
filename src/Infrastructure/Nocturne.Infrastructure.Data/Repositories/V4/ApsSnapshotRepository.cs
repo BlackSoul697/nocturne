@@ -66,10 +66,10 @@ public class ApsSnapshotRepository : SyncUpsertRepositoryBase<ApsSnapshot, ApsSn
         var rows = await snapshots.Where(e => e.Timestamp < from).OrderByDescending(e => e.Timestamp).Take(1).Select(LoopCycleRow)
             .Concat(snapshots.Where(e => e.Timestamp >= from && e.Timestamp <= to).Select(LoopCycleRow))
             .Concat(snapshots.Where(e => e.Timestamp > to).OrderBy(e => e.Timestamp).Take(1).Select(LoopCycleRow))
-            .OrderBy(r => r.Timestamp)
             .ToListAsync(ct);
 
-        return [.. rows.Select(r =>
+        // Sorted here: in SQL the sort of every row's reason over a 90-day union spills to disk.
+        return [.. rows.OrderBy(r => r.Timestamp).Select(r =>
         {
             var reason = string.IsNullOrEmpty(r.Reason) ? null : r.Reason;
             return new ApsLoopCycle
