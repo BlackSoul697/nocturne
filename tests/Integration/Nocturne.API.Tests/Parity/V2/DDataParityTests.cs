@@ -20,13 +20,11 @@ public class DDataParityTests : ParityTestBase
 
     protected override ComparisonOptions GetComparisonOptions()
     {
-        // DData responses contain dynamic timestamps and computed values
-        return ComparisonOptions.Default.WithIgnoredFields(
-            "lastUpdated",
-            "serverTime",
-            "serverTimeEpoch",
-            "now"
-        );
+        // DData responses contain dynamic timestamps and computed values. Nocturne serves no store
+        // size, a fixed 0, where Nightscout serves Mongo's byte counts, so only their presence is checked.
+        return ComparisonOptions.Default
+            .WithIgnoredFields("lastUpdated", "serverTime", "serverTimeEpoch", "now")
+            .WithPresenceOnlyFields("dataSize", "indexSize");
     }
 
     #region Helper Methods

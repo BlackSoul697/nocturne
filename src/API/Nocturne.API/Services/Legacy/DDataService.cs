@@ -21,6 +21,7 @@ namespace Nocturne.API.Services.Legacy;
 public class DDataService : IDDataService
 {
     private const long DeviceStatusWindowMills = 24L * 60 * 60 * 1000;
+    private const long LiveFrameWindowMills = 5L * 60 * 1000;
 
     private readonly IEntryStore _store;
     private readonly ITreatmentService _treatments;
@@ -59,12 +60,33 @@ public class DDataService : IDDataService
     }
 
     /// <inheritdoc />
-    public async Task<DData> GetDDataAsync(
+    public Task<DData> GetDDataAsync(
+        long timestamp,
+        CancellationToken cancellationToken = default
+    ) => LoadDDataAsync(new DData { LastUpdated = timestamp }, cancellationToken);
+
+    /// <inheritdoc />
+    public async Task<DDataFrame> GetDDataFrameAsync(
         long timestamp,
         CancellationToken cancellationToken = default
     )
     {
-        var ddata = new DData { LastUpdated = timestamp };
+        var isLive = Math.Abs(DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() - timestamp) < LiveFrameWindowMills;
+        var frame = await LoadDDataAsync(
+            new DDataFrame
+            {
+                LastUpdated = timestamp,
+                Page = isLive ? null : new DDataFramePage { After = timestamp },
+            },
+            cancellationToken);
+        frame.Sgvs = frame.Sgvs.OrderBy(e => e.Mills).ToList();
+        return frame;
+    }
+
+    private async Task<T> LoadDDataAsync<T>(T ddata, CancellationToken cancellationToken)
+        where T : DData
+    {
+        var timestamp = ddata.LastUpdated;
 
         // Sequential: see INocturneDbContextFactory.
         await LoadSgvsAsync(ddata, timestamp, cancellationToken);

@@ -436,6 +436,20 @@ public class ComparisonOptions
     };
 
     /// <summary>
+    /// Create options with additional fields whose presence is checked but whose value is not
+    /// </summary>
+    public ComparisonOptions WithPresenceOnlyFields(params string[] fields)
+    {
+        var options = WithIgnoredFields();
+        foreach (var field in fields)
+        {
+            options.IdFields.Add(field);
+        }
+
+        return options;
+    }
+
+    /// <summary>
     /// Create options with additional fields to ignore
     /// </summary>
     public ComparisonOptions WithIgnoredFields(params string[] fields)

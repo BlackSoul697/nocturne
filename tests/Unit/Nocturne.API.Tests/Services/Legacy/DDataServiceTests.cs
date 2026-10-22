@@ -1,5 +1,7 @@
+using System.Text.Json;
 using Microsoft.Extensions.Logging;
 using Moq;
+using Nocturne.API.Configuration;
 using Nocturne.API.Services.Devices;
 using Nocturne.API.Services.Legacy;
 using Nocturne.Core.Contracts.Entries;
@@ -132,6 +134,69 @@ public class DDataServiceTests
         _mockGroupRepo.Verify(x => x.GetAsync(
             at.UtcDateTime.AddDays(-1), at.UtcDateTime, It.IsAny<string?>(),
             It.IsAny<int>(), It.IsAny<int>(), true, It.IsAny<CancellationToken>()));
+    }
+
+    [Fact]
+    public async Task GetDDataFrameAsync_ServesSgvsOldestFirstWhereGetDDataAsyncKeepsTheStoreOrder()
+    {
+        _mockEntryStore
+            .Setup(x => x.QueryAsync(It.Is<EntryQuery>(q => q.Type == "sgv"), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new List<Entry>
+            {
+                new() { Type = "sgv", Mills = 3000 },
+                new() { Type = "sgv", Mills = 1000 },
+                new() { Type = "sgv", Mills = 2000 },
+            });
+
+        var frame = await _ddataService.GetDDataFrameAsync(5000, CancellationToken.None);
+        var ddata = await _ddataService.GetDDataAsync(5000, CancellationToken.None);
+
+        Assert.Equal([1000L, 2000L, 3000L], frame.Sgvs.Select(e => e.Mills));
+        Assert.Equal([3000L, 1000L, 2000L], ddata.Sgvs.Select(e => e.Mills));
+    }
+
+    [Fact]
+    public async Task GetDDataFrameAsync_AnOlderTimestampPagesFromIt()
+    {
+        var at = DateTimeOffset.UtcNow.AddMinutes(-10).ToUnixTimeMilliseconds();
+
+        var frame = await _ddataService.GetDDataFrameAsync(at, CancellationToken.None);
+
+        Assert.True(frame.Page!.Frame);
+        Assert.Equal(at, frame.Page.After);
+        Assert.Equal(at, frame.LastUpdated);
+        Assert.Empty(frame.Entries);
+    }
+
+    [Theory]
+    [InlineData(0)]
+    [InlineData(-4)]
+    [InlineData(4)]
+    public async Task GetDDataFrameAsync_ATimestampWithinFiveMinutesOfNowCarriesNoPage(int minutesFromNow)
+    {
+        var at = DateTimeOffset.UtcNow.AddMinutes(minutesFromNow).ToUnixTimeMilliseconds();
+
+        var frame = await _ddataService.GetDDataFrameAsync(at, CancellationToken.None);
+
+        Assert.Null(frame.Page);
+        Assert.DoesNotContain("\"page\"", JsonSerializer.Serialize(frame, NightscoutJsonOptions.Create()));
+    }
+
+    [Fact]
+    public async Task GetDDataFrameAsync_SerialisesTheFrameFieldsNightscoutSends()
+    {
+        var at = DateTimeOffset.UtcNow.AddHours(-1).ToUnixTimeMilliseconds();
+        var frame = await _ddataService.GetDDataFrameAsync(at, CancellationToken.None);
+
+        var json = JsonSerializer.SerializeToElement(frame, NightscoutJsonOptions.Create());
+
+        Assert.Equal(JsonValueKind.Array, json.GetProperty("entries").ValueKind);
+        Assert.Equal(0, json.GetProperty("entries").GetArrayLength());
+        Assert.Equal(JsonValueKind.Null, json.GetProperty("lastProfileFromSwitch").ValueKind);
+        Assert.Equal(0, json.GetProperty("dbstats").GetProperty("dataSize").GetInt64());
+        Assert.Equal(0, json.GetProperty("dbstats").GetProperty("indexSize").GetInt64());
+        Assert.True(json.GetProperty("page").GetProperty("frame").GetBoolean());
+        Assert.Equal(at, json.GetProperty("page").GetProperty("after").GetInt64());
     }
 
     [Fact]
