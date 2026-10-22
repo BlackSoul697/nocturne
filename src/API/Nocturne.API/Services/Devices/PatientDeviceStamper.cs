@@ -103,15 +103,8 @@ internal sealed class PatientDeviceStamper : IPatientDeviceStamper
         var unresolved = 0;
         foreach (var record in unstamped)
         {
-            var local = record.UtcOffset is { } offsetMinutes
-                ? record.Timestamp.AddMinutes(offsetMinutes)
-                : timeline!.ToLocal(record.Timestamp);
-            var date = DateOnly.FromDateTime(local);
-            var active = candidates
-                .Where(d =>
-                    (d.StartDate is null || d.StartDate <= date) &&
-                    (d.EndDate is null || d.EndDate >= date))
-                .ToList();
+            var date = PatientDeviceUsage.LocalDate(record.Timestamp, record.UtcOffset, timeline);
+            var active = candidates.Where(d => PatientDeviceUsage.Covers(d, date)).ToList();
             if (active.Count == 0) continue;
 
             var match = MatchBySerial(record, active) ?? MatchBySource(record, active, batchSource);
