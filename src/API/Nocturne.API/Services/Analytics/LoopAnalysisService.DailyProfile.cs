@@ -22,7 +22,9 @@ internal sealed partial class LoopAnalysisService
         return new DailyProfileResponse { Primary = primary, Comparison = comparison, ProfileNames = names };
     }
 
-    private sealed record DailyProfileLoaded(DailyProfileInputs Inputs, LoopAnalysisMaskSources Sources) : ILoaded;
+    /// <param name="Timeline">The therapy settings in force over the window, which the IOB/COB was computed against.</param>
+    private sealed record DailyProfileLoaded(
+        DailyProfileInputs Inputs, LoopAnalysisMaskSources Sources, TherapyTimeline Timeline) : ILoaded;
 
     private async Task<DailyProfileLoaded> LoadDailyProfileAsync(Window window, TimeZoneInfo zone, CancellationToken ct)
     {
@@ -63,7 +65,7 @@ internal sealed partial class LoopAnalysisService
                 delivery.HasTherapy ? common.Profiles : [], ActiveTemporaryTargets(common.Spans, to), zone, to, ct),
         };
 
-        return new DailyProfileLoaded(inputs, Sources(common, snapshotMills, zone, to));
+        return new DailyProfileLoaded(inputs, Sources(common, snapshotMills, zone, to), delivery.Timeline);
     }
 
     /// <summary>

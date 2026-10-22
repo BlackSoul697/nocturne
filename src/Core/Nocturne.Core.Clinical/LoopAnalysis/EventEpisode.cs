@@ -112,7 +112,8 @@ public sealed class EventSeries
 
     public double? CobAt(long mills) => TickAt(mills)?.Cob;
 
-    private IobCobTick? TickAt(long mills)
+    /// <summary>The standing tick whose values hold at <paramref name="mills"/>.</summary>
+    public IobCobTick? TickAt(long mills)
     {
         var ticks = _inputs.IobCob;
         var i = SortedSearch.FirstEndingAfter(ticks, mills, t => t.Mills + _inputs.IobCobIntervalMs);

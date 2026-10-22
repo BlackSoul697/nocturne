@@ -1,3 +1,5 @@
+using System.Globalization;
+
 namespace Nocturne.Core.Clinical.LoopAnalysis;
 
 /// <summary>
@@ -54,6 +56,13 @@ public static class LocalSlotBinning
 
     public static DateTime LocalTime(long mills, TimeZoneInfo tz) =>
         TimeZoneInfo.ConvertTimeFromUtc(DateTimeOffset.FromUnixTimeMilliseconds(mills).UtcDateTime, tz);
+
+    /// <summary>The local date (yyyy-MM-dd) and time (HH:mm) Day in Review is linked to an instant by.</summary>
+    public static (string Date, string Time) DayInReview(long mills, TimeZoneInfo tz)
+    {
+        var local = LocalTime(mills, tz);
+        return (local.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture), local.ToString("HH:mm", CultureInfo.InvariantCulture));
+    }
 
     public static DateOnly LocalDay(long mills, TimeZoneInfo tz) => DateOnly.FromDateTime(LocalTime(mills, tz));
 

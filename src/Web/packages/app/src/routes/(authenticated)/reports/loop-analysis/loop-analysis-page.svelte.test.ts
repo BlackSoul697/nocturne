@@ -8,6 +8,7 @@ import {
   type EventResponseReport,
   type LoopHealthResponse,
   type PredictionAccuracyResponse,
+  type SettingsEvidenceReport,
 } from "$lib/api";
 import { remoteQuery } from "$lib/test-stubs/remote-resource";
 import {
@@ -17,6 +18,7 @@ import {
 import { eventResponse } from "$lib/components/reports/loop-analysis/event-response.test-fixtures";
 import { predictionResponse } from "$lib/components/reports/loop-analysis/prediction-accuracy.test-fixtures";
 import { loopHealthResponse } from "$lib/components/reports/loop-analysis/loop-health.test-fixtures";
+import { settingsEvidenceResponse } from "$lib/components/reports/loop-analysis/settings-evidence.test-fixtures";
 
 type Registration = { current: () => unknown; active: () => boolean };
 
@@ -25,6 +27,7 @@ const calls = vi.hoisted(() => ({
   events: [] as unknown[],
   predictions: [] as unknown[],
   loopHealth: [] as unknown[],
+  settingsEvidence: [] as unknown[],
   goto: [] as [string, unknown][],
   /** Every resource the page created, and whether it reports to the guard. */
   resources: [] as Registration[],
@@ -42,6 +45,7 @@ let response: DailyProfileResponse;
 let events: EventResponseReport;
 let predictions: PredictionAccuracyResponse | undefined;
 let health: LoopHealthResponse;
+let evidence: SettingsEvidenceReport | undefined;
 /** `failing`: the one response whose request failed, when only one did. */
 let resourceState: { stale?: boolean; error?: unknown; failing?: unknown } = {};
 
@@ -61,6 +65,10 @@ vi.mock("$api/generated/loopAnalysis.generated.remote", () => ({
   getLoopHealth: (input: unknown) => {
     calls.loopHealth.push(input);
     return remoteQuery(() => health);
+  },
+  getSettingsEvidence: (input: unknown) => {
+    calls.settingsEvidence.push(input);
+    return remoteQuery(() => evidence);
   },
 }));
 
@@ -116,6 +124,7 @@ describe("Loop Analysis page", () => {
     calls.events.length = 0;
     calls.predictions.length = 0;
     calls.loopHealth.length = 0;
+    calls.settingsEvidence.length = 0;
     calls.resources.length = 0;
     calls.navigate = false;
     calls.goto.length = 0;
@@ -123,6 +132,7 @@ describe("Loop Analysis page", () => {
     events = eventResponse();
     predictions = predictionResponse();
     health = loopHealthResponse();
+    evidence = settingsEvidenceResponse();
     resourceState = {};
   });
 
@@ -235,11 +245,11 @@ describe("Loop Analysis page", () => {
     expect(page.getByText("Some filters were not applied").elements()).toHaveLength(0);
   });
 
-  it("lists all four tabs", async () => {
+  it("lists all five tabs", async () => {
     open("");
 
     await expect.element(page.getByRole("tab", { name: "Daily profile", selected: true })).toBeVisible();
-    for (const name of ["Meals & events", "Predictions", "Loop health"])
+    for (const name of ["Meals & events", "Predictions", "Loop health", "Settings evidence"])
       await expect.element(page.getByRole("tab", { name })).toBeVisible();
   });
 
@@ -332,6 +342,33 @@ describe("Loop Analysis page", () => {
     });
   });
 
+  it("fetches only Settings evidence on its tab, with the same filter", async () => {
+    open("?tab=settings-evidence&weekdays=6&excludeIllness=false");
+
+    await expect.element(page.getByRole("tab", { name: "Settings evidence", selected: true })).toBeVisible();
+    await expect.element(page.getByRole("slider", { name: "Basal by time of day" })).toBeVisible();
+    expect(calls.query).toHaveLength(0);
+    expect(calls.loopHealth).toHaveLength(0);
+    expect(calls.settingsEvidence.at(-1)).toEqual({
+      startDate: "2026-10-09",
+      endDate: "2026-10-22",
+      days: [6],
+      excludeIllness: false,
+    });
+  });
+
+  it("links Settings evidence's ISF to Loop health's sensitivity ratio under the same filter", async () => {
+    open("?tab=settings-evidence&weekdays=6&excludeIllness=false");
+
+    const link = page.getByRole("link", { name: /sensitivity ratio by hour, in Loop health/ });
+    await expect.element(link).toBeVisible();
+    const href = new URL(link.element().getAttribute("href")!, "http://localhost");
+    expect(href.hash).toBe("#sensitivity");
+    expect(href.searchParams.get("tab")).toBe("loop-health");
+    expect(href.searchParams.get("weekdays")).toBe("6");
+    expect(href.searchParams.get("excludeIllness")).toBe("false");
+  });
+
   it("drops a filter Loop health says the viewer cannot use", async () => {
     health = loopHealthResponse({ scopes: ["glucose.read", "treatments.read", "therapy.read", "reports.read"] });
     open("?tab=loop-health&excludeOpenLoop=true");
@@ -389,6 +426,14 @@ describe("Loop Analysis page", () => {
     await expect.element(page.getByRole("tab", { name: "Predictions", selected: true })).toBeVisible();
     await expect.element(page.getByLabelText("Exercise")).toBeVisible();
     expect(calls.resources.filter((r) => r.active())).toHaveLength(0);
+  });
+
+  it("loads Settings evidence's first response inside its tab", async () => {
+    evidence = undefined;
+    open("?tab=settings-evidence");
+
+    await expect.element(page.getByRole("status", { name: "Loading" })).toBeVisible();
+    await expect.element(page.getByRole("tab", { name: "Settings evidence", selected: true })).toBeVisible();
   });
 
   it("keeps the tab on screen when a tab left behind failed, and only it reports to the guard", async () => {

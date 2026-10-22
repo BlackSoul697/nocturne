@@ -523,6 +523,7 @@ internal static partial class LoopAnalysisReadScopeGuard
             WithheldLoopHealth, r => [r.Primary, r.Comparison], Narrow),
         [typeof(EventResponseReport)] = TabOf<EventResponseReport, EventResponseRange>(
             WithheldEvents, r => [r.Primary, r.Comparison], Narrow),
+        [typeof(SettingsEvidenceReport)] = new(WithheldSettingsEvidence, NarrowSettingsEvidence),
     };
 
     private static Tab TabOf<TResponse, TRange>(
@@ -664,6 +665,32 @@ internal static partial class LoopAnalysisReadScopeGuard
         Withhold(withheld, !therapy || !devices, LoopAnalysisSeries.LoopLimits);
         Withhold(withheld, !therapy || !devices, LoopAnalysisSeries.OrefMaxIob);
         return withheld;
+    }
+
+    /// <summary>
+    /// The Settings evidence the caller's scopes withhold: all of it, or none. Every figure combines
+    /// glucose, the insulin delivered and the profile's settings, and its episodes place each bolus
+    /// and meal in time, so no part of it stands without all three.
+    /// </summary>
+    public static HashSet<LoopAnalysisSeries> WithheldSettingsEvidence(IReadOnlySet<string> grantedScopes)
+    {
+        var withheld = new HashSet<LoopAnalysisSeries>();
+        Withhold(
+            withheld,
+            !AnalyticsReadScopes.Allows(grantedScopes, Scope.GlucoseRead)
+                || !AnalyticsReadScopes.Allows(grantedScopes, Scope.TreatmentsRead)
+                || !AnalyticsReadScopes.Allows(grantedScopes, Scope.TherapyRead),
+            LoopAnalysisSeries.SettingsEvidence);
+        return withheld;
+    }
+
+    private static void NarrowSettingsEvidence(LoopAnalysisResponse response, HashSet<LoopAnalysisSeries> withheld)
+    {
+        if (!withheld.Contains(LoopAnalysisSeries.SettingsEvidence))
+            return;
+        var report = (SettingsEvidenceReport)response;
+        report.Primary = null;
+        report.Comparison = null;
     }
 
     private static void Narrow(LoopHealthRange range, HashSet<LoopAnalysisSeries> withheld)

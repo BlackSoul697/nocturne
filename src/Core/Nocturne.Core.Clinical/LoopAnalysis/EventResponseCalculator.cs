@@ -1,4 +1,3 @@
-using System.Globalization;
 using Nocturne.Core.Models.LoopAnalysis;
 
 namespace Nocturne.Core.Clinical.LoopAnalysis;
@@ -154,12 +153,12 @@ public static class EventResponseCalculator
 
     private static EventResponseEvent Event(EventEpisode episode, List<int> cohorts, TimeZoneInfo zone)
     {
-        var local = LocalSlotBinning.LocalTime(episode.Anchor.Mills, zone);
+        var (date, time) = LocalSlotBinning.DayInReview(episode.Anchor.Mills, zone);
         return new EventResponseEvent
         {
             At = DateTimeOffset.FromUnixTimeMilliseconds(episode.Anchor.Mills).UtcDateTime,
-            Date = local.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture),
-            Time = local.ToString("HH:mm", CultureInfo.InvariantCulture),
+            Date = date,
+            Time = time,
             Anchor = episode.Anchor.Kind,
             Grams = episode.Anchor.Grams is { } grams ? SlotSummary.Round(grams) : null,
             Cohorts = cohorts,
