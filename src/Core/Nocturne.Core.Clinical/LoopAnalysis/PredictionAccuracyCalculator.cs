@@ -113,6 +113,18 @@ public static class PredictionAccuracyCalculator
 
     private static readonly PredictionContext[] AfterMeal = [PredictionContext.PostMeal];
 
+    /// <summary>
+    /// The curves an algorithm's snapshots can carry, whether or not any in a range did: oref's four
+    /// (iAPS is oref), else the one default curve.
+    /// </summary>
+    public static IReadOnlyList<PredictionCurve> CurvesOf(AidAlgorithm algorithm) =>
+        LoopHealthCalculator.IsOref(algorithm)
+            ? [PredictionCurve.Iob, PredictionCurve.ZeroTemp, PredictionCurve.Cob, PredictionCurve.Uam]
+            : [PredictionCurve.Default];
+
+    /// <summary>Whether a curve is reported in only some contexts, which are drawn from treatments.</summary>
+    public static bool IsReportedInSomeContexts(PredictionCurve curve) => ContextsOf(curve).Length < AllContexts.Length;
+
     /// <summary>See <see cref="PredictionCurveAccuracy.Contexts"/>.</summary>
     private static PredictionContext[] ContextsOf(PredictionCurve curve) => curve switch
     {

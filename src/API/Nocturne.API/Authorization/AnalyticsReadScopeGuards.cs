@@ -1,5 +1,6 @@
 using Nocturne.API.Controllers.V4.Analytics;
 using Nocturne.API.Services.Glucose;
+using Nocturne.Core.Clinical.LoopAnalysis;
 using Nocturne.Core.Models;
 using Nocturne.Core.Models.Authorization;
 using Nocturne.Core.Models.LoopAnalysis;
@@ -617,7 +618,16 @@ internal static partial class LoopAnalysisReadScopeGuard
         if (withheld.Contains(LoopAnalysisSeries.PredictionContexts))
         {
             var everyContext = Enum.GetValues<PredictionContext>().Length;
-            range.HiddenCurves = [.. range.Curves.Where(c => c.Contexts.Count < everyContext).Select(c => c.Curve)];
+            // From the algorithms, not the curves carried: oref uploads its COB curve only while carbs
+            // are absorbing, so which partial curves a range carried would say when carbs were on board.
+            range.HiddenCurves =
+            [
+                .. range.Algorithms
+                    .SelectMany(PredictionAccuracyCalculator.CurvesOf)
+                    .Where(PredictionAccuracyCalculator.IsReportedInSomeContexts)
+                    .Distinct()
+                    .Order(),
+            ];
             range.Curves.RemoveAll(c => c.Contexts.Count < everyContext);
             foreach (var curve in range.Curves)
             {

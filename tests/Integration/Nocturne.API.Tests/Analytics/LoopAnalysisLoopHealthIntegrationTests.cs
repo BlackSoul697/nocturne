@@ -61,6 +61,8 @@ public class LoopAnalysisLoopHealthIntegrationTests(ApiIntegrationTestFixture fi
         Absent(limits, "orefMaxBasal").Should().BeTrue("the suggestions omit the key, so the limit is unknown");
         Absent(limits, "orefMaxIob").Should().BeTrue();
         Absent(limits, "loopMaximumBasalRate").Should().BeTrue();
+        primary.GetProperty("unknown").GetProperty("loopMaximumBasalRate").GetString()
+            .Should().Be("NotRecordedByThisSystem", "reasons go out by name, as every Loop Analysis enum does");
 
         var boluses = primary.GetProperty("automaticBoluses");
         boluses.GetProperty("perDay").GetProperty("overall").GetProperty("mean").GetDouble().Should().Be(1);

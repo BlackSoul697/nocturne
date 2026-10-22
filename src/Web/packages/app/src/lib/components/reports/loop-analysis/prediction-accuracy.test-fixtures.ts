@@ -107,7 +107,10 @@ function narrow(range: PredictionAccuracyRange, withheld: Set<LoopAnalysisSeries
   if (withheld.has(S.PredictionCurves)) range.curves = [];
   if (withheld.has(S.PredictionContexts)) {
     const partial = (c: PredictionCurveAccuracy) => (c.contexts ?? []).length < ALL_CONTEXTS.length;
-    range.hiddenCurves = (range.curves ?? []).filter(partial).map((c) => c.curve!);
+    // As the guard names them: by the algorithms, whatever curves the snapshots carried.
+    range.hiddenCurves = (range.algorithms ?? []).some((a) => a !== AidAlgorithm.Loop)
+      ? [PredictionCurve.Iob, PredictionCurve.ZeroTemp, PredictionCurve.Cob]
+      : [];
     range.curves = (range.curves ?? []).filter((c) => !partial(c));
     for (const c of range.curves) {
       c.byContext = [];
