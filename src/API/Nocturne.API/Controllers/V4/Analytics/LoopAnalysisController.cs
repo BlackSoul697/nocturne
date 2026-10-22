@@ -53,7 +53,7 @@ public class LoopAnalysisController(
     public Task<ActionResult<DailyProfileResponse>> GetDailyProfile(
         [FromQuery] LoopAnalysisQuery query,
         CancellationToken cancellationToken = default) =>
-        ServeAsync(query, service.GetDailyProfileAsync, LoopAnalysisReadScopeGuard.Redact, cancellationToken);
+        ServeAsync(query, service.GetDailyProfileAsync, cancellationToken);
 
     /// <summary>
     /// Glucose, net loop correction, net insulin above schedule, IOB and COB aligned on up to three
@@ -62,10 +62,12 @@ public class LoopAnalysisController(
     /// slots from the anchor, with each event's figures and their spread.
     /// </summary>
     /// <remarks>
-    /// An event is dropped and counted when no reading lies within 5 minutes of its anchor. A cohort
-    /// whose anchor is drawn from a category the caller cannot read is dropped and its
-    /// <c>anchor{n}</c> reported as ignored; without treatments.read the event list and every
-    /// insulin, IOB and COB series and figure are withheld.
+    /// An event is dropped and counted when no reading lies within 5 minutes of its anchor. Every
+    /// cohort needs glucose.read, and the read scope its anchor is drawn from; one the caller lacks
+    /// them for is dropped before anything is computed and its <c>anchor{n}</c> reported as ignored.
+    /// Without treatments.read the event list and every insulin, IOB and COB series and figure are
+    /// withheld. Equal start and end times of day mean all day, and grams given the wrong way round
+    /// are swapped.
     /// </remarks>
     /// <param name="query">The range, comparison and masks (<see cref="LoopAnalysisQuery"/>).</param>
     /// <param name="events">The cohorts and window (<see cref="EventResponseQuery"/>).</param>
@@ -89,18 +91,19 @@ public class LoopAnalysisController(
         var ignored = LoopAnalysisReadScopeGuard.NarrowEvents(definition, granted);
         var passed = Request.Query.Keys.ToHashSet(StringComparer.OrdinalIgnoreCase);
 
-        return await ServeAsync(
+        var served = await ServeAsync(
             query,
             (filter, zone, ct) => service.GetEventResponseAsync(filter, definition, zone, ct),
-            (report, scopes) =>
-            {
-                report.Definition = definition;
-                report.IgnoredFilters.AddRange(ignored.Where(passed.Contains));
-                report.UnavailableFilters.AddRange(LoopAnalysisReadScopeGuard.UnavailableEventFilters(scopes));
-                report.UnavailableAnchors = LoopAnalysisReadScopeGuard.UnavailableAnchors(scopes);
-                return LoopAnalysisReadScopeGuard.Redact(report, scopes);
-            },
             cancellationToken);
+        if (served.Result is OkObjectResult { Value: EventResponseReport report })
+        {
+            report.Definition = definition;
+            report.SlotMinutes = EventResponseCalculator.SlotMinutes(definition);
+            report.IgnoredFilters.AddRange(ignored.Where(passed.Contains));
+            report.UnavailableFilters.AddRange(LoopAnalysisReadScopeGuard.UnavailableEventFilters(granted));
+            report.UnavailableAnchors = LoopAnalysisReadScopeGuard.UnavailableAnchors(granted);
+        }
+        return served;
     }
 
     /// <summary>
@@ -110,7 +113,6 @@ public class LoopAnalysisController(
     private async Task<ActionResult<T>> ServeAsync<T>(
         LoopAnalysisQuery query,
         Func<LoopAnalysisFilter, TimeZoneInfo, CancellationToken, Task<T>> compute,
-        Func<T, IReadOnlySet<string>, T> redact,
         CancellationToken ct)
         where T : LoopAnalysisResponse, new()
     {
@@ -119,7 +121,7 @@ public class LoopAnalysisController(
             return invalid;
 
         var result = request!.Zone is { } zone ? await compute(request.Filter!, zone, ct) : new T();
-        return Ok(redact(request.Fill(result), HttpContext.GetGrantedScopes()));
+        return Ok(LoopAnalysisReadScopeGuard.Redact(request.Fill(result), HttpContext.GetGrantedScopes()));
     }
 
     /// <summary>A request resolved against the tenant clock and the caller.</summary>

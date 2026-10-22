@@ -72,6 +72,13 @@ public sealed class EventSeries
         return count > 0 ? sum / count : null;
     }
 
+    /// <summary>The first reading in <c>[from, to]</c>.</summary>
+    public double? FirstGlucose(long from, long to)
+    {
+        var i = FirstReadingFrom(from);
+        return i < _readings.Length && _readings[i].Mills <= to ? _readings[i].Mgdl : null;
+    }
+
     /// <summary>Index of the first reading at or after <paramref name="mills"/>.</summary>
     public int FirstReadingFrom(long mills) =>
         SortedSearch.FirstEndingAfter(_readings, mills - 1, static r => r.Mills);
@@ -160,9 +167,9 @@ public readonly record struct EpisodeSlot(
 /// A slot's rates follow the Daily profile's: net loop correction is the algorithm temp delta
 /// over the time both delivery and the schedule are known plus automatic boluses over the slot, and
 /// counts only where that time is at least <see cref="SlotSummary.MinimumSlotCoverage"/> of the
-/// slot. Totals over a longer stretch (the window, the first 30 to 120 minutes) need
-/// <see cref="DailyProfileCalculator.InsulinSummaryMinimumCoverage"/> of it, since a gap there
-/// would be read as insulin not given.
+/// slot. Insulin accrued over a longer stretch (since the anchor, the window, the first 30 to 120
+/// minutes) needs <see cref="DailyProfileCalculator.InsulinSummaryMinimumCoverage"/> of it, since a
+/// gap there would be read as insulin not given.
 /// </remarks>
 public sealed class EventEpisode
 {
@@ -172,49 +179,83 @@ public sealed class EventEpisode
     /// </summary>
     public const long ReadingToleranceMs = 5 * LocalSlotBinning.MinuteMs;
 
+    /// <summary>
+    /// How long after a sensor start its first reading may come and still stand for its start
+    /// glucose: a new sensor reads nothing through its warm-up, up to two hours, and the start is
+    /// often recorded a little before the sensor goes in.
+    /// </summary>
+    public const long SensorWarmUpMs = 3 * LocalSlotBinning.HourMs;
+
     /// <summary>The band around the start glucose that counts as back to start.</summary>
     public const double BackToStartMgdl = 20;
 
-    private EventEpisode(EventAnchor anchor, EpisodeSlot[] slots, EventMetrics metrics)
+    private EventEpisode(EventAnchor anchor, bool isolated, EpisodeSlot[] slots, EventMetrics metrics)
     {
         Anchor = anchor;
+        Isolated = isolated;
         Slots = slots;
         Metrics = metrics;
     }
 
     public EventAnchor Anchor { get; }
 
+    /// <summary>No other meal, correction or rise fell inside the window, so its insulin is this event's.</summary>
+    public bool Isolated { get; }
+
     public IReadOnlyList<EpisodeSlot> Slots { get; }
 
     public EventMetrics Metrics { get; }
 
-    /// <returns>Null when no reading stands for the anchor glucose.</returns>
-    public static EventEpisode? Build(EventAnchor anchor, EventSeries series, EventWindow window)
+    /// <param name="isolated">See <see cref="Isolated"/>; a meal's grams per unit is read only then.</param>
+    /// <returns>Null when no reading stands for the start glucose.</returns>
+    public static EventEpisode? Build(EventAnchor anchor, EventSeries series, EventWindow window, bool isolated)
     {
-        if (series.GlucoseNear(anchor.Mills, ReadingToleranceMs) is not { } start)
+        var startGlucose = anchor.Kind == EventAnchorKind.SensorStart
+            ? series.FirstGlucose(anchor.Mills, anchor.Mills + SensorWarmUpMs)
+            : series.GlucoseNear(anchor.Mills, ReadingToleranceMs);
+        if (startGlucose is not { } start)
             return null;
 
         var slots = new EpisodeSlot[window.SlotCount];
+        var coverage = DailyProfileCalculator.InsulinSummaryMinimumCoverage;
+        NetInsulin? accrued = null;
         for (var k = 0; k < slots.Length; k++)
-            slots[k] = Slot(anchor.Mills, anchor.Mills + window.SlotOffset(k), start, series);
+        {
+            var slotStart = anchor.Mills + window.SlotOffset(k);
+            var slotEnd = slotStart + EventWindow.SlotMs;
+            var net = series.Insulin.Over(slotStart, slotEnd);
+            NetInsulin? sinceAnchor = null;
+            if (slotStart >= anchor.Mills)
+            {
+                accrued = accrued is null ? net : Sum(accrued, net);
+                if (accrued.CoveredMs > 0 && accrued.CoveredMs >= coverage * (slotEnd - anchor.Mills))
+                    sinceAnchor = accrued;
+            }
+            slots[k] = Slot(slotStart, slotEnd, net, sinceAnchor, start, series);
+        }
 
-        return new EventEpisode(anchor, slots, Measure(anchor, start, series, window));
+        return new EventEpisode(anchor, isolated, slots, Measure(anchor, isolated, start, series, window));
     }
 
-    private static EpisodeSlot Slot(long anchor, long slotStart, double start, EventSeries series)
+    private static NetInsulin Sum(NetInsulin a, NetInsulin b) => new(
+        a.AlgorithmTemp + b.AlgorithmTemp,
+        a.AutomaticBolus + b.AutomaticBolus,
+        a.ManualTemp + b.ManualTemp,
+        a.Suspend + b.Suspend,
+        a.Inferred + b.Inferred,
+        a.ManualBolus + b.ManualBolus,
+        a.CoveredMs + b.CoveredMs);
+
+    private static EpisodeSlot Slot(
+        long slotStart, long slotEnd, NetInsulin net, NetInsulin? sinceAnchor, double start, EventSeries series)
     {
-        var slotEnd = slotStart + EventWindow.SlotMs;
         var glucose = series.MeanGlucose(slotStart, slotEnd);
 
         double? correction = null;
-        var net = series.Insulin.Over(slotStart, slotEnd);
         if (net.CoveredMs > 0 && net.CoveredMs >= SlotSummary.MinimumSlotCoverage * EventWindow.SlotMs)
             correction = net.AlgorithmTemp * LocalSlotBinning.HourMs / net.CoveredMs
                 + net.AutomaticBolus * LocalSlotBinning.HourMs / EventWindow.SlotMs;
 
-        var sinceAnchor = slotStart >= anchor
-            ? series.NetInsulinOver(anchor, slotEnd, SlotSummary.MinimumSlotCoverage)
-            : null;
         var iobCob = series.IobCobOver(slotStart, slotEnd);
 
         return new EpisodeSlot(
@@ -227,7 +268,7 @@ public sealed class EventEpisode
             iobCob?.Cob);
     }
 
-    private static EventMetrics Measure(EventAnchor anchor, double start, EventSeries series, EventWindow window)
+    private static EventMetrics Measure(EventAnchor anchor, bool isolated, double start, EventSeries series, EventWindow window)
     {
         var a = anchor.Mills;
         var end = a + window.AfterMs;
@@ -253,7 +294,7 @@ public sealed class EventEpisode
             NetInsulin = net,
             IobAtAnchor = series.IobAt(a),
             IobAtEnd = series.IobAt(end),
-            GramsPerUnit = anchor.Grams is { } grams && net is > 0 ? grams / net : null,
+            GramsPerUnit = isolated && anchor.Grams is { } grams && net is > 0 ? grams / net : null,
             NetInsulinFirst30 = First(30),
             NetInsulinFirst60 = First(60),
             NetInsulinFirst120 = First(120),

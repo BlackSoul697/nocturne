@@ -77,7 +77,7 @@ public static class EventAnchors
     }
 
     /// <summary>
-    /// Whether no other meal or correction bolus in <paramref name="isolating"/> (sorted instants)
+    /// Whether no other meal, correction bolus or rise in <paramref name="isolating"/> (sorted instants)
     /// falls inside the anchor's window, <c>[anchor - before, anchor + after)</c>. The anchor's own
     /// instant does not count against it.
     /// </summary>

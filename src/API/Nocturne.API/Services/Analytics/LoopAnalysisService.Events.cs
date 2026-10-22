@@ -20,25 +20,30 @@ internal sealed partial class LoopAnalysisService
     {
         var window = EventWindow.Of(definition);
         var sensorStarts = definition.Cohorts.Any(c => c.Anchor == EventAnchorKind.SensorStart);
+        var primaryFrom = Window.Of(filter.From, filter.To).From;
         var (primary, comparison) = await ForRangesAsync(
             filter,
             range => LoadEventsAsync(range, window, zone, sensorStarts, ct),
             (inputs, range) => EventResponseCalculator.Calculate(
-                inputs, Mask(filter, range, zone, inputs.Sources), range.From, range.To, definition));
+                inputs, Mask(filter, range, zone, inputs.Sources), range.From, range.To, definition,
+                listEvents: range.From == primaryFrom));
         return new EventResponseReport { Primary = primary, Comparison = comparison };
     }
 
     /// <summary>
     /// The Daily profile's reads over <paramref name="range"/> widened by the window and
     /// <see cref="EventMarginMs"/>, since an anchor near either end reads past it, and the sensor
-    /// starts in the range when a cohort asks for them.
+    /// starts in the range when a cohort asks for them, from
+    /// <see cref="EventAnchors.SensorSessionMergeMs"/> before it so a start just inside the range is
+    /// merged with the change recorded just before it.
     /// </summary>
     private async Task<EventResponseInputs> LoadEventsAsync(
         Window range, EventWindow window, TimeZoneInfo zone, bool sensorStarts, CancellationToken ct)
     {
         var padded = new Window(range.From - window.BeforeMs - EventMarginMs, range.To + window.AfterMs + EventMarginMs);
         var sensorTask = sensorStarts
-            ? deviceEventRepository.GetAsync(ToUtc(range.From), ToUtc(range.To), null, null, int.MaxValue, descending: false, ct: ct)
+            ? deviceEventRepository.GetAsync(
+                ToUtc(range.From - EventAnchors.SensorSessionMergeMs), ToUtc(range.To), null, null, int.MaxValue, descending: false, ct: ct)
             : Task.FromResult(Enumerable.Empty<Core.Models.V4.DeviceEvent>());
         var loaded = await LoadAsync(padded, zone, ct);
 

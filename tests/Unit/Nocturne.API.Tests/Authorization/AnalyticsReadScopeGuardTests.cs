@@ -1214,11 +1214,22 @@ public partial class AnalyticsReadScopeGuardTests
     [Fact]
     public void LoopAnalysis_EverySeriesCanBeWithheld_ByExactlyOneTab()
     {
-        var dailyProfile = LoopAnalysisReadScopeGuard.Withheld(Granted());
-        var events = LoopAnalysisReadScopeGuard.WithheldEvents(Granted());
+        var byTab = LoopAnalysisReadScopeGuard.TabResponses
+            .ToDictionary(t => t, t => LoopAnalysisReadScopeGuard.WithheldFrom(t, Granted()));
 
-        dailyProfile.Should().NotIntersectWith(events);
-        dailyProfile.Concat(events).Should().BeEquivalentTo(Enum.GetValues<LoopAnalysisSeries>());
+        foreach (var series in Enum.GetValues<LoopAnalysisSeries>())
+            byTab.Where(t => t.Value.Contains(series)).Select(t => t.Key)
+                .Should().ContainSingle($"{series} is withheld by exactly one tab");
+    }
+
+    [Fact]
+    public void LoopAnalysis_EveryRouteIsARegisteredTab()
+    {
+        var responses = typeof(LoopAnalysisController).GetMethods()
+            .Where(m => m.GetCustomAttribute<HttpGetAttribute>() is not null)
+            .Select(m => m.ReturnType.GetGenericArguments().Single().GetGenericArguments().Single());
+
+        LoopAnalysisReadScopeGuard.TabResponses.Should().BeEquivalentTo(responses);
     }
 
     [Fact]

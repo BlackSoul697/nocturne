@@ -45,7 +45,7 @@ public class LoopAnalysisEventResponseIntegrationTests(ApiIntegrationTestFixture
         meals.GetProperty("events").GetInt32().Should().Be(7);
         var slots = meals.GetProperty("slots");
         slots.GetArrayLength().Should().Be(72);
-        slots[24].GetProperty("minute").GetInt32().Should().Be(60);
+        body.GetProperty("slotMinutes")[24].GetInt32().Should().Be(60);
         slots[24].GetProperty("glucoseChange").GetProperty("p50").GetDouble().Should().Be(80);
         slots[24].GetProperty("glucoseChange").GetProperty("n").GetInt32().Should().Be(7);
         meals.GetProperty("metrics").GetProperty("peakRise").GetProperty("p50").GetDouble().Should().Be(80);
@@ -65,6 +65,7 @@ public class LoopAnalysisEventResponseIntegrationTests(ApiIntegrationTestFixture
         events[1].GetProperty("time").GetString().Should().Be("19:00");
 
         body.GetProperty("comparison").GetProperty("cohorts")[0].GetProperty("events").GetInt32().Should().Be(7);
+        body.GetProperty("comparison").GetProperty("events").GetArrayLength().Should().Be(0, "only the primary range's events are listed");
     }
 
     [Theory]
@@ -79,25 +80,29 @@ public class LoopAnalysisEventResponseIntegrationTests(ApiIntegrationTestFixture
 
         var body = await GetOkAsync(client, Query($"{Week}&anchor1=Meal&isolatedOnly=true"));
 
+        var meals = treatments && glucose;
         var ignored = body.GetProperty("ignoredFilters").EnumerateArray().Select(f => f.GetString()).ToList();
-        ignored.Should().BeEquivalentTo(treatments ? Array.Empty<string>() : ["anchor1", "isolatedOnly"]);
+        ignored.Should().BeEquivalentTo([
+            .. meals ? Array.Empty<string>() : ["anchor1"],
+            .. treatments ? Array.Empty<string>() : ["isolatedOnly"],
+        ]);
         var unavailable = body.GetProperty("unavailableAnchors").EnumerateArray()
             .Select(a => a.GetProperty("anchor").GetString()).ToList();
-        unavailable.Contains("Meal").Should().Be(!treatments);
-        unavailable.Contains("UnannouncedRise").Should().Be(!(treatments && glucose));
-        unavailable.Contains("SensorStart").Should().Be(!scopes.Contains(Scope.DevicesRead));
+        unavailable.Contains("Meal").Should().Be(!meals, "every anchor needs glucose");
+        unavailable.Contains("UnannouncedRise").Should().Be(!meals);
+        unavailable.Contains("SensorStart").Should().Be(!(glucose && scopes.Contains(Scope.DevicesRead)));
 
         var withheld = body.GetProperty("withheldSeries").EnumerateArray().Select(s => s.GetString()).ToList();
         withheld.Contains("EventList").Should().Be(!treatments);
         withheld.Contains("EventGlucose").Should().Be(!glucose);
 
         var cohorts = body.GetProperty("primary").GetProperty("cohorts");
-        cohorts.GetArrayLength().Should().Be(treatments ? 1 : 0);
-        body.GetProperty("primary").GetProperty("events").GetArrayLength().Should().Be(treatments ? 7 : 0);
-        if (treatments)
+        cohorts.GetArrayLength().Should().Be(meals ? 1 : 0);
+        body.GetProperty("primary").GetProperty("events").GetArrayLength().Should().Be(meals ? 7 : 0);
+        if (meals)
         {
             var slot = cohorts[0].GetProperty("slots")[24];
-            Absent(slot, "glucose").Should().Be(!glucose);
+            Absent(slot, "glucose").Should().BeFalse();
             Absent(slot, "iob").Should().BeFalse();
         }
     }
@@ -117,6 +122,7 @@ public class LoopAnalysisEventResponseIntegrationTests(ApiIntegrationTestFixture
     [Theory]
     [InlineData("minutesAfter=500")]
     [InlineData("minutesBefore=3")]
+    [InlineData("fromMinute1=1440")]
     [InlineData("anchor1=CorrectionBolus&minGrams1=20")]
     [InlineData("fromMinute2=60")]
     public async Task Rejects_a_definition_it_cannot_compute(string events)

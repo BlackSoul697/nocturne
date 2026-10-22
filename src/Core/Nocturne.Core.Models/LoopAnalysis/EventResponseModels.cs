@@ -70,19 +70,16 @@ public class EventResponseDefinition
     public int MinutesAfter { get; set; } = DefaultMinutesAfter;
 
     /// <summary>
-    /// Drop an event when another meal or correction bolus falls inside its window, so its curve is
-    /// its own.
+    /// Drop an event when another meal, correction bolus or unannounced rise falls inside its
+    /// window, so its curve is its own.
     /// </summary>
     public bool IsolatedOnly { get; set; }
 
     /// <summary>
-    /// Count an unannounced rise only where the loop answered it with automatic boluses; see
-    /// <c>UnannouncedRises.ClusterUnits</c>.
+    /// Count an unannounced rise only where the loop answered it with a correction of its own; see
+    /// <c>UnannouncedRises.CorroborationBasalHours</c>.
     /// </summary>
-    public bool RequireBolusCluster { get; set; }
-
-    [JsonIgnore]
-    public int SlotCount => (MinutesBefore + MinutesAfter) / SlotMinutes;
+    public bool RequireCorroboration { get; set; }
 }
 
 /// <summary>An anchor kind the caller's scopes do not let it ask for, and the scope it would need.</summary>
@@ -102,6 +99,12 @@ public class EventResponseReport : LoopAnalysisResponse
     /// <summary>Anchor kinds the caller cannot ask for; a cohort that asks for one is dropped.</summary>
     public List<EventUnavailableAnchor> UnavailableAnchors { get; set; } = [];
 
+    /// <summary>
+    /// Minutes from the anchor to the start of each slot of the window, earliest first; every
+    /// cohort's <see cref="EventCohortResult.Slots"/> follows this order.
+    /// </summary>
+    public List<int> SlotMinutes { get; set; } = [];
+
     public EventResponseRange Primary { get; set; } = new();
 
     public EventResponseRange? Comparison { get; set; }
@@ -116,7 +119,10 @@ public class EventResponseRange
     /// <summary>One result per cohort of <see cref="EventResponseReport.Definition"/>, in its order.</summary>
     public List<EventCohortResult> Cohorts { get; set; } = [];
 
-    /// <summary>Every event counted in some cohort, oldest first; each appears once.</summary>
+    /// <summary>
+    /// Every event counted in some cohort, oldest first; each appears once. Listed for the primary
+    /// range only.
+    /// </summary>
     public List<EventResponseEvent> Events { get; set; } = [];
 }
 
@@ -127,18 +133,30 @@ public class EventCohortResult
     /// <summary>Anchors of the cohort's kind and filters in the range's analysed time.</summary>
     public int Anchors { get; set; }
 
-    /// <summary>Anchors dropped because another meal or correction bolus fell inside the window.</summary>
+    /// <summary>Anchors dropped, with isolated events only asked for, for another event in the window.</summary>
     public int NotIsolated { get; set; }
 
-    /// <summary>Anchors dropped for want of a glucose reading within 5 minutes of the anchor.</summary>
+    /// <summary>
+    /// Anchors dropped for want of a start glucose: a reading within 5 minutes of the anchor, or for
+    /// a sensor start the first reading after its warm-up.
+    /// </summary>
     public int MissingAnchorGlucose { get; set; }
 
     /// <summary>Anchors counted: the events behind every slot and metric.</summary>
     public int Events { get; set; }
 
     /// <summary>
+    /// Meals given no grams per unit because another meal, correction or rise fell inside the
+    /// window, so its insulin is not the meal's alone.
+    /// </summary>
+    public int GramsPerUnitNotIsolated { get; set; }
+
+    /// <summary>Isolated meals given no grams per unit because no insulin above schedule was delivered in the window.</summary>
+    public int GramsPerUnitNoNetInsulin { get; set; }
+
+    /// <summary>
     /// The window in <see cref="EventResponseDefinition.SlotMinutes"/>-minute slots from the
-    /// anchor's exact time, earliest first.
+    /// anchor's exact time, in the order of <see cref="EventResponseReport.SlotMinutes"/>.
     /// </summary>
     public List<EventResponseSlot> Slots { get; set; } = [];
 
@@ -150,11 +168,6 @@ public class EventCohortResult
 /// </summary>
 public class EventResponseSlot
 {
-    public int Slot { get; set; }
-
-    /// <summary>Minutes from the anchor to the slot's start; negative before it.</summary>
-    public int Minute { get; set; }
-
     /// <summary>mg/dL, the slot's mean reading minus the anchor glucose.</summary>
     public LoopAnalysisAggregate? GlucoseChange { get; set; }
 
@@ -195,6 +208,13 @@ public class EventResponseEvent
 
     /// <summary>The cohorts that counted it.</summary>
     public List<int> Cohorts { get; set; } = [];
+
+    /// <summary>
+    /// Which slots of the window held a glucose reading, as base64 of a bitmap: slot <c>i</c> is
+    /// bit <c>i % 8</c> (least significant first) of byte <c>i / 8</c>, in the order of
+    /// <see cref="EventResponseReport.SlotMinutes"/>. Null when glucose is withheld.
+    /// </summary>
+    public string? GlucoseCoverage { get; set; }
 
     public EventMetrics Metrics { get; set; } = new();
 }

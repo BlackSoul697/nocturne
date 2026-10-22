@@ -25,21 +25,34 @@ public sealed record EventResponseInputs
 /// <remarks>
 /// An anchor counts when it falls in the range's analysed time (<see cref="LoopAnalysisMask.Analysed"/>);
 /// its window then reads whatever data surrounds it, masked or not, except readings under a data
-/// exclusion. An anchor two cohorts both match is one episode, counted in each.
+/// exclusion. An anchor two cohorts both match is one episode, counted in each. Whether an event is
+/// isolated (<see cref="EventAnchors.IsIsolated"/>) is decided for every event, whether or not only
+/// isolated events are asked for, because a meal's grams per unit is read only off an isolated one.
 /// </remarks>
 public static class EventResponseCalculator
 {
+    /// <param name="listEvents">Whether to list the events; the comparison range's are not shown.</param>
     public static EventResponseRange Calculate(
-        EventResponseInputs inputs, LoopAnalysisMask mask, long from, long to, EventResponseDefinition definition)
+        EventResponseInputs inputs,
+        LoopAnalysisMask mask,
+        long from,
+        long to,
+        EventResponseDefinition definition,
+        bool listEvents = true)
     {
         var zone = inputs.Series.Zone;
         var window = EventWindow.Of(definition);
         var exclusions = IntervalSet.Of(inputs.Sources.DataExclusions);
         var series = new EventSeries(inputs.Series, exclusions);
-        var anchors = new AnchorSource(inputs, series, exclusions, definition.RequireBolusCluster);
-        long[] isolating = definition.IsolatedOnly
-            ? [.. anchors.Of(EventAnchorKind.Meal).Concat(anchors.Of(EventAnchorKind.CorrectionBolus)).Select(a => a.Mills).Order()]
-            : [];
+        var anchors = new AnchorSource(inputs, series, exclusions, definition.RequireCorroboration);
+        long[] isolating =
+        [
+            .. anchors.Of(EventAnchorKind.Meal)
+                .Concat(anchors.Of(EventAnchorKind.CorrectionBolus))
+                .Concat(anchors.Of(EventAnchorKind.UnannouncedRise))
+                .Select(a => a.Mills)
+                .Order(),
+        ];
 
         var episodes = new Dictionary<EventAnchor, EventEpisode?>();
         var membership = new SortedDictionary<long, List<(EventEpisode Episode, int Cohort)>>();
@@ -54,19 +67,27 @@ public static class EventResponseCalculator
                 if (anchor.Mills < from || anchor.Mills >= to || !mask.Analysed.Contains(anchor.Mills) || !Matches(cohort, anchor, zone))
                     continue;
                 result.Anchors++;
-                if (definition.IsolatedOnly && !EventAnchors.IsIsolated(anchor, isolating, window.BeforeMs, window.AfterMs))
+                var isolated = EventAnchors.IsIsolated(anchor, isolating, window.BeforeMs, window.AfterMs);
+                if (definition.IsolatedOnly && !isolated)
                 {
                     result.NotIsolated++;
                     continue;
                 }
                 if (!episodes.TryGetValue(anchor, out var episode))
-                    episodes[anchor] = episode = EventEpisode.Build(anchor, series, window);
+                    episodes[anchor] = episode = EventEpisode.Build(anchor, series, window, isolated);
                 if (episode is null)
                 {
                     result.MissingAnchorGlucose++;
                     continue;
                 }
                 counted.Add(episode);
+                if (anchor.Kind == EventAnchorKind.Meal && episode.Metrics.GramsPerUnit is null)
+                {
+                    if (!isolated)
+                        result.GramsPerUnitNotIsolated++;
+                    else if (episode.Metrics.NetInsulin is <= 0)
+                        result.GramsPerUnitNoNetInsulin++;
+                }
                 if (!membership.TryGetValue(anchor.Mills, out var members))
                     membership[anchor.Mills] = members = [];
                 members.Add((episode, cohort.Cohort));
@@ -83,10 +104,19 @@ public static class EventResponseCalculator
             From = DateTimeOffset.FromUnixTimeMilliseconds(from).UtcDateTime,
             To = DateTimeOffset.FromUnixTimeMilliseconds(to).UtcDateTime,
             Cohorts = cohorts,
-            Events = [.. membership.Values.SelectMany(members => members
-                .GroupBy(m => m.Episode)
-                .Select(g => Event(g.Key, [.. g.Select(m => m.Cohort).Distinct().Order()], zone)))],
+            Events = listEvents
+                ? [.. membership.Values.SelectMany(members => members
+                    .GroupBy(m => m.Episode)
+                    .Select(g => Event(g.Key, [.. g.Select(m => m.Cohort).Distinct().Order()], zone)))]
+                : [],
         };
+    }
+
+    /// <summary>Minutes from the anchor to the start of each slot of the window.</summary>
+    public static List<int> SlotMinutes(EventResponseDefinition definition)
+    {
+        var window = EventWindow.Of(definition);
+        return [.. Enumerable.Range(0, window.SlotCount).Select(k => (int)(window.SlotOffset(k) / LocalSlotBinning.MinuteMs))];
     }
 
     /// <summary>Whether an anchor falls in the cohort's local time-of-day window and, for a meal, its size.</summary>
@@ -115,8 +145,18 @@ public static class EventResponseCalculator
             Anchor = episode.Anchor.Kind,
             Grams = episode.Anchor.Grams is { } grams ? SlotSummary.Round(grams) : null,
             Cohorts = cohorts,
+            GlucoseCoverage = GlucoseCoverage(episode),
             Metrics = Rounded(episode.Metrics),
         };
+    }
+
+    private static string GlucoseCoverage(EventEpisode episode)
+    {
+        var bits = new byte[(episode.Slots.Count + 7) / 8];
+        for (var k = 0; k < episode.Slots.Count; k++)
+            if (episode.Slots[k].Glucose is not null)
+                bits[k / 8] |= (byte)(1 << (k % 8));
+        return Convert.ToBase64String(bits);
     }
 
     private static List<EventResponseSlot> Slots(List<EventEpisode> episodes, EventWindow window)
@@ -129,8 +169,6 @@ public static class EventResponseCalculator
 
             slots.Add(new EventResponseSlot
             {
-                Slot = k,
-                Minute = (int)(window.SlotOffset(k) / LocalSlotBinning.MinuteMs),
                 GlucoseChange = Of(s => s.GlucoseChange),
                 Glucose = Of(s => s.Glucose),
                 NetLoopCorrection = Of(s => s.NetLoopCorrection),
@@ -180,7 +218,7 @@ public static class EventResponseCalculator
 
     /// <summary>The anchors of each kind, found once per range whichever cohorts ask for them.</summary>
     private sealed class AnchorSource(
-        EventResponseInputs inputs, EventSeries series, IntervalSet exclusions, bool requireCluster)
+        EventResponseInputs inputs, EventSeries series, IntervalSet exclusions, bool requireCorroboration)
     {
         private readonly Dictionary<EventAnchorKind, List<EventAnchor>> _found = [];
 
@@ -205,7 +243,7 @@ public static class EventResponseCalculator
                 EventAnchorKind.TemporaryTargetStart => EventAnchors.Starts(sources.TemporaryTargets, kind),
                 EventAnchorKind.UnannouncedRise => UnannouncedRises.Find(
                     series.Readings, exclusions, carbs,
-                    [.. series.Insulin.Doses.Where(d => d.Automatic)], requireCluster),
+                    series.Insulin, requireCorroboration),
                 _ => throw new ArgumentOutOfRangeException(nameof(kind), kind, null),
             };
         }

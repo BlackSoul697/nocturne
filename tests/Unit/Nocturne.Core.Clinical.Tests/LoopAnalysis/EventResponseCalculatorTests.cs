@@ -10,6 +10,7 @@ public class EventResponseCalculatorTests
     private static readonly TimeZoneInfo Sydney = TimeZoneInfo.FindSystemTimeZoneById("Australia/Sydney");
     private const long Minute = 60_000;
     private const long Hour = 60 * Minute;
+    private const long Day = 24 * Hour;
 
     private static long Local(int y, int mo, int d, int h, int mi = 0) =>
         new DateTimeOffset(new DateTime(y, mo, d, h, mi, 0), Sydney.GetUtcOffset(new DateTime(y, mo, d, h, mi, 0)))
@@ -32,6 +33,7 @@ public class EventResponseCalculatorTests
         IEnumerable<RateSegment>? scheduled = null,
         IEnumerable<IobCobTick>? iobCob = null,
         LoopAnalysisMaskSources? sources = null,
+        IReadOnlyList<long>? sensorStarts = null,
         bool isolatedOnly = false,
         long? from = null,
         long? to = null)
@@ -48,6 +50,7 @@ public class EventResponseCalculatorTests
                 IobCob = [.. iobCob ?? []],
             },
             Sources = sources ?? new LoopAnalysisMaskSources(),
+            SensorStarts = sensorStarts ?? [],
         };
         var start = from ?? From;
         var end = to ?? To;
@@ -74,8 +77,9 @@ public class EventResponseCalculatorTests
         var cohort = range.Cohorts.Single();
         cohort.Events.Should().Be(1);
         cohort.Slots.Should().HaveCount(72);
-        cohort.Slots[12].Minute.Should().Be(0);
-        cohort.Slots[0].Minute.Should().Be(-60);
+        var minutes = EventResponseCalculator.SlotMinutes(new EventResponseDefinition());
+        minutes[12].Should().Be(0);
+        minutes[0].Should().Be(-60);
         cohort.Slots[12].GlucoseChange!.P50.Should().Be(0);
         var e = range.Events.Single();
         e.Date.Should().Be("2024-06-12");
@@ -265,14 +269,57 @@ public class EventResponseCalculatorTests
     }
 
     [Fact]
+    public void ASensorStart_TakesItsStartGlucoseFromTheFirstReadingAfterWarmUp()
+    {
+        var start = Local(2024, 6, 11, 9, 0);
+        var firstReading = start + 2 * Hour;
+        var glucose = Flat(140).Where(g => g.Mills < start - 10 * Minute || g.Mills >= firstReading);
+
+        var range = Calculate([Cohort(1, EventAnchorKind.SensorStart)], glucose: glucose, sensorStarts: [start]);
+
+        var cohort = range.Cohorts.Single();
+        cohort.MissingAnchorGlucose.Should().Be(0);
+        cohort.Events.Should().Be(1);
+        range.Events.Single().Metrics.StartGlucose.Should().Be(140);
+
+        var lateSensor = Calculate(
+            [Cohort(1, EventAnchorKind.SensorStart)],
+            glucose: Flat(140).Where(g => g.Mills < start || g.Mills >= start + 4 * Hour),
+            sensorStarts: [start]);
+        lateSensor.Cohorts.Single().MissingAnchorGlucose.Should().Be(1, "no reading came within three hours");
+    }
+
+    [Fact]
+    public void GramsPerUnit_IsReadOnlyOffIsolatedMeals_AndTheRestAreCounted()
+    {
+        var lunch = Local(2024, 6, 11, 12, 0);
+        var snack = lunch + 2 * Hour;
+        var dinner = Local(2024, 6, 12, 18, 0);
+
+        var range = Calculate(
+            [Cohort(1)],
+            glucose: Flat(120),
+            carbs: [new(lunch, 60), new(snack, 20), new(dinner, 40)],
+            doses: [new(lunch, 4, false), new(snack, 1, false), new(dinner, 3, false)],
+            delivered: [new(From - Day, To + Day, 1.0, BasalDeliveryOrigin.Algorithm)],
+            scheduled: [new(From - Day, To + Day, 1.0)]);
+
+        var cohort = range.Cohorts.Single();
+        cohort.Events.Should().Be(3, "isolation decides grams per unit, not whether a meal is counted");
+        cohort.GramsPerUnitNotIsolated.Should().Be(1, "the snack falls in lunch's window");
+        cohort.Metrics.GramsPerUnit!.N.Should().Be(2);
+        range.Events.Single(e => e.Grams == 60).Metrics.GramsPerUnit.Should().BeNull();
+        range.Events.Single(e => e.Grams == 40).Metrics.GramsPerUnit.Should().BeApproximately(13.333, 0.001);
+    }
+
+    [Fact]
     public void SensorStarts_LoggedTogether_AreOneSensor()
     {
         var change = Local(2024, 6, 11, 9, 0);
 
-        EventAnchors.SensorStarts([change, change + 30 * Minute, change + 3 * Day()])
-            .Select(a => a.Mills).Should().Equal(change, change + 3 * Day());
+        EventAnchors.SensorStarts([change, change + 30 * Minute, change + 3 * Day])
+            .Select(a => a.Mills).Should().Equal(change, change + 3 * Day);
 
-        static long Day() => 24 * Hour;
     }
 
     [Fact]

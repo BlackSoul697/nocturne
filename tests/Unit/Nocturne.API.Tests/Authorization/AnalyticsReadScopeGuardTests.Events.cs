@@ -23,6 +23,7 @@ public partial class AnalyticsReadScopeGuardTests
                 Cohort = cohort,
                 Anchors = 1,
                 Events = 1,
+                GramsPerUnitNotIsolated = 1,
                 Slots =
                 [
                     new EventResponseSlot
@@ -38,25 +39,19 @@ public partial class AnalyticsReadScopeGuardTests
         Events = [new EventResponseEvent { Date = "2024-06-03", Metrics = new EventMetrics { StartGlucose = 100, NetInsulin = 2, IobAtAnchor = 1 } }],
     };
 
-    private static EventResponseReport EventReport(EventAnchorKind anchor) => new()
-    {
-        Definition = new EventResponseDefinition { Cohorts = [new EventCohortDefinition { Cohort = 1, Anchor = anchor }] },
-        Primary = EventRange(),
-        Comparison = EventRange(),
-    };
+    private static EventResponseReport EventReport() => new() { Primary = EventRange(), Comparison = EventRange() };
 
     public static TheoryData<string[], LoopAnalysisSeries[]> EventScopeCombinations => new()
     {
         { AllLoopAnalysisCategories, [] },
         { [Scope.GlucoseRead, Scope.DevicesRead], [LoopAnalysisSeries.EventNetInsulin, LoopAnalysisSeries.EventIob, LoopAnalysisSeries.EventCob, LoopAnalysisSeries.EventList] },
-        { [Scope.TreatmentsRead, Scope.DevicesRead], [LoopAnalysisSeries.EventGlucose] },
     };
 
     [Theory]
     [MemberData(nameof(EventScopeCombinations))]
     public void LoopAnalysis_Events_WithheldSeries_ListExactlyWhatIsEmptied(string[] scopes, LoopAnalysisSeries[] expected)
     {
-        var data = LoopAnalysisReadScopeGuard.Redact(EventReport(EventAnchorKind.SensorStart), Granted(scopes));
+        var data = LoopAnalysisReadScopeGuard.Redact(EventReport(), Granted(scopes));
 
         data.WithheldSeries.Should().BeEquivalentTo(expected);
         bool Withheld(LoopAnalysisSeries series) => expected.Contains(series);
@@ -64,12 +59,12 @@ public partial class AnalyticsReadScopeGuardTests
         {
             var cohort = range.Cohorts.Single();
             var slot = cohort.Slots.Single();
-            (slot.Glucose is null).Should().Be(Withheld(LoopAnalysisSeries.EventGlucose));
-            (slot.GlucoseChange is null).Should().Be(Withheld(LoopAnalysisSeries.EventGlucose));
-            (cohort.Metrics.StartGlucose is null).Should().Be(Withheld(LoopAnalysisSeries.EventGlucose));
+            slot.Glucose.Should().NotBeNull();
+            cohort.Metrics.StartGlucose.Should().NotBeNull();
             (slot.NetLoopCorrection is null).Should().Be(Withheld(LoopAnalysisSeries.EventNetInsulin));
             (slot.NetInsulinSinceAnchor is null).Should().Be(Withheld(LoopAnalysisSeries.EventNetInsulin));
             (cohort.Metrics.NetInsulin is null).Should().Be(Withheld(LoopAnalysisSeries.EventNetInsulin));
+            (cohort.GramsPerUnitNotIsolated == 0).Should().Be(Withheld(LoopAnalysisSeries.EventNetInsulin));
             (slot.Iob is null).Should().Be(Withheld(LoopAnalysisSeries.EventIob));
             (cohort.Metrics.IobAtAnchor is null).Should().Be(Withheld(LoopAnalysisSeries.EventIob));
             (slot.Cob is null).Should().Be(Withheld(LoopAnalysisSeries.EventCob));
@@ -77,61 +72,58 @@ public partial class AnalyticsReadScopeGuardTests
         }
     }
 
-    [Fact]
-    public void LoopAnalysis_Events_WithNoCategory_LeaveNothingButTheAllowlist()
+    public static TheoryData<string[]> ScopesWithoutGlucose => new()
     {
-        var data = LoopAnalysisReadScopeGuard.Redact(RedactionCoverage.Populated<EventResponseReport>(), Granted());
+        Array.Empty<string>(),
+        new[] { Scope.TreatmentsRead, Scope.DevicesRead, Scope.TherapyRead },
+    };
+
+    [Theory]
+    [MemberData(nameof(ScopesWithoutGlucose))]
+    public void LoopAnalysis_Events_WithoutGlucose_LeaveNoCohortCountOrEvent(string[] scopes)
+    {
+        var data = LoopAnalysisReadScopeGuard.Redact(RedactionCoverage.Populated<EventResponseReport>(), Granted(scopes));
 
         RedactionCoverage.AssertWithheld(
-            data,
-            [typeof(EventResponseRange), typeof(EventResponseDefinition)],
-            [
-                "EventResponseRange.From", "EventResponseRange.To",
-                "EventResponseDefinition.MinutesBefore", "EventResponseDefinition.MinutesAfter",
-            ]);
+            data, [typeof(EventResponseRange)], ["EventResponseRange.From", "EventResponseRange.To"]);
     }
 
     [Fact]
-    public void LoopAnalysis_Events_WithDevicesOnly_KeepOnlyTheSensorStartCountsAndShape()
+    public void LoopAnalysis_Events_WithGlucoseAndDevices_KeepOnlyTheGlucoseSeriesAndTheCounts()
     {
-        var data = RedactionCoverage.Populated<EventResponseReport>();
-        data.Definition.Cohorts.Single().Anchor = EventAnchorKind.SensorStart;
-
         RedactionCoverage.AssertWithheld(
-            LoopAnalysisReadScopeGuard.Redact(data, Granted(Scope.DevicesRead)),
+            LoopAnalysisReadScopeGuard.Redact(RedactionCoverage.Populated<EventResponseReport>(), Granted(Scope.GlucoseRead, Scope.DevicesRead)),
             [typeof(EventCohortResult), typeof(EventResponseSlot), typeof(EventMetricsSummary)],
             [
                 "EventCohortResult.Cohort", "EventCohortResult.Anchors", "EventCohortResult.NotIsolated",
                 "EventCohortResult.MissingAnchorGlucose", "EventCohortResult.Events",
                 "EventCohortResult.Slots", "EventCohortResult.Metrics",
-                "EventResponseSlot.Slot", "EventResponseSlot.Minute",
+                "EventResponseSlot.GlucoseChange", "EventResponseSlot.Glucose",
+                "EventMetricsSummary.StartGlucose", "EventMetricsSummary.PeakRise", "EventMetricsSummary.MinutesToPeak",
+                "EventMetricsSummary.GlucoseAt2Hours", "EventMetricsSummary.GlucoseAt4Hours", "EventMetricsSummary.MinutesBackToStart",
             ]);
     }
 
     [Fact]
-    public void LoopAnalysis_Events_WithoutGlucose_WithholdEveryGlucoseFigureOfEachEvent()
+    public void LoopAnalysis_Events_WithGlucoseAndTreatments_KeepEveryFigureOfEachEvent()
     {
-        var data = RedactionCoverage.Populated<EventResponseReport>();
-        data.Definition.Cohorts.Single().Anchor = EventAnchorKind.Meal;
+        var data = LoopAnalysisReadScopeGuard.Redact(
+            RedactionCoverage.Populated<EventResponseReport>(), Granted(Scope.GlucoseRead, Scope.TreatmentsRead));
 
-        RedactionCoverage.AssertWithheld(
-            LoopAnalysisReadScopeGuard.Redact(data, Granted(Scope.TreatmentsRead, Scope.DevicesRead)),
-            [typeof(EventMetrics)],
-            [
-                "EventMetrics.TotalInsulin", "EventMetrics.NetInsulin", "EventMetrics.GramsPerUnit",
-                "EventMetrics.IobAtAnchor", "EventMetrics.IobAtEnd", "EventMetrics.NetInsulinFirst30",
-                "EventMetrics.NetInsulinFirst60", "EventMetrics.NetInsulinFirst120",
-            ]);
+        data.WithheldSeries.Should().BeEmpty();
+        data.Primary.Events.Single().Metrics.GramsPerUnit.Should().NotBeNull();
     }
 
     public static TheoryData<EventAnchorKind, string[], bool> AnchorAccess => new()
     {
         { EventAnchorKind.Meal, [Scope.GlucoseRead, Scope.DevicesRead], false },
-        { EventAnchorKind.Meal, [Scope.TreatmentsRead], true },
+        { EventAnchorKind.Meal, [Scope.TreatmentsRead], false },
+        { EventAnchorKind.Meal, [Scope.GlucoseRead, Scope.TreatmentsRead], true },
         { EventAnchorKind.CorrectionBolus, [Scope.GlucoseRead], false },
-        { EventAnchorKind.ExerciseStart, [Scope.TreatmentsRead], true },
+        { EventAnchorKind.ExerciseStart, [Scope.GlucoseRead, Scope.TreatmentsRead], true },
         { EventAnchorKind.SensorStart, [Scope.GlucoseRead, Scope.TreatmentsRead], false },
-        { EventAnchorKind.SensorStart, [Scope.DevicesRead], true },
+        { EventAnchorKind.SensorStart, [Scope.DevicesRead], false },
+        { EventAnchorKind.SensorStart, [Scope.GlucoseRead, Scope.DevicesRead], true },
         { EventAnchorKind.UnannouncedRise, [Scope.GlucoseRead], false },
         { EventAnchorKind.UnannouncedRise, [Scope.TreatmentsRead], false },
         { EventAnchorKind.UnannouncedRise, [Scope.GlucoseRead, Scope.TreatmentsRead], true },
@@ -139,7 +131,7 @@ public partial class AnalyticsReadScopeGuardTests
 
     [Theory]
     [MemberData(nameof(AnchorAccess))]
-    public void LoopAnalysis_Events_ACohortNeedsTheCategoriesItsAnchorIsDrawnFrom(EventAnchorKind anchor, string[] scopes, bool kept)
+    public void LoopAnalysis_Events_ACohortNeedsGlucoseAndTheCategoryItsAnchorIsDrawnFrom(EventAnchorKind anchor, string[] scopes, bool kept)
     {
         var definition = new EventResponseDefinition
         {
@@ -157,26 +149,16 @@ public partial class AnalyticsReadScopeGuardTests
     [Fact]
     public void LoopAnalysis_Events_WithoutTreatments_DropTheOptions()
     {
-        var definition = new EventResponseDefinition { IsolatedOnly = true, RequireBolusCluster = true };
+        var definition = new EventResponseDefinition { IsolatedOnly = true, RequireCorroboration = true };
 
         var ignored = LoopAnalysisReadScopeGuard.NarrowEvents(definition, Granted(Scope.GlucoseRead, Scope.DevicesRead));
 
-        ignored.Should().Equal("isolatedOnly", "requireBolusCluster");
+        ignored.Should().Equal("isolatedOnly", "requireCorroboration");
         definition.IsolatedOnly.Should().BeFalse();
-        definition.RequireBolusCluster.Should().BeFalse();
+        definition.RequireCorroboration.Should().BeFalse();
         LoopAnalysisReadScopeGuard.UnavailableEventFilters(Granted(Scope.GlucoseRead)).Select(f => f.Filter)
-            .Should().Equal("isolatedOnly", "requireBolusCluster");
+            .Should().Equal("isolatedOnly", "requireCorroboration");
         LoopAnalysisReadScopeGuard.UnavailableEventFilters(Granted(Scope.TreatmentsRead)).Should().BeEmpty();
-    }
-
-    [Fact]
-    public void LoopAnalysis_Events_RedactDropsACohortTheCallerCouldNotHaveAskedFor()
-    {
-        var data = LoopAnalysisReadScopeGuard.Redact(EventReport(EventAnchorKind.Meal), Granted(Scope.GlucoseRead, Scope.DevicesRead));
-
-        data.Definition.Cohorts.Should().BeEmpty();
-        data.Primary.Cohorts.Should().BeEmpty();
-        data.Comparison!.Cohorts.Should().BeEmpty();
     }
 
     [Fact]
@@ -193,7 +175,7 @@ public partial class AnalyticsReadScopeGuardTests
     }
 
     [Fact]
-    public async Task LoopAnalysis_EventHandler_NarrowsTheDefinitionAndReportsWhatItIgnored()
+    public async Task LoopAnalysis_EventHandler_NarrowsTheDefinitionBeforeComputingAndReportsWhatItIgnored()
     {
         var (controller, service) = LoopAnalysisHandler(
             Granted(Scope.ReportsRead, Scope.GlucoseRead, Scope.DevicesRead), query: "?anchor1=Meal&anchor2=SensorStart&isolatedOnly=true");
@@ -207,20 +189,20 @@ public partial class AnalyticsReadScopeGuardTests
         var data = result.Result.Should().BeOfType<OkObjectResult>().Which.Value.Should().BeOfType<EventResponseReport>().Subject;
         data.IgnoredFilters.Should().BeEquivalentTo(["anchor1", "isolatedOnly"]);
         data.Definition.Cohorts.Select(c => c.Anchor).Should().Equal(EventAnchorKind.SensorStart);
+        data.SlotMinutes.Should().HaveCount(72).And.StartWith(-60);
         data.UnavailableAnchors.Select(a => a.Anchor).Should().Contain(EventAnchorKind.Meal).And.NotContain(EventAnchorKind.SensorStart);
-        data.UnavailableFilters.Select(f => f.Filter).Should().Contain(["isolatedOnly", "requireBolusCluster", "excludeOverrides"]);
+        data.UnavailableFilters.Select(f => f.Filter).Should().Contain(["isolatedOnly", "requireCorroboration", "excludeOverrides"]);
         data.Primary.Events.Should().BeEmpty();
         data.Primary.Cohorts.Single().Slots.Single().Glucose.Should().NotBeNull();
         service.Verify(s => s.GetEventResponseAsync(
             It.IsAny<LoopAnalysisFilter>(),
-            It.Is<EventResponseDefinition>(d => d.Cohorts.Count == 1 && !d.IsolatedOnly),
+            It.Is<EventResponseDefinition>(d => d.Cohorts.Count == 1 && d.Cohorts[0].Anchor == EventAnchorKind.SensorStart && !d.IsolatedOnly),
             It.IsAny<TimeZoneInfo>(),
             It.IsAny<CancellationToken>()));
     }
 
     [Theory]
-    [InlineData("minutesAfter", 485)]
-    [InlineData("minutesAfter", 30)]
+    [InlineData("minutesAfter", 482)]
     [InlineData("minutesBefore", 7)]
     public async Task LoopAnalysis_EventHandler_RejectsAWindowItCannotSlot(string parameter, int minutes)
     {
@@ -234,7 +216,7 @@ public partial class AnalyticsReadScopeGuardTests
     }
 
     [Fact]
-    public void LoopAnalysis_EventQuery_DefaultsToEveryMealAndRejectsGramsOnAnotherKind()
+    public void LoopAnalysis_EventQuery_DefaultsToEveryMeal_AndReadsAnInvertedFilterLeniently()
     {
         new EventResponseQuery().ToDefinition().Cohorts.Should().ContainSingle()
             .Which.Anchor.Should().Be(EventAnchorKind.Meal);
@@ -242,7 +224,24 @@ public partial class AnalyticsReadScopeGuardTests
             .Should().ContainSingle().Which.Cohort.Should().Be(2);
         new EventResponseQuery { Anchor1 = EventAnchorKind.CorrectionBolus, MinGrams1 = 10 }.Problem().Should().NotBeNull();
         new EventResponseQuery { FromMinute2 = 60 }.Problem().Should().NotBeNull();
-        new EventResponseQuery { FromMinute1 = 60, ToMinute1 = 60 }.Problem().Should().NotBeNull();
-        new EventResponseQuery { FromMinute1 = 22 * 60, ToMinute1 = 120, MinGrams1 = 20, MaxGrams1 = 80 }.Problem().Should().BeNull();
+
+        var lenient = new EventResponseQuery { FromMinute1 = 60, ToMinute1 = 60, MinGrams1 = 80, MaxGrams1 = 20 };
+        lenient.Problem().Should().BeNull();
+        var cohort = lenient.ToDefinition().Cohorts.Single();
+        (cohort.FromMinute, cohort.ToMinute).Should().Be((null, null), "the same start and end is the whole day");
+        (cohort.MinGrams, cohort.MaxGrams).Should().Be((20, 80));
+    }
+
+    [Theory]
+    [InlineData(nameof(EventResponseQuery.FromMinute1), 1440)]
+    [InlineData(nameof(EventResponseQuery.MinutesAfter), 485)]
+    [InlineData(nameof(EventResponseQuery.MaxGrams3), -1)]
+    public void LoopAnalysis_EventQuery_BoundsEveryNumber(string property, int value)
+    {
+        var info = typeof(EventResponseQuery).GetProperty(property)!;
+        var range = info.GetCustomAttribute<System.ComponentModel.DataAnnotations.RangeAttribute>();
+
+        range.Should().NotBeNull();
+        range!.IsValid(value).Should().BeFalse();
     }
 }

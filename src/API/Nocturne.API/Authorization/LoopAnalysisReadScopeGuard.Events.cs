@@ -6,22 +6,25 @@ namespace Nocturne.API.Authorization;
 /// <summary>
 /// The Meals &amp; events tab. An anchor is drawn from a category as a series is: meals, correction
 /// boluses and the starts of exercise, overrides and temporary targets are treatments, sensor
-/// starts are devices, and an unannounced rise is read off glucose and the carbs and automatic
-/// boluses around it, so it needs both. A caller may ask only for anchors it could read, since the
-/// curves and counts aligned on an anchor would otherwise place each one in time. The isolation and
-/// corroboration options read meals and boluses, so they need treatments too.
+/// starts are devices, and an unannounced rise is read off glucose and the carbs and loop
+/// correction around it. Every event is also read off glucose, since one counts only with a start
+/// glucose, so every anchor needs <c>glucose.read</c> as well: otherwise the counts would say where
+/// CGM data existed. A caller may ask only for anchors it could read, since the curves and counts
+/// aligned on an anchor would otherwise place each one in time; the controller drops the rest
+/// before anything is computed (<see cref="NarrowEvents"/>). The isolation and corroboration options
+/// read meals, boluses and delivery, so they need treatments too.
 /// </summary>
 internal static partial class LoopAnalysisReadScopeGuard
 {
     private static readonly IReadOnlyDictionary<EventAnchorKind, string[]> AnchorScopes =
         new Dictionary<EventAnchorKind, string[]>
         {
-            [EventAnchorKind.Meal] = [Scope.TreatmentsRead],
-            [EventAnchorKind.CorrectionBolus] = [Scope.TreatmentsRead],
-            [EventAnchorKind.SensorStart] = [Scope.DevicesRead],
-            [EventAnchorKind.ExerciseStart] = [Scope.TreatmentsRead],
-            [EventAnchorKind.OverrideStart] = [Scope.TreatmentsRead],
-            [EventAnchorKind.TemporaryTargetStart] = [Scope.TreatmentsRead],
+            [EventAnchorKind.Meal] = [Scope.GlucoseRead, Scope.TreatmentsRead],
+            [EventAnchorKind.CorrectionBolus] = [Scope.GlucoseRead, Scope.TreatmentsRead],
+            [EventAnchorKind.SensorStart] = [Scope.GlucoseRead, Scope.DevicesRead],
+            [EventAnchorKind.ExerciseStart] = [Scope.GlucoseRead, Scope.TreatmentsRead],
+            [EventAnchorKind.OverrideStart] = [Scope.GlucoseRead, Scope.TreatmentsRead],
+            [EventAnchorKind.TemporaryTargetStart] = [Scope.GlucoseRead, Scope.TreatmentsRead],
             [EventAnchorKind.UnannouncedRise] = [Scope.GlucoseRead, Scope.TreatmentsRead],
         };
 
@@ -29,7 +32,7 @@ internal static partial class LoopAnalysisReadScopeGuard
     private static readonly (string Name, Func<EventResponseDefinition, bool> IsSet, Action<EventResponseDefinition> Clear)[] EventOptions =
     [
         ("isolatedOnly", d => d.IsolatedOnly, d => d.IsolatedOnly = false),
-        ("requireBolusCluster", d => d.RequireBolusCluster, d => d.RequireBolusCluster = false),
+        ("requireCorroboration", d => d.RequireCorroboration, d => d.RequireCorroboration = false),
     ];
 
     /// <summary>The first scope an anchor kind needs that the caller lacks, or null.</summary>
@@ -89,31 +92,19 @@ internal static partial class LoopAnalysisReadScopeGuard
     }
 
     /// <summary>
-    /// Narrows the response to the caller. The definition was narrowed before it was computed; any
-    /// cohort it still holds that the caller could not have asked for is dropped here as well, so
-    /// the response never depends on that having happened.
+    /// Without glucose there is no event at all, since each counts only with a start glucose; so the
+    /// cohorts and the list go with it, counts included.
     /// </summary>
-    public static EventResponseReport Redact(EventResponseReport data, IReadOnlySet<string> grantedScopes)
-    {
-        NarrowEvents(data.Definition, grantedScopes);
-        var kept = data.Definition.Cohorts.Select(c => c.Cohort).ToHashSet();
-        var withheld = WithheldEvents(grantedScopes);
-        data.WithheldSeries = [.. withheld.Order()];
-
-        foreach (var range in new[] { data.Primary, data.Comparison }.OfType<EventResponseRange>())
-        {
-            range.Cohorts.RemoveAll(c => !kept.Contains(c.Cohort));
-            Narrow(range, withheld);
-        }
-        return data;
-    }
-
     private static void Narrow(EventResponseRange range, HashSet<LoopAnalysisSeries> withheld)
     {
-        if (withheld.Count == 0)
-            return;
         bool Hidden(LoopAnalysisSeries series) => withheld.Contains(series);
 
+        if (Hidden(LoopAnalysisSeries.EventGlucose))
+        {
+            range.Cohorts = [];
+            range.Events = [];
+            return;
+        }
         if (Hidden(LoopAnalysisSeries.EventList))
             range.Events = [];
         foreach (var e in range.Events)
@@ -123,11 +114,6 @@ internal static partial class LoopAnalysisReadScopeGuard
         {
             foreach (var slot in cohort.Slots)
             {
-                if (Hidden(LoopAnalysisSeries.EventGlucose))
-                {
-                    slot.Glucose = null;
-                    slot.GlucoseChange = null;
-                }
                 if (Hidden(LoopAnalysisSeries.EventNetInsulin))
                 {
                     slot.NetLoopCorrection = null;
@@ -137,22 +123,22 @@ internal static partial class LoopAnalysisReadScopeGuard
                 if (Hidden(LoopAnalysisSeries.EventIob)) slot.Iob = null;
                 if (Hidden(LoopAnalysisSeries.EventCob)) slot.Cob = null;
             }
-
+            if (Hidden(LoopAnalysisSeries.EventNetInsulin))
+            {
+                cohort.GramsPerUnitNotIsolated = 0;
+                cohort.GramsPerUnitNoNetInsulin = 0;
+            }
             ClearMetrics(cohort.Metrics, Hidden);
         }
     }
 
     /// <summary>
     /// Each figure of <see cref="EventMetrics"/> by the series it belongs to; the same names on
-    /// <see cref="EventMetricsSummary"/> carry its spread.
+    /// <see cref="EventMetricsSummary"/> carry its spread. Glucose figures need no entry: without
+    /// glucose there are no events.
     /// </summary>
     private static readonly (LoopAnalysisSeries Series, string[] Metrics)[] MetricSeries =
     [
-        (LoopAnalysisSeries.EventGlucose,
-        [
-            nameof(EventMetrics.StartGlucose), nameof(EventMetrics.PeakRise), nameof(EventMetrics.MinutesToPeak),
-            nameof(EventMetrics.GlucoseAt2Hours), nameof(EventMetrics.GlucoseAt4Hours), nameof(EventMetrics.MinutesBackToStart),
-        ]),
         (LoopAnalysisSeries.EventNetInsulin,
         [
             nameof(EventMetrics.TotalInsulin), nameof(EventMetrics.NetInsulin), nameof(EventMetrics.GramsPerUnit),
