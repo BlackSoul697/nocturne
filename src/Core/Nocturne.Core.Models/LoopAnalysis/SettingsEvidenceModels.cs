@@ -1,0 +1,354 @@
+using System.Text.Json.Serialization;
+
+namespace Nocturne.Core.Models.LoopAnalysis;
+
+/// <summary>A local time-of-day block the ISF and carb ratio evidence is reported in.</summary>
+[JsonConverter(typeof(JsonStringEnumConverter<SettingsEvidenceBlock>))]
+public enum SettingsEvidenceBlock
+{
+    /// <summary>00:00 to 06:00.</summary>
+    Overnight,
+
+    /// <summary>06:00 to 11:00.</summary>
+    Morning,
+
+    /// <summary>11:00 to 17:00.</summary>
+    Midday,
+
+    /// <summary>17:00 to 24:00.</summary>
+    Evening,
+}
+
+[JsonConverter(typeof(JsonStringEnumConverter<SettingsEvidenceConfidence>))]
+public enum SettingsEvidenceConfidence
+{
+    Low,
+    Moderate,
+    High,
+}
+
+/// <summary>Why a figure's confidence is below <see cref="SettingsEvidenceConfidence.High"/>.</summary>
+[JsonConverter(typeof(JsonStringEnumConverter<SettingsEvidenceConfidenceReason>))]
+public enum SettingsEvidenceConfidenceReason
+{
+    FewEpisodes,
+
+    /// <summary>The interquartile range is wide against the median.</summary>
+    WideSpread,
+
+    /// <summary>Glucose change converted at an ISF from the profile, for want of a confident observed one.</summary>
+    IsfDependent,
+
+    /// <summary>Insulin measured above the profile's basal schedule, for want of a confident observed basal need.</summary>
+    BasalDependent,
+}
+
+/// <summary>Why a figure has no observed value.</summary>
+[JsonConverter(typeof(JsonStringEnumConverter<SettingsEvidenceUnavailableReason>))]
+public enum SettingsEvidenceUnavailableReason
+{
+    /// <summary>Nothing in the range could be an episode: no correction boluses, or no time in the block.</summary>
+    NoCandidates,
+
+    /// <summary>No carb entries in the block, as for a loop run without announcing meals.</summary>
+    NoAnnouncedMeals,
+
+    /// <summary>Every announced meal had another meal, bolus or rise in its window.</summary>
+    NoneIsolated,
+
+    /// <summary>Candidates existed, and every one was rejected; see the rejection counts.</summary>
+    NoneQualified,
+
+    /// <summary>Too few episodes qualified for a median and spread to mean anything.</summary>
+    TooFew,
+
+    /// <summary>Glucose moved too far across the block for the basal it needed to be read off it.</summary>
+    SteepTrend,
+
+    /// <summary>The loop's correction pointed different ways on too many days.</summary>
+    Inconsistent,
+}
+
+/// <summary>An exclusion rule an episode can be rejected by. Each episode is counted against the first it fails.</summary>
+[JsonConverter(typeof(JsonStringEnumConverter<SettingsEvidenceRule>))]
+public enum SettingsEvidenceRule
+{
+    /// <summary>The loop was open for some of the window.</summary>
+    OpenLoop,
+
+    Override,
+    TemporaryTarget,
+    Exercise,
+    Illness,
+
+    /// <summary>Some of the window falls outside the report's filter: a weekday, a profile, or a masked span.</summary>
+    Filtered,
+
+    /// <summary>Basal: carbs in the window or the hours before it.</summary>
+    CarbsBefore,
+
+    /// <summary>Basal: a manual bolus in the window or within DIA before it.</summary>
+    ManualBolus,
+
+    /// <summary>Basal: carbs on board in the window.</summary>
+    CarbsOnBoard,
+
+    /// <summary>Basal: a manual temp basal or a suspend in the window.</summary>
+    ManualDelivery,
+
+    /// <summary>ISF: carbs from an hour before the bolus to three hours after it.</summary>
+    CarbsNear,
+
+    /// <summary>No target range is known at the start or end of the window.</summary>
+    NoTarget,
+
+    /// <summary>ISF: glucose at the bolus was not above the target range.</summary>
+    NotAboveTarget,
+
+    /// <summary>ISF: too much insulin was already on board at the bolus.</summary>
+    IobAtBolus,
+
+    /// <summary>No IOB is known at the start or end of the window.</summary>
+    IobUnknown,
+
+    /// <summary>ISF: glucose ended below the target range, so a low cut the drop short.</summary>
+    EndedBelowTarget,
+
+    /// <summary>Carb ratio: another meal, bolus or rise fell in the window.</summary>
+    NotIsolated,
+
+    /// <summary>Carb ratio: glucose at the meal was out of range.</summary>
+    StartOutOfRange,
+
+    /// <summary>Carb ratio: glucose was moving at the meal.</summary>
+    StartUnstable,
+
+    /// <summary>No reading stands for glucose at the start or end of the window.</summary>
+    MissingGlucose,
+
+    /// <summary>The pump's records cover too little of the window's basal to total its insulin.</summary>
+    InsulinUncovered,
+
+    /// <summary>Too little insulin acted, or was needed, for a ratio to it to be read.</summary>
+    TooLittleInsulin,
+}
+
+public class SettingsEvidenceRejection
+{
+    public SettingsEvidenceRule Rule { get; set; }
+
+    public int Count { get; set; }
+}
+
+/// <summary>
+/// One observed setting beside the profile's: an observation from the user's own data, never an
+/// instruction.
+/// </summary>
+public class SettingsEvidenceFigure
+{
+    /// <summary>The observed value; null when <see cref="UnavailableReason"/> is set.</summary>
+    public double? Observed { get; set; }
+
+    /// <summary>The profile's value over the block: the median of the value in force across its time in the range.</summary>
+    public double? Profile { get; set; }
+
+    /// <summary>Episodes that qualified.</summary>
+    public int N { get; set; }
+
+    /// <summary>The episodes' values spread; null when <see cref="UnavailableReason"/> is set.</summary>
+    public LoopAnalysisAggregate? Spread { get; set; }
+
+    /// <summary>Null when <see cref="UnavailableReason"/> is set.</summary>
+    public SettingsEvidenceConfidence? Confidence { get; set; }
+
+    public List<SettingsEvidenceConfidenceReason> ConfidenceReasons { get; set; } = [];
+
+    public SettingsEvidenceUnavailableReason? UnavailableReason { get; set; }
+
+    /// <summary>
+    /// Some episode's glucose change was converted at the profile's ISF, scaled by what the other
+    /// blocks observed where any did, for want of a confident observed ISF for its own block. Never
+    /// set on the ISF itself.
+    /// </summary>
+    public bool IsfDependent { get; set; }
+
+    /// <summary>Every rule that applies to the figure, with the episodes it rejected, zero included.</summary>
+    public List<SettingsEvidenceRejection> Rejections { get; set; } = [];
+}
+
+/// <summary>An episode a figure was read from, for drill-down to Day in Review.</summary>
+public class SettingsEvidenceEpisode
+{
+    public DateTime At { get; set; }
+
+    public DateTime End { get; set; }
+
+    /// <summary>The local date, yyyy-MM-dd, as Day in Review's <c>date</c> parameter reads it.</summary>
+    public string Date { get; set; } = "";
+
+    /// <summary>The local time, HH:mm, as Day in Review's <c>time</c> parameter reads it.</summary>
+    public string Time { get; set; } = "";
+
+    /// <summary>The episode's own observed value, in the figure's unit.</summary>
+    public double Value { get; set; }
+
+    /// <summary>The profile's value in force at the episode.</summary>
+    public double? Profile { get; set; }
+}
+
+/// <summary>
+/// Basal evidence for one two-hour local block, U/h. A block's insulin is attributed by when it was
+/// delivered, not when it acted.
+/// </summary>
+public class BasalEvidenceBlock : SettingsEvidenceFigure
+{
+    /// <summary>Local hour the block starts at.</summary>
+    public int StartHour { get; set; }
+
+    /// <summary>Local hour the block ends at, exclusive.</summary>
+    public int EndHour { get; set; }
+
+    /// <summary>U/h: the algorithm's temp delta plus its automatic boluses, the mean across qualifying days.</summary>
+    public double? MeanNetLoopCorrection { get; set; }
+
+    /// <summary>The share of qualifying days whose correction had the majority's sign, 0 to 1.</summary>
+    public double? Consistency { get; set; }
+
+    /// <summary>mg/dL per hour across the block, spread across qualifying days.</summary>
+    public LoopAnalysisAggregate? GlucoseTrend { get; set; }
+
+    public List<BasalEvidenceDay> Days { get; set; } = [];
+}
+
+/// <summary>One qualifying day of a basal block; <see cref="SettingsEvidenceEpisode.Value"/> is its observed need, U/h.</summary>
+public class BasalEvidenceDay : SettingsEvidenceEpisode
+{
+    /// <summary>Hours the block lasted that day: 1 or 3 across a DST change.</summary>
+    public double Hours { get; set; }
+
+    /// <summary>U/h.</summary>
+    public double NetLoopCorrection { get; set; }
+
+    /// <summary>
+    /// U/h: IOB at the block's start less IOB at its end, over its hours. Insulin delivered before the
+    /// block that acted in it, less insulin delivered in it that acts after.
+    /// </summary>
+    public double CarriedInsulin { get; set; }
+
+    /// <summary>mg/dL, the end of the block minus its start.</summary>
+    public double GlucoseChange { get; set; }
+
+    /// <summary>The ISF the glucose change was converted at, mg/dL per U.</summary>
+    public double Isf { get; set; }
+
+    /// <summary>See <see cref="SettingsEvidenceFigure.IsfDependent"/>.</summary>
+    public bool IsfDependent { get; set; }
+}
+
+/// <summary>A figure read off the insulin that acted over each episode's window.</summary>
+public class InsulinActedFigure : SettingsEvidenceFigure
+{
+    /// <summary>
+    /// The episodes' insulin was measured above the profile's basal schedule, for want of a confident
+    /// observed basal need: a schedule that is short credits the episodes with the loop's top-up.
+    /// </summary>
+    public bool BasalDependent { get; set; }
+}
+
+/// <summary>Observed ISF for one block, mg/dL per U.</summary>
+public class IsfEvidenceBlock : InsulinActedFigure
+{
+    public SettingsEvidenceBlock Block { get; set; }
+
+    public List<IsfEvidenceEpisode> Episodes { get; set; } = [];
+}
+
+/// <summary>An episode read off the insulin that acted over its window.</summary>
+public class InsulinActedEpisode : SettingsEvidenceEpisode
+{
+    /// <summary>At the start of the window: the bolus, or a quarter-hour before the meal.</summary>
+    public double StartGlucose { get; set; }
+
+    /// <summary>At the end of the window, not the nadir.</summary>
+    public double EndGlucose { get; set; }
+
+    /// <summary>U, net insulin above schedule delivered over the window.</summary>
+    public double NetInsulin { get; set; }
+
+    public double IobAtStart { get; set; }
+
+    public double IobAtEnd { get; set; }
+
+    /// <summary>
+    /// U: the observed basal need above the schedule over the window, which the loop's top-up met
+    /// rather than the episode; 0 when no observed basal need was confident.
+    /// </summary>
+    public double BasalExcess { get; set; }
+
+    /// <summary>
+    /// U: <see cref="NetInsulin"/> plus <see cref="IobAtStart"/>, less <see cref="IobAtEnd"/> and
+    /// <see cref="BasalExcess"/>.
+    /// </summary>
+    public double InsulinActed { get; set; }
+}
+
+/// <summary>One correction; <see cref="SettingsEvidenceEpisode.Value"/> is its observed ISF, mg/dL per U.</summary>
+public class IsfEvidenceEpisode : InsulinActedEpisode
+{
+    /// <summary>U, the manual bolus.</summary>
+    public double Units { get; set; }
+
+    /// <summary>mg/dL, start minus end; not the nadir.</summary>
+    public double Drop { get; set; }
+}
+
+/// <summary>Observed carb ratio for one block, g per U.</summary>
+public class CarbRatioEvidenceBlock : InsulinActedFigure
+{
+    public SettingsEvidenceBlock Block { get; set; }
+
+    public List<CarbRatioEvidenceEpisode> Episodes { get; set; } = [];
+}
+
+/// <summary>One isolated meal; <see cref="SettingsEvidenceEpisode.Value"/> is its observed carb ratio, g per U.</summary>
+public class CarbRatioEvidenceEpisode : InsulinActedEpisode
+{
+    public double Grams { get; set; }
+
+    /// <summary>
+    /// U: <see cref="InsulinActedEpisode.InsulinActed"/> plus the end glucose less the start over
+    /// <see cref="Isf"/>.
+    /// </summary>
+    public double InsulinNeeded { get; set; }
+
+    /// <summary>The ISF the glucose change was converted at, mg/dL per U.</summary>
+    public double Isf { get; set; }
+
+    /// <summary>See <see cref="SettingsEvidenceFigure.IsfDependent"/>.</summary>
+    public bool IsfDependent { get; set; }
+}
+
+/// <summary>The Settings evidence tab for one range. Glucose is mg/dL throughout.</summary>
+public class SettingsEvidenceRange
+{
+    public DateTime From { get; set; }
+
+    public DateTime To { get; set; }
+
+    /// <summary>Twelve two-hour blocks from local midnight.</summary>
+    public List<BasalEvidenceBlock> Basal { get; set; } = [];
+
+    /// <summary>One per <see cref="SettingsEvidenceBlock"/>, in its order.</summary>
+    public List<IsfEvidenceBlock> Isf { get; set; } = [];
+
+    /// <summary>One per <see cref="SettingsEvidenceBlock"/>, in its order.</summary>
+    public List<CarbRatioEvidenceBlock> CarbRatio { get; set; } = [];
+}
+
+/// <summary>The Settings evidence tab: the primary range and, when asked for, a comparison.</summary>
+public class SettingsEvidenceReport : LoopAnalysisResponse
+{
+    public SettingsEvidenceRange Primary { get; set; } = new();
+
+    public SettingsEvidenceRange? Comparison { get; set; }
+}
