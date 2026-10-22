@@ -6340,6 +6340,7 @@ msgstr ""
 msgid "Site changes are required to analyze glucose patterns"
 msgstr ""
 
+#: src/lib/components/calendar/CalendarHeader.svelte
 #: src/lib/components/dashboard/glucose-chart/ChartLegend.svelte
 #: src/lib/components/reports/TIRStackedChart.svelte
 #: src/routes/(authenticated)/reports/glucose-distribution/+page.svelte
@@ -6347,6 +6348,7 @@ msgstr ""
 msgid "Very Low"
 msgstr ""
 
+#: src/lib/components/calendar/CalendarHeader.svelte
 #: src/lib/components/dashboard/glucose-chart/ChartLegend.svelte
 #: src/lib/components/reports/TIRStackedChart.svelte
 #: src/routes/(authenticated)/reports/glucose-distribution/+page.svelte
@@ -23173,10 +23175,12 @@ msgid "{0} color scale from {1} to {2} {3}"
 msgstr ""
 
 #: src/lib/components/reports/year-overview/ColorFocusRange.svelte
+#: src/routes/(authenticated)/settings/appearance/+page.svelte
 msgid "<0/> Low"
 msgstr ""
 
 #: src/lib/components/reports/year-overview/ColorFocusRange.svelte
+#: src/routes/(authenticated)/settings/appearance/+page.svelte
 msgid "<0/> High"
 msgstr ""
 
@@ -23244,6 +23248,7 @@ msgid "{0}: color {1} {2} {3}"
 msgstr ""
 
 #: src/lib/components/reports/year-overview/HeatmapLegend.svelte
+#: src/routes/(authenticated)/settings/appearance/+page.svelte
 msgid "Theme"
 msgstr ""
 
@@ -27650,4 +27655,45 @@ msgstr ""
 #. 0: formatNumber(insulinStats.manualBolusCount); 1: formatNumericDate(startDate); 2: formatNumericDate(endDate)
 #: src/routes/(authenticated)/reports/insulin-delivery/+page.svelte
 msgid "Report generated from {0} manual boluses between {1} and {2}"
+msgstr ""
+
+#: src/lib/components/calendar/CalendarDayCell.svelte
+msgid "Very High:"
+msgstr ""
+
+#: src/lib/components/calendar/CalendarDayCell.svelte
+msgid "Very Low:"
+msgstr ""
+
+#: src/routes/(authenticated)/settings/appearance/+page.svelte
+#: src/routes/(authenticated)/settings/appearance/+page.svelte
+msgid "Glucose range colors"
+msgstr ""
+
+#: src/routes/(authenticated)/settings/appearance/+page.svelte
+msgid "The range colors of the selected color theme"
+msgstr ""
+
+#: src/routes/(authenticated)/settings/appearance/+page.svelte
+msgid "Distinct"
+msgstr ""
+
+#: src/routes/(authenticated)/settings/appearance/+page.svelte
+msgid "Maroon, red, yellow and orange for the four out-of-range bands on every theme"
+msgstr ""
+
+#: src/routes/(authenticated)/settings/appearance/+page.svelte
+msgid "Range color preview"
+msgstr ""
+
+#: src/routes/(authenticated)/settings/appearance/+page.svelte
+msgid "<0/> Very high"
+msgstr ""
+
+#: src/routes/(authenticated)/settings/appearance/+page.svelte
+msgid "<0/> In range"
+msgstr ""
+
+#: src/routes/(authenticated)/settings/appearance/+page.svelte
+msgid "<0/> Very low"
 msgstr ""
