@@ -9,7 +9,8 @@
 
   interface Props {
     boluses: Bolus[];
-    totalBolus: number;
+    manualBolus: number;
+    automaticBolus: number;
     scheduledBasal: number;
     additionalBasal: number;
     totalInsulin: number;
@@ -19,7 +20,8 @@
 
   let {
     boluses,
-    totalBolus,
+    manualBolus,
+    automaticBolus,
     scheduledBasal,
     additionalBasal,
     totalInsulin,
@@ -81,13 +83,23 @@
       });
     });
 
-    if (boluses.length === 0 && totalBolus > 0) {
+    if (boluses.length === 0 && manualBolus > 0) {
       segments.push({
         key: "bolus",
-        label: "Bolus",
-        value: totalBolus,
+        label: "Manual Bolus",
+        value: manualBolus,
         color: getBolusColor(0, 1),
         props: arcProps("insulin-bolus"),
+      });
+    }
+
+    if (automaticBolus > 0) {
+      segments.push({
+        key: "automatic-bolus",
+        label: "Automatic Bolus",
+        value: automaticBolus,
+        color: "var(--iob-temporary)",
+        props: arcProps("insulin-automatic-bolus"),
       });
     }
 
@@ -117,7 +129,8 @@
   const keyItems = $derived(
     (
       [
-        { texture: "insulin-bolus", label: `Bolus ${totalBolus.toFixed(1)}U`, value: totalBolus },
+        { texture: "insulin-bolus", label: `Manual bolus ${manualBolus.toFixed(1)}U`, value: manualBolus },
+        { texture: "insulin-automatic-bolus", label: `Automatic bolus ${automaticBolus.toFixed(1)}U`, value: automaticBolus },
         { texture: "insulin-scheduled-basal", label: `Scheduled basal ${scheduledBasal.toFixed(1)}U`, value: scheduledBasal },
         { texture: "insulin-temp-basal", label: `Additional basal ${additionalBasal.toFixed(1)}U`, value: additionalBasal },
       ] satisfies (ChartKeyItem & { value: number })[]

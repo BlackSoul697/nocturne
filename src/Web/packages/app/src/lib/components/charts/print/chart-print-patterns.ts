@@ -82,6 +82,7 @@ export const CHART_TEXTURES = {
 	"heart-rate": { color: "var(--chart-1)", texture: solid },
 
 	"insulin-bolus": { color: "var(--insulin-bolus)", texture: solid },
+	"insulin-automatic-bolus": { color: "var(--iob-temporary)", texture: { kind: "dots", gap: 5 } },
 	"insulin-scheduled-basal": {
 		color: "var(--insulin-scheduled-basal)",
 		texture: lines(90, 5),

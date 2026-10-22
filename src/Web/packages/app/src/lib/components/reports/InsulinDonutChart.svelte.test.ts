@@ -8,7 +8,8 @@ describe("InsulinDonutChart", () => {
     render(InsulinDonutChart, {
       props: {
         boluses: [{ insulin: 4.5 }, { insulin: 3.25 }],
-        totalBolus: 9.9,
+        manualBolus: 9.9,
+        automaticBolus: 0,
         scheduledBasal: 4,
         additionalBasal: 2.35,
         totalInsulin: 16.25,
@@ -16,7 +17,7 @@ describe("InsulinDonutChart", () => {
     });
 
     await expect.element(page.getByText("16.3U")).toBeVisible();
-    await expect.element(page.getByText("Bolus 9.9U")).toBeVisible();
+    await expect.element(page.getByText("Manual bolus 9.9U")).toBeVisible();
     await expect.element(page.getByText("Scheduled basal 4.0U")).toBeVisible();
     await expect.element(page.getByText("Additional basal 2.4U")).toBeVisible();
   });
@@ -25,7 +26,8 @@ describe("InsulinDonutChart", () => {
     render(InsulinDonutChart, {
       props: {
         boluses: [],
-        totalBolus: 7.75,
+        manualBolus: 7.75,
+        automaticBolus: 0,
         scheduledBasal: 4,
         additionalBasal: 2.35,
         totalInsulin: 14.1,
@@ -33,14 +35,31 @@ describe("InsulinDonutChart", () => {
     });
 
     await expect.element(page.getByText("14.1U")).toBeVisible();
-    await expect.element(page.getByText("Bolus 7.8U")).toBeVisible();
+    await expect.element(page.getByText("Manual bolus 7.8U")).toBeVisible();
+  });
+
+  it("draws automatic boluses as one slice apart from the additional basal", async () => {
+    render(InsulinDonutChart, {
+      props: {
+        boluses: [{ insulin: 2 }],
+        manualBolus: 2,
+        automaticBolus: 3,
+        scheduledBasal: 10,
+        additionalBasal: 0,
+        totalInsulin: 15,
+      },
+    });
+
+    await expect.element(page.getByText("Automatic bolus 3.0U")).toBeVisible();
+    await expect.element(page.getByText("Additional basal", { exact: false })).not.toBeInTheDocument();
   });
 
   it("shows no total when the backend reports no insulin", async () => {
     render(InsulinDonutChart, {
       props: {
         boluses: [],
-        totalBolus: 0,
+        manualBolus: 0,
+        automaticBolus: 0,
         scheduledBasal: 0,
         additionalBasal: 0,
         totalInsulin: 0,

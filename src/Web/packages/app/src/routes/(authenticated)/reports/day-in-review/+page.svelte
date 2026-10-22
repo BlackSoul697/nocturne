@@ -365,7 +365,8 @@
       <Card.Content class="p-4 flex flex-col items-center gap-4">
         <InsulinDonutChart
           boluses={delivery?.manualBoluses ?? []}
-          totalBolus={delivery?.totalBolus ?? 0}
+          manualBolus={delivery?.manualBolus ?? 0}
+          automaticBolus={delivery?.automaticBolus ?? 0}
           scheduledBasal={delivery?.scheduledBasal ?? 0}
           additionalBasal={delivery?.additionalBasal ?? 0}
           totalInsulin={delivery?.totalInsulin ?? 0}
@@ -382,13 +383,13 @@
           <div>
             <div class="text-muted-foreground">Manual boluses</div>
             <div class="font-medium tabular-nums">
-              {delivery?.bolusCount ?? 0}
+              {delivery?.manualBolusCount ?? 0}
             </div>
           </div>
           <div>
             <div class="text-muted-foreground">Automatic boluses</div>
             <div class="font-medium tabular-nums">
-              {delivery?.microBolusCount ?? 0}
+              {delivery?.automaticBolusCount ?? 0}
             </div>
           </div>
         </div>

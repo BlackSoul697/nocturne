@@ -808,7 +808,7 @@ public class StatisticsController : ControllerBase
     /// <returns>A <see cref="MultiPeriodStatistics"/> containing a <see cref="PeriodStatistics"/>
     /// entry for each of the five standard periods.</returns>
     /// <remarks>
-    /// When a period has no algorithm boluses, profile basal may stand in for scheduled basal; see
+    /// When a period has no temp basals, profile basal may stand in for scheduled basal; see
     /// <see cref="AddScheduledBasalFallbackAsync"/> for the rest of the gate.
     /// GMI reliability is assessed per-period using context-appropriate recommended-day minimums
     /// (e.g., 1-day periods cannot require 14 days of data).
@@ -884,8 +884,7 @@ public class StatisticsController : ControllerBase
                     dayCount: days
                 );
 
-                if (algorithmBoluses.Count == 0)
-                    await AddScheduledBasalFallbackAsync(tempBasals, startDate, endDate, basalInjections, cancellationToken);
+                await AddScheduledBasalFallbackAsync(tempBasals, startDate, endDate, basalInjections, cancellationToken);
 
                 insulinDelivery = _statisticsService.CalculateInsulinDeliveryStatistics(
                     filteredBoluses,
@@ -1089,6 +1088,7 @@ public class StatisticsController : ControllerBase
         var windows = days.Select(d => PunchCardDayWindow.For(d, tz)).ToList();
         var glucoseByDay = PunchCardDayBuckets.Bucket(glucoseData, windows, e => e.Mills);
         var bolusesByDay = PunchCardDayBuckets.Bucket(manualBoluses, windows, b => b.Mills);
+        var algorithmBolusesByDay = PunchCardDayBuckets.Bucket(algorithmBoluses, windows, b => b.Mills);
         var carbsByDay = PunchCardDayBuckets.Bucket(carbs, windows, c => c.Mills);
 
         for (var i = 0; i < days.Count; i++)
@@ -1128,7 +1128,8 @@ public class StatisticsController : ControllerBase
             var dateStr = day.ToString("yyyy-MM-dd");
             var totals = treatment?.Totals;
             var totalCarbs = totals?.Food?.Carbs ?? 0;
-            var totalBolus = totals?.Insulin?.Bolus ?? 0;
+            var totalBolus = (totals?.Insulin?.Bolus ?? 0)
+                + StatisticsService.CountedBoluses(algorithmBolusesByDay[i]).Sum(b => b.Insulin);
             var totalBasal = dailyBasalMap.GetValueOrDefault(dateStr, 0.0);
             var totalInsulin = totalBolus + totalBasal;
             var carbToInsulinRatio = treatment?.CarbToInsulinRatio ?? 0;
@@ -1228,7 +1229,7 @@ public class StatisticsController : ControllerBase
     /// </summary>
     /// <param name="startDate">Start of the period.</param>
     /// <param name="endDate">End of the period.</param>
-    /// <param name="includeBoluses">Fill <see cref="InsulinDeliveryStatistics.ManualBoluses"/> with the records behind <see cref="InsulinDeliveryStatistics.TotalBolus"/>; ignored unless the caller holds treatments.read.</param>
+    /// <param name="includeBoluses">Fill <see cref="InsulinDeliveryStatistics.ManualBoluses"/> with the records behind <see cref="InsulinDeliveryStatistics.ManualBolus"/>; ignored unless the caller holds treatments.read.</param>
     /// <param name="cancellationToken">Cancellation token.</param>
     /// <returns>Comprehensive insulin delivery statistics</returns>
     [HttpGet("insulin-delivery-stats")]
@@ -1290,13 +1291,7 @@ public class StatisticsController : ControllerBase
         var endUtc = DateTime.SpecifyKind(endDate, DateTimeKind.Utc);
 
         // Uncapped for the reason given on FetchInsulinRecordsAsync.
-        var tempBasalTask = _tempBasalRepository.GetAsync((DateTime?)startUtc, (DateTime?)endUtc, null, null, int.MaxValue, descending: false, ct: cancellationToken);
-        var algoTask      = _bolusRepository.GetAsync((DateTime?)startUtc, (DateTime?)endUtc, null, null, int.MaxValue, descending: false, kind: BolusKind.Algorithm, ct: cancellationToken);
-
-        await Task.WhenAll(tempBasalTask, algoTask);
-
-        var tempBasals       = (await tempBasalTask).ToList();
-        var algorithmBoluses = await algoTask;
+        var tempBasals = (await _tempBasalRepository.GetAsync((DateTime?)startUtc, (DateTime?)endUtc, null, null, int.MaxValue, descending: false, ct: cancellationToken)).ToList();
 
         var startMs = new DateTimeOffset(startUtc, TimeSpan.Zero).ToUnixTimeMilliseconds();
         var endMs   = new DateTimeOffset(endUtc,   TimeSpan.Zero).ToUnixTimeMilliseconds();
@@ -1309,7 +1304,6 @@ public class StatisticsController : ControllerBase
 
         var result = _statisticsService.CalculateBasalAnalysis(
             tempBasals,
-            algorithmBoluses,
             startUtc,
             endUtc,
             userTz

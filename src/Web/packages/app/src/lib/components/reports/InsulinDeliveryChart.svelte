@@ -43,6 +43,9 @@
     chartData.some((d) => (d.scheduledBasal ?? 0) > 0)
   );
   const hasTempBasalData = $derived(chartData.some((d) => (d.tempBasal ?? 0) > 0));
+  const hasAutomaticBolusData = $derived(
+    chartData.some((d) => (d.automaticBolus ?? 0) > 0)
+  );
 
   type Series = {
     key: string;
@@ -78,16 +81,24 @@
         label: "Basal",
         texture: "insulin-scheduled-basal",
       });
-    return [
-      ...basal,
+    const bolus: Series[] = [
       {
-        key: "bolus",
-        value: (d) => d.bolus ?? 0,
+        key: "manualBolus",
+        value: (d) => d.manualBolus ?? 0,
         color: "var(--insulin-bolus)",
-        label: "Bolus",
+        label: "Manual Bolus",
         texture: "insulin-bolus",
       },
     ];
+    if (hasAutomaticBolusData)
+      bolus.push({
+        key: "automaticBolus",
+        value: (d) => d.automaticBolus ?? 0,
+        color: "var(--iob-temporary)",
+        label: "Automatic Bolus",
+        texture: "insulin-automatic-bolus",
+      });
+    return [...basal, ...bolus];
   });
 
   const series = $derived(

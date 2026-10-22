@@ -49,15 +49,15 @@
     {@const avgCarbs = (stats?.last90Days?.treatmentSummary?.totals?.food?.carbs ?? 0) / (stats?.last90Days?.periodDays ?? 90)}
 
     <!-- Use insulinDelivery for insulin values (single source of truth) -->
-    {@const todayBolus = todayDelivery?.totalBolus ?? 0}
-    {@const todayAuto = todayDelivery?.microBolusInsulin ?? 0}
-    {@const todayBasal = Math.max(0, (todayDelivery?.totalBasal ?? 0) - todayAuto)}
-    {@const todayTotal = todayDelivery?.tdd ?? (todayBolus + todayAuto + todayBasal)}
+    {@const todayBolus = todayDelivery?.manualBolus ?? 0}
+    {@const todayAuto = todayDelivery?.automaticBolus ?? 0}
+    {@const todayBasal = todayDelivery?.totalBasal ?? 0}
+    {@const todayTotal = todayDelivery?.tdd ?? 0}
 
     {@const periodDays = stats?.last90Days?.periodDays ?? 90}
-    {@const avgBolus = (avgDelivery?.totalBolus ?? 0) / periodDays}
-    {@const avgAuto = (avgDelivery?.microBolusInsulin ?? 0) / periodDays}
-    {@const avgBasal = Math.max(0, ((avgDelivery?.totalBasal ?? 0) - (avgDelivery?.microBolusInsulin ?? 0)) / periodDays)}
+    {@const avgBolus = (avgDelivery?.manualBolus ?? 0) / periodDays}
+    {@const avgAuto = (avgDelivery?.automaticBolus ?? 0) / periodDays}
+    {@const avgBasal = (avgDelivery?.totalBasal ?? 0) / periodDays}
     {@const avgTotal = avgDelivery?.tdd ?? 0}
 
     <!-- Select which values to display based on toggle -->

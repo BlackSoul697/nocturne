@@ -148,6 +148,9 @@
               style:--share="{bolusPct}%"
             ></div>
           </div>
+          <p class="text-xs text-muted-foreground tabular-nums">
+            Bolus total: manual {(insulinStats?.manualBolus ?? 0).toFixed(1)} U / automatic {(insulinStats?.automaticBolus ?? 0).toFixed(1)} U
+          </p>
         </div>
 
         <Separator />

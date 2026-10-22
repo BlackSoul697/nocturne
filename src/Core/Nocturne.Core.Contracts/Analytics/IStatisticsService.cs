@@ -278,7 +278,7 @@ public interface IStatisticsService
 
     /// <summary>
     /// Calculate comprehensive insulin delivery statistics.
-    /// Basal data comes from TempBasals, algorithmBoluses, and basalInjections (MDI); pass empty collections if none are available.
+    /// Algorithm boluses count as bolus insulin. Basal data comes from TempBasals and basalInjections (MDI); pass empty collections if none are available.
     /// </summary>
     InsulinDeliveryStatistics CalculateInsulinDeliveryStatistics(
         IEnumerable<Bolus> boluses,
@@ -371,7 +371,7 @@ public interface IStatisticsService
 
     /// <summary>
     /// Calculate daily basal/bolus ratio breakdown.
-    /// Basal data comes from TempBasals, algorithm boluses, and basalInjections (MDI); pass empty collections if none are available.
+    /// Algorithm boluses count as bolus insulin. Basal data comes from TempBasals and basalInjections (MDI); pass empty collections if none are available.
     /// </summary>
     DailyBasalBolusRatioResponse CalculateDailyBasalBolusRatios(
         IEnumerable<Bolus> boluses,
@@ -387,14 +387,13 @@ public interface IStatisticsService
     /// </summary>
     BasalAnalysisResponse CalculateBasalAnalysis(
         IEnumerable<TempBasal> tempBasals,
-        IEnumerable<Bolus> algorithmBoluses,
         DateTime startDate,
         DateTime endDate,
         TimeZoneInfo? userTimeZone = null);
 
     /// <summary>
     /// Calculate the average insulin delivered per hour of day, from pump-confirmed
-    /// delivery records only. Basal insulin is duration-weighted across the
+    /// delivery records only. Algorithm boluses are reported as automatic bolus, not basal. Basal insulin is duration-weighted across the
     /// <paramref name="userTimeZone"/>-local hours each TempBasal overlaps; averages
     /// divide by the number of distinct local days that have delivery data, so a
     /// period that extends beyond the available data does not distort the pattern.

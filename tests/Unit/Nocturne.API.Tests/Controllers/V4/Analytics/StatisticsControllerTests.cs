@@ -727,10 +727,10 @@ public class StatisticsControllerTests
         List<TempBasal>? synthesized = null;
         _statsServiceMock
             .Setup(s => s.CalculateBasalAnalysis(
-                It.IsAny<IEnumerable<TempBasal>>(), It.IsAny<IEnumerable<Bolus>>(),
+                It.IsAny<IEnumerable<TempBasal>>(),
                 It.IsAny<DateTime>(), It.IsAny<DateTime>(), It.IsAny<TimeZoneInfo?>()))
-            .Callback<IEnumerable<TempBasal>, IEnumerable<Bolus>, DateTime, DateTime, TimeZoneInfo?>(
-                (tempBasals, _, _, _, _) => synthesized = tempBasals.ToList())
+            .Callback<IEnumerable<TempBasal>, DateTime, DateTime, TimeZoneInfo?>(
+                (tempBasals, _, _, _) => synthesized = tempBasals.ToList())
             .Returns(new BasalAnalysisResponse());
 
         await CreateController().GetBasalAnalysis(start, start.AddDays(1));
@@ -904,12 +904,15 @@ public class StatisticsControllerTests
         var stats = await DeliveryStatsAsync(start, Scope.ReportsRead, Scope.TreatmentsRead);
 
         stats.ManualBoluses.Should().HaveCount(2);
-        stats.ManualBoluses!.Sum(b => b.Insulin).Should().BeApproximately(stats.TotalBolus, 1e-9);
-        stats.TotalBolus.Should().Be(7.75);
+        stats.ManualBoluses!.Sum(b => b.Insulin).Should().BeApproximately(stats.ManualBolus, 1e-9);
+        stats.ManualBolus.Should().Be(7.75);
+        stats.AutomaticBolus.Should().Be(0.35);
+        stats.TotalBolus.Should().Be(8.1);
         (stats.TotalBolus + stats.ScheduledBasal + stats.AdditionalBasal)
             .Should().BeApproximately(stats.TotalInsulin, 0.011);
         stats.ScheduledBasal.Should().Be(4);
-        stats.AdditionalBasal.Should().Be(2.35);
+        stats.AdditionalBasal.Should().Be(2);
+        stats.TotalBasal.Should().Be(6);
         stats.TotalInsulin.Should().Be(14.1);
     }
 
@@ -1085,8 +1088,10 @@ public class StatisticsControllerTests
         var payload = result.Result.Should().BeOfType<OkObjectResult>().Subject
             .Value.Should().BeOfType<DailyBasalBolusRatioResponse>().Subject;
         var lateDay = payload.DailyData.Should().ContainSingle(d => d.Date == LateRecordDate).Subject;
-        lateDay.Bolus.Should().Be(5);
-        lateDay.Basal.Should().BeApproximately(12.3, 1e-9);
+        lateDay.Bolus.Should().Be(5.3);
+        lateDay.ManualBolus.Should().Be(5);
+        lateDay.AutomaticBolus.Should().Be(0.3);
+        lateDay.Basal.Should().BeApproximately(12.0, 1e-9);
 
         _repositoryTokens.Should().HaveCount(4).And.OnlyContain(t => t == cts.Token);
         _therapySettingsResolverMock.Verify(r => r.GetTimezoneAsync(null, cts.Token), Times.Once);
@@ -1109,8 +1114,8 @@ public class StatisticsControllerTests
         lateDay.TotalReadings.Should().Be(1);
         lateDay.AverageGlucose.Should().Be(150);
         lateDay.TotalCarbs.Should().Be(40);
-        lateDay.TotalBolus.Should().Be(5);
-        lateDay.TotalBasal.Should().BeApproximately(12.3, 1e-9);
+        lateDay.TotalBolus.Should().Be(5.3);
+        lateDay.TotalBasal.Should().BeApproximately(12.0, 1e-9);
 
         _repositoryTokens.Should().HaveCount(6).And.OnlyContain(t => t == cts.Token);
         _therapySettingsResolverMock.Verify(r => r.GetTimezoneAsync(null, cts.Token), Times.Once);
@@ -1134,8 +1139,8 @@ public class StatisticsControllerTests
             .Value.Should().BeOfType<InsulinDeliveryStatistics>().Subject;
         payload.CarbCount.Should().Be(OldTreatmentLimit + 1);
         payload.TotalCarbs.Should().Be(OldTreatmentLimit + 40);
-        payload.BolusCount.Should().Be(OldTreatmentLimit + 1);
-        payload.MicroBolusCount.Should().Be(OldTreatmentLimit + 1);
+        payload.ManualBolusCount.Should().Be(OldTreatmentLimit + 1);
+        payload.AutomaticBolusCount.Should().Be(OldTreatmentLimit + 1);
         payload.BasalInjectionCount.Should().Be(OldTreatmentLimit + 1);
         payload.BasalCount.Should().Be(2 * (OldTreatmentLimit + 1));
 
@@ -1157,7 +1162,7 @@ public class StatisticsControllerTests
             .GetBasalAnalysis(DenseDay, DenseDay.AddDays(4), cts.Token);
 
         result.Result.Should().BeOfType<OkObjectResult>();
-        _repositoryTokens.Should().HaveCount(2).And.OnlyContain(t => t == cts.Token);
+        _repositoryTokens.Should().HaveCount(1).And.OnlyContain(t => t == cts.Token);
         _basalRateResolverMock.Verify(
             r => r.BuildResolverAsync(It.IsAny<long>(), It.IsAny<long>(), cts.Token), Times.Once);
         _therapySettingsResolverMock.Verify(r => r.GetTimezoneAsync(null, cts.Token), Times.Once);
@@ -1282,7 +1287,7 @@ public class StatisticsControllerTests
     }
 
     [Fact]
-    public async Task GetMultiPeriodStatistics_WithAlgorithmBoluses_DoesNotFallBackToProfileBasal()
+    public async Task GetMultiPeriodStatistics_WithAlgorithmBolusesAndNoTempBasals_CountsTheProfileAsBasalAndTheBolusesAsBolus()
     {
         var start = DateTime.UtcNow.AddDays(-1);
         SetupMultiPeriodWithProfile(
@@ -1295,13 +1300,12 @@ public class StatisticsControllerTests
 
         var delivery = await MultiPeriodLastDayDelivery();
 
-        delivery.TotalBasal.Should().Be(0.35);
-        delivery.ScheduledBasal.Should().Be(0);
-        delivery.AdditionalBasal.Should().Be(0.35);
-        delivery.BasalCount.Should().Be(0);
-        _basalSegmentsMock.Verify(
-            s => s.GetSegmentsAsync(It.IsAny<long>(), It.IsAny<long>(), It.IsAny<CancellationToken>()),
-            Times.Never);
+        delivery.TotalBasal.Should().Be(24);
+        delivery.ScheduledBasal.Should().Be(24);
+        delivery.AdditionalBasal.Should().Be(0);
+        delivery.AutomaticBolus.Should().Be(0.35);
+        delivery.TotalBolus.Should().Be(0.35);
+        delivery.AutomaticBolusCount.Should().Be(2);
     }
 
     [Fact]
@@ -2284,8 +2288,10 @@ public class StatisticsControllerTests
         periods.Select(p => p!.TreatmentCount).Should().Equal(2, 4, 4, 4, 6);
         periods.Select(p => p!.InsulinDelivery!.TotalCarbs).Should().Equal(10, 20, 20, 20, 30);
         periods.Select(p => p!.InsulinDelivery!.BasalCount).Should().Equal(2, 4, 4, 4, 6);
-        periods.Select(p => p!.InsulinDelivery!.BolusCount).Should().Equal(1, 2, 2, 2, 3);
-        periods.Select(p => p!.InsulinDelivery!.TotalBasal).Should().Equal(12, 24, 24, 24, 36);
+        periods.Select(p => p!.InsulinDelivery!.ManualBolusCount).Should().Equal(1, 2, 2, 2, 3);
+        periods.Select(p => p!.InsulinDelivery!.AutomaticBolusCount).Should().Equal(1, 2, 2, 2, 3);
+        periods.Select(p => p!.InsulinDelivery!.TotalBasal).Should().Equal(11, 22, 22, 22, 33);
+        periods.Select(p => p!.InsulinDelivery!.TotalBolus).Should().Equal(2, 4, 4, 4, 6);
 
         _glucoseRepoMock.Verify(r => r.GetForAnalyticsAsync(
             It.Is<DateTime?>(d => d < now.AddDays(-89)), It.IsAny<DateTime?>(), It.IsAny<string?>(), It.IsAny<string?>(),
