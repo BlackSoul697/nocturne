@@ -1165,6 +1165,51 @@ public class TddCalculationTests
     }
 
     [Fact]
+    public void PerDayFigures_OverWindowWithEmptyDays_DivideByWindowDaysAndSumToTdd()
+    {
+        var boluses = new List<Bolus> { MakeBolus(8, units: 9.0), MakeBolus(12, units: 3.0) };
+        var algorithmBoluses = new List<Bolus> { MakeBolus(9, units: 6.0, automatic: true) };
+        var tempBasals = new List<TempBasal>();
+        for (var h = 0; h < 24; h++)
+        {
+            tempBasals.Add(MakeTempBasalFromBase(DayStart, 0, h, rateUPerHr: 1.0, durationMinutes: 60));
+        }
+
+        var result = _statisticsService.CalculateInsulinDeliveryStatistics(
+            boluses,
+            algorithmBoluses,
+            tempBasals,
+            Array.Empty<CarbIntake>(),
+            StartDate,
+            StartDate.AddDays(3)
+        );
+
+        result.WindowDays.Should().Be(3);
+        result.ManualBolusPerDay.Should().Be(4.0);
+        result.AutomaticBolusPerDay.Should().Be(2.0);
+        result.TotalBasalPerDay.Should().Be(8.0);
+        (result.ManualBolusPerDay + result.AutomaticBolusPerDay + result.TotalBasalPerDay)
+            .Should().Be(result.Tdd);
+    }
+
+    [Fact]
+    public void PerDayFigures_WithNoDelivery_AreZero()
+    {
+        var result = _statisticsService.CalculateInsulinDeliveryStatistics(
+            Array.Empty<Bolus>(),
+            Array.Empty<Bolus>(),
+            Array.Empty<TempBasal>(),
+            Array.Empty<CarbIntake>(),
+            StartDate,
+            StartDate.AddDays(90)
+        );
+
+        result.ManualBolusPerDay.Should().Be(0);
+        result.AutomaticBolusPerDay.Should().Be(0);
+        result.TotalBasalPerDay.Should().Be(0);
+    }
+
+    [Fact]
     public void TDD_SubHourTempBasal_ShouldCalculateFractionalInsulin()
     {
         // A very short temp basal: 3.0 U/hr for 5 minutes = 0.25 U

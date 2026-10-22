@@ -1607,6 +1607,21 @@ public class InsulinDeliveryStatistics
     public double Tdd { get; set; }
 
     /// <summary>
+    /// Units per day of <see cref="ManualBolus"/>, over <see cref="WindowDays"/>
+    /// </summary>
+    public double ManualBolusPerDay { get; set; }
+
+    /// <summary>
+    /// Units per day of <see cref="AutomaticBolus"/>, over <see cref="WindowDays"/>
+    /// </summary>
+    public double AutomaticBolusPerDay { get; set; }
+
+    /// <summary>
+    /// Units per day of <see cref="TotalBasal"/>, over <see cref="WindowDays"/>
+    /// </summary>
+    public double TotalBasalPerDay { get; set; }
+
+    /// <summary>
     /// Average manual bolus size (units): <see cref="ManualBolus"/> over <see cref="ManualBolusCount"/>
     /// </summary>
     public double AvgBolus { get; set; }

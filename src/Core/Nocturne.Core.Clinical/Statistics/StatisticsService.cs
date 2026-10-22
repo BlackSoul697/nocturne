@@ -2188,6 +2188,8 @@ public class StatisticsService : IStatisticsService
             BasalPercent = 0,
             BolusPercent = totalBolus > 0 ? 100 : 0,
             Tdd = Math.Round(totalBolus / dayCount * 10) / 10,
+            ManualBolusPerDay = Math.Round(manualBolus / dayCount * 100) / 100,
+            AutomaticBolusPerDay = Math.Round(automaticBolus / dayCount * 100) / 100,
             AvgBolus = manualCount > 0 ? Math.Round(manualBolus / manualCount * 100) / 100 : 0,
             MealBoluses = mealBoluses,
             CorrectionBoluses = correctionBoluses,
@@ -2355,6 +2357,7 @@ public class StatisticsService : IStatisticsService
         stats.AdditionalBasal = Math.Round(additionalBasalInsulin * 100) / 100;
         stats.TotalInsulin = Math.Round(totalInsulin * 100) / 100;
         stats.Tdd = Math.Round(totalInsulin / stats.WindowDays * 10) / 10;
+        stats.TotalBasalPerDay = Math.Round(totalBasal / stats.WindowDays * 100) / 100;
         stats.BasalPercent =
             totalInsulin > 0 ? Math.Round(totalBasal / totalInsulin * 100 * 10) / 10 : 0;
         stats.BolusPercent =
