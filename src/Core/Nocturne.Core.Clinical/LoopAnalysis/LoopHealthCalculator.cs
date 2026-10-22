@@ -20,8 +20,11 @@ public sealed record LoopHealthInputs
 
     public required BasalEvidence Evidence { get; init; }
 
-    /// <summary>When each recorded temp basal began, ascending: the temps the delivered pieces belong to.</summary>
-    public IReadOnlyList<long> TempStarts { get; init; } = [];
+    /// <summary>
+    /// The recorded temp basals as <see cref="NetInsulinAboveSchedule.ClipTempBasals"/> clips them,
+    /// ascending by start: the temps the delivered pieces belong to.
+    /// </summary>
+    public IReadOnlyList<TempBasal> Temps { get; init; } = [];
 
     /// <summary>Canonical readings.</summary>
     public IReadOnlyList<SensorGlucose> Glucose { get; init; } = [];
@@ -183,7 +186,8 @@ public static class LoopHealthCalculator
         {
             foreach (var piece in inputs.Insulin.Pieces.Where(p => p.Delivered.HasValue))
             {
-                if (piece.Origin is NetInsulinOrigin.AlgorithmTemp)
+                if (piece.Origin is NetInsulinOrigin.AlgorithmTemp
+                    && TempOf(inputs, piece.Start)?.OriginEvidence is TempBasalOriginEvidence.Reported or TempBasalOriginEvidence.Snapshot)
                     grid.AddTime(closed, piece.Start, piece.End);
                 if (piece.Origin is NetInsulinOrigin.AlgorithmTemp or NetInsulinOrigin.ManualTemp or NetInsulinOrigin.Suspend)
                     grid.AddTime(pump, piece.Start, piece.End);
@@ -280,10 +284,9 @@ public static class LoopHealthCalculator
             if (piece.Origin != NetInsulinOrigin.AlgorithmTemp || piece.Delivered is not { } rate)
                 continue;
             grid.AddTime(algorithmTime, piece.Start, piece.End);
-            var tempStart = SortedSearch.FirstEndingAfter(inputs.TempStarts, piece.Start, static m => m) - 1 is var i and >= 0
-                ? inputs.TempStarts[i]
-                : piece.Start;
-            if (AtCap(tempStart, rate, cycles, enacted, inputs.LoopMaximumBasalRate) is not { } capped)
+            var temp = TempOf(inputs, piece.Start);
+            if (AtCap(temp?.StartMills ?? piece.Start, temp?.ApsSnapshotId, rate, cycles, enacted, inputs.LoopMaximumBasalRate)
+                is not { } capped)
                 continue;
             grid.AddTime(known, piece.Start, piece.End);
             if (capped)
@@ -299,7 +302,8 @@ public static class LoopHealthCalculator
 
     /// <summary>
     /// Whether a temp of <paramref name="rate"/> that began at <paramref name="tempStart"/> was at
-    /// its cap; null where the cap is unknown. An oref temp is judged by the cycle that set it: of
+    /// its cap; null where the cap is unknown. An oref temp is judged by the cycle that set it: the
+    /// snapshot <paramref name="setterId"/> names where it was read, else, of
     /// the enacted cycles within <see cref="SetterWindowMs"/> of its start whose rate is within
     /// <see cref="PumpStepUph"/> of the delivered one, the nearest. The rate decides before the
     /// time does: the record is often stamped after the next cycle has run and enacted another
@@ -308,6 +312,7 @@ public static class LoopHealthCalculator
     /// </summary>
     private static bool? AtCap(
         long tempStart,
+        Guid? setterId,
         double rate,
         List<ApsLoopCycle> cycles,
         List<ApsLoopCycle> enacted,
@@ -325,6 +330,13 @@ public static class LoopHealthCalculator
         if (!IsOref(cycles[latest].AidAlgorithm))
             return null;
 
+        var setter = (setterId is { } id ? cycles.Find(c => c.Id == id) : null)
+            ?? NearestSetter(tempStart, rate, enacted);
+        return setter is { HasReason: true } ? OrefReason.Parse(setter.LimitReason).CappedAtMaxSafeBasal : null;
+    }
+
+    private static ApsLoopCycle? NearestSetter(long tempStart, double rate, List<ApsLoopCycle> enacted)
+    {
         ApsLoopCycle? setter = null;
         for (var i = SortedSearch.FirstEndingAfter(enacted, tempStart - SetterWindowMs - 1, static c => c.Mills);
              i < enacted.Count && enacted[i].Mills <= tempStart + SetterWindowMs;
@@ -334,9 +346,14 @@ public static class LoopHealthCalculator
                 && (setter is null || Math.Abs(enacted[i].Mills - tempStart) < Math.Abs(setter.Mills - tempStart)))
                 setter = enacted[i];
         }
-
-        return setter is { HasReason: true } ? OrefReason.Parse(setter.LimitReason).CappedAtMaxSafeBasal : null;
+        return setter;
     }
+
+    /// <summary>The temp a delivered piece starting at <paramref name="mills"/> belongs to.</summary>
+    private static TempBasal? TempOf(LoopHealthInputs inputs, long mills) =>
+        SortedSearch.FirstEndingAfter(inputs.Temps, mills, static t => t.StartMills) - 1 is var i and >= 0
+            ? inputs.Temps[i]
+            : null;
 
     /// <summary>
     /// Each oref cycle with a reason stands until the next, or for <see cref="LoopGapMs"/>.

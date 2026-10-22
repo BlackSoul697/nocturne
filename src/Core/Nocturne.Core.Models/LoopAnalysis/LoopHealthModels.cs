@@ -105,8 +105,9 @@ public class LoopHealthHourValue
 /// The three percentages are <c>aid-system-metrics</c>' over the whole range, without the filter's
 /// masks. The shares split the same measures by hour over the analysed time: an enacted loop cycle
 /// stands for five minutes of closed loop and any cycle for five minutes of pump use, or, with no
-/// APS cycles in the range, algorithm temp basals and any temp basal do; a CGM reading stands for
-/// its stream's cadence.
+/// APS cycles in the range, any temp basal stands for pump use and an algorithm temp basal for
+/// closed loop where its origin was reported or confirmed by a snapshot, not where it is only the
+/// uploader's default; a CGM reading stands for its stream's cadence.
 /// </remarks>
 public class LoopHealthActivity
 {

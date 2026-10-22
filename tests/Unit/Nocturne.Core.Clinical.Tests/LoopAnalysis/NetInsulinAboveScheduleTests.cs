@@ -43,6 +43,22 @@ public class NetInsulinAboveScheduleTests
     }
 
     [Fact]
+    public void ClippedTemps_KeepTheirResolvedEvidenceAndSetter()
+    {
+        var setter = Guid.NewGuid();
+        var corroborated = Temp(0, 30, 2.0);
+        corroborated.OriginEvidence = TempBasalOriginEvidence.Snapshot;
+        corroborated.ApsSnapshotId = setter;
+        var defaulted = Temp(30, 30, 1.0);
+        defaulted.App = "Trio";
+
+        var (clipped, _) = NetInsulinAboveSchedule.ClipTempBasals([corroborated, defaulted]);
+
+        clipped.Select(t => t.OriginEvidence).Should().Equal(TempBasalOriginEvidence.Snapshot, TempBasalOriginEvidence.Uploader);
+        clipped.Select(t => t.ApsSnapshotId).Should().Equal(setter, null);
+    }
+
+    [Fact]
     public void PercentTempWithNoRate_IsUnknownDeliveryNotZero()
     {
         var (_, evidence) = NetInsulinAboveSchedule.ClipTempBasals(

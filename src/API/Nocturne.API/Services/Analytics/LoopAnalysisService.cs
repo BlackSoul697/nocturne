@@ -128,7 +128,7 @@ internal sealed partial class LoopAnalysisService(
     private sealed record Delivery(
         NetInsulinAboveSchedule Insulin,
         BasalEvidence Evidence,
-        IReadOnlyList<long> TempStarts,
+        IReadOnlyList<TempBasal> Temps,
         TherapyTimeline Timeline,
         long TickStart,
         bool HasTherapy);
@@ -164,7 +164,7 @@ internal sealed partial class LoopAnalysisService(
         return new Delivery(
             new NetInsulinAboveSchedule(delivered, scheduled, doses),
             evidence,
-            [.. clipped.Select(t => t.StartMills).Order()],
+            [.. clipped.OrderBy(t => t.StartMills)],
             timeline,
             tickStart,
             hasTherapy);

@@ -33,6 +33,7 @@ public class ApsLoopCycleReadTests(V4GoldenFixture fixture)
         cycles.Select(c => c.Timestamp).Should().BeInAscendingOrder("rows seeded newest-first come back oldest-first")
             .And.Equal(
             Start.AddHours(-1), Start, Start.AddMinutes(5), Start.AddMinutes(10), Start.AddMinutes(15), Start.AddHours(2));
+        cycles.Select(c => c.Id).Should().OnlyHaveUniqueItems().And.NotContain(Guid.Empty, "a temp names its setter by id");
 
         var capped = cycles[1];
         capped.AidAlgorithm.Should().Be(AidAlgorithm.AndroidAps);

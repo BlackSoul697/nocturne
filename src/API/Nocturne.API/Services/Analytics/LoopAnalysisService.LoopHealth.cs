@@ -50,7 +50,7 @@ internal sealed partial class LoopAnalysisService
             Cycles = cycles,
             Insulin = delivery.Insulin,
             Evidence = delivery.Evidence,
-            TempStarts = delivery.TempStarts,
+            Temps = delivery.Temps,
             Glucose = common.Glucose,
             LoopMaximumBasalRate = cycles.Any(c => c.AidAlgorithm == AidAlgorithm.Loop)
                 ? await LoopMaximumBasalRateAsync(common.Profiles, to, ct)

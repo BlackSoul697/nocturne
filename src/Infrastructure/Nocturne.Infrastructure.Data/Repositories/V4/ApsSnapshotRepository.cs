@@ -148,6 +148,7 @@ public class ApsSnapshotRepository : SyncUpsertRepositoryBase<ApsSnapshot, ApsSn
             var reason = string.IsNullOrEmpty(r.Reason) ? null : r.Reason;
             return new ApsLoopCycle
             {
+                Id = r.Id,
                 Timestamp = r.Timestamp,
                 AidAlgorithm = Enum.TryParse<AidAlgorithm>(r.AidAlgorithm, out var algorithm) ? algorithm : AidAlgorithm.Unknown,
                 Enacted = r.Enacted,
@@ -167,6 +168,7 @@ public class ApsSnapshotRepository : SyncUpsertRepositoryBase<ApsSnapshot, ApsSn
     /// <summary>Set by member initialisation, which EF can translate on both sides of a union.</summary>
     private sealed class LoopCycleColumns
     {
+        public Guid Id { get; init; }
         public DateTime Timestamp { get; init; }
         public string AidAlgorithm { get; init; } = "";
         public bool Enacted { get; init; }
@@ -184,6 +186,7 @@ public class ApsSnapshotRepository : SyncUpsertRepositoryBase<ApsSnapshot, ApsSn
     private static readonly System.Linq.Expressions.Expression<Func<ApsSnapshotEntity, LoopCycleColumns>> LoopCycleRow =
         e => new LoopCycleColumns
         {
+            Id = e.Id,
             Timestamp = e.Timestamp,
             AidAlgorithm = e.AidAlgorithm,
             Enacted = e.Enacted,

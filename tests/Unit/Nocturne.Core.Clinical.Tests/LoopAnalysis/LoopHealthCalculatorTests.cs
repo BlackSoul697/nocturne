@@ -26,7 +26,8 @@ public class LoopHealthCalculatorTests
         IEnumerable<SensorGlucose>? glucose = null,
         StepTimeline<double>? loopMaximum = null,
         LoopAnalysisMasks? masks = null,
-        LoopAnalysisMaskSources? sources = null)
+        LoopAnalysisMaskSources? sources = null,
+        IEnumerable<TempBasal>? temps = null)
     {
         var deliveredList = (delivered ?? []).ToList();
         var inputs = new LoopHealthInputs
@@ -35,7 +36,7 @@ public class LoopHealthCalculatorTests
             Cycles = [.. cycles ?? []],
             Insulin = new NetInsulinAboveSchedule(deliveredList, [], doses ?? []),
             Evidence = new BasalEvidence(recorded ?? IntervalSet.Empty, IntervalSet.Empty, inferable ?? IntervalSet.Empty),
-            TempStarts = [.. deliveredList.Select(d => d.Start).Order()],
+            Temps = [.. (temps ?? deliveredList.Select(d => TempAt(d.Start))).OrderBy(t => t.StartMills)],
             Glucose = [.. glucose ?? []],
             LoopMaximumBasalRate = loopMaximum,
         };
@@ -54,8 +55,10 @@ public class LoopHealthCalculatorTests
         bool hasReason = true,
         double? iob = null,
         double? sensitivity = null,
-        bool? suggestedChange = true) => new()
+        bool? suggestedChange = true,
+        Guid? id = null) => new()
         {
+            Id = id ?? Guid.NewGuid(),
             Timestamp = DateTimeOffset.FromUnixTimeMilliseconds(mills).UtcDateTime,
             AidAlgorithm = algorithm,
             Enacted = enacted,
@@ -65,6 +68,16 @@ public class LoopHealthCalculatorTests
             HasReason = algorithm != AidAlgorithm.Loop && hasReason,
             SuggestedChange = algorithm != AidAlgorithm.Loop ? suggestedChange : null,
             LimitReason = limitReason,
+        };
+
+    /// <summary>A temp's start, origin evidence and setter, as <see cref="LoopHealthInputs.Temps"/> reads them.</summary>
+    private static TempBasal TempAt(
+        long start, TempBasalOriginEvidence evidence = TempBasalOriginEvidence.Reported, Guid? setter = null) => new()
+        {
+            StartTimestamp = DateTimeOffset.FromUnixTimeMilliseconds(start).UtcDateTime,
+            Origin = TempBasalOrigin.Algorithm,
+            OriginEvidence = evidence,
+            ApsSnapshotId = setter,
         };
 
     private static IEnumerable<ApsLoopCycle> EveryFiveMinutes(long from, long to, Func<long, ApsLoopCycle> cycle)
@@ -217,13 +230,54 @@ public class LoopHealthCalculatorTests
                     Cycle(t, enacted: false, suggestedChange: false)), Cycle(from + 30 * Minute, rate: 1.0)],
                 Insulin = insulin,
                 Evidence = evidence,
-                TempStarts = [.. clipped.Select(t => t.StartMills).Order()],
+                Temps = [.. clipped.OrderBy(t => t.StartMills)],
             },
             LoopAnalysisMask.Build(new LoopAnalysisMasks { ExcludeIllness = false, ExcludeOpenLoop = false }, from, to, Sydney, new()),
             from, to);
 
         result.MaxBasal!.CapKnown.Percent.Should().Be(100);
         result.MaxBasal.AtCap.Percent.Should().Be(50);
+    }
+
+    [Fact]
+    public void ATempsRecordedSetter_DecidesItsCapOverTheNearestCycle()
+    {
+        // The nearest cycle with the rate cut it to maxSafeBasal; the snapshot the temp names did not.
+        var from = Day0;
+        var to = Day0 + Hour;
+        var named = Guid.NewGuid();
+        var cycles = new[]
+        {
+            Cycle(from - 4 * Minute, rate: 2.4, limitReason: "temp 1.2 < 2.4U/hr.", id: named),
+            Cycle(from, rate: 2.4, limitReason: Capped),
+        };
+        LoopHealthMaxBasal MaxBasal(Guid? setter) => Calculate(from, to, cycles,
+            [new(from, to, 2.4, BasalDeliveryOrigin.Algorithm)],
+            temps: [TempAt(from, setter: setter)]).MaxBasal!;
+
+        MaxBasal(null).AtCap.Percent.Should().Be(100, "without a recorded setter the nearest cycle is taken");
+        MaxBasal(named).AtCap.Percent.Should().Be(0);
+        MaxBasal(named).CapKnown.Percent.Should().Be(100);
+        MaxBasal(Guid.NewGuid()).AtCap.Percent.Should().Be(100, "a setter outside the cycles read falls back to the window");
+    }
+
+    [Theory]
+    [InlineData(TempBasalOriginEvidence.Reported, 100)]
+    [InlineData(TempBasalOriginEvidence.Snapshot, 100)]
+    [InlineData(TempBasalOriginEvidence.Uploader, 0)]
+    [InlineData(TempBasalOriginEvidence.Uncorroborated, 0)]
+    public void Activity_WithNoCycles_CreditsOnlyAnAlgorithmTempWhoseOriginIsMoreThanTheUploadersDefault(
+        TempBasalOriginEvidence evidence, double closed)
+    {
+        var from = Day0;
+        var to = Day0 + Hour;
+        var result = Calculate(from, to,
+            delivered: [new(from, to, 1.0, BasalDeliveryOrigin.Algorithm)],
+            recorded: IntervalSet.Of([new MillsInterval(from, to)]),
+            temps: [TempAt(from, evidence)]);
+
+        result.Activity.ClosedLoop!.Percent.Should().Be(closed);
+        result.Activity.Pump!.Percent.Should().Be(100);
     }
 
     [Fact]
