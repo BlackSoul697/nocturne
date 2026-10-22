@@ -194,7 +194,6 @@ public class TempBasalRepository : SyncUpsertRepositoryBase<TempBasal, TempBasal
         return await ctx.TempBasals.AnyAsync(t => t.Percent != null && (t.Rate == null || t.RateFromSchedule), ct);
     }
 
-    // A temp judged without a rate is judged again once it has one.
     private const string Uncorroborated = nameof(TempBasalOriginEvidence.Uncorroborated);
     private const string Pending = nameof(TempBasalOriginEvidence.Uploader);
 
@@ -212,7 +211,7 @@ public class TempBasalRepository : SyncUpsertRepositoryBase<TempBasal, TempBasal
                 .SetProperty(t => t.Rate, rate)
                 .SetProperty(t => t.ScheduledRate, scheduledRate)
                 .SetProperty(t => t.RateFromSchedule, fromSchedule)
-                .SetProperty(t => t.OriginEvidence, t => t.OriginEvidence == Uncorroborated ? Pending : t.OriginEvidence)
+                .SetProperty(t => t.OriginEvidence, t => t.OriginEvidence == Uncorroborated ? Pending : t.OriginEvidence) // judged without a rate, judged again with one
                 .SetProperty(t => t.SysUpdatedAt, stamp), ct);
         return updated > 0;
     }

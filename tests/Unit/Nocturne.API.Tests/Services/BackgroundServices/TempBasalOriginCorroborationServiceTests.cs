@@ -72,7 +72,7 @@ public class TempBasalOriginCorroborationServiceTests
     }
 
     [Fact]
-    public void A_run_that_read_snapshots_moves_only_its_own_tenants_watermark()
+    public void A_run_that_read_snapshots_moves_only_its_own_tenants_watermark_to_a_commit_margin_before_its_last_write()
     {
         var now = new DateTime(2026, 10, 22, 12, 0, 0, DateTimeKind.Utc);
         var through = now.AddMinutes(-3);
@@ -80,7 +80,7 @@ public class TempBasalOriginCorroborationServiceTests
 
         watermarks.Advance(Tenants[0], through);
 
-        watermarks.Since(Tenants[0], now).Should().Be(through);
+        watermarks.Since(Tenants[0], now).Should().Be(through - TempBasalOriginCorroborator.CommitMargin);
         watermarks.Since(Tenants[1], now).Should().Be(now - SnapshotWatermarks.RestartLookback);
     }
 
@@ -94,6 +94,6 @@ public class TempBasalOriginCorroborationServiceTests
 
         watermarks.Advance(Tenants[0], null);
 
-        watermarks.Since(Tenants[0], now).Should().Be(through);
+        watermarks.Since(Tenants[0], now).Should().Be(through - TempBasalOriginCorroborator.CommitMargin);
     }
 }

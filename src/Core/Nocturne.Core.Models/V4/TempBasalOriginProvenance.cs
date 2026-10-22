@@ -64,7 +64,11 @@ public static class TempBasalOriginProvenance
             tempBasal.App,
             tempBasal.DataSource);
 
-    /// <summary>The connectors that write temp basals themselves rather than through the decomposer.</summary>
+    /// <summary>
+    /// The connectors that wrote temp basals themselves rather than through the decomposer: a closed
+    /// set for rows stored before evidence was recorded. A new connector need not be added, since
+    /// every writer now records evidence and no connector sets <see cref="TempBasal.App"/>.
+    /// </summary>
     private static readonly HashSet<string> ConnectorSources = new(StringComparer.OrdinalIgnoreCase)
     {
         DataSources.CareLinkConnector,

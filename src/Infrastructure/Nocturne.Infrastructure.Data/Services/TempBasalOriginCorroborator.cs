@@ -26,8 +26,9 @@ namespace Nocturne.Infrastructure.Data.Services;
 /// A tenant's pending rows (<c>ix_temp_basals_origin_pending</c>) are walked in pages along
 /// <c>(start_timestamp, id)</c>, and a judged row leaves that index, so a rerun reads only rows
 /// written since. A row still settling is read and passed over; such rows are only those written in
-/// the last settling delay, so the cost is bounded by what an import writes in that time. Each row is written only if its <c>sys_updated_at</c> and evidence are those it
-/// was judged on, so an upload that rewrote it meanwhile stands and is judged on a later run.
+/// the last settling delay, so the cost is bounded by what an import writes in that time. Each row
+/// is written only if its <c>sys_updated_at</c> and evidence are those it was judged on, so an
+/// upload that rewrote it meanwhile stands and is judged on a later run.
 /// <c>sys_updated_at</c> is left alone, so v3 history does not resend every judged temp basal.
 /// </para>
 /// </remarks>
@@ -86,9 +87,11 @@ public static class TempBasalOriginCorroborator
         """;
 
     private const string FreshSnapshotsSql = """
-        SELECT min(timestamp), max(timestamp), max(sys_updated_at)
+        SELECT date_bin('1 hour', timestamp, 'epoch'::timestamptz) AS hour, max(sys_updated_at)
         FROM aps_snapshots
         WHERE tenant_id = @tenant AND sys_updated_at > @after AND deleted_at IS NULL
+        GROUP BY 1
+        ORDER BY 1
         """;
 
     private const string ReopenSql = """
@@ -189,6 +192,14 @@ public static class TempBasalOriginCorroborator
     }
 
     /// <summary>
+    /// How far behind the last snapshot write a run has read the next one starts. A snapshot's
+    /// <c>sys_updated_at</c> is stamped when it is saved, not when it commits, so a long import page,
+    /// two uploaders or two replicas' clocks can commit one stamped before a write already read.
+    /// Reading the overlap again only reopens temps that are judged the same.
+    /// </summary>
+    public static readonly TimeSpan CommitMargin = TimeSpan.FromMinutes(5);
+
+    /// <summary>
     /// Sends the <see cref="TempBasalOriginEvidence.Uncorroborated"/> temps of the tenant
     /// <paramref name="db"/> is pinned to back to pending when snapshots written after
     /// <paramref name="snapshotsWrittenAfter"/> now lie near them, so a later
@@ -196,12 +207,14 @@ public static class TempBasalOriginCorroborator
     /// treatment before any devicestatus, so its temps settle with no snapshot to judge them by.
     /// </summary>
     /// <returns>
-    /// How many were reopened, and the latest <c>sys_updated_at</c> of the snapshots read, which is
-    /// where the next call starts; null when none were written.
+    /// How many were reopened, and the latest <c>sys_updated_at</c> of the snapshots read, from
+    /// which the next call starts, less <see cref="CommitMargin"/>; null when none were written.
     /// </returns>
     /// <remarks>
-    /// The temps are found through <c>ix_temp_basals_tenant_start_timestamp</c> over the span the new
-    /// snapshots cover, which between runs is minutes, and only an import makes long.
+    /// The new snapshots are taken by the hour they fall in, and consecutive hours are joined, so one
+    /// snapshot backfilled months back reopens only the temps of its own hour. Each span is walked
+    /// through <c>ix_temp_basals_tenant_start_timestamp</c>; between runs it is minutes, and only an
+    /// import makes it long.
     /// </remarks>
     public static async Task<(int Reopened, DateTime? SnapshotsWrittenThrough)> ReopenNearNewSnapshotsAsync(
         NocturneDbContext db,
@@ -210,22 +223,58 @@ public static class TempBasalOriginCorroborator
         int pageSize,
         CancellationToken ct)
     {
-        var fresh = await db.ExecuteInTransactionAsync(
+        var hours = await db.ExecuteInTransactionAsync(
             async attemptCt =>
             {
                 await using var command = Command(db, FreshSnapshotsSql);
                 command.Parameters.AddWithValue("tenant", tenantId);
                 command.Parameters.AddWithValue("after", snapshotsWrittenAfter);
+                var read = new List<(DateTime Hour, DateTime WrittenAt)>();
                 await using var reader = await command.ExecuteReaderAsync(attemptCt);
-                await reader.ReadAsync(attemptCt);
-                return reader.IsDBNull(0)
-                    ? ((DateTime From, DateTime To, DateTime Through)?)null
-                    : (reader.GetDateTime(0) - Window - RepeatedEnactment, reader.GetDateTime(1) + Window, reader.GetDateTime(2));
+                while (await reader.ReadAsync(attemptCt))
+                    read.Add((reader.GetDateTime(0), reader.GetDateTime(1)));
+                return read;
             },
             ct: ct);
-        if (fresh is not { } span)
+        if (hours.Count == 0)
             return (0, null);
 
+        var reopened = 0;
+        foreach (var (from, to) in Spans(hours.Select(h => h.Hour)))
+            reopened += await ReopenSpanAsync(db, tenantId, from, to, pageSize, ct);
+
+        return (reopened, hours.Max(h => h.WrittenAt));
+    }
+
+    /// <summary>
+    /// The start times a temp near a snapshot in each run of consecutive hours can have: a snapshot
+    /// at <c>t</c> judges a temp starting from <c>t</c> less the repeated enactment and window to
+    /// <c>t</c> plus the window.
+    /// </summary>
+    private static IEnumerable<(DateTime From, DateTime To)> Spans(IEnumerable<DateTime> orderedHours)
+    {
+        var hour = TimeSpan.FromHours(1);
+        (DateTime First, DateTime Last)? run = null;
+        foreach (var h in orderedHours)
+        {
+            if (run is { } r && h - r.Last <= hour)
+            {
+                run = (r.First, h);
+                continue;
+            }
+
+            if (run is { } done)
+                yield return (done.First - Window - RepeatedEnactment, done.Last + hour + Window);
+            run = (h, h);
+        }
+
+        if (run is { } last)
+            yield return (last.First - Window - RepeatedEnactment, last.Last + hour + Window);
+    }
+
+    private static async Task<int> ReopenSpanAsync(
+        NocturneDbContext db, Guid tenantId, DateTime from, DateTime to, int pageSize, CancellationToken ct)
+    {
         var afterAt = DateTime.UnixEpoch;
         var afterId = Guid.Empty;
         var reopened = 0;
@@ -236,8 +285,8 @@ public static class TempBasalOriginCorroborator
                 {
                     await using var command = Command(db, ReopenSql);
                     command.Parameters.AddWithValue("tenant", tenantId);
-                    command.Parameters.AddWithValue("from", span.From);
-                    command.Parameters.AddWithValue("to", span.To);
+                    command.Parameters.AddWithValue("from", from);
+                    command.Parameters.AddWithValue("to", to);
                     command.Parameters.AddWithValue("after_at", afterAt);
                     command.Parameters.AddWithValue("after_id", afterId);
                     command.Parameters.AddWithValue("size", pageSize);
@@ -248,7 +297,7 @@ public static class TempBasalOriginCorroborator
                 },
                 ct: ct);
             if (page is not { } done)
-                return (reopened, span.Through);
+                return reopened;
 
             reopened += done.Reopened;
             (afterAt, afterId) = (done.LastAt, done.LastId);

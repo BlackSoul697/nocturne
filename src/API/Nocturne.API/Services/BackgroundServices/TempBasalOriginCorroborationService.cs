@@ -135,13 +135,17 @@ internal sealed class SnapshotWatermarks
     /// How far back the first run after a start looks for snapshot writes, the watermark being kept
     /// in memory only. A week covers a restart in the middle of an import; a snapshot written longer
     /// before a restart than that, beside a temp that had already settled, is not looked at again.
+    /// Each start therefore re-reads a week of every tenant's snapshot writes, and reopens the few
+    /// Uncorroborated temps beside them to be judged the same again.
     /// </summary>
     internal static readonly TimeSpan RestartLookback = TimeSpan.FromDays(7);
 
     private readonly Dictionary<Guid, DateTime> _writtenThrough = [];
 
     public DateTime Since(Guid tenantId, DateTime now) =>
-        _writtenThrough.TryGetValue(tenantId, out var through) ? through : now - RestartLookback;
+        _writtenThrough.TryGetValue(tenantId, out var through)
+            ? through - TempBasalOriginCorroborator.CommitMargin
+            : now - RestartLookback;
 
     public void Advance(Guid tenantId, DateTime? writtenThrough)
     {
