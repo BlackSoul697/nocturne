@@ -7,16 +7,16 @@ public interface ICobCalculator
 {
     Task<CobResult> CalculateTotalAsync(
         List<CarbIntake> carbIntakes,
-        List<Bolus>? boluses = null,
-        List<TempBasal>? tempBasals = null,
-        long? time = null,
+        List<Bolus>? boluses,
+        List<TempBasal>? tempBasals,
+        long time,
         CancellationToken ct = default);
 
     CobResult FromCarbIntakes(
         List<CarbIntake> carbIntakes,
-        List<Bolus>? boluses = null,
-        List<TempBasal>? tempBasals = null,
-        long? time = null);
+        List<Bolus>? boluses,
+        List<TempBasal>? tempBasals,
+        long time);
 
     /// <summary>
     /// Async-free overload for the chart COB tick loop. Resolves carb absorption, sensitivity and

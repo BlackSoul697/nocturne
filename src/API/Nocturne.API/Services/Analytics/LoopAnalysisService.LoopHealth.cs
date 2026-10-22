@@ -81,7 +81,7 @@ internal sealed partial class LoopAnalysisService
             new AidSystemMetricsRecords(
                 loaded.Devices,
                 [.. inputs.Cycles.Where(c => c.Timestamp >= start && c.Timestamp < end)],
-                [.. loaded.TempBasals.Where(t => t.StartTimestamp < end && (t.EndTimestamp ?? t.StartTimestamp) >= start)],
+                [.. loaded.TempBasals.Where(t => t.StartTimestamp < end && (t.EndTimestamp is null || t.EndTimestamp >= start))],
                 [],
                 [.. inputs.Glucose.Where(g => g.Mills >= window.From && g.Mills < window.To)],
                 null,

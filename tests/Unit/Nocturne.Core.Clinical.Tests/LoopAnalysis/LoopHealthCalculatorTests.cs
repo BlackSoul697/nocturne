@@ -214,7 +214,7 @@ public class LoopHealthCalculatorTests
             Rate = rate, Origin = TempBasalOrigin.Algorithm, Device = "pump",
         };
         var (clipped, evidence) = NetInsulinAboveSchedule.ClipTempBasals(
-            [Temp(from, from + 30 * Minute, 2.4), Temp(from + 30 * Minute, to, 1.0)]);
+            [Temp(from, from + 30 * Minute, 2.4), Temp(from + 30 * Minute, to, 1.0)], to);
         var delivered = NetInsulinAboveSchedule.DeliveredFromSeries(
             clipped.Select(t => new BasalPoint { Timestamp = t.StartMills, Rate = t.Rate!.Value, Origin = BasalDeliveryOrigin.Algorithm }),
             to, evidence);

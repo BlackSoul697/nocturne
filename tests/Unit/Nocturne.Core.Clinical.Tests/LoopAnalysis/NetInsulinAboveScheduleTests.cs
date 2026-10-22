@@ -24,7 +24,7 @@ public class NetInsulinAboveScheduleTests
     public void OverlappingAlgorithmTemps_EachEndsWhereTheNextStarts()
     {
         var (clipped, evidence) = NetInsulinAboveSchedule.ClipTempBasals(
-            [Temp(0, 30, 2.0), Temp(5, 30, 0.0)]);
+            [Temp(0, 30, 2.0), Temp(5, 30, 0.0)], T0Mills + Hour);
 
         clipped.Select(t => t.EndTimestamp).Should().Equal(T0.AddMinutes(5), T0.AddMinutes(35));
         evidence.Recorded.Intervals.Should().Equal(new MillsInterval(T0Mills, T0Mills + 35 * Minute));
@@ -52,7 +52,7 @@ public class NetInsulinAboveScheduleTests
         foreach (var tb in mirror)
             tb.Device = "tidepool";
 
-        var (clipped, evidence) = NetInsulinAboveSchedule.ClipTempBasals([.. mirror, .. loop]);
+        var (clipped, evidence) = NetInsulinAboveSchedule.ClipTempBasals([.. mirror, .. loop], T0Mills + Hour);
 
         clipped.Where(t => t.Device == "tidepool").Select(t => (t.StartTimestamp, t.EndTimestamp)).Should().Equal(
             (T0.AddMinutes(30), T0.AddMinutes(40)),
@@ -81,7 +81,7 @@ public class NetInsulinAboveScheduleTests
         var defaulted = Temp(30, 30, 1.0);
         defaulted.App = "Trio";
 
-        var (clipped, _) = NetInsulinAboveSchedule.ClipTempBasals([corroborated, defaulted]);
+        var (clipped, _) = NetInsulinAboveSchedule.ClipTempBasals([corroborated, defaulted], T0Mills + Hour);
 
         clipped.Select(t => t.OriginEvidence).Should().Equal(TempBasalOriginEvidence.Snapshot, TempBasalOriginEvidence.Uploader);
         clipped.Select(t => t.ApsSnapshotId).Should().Equal(setter, null);
@@ -91,7 +91,7 @@ public class NetInsulinAboveScheduleTests
     public void PercentTempWithNoRate_IsUnknownDeliveryNotZero()
     {
         var (_, evidence) = NetInsulinAboveSchedule.ClipTempBasals(
-            [Temp(0, 10, 2.0), Temp(10, 20, null), Temp(60, 10, 2.0)]);
+            [Temp(0, 10, 2.0), Temp(10, 20, null), Temp(60, 10, 2.0)], T0Mills + Hour);
 
         evidence.Unknown.Intervals.Should().Equal(new MillsInterval(T0Mills + 10 * Minute, T0Mills + 30 * Minute));
 
@@ -112,7 +112,7 @@ public class NetInsulinAboveScheduleTests
     [Fact]
     public void RecordedPoint_DoesNotRunOnAcrossAnUnfilledGap()
     {
-        var (_, evidence) = NetInsulinAboveSchedule.ClipTempBasals([Temp(0, 10, 2.0), Temp(50, 10, 2.0)]);
+        var (_, evidence) = NetInsulinAboveSchedule.ClipTempBasals([Temp(0, 10, 2.0), Temp(50, 10, 2.0)], T0Mills + Hour);
 
         var delivered = NetInsulinAboveSchedule.DeliveredFromSeries(
             [Point(0, 2.0, BasalDeliveryOrigin.Algorithm), Point(50, 2.0, BasalDeliveryOrigin.Algorithm)],
@@ -177,7 +177,7 @@ public class NetInsulinAboveScheduleTests
         // Temps for the first two hours, a 2-hour gap, an hour of temps, then an 8-hour outage
         // and one more temp. The series fills every gap from the schedule.
         var (_, evidence) = NetInsulinAboveSchedule.ClipTempBasals(
-            [Temp(0, 120, 2.0), Temp(240, 60, 2.0), Temp(780, 30, 2.0)]);
+            [Temp(0, 120, 2.0), Temp(240, 60, 2.0), Temp(780, 30, 2.0)], T0Mills + Hour);
 
         var delivered = NetInsulinAboveSchedule.DeliveredFromSeries(
             [
@@ -204,7 +204,7 @@ public class NetInsulinAboveScheduleTests
     {
         var resume = T0Mills + 10 * Minute + NetInsulinAboveSchedule.MaxInferredGapMs + extraMs;
         var (_, evidence) = NetInsulinAboveSchedule.ClipTempBasals(
-            [Temp(0, 10, 2.0), TempAt(resume, 10, 2.0)]);
+            [Temp(0, 10, 2.0), TempAt(resume, 10, 2.0)], T0Mills + Hour);
 
         evidence.Inferable.Contains(T0Mills + 60 * Minute).Should().Be(filled);
     }
@@ -218,7 +218,7 @@ public class NetInsulinAboveScheduleTests
         List<TempBasal> temps = [Temp(0, 60, 2.0)];
         if (evidenceAfterTheEnd)
             temps.Add(TempAt(T0Mills + 4 * Hour, 30, 2.0));
-        var (_, evidence) = NetInsulinAboveSchedule.ClipTempBasals(temps);
+        var (_, evidence) = NetInsulinAboveSchedule.ClipTempBasals(temps, T0Mills + Hour);
 
         var delivered = NetInsulinAboveSchedule.DeliveredFromSeries(
             [Point(0, 2.0, BasalDeliveryOrigin.Algorithm), Point(60, 1.0, BasalDeliveryOrigin.Inferred)], to, evidence);

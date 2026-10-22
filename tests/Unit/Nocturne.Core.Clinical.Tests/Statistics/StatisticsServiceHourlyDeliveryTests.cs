@@ -2,6 +2,7 @@ using FluentAssertions;
 using Nocturne.Core.Clinical.Statistics;
 using Nocturne.Core.Models;
 using Nocturne.Core.Models.V4;
+using static Nocturne.Core.Clinical.Tests.Statistics.WindowEnd;
 
 namespace Nocturne.Core.Clinical.Tests.Statistics;
 
@@ -29,7 +30,7 @@ public class StatisticsServiceHourlyDeliveryTests
         };
 
         var result = _sut.CalculateHourlyInsulinDelivery(
-            tempBasals, [], [], StartDate, EndDate);
+            tempBasals, [], [], StartDate, EndDate, Mills(EndDate));
 
         result.DaysWithData.Should().Be(1);
         result.Hours[10].Basal.Should().Be(1.2);
@@ -49,7 +50,7 @@ public class StatisticsServiceHourlyDeliveryTests
         };
 
         var result = _sut.CalculateHourlyInsulinDelivery(
-            tempBasals, [], [], StartDate, EndDate);
+            tempBasals, [], [], StartDate, EndDate, Mills(EndDate));
 
         result.Hours[10].Basal.Should().Be(0.5);
         result.Hours[11].Basal.Should().Be(0.5);
@@ -66,7 +67,7 @@ public class StatisticsServiceHourlyDeliveryTests
         };
 
         var result = _sut.CalculateHourlyInsulinDelivery(
-            tempBasals, [], [], StartDate, EndDate, tz);
+            tempBasals, [], [], StartDate, EndDate, Mills(EndDate), tz);
 
         result.Hours[16].Basal.Should().Be(1.0);
         result.Hours[0].Basal.Should().Be(0);
@@ -83,7 +84,7 @@ public class StatisticsServiceHourlyDeliveryTests
         };
 
         var result = _sut.CalculateHourlyInsulinDelivery(
-            tempBasals, [], [], StartDate, EndDate, tz);
+            tempBasals, [], [], StartDate, EndDate, Mills(EndDate), tz);
 
         result.Hours[9].Basal.Should().Be(0.5);
         result.Hours[10].Basal.Should().Be(0.5);
@@ -102,7 +103,7 @@ public class StatisticsServiceHourlyDeliveryTests
         };
 
         var result = _sut.CalculateHourlyInsulinDelivery(
-            tempBasals, [], [], StartDate, EndDate);
+            tempBasals, [], [], StartDate, EndDate, Mills(EndDate));
 
         result.DaysWithData.Should().Be(2, "only two days have delivery data");
         foreach (var hour in result.Hours)
@@ -121,7 +122,7 @@ public class StatisticsServiceHourlyDeliveryTests
         };
 
         var result = _sut.CalculateHourlyInsulinDelivery(
-            tempBasals, [], [], StartDate, EndDate);
+            tempBasals, [], [], StartDate, EndDate, Mills(EndDate));
 
         result.Hours[8].ScheduledBasal.Should().Be(0.5);
         result.Hours[8].TempBasal.Should().Be(0);
@@ -136,7 +137,7 @@ public class StatisticsServiceHourlyDeliveryTests
         var algorithmBoluses = new[] { MakeBolus(0.4, Utc(2024, 1, 1, 9, 5)) };
 
         var result = _sut.CalculateHourlyInsulinDelivery(
-            [], boluses, algorithmBoluses, StartDate, EndDate);
+            [], boluses, algorithmBoluses, StartDate, EndDate, Mills(EndDate));
 
         result.Hours[8].Bolus.Should().Be(5.0);
         result.Hours[9].Bolus.Should().Be(0);
@@ -154,7 +155,7 @@ public class StatisticsServiceHourlyDeliveryTests
         };
 
         var result = _sut.CalculateHourlyInsulinDelivery(
-            [], boluses, [], StartDate, EndDate);
+            [], boluses, [], StartDate, EndDate, Mills(EndDate));
 
         result.DaysWithData.Should().Be(2);
         result.Hours[12].Bolus.Should().Be(3.0);
@@ -181,7 +182,7 @@ public class StatisticsServiceHourlyDeliveryTests
         };
 
         var result = _sut.CalculateHourlyInsulinDelivery(
-            tempBasals, boluses, [], StartDate, EndDate);
+            tempBasals, boluses, [], StartDate, EndDate, Mills(EndDate));
 
         result.Hours[12].ScheduledBasal.Should().Be(0.5, "basal averages over its 30 covered days");
         result.Hours[12].Bolus.Should().Be(3.0, "boluses average over their own 2 data days");
@@ -192,7 +193,7 @@ public class StatisticsServiceHourlyDeliveryTests
     public void NoData_ReturnsZeroedHours()
     {
         var result = _sut.CalculateHourlyInsulinDelivery(
-            [], [], [], StartDate, EndDate);
+            [], [], [], StartDate, EndDate, Mills(EndDate));
 
         result.Hours.Should().HaveCount(24);
         result.DaysWithData.Should().Be(0);

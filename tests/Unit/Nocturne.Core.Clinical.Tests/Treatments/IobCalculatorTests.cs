@@ -380,7 +380,7 @@ public class IobCalculatorTests
             },
         };
 
-        var result = await _calculator.CalculateTotalAsync(boluses, time: now);
+        var result = await _calculator.CalculateTotalAsync(boluses, null, now);
 
         Assert.Equal(0.0, result.Iob);
         Assert.Equal("OpenAPS", result.Source);

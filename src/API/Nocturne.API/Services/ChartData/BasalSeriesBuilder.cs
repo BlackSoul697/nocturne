@@ -51,7 +51,7 @@ internal sealed class BasalSeriesBuilder(
         foreach (var tb in sorted)
         {
             var tbStart = tb.StartMills;
-            var tbEnd = tb.EndMills ?? endTime;
+            var tbEnd = tb.EndMills!.Value;
 
             if (tbEnd < startTime || tbStart > endTime)
                 continue;

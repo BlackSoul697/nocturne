@@ -14,7 +14,9 @@ public interface IBasalSeriesBuilder
     /// <summary>
     /// Build a basal delivery series for the given time window.
     /// </summary>
-    /// <param name="tempBasals">Pump-confirmed TempBasal records (may be empty)</param>
+    /// <param name="tempBasals">
+    /// Temp basals as delivered, as <c>StatisticsService.ClipOverlappingTempBasals</c> returns them (may be empty)
+    /// </param>
     /// <param name="startTime">Start of the time range in Unix milliseconds</param>
     /// <param name="endTime">End of the time range in Unix milliseconds</param>
     /// <param name="defaultBasalRate">Fallback basal rate when no profile data exists</param>

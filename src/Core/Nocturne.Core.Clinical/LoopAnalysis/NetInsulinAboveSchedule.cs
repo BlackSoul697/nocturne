@@ -192,9 +192,11 @@ public sealed class NetInsulinAboveSchedule
     /// origin rests on, resolved (<see cref="TempBasalOriginProvenance.EvidenceOf(TempBasal)"/>), and
     /// the snapshot that set it.
     /// </summary>
-    public static (List<TempBasal> Clipped, BasalEvidence Evidence) ClipTempBasals(IEnumerable<TempBasal> tempBasals)
+    /// <param name="untilMills">Where a temp still running stops: the end of the window.</param>
+    public static (List<TempBasal> Clipped, BasalEvidence Evidence) ClipTempBasals(
+        IEnumerable<TempBasal> tempBasals, long untilMills)
     {
-        var clipped = StatisticsService.ClipOverlappingTempBasals(tempBasals);
+        var clipped = StatisticsService.ClipOverlappingTempBasals(tempBasals, untilMills);
         var recorded = new List<MillsInterval>();
         var unknown = new List<MillsInterval>();
         foreach (var tb in clipped)

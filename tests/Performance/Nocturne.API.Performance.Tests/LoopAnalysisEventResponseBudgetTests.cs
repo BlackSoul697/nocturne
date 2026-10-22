@@ -79,7 +79,7 @@ public class LoopAnalysisEventResponseBudgetTests(ITestOutputHelper output)
 
         var stopwatch = Stopwatch.StartNew();
 
-        var (clipped, evidence) = NetInsulinAboveSchedule.ClipTempBasals(temps);
+        var (clipped, evidence) = NetInsulinAboveSchedule.ClipTempBasals(temps, to);
         var series = clipped.Select(tb => new BasalPoint
         {
             Timestamp = tb.StartMills, Rate = tb.Rate!.Value, Origin = BasalDeliveryOrigin.Algorithm,
