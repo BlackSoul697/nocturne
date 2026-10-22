@@ -36,7 +36,7 @@ namespace Nocturne.API.Services.ChartData.Stages;
 /// basal IOB sees temp basals that began before the window, under the same cap as
 /// <see cref="Nocturne.API.Services.Analytics.ChartDataService"/> because the ascending read truncates the newest
 /// rows. Consumers sort for themselves. <see cref="ChartDataContext.DisplayTempBasals"/> is the
-/// subset overlapping the display window, chosen by
+/// delivered pieces of the whole fetch that overlap the display window, chosen by
 /// <see cref="Nocturne.API.Services.Analytics.ChartDataService.SelectDisplayTempBasals"/>.
 /// </para>
 /// <para>

@@ -1563,7 +1563,7 @@ public class ChartDataServiceTests
         {
             var running = Basal(Start - 20 * Minute, Start + 10 * Minute);
 
-            ChartDataService.SelectDisplayTempBasals([running], Start, End).Should().Equal(running);
+            Spans(ChartDataService.SelectDisplayTempBasals([running], Start, End)).Should().Equal(Span(running));
         }
 
         [Fact]
@@ -1588,7 +1588,7 @@ public class ChartDataServiceTests
             var stale = Basal(Start - 3 * 60 * Minute, null);
             var later = Basal(Start + 30 * Minute, Start + 60 * Minute);
 
-            ChartDataService.SelectDisplayTempBasals([stale, later], Start, End).Should().Equal(later);
+            Spans(ChartDataService.SelectDisplayTempBasals([stale, later], Start, End)).Should().Equal(Span(later));
         }
 
         [Fact]
@@ -1606,16 +1606,49 @@ public class ChartDataServiceTests
             var touching = Basal(Start - 30 * Minute, Start);
             var overlapping = Basal(Start - 30 * Minute, Start + Minute);
 
-            ChartDataService.SelectDisplayTempBasals([touching, overlapping], Start, End).Should().Equal(overlapping);
+            Spans(ChartDataService.SelectDisplayTempBasals([touching, overlapping], Start, End)).Should().Equal(Span(overlapping));
         }
 
         [Fact]
-        public void OpenEndedInsideWindow_IsSelected()
+        public void OpenEndedInsideWindow_IsSelectedForFiveMinutes()
         {
             var open = Basal(Start + 30 * Minute, null);
 
-            ChartDataService.SelectDisplayTempBasals([open], Start, End).Should().Equal(open);
+            Spans(ChartDataService.SelectDisplayTempBasals([open], Start, End))
+                .Should().Equal((Start + 30 * Minute, Start + 35 * Minute));
         }
+
+        [Fact]
+        public void CancelledJustBeforeWindow_IsNotDrawnIntoIt()
+        {
+            var cancelled = Basal(Start - 10 * Minute, Start + 20 * Minute);
+            cancelled.Rate = 2.0;
+            var cancel = Basal(Start - 3 * Minute, null);
+            cancel.Rate = 0;
+
+            ChartDataService.SelectDisplayTempBasals([cancelled, cancel], Start, End)
+                .Should().NotContain(tb => tb.Rate == 2.0);
+        }
+
+        [Fact]
+        public void MirrorOverlappingTheLoop_ShowsTheLoopWhereItRuns()
+        {
+            var loop = Basal(Start, Start + 30 * Minute);
+            loop.Device = "openaps://Trio";
+            var mirror = Basal(Start + 10 * Minute, Start + 40 * Minute);
+            mirror.Device = "tidepool";
+
+            ChartDataService.SelectDisplayTempBasals([mirror, loop], Start, End)
+                .Select(tb => (tb.Device, tb.StartMills, tb.EndMills!.Value))
+                .Should().Equal(
+                    ("openaps://Trio", Start, Start + 30 * Minute),
+                    ("tidepool", Start + 30 * Minute, Start + 40 * Minute));
+        }
+
+        private static IEnumerable<(long, long)> Spans(IEnumerable<TempBasal> selected) =>
+            selected.Select(tb => (tb.StartMills, tb.EndMills!.Value));
+
+        private static (long, long) Span(TempBasal tb) => (tb.StartMills, tb.EndMills!.Value);
     }
 
     #endregion
@@ -1692,6 +1725,40 @@ public class ChartDataServiceTests
             };
 
             ChartDataService.MapTempBasalSpans([tempBasal]).Should().HaveCount(bands);
+        }
+
+        [Fact]
+        public void A_split_records_later_piece_has_the_same_id_in_every_window_that_holds_it()
+        {
+            const long Start = TestMills;
+            const long Minute = 60 * 1000;
+            var manual = new TempBasal
+            {
+                Id = Guid.CreateVersion7(),
+                StartTimestamp = DateTimeOffset.FromUnixTimeMilliseconds(Start).UtcDateTime,
+                EndTimestamp = DateTimeOffset.FromUnixTimeMilliseconds(Start + 60 * Minute).UtcDateTime,
+                Rate = 1.2,
+                Origin = TempBasalOrigin.Manual,
+                Device = "pump",
+            };
+            var loop = new TempBasal
+            {
+                Id = Guid.CreateVersion7(),
+                StartTimestamp = DateTimeOffset.FromUnixTimeMilliseconds(Start + 10 * Minute).UtcDateTime,
+                EndTimestamp = DateTimeOffset.FromUnixTimeMilliseconds(Start + 20 * Minute).UtcDateTime,
+                Rate = 0.5,
+                Origin = TempBasalOrigin.Algorithm,
+                Device = "openaps://Trio",
+            };
+            var records = new List<TempBasal> { manual, loop };
+
+            var wide = ChartDataService.MapTempBasalSpans(
+                ChartDataService.SelectDisplayTempBasals(records, Start - Minute, Start + 90 * Minute));
+            var late = ChartDataService.MapTempBasalSpans(
+                ChartDataService.SelectDisplayTempBasals(records, Start + 30 * Minute, Start + 90 * Minute));
+
+            wide.Select(s => s.Id).Should().Equal(manual.Id.ToString(), $"{manual.Id}:{Start + 20 * Minute}");
+            late.Select(s => s.Id).Should().Equal($"{manual.Id}:{Start + 20 * Minute}");
         }
     }
 }

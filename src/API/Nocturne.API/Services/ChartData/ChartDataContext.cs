@@ -70,7 +70,10 @@ public sealed record ChartDataContext
     public IReadOnlyList<DeviceEvent> DeviceEventList { get; init; } = [];
     public IReadOnlyList<TempBasal> TempBasalList { get; init; } = [];
 
-    /// <summary>Temp basals starting in the display window (StartTime..EndTime).</summary>
+    /// <summary>
+    /// Temp basals as delivered that overlap the display window (StartTime..EndTime), which every
+    /// reader of the window's basal delivery reads.
+    /// </summary>
     public IReadOnlyList<TempBasal> DisplayTempBasals { get; init; } = [];
 
     /// <summary>

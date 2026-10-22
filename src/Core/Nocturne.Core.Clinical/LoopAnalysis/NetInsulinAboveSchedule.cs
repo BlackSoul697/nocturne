@@ -187,38 +187,22 @@ public sealed class NetInsulinAboveSchedule
     }
 
     /// <summary>
-    /// Temp basals as delivered: each ends where the next from the same device starts
-    /// (<see cref="StatisticsService.ClipOverlappingTempBasals"/>), with what they say about
-    /// delivery, for <see cref="DeliveredFromSeries"/>. Each keeps the evidence its origin rests on,
-    /// resolved (<see cref="TempBasalOriginProvenance.EvidenceOf(TempBasal)"/>), and the snapshot that
-    /// set it.
+    /// Temp basals as delivered (<see cref="StatisticsService.ClipOverlappingTempBasals"/>), with what
+    /// they say about delivery, for <see cref="DeliveredFromSeries"/>. Each keeps the evidence its
+    /// origin rests on, resolved (<see cref="TempBasalOriginProvenance.EvidenceOf(TempBasal)"/>), and
+    /// the snapshot that set it.
     /// </summary>
     public static (List<TempBasal> Clipped, BasalEvidence Evidence) ClipTempBasals(IEnumerable<TempBasal> tempBasals)
     {
-        var clipped = new List<TempBasal>();
+        var clipped = StatisticsService.ClipOverlappingTempBasals(tempBasals);
         var recorded = new List<MillsInterval>();
         var unknown = new List<MillsInterval>();
-        foreach (var (tb, effectiveEnd) in StatisticsService.ClipOverlappingTempBasals(tempBasals))
+        foreach (var tb in clipped)
         {
-            if (effectiveEnd <= tb.StartMills)
-                continue;
-            clipped.Add(new TempBasal
-            {
-                Id = tb.Id,
-                StartTimestamp = tb.StartTimestamp,
-                EndTimestamp = DateTimeOffset.FromUnixTimeMilliseconds(effectiveEnd).UtcDateTime,
-                Rate = tb.Rate,
-                ScheduledRate = tb.ScheduledRate,
-                Percent = tb.Percent,
-                Origin = tb.Origin,
-                OriginEvidence = TempBasalOriginProvenance.EvidenceOf(tb),
-                ApsSnapshotId = tb.ApsSnapshotId,
-                DeviceId = tb.DeviceId,
-                Device = tb.Device,
-            });
-            recorded.Add(new MillsInterval(tb.StartMills, effectiveEnd));
+            tb.OriginEvidence = TempBasalOriginProvenance.EvidenceOf(tb);
+            recorded.Add(new MillsInterval(tb.StartMills, tb.EndMills!.Value));
             if (tb.Rate is null && tb.Origin != TempBasalOrigin.Suspended)
-                unknown.Add(new MillsInterval(tb.StartMills, effectiveEnd));
+                unknown.Add(new MillsInterval(tb.StartMills, tb.EndMills!.Value));
         }
 
         var recordedSet = IntervalSet.Of(recorded);

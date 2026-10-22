@@ -625,7 +625,7 @@ public class IobCobComputeStageTests
 
         var result = await _stage.ExecuteAsync(context, CancellationToken.None);
 
-        firstTickBasals.Should().ContainSingle().Which.Should().BeSameAs(preWindow);
+        firstTickBasals.Should().ContainSingle().Which.Should().BeEquivalentTo(preWindow);
         result.IobSeries[0].Value.Should().BeApproximately(0.4, 1e-9);
         _mockBasalSeriesBuilder.Verify(b => b.BuildAsync(
             It.Is<List<TempBasal>>(l => l.Count == 0),

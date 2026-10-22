@@ -1,3 +1,4 @@
+using Nocturne.Core.Clinical.Statistics;
 using Nocturne.Core.Contracts.Treatments;
 using Nocturne.Core.Models;
 using Nocturne.Core.Models.V4;
@@ -24,7 +25,8 @@ public readonly record struct IobCobTick(
 /// indices that advance with each tick: only boluses and temp basals within DIA hours of the tick
 /// contribute to IOB, and only carb intakes within 6 hours to COB, so the inner-loop work is
 /// O(ticks + active window) rather than O(ticks × treatments). DIA is read from the timeline at
-/// <c>endTime</c>.
+/// <c>endTime</c>. Temp basals count as delivered
+/// (<see cref="StatisticsService.ClipOverlappingTempBasals"/>).
 /// </para>
 /// </remarks>
 public static class IobCobSeries
@@ -58,7 +60,7 @@ public static class IobCobSeries
             .Where(c => c.Carbs > 0)
             .OrderBy(c => c.Mills)
             .ToList();
-        var sortedTempBasals = tempBasals?.OrderBy(tb => tb.StartMills).ToList();
+        var sortedTempBasals = tempBasals is null ? null : StatisticsService.ClipOverlappingTempBasals(tempBasals);
 
         var sortedSnapshots = (apsSnapshots ?? [])
             .Select(s => (

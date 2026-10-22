@@ -12,6 +12,11 @@ public interface IIobCalculator
         CancellationToken ct = default);
 
     IobResult FromBoluses(List<Bolus> boluses, long? time = null);
+    /// <summary>
+    /// Basal IOB from temp basals as delivered: the input is first clipped by
+    /// <c>StatisticsService.ClipOverlappingTempBasals</c>, so stored records and pieces that clip
+    /// already both count each minute of delivery once.
+    /// </summary>
     IobResult FromTempBasals(List<TempBasal> tempBasals, long? time = null);
     IobContribution CalcBolus(Bolus bolus, long? time = null);
     IobContribution CalcTempBasal(TempBasal tempBasal, long? time = null);
@@ -31,6 +36,10 @@ public interface IIobCalculator
     /// <inheritdoc cref="FromBoluses(List{Bolus}, long?)"/>
     IobResult FromBoluses(List<Bolus> boluses, TherapySnapshot snapshot, long time);
 
-    /// <inheritdoc cref="FromTempBasals(List{TempBasal}, long?)"/>
+    /// <summary>
+    /// Basal IOB from temp basals that are already pieces, as <c>StatisticsService.ClipOverlappingTempBasals</c>
+    /// returns them. Unlike <see cref="FromTempBasals(List{TempBasal}, long?)"/> it does not clip,
+    /// since the tick loop calls it for every tick over the same pieces.
+    /// </summary>
     IobResult FromTempBasals(List<TempBasal> tempBasals, TherapySnapshot snapshot, long time);
 }
