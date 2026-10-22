@@ -42,6 +42,11 @@ const COLOR_THEMES = ["nocturne", "trio", "aaps", "classic"] as const;
 /** Color theme - visual styling */
 export type ColorTheme = (typeof COLOR_THEMES)[number];
 
+const GLUCOSE_RANGE_PALETTES = ["theme", "clarity"] as const;
+
+/** Glucose range palette: the theme's own range colours, or distinct colours for every band */
+export type GlucoseRangePalette = (typeof GLUCOSE_RANGE_PALETTES)[number];
+
 const COLOR_SCHEMES = ["system", "light", "dark"] as const;
 
 /** Color scheme - light/dark mode preference */
@@ -334,6 +339,13 @@ export const colorTheme = new SyncedPref<ColorTheme>(
   oneOfPref(COLOR_THEMES)
 );
 
+export const glucoseRangePalette = new SyncedPref<GlucoseRangePalette>(
+  "nocturne-glucose-range-palette",
+  "theme",
+  (p) => p.glucoseRangePalette,
+  oneOfPref(GLUCOSE_RANGE_PALETTES)
+);
+
 /**
  * Blood glucose units preference. Per-user: syncs across devices/tenants.
  */
@@ -433,6 +445,22 @@ function applyColorTheme(theme: ColorTheme): void {
   }
 }
 
+const RANGE_PALETTE_CLASS = "range-palette-clarity";
+
+function applyGlucoseRangePalette(palette: GlucoseRangePalette): void {
+  if (!browser) return;
+  document.documentElement.classList.toggle(RANGE_PALETTE_CLASS, palette === "clarity");
+}
+
+/**
+ * Set glucose range palette and apply immediately
+ */
+export function setGlucoseRangePalette(palette: GlucoseRangePalette): void {
+  if (glucoseRangePalette.current === palette) return;
+  glucoseRangePalette.current = palette;
+  applyGlucoseRangePalette(palette);
+}
+
 /**
  * Set color theme and apply immediately
  */
@@ -455,6 +483,7 @@ export function getColorTheme(): ColorTheme {
 export function initColorTheme(): void {
   if (!browser) return;
   applyColorTheme(colorTheme.current);
+  applyGlucoseRangePalette(glucoseRangePalette.current);
 }
 
 // Apply theme on module load in browser
@@ -462,6 +491,7 @@ if (browser) {
   // Use setTimeout to ensure DOM is ready
   setTimeout(() => {
     applyColorTheme(colorTheme.current);
+    applyGlucoseRangePalette(glucoseRangePalette.current);
   }, 0);
 }
 
@@ -694,6 +724,7 @@ export function collectPreferences(): UserDisplayPreferences {
     timeFormat: timeFormat.current,
     regionFormat: regionFormat.current,
     colorTheme: colorTheme.current,
+    glucoseRangePalette: glucoseRangePalette.current,
     nightModeSchedule: nightModeSchedule.current,
     dashboardTopWidgets: dashboardTopWidgets.current,
     prediction: {
@@ -728,7 +759,10 @@ export function applyPreferences(
 
   for (const pref of syncedRegistry.values()) pref.hydrateFrom(prefs);
 
-  if (browser) applyColorTheme(colorTheme.current);
+  if (browser) {
+    applyColorTheme(colorTheme.current);
+    applyGlucoseRangePalette(glucoseRangePalette.current);
+  }
   if (options.refreshCookie) writePrefsCookie(collectPreferences());
 }
 
@@ -886,6 +920,9 @@ if (browser) {
     if (!pref) return;
     pref.hydrateJson(event.newValue);
     if (event.key === "nocturne-color-theme") applyColorTheme(colorTheme.current);
+    if (event.key === "nocturne-glucose-range-palette") {
+      applyGlucoseRangePalette(glucoseRangePalette.current);
+    }
   });
 }
 

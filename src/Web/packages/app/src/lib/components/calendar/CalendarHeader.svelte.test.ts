@@ -122,9 +122,9 @@ describe("CalendarHeader", () => {
 			setViewMode: () => {},
 		});
 
-		await expect.element(page.getByText("In Range")).toBeVisible();
-		await expect.element(page.getByText("Low")).toBeVisible();
-		await expect.element(page.getByText("High")).toBeVisible();
+		for (const label of ["Very High", "High", "In Range", "Low", "Very Low"]) {
+			await expect.element(page.getByText(label, { exact: true })).toBeVisible();
+		}
 	});
 
 	// The header is its own @container: the explanation needs @2xl (42rem) and the

@@ -37,6 +37,7 @@ public class UserDisplayPreferencesTests
             GlucoseUnits = "mmol",
             TimeFormat = "24",
             ColorTheme = "trio",
+            GlucoseRangePalette = "clarity",
             NightModeSchedule = true,
             Prediction = new PredictionPreferences { Enabled = true, Minutes = 45, DisplayMode = "cone" },
             Chart = new ChartPreferences { LineColor = "#123456", AreaOpacity = 0.25, Lookback = 6 },
@@ -47,6 +48,7 @@ public class UserDisplayPreferencesTests
         restored.GlucoseUnits.Should().Be("mmol");
         restored.TimeFormat.Should().Be("24");
         restored.ColorTheme.Should().Be("trio");
+        restored.GlucoseRangePalette.Should().Be("clarity");
         restored.NightModeSchedule.Should().BeTrue();
         restored.Prediction!.Minutes.Should().Be(45);
         restored.Chart!.LineColor.Should().Be("#123456");
@@ -173,6 +175,33 @@ public class UserDisplayPreferencesTests
         };
 
         prefs.Validate().Should().NotBeNull().And.Contain(expectedField);
+    }
+
+    [Theory]
+    [InlineData("theme")]
+    [InlineData("clarity")]
+    public void Validate_accepts_known_glucose_range_palettes(string palette)
+    {
+        new UserDisplayPreferences { GlucoseRangePalette = palette }.Validate().Should().BeNull();
+    }
+
+    [Fact]
+    public void Validate_rejects_unknown_glucose_range_palette()
+    {
+        new UserDisplayPreferences { GlucoseRangePalette = "rainbow" }.Validate()
+            .Should().NotBeNull().And.Contain("glucoseRangePalette");
+    }
+
+    [Fact]
+    public void MergeWith_replaces_glucose_range_palette_only_when_incoming_has_one()
+    {
+        var existing = new UserDisplayPreferences { GlucoseRangePalette = "clarity" };
+
+        existing.MergeWith(new UserDisplayPreferences { GlucoseUnits = "mmol" });
+        existing.GlucoseRangePalette.Should().Be("clarity");
+
+        existing.MergeWith(new UserDisplayPreferences { GlucoseRangePalette = "theme" });
+        existing.GlucoseRangePalette.Should().Be("theme");
     }
 
     [Fact]

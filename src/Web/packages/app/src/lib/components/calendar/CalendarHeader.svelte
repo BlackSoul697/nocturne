@@ -83,7 +83,15 @@
       </ToggleGroup.Root>
 
       <!-- Glucose colors -->
-      <div class="flex items-center gap-3">
+      <div class="flex flex-wrap items-center gap-x-3 gap-y-1">
+        <div class="flex items-center gap-1.5">
+          <div class="h-3 w-3 rounded bg-glucose-very-high"></div>
+          <span class="text-sm">Very High</span>
+        </div>
+        <div class="flex items-center gap-1.5">
+          <div class="h-3 w-3 rounded bg-glucose-high"></div>
+          <span class="text-sm">High</span>
+        </div>
         <div class="flex items-center gap-1.5">
           <div class="h-3 w-3 rounded bg-glucose-in-range"></div>
           <span class="text-sm">In Range</span>
@@ -93,8 +101,8 @@
           <span class="text-sm">Low</span>
         </div>
         <div class="flex items-center gap-1.5">
-          <div class="h-3 w-3 rounded bg-glucose-high"></div>
-          <span class="text-sm">High</span>
+          <div class="h-3 w-3 rounded bg-glucose-very-low"></div>
+          <span class="text-sm">Very Low</span>
         </div>
       </div>
 

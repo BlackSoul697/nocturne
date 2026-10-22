@@ -1678,6 +1678,46 @@ public class StatisticsControllerTests
     }
 
     [Fact]
+    public async Task GetPunchCardData_ServesAllFiveBandsWithTheModerateBandsExcludingTheExtremes()
+    {
+        var dayStart = new DateTime(2026, 6, 1, 0, 0, 0, DateTimeKind.Utc);
+        var readings = Enumerable
+            .Range(0, 100)
+            .Select(i => new SensorGlucose { Timestamp = dayStart.AddMinutes(i), Mgdl = 100 })
+            .ToArray();
+        SetupPunchCardGlucose(readings);
+        SetupEmptyTreatments();
+        _statsServiceMock
+            .Setup(s => s.CalculateTimeInRange(
+                It.IsAny<IEnumerable<SensorGlucose>>(),
+                It.IsAny<GlycemicThresholds?>()))
+            .Returns(new TimeInRangeMetrics
+            {
+                Percentages = new TimeInRangePercentages
+                {
+                    VeryLow = 5, Low = 10, Target = 50, High = 20, VeryHigh = 15,
+                },
+            });
+
+        var result = await CreateController().GetPunchCardData(
+            DateOnly.FromDateTime(dayStart), DateOnly.FromDateTime(dayStart));
+
+        var month = result.Result.Should().BeOfType<OkObjectResult>().Subject
+            .Value.Should().BeOfType<PunchCardResponse>().Subject
+            .Months.Should().ContainSingle().Subject;
+        var day = month.Days.Should().ContainSingle().Subject;
+        day.VeryLowPercent.Should().Be(5);
+        day.LowPercent.Should().Be(10);
+        day.InRangePercent.Should().Be(50);
+        day.HighPercent.Should().Be(20);
+        day.VeryHighPercent.Should().Be(15);
+        month.Summary!.VeryLowPercent.Should().BeApproximately(5, 0.01);
+        month.Summary.LowPercent.Should().BeApproximately(10, 0.01);
+        month.Summary.HighPercent.Should().BeApproximately(20, 0.01);
+        month.Summary.VeryHighPercent.Should().BeApproximately(15, 0.01);
+    }
+
+    [Fact]
     public async Task GetPunchCardData_AveragesEveryReadingOfTheDayAndWeightsTheMonthByReadings()
     {
         var dayStart = new DateTime(2026, 6, 1, 0, 0, 0, DateTimeKind.Utc);
@@ -2553,8 +2593,10 @@ public class StatisticsControllerTests
 
             var pct = tir?.Percentages;
             var inRangePct = pct?.Target ?? 0;
-            var lowPct = (pct?.VeryLow ?? 0) + (pct?.Low ?? 0);
-            var highPct = (pct?.VeryHigh ?? 0) + (pct?.High ?? 0);
+            var veryLowPct = pct?.VeryLow ?? 0;
+            var lowPct = pct?.Low ?? 0;
+            var highPct = pct?.High ?? 0;
+            var veryHighPct = pct?.VeryHigh ?? 0;
 
             var dateStr = day.ToString("yyyy-MM-dd");
             var totals = treatment?.Totals;
@@ -2574,11 +2616,15 @@ public class StatisticsControllerTests
                 Timestamp = dayStartMs,
                 TotalReadings = totalReadings,
                 InRangeCount = (int)Math.Round(inRangePct / 100.0 * totalReadings),
+                VeryLowCount = (int)Math.Round(veryLowPct / 100.0 * totalReadings),
                 LowCount = (int)Math.Round(lowPct / 100.0 * totalReadings),
                 HighCount = (int)Math.Round(highPct / 100.0 * totalReadings),
+                VeryHighCount = (int)Math.Round(veryHighPct / 100.0 * totalReadings),
                 InRangePercent = inRangePct,
+                VeryLowPercent = veryLowPct,
                 LowPercent = lowPct,
                 HighPercent = highPct,
+                VeryHighPercent = veryHighPct,
                 AverageGlucose = totalReadings > 0 ? entries.Average(e => e.Mgdl) : 0,
                 TotalCarbs = totals?.Food?.Carbs ?? 0,
                 TotalInsulin = totalBolus + totalBasal,
