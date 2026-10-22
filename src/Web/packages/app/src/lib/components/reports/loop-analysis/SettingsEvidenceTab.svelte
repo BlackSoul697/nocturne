@@ -9,6 +9,7 @@
     LoopAnalysisSeries,
     SettingsEvidenceConfidence,
     SettingsEvidenceUnavailableReason,
+    SettingsEvidenceWithheldReason,
     type BasalEvidenceBlock,
     type BasalEvidenceDay,
     type CarbRatioEvidenceEpisode,
@@ -19,6 +20,8 @@
   import * as Alert from "$lib/components/ui/alert";
   import { glucoseUnits } from "$lib/stores/appearance-store.svelte";
   import { bg, bgDelta, bgLabel, convertToDisplayUnits, hourLabel } from "$lib/utils/formatting";
+  import { Button } from "$lib/components/ui/button";
+  import ArrowRight from "@lucide/svelte/icons/arrow-right";
   import Clock from "@lucide/svelte/icons/clock";
   import EyeOff from "@lucide/svelte/icons/eye-off";
   import Info from "@lucide/svelte/icons/info";
@@ -32,11 +35,22 @@
   import { TimeOfDayCursor } from "./time-of-day-cursor.svelte";
   import { atMinute } from "./daily-profile-view";
   import { blockAt, blockSpan, matchingBlock, valueDomain, type EpisodeColumn } from "./settings-evidence-view";
-  import { confidenceLabel, unavailableText, type SettingsEvidenceSection } from "./settings-evidence-labels.svelte";
+  import { confidenceLabel, hoursText, unavailableText, type SettingsEvidenceSection } from "./settings-evidence-labels.svelte";
 
-  let { response }: { response: SettingsEvidenceReport } = $props();
+  interface Props {
+    response: SettingsEvidenceReport;
+    /** Loop health's sensitivity ratio by hour, under the same filter. */
+    sensitivityHref?: string;
+  }
 
-  const withheld = $derived((response.withheldSeries ?? []).includes(LoopAnalysisSeries.SettingsEvidence));
+  let { response, sensitivityHref }: Props = $props();
+
+  const clamped = $derived(response.withheldReason === SettingsEvidenceWithheldReason.HistoryClamped);
+  const withheld = $derived(
+    response.withheldReason === SettingsEvidenceWithheldReason.ReadScopes ||
+      (response.withheldSeries ?? []).includes(LoopAnalysisSeries.SettingsEvidence)
+  );
+  const rules = $derived(response.rules);
   const primary = $derived(response.primary ?? null);
   const comparison = $derived(response.comparison ?? null);
   const comparing = $derived(comparison != null);
@@ -140,8 +154,7 @@
           {
             key: "isf",
             title: "Insulin sensitivity (ISF)",
-            caption:
-              "Correction boluses given with glucose high and steady and no carbs logged around them: the drop over the next three to four hours per unit that acted.",
+            caption: `Correction boluses given with glucose high and steady and no carbs logged around them: the drop over the next ${(rules?.isfMinimumWindowMs ?? 0) / 3_600_000} to ${hoursText(rules?.isfWindowMs)} per unit that acted.`,
             direction: "A higher ISF means each unit lowers glucose more, so less insulin for the same correction.",
             unit: isfUnit,
             blocks: primary.isf ?? [],
@@ -153,7 +166,7 @@
           {
             key: "carbRatio",
             title: "Carb ratio",
-            caption: "Meals logged with carbs and nothing else nearby: grams per unit of insulin the meal needed over four hours.",
+            caption: `Meals logged with carbs and nothing else nearby: grams per unit of insulin the meal needed over ${hoursText(rules?.carbRatioWindowMs)}.`,
             direction: "A higher carb ratio means less insulin for the same meal.",
             unit: "g/U",
             blocks: primary.carbRatio ?? [],
@@ -209,20 +222,19 @@
       </Alert.Description>
     </Alert.Root>
 
-    {#if response.historyClamped}
-      <Alert.Root variant="info">
-        <Clock />
-        <Alert.Title>Only the last 24 hours are included</Alert.Title>
-        <Alert.Description>
-          You can read only the most recent 24 hours of this data, so the evidence covers those 24
-          hours whatever range is picked and compares nothing. That is rarely enough for a figure.
-        </Alert.Description>
-      </Alert.Root>
-    {/if}
-
     <IgnoredFiltersNotice ignored={response.ignoredFilters} />
 
-    {#if withheld || primary == null}
+    {#if clamped}
+      <div class="flex flex-col items-center gap-3 rounded-lg border border-dashed px-6 py-10 text-center text-muted-foreground">
+        <Clock class="size-10 opacity-50" />
+        <p class="font-medium text-foreground">Settings evidence needs more than the last 24 hours of history</p>
+        <p class="max-w-prose text-sm">
+          You can read only the most recent 24 hours of this data. Every figure here is checked
+          against the hours before it, such as whether anything was eaten, and those hours are out
+          of reach, so nothing is shown rather than figures that cannot be checked.
+        </p>
+      </div>
+    {:else if withheld || primary == null}
       <div class="flex flex-col items-center gap-3 rounded-lg border border-dashed px-6 py-10 text-center text-muted-foreground">
         <EyeOff class="size-10 opacity-50" />
         <p class="font-medium text-foreground">Your access does not include the data this tab is drawn from</p>
@@ -238,6 +250,12 @@
             <h3 id="settings-evidence-{section.key}" class="font-medium">{section.title}</h3>
             <p class="text-sm text-muted-foreground">{section.caption}</p>
             <p class="text-sm text-muted-foreground">{section.direction}</p>
+            {#if section.key === "isf" && sensitivityHref}
+              <Button href={sensitivityHref} variant="link" size="inline">
+                The loop's own sensitivity ratio by hour, in Loop health
+                <ArrowRight />
+              </Button>
+            {/if}
           </div>
           <div class="space-y-1">
             <TimeOfDayPanel
@@ -312,6 +330,7 @@
                     unit={section.unit}
                     episodes={block.days ?? []}
                     columns={basalColumns}
+                    {rules}
                     details={basalDetails(block)}
                   />
                 </div>
@@ -328,6 +347,7 @@
                     unit={section.unit}
                     episodes={block.episodes ?? []}
                     columns={isfColumns}
+                    {rules}
                   />
                 </div>
               {/each}
@@ -343,6 +363,7 @@
                     unit={section.unit}
                     episodes={block.episodes ?? []}
                     columns={crColumns}
+                    {rules}
                   />
                 </div>
               {/each}

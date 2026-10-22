@@ -1,10 +1,19 @@
 import {
+  type SettingsEvidenceRules,
   SettingsEvidenceConfidence,
   SettingsEvidenceConfidenceReason,
   SettingsEvidenceRule,
   SettingsEvidenceUnavailableReason,
 } from "$lib/api";
 import { bg, bgLabel } from "$lib/utils/formatting";
+import { plural } from "$lib/utils/plural";
+
+const HOUR_MS = 3_600_000;
+
+/** A rule's span in hours, as it reads. */
+export function hoursText(ms: number | undefined): string {
+  return plural((ms ?? 0) / HOUR_MS, ["# hour", "# hours"]);
+}
 
 /** Built per call so wuchale reads them in the current locale. */
 export function confidenceLabel(confidence: SettingsEvidenceConfidence | undefined): string {
@@ -61,7 +70,7 @@ export function reasonText(reason: SettingsEvidenceConfidenceReason | undefined)
     case SettingsEvidenceConfidenceReason.StillMovingAtEnd:
       return {
         why: "Glucose was usually still moving when the window closed, so part of the response was missed.",
-        raise: "It firms up when your data includes episodes whose glucose settles within four hours.",
+        raise: "It firms up when your data includes episodes whose glucose settles before the window closes.",
       };
     case SettingsEvidenceConfidenceReason.CarriedInsulinMaterial:
       return {
@@ -101,7 +110,7 @@ export function unavailableText(
 }
 
 /** Why candidates were set aside, one rule each. */
-export function ruleText(rule: SettingsEvidenceRule | undefined): string {
+export function ruleText(rule: SettingsEvidenceRule | undefined, rules: SettingsEvidenceRules | undefined): string {
   switch (rule) {
     case SettingsEvidenceRule.OpenLoop:
       return "The loop was open";
@@ -118,11 +127,11 @@ export function ruleText(rule: SettingsEvidenceRule | undefined): string {
     case SettingsEvidenceRule.OutsideRange:
       return "Ran past the edge of the range";
     case SettingsEvidenceRule.CarbsBefore:
-      return "Carbs within 4 hours before, or during";
+      return `Carbs within ${hoursText(rules?.basalCarbFreeMs)} before, or during`;
     case SettingsEvidenceRule.RiseBefore:
-      return "Glucose rose as after a meal, within 4 hours before or during";
+      return `Glucose rose as after a meal, within ${hoursText(rules?.basalCarbFreeMs)} before or during`;
     case SettingsEvidenceRule.ManualBolus:
-      return "A manual bolus within 5 hours before, or during";
+      return `A manual bolus within ${hoursText(rules?.basalManualBolusFreeMs)} before, or during`;
     case SettingsEvidenceRule.CarbsOnBoard:
       return "Carbs still on board";
     case SettingsEvidenceRule.ManualDelivery:
@@ -130,7 +139,7 @@ export function ruleText(rule: SettingsEvidenceRule | undefined): string {
     case SettingsEvidenceRule.InferredDelivery:
       return "Basal delivery was not recorded and differed from the schedule";
     case SettingsEvidenceRule.CarbsNear:
-      return "Carbs from an hour before to three hours after";
+      return `Carbs from ${hoursText(rules?.isfCarbFreeBeforeMs)} before to ${hoursText(rules?.isfMinimumWindowMs)} after`;
     case SettingsEvidenceRule.NoTarget:
       return "No target range was set";
     case SettingsEvidenceRule.NotAboveTarget:
@@ -142,11 +151,11 @@ export function ruleText(rule: SettingsEvidenceRule | undefined): string {
     case SettingsEvidenceRule.IobSourceChanged:
       return "Insulin on board came from different sources at the start and end";
     case SettingsEvidenceRule.WentLow:
-      return `Glucose went below ${bg(70)} ${bgLabel()}`;
+      return `Glucose went below ${bg(rules?.lowMgdl ?? 0)} ${bgLabel()}`;
     case SettingsEvidenceRule.NotIsolated:
       return "Another meal, correction or rise in the window";
     case SettingsEvidenceRule.StartOutOfRange:
-      return `Glucose was outside ${bg(70)}–${bg(180)} ${bgLabel()} at the start`;
+      return `Glucose was outside ${bg(rules?.startLowMgdl ?? 0)}–${bg(rules?.startHighMgdl ?? 0)} ${bgLabel()} at the start`;
     case SettingsEvidenceRule.StartUnstable:
       return "Glucose was moving at the start";
     case SettingsEvidenceRule.MissingGlucose:

@@ -357,6 +357,18 @@ describe("Loop Analysis page", () => {
     });
   });
 
+  it("links Settings evidence's ISF to Loop health's sensitivity ratio under the same filter", async () => {
+    open("?tab=settings-evidence&weekdays=6&excludeIllness=false");
+
+    const link = page.getByRole("link", { name: /sensitivity ratio by hour, in Loop health/ });
+    await expect.element(link).toBeVisible();
+    const href = new URL(link.element().getAttribute("href")!, "http://localhost");
+    expect(href.hash).toBe("#sensitivity");
+    expect(href.searchParams.get("tab")).toBe("loop-health");
+    expect(href.searchParams.get("weekdays")).toBe("6");
+    expect(href.searchParams.get("excludeIllness")).toBe("false");
+  });
+
   it("drops a filter Loop health says the viewer cannot use", async () => {
     health = loopHealthResponse({ scopes: ["glucose.read", "treatments.read", "therapy.read", "reports.read"] });
     open("?tab=loop-health&excludeOpenLoop=true");

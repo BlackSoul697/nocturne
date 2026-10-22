@@ -111,6 +111,12 @@
       .join("&");
     return resolve(`/reports/insulin-delivery?${range}`);
   });
+  /** Loop health's sensitivity ratio by hour, under the same filter. */
+  const sensitivityHref = $derived.by(() => {
+    const kept = [...page.url.searchParams].filter(([name]) => name !== "tab");
+    const query = [["tab", "loop-health"], ...kept].map(([name, value]) => `${name}=${encodeURIComponent(value)}`).join("&");
+    return resolve(`/reports/loop-analysis?${query}#sensitivity`);
+  });
 </script>
 
 <svelte:head>
@@ -220,7 +226,7 @@
     </Tabs.Content>
     <Tabs.Content value="settings-evidence" class="mt-4">
       {#if settingsEvidence}
-        <SettingsEvidenceTab response={settingsEvidence} />
+        <SettingsEvidenceTab response={settingsEvidence} {sensitivityHref} />
       {:else if !TABS["settings-evidence"].failed}
         <TabLoading />
       {/if}

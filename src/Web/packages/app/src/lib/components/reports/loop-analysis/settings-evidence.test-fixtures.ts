@@ -6,6 +6,7 @@ import {
   SettingsEvidenceConfidenceReason,
   SettingsEvidenceRule,
   SettingsEvidenceUnavailableReason,
+  SettingsEvidenceWithheldReason,
   type BasalEvidenceBlock,
   type CarbRatioEvidenceBlock,
   type IsfEvidenceBlock,
@@ -14,6 +15,7 @@ import {
   type SettingsEvidenceReport,
 } from "$lib/api";
 
+const HOUR = 3_600_000;
 const C = SettingsEvidenceConfidence;
 const R = SettingsEvidenceConfidenceReason;
 const U = SettingsEvidenceUnavailableReason;
@@ -141,11 +143,23 @@ export function settingsEvidenceResponse(overrides: Partial<SettingsEvidenceRepo
     unavailableFilters: [],
     profileNames: ["Default"],
     primary: settingsEvidenceRange(),
+    rules: {
+      basalCarbFreeMs: 4 * HOUR,
+      basalManualBolusFreeMs: 5 * HOUR,
+      isfCarbFreeBeforeMs: HOUR,
+      isfMinimumWindowMs: 3 * HOUR,
+      isfWindowMs: 4 * HOUR,
+      carbRatioWindowMs: 4 * HOUR,
+      lowMgdl: 70,
+      startLowMgdl: 70,
+      startHighMgdl: 180,
+    },
     ...overrides,
   };
 }
 
 export const WITHHELD_SETTINGS_EVIDENCE: Partial<SettingsEvidenceReport> = {
+  withheldReason: SettingsEvidenceWithheldReason.ReadScopes,
   withheldSeries: [LoopAnalysisSeries.SettingsEvidence],
   primary: undefined,
   comparison: undefined,

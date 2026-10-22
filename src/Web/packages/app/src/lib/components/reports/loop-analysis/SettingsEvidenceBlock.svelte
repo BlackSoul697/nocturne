@@ -11,6 +11,7 @@
     SettingsEvidenceConfidence,
     type SettingsEvidenceEpisode,
     type SettingsEvidenceFigure,
+    type SettingsEvidenceRules,
   } from "$lib/api";
   import { Badge } from "$lib/components/ui/badge";
   import * as Tooltip from "$lib/components/ui/tooltip";
@@ -40,9 +41,10 @@
     columns: EpisodeColumn<E>[];
     /** Further lines under the figure, such as the loop's mean correction for basal. */
     details?: string[];
+    rules: SettingsEvidenceRules | undefined;
   }
 
-  let { figure, compared, comparing, section, format, unit, episodes, columns, details = [] }: Props = $props();
+  let { figure, compared, comparing, section, format, unit, episodes, columns, details = [], rules }: Props = $props();
 
   const span = $derived(`${hourLabel(atMinute((figure.startHour ?? 0) * 60))}–${hourLabel(atMinute((figure.endHour ?? 0) * 60))}`);
   const value = (v: number | null | undefined) => (v == null ? "–" : format(v));
@@ -149,7 +151,7 @@
         <ul class="grid gap-x-6 gap-y-0.5 @lg:grid-cols-2">
           {#each rejections as rejection (rejection.rule)}
             <li class="flex justify-between gap-3">
-              <span class="text-muted-foreground">{ruleText(rejection.rule)}</span>
+              <span class="text-muted-foreground">{ruleText(rejection.rule, rules)}</span>
               <span class="tabular-nums">{rejection.count}</span>
             </li>
           {/each}
@@ -171,11 +173,11 @@
                   <th scope="col" class={["px-2 py-1.5 text-right font-medium whitespace-nowrap", column.wide && "hidden @lg:table-cell"]}>
                     {#if column.hint}
                       <Tooltip.Root>
-                        <Tooltip.Trigger class="inline-flex items-center gap-1 underline decoration-dotted underline-offset-2">
+                        <Tooltip.Trigger class="inline-flex items-center gap-1">
                           {column.label}
                           <Info class="size-3" aria-hidden="true" />
                         </Tooltip.Trigger>
-                        <Tooltip.Content class="max-w-64 text-left font-normal">{column.hint}</Tooltip.Content>
+                        <Tooltip.Content class="max-w-64 text-left">{column.hint}</Tooltip.Content>
                       </Tooltip.Root>
                     {:else}
                       {column.label}

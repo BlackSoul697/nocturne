@@ -1,7 +1,7 @@
 import { render } from "vitest-browser-svelte";
 import { page, userEvent } from "vitest/browser";
 import { afterEach, describe, expect, it } from "vitest";
-import { SettingsEvidenceConfidence, TimeZoneUnavailableReason } from "$lib/api";
+import { SettingsEvidenceConfidence, SettingsEvidenceWithheldReason, TimeZoneUnavailableReason } from "$lib/api";
 import { glucoseUnits } from "$lib/stores/appearance-store.svelte";
 import SettingsEvidenceTab from "./SettingsEvidenceTab.svelte";
 import {
@@ -223,16 +223,46 @@ describe("SettingsEvidenceTab", () => {
     await expect.element(page.getByRole("slider")).not.toBeInTheDocument();
   });
 
-  it("explains a missing time zone and a history clamp", async () => {
+  it("explains a missing time zone", async () => {
     render(SettingsEvidenceTab, {
       props: { response: settingsEvidenceResponse({ timeZoneUnavailableReason: TimeZoneUnavailableReason.NotConfigured, primary: undefined }) },
     });
     await expect.element(page.getByText("This report needs a time zone")).toBeVisible();
   });
 
-  it("says only the last 24 hours are included for a clamped viewer", async () => {
-    render(SettingsEvidenceTab, { props: { response: settingsEvidenceResponse({ historyClamped: true }) } });
-    await expect.element(page.getByText("Only the last 24 hours are included")).toBeVisible();
+  it("says a history-clamped viewer's tab is withheld because it needs more than 24 hours", async () => {
+    render(SettingsEvidenceTab, {
+      props: {
+        response: settingsEvidenceResponse({
+          historyClamped: true,
+          withheldReason: SettingsEvidenceWithheldReason.HistoryClamped,
+          primary: undefined,
+        }),
+      },
+    });
+    await expect.element(page.getByText("Settings evidence needs more than the last 24 hours of history")).toBeVisible();
+    await expect.element(page.getByText("Your access does not include the data this tab is drawn from")).not.toBeInTheDocument();
+    await expect.element(page.getByRole("slider")).not.toBeInTheDocument();
+  });
+
+  it("names each rule's span from the thresholds the report serves", async () => {
+    const response = settingsEvidenceResponse();
+    response.rules = { ...response.rules, basalCarbFreeMs: 3 * 3_600_000, carbRatioWindowMs: 5 * 3_600_000 };
+    render(SettingsEvidenceTab, { props: { response } });
+
+    await expect.element(page.getByText(/insulin the meal needed over 5 hours\./)).toBeVisible();
+    const night = block("Basal", /^\s*4/).first();
+    await night.getByText(/1\.05/).click();
+    await expect.element(night.getByText("Carbs within 3 hours before, or during")).toBeVisible();
+  });
+
+  it("links ISF to the loop's own sensitivity ratio in Loop health", async () => {
+    render(SettingsEvidenceTab, {
+      props: { response: settingsEvidenceResponse(), sensitivityHref: "/reports/loop-analysis?tab=loop-health&days=14#sensitivity" },
+    });
+    await expect
+      .element(page.getByRole("link", { name: /sensitivity ratio by hour, in Loop health/ }))
+      .toHaveAttribute("href", "/reports/loop-analysis?tab=loop-health&days=14#sensitivity");
   });
 
   it("names a filter the viewer's access ignored", async () => {
