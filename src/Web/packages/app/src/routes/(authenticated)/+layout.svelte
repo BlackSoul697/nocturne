@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { Key } from "@nocturne/ui/keys";
   import { createRealtimeStore } from "$lib/stores/realtime-store.svelte";
   import {
     displayedGlucose,
@@ -131,7 +132,7 @@
   );
 
   function handleCommandPaletteKeydown(e: KeyboardEvent) {
-    if ((e.metaKey || e.ctrlKey) && e.key === "k") {
+    if ((e.metaKey || e.ctrlKey) && e.key === Key.K) {
       e.preventDefault();
       commandPalette.open = !commandPalette.open;
     }
