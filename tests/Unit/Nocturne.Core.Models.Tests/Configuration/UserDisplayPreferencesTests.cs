@@ -259,4 +259,84 @@ public class UserDisplayPreferencesTests
         new UserDisplayPreferences { Chart = new ChartPreferences { Lookback = 0 } }
             .Validate().Should().NotBeNull().And.Contain("chart.lookback");
     }
+
+    // ----- Energy unit -----
+
+    [Theory]
+    [InlineData("kJ")]
+    [InlineData("kcal")]
+    public void Validate_accepts_each_energy_unit(string unit)
+    {
+        new UserDisplayPreferences { EnergyUnit = unit }.Validate().Should().BeNull();
+    }
+
+    [Theory]
+    [InlineData("kj")]
+    [InlineData("Cal")]
+    [InlineData("")]
+    public void Validate_rejects_an_unknown_energy_unit(string unit)
+    {
+        new UserDisplayPreferences { EnergyUnit = unit }
+            .Validate().Should().NotBeNull().And.Contain("energyUnit");
+    }
+
+    [Fact]
+    public void MergeWith_keeps_the_energy_unit_when_the_patch_omits_it()
+    {
+        var existing = new UserDisplayPreferences { EnergyUnit = "kJ" };
+
+        existing.MergeWith(new UserDisplayPreferences { GlucoseUnits = "mmol" });
+
+        existing.EnergyUnit.Should().Be("kJ");
+    }
+
+    [Fact]
+    public void MergeWith_replaces_the_energy_unit()
+    {
+        var existing = new UserDisplayPreferences { EnergyUnit = "kJ" };
+
+        existing.MergeWith(new UserDisplayPreferences { EnergyUnit = "kcal" });
+
+        existing.EnergyUnit.Should().Be("kcal");
+    }
+
+    [Fact]
+    public void An_explicit_energy_unit_survives_a_round_trip()
+    {
+        var restored = UserDisplayPreferences.Deserialize(
+            new UserDisplayPreferences { EnergyUnit = "kJ", RegionFormat = "en-GB" }.Serialize());
+
+        restored.EnergyUnit.Should().Be("kJ");
+        restored.EffectiveEnergyUnit.Should().Be("kJ");
+    }
+
+    [Fact]
+    public void The_resolved_energy_unit_is_not_stored()
+    {
+        var stored = new UserDisplayPreferences { EnergyUnit = "kJ", RegionFormat = "en-AU" }.Serialize();
+
+        stored.Should().Contain("\"energyUnit\"").And.NotContain("effectiveEnergyUnit");
+    }
+
+    [Fact]
+    public void The_resolved_energy_unit_is_still_served()
+    {
+        var served = System.Text.Json.JsonSerializer.Serialize(
+            new UserDisplayPreferences { RegionFormat = "en-NZ" },
+            new System.Text.Json.JsonSerializerOptions(System.Text.Json.JsonSerializerDefaults.Web));
+
+        served.Should().Contain("\"effectiveEnergyUnit\":\"kJ\"");
+    }
+
+    [Fact]
+    public void The_effective_energy_unit_follows_a_later_region_change()
+    {
+        var restored = UserDisplayPreferences.Deserialize(
+            new UserDisplayPreferences { RegionFormat = "en-GB" }.Serialize());
+
+        restored.RegionFormat = "en-AU";
+
+        restored.EnergyUnit.Should().BeNull();
+        restored.EffectiveEnergyUnit.Should().Be("kJ");
+    }
 }

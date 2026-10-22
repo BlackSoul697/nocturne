@@ -137,11 +137,24 @@ describe("appearance-store preference sync", () => {
     expect(collected.chart?.showPoints).toBe(false);
   });
 
+  it("sends back an explicit energy unit but never the resolved one", () => {
+    applyPreferences({ energyUnit: "kJ", effectiveEnergyUnit: "kJ" });
+
+    const collected = collectPreferences();
+
+    expect(collected.energyUnit).toBe("kJ");
+    expect(collected).not.toHaveProperty("effectiveEnergyUnit");
+  });
+
   describe("hasStoredPreferences", () => {
     it("is false for null/empty payloads", () => {
       expect(hasStoredPreferences(null)).toBe(false);
       expect(hasStoredPreferences(undefined)).toBe(false);
       expect(hasStoredPreferences({})).toBe(false);
+    });
+
+    it("is false when the only value is the resolved energy unit", () => {
+      expect(hasStoredPreferences({ effectiveEnergyUnit: "kcal" })).toBe(false);
     });
 
     it("is true when any value is present", () => {

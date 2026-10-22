@@ -32,6 +32,7 @@ import { DEFAULT_TOP_WIDGETS } from "../components/dashboard/top-widget-ids";
 import { weekStartName } from "../components/calendar/calendar-date";
 import { resolveCookieDomain } from "../utils/tenant-host";
 import { isRecord } from "../utils/type-guards";
+import { ENERGY_UNITS, type EnergyUnit } from "@nocturne/ui/energy";
 
 // ==========================================
 // Type Definitions
@@ -180,9 +181,13 @@ export function registerPreferenceCookieDomain(
  */
 function writeThroughReporting(prefs: UserDisplayPreferences): void {
   try {
-    void Promise.resolve(writeThrough?.(prefs)).catch((error: unknown) => {
-      console.error("Failed to save display preferences:", error);
-    });
+    void Promise.resolve(writeThrough?.(prefs))
+      .then((saved) => {
+        if (isRecord(saved) && isRecord(saved.preferences)) hydrateResolvedEnergyUnit(saved.preferences);
+      })
+      .catch((error: unknown) => {
+        console.error("Failed to save display preferences:", error);
+      });
   } catch (error) {
     console.error("Failed to save display preferences:", error);
   }
@@ -354,6 +359,17 @@ export const glucoseUnits = new SyncedPref<GlucoseUnits>(
   "mg/dl",
   (p) => p.glucoseUnits,
   oneOfPref(GLUCOSE_UNITS)
+);
+
+/**
+ * The food energy unit the user chose, or `null` to follow the backend's resolution from their
+ * region format (see {@link getEnergyUnit}).
+ */
+export const energyUnit = new SyncedPref<EnergyUnit | null>(
+  "nocturne-energy-unit",
+  null,
+  (p) => p.energyUnit,
+  oneOfPref(ENERGY_UNITS)
 );
 
 // @wc-ignore
@@ -542,6 +558,37 @@ export function setGlucoseUnits(units: GlucoseUnits): void {
 }
 
 // ==========================================
+// Energy Unit Helpers
+// ==========================================
+
+const energyUnitPref = oneOfPref(ENERGY_UNITS);
+
+/**
+ * The backend's `effectiveEnergyUnit`. It is an answer rather than a preference, so it is never
+ * written back, and it is refreshed from each save so a region change takes effect.
+ */
+let resolvedEnergyUnit = $state<EnergyUnit>("kcal");
+
+function hydrateResolvedEnergyUnit(prefs: { effectiveEnergyUnit?: unknown }): void {
+  if (!browser) return;
+  const unit = energyUnitPref(prefs.effectiveEnergyUnit);
+  if (unit) resolvedEnergyUnit = unit;
+}
+
+/** The unit food energy is shown and entered in. */
+export function getEnergyUnit(): EnergyUnit {
+  const chosen = energyUnit.current;
+  if (chosen) return chosen;
+  if (!browser) {
+    for (const prefs of requestPreferences()?.layers ?? []) {
+      const unit = energyUnitPref(prefs.effectiveEnergyUnit);
+      if (unit) return unit;
+    }
+  }
+  return resolvedEnergyUnit;
+}
+
+// ==========================================
 // Prediction Settings
 // ==========================================
 
@@ -723,6 +770,7 @@ export function collectPreferences(): UserDisplayPreferences {
     a1cUnits: a1cUnits.current,
     timeFormat: timeFormat.current,
     regionFormat: regionFormat.current,
+    energyUnit: energyUnit.current ?? undefined,
     colorTheme: colorTheme.current,
     glucoseRangePalette: glucoseRangePalette.current,
     nightModeSchedule: nightModeSchedule.current,
@@ -758,6 +806,7 @@ export function applyPreferences(
   if (!prefs) return;
 
   for (const pref of syncedRegistry.values()) pref.hydrateFrom(prefs);
+  hydrateResolvedEnergyUnit(prefs);
 
   if (browser) {
     applyColorTheme(colorTheme.current);
@@ -766,10 +815,15 @@ export function applyPreferences(
   if (options.refreshCookie) writePrefsCookie(collectPreferences());
 }
 
-/** True when a server preference payload carries at least one saved value. */
+/**
+ * True when a server preference payload carries at least one saved value. `effectiveEnergyUnit`
+ * is resolved on every response, saved or not.
+ */
 export function hasStoredPreferences(prefs: UserDisplayPreferences | null | undefined): boolean {
   if (!prefs) return false;
-  return Object.values(prefs).some((v) => v !== undefined && v !== null);
+  return Object.entries(prefs).some(
+    ([key, v]) => key !== "effectiveEnergyUnit" && v !== undefined && v !== null
+  );
 }
 
 /** Ensures reconciliation happens once per document load, not on every client navigation. */
@@ -789,6 +843,7 @@ let preferencesReconciled = false;
 export function reconcilePreferences(serverPrefs: UserDisplayPreferences | null | undefined): void {
   if (!browser || preferencesReconciled) return;
   preferencesReconciled = true;
+  if (serverPrefs) hydrateResolvedEnergyUnit(serverPrefs);
 
   if (hasStoredPreferences(serverPrefs)) {
     applyPreferences(serverPrefs, { refreshCookie: true });

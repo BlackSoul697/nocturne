@@ -1,5 +1,6 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using System.Text.Json.Serialization.Metadata;
 
 namespace Nocturne.Core.Models.Configuration;
 
@@ -14,8 +15,24 @@ namespace Nocturne.Core.Models.Configuration;
 /// </summary>
 public class UserDisplayPreferences
 {
-    /// <summary>Shared JSON options for (de)serializing the preferences blob (camelCase / web defaults).</summary>
-    public static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
+    /// <summary>
+    /// JSON options for (de)serializing the stored preferences blob (camelCase / web defaults).
+    /// <see cref="EffectiveEnergyUnit"/> is left out: it is resolved on every response, and a stored
+    /// copy would go stale when the region format changes.
+    /// </summary>
+    public static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web)
+    {
+        TypeInfoResolver = new DefaultJsonTypeInfoResolver { Modifiers = { OmitResolvedValues } },
+    };
+
+    private static void OmitResolvedValues(JsonTypeInfo typeInfo)
+    {
+        if (typeInfo.Type != typeof(UserDisplayPreferences))
+            return;
+
+        var resolved = typeInfo.Properties.Single(p => p.Name == "effectiveEnergyUnit");
+        typeInfo.Properties.Remove(resolved);
+    }
 
     /// <summary>
     /// Deserializes a stored preferences blob, returning an empty (all-null) instance when the
@@ -80,6 +97,7 @@ public class UserDisplayPreferences
             ?? Check("a1cUnits", A1cUnits, AllowedA1cUnits)
             ?? Check("timeFormat", TimeFormat, AllowedTimeFormats)
             ?? Check("regionFormat", RegionFormat, AllowedRegionFormats)
+            ?? Check("energyUnit", EnergyUnit, EnergyUnits.Allowed)
             ?? Check("colorTheme", ColorTheme, AllowedColorThemes)
             ?? Check("glucoseRangePalette", GlucoseRangePalette, AllowedGlucoseRangePalettes)
             ?? Check("prediction.displayMode", Prediction?.DisplayMode, AllowedPredictionModes)
@@ -124,6 +142,7 @@ public class UserDisplayPreferences
         A1cUnits = incoming.A1cUnits ?? A1cUnits;
         TimeFormat = incoming.TimeFormat ?? TimeFormat;
         RegionFormat = incoming.RegionFormat ?? RegionFormat;
+        EnergyUnit = incoming.EnergyUnit ?? EnergyUnit;
         ColorTheme = incoming.ColorTheme ?? ColorTheme;
         GlucoseRangePalette = incoming.GlucoseRangePalette ?? GlucoseRangePalette;
         NightModeSchedule = incoming.NightModeSchedule ?? NightModeSchedule;
@@ -174,6 +193,7 @@ public class UserDisplayPreferences
         A1cUnits = A1cUnits,
         TimeFormat = TimeFormat,
         RegionFormat = RegionFormat,
+        EnergyUnit = EnergyUnit,
         ColorTheme = ColorTheme,
         GlucoseRangePalette = GlucoseRangePalette,
         Prediction = Prediction,
@@ -199,6 +219,17 @@ public class UserDisplayPreferences
     /// </summary>
     [JsonPropertyName("regionFormat")]
     public string? RegionFormat { get; set; }
+
+    /// <summary>Food energy display unit: "kJ" or "kcal". Null follows <see cref="EffectiveEnergyUnit"/>.</summary>
+    [JsonPropertyName("energyUnit")]
+    public string? EnergyUnit { get; set; }
+
+    /// <summary>
+    /// The energy unit to display, resolved by <see cref="EnergyUnits.Resolve"/>. Served so the
+    /// frontend never applies the region rule itself; never stored (see <see cref="JsonOptions"/>).
+    /// </summary>
+    [JsonPropertyName("effectiveEnergyUnit")]
+    public string EffectiveEnergyUnit => EnergyUnits.Resolve(EnergyUnit, RegionFormat);
 
     /// <summary>Color theme: "nocturne", "trio", "aaps", or "classic".</summary>
     [JsonPropertyName("colorTheme")]

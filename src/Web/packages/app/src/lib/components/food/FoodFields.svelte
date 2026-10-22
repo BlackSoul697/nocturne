@@ -1,15 +1,18 @@
 <script lang="ts">
-  import { distinct } from "$lib/utils/collections";
   import type { Food } from "$api";
   import type { Snippet } from "svelte";
   import ChevronRight from "@lucide/svelte/icons/chevron-right";
+  import {
+    energyFromDisplayUnits,
+    energyToDisplayUnits,
+    type EnergyUnit,
+  } from "@nocturne/ui/energy";
+  import { getEnergyUnit } from "$lib/stores/appearance-store.svelte";
   import GiIcon from "./GiIcon.svelte";
   import GiLabel from "./GiLabel.svelte";
-  import { getFoodState } from "./food-context.js";
-  import { giFromInt, giToInt, isGiLevel } from "./types.js";
-  import type { GiLevel } from "./types.js";
-  import { FOOD_UNITS } from "$lib/components/food";
-  import * as Select from "$lib/components/ui/select";
+  import CategorySubcategoryCombobox from "./CategorySubcategoryCombobox.svelte";
+  import { giFromInt, giToInt, isGiLevel, type GiLevel } from "./gi";
+  import { FOOD_UNITS, type FoodCategoryMap } from "./food-constants";
   import { Button } from "$lib/components/ui/button";
   import { Input } from "$lib/components/ui/input";
   import * as InputGroup from "$lib/components/ui/input-group";
@@ -19,32 +22,55 @@
 
   interface Props {
     draft: Food;
+    categories: FoodCategoryMap;
+    onCategoryCreate?: (category: string) => void;
+    onSubcategoryCreate?: (category: string, subcategory: string) => void;
     nameRef?: HTMLInputElement | null;
     collapseDetails?: boolean;
-    actions: Snippet;
+    actions?: Snippet;
   }
 
   let {
     draft = $bindable(),
+    categories,
+    onCategoryCreate,
+    onSubcategoryCreate,
     nameRef = $bindable(null),
     collapseDetails = false,
     actions,
   }: Props = $props();
 
-  const foodState = getFoodState();
   const uid = $props.id();
   const giLevels: GiLevel[] = ["low", "medium", "high"];
+  const energyUnit = $derived(getEnergyUnit());
 
   let showDetails = $state(false);
 
-  const subcategories = $derived.by(() => {
-    if (!draft.category) return [];
-    return distinct(
-      foodState.foods
-        .filter((f) => f.category === draft.category)
-        .map((f) => f.subcategory || null)
-    ).sort();
+  function displayedEnergy(): number | undefined {
+    return draft.energy == null ? undefined : energyToDisplayUnits(draft.energy, energyUnit);
+  }
+
+  /**
+   * The field holds what was typed and writes kilojoules only on an edit, so typing is never
+   * rounded under the cursor and an untouched value saves exactly as stored. It is reformatted from
+   * the stored value on blur, or when the value or unit changes from outside.
+   */
+  let energyInput = $state(displayedEnergy());
+  let writtenEnergy: number | undefined;
+  let shownUnit: EnergyUnit | undefined;
+
+  $effect(() => {
+    if (draft.energy === writtenEnergy && energyUnit === shownUnit) return;
+    writtenEnergy = draft.energy;
+    shownUnit = energyUnit;
+    energyInput = displayedEnergy();
   });
+
+  function setEnergy(value: number | null | undefined) {
+    energyInput = typeof value === "number" ? value : undefined;
+    draft.energy = typeof value === "number" ? energyFromDisplayUnits(value, energyUnit) : undefined;
+    writtenEnergy = draft.energy;
+  }
 </script>
 
 {#snippet required()}
@@ -103,58 +129,27 @@
           type="number"
           id="{uid}-energy"
           name="energy"
-          bind:value={draft.energy}
+          bind:value={() => energyInput, setEnergy}
+          onblur={() => (energyInput = displayedEnergy())}
           min="0"
           step="1"
         />
-        <span class="shrink-0 text-xs text-muted-foreground">kcal</span>
+        <span class="shrink-0 text-xs text-muted-foreground">{energyUnit}</span>
       </div>
     </div>
 
-    <div class="flex flex-col gap-1">
+    <div class="col-span-2 flex flex-col gap-1">
       <Label for="{uid}-category" size="sm" variant="muted">Category</Label>
-      <Select.Root
-        type="single"
-        name="category"
-        value={draft.category ?? ""}
-        onValueChange={(v) => {
-          draft.category = v;
-        }}
-      >
-        <Select.Trigger id="{uid}-category" class="w-full">
-          {draft.category || "No category"}
-        </Select.Trigger>
-        <Select.Content>
-          <Select.Item value="" label="No category" />
-          {#each foodState.categories as cat (cat)}
-            <Select.Item value={cat} label={cat} />
-          {/each}
-        </Select.Content>
-      </Select.Root>
-    </div>
-
-    <div class="flex flex-col gap-1">
-      <Label for="{uid}-subcategory" size="sm" variant="muted">
-        Subcategory
-      </Label>
-      <Select.Root
-        type="single"
-        name="subcategory"
-        value={draft.subcategory ?? ""}
-        onValueChange={(v) => {
-          draft.subcategory = v;
-        }}
-      >
-        <Select.Trigger id="{uid}-subcategory" class="w-full">
-          {draft.subcategory || "No subcategory"}
-        </Select.Trigger>
-        <Select.Content>
-          <Select.Item value="" label="No subcategory" />
-          {#each subcategories as sub (sub)}
-            <Select.Item value={sub} label={sub} />
-          {/each}
-        </Select.Content>
-      </Select.Root>
+      <CategorySubcategoryCombobox
+        id="{uid}-category"
+        category={draft.category ?? ""}
+        subcategory={draft.subcategory ?? ""}
+        {categories}
+        onCategoryChange={(category) => (draft.category = category)}
+        onSubcategoryChange={(subcategory) => (draft.subcategory = subcategory)}
+        {onCategoryCreate}
+        {onSubcategoryCreate}
+      />
     </div>
   </div>
 {/snippet}
@@ -291,13 +286,15 @@
             </Button>
           {/snippet}
         </Collapsible.Trigger>
-        {@render actions()}
+        {@render actions?.()}
       </div>
     </Collapsible.Root>
   {:else}
     <div class="mt-3">{@render detailFields()}</div>
-    <div class="mt-3 flex flex-wrap items-center justify-end gap-2">
-      {@render actions()}
-    </div>
+    {#if actions}
+      <div class="mt-3 flex flex-wrap items-center justify-end gap-2">
+        {@render actions()}
+      </div>
+    {/if}
   {/if}
 </div>

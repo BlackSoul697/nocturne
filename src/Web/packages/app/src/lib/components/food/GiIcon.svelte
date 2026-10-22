@@ -1,5 +1,5 @@
 <script lang="ts">
-	import type { GiLevel } from './types';
+	import type { GiLevel } from './gi';
 
 	interface Props {
 		level: GiLevel;
