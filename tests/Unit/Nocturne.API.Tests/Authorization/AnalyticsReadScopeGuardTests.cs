@@ -1736,6 +1736,19 @@ public partial class AnalyticsReadScopeGuardTests
     }
 
     [Fact]
+    public void LoopAnalysis_Predictions_WithDevicesAlone_NameNoHiddenCurve()
+    {
+        var data = LoopAnalysisReadScopeGuard.Redact(PredictionAccuracy(), Granted(Scope.DevicesRead));
+
+        foreach (var range in new[] { data.Primary, data.Comparison! })
+        {
+            range.Curves.Should().BeEmpty();
+            range.HiddenCurves.Should().BeEmpty("every curve is withheld for want of glucose, not only some for treatments");
+            range.Algorithms.Should().NotBeEmpty();
+        }
+    }
+
+    [Fact]
     public void LoopAnalysis_Predictions_ForLoopAlone_HideNoCurveWithoutTreatments()
     {
         var data = PredictionAccuracy();

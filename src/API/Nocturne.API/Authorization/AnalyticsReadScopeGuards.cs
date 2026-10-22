@@ -620,14 +620,16 @@ internal static partial class LoopAnalysisReadScopeGuard
             var everyContext = Enum.GetValues<PredictionContext>().Length;
             // From the algorithms, not the curves carried: oref uploads its COB curve only while carbs
             // are absorbing, so which partial curves a range carried would say when carbs were on board.
-            range.HiddenCurves =
-            [
-                .. range.Algorithms
-                    .SelectMany(PredictionAccuracyCalculator.CurvesOf)
-                    .Where(PredictionAccuracyCalculator.IsReportedInSomeContexts)
-                    .Distinct()
-                    .Order(),
-            ];
+            // With every curve withheld none is hidden for want of treatments alone.
+            if (!withheld.Contains(LoopAnalysisSeries.PredictionCurves))
+                range.HiddenCurves =
+                [
+                    .. range.Algorithms
+                        .SelectMany(PredictionAccuracyCalculator.CurvesOf)
+                        .Where(PredictionAccuracyCalculator.IsReportedInSomeContexts)
+                        .Distinct()
+                        .Order(),
+                ];
             range.Curves.RemoveAll(c => c.Contexts.Count < everyContext);
             foreach (var curve in range.Curves)
             {
