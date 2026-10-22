@@ -1,7 +1,8 @@
 <!--
   The filters every Loop Analysis tab shares. The range picked is the reports layout's; this bar
   adds the comparison, weekdays, exclusions and profile. Once a response is in, it shows the range,
-  comparison and filters the API resolved and applied rather than what was asked for.
+  comparison and filters the API resolved and applied rather than what was asked for; while a
+  newer request is loading, an echo it has not answered yet is shown as loading, not stale.
 -->
 <script lang="ts">
   import {
@@ -9,6 +10,7 @@
     LoopAnalysisComparison,
     type LoopAnalysisMasks,
     type LoopAnalysisResolvedRange,
+    type LoopAnalysisUnavailableFilter,
   } from "$lib/api";
   import * as Select from "$lib/components/ui/select";
   import * as ToggleGroup from "$lib/components/ui/toggle-group";
@@ -17,12 +19,10 @@
   import { Label } from "$lib/components/ui/label";
   import Clock from "@lucide/svelte/icons/clock";
   import Info from "@lucide/svelte/icons/info";
-  import { satisfiesScope } from "$lib/authorization/scopes";
-  import { formatDateTime, formatLocale, formatMediumDateRange } from "$lib/utils/formatting";
+  import { formatLocale, formatMediumDateRange } from "$lib/utils/formatting";
   import { startOfDay } from "$lib/utils/date-range";
   import {
     customComparisonProblem,
-    FILTER_SCOPES,
     MASK_KEYS,
     toComparison,
     toWeekdays,
@@ -40,9 +40,12 @@
     comparisonRange?: LoopAnalysisResolvedRange | null;
     /** The filters the last response applied, after the API's defaults and the caller's scopes. */
     applied?: LoopAnalysisMasks | null;
+    /** The echoes above answer the request on screen, not an earlier one. */
+    settled: boolean;
     /** The caller reads only the last 24 hours, whatever range is picked. */
     clamped: boolean;
-    grantedScopes: readonly string[];
+    /** The filters the caller's scopes do not let it use, as the last response reported them. */
+    unavailable?: LoopAnalysisUnavailableFilter[] | null;
     profileNames: string[];
   }
 
@@ -53,8 +56,9 @@
     primaryRange = null,
     comparisonRange = null,
     applied = null,
+    settled,
     clamped,
-    grantedScopes,
+    unavailable = null,
     profileNames,
   }: Props = $props();
 
@@ -85,13 +89,20 @@
   );
 
   const masks = $derived(maskLabels());
-  const usable = (key: MaskKey | "profileName") => satisfiesScope(grantedScopes, FILTER_SCOPES[key]);
-  // What the URL sets wins, so a change shows before its response arrives; the rest is what the
-  // API applied.
-  const maskChecked = (key: MaskKey) => filter.masks[key] ?? applied?.[key] ?? false;
+  const requiredScope = $derived(
+    new Map((unavailable ?? []).map((f) => [f.filter ?? "", f.requiredScope ?? ""]))
+  );
+  const usable = (key: MaskKey | "profileName") => !requiredScope.has(key);
+  const reason = (key: MaskKey | "profileName") => missingScopeReason(requiredScope.get(key) ?? "");
+
+  // What the URL sets is shown as set; anything else is the API's echo, once it has answered.
+  const maskLoading = (key: MaskKey) => filter.masks[key] == null && !settled;
+  const maskChecked = (key: MaskKey) => filter.masks[key] ?? (settled ? applied?.[key] : false) ?? false;
 
   const ALL_PROFILES = "__all__";
-  const profileName = $derived(filter.profileName ?? applied?.profileName ?? null);
+  const profileName = $derived(filter.profileName ?? (settled ? applied?.profileName : null) ?? null);
+  const shownPrimary = $derived(settled ? primaryRange : null);
+  const shownComparison = $derived(settled ? comparisonRange : null);
   const profiles = $derived(
     profileName && !profileNames.includes(profileName) ? [profileName, ...profileNames] : profileNames
   );
@@ -105,12 +116,12 @@
     <div class="space-y-1.5">
       <span class="text-xs font-medium text-muted-foreground">Range</span>
       <p class="text-sm tabular-nums">
-        {#if clamped && primaryRange?.from && primaryRange.to}
-          {formatDateTime(primaryRange.from)} – {formatDateTime(primaryRange.to)}
+        {#if clamped && shownPrimary}
+          Last 24 hours, {dayRange(shownPrimary.startDate, shownPrimary.endDate)}
         {:else if clamped}
           Last 24 hours
         {:else}
-          {dayRange(primaryRange?.startDate ?? requested.startDate, primaryRange?.endDate ?? requested.endDate)}
+          {dayRange(shownPrimary?.startDate ?? requested.startDate, shownPrimary?.endDate ?? requested.endDate)}
         {/if}
       </p>
     </div>
@@ -173,11 +184,11 @@
       </div>
     {/if}
 
-    {#if comparisonRange}
+    {#if shownComparison}
       <div class="space-y-1.5">
         <span class="text-xs font-medium text-muted-foreground">Compared range</span>
         <p class="text-sm tabular-nums text-muted-foreground">
-          {dayRange(comparisonRange.startDate, comparisonRange.endDate)}
+          {dayRange(shownComparison.startDate, shownComparison.endDate)}
         </p>
       </div>
     {/if}
@@ -201,7 +212,7 @@
         </Select.Content>
       </Select.Root>
       {#if !usable("profileName")}
-        <p class="text-xs text-muted-foreground">{missingScopeReason(FILTER_SCOPES.profileName)}</p>
+        <p class="text-xs text-muted-foreground">{reason("profileName")}</p>
       {/if}
     </div>
   </div>
@@ -235,6 +246,7 @@
           <Checkbox
             id="loop-analysis-{key}"
             checked={enabled && maskChecked(key)}
+            indeterminate={enabled && maskLoading(key)}
             disabled={!enabled}
             aria-describedby={enabled ? undefined : `loop-analysis-${key}-reason`}
             onCheckedChange={(checked) => update({ masks: { ...filter.masks, [key]: checked === true } })}
@@ -242,7 +254,7 @@
           <Label for="loop-analysis-{key}" variant="option">{masks[key]}</Label>
           {#if !enabled}
             <span id="loop-analysis-{key}-reason" class="text-xs text-muted-foreground">
-              ({missingScopeReason(FILTER_SCOPES[key])})
+              ({reason(key)})
             </span>
           {/if}
         </div>
@@ -255,7 +267,7 @@
       <Clock class="mt-0.5 size-3.5 shrink-0" />
       You can see the last 24 hours only, so the range picked does not apply and nothing is compared.
     </p>
-  {:else if primaryRange?.shortened || comparisonRange?.shortened}
+  {:else if shownPrimary?.shortened || shownComparison?.shortened}
     <p class="flex items-start gap-2 text-xs text-muted-foreground">
       <Info class="mt-0.5 size-3.5 shrink-0" />
       Loop Analysis covers at most 90 days, so only the most recent 90 days of a longer range are

@@ -212,6 +212,21 @@ function narrow(range: DailyProfileRange, withheld: Set<LoopAnalysisSeries>): Da
   return range;
 }
 
+/** The filters `LoopAnalysisReadScopeGuard.UnavailableFilters` reports for these scopes. */
+export function unavailableFor(scopes: readonly string[]) {
+  const rules: [string, string][] = [
+    ["profileName", "therapy.read"],
+    ["excludeOverrides", "treatments.read"],
+    ["excludeTemporaryTargets", "treatments.read"],
+    ["excludeExercise", "treatments.read"],
+    ["excludeIllness", "treatments.read"],
+    ["excludeOpenLoop", "devices.read"],
+  ];
+  return rules
+    .filter(([, scope]) => !scopes.includes(scope))
+    .map(([filter, requiredScope]) => ({ filter, requiredScope }));
+}
+
 export const ALL_SCOPES = ["glucose.read", "treatments.read", "devices.read", "therapy.read", "reports.read"];
 
 export function profileResponse(
@@ -237,5 +252,6 @@ export function profileResponse(
     historyClamped: options.historyClamped ?? false,
     ignoredFilters: [],
     withheldSeries: withheld,
+    unavailableFilters: unavailableFor(options.scopes ?? ALL_SCOPES),
   };
 }

@@ -4,6 +4,7 @@ import {
   customComparisonProblem,
   dailyProfileQuery,
   readLoopAnalysisFilter,
+  withoutUnavailable,
   writeLoopAnalysisFilter,
   type LoopAnalysisFilterState,
 } from "./loop-analysis-filter";
@@ -118,5 +119,20 @@ describe("daily profile query", () => {
     );
     expect(query.days).toEqual([DayOfWeek.Saturday]);
     expect(query.profileName).toBe("Default");
+  });
+});
+
+describe("withoutUnavailable", () => {
+  it("drops the filters the caller cannot use and keeps the rest", () => {
+    const filter = { ...bare(), profileName: "Default", masks: { excludeOpenLoop: true, excludeIllness: false } };
+    expect(withoutUnavailable(filter, ["profileName", "excludeOpenLoop", "excludeOverrides"])).toEqual({
+      ...filter,
+      profileName: null,
+      masks: { excludeIllness: false },
+    });
+  });
+
+  it("leaves a filter that sets none of them alone", () => {
+    expect(withoutUnavailable({ ...bare(), masks: { excludeIllness: true } }, ["excludeOpenLoop"])).toBeNull();
   });
 });

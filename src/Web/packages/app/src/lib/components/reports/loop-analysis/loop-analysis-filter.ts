@@ -23,19 +23,6 @@ export const MASK_KEYS: MaskKey[] = [
 ];
 
 /**
- * The read scope each filter is drawn from, as `LoopAnalysisReadScopeGuard.NarrowFilter` ignores
- * them: a caller without it cannot use the filter.
- */
-export const FILTER_SCOPES: Record<MaskKey | "profileName", string> = {
-  excludeOverrides: "treatments.read",
-  excludeTemporaryTargets: "treatments.read",
-  excludeExercise: "treatments.read",
-  excludeIllness: "treatments.read",
-  excludeOpenLoop: "devices.read",
-  profileName: "therapy.read",
-};
-
-/**
  * The report's filter as the URL carries it, beside the shared report range (`days`/`from`/`to`),
  * whose names it must not reuse: the weekdays travel as `weekdays`. A mask the URL leaves out is
  * absent here and is not sent, so the API's default applies and the response's `appliedFilters`
@@ -175,4 +162,26 @@ export function dailyProfileQuery(
     if (value != null) query[key] = value;
   }
   return query;
+}
+
+/**
+ * The filter without the parts named in `unavailable` (a response's unavailable filters, by query
+ * parameter), or null when it sets none of them.
+ */
+export function withoutUnavailable(
+  filter: LoopAnalysisFilterState,
+  unavailable: readonly string[]
+): LoopAnalysisFilterState | null {
+  const names = new Set(unavailable);
+  const masks = { ...filter.masks };
+  let changed = false;
+  for (const key of MASK_KEYS) {
+    if (names.has(key) && masks[key] != null) {
+      delete masks[key];
+      changed = true;
+    }
+  }
+  const dropProfile = names.has("profileName") && filter.profileName != null;
+  if (!changed && !dropProfile) return null;
+  return { ...filter, masks, profileName: dropProfile ? null : filter.profileName };
 }

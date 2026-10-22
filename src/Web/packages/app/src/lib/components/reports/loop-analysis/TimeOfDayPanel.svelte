@@ -85,7 +85,7 @@
     if (action.kind === "close") {
       if (cursor.selected == null) return;
       cursor.selected = null;
-    } else if (action.kind === "select") cursor.select(current);
+    } else if (action.kind === "select") cursor.select(current, true);
     else if (action.kind === "step") cursor.hover(id, current + action.by);
     else if (action.kind === "to") cursor.hover(id, action.slot);
     else cursor.focusNeighbour(id, action.by);

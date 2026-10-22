@@ -12,6 +12,7 @@
     dailyProfileQuery,
     isLoopAnalysisTab,
     readLoopAnalysisFilter,
+    withoutUnavailable,
     writeLoopAnalysisFilter,
     type LoopAnalysisFilterState,
     type LoopAnalysisTab,
@@ -37,7 +38,16 @@
     errorTitle: "Error Loading Loop Analysis",
   });
   const response = $derived(profileResource.current);
+  const settled = $derived(response != null && !profileResource.stale);
   const clamped = $derived(response?.historyClamped ?? page.data.limitTo24Hours ?? false);
+
+  // A shared link may carry a filter this viewer cannot use. Once the API has said which those
+  // are, they leave the URL, and so the request, rather than standing as an ignored filter.
+  $effect(() => {
+    const unavailable = response?.unavailableFilters?.map((f) => f.filter ?? "") ?? [];
+    const next = withoutUnavailable(filter, unavailable);
+    if (next) setFilter(next);
+  });
 
   const insulinDeliveryHref = $derived.by(() => {
     const range = ["days", "from", "to", "isDefault"]
@@ -74,8 +84,9 @@
     primaryRange={response?.primaryRange}
     comparisonRange={response?.comparisonRange}
     applied={response?.appliedFilters}
+    {settled}
     {clamped}
-    grantedScopes={page.data.effectivePermissions ?? []}
+    unavailable={response?.unavailableFilters}
     profileNames={response?.primary?.profileNames ?? []}
   />
 

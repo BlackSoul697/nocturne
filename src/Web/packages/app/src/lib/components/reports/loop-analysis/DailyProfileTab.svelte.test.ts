@@ -84,6 +84,15 @@ describe("DailyProfileTab", () => {
     await expect.element(slider).toHaveAttribute("aria-valuenow", "0");
   });
 
+  it("opens the day list on a click without moving focus, so the page does not scroll", async () => {
+    render(DailyProfileTab, { props: { response: profileResponse() } });
+
+    await page.getByRole("slider", { name: "Glucose" }).click();
+    const heading = page.getByRole("heading", { name: /^Days behind/ });
+    await expect.element(heading).toBeVisible();
+    await expect.element(heading).not.toHaveFocus();
+  });
+
   it("moves focus to the day list it opens, and back to the panel when Escape closes it", async () => {
     render(DailyProfileTab, { props: { response: profileResponse() } });
 

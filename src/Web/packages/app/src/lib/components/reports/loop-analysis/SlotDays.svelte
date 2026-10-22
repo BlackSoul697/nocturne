@@ -21,10 +21,12 @@
     slot: number;
     primary: DailyProfileRange | undefined;
     comparison?: DailyProfileRange | null;
+    /** Move focus to the list as each slot is picked: on a keyboard pick, not a click, which would scroll. */
+    focusOnPick?: boolean;
     onclose: () => void;
   }
 
-  let { slot, primary, comparison = null, onclose }: Props = $props();
+  let { slot, primary, comparison = null, focusOnPick = false, onclose }: Props = $props();
 
   const minute = $derived(slot * SLOT_MINUTES);
   const groups = $derived(
@@ -39,8 +41,10 @@
   let section = $state<HTMLElement | null>(null);
   let heading = $state<HTMLElement | null>(null);
 
-  // Each slot picked moves focus to the list it opened.
-  const focusHeading = (_picked: number) => heading?.focus();
+  // Each slot picked from the keyboard moves focus to the list it opened.
+  const focusHeading = (_picked: number) => {
+    if (focusOnPick) heading?.focus();
+  };
   $effect(() => focusHeading(slot));
 
   function onkeydown(event: KeyboardEvent) {

@@ -4,15 +4,16 @@ import { describe, expect, it, vi } from "vitest";
 import { DayOfWeek, LoopAnalysisComparison } from "$lib/api";
 import LoopAnalysisFilterBar from "./LoopAnalysisFilterBar.svelte";
 import { readLoopAnalysisFilter } from "./loop-analysis-filter";
+import { unavailableFor } from "./daily-profile.test-fixtures";
 
-const ALL_SCOPES = ["glucose.read", "treatments.read", "devices.read", "therapy.read", "reports.read"];
 const bare = () => readLoopAnalysisFilter(new URLSearchParams());
 
 const base = {
   onchange: vi.fn(),
   requested: { startDate: "2026-10-09", endDate: "2026-10-22" },
+  settled: true,
   clamped: false,
-  grantedScopes: ALL_SCOPES,
+  unavailable: [],
   profileNames: ["Default"],
 };
 
@@ -49,7 +50,7 @@ describe("LoopAnalysisFilterBar", () => {
         ...base,
         filter: bare(),
         applied: { ...applied, excludeOpenLoop: false },
-        grantedScopes: ["glucose.read", "treatments.read", "reports.read"],
+        unavailable: unavailableFor(["glucose.read", "treatments.read", "reports.read"]),
       },
     });
 
@@ -108,8 +109,26 @@ describe("LoopAnalysisFilterBar", () => {
     });
 
     await expect.element(page.getByText(/You can see the last 24 hours only/)).toBeVisible();
+    await expect.element(page.getByText("Last 24 hours, Oct 21 – 22, 2026")).toBeVisible();
     await expect.element(page.getByText("No comparison")).toBeVisible();
     expect(page.getByText(/Jan 1/).elements()).toHaveLength(0);
+    expect(page.getByText(/covers at most 90 days/).elements()).toHaveLength(0);
+  });
+
+  it("shows an echo the API has not answered yet as loading, not as the last answer", async () => {
+    render(LoopAnalysisFilterBar, {
+      props: {
+        ...base,
+        filter: bare(),
+        settled: false,
+        applied: { ...applied, profileName: "Weekend" },
+        primaryRange: { startDate: "2026-07-25", endDate: "2026-10-22", shortened: true },
+      },
+    });
+
+    await expect.element(page.getByLabelText("Illness")).toHaveAttribute("data-state", "indeterminate");
+    await expect.element(page.getByText("All profiles")).toBeVisible();
+    await expect.element(page.getByText("Oct 9 – 22, 2026")).toBeVisible();
     expect(page.getByText(/covers at most 90 days/).elements()).toHaveLength(0);
   });
 

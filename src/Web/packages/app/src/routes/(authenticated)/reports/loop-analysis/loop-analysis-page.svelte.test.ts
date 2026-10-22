@@ -9,7 +9,7 @@ import {
   profileResponse,
 } from "$lib/components/reports/loop-analysis/daily-profile.test-fixtures";
 
-const calls = vi.hoisted(() => ({ query: [] as unknown[], goto: [] as string[] }));
+const calls = vi.hoisted(() => ({ query: [] as unknown[], goto: [] as [string, unknown][] }));
 let response: DailyProfileResponse;
 
 vi.mock("$api/generated/loopAnalysis.generated.remote", () => ({
@@ -20,8 +20,8 @@ vi.mock("$api/generated/loopAnalysis.generated.remote", () => ({
 }));
 
 vi.mock("$app/navigation", () => ({
-  goto: (url: string) => {
-    calls.goto.push(url);
+  goto: (url: string, options?: unknown) => {
+    calls.goto.push([url, options]);
     return Promise.resolve();
   },
 }));
@@ -41,7 +41,7 @@ vi.mock("$lib/hooks/resource-context.svelte", () => ({
 import LoopAnalysisPage from "./+page.svelte";
 
 function open(search: string, data: Record<string, unknown> = {}) {
-  pageState.url = new URL(`http://localhost/reports/loop-analysis${search}`);
+  pageState.url = new URL(`http://localhost/reports/loop-analysis${search}`) as typeof pageState.url;
   for (const key of Object.keys(pageState.data)) delete pageState.data[key];
   Object.assign(pageState.data, { effectivePermissions: ALL_SCOPES, ...data });
   return render(LoopAnalysisPage);
@@ -63,7 +63,7 @@ describe("Loop Analysis page", () => {
     await page.getByLabelText("Exercise").click();
     const target = calls.goto.at(-1);
     expect(target).toBeDefined();
-    const search = new URL(target!, "http://localhost").searchParams;
+    const search = new URL(target![0], "http://localhost").searchParams;
     expect(search.get("excludeExercise")).toBe("true");
     expect(search.get("days")).toBe("14");
     expect(search.get("weekdays")).toBe("6");
@@ -79,7 +79,7 @@ describe("Loop Analysis page", () => {
     await expect.element(page.getByLabelText("Exercise")).toBeChecked();
   });
 
-  it("shows the range the API trimmed, as it resolved it across a clock change", async () => {
+  it("shows the range as the API resolved it, not as it was picked", async () => {
     response = {
       ...profileResponse(),
       primaryRange: {
@@ -90,7 +90,7 @@ describe("Loop Analysis page", () => {
         shortened: true,
       },
     };
-    open("?from=2026-01-01&to=2026-11-01&isDefault=false");
+    open("");
 
     expect(lastQuery()).toEqual({ startDate: "2026-10-09", endDate: "2026-10-22" });
     await expect.element(page.getByText("Aug 4 – Nov 1, 2026")).toBeVisible();
@@ -107,6 +107,25 @@ describe("Loop Analysis page", () => {
     expect(lastQuery()).toMatchObject({ compare: "Previous" });
     await expect.element(page.getByText("May 6 – Aug 3, 2026")).toBeVisible();
     await expect.element(page.getByText(/covers at most 90 days/)).toBeVisible();
+  });
+
+  it("drops from the URL, replacing it, a filter the viewer cannot use", async () => {
+    response = profileResponse({ scopes: ["glucose.read", "treatments.read", "therapy.read", "reports.read"] });
+    open("?days=14&excludeOpenLoop=true&excludeIllness=false");
+
+    await expect.poll(() => calls.goto.length).toBeGreaterThan(0);
+    const [url, options] = calls.goto.at(-1)!;
+    const search = new URL(url, "http://localhost").searchParams;
+    expect(search.has("excludeOpenLoop")).toBe(false);
+    expect(search.get("excludeIllness")).toBe("false");
+    expect(search.get("days")).toBe("14");
+    expect(options).toMatchObject({ replaceState: true });
+  });
+
+  it("leaves a URL alone when every filter it sets is usable", async () => {
+    open("?days=14&excludeIllness=false");
+    await expect.element(page.getByLabelText("Illness")).toBeVisible();
+    expect(calls.goto).toHaveLength(0);
   });
 
   it("shows a clamped viewer the last 24 hours whatever range is picked", async () => {

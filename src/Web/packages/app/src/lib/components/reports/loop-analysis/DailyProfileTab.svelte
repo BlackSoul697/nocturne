@@ -703,6 +703,7 @@
           slot={cursor.selected}
           primary={primary}
           comparison={comparisonRange}
+          focusOnPick={cursor.selectedByKeyboard}
           onclose={closeDays}
         />
       {/if}

@@ -9,6 +9,8 @@ export class TimeOfDayCursor {
   /** The panel under the pointer or focus, which alone shows the tooltip; the others show only the crosshair. */
   panel = $state<string | null>(null);
   selected = $state<number | null>(null);
+  /** The slot was picked from the keyboard, so the day list takes focus when it opens. */
+  selectedByKeyboard = $state(false);
   /** The panel that is in the tab order; the others are reached with the up and down arrows. */
   tabStop = $state<string | null>(null);
 
@@ -38,8 +40,9 @@ export class TimeOfDayCursor {
     this.slot = null;
   }
 
-  select(slot: number) {
+  select(slot: number, byKeyboard = false) {
     this.selected = this.selected === slot ? null : slot;
+    this.selectedByKeyboard = byKeyboard;
   }
 
   /** Moves focus, and the tab stop, to the panel `by` places from `from`, keeping the slot. */
