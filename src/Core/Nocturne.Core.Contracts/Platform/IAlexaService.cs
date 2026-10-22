@@ -41,16 +41,7 @@ public interface IAlexaService
     );
 
     /// <summary>
-    /// Build a speechlet response with speech output and card
+    /// The answer for a request that failed, one wording for every error path.
     /// </summary>
-    /// <param name="title">Title for the response card</param>
-    /// <param name="output">Speech output text</param>
-    /// <param name="repromptText">Text for reprompt if user doesn't respond</param>
-    /// <returns>Complete Alexa response</returns>
-    AlexaResponse BuildSpeechletResponse(
-        string title,
-        string output,
-        string repromptText,
-        bool shouldEndSession
-    );
+    AlexaResponse BuildErrorResponse();
 }

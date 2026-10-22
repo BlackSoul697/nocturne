@@ -109,14 +109,7 @@ public class AlexaController : ControllerBase
             _logger.LogError(ex, "Error processing Alexa request");
 
             // Return a valid Alexa error response instead of HTTP error to maintain skill functionality
-            var errorResponse = _alexaService.BuildSpeechletResponse(
-                "Error",
-                "Sorry, I'm having trouble right now. Please try again later.",
-                string.Empty,
-                true
-            );
-
-            return Ok(errorResponse);
+            return Ok(_alexaService.BuildErrorResponse());
         }
     }
 }
