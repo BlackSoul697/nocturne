@@ -969,6 +969,23 @@ public class SettingsEvidenceCalculatorTests
         Rated(12, 12, 10, higherMeansMoreInsulin: false, borrowed: true).TowardsMoreInsulin.Should().BeFalse();
     }
 
+    [Theory]
+    [InlineData(8, false, true, false)]
+    [InlineData(12, false, false, true)]
+    [InlineData(1.2, true, true, false)]
+    [InlineData(0.8, true, false, true)]
+    [InlineData(9.5, false, false, false)]
+    [InlineData(1.05, true, false, false)]
+    public void AFigureSaysWhichWayItPoints_OnlyBeyondTheDeadband(
+        double observed, bool higherMeansMoreInsulin, bool more, bool less)
+    {
+        var profile = higherMeansMoreInsulin ? 1.0 : 10.0;
+        var figure = Rated(12, observed, profile, higherMeansMoreInsulin, borrowed: false);
+
+        figure.TowardsMoreInsulin.Should().Be(more);
+        figure.TowardsLessInsulin.Should().Be(less);
+    }
+
     [Fact]
     public void GlucoseStillFallingAtTheWindowsEnd_SaysTheWindowMissedPartOfTheResponse()
     {

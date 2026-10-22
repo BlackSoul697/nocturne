@@ -255,10 +255,11 @@ public static class SettingsEvidenceCalculator
                 _ => SettingsEvidenceConfidence.Low,
             };
 
-        var moreInsulin = figure.Profile is > 0 and var profile
-            && Math.Abs(observed / profile - 1) >= DirectionDeadband
-            && (higherMeansMoreInsulin ? observed > profile : observed < profile);
+        var departs = figure.Profile is > 0 and var profile
+            && Math.Abs(observed / profile - 1) >= DirectionDeadband;
+        var moreInsulin = departs && (higherMeansMoreInsulin ? observed > figure.Profile : observed < figure.Profile);
         figure.TowardsMoreInsulin = moreInsulin;
+        figure.TowardsLessInsulin = departs && !moreInsulin;
         if (moreInsulin && materialBorrowed)
         {
             figure.Confidence = figure.Confidence == SettingsEvidenceConfidence.High

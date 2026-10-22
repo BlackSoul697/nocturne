@@ -236,6 +236,12 @@ public class SettingsEvidenceFigure
     public bool TowardsMoreInsulin { get; set; }
 
     /// <summary>
+    /// The opposite of <see cref="TowardsMoreInsulin"/>, by the same deadband. Neither is set where the
+    /// observed value is within the deadband of the profile's, or there is none.
+    /// </summary>
+    public bool TowardsLessInsulin { get; set; }
+
+    /// <summary>
     /// Some episode's glucose change was converted at the profile's ISF, scaled by what the other
     /// blocks observed where any did, for want of a confident observed ISF for its own block. Never
     /// set on the ISF itself.
