@@ -63,17 +63,19 @@
   );
 
   // Queries
-  const membersQuery = getMembers();
+  const canListMembers = $derived(canInvite || canManageMembers);
+  const membersQuery = $derived(canListMembers ? getMembers() : null);
   const invitesQuery = $derived(canInvite ? listInvites() : null);
   const rolesQuery = getRoles();
   const pendingRequestsQuery = $derived(canManageMembers ? getPendingRequests() : null);
   const shareQuery = $derived(canManageSharing ? getShareLink() : null);
+  retainQuery(() => membersQuery);
   retainQuery(() => invitesQuery);
   retainQuery(() => pendingRequestsQuery);
   retainQuery(() => shareQuery);
 
   // Data
-  const allMembers = $derived(membersQuery.current ?? []);
+  const allMembers = $derived(membersQuery?.current ?? []);
   const invites = $derived(invitesQuery?.current ?? []);
   const activeInvites = $derived(invites.filter((i) => i.isValid));
   const allRoles = $derived(rolesQuery.current ?? []);
@@ -164,7 +166,7 @@
       await approveRequest({ id: requestId, request: { roleIds } });
       // The approved requester becomes a member; GetMembers is on another
       // controller so ApproveRequest's Invalidates cannot name it.
-      await membersQuery.refresh();
+      await membersQuery?.refresh();
       successMessage = "Membership request approved.";
       clearMessages();
     } catch (err) {
@@ -218,10 +220,12 @@
           {publicStatus}
         </span>
       {/if}
-      <span class="inline-flex h-8 items-center gap-2 rounded-full bg-secondary px-3 text-xs font-medium">
-        <Users class="h-3.5 w-3.5 text-muted-foreground" />
-        {memberCount} member{memberCount !== 1 ? "s" : ""}
-      </span>
+      {#if canListMembers}
+        <span class="inline-flex h-8 items-center gap-2 rounded-full bg-secondary px-3 text-xs font-medium">
+          <Users class="h-3.5 w-3.5 text-muted-foreground" />
+          {memberCount} member{memberCount !== 1 ? "s" : ""}
+        </span>
+      {/if}
     </div>
   </div>
 
