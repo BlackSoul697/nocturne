@@ -1,5 +1,6 @@
 import { getContext, setContext, untrack } from "svelte";
 import type {
+  CoachLabels,
   CoachMarkAdapter,
   DismissOptions,
   MarkRegistration,
@@ -60,6 +61,7 @@ const nowIso = () => new Date().toISOString();
 
 export class CoachMarkContext {
   private adapter: CoachMarkAdapter;
+  labels: CoachLabels;
   private sequences: SequenceConfig;
   private settleDelay: number;
   private seenDwellMs: number;
@@ -80,11 +82,13 @@ export class CoachMarkContext {
 
   constructor(
     adapter: CoachMarkAdapter,
+    labels: CoachLabels,
     sequences: SequenceConfig = {},
     settleDelay = 500,
     seenDwellMs = 2000,
   ) {
     this.adapter = adapter;
+    this.labels = $state.raw(labels);
     this.sequences = sequences;
     this.settleDelay = settleDelay;
     this.seenDwellMs = seenDwellMs;
@@ -435,11 +439,12 @@ export class CoachMarkContext {
 
 export function createCoachMarkContext(
   adapter: CoachMarkAdapter,
+  labels: CoachLabels,
   sequences: SequenceConfig = {},
   settleDelay = 500,
   seenDwellMs = 2000,
 ): CoachMarkContext {
-  const ctx = new CoachMarkContext(adapter, sequences, settleDelay, seenDwellMs);
+  const ctx = new CoachMarkContext(adapter, labels, sequences, settleDelay, seenDwellMs);
   setContext(COACH_CONTEXT_KEY, ctx);
   return ctx;
 }
