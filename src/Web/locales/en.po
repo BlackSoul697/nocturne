@@ -11086,11 +11086,8 @@ msgstr "GMI"
 msgid "CV"
 msgstr "CV"
 
-#: src/routes/(authenticated)/reports/agp/+page.svelte
-#: src/routes/(authenticated)/reports/executive-summary/+page.svelte
-#: src/routes/(authenticated)/reports/idp/+page.svelte
-msgid "Target: ≤33%"
-msgstr "Target: ≤33%"
+#~ msgid "Target: ≤33%"
+#~ msgstr "Target: ≤33%"
 
 #~ msgid "Below Range"
 #~ msgstr "Below Range"
@@ -18175,9 +18172,8 @@ msgstr "Percentage of time in your target zone ({0})"
 #~ msgid "Calculated using the Nathan formula: eA1C = (GMI + 2.59) / 1.59. Based on mean glucose of {0} {1} over {2} days."
 #~ msgstr "Calculated using the Nathan formula: eA1C = (GMI + 2.59) / 1.59. Based on mean glucose of {0} {1} over {2} days."
 
-#: src/routes/(authenticated)/reports/executive-summary/+page.svelte
-msgid "Target: ≤33%. Lower means steadier glucose with fewer ups and downs."
-msgstr "Target: ≤33%. Lower means steadier glucose with fewer ups and downs."
+#~ msgid "Target: ≤33%. Lower means steadier glucose with fewer ups and downs."
+#~ msgstr "Target: ≤33%. Lower means steadier glucose with fewer ups and downs."
 
 #. 0: bg(70); 1: bgLabel()
 #: src/routes/(authenticated)/reports/executive-summary/+page.svelte
@@ -24186,6 +24182,7 @@ msgstr "Consensus target: at least 70% of time in range."
 #~ msgstr "Estimated A1C"
 
 #: src/routes/(authenticated)/reports/+page.svelte
+#: src/routes/(authenticated)/reports/executive-summary/+page.svelte
 msgid "Coefficient of variation"
 msgstr "Coefficient of variation"
 
@@ -26329,10 +26326,8 @@ msgstr "Use % (NGSP) or mmol/mol (IFCC) for measured and estimated {0}. Blood gl
 msgid "Target: <{0}"
 msgstr "Target: <{0}"
 
-#. 0: formatA1c(variability?.a1cTarget)
-#: src/routes/(authenticated)/reports/executive-summary/+page.svelte
-msgid "Target: below {0}. Your care team sets your individual target."
-msgstr "Target: below {0}. Your care team sets your individual target."
+#~ msgid "Target: below {0}. Your care team sets your individual target."
+#~ msgstr "Target: below {0}. Your care team sets your individual target."
 
 #. 0: a1cLabel(true); 1: bgOr(stats?.mean); 2: bgLabel(); 3: dayCount
 #: src/routes/(authenticated)/reports/executive-summary/+page.svelte
@@ -27699,3 +27694,40 @@ msgstr "No data in the last 24h"
 #: src/lib/components/calendar/CalendarHeader.svelte
 msgid "Show TIR %"
 msgstr "Show TIR %"
+
+#. 0: variability.coefficientOfVariationTarget
+#. 0: variability.coefficientOfVariationTarget
+#. 0: variability.coefficientOfVariationTarget
+#. 0: variability.coefficientOfVariationTarget
+#: src/routes/(authenticated)/reports/agp/+page.svelte
+#: src/routes/(authenticated)/reports/executive-summary/+page.svelte
+#: src/routes/(authenticated)/reports/executive-summary/+page.svelte
+#: src/routes/(authenticated)/reports/idp/+page.svelte
+msgid "Target: ≤{0}%"
+msgstr "Target: ≤{0}%"
+
+#. 0: variability.coefficientOfVariationTarget
+#: src/routes/(authenticated)/reports/agp/+page.svelte
+msgid "{0}% or below"
+msgstr "{0}% or below"
+
+#: src/routes/(authenticated)/reports/executive-summary/+page.svelte
+msgid "<0/> Target met"
+msgstr "<0/> Target met"
+
+#: src/routes/(authenticated)/reports/executive-summary/+page.svelte
+msgid "<0/> Target not met"
+msgstr "<0/> Target not met"
+
+#. 0: formatA1c(variability.a1cTarget)
+#: src/routes/(authenticated)/reports/executive-summary/+page.svelte
+msgid "Target: below {0}"
+msgstr "Target: below {0}"
+
+#: src/routes/(authenticated)/reports/executive-summary/+page.svelte
+msgid "Your care team sets your individual target."
+msgstr "Your care team sets your individual target."
+
+#: src/routes/(authenticated)/reports/executive-summary/+page.svelte
+msgid "Lower means steadier glucose with fewer ups and downs."
+msgstr "Lower means steadier glucose with fewer ups and downs."
