@@ -152,8 +152,10 @@ public static class LoopHealthCalculator
     }
 
     /// <summary>
-    /// Time the loop was cycling (no <see cref="LoopGapMs"/> gap) with no temp basal recorded, in
-    /// stretches of at least <see cref="NetInsulinAboveSchedule.MaxInferredGapMs"/>.
+    /// Time the loop was cycling with no temp basal recorded, in stretches of at least
+    /// <see cref="NetInsulinAboveSchedule.MaxInferredGapMs"/>. The loop counts as cycling across a
+    /// gap no longer than that too, so one outage of the pump's records is one gap however often
+    /// the loop briefly stopped during it.
     /// </summary>
     private static LoopHealthGaps UnrecordedDelivery(
         List<ApsLoopCycle> cycles, BasalEvidence evidence, HourGrid grid, long from, long to)
@@ -161,7 +163,7 @@ public static class LoopHealthCalculator
         var looping = new List<MillsInterval>();
         for (var i = 0; i + 1 < cycles.Count; i++)
         {
-            if (cycles[i + 1].Mills - cycles[i].Mills <= LoopGapMs)
+            if (cycles[i + 1].Mills - cycles[i].Mills <= NetInsulinAboveSchedule.MaxInferredGapMs)
                 looping.Add(new MillsInterval(cycles[i].Mills, cycles[i + 1].Mills));
         }
         var unrecorded = IntervalSet.Of(looping).Subtract(evidence.Recorded).Intervals

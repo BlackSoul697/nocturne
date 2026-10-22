@@ -301,12 +301,13 @@ public class LoopHealthCalculatorTests
         var from = Day0;
         var to = Day0 + 6 * Hour;
         var result = Calculate(from, to,
-            cycles: EveryFiveMinutes(from, to + 5 * Minute, t => Cycle(t)),
+            cycles: EveryFiveMinutes(from, to + 5 * Minute, t => Cycle(t))
+                .Where(c => c.Mills <= from + 3 * Hour || c.Mills >= from + 3 * Hour + 30 * Minute),
             recorded: IntervalSet.Of(from, from + Hour));
 
-        var gap = result.Cadence.UnrecordedDelivery!.Gaps.Should().ContainSingle().Subject;
+        var gap = result.Cadence.UnrecordedDelivery!.Gaps.Should().ContainSingle("a half-hour loop gap does not split it").Subject;
         gap.Minutes.Should().Be(300);
-        result.Cadence.LoopGaps!.Count.Should().Be(0);
+        result.Cadence.LoopGaps!.Count.Should().Be(1);
     }
 
     [Fact]
