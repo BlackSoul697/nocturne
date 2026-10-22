@@ -8,11 +8,13 @@
   useReportFilters({
     fields,
     begin: () => log.push("begin"),
-    apply: async () => {
+    apply: (search) => {
       log.push("apply");
+      return search;
     },
-    reset: async () => {
+    reset: (search) => {
       log.push("reset");
+      return search;
     },
   });
 </script>

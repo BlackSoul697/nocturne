@@ -1,6 +1,6 @@
 <!--
-  The Daily profile tab: every series on one local time-of-day axis, stacked so a single crosshair
-  reads them all at once. Values come from the API as they are; the tab picks only the axes, splits
+  The Daily profile page body: every series on one local time-of-day axis, stacked so a single crosshair
+  reads them all at once. Values come from the API as they are; the body picks only the axes, splits
   series where they are absent or change sparseness, and lays the panels out.
 -->
 <script lang="ts">

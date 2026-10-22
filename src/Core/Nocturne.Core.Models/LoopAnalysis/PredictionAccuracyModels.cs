@@ -52,7 +52,7 @@ public enum PredictionContext
     Fasting,
 }
 
-/// <summary>The Predictions tab: the primary range and, when asked for, a comparison range.</summary>
+/// <summary>The Prediction accuracy page: the primary range and, when asked for, a comparison range.</summary>
 public class PredictionAccuracyResponse : LoopAnalysisResponse
 {
     public PredictionAccuracyRange Primary { get; set; } = new();

@@ -14,7 +14,7 @@ import { sortEvents } from "./event-response-view";
 describe("event response filter", () => {
   it("round-trips the cohorts and window through the URL, keeping the parameters it does not own", () => {
     const search = new URLSearchParams(
-      "days=14&tab=meals-events&anchor1=Meal&fromMinute1=300&toMinute1=600&minGrams1=40&anchor3=UnannouncedRise&isolatedOnly=true&minutesAfter=480"
+      "days=14&excludeIllness=false&anchor1=Meal&fromMinute1=300&toMinute1=600&minGrams1=40&anchor3=UnannouncedRise&isolatedOnly=true&minutesAfter=480"
     );
 
     const state = readEventResponse(search);
@@ -28,7 +28,7 @@ describe("event response filter", () => {
 
     const written = writeEventResponse(state, search);
     expect(written.get("days")).toBe("14");
-    expect(written.get("tab")).toBe("meals-events");
+    expect(written.get("excludeIllness")).toBe("false");
     expect(written.get("anchor2")).toBe("UnannouncedRise");
     expect(written.has("anchor3")).toBe(false);
     expect(readEventResponse(written)).toEqual(state);

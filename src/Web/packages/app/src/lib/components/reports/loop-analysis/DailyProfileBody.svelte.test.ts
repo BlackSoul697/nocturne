@@ -2,7 +2,7 @@ import { render } from "vitest-browser-svelte";
 import { page, userEvent } from "vitest/browser";
 import { describe, expect, it } from "vitest";
 import { TimeZoneUnavailableReason } from "$lib/api";
-import DailyProfileTab from "./DailyProfileTab.svelte";
+import DailyProfileBody from "./DailyProfileBody.svelte";
 import { profileResponse } from "./daily-profile.test-fixtures";
 
 const focused = () => document.activeElement?.getAttribute("aria-label");
@@ -14,9 +14,9 @@ async function hoverSlot(panel: string, steps: number) {
   return page.getByRole("tooltip");
 }
 
-describe("DailyProfileTab", () => {
+describe("DailyProfileBody", () => {
   it("lays every series out on the shared time-of-day axis with the summary strip", async () => {
-    render(DailyProfileTab, {
+    render(DailyProfileBody, {
       props: { response: profileResponse(), insulinDeliveryHref: "/reports/insulin-delivery?days=14" },
     });
 
@@ -47,7 +47,7 @@ describe("DailyProfileTab", () => {
   });
 
   it("describes each panel's slider by its unit and the keys it takes, with no region per panel", async () => {
-    render(DailyProfileTab, { props: { response: profileResponse() } });
+    render(DailyProfileBody, { props: { response: profileResponse() } });
 
     const slider = page.getByRole("slider", { name: "Glucose", exact: true });
     await expect.element(slider).toBeVisible();
@@ -58,7 +58,7 @@ describe("DailyProfileTab", () => {
   });
 
   it("is one tab stop, and the arrows move between panels keeping the slot", async () => {
-    render(DailyProfileTab, { props: { response: profileResponse() } });
+    render(DailyProfileBody, { props: { response: profileResponse() } });
 
     const sliders = page.getByRole("slider").elements();
     expect(sliders.filter((s) => s.getAttribute("tabindex") === "0")).toHaveLength(1);
@@ -76,7 +76,7 @@ describe("DailyProfileTab", () => {
   });
 
   it("reads the slot's headline value and n as the slider's value", async () => {
-    render(DailyProfileTab, { props: { response: profileResponse() } });
+    render(DailyProfileBody, { props: { response: profileResponse() } });
 
     await hoverSlot("Insulin on board", 1);
     await expect
@@ -85,7 +85,7 @@ describe("DailyProfileTab", () => {
   });
 
   it("goes to either end of the day with Home and End", async () => {
-    render(DailyProfileTab, { props: { response: profileResponse() } });
+    render(DailyProfileBody, { props: { response: profileResponse() } });
     const slider = page.getByRole("slider", { name: "Glucose" });
 
     await hoverSlot("Glucose", 1);
@@ -96,7 +96,7 @@ describe("DailyProfileTab", () => {
   });
 
   it("opens the day list on a click without moving focus, so the page does not scroll", async () => {
-    render(DailyProfileTab, { props: { response: profileResponse() } });
+    render(DailyProfileBody, { props: { response: profileResponse() } });
 
     await page.getByRole("slider", { name: "Glucose" }).click();
     const heading = page.getByRole("heading", { name: /^Days for/ });
@@ -105,7 +105,7 @@ describe("DailyProfileTab", () => {
   });
 
   it("moves focus to the day list it opens, and back to the panel when Escape closes it", async () => {
-    render(DailyProfileTab, { props: { response: profileResponse() } });
+    render(DailyProfileBody, { props: { response: profileResponse() } });
 
     await hoverSlot("Carbs on board", 3);
     await userEvent.keyboard("{Enter}");
@@ -118,7 +118,7 @@ describe("DailyProfileTab", () => {
   });
 
   it("shows the slot's percentiles and n in the tooltip", async () => {
-    render(DailyProfileTab, { props: { response: profileResponse() } });
+    render(DailyProfileBody, { props: { response: profileResponse() } });
 
     const tooltip = await hoverSlot("Insulin on board", 1);
     await expect.element(tooltip).toBeVisible();
@@ -130,7 +130,7 @@ describe("DailyProfileTab", () => {
   });
 
   it("marks sparse slots as too thin to read as a pattern", async () => {
-    render(DailyProfileTab, { props: { response: profileResponse({ sparse: true }) } });
+    render(DailyProfileBody, { props: { response: profileResponse({ sparse: true }) } });
 
     const tooltip = await hoverSlot("Glucose", 1);
     await expect.element(tooltip.getByText("Too few days to show a pattern")).toBeVisible();
@@ -138,7 +138,7 @@ describe("DailyProfileTab", () => {
   });
 
   it("draws the comparison and reads it beside the primary range", async () => {
-    render(DailyProfileTab, { props: { response: profileResponse({ comparison: true }) } });
+    render(DailyProfileBody, { props: { response: profileResponse({ comparison: true }) } });
 
     await expect
       .element(page.getByText("The charts show the comparison range as dashed outlines on each series."))
@@ -149,7 +149,7 @@ describe("DailyProfileTab", () => {
   });
 
   it("lists the days behind a picked slot, each linking to Day in Review at that time", async () => {
-    render(DailyProfileTab, { props: { response: profileResponse({ comparison: true }) } });
+    render(DailyProfileBody, { props: { response: profileResponse({ comparison: true }) } });
 
     await hoverSlot("Glucose", 8);
     await userEvent.keyboard("{Enter}");
@@ -161,7 +161,7 @@ describe("DailyProfileTab", () => {
   });
 
   it("hides every series the response withholds from a caller with glucose access only", async () => {
-    render(DailyProfileTab, {
+    render(DailyProfileBody, {
       props: { response: profileResponse({ scopes: ["glucose.read", "reports.read"] }) },
     });
 
@@ -189,7 +189,7 @@ describe("DailyProfileTab", () => {
   });
 
   it("keeps treatment series but hides the schedule without therapy access", async () => {
-    render(DailyProfileTab, {
+    render(DailyProfileBody, {
       props: { response: profileResponse({ scopes: ["glucose.read", "treatments.read", "reports.read"] }) },
     });
 
@@ -203,7 +203,7 @@ describe("DailyProfileTab", () => {
   });
 
   it("explains a missing time zone instead of drawing anything", async () => {
-    render(DailyProfileTab, {
+    render(DailyProfileBody, {
       props: {
         response: {
           primary: { slots: [], days: [] },
@@ -220,7 +220,7 @@ describe("DailyProfileTab", () => {
   });
 
   it("says why a shared link has no time-of-day view", async () => {
-    render(DailyProfileTab, {
+    render(DailyProfileBody, {
       props: {
         response: {
           primary: { slots: [], days: [] },
@@ -233,13 +233,13 @@ describe("DailyProfileTab", () => {
   });
 
   it("says the ranges were clamped to the last 24 hours", async () => {
-    render(DailyProfileTab, { props: { response: profileResponse({ historyClamped: true }) } });
+    render(DailyProfileBody, { props: { response: profileResponse({ historyClamped: true }) } });
 
     await expect.element(page.getByText("Only the last 24 hours are included")).toBeVisible();
   });
 
   it("names the filters the caller's access made the API ignore", async () => {
-    render(DailyProfileTab, {
+    render(DailyProfileBody, {
       props: { response: { ...profileResponse(), ignoredFilters: ["profileName", "excludeOpenLoop"] } },
     });
 

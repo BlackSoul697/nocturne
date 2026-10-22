@@ -243,7 +243,7 @@
           disabled={filterScope.has(REQUIRE_CORROBORATION)}
           onCheckedChange={(checked) => update({ requireCorroboration: checked === true })}
         />
-        <Label for="event-cluster" variant="option">Only rises that the loop corrected by itself</Label>
+        <Label for="event-cluster" variant="option">Only rises where the loop gave extra insulin by itself</Label>
         {#if filterScope.has(REQUIRE_CORROBORATION)}
           <span class="text-xs text-muted-foreground">({missingScopeReason(filterScope.get(REQUIRE_CORROBORATION) ?? "")})</span>
         {/if}

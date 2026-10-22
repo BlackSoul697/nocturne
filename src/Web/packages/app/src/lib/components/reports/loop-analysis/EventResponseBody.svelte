@@ -1,5 +1,5 @@
 <!--
-  The Meals & events tab: each cohort's events aligned on their anchors, every series on one shared
+  The Meals and events page body: each cohort's events aligned on their anchors, every series on one shared
   axis of minutes from the event, stacked so a single crosshair reads them all; then each cohort's
   figures side by side and the events themselves. Values come from the API as they are.
 -->

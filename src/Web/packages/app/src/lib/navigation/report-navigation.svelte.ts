@@ -60,10 +60,11 @@ export interface ReportCategory {
   icon: IconComponent;
   reports: ReportItem[];
   /**
-   * The reports are the pages of one report and share its filters: the report header links
-   * between them (`ReportPageSwitcher`).
+   * The reports are the pages of one report, opened at this address, and share its filters. The
+   * report header links between them (`ReportPageSwitcher`), the sidebar offers the report as one
+   * entry, and each page is titled with the report's name ({@link reportTitle}).
    */
-  pages?: boolean;
+  pages?: { href: string };
 }
 
 /** Read scopes, spelled as the API's `OAuthScopes` spells them. */
@@ -339,13 +340,13 @@ export function reportCategories(): ReportCategory[] {
       title: "Loop Analysis",
       subtitle: "What your automated insulin delivery does",
       icon: Repeat,
-      pages: true,
+      pages: { href: "/reports/loop-analysis" },
       reports: [
         {
           title: "Daily profile",
           description: "Glucose, insulin and carbs at each time of day",
           href: "/reports/loop-analysis/daily-profile",
-          keywords: ["loopalyzer", "closed loop", "aid", "smb", "temp basal", "iob", "cob"],
+          keywords: ["loop analysis", "loopalyzer", "closed loop", "aid", "smb", "temp basal", "iob", "cob"],
           scopes: [READ.glucose, READ.treatments, READ.reports],
           icon: ChartLine,
           status: "available",
@@ -396,6 +397,11 @@ export function reportCategories(): ReportCategory[] {
   ];
 }
 
+/** A report's full title: a page of a report made of several is named with that report. */
+export function reportTitle(category: ReportCategory, report: ReportItem): string {
+  return category.pages ? `${category.title}: ${report.title}` : report.title;
+}
+
 /** The viewer a report list is built for. */
 export interface ReportViewer {
   /**
@@ -428,18 +434,23 @@ export function visibleReportCategories(
     .filter((c) => c.reports.length > 0);
 }
 
-/** Flat list of available report items for sidebar navigation, per viewer. */
+/**
+ * Flat list of available report items for sidebar navigation, per viewer. A report made of several
+ * pages is one entry, at the report's own address.
+ */
 export function getSidebarReportItems(viewer: ReportViewer): {
   title: string;
   href: string;
   icon: IconComponent;
 }[] {
-  return visibleReportCategories(viewer)
-    .flatMap((c) => c.reports)
-    .filter((r) => r.status === "available")
-    .map((r) => ({
+  return visibleReportCategories(viewer).flatMap((c) => {
+    const available = c.reports.filter((r) => r.status === "available");
+    if (c.pages)
+      return available.length > 0 ? [{ title: c.title, href: c.pages.href, icon: c.icon }] : [];
+    return available.map((r) => ({
       title: r.sidebarTitle ?? r.title,
       href: r.href,
       icon: r.icon,
     }));
+  });
 }

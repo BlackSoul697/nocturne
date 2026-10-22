@@ -90,7 +90,7 @@ public class EventUnavailableAnchor
     public string RequiredScope { get; set; } = "";
 }
 
-/// <summary>The Meals &amp; events tab: each cohort's response curves, for the primary range and a comparison.</summary>
+/// <summary>The Meals and events page: each cohort's response curves, for the primary range and a comparison.</summary>
 public class EventResponseReport : LoopAnalysisResponse
 {
     /// <summary>The cohorts and window as applied, after the defaults and the caller's scopes.</summary>

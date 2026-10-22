@@ -16,8 +16,8 @@ namespace Nocturne.API.Services.Analytics;
 
 /// <summary>
 /// Fetches one window of everything Loop Analysis reads and hands it to the Core calculators.
-/// Each tab's load and calculation is in its own part (<c>LoopAnalysisService.&lt;Tab&gt;.cs</c>);
-/// this one holds what the tabs share. Every collection is read uncapped, for the reason given on
+/// Each page's load and calculation is in its own part (<c>LoopAnalysisService.&lt;Page&gt;.cs</c>);
+/// this one holds what the pages share. Every collection is read uncapped, for the reason given on
 /// <c>StatisticsController.FetchInsulinRecordsAsync</c>.
 /// </summary>
 internal sealed partial class LoopAnalysisService(
@@ -55,7 +55,7 @@ internal sealed partial class LoopAnalysisService(
         StateSpanCategory.PumpMode,
     ];
 
-    /// <summary>What every tab loads for a window: at least the sources of its masks.</summary>
+    /// <summary>What every page loads for a window: at least the sources of its masks.</summary>
     private interface ILoaded
     {
         LoopAnalysisMaskSources Sources { get; }
@@ -119,7 +119,7 @@ internal sealed partial class LoopAnalysisService(
         LoopAnalysisFilter filter, Window window, TimeZoneInfo zone, LoopAnalysisMaskSources sources) =>
         LoopAnalysisMask.Build(filter.Masks, window.From, window.To, zone, sources);
 
-    /// <summary>The reads the Daily profile and Loop health tabs share, issued together.</summary>
+    /// <summary>The reads the Daily profile and Loop health pages share, issued together.</summary>
     /// <remarks>
     /// Boluses and temp basals are read from <see cref="DailyProfileCalculator.ActingMs"/> before the
     /// window so IOB and COB at its start see the doses still acting, and temp basals to

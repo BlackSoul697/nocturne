@@ -22,22 +22,22 @@ vi.mock("$api/generated/loopAnalysis.generated.remote", () => {
 });
 
 // The pages' charts are not rendered without data, and their chart library does not load in node.
-vi.mock("$lib/components/reports/loop-analysis/DailyProfileTab.svelte", async () => ({
+vi.mock("$lib/components/reports/loop-analysis/DailyProfileBody.svelte", async () => ({
   default: (await import("$lib/test-stubs/Empty.test-stub.svelte")).default,
 }));
-vi.mock("$lib/components/reports/loop-analysis/EventResponseTab.svelte", async () => ({
+vi.mock("$lib/components/reports/loop-analysis/EventResponseBody.svelte", async () => ({
   default: (await import("$lib/test-stubs/Empty.test-stub.svelte")).default,
 }));
 vi.mock("$lib/components/reports/loop-analysis/EventCohortBuilder.svelte", async () => ({
   default: (await import("$lib/test-stubs/Empty.test-stub.svelte")).default,
 }));
-vi.mock("$lib/components/reports/loop-analysis/PredictionsTab.svelte", async () => ({
+vi.mock("$lib/components/reports/loop-analysis/PredictionAccuracyBody.svelte", async () => ({
   default: (await import("$lib/test-stubs/Empty.test-stub.svelte")).default,
 }));
-vi.mock("$lib/components/reports/loop-analysis/LoopHealthTab.svelte", async () => ({
+vi.mock("$lib/components/reports/loop-analysis/LoopHealthBody.svelte", async () => ({
   default: (await import("$lib/test-stubs/Empty.test-stub.svelte")).default,
 }));
-vi.mock("$lib/components/reports/loop-analysis/SettingsEvidenceTab.svelte", async () => ({
+vi.mock("$lib/components/reports/loop-analysis/SettingsEvidenceBody.svelte", async () => ({
   default: (await import("$lib/test-stubs/Empty.test-stub.svelte")).default,
 }));
 

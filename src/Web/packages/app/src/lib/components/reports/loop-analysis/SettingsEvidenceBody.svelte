@@ -1,5 +1,5 @@
 <!--
-  The Settings evidence tab: the basal, ISF and carb ratio the user's own data shows, each block's
+  The Settings evidence page body: the basal, ISF and carb ratio the user's own data shows, each block's
   observed value on its spread against the profile's step line, then every block with its
   confidence, why it is not higher, what was set aside and the episodes behind it. Every figure
   comes from the API as it is; these are observations, never advice.
@@ -71,6 +71,13 @@
   const COLOR = "var(--chart-2)";
   const cursor = new TimeOfDayCursor();
 
+  // Start and end glucose share a column, as do the three IOB figures, so a table fits the report width.
+  const glucoseSpan = (e: { startGlucose?: number | null; endGlucose?: number | null }) =>
+    `${glucose(e.startGlucose)} → ${glucose(e.endGlucose)}`;
+  const iobSpan = (e: { iobAtStart?: number | null; iobAtEnd?: number | null; residualIob?: number | null }) =>
+    `${u(e.iobAtStart)} / ${u(e.iobAtEnd)} / ${u(e.residualIob)}`;
+  const iobLabel = "IOB start / end / residual, U";
+
   const iobHint = () =>
     "Insulin on board here compares delivery with the schedule. It is negative when the loop gave less basal than the schedule.";
 
@@ -89,24 +96,18 @@
   const isfColumns: EpisodeColumn<IsfEvidenceEpisode>[] = $derived([
     { label: `ISF, ${isfUnit}`, value: (e) => (e.value == null ? "–" : isfFormat(e.value)) },
     { label: "Bolus, U", value: (e) => u(e.units) },
-    { label: "Start", value: (e) => glucose(e.startGlucose) },
-    { label: "End", value: (e) => glucose(e.endGlucose) },
+    { label: `Glucose start → end, ${bgLabel()}`, value: (e) => glucoseSpan(e) },
     { label: "Net insulin, U", value: (e) => u(e.netInsulin) },
-    { label: "IOB start, U", value: (e) => u(e.iobAtStart), hint: iobHint(), wide: true },
-    { label: "IOB end, U", value: (e) => u(e.iobAtEnd), hint: iobHint(), wide: true },
-    { label: "Residual IOB, U", value: (e) => u(e.residualIob), hint: iobHint(), wide: true },
+    { label: iobLabel, value: (e) => iobSpan(e), hint: iobHint(), wide: true },
     { label: "Basal need above schedule, U", value: (e) => u(e.basalExcess) },
     { label: "Insulin that acted, U", value: (e) => u(e.insulinActed) },
   ]);
   const crColumns: EpisodeColumn<CarbRatioEvidenceEpisode>[] = $derived([
     { label: "Carb ratio, g/U", value: (e) => (e.value == null ? "–" : ratio(e.value)) },
     { label: "Carbs, g", value: (e) => (e.grams == null ? "–" : String(e.grams)) },
-    { label: "Start", value: (e) => glucose(e.startGlucose) },
-    { label: "End", value: (e) => glucose(e.endGlucose) },
+    { label: `Glucose start → end, ${bgLabel()}`, value: (e) => glucoseSpan(e) },
     { label: "Net insulin, U", value: (e) => u(e.netInsulin) },
-    { label: "IOB start, U", value: (e) => u(e.iobAtStart), hint: iobHint(), wide: true },
-    { label: "IOB end, U", value: (e) => u(e.iobAtEnd), hint: iobHint(), wide: true },
-    { label: "Residual IOB, U", value: (e) => u(e.residualIob), hint: iobHint(), wide: true },
+    { label: iobLabel, value: (e) => iobSpan(e), hint: iobHint(), wide: true },
     { label: "Basal need above schedule, U", value: (e) => u(e.basalExcess) },
     { label: "Insulin that acted, U", value: (e) => u(e.insulinActed) },
     { label: "Needed, U", value: (e) => u(e.insulinNeeded) },
@@ -231,7 +232,7 @@
         <p class="max-w-prose text-sm">
           You can see only the most recent 24 hours of this data. Each figure on this page is checked
           against the hours before it, for example whether food was eaten. You cannot see those hours.
-          Thus this page does not show figures that it cannot check.
+          So this page does not show figures that it cannot check.
         </p>
       </div>
     {:else if withheld || primary == null}

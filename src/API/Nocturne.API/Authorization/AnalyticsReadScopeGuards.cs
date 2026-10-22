@@ -503,32 +503,32 @@ internal static partial class LoopAnalysisReadScopeGuard
         return withheld;
     }
 
-    /// <summary>A tab: the series the caller's scopes withhold, and how its response drops exactly those.</summary>
-    private sealed record Tab(
+    /// <summary>A page: the series the caller's scopes withhold, and how its response drops exactly those.</summary>
+    private sealed record Page(
         Func<IReadOnlySet<string>, HashSet<LoopAnalysisSeries>> Withheld,
         Action<LoopAnalysisResponse, HashSet<LoopAnalysisSeries>> Narrow);
 
     /// <summary>
-    /// Every tab, by its response type, and the envelope served on its own, which carries no
-    /// series. Every <see cref="LoopAnalysisSeries"/> belongs to exactly one tab or to the envelope
-    /// (<see cref="WithheldEnvelope"/>), so a tab's response never lists another's series; a new
-    /// tab adds one entry here.
+    /// Every page, by its response type, and the envelope served on its own, which carries no
+    /// series. Every <see cref="LoopAnalysisSeries"/> belongs to exactly one page or to the envelope
+    /// (<see cref="WithheldEnvelope"/>), so a page's response never lists another's series; a new
+    /// page adds one entry here.
     /// </summary>
-    private static readonly Dictionary<Type, Tab> Tabs = new()
+    private static readonly Dictionary<Type, Page> Pages = new()
     {
         [typeof(LoopAnalysisResponse)] = new(_ => [], (_, _) => { }),
-        [typeof(DailyProfileResponse)] = TabOf<DailyProfileResponse, DailyProfileRange>(
+        [typeof(DailyProfileResponse)] = PageOf<DailyProfileResponse, DailyProfileRange>(
             WithheldDailyProfile, r => [r.Primary, r.Comparison], Narrow),
-        [typeof(PredictionAccuracyResponse)] = TabOf<PredictionAccuracyResponse, PredictionAccuracyRange>(
+        [typeof(PredictionAccuracyResponse)] = PageOf<PredictionAccuracyResponse, PredictionAccuracyRange>(
             WithheldPredictions, r => [r.Primary, r.Comparison], Narrow),
-        [typeof(LoopHealthResponse)] = TabOf<LoopHealthResponse, LoopHealthRange>(
+        [typeof(LoopHealthResponse)] = PageOf<LoopHealthResponse, LoopHealthRange>(
             WithheldLoopHealth, r => [r.Primary, r.Comparison], Narrow),
-        [typeof(EventResponseReport)] = TabOf<EventResponseReport, EventResponseRange>(
+        [typeof(EventResponseReport)] = PageOf<EventResponseReport, EventResponseRange>(
             WithheldEvents, r => [r.Primary, r.Comparison], Narrow),
         [typeof(SettingsEvidenceReport)] = new(WithheldSettingsEvidence, NarrowSettingsEvidence),
     };
 
-    private static Tab TabOf<TResponse, TRange>(
+    private static Page PageOf<TResponse, TRange>(
         Func<IReadOnlySet<string>, HashSet<LoopAnalysisSeries>> withheld,
         Func<TResponse, TRange?[]> ranges,
         Action<TRange, HashSet<LoopAnalysisSeries>> narrow)
@@ -541,31 +541,31 @@ internal static partial class LoopAnalysisReadScopeGuard
                     narrow(range, hidden);
         });
 
-    public static IReadOnlyCollection<Type> TabResponses => Tabs.Keys;
+    public static IReadOnlyCollection<Type> PageResponses => Pages.Keys;
 
     public static HashSet<LoopAnalysisSeries> WithheldFrom(Type response, IReadOnlySet<string> grantedScopes) =>
-        Tabs[response].Withheld(grantedScopes);
+        Pages[response].Withheld(grantedScopes);
 
     /// <summary>
-    /// Lists the series the caller's scopes withhold from <typeparamref name="T"/>'s tab and empties
+    /// Lists the series the caller's scopes withhold from <typeparamref name="T"/>'s page and empties
     /// exactly those.
     /// </summary>
     public static T Redact<T>(T data, IReadOnlySet<string> grantedScopes) where T : LoopAnalysisResponse
     {
-        var tab = Tabs[typeof(T)];
-        var withheld = tab.Withheld(grantedScopes);
+        var page = Pages[typeof(T)];
+        var withheld = page.Withheld(grantedScopes);
         withheld.UnionWith(WithheldEnvelope(grantedScopes));
         data.WithheldSeries = [.. withheld.Order()];
         if (withheld.Contains(LoopAnalysisSeries.ProfileNames))
             data.ProfileNames = [];
         if (withheld.Count > 0)
-            tab.Narrow(data, withheld);
+            page.Narrow(data, withheld);
         return data;
     }
 
     /// <summary>
-    /// The series of the envelope every tab carries, which <see cref="Redact{T}"/> withholds whatever
-    /// the tab: the profile names are therapy settings.
+    /// The series of the envelope every page carries, which <see cref="Redact{T}"/> withholds whatever
+    /// the page: the profile names are therapy settings.
     /// </summary>
     public static HashSet<LoopAnalysisSeries> WithheldEnvelope(IReadOnlySet<string> grantedScopes)
     {

@@ -14,7 +14,7 @@
   import { contextResource } from "$lib/hooks/resource-context.svelte";
   import { getLoopAnalysis } from "$lib/components/reports/loop-analysis/loop-analysis-context.svelte";
   import PageBodyLoading from "$lib/components/reports/loop-analysis/PageBodyLoading.svelte";
-  import EventResponseTab from "$lib/components/reports/loop-analysis/EventResponseTab.svelte";
+  import EventResponseBody from "$lib/components/reports/loop-analysis/EventResponseBody.svelte";
 
   const analysis = getLoopAnalysis();
   const events = $derived(readEventResponse(page.url.searchParams));
@@ -52,7 +52,7 @@
       unavailableAnchors={resource.current.unavailableAnchors}
       unavailableFilters={resource.current.unavailableFilters}
     />
-    <EventResponseTab response={resource.current} />
+    <EventResponseBody response={resource.current} />
   </div>
 {:else}
   <PageBodyLoading />

@@ -72,7 +72,7 @@ public sealed record BasalEvidence(IntervalSet Recorded, IntervalSet Unknown, In
 
 /// <summary>
 /// Delivered basal minus scheduled basal, plus every bolus, over any interval, split by
-/// <see cref="NetInsulinOrigin"/>. The definition every Loop Analysis tab reads its insulin from.
+/// <see cref="NetInsulinOrigin"/>. The definition every Loop Analysis page reads its insulin from.
 /// </summary>
 /// <remarks>
 /// Time where either delivery or the schedule is unknown contributes no basal delta, rather than

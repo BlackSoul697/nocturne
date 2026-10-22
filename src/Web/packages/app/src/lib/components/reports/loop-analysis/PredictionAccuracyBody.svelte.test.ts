@@ -2,7 +2,7 @@ import { render } from "vitest-browser-svelte";
 import { page, userEvent } from "vitest/browser";
 import { describe, expect, it } from "vitest";
 import { PredictionCurve, TimeZoneUnavailableReason } from "$lib/api";
-import PredictionsTab from "./PredictionsTab.svelte";
+import PredictionAccuracyBody from "./PredictionAccuracyBody.svelte";
 import { predictionResponse } from "./prediction-accuracy.test-fixtures";
 
 const NO_DEVICES = ["glucose.read", "treatments.read", "therapy.read", "reports.read"];
@@ -20,9 +20,9 @@ async function focusHorizon(curve: string, steps: number) {
 const heatmapCell = (value: string) => page.getByRole("cell", { name: value, exact: true }).first();
 const tintOf = (value: string) => (heatmapCell(value).element() as HTMLElement).style.getPropertyValue("--tint");
 
-describe("PredictionsTab", () => {
+describe("PredictionAccuracyBody", () => {
   it("draws each curve's error by horizon with the figures and the framing", async () => {
-    render(PredictionsTab, { props: { response: predictionResponse() } });
+    render(PredictionAccuracyBody, { props: { response: predictionResponse() } });
 
     for (const curve of ["IOB", "Zero temp", "COB", "UAM"]) await expect.element(slider(curve)).toBeVisible();
     await expect.element(page.getByText("4,032")).toBeVisible();
@@ -36,7 +36,7 @@ describe("PredictionsTab", () => {
   });
 
   it("reads a horizon's bias, MAE and n as the slider's value and in its tooltip", async () => {
-    render(PredictionsTab, { props: { response: predictionResponse() } });
+    render(PredictionAccuracyBody, { props: { response: predictionResponse() } });
 
     const tooltip = await focusHorizon("IOB", 1);
     await expect
@@ -50,7 +50,7 @@ describe("PredictionsTab", () => {
   });
 
   it("moves between horizons with the arrows, Home and End", async () => {
-    render(PredictionsTab, { props: { response: predictionResponse() } });
+    render(PredictionAccuracyBody, { props: { response: predictionResponse() } });
 
     await focusHorizon("COB", 2);
     await userEvent.keyboard("{ArrowLeft}");
@@ -64,7 +64,7 @@ describe("PredictionsTab", () => {
   });
 
   it("shows the tooltip for the horizon under the pointer", async () => {
-    render(PredictionsTab, { props: { response: predictionResponse() } });
+    render(PredictionAccuracyBody, { props: { response: predictionResponse() } });
 
     await slider("UAM").hover();
     await expect.element(page.getByRole("tooltip").getByText(/^UAM, \+\d+ min$/)).toBeVisible();
@@ -73,7 +73,7 @@ describe("PredictionsTab", () => {
   });
 
   it("tints the hourly bias by sign and size, and marks the settings-signal columns", async () => {
-    render(PredictionsTab, { props: { response: predictionResponse() } });
+    render(PredictionAccuracyBody, { props: { response: predictionResponse() } });
 
     await expect.element(page.getByText("IOB bias by hour of day", { exact: true })).toBeVisible();
     await expect.element(page.getByText("Settings signal", { exact: true }).first()).toBeVisible();
@@ -85,7 +85,7 @@ describe("PredictionsTab", () => {
   });
 
   it("fades and italicises sparse cells, keeping their text in the foreground ink", async () => {
-    render(PredictionsTab, { props: { response: predictionResponse({ sparse: true }) } });
+    render(PredictionAccuracyBody, { props: { response: predictionResponse({ sparse: true }) } });
 
     expect(tintOf("-16")).toBe("color-mix(in oklab, var(--bias-low) 12%, transparent)");
     const cell = heatmapCell("-16").element() as HTMLElement;
@@ -97,7 +97,7 @@ describe("PredictionsTab", () => {
   });
 
   it("lists each context for the curve picked, with the Adjusted note", async () => {
-    render(PredictionsTab, { props: { response: predictionResponse() } });
+    render(PredictionAccuracyBody, { props: { response: predictionResponse() } });
 
     await expect.element(page.getByText("After a correction")).toBeVisible();
     await page.getByRole("radio", { name: "UAM" }).click();
@@ -107,7 +107,7 @@ describe("PredictionsTab", () => {
   });
 
   it("outlines the comparison and reads its bias beside the range's", async () => {
-    render(PredictionsTab, { props: { response: predictionResponse({ comparison: true }) } });
+    render(PredictionAccuracyBody, { props: { response: predictionResponse({ comparison: true }) } });
 
     await expect.element(page.getByText("Compared range", { exact: true })).toBeVisible();
     await expect.element(page.getByText("4,032 in the compared range")).toBeVisible();
@@ -121,7 +121,7 @@ describe("PredictionsTab", () => {
   it("draws a curve only the comparison carried", async () => {
     const response = predictionResponse({ comparison: true });
     response.comparison!.curves!.push(...predictionResponse({ curves: [PredictionCurve.Default] }).primary!.curves!);
-    render(PredictionsTab, { props: { response } });
+    render(PredictionAccuracyBody, { props: { response } });
 
     await expect.element(slider("Prediction")).toBeVisible();
     await expect.element(page.getByText("Only in the compared range")).toBeVisible();
@@ -131,7 +131,7 @@ describe("PredictionsTab", () => {
   });
 
   it("hides every curve when the caller cannot read the device data they come from", async () => {
-    render(PredictionsTab, { props: { response: predictionResponse({ scopes: NO_DEVICES }) } });
+    render(PredictionAccuracyBody, { props: { response: predictionResponse({ scopes: NO_DEVICES }) } });
 
     await expect.element(page.getByText("Prediction accuracy is hidden")).toBeVisible();
     await expect.element(page.getByText(/Your access does not include\s+device data/)).toBeVisible();
@@ -139,7 +139,7 @@ describe("PredictionsTab", () => {
   });
 
   it("hides every curve when the caller cannot read glucose", async () => {
-    render(PredictionsTab, { props: { response: predictionResponse({ scopes: NO_GLUCOSE }) } });
+    render(PredictionAccuracyBody, { props: { response: predictionResponse({ scopes: NO_GLUCOSE }) } });
 
     await expect.element(page.getByText("Prediction accuracy is hidden")).toBeVisible();
     await expect.element(page.getByText(/Your access does not include\s+glucose/)).toBeVisible();
@@ -147,7 +147,7 @@ describe("PredictionsTab", () => {
   });
 
   it("without treatments keeps the curves read in every context and says why the rest are gone", async () => {
-    render(PredictionsTab, { props: { response: predictionResponse({ scopes: NO_TREATMENTS, interrupted: 7 }) } });
+    render(PredictionAccuracyBody, { props: { response: predictionResponse({ scopes: NO_TREATMENTS, interrupted: 7 }) } });
 
     await expect.element(slider("UAM")).toBeVisible();
     expect(slider("IOB").elements()).toHaveLength(0);
@@ -158,7 +158,7 @@ describe("PredictionsTab", () => {
   });
 
   it("counts interrupted horizons in the context table", async () => {
-    render(PredictionsTab, {
+    render(PredictionAccuracyBody, {
       props: { response: predictionResponse({ curves: [PredictionCurve.Default], interrupted: 7 }) },
     });
 
@@ -168,14 +168,14 @@ describe("PredictionsTab", () => {
   });
 
   it("names the filters the caller's access ignored", async () => {
-    render(PredictionsTab, { props: { response: { ...predictionResponse(), ignoredFilters: ["excludeExercise", "startDate"] } } });
+    render(PredictionAccuracyBody, { props: { response: { ...predictionResponse(), ignoredFilters: ["excludeExercise", "startDate"] } } });
 
     await expect.element(page.getByText("Some filters were not applied")).toBeVisible();
     await expect.element(page.getByText(/so the report did not apply them:\s+Exercise\./)).toBeVisible();
   });
 
   it("explains a missing time zone in place of the figures", async () => {
-    render(PredictionsTab, {
+    render(PredictionAccuracyBody, {
       props: {
         response: {
           ...predictionResponse(),
@@ -190,19 +190,19 @@ describe("PredictionsTab", () => {
   });
 
   it("says a clamped viewer sees only the last 24 hours", async () => {
-    render(PredictionsTab, { props: { response: predictionResponse({ historyClamped: true }) } });
+    render(PredictionAccuracyBody, { props: { response: predictionResponse({ historyClamped: true }) } });
 
     await expect.element(page.getByText("Only the last 24 hours are included")).toBeVisible();
     await expect.element(page.getByText(/not included until their readings arrive/)).toBeVisible();
   });
 
   it("says when the range has no predictions, without suggesting a longer range to a clamped viewer", async () => {
-    const view = render(PredictionsTab, { props: { response: predictionResponse({ curves: [] }) } });
+    const view = render(PredictionAccuracyBody, { props: { response: predictionResponse({ curves: [] }) } });
     await expect.element(page.getByText("No predictions in this range")).toBeVisible();
     await expect.element(page.getByText(/Select a longer range/)).toBeVisible();
     view.unmount();
 
-    render(PredictionsTab, { props: { response: predictionResponse({ curves: [], historyClamped: true }) } });
+    render(PredictionAccuracyBody, { props: { response: predictionResponse({ curves: [], historyClamped: true }) } });
     await expect.element(page.getByText(/there are no predictions in them yet/)).toBeVisible();
     expect(page.getByText(/Select a longer range/).elements()).toHaveLength(0);
   });

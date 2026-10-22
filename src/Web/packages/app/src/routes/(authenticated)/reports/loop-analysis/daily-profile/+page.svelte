@@ -5,7 +5,7 @@
   import { contextResource } from "$lib/hooks/resource-context.svelte";
   import { getLoopAnalysis } from "$lib/components/reports/loop-analysis/loop-analysis-context.svelte";
   import PageBodyLoading from "$lib/components/reports/loop-analysis/PageBodyLoading.svelte";
-  import DailyProfileTab from "$lib/components/reports/loop-analysis/DailyProfileTab.svelte";
+  import DailyProfileBody from "$lib/components/reports/loop-analysis/DailyProfileBody.svelte";
 
   const analysis = getLoopAnalysis();
   const resource = contextResource(() => getDailyProfile(analysis.query), { errorTitle: "Cannot load the daily profile" });
@@ -28,7 +28,7 @@
 </svelte:head>
 
 {#if resource.current}
-  <DailyProfileTab response={resource.current} {insulinDeliveryHref} />
+  <DailyProfileBody response={resource.current} {insulinDeliveryHref} />
 {:else}
   <PageBodyLoading />
 {/if}

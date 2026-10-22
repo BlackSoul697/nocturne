@@ -48,7 +48,7 @@ describe("EventCohortBuilder", () => {
       },
     });
 
-    await expect.element(page.getByLabelText("Only rises that the loop corrected by itself")).toBeVisible();
+    await expect.element(page.getByLabelText("Only rises where the loop gave extra insulin by itself")).toBeVisible();
     await expect.element(page.getByLabelText("Isolated events only")).toBeDisabled();
     await expect.element(page.getByText("(Needs access to treatments)")).toBeVisible();
   });

@@ -3,7 +3,7 @@
   import { contextResource } from "$lib/hooks/resource-context.svelte";
   import { getLoopAnalysis } from "$lib/components/reports/loop-analysis/loop-analysis-context.svelte";
   import PageBodyLoading from "$lib/components/reports/loop-analysis/PageBodyLoading.svelte";
-  import LoopHealthTab from "$lib/components/reports/loop-analysis/LoopHealthTab.svelte";
+  import LoopHealthBody from "$lib/components/reports/loop-analysis/LoopHealthBody.svelte";
 
   const analysis = getLoopAnalysis();
   const resource = contextResource(() => getLoopHealth(analysis.query), { errorTitle: "Cannot load the loop health" });
@@ -15,7 +15,7 @@
 </svelte:head>
 
 {#if resource.current}
-  <LoopHealthTab response={resource.current} />
+  <LoopHealthBody response={resource.current} />
 {:else}
   <PageBodyLoading />
 {/if}

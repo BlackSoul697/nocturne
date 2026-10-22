@@ -17,8 +17,16 @@ export class LoopAnalysisState {
   readonly #envelope: { readonly current: LoopAnalysisResponse | undefined; readonly stale: boolean };
 
   readonly filter = $derived(readLoopAnalysisFilter(page.url.searchParams));
-  /** The request every page makes, over the report range's local days. */
-  readonly query = $derived(this.#request());
+  #lastQuery: ReturnType<typeof dailyProfileQuery> | undefined;
+  /**
+   * The request every page makes, over the report range's local days. A URL that asks for the same
+   * keeps the same object, so a move between pages does not ask again.
+   */
+  readonly query = $derived.by(() => {
+    const next = this.#request();
+    if (this.#lastQuery && JSON.stringify(this.#lastQuery) === JSON.stringify(next)) return this.#lastQuery;
+    return (this.#lastQuery = next);
+  });
   /** The page on screen; undefined only on the address that redirects to one. */
   readonly current = $derived(LOOP_ANALYSIS_PAGES.find((p) => page.url.pathname.endsWith(`/loop-analysis/${p}`)));
 

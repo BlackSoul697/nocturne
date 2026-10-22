@@ -414,7 +414,7 @@ public class CarbRatioEvidenceEpisode : InsulinActedEpisode
     public bool IsfDependent { get; set; }
 }
 
-/// <summary>The Settings evidence tab for one range. Glucose is mg/dL throughout.</summary>
+/// <summary>The Settings evidence page for one range. Glucose is mg/dL throughout.</summary>
 public class SettingsEvidenceRange
 {
     public DateTime From { get; set; }
@@ -431,22 +431,22 @@ public class SettingsEvidenceRange
     public List<CarbRatioEvidenceBlock> CarbRatio { get; set; } = [];
 }
 
-/// <summary>The Settings evidence tab: the primary range and, when asked for, a comparison.</summary>
+/// <summary>The Settings evidence page: the primary range and, when asked for, a comparison.</summary>
 public class SettingsEvidenceReport : LoopAnalysisResponse
 {
-    /// <summary>Null when the tab is withheld (<see cref="WithheldReason"/>) or no timezone resolved.</summary>
+    /// <summary>Null when the page is withheld (<see cref="WithheldReason"/>) or no timezone resolved.</summary>
     public SettingsEvidenceRange? Primary { get; set; }
 
     public SettingsEvidenceRange? Comparison { get; set; }
 
-    /// <summary>Why the tab is withheld whole, when it is; nothing is computed then.</summary>
+    /// <summary>Why the page is withheld whole, when it is; nothing is computed then.</summary>
     public SettingsEvidenceWithheldReason? WithheldReason { get; set; }
 
     /// <summary>The thresholds the rules and windows apply, for the copy that names them.</summary>
     public SettingsEvidenceRules Rules { get; set; } = new();
 }
 
-/// <summary>Why the Settings evidence tab is withheld whole.</summary>
+/// <summary>Why the Settings evidence page is withheld whole.</summary>
 [JsonConverter(typeof(JsonStringEnumConverter<SettingsEvidenceWithheldReason>))]
 public enum SettingsEvidenceWithheldReason
 {

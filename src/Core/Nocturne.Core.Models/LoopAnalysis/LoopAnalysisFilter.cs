@@ -45,7 +45,7 @@ public class LoopAnalysisFilter
     public LoopAnalysisMasks Masks { get; set; } = new();
 
     /// <summary>
-    /// The caller may see the profile names, so a tab that does not otherwise load the profiles reads
+    /// The caller may see the profile names, so a page that does not otherwise load the profiles reads
     /// them for <see cref="LoopAnalysisResponse.ProfileNames"/>.
     /// </summary>
     public bool ReadProfileNames { get; set; }
@@ -158,7 +158,7 @@ public enum LoopAnalysisSeries
     EventList,
 
     /// <summary>
-    /// The whole Settings evidence tab: every figure reads glucose, the insulin delivered and the
+    /// The whole Settings evidence page: every figure reads glucose, the insulin delivered and the
     /// profile's settings, so without any of them there is nothing to serve.
     /// </summary>
     SettingsEvidence,

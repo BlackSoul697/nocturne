@@ -4,10 +4,12 @@
   import { Label } from "$lib/components/ui/label";
   import { Separator } from "$lib/components/ui/separator";
   import { ScrollArea } from "$lib/components/ui/scroll-area";
-  import { tick, untrack } from "svelte";
+  import { untrack } from "svelte";
+  import { page } from "$app/state";
+  import { goto } from "$app/navigation";
   import { getLocalTimeZone, parseDate, today } from "@internationalized/date";
   import type { DateRange } from "bits-ui";
-  import { requireDateParamsContext } from "$lib/hooks/date-params.svelte";
+  import { requireDateParamsContext, withRange, type RangeWrite } from "$lib/hooks/date-params.svelte";
   import { getReportSlots } from "$lib/hooks/report-slots.svelte";
   import { RangeCalendar } from "$lib/components/ui/range-calendar";
   import { dayCount } from "$lib/utils/date-range";
@@ -47,14 +49,17 @@
   // rather than the URL-only params: a default range seeded during hydration
   // never reaches the URL, so params.from/days can read as null while the range
   // on screen is intact.
+  // Only opening seeds the drafts: a range that changes while the panel is open leaves them be.
   $effect(() => {
     if (!open) return;
 
-    untrack(() => extension?.begin());
-    draftCalendarValue = {
-      start: parseDate(params.fromDay),
-      end: parseDate(params.toDay),
-    };
+    untrack(() => {
+      extension?.begin();
+      draftCalendarValue = {
+        start: parseDate(params.fromDay),
+        end: parseDate(params.toDay),
+      };
+    });
   });
 
   // The quick-selection preset to highlight: the whole-day span of the draft
@@ -92,16 +97,18 @@
    * Resetting to a fixed 7 days shortened 30-day reports and pinned the result
    * as a user choice.
    */
+  /** Writes the range and the report's filters in one navigation, so one history entry. */
+  async function write(range: RangeWrite | null, report: (search: URLSearchParams) => URLSearchParams) {
+    const search = report(range ? withRange(page.url.searchParams, range) : page.url.searchParams);
+    // eslint-disable-next-line svelte/no-navigation-without-resolve -- a query on the page on screen
+    await goto(`?${search.toString()}`, { noScroll: true, keepFocus: true });
+  }
+
   async function resetFilters() {
     open = false;
     onOpenChange?.(false);
-    // The report's own filters go first: each write navigates, and the date range's write keeps
-    // every parameter the URL holds once the report's has landed.
-    if (extension) {
-      await extension.reset();
-      await tick();
-    }
-    params.reset();
+    if (extension) await write(params.resetWrite(), extension.reset);
+    else params.reset();
   }
 
   async function applyFilters() {
@@ -110,14 +117,18 @@
 
     open = false;
     onOpenChange?.(false);
-    if (extension) {
-      await extension.apply();
-      await tick();
-    }
 
-    if (start && end) {
-      // A range matching a "last N days" preset commits as a relative range so it
-      // stays anchored to today; anything else commits as an explicit custom range.
+    // A range matching a "last N days" preset commits as a relative range so it
+    // stays anchored to today; anything else commits as an explicit custom range.
+    if (extension) {
+      const range =
+        start && end
+          ? selectedDays !== undefined
+            ? params.dayRangeWrite(selectedDays)
+            : params.customRangeWrite(start.toString(), end.toString())
+          : null;
+      await write(range, extension.apply);
+    } else if (start && end) {
       if (selectedDays !== undefined) {
         params.setDayRange(selectedDays);
       } else {

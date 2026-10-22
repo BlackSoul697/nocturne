@@ -31,7 +31,7 @@ export function ignoredFilterLabel(name: string): string {
   const cohort = /^anchor(\d)$/.exec(name);
   if (cohort) return `Cohort ${cohort[1]}`;
   if (name === "isolatedOnly") return "Isolated events only";
-  if (name === "requireCorroboration") return "Only rises the loop corrected";
+  if (name === "requireCorroboration") return "Only rises with extra loop insulin";
   const masks: Record<string, string> = maskLabels();
   return masks[name] ?? name;
 }

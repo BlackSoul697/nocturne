@@ -2,17 +2,18 @@ import { getContext, onDestroy, setContext, type Snippet } from "svelte";
 
 /**
  * Filters a report adds to the reports layout's Filters panel, below the date range. The fields
- * edit a draft the report owns; the panel asks the report to start the draft when it opens and to
- * write it when Apply or Reset is used.
+ * edit a draft the report owns; the panel asks the report to start the draft when it opens, and on
+ * Apply or Reset asks for the search params with the report's part written, so that the range and
+ * the report's filters change in one navigation and one history entry.
  */
 export interface ReportFilterExtension {
   fields: Snippet;
   /** Copy the filters in force into the draft. */
   begin: () => void;
-  /** Write the draft into the URL. The panel waits for it before it writes the date range. */
-  apply: () => Promise<void>;
-  /** Clear the report's filters from the URL. */
-  reset: () => Promise<void>;
+  /** `search` with the draft written in, every other parameter kept. */
+  apply: (search: URLSearchParams) => URLSearchParams;
+  /** `search` without the report's filters, every other parameter kept. */
+  reset: (search: URLSearchParams) => URLSearchParams;
 }
 
 /** What a report adds to the reports layout. */

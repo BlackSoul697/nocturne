@@ -1214,19 +1214,19 @@ public partial class AnalyticsReadScopeGuardTests
     [Fact]
     public void LoopAnalysis_EverySeriesCanBeWithheld_ByExactlyOneTabOrTheEnvelope()
     {
-        var byOwner = LoopAnalysisReadScopeGuard.TabResponses
+        var byOwner = LoopAnalysisReadScopeGuard.PageResponses
             .ToDictionary(t => t.Name, t => LoopAnalysisReadScopeGuard.WithheldFrom(t, Granted()));
         byOwner["envelope"] = LoopAnalysisReadScopeGuard.WithheldEnvelope(Granted());
 
         foreach (var series in Enum.GetValues<LoopAnalysisSeries>())
             byOwner.Where(t => t.Value.Contains(series)).Select(t => t.Key)
-                .Should().ContainSingle($"{series} is withheld by exactly one tab or the envelope");
+                .Should().ContainSingle($"{series} is withheld by exactly one page or the envelope");
     }
 
-    public static TheoryData<Type> LoopAnalysisTabResponses => [.. LoopAnalysisReadScopeGuard.TabResponses];
+    public static TheoryData<Type> LoopAnalysisPageResponses => [.. LoopAnalysisReadScopeGuard.PageResponses];
 
     [Theory]
-    [MemberData(nameof(LoopAnalysisTabResponses))]
+    [MemberData(nameof(LoopAnalysisPageResponses))]
     public void LoopAnalysis_WithholdingEveryCategory_LeavesTheEnvelopeOnlyWhatItSaysOfTheRequest(Type response)
     {
         var populated = typeof(RedactionCoverage).GetMethod(nameof(RedactionCoverage.Populated))!
@@ -1268,7 +1268,7 @@ public partial class AnalyticsReadScopeGuardTests
             .Where(m => m.GetCustomAttribute<HttpGetAttribute>() is not null)
             .Select(m => m.ReturnType.GetGenericArguments().Single().GetGenericArguments().Single());
 
-        LoopAnalysisReadScopeGuard.TabResponses.Should().BeEquivalentTo(responses);
+        LoopAnalysisReadScopeGuard.PageResponses.Should().BeEquivalentTo(responses);
     }
 
     [Fact]
@@ -1519,7 +1519,7 @@ public partial class AnalyticsReadScopeGuardTests
         data.ProfileNames.Should().Equal(therapy ? ["Default"] : []);
         data.WithheldSeries.Contains(LoopAnalysisSeries.ProfileNames).Should().Be(!therapy);
         var asked = service.Invocations.Single().Arguments.OfType<LoopAnalysisFilter>().Single();
-        asked.ReadProfileNames.Should().Be(therapy, "a tab that does not load the profiles reads them only for a caller who may see them");
+        asked.ReadProfileNames.Should().Be(therapy, "a page that does not load the profiles reads them only for a caller who may see them");
     }
 
     [Fact]

@@ -3,7 +3,12 @@
   the week and the time to leave out. They edit a draft; the panel writes it on Apply.
 -->
 <script lang="ts">
-  import { DayOfWeek, LoopAnalysisComparison, type LoopAnalysisUnavailableFilter } from "$lib/api";
+  import {
+    DayOfWeek,
+    LoopAnalysisComparison,
+    type LoopAnalysisMasks,
+    type LoopAnalysisUnavailableFilter,
+  } from "$lib/api";
   import * as Select from "$lib/components/ui/select";
   import * as ToggleGroup from "$lib/components/ui/toggle-group";
   import { Checkbox } from "$lib/components/ui/checkbox";
@@ -24,6 +29,11 @@
   interface Props {
     value: LoopAnalysisFilterState;
     onchange: (next: LoopAnalysisFilterState) => void;
+    /**
+     * The filters the API applied to the filters on screen, or null while it has not answered. A
+     * mask the draft leaves unset shows this default, and cannot be changed until it is known.
+     */
+    applied?: LoopAnalysisMasks | null;
     /** The filters the caller's scopes do not let it use, as the last response reported them. */
     unavailable?: LoopAnalysisUnavailableFilter[] | null;
     profileNames: string[];
@@ -31,7 +41,7 @@
     clamped: boolean;
   }
 
-  let { value, onchange, unavailable = null, profileNames, clamped }: Props = $props();
+  let { value, onchange, applied = null, unavailable = null, profileNames, clamped }: Props = $props();
 
   const update = (patch: Partial<LoopAnalysisFilterState>) => onchange({ ...value, ...patch });
 
@@ -63,6 +73,9 @@
   const requiredScope = $derived(new Map((unavailable ?? []).map((f) => [f.filter ?? "", f.requiredScope ?? ""])));
   const usable = (key: MaskKey | "profileName") => !requiredScope.has(key);
   const reason = (key: MaskKey | "profileName") => missingScopeReason(requiredScope.get(key) ?? "");
+
+  const maskLoading = (key: MaskKey) => value.masks[key] == null && applied == null;
+  const maskChecked = (key: MaskKey) => value.masks[key] ?? applied?.[key] ?? false;
 
   const ALL_PROFILES = "__all__";
   const profiles = $derived(
@@ -184,15 +197,15 @@
 
   <Separator />
 
-  <fieldset class="space-y-3">
+  <fieldset class="space-y-3" aria-busy={MASK_KEYS.some(maskLoading)}>
     <legend class="text-sm font-medium">Exclude the time of</legend>
     {#each MASK_KEYS as key (key)}
       {@const enabled = usable(key)}
       <div class="flex items-start gap-2">
         <Checkbox
           id="loop-analysis-{key}"
-          checked={enabled && (value.masks[key] ?? false)}
-          disabled={!enabled}
+          checked={enabled && maskChecked(key)}
+          disabled={!enabled || maskLoading(key)}
           aria-describedby={enabled ? undefined : `loop-analysis-${key}-reason`}
           onCheckedChange={(checked) => update({ masks: { ...value.masks, [key]: checked === true } })}
         />

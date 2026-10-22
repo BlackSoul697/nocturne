@@ -2,6 +2,7 @@
 <script lang="ts">
   import type { EventCohortDefinition, EventCohortResult } from "$lib/api";
   import { plural } from "$lib/utils/plural";
+  import { bg, bgLabel } from "$lib/utils/formatting";
   import CohortDot from "./CohortDot.svelte";
   import { cohortLabel, formatMetric, metricDefinitions } from "./event-labels.svelte";
 
@@ -67,7 +68,7 @@
               {/if}
               {#if metric.key === "minutesBackToStart"}
                 <span class="block text-xs text-muted-foreground">
-                  {value?.n ?? 0} of {plural(events, ["# event", "# events"])} returned
+                  {value?.n ?? 0} of {plural(events, ["# event", "# events"])} returned to within {bg(20)} {bgLabel()} of the start glucose
                 </span>
               {/if}
               {#if comparison}
@@ -93,7 +94,7 @@
     <p>
       {cohort ? cohortLabel(cohort) : ""}: grams per unit comes only from a meal with no other meal,
       correction or rise in its window. The pump records must also show all the insulin in that window.
-      {plural(r.gramsPerUnitNotIsolated ?? 0, ["# meal had another intake", "# meals had another intake"])};
+      {plural(r.gramsPerUnitNotIsolated ?? 0, ["# meal had another event in its window", "# meals had another event in their window"])};
       {plural(r.gramsPerUnitUncovered ?? 0, [
         "# had too little of its basal recorded",
         "# had too little of their basal recorded",

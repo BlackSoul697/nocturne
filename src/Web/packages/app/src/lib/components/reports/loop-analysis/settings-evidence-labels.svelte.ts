@@ -43,7 +43,7 @@ export function reasonText(reason: SettingsEvidenceConfidenceReason | undefined)
     case SettingsEvidenceConfidenceReason.IsfDependent:
       return {
         why: "The glucose changes were converted with the ISF from the profile, not with an ISF from your data.",
-        raise: "Confidence increases when your data has correction boluses at this time of day, given when glucose was steady and no carbs were logged near them.",
+        raise: "Confidence increases when your data has correction boluses at this time of day. For each bolus, glucose was steady and no carbs were logged near it.",
       };
     case SettingsEvidenceConfidenceReason.BasalDependent:
       return {
@@ -57,18 +57,19 @@ export function reasonText(reason: SettingsEvidenceConfidenceReason | undefined)
       };
     case SettingsEvidenceConfidenceReason.MostNotIsolated:
       return {
-        why: "Most candidates overlapped other meals, boluses or rises. The few that did not overlap are possibly not typical.",
+        why: "Most candidates overlapped other meals, boluses or rises. The few episodes without overlaps can be different from your usual episodes.",
         raise: "Confidence increases when your data has more periods without overlaps.",
       };
     case SettingsEvidenceConfidenceReason.FastingUnverifiable:
       return {
         why: "Carbs are logged on only a few days, so the fasting time comes from glucose only.",
-        raise: "Confidence increases when your data has carbs logged on more days, so that the fasting time can come from meals.",
+        raise: "Confidence increases when your data has carbs logged on more days. Then the report can find fasting time from the carb entries.",
       };
     case SettingsEvidenceConfidenceReason.MoreInsulinOnBorrowedInput:
       return {
+        // "Points to" on purpose: "shows" would claim more than the evidence gives.
         why: "This figure points to more insulin. Part of it depends on something that this block cannot check by itself: another figure, the profile, or the estimate of the insulin curve.",
-        raise: "Confidence increases with evidence from this block only.",
+        raise: "Confidence increases when this block has its own evidence.",
       };
     case SettingsEvidenceConfidenceReason.StillMovingAtEnd:
       return {
@@ -100,7 +101,7 @@ export function unavailableText(
     case SettingsEvidenceUnavailableReason.NoneIsolated:
       return "Every meal in this block overlapped another meal, bolus or rise";
     case SettingsEvidenceUnavailableReason.NoneQualified:
-      return "All candidates were set aside. Open the block to see why.";
+      return "All candidates were set aside. Open the block to see why";
     case SettingsEvidenceUnavailableReason.TooFew:
       return "Too few episodes to show a figure";
     case SettingsEvidenceUnavailableReason.SteepTrend:

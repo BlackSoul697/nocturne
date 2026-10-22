@@ -2,7 +2,7 @@ using Nocturne.Core.Models.LoopAnalysis;
 
 namespace Nocturne.Core.Clinical.LoopAnalysis;
 
-/// <summary>Everything the Meals &amp; events tab is computed from, fetched once for every range it covers.</summary>
+/// <summary>Everything the Meals and events page is computed from, fetched once for every range it covers.</summary>
 /// <remarks>
 /// The series must reach a window past each end of the range, since an anchor near its edge reads
 /// glucose and insulin outside it.
@@ -21,7 +21,7 @@ public sealed record EventResponseInputs
 }
 
 /// <summary>
-/// The Meals &amp; events tab: each cohort's events aligned on their anchors, every series spread
+/// The Meals and events page: each cohort's events aligned on their anchors, every series spread
 /// across events in relative slots, with each event's figures and their spread.
 /// </summary>
 /// <remarks>

@@ -14,7 +14,7 @@ namespace Nocturne.Core.Clinical.LoopAnalysis;
 /// </summary>
 public sealed record PredictionSnapshot(long StartMills, AidAlgorithm Algorithm, double?[]?[] Curves);
 
-/// <summary>Everything the Predictions tab is computed from, fetched once for every range it covers.</summary>
+/// <summary>Everything the Prediction accuracy page is computed from, fetched once for every range it covers.</summary>
 public sealed record PredictionAccuracyInputs
 {
     public required TimeZoneInfo Zone { get; init; }
@@ -67,7 +67,7 @@ public sealed record PredictionAccuracyInputs
 /// horizon is no prediction at all.
 /// </para>
 /// <para>
-/// The tab is read for what the settings a prediction ran on got wrong, so a horizon that a carb
+/// The page is read for what the settings a prediction ran on got wrong, so a horizon that a carb
 /// entry or manual bolus came before (<see cref="IsInterrupted"/>) is counted interrupted and kept
 /// out of every error figure: its reading measures that action, which the prediction could not
 /// have known of.

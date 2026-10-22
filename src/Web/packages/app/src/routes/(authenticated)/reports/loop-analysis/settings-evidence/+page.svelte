@@ -3,7 +3,7 @@
   import { contextResource } from "$lib/hooks/resource-context.svelte";
   import { getLoopAnalysis } from "$lib/components/reports/loop-analysis/loop-analysis-context.svelte";
   import PageBodyLoading from "$lib/components/reports/loop-analysis/PageBodyLoading.svelte";
-  import SettingsEvidenceTab from "$lib/components/reports/loop-analysis/SettingsEvidenceTab.svelte";
+  import SettingsEvidenceBody from "$lib/components/reports/loop-analysis/SettingsEvidenceBody.svelte";
 
   const analysis = getLoopAnalysis();
   const resource = contextResource(() => getSettingsEvidence(analysis.query), { errorTitle: "Cannot load the settings evidence" });
@@ -15,7 +15,7 @@
 </svelte:head>
 
 {#if resource.current}
-  <SettingsEvidenceTab response={resource.current} sensitivityHref={analysis.path("loop-health", "sensitivity")} />
+  <SettingsEvidenceBody response={resource.current} sensitivityHref={analysis.path("loop-health", "sensitivity")} />
 {:else}
   <PageBodyLoading />
 {/if}

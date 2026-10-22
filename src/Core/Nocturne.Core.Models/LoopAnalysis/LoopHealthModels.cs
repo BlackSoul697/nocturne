@@ -2,7 +2,7 @@ using System.Text.Json.Serialization;
 
 namespace Nocturne.Core.Models.LoopAnalysis;
 
-/// <summary>The Loop health tab: the primary range and, when asked for, a comparison range.</summary>
+/// <summary>The Loop health page: the primary range and, when asked for, a comparison range.</summary>
 public class LoopHealthResponse : LoopAnalysisResponse
 {
     public LoopHealthRange Primary { get; set; } = new();

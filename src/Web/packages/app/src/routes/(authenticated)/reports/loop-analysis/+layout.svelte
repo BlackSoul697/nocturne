@@ -14,7 +14,6 @@
   import LoopAnalysisFilterFields from "$lib/components/reports/loop-analysis/LoopAnalysisFilterFields.svelte";
   import { LoopAnalysisState, setLoopAnalysis } from "$lib/components/reports/loop-analysis/loop-analysis-context.svelte";
   import {
-    MASK_KEYS,
     readLoopAnalysisFilter,
     withoutUnavailable,
     writeLoopAnalysisFilter,
@@ -37,33 +36,16 @@
     });
   }
 
-  // The panel shows the filters in force: what the URL sets, else what the API applied by default.
+  // The draft holds what the URL sets and what the viewer changes. A mask it leaves unset shows
+  // the API's default once the envelope answers, and stays out of the URL.
   let draft = $state<LoopAnalysisFilterState>(readLoopAnalysisFilter(new URLSearchParams()));
 
-  function begin() {
-    const applied = analysis.settled?.appliedFilters;
-    const filter = analysis.filter;
-    const masks = { ...filter.masks };
-    for (const key of MASK_KEYS) masks[key] ??= applied?.[key] ?? undefined;
-    draft = { ...filter, profileName: filter.profileName ?? applied?.profileName ?? null, masks };
-  }
-
-  // A filter the URL left out stays out while the draft still holds the API's default for it.
-  async function apply() {
-    const applied = analysis.settled?.appliedFilters;
-    const filter = analysis.filter;
-    const masks = { ...draft.masks };
-    for (const key of MASK_KEYS) {
-      if (filter.masks[key] == null && masks[key] === (applied?.[key] ?? undefined)) delete masks[key];
-    }
-    const profileName =
-      filter.profileName == null && draft.profileName === (applied?.profileName ?? null) ? null : draft.profileName;
-    await navigate({ ...draft, profileName, masks });
-  }
-
-  const reset = () => navigate(readLoopAnalysisFilter(new URLSearchParams()));
-
-  useReportFilters({ fields, begin, apply, reset });
+  useReportFilters({
+    fields,
+    begin: () => (draft = analysis.filter),
+    apply: (search) => writeLoopAnalysisFilter(draft, search),
+    reset: (search) => writeLoopAnalysisFilter(readLoopAnalysisFilter(new URLSearchParams()), search),
+  });
 
   // A shared link may carry a filter this viewer cannot use. Once the API has said which those
   // are, they leave the URL, and so the request, rather than standing as an ignored filter.
@@ -85,6 +67,7 @@
   <LoopAnalysisFilterFields
     value={draft}
     onchange={(next) => (draft = next)}
+    applied={analysis.settled?.appliedFilters}
     unavailable={analysis.envelope?.unavailableFilters}
     profileNames={analysis.envelope?.profileNames ?? []}
     clamped={analysis.clamped}

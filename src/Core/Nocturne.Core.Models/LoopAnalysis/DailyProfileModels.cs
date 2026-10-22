@@ -22,7 +22,7 @@ public class LoopAnalysisAggregate
     public bool Sparse { get; set; }
 }
 
-/// <summary>The Daily profile tab: the primary range and, when asked for, a comparison range.</summary>
+/// <summary>The Daily profile page: the primary range and, when asked for, a comparison range.</summary>
 public class DailyProfileResponse : LoopAnalysisResponse
 {
     public DailyProfileRange Primary { get; set; } = new();

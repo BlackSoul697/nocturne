@@ -108,6 +108,7 @@
     {#if figure.towardsMoreInsulin}
       <p class="flex items-start gap-2 rounded-md border border-info/40 bg-info/10 px-3 py-2">
         <Stethoscope class="mt-0.5 size-4 shrink-0 text-info" aria-hidden="true" />
+        <!-- "Points to" on purpose: "shows" would claim more than the evidence gives. -->
         <span>
           Your data points to more insulin here than your profile gives. This is an observation, not
           a setting to copy. Usually, settings are changed in small steps, one at a time, with your
@@ -170,7 +171,7 @@
               <tr class="border-b text-muted-foreground">
                 <th scope="col" class="px-2 py-1.5 text-left font-medium">When</th>
                 {#each columns as column (column.label)}
-                  <th scope="col" class={["px-2 py-1.5 text-right font-medium whitespace-nowrap", column.wide && "hidden @lg:table-cell"]}>
+                  <th scope="col" class={["px-2 py-1.5 text-right align-bottom font-medium", column.wide && "hidden @lg:table-cell"]}>
                     {#if column.hint}
                       <Tooltip.Root>
                         <Tooltip.Trigger class="inline-flex items-center gap-1">
@@ -194,7 +195,7 @@
                     {formatWeekdayDate(startOfDay(episode.date ?? ""))}, {localTime(episode.time)}
                   </th>
                   {#each columns as column (column.label)}
-                    <td class={["px-2 py-1 text-right", column.wide && "hidden @lg:table-cell"]}>{column.value(episode)}</td>
+                    <td class={["px-2 py-1 text-right whitespace-nowrap", column.wide && "hidden @lg:table-cell"]}>{column.value(episode)}</td>
                   {/each}
                   <td class="px-2 py-1 text-right">
                     <a

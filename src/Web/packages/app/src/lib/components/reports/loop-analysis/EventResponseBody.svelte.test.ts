@@ -2,7 +2,7 @@ import { render } from "vitest-browser-svelte";
 import { page, userEvent } from "vitest/browser";
 import { describe, expect, it } from "vitest";
 import { LoopAnalysisSeries, TimeZoneUnavailableReason } from "$lib/api";
-import EventResponseTab from "./EventResponseTab.svelte";
+import EventResponseBody from "./EventResponseBody.svelte";
 import { eventResponse, TREATMENT_SERIES } from "./event-response.test-fixtures";
 import { time } from "$lib/utils/formatting";
 import { atMinute } from "./daily-profile-view";
@@ -25,9 +25,9 @@ function focusSlider(name: string) {
   return slider;
 }
 
-describe("EventResponseTab", () => {
+describe("EventResponseBody", () => {
   it("stacks every series on the shared axis of minutes from the event", async () => {
-    render(EventResponseTab, { props: { response: eventResponse() } });
+    render(EventResponseBody, { props: { response: eventResponse() } });
 
     for (const title of PANELS)
       await expect.element(page.getByRole("slider", { name: title, exact: true })).toBeVisible();
@@ -39,7 +39,7 @@ describe("EventResponseTab", () => {
   });
 
   it("names every cohort by its number and filters, not by colour alone", async () => {
-    render(EventResponseTab, { props: { response: eventResponse() } });
+    render(EventResponseBody, { props: { response: eventResponse() } });
 
     await expect.element(page.getByRole("list", { name: "Cohorts" })).toHaveTextContent(MEALS);
     await expect.element(page.getByRole("columnheader", { name: new RegExp(MEALS) })).toBeVisible();
@@ -48,7 +48,7 @@ describe("EventResponseTab", () => {
   });
 
   it("is one tab stop, and reads each cohort's median and n at the slot", async () => {
-    render(EventResponseTab, { props: { response: eventResponse() } });
+    render(EventResponseBody, { props: { response: eventResponse() } });
 
     const sliders = page.getByRole("slider").elements();
     expect(sliders.filter((s) => s.getAttribute("tabindex") === "0")).toHaveLength(1);
@@ -69,7 +69,7 @@ describe("EventResponseTab", () => {
   });
 
   it("lists the events behind a picked slot, each opening Day in Review", async () => {
-    render(EventResponseTab, { props: { response: eventResponse() } });
+    render(EventResponseBody, { props: { response: eventResponse() } });
 
     focusSlider("Glucose");
     await userEvent.keyboard("{Shift>}{ArrowRight}{/Shift}{Enter}");
@@ -86,15 +86,15 @@ describe("EventResponseTab", () => {
   });
 
   it("compares each cohort's figures side by side, with how many came back and why grams per unit is missing", async () => {
-    render(EventResponseTab, { props: { response: eventResponse({ comparison: true }) } });
+    render(EventResponseBody, { props: { response: eventResponse({ comparison: true }) } });
 
     await expect.element(page.getByText("The charts show the comparison range as dashed outlines in the colour of each cohort.")).toBeVisible();
     await expect.element(page.getByRole("rowheader", { name: "Observed grams per unit" })).toBeVisible();
     await expect.element(page.getByText("9.5 g/U").first()).toBeVisible();
     await expect.element(page.getByText(/Compared 9.5 g\/U/).first()).toBeVisible();
-    await expect.element(page.getByText("8 of 12 events returned")).toBeVisible();
+    await expect.element(page.getByText("8 of 12 events returned to within 20 mg/dL of the start glucose")).toBeVisible();
     const note = page.getByText(/grams per unit comes only from a meal/);
-    await expect.element(note).toHaveTextContent(/2 meals had another intake;\s*3 had too little of their basal recorded;\s*1 had no insulin above schedule/);
+    await expect.element(note).toHaveTextContent(/2 meals had another event in their window;\s*3 had too little of their basal recorded;\s*1 had no insulin above schedule/);
 
     const links = page.getByRole("link", { name: /in Day in Review/ }).elements();
     expect(links).toHaveLength(3);
@@ -102,7 +102,7 @@ describe("EventResponseTab", () => {
   });
 
   it("sorts the event list by a figure", async () => {
-    render(EventResponseTab, { props: { response: eventResponse() } });
+    render(EventResponseBody, { props: { response: eventResponse() } });
 
     await page.getByRole("button", { name: "Peak rise" }).click();
     const firstRow = () => page.getByRole("link", { name: /in Day in Review/ }).elements()[0].getAttribute("href");
@@ -113,7 +113,7 @@ describe("EventResponseTab", () => {
   });
 
   it("hides the event list and every treatment series and figure the caller cannot read", async () => {
-    render(EventResponseTab, { props: { response: eventResponse({ withheld: TREATMENT_SERIES }) } });
+    render(EventResponseBody, { props: { response: eventResponse({ withheld: TREATMENT_SERIES }) } });
 
     await expect.element(page.getByRole("slider", { name: "Glucose", exact: true })).toBeVisible();
     expect(page.getByRole("slider", { name: "Insulin on board" }).elements()).toHaveLength(0);
@@ -128,7 +128,7 @@ describe("EventResponseTab", () => {
   it("shows the comparison when only it has events", async () => {
     const response = eventResponse({ comparison: true });
     for (const c of response.primary?.cohorts ?? []) c.events = 0;
-    render(EventResponseTab, { props: { response } });
+    render(EventResponseBody, { props: { response } });
 
     await expect.element(page.getByRole("slider", { name: "Glucose", exact: true })).toBeVisible();
     await expect.element(page.getByText("(compared 12)")).toBeVisible();
@@ -137,7 +137,7 @@ describe("EventResponseTab", () => {
   it("explains a missing time zone in place of the curves", async () => {
     const response = eventResponse();
     response.timeZoneUnavailableReason = TimeZoneUnavailableReason.NotConfigured;
-    render(EventResponseTab, { props: { response } });
+    render(EventResponseBody, { props: { response } });
 
     await expect.element(page.getByText("This report needs a time zone")).toBeVisible();
     expect(page.getByRole("slider").elements()).toHaveLength(0);
@@ -146,7 +146,7 @@ describe("EventResponseTab", () => {
   it("says when only the last 24 hours are included, and which choices were ignored", async () => {
     const response = eventResponse({ historyClamped: true });
     response.ignoredFilters = ["startDate", "anchor2", "isolatedOnly"];
-    render(EventResponseTab, { props: { response } });
+    render(EventResponseBody, { props: { response } });
 
     await expect.element(page.getByText("Only the last 24 hours are included")).toBeVisible();
     await expect.element(page.getByText(/Cohort 2, Isolated events only\./)).toBeVisible();
@@ -155,7 +155,7 @@ describe("EventResponseTab", () => {
   it("says so when no cohort is left to align, as without glucose", async () => {
     const response = eventResponse({ withheld: [LoopAnalysisSeries.EventGlucose] });
     response.definition = { ...response.definition, cohorts: [] };
-    render(EventResponseTab, { props: { response } });
+    render(EventResponseBody, { props: { response } });
 
     await expect.element(page.getByText("No events to align")).toBeVisible();
     expect(page.getByRole("slider").elements()).toHaveLength(0);

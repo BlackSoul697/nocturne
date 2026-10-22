@@ -14,7 +14,7 @@ using OpenApi.Remote.Attributes;
 namespace Nocturne.API.Controllers.V4.Analytics;
 
 /// <summary>
-/// The Loop Analysis report: every tab is computed server-side from one fetch per request and
+/// The Loop Analysis report: every page is computed server-side from one fetch per request and
 /// returned as <c>{ primary, comparison? }</c> inside the <see cref="LoopAnalysisResponse"/>
 /// envelope.
 /// </summary>
@@ -110,7 +110,7 @@ public class LoopAnalysisController(
     /// observations, never instructions.
     /// </summary>
     /// <remarks>
-    /// The tab is withheld whole, with nothing computed, <c>primary</c> and <c>comparison</c> null
+    /// The page is withheld whole, with nothing computed, <c>primary</c> and <c>comparison</c> null
     /// and the reason in <c>withheldReason</c>: without glucose.read, treatments.read and
     /// therapy.read, since every figure reads all three (and <c>withheldSeries</c> then holds
     /// <c>SettingsEvidence</c>), and for a history-clamped caller, since every rule looks back hours
@@ -215,7 +215,7 @@ public class LoopAnalysisController(
     }
 
     /// <summary>
-    /// Resolves <paramref name="query"/>, computes the tab when the tenant has a zone, fills the
+    /// Resolves <paramref name="query"/>, computes the page when the tenant has a zone, fills the
     /// envelope and narrows the result to the caller.
     /// </summary>
     private async Task<ActionResult<T>> ServeAsync<T>(

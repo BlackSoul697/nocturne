@@ -243,19 +243,38 @@ describe("Loop Analysis pages", () => {
     await expect.element(page.getByLabelText("Overrides")).not.toBeChecked();
   });
 
+  it("holds the masks the URL leaves unset until the envelope says what they default to", async () => {
+    stale = true;
+    await open("daily-profile", "?excludeExercise=true");
+    await page.getByRole("button", { name: "Open filters" }).click();
+
+    await expect.element(page.getByLabelText("Exercise")).toBeChecked();
+    await expect.element(page.getByLabelText("Exercise")).toBeEnabled();
+    await expect.element(page.getByLabelText("Illness")).toBeDisabled();
+    await expect.element(page.getByRole("group", { name: "Exclude the time of" })).toHaveAttribute("aria-busy", "true");
+  });
+
+  it("links the pages the viewer can load from a page it cannot list", async () => {
+    await open("settings-evidence", "?days=14", {
+      effectivePermissions: ["glucose.read", "treatments.read", "devices.read", "reports.read"],
+    });
+
+    await expect.element(switcher().getByRole("link", { name: "Loop health" })).toBeVisible();
+    expect(switcher().getByRole("link", { name: "Settings evidence" }).elements()).toHaveLength(0);
+  });
+
   it("writes the panel's filters into this page's URL, leaving out an untouched default", async () => {
     await open("prediction-accuracy", "?days=14&isDefault=false&weekdays=6");
     await page.getByRole("button", { name: "Open filters" }).click();
     await page.getByLabelText("Overrides").click();
     await page.getByRole("button", { name: "Apply filters" }).click();
 
-    const { url, options } = lastGoto();
+    const { url } = lastGoto();
     expect(url.pathname).toBe("/reports/loop-analysis/prediction-accuracy");
     expect(url.searchParams.get("excludeOverrides")).toBe("true");
     expect(url.searchParams.has("excludeIllness")).toBe(false);
     expect(url.searchParams.get("days")).toBe("14");
     expect(url.searchParams.get("weekdays")).toBe("6");
-    expect(options).toMatchObject({ replaceState: true });
   });
 
   it("clears every Loop Analysis filter on Reset and keeps the range", async () => {

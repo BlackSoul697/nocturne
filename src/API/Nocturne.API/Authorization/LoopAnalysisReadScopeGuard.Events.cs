@@ -4,7 +4,7 @@ using Nocturne.Core.Models.LoopAnalysis;
 namespace Nocturne.API.Authorization;
 
 /// <summary>
-/// The Meals &amp; events tab. An anchor is drawn from a category as a series is: meals, correction
+/// The Meals and events page. An anchor is drawn from a category as a series is: meals, correction
 /// boluses and the starts of exercise, overrides and temporary targets are treatments, sensor
 /// starts are devices, and an unannounced rise is read off glucose and the carbs and loop
 /// correction around it. Every event is also read off glucose, since one counts only with a start

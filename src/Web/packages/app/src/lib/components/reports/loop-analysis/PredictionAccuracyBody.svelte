@@ -1,6 +1,6 @@
 <!--
-  The Predictions tab: how far each curve the loop predicted with landed from the readings that
-  followed, by horizon, by hour of day and by context. Every figure is the API's; the tab picks the
+  The Prediction accuracy page body: how far each curve the loop predicted with landed from the readings that
+  followed, by horizon, by hour of day and by context. Every figure is the API's; the body picks the
   axis, the curve shown in the detail, and lays the panels out.
 -->
 <script lang="ts">
@@ -201,12 +201,12 @@
               {#if has(PredictionCurve.Uam)}
                 <li>
                   oref gives its unannounced meal (UAM) curve only when glucose increases faster than
-                  insulin alone predicts. Thus the report measures UAM accuracy only during that time.
+                  insulin alone predicts. So the report measures UAM accuracy only during that time.
                 </li>
               {/if}
               {#if has(PredictionCurve.ZeroTemp)}
                 <li>
-                  oref stops its zero-temp curve where the curve goes up above the target. Thus its
+                  oref stops its zero-temp curve where the curve goes up above the target. So its
                   long horizons come only from predictions that stayed low.
                 </li>
               {/if}
@@ -304,7 +304,7 @@
                   The context of a prediction is what occurred in the three hours before it.
                   {#if (detail.contexts ?? []).includes(PredictionContext.Adjusted)}
                     Override, temp target or exercise includes low "eating soon" temporary targets.
-                    Thus some predictions made just before a meal are in that context, not in After a
+                    So some predictions made just before a meal are in that context, not in After a
                     meal.
                   {/if}
                   {#if anyInterrupted}

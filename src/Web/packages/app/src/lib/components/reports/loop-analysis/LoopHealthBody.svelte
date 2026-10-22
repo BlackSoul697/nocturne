@@ -1,5 +1,5 @@
 <!--
-  The Loop health tab: how the loop ran, as the API measured it, in tiles for the range and strips
+  The Loop health page body: how the loop ran, as the API measured it, in tiles for the range and strips
   for each hour of the day, with the gaps it found listed and linked to Day in Review. A figure the
   API could not measure reads as unknown, never as zero.
 -->
@@ -199,7 +199,7 @@
         note: noted(
           value == null
             ? "The delivery is not known for this range"
-            : `Percent of the time with known delivery when the loop set basal to zero. Suspended ${maybePct(zero?.suspended?.percent)}, manual zero temps ${maybePct(zero?.manualZeroTemp?.percent)}`,
+            : `Percent of the time with known delivery when basal delivery was zero. Suspended ${maybePct(zero?.suspended?.percent)}, manual zero temps ${maybePct(zero?.manualZeroTemp?.percent)}`,
           maybeComparedPct(comparison?.zeroDelivery?.algorithmZeroTemp?.percent)
         ),
       });
@@ -230,7 +230,7 @@
         shareFigure(
           "At max IOB",
           (r) => r?.atMaxIob,
-          "Percent of the loop time with a recorded reason when the loop gave less insulin than it wanted, because insulin on board (IOB) was at or near max IOB"
+          "Percent of the loop time with a recorded reason when max IOB limited the dose. Then the loop gave less insulin than it wanted. Insulin on board (IOB) was at or near max IOB."
         )
       );
 
@@ -567,7 +567,7 @@
             slotHeading={false}
             id="sensitivity"
             title="Sensitivity ratio by hour"
-            unit="Autosens or dynamic ISF. Above 1 means that more insulin is necessary."
+            unit="Autosens or dynamic ISF. Above 1 means that the loop calculated a need for more insulin."
             {cursor}
             yDomain={sensitivityDomain}
             yFormat={sensitivityTick}

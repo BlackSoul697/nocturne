@@ -4,7 +4,7 @@ using Nocturne.Core.Models.LoopAnalysis;
 
 namespace Nocturne.Core.Clinical.LoopAnalysis;
 
-/// <summary>Everything the Settings evidence tab is computed from, fetched once for every range it covers.</summary>
+/// <summary>Everything the Settings evidence page is computed from, fetched once for every range it covers.</summary>
 /// <remarks>
 /// The series must reach past each end of the range: a basal block looks back
 /// <see cref="ObservedBasalNeed.CarbFreeMs"/> for carbs, a climb's own length before that, and
@@ -24,7 +24,7 @@ public sealed record SettingsEvidenceInputs
 }
 
 /// <summary>
-/// The Settings evidence tab: the basal, ISF and carb ratio the user's own data shows, beside the
+/// The Settings evidence page: the basal, ISF and carb ratio the user's own data shows, beside the
 /// profile's. Each is an observation with its n, spread, confidence, rejections and episodes, never
 /// an instruction.
 /// </summary>
@@ -377,7 +377,7 @@ internal sealed class SettingsEvidenceContext
 
     /// <summary>
     /// Every intake or dose that keeps an episode around it from being isolated, sorted: the
-    /// meals, correction boluses and meal-like climbs, announced or not, the Meals &amp; events tab
+    /// meals, correction boluses and meal-like climbs, announced or not, the Meals and events page
     /// isolates its events by (<see cref="EventAnchors.IsIsolated"/>).
     /// </summary>
     public IReadOnlyList<long> Isolating => _isolating ??=
