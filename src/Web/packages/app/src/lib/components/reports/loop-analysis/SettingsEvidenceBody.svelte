@@ -28,7 +28,8 @@
   import Stethoscope from "@lucide/svelte/icons/stethoscope";
   import TimeOfDayPanel from "./TimeOfDayPanel.svelte";
   import StripKey, { type StripKeyItem } from "./StripKey.svelte";
-  import NoTimeZone from "./NoTimeZone.svelte";
+  import NoTimeZone from "$lib/components/reports/NoTimeZone.svelte";
+  import { loopAnalysisTimeZoneNeed } from "./time-zone-need.svelte";
   import IgnoredFiltersNotice from "./IgnoredFiltersNotice.svelte";
   import SettingsEvidenceMarks from "./SettingsEvidenceMarks.svelte";
   import SettingsEvidenceBlock from "./SettingsEvidenceBlock.svelte";
@@ -211,7 +212,7 @@
 </script>
 
 {#if response.timeZoneUnavailableReason}
-  <NoTimeZone reason={response.timeZoneUnavailableReason} />
+  <NoTimeZone reason={response.timeZoneUnavailableReason}>{loopAnalysisTimeZoneNeed()}</NoTimeZone>
 {:else}
   <div class="space-y-6">
     <Alert.Root variant="info">

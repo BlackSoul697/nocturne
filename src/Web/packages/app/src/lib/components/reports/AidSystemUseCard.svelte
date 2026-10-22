@@ -28,7 +28,7 @@
     {#if metrics?.timeZoneUnavailableReason}
       <p class="mb-4 text-sm text-muted-foreground">
         <TimeZoneNote reason={metrics.timeZoneUnavailableReason}>
-          so this report counts device use on UTC days.
+          This report counts device use on UTC days.
         </TimeZoneNote>
       </p>
     {/if}

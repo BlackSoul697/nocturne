@@ -40,7 +40,8 @@
   import SlotDays from "./SlotDays.svelte";
   import { TimeOfDayCursor } from "./time-of-day-cursor.svelte";
   import { atMinute, axisEnd } from "./daily-profile-view";
-  import NoTimeZone from "./NoTimeZone.svelte";
+  import NoTimeZone from "$lib/components/reports/NoTimeZone.svelte";
+  import { loopAnalysisTimeZoneNeed } from "./time-zone-need.svelte";
   import IgnoredFiltersNotice from "./IgnoredFiltersNotice.svelte";
 
   interface Props {
@@ -282,7 +283,7 @@
 {/snippet}
 
 {#if response.timeZoneUnavailableReason}
-  <NoTimeZone reason={response.timeZoneUnavailableReason} />
+  <NoTimeZone reason={response.timeZoneUnavailableReason}>{loopAnalysisTimeZoneNeed()}</NoTimeZone>
 {:else}
   <div class="space-y-6">
     {#if response.historyClamped}
