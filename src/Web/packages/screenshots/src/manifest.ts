@@ -478,6 +478,45 @@ export const definitions: ScreenshotDefinition[] = [
 		alt: 'The Ambulatory Glucose Profile report. It stacks every day of the chosen date range onto one 24-hour graph, drawing a middle line with shaded bands around it, and lists the share of time spent in each glucose range beside it.',
 	},
 	{
+		id: 'loop-analysis-filter-bar',
+		route: '/reports/loop-analysis?days=7',
+		scenario: 'patient',
+		clip: '[data-testid="loop-analysis-filter-bar"]',
+		alt: 'The Loop Analysis filter bar. It shows the date range being analysed, a choice of period to compare it with, a profile picker, buttons for the days of the week to include, and checkboxes to leave out time spent in overrides, temporary targets, exercise, illness and open loop.',
+	},
+	{
+		id: 'loop-analysis-daily-profile',
+		route: '/reports/loop-analysis?days=7',
+		scenario: 'patient',
+		clip: '[data-testid="loop-analysis-daily-profile"]',
+		// Seeded data: the figures move every capture.
+		alt: 'The Daily profile tab. A row of tiles sums up the range: days with data, total insulin a day, the basal and bolus split, automatic against manual boluses, delivered against scheduled basal, and net loop correction. Under it a stack of charts shares one time-of-day axis: glucose with its shaded bands and the target range, scheduled and delivered basal, net loop correction, insulin and carbs on board, and the manual boluses and carbs given at each time of day.',
+	},
+	{
+		id: 'loop-analysis-meals-events',
+		route: '/reports/loop-analysis?days=7&tab=meals-events',
+		scenario: 'patient',
+		clip: '[data-testid="loop-analysis-meals-events"]',
+		// Seeded data: the figures move every capture.
+		alt: 'The Meals and events tab. The builder at the top picks the events to line up, here meals, with the time before and after each to show. Below it, charts line every meal up at the moment it was eaten and show what followed: the change in glucose, glucose itself, the correction the loop added, insulin above schedule since the meal, and insulin and carbs on board. A table then gives the typical figures after each meal, and a list names every meal behind them.',
+	},
+	{
+		id: 'loop-analysis-predictions',
+		route: '/reports/loop-analysis?days=7&tab=predictions',
+		scenario: 'patient',
+		clip: '[data-testid="loop-analysis-predictions"]',
+		// Seeded data: the figures move every capture.
+		alt: 'The Predictions tab. Tiles give how many predictions were checked and which system made them, and a note explains how to read the figures. A chart then shows, for each curve the loop predicted with, how far its predictions landed from the readings that followed at 30, 60, 90 and 120 minutes ahead, with a heat map of that error by hour of the day and a table of it by context.',
+	},
+	{
+		id: 'loop-analysis-loop-health',
+		route: '/reports/loop-analysis?days=7&tab=loop-health',
+		scenario: 'patient',
+		clip: '[data-testid="loop-analysis-loop-health"]',
+		// Seeded data: the figures move every capture.
+		alt: 'The Loop health tab. Tiles sum up how the loop ran: time in closed loop, CGM and pump activity, gaps between loop cycles, time missing from the pump records, zero temps, time at maximum basal and maximum IOB, automatic boluses a day, suggestions not carried out, and the limits the loop reported. Bar charts then show the closed-loop, CGM, pump, zero-temp and maximum-basal shares by hour of the day, with the sensitivity ratio below them and a list of the longest gaps.',
+	},
+	{
 		id: 'sharing-settings',
 		route: '/settings/members',
 		scenario: 'patient',

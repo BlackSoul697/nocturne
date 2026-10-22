@@ -1,0 +1,459 @@
+---
+title: Loop Analysis
+---
+
+<script>
+  import Callout from '@nocturne/cms/components/Callout.svelte';
+</script>
+
+# Loop Analysis
+
+If you use an automated insulin delivery system (Loop, AAPS, Trio, iAPS or
+OpenAPS), it makes small changes to your insulin all day long. **Loop Analysis**
+shows you what those changes were, when they happened, and what followed. It
+answers questions like _"does my loop always add insulin at 3 in the morning?"_,
+_"what does my glucose do after breakfast?"_ and _"how often does the loop stop
+running?"_
+
+You'll find it under **Reports > Loop Analysis**. Only members of your account
+can open it; it is not available on a public share link.
+
+<Callout type="warning" title="Observations, not advice">
+
+  Everything in Loop Analysis is an observation of what happened in your own
+  data, with the number of days or events behind it. None of it is an
+  instruction. Talk to your diabetes care team before you change any setting.
+
+</Callout>
+
+## The filter bar
+
+Every tab shares the filter bar at the top, so you can switch tabs without
+losing your choices.
+
+<!-- Screenshot pending, declared in the screenshots manifest: loop-analysis-filter-bar -->
+
+- **Range**: the dates being analysed, up to 90 days. A longer range is
+  shortened to 90 days, and the bar says so.
+- **Compare with**: a second period to draw alongside the first, either the
+  period just before it or dates you pick. The comparison is drawn as dashed
+  outlines over each chart, and each figure shows the compared value beside it.
+- **Profile**: limit the analysis to the time a particular profile was active.
+- **Days**: leave out days of the week, for example to look at weekdays only.
+- **Exclude**: leave out the time you spent in an override, a temporary target,
+  exercise, illness, or with the loop open (not running automatically). Illness
+  and open loop are left out by default. Only that time is removed, not the
+  whole day it fell on.
+
+Times that your data marks as unreliable, such as compression lows (a false low
+when you lie on your sensor) and sensor errors, are always left out of glucose.
+
+## The tabs
+
+| Tab | The question it answers |
+|-----|-------------------------|
+| **Daily profile** | What does a typical day look like, hour by hour? Where does the loop add or take away insulin? |
+| **Meals & events** | What happens after a meal, a correction, a rise you didn't log, or the start of exercise or a new sensor? |
+| **Predictions** | How close do the loop's predictions come to what actually happened? |
+| **Loop health** | How much of the time was the loop running, and how often did it hit its limits? |
+| **Settings evidence** | What do your own data suggest about your basal rates, correction factor and carb ratio? |
+
+## Net loop correction
+
+The headline figure on several tabs is **net loop correction**: the extra
+insulin your loop gave, or held back, on top of your scheduled basal. It adds up
+two things the algorithm decides:
+
+- **Temp basals the algorithm set**, measured against your scheduled basal. A
+  temp above schedule adds insulin; a temp below it (including a zero temp)
+  takes insulin away.
+- **Automatic boluses** (SMBs in AAPS, Trio and OpenAPS, or Loop's automatic
+  boluses).
+
+Automatic boluses are included because many systems do most of their correcting
+with them. Leaving them out, as older tools did, would show only part of what
+the loop does.
+
+Some things are deliberately kept **out** of net loop correction and shown on
+their own, because they are not the algorithm's decisions:
+
+- temp basals you set by hand;
+- pump suspends;
+- boluses you gave yourself.
+
+Trio, AAPS and OpenAPS don't label whether a temp basal came from the loop or
+from you. Nocturne checks each temp against the decisions your loop uploaded
+around it. A temp the loop asked for counts as the algorithm's. A temp the loop's
+decisions show it didn't ask for counts as manual. A temp with no loop decisions
+uploaded near it stays counted as the algorithm's, since that's what these
+systems almost always do.
+
+## Reading the charts
+
+Most charts in Loop Analysis show a shaded band rather than a single line.
+
+- The **line** in the middle is the median: half your days (or readings) were
+  above it and half below.
+- The **darker band** covers the middle half (25th to 75th percentile).
+- The **lighter band** covers most of your data (10th to 90th percentile).
+- **n** is how many days, readings or events a figure is based on.
+
+Two kinds of figure are measured slightly differently:
+
+- **Glucose** pools every reading from every day into each five-minute slot,
+  the same way the AGP report does, so the bands agree with AGP. Its n counts
+  readings.
+- **Rates** (basal, net loop correction, insulin on board and carbs on board)
+  are worked out for each day first and then compared across days. Their n
+  counts days. A day only counts in a slot when at least half of that slot has
+  data.
+
+A figure based on **fewer than 5 days** is drawn faded and marked as sparse:
+there isn't enough behind it to read it as a pattern.
+
+Missing data is shown as missing, never as zero. A zero temp is a real zero and
+always counts.
+
+### When parts are hidden
+
+If someone has shared your data with limited access, some parts of the report
+may say **"Hidden: your access does not include this data"**. Each part needs
+access to the kind of data it is drawn from: glucose, treatments (insulin and
+carbs), devices (what the loop and pump recorded) or therapy settings (your
+profile). Filters you can't use are greyed out, with the access they need.
+
+Someone who can see only the **last 24 hours** sees that, whatever dates they
+pick, with no comparison. The report tells them so.
+
+## Daily profile
+
+<!-- Screenshot pending, declared in the screenshots manifest: loop-analysis-daily-profile -->
+
+The Daily profile lays your days on top of each other, in five-minute slots of
+the local day, so patterns by time of day stand out. From top to bottom:
+
+- **Glucose**, with your target range behind it.
+- **Basal**: what your schedule asked for and what was actually delivered.
+- **Net loop correction**: what the loop added or took away, with its spread.
+  The hourly chart underneath sums it by hour.
+- **Insulin on board** and **carbs on board**.
+- **Manual boluses** and **carbs**, showing how often and how much at each time
+  of day.
+
+The tiles across the top give the totals: insulin per day, the basal and bolus
+split, automatic against manual boluses, delivered against scheduled basal, and
+net loop correction per day. Daily totals use only days with at least 90% of the
+day covered by delivery records, and are never scaled up from partial days.
+
+Click a slot, or press Enter on it, to list the days behind it. Each day links
+to **Day in Review** at that time.
+
+## Meals & events
+
+<!-- Screenshot pending, declared in the screenshots manifest: loop-analysis-meals-events -->
+
+This tab lines up every event of a kind at the moment it happened, then shows
+what followed: the change in glucose, glucose itself, the loop's correction,
+insulin above your schedule since the event, and insulin and carbs on board.
+You can compare up to three kinds of event at once.
+
+### The events you can pick
+
+- **Meals**: a carb entry. Entries at the same moment count as one meal.
+- **Correction boluses**: a bolus you gave with no carbs logged within 30
+  minutes either side.
+- **Unannounced rises**: a rise in glucose that looks like a meal but has no
+  carbs logged. See below.
+- **Sensor starts**, and the start of **exercise**, an **override** or a
+  **temporary target**.
+
+You choose how long before and after each event to show (by default an hour
+before and five hours after), and can limit an event kind to a time of day or,
+for meals, a range of grams.
+
+### How an unannounced rise is found
+
+Nocturne looks for a pattern that a meal would make:
+
+1. **A stable floor.** Glucose holds steady for at least 30 minutes, moving no
+   more than 20 mg/dL (1.1 mmol/L), at 70 mg/dL (3.9 mmol/L) or above.
+2. **A climb.** From there, glucose rises at least 40 mg/dL (2.2 mmol/L) within
+   45 minutes without dropping back.
+3. **Not a sensor artefact.** A climb faster than 5 mg/dL (0.3 mmol/L) a minute,
+   or a single jump of 30 mg/dL (1.7 mmol/L) or more, is set aside as noise. So
+   is the shape of a **compression recovery**: a sharp drop onto the floor
+   followed by a climb straight back to where glucose was, which is what
+   lying on your sensor looks like.
+4. **Not logged.** A rise with carbs logged in the three hours before it, or
+   with carbs still on board, isn't unannounced.
+
+Optionally, you can ask for **only rises the loop answered**: rises where the
+loop added at least half an hour of your usual basal (and at least 0.2 U) in the
+45 minutes after the rise began. This filters out rises your loop didn't treat
+as real.
+
+### Isolated events
+
+An event is **isolated** when no other meal, correction or meal-like rise
+happens in its window. Tick **Isolated events only** to keep just those. Without
+it, the curves after a meal may also include the next snack.
+
+The **observed grams per unit** (how many grams of carbs each unit of insulin
+covered) is shown only for isolated meals. For a meal that overlaps another, the
+insulin in the window wasn't for that meal alone, so dividing its grams by it
+would mislead. It also needs delivery records for at least 90% of the window.
+
+## Predictions
+
+<!-- Screenshot pending, declared in the screenshots manifest: loop-analysis-predictions -->
+
+Your loop predicts where your glucose is heading, and decides what to do based
+on that. This tab checks those predictions against the readings that actually
+followed, at 30, 60, 90 and 120 minutes ahead.
+
+- **Bias** is the average of _predicted minus actual_. A positive bias means
+  the predictions ran high; a negative one, that they ran low.
+- **MAE** (mean absolute error) is how far off the predictions were on average,
+  whichever direction.
+- **n** is how many predictions were checked.
+
+A prediction is only paired with a reading within 2.5 minutes of the time it
+predicted; with none that close, it's counted as unmatched rather than guessed.
+
+### Why only 30 and 60 minutes matter for settings
+
+A prediction assumes nothing else will happen. But the loop keeps acting after
+it makes a prediction: by two hours later, glucose reflects all of that too. So
+only the **30 and 60 minute bias** says something about your settings. A
+consistent bias there, for example predictions that always run high after
+meals, is worth raising with your care team. The longer horizons are shown for
+interest.
+
+### Interrupted predictions
+
+If you ate or gave a bolus after a prediction was made but before the time it
+predicted, the prediction couldn't have known about it. Those horizons are
+counted as **interrupted** and left out of every figure.
+
+### Curves and contexts
+
+Loop makes one prediction. AAPS, Trio, iAPS and OpenAPS make several, each
+assuming something different: **IOB** (insulin only), **zero temp** (if basal
+stopped), **COB** (carbs absorbing as entered) and **UAM** (unannounced meal,
+from the rise in glucose). Each curve is checked in the situations the algorithm
+uses it in, such as after a meal, after a correction, or fasting.
+
+Two curves come with a built-in bias in which predictions get checked:
+
+- **UAM** is only made while glucose is rising faster than insulin alone
+  explains, so its accuracy is only measured during rises.
+- **Zero temp** is cut short where it turns back up above target, so its long
+  horizons come only from predictions that stayed low.
+
+If your access doesn't include treatments, the curves that are read only after
+meals or corrections are hidden, and the tab names them.
+
+## Loop health
+
+<!-- Screenshot pending, declared in the screenshots manifest: loop-analysis-loop-health -->
+
+Loop health shows how steadily your loop ran. Each tile is a share of the time
+being analysed, and the charts break it down by hour of the day.
+
+| Tile | What it means |
+|------|---------------|
+| **Closed loop** | Time the loop was in control. |
+| **CGM active** | Time your sensor was sending readings. |
+| **Pump active** | Time the loop was talking to the pump. |
+| **Loop gaps** | Stretches of more than 15 minutes between two loop cycles. |
+| **Unrecorded delivery** | Time the loop was running but the pump's records don't say what it delivered. |
+| **Algorithm zero temps** | Time the loop set basal to zero, as a share of the time delivery is known. Suspends and manual zero temps are shown separately. |
+| **At max basal** | Time the loop's temp basals were at the highest rate it was allowed. |
+| **At max IOB** | Time the loop held back because insulin on board had reached its limit (AAPS, Trio, OpenAPS). |
+| **Automatic boluses a day** | How many, and how big. |
+| **Suggested, not enacted** | Changes the loop asked for that weren't carried out, for example because the pump didn't respond. |
+| **Max basal setting** and **Max IOB** | The limits your loop reported. |
+
+### At max basal and "cap known"
+
+For **Loop**, a temp is at its cap when it reaches your maximum basal rate
+setting. For **AAPS, Trio and OpenAPS**, the cap is a safety limit the
+algorithm works out each time, and only the loop's own explanation says when it
+was reached. **Cap known** is the share of the algorithm's temp time where
+Nocturne could tell either way; **at max basal** is measured over that time.
+
+### Unrecorded delivery
+
+When the loop is running but there is no record of what the pump delivered, the
+basal for that time is unknown. Loop Analysis never assumes your schedule ran
+for longer than three hours without a record. A lot of unrecorded delivery
+usually means pump history isn't reaching Nocturne, and it makes the insulin
+figures on the other tabs less complete.
+
+### When a figure says "Unknown"
+
+A tile that can't be worked out says why:
+
+- **No loop cycles in this range**: nothing from the loop was recorded.
+- **The system that ran the loop does not record this**: for example, Loop
+  doesn't report a maximum IOB, and only Loop uploads a maximum basal rate
+  setting.
+- **No loop cycle recorded what this needs**: the loop ran, but didn't record the
+  explanation the figure is read from.
+- **No loop cycle in this range set the temps this needs**: no loop decision
+  could be matched to the temps.
+- **Everything this is measured on falls in time the filters leave out.**
+- **The profile in force records no maximum basal rate.**
+- **The loop set no temp basal in this range.**
+
+## Settings evidence
+
+Settings evidence puts what your data shows next to what your profile says, for
+three settings:
+
+- **Basal** in two-hour blocks of the day;
+- **Correction factor (ISF)** and **carb ratio** in four blocks: overnight
+  (midnight to 6am), morning (6 to 11), midday (11 to 5pm) and evening (5pm to
+  midnight).
+
+Each figure comes with how many days or events it is based on, how much they
+varied, a confidence level, and the list of every day or event behind it.
+
+<Callout type="warning" title="Discuss changes with your care team">
+
+  These are observations of your own data, never recommendations. A figure can
+  look convincing and still be wrong because of something the data can't see.
+  Take them to your care team rather than changing settings on your own.
+
+</Callout>
+
+### How each figure is worked out
+
+**Basal.** For each two-hour block on each day, Nocturne asks: what basal rate
+would have kept glucose level? It starts from your scheduled rate, adds what the
+loop added or took away, allows for insulin from earlier still acting (and for
+insulin given in the block that acts later), and adjusts for any drift in
+glucose across the block using your correction factor. The figure is the average
+across the days that qualify. It's only shown when at least 70% of those days
+agree on whether the loop was adding or taking away insulin, and not when
+glucose was rising or falling steeply on average (more than 10 mg/dL, or
+0.6 mmol/L, an hour).
+
+**Insulin is counted when it was delivered, not when it acted.** The blocks are
+two hours long because the loop's insulin acts over the next hour or two, and
+the allowance for insulin still acting keeps the end of the evening's insulin
+from looking like overnight need.
+
+**Correction factor.** Each correction bolus is followed for four hours (three
+if you eat after that). The figure is how far glucose fell, divided by the
+insulin that acted, and the median across corrections is shown. Nocturne uses
+the reading at the end of the window rather than the lowest point, because the
+lowest of many readings tends to be a little too low.
+
+**Carb ratio.** Each meal is followed from 15 minutes before it (to include a
+pre-bolus) to four hours after. The figure is the grams eaten divided by the
+insulin needed: the insulin that acted, adjusted for where glucose ended up
+compared with where it started. The median across meals is shown.
+
+The correction factor and carb ratio measure insulin above your **observed**
+basal, not above your schedule. If your scheduled basal is too low, the loop
+tops it up, and that extra insulin shouldn't be credited to the meal or
+correction.
+
+### What is left out
+
+A day or event is left out if any of these applies anywhere in its window, and
+the tab counts how many were left out for each reason.
+
+**Basal blocks are left out when:**
+
+- the loop was open, or an override, temporary target, exercise or illness was
+  active;
+- carbs were logged in the four hours before or during the block, or carbs were
+  still on board;
+- glucose was climbing in a way that looks like an unlogged meal;
+- a bolus was given by hand in the five hours before or during the block;
+- a temp was set by hand or the pump was suspended;
+- delivery records cover less than 90% of the block, or the schedule had to be
+  assumed;
+- insulin on board isn't known at both ends of the block;
+- there's no reading near the start or end of the block;
+- the block falls outside your filters.
+
+**Corrections are left out when:**
+
+- carbs were logged in the hour before or the three hours after;
+- another meal, correction or meal-like rise falls in the window;
+- an override, temporary target, exercise or illness was active;
+- glucose wasn't above your target range at the time, or moved more than
+  15 mg/dL (0.8 mmol/L) in the 15 minutes before;
+- insulin already on board was more than the bolus itself;
+- glucose went below 70 mg/dL (3.9 mmol/L) in the window;
+- less than 0.5 U of insulin acted;
+- readings, delivery records or insulin on board are missing.
+
+**Meals are left out when:**
+
+- another meal, correction or meal-like rise falls in the window;
+- an override, temporary target, exercise or illness was active;
+- glucose at the start was below 70 or above 180 mg/dL (3.9 or 10.0 mmol/L), or
+  moved more than 15 mg/dL (0.8 mmol/L) in the 15 minutes before the meal;
+- less than 0.5 U of insulin was needed;
+- readings, delivery records or insulin on board are missing.
+
+A figure needs at least 5 days (basal) or 3 events (correction factor and carb
+ratio) to be shown at all.
+
+### Confidence
+
+Each figure is rated **High**, **Moderate** or **Low**. It starts at High and
+drops one level for each concern. Fewer than 6 days or events is always Low.
+The concerns are:
+
+- **Few episodes**: fewer than 10.
+- **Wide spread**: the middle half of the values spans more than half the figure.
+- **Borrowed correction factor**: glucose drift was converted using a correction
+  factor that wasn't itself measured with confidence, and that conversion made
+  up a real part of the figure.
+- **Borrowed basal**: insulin was measured against a basal that wasn't measured
+  with confidence.
+- **Insulin still on board**: a lot of the insulin was still acting when the
+  window ended.
+- **Most events weren't isolated**: more than half were left out because
+  something else happened in their window.
+- **Fasting can't be checked**: carbs were logged on fewer than one day in five,
+  so Nocturne can't tell fasting time from unlogged meals.
+- **Still moving at the end**: glucose was still rising or falling at the end of
+  the window.
+- **Insulin from earlier mattered**: insulin still acting from before the block
+  made up a real part of the basal figure.
+
+### Why "more insulin" figures are held to a higher bar
+
+When a figure would mean **more insulin** than your profile (a higher basal, a
+lower correction factor, or a lower carb ratio) by 10% or more, and it leans on
+another estimate, its confidence drops a further level. Getting it wrong in that
+direction carries more risk of a low, so Nocturne asks for stronger evidence
+before rating it highly.
+
+## How it differs from Nightscout's Loopalyzer
+
+Loop Analysis replaces Nightscout's Loopalyzer report and fixes the problems
+that made it hard to trust:
+
+- **Zeros count.** Loopalyzer skipped zeros when it averaged, so a zero temp
+  made the loop look as if it had done more than it did.
+- **Automatic boluses count.** Loopalyzer charted temp basals only, so users
+  whose loop corrects with SMBs saw only a fraction of what it did.
+- **Daylight saving time works.** Loopalyzer dropped days that weren't exactly
+  24 hours long, and showed glucose an hour off after a change.
+- **Readings exactly on a five-minute mark are kept**, and one missing basal
+  record no longer shifts every later slot.
+- **Spread and n are shown**, not just an average.
+- **Totals**: insulin per day, split into basal, automatic and manual boluses.
+- **Up to 90 days**, not 14.
+- **Meals line up properly.** Loopalyzer's time shift used the first meal in the
+  data rather than in the day, and lost data pushed past midnight.
+- **You can leave things out**: overrides, temporary targets, exercise, illness
+  and open-loop time.
+- **It works the same way for Loop, AAPS, Trio, iAPS and OpenAPS.**
