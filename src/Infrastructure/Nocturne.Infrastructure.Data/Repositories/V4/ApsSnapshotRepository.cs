@@ -143,30 +143,32 @@ public class ApsSnapshotRepository : SyncUpsertRepositoryBase<ApsSnapshot, ApsSn
             .ToListAsync(ct);
 
         // Sorted here: in SQL the sort of every row's reason over a 90-day union spills to disk.
-        return [.. rows.OrderBy(r => r.Timestamp).Select(r =>
+        return [.. rows.OrderBy(r => r.Timestamp).Select(ToLoopCycle)];
+    }
+
+    internal static ApsLoopCycle ToLoopCycle(LoopCycleColumns r)
+    {
+        var reason = string.IsNullOrEmpty(r.Reason) ? null : r.Reason;
+        return new ApsLoopCycle
         {
-            var reason = string.IsNullOrEmpty(r.Reason) ? null : r.Reason;
-            return new ApsLoopCycle
-            {
-                Id = r.Id,
-                Timestamp = r.Timestamp,
-                AidAlgorithm = Enum.TryParse<AidAlgorithm>(r.AidAlgorithm, out var algorithm) ? algorithm : AidAlgorithm.Unknown,
-                Enacted = r.Enacted,
-                EnactedRate = r.EnactedRate,
-                Iob = r.Iob,
-                SensitivityRatio = r.SensitivityRatio,
-                HasReason = reason is not null,
-                SuggestedChange = r.SuggestedChange,
-                LimitReason = reason is not null
-                    && (reason.Contains("maxSafeBasal", StringComparison.Ordinal) || reason.Contains("max_iob", StringComparison.Ordinal))
-                        ? reason
-                        : null,
-            };
-        })];
+            Id = r.Id,
+            Timestamp = r.Timestamp,
+            AidAlgorithm = Enum.TryParse<AidAlgorithm>(r.AidAlgorithm, out var algorithm) ? algorithm : AidAlgorithm.Unknown,
+            Enacted = r.Enacted,
+            EnactedRate = r.EnactedRate,
+            Iob = r.Iob,
+            SensitivityRatio = r.SensitivityRatio,
+            HasReason = reason is not null,
+            SuggestedChange = r.SuggestedChange,
+            LimitReason = reason is not null
+                && (reason.Contains("maxSafeBasal", StringComparison.Ordinal) || reason.Contains("max_iob", StringComparison.Ordinal))
+                    ? reason
+                    : null,
+        };
     }
 
     /// <summary>Set by member initialisation, which EF can translate on both sides of a union.</summary>
-    private sealed class LoopCycleColumns
+    internal sealed class LoopCycleColumns
     {
         public Guid Id { get; init; }
         public DateTime Timestamp { get; init; }

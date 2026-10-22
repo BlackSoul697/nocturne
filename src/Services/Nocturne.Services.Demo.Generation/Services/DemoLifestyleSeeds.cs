@@ -110,11 +110,9 @@ public static class DemoLifestyleSeeds
                     workoutStart.AddMinutes(-10), workoutEnd.AddMinutes(10),
                     new Dictionary<string, object> { ["targetTop"] = 150.0, ["targetBottom"] = 140.0 }));
             }
-            else if (DayScenarios.Roll(day, "manual-mode", 100) < 9)
+            else if (DemoLoopInterruptions.ManualModeWindow(day) is { } manual)
             {
-                // An occasional afternoon in manual mode (pump maintenance, pool day).
-                var start = day.AddHours(13 + DayScenarios.Roll(day, "manual-start", 4));
-                interruptions.Add((start, start.AddHours(2.5), nameof(PumpModeState.Manual)));
+                interruptions.Add((manual.Start, manual.End, nameof(PumpModeState.Manual)));
             }
         }
 
