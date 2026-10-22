@@ -60,7 +60,7 @@
     {@const outer = band(i, h.error.p10, h.error.p90, 0.22)}
     <rect {...outer} rx="2" fill="color-mix(in oklab, {color} 28%, transparent)" fill-opacity={opacity} />
     <rect {...band(i, h.error.p25, h.error.p75, 0.22)} rx="2" fill="color-mix(in oklab, {color} 55%, transparent)" fill-opacity={opacity} />
-    <line x1={outer.x - 3} x2={outer.x + outer.width + 3} y1={bias} y2={bias} class="stroke-card" stroke-width="6" stroke-linecap="round" />
+    <line x1={outer.x - 3} x2={outer.x + outer.width + 3} y1={bias} y2={bias} class="stroke-card" stroke-width="6" stroke-linecap="round" opacity={opacity} />
     <line x1={outer.x - 3} x2={outer.x + outer.width + 3} y1={bias} y2={bias} class="stroke-foreground" stroke-width="2" stroke-linecap="round" opacity={opacity} />
     <text x={outer.x + outer.width / 2} y={plotTop - 16} text-anchor="middle" class="fill-muted-foreground text-2xs tabular-nums">
       MAE {formatMae(h.mae ?? 0)}

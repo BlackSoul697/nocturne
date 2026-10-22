@@ -109,7 +109,7 @@ describe("PredictionsTab", () => {
   it("outlines the comparison and reads its bias beside the range's", async () => {
     render(PredictionsTab, { props: { response: predictionResponse({ comparison: true }) } });
 
-    await expect.element(page.getByText("Compared range, dashed", { exact: true })).toBeVisible();
+    await expect.element(page.getByText("Compared range", { exact: true })).toBeVisible();
     await expect.element(page.getByText("4,032 in the compared range")).toBeVisible();
     await expect.element(page.getByText("The compared range is in the charts above.")).toBeVisible();
     await expect.element(page.getByText("Compared", { exact: true }).first()).toBeVisible();

@@ -83,12 +83,12 @@
 </script>
 
 <div class="space-y-1">
-  <div class="flex items-baseline justify-between gap-2 px-1">
+  <div class="space-y-0.5 px-1">
     <h3 class="flex items-center gap-2 text-sm font-medium">
       <span class="inline-block h-0.5 w-3 rounded-full bg-(--curve)" style:--curve={color} aria-hidden="true"></span>
       {title}
     </h3>
-    <span class="text-xs text-muted-foreground">{curveCaption(kind)}</span>
+    <p class="text-xs text-muted-foreground">{curveCaption(kind)}</p>
   </div>
   {#if !curve}
     <p class="px-1 text-xs text-muted-foreground">Only in the compared range</p>

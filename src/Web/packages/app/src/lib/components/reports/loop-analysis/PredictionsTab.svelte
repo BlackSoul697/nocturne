@@ -101,7 +101,6 @@
     { texture: "percentile-inner", label: "25–75%", color: "color-mix(in oklab, var(--muted-foreground) 55%, transparent)" },
     { texture: "percentile-median", label: "Bias", color: "var(--foreground)", shape: "line" },
     ...(settingsSignal ? [{ texture: "in-range" as const, label: "Settings signal", color: "var(--muted)" }] : []),
-    ...(comparing ? [{ texture: "percentile-outer" as const, label: "Compared range, dashed", color: "var(--foreground)", shape: "line" as const }] : []),
   ]);
 
   const figures = $derived.by<Figure[]>(() => {
@@ -224,7 +223,17 @@
               bold line, with the MAE and the number of predictions above.
             </p>
           </div>
-          <ChartKey class="justify-start px-1" items={key} />
+          <div class="flex flex-wrap items-center gap-x-4 gap-y-1 px-1">
+            <ChartKey class="justify-start" items={key} />
+            {#if comparing}
+              <span class="flex items-center gap-1.5 text-xs text-muted-foreground">
+                <svg viewBox="0 0 44 12" class="inline-block h-3 w-11 shrink-0" aria-hidden="true">
+                  <line x1="0" y1="6" x2="44" y2="6" class="stroke-foreground" stroke-width="1.5" stroke-dasharray="3 2" />
+                </svg>
+                Compared range
+              </span>
+            {/if}
+          </div>
           <div class="grid gap-x-6 gap-y-8 @2xl:grid-cols-2">
             {#each kinds as kind (kind)}
               <HorizonErrorChart
