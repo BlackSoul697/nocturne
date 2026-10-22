@@ -152,6 +152,15 @@ public class StatisticsController : ControllerBase
     }
 
     /// <summary>
+    /// Where a temp basal still running stops: now, or <paramref name="endUtc"/> when that comes
+    /// first. A window that ends in the future has not delivered past now.
+    /// </summary>
+    private long UntilMills(DateTime endUtc) =>
+        Math.Min(
+            new DateTimeOffset(endUtc, TimeSpan.Zero).ToUnixTimeMilliseconds(),
+            _timeProvider.GetUtcNow().ToUnixTimeMilliseconds());
+
+    /// <summary>
     /// Fills <see cref="TempBasal.ScheduledRate"/> from the profile's scheduled rate at each
     /// temp's start, for records that have none. Legacy-sourced temps arrive with a null rate and
     /// <see cref="IStatisticsService.CalculateBasalAnalysis"/> can only classify a temp as high or
@@ -772,7 +781,7 @@ public class StatisticsController : ControllerBase
 
         // Calculate statistics for each period
         var periods = new[] { 1, 3, 7, 30, 90 };
-        var now = DateTime.UtcNow;
+        var now = _timeProvider.GetUtcNow().UtcDateTime;
         var result = new MultiPeriodStatistics { LastUpdated = now };
 
         var periodResults = new List<(int Days, PeriodStatistics Statistics)>();
@@ -834,6 +843,7 @@ public class StatisticsController : ControllerBase
                     filteredCarbs,
                     startDate,
                     endDate,
+                    UntilMills(endDate),
                     basalInjections
                 );
             }
@@ -953,6 +963,7 @@ public class StatisticsController : ControllerBase
             boluses,
             algorithmBoluses,
             tempBasals,
+            UntilMills(endDt),
             tz,
             basalInjections
         );
@@ -1009,7 +1020,7 @@ public class StatisticsController : ControllerBase
         // Daily basal totals come from the existing service path so the calendar's "totalBasal"
         // matches what /daily-basal-bolus-ratios would return for the same window.
         var dailyBasalBolus = _statisticsService.CalculateDailyBasalBolusRatios(
-            manualBoluses, algorithmBoluses, tempBasals, tz, basalInjections);
+            manualBoluses, algorithmBoluses, tempBasals, UntilMills(endDt), tz, basalInjections);
         var dailyBasalMap = new Dictionary<string, double>(StringComparer.Ordinal);
         foreach (var d in dailyBasalBolus.DailyData)
         {
@@ -1201,6 +1212,7 @@ public class StatisticsController : ControllerBase
             carbs,
             startDate,
             endDate,
+            UntilMills(endDt),
             basalInjections
         );
         if (includeBoluses && AnalyticsReadScopes.Allows(HttpContext.GetGrantedScopes(), Scope.TreatmentsRead))
@@ -1252,6 +1264,7 @@ public class StatisticsController : ControllerBase
             algorithmBoluses,
             startUtc,
             endUtc,
+            UntilMills(endUtc),
             userTz
         );
         return Ok(result);
@@ -1294,6 +1307,7 @@ public class StatisticsController : ControllerBase
             algorithmBoluses,
             startUtc,
             endUtc,
+            UntilMills(endUtc),
             userTz,
             basalInjections
         );

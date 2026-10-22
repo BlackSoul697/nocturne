@@ -47,6 +47,7 @@ public class StatisticsControllerTests
     private readonly Mock<IBasalRateResolver> _basalRateResolverMock = new();
     private readonly Mock<ILogger<StatisticsController>> _loggerMock = new();
     private readonly Mock<ILogger<TenantClockResolver>> _clockLoggerMock = new();
+    private static readonly DateTimeOffset DefaultNow = new(2030, 1, 1, 0, 0, 0, TimeSpan.Zero);
 
     private StatisticsController CreateController(
         ICanonicalGlucoseService? canonicalGlucose = null,
@@ -99,7 +100,7 @@ public class StatisticsControllerTests
                 _therapySettingsResolverMock.Object,
                 categoryReadContext ?? new CategoryReadContext(),
                 _clockLoggerMock.Object),
-            timeProvider ?? new FakeTimeProvider(new DateTimeOffset(2030, 1, 1, 0, 0, 0, TimeSpan.Zero)),
+            timeProvider ?? new FakeTimeProvider(DefaultNow),
             _loggerMock.Object);
 
         var httpContext = new DefaultHttpContext();
@@ -160,6 +161,7 @@ public class StatisticsControllerTests
                 It.IsAny<IEnumerable<Bolus>>(),
                 It.IsAny<IEnumerable<Bolus>>(),
                 It.IsAny<IEnumerable<TempBasal>>(),
+                It.IsAny<long>(),
                 It.IsAny<TimeZoneInfo?>(),
                 It.IsAny<IEnumerable<BasalInjection>?>()))
             .Returns(new DailyBasalBolusRatioResponse());
@@ -748,9 +750,9 @@ public class StatisticsControllerTests
         _statsServiceMock
             .Setup(s => s.CalculateBasalAnalysis(
                 It.IsAny<IEnumerable<TempBasal>>(), It.IsAny<IEnumerable<Bolus>>(),
-                It.IsAny<DateTime>(), It.IsAny<DateTime>(), It.IsAny<TimeZoneInfo?>()))
-            .Callback<IEnumerable<TempBasal>, IEnumerable<Bolus>, DateTime, DateTime, TimeZoneInfo?>(
-                (tempBasals, _, _, _, _) => synthesized = tempBasals.ToList())
+                It.IsAny<DateTime>(), It.IsAny<DateTime>(), It.IsAny<long>(), It.IsAny<TimeZoneInfo?>()))
+            .Callback<IEnumerable<TempBasal>, IEnumerable<Bolus>, DateTime, DateTime, long, TimeZoneInfo?>(
+                (tempBasals, _, _, _, _, _) => synthesized = tempBasals.ToList())
             .Returns(new BasalAnalysisResponse());
 
         await CreateController().GetBasalAnalysis(start, start.AddDays(1));
@@ -838,10 +840,10 @@ public class StatisticsControllerTests
         _statsServiceMock
             .Setup(s => s.CalculateHourlyInsulinDelivery(
                 It.IsAny<IEnumerable<TempBasal>>(), It.IsAny<IEnumerable<Bolus>>(),
-                It.IsAny<IEnumerable<Bolus>>(), It.IsAny<DateTime>(), It.IsAny<DateTime>(),
+                It.IsAny<IEnumerable<Bolus>>(), It.IsAny<DateTime>(), It.IsAny<DateTime>(), It.IsAny<long>(),
                 It.IsAny<TimeZoneInfo?>(), It.IsAny<IEnumerable<BasalInjection>?>()))
-            .Callback<IEnumerable<TempBasal>, IEnumerable<Bolus>, IEnumerable<Bolus>, DateTime, DateTime, TimeZoneInfo?, IEnumerable<BasalInjection>?>(
-                (tempBasals, _, _, _, _, _, _) => passed = tempBasals.ToList())
+            .Callback<IEnumerable<TempBasal>, IEnumerable<Bolus>, IEnumerable<Bolus>, DateTime, DateTime, long, TimeZoneInfo?, IEnumerable<BasalInjection>?>(
+                (tempBasals, _, _, _, _, _, _, _) => passed = tempBasals.ToList())
             .Returns(new HourlyInsulinDeliveryResponse());
 
         await CreateController().GetHourlyInsulinDelivery(start, start.AddDays(1));
@@ -874,9 +876,9 @@ public class StatisticsControllerTests
             .Setup(s => s.CalculateInsulinDeliveryStatistics(
                 It.IsAny<IEnumerable<Bolus>>(), It.IsAny<IEnumerable<Bolus>>(),
                 It.IsAny<IEnumerable<TempBasal>>(), It.IsAny<IEnumerable<CarbIntake>>(),
-                It.IsAny<DateTime>(), It.IsAny<DateTime>(), It.IsAny<IEnumerable<BasalInjection>?>()))
-            .Callback<IEnumerable<Bolus>, IEnumerable<Bolus>, IEnumerable<TempBasal>, IEnumerable<CarbIntake>, DateTime, DateTime, IEnumerable<BasalInjection>?>(
-                (m, a, _, _, _, _, _) => { passedManual = m.ToList(); passedAlgorithm = a.ToList(); })
+                It.IsAny<DateTime>(), It.IsAny<DateTime>(), It.IsAny<long>(), It.IsAny<IEnumerable<BasalInjection>?>()))
+            .Callback<IEnumerable<Bolus>, IEnumerable<Bolus>, IEnumerable<TempBasal>, IEnumerable<CarbIntake>, DateTime, DateTime, long, IEnumerable<BasalInjection>?>(
+                (m, a, _, _, _, _, _, _) => { passedManual = m.ToList(); passedAlgorithm = a.ToList(); })
             .Returns(new InsulinDeliveryStatistics());
 
         await CreateController().GetInsulinDeliveryStatistics(start, start.AddDays(1));
@@ -967,6 +969,31 @@ public class StatisticsControllerTests
     }
 
     [Fact]
+    public async Task GetInsulinDeliveryStatistics_WindowEndingAfterNow_StopsARunningTempAtNow()
+    {
+        var start = new DateTime(2026, 4, 1, 0, 0, 0, DateTimeKind.Utc);
+        SetupEmptyTreatments();
+        _tempBasalRepoMock
+            .Setup(r => r.GetAsync(
+                It.IsAny<DateTime?>(), It.IsAny<DateTime?>(),
+                It.IsAny<string?>(), It.IsAny<string?>(),
+                It.IsAny<int>(), It.IsAny<int>(), It.IsAny<bool>(),
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new List<TempBasal>
+            {
+                new() { StartTimestamp = start.AddHours(10), Rate = 2.0, ScheduledRate = 1.0 },
+            });
+        var now = new FakeTimeProvider(new DateTimeOffset(start.AddHours(10).AddMinutes(30), TimeSpan.Zero));
+
+        var result = await CreateController(statisticsService: new StatisticsService(), timeProvider: now)
+            .GetInsulinDeliveryStatistics(start, start.AddDays(1));
+
+        result.Result.Should().BeOfType<OkObjectResult>().Subject
+            .Value.Should().BeOfType<InsulinDeliveryStatistics>().Subject
+            .TotalBasal.Should().BeApproximately(1.0, 1e-9);
+    }
+
+    [Fact]
     public async Task GetHourlyInsulinDelivery_FetchesUncapped()
     {
         var start = new DateTime(2026, 4, 1, 0, 0, 0, DateTimeKind.Utc);
@@ -974,7 +1001,7 @@ public class StatisticsControllerTests
         _statsServiceMock
             .Setup(s => s.CalculateHourlyInsulinDelivery(
                 It.IsAny<IEnumerable<TempBasal>>(), It.IsAny<IEnumerable<Bolus>>(),
-                It.IsAny<IEnumerable<Bolus>>(), It.IsAny<DateTime>(), It.IsAny<DateTime>(),
+                It.IsAny<IEnumerable<Bolus>>(), It.IsAny<DateTime>(), It.IsAny<DateTime>(), It.IsAny<long>(),
                 It.IsAny<TimeZoneInfo?>(), It.IsAny<IEnumerable<BasalInjection>?>()))
             .Returns(new HourlyInsulinDeliveryResponse());
 
@@ -1245,7 +1272,7 @@ public class StatisticsControllerTests
     [Fact]
     public async Task GetMultiPeriodStatistics_WithOnlyProfileBasal_CountsTheProfileAsScheduledBasal()
     {
-        var start = DateTime.UtcNow.AddDays(-1);
+        var start = DefaultNow.UtcDateTime.AddDays(-1);
         SetupMultiPeriodWithProfile(
             [
                 new BasalSegment(Mills(start), Mills(start.AddHours(6)), 0.8, 0.8, "Default"),
@@ -1274,7 +1301,7 @@ public class StatisticsControllerTests
     [Fact]
     public async Task GetMultiPeriodStatistics_DoesNotCountAZeroRateProfileSegmentAsABasalEvent()
     {
-        var start = DateTime.UtcNow.AddDays(-1);
+        var start = DefaultNow.UtcDateTime.AddDays(-1);
         SetupMultiPeriodWithProfile(
             [
                 new BasalSegment(Mills(start), Mills(start.AddHours(12)), 0.8, 0.8, "Default"),
@@ -1291,7 +1318,7 @@ public class StatisticsControllerTests
     [Fact]
     public async Task GetMultiPeriodStatistics_DerivesTddFromTheUnroundedProfileBasal()
     {
-        var start = DateTime.UtcNow.AddDays(-1);
+        var start = DefaultNow.UtcDateTime.AddDays(-1);
         SetupMultiPeriodWithProfile(
             [new BasalSegment(Mills(start), Mills(start) + 44_117_640, 1.0, 1.0, "Default")]);
 
@@ -1304,7 +1331,7 @@ public class StatisticsControllerTests
     [Fact]
     public async Task GetMultiPeriodStatistics_WithAlgorithmBoluses_DoesNotFallBackToProfileBasal()
     {
-        var start = DateTime.UtcNow.AddDays(-1);
+        var start = DefaultNow.UtcDateTime.AddDays(-1);
         SetupMultiPeriodWithProfile(
             [new BasalSegment(Mills(start), Mills(start.AddDays(1)), 1.0, 1.0, "Default")]);
         SetupBoluses(BolusKind.Algorithm,
@@ -1327,7 +1354,7 @@ public class StatisticsControllerTests
     [Fact]
     public async Task GetMultiPeriodStatistics_WithBasalInjections_DoesNotFallBackToProfileBasal()
     {
-        var start = DateTime.UtcNow.AddDays(-1);
+        var start = DefaultNow.UtcDateTime.AddDays(-1);
         SetupMultiPeriodWithProfile(
             [new BasalSegment(Mills(start), Mills(start.AddDays(1)), 1.0, 1.0, "Default")]);
         _basalInjectionRepoMock
@@ -1350,7 +1377,7 @@ public class StatisticsControllerTests
     [Fact]
     public async Task GetMultiPeriodStatistics_WithTempBasals_DoesNotFallBackToProfileBasal()
     {
-        var start = DateTime.UtcNow.AddHours(-23);
+        var start = DefaultNow.UtcDateTime.AddHours(-23);
         SetupMultiPeriodWithProfile(
             [new BasalSegment(Mills(start), Mills(start.AddDays(1)), 1.0, 1.0, "Default")]);
         _tempBasalRepoMock
@@ -1381,7 +1408,7 @@ public class StatisticsControllerTests
 
     private void SetupMultiPeriodWithProfile(BasalSegment[] segments)
     {
-        var now = DateTime.UtcNow;
+        var now = DefaultNow.UtcDateTime;
         SetupGlucose(Enumerable.Range(1, 12)
             .Select(i => new SensorGlucose { Timestamp = now.AddMinutes(-5 * i), Mgdl = 120 })
             .ToList());
@@ -2361,7 +2388,7 @@ public class StatisticsControllerTests
     [Fact]
     public async Task GetMultiPeriodStatistics_ReadsTheWidestWindowOnce_AndSlicesEachPeriodFromIt()
     {
-        var now = DateTime.UtcNow;
+        var now = DefaultNow.UtcDateTime;
         SetupGlucose(new[] { TimeSpan.FromHours(1), TimeSpan.FromHours(2), TimeSpan.FromDays(2),
                 TimeSpan.FromDays(5), TimeSpan.FromDays(20), TimeSpan.FromDays(60) }
             .Concat(Enumerable.Range(1, 10).Select(i => TimeSpan.FromMinutes(5 * i)))
@@ -2647,7 +2674,7 @@ public class StatisticsControllerTests
         StatisticsService stats)
     {
         var dailyBasalMap = new Dictionary<string, double>(StringComparer.Ordinal);
-        foreach (var d in stats.CalculateDailyBasalBolusRatios(manualBoluses, [], [], tz, injections).DailyData)
+        foreach (var d in stats.CalculateDailyBasalBolusRatios(manualBoluses, [], [], Mills(end.ToDateTime(TimeOnly.MinValue, DateTimeKind.Utc)), tz, injections).DailyData)
         {
             if (!string.IsNullOrEmpty(d.Date)) dailyBasalMap[d.Date] = d.Basal;
         }

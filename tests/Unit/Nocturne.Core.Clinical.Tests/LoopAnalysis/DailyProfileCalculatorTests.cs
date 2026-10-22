@@ -359,7 +359,7 @@ public class DailyProfileCalculatorTests
         var (_, evidence) = NetInsulinAboveSchedule.ClipTempBasals(
         [
             new TempBasal { StartTimestamp = at, EndTimestamp = at.AddDays(1), Rate = 2, Origin = TempBasalOrigin.Algorithm, Device = "p" },
-        ]);
+        ], to);
         var delivered = NetInsulinAboveSchedule.DeliveredFromSeries(
         [
             new BasalPoint { Timestamp = from, Rate = 2, Origin = BasalDeliveryOrigin.Algorithm },
@@ -392,7 +392,7 @@ public class DailyProfileCalculatorTests
                 var at = DateTimeOffset.FromUnixTimeMilliseconds(t).UtcDateTime;
                 temps.Add(new TempBasal { StartTimestamp = at, EndTimestamp = at.AddMinutes(5), Rate = 1.5, Origin = TempBasalOrigin.Algorithm, Device = "p" });
             }
-        var (clipped, evidence) = NetInsulinAboveSchedule.ClipTempBasals(temps);
+        var (clipped, evidence) = NetInsulinAboveSchedule.ClipTempBasals(temps, to);
         var series = clipped.Select(t => new BasalPoint { Timestamp = t.StartMills, Rate = 1.5, Origin = BasalDeliveryOrigin.Algorithm })
             .Append(new BasalPoint { Timestamp = stretchStart, Rate = 1, Origin = BasalDeliveryOrigin.Inferred });
         var snapshots = new List<IobCobTick>();
@@ -426,7 +426,7 @@ public class DailyProfileCalculatorTests
             var at = DateTimeOffset.FromUnixTimeMilliseconds(t).UtcDateTime;
             temps.Add(new TempBasal { StartTimestamp = at, EndTimestamp = at.AddMinutes(30), Rate = 1.5, Origin = TempBasalOrigin.Algorithm, Device = "p" });
         }
-        var (clipped, evidence) = NetInsulinAboveSchedule.ClipTempBasals(temps);
+        var (clipped, evidence) = NetInsulinAboveSchedule.ClipTempBasals(temps, to);
         var series = new List<BasalPoint> { new() { Timestamp = from, Rate = 1, Origin = BasalDeliveryOrigin.Inferred } };
         series.AddRange(clipped.Select(t => new BasalPoint { Timestamp = t.StartMills, Rate = 1.5, Origin = BasalDeliveryOrigin.Algorithm }));
 

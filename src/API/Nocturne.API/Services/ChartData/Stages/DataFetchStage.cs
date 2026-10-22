@@ -65,7 +65,8 @@ internal sealed class DataFetchStage(
     ILogger<DataFetchStage> logger,
     IHeartRateService heartRateService,
     IStepCountService stepCountService,
-    ISleepService sleepService
+    ISleepService sleepService,
+    TimeProvider timeProvider
 ) : IChartDataStage
 {
     public async Task<ChartDataContext> ExecuteAsync(ChartDataContext context, CancellationToken cancellationToken)
@@ -300,7 +301,7 @@ internal sealed class DataFetchStage(
             .Where(c => c.Mills >= startTime && c.Mills <= endTime)
             .ToList();
         var displayTempBasals = Nocturne.API.Services.Analytics.ChartDataService
-            .SelectDisplayTempBasals(tempBasalList, startTime, endTime);
+            .SelectDisplayTempBasals(tempBasalList, startTime, endTime, timeProvider.GetUtcNow().ToUnixTimeMilliseconds());
 
         logger.LogDebug(
             "DataFetchStage: fetched {Glucose} glucose, {Bolus} bolus, {Carb} carb, {BgCheck} bg-check, {DeviceEvent} device-event, {TempBasal} temp-basal, {HeartRate} heart-rate, {StepCount} step-count, {Sleep} sleep records",

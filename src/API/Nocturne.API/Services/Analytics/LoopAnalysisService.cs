@@ -188,7 +188,7 @@ internal sealed partial class LoopAnalysisService(
                     .Select(o => new ScaleFactorInterval(o.Interval.Start, o.Interval.End, (double)(o.Span.Metadata?.OverrideScaleFactor() ?? 1m))))
             : [];
 
-        var (clipped, evidence) = NetInsulinAboveSchedule.ClipTempBasals(common.TempBasals);
+        var (clipped, evidence) = NetInsulinAboveSchedule.ClipTempBasals(common.TempBasals, to);
         var series = await basalSeriesBuilder.BuildAsync(
             clipped, tickStart, to, timeline.SnapshotAt(from).BasalRateAt(from), ct);
         var delivered = NetInsulinAboveSchedule.DeliveredFromSeries(series, to, evidence);

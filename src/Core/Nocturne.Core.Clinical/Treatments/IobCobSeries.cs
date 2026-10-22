@@ -26,7 +26,7 @@ public readonly record struct IobCobTick(
 /// contribute to IOB, and only carb intakes within 6 hours to COB, so the inner-loop work is
 /// O(ticks + active window) rather than O(ticks × treatments). DIA is read from the timeline at
 /// <c>endTime</c>. Temp basals count as delivered
-/// (<see cref="StatisticsService.ClipOverlappingTempBasals"/>).
+/// (<see cref="StatisticsService.ClipOverlappingTempBasals"/>), one still running up to <c>endTime</c>.
 /// </para>
 /// </remarks>
 public static class IobCobSeries
@@ -60,7 +60,7 @@ public static class IobCobSeries
             .Where(c => c.Carbs > 0)
             .OrderBy(c => c.Mills)
             .ToList();
-        var sortedTempBasals = tempBasals is null ? null : StatisticsService.ClipOverlappingTempBasals(tempBasals);
+        var sortedTempBasals = tempBasals is null ? null : StatisticsService.ClipOverlappingTempBasals(tempBasals, endTime);
 
         var sortedSnapshots = (apsSnapshots ?? [])
             .Select(s => (

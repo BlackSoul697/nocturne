@@ -36,6 +36,7 @@ public class ChartDataService : IChartDataService
     private readonly ITempBasalRepository _tempBasalRepository;
     private readonly ITherapySettingsResolver _therapySettingsResolver;
     private readonly IBasalRateResolver _basalRateResolver;
+    private readonly TimeProvider _timeProvider;
     private readonly ILogger<ChartDataService> _logger;
 
     /// <summary>
@@ -47,6 +48,7 @@ public class ChartDataService : IChartDataService
     /// <param name="tempBasalRepository">Repository for fetching temp basal records.</param>
     /// <param name="therapySettingsResolver">Resolves whether therapy settings (profile) data exists.</param>
     /// <param name="basalRateResolver">Resolves the active basal rate at a point in time.</param>
+    /// <param name="timeProvider">The clock a temp basal still running stops at.</param>
     /// <param name="logger">The logger instance.</param>
     public ChartDataService(
         IEnumerable<IChartDataStage> pipeline,
@@ -55,6 +57,7 @@ public class ChartDataService : IChartDataService
         ITempBasalRepository tempBasalRepository,
         ITherapySettingsResolver therapySettingsResolver,
         IBasalRateResolver basalRateResolver,
+        TimeProvider timeProvider,
         ILogger<ChartDataService> logger
     )
     {
@@ -64,6 +67,7 @@ public class ChartDataService : IChartDataService
         _tempBasalRepository = tempBasalRepository;
         _therapySettingsResolver = therapySettingsResolver;
         _basalRateResolver = basalRateResolver;
+        _timeProvider = timeProvider;
         _logger = logger;
     }
 
@@ -116,7 +120,7 @@ public class ChartDataService : IChartDataService
             ct: cancellationToken
         )).ToList();
         return await _basalSeriesBuilder.BuildAsync(
-            SelectDisplayTempBasals(tempBasals, startTime, endTime),
+            SelectDisplayTempBasals(tempBasals, startTime, endTime, _timeProvider.GetUtcNow().ToUnixTimeMilliseconds()),
             startTime,
             endTime,
             defaultBasalRate,
@@ -129,14 +133,17 @@ public class ChartDataService : IChartDataService
     /// <summary>
     /// The delivered pieces (<see cref="StatisticsService.ClipOverlappingTempBasals"/>) that overlap
     /// the window. <paramref name="tempBasals"/> must reach back before the window, so a record
-    /// cancelled before it is cut by the record that cancelled it.
+    /// cancelled before it is cut by the record that cancelled it. A temp still running counts to
+    /// <paramref name="nowMills"/>, or to <paramref name="endTime"/> when that comes first: the
+    /// live chart asks for a window that ends ahead of now.
     /// </summary>
     internal static List<TempBasal> SelectDisplayTempBasals(
         IEnumerable<TempBasal> tempBasals,
         long startTime,
-        long endTime
+        long endTime,
+        long nowMills
     ) =>
-        StatisticsService.ClipOverlappingTempBasals(tempBasals)
+        StatisticsService.ClipOverlappingTempBasals(tempBasals, Math.Min(endTime, nowMills))
             .Where(tb => tb.StartMills <= endTime && tb.EndMills > startTime)
             .ToList();
 

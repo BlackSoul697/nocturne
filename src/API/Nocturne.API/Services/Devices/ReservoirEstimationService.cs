@@ -154,7 +154,7 @@ internal sealed class ReservoirEstimationService(
         // the lookback may straddle the window start, and the newest record's declared
         // end usually lies in the future — insulin not yet delivered.
         var anyTempBasalDelivery = false;
-        foreach (var tb in StatisticsService.ClipOverlappingTempBasals(tempBasalRecords))
+        foreach (var tb in StatisticsService.ClipOverlappingTempBasals(tempBasalRecords, toMs))
         {
             var start = Math.Max(tb.StartMills, fromMs);
             var end = Math.Min(tb.EndMills!.Value, toMs);

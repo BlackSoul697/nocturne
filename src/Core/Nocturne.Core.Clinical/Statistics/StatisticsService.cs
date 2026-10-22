@@ -2232,6 +2232,18 @@ public class StatisticsService : IStatisticsService
     }
 
     /// <summary>
+    /// How far after an open temp basal another stream may stamp its copy of that same temp: two
+    /// loop cycles. See <see cref="ClipOverlappingTempBasals"/>.
+    /// </summary>
+    private static readonly TimeSpan MirrorSkewTolerance = TimeSpan.FromMinutes(10);
+
+    /// <summary>
+    /// The longest temp basal a pump accepts, so the longest an open record can still be running.
+    /// See <see cref="ClipOverlappingTempBasals"/>.
+    /// </summary>
+    private static readonly TimeSpan MaxOpenTempDuration = TimeSpan.FromHours(24);
+
+    /// <summary>
     /// Temp basals as delivered: each piece of a record during which it set the pump's rate, as a
     /// copy with the piece's start and end, in start order. Every reader of basal delivery reads
     /// temp basals through this.
@@ -2241,7 +2253,22 @@ public class StatisticsService : IStatisticsService
     /// A stream is the records of one <c>DeviceId</c>, else one <c>Device</c>. Within a stream a
     /// record ends where the next starts: loop systems write a new temp every few minutes with a
     /// 30 to 120 minute declared duration, and each cancels the one before on the pump. A record
-    /// with no end runs for five minutes.
+    /// whose end is its start is a cancel: it ends the record before it and delivers nothing, and a
+    /// cancel at the instant a new temp starts ends the one before, not the new one. A record with
+    /// no end is still running, so it runs to the next record of its stream. The last of its stream
+    /// runs to the earliest of: the first later start of a successor stream or of a stream that
+    /// outranks it; the first record of any other stream that starts more than
+    /// <see cref="MirrorSkewTolerance"/> after it; its start plus <see cref="MaxOpenTempDuration"/>;
+    /// and <paramref name="untilMills"/>. A successor is a stream whose first record starts after it:
+    /// a stream that stops, as at a pump switch, cannot claim the time the stream that took over
+    /// recorded after it. A stream that outranks it describes the pump wherever it has records, so a
+    /// mirror's copy cannot run past the loop's own records. A lower-ranked stream with a record at
+    /// or before it ran beside it, as a mirror does, and a mirror's copy of the same running temp
+    /// lands within the tolerance, so that copy cannot cut the temp short. A record of that stream
+    /// past the tolerance shows the stream records on after this one went quiet, so it ends it. No
+    /// pump accepts a temp longer than <see cref="MaxOpenTempDuration"/>, so a stream that stopped
+    /// uploading does not deliver past it. A mirror whose earlier records are not in the input reads
+    /// as a successor, so a reader fetches with lookback before the window.
     /// </para>
     /// <para>
     /// A patient wears one pump, so where streams overlap only one of them describes its delivery.
@@ -2261,27 +2288,35 @@ public class StatisticsService : IStatisticsService
     /// The pieces are records again, so clipping them again changes nothing.
     /// </para>
     /// </remarks>
-    public static List<TempBasal> ClipOverlappingTempBasals(IEnumerable<TempBasal> tempBasals)
+    /// <param name="untilMills">
+    /// Where a record with no end stops: now, or the end of the window read when that ends first.
+    /// </param>
+    public static List<TempBasal> ClipOverlappingTempBasals(IEnumerable<TempBasal> tempBasals, long untilMills)
     {
         var streams = tempBasals
             .GroupBy(tb => tb.DeviceId?.ToString() ?? tb.Device ?? string.Empty)
-            .Select(g => (g.Key, Temps: g.OrderBy(tb => tb.StartMills).ToList()))
+            .Select(g => (g.Key, Temps: g.OrderBy(tb => tb.StartMills).ThenBy(tb => tb.EndMills != tb.StartMills).ToList()))
             .OrderByDescending(s => s.Temps.Any(IsLoopTemp))
             .ThenByDescending(s => s.Temps.Any(IsAidUploaderTemp))
             .ThenByDescending(s => s.Temps.Count)
             .ThenBy(s => s.Temps[0].StartMills)
-            .ThenBy(s => s.Key, StringComparer.Ordinal);
-
+            .ThenBy(s => s.Key, StringComparer.Ordinal)
+            .ToList();
         var result = new List<TempBasal>();
         var covered = IntervalSet.Empty;
-        foreach (var (_, sorted) in streams)
+        for (var rank = 0; rank < streams.Count; rank++)
         {
+            var sorted = streams[rank].Temps;
             var own = new List<MillsInterval>(sorted.Count);
             for (var i = 0; i < sorted.Count; i++)
             {
                 var tb = sorted[i];
-                var declaredEnd = tb.EndMills ?? tb.StartMills + (5 * 60_000L);
-                var end = i < sorted.Count - 1 ? Math.Min(declaredEnd, sorted[i + 1].StartMills) : declaredEnd;
+                var last = i == sorted.Count - 1;
+                var bound = last && tb.EndMills is null
+                    ? Math.Min(untilMills, OpenEndBound(streams.Select(s => s.Temps), rank, tb.StartMills))
+                    : untilMills;
+                var declaredEnd = tb.EndMills ?? Math.Max(bound, tb.StartMills);
+                var end = last ? declaredEnd : Math.Min(declaredEnd, sorted[i + 1].StartMills);
                 covered.ForEachGap(tb.StartMills, end, (start, stop) => result.Add(tb.WithSpan(start, stop)));
                 own.Add(new MillsInterval(tb.StartMills, end));
             }
@@ -2289,6 +2324,23 @@ public class StatisticsService : IStatisticsService
         }
 
         return [.. result.OrderBy(tb => tb.StartMills)];
+    }
+
+    private static long OpenEndBound(IEnumerable<List<TempBasal>> rankedStreams, int rank, long startMills)
+    {
+        var pastSkew = startMills + (long)MirrorSkewTolerance.TotalMilliseconds;
+        return rankedStreams
+            .Select((temps, r) =>
+            {
+                if (r == rank)
+                    return long.MaxValue;
+                var endsAtNextStart = r < rank || temps[0].StartMills > startMills;
+                return temps
+                    .Select(tb => tb.StartMills)
+                    .FirstOrDefault(s => s > pastSkew || (endsAtNextStart && s > startMills), long.MaxValue);
+            })
+            .Append(startMills + (long)MaxOpenTempDuration.TotalMilliseconds)
+            .Min();
     }
 
     private static bool IsLoopTemp(TempBasal tb) =>
@@ -2315,6 +2367,7 @@ public class StatisticsService : IStatisticsService
         IEnumerable<CarbIntake> carbIntakes,
         DateTime startDate,
         DateTime endDate,
+        long untilMills,
         IEnumerable<BasalInjection>? basalInjections = null
     )
     {
@@ -2328,7 +2381,7 @@ public class StatisticsService : IStatisticsService
         var scheduledBasalInsulin = 0.0;
         var additionalBasalInsulin = 0.0;
         var tempBasalCount = 0;
-        foreach (var tb in ClipOverlappingTempBasals(tempBasals))
+        foreach (var tb in ClipOverlappingTempBasals(tempBasals, untilMills))
         {
             if (GetTempBasalInsulin(tb) is not { } insulin || insulin <= 0)
                 continue;
@@ -2405,6 +2458,7 @@ public class StatisticsService : IStatisticsService
         IEnumerable<Bolus> boluses,
         IEnumerable<Bolus> algorithmBoluses,
         IEnumerable<TempBasal> tempBasals,
+        long untilMills,
         TimeZoneInfo? userTimeZone = null,
         IEnumerable<BasalInjection>? basalInjections = null
     )
@@ -2429,7 +2483,7 @@ public class StatisticsService : IStatisticsService
             Accumulate(bolus.Mills, 0, bolus.Insulin);
         }
 
-        foreach (var tb in ClipOverlappingTempBasals(tempBasals))
+        foreach (var tb in ClipOverlappingTempBasals(tempBasals, untilMills))
         {
             if (GetTempBasalInsulin(tb) is not { } basalInsulin || basalInsulin <= 0)
                 continue;
@@ -2520,11 +2574,12 @@ public class StatisticsService : IStatisticsService
         IEnumerable<Bolus> algorithmBoluses,
         DateTime startDate,
         DateTime endDate,
+        long untilMills,
         TimeZoneInfo? userTimeZone = null
     )
     {
         var tz = userTimeZone ?? TimeZoneInfo.Utc;
-        var tempBasalList = ClipOverlappingTempBasals(tempBasals);
+        var tempBasalList = ClipOverlappingTempBasals(tempBasals, untilMills);
         var dayCount = WindowDays(startDate, endDate);
 
         var allRates = new List<double>();
@@ -2625,6 +2680,7 @@ public class StatisticsService : IStatisticsService
         IEnumerable<Bolus> algorithmBoluses,
         DateTime startDate,
         DateTime endDate,
+        long untilMills,
         TimeZoneInfo? userTimeZone = null,
         IEnumerable<BasalInjection>? basalInjections = null)
     {
@@ -2641,7 +2697,7 @@ public class StatisticsService : IStatisticsService
         var basalDays = new HashSet<DateOnly>();
         var bolusDays = new HashSet<DateOnly>();
 
-        foreach (var tb in ClipOverlappingTempBasals(tempBasals))
+        foreach (var tb in ClipOverlappingTempBasals(tempBasals, untilMills))
         {
             if (tb.Rate is not { } rate)
                 continue;

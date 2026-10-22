@@ -280,6 +280,7 @@ public interface IStatisticsService
     /// Calculate comprehensive insulin delivery statistics.
     /// Basal data comes from TempBasals, algorithmBoluses, and basalInjections (MDI); pass empty collections if none are available.
     /// </summary>
+    /// <param name="untilMills">Where a temp basal still running stops: now, or the window end when that comes first.</param>
     InsulinDeliveryStatistics CalculateInsulinDeliveryStatistics(
         IEnumerable<Bolus> boluses,
         IEnumerable<Bolus> algorithmBoluses,
@@ -287,6 +288,7 @@ public interface IStatisticsService
         IEnumerable<CarbIntake> carbIntakes,
         DateTime startDate,
         DateTime endDate,
+        long untilMills,
         IEnumerable<BasalInjection>? basalInjections = null
     );
 
@@ -373,10 +375,12 @@ public interface IStatisticsService
     /// Calculate daily basal/bolus ratio breakdown.
     /// Basal data comes from TempBasals, algorithm boluses, and basalInjections (MDI); pass empty collections if none are available.
     /// </summary>
+    /// <param name="untilMills">Where a temp basal still running stops: now, or the window end when that comes first.</param>
     DailyBasalBolusRatioResponse CalculateDailyBasalBolusRatios(
         IEnumerable<Bolus> boluses,
         IEnumerable<Bolus> algorithmBoluses,
         IEnumerable<TempBasal> tempBasals,
+        long untilMills,
         TimeZoneInfo? userTimeZone = null,
         IEnumerable<BasalInjection>? basalInjections = null);
 
@@ -385,11 +389,13 @@ public interface IStatisticsService
     /// bucketed by <paramref name="userTimeZone"/>'s local hour-of-day (0–23) so the chart shows
     /// rates against the user's wall clock, not UTC. Defaults to UTC when null.
     /// </summary>
+    /// <param name="untilMills">Where a temp basal still running stops: now, or the window end when that comes first.</param>
     BasalAnalysisResponse CalculateBasalAnalysis(
         IEnumerable<TempBasal> tempBasals,
         IEnumerable<Bolus> algorithmBoluses,
         DateTime startDate,
         DateTime endDate,
+        long untilMills,
         TimeZoneInfo? userTimeZone = null);
 
     /// <summary>
@@ -402,12 +408,14 @@ public interface IStatisticsService
     /// Long-acting basal injections (MDI) are spread evenly across the 24 hours
     /// following each injection and counted as scheduled basal.
     /// </summary>
+    /// <param name="untilMills">Where a temp basal still running stops: now, or the window end when that comes first.</param>
     HourlyInsulinDeliveryResponse CalculateHourlyInsulinDelivery(
         IEnumerable<TempBasal> tempBasals,
         IEnumerable<Bolus> boluses,
         IEnumerable<Bolus> algorithmBoluses,
         DateTime startDate,
         DateTime endDate,
+        long untilMills,
         TimeZoneInfo? userTimeZone = null,
         IEnumerable<BasalInjection>? basalInjections = null);
 }
