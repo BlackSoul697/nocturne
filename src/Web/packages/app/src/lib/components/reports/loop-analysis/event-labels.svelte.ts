@@ -1,8 +1,8 @@
 import { EventAnchorKind, type EventCohortDefinition } from "$lib/api";
-import { bg, bgDelta, bgLabel } from "$lib/utils/formatting";
+import { bg, bgDelta, bgLabel, time } from "$lib/utils/formatting";
 import type { EventMetricKey, MetricKind } from "./event-response-view";
 import { ignoredFilterLabel } from "./filter-labels.svelte";
-import { minuteToClock } from "./event-response-filter";
+import { atMinute } from "./daily-profile-view";
 
 /** Built per call so wuchale reads them in the current locale. */
 export function anchorLabels(): Record<EventAnchorKind, string> {
@@ -28,7 +28,7 @@ export function anchorLabel(kind: EventAnchorKind | undefined): string {
 export function cohortLabel(cohort: EventCohortDefinition): string {
   const parts = [anchorLabel(cohort.anchor)];
   if (cohort.fromMinute != null || cohort.toMinute != null)
-    parts.push(`${minuteToClock(cohort.fromMinute ?? 0)}–${minuteToClock(cohort.toMinute ?? 0)}`);
+    parts.push(`${time(atMinute(cohort.fromMinute ?? 0))}–${time(atMinute(cohort.toMinute ?? 0))}`);
   const filters = [parts.join(" ")];
   if (cohort.minGrams != null && cohort.maxGrams != null) filters.push(`${cohort.minGrams}–${cohort.maxGrams} g`);
   else if (cohort.minGrams != null) filters.push(`at least ${cohort.minGrams} g`);

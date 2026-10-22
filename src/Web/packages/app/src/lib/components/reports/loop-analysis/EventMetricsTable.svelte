@@ -23,7 +23,9 @@
     )
   );
   const missingGramsPerUnit = $derived(
-    primary.filter((r) => (r.gramsPerUnitNotIsolated ?? 0) + (r.gramsPerUnitNoNetInsulin ?? 0) > 0)
+    primary.filter(
+      (r) => (r.gramsPerUnitNotIsolated ?? 0) + (r.gramsPerUnitNoNetInsulin ?? 0) + (r.gramsPerUnitUncovered ?? 0) > 0
+    )
   );
 </script>
 
@@ -89,10 +91,12 @@
     {@const cohort = cohorts.find((c) => c.cohort === r.cohort)}
     <p>
       {cohort ? cohortLabel(cohort) : ""}: grams per unit is read only off a meal with no other meal,
-      correction or rise in its window; {plural(r.gramsPerUnitNotIsolated ?? 0, [
-        "# meal had one",
-        "# meals had one",
-      ])}, and {plural(r.gramsPerUnitNoNetInsulin ?? 0, [
+      correction or rise in its window, and whose window's insulin the pump's records account for.
+      {plural(r.gramsPerUnitNotIsolated ?? 0, ["# meal had another intake", "# meals had another intake"])};
+      {plural(r.gramsPerUnitUncovered ?? 0, [
+        "# had too little of its basal recorded",
+        "# had too little of their basal recorded",
+      ])}; {plural(r.gramsPerUnitNoNetInsulin ?? 0, [
         "# had no insulin above schedule",
         "# had no insulin above schedule",
       ])}.

@@ -328,7 +328,7 @@
             <Info class="size-3.5" />
             Each band is a cohort's events lined up on the event, at 0. Faded stretches rest on too
             few events to read as a pattern. {#if listed}Click a time, or press Enter on it, to list
-              the events behind it.{/if} With the keyboard, the arrow keys move along the window and
+              the events with a glucose reading there.{/if} With the keyboard, the arrow keys move along the window and
             between charts, and Home and End go to either end.
           </p>
         </div>

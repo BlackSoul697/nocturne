@@ -46,6 +46,7 @@ function cohort(number: number, events: number, offset = 0): EventCohortResult {
     events,
     gramsPerUnitNotIsolated: number === 1 ? 2 : 0,
     gramsPerUnitNoNetInsulin: number === 1 ? 1 : 0,
+    gramsPerUnitUncovered: number === 1 ? 3 : 0,
     slots,
     metrics: {
       startGlucose: aggregate(110, events),
@@ -140,7 +141,7 @@ export function eventResponse(
       }
       if (withheld.has(LoopAnalysisSeries.EventNetInsulin)) {
         for (const key of INSULIN_FIGURES) if (c.metrics) c.metrics[key] = undefined;
-        c.gramsPerUnitNotIsolated = c.gramsPerUnitNoNetInsulin = 0;
+        c.gramsPerUnitNotIsolated = c.gramsPerUnitNoNetInsulin = c.gramsPerUnitUncovered = 0;
       }
       if (withheld.has(LoopAnalysisSeries.EventIob) && c.metrics) c.metrics.iobAtAnchor = c.metrics.iobAtEnd = undefined;
     }

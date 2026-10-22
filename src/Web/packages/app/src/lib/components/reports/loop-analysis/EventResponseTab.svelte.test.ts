@@ -4,6 +4,8 @@ import { describe, expect, it } from "vitest";
 import { LoopAnalysisSeries, TimeZoneUnavailableReason } from "$lib/api";
 import EventResponseTab from "./EventResponseTab.svelte";
 import { eventResponse, TREATMENT_SERIES } from "./event-response.test-fixtures";
+import { time } from "$lib/utils/formatting";
+import { atMinute } from "./daily-profile-view";
 
 const PANELS = [
   "Glucose change from the event",
@@ -14,7 +16,7 @@ const PANELS = [
   "Carbs on board",
 ];
 
-const MEALS = "Cohort 1: Meals 05:00–10:00, 30–80 g";
+const MEALS = `Cohort 1: Meals ${time(atMinute(300))}–${time(atMinute(600))}, 30–80 g`;
 const RISES = "Cohort 2: Unannounced rises";
 
 function focusSlider(name: string) {
@@ -71,12 +73,12 @@ describe("EventResponseTab", () => {
 
     focusSlider("Glucose");
     await userEvent.keyboard("{Shift>}{ArrowRight}{/Shift}{Enter}");
-    const list = page.getByRole("region", { name: "Events behind Event to +5 min" });
+    const list = page.getByRole("region", { name: "Events with a glucose reading in Event to +5 min" });
     await expect.element(list).toBeVisible();
     expect(list.getByRole("link").elements()).toHaveLength(3);
 
     await userEvent.keyboard("{Escape}");
-    expect(page.getByRole("region", { name: /Events behind/ }).elements()).toHaveLength(0);
+    expect(page.getByRole("region", { name: /Events with a glucose reading/ }).elements()).toHaveLength(0);
 
     focusSlider("Glucose");
     await userEvent.keyboard("{Home}{Enter}");
@@ -91,7 +93,8 @@ describe("EventResponseTab", () => {
     await expect.element(page.getByText("9.5 g/U").first()).toBeVisible();
     await expect.element(page.getByText(/Compared 9.5 g\/U/).first()).toBeVisible();
     await expect.element(page.getByText("8 of 12 events came back")).toBeVisible();
-    await expect.element(page.getByText(/2 meals had one, and 1 had no insulin above schedule/)).toBeVisible();
+    const note = page.getByText(/grams per unit is read only off a meal/);
+    await expect.element(note).toHaveTextContent(/2 meals had another intake;\s*3 had too little of their basal recorded;\s*1 had no insulin above schedule/);
 
     const links = page.getByRole("link", { name: /in Day in Review/ }).elements();
     expect(links).toHaveLength(3);
@@ -119,7 +122,7 @@ describe("EventResponseTab", () => {
     expect(page.getByRole("rowheader", { name: "Observed grams per unit" }).elements()).toHaveLength(0);
     expect(page.getByText(/grams per unit is read only/).elements()).toHaveLength(0);
     await expect.element(page.getByRole("rowheader", { name: "Peak rise" })).toBeVisible();
-    expect(page.getByText(/list the events behind it/).elements()).toHaveLength(0);
+    expect(page.getByText(/list the events with a glucose reading there/).elements()).toHaveLength(0);
   });
 
   it("shows the comparison when only it has events", async () => {

@@ -59,11 +59,12 @@
   <div class="flex items-start justify-between gap-2">
     <div>
       <h3 id="slot-events-heading" bind:this={heading} tabindex="-1" class="font-medium outline-none">
-        Events behind {label}
+        Events with a glucose reading in {label}
       </h3>
       <p class="text-sm text-muted-foreground">
-        Each event with a glucose reading in this stretch. Open one to see it in Day in Review, or
-        press Escape to return to the chart.
+        Whichever chart the stretch was picked on, these are the events with a glucose reading in it;
+        an insulin or carbs figure there may rest on a few more or fewer. Open one to see it in Day
+        in Review, or press Escape to return to the chart.
       </p>
     </div>
     <Button variant="ghost" size="icon-sm" onclick={onclose} aria-label="Close the event list">

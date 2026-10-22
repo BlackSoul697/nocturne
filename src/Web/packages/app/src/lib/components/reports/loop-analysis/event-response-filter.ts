@@ -78,7 +78,7 @@ export function writeEventResponse(state: EventResponseState, search: URLSearchP
   return next;
 }
 
-/** The grams the API bounds a meal cohort to. */
+/** The grams the API bounds a meal cohort to: `GramsMax` on its `EventResponseQuery`. */
 const MAX_GRAMS = 1000;
 
 /** Whether a cohort's window starts and ends at the same minute, which the builder does not send. */

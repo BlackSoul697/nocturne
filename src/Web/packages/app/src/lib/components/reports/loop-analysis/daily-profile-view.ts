@@ -45,14 +45,6 @@ export function contributingDays(range: DailyProfileRange | undefined, slot: num
   return result;
 }
 
-/**
- * The number of a slot of any series laid out in slots, the time of day or time from an event:
- * its own `slot` where it carries one, else its place in the list.
- */
-function slotNumber(slot: object, position: number): number {
-  return "slot" in slot && typeof slot.slot === "number" ? slot.slot : position;
-}
-
 export interface SlotPoint<T> {
   slot: number;
   value: T;
@@ -68,7 +60,8 @@ export type AggregatePoint = SlotPoint<LoopAnalysisAggregate>;
 /**
  * Consecutive slots holding the series, split where it is absent (a gap, never drawn as zero) and
  * where its sparse flag changes. A run ending at a sparseness change repeats the next run's first
- * point so the two meet instead of leaving a sliver.
+ * point so the two meet instead of leaving a sliver. Slots are numbered by their place in the
+ * list, which every series lays out whole, slot 0 first.
  */
 export function slotRuns<S extends object, T>(
   slots: S[],
@@ -79,13 +72,12 @@ export function slotRuns<S extends object, T>(
   let current: SlotRun<T> | null = null;
   for (const [position, slot] of slots.entries()) {
     const value = pick(slot);
-    const index = slotNumber(slot, position);
     if (value == null) {
       current = null;
       continue;
     }
     const sparse = isSparse(value, slot);
-    const point = { slot: index, value };
+    const point = { slot: position, value };
     if (current && current.sparse === sparse) {
       current.points.push(point);
       continue;
