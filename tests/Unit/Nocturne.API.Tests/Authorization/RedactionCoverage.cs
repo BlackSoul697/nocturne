@@ -22,7 +22,8 @@ namespace Nocturne.API.Tests.Authorization;
 /// </example>
 internal static class RedactionCoverage
 {
-    private const int MaxDepth = 6;
+    /// <summary>Past any response's depth; only a recursive type reaches it, and reaching it fails.</summary>
+    private const int MaxDepth = 16;
 
     public static T Populated<T>() where T : new() => (T)Populate(typeof(T), 0)!;
 
@@ -39,8 +40,13 @@ internal static class RedactionCoverage
 
         void Walk(object? value, int depth)
         {
-            if (value is null || depth > MaxDepth || IsScalar(value.GetType()))
+            if (value is null || IsScalar(value.GetType()))
                 return;
+            if (depth > MaxDepth)
+            {
+                leaks.Add($"depth cap reached at {value.GetType().Name}");
+                return;
+            }
             if (value is IEnumerable items)
             {
                 foreach (var item in items)
@@ -87,7 +93,8 @@ internal static class RedactionCoverage
         if (type == typeof(DateTime)) return new DateTime(2024, 6, 3, 0, 0, 0, DateTimeKind.Utc);
         if (type == typeof(DateOnly)) return new DateOnly(2024, 6, 3);
         if (type.IsPrimitive || type == typeof(decimal)) return Convert.ChangeType(1, type);
-        if (depth > MaxDepth) return null;
+        if (depth > MaxDepth)
+            throw new InvalidOperationException($"Depth cap reached populating {type.Name}; a recursive type needs a hand-built fixture.");
 
         if (type.IsGenericType && type.GetGenericTypeDefinition() == typeof(List<>))
         {

@@ -50,17 +50,53 @@ public class LoopAnalysisController(
     [ResponseCache(Duration = 60, Location = ResponseCacheLocation.Client)]
     [ProducesResponseType(typeof(DailyProfileResponse), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
-    public async Task<ActionResult<DailyProfileResponse>> GetDailyProfile(
+    public Task<ActionResult<DailyProfileResponse>> GetDailyProfile(
         [FromQuery] LoopAnalysisQuery query,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default) =>
+        ServeAsync(query, service.GetDailyProfileAsync, cancellationToken);
+
+    /// <summary>
+    /// How far each prediction curve's values at +30, +60, +90 and +120 minutes landed from the
+    /// sensor reading nearest the time they predicted, overall, by local hour of day and by context.
+    /// </summary>
+    /// <remarks>
+    /// Only the +30 and +60 minute bias is a sign of the settings a prediction ran on: the reading at
+    /// a longer horizon follows everything the loop did after the prediction, which the prediction
+    /// assumed would not happen. Error is predicted minus actual, so a positive bias is a prediction
+    /// that ran high. A horizon with no reading within 2.5 minutes is counted as unmatched, never
+    /// paired with an imputed value. Needs glucose.read and devices.read for any curve, the
+    /// readings and the APS snapshots the curves come from; without treatments.read the context
+    /// breakdowns are withheld, and so are oref's IOB, zero-temp and COB curves, each reported only
+    /// in the contexts the algorithm relies on it in.
+    /// </remarks>
+    /// <param name="query">The range, comparison and masks (<see cref="LoopAnalysisQuery"/>).</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    [HttpGet("prediction-accuracy")]
+    [RemoteQuery]
+    [RequireScope(LoopAnalysisReadScopeGuard.AdmissionScope)]
+    [ResponseCache(Duration = 60, Location = ResponseCacheLocation.Client)]
+    [ProducesResponseType(typeof(PredictionAccuracyResponse), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    public Task<ActionResult<PredictionAccuracyResponse>> GetPredictionAccuracy(
+        [FromQuery] LoopAnalysisQuery query,
+        CancellationToken cancellationToken = default) =>
+        ServeAsync(query, service.GetPredictionAccuracyAsync, cancellationToken);
+
+    /// <summary>
+    /// Resolves <paramref name="query"/>, computes the tab when the tenant has a zone, fills the
+    /// envelope and narrows the result to the caller.
+    /// </summary>
+    private async Task<ActionResult<T>> ServeAsync<T>(
+        LoopAnalysisQuery query,
+        Func<LoopAnalysisFilter, TimeZoneInfo, CancellationToken, Task<T>> compute,
+        CancellationToken ct)
+        where T : LoopAnalysisResponse, new()
     {
-        var (invalid, request) = await TryResolveAsync(query, cancellationToken);
+        var (invalid, request) = await TryResolveAsync(query, ct);
         if (invalid is not null)
             return invalid;
 
-        var result = request!.Zone is { } zone
-            ? await service.GetDailyProfileAsync(request.Filter!, zone, cancellationToken)
-            : new DailyProfileResponse();
+        var result = request!.Zone is { } zone ? await compute(request.Filter!, zone, ct) : new T();
         return Ok(LoopAnalysisReadScopeGuard.Redact(request.Fill(result), HttpContext.GetGrantedScopes()));
     }
 

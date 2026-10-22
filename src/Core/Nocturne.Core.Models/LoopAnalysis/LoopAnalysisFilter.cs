@@ -101,6 +101,18 @@ public enum LoopAnalysisSeries
     /// <summary>The summary's net loop correction per day and share of total insulin.</summary>
     NetLoopCorrectionSummary,
     DeliveredToScheduledRatio,
+
+    /// <summary>Every prediction curve's accuracy, which compares the APS snapshots with glucose.</summary>
+    PredictionCurves,
+
+    /// <summary>How many APS snapshots were analysed, and their algorithms.</summary>
+    PredictionCount,
+
+    /// <summary>
+    /// The prediction context breakdowns, and the curves reported only in some contexts, which are
+    /// drawn from carbs, boluses, overrides and exercise.
+    /// </summary>
+    PredictionContexts,
 }
 
 /// <summary>

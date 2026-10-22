@@ -15,4 +15,8 @@ public interface ILoopAnalysisService
     /// </remarks>
     Task<DailyProfileResponse> GetDailyProfileAsync(
         LoopAnalysisFilter filter, TimeZoneInfo zone, CancellationToken ct = default);
+
+    /// <remarks>Takes and returns as <see cref="GetDailyProfileAsync"/> does.</remarks>
+    Task<PredictionAccuracyResponse> GetPredictionAccuracyAsync(
+        LoopAnalysisFilter filter, TimeZoneInfo zone, CancellationToken ct = default);
 }

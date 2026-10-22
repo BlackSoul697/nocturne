@@ -465,7 +465,7 @@ internal static class LoopAnalysisReadScopeGuard
     ];
 
     /// <summary>
-    /// The series the caller's scopes withhold. <see cref="Redact"/> empties exactly these, so the
+    /// The Daily profile series the caller's scopes withhold. <see cref="Redact{T}"/> empties exactly these, so the
     /// response's <see cref="LoopAnalysisResponse.WithheldSeries"/> and its nulls cannot disagree.
     /// </summary>
     public static HashSet<LoopAnalysisSeries> Withheld(IReadOnlySet<string> grantedScopes)
@@ -501,17 +501,104 @@ internal static class LoopAnalysisReadScopeGuard
         return withheld;
     }
 
-    public static DailyProfileResponse Redact(DailyProfileResponse data, IReadOnlySet<string> grantedScopes)
-    {
-        var withheld = Withheld(grantedScopes);
-        data.WithheldSeries = [.. withheld.Order()];
-        if (withheld.Count == 0)
-            return data;
+    /// <summary>A tab: the series the caller's scopes withhold, and how its response drops exactly those.</summary>
+    private sealed record Tab(
+        Func<IReadOnlySet<string>, HashSet<LoopAnalysisSeries>> Withheld,
+        Action<LoopAnalysisResponse, HashSet<LoopAnalysisSeries>> Narrow);
 
-        Narrow(data.Primary, withheld);
-        if (data.Comparison is { } comparison)
-            Narrow(comparison, withheld);
+    /// <summary>
+    /// Every tab, by its response type. Every <see cref="LoopAnalysisSeries"/> belongs to exactly
+    /// one tab, so a tab's response never lists another's series; a new tab adds one entry here.
+    /// </summary>
+    private static readonly Dictionary<Type, Tab> Tabs = new()
+    {
+        [typeof(DailyProfileResponse)] = TabOf<DailyProfileResponse, DailyProfileRange>(
+            Withheld, r => [r.Primary, r.Comparison], Narrow),
+        [typeof(PredictionAccuracyResponse)] = TabOf<PredictionAccuracyResponse, PredictionAccuracyRange>(
+            WithheldPredictions, r => [r.Primary, r.Comparison], Narrow),
+    };
+
+    private static Tab TabOf<TResponse, TRange>(
+        Func<IReadOnlySet<string>, HashSet<LoopAnalysisSeries>> withheld,
+        Func<TResponse, TRange?[]> ranges,
+        Action<TRange, HashSet<LoopAnalysisSeries>> narrow)
+        where TResponse : LoopAnalysisResponse
+        where TRange : class =>
+        new(withheld, (response, hidden) =>
+        {
+            foreach (var range in ranges((TResponse)response))
+                if (range is not null)
+                    narrow(range, hidden);
+        });
+
+    public static IReadOnlyCollection<Type> TabResponses => Tabs.Keys;
+
+    public static HashSet<LoopAnalysisSeries> WithheldFrom(Type response, IReadOnlySet<string> grantedScopes) =>
+        Tabs[response].Withheld(grantedScopes);
+
+    /// <summary>
+    /// Lists the series the caller's scopes withhold from <typeparamref name="T"/>'s tab and empties
+    /// exactly those.
+    /// </summary>
+    public static T Redact<T>(T data, IReadOnlySet<string> grantedScopes) where T : LoopAnalysisResponse
+    {
+        var tab = Tabs[typeof(T)];
+        var withheld = tab.Withheld(grantedScopes);
+        data.WithheldSeries = [.. withheld.Order()];
+        if (withheld.Count > 0)
+            tab.Narrow(data, withheld);
         return data;
+    }
+
+    /// <summary>
+    /// The prediction figures the caller's scopes withhold, as <see cref="Withheld"/> is for the
+    /// Daily profile. A curve's accuracy compares the APS snapshots, which are devices, with the
+    /// sensor readings, which are glucose, so it needs both. Its context and its interrupted counts
+    /// are drawn from treatments.
+    /// </summary>
+    /// <remarks>
+    /// Without treatments a curve kept for every context still leaves out its interrupted values, so
+    /// a lower n in an hour hints weakly at when meals and corrections happen. That residue is
+    /// accepted: the counts themselves, which would say it outright, are withheld.
+    /// </remarks>
+    public static HashSet<LoopAnalysisSeries> WithheldPredictions(IReadOnlySet<string> grantedScopes)
+    {
+        var glucose = AnalyticsReadScopes.Allows(grantedScopes, Scope.GlucoseRead);
+        var devices = AnalyticsReadScopes.Allows(grantedScopes, Scope.DevicesRead);
+        var treatments = AnalyticsReadScopes.Allows(grantedScopes, Scope.TreatmentsRead);
+
+        var withheld = new HashSet<LoopAnalysisSeries>();
+        if (!devices)
+            withheld.Add(LoopAnalysisSeries.PredictionCount);
+        if (!glucose || !devices)
+            withheld.Add(LoopAnalysisSeries.PredictionCurves);
+        if (!treatments)
+            withheld.Add(LoopAnalysisSeries.PredictionContexts);
+        return withheld;
+    }
+
+    private static void Narrow(PredictionAccuracyRange range, HashSet<LoopAnalysisSeries> withheld)
+    {
+        if (withheld.Contains(LoopAnalysisSeries.PredictionCount))
+        {
+            range.Predictions = 0;
+            range.Algorithms = [];
+        }
+
+        if (withheld.Contains(LoopAnalysisSeries.PredictionCurves))
+            range.Curves = [];
+
+        if (withheld.Contains(LoopAnalysisSeries.PredictionContexts))
+        {
+            var everyContext = Enum.GetValues<PredictionContext>().Length;
+            range.Curves.RemoveAll(c => c.Contexts.Count < everyContext);
+            foreach (var curve in range.Curves)
+            {
+                curve.ByContext = [];
+                foreach (var horizon in curve.Horizons.Concat(curve.ByHour.SelectMany(h => h.Horizons)))
+                    horizon.Interrupted = null;
+            }
+        }
     }
 
     private static void Narrow(DailyProfileRange range, HashSet<LoopAnalysisSeries> withheld)

@@ -43,7 +43,8 @@ internal sealed class LoopAnalysisService(
     IBasalSeriesBuilder basalSeriesBuilder,
     IBasalSegmentService basalSegmentService,
     IIobCalculator iobCalculator,
-    ICobCalculator cobCalculator
+    ICobCalculator cobCalculator,
+    TimeProvider timeProvider
 ) : ILoopAnalysisService
 {
     private const long TickMs = DailyProfileCalculator.SlotMinutes * LocalSlotBinning.MinuteMs;
@@ -61,34 +62,55 @@ internal sealed class LoopAnalysisService(
     public async Task<DailyProfileResponse> GetDailyProfileAsync(
         LoopAnalysisFilter filter, TimeZoneInfo zone, CancellationToken ct = default)
     {
+        var (primary, comparison) = await ForRangesAsync(
+            filter,
+            window => LoadAsync(window, zone, ct),
+            (loaded, window) => DailyProfileCalculator.Calculate(
+                loaded.Inputs, Mask(filter, window, zone, loaded.Sources), window.From, window.To));
+        return new DailyProfileResponse { Primary = primary, Comparison = comparison };
+    }
+
+    public async Task<PredictionAccuracyResponse> GetPredictionAccuracyAsync(
+        LoopAnalysisFilter filter, TimeZoneInfo zone, CancellationToken ct = default)
+    {
+        var (primary, comparison) = await ForRangesAsync(
+            filter,
+            window => LoadPredictionsAsync(window, zone, filter.Masks.ProfileName is not null, ct),
+            (loaded, window) => PredictionAccuracyCalculator.Calculate(
+                loaded.Inputs, Mask(filter, window, zone, loaded.Sources), window.From, window.To));
+        return new PredictionAccuracyResponse { Primary = primary, Comparison = comparison };
+    }
+
+    /// <summary>
+    /// Computes the primary range and the comparison: from one load over both where they touch or
+    /// overlap, else one load each.
+    /// </summary>
+    private static async Task<(TRange Primary, TRange? Comparison)> ForRangesAsync<TLoaded, TRange>(
+        LoopAnalysisFilter filter, Func<Window, Task<TLoaded>> load, Func<TLoaded, Window, TRange> calculate)
+        where TRange : class
+    {
         var primary = Window.Of(filter.From, filter.To);
         var comparison = filter.CompareFrom is { } compareFrom && filter.CompareTo is { } compareTo
             ? Window.Of(compareFrom, compareTo)
             : (Window?)null;
 
-        var response = new DailyProfileResponse();
         if (comparison is { } other && primary.Touches(other))
         {
-            var both = await LoadAsync(primary.Hull(other), zone, ct);
-            response.Primary = Calculate(both, filter, primary);
-            response.Comparison = Calculate(both, filter, other);
-            return response;
+            var both = await load(primary.Hull(other));
+            return (calculate(both, primary), calculate(both, other));
         }
 
-        response.Primary = Calculate(await LoadAsync(primary, zone, ct), filter, primary);
-        if (comparison is { } separate)
-            response.Comparison = Calculate(await LoadAsync(separate, zone, ct), filter, separate);
-        return response;
+        var first = calculate(await load(primary), primary);
+        return (first, comparison is { } separate ? calculate(await load(separate), separate) : null);
     }
 
-    private static DailyProfileRange Calculate(Loaded loaded, LoopAnalysisFilter filter, Window window) =>
-        DailyProfileCalculator.Calculate(
-            loaded.Inputs,
-            LoopAnalysisMask.Build(filter.Masks, window.From, window.To, loaded.Inputs.Zone, loaded.Sources),
-            window.From,
-            window.To);
+    private static LoopAnalysisMask Mask(
+        LoopAnalysisFilter filter, Window window, TimeZoneInfo zone, LoopAnalysisMaskSources sources) =>
+        LoopAnalysisMask.Build(filter.Masks, window.From, window.To, zone, sources);
 
     private sealed record Loaded(DailyProfileInputs Inputs, LoopAnalysisMaskSources Sources);
+
+    private sealed record LoadedPredictions(PredictionAccuracyInputs Inputs, LoopAnalysisMaskSources Sources);
 
     private async Task<Loaded> LoadAsync(Window window, TimeZoneInfo zone, CancellationToken ct)
     {
@@ -142,9 +164,7 @@ internal sealed class LoopAnalysisService(
         var iobCob = IobCobSeries.Build(
             iobCalculator, cobCalculator, boluses, carbs, tempBasals, timeline, apsPoints,
             tickStart, to - 1, TickMs, ct);
-        var temporaryTargets = SpansOf(spans, StateSpanCategory.TemporaryTarget, to)
-            .Where(s => s.Span.State != nameof(TemporaryTargetState.Cancelled))
-            .ToList();
+        var temporaryTargets = ActiveTemporaryTargets(spans, to);
 
         var profileIntervals = profiles
             .Select(p => new ProfileInterval(p.ProfileName, p.StartMills, p.EndMills ?? to))
@@ -166,19 +186,86 @@ internal sealed class LoopAnalysisService(
             Profiles = profileIntervals,
         };
 
-        var sources = new LoopAnalysisMaskSources
-        {
-            Overrides = [.. overrides.Select(o => o.Interval)],
-            TemporaryTargets = [.. temporaryTargets.Select(s => s.Interval)],
-            Exercise = [.. SpansOf(spans, StateSpanCategory.Exercise, to).Select(s => s.Interval)],
-            Illness = [.. SpansOf(spans, StateSpanCategory.Illness, to).Select(s => s.Interval)],
-            DataExclusions = [.. SpansOf(spans, StateSpanCategory.DataExclusion, to).Select(s => s.Interval)],
-            OpenLoop = OpenLoop(spans, await deviceTask, snapshotMills, zone, to).Intervals,
-            Profiles = profileIntervals,
-        };
-
-        return new Loaded(inputs, sources);
+        return new Loaded(inputs, MaskSources(spans, await deviceTask, snapshotMills, profileIntervals, zone, to));
     }
+
+    /// <summary>
+    /// Every prediction made in the window; the readings up to
+    /// <see cref="PredictionAccuracyCalculator.ReadingsAfterRangeMs"/> past it that the last of them
+    /// are paired with, and the spans over the same time, open ones closed at its end; and the
+    /// carbs and manual boluses that set the context, from
+    /// <see cref="PredictionAccuracyCalculator.ContextLookbackMs"/> before it to
+    /// <see cref="PredictionAccuracyCalculator.TreatmentsAfterRangeMs"/> after it. Snapshots with
+    /// predictions are the AID evidence the open-loop mask weighs.
+    /// </summary>
+    private async Task<LoadedPredictions> LoadPredictionsAsync(
+        Window window, TimeZoneInfo zone, bool needsProfiles, CancellationToken ct)
+    {
+        var (from, to) = (window.From, window.To);
+        var fromUtc = ToUtc(from);
+        var toUtc = ToUtc(to);
+        var readingsEnd = to + PredictionAccuracyCalculator.ReadingsAfterRangeMs;
+        var readingsEndUtc = ToUtc(readingsEnd);
+        var lookbackUtc = ToUtc(from - PredictionAccuracyCalculator.ContextLookbackMs);
+        var treatmentsEndUtc = ToUtc(to + PredictionAccuracyCalculator.TreatmentsAfterRangeMs);
+
+        var predictionTask = apsSnapshotRepository.GetPredictionsAsync(fromUtc, toUtc, ct);
+        var glucoseTask = glucoseRepository.GetForAnalyticsAsync(fromUtc, readingsEndUtc, null, null, int.MaxValue, descending: false, ct: ct);
+        var bolusTask = bolusRepository.GetAsync(lookbackUtc, treatmentsEndUtc, null, null, int.MaxValue, descending: false, ct: ct);
+        var carbTask = carbIntakeRepository.GetAsync(lookbackUtc, treatmentsEndUtc, null, null, int.MaxValue, descending: false, ct: ct);
+        var spanTask = stateSpanRepository.GetByCategories(MaskCategories, fromUtc, readingsEndUtc, ct);
+        var deviceTask = patientDeviceRepository.GetByDateRangeAsync(fromUtc, toUtc, ct);
+        await Task.WhenAll(predictionTask, glucoseTask, bolusTask, carbTask, spanTask, deviceTask);
+
+        var snapshots = (await predictionTask)
+            .Select(PredictionAccuracyCalculator.Parse)
+            .OfType<PredictionSnapshot>()
+            .ToList();
+        var glucose = await canonicalGlucose.SelectAsync([.. await glucoseTask], ct);
+        var spans = await spanTask;
+        var profiles = needsProfiles
+            ? (await activeProfileResolver.GetProfileSpansForRangeAsync(from, to, ct))
+                .Select(p => new ProfileInterval(p.ProfileName, p.StartMills, p.EndMills ?? to))
+                .ToList()
+            : [];
+        var sources = MaskSources(spans, await deviceTask, [.. snapshots.Select(s => s.StartMills)], profiles, zone, readingsEnd);
+
+        var inputs = new PredictionAccuracyInputs
+        {
+            Zone = zone,
+            Snapshots = snapshots,
+            Glucose = [.. glucose.Select(g => new GlucoseSample(g.Mills, g.Mgdl)).Where(g => g.Mgdl > 0).OrderBy(g => g.Mills)],
+            GlucoseExclusions = IntervalSet.Of(sources.DataExclusions),
+            ReadingsUntil = Math.Min(readingsEnd, timeProvider.GetUtcNow().ToUnixTimeMilliseconds()),
+            CarbMills = [.. (await carbTask).Where(c => c.Carbs > 0).Select(c => c.Mills).Order()],
+            ManualBolusMills = [.. (await bolusTask).Where(b => b.Kind != BolusKind.Algorithm && b.Insulin > 0).Select(b => b.Mills).Order()],
+            Adjusted = IntervalSet.Of(sources.Overrides.Concat(sources.TemporaryTargets).Concat(sources.Exercise)),
+        };
+        return new LoadedPredictions(inputs, sources);
+    }
+
+    /// <param name="openEnd">Where a span still open ends: the end of the time its readers look at.</param>
+    private static LoopAnalysisMaskSources MaskSources(
+        Dictionary<StateSpanCategory, List<StateSpan>> spans,
+        IEnumerable<PatientDevice> devices,
+        IReadOnlyList<long> snapshotMills,
+        IReadOnlyList<ProfileInterval> profiles,
+        TimeZoneInfo zone,
+        long openEnd) => new()
+    {
+        Overrides = [.. SpansOf(spans, StateSpanCategory.Override, openEnd).Select(s => s.Interval)],
+        TemporaryTargets = [.. ActiveTemporaryTargets(spans, openEnd).Select(s => s.Interval)],
+        Exercise = [.. SpansOf(spans, StateSpanCategory.Exercise, openEnd).Select(s => s.Interval)],
+        Illness = [.. SpansOf(spans, StateSpanCategory.Illness, openEnd).Select(s => s.Interval)],
+        DataExclusions = [.. SpansOf(spans, StateSpanCategory.DataExclusion, openEnd).Select(s => s.Interval)],
+        OpenLoop = OpenLoop(spans, devices, snapshotMills, zone, openEnd).Intervals,
+        Profiles = profiles,
+    };
+
+    private static List<(StateSpan Span, MillsInterval Interval)> ActiveTemporaryTargets(
+        Dictionary<StateSpanCategory, List<StateSpan>> spans, long to) =>
+        [.. SpansOf(spans, StateSpanCategory.TemporaryTarget, to)
+            .Where(s => s.Span.State != nameof(TemporaryTargetState.Cancelled))];
 
     private async Task<List<BasalSegment>> ScheduleAsync(long from, long to, CancellationToken ct)
     {
