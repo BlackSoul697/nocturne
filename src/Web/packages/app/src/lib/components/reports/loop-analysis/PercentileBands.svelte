@@ -3,11 +3,11 @@
   stays a gap and a sparse run is faded. The comparison range is drawn over them as dashed outlines
   of its P25-P75 band and its centre, since a muted fill under strong bands disappears.
 -->
-<script lang="ts" generics="S extends Slotted">
+<script lang="ts" generics="S extends object">
   import { Area, Spline } from "layerchart";
   import type { LoopAnalysisAggregate } from "$lib/api";
   import { patternClass } from "$lib/components/charts/print/chart-print-patterns";
-  import { aggregateRuns, type AggregatePoint, type Slotted } from "./daily-profile-view";
+  import { aggregateRuns, type AggregatePoint } from "./daily-profile-view";
 
   interface Props {
     slots: S[];

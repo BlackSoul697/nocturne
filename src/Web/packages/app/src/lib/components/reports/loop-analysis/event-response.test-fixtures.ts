@@ -2,6 +2,7 @@ import {
   EventAnchorKind,
   LoopAnalysisSeries,
   type EventCohortResult,
+  type EventMetricsSummary,
   type EventResponseEvent,
   type EventResponseRange,
   type EventResponseReport,
@@ -20,14 +21,14 @@ const aggregate = (p50: number, n: number, sparse = false): LoopAnalysisAggregat
   sparse,
 });
 
-/** A cohort's 72 slots from -60 to +300 minutes, glucose rising 1 mg/dL a slot after the event. */
+/** Minutes from the event to each of the 72 slots of a -60 to +300 window. */
+export const SLOT_MINUTES = Array.from({ length: 72 }, (_, slot) => slot * 5 - 60);
+
+/** A cohort's 72 slots, glucose rising 1 mg/dL a slot after the event. */
 function cohort(number: number, events: number, offset = 0): EventCohortResult {
-  const slots: EventResponseSlot[] = Array.from({ length: 72 }, (_, slot) => {
-    const minute = slot * 5 - 60;
+  const slots: EventResponseSlot[] = SLOT_MINUTES.map((minute, slot) => {
     const after = minute >= 0;
     return {
-      slot,
-      minute,
       glucoseChange: aggregate(after ? slot - 12 + offset : 0, events, events < 5),
       glucose: aggregate(120 + (after ? slot - 12 : 0), events, events < 5),
       netLoopCorrection: aggregate(0.5, events),
@@ -43,12 +44,15 @@ function cohort(number: number, events: number, offset = 0): EventCohortResult {
     notIsolated: 1,
     missingAnchorGlucose: 1,
     events,
+    gramsPerUnitNotIsolated: number === 1 ? 2 : 0,
+    gramsPerUnitNoNetInsulin: number === 1 ? 1 : 0,
     slots,
     metrics: {
       startGlucose: aggregate(110, events),
       peakRise: aggregate(65, events),
       minutesToPeak: aggregate(55, events),
-      gramsPerUnit: aggregate(9.5, events),
+      minutesBackToStart: aggregate(150, Math.max(0, events - 4)),
+      gramsPerUnit: number === 1 ? aggregate(9.5, events) : undefined,
       netInsulin: aggregate(4.2, events),
       netInsulinFirst60: aggregate(1.1, events),
       iobAtAnchor: aggregate(3, events),
@@ -56,60 +60,91 @@ function cohort(number: number, events: number, offset = 0): EventCohortResult {
   };
 }
 
-const event = (date: string, time: string, anchor: EventAnchorKind, cohorts: number[], peakRise: number, grams?: number): EventResponseEvent => ({
+/** Every slot covered but the first two, as base64 of the 72-slot bitmap. */
+const MOSTLY_COVERED = btoa(String.fromCharCode(0xfc, ...Array<number>(8).fill(0xff)));
+
+const event = (
+  date: string,
+  time: string,
+  anchor: EventAnchorKind,
+  cohorts: number[],
+  peakRise: number,
+  grams?: number
+): EventResponseEvent => ({
   at: `${date}T${time}:00Z`,
   date,
   time,
   anchor,
   grams,
   cohorts,
+  glucoseCoverage: MOSTLY_COVERED,
   metrics: { startGlucose: 110, peakRise, minutesToPeak: 50, netInsulin: 4, netInsulinFirst60: 1, iobAtAnchor: 3 },
 });
 
-function range(): EventResponseRange {
+function range(listEvents: boolean): EventResponseRange {
   return {
     cohorts: [cohort(1, 12), cohort(2, 3, 5)],
-    events: [
-      event("2026-10-10", "07:30", EventAnchorKind.Meal, [1], 80, 45),
-      event("2026-10-11", "12:05", EventAnchorKind.Meal, [1], 40, 30),
-      event("2026-10-12", "19:00", EventAnchorKind.UnannouncedRise, [2], 95),
-    ],
+    events: listEvents
+      ? [
+          event("2026-10-10", "07:30", EventAnchorKind.Meal, [1], 80, 45),
+          event("2026-10-11", "12:05", EventAnchorKind.Meal, [1], 40, 30),
+          event("2026-10-12", "19:00", EventAnchorKind.UnannouncedRise, [2], 95),
+        ]
+      : [],
   };
 }
+
+const INSULIN_FIGURES: (keyof EventMetricsSummary)[] = [
+  "totalInsulin", "netInsulin", "gramsPerUnit", "netInsulinFirst30", "netInsulinFirst60", "netInsulinFirst120",
+];
 
 export function eventResponse(
   options: { comparison?: boolean; withheld?: LoopAnalysisSeries[]; historyClamped?: boolean } = {}
 ): EventResponseReport {
-  const withheld = options.withheld ?? [];
+  const withheld = new Set(options.withheld ?? []);
   const report: EventResponseReport = {
     historyClamped: options.historyClamped ?? false,
     ignoredFilters: [],
     unavailableFilters: [],
     unavailableAnchors: [],
-    withheldSeries: withheld,
+    withheldSeries: [...withheld],
+    slotMinutes: SLOT_MINUTES,
     definition: {
       cohorts: [
-        { cohort: 1, anchor: EventAnchorKind.Meal, fromMinute: 300, toMinute: 600 },
+        { cohort: 1, anchor: EventAnchorKind.Meal, fromMinute: 300, toMinute: 600, minGrams: 30, maxGrams: 80 },
         { cohort: 2, anchor: EventAnchorKind.UnannouncedRise },
       ],
       minutesBefore: 60,
       minutesAfter: 300,
       isolatedOnly: false,
-      requireBolusCluster: false,
+      requireCorroboration: false,
     },
-    primary: range(),
-    comparison: options.comparison ? range() : undefined,
+    primary: range(true),
+    comparison: options.comparison ? range(false) : undefined,
   };
-  if (withheld.includes(LoopAnalysisSeries.EventList) && report.primary) report.primary.events = [];
-  for (const r of [report.primary, report.comparison])
-    for (const c of r?.cohorts ?? [])
+
+  // As the API's guard narrows: without glucose there is no event at all.
+  for (const r of [report.primary, report.comparison]) {
+    if (!r) continue;
+    if (withheld.has(LoopAnalysisSeries.EventGlucose)) {
+      r.cohorts = [];
+      r.events = [];
+    }
+    if (withheld.has(LoopAnalysisSeries.EventList)) r.events = [];
+    for (const c of r.cohorts ?? []) {
       for (const s of c.slots ?? []) {
-        if (withheld.includes(LoopAnalysisSeries.EventGlucose)) s.glucose = s.glucoseChange = undefined;
-        if (withheld.includes(LoopAnalysisSeries.EventNetInsulin))
+        if (withheld.has(LoopAnalysisSeries.EventNetInsulin))
           s.netLoopCorrection = s.netInsulinSinceAnchor = s.netLoopCorrectionSinceAnchor = undefined;
-        if (withheld.includes(LoopAnalysisSeries.EventIob)) s.iob = undefined;
-        if (withheld.includes(LoopAnalysisSeries.EventCob)) s.cob = undefined;
+        if (withheld.has(LoopAnalysisSeries.EventIob)) s.iob = undefined;
+        if (withheld.has(LoopAnalysisSeries.EventCob)) s.cob = undefined;
       }
+      if (withheld.has(LoopAnalysisSeries.EventNetInsulin)) {
+        for (const key of INSULIN_FIGURES) if (c.metrics) c.metrics[key] = undefined;
+        c.gramsPerUnitNotIsolated = c.gramsPerUnitNoNetInsulin = 0;
+      }
+      if (withheld.has(LoopAnalysisSeries.EventIob) && c.metrics) c.metrics.iobAtAnchor = c.metrics.iobAtEnd = undefined;
+    }
+  }
   return report;
 }
 

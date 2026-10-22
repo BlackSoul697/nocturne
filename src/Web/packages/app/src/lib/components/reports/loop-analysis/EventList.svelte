@@ -1,7 +1,7 @@
 <!-- Every event behind the curves, sortable by any figure, each opening Day in Review at its time. -->
 <script lang="ts">
   import { resolve } from "$app/paths";
-  import type { EventResponseEvent } from "$lib/api";
+  import type { EventCohortDefinition, EventResponseEvent } from "$lib/api";
   import { Button } from "$lib/components/ui/button";
   import ArrowUpRight from "@lucide/svelte/icons/arrow-up-right";
   import ArrowDown from "@lucide/svelte/icons/arrow-down";
@@ -12,22 +12,16 @@
   import { atMinute } from "./daily-profile-view";
   import { clockToMinute } from "./event-response-filter";
   import CohortDot from "./CohortDot.svelte";
-  import {
-    METRIC_KINDS,
-    sortEvents,
-    type EventMetricKey,
-    type EventSortKey,
-  } from "./event-response-view";
-  import { anchorEventLabel, formatMetric, metricLabels } from "./event-labels.svelte";
+  import { sortEvents, type EventMetricKey, type EventSortKey } from "./event-response-view";
+  import { anchorEventLabel, cohortLabel, formatMetric, metricDefinitions } from "./event-labels.svelte";
 
   interface Props {
     events: EventResponseEvent[];
-    /** Cohort numbers in the order the builder lists them, for their colours. */
-    cohorts: number[];
-    hidden: (metric: EventMetricKey) => boolean;
+    /** The cohorts the response applied, in order, for their colours and names. */
+    cohorts: EventCohortDefinition[];
   }
 
-  let { events, cohorts, hidden }: Props = $props();
+  let { events, cohorts }: Props = $props();
 
   const PAGE = 50;
   const COLUMNS: EventMetricKey[] = ["startGlucose", "peakRise", "minutesToPeak", "netInsulin", "netInsulinFirst60", "iobAtAnchor"];
@@ -36,10 +30,13 @@
   let descending = $state(false);
   let shown = $state(PAGE);
 
-  const labels = $derived(metricLabels());
-  const columns = $derived(COLUMNS.filter((m) => !hidden(m)));
+  // A figure no event carries, withheld or never observed, is left out.
+  const columns = $derived(
+    metricDefinitions().filter((m) => COLUMNS.includes(m.key) && events.some((e) => e.metrics?.[m.key] != null))
+  );
   const sorted = $derived(sortEvents(events, sortKey, descending));
   const showGrams = $derived(events.some((e) => e.grams != null));
+  const cohortIndex = (cohort: number) => Math.max(0, cohorts.findIndex((c) => c.cohort === cohort));
 
   function sortBy(key: EventSortKey) {
     if (sortKey === key) descending = !descending;
@@ -75,8 +72,8 @@
         {@render header("at", "When", "text-left")}
         <th scope="col" class="px-2 py-2 text-left font-medium">Event</th>
         {#if showGrams}<th scope="col" class="px-2 py-2 text-right font-medium">Carbs</th>{/if}
-        {#each columns as metric (metric)}
-          {@render header(metric, labels[metric], "text-right")}
+        {#each columns as metric (metric.key)}
+          {@render header(metric.key, metric.label, "text-right")}
         {/each}
         <th scope="col" class="px-2 py-2"><span class="sr-only">Open in Day in Review</span></th>
       </tr>
@@ -90,16 +87,23 @@
           <td class="px-2 py-1.5">
             <span class="inline-flex items-center gap-1.5">
               {#each event.cohorts ?? [] as cohort (cohort)}
-                <CohortDot index={Math.max(0, cohorts.indexOf(cohort))} class="size-2" />
+                <CohortDot index={cohortIndex(cohort)} class="size-2" />
               {/each}
               {anchorEventLabel(event.anchor)}
+            </span>
+            <span class="sr-only">
+              , in {(event.cohorts ?? [])
+                .map((n) => cohorts.find((c) => c.cohort === n))
+                .filter((c) => c != null)
+                .map(cohortLabel)
+                .join("; ")}
             </span>
           </td>
           {#if showGrams}
             <td class="px-2 py-1.5 text-right">{event.grams != null ? `${event.grams} g` : "–"}</td>
           {/if}
-          {#each columns as metric (metric)}
-            <td class="px-2 py-1.5 text-right">{formatMetric(METRIC_KINDS[metric], event.metrics?.[metric])}</td>
+          {#each columns as metric (metric.key)}
+            <td class="px-2 py-1.5 text-right">{formatMetric(metric.kind, event.metrics?.[metric.key])}</td>
           {/each}
           <td class="px-2 py-1.5 text-right">
             <a

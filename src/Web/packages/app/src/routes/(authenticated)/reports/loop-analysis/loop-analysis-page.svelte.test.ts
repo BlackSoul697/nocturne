@@ -195,7 +195,7 @@ describe("Loop Analysis page", () => {
       anchor2: EventAnchorKind.UnannouncedRise,
       minutesAfter: 480,
     });
-    await expect.element(page.getByLabelText("From").first()).toHaveValue("05:00");
+    await expect.element(page.getByLabelText("Cohort 1 from")).toHaveValue("05:00");
   });
 
   it("writes a builder change into the URL beside the shared filter", async () => {
@@ -221,5 +221,39 @@ describe("Loop Analysis page", () => {
     const search = new URL(calls.goto.at(-1)![0], "http://localhost").searchParams;
     expect(search.get("anchor1")).toBe("SensorStart");
     expect(search.has("anchor2")).toBe(false);
+  });
+
+  it("fetches only the tab on screen as it switches, and reads each tab's loading and failure", async () => {
+    // On Meals & events while its request is still loading: the bar waits for its echo.
+    resourceState = { stale: true };
+    const meals = open("?tab=meals-events&days=14&anchor1=Meal");
+    await expect.element(page.getByRole("group", { name: "Exclude" })).toHaveAttribute("aria-busy", "true");
+    expect(calls.query).toHaveLength(0);
+    expect(calls.events).toHaveLength(1);
+
+    await page.getByRole("tab", { name: "Daily profile" }).click();
+    const toDaily = new URL(calls.goto.at(-1)![0], "http://localhost").searchParams;
+    expect(toDaily.has("tab")).toBe(false);
+    expect(toDaily.get("anchor1")).toBe("Meal");
+    meals.unmount();
+
+    // On the Daily profile, whose request failed: the bar settles on what was picked.
+    resourceState = { error: new Error("Request rejected") };
+    const daily = open(`?${toDaily}`);
+    await expect.element(page.getByRole("group", { name: "Exclude" })).toHaveAttribute("aria-busy", "false");
+    expect(calls.query).toHaveLength(1);
+    expect(calls.events).toHaveLength(1);
+
+    await page.getByRole("tab", { name: "Meals & events" }).click();
+    const back = new URL(calls.goto.at(-1)![0], "http://localhost").searchParams;
+    expect(back.get("tab")).toBe("meals-events");
+    daily.unmount();
+
+    resourceState = {};
+    open(`?${back}`);
+    await expect.element(page.getByRole("slider", { name: "Glucose change from the event" })).toBeVisible();
+    expect(calls.events).toHaveLength(2);
+    expect(calls.events.at(-1)).toMatchObject({ anchor1: EventAnchorKind.Meal });
+    expect(calls.query).toHaveLength(1);
   });
 });

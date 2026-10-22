@@ -1,7 +1,8 @@
-import { EventAnchorKind } from "$lib/api";
+import { EventAnchorKind, type EventCohortDefinition } from "$lib/api";
 import { bg, bgDelta, bgLabel } from "$lib/utils/formatting";
 import type { EventMetricKey, MetricKind } from "./event-response-view";
 import { ignoredFilterLabel } from "./filter-labels.svelte";
+import { minuteToClock } from "./event-response-filter";
 
 /** Built per call so wuchale reads them in the current locale. */
 export function anchorLabels(): Record<EventAnchorKind, string> {
@@ -18,6 +19,21 @@ export function anchorLabels(): Record<EventAnchorKind, string> {
 
 export function anchorLabel(kind: EventAnchorKind | undefined): string {
   return kind ? anchorLabels()[kind] : "";
+}
+
+/**
+ * A cohort as the response applied it, told from every other by its number and its filters as well
+ * as its colour: "Cohort 1: Meals 05:00–10:00, 30–80 g".
+ */
+export function cohortLabel(cohort: EventCohortDefinition): string {
+  const parts = [anchorLabel(cohort.anchor)];
+  if (cohort.fromMinute != null || cohort.toMinute != null)
+    parts.push(`${minuteToClock(cohort.fromMinute ?? 0)}–${minuteToClock(cohort.toMinute ?? 0)}`);
+  const filters = [parts.join(" ")];
+  if (cohort.minGrams != null && cohort.maxGrams != null) filters.push(`${cohort.minGrams}–${cohort.maxGrams} g`);
+  else if (cohort.minGrams != null) filters.push(`at least ${cohort.minGrams} g`);
+  else if (cohort.maxGrams != null) filters.push(`at most ${cohort.maxGrams} g`);
+  return `Cohort ${cohort.cohort}: ${filters.join(", ")}`;
 }
 
 /** One event's anchor, in the event list. */
@@ -42,23 +58,34 @@ export function anchorEventLabel(kind: EventAnchorKind | undefined): string {
   }
 }
 
-export function metricLabels(): Record<EventMetricKey, string> {
-  return {
-    startGlucose: "Start glucose",
-    peakRise: "Peak rise",
-    minutesToPeak: "Time to peak",
-    glucoseAt2Hours: "Glucose at 2 h",
-    glucoseAt4Hours: "Glucose at 4 h",
-    minutesBackToStart: "Back within 20 mg/dL of start",
-    totalInsulin: "Total insulin in window",
-    netInsulin: "Net insulin above schedule in window",
-    netInsulinFirst30: "Above schedule, first 30 min",
-    netInsulinFirst60: "Above schedule, first 60 min",
-    netInsulinFirst120: "Above schedule, first 2 h",
-    iobAtAnchor: "IOB at the event",
-    iobAtEnd: "IOB at window end",
-    gramsPerUnit: "Observed grams per unit",
-  };
+export interface MetricDefinition {
+  key: EventMetricKey;
+  label: string;
+  kind: MetricKind;
+}
+
+/** Every figure of an event, in the order the table and the list show them. */
+export function metricDefinitions(): MetricDefinition[] {
+  return [
+    { key: "startGlucose", label: "Start glucose", kind: "glucose" },
+    { key: "peakRise", label: "Peak rise", kind: "glucoseChange" },
+    { key: "minutesToPeak", label: "Time to peak", kind: "minutes" },
+    { key: "glucoseAt2Hours", label: "Glucose at 2 h", kind: "glucose" },
+    { key: "glucoseAt4Hours", label: "Glucose at 4 h", kind: "glucose" },
+    {
+      key: "minutesBackToStart",
+      label: `Back within ${bg(20)} ${bgLabel()} of start`,
+      kind: "minutes",
+    },
+    { key: "totalInsulin", label: "Total insulin in window", kind: "units" },
+    { key: "netInsulin", label: "Net insulin above schedule in window", kind: "units" },
+    { key: "netInsulinFirst30", label: "Above schedule, first 30 min", kind: "units" },
+    { key: "netInsulinFirst60", label: "Above schedule, first 60 min", kind: "units" },
+    { key: "netInsulinFirst120", label: "Above schedule, first 2 h", kind: "units" },
+    { key: "iobAtAnchor", label: "IOB at the event", kind: "units" },
+    { key: "iobAtEnd", label: "IOB at window end", kind: "units" },
+    { key: "gramsPerUnit", label: "Observed grams per unit", kind: "gramsPerUnit" },
+  ];
 }
 
 /** A name from the response's `ignoredFilters`, including the builder's parameters. */
@@ -66,7 +93,7 @@ export function eventIgnoredFilterLabel(name: string): string {
   const cohort = /^anchor(\d)$/.exec(name);
   if (cohort) return `Cohort ${cohort[1]}`;
   if (name === "isolatedOnly") return "Isolated events only";
-  if (name === "requireBolusCluster") return "Require automatic boluses";
+  if (name === "requireCorroboration") return "Only rises the loop answered";
   return ignoredFilterLabel(name);
 }
 

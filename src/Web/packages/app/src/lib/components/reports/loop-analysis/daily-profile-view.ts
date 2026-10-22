@@ -45,9 +45,12 @@ export function contributingDays(range: DailyProfileRange | undefined, slot: num
   return result;
 }
 
-/** A slot of any series laid out in numbered slots: the time of day, or time from an event. */
-export interface Slotted {
-  slot?: number;
+/**
+ * The number of a slot of any series laid out in slots, the time of day or time from an event:
+ * its own `slot` where it carries one, else its place in the list.
+ */
+function slotNumber(slot: object, position: number): number {
+  return "slot" in slot && typeof slot.slot === "number" ? slot.slot : position;
 }
 
 export interface SlotPoint<T> {
@@ -67,16 +70,16 @@ export type AggregatePoint = SlotPoint<LoopAnalysisAggregate>;
  * where its sparse flag changes. A run ending at a sparseness change repeats the next run's first
  * point so the two meet instead of leaving a sliver.
  */
-export function slotRuns<S extends Slotted, T>(
+export function slotRuns<S extends object, T>(
   slots: S[],
   pick: (slot: S) => T | null | undefined,
   isSparse: (value: T, slot: S) => boolean
 ): SlotRun<T>[] {
   const runs: SlotRun<T>[] = [];
   let current: SlotRun<T> | null = null;
-  for (const slot of slots) {
+  for (const [position, slot] of slots.entries()) {
     const value = pick(slot);
-    const index = slot.slot ?? 0;
+    const index = slotNumber(slot, position);
     if (value == null) {
       current = null;
       continue;
@@ -94,7 +97,7 @@ export function slotRuns<S extends Slotted, T>(
   return runs;
 }
 
-export function aggregateRuns<S extends Slotted>(
+export function aggregateRuns<S extends object>(
   slots: S[],
   pick: (slot: S) => LoopAnalysisAggregate | undefined
 ): SlotRun<LoopAnalysisAggregate>[] {

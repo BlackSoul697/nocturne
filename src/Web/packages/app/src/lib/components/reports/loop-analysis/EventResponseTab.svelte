@@ -20,19 +20,20 @@
   import { glucoseUnits } from "$lib/stores/appearance-store.svelte";
   import { bg, bgDelta, bgLabel, convertToDisplayUnits } from "$lib/utils/formatting";
   import Clock from "@lucide/svelte/icons/clock";
-  import EyeOff from "@lucide/svelte/icons/eye-off";
+  import Info from "@lucide/svelte/icons/info";
   import FilterX from "@lucide/svelte/icons/funnel-x";
   import TimeOfDayPanel from "./TimeOfDayPanel.svelte";
   import PercentileBands from "./PercentileBands.svelte";
   import AggregateReadout from "./AggregateReadout.svelte";
   import EventMetricsTable from "./EventMetricsTable.svelte";
   import EventList from "./EventList.svelte";
+  import EventSlotEvents from "./EventSlotEvents.svelte";
   import NoTimeZone from "./NoTimeZone.svelte";
   import CohortDot from "./CohortDot.svelte";
   import { TimeOfDayCursor } from "./time-of-day-cursor.svelte";
   import { axisEnd } from "./daily-profile-view";
-  import { cohortBands, hourTicks, METRIC_SERIES, slotMinute, type EventMetricKey } from "./event-response-view";
-  import { anchorLabel, eventIgnoredFilterLabel, relativeHours, relativeMinutes } from "./event-labels.svelte";
+  import { cohortBands, hourTicks, slotMinute } from "./event-response-view";
+  import { cohortLabel, eventIgnoredFilterLabel, relativeHours, relativeMinutes } from "./event-labels.svelte";
 
   interface Props {
     response: EventResponseReport;
@@ -44,11 +45,11 @@
   const primary = $derived(response.primary?.cohorts ?? []);
   const comparison = $derived(response.comparison?.cohorts ?? null);
   const comparing = $derived(comparison != null);
-  const slots = $derived(primary[0]?.slots ?? []);
-  const totalEvents = $derived(primary.reduce((sum, c) => sum + (c.events ?? 0), 0));
+  const minutes = $derived(response.slotMinutes ?? []);
+  const anyEvents = $derived([...primary, ...(comparison ?? [])].some((c) => (c.events ?? 0) > 0));
 
   // The axis is fixed per response; a cursor per slot count keeps the stack's tab stop and crosshair.
-  const cursor = $derived(new TimeOfDayCursor(Math.max(1, slots.length)));
+  const cursor = $derived(new TimeOfDayCursor(Math.max(1, minutes.length)));
   let algorithmOnly = $state(false);
 
   const units = $derived(glucoseUnits.current);
@@ -57,7 +58,6 @@
 
   const withheld = $derived(new Set(response.withheldSeries ?? []));
   const hidden = (series: LoopAnalysisSeries) => withheld.has(series);
-  const metricHidden = (metric: EventMetricKey) => hidden(METRIC_SERIES[metric]);
   const hiddenText = () => "Hidden: your access does not include this data";
 
   const resultFor = (list: EventCohortResult[] | null, cohort: number | undefined) =>
@@ -93,7 +93,14 @@
   );
   const u2 = (v: number) => v.toFixed(2);
   const signedUnits = (v: number) => `${v > 0 ? "+" : ""}${v.toFixed(2)}`;
-  const axisGlucose = (v: number) => (units === "mmol" ? v.toFixed(0) : String(Math.round(v)));
+  /** Whole numbers in mg/dL; in mmol/L, as many decimals as the axis span needs so ticks stay distinct. */
+  const axisGlucose = (domain: [number, number]) => (v: number) =>
+    units === "mmol" ? v.toFixed(domain[1] - domain[0] < 6 ? 1 : 0) : String(Math.round(v));
+
+  const changeDomain = $derived(
+    signedDomain(spread(glucoseChange).map((v) => (v == null ? null : toDisplay(v))), units === "mmol" ? 1 : 20)
+  );
+  const glucoseDomain = $derived<[number, number]>([0, toDisplay(thresholds.current.glucoseYMax)]);
 
   const panels = $derived<Panel[]>([
     {
@@ -104,9 +111,9 @@
       pick: glucoseChange,
       format: (v) => bgDelta(v),
       scale: toDisplay,
-      domain: signedDomain(spread(glucoseChange).map((v) => (v == null ? null : toDisplay(v))), units === "mmol" ? 1 : 20),
+      domain: changeDomain,
       zero: true,
-      yFormat: axisGlucose,
+      yFormat: axisGlucose(changeDomain),
     },
     {
       id: "glucose",
@@ -116,8 +123,8 @@
       pick: (s) => s.glucose,
       format: (v) => String(bg(v)),
       scale: toDisplay,
-      domain: [0, toDisplay(thresholds.current.glucoseYMax)],
-      yFormat: axisGlucose,
+      domain: glucoseDomain,
+      yFormat: axisGlucose(glucoseDomain),
     },
     {
       id: "correction",
@@ -159,16 +166,18 @@
     },
   ]);
 
-  const ticks = $derived(hourTicks(slots));
+  const ticks = $derived(hourTicks(minutes));
   const slotLabel = (slot: number) =>
-    `${relativeMinutes(slotMinute(slots, slot))} to ${relativeMinutes(slotMinute(slots, slot + 1))}`;
-  const zeroSlot = $derived(slots.find((s) => s.minute === 0)?.slot ?? 0);
+    `${relativeMinutes(slotMinute(minutes, slot))} to ${relativeMinutes(slotMinute(minutes, slot + 1))}`;
+  const zeroSlot = $derived(Math.max(0, minutes.indexOf(0)));
+  const slotOf = (list: EventCohortResult[] | null, cohort: number | undefined, slot: number) =>
+    resultFor(list, cohort)?.slots?.[slot] ?? {};
 
   function describe(panel: Panel, slot: number): string {
     return cohorts
       .map((cohort) => {
-        const value = panel.pick(resultFor(primary, cohort.cohort)?.slots?.[slot] ?? {});
-        const label = anchorLabel(cohort.anchor);
+        const value = panel.pick(slotOf(primary, cohort.cohort, slot));
+        const label = cohortLabel(cohort);
         return value
           ? `${label}: median ${panel.format(value.p50 ?? 0)}, ${plural(value.n ?? 0, ["# event", "# events"])}`
           : `${label}: no data`;
@@ -182,6 +191,13 @@
       : allSlots.some((s) => panel.pick(s) != null)
         ? null
         : "Nothing recorded around these events";
+
+  const listed = $derived(!hidden(LoopAnalysisSeries.EventList));
+
+  function closeEvents() {
+    cursor.selected = null;
+    cursor.restoreFocus();
+  }
 </script>
 
 {#if response.timeZoneUnavailableReason}
@@ -216,14 +232,14 @@
         <p class="text-sm">Pick an event your access includes.</p>
       </div>
     {:else}
-      <ul class="flex flex-wrap gap-x-6 gap-y-2 text-sm" aria-label="Cohorts">
+      <ul class="space-y-1.5 text-sm" aria-label="Cohorts">
         {#each cohorts as cohort, i (cohort.cohort)}
           {@const result = resultFor(primary, cohort.cohort)}
           {@const compared = resultFor(comparison, cohort.cohort)}
           <li class="flex items-start gap-2">
             <CohortDot index={i} class="mt-1.5" />
             <span>
-              <span class="font-medium">{anchorLabel(cohort.anchor)}</span>
+              <span class="font-medium">{cohortLabel(cohort)}</span>:
               {plural(result?.events ?? 0, ["# event", "# events"])}
               {#if comparing}<span class="text-muted-foreground">(compared {compared?.events ?? 0})</span>{/if}
               {#if (result?.notIsolated ?? 0) > 0 || (result?.missingAnchorGlucose ?? 0) > 0}
@@ -238,7 +254,7 @@
         {/each}
       </ul>
 
-      {#if totalEvents === 0}
+      {#if !anyEvents}
         <div class="rounded-lg border border-dashed p-8 text-center text-muted-foreground">
           <p class="font-medium">No events like these in this range</p>
           <p class="text-sm">Pick a longer range, widen the cohorts, or relax the filters.</p>
@@ -262,7 +278,7 @@
               heightClass={p < 2 ? "h-44" : "h-32"}
               showTimeAxis={p === panels.length - 1}
               {ticks}
-              tickLabel={(slot) => relativeHours(slotMinute(slots, slot))}
+              tickLabel={(slot) => relativeHours(slotMinute(minutes, slot))}
               {slotLabel}
               empty={emptyText(panel)}
               describe={(slot) => describe(panel, slot)}
@@ -289,9 +305,9 @@
                 <div class="space-y-2">
                   {#each cohorts as cohort (cohort.cohort)}
                     <AggregateReadout
-                      label={anchorLabel(cohort.anchor)}
-                      value={panel.pick(resultFor(primary, cohort.cohort)?.slots?.[slot] ?? {})}
-                      comparison={panel.pick(resultFor(comparison, cohort.cohort)?.slots?.[slot] ?? {})}
+                      label={cohortLabel(cohort)}
+                      value={panel.pick(slotOf(primary, cohort.cohort, slot))}
+                      comparison={panel.pick(slotOf(comparison, cohort.cohort, slot))}
                       showComparison={comparing}
                       format={panel.format}
                       counts="events"
@@ -309,28 +325,36 @@
           {/each}
 
           <p class="flex items-center gap-1.5 px-1 text-xs text-muted-foreground">
-            <EyeOff class="size-3.5" />
+            <Info class="size-3.5" />
             Each band is a cohort's events lined up on the event, at 0. Faded stretches rest on too
-            few events to read as a pattern. With the keyboard, the arrow keys move along the window
-            and between charts, and Home and End go to either end.
+            few events to read as a pattern. {#if listed}Click a time, or press Enter on it, to list
+              the events behind it.{/if} With the keyboard, the arrow keys move along the window and
+            between charts, and Home and End go to either end.
           </p>
         </div>
 
+        {#if listed && cursor.selected != null}
+          <EventSlotEvents
+            slot={cursor.selected}
+            label={slotLabel(cursor.selected)}
+            events={response.primary?.events ?? []}
+            {cohorts}
+            focusOnPick={cursor.selectedByKeyboard}
+            onclose={closeEvents}
+          />
+        {/if}
+
         <section class="space-y-2" aria-labelledby="event-metrics-heading">
           <h3 id="event-metrics-heading" class="text-sm font-medium">What happened after each event</h3>
-          <EventMetricsTable {cohorts} {primary} {comparison} hidden={metricHidden} />
+          <EventMetricsTable {cohorts} {primary} {comparison} />
         </section>
 
         <section class="space-y-2" aria-labelledby="event-list-heading">
           <h3 id="event-list-heading" class="text-sm font-medium">Events</h3>
-          {#if hidden(LoopAnalysisSeries.EventList)}
+          {#if !listed}
             <p class="text-sm text-muted-foreground">{hiddenText()}</p>
           {:else}
-            <EventList
-              events={response.primary?.events ?? []}
-              cohorts={cohorts.map((c) => c.cohort ?? 0)}
-              hidden={metricHidden}
-            />
+            <EventList events={response.primary?.events ?? []} {cohorts} />
           {/if}
         </section>
       {/if}

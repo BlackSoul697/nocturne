@@ -156,7 +156,7 @@
     </Tabs.Content>
     <Tabs.Content value="meals-events" class="mt-4 space-y-6">
       <EventCohortBuilder
-        state={events}
+        value={events}
         onchange={setEvents}
         applied={eventResponse?.definition}
         unavailableAnchors={eventResponse?.unavailableAnchors}

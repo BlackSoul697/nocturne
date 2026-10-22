@@ -14,6 +14,15 @@ const PANELS = [
   "Carbs on board",
 ];
 
+const MEALS = "Cohort 1: Meals 05:00–10:00, 30–80 g";
+const RISES = "Cohort 2: Unannounced rises";
+
+function focusSlider(name: string) {
+  const slider = page.getByRole("slider", { name, exact: true });
+  (slider.element() as HTMLElement).focus();
+  return slider;
+}
+
 describe("EventResponseTab", () => {
   it("stacks every series on the shared axis of minutes from the event", async () => {
     render(EventResponseTab, { props: { response: eventResponse() } });
@@ -23,9 +32,17 @@ describe("EventResponseTab", () => {
     await expect
       .element(page.getByRole("slider", { name: "Glucose", exact: true }))
       .toHaveAttribute("aria-valuemax", "71");
-    await expect.element(page.getByText("12 events").first()).toBeVisible();
     await expect.element(page.getByText(/1 left out for another event in its window/).first()).toBeVisible();
     await expect.element(page.getByText(/1 without a glucose reading at the time/).first()).toBeVisible();
+  });
+
+  it("names every cohort by its number and filters, not by colour alone", async () => {
+    render(EventResponseTab, { props: { response: eventResponse() } });
+
+    await expect.element(page.getByRole("list", { name: "Cohorts" })).toHaveTextContent(MEALS);
+    await expect.element(page.getByRole("columnheader", { name: new RegExp(MEALS) })).toBeVisible();
+    await expect.element(page.getByRole("columnheader", { name: new RegExp(RISES) })).toBeVisible();
+    await expect.element(page.getByRole("row", { name: /in Cohort 2: Unannounced rises/ })).toBeVisible();
   });
 
   it("is one tab stop, and reads each cohort's median and n at the slot", async () => {
@@ -34,15 +51,14 @@ describe("EventResponseTab", () => {
     const sliders = page.getByRole("slider").elements();
     expect(sliders.filter((s) => s.getAttribute("tabindex") === "0")).toHaveLength(1);
 
-    const slider = page.getByRole("slider", { name: "Glucose change from the event" });
-    (slider.element() as HTMLElement).focus();
+    const slider = focusSlider("Glucose change from the event");
     await userEvent.keyboard("{Shift>}{ArrowRight}{/Shift}");
     await expect.element(slider).toHaveAttribute("aria-valuenow", "12");
     await expect
       .element(slider)
       .toHaveAttribute(
         "aria-valuetext",
-        "Event to +5 min: Meals: median 0, 12 events; Unannounced rises: median +5, 3 events"
+        `Event to +5 min: ${MEALS}: median 0, 12 events; ${RISES}: median +5, 3 events`
       );
     await userEvent.keyboard("{End}");
     await expect.element(slider).toHaveAttribute("aria-valuenow", "71");
@@ -50,13 +66,32 @@ describe("EventResponseTab", () => {
     expect(document.activeElement?.getAttribute("aria-label")).toBe("Glucose");
   });
 
-  it("compares each cohort's figures side by side, and lists every event with a Day in Review link", async () => {
+  it("lists the events behind a picked slot, each opening Day in Review", async () => {
+    render(EventResponseTab, { props: { response: eventResponse() } });
+
+    focusSlider("Glucose");
+    await userEvent.keyboard("{Shift>}{ArrowRight}{/Shift}{Enter}");
+    const list = page.getByRole("region", { name: "Events behind Event to +5 min" });
+    await expect.element(list).toBeVisible();
+    expect(list.getByRole("link").elements()).toHaveLength(3);
+
+    await userEvent.keyboard("{Escape}");
+    expect(page.getByRole("region", { name: /Events behind/ }).elements()).toHaveLength(0);
+
+    focusSlider("Glucose");
+    await userEvent.keyboard("{Home}{Enter}");
+    await expect.element(page.getByText("No event of this cohort has a reading here.").first()).toBeVisible();
+  });
+
+  it("compares each cohort's figures side by side, with how many came back and why grams per unit is missing", async () => {
     render(EventResponseTab, { props: { response: eventResponse({ comparison: true }) } });
 
     await expect.element(page.getByText("The comparison range is drawn as dashed outlines in each cohort's colour.")).toBeVisible();
     await expect.element(page.getByRole("rowheader", { name: "Observed grams per unit" })).toBeVisible();
     await expect.element(page.getByText("9.5 g/U").first()).toBeVisible();
     await expect.element(page.getByText(/Compared 9.5 g\/U/).first()).toBeVisible();
+    await expect.element(page.getByText("8 of 12 events came back")).toBeVisible();
+    await expect.element(page.getByText(/2 meals had one, and 1 had no insulin above schedule/)).toBeVisible();
 
     const links = page.getByRole("link", { name: /in Day in Review/ }).elements();
     expect(links).toHaveLength(3);
@@ -74,7 +109,7 @@ describe("EventResponseTab", () => {
     expect(firstRow()).toContain("2026-10-11");
   });
 
-  it("hides the event list and every treatment series the caller cannot read", async () => {
+  it("hides the event list and every treatment series and figure the caller cannot read", async () => {
     render(EventResponseTab, { props: { response: eventResponse({ withheld: TREATMENT_SERIES }) } });
 
     await expect.element(page.getByRole("slider", { name: "Glucose", exact: true })).toBeVisible();
@@ -82,15 +117,18 @@ describe("EventResponseTab", () => {
     await expect.element(page.getByText("Hidden: your access does not include this data").first()).toBeVisible();
     expect(page.getByRole("link", { name: /in Day in Review/ }).elements()).toHaveLength(0);
     expect(page.getByRole("rowheader", { name: "Observed grams per unit" }).elements()).toHaveLength(0);
+    expect(page.getByText(/grams per unit is read only/).elements()).toHaveLength(0);
     await expect.element(page.getByRole("rowheader", { name: "Peak rise" })).toBeVisible();
+    expect(page.getByText(/list the events behind it/).elements()).toHaveLength(0);
   });
 
-  it("hides the glucose series and figures without glucose", async () => {
-    render(EventResponseTab, { props: { response: eventResponse({ withheld: [LoopAnalysisSeries.EventGlucose] }) } });
+  it("shows the comparison when only it has events", async () => {
+    const response = eventResponse({ comparison: true });
+    for (const c of response.primary?.cohorts ?? []) c.events = 0;
+    render(EventResponseTab, { props: { response } });
 
-    expect(page.getByRole("slider", { name: "Glucose", exact: true }).elements()).toHaveLength(0);
-    expect(page.getByRole("rowheader", { name: "Peak rise" }).elements()).toHaveLength(0);
-    await expect.element(page.getByRole("slider", { name: "Insulin on board" })).toBeVisible();
+    await expect.element(page.getByRole("slider", { name: "Glucose", exact: true })).toBeVisible();
+    await expect.element(page.getByText("(compared 12)")).toBeVisible();
   });
 
   it("explains a missing time zone in place of the curves", async () => {
@@ -111,11 +149,12 @@ describe("EventResponseTab", () => {
     await expect.element(page.getByText(/Cohort 2, Isolated events only\./)).toBeVisible();
   });
 
-  it("says so when no cohort is left to align", async () => {
-    const response = eventResponse();
+  it("says so when no cohort is left to align, as without glucose", async () => {
+    const response = eventResponse({ withheld: [LoopAnalysisSeries.EventGlucose] });
     response.definition = { ...response.definition, cohorts: [] };
     render(EventResponseTab, { props: { response } });
 
     await expect.element(page.getByText("No events to align")).toBeVisible();
+    expect(page.getByRole("slider").elements()).toHaveLength(0);
   });
 });

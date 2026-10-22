@@ -17,8 +17,8 @@ export const ANCHOR_KINDS: EventAnchorKind[] = Object.values(EventAnchorKind);
 const COHORT_FIELDS = ["anchor", "fromMinute", "toMinute", "minGrams", "maxGrams"] as const;
 /** The options' query parameters, as a response's unavailable filters name them. */
 export const ISOLATED_ONLY = "isolatedOnly";
-export const REQUIRE_BOLUS_CLUSTER = "requireBolusCluster";
-const OPTION_PARAMS = [ISOLATED_ONLY, REQUIRE_BOLUS_CLUSTER] as const;
+export const REQUIRE_CORROBORATION = "requireCorroboration";
+const OPTION_PARAMS = [ISOLATED_ONLY, REQUIRE_CORROBORATION] as const;
 const WINDOW_PARAMS = ["minutesBefore", "minutesAfter"] as const;
 
 /** Every query parameter the events builder owns; a write clears them all before setting its own. */
@@ -64,7 +64,7 @@ export function readEventResponse(search: URLSearchParams): EventResponseState {
   return {
     cohorts,
     isolatedOnly: search.get("isolatedOnly") === "true",
-    requireBolusCluster: search.get("requireBolusCluster") === "true",
+    requireCorroboration: search.get("requireCorroboration") === "true",
     minutesBefore: MINUTES_BEFORE.find((m) => m === before),
     minutesAfter: MINUTES_AFTER.find((m) => m === after),
   };
@@ -78,10 +78,38 @@ export function writeEventResponse(state: EventResponseState, search: URLSearchP
   return next;
 }
 
+/** The grams the API bounds a meal cohort to. */
+const MAX_GRAMS = 1000;
+
+/** Whether a cohort's window starts and ends at the same minute, which the builder does not send. */
+export function sameTimes(cohort: EventCohortDefinition): boolean {
+  return cohort.fromMinute != null && cohort.fromMinute === cohort.toMinute;
+}
+
+/**
+ * A cohort as the API accepts it: grams within its bounds and the right way round, a window
+ * whose start and end are the same minute dropped, and no grams on a cohort that is not meals.
+ */
+export function normalisedCohort(cohort: EventCohortDefinition): EventCohortDefinition {
+  const clamp = (g: number | undefined) => (g == null ? undefined : Math.min(MAX_GRAMS, Math.max(0, g)));
+  let min = clamp(cohort.minGrams);
+  let max = clamp(cohort.maxGrams);
+  if (min != null && max != null && min > max) [min, max] = [max, min];
+  const meal = cohort.anchor === EventAnchorKind.Meal;
+  const allDay = sameTimes(cohort);
+  return {
+    ...cohort,
+    fromMinute: allDay ? undefined : cohort.fromMinute,
+    toMinute: allDay ? undefined : cohort.toMinute,
+    minGrams: meal ? min : undefined,
+    maxGrams: meal ? max : undefined,
+  };
+}
+
 /** The builder's parameters, cohorts numbered in order; only what is set. */
 function eventParameters(state: EventResponseState): Record<string, string | number | boolean> {
   const params: Record<string, string | number | boolean> = {};
-  (state.cohorts ?? []).slice(0, MAX_COHORTS).forEach((cohort, i) => {
+  (state.cohorts ?? []).slice(0, MAX_COHORTS).map(normalisedCohort).forEach((cohort, i) => {
     if (!cohort.anchor) return;
     const n = i + 1;
     params[`anchor${n}`] = cohort.anchor;
@@ -93,7 +121,7 @@ function eventParameters(state: EventResponseState): Record<string, string | num
     }
   });
   if (state.isolatedOnly) params.isolatedOnly = true;
-  if (state.requireBolusCluster) params.requireBolusCluster = true;
+  if (state.requireCorroboration) params.requireCorroboration = true;
   if (state.minutesBefore != null) params.minutesBefore = state.minutesBefore;
   if (state.minutesAfter != null) params.minutesAfter = state.minutesAfter;
   return params;
@@ -120,14 +148,14 @@ export function withoutUnavailableEvents(
   const filters = new Set(unavailableFilters);
   const cohorts = (state.cohorts ?? []).filter((c) => !c.anchor || !anchors.has(c.anchor));
   const isolatedOnly = state.isolatedOnly && !filters.has(ISOLATED_ONLY);
-  const requireBolusCluster = state.requireBolusCluster && !filters.has(REQUIRE_BOLUS_CLUSTER);
+  const requireCorroboration = state.requireCorroboration && !filters.has(REQUIRE_CORROBORATION);
   if (
     cohorts.length === (state.cohorts ?? []).length &&
     isolatedOnly === state.isolatedOnly &&
-    requireBolusCluster === state.requireBolusCluster
+    requireCorroboration === state.requireCorroboration
   )
     return null;
-  return { ...state, cohorts, isolatedOnly, requireBolusCluster };
+  return { ...state, cohorts, isolatedOnly, requireCorroboration };
 }
 
 /** `HH:mm` for a minute of the day, as a time input reads it. */

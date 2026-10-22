@@ -4,6 +4,7 @@ import {
   clockToMinute,
   eventResponseQuery,
   minuteToClock,
+  normalisedCohort,
   readEventResponse,
   withoutUnavailableEvents,
   writeEventResponse,
@@ -51,7 +52,7 @@ describe("event response filter", () => {
           { anchor: EventAnchorKind.CorrectionBolus, minGrams: 20, fromMinute: 0, toMinute: 120 },
           { anchor: EventAnchorKind.Meal, maxGrams: 50 },
         ],
-        requireBolusCluster: true,
+        requireCorroboration: true,
       }
     );
     expect(query).toEqual({
@@ -63,7 +64,7 @@ describe("event response filter", () => {
       toMinute1: 120,
       anchor2: EventAnchorKind.Meal,
       maxGrams2: 50,
-      requireBolusCluster: true,
+      requireCorroboration: true,
     });
   });
 
@@ -73,11 +74,37 @@ describe("event response filter", () => {
     const next = withoutUnavailableEvents(
       state,
       [{ anchor: EventAnchorKind.Meal, requiredScope: "treatments.read" }],
-      ["isolatedOnly", "requireBolusCluster"]
+      ["isolatedOnly", "requireCorroboration"]
     );
     expect(next?.cohorts?.map((c) => c.anchor)).toEqual([EventAnchorKind.SensorStart]);
     expect(next?.isolatedOnly).toBe(false);
     expect(withoutUnavailableEvents(next!, [{ anchor: EventAnchorKind.Meal }], ["isolatedOnly"])).toBeNull();
+  });
+
+  it("sends only what the API accepts: grams the right way round and in bounds, and no empty window", () => {
+    const query = eventResponseQuery(
+      { startDate: "2026-10-01", endDate: "2026-10-14" },
+      {
+        cohorts: [
+          { anchor: EventAnchorKind.Meal, minGrams: 80, maxGrams: 20, fromMinute: 300, toMinute: 300 },
+          { anchor: EventAnchorKind.Meal, minGrams: -5, maxGrams: 5000 },
+        ],
+      }
+    );
+    expect(query).toEqual({
+      startDate: "2026-10-01",
+      endDate: "2026-10-14",
+      anchor1: EventAnchorKind.Meal,
+      minGrams1: 20,
+      maxGrams1: 80,
+      anchor2: EventAnchorKind.Meal,
+      minGrams2: 0,
+      maxGrams2: 1000,
+    });
+    expect(normalisedCohort({ anchor: EventAnchorKind.Meal, fromMinute: 60, toMinute: 60 })).toMatchObject({
+      fromMinute: undefined,
+      toMinute: undefined,
+    });
   });
 
   it("converts minutes of the day to and from a time input", () => {

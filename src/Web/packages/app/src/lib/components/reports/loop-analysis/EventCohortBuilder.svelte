@@ -26,7 +26,9 @@
     MINUTES_AFTER,
     MINUTES_BEFORE,
     minuteToClock,
-    REQUIRE_BOLUS_CLUSTER,
+    normalisedCohort,
+    REQUIRE_CORROBORATION,
+    sameTimes,
     type EventResponseState,
   } from "./event-response-filter";
   import CohortDot from "./CohortDot.svelte";
@@ -34,7 +36,7 @@
   import { missingScopeReason } from "./filter-labels.svelte";
 
   interface Props {
-    state: EventResponseState;
+    value: EventResponseState;
     onchange: (next: EventResponseState) => void;
     /** The definition the last response applied, after the API's defaults and the caller's scopes. */
     applied?: EventResponseDefinition | null;
@@ -42,7 +44,7 @@
     unavailableFilters?: LoopAnalysisUnavailableFilter[] | null;
   }
 
-  let { state, onchange, applied = null, unavailableAnchors = null, unavailableFilters = null }: Props = $props();
+  let { value, onchange, applied = null, unavailableAnchors = null, unavailableFilters = null }: Props = $props();
 
   const labels = $derived(anchorLabels());
   const anchorScope = $derived(new Map((unavailableAnchors ?? []).map((a) => [a.anchor, a.requiredScope ?? ""])));
@@ -51,15 +53,23 @@
 
   // What the URL sets is shown as set; with no cohorts there, the API's echo once it has answered.
   const cohorts = $derived<EventCohortDefinition[]>(
-    (state.cohorts?.length ?? 0) > 0 ? (state.cohorts ?? []) : (applied?.cohorts ?? [])
+    (value.cohorts?.length ?? 0) > 0 ? (value.cohorts ?? []) : (applied?.cohorts ?? [])
   );
-  const minutesBefore = $derived(state.minutesBefore ?? applied?.minutesBefore ?? 60);
-  const minutesAfter = $derived(state.minutesAfter ?? applied?.minutesAfter ?? 300);
+  const minutesBefore = $derived(value.minutesBefore ?? applied?.minutesBefore ?? 60);
+  const minutesAfter = $derived(value.minutesAfter ?? applied?.minutesAfter ?? 300);
   const hasRise = $derived(cohorts.some((c) => c.anchor === EventAnchorKind.UnannouncedRise));
 
-  const update = (patch: Partial<EventResponseState>) => onchange({ ...state, cohorts, ...patch });
-  const setCohort = (index: number, patch: Partial<EventCohortDefinition>) =>
-    update({ cohorts: cohorts.map((c, i) => (i === index ? { ...c, ...patch } : c)) });
+  const update = (patch: Partial<EventResponseState>) => onchange({ ...value, cohorts, ...patch });
+
+  /** The cohort whose start and end were just set to the same minute, which is not sent. */
+  let sameTimesCohort = $state<number | null>(null);
+
+  function setCohort(index: number, patch: Partial<EventCohortDefinition>) {
+    const next = { ...cohorts[index], ...patch };
+    sameTimesCohort = sameTimes(next) ? index : null;
+    if (sameTimesCohort != null) return;
+    update({ cohorts: cohorts.map((c, i) => (i === index ? normalisedCohort(next) : c)) });
+  }
 
   function setAnchor(index: number, value: string) {
     const anchor = ANCHOR_KINDS.find((kind) => kind === value);
@@ -109,6 +119,7 @@
           <Label for="event-from-{i}" size="sm" variant="muted">From</Label>
           <Input
             id="event-from-{i}"
+            aria-label="Cohort {i + 1} from"
             type="time"
             size="sm"
             class="w-28"
@@ -120,6 +131,7 @@
           <Label for="event-to-{i}" size="sm" variant="muted">To</Label>
           <Input
             id="event-to-{i}"
+            aria-label="Cohort {i + 1} to"
             type="time"
             size="sm"
             class="w-28"
@@ -157,6 +169,11 @@
           <Button variant="ghost" size="icon-sm" onclick={() => removeCohort(i)} aria-label="Remove cohort {i + 1}">
             <X class="size-4" />
           </Button>
+        {/if}
+        {#if sameTimesCohort === i}
+          <p class="basis-full text-xs text-warning" role="status">
+            Pick a start and an end that differ, or clear both for all day.
+          </p>
         {/if}
       </li>
     {/each}
@@ -209,7 +226,7 @@
     <div class="flex items-center gap-1.5">
       <Checkbox
         id="event-isolated"
-        checked={state.isolatedOnly ?? false}
+        checked={value.isolatedOnly ?? false}
         disabled={filterScope.has(ISOLATED_ONLY)}
         onCheckedChange={(checked) => update({ isolatedOnly: checked === true })}
       />
@@ -222,16 +239,19 @@
       <div class="flex items-center gap-1.5">
         <Checkbox
           id="event-cluster"
-          checked={state.requireBolusCluster ?? false}
-          disabled={filterScope.has(REQUIRE_BOLUS_CLUSTER)}
-          onCheckedChange={(checked) => update({ requireBolusCluster: checked === true })}
+          checked={value.requireCorroboration ?? false}
+          disabled={filterScope.has(REQUIRE_CORROBORATION)}
+          onCheckedChange={(checked) => update({ requireCorroboration: checked === true })}
         />
-        <Label for="event-cluster" variant="option">Only rises the loop answered with automatic boluses</Label>
+        <Label for="event-cluster" variant="option">Only rises the loop answered with its own correction</Label>
+        {#if filterScope.has(REQUIRE_CORROBORATION)}
+          <span class="text-xs text-muted-foreground">({missingScopeReason(filterScope.get(REQUIRE_CORROBORATION) ?? "")})</span>
+        {/if}
       </div>
     {/if}
   </div>
   <p class="text-xs text-muted-foreground">
-    Isolated events have no other meal or correction bolus inside their window. A window across
-    midnight, such as 22:00 to 02:00, wraps to the next day.
+    Isolated events have no other meal, correction bolus or unannounced rise inside their window. A
+    window across midnight, such as 22:00 to 02:00, wraps to the next day.
   </p>
 </section>
