@@ -47,6 +47,15 @@ internal static class RedactionCoverage
                 leaks.Add($"depth cap reached at {value.GetType().Name}");
                 return;
             }
+            if (value is IDictionary map)
+            {
+                foreach (DictionaryEntry entry in map)
+                {
+                    Walk(entry.Key, depth + 1);
+                    Walk(entry.Value, depth + 1);
+                }
+                return;
+            }
             if (value is IEnumerable items)
             {
                 foreach (var item in items)
@@ -83,6 +92,10 @@ internal static class RedactionCoverage
             .Where(p => p.CanRead && p.CanWrite && p.GetIndexParameters().Length == 0
                 && p.GetCustomAttribute<JsonIgnoreAttribute>() is null);
 
+    /// <remarks>
+    /// A type it cannot fill throws rather than returning null, which would leave every property
+    /// beneath it unchecked.
+    /// </remarks>
     private static object? Populate(Type type, int depth)
     {
         if (Nullable.GetUnderlyingType(type) is { } underlying)
@@ -91,27 +104,74 @@ internal static class RedactionCoverage
         if (type == typeof(bool)) return true;
         if (type.IsEnum) return Enum.GetValues(type).Cast<object>().Last();
         if (type == typeof(DateTime)) return new DateTime(2024, 6, 3, 0, 0, 0, DateTimeKind.Utc);
+        if (type == typeof(DateTimeOffset)) return new DateTimeOffset(2024, 6, 3, 0, 0, 0, TimeSpan.Zero);
         if (type == typeof(DateOnly)) return new DateOnly(2024, 6, 3);
+        if (type == typeof(TimeOnly)) return new TimeOnly(1, 0);
+        if (type == typeof(TimeSpan)) return TimeSpan.FromMinutes(1);
+        if (type == typeof(Guid)) return new Guid("00000000-0000-0000-0000-000000000001");
         if (type.IsPrimitive || type == typeof(decimal)) return Convert.ChangeType(1, type);
         if (depth > MaxDepth)
             throw new InvalidOperationException($"Depth cap reached populating {type.Name}; a recursive type needs a hand-built fixture.");
 
-        if (type.IsGenericType && type.GetGenericTypeDefinition() == typeof(List<>))
+        if (type.IsArray)
         {
-            var list = (IList)Activator.CreateInstance(type)!;
-            list.Add(Populate(type.GetGenericArguments()[0], depth + 1));
-            return list;
+            var element = type.GetElementType()!;
+            var array = Array.CreateInstance(element, 1);
+            array.SetValue(Populate(element, depth + 1), 0);
+            return array;
         }
 
-        if (type.GetConstructor(Type.EmptyTypes) is null)
-            return null;
-        var instance = Activator.CreateInstance(type)!;
+        if (type.IsGenericType)
+        {
+            var definition = type.GetGenericTypeDefinition();
+            var arguments = type.GetGenericArguments();
+            if (DictionaryTypes.Contains(definition))
+            {
+                var map = (IDictionary)Activator.CreateInstance(typeof(Dictionary<,>).MakeGenericType(arguments))!;
+                map.Add(Populate(arguments[0], depth + 1)!, Populate(arguments[1], depth + 1));
+                return map;
+            }
+            if (ListTypes.Contains(definition))
+            {
+                var list = (IList)Activator.CreateInstance(typeof(List<>).MakeGenericType(arguments))!;
+                list.Add(Populate(arguments[0], depth + 1));
+                return list;
+            }
+            if (definition == typeof(HashSet<>))
+            {
+                var set = Activator.CreateInstance(type)!;
+                type.GetMethod(nameof(HashSet<object>.Add))!.Invoke(set, [Populate(arguments[0], depth + 1)]);
+                return set;
+            }
+        }
+
+        if (type.IsInterface || type.IsAbstract || typeof(IEnumerable).IsAssignableFrom(type))
+            throw new InvalidOperationException($"Cannot populate {type.Name}; teach {nameof(Populate)} its shape.");
+
+        var constructor = type.GetConstructor(Type.EmptyTypes)
+            ?? type.GetConstructors().OrderByDescending(c => c.GetParameters().Length).FirstOrDefault();
+        var instance = constructor is null
+            ? type.IsValueType
+                ? Activator.CreateInstance(type)!
+                : throw new InvalidOperationException($"Cannot populate {type.Name}: it has no public constructor.")
+            : constructor.Invoke([.. constructor.GetParameters().Select(p => Populate(p.ParameterType, depth + 1))]);
         foreach (var property in Served(type))
             property.SetValue(instance, Populate(property.PropertyType, depth + 1));
         return instance;
     }
 
+    private static readonly Type[] ListTypes =
+    [
+        typeof(List<>), typeof(IList<>), typeof(IReadOnlyList<>), typeof(ICollection<>),
+        typeof(IReadOnlyCollection<>), typeof(IEnumerable<>),
+    ];
+
+    private static readonly Type[] DictionaryTypes =
+        [typeof(Dictionary<,>), typeof(IDictionary<,>), typeof(IReadOnlyDictionary<,>)];
+
     private static bool IsScalar(Type type) =>
         type.IsPrimitive || type.IsEnum || type == typeof(string) || type == typeof(decimal)
-        || type == typeof(DateTime) || type == typeof(DateOnly) || Nullable.GetUnderlyingType(type) is not null;
+        || type == typeof(DateTime) || type == typeof(DateTimeOffset) || type == typeof(DateOnly)
+        || type == typeof(TimeOnly) || type == typeof(TimeSpan) || type == typeof(Guid)
+        || Nullable.GetUnderlyingType(type) is not null;
 }
