@@ -8748,6 +8748,11 @@ namespace Nocturne.Infrastructure.Data.Migrations
                         .HasColumnType("character varying(32)")
                         .HasColumnName("origin");
 
+                    b.Property<string>("OriginEvidence")
+                        .HasMaxLength(16)
+                        .HasColumnType("character varying(16)")
+                        .HasColumnName("origin_evidence");
+
                     b.Property<Guid?>("PatientDeviceId")
                         .HasColumnType("uuid")
                         .HasColumnName("patient_device_id");

@@ -231,6 +231,23 @@ public class DirectionServiceTests
     }
 
     [Fact]
+    public void CalculateDelta_ScaledRoundsAtTheBoundaryWithTheCoreFactor()
+    {
+        var now = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+        var entries = new List<Entry>
+        {
+            new() { Mills = now - (5 * 60 * 1000), Mgdl = 100 },
+            new() { Mills = now, Mgdl = 209 },
+        };
+
+        var result = DirectionService.CalculateDelta(entries, "mmol");
+
+        Assert.NotNull(result);
+        Assert.Equal(6.0, result.Scaled);
+        Assert.Equal("+6.0", result.Display);
+    }
+
+    [Fact]
     public void CalculateDelta_ShouldReturnNullForInsufficientData()
     {
         // Arrange
