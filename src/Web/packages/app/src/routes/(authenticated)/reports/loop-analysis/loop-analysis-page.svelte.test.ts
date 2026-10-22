@@ -2,17 +2,30 @@ import { render } from "vitest-browser-svelte";
 import { page } from "vitest/browser";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { page as pageState } from "$app/state";
-import { EventAnchorKind, type DailyProfileResponse, type EventResponseReport } from "$lib/api";
+import type { DailyProfileResponse, PredictionAccuracyResponse } from "$lib/api";
 import { remoteQuery } from "$lib/test-stubs/remote-resource";
 import {
   ALL_SCOPES,
   profileResponse,
 } from "$lib/components/reports/loop-analysis/daily-profile.test-fixtures";
-import { eventResponse } from "$lib/components/reports/loop-analysis/event-response.test-fixtures";
+import { predictionResponse } from "$lib/components/reports/loop-analysis/prediction-accuracy.test-fixtures";
 
-const calls = vi.hoisted(() => ({ query: [] as unknown[], events: [] as unknown[], goto: [] as [string, unknown][] }));
+const calls = vi.hoisted(() => ({
+  query: [] as unknown[],
+  predictions: [] as unknown[],
+  goto: [] as [string, unknown][],
+  /** Whether a goto moves the page's URL, as SvelteKit's does, rather than only being recorded. */
+  navigate: false,
+}));
+
+// The page reads `page.url` reactively; the shared stub's is a plain property.
+vi.mock("$app/state", async () => {
+  const stub = await vi.importActual<typeof import("$app/state")>("$app/state");
+  const { reactiveFields } = await import("$lib/test-stubs/reactive-fields.svelte");
+  return { ...stub, page: reactiveFields({ ...stub.page }) };
+});
 let response: DailyProfileResponse;
-let events: EventResponseReport;
+let predictions: PredictionAccuracyResponse;
 let resourceState: { stale?: boolean; error?: unknown } = {};
 
 vi.mock("$api/generated/loopAnalysis.generated.remote", () => ({
@@ -20,18 +33,22 @@ vi.mock("$api/generated/loopAnalysis.generated.remote", () => ({
     calls.query.push(input);
     return remoteQuery(() => response);
   },
-  getEventResponse: (input: unknown) => {
-    calls.events.push(input);
-    return remoteQuery(() => events);
+  getPredictionAccuracy: (input: unknown) => {
+    calls.predictions.push(input);
+    return remoteQuery(() => predictions);
   },
 }));
 
-vi.mock("$app/navigation", () => ({
-  goto: (url: string, options?: unknown) => {
-    calls.goto.push([url, options]);
-    return Promise.resolve();
-  },
-}));
+vi.mock("$app/navigation", async () => {
+  const { page: state } = await import("$app/state");
+  return {
+    goto: (url: string, options?: unknown) => {
+      calls.goto.push([url, options]);
+      if (calls.navigate) state.url = new URL(url, "http://localhost") as typeof state.url;
+      return Promise.resolve();
+    },
+  };
+});
 
 vi.mock("$lib/hooks/date-params.svelte", () => ({
   requireDateParamsContext: () => ({ fromDay: "2026-10-09", toDay: "2026-10-22" }),
@@ -65,10 +82,11 @@ const lastQuery = () => calls.query.at(-1);
 describe("Loop Analysis page", () => {
   beforeEach(() => {
     calls.query.length = 0;
-    calls.events.length = 0;
+    calls.predictions.length = 0;
+    calls.navigate = false;
     calls.goto.length = 0;
     response = profileResponse();
-    events = eventResponse();
+    predictions = predictionResponse();
     resourceState = {};
   });
 
@@ -181,79 +199,57 @@ describe("Loop Analysis page", () => {
     expect(page.getByText("Some filters were not applied").elements()).toHaveLength(0);
   });
 
-  it("fetches only the Meals & events tab when it is on screen, with its cohorts", async () => {
-    open("?tab=meals-events&anchor1=Meal&fromMinute1=300&toMinute1=600&anchor2=UnannouncedRise&minutesAfter=480");
+  it("fetches only the Predictions tab when it is on screen, with the shared filter", async () => {
+    open("?tab=predictions&compare=previous&excludeExercise=true");
 
-    await expect.element(page.getByRole("slider", { name: "Glucose change from the event" })).toBeVisible();
+    await expect.element(page.getByRole("slider", { name: "UAM", exact: true })).toBeVisible();
     expect(calls.query).toHaveLength(0);
-    expect(calls.events.at(-1)).toEqual({
+    expect(calls.predictions.at(-1)).toEqual({
       startDate: "2026-10-09",
       endDate: "2026-10-22",
-      anchor1: EventAnchorKind.Meal,
-      fromMinute1: 300,
-      toMinute1: 600,
-      anchor2: EventAnchorKind.UnannouncedRise,
-      minutesAfter: 480,
+      compare: "Previous",
+      excludeExercise: true,
     });
-    await expect.element(page.getByLabelText("Cohort 1 from")).toHaveValue("05:00");
   });
 
-  it("writes a builder change into the URL beside the shared filter", async () => {
-    open("?tab=meals-events&days=14&excludeExercise=true");
+  it("drops from the URL a filter the Predictions tab's viewer cannot use", async () => {
+    const scopes = ["glucose.read", "treatments.read", "therapy.read", "reports.read"];
+    predictions = predictionResponse({ scopes });
+    open("?tab=predictions&excludeOpenLoop=true");
 
-    await page.getByLabelText("Isolated events only").click();
-    const search = new URL(calls.goto.at(-1)![0], "http://localhost").searchParams;
-    expect(search.get("isolatedOnly")).toBe("true");
-    expect(search.get("anchor1")).toBe("Meal");
-    expect(search.get("anchor2")).toBe("UnannouncedRise");
-    expect(search.get("excludeExercise")).toBe("true");
-    expect(search.get("tab")).toBe("meals-events");
-  });
-
-  it("drops from the URL a cohort whose events the viewer cannot read", async () => {
-    events = {
-      ...eventResponse(),
-      unavailableAnchors: [{ anchor: EventAnchorKind.Meal, requiredScope: "treatments.read" }],
-    };
-    open("?tab=meals-events&anchor1=Meal&anchor2=SensorStart");
-
+    await expect.element(page.getByText("Prediction accuracy is hidden")).toBeVisible();
     await expect.poll(() => calls.goto.length).toBeGreaterThan(0);
     const search = new URL(calls.goto.at(-1)![0], "http://localhost").searchParams;
-    expect(search.get("anchor1")).toBe("SensorStart");
-    expect(search.has("anchor2")).toBe(false);
+    expect(search.has("excludeOpenLoop")).toBe(false);
+    expect(search.get("tab")).toBe("predictions");
   });
 
-  it("fetches only the tab on screen as it switches, and reads each tab's loading and failure", async () => {
-    // On Meals & events while its request is still loading: the bar waits for its echo.
-    resourceState = { stale: true };
-    const meals = open("?tab=meals-events&days=14&anchor1=Meal");
-    await expect.element(page.getByRole("group", { name: "Exclude" })).toHaveAttribute("aria-busy", "true");
+  it("keeps a tab's response across a switch away and back, and never fetches a tab off screen", async () => {
+    calls.navigate = true;
+    const distinct = (list: unknown[]) => new Set(list.map((q) => JSON.stringify(q)));
+    open("?tab=predictions");
+
+    await expect.element(page.getByRole("slider", { name: "UAM", exact: true })).toBeVisible();
     expect(calls.query).toHaveLength(0);
-    expect(calls.events).toHaveLength(1);
 
     await page.getByRole("tab", { name: "Daily profile" }).click();
-    const toDaily = new URL(calls.goto.at(-1)![0], "http://localhost").searchParams;
-    expect(toDaily.has("tab")).toBe(false);
-    expect(toDaily.get("anchor1")).toBe("Meal");
-    meals.unmount();
-
-    // On the Daily profile, whose request failed: the bar settles on what was picked.
-    resourceState = { error: new Error("Request rejected") };
-    const daily = open(`?${toDaily}`);
+    await expect.element(page.getByRole("slider", { name: "Glucose", exact: true })).toBeVisible();
     await expect.element(page.getByRole("group", { name: "Exclude" })).toHaveAttribute("aria-busy", "false");
-    expect(calls.query).toHaveLength(1);
-    expect(calls.events).toHaveLength(1);
 
-    await page.getByRole("tab", { name: "Meals & events" }).click();
-    const back = new URL(calls.goto.at(-1)![0], "http://localhost").searchParams;
-    expect(back.get("tab")).toBe("meals-events");
-    daily.unmount();
+    // A filter changed off the Predictions tab is not fetched for it until it is back on screen.
+    await page.getByLabelText("Exercise").click();
+    expect(distinct(calls.predictions)).toEqual(new Set([JSON.stringify({ startDate: "2026-10-09", endDate: "2026-10-22" })]));
 
-    resourceState = {};
-    open(`?${back}`);
-    await expect.element(page.getByRole("slider", { name: "Glucose change from the event" })).toBeVisible();
-    expect(calls.events).toHaveLength(2);
-    expect(calls.events.at(-1)).toMatchObject({ anchor1: EventAnchorKind.Meal });
-    expect(calls.query).toHaveLength(1);
+    await page.getByRole("tab", { name: "Predictions" }).click();
+    await expect.element(page.getByRole("slider", { name: "UAM", exact: true })).toBeVisible();
+    await expect.element(page.getByRole("group", { name: "Exclude" })).toHaveAttribute("aria-busy", "false");
+    expect(calls.predictions.at(-1)).toEqual({ startDate: "2026-10-09", endDate: "2026-10-22", excludeExercise: true });
+
+    // Back and forth with the filter unchanged asks for nothing new.
+    const asked = distinct(calls.predictions).size;
+    await page.getByRole("tab", { name: "Daily profile" }).click();
+    await page.getByRole("tab", { name: "Predictions" }).click();
+    await expect.element(page.getByRole("slider", { name: "UAM", exact: true })).toBeVisible();
+    expect(distinct(calls.predictions).size).toBe(asked);
   });
 });
