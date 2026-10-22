@@ -15,6 +15,9 @@ namespace Nocturne.Core.Models.Configuration;
 /// </summary>
 public class UserDisplayPreferences
 {
+    /// <summary>The display language of a subject who has not chosen one; the frontend's default language.</summary>
+    public const string DefaultLanguage = "en";
+
     /// <summary>
     /// JSON options for (de)serializing the stored preferences blob (camelCase / web defaults).
     /// <see cref="EffectiveEnergyUnit"/> is left out: it is resolved on every response, and a stored
@@ -70,7 +73,7 @@ public class UserDisplayPreferences
     /// Each tag drives date ordering, month/weekday names and the first day of the week through
     /// Intl on the frontend, so adding one here is all that a new region needs.
     /// </summary>
-    private static readonly HashSet<string> AllowedRegionFormats = new(StringComparer.Ordinal)
+    internal static readonly HashSet<string> AllowedRegionFormats = new(StringComparer.Ordinal)
     {
         "",
         "en-US", "en-GB", "en-AU", "en-CA", "en-IE", "en-NZ", "en-ZA",
