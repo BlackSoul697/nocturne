@@ -101,6 +101,12 @@ public enum LoopHealthUnknownReason
 
     /// <summary>The algorithm set no temp basal in the range.</summary>
     NoAlgorithmTemps,
+
+    /// <summary>
+    /// oref cycles ran in the range, but none enacted a temp's rate within five minutes of its start
+    /// and the temp names no snapshot that set it, so no reason speaks for it.
+    /// </summary>
+    SetterNotFound,
 }
 
 public class LoopHealthDay

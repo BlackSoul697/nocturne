@@ -358,17 +358,40 @@ public class LoopHealthCalculatorTests
 
         result.Cadence.LoopGaps.Should().BeNull();
         result.Cadence.UnrecordedDelivery.Should().BeNull();
-        // The temp's cap is judged by the system of the newest cycle by its start, here Trio's before the range.
         result.Unknown.Should().BeEquivalentTo(new LoopHealthUnknown
         {
             LoopGaps = LoopHealthUnknownReason.NoCyclesInRange,
             UnrecordedDelivery = LoopHealthUnknownReason.NoCyclesInRange,
-            MaxBasal = LoopHealthUnknownReason.NoReasonRecorded,
+            MaxBasal = LoopHealthUnknownReason.NoCyclesInRange,
             AtMaxIob = LoopHealthUnknownReason.NoCyclesInRange,
             SuggestedNotEnacted = LoopHealthUnknownReason.NoCyclesInRange,
             LoopMaximumBasalRate = LoopHealthUnknownReason.NoCyclesInRange,
             OrefMaxIob = LoopHealthUnknownReason.NoCyclesInRange,
         });
+    }
+
+    [Fact]
+    public void AnOrefTempNoCycleSet_HasNoSetterFound()
+    {
+        var from = Day0;
+        var to = Day0 + Hour;
+        var result = Calculate(from, to,
+            cycles: EveryFiveMinutes(from, to, t => Cycle(t, enacted: false, suggestedChange: false)),
+            delivered: [new(from, to, 2.4, BasalDeliveryOrigin.Algorithm)]);
+
+        result.Unknown.MaxBasal.Should().Be(LoopHealthUnknownReason.SetterNotFound);
+    }
+
+    [Fact]
+    public void ACycleMonthsBeforeTheRange_SaysNothingOfItsTemps()
+    {
+        var from = Day0;
+        var to = Day0 + Hour;
+        var result = Calculate(from, to,
+            cycles: [Cycle(from - 60L * 24 * Hour, rate: 1.0)],
+            delivered: [new(from, to, 1.0, BasalDeliveryOrigin.Algorithm)]);
+
+        result.Unknown.MaxBasal.Should().Be(LoopHealthUnknownReason.NoCyclesInRange);
     }
 
     [Fact]

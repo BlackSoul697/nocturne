@@ -319,6 +319,7 @@ public static class LoopHealthCalculator
         var unanalysed = false;
         var uncapped = new Dictionary<LoopHealthUnknownReason, double>();
         var enacted = cycles.Where(c => c.Enacted && c.EnactedRate is not null).ToList();
+        var cyclesInRange = cycles.Any(c => c.Mills >= from && c.Mills < to);
         var byId = new Dictionary<Guid, ApsLoopCycle>(cycles.Count);
         foreach (var cycle in cycles)
             byId.TryAdd(cycle.Id, cycle);
@@ -338,7 +339,7 @@ public static class LoopHealthCalculator
             }
             var temp = TempOf(inputs, piece.Start);
             var setter = temp?.ApsSnapshotId is { } id ? byId.GetValueOrDefault(id) : null;
-            if (AtCap(temp?.StartMills ?? piece.Start, setter, rate, cycles, enacted, inputs.LoopMaximumBasalRate, out var why)
+            if (AtCap(temp?.StartMills ?? piece.Start, setter, rate, cycles, cyclesInRange, enacted, inputs.LoopMaximumBasalRate, out var why)
                 is not { } capped)
             {
                 uncapped[why] = uncapped.GetValueOrDefault(why) + analysedMs;
@@ -364,7 +365,8 @@ public static class LoopHealthCalculator
     /// <summary>
     /// Whether a temp of <paramref name="rate"/> that began at <paramref name="tempStart"/> was at
     /// its cap; null where the cap is unknown, with <paramref name="why"/>. The temp's system is that
-    /// of the newest cycle by its start. An oref temp is judged by the cycle that set it:
+    /// of the newest cycle by its start, no more than <see cref="TempLookbackMs"/> before it, the
+    /// longest an algorithm's temp runs; with none, no cycle bears on it. An oref temp is judged by the cycle that set it:
     /// <paramref name="recordedSetter"/>, the snapshot the temp names, where it was read and kept, else, of
     /// the enacted cycles within <see cref="SetterWindowMs"/> of its start whose rate is within
     /// <see cref="PumpStepUph"/> of the delivered one, the nearest. The rate decides before the
@@ -377,13 +379,14 @@ public static class LoopHealthCalculator
         ApsLoopCycle? recordedSetter,
         double rate,
         List<ApsLoopCycle> cycles,
+        bool cyclesInRange,
         List<ApsLoopCycle> enacted,
         StepTimeline<double>? loopMaximum,
         out LoopHealthUnknownReason why)
     {
         why = LoopHealthUnknownReason.NoCyclesInRange;
         var latest = SortedSearch.FirstEndingAfter(cycles, tempStart + SetterWindowMs, static c => c.Mills) - 1;
-        if (latest < 0)
+        if (latest < 0 || cycles[latest].Mills < tempStart - TempLookbackMs)
             return null;
 
         if (cycles[latest].AidAlgorithm == AidAlgorithm.Loop)
@@ -398,8 +401,10 @@ public static class LoopHealthCalculator
         if (!IsOref(cycles[latest].AidAlgorithm))
             return null;
 
-        why = LoopHealthUnknownReason.NoReasonRecorded;
         var setter = recordedSetter ?? NearestSetter(tempStart, rate, enacted);
+        why = setter is not null ? LoopHealthUnknownReason.NoReasonRecorded
+            : cyclesInRange ? LoopHealthUnknownReason.SetterNotFound
+            : LoopHealthUnknownReason.NoCyclesInRange;
         return setter is { HasReason: true } ? OrefReason.Parse(setter.LimitReason).CappedAtMaxSafeBasal : null;
     }
 
