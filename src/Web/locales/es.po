@@ -196,10 +196,8 @@ msgstr "<0/> Dispositivo autorizado correctamente. Esperando datos..."
 msgid "<0/> Authorization denied. The device will not be granted access."
 msgstr "<0/> Autorización denegada. El dispositivo no tendrá acceso."
 
-#: src/lib/components/PreludeQuickConnect.svelte
-#: src/lib/components/XdripQuickConnect.svelte
-msgid "<0/> wants access"
-msgstr "<0/> solicita acceso"
+#~ msgid "<0/> wants access"
+#~ msgstr "<0/> solicita acceso"
 
 #: src/lib/components/PreludeQuickConnect.svelte
 #: src/lib/components/XdripQuickConnect.svelte
@@ -230,6 +228,7 @@ msgstr "<0/> Aprobar"
 #: src/lib/components/XdripQuickConnect.svelte
 #: src/routes/(authenticated)/oauth/device/+page.svelte
 #: src/routes/(unauthenticated)/auth/bot/authorize/+page.svelte
+#: src/routes/(unauthenticated)/auth/recovery/+page.svelte
 msgid "<0/> Continue"
 msgstr "<0/> Continuar"
 
@@ -572,6 +571,7 @@ msgstr "Código de verificación"
 #: src/lib/components/patient/PatientInsulinManager.svelte
 #: src/lib/components/profile/ProfileCreateDialog.svelte
 #: src/lib/components/profile/ProfileEditDialog.svelte
+#: src/lib/components/profile/ProfileSwitchDialog.svelte
 #: src/lib/components/schedule/TargetRangeCard.svelte
 #: src/lib/components/settings/AlarmProfileDialog.svelte
 #: src/lib/components/settings/ApiTokens.svelte
@@ -1161,6 +1161,7 @@ msgid "Started"
 msgstr "Iniciada"
 
 #: src/lib/components/alerts/AlertHistoryCard.svelte
+#: src/lib/components/profile/ProfileSwitchDialog.svelte
 #: src/lib/components/reports/sensor-integrity/ClusterTable.svelte
 #: src/lib/components/trackers/TrackerEditorDialog.svelte
 #: src/lib/components/trackers/tracker-notification-editor.svelte
@@ -1252,6 +1253,8 @@ msgstr "{0} lectura{1}"
 #: src/routes/(authenticated)/settings/appearance/+page.svelte
 #: src/routes/(authenticated)/settings/appearance/+page.svelte
 #: src/routes/(authenticated)/settings/integrations/discord/+page.svelte
+#: src/routes/(authenticated)/settings/profile/+page.svelte
+#: src/routes/(authenticated)/settings/profile/+page.svelte
 #: src/routes/(authenticated)/settings/profile/+page.svelte
 msgid "Default"
 msgstr "Predeterminado"
@@ -1628,7 +1631,6 @@ msgstr "<0/> Continuar con {0}"
 #: src/lib/components/auth/LoginForm.svelte
 #: src/lib/components/auth/LoginForm.svelte
 #: src/lib/components/auth/PasskeyRegistrationForm.svelte
-#: src/routes/(unauthenticated)/auth/recovery/+page.svelte
 #: src/routes/(unauthenticated)/auth/recovery/passkey/+page.svelte
 #: src/routes/(unauthenticated)/setup/steps/AccountCreation.svelte
 msgid "<0/> Waiting for passkey..."
@@ -1656,7 +1658,6 @@ msgstr "O continuar con"
 #: src/lib/components/auth/LoginForm.svelte
 #: src/lib/components/auth/LoginForm.svelte
 #: src/lib/components/auth/PasskeyRegistrationForm.svelte
-#: src/routes/(unauthenticated)/auth/recovery/+page.svelte
 #: src/routes/(unauthenticated)/setup/steps/AccountCreation.svelte
 #: src/routes/(unauthenticated)/setup/steps/AccountCreation.svelte
 msgid "Username"
@@ -1701,7 +1702,6 @@ msgstr "<0/> Verificar"
 #: src/lib/components/auth/PasskeyRegistrationForm.svelte
 #: src/routes/(authenticated)/settings/admin/tenants/+page.svelte
 #: src/routes/(authenticated)/settings/integrations/discord/+page.svelte
-#: src/routes/(unauthenticated)/auth/recovery/+page.svelte
 #: src/routes/(unauthenticated)/setup/steps/AccountCreation.svelte
 msgid "Display name"
 msgstr "Nombre visible"
@@ -1709,7 +1709,6 @@ msgstr "Nombre visible"
 #: ../portal/src/routes/studio/+page.svelte
 #: src/lib/components/auth/PasskeyRegistrationForm.svelte
 #: src/routes/(authenticated)/settings/translations/[locale]/+page.svelte
-#: src/routes/(unauthenticated)/auth/recovery/+page.svelte
 #: src/routes/(unauthenticated)/setup/steps/AccountCreation.svelte
 msgid "Your name"
 msgstr "Tu nombre"
@@ -1963,7 +1962,6 @@ msgstr "<0/> Completar"
 
 #: src/lib/components/auth/RecoveryCodes.svelte
 #: src/lib/components/connectors/UploaderSetupView.svelte
-#: src/routes/(unauthenticated)/auth/recovery/+page.svelte
 msgid "Continue"
 msgstr "Continuar"
 
@@ -2084,6 +2082,7 @@ msgstr "Mostrar unidades"
 
 #: src/lib/components/clock-builder/ElementInspector.svelte
 #: src/lib/components/clock-builder/ElementInspector.svelte
+#: src/lib/components/profile/ProfileSwitchDialog.svelte
 #: src/lib/components/trackers/tracker-notification-editor.svelte
 msgid "Hours"
 msgstr "Horas"
@@ -2573,6 +2572,7 @@ msgstr "Selecciona un intervalo de fechas para volver a sincronizar datos concre
 #: ../portal/src/lib/components/docs/alert-simulator/ConditionEditor.svelte
 #: src/lib/components/connectors/ConnectorDetailsDialog.svelte
 #: src/routes/(authenticated)/alerts/dnd/+page.svelte
+#: src/routes/(authenticated)/reports/data-quality/rejected-uploads/+page.svelte
 #: src/routes/(authenticated)/settings/audit/+page.svelte
 #: src/routes/(authenticated)/settings/audit/+page.svelte
 msgid "From"
@@ -2679,8 +2679,6 @@ msgstr "No hay conectores del servidor registrados en esta instalación."
 #: src/routes/(authenticated)/settings/appearance/+page.svelte
 #: src/routes/(authenticated)/settings/appearance/+page.svelte
 #: src/routes/(authenticated)/settings/migration/+page.svelte
-#: src/routes/(authenticated)/settings/profile/+page.svelte
-#: src/routes/(authenticated)/settings/profile/+page.svelte
 #: src/routes/(authenticated)/settings/support/+page.svelte
 msgid "Active"
 msgstr "Activo"
@@ -3351,15 +3349,12 @@ msgstr "El dispositivo no tendrá acceso."
 msgid "Authorize Application"
 msgstr "Autorizar aplicación"
 
-#: src/lib/components/connectors/UploaderSetupView.svelte
 #: src/routes/(authenticated)/oauth/consent/+page.svelte
-#: src/routes/(authenticated)/oauth/device/+page.svelte
 msgid "<0/> wants to access your Nocturne data."
 msgstr "<0/> quiere acceder a tus datos de Nocturne."
 
-#: src/lib/components/connectors/UploaderSetupView.svelte
-msgid "This application is not in the Nocturne known app directory. Only approve if you trust it."
-msgstr "Esta aplicación no figura en el directorio de aplicaciones conocidas de Nocturne. Apruébala solo si confías en ella."
+#~ msgid "This application is not in the Nocturne known app directory. Only approve if you trust it."
+#~ msgstr "Esta aplicación no figura en el directorio de aplicaciones conocidas de Nocturne. Apruébala solo si confías en ella."
 
 #: src/lib/components/connectors/UploaderSetupView.svelte
 #: src/routes/(authenticated)/oauth/consent/+page.svelte
@@ -3648,6 +3643,7 @@ msgstr "Añadir alimento"
 #: src/lib/components/trackers/TrackerEditorDialog.svelte
 #: src/lib/components/trackers/TrackerEditorDialog.svelte
 #: src/lib/components/treatments/TreatmentEditDialog.svelte
+#: src/routes/(authenticated)/settings/profile/+page.svelte
 msgid "Saving..."
 msgstr "Guardando..."
 
@@ -4064,6 +4060,7 @@ msgstr "Tipo de evento"
 #: src/lib/components/entries/DeviceEventSection.svelte
 #: src/lib/components/patient/InsulinFormFields.svelte
 #: src/lib/components/patient/PatientDeviceManager.svelte
+#: src/lib/components/profile/ProfileSwitchDialog.svelte
 #: src/lib/components/status-pills/COBPill.svelte
 #: src/lib/components/status-pills/IOBPill.svelte
 #: src/lib/components/treatments/edit-dialog/BasalInjectionFormFields.svelte
@@ -6015,6 +6012,7 @@ msgstr "No hay datos disponibles"
 #~ msgid "No glucose readings found for percentile visualization"
 #~ msgstr ""
 
+#: src/lib/components/profile/ProfileSwitchDialog.svelte
 #: src/lib/components/reports/HourlyGlucoseDistributionChart.svelte
 msgid "Percentage"
 msgstr "Porcentaje"
@@ -6767,9 +6765,8 @@ msgstr "¿Eliminar «{0}»? Esta acción no se puede deshacer."
 msgid "Failed to delete sound"
 msgstr "No se pudo eliminar el sonido"
 
-#: src/lib/components/settings/CustomSoundUpload.svelte
-msgid "Upload your own alarm sounds (MP3, WAV, OGG, up to 5MB)"
-msgstr "Sube tus propios sonidos de alarma (MP3, WAV, OGG, hasta 5 MB)"
+#~ msgid "Upload your own alarm sounds (MP3, WAV, OGG, up to 5MB)"
+#~ msgstr "Sube tus propios sonidos de alarma (MP3, WAV, OGG, hasta 5 MB)"
 
 #: src/lib/components/settings/CustomSoundUpload.svelte
 msgid "<0/> Upload Sound"
@@ -6840,8 +6837,10 @@ msgstr "<0/> Desactualizado"
 msgid "<0/> Inactive"
 msgstr "<0/> Inactivo"
 
+#. 0: rejectedCount
 #. 0: formatNumber(allRows.length)
 #. 0: formatCount(col.migrated)
+#: src/routes/(authenticated)/reports/data-quality/+page.svelte
 #: src/routes/(authenticated)/reports/treatments/+page.svelte
 #: src/routes/(unauthenticated)/setup/steps/ImportProgress.svelte
 msgid "{0} records"
@@ -7897,6 +7896,7 @@ msgstr "Buscar registros..."
 #: src/lib/components/treatments/DataTableToolbar.svelte
 #: src/lib/components/treatments/DataTableToolbar.svelte
 #: src/routes/(authenticated)/compatibility/+page.svelte
+#: src/routes/(authenticated)/reports/data-quality/rejected-uploads/+page.svelte
 msgid "Clear"
 msgstr "Limpiar"
 
@@ -10968,6 +10968,7 @@ msgid "Selected Target"
 msgstr "Destino seleccionado"
 
 #: src/routes/(authenticated)/compatibility/[id]/+page.svelte
+#: src/routes/(authenticated)/reports/data-quality/rejected-uploads/+page.svelte
 msgid "Reason"
 msgstr "Motivo"
 
@@ -11034,17 +11035,15 @@ msgstr "Barra lateral"
 msgid "Displays the mobile sidebar."
 msgstr "Muestra la barra lateral móvil."
 
-#. 0: appName
-#: src/routes/(authenticated)/oauth/device/+page.svelte
-msgid "Authorize {0}"
-msgstr "Autorizar {0}"
+#~ msgid "Authorize {0}"
+#~ msgstr "Autorizar {0}"
 
 #: src/routes/(authenticated)/oauth/device/+page.svelte
 #: src/routes/(authenticated)/oauth/device/+page.svelte
 msgid "Link a Device"
 msgstr "Vincular un dispositivo"
 
-#. 0: deviceInfo ? `Authorize ${appName}` \\: "Link a Device"
+#. 0: deviceInfo ? "Authorize a Device" \\: "Link a Device"
 #. 0: dateDisplay ? `${dateDisplay} - Sleep Report` \\: "Sleep Report"
 #: src/routes/(authenticated)/oauth/device/+page.svelte
 #: src/routes/(authenticated)/reports/sleep/[date]/+page.svelte
@@ -11726,6 +11725,7 @@ msgid "90th %ile"
 msgstr "Percentil 90"
 
 #: src/routes/(authenticated)/reports/data-quality/cgm-comparison/+page.svelte
+#: src/routes/(authenticated)/reports/data-quality/rejected-uploads/+page.svelte
 #: src/routes/(authenticated)/reports/data-quality/sensor-integrity/+page.svelte
 #: src/routes/(authenticated)/reports/executive-summary/+page.svelte
 msgid "<0/> Data Quality"
@@ -14251,22 +14251,18 @@ msgstr "Modo de recuperación - Nocturne"
 msgid "Recovery Mode"
 msgstr "Modo de recuperación"
 
-#: src/routes/(unauthenticated)/auth/recovery/+page.svelte
-msgid "This instance has accounts that need a passkey registered. Enter your username and register a passkey to restore access."
-msgstr "Esta instancia tiene cuentas que necesitan registrar una clave de acceso. Introduce tu nombre de usuario y registra una clave de acceso para recuperar el acceso."
+#~ msgid "This instance has accounts that need a passkey registered. Enter your username and register a passkey to restore access."
+#~ msgstr "Esta instancia tiene cuentas que necesitan registrar una clave de acceso. Introduce tu nombre de usuario y registra una clave de acceso para recuperar el acceso."
 
-#: src/routes/(unauthenticated)/auth/recovery/+page.svelte
-msgid "Optional. Updates your display name if provided."
-msgstr "Opcional. Actualiza tu nombre visible si lo indicas."
+#~ msgid "Optional. Updates your display name if provided."
+#~ msgstr "Opcional. Actualiza tu nombre visible si lo indicas."
 
-#: src/routes/(unauthenticated)/auth/recovery/+page.svelte
 #: src/routes/(unauthenticated)/auth/recovery/passkey/+page.svelte
 msgid "<0/> Register passkey"
 msgstr "<0/> Registrar clave de acceso"
 
-#: src/routes/(unauthenticated)/auth/recovery/+page.svelte
-msgid "Passkey registered successfully."
-msgstr "Clave de acceso registrada correctamente."
+#~ msgid "Passkey registered successfully."
+#~ msgstr "Clave de acceso registrada correctamente."
 
 #~ msgid "Save these recovery codes in a safe place. Each code can only be used once."
 #~ msgstr ""
@@ -14274,13 +14270,11 @@ msgstr "Clave de acceso registrada correctamente."
 #~ msgid "Copy your recovery codes before continuing."
 #~ msgstr ""
 
-#: src/routes/(unauthenticated)/auth/recovery/+page.svelte
-msgid "Passkey registered successfully. Recovery mode has been deactivated."
-msgstr "Clave de acceso registrada correctamente. El modo de recuperación se ha desactivado."
+#~ msgid "Passkey registered successfully. Recovery mode has been deactivated."
+#~ msgstr "Clave de acceso registrada correctamente. El modo de recuperación se ha desactivado."
 
-#: src/routes/(unauthenticated)/auth/recovery/+page.svelte
-msgid "Register a passkey to restore normal access."
-msgstr "Registra una clave de acceso para recuperar el acceso normal."
+#~ msgid "Register a passkey to restore normal access."
+#~ msgstr "Registra una clave de acceso para recuperar el acceso normal."
 
 #~ msgid "Invalid or expired code"
 #~ msgstr ""
@@ -15125,6 +15119,7 @@ msgid "Missing state token."
 msgstr "Falta el token de estado."
 
 #: src/routes/(unauthenticated)/auth/bot/authorize/+page.svelte
+#: src/routes/(unauthenticated)/auth/bot/authorize/+page.svelte
 msgid "This link is expired or invalid. Please run /connect in your chat app again."
 msgstr "Este enlace ha caducado o no es válido. Ejecuta /connect de nuevo en tu aplicación de chat."
 
@@ -15172,17 +15167,14 @@ msgstr "<0/> Conectar"
 msgid "Your chat account is now linked to Nocturne. You can close this tab and head back to your chat app."
 msgstr "Tu cuenta de chat ya está vinculada a Nocturne. Puedes cerrar esta pestaña y volver a tu aplicación de chat."
 
-#: src/routes/(unauthenticated)/auth/bot/discord/finalize/+page.svelte
-msgid "We couldn't complete the Discord link. The token may have expired. Please try again from Settings."
-msgstr "No pudimos completar la vinculación con Discord. Es posible que el token haya caducado. Inténtalo de nuevo desde Ajustes."
+#~ msgid "We couldn't complete the Discord link. The token may have expired. Please try again from Settings."
+#~ msgstr "No pudimos completar la vinculación con Discord. Es posible que el token haya caducado. Inténtalo de nuevo desde Ajustes."
 
-#: src/routes/(unauthenticated)/auth/bot/discord/finalize/+page.svelte
-msgid "Missing Token"
-msgstr "Falta el token"
+#~ msgid "Missing Token"
+#~ msgstr "Falta el token"
 
-#: src/routes/(unauthenticated)/auth/bot/discord/finalize/+page.svelte
-msgid "Missing token parameter."
-msgstr "Falta el parámetro token."
+#~ msgid "Missing token parameter."
+#~ msgstr "Falta el parámetro token."
 
 #: src/routes/(unauthenticated)/auth/bot/discord/finalize/+page.svelte
 msgid "Discord account linked"
@@ -15197,9 +15189,8 @@ msgstr "Tu cuenta de Discord ya está vinculada como <0/> (etiqueta <1/>). Ejecu
 msgid "Back to Settings"
 msgstr "Volver a Ajustes"
 
-#: src/routes/(unauthenticated)/auth/bot/discord/finalize/+page.svelte
-msgid "Link failed"
-msgstr "Error de vinculación"
+#~ msgid "Link failed"
+#~ msgstr "Error de vinculación"
 
 #: src/routes/(authenticated)/alerts/[id]/+page.svelte
 msgid "Condition"
@@ -16597,10 +16588,7 @@ msgstr "Prelude muestra un código corto después de escanear. Introdúcelo aqu�
 msgid "<0/> Device authorized successfully. Prelude is now connected."
 msgstr "<0/> Dispositivo autorizado correctamente. Prelude ya está conectado."
 
-#: src/lib/components/PreludeQuickConnect.svelte
-#: src/lib/components/XdripQuickConnect.svelte
 #: src/routes/(authenticated)/oauth/consent/+page.svelte
-#: src/routes/(authenticated)/oauth/device/+page.svelte
 msgid "This application is not in the Nocturne known app directory. Only approve if you trust this application."
 msgstr "Esta aplicación no está en el directorio de aplicaciones conocidas de Nocturne. Apruébala solo si confías en ella."
 
@@ -18577,13 +18565,11 @@ msgstr "Hace {0} años"
 msgid "Profiles are typically uploaded from your diabetes management app (like AAPS, Loop, or xDrip+). They contain your basal rates, insulin sensitivity factors, and carb ratios."
 msgstr "Los perfiles suelen cargarse desde tu aplicación de gestión de diabetes (como AAPS, Loop o xDrip+). Contienen tus tasas basales, factores de sensibilidad a la insulina y ratios de carbohidratos."
 
-#: src/routes/(authenticated)/settings/profile/+page.svelte
-msgid "Switching..."
-msgstr "Cambiando..."
+#~ msgid "Switching..."
+#~ msgstr "Cambiando..."
 
-#: src/routes/(authenticated)/settings/profile/+page.svelte
-msgid "Set as active"
-msgstr "Establecer como activo"
+#~ msgid "Set as active"
+#~ msgstr "Establecer como activo"
 
 #: src/routes/(authenticated)/settings/members/+page.svelte
 msgid "Members only"
@@ -18846,9 +18832,7 @@ msgstr "Solicitar membresía"
 msgid "Enter the code shared with you to view health data. The code works once — this device stays signed in for 48 hours."
 msgstr "Introduce el código que te han compartido para ver datos de salud. El código funciona una sola vez; este dispositivo permanecerá conectado durante 48 horas."
 
-#. 0: displayName.trim() || username.trim()
 #. 0: username
-#: src/routes/(unauthenticated)/auth/recovery/+page.svelte
 #: src/routes/(unauthenticated)/auth/recovery/passkey/+page.svelte
 msgid "{0}'s passkey"
 msgstr "Clave de acceso de {0}"
@@ -21516,9 +21500,8 @@ msgstr "Tu navegador no admite claves de acceso. Usa un código de recuperación
 msgid "Or continue with a passkey"
 msgstr "O continuar con una clave de acceso"
 
-#: src/lib/components/auth/LoginForm.svelte
-msgid "Your passkey was accepted. Enter the current code from your authenticator app to finish signing in."
-msgstr "Tu clave de acceso ha sido aceptada. Introduce el código actual de tu aplicación de autenticación para terminar de iniciar sesión."
+#~ msgid "Your passkey was accepted. Enter the current code from your authenticator app to finish signing in."
+#~ msgstr "Tu clave de acceso ha sido aceptada. Introduce el código actual de tu aplicación de autenticación para terminar de iniciar sesión."
 
 #: src/lib/components/clock/ClockFacePreview.svelte
 msgid "Failed to load preview"
@@ -22208,9 +22191,8 @@ msgstr "Aún no hay códigos de recuperación"
 msgid "Generate recovery codes"
 msgstr "Generar códigos de recuperación"
 
-#: src/routes/(unauthenticated)/auth/recovery/+page.svelte
-msgid "We couldn't register a passkey for that username. This page only works for an account that has no passkey and no linked sign-in provider — otherwise sign in with a recovery code."
-msgstr "No pudimos registrar una clave de acceso para ese nombre de usuario. Esta página solo funciona para una cuenta que no tenga clave de acceso ni proveedor de inicio de sesión vinculado; en caso contrario, inicia sesión con un código de recuperación."
+#~ msgid "We couldn't register a passkey for that username. This page only works for an account that has no passkey and no linked sign-in provider — otherwise sign in with a recovery code."
+#~ msgstr "No pudimos registrar una clave de acceso para ese nombre de usuario. Esta página solo funciona para una cuenta que no tenga clave de acceso ni proveedor de inicio de sesión vinculado; en caso contrario, inicia sesión con un código de recuperación."
 
 #: src/routes/(unauthenticated)/auth/handoff/+page.svelte
 msgid "Signing you in - Nocturne"
@@ -27183,4 +27165,454 @@ msgstr ""
 
 #: src/routes/(authenticated)/oauth/consent/+page.svelte
 msgid "Approving sends access to <0/>"
+msgstr ""
+
+#: src/lib/components/alerts/ChannelsSection.svelte
+msgid "Unavailable member"
+msgstr ""
+
+#: src/lib/components/alerts/ChannelsSection.svelte
+msgid "No recipient"
+msgstr ""
+
+#: src/lib/components/alerts/ChannelsSection.svelte
+#: src/lib/components/alerts/ChannelsSection.svelte
+msgid "Me"
+msgstr ""
+
+#: src/lib/components/alerts/ChannelsSection.svelte
+msgid "Member"
+msgstr ""
+
+#: src/lib/components/alerts/ChannelsSection.svelte
+msgid "This channel has no recipient. Saving the rule sends it to you."
+msgstr ""
+
+#: src/lib/components/alerts/ChannelsSection.svelte
+msgid "This person can no longer receive alerts on this site. Saving the rule sends this channel to you."
+msgstr ""
+
+#: src/lib/components/alerts/ChannelsSection.svelte
+msgid "Shown in this person's Nocturne notification centre."
+msgstr ""
+
+#: src/lib/components/alerts/ChannelsSection.svelte
+msgid "Recipient"
+msgstr ""
+
+#: src/lib/components/alerts/AlertRuleRow.svelte
+msgid "Needs review"
+msgstr ""
+
+#: src/lib/components/alerts/conditionIssues.svelte.ts
+msgid "Part of this rule's conditions is malformed, so the rule may not alert as set. Edit its conditions and save it."
+msgstr ""
+
+#. 0: needsReview
+#: src/routes/(authenticated)/alerts/+page.svelte
+msgid "{0} alert rules need review."
+msgstr ""
+
+#. 0: needsReview === 1 ? "1 alert rule needs review." \\: `${needsReview} alert rules need review.`
+#: src/routes/(authenticated)/alerts/+page.svelte
+msgid "{0} An update changed or turned off rules set up in an older format, or their conditions may not alert as set. They are marked below."
+msgstr ""
+
+#: src/lib/components/shared/SkippedRecordsNote.svelte
+msgid "1 record could not be stored. It is listed under"
+msgstr ""
+
+#. 0: formatNumber(refused)
+#: src/lib/components/shared/SkippedRecordsNote.svelte
+msgid "{0} records could not be stored. They are listed under"
+msgstr ""
+
+#: src/lib/components/shared/SkippedRecordsNote.svelte
+#: src/routes/(authenticated)/reports/data-quality/+page.svelte
+#: src/routes/(authenticated)/reports/data-quality/rejected-uploads/+page.svelte
+msgid "Rejected Uploads"
+msgstr ""
+
+#: src/routes/(authenticated)/reports/data-quality/+page.svelte
+msgid "Records an uploader sent that Nocturne could not store"
+msgstr ""
+
+#: src/routes/(authenticated)/reports/data-quality/rejected-uploads/+page.svelte
+msgid "Error Loading Rejected Uploads"
+msgstr ""
+
+#: src/routes/(authenticated)/reports/data-quality/rejected-uploads/+page.svelte
+msgid "Rejected Uploads - Nocturne"
+msgstr ""
+
+#: src/routes/(authenticated)/reports/data-quality/rejected-uploads/+page.svelte
+msgid "Records an uploader sent that Nocturne answered but could not store, because a value in them could not be stored as sent. Most uploaders treat them as saved, so they are not in your data. Each is listed once, with how many times it was sent. Long text in a record is shortened here."
+msgstr ""
+
+#: src/routes/(authenticated)/reports/data-quality/rejected-uploads/+page.svelte
+msgid "<0/> Export this page"
+msgstr ""
+
+#: src/routes/(authenticated)/reports/data-quality/rejected-uploads/+page.svelte
+msgid "<0/> Clear this page"
+msgstr ""
+
+#: src/routes/(authenticated)/reports/data-quality/rejected-uploads/+page.svelte
+msgid "No rejected uploads."
+msgstr ""
+
+#: src/routes/(authenticated)/reports/data-quality/rejected-uploads/+page.svelte
+msgid "Last sent"
+msgstr ""
+
+#: src/routes/(authenticated)/reports/data-quality/rejected-uploads/+page.svelte
+msgid "Times sent"
+msgstr ""
+
+#: src/routes/(authenticated)/reports/data-quality/rejected-uploads/+page.svelte
+msgid "Record"
+msgstr ""
+
+#. 0: formatDateTime(row.firstSeenAt)
+#: src/routes/(authenticated)/reports/data-quality/rejected-uploads/+page.svelte
+msgid "First {0}"
+msgstr ""
+
+#. 0: formatNumber(row.payloadBytes ?? 0)
+#: src/routes/(authenticated)/reports/data-quality/rejected-uploads/+page.svelte
+msgid "Shortened from {0} bytes."
+msgstr ""
+
+#: src/routes/(authenticated)/reports/data-quality/rejected-uploads/+page.svelte
+msgid "<0/> Newer"
+msgstr ""
+
+#: src/routes/(authenticated)/reports/data-quality/rejected-uploads/+page.svelte
+msgid "Older <0/>"
+msgstr ""
+
+#. 0: formatNumber(offset + 1); 1: formatNumber(offset + rows.length); 2: formatNumber(total)
+#: src/routes/(authenticated)/reports/data-quality/rejected-uploads/+page.svelte
+msgid "{0}–{1} of {2}"
+msgstr ""
+
+#: src/routes/(authenticated)/reports/data-quality/rejected-uploads/+page.svelte
+msgid "Clear rejected uploads"
+msgstr ""
+
+#: src/routes/(authenticated)/reports/data-quality/rejected-uploads/+page.svelte
+msgid "Clearing..."
+msgstr ""
+
+#. 0: formatNumber(rows.length)
+#: src/routes/(authenticated)/reports/data-quality/rejected-uploads/+page.svelte
+msgid "Remove the {0} rejected uploads on this page? Export them first to keep a copy. They are not in your data and cannot be recovered once cleared. Uploads not on this page are kept."
+msgstr ""
+
+#: src/lib/components/PreludeQuickConnect.svelte
+#: src/lib/components/XdripQuickConnect.svelte
+msgid "A device wants access"
+msgstr ""
+
+#: src/lib/components/admin/IntegrationsTabContent.svelte
+msgid "Telegram webhook calls are refused until one is set. Choose a random value of letters, digits, <0/> or <1/> (for example from <2/>), save it here with the bot enabled, then register the webhook again with the same value:"
+msgstr ""
+
+#: src/lib/components/admin/IntegrationsTabContent.svelte
+msgid "A webhook secret token is required"
+msgstr ""
+
+#: src/lib/components/auth/DeviceAppClaimNotice.svelte
+msgid "This request says it is from <0/>, but a device sign-in cannot prove which app started it. Only approve if you started this sign-in yourself on a device you trust."
+msgstr ""
+
+#: src/lib/components/auth/LoginForm.svelte
+msgid "Enter the current code from your authenticator app to finish signing in."
+msgstr ""
+
+#: src/lib/components/connectors/UploaderSetupView.svelte
+#: src/routes/(authenticated)/oauth/device/+page.svelte
+msgid "A device wants to access your Nocturne data."
+msgstr ""
+
+#: src/lib/components/settings/ConnectedApps.svelte
+msgid "Unverified"
+msgstr ""
+
+#: src/routes/(authenticated)/oauth/device/+page.svelte
+msgid "Authorize a Device"
+msgstr ""
+
+#: src/routes/(unauthenticated)/auth/bot/authorize/+page.svelte
+msgid "Link the <0/> account <1/> to your Nocturne account? It will be able to read your glucose and acknowledge your alerts."
+msgstr ""
+
+#: src/routes/(unauthenticated)/auth/bot/authorize/+page.svelte
+msgid "Only continue if you started this link yourself."
+msgstr ""
+
+#: src/routes/(unauthenticated)/auth/bot/discord/finalize/+page.svelte
+msgid "We couldn't complete the Discord link. It may have expired. Please try again from Settings."
+msgstr ""
+
+#: src/routes/(unauthenticated)/auth/bot/discord/finalize/+page.svelte
+msgid "Missing link details"
+msgstr ""
+
+#: src/routes/(unauthenticated)/auth/bot/discord/finalize/+page.svelte
+msgid "Start linking your Discord account again from Settings."
+msgstr ""
+
+#: src/routes/(unauthenticated)/auth/bot/discord/finalize/+page.svelte
+msgid "Can't complete this link"
+msgstr ""
+
+#: src/routes/(unauthenticated)/auth/bot/discord/finalize/+page.svelte
+msgid "This link has expired, or was started from another browser or account. Start linking your Discord account again from Settings."
+msgstr ""
+
+#: src/routes/(unauthenticated)/auth/bot/discord/finalize/+page.svelte
+msgid "Link the Discord account <0/> to your Nocturne account?"
+msgstr ""
+
+#: src/routes/(unauthenticated)/auth/bot/discord/finalize/+page.svelte
+msgid "Link the Discord account you just signed in with to your Nocturne account?"
+msgstr ""
+
+#: src/routes/(unauthenticated)/auth/bot/discord/finalize/+page.svelte
+msgid "Link Discord account"
+msgstr ""
+
+#: src/routes/(unauthenticated)/auth/bot/discord/finalize/+page.svelte
+msgid "<0/> It will be able to read your glucose and acknowledge your alerts."
+msgstr ""
+
+#: src/routes/(unauthenticated)/auth/bot/discord/finalize/+page.svelte
+msgid "<0/> Link account"
+msgstr ""
+
+#: src/routes/(unauthenticated)/auth/bot/authorize/+page.svelte
+msgid "This chat account is already linked to another member."
+msgstr ""
+
+#: src/routes/(unauthenticated)/auth/bot/discord/finalize/+page.svelte
+msgid "This Discord account is already linked to another member."
+msgstr ""
+
+#: src/routes/(unauthenticated)/auth/bot/discord/finalize/+page.svelte
+msgid "This link is expired or invalid. Please try again from Settings."
+msgstr ""
+
+#. 0: activation.timeshiftHours > 0 ? "+" \\: ""; 1: activation.timeshiftHours
+#: src/lib/components/profile/ActiveProfileActivation.svelte
+msgid "{0}{1}h"
+msgstr ""
+
+#. 0: activation.enteredBy ?? "a person"
+#: src/lib/components/profile/ActiveProfileActivation.svelte
+msgid "<0/> Recorded by {0}"
+msgstr ""
+
+#. 0: profileActivationSource(activation) ?? "a connector"
+#: src/lib/components/profile/ActiveProfileActivation.svelte
+msgid "<0/> Reported by {0}"
+msgstr ""
+
+#. 0: profileActivationSource(activation) ?? activation.enteredBy ?? "an uploader"
+#: src/lib/components/profile/ActiveProfileActivation.svelte
+msgid "<0/> Uploaded by {0}"
+msgstr ""
+
+#. 0: formatDateTimeCompact(activation.endMills)
+#: src/lib/components/profile/ActiveProfileActivation.svelte
+msgid "· Until {0}"
+msgstr ""
+
+#. 0: formatDateTimeCompact(activation.startMills)
+#: src/lib/components/profile/ActiveProfileActivation.svelte
+msgid "<0/> · Since {0} <1/>"
+msgstr ""
+
+#: src/lib/components/profile/ActiveProfileActivation.svelte
+msgid "<0/> Active profile switch"
+msgstr ""
+
+#: src/lib/components/profile/ActiveProfileActivation.svelte
+msgid "The active switch could not be loaded."
+msgstr ""
+
+#: src/lib/components/profile/ActiveProfileActivation.svelte
+msgid "No switch is active. The default profile applies."
+msgstr ""
+
+#. 0: profileActivationSource(status.reported) ?? "your AID system"
+#: src/lib/components/profile/ActiveProfileActivation.svelte
+msgid "This switch is recorded, but Nocturne's calculations follow the profile {0} reports while it does."
+msgstr ""
+
+#. 0: recorded.baseProfileName
+#: src/lib/components/profile/ActiveProfileActivation.svelte
+msgid "{0} has changed since this switch was recorded. The switch keeps the schedules it was recorded with."
+msgstr ""
+
+#: src/lib/components/profile/ActiveProfileActivation.svelte
+msgid "The switch was not recorded again."
+msgstr ""
+
+#: src/lib/components/profile/ActiveProfileActivation.svelte
+msgid "Switch again"
+msgstr ""
+
+#: src/lib/components/profile/ActiveProfileActivation.svelte
+msgid "The switch was not ended."
+msgstr ""
+
+#: src/lib/components/profile/ActiveProfileActivation.svelte
+msgid "End switch"
+msgstr ""
+
+#: src/lib/components/profile/ProfileSwitchDialog.svelte
+msgid "The switch was not recorded."
+msgstr ""
+
+#. 0: profileName
+#: src/lib/components/profile/ProfileSwitchDialog.svelte
+msgid "Switch to {0}"
+msgstr ""
+
+#: src/lib/components/profile/ProfileSwitchDialog.svelte
+msgid "Starts now. Scales the profile by a percentage and shifts its schedule by whole hours."
+msgstr ""
+
+#: src/lib/components/profile/ProfileSwitchDialog.svelte
+msgid "The switch is recorded in Nocturne only. It is not sent to your pump, and AAPS and Nightscout followers never see it."
+msgstr ""
+
+#: src/lib/components/profile/ProfileSwitchDialog.svelte
+msgid "An AID system"
+msgstr ""
+
+#. 0: profileActivationSource(reported) ?? "An AID system"
+#: src/lib/components/profile/ProfileSwitchDialog.svelte
+msgid "{0} is reporting the profile your pump runs. The switch will be recorded, but Nocturne's calculations follow the reported profile while it does."
+msgstr ""
+
+#: src/lib/components/profile/ProfileSwitchDialog.svelte
+msgid "Enter a whole number from 30 to 250."
+msgstr ""
+
+#: src/lib/components/profile/ProfileSwitchDialog.svelte
+msgid "Enter a whole number from -23 to 23."
+msgstr ""
+
+#: src/lib/components/profile/ProfileSwitchDialog.svelte
+msgid "Timeshift (hours)"
+msgstr ""
+
+#: src/lib/components/profile/ProfileSwitchDialog.svelte
+msgid "Temporary"
+msgstr ""
+
+#: src/lib/components/profile/ProfileSwitchDialog.svelte
+msgid "Minutes"
+msgstr ""
+
+#: src/lib/components/profile/ProfileSwitchDialog.svelte
+msgid "Enter a length from 1 minute to 7 days."
+msgstr ""
+
+#: src/lib/components/profile/ProfileSwitchDialog.svelte
+msgid "Runs until another switch replaces it or it is ended."
+msgstr ""
+
+#: src/lib/components/profile/ProfileSwitchDialog.svelte
+msgid "<0/> Record switch"
+msgstr ""
+
+#. 0: FORMATS
+#: src/lib/components/settings/CustomSoundUpload.svelte
+msgid "Choose one of these formats: {0}"
+msgstr ""
+
+#. 0: MAX_CUSTOM_SOUND_SIZE_MB
+#: src/lib/components/settings/CustomSoundUpload.svelte
+msgid "The file is larger than {0} MB"
+msgstr ""
+
+#: src/lib/components/settings/CustomSoundUpload.svelte
+msgid "This file could not be played. Check that it is a valid audio file."
+msgstr ""
+
+#: src/lib/components/settings/CustomSoundUpload.svelte
+msgid "The audio file took too long to load"
+msgstr ""
+
+#. 0: FORMATS; 1: MAX_CUSTOM_SOUND_SIZE_MB
+#: src/lib/components/settings/CustomSoundUpload.svelte
+msgid "Upload your own alarm sounds ({0}, up to {1} MB)"
+msgstr ""
+
+#: src/routes/(authenticated)/settings/profile/+page.svelte
+msgid "Make default"
+msgstr ""
+
+#: src/routes/(authenticated)/settings/profile/+page.svelte
+#: src/routes/(authenticated)/settings/profile/+page.svelte
+msgid "Switch…"
+msgstr ""
+
+#: src/routes/(unauthenticated)/auth/recovery/+page.svelte
+msgid "Too many attempts. Wait a minute, then try again."
+msgstr ""
+
+#: src/routes/(unauthenticated)/auth/recovery/+page.svelte
+msgid "That recovery code has expired or was already used. Ask an administrator for a new one."
+msgstr ""
+
+#: src/routes/(unauthenticated)/auth/recovery/+page.svelte
+msgid "Some accounts here have no way to sign in. If yours is one of them, sign in with one of your own recovery codes, or ask an administrator for a one-time recovery code."
+msgstr ""
+
+#: src/routes/(unauthenticated)/auth/recovery/+page.svelte
+msgid "Recovery code from your administrator"
+msgstr ""
+
+#: src/routes/(unauthenticated)/auth/recovery/+page.svelte
+msgid "<0/> Checking code..."
+msgstr ""
+
+#: src/routes/(unauthenticated)/auth/recovery/+page.svelte
+msgid "Sign in with your own recovery code instead"
+msgstr ""
+
+#: src/routes/(unauthenticated)/auth/recovery/LockedOutMembers.svelte
+msgid "Couldn't create a recovery link."
+msgstr ""
+
+#: src/routes/(unauthenticated)/auth/recovery/LockedOutMembers.svelte
+msgid "Members who can't sign in"
+msgstr ""
+
+#: src/routes/(unauthenticated)/auth/recovery/LockedOutMembers.svelte
+msgid "Send a member a one-time recovery link so they can register a new passkey. It works once and expires after 24 hours."
+msgstr ""
+
+#: src/routes/(unauthenticated)/auth/recovery/LockedOutMembers.svelte
+msgid "Only the operator can recover this account"
+msgstr ""
+
+#: src/routes/(unauthenticated)/auth/recovery/LockedOutMembers.svelte
+msgid "<0/> Create link"
+msgstr ""
+
+#: src/routes/(unauthenticated)/auth/recovery/LockedOutMembers.svelte
+msgid "They still have recovery codes of their own. If they've lost them, a link cancels those codes once it is used."
+msgstr ""
+
+#: src/routes/(unauthenticated)/auth/recovery/LockedOutMembers.svelte
+msgid "Recovery link"
+msgstr ""
+
+#: src/routes/(unauthenticated)/auth/recovery/LockedOutMembers.svelte
+msgid "Copy recovery link"
 msgstr ""

@@ -110,6 +110,7 @@ public class TreatmentClientIdRoundTripTests : IDisposable
             Mock.Of<IPatientDeviceStamper>(),
             Mock.Of<IActiveProfileResolver>(),
             Mock.Of<IPatientInsulinRepository>(),
+            TempBasalTestDeps.Unscheduled(),
             apiSecretCaller,
             NullLogger<TreatmentDecomposer>.Instance);
 

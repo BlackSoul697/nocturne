@@ -91,6 +91,7 @@ public class TreatmentDecomposerDeleteTests : IDisposable
         Mock.Of<IPatientDeviceStamper>(),
         Mock.Of<IActiveProfileResolver>(),
         Mock.Of<IPatientInsulinRepository>(),
+        TempBasalTestDeps.Unscheduled(),
         auditContext,
         logger ?? NullLogger<TreatmentDecomposer>.Instance);
 

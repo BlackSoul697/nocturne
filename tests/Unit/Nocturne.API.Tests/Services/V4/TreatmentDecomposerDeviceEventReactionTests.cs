@@ -70,6 +70,7 @@ public class TreatmentDecomposerDeviceEventReactionTests : IDisposable
             Mock.Of<IPatientDeviceStamper>(),
             Mock.Of<IActiveProfileResolver>(),
             Mock.Of<IPatientInsulinRepository>(),
+            TempBasalTestDeps.Unscheduled(),
             audit,
             NullLogger<TreatmentDecomposer>.Instance,
             reactor.Object);

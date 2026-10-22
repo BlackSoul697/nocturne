@@ -63,6 +63,7 @@ public class TreatmentDecomposerNotesTests : IDisposable
             Mock.Of<IPatientDeviceStamper>(),
             activeProfileResolverMock.Object,
             insulinRepoMock.Object,
+            TempBasalTestDeps.Unscheduled(),
             Mock.Of<IAuditContext>(),
             NullLogger<TreatmentDecomposer>.Instance);
     }
