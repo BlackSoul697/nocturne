@@ -46,12 +46,6 @@ export function contributingDays(range: DailyProfileRange | undefined, slot: num
   return result;
 }
 
-/** Whether every day of the range has this series' bitmap withheld from the caller. */
-export function withheld(range: DailyProfileRange | undefined, series: CoverageSeries): boolean {
-  const days = range?.days ?? [];
-  return days.length > 0 && days.every((d) => d.coverage?.[series] == null);
-}
-
 export interface SlotPoint<T> {
   slot: number;
   value: T;

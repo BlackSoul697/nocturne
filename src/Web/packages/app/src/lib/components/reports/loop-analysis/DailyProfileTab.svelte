@@ -8,6 +8,7 @@
   import { curveStepAfter } from "d3-shape";
   import {
     IobCobSource,
+    LoopAnalysisSeries,
     type DailyProfileResponse,
     type DailyProfileSlot,
     type LoopAnalysisAggregate,
@@ -39,7 +40,7 @@
   import AggregateReadout from "./AggregateReadout.svelte";
   import SlotDays from "./SlotDays.svelte";
   import { TimeOfDayCursor } from "./time-of-day-cursor.svelte";
-  import { atMinute, withheld } from "./daily-profile-view";
+  import { atMinute } from "./daily-profile-view";
   import { ignoredFilterLabel } from "./filter-labels.svelte";
   import NoTimeZone from "./NoTimeZone.svelte";
 
@@ -127,11 +128,14 @@
   const bolusDomain = $derived<[number, number]>([0, axisEnd([...bolusBars, ...bolusComparison].map((b) => b.value), 0.1)]);
   const carbDomain = $derived<[number, number]>([0, axisEnd([...carbBars, ...carbComparison].map((b) => b.value), 1)]);
 
-  const treatmentsWithheld = $derived(withheld(primary, "iobCob"));
-  const scheduleWithheld = $derived(withheld(primary, "scheduledBasal"));
+  const withheld = $derived(new Set(response.withheldSeries ?? []));
+  const hidden = (series: LoopAnalysisSeries) => withheld.has(series);
+  const componentsHidden = $derived(withheld.has(LoopAnalysisSeries.NetLoopCorrectionComponents));
+  const hiddenText = () => "Hidden: your access does not include this data";
 
-  const emptyText = (available: boolean, hidden: boolean, none: string) =>
-    hidden ? "Hidden: you do not have access to treatments" : available ? null : none;
+  /** What a panel shows in place of its plot: why it is hidden, or that there is nothing to draw. */
+  const emptyText = (series: LoopAnalysisSeries, available: boolean, none: string) =>
+    hidden(series) ? hiddenText() : available ? null : none;
 
   const targetRuns = $derived.by(() => {
     const runs: DailyProfileSlot[][] = [];
@@ -165,18 +169,52 @@
   const TARGET_EDGE = CHART_TEXTURES["target-range-limit"].color;
 
   const summary = $derived(primary?.summary);
+  const percent = (v: number | undefined) => `${(v ?? 0).toFixed(0)}%`;
+  const hiddenFigure = (label: string): Figure => ({ label, value: "–", note: hiddenText() });
+
   const figures = $derived.by<Figure[]>(() => {
     const days = summary?.daysWithData ?? 0;
     const list: Figure[] = [
       { label: "Days with data", value: String(days), unit: plural(days, ["day", "days"]) },
     ];
-    if (summary?.deliveredToScheduledRatio != null)
+
+    const insulin = summary?.insulin;
+    if (hidden(LoopAnalysisSeries.InsulinSummary)) {
+      list.push(hiddenFigure("Total insulin"));
+    } else if (insulin) {
+      list.push(
+        {
+          label: "Total insulin",
+          value: u1(insulin.total?.mean ?? 0),
+          unit: "U/day",
+          note: `Median ${u1(insulin.total?.p50 ?? 0)}, ${plural(insulin.total?.n ?? 0, ["over # day", "over # days"])}`,
+        },
+        {
+          label: "Basal / bolus",
+          value: `${percent(insulin.deliveredBasalPercent)} / ${percent(insulin.bolusPercent)}`,
+          note: `${u1(insulin.deliveredBasal ?? 0)} / ${u1(insulin.bolus ?? 0)} U/day`,
+        },
+        {
+          label: "Automatic / manual bolus",
+          value: `${u1(insulin.automaticBolus ?? 0)} / ${u1(insulin.manualBolus ?? 0)}`,
+          unit: "U/day",
+          note: `${percent(insulin.automaticBolusPercent)} / ${percent(insulin.manualBolusPercent)} of total insulin`,
+        }
+      );
+    }
+
+    if (hidden(LoopAnalysisSeries.DeliveredToScheduledRatio))
+      list.push(hiddenFigure("Delivered vs scheduled basal"));
+    else if (summary?.deliveredToScheduledRatio != null)
       list.push({
         label: "Delivered vs scheduled basal",
         value: `${summary.deliveredToScheduledRatio.toFixed(2)}×`,
         note: "Observed delivered basal over scheduled",
       });
-    if (summary?.netLoopCorrectionPerDay != null) {
+
+    if (hidden(LoopAnalysisSeries.NetLoopCorrectionSummary)) {
+      list.push(hiddenFigure("Net loop correction"));
+    } else if (summary?.netLoopCorrectionPerDay != null) {
       const correctionDays = summary.netLoopCorrectionDays ?? 0;
       list.push({
         label: "Net loop correction",
@@ -190,6 +228,12 @@
     }
     return list;
   });
+
+  // Under the clamp the range parameters are always ignored; the clamp notice says so instead.
+  const RANGE_PARAMETERS = new Set(["startDate", "endDate", "compare", "compareStartDate", "compareEndDate"]);
+  const ignoredFilters = $derived(
+    (response.ignoredFilters ?? []).filter((name) => !RANGE_PARAMETERS.has(name))
+  );
 
   const daysText = (n: number | undefined) => plural(n ?? 0, ["# day", "# days"]);
   const readingsText = (n: number | undefined) => plural(n ?? 0, ["# reading", "# readings"]);
@@ -260,19 +304,20 @@
         <Clock />
         <Alert.Title>Only the last 24 hours are included</Alert.Title>
         <Alert.Description>
-          You can read only the most recent 24 hours of this data, so each range holds less than it
-          spans and the time-of-day figures rest on at most one day.
+          You can read only the most recent 24 hours of this data, so the report covers those 24
+          hours whatever range is picked, compares nothing, and each time of day rests on at most
+          one day.
         </Alert.Description>
       </Alert.Root>
     {/if}
 
-    {#if (response.ignoredFilters?.length ?? 0) > 0}
+    {#if ignoredFilters.length > 0}
       <Alert.Root variant="info">
         <FilterX />
         <Alert.Title>Some filters were not applied</Alert.Title>
         <Alert.Description>
           Your access does not include the data these filters are drawn from, so they were ignored:
-          {response.ignoredFilters?.map(ignoredFilterLabel).join(", ")}.
+          {ignoredFilters.map(ignoredFilterLabel).join(", ")}.
         </Alert.Description>
       </Alert.Root>
     {/if}
@@ -281,7 +326,7 @@
       <FigureStrip {figures} />
       {#if insulinDeliveryHref}
         <Button href={insulinDeliveryHref} variant="link" size="inline">
-          Total daily dose and the basal and bolus split for the whole range are in Insulin Delivery
+          Insulin Delivery has the whole range's totals, without these filters
           <ArrowRight />
         </Button>
       {/if}
@@ -309,13 +354,14 @@
           yDomain={glucoseDomain}
           yFormat={axisGlucose}
           heightClass="h-48"
-          empty={has((s) => s.glucose) ? null : "No glucose readings in this range"}
+          empty={emptyText(LoopAnalysisSeries.Glucose, has((s) => s.glucose), "No glucose readings in this range")}
           legend={[
             { texture: "percentile-outer", label: "10–90%", color: GLUCOSE_BANDS.outer },
             { texture: "percentile-inner", label: "25–75%", color: GLUCOSE_BANDS.inner },
             { texture: "percentile-median", label: "Median", color: GLUCOSE_BANDS.median, shape: "line" },
-            { texture: "target-band", label: "Target range in force" },
+            ...(hidden(LoopAnalysisSeries.Target) ? [] : [{ texture: "target-band" as const, label: "Target range in force" }]),
           ]}
+          hiddenNote={hidden(LoopAnalysisSeries.Target) ? "Target range hidden: your access does not include it" : null}
         >
           {#snippet marks()}
             {#each targetRuns as run, i (i)}
@@ -364,12 +410,17 @@
           unit="U/h"
           {cursor}
           yDomain={basalDomain}
-          empty={has((s) => s.deliveredBasal) || has((s) => s.scheduledBasal) ? null : "No basal delivery in this range"}
+          empty={emptyText(
+            LoopAnalysisSeries.DeliveredBasal,
+            has((s) => s.deliveredBasal) || has((s) => s.scheduledBasal),
+            "No basal delivery in this range"
+          )}
+          hiddenNote={hidden(LoopAnalysisSeries.ScheduledBasal) ? "Scheduled basal hidden: your access does not include it" : null}
           legend={[
             { texture: "percentile-outer", label: "Delivered 10–90%", color: BASAL_BANDS.outer },
             { texture: "percentile-inner", label: "Delivered 25–75%", color: BASAL_BANDS.inner },
             { texture: "percentile-median", label: "Delivered median", color: BASAL_BANDS.median, shape: "line" },
-            ...(scheduleWithheld
+            ...(hidden(LoopAnalysisSeries.ScheduledBasal)
               ? []
               : [{ texture: "insulin-scheduled-basal" as const, label: "Scheduled", color: SCHEDULED, shape: "line" as const }]),
           ]}
@@ -423,7 +474,7 @@
             unit="U/h above schedule"
             {cursor}
             yDomain={correctionDomain}
-            empty={has((s) => s.netLoopCorrection) ? null : "No loop corrections in this range"}
+            empty={emptyText(LoopAnalysisSeries.NetLoopCorrection, has((s) => s.netLoopCorrection), "No loop corrections in this range")}
             legend={[
               { texture: "percentile-inner", label: "Temp basal delta 25–75%", color: CORRECTION_BAND },
               { texture: "percentile-median", label: "Mean, with automatic boluses", color: CORRECTION_LINE, shape: "line" },
@@ -493,16 +544,19 @@
           </TimeOfDayPanel>
           <div class="flex flex-wrap items-center gap-x-5 gap-y-2 px-1 text-sm">
             <span class="text-xs text-muted-foreground">Also show</span>
+            {#if componentsHidden}
+              <span class="text-xs text-muted-foreground">{hiddenText()}</span>
+            {/if}
             <div class="flex items-center gap-2">
-              <Switch id="show-manual-temp" bind:checked={showManualTemp} />
+              <Switch id="show-manual-temp" disabled={componentsHidden} bind:checked={showManualTemp} />
               <Label for="show-manual-temp">Manual temps</Label>
             </div>
             <div class="flex items-center gap-2">
-              <Switch id="show-suspend" bind:checked={showSuspend} />
+              <Switch id="show-suspend" disabled={componentsHidden} bind:checked={showSuspend} />
               <Label for="show-suspend">Suspends</Label>
             </div>
             <div class="flex items-center gap-2">
-              <Switch id="show-inferred" bind:checked={showInferred} />
+              <Switch id="show-inferred" disabled={componentsHidden} bind:checked={showInferred} />
               <Label for="show-inferred">Inferred</Label>
             </div>
           </div>
@@ -516,7 +570,7 @@
           {cursor}
           yDomain={hourlyDomain}
           heightClass="h-28"
-          empty={hourlyPrimary.length > 0 ? null : "No loop corrections in this range"}
+          empty={emptyText(LoopAnalysisSeries.HourlyNetLoopCorrection, hourlyPrimary.length > 0, "No loop corrections in this range")}
         >
           {#snippet marks()}
             <Rule y={0} class="stroke-foreground/40" />
@@ -550,7 +604,7 @@
           unit="U"
           {cursor}
           yDomain={iobDomain}
-          empty={emptyText(has((s) => s.iob), treatmentsWithheld, "No IOB in this range")}
+          empty={emptyText(LoopAnalysisSeries.Iob, has((s) => s.iob), "No IOB in this range")}
           legend={[
             { texture: "percentile-outer", label: "10–90%", color: IOB.outer },
             { texture: "percentile-inner", label: "25–75%", color: IOB.inner },
@@ -578,7 +632,7 @@
           unit="g"
           {cursor}
           yDomain={cobDomain}
-          empty={emptyText(has((s) => s.cob), treatmentsWithheld, "No COB in this range")}
+          empty={emptyText(LoopAnalysisSeries.Cob, has((s) => s.cob), "No COB in this range")}
           legend={[
             { texture: "percentile-outer", label: "10–90%", color: COB.outer },
             { texture: "percentile-inner", label: "25–75%", color: COB.inner },
@@ -607,7 +661,7 @@
           {cursor}
           yDomain={bolusDomain}
           heightClass="h-24"
-          empty={emptyText(has((s) => s.manualBoluses), treatmentsWithheld, "No manual boluses in this range")}
+          empty={emptyText(LoopAnalysisSeries.ManualBoluses, has((s) => s.manualBoluses), "No manual boluses in this range")}
         >
           {#snippet marks()}
             <SlotBars bars={bolusBars} comparison={bolusComparison} color="var(--insulin-bolus)" gap={0} />
@@ -626,7 +680,7 @@
           yDomain={carbDomain}
           heightClass="h-28"
           showTimeAxis
-          empty={emptyText(has((s) => s.carbs), treatmentsWithheld, "No carbs in this range")}
+          empty={emptyText(LoopAnalysisSeries.Carbs, has((s) => s.carbs), "No carbs in this range")}
         >
           {#snippet marks()}
             <SlotBars bars={carbBars} comparison={carbComparison} color="var(--carbs)" gap={0} />

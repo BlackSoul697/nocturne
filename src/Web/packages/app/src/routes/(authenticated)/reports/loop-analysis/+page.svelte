@@ -9,7 +9,7 @@
   import LoopAnalysisFilterBar from "$lib/components/reports/loop-analysis/LoopAnalysisFilterBar.svelte";
   import DailyProfileTab from "$lib/components/reports/loop-analysis/DailyProfileTab.svelte";
   import {
-    dailyProfileRequest,
+    dailyProfileQuery,
     isLoopAnalysisTab,
     readLoopAnalysisFilter,
     writeLoopAnalysisFilter,
@@ -30,20 +30,14 @@
     });
   }
 
-  // Read once, so a clamped viewer's range does not move, and refetch, on every recomputation.
-  const openedAt = new Date();
+  const requested = $derived({ startDate: reportsParams.fromDay, endDate: reportsParams.toDay });
+  const query = $derived(dailyProfileQuery(filter, requested));
 
-  const request = $derived(
-    dailyProfileRequest(
-      filter,
-      { fromDay: reportsParams.fromDay, toDay: reportsParams.toDay, dayCount: reportsParams.dayCount },
-      { limitTo24Hours: page.data.limitTo24Hours ?? false, now: openedAt }
-    )
-  );
-
-  const profileResource = contextResource(() => getDailyProfile(request.query), {
+  const profileResource = contextResource(() => getDailyProfile(query), {
     errorTitle: "Error Loading Loop Analysis",
   });
+  const response = $derived(profileResource.current);
+  const clamped = $derived(response?.historyClamped ?? page.data.limitTo24Hours ?? false);
 
   const insulinDeliveryHref = $derived.by(() => {
     const range = ["days", "from", "to", "isDefault"]
@@ -76,10 +70,13 @@
   <LoopAnalysisFilterBar
     {filter}
     onchange={setFilter}
-    primary={request.primary}
-    comparison={request.comparison}
-    limitedTo24Hours={request.limitedTo24Hours}
-    profileNames={profileResource.current?.primary?.profileNames ?? []}
+    {requested}
+    primaryRange={response?.primaryRange}
+    comparisonRange={response?.comparisonRange}
+    applied={response?.appliedFilters}
+    {clamped}
+    grantedScopes={page.data.effectivePermissions ?? []}
+    profileNames={response?.primary?.profileNames ?? []}
   />
 
   <Tabs.Root
@@ -94,8 +91,8 @@
       {/each}
     </Tabs.List>
     <Tabs.Content value="daily-profile" class="mt-4">
-      {#if profileResource.current}
-        <DailyProfileTab response={profileResource.current} {insulinDeliveryHref} />
+      {#if response}
+        <DailyProfileTab {response} {insulinDeliveryHref} />
       {/if}
     </Tabs.Content>
   </Tabs.Root>

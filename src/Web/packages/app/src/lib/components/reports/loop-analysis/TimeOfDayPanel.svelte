@@ -21,6 +21,8 @@
     yFormat?: (value: number) => string;
     /** Shown in place of the plot when the panel has nothing to draw. */
     empty?: string | null;
+    /** Says which of the panel's series the caller's access hides, when the rest still draws. */
+    hiddenNote?: string | null;
     showTimeAxis?: boolean;
     heightClass?: string;
     legend?: ChartKeyItem[];
@@ -38,6 +40,7 @@
     yDomain,
     yFormat,
     empty = null,
+    hiddenNote = null,
     showTimeAxis = false,
     heightClass = "h-36",
     legend = [],
@@ -180,6 +183,9 @@
     </div>
     {#if legend.length > 0}
       <ChartKey class="justify-start px-1" items={legend} />
+    {/if}
+    {#if hiddenNote}
+      <p class="px-1 text-xs text-muted-foreground">{hiddenNote}</p>
     {/if}
   {/if}
 </section>

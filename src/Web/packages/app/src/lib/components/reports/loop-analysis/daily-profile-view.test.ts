@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { DailyProfileRange, DailyProfileSlot } from "$lib/api";
-import { aggregateRuns, clockTime, contributingDays, covers, withheld } from "./daily-profile-view";
+import { aggregateRuns, clockTime, contributingDays, covers } from "./daily-profile-view";
 import { bitmapOf } from "./daily-profile.test-fixtures";
 
 describe("coverage bitmaps", () => {
@@ -34,8 +34,6 @@ describe("coverage bitmaps", () => {
       ],
     };
     expect(contributingDays(range, 5).map((d) => d.day.date)).toEqual(["2026-10-01"]);
-    expect(withheld(range, "iobCob")).toBe(true);
-    expect(withheld(range, "glucose")).toBe(false);
   });
 });
 

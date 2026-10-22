@@ -33,11 +33,16 @@ describe("DailyProfileTab", () => {
       await expect.element(page.getByRole("slider", { name: title, exact: true })).toBeVisible();
 
     await expect.element(page.getByText("Days with data")).toBeVisible();
+    await expect.element(page.getByText("30.0", { exact: true })).toBeVisible();
+    await expect.element(page.getByText("Median 30.0, over 14 days")).toBeVisible();
+    await expect.element(page.getByText("47% / 53%")).toBeVisible();
+    await expect.element(page.getByText("10.0 / 6.0", { exact: true })).toBeVisible();
+    await expect.element(page.getByText("33% / 20% of total insulin")).toBeVisible();
     await expect.element(page.getByText("0.88×")).toBeVisible();
     await expect.element(page.getByText("+9.60")).toBeVisible();
     await expect.element(page.getByText("32% of total insulin, over 14 days")).toBeVisible();
     await expect
-      .element(page.getByRole("link", { name: /are in Insulin Delivery/ }))
+      .element(page.getByRole("link", { name: /Insulin Delivery has the whole range/ }))
       .toHaveAttribute("href", "/reports/insulin-delivery?days=14");
   });
 
@@ -135,15 +140,44 @@ describe("DailyProfileTab", () => {
     await expect.element(link).toHaveAttribute("href", "/reports/day-in-review?date=2026-10-01&time=08:00");
   });
 
-  it("says treatment series are hidden from a caller without treatments access", async () => {
+  it("hides every series the response withholds from a caller with glucose access only", async () => {
     render(DailyProfileTab, {
-      props: { response: profileResponse({ withholdTreatments: true, withholdSchedule: true }) },
+      props: { response: profileResponse({ scopes: ["glucose.read", "reports.read"] }) },
     });
 
-    expect(page.getByText("Hidden: you do not have access to treatments").elements()).toHaveLength(4);
-    expect(page.getByRole("slider", { name: "Insulin on board" }).elements()).toHaveLength(0);
-    await expect.element(page.getByRole("slider", { name: "Glucose" })).toBeVisible();
+    const sliders = page.getByRole("slider").elements().map((s) => s.getAttribute("aria-label"));
+    expect(sliders).toEqual(["Glucose"]);
+    for (const title of [
+      "Basal",
+      "Net loop correction",
+      "Net loop correction by hour",
+      "Insulin on board",
+      "Carbs on board",
+      "Manual boluses",
+      "Carbs",
+    ])
+      await expect
+        .element(page.getByRole("region", { name: title, exact: true }).getByText("Hidden: your access does not include this data"))
+        .toBeVisible();
+    for (const figure of ["Total insulin", "Delivered vs scheduled basal", "Net loop correction"])
+      await expect.element(page.getByText(figure, { exact: true }).first()).toBeVisible();
+    await expect.element(page.getByText("Target range hidden: your access does not include it")).toBeVisible();
+    expect(page.getByText("Target range in force").elements()).toHaveLength(0);
+    await expect.element(page.getByRole("switch", { name: "Manual temps" })).toBeDisabled();
+  });
+
+  it("keeps treatment series but hides the schedule without therapy access", async () => {
+    render(DailyProfileTab, {
+      props: { response: profileResponse({ scopes: ["glucose.read", "treatments.read", "reports.read"] }) },
+    });
+
+    await expect.element(page.getByRole("slider", { name: "Insulin on board" })).toBeVisible();
+    await expect
+      .element(page.getByText("Scheduled basal hidden: your access does not include it"))
+      .toBeVisible();
     expect(page.getByText("Scheduled", { exact: true }).elements()).toHaveLength(0);
+    await expect.element(page.getByText("Total insulin", { exact: true })).toBeVisible();
+    await expect.element(page.getByText("30.0", { exact: true })).toBeVisible();
   });
 
   it("explains a missing time zone instead of drawing anything", async () => {
