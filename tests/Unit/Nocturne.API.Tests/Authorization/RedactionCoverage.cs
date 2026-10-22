@@ -9,7 +9,8 @@ namespace Nocturne.API.Tests.Authorization;
 /// Checks a scope guard against every property of the types it narrows, so a property added to a
 /// response cannot ship unredacted: <see cref="Populated{T}"/> builds a response with every
 /// property set, the guard redacts it for a caller with no category, and
-/// <see cref="AssertWithheld"/> fails on any nullable or collection property still holding data.
+/// <see cref="AssertWithheld"/> fails on any property still holding something other than null, an
+/// empty collection or its type's default, unless it is allowlisted as served whatever the scope.
 /// </summary>
 /// <example>
 /// <code>
@@ -29,7 +30,6 @@ internal static class RedactionCoverage
     /// <param name="allowed">Properties served whatever the caller's scopes, as <c>Type.Property</c>.</param>
     public static void AssertWithheld(object root, IReadOnlyCollection<Type> types, IReadOnlyCollection<string> allowed)
     {
-        var nullability = new NullabilityInfoContext();
         var leaks = new List<string>();
         var checkedTypes = new HashSet<Type>();
         Walk(root, 0);
@@ -56,22 +56,21 @@ internal static class RedactionCoverage
             foreach (var property in Served(type))
             {
                 var child = property.GetValue(value);
-                if (guarded && !allowed.Contains($"{type.Name}.{property.Name}") && Holds(property, child, nullability))
+                if (guarded && !allowed.Contains($"{type.Name}.{property.Name}") && Holds(child))
                     leaks.Add($"{type.Name}.{property.Name}");
                 Walk(child, depth + 1);
             }
         }
     }
 
-    private static bool Holds(PropertyInfo property, object? value, NullabilityInfoContext nullability) =>
-        value switch
-        {
-            null => false,
-            string => nullability.Create(property).ReadState == NullabilityState.Nullable,
-            IEnumerable items => items.Cast<object?>().Any(),
-            _ => nullability.Create(property).ReadState == NullabilityState.Nullable
-                || Nullable.GetUnderlyingType(property.PropertyType) is not null,
-        };
+    private static bool Holds(object? value) => value switch
+    {
+        null => false,
+        string text => text.Length > 0,
+        IEnumerable items => items.Cast<object?>().Any(),
+        _ when value.GetType().IsValueType => !value.Equals(Activator.CreateInstance(value.GetType())),
+        _ => true,
+    };
 
     private static IEnumerable<PropertyInfo> Served(Type type) =>
         type.GetProperties(BindingFlags.Public | BindingFlags.Instance)
@@ -84,7 +83,7 @@ internal static class RedactionCoverage
             return Populate(underlying, depth);
         if (type == typeof(string)) return "x";
         if (type == typeof(bool)) return true;
-        if (type.IsEnum) return Enum.GetValues(type).GetValue(0);
+        if (type.IsEnum) return Enum.GetValues(type).Cast<object>().Last();
         if (type == typeof(DateTime)) return new DateTime(2024, 6, 3, 0, 0, 0, DateTimeKind.Utc);
         if (type == typeof(DateOnly)) return new DateOnly(2024, 6, 3);
         if (type.IsPrimitive || type == typeof(decimal)) return Convert.ChangeType(1, type);

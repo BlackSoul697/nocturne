@@ -1181,8 +1181,18 @@ public class AnalyticsReadScopeGuardTests
 
         RedactionCoverage.AssertWithheld(
             data,
-            [typeof(DailyProfileSlot), typeof(DailyProfileDay), typeof(DailyProfileDayCoverage), typeof(DailyProfileSummary)],
-            ["DailyProfileDayCoverage.Analysed"]);
+            [
+                typeof(DailyProfileRange), typeof(DailyProfileSlot), typeof(DailyProfileDay),
+                typeof(DailyProfileDayCoverage), typeof(DailyProfileSummary),
+            ],
+            [
+                "DailyProfileRange.From", "DailyProfileRange.To", "DailyProfileRange.SlotMinutes",
+                "DailyProfileRange.Slots", "DailyProfileRange.Days", "DailyProfileRange.Summary",
+                "DailyProfileSlot.Slot", "DailyProfileSlot.MinuteOfDay",
+                "DailyProfileDay.Date", "DailyProfileDay.DayOfWeek", "DailyProfileDay.Start", "DailyProfileDay.Coverage",
+                "DailyProfileDayCoverage.Analysed",
+                "DailyProfileSummary.DaysWithData",
+            ]);
     }
 
     [Theory]

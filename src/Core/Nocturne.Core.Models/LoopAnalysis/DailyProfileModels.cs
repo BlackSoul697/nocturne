@@ -246,8 +246,9 @@ public class DailyProfileSummary
 
 /// <summary>
 /// Insulin per day over the near-complete days only: those analysed, and covered by the basal the
-/// pump's records account for, through at least 90% of their length. Nothing is scaled; a masked
-/// or partly recorded day is left out rather than counted as a whole one.
+/// pump's records account for, through at least <c>DailyProfileCalculator.InsulinSummaryMinimumCoverage</c>
+/// of their length. Nothing is scaled; a masked or partly recorded day is left out rather than
+/// counted as a whole one.
 /// </summary>
 /// <remarks>
 /// In the basal/bolus split an automatic bolus (SMB) is bolus, as Trio and AAPS count it in their
