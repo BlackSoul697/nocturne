@@ -1,9 +1,6 @@
 using FluentAssertions;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.AspNetCore.Mvc.Abstractions;
-using Microsoft.AspNetCore.Mvc.Filters;
-using Microsoft.AspNetCore.Routing;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using Moq;
@@ -11,6 +8,7 @@ using Nocturne.API.Attributes;
 using Nocturne.API.Controllers.V4.Monitoring;
 using Nocturne.API.Controllers.V4.Platform;
 using Nocturne.API.Services.Platform;
+using Nocturne.API.Tests.Infrastructure;
 using Nocturne.Core.Contracts.Alerts;
 using Nocturne.Core.Contracts.Multitenancy;
 using Nocturne.Core.Models.Authorization;
@@ -139,27 +137,12 @@ public class AlertDeliveryEndpointTests
         Authorize(new HashSet<string> { scope }).Should().BeNull();
     }
 
-    private static IActionResult? Authorize(IReadOnlySet<string> grantedScopes)
-    {
-        var httpContext = new DefaultHttpContext();
-        httpContext.Items["AuthContext"] = new AuthContext { IsAuthenticated = true };
-        httpContext.Items["GrantedScopes"] = grantedScopes;
-
-        var context = new AuthorizationFilterContext(
-            new ActionContext(httpContext, new RouteData(), new ActionDescriptor()), []);
-
-        typeof(AlertsController).GetMethod(nameof(AlertsController.GetPendingDeliveries))!
-            .GetCustomAttributes(inherit: true)
-            .OfType<IAuthorizationFilter>()
-            .ToList()
-            .ForEach(filter =>
-            {
-                if (context.Result is null)
-                    filter.OnAuthorization(context);
-            });
-
-        return context.Result;
-    }
+    private static IActionResult? Authorize(IReadOnlySet<string> grantedScopes) =>
+        ActionGate.Evaluate(
+            typeof(AlertsController),
+            nameof(AlertsController.GetPendingDeliveries),
+            grantedScopes,
+            new AuthContext { IsAuthenticated = true });
 
     [Fact]
     public void Heartbeat_Returns200()
