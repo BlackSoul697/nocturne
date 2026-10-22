@@ -1,5 +1,6 @@
 using System.Reflection;
 using System.Text.Json;
+using Nocturne.Core.Clinical.Schedules;
 using Nocturne.Core.Constants;
 using Nocturne.Core.Contracts.Entries;
 using Nocturne.Core.Contracts.Health;
@@ -346,34 +347,12 @@ public class DDataService : IDDataService
         for (int i = 0; i < convertedTreatments.Count; i++)
         {
             var treatment = convertedTreatments[i];
-            bool converted = false;
+            if (!TemporaryTargetUnits.IsMmol(treatment.TargetTop, treatment.TargetBottom, treatment.Units))
+                continue;
 
-            // If treatment is in mmol, convert to mg/dl
-            if (!string.IsNullOrEmpty(treatment.Units) && treatment.Units == "mmol")
-            {
-                if (treatment.TargetTop.HasValue)
-                    treatment.TargetTop = treatment.TargetTop * GlucoseConstants.MgdlPerMmol;
-                if (treatment.TargetBottom.HasValue)
-                    treatment.TargetBottom = treatment.TargetBottom * GlucoseConstants.MgdlPerMmol;
-                treatment.Units = "mg/dl";
-                converted = true;
-            }
-
-            // If we have a temp target that's below 20, assume it's mmol and convert to mg/dl for safety
-            if (
-                !converted
-                && (
-                    (treatment.TargetTop.HasValue && treatment.TargetTop < 20)
-                    || (treatment.TargetBottom.HasValue && treatment.TargetBottom < 20)
-                )
-            )
-            {
-                if (treatment.TargetTop.HasValue)
-                    treatment.TargetTop = treatment.TargetTop * GlucoseConstants.MgdlPerMmol;
-                if (treatment.TargetBottom.HasValue)
-                    treatment.TargetBottom = treatment.TargetBottom * GlucoseConstants.MgdlPerMmol;
-                treatment.Units = "mg/dl";
-            }
+            (treatment.TargetTop, treatment.TargetBottom) =
+                TemporaryTargetUnits.ToMgdl(treatment.TargetTop, treatment.TargetBottom, treatment.Units);
+            treatment.Units = "mg/dl";
         }
 
         return convertedTreatments;

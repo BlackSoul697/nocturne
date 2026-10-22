@@ -1,4 +1,5 @@
 using Nocturne.Core.Clinical.Devices;
+using Nocturne.Core.Clinical.LoopAnalysis;
 using Nocturne.Core.Clinical.Schedules;
 using Nocturne.Core.Constants;
 using Nocturne.Core.Contracts.Analytics;
@@ -813,23 +814,8 @@ public class StatisticsService : IStatisticsService
     /// <param name="sortedValues">Pre-sorted collection of values</param>
     /// <param name="percentile">Percentile to calculate (0-100)</param>
     /// <returns>Value at the specified percentile</returns>
-    public double CalculatePercentile(IList<double> sortedValues, double percentile)
-    {
-        if (sortedValues.Count == 0)
-            return 0;
-
-        var index = (percentile / 100) * (sortedValues.Count - 1);
-        var lower = (int)Math.Floor(index);
-        var upper = (int)Math.Ceiling(index);
-
-        if (lower == upper)
-        {
-            return sortedValues[lower];
-        }
-
-        var weight = index - lower;
-        return sortedValues[lower] * (1 - weight) + sortedValues[upper] * weight;
-    }
+    public double CalculatePercentile(IList<double> sortedValues, double percentile) =>
+        GlucoseStatistics.Percentile(sortedValues, percentile);
 
     /// <summary>
     /// Extract glucose values from entries
@@ -2663,7 +2649,7 @@ public class StatisticsService : IStatisticsService
             var hour = LocalHourOfDay(b.Mills, tz);
             bolus[hour] += b.Insulin;
             counts[hour]++;
-            bolusDays.Add(LocalDay(b.Mills, tz));
+            bolusDays.Add(LocalSlotBinning.LocalDay(b.Mills, tz));
         }
 
         // Algorithm micro-boluses are basal-replacement doses above schedule
@@ -2672,7 +2658,7 @@ public class StatisticsService : IStatisticsService
             var hour = LocalHourOfDay(ab.Mills, tz);
             tempBasal[hour] += ab.Insulin;
             counts[hour]++;
-            basalDays.Add(LocalDay(ab.Mills, tz));
+            basalDays.Add(LocalSlotBinning.LocalDay(ab.Mills, tz));
         }
 
         // Long-acting basal injections (MDI) provide baseline coverage across their duration
@@ -2686,7 +2672,7 @@ public class StatisticsService : IStatisticsService
             var dia = bi.InsulinContext?.Dia ?? 0.0;
             var coverageHours = dia > 0 ? Math.Min(dia, 72.0) : 24.0;
             var ratePerHour = bi.Units / coverageHours;
-            var endMills = bi.Mills + (long)(coverageHours * HourMs);
+            var endMills = bi.Mills + (long)(coverageHours * LocalSlotBinning.HourMs);
             DistributeInsulinAcrossHourOfDay(
                 bi.Mills, endMills, ratePerHour, tz, scheduledBasal, basalDays);
             counts[LocalHourOfDay(bi.Mills, tz)]++;
@@ -2730,7 +2716,7 @@ public class StatisticsService : IStatisticsService
 
     /// <summary>
     /// Adds a constant-rate delivery interval's insulin into per-local-hour-of-day
-    /// buckets, sliced by <see cref="DistributeAcrossLocalHours"/>. Also records the local
+    /// buckets, sliced by <see cref="LocalSlotBinning.Distribute"/>. Also records the local
     /// days the interval touches.
     /// </summary>
     private static void DistributeInsulinAcrossHourOfDay(
@@ -2741,52 +2727,18 @@ public class StatisticsService : IStatisticsService
         double[] insulinBuckets,
         HashSet<DateOnly> localDays)
     {
-        DistributeAcrossLocalHours(startMills, endMills, tz, (localStart, sliceMs) =>
+        LocalSlotBinning.Distribute(startMills, endMills, tz, 60, (localStart, sliceMs) =>
         {
-            insulinBuckets[localStart.Hour] += rate * sliceMs / HourMs;
+            insulinBuckets[localStart.Hour] += rate * sliceMs / LocalSlotBinning.HourMs;
             localDays.Add(DateOnly.FromDateTime(localStart));
         });
     }
 
-    private const long HourMs = 3_600_000L;
-
-    /// <summary>
-    /// Walks a [startMills, endMills) interval in slices that end on <paramref name="tz"/>'s
-    /// local hour boundaries, handing each slice's local start and length to
-    /// <paramref name="addSlice"/>. A 30-minute interval at local 13:55 yields 5 min in hour 13
-    /// and 25 min in hour 14. Slicing on local rather than UTC boundaries is what keeps a zone
-    /// with a non-whole-hour offset (Adelaide +9:30, Kathmandu +5:45) from attributing part of
-    /// every slice to the neighbouring hour. Every hour-of-day distribution goes through here.
-    /// </summary>
-    private static void DistributeAcrossLocalHours(
-        long startMills,
-        long endMills,
-        TimeZoneInfo tz,
-        Action<DateTime, long> addSlice)
-    {
-        long cursor = startMills;
-        while (cursor < endMills)
-        {
-            var utcDt = DateTimeOffset.FromUnixTimeMilliseconds(cursor);
-            var offsetMs = (long)tz.GetUtcOffset(utcDt).TotalMilliseconds;
-            long nextLocalHourBoundary = ((cursor + offsetMs) / HourMs + 1) * HourMs - offsetMs;
-            long sliceEnd = Math.Min(nextLocalHourBoundary, endMills);
-            addSlice(TimeZoneInfo.ConvertTimeFromUtc(utcDt.UtcDateTime, tz), sliceEnd - cursor);
-            cursor = sliceEnd;
-        }
-    }
-
-    private static int LocalHourOfDay(long mills, TimeZoneInfo tz) =>
-        TimeZoneInfo.ConvertTimeFromUtc(
-            DateTimeOffset.FromUnixTimeMilliseconds(mills).UtcDateTime, tz).Hour;
-
-    private static DateOnly LocalDay(long mills, TimeZoneInfo tz) =>
-        DateOnly.FromDateTime(TimeZoneInfo.ConvertTimeFromUtc(
-            DateTimeOffset.FromUnixTimeMilliseconds(mills).UtcDateTime, tz));
+    private static int LocalHourOfDay(long mills, TimeZoneInfo tz) => LocalSlotBinning.LocalTime(mills, tz).Hour;
 
     /// <summary>
     /// Adds (rate, overlapMs) entries to each local hour-of-day bucket the interval crosses,
-    /// sliced by <see cref="DistributeAcrossLocalHours"/>.
+    /// sliced by <see cref="LocalSlotBinning.Distribute"/>.
     /// </summary>
     private static void DistributeAcrossHourOfDay(
         long startMills,
@@ -2795,7 +2747,7 @@ public class StatisticsService : IStatisticsService
         TimeZoneInfo tz,
         List<(double Rate, long WeightMs)>[] buckets)
     {
-        DistributeAcrossLocalHours(startMills, endMills, tz,
+        LocalSlotBinning.Distribute(startMills, endMills, tz, 60,
             (localStart, sliceMs) => buckets[localStart.Hour].Add((rate, sliceMs)));
     }
 
@@ -2997,7 +2949,7 @@ public class StatisticsService : IStatisticsService
 
         var tz = timeZone ?? TimeZoneInfo.Utc;
         var daysOfData = sortedEntries
-            .Select(e => LocalDay(e.Mills, tz))
+            .Select(e => LocalSlotBinning.LocalDay(e.Mills, tz))
             .Distinct()
             .Count();
         var reliability = AssessReliability(daysOfData, sortedEntries.Count, windowDays);

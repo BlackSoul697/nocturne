@@ -774,6 +774,8 @@ public static class ServiceRegistrationExtensions
         services.AddScoped<IChartDataAssembler, DashboardChartDataAssembler>();
         services.AddScoped<IChartDataService, ChartDataService>();
         services.AddScoped<IActogramReportService, ActogramReportService>();
+        services.AddScoped<TenantClockResolver>();
+        services.AddScoped<ILoopAnalysisService, LoopAnalysisService>();
         services.AddScoped<IDataOverviewService, DataOverviewService>();
 
         return services;

@@ -2,6 +2,7 @@ using Nocturne.API.Controllers.V4.Analytics;
 using Nocturne.API.Services.Glucose;
 using Nocturne.Core.Models;
 using Nocturne.Core.Models.Authorization;
+using Nocturne.Core.Models.LoopAnalysis;
 using Nocturne.Core.Models.Widget;
 
 namespace Nocturne.API.Authorization;
@@ -389,4 +390,198 @@ internal static class StatisticsReadScopeGuard
                 Time = analytics.Time,
                 ClinicalAssessment = analytics.ClinicalAssessment,
             };
+}
+
+/// <summary>
+/// Per-category read scopes for Loop Analysis, admitted on <c>reports.read</c>: glucose is the
+/// glucose category; delivered basal, the insulin above schedule, IOB/COB, boluses and carbs are
+/// treatments; the profile names and the separate schedule series (scheduled basal, target range)
+/// are therapy settings. Both of those series also carry treatments (the scheduled basal is scaled
+/// by any override, the target range overlays temporary targets), so they need treatments too.
+/// The masks follow the categories of the spans they are drawn from, as
+/// <see cref="ChartDataReadScopeGuard"/> serves them: overrides, temporary targets, exercise and
+/// illness are treatments, pump mode and the registered pumps are devices.
+/// </summary>
+/// <remarks>
+/// <para>
+/// The schedule can be worked back from the delivered basal and the components of insulin above
+/// schedule. That is not a disclosure past <c>treatments.read</c>: a schedule value carried inside
+/// delivery is treatment data, as <see cref="ChartDataReadScopeGuard"/> serves the basal series and
+/// its scheduled rate under that scope. <c>therapy.read</c> gates the schedule and target series
+/// served in their own right, and the profile names.
+/// </para>
+/// <para>The response is built per request and never cached server-side, so it is narrowed in place.</para>
+/// </remarks>
+/// <seealso cref="AnalyticsReadScopes"/>
+internal static class LoopAnalysisReadScopeGuard
+{
+    public const string AdmissionScope = Scope.ReportsRead;
+
+    /// <summary>
+    /// Drops from <paramref name="masks"/> every part the caller could not otherwise see: a profile
+    /// name without <c>therapy.read</c>, and each mask drawn from a category the caller lacks, which
+    /// would otherwise show where those spans fell through the analysed time.
+    /// </summary>
+    /// <returns>The query parameter names that were ignored, for the response to report.</returns>
+    public static List<string> NarrowFilter(LoopAnalysisMasks masks, IReadOnlySet<string> grantedScopes)
+    {
+        var ignored = new List<string>();
+        foreach (var rule in FilterRules)
+        {
+            if (AnalyticsReadScopes.Allows(grantedScopes, rule.Scope) || !rule.IsSet(masks))
+                continue;
+            rule.Clear(masks);
+            ignored.Add(rule.Name);
+        }
+        return ignored;
+    }
+
+    /// <summary>
+    /// Every filter <see cref="NarrowFilter"/> would drop for this caller, set or not, with the
+    /// scope it needs.
+    /// </summary>
+    public static List<LoopAnalysisUnavailableFilter> UnavailableFilters(IReadOnlySet<string> grantedScopes) =>
+    [
+        .. FilterRules
+            .Where(rule => !AnalyticsReadScopes.Allows(grantedScopes, rule.Scope))
+            .Select(rule => new LoopAnalysisUnavailableFilter { Filter = rule.Name, RequiredScope = rule.Scope }),
+    ];
+
+    /// <summary>The query parameter of every filter the guard narrows.</summary>
+    public static IEnumerable<string> FilterNames => FilterRules.Select(rule => rule.Name);
+
+    /// <summary>Each filter by its query parameter, the scope it is drawn from, and how to drop it.</summary>
+    private sealed record FilterRule(
+        string Name, string Scope, Func<LoopAnalysisMasks, bool> IsSet, Action<LoopAnalysisMasks> Clear);
+
+    private static readonly FilterRule[] FilterRules =
+    [
+        new("profileName", Scope.TherapyRead, m => m.ProfileName is not null, m => m.ProfileName = null),
+        new("excludeOverrides", Scope.TreatmentsRead, m => m.ExcludeOverrides, m => m.ExcludeOverrides = false),
+        new("excludeTemporaryTargets", Scope.TreatmentsRead, m => m.ExcludeTemporaryTargets, m => m.ExcludeTemporaryTargets = false),
+        new("excludeExercise", Scope.TreatmentsRead, m => m.ExcludeExercise, m => m.ExcludeExercise = false),
+        new("excludeIllness", Scope.TreatmentsRead, m => m.ExcludeIllness, m => m.ExcludeIllness = false),
+        new("excludeOpenLoop", Scope.DevicesRead, m => m.ExcludeOpenLoop, m => m.ExcludeOpenLoop = false),
+    ];
+
+    /// <summary>
+    /// The series the caller's scopes withhold. <see cref="Redact"/> empties exactly these, so the
+    /// response's <see cref="LoopAnalysisResponse.WithheldSeries"/> and its nulls cannot disagree.
+    /// </summary>
+    public static HashSet<LoopAnalysisSeries> Withheld(IReadOnlySet<string> grantedScopes)
+    {
+        var glucose = AnalyticsReadScopes.Allows(grantedScopes, Scope.GlucoseRead);
+        var treatments = AnalyticsReadScopes.Allows(grantedScopes, Scope.TreatmentsRead);
+        var therapy = AnalyticsReadScopes.Allows(grantedScopes, Scope.TherapyRead);
+
+        var withheld = new HashSet<LoopAnalysisSeries>();
+        void Withhold(bool hidden, params LoopAnalysisSeries[] series)
+        {
+            if (hidden)
+                withheld.UnionWith(series);
+        }
+
+        Withhold(!glucose, LoopAnalysisSeries.Glucose);
+        Withhold(!treatments,
+            LoopAnalysisSeries.DeliveredBasal,
+            LoopAnalysisSeries.NetLoopCorrection,
+            LoopAnalysisSeries.NetLoopCorrectionComponents,
+            LoopAnalysisSeries.HourlyNetLoopCorrection,
+            LoopAnalysisSeries.Iob,
+            LoopAnalysisSeries.Cob,
+            LoopAnalysisSeries.ManualBoluses,
+            LoopAnalysisSeries.Carbs,
+            LoopAnalysisSeries.InsulinSummary,
+            LoopAnalysisSeries.NetLoopCorrectionSummary);
+        Withhold(!therapy || !treatments,
+            LoopAnalysisSeries.ScheduledBasal,
+            LoopAnalysisSeries.Target,
+            LoopAnalysisSeries.DeliveredToScheduledRatio);
+        Withhold(!therapy, LoopAnalysisSeries.ProfileNames);
+        return withheld;
+    }
+
+    public static DailyProfileResponse Redact(DailyProfileResponse data, IReadOnlySet<string> grantedScopes)
+    {
+        var withheld = Withheld(grantedScopes);
+        data.WithheldSeries = [.. withheld.Order()];
+        if (withheld.Count == 0)
+            return data;
+
+        Narrow(data.Primary, withheld);
+        if (data.Comparison is { } comparison)
+            Narrow(comparison, withheld);
+        return data;
+    }
+
+    private static void Narrow(DailyProfileRange range, HashSet<LoopAnalysisSeries> withheld)
+    {
+        bool Hidden(LoopAnalysisSeries series) => withheld.Contains(series);
+
+        foreach (var slot in range.Slots)
+        {
+            if (Hidden(LoopAnalysisSeries.Glucose)) slot.Glucose = null;
+            if (Hidden(LoopAnalysisSeries.ScheduledBasal)) slot.ScheduledBasal = null;
+            if (Hidden(LoopAnalysisSeries.DeliveredBasal)) slot.DeliveredBasal = null;
+            if (Hidden(LoopAnalysisSeries.NetLoopCorrection)) slot.NetLoopCorrection = null;
+            if (Hidden(LoopAnalysisSeries.NetLoopCorrectionComponents))
+            {
+                slot.ManualTemp = null;
+                slot.Suspend = null;
+                slot.Inferred = null;
+            }
+            if (Hidden(LoopAnalysisSeries.Iob))
+            {
+                slot.Iob = null;
+                slot.IobSource = null;
+            }
+            if (Hidden(LoopAnalysisSeries.Cob))
+            {
+                slot.Cob = null;
+                slot.CobSource = null;
+            }
+            if (Hidden(LoopAnalysisSeries.ManualBoluses)) slot.ManualBoluses = null;
+            if (Hidden(LoopAnalysisSeries.Carbs)) slot.Carbs = null;
+            if (Hidden(LoopAnalysisSeries.Target))
+            {
+                slot.TargetLow = null;
+                slot.TargetHigh = null;
+            }
+        }
+
+        foreach (var day in range.Days)
+        {
+            if (Hidden(LoopAnalysisSeries.Glucose)) day.Coverage.Glucose = null;
+            if (Hidden(LoopAnalysisSeries.ScheduledBasal)) day.Coverage.ScheduledBasal = null;
+            if (Hidden(LoopAnalysisSeries.DeliveredBasal)) day.Coverage.DeliveredBasal = null;
+            if (Hidden(LoopAnalysisSeries.NetLoopCorrection))
+            {
+                day.Coverage.NetLoopCorrection = null;
+                day.NetLoopCorrection = null;
+            }
+            if (Hidden(LoopAnalysisSeries.Iob) || Hidden(LoopAnalysisSeries.Cob)) day.Coverage.IobCob = null;
+            if (Hidden(LoopAnalysisSeries.InsulinSummary))
+            {
+                day.TotalInsulin = null;
+                day.DeliveredBasal = null;
+                day.AutomaticBolus = null;
+                day.ManualBolus = null;
+            }
+        }
+
+        if (Hidden(LoopAnalysisSeries.HourlyNetLoopCorrection)) range.HourlyNetLoopCorrection = [];
+        if (Hidden(LoopAnalysisSeries.NetLoopCorrectionSummary))
+        {
+            range.Summary.NetLoopCorrectionPerDay = null;
+            range.Summary.NetLoopCorrectionTddPercent = null;
+            range.Summary.NetLoopCorrectionDays = 0;
+        }
+        if (Hidden(LoopAnalysisSeries.InsulinSummary)) range.Summary.Insulin = null;
+        if (Hidden(LoopAnalysisSeries.DeliveredToScheduledRatio)) range.Summary.DeliveredToScheduledRatio = null;
+        if (Hidden(LoopAnalysisSeries.ProfileNames)) range.ProfileNames = [];
+
+        range.Summary.DaysWithData = range.Days.Count(day =>
+            (day.HasGlucose && !Hidden(LoopAnalysisSeries.Glucose))
+            || (day.HasTreatments && !Hidden(LoopAnalysisSeries.DeliveredBasal)));
+    }
 }

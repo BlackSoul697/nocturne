@@ -13,7 +13,6 @@ using Nocturne.Core.Contracts.Analytics;
 using Nocturne.Core.Contracts.Glucose;
 using Nocturne.Core.Contracts.Profiles;
 using Nocturne.Core.Contracts.Profiles.Resolvers;
-using Nocturne.Core.Contracts.Multitenancy;
 using Nocturne.Core.Contracts.V4.Repositories;
 using Nocturne.Core.Models;
 using Nocturne.Core.Models.Basal;
@@ -74,7 +73,7 @@ public class StatisticsController : ControllerBase
     private readonly IBasalInjectionRepository _basalInjectionRepository;
     private readonly IActiveProfileResolver _activeProfileResolver;
     private readonly ICanonicalGlucoseService _canonicalGlucose;
-    private readonly ICategoryReadContext _categoryReadContext;
+    private readonly TenantClockResolver _tenantClock;
     private readonly TimeProvider _timeProvider;
     private readonly ILogger<StatisticsController> _logger;
 
@@ -97,7 +96,7 @@ public class StatisticsController : ControllerBase
         IBasalInjectionRepository basalInjectionRepository,
         IActiveProfileResolver activeProfileResolver,
         ICanonicalGlucoseService canonicalGlucose,
-        ICategoryReadContext categoryReadContext,
+        TenantClockResolver tenantClock,
         TimeProvider timeProvider,
         ILogger<StatisticsController> logger
     )
@@ -121,7 +120,7 @@ public class StatisticsController : ControllerBase
         _activeProfileResolver = activeProfileResolver;
         _canonicalGlucose = canonicalGlucose;
         _timeProvider = timeProvider;
-        _categoryReadContext = categoryReadContext;
+        _tenantClock = tenantClock;
         _logger = logger;
     }
 
@@ -296,7 +295,7 @@ public class StatisticsController : ControllerBase
         CancellationToken cancellationToken = default
     )
     {
-        var clock = await ResolveTenantTimeZoneAsync(cancellationToken);
+        var clock = await _tenantClock.ResolveAsync(cancellationToken);
         return Ok(_statisticsService.CalculateAveragedStats(entries, clock.Zone));
     }
 
@@ -375,7 +374,7 @@ public class StatisticsController : ControllerBase
         CancellationToken cancellationToken = default
     )
     {
-        var clock = await ResolveTenantTimeZoneAsync(cancellationToken);
+        var clock = await _tenantClock.ResolveAsync(cancellationToken);
         var result = _statisticsService.AnalyzeGlucoseDataExtended(
             request.Entries,
             request.Boluses ?? Enumerable.Empty<Bolus>(),
@@ -476,7 +475,7 @@ public class StatisticsController : ControllerBase
             });
         }
 
-        var clock = await ResolveTenantTimeZoneAsync(cancellationToken);
+        var clock = await _tenantClock.ResolveAsync(cancellationToken);
 
         var result = new ReportAnalysisResult
         {
@@ -558,51 +557,11 @@ public class StatisticsController : ControllerBase
         var rawGlucose = (await _sensorGlucoseRepository.GetForAnalyticsAsync(startDt, endDt, null, null, int.MaxValue, descending: false, ct: cancellationToken)).ToList();
         var entries = await _canonicalGlucose.SelectAsync(rawGlucose, cancellationToken);
 
-        var clock = await ResolveTenantTimeZoneAsync(cancellationToken);
+        var clock = await _tenantClock.ResolveAsync(cancellationToken);
 
         var patterns = _statisticsService.CalculateHourlyPatterns(entries, clock.Zone);
         patterns.TimeZoneUnavailableReason = clock.Reason;
         return Ok(patterns);
-    }
-
-    private readonly record struct TenantClock(TimeZoneInfo? Zone, TimeZoneUnavailableReason? Reason);
-
-    /// <summary>
-    /// The tenant's timezone, or no zone and why not: none is set, the stored one does not
-    /// resolve, the request is a public share, or the lookup threw. A share is reported as a share
-    /// whatever else is true, since its viewer can act on none of the others. No zone rather than UTC, so the hourly
-    /// statistics fall back to each reading's own offset instead of shifting every hour.
-    /// <para>
-    /// A share normally gets no zone, because RLS hides the therapy settings it lives in from share
-    /// connections. It is not guaranteed: <see cref="ITherapySettingsResolver"/> caches briefly by
-    /// tenant, so a share arriving just after the owner can be served the owner's zone.
-    /// </para>
-    /// </summary>
-    private async Task<TenantClock> ResolveTenantTimeZoneAsync(CancellationToken ct)
-    {
-        try
-        {
-            var id = await _therapySettingsResolver.GetTimezoneAsync(ct: ct);
-            if (TimeZoneHelper.TryGetTimeZoneInfoFromId(id, out var tz))
-                return new TenantClock(tz, null);
-
-            return new TenantClock(
-                null,
-                _categoryReadContext.IsShare ? TimeZoneUnavailableReason.Share
-                : string.IsNullOrWhiteSpace(id) ? TimeZoneUnavailableReason.NotConfigured
-                : TimeZoneUnavailableReason.Unrecognised);
-        }
-        catch (OperationCanceledException)
-        {
-            throw;
-        }
-        catch (Exception ex)
-        {
-            _logger.LogWarning(
-                ex,
-                "Tenant timezone lookup failed; hourly statistics fall back to each reading's own offset");
-            return new TenantClock(null, TimeZoneUnavailableReason.LookupFailed);
-        }
     }
 
     /// <summary>
@@ -847,7 +806,7 @@ public class StatisticsController : ControllerBase
         var allGlucose = (await glucoseTask).ToList();
         var allCarbs = (await carbTask).ToList();
         var allDeviceEvents = await sessionTask;
-        var clock = await ResolveTenantTimeZoneAsync(cancellationToken);
+        var clock = await _tenantClock.ResolveAsync(cancellationToken);
 
         foreach (var days in periods)
         {

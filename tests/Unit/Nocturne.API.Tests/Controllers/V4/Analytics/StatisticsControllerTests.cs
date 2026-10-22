@@ -46,6 +46,7 @@ public class StatisticsControllerTests
     private readonly Mock<IAidMetricsService> _aidMetricsServiceMock = new();
     private readonly Mock<IBasalRateResolver> _basalRateResolverMock = new();
     private readonly Mock<ILogger<StatisticsController>> _loggerMock = new();
+    private readonly Mock<ILogger<TenantClockResolver>> _clockLoggerMock = new();
 
     private StatisticsController CreateController(
         ICanonicalGlucoseService? canonicalGlucose = null,
@@ -78,7 +79,10 @@ public class StatisticsControllerTests
             _basalInjectionRepoMock.Object,
             _activeProfileResolverMock.Object,
             canonicalGlucose ?? TestDoubles.CanonicalGlucosePassThrough.Create(),
-            categoryReadContext ?? new CategoryReadContext(),
+            new TenantClockResolver(
+                _therapySettingsResolverMock.Object,
+                categoryReadContext ?? new CategoryReadContext(),
+                _clockLoggerMock.Object),
             timeProvider ?? new FakeTimeProvider(new DateTimeOffset(2030, 1, 1, 0, 0, 0, TimeSpan.Zero)),
             _loggerMock.Object);
 
@@ -452,7 +456,7 @@ public class StatisticsControllerTests
             s => s.CalculatePersonalRangeTime(
                 It.IsAny<IEnumerable<SensorGlucose>>(), It.IsAny<List<TargetRangeEntry>>(), It.IsAny<TimeZoneInfo>()),
             Times.Never);
-        _loggerMock.Verify(
+        _clockLoggerMock.Verify(
             l => l.Log(
                 LogLevel.Warning, It.IsAny<EventId>(), It.IsAny<It.IsAnyType>(),
                 It.IsAny<InvalidOperationException>(), It.IsAny<Func<It.IsAnyType, Exception?, string>>()),
