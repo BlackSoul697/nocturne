@@ -30,25 +30,25 @@ public readonly record struct ProfileInterval(string ProfileName, long Start, lo
 public sealed record LoopAnalysisMask(IntervalSet Analysed, IntervalSet Glucose)
 {
     public static LoopAnalysisMask Build(
-        LoopAnalysisMasks filter, long from, long to, TimeZoneInfo tz, LoopAnalysisMaskSources sources)
+        LoopAnalysisMasks masks, long from, long to, TimeZoneInfo tz, LoopAnalysisMaskSources sources)
     {
         var analysed = IntervalSet.Of(from, to);
 
-        var days = filter.Days.ToHashSet();
+        var days = masks.Days.ToHashSet();
         if (days.Count is > 0 and < 7)
             analysed = analysed.Intersect(LocalWeekdays(from, to, tz, days));
 
-        if (filter.ProfileName is { } profileName)
+        if (masks.ProfileName is { } profileName)
             analysed = analysed.Intersect(IntervalSet.Of(sources.Profiles
                 .Where(p => string.Equals(p.ProfileName, profileName, StringComparison.Ordinal))
                 .Select(p => new MillsInterval(p.Start, p.End))));
 
         var masked = new List<MillsInterval>();
-        if (filter.ExcludeOverrides) masked.AddRange(sources.Overrides);
-        if (filter.ExcludeTemporaryTargets) masked.AddRange(sources.TemporaryTargets);
-        if (filter.ExcludeExercise) masked.AddRange(sources.Exercise);
-        if (filter.ExcludeIllness) masked.AddRange(sources.Illness);
-        if (filter.ExcludeOpenLoop) masked.AddRange(sources.OpenLoop);
+        if (masks.ExcludeOverrides) masked.AddRange(sources.Overrides);
+        if (masks.ExcludeTemporaryTargets) masked.AddRange(sources.TemporaryTargets);
+        if (masks.ExcludeExercise) masked.AddRange(sources.Exercise);
+        if (masks.ExcludeIllness) masked.AddRange(sources.Illness);
+        if (masks.ExcludeOpenLoop) masked.AddRange(sources.OpenLoop);
         analysed = analysed.Subtract(IntervalSet.Of(masked));
 
         return new LoopAnalysisMask(analysed, analysed.Subtract(IntervalSet.Of(sources.DataExclusions)));

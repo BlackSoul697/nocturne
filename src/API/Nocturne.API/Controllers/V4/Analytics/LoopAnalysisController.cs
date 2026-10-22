@@ -19,7 +19,7 @@ namespace Nocturne.API.Controllers.V4.Analytics;
 /// envelope.
 /// </summary>
 /// <remarks>
-/// Every action takes the same query parameters, resolves them with <see cref="TryResolveAsync"/>
+/// Every action binds a <see cref="LoopAnalysisQuery"/>, resolves it with <see cref="TryResolveAsync"/>
 /// and fills the envelope with <see cref="LoopAnalysisRequest.Fill"/>. Responses carry a 60-second
 /// client-only cache and nothing is cached server-side, because
 /// <see cref="LoopAnalysisReadScopeGuard"/> narrows each response to its caller.
@@ -42,21 +42,7 @@ public class LoopAnalysisController(
     /// basal, net loop correction and its components, IOB/COB, manual boluses, carbs and the
     /// target range, with the days behind them.
     /// </summary>
-    /// <param name="startDate">First tenant-local calendar date of the range.</param>
-    /// <param name="endDate">
-    /// Last tenant-local calendar date of the range, inclusive. A range of more than 90 days keeps
-    /// only its most recent 90 (<see cref="LoopAnalysisResolvedRange.Shortened"/>).
-    /// </param>
-    /// <param name="compare">Which comparison range to compute, if any.</param>
-    /// <param name="compareStartDate">First local date of a custom comparison range.</param>
-    /// <param name="compareEndDate">Last local date of a custom comparison range, inclusive, under the same 90-day limit.</param>
-    /// <param name="days">Local weekdays to analyse; every day when empty.</param>
-    /// <param name="excludeOverrides">Mask override time; ignored without treatments.read.</param>
-    /// <param name="excludeTemporaryTargets">Mask temporary target time; ignored without treatments.read.</param>
-    /// <param name="excludeExercise">Mask exercise time; ignored without treatments.read.</param>
-    /// <param name="excludeIllness">Mask illness time; ignored without treatments.read. On by default.</param>
-    /// <param name="excludeOpenLoop">Mask time the pump was in manual mode or had no AID algorithm; ignored without devices.read. On by default.</param>
-    /// <param name="profileName">Analyse only time this profile was active; ignored without therapy.read.</param>
+    /// <param name="query">The range, comparison and masks (<see cref="LoopAnalysisQuery"/>).</param>
     /// <param name="cancellationToken">Cancellation token.</param>
     [HttpGet("daily-profile")]
     [RemoteQuery]
@@ -64,33 +50,10 @@ public class LoopAnalysisController(
     [ResponseCache(Duration = 60, Location = ResponseCacheLocation.Client)]
     [ProducesResponseType(typeof(DailyProfileResponse), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
-    public async Task<ActionResult<DailyProfileResponse>> GetDailyProfile(
-        [FromQuery] DateOnly startDate,
-        [FromQuery] DateOnly endDate,
-        [FromQuery] LoopAnalysisComparison compare = LoopAnalysisComparison.None,
-        [FromQuery] DateOnly? compareStartDate = null,
-        [FromQuery] DateOnly? compareEndDate = null,
-        [FromQuery] DayOfWeek[]? days = null,
-        [FromQuery] bool excludeOverrides = false,
-        [FromQuery] bool excludeTemporaryTargets = false,
-        [FromQuery] bool excludeExercise = false,
-        [FromQuery] bool excludeIllness = true,
-        [FromQuery] bool excludeOpenLoop = true,
-        [FromQuery] string? profileName = null,
-        CancellationToken cancellationToken = default)
-    {
-        var (invalid, request) = await TryResolveAsync(
-            LoopAnalysisQuery.Of(startDate, endDate, compare, compareStartDate, compareEndDate, days,
-                excludeOverrides, excludeTemporaryTargets, excludeExercise, excludeIllness, excludeOpenLoop, profileName),
-            cancellationToken);
-        if (invalid is not null)
-            return invalid;
-
-        var result = request!.Zone is { } zone
-            ? await service.GetDailyProfileAsync(request.Filter!, zone, cancellationToken)
-            : new DailyProfileResponse();
-        return Ok(LoopAnalysisReadScopeGuard.Redact(request.Fill(result), HttpContext.GetGrantedScopes()));
-    }
+    public Task<ActionResult<DailyProfileResponse>> GetDailyProfile(
+        [FromQuery] LoopAnalysisQuery query,
+        CancellationToken cancellationToken = default) =>
+        ServeAsync(query, service.GetDailyProfileAsync, LoopAnalysisReadScopeGuard.Redact, cancellationToken);
 
     /// <summary>
     /// How far each prediction curve's values at +30, +60, +90 and +120 minutes landed from the
@@ -106,21 +69,7 @@ public class LoopAnalysisController(
     /// breakdowns are withheld, and so are oref's IOB, zero-temp and COB curves, each reported only
     /// in the contexts the algorithm relies on it in.
     /// </remarks>
-    /// <param name="startDate">First tenant-local calendar date of the range.</param>
-    /// <param name="endDate">
-    /// Last tenant-local calendar date of the range, inclusive. A range of more than 90 days keeps
-    /// only its most recent 90 (<see cref="LoopAnalysisResolvedRange.Shortened"/>).
-    /// </param>
-    /// <param name="compare">Which comparison range to compute, if any.</param>
-    /// <param name="compareStartDate">First local date of a custom comparison range.</param>
-    /// <param name="compareEndDate">Last local date of a custom comparison range, inclusive, under the same 90-day limit.</param>
-    /// <param name="days">Local weekdays to analyse; every day when empty.</param>
-    /// <param name="excludeOverrides">Mask override time; ignored without treatments.read.</param>
-    /// <param name="excludeTemporaryTargets">Mask temporary target time; ignored without treatments.read.</param>
-    /// <param name="excludeExercise">Mask exercise time; ignored without treatments.read.</param>
-    /// <param name="excludeIllness">Mask illness time; ignored without treatments.read. On by default.</param>
-    /// <param name="excludeOpenLoop">Mask time the pump was in manual mode or had no AID algorithm; ignored without devices.read. On by default.</param>
-    /// <param name="profileName">Analyse only time this profile was active; ignored without therapy.read.</param>
+    /// <param name="query">The range, comparison and masks (<see cref="LoopAnalysisQuery"/>).</param>
     /// <param name="cancellationToken">Cancellation token.</param>
     [HttpGet("prediction-accuracy")]
     [RemoteQuery]
@@ -128,58 +77,28 @@ public class LoopAnalysisController(
     [ResponseCache(Duration = 60, Location = ResponseCacheLocation.Client)]
     [ProducesResponseType(typeof(PredictionAccuracyResponse), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
-    public async Task<ActionResult<PredictionAccuracyResponse>> GetPredictionAccuracy(
-        [FromQuery] DateOnly startDate,
-        [FromQuery] DateOnly endDate,
-        [FromQuery] LoopAnalysisComparison compare = LoopAnalysisComparison.None,
-        [FromQuery] DateOnly? compareStartDate = null,
-        [FromQuery] DateOnly? compareEndDate = null,
-        [FromQuery] DayOfWeek[]? days = null,
-        [FromQuery] bool excludeOverrides = false,
-        [FromQuery] bool excludeTemporaryTargets = false,
-        [FromQuery] bool excludeExercise = false,
-        [FromQuery] bool excludeIllness = true,
-        [FromQuery] bool excludeOpenLoop = true,
-        [FromQuery] string? profileName = null,
-        CancellationToken cancellationToken = default)
+    public Task<ActionResult<PredictionAccuracyResponse>> GetPredictionAccuracy(
+        [FromQuery] LoopAnalysisQuery query,
+        CancellationToken cancellationToken = default) =>
+        ServeAsync(query, service.GetPredictionAccuracyAsync, LoopAnalysisReadScopeGuard.Redact, cancellationToken);
+
+    /// <summary>
+    /// Resolves <paramref name="query"/>, computes the tab when the tenant has a zone, fills the
+    /// envelope and narrows the result to the caller.
+    /// </summary>
+    private async Task<ActionResult<T>> ServeAsync<T>(
+        LoopAnalysisQuery query,
+        Func<LoopAnalysisFilter, TimeZoneInfo, CancellationToken, Task<T>> compute,
+        Func<T, IReadOnlySet<string>, T> redact,
+        CancellationToken ct)
+        where T : LoopAnalysisResponse, new()
     {
-        var (invalid, request) = await TryResolveAsync(
-            LoopAnalysisQuery.Of(startDate, endDate, compare, compareStartDate, compareEndDate, days,
-                excludeOverrides, excludeTemporaryTargets, excludeExercise, excludeIllness, excludeOpenLoop, profileName),
-            cancellationToken);
+        var (invalid, request) = await TryResolveAsync(query, ct);
         if (invalid is not null)
             return invalid;
 
-        var result = request!.Zone is { } zone
-            ? await service.GetPredictionAccuracyAsync(request.Filter!, zone, cancellationToken)
-            : new PredictionAccuracyResponse();
-        return Ok(LoopAnalysisReadScopeGuard.Redact(request.Fill(result), HttpContext.GetGrantedScopes()));
-    }
-
-    /// <summary>The query parameters every Loop Analysis action takes, as bound.</summary>
-    private sealed record LoopAnalysisQuery(
-        DateOnly StartDate,
-        DateOnly EndDate,
-        LoopAnalysisComparison Compare,
-        DateOnly? CompareStartDate,
-        DateOnly? CompareEndDate,
-        LoopAnalysisMasks Masks)
-    {
-        public static LoopAnalysisQuery Of(
-            DateOnly startDate, DateOnly endDate, LoopAnalysisComparison compare,
-            DateOnly? compareStartDate, DateOnly? compareEndDate, DayOfWeek[]? days,
-            bool excludeOverrides, bool excludeTemporaryTargets, bool excludeExercise,
-            bool excludeIllness, bool excludeOpenLoop, string? profileName) =>
-            new(startDate, endDate, compare, compareStartDate, compareEndDate, new LoopAnalysisMasks
-            {
-                Days = days is { Length: > 0 } ? [.. days.Distinct().Order()] : [.. Enum.GetValues<DayOfWeek>()],
-                ExcludeOverrides = excludeOverrides,
-                ExcludeTemporaryTargets = excludeTemporaryTargets,
-                ExcludeExercise = excludeExercise,
-                ExcludeIllness = excludeIllness,
-                ExcludeOpenLoop = excludeOpenLoop,
-                ProfileName = profileName,
-            });
+        var result = request!.Zone is { } zone ? await compute(request.Filter!, zone, ct) : new T();
+        return Ok(redact(request.Fill(result), HttpContext.GetGrantedScopes()));
     }
 
     /// <summary>A request resolved against the tenant clock and the caller.</summary>
@@ -233,8 +152,9 @@ public class LoopAnalysisController(
                 return (BadRange("compareEndDate must not be before compareStartDate."), null);
         }
 
+        var masks = query.ToMasks();
         var passed = Request.Query.Keys.ToHashSet(StringComparer.OrdinalIgnoreCase);
-        var ignored = LoopAnalysisReadScopeGuard.NarrowFilter(query.Masks, HttpContext.GetGrantedScopes());
+        var ignored = LoopAnalysisReadScopeGuard.NarrowFilter(masks, HttpContext.GetGrantedScopes());
         var clamped = HttpContext.IsCallerHistoryClamped();
         if (clamped)
             ignored.AddRange(["startDate", "endDate", "compare", "compareStartDate", "compareEndDate"]);
@@ -242,7 +162,7 @@ public class LoopAnalysisController(
 
         var (zone, reason) = await tenantClock.ResolveAsync(ct);
         if (zone is null)
-            return (null, new LoopAnalysisRequest(null, null, reason, null, null, query.Masks, ignored, clamped));
+            return (null, new LoopAnalysisRequest(null, null, reason, null, null, masks, ignored, clamped));
 
         var maxDays = V4ReadLimits.MaxAnalyticsSpanDays;
         var primary = clamped
@@ -262,9 +182,9 @@ public class LoopAnalysisController(
             To = primary.To,
             CompareFrom = comparison?.From,
             CompareTo = comparison?.To,
-            Masks = query.Masks,
+            Masks = masks,
         };
-        return (null, new LoopAnalysisRequest(filter, zone, null, primary, comparison, query.Masks, ignored, clamped));
+        return (null, new LoopAnalysisRequest(filter, zone, null, primary, comparison, masks, ignored, clamped));
     }
 
     private static bool OutOfRange(DateOnly date) => date < EarliestDate || date > LatestDate;

@@ -59,6 +59,15 @@ public static class DailyProfileCalculator
     private const long SlotMs = SlotMinutes * LocalSlotBinning.MinuteMs;
 
     /// <summary>
+    /// The share of a day that must be analysed, and covered by the basal the pump's records
+    /// account for, for the day to count in the insulin and net loop correction per day. As Trio's
+    /// and AAPS's total daily dose, those figures add up whole days and scale none: a masked or
+    /// half-recorded day would be a day of missing boluses read as none, and scaling it up would
+    /// multiply the boluses it did record. A DST day is measured against its own 23 or 25 hours.
+    /// </summary>
+    public const double InsulinSummaryMinimumCoverage = 0.9;
+
+    /// <summary>
     /// How long after a dose or carb entry it is taken to still act. Eight hours covers the
     /// longest DIA an AID profile commonly runs (Loop's and the oref systems' curves end by 6 to 8
     /// hours) and the six hours <see cref="IobCobSeries"/> lets a carb entry absorb over.
@@ -408,26 +417,27 @@ public static class DailyProfileCalculator
             ratioDeltaW += deltaW;
 
             double? net = both > 0 ? algorithmW / LocalSlotBinning.HourMs + automaticU : null;
-            double? total = deliveredMs > 0 ? deliveredW / LocalSlotBinning.HourMs + automaticU + manualU : null;
-            if (glucose || deliveredMs > 0 || automaticU > 0 || manualU > 0 || carbG > 0)
+            var basal = deliveredW / LocalSlotBinning.HourMs;
+            double? total = deliveredMs > 0 ? basal + automaticU + manualU : null;
+            var hasTreatments = deliveredMs > 0 || automaticU > 0 || manualU > 0 || carbG > 0;
+            if (glucose || hasTreatments)
                 daysWithData++;
-            if (both >= SlotSummary.MinimumSlotCoverage * wall && net is not null && total is not null)
+
+            var wholeDay = analysed >= InsulinSummaryMinimumCoverage * wall
+                && deliveredMs >= InsulinSummaryMinimumCoverage * wall;
+            if (wholeDay)
+            {
+                basalPerDaySum += basal;
+                automaticPerDaySum += automaticU;
+                manualPerDaySum += manualU;
+                totalPerDay.Add(total!.Value);
+            }
+            if (wholeDay && both >= InsulinSummaryMinimumCoverage * wall)
             {
                 netDays++;
-                netPerDaySum += (algorithmW / both + automaticU / (analysed / LocalSlotBinning.HourMs)) * (wall / LocalSlotBinning.HourMs);
+                netPerDaySum += net!.Value;
                 netShareU += net.Value;
-                tddShareU += total.Value;
-            }
-
-            if (deliveredMs >= SlotSummary.MinimumSlotCoverage * wall && deliveredMs > 0)
-            {
-                var basal = deliveredW / deliveredMs * (wall / LocalSlotBinning.HourMs);
-                var automatic = automaticU * wall / analysed;
-                var manual = manualU * wall / analysed;
-                basalPerDaySum += basal;
-                automaticPerDaySum += automatic;
-                manualPerDaySum += manual;
-                totalPerDay.Add(basal + automatic + manual);
+                tddShareU += total!.Value;
             }
 
             var date = firstDay.AddDays(d);
@@ -442,6 +452,8 @@ public static class DailyProfileCalculator
                 DeliveredBasal = deliveredMs > 0 ? SlotSummary.Round(deliveredW / LocalSlotBinning.HourMs) : null,
                 AutomaticBolus = SlotSummary.Round(automaticU),
                 ManualBolus = SlotSummary.Round(manualU),
+                HasGlucose = glucose,
+                HasTreatments = hasTreatments,
             });
         }
 

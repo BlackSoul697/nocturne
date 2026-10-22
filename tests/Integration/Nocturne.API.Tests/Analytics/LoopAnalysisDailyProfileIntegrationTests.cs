@@ -137,6 +137,7 @@ public class LoopAnalysisDailyProfileIntegrationTests(ApiIntegrationTestFixture 
 
     [Theory]
     [InlineData("startDate=2024-06-16&endDate=2024-06-10")]
+    [InlineData("endDate=2024-06-16")]
     [InlineData("startDate=2024-06-10&endDate=2024-06-16&compare=custom")]
     [InlineData("startDate=2024-06-10&endDate=2024-06-16&compareStartDate=2024-06-01&compareEndDate=2024-06-07")]
     public async Task Rejects_dates_that_do_not_make_a_range(string query)
