@@ -67,9 +67,9 @@ public sealed class NativeProfileSwitchesTests : IDisposable
         var audit = new Mock<IAuditContext>();
         audit.SetupGet(a => a.SubjectName).Returns(Person);
 
-        _resolver = new ProfileActivationResolver(_repository, therapy.Object, new ProfileVersionCache(cache), cache);
+        _resolver = new ProfileActivationResolver(_repository, new ProfileStoreTimelineSource(therapy.Object), cache);
         _native = new NativeProfileSwitches(
-            _repository, new ProfileActivationWriter(_repository, cache), _resolver, therapy.Object, basal.Object,
+            _repository, new ProfileActivationWriter(_repository, cache, TempBasalTestDeps.NoReresolution()), _resolver, therapy.Object, basal.Object,
             carbRatio.Object, sensitivity.Object, targets.Object, audit.Object, _time);
     }
 
