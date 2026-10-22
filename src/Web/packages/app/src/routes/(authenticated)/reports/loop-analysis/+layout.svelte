@@ -74,7 +74,7 @@
   />
 {/snippet}
 
-<div class="@container space-y-6">
+<div class="@container space-y-6" data-testid="loop-analysis-page">
   {#if analysis.current}
     <div class="space-y-1 print:hidden">
       <p class="text-muted-foreground">{intros[analysis.current]}</p>
