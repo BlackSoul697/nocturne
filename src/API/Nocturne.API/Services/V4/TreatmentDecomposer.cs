@@ -521,10 +521,12 @@ public class TreatmentDecomposer : DecomposerBase, ITreatmentDecomposer, IDecomp
     /// <summary>
     /// Whether the dose was delivered by an AID algorithm rather than the user, by the conventions
     /// the uploaders use: the <c>isBasalInsulin</c> flag (legacy AAPS), <c>Correction Bolus</c> from
-    /// AAPS (BolusExtension.kt:28), <c>SMB</c> from Trio / iAPS, and <c>Automatic Bolus</c>.
+    /// AAPS (BolusExtension.kt:28), <c>SMB</c> from Trio / iAPS, <c>Automatic Bolus</c>, and any
+    /// treatment the uploader flags <c>automatic</c> (Loop's automatic <c>Correction Bolus</c>).
     /// </summary>
     private static bool IsAlgorithmBolus(Treatment treatment) =>
-        (treatment.IsBasalInsulin == true && treatment.Insulin > 0)
+        treatment.Automatic == true
+        || (treatment.IsBasalInsulin == true && treatment.Insulin > 0)
         || (string.Equals(treatment.EventType, "Correction Bolus", StringComparison.OrdinalIgnoreCase) && IsAapsUpload(treatment))
         || string.Equals(treatment.EventType, "SMB", StringComparison.OrdinalIgnoreCase)
         || string.Equals(treatment.EventType, "Automatic Bolus", StringComparison.OrdinalIgnoreCase);

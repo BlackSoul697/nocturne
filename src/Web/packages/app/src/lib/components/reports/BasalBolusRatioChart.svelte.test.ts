@@ -18,11 +18,19 @@ vi.mock("layerchart", async (importOriginal) => {
   };
 });
 
-const day = (displayDate: string, basal: number, bolus: number, carbs?: number) => ({
+const day = (
+  displayDate: string,
+  basal: number,
+  manualBolus: number,
+  carbs?: number,
+  automaticBolus = 0,
+) => ({
   displayDate,
   basal,
-  bolus,
-  total: basal + bolus,
+  manualBolus,
+  automaticBolus,
+  bolus: manualBolus + automaticBolus,
+  total: basal + manualBolus + automaticBolus,
   carbs,
 });
 
@@ -41,16 +49,17 @@ describe("BasalBolusRatioChart", () => {
     await expect.element(page.getByText("Carbs (g)", { exact: true })).toBeVisible();
   });
 
-  it("lists bolus, basal and carbs in the tooltip, then the total", async () => {
+  it("lists manual and automatic bolus, basal and carbs in the tooltip, then the total", async () => {
     render(BasalBolusRatioChart, {
-      props: { data: { dailyData: [day("Oct 1", 20, 15, 180)] } },
+      props: { data: { dailyData: [day("Oct 1", 20, 15, 180, 2.5)] } },
     });
 
     await expect.element(page.getByText("Oct 1", { exact: true })).toBeVisible();
-    await expect.element(page.getByText("Bolus (U): 15.0")).toBeVisible();
+    await expect.element(page.getByText("Manual bolus (U): 15.0")).toBeVisible();
+    await expect.element(page.getByText("Automatic bolus (U): 2.5")).toBeVisible();
     await expect.element(page.getByText("Basal (U): 20.0")).toBeVisible();
     await expect.element(page.getByText("Carbs (g): 180")).toBeVisible();
-    await expect.element(page.getByText("Total (U): 35.0")).toBeVisible();
+    await expect.element(page.getByText("Total (U): 37.5")).toBeVisible();
   });
 
   it("leaves the carbs out when no day has any", async () => {

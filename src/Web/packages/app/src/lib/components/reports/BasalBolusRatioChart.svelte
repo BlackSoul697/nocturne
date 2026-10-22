@@ -5,21 +5,7 @@
   import PieChart from "@lucide/svelte/icons/chart-pie";
   import { dashClass, patternClass } from "$lib/components/charts/print/chart-print-patterns";
   import ChartKey from "$lib/components/charts/print/ChartKey.svelte";
-
-  // Local type definitions matching the backend response structure
-  interface DailyBasalBolusData {
-    displayDate?: string;
-    basal?: number;
-    bolus?: number;
-    total?: number;
-    carbs?: number;
-  }
-
-  interface DailyBasalBolusRatioResponse {
-    dailyData?: DailyBasalBolusData[];
-    averageBasalPercent?: number;
-    averageBolusPercent?: number;
-  }
+  import type { DailyBasalBolusRatioData, DailyBasalBolusRatioResponse } from "$lib/api";
 
   interface Props {
     /** Optional pre-loaded ratio data */
@@ -71,10 +57,16 @@
             props: { class: patternClass("insulin-scheduled-basal") },
           },
           {
-            key: "bolus",
+            key: "manualBolus",
             color: "var(--insulin-bolus)",
-            label: "Bolus (U)",
+            label: "Manual bolus (U)",
             props: { class: patternClass("insulin-bolus") },
+          },
+          {
+            key: "automaticBolus",
+            color: "var(--iob-temporary)",
+            label: "Automatic bolus (U)",
+            props: { class: patternClass("insulin-automatic-bolus") },
           },
         ]}
         seriesLayout="stack"
@@ -92,7 +84,7 @@
         {#snippet aboveMarks({ context })}
           {#if hasCarbs}
             {@const yMax = Number(context.yScale.domain()[1])}
-            {@const toInsulinScale = (d: DailyBasalBolusData) =>
+            {@const toInsulinScale = (d: DailyBasalBolusRatioData) =>
               carbsOnInsulinScale(d.carbs ?? 0, carbAxisMax, yMax)}
             <Spline
               data={chartData}
@@ -117,13 +109,19 @@
         {#snippet tooltip({ context })}
           <Tooltip.Root {context}>
             {#snippet children({ data })}
-              {@const d: DailyBasalBolusData = data}
+              {@const d: DailyBasalBolusRatioData = data}
               <Tooltip.Header value={d.displayDate} />
               <Tooltip.List>
                 <Tooltip.Item
-                  label="Bolus (U)"
-                  value={(d.bolus ?? 0).toFixed(1)}
+                  label="Manual bolus (U)"
+                  value={(d.manualBolus ?? 0).toFixed(1)}
                   color="var(--insulin-bolus)"
+                  valueAlign="right"
+                />
+                <Tooltip.Item
+                  label="Automatic bolus (U)"
+                  value={(d.automaticBolus ?? 0).toFixed(1)}
+                  color="var(--iob-temporary)"
                   valueAlign="right"
                 />
                 <Tooltip.Item
@@ -156,7 +154,8 @@
       class="mt-2"
       items={[
         { texture: "insulin-scheduled-basal", label: "Basal (U)", color: "var(--insulin-scheduled-basal)" },
-        { texture: "insulin-bolus", label: "Bolus (U)", color: "var(--insulin-bolus)" },
+        { texture: "insulin-bolus", label: "Manual bolus (U)", color: "var(--insulin-bolus)" },
+        { texture: "insulin-automatic-bolus", label: "Automatic bolus (U)", color: "var(--iob-temporary)" },
         ...(hasCarbs
           ? [{ texture: "carbs" as const, label: "Carbs (g)", color: "var(--carbs)", shape: "line" as const }]
           : []),
