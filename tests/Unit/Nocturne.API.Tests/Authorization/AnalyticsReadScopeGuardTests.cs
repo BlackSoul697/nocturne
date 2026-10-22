@@ -1501,7 +1501,7 @@ public class AnalyticsReadScopeGuardTests
         data.WithheldSeries.Should().BeEquivalentTo([
             LoopAnalysisSeries.LoopActivity, LoopAnalysisSeries.UnrecordedDelivery, LoopAnalysisSeries.LoopGaps,
             LoopAnalysisSeries.MaxBasal, LoopAnalysisSeries.AtMaxIob, LoopAnalysisSeries.SuggestedNotEnacted,
-            LoopAnalysisSeries.SensitivityRatio, LoopAnalysisSeries.OrefLimits,
+            LoopAnalysisSeries.SensitivityRatio, LoopAnalysisSeries.OrefMaxIob,
         ]);
         foreach (var range in new[] { data.Primary, data.Comparison! })
         {
@@ -1549,7 +1549,7 @@ public class AnalyticsReadScopeGuardTests
             LoopHealth(), Granted(Scope.TreatmentsRead, Scope.DevicesRead));
 
         data.WithheldSeries.Should().BeEquivalentTo([
-            LoopAnalysisSeries.CgmActivity, LoopAnalysisSeries.LoopLimits, LoopAnalysisSeries.OrefLimits,
+            LoopAnalysisSeries.CgmActivity, LoopAnalysisSeries.LoopLimits, LoopAnalysisSeries.OrefMaxIob,
             LoopAnalysisSeries.MaxBasal,
         ]);
         data.Primary.Limits.Should().BeEquivalentTo(new LoopHealthLimits());

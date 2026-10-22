@@ -537,7 +537,7 @@ internal static class LoopAnalysisReadScopeGuard
             LoopAnalysisSeries.SuggestedNotEnacted,
             LoopAnalysisSeries.SensitivityRatio);
         Withhold(!therapy, LoopAnalysisSeries.LoopLimits);
-        Withhold(!therapy || !devices, LoopAnalysisSeries.OrefLimits);
+        Withhold(!therapy || !devices, LoopAnalysisSeries.OrefMaxIob);
         return withheld;
     }
 
@@ -579,7 +579,7 @@ internal static class LoopAnalysisReadScopeGuard
         if (Hidden(LoopAnalysisSeries.SuggestedNotEnacted)) range.SuggestedNotEnacted = null;
         if (Hidden(LoopAnalysisSeries.SensitivityRatio)) range.SensitivityRatio = null;
         if (Hidden(LoopAnalysisSeries.LoopLimits)) range.Limits.LoopMaximumBasalRate = null;
-        if (Hidden(LoopAnalysisSeries.OrefLimits)) range.Limits.OrefMaxIob = null;
+        if (Hidden(LoopAnalysisSeries.OrefMaxIob)) range.Limits.OrefMaxIob = null;
     }
 
     private static void Narrow(DailyProfileRange range, HashSet<LoopAnalysisSeries> withheld)

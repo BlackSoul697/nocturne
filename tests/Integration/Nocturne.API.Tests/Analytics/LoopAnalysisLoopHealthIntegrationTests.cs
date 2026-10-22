@@ -61,10 +61,8 @@ public class LoopAnalysisLoopHealthIntegrationTests(ApiIntegrationTestFixture fi
         var maxBasal = primary.GetProperty("maxBasal");
         maxBasal.GetProperty("capKnown").GetProperty("percent").GetDouble().Should().Be(100);
         maxBasal.GetProperty("atCap").GetProperty("percent").GetDouble().Should().BeGreaterThan(0);
-        var binding = maxBasal.GetProperty("binding");
-        binding.GetArrayLength().Should().Be(1);
-        binding[0].GetProperty("cap").GetString().Should().Be("OrefMaxSafeBasal");
-        binding[0].GetProperty("minutes").GetDouble().Should().Be(210, "a capped temp held for half an hour on each of seven days");
+        maxBasal.GetProperty("atCap").GetProperty("hours")[3].GetProperty("percent").GetDouble()
+            .Should().Be(50, "a capped temp held for half an hour on each of seven days");
 
         var limits = primary.GetProperty("limits");
         Absent(limits, "orefMaxBasal").Should().BeTrue("the suggestions omit the key, so the limit is unknown");

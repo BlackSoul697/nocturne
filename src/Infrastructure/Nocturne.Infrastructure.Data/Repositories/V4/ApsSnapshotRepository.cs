@@ -63,25 +63,21 @@ public class ApsSnapshotRepository : SyncUpsertRepositoryBase<ApsSnapshot, ApsSn
     {
         await using var ctx = await ContextFactory.CreateAsync(ct);
         var snapshots = ctx.ApsSnapshots.AsNoTracking();
-        var before = await snapshots.Where(e => e.Timestamp < from)
-            .OrderByDescending(e => e.Timestamp).Take(1).Select(LoopCycleRow).ToListAsync(ct);
-        var inside = await snapshots.Where(e => e.Timestamp >= from && e.Timestamp <= to)
-            .OrderBy(e => e.Timestamp).Select(LoopCycleRow).ToListAsync(ct);
-        var after = await snapshots.Where(e => e.Timestamp > to)
-            .OrderBy(e => e.Timestamp).Take(1).Select(LoopCycleRow).ToListAsync(ct);
+        var rows = await snapshots.Where(e => e.Timestamp < from).OrderByDescending(e => e.Timestamp).Take(1).Select(LoopCycleRow)
+            .Concat(snapshots.Where(e => e.Timestamp >= from && e.Timestamp <= to).Select(LoopCycleRow))
+            .Concat(snapshots.Where(e => e.Timestamp > to).OrderBy(e => e.Timestamp).Take(1).Select(LoopCycleRow))
+            .OrderBy(r => r.Timestamp)
+            .ToListAsync(ct);
 
-        return [.. before.Concat(inside).Concat(after).Select(r =>
+        return [.. rows.Select(r =>
         {
             var reason = string.IsNullOrEmpty(r.Reason) ? null : r.Reason;
             return new ApsLoopCycle
             {
                 Timestamp = r.Timestamp,
-                Device = r.Device,
                 AidAlgorithm = Enum.TryParse<AidAlgorithm>(r.AidAlgorithm, out var algorithm) ? algorithm : AidAlgorithm.Unknown,
                 Enacted = r.Enacted,
                 EnactedRate = r.EnactedRate,
-                EnactedDuration = r.EnactedDuration,
-                EnactedBolusVolume = r.EnactedBolusVolume,
                 Iob = r.Iob,
                 SensitivityRatio = r.SensitivityRatio,
                 HasReason = reason is not null,
@@ -96,12 +92,9 @@ public class ApsSnapshotRepository : SyncUpsertRepositoryBase<ApsSnapshot, ApsSn
 
     private sealed record LoopCycleColumns(
         DateTime Timestamp,
-        string? Device,
         string AidAlgorithm,
         bool Enacted,
         double? EnactedRate,
-        int? EnactedDuration,
-        double? EnactedBolusVolume,
         double? Iob,
         double? SensitivityRatio,
         string? Reason,
@@ -114,12 +107,9 @@ public class ApsSnapshotRepository : SyncUpsertRepositoryBase<ApsSnapshot, ApsSn
     private static readonly System.Linq.Expressions.Expression<Func<ApsSnapshotEntity, LoopCycleColumns>> LoopCycleRow =
         e => new LoopCycleColumns(
             e.Timestamp,
-            e.Device,
             e.AidAlgorithm,
             e.Enacted,
             e.EnactedRate,
-            e.EnactedDuration,
-            e.EnactedBolusVolume,
             e.Iob,
             e.SensitivityRatio,
             Jsonb.Text(e.SuggestedJson, "reason"),

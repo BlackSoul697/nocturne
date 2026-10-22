@@ -20,6 +20,9 @@ public sealed record LoopHealthInputs
 
     public required BasalEvidence Evidence { get; init; }
 
+    /// <summary>When each recorded temp basal began, ascending: the temps the delivered pieces belong to.</summary>
+    public IReadOnlyList<long> TempStarts { get; init; } = [];
+
     /// <summary>Canonical readings.</summary>
     public IReadOnlyList<SensorGlucose> Glucose { get; init; } = [];
 
@@ -49,21 +52,31 @@ public static class LoopHealthCalculator
     public const long CycleCreditMs = 5 * LocalSlotBinning.MinuteMs;
 
     /// <summary>
-    /// How long before a temp basal piece the cycle that set it is looked for: the longest temp an
-    /// AID algorithm sets. The cycles are read from this far before a range.
+    /// How long before a range a temp still running at its start can have been set: the longest
+    /// temp an AID algorithm sets. The cycles are read from this far before a range.
     /// </summary>
     public const long TempLookbackMs = 2 * LocalSlotBinning.HourMs;
 
     /// <summary>A temp this close below the cap is at it: half the 0.05 U/h step pumps set rates in.</summary>
     public const double MaxBasalToleranceUph = 0.025;
 
+    /// <summary>
+    /// How far an enacted rate can be from the rate the pump delivers for the same temp: one pump
+    /// step. AAPS enacts the rate it computed, unrounded, and the pump rounds it.
+    /// </summary>
+    public const double PumpStepUph = 0.05;
+
+    /// <summary>
+    /// How far either side of a temp record's start the cycle that set it is looked for. The
+    /// snapshot is stamped when the cycle ran and the record when the pump confirmed the temp, which
+    /// can come minutes later, or the other way round where an uploader stamps both late.
+    /// </summary>
+    public const long SetterWindowMs = 5 * LocalSlotBinning.MinuteMs;
+
     /// <summary>IOB this close below a reported <c>max_iob</c> is at it.</summary>
     public const double MaxIobToleranceU = 0.1;
 
     private const int HoursPerDay = 24;
-
-    /// <summary>How far a temp record's start and the snapshot of the cycle that set it can differ.</summary>
-    private const long CycleClockSkewMs = 2 * LocalSlotBinning.MinuteMs;
 
     public static bool IsOref(AidAlgorithm algorithm) =>
         algorithm is AidAlgorithm.OpenAps or AidAlgorithm.AndroidAps or AidAlgorithm.Trio or AidAlgorithm.IAPS;
@@ -127,6 +140,32 @@ public static class LoopHealthCalculator
         return IntervalSet.Of(credits);
     }
 
+    /// <summary>
+    /// The cycles the loop was closed at. oref enacts only a change: holding a temp ("temp X &gt;~
+    /// req Y") or needing none, it enacts nothing while still in control, so its state is the
+    /// outcome of the newest cycle that asked for a change, closed if that was enacted and open if
+    /// not. Loop records nothing it decided apart from what it enacted, so only an enacted cycle
+    /// shows it closed.
+    /// </summary>
+    private static List<long> ClosedLoopCycles(List<ApsLoopCycle> cycles)
+    {
+        var closed = new List<long>();
+        var orefClosed = false;
+        foreach (var cycle in cycles)
+        {
+            if (IsOref(cycle.AidAlgorithm))
+            {
+                if (cycle.SuggestedChange == true)
+                    orefClosed = cycle.Enacted;
+                if (orefClosed)
+                    closed.Add(cycle.Mills);
+            }
+            else if (cycle.Enacted)
+                closed.Add(cycle.Mills);
+        }
+        return closed;
+    }
+
     private static LoopHealthActivity Activity(
         LoopHealthInputs inputs, List<ApsLoopCycle> cycles, HourGrid grid, long from, long to)
     {
@@ -136,7 +175,7 @@ public static class LoopHealthCalculator
         {
             var all = cycles.Select(c => c.Mills).ToList();
             grid.AddTime(pump, Credits(all, all, CycleCreditMs));
-            grid.AddTime(closed, Credits([.. cycles.Where(c => c.Enacted).Select(c => c.Mills)], all, CycleCreditMs));
+            grid.AddTime(closed, Credits(ClosedLoopCycles(cycles), all, CycleCreditMs));
         }
         else
         {
@@ -222,10 +261,10 @@ public static class LoopHealthCalculator
 
     /// <summary>
     /// Time the algorithm's temps were delivering at the effective cap, measured on the delivered
-    /// basal: a temp held through cycles that enacted nothing counts for as long as it ran. The
-    /// cycles judge which cap was in force: Loop's setting at the time, or for oref, whether the
-    /// cycle that set the temp (the newest enacted at its rate within
-    /// <see cref="TempLookbackMs"/>) cut it to <c>maxSafeBasal</c>.
+    /// basal: a temp held through cycles that enacted nothing counts for as long as it ran. Each
+    /// piece belongs to the temp record it falls in, and the cycles judge that temp's cap: Loop's
+    /// setting at the time, or for oref, whether the cycle that set the temp cut it to
+    /// <c>maxSafeBasal</c>.
     /// </summary>
     private static LoopHealthMaxBasal MaxBasal(LoopHealthInputs inputs, List<ApsLoopCycle> cycles, HourGrid grid)
     {
@@ -233,81 +272,68 @@ public static class LoopHealthCalculator
         var algorithmTime = grid.New();
         var known = grid.New();
         var atCap = grid.New();
-        var bindingMs = new Dictionary<LoopHealthCap, long>();
 
         foreach (var piece in inputs.Insulin.Pieces)
         {
             if (piece.Origin != NetInsulinOrigin.AlgorithmTemp || piece.Delivered is not { } rate)
                 continue;
             grid.AddTime(algorithmTime, piece.Start, piece.End);
-            if (!TryJudgeCap(piece.Start, rate, cycles, enacted, inputs.LoopMaximumBasalRate, out var binding))
+            var tempStart = SortedSearch.FirstEndingAfter(inputs.TempStarts, piece.Start, static m => m) - 1 is var i and >= 0
+                ? inputs.TempStarts[i]
+                : piece.Start;
+            if (AtCap(tempStart, rate, cycles, enacted, inputs.LoopMaximumBasalRate) is not { } capped)
                 continue;
             grid.AddTime(known, piece.Start, piece.End);
-            if (binding is { } binder)
-                bindingMs[binder] = bindingMs.GetValueOrDefault(binder) + grid.AddTime(atCap, piece.Start, piece.End);
+            if (capped)
+                grid.AddTime(atCap, piece.Start, piece.End);
         }
 
-        var atCapMs = bindingMs.Values.Sum();
         return new LoopHealthMaxBasal
         {
             AtCap = grid.Share(atCap, known),
             CapKnown = grid.Share(known, algorithmTime),
-            Binding = [.. bindingMs
-                .Where(b => b.Value > 0)
-                .OrderByDescending(b => b.Value)
-                .Select(b => new LoopHealthCapShare
-                {
-                    Cap = b.Key,
-                    Minutes = SlotSummary.Round((double)b.Value / LocalSlotBinning.MinuteMs),
-                    Percent = SlotSummary.Round(100.0 * b.Value / atCapMs),
-                })],
         };
     }
 
-    /// <summary>Whether a temp delivering <paramref name="rate"/> from <paramref name="start"/> was at its cap.</summary>
-    /// <param name="binding">The cap it was at, or null where it was below it.</param>
-    /// <returns>False where the cap is unknown.</returns>
-    private static bool TryJudgeCap(
-        long start,
+    /// <summary>
+    /// Whether a temp of <paramref name="rate"/> that began at <paramref name="tempStart"/> was at
+    /// its cap; null where the cap is unknown. An oref temp is judged by the cycle that set it: the
+    /// enacted cycle nearest its start within <see cref="SetterWindowMs"/>, whose rate is within
+    /// <see cref="PumpStepUph"/> of the delivered one. With no such cycle the cap is unknown: an
+    /// older cycle that set the same rate set a different temp, and its reason says nothing of this
+    /// one.
+    /// </summary>
+    private static bool? AtCap(
+        long tempStart,
         double rate,
         List<ApsLoopCycle> cycles,
         List<ApsLoopCycle> enacted,
-        StepTimeline<double>? loopMaximum,
-        out LoopHealthCap? binding)
+        StepTimeline<double>? loopMaximum)
     {
-        binding = null;
-        var latest = SortedSearch.FirstEndingAfter(cycles, start + CycleClockSkewMs, static c => c.Mills) - 1;
+        var latest = SortedSearch.FirstEndingAfter(cycles, tempStart + SetterWindowMs, static c => c.Mills) - 1;
         if (latest < 0)
-            return false;
+            return null;
 
         if (cycles[latest].AidAlgorithm == AidAlgorithm.Loop)
-        {
-            if (loopMaximum is null || !loopMaximum.TryAt(start, out var maximum))
-                return false;
-            if (rate >= maximum - MaxBasalToleranceUph)
-                binding = LoopHealthCap.LoopMaximumBasalRate;
-            return true;
-        }
+            return loopMaximum is not null && loopMaximum.TryAt(tempStart, out var maximum)
+                ? rate >= maximum - MaxBasalToleranceUph
+                : null;
 
         if (!IsOref(cycles[latest].AidAlgorithm))
-            return false;
+            return null;
 
         ApsLoopCycle? setter = null;
-        for (var i = SortedSearch.FirstEndingAfter(enacted, start + CycleClockSkewMs, static c => c.Mills) - 1;
-             i >= 0 && enacted[i].Mills >= start - TempLookbackMs;
-             i--)
+        for (var i = SortedSearch.FirstEndingAfter(enacted, tempStart - SetterWindowMs - 1, static c => c.Mills);
+             i < enacted.Count && enacted[i].Mills <= tempStart + SetterWindowMs;
+             i++)
         {
-            if (Math.Abs(enacted[i].EnactedRate!.Value - rate) <= MaxBasalToleranceUph)
-            {
+            if (setter is null || Math.Abs(enacted[i].Mills - tempStart) < Math.Abs(setter.Mills - tempStart))
                 setter = enacted[i];
-                break;
-            }
         }
-        if (setter is not { HasReason: true })
-            return false;
-        if (OrefReason.Parse(setter.LimitReason).CappedAtMaxSafeBasal)
-            binding = LoopHealthCap.OrefMaxSafeBasal;
-        return true;
+
+        return setter is { HasReason: true } && Math.Abs(setter.EnactedRate!.Value - rate) <= PumpStepUph
+            ? OrefReason.Parse(setter.LimitReason).CappedAtMaxSafeBasal
+            : null;
     }
 
     /// <summary>

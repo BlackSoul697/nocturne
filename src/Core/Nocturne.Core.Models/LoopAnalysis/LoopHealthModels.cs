@@ -131,8 +131,9 @@ public class LoopHealthCadence
     public LoopHealthGaps? LoopGaps { get; set; }
 
     /// <summary>
-    /// Stretches of at least three hours with the loop cycling and no temp basal recorded: the
-    /// pump's delivery records are missing while the loop was running.
+    /// Loop time (cycles no more than fifteen minutes apart) where delivery is unknown: no temp
+    /// basal is recorded and none bounds a stretch the schedule can be taken to have run through,
+    /// so the pump's delivery records are missing while the loop was running.
     /// </summary>
     public LoopHealthGaps? UnrecordedDelivery { get; set; }
 }
@@ -200,32 +201,6 @@ public class LoopHealthMaxBasal
 
     /// <summary>Of the algorithm temp time: where the cap is known, and so <see cref="AtCap"/> is measured.</summary>
     public LoopHealthShare CapKnown { get; set; } = new();
-
-    /// <summary>Which cap was binding, over the time at the cap.</summary>
-    public List<LoopHealthCapShare> Binding { get; set; } = [];
-}
-
-[JsonConverter(typeof(JsonStringEnumConverter<LoopHealthCap>))]
-public enum LoopHealthCap
-{
-    /// <summary>Loop's maximum basal rate setting.</summary>
-    LoopMaximumBasalRate,
-
-    /// <summary>
-    /// oref's <c>maxSafeBasal</c>. Which of the limits it is the lowest of was binding is not
-    /// recorded.
-    /// </summary>
-    OrefMaxSafeBasal,
-}
-
-public class LoopHealthCapShare
-{
-    public LoopHealthCap Cap { get; set; }
-
-    public double Minutes { get; set; }
-
-    /// <summary>Of the time at the cap.</summary>
-    public double Percent { get; set; }
 }
 
 /// <summary>Boluses the algorithm gave (SMBs, Loop's automatic boluses).</summary>

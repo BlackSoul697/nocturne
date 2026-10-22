@@ -184,6 +184,7 @@ internal sealed partial class LoopAnalysisService(
     private sealed record Delivery(
         NetInsulinAboveSchedule Insulin,
         BasalEvidence Evidence,
+        IReadOnlyList<long> TempStarts,
         TherapyTimeline Timeline,
         long TickStart,
         bool HasTherapy);
@@ -217,7 +218,12 @@ internal sealed partial class LoopAnalysisService(
             .Select(b => new InsulinDose(b.Mills, b.Insulin, b.Kind == BolusKind.Algorithm));
 
         return new Delivery(
-            new NetInsulinAboveSchedule(delivered, scheduled, doses), evidence, timeline, tickStart, hasTherapy);
+            new NetInsulinAboveSchedule(delivered, scheduled, doses),
+            evidence,
+            [.. clipped.Select(t => t.StartMills).Order()],
+            timeline,
+            tickStart,
+            hasTherapy);
     }
 
     private static LoopAnalysisMaskSources MaskSources(

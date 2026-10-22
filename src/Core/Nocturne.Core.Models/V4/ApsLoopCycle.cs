@@ -17,8 +17,6 @@ public sealed class ApsLoopCycle
 
     public long Mills => new DateTimeOffset(Timestamp, TimeSpan.Zero).ToUnixTimeMilliseconds();
 
-    public string? Device { get; init; }
-
     public AidAlgorithm AidAlgorithm { get; init; }
 
     /// <inheritdoc cref="ApsSnapshot.Enacted"/>
@@ -26,12 +24,6 @@ public sealed class ApsLoopCycle
 
     /// <summary>U/h.</summary>
     public double? EnactedRate { get; init; }
-
-    /// <summary>Minutes.</summary>
-    public int? EnactedDuration { get; init; }
-
-    /// <summary>U.</summary>
-    public double? EnactedBolusVolume { get; init; }
 
     /// <summary>U.</summary>
     public double? Iob { get; init; }

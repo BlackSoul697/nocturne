@@ -119,8 +119,8 @@ public enum LoopAnalysisSeries
     /// <summary>Loop's maximum basal rate setting.</summary>
     LoopLimits,
 
-    /// <summary>oref's limits, as its loop cycles report them.</summary>
-    OrefLimits,
+    /// <summary>oref's <c>max_iob</c>, as its loop cycles report it where it bound.</summary>
+    OrefMaxIob,
 }
 
 /// <summary>

@@ -37,7 +37,6 @@ public class ApsLoopCycleReadTests(V4GoldenFixture fixture)
         capped.AidAlgorithm.Should().Be(AidAlgorithm.AndroidAps);
         capped.Enacted.Should().BeTrue();
         capped.EnactedRate.Should().Be(2.4);
-        capped.EnactedDuration.Should().Be(30);
         capped.Iob.Should().Be(1.5);
         capped.SensitivityRatio.Should().Be(1.1);
         capped.HasReason.Should().BeTrue();
@@ -55,7 +54,6 @@ public class ApsLoopCycleReadTests(V4GoldenFixture fixture)
         loop.AidAlgorithm.Should().Be(AidAlgorithm.Loop);
         loop.HasReason.Should().BeFalse();
         loop.SuggestedChange.Should().BeNull();
-        loop.EnactedBolusVolume.Should().Be(0.3);
     }
 
     [Fact]
@@ -83,20 +81,18 @@ public class ApsLoopCycleReadTests(V4GoldenFixture fixture)
 
         (await repo.GetLoopCyclesAsync(Start, Start.AddMinutes(20))).Should().HaveCount(6);
 
-        var selects = statements.All.Where(s => s.StartsWith("SELECT")).ToList();
-        selects.Should().HaveCount(3, "the cycles in the window and one beyond each end");
-        foreach (var select in selects)
-        {
-            foreach (var blob in new[]
-                     {
-                         "enacted_json", "predicted_default_json", "predicted_iob_json", "predicted_zt_json",
-                         "predicted_cob_json", "predicted_uam_json", "loop_json", "additional_properties",
-                     })
-                select.Should().NotContain(blob);
-            System.Text.RegularExpressions.Regex.Matches(select, "suggested_json").Count.Should().Be(
-                3, "the reason, the null test and the key test each read it once: {0}", select);
-            select.Should().Contain("jsonb_extract_path_text(a.suggested_json, 'reason')");
-        }
+        var select = statements.All.Should().ContainSingle(s => s.StartsWith("SELECT"),
+            "the cycles in the window and one beyond each end come in one round trip").Subject;
+        select.Should().Contain("UNION ALL");
+        foreach (var blob in new[]
+                 {
+                     "enacted_json", "predicted_default_json", "predicted_iob_json", "predicted_zt_json",
+                     "predicted_cob_json", "predicted_uam_json", "loop_json", "additional_properties",
+                 })
+            select.Should().NotContain(blob);
+        System.Text.RegularExpressions.Regex.Matches(select, @"jsonb_extract_path_text\([a-z0-9]+\.suggested_json, 'reason'\)")
+            .Count.Should().Be(3, "each part of the union reads the reason once per row: {0}", select);
+        System.Text.RegularExpressions.Regex.Matches(select, @"\?\|").Count.Should().Be(3, "and tests the keys once: {0}", select);
     }
 
     private static async Task SeedAsync(IApsSnapshotRepository repo)

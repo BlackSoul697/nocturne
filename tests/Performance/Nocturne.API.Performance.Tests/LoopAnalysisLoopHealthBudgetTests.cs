@@ -42,7 +42,7 @@ public class LoopAnalysisLoopHealthBudgetTests(ITestOutputHelper output)
             cycles.Add(new ApsLoopCycle
             {
                 Timestamp = at, AidAlgorithm = AidAlgorithm.Trio, Enacted = step % 50 != 0, EnactedRate = rate,
-                EnactedDuration = 30, Iob = step % 40 * 0.1, SensitivityRatio = 0.8 + step % 5 * 0.1,
+                Iob = step % 40 * 0.1, SensitivityRatio = 0.8 + step % 5 * 0.1,
                 HasReason = true, SuggestedChange = true,
                 LimitReason = step % 30 == 0 ? $"adj. req. rate: 3.1 to maxSafeBasal: {rate}" : null,
             });
@@ -69,6 +69,7 @@ public class LoopAnalysisLoopHealthBudgetTests(ITestOutputHelper output)
             Cycles = cycles,
             Insulin = new NetInsulinAboveSchedule(delivered, scheduled, doses),
             Evidence = evidence,
+            TempStarts = [.. clipped.Select(t => t.StartMills).Order()],
             Glucose = glucose,
         };
         var filter = new LoopAnalysisMasks();

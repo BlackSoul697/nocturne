@@ -20,8 +20,9 @@ namespace Nocturne.Core.Clinical.LoopAnalysis;
 public readonly record struct OrefReason(bool CappedAtMaxSafeBasal, bool AtMaxIob, double? MaxIob)
 {
     /// <summary>
-    /// AAPS formats numbers in the phone's locale, so a decimal comma is as likely as a point; a
-    /// comma followed by a space is the reason's own separator.
+    /// Every system writes <c>max_iob</c> with a decimal point (AAPS from a Kotlin string
+    /// template, not its locale-formatted numbers). A decimal comma is accepted anyway; a comma
+    /// followed by a space is the reason's own separator.
     /// </summary>
     private static readonly Regex MaxIobPattern = new(@"max_iob\s+(\d+(?:[.,]\d+)?)", RegexOptions.CultureInvariant);
 
