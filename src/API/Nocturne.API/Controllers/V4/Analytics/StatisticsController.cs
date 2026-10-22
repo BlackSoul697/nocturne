@@ -1065,15 +1065,14 @@ public class StatisticsController : ControllerBase
         var glucoseData = (await _canonicalGlucose.SelectAsync(rawGlucose, cancellationToken)).ToList();
         var carbs       = (await carbTask).ToList();
 
-        // Daily basal and bolus totals come from the existing service path so the calendar's
-        // "totalBasal" and "totalBolus" match what /daily-basal-bolus-ratios would return for the
-        // same window.
+        // Daily basal totals come from the existing service path so the calendar's "totalBasal"
+        // matches what /daily-basal-bolus-ratios would return for the same window.
         var dailyBasalBolus = _statisticsService.CalculateDailyBasalBolusRatios(
             manualBoluses, algorithmBoluses, tempBasals, tz, basalInjections);
-        var dailyInsulinMap = new Dictionary<string, DailyBasalBolusRatioData>(StringComparer.Ordinal);
+        var dailyBasalMap = new Dictionary<string, double>(StringComparer.Ordinal);
         foreach (var d in dailyBasalBolus.DailyData)
         {
-            if (!string.IsNullOrEmpty(d.Date)) dailyInsulinMap[d.Date] = d;
+            if (!string.IsNullOrEmpty(d.Date)) dailyBasalMap[d.Date] = d.Basal;
         }
 
         // Build the per-month/per-day shape.
@@ -1089,6 +1088,7 @@ public class StatisticsController : ControllerBase
         var windows = days.Select(d => PunchCardDayWindow.For(d, tz)).ToList();
         var glucoseByDay = PunchCardDayBuckets.Bucket(glucoseData, windows, e => e.Mills);
         var bolusesByDay = PunchCardDayBuckets.Bucket(manualBoluses, windows, b => b.Mills);
+        var algorithmBolusesByDay = PunchCardDayBuckets.Bucket(algorithmBoluses, windows, b => b.Mills);
         var carbsByDay = PunchCardDayBuckets.Bucket(carbs, windows, c => c.Mills);
 
         for (var i = 0; i < days.Count; i++)
@@ -1128,9 +1128,9 @@ public class StatisticsController : ControllerBase
             var dateStr = day.ToString("yyyy-MM-dd");
             var totals = treatment?.Totals;
             var totalCarbs = totals?.Food?.Carbs ?? 0;
-            dailyInsulinMap.TryGetValue(dateStr, out var dailyInsulin);
-            var totalBolus = dailyInsulin?.Bolus ?? 0;
-            var totalBasal = dailyInsulin?.Basal ?? 0;
+            var totalBolus = (totals?.Insulin?.Bolus ?? 0)
+                + StatisticsService.CountedBoluses(algorithmBolusesByDay[i]).Sum(b => b.Insulin);
+            var totalBasal = dailyBasalMap.GetValueOrDefault(dateStr, 0.0);
             var totalInsulin = totalBolus + totalBasal;
             var carbToInsulinRatio = treatment?.CarbToInsulinRatio ?? 0;
 
