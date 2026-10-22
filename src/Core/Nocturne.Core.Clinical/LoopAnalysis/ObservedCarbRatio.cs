@@ -63,6 +63,9 @@ public static class ObservedCarbRatio
                 episodes[block].Add(episode!);
         }
 
+        // An unscaled profile ISF can be off by half or double with nothing in the range to say so; a
+        // glucose term read at it is weighed at twice its share, so half the material share flags it.
+        var glucoseWeight = conversion.ProfileOnly ? 2.0 : 1.0;
         return [.. blocks.Select((b, i) =>
         {
             var tally = tallies[i];
@@ -76,9 +79,9 @@ public static class ObservedCarbRatio
                     : SettingsEvidenceCalculator.Unavailable(tally.Candidates, episodes[i].Count),
                 t => context.TherapyAt(t).CarbRatioAt(t),
                 isfDependent: episodes[i].Any(e => e.IsfDependent),
-                glucoseTermMaterial: SettingsEvidenceCalculator.Material(episodes[i].Select(GlucoseTermShare)),
+                glucoseTermMaterial: SettingsEvidenceCalculator.Material(episodes[i].Select(e => glucoseWeight * GlucoseTermShare(e))),
                 materialBorrowed: SettingsEvidenceCalculator.Material(episodes[i].Select(e =>
-                    GlucoseTermShare(e) + SettingsEvidenceCalculator.Share(e.BasalExcess, e.InsulinActed))));
+                    glucoseWeight * GlucoseTermShare(e) + SettingsEvidenceCalculator.Share(e.BasalExcess, e.InsulinActed))));
         })];
     }
 
@@ -90,6 +93,23 @@ public static class ObservedCarbRatio
     /// </summary>
     private static double GlucoseTermShare(CarbRatioEvidenceEpisode e) =>
         SettingsEvidenceCalculator.Share((e.EndGlucose - e.StartGlucose) / e.Isf, e.InsulinNeeded);
+
+    /// <summary>
+    /// IOB before the meal's own bolus: the first manual dose up to <see cref="EventAnchors.CarbFreeMs"/>
+    /// before the meal, which a pre-bolus may put ahead of the window's start.
+    /// </summary>
+    private static double? StandingIob(SettingsEvidenceContext context, long meal)
+    {
+        var doses = context.Insulin.Doses;
+        for (var i = SortedSearch.FirstEndingAfter(doses, meal - EventAnchors.CarbFreeMs - 1, static d => d.Mills);
+             i < doses.Count && doses[i].Mills <= meal;
+             i++)
+        {
+            if (!doses[i].Automatic)
+                return context.Series.IobAt(doses[i].Mills - 1);
+        }
+        return null;
+    }
 
     private static (CarbRatioEvidenceEpisode? Episode, SettingsEvidenceRule? Rejected) Measure(
         SettingsEvidenceContext context, EventAnchor meal, IsfConversion conversion, BasalBaseline? baseline)
@@ -120,7 +140,7 @@ public static class ObservedCarbRatio
         var grams = meal.Grams!.Value;
         var episode = context.Episode<CarbRatioEvidenceEpisode>(
             meal.Mills, end, grams / needed, context.TherapyAt(meal.Mills).CarbRatioAt(meal.Mills));
-        context.Fill(episode, startGlucose, endGlucose, insulin, insulin.IobAtStart);
+        context.Fill(episode, end, startGlucose, endGlucose, insulin, StandingIob(context, meal.Mills) ?? insulin.IobAtStart);
         episode.Grams = SlotSummary.Round(grams);
         episode.InsulinNeeded = SlotSummary.Round(needed);
         episode.Isf = SlotSummary.Round(isf);

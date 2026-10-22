@@ -143,7 +143,7 @@ public static class ObservedIsf
         var drop = startGlucose - endGlucose;
         var episode = context.Episode<IsfEvidenceEpisode>(
             start, end, drop / insulin.Acted, context.TherapyAt(start).SensitivityAt(start));
-        context.Fill(episode, startGlucose, endGlucose, insulin, iobBefore);
+        context.Fill(episode, end, startGlucose, endGlucose, insulin, iobBefore);
         episode.Units = SlotSummary.Round(units);
         episode.Drop = SlotSummary.Round(drop);
         return (episode, null);
@@ -161,6 +161,9 @@ internal sealed class IsfConversion
 {
     private readonly double?[] _observed;
     private readonly double _ratio;
+
+    /// <summary>No block's ISF is lendable, so every conversion is at the profile's ISF, unscaled.</summary>
+    public bool ProfileOnly => _observed.All(o => o is null);
 
     private IsfConversion(double?[] observed, double ratio)
     {

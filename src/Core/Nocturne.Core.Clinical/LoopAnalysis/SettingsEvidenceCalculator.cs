@@ -99,6 +99,24 @@ public static class SettingsEvidenceCalculator
     public const double MinimumCarbDayShare = 0.2;
 
     /// <summary>
+    /// How far a figure must sit from the profile's, as a share of it, to be read as pointing
+    /// towards more insulin: within 10%, the difference is inside the spread a right profile reads
+    /// with, and no step a setting is changed by.
+    /// </summary>
+    public const double DirectionDeadband = 0.10;
+
+    /// <summary>The span before a window's end its closing trend is read over.</summary>
+    public const long EndTrendSpanMs = 30 * LocalSlotBinning.MinuteMs;
+
+    /// <summary>
+    /// The fastest glucose may still be moving over <see cref="EndTrendSpanMs"/> before a window's
+    /// end, as a median across a figure's episodes, for the window to have caught the whole response:
+    /// past 1 mg/dL a minute, where a CGM's trend arrow leaves flat, insulin or carbs were still
+    /// acting when the window closed.
+    /// </summary>
+    public const double MaxEndTrendMgdlPerMinute = 1;
+
+    /// <summary>
     /// The largest share of candidates rejected for another intake or bolus in their window before
     /// the survivors are read as atypical: past half, the episodes that qualified are the quiet
     /// exceptions, and their figure may not hold for the user's ordinary days.
@@ -219,7 +237,9 @@ public static class SettingsEvidenceCalculator
                 _ => SettingsEvidenceConfidence.Low,
             };
 
-        var moreInsulin = figure.Profile is { } profile && (higherMeansMoreInsulin ? observed > profile : observed < profile);
+        var moreInsulin = figure.Profile is > 0 and var profile
+            && Math.Abs(observed / profile - 1) >= DirectionDeadband
+            && (higherMeansMoreInsulin ? observed > profile : observed < profile);
         if (moreInsulin && materialBorrowed)
         {
             figure.Confidence = figure.Confidence == SettingsEvidenceConfidence.High
@@ -372,6 +392,12 @@ internal sealed class SettingsEvidenceContext
 
     public double? GlucoseAt(long mills) => Series.GlucoseNear(mills, SettingsEvidenceCalculator.ReadingToleranceMs);
 
+    /// <summary>Glucose's change over <see cref="SettingsEvidenceCalculator.EndTrendSpanMs"/> before <paramref name="end"/>, mg/dL a minute.</summary>
+    public double? EndTrend(long end) =>
+        GlucoseAt(end) is { } last && GlucoseAt(end - SettingsEvidenceCalculator.EndTrendSpanMs) is { } before
+            ? (last - before) / (SettingsEvidenceCalculator.EndTrendSpanMs / (double)LocalSlotBinning.MinuteMs)
+            : null;
+
     /// <summary>The lowest reading in <c>[start, end]</c>, or null where there is none.</summary>
     public double? LowestGlucose(long start, long end)
     {
@@ -429,7 +455,11 @@ internal sealed class SettingsEvidenceContext
     /// The glucose-change term carries a material share of the figure
     /// (<see cref="SettingsEvidenceCalculator.Material"/>), so an ISF-dependent figure is less sure.
     /// </param>
-    /// <param name="materialBorrowed">See <see cref="SettingsEvidenceCalculator.Rate"/>.</param>
+    /// <param name="materialBorrowed">
+    /// See <see cref="SettingsEvidenceCalculator.Rate"/>. A basal-dependent episode, and glucose still
+    /// moving at the window's end, also count: neither error can be sized from the data, so neither
+    /// can be shown to be small.
+    /// </param>
     public T Finish<T, TEpisode>(
         T figure,
         SettingsEvidenceBlock block,
@@ -466,10 +496,15 @@ internal sealed class SettingsEvidenceContext
             reasons.Add(SettingsEvidenceConfidenceReason.ResidualIob);
         if (tally[SettingsEvidenceRule.NotIsolated] > SettingsEvidenceCalculator.MaxNotIsolatedShare * tally.Candidates)
             reasons.Add(SettingsEvidenceConfidenceReason.MostNotIsolated);
+        var stillMoving = SlotSummary.Of([.. episodes.Select(e => e.EndTrend).OfType<double>().Select(Math.Abs)])?.P50
+            > SettingsEvidenceCalculator.MaxEndTrendMgdlPerMinute;
+        if (stillMoving)
+            reasons.Add(SettingsEvidenceConfidenceReason.StillMovingAtEnd);
 
         var values = episodes.Select(e => e.Value).ToList();
         SettingsEvidenceCalculator.Rate(
-            figure, SlotSummary.Of(values)!.P50, values, higherMeansMoreInsulin: false, materialBorrowed, reasons);
+            figure, SlotSummary.Of(values)!.P50, values, higherMeansMoreInsulin: false,
+            materialBorrowed || figure.BasalDependent || stillMoving, reasons);
         return figure;
     }
 
@@ -544,9 +579,10 @@ internal sealed class SettingsEvidenceContext
     }
 
     /// <param name="standingIob">IOB just before the window's own doses: what was already on board.</param>
-    public void Fill(InsulinActedEpisode episode, double startGlucose, double endGlucose, ActedInsulin acted, double standingIob)
+    public void Fill(InsulinActedEpisode episode, long end, double startGlucose, double endGlucose, ActedInsulin acted, double standingIob)
     {
         episode.ResidualIob = SlotSummary.Round(Math.Max(0, acted.IobAtEnd - standingIob));
+        episode.EndTrend = EndTrend(end) is { } trend ? SlotSummary.Round(trend) : null;
         episode.StartGlucose = SlotSummary.Round(startGlucose);
         episode.EndGlucose = SlotSummary.Round(endGlucose);
         episode.NetInsulin = SlotSummary.Round(acted.Net.Total);

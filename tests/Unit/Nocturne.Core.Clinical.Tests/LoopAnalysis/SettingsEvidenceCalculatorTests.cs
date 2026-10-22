@@ -239,7 +239,7 @@ public class SettingsEvidenceCalculatorTests
     }
 
     public static TheoryData<string> Departures =>
-        ["noise", "longModelDia", "shortModelDia", "slowAbsorption", "nightNeedsMore", "nightNeedsLess"];
+        ["noise", "longModelDia", "shortModelDia", "bodyActsLonger", "slowAbsorption", "nightNeedsMore", "nightNeedsLess", "dayNeedsMore"];
 
     /// <summary>
     /// A body that departs from what the calculator assumes, with the profile right by day: CGM
@@ -259,9 +259,11 @@ public class SettingsEvidenceCalculatorTests
             "noise" => plan with { NoiseMgdl = 8 },
             "longModelDia" => plan with { ModelDiaSteps = 72, ModelPeakSteps = 18 },
             "shortModelDia" => plan with { ModelDiaSteps = 24, ModelPeakSteps = 10 },
+            "bodyActsLonger" => plan with { BodyDiaSteps = 72, BodyPeakSteps = 18 },
             "slowAbsorption" => plan with { AbsorptionSteps = 60 },
             "nightNeedsMore" => plan with { TrueBasal = h => h < 6 ? 1.25 : 1.0 },
             "nightNeedsLess" => plan with { TrueBasal = h => h < 6 ? 0.7 : 1.0 },
+            "dayNeedsMore" => plan with { TrueBasal = h => h < 6 ? 1.0 : 1.25 },
             _ => throw new ArgumentOutOfRangeException(nameof(departure)),
         };
 
@@ -296,6 +298,8 @@ public class SettingsEvidenceCalculatorTests
         ["slowAbsorption"] = 0.3,
         ["nightNeedsMore"] = 0.35,
         ["nightNeedsLess"] = 0.3,
+        ["bodyActsLonger"] = 0.2,
+        ["dayNeedsMore"] = 0.3,
     };
 
     #endregion
@@ -561,6 +565,8 @@ public class SettingsEvidenceCalculatorTests
 
         block.Days.Should().OnlyContain(d => d.CarriedInsulin == 0.2);
         block.Observed.Should().BeApproximately(1.2, 0.001);
+        block.ConfidenceReasons.Should().Contain(SettingsEvidenceConfidenceReason.CarriedInsulinMaterial,
+            "0.2 of a 1.2 U/h need is the IOB curve's to give");
     }
 
     [Fact]
@@ -949,6 +955,66 @@ public class SettingsEvidenceCalculatorTests
         Rated(12, 1.2, 1.0, higherMeansMoreInsulin: true, borrowed: true).Confidence.Should().Be(SettingsEvidenceConfidence.Moderate);
         Rated(12, 8, 10, higherMeansMoreInsulin: false, borrowed: true, SettingsEvidenceConfidenceReason.BasalDependent)
             .Confidence.Should().Be(SettingsEvidenceConfidence.Low, "it is lowered a level from Moderate, not held there");
+        Rated(12, 9.5, 10, higherMeansMoreInsulin: false, borrowed: true).Confidence.Should().Be(
+            SettingsEvidenceConfidence.High, "5% from the profile is inside the direction deadband");
+    }
+
+    [Fact]
+    public void GlucoseStillFallingAtTheWindowsEnd_SaysTheWindowMissedPartOfTheResponse()
+    {
+        var week = Corrections();
+        var boluses = week.Doses.Select(d => d.Mills).ToList();
+        week.Glucose = t =>
+        {
+            foreach (var b in boluses)
+            {
+                if (t >= b - Hour && t < b + 3 * Hour + 30 * Minute)
+                    return 200;
+                if (t >= b + 3 * Hour + 30 * Minute && t <= b + 4 * Hour)
+                    return 200 - 2.0 * (t - b - 3 * Hour - 30 * Minute) / Minute;
+            }
+            return 120;
+        };
+
+        var midday = Isf(week.Run(), SettingsEvidenceBlock.Midday);
+
+        midday.Episodes.Should().OnlyContain(e => e.EndTrend == -2);
+        midday.ConfidenceReasons.Should().Contain(SettingsEvidenceConfidenceReason.StillMovingAtEnd);
+    }
+
+    [Fact]
+    public void AGlucoseTermReadAtAnUnscaledProfileIsf_IsWeighedAtTwiceItsShare()
+    {
+        // 40 g bolused 4 U with glucose 20 mg/dL higher at the end: the glucose term is 0.5 U at an ISF
+        // of 40, about 11% of the 4.5 U needed. That is under the material share but over half of it,
+        // and no ISF in the range is observed to scale the profile's by.
+        var week = new Week();
+        for (var d = 0; d < 7; d++)
+        {
+            week.Carbs.Add(new CarbEvent(week.At(d, 8), 40));
+            week.Doses.Add(new InsulinDose(week.At(d, 8), 4, Automatic: false));
+        }
+        week.Glucose = t => LocalSlotBinning.LocalTime(t, Sydney).TimeOfDay.TotalHours is >= 8.5 and <= 12.5 ? 140 : 120;
+
+        var morning = CarbRatio(week.Run(), SettingsEvidenceBlock.Morning);
+
+        morning.IsfDependent.Should().BeTrue();
+        morning.ConfidenceReasons.Should().Contain(SettingsEvidenceConfidenceReason.IsfDependent);
+    }
+
+    [Fact]
+    public void IobOnBoardAtAMealsEnd_IsMeasuredAboveWhatWasOnBoardBeforeItsBolus_EvenAPreBolus()
+    {
+        var week = Meals();
+        var meal = week.At(3, 8);
+        week.Doses.RemoveAll(d => d.Mills == meal);
+        week.Doses.Add(new InsulinDose(meal - 25 * Minute, 4, Automatic: false));
+        week.Iob = t => t == meal + 4 * Hour ? 0.9 : null;
+
+        var episode = CarbRatio(week.Run(), SettingsEvidenceBlock.Morning).Episodes.Single(e => e.Date == "2024-06-06");
+
+        episode.IobAtStart.Should().BeGreaterThan(3, "the pre-bolus is on board at the window's start");
+        episode.ResidualIob.Should().Be(0.9, "none of it was on board before the meal's own bolus");
     }
 
     #endregion

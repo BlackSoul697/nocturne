@@ -68,6 +68,18 @@ public enum SettingsEvidenceConfidenceReason
     /// material share of it, so its confidence is one level lower than its other reasons give.
     /// </summary>
     MoreInsulinOnBorrowedInput,
+
+    /// <summary>
+    /// Glucose was typically still moving at the window's end, so insulin or carbs were still acting
+    /// when it closed and the window missed part of the response.
+    /// </summary>
+    StillMovingAtEnd,
+
+    /// <summary>
+    /// Basal: the insulin carried into and out of the blocks, which the IOB curve gives, carries a
+    /// material share of the need.
+    /// </summary>
+    CarriedInsulinMaterial,
 }
 
 /// <summary>Why a figure has no observed value.</summary>
@@ -336,6 +348,9 @@ public class InsulinActedEpisode : SettingsEvidenceEpisode
     /// still to act; zero where IOB fell.
     /// </summary>
     public double ResidualIob { get; set; }
+
+    /// <summary>mg/dL a minute, glucose's change over the half-hour before the window's end; null where a reading is missing.</summary>
+    public double? EndTrend { get; set; }
 
     /// <summary>
     /// U: the observed basal need above the schedule over the window, which the loop's top-up met

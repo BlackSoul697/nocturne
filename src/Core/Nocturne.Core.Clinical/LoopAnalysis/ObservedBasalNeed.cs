@@ -223,10 +223,14 @@ public static class ObservedBasalNeed
                 reasons.Add(SettingsEvidenceConfidenceReason.IsfDependent);
             if (context.FastingUnverifiable)
                 reasons.Add(SettingsEvidenceConfidenceReason.FastingUnverifiable);
+            var carriedMaterial = SettingsEvidenceCalculator.Material(
+                days.Select(d => SettingsEvidenceCalculator.Share(d.Carried, d.Need)));
+            if (carriedMaterial)
+                reasons.Add(SettingsEvidenceConfidenceReason.CarriedInsulinMaterial);
             var needs = days.Select(d => d.Need).ToList();
             SettingsEvidenceCalculator.Rate(
                 result, needs.Average(), needs, higherMeansMoreInsulin: true,
-                materialBorrowed: driftMaterial, reasons);
+                materialBorrowed: driftMaterial || carriedMaterial, reasons);
         }
 
         if (context.ListEpisodes)
