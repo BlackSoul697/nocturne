@@ -452,7 +452,7 @@ internal static class LoopAnalysisReadScopeGuard
     }
 
     /// <summary>
-    /// The series the caller's scopes withhold. <see cref="Redact"/> empties exactly these, so the
+    /// The Daily profile series the caller's scopes withhold. <see cref="Redact{T}"/> empties exactly these, so the
     /// response's <see cref="LoopAnalysisResponse.WithheldSeries"/> and its nulls cannot disagree.
     /// </summary>
     public static HashSet<LoopAnalysisSeries> Withheld(IReadOnlySet<string> grantedScopes)
@@ -488,30 +488,54 @@ internal static class LoopAnalysisReadScopeGuard
         return withheld;
     }
 
-    public static DailyProfileResponse Redact(DailyProfileResponse data, IReadOnlySet<string> grantedScopes)
-    {
-        var withheld = Withheld(grantedScopes);
-        data.WithheldSeries = [.. withheld.Order()];
-        if (withheld.Count == 0)
-            return data;
-
-        Narrow(data.Primary, withheld);
-        if (data.Comparison is { } comparison)
-            Narrow(comparison, withheld);
-        return data;
-    }
+    /// <summary>A tab: the series the caller's scopes withhold, and how its response drops exactly those.</summary>
+    private sealed record Tab(
+        Func<IReadOnlySet<string>, HashSet<LoopAnalysisSeries>> Withheld,
+        Action<LoopAnalysisResponse, HashSet<LoopAnalysisSeries>> Narrow);
 
     /// <summary>
-    /// Each tab's withheld series, by route. Every <see cref="LoopAnalysisSeries"/> belongs to
-    /// exactly one tab, so a tab's response never lists another's series; a new tab adds its entry
-    /// here.
+    /// Every tab, by its response type. Every <see cref="LoopAnalysisSeries"/> belongs to exactly
+    /// one tab, so a tab's response never lists another's series; a new tab adds one entry here.
     /// </summary>
-    public static readonly IReadOnlyDictionary<string, Func<IReadOnlySet<string>, HashSet<LoopAnalysisSeries>>> TabWithheld =
-        new Dictionary<string, Func<IReadOnlySet<string>, HashSet<LoopAnalysisSeries>>>
+    private static readonly Dictionary<Type, Tab> Tabs = new()
+    {
+        [typeof(DailyProfileResponse)] = TabOf<DailyProfileResponse, DailyProfileRange>(
+            Withheld, r => [r.Primary, r.Comparison], Narrow),
+        [typeof(PredictionAccuracyResponse)] = TabOf<PredictionAccuracyResponse, PredictionAccuracyRange>(
+            WithheldPredictions, r => [r.Primary, r.Comparison], Narrow),
+    };
+
+    private static Tab TabOf<TResponse, TRange>(
+        Func<IReadOnlySet<string>, HashSet<LoopAnalysisSeries>> withheld,
+        Func<TResponse, TRange?[]> ranges,
+        Action<TRange, HashSet<LoopAnalysisSeries>> narrow)
+        where TResponse : LoopAnalysisResponse
+        where TRange : class =>
+        new(withheld, (response, hidden) =>
         {
-            ["daily-profile"] = Withheld,
-            ["prediction-accuracy"] = WithheldPredictions,
-        };
+            foreach (var range in ranges((TResponse)response))
+                if (range is not null)
+                    narrow(range, hidden);
+        });
+
+    public static IReadOnlyCollection<Type> TabResponses => Tabs.Keys;
+
+    public static HashSet<LoopAnalysisSeries> WithheldFrom(Type response, IReadOnlySet<string> grantedScopes) =>
+        Tabs[response].Withheld(grantedScopes);
+
+    /// <summary>
+    /// Lists the series the caller's scopes withhold from <typeparamref name="T"/>'s tab and empties
+    /// exactly those.
+    /// </summary>
+    public static T Redact<T>(T data, IReadOnlySet<string> grantedScopes) where T : LoopAnalysisResponse
+    {
+        var tab = Tabs[typeof(T)];
+        var withheld = tab.Withheld(grantedScopes);
+        data.WithheldSeries = [.. withheld.Order()];
+        if (withheld.Count > 0)
+            tab.Narrow(data, withheld);
+        return data;
+    }
 
     /// <summary>
     /// The prediction figures the caller's scopes withhold, as <see cref="Withheld"/> is for the
@@ -532,19 +556,6 @@ internal static class LoopAnalysisReadScopeGuard
         if (!treatments)
             withheld.Add(LoopAnalysisSeries.PredictionContexts);
         return withheld;
-    }
-
-    public static PredictionAccuracyResponse Redact(PredictionAccuracyResponse data, IReadOnlySet<string> grantedScopes)
-    {
-        var withheld = WithheldPredictions(grantedScopes);
-        data.WithheldSeries = [.. withheld.Order()];
-        if (withheld.Count == 0)
-            return data;
-
-        Narrow(data.Primary, withheld);
-        if (data.Comparison is { } comparison)
-            Narrow(comparison, withheld);
-        return data;
     }
 
     private static void Narrow(PredictionAccuracyRange range, HashSet<LoopAnalysisSeries> withheld)

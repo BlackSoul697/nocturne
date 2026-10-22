@@ -53,7 +53,7 @@ public class LoopAnalysisController(
     public Task<ActionResult<DailyProfileResponse>> GetDailyProfile(
         [FromQuery] LoopAnalysisQuery query,
         CancellationToken cancellationToken = default) =>
-        ServeAsync(query, service.GetDailyProfileAsync, LoopAnalysisReadScopeGuard.Redact, cancellationToken);
+        ServeAsync(query, service.GetDailyProfileAsync, cancellationToken);
 
     /// <summary>
     /// How far each prediction curve's values at +30, +60, +90 and +120 minutes landed from the
@@ -80,7 +80,7 @@ public class LoopAnalysisController(
     public Task<ActionResult<PredictionAccuracyResponse>> GetPredictionAccuracy(
         [FromQuery] LoopAnalysisQuery query,
         CancellationToken cancellationToken = default) =>
-        ServeAsync(query, service.GetPredictionAccuracyAsync, LoopAnalysisReadScopeGuard.Redact, cancellationToken);
+        ServeAsync(query, service.GetPredictionAccuracyAsync, cancellationToken);
 
     /// <summary>
     /// Resolves <paramref name="query"/>, computes the tab when the tenant has a zone, fills the
@@ -89,7 +89,6 @@ public class LoopAnalysisController(
     private async Task<ActionResult<T>> ServeAsync<T>(
         LoopAnalysisQuery query,
         Func<LoopAnalysisFilter, TimeZoneInfo, CancellationToken, Task<T>> compute,
-        Func<T, IReadOnlySet<string>, T> redact,
         CancellationToken ct)
         where T : LoopAnalysisResponse, new()
     {
@@ -98,7 +97,7 @@ public class LoopAnalysisController(
             return invalid;
 
         var result = request!.Zone is { } zone ? await compute(request.Filter!, zone, ct) : new T();
-        return Ok(redact(request.Fill(result), HttpContext.GetGrantedScopes()));
+        return Ok(LoopAnalysisReadScopeGuard.Redact(request.Fill(result), HttpContext.GetGrantedScopes()));
     }
 
     /// <summary>A request resolved against the tenant clock and the caller.</summary>
