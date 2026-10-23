@@ -12,8 +12,9 @@ using Xunit;
 namespace Nocturne.API.Tests.Services.Alerts.Engines;
 
 /// <summary>
-/// An evaluation that loaded a rule before an edit writes nothing decided on the old rule: the edit lands after the evaluation read the rule and the tracker state, and
-/// before it takes the rule's transition lock, as an edit on another replica can
+/// An evaluation that loaded a rule before an edit writes nothing decided on the old rule: the
+/// edit lands after the evaluation read the rule and the tracker state, and before it takes the
+/// rule's transition lock, as an edit on another replica can
 /// (docs/alerts/engine-semantics.md §6.3).
 /// </summary>
 public class StaleRuleDecisionSeamTests

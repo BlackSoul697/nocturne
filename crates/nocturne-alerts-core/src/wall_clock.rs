@@ -65,6 +65,40 @@ mod tests {
         references_wall_clock(&RuleConditions::body(condition_type, condition_params))
     }
 
+    /// The §5.1 table. A kind dropped from it would only re-evaluate on the next
+    /// reading, which during a CGM outage may never come.
+    #[test]
+    fn the_wall_clock_kinds_are_the_spec_table() {
+        use crate::enums::WireEnum;
+        let mut ours: Vec<&str> = ConditionKind::ALL
+            .iter()
+            .copied()
+            .filter(|&kind| is_wall_clock(kind))
+            .map(ConditionKind::name)
+            .collect();
+        ours.sort_unstable();
+        assert_eq!(
+            ours,
+            [
+                "alert_state",
+                "do_not_disturb",
+                "loop_enaction_stale",
+                "loop_stale",
+                "override_active",
+                "pump_state",
+                "pump_suspended",
+                "sensor_age",
+                "signal_loss",
+                "site_age",
+                "staleness",
+                "state_span_active",
+                "time_since_last_bolus",
+                "time_since_last_carb",
+                "tracker_age",
+            ]
+        );
+    }
+
     #[test]
     fn wall_clock_root_is_selected_whatever_its_payload() {
         assert!(body_references_wall_clock(

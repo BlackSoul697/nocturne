@@ -26,8 +26,8 @@ namespace Nocturne.API.Tests.Services.Alerts;
 
 /// <summary>
 /// Drives <see cref="AlertSweepService.CheckSnoozedInstancesAsync"/> end to end over mocked
-/// persistence and glucose, with the real engine evaluating snooze conditions. Every clear must hand the instance to <see cref="IAlertSnoozeService.ResumeAsync"/>
-/// and no extension may, so <see cref="ShouldBeCleared"/> and <see cref="ShouldBeExtended"/> check
+/// persistence and glucose, with the real engine evaluating snooze conditions. Every clear must
+/// hand the instance to <see cref="IAlertSnoozeService.ResumeAsync"/> and no extension may, so <see cref="ShouldBeCleared"/> and <see cref="ShouldBeExtended"/> check
 /// that too.
 /// </summary>
 [Trait("Category", "Unit")]

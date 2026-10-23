@@ -112,10 +112,19 @@ internal static class EnumManifest
 
 public class EnumManifestTests
 {
+    /// <summary>
+    /// Under <c>NOCTURNE_CORPUS_BLESS=1</c> the manifest is rewritten from the enums instead, for
+    /// review in the diff alongside the Rust tables it binds.
+    /// </summary>
     [Fact]
     public void The_committed_manifest_matches_the_csharp_enums()
     {
         var path = EnumManifest.PathFor(CorpusLocator.CorpusDirectory());
+        if (Environment.GetEnvironmentVariable("NOCTURNE_CORPUS_BLESS") == "1")
+        {
+            File.WriteAllText(path, EnumManifest.Render());
+            return;
+        }
 
         File.ReadAllText(path).ReplaceLineEndings("\n").Should().Be(
             EnumManifest.Render(),

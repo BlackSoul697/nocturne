@@ -6,7 +6,7 @@ namespace Nocturne.Alerts.Corpus;
 /// <summary>
 /// Locates and loads the committed golden corpus (<c>tests/Parity/AlertEngineCorpus</c>)
 /// by walking up from the build output directory to the repo root (<c>nocturne.sln</c>).
-/// Shared by the generator and every parity test project.
+/// Shared by every parity test project.
 /// </summary>
 public static class CorpusLocator
 {

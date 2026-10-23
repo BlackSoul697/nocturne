@@ -87,7 +87,7 @@ internal sealed class RustBackedAlertEngine(
             return new AlertEngineEvaluation { Skipped = true };
         }
 
-        // Timer deltas in execution order reproduce exactly the rows the managed evaluators write.
+        // Timer deltas apply in the order the engine executed them.
         await ApplyTimerOpsAsync(rule.Id, result.TimerOps, ct);
 
         var decision = new TrackerDecision(

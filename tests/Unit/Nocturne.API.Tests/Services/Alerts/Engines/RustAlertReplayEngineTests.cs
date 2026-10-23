@@ -1,8 +1,5 @@
-using System.Diagnostics.Metrics;
 using FluentAssertions;
-using Microsoft.Extensions.DependencyInjection;
 using Nocturne.Alerts.Corpus;
-using Nocturne.API.Services.Alerts.Engines;
 using Nocturne.Core.Contracts.Alerts;
 using Nocturne.Core.Models;
 using Nocturne.Core.Models.Alerts;
@@ -25,11 +22,7 @@ public class RustAlertReplayEngineTests
         """["not","an","object"]""",
     };
 
-    private static RustAlertReplayEngine Rust() => new(new AlertEngineErrors(
-        new ServiceCollection().AddMetrics().BuildServiceProvider().GetRequiredService<IMeterFactory>(),
-        TimeProvider.System));
-
-    private static async Task<AlertReplayRun> ReplayAsync(IAlertReplayEngine engine, string conditionParams)
+    private static async Task<AlertReplayRun> ReplayAsync(string conditionParams)
     {
         var rule = new AlertRuleSnapshot(
             Guid.NewGuid(), Guid.Empty, "rule", AlertConditionType.Threshold, conditionParams,
@@ -41,14 +34,14 @@ public class RustAlertReplayEngineTests
             TrendRate = 0m,
             LastReadingAt = T0,
         }, new HashSet<Guid>());
-        return await engine.ReplayAsync(new AlertReplayInput([rule], [tick], IncludeTicks: true), CancellationToken.None);
+        return await ReplayScenarioRunner.Rust().ReplayAsync(new AlertReplayInput([rule], [tick], IncludeTicks: true), CancellationToken.None);
     }
 
     [NativeTheory]
     [MemberData(nameof(UnreadableBodies))]
     public async Task A_body_that_does_not_parse_is_skipped(string conditionParams)
     {
-        var run = await ReplayAsync(Rust(), conditionParams);
+        var run = await ReplayAsync(conditionParams);
 
         run.Events.Should().BeEmpty();
         run.Ticks![0].Rules.Should().ContainSingle().Which.Skipped.Should().BeTrue();

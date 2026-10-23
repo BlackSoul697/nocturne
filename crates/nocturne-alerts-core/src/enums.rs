@@ -3,9 +3,10 @@
 //!
 //! A mirrored enum's declaration order is its ordinal, and an integer payload
 //! value is that ordinal, so an enum that drifts from the host's silently
-//! rebinds integer payloads to the wrong member. The corpus generator writes
-//! every mirrored enum to `tests/Parity/AlertEngineEnums.json`, and
-//! `enums_match_manifest` pins each one to it.
+//! rebinds integer payloads to the wrong member. Every mirrored enum is listed
+//! in `tests/Parity/AlertEngineEnums.json`, which the backend's
+//! `EnumManifestTests` keeps equal to the C# enums, and `enums_match_manifest`
+//! pins each one to it.
 
 use serde::{Serialize, Serializer};
 

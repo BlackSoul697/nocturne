@@ -448,9 +448,8 @@ public class AlertSweepService : BackgroundService
 
         try
         {
-            // The engine seeds CurrentRuleId/CurrentPath; snooze conditions evaluate under
-            // the reserved "snooze" path root so nested sustained timers don't collide
-            // with rule-body or auto-resolve timers.
+            // Snooze conditions evaluate under the reserved "snooze" path root so nested
+            // sustained timers don't collide with rule-body or auto-resolve timers.
             return await engine.EvaluateNodeAsync(
                 instance.AlertRuleId, node, enrichedContext, AlertConditionTypeNames.SnoozePathRoot, ct);
         }

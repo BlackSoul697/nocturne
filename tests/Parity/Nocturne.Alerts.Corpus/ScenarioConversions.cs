@@ -8,9 +8,8 @@ namespace Nocturne.Alerts.Corpus;
 
 /// <summary>
 /// Conversions from the corpus wire records (<see cref="ScenarioRule"/> /
-/// <see cref="ScenarioContext"/>) to the domain types the engines consume. Shared by the
-/// generator's <see cref="ScenarioRunner"/> and the engine-seam test harnesses so the
-/// wire-to-domain mapping exists exactly once.
+/// <see cref="ScenarioContext"/>) to the domain types the engine consumes, shared by the
+/// engine-seam test harnesses so the wire-to-domain mapping exists exactly once.
 /// </summary>
 public static class ScenarioConversions
 {

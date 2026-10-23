@@ -33,7 +33,7 @@ public class ReplayCorpusTests
     {
         var (scenario, expected) = await CorpusLocator.LoadReplayScenarioAsync(scenarioName);
 
-        var actual = await ReplayScenarioRunner.RunAsync(ReplayScenarioRunner.Rust(), scenario, CancellationToken.None);
+        var actual = await ReplayScenarioRunner.RunAsync(scenario, CancellationToken.None);
 
         var failures = new List<string>();
         JsonNodeDiff.Compare(

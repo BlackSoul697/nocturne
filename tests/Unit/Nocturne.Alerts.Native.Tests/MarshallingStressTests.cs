@@ -231,7 +231,7 @@ public class MarshallingStressTests
     [NativeFact]
     public void Malformed_leaf_paths_node_throws_typed_exception()
     {
-        // `type` must be a string — a number is a JsonException in the C# engine.
+        // `type` must be a string.
         var node = JsonSerializer.SerializeToElement(new { type = 5 });
 
         var act = () => RustAlertEngine.LeafPaths(node);

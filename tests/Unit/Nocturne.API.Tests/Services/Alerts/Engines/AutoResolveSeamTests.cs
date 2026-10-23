@@ -10,7 +10,8 @@ using Xunit;
 namespace Nocturne.API.Tests.Services.Alerts.Engines;
 
 /// <summary>
-/// <see cref="IAlertEvaluationEngine.EvaluateAutoResolveAsync"/>, the sweep's auto-resolve: it closes the open excursion with reason auto only when the tree holds.
+/// <see cref="IAlertEvaluationEngine.EvaluateAutoResolveAsync"/>, the sweep's auto-resolve: it
+/// closes the open excursion with reason auto only when the tree holds.
 /// </summary>
 public class AutoResolveSeamTests
 {

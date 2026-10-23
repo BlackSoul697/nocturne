@@ -44,7 +44,7 @@ public class AlertEngineCorpusTests
     }
 
     /// <summary>
-    /// Drives one scenario through the seam per rule per tick over the generator's
+    /// Drives one scenario through the seam per rule per tick over the corpus's
     /// in-memory fakes (recording timer store + ordinal-guid tracker repository) and
     /// reassembles the expected-file JSON shape.
     /// </summary>

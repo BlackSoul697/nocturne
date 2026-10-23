@@ -24,6 +24,7 @@ public static class CorpusWire
         ExcursionCloseReason.Hysteresis => "hysteresis",
         ExcursionCloseReason.AutoResolve => "auto",
         ExcursionCloseReason.Manual => "manual",
-        _ => reason.ToString().ToLowerInvariant(),
+        ExcursionCloseReason.RuleDisabled => "rule-disabled",
+        _ => throw new InvalidOperationException($"Unknown close reason {reason}"),
     };
 }

@@ -1,6 +1,5 @@
-//! Representative port of the C# evaluator/tracker edge tests
-//! (`ConditionEvaluatorTests.cs`, `ExcursionTrackerTests.cs`), covering null
-//! permutations and state-machine edges the corpus may not pin individually.
+//! Evaluator and tracker edge cases, covering null permutations and
+//! state-machine edges the corpus may not pin individually.
 
 #![allow(
     clippy::unwrap_used,

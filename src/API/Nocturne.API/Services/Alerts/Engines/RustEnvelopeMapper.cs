@@ -144,7 +144,7 @@ internal static class RustEnvelopeMapper
 
     /// <summary>
     /// Projects a <see cref="SensorContext"/> onto the corpus <c>ScenarioContext</c> wire
-    /// shape. Field-by-field total against the generator's <c>ScenarioModels.cs</c>
+    /// shape. Field-by-field total against the corpus's <c>ScenarioModels.cs</c>
     /// (its <c>ToSensorContext</c> is the inverse of this mapping).
     /// </summary>
     public static JsonElement BuildContext(SensorContext ctx) => (JsonElement)BuildContextBoxed(ctx);

@@ -9,8 +9,8 @@ using Nocturne.Core.Models.Alerts;
 namespace Nocturne.Alerts.Corpus;
 
 /// <summary>
-/// Drives a replay scenario through an <see cref="IAlertReplayEngine"/> and produces the snapshot
-/// its committed <c>.expected.json</c> is compared with.
+/// Drives a replay scenario through the Rust replay engine and produces the snapshot its committed
+/// <c>.expected.json</c> is compared with.
 /// </summary>
 public static class ReplayScenarioRunner
 {
@@ -20,9 +20,10 @@ public static class ReplayScenarioRunner
             new ServiceCollection().AddMetrics().BuildServiceProvider().GetRequiredService<IMeterFactory>(),
             TimeProvider.System));
 
-    public static async Task<ReplayExpectedFile> RunAsync(
-        IAlertReplayEngine engine, ReplayScenarioFile scenario, CancellationToken ct)
+    /// <remarks>Needs the native library.</remarks>
+    public static async Task<ReplayExpectedFile> RunAsync(ReplayScenarioFile scenario, CancellationToken ct)
     {
+        var engine = Rust();
         var rules = scenario.Rules.Select(ToSnapshot).ToList();
         var ticks = scenario.Ticks
             .Select(t => new AlertReplayTick(

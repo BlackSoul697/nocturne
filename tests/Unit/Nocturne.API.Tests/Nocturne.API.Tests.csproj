@@ -41,8 +41,8 @@
         <ProjectReference Include="..\..\..\src\Connectors\Nocturne.Connectors.GoogleHealth\Nocturne.Connectors.GoogleHealth.csproj" />
         <ProjectReference Include="..\..\..\src\Connectors\Nocturne.Connectors.Nightscout\Nocturne.Connectors.Nightscout.csproj" />
         <ProjectReference Include="..\..\Shared\Nocturne.Tests.Shared\Nocturne.Tests.Shared.csproj" />
-        <!-- The corpus generator project carries the C# scenario harness (ScenarioModels +
-             the in-memory tracker/timer fakes) used by the engine-seam corpus tests. -->
+        <!-- The corpus test support (ScenarioModels and the in-memory tracker/timer fakes)
+             used by the engine-seam corpus tests. -->
         <ProjectReference Include="..\..\Parity\Nocturne.Alerts.Corpus\Nocturne.Alerts.Corpus.csproj" />
     </ItemGroup>
     <ItemGroup>

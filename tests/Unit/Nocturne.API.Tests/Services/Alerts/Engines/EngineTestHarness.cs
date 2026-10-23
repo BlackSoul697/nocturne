@@ -90,7 +90,7 @@ internal static class EngineTestHarness
 
     /// <summary>
     /// Assembles an <see cref="ExpectedRuleResult"/> from a seam evaluation plus the
-    /// observable state in the fakes — the same projection the corpus generator records.
+    /// observable state in the fakes, in the shape the corpus snapshots record.
     /// </summary>
     public static async Task<ExpectedRuleResult> ToExpectedResultAsync(
         ScenarioRule rule,

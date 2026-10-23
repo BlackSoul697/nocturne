@@ -43,7 +43,7 @@ public class TimerContinuityTests
     };
 
     [NativeFact]
-    public async Task Timer_row_written_by_one_engine_instance_is_honoured_by_a_fresh_instance()
+    public async Task A_sustained_window_reads_its_first_true_from_the_timer_store()
     {
         var rule = BuildSustainedRule();
         var time = new ManualTimeProvider();
