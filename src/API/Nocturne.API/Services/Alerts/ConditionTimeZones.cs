@@ -1,6 +1,6 @@
 using System.Text.Json;
 using System.Text.Json.Nodes;
-using Nocturne.API.Services.Alerts.Evaluators;
+using Nocturne.API.Services.Alerts.Conditions;
 using Nocturne.Core.Models;
 using Nocturne.Core.Models.Alerts;
 
@@ -11,9 +11,9 @@ namespace Nocturne.API.Services.Alerts;
 /// to IANA, and finding ids no zone resolves from.
 /// </summary>
 /// <remarks>
-/// The managed engine resolves a Windows id. The Rust engine reads the IANA database and does not
-/// (docs/alerts/engine-semantics.md §4), so there a Windows id fails the window closed. Rules are
-/// rewritten on save, and every request to the Rust engine is rewritten too, for rules stored
+/// The engine reads the IANA database and does not resolve a Windows id
+/// (docs/alerts/engine-semantics.md §4), so a Windows id would fail the window closed. Rules are
+/// rewritten on save, and every request to the engine is rewritten too, for rules stored
 /// before that. The JSON is edited in place rather than round-tripped through
 /// <see cref="ConditionNode"/>, which would drop fields the model does not declare.
 /// </remarks>
@@ -118,7 +118,7 @@ internal static class ConditionTimeZones
     }
 
     /// <summary>
-    /// Walks a condition node in <see cref="ConditionPath"/> order. <paramref name="path"/> is the
+    /// Walks a condition node in condition-path order (docs/alerts/engine-semantics.md §2.3). <paramref name="path"/> is the
     /// node's own path; empty means its verbatim type.
     /// </summary>
     private static void VisitNode(JsonNode? node, string path, Action<JsonObject, string> onTimeOfDay)
@@ -168,7 +168,7 @@ internal static class ConditionTimeZones
             ? type
             : string.Empty;
 
-    /// <summary>The key matching <paramref name="name"/> case-insensitively, as the evaluators read it.</summary>
+    /// <summary>The key matching <paramref name="name"/> case-insensitively, as the engine reads it.</summary>
     private static string? Property(JsonObject obj, string name)
     {
         foreach (var (key, _) in obj)
@@ -181,7 +181,7 @@ internal static class ConditionTimeZones
 
     /// <summary>
     /// Edits JSON that mentions <c>time_of_day</c> at all, or that is known to be a
-    /// <c>time_of_day</c> payload. Unparseable JSON is returned as is, for the evaluators to reject.
+    /// <c>time_of_day</c> payload. Unparseable JSON is returned as is, for the engine to reject.
     /// </summary>
     private static string Rewrite(string json, Action<JsonNode> edit, bool mentionsTimeOfDay = false)
     {

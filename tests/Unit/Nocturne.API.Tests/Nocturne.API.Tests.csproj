@@ -43,7 +43,7 @@
         <ProjectReference Include="..\..\Shared\Nocturne.Tests.Shared\Nocturne.Tests.Shared.csproj" />
         <!-- The corpus generator project carries the C# scenario harness (ScenarioModels +
              the in-memory tracker/timer fakes) used by the engine-seam corpus tests. -->
-        <ProjectReference Include="..\..\Parity\Nocturne.Alerts.ParityCorpus.Generator\Nocturne.Alerts.ParityCorpus.Generator.csproj" />
+        <ProjectReference Include="..\..\Parity\Nocturne.Alerts.Corpus\Nocturne.Alerts.Corpus.csproj" />
     </ItemGroup>
     <ItemGroup>
         <Compile Include="..\Nocturne.Connectors.Nightscout.Tests\TestSupport\PreBolusSplittingNightscout.cs" Link="TestSupport\PreBolusSplittingNightscout.cs" />

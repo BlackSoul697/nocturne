@@ -3,6 +3,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using Moq;
+using Nocturne.Alerts.Corpus;
 using Nocturne.API.Configuration;
 using Nocturne.API.Services.Alerts;
 using Nocturne.API.Services.Alerts.Engines;
@@ -89,7 +90,8 @@ public class AlertReplayServiceLeafLogTests
             enricher,
             _tenantAccessor.Object,
             Options.Create(new AlertEvaluationOptions()),
-            new ManagedAlertReplayEngine(NullLogger<ManagedAlertReplayEngine>.Instance));
+            new RustAlertReplayEngine(new AlertEngineErrors(
+                new Nocturne.API.Tests.Services.BackgroundServices.TestMeterFactory(), TimeProvider.System)));
     }
 
     private static AlertRuleSnapshot ThresholdRule(Guid id, string direction, decimal value) =>
@@ -116,7 +118,7 @@ public class AlertReplayServiceLeafLogTests
         Mgdl = mgdl,
     };
 
-    [Fact]
+    [NativeFact]
     public async Task SingleThresholdLeaf_FalseThenTrueThenFalse_RecordsThreeTransitions()
     {
         var ruleId = Guid.NewGuid();
@@ -166,7 +168,7 @@ public class AlertReplayServiceLeafLogTests
         leaf0.Points[2].AtMs.Should().Be(new DateTimeOffset(dayStart.AddMinutes(60)).ToUnixTimeMilliseconds());
     }
 
-    [Fact]
+    [NativeFact]
     public async Task LeafStableAcrossWindow_RecordsExactlyOneBaselineTransition()
     {
         var ruleId = Guid.NewGuid();
@@ -196,7 +198,7 @@ public class AlertReplayServiceLeafLogTests
         leaf0.Points[0].Value.Should().BeFalse();
     }
 
-    [Fact]
+    [NativeFact]
     public async Task MultipleLeavesInComposite_TrackedIndependently()
     {
         var ruleId = Guid.NewGuid();

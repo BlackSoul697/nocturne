@@ -7,7 +7,7 @@ using Moq;
 using Nocturne.API.Configuration;
 using Nocturne.API.Controllers.V4.Monitoring;
 using Nocturne.API.Services.Alerts;
-using Nocturne.Alerts.ParityCorpus.Generator.Harness;
+using Nocturne.Alerts.Corpus;
 using Nocturne.API.Services.Alerts.Engines;
 using Nocturne.API.Services.Glucose;
 using Nocturne.API.Services.Treatments;

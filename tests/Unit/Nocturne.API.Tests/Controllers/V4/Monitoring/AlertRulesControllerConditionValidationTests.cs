@@ -6,7 +6,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using Moq;
-using Nocturne.Alerts.ParityCorpus.Generator.Harness;
+using Nocturne.Alerts.Corpus;
 using Nocturne.API.Controllers.V4.Monitoring;
 using Nocturne.API.Services.Alerts;
 using Nocturne.API.Tests.TestDoubles;

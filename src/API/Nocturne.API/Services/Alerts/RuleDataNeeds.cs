@@ -151,7 +151,7 @@ public static class RuleDataNeeds
             case AlertConditionType.DayOfWeek: b.TenantTimeZone = true; break;
             // TimeOfDay falls back to the tenant timezone when the rule's own Timezone is
             // null (the default the UI saves), so the enricher must populate it. Without
-            // this co-fetch the evaluator would silently fall back to UTC.
+            // this co-fetch the engine would silently fall back to UTC.
             case AlertConditionType.TimeOfDay: b.TenantTimeZone = true; break;
             case AlertConditionType.SleepSessionActive: b.SleepSession = true; break;
             case AlertConditionType.PumpState: /* selection read in VisitLeaf */ break;

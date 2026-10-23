@@ -1,7 +1,7 @@
 using System.Runtime.CompilerServices;
 using System.Text.Json;
 using System.Text.Json.Serialization;
-using Nocturne.API.Services.Alerts.Evaluators;
+using Nocturne.API.Services.Alerts.Conditions;
 using Nocturne.Core.Alerts.Native;
 using Nocturne.Core.Contracts.Alerts;
 using Nocturne.Core.Models;
@@ -51,10 +51,9 @@ internal static class RustEnvelopeMapper
 
     /// <summary>
     /// Builds the FFI rule object from the stored rule row. Malformed stored condition JSON
-    /// throws <see cref="JsonException"/>, matching the managed path, where the evaluator's
-    /// payload deserialisation would throw into the per-rule catch. Auto-resolve params are sent
-    /// only when auto-resolve is enabled, and unparseable ones as null. They only gate
-    /// auto-resolve, which neither engine fires for a tree that does not parse. Timezone ids go
+    /// throws <see cref="JsonException"/> into the orchestrator's per-rule catch. Auto-resolve
+    /// params are sent only when auto-resolve is enabled, and unparseable ones as null. They only
+    /// gate auto-resolve, which the engine never fires for a tree that does not parse. Timezone ids go
     /// through <see cref="ConditionTimeZones"/>.
     /// </summary>
     public static RustAlertRule BuildRule(AlertRule rule) => new()
@@ -233,7 +232,7 @@ internal static class RustEnvelopeMapper
     /// expects (child <c>type</c> strings preserved verbatim).
     /// </summary>
     public static JsonElement BuildNode(ConditionNode node) =>
-        ConditionTimeZones.CanonicaliseNode(JsonSerializer.SerializeToElement(node, EvaluatorJson.Options));
+        ConditionTimeZones.CanonicaliseNode(JsonSerializer.SerializeToElement(node, ConditionJson.Options));
 
     // -----------------------------------------------------------------------
     // Response mapping

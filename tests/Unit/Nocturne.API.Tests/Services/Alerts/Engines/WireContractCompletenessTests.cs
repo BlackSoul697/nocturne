@@ -2,7 +2,7 @@ using System.Reflection;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using FluentAssertions;
-using Nocturne.Alerts.ParityCorpus.Generator.Harness;
+using Nocturne.Alerts.Corpus;
 using Nocturne.API.Services.Alerts.Engines;
 using Nocturne.Core.Models;
 using Nocturne.Core.Models.Alerts;

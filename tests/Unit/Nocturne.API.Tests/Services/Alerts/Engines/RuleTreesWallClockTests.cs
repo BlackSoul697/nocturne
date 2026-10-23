@@ -1,5 +1,5 @@
 using FluentAssertions;
-using Nocturne.Alerts.ParityCorpus.Generator.Harness;
+using Nocturne.Alerts.Corpus;
 using Nocturne.API.Services.Alerts.Engines;
 using Nocturne.Core.Models;
 using Nocturne.Core.Models.Alerts;
@@ -11,16 +11,6 @@ namespace Nocturne.API.Tests.Services.Alerts.Engines;
 [Trait("Category", "Unit")]
 public class RuleTreesWallClockTests
 {
-    [Fact]
-    public void Every_condition_type_is_classified_exactly_once()
-    {
-        var all = Enum.GetValues<AlertConditionType>();
-
-        WallClockKinds.Kinds.Intersect(WallClockKinds.NotWallClock).Should().BeEmpty();
-        WallClockKinds.Kinds.Union(WallClockKinds.NotWallClock)
-            .Should().BeEquivalentTo(all, "a new condition kind must be placed on one side");
-    }
-
     [NativeTheory]
     [InlineData(AlertConditionType.SignalLoss, """{"timeout_minutes": 15}""")]
     [InlineData(AlertConditionType.Staleness, """{"operator": ">", "value": 20}""")]

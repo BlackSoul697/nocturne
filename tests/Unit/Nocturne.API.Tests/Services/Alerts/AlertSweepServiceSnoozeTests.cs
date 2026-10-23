@@ -5,12 +5,13 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Time.Testing;
 using Moq;
-using Nocturne.Alerts.ParityCorpus.Generator.Harness;
+using Nocturne.Alerts.Corpus;
 using Nocturne.API.Extensions;
 using Nocturne.API.Services.Alerts;
 using Nocturne.API.Services.Alerts.Engines;
-using Nocturne.API.Services.Alerts.Evaluators;
+using Nocturne.API.Services.Alerts.Conditions;
 using Nocturne.API.Services.Audit;
+using Nocturne.API.Tests.TestDoubles;
 using Nocturne.Core.Contracts.Alerts;
 using Nocturne.Core.Contracts.Audit;
 using Nocturne.Core.Contracts.Glucose;
@@ -25,8 +26,7 @@ namespace Nocturne.API.Tests.Services.Alerts;
 
 /// <summary>
 /// Drives <see cref="AlertSweepService.CheckSnoozedInstancesAsync"/> end to end over mocked
-/// persistence and glucose, with the real managed engine and evaluators evaluating snooze
-/// conditions. Every clear must hand the instance to <see cref="IAlertSnoozeService.ResumeAsync"/>
+/// persistence and glucose, with the real engine evaluating snooze conditions. Every clear must hand the instance to <see cref="IAlertSnoozeService.ResumeAsync"/>
 /// and no extension may, so <see cref="ShouldBeCleared"/> and <see cref="ShouldBeExtended"/> check
 /// that too.
 /// </summary>

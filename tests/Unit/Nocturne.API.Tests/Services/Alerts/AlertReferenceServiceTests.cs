@@ -1,7 +1,7 @@
 using Nocturne.Tests.Shared.Infrastructure;
 using System.Text.Json;
 using FluentAssertions;
-using Nocturne.Alerts.ParityCorpus.Generator.Harness;
+using Nocturne.Alerts.Corpus;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging.Abstractions;
 using Moq;

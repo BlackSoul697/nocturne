@@ -166,8 +166,8 @@ public record SensorContext
     // very old" — i.e. where a missing/old timestamp would otherwise satisfy a `>=`
     // operator (LoopStale > 15min on a brand-new tenant). Facts whose projection is
     // naturally null when absent (ActiveOverride, ActiveTempBasal) need no flag.
-    // False ⇒ the underlying fact has never been observed for this tenant; the evaluator
-    // should return false rather than treat null as "infinity stale" or similar.
+    // False ⇒ the underlying fact has never been observed for this tenant; the engine
+    // returns false rather than treat null as "infinity stale" or similar.
 
     /// <summary>True when the tenant has at least one ApsSnapshot recorded.</summary>
     public bool HasEverApsCycled { get; init; }
@@ -423,7 +423,7 @@ public record DoNotDisturbCondition(
     [property: JsonPropertyName("for_minutes")] int? ForMinutes);
 
 /// <summary>Comparison operator for time-since-last-event leaves. Single-character forms
-/// match the existing <see cref="ComparisonOps"/> wire format used by the JSON payload.</summary>
+/// match the operator wire format the other comparison leaves use.</summary>
 [JsonConverter(typeof(JsonStringEnumConverter<AlertComparisonOperator>))]
 public enum AlertComparisonOperator
 {

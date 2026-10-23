@@ -1,5 +1,5 @@
 using System.Text.Json;
-using Nocturne.API.Services.Alerts.Evaluators;
+using Nocturne.API.Services.Alerts.Conditions;
 using Nocturne.Core.Alerts.Native;
 using Nocturne.Core.Contracts.Alerts;
 using Nocturne.Core.Models;

@@ -12,7 +12,7 @@ using Nocturne.API.Multitenancy;
 using Nocturne.API.RateLimiting;
 using Nocturne.API.Services.AidDetection;
 using Nocturne.API.Services.Alerts;
-using Nocturne.API.Services.Alerts.Evaluators;
+using Nocturne.API.Services.Alerts.Conditions;
 using Nocturne.API.Services.Alerts.Webhooks;
 using Nocturne.API.Services.Analytics;
 using Nocturne.API.Services.Auth;
@@ -1136,51 +1136,6 @@ public static class ServiceRegistrationExtensions
         services.AddScoped<Nocturne.Core.Contracts.Alerts.IAlertEvaluationEngine,
             Nocturne.API.Services.Alerts.Engines.RustBackedAlertEngine>();
 
-        return services;
-    }
-
-    /// <summary>
-    /// Registers every <see cref="IConditionEvaluator"/> implementation that the
-    /// <see cref="ConditionEvaluatorRegistry"/> resolves at runtime. Extracted from
-    /// <see cref="AddAlertingAndMonitoring"/> so production wiring and the registry
-    /// coverage tests can share the same single source of truth — adding a new
-    /// evaluator here automatically updates both.
-    /// </summary>
-    public static IServiceCollection AddAlertEvaluators(this IServiceCollection services)
-    {
-        services.AddScoped<IConditionEvaluator, ThresholdEvaluator>();
-        services.AddScoped<IConditionEvaluator, RateOfChangeEvaluator>();
-        services.AddScoped<IConditionEvaluator, SignalLossEvaluator>();
-        services.AddScoped<IConditionEvaluator, StalenessEvaluator>();
-        services.AddScoped<IConditionEvaluator, CompositeEvaluator>();
-        services.AddScoped<IConditionEvaluator, NotEvaluator>();
-        services.AddScoped<IConditionEvaluator, SustainedEvaluator>();
-        services.AddScoped<IConditionEvaluator, PredictedEvaluator>();
-        services.AddScoped<IConditionEvaluator, TrendEvaluator>();
-        services.AddScoped<IConditionEvaluator, TimeOfDayEvaluator>();
-        services.AddScoped<IConditionEvaluator, IobEvaluator>();
-        services.AddScoped<IConditionEvaluator, CobEvaluator>();
-        services.AddScoped<IConditionEvaluator, ReservoirEvaluator>();
-        services.AddScoped<IConditionEvaluator, SiteAgeEvaluator>();
-        services.AddScoped<IConditionEvaluator, SensorAgeEvaluator>();
-        services.AddScoped<IConditionEvaluator, AlertStateEvaluator>();
-        services.AddScoped<IConditionEvaluator, LoopStaleEvaluator>();
-        services.AddScoped<IConditionEvaluator, LoopEnactionStaleEvaluator>();
-        services.AddScoped<IConditionEvaluator, PumpSuspendedEvaluator>();
-        services.AddScoped<IConditionEvaluator, PumpBatteryEvaluator>();
-        services.AddScoped<IConditionEvaluator, TempBasalEvaluator>();
-        services.AddScoped<IConditionEvaluator, UploaderBatteryEvaluator>();
-        services.AddScoped<IConditionEvaluator, OverrideActiveEvaluator>();
-        services.AddScoped<IConditionEvaluator, SensitivityRatioEvaluator>();
-        services.AddScoped<IConditionEvaluator, DoNotDisturbEvaluator>();
-        services.AddScoped<IConditionEvaluator, GlucoseBucketEvaluator>();
-        services.AddScoped<IConditionEvaluator, TimeSinceLastCarbEvaluator>();
-        services.AddScoped<IConditionEvaluator, TimeSinceLastBolusEvaluator>();
-        services.AddScoped<IConditionEvaluator, DayOfWeekEvaluator>();
-        services.AddScoped<IConditionEvaluator, PumpStateEvaluator>();
-        services.AddScoped<IConditionEvaluator, StateSpanActiveEvaluator>();
-        services.AddScoped<IConditionEvaluator, SleepSessionActiveEvaluator>();
-        services.AddScoped<IConditionEvaluator, TrackerAgeEvaluator>();
         return services;
     }
 

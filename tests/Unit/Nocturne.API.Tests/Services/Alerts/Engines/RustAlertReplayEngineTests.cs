@@ -1,8 +1,7 @@
 using System.Diagnostics.Metrics;
 using FluentAssertions;
 using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Logging.Abstractions;
-using Nocturne.Alerts.ParityCorpus.Generator.Harness;
+using Nocturne.Alerts.Corpus;
 using Nocturne.API.Services.Alerts.Engines;
 using Nocturne.Core.Contracts.Alerts;
 using Nocturne.Core.Models;
@@ -12,7 +11,7 @@ using Xunit;
 namespace Nocturne.API.Tests.Services.Alerts.Engines;
 
 /// <summary>
-/// Rule bodies the replay corpus cannot express: each engine must skip them the same way.
+/// Rule bodies the replay corpus cannot express: the replay skips them.
 /// </summary>
 public class RustAlertReplayEngineTests
 {
@@ -47,15 +46,11 @@ public class RustAlertReplayEngineTests
 
     [NativeTheory]
     [MemberData(nameof(UnreadableBodies))]
-    public async Task A_body_that_does_not_parse_is_skipped_by_both_engines(string conditionParams)
+    public async Task A_body_that_does_not_parse_is_skipped(string conditionParams)
     {
-        var managed = await ReplayAsync(new ManagedAlertReplayEngine(NullLogger<ManagedAlertReplayEngine>.Instance), conditionParams);
-        var rust = await ReplayAsync(Rust(), conditionParams);
+        var run = await ReplayAsync(Rust(), conditionParams);
 
-        foreach (var run in new[] { managed, rust })
-        {
-            run.Events.Should().BeEmpty();
-            run.Ticks![0].Rules.Should().ContainSingle().Which.Skipped.Should().BeTrue();
-        }
+        run.Events.Should().BeEmpty();
+        run.Ticks![0].Rules.Should().ContainSingle().Which.Skipped.Should().BeTrue();
     }
 }

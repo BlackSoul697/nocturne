@@ -1,6 +1,6 @@
 using System.Text.Json.Nodes;
 using FluentAssertions;
-using Nocturne.Alerts.ParityCorpus.Generator.Harness;
+using Nocturne.Alerts.Corpus;
 using Nocturne.API.Services.Alerts;
 using Nocturne.API.Tests.TestDoubles;
 using Nocturne.Core.Alerts.Native;

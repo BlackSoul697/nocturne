@@ -142,11 +142,10 @@ mod tests {
         assert!(find_tz("AUS Eastern Standard Time").is_none());
     }
 
-    /// The other half of the documented divergence: `TZ_VARIANTS` carries tzdb backward
-    /// links that C#'s ICU-canonical scan rejects, so these resolve here and fail closed
-    /// under the managed engine. Pinned so a change to the set is a deliberate one.
+    /// `TZ_VARIANTS` carries tzdb backward links (engine-semantics.md §4), so these
+    /// resolve. Pinned so a change to the set is a deliberate one.
     #[test]
-    fn resolves_backward_links_that_the_managed_engine_rejects() {
+    fn resolves_backward_links() {
         assert_eq!(
             find_tz("Etc/Greenwich").map(Tz::name),
             Some("Etc/Greenwich")

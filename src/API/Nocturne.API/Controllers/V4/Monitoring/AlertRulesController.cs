@@ -8,7 +8,7 @@ using Nocturne.API.Attributes;
 using Nocturne.API.Extensions;
 using Nocturne.API.Services.Alerts;
 using Nocturne.API.Services.Alerts.Engines;
-using Nocturne.API.Services.Alerts.Evaluators;
+using Nocturne.API.Services.Alerts.Conditions;
 using Nocturne.Core.Alerts.Native;
 using Nocturne.Core.Contracts.Alerts;
 using Nocturne.Core.Contracts.Auth;

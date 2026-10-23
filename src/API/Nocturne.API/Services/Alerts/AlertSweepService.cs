@@ -1,7 +1,7 @@
 using System.Text.Json;
 using Microsoft.Extensions.DependencyInjection;
 using Nocturne.API.Services.Alerts.Engines;
-using Nocturne.API.Services.Alerts.Evaluators;
+using Nocturne.API.Services.Alerts.Conditions;
 using Nocturne.API.Multitenancy;
 using Nocturne.Core.Contracts.Alerts;
 using Nocturne.Core.Contracts.Glucose;
@@ -396,7 +396,7 @@ public class AlertSweepService : BackgroundService
         foreach (var (instance, conditions) in withConditions)
         {
             var composite = new CompositeCondition("and", conditions!.ToList());
-            var json = JsonSerializer.Serialize(composite, EvaluatorJson.Options);
+            var json = JsonSerializer.Serialize(composite, ConditionJson.Options);
             syntheticRules.Add(new AlertRuleSnapshot(
                 instance.AlertRuleId,
                 tenantContext.TenantId,

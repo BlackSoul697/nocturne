@@ -1,5 +1,5 @@
 using System.Text.Json;
-using Nocturne.API.Services.Alerts.Evaluators;
+using Nocturne.API.Services.Alerts.Conditions;
 using Nocturne.Core.Models;
 using Nocturne.Core.Models.Alerts;
 
@@ -83,7 +83,7 @@ internal static class SmartSnoozeTrendGate
         string? direction;
         try
         {
-            direction = JsonSerializer.Deserialize<ThresholdCondition>(conditionParams, EvaluatorJson.Options)
+            direction = JsonSerializer.Deserialize<ThresholdCondition>(conditionParams, ConditionJson.Options)
                 ?.Direction?.ToLowerInvariant();
         }
         catch (JsonException)

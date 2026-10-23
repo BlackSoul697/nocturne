@@ -61,7 +61,7 @@ out as data, and the host persists it.
 
 The `rule`, `context` and `result` shapes are exactly the golden-corpus
 interchange shapes (`ScenarioRule`, `ScenarioContext`, `ExpectedRuleResult` in
-`tests/Parity/Nocturne.Alerts.ParityCorpus.Generator/Harness/ScenarioModels.cs`)
+`tests/Parity/Nocturne.Alerts.Corpus/ScenarioModels.cs`)
 — the corpus in `tests/Parity/AlertEngineCorpus/` is the machine-checkable
 spec for all of them. Timestamps are RFC 3339 UTC; the engine emits
 whole-second instants without a fraction (`2026-01-05T12:00:00Z`) and
@@ -751,7 +751,7 @@ and `day_of_week` apply are the IANA release compiled into the library
 (`chrono-tz`), not the host's; `nocturne_alerts_tzdb_version` reports it, so a
 host can log it at load and notice when it falls behind a zone change. Keeping
 it current means updating the `chrono-tz` dependency and rebuilding. Behavioural changes to evaluation
-itself are governed by the golden corpus: both the Rust core (`tests/parity.rs`),
-this crate's FFI round-trip test, and the .NET three-way suite
+itself are governed by the golden corpus: the Rust core (`tests/parity.rs`),
+this crate's FFI round-trip test, and the .NET FFI parity suite
 (`tests/Unit/Nocturne.Alerts.Native.Tests`) pin every scenario against the
 committed `.expected.json` snapshots.

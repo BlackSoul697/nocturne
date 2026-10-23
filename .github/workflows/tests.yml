@@ -166,7 +166,7 @@ jobs:
           dotnet sln "$sln" add --solution-folder Unit tests/Unit/*/*.csproj
           dotnet sln "$sln" add --solution-folder Integration tests/Integration/*/*.csproj
           dotnet sln "$sln" add --solution-folder Parity \
-            tests/Parity/Nocturne.Alerts.ParityCorpus.Generator/Nocturne.Alerts.ParityCorpus.Generator.csproj
+            tests/Parity/Nocturne.Alerts.Corpus/Nocturne.Alerts.Corpus.csproj
           dotnet build "$sln" -p:GenerateNSwagClient=true
           missing=0
           for project in tests/Unit/*/*.csproj tests/Integration/*/*.csproj tests/Parity/*/*.csproj; do
@@ -257,27 +257,11 @@ jobs:
           name: unit-trx
           path: "**/*.trx"
 
-  # The alert-engine golden corpus (tests/Parity/AlertEngineCorpus) is the normative spec of
-  # the Rust engine. The C# evaluators no longer serve alerts; they remain only as the oracle
-  # that generates the corpus, until the corpus is frozen (#1581). This job fails if the
-  # committed corpus no longer matches what that oracle produces.
-  alert-corpus-check:
-    needs: [changes, build]
-    if: needs.changes.outputs.dotnet == 'true'
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-    steps:
-      - uses: actions/checkout@v5
-      - uses: ./.github/actions/setup-dotnet
-      - uses: ./.github/actions/dotnet-build-output
-      - name: Verify alert engine corpus is current
-        run: |
-          dotnet run --no-build \
-            --project tests/Parity/Nocturne.Alerts.ParityCorpus.Generator -- --check
-
-  # Rust alert engine: tests, lints and formats the crates workspace. The three-way parity suite
-  # (Nocturne.Alerts.Native.Tests: C# oracle vs committed corpus vs Rust over the C ABI) runs in
-  # the unit job, on the cdylib the build job packed.
+  # Rust alert engine: tests, lints and formats the crates workspace, including the golden corpus
+  # (tests/Parity/AlertEngineCorpus), the engine's normative spec. The corpus is frozen: a missing
+  # snapshot fails here, and NOCTURNE_CORPUS_BLESS=1 writes a new scenario's snapshot locally for
+  # review. The FFI parity suite (Nocturne.Alerts.Native.Tests: committed corpus vs Rust over the
+  # C ABI) runs in the unit job, on the cdylib the build job packed.
   alerts-ffi-parity:
     needs: changes
     if: needs.changes.outputs.crates == 'true'
@@ -794,7 +778,6 @@ jobs:
       - changes
       - build
       - unit
-      - alert-corpus-check
       - alerts-ffi-parity
       - desktop-rust
       - web-static

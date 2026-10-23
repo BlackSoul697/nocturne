@@ -1,6 +1,6 @@
 using System.Text.Json;
 using System.Text.Json.Nodes;
-using Nocturne.API.Services.Alerts.Evaluators;
+using Nocturne.API.Services.Alerts.Conditions;
 using Nocturne.Core.Models;
 
 namespace Nocturne.API.Services.Alerts;
@@ -156,7 +156,7 @@ internal sealed record SmartSnoozeConfig(
                 try
                 {
                     conditions = JsonSerializer.Deserialize<List<ConditionNode>>(
-                        conditionsEl.GetRawText(), EvaluatorJson.Options);
+                        conditionsEl.GetRawText(), ConditionJson.Options);
                 }
                 catch (JsonException)
                 {

@@ -1,8 +1,9 @@
 using FluentAssertions;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Time.Testing;
+using Nocturne.Alerts.Corpus;
 using Nocturne.API.Services.Alerts;
+using Nocturne.API.Tests.Services.Alerts.Engines;
 using Nocturne.Core.Contracts.Alerts;
 using Nocturne.Core.Models;
 using Nocturne.Core.Models.Alerts;
@@ -140,7 +141,7 @@ public class StaleRuleDecisionPostgresTests(StaleRuleDecisionPostgresTests.Datab
     };
 
     private static ExcursionTracker Tracker(AlertTrackerRepository repository) =>
-        new(repository, new AlertRuleEvaluationGate(), new FakeTimeProvider(Now), NullLogger<ExcursionTracker>.Instance);
+        EngineTestHarness.BuildRustTracker(new FakeTimeProvider(Now), repository);
 
     private async Task<(string State, Guid? ActiveExcursionId, bool AwaitingRearm, int OpenExcursions)> StoredAsync(Guid tenant)
     {
@@ -150,7 +151,7 @@ public class StaleRuleDecisionPostgresTests(StaleRuleDecisionPostgresTests.Datab
         return (state?.State ?? "none", state?.ActiveExcursionId, state?.AwaitingRearm ?? false, open);
     }
 
-    [Fact]
+    [NativeFact]
     public async Task A_pre_edit_auto_resolve_close_sets_no_hold()
     {
         var (tenant, rule, excursionId) = await SeedAsync(active: true);
@@ -165,7 +166,7 @@ public class StaleRuleDecisionPostgresTests(StaleRuleDecisionPostgresTests.Datab
         (await StoredAsync(tenant)).Should().Be(("active", excursionId, false, 1));
     }
 
-    [Fact]
+    [NativeFact]
     public async Task A_pre_edit_evaluation_opens_nothing()
     {
         var (tenant, rule, _) = await SeedAsync(active: false);
@@ -178,7 +179,7 @@ public class StaleRuleDecisionPostgresTests(StaleRuleDecisionPostgresTests.Datab
         (await StoredAsync(tenant)).Should().Be(("none", (Guid?)null, false, 0));
     }
 
-    [Fact]
+    [NativeFact]
     public async Task An_auto_resolve_close_of_the_current_rule_sets_the_hold()
     {
         var (tenant, rule, excursionId) = await SeedAsync(active: true);
@@ -192,7 +193,7 @@ public class StaleRuleDecisionPostgresTests(StaleRuleDecisionPostgresTests.Datab
         (await StoredAsync(tenant)).Should().Be(("idle", (Guid?)null, true, 0));
     }
 
-    [Fact]
+    [NativeFact]
     public async Task A_close_no_evaluation_decided_is_written_after_an_edit()
     {
         var (tenant, rule, excursionId) = await SeedAsync(active: true);

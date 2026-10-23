@@ -156,7 +156,7 @@ internal sealed class RustBackedAlertEngine(
         SensorContext context,
         CancellationToken ct)
     {
-        var wire = Evaluators.AlertConditionTypeNames.ToWireString(rule.ConditionType);
+        var wire = Conditions.AlertConditionTypeNames.ToWireString(rule.ConditionType);
         var node = RustEnvelopeMapper.ParseNode(
             RustEnvelopeMapper.WrapPayload(wire, rule.ConditionParams));
         return EvaluateNodeAsync(rule.Id, node, wire, context, ct);

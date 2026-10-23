@@ -24,19 +24,6 @@ public class ExcursionTracker : IExcursionTracker
     private readonly TimeProvider _timeProvider;
     private readonly ILogger<ExcursionTracker> _logger;
 
-    /// <summary>
-    /// A tracker deciding with the managed state machine, which production never uses: it is the
-    /// parity corpus generator's oracle until the C# evaluators are deleted (#1581).
-    /// </summary>
-    internal ExcursionTracker(
-        IAlertTrackerRepository repository,
-        AlertRuleEvaluationGate gate,
-        TimeProvider timeProvider,
-        ILogger<ExcursionTracker> logger)
-        : this(repository, gate, timeProvider, logger, ManagedExcursionDecider.Instance)
-    {
-    }
-
     internal ExcursionTracker(
         IAlertTrackerRepository repository,
         AlertRuleEvaluationGate gate,

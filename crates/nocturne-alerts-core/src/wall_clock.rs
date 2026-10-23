@@ -59,43 +59,10 @@ pub fn references_wall_clock(rule: &RuleConditions<'_>) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::enums::WireEnum;
     use serde_json::{Value, json};
 
     fn body_references_wall_clock(condition_type: &str, condition_params: &Value) -> bool {
         references_wall_clock(&RuleConditions::body(condition_type, condition_params))
-    }
-
-    fn manifest_names(key: &str) -> Vec<String> {
-        let path = concat!(
-            env!("CARGO_MANIFEST_DIR"),
-            "/../../tests/Parity/AlertEngineEnums.json"
-        );
-        let text = std::fs::read_to_string(path).expect("read enum manifest");
-        let manifest: Value = serde_json::from_str(&text).expect("parse enum manifest");
-        manifest[key]
-            .as_array()
-            .unwrap_or_else(|| panic!("{key} missing from manifest"))
-            .iter()
-            .map(|v| v.as_str().expect("kind is a string").to_string())
-            .collect()
-    }
-
-    #[test]
-    fn wall_clock_kinds_match_the_manifest() {
-        let ours: Vec<String> = manifest_names("AlertConditionType")
-            .into_iter()
-            .filter(|wire| {
-                ConditionKind::from_name(wire)
-                    .map(is_wall_clock)
-                    .expect("manifest kind resolves")
-            })
-            .collect();
-        assert_eq!(
-            ours,
-            manifest_names("WallClockConditionTypes"),
-            "wall-clock kinds drifted from C#"
-        );
     }
 
     #[test]

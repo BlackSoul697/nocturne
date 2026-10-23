@@ -3,7 +3,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.Extensions.DependencyInjection;
 using Moq;
-using Nocturne.Alerts.ParityCorpus.Generator.Harness;
+using Nocturne.Alerts.Corpus;
 using Nocturne.API.Multitenancy;
 using Microsoft.Extensions.Logging;
 using Nocturne.API.Services.Alerts;
@@ -25,7 +25,7 @@ namespace Nocturne.API.Tests.Services.Alerts;
 
 /// <summary>
 /// Rules driven only by <see cref="AlertSweepService"/> ticks, through the real orchestrator and
-/// each evaluation engine over in-memory tracker state.
+/// evaluation engine over in-memory tracker state.
 /// </summary>
 [Trait("Category", "Unit")]
 public class AlertSweepServiceWallClockTests
@@ -36,18 +36,10 @@ public class AlertSweepServiceWallClockTests
 
     private const string SignalLoss15 = """{"timeout_minutes": 15}""";
 
-    [Fact]
-    public Task Managed_engine_opens_dispatches_once_and_closes_on_resume() =>
-        RunOutageAsync(useRustEngine: false);
-
-    [NativeFact]
-    public Task Rust_backed_engine_opens_dispatches_once_and_closes_on_resume() =>
-        RunOutageAsync(useRustEngine: true);
-
     [NativeFact]
     public async Task Tenant_with_no_reading_history_does_not_fire()
     {
-        var fixture = new Fixture(useRustEngine: true, AlertConditionType.SignalLoss, SignalLoss15)
+        var fixture = new Fixture(AlertConditionType.SignalLoss, SignalLoss15)
         {
             LastReadingAt = null,
         };
@@ -57,14 +49,6 @@ public class AlertSweepServiceWallClockTests
         fixture.Dispatches.Should().Be(0);
         fixture.InstancesCreated.Should().Be(0);
     }
-
-    [Fact]
-    public Task Managed_engine_fires_signal_loss_nested_in_a_night_window() =>
-        RunNightOutageAsync(useRustEngine: false);
-
-    [NativeFact]
-    public Task Rust_backed_engine_fires_signal_loss_nested_in_a_night_window() =>
-        RunNightOutageAsync(useRustEngine: true);
 
     [NativeFact]
     public async Task Reading_driven_leaves_keep_the_verdict_of_the_last_reading()
@@ -77,7 +61,7 @@ public class AlertSweepServiceWallClockTests
               {"type": "signal_loss", "signal_loss": {"timeout_minutes": 15}}
             ]}
             """;
-        var fixture = new Fixture(useRustEngine: true, AlertConditionType.Composite, lowOrLoss)
+        var fixture = new Fixture(AlertConditionType.Composite, lowOrLoss)
         {
             LastReadingAt = T0,
             LatestMgdl = 60,
@@ -101,7 +85,7 @@ public class AlertSweepServiceWallClockTests
               {"type": "time_of_day", "time_of_day": {"from": "22:00", "to": "06:00", "timezone": null}}
             ]}
             """;
-        var fixture = new Fixture(useRustEngine: true, AlertConditionType.Composite, nightLow)
+        var fixture = new Fixture(AlertConditionType.Composite, nightLow)
         {
             LastReadingAt = T0,
             LatestMgdl = 60,
@@ -113,25 +97,10 @@ public class AlertSweepServiceWallClockTests
         (await fixture.TrackerRepo.GetTrackerStateAsync(RuleId)).Should().BeNull();
     }
 
-    [Fact]
-    public Task Managed_engine_escalates_a_child_of_a_reading_driven_parent() =>
-        RunEscalationAsync(useRustEngine: false);
-
     [NativeFact]
-    public Task Rust_backed_engine_escalates_a_child_of_a_reading_driven_parent() =>
-        RunEscalationAsync(useRustEngine: true);
-
-    [Fact]
-    public Task Managed_engine_measures_signal_loss_from_the_last_usable_reading() =>
-        RunErrorReadingOutageAsync(useRustEngine: false);
-
-    [NativeFact]
-    public Task Rust_backed_engine_measures_signal_loss_from_the_last_usable_reading() =>
-        RunErrorReadingOutageAsync(useRustEngine: true);
-
-    private static async Task RunErrorReadingOutageAsync(bool useRustEngine)
+    public async Task Measures_signal_loss_from_the_last_usable_reading()
     {
-        var fixture = new Fixture(useRustEngine, AlertConditionType.SignalLoss, SignalLoss15);
+        var fixture = new Fixture(AlertConditionType.SignalLoss, SignalLoss15);
         fixture.Readings.Add(new SensorGlucose { Timestamp = T0, Mgdl = 110 });
         for (var minutes = 5; minutes <= 20; minutes += 5)
             fixture.Readings.Add(new SensorGlucose { Timestamp = T0.AddMinutes(minutes), Mgdl = 0 });
@@ -147,7 +116,7 @@ public class AlertSweepServiceWallClockTests
     [NativeFact]
     public async Task The_lookback_for_a_usable_reading_runs_once_per_newest_reading()
     {
-        var fixture = new Fixture(useRustEngine: true, AlertConditionType.SignalLoss, SignalLoss15);
+        var fixture = new Fixture(AlertConditionType.SignalLoss, SignalLoss15);
         fixture.Readings.Add(new SensorGlucose { Timestamp = T0, Mgdl = 110 });
         fixture.Readings.Add(new SensorGlucose { Timestamp = T0.AddMinutes(5), Mgdl = 0 });
         fixture.LastReadingAt = T0.AddMinutes(5);
@@ -168,7 +137,7 @@ public class AlertSweepServiceWallClockTests
     [NativeFact]
     public async Task An_outage_with_no_usable_reading_in_the_lookback_still_fires()
     {
-        var fixture = new Fixture(useRustEngine: true, AlertConditionType.SignalLoss, SignalLoss15);
+        var fixture = new Fixture(AlertConditionType.SignalLoss, SignalLoss15);
         for (var minutes = 0; minutes <= 60; minutes += 5)
             fixture.Readings.Add(new SensorGlucose { Timestamp = T0.AddMinutes(minutes), Mgdl = 0 });
         fixture.LastReadingAt = T0.AddMinutes(60);
@@ -185,7 +154,7 @@ public class AlertSweepServiceWallClockTests
     [NativeFact]
     public async Task A_wall_clock_auto_resolve_tree_puts_the_rule_on_the_sweep_once_enabled()
     {
-        var fixture = new Fixture(useRustEngine: true, AlertConditionType.Threshold, """{"direction": "below", "value": 70}""")
+        var fixture = new Fixture(AlertConditionType.Threshold, """{"direction": "below", "value": 70}""")
         {
             LastReadingAt = T0,
             LatestMgdl = 50,
@@ -214,7 +183,7 @@ public class AlertSweepServiceWallClockTests
               {"type": "composite"}
             ]}
             """;
-        var fixture = new Fixture(useRustEngine: true, AlertConditionType.Composite, lossAndBroken)
+        var fixture = new Fixture(AlertConditionType.Composite, lossAndBroken)
         {
             LastReadingAt = T0,
         };
@@ -237,7 +206,7 @@ public class AlertSweepServiceWallClockTests
             ConditionType = AlertConditionType.Composite,
             ConditionParams = null!,
         };
-        var fixture = new Fixture(useRustEngine: true, AlertConditionType.SignalLoss, SignalLoss15, unwalkable)
+        var fixture = new Fixture(AlertConditionType.SignalLoss, SignalLoss15, unwalkable)
         {
             LastReadingAt = T0,
         };
@@ -249,7 +218,8 @@ public class AlertSweepServiceWallClockTests
         fixture.Logger.Warnings.Should().ContainSingle(w => w.Contains(unwalkable.Id.ToString()));
     }
 
-    private static async Task RunEscalationAsync(bool useRustEngine)
+    [NativeFact]
+    public async Task Escalates_a_child_of_a_reading_driven_parent()
     {
         // The parent is not wall-clock, so the sweep evaluates only the child; the child's
         // reference must still resolve against every enabled rule of the tenant.
@@ -263,7 +233,7 @@ public class AlertSweepServiceWallClockTests
             ConfirmationReadings = 1,
         };
         var fixture = new Fixture(
-            useRustEngine, AlertConditionType.AlertState,
+            AlertConditionType.AlertState,
             $$"""{"alert_id": "{{parentId}}", "state": "unacknowledged", "for_minutes": 15}""",
             parent)
         {
@@ -282,9 +252,10 @@ public class AlertSweepServiceWallClockTests
             "the reading-driven parent is not the sweep's to evaluate");
     }
 
-    private static async Task RunOutageAsync(bool useRustEngine)
+    [NativeFact]
+    public async Task Signal_loss_opens_dispatches_once_and_closes_on_resume()
     {
-        var fixture = new Fixture(useRustEngine, AlertConditionType.SignalLoss, SignalLoss15)
+        var fixture = new Fixture(AlertConditionType.SignalLoss, SignalLoss15)
         {
             LastReadingAt = T0,
         };
@@ -314,7 +285,8 @@ public class AlertSweepServiceWallClockTests
         fixture.Dispatches.Should().Be(1);
     }
 
-    private static async Task RunNightOutageAsync(bool useRustEngine)
+    [NativeFact]
+    public async Task Fires_signal_loss_nested_in_a_night_window()
     {
         const string nightLoss = """
             {"operator": "and", "conditions": [
@@ -322,7 +294,7 @@ public class AlertSweepServiceWallClockTests
               {"type": "time_of_day", "time_of_day": {"from": "22:00", "to": "06:00", "timezone": null}}
             ]}
             """;
-        var fixture = new Fixture(useRustEngine, AlertConditionType.Composite, nightLoss)
+        var fixture = new Fixture(AlertConditionType.Composite, nightLoss)
         {
             LastReadingAt = T0.AddHours(9),
             LatestMgdl = 110,
@@ -371,7 +343,7 @@ public class AlertSweepServiceWallClockTests
         }
 
         public Fixture(
-            bool useRustEngine, AlertConditionType conditionType, string conditionParams,
+            AlertConditionType conditionType, string conditionParams,
             params AlertRule[] otherRules)
         {
             var rule = new AlertRule
@@ -402,18 +374,7 @@ public class AlertSweepServiceWallClockTests
             services.AddLogging();
             services.AddSingleton<TimeProvider>(Time);
 
-            IAlertEvaluationEngine engine;
-            if (useRustEngine)
-            {
-                engine = EngineTestHarness.BuildRustEngine(Time, timerStore, TrackerRepo);
-            }
-            else
-            {
-                var (managed, provider) = EngineTestHarness.BuildManagedEngine(Time, timerStore, TrackerRepo);
-                engine = managed;
-                services.AddSingleton(provider);
-            }
-            services.AddSingleton(engine);
+            services.AddSingleton<IAlertEvaluationEngine>(EngineTestHarness.BuildRustEngine(Time, timerStore, TrackerRepo));
 
             var repository = new Mock<IAlertRepository>();
             repository

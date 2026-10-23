@@ -620,10 +620,9 @@ fn evaluate_rejects_unknown_condition_type() {
 
 #[test]
 fn evaluate_rejects_structurally_malformed_condition_params() {
-    // JsonException parity: the managed engine throws on a wrong-shape payload
-    // and the orchestrator's per-rule catch leaves timers/tracker untouched, so
-    // the envelope must reject it rather than fail-closed-evaluate (which would
-    // advance the tracker and silently close an active excursion).
+    // A wrong-shape payload must be rejected, so the host's per-rule catch
+    // leaves timers and tracker untouched, rather than fail-closed-evaluated
+    // (which would advance the tracker and silently close an active excursion).
     let request = json!({
         "schema_version": 1,
         "rule": {
@@ -812,8 +811,7 @@ fn leaf_paths_rejects_non_object() {
 
 #[test]
 fn leaf_paths_rejects_malformed_node() {
-    // `type` must be a string (or null/absent) — a number is a JsonException
-    // in the C# engine.
+    // `type` must be a string (or null/absent).
     assert_error(
         &call_json(nocturne_alerts_leaf_paths, r#"{ "type": 5 }"#),
         "malformed condition node",
