@@ -48,6 +48,12 @@
     satisfiesScope(granted, "members.manage") ||
       satisfiesScope(granted, "sharing.manage"),
   );
+  const canListRoles = $derived(
+    canInvite ||
+      satisfiesScope(granted, "members.manage") ||
+      satisfiesScope(granted, "roles.manage"),
+  );
+  const canReviewRequests = $derived(satisfiesScope(granted, "members.manage"));
   const canEditMemberRoles = $derived(
     satisfiesScope(granted, "members.manage"),
   );
@@ -66,11 +72,12 @@
   const canListMembers = $derived(canInvite || canManageMembers);
   const membersQuery = $derived(canListMembers ? getMembers() : null);
   const invitesQuery = $derived(canInvite ? listInvites() : null);
-  const rolesQuery = getRoles();
-  const pendingRequestsQuery = $derived(canManageMembers ? getPendingRequests() : null);
+  const rolesQuery = $derived(canListRoles ? getRoles() : null);
+  const pendingRequestsQuery = $derived(canReviewRequests ? getPendingRequests() : null);
   const shareQuery = $derived(canManageSharing ? getShareLink() : null);
   retainQuery(() => membersQuery);
   retainQuery(() => invitesQuery);
+  retainQuery(() => rolesQuery);
   retainQuery(() => pendingRequestsQuery);
   retainQuery(() => shareQuery);
 
@@ -78,7 +85,7 @@
   const allMembers = $derived(membersQuery?.current ?? []);
   const invites = $derived(invitesQuery?.current ?? []);
   const activeInvites = $derived(invites.filter((i) => i.isValid));
-  const allRoles = $derived(rolesQuery.current ?? []);
+  const allRoles = $derived(rolesQuery?.current ?? []);
   const pendingRequests = $derived(pendingRequestsQuery?.current ?? []);
   const share = $derived(shareQuery?.current ?? null);
 
