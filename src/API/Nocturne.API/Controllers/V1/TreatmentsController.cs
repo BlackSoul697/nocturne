@@ -525,7 +525,7 @@ public class TreatmentsController : ControllerBase
                 return;
 
             results.AddRange(TreatmentEcho.InSubmittedOrder(
-                await _treatmentService.CreateTreatmentsAsync(withIdentity, cancellationToken)));
+                await _treatmentService.CreateV1TreatmentsAsync(withIdentity, cancellationToken)));
             withIdentity.Clear();
         }
 
@@ -547,7 +547,7 @@ public class TreatmentsController : ControllerBase
             }
 
             results.AddRange(TreatmentEcho.InSubmittedOrder(
-                await _treatmentService.CreateTreatmentsAsync([treatment], cancellationToken)));
+                await _treatmentService.CreateV1TreatmentsAsync([treatment], cancellationToken)));
         }
 
         await FlushAsync();

@@ -30,6 +30,14 @@ public interface ITreatmentService
         CancellationToken cancellationToken = default
     );
 
+    /// <inheritdoc cref="ITreatmentStore.GetLatestOfTypeAsync"/>
+    Task<Treatment?> GetLatestTreatmentOfTypeAsync(
+        string eventType,
+        long fromMills,
+        long toMills,
+        CancellationToken cancellationToken = default
+    );
+
     /// <returns>Treatment if found, null otherwise</returns>
     Task<Treatment?> GetTreatmentByIdAsync(
         string id,
@@ -64,8 +72,7 @@ public interface ITreatmentService
     /// <summary>
     /// The id of the stored treatment at <paramref name="treatment"/>'s time with its event type, or
     /// <see langword="null"/> when none is stored: Nightscout's upsert key for a document with neither
-    /// <c>identifier</c> nor <c>_id</c>. A stored treatment served under the event type
-    /// <paramref name="treatment"/> itself will be served as also matches, when none matches the sent type.
+    /// <c>identifier</c> nor <c>_id</c>.
     /// </summary>
     Task<string?> FindSameEventIdAsync(Treatment treatment, CancellationToken cancellationToken = default);
 
@@ -93,6 +100,19 @@ public interface ITreatmentService
     /// A treatment could not be stored. The ones before it are stored and announced.
     /// </exception>
     Task<BulkWrite<Treatment>> CreateTreatmentsAsync(
+        IEnumerable<Treatment> treatments,
+        CancellationToken cancellationToken = default
+    );
+
+    /// <summary>
+    /// <see cref="CreateTreatmentsAsync"/> for treatments posted to the v1 API, where a meal with a
+    /// <c>preBolus</c> is stored as a bolus and its carbs at the preBolus offset, as Nightscout's
+    /// POST stores it. Both halves are returned, the bolus first.
+    /// </summary>
+    /// <exception cref="TreatmentBatchFailedException">
+    /// A treatment could not be stored. The ones before it are stored and announced.
+    /// </exception>
+    Task<BulkWrite<Treatment>> CreateV1TreatmentsAsync(
         IEnumerable<Treatment> treatments,
         CancellationToken cancellationToken = default
     );

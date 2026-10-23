@@ -27,13 +27,6 @@ public interface ITreatmentDecomposer
     Task<DecompositionResult> DecomposeAsync(Treatment treatment, WriteOrigin origin, CancellationToken ct = default);
 
     /// <summary>
-    /// The eventType <paramref name="treatment"/> is served as once decomposed when its uploaded eventType
-    /// is not kept and it becomes a bolus, a carb intake or both: <c>Meal Bolus</c>, <c>Correction Bolus</c>
-    /// or <c>Carb Correction</c>. Null for any other treatment, which is served as it was sent.
-    /// </summary>
-    string? ServedBolusCarbEventType(Treatment treatment);
-
-    /// <summary>
     /// Decomposes a batch of legacy Treatments into v4 records using bulk-insert operations,
     /// eliminating per-record DB round-trips. State span treatments (TempBasal, ProfileSwitch,
     /// Override, TemporaryTarget) are upserted individually since they require idempotent semantics.
@@ -52,6 +45,12 @@ public interface ITreatmentDecomposer
     /// <param name="legacyId">The legacy Treatment ID</param>
     /// <returns>Total number of v4 records deleted across all tables</returns>
     Task<int> DeleteByLegacyIdAsync(string legacyId, WriteOrigin origin, CancellationToken ct = default);
+
+    /// <summary>
+    /// The subset of <paramref name="legacyIds"/> held only by records the user deleted, which a
+    /// re-upload under that id does not bring back.
+    /// </summary>
+    Task<IReadOnlySet<string>> GetDeletedByUserAsync(IReadOnlyCollection<string> legacyIds, CancellationToken ct = default);
 
     /// <summary>
     /// Soft-deletes <paramref name="source"/>'s records decomposed from <paramref name="legacyIds"/>,
