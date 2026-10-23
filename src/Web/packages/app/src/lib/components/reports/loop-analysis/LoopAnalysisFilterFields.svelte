@@ -15,7 +15,6 @@
   import { Input } from "$lib/components/ui/input";
   import { Label } from "$lib/components/ui/label";
   import { Separator } from "$lib/components/ui/separator";
-  import { formatLocale } from "$lib/utils/formatting";
   import {
     customComparisonProblem,
     MASK_KEYS,
@@ -23,6 +22,7 @@
     toWeekdays,
     type LoopAnalysisFilterState,
     type MaskKey,
+    weekdayLabel,
   } from "./loop-analysis-filter";
   import { maskLabels, missingScopeReason } from "./filter-labels.svelte";
 
@@ -62,11 +62,7 @@
       DayOfWeek.Friday,
       DayOfWeek.Saturday,
       DayOfWeek.Sunday,
-    ].map((day) => ({
-      day,
-      // 4 January 2026 is a Sunday, so day d falls on the 4th + d.
-      label: new Date(2026, 0, 4 + day).toLocaleDateString(formatLocale(), { weekday: "short" }),
-    }))
+    ].map((day) => ({ day, label: weekdayLabel(day) }))
   );
 
   const masks = $derived(maskLabels());
@@ -107,7 +103,7 @@
       </Select.Content>
     </Select.Root>
     {#if clamped}
-      <p class="text-xs text-muted-foreground">You can see only the last 24 hours, so you cannot compare.</p>
+      <p class="text-xs text-muted-foreground">You cannot compare, because you can see only the most recent history.</p>
     {/if}
     {#if compare === LoopAnalysisComparison.Custom}
       <div class="grid grid-cols-2 gap-2">
@@ -188,9 +184,9 @@
     </ToggleGroup.Root>
     <p class="text-xs text-muted-foreground">
       {#if value.weekdays.length === 0}
-        All days are included. Select days to include only those days.
+        The report uses all days. Select days to use only those days.
       {:else}
-        Only the days you selected are included.
+        The report uses only the days that you selected.
       {/if}
     </p>
   </div>

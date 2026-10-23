@@ -30,8 +30,24 @@ export function ignoredFilterLabel(name: string): string {
   if (name === "profileName") return "Profile";
   const cohort = /^anchor(\d)$/.exec(name);
   if (cohort) return `Cohort ${cohort[1]}`;
-  if (name === "isolatedOnly") return "Isolated events only";
-  if (name === "requireCorroboration") return "Only rises with extra loop insulin";
-  const masks: Record<string, string> = maskLabels();
-  return masks[name] ?? name;
+  const grams = /^(min|max)Grams(\d)$/.exec(name);
+  if (grams) return grams[1] === "min" ? `Cohort ${grams[2]}, at least (g)` : `Cohort ${grams[2]}, at most (g)`;
+  const labels: Record<string, string> = { ...eventOptionLabels(), ...eventWindowLabels(), ...maskLabels() };
+  return labels[name] ?? name;
+}
+
+/** The Meals and events options, by query parameter, as the builder and the notices name them. */
+export function eventOptionLabels(): Record<"isolatedOnly" | "requireCorroboration", string> {
+  return {
+    isolatedOnly: "Isolated events only",
+    requireCorroboration: "Only rises with extra loop insulin",
+  };
+}
+
+/** The Meals and events window, by query parameter, as the builder names it. */
+export function eventWindowLabels(): Record<"minutesBefore" | "minutesAfter", string> {
+  return {
+    minutesBefore: "Before the event",
+    minutesAfter: "After the event",
+  };
 }

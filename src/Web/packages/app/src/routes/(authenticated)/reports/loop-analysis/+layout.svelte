@@ -12,6 +12,7 @@
   import { startOfDay } from "$lib/utils/date-range";
   import Info from "@lucide/svelte/icons/info";
   import LoopAnalysisFilterFields from "$lib/components/reports/loop-analysis/LoopAnalysisFilterFields.svelte";
+  import AppliedFiltersSummary from "$lib/components/reports/loop-analysis/AppliedFiltersSummary.svelte";
   import { LoopAnalysisState, setLoopAnalysis } from "$lib/components/reports/loop-analysis/loop-analysis-context.svelte";
   import {
     readLoopAnalysisFilter,
@@ -78,8 +79,8 @@
 
 <div class="@container space-y-6" data-testid="loop-analysis-page">
   {#if analysis.current}
-    <div class="space-y-1 print:hidden">
-      <div class="flex items-start justify-between gap-2">
+    <div class="space-y-1">
+      <div class="flex items-start justify-between gap-2 print:hidden">
         <p class="text-muted-foreground">{intros[analysis.current]}</p>
         <TourReplayButton tour={loopAnalysisReplay(analysis.current)} />
       </div>
@@ -94,6 +95,7 @@
           Loop Analysis uses a maximum of 90 days. For a longer range, it uses only the most recent 90 days.
         </p>
       {/if}
+      <AppliedFiltersSummary applied={analysis.settled?.appliedFilters} />
     </div>
   {/if}
 

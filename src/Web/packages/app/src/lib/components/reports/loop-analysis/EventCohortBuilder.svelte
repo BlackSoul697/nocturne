@@ -8,6 +8,7 @@
     EventAnchorKind,
     type EventCohortDefinition,
     type EventResponseDefinition,
+    type EventResponseLimits,
     type EventUnavailableAnchor,
     type LoopAnalysisUnavailableFilter,
   } from "$lib/api";
@@ -22,9 +23,6 @@
     ANCHOR_KINDS,
     clockToMinute,
     ISOLATED_ONLY,
-    MAX_COHORTS,
-    MINUTES_AFTER,
-    MINUTES_BEFORE,
     minuteToClock,
     normalisedCohort,
     REQUIRE_CORROBORATION,
@@ -33,7 +31,7 @@
   } from "./event-response-filter";
   import CohortDot from "./CohortDot.svelte";
   import { anchorLabels } from "./event-labels.svelte";
-  import { missingScopeReason } from "./filter-labels.svelte";
+  import { eventOptionLabels, eventWindowLabels, missingScopeReason } from "./filter-labels.svelte";
   import { loopAnalysisMark } from "./loop-analysis-tour.svelte";
 
   interface Props {
@@ -41,13 +39,18 @@
     onchange: (next: EventResponseState) => void;
     /** The definition the last response applied, after the API's defaults and the caller's scopes. */
     applied?: EventResponseDefinition | null;
+    /** What the API lets a request ask for. */
+    limits: EventResponseLimits | undefined;
     unavailableAnchors?: EventUnavailableAnchor[] | null;
     unavailableFilters?: LoopAnalysisUnavailableFilter[] | null;
   }
 
-  let { value, onchange, applied = null, unavailableAnchors = null, unavailableFilters = null }: Props = $props();
+  let { value, onchange, applied = null, limits, unavailableAnchors = null, unavailableFilters = null }: Props = $props();
 
   const labels = $derived(anchorLabels());
+  const options = $derived(eventOptionLabels());
+  const windowLabels = $derived(eventWindowLabels());
+  const maxGrams = $derived(limits?.maxGrams ?? 0);
   const anchorScope = $derived(new Map((unavailableAnchors ?? []).map((a) => [a.anchor, a.requiredScope ?? ""])));
   const filterScope = $derived(new Map((unavailableFilters ?? []).map((f) => [f.filter ?? "", f.requiredScope ?? ""])));
   const available = $derived(ANCHOR_KINDS.filter((kind) => !anchorScope.has(kind)));
@@ -56,8 +59,8 @@
   const cohorts = $derived<EventCohortDefinition[]>(
     (value.cohorts?.length ?? 0) > 0 ? (value.cohorts ?? []) : (applied?.cohorts ?? [])
   );
-  const minutesBefore = $derived(value.minutesBefore ?? applied?.minutesBefore ?? 60);
-  const minutesAfter = $derived(value.minutesAfter ?? applied?.minutesAfter ?? 300);
+  const minutesBefore = $derived(value.minutesBefore ?? applied?.minutesBefore);
+  const minutesAfter = $derived(value.minutesAfter ?? applied?.minutesAfter);
   const hasRise = $derived(cohorts.some((c) => c.anchor === EventAnchorKind.UnannouncedRise));
 
   const update = (patch: Partial<EventResponseState>) => onchange({ ...value, cohorts, ...patch });
@@ -69,7 +72,7 @@
     const next = { ...cohorts[index], ...patch };
     sameTimesCohort = sameTimes(next) ? index : null;
     if (sameTimesCohort != null) return;
-    update({ cohorts: cohorts.map((c, i) => (i === index ? normalisedCohort(next) : c)) });
+    update({ cohorts: cohorts.map((c, i) => (i === index ? normalisedCohort(next, maxGrams) : c)) });
   }
 
   function setAnchor(index: number, value: string) {
@@ -152,6 +155,7 @@
               id="event-min-grams-{i}"
               type="number"
               min="0"
+              max={maxGrams}
               size="sm"
               class="w-24"
               value={cohort.minGrams ?? ""}
@@ -164,6 +168,7 @@
               id="event-max-grams-{i}"
               type="number"
               min="0"
+              max={maxGrams}
               size="sm"
               class="w-24"
               value={cohort.maxGrams ?? ""}
@@ -191,7 +196,7 @@
   {/if}
 
   <div class="flex flex-wrap items-end gap-x-6 gap-y-3">
-    {#if cohorts.length < MAX_COHORTS && available.length > 0}
+    {#if cohorts.length < (limits?.maxCohorts ?? 0) && available.length > 0}
       <Button variant="outline" size="sm" onclick={addCohort}>
         <Plus class="size-4" />
         Add cohort
@@ -199,30 +204,30 @@
     {/if}
 
     <div class="space-y-1.5">
-      <Label for="event-before" size="sm" variant="muted">Before the event</Label>
+      <Label for="event-before" size="sm" variant="muted">{windowLabels.minutesBefore}</Label>
       <Select.Root
         type="single"
         value={String(minutesBefore)}
         onValueChange={(value) => update({ minutesBefore: Number(value) })}
       >
-        <Select.Trigger id="event-before" class="w-28" size="sm">{minutesBefore} min</Select.Trigger>
+        <Select.Trigger id="event-before" class="w-28" size="sm">{minutesBefore ?? "–"} min</Select.Trigger>
         <Select.Content>
-          {#each MINUTES_BEFORE as minutes (minutes)}
+          {#each limits?.minutesBeforeChoices ?? [] as minutes (minutes)}
             <Select.Item value={String(minutes)} label="{minutes} min">{minutes} min</Select.Item>
           {/each}
         </Select.Content>
       </Select.Root>
     </div>
     <div class="space-y-1.5">
-      <Label for="event-after" size="sm" variant="muted">After the event</Label>
+      <Label for="event-after" size="sm" variant="muted">{windowLabels.minutesAfter}</Label>
       <Select.Root
         type="single"
         value={String(minutesAfter)}
         onValueChange={(value) => update({ minutesAfter: Number(value) })}
       >
-        <Select.Trigger id="event-after" class="w-28" size="sm">{minutesAfter / 60} h</Select.Trigger>
+        <Select.Trigger id="event-after" class="w-28" size="sm">{minutesAfter == null ? "–" : minutesAfter / 60} h</Select.Trigger>
         <Select.Content>
-          {#each MINUTES_AFTER as minutes (minutes)}
+          {#each limits?.minutesAfterChoices ?? [] as minutes (minutes)}
             <Select.Item value={String(minutes)} label="{minutes / 60} h">{minutes / 60} h</Select.Item>
           {/each}
         </Select.Content>
@@ -236,7 +241,7 @@
         disabled={filterScope.has(ISOLATED_ONLY)}
         onCheckedChange={(checked) => update({ isolatedOnly: checked === true })}
       />
-      <Label for="event-isolated" variant="option">Isolated events only</Label>
+      <Label for="event-isolated" variant="option">{options.isolatedOnly}</Label>
       {#if filterScope.has(ISOLATED_ONLY)}
         <span class="text-xs text-muted-foreground">({missingScopeReason(filterScope.get(ISOLATED_ONLY) ?? "")})</span>
       {/if}
@@ -249,7 +254,7 @@
           disabled={filterScope.has(REQUIRE_CORROBORATION)}
           onCheckedChange={(checked) => update({ requireCorroboration: checked === true })}
         />
-        <Label for="event-cluster" variant="option">Only rises where the loop gave extra insulin by itself</Label>
+        <Label for="event-cluster" variant="option">{options.requireCorroboration}</Label>
         {#if filterScope.has(REQUIRE_CORROBORATION)}
           <span class="text-xs text-muted-foreground">({missingScopeReason(filterScope.get(REQUIRE_CORROBORATION) ?? "")})</span>
         {/if}

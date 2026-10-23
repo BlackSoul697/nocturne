@@ -23,6 +23,14 @@ const aggregate = (p50: number, n: number, sparse = false): LoopAnalysisAggregat
 });
 
 /** Minutes from the event to each of the 72 slots of a -60 to +300 window. */
+/** The limits the API serves, as a fixture states them. */
+export const EVENT_LIMITS = {
+  maxCohorts: 3,
+  maxGrams: 1000,
+  minutesBeforeChoices: [0, 30, 60, 90, 120],
+  minutesAfterChoices: [120, 180, 240, 300, 360, 420, 480],
+};
+
 export const SLOT_MINUTES = Array.from({ length: 72 }, (_, slot) => slot * 5 - 60);
 
 /** A cohort's 72 slots, glucose rising 1 mg/dL a slot after the event. */
@@ -150,12 +158,14 @@ export function eventResponse(
   const withheld = new Set(options.withheld ?? []);
   const report: EventResponseReport = {
     historyClamped: options.historyClamped ?? false,
+    historyWindowHours: 24,
     ignoredFilters: [],
     unavailableFilters: [],
     unavailableAnchors: [],
     withheldSeries: [...withheld],
     slotMinutes: SLOT_MINUTES,
     backToStartMgdl: 25,
+    limits: EVENT_LIMITS,
     definition: {
       cohorts: [
         { cohort: 1, anchor: EventAnchorKind.Meal, fromMinute: 300, toMinute: 600, minGrams: 30, maxGrams: 80 },

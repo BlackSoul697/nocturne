@@ -1,7 +1,7 @@
 <!--
   One block of a setting, as a disclosure: its summary row names the block, the observed value
   against the profile's (and the compared range's), n and the confidence; opened, it says why the
-  confidence is what it is and what would raise it, why candidates were set aside, and lists the
+  confidence is what it is and what would raise it, why it did not use some candidates, and lists the
   episodes, each opening Day in Review. A figure towards more insulin says so on its summary row,
   and carries the observations-not-advice note in its body.
 -->
@@ -111,8 +111,8 @@
         <!-- "Points to" on purpose: "shows" would claim more than the evidence gives. -->
         <span>
           Your data points to more insulin here than your profile gives. This is an observation, not
-          a setting to copy. Usually, settings are changed in small steps, one at a time, with your
-          care team.
+          a setting to copy. Usually, people change settings in small steps, one at a time, with
+          their diabetes care team.
         </span>
       </p>
     {:else if figure.observed != null}
@@ -148,7 +148,7 @@
 
     {#if rejections.length > 0}
       <div class="space-y-1">
-        <h4 class="font-medium">Set aside</h4>
+        <h4 class="font-medium">Candidates not used</h4>
         <ul class="grid gap-x-6 gap-y-0.5 @lg:grid-cols-2">
           {#each rejections as rejection (rejection.rule)}
             <li class="flex justify-between gap-3">

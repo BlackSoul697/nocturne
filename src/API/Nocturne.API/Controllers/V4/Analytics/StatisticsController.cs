@@ -152,8 +152,9 @@ public class StatisticsController : ControllerBase
     }
 
     /// <summary>
-    /// Where a temp basal still running stops: now, or <paramref name="endUtc"/> when that comes
-    /// first. A window that ends in the future has not delivered past now.
+    /// The <c>untilMills</c> of <see cref="IStatisticsService.CalculateInsulinDeliveryStatistics"/>
+    /// for a window ending at <paramref name="endUtc"/>. A window that ends in the future has not
+    /// delivered past now.
     /// </summary>
     private long UntilMills(DateTime endUtc) =>
         Math.Min(

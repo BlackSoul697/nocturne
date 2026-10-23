@@ -62,9 +62,9 @@ describe("coach mark overlay continuity", () => {
     const backdrop = page.getByTestId("coach-backdrop").element();
     const watch = watchBackdrop();
 
-    await page.getByRole("button", { name: "Got it" }).click();
+    await page.getByRole("button", { name: "Done", exact: true }).click();
     await expect.element(page.getByText("Second stop.")).toBeVisible();
-    await page.getByRole("button", { name: "Got it" }).click();
+    await page.getByRole("button", { name: "Done", exact: true }).click();
     await expect.element(page.getByText("Third stop.")).toBeVisible();
 
     expectUninterrupted(watch, backdrop);
@@ -78,9 +78,9 @@ describe("coach mark overlay continuity", () => {
     const backdrop = page.getByTestId("coach-backdrop").element();
     const watch = watchBackdrop();
 
-    await page.getByRole("button", { name: "Got it" }).click();
+    await page.getByRole("button", { name: "Done", exact: true }).click();
     await expect.element(page.getByText("Second stop.")).toBeVisible();
-    await page.getByRole("button", { name: "Got it" }).click();
+    await page.getByRole("button", { name: "Done", exact: true }).click();
     await expect.element(page.getByText("Third stop.")).toBeVisible();
 
     expectUninterrupted(watch, backdrop);
@@ -96,7 +96,7 @@ describe("coach mark overlay continuity", () => {
     await expect.element(page.getByText("First stop, part two.")).toBeVisible();
     const watch = watchBackdrop();
 
-    await page.getByRole("button", { name: "Got it" }).click();
+    await page.getByRole("button", { name: "Done", exact: true }).click();
     await expect.element(page.getByText("Second stop.")).toBeVisible();
 
     expectUninterrupted(watch, backdrop);

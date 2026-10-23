@@ -68,7 +68,7 @@ public class LoopAnalysisEventResponseBudgetTests(ITestOutputHelper output)
         var cob = new CobCalculator(NullLogger<CobCalculator>.Instance, iob, null!, null!, null!, null!);
         var definition = new EventResponseDefinition
         {
-            MinutesAfter = EventResponseDefinition.MaxMinutesAfter,
+            MinutesAfter = EventResponseDefinition.MinutesAfterChoices[^1],
             Cohorts =
             [
                 new EventCohortDefinition { Cohort = 1, Anchor = EventAnchorKind.Meal, FromMinute = 5 * 60, ToMinute = 10 * 60 },

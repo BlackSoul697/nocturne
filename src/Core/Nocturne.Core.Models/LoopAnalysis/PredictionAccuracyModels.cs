@@ -58,6 +58,9 @@ public class PredictionAccuracyResponse : LoopAnalysisResponse
     public PredictionAccuracyRange Primary { get; set; } = new();
 
     public PredictionAccuracyRange? Comparison { get; set; }
+
+    /// <summary>How far before a prediction its context looks for carbs and manual boluses, ms.</summary>
+    public long ContextLookbackMs { get; set; }
 }
 
 /// <summary>
@@ -180,4 +183,13 @@ public class PredictionHorizonAccuracy
 
     /// <summary>The horizon's bias is read as a settings signal; see the remarks.</summary>
     public bool SettingsSignal { get; set; }
+
+    /// <summary>The size of a bias at which the report shows it at full strength, mg/dL.</summary>
+    public const double FullScaleBiasMgdl = 30;
+
+    /// <summary>
+    /// The bias's size as a share of <see cref="FullScaleBiasMgdl"/>, at most 1; the report tints a
+    /// cell by it. Null when no prediction matched.
+    /// </summary>
+    public double? BiasScale => Error?.Mean is { } bias ? Math.Min(1, Math.Abs(bias) / FullScaleBiasMgdl) : null;
 }

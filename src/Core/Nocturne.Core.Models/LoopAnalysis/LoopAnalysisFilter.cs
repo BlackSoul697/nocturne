@@ -1,4 +1,5 @@
 using System.Text.Json.Serialization;
+using Nocturne.Core.Models.Authorization;
 
 namespace Nocturne.Core.Models.LoopAnalysis;
 
@@ -187,6 +188,9 @@ public class LoopAnalysisResponse
     /// asked for, and there is no comparison.
     /// </summary>
     public bool HistoryClamped { get; set; }
+
+    /// <summary>The hours of history a clamped caller may read.</summary>
+    public int HistoryWindowHours => HistoryClamp.WindowHours;
 
     /// <summary>
     /// Why no tenant timezone resolved. When set, the dates could not be placed: there are no

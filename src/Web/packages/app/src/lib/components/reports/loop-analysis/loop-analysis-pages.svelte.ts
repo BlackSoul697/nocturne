@@ -27,7 +27,7 @@ export function loopAnalysisPageIntros(): Record<LoopAnalysisPage, string> {
     "loop-health":
       "This page shows how much of the time the loop was closed, why it stopped and how frequently it reached its limits.",
     "settings-evidence":
-      "This page compares your profile settings with observations from your data. Speak to your care team before you change a setting.",
+      "This page compares your profile settings with observations from your data. Speak to your diabetes care team before you change a setting.",
   };
 }
 

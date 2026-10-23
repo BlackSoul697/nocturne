@@ -1301,6 +1301,7 @@ public partial class AnalyticsReadScopeGuardTests
                     "Primary", "Comparison", "HistoryClamped", "TimeZoneUnavailableReason", "PrimaryRange",
                     "ComparisonRange", "AppliedFilters", "IgnoredFilters", "WithheldSeries", "UnavailableFilters",
                     "Definition", "SlotMinutes", "BackToStartMgdl", "UnavailableAnchors", "WithheldReason", "Rules",
+                    "HistoryWindowHours", "Limits", "LoopGapMinutes", "ContextLookbackMs",
                 }.Select(p => $"{response.Name}.{p}"),
             ]);
     }
@@ -1800,7 +1801,7 @@ public partial class AnalyticsReadScopeGuardTests
                 "PredictionHorizonAccuracy.Minutes", "PredictionHorizonAccuracy.Error",
                 "PredictionHorizonAccuracy.Mae", "PredictionHorizonAccuracy.Mard",
                 "PredictionHorizonAccuracy.Unmatched", "PredictionHorizonAccuracy.Excluded",
-                "PredictionHorizonAccuracy.SettingsSignal",
+                "PredictionHorizonAccuracy.SettingsSignal", "PredictionHorizonAccuracy.BiasScale",
             ]);
     }
 

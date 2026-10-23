@@ -4,6 +4,7 @@ import { describe, expect, it, vi } from "vitest";
 import { EventAnchorKind, type EventResponseDefinition } from "$lib/api";
 import EventCohortBuilder from "./EventCohortBuilder.svelte";
 import type { EventResponseState } from "./event-response-filter";
+import { EVENT_LIMITS as limits } from "./event-response.test-fixtures";
 
 const applied: EventResponseDefinition = {
   cohorts: [{ cohort: 1, anchor: EventAnchorKind.Meal }],
@@ -14,7 +15,7 @@ const applied: EventResponseDefinition = {
 describe("EventCohortBuilder", () => {
   it("shows the cohorts the API applied while the URL names none, and writes them out on a change", async () => {
     const onchange = vi.fn<(next: EventResponseState) => void>();
-    render(EventCohortBuilder, { props: { value: { cohorts: [] }, onchange, applied } });
+    render(EventCohortBuilder, { props: { value: { cohorts: [] }, onchange, applied, limits } });
 
     await expect.element(page.getByLabelText("Cohort 1", { exact: true })).toHaveTextContent("Meals");
     await expect.element(page.getByLabelText("At least (g)")).toBeVisible();
@@ -32,7 +33,7 @@ describe("EventCohortBuilder", () => {
 
   it("offers a cohort's grams only for meals", async () => {
     render(EventCohortBuilder, {
-      props: { value: { cohorts: [{ cohort: 1, anchor: EventAnchorKind.SensorStart }] }, onchange: () => {}, applied },
+      props: { value: { cohorts: [{ cohort: 1, anchor: EventAnchorKind.SensorStart }] }, onchange: () => {}, applied, limits },
     });
 
     expect(page.getByLabelText("At least (g)").elements()).toHaveLength(0);
@@ -44,11 +45,12 @@ describe("EventCohortBuilder", () => {
       props: {
         value: { cohorts: [{ cohort: 1, anchor: EventAnchorKind.UnannouncedRise }] },
         onchange: () => {},
+        limits,
         unavailableFilters: [{ filter: "isolatedOnly", requiredScope: "treatments.read" }],
       },
     });
 
-    await expect.element(page.getByLabelText("Only rises where the loop gave extra insulin by itself")).toBeVisible();
+    await expect.element(page.getByLabelText("Only rises with extra loop insulin")).toBeVisible();
     await expect.element(page.getByLabelText("Isolated events only")).toBeDisabled();
     await expect.element(page.getByText("(Needs access to treatments)")).toBeVisible();
   });
@@ -56,7 +58,7 @@ describe("EventCohortBuilder", () => {
   it("never writes a definition the API would refuse", async () => {
     const onchange = vi.fn<(next: EventResponseState) => void>();
     render(EventCohortBuilder, {
-      props: { value: { cohorts: [{ cohort: 1, anchor: EventAnchorKind.Meal, fromMinute: 300, minGrams: 80 }] }, onchange },
+      props: { value: { cohorts: [{ cohort: 1, anchor: EventAnchorKind.Meal, fromMinute: 300, minGrams: 80 }] }, onchange, limits },
     });
 
     const change = (label: string, value: string) => {
@@ -81,11 +83,28 @@ describe("EventCohortBuilder", () => {
         value: { cohorts: [] },
         onchange: () => {},
         applied: { cohorts: [] },
+        limits,
         unavailableAnchors: Object.values(EventAnchorKind).map((anchor) => ({ anchor, requiredScope: "treatments.read" })),
       },
     });
 
     await expect.element(page.getByText("Your access does not include the events that this page aligns.")).toBeVisible();
     expect(page.getByRole("button", { name: "Add cohort" }).elements()).toHaveLength(0);
+  });
+
+  it("offers the windows and the number of cohorts that the API serves", async () => {
+    render(EventCohortBuilder, {
+      props: {
+        value: { cohorts: [{ cohort: 1, anchor: EventAnchorKind.Meal }] },
+        onchange: () => {},
+        applied,
+        limits: { ...limits, maxCohorts: 1, minutesAfterChoices: [120, 600] },
+      },
+    });
+
+    expect(page.getByRole("button", { name: "Add cohort" }).elements()).toHaveLength(0);
+    await page.getByLabelText("After the event").click();
+    await expect.element(page.getByRole("option", { name: "10 h" })).toBeVisible();
+    expect(page.getByRole("option", { name: "8 h" }).elements()).toHaveLength(0);
   });
 });

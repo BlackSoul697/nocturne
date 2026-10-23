@@ -47,6 +47,7 @@ public partial class AnalyticsReadScopeGuardTests
                 {
                     "HistoryClamped", "TimeZoneUnavailableReason", "PrimaryRange", "ComparisonRange", "AppliedFilters",
                     "IgnoredFilters", "WithheldSeries", "UnavailableFilters", "ProfileNames", "WithheldReason", "Rules",
+                    "HistoryWindowHours",
                 }.Select(p => $"{nameof(SettingsEvidenceReport)}.{p}"),
             ]);
     }

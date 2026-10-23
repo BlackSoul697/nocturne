@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { DailyProfileRange, DailyProfileSlot } from "$lib/api";
-import { aggregateRuns, clockTime, contributingDays, covers } from "./daily-profile-view";
+import { aggregateRuns, clockTime, contributingDays, covers, signedTwoPlaces } from "./daily-profile-view";
 import { bitmapOf } from "./daily-profile.test-fixtures";
 
 describe("coverage bitmaps", () => {
@@ -67,5 +67,17 @@ describe("day in review link time", () => {
     expect(clockTime(0)).toBe("00:00");
     expect(clockTime(8 * 60 + 35)).toBe("08:35");
     expect(clockTime(23 * 60 + 55)).toBe("23:55");
+  });
+});
+
+describe("signed two places", () => {
+  it("reads a value that rounds to zero as 0.00, with no sign", () => {
+    expect(signedTwoPlaces(-0.004)).toBe("0.00");
+    expect(signedTwoPlaces(0.004)).toBe("0.00");
+  });
+
+  it("signs a value that rounds away from zero", () => {
+    expect(signedTwoPlaces(0.005)).toBe("+0.01");
+    expect(signedTwoPlaces(-1.234)).toBe("-1.23");
   });
 });

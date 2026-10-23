@@ -71,7 +71,7 @@
     <Button variant="ghost" size="xs" onclick={() => sortBy(key)}>
       {label}
       {#if sortKey === key}
-        {#if descending}<ArrowDown class="size-3" />{:else}<ArrowUp class="size-3" />{/if}
+        {#if descending}<ArrowDown class="size-3 print:hidden" />{:else}<ArrowUp class="size-3 print:hidden" />{/if}
       {/if}
     </Button>
   </th>
@@ -140,7 +140,7 @@
   </table>
 </div>
 {#if sorted.length > shown}
-  <Button variant="outline" size="sm" onclick={() => (shown = sorted.length)}>
+  <Button variant="outline" size="sm" class="print:hidden" onclick={() => (shown = sorted.length)}>
     Show all {plural(sorted.length, ["# event", "# events"])}
   </Button>
 {/if}

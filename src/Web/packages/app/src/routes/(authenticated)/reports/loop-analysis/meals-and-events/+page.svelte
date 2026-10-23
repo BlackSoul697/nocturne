@@ -6,6 +6,7 @@
   import {
     eventResponseQuery,
     readEventResponse,
+    withinLimits,
     withoutUnavailableEvents,
     writeEventResponse,
     type EventResponseState,
@@ -20,7 +21,9 @@
   const events = $derived(readEventResponse(page.url.searchParams));
   const resource = contextResource(() => getEventResponse(eventResponseQuery(analysis.query, events)), { errorTitle: "Cannot load the meals and events" });
 
-  const setEvents = (next: EventResponseState) =>
+  let cleanedFilters = $state<string[]>([]);
+
+  const navigate = (next: EventResponseState) =>
     // eslint-disable-next-line svelte/no-navigation-without-resolve -- loopAnalysisPath resolves the path
     goto(loopAnalysisPath("meals-and-events", writeEventResponse(next, page.url.searchParams)), {
       replaceState: true,
@@ -28,13 +31,21 @@
       keepFocus: true,
     });
 
-  // Event kinds and filters this viewer cannot use leave the URL once the API has named them.
+  const setEvents = (next: EventResponseState) => {
+    cleanedFilters = [];
+    return navigate(next);
+  };
+
+  // Event kinds and filters this viewer cannot use, and values outside the limits, leave the URL once the API has answered.
   $effect(() => {
     const response = resource.current;
     if (!response) return;
     const unavailable = response.unavailableFilters?.map((f) => f.filter ?? "") ?? [];
-    const next = withoutUnavailableEvents(events, response.unavailableAnchors ?? [], unavailable);
-    if (next) void setEvents(next);
+    const available = withoutUnavailableEvents(events, response.unavailableAnchors ?? [], unavailable) ?? events;
+    const limited = response.limits ? withinLimits(available, response.limits) : null;
+    if (limited) cleanedFilters = limited.dropped;
+    const next = limited?.state ?? available;
+    if (next !== events) void navigate(next);
   });
 </script>
 
@@ -49,10 +60,11 @@
       value={events}
       onchange={setEvents}
       applied={resource.current.definition}
+      limits={resource.current.limits}
       unavailableAnchors={resource.current.unavailableAnchors}
       unavailableFilters={resource.current.unavailableFilters}
     />
-    <EventResponseBody response={resource.current} />
+    <EventResponseBody response={resource.current} {cleanedFilters} />
   </div>
 {:else}
   <PageBodyLoading />

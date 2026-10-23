@@ -205,6 +205,8 @@ export function loopHealthResponse(
       excludeOpenLoop: true,
     },
     historyClamped: options.historyClamped ?? false,
+    historyWindowHours: 24,
+    loopGapMinutes: 15,
     ignoredFilters: [],
     withheldSeries: withheld,
     unavailableFilters: unavailableFor(scopes),

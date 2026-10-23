@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { render } from "svelte/server";
-import Harness from "./context-provider-harness.svelte";
+import Harness from "./ContextProviderHarness.test.svelte";
 
 type Module = Record<string, (...args: never[]) => unknown>;
 

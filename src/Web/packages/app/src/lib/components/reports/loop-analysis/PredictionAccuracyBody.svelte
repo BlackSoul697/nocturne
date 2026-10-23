@@ -12,6 +12,8 @@
     type PredictionCurveAccuracy,
   } from "$lib/api";
   import * as Alert from "$lib/components/ui/alert";
+  import HistoryClampNote from "./HistoryClampNote.svelte";
+  import { hoursText } from "./settings-evidence-labels.svelte";
   import * as ToggleGroup from "$lib/components/ui/toggle-group";
   import FigureStrip, { type Figure } from "$lib/components/reports/FigureStrip.svelte";
   import ChartKey, { type ChartKeyItem } from "$lib/components/charts/print/ChartKey.svelte";
@@ -19,7 +21,6 @@
   import { glucoseUnits } from "$lib/stores/appearance-store.svelte";
   import { bgDelta, bgLabel, convertToDisplayUnits } from "$lib/utils/formatting";
   import { plural } from "$lib/utils/plural";
-  import Clock from "@lucide/svelte/icons/clock";
   import EyeOff from "@lucide/svelte/icons/eye-off";
   import Info from "@lucide/svelte/icons/info";
   import Lock from "@lucide/svelte/icons/lock";
@@ -123,17 +124,9 @@
   <NoTimeZone reason={response.timeZoneUnavailableReason}>{loopAnalysisTimeZoneNeed()}</NoTimeZone>
 {:else}
   <div class="space-y-6">
-    {#if response.historyClamped}
-      <Alert.Root variant="info">
-        <Clock />
-        <Alert.Title>Only the last 24 hours are included</Alert.Title>
-        <Alert.Description>
-          You can see only the most recent 24 hours of this data. These figures show only the
-          predictions from those 24 hours, for all ranges that you select. There is no comparison.
-          The most recent predictions are not included until their readings arrive.
-        </Alert.Description>
-      </Alert.Root>
-    {/if}
+    <HistoryClampNote {response}>
+      The report adds the most recent predictions when their readings arrive.
+    </HistoryClampNote>
 
     <IgnoredFiltersNotice ignored={response.ignoredFilters} />
 
@@ -146,8 +139,8 @@
             The predictions come from the device status of your loop. Your access does not include
             device data.
           {:else}
-            The predictions are compared with your glucose readings. Your access does not include
-            glucose.
+            The report compares the predictions with your glucose readings. Your access does not
+            include glucose.
           {/if}
           A person who manages this account can give you access.
         </p>
@@ -171,7 +164,10 @@
           <p class="text-sm">
             Prediction accuracy needs the predictions that your loop uploads with its device status.
             {#if response.historyClamped}
-              Your access includes only the last 24 hours, and there are no predictions in them yet.
+              {plural(response.historyWindowHours ?? 0, [
+                "You can see only the last hour, and it has no predictions yet.",
+                "You can see only the last # hours, and they have no predictions yet.",
+              ])}
             {:else}
               Select a longer range, or use fewer filters.
             {/if}
@@ -197,8 +193,8 @@
               {/if}
               <li>
                 A prediction is interrupted if a carb entry or manual bolus occurs before its
-                horizon. Interrupted predictions are not included in any bias figure, because the
-                reading then measures that action.
+                horizon. No bias figure includes interrupted predictions, because the reading then
+                measures that action.
               </li>
               {#if has(PredictionCurve.Uam)}
                 <li>
@@ -310,9 +306,9 @@
                 </p>
               {:else}
                 <p class="px-1 text-xs text-muted-foreground">
-                  The context of a prediction is what occurred in the three hours before it.
+                  The context of a prediction is what occurred in the {hoursText(response.contextLookbackMs)} before it.
                   {#if (detail.contexts ?? []).includes(PredictionContext.Adjusted)}
-                    Override, temp target or exercise includes low "eating soon" temporary targets.
+                    Override, temporary target or exercise includes low "eating soon" temporary targets.
                     So some predictions made just before a meal are in that context, not in After a
                     meal.
                   {/if}
@@ -326,6 +322,7 @@
                   formatError={signed}
                   formatMae={unsigned}
                   {unit}
+                  lookbackMs={response.contextLookbackMs}
                 />
               {/if}
             </div>
@@ -334,8 +331,9 @@
 
         <p class="px-1 text-xs text-muted-foreground">
           {plural(kinds.length, ["# curve", "# curves"])} from the predictions that your loop uploaded.
-          Each prediction is paired with the reading within 2.5 minutes of its horizon. Unmatched
-          horizons had no reading. Excluded horizons were in a sensor error or a compression low.
+          The report pairs each prediction with the reading within 2.5 minutes of its horizon.
+          Unmatched horizons had no reading. Excluded horizons were in a sensor error or a
+          compression low.
         </p>
       {/if}
     {/if}

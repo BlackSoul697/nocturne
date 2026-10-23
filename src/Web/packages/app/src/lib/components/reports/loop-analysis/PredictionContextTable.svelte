@@ -12,9 +12,11 @@
     formatError: (mgdl: number) => string;
     formatMae: (mgdl: number) => string;
     unit: string;
+    /** How far before a prediction its context looks, ms. */
+    lookbackMs: number | undefined;
   }
 
-  let { curve, comparison = null, formatError, formatMae, unit }: Props = $props();
+  let { curve, comparison = null, formatError, formatMae, unit, lookbackMs }: Props = $props();
 
   const minutes = $derived((curve.horizons ?? []).map((h) => h.minutes ?? 0));
   const anySparse = $derived(
@@ -71,7 +73,7 @@
           <tr class="border-b last:border-0">
             <th scope="row" class="min-w-36 px-2 py-1.5 text-left align-top font-normal">
               <span class="block font-medium">{contextLabel(row.context)}</span>
-              <span class="block text-muted-foreground">{contextCaption(row.context)}</span>
+              <span class="block text-muted-foreground">{contextCaption(row.context, lookbackMs)}</span>
             </th>
             {#each minutes as minute (minute)}
               <td class="px-2 py-1.5 text-right align-top">

@@ -196,11 +196,11 @@ describe("DailyProfileBody", () => {
       const panel = heading.element().parentElement!.parentElement!;
       expect(panel.textContent).toContain("Hidden: your access does not include this data");
     }
-    for (const figure of ["Total insulin", "Delivered vs scheduled basal", "Net loop correction"])
+    for (const figure of ["Total insulin", "Delivered basal ratio", "Net loop correction"])
       await expect.element(page.getByText(figure, { exact: true }).first()).toBeVisible();
     await expect.element(page.getByText("Target range hidden: your access does not include it")).toBeVisible();
     expect(page.getByText("Active target range").elements()).toHaveLength(0);
-    await expect.element(page.getByRole("switch", { name: "Manual temps" })).toBeDisabled();
+    await expect.element(page.getByRole("switch", { name: "Manual temp" })).toBeDisabled();
   });
 
   it("keeps treatment series but hides the schedule without therapy access", async () => {
@@ -250,7 +250,7 @@ describe("DailyProfileBody", () => {
   it("says the ranges were clamped to the last 24 hours", async () => {
     render(DailyProfileBody, { props: { response: profileResponse({ historyClamped: true }) } });
 
-    await expect.element(page.getByText("Only the last 24 hours are included")).toBeVisible();
+    await expect.element(page.getByText(/This page uses only the last 24 hours/)).toBeVisible();
   });
 
   it("names the filters the caller's access made the API ignore", async () => {
@@ -258,7 +258,15 @@ describe("DailyProfileBody", () => {
       props: { response: { ...profileResponse(), ignoredFilters: ["profileName", "excludeOpenLoop"] } },
     });
 
-    await expect.element(page.getByText("Some filters were not applied")).toBeVisible();
+    await expect.element(page.getByText("The report did not use some filters")).toBeVisible();
     await expect.element(page.getByText(/Profile, Time not in closed loop\./)).toBeVisible();
+  });
+
+  it("tells a keyboard user what Enter and Escape do on this page", async () => {
+    render(DailyProfileBody, { props: { response: profileResponse() } });
+
+    await expect
+      .element(page.getByRole("slider", { name: "Glucose" }))
+      .toHaveAccessibleDescription(/Press Enter to list the days for the time\. Press Escape to close the list\./);
   });
 });

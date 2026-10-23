@@ -39,21 +39,23 @@ vi.mock("$app/state", async () => {
 
 let envelope: LoopAnalysisResponse;
 let daily: DailyProfileResponse;
-let events: EventResponseReport;
+let events: EventResponseReport | undefined;
+/** The Meals and events response for each query, when `events` is undefined. */
+let eventsFor: ((query: Record<string, unknown>) => EventResponseReport) | undefined;
 let predictions: PredictionAccuracyResponse | undefined;
 let health: LoopHealthResponse;
 let evidence: SettingsEvidenceReport;
 let stale = false;
 
 vi.mock("$api/generated/loopAnalysis.generated.remote", () => {
-  const remote = (name: string, read: () => unknown) => (input: unknown) => {
+  const remote = (name: string, read: (input: unknown) => unknown) => (input: unknown) => {
     (calls.fetched[name] ??= []).push(input);
-    return remoteQuery(read);
+    return remoteQuery(() => read(input));
   };
   return {
     getEnvelope: remote("envelope", () => envelope),
     getDailyProfile: remote("daily-profile", () => daily),
-    getEventResponse: remote("meals-and-events", () => events),
+    getEventResponse: remote("meals-and-events", (input) => events ?? eventsFor!(input as Record<string, unknown>)),
     getPredictionAccuracy: remote("prediction-accuracy", () => predictions),
     getLoopHealth: remote("loop-health", () => health),
     getSettingsEvidence: remote("settings-evidence", () => evidence),
@@ -106,7 +108,7 @@ const PAGE_NAMES: PageName[] = [
   "settings-evidence",
 ];
 
-const ENVELOPE_ERROR = "Error Loading Loop Analysis";
+const ENVELOPE_ERROR = "Cannot load Loop Analysis";
 
 async function report(name: PageName): Promise<Component> {
   return (await PAGES[name]()).default;
@@ -148,6 +150,7 @@ describe("Loop Analysis pages", () => {
     envelope = { ...profileResponse(), profileNames: ["Default"] };
     daily = profileResponse();
     events = eventResponse();
+    eventsFor = undefined;
     predictions = predictionResponse();
     health = loopHealthResponse();
     evidence = settingsEvidenceResponse();
@@ -342,7 +345,7 @@ describe("Loop Analysis pages", () => {
     await open("daily-profile", "?compare=previous", { limitTo24Hours: true });
     await page.getByRole("button", { name: "Open filters" }).click();
 
-    await expect.element(page.getByText(/so you cannot compare/)).toBeVisible();
+    await expect.element(page.getByText(/You cannot compare, because you can see only the most recent history/)).toBeVisible();
     await expect.element(page.elementLocator(document.getElementById("loop-analysis-compare")!)).toBeDisabled();
   });
 
@@ -394,6 +397,18 @@ describe("Loop Analysis pages", () => {
     expect(url.searchParams.get("isolatedOnly")).toBe("true");
     expect(url.searchParams.get("excludeExercise")).toBe("true");
     expect(url.searchParams.get("days")).toBe("14");
+  });
+
+  it("keeps naming a window outside the limits after the URL drops it", async () => {
+    calls.navigate = true;
+    events = undefined;
+    eventsFor = (query) => ({ ...eventResponse(), ignoredFilters: query.minutesAfter === 500 ? ["minutesAfter"] : [] });
+    await open("meals-and-events", "?anchor1=Meal&minutesAfter=500");
+
+    await expect.poll(() => pageState.url.searchParams.has("minutesAfter")).toBe(false);
+    expect(calls.fetched["meals-and-events"].at(-1)).not.toHaveProperty("minutesAfter");
+    await expect.element(page.getByText(/These values are outside the limits/)).toBeVisible();
+    await expect.element(page.getByText(/These values are outside the limits/)).toHaveTextContent(/After the event/);
   });
 
   it("drops from the URL a cohort whose events the viewer cannot read", async () => {

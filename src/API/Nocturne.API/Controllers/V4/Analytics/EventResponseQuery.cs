@@ -26,15 +26,15 @@ public sealed class EventResponseQuery
     [FromQuery(Name = "toMinute2"), Range(0, MinuteOfDayMax)] public int? ToMinute2 { get; set; }
     [FromQuery(Name = "toMinute3"), Range(0, MinuteOfDayMax)] public int? ToMinute3 { get; set; }
 
-    /// <summary>Smallest meal in cohort 1, g; for a meal cohort only.</summary>
-    [FromQuery(Name = "minGrams1"), Range(0, GramsMax)] public double? MinGrams1 { get; set; }
-    [FromQuery(Name = "minGrams2"), Range(0, GramsMax)] public double? MinGrams2 { get; set; }
-    [FromQuery(Name = "minGrams3"), Range(0, GramsMax)] public double? MinGrams3 { get; set; }
+    /// <summary>Smallest meal in cohort 1, g; for a meal cohort only. Outside 0 to <see cref="EventResponseDefinition.MaxGrams"/>, ignored.</summary>
+    [FromQuery(Name = "minGrams1")] public double? MinGrams1 { get; set; }
+    [FromQuery(Name = "minGrams2")] public double? MinGrams2 { get; set; }
+    [FromQuery(Name = "minGrams3")] public double? MinGrams3 { get; set; }
 
-    /// <summary>Largest meal in cohort 1, g; for a meal cohort only.</summary>
-    [FromQuery(Name = "maxGrams1"), Range(0, GramsMax)] public double? MaxGrams1 { get; set; }
-    [FromQuery(Name = "maxGrams2"), Range(0, GramsMax)] public double? MaxGrams2 { get; set; }
-    [FromQuery(Name = "maxGrams3"), Range(0, GramsMax)] public double? MaxGrams3 { get; set; }
+    /// <summary>Largest meal in cohort 1, g; for a meal cohort only. Outside 0 to <see cref="EventResponseDefinition.MaxGrams"/>, ignored.</summary>
+    [FromQuery(Name = "maxGrams1")] public double? MaxGrams1 { get; set; }
+    [FromQuery(Name = "maxGrams2")] public double? MaxGrams2 { get; set; }
+    [FromQuery(Name = "maxGrams3")] public double? MaxGrams3 { get; set; }
 
     /// <summary>Drop events with another meal, correction bolus or rise in their window; ignored without treatments.read.</summary>
     [FromQuery(Name = "isolatedOnly")] public bool IsolatedOnly { get; set; }
@@ -42,17 +42,22 @@ public sealed class EventResponseQuery
     /// <summary>Count an unannounced rise only where the loop answered it with its own correction; ignored without treatments.read.</summary>
     [FromQuery(Name = "requireCorroboration")] public bool RequireCorroboration { get; set; }
 
-    /// <summary>Minutes of window before the anchor: 0 to 120, a multiple of 5.</summary>
-    [FromQuery(Name = "minutesBefore"), Range(0, EventResponseDefinition.MaxMinutesBefore)] public int MinutesBefore { get; set; } = EventResponseDefinition.DefaultMinutesBefore;
+    /// <summary>Minutes of window before the anchor, one of <see cref="EventResponseDefinition.MinutesBeforeChoices"/>; any other is ignored.</summary>
+    [FromQuery(Name = "minutesBefore")] public int? MinutesBefore { get; set; }
 
-    /// <summary>Minutes of window after the anchor: 60 to 480, a multiple of 5.</summary>
-    [FromQuery(Name = "minutesAfter"), Range(EventResponseDefinition.MinMinutesAfter, EventResponseDefinition.MaxMinutesAfter)] public int MinutesAfter { get; set; } = EventResponseDefinition.DefaultMinutesAfter;
+    /// <summary>Minutes of window after the anchor, one of <see cref="EventResponseDefinition.MinutesAfterChoices"/>; any other is ignored.</summary>
+    [FromQuery(Name = "minutesAfter")] public int? MinutesAfter { get; set; }
 
     /// <summary>The last minute of the day a time-of-day window may name.</summary>
     private const int MinuteOfDayMax = 24 * 60 - 1;
 
-    /// <summary>A bound no meal reaches, so a typing slip is refused rather than read.</summary>
-    private const double GramsMax = 1000;
+    private static bool IsGrams(double? grams) => grams is null or (>= 0 and <= EventResponseDefinition.MaxGrams);
+
+    private int AppliedMinutesBefore =>
+        MinutesBefore is { } m && EventResponseDefinition.MinutesBeforeChoices.Contains(m) ? m : EventResponseDefinition.DefaultMinutesBefore;
+
+    private int AppliedMinutesAfter =>
+        MinutesAfter is { } m && EventResponseDefinition.MinutesAfterChoices.Contains(m) ? m : EventResponseDefinition.DefaultMinutesAfter;
 
     private IEnumerable<(int Cohort, EventAnchorKind? Anchor, int? From, int? To, double? MinGrams, double? MaxGrams)> Cohorts() =>
     [
@@ -71,9 +76,6 @@ public sealed class EventResponseQuery
     /// </summary>
     public string? Problem()
     {
-        if (MinutesBefore % EventResponseDefinition.SlotMinutes != 0 || MinutesAfter % EventResponseDefinition.SlotMinutes != 0)
-            return "minutesBefore and minutesAfter must be multiples of 5.";
-
         foreach (var (n, anchor, from, to, min, max) in Cohorts())
         {
             var kind = KindOf(n, anchor);
@@ -86,8 +88,28 @@ public sealed class EventResponseQuery
     }
 
     /// <summary>
+    /// The window and grams parameters that were sent with a value outside
+    /// <see cref="EventResponseLimits"/>; the definition applies the default in their place.
+    /// </summary>
+    public IEnumerable<string> OutOfLimits()
+    {
+        if (MinutesBefore is not null && AppliedMinutesBefore != MinutesBefore)
+            yield return "minutesBefore";
+        if (MinutesAfter is not null && AppliedMinutesAfter != MinutesAfter)
+            yield return "minutesAfter";
+        foreach (var (n, _, _, _, min, max) in Cohorts())
+        {
+            if (!IsGrams(min))
+                yield return $"minGrams{n}";
+            if (!IsGrams(max))
+                yield return $"maxGrams{n}";
+        }
+    }
+
+    /// <summary>
     /// The definition asked for, before the caller's scopes narrow it. A window whose start and end
-    /// are the same minute is the whole day, and grams given the wrong way round are swapped.
+    /// are the same minute is the whole day, grams given the wrong way round are swapped, and a
+    /// value <see cref="OutOfLimits"/> names is left at its default.
     /// </summary>
     public EventResponseDefinition ToDefinition() => new()
     {
@@ -96,6 +118,11 @@ public sealed class EventResponseQuery
             .. Cohorts()
                 .Select(c => c with { Anchor = KindOf(c.Cohort, c.Anchor) })
                 .Where(c => c.Anchor is not null)
+                .Select(c => c with
+                {
+                    MinGrams = IsGrams(c.MinGrams) ? c.MinGrams : null,
+                    MaxGrams = IsGrams(c.MaxGrams) ? c.MaxGrams : null,
+                })
                 .Select(c =>
                 {
                     var allDay = c.From is not null && c.From == c.To;
@@ -111,8 +138,8 @@ public sealed class EventResponseQuery
                     };
                 }),
         ],
-        MinutesBefore = MinutesBefore,
-        MinutesAfter = MinutesAfter,
+        MinutesBefore = AppliedMinutesBefore,
+        MinutesAfter = AppliedMinutesAfter,
         IsolatedOnly = IsolatedOnly,
         RequireCorroboration = RequireCorroboration,
     };

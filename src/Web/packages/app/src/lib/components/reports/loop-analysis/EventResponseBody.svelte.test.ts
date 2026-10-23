@@ -179,7 +179,7 @@ describe("EventResponseBody", () => {
     response.ignoredFilters = ["startDate", "anchor2", "isolatedOnly"];
     render(EventResponseBody, { props: { response } });
 
-    await expect.element(page.getByText("Only the last 24 hours are included")).toBeVisible();
+    await expect.element(page.getByText(/This page uses only the last 24 hours/)).toBeVisible();
     await expect.element(page.getByText(/Cohort 2, Isolated events only\./)).toBeVisible();
   });
 
@@ -190,5 +190,25 @@ describe("EventResponseBody", () => {
 
     await expect.element(page.getByText("No events to align")).toBeVisible();
     expect(page.getByRole("slider").elements()).toHaveLength(0);
+  });
+
+  it("names a window or grams value outside the limits, which the API replaced with its default", async () => {
+    const response = eventResponse();
+    response.ignoredFilters = ["minutesAfter", "maxGrams1", "isolatedOnly"];
+    render(EventResponseBody, { props: { response } });
+
+    await expect.element(page.getByText("The report did not use some filters")).toBeVisible();
+    await expect.element(page.getByText(/outside the limits of the report, so the report used its default values:\s+After the event, Cohort 1, at most \(g\)\./)).toBeVisible();
+    await expect.element(page.getByText(/so the report did not use them:\s+Isolated events only\./)).toBeVisible();
+  });
+
+  it("states the window and the options the API applied, so a printed page says what it covers", async () => {
+    const response = eventResponse();
+    response.definition = { ...response.definition, isolatedOnly: true };
+    render(EventResponseBody, { props: { response } });
+
+    await expect
+      .element(page.getByTestId("loop-analysis-event-window"))
+      .toHaveTextContent(/60 minutes before to\s+5 hours after each event\.\s+Isolated events only\./);
   });
 });

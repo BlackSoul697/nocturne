@@ -249,6 +249,7 @@ export function profileResponse(
       excludeOpenLoop: true,
     },
     historyClamped: options.historyClamped ?? false,
+    historyWindowHours: 24,
     ignoredFilters: [],
     withheldSeries: withheld,
     unavailableFilters: unavailableFor(options.scopes ?? ALL_SCOPES),

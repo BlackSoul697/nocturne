@@ -6,6 +6,7 @@ import {
   minuteToClock,
   normalisedCohort,
   readEventResponse,
+  withinLimits,
   withoutUnavailableEvents,
   writeEventResponse,
 } from "./event-response-filter";
@@ -35,7 +36,7 @@ describe("event response filter", () => {
   });
 
   it("reads no cohorts as the API's default, and drops what it cannot read", () => {
-    const state = readEventResponse(new URLSearchParams("anchor1=Lunch&minutesAfter=7&minGrams2=20"));
+    const state = readEventResponse(new URLSearchParams("anchor1=Lunch&minutesAfter=7.5&minGrams2=20"));
     expect(state.cohorts).toEqual([]);
     expect(state.minutesAfter).toBeUndefined();
     expect(eventResponseQuery({ startDate: "2026-10-01", endDate: "2026-10-14" }, state)).toEqual({
@@ -81,30 +82,31 @@ describe("event response filter", () => {
     expect(withoutUnavailableEvents(next!, [{ anchor: EventAnchorKind.Meal }], ["isolatedOnly"])).toBeNull();
   });
 
-  it("sends only what the API accepts: grams the right way round and in bounds, and no empty window", () => {
-    const query = eventResponseQuery(
-      { startDate: "2026-10-01", endDate: "2026-10-14" },
-      {
-        cohorts: [
-          { anchor: EventAnchorKind.Meal, minGrams: 80, maxGrams: 20, fromMinute: 300, toMinute: 300 },
-          { anchor: EventAnchorKind.Meal, minGrams: -5, maxGrams: 5000 },
-        ],
-      }
-    );
-    expect(query).toEqual({
-      startDate: "2026-10-01",
-      endDate: "2026-10-14",
-      anchor1: EventAnchorKind.Meal,
-      minGrams1: 20,
-      maxGrams1: 80,
-      anchor2: EventAnchorKind.Meal,
-      minGrams2: 0,
-      maxGrams2: 1000,
+  it("normalises a cohort as the builder edits it: grams the right way round and in the limits, and no empty window", () => {
+    expect(normalisedCohort({ anchor: EventAnchorKind.Meal, minGrams: 80, maxGrams: 20 }, 1000)).toMatchObject({
+      minGrams: 20,
+      maxGrams: 80,
     });
-    expect(normalisedCohort({ anchor: EventAnchorKind.Meal, fromMinute: 60, toMinute: 60 })).toMatchObject({
+    expect(normalisedCohort({ anchor: EventAnchorKind.Meal, minGrams: -5, maxGrams: 5000 }, 1000)).toMatchObject({
+      minGrams: 0,
+      maxGrams: 1000,
+    });
+    expect(normalisedCohort({ anchor: EventAnchorKind.Meal, fromMinute: 60, toMinute: 60 }, 1000)).toMatchObject({
       fromMinute: undefined,
       toMinute: undefined,
     });
+  });
+
+  it("drops the window and grams outside the served limits, or reports nothing to drop", () => {
+    const limits = { maxCohorts: 3, maxGrams: 1000, minutesBeforeChoices: [0, 60], minutesAfterChoices: [120, 300] };
+    const state = readEventResponse(new URLSearchParams("anchor1=Meal&minGrams1=20&maxGrams1=5000&minutesBefore=45&minutesAfter=300"));
+
+    const next = withinLimits(state, limits);
+    expect(next?.dropped).toEqual(["minutesBefore", "maxGrams1"]);
+    expect(next?.state.minutesBefore).toBeUndefined();
+    expect(next?.state.minutesAfter).toBe(300);
+    expect(next?.state.cohorts?.[0]).toMatchObject({ minGrams: 20, maxGrams: undefined });
+    expect(withinLimits(next!.state, limits)).toBeNull();
   });
 
   it("converts minutes of the day to and from a time input", () => {

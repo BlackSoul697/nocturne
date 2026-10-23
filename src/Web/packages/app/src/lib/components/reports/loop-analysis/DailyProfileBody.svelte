@@ -13,7 +13,6 @@
     type DailyProfileSlot,
     type LoopAnalysisAggregate,
   } from "$lib/api";
-  import * as Alert from "$lib/components/ui/alert";
   import { Switch } from "$lib/components/ui/switch";
   import { Label } from "$lib/components/ui/label";
   import FigureStrip, { type Figure } from "$lib/components/reports/FigureStrip.svelte";
@@ -30,7 +29,6 @@
   import { tenantChartThresholds } from "$lib/stores/realtime-store.svelte";
   import { glucoseUnits } from "$lib/stores/appearance-store.svelte";
   import { bg, bgLabel, convertToDisplayUnits, hourLabel } from "$lib/utils/formatting";
-  import Clock from "@lucide/svelte/icons/clock";
   import EyeOff from "@lucide/svelte/icons/eye-off";
   import TimeOfDayPanel from "./TimeOfDayPanel.svelte";
   import PercentileBands from "./PercentileBands.svelte";
@@ -40,10 +38,11 @@
   import SlotDays from "./SlotDays.svelte";
   import { TimeOfDayCursor } from "./time-of-day-cursor.svelte";
   import { loopAnalysisMark } from "./loop-analysis-tour.svelte";
-  import { atMinute, axisEnd } from "./daily-profile-view";
+  import { atMinute, axisEnd, signedTwoPlaces as signed } from "./daily-profile-view";
   import NoTimeZone from "$lib/components/reports/NoTimeZone.svelte";
   import { loopAnalysisTimeZoneNeed } from "./time-zone-need.svelte";
   import IgnoredFiltersNotice from "./IgnoredFiltersNotice.svelte";
+  import HistoryClampNote from "./HistoryClampNote.svelte";
 
   interface Props {
     response: DailyProfileResponse;
@@ -148,7 +147,6 @@
 
   const u2 = (v: number) => v.toFixed(2);
   const u1 = (v: number) => v.toFixed(1);
-  const signed = (v: number) => `${v > 0 ? "+" : ""}${v.toFixed(2)}`;
   const glucoseText = (v: number) => String(bg(v));
   const axisGlucose = (v: number) => (units === "mmol" ? v.toFixed(0) : String(Math.round(v)));
 
@@ -198,10 +196,10 @@
     }
 
     if (hidden(LoopAnalysisSeries.DeliveredToScheduledRatio))
-      list.push(hiddenFigure("Delivered vs scheduled basal"));
+      list.push(hiddenFigure("Delivered basal ratio"));
     else if (summary?.deliveredToScheduledRatio != null)
       list.push({
-        label: "Delivered vs scheduled basal",
+        label: "Delivered basal ratio",
         value: `${summary.deliveredToScheduledRatio.toFixed(2)}×`,
         note: "Delivered basal divided by scheduled basal",
       });
@@ -233,19 +231,19 @@
     unit: string,
     counts: "days" | "readings"
   ): string {
-    if (!value) return "No data in this slot";
+    if (!value) return "No data at this time";
     const n = counts === "days" ? daysText(value.n) : readingsText(value.n);
     return `Median ${format(value.p50 ?? 0)} ${unit}, ${n}`;
   }
 
   function describeEvents(series: DailyProfileSlot["carbs"], unit: string): string {
-    if (!series) return "No data in this slot";
+    if (!series) return "No data at this time";
     return `${u2(series.meanPerDay ?? 0)} ${unit} per day, ${daysText(series.n)}`;
   }
 
   function describeCorrection(slot: number): string {
     const value = at(slots, slot)?.netLoopCorrection;
-    if (!value) return "No data in this slot";
+    if (!value) return "No data at this time";
     return `Net loop correction ${signed(value.mean ?? 0)} U/h, ${daysText(value.rate?.n)}`;
   }
 
@@ -255,6 +253,8 @@
     return `Net loop correction ${signed(hour.mean)} U, ${daysText(hour.n)}`;
   }
 
+  const pickHelp = "Press Enter to list the days for the time. Press Escape to close the list.";
+
   function closeDays() {
     cursor.selected = null;
     cursor.restoreFocus();
@@ -263,7 +263,7 @@
 
 {#snippet eventReadout(series: DailyProfileSlot["carbs"], comparisonSeries: DailyProfileSlot["carbs"], unit: string)}
   {#if !series}
-    <p class="text-muted-foreground">No data in this slot</p>
+    <p class="text-muted-foreground">No data at this time</p>
   {:else}
     <dl class="grid grid-cols-[auto_auto] gap-x-3 tabular-nums">
       <dt class="text-muted-foreground">Mean per day</dt>
@@ -287,17 +287,7 @@
   <NoTimeZone reason={response.timeZoneUnavailableReason}>{loopAnalysisTimeZoneNeed()}</NoTimeZone>
 {:else}
   <div class="space-y-6">
-    {#if response.historyClamped}
-      <Alert.Root variant="info">
-        <Clock />
-        <Alert.Title>Only the last 24 hours are included</Alert.Title>
-        <Alert.Description>
-          You can see only the most recent 24 hours of this data. The report shows only those 24
-          hours for all ranges that you select. It does not compare ranges. Each time of day uses
-          data from one day at most.
-        </Alert.Description>
-      </Alert.Root>
-    {/if}
+    <HistoryClampNote {response}>Each time of day uses data from one day at most.</HistoryClampNote>
 
     <IgnoredFiltersNotice ignored={response.ignoredFilters} />
 
@@ -331,6 +321,7 @@
             title="Glucose"
             unit={bgLabel()}
             {cursor}
+            {pickHelp}
             yDomain={glucoseDomain}
             yFormat={axisGlucose}
             heightClass="h-48"
@@ -390,6 +381,7 @@
           title="Basal"
           unit="U/h"
           {cursor}
+          {pickHelp}
           yDomain={basalDomain}
           empty={emptyText(
             LoopAnalysisSeries.DeliveredBasal,
@@ -454,10 +446,11 @@
             title="Net loop correction"
             unit="U/h above schedule"
             {cursor}
+            {pickHelp}
             yDomain={correctionDomain}
             empty={emptyText(LoopAnalysisSeries.NetLoopCorrection, has((s) => s.netLoopCorrection), "No loop corrections in this range")}
             legend={[
-              { texture: "percentile-inner", label: "Temp basal delta 25–75%", color: CORRECTION_BAND },
+              { texture: "percentile-inner", label: "Temp basal change 25–75%", color: CORRECTION_BAND },
               { texture: "percentile-median", label: "Mean, with automatic boluses", color: CORRECTION_LINE, shape: "line" },
               ...(showManualTemp ? [{ texture: "steps" as const, label: "Manual temp", color: COMPONENT_COLORS.manualTemp, shape: "line" as const }] : []),
               ...(showSuspend ? [{ texture: "steps" as const, label: "Suspend", color: COMPONENT_COLORS.suspend, shape: "line" as const }] : []),
@@ -498,7 +491,7 @@
               {@const s = at(slots, slot)}
               {@const c = at(comparisonSlots, slot)}
               <AggregateReadout
-                label="Temp basal delta"
+                label="Temp basal change"
                 value={s?.netLoopCorrection?.rate}
                 comparison={c?.netLoopCorrection?.rate}
                 showComparison={comparing}
@@ -523,18 +516,18 @@
               {/if}
             {/snippet}
           </TimeOfDayPanel>
-          <div class="flex flex-wrap items-center gap-x-5 gap-y-2 px-1 text-sm">
+          <div class="flex flex-wrap items-center gap-x-5 gap-y-2 px-1 text-sm print:hidden">
             <span class="text-xs text-muted-foreground">Also show</span>
             {#if componentsHidden}
               <span class="text-xs text-muted-foreground">{hiddenText()}</span>
             {/if}
             <div class="flex items-center gap-2">
               <Switch id="show-manual-temp" disabled={componentsHidden} bind:checked={showManualTemp} />
-              <Label for="show-manual-temp">Manual temps</Label>
+              <Label for="show-manual-temp">Manual temp</Label>
             </div>
             <div class="flex items-center gap-2">
               <Switch id="show-suspend" disabled={componentsHidden} bind:checked={showSuspend} />
-              <Label for="show-suspend">Suspends</Label>
+              <Label for="show-suspend">Suspend</Label>
             </div>
             <div class="flex items-center gap-2">
               <Switch id="show-inferred" disabled={componentsHidden} bind:checked={showInferred} />
@@ -549,6 +542,7 @@
           title="Net loop correction by hour"
           unit="U per hour"
           {cursor}
+          {pickHelp}
           yDomain={hourlyDomain}
           heightClass="h-28"
           empty={emptyText(LoopAnalysisSeries.HourlyNetLoopCorrection, hourlyPrimary.length > 0, "No loop corrections in this range")}
@@ -584,6 +578,7 @@
           title="Insulin on board"
           unit="U"
           {cursor}
+          {pickHelp}
           yDomain={iobDomain}
           empty={emptyText(LoopAnalysisSeries.Iob, has((s) => s.iob), "No IOB in this range")}
           legend={[
@@ -612,6 +607,7 @@
           title="Carbs on board"
           unit="g"
           {cursor}
+          {pickHelp}
           yDomain={cobDomain}
           empty={emptyText(LoopAnalysisSeries.Cob, has((s) => s.cob), "No COB in this range")}
           legend={[
@@ -640,6 +636,7 @@
           title="Manual boluses"
           unit="U per day"
           {cursor}
+          {pickHelp}
           yDomain={bolusDomain}
           heightClass="h-24"
           empty={emptyText(LoopAnalysisSeries.ManualBoluses, has((s) => s.manualBoluses), "No manual boluses in this range")}
@@ -656,8 +653,9 @@
           id="carbs"
           describe={(slot) => describeEvents(at(slots, slot)?.carbs, "g")}
           title="Carbs"
-          unit="g per day"
+          unit="Grams per day"
           {cursor}
+          {pickHelp}
           yDomain={carbDomain}
           heightClass="h-28"
           showTimeAxis
@@ -673,9 +671,9 @@
 
         <p class="flex items-center gap-1.5 px-1 text-xs text-muted-foreground" {@attach loopAnalysisMark("loop-analysis-daily-profile.days")}>
           <EyeOff class="size-3.5" />
-          Faded areas have too few days to show a pattern. To list the days for a time, click the time
-          or press Enter on it. Use the arrow keys to move along the day and between charts. Use Home
-          and End to go to the start and the end of the day.
+          Faded areas have too few days to show a pattern. To list the days for a time, select the
+          time or press Enter on it. Use the arrow keys to move along the day and between charts. Use
+          Home and End to go to the start and the end of the day.
         </p>
       </div>
 

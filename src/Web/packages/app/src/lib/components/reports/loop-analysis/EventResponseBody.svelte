@@ -12,14 +12,12 @@
     type EventResponseSlot,
     type LoopAnalysisAggregate,
   } from "$lib/api";
-  import * as Alert from "$lib/components/ui/alert";
   import { Switch } from "$lib/components/ui/switch";
   import { Label } from "$lib/components/ui/label";
   import { plural } from "$lib/utils/plural";
   import { tenantChartThresholds } from "$lib/stores/realtime-store.svelte";
   import { glucoseUnits } from "$lib/stores/appearance-store.svelte";
   import { bg, bgDelta, bgLabel, convertToDisplayUnits } from "$lib/utils/formatting";
-  import Clock from "@lucide/svelte/icons/clock";
   import Info from "@lucide/svelte/icons/info";
   import TimeOfDayPanel from "./TimeOfDayPanel.svelte";
   import PercentileBands from "./PercentileBands.svelte";
@@ -31,17 +29,21 @@
   import { loopAnalysisTimeZoneNeed } from "./time-zone-need.svelte";
   import CohortDot from "./CohortDot.svelte";
   import { TimeOfDayCursor } from "./time-of-day-cursor.svelte";
-  import { axisEnd } from "./daily-profile-view";
+  import { axisEnd, signedTwoPlaces as signedUnits } from "./daily-profile-view";
   import { cohortBands, hourTicks, slotMinute } from "./event-response-view";
   import { cohortLabel, relativeHours, relativeMinutes } from "./event-labels.svelte";
   import IgnoredFiltersNotice from "./IgnoredFiltersNotice.svelte";
+  import { eventOptionLabels } from "./filter-labels.svelte";
+  import HistoryClampNote from "./HistoryClampNote.svelte";
   import { loopAnalysisMark } from "./loop-analysis-tour.svelte";
 
   interface Props {
     response: EventResponseReport;
+    /** Values the page removed from the URL after an earlier response ignored them, which this response no longer names. */
+    cleanedFilters?: string[];
   }
 
-  let { response }: Props = $props();
+  let { response, cleanedFilters = [] }: Props = $props();
 
   const cohorts = $derived(response.definition?.cohorts ?? []);
   const primary = $derived(response.primary?.cohorts ?? []);
@@ -53,6 +55,7 @@
   // The axis is fixed per response; a cursor per slot count keeps the stack's tab stop and crosshair.
   const cursor = $derived(new TimeOfDayCursor(Math.max(1, minutes.length)));
   let algorithmOnly = $state(false);
+  const options = $derived(eventOptionLabels());
 
   const units = $derived(glucoseUnits.current);
   const toDisplay = $derived((mgdl: number) => convertToDisplayUnits(mgdl, units));
@@ -77,8 +80,8 @@
         : null,
       n(result?.beforeVisibleHistory) > 0
         ? plural(n(result?.beforeVisibleHistory), [
-            "# not included because the time before it is outside the last 24 hours",
-            "# not included because the time before them is outside the last 24 hours",
+            "# not included because the time before it is outside the history that you can see",
+            "# not included because the time before them is outside the history that you can see",
           ])
         : null,
     ]
@@ -111,7 +114,6 @@
     algorithmOnly ? s.netLoopCorrectionSinceAnchor : s.netInsulinSinceAnchor
   );
   const u2 = (v: number) => v.toFixed(2);
-  const signedUnits = (v: number) => `${v > 0 ? "+" : ""}${v.toFixed(2)}`;
   /** Whole numbers in mg/dL; in mmol/L, as many decimals as the axis span needs so ticks stay distinct. */
   const axisGlucose = (domain: [number, number]) => (v: number) =>
     units === "mmol" ? v.toFixed(domain[1] - domain[0] < 6 ? 1 : 0) : String(Math.round(v));
@@ -157,7 +159,7 @@
     },
     {
       id: "cumulative",
-      title: algorithmOnly ? "Loop correction since the event" : "Net insulin above schedule since the event",
+      title: algorithmOnly ? "Net loop correction since the event" : "Net insulin above schedule since the event",
       unit: "U",
       series: LoopAnalysisSeries.EventNetInsulin,
       pick: cumulative,
@@ -223,18 +225,9 @@
   <NoTimeZone reason={response.timeZoneUnavailableReason}>{loopAnalysisTimeZoneNeed()}</NoTimeZone>
 {:else}
   <div class="space-y-6">
-    {#if response.historyClamped}
-      <Alert.Root variant="info">
-        <Clock />
-        <Alert.Title>Only the last 24 hours are included</Alert.Title>
-        <Alert.Description>
-          You can see only the most recent 24 hours of this data. The events are from the last 24
-          hours for all ranges that you select. There is no comparison.
-        </Alert.Description>
-      </Alert.Root>
-    {/if}
+    <HistoryClampNote {response} />
 
-    <IgnoredFiltersNotice ignored={response.ignoredFilters} />
+    <IgnoredFiltersNotice ignored={[...new Set([...(response.ignoredFilters ?? []), ...cleanedFilters])]} />
 
     {#if cohorts.length === 0}
       <div class="rounded-lg border border-dashed p-8 text-center text-muted-foreground">
@@ -259,6 +252,12 @@
           </li>
         {/each}
       </ul>
+      <p class="text-xs text-muted-foreground" data-testid="loop-analysis-event-window">
+        {plural(response.definition?.minutesBefore ?? 0, ["# minute before", "# minutes before"])} to
+        {plural((response.definition?.minutesAfter ?? 0) / 60, ["# hour after", "# hours after"])} each event.
+        {#if response.definition?.isolatedOnly}{options.isolatedOnly}.{/if}
+        {#if response.definition?.requireCorroboration}{options.requireCorroboration}.{/if}
+      </p>
 
       {#if !anyEvents}
         <div class="rounded-lg border border-dashed p-8 text-center text-muted-foreground">
@@ -286,6 +285,7 @@
               {ticks}
               tickLabel={(slot) => relativeHours(slotMinute(minutes, slot))}
               {slotLabel}
+              pickHelp={listed ? "Press Enter to list the events for the time. Press Escape to close the list." : null}
               empty={emptyText(panel)}
               describe={(slot) => describe(panel, slot)}
             >
@@ -323,9 +323,9 @@
               {/snippet}
             </TimeOfDayPanel>
             {#if panel.id === "cumulative" && !hidden(panel.series)}
-              <div class="flex items-center gap-2 px-1">
+              <div class="flex items-center gap-2 px-1 print:hidden">
                 <Switch id="event-algorithm-only" bind:checked={algorithmOnly} />
-                <Label for="event-algorithm-only">The loop's own correction only</Label>
+                <Label for="event-algorithm-only">Net loop correction only</Label>
               </div>
             {/if}
           {/each}
@@ -334,7 +334,7 @@
             <Info class="size-3.5" />
             Each band shows the events of a cohort, aligned on the event at 0. Faded areas have too few
             events to show a pattern. {#if listed}To list the events with a glucose reading at a time,
-              click the time or press Enter on it.{/if} Use the arrow keys to move along the window and
+              select the time or press Enter on it.{/if} Use the arrow keys to move along the window and
             between charts. Use Home and End to go to the start and the end.
           </p>
         </div>
@@ -356,7 +356,7 @@
           data-testid="loop-analysis-event-metrics"
           {@attach loopAnalysisMark("loop-analysis-meals-and-events.metrics")}
         >
-          <h3 id="event-metrics-heading" class="text-sm font-medium">What happened after each event</h3>
+          <h3 id="event-metrics-heading" class="text-sm font-medium">Results after each event</h3>
           <EventMetricsTable {cohorts} {primary} {comparison} backToStartMgdl={response.backToStartMgdl} />
         </section>
 
