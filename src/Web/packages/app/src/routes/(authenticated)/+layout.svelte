@@ -20,7 +20,6 @@
   import DemoBanner from "$lib/components/layout/DemoBanner.svelte";
   import GuestBanner from "$lib/components/layout/GuestBanner.svelte";
   import BackupSignInPrompt from "$lib/components/layout/BackupSignInPrompt.svelte";
-  import SessionExpiryWatcher from "$lib/components/layout/SessionExpiryWatcher.svelte";
   import MembershipRequestAutoSubmit from "$lib/components/members/MembershipRequestAutoSubmit.svelte";
   import { CommandPalette } from "$lib/components/command-palette";
   import { CoachMarkProvider } from "@nocturne/coach";
@@ -232,9 +231,6 @@
             <BackupSignInPrompt />
           {/if}
       </div>
-      {#if data.user && !data.isGuestSession}
-        <SessionExpiryWatcher />
-      {/if}
       {#if !tenantless}
         <MembershipRequestAutoSubmit
           isAuthenticated={!!data.user}
