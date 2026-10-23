@@ -191,6 +191,11 @@ public class DemoDataGenerator : IDemoDataGenerator
                 yield return MarkTempBasal(entryTime, reducedRate, tempBasalDuration);
             }
         }
+        else
+        {
+            var localTime = entryTime.Kind == DateTimeKind.Utc ? entryTime.ToLocalTime() : entryTime;
+            yield return MarkTempBasal(entryTime, InRangeTempRate(localTime, glucose - targetGlucose), tempBasalDuration);
+        }
     }
 
     public void SeedCurrentGlucose(double glucose)
