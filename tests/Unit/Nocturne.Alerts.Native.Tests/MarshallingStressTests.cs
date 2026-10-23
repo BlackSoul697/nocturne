@@ -2,7 +2,7 @@ using System.Text.Json;
 using System.Text.Json.Nodes;
 using System.Text.RegularExpressions;
 using FluentAssertions;
-using Nocturne.Alerts.ParityCorpus.Generator.Harness;
+using Nocturne.Alerts.Corpus;
 using Nocturne.Core.Alerts.Native;
 using Xunit;
 
@@ -231,7 +231,7 @@ public class MarshallingStressTests
     [NativeFact]
     public void Malformed_leaf_paths_node_throws_typed_exception()
     {
-        // `type` must be a string — a number is a JsonException in the C# engine.
+        // `type` must be a string.
         var node = JsonSerializer.SerializeToElement(new { type = 5 });
 
         var act = () => RustAlertEngine.LeafPaths(node);

@@ -504,3 +504,88 @@ public sealed record RustReplayRuleTick
 
     public bool? Firing { get; init; }
 }
+
+/// <summary>
+/// Request envelope for <c>nocturne_alerts_references_wall_clock</c>: a stored rule's body and
+/// auto-resolve configuration.
+/// </summary>
+public sealed record RustRuleConditionsRequest
+{
+    [JsonPropertyName("schema_version")]
+    public int SchemaVersion { get; init; } = AlertEnvelopeJson.SchemaVersion;
+
+    /// <summary>Wire-format condition type discriminator (e.g. <c>"threshold"</c>).</summary>
+    [JsonPropertyName("condition_type")]
+    public required string ConditionType { get; init; }
+
+    /// <summary>The kind-specific payload as stored in <c>alert_rules.condition_params</c>.</summary>
+    [JsonPropertyName("condition_params")]
+    public required JsonElement ConditionParams { get; init; }
+
+    [JsonPropertyName("auto_resolve_enabled")]
+    public bool AutoResolveEnabled { get; init; }
+
+    /// <summary>The auto-resolve tree, a full condition node.</summary>
+    [JsonPropertyName("auto_resolve_params")]
+    public JsonElement? AutoResolveParams { get; init; }
+}
+
+/// <summary>Response envelope for <c>nocturne_alerts_references_wall_clock</c>.</summary>
+public sealed record RustWallClockResponse : IRustResponseEnvelope
+{
+    [JsonPropertyName("schema_version"), JsonRequired]
+    public int SchemaVersion { get; init; }
+
+    [JsonRequired]
+    public bool Ok { get; init; }
+
+    /// <summary>Error message when <see cref="Ok"/> is false.</summary>
+    public string? Error { get; init; }
+
+    [JsonPropertyName("references_wall_clock")]
+    public bool? ReferencesWallClock { get; init; }
+}
+
+/// <summary>Request envelope for <c>nocturne_alerts_describe</c>.</summary>
+public sealed record RustDescribeRequest
+{
+    [JsonPropertyName("schema_version")]
+    public int SchemaVersion { get; init; } = AlertEnvelopeJson.SchemaVersion;
+
+    /// <summary>Wire-format condition type discriminator (e.g. <c>"threshold"</c>).</summary>
+    [JsonPropertyName("condition_type")]
+    public required string ConditionType { get; init; }
+
+    /// <summary>The kind-specific payload as stored in <c>alert_rules.condition_params</c>.</summary>
+    [JsonPropertyName("condition_params")]
+    public required JsonElement ConditionParams { get; init; }
+
+    /// <summary>
+    /// An auto-resolve tree (a full condition node) to describe as well, or null for none.
+    /// </summary>
+    [JsonPropertyName("auto_resolve_params")]
+    public JsonElement? AutoResolveParams { get; init; }
+}
+
+/// <summary>Response envelope for <c>nocturne_alerts_describe</c>.</summary>
+public sealed record RustDescribeResponse : IRustResponseEnvelope
+{
+    [JsonPropertyName("schema_version"), JsonRequired]
+    public int SchemaVersion { get; init; }
+
+    [JsonRequired]
+    public bool Ok { get; init; }
+
+    /// <summary>Error message when <see cref="Ok"/> is false.</summary>
+    public string? Error { get; init; }
+
+    /// <summary>The body's described tree (crates/nocturne-alerts-ffi/README.md, "Describe").</summary>
+    public JsonElement? Tree { get; init; }
+
+    /// <summary>
+    /// The auto-resolve tree under the <c>auto_resolve</c> root; absent or null when the request
+    /// carried none, or the tree cannot be evaluated.
+    /// </summary>
+    [JsonPropertyName("auto_resolve_tree")]
+    public JsonElement? AutoResolveTree { get; init; }
+}

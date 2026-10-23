@@ -7,7 +7,8 @@ using OpenApi.Remote.Attributes;
 using Nocturne.API.Attributes;
 using Nocturne.API.Extensions;
 using Nocturne.API.Services.Alerts;
-using Nocturne.API.Services.Alerts.Evaluators;
+using Nocturne.API.Services.Alerts.Engines;
+using Nocturne.API.Services.Alerts.Conditions;
 using Nocturne.Core.Alerts.Native;
 using Nocturne.Core.Contracts.Alerts;
 using Nocturne.Core.Contracts.Auth;
@@ -149,7 +150,8 @@ public class AlertRulesController : ControllerBase
         if (await ResolveAndValidateChannelsAsync(request.Channels, NoStoredRecipients, db, ct) is { } badChannel)
             return badChannel;
 
-        if (await RejectInvalidTrackerAgeAsync(db, request.ConditionType, request.ConditionParams, ct) is { } badTracker)
+        var leaves = RuleTrees.Leaves(request.ConditionType, trees.ConditionParams);
+        if (await RejectInvalidTrackerAgeAsync(db, leaves, ct) is { } badTracker)
             return badTracker;
 
         var tenantId = db.TenantId;
@@ -231,12 +233,11 @@ public class AlertRulesController : ControllerBase
         if (await ResolveAndValidateChannelsAsync(request.Channels, InAppRecipientsOf(rule.Channels), db, ct) is { } badChannel)
             return badChannel;
 
-        if (await RejectInvalidTrackerAgeAsync(db, request.ConditionType, request.ConditionParams, ct) is { } badTracker)
+        var leaves = RuleTrees.Leaves(request.ConditionType, trees.ConditionParams);
+        if (await RejectInvalidTrackerAgeAsync(db, leaves, ct) is { } badTracker)
             return badTracker;
 
-        var rootForCycle = TryDeserializeRoot(request.ConditionType, request.ConditionParams);
-        if (rootForCycle is not null
-            && await _referenceService.DetectCycleAsync(id, rootForCycle, ct))
+        if (await _referenceService.DetectCycleAsync(id, RuleTrees.AlertStateTargets(leaves).ToList(), ct))
         {
             return BadRequest("Cyclical alert_state reference detected.");
         }
@@ -815,6 +816,25 @@ public class AlertRulesController : ControllerBase
         (await ToResponsesAsync(db, [rule], ct))[0];
 
     /// <summary>
+    /// What a save of the stored rule would reject. A rule the engine cannot take at all is logged
+    /// and listed without issues, so one such rule does not fail the whole list.
+    /// </summary>
+    private IReadOnlyList<RustValidationIssue> StoredIssues(AlertRuleEntity rule)
+    {
+        try
+        {
+            return _conditionValidator.Validate(
+                rule.ConditionType, rule.ConditionParams, rule.AutoResolveEnabled,
+                rule.AutoResolveParams, rule.ClientConfiguration);
+        }
+        catch (RustAlertEngineException ex)
+        {
+            _logger.LogError(ex, "The alert engine could not check the conditions of alert rule {AlertRuleId}", rule.Id);
+            return [];
+        }
+    }
+
+    /// <summary>
     /// Maps rules to responses and, for a caller who may edit the rules, describes each in-app
     /// channel's recipient. Only the rule editor reads it, so other callers are spared the lookup.
     /// This is not a privacy boundary: member names are readable more widely (issue #2359).
@@ -822,10 +842,7 @@ public class AlertRulesController : ControllerBase
     private async Task<List<AlertRuleResponse>> ToResponsesAsync(
         NocturneDbContext db, IEnumerable<AlertRuleEntity> rules, CancellationToken ct)
     {
-        var responses = rules.Select(rule => MapToResponse(rule, _conditionValidator.Validate(
-                rule.ConditionType, rule.ConditionParams, rule.AutoResolveEnabled,
-                rule.AutoResolveParams, rule.ClientConfiguration)))
-            .ToList();
+        var responses = rules.Select(rule => MapToResponse(rule, StoredIssues(rule))).ToList();
         var inApp = responses
             .SelectMany(r => r.Channels)
             .Where(c => c.ChannelType == ChannelType.InApp)
@@ -919,86 +936,20 @@ public class AlertRulesController : ControllerBase
     }
 
     /// <summary>
-    /// Reconstructs a <see cref="ConditionNode"/> from the controller's
-    /// <c>ConditionType</c> + <c>ConditionParams</c> request shape so the reference walker can
-    /// inspect the proposed tree before persisting. Returns null if the payload can't be
-    /// deserialised — cycle detection then no-ops and the request still passes validation
-    /// (the existing rule-shape validator catches malformed payloads with a clearer error).
-    /// </summary>
-    private static ConditionNode? TryDeserializeRoot(AlertConditionType type, object? conditionParams)
-    {
-        if (conditionParams is null) return null;
-        try
-        {
-            var json = JsonSerializer.Serialize(conditionParams);
-            return type switch
-            {
-                AlertConditionType.Composite => new ConditionNode("composite",
-                    Composite: JsonSerializer.Deserialize<CompositeCondition>(json, ReferenceJsonOptions)),
-                AlertConditionType.Not => new ConditionNode("not",
-                    Not: JsonSerializer.Deserialize<NotCondition>(json, ReferenceJsonOptions)),
-                AlertConditionType.Sustained => new ConditionNode("sustained",
-                    Sustained: JsonSerializer.Deserialize<SustainedCondition>(json, ReferenceJsonOptions)),
-                AlertConditionType.AlertState => new ConditionNode("alert_state",
-                    AlertState: JsonSerializer.Deserialize<AlertStateCondition>(json, ReferenceJsonOptions)),
-                _ => new ConditionNode(type.ToString().ToLowerInvariant()),
-            };
-        }
-        catch (JsonException)
-        {
-            return null;
-        }
-    }
-
-    private static readonly JsonSerializerOptions ReferenceJsonOptions = new()
-    {
-        PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower,
-        PropertyNameCaseInsensitive = true,
-    };
-
-    /// <summary>
     /// Returns a <c>400 BadRequest</c> when the rule contains a <c>tracker_age</c> leaf whose
     /// <c>tracker_definition_id</c> is missing, malformed, or does not exist for this tenant.
-    /// Without this the rule saves fine but the evaluator fails closed on every reading and
-    /// sweep pass — a rule that silently never fires (or throws into the per-rule catch when
-    /// the id can't even deserialise). Returns null when the request is acceptable.
+    /// Without this the rule saves fine but the engine fails closed on every reading and sweep
+    /// pass, a rule that silently never fires. Returns null when the request is acceptable.
     /// </summary>
     private static async Task<BadRequestObjectResult?> RejectInvalidTrackerAgeAsync(
-        NocturneDbContext db, AlertConditionType type, object? conditionParams, CancellationToken ct)
+        NocturneDbContext db, IReadOnlyList<ConditionLeaf> leaves, CancellationToken ct)
     {
-        if (conditionParams is null)
-            return null;
-
         var definitionIds = new List<Guid>();
-        if (type == AlertConditionType.TrackerAge)
+        foreach (var leaf in leaves.Where(leaf => leaf.Kind == AlertConditionType.TrackerAge))
         {
-            try
-            {
-                var json = JsonSerializer.Serialize(conditionParams);
-                var typed = JsonSerializer.Deserialize<TrackerAgeCondition>(json, ReferenceJsonOptions);
-                if (typed is null || typed.TrackerDefinitionId == Guid.Empty)
-                    return new BadRequestObjectResult("tracker_age requires a tracker_definition_id.");
-                definitionIds.Add(typed.TrackerDefinitionId);
-            }
-            catch (JsonException)
-            {
-                return new BadRequestObjectResult("tracker_age requires a valid tracker_definition_id.");
-            }
-        }
-        else
-        {
-            var root = TryDeserializeRoot(type, conditionParams);
-            if (root is not null)
-            {
-                ConditionPath.Walk<object>(root, (visited, _) =>
-                {
-                    if (visited.TrackerAge is { } trackerAge)
-                        definitionIds.Add(trackerAge.TrackerDefinitionId);
-                    return null;
-                });
-                if (definitionIds.Contains(Guid.Empty))
-                    return new BadRequestObjectResult("tracker_age requires a tracker_definition_id.");
-            }
+            if (leaf.GuidParam("tracker_definition_id") is not { } definitionId || definitionId == Guid.Empty)
+                return new BadRequestObjectResult("tracker_age requires a tracker_definition_id.");
+            definitionIds.Add(definitionId);
         }
 
         foreach (var definitionId in definitionIds)

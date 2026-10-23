@@ -549,7 +549,7 @@ app.Services.GetRequiredService<CredentialPathRedactor>()
 var isNSwagGeneration = IsRunningInNSwagContext();
 
 if (!isNSwagGeneration)
-    app.Services.GetRequiredService<Nocturne.API.Services.Alerts.Engines.AlertEngineSelection>();
+    app.Services.GetRequiredService<Nocturne.API.Services.Alerts.Engines.AlertEngineNativeLibrary>();
 if (!isNSwagGeneration && !app.Environment.IsEnvironment("Testing"))
 {
     // Validate that the migrator connection string is present and uses a different role.

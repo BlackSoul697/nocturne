@@ -47,18 +47,6 @@ public sealed class RuleScopeClassBackfillService : BackgroundService
             var factory = scope.ServiceProvider.GetRequiredService<INocturneDbContextFactory>();
             var classifier = scope.ServiceProvider.GetRequiredService<IRuleScopeClassifier>();
 
-            // Without the native engine every Classify falls back to Undirected, and the
-            // recompute-and-compare below would overwrite previously-correct low/high
-            // classifications with that fallback. Skip the whole scan instead of persisting it.
-            // Asked of the classifier rather than AlertsInterop directly: it is the thing whose
-            // availability actually matters here, and it caches the probe for the process lifetime.
-            if (!classifier.IsAvailable)
-            {
-                _logger.LogWarning(
-                    "nocturne_alerts native library unavailable; skipping scope-class backfill to preserve stored classifications");
-                return;
-            }
-
             // Tenants are not RLS-scoped, so this list read is safe without a tenant context.
             List<Guid> tenantIds;
             await using (var lookup = await factory.CreatePlatformAsync(stoppingToken))

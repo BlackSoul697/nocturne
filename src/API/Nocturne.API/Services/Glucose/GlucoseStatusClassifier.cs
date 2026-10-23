@@ -1,6 +1,6 @@
 using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
-using Nocturne.API.Services.Alerts.Evaluators;
+using Nocturne.API.Services.Alerts.Conditions;
 using Nocturne.Core.Constants;
 using Nocturne.Core.Contracts.Multitenancy;
 using Nocturne.Core.Models;
@@ -82,7 +82,7 @@ public class GlucoseStatusClassifier : IGlucoseStatusClassifier
             ThresholdCondition? condition;
             try
             {
-                condition = JsonSerializer.Deserialize<ThresholdCondition>(rule.ConditionParams, EvaluatorJson.Options);
+                condition = JsonSerializer.Deserialize<ThresholdCondition>(rule.ConditionParams, ConditionJson.Options);
             }
             catch (JsonException ex)
             {

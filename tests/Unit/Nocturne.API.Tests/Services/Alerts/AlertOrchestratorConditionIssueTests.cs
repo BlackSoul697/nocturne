@@ -2,10 +2,11 @@ using FluentAssertions;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using Moq;
-using Nocturne.Alerts.ParityCorpus.Generator.Harness;
+using Nocturne.Alerts.Corpus;
 using Nocturne.API.Services.Alerts;
 using Nocturne.API.Services.Alerts.Engines;
-using Nocturne.API.Services.Alerts.Evaluators;
+using Nocturne.API.Services.Alerts.Conditions;
+using Nocturne.API.Tests.Services.BackgroundServices;
 using Nocturne.API.Tests.TestDoubles;
 using Nocturne.Core.Alerts.Native;
 using Nocturne.Core.Contracts.Alerts;
@@ -38,33 +39,40 @@ public class AlertOrchestratorConditionIssueTests
         LastReadingAt = lastReadingAt ?? Now,
     };
 
-    [Fact]
-    public async Task A_wizard_urgent_low_never_fires_however_low_glucose_is()
+    /// <summary>A stored rule body evaluated as its root node, as the engine reads it.</summary>
+    private static bool Evaluate(AlertConditionType type, string conditionParams, SensorContext context)
     {
-        (await new ThresholdEvaluator().EvaluateAsync(WizardUrgentLow, Reading(40), CancellationToken.None))
+        var node = RustEnvelopeMapper.ParseNode(
+            RustEnvelopeMapper.WrapPayload(AlertConditionTypeNames.ToWireString(type), conditionParams));
+        var errors = new AlertEngineErrors(new TestMeterFactory(), TimeProvider.System);
+        return RustAuxiliaryEvaluation.EvaluateNode(
+            errors, RuleId, node, "condition", context, Now, new Dictionary<string, DateTime>()).Value!.Value;
+    }
+
+    [NativeFact]
+    public void A_wizard_urgent_low_never_fires_however_low_glucose_is()
+    {
+        Evaluate(AlertConditionType.Threshold, WizardUrgentLow, Reading(40))
             .Should().BeFalse("with no value the threshold reads as 0, and no reading is below 0");
-        (await new ThresholdEvaluator().EvaluateAsync("""{"direction": "below", "value": 54}""", Reading(40), CancellationToken.None))
+        Evaluate(AlertConditionType.Threshold, """{"direction": "below", "value": 54}""", Reading(40))
             .Should().BeTrue("the shape the repair gives it fires");
     }
 
-    [Fact]
-    public async Task A_wizard_signal_loss_never_fires_however_long_the_gap()
+    [NativeFact]
+    public void A_wizard_signal_loss_never_fires_however_long_the_gap()
     {
-        var time = new ManualTimeProvider();
-        time.SetUtcNow(Now);
-        var evaluator = new SignalLossEvaluator(time);
         var gap = Reading(120, lastReadingAt: Now.AddHours(-3));
 
-        (await evaluator.EvaluateAsync(WizardSensorLost, gap, CancellationToken.None))
+        Evaluate(AlertConditionType.SignalLoss, WizardSensorLost, gap)
             .Should().BeFalse("with no timeout_minutes the timeout reads as 0, which never fires");
-        (await evaluator.EvaluateAsync("""{"timeout_minutes": 15}""", gap, CancellationToken.None))
+        Evaluate(AlertConditionType.SignalLoss, """{"timeout_minutes": 15}""", gap)
             .Should().BeTrue("the shape the repair gives it fires");
     }
 
     [NativeFact]
     public void A_wizard_urgent_low_is_one_a_save_would_reject()
     {
-        new AlertRuleConditionValidator(NullLogger<AlertRuleConditionValidator>.Instance)
+        new AlertRuleConditionValidator()
             .Validate(AlertConditionType.Threshold, WizardUrgentLow, false, null, null)
             .Select(i => i.Reason)
             .Should().Contain("field_missing");
@@ -94,6 +102,24 @@ public class AlertOrchestratorConditionIssueTests
         harness.Logger.Warnings.Should().HaveCount(2, "an edited condition is a new version");
     }
 
+    [NativeFact]
+    public async Task A_rule_the_reference_filter_drops_is_still_reported()
+    {
+        var harness = new Harness();
+        harness.Validator
+            .Setup(v => v.Validate(It.IsAny<AlertConditionType>(), It.IsAny<string>(), It.IsAny<bool>(),
+                It.IsAny<string?>(), It.IsAny<string?>()))
+            .Returns([new RustValidationIssue("condition", "alert_state", "invalid_field", "alert_id")]);
+
+        await harness.EvaluateAsync(Rule("""{"alert_id": "garbage", "state": "active"}""", AlertConditionType.AlertState));
+
+        harness.Logger.Warnings.Should().ContainSingle().Which.Should().Contain("invalid_field (alert_id)");
+        harness.Engine.Verify(
+            e => e.EvaluateRuleAsync(It.IsAny<AlertRuleSnapshot>(), It.IsAny<SensorContext>(),
+                It.IsAny<AlertEngineOptions>(), It.IsAny<CancellationToken>()),
+            Times.Never, "a rule naming no enabled rule is not evaluated");
+    }
+
     [Fact]
     public async Task A_rule_with_no_issues_is_not_reported()
     {
@@ -109,7 +135,7 @@ public class AlertOrchestratorConditionIssueTests
     }
 
     [Fact]
-    public async Task A_tree_that_fails_evaluation_is_left_to_the_fault_report()
+    public async Task A_tree_that_fails_evaluation_is_checked_once_like_any_other()
     {
         var harness = new Harness();
         harness.Validator
@@ -123,7 +149,7 @@ public class AlertOrchestratorConditionIssueTests
         harness.Validator.Verify(
             v => v.Validate(It.IsAny<AlertConditionType>(), It.IsAny<string>(), It.IsAny<bool>(),
                 It.IsAny<string?>(), It.IsAny<string?>()),
-            Times.Never);
+            Times.Once);
     }
 
     [Fact]

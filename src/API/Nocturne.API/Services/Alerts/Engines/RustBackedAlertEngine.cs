@@ -62,7 +62,7 @@ internal sealed class RustBackedAlertEngine(
         var timers = RustEnvelopeMapper.BuildTimers(await timerStore.GetAllForRuleAsync(rule.Id, ct));
         var trackerState = await trackerRepository.GetTrackerStateAsync(rule.Id, ct);
 
-        var (response, result) = errors.Track("evaluate", AlertEngineErrors.RustEngine, () =>
+        var (response, result) = errors.Track("evaluate", () =>
         {
             var response = RustAlertEngine.Evaluate(
                 RustEnvelopeMapper.BuildRule(ruleRow),
@@ -87,7 +87,7 @@ internal sealed class RustBackedAlertEngine(
             return new AlertEngineEvaluation { Skipped = true };
         }
 
-        // Timer deltas in execution order reproduce exactly the rows the managed evaluators write.
+        // Timer deltas apply in the order the engine executed them.
         await ApplyTimerOpsAsync(rule.Id, result.TimerOps, ct);
 
         var decision = new TrackerDecision(
@@ -136,7 +136,7 @@ internal sealed class RustBackedAlertEngine(
         var now = timeProvider.GetUtcNow().UtcDateTime;
         var timers = await timerStore.GetAllForRuleAsync(rule.Id, ct);
         var outcome = RustAuxiliaryEvaluation.AutoResolve(
-            errors, AlertEngineErrors.RustEngine, rule, context, now, timers, state, logger);
+            errors, rule, context, now, timers, state, logger);
         if (outcome.Node is { } node)
             await ApplyTimerOpsAsync(rule.Id, node.TimerOps, ct);
         if (outcome.Close is not { } close)
@@ -156,7 +156,7 @@ internal sealed class RustBackedAlertEngine(
         SensorContext context,
         CancellationToken ct)
     {
-        var wire = Evaluators.AlertConditionTypeNames.ToWireString(rule.ConditionType);
+        var wire = Conditions.AlertConditionTypeNames.ToWireString(rule.ConditionType);
         var node = RustEnvelopeMapper.ParseNode(
             RustEnvelopeMapper.WrapPayload(wire, rule.ConditionParams));
         return EvaluateNodeAsync(rule.Id, node, wire, context, ct);
@@ -170,7 +170,7 @@ internal sealed class RustBackedAlertEngine(
         Guid ruleId, JsonElement node, string pathRoot, SensorContext context, CancellationToken ct)
     {
         var response = RustAuxiliaryEvaluation.EvaluateNode(
-            errors, AlertEngineErrors.RustEngine, ruleId, node, pathRoot, context,
+            errors, ruleId, node, pathRoot, context,
             timeProvider.GetUtcNow().UtcDateTime, await timerStore.GetAllForRuleAsync(ruleId, ct));
         await ApplyTimerOpsAsync(ruleId, response.TimerOps, ct);
         return response.Value!.Value;

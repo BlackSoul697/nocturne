@@ -620,10 +620,9 @@ fn evaluate_rejects_unknown_condition_type() {
 
 #[test]
 fn evaluate_rejects_structurally_malformed_condition_params() {
-    // JsonException parity: the managed engine throws on a wrong-shape payload
-    // and the orchestrator's per-rule catch leaves timers/tracker untouched, so
-    // the envelope must reject it rather than fail-closed-evaluate (which would
-    // advance the tracker and silently close an active excursion).
+    // A wrong-shape payload must be rejected, so the host's per-rule catch
+    // leaves timers and tracker untouched, rather than fail-closed-evaluated
+    // (which would advance the tracker and silently close an active excursion).
     let request = json!({
         "schema_version": 1,
         "rule": {
@@ -812,8 +811,7 @@ fn leaf_paths_rejects_non_object() {
 
 #[test]
 fn leaf_paths_rejects_malformed_node() {
-    // `type` must be a string (or null/absent) — a number is a JsonException
-    // in the C# engine.
+    // `type` must be a string (or null/absent).
     assert_error(
         &call_json(nocturne_alerts_leaf_paths, r#"{ "type": 5 }"#),
         "malformed condition node",
@@ -1272,6 +1270,59 @@ fn describe_null_composite_slot_is_a_typeless_leaf() {
     assert_eq!(conds[1]["leaf_id"], json!(1));
     assert_eq!(conds[1]["type"], Value::Null);
     assert_eq!(conds[1]["kind"], Value::Null);
+}
+
+#[test]
+fn describe_without_auto_resolve_params_has_no_auto_resolve_tree() {
+    let response = describe(&json!({
+        "schema_version": 1,
+        "condition_type": "threshold",
+        "condition_params": { "direction": "below", "value": 70 },
+    }));
+    assert!(response.get("auto_resolve_tree").is_none());
+}
+
+#[test]
+fn describe_auto_resolve_tree_is_rooted_at_auto_resolve() {
+    let response = describe(&json!({
+        "schema_version": 1,
+        "condition_type": "threshold",
+        "condition_params": { "direction": "below", "value": 70 },
+        "auto_resolve_params": {
+            "type": "composite",
+            "composite": {
+                "operator": "and",
+                "conditions": [
+                    { "type": "threshold", "threshold": { "direction": "above", "value": 90 } },
+                    { "type": "Iob", "iob": { "operator": "<", "value": 1 } }
+                ]
+            }
+        },
+    }));
+    let tree = &response["auto_resolve_tree"];
+    assert_eq!(tree["path"], json!("auto_resolve"));
+    let conds = tree["conditions"].as_array().unwrap();
+    assert_eq!(conds[0]["leaf_id"], json!(0));
+    assert_eq!(conds[0]["path"], json!("auto_resolve[0].threshold"));
+    assert_eq!(conds[1]["kind"], json!("iob"));
+    assert_eq!(response["tree"]["leaf_id"], json!(0));
+}
+
+#[test]
+fn describe_null_or_unevaluable_auto_resolve_tree_is_null() {
+    for params in [
+        Value::Null,
+        json!({ "type": "threshold", "threshold": { "value": 90 } }),
+    ] {
+        let response = describe(&json!({
+            "schema_version": 1,
+            "condition_type": "threshold",
+            "condition_params": { "direction": "below", "value": 70 },
+            "auto_resolve_params": params,
+        }));
+        assert_eq!(response["ok"], json!(true));
+        assert_eq!(response["auto_resolve_tree"], Value::Null, "for {params}");
+    }
 }
 
 #[test]

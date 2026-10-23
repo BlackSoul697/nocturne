@@ -1,6 +1,6 @@
 using Microsoft.Extensions.DependencyInjection;
 using Nocturne.API.Configuration;
-using Nocturne.API.Services.Alerts.Evaluators;
+using Nocturne.API.Services.Alerts.Conditions;
 using Nocturne.API.Services.Glucose;
 using Nocturne.Core.Constants;
 using Nocturne.Core.Contracts.Alerts;
@@ -386,7 +386,7 @@ internal sealed class SensorContextEnricher : ISensorContextEnricher
 
         // Pick the entry active at the tenant's local time-of-day. `at` is always UTC; the
         // schedule's time-of-day entries are local wall-clock so we must convert. An
-        // unparseable tenant tz swallows to UTC (matches DayOfWeekEvaluator's stance) so a
+        // unparseable tenant tz swallows to UTC (as the engine's day_of_week does) so a
         // misconfigured tenant tz field still produces a deterministic bucket rather than no
         // bucket at all.
         var atUtc = DateTime.SpecifyKind(at, DateTimeKind.Utc);
@@ -652,7 +652,7 @@ internal sealed class SensorContextEnricher : ISensorContextEnricher
         for (var i = 0; i < curve.Count; i++)
         {
             // Curve index 0 is "now"; first forward step is index 1. Offset minutes are measured
-            // from the current reading; the evaluator filters by WithinMinutes.
+            // from the current reading; the engine filters by WithinMinutes.
             var offsetMinutes = (i + 1) * interval;
             points.Add(new PredictedGlucosePoint(offsetMinutes, (decimal)curve[i]));
         }

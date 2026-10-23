@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using Nocturne.Core.Alerts.Native;
 using Nocturne.Infrastructure.Data.Services;
 
 namespace Nocturne.API.Services.Alerts;
@@ -96,12 +97,24 @@ public sealed class AlertRuleConditionAuditService : BackgroundService
         var flagged = 0;
         foreach (var rule in rules)
         {
-            var issues = validator.Validate(
-                rule.ConditionType,
-                rule.ConditionParams,
-                rule.AutoResolveEnabled,
-                rule.AutoResolveParams,
-                rule.ClientConfiguration);
+            IReadOnlyList<RustValidationIssue> issues;
+            try
+            {
+                issues = validator.Validate(
+                    rule.ConditionType,
+                    rule.ConditionParams,
+                    rule.AutoResolveEnabled,
+                    rule.AutoResolveParams,
+                    rule.ClientConfiguration);
+            }
+            catch (RustAlertEngineException ex)
+            {
+                flagged++;
+                _logger.LogError(ex,
+                    "The alert engine could not check the conditions of alert rule {AlertRuleId} for tenant {TenantId}",
+                    rule.Id, tenantId);
+                continue;
+            }
             if (issues.Count == 0)
                 continue;
 

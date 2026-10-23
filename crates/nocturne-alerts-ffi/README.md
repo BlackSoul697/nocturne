@@ -61,7 +61,7 @@ out as data, and the host persists it.
 
 The `rule`, `context` and `result` shapes are exactly the golden-corpus
 interchange shapes (`ScenarioRule`, `ScenarioContext`, `ExpectedRuleResult` in
-`tests/Parity/Nocturne.Alerts.ParityCorpus.Generator/Harness/ScenarioModels.cs`)
+`tests/Parity/Nocturne.Alerts.Corpus/ScenarioModels.cs`)
 — the corpus in `tests/Parity/AlertEngineCorpus/` is the machine-checkable
 spec for all of them. Timestamps are RFC 3339 UTC; the engine emits
 whole-second instants without a fraction (`2026-01-05T12:00:00Z`) and
@@ -435,6 +435,15 @@ Response — a recursive `tree`:
   wrong `schema_version`) is an error envelope. A malformed *payload* is not —
   it collapses to a single best-effort leaf with default operands, mirroring
   the engine's silent-fail.
+- **Auto-resolve tree.** A request may also carry `auto_resolve_params`, a full
+  condition node as a rule stores it. The response then has
+  `auto_resolve_tree`, described the same way with paths under the
+  `auto_resolve` root and leaf ids numbered from 0, as `evaluate_node` numbers
+  them for that root. It is `null` when the tree is `null` or cannot be
+  evaluated, since evaluation never reads such a tree. Without
+  `auto_resolve_params` the field is absent. The backend reads the leaves of
+  both trees to decide what context to fetch and which rules an `alert_state`
+  reference ties together.
 
 ## Validate (`nocturne_alerts_validate`)
 
@@ -742,7 +751,7 @@ and `day_of_week` apply are the IANA release compiled into the library
 (`chrono-tz`), not the host's; `nocturne_alerts_tzdb_version` reports it, so a
 host can log it at load and notice when it falls behind a zone change. Keeping
 it current means updating the `chrono-tz` dependency and rebuilding. Behavioural changes to evaluation
-itself are governed by the golden corpus: both the Rust core (`tests/parity.rs`),
-this crate's FFI round-trip test, and the .NET three-way suite
+itself are governed by the golden corpus: the Rust core (`tests/parity.rs`),
+this crate's FFI round-trip test, and the .NET FFI parity suite
 (`tests/Unit/Nocturne.Alerts.Native.Tests`) pin every scenario against the
 committed `.expected.json` snapshots.

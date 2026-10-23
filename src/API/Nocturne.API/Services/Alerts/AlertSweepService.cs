@@ -1,6 +1,7 @@
 using System.Text.Json;
 using Microsoft.Extensions.DependencyInjection;
-using Nocturne.API.Services.Alerts.Evaluators;
+using Nocturne.API.Services.Alerts.Engines;
+using Nocturne.API.Services.Alerts.Conditions;
 using Nocturne.API.Multitenancy;
 using Nocturne.Core.Contracts.Alerts;
 using Nocturne.Core.Contracts.Glucose;
@@ -19,7 +20,7 @@ namespace Nocturne.API.Services.Alerts;
 /// <list type="number">
 ///   <item>Close excursions whose hysteresis window has elapsed.</item>
 ///   <item>Check snoozed instances for smart-snooze extension or re-fire.</item>
-///   <item>Evaluate rules with a wall-clock-sensitive condition (<see cref="WallClockConditions"/>).</item>
+///   <item>Evaluate rules with a wall-clock-sensitive condition (<see cref="RuleTrees.ReferencesWallClock"/>).</item>
 ///   <item>Run periodic auto-resolve for excursions whose conditions don't depend on the latest reading.</item>
 /// </list>
 /// The wall-clock pass evaluates every such rule of every tenant, so it runs after the two
@@ -44,13 +45,14 @@ public class AlertSweepService : BackgroundService
     private const string AuditEndpoint = "service:alert-sweep";
 
     /// <summary>
-    /// <see cref="WallClockConditions.ReferencesWallClock"/> per enabled rule, kept while the
-    /// rule's condition is unchanged, so a tree is walked, and an unwalkable one reported, once
-    /// per version rather than every tick.
+    /// <see cref="RuleTrees.ReferencesWallClock"/> per enabled rule, kept while the rule's body and
+    /// auto-resolve configuration are unchanged, so a rule is asked about, and a failure reported,
+    /// once per version rather than every tick.
     /// </summary>
     private readonly Dictionary<Guid, WallClockVerdict> _wallClock = [];
 
-    private sealed record WallClockVerdict(AlertConditionType Type, string Params, bool References);
+    private sealed record WallClockVerdict(
+        AlertConditionType Type, string Params, bool AutoResolveEnabled, string? AutoResolveParams, bool References);
 
     /// <summary>
     /// Per tenant whose newest canonical reading has no glucose value, what
@@ -394,7 +396,7 @@ public class AlertSweepService : BackgroundService
         foreach (var (instance, conditions) in withConditions)
         {
             var composite = new CompositeCondition("and", conditions!.ToList());
-            var json = JsonSerializer.Serialize(composite, EvaluatorJson.Options);
+            var json = JsonSerializer.Serialize(composite, ConditionJson.Options);
             syntheticRules.Add(new AlertRuleSnapshot(
                 instance.AlertRuleId,
                 tenantContext.TenantId,
@@ -446,9 +448,8 @@ public class AlertSweepService : BackgroundService
 
         try
         {
-            // The engine seeds CurrentRuleId/CurrentPath; snooze conditions evaluate under
-            // the reserved "snooze" path root so nested sustained timers don't collide
-            // with rule-body or auto-resolve timers.
+            // Snooze conditions evaluate under the reserved "snooze" path root so nested
+            // sustained timers don't collide with rule-body or auto-resolve timers.
             return await engine.EvaluateNodeAsync(
                 instance.AlertRuleId, node, enrichedContext, AlertConditionTypeNames.SnoozePathRoot, ct);
         }
@@ -554,7 +555,7 @@ public class AlertSweepService : BackgroundService
     }
 
     /// <summary>
-    /// Evaluates every enabled rule whose tree contains a <see cref="WallClockConditions"/> kind
+    /// Evaluates every enabled rule that <see cref="RuleTrees.ReferencesWallClock"/> selects
     /// through the orchestrator's full pipeline. Those conditions change truth with the clock
     /// alone, so between readings, or with no readings at all, only this pass moves them. The
     /// excursion tracker dedupes: a condition that stays true is <c>ExcursionContinues</c>.
@@ -667,7 +668,9 @@ public class AlertSweepService : BackgroundService
     {
         if (_wallClock.TryGetValue(rule.Id, out var cached)
             && cached.Type == rule.ConditionType
-            && string.Equals(cached.Params, rule.ConditionParams, StringComparison.Ordinal))
+            && string.Equals(cached.Params, rule.ConditionParams, StringComparison.Ordinal)
+            && cached.AutoResolveEnabled == rule.AutoResolveEnabled
+            && string.Equals(cached.AutoResolveParams, rule.AutoResolveParams, StringComparison.Ordinal))
         {
             return cached.References;
         }
@@ -675,17 +678,18 @@ public class AlertSweepService : BackgroundService
         bool references;
         try
         {
-            references = WallClockConditions.ReferencesWallClock(rule);
+            references = RuleTrees.ReferencesWallClock(rule);
         }
         catch (Exception ex)
         {
             _logger.LogWarning(ex,
-                "Condition tree of rule {AlertRuleId} could not be walked; it evaluates per reading only",
+                "The engine could not read the condition trees of rule {AlertRuleId}; it evaluates per reading only",
                 rule.Id);
             references = false;
         }
 
-        _wallClock[rule.Id] = new WallClockVerdict(rule.ConditionType, rule.ConditionParams, references);
+        _wallClock[rule.Id] = new WallClockVerdict(
+            rule.ConditionType, rule.ConditionParams, rule.AutoResolveEnabled, rule.AutoResolveParams, references);
         return references;
     }
 }
