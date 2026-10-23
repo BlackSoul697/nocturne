@@ -625,7 +625,7 @@ export const definitions: ScreenshotDefinition[] = [
 		scenario: 'patient',
 		clip: '[data-testid="loop-analysis-settings-evidence-isf"]',
 		// Seeded data: the figures move every capture.
-		alt: 'The insulin sensitivity (ISF) box of the Settings evidence page. A chart shows the ISF of the profile as a line and the observed figure for each of the four blocks of the day as a dot, with its spread. A hollow dot is a figure with low confidence. Under the chart is one row for each block, with the figure, the number of episodes and the confidence.',
+		alt: 'The insulin sensitivity (ISF) box of the Settings evidence page. A chart shows the ISF of the profile as a line. Each block of the day with enough episodes has a dot for the observed figure, with its spread. A hollow dot is a figure with low confidence. Under the chart is one row for each block, with the figure, the number of episodes and the confidence.',
 	},
 	{
 		id: 'sharing-settings',
