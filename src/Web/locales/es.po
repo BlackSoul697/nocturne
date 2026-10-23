@@ -5335,7 +5335,7 @@ msgstr "Icono del perfil"
 #: src/lib/components/profile/ProfileCreateDialog.svelte
 #: src/lib/components/profile/ProfileEditDialog.svelte
 msgid "Blood Glucose Units"
-msgstr "Unidades de glucosa"
+msgstr "Unidades de glucucemia"
 
 #: src/lib/components/profile/ProfileCreateDialog.svelte
 msgid "Select units"
@@ -5492,11 +5492,11 @@ msgstr "Factor de sensibilidad a la insulina (ISF)"
 
 #: src/lib/components/profile/ProfileEditDialog.svelte
 msgid "How much your blood glucose drops per unit of insulin"
-msgstr "Cuánto disminuye la glucosa por cada unidad de insulina"
+msgstr "Cuánto disminuye la glucucemia por cada unidad de insulina"
 
 #: src/lib/components/profile/ProfileEditDialog.svelte
 msgid "Target Blood Glucose Range"
-msgstr "Intervalo objetivo de glucosa"
+msgstr "Intervalo objetivo de glucemia"
 
 #: src/lib/components/profile/ProfileEditDialog.svelte
 msgid "Set your desired low and high targets throughout the day"
@@ -5596,7 +5596,7 @@ msgstr "Acceso completo"
 #: src/lib/components/rbac/PermissionSummary.svelte
 #: src/lib/components/settings/TokenScopeSelector.svelte
 msgid "Blood Glucose"
-msgstr "Glucosa"
+msgstr "Glucemia"
 
 #: src/lib/components/rbac/PermissionCategorySelector.svelte
 #: src/lib/components/rbac/PermissionSummary.svelte
@@ -10099,7 +10099,7 @@ msgstr "Tratamiento"
 
 #: src/lib/components/dashboard/glucose-chart/GlucoseChartCard.svelte
 msgid "Blood Glucose <0/>"
-msgstr "Glucosa en sangre <0/>"
+msgstr "Glucemia <0/>"
 
 #: src/lib/components/dashboard/widgets/TrackersWidget.svelte
 msgid "Trackers"
@@ -13004,7 +13004,7 @@ msgstr "<0/> Unidades y formatos"
 
 #: src/routes/(authenticated)/settings/appearance/+page.svelte
 msgid "Blood glucose units"
-msgstr "Unidades de glucosa en sangre"
+msgstr "Unidades de glucemia"
 
 #: src/routes/(authenticated)/settings/appearance/+page.svelte
 msgid "Time format"
@@ -13994,7 +13994,7 @@ msgstr "Rango objetivo"
 #: src/lib/components/schedule/TargetRangeCard.svelte
 #: src/lib/components/schedule/TargetRangeCard.svelte
 msgid "Desired blood glucose range"
-msgstr "Rango de glucosa deseado"
+msgstr "Rango de glucemia deseado"
 
 #: src/routes/(authenticated)/settings/profile/+page.svelte
 msgid "Profile Settings"
