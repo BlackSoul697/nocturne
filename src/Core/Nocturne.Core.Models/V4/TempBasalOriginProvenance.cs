@@ -66,6 +66,9 @@ public static class TempBasalOriginProvenance
     /// </summary>
     public const double RateTolerance = 0.0495;
 
+    /// <summary>Whether two rates are the same rate (<see cref="RateTolerance"/>).</summary>
+    public static bool SameRate(double a, double b) => Math.Abs(a - b) < RateTolerance;
+
     /// <summary>
     /// The origin a write leaves on a stored temp basal. An incoming statement
     /// (<see cref="TempBasalOriginEvidence.Reported"/>) wins. An incoming default
@@ -81,7 +84,8 @@ public static class TempBasalOriginProvenance
 
     private static bool KeepsStored(TempBasalOriginState stored, TempBasalOriginState incoming) =>
         stored.Evidence is TempBasalOriginEvidence.Reported
-        || stored.Evidence is TempBasalOriginEvidence.Snapshot && SameTemp(stored, incoming);
+        || stored.Evidence is TempBasalOriginEvidence.Snapshot or TempBasalOriginEvidence.OtherDevice
+        && SameTemp(stored, incoming);
 
     private static bool SameTemp(TempBasalOriginState stored, TempBasalOriginState incoming) =>
         stored.StartMills == incoming.StartMills

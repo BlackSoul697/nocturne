@@ -82,6 +82,39 @@ public class IobCobComputeStageTests
     );
 
     [Fact]
+    public async Task ExecuteAsync_ARunningTempInAWindowEndingAfterNow_DeliversOnlyUntilNow()
+    {
+        var now = TestMills + 10 * 60 * 1000;
+        var running = new TempBasal
+        {
+            StartTimestamp = DateTimeOffset.FromUnixTimeMilliseconds(TestMills).UtcDateTime,
+            Rate = 3.0,
+            Origin = TempBasalOrigin.Algorithm,
+        };
+        var pieceEnds = new List<long>();
+        _mockIobCalculator
+            .Setup(s => s.FromBoluses(It.IsAny<List<Bolus>>(), It.IsAny<TherapySnapshot>(), It.IsAny<long>()))
+            .Returns(new IobResult { Iob = 0 });
+        _mockIobCalculator
+            .Setup(s => s.FromTempBasals(It.IsAny<List<TempBasal>>(), It.IsAny<TherapySnapshot>(), It.IsAny<long>()))
+            .Callback((List<TempBasal> pieces, TherapySnapshot _, long _) => pieceEnds.AddRange(pieces.Select(p => p.EndMills!.Value)))
+            .Returns(new IobResult { BasalIob = 0.1 });
+
+        await _stage.ExecuteAsync(new ChartDataContext
+        {
+            StartTime = TestMills,
+            EndTime = TestMills + 30 * 60 * 1000,
+            NowMills = now,
+            IntervalMinutes = 5,
+            DefaultBasalRate = 1.0,
+            TempBasalList = [running],
+        }, CancellationToken.None);
+
+        pieceEnds.Should().NotBeEmpty().And.OnlyContain(end => end == now,
+            "the chart's basal stops a running temp at now, and so must its IOB");
+    }
+
+    [Fact]
     public async Task ExecuteAsync_ComputesIobCobAndBasalSeries()
     {
         // Arrange

@@ -1,4 +1,5 @@
 using Nocturne.Core.Clinical.LoopAnalysis;
+using Nocturne.Core.Clinical.Treatments;
 using Nocturne.Core.Models;
 using Nocturne.Core.Models.LoopAnalysis;
 
@@ -34,7 +35,7 @@ internal sealed partial class LoopAnalysisService
         var sensorStarts = definition.Cohorts.Any(c => c.Anchor == EventAnchorKind.SensorStart);
         var (primary, comparison, names) = await ForRangesAsync(
             filter,
-            range => LoadEventsAsync(range, window, zone, sensorStarts, filter.HistoryVisibleFrom, ToMills(filter.Now), ct),
+            range => LoadEventsAsync(range, window, zone, sensorStarts, filter, ct),
             (loaded, range, isPrimary) => EventResponseCalculator.Calculate(
                 loaded.Inputs, Mask(filter, range, zone, loaded.Sources), range.From, range.To, definition,
                 listEvents: isPrimary));
@@ -55,23 +56,22 @@ internal sealed partial class LoopAnalysisService
     /// merged with the change recorded just before it.
     /// </summary>
     private async Task<EventsLoaded> LoadEventsAsync(
-        Window range, EventWindow window, TimeZoneInfo zone, bool sensorStarts, DateTime? visibleFrom, long now,
-        CancellationToken ct)
+        Window range, EventWindow window, TimeZoneInfo zone, bool sensorStarts, LoopAnalysisFilter filter, CancellationToken ct)
     {
         var padded = new Window(range.From - EventLookbackMs(window), range.To + window.AfterMs + EventMarginMs);
         var sensorTask = sensorStarts
             ? deviceEventRepository.GetAsync(
                 ToUtc(range.From - EventAnchors.SensorSessionMergeMs), ToUtc(range.To), null, null, int.MaxValue, descending: false, ct: ct)
             : Task.FromResult(Enumerable.Empty<Core.Models.V4.DeviceEvent>());
-        var loaded = await LoadDailyProfileAsync(padded, zone, ct);
+        var loaded = await LoadDailyProfileAsync(padded, zone, filter, BasalIobModel.Displayed, ct);
 
         return new EventsLoaded(new EventResponseInputs
         {
             Series = loaded.Inputs,
             Sources = loaded.Sources,
             SensorStarts = [.. (await sensorTask).Where(e => SensorStartTypes.Contains(e.EventType)).Select(e => e.Mills)],
-            HistoryVisibleFrom = visibleFrom is { } edge ? ToMills(edge) : null,
-            Now = now,
+            HistoryVisibleFrom = loaded.Inputs.HistoryVisibleFrom,
+            Now = ToMills(filter.Now),
         });
     }
 }

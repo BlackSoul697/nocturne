@@ -160,10 +160,7 @@ public class ApsSnapshotRepository : SyncUpsertRepositoryBase<ApsSnapshot, ApsSn
             SensitivityRatio = r.SensitivityRatio,
             HasReason = reason is not null,
             SuggestedChange = r.SuggestedChange,
-            LimitReason = reason is not null
-                && (reason.Contains("maxSafeBasal", StringComparison.Ordinal) || reason.Contains("max_iob", StringComparison.Ordinal))
-                    ? reason
-                    : null,
+            LimitReason = reason is not null && ApsLoopCycle.NamesALimit(reason) ? reason : null,
         };
     }
 

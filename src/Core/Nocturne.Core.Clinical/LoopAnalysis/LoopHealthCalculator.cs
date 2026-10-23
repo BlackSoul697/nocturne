@@ -1,3 +1,4 @@
+using System.Globalization;
 using Nocturne.Core.Clinical.Statistics;
 using Nocturne.Core.Models;
 using Nocturne.Core.Models.LoopAnalysis;
@@ -64,12 +65,6 @@ public static class LoopHealthCalculator
     public const double MaxBasalToleranceUph = 0.025;
 
     /// <summary>
-    /// How far an enacted rate can be from the rate the pump delivers for the same temp: one pump
-    /// step. AAPS enacts the rate it computed, unrounded, and the pump rounds it.
-    /// </summary>
-    public const double PumpStepUph = 0.05;
-
-    /// <summary>
     /// How far either side of a temp record's start the cycle that set it is looked for. The
     /// snapshot is stamped when the cycle ran and the record when the pump confirmed the temp, which
     /// can come minutes later, or the other way round where an uploader stamps both late.
@@ -87,7 +82,7 @@ public static class LoopHealthCalculator
     public static LoopHealthRange Calculate(LoopHealthInputs inputs, LoopAnalysisMask mask, long from, long to)
     {
         var grid = new HourGrid(inputs.Zone, from, to, mask.Analysed);
-        var cycles = Distinct(inputs.Cycles);
+        var cycles = LoopCycles.Distinct(inputs.Cycles, c => c.Mills, c => c.Enacted);
         var inRange = cycles.Where(c => c.Mills >= from && c.Mills < to).ToList();
         var range = new LoopHealthRange
         {
@@ -149,13 +144,6 @@ public static class LoopHealthCalculator
                 : LoopHealthUnknownReason.NoReasonRecorded,
         };
     }
-
-    /// <summary>
-    /// One cycle per instant, oldest first: two uploaders can post the same cycle, and where only
-    /// one of them saw it enacted, it was.
-    /// </summary>
-    private static List<ApsLoopCycle> Distinct(IEnumerable<ApsLoopCycle> cycles) =>
-        [.. cycles.GroupBy(c => c.Mills).OrderBy(g => g.Key).Select(g => g.FirstOrDefault(c => c.Enacted) ?? g.First())];
 
     /// <summary>Time between two cycles no further apart than <see cref="LoopGapMs"/>.</summary>
     private static IntervalSet Looping(List<ApsLoopCycle> cycles) =>
@@ -223,7 +211,8 @@ public static class LoopHealthCalculator
             foreach (var piece in inputs.Insulin.Pieces.Where(p => p.Delivered.HasValue))
             {
                 if (piece.Origin is NetInsulinOrigin.AlgorithmTemp
-                    && TempOf(inputs, piece.Start)?.OriginEvidence is TempBasalOriginEvidence.Reported or TempBasalOriginEvidence.Snapshot)
+                    && TempOf(inputs, piece.Start)?.OriginEvidence
+                        is TempBasalOriginEvidence.Reported or TempBasalOriginEvidence.Snapshot or TempBasalOriginEvidence.OtherDevice)
                     grid.AddTime(closed, piece.Start, piece.End);
                 if (piece.Origin is NetInsulinOrigin.AlgorithmTemp or NetInsulinOrigin.ManualTemp or NetInsulinOrigin.Suspend)
                     grid.AddTime(pump, piece.Start, piece.End);
@@ -339,7 +328,7 @@ public static class LoopHealthCalculator
             }
             var temp = TempOf(inputs, piece.Start);
             var setter = temp?.ApsSnapshotId is { } id ? byId.GetValueOrDefault(id) : null;
-            if (AtCap(temp?.StartMills ?? piece.Start, setter, rate, cycles, cyclesInRange, enacted, inputs.LoopMaximumBasalRate, out var why)
+            if (AtCap(temp?.RecordStartMills ?? piece.Start, setter, rate, cycles, cyclesInRange, enacted, inputs.LoopMaximumBasalRate, out var why)
                 is not { } capped)
             {
                 uncapped[why] = uncapped.GetValueOrDefault(why) + analysedMs;
@@ -368,8 +357,8 @@ public static class LoopHealthCalculator
     /// of the newest cycle by its start, no more than <see cref="TempLookbackMs"/> before it, the
     /// longest an algorithm's temp runs; with none, no cycle bears on it. An oref temp is judged by the cycle that set it:
     /// <paramref name="recordedSetter"/>, the snapshot the temp names, where it was read and kept, else, of
-    /// the enacted cycles within <see cref="SetterWindowMs"/> of its start whose rate is within
-    /// <see cref="PumpStepUph"/> of the delivered one, the nearest. The rate decides before the
+    /// the enacted cycles within <see cref="SetterWindowMs"/> of its start whose rate is the delivered
+    /// one (<see cref="TempBasalOriginProvenance.SameRate"/>), the nearest. The rate decides before the
     /// time does: the record is often stamped after the next cycle has run and enacted another
     /// rate. With no such cycle the cap is unknown: an older cycle that set the same rate set a
     /// different temp, and its reason says nothing of this one.
@@ -415,7 +404,7 @@ public static class LoopHealthCalculator
              i < enacted.Count && enacted[i].Mills <= tempStart + SetterWindowMs;
              i++)
         {
-            if (Math.Abs(enacted[i].EnactedRate!.Value - rate) <= PumpStepUph
+            if (TempBasalOriginProvenance.SameRate(enacted[i].EnactedRate!.Value, rate)
                 && (setter is null || Math.Abs(enacted[i].Mills - tempStart) < Math.Abs(setter.Mills - tempStart)))
                 setter = enacted[i];
         }
@@ -566,7 +555,7 @@ public static class LoopHealthCalculator
                 var date = _firstDay.AddDays(d);
                 days.Add(new LoopHealthDay
                 {
-                    Date = date.ToString("yyyy-MM-dd"),
+                    Date = date.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture),
                     DayOfWeek = date.DayOfWeek,
                     Start = DateTimeOffset.FromUnixTimeMilliseconds(_dayStarts[d]).UtcDateTime,
                 });
@@ -695,7 +684,7 @@ public static class LoopHealthCalculator
                     Start = DateTimeOffset.FromUnixTimeMilliseconds(start).UtcDateTime,
                     End = DateTimeOffset.FromUnixTimeMilliseconds(end).UtcDateTime,
                     Minutes = SlotSummary.Round((double)(end - start) / LocalSlotBinning.MinuteMs),
-                    Date = DateOnly.FromDateTime(local).ToString("yyyy-MM-dd"),
+                    Date = DateOnly.FromDateTime(local).ToString("yyyy-MM-dd", CultureInfo.InvariantCulture),
                     StartMinuteOfDay = local.Hour * 60 + local.Minute,
                 });
             }

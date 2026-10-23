@@ -501,7 +501,7 @@ public class IobCalculatorTests
         var timeline = new TherapyTimeline([new TherapySegment(now - 60 * 60_000L, now + 1, MatchingSnapshot())]);
 
         var ticks = IobCobSeries.Build(
-            _calculator, Mock.Of<ICobCalculator>(), [], [], LoopStream(now), timeline, null, now, now, 5 * 60_000L);
+            _calculator, Mock.Of<ICobCalculator>(), [], [], LoopStream(now), timeline, null, now, now, now, 5 * 60_000L);
 
         Assert.Equal(LoopStreamBasalIob, ticks.Single().Iob, 0.002);
     }

@@ -41,9 +41,11 @@ public static class ObservedIsf
     public const double MaxIobShareOfBolus = 1.0;
 
     /// <summary>
-    /// The glucose below which a correction's window is cut short by a low: the hypoglycaemia
-    /// threshold, at which the loop suspends and the user treats, so the drop is no longer the
-    /// insulin's alone. Ending merely below target is a drop like any other.
+    /// The glucose below which a correction is rejected: the hypoglycaemia threshold, at which the
+    /// loop suspends and the user treats, so the drop is no longer the insulin's alone. Ending merely
+    /// below target is a drop like any other. The corrections rejected are those that dropped
+    /// furthest, so a material share of them lowers the figure's confidence
+    /// (<see cref="SettingsEvidenceConfidenceReason.ManyWentLow"/>).
     /// </summary>
     public const double LowMgdl = GlucoseConstants.TargetBottomMgdl;
 

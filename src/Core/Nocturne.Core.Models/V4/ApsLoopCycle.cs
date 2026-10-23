@@ -43,6 +43,16 @@ public sealed class ApsLoopCycle
     /// </summary>
     public bool? SuggestedChange { get; init; }
 
-    /// <summary>The suggestion's <c>reason</c>, only where it names <c>maxSafeBasal</c> or <c>max_iob</c>.</summary>
+    /// <summary>The suggestion's <c>reason</c>, only where it names a limit (<see cref="NamesALimit"/>).</summary>
     public string? LimitReason { get; init; }
+
+    /// <summary>How an oref reason names determine-basal's cut of a rate to its basal cap.</summary>
+    public const string MaxSafeBasalToken = "maxSafeBasal";
+
+    /// <summary>How an oref reason names its IOB limit.</summary>
+    public const string MaxIobToken = "max_iob";
+
+    /// <summary>Whether a suggestion's <c>reason</c> names a limit, and so is kept as <see cref="LimitReason"/>.</summary>
+    public static bool NamesALimit(string reason) =>
+        reason.Contains(MaxSafeBasalToken, StringComparison.Ordinal) || reason.Contains(MaxIobToken, StringComparison.Ordinal);
 }

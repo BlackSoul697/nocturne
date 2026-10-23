@@ -309,7 +309,8 @@ internal sealed class RejectionTally(IReadOnlyList<SettingsEvidenceRule> rules)
 
     public void Reject(SettingsEvidenceRule rule) => _counts[rule]++;
 
-    public int this[SettingsEvidenceRule rule] => _counts[rule];
+    /// <summary>The rejections for <paramref name="rule"/>; none for a rule the section does not apply.</summary>
+    public int this[SettingsEvidenceRule rule] => _counts.GetValueOrDefault(rule);
 
     public List<SettingsEvidenceRejection> ToList() =>
         [.. rules.Select(r => new SettingsEvidenceRejection { Rule = r, Count = _counts[r] })];
@@ -491,9 +492,10 @@ internal sealed class SettingsEvidenceContext
     /// (<see cref="SettingsEvidenceCalculator.Material"/>), so an ISF-dependent figure is less sure.
     /// </param>
     /// <param name="materialBorrowed">
-    /// See <see cref="SettingsEvidenceCalculator.Rate"/>. A basal-dependent episode, and glucose still
-    /// moving at the window's end, also count: neither error can be sized from the data, so neither
-    /// can be shown to be small.
+    /// See <see cref="SettingsEvidenceCalculator.Rate"/>. A basal-dependent episode, glucose still
+    /// moving at the window's end, and corrections left out for going low
+    /// (<see cref="SettingsEvidenceConfidenceReason.ManyWentLow"/>) also count: none of these errors
+    /// can be sized from the data, so none can be shown to be small.
     /// </param>
     public T Finish<T, TEpisode>(
         T figure,
@@ -536,11 +538,15 @@ internal sealed class SettingsEvidenceContext
             > SettingsEvidenceCalculator.MaxEndTrendMgdlPerMinute;
         if (stillMoving)
             reasons.Add(SettingsEvidenceConfidenceReason.StillMovingAtEnd);
+        var wentLow = tally[SettingsEvidenceRule.WentLow];
+        var manyWentLow = SettingsEvidenceCalculator.Share(wentLow, wentLow + episodes.Count) >= SettingsEvidenceCalculator.MaterialShare;
+        if (manyWentLow)
+            reasons.Add(SettingsEvidenceConfidenceReason.ManyWentLow);
 
         var values = episodes.Select(e => e.Value).ToList();
         SettingsEvidenceCalculator.Rate(
             figure, SlotSummary.Of(values)!.P50, values, higherMeansMoreInsulin: false,
-            materialBorrowed || figure.BasalDependent || stillMoving, reasons);
+            materialBorrowed || figure.BasalDependent || stillMoving || manyWentLow, reasons);
         return figure;
     }
 

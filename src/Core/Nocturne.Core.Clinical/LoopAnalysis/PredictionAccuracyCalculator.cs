@@ -53,6 +53,13 @@ public sealed record PredictionAccuracyInputs
 
     /// <summary>Override, temporary target and exercise time.</summary>
     public IntervalSet Adjusted { get; init; } = IntervalSet.Empty;
+
+    /// <summary>
+    /// <see cref="LoopAnalysisFilter.HistoryVisibleFrom"/>. A prediction is counted only
+    /// <see cref="PredictionAccuracyCalculator.ContextLookbackMs"/> after it, since its context
+    /// reads carbs and boluses that far back.
+    /// </summary>
+    public long? HistoryVisibleFrom { get; init; }
 }
 
 /// <summary>
@@ -61,16 +68,17 @@ public sealed record PredictionAccuracyInputs
 /// </summary>
 /// <remarks>
 /// <para>
-/// A prediction counts where its start is in the analysed time and not in a data exclusion. Where
+/// A prediction counts where its start is in the analysed time, not in a data exclusion, and late
+/// enough that its context is visible (<see cref="PredictionAccuracyInputs.HistoryVisibleFrom"/>). Where
 /// it does not reach a horizon (the curve is shorter, or leaves the value out), or the reading for
 /// the horizon could not have arrived by <see cref="PredictionAccuracyInputs.ReadingsUntil"/>, that
 /// horizon is no prediction at all.
 /// </para>
 /// <para>
 /// The page is read for what the settings a prediction ran on got wrong, so a horizon that a carb
-/// entry or manual bolus came before (<see cref="IsInterrupted"/>) is counted interrupted and kept
-/// out of every error figure: its reading measures that action, which the prediction could not
-/// have known of.
+/// entry, a manual bolus or the start of an override, temporary target or exercise came before
+/// (<see cref="IsInterrupted"/>) is counted interrupted and kept out of every error figure: its
+/// reading measures that action, which the prediction could not have known of.
 /// </para>
 /// </remarks>
 public static class PredictionAccuracyCalculator
@@ -241,11 +249,12 @@ public static class PredictionAccuracyCalculator
         var carried = new bool[CurveCount];
         var algorithms = new SortedSet<AidAlgorithm>();
         var predictions = 0;
+        var readableFrom = VisibleHistory.ReadableFrom(inputs.HistoryVisibleFrom, ContextLookbackMs);
 
         foreach (var snapshot in inputs.Snapshots)
         {
             var start = snapshot.StartMills;
-            if (start < from || start >= to || !mask.Glucose.Contains(start))
+            if (start < from || start >= to || start < readableFrom || !mask.Glucose.Contains(start))
                 continue;
 
             predictions++;
@@ -332,12 +341,13 @@ public static class PredictionAccuracyCalculator
     }
 
     /// <summary>
-    /// Whether a carb entry or manual bolus came in <c>(start, target]</c>. The reading at the
-    /// target then follows an action the prediction could not know of, so its error measures the
-    /// action, not the prediction.
+    /// Whether a carb entry, a manual bolus or the start of an adjustment came in
+    /// <c>(start, target]</c>. The reading at the target then follows an action the prediction could
+    /// not know of, so its error measures the action, not the prediction.
     /// </summary>
     public static bool IsInterrupted(PredictionAccuracyInputs inputs, long start, long target) =>
-        AnyWithin(inputs.CarbMills, start + 1, target) || AnyWithin(inputs.ManualBolusMills, start + 1, target);
+        AnyWithin(inputs.CarbMills, start + 1, target) || AnyWithin(inputs.ManualBolusMills, start + 1, target)
+        || inputs.Adjusted.StartsWithin(start, target);
 
     private static bool AnyWithin(IReadOnlyList<long> sorted, long from, long to)
     {

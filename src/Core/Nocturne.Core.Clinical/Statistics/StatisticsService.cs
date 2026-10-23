@@ -1,3 +1,4 @@
+using System.Globalization;
 using Nocturne.Core.Clinical.Devices;
 using Nocturne.Core.Clinical.LoopAnalysis;
 using Nocturne.Core.Clinical.Schedules;
@@ -2200,8 +2201,8 @@ public class StatisticsService : IStatisticsService
             IcRatio = Math.Round(icRatio * 10) / 10,
             BolusesPerDay = Math.Round(bolusesPerDay * 10) / 10,
             WindowDays = dayCount,
-            StartDate = startDate.ToString("yyyy-MM-dd"),
-            EndDate = endDate.ToString("yyyy-MM-dd"),
+            StartDate = startDate.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture),
+            EndDate = endDate.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture),
             CarbCount = carbCount,
             CarbBolusCount = carbBolusCount,
         };
@@ -2228,7 +2229,7 @@ public class StatisticsService : IStatisticsService
     {
         var utc = DateTimeOffset.FromUnixTimeMilliseconds(mills);
         var local = TimeZoneInfo.ConvertTime(utc, tz);
-        return local.ToString("yyyy-MM-dd");
+        return local.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
     }
 
     /// <summary>
@@ -2255,32 +2256,37 @@ public class StatisticsService : IStatisticsService
     /// 30 to 120 minute declared duration, and each cancels the one before on the pump. A record
     /// whose end is its start is a cancel: it ends the record before it and delivers nothing, and a
     /// cancel at the instant a new temp starts ends the one before, not the new one. A record with
-    /// no end is still running, so it runs to the next record of its stream. The last of its stream
-    /// runs to the earliest of: the first later start of a successor stream or of a stream that
-    /// outranks it; the first record of any other stream that starts more than
-    /// <see cref="MirrorSkewTolerance"/> after it; its start plus <see cref="MaxOpenTempDuration"/>;
-    /// and <paramref name="untilMills"/>. A successor is a stream whose first record starts after it:
+    /// no end is still running, so it runs to the earliest of: the next record of its stream; the
+    /// first later start of a successor stream or of a stream that outranks it; the first record of
+    /// any other stream that starts more than <see cref="MirrorSkewTolerance"/> after it; its start
+    /// plus <see cref="MaxOpenTempDuration"/>; and <paramref name="untilMills"/>. A successor is a
+    /// stream whose first record starts after it:
     /// a stream that stops, as at a pump switch, cannot claim the time the stream that took over
     /// recorded after it. A stream that outranks it describes the pump wherever it has records, so a
     /// mirror's copy cannot run past the loop's own records. A lower-ranked stream with a record at
     /// or before it ran beside it, as a mirror does, and a mirror's copy of the same running temp
     /// lands within the tolerance, so that copy cannot cut the temp short. A record of that stream
     /// past the tolerance shows the stream records on after this one went quiet, so it ends it. No
-    /// pump accepts a temp longer than <see cref="MaxOpenTempDuration"/>, so a stream that stopped
-    /// uploading does not deliver past it. A mirror whose earlier records are not in the input reads
+    /// pump accepts a temp longer than <see cref="MaxOpenTempDuration"/>, so no record with no end
+    /// delivers past it, even where its own stream's next record comes days later after an upload
+    /// gap. A mirror whose earlier records are not in the input reads
     /// as a successor, so a reader fetches with lookback before the window.
     /// </para>
     /// <para>
     /// A patient wears one pump, so where streams overlap only one of them describes its delivery.
     /// Another source can mirror the loop's temps, such as Tidepool history beside Trio's own, and
-    /// summing both counts the same insulin twice. The stream holding a temp its APS snapshots
-    /// judged (<see cref="TempBasalOriginEvidence.Snapshot"/>, or an
-    /// <see cref="TempBasal.ApsSnapshotId"/>) is the loop's own and wins. A snapshot judges a temp only
-    /// some time after it is stored, and never one whose upload stated its origin, so next comes a
-    /// stream a closed-loop uploader wrote (<see cref="TempBasalOriginProvenance.IsAidUploader"/>),
-    /// which wins in every window that holds one of its records. Among the rest the stream with more
-    /// records wins, since it steps the rate more finely; then the one whose first record is earlier,
-    /// then the lower stream key, so the result never depends on read order. A losing record keeps
+    /// summing both counts the same insulin twice. The stream holding a temp its own device's APS
+    /// snapshots judged (<see cref="TempBasalOriginEvidence.Snapshot"/>, or an
+    /// <see cref="TempBasal.ApsSnapshotId"/> with that evidence or none) is the loop's own and wins. A
+    /// snapshot judges a temp only some time after it is stored, and never one whose upload stated
+    /// its origin, so next comes a stream a closed-loop uploader wrote
+    /// (<see cref="TempBasalOriginProvenance.IsAidUploader"/>), which wins in every window that holds
+    /// one of its records, and then a stream with no temp judged only by another device's snapshots
+    /// (<see cref="TempBasalOriginEvidence.OtherDevice"/>): such a temp is most often a
+    /// mirror's copy of the loop's, and the loop's own stream, stating its origin, has no judgement to
+    /// show. Among the rest the stream with more records wins, since it steps the rate more finely;
+    /// then the one whose first record is earlier, then the lower stream key, so the result never
+    /// depends on read order. A losing record keeps
     /// only the time no winning stream covers, so a mirror still counts where the loop's own records
     /// are missing.
     /// </para>
@@ -2298,6 +2304,7 @@ public class StatisticsService : IStatisticsService
             .Select(g => (g.Key, Temps: g.OrderBy(tb => tb.StartMills).ThenBy(tb => tb.EndMills != tb.StartMills).ToList()))
             .OrderByDescending(s => s.Temps.Any(IsLoopTemp))
             .ThenByDescending(s => s.Temps.Any(IsAidUploaderTemp))
+            .ThenBy(s => s.Temps.Any(tb => tb.OriginEvidence == TempBasalOriginEvidence.OtherDevice))
             .ThenByDescending(s => s.Temps.Count)
             .ThenBy(s => s.Temps[0].StartMills)
             .ThenBy(s => s.Key, StringComparer.Ordinal)
@@ -2312,8 +2319,8 @@ public class StatisticsService : IStatisticsService
             {
                 var tb = sorted[i];
                 var last = i == sorted.Count - 1;
-                var bound = last && tb.EndMills is null
-                    ? Math.Min(untilMills, OpenEndBound(streams.Select(s => s.Temps), rank, tb.StartMills))
+                var bound = tb.EndMills is null
+                    ? Math.Min(untilMills, OpenEndBound(streams, rank, tb.StartMills))
                     : untilMills;
                 var declaredEnd = tb.EndMills ?? Math.Max(bound, tb.StartMills);
                 var end = last ? declaredEnd : Math.Min(declaredEnd, sorted[i + 1].StartMills);
@@ -2326,25 +2333,26 @@ public class StatisticsService : IStatisticsService
         return [.. result.OrderBy(tb => tb.StartMills)];
     }
 
-    private static long OpenEndBound(IEnumerable<List<TempBasal>> rankedStreams, int rank, long startMills)
+    private static long OpenEndBound(List<(string Key, List<TempBasal> Temps)> rankedStreams, int rank, long startMills)
     {
-        var pastSkew = startMills + (long)MirrorSkewTolerance.TotalMilliseconds;
-        return rankedStreams
-            .Select((temps, r) =>
-            {
-                if (r == rank)
-                    return long.MaxValue;
-                var endsAtNextStart = r < rank || temps[0].StartMills > startMills;
-                return temps
-                    .Select(tb => tb.StartMills)
-                    .FirstOrDefault(s => s > pastSkew || (endsAtNextStart && s > startMills), long.MaxValue);
-            })
-            .Append(startMills + (long)MaxOpenTempDuration.TotalMilliseconds)
-            .Min();
+        var bound = startMills + (long)MaxOpenTempDuration.TotalMilliseconds;
+        for (var r = 0; r < rankedStreams.Count; r++)
+        {
+            if (r == rank)
+                continue;
+            var temps = rankedStreams[r].Temps;
+            var endsAtNextStart = r < rank || temps[0].StartMills > startMills;
+            var after = endsAtNextStart ? startMills : startMills + (long)MirrorSkewTolerance.TotalMilliseconds;
+            var next = SortedSearch.FirstEndingAfter(temps, after, static tb => tb.StartMills);
+            if (next < temps.Count)
+                bound = Math.Min(bound, temps[next].StartMills);
+        }
+        return bound;
     }
 
     private static bool IsLoopTemp(TempBasal tb) =>
-        tb.OriginEvidence == TempBasalOriginEvidence.Snapshot || tb.ApsSnapshotId is not null;
+        tb.OriginEvidence == TempBasalOriginEvidence.Snapshot
+        || tb.ApsSnapshotId is not null && tb.OriginEvidence != TempBasalOriginEvidence.OtherDevice;
 
     private static bool IsAidUploaderTemp(TempBasal tb) =>
         TempBasalOriginProvenance.IsAidUploader(tb.App, tb.App)
@@ -2668,8 +2676,8 @@ public class StatisticsService : IStatisticsService
             TempBasalInfo = tempBasalInfo,
             HourlyPercentiles = hourlyPercentiles,
             WindowDays = dayCount,
-            StartDate = startDate.ToString("yyyy-MM-dd"),
-            EndDate = endDate.ToString("yyyy-MM-dd"),
+            StartDate = startDate.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture),
+            EndDate = endDate.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture),
         };
     }
 
@@ -2778,8 +2786,8 @@ public class StatisticsService : IStatisticsService
         {
             Hours = hours,
             DaysWithData = allDays.Count,
-            StartDate = startDate.ToString("yyyy-MM-dd"),
-            EndDate = endDate.ToString("yyyy-MM-dd"),
+            StartDate = startDate.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture),
+            EndDate = endDate.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture),
         };
     }
 

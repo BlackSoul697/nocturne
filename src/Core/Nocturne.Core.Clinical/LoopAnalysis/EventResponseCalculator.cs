@@ -55,7 +55,7 @@ public static class EventResponseCalculator
     {
         var zone = inputs.Series.Zone;
         var window = EventWindow.Of(definition);
-        var visibleFrom = inputs.HistoryVisibleFrom is { } edge ? edge + HistoryLookbackMs(window) : long.MinValue;
+        var visibleFrom = VisibleHistory.ReadableFrom(inputs.HistoryVisibleFrom, HistoryLookbackMs(window));
         var exclusions = IntervalSet.Of(inputs.Sources.DataExclusions);
         var series = new EventSeries(inputs.Series, exclusions);
         var anchors = new AnchorSource(inputs, series, exclusions, definition.RequireCorroboration);

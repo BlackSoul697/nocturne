@@ -583,7 +583,7 @@ public class StatisticsController : ControllerBase
     {
         try
         {
-            var schedule = await ActiveTargetRange.ScheduleAsync(_activeProfileResolver, _targetRangeScheduleRepository, ct);
+            var schedule = await ActiveTargetRange.ScheduleAsync(_activeProfileResolver, _targetRangeScheduleRepository, _timeProvider, ct);
             if (schedule is null || schedule.Entries.Count == 0)
                 return null;
 

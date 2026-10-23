@@ -9,6 +9,16 @@ namespace Nocturne.Core.Clinical.Treatments;
 public readonly record struct IobCobTick(
     long Mills, double Iob, IobCobSource IobSource, double Cob, IobCobSource CobSource);
 
+/// <summary>How a calculated tick counts temp basal insulin on board.</summary>
+public enum BasalIobModel
+{
+    /// <summary>oref's, as IOB is shown: <see cref="IIobCalculator.FromTempBasals(List{TempBasal}, TherapySnapshot, long)"/>.</summary>
+    Displayed,
+
+    /// <summary>Signed, on the model of net insulin above schedule: <see cref="CarriedBasalInsulin"/>.</summary>
+    Carried,
+}
+
 /// <summary>
 /// IOB and COB at every tick of a window, preferring the AID system's own values.
 /// </summary>
@@ -26,7 +36,8 @@ public readonly record struct IobCobTick(
 /// contribute to IOB, and only carb intakes within 6 hours to COB, so the inner-loop work is
 /// O(ticks + active window) rather than O(ticks × treatments). DIA is read from the timeline at
 /// <c>endTime</c>. Temp basals count as delivered
-/// (<see cref="StatisticsService.ClipOverlappingTempBasals"/>), one still running up to <c>endTime</c>.
+/// (<see cref="StatisticsService.ClipOverlappingTempBasals"/>), one still running up to <c>untilMills</c>.
+/// Under <see cref="BasalIobModel.Carried"/> a piece counts until DIA after its end, not its start.
 /// </para>
 /// </remarks>
 public static class IobCobSeries
@@ -34,6 +45,7 @@ public static class IobCobSeries
     private const long CobAbsorptionMs = 6L * 60 * 60 * 1000;
 
     /// <param name="timeline">Covers at least <c>[startTime, endTime + 1)</c>.</param>
+    /// <param name="untilMills">Where a temp basal still running stops; see <see cref="StatisticsService.ClipOverlappingTempBasals"/>.</param>
     /// <returns>One tick at <paramref name="startTime"/> and every <paramref name="intervalMs"/> after it, up to and including <paramref name="endTime"/>.</returns>
     public static List<IobCobTick> Build(
         IIobCalculator iobCalculator,
@@ -45,7 +57,9 @@ public static class IobCobSeries
         IEnumerable<ApsIobCobPoint>? apsSnapshots,
         long startTime,
         long endTime,
+        long untilMills,
         long intervalMs,
+        BasalIobModel basalModel = BasalIobModel.Displayed,
         CancellationToken ct = default)
     {
         var ticks = new List<IobCobTick>();
@@ -60,7 +74,7 @@ public static class IobCobSeries
             .Where(c => c.Carbs > 0)
             .OrderBy(c => c.Mills)
             .ToList();
-        var sortedTempBasals = tempBasals is null ? null : StatisticsService.ClipOverlappingTempBasals(tempBasals, endTime);
+        var sortedTempBasals = tempBasals is null ? null : StatisticsService.ClipOverlappingTempBasals(tempBasals, untilMills);
 
         var sortedSnapshots = (apsSnapshots ?? [])
             .Select(s => (
@@ -76,7 +90,8 @@ public static class IobCobSeries
         int carbHi = 0,
             carbLo = 0;
         int basalHi = 0,
-            basalLo = 0;
+            basalLo = 0,
+            carriedLo = 0;
         int snapshotHi = 0;
 
         for (long t = startTime; t <= endTime; t += intervalMs)
@@ -103,6 +118,8 @@ public static class IobCobSeries
             {
                 while (basalLo < basalHi && sortedTempBasals[basalLo].StartMills < t - diaMs)
                     basalLo++;
+                while (carriedLo < basalHi && (sortedTempBasals[carriedLo].EndMills ?? sortedTempBasals[carriedLo].StartMills) <= t - diaMs)
+                    carriedLo++;
             }
 
             while (snapshotHi < sortedSnapshots.Count && sortedSnapshots[snapshotHi].Mills <= t)
@@ -130,7 +147,11 @@ public static class IobCobSeries
                     : new IobResult { Iob = 0 };
 
                 var basalIob = 0.0;
-                if (sortedTempBasals is not null && basalCount > 0)
+                if (sortedTempBasals is not null && basalModel == BasalIobModel.Carried)
+                {
+                    basalIob = CarriedBasalInsulin.At(sortedTempBasals.Skip(carriedLo).Take(basalHi - carriedLo), snapshot, t);
+                }
+                else if (sortedTempBasals is not null && basalCount > 0)
                 {
                     var basalResult = iobCalculator.FromTempBasals(
                         sortedTempBasals.GetRange(basalLo, basalCount),

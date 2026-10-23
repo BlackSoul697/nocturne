@@ -171,9 +171,11 @@ internal sealed partial class LoopAnalysisService(
 
     /// <summary>
     /// Basal delivered against the schedule (scaled by any override) and every bolus in the window,
-    /// as <see cref="NetInsulinAboveSchedule"/> defines them.
+    /// as <see cref="NetInsulinAboveSchedule"/> defines them. A temp basal still running stops at
+    /// <paramref name="now"/>, or the window's end when that comes first: a padded window can end
+    /// after now.
     /// </summary>
-    private async Task<Delivery> DeliveryAsync(Common common, Window window, CancellationToken ct)
+    private async Task<Delivery> DeliveryAsync(Common common, Window window, long now, CancellationToken ct)
     {
         var from = window.From;
         var to = window.To;
@@ -188,7 +190,7 @@ internal sealed partial class LoopAnalysisService(
                     .Select(o => new ScaleFactorInterval(o.Interval.Start, o.Interval.End, (double)(o.Span.Metadata?.OverrideScaleFactor() ?? 1m))))
             : [];
 
-        var (clipped, evidence) = NetInsulinAboveSchedule.ClipTempBasals(common.TempBasals, to);
+        var (clipped, evidence) = NetInsulinAboveSchedule.ClipTempBasals(common.TempBasals, Math.Min(to, now));
         var series = await basalSeriesBuilder.BuildAsync(
             clipped, tickStart, to, timeline.SnapshotAt(from).BasalRateAt(from), ct);
         var delivered = NetInsulinAboveSchedule.DeliveredFromSeries(series, to, evidence);
@@ -230,6 +232,14 @@ internal sealed partial class LoopAnalysisService(
             segments.Add(segment);
         return segments;
     }
+
+    /// <summary>
+    /// When each APS snapshot was stored: the AID evidence of the open-loop mask
+    /// (<see cref="LoopAnalysisMask.OpenLoop"/>) on every page. Any snapshot shows the loop ran,
+    /// whatever it carries.
+    /// </summary>
+    private static List<long> SnapshotMills(IEnumerable<DateTime> storedAt) =>
+        [.. storedAt.Select(t => ToMills(DateTime.SpecifyKind(t, DateTimeKind.Utc)))];
 
     /// <summary><see cref="MaskSources"/> over <paramref name="common"/>'s spans, devices and profiles.</summary>
     private static LoopAnalysisMaskSources Sources(

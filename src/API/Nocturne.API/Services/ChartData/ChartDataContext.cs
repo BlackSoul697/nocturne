@@ -76,6 +76,9 @@ public sealed record ChartDataContext
     /// </summary>
     public IReadOnlyList<TempBasal> DisplayTempBasals { get; init; } = [];
 
+    /// <summary>When the data was fetched: a temp basal still running delivers up to here, or to <see cref="EndTime"/> when that comes first.</summary>
+    public long NowMills { get; init; } = long.MaxValue;
+
     /// <summary>
     /// APS snapshot IOB/COB points covering the buffer window, ascending by timestamp. Carries the
     /// IOB/COB the AID system reported, which the IOB/COB series prefers over its own recomputation.

@@ -1,4 +1,5 @@
 using Nocturne.Core.Clinical.LoopAnalysis;
+using Nocturne.Core.Clinical.Treatments;
 using Nocturne.Core.Contracts.Profiles.Resolvers;
 using Nocturne.Core.Models.LoopAnalysis;
 
@@ -30,7 +31,7 @@ internal sealed partial class LoopAnalysisService
     {
         var (primary, comparison, names) = await ForRangesAsync(
             filter,
-            range => LoadSettingsEvidenceAsync(range, zone, ct),
+            range => LoadSettingsEvidenceAsync(range, zone, filter, ct),
             (loaded, range, isPrimary) => SettingsEvidenceCalculator.Calculate(
                 loaded.Inputs, Mask(filter, range, zone, loaded.Sources), range.From, range.To, listEpisodes: isPrimary));
         return new SettingsEvidenceReport { Primary = primary, Comparison = comparison, ProfileNames = names };
@@ -55,12 +56,15 @@ internal sealed partial class LoopAnalysisService
     /// <summary>
     /// The Daily profile's reads over <paramref name="range"/> widened by
     /// <see cref="SettingsEvidenceBeforeMs"/> and <see cref="SettingsEvidenceAfterMs"/>, with the
-    /// therapy timeline they were read against.
+    /// therapy timeline they were read against. A calculated IOB counts temp basals as
+    /// <see cref="BasalIobModel.Carried"/>, the model of the net insulin it is subtracted from
+    /// (<see cref="SettingsEvidenceContext.InsulinActed"/>).
     /// </summary>
-    private async Task<SettingsEvidenceLoaded> LoadSettingsEvidenceAsync(Window range, TimeZoneInfo zone, CancellationToken ct)
+    private async Task<SettingsEvidenceLoaded> LoadSettingsEvidenceAsync(
+        Window range, TimeZoneInfo zone, LoopAnalysisFilter filter, CancellationToken ct)
     {
         var padded = new Window(range.From - SettingsEvidenceBeforeMs, range.To + SettingsEvidenceAfterMs);
-        var loaded = await LoadDailyProfileAsync(padded, zone, ct);
+        var loaded = await LoadDailyProfileAsync(padded, zone, filter, BasalIobModel.Carried, ct);
         return new SettingsEvidenceLoaded(new SettingsEvidenceInputs
         {
             Series = loaded.Inputs,

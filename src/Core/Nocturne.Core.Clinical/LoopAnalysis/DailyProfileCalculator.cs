@@ -1,3 +1,4 @@
+using System.Globalization;
 using Nocturne.Core.Clinical.Statistics;
 using Nocturne.Core.Clinical.Treatments;
 using Nocturne.Core.Models;
@@ -29,10 +30,21 @@ public sealed record DailyProfileInputs
     /// </summary>
     public IntervalSet CalculatedIobCobTime { get; init; } = IntervalSet.Empty;
 
-    /// <summary>Whether a tick's IOB and COB are values; see <see cref="CalculatedIobCobTime"/>.</summary>
+    /// <summary>
+    /// <see cref="LoopAnalysisFilter.HistoryVisibleFrom"/>. A calculated IOB or COB is a value only
+    /// <see cref="DailyProfileCalculator.ActingMs"/> after it, once no hidden dose can still act.
+    /// </summary>
+    public long? HistoryVisibleFrom { get; init; }
+
+    /// <summary>
+    /// Whether a tick's IOB and COB are values: both reported by the device, or calculated where
+    /// <see cref="CalculatedIobCobTime"/> holds the tick and the history it reads is visible. A
+    /// tick half device and half calculated is a calculated one.
+    /// </summary>
     public bool Stands(IobCobTick tick) =>
-        tick.IobSource != IobCobSource.Calculated || tick.CobSource != IobCobSource.Calculated
-        || CalculatedIobCobTime.Contains(tick.Mills);
+        tick.IobSource == IobCobSource.Device && tick.CobSource == IobCobSource.Device
+        || CalculatedIobCobTime.Contains(tick.Mills)
+        && tick.Mills >= VisibleHistory.ReadableFrom(HistoryVisibleFrom, DailyProfileCalculator.ActingMs);
 
     /// <summary>The target range in force at an instant, mg/dL; null where none is.</summary>
     public Func<long, (double Low, double High)?>? TargetAt { get; init; }
@@ -436,7 +448,7 @@ public static class DailyProfileCalculator
             var date = firstDay.AddDays(d);
             days.Add(new DailyProfileDay
             {
-                Date = date.ToString("yyyy-MM-dd"),
+                Date = date.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture),
                 DayOfWeek = date.DayOfWeek,
                 Start = DateTimeOffset.FromUnixTimeMilliseconds(dayStarts[d]).UtcDateTime,
                 Complete = dayStarts[d] >= from && dayStarts[d + 1] <= to,

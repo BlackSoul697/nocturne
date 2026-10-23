@@ -34,8 +34,8 @@ public readonly record struct OrefReason(bool CappedAtMaxSafeBasal, bool AtMaxIo
 
         var maxIob = MaxIobPattern.Match(limitReason);
         return new OrefReason(
-            limitReason.Contains("maxSafeBasal", StringComparison.Ordinal),
-            limitReason.Contains("max_iob", StringComparison.Ordinal),
+            limitReason.Contains(ApsLoopCycle.MaxSafeBasalToken, StringComparison.Ordinal),
+            limitReason.Contains(ApsLoopCycle.MaxIobToken, StringComparison.Ordinal),
             maxIob.Success
                 ? double.Parse(maxIob.Groups[1].Value.Replace(',', '.'), CultureInfo.InvariantCulture)
                 : null);

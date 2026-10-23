@@ -1150,6 +1150,62 @@ public class StatisticsServiceTDDTests
     }
 
     [Fact]
+    public void Clip_MirrorJudgedByAnotherDevicesSnapshot_LosesToTheLoopStatingItsOrigin()
+    {
+        var loop = WithRate(0, Stream("loop://iPhone", Day1Mills, count: 6, everyMinutes: 5, durationMinutes: 30));
+        foreach (var tb in loop)
+            tb.OriginEvidence = TempBasalOriginEvidence.Reported;
+        var mirror = WithRate(3.0, [Temp("tidepool", Day1Mills, 30)]);
+        mirror[0].OriginEvidence = TempBasalOriginEvidence.OtherDevice;
+        mirror[0].ApsSnapshotId = Guid.NewGuid();
+
+        var clipped = StatisticsService.ClipOverlappingTempBasals([.. mirror, .. loop], Now);
+
+        clipped.Should().OnlyContain(tb => tb.Device == "loop://iPhone");
+        clipped.Sum(tb => StatisticsService.GetTempBasalInsulin(tb)!.Value).Should().Be(0, "the loop's own records say it zero-temped");
+    }
+
+    [Fact]
+    public void Clip_StreamJudgedOnlyByAnotherDevice_RanksBelowAStreamStatingItsOrigin()
+    {
+        var stated = Temp("pump-a", Day1Mills, 30);
+        stated.OriginEvidence = TempBasalOriginEvidence.Reported;
+        var mirror = Stream("pump-b", Day1Mills, count: 3, everyMinutes: 10, durationMinutes: 10);
+        foreach (var tb in mirror)
+            tb.OriginEvidence = TempBasalOriginEvidence.OtherDevice;
+
+        var clipped = StatisticsService.ClipOverlappingTempBasals([.. mirror, stated], Now);
+
+        clipped.Should().ContainSingle().Which.Device.Should().Be("pump-a", "the mirror's three records would otherwise outnumber it");
+    }
+
+    [Fact]
+    public void Clip_RunningRecordBeforeAnUploadGap_StopsAfterTheLongestTempAPumpAccepts()
+    {
+        var running = Running(Day1Mills);
+        var next = MakeTempBasal(rate: 0.5, durationMinutes: 30, mills: Day1Mills + 3 * 24 * 60 * Minute);
+
+        var clipped = StatisticsService.ClipOverlappingTempBasals([running, next], next.EndMills!.Value);
+
+        Spans(clipped).Should().Equal(
+            (Day1Mills, Day1Mills + 24 * 60 * Minute),
+            (next.StartMills, next.EndMills!.Value));
+    }
+
+    [Fact]
+    public void Clip_RunningRecordBeforeItsStreamsNextRecord_IsEndedByAnotherStreamRecordingOn()
+    {
+        var running = RunningTemp("pump-a", At(0));
+        TempBasal[] after = [Temp("pump-a", At(180), 30), Temp("pump-a", At(210), 30)];
+        TempBasal[] other = [Temp("pump-b", At(-30), 20), Temp("pump-b", At(30), 5)];
+
+        var clipped = StatisticsService.ClipOverlappingTempBasals([running, .. after, .. other], Now);
+
+        Spans(clipped.Where(tb => tb.Device == "pump-a")).Should().Equal(
+            (At(0), At(30)), (At(180), At(210)), (At(210), At(240)));
+    }
+
+    [Fact]
     public void InsulinDelivery_MirrorOverlappingTheLoop_CountsTheLoopOnce()
     {
         var loop = Stream("openaps://Trio", Day1Mills, count: 12, everyMinutes: 5, durationMinutes: 30, loop: true);
