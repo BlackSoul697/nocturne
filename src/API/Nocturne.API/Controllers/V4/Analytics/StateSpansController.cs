@@ -265,7 +265,6 @@ public class StateSpansController : ControllerBase
         limit = V4ReadLimits.ClampMergedPage(limit, offset);
 
         var descending = sort == "timestamp_desc";
-        var activityCategories = new[] { StateSpanCategory.Exercise, StateSpanCategory.Illness, StateSpanCategory.Travel };
         var allSpans = new List<StateSpan>();
         var total = 0;
 
@@ -274,7 +273,7 @@ public class StateSpansController : ControllerBase
         // limit, a page no category has to be read for at all.
         var perCategoryWindow = limit == 0 ? 0 : offset + limit;
 
-        foreach (var category in activityCategories)
+        foreach (var category in StateSpanCategories.DrawnActivities)
         {
             var spans = await _stateSpanService.GetStateSpansAsync(category, from: from, to: to, count: perCategoryWindow, descending: descending, cancellationToken: cancellationToken);
             allSpans.AddRange(spans);

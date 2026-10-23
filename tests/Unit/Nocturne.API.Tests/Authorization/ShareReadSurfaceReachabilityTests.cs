@@ -152,9 +152,10 @@ public class ShareReadSurfaceReachabilityTests
         {
             ["StatisticsController.GetMultiPeriodStatistics"] = Scope.GlucoseRead,
             ["StatisticsController.GetPunchCardData"] = Scope.GlucoseRead,
-            // Basal delivery is wholly the treatment category, so neither action is broadened to
-            // the OR its controller's mixed payloads need.
+            // Basal delivery is wholly the treatment category, so none of these actions is broadened
+            // to the OR its controller's mixed payloads need.
             ["ChartDataController.GetBasalSeries"] = Scope.TreatmentsRead,
+            ["ChartDataController.GetBasalDeliverySpans"] = Scope.TreatmentsRead,
             ["RetrospectiveController.GetBasalTimeline"] = Scope.TreatmentsRead,
         };
 
