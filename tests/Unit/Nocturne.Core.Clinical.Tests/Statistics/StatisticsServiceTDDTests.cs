@@ -117,7 +117,7 @@ public class StatisticsServiceTDDTests
         result.TotalBolus.Should().Be(6.8);
         result.TotalBasal.Should().Be(0);
         result.TotalInsulin.Should().Be(6.8);
-        result.BolusCount.Should().Be(3);
+        result.ManualBolusCount.Should().Be(3);
     }
 
     [Fact]
@@ -302,7 +302,7 @@ public class StatisticsServiceTDDTests
         // Bolus should be meal boluses + SMBs
         delivery.TotalBolus.Should().BeGreaterThan(0);
         delivery.TotalBasal.Should().BeGreaterThan(0);
-        delivery.BolusCount.Should().Be(11, "3 meals + 8 SMBs = 11 boluses");
+        delivery.ManualBolusCount.Should().Be(11, "the 8 automatic-flagged records are stored as manual until #2412, so 3 meals + 8 = 11");
     }
 
     #region LoopSystem Overlap
@@ -466,6 +466,34 @@ public class StatisticsServiceTDDTests
         // AverageTdd divides by DaysWithData (days with data), not date range
         result.DaysWithData.Should().Be(2);
         result.AverageTdd.Should().Be(15.0, "30U / 2 days with data = 15 U/day");
+    }
+
+    [Fact]
+    public void DailyRatios_Carbs_ShouldSumPerDayWithoutChangingTheInsulinAverages()
+    {
+        var boluses = new[]
+        {
+            MakeBolus(10.0, Day1Mills),
+            MakeBolus(20.0, Day2Mills),
+        };
+        var carbs = new[]
+        {
+            MakeCarbIntake(45.0, Day1Mills),
+            MakeCarbIntake(30.5, Day1Mills + 3_600_000),
+            MakeCarbIntake(60.0, Day3Mills), // carbs logged, no insulin
+            MakeCarbIntake(0, Day2Mills),
+        };
+
+        var result = _sut.CalculateDailyBasalBolusRatios(
+            boluses, Array.Empty<Bolus>(), Array.Empty<TempBasal>(), Mills(EndDate), carbIntakes: carbs);
+
+        result.DailyData.Select(d => (d.Date, d.Carbs)).Should().Equal(
+            ("2024-01-01", 75.5),
+            ("2024-01-02", 0.0),
+            ("2024-01-03", 60.0));
+        result.DailyData.Single(d => d.Date == "2024-01-03").Total.Should().Be(0);
+        result.DaysWithData.Should().Be(2, "a carb-only day is not a day with insulin");
+        result.AverageTdd.Should().Be(15.0);
     }
 
     #endregion
@@ -1293,6 +1321,15 @@ public class StatisticsServiceTDDTests
             Insulin = insulin,
             Timestamp = DateTimeOffset.FromUnixTimeMilliseconds(mills ?? Day1Mills).UtcDateTime,
             Automatic = automatic,
+        };
+    }
+
+    private static CarbIntake MakeCarbIntake(double carbs, long mills)
+    {
+        return new CarbIntake
+        {
+            Carbs = carbs,
+            Timestamp = DateTimeOffset.FromUnixTimeMilliseconds(mills).UtcDateTime,
         };
     }
 

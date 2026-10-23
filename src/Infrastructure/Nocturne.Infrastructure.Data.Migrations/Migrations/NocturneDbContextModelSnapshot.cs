@@ -2468,6 +2468,12 @@ namespace Nocturne.Infrastructure.Data.Migrations
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("expires_at");
 
+                    b.Property<string>("Purpose")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("character varying(16)")
+                        .HasColumnName("purpose");
+
                     b.Property<Guid>("SubjectId")
                         .HasColumnType("uuid")
                         .HasColumnName("subject_id");
@@ -7965,6 +7971,15 @@ namespace Nocturne.Infrastructure.Data.Migrations
                     b.Property<DateTime?>("EndTimestamp")
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("end_timestamp");
+
+                    b.Property<DateTime?>("EndedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("ended_at");
+
+                    b.Property<string>("EndedBy")
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)")
+                        .HasColumnName("ended_by");
 
                     b.Property<string>("EnteredBy")
                         .HasMaxLength(256)

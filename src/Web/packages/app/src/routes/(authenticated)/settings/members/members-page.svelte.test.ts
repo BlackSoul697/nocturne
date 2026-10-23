@@ -7,6 +7,7 @@ import type { TenantMemberDto, TenantRoleDto } from "$api-clients";
 import { remoteQuery } from "$lib/test-stubs/remote-resource";
 
 const mocks = vi.hoisted(() => ({
+  getMembers: vi.fn(),
   setMemberRoles: vi.fn(),
   setMemberPermissions: vi.fn(),
   setMemberLimitTo24Hours: vi.fn(),
@@ -22,7 +23,10 @@ const viewer: TenantRoleDto = {
 };
 
 vi.mock("$lib/api/generated/memberInvites.generated.remote", () => ({
-  getMembers: () => remoteQuery(() => members),
+  getMembers: () => {
+    mocks.getMembers();
+    return remoteQuery(() => members);
+  },
   listInvites: () => remoteQuery(() => []),
   revokeInvite: () => Promise.resolve(),
   removeMember: () => Promise.resolve(),
@@ -137,5 +141,32 @@ describe("members page saving a member", () => {
 
     await expect.element(browserPage.getByRole("button", { name: "Save" })).toBeVisible();
     expect(browserPage.getByRole("alert").elements()).toHaveLength(0);
+  });
+});
+
+describe("members page listing members", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    page.data.user = { subjectId: "55555555-5555-5555-5555-555555555555" };
+    members = [member];
+  });
+
+  it("does not request or count members for a caller without a members or sharing scope", async () => {
+    page.data.effectivePermissions = ["sharing.guest"];
+    render(MembersPage);
+
+    await expect
+      .element(browserPage.getByRole("heading", { name: "Sharing & Privacy" }))
+      .toBeVisible();
+    expect(mocks.getMembers).not.toHaveBeenCalled();
+    expect(browserPage.getByText(/\d+ members?$/).elements()).toHaveLength(0);
+  });
+
+  it("requests and counts members for a caller with members.manage", async () => {
+    page.data.effectivePermissions = ["members.manage"];
+    render(MembersPage);
+
+    await expect.element(browserPage.getByText("1 member", { exact: true })).toBeVisible();
+    expect(mocks.getMembers).toHaveBeenCalled();
   });
 });
