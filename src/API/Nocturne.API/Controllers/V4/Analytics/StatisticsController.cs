@@ -3,8 +3,10 @@ using Microsoft.AspNetCore.RateLimiting;
 using Nocturne.Core.Clinical.Devices;
 using Nocturne.API.Attributes;
 using Nocturne.API.Authorization;
+using Nocturne.API.Controllers.V4.Base;
 using Nocturne.API.Extensions;
 using Nocturne.API.Services.Analytics;
+using Nocturne.Core.Clinical.LoopAnalysis;
 using Nocturne.Core.Clinical.Statistics;
 using Nocturne.API.Services.Caching;
 using Nocturne.Core.Models.Authorization;
@@ -1366,7 +1368,9 @@ public class StatisticsController : ControllerBase
     /// CGM active time comes from <see cref="IStatisticsService.CalculateCgmActivePercent"/>,
     /// measured against the registered CGMs' windows where the tenant has registered any. The target
     /// range is optional; the report goes without it if it cannot be read. Each figure is narrowed to
-    /// the caller's categories by <see cref="AidSystemMetricsReadScopeGuard"/>.
+    /// the caller's categories by <see cref="AidSystemMetricsReadScopeGuard"/>. A history-clamped
+    /// caller reads the last <see cref="HistoryClamp.WindowHours"/> hours whatever the dates, as in
+    /// <see cref="LoopAnalysisRanges.Clamped"/>, and a window ending in the future stops at now.
     /// </remarks>
     [HttpGet("aid-system-metrics")]
     [RequireScope(Scope.ReportsRead)]
@@ -1379,6 +1383,20 @@ public class StatisticsController : ControllerBase
     {
         var startDt = DateTime.SpecifyKind(startDate, DateTimeKind.Utc);
         var endDt = DateTime.SpecifyKind(endDate, DateTimeKind.Utc);
+        var now = _timeProvider.GetUtcNow().UtcDateTime;
+        if (HttpContext.IsCallerHistoryClamped())
+        {
+            var window = LoopAnalysisRanges.Clamped(now, HistoryClamp.Window, TimeZoneInfo.Utc);
+            (startDt, endDt) = (window.From, window.To);
+        }
+        else
+        {
+            if (this.RejectDateSpan(startDt, endDt) is { } overlong)
+                return overlong;
+            if (endDt > now)
+                endDt = now;
+        }
+
         return Ok(AidSystemMetricsReadScopeGuard.Redact(
             await _aidSystemMetrics.ReadAsync(startDt, endDt, cancellationToken),
             HttpContext.GetGrantedScopes()));
