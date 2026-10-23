@@ -176,7 +176,7 @@
     list.push(
       hidden(LoopAnalysisSeries.LoopActivity)
         ? hiddenFigure("Pump active")
-        : shareFigure("Pump active", (r) => r?.activity?.pump, "Percent of the analysed time when the pump sent reports")
+        : shareFigure("Pump active", (r) => r?.activity?.pump, "Percent of the analysed time when the loop uploaded a cycle. If there are no cycles, the report uses the delivery records.")
     );
     list.push(
       gapsFigure("Loop gaps", LoopAnalysisSeries.LoopGaps, "loopGaps", "No gap of more than 15 minutes between loop cycles")
@@ -477,7 +477,7 @@
     {:else}
       <FigureStrip {figures} />
 
-      <div class="space-y-5 rounded-lg border bg-card p-3 @md:p-4">
+      <div class="space-y-5 rounded-lg border bg-card p-3 @md:p-4" data-testid="loop-analysis-health-strips">
         {#each activityStrips as strip (strip.id)}
           <div class="space-y-1">
             <TimeOfDayPanel

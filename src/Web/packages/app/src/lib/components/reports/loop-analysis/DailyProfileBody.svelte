@@ -300,7 +300,7 @@
 
     <IgnoredFiltersNotice ignored={response.ignoredFilters} />
 
-    <div class="space-y-2">
+    <div class="space-y-2" data-testid="loop-analysis-daily-totals">
       <FigureStrip {figures} />
       {#if insulinDeliveryHref}
         <Button href={insulinDeliveryHref} variant="link" size="inline">
@@ -444,7 +444,7 @@
           {/snippet}
         </TimeOfDayPanel>
 
-        <div class="space-y-2">
+        <div class="space-y-2" data-testid="loop-analysis-net-correction">
           <TimeOfDayPanel
             id="correction"
             describe={describeCorrection}

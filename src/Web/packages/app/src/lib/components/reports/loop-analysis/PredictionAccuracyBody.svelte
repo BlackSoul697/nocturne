@@ -202,20 +202,22 @@
               {#if has(PredictionCurve.Uam)}
                 <li>
                   oref gives its unannounced meal (UAM) curve only when glucose increases faster than
-                  insulin alone predicts. So the report measures UAM accuracy only during that time.
+                  insulin alone predicts, or when carbs are absorbing. So the report measures UAM
+                  accuracy only at these times.
                 </li>
               {/if}
               {#if has(PredictionCurve.ZeroTemp)}
                 <li>
-                  oref stops its zero-temp curve where the curve goes up above the target. So its
-                  long horizons come only from predictions that stayed low.
+                  oref removes the end of its zero-temp curve where the curve increases above the
+                  target. So its long horizons come only from predictions that did not increase
+                  above the target.
                 </li>
               {/if}
             </ul>
           </Alert.Description>
         </Alert.Root>
 
-        <section class="space-y-3 rounded-lg border bg-card p-3 @md:p-4" aria-labelledby="prediction-error-title">
+        <section class="space-y-3 rounded-lg border bg-card p-3 @md:p-4" aria-labelledby="prediction-error-title" data-testid="loop-analysis-prediction-error">
           <div class="space-y-1 px-1">
             <h2 id="prediction-error-title" class="font-medium">Error by horizon</h2>
             <p class="text-xs text-muted-foreground">
@@ -262,7 +264,7 @@
         </section>
 
         {#if detail}
-          <section class="space-y-4 rounded-lg border bg-card p-3 @md:p-4" aria-labelledby="prediction-detail-title">
+          <section class="space-y-4 rounded-lg border bg-card p-3 @md:p-4" aria-labelledby="prediction-detail-title" data-testid="loop-analysis-prediction-detail">
             <div class="flex flex-wrap items-center justify-between gap-2 px-1">
               <h2 id="prediction-detail-title" class="font-medium">By hour and context</h2>
               {#if curves.length > 1}
