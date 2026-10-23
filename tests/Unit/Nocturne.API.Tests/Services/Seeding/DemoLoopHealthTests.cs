@@ -26,23 +26,26 @@ namespace Nocturne.API.Tests.Services.Seeding;
 /// </summary>
 public class DemoLoopHealthTests
 {
-    private const int Days = 7;
+    internal const int Days = 7;
 
-    private static readonly DateTime End = new(2026, 10, 20, 20, 0, 0);
+    internal static readonly DateTime End = new(2026, 10, 20, 20, 0, 0);
 
-    private sealed record Run(
+    internal sealed record Run(
         List<DemoTimeStep> Steps,
         List<Entry> Readings,
+        List<Aid.ApsSnapshot> Snapshots,
         List<Aid.ApsLoopCycle> Cycles,
         List<(Treatment Source, Aid.TempBasal Temp, Aid.TempBasalOrigin Default)> Temps,
         LoopHealthRange Health);
 
-    private static Run Simulate()
+    internal static Run Simulate() => Simulate(End);
+
+    internal static Run Simulate(DateTime end)
     {
         var config = SampleDataSeeder.ConfigurationFor(Days);
         var steps = new DemoDataGenerator(
                 Options.Create(config), NullLogger<DemoDataGenerator>.Instance, NullLoggerFactory.Instance)
-            .GenerateHistoricalTimeline(End)
+            .GenerateHistoricalTimeline(end)
             .ToList();
 
         var readings = new List<Entry>();
@@ -96,7 +99,7 @@ public class DemoLoopHealthTests
             Evidence = new BasalEvidence(IntervalSet.Empty, IntervalSet.Empty, IntervalSet.Empty),
             Temps = [.. ordered.Select(t => t.Item2)],
         };
-        var manualModes = DemoLifestyleSeeds.BuildSpans(End.Date, Days)
+        var manualModes = DemoLifestyleSeeds.BuildSpans(end.Date, Days, end)
             .Where(s => s.Category == StateSpanCategory.PumpMode && s.State == nameof(PumpModeState.Manual))
             .Select(s => new MillsInterval(Mills(s.StartLocal), s.EndLocal is { } end ? Mills(end) : to));
         var sources = new LoopAnalysisMaskSources
@@ -106,7 +109,7 @@ public class DemoLoopHealthTests
         var mask = LoopAnalysisMask.Build(
             new LoopAnalysisMasks { ExcludeIllness = false, ExcludeOpenLoop = true }, from, to, zone, sources);
 
-        return new Run(steps, readings, cycles, ordered, LoopHealthCalculator.Calculate(inputs, mask, from, to));
+        return new Run(steps, readings, snapshots, cycles, ordered, LoopHealthCalculator.Calculate(inputs, mask, from, to));
     }
 
     private static long Mills(DateTime local) => new DateTimeOffset(local).ToUnixTimeMilliseconds();
@@ -230,6 +233,39 @@ public class DemoLoopHealthTests
         maxBasal!.CapKnown.Percent.Should().BeGreaterThan(0);
         maxBasal.AtCap.Percent.Should().BeGreaterThan(0);
         run.Health.Unknown.MaxBasal.Should().BeNull();
+    }
+
+    /// <summary>
+    /// A seeded tenant looks current: wherever its range ends, no interruption reaches into the
+    /// two hours before the end.
+    /// </summary>
+    [Fact]
+    public void SampleLoop_IsClosedForTheLastTwoHoursOfAnyRange()
+    {
+        for (var end = new DateTime(2026, 9, 1, 0, 0, 0); end < new DateTime(2026, 10, 1); end = end.AddMinutes(25))
+        {
+            for (var t = end - DemoLoopInterruptions.QuietBeforeEnd; t < end; t = t.AddMinutes(5))
+                DemoLoopInterruptions.StateAt(t, end).Should().Be(DemoLoopState.Closed, $"{t:g} is in the last two hours before {end:g}");
+        }
+    }
+
+    /// <summary>
+    /// A range that ends in what would be a phone gap still ends with the loop closed and a cycle
+    /// every five minutes, so the dashboard shows a recent loop status and IOB.
+    /// </summary>
+    [Fact]
+    public void SampleLoop_EndsWithARecentStatus()
+    {
+        var gap = Enumerable.Range(0, 30)
+            .SelectMany(d => DemoLoopInterruptions.On(End.Date.AddDays(-d), DateTime.MaxValue))
+            .First(i => i.State == DemoLoopState.PhoneOutOfRange);
+        var end = gap.Start.AddMinutes(10);
+
+        var run = Simulate(end);
+
+        var tail = run.Steps.Where(s => s.Time >= end - DemoLoopInterruptions.QuietBeforeEnd).ToList();
+        tail.Should().NotBeEmpty().And.OnlyContain(s => s.Loop == DemoLoopState.Closed);
+        run.Cycles.Select(c => c.Mills).Should().Contain(tail.Select(s => Mills(s.Time)));
     }
 
     [Fact]

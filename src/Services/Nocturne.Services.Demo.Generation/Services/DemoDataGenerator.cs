@@ -191,6 +191,11 @@ public class DemoDataGenerator : IDemoDataGenerator
                 yield return MarkTempBasal(entryTime, reducedRate, tempBasalDuration);
             }
         }
+        else
+        {
+            var localTime = entryTime.Kind == DateTimeKind.Utc ? entryTime.ToLocalTime() : entryTime;
+            yield return MarkTempBasal(entryTime, InRangeTempRate(localTime, glucose - targetGlucose), tempBasalDuration);
+        }
     }
 
     public void SeedCurrentGlucose(double glucose)
@@ -233,6 +238,9 @@ public class DemoDataGenerator : IDemoDataGenerator
         // Treatments timestamped past a day boundary (late boluses near
         // midnight) carry into the next day's step buckets.
         var carriedOver = new List<(DateTime Time, Treatment Treatment)>();
+        DateTime? lastLevelCorrectionAt = null;
+        DateTime? lastCarbsAt = null;
+        var recentGlucose = new Queue<double>();
 
         while (currentDay <= end.Date)
         {
@@ -249,6 +257,11 @@ public class DemoDataGenerator : IDemoDataGenerator
                 ?? scenarioParams.FastingGlucose + (_random.NextDouble() - 0.5) * 20;
             var mealPlan = GenerateMealPlan(currentDay, dayScenario);
             var basalAdjustments = GenerateBasalAdjustments(currentDay, dayScenario);
+            if (HasDawnHigh(currentDay, dayScenario))
+            {
+                scenarioParams.DawnPhenomenonStrength = DawnHighStrength;
+                mealPlan = LateBreakfast(currentDay, mealPlan);
+            }
 
             // Pre-populate the simulator with the day's meals and boluses, and
             // bucket the corresponding treatments by their actual timestamps.
@@ -302,20 +315,24 @@ public class DemoDataGenerator : IDemoDataGenerator
                 int? tempDuration = null;
                 double? requestedRate = null;
                 (double Rate, double? Requested)? loopTemp = null;
-                var loop = DemoLoopInterruptions.StateAt(currentTime);
+                var loop = DemoLoopInterruptions.StateAt(currentTime, end);
 
                 // Consume planned treatments due this step.
                 while (pending.Count > 0 && pending[0].Time < consumeUntil)
                 {
+                    if (pending[0].Treatment.Carbs > 0)
+                        lastCarbsAt = pending[0].Time;
                     stepTreatments.Add(pending[0].Treatment);
                     pending.RemoveAt(0);
                 }
+                var smbEnabled = loop == DemoLoopState.Closed
+                    && lastCarbsAt is { } carbsAt && currentTime - carbsAt < SmbAfterCarbsTime;
 
                 var basalAdj = basalAdjustments.FirstOrDefault(b =>
                     Math.Abs((b.Time - currentTime).TotalMinutes) < 2.5
                 );
                 var adjustedRate = NormalizeBasalRate(basalAdj.Rate);
-                var adjustedDuration = DemoLoopInterruptions.MinutesToNext(currentTime, basalAdj.Duration);
+                var adjustedDuration = DemoLoopInterruptions.MinutesToNext(currentTime, basalAdj.Duration, end);
                 if (loop == DemoLoopState.Closed && adjustedDuration > 0 && (adjustedRate > 0 || basalAdj.Duration > 0))
                 {
                     stepTreatments.Add(CreateTempBasalTreatment(currentTime, adjustedRate, adjustedDuration));
@@ -358,6 +375,7 @@ public class DemoDataGenerator : IDemoDataGenerator
                     var correctionCarbs =
                         glucose < 55 ? _random.Next(15, 25) : _random.Next(10, 18);
                     stepTreatments.Add(CreateCarbCorrectionTreatment(currentTime, correctionCarbs));
+                    lastCarbsAt = currentTime;
                     simulator.AddCarbs(currentTime, correctionCarbs, 0.4);
 
                     if (_random.NextDouble() < 0.4)
@@ -370,12 +388,31 @@ public class DemoDataGenerator : IDemoDataGenerator
                     var insulinNeeded = glucoseAboveTarget / effectiveIsf;
                     var insulinToDeliver = Math.Max(0, insulinNeeded - simulator.CalculateIob(currentTime));
 
+                    // A high the insulin on board already covers needs no high temp: oref's
+                    // eventual glucose counts it.
                     var (requested, highTempRate) = HighTempRate(glucoseAboveTarget);
-                    loopTemp = (highTempRate, requested);
+                    loopTemp = insulinNeeded > simulator.CalculateIob(currentTime)
+                        ? (highTempRate, requested)
+                        : (InRangeTempRate(currentTime, 0), null);
+                    var correctedRecently = lastLevelCorrectionAt is { } corrected
+                        && currentTime - corrected < LevelCorrectionQuietTime;
 
+                    if (!correctedRecently
+                        && loop == DemoLoopState.Closed
+                        && recentGlucose.Count == 3
+                        && !stepTreatments.Any(t => t.Insulin > 0)
+                        && LevelCorrection(
+                            currentTime, glucose, recentGlucose.Peek(), simulator.CalculateIob(currentTime), effectiveIsf,
+                            dayScenario, mealPlan, pending, end) is { } levelCorrection)
+                    {
+                        lastLevelCorrectionAt = currentTime;
+                        stepTreatments.Add(CreateManualCorrectionBolusTreatment(currentTime, levelCorrection));
+                        simulator.AddInsulinDose(currentTime, levelCorrection);
+                    }
                     // MANUAL CORRECTION BOLUS. A person corrects a clear high, not a mild one.
                     // Nor within minutes of it: ~3% per step is one in ~2.5 hours.
-                    if (isWakingHours && glucose > targetGlucose + 90 && _random.NextDouble() < 0.03)
+                    else if (!correctedRecently
+                             && isWakingHours && glucose > targetGlucose + 90 && _random.NextDouble() < 0.03)
                     {
                         var manualCorrectionBolus = insulinToDeliver;
                         manualCorrectionBolus = NormalizeBolus(
@@ -384,20 +421,22 @@ public class DemoDataGenerator : IDemoDataGenerator
                         stepTreatments.Add(CreateManualCorrectionBolusTreatment(currentTime, manualCorrectionBolus));
                         simulator.AddInsulinDose(currentTime, manualCorrectionBolus);
                     }
-                    // AID correction bolus every 30 minutes when significantly high
+                    // A larger automatic bolus every 30 minutes when significantly high. Trio uploads it
+                    // as an SMB like any other, so it is not read as the person's correction.
                     else if (
-                        glucose > targetGlucose + 40
+                        smbEnabled
+                        && glucose > targetGlucose + 40
                         && currentTime.Minute % 30 == 0
                         && insulinToDeliver > 0.1
                     )
                     {
                         var correctionBolus = insulinToDeliver * (0.3 + _random.NextDouble() * 0.1);
                         correctionBolus = NormalizeBolus(Math.Clamp(correctionBolus, 0.1, 1.0));
-                        stepTreatments.Add(CreateCorrectionBolusTreatment(currentTime, correctionBolus));
+                        stepTreatments.Add(CreateAlgorithmBolusTreatment(currentTime, correctionBolus));
                         simulator.AddInsulinDose(currentTime, correctionBolus);
                     }
                     // SMBs every 5 minutes for fine-tuning when moderately high
-                    else if (glucose > targetGlucose + 30 && insulinToDeliver > 0.05)
+                    else if (smbEnabled && glucose > targetGlucose + 30 && insulinToDeliver > 0.05)
                     {
                         var algorithmBolus = NormalizeBolus(
                             Math.Clamp(insulinToDeliver * 0.1, 0.05, 0.3)
@@ -418,6 +457,10 @@ public class DemoDataGenerator : IDemoDataGenerator
                         : 0.4;
                     loopTemp = (NormalizeBasalRate(_config.BasalRate * reductionFactor), null);
                 }
+                else
+                {
+                    loopTemp = (InRangeTempRate(currentTime, glucose - targetGlucose), null);
+                }
 
                 if (loop == DemoLoopState.Manual)
                 {
@@ -429,7 +472,7 @@ public class DemoDataGenerator : IDemoDataGenerator
                          && loopTemp is { } temp
                          && (currentTime.Minute == 0 || currentTime.Minute == 30)
                          && tempRate is null
-                         && DemoLoopInterruptions.MinutesToNext(currentTime, LoopTempMinutes) is var minutes and > 0)
+                         && DemoLoopInterruptions.MinutesToNext(currentTime, LoopTempMinutes, end) is var minutes and > 0)
                 {
                     stepTreatments.Add(CreateTempBasalTreatment(currentTime, temp.Rate, minutes));
                     tempRate = temp.Rate;
@@ -483,6 +526,9 @@ public class DemoDataGenerator : IDemoDataGenerator
                 totalSteps++;
 
                 lastGlucose = glucose;
+                recentGlucose.Enqueue(glucose);
+                if (recentGlucose.Count > 3)
+                    recentGlucose.Dequeue();
                 currentTime = stepEnd;
                 simulator.CleanupExpired(currentTime);
             }
@@ -881,10 +927,10 @@ public class DemoDataGenerator : IDemoDataGenerator
     {
         var chance = scenario switch
         {
-            DayScenario.HighDay => 0.6,
-            DayScenario.SickDay or DayScenario.StressDay => 0.45,
-            DayScenario.PoorSleep => 0.4,
-            DayScenario.Normal => 0.3,
+            DayScenario.HighDay => 0.35,
+            DayScenario.SickDay or DayScenario.StressDay => 0.25,
+            DayScenario.PoorSleep => 0.2,
+            DayScenario.Normal => 0.1,
             _ => 0.1,
         };
         if (_random.NextDouble() >= chance)
@@ -983,19 +1029,6 @@ public class DemoDataGenerator : IDemoDataGenerator
             Mills = new DateTimeOffset(time).ToUnixTimeMilliseconds(),
             Created_at = time.ToString("o"),
             EnteredBy = "demo-user",
-            DataSource = DataSources.DemoService,
-        };
-    }
-
-    private Treatment CreateCorrectionBolusTreatment(DateTime time, double insulin)
-    {
-        return new Treatment
-        {
-            EventType = "Correction Bolus",
-            Insulin = insulin,
-            Mills = new DateTimeOffset(time).ToUnixTimeMilliseconds(),
-            Created_at = time.ToString("o"),
-            EnteredBy = "demo-pump", // AID pump delivers partial corrections
             DataSource = DataSources.DemoService,
         };
     }
@@ -1385,6 +1418,111 @@ public class DemoDataGenerator : IDemoDataGenerator
         var rounded = RoundToIncrement(clamped, PumpBolusIncrementUnits);
         return Math.Clamp(rounded, PumpBolusIncrementUnits, PumpMaxBolusUnits);
     }
+
+    /// <summary>
+    /// The dawn phenomenon on a strong morning: a rise from 4 to 8 am that the loop's temp basals
+    /// slow but do not stop, to about 200 mg/dL by 7 am, which the person corrects on waking
+    /// (<see cref="LevelCorrection"/>).
+    /// </summary>
+    private const double DawnHighStrength = 1.9;
+
+    /// <summary>The weekdays with a strong dawn rise: four, so every week of the sample has them.</summary>
+    private static readonly DayOfWeek[] DawnHighDays =
+        [DayOfWeek.Monday, DayOfWeek.Wednesday, DayOfWeek.Friday, DayOfWeek.Saturday];
+
+    /// <summary>
+    /// Whether the morning has a strong dawn rise and a late breakfast, so a correction on waking
+    /// has the hours before food that <see cref="LevelCorrection"/> needs. A sick day is left out:
+    /// the illness mask takes its hours out of the analysis.
+    /// </summary>
+    private static bool HasDawnHigh(DateTime day, DayScenario scenario) =>
+        scenario != DayScenario.SickDay && DawnHighDays.Contains(day.DayOfWeek);
+
+    /// <summary>
+    /// The meal plan with breakfast at 10:00 to 10:45 at the earliest, no other food before it, and
+    /// lunch at least three hours after it: a late breakfast moves the next meal later, and no
+    /// morning snack is eaten between them.
+    /// </summary>
+    private static List<MealEvent> LateBreakfast(DateTime day, List<MealEvent> meals)
+    {
+        var breakfastAt = day.AddHours(10).AddMinutes(5 * DayScenarios.Roll(day, "late-breakfast", 10));
+        var lunchFrom = breakfastAt.AddHours(3);
+        return
+        [
+            .. meals
+                .Where(m => m.FoodType is "Breakfast" or "Lunch" || m.MealTime >= lunchFrom)
+                .Select(m => m.FoodType switch
+                {
+                    "Breakfast" when m.MealTime < breakfastAt => m with { MealTime = breakfastAt },
+                    "Lunch" when m.MealTime < lunchFrom => m with { MealTime = lunchFrom },
+                    _ => m,
+                }),
+        ];
+    }
+
+    /// <summary>
+    /// How long after carbs the loop may give automatic boluses, as Trio's enableSMB_after_carbs:
+    /// outside it, and whenever the loop is not closed, the loop corrects a high with temp basals
+    /// alone.
+    /// </summary>
+    private static readonly TimeSpan SmbAfterCarbsTime = TimeSpan.FromHours(6);
+
+    /// <summary>
+    /// The share of the bolus calculator's dose the person gives for a level high: a cautious
+    /// correction, since the loop has more to add and a full dose with the dawn rise ending
+    /// would run low.
+    /// </summary>
+    private const double LevelCorrectionShare = 0.8;
+
+    /// <summary>How long after a level-high correction the person eats nothing.</summary>
+    private static readonly TimeSpan LevelCorrectionCarbFreeTime = TimeSpan.FromHours(3);
+
+    /// <summary>How long after a level-high correction the person leaves it to act before correcting again.</summary>
+    private static readonly TimeSpan LevelCorrectionQuietTime = TimeSpan.FromHours(4);
+
+    /// <summary>
+    /// The person's correction of a high that has levelled off, away from food, other boluses and
+    /// loop interruptions for the hours it acts, while awake: <see cref="LevelCorrectionShare"/> of
+    /// the bolus calculator's dose, the need less the insulin on board, given once what is on board
+    /// is no more than the dose. These are the corrections the Settings evidence page reads an ISF
+    /// from. A sick day is left out: the illness mask takes its hours out of the analysis.
+    /// </summary>
+    /// <param name="glucoseBefore">Glucose 15 minutes earlier; a high still moving faster is still rising or falling.</param>
+    private double? LevelCorrection(
+        DateTime time,
+        double glucose,
+        double glucoseBefore,
+        double iob,
+        double effectiveIsf,
+        DayScenario scenario,
+        IEnumerable<MealEvent> meals,
+        IEnumerable<(DateTime Time, Treatment Treatment)> pending,
+        DateTime seedEnd)
+    {
+        if (scenario == DayScenario.SickDay
+            || time.Hour is >= 1 and < 6
+            || glucose <= _config.TargetGlucose + 40
+            || Math.Abs(glucose - glucoseBefore) > 12)
+            return null;
+
+        var foodFreeUntil = time + LevelCorrectionCarbFreeTime;
+        if (meals.Any(m => m.MealTime > time.AddMinutes(-90) && m.MealTime < foodFreeUntil)
+            || pending.Any(p => p.Treatment.Insulin > 0 && p.Time < foodFreeUntil)
+            || DemoLoopInterruptions.On(time, seedEnd).Concat(DemoLoopInterruptions.On(time.AddDays(1), seedEnd))
+                .Any(i => i.Start < time + LevelCorrectionQuietTime && i.End > time))
+            return null;
+
+        var dose = NormalizeBolus(Math.Min(
+            LevelCorrectionShare * ((glucose - _config.TargetGlucose) / effectiveIsf - Math.Max(0, iob)), 5.0));
+        return dose >= 0.6 && iob <= dose ? dose : null;
+    }
+
+    /// <summary>
+    /// The temp the loop sets while glucose is in range: the scheduled rate nudged towards target,
+    /// as oref sets a small adjustment most cycles rather than leaving the schedule to run for hours.
+    /// </summary>
+    private double InRangeTempRate(DateTime localTime, double glucoseAboveTarget) =>
+        NormalizeBasalRate(DemoTherapyProfile.ScheduledRateAt(localTime, _config.BasalRate) * (1 + glucoseAboveTarget / 150.0));
 
     private double MaxSafeBasalRate => NormalizeBasalRate(_config.BasalRate * MaxSafeBasalMultiplier);
 

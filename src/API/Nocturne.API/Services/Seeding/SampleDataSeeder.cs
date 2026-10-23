@@ -190,6 +190,9 @@ public class SampleDataSeeder
                 $"Seed {tenant.Slug} from a scope of its own; see {nameof(SeedInTenantScopeAsync)}.");
 
         var config = ConfigurationFor(days);
+        // One end for every stream, so the loop and the pump mode spans agree on the quiet end
+        // (DemoLoopInterruptions.QuietBeforeEnd).
+        var seedEnd = DateTime.Now;
 
         // The episode tracker rides along with the glucose stream so alarm
         // history matches the lows/highs actually visible on the chart.
@@ -257,7 +260,7 @@ public class SampleDataSeeder
                 statusBatch.Clear();
             }
 
-            foreach (var step in generator.GenerateHistoricalTimeline())
+            foreach (var step in generator.GenerateHistoricalTimeline(seedEnd))
             {
                 ct.ThrowIfCancellationRequested();
 
@@ -319,7 +322,7 @@ public class SampleDataSeeder
         }
         episodeTracker.Flush();
 
-        var localToday = DateTime.Now.Date;
+        var localToday = seedEnd.Date;
 
         // Device changes as treatments: the decomposer turns them into
         // DeviceEvents, which drive the dashboard age pills (SAGE/CAGE/…).
@@ -350,7 +353,7 @@ public class SampleDataSeeder
             await SeedCompressionLowReviewsAsync(localToday, days, ct);
 
         var foodCount = await SeedFoodsAsync(db, mealCarbLinks, ownerSubjectId, ct);
-        var stateSpanCount = await SeedStateSpansAsync(db, localToday, days, dataSource, ct);
+        var stateSpanCount = await SeedStateSpansAsync(db, localToday, seedEnd, days, dataSource, ct);
         await SeedBodyWeightAsync(db, localToday, days, dataSource, ct);
         await SeedTimezoneTimelineAsync(db, localToday, days, ct);
         await SeedDndWindowAsync(db, localToday, ct);
@@ -781,7 +784,7 @@ public class SampleDataSeeder
     /// </summary>
     private async Task<int> SeedStateSpansAsync(
         NocturneDbContext db,
-        DateTime localToday, int days, string dataSource, CancellationToken ct)
+        DateTime localToday, DateTime seedEnd, int days, string dataSource, CancellationToken ct)
     {
         await db.StateSpans.PurgeAsync(s => s.Source == dataSource, ct);
         await db.ProfileActivations.PurgeAsync(a => a.DataSource == dataSource, ct);
@@ -797,7 +800,7 @@ public class SampleDataSeeder
             DataSource = dataSource,
         });
 
-        var spans = DemoLifestyleSeeds.BuildSpans(localToday, days);
+        var spans = DemoLifestyleSeeds.BuildSpans(localToday, days, seedEnd);
         foreach (var seed in spans)
         {
             db.StateSpans.Add(new StateSpanEntity

@@ -30,15 +30,23 @@ public static class DemoLoopInterruptions
     /// <summary>The Dexcom G7 warm-up.</summary>
     private static readonly TimeSpan SensorWarmUpLength = TimeSpan.FromMinutes(30);
 
-    private static readonly TimeSpan ManualModeLength = TimeSpan.FromHours(2.5);
+    private static readonly TimeSpan ManualModeLength = TimeSpan.FromHours(2);
+
+    /// <summary>
+    /// How long before the end of a seeded range no interruption runs, so the tenant looks current
+    /// when it is seeded: the loop closed, with a recent status, and its IOB on the dashboard.
+    /// </summary>
+    public static readonly TimeSpan QuietBeforeEnd = TimeSpan.FromHours(2);
 
     public sealed record Interruption(DemoLoopState State, DateTime Start, DateTime End);
 
     /// <summary>
-    /// The interruptions that start on <paramref name="localDay"/>. Each ends the same day, so a
+    /// The interruptions that start on <paramref name="localDay"/>, less any that reach into the
+    /// <see cref="QuietBeforeEnd"/> before <paramref name="seedEnd"/>. Each ends the same day, so a
     /// day's interruptions are all that can cover a time on it.
     /// </summary>
-    public static IReadOnlyList<Interruption> On(DateTime localDay)
+    /// <param name="seedEnd">The local end of the seeded range, which is now for a live seed.</param>
+    public static IReadOnlyList<Interruption> On(DateTime localDay, DateTime seedEnd)
     {
         var day = localDay.Date;
         var interruptions = new List<Interruption>();
@@ -47,40 +55,44 @@ public static class DemoLoopInterruptions
             interruptions.Add(new(DemoLoopState.SiteChange, siteChange, siteChange + SiteChangeLength));
         if (DemoDeviceLifecycle.ChangeTimeOn(day, "Sensor Start") is { } sensorStart)
             interruptions.Add(new(DemoLoopState.SensorWarmUp, sensorStart, sensorStart + SensorWarmUpLength));
-        if (ManualModeWindow(day) is { } manual)
+        if (ManualModeWindow(day, seedEnd) is { } manual)
             interruptions.Add(new(DemoLoopState.Manual, manual.Start, manual.End));
 
         AddPhoneGap(interruptions, day, "loop-gap", chancePercent: 75);
         AddPhoneGap(interruptions, day, "loop-gap-2", chancePercent: 45);
 
-        return interruptions;
+        return [.. interruptions.Where(i => !InQuietEnd(i.Start, i.End, seedEnd))];
     }
 
     /// <summary>
     /// An occasional afternoon in manual mode (pump maintenance, a pool day), on a day with no
     /// workout. The pump mode spans and the loop read the same window.
     /// </summary>
-    public static (DateTime Start, DateTime End)? ManualModeWindow(DateTime localDay)
+    /// <param name="seedEnd">See <see cref="On"/>.</param>
+    public static (DateTime Start, DateTime End)? ManualModeWindow(DateTime localDay, DateTime seedEnd)
     {
         var day = localDay.Date;
         if (DayScenarios.For(day) == DayScenario.Exercise || DayScenarios.Roll(day, "manual-mode", 100) >= 9)
             return null;
 
         var start = day.AddHours(13 + DayScenarios.Roll(day, "manual-start", 4));
-        return (start, start + ManualModeLength);
+        var end = start + ManualModeLength;
+        return InQuietEnd(start, end, seedEnd) ? null : (start, end);
     }
 
-    public static DemoLoopState StateAt(DateTime localTime) =>
-        On(localTime).FirstOrDefault(i => i.Start <= localTime && localTime < i.End)?.State ?? DemoLoopState.Closed;
+    /// <param name="seedEnd">See <see cref="On"/>.</param>
+    public static DemoLoopState StateAt(DateTime localTime, DateTime seedEnd) =>
+        On(localTime, seedEnd).FirstOrDefault(i => i.Start <= localTime && localTime < i.End)?.State ?? DemoLoopState.Closed;
 
     /// <summary>
     /// The minutes from <paramref name="localTime"/> to the next interruption, at most
     /// <paramref name="limit"/>. A temp basal set now ends by then: a site change or manual mode
     /// cancels it, and the loop cannot re-issue it through a gap.
     /// </summary>
-    public static int MinutesToNext(DateTime localTime, int limit)
+    /// <param name="seedEnd">See <see cref="On"/>.</param>
+    public static int MinutesToNext(DateTime localTime, int limit, DateTime seedEnd)
     {
-        var next = On(localTime).Concat(On(localTime.AddDays(1)))
+        var next = On(localTime, seedEnd).Concat(On(localTime.AddDays(1), seedEnd))
             .Where(i => i.Start > localTime)
             .Select(i => (int)(i.Start - localTime).TotalMinutes)
             .DefaultIfEmpty(limit)
@@ -88,12 +100,16 @@ public static class DemoLoopInterruptions
         return Math.Min(next, limit);
     }
 
+    private static bool InQuietEnd(DateTime start, DateTime end, DateTime seedEnd) =>
+        start < seedEnd && end > seedEnd - QuietBeforeEnd;
+
     private static void AddPhoneGap(List<Interruption> interruptions, DateTime day, string stream, int chancePercent)
     {
         if (DayScenarios.Roll(day, stream, 100) >= chancePercent)
             return;
 
-        var start = day.AddHours(6).AddMinutes(5 * DayScenarios.Roll(day, $"{stream}:start", 180));
+        // Out of the house, from mid-morning to the evening: the phone stays by the pump at home.
+        var start = day.AddHours(10.5).AddMinutes(5 * DayScenarios.Roll(day, $"{stream}:start", 126));
         var length = TimeSpan.FromMinutes(20 + 5 * DayScenarios.Roll(day, $"{stream}:length", 11));
         interruptions.Add(new(DemoLoopState.PhoneOutOfRange, start, start + length));
     }
