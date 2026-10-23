@@ -80,6 +80,13 @@ public enum SettingsEvidenceConfidenceReason
     /// material share of the need.
     /// </summary>
     CarriedInsulinMaterial,
+
+    /// <summary>
+    /// ISF: a material share of the corrections that reached the low check went low and were
+    /// rejected (<see cref="SettingsEvidenceRule.WentLow"/>). They are the corrections that dropped
+    /// furthest per unit, so the median of the rest reads low, towards more insulin.
+    /// </summary>
+    ManyWentLow,
 }
 
 /// <summary>Why a figure has no observed value.</summary>
@@ -168,7 +175,10 @@ public enum SettingsEvidenceRule
     /// </summary>
     IobSourceChanged,
 
-    /// <summary>ISF: glucose went below 70 mg/dL in the window, so a low cut the drop short.</summary>
+    /// <summary>
+    /// ISF: glucose went below 70 mg/dL in the window, so the correction is rejected: a low brings a
+    /// suspend and treatment, and the drop is no longer the insulin's alone.
+    /// </summary>
     WentLow,
 
     /// <summary>Another meal, correction bolus or meal-like climb fell in the window.</summary>
@@ -484,7 +494,7 @@ public class SettingsEvidenceRules
     /// <summary>Carb ratio: the window read after a meal.</summary>
     public long CarbRatioWindowMs { get; set; }
 
-    /// <summary>Glucose below which an ISF episode is set aside.</summary>
+    /// <summary>Glucose below which an ISF episode is rejected.</summary>
     public double LowMgdl { get; set; }
 
     /// <summary>The range a carb ratio episode's glucose must start in.</summary>

@@ -1,5 +1,8 @@
 using Nocturne.Core.Clinical.LoopAnalysis;
 using Nocturne.Core.Clinical.Treatments;
+using Nocturne.Core.Contracts.Profiles.Resolvers;
+using Nocturne.Core.Contracts.Treatments;
+using Nocturne.Core.Contracts.V4.Repositories;
 using Nocturne.Core.Models.Basal;
 using Nocturne.Core.Models.LoopAnalysis;
 using Nocturne.Core.Models.V4;
@@ -29,9 +32,9 @@ public class SettingsEvidenceCalculatorTests
         return SettingsEvidenceCalculator.Calculate(inputs, mask, from, to, listEpisodes);
     }
 
-    private static TherapyTimeline Therapy(long from, long to, double isf = 40, double carbRatio = 10, double basal = 1) =>
+    private static TherapyTimeline Therapy(long from, long to, double isf = 40, double carbRatio = 10, double basal = 1, double dia = 4) =>
         new([new TherapySegment(from, to, new TherapySnapshot(
-            4, 75, 30, Sydney, null, 0,
+            dia, 75, 30, Sydney, null, 0,
             [new ScheduleEntry { TimeAsSeconds = 0, Value = isf }],
             [new ScheduleEntry { TimeAsSeconds = 0, Value = carbRatio }],
             [new ScheduleEntry { TimeAsSeconds = 0, Value = basal }]))]);
@@ -245,13 +248,16 @@ public class SettingsEvidenceCalculatorTests
     }
 
     public static TheoryData<string> Departures =>
-        ["noise", "longModelDia", "shortModelDia", "bodyActsLonger", "slowAbsorption", "nightNeedsMore", "nightNeedsLess", "dayNeedsMore"];
+        ["noise", "longModelDia", "shortModelDia", "bodyActsLonger", "slowAbsorption", "nightNeedsMore", "nightNeedsLess", "dayNeedsMore",
+         "profileBasalHigh", "profileBasalLow", "profileIsfHigh", "profileIsfLow", "profileCrHigh", "profileCrLow",
+         "profileAllLowLongModelDia"];
 
     /// <summary>
     /// A body that departs from what the calculator assumes, with the profile right by day: CGM
     /// noise of ±8 mg/dL, an IOB curve half as long again or half as long as the body's insulin acts,
     /// meals that absorb over five hours, past the four-hour window, and a night that needs 1.25 or
-    /// 0.7 U/h against a schedule of 1.0, which the day's windows borrow. Each figure must stay within
+    /// 0.7 U/h against a schedule of 1.0, which the day's windows borrow. Or a profile 20% to 25% off
+    /// the body in one setting, or in all three with that longer IOB curve. Each figure must stay within
     /// an honest tolerance of the truth. One more than 15% off towards more insulin (a basal above the
     /// truth, an ISF or carb ratio below it) must be Low; one that far off the other way must not be High.
     /// </summary>
@@ -270,14 +276,21 @@ public class SettingsEvidenceCalculatorTests
             "nightNeedsMore" => plan with { TrueBasal = h => h < 6 ? 1.25 : 1.0 },
             "nightNeedsLess" => plan with { TrueBasal = h => h < 6 ? 0.7 : 1.0 },
             "dayNeedsMore" => plan with { TrueBasal = h => h < 6 ? 1.0 : 1.25 },
+            "profileBasalHigh" => plan with { TrueBasal = _ => 0.8 },
+            "profileBasalLow" => plan with { TrueBasal = _ => 1.25 },
+            "profileIsfHigh" => plan with { TrueIsf = 40 },
+            "profileIsfLow" => plan with { TrueIsf = 62.5 },
+            "profileCrHigh" => plan with { TrueCr = 8 },
+            "profileCrLow" => plan with { TrueCr = 12.5 },
+            "profileAllLowLongModelDia" => plan with { TrueBasal = _ => 1.25, TrueIsf = 62.5, TrueCr = 12.5, ModelDiaSteps = 72, ModelPeakSteps = 18 },
             _ => throw new ArgumentOutOfRangeException(nameof(departure)),
         };
 
         var range = Recover(plan);
 
         var figures = range.Basal.Select(b => (Figure: (SettingsEvidenceFigure)b, Truth: plan.TrueBasal(b.StartHour), HigherMeansMore: true))
-            .Concat(range.Isf.Select(b => (Figure: (SettingsEvidenceFigure)b, Truth: 50.0, HigherMeansMore: false)))
-            .Concat(range.CarbRatio.Select(b => (Figure: (SettingsEvidenceFigure)b, Truth: 10.0, HigherMeansMore: false)))
+            .Concat(range.Isf.Select(b => (Figure: (SettingsEvidenceFigure)b, Truth: plan.TrueIsf, HigherMeansMore: false)))
+            .Concat(range.CarbRatio.Select(b => (Figure: (SettingsEvidenceFigure)b, Truth: plan.TrueCr, HigherMeansMore: false)))
             .Where(f => f.Figure.Observed is not null)
             .ToList();
         figures.Should().NotBeEmpty();
@@ -306,6 +319,13 @@ public class SettingsEvidenceCalculatorTests
         ["nightNeedsLess"] = 0.3,
         ["bodyActsLonger"] = 0.2,
         ["dayNeedsMore"] = 0.3,
+        ["profileBasalHigh"] = 0.05,
+        ["profileBasalLow"] = 0.05,
+        ["profileIsfHigh"] = 0.05,
+        ["profileIsfLow"] = 0.05,
+        ["profileCrHigh"] = 0.05,
+        ["profileCrLow"] = 0.05,
+        ["profileAllLowLongModelDia"] = 0.35,
     };
 
     #endregion
@@ -333,11 +353,42 @@ public class SettingsEvidenceCalculatorTests
         public List<InsulinDose> Doses { get; } = [];
         public LoopAnalysisMaskSources Sources { get; set; } = new();
         public LoopAnalysisMasks Masks { get; set; } = new();
+        public double Isf { get; init; } = 40;
+        public double Dia { get; init; } = 4;
 
         public long At(int day, int hour, int minute = 0) => From + day * Day + hour * Hour + minute * Minute;
 
+        public TherapyTimeline Timeline() => Therapy(From - Day, To + Day, isf: Isf, dia: Dia);
+
         public SettingsEvidenceRange Run(bool listEpisodes = true) =>
-            Calculate(Series(), Therapy(From - Day, To + Day), From, To, Sources, Masks, listEpisodes);
+            Calculate(Series(), Timeline(), From, To, Sources, Masks, listEpisodes);
+
+        /// <summary>
+        /// IOB calculated from <paramref name="temps"/> and the doses as the Settings evidence load
+        /// calculates it (<see cref="BasalIobModel.Carried"/>), with the basal delivered as the temps
+        /// set it and the schedule elsewhere.
+        /// </summary>
+        public Week WithCalculatedIob(IReadOnlyList<TempBasal> temps)
+        {
+            var (start, end) = (From - Day, To + Day);
+            List<Bolus> boluses = [.. Doses.Select(d => new Bolus
+            {
+                Timestamp = DateTimeOffset.FromUnixTimeMilliseconds(d.Mills).UtcDateTime,
+                Insulin = d.Units,
+                Kind = d.Automatic ? BolusKind.Algorithm : BolusKind.Manual,
+            })];
+            var calculator = new IobCalculator(
+                Mock.Of<ITherapySettingsResolver>(), Mock.Of<ISensitivityResolver>(), Mock.Of<IBasalRateResolver>(),
+                Mock.Of<IApsSnapshotRepository>(), Mock.Of<IPumpSnapshotRepository>());
+            var iob = IobCobSeries.Build(
+                    calculator, Mock.Of<ICobCalculator>(), boluses, [], temps, Timeline(), null,
+                    start, end, end, 5 * Minute, BasalIobModel.Carried)
+                .ToDictionary(t => t.Mills, t => t.Iob);
+            Iob = t => iob[t];
+            IobSource = _ => IobCobSource.Calculated;
+            Basal = t => (temps.FirstOrDefault(tb => tb.StartMills <= t && t < tb.EndMills)?.Rate ?? 1, BasalDeliveryOrigin.Algorithm);
+            return this;
+        }
 
         public DailyProfileInputs Series()
         {
@@ -361,6 +412,7 @@ public class SettingsEvidenceCalculatorTests
                 Insulin = new NetInsulinAboveSchedule(delivered, [new RateSegment(start, end, 1)], Doses),
                 Carbs = Carbs,
                 IobCob = ticks,
+                CalculatedIobCobTime = IntervalSet.Of(start, end),
                 TargetAt = Target,
             };
         }
@@ -1108,6 +1160,166 @@ public class SettingsEvidenceCalculatorTests
 
         episode.IobAtStart.Should().BeGreaterThan(3, "the pre-bolus is on board at the window's start");
         episode.ResidualIob.Should().Be(0.9, "none of it was on board before the meal's own bolus");
+    }
+
+    #endregion
+
+    #region Calculated IOB carried against net insulin
+
+    private static TempBasal TempOf(long start, long end, double rate) => new()
+    {
+        StartTimestamp = DateTimeOffset.FromUnixTimeMilliseconds(start).UtcDateTime,
+        EndTimestamp = DateTimeOffset.FromUnixTimeMilliseconds(end).UtcDateTime,
+        Rate = rate,
+        Origin = TempBasalOrigin.Algorithm,
+        Device = "pump",
+    };
+
+    /// <summary>One temp a day, from <paramref name="startHour"/> to <paramref name="endHour"/>, as one record or as five-minute records.</summary>
+    private static List<TempBasal> DailyTemps(Week week, int startHour, int endHour, double rate, bool fiveMinutePieces = false)
+    {
+        var temps = new List<TempBasal>();
+        for (var d = -1; d <= week.Days; d++)
+        {
+            var (start, end) = (week.At(d, startHour), week.At(d, endHour));
+            if (!fiveMinutePieces)
+                temps.Add(TempOf(start, end, rate));
+            else
+                for (var t = start; t < end; t += 5 * Minute)
+                    temps.Add(TempOf(t, t + 5 * Minute, rate));
+        }
+        return temps;
+    }
+
+    [Fact]
+    public void AZeroTempBeforeABlockAtSchedule_IsCarriedIntoItAsNegativeInsulin()
+    {
+        // Schedule 1 U/h, DIA 5 h, zero temp 01:00-02:00. Each five minutes of the zero temp carries
+        // -1/12 U decaying from its own start: -0.892 U at 02:00, -0.492 U at 04:00.
+        var week = new Week { Dia = 5 };
+        week.WithCalculatedIob(DailyTemps(week, 1, 2, 0));
+
+        var block = BasalBlock(week.Run(), 2);
+
+        block.N.Should().Be(7);
+        block.Days.Should().OnlyContain(d => d.CarriedInsulin == -0.2 && d.NetLoopCorrection == 0,
+            "acted is 0 U delivered above schedule + -0.892 - -0.492 = -0.4 U over two hours");
+        block.Observed.Should().Be(0.8, "the 0.4 U the zero temp left missing acts in the block");
+    }
+
+    [Fact]
+    public void ALongHighTemp_IsCarriedTheSame_AsOneRecordOrAsFiveMinuteRecords()
+    {
+        // 1.5 U/h on a 1 U/h schedule from 01:00 to 04:00, DIA 5 h: 0.446 U on board at 02:00 and
+        // 1.038 U at 04:00, so acted over 02:00-04:00 is 1.0 + 0.446 - 1.038 = 0.408 U.
+        SettingsEvidenceRange Run(bool fiveMinutePieces)
+        {
+            var week = new Week { Dia = 5 };
+            return week.WithCalculatedIob(DailyTemps(week, 1, 4, 1.5, fiveMinutePieces)).Run();
+        }
+
+        var whole = BasalBlock(Run(fiveMinutePieces: false), 2);
+        var pieces = BasalBlock(Run(fiveMinutePieces: true), 2);
+
+        whole.Observed.Should().Be(1.204, "1.0 scheduled + 0.5 correction + (0.408 / 2 - 0.5) carried");
+        whole.Days.Should().OnlyContain(d => d.CarriedInsulin == -0.296);
+        pieces.Observed.Should().Be(whole.Observed);
+        pieces.Days.Select(d => d.CarriedInsulin).Should().Equal(whole.Days.Select(d => d.CarriedInsulin));
+    }
+
+    [Fact]
+    public void AZeroTempBeforeACorrection_IsTakenOffTheInsulinThatActed()
+    {
+        // A 2 U correction at 14:00 after a zero temp from 13:00, DIA 5 h. On board: 2 - 0.892 U at
+        // 14:00, and 0.118 U of the bolus less 0.092 U still missing at 18:00, so 1.082 U acted
+        // against an 80 mg/dL drop. Counting the zero temp as nothing, 1.882 U would read an ISF of 42.5.
+        var week = new Week { Dia = 5, Glucose = Corrections().Glucose };
+        week.Doses.AddRange(Enumerable.Range(0, 7).Select(d => new InsulinDose(week.At(d, 14), 2, Automatic: false)));
+        week.WithCalculatedIob(DailyTemps(week, 13, 14, 0));
+
+        var isf = Isf(week.Run(), SettingsEvidenceBlock.Midday);
+
+        isf.N.Should().Be(7);
+        isf.Episodes.Should().OnlyContain(e => e.InsulinActed == 1.082 && e.Value == 73.937);
+        isf.Observed.Should().Be(73.937);
+    }
+
+    [Fact]
+    public void ACarriedTermThatLeavesTheNeedTooHigh_ReadsLow()
+    {
+        // A high temp before the block that the body has already used: glucose stays flat at
+        // schedule, but 0.6 U of it is still on the calculated curve, so the need reads 1.3 U/h
+        // against a body that needs 1.0. The carried term is 23% of it, which is material, and the
+        // figure points towards more insulin, so it reads Low.
+        var week = new Week { Dia = 5, Days = 14 };
+        for (var d = 0; d < week.Days; d++)
+            week.Carbs.Add(new CarbEvent(week.At(d, 12), 30));
+        week.WithCalculatedIob(DailyTemps(week, 1, 2, 2.5));
+
+        var block = BasalBlock(week.Run(), 2);
+
+        block.Observed.Should().Be(1.3);
+        block.TowardsMoreInsulin.Should().BeTrue();
+        block.ConfidenceReasons.Should().Equal(
+            SettingsEvidenceConfidenceReason.CarriedInsulinMaterial,
+            SettingsEvidenceConfidenceReason.MoreInsulinOnBorrowedInput);
+        block.Confidence.Should().Be(SettingsEvidenceConfidence.Low);
+    }
+
+    #endregion
+
+    #region Corrections that went low
+
+    /// <summary>
+    /// A 3 U correction at 14:00 every day from 220 mg/dL, glucose falling evenly over four hours by
+    /// the day's own ISF times 3 U, the IOB on a straight four-hour decline.
+    /// </summary>
+    private static Week CorrectionsAtIsf(IReadOnlyList<double> isfByDay, double profileIsf)
+    {
+        var week = new Week { Days = isfByDay.Count, Isf = profileIsf };
+        for (var d = 0; d < isfByDay.Count; d++)
+            week.Doses.Add(new InsulinDose(week.At(d, 14), 3, Automatic: false));
+        week.Glucose = t =>
+        {
+            for (var d = 0; d < isfByDay.Count; d++)
+            {
+                var bolus = week.At(d, 14);
+                var drop = 3 * isfByDay[d];
+                if (t >= bolus - Hour && t < bolus)
+                    return 220;
+                if (t >= bolus && t < bolus + 4 * Hour)
+                    return 220 - drop * (t - bolus) / (4 * Hour);
+                if (t >= bolus + 4 * Hour && t < bolus + 6 * Hour)
+                    return 220 - drop;
+            }
+            return 120;
+        };
+        return week;
+    }
+
+    [Fact]
+    public void CorrectionsLeftOutForGoingLow_AreAReasonForLessConfidence_WhenAMaterialShare()
+    {
+        // The review's hand example: the ISF is 40 to 58 by day. Every day above 50 ends below
+        // 70 mg/dL and is rejected, so the median of the rest is 45 against a mean of 49.
+        var isf = Isf(CorrectionsAtIsf([40, 42, 44, 46, 48, 50, 52, 54, 56, 58], profileIsf: 55).Run(), SettingsEvidenceBlock.Midday);
+
+        Rejected(isf, SettingsEvidenceRule.WentLow).Should().Be(4);
+        isf.Observed.Should().Be(45);
+        isf.ConfidenceReasons.Should().Contain(SettingsEvidenceConfidenceReason.ManyWentLow);
+        isf.TowardsMoreInsulin.Should().BeTrue();
+        isf.ConfidenceReasons.Should().Contain(SettingsEvidenceConfidenceReason.MoreInsulinOnBorrowedInput,
+            "what the lows took out of the median cannot be sized, and it points the riskier way");
+        isf.Confidence.Should().Be(SettingsEvidenceConfidence.Low);
+    }
+
+    [Fact]
+    public void OneCorrectionInTenGoingLow_IsNoReason()
+    {
+        var isf = Isf(CorrectionsAtIsf([40, 41, 42, 43, 44, 45, 46, 47, 48, 52], profileIsf: 44).Run(), SettingsEvidenceBlock.Midday);
+
+        Rejected(isf, SettingsEvidenceRule.WentLow).Should().Be(1);
+        isf.ConfidenceReasons.Should().NotContain(SettingsEvidenceConfidenceReason.ManyWentLow, "a tenth is under the material share");
     }
 
     #endregion

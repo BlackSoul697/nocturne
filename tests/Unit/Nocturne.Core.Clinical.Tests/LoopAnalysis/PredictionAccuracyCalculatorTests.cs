@@ -53,7 +53,8 @@ public class PredictionAccuracyCalculatorTests
         long readingsUntil = long.MaxValue,
         IntervalSet? exclusions = null,
         LoopAnalysisMasks? filter = null,
-        LoopAnalysisMaskSources? sources = null)
+        LoopAnalysisMaskSources? sources = null,
+        long? historyVisibleFrom = null)
     {
         from = from == 0 ? From : from;
         to = to == 0 ? To : to;
@@ -67,6 +68,7 @@ public class PredictionAccuracyCalculatorTests
             Adjusted = adjusted ?? IntervalSet.Empty,
             ReadingsUntil = readingsUntil,
             GlucoseExclusions = exclusions ?? IntervalSet.Empty,
+            HistoryVisibleFrom = historyVisibleFrom,
         };
         var mask = LoopAnalysisMask.Build(filter ?? new LoopAnalysisMasks(), from, to, Sydney, sources ?? new LoopAnalysisMaskSources());
         return PredictionAccuracyCalculator.Calculate(inputs, mask, from, to);
@@ -192,6 +194,47 @@ public class PredictionAccuracyCalculatorTests
     }
 
     [Fact]
+    public void AnAdjustmentStartedAfterThePrediction_InterruptsTheHorizonsAfterIt()
+    {
+        var start = Midnight + 10 * Hour;
+
+        var curve = Calculate(
+            [LoopFixture(start, Flat(120))], Readings(Midnight, To + 3 * Hour, 110),
+            adjusted: IntervalSet.Of(start + 40 * Minute, start + 3 * Hour)).Curves.Single();
+
+        Matched(curve, PredictionContext.Fasting).Should().Equal(1, 0, 0, 0);
+        curve.Horizons.Select(h => h.Interrupted).Should().Equal(0, 1, 1, 1);
+    }
+
+    [Fact]
+    public void AnAdjustmentAlreadyRunning_IsTheContext_NotAnInterruption()
+    {
+        var start = Midnight + 10 * Hour;
+
+        var curve = Calculate(
+            [LoopFixture(start, Flat(120))], Readings(Midnight, To + 3 * Hour, 110),
+            adjusted: IntervalSet.Of(start - Hour, start + Hour)).Curves.Single();
+
+        Matched(curve, PredictionContext.Adjusted).Should().Equal(1, 1, 1, 1);
+        curve.Horizons.Select(h => h.Interrupted).Should().Equal(0, 0, 0, 0);
+    }
+
+    [Fact]
+    public void ForAHistoryClampedCaller_APredictionWhoseContextReachesBehindTheEdge_IsNotCounted()
+    {
+        var edge = Midnight + 6 * Hour;
+        var hidden = edge + PredictionAccuracyCalculator.ContextLookbackMs - 5 * Minute;
+        var seen = edge + PredictionAccuracyCalculator.ContextLookbackMs;
+
+        var range = Calculate(
+            [LoopFixture(hidden, Flat(120)), LoopFixture(seen, Flat(120))], Readings(Midnight, To + 3 * Hour, 110),
+            historyVisibleFrom: edge);
+
+        range.Predictions.Should().Be(1, "a meal just before the edge would be hidden from the earlier one's context");
+        range.Curves.Single().ByHour[9].Horizons[0].Error!.N.Should().Be(1);
+    }
+
+    [Fact]
     public void APreBolusStillActing_IsPostCorrection_UntilTheCarbsInterrupt()
     {
         var bolus = Midnight + 12 * Hour;
@@ -308,6 +351,22 @@ public class PredictionAccuracyCalculatorTests
 
         var curve = range.Curves.Single();
         curve.Horizons.Should().OnlyContain(h => h.Error != null && h.Error.N == 1 && h.Unmatched == 0);
+    }
+
+    [Fact]
+    public void LoopCycles_AreOnePerInstant_AcrossDeviceNames_AndApartWithinFiveMinutes()
+    {
+        var start = Midnight + 10 * Hour;
+        ApsPredictionPoint Point(long at, string device, bool enacted) => new(
+            DateTimeOffset.FromUnixTimeMilliseconds(at).UtcDateTime, device, enacted, AidAlgorithm.Loop,
+            Flat(120), null, null, null, null);
+
+        var distinct = LoopCycles.Distinct(
+            [Point(start, "loop://iPhone", false), Point(start, "loop://Phone", true), Point(start + 3 * Minute, "loop://iPhone", false)],
+            p => new DateTimeOffset(p.PredictedStart).ToUnixTimeMilliseconds(),
+            p => p.Enacted);
+
+        distinct.Select(p => (p.Device, p.Enacted)).Should().Equal(("loop://Phone", true), ("loop://iPhone", false));
     }
 
     [Fact]

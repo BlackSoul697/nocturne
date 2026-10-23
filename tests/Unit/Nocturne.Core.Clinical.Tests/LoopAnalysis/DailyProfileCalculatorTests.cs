@@ -34,7 +34,8 @@ public class DailyProfileCalculatorTests
         LoopAnalysisMasks? filter = null,
         LoopAnalysisMaskSources? sources = null,
         IntervalSet? calculatedIobCobTime = null,
-        Func<long, (double Low, double High)?>? targetAt = null)
+        Func<long, (double Low, double High)?>? targetAt = null,
+        long? historyVisibleFrom = null)
     {
         var inputs = new DailyProfileInputs
         {
@@ -45,6 +46,7 @@ public class DailyProfileCalculatorTests
             IobCob = [.. iobCob ?? []],
             CalculatedIobCobTime = calculatedIobCobTime ?? IntervalSet.Empty,
             TargetAt = targetAt,
+            HistoryVisibleFrom = historyVisibleFrom,
         };
         var mask = LoopAnalysisMask.Build(filter ?? new LoopAnalysisMasks(), from, to, tz, sources ?? new LoopAnalysisMaskSources());
         return DailyProfileCalculator.Calculate(inputs, mask, from, to);
@@ -346,6 +348,65 @@ public class DailyProfileCalculatorTests
         result.Slots[SlotAt(3, 0)].Iob!.P50.Should().Be(0);
         result.Slots[SlotAt(12, 0)].Iob.Should().BeNull();
         result.Slots[SlotAt(12, 0)].Cob.Should().BeNull();
+    }
+
+    [Fact]
+    public void ATickWithDeviceCobButCalculatedIob_StandsOnlyWhereACalculatedValueWould()
+    {
+        var from = Local(Darwin, 2024, 6, 3, 0);
+        var to = Local(Darwin, 2024, 6, 4, 0);
+        var ticks = new List<IobCobTick>();
+        for (var t = from; t < to; t += 5 * Minute)
+            ticks.Add(t < from + 12 * Hour
+                ? new IobCobTick(t, 0, IobCobSource.Calculated, 4, IobCobSource.Device)
+                : new IobCobTick(t, 0.5, IobCobSource.Device, 4, IobCobSource.Device));
+
+        var result = Calculate(Darwin, from, to, iobCob: ticks, calculatedIobCobTime: IntervalSet.Of(from, from + 6 * Hour));
+
+        result.Slots[SlotAt(3, 0)].Iob!.P50.Should().Be(0, "a calculated zero is a value where a dose is still acting");
+        result.Slots[SlotAt(9, 0)].Iob.Should().BeNull("the device's COB does not make a calculated zero IOB a value");
+        result.Slots[SlotAt(9, 0)].Cob.Should().BeNull();
+        result.Slots[SlotAt(18, 0)].Iob!.P50.Should().Be(0.5);
+    }
+
+    [Fact]
+    public void ForAHistoryClampedCaller_CalculatedIobCob_IsAbsentWhileHiddenDosesCanStillAct()
+    {
+        var from = Local(Darwin, 2024, 6, 3, 0);
+        var to = Local(Darwin, 2024, 6, 4, 0);
+        var ticks = new List<IobCobTick>();
+        for (var t = from; t < to; t += 5 * Minute)
+            ticks.Add(t < from + 2 * Hour
+                ? new IobCobTick(t, 2, IobCobSource.Device, 10, IobCobSource.Device)
+                : new IobCobTick(t, 1, IobCobSource.Calculated, 5, IobCobSource.Calculated));
+
+        var result = Calculate(Darwin, from, to, iobCob: ticks, calculatedIobCobTime: IntervalSet.Of(from, to),
+            historyVisibleFrom: from);
+
+        result.Slots[SlotAt(1, 0)].Iob!.P50.Should().Be(2, "the device's own IOB counts the hidden doses");
+        result.Slots[SlotAt(7, 55)].Iob.Should().BeNull("a dose hidden before the edge can still act until eight hours after it");
+        result.Slots[SlotAt(7, 55)].Cob.Should().BeNull();
+        result.Slots[SlotAt(8, 0)].Iob!.P50.Should().Be(1);
+        result.Slots[SlotAt(8, 0)].Cob!.P50.Should().Be(5);
+    }
+
+    [Fact]
+    public void DayDates_AreGregorian_WhateverTheProcessCulture()
+    {
+        var from = Local(Darwin, 2024, 6, 3, 0);
+        var to = Local(Darwin, 2024, 6, 4, 0);
+        var culture = System.Globalization.CultureInfo.CurrentCulture;
+        try
+        {
+            System.Globalization.CultureInfo.CurrentCulture = new System.Globalization.CultureInfo("th-TH");
+
+            Calculate(Darwin, from, to, glucose: EveryFiveMinutes(from, to, 100))
+                .Days.Single().Date.Should().Be("2024-06-03");
+        }
+        finally
+        {
+            System.Globalization.CultureInfo.CurrentCulture = culture;
+        }
     }
 
     [Fact]

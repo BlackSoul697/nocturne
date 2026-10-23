@@ -303,7 +303,7 @@ public class TempBasalOriginCorroboratorTests(TempBasalOriginCorroboratorFixture
     {
         Rows[TempBasalOriginCorroboratorFixture.OtherDevice].Should().BeEquivalentTo(new
         {
-            Origin = "Algorithm", Evidence = "Snapshot", SnapshotId = (Guid?)TempBasalOriginCorroboratorFixture.LoopPhoneSnapshot,
+            Origin = "Algorithm", Evidence = "OtherDevice", SnapshotId = (Guid?)TempBasalOriginCorroboratorFixture.LoopPhoneSnapshot,
         });
     }
 
@@ -312,7 +312,7 @@ public class TempBasalOriginCorroboratorTests(TempBasalOriginCorroboratorFixture
     {
         Rows[TempBasalOriginCorroboratorFixture.Deviceless].Should().BeEquivalentTo(new
         {
-            Origin = "Algorithm", Evidence = "Snapshot", SnapshotId = (Guid?)TempBasalOriginCorroboratorFixture.PhoneSnapshot,
+            Origin = "Algorithm", Evidence = "OtherDevice", SnapshotId = (Guid?)TempBasalOriginCorroboratorFixture.PhoneSnapshot,
         });
     }
 
@@ -321,7 +321,7 @@ public class TempBasalOriginCorroboratorTests(TempBasalOriginCorroboratorFixture
     {
         Rows[TempBasalOriginCorroboratorFixture.Tidepool].Should().BeEquivalentTo(new
         {
-            Origin = "Algorithm", Evidence = "Snapshot", SnapshotId = (Guid?)TempBasalOriginCorroboratorFixture.TrioMirroredSnapshot,
+            Origin = "Algorithm", Evidence = "OtherDevice", SnapshotId = (Guid?)TempBasalOriginCorroboratorFixture.TrioMirroredSnapshot,
         });
     }
 
@@ -339,7 +339,7 @@ public class TempBasalOriginCorroboratorTests(TempBasalOriginCorroboratorFixture
     {
         Rows[TempBasalOriginCorroboratorFixture.DevicelessByHand].Should().BeEquivalentTo(new
         {
-            Origin = "Manual", Evidence = "Snapshot", SnapshotId = (Guid?)null,
+            Origin = "Manual", Evidence = "OtherDevice", SnapshotId = (Guid?)null,
         });
     }
 

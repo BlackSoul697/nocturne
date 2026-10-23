@@ -14,7 +14,7 @@ internal sealed partial class LoopAnalysisService
     {
         var (primary, comparison, names) = await ForRangesAsync(
             filter,
-            window => LoadLoopHealthAsync(window, zone, ct),
+            window => LoadLoopHealthAsync(window, zone, ToMills(filter.Now), ct),
             (loaded, window) => CalculateLoopHealth(loaded, filter, window, zone));
         return new LoopHealthResponse { Primary = primary, Comparison = comparison, ProfileNames = names };
     }
@@ -31,7 +31,7 @@ internal sealed partial class LoopAnalysisService
     /// temp running at its start is read, and the repository adds the nearest cycle beyond each end,
     /// so a loop gap that straddles either end is bounded.
     /// </remarks>
-    private async Task<LoopHealthLoaded> LoadLoopHealthAsync(Window window, TimeZoneInfo zone, CancellationToken ct)
+    private async Task<LoopHealthLoaded> LoadLoopHealthAsync(Window window, TimeZoneInfo zone, long now, CancellationToken ct)
     {
         var to = window.To;
         var cyclesTask = apsSnapshotRepository.GetLoopCyclesAsync(
@@ -40,9 +40,8 @@ internal sealed partial class LoopAnalysisService
         await Task.WhenAll(cyclesTask, commonTask);
 
         var cycles = await cyclesTask;
-        var snapshotMills = cycles.Select(c => c.Mills).ToList();
         var common = await commonTask;
-        var delivery = await DeliveryAsync(common, window, ct);
+        var delivery = await DeliveryAsync(common, window, now, ct);
 
         var inputs = new LoopHealthInputs
         {
@@ -59,7 +58,7 @@ internal sealed partial class LoopAnalysisService
 
         return new LoopHealthLoaded(
             inputs,
-            Sources(common, snapshotMills, zone, to),
+            Sources(common, SnapshotMills(cycles.Select(c => c.Timestamp)), zone, to),
             common.Devices,
             common.TempBasals);
     }

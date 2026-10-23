@@ -123,11 +123,11 @@ public static class TempBasalOriginCorroborator
     /// its own device read within the window of its start. When it names no device, or its device
     /// uploaded none there, those of the one device that did, since a temp mirrored through another
     /// uploader (AAPS through Nightscout with no device, Trio through Tidepool) names no loop of its
-    /// own. Snapshots that name no device count as one device there, but a null device is the
-    /// absence of a name, so it never matches them as its own. With two or more devices there is no
-    /// telling which loop it belongs to, so none.
+    /// own; <c>OtherDevice</c> is then true. Snapshots that name no device count as one device there,
+    /// but a null device is the absence of a name, so it never matches them as its own. With two or
+    /// more devices there is no telling which loop it belongs to, so none.
     /// </summary>
-    public static IReadOnlyList<Proposal> ProposalsFor(
+    public static (IReadOnlyList<Proposal> Proposals, bool OtherDevice) ProposalsFor(
         string? device, DateTime start, IEnumerable<(string? Device, Proposal Proposal)> read)
     {
         var nearby = read
@@ -137,11 +137,11 @@ public static class TempBasalOriginCorroborator
             ? []
             : nearby.Where(p => string.Equals(p.Device, device, StringComparison.Ordinal)).ToList();
         if (own.Count > 0)
-            return own.Select(p => p.Proposal).ToList();
+            return (own.Select(p => p.Proposal).ToList(), false);
 
         return nearby.Select(p => p.Device).Distinct(StringComparer.Ordinal).Count() == 1
-            ? nearby.Select(p => p.Proposal).ToList()
-            : [];
+            ? (nearby.Select(p => p.Proposal).ToList(), true)
+            : ([], false);
     }
 
     /// <summary>
@@ -152,8 +152,12 @@ public static class TempBasalOriginCorroborator
     /// named no rate (oref's "no temp required"), or an enactment repeated from outside the window, is
     /// no evidence either way. With no evidence, or no rate to compare, <paramref name="uploaderDefault"/> stands.
     /// </summary>
+    /// <param name="otherDevice">
+    /// The proposals are another device's (<see cref="ProposalsFor"/>), so a verdict rests on
+    /// <see cref="TempBasalOriginEvidence.OtherDevice"/>.
+    /// </param>
     public static Verdict Judge(
-        TempBasalOrigin uploaderDefault, DateTime start, double? rate, IEnumerable<Proposal> proposals)
+        TempBasalOrigin uploaderDefault, DateTime start, double? rate, IEnumerable<Proposal> proposals, bool otherDevice = false)
     {
         var rated = proposals
             .Select(p => (Proposal: p, Distance: DistanceFrom(p, start), Rates: RatesOf(p, start)))
@@ -163,14 +167,15 @@ public static class TempBasalOriginCorroborator
             return new Verdict(uploaderDefault, TempBasalOriginEvidence.Uncorroborated, null);
 
         var match = rated
-            .Where(p => p.Rates.Any(proposed => Math.Abs(proposed - r) < TempBasalOriginProvenance.RateTolerance))
+            .Where(p => p.Rates.Any(proposed => TempBasalOriginProvenance.SameRate(proposed, r)))
             .OrderBy(p => p.Distance)
             .Select(p => p.Proposal)
             .FirstOrDefault();
 
+        var evidence = otherDevice ? TempBasalOriginEvidence.OtherDevice : TempBasalOriginEvidence.Snapshot;
         return match is null
-            ? new Verdict(TempBasalOrigin.Manual, TempBasalOriginEvidence.Snapshot, null)
-            : new Verdict(TempBasalOrigin.Algorithm, TempBasalOriginEvidence.Snapshot, match.SnapshotId);
+            ? new Verdict(TempBasalOrigin.Manual, evidence, null)
+            : new Verdict(TempBasalOrigin.Algorithm, evidence, match.SnapshotId);
     }
 
     /// <summary>
@@ -374,7 +379,8 @@ public static class TempBasalOriginCorroborator
         var uploaderDefault = stored is null
             ? TempBasalOriginProvenance.UploaderDefault(row.EnteredBy, app: null)
             : row.Origin;
-        return Judge(uploaderDefault, row.Start, row.Rate, ProposalsFor(row.Device, row.Start, proposals));
+        var (loop, otherDevice) = ProposalsFor(row.Device, row.Start, proposals);
+        return Judge(uploaderDefault, row.Start, row.Rate, loop, otherDevice);
     }
 
     private static TimeSpan DistanceFrom(Proposal proposal, DateTime start)

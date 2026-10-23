@@ -96,7 +96,7 @@ public class LoopAnalysisEventResponseBudgetTests(ITestOutputHelper output)
                     NetInsulinAboveSchedule.ScheduledBaseline([new BasalSegment(start, end, 0.8, 0.8, "Default")], []),
                     boluses.Select(b => new InsulinDose(b.Mills, b.Insulin, b.Kind == BolusKind.Algorithm))),
                 Carbs = [.. carbs.Select(c => new CarbEvent(c.Mills, c.Carbs))],
-                IobCob = IobCobSeries.Build(iob, cob, boluses, carbs, temps, timeline, null, start, end - 1, 5 * Minute),
+                IobCob = IobCobSeries.Build(iob, cob, boluses, carbs, temps, timeline, null, start, end - 1, end - 1, 5 * Minute),
                 CalculatedIobCobTime = DailyProfileCalculator.CalculableIobCobTime(
                     evidence, boluses.Select(b => b.Mills).Concat(carbs.Select(c => c.Mills))),
             },

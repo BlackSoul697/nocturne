@@ -77,7 +77,7 @@ public class LoopAnalysisDailyProfileBudgetTests(ITestOutputHelper output)
         var delivered = NetInsulinAboveSchedule.DeliveredFromSeries(series, to, evidence);
         var scheduled = NetInsulinAboveSchedule.ScheduledBaseline(
             [new BasalSegment(compareFrom, to, 0.8, 0.8, "Default")], overrides);
-        var ticks = IobCobSeries.Build(iob, cob, boluses, carbs, temps, timeline, null, compareFrom, to - 1, 5 * Minute);
+        var ticks = IobCobSeries.Build(iob, cob, boluses, carbs, temps, timeline, null, compareFrom, to - 1, to - 1, 5 * Minute);
 
         var inputs = new DailyProfileInputs
         {

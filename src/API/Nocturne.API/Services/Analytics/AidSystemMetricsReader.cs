@@ -45,7 +45,8 @@ public sealed class AidSystemMetricsReader(
     IActiveProfileResolver activeProfileResolver,
     IStatisticsService statisticsService,
     IAidMetricsService aidMetricsService,
-    TenantClockResolver tenantClock)
+    TenantClockResolver tenantClock,
+    TimeProvider timeProvider)
 {
     /// <summary>
     /// Every collection is read uncapped, for the reason given on
@@ -70,7 +71,7 @@ public sealed class AidSystemMetricsReader(
         double? targetHigh = null;
         try
         {
-            var activeSchedule = await ActiveTargetRange.ScheduleAsync(activeProfileResolver, targetRangeScheduleRepository, ct);
+            var activeSchedule = await ActiveTargetRange.ScheduleAsync(activeProfileResolver, targetRangeScheduleRepository, timeProvider, ct);
             if (activeSchedule?.Entries.Count > 0)
             {
                 targetLow = activeSchedule.Entries.Min(e => e.Low);

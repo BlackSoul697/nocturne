@@ -63,8 +63,8 @@ internal sealed class IobCobComputeStage(
         var timeline = await therapyTimelineResolver.BuildAsync(startTime, endTime + 1, ct: cancellationToken);
 
         var (iobSeries, cobSeries, maxIob, maxCob) = BuildIobCobSeries(
-            bolusList, carbIntakeList, startTime, endTime, intervalMinutes, tempBasalList, timeline,
-            context.ApsSnapshotList, cancellationToken
+            bolusList, carbIntakeList, startTime, endTime, Math.Min(endTime, context.NowMills), intervalMinutes,
+            tempBasalList, timeline, context.ApsSnapshotList, cancellationToken
         );
 
         var basalSeries = await basalSeriesBuilder.BuildAsync(
@@ -101,6 +101,7 @@ internal sealed class IobCobComputeStage(
         List<CarbIntake> carbIntakes,
         long startTime,
         long endTime,
+        long untilMills,
         int intervalMinutes,
         List<TempBasal>? tempBasals,
         TherapyTimeline timeline,
@@ -108,9 +109,7 @@ internal sealed class IobCobComputeStage(
         CancellationToken ct = default
     )
     {
-
-        // Generate cache key based on data hash and time range
-        var cacheKey = GenerateIobCobCacheKey(boluses, carbIntakes, startTime, endTime, intervalMinutes, timeline, tempBasals, apsSnapshots);
+        var cacheKey = GenerateIobCobCacheKey(boluses, carbIntakes, startTime, endTime, untilMills, intervalMinutes, timeline, tempBasals, apsSnapshots);
 
         if (
             cache.TryGetLocal(
@@ -136,7 +135,7 @@ internal sealed class IobCobComputeStage(
 
         var ticks = IobCobSeries.Build(
             iobCalculator, cobCalculator, boluses, carbIntakes, tempBasals, timeline, apsSnapshots,
-            startTime, endTime, intervalMinutes * 60 * 1000L, ct);
+            startTime, endTime, untilMills, intervalMinutes * 60 * 1000L, ct: ct);
 
         var iobSeries = new List<TimeSeriesPoint>(ticks.Count);
         var cobSeries = new List<TimeSeriesPoint>(ticks.Count);
@@ -172,6 +171,7 @@ internal sealed class IobCobComputeStage(
         List<CarbIntake> carbIntakes,
         long startTime,
         long endTime,
+        long untilMills,
         int intervalMinutes,
         TherapyTimeline timeline,
         List<TempBasal>? tempBasals = null,
@@ -182,6 +182,7 @@ internal sealed class IobCobComputeStage(
         var intervalMs = intervalMinutes * 60 * 1000;
         var roundedStart = (startTime / intervalMs) * intervalMs;
         var roundedEnd = (endTime / intervalMs) * intervalMs;
+        var roundedUntil = (untilMills / intervalMs) * intervalMs;
 
         // Hash individual data for a collision-resistant fingerprint
         var sb = new StringBuilder();
@@ -236,7 +237,7 @@ internal sealed class IobCobComputeStage(
             ..16
         ]; // First 16 hex chars (64 bits) is sufficient
 
-        return $"iobcob:{hash}:{roundedStart}:{roundedEnd}:{intervalMinutes}";
+        return $"iobcob:{hash}:{roundedStart}:{roundedEnd}:{roundedUntil}:{intervalMinutes}";
     }
 
 }

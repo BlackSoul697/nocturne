@@ -89,7 +89,8 @@ public class StatisticsControllerTests
                 new TenantClockResolver(
                     _therapySettingsResolverMock.Object,
                     categoryReadContext ?? new CategoryReadContext(),
-                    _clockLoggerMock.Object)),
+                    _clockLoggerMock.Object),
+                TimeProvider.System),
             _patientDeviceRepoMock.Object,
             _deviceEventRepoMock.Object,
             _targetRangeScheduleRepoMock.Object,

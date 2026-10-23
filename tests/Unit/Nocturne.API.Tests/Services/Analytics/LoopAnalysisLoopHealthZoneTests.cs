@@ -101,7 +101,8 @@ public class LoopAnalysisLoopHealthZoneTests
             new TenantClockResolver(
                 Mock.Of<ITherapySettingsResolver>(),
                 new CategoryReadContext(),
-                NullLogger<TenantClockResolver>.Instance));
+                NullLogger<TenantClockResolver>.Instance),
+            TimeProvider.System);
 
         var service = new LoopAnalysisService(
             glucoseRepository: Mock.Of<ISensorGlucoseRepository>(),

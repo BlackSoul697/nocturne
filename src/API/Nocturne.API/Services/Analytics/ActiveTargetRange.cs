@@ -7,21 +7,20 @@ namespace Nocturne.API.Services.Analytics;
 internal static class ActiveTargetRange
 {
     /// <summary>
-    /// Returns the target range schedule active for the tenant's active profile right now, or null
-    /// when none is configured. Shared selection policy for report statistics and AID metrics, kept
-    /// in step with the alert engine and <c>TargetRangeResolver</c> (active profile, newest schedule
-    /// at the point in time) so reports evaluate the same range alerts fire against — rather than the
-    /// globally-newest record, which could belong to a different, inactive profile.
+    /// The target range schedule in force now for the tenant's active profile, or null when none is
+    /// configured. Report statistics and AID metrics read it as the alert engine and
+    /// <c>TargetRangeResolver</c> do: the active profile's newest schedule at the instant.
     /// </summary>
     public static async Task<TargetRangeSchedule?> ScheduleAsync(
         IActiveProfileResolver activeProfileResolver,
         ITargetRangeScheduleRepository targetRangeScheduleRepository,
+        TimeProvider timeProvider,
         CancellationToken ct)
     {
-        var nowMills = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
-        var profileName = await activeProfileResolver.GetProfileNameAsync(nowMills, ct);
+        var now = timeProvider.GetUtcNow();
+        var profileName = await activeProfileResolver.GetProfileNameAsync(now.ToUnixTimeMilliseconds(), ct);
         // Before the store's first version, its newest, as ProfileVersionCache.ActiveAt reads it.
-        return await targetRangeScheduleRepository.GetActiveAtAsync(profileName, DateTime.UtcNow, ct)
+        return await targetRangeScheduleRepository.GetActiveAtAsync(profileName, now.UtcDateTime, ct)
             ?? (await targetRangeScheduleRepository.GetByProfileNameAsync(profileName, ct)).MaxBy(s => s.Timestamp);
     }
 }

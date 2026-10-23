@@ -61,6 +61,15 @@ public sealed class IntervalSet
         return index < _intervals.Length && _intervals[index].Start <= start && _intervals[index].End >= end;
     }
 
+    /// <summary>Whether an interval of the set starts in <c>(after, upTo]</c>.</summary>
+    public bool StartsWithin(long after, long upTo)
+    {
+        var index = FirstEndingAfter(after);
+        if (index < _intervals.Length && _intervals[index].Start <= after)
+            index++;
+        return index < _intervals.Length && _intervals[index].Start <= upTo;
+    }
+
     public IntervalSet Union(IntervalSet other) => Of(_intervals.Concat(other._intervals));
 
     public IntervalSet Intersect(IntervalSet other)

@@ -16,7 +16,7 @@ internal sealed partial class LoopAnalysisService
     {
         var (primary, comparison, names) = await ForRangesAsync(
             filter,
-            window => LoadDailyProfileAsync(window, zone, ct),
+            window => LoadDailyProfileAsync(window, zone, filter, BasalIobModel.Displayed, ct),
             (loaded, window) => DailyProfileCalculator.Calculate(
                 loaded.Inputs, Mask(filter, window, zone, loaded.Sources), window.From, window.To));
         return new DailyProfileResponse { Primary = primary, Comparison = comparison, ProfileNames = names };
@@ -26,7 +26,10 @@ internal sealed partial class LoopAnalysisService
     private sealed record DailyProfileLoaded(
         DailyProfileInputs Inputs, LoopAnalysisMaskSources Sources, TherapyTimeline Timeline) : ILoaded;
 
-    private async Task<DailyProfileLoaded> LoadDailyProfileAsync(Window window, TimeZoneInfo zone, CancellationToken ct)
+    /// <param name="filter">Gives now, which a temp basal still running stops at, and the history clamp's visible edge.</param>
+    /// <param name="basalModel">How the calculated IOB counts temp basals.</param>
+    private async Task<DailyProfileLoaded> LoadDailyProfileAsync(
+        Window window, TimeZoneInfo zone, LoopAnalysisFilter filter, BasalIobModel basalModel, CancellationToken ct)
     {
         var from = window.From;
         var to = window.To;
@@ -39,15 +42,13 @@ internal sealed partial class LoopAnalysisService
 
         var carbs = (await carbTask).ToList();
         var apsPoints = await apsTask;
-        var snapshotMills = apsPoints
-            .Select(p => ToMills(DateTime.SpecifyKind(p.Timestamp, DateTimeKind.Utc)))
-            .ToList();
         var common = await commonTask;
-        var delivery = await DeliveryAsync(common, window, ct);
+        var now = ToMills(filter.Now);
+        var delivery = await DeliveryAsync(common, window, now, ct);
 
         var iobCob = IobCobSeries.Build(
             iobCalculator, cobCalculator, common.Boluses, carbs, common.TempBasals, delivery.Timeline, apsPoints,
-            delivery.TickStart, to - 1, TickMs, ct);
+            delivery.TickStart, to - 1, Math.Min(to - 1, now), TickMs, basalModel, ct);
 
         var inputs = new DailyProfileInputs
         {
@@ -57,6 +58,7 @@ internal sealed partial class LoopAnalysisService
             Carbs = [.. carbs.Where(c => c.Mills >= from && c.Mills < to).Select(c => new CarbEvent(c.Mills, c.Carbs))],
             IobCob = iobCob,
             IobCobIntervalMs = TickMs,
+            HistoryVisibleFrom = filter.HistoryVisibleFrom is { } edge ? ToMills(edge) : null,
             CalculatedIobCobTime = DailyProfileCalculator.CalculableIobCobTime(
                 delivery.Evidence,
                 common.Boluses.Where(b => b.Insulin > 0).Select(b => b.Mills)
@@ -65,7 +67,7 @@ internal sealed partial class LoopAnalysisService
                 delivery.HasTherapy ? common.Profiles : [], ActiveTemporaryTargets(common.Spans, to), zone, to, ct),
         };
 
-        return new DailyProfileLoaded(inputs, Sources(common, snapshotMills, zone, to), delivery.Timeline);
+        return new DailyProfileLoaded(inputs, Sources(common, SnapshotMills(apsPoints.Select(p => p.Timestamp)), zone, to), delivery.Timeline);
     }
 
     /// <summary>

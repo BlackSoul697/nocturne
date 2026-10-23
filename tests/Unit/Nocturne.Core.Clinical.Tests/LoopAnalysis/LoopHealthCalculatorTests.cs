@@ -106,8 +106,11 @@ public class LoopHealthCalculatorTests
     [InlineData("COB: 0, Dev: 31, BGI: -1.2, ISF: 45, CR: 9, Target: 100; Eventual BG 170 >= 100, max_iob 2,  insulinReq 0.5; maxBolus 1; setting 30m low temp of 0.4U/h. ", false, true, 2.0)]
     [InlineData("Autosens/Dynamic Limit: 1.2 (1.05), AF: 1, SMB Ratio: 0.5; Eventual BG 180 >= 100, insulinReq 0.9. Microbolusing 0.4U. adj. req. rate: 3.1 to maxSafeBasal: 2.6, temp 1.2 < 2.6U/hr. ", true, false, null)]
     [InlineData("Autosens/Dynamic Limit: 1.2 (1.05), AF: 1, SMB Ratio: 0.5; Eventual BG 120 >= 100, temp 1.2 >~ req 1.15U/hr. ", false, false, null)]
-    public void OrefReason_ReadsTheLimitsEachSystemNames(string reason, bool capped, bool atMaxIob, double? maxIob) =>
+    public void OrefReason_ReadsTheLimitsEachSystemNames(string reason, bool capped, bool atMaxIob, double? maxIob)
+    {
         OrefReason.Parse(reason).Should().Be(new OrefReason(capped, atMaxIob, maxIob));
+        ApsLoopCycle.NamesALimit(reason).Should().Be(capped || atMaxIob, "the repository keeps a reason only where the parser finds a limit in it");
+    }
 
     [Fact]
     public void UnknownLimits_AreReportedUnknownRatherThanDefaulted()
@@ -158,6 +161,44 @@ public class LoopHealthCalculatorTests
             [new(from, to, 2.40, BasalDeliveryOrigin.Algorithm)]);
 
         result.MaxBasal!.CapKnown.Percent.Should().Be(100);
+        result.MaxBasal.AtCap.Percent.Should().Be(100);
+    }
+
+    [Theory]
+    [InlineData(2.43, true)]
+    [InlineData(2.4498, false)]
+    [InlineData(2.45, false)]
+    public void AnEnactedRateIsTheDeliveredOne_OnlyWithinTheTolerance_TheOriginCorroboratorUses(double enacted, bool setter)
+    {
+        var from = Day0;
+        var to = Day0 + Hour;
+        var result = Calculate(from, to,
+            [Cycle(from, rate: enacted, limitReason: Capped)],
+            [new(from, to, 2.40, BasalDeliveryOrigin.Algorithm)]);
+
+        TempBasalOriginProvenance.SameRate(enacted, 2.40).Should().Be(setter);
+        result.MaxBasal!.CapKnown.Percent.Should().Be(setter ? 100 : 0);
+    }
+
+    [Fact]
+    public void APieceOfATempAfterAnotherStreamCoveredItsStart_IsJudgedByTheCycleThatSetTheRecord()
+    {
+        var from = Day0;
+        var to = Day0 + Hour;
+        var record = new TempBasal
+        {
+            StartTimestamp = DateTimeOffset.FromUnixTimeMilliseconds(from).UtcDateTime,
+            EndTimestamp = DateTimeOffset.FromUnixTimeMilliseconds(to).UtcDateTime,
+            Rate = 2.4,
+            Origin = TempBasalOrigin.Algorithm,
+            OriginEvidence = TempBasalOriginEvidence.Reported,
+        };
+        var result = Calculate(from, to,
+            [Cycle(from, rate: 2.4, limitReason: Capped)],
+            [new(from + 20 * Minute, to, 2.4, BasalDeliveryOrigin.Algorithm)],
+            temps: [record.WithSpan(from + 20 * Minute, to)]);
+
+        result.MaxBasal!.CapKnown.Percent.Should().Be(100, "the record was set at the start of the hour, not where its piece starts");
         result.MaxBasal.AtCap.Percent.Should().Be(100);
     }
 
@@ -682,6 +723,23 @@ public class LoopHealthCalculatorTests
 
         result.Days.Select(d => d.Date).Should().Equal("2024-06-10", "2024-06-11");
         result.Activity.Pump!.Daily!.N.Should().Be(1, "only the second day was analysed");
+    }
+
+    [Fact]
+    public void DayDates_AreGregorian_WhateverTheProcessCulture()
+    {
+        var culture = System.Globalization.CultureInfo.CurrentCulture;
+        try
+        {
+            System.Globalization.CultureInfo.CurrentCulture = new System.Globalization.CultureInfo("th-TH");
+
+            Calculate(Day0, Day0 + 24 * Hour, cycles: EveryFiveMinutes(Day0, Day0 + 24 * Hour, t => Cycle(t)))
+                .Days.Select(d => d.Date).Should().Equal("2024-06-10");
+        }
+        finally
+        {
+            System.Globalization.CultureInfo.CurrentCulture = culture;
+        }
     }
 
     [Fact]
