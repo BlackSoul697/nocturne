@@ -84,7 +84,7 @@ public class DemoLoopAnalysisTests(ITestOutputHelper output)
         var iob = new IobCalculator(null!, null!, null!, null!, null!);
         var cob = new CobCalculator(NullLogger<CobCalculator>.Instance, iob, null!, null!, null!, null!);
 
-        var spans = DemoLifestyleSeeds.BuildSpans(End.Date, DemoLoopHealthTests.Days);
+        var spans = DemoLifestyleSeeds.BuildSpans(End.Date, DemoLoopHealthTests.Days, End);
         List<MillsInterval> SpansOf(StateSpanCategory category, string? state = null) =>
         [
             .. spans.Where(s => s.Category == category && (state is null || s.State == state))
@@ -193,7 +193,7 @@ public class DemoLoopAnalysisTests(ITestOutputHelper output)
         var wholeDays = Enumerable.Range(0, (lastWholeDay - firstWholeDay).Days).Select(d => firstWholeDay.AddDays(d)).ToList();
         var sickDays = wholeDays.Count(d => DayScenarios.For(d) == DayScenario.SickDay);
         sickDays.Should().BePositive("the week holds a sick day for the illness mask to take out");
-        wholeDays.Should().Contain(d => DemoLoopInterruptions.ManualModeWindow(d) != null, "the week holds a day in manual mode");
+        wholeDays.Should().Contain(d => DemoLoopInterruptions.ManualModeWindow(d, End) != null, "the week holds a day in manual mode");
         profile.Summary.Insulin.Should().NotBeNull();
         profile.Summary.Insulin!.Total!.N.Should().Be(wholeDays.Count - sickDays);
     }

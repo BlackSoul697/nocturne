@@ -315,7 +315,7 @@ public class DemoDataGenerator : IDemoDataGenerator
                 int? tempDuration = null;
                 double? requestedRate = null;
                 (double Rate, double? Requested)? loopTemp = null;
-                var loop = DemoLoopInterruptions.StateAt(currentTime);
+                var loop = DemoLoopInterruptions.StateAt(currentTime, end);
 
                 // Consume planned treatments due this step.
                 while (pending.Count > 0 && pending[0].Time < consumeUntil)
@@ -332,7 +332,7 @@ public class DemoDataGenerator : IDemoDataGenerator
                     Math.Abs((b.Time - currentTime).TotalMinutes) < 2.5
                 );
                 var adjustedRate = NormalizeBasalRate(basalAdj.Rate);
-                var adjustedDuration = DemoLoopInterruptions.MinutesToNext(currentTime, basalAdj.Duration);
+                var adjustedDuration = DemoLoopInterruptions.MinutesToNext(currentTime, basalAdj.Duration, end);
                 if (loop == DemoLoopState.Closed && adjustedDuration > 0 && (adjustedRate > 0 || basalAdj.Duration > 0))
                 {
                     stepTreatments.Add(CreateTempBasalTreatment(currentTime, adjustedRate, adjustedDuration));
@@ -403,7 +403,7 @@ public class DemoDataGenerator : IDemoDataGenerator
                         && !stepTreatments.Any(t => t.Insulin > 0)
                         && LevelCorrection(
                             currentTime, glucose, recentGlucose.Peek(), simulator.CalculateIob(currentTime), effectiveIsf,
-                            dayScenario, mealPlan, pending) is { } levelCorrection)
+                            dayScenario, mealPlan, pending, end) is { } levelCorrection)
                     {
                         lastLevelCorrectionAt = currentTime;
                         stepTreatments.Add(CreateManualCorrectionBolusTreatment(currentTime, levelCorrection));
@@ -472,7 +472,7 @@ public class DemoDataGenerator : IDemoDataGenerator
                          && loopTemp is { } temp
                          && (currentTime.Minute == 0 || currentTime.Minute == 30)
                          && tempRate is null
-                         && DemoLoopInterruptions.MinutesToNext(currentTime, LoopTempMinutes) is var minutes and > 0)
+                         && DemoLoopInterruptions.MinutesToNext(currentTime, LoopTempMinutes, end) is var minutes and > 0)
                 {
                     stepTreatments.Add(CreateTempBasalTreatment(currentTime, temp.Rate, minutes));
                     tempRate = temp.Rate;
@@ -1496,7 +1496,8 @@ public class DemoDataGenerator : IDemoDataGenerator
         double effectiveIsf,
         DayScenario scenario,
         IEnumerable<MealEvent> meals,
-        IEnumerable<(DateTime Time, Treatment Treatment)> pending)
+        IEnumerable<(DateTime Time, Treatment Treatment)> pending,
+        DateTime seedEnd)
     {
         if (scenario == DayScenario.SickDay
             || time.Hour is >= 1 and < 6
@@ -1507,7 +1508,7 @@ public class DemoDataGenerator : IDemoDataGenerator
         var foodFreeUntil = time + LevelCorrectionCarbFreeTime;
         if (meals.Any(m => m.MealTime > time.AddMinutes(-90) && m.MealTime < foodFreeUntil)
             || pending.Any(p => p.Treatment.Insulin > 0 && p.Time < foodFreeUntil)
-            || DemoLoopInterruptions.On(time).Concat(DemoLoopInterruptions.On(time.AddDays(1)))
+            || DemoLoopInterruptions.On(time, seedEnd).Concat(DemoLoopInterruptions.On(time.AddDays(1), seedEnd))
                 .Any(i => i.Start < time + LevelCorrectionQuietTime && i.End > time))
             return null;
 
