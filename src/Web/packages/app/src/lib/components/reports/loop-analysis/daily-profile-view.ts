@@ -156,3 +156,13 @@ export function axisEnd(values: (number | null | undefined)[], floor: number): n
 export function atMinute(minuteOfDay: number): Date {
   return new Date(2000, 0, 1, 0, minuteOfDay);
 }
+
+/** Two decimals, with a value that rounds to zero read as 0.00 rather than -0.00. */
+export function twoPlaces(v: number): string {
+  return (Math.round(v * 100) === 0 ? 0 : v).toFixed(2);
+}
+
+/** Two decimals with a sign: + above zero, - below, none at a value that rounds to zero. */
+export function signedTwoPlaces(v: number): string {
+  return `${Math.round(v * 100) > 0 ? "+" : ""}${twoPlaces(v)}`;
+}

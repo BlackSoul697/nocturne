@@ -43,7 +43,6 @@ public class LoopAnalysisController(
     /// target range, with the days behind them.
     /// </summary>
     /// <param name="query">The range, comparison and masks (<see cref="LoopAnalysisQuery"/>).</param>
-    /// <param name="cancellationToken">Cancellation token.</param>
     [HttpGet("daily-profile")]
     [RemoteQuery]
     [RequireScope(LoopAnalysisReadScopeGuard.AdmissionScope)]
@@ -70,17 +69,21 @@ public class LoopAnalysisController(
     /// in the contexts the algorithm relies on it in.
     /// </remarks>
     /// <param name="query">The range, comparison and masks (<see cref="LoopAnalysisQuery"/>).</param>
-    /// <param name="cancellationToken">Cancellation token.</param>
     [HttpGet("prediction-accuracy")]
     [RemoteQuery]
     [RequireScope(LoopAnalysisReadScopeGuard.AdmissionScope)]
     [ResponseCache(Duration = 60, Location = ResponseCacheLocation.Client)]
     [ProducesResponseType(typeof(PredictionAccuracyResponse), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
-    public Task<ActionResult<PredictionAccuracyResponse>> GetPredictionAccuracy(
+    public async Task<ActionResult<PredictionAccuracyResponse>> GetPredictionAccuracy(
         [FromQuery] LoopAnalysisQuery query,
-        CancellationToken cancellationToken = default) =>
-        ServeAsync(query, service.GetPredictionAccuracyAsync, cancellationToken);
+        CancellationToken cancellationToken = default)
+    {
+        var served = await ServeAsync(query, service.GetPredictionAccuracyAsync, cancellationToken);
+        if (served.Result is OkObjectResult { Value: PredictionAccuracyResponse report })
+            report.ContextLookbackMs = PredictionAccuracyCalculator.ContextLookbackMs;
+        return served;
+    }
 
     /// <summary>
     /// How the loop ran, each figure for the range and by local hour of the day: closed-loop, pump
@@ -89,17 +92,21 @@ public class LoopAnalysisController(
     /// <c>max_iob</c>, automatic boluses, suggestions not enacted and the sensitivity ratio.
     /// </summary>
     /// <param name="query">The range, comparison and masks (<see cref="LoopAnalysisQuery"/>).</param>
-    /// <param name="cancellationToken">Cancellation token.</param>
     [HttpGet("loop-health")]
     [RemoteQuery]
     [RequireScope(LoopAnalysisReadScopeGuard.AdmissionScope)]
     [ResponseCache(Duration = 60, Location = ResponseCacheLocation.Client)]
     [ProducesResponseType(typeof(LoopHealthResponse), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
-    public Task<ActionResult<LoopHealthResponse>> GetLoopHealth(
+    public async Task<ActionResult<LoopHealthResponse>> GetLoopHealth(
         [FromQuery] LoopAnalysisQuery query,
-        CancellationToken cancellationToken = default) =>
-        ServeAsync(query, service.GetLoopHealthAsync, cancellationToken);
+        CancellationToken cancellationToken = default)
+    {
+        var served = await ServeAsync(query, service.GetLoopHealthAsync, cancellationToken);
+        if (served.Result is OkObjectResult { Value: LoopHealthResponse report })
+            report.LoopGapMinutes = (int)(LoopHealthCalculator.LoopGapMs / LocalSlotBinning.MinuteMs);
+        return served;
+    }
 
     /// <summary>
     /// The basal need, ISF and carb ratio the user's own data shows, beside the profile's: basal per
@@ -118,7 +125,6 @@ public class LoopAnalysisController(
     /// the rules apply.
     /// </remarks>
     /// <param name="query">The range, comparison and masks (<see cref="LoopAnalysisQuery"/>).</param>
-    /// <param name="cancellationToken">Cancellation token.</param>
     [HttpGet("settings-evidence")]
     [RemoteQuery]
     [RequireScope(LoopAnalysisReadScopeGuard.AdmissionScope)]
@@ -151,7 +157,6 @@ public class LoopAnalysisController(
     /// the time-zone state and the profiles the <c>profileName</c> filter can be set to.
     /// </summary>
     /// <param name="query">The range, comparison and masks (<see cref="LoopAnalysisQuery"/>).</param>
-    /// <param name="cancellationToken">Cancellation token.</param>
     [HttpGet("envelope")]
     [RemoteQuery]
     [RequireScope(LoopAnalysisReadScopeGuard.AdmissionScope)]
@@ -179,7 +184,6 @@ public class LoopAnalysisController(
     /// </remarks>
     /// <param name="query">The range, comparison and masks (<see cref="LoopAnalysisQuery"/>).</param>
     /// <param name="events">The cohorts and window (<see cref="EventResponseQuery"/>).</param>
-    /// <param name="cancellationToken">Cancellation token.</param>
     [HttpGet("event-response")]
     [RemoteQuery]
     [RequireScope(LoopAnalysisReadScopeGuard.AdmissionScope)]
@@ -208,7 +212,7 @@ public class LoopAnalysisController(
             report.Definition = definition;
             report.SlotMinutes = EventResponseCalculator.SlotMinutes(definition);
             report.BackToStartMgdl = EventEpisode.BackToStartMgdl;
-            report.IgnoredFilters.AddRange(ignored.Where(passed.Contains));
+            report.IgnoredFilters.AddRange(ignored.Where(passed.Contains).Concat(events.OutOfLimits()));
             report.UnavailableFilters.AddRange(LoopAnalysisReadScopeGuard.UnavailableEventFilters(granted));
             report.UnavailableAnchors = LoopAnalysisReadScopeGuard.UnavailableAnchors(granted);
         }

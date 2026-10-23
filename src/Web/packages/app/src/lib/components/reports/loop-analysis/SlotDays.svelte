@@ -62,7 +62,7 @@
     glucose: "Glucose",
     scheduledBasal: "Scheduled basal",
     deliveredBasal: "Delivered basal",
-    netLoopCorrection: "Loop correction",
+    netLoopCorrection: "Net loop correction",
     iobCob: "IOB/COB",
   });
 </script>
@@ -81,7 +81,7 @@
         Days for {time(atMinute(minute))}–{time(atMinute(minute + SLOT_MINUTES))}
       </h3>
       <p class="text-sm text-muted-foreground">
-        These are the days whose data this slot uses. Open a day to see it in Day in Review at this
+        These are the days that give the data for this time. Open a day to see it in Day in Review at this
         time. Press Escape to go back to the chart.
       </p>
     </div>
@@ -96,7 +96,7 @@
         <h4 class="text-xs font-medium text-muted-foreground">{group.label}</h4>
       {/if}
       {#if group.days.length === 0}
-        <p class="text-sm text-muted-foreground">No day has data in this slot.</p>
+        <p class="text-sm text-muted-foreground">No day has data at this time.</p>
       {:else}
         <ul class="divide-y rounded-md border">
           {#each group.days as entry (entry.day.date)}

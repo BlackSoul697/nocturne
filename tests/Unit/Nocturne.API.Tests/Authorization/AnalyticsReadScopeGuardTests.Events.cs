@@ -207,15 +207,41 @@ public partial class AnalyticsReadScopeGuardTests
     [Theory]
     [InlineData("minutesAfter", 482)]
     [InlineData("minutesBefore", 7)]
-    public async Task LoopAnalysis_EventHandler_RejectsAWindowItCannotSlot(string parameter, int minutes)
+    public async Task LoopAnalysis_EventHandler_AppliesTheDefaultForAWindowOutsideTheChoices(string parameter, int minutes)
     {
-        var (controller, _) = LoopAnalysisHandler(Granted([Scope.ReportsRead, .. AllLoopAnalysisCategories]));
+        var (controller, service) = LoopAnalysisHandler(Granted([Scope.ReportsRead, .. AllLoopAnalysisCategories]));
+        service
+            .Setup(s => s.GetEventResponseAsync(It.IsAny<LoopAnalysisFilter>(), It.IsAny<EventResponseDefinition>(), It.IsAny<TimeZoneInfo>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(() => new EventResponseReport { Primary = EventRange(2) });
         var events = new EventResponseQuery();
         if (parameter == "minutesAfter") events.MinutesAfter = minutes; else events.MinutesBefore = minutes;
 
         var result = await controller.GetEventResponse(Week(), events);
 
-        result.Result.Should().BeOfType<ObjectResult>().Which.StatusCode.Should().Be(400);
+        var data = result.Result.Should().BeOfType<OkObjectResult>().Which.Value.Should().BeOfType<EventResponseReport>().Subject;
+        data.IgnoredFilters.Should().Contain(parameter);
+        data.Definition.MinutesBefore.Should().Be(EventResponseDefinition.DefaultMinutesBefore);
+        data.Definition.MinutesAfter.Should().Be(EventResponseDefinition.DefaultMinutesAfter);
+        data.Limits.MinutesAfterChoices.Should().Equal(EventResponseDefinition.MinutesAfterChoices);
+    }
+
+    [Fact]
+    public void LoopAnalysis_EventQuery_NamesTheValuesOutsideTheLimits_AndLeavesThemOut()
+    {
+        var query = new EventResponseQuery
+        {
+            Anchor1 = EventAnchorKind.Meal,
+            MinGrams1 = -1,
+            MaxGrams1 = EventResponseDefinition.MaxGrams + 1,
+            MinutesBefore = EventResponseDefinition.MinutesBeforeChoices[^1],
+            MinutesAfter = 485,
+        };
+
+        query.OutOfLimits().Should().BeEquivalentTo(["minutesAfter", "minGrams1", "maxGrams1"]);
+        var definition = query.ToDefinition();
+        (definition.Cohorts.Single().MinGrams, definition.Cohorts.Single().MaxGrams).Should().Be((null, null));
+        definition.MinutesBefore.Should().Be(EventResponseDefinition.MinutesBeforeChoices[^1]);
+        definition.MinutesAfter.Should().Be(EventResponseDefinition.DefaultMinutesAfter);
     }
 
     [Fact]
@@ -237,9 +263,8 @@ public partial class AnalyticsReadScopeGuardTests
 
     [Theory]
     [InlineData(nameof(EventResponseQuery.FromMinute1), 1440)]
-    [InlineData(nameof(EventResponseQuery.MinutesAfter), 485)]
-    [InlineData(nameof(EventResponseQuery.MaxGrams3), -1)]
-    public void LoopAnalysis_EventQuery_BoundsEveryNumber(string property, int value)
+    [InlineData(nameof(EventResponseQuery.ToMinute3), -1)]
+    public void LoopAnalysis_EventQuery_BoundsEveryMinuteOfTheDay(string property, int value)
     {
         var info = typeof(EventResponseQuery).GetProperty(property)!;
         var range = info.GetCustomAttribute<System.ComponentModel.DataAnnotations.RangeAttribute>();

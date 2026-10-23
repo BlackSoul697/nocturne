@@ -28,7 +28,7 @@ export function confidenceLabel(confidence: SettingsEvidenceConfidence | undefin
 }
 
 /** Why a figure is less sure than it could be, and what would make it surer. */
-export function reasonText(reason: SettingsEvidenceConfidenceReason | undefined): { why: string; raise: string } {
+export function reasonText(reason: SettingsEvidenceConfidenceReason): { why: string; raise: string } {
   switch (reason) {
     case SettingsEvidenceConfidenceReason.FewEpisodes:
       return {
@@ -42,12 +42,12 @@ export function reasonText(reason: SettingsEvidenceConfidenceReason | undefined)
       };
     case SettingsEvidenceConfidenceReason.IsfDependent:
       return {
-        why: "The glucose changes were converted with the ISF from the profile, not with an ISF from your data.",
-        raise: "Confidence increases when your data has correction boluses at this time of day. For each bolus, glucose was steady and no carbs were logged near it.",
+        why: "The report converted the glucose changes with the ISF from the profile, not with an ISF from your data.",
+        raise: "Confidence increases when your data has correction boluses at this time of day. For each bolus, glucose was steady and no carb entry was near it.",
       };
     case SettingsEvidenceConfidenceReason.BasalDependent:
       return {
-        why: "The insulin was measured against basal that was not checked for this time of day.",
+        why: "The report measured the insulin against a basal rate that it did not check for this time of day.",
         raise: "Confidence increases when your data has times without food at this time of day.",
       };
     case SettingsEvidenceConfidenceReason.ResidualIob:
@@ -62,13 +62,13 @@ export function reasonText(reason: SettingsEvidenceConfidenceReason | undefined)
       };
     case SettingsEvidenceConfidenceReason.FastingUnverifiable:
       return {
-        why: "Carbs are logged on only a few days, so the fasting time comes from glucose only.",
-        raise: "Confidence increases when your data has carbs logged on more days. Then the report can find fasting time from the carb entries.",
+        why: "Only a few days have carb entries, so the fasting time comes from glucose only.",
+        raise: "Confidence increases when more days have carb entries. Then the report can find fasting time from the carb entries.",
       };
     case SettingsEvidenceConfidenceReason.MoreInsulinOnBorrowedInput:
       return {
         // "Points to" on purpose: "shows" would claim more than the evidence gives.
-        why: "This figure points to more insulin. Part of it depends on something that this block cannot check by itself: another figure, the profile, or the estimate of the insulin curve.",
+        why: "This figure points to more insulin. Part of it depends on something that this block cannot check with its own data: another figure, the profile, or the estimate of the insulin curve.",
         raise: "Confidence increases when this block has its own evidence.",
       };
     case SettingsEvidenceConfidenceReason.StillMovingAtEnd:
@@ -78,11 +78,18 @@ export function reasonText(reason: SettingsEvidenceConfidenceReason | undefined)
       };
     case SettingsEvidenceConfidenceReason.CarriedInsulinMaterial:
       return {
-        why: "Much of the figure depends on insulin carried in from earlier, as the insulin curve estimates it.",
-        raise: "Confidence increases when your data has times without food that start with little insulin still active.",
+        why: "Much of the figure comes from the decrease in insulin on board. Insulin on board is an estimate, from the loop or from the insulin curve.",
+        raise: "Confidence increases when your data has times without food that start and end with little insulin on board.",
       };
-    default:
-      return { why: "", raise: "" };
+    case SettingsEvidenceConfidenceReason.ManyWentLow:
+      return {
+        why: "Many corrections in this block went low, so the report did not use them. So the figure can show less effect for each unit than the true value.",
+        raise: "Confidence increases when fewer corrections at this time of day go low.",
+      };
+    default: {
+      const unhandled: never = reason;
+      return { why: unhandled, raise: "" };
+    }
   }
 }
 
@@ -97,11 +104,11 @@ export function unavailableText(
     case SettingsEvidenceUnavailableReason.NoCandidates:
       return section === "isf" ? "No correction boluses in this block" : "No time in this block in the range";
     case SettingsEvidenceUnavailableReason.NoAnnouncedMeals:
-      return "No meals were logged with carbs in this block";
+      return "No meal in this block has carbs logged";
     case SettingsEvidenceUnavailableReason.NoneIsolated:
       return "Every meal in this block overlapped another meal, bolus or rise";
     case SettingsEvidenceUnavailableReason.NoneQualified:
-      return "All candidates were set aside. Open the block to see why";
+      return "The report did not use any candidates. Open the block to see why";
     case SettingsEvidenceUnavailableReason.TooFew:
       return "Too few episodes to show a figure";
     case SettingsEvidenceUnavailableReason.SteepTrend:
@@ -113,7 +120,7 @@ export function unavailableText(
   }
 }
 
-/** Why candidates were set aside, one rule each. */
+/** Why the report did not use some candidates, one rule each. */
 export function ruleText(rule: SettingsEvidenceRule | undefined, rules: SettingsEvidenceRules | undefined): string {
   switch (rule) {
     case SettingsEvidenceRule.OpenLoop:
@@ -121,11 +128,11 @@ export function ruleText(rule: SettingsEvidenceRule | undefined, rules: Settings
     case SettingsEvidenceRule.Override:
       return "An override was running";
     case SettingsEvidenceRule.TemporaryTarget:
-      return "A temporary target was set";
+      return "A temporary target was active";
     case SettingsEvidenceRule.Exercise:
-      return "Exercise was logged";
+      return "An exercise entry";
     case SettingsEvidenceRule.Illness:
-      return "Illness was logged";
+      return "An illness entry";
     case SettingsEvidenceRule.Filtered:
       return "Outside the report's filters";
     case SettingsEvidenceRule.OutsideRange:
@@ -141,7 +148,7 @@ export function ruleText(rule: SettingsEvidenceRule | undefined, rules: Settings
     case SettingsEvidenceRule.ManualDelivery:
       return "A manual temp basal or a suspend";
     case SettingsEvidenceRule.InferredDelivery:
-      return "Basal delivery was not recorded and differed from the schedule";
+      return "The pump did not record the basal delivery, and it was different from the schedule";
     case SettingsEvidenceRule.CarbsNear:
       return `Carbs from ${hoursText(rules?.isfCarbFreeBeforeMs)} before to ${hoursText(rules?.isfMinimumWindowMs)} after`;
     case SettingsEvidenceRule.NoTarget:
@@ -163,12 +170,12 @@ export function ruleText(rule: SettingsEvidenceRule | undefined, rules: Settings
     case SettingsEvidenceRule.StartUnstable:
       return "Glucose was moving at the start";
     case SettingsEvidenceRule.MissingGlucose:
-      return "Glucose readings were missing";
+      return "Some glucose readings are missing";
     case SettingsEvidenceRule.InsulinUncovered:
       return "The pump's records were incomplete";
     case SettingsEvidenceRule.TooLittleInsulin:
       return "Too little insulin to calculate a ratio";
     default:
-      return "Set aside";
+      return "Not used";
   }
 }

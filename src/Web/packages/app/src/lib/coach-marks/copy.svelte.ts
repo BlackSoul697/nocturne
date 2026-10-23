@@ -9,7 +9,7 @@ export function coachCopy() {
         "This updates in real-time as new readings arrive from your CGM.",
     },
     "quick-tour.widgets": {
-      title: "Customizable widgets",
+      title: "Customisable widgets",
       description:
         "Reorder or swap these in Settings \u2192 Appearance to show the stats you care about.",
     },
@@ -26,7 +26,7 @@ export function coachCopy() {
     "feature-intro.calendar-trackers": {
       title: "Tracker events",
       description:
-        "Tracker events appear on your calendar \u2014 colored by urgency.",
+        "Tracker events appear on your calendar \u2014 coloured by urgency.",
     },
     "feature-intro.meals-matching": {
       title: "Smart matching",
@@ -70,7 +70,7 @@ export function coachCopy() {
     "onboarding.patient-details": {
       title: "Why this matters",
       description:
-        "Your diabetes type determines how Nocturne calculates bolus suggestions and categorizes treatments. Select your type and save.",
+        "Your diabetes type determines how Nocturne calculates bolus suggestions and categorises treatments. Select your type and save.",
     },
     "onboarding.devices": {
       title: "Add your current device",
@@ -90,7 +90,7 @@ export function coachCopy() {
     "loop-analysis-pages.switcher": {
       title: "Pages and filters",
       description:
-        "Select a page name to open that page. Select Filters (the funnel icon) at the top of the report to change the data. All the Loop Analysis pages use the same filters.",
+        "Select a page name to open that page. Select Filters (the funnel icon) at the top of the report to choose the data that the report uses. All the Loop Analysis pages use the same filters.",
     },
     "loop-analysis-daily-profile.totals": {
       title: "Daily totals",
@@ -115,7 +115,7 @@ export function coachCopy() {
     "loop-analysis-meals-and-events.builder": {
       title: "Events to align",
       description:
-        "Select the type of event for each cohort, for example meals or correction boluses. You can compare a maximum of three cohorts. Select Isolated events only to use only events with no other meal, correction bolus or unannounced rise in their window.",
+        "Select the type of event for each cohort, for example meals or correction boluses. You can compare a maximum of three cohorts. Isolated events only removes each event that has another meal, correction bolus or unannounced rise in its window.",
     },
     "loop-analysis-meals-and-events.curves": {
       title: "Before and after each event",
@@ -210,7 +210,7 @@ export function coachLabels(): CoachLabels {
     showTip: "Show tip",
     back: "Back",
     next: "Next",
-    gotIt: "Got it",
+    gotIt: "Done",
     stepCounter: (current, total) => `${current} of ${total}`,
   };
 }

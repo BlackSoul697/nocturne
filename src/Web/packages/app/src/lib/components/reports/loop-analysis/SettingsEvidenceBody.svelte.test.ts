@@ -54,24 +54,24 @@ describe("SettingsEvidenceBody", () => {
   it("says in plain words why a block has no figure, a missing meal in this block", async () => {
     render(SettingsEvidenceBody, { props: { response: settingsEvidenceResponse() } });
 
-    await expect.element(block("Carb ratio", /^\s*5\s*PM|^\s*17/).first()).toHaveTextContent("No meals were logged with carbs in this block");
+    await expect.element(block("Carb ratio", /^\s*5\s*PM|^\s*17/).first()).toHaveTextContent("No meal in this block has carbs logged");
     await expect.element(block("Insulin sensitivity (ISF)", /^\s*12\s*AM|^\s*0/).first()).toHaveTextContent("No correction boluses in this block");
     await expect.element(block("Insulin sensitivity (ISF)", /^\s*5\s*PM|^\s*17/).first()).toHaveTextContent("Too few episodes to show a figure");
-    await expect.element(block("Basal", /^\s*10/).first()).toHaveTextContent("All candidates were set aside");
+    await expect.element(block("Basal", /^\s*10/).first()).toHaveTextContent("The report did not use any candidates");
   });
 
-  it("opens a block to say why its confidence is not higher, what would raise it, and what was set aside", async () => {
+  it("opens a block to say why its confidence is not higher, what would raise it, and the candidates it did not use", async () => {
     render(SettingsEvidenceBody, { props: { response: settingsEvidenceResponse() } });
 
     const night = block("Basal", /^\s*4/).first();
     await night.getByText(/1\.05/).click();
 
     await expect.element(night.getByText("Why the confidence is not higher")).toBeVisible();
-    await expect.element(night.getByText(/Carbs are logged on only a few days/)).toBeVisible();
+    await expect.element(night.getByText(/Only a few days have carb entries/)).toBeVisible();
     await expect
-      .element(night.getByText("Confidence increases when your data has carbs logged on more days. Then the report can find fasting time from the carb entries."))
+      .element(night.getByText("Confidence increases when more days have carb entries. Then the report can find fasting time from the carb entries."))
       .toBeVisible();
-    await expect.element(night.getByText(/depends on something that this block cannot check by itself/)).toBeVisible();
+    await expect.element(night.getByText(/depends on something that this block cannot check with its own data/)).toBeVisible();
     await expect.element(night.getByText("Carbs within 4 hours before, or during")).toBeVisible();
     await expect.element(night.getByText("The loop's mean correction: +0.25 U/h")).toBeVisible();
     await expect.element(night.getByText("In the same direction on 93% of days")).toBeVisible();
@@ -105,7 +105,7 @@ describe("SettingsEvidenceBody", () => {
     await expect
       .element(
         isf.getByText(
-          "Your data points to more insulin here than your profile gives. This is an observation, not a setting to copy. Usually, settings are changed in small steps, one at a time, with your care team."
+          "Your data points to more insulin here than your profile gives. This is an observation, not a setting to copy. Usually, people change settings in small steps, one at a time, with their diabetes care team."
         )
       )
       .toBeVisible();
@@ -148,7 +148,7 @@ describe("SettingsEvidenceBody", () => {
   it("says once that carb ratio needs logged meals when no block had any", async () => {
     render(SettingsEvidenceBody, { props: { response: settingsEvidenceResponse({ primary: settingsEvidenceRange({ meals: false }) }) } });
 
-    await expect.element(page.getByText("Carb ratio needs meals logged with carbs. No meals were logged with carbs in this range.")).toBeVisible();
+    await expect.element(page.getByText("Carb ratio needs meals with carbs logged. No meal in this range has carbs logged.")).toBeVisible();
     await expect.element(page.getByRole("list", { name: "Carb ratio by block" })).not.toBeInTheDocument();
     await expect.element(page.getByRole("list", { name: "Basal by block" })).toBeVisible();
   });
@@ -237,7 +237,9 @@ describe("SettingsEvidenceBody", () => {
         }),
       },
     });
-    await expect.element(page.getByText("Settings evidence needs more than the last 24 hours of history")).toBeVisible();
+    await expect.element(page.getByText("This page needs more than the last 24 hours")).toBeVisible();
+    await expect.element(page.getByText(/You can see only the last 24 hours, so the page shows no figures\./)).toBeVisible();
+    await expect.element(page.getByText(/This page uses only the last/)).not.toBeInTheDocument();
     await expect.element(page.getByText("Your access does not include the data for this page")).not.toBeInTheDocument();
     await expect.element(page.getByRole("slider")).not.toBeInTheDocument();
   });
@@ -264,6 +266,14 @@ describe("SettingsEvidenceBody", () => {
 
   it("names a filter the viewer's access ignored", async () => {
     render(SettingsEvidenceBody, { props: { response: settingsEvidenceResponse({ ignoredFilters: ["excludeOverrides"] }) } });
-    await expect.element(page.getByText("Some filters were not applied")).toBeVisible();
+    await expect.element(page.getByText("The report did not use some filters")).toBeVisible();
+  });
+
+  it("does not offer Enter on its charts, where Enter opens nothing", async () => {
+    render(SettingsEvidenceBody, { props: { response: settingsEvidenceResponse() } });
+
+    const chart = page.getByRole("slider", { name: "Basal by time of day" });
+    await expect.element(chart).toHaveAccessibleDescription(/Use Home and End/);
+    await expect.element(chart).not.toHaveAccessibleDescription(/Enter/);
   });
 });

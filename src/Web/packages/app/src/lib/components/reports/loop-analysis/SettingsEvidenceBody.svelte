@@ -1,7 +1,7 @@
 <!--
   The Settings evidence page body: the basal, ISF and carb ratio the user's own data shows, each block's
   observed value on its spread against the profile's step line, then every block with its
-  confidence, why it is not higher, what was set aside and the episodes behind it. Every figure
+  confidence, why it is not higher, the candidates it did not use and the episodes behind it. Every figure
   comes from the API as it is; these are observations, never advice.
 -->
 <script lang="ts">
@@ -19,6 +19,7 @@
   } from "$lib/api";
   import * as Alert from "$lib/components/ui/alert";
   import { glucoseUnits } from "$lib/stores/appearance-store.svelte";
+  import { plural } from "$lib/utils/plural";
   import { bg, bgDelta, bgLabel, convertToDisplayUnits, hourLabel } from "$lib/utils/formatting";
   import { Button } from "$lib/components/ui/button";
   import ArrowRight from "@lucide/svelte/icons/arrow-right";
@@ -34,7 +35,7 @@
   import SettingsEvidenceMarks from "./SettingsEvidenceMarks.svelte";
   import SettingsEvidenceBlock from "./SettingsEvidenceBlock.svelte";
   import { TimeOfDayCursor } from "./time-of-day-cursor.svelte";
-  import { atMinute } from "./daily-profile-view";
+  import { atMinute, signedTwoPlaces as signed, twoPlaces } from "./daily-profile-view";
   import { blockAt, blockSpan, matchingBlock, valueDomain, type EpisodeColumn } from "./settings-evidence-view";
   import { confidenceLabel, hoursText, unavailableText, type SettingsEvidenceSection } from "./settings-evidence-labels.svelte";
   import { loopAnalysisMark } from "./loop-analysis-tour.svelte";
@@ -61,14 +62,11 @@
   const isfDisplay = $derived((mgdlPerUnit: number) => convertToDisplayUnits(mgdlPerUnit, units));
   const isfFormat = $derived((v: number) => (units === "mmol" ? isfDisplay(v).toFixed(1) : String(Math.round(v))));
   const isfUnit = $derived(`${bgLabel()} per U`);
-  /** Two decimals, with a value that rounds to zero read as 0.00 rather than -0.00. */
-  const twoPlaces = (v: number) => (Math.round(v * 100) === 0 ? 0 : v).toFixed(2);
   const rate = twoPlaces;
   const ratio = (v: number) => v.toFixed(1);
   const u = (v: number | null | undefined) => (v == null ? "–" : twoPlaces(v));
   const glucose = (v: number | null | undefined) => (v == null ? "–" : String(bg(v)));
   const change = (v: number | null | undefined) => (v == null ? "–" : bgDelta(v));
-  const signed = (v: number) => `${Math.round(v * 100) > 0 ? "+" : ""}${twoPlaces(v)}`;
 
   const COLOR = "var(--chart-2)";
   const cursor = new TimeOfDayCursor();
@@ -91,7 +89,7 @@
     {
       label: "Carried insulin, U/h",
       value: (d) => u(d.carriedInsulin),
-      hint: "Insulin carried in from earlier, compared with the schedule. It is negative when the delivery before the period was less than the schedule.",
+      hint: "Insulin on board at the start of the period less insulin on board at the end, for each hour. It is negative when more insulin is on board at the end.",
     },
     { label: `Glucose change, ${bgLabel()}`, value: (d) => change(d.glucoseChange) },
   ]);
@@ -145,7 +143,7 @@
             key: "basal",
             title: "Basal",
             caption:
-              "Fasting periods, in two-hour blocks. Each figure adds the schedule, the insulin that the loop added and the insulin carried in from earlier. It then adjusts for a glucose increase or decrease.",
+              "Fasting periods, in two-hour blocks. Each figure adds the schedule, the insulin that the loop added and the decrease in insulin on board. It then adjusts for a glucose increase or decrease.",
             direction: "A higher basal rate means more insulin every hour.",
             unit: "U/h",
             blocks: primary.basal ?? [],
@@ -232,11 +230,16 @@
     {#if clamped}
       <div class="flex flex-col items-center gap-3 rounded-lg border border-dashed px-6 py-10 text-center text-muted-foreground">
         <Clock class="size-10 opacity-50" />
-        <p class="font-medium text-foreground">Settings evidence needs more than the last 24 hours of history</p>
+        <p class="font-medium text-foreground">
+          {plural(response.historyWindowHours ?? 0, ["This page needs more than the last hour", "This page needs more than the last # hours"])}
+        </p>
         <p class="max-w-prose text-sm">
-          You can see only the most recent 24 hours of this data. Each figure on this page is checked
-          against the hours before it, for example whether food was eaten. You cannot see those hours.
-          So this page does not show figures that it cannot check.
+          This page needs more history than you can see. The report checks each figure against the hours
+          before it, for example to find meals.
+          {plural(response.historyWindowHours ?? 0, [
+            "You can see only the last hour, so the page shows no figures.",
+            "You can see only the last # hours, so the page shows no figures.",
+          ])}
         </p>
       </div>
     {:else if withheld || primary == null}
@@ -319,7 +322,7 @@
 
           {#if section.key === "carbRatio" && noMealsLogged}
             <p class="rounded-md border px-3 py-2 text-sm text-muted-foreground">
-              Carb ratio needs meals logged with carbs. No meals were logged with carbs in this range.
+              Carb ratio needs meals with carbs logged. No meal in this range has carbs logged.
             </p>
           {:else}
           <div
@@ -386,7 +389,7 @@
       <p class="flex items-center gap-1.5 px-1 text-xs text-muted-foreground">
         <Info class="size-3.5" />
         Hollow dots show figures with low confidence. Open a block to see the reasons, the candidates
-        that were set aside and the episodes for the figure. Use the arrow keys to move along the day
+        that the report did not use and the episodes for the figure. Use the arrow keys to move along the day
         and between charts.
       </p>
     {/if}

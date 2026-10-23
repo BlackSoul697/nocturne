@@ -2,19 +2,18 @@ import {
   EventAnchorKind,
   type EventCohortDefinition,
   type EventResponseDefinition,
+  type EventResponseLimits,
   type EventUnavailableAnchor,
 } from "$lib/api";
 import type { getEventResponse } from "$api/generated/loopAnalysis.generated.remote";
 
 type EventResponseQuery = Parameters<typeof getEventResponse>[0];
 
-export const MAX_COHORTS = 3;
-export const MINUTES_BEFORE = [0, 30, 60, 90, 120] as const;
-export const MINUTES_AFTER = [120, 180, 240, 300, 360, 420, 480] as const;
 export const ANCHOR_KINDS: EventAnchorKind[] = Object.values(EventAnchorKind);
 
-/** Each cohort parameter, suffixed with the cohort's number as the API binds it. */
+/** Each cohort parameter, suffixed with the cohort's number as the API binds it: anchor1 to anchor3. */
 const COHORT_FIELDS = ["anchor", "fromMinute", "toMinute", "minGrams", "maxGrams"] as const;
+const COHORT_NUMBERS = [1, 2, 3] as const;
 /** The options' query parameters, as a response's unavailable filters name them. */
 export const ISOLATED_ONLY = "isolatedOnly";
 export const REQUIRE_CORROBORATION = "requireCorroboration";
@@ -23,7 +22,7 @@ const WINDOW_PARAMS = ["minutesBefore", "minutesAfter"] as const;
 
 /** Every query parameter the events builder owns; a write clears them all before setting its own. */
 const EVENT_PARAM_NAMES = [
-  ...[1, 2, 3].flatMap((n) => COHORT_FIELDS.map((field) => `${field}${n}`)),
+  ...COHORT_NUMBERS.flatMap((n) => COHORT_FIELDS.map((field) => `${field}${n}`)),
   ...OPTION_PARAMS,
   ...WINDOW_PARAMS,
 ];
@@ -45,9 +44,14 @@ function toNumber(value: string | null): number | undefined {
   return Number.isFinite(n) ? n : undefined;
 }
 
+function toWhole(value: string | null): number | undefined {
+  const n = toNumber(value);
+  return n != null && Number.isInteger(n) ? n : undefined;
+}
+
 export function readEventResponse(search: URLSearchParams): EventResponseState {
   const cohorts: EventCohortDefinition[] = [];
-  for (let n = 1; n <= MAX_COHORTS; n++) {
+  for (const n of COHORT_NUMBERS) {
     const anchor = toAnchor(search.get(`anchor${n}`));
     if (!anchor) continue;
     cohorts.push({
@@ -59,14 +63,12 @@ export function readEventResponse(search: URLSearchParams): EventResponseState {
       maxGrams: anchor === EventAnchorKind.Meal ? toNumber(search.get(`maxGrams${n}`)) : undefined,
     });
   }
-  const before = toNumber(search.get("minutesBefore"));
-  const after = toNumber(search.get("minutesAfter"));
   return {
     cohorts,
     isolatedOnly: search.get("isolatedOnly") === "true",
     requireCorroboration: search.get("requireCorroboration") === "true",
-    minutesBefore: MINUTES_BEFORE.find((m) => m === before),
-    minutesAfter: MINUTES_AFTER.find((m) => m === after),
+    minutesBefore: toWhole(search.get("minutesBefore")),
+    minutesAfter: toWhole(search.get("minutesAfter")),
   };
 }
 
@@ -78,20 +80,17 @@ export function writeEventResponse(state: EventResponseState, search: URLSearchP
   return next;
 }
 
-/** The grams the API bounds a meal cohort to: `GramsMax` on its `EventResponseQuery`. */
-const MAX_GRAMS = 1000;
-
 /** Whether a cohort's window starts and ends at the same minute, which the builder does not send. */
 export function sameTimes(cohort: EventCohortDefinition): boolean {
   return cohort.fromMinute != null && cohort.fromMinute === cohort.toMinute;
 }
 
 /**
- * A cohort as the API accepts it: grams within its bounds and the right way round, a window
- * whose start and end are the same minute dropped, and no grams on a cohort that is not meals.
+ * A cohort as the API accepts it: grams within the response's limits and the right way round, a
+ * window whose start and end are the same minute dropped, and no grams on a cohort that is not meals.
  */
-export function normalisedCohort(cohort: EventCohortDefinition): EventCohortDefinition {
-  const clamp = (g: number | undefined) => (g == null ? undefined : Math.min(MAX_GRAMS, Math.max(0, g)));
+export function normalisedCohort(cohort: EventCohortDefinition, maxGrams: number): EventCohortDefinition {
+  const clamp = (g: number | undefined) => (g == null ? undefined : Math.min(maxGrams, Math.max(0, g)));
   let min = clamp(cohort.minGrams);
   let max = clamp(cohort.maxGrams);
   if (min != null && max != null && min > max) [min, max] = [max, min];
@@ -109,7 +108,7 @@ export function normalisedCohort(cohort: EventCohortDefinition): EventCohortDefi
 /** The builder's parameters, cohorts numbered in order; only what is set. */
 function eventParameters(state: EventResponseState): Record<string, string | number | boolean> {
   const params: Record<string, string | number | boolean> = {};
-  (state.cohorts ?? []).slice(0, MAX_COHORTS).map(normalisedCohort).forEach((cohort, i) => {
+  (state.cohorts ?? []).slice(0, COHORT_NUMBERS.length).forEach((cohort, i) => {
     if (!cohort.anchor) return;
     const n = i + 1;
     params[`anchor${n}`] = cohort.anchor;
@@ -156,6 +155,38 @@ export function withoutUnavailableEvents(
   )
     return null;
   return { ...state, cohorts, isolatedOnly, requireCorroboration };
+}
+
+/**
+ * The state without the window and grams the response's limits do not allow, which the API
+ * ignored, with the parameter names it dropped as the API names them; or null when it holds none.
+ */
+export function withinLimits(
+  state: EventResponseState,
+  limits: EventResponseLimits
+): { state: EventResponseState; dropped: string[] } | null {
+  const dropped: string[] = [];
+  const grams = (g: number | undefined, name: string) => {
+    if (g == null || (g >= 0 && g <= (limits.maxGrams ?? 0))) return g;
+    dropped.push(name);
+    return undefined;
+  };
+  const minutes = (m: number | undefined, choices: number[] | undefined, name: string) => {
+    if (m == null || (choices ?? []).includes(m)) return m;
+    dropped.push(name);
+    return undefined;
+  };
+  const next: EventResponseState = {
+    ...state,
+    minutesBefore: minutes(state.minutesBefore, limits.minutesBeforeChoices, "minutesBefore"),
+    minutesAfter: minutes(state.minutesAfter, limits.minutesAfterChoices, "minutesAfter"),
+    cohorts: (state.cohorts ?? []).map((c, i) => ({
+      ...c,
+      minGrams: grams(c.minGrams, `minGrams${i + 1}`),
+      maxGrams: grams(c.maxGrams, `maxGrams${i + 1}`),
+    })),
+  };
+  return dropped.length > 0 ? { state: next, dropped } : null;
 }
 
 /** `HH:mm` for a minute of the day, as a time input reads it. */

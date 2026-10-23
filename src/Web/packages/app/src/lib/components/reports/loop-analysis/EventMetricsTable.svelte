@@ -120,8 +120,8 @@
   {#if falls}
     <p>
       The drop is the start glucose minus the glucose at the end of the window. Drop per unit shows only
-      for an event with no other meal, correction or rise in its window, with enough insulin above
-      schedule, and with no glucose below range.
+      for some events. The event must have no other meal, correction or rise in its window. It must
+      also have enough insulin above schedule, and no glucose below range.
     </p>
   {/if}
   {#each missingGramsPerUnit as r (r.cohort)}

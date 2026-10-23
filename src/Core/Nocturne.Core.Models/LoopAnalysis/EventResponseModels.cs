@@ -66,11 +66,17 @@ public class EventResponseDefinition
 {
     public const int SlotMinutes = 5;
     public const int DefaultMinutesBefore = 60;
-    public const int MaxMinutesBefore = 120;
     public const int DefaultMinutesAfter = 300;
-    public const int MinMinutesAfter = 60;
-    public const int MaxMinutesAfter = 480;
     public const int MaxCohorts = 3;
+
+    /// <summary>A bound no meal reaches, so a typing slip is ignored rather than read.</summary>
+    public const double MaxGrams = 1000;
+
+    /// <summary>The windows before the anchor a request may ask for, in minutes.</summary>
+    public static readonly IReadOnlyList<int> MinutesBeforeChoices = [0, 30, 60, 90, 120];
+
+    /// <summary>The windows after the anchor a request may ask for, in minutes.</summary>
+    public static readonly IReadOnlyList<int> MinutesAfterChoices = [120, 180, 240, 300, 360, 420, 480];
 
     public List<EventCohortDefinition> Cohorts { get; set; } = [];
 
@@ -93,6 +99,18 @@ public class EventResponseDefinition
     public bool RequireCorroboration { get; set; }
 }
 
+/// <summary>The bounds of an <see cref="EventResponseDefinition"/>, as the builder offers them.</summary>
+public class EventResponseLimits
+{
+    public int MaxCohorts { get; set; } = EventResponseDefinition.MaxCohorts;
+
+    public double MaxGrams { get; set; } = EventResponseDefinition.MaxGrams;
+
+    public List<int> MinutesBeforeChoices { get; set; } = [.. EventResponseDefinition.MinutesBeforeChoices];
+
+    public List<int> MinutesAfterChoices { get; set; } = [.. EventResponseDefinition.MinutesAfterChoices];
+}
+
 /// <summary>An anchor kind the caller's scopes do not let it ask for, and the scope it would need.</summary>
 public class EventUnavailableAnchor
 {
@@ -109,6 +127,9 @@ public class EventResponseReport : LoopAnalysisResponse
 
     /// <summary>Anchor kinds the caller cannot ask for; a cohort that asks for one is dropped.</summary>
     public List<EventUnavailableAnchor> UnavailableAnchors { get; set; } = [];
+
+    /// <summary>What a request may ask for; a window or grams outside these is ignored.</summary>
+    public EventResponseLimits Limits { get; set; } = new();
 
     /// <summary>
     /// Minutes from the anchor to the start of each slot of the window, earliest first; every

@@ -85,7 +85,7 @@ async function open(name: LoopAnalysisPage, options: { store?: Map<string, MarkS
 }
 
 /**
- * Reads each step the tour raises and closes it with Got it. The overlay waits for its target to be
+ * Reads each step the tour raises and closes it with Done. The overlay waits for its target to be
  * on screen, so each target is scrolled to first, as a reader would.
  */
 async function walk(ctx: CoachMarkContext): Promise<string[]> {
@@ -95,7 +95,7 @@ async function walk(ctx: CoachMarkContext): Promise<string[]> {
     ctx.getMountedSteps(key)[0].element.scrollIntoView({ block: "center" });
     await expect.element(page.getByRole("dialog", { name: title(key) })).toBeVisible();
     shown.push(key);
-    await page.getByRole("button", { name: "Got it" }).click();
+    await page.getByRole("button", { name: "Done", exact: true }).click();
     await vi.waitFor(() => expect(ctx.activeKey).not.toBe(key));
   }
   return shown;
@@ -128,12 +128,12 @@ describe("Loop Analysis tours", () => {
     const first = await open("prediction-accuracy");
     await walk(first.ctx);
     first.screen.unmount();
+    const last = steps("prediction-accuracy").at(-1)!;
+    first.store.delete(last);
 
     const later = await open("prediction-accuracy", { store: first.store });
-    await new Promise((resolve) => setTimeout(resolve, 200));
 
-    expect(later.ctx.activeKey).toBeNull();
-    await expect.element(page.getByRole("dialog")).not.toBeInTheDocument();
+    expect(await walk(later.ctx)).toEqual([last]);
   });
 
   it("replays the pages and filters, then the page's tour, from the button", async () => {
@@ -150,12 +150,21 @@ describe("Loop Analysis tours", () => {
     await vi.waitFor(() => expect(ctx.activeKey).toBe(SHARED[0]), { timeout: 3_000 });
     await expect.element(page.getByRole("dialog", { name: title(SHARED[0]) })).toBeVisible();
 
+    const active: string[] = [];
+    const stop = $effect.root(() => {
+      $effect(() => {
+        if (ctx.activeKey) active.push(ctx.activeKey);
+      });
+    });
     await page.getByRole("button", { name: "Dismiss" }).click();
-    await new Promise((resolve) => setTimeout(resolve, 200));
+    await vi.waitFor(() => expect(store.get(SHARED[0])?.status).toBe("dismissed"));
 
-    expect(ctx.activeKey).toBeNull();
-    await expect.element(page.getByRole("dialog")).not.toBeInTheDocument();
-    expect(store.get(SHARED[0])?.status).toBe("dismissed");
+    // The replay raising the first step again shows the queue ran after the dismiss.
+    await page.getByRole("button", { name: tourReplayLabel() }).click();
+    await vi.waitFor(() => expect(ctx.activeKey).toBe(SHARED[0]));
+    stop();
+
+    expect(active.filter((key) => steps("daily-profile").includes(key))).toEqual([]);
     for (const key of steps("daily-profile")) expect(store.get(key)?.status ?? "unseen", key).toBe("unseen");
   });
 
@@ -163,7 +172,7 @@ describe("Loop Analysis tours", () => {
     const { ctx, screen } = await open("daily-profile");
     await vi.waitFor(() => expect(ctx.activeKey).toBe(SHARED[0]), { timeout: 3_000 });
     await expect.element(page.getByRole("dialog", { name: title(SHARED[0]) })).toBeVisible();
-    await page.getByRole("button", { name: "Got it" }).click();
+    await page.getByRole("button", { name: "Done", exact: true }).click();
     await vi.waitFor(() => expect(ctx.activeKey).toBe(steps("daily-profile")[0]));
 
     pageState.url = new URL("http://localhost/reports/loop-analysis/loop-health") as typeof pageState.url;
@@ -217,9 +226,9 @@ describe("Loop Analysis tours", () => {
     ["a guest", { isGuestSession: true }],
   ])("leaves the page alone for %s", async (_, data) => {
     const { ctx } = await open("daily-profile", { data });
-    await expect.element(page.getByTestId("loop-analysis-page")).toBeVisible();
-    await new Promise((resolve) => setTimeout(resolve, 200));
+    await expect.element(page.getByTestId("loop-analysis-daily-totals")).toBeVisible();
 
+    for (const key of [...SHARED, ...steps("daily-profile")]) expect(ctx.getMountedSteps(key), key).toHaveLength(0);
     expect(ctx.activeKey).toBeNull();
     await expect.element(page.getByRole("dialog")).not.toBeInTheDocument();
     await expect.element(page.getByRole("button", { name: tourReplayLabel() })).not.toBeInTheDocument();

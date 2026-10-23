@@ -1,7 +1,8 @@
 <!--
   One curve's bias by local hour of the prediction and horizon, as a table whose cells are tinted
-  by the sign and size of the bias: one hue for predictions that ran high, another for low, fading
-  to the surface at zero. Every cell carries its value, so the tint is never read alone.
+  by the sign of the bias and the size the API scales it to: one hue for predictions that ran high,
+  another for low, fading to the surface at zero. Every cell carries its value, so the tint is never
+  read alone.
 -->
 <script lang="ts">
   import type { PredictionCurveAccuracy, PredictionHorizonAccuracy } from "$lib/api";
@@ -17,8 +18,6 @@
 
   let { curve, formatError, unit }: Props = $props();
 
-  /** The bias, in mg/dL, at which a cell takes its full tint. */
-  const FULL_TINT_MGDL = 30;
   /** The strongest tint, in percent; text on it keeps at least 5:1 in every theme. */
   const MAX_TINT = 55;
   /** A sparse cell's tint is this share of what its bias would give. */
@@ -30,8 +29,8 @@
   /** The cell's tint as a CSS colour, or null for none. */
   function tintOf(h: PredictionHorizonAccuracy | undefined): string | null {
     const bias = h?.error?.mean;
-    if (bias == null || bias === 0) return null;
-    const share = Math.min(1, Math.abs(bias) / FULL_TINT_MGDL) * MAX_TINT * (h?.error?.sparse ? SPARSE_TINT : 1);
+    if (bias == null || bias === 0 || h?.biasScale == null) return null;
+    const share = h.biasScale * MAX_TINT * (h.error?.sparse ? SPARSE_TINT : 1);
     return `color-mix(in oklab, var(${bias > 0 ? "--bias-high" : "--bias-low"}) ${Math.round(share)}%, transparent)`;
   }
 
@@ -94,7 +93,7 @@
       <span class="swatch-high inline-block size-3 rounded-sm"></span>
       Predicted too high
     </span>
-    <span><span class="italic">Italic</span>, paler: too few days to show a pattern</span>
+    <span><span class="italic">Italic</span> and faded: too few days to show a pattern</span>
   </div>
 </div>
 

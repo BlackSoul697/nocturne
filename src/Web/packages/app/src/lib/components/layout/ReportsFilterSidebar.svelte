@@ -91,12 +91,6 @@
     }
   }
 
-  /**
-   * Return to the on-screen report's own default window and hand the range back
-   * to default mode, so navigating to another report can adjust it again.
-   * Resetting to a fixed 7 days shortened 30-day reports and pinned the result
-   * as a user choice.
-   */
   /** Writes the range and the report's filters in one navigation, so one history entry. */
   async function write(range: RangeWrite | null, report: (search: URLSearchParams) => URLSearchParams) {
     const search = report(range ? withRange(page.url.searchParams, range) : page.url.searchParams);
@@ -104,6 +98,10 @@
     await goto(`?${search.toString()}`, { noScroll: true, keepFocus: true });
   }
 
+  /**
+   * Returns to the on-screen report's own default window and hands the range back
+   * to default mode, so navigating to another report can adjust it again.
+   */
   async function resetFilters() {
     open = false;
     onOpenChange?.(false);

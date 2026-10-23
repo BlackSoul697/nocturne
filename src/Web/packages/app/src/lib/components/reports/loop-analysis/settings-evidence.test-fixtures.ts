@@ -136,6 +136,7 @@ export function settingsEvidenceRange(options: { meals?: boolean; shift?: number
 export function settingsEvidenceResponse(overrides: Partial<SettingsEvidenceReport> = {}): SettingsEvidenceReport {
   return {
     historyClamped: false,
+    historyWindowHours: 24,
     primaryRange: { startDate: "2026-06-10", endDate: "2026-06-16", shortened: false },
     appliedFilters: { days: [DayOfWeek.Monday], excludeIllness: true, excludeOpenLoop: true },
     ignoredFilters: [],

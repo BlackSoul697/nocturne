@@ -16,13 +16,11 @@
     type LoopHealthUnknown,
   } from "$lib/api";
   import FigureStrip, { type Figure } from "$lib/components/reports/FigureStrip.svelte";
-  import * as Alert from "$lib/components/ui/alert";
   import { Button } from "$lib/components/ui/button";
   import { plural } from "$lib/utils/plural";
   import { startOfDay } from "$lib/utils/date-range";
   import { formatMediumDate, formatWeekdayDate, hourLabel, time } from "$lib/utils/formatting";
   import ArrowUpRight from "@lucide/svelte/icons/arrow-up-right";
-  import Clock from "@lucide/svelte/icons/clock";
   import EyeOff from "@lucide/svelte/icons/eye-off";
   import TimeOfDayPanel from "./TimeOfDayPanel.svelte";
   import HourBars from "./HourBars.svelte";
@@ -31,6 +29,7 @@
   import NoTimeZone from "$lib/components/reports/NoTimeZone.svelte";
   import { loopAnalysisTimeZoneNeed } from "./time-zone-need.svelte";
   import IgnoredFiltersNotice from "./IgnoredFiltersNotice.svelte";
+  import HistoryClampNote from "./HistoryClampNote.svelte";
   import AggregateReadout from "./AggregateReadout.svelte";
   import { TimeOfDayCursor } from "./time-of-day-cursor.svelte";
   import { atMinute, axisEnd } from "./daily-profile-view";
@@ -167,7 +166,7 @@
     list.push(
       hidden(LoopAnalysisSeries.LoopActivity)
         ? hiddenFigure("Closed loop")
-        : shareFigure("Closed loop", (r) => r?.activity?.closedLoop, "Percent of the analysed time when the loop was in control")
+        : shareFigure("Closed loop", (r) => r?.activity?.closedLoop, "Percent of the analysed time when the loop controlled basal delivery")
     );
     list.push(
       hidden(LoopAnalysisSeries.CgmActivity)
@@ -180,7 +179,7 @@
         : shareFigure("Pump active", (r) => r?.activity?.pump, "Percent of the analysed time when the loop uploaded a cycle. If there are no cycles, the report uses the delivery records.")
     );
     list.push(
-      gapsFigure("Loop gaps", LoopAnalysisSeries.LoopGaps, "loopGaps", "No gap of more than 15 minutes between loop cycles")
+      gapsFigure("Loop gaps", LoopAnalysisSeries.LoopGaps, "loopGaps", `No gap of more than ${gapThreshold} between loop cycles`)
     );
     list.push(
       gapsFigure(
@@ -218,7 +217,7 @@
           label: "At max basal",
           value: pct(value),
           note: noted(
-            `Percent of the algorithm temp basal time with a known limit (${maybePct(known)})`,
+            `Percent of the algorithm temp basal time with a known max basal (${maybePct(known)})`,
             maybeComparedPct(comparison?.maxBasal?.atCap?.percent)
           ),
         });
@@ -256,30 +255,30 @@
       });
     }
 
-    if (hidden(LoopAnalysisSeries.SuggestedNotEnacted)) list.push(hiddenFigure("Suggested, not enacted"));
+    if (hidden(LoopAnalysisSeries.SuggestedNotEnacted)) list.push(hiddenFigure("Requested, not done"));
     else if (primary?.suggestedNotEnacted?.percent == null)
-      list.push(unknownFigure("Suggested, not enacted", unknown("suggestedNotEnacted")));
+      list.push(unknownFigure("Requested, not done", unknown("suggestedNotEnacted")));
     else
       list.push(
         shareFigure(
-          "Suggested, not enacted",
+          "Requested, not done",
           (r) => r?.suggestedNotEnacted,
           "Percent of the changes that the loop requested but that did not occur (open loop, or the pump did not respond)"
         )
       );
 
-    if (hidden(LoopAnalysisSeries.LoopLimits)) list.push(hiddenFigure("Loop's max basal rate setting"));
+    if (hidden(LoopAnalysisSeries.LoopLimits)) list.push(hiddenFigure("Max basal rate setting of the Loop app"));
     else if (primary?.limits?.loopMaximumBasalRate == null)
       list.push(
         unknownFigure(
-          "Loop's max basal rate setting",
+          "Max basal rate setting of the Loop app",
           primary?.unknown?.loopMaximumBasalRate === LoopHealthUnknownReason.NotRecordedByThisSystem
-            ? "Only Loop uploads this setting"
+            ? "Only the Loop app uploads this setting"
             : unknown("loopMaximumBasalRate")
         )
       );
     else
-      list.push({ label: "Loop's max basal rate setting", value: u2(primary.limits.loopMaximumBasalRate), unit: "U/h" });
+      list.push({ label: "Max basal rate setting of the Loop app", value: u2(primary.limits.loopMaximumBasalRate), unit: "U/h" });
 
     if (hidden(LoopAnalysisSeries.OrefMaxIob)) list.push(hiddenFigure("Max IOB"));
     else if (primary?.limits?.orefMaxIob == null)
@@ -287,7 +286,7 @@
         unknownFigure(
           "Max IOB",
           primary?.unknown?.orefMaxIob === LoopHealthUnknownReason.NoReasonRecorded
-            ? "Shown only when the loop reports that max IOB limited a dose. The loop did not report this in this range."
+            ? "This figure shows only when the loop reports that max IOB limited a dose. The loop did not report this in this range."
             : unknown("orefMaxIob")
         )
       );
@@ -297,6 +296,8 @@
   });
 
   const cursor = new TimeOfDayCursor();
+  const gapThreshold = $derived(plural(response.loopGapMinutes ?? 0, ["# minute", "# minutes"]));
+  const pickHelp = "Press Enter to show only the gaps that started in the hour. Press Escape to show all the gaps.";
 
   const activityStrips = $derived(
     [
@@ -401,7 +402,7 @@
       {
         key: "loop-gaps",
         title: "Loop gaps",
-        explanation: "More than 15 minutes between loop cycles.",
+        explanation: `More than ${gapThreshold} between loop cycles.`,
         series: LoopAnalysisSeries.LoopGaps,
         reason: "loopGaps" as const,
         gaps: primary?.cadence?.loopGaps,
@@ -452,17 +453,7 @@
   <NoTimeZone reason={response.timeZoneUnavailableReason}>{loopAnalysisTimeZoneNeed()}</NoTimeZone>
 {:else}
   <div class="space-y-6">
-    {#if response.historyClamped}
-      <Alert.Root variant="info">
-        <Clock />
-        <Alert.Title>Only the last 24 hours are included</Alert.Title>
-        <Alert.Description>
-          You can see only the most recent 24 hours of this data. The report shows only those 24
-          hours for all ranges that you select. It does not compare ranges. Each hour of the day uses
-          data from one day at most.
-        </Alert.Description>
-      </Alert.Root>
-    {/if}
+    <HistoryClampNote {response}>Each hour of the day uses data from one day at most.</HistoryClampNote>
 
     <IgnoredFiltersNotice ignored={response.ignoredFilters} />
 
@@ -493,6 +484,7 @@
               title={strip.title}
               unit="Share of analysed time, %"
               {cursor}
+              {pickHelp}
               yDomain={[0, 100]}
               heightClass="h-24"
               describe={(slot) => describeShare(strip.pick(primary), slot)}
@@ -518,6 +510,7 @@
             title="Algorithm zero temps by hour"
             unit="Share of time with known delivery, %"
             {cursor}
+            {pickHelp}
             yDomain={zeroDomain}
             heightClass="h-28"
             describe={(slot) => describeShare(primary?.zeroDelivery?.algorithmZeroTemp, slot)}
@@ -547,8 +540,9 @@
             slotHeading={false}
             id="max-basal"
             title="At max basal by hour"
-            unit="Share of algorithm temp basal time with a known cap, %"
+            unit="Share of algorithm temp basal time with a known max basal, %"
             {cursor}
+            {pickHelp}
             yDomain={capDomain}
             heightClass="h-28"
             describe={(slot) => describeShare(primary?.maxBasal?.atCap, slot)}
@@ -561,7 +555,7 @@
               {@const known = shareHour(primary?.maxBasal?.capKnown, hourOfSlot(slot))?.percent}
               {@render shareReadout(primary?.maxBasal?.atCap, comparison?.maxBasal?.atCap, slot)}
               <p class="mt-1 tabular-nums">
-                <span class="text-muted-foreground">Cap known for</span> {maybePct(known)}
+                <span class="text-muted-foreground">Max basal known for</span> {maybePct(known)}
               </p>
             {/snippet}
           </TimeOfDayPanel>
@@ -577,6 +571,7 @@
             title="Sensitivity ratio by hour"
             unit="Autosens or dynamic ISF. Above 1 means that the loop calculated a need for more insulin."
             {cursor}
+            {pickHelp}
             yDomain={sensitivityDomain}
             yFormat={sensitivityTick}
             heightClass="h-32"
@@ -621,8 +616,8 @@
 
         <p class="flex items-center gap-1.5 px-1 text-xs text-muted-foreground">
           <EyeOff class="size-3.5" />
-          Pale hours have too few days to show a pattern. To list only the gaps that started in an
-          hour, click the hour or press Enter on it. Use the arrow keys to move along the day and
+          Faded hours have too few days to show a pattern. To list only the gaps that started in an
+          hour, select the hour or press Enter on it. Use the arrow keys to move along the day and
           between charts.
         </p>
       </div>
@@ -631,7 +626,7 @@
         <div class="flex flex-wrap items-baseline justify-between gap-2">
           <h3 id="loop-health-gaps" class="font-medium">Gaps, longest first</h3>
           {#if pickedHour != null}
-            <Button variant="link" size="inline" onclick={() => (cursor.selected = null)}>Show all hours</Button>
+            <Button variant="link" size="inline" class="print:hidden" onclick={() => (cursor.selected = null)}>Show all hours</Button>
           {/if}
         </div>
         {#if pickedHour != null}
@@ -673,6 +668,7 @@
                   <Button
                     variant="link"
                     size="inline"
+                    class="print:hidden"
                     aria-expanded={expanded[list.key] ?? false}
                     aria-controls={`${list.key}-list`}
                     onclick={() => (expanded = { ...expanded, [list.key]: !expanded[list.key] })}

@@ -39,13 +39,13 @@ describe("LoopHealthBody", () => {
     await tile("Algorithm zero temps").toContain("Percent of the time with known delivery");
     await tile("Algorithm zero temps").toContain("Suspended 1.2%, manual zero temps 0.0%");
     await tile("At max basal").toContain("2.5%");
-    await tile("At max basal").toMatch(/^At max basal\s*2\.5%\s*Percent of the algorithm temp basal time with a known limit/);
-    await tile("At max basal").toContain("with a known limit (76.7%)");
+    await tile("At max basal").toMatch(/^At max basal\s*2\.5%\s*Percent of the algorithm temp basal time with a known max basal/);
+    await tile("At max basal").toContain("with a known max basal (76.7%)");
     await tile("At max IOB").toContain("0.1%");
     await tile("At max IOB").toContain("at or near max IOB");
     await tile("Automatic boluses a day").toContain("54.0");
     await tile("Automatic boluses a day").toContain("Median size 0.20 U, P10–P90 0.00–0.40 U");
-    await tile("Suggested, not enacted").toContain("0.2%");
+    await tile("Requested, not done").toContain("0.2%");
     await tile("Max IOB").toMatch(/15\.0\s*U/);
 
     for (const title of STRIPS) await expect.element(page.getByRole("slider", { name: title })).toBeVisible();
@@ -123,10 +123,10 @@ describe("LoopHealthBody", () => {
     render(LoopHealthBody, { props: { response: loopHealthResponse({ system: "loop" }) } });
 
     await tile("At max IOB").toContain("Unknown");
-    await tile("Suggested, not enacted").toContain("Unknown");
+    await tile("Requested, not done").toContain("Unknown");
     await tile("Max IOB").toContain("Unknown");
-    await tile("Loop's max basal rate setting").toMatch(/3\.00\s*U\/h/);
-    for (const label of ["At max IOB", "Suggested, not enacted", "Max IOB"]) {
+    await tile("Max basal rate setting of the Loop app").toMatch(/3\.00\s*U\/h/);
+    for (const label of ["At max IOB", "Requested, not done", "Max IOB"]) {
       await tile(label).toContain("The system that ran the loop does not record this");
       await tile(label).not.toMatch(/oref|AAPS|Trio|Loop\b/);
     }
@@ -139,8 +139,8 @@ describe("LoopHealthBody", () => {
     });
 
     await tile("At max IOB").toContain("No loop cycle in this range recorded the data that this figure needs");
-    await tile("Suggested, not enacted").toContain("No loop cycle in this range recorded the data that this figure needs");
-    await tile("Loop's max basal rate setting").toContain("Only Loop uploads this setting");
+    await tile("Requested, not done").toContain("No loop cycle in this range recorded the data that this figure needs");
+    await tile("Max basal rate setting of the Loop app").toContain("Only the Loop app uploads this setting");
   });
 
   it("says max IOB is shown only once it limited a dose", async () => {
@@ -149,8 +149,8 @@ describe("LoopHealthBody", () => {
     response.primary!.unknown!.orefMaxIob = LoopHealthUnknownReason.NoReasonRecorded;
     render(LoopHealthBody, { props: { response } });
 
-    await tile("Max IOB").toContain("Shown only when the loop reports that max IOB limited a dose. The loop did not report this in this range.");
-    await tile("Suggested, not enacted").toContain("(open loop, or the pump did not respond)");
+    await tile("Max IOB").toContain("This figure shows only when the loop reports that max IOB limited a dose. The loop did not report this in this range.");
+    await tile("Requested, not done").toContain("(open loop, or the pump did not respond)");
   });
 
   it("counts the loop cycles behind each hour's sensitivity ratio", async () => {
@@ -179,7 +179,7 @@ describe("LoopHealthBody", () => {
       props: { response: loopHealthResponse({ scopes: ["glucose.read", "treatments.read", "reports.read"] }) },
     });
 
-    for (const label of ["Closed loop", "Pump active", "Loop gaps", "Unrecorded delivery", "At max basal", "At max IOB", "Max IOB", "Loop's max basal rate setting"])
+    for (const label of ["Closed loop", "Pump active", "Loop gaps", "Unrecorded delivery", "At max basal", "At max IOB", "Max IOB", "Max basal rate setting of the Loop app"])
       await tile(label).toContain(HIDDEN);
     await tile("CGM active").toContain("98.7%");
     await tile("Algorithm zero temps").toContain("41.0%");
@@ -258,7 +258,7 @@ describe("LoopHealthBody", () => {
   it("says a clamped viewer sees only the last 24 hours", async () => {
     render(LoopHealthBody, { props: { response: loopHealthResponse({ historyClamped: true, days: 1 }) } });
 
-    await expect.element(page.getByText("Only the last 24 hours are included")).toBeVisible();
+    await expect.element(page.getByText(/This page uses only the last 24 hours/)).toBeVisible();
     await tile("Closed loop").toContain("91.1%");
   });
 
@@ -268,5 +268,14 @@ describe("LoopHealthBody", () => {
     await expect
       .element(page.getByRole("slider", { name: "Closed loop by hour" }))
       .toHaveAttribute("aria-valuetext", expect.stringContaining("91.1%, 14 days"));
+  });
+
+  it("tells a keyboard user what Enter does on this page", async () => {
+    render(LoopHealthBody, { props: { response: loopHealthResponse() } });
+
+    const strip = page.getByRole("slider", { name: "Closed loop by hour" });
+    await expect.element(strip).toHaveAccessibleDescription(/up arrow to go to the previous chart/);
+    await expect.element(strip).toHaveAccessibleDescription(/Press Enter to show only the gaps that started in the hour\./);
+    await expect.element(strip).not.toHaveAccessibleDescription(/list the days/);
   });
 });

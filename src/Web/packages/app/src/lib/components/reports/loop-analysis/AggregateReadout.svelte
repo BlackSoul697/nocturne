@@ -52,7 +52,7 @@
     <p class="font-medium text-muted-foreground">{label}</p>
   {/if}
   {#if !value && headline?.value == null}
-    <p class="text-muted-foreground">No data in this slot</p>
+    <p class="text-muted-foreground">No data at this time</p>
   {:else}
     <table class="w-full tabular-nums">
       {#if showComparison}

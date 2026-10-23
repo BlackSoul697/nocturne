@@ -1,4 +1,5 @@
 using System.Net;
+using System.Text.Json;
 using FluentAssertions;
 using Microsoft.Extensions.DependencyInjection;
 using Nocturne.API.Tests.Integration.Infrastructure;
@@ -212,8 +213,33 @@ public class LoopAnalysisEventResponseIntegrationTests(ApiIntegrationTestFixture
     }
 
     [Theory]
-    [InlineData("minutesAfter=500")]
-    [InlineData("minutesBefore=3")]
+    [InlineData("minutesAfter=500", "minutesAfter")]
+    [InlineData("minutesBefore=45", "minutesBefore")]
+    [InlineData("anchor1=Meal&minGrams1=20&maxGrams1=5000", "maxGrams1")]
+    [InlineData("anchor1=Meal&minGrams1=-5", "minGrams1")]
+    public async Task Applies_the_default_for_a_value_outside_the_limits_and_names_it_ignored(string events, string parameter)
+    {
+        await SeedProfileAsync("Australia/Sydney");
+
+        var body = await GetOkAsync(AuthenticatedClient, Query($"{Week}&{events}"));
+
+        body.GetProperty("ignoredFilters").EnumerateArray().Select(f => f.GetString()).Should().Equal(parameter);
+        var definition = body.GetProperty("definition");
+        definition.GetProperty("minutesBefore").GetInt32().Should().Be(60);
+        definition.GetProperty("minutesAfter").GetInt32().Should().Be(300);
+        if (parameter.Contains("Grams"))
+        {
+            var cohort = definition.GetProperty("cohorts")[0];
+            var grams = cohort.TryGetProperty(parameter[..^1], out var value) ? value.ValueKind : JsonValueKind.Null;
+            grams.Should().Be(JsonValueKind.Null);
+        }
+        var limits = body.GetProperty("limits");
+        limits.GetProperty("maxCohorts").GetInt32().Should().Be(3);
+        limits.GetProperty("minutesAfterChoices").EnumerateArray().Select(m => m.GetInt32()).Should().Contain(300);
+    }
+
+    [Theory]
+    [InlineData("minutesAfter=five")]
     [InlineData("fromMinute1=1440")]
     [InlineData("anchor1=CorrectionBolus&minGrams1=20")]
     [InlineData("fromMinute2=60")]

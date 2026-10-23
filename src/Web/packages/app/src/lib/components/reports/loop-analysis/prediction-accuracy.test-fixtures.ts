@@ -49,6 +49,7 @@ function horizon(minutes: number, options: PredictionOptions): PredictionHorizon
       n,
       sparse: options.sparse ?? false,
     },
+    biasScale: Math.min(1, Math.abs(bias) / 30),
     mae: 10 + minutes / 6,
     mard: 8 + minutes / 15,
     unmatched: 5,
@@ -134,6 +135,8 @@ export function predictionResponse(
       ? { startDate: "2026-09-17", endDate: "2026-09-30", from: "2026-09-17T00:00:00Z", to: "2026-10-01T00:00:00Z", shortened: false }
       : undefined,
     historyClamped: options.historyClamped ?? false,
+    historyWindowHours: 24,
+    contextLookbackMs: 3 * 3_600_000,
     ignoredFilters: [],
     withheldSeries: withheld,
     unavailableFilters: unavailableFor(scopes),

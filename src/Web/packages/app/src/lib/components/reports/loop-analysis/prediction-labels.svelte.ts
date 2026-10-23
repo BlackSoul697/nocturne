@@ -1,6 +1,7 @@
 import { PredictionContext, PredictionCurve } from "$lib/api";
 import { plural } from "$lib/utils/plural";
 import { formatLocale } from "$lib/utils/formatting";
+import { hoursText } from "./settings-evidence-labels.svelte";
 
 /** Built per call so wuchale reads them in the current locale. */
 export function curveLabel(curve: PredictionCurve | undefined): string {
@@ -37,7 +38,7 @@ export function curveCaption(curve: PredictionCurve | undefined): string {
 export function contextLabel(context: PredictionContext | undefined): string {
   switch (context) {
     case PredictionContext.Adjusted:
-      return "Override, temp target or exercise";
+      return "Override, temporary target or exercise";
     case PredictionContext.PostMeal:
       return "After a meal";
     case PredictionContext.PostCorrection:
@@ -47,14 +48,15 @@ export function contextLabel(context: PredictionContext | undefined): string {
   }
 }
 
-export function contextCaption(context: PredictionContext | undefined): string {
+/** @param lookbackMs How far before a prediction its context looks, as the response serves it. */
+export function contextCaption(context: PredictionContext | undefined, lookbackMs: number | undefined): string {
   switch (context) {
     case PredictionContext.Adjusted:
       return "An override, temporary target or exercise was active";
     case PredictionContext.PostMeal:
-      return "Carbs were entered in the 3 hours before";
+      return `Carbs were entered in the ${hoursText(lookbackMs)} before`;
     case PredictionContext.PostCorrection:
-      return "A manual bolus in the 3 hours before, no carbs";
+      return `A manual bolus in the ${hoursText(lookbackMs)} before, no carbs`;
     default:
       return "None of the above";
   }

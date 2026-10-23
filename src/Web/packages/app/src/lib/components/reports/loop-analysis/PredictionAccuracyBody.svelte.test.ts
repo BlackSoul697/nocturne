@@ -31,7 +31,7 @@ describe("PredictionAccuracyBody", () => {
     await expect.element(page.getByText(/the average size of the\s+error, in either direction/)).toBeVisible();
     await expect.element(page.getByText(/oref gives its unannounced meal \(UAM\) curve only when/)).toBeVisible();
     await expect.element(page.getByText(/oref removes the end of its zero-temp curve/)).toBeVisible();
-    await expect.element(page.getByText(/Interrupted predictions are not included in any bias/)).toBeVisible();
+    await expect.element(page.getByText(/No bias figure includes interrupted predictions/)).toBeVisible();
     expect(page.getByText(/Faded horizons/).elements()).toHaveLength(0);
   });
 
@@ -84,6 +84,15 @@ describe("PredictionAccuracyBody", () => {
     expect((heatmapCell("-16").element() as HTMLElement).className).not.toContain("italic");
   });
 
+  it("tints a cell by the bias scale the API serves", async () => {
+    const response = predictionResponse();
+    const cell = response.primary!.curves![0].byHour![0].horizons![0];
+    cell.biasScale = 1;
+    render(PredictionAccuracyBody, { props: { response } });
+
+    expect(tintOf("-16")).toBe("color-mix(in oklab, var(--bias-low) 55%, transparent)");
+  });
+
   it("fades and italicises sparse cells, keeping their text in the foreground ink", async () => {
     render(PredictionAccuracyBody, { props: { response: predictionResponse({ sparse: true }) } });
 
@@ -102,7 +111,7 @@ describe("PredictionAccuracyBody", () => {
     await expect.element(page.getByText("After a correction")).toBeVisible();
     await page.getByRole("radio", { name: "UAM" }).click();
     await expect.element(page.getByText("UAM by context", { exact: true })).toBeVisible();
-    await expect.element(page.getByText("Override, temp target or exercise").first()).toBeVisible();
+    await expect.element(page.getByText("Override, temporary target or exercise").first()).toBeVisible();
     await expect.element(page.getByText(/low "eating soon" temporary targets/)).toBeVisible();
   });
 
@@ -142,7 +151,7 @@ describe("PredictionAccuracyBody", () => {
     render(PredictionAccuracyBody, { props: { response: predictionResponse({ scopes: NO_GLUCOSE }) } });
 
     await expect.element(page.getByText("Prediction accuracy is hidden")).toBeVisible();
-    await expect.element(page.getByText(/Your access does not include\s+glucose/)).toBeVisible();
+    await expect.element(page.getByText(/Your access does not\s+include\s+glucose/)).toBeVisible();
     expect(page.getByText(/device data/).elements()).toHaveLength(0);
   });
 
@@ -170,8 +179,8 @@ describe("PredictionAccuracyBody", () => {
   it("names the filters the caller's access ignored", async () => {
     render(PredictionAccuracyBody, { props: { response: { ...predictionResponse(), ignoredFilters: ["excludeExercise", "startDate"] } } });
 
-    await expect.element(page.getByText("Some filters were not applied")).toBeVisible();
-    await expect.element(page.getByText(/so the report did not apply them:\s+Exercise\./)).toBeVisible();
+    await expect.element(page.getByText("The report did not use some filters")).toBeVisible();
+    await expect.element(page.getByText(/so the report did not use them:\s+Exercise\./)).toBeVisible();
   });
 
   it("explains a missing time zone in place of the figures", async () => {
@@ -192,8 +201,8 @@ describe("PredictionAccuracyBody", () => {
   it("says a clamped viewer sees only the last 24 hours", async () => {
     render(PredictionAccuracyBody, { props: { response: predictionResponse({ historyClamped: true }) } });
 
-    await expect.element(page.getByText("Only the last 24 hours are included")).toBeVisible();
-    await expect.element(page.getByText(/not included until their readings arrive/)).toBeVisible();
+    await expect.element(page.getByText(/This page uses only the last 24 hours/)).toBeVisible();
+    await expect.element(page.getByText(/adds the most recent predictions when their readings arrive/)).toBeVisible();
   });
 
   it("says when the range has no predictions, without suggesting a longer range to a clamped viewer", async () => {
@@ -203,7 +212,7 @@ describe("PredictionAccuracyBody", () => {
     view.unmount();
 
     render(PredictionAccuracyBody, { props: { response: predictionResponse({ curves: [], historyClamped: true }) } });
-    await expect.element(page.getByText(/there are no predictions in them yet/)).toBeVisible();
+    await expect.element(page.getByText(/they have no predictions yet/)).toBeVisible();
     expect(page.getByText(/Select a longer range/).elements()).toHaveLength(0);
   });
 });

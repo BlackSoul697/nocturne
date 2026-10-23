@@ -8,6 +8,9 @@ public class LoopHealthResponse : LoopAnalysisResponse
     public LoopHealthRange Primary { get; set; } = new();
 
     public LoopHealthRange? Comparison { get; set; }
+
+    /// <summary>Minutes between loop cycles beyond which the time between them is a loop gap.</summary>
+    public int LoopGapMinutes { get; set; }
 }
 
 /// <summary>

@@ -44,7 +44,7 @@ export function shareBars(share: LoopHealthShare | null | undefined): HourBar[] 
     .map((h) => ({ hour: h.hour ?? 0, value: h.percent!, sparse: h.daily?.sparse ?? true }));
 }
 
-/** A kind of gap's list, longest first, as the API reported it. */
+/** A kind of gap's list, longest first; the API serves it oldest first. */
 export function longestFirst(gaps: LoopHealthGaps | null | undefined): LoopHealthGap[] {
   return [...(gaps?.gaps ?? [])].sort((a, b) => (b.minutes ?? 0) - (a.minutes ?? 0));
 }

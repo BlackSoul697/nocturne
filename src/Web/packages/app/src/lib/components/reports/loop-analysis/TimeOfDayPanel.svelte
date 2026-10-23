@@ -40,6 +40,8 @@
     slotLabel?: (slot: number) => string;
     /** Heads the readout with the slot's span; off for a panel whose readout names its own hour. */
     slotHeading?: boolean;
+    /** What Enter and Escape do on this page, for the key help; null where Enter does nothing. */
+    pickHelp?: string | null;
   }
 
   let {
@@ -62,6 +64,7 @@
     slotLabel = (slot: number) =>
       `${time(atMinute(slot * SLOT_MINUTES))}–${time(atMinute((slot + 1) * SLOT_MINUTES))}`,
     slotHeading = true,
+    pickHelp = null,
   }: Props = $props();
 
   const unitId = $derived(`time-of-day-${id}-unit`);
@@ -159,8 +162,8 @@
     >
       <span id={keysId} class="sr-only">
         Use the left and right arrows to move along the axis. Use Home and End to go to its ends. Use
-        the up and down arrows to go to the next panel. Press Enter to list the days for the slot. Press
-        Escape to close the list.
+        the up arrow to go to the previous chart and the down arrow to go to the next chart.
+        {pickHelp ?? ""}
       </span>
       <Chart data={[]} xDomain={[0, slotCount]} {yDomain} {padding}>
         <Svg>
