@@ -149,6 +149,19 @@ public class TreatmentService : ITreatmentService
     }
 
     /// <inheritdoc />
+    public async Task<string?> FindSameEventIdAsync(
+        Treatment treatment, CancellationToken cancellationToken = default)
+    {
+        if (treatment.Mills <= 0)
+            return null;
+
+        return (await _store.GetByRangeAsync(treatment.Mills, treatment.Mills, cancellationToken))
+            .FirstOrDefault(stored => !string.IsNullOrEmpty(stored.Id)
+                && string.Equals(stored.EventType, treatment.EventType, StringComparison.Ordinal))
+            ?.Id;
+    }
+
+    /// <inheritdoc />
     public async Task<IEnumerable<Treatment>> GetTreatmentsModifiedSinceAsync(
         long lastModifiedMills, int limit = 500, CancellationToken cancellationToken = default)
     {
