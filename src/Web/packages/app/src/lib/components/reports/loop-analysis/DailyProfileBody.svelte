@@ -39,6 +39,7 @@
   import AggregateReadout from "./AggregateReadout.svelte";
   import SlotDays from "./SlotDays.svelte";
   import { TimeOfDayCursor } from "./time-of-day-cursor.svelte";
+  import { loopAnalysisMark } from "./loop-analysis-tour.svelte";
   import { atMinute, axisEnd } from "./daily-profile-view";
   import NoTimeZone from "$lib/components/reports/NoTimeZone.svelte";
   import { loopAnalysisTimeZoneNeed } from "./time-zone-need.svelte";
@@ -300,7 +301,7 @@
 
     <IgnoredFiltersNotice ignored={response.ignoredFilters} />
 
-    <div class="space-y-2" data-testid="loop-analysis-daily-totals">
+    <div class="space-y-2" data-testid="loop-analysis-daily-totals" {@attach loopAnalysisMark("loop-analysis-daily-profile.totals")}>
       <FigureStrip {figures} />
       {#if insulinDeliveryHref}
         <Button href={insulinDeliveryHref} variant="link" size="inline">
@@ -323,63 +324,65 @@
           </p>
         {/if}
 
-        <TimeOfDayPanel
-          id="glucose"
-          describe={(slot) => describeSpread(at(slots, slot)?.glucose, glucoseText, bgLabel(), "readings")}
-          title="Glucose"
-          unit={bgLabel()}
-          {cursor}
-          yDomain={glucoseDomain}
-          yFormat={axisGlucose}
-          heightClass="h-48"
-          empty={emptyText(LoopAnalysisSeries.Glucose, has((s) => s.glucose), "No glucose readings in this range")}
-          legend={[
-            { texture: "percentile-outer", label: "10–90%", color: GLUCOSE_BANDS.outer },
-            { texture: "percentile-inner", label: "25–75%", color: GLUCOSE_BANDS.inner },
-            { texture: "percentile-median", label: "Median", color: GLUCOSE_BANDS.median, shape: "line" },
-            ...(hidden(LoopAnalysisSeries.Target) ? [] : [{ texture: "target-band" as const, label: "Active target range" }]),
-          ]}
-          hiddenNote={hidden(LoopAnalysisSeries.Target) ? "Target range hidden: your access does not include it" : null}
-        >
-          {#snippet marks()}
-            {#each targetRuns as run, i (i)}
-              <Area
-                data={run}
-                x={(s: DailyProfileSlot) => s.slot ?? 0}
-                y0={(s: DailyProfileSlot) => toDisplay(s.targetLow ?? 0)}
-                y1={(s: DailyProfileSlot) => toDisplay(s.targetHigh ?? 0)}
-                curve={curveStepAfter}
-                fill={CHART_TEXTURES["target-band"].color}
-                class={patternClass("target-band")}
+        <div {@attach loopAnalysisMark("loop-analysis-daily-profile.glucose")}>
+          <TimeOfDayPanel
+            id="glucose"
+            describe={(slot) => describeSpread(at(slots, slot)?.glucose, glucoseText, bgLabel(), "readings")}
+            title="Glucose"
+            unit={bgLabel()}
+            {cursor}
+            yDomain={glucoseDomain}
+            yFormat={axisGlucose}
+            heightClass="h-48"
+            empty={emptyText(LoopAnalysisSeries.Glucose, has((s) => s.glucose), "No glucose readings in this range")}
+            legend={[
+              { texture: "percentile-outer", label: "10–90%", color: GLUCOSE_BANDS.outer },
+              { texture: "percentile-inner", label: "25–75%", color: GLUCOSE_BANDS.inner },
+              { texture: "percentile-median", label: "Median", color: GLUCOSE_BANDS.median, shape: "line" },
+              ...(hidden(LoopAnalysisSeries.Target) ? [] : [{ texture: "target-band" as const, label: "Active target range" }]),
+            ]}
+            hiddenNote={hidden(LoopAnalysisSeries.Target) ? "Target range hidden: your access does not include it" : null}
+          >
+            {#snippet marks()}
+              {#each targetRuns as run, i (i)}
+                <Area
+                  data={run}
+                  x={(s: DailyProfileSlot) => s.slot ?? 0}
+                  y0={(s: DailyProfileSlot) => toDisplay(s.targetLow ?? 0)}
+                  y1={(s: DailyProfileSlot) => toDisplay(s.targetHigh ?? 0)}
+                  curve={curveStepAfter}
+                  fill={CHART_TEXTURES["target-band"].color}
+                  class={patternClass("target-band")}
+                />
+              {/each}
+              <!-- A single-value target has no height as a band, so its edges are drawn as well. -->
+              <SlotLine {slots} value={(s) => (s.targetLow == null ? null : toDisplay(s.targetLow))} stroke={TARGET_EDGE} dash="4 4" width={1} step />
+              <SlotLine {slots} value={(s) => (s.targetHigh == null ? null : toDisplay(s.targetHigh))} stroke={TARGET_EDGE} dash="4 4" width={1} step />
+              <PercentileBands
+                {slots}
+                comparison={comparisonSlots}
+                pick={(s) => s.glucose}
+                scale={toDisplay}
+                outerColor={GLUCOSE_BANDS.outer}
+                innerColor={GLUCOSE_BANDS.inner}
+                lineColor={GLUCOSE_BANDS.median}
               />
-            {/each}
-            <!-- A single-value target has no height as a band, so its edges are drawn as well. -->
-            <SlotLine {slots} value={(s) => (s.targetLow == null ? null : toDisplay(s.targetLow))} stroke={TARGET_EDGE} dash="4 4" width={1} step />
-            <SlotLine {slots} value={(s) => (s.targetHigh == null ? null : toDisplay(s.targetHigh))} stroke={TARGET_EDGE} dash="4 4" width={1} step />
-            <PercentileBands
-              {slots}
-              comparison={comparisonSlots}
-              pick={(s) => s.glucose}
-              scale={toDisplay}
-              outerColor={GLUCOSE_BANDS.outer}
-              innerColor={GLUCOSE_BANDS.inner}
-              lineColor={GLUCOSE_BANDS.median}
-            />
-          {/snippet}
-          {#snippet tooltip(slot)}
-            {@const s = at(slots, slot)}
-            <AggregateReadout
-              value={s?.glucose}
-              comparison={at(comparisonSlots, slot)?.glucose}
-              showComparison={comparing}
-              format={glucoseText}
-              counts="readings"
-            />
-            {#if s?.targetLow != null && s.targetHigh != null}
-              <p class="mt-1 text-muted-foreground">Target {bg(s.targetLow)}–{bg(s.targetHigh)}</p>
-            {/if}
-          {/snippet}
-        </TimeOfDayPanel>
+            {/snippet}
+            {#snippet tooltip(slot)}
+              {@const s = at(slots, slot)}
+              <AggregateReadout
+                value={s?.glucose}
+                comparison={at(comparisonSlots, slot)?.glucose}
+                showComparison={comparing}
+                format={glucoseText}
+                counts="readings"
+              />
+              {#if s?.targetLow != null && s.targetHigh != null}
+                <p class="mt-1 text-muted-foreground">Target {bg(s.targetLow)}–{bg(s.targetHigh)}</p>
+              {/if}
+            {/snippet}
+          </TimeOfDayPanel>
+        </div>
 
         <TimeOfDayPanel
           id="basal"
@@ -444,7 +447,7 @@
           {/snippet}
         </TimeOfDayPanel>
 
-        <div class="space-y-2" data-testid="loop-analysis-net-correction">
+        <div class="space-y-2" data-testid="loop-analysis-net-correction" {@attach loopAnalysisMark("loop-analysis-daily-profile.correction")}>
           <TimeOfDayPanel
             id="correction"
             describe={describeCorrection}
@@ -668,7 +671,7 @@
           {/snippet}
         </TimeOfDayPanel>
 
-        <p class="flex items-center gap-1.5 px-1 text-xs text-muted-foreground">
+        <p class="flex items-center gap-1.5 px-1 text-xs text-muted-foreground" {@attach loopAnalysisMark("loop-analysis-daily-profile.days")}>
           <EyeOff class="size-3.5" />
           Faded areas have too few days to show a pattern. To list the days for a time, click the time
           or press Enter on it. Use the arrow keys to move along the day and between charts. Use Home

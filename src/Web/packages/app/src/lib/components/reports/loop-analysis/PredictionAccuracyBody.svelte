@@ -31,6 +31,7 @@
   import { loopAnalysisTimeZoneNeed } from "./time-zone-need.svelte";
   import { axisEnd } from "./daily-profile-view";
   import { curveLabel, horizonList } from "./prediction-labels.svelte";
+  import { loopAnalysisMark } from "./loop-analysis-tour.svelte";
 
   let { response }: { response: PredictionAccuracyResponse } = $props();
 
@@ -217,7 +218,12 @@
           </Alert.Description>
         </Alert.Root>
 
-        <section class="space-y-3 rounded-lg border bg-card p-3 @md:p-4" aria-labelledby="prediction-error-title" data-testid="loop-analysis-prediction-error">
+        <section
+          class="space-y-3 rounded-lg border bg-card p-3 @md:p-4"
+          aria-labelledby="prediction-error-title"
+          data-testid="loop-analysis-prediction-error"
+          {@attach loopAnalysisMark("loop-analysis-prediction-accuracy.horizons")}
+        >
           <div class="space-y-1 px-1">
             <h2 id="prediction-error-title" class="font-medium">Error by horizon</h2>
             <p class="text-xs text-muted-foreground">
@@ -286,7 +292,7 @@
               {/if}
             </div>
 
-            <div class="space-y-2">
+            <div class="space-y-2" {@attach loopAnalysisMark("loop-analysis-prediction-accuracy.hours")}>
               <h3 class="px-1 text-sm font-medium">{curveLabel(detail.curve)} bias by hour of day</h3>
               <p class="px-1 text-xs text-muted-foreground">
                 By the local hour of the prediction, in {unit}.
@@ -295,7 +301,7 @@
               <PredictionBiasHeatmap curve={detail} formatError={signed} {unit} />
             </div>
 
-            <div class="space-y-2">
+            <div class="space-y-2" {@attach contextsHidden ? undefined : loopAnalysisMark("loop-analysis-prediction-accuracy.contexts")}>
               <h3 class="px-1 text-sm font-medium">{curveLabel(detail.curve)} by context</h3>
               {#if contextsHidden}
                 <p class="px-1 text-sm text-muted-foreground">

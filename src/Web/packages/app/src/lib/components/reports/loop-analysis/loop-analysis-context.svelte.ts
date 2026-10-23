@@ -5,7 +5,7 @@ import { getEnvelope } from "$api/generated/loopAnalysis.generated.remote";
 import type { ReportsParamsReturn } from "$lib/hooks/date-params.svelte";
 import { contextResource } from "$lib/hooks/resource-context.svelte";
 import { dailyProfileQuery, readLoopAnalysisFilter } from "./loop-analysis-filter";
-import { LOOP_ANALYSIS_PAGES, loopAnalysisPath, type LoopAnalysisPage } from "./loop-analysis-pages.svelte";
+import { loopAnalysisPageAt, loopAnalysisPath, type LoopAnalysisPage } from "./loop-analysis-pages.svelte";
 
 /**
  * What the five Loop Analysis pages share, owned by their layout so it outlives a move between
@@ -28,7 +28,7 @@ export class LoopAnalysisState {
     return (this.#lastQuery = next);
   });
   /** The page on screen; undefined only on the address that redirects to one. */
-  readonly current = $derived(LOOP_ANALYSIS_PAGES.find((p) => page.url.pathname.endsWith(`/loop-analysis/${p}`)));
+  readonly current = $derived(loopAnalysisPageAt(page.url.pathname));
 
   constructor(range: ReportsParamsReturn) {
     this.#range = range;

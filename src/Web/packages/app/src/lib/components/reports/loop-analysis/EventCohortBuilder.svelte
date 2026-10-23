@@ -34,6 +34,7 @@
   import CohortDot from "./CohortDot.svelte";
   import { anchorLabels } from "./event-labels.svelte";
   import { missingScopeReason } from "./filter-labels.svelte";
+  import { loopAnalysisMark } from "./loop-analysis-tour.svelte";
 
   interface Props {
     value: EventResponseState;
@@ -88,7 +89,12 @@
   const grams = (value: string) => (value === "" ? undefined : Math.max(0, Number(value)));
 </script>
 
-<section class="space-y-3 rounded-lg border bg-card p-3 @md:p-4 print:hidden" aria-labelledby="event-builder-heading" data-testid="loop-analysis-event-builder">
+<section
+  class="space-y-3 rounded-lg border bg-card p-3 @md:p-4 print:hidden"
+  aria-labelledby="event-builder-heading"
+  data-testid="loop-analysis-event-builder"
+  {@attach loopAnalysisMark("loop-analysis-meals-and-events.builder")}
+>
   <h3 id="event-builder-heading" class="text-sm font-medium">Events to align</h3>
 
   <ul class="space-y-2">
