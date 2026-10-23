@@ -40,7 +40,7 @@ public class ExcursionTrackerSeamTests
             });
             IExcursionDecider decider = engine == Engine.Managed
                 ? ManagedExcursionDecider.Instance
-                : new RustExcursionDecider(new AlertEngineErrors(new TestMeterFactory(), Time), AlertEngineErrors.RustEngine);
+                : new RustExcursionDecider(new AlertEngineErrors(new TestMeterFactory(), Time));
             Tracker = new ExcursionTracker(
                 Repository, new AlertRuleEvaluationGate(), Time, NullLogger<ExcursionTracker>.Instance, decider);
         }

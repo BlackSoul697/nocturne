@@ -61,6 +61,9 @@ jobs:
               - *shared
               - 'src/**'
               - 'e2e/**'
+              - 'crates/**'
+              - 'scripts/Shared/**'
+              - 'scripts/alerts-native-build.cs'
               - 'Dockerfile.web'
               - 'docs/postgres/**'
             migrations:
@@ -104,6 +107,23 @@ jobs:
       - uses: ./.github/actions/setup-pnpm
         with:
           install: src/Web
+      # The API refuses to start without the nocturne_alerts cdylib, and Nocturne.Core.Alerts.Native
+      # packs it into every referencing output when crates/target/release holds it, so each test
+      # assembly below carries it to the test jobs.
+      - name: Cache cargo
+        if: env.BUILD_TESTS == 'true'
+        uses: actions/cache@v5
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            crates/target
+          # Sources, not just the lockfile: see the alerts-ffi-parity job.
+          key: cargo-cdylib-${{ runner.os }}-${{ hashFiles('crates/Cargo.lock', 'crates/**/*.rs', 'crates/**/Cargo.toml') }}
+      - name: Build nocturne_alerts cdylib
+        if: env.BUILD_TESTS == 'true'
+        working-directory: crates
+        run: cargo build --release -p nocturne-alerts-ffi
       # No job here builds nocturne.sln — CI builds named projects only (see Build below) — so this
       # is the only thing gating solution membership, and it has to hold in both directions.
       # scripts/Shared is the deliberate omission: scripts/ consumes it through `#:project`.
@@ -207,8 +227,11 @@ jobs:
       - uses: actions/checkout@v5
       - uses: ./.github/actions/setup-dotnet
       - uses: ./.github/actions/dotnet-build-output
-      # One solution of the unit test projects, so the assemblies are tested concurrently.
+      # One solution of the unit test projects, so the assemblies are tested concurrently. The build
+      # job packed the nocturne_alerts cdylib into every output, so a native test may not skip.
       - name: Test
+        env:
+          NOCTURNE_ALERTS_REQUIRE_NATIVE: "1"
         run: |
           set -euo pipefail
           sln="$RUNNER_TEMP/unit/unit.slnx"
@@ -303,31 +326,6 @@ jobs:
           dotnet test tests/Unit/Nocturne.Alerts.Native.Tests/Nocturne.Alerts.Native.Tests.csproj \
             --no-build \
             --logger "trx;LogFileName=alerts-ffi-parity.trx"
-      # Engine-seam tests (IAlertEvaluationEngine) plus every API test class holding a
-      # [NativeFact]/[NativeTheory], which the unit job skips for want of the cdylib. The
-      # classes are found by grep, each in a file named after it, so a new native test
-      # cannot be left out; NOCTURNE_ALERTS_REQUIRE_NATIVE turns silent skips into failures.
-      - name: Engine seam and native-backed API tests
-        env:
-          NOCTURNE_ALERTS_NATIVE_DIR: ${{ github.workspace }}/crates/target/release
-          NOCTURNE_ALERTS_REQUIRE_NATIVE: "1"
-          Alerts__Engine: rust
-        run: |
-          set -euo pipefail
-          filter="FullyQualifiedName~Services.Alerts.Engines"
-          while IFS= read -r file; do
-            class=$(basename "$file" .cs)
-            if ! grep -qE "class ${class}\b" "$file"; then
-              echo "::error file=$file::holds native tests but declares no class named $class"
-              exit 1
-            fi
-            filter="$filter|FullyQualifiedName~.${class}."
-          done < <(grep -rlE '\[Native(Fact|Theory)' tests/Unit/Nocturne.API.Tests --include='*.cs')
-          echo "Filter: $filter"
-          dotnet test tests/Unit/Nocturne.API.Tests/Nocturne.API.Tests.csproj \
-            --no-build \
-            --filter "$filter" \
-            --logger "trx;LogFileName=alerts-engine-seam.trx"
       - uses: actions/upload-artifact@v6
         if: failure()
         with:

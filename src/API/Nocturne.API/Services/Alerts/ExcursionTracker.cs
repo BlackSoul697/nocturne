@@ -13,8 +13,7 @@ namespace Nocturne.API.Services.Alerts;
 /// <see cref="AlertRuleEvaluationGate"/> lease.
 /// </summary>
 /// <remarks>
-/// The decider is the engine: <see cref="ManagedExcursionDecider"/> by default, or the one
-/// <c>Alerts:Engine</c> selects (see <c>AddAlertEvaluationEngine</c>).
+/// The decider is the engine: the Rust tracker (see <c>AddAlertEvaluationEngine</c>).
 /// </remarks>
 /// <seealso cref="IExcursionTracker"/>
 /// <seealso cref="IAlertTrackerRepository"/>

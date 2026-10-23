@@ -1,9 +1,7 @@
 using System.Text.Json;
 using FluentAssertions;
-using Microsoft.Extensions.Logging;
 using Nocturne.Alerts.ParityCorpus.Generator.Harness;
 using Nocturne.API.Services.Alerts.Engines;
-using Nocturne.API.Tests.TestDoubles;
 using Nocturne.Core.Contracts.Alerts;
 using Xunit;
 
@@ -11,8 +9,7 @@ namespace Nocturne.API.Tests.Services.Alerts.Engines;
 
 /// <summary>
 /// Seam-level replay corpus parity: every replay scenario through each
-/// <see cref="IAlertReplayEngine"/> must reproduce the committed snapshot, and shadow mode must
-/// find nothing to report.
+/// <see cref="IAlertReplayEngine"/> must reproduce the committed snapshot.
 /// </summary>
 public class ReplayCorpusTests
 {
@@ -39,19 +36,6 @@ public class ReplayCorpusTests
     [MemberData(nameof(ScenarioNames))]
     public Task Rust_replay_reproduces_the_committed_snapshot(string scenarioName) =>
         AssertReproducesAsync(ReplayScenarioRunner.Rust(), scenarioName, "rust");
-
-    [NativeTheory]
-    [MemberData(nameof(ScenarioNames))]
-    public async Task Shadow_replay_reports_no_divergence(string scenarioName)
-    {
-        var logger = new ListLogger<ShadowAlertReplayEngine>();
-        var shadow = new ShadowAlertReplayEngine(ReplayScenarioRunner.Managed(), ReplayScenarioRunner.Rust(), logger);
-
-        await AssertReproducesAsync(shadow, scenarioName, "shadow");
-        await shadow.PendingComparison;
-
-        logger.Entries.Should().NotContain(e => e.Level >= LogLevel.Warning);
-    }
 
     private static async Task AssertReproducesAsync(IAlertReplayEngine engine, string scenarioName, string label)
     {

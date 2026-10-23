@@ -19,8 +19,7 @@ namespace Nocturne.API.Services.Alerts;
 /// (root condition truth, excursion transition, auto-resolve) and applies the side effects:
 /// instance creation, engine-level DND suppression, delivery dispatch to the rule's flat
 /// channel list, info auto-ack, and close handling. The engine owns evaluation-state
-/// persistence (sustained timers, tracker state, excursion rows); which engine runs
-/// (managed C# evaluators, Rust over FFI, or shadow) is selected by <c>Alerts:Engine</c>.
+/// persistence (sustained timers, tracker state, excursion rows).
 /// Errors from individual rule evaluations are caught and logged without aborting the rest of
 /// the evaluation pass. A rule whose stored condition tree cannot be evaluated fails the same way
 /// on every pass, so that is logged once per version of the condition. Delayed escalation is a

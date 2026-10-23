@@ -551,7 +551,7 @@ Replay answers "what would these rules have done over this window": the rule set
 re-evaluated at a fixed **5-minute tick** over a historical window. The host builds each
 tick's context and the driver evaluates every tick in one call — `replay::replay` in the
 crate, `nocturne_alerts_replay` over the C ABI and UniFFI, `IAlertReplayEngine` in the
-backend (`Alerts:Engine` selects managed, Rust, or shadow, as for evaluation). The
+backend. The
 machine-checkable form is `tests/Parity/AlertEngineCorpus/replay/`.
 
 **Host side** (`AlertReplayService`; out of the driver's scope):

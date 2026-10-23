@@ -17,9 +17,6 @@ namespace Nocturne.API.Services.Alerts.Engines;
 /// </remarks>
 internal sealed class RustAlertReplayEngine(AlertEngineErrors errors) : IAlertReplayEngine
 {
-    /// <summary>The <see cref="AlertEngineErrors"/> engine tag calls are recorded under.</summary>
-    public string EngineTag { get; init; } = AlertEngineErrors.RustEngine;
-
     /// <exception cref="RustAlertEngineException">The native call failed.</exception>
     public Task<AlertReplayRun> ReplayAsync(AlertReplayInput input, CancellationToken ct)
     {
@@ -37,7 +34,7 @@ internal sealed class RustAlertReplayEngine(AlertEngineErrors errors) : IAlertRe
             }).ToList(),
             IncludeTicks = input.IncludeTicks,
         };
-        var response = errors.Track("replay", EngineTag, () => RustAlertEngine.Replay(request));
+        var response = errors.Track("replay", () => RustAlertEngine.Replay(request));
         return Task.FromResult(ToRun(response));
     }
 

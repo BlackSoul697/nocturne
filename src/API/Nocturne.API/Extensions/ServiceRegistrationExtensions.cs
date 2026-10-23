@@ -981,12 +981,6 @@ public static class ServiceRegistrationExtensions
                     new PinnedConnector(OutboundAddressPolicy.PubliclyRoutable).ConnectAsync,
             });
 
-        // Condition evaluators. Scoped because SustainedEvaluator depends on the scoped
-        // IConditionTimerStore (DbContext-backed); the registry is also scoped because it captures
-        // IEnumerable<IConditionEvaluator>.
-        services.AddAlertEvaluators();
-        services.AddScoped<ConditionEvaluatorRegistry>();
-
         // Sustained-condition timer store
         services.AddScoped<IConditionTimerStore, ConditionTimerRepository>();
 
@@ -996,8 +990,7 @@ public static class ServiceRegistrationExtensions
         services.AddScoped<AlertRuleRearm>();
         services.AddScoped<AlertRuleRetirement>();
 
-        // Alert evaluation engine and excursion tracker seams (Alerts:Engine = managed | shadow | rust)
-        services.AddAlertEvaluationEngine(configuration);
+        services.AddAlertEvaluationEngine();
 
         // Alert engine core
         services.AddScoped<IAlertRepository, AlertRepository>();
@@ -1103,25 +1096,19 @@ public static class ServiceRegistrationExtensions
     }
 
     /// <summary>
-    /// Registers the <see cref="Nocturne.Core.Contracts.Alerts.IAlertEvaluationEngine"/> and
-    /// <see cref="IExcursionTracker"/> seams: all three engine implementations, the tracker
-    /// deciding with the selected engine, plus the singleton
-    /// <see cref="Nocturne.API.Services.Alerts.Engines.AlertEngineSelection"/> resolved
-    /// from the <c>Alerts:Engine</c> flag (<c>managed</c> | <c>shadow</c> | <c>rust</c>,
-    /// default <c>managed</c>). Program resolves the selection at startup so the native-library
-    /// probe runs once, before the host serves traffic; see
-    /// <see cref="Nocturne.API.Services.Alerts.Engines.AlertEngineSelector"/> for what a failed
-    /// probe does in each mode.
+    /// Registers the <see cref="Nocturne.Core.Contracts.Alerts.IAlertEvaluationEngine"/>,
+    /// <see cref="IExcursionTracker"/> and <see cref="Nocturne.Core.Contracts.Alerts.IAlertReplayEngine"/>
+    /// seams over the nocturne_alerts native library, plus the singleton
+    /// <see cref="Nocturne.API.Services.Alerts.Engines.AlertEngineNativeLibrary"/>, which Program
+    /// resolves at startup so a library that fails its probe stops the host before it serves traffic.
     /// </summary>
     /// <param name="services">The service collection.</param>
-    /// <param name="configuration">Configuration carrying the <c>Alerts:Engine</c> flag.</param>
     /// <param name="nativeProbe">
     /// Native-library probe override for tests; defaults to
     /// <see cref="Nocturne.Core.Alerts.Native.AlertsInterop.Probe"/>.
     /// </param>
     public static IServiceCollection AddAlertEvaluationEngine(
         this IServiceCollection services,
-        IConfiguration configuration,
         Func<Nocturne.Core.Alerts.Native.NativeProbeResult>? nativeProbe = null)
     {
         services.AddMetrics();
@@ -1132,83 +1119,22 @@ public static class ServiceRegistrationExtensions
         services.AddHealthChecks()
             .AddCheck<Nocturne.API.Services.Alerts.Engines.AlertEngineHealthCheck>("alert-engine");
 
-        services.AddScoped<Nocturne.API.Services.Alerts.Engines.ManagedAlertEngine>();
-        services.AddScoped<Nocturne.API.Services.Alerts.Engines.RustBackedAlertEngine>();
-        services.AddScoped<
-            Nocturne.API.Services.Alerts.Engines.IShadowRuleEvaluator,
-            Nocturne.API.Services.Alerts.Engines.RustShadowRuleEvaluator>();
-        services.AddScoped<Nocturne.API.Services.Alerts.Engines.ShadowAlertEngine>();
+        services.AddSingleton(sp => Nocturne.API.Services.Alerts.Engines.AlertEngineNativeLibrary.Load(
+            nativeProbe ?? Nocturne.Core.Alerts.Native.AlertsInterop.Probe,
+            sp.GetRequiredService<ILoggerFactory>()
+                .CreateLogger(typeof(Nocturne.API.Services.Alerts.Engines.AlertEngineNativeLibrary).FullName!)));
 
-        // The managed engine always tracks with the managed decider; shadow mode compares
-        // through ShadowAlertEngine instead.
-        services.AddScoped(sp => new ExcursionTracker(
+        services.AddScoped<IExcursionTracker>(sp => new ExcursionTracker(
             sp.GetRequiredService<Nocturne.Core.Contracts.Repositories.IAlertTrackerRepository>(),
             sp.GetRequiredService<AlertRuleEvaluationGate>(),
             sp.GetRequiredService<TimeProvider>(),
-            sp.GetRequiredService<ILogger<ExcursionTracker>>()));
-        services.AddScoped<IExcursionTracker>(sp =>
-        {
-            var mode = sp.GetRequiredService<Nocturne.API.Services.Alerts.Engines.AlertEngineSelection>().Mode;
-            if (mode == Nocturne.API.Services.Alerts.Engines.AlertEngineMode.Managed)
-                return sp.GetRequiredService<ExcursionTracker>();
-
-            var errors = sp.GetRequiredService<Nocturne.API.Services.Alerts.Engines.AlertEngineErrors>();
-            IExcursionDecider decider = mode == Nocturne.API.Services.Alerts.Engines.AlertEngineMode.Rust
-                ? new Nocturne.API.Services.Alerts.Engines.RustExcursionDecider(
-                    errors, Nocturne.API.Services.Alerts.Engines.AlertEngineErrors.RustEngine)
-                : new Nocturne.API.Services.Alerts.Engines.ShadowExcursionDecider(
-                    ManagedExcursionDecider.Instance,
-                    new Nocturne.API.Services.Alerts.Engines.RustExcursionDecider(
-                        errors, Nocturne.API.Services.Alerts.Engines.AlertEngineErrors.ShadowEngine),
-                    sp.GetRequiredService<ILogger<Nocturne.API.Services.Alerts.Engines.ShadowExcursionDecider>>());
-            return new ExcursionTracker(
-                sp.GetRequiredService<Nocturne.Core.Contracts.Repositories.IAlertTrackerRepository>(),
-                sp.GetRequiredService<AlertRuleEvaluationGate>(),
-                sp.GetRequiredService<TimeProvider>(),
-                sp.GetRequiredService<ILogger<ExcursionTracker>>(),
-                decider);
-        });
-
-        services.AddSingleton(sp =>
-        {
-            var logger = sp.GetRequiredService<ILoggerFactory>()
-                .CreateLogger(typeof(Nocturne.API.Services.Alerts.Engines.AlertEngineSelector).FullName!);
-            return Nocturne.API.Services.Alerts.Engines.AlertEngineSelector.Select(
-                configuration[Nocturne.API.Services.Alerts.Engines.AlertEngineSelector.ConfigurationKey],
-                nativeProbe ?? Nocturne.Core.Alerts.Native.AlertsInterop.Probe,
-                logger);
-        });
-
-        services.AddSingleton<Nocturne.API.Services.Alerts.Engines.ManagedAlertReplayEngine>();
-        services.AddSingleton<Nocturne.Core.Contracts.Alerts.IAlertReplayEngine>(sp =>
-        {
-            var managed = sp.GetRequiredService<Nocturne.API.Services.Alerts.Engines.ManagedAlertReplayEngine>();
-            var errors = sp.GetRequiredService<Nocturne.API.Services.Alerts.Engines.AlertEngineErrors>();
-            return sp.GetRequiredService<Nocturne.API.Services.Alerts.Engines.AlertEngineSelection>().Mode switch
-            {
-                Nocturne.API.Services.Alerts.Engines.AlertEngineMode.Rust =>
-                    new Nocturne.API.Services.Alerts.Engines.RustAlertReplayEngine(errors),
-                Nocturne.API.Services.Alerts.Engines.AlertEngineMode.Shadow =>
-                    new Nocturne.API.Services.Alerts.Engines.ShadowAlertReplayEngine(
-                        managed,
-                        new Nocturne.API.Services.Alerts.Engines.RustAlertReplayEngine(errors)
-                        {
-                            EngineTag = Nocturne.API.Services.Alerts.Engines.AlertEngineErrors.ShadowEngine,
-                        },
-                        sp.GetRequiredService<ILogger<Nocturne.API.Services.Alerts.Engines.ShadowAlertReplayEngine>>()),
-                _ => managed,
-            };
-        });
-
-        services.AddScoped<Nocturne.Core.Contracts.Alerts.IAlertEvaluationEngine>(sp =>
-            sp.GetRequiredService<Nocturne.API.Services.Alerts.Engines.AlertEngineSelection>().Mode switch
-            {
-                Nocturne.API.Services.Alerts.Engines.AlertEngineMode.Rust =>
-                    sp.GetRequiredService<Nocturne.API.Services.Alerts.Engines.RustBackedAlertEngine>(),
-                Nocturne.API.Services.Alerts.Engines.AlertEngineMode.Shadow =>
-                    sp.GetRequiredService<Nocturne.API.Services.Alerts.Engines.ShadowAlertEngine>(),
-                _ => sp.GetRequiredService<Nocturne.API.Services.Alerts.Engines.ManagedAlertEngine>(),
-            });
+            sp.GetRequiredService<ILogger<ExcursionTracker>>(),
+            new Nocturne.API.Services.Alerts.Engines.RustExcursionDecider(
+                sp.GetRequiredService<Nocturne.API.Services.Alerts.Engines.AlertEngineErrors>())));
+        services.AddSingleton<Nocturne.Core.Contracts.Alerts.IAlertReplayEngine,
+            Nocturne.API.Services.Alerts.Engines.RustAlertReplayEngine>();
+        services.AddScoped<Nocturne.Core.Contracts.Alerts.IAlertEvaluationEngine,
+            Nocturne.API.Services.Alerts.Engines.RustBackedAlertEngine>();
 
         return services;
     }

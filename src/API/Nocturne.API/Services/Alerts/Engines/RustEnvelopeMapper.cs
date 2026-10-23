@@ -133,9 +133,8 @@ internal static class RustEnvelopeMapper
     }
 
     /// <summary>
-    /// Per-instance memo for <see cref="BuildContext"/>: the orchestrator (and the shadow
-    /// evaluator) pass the same enriched immutable <see cref="SensorContext"/> to every
-    /// rule of a tick, so the wire element is built and serialised once per context
+    /// Per-instance memo for <see cref="BuildContext"/>: the orchestrator passes the same
+    /// enriched immutable <see cref="SensorContext"/> to every rule of a tick, so the wire element is built and serialised once per context
     /// instance. Keyed by reference; <see cref="ConditionalWeakTable{TKey,TValue}.GetValue"/>
     /// is thread-safe and entries are collected with their context.
     /// </summary>
@@ -298,7 +297,7 @@ internal static class RustEnvelopeMapper
                 tracker.HysteresisStartedAt,
                 tracker.AwaitingRearm);
 
-    /// <summary>Wire form of a managed transition type (for shadow comparison logging).</summary>
+    /// <summary>Wire form of a transition type, as the corpus records it.</summary>
     public static string TransitionToWire(ExcursionTransitionType type) => type switch
     {
         ExcursionTransitionType.None => "none",
@@ -310,7 +309,7 @@ internal static class RustEnvelopeMapper
         _ => type.ToString().ToLowerInvariant(),
     };
 
-    /// <summary>Wire form of a managed close reason (for shadow comparison logging).</summary>
+    /// <summary>Wire form of a close reason, as the corpus records it.</summary>
     public static string? CloseReasonToWire(ExcursionCloseReason? reason) => reason switch
     {
         null => null,

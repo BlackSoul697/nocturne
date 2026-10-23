@@ -56,6 +56,7 @@ Nocturne/
 - [Docker Desktop](https://www.docker.com/products/docker-desktop)
 - [Node.js 24+](https://nodejs.org/)
 - [pnpm 9+](https://pnpm.io/)
+- [Rust](https://rustup.rs/) (`cargo` on your `PATH`): alerts run in a Rust library the API loads
 
 Aspire orchestrates all services with a single command:
 
@@ -66,6 +67,7 @@ aspire start
 Aspire will automatically:
 
 - Start PostgreSQL in a container
+- Build the alert engine's native library (`crates/nocturne-alerts-ffi`)
 - Run database migrations
 - Start the Nocturne API and SvelteKit frontend
 - Launch any configured data connectors

@@ -56,10 +56,8 @@ public sealed record AlertEngineEvaluation
 }
 
 /// <summary>
-/// Engine seam for alert rule evaluation: one implementation wraps the in-process C#
-/// evaluators ("managed"), another delegates to the Rust engine over FFI ("rust"), and a
-/// third runs both and logs divergences ("shadow"). Selected at startup via the
-/// <c>Alerts:Engine</c> configuration flag (default <c>managed</c>).
+/// Engine seam for alert rule evaluation, implemented over the Rust engine
+/// (<c>crates/nocturne-alerts-core</c>) through its FFI.
 /// </summary>
 /// <remarks>
 /// Implementations own all evaluation-state persistence (sustained timers via
