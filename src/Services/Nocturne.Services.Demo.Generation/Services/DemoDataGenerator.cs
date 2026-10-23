@@ -922,10 +922,10 @@ public class DemoDataGenerator : IDemoDataGenerator
     {
         var chance = scenario switch
         {
-            DayScenario.HighDay => 0.6,
-            DayScenario.SickDay or DayScenario.StressDay => 0.45,
-            DayScenario.PoorSleep => 0.4,
-            DayScenario.Normal => 0.3,
+            DayScenario.HighDay => 0.35,
+            DayScenario.SickDay or DayScenario.StressDay => 0.25,
+            DayScenario.PoorSleep => 0.2,
+            DayScenario.Normal => 0.1,
             _ => 0.1,
         };
         if (_random.NextDouble() >= chance)
@@ -1416,28 +1416,42 @@ public class DemoDataGenerator : IDemoDataGenerator
 
     /// <summary>
     /// The dawn phenomenon on a strong morning: a rise from 4 to 8 am that the loop's temp basals
-    /// slow but do not stop, to about 250 mg/dL by 7 am, which the person corrects on waking
+    /// slow but do not stop, to about 200 mg/dL by 7 am, which the person corrects on waking
     /// (<see cref="LevelCorrection"/>).
     /// </summary>
-    private const double DawnHighStrength = 3.5;
+    private const double DawnHighStrength = 1.9;
+
+    /// <summary>The weekdays with a strong dawn rise: four, so every week of the sample has them.</summary>
+    private static readonly DayOfWeek[] DawnHighDays =
+        [DayOfWeek.Monday, DayOfWeek.Wednesday, DayOfWeek.Friday, DayOfWeek.Saturday];
 
     /// <summary>
     /// Whether the morning has a strong dawn rise and a late breakfast, so a correction on waking
-    /// has the hours before food that <see cref="LevelCorrection"/> needs. Every day but a workout,
-    /// sick or low day has them, so every week of the sample shows the corrections.
+    /// has the hours before food that <see cref="LevelCorrection"/> needs. A sick day is left out:
+    /// the illness mask takes its hours out of the analysis.
     /// </summary>
     private static bool HasDawnHigh(DateTime day, DayScenario scenario) =>
-        scenario is not (DayScenario.Exercise or DayScenario.SickDay or DayScenario.LowDay);
+        scenario != DayScenario.SickDay && DawnHighDays.Contains(day.DayOfWeek);
 
-    /// <summary>The meal plan with breakfast at 10:00 to 10:45 at the earliest, and no other food before it.</summary>
+    /// <summary>
+    /// The meal plan with breakfast at 10:00 to 10:45 at the earliest, no other food before it, and
+    /// lunch at least three hours after it: a late breakfast moves the next meal later, and no
+    /// morning snack is eaten between them.
+    /// </summary>
     private static List<MealEvent> LateBreakfast(DateTime day, List<MealEvent> meals)
     {
         var breakfastAt = day.AddHours(10).AddMinutes(5 * DayScenarios.Roll(day, "late-breakfast", 10));
+        var lunchFrom = breakfastAt.AddHours(3);
         return
         [
             .. meals
-                .Where(m => m.FoodType == "Breakfast" || m.MealTime >= breakfastAt)
-                .Select(m => m.FoodType == "Breakfast" && m.MealTime < breakfastAt ? m with { MealTime = breakfastAt } : m),
+                .Where(m => m.FoodType is "Breakfast" or "Lunch" || m.MealTime >= lunchFrom)
+                .Select(m => m.FoodType switch
+                {
+                    "Breakfast" when m.MealTime < breakfastAt => m with { MealTime = breakfastAt },
+                    "Lunch" when m.MealTime < lunchFrom => m with { MealTime = lunchFrom },
+                    _ => m,
+                }),
         ];
     }
 
@@ -1466,8 +1480,7 @@ public class DemoDataGenerator : IDemoDataGenerator
     /// loop interruptions for the hours it acts, while awake: <see cref="LevelCorrectionShare"/> of
     /// the bolus calculator's dose, the need less the insulin on board, given once what is on board
     /// is no more than the dose. These are the corrections the Settings evidence page reads an ISF
-    /// from. Workout and sick days are left out: their overrides, targets and illness set the hours
-    /// apart.
+    /// from. A sick day is left out: the illness mask takes its hours out of the analysis.
     /// </summary>
     /// <param name="glucoseBefore">Glucose 15 minutes earlier; a high still moving faster is still rising or falling.</param>
     private double? LevelCorrection(
@@ -1480,9 +1493,9 @@ public class DemoDataGenerator : IDemoDataGenerator
         IEnumerable<MealEvent> meals,
         IEnumerable<(DateTime Time, Treatment Treatment)> pending)
     {
-        if (scenario is DayScenario.Exercise or DayScenario.SickDay
+        if (scenario == DayScenario.SickDay
             || time.Hour is >= 1 and < 6
-            || glucose <= _config.TargetGlucose + 50
+            || glucose <= _config.TargetGlucose + 40
             || Math.Abs(glucose - glucoseBefore) > 12)
             return null;
 
