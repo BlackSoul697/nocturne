@@ -110,6 +110,7 @@ public class HubAuthorizationFilterTests
         { typeof(AlertHub), nameof(AlertHub.Subscribe) },
         { typeof(AlertHub), nameof(AlertHub.Acknowledge) },
         { typeof(AlarmHub), nameof(AlarmHub.Ack) },
+        { typeof(AlarmHub), nameof(AlarmHub.CurrentAlarm) },
         { typeof(HomeAssistantHub), nameof(HomeAssistantHub.Subscribe) },
         { typeof(HomeAssistantHub), nameof(HomeAssistantHub.Acknowledge) },
         { typeof(ConfigHub), nameof(ConfigHub.Subscribe) },
