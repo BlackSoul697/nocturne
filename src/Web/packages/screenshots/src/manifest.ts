@@ -535,7 +535,7 @@ export const definitions: ScreenshotDefinition[] = [
 		id: 'loop-analysis-event-metrics',
 		route: '/reports/loop-analysis/meals-and-events?days=14&anchor1=Meal&anchor2=CorrectionBolus',
 		scenario: 'patient',
-		clip: '[data-testid="loop-analysis-event-metrics"]',
+		clip: '[data-testid="loop-analysis-event-metrics-table"]',
 		// Seeded data: the figures move every capture.
 		alt: 'The table of what happened after each event, with one column for meals and one column for correction boluses. Each cell shows the median and the middle half. The meals column shows the rise figures. The corrections column shows the fall figures: the drop to the window end, the lowest glucose, the time to the lowest glucose, the drop for each unit above schedule, and how many events went below range.',
 	},
