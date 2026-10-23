@@ -30,7 +30,6 @@
   import InitialReadsPrefetch from "$lib/components/layout/InitialReadsPrefetch.svelte";
   import GuestBanner from "$lib/components/layout/GuestBanner.svelte";
   import BackupSignInPrompt from "$lib/components/layout/BackupSignInPrompt.svelte";
-  import SessionExpiryWatcher from "$lib/components/layout/SessionExpiryWatcher.svelte";
   import MembershipRequestAutoSubmit from "$lib/components/members/MembershipRequestAutoSubmit.svelte";
   import { lazyComponent } from "$lib/utils/lazy-component.svelte";
   import { CoachMarkProvider, type CoachRouter } from "@nocturne/coach";
@@ -267,9 +266,6 @@
             <BackupSignInPrompt show={data.showBackupSignInPrompt} />
           {/if}
       </div>
-      {#if data.user && !data.isGuestSession}
-        <SessionExpiryWatcher />
-      {/if}
       {#if !tenantless}
         <MembershipRequestAutoSubmit
           isAuthenticated={!!data.user}
