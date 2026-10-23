@@ -30,7 +30,7 @@ public class StatisticsServiceOneRuleTests
             TempBasalAt(3.0, start.AddMinutes(5), start.AddMinutes(25)),
         };
 
-        var analysis = _sut.CalculateBasalAnalysis(tempBasals, [], start, end, Mills(end), Kathmandu);
+        var analysis = _sut.CalculateBasalAnalysis(tempBasals, start, end, Mills(end), Kathmandu);
         var delivery = _sut.CalculateHourlyInsulinDelivery(tempBasals, [], [], start, end, Mills(end), Kathmandu);
 
         analysis.HourlyPercentiles[5].Count.Should().Be(1);
@@ -56,7 +56,7 @@ public class StatisticsServiceOneRuleTests
         var boluses = new[] { new Bolus { Insulin = 2.0, Timestamp = start.AddHours(3) } };
 
         var delivery = _sut.CalculateInsulinDeliveryStatistics(boluses, [], tempBasals, [], start, end, Mills(end));
-        var analysis = _sut.CalculateBasalAnalysis(tempBasals, [], start, end, Mills(end));
+        var analysis = _sut.CalculateBasalAnalysis(tempBasals, start, end, Mills(end));
 
         delivery.WindowDays.Should().Be(expected);
         analysis.WindowDays.Should().Be(expected);

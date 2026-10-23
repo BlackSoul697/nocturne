@@ -381,6 +381,7 @@ public static class ServiceRegistrationExtensions
         services.AddScoped<IDirectGrantService, DirectGrantService>();
         services.AddScoped<IJwtService, JwtService>();
         services.AddScoped<ILoginCodeService, LoginCodeService>();
+        services.AddScoped<MemberRecoveryEligibility>();
         services.AddScoped<IRefreshTokenService, RefreshTokenService>();
         services.AddSingleton<IRotationSuccessorCache, RotationSuccessorCache>();
         services.AddScoped<IFirstPartyTokenRepository, EfFirstPartyTokenRepository>();
@@ -414,7 +415,7 @@ public static class ServiceRegistrationExtensions
         services.AddSingleton<IShareTokenResolver>(sp => sp.GetRequiredService<ShareTokenCacheService>());
         services.AddSingleton<IShareTokenGenerator, ShareTokenGenerator>();
         services.AddScoped<IShareLinkService, ShareLinkService>();
-        services.AddScoped<IShareAppearanceReader>(sp => sp.GetRequiredService<IShareLinkService>());
+        services.AddScoped<ITenantAppearanceReader>(sp => sp.GetRequiredService<IShareLinkService>());
         // Singleton because its consumer runs at startup outside any request scope; it creates its
         // own scope per notification.
         services.AddSingleton<IShareLinkRotatedNotifier, ShareLinkRotatedNotifier>();
@@ -660,6 +661,7 @@ public static class ServiceRegistrationExtensions
         services.AddScoped<IProfileWriteService, ProfileWriteService>();
         services.AddScoped<IProfileActivationResolver, Services.ProfileActivations.ProfileActivationResolver>();
         services.AddScoped<Services.ProfileActivations.ProfileActivationWriter>();
+        services.AddScoped<Services.ProfileActivations.NativeProfileSwitches>();
         services.AddScoped<IActiveProfileResolver, ActiveProfileResolver>();
         services.AddScoped<ProfileVersionCache>();
         services.AddScoped<ProfileStoreTimelineSource>();

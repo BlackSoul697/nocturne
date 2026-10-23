@@ -80,7 +80,9 @@ public sealed class ProfileActivationResolverTests : IDisposable
         int percentage = 100,
         string? enteredBy = "careportal",
         ProfileActivationSnapshot? snapshot = null,
-        bool customized = false)
+        bool customized = false,
+        ProfileActivationOrigin origin = ProfileActivationOrigin.Uploader,
+        string? dataSource = null)
     {
         var activation = new ProfileActivation
         {
@@ -94,6 +96,8 @@ public sealed class ProfileActivationResolverTests : IDisposable
             EnteredBy = enteredBy,
             Snapshot = snapshot,
             SnapshotIsCustomized = customized,
+            Origin = origin,
+            DataSource = dataSource,
         };
         _stored.Add(activation);
         return activation;
@@ -286,6 +290,52 @@ public sealed class ProfileActivationResolverTests : IDisposable
         active.Source.Should().Be(ProfileScheduleSource.BaseSnapshot);
         active.Scaling!.Percentage.Should().Be(200);
         (await BasalRates(Resolver()).GetBasalRateAsync(T0 + Hour)).Should().BeApproximately(1.4, 1e-9);
+    }
+
+    [Fact]
+    public async Task ASwitchRecordedInNocturneReadsTheProfileAsItWasWhenRecorded()
+    {
+        Store(0, "Rhys", percentage: 110, snapshot: Snapshot(0.8),
+            origin: ProfileActivationOrigin.User, dataSource: "manual", enteredBy: null);
+
+        var active = (await Resolver().GetAtAsync(T0 + Hour))!;
+        active.Source.Should().Be(ProfileScheduleSource.BaseSnapshot, "a later edit to Rhys must not rewrite the switch");
+        (await BasalRates(Resolver()).GetBasalRateAsync(T0 + Hour)).Should().BeApproximately(0.88, 1e-9);
+    }
+
+    [Fact]
+    public async Task ASwitchRecordedInNocturneIsIgnoredWhileAnAidSystemReportsWhatItsPumpRuns()
+    {
+        var reported = Store(0, "Rhys", ProfileActivationPhase.Effective, end: 3 * Hour, enteredBy: "openaps://AndroidAPS");
+        var recorded = Store(Hour, "Rhys", percentage: 120,
+            origin: ProfileActivationOrigin.User, dataSource: "manual", enteredBy: null);
+
+        (await Resolver().GetAtAsync(T0 + 2 * Hour))!.Activation.Id.Should().Be(reported.Id,
+            "the pump runs what it reports, however recent the recorded switch");
+        (await Resolver().GetAtAsync(T0 + 4 * Hour))!.Activation.Id.Should().Be(recorded.Id,
+            "once nothing reports, the recorded switch applies");
+    }
+
+    [Fact]
+    public async Task ASwitchRecordedInNocturneAppliesBeforeAnAidSystemFirstReports()
+    {
+        var recorded = Store(0, "Rhys", percentage: 120,
+            origin: ProfileActivationOrigin.User, dataSource: "manual", enteredBy: null);
+        var reported = Store(2 * Hour, "Rhys", ProfileActivationPhase.Effective, enteredBy: "openaps://AndroidAPS");
+
+        (await Resolver().GetAtAsync(T0 + Hour))!.Activation.Id.Should().Be(recorded.Id);
+        (await Resolver().GetAtAsync(T0 + 3 * Hour))!.Activation.Id.Should().Be(reported.Id);
+        (await Resolver().GetRangeAsync(T0, T0 + 3 * Hour)).Select(s => (s.StartMills, s.Active.Activation.Id))
+            .Should().Equal((T0, recorded.Id), (T0 + 2 * Hour, reported.Id));
+    }
+
+    [Fact]
+    public async Task APersonsRequestIsNeverTakenForTheRequestOfASourceThatReportsWhatItsPumpRuns()
+    {
+        Store(0, "Rhys", ProfileActivationPhase.Effective, end: Hour, dataSource: "manual");
+        var recorded = Store(2 * Hour, "Rhys", origin: ProfileActivationOrigin.User, dataSource: "manual");
+
+        (await Resolver().GetAtAsync(T0 + 3 * Hour))!.Activation.Id.Should().Be(recorded.Id);
     }
 
     [Fact]

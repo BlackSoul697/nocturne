@@ -17,10 +17,10 @@ internal sealed record ProfileActivationSettlement(
 /// one confirms.
 /// </summary>
 /// <remarks>
-/// Within one phase of a family, a permanent activation ends at the start of the next permanent one and
-/// a temporary one at its requested length or the next start of either kind, whichever is first. A
-/// temporary activation leaves a permanent one running, which applies again once it ends
-/// (<see cref="ProfileActivationSelection"/>). A requested activation also ends where the first
+/// Within one phase of a family, an unbounded activation ends at the start of the next unbounded one and
+/// a bounded one (<see cref="ProfileActivation.IsBounded"/>: temporary, or ended by a person) at its own
+/// end or the next start of either kind, whichever is first. A bounded activation leaves an unbounded
+/// one running, which applies again once it ends (<see cref="ProfileActivationSelection"/>). A requested activation also ends where the first
 /// effective activation that confirms it starts.
 ///
 /// An effective activation confirms the family's newest requested activation at or before it, if that
@@ -78,6 +78,29 @@ public sealed class ProfileActivationWriter
         await InvalidateAsync(ct);
         await _tempBasalRates.AfterActivationsChangedAsync(
             moved ? [Span(written), Span(stored!)] : [Span(written)], ct);
+        return written;
+    }
+
+    /// <summary>
+    /// Ends the requested <paramref name="activation"/> at <paramref name="at"/>, or at its own length if
+    /// that is sooner, and writes it through <paramref name="store"/> as <see cref="WriteAsync"/> does.
+    /// Ended, it is bounded, so the activation it superseded runs again and applies once it ends.
+    /// </summary>
+    public async Task<ProfileActivation?> EndAsync(
+        ProfileActivation activation,
+        DateTime at,
+        string? endedBy,
+        Func<ProfileActivation, Task<ProfileActivation?>> store,
+        CancellationToken ct)
+    {
+        activation.EndedAt = at;
+        activation.EndedBy = endedBy;
+        var written = await WriteAsync(activation, activation, store, ct);
+        if (written is not null)
+        {
+            await ResettleNeighboursOfAsync([written], ct);
+            await InvalidateAsync(ct);
+        }
         return written;
     }
 
@@ -173,13 +196,13 @@ public sealed class ProfileActivationWriter
         {
             if (previous.Phase == written.Phase
                 && previous.StartTimestamp < start
-                && (!written.IsTemporary || previous.IsTemporary))
+                && (!written.IsBounded || previous.IsBounded))
                 ends[previous.Id] = start;
         }
 
         var nextOfPhase = after
             .Where(a => a.Phase == written.Phase)
-            .FirstOrDefault(a => written.IsTemporary || !a.IsTemporary);
+            .FirstOrDefault(a => written.IsBounded || !a.IsBounded);
         var end = Earliest(NaturalEnd(written), nextOfPhase?.StartTimestamp);
 
         if (written.Phase == ProfileActivationPhase.Effective)
@@ -235,14 +258,16 @@ public sealed class ProfileActivationWriter
 
     /// <summary>
     /// The end an activation being written brings with it: the end an effective one was reported with
-    /// (AAPS's for a temporary switch, a connector's next reading), or a temporary requested one's start
-    /// plus its length. A permanent requested one has none.
+    /// (AAPS's for a temporary switch, a connector's next reading), or a requested one's start plus its
+    /// length or the moment a person ended it, whichever is first. A permanent requested one that nobody
+    /// ended has none.
     /// </summary>
     private static DateTime? NaturalEnd(ProfileActivation activation) =>
         activation.Phase == ProfileActivationPhase.Effective
             ? activation.EndTimestamp
-            : activation.RequestedDurationMs is > 0 and var duration ? activation.StartTimestamp.AddMilliseconds(duration)
-            : null;
+            : Earliest(
+                activation.RequestedDurationMs is > 0 and var duration ? activation.StartTimestamp.AddMilliseconds(duration) : null,
+                activation.EndedAt);
 
     /// <summary>
     /// <see cref="NaturalEnd"/> of a stored activation, whose end its family has since settled: an
