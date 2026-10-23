@@ -38,12 +38,14 @@ public class DemoLoopHealthTests
         List<(Treatment Source, Aid.TempBasal Temp, Aid.TempBasalOrigin Default)> Temps,
         LoopHealthRange Health);
 
-    internal static Run Simulate()
+    internal static Run Simulate() => Simulate(End);
+
+    internal static Run Simulate(DateTime end)
     {
         var config = SampleDataSeeder.ConfigurationFor(Days);
         var steps = new DemoDataGenerator(
                 Options.Create(config), NullLogger<DemoDataGenerator>.Instance, NullLoggerFactory.Instance)
-            .GenerateHistoricalTimeline(End)
+            .GenerateHistoricalTimeline(end)
             .ToList();
 
         var readings = new List<Entry>();
@@ -97,7 +99,7 @@ public class DemoLoopHealthTests
             Evidence = new BasalEvidence(IntervalSet.Empty, IntervalSet.Empty, IntervalSet.Empty),
             Temps = [.. ordered.Select(t => t.Item2)],
         };
-        var manualModes = DemoLifestyleSeeds.BuildSpans(End.Date, Days)
+        var manualModes = DemoLifestyleSeeds.BuildSpans(end.Date, Days)
             .Where(s => s.Category == StateSpanCategory.PumpMode && s.State == nameof(PumpModeState.Manual))
             .Select(s => new MillsInterval(Mills(s.StartLocal), s.EndLocal is { } end ? Mills(end) : to));
         var sources = new LoopAnalysisMaskSources

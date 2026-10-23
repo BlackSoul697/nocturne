@@ -23,17 +23,31 @@ namespace Nocturne.API.Tests.Services.Seeding;
 /// <see cref="BasalSeriesBuilder"/>, IOB and COB preferring the device statuses' own, and the
 /// pump mode, override, temporary target and illness spans the seeder writes.
 /// </summary>
+/// <remarks>
+/// The wiring is a copy of <c>LoopAnalysisService</c>'s loading, simpler in five ways, none of which
+/// the sample's data reaches today: the series are not padded past the range; the scheduled baseline
+/// carries no override scale factor; open loop comes from Manual pump mode spans alone, not Off;
+/// <see cref="TargetAt"/> reads the profile's targets without temporary targets; and the IOB is
+/// the Settings evidence page's <see cref="BasalIobModel.Carried"/> model, where the Daily profile
+/// page reads <see cref="BasalIobModel.Displayed"/>.
+/// </remarks>
 public class DemoLoopAnalysisTests(ITestOutputHelper output)
 {
     private const long Minute = 60_000;
 
     private static readonly TimeZoneInfo Zone = TimeZoneInfo.Local;
 
+    /// <summary>
+    /// A week with a sick day and every kind of loop interruption, manual mode among them, so the
+    /// insulin totals test sees the days the masks take out and the days they leave in.
+    /// </summary>
+    private static readonly DateTime End = new(2026, 9, 7, 20, 0, 0);
+
     private static readonly Lazy<(SettingsEvidenceInputs Inputs, long From, long To)> Week = new(Load);
 
     private static (SettingsEvidenceInputs Inputs, long From, long To) Load()
     {
-        var run = DemoLoopHealthTests.Simulate();
+        var run = DemoLoopHealthTests.Simulate(End);
         var config = new DemoModeConfiguration();
         var from = Mills(run.Steps[0].Time);
         var to = Mills(run.Steps[^1].Time) + 5 * Minute;
@@ -70,7 +84,7 @@ public class DemoLoopAnalysisTests(ITestOutputHelper output)
         var iob = new IobCalculator(null!, null!, null!, null!, null!);
         var cob = new CobCalculator(NullLogger<CobCalculator>.Instance, iob, null!, null!, null!, null!);
 
-        var spans = DemoLifestyleSeeds.BuildSpans(DemoLoopHealthTests.End.Date, DemoLoopHealthTests.Days);
+        var spans = DemoLifestyleSeeds.BuildSpans(End.Date, DemoLoopHealthTests.Days);
         List<MillsInterval> SpansOf(StateSpanCategory category, string? state = null) =>
         [
             .. spans.Where(s => s.Category == category && (state is null || s.State == state))
@@ -161,10 +175,10 @@ public class DemoLoopAnalysisTests(ITestOutputHelper output)
     }
 
     /// <summary>
-    /// The insulin totals add up only days whose delivery is known for
+    /// The insulin totals add up only days whose delivery is known and analysed for
     /// <see cref="DailyProfileCalculator.InsulinSummaryMinimumCoverage"/> of the day. The sample's
-    /// loop interruptions are short enough that every whole day counts, except a sick day, which
-    /// the default illness mask takes out.
+    /// loop interruptions are short enough that every whole day counts, a day in manual mode among
+    /// them, except the sick day, which the default illness mask takes out.
     /// </summary>
     [Fact]
     public void SampleWeek_EveryWholeDayCountsInTheInsulinTotals()
@@ -176,9 +190,11 @@ public class DemoLoopAnalysisTests(ITestOutputHelper output)
 
         var profile = DailyProfileCalculator.Calculate(inputs.Series, Mask(start, end), start, end);
 
-        var sickDays = Enumerable.Range(0, (lastWholeDay - firstWholeDay).Days)
-            .Count(d => DayScenarios.For(firstWholeDay.AddDays(d)) == DayScenario.SickDay);
+        var wholeDays = Enumerable.Range(0, (lastWholeDay - firstWholeDay).Days).Select(d => firstWholeDay.AddDays(d)).ToList();
+        var sickDays = wholeDays.Count(d => DayScenarios.For(d) == DayScenario.SickDay);
+        sickDays.Should().BePositive("the week holds a sick day for the illness mask to take out");
+        wholeDays.Should().Contain(d => DemoLoopInterruptions.ManualModeWindow(d) != null, "the week holds a day in manual mode");
         profile.Summary.Insulin.Should().NotBeNull();
-        profile.Summary.Insulin!.Total!.N.Should().Be((lastWholeDay - firstWholeDay).Days - sickDays);
+        profile.Summary.Insulin!.Total!.N.Should().Be(wholeDays.Count - sickDays);
     }
 }
