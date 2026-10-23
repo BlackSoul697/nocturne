@@ -42,6 +42,8 @@ public class NotificationBase
 
     public string? Plugin { get; set; }
 
+    public string? EventName { get; set; }
+
     /// <summary>
     /// Indicates if this is an announcement notification
     /// </summary>
