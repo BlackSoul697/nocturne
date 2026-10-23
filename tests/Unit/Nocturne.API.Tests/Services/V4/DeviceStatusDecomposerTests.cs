@@ -2063,7 +2063,7 @@ public class DeviceStatusDecomposerTests : IDisposable
             new UploaderSnapshotRepository(ctxFactory, new SystemAuditContext(), NullLogger<UploaderSnapshotRepository>.Instance),
             _extrasRepo,
             _stateSpanServiceMock.Object,
-            new DeviceService(deviceRepo.Object, patientDeviceRepo.Object, MockTenantAccessor.Create().Object, TimezoneTimelineDoubles.Utc()),
+            new DeviceService(deviceRepo.Object, patientDeviceRepo.Object, MockTenantAccessor.Create().Object, DeviceDateClockDoubles.Utc()),
             Mock.Of<IAuditContext>(),
             NullLogger<DeviceStatusDecomposer>.Instance);
     }

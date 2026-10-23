@@ -71,14 +71,6 @@ public sealed record LoopAnalysisMask(IntervalSet Analysed, IntervalSet Glucose)
         return IntervalSet.Of(manualPumpModes).Union(IntervalSet.Of(nonAidPumps).Subtract(aidEvidence));
     }
 
-    /// <summary>
-    /// A registered device's window, whose dates are local calendar dates: from the start of its
-    /// first day to the end of its last, open-ended on either side a date does not bound.
-    /// </summary>
-    public static MillsInterval DeviceWindow(DateOnly? start, DateOnly? end, TimeZoneInfo tz, long openEnd) => new(
-        start is { } first ? LocalSlotBinning.DayStartMills(first, tz) : long.MinValue,
-        end is { } last ? LocalSlotBinning.DayStartMills(last.AddDays(1), tz) : openEnd);
-
     private static IntervalSet LocalWeekdays(long from, long to, TimeZoneInfo tz, HashSet<DayOfWeek> days)
     {
         var (firstDay, starts) = LocalSlotBinning.DayStarts(from, to, tz);

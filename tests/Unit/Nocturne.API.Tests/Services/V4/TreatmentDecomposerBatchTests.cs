@@ -731,6 +731,6 @@ public class TreatmentDecomposerBatchTests : IDisposable
         patientDevices
             .Setup(r => r.GetByDeviceIdAsync(It.IsAny<Guid>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync([]);
-        return new DeviceService(deviceRepo.Object, patientDevices.Object, MockTenantAccessor.Create().Object, TimezoneTimelineDoubles.Utc());
+        return new DeviceService(deviceRepo.Object, patientDevices.Object, MockTenantAccessor.Create().Object, DeviceDateClockDoubles.Utc());
     }
 }

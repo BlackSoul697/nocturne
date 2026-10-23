@@ -67,7 +67,7 @@ internal sealed partial class LoopAnalysisService
                 delivery.HasTherapy ? common.Profiles : [], ActiveTemporaryTargets(common.Spans, to), zone, to, ct),
         };
 
-        return new DailyProfileLoaded(inputs, Sources(common, SnapshotMills(apsPoints.Select(p => p.Timestamp)), zone, to), delivery.Timeline);
+        return new DailyProfileLoaded(inputs, Sources(common, SnapshotMills(apsPoints.Select(p => p.Timestamp)), to), delivery.Timeline);
     }
 
     /// <summary>

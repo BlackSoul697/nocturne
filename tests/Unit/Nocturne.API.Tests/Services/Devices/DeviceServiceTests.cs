@@ -24,7 +24,7 @@ public class DeviceServiceTests
     {
         _mockRepository = new Mock<IDeviceRepository>();
         _mockPatientDeviceRepository = new Mock<IPatientDeviceRepository>();
-        _service = new DeviceService(_mockRepository.Object, _mockPatientDeviceRepository.Object, MockTenantAccessor.Create().Object, TimezoneTimelineDoubles.Utc());
+        _service = new DeviceService(_mockRepository.Object, _mockPatientDeviceRepository.Object, MockTenantAccessor.Create().Object, DeviceDateClockDoubles.Utc());
         _mockRepository
             .Setup(r => r.WidenSeenWindowAsync(It.IsAny<Guid>(), It.IsAny<DateTime>(), It.IsAny<WriteOrigin>(), It.IsAny<CancellationToken>()))
             .Callback((Guid id, DateTime t, WriteOrigin _, CancellationToken _) => _updates.Add((id, t)))
