@@ -387,6 +387,11 @@ class Program
                 .AddProject<Projects.Nocturne_API>(ServiceNames.NocturneApi, launchProfileName: null)
                 .WithHttpEndpoint(name: "http", targetPort: 8080)
                 .WithEnvironment("ASPNETCORE_ENVIRONMENT", "Production")
+                // Self-hosted stacks share a small box with Postgres and the web app. The server
+                // GC sizes its heaps per core and held ~690 MiB idle on 2 vCPUs; workstation GC
+                // with a conserving heap holds ~330 MiB, letting the whole stack fit a 2 GB VM.
+                .WithEnvironment("DOTNET_gcServer", "0")
+                .WithEnvironment("DOTNET_GCConserveMemory", "5")
                 .PublishAsDockerComposeService((_, _) => { })
                 .WithRemoteImageName("ghcr.io/nightscout/nocturne/nocturne-api")
                 .WithRemoteImageTag("latest")
