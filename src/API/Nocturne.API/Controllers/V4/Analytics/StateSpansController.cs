@@ -433,7 +433,6 @@ public class StateSpansController : ControllerBase
         nameof(GetPumpModes), nameof(GetConnectivity), nameof(GetOverrides), nameof(GetTemporaryTargets),
         nameof(GetExercise), nameof(GetIllness), nameof(GetTravel)])]
     [ProducesResponseType(typeof(StateSpan), StatusCodes.Status200OK)]
-    [ProducesResponseType(StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status403Forbidden)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     [ProducesResponseType(StatusCodes.Status409Conflict)]
@@ -444,9 +443,6 @@ public class StateSpansController : ControllerBase
             return NotFound();
 
         var (rowId, (_, category)) = deleted.Single();
-        if (category == StateSpanCategory.Profile)
-            return ProfileSpanRefused();
-
         var missingScope = StateSpanWriteScopeGuard.FindMissingScope(HttpContext.GetGrantedScopes(), category);
         if (missingScope is not null)
             return this.ForbiddenForScope(missingScope);
@@ -475,15 +471,12 @@ public class StateSpansController : ControllerBase
         nameof(GetPumpModes), nameof(GetConnectivity), nameof(GetOverrides), nameof(GetTemporaryTargets),
         nameof(GetExercise), nameof(GetIllness), nameof(GetTravel)])]
     [ProducesResponseType(typeof(StateSpanBulkRestoreResult), StatusCodes.Status200OK)]
-    [ProducesResponseType(StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status403Forbidden)]
     [ProducesResponseType(StatusCodes.Status409Conflict)]
     public async Task<ActionResult<StateSpanBulkRestoreResult>> BulkRestoreStateSpans(
         [FromBody] string[] ids, CancellationToken cancellationToken = default)
     {
         var deleted = await _stateSpanService.ResolveDeletedAsync(ids, cancellationToken);
-        if (deleted.Values.Any(d => d.Category == StateSpanCategory.Profile))
-            return ProfileSpanRefused();
         var missingScope = StateSpanWriteScopeGuard.FindMissingScope(
             HttpContext.GetGrantedScopes(), deleted.Values.Select(d => d.Category).Distinct().ToArray());
         if (missingScope is not null)
@@ -498,7 +491,7 @@ public class StateSpansController : ControllerBase
     }
 
     /// <summary>
-    /// A <see cref="StateSpanCategory.Profile"/> span is read by nothing: a profile switch is a
+    /// No <see cref="StateSpanCategory.Profile"/> span is written: a profile switch is a
     /// <see cref="Core.Models.V4.ProfileActivation"/>, written as a Profile Switch treatment.
     /// </summary>
     private ObjectResult ProfileSpanRefused() => Problem(

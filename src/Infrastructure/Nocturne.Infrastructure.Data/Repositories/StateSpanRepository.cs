@@ -49,8 +49,6 @@ public class StateSpanRepository : IStateSpanRepository
     /// </summary>
     private const int OpenCarryInLimit = 10;
 
-    private static readonly string ProfileCategory = nameof(StateSpanCategory.Profile);
-
     /// <summary>
     /// Exclusive categories whose open spans exclude each other only within a partition.
     /// </summary>
@@ -165,8 +163,7 @@ public class StateSpanRepository : IStateSpanRepository
         string? source,
         bool? active)
     {
-        // A Profile span is listed as nothing: a profile switch is a ProfileActivation.
-        var query = db.StateSpans.AsNoTracking().Where(s => s.Category != ProfileCategory);
+        var query = db.StateSpans.AsNoTracking();
 
         if (category.HasValue)
             query = query.Where(s => s.Category == category.Value.ToString());
@@ -389,7 +386,7 @@ public class StateSpanRepository : IStateSpanRepository
 
         // PumpMode mixes independent dimensions (Automatic/Manual loop mode vs Suspended
         // delivery) which can legitimately overlap, so only the SAME state is mutually exclusive
-        // there. Other exclusive categories (Override, TemporaryTarget, Profile) supersede any
+        // there. Other exclusive categories (Override, TemporaryTarget, Motion) supersede any
         // open span regardless of state.
         var sameStateOnly = string.Equals(
             entity.Category, nameof(StateSpanCategory.PumpMode), StringComparison.OrdinalIgnoreCase);
