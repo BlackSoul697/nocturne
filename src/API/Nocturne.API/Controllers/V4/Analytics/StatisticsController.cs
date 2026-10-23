@@ -1327,7 +1327,8 @@ public class StatisticsController : ControllerBase
     /// <remarks>
     /// CGM active time comes from <see cref="IStatisticsService.CalculateCgmActivePercent"/>,
     /// measured against the registered CGMs' windows where the tenant has registered any. The target
-    /// range is optional; the report goes without it if it cannot be read.
+    /// range is optional; the report goes without it if it cannot be read. Each figure is narrowed to
+    /// the caller's categories by <see cref="AidSystemMetricsReadScopeGuard"/>.
     /// </remarks>
     [HttpGet("aid-system-metrics")]
     [RequireScope(Scope.ReportsRead)]
@@ -1340,7 +1341,9 @@ public class StatisticsController : ControllerBase
     {
         var startDt = DateTime.SpecifyKind(startDate, DateTimeKind.Utc);
         var endDt = DateTime.SpecifyKind(endDate, DateTimeKind.Utc);
-        return Ok(await _aidSystemMetrics.ReadAsync(startDt, endDt, cancellationToken));
+        return Ok(AidSystemMetricsReadScopeGuard.Redact(
+            await _aidSystemMetrics.ReadAsync(startDt, endDt, cancellationToken),
+            HttpContext.GetGrantedScopes()));
     }
 }
 

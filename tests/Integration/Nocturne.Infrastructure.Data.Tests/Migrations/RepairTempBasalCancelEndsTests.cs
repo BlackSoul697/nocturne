@@ -54,6 +54,9 @@ public class RepairTempBasalCancelEndsFixture : IAsyncLifetime
     /// <summary>A Glooko temp with a legacy id and no correlation id, waiting for its end.</summary>
     internal static readonly Guid Glooko = Guid.Parse("70000000-0000-7000-8000-000000002511");
 
+    /// <summary>A soft-deleted v1 cancel stored with no end.</summary>
+    internal static readonly Guid DeletedDecomposedCancel = Guid.Parse("70000000-0000-7000-8000-000000002512");
+
     internal sealed record Row(DateTime StartTimestamp, DateTime? EndTimestamp, DateTime UpdatedAt);
 
     internal Dictionary<Guid, Row> Seeded { get; } = [];
@@ -113,6 +116,9 @@ public class RepairTempBasalCancelEndsFixture : IAsyncLifetime
               ('{{V4SyncedWithLegacyId}}', '{{TenantA}}', '{{Start.AddHours(7):O}}', NULL, 1.5, 'Algorithm', '65f0c0ffee0000000000a004', '{{Guid.CreateVersion7()}}', 'loop', 'loop-sync-1', '{{SeededAt:O}}'),
               ('{{CareLink}}', '{{TenantA}}', '{{Start.AddHours(8):O}}', '{{Start.AddHours(8).AddMinutes(5):O}}', 0.7, 'Algorithm', NULL, NULL, 'carelink-connector', NULL, '{{SeededAt:O}}'),
               ('{{Glooko}}', '{{TenantA}}', '{{Start.AddHours(9):O}}', NULL, 0.6, 'Manual', 'glooko_tempbasal_1', NULL, 'glooko-connector', NULL, '{{SeededAt:O}}');
+            INSERT INTO temp_basals
+              (id, tenant_id, start_timestamp, end_timestamp, rate, origin, legacy_id, correlation_id, deleted_at, sys_updated_at)
+            VALUES ('{{DeletedDecomposedCancel}}', '{{TenantA}}', '{{Start.AddHours(10):O}}', NULL, 0, 'Algorithm', '65f0c0ffee0000000000a005', '{{Guid.CreateVersion7()}}', '{{SeededAt:O}}', '{{SeededAt:O}}');
 
             SELECT set_config('app.current_tenant_id', '{{TenantB}}', false);
             INSERT INTO temp_basals
@@ -157,7 +163,8 @@ public class RepairTempBasalCancelEndsTests(RepairTempBasalCancelEndsFixture fix
     [InlineData("70000000-0000-7000-8000-000000002501")]
     [InlineData("70000000-0000-7000-8000-000000002502")]
     [InlineData("70000000-0000-7000-8000-000000002503")]
-    public void A_v1_temp_basal_with_no_duration_in_every_tenant_ends_where_it_starts(string id)
+    [InlineData("70000000-0000-7000-8000-000000002512")]
+    public void A_v1_temp_basal_with_no_duration_in_every_tenant_deleted_or_not_ends_where_it_starts(string id)
     {
         var row = Rows[Guid.Parse(id)];
         row.EndTimestamp.Should().Be(row.StartTimestamp);

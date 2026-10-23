@@ -53,6 +53,15 @@ public class RepairTempBasalOriginEvidenceFixture : IAsyncLifetime
     /// </summary>
     internal static readonly Guid V4Stated = Guid.Parse("70000000-0000-7000-8000-000000002410");
 
+    /// <summary>A soft-deleted temp judged with no snapshot to judge it by.</summary>
+    internal static readonly Guid DeletedUncorroborated = Guid.Parse("70000000-0000-7000-8000-000000002411");
+
+    /// <summary>A Manual temp classified Reported whose flag is not a boolean, which reads as no flag.</summary>
+    internal static readonly Guid NonBooleanFlag = Guid.Parse("70000000-0000-7000-8000-000000002412");
+
+    /// <summary>A Manual temp classified Reported whose flag is a boolean held as a string.</summary>
+    internal static readonly Guid StringBooleanFlag = Guid.Parse("70000000-0000-7000-8000-000000002413");
+
     internal sealed record Row(string Origin, string? Evidence, DateTime UpdatedAt);
 
     internal Dictionary<Guid, Row> Seeded { get; } = [];
@@ -110,7 +119,11 @@ public class RepairTempBasalOriginEvidenceFixture : IAsyncLifetime
               ('{{V4Stated}}', '{{TenantA}}', '2026-08-01T09:00:00Z', 0.4, NULL, NULL, NULL, 'Manual', 'Reported', NULL, NULL, '{{SeededAt:O}}'),
               ('{{TrioReported}}', '{{TenantA}}', '2026-08-01T06:00:00Z', 0.8, 'Trio', 'Trio', NULL, 'Manual', 'Reported', NULL, 'trio-2', '{{SeededAt:O}}'),
               ('{{Judged}}', '{{TenantA}}', '2026-08-01T07:00:00Z', 0.9, NULL, NULL, 'nightscout-connector', 'Manual', 'Snapshot', NULL, 'ns-2', '{{SeededAt:O}}'),
-              ('{{Unclassified}}', '{{TenantA}}', '2026-08-01T08:00:00Z', 0.5, 'tidepool', 'tidepool', 'nightscout-connector', 'Manual', NULL, NULL, 'tp-2', '{{SeededAt:O}}');
+              ('{{Unclassified}}', '{{TenantA}}', '2026-08-01T08:00:00Z', 0.5, 'tidepool', 'tidepool', 'nightscout-connector', 'Manual', NULL, NULL, 'tp-2', '{{SeededAt:O}}'),
+              ('{{NonBooleanFlag}}', '{{TenantA}}', '2026-08-01T10:00:00Z', 0.3, NULL, NULL, 'nightscout-connector', 'Manual', 'Reported', '{"automatic": "yes"}', 'ns-3', '{{SeededAt:O}}'),
+              ('{{StringBooleanFlag}}', '{{TenantA}}', '2026-08-01T11:00:00Z', 0.3, NULL, NULL, 'nightscout-connector', 'Manual', 'Reported', '{"automatic": "False"}', 'ns-4', '{{SeededAt:O}}');
+            INSERT INTO temp_basals (id, tenant_id, start_timestamp, rate, origin, origin_evidence, legacy_id, deleted_at, sys_updated_at)
+            VALUES ('{{DeletedUncorroborated}}', '{{TenantA}}', '2026-08-01T12:00:00Z', 1.0, 'Algorithm', 'Uncorroborated', 'trio-3', '{{SeededAt:O}}', '{{SeededAt:O}}');
 
             SELECT set_config('app.current_tenant_id', '{{TenantB}}', false);
             INSERT INTO temp_basals (id, tenant_id, start_timestamp, rate, device, app, origin, origin_evidence, sys_updated_at)
@@ -153,6 +166,7 @@ public class RepairTempBasalOriginEvidenceTests(RepairTempBasalOriginEvidenceFix
     [Theory]
     [InlineData("70000000-0000-7000-8000-000000002401")]
     [InlineData("70000000-0000-7000-8000-000000002402")]
+    [InlineData("70000000-0000-7000-8000-000000002412")]
     public void A_manual_temp_classified_reported_from_no_evidence_is_classified_again(string id)
     {
         Rows[Guid.Parse(id)].Should().BeEquivalentTo(new { Origin = "Manual", Evidence = (string?)null });
@@ -161,7 +175,8 @@ public class RepairTempBasalOriginEvidenceTests(RepairTempBasalOriginEvidenceFix
     [Theory]
     [InlineData("70000000-0000-7000-8000-000000002403", "Algorithm")]
     [InlineData("70000000-0000-7000-8000-000000002404", "Manual")]
-    public void An_uncorroborated_temp_in_every_tenant_is_judged_again(string id, string origin)
+    [InlineData("70000000-0000-7000-8000-000000002411", "Algorithm")]
+    public void An_uncorroborated_temp_in_every_tenant_deleted_or_not_is_judged_again(string id, string origin)
     {
         Rows[Guid.Parse(id)].Should().BeEquivalentTo(new { Origin = origin, Evidence = "Uploader" });
     }
@@ -173,6 +188,7 @@ public class RepairTempBasalOriginEvidenceTests(RepairTempBasalOriginEvidenceFix
     [InlineData("70000000-0000-7000-8000-000000002408")]
     [InlineData("70000000-0000-7000-8000-000000002409")]
     [InlineData("70000000-0000-7000-8000-000000002410")]
+    [InlineData("70000000-0000-7000-8000-000000002413")]
     public void A_statement_a_judgement_or_an_unclassified_row_is_left_as_it_is(string id)
     {
         Rows[Guid.Parse(id)].Should().Be(fixture.Seeded[Guid.Parse(id)]);

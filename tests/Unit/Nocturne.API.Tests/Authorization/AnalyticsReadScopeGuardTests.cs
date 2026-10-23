@@ -1052,6 +1052,63 @@ public partial class AnalyticsReadScopeGuardTests
         redacted.LastDay.Analytics.Should().BeNull();
     }
 
+    // ── AID system metrics ──────────────────────────────────────────────────────────────────
+
+    private static AidSystemMetrics EveryAidFigure() => new()
+    {
+        CgmDeviceNames = "Dexcom G7",
+        PumpDeviceNames = "Omnipod 5",
+        PumpUsePercent = 98,
+        AidActivePercent = 91,
+        CgmActivePercent = 95,
+        TargetLow = 80,
+        TargetHigh = 140,
+        SiteChangeCount = 3,
+        Segments = [new AidTimeSegment { Algorithm = AidAlgorithm.Trio, DurationHours = 24 }],
+        TimeZoneUnavailableReason = TimeZoneUnavailableReason.NotConfigured,
+    };
+
+    [Fact]
+    public void AidSystemMetrics_EveryCategory_KeepsEveryFigure()
+    {
+        var redacted = AidSystemMetricsReadScopeGuard.Redact(
+            EveryAidFigure(),
+            Granted(Scope.GlucoseRead, Scope.TreatmentsRead, Scope.DevicesRead, Scope.TherapyRead));
+
+        redacted.Should().BeEquivalentTo(EveryAidFigure());
+    }
+
+    [Fact]
+    public void AidSystemMetrics_WithholdingEveryCategory_LeavesNothingButTheAllowlist()
+    {
+        RedactionCoverage.AssertWithheld(
+            AidSystemMetricsReadScopeGuard.Redact(RedactionCoverage.Populated<AidSystemMetrics>(), Granted()),
+            [typeof(AidSystemMetrics)],
+            ["AidSystemMetrics.TimeZoneUnavailableReason"]);
+    }
+
+    [Theory]
+    [InlineData(Scope.GlucoseRead)]
+    [InlineData(Scope.TreatmentsRead)]
+    [InlineData(Scope.DevicesRead)]
+    [InlineData(Scope.TherapyRead)]
+    public void AidSystemMetrics_WithoutOneCategory_WithholdsOnlyTheFiguresDrawnFromIt(string missing)
+    {
+        string[] every = [Scope.GlucoseRead, Scope.TreatmentsRead, Scope.DevicesRead, Scope.TherapyRead];
+
+        var redacted = AidSystemMetricsReadScopeGuard.Redact(
+            EveryAidFigure(), Granted([.. every.Where(s => s != missing)]));
+
+        var loopActivity = missing is Scope.TreatmentsRead or Scope.DevicesRead;
+        (redacted.CgmActivePercent is null).Should().Be(missing == Scope.GlucoseRead);
+        (redacted.AidActivePercent is null).Should().Be(loopActivity);
+        (redacted.PumpUsePercent is null).Should().Be(loopActivity);
+        (redacted.Segments.Count == 0).Should().Be(loopActivity);
+        (redacted.TargetLow is null && redacted.TargetHigh is null).Should().Be(missing == Scope.TherapyRead);
+        (redacted.SiteChangeCount is null && redacted.CgmDeviceNames is null && redacted.PumpDeviceNames is null)
+            .Should().Be(missing == Scope.DevicesRead);
+    }
+
     // ── Loop Analysis ───────────────────────────────────────────────────────────────────────
 
     private static readonly string[] AllLoopAnalysisCategories =

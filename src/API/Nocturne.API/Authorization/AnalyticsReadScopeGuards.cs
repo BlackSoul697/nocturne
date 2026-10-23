@@ -394,6 +394,46 @@ internal static class StatisticsReadScopeGuard
 }
 
 /// <summary>
+/// Per-category read scopes for <c>GET /api/v4/statistics/aid-system-metrics</c>, admitted on
+/// <c>reports.read</c>. The CGM active time and the AID and pump shares, with their segments, are
+/// withheld as Loop health withholds the same figures
+/// (<see cref="LoopAnalysisReadScopeGuard.WithheldLoopHealth"/>). The target range is a therapy
+/// setting. The site changes and the registered device names are devices.
+/// </summary>
+/// <remarks>The response is built per request and never cached server-side, so it is narrowed in place.</remarks>
+/// <seealso cref="AnalyticsReadScopes"/>
+internal static class AidSystemMetricsReadScopeGuard
+{
+    public static AidSystemMetrics Redact(AidSystemMetrics data, IReadOnlySet<string> grantedScopes)
+    {
+        var loopHealth = LoopAnalysisReadScopeGuard.WithheldLoopHealth(grantedScopes);
+        var devices = AnalyticsReadScopes.Allows(grantedScopes, Scope.DevicesRead);
+        var therapy = AnalyticsReadScopes.Allows(grantedScopes, Scope.TherapyRead);
+
+        if (loopHealth.Contains(LoopAnalysisSeries.CgmActivity))
+            data.CgmActivePercent = null;
+        if (loopHealth.Contains(LoopAnalysisSeries.LoopActivity))
+        {
+            data.AidActivePercent = null;
+            data.PumpUsePercent = null;
+            data.Segments = [];
+        }
+        if (!therapy)
+        {
+            data.TargetLow = null;
+            data.TargetHigh = null;
+        }
+        if (!devices)
+        {
+            data.SiteChangeCount = null;
+            data.CgmDeviceNames = null;
+            data.PumpDeviceNames = null;
+        }
+        return data;
+    }
+}
+
+/// <summary>
 /// Per-category read scopes for Loop Analysis, admitted on <c>reports.read</c>: glucose is the
 /// glucose category; delivered basal, the insulin above schedule, IOB/COB, boluses and carbs are
 /// treatments; the profile names and the separate schedule series (scheduled basal, target range)

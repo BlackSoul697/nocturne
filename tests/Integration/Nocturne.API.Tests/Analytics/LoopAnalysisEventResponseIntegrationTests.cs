@@ -186,6 +186,20 @@ public class LoopAnalysisEventResponseIntegrationTests(ApiIntegrationTestFixture
     }
 
     [Fact]
+    public async Task A_share_gets_its_reason_and_no_cohorts()
+    {
+        await SeedProfileAsync("Australia/Sydney");
+        await SeedWeekAsync(WeekStart);
+        using var share = await CreateShareClientAsync();
+
+        var body = await GetOkAsync(share, Query($"{Week}&{Cohorts}"));
+
+        body.GetProperty("timeZoneUnavailableReason").GetString().Should().Be("Share");
+        Absent(body, "primaryRange").Should().BeTrue();
+        body.GetProperty("primary").GetProperty("cohorts").GetArrayLength().Should().Be(0);
+    }
+
+    [Fact]
     public async Task Returns_no_cohorts_without_a_tenant_timezone()
     {
         await SeedWeekAsync(WeekStart);
