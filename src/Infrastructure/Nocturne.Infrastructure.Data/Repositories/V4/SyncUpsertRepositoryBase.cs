@@ -23,11 +23,11 @@ namespace Nocturne.Infrastructure.Data.Repositories.V4;
 /// <typeparam name="TEntity">The EF entity type backing <typeparamref name="TModel"/>.</typeparam>
 public abstract class SyncUpsertRepositoryBase<TModel, TEntity> : SyncKeyedRepositoryBase<TModel, TEntity>
     where TModel : class, IV4Record
-    where TEntity : class, IV4TimeSeriesEntity, IAuditable, ISyncDedupable
+    where TEntity : class, IV4TimeSeriesEntity, IAuditable, ISystemTimestamped, ISyncDedupable
 {
     /// <inheritdoc />
     protected SyncUpsertRepositoryBase(
-        ITenantDbContextFactory contextFactory,
+        INocturneDbContextFactory contextFactory,
         IAuditContext auditContext,
         ILogger logger,
         IV4RecordBroadcaster<TModel>? broadcaster = null,
@@ -52,6 +52,10 @@ public abstract class SyncUpsertRepositoryBase<TModel, TEntity> : SyncKeyedRepos
     /// Creates a record, or updates in place the stored row carrying the same
     /// (DataSource, SyncIdentifier).
     /// </summary>
+    /// <remarks>
+    /// Sealed so the single write has one override point, <see cref="UpsertAsync"/>, that both entry
+    /// points pass through.
+    /// </remarks>
     /// <param name="model">The record to create.</param>
     /// <param name="origin">Whether the write is live or a backfill import.</param>
     /// <param name="ct">The cancellation token.</param>
@@ -61,7 +65,11 @@ public abstract class SyncUpsertRepositoryBase<TModel, TEntity> : SyncKeyedRepos
     /// <see cref="SoftDeleteDedupExtensions.WhereBlocksRecreation{TEntity}"/> — the same rule
     /// <see cref="SplitUpsertsAsync"/> applies to a batch.
     /// </exception>
-    public override async Task<TModel> CreateAsync(TModel model, WriteOrigin origin, CancellationToken ct = default)
+    public sealed override async Task<TModel> CreateAsync(TModel model, WriteOrigin origin, CancellationToken ct = default)
+        => (await UpsertAsync(model, origin, ct)).Record;
+
+    /// <inheritdoc cref="ISyncKeyedRepository{T}.UpsertAsync" />
+    public virtual async Task<SyncUpsert<TModel>> UpsertAsync(TModel model, WriteOrigin origin, CancellationToken ct = default)
     {
         await using var ctx = await ContextFactory.CreateAsync(ct);
         // The domain models carry no sync-key contract, so the key is read off the mapped entity.
@@ -77,17 +85,25 @@ public abstract class SyncUpsertRepositoryBase<TModel, TEntity> : SyncKeyedRepos
 
             if (existing != null)
             {
-                ApplyUpdate(existing, model);
+                var before = ToDomain(existing);
+                ApplySyncUpsert(existing, model);
                 await ctx.SaveChangesAsync(ct);
                 var upserted = ToDomain(existing);
                 // A single explicit upsert always broadcasts (no material-change gate on the single path).
-                await RaiseBroadcastAsync([], [upserted], [], origin, ct);
-                return upserted;
+                await RaiseBroadcastAsync([], [upserted], [], origin, ct, vacated: [before]);
+                return new SyncUpsert<TModel>(upserted, Created: false);
             }
         }
 
-        return await InsertAsync(ctx, entity, origin, ct);
+        return new SyncUpsert<TModel>(await InsertAsync(ctx, entity, origin, ct), Created: true);
     }
+
+    /// <summary>
+    /// Writes a create onto the stored row its sync key matched, on both the single and the batch
+    /// path. The caller never read that row, so a type holding server-resolved state the write
+    /// cannot express overrides this to keep it; the default is <see cref="V4RepositoryBase{TModel,TEntity}.ApplyUpdate"/>.
+    /// </summary>
+    protected virtual void ApplySyncUpsert(TEntity existing, TModel model) => ApplyUpdate(existing, model);
 
     /// <inheritdoc cref="Core.Contracts.V4.Repositories.ISyncKeyedRepository{T}.IsRecreationBlockedAsync" />
     public async Task<bool> IsRecreationBlockedAsync(
@@ -95,6 +111,31 @@ public abstract class SyncUpsertRepositoryBase<TModel, TEntity> : SyncKeyedRepos
     {
         await using var ctx = await ContextFactory.CreateAsync(ct);
         return await FindGoverningRowAsync(ctx, dataSource, syncIdentifier, ct) is { DeletedAt: not null };
+    }
+
+    /// <inheritdoc cref="ISyncKeyedRepository{T}.GetUpsertTargetTimestampsAsync" />
+    public async Task<IReadOnlyList<DateTime>> GetUpsertTargetTimestampsAsync(
+        IReadOnlyCollection<TModel> records, CancellationToken ct = default)
+    {
+        var keys = records
+            .Select(ToEntity)
+            .Where(e => !string.IsNullOrEmpty(e.DataSource) && !string.IsNullOrEmpty(e.SyncIdentifier))
+            .Select(e => (DataSource: e.DataSource!, SyncIdentifier: e.SyncIdentifier!))
+            .ToHashSet();
+        if (keys.Count == 0)
+            return [];
+
+        var sources = keys.Select(k => k.DataSource).Distinct().ToList();
+        var syncIds = keys.Select(k => k.SyncIdentifier).Distinct().ToList();
+
+        await using var ctx = await ContextFactory.CreateAsync(ct);
+        // Over-fetches by a Cartesian amount, as SplitUpsertsAsync does, on the same index.
+        var rows = await ctx.Set<TEntity>().AsNoTracking()
+            .Where(e => sources.Contains(e.DataSource!) && syncIds.Contains(e.SyncIdentifier!))
+            .Select(e => new { e.DataSource, e.SyncIdentifier, e.Timestamp })
+            .ToListAsync(ct);
+
+        return [.. rows.Where(r => keys.Contains((r.DataSource!, r.SyncIdentifier!))).Select(r => r.Timestamp)];
     }
 
     /// <summary>
@@ -138,8 +179,9 @@ public abstract class SyncUpsertRepositoryBase<TModel, TEntity> : SyncKeyedRepos
 
         var updatedEntities = new List<TEntity>();
         var materiallyChanged = new List<TEntity>();
+        var vacated = new List<TModel>();
         if (syncKeyed.Count == 0)
-            return new UpsertSplit(updatedEntities, materiallyChanged, entities, 0);
+            return new UpsertSplit(updatedEntities, materiallyChanged, vacated, entities, 0);
 
         var sources = syncKeyed.Select(e => e.DataSource!).Distinct().ToList();
         var syncIds = syncKeyed.Select(e => e.SyncIdentifier!).Distinct().ToList();
@@ -171,11 +213,15 @@ public abstract class SyncUpsertRepositoryBase<TModel, TEntity> : SyncKeyedRepos
                     continue;
                 }
 
-                ApplyUpdate(existing, ToDomain(entity));
+                var before = ToDomain(existing);
+                ApplySyncUpsert(existing, ToDomain(entity));
                 updatedEntities.Add(existing);
                 // Capture material changes now, before SaveChanges clears the modified flags.
                 if (HasMaterialChange(ctx, existing))
+                {
                     materiallyChanged.Add(existing);
+                    vacated.Add(before);
+                }
             }
             else
             {
@@ -189,6 +235,6 @@ public abstract class SyncUpsertRepositoryBase<TModel, TEntity> : SyncKeyedRepos
             await ctx.SaveChangesAsync(ct);
         }
 
-        return new UpsertSplit(updatedEntities, materiallyChanged, toInsert, skippedDeleted);
+        return new UpsertSplit(updatedEntities, materiallyChanged, vacated, toInsert, skippedDeleted);
     }
 }

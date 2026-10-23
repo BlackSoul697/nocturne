@@ -25,7 +25,7 @@ public class SubjectServiceOidcIdentityTests : IDisposable
     {
         _db = TestDbContextFactory.CreateInMemoryContext();
         _service = new SubjectService(
-            _db,
+            _db.AsFactory(),
             _audit.Object,
             Mock.Of<IRecoveryCodeService>(),
             NullLogger<SubjectService>.Instance
@@ -151,121 +151,6 @@ public class SubjectServiceOidcIdentityTests : IDisposable
         rows[0].SubjectId.Should().Be(subjectA);
     }
 
-    // -- TryRemoveOidcIdentityAsync ----------------------------------------------
-
-    private async Task<Guid> SeedPasskeyAsync(Guid subjectId, byte tag = 0)
-    {
-        var id = Guid.CreateVersion7();
-        _db.PasskeyCredentials.Add(new PasskeyCredentialEntity
-        {
-            Id = id,
-            SubjectId = subjectId,
-            CredentialId = new byte[] { tag, 1, 2, 3 },
-            PublicKey = new byte[] { 4, 5, 6 },
-            SignCount = 0,
-            Label = $"pk{tag}",
-            CreatedAt = DateTime.UtcNow,
-        });
-        await _db.SaveChangesAsync();
-        return id;
-    }
-
-    [Fact]
-    [Trait("Category", "Unit")]
-    public async Task TryRemoveOidcIdentityAsync_WhenNotOwned_ReturnsNotFound()
-    {
-        var a = await SeedSubjectAsync("a");
-        var b = await SeedSubjectAsync("b");
-        var providerId = await SeedProviderAsync();
-        var idA = await SeedIdentityAsync(a, providerId, "ext-a");
-        await SeedIdentityAsync(b, providerId, "ext-b");
-        // Keep b with another primary factor so the last-factor guard isn't what's blocking.
-        await SeedPasskeyAsync(b);
-
-        var result = await _service.TryRemoveOidcIdentityAsync(b, idA);
-
-        result.Should().Be(FactorRemovalResult.NotFound);
-        (await _db.SubjectOidcIdentities.CountAsync()).Should().Be(2);
-    }
-
-    [Fact]
-    [Trait("Category", "Unit")]
-    public async Task TryRemoveOidcIdentityAsync_WhenLastPrimaryFactor_ReturnsLastPrimaryFactor_DoesNotDelete()
-    {
-        var subjectId = await SeedSubjectAsync();
-        var providerId = await SeedProviderAsync();
-        var idId = await SeedIdentityAsync(subjectId, providerId, "ext-1");
-
-        var result = await _service.TryRemoveOidcIdentityAsync(subjectId, idId);
-
-        result.Should().Be(FactorRemovalResult.LastPrimaryFactor);
-        (await _db.SubjectOidcIdentities.CountAsync()).Should().Be(1);
-    }
-
-    [Fact]
-    [Trait("Category", "Unit")]
-    public async Task TryRemoveOidcIdentityAsync_WhenMultipleFactors_RemovesAndReturnsRemoved()
-    {
-        var subjectId = await SeedSubjectAsync();
-        var providerId = await SeedProviderAsync();
-        var idId = await SeedIdentityAsync(subjectId, providerId, "ext-1");
-        await SeedPasskeyAsync(subjectId);
-
-        var result = await _service.TryRemoveOidcIdentityAsync(subjectId, idId);
-
-        result.Should().Be(FactorRemovalResult.Removed);
-        (await _db.SubjectOidcIdentities.CountAsync()).Should().Be(0);
-        (await _db.PasskeyCredentials.CountAsync()).Should().Be(1);
-    }
-
-    [Fact]
-    [Trait("Category", "Unit")]
-    public async Task TryRemoveOidcIdentityAsync_WhenOnlyOtherIdentityIsOnDisabledProvider_ReturnsLastPrimaryFactor()
-    {
-        var subjectId = await SeedSubjectAsync();
-        var enabledProviderId = await SeedProviderAsync("Enabled");
-        var disabledProviderId = await SeedProviderAsync("Disabled", isEnabled: false);
-        var enabledIdentityId = await SeedIdentityAsync(subjectId, enabledProviderId, "enabled");
-        await SeedIdentityAsync(subjectId, disabledProviderId, "disabled");
-
-        var result = await _service.TryRemoveOidcIdentityAsync(subjectId, enabledIdentityId);
-
-        result.Should().Be(FactorRemovalResult.LastPrimaryFactor);
-        (await _db.SubjectOidcIdentities.CountAsync()).Should().Be(2);
-    }
-
-    // -- TryRemovePasskeyCredentialAsync -----------------------------------------
-
-    [Fact]
-    [Trait("Category", "Unit")]
-    public async Task TryRemovePasskeyCredentialAsync_WhenOnlyOtherIdentityIsOnDisabledProvider_ReturnsLastPrimaryFactor()
-    {
-        var subjectId = await SeedSubjectAsync();
-        var providerId = await SeedProviderAsync("Disabled", isEnabled: false);
-        await SeedIdentityAsync(subjectId, providerId, "ext-1");
-        var passkeyId = await SeedPasskeyAsync(subjectId);
-
-        var result = await _service.TryRemovePasskeyCredentialAsync(subjectId, passkeyId);
-
-        result.Should().Be(FactorRemovalResult.LastPrimaryFactor);
-        (await _db.PasskeyCredentials.CountAsync()).Should().Be(1);
-    }
-
-    [Fact]
-    [Trait("Category", "Unit")]
-    public async Task TryRemovePasskeyCredentialAsync_WhenOtherIdentityIsOnEnabledProvider_RemovesPasskey()
-    {
-        var subjectId = await SeedSubjectAsync();
-        var providerId = await SeedProviderAsync();
-        await SeedIdentityAsync(subjectId, providerId, "ext-1");
-        var passkeyId = await SeedPasskeyAsync(subjectId);
-
-        var result = await _service.TryRemovePasskeyCredentialAsync(subjectId, passkeyId);
-
-        result.Should().Be(FactorRemovalResult.Removed);
-        (await _db.PasskeyCredentials.CountAsync()).Should().Be(0);
-    }
-
     // -- CountPrimaryAuthFactorsAsync --------------------------------------------
 
     [Fact]
@@ -382,7 +267,7 @@ public class SubjectServiceOidcIdentityTests : IDisposable
         var providerId = await SeedProviderAsync();
 
         var subject = await _service.FindOrCreateFromOidcAsync(
-            providerId, "new-ext", "https://issuer.example", "new@x", "New User");
+            providerId, "new-ext", "https://issuer.example", "new@x", emailVerified: true, "New User");
 
         subject.Should().NotBeNull();
         var sRow = await _db.Subjects.AsNoTracking().SingleAsync(s => s.Id == subject.Id);
@@ -420,11 +305,42 @@ public class SubjectServiceOidcIdentityTests : IDisposable
         await SeedIdentityAsync(subjectId, providerId, "ext-1");
 
         await _service.FindOrCreateFromOidcAsync(
-            providerId, "ext-1", "https://issuer.example", "new@e", "New Name");
+            providerId, "ext-1", "https://issuer.example", "new@e", emailVerified: true, "New Name");
 
         var sRow = await _db.Subjects.AsNoTracking().SingleAsync(s => s.Id == subjectId);
         sRow.Email.Should().Be("new@e");
         sRow.Name.Should().Be("New Name");
+    }
+
+    [Fact]
+    [Trait("Category", "Unit")]
+    public async Task FindOrCreateFromOidcAsync_OnFind_KeepsTheSubjectEmailWhenTheProviderEmailIsUnverified()
+    {
+        var subjectId = await SeedSubjectAsync("alice");
+        var providerId = await SeedProviderAsync();
+        await SeedIdentityAsync(subjectId, providerId, "ext-1");
+        var before = (await _db.Subjects.AsNoTracking().SingleAsync(s => s.Id == subjectId)).Email;
+
+        await _service.FindOrCreateFromOidcAsync(
+            providerId, "ext-1", "https://issuer.example", "someone-else@e", emailVerified: false);
+
+        var sRow = await _db.Subjects.AsNoTracking().SingleAsync(s => s.Id == subjectId);
+        sRow.Email.Should().Be(before);
+    }
+
+    [Fact]
+    [Trait("Category", "Unit")]
+    public async Task FindOrCreateFromOidcAsync_OnCreate_RecordsAnUnverifiedEmailOnlyOnTheIdentity()
+    {
+        var providerId = await SeedProviderAsync();
+
+        var subject = await _service.FindOrCreateFromOidcAsync(
+            providerId, "new-ext", "https://issuer.example", "unverified@x", emailVerified: false, "New User");
+
+        var sRow = await _db.Subjects.AsNoTracking().SingleAsync(s => s.Id == subject.Id);
+        sRow.Email.Should().BeNull();
+        var iRow = await _db.SubjectOidcIdentities.AsNoTracking().SingleAsync();
+        iRow.Email.Should().Be("unverified@x");
     }
 
     // -- UpdateOidcIdentityLastUsedAsync -----------------------------------------

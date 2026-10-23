@@ -43,14 +43,42 @@ export interface SequenceDefinition {
   steps: string[];
   prerequisite?: string;
   completesKeys?: string[];
+  /** Dismissing a step of this sequence also holds back every other mark until the next navigation. */
+  quietOnDismiss?: boolean;
 }
 
 export interface SequenceConfig {
   [name: string]: SequenceDefinition;
 }
 
+/** The part of a router's before-navigate event the provider needs; SvelteKit's `BeforeNavigate` fits. */
+export interface CoachNavigation {
+  type: string;
+  to: { url: URL } | null;
+  willUnload: boolean;
+  cancel: () => void;
+  complete: Promise<void>;
+}
+
+export interface CoachRouter {
+  /** Registers a callback run before every client-side navigation. Called once, at provider init. */
+  beforeNavigate(callback: (navigation: CoachNavigation) => void): void;
+  goto(url: URL): Promise<unknown>;
+}
+
+/** The popover's control text. The app supplies it so the package carries no language of its own. */
+export interface CoachLabels {
+  dismiss: string;
+  showTip: string;
+  back: string;
+  next: string;
+  gotIt: string;
+  stepCounter: (current: number, total: number) => string;
+}
+
 export interface CoachMarkProviderOptions {
   adapter: CoachMarkAdapter;
+  labels: CoachLabels;
   sequences?: SequenceConfig;
   settleDelay?: number;
   seenDwellMs?: number;

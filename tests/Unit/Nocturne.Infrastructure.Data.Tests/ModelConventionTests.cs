@@ -134,18 +134,23 @@ public class ModelConventionTests
     }
 
     /// <summary>
-    /// EF drops this one as redundant against the tenant-leading partial indexes unless it is
-    /// declared — see <see cref="NocturneDbContext.V4SnapshotEntities"/>.
+    /// The snapshot tables' other tenant-leading indexes are partial, and EF drops its conventional
+    /// tenant index as redundant against them, so a table neither history-paged nor given
+    /// IX_&lt;table&gt;_tenant_id would leave a tenant-wide scan nothing to read.
     /// </summary>
     [Fact]
-    public void EverySnapshotTable_KeepsTheUnfilteredTenantIndex() =>
-        AssertFamily(
-            NocturneDbContext.V4SnapshotEntities,
-            "_tenant_id",
-            i => Columns(i).SequenceEqual([nameof(ITenantScoped.TenantId)])
-                && !i.IsUnique
-                && i.GetFilter() is null,
-            prefix: "IX_");
+    public void EverySnapshotTable_HasAnUnfilteredTenantLeadingIndex()
+    {
+        NocturneDbContext.V4SnapshotEntities.Should().NotBeEmpty();
+        var model = Model();
+
+        NocturneDbContext.V4SnapshotEntities.Select(model.FindEntityType)
+            .Where(e => e is null
+                || !e.GetIndexes().Any(i =>
+                    i.Properties[0].Name == nameof(ITenantScoped.TenantId) && i.GetFilter() is null))
+            .Select(e => e?.ShortName() ?? "<unmapped>")
+            .Should().BeEmpty("a tenant-wide scan of a snapshot table needs an unfiltered tenant-leading index");
+    }
 
     [Fact]
     public void EverySyncDedupedTable_HasThePartialUniqueUpsertKey() =>
@@ -214,7 +219,7 @@ public class ModelConventionTests
             .SelectMany(g => g.Entities.Select(t => (Entity: t, g.Property)))
             .ToList();
 
-        listed.Should().HaveCountGreaterThan(40,
+        listed.Should().HaveCountGreaterThan(15,
             "a loop over an empty list emits nothing, and the assertion below would then pass vacuously");
 
         var model = Model();
@@ -224,6 +229,33 @@ public class ModelConventionTests
                 || property.GetDefaultValueSql() != "CURRENT_TIMESTAMP")
             .Select(p => $"{p.Entity.Name}.{p.Property}")
             .Should().BeEmpty("every listed column needs the default on its own mapped property");
+    }
+
+    [Fact]
+    public void EveryMarkerDeclaredTimestampColumn_HasACurrentTimestampDefault()
+    {
+        (Type Marker, string Property)[] markers =
+        [
+            (typeof(ISystemCreated), nameof(ISystemCreated.SysCreatedAt)),
+            (typeof(ISystemTimestamped), nameof(ISystemTimestamped.SysUpdatedAt)),
+            (typeof(IEntityCreated), nameof(IEntityCreated.CreatedAt)),
+            (typeof(IEntityTimestamped), nameof(IEntityTimestamped.UpdatedAt)),
+        ];
+
+        var columns = Model().GetEntityTypes()
+            .SelectMany(e => markers
+                .Where(m => m.Marker.IsAssignableFrom(e.ClrType))
+                .Select(m => (Entity: e, m.Property)))
+            .ToList();
+
+        columns.Should().HaveCountGreaterThan(90,
+            "every record, snapshot, schedule and identity table declares a timestamp marker");
+
+        columns
+            .Where(c => c.Entity.FindProperty(c.Property)?.GetDefaultValueSql() != "CURRENT_TIMESTAMP")
+            .Select(c => $"{c.Entity.ClrType.Name}.{c.Property}")
+            .Should().BeEmpty(
+                "a write that bypasses SaveChanges would otherwise store 0001-01-01 in the column");
     }
 
     private static void AssertFamily(

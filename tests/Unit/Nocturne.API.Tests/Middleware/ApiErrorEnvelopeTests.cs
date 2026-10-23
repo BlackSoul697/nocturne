@@ -4,8 +4,11 @@ using System.Text;
 using System.Text.Json;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 using Moq;
+using Nocturne.API.Middleware;
 using Nocturne.API.Tests.Infrastructure;
+using Nocturne.API.Tests.TestDoubles;
 using Nocturne.Core.Contracts.Alerts;
 using Nocturne.Core.Contracts.Glucose;
 using Nocturne.Core.Contracts.Health;
@@ -31,9 +34,11 @@ public class ApiErrorEnvelopeTests : IClassFixture<ApiErrorEnvelopeTests.Throwin
     private const string TwentyFourHexId = "aaaaaaaaaaaaaaaaaaaaaaaa";
 
     private readonly HttpClient _client;
+    private readonly ThrowingServiceFactory _factory;
 
     public ApiErrorEnvelopeTests(ThrowingServiceFactory factory)
     {
+        _factory = factory;
         _client = factory.CreateClient();
         _client.DefaultRequestHeaders.Add(
             "api-secret",
@@ -45,6 +50,26 @@ public class ApiErrorEnvelopeTests : IClassFixture<ApiErrorEnvelopeTests.Throwin
     public async Task V1_ThrowingAction_AnswersTheNightscoutV1Envelope()
     {
         var response = await _client.GetAsync($"/api/v1/entries/{TwentyFourHexId}");
+
+        Assert.Equal(HttpStatusCode.InternalServerError, response.StatusCode);
+        Assert.Equal("application/json", response.Content.Headers.ContentType?.MediaType);
+        Assert.Equal(
+            $$"""{"status":500,"message":"Internal server error","type":"internal","error":"{{BoomMessage}}"}""",
+            await response.Content.ReadAsStringAsync()
+        );
+    }
+
+    /// <summary>
+    /// Nightscout serves v1 under <c>/api/v2</c> wherever v2 has no route of its own, so a v1
+    /// resource read through a v2 path is served by the v1 action and answers the v1 envelope. The
+    /// <c>.json</c> form checks the fallback runs after the suffix is stripped.
+    /// </summary>
+    [Theory]
+    [InlineData($"/api/v2/entries/{TwentyFourHexId}")]
+    [InlineData($"/api/v2/entries/{TwentyFourHexId}.json")]
+    public async Task V2PathWithoutAV2Route_IsServedByV1_AndAnswersTheV1Envelope(string route)
+    {
+        var response = await _client.GetAsync(route);
 
         Assert.Equal(HttpStatusCode.InternalServerError, response.StatusCode);
         Assert.Equal("application/json", response.Content.Headers.ContentType?.MediaType);
@@ -110,6 +135,21 @@ public class ApiErrorEnvelopeTests : IClassFixture<ApiErrorEnvelopeTests.Throwin
         Assert.DoesNotContain(BoomMessage, raw);
     }
 
+    [Fact]
+    public async Task ThrowingAction_LogsTheRouteTemplate_NotTheCredentialInThePath()
+    {
+        const string token = "noc_credentialthatmustnotbelogged";
+
+        await _client.GetAsync($"/api/v2/authorization/request/{token}");
+
+        var messages = _factory.HandlerLogger.Entries
+            .Where(e => e.Level == LogLevel.Error)
+            .Select(e => e.Message)
+            .ToList();
+        messages.Should().Contain(m => m.Contains("api/v2/authorization/request/{accessToken}"));
+        messages.Should().NotContain(m => m.Contains(token));
+    }
+
     private static string Sha1Hex(string value) =>
         Convert.ToHexString(SHA1.HashData(Encoding.UTF8.GetBytes(value))).ToLowerInvariant();
 
@@ -119,12 +159,15 @@ public class ApiErrorEnvelopeTests : IClassFixture<ApiErrorEnvelopeTests.Throwin
     /// </summary>
     public sealed class ThrowingServiceFactory : AuthenticationTestFactory
     {
+        internal ListLogger<ApiErrorEnvelopeHandler> HandlerLogger { get; } = new();
+
         protected override void ConfigureWebHost(IWebHostBuilder builder)
         {
             base.ConfigureWebHost(builder);
 
             builder.ConfigureServices(services =>
             {
+                services.AddSingleton<ILogger<ApiErrorEnvelopeHandler>>(HandlerLogger);
                 var entries = new Mock<IEntryService>();
                 entries
                     .Setup(s =>
@@ -133,7 +176,6 @@ public class ApiErrorEnvelopeTests : IClassFixture<ApiErrorEnvelopeTests.Throwin
                     .ThrowsAsync(new InvalidOperationException(BoomMessage));
                 services.AddSingleton(entries.Object);
                 services.AddSingleton(new Mock<IDocumentProcessingService>().Object);
-                services.AddSingleton(new Mock<IProcessingStatusService>().Object);
                 services.AddSingleton(new Mock<ICanonicalAlertEvaluator>().Object);
 
                 var bodyWeight = new Mock<IBodyWeightService>();

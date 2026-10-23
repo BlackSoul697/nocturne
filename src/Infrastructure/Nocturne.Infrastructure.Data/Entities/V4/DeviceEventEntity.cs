@@ -10,8 +10,13 @@ namespace Nocturne.Infrastructure.Data.Entities.V4;
 /// Maps to Nocturne.Core.Models.V4.DeviceEvent
 /// </summary>
 [Table("device_events")]
-public class DeviceEventEntity : V4TimeSeriesEntityBase, ISyncDedupable, IDeviceAttributedEntity
+public class DeviceEventEntity : V4TimeSeriesEntityBase, ISyncDedupable, IDeviceAttributedEntity, IUpstreamFingerprinted
 {
+    /// <inheritdoc />
+    [AuditIgnored]
+    [Column("upstream_fingerprint")]
+    public string? UpstreamFingerprint { get; set; }
+
     /// <summary>
     /// Type of device event stored as string (e.g. "SiteChange", "SensorStart")
     /// </summary>
@@ -23,7 +28,6 @@ public class DeviceEventEntity : V4TimeSeriesEntityBase, ISyncDedupable, IDevice
     /// Free-text notes about the device event
     /// </summary>
     [Column("notes")]
-    [MaxLength(4096)]
     public string? Notes { get; set; }
 
     /// <summary>

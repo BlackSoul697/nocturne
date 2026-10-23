@@ -2,15 +2,14 @@
   import * as Card from "$lib/components/ui/card";
   import * as Dialog from "$lib/components/ui/dialog";
   import { Button } from "$lib/components/ui/button";
-  import {
-    Link2,
-    Plus,
-    Trash2,
-    Loader2,
-    Clock,
-    AlertTriangle,
-    Check,
-  } from "lucide-svelte";
+  import { invalidateAll } from "$app/navigation";
+  import Link2 from "@lucide/svelte/icons/link-2";
+  import Plus from "@lucide/svelte/icons/plus";
+  import Trash2 from "@lucide/svelte/icons/trash-2";
+  import Loader2 from "@lucide/svelte/icons/loader-circle";
+  import Clock from "@lucide/svelte/icons/clock";
+  import AlertTriangle from "@lucide/svelte/icons/triangle-alert";
+  import Check from "@lucide/svelte/icons/check";
   import { formatMediumDateTime } from "$lib/utils/formatting";
   import {
     getLinkedIdentities,
@@ -85,6 +84,7 @@
 
     try {
       await unlinkIdentity(removeTarget.id);
+      await invalidateAll();
       successMessage = "Sign-in method removed.";
       clearMessagesSoon();
     } catch (err) {

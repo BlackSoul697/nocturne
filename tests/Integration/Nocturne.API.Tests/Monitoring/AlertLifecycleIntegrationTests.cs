@@ -2,8 +2,11 @@ using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
 using FluentAssertions;
+using Microsoft.EntityFrameworkCore;
 using Nocturne.API.Services.Alerts;
 using Nocturne.API.Tests.Integration.Infrastructure;
+using Nocturne.Core.Models.Alerts;
+using Nocturne.Infrastructure.Data.Entities;
 using Npgsql;
 using Xunit;
 using Xunit.Abstractions;
@@ -16,13 +19,13 @@ namespace Nocturne.API.Tests.Integration.Monitoring;
 /// snooze, history, and delivery workflows.
 /// </summary>
 [Trait("Category", "Integration")]
-public class AlertLifecycleIntegrationTests : AspireIntegrationTestBase
+public class AlertLifecycleIntegrationTests : ApiIntegrationTestBase
 {
     private Guid _tenantId;
     private string _accessToken = null!;
 
     public AlertLifecycleIntegrationTests(
-        AspireIntegrationTestFixture fixture,
+        ApiIntegrationTestFixture fixture,
         ITestOutputHelper output)
         : base(fixture, output) { }
 
@@ -74,8 +77,8 @@ public class AlertLifecycleIntegrationTests : AspireIntegrationTestBase
         await using var conn = new NpgsqlConnection(connStr);
         await conn.OpenAsync();
 
-        var ruleId = await AuthTestHelpers.SeedAlertRuleAsync(conn, _tenantId);
-        var (excursionId, _) = await AuthTestHelpers.SeedAlertExcursionAsync(conn, _tenantId, ruleId);
+        var ruleId = await AuthTestHelpers.SeedAlertRuleAsync(Fixture, _tenantId);
+        var (excursionId, _) = await AuthTestHelpers.SeedAlertExcursionAsync(Fixture, _tenantId, ruleId);
 
         using var client = AuthTestHelpers.CreateAuthenticatedSubjectClient(Fixture, _accessToken);
 
@@ -104,8 +107,8 @@ public class AlertLifecycleIntegrationTests : AspireIntegrationTestBase
         await using var conn = new NpgsqlConnection(connStr);
         await conn.OpenAsync();
 
-        var ruleId = await AuthTestHelpers.SeedAlertRuleAsync(conn, _tenantId);
-        await AuthTestHelpers.SeedAlertExcursionAsync(conn, _tenantId, ruleId);
+        var ruleId = await AuthTestHelpers.SeedAlertRuleAsync(Fixture, _tenantId);
+        await AuthTestHelpers.SeedAlertExcursionAsync(Fixture, _tenantId, ruleId);
 
         using var client = AuthTestHelpers.CreateAuthenticatedSubjectClient(Fixture, _accessToken);
 
@@ -138,8 +141,8 @@ public class AlertLifecycleIntegrationTests : AspireIntegrationTestBase
         await using var conn = new NpgsqlConnection(connStr);
         await conn.OpenAsync();
 
-        var ruleId = await AuthTestHelpers.SeedAlertRuleAsync(conn, _tenantId);
-        var (_, instanceId) = await AuthTestHelpers.SeedAlertExcursionAsync(conn, _tenantId, ruleId);
+        var ruleId = await AuthTestHelpers.SeedAlertRuleAsync(Fixture, _tenantId);
+        var (_, instanceId) = await AuthTestHelpers.SeedAlertExcursionAsync(Fixture, _tenantId, ruleId);
 
         using var client = AuthTestHelpers.CreateAuthenticatedSubjectClient(Fixture, _accessToken);
 
@@ -153,6 +156,36 @@ public class AlertLifecycleIntegrationTests : AspireIntegrationTestBase
     }
 
     [Fact]
+    public async Task SnoozeInstance_IsReportedOnActiveAlerts()
+    {
+        var connStr = await GetPostgresConnectionStringAsync();
+        await using var conn = new NpgsqlConnection(connStr);
+        await conn.OpenAsync();
+
+        var ruleId = await AuthTestHelpers.SeedAlertRuleAsync(Fixture, _tenantId);
+        var (excursionId, instanceId) = await AuthTestHelpers.SeedAlertExcursionAsync(Fixture, _tenantId, ruleId);
+
+        using var client = AuthTestHelpers.CreateAuthenticatedSubjectClient(Fixture, _accessToken);
+        var before = DateTime.UtcNow;
+
+        var snooze = await client.PostAsJsonAsync(
+            $"/api/v4/alerts/instances/{instanceId}/snooze",
+            new { minutes = 30 });
+        snooze.StatusCode.Should().Be(HttpStatusCode.NoContent);
+
+        var active = JsonSerializer.Deserialize<JsonElement>(
+            await client.GetStringAsync("/api/v4/alerts/active"));
+        var excursion = active.EnumerateArray().Single(e => e.GetProperty("id").GetGuid() == excursionId);
+
+        excursion.GetProperty("snoozedUntil").GetDateTime().Should()
+            .BeCloseTo(before.AddMinutes(30), TimeSpan.FromMinutes(1));
+        excursion.GetProperty("acknowledgedAt").ValueKind.Should().Be(JsonValueKind.Null);
+        var instance = excursion.GetProperty("activeInstances").EnumerateArray().Single();
+        instance.GetProperty("snoozedUntil").ValueKind.Should().Be(JsonValueKind.String);
+        instance.GetProperty("snoozeCount").GetInt32().Should().Be(1);
+    }
+
+    [Fact]
     public async Task SnoozeInstance_MaxSnoozesExceeded_Returns409()
     {
         // Arrange
@@ -160,8 +193,8 @@ public class AlertLifecycleIntegrationTests : AspireIntegrationTestBase
         await using var conn = new NpgsqlConnection(connStr);
         await conn.OpenAsync();
 
-        var ruleId = await AuthTestHelpers.SeedAlertRuleAsync(conn, _tenantId);
-        var (_, instanceId) = await AuthTestHelpers.SeedAlertExcursionAsync(conn, _tenantId, ruleId);
+        var ruleId = await AuthTestHelpers.SeedAlertRuleAsync(Fixture, _tenantId);
+        var (_, instanceId) = await AuthTestHelpers.SeedAlertExcursionAsync(Fixture, _tenantId, ruleId);
 
         using var client = AuthTestHelpers.CreateAuthenticatedSubjectClient(Fixture, _accessToken);
 
@@ -207,8 +240,8 @@ public class AlertLifecycleIntegrationTests : AspireIntegrationTestBase
         await using var conn = new NpgsqlConnection(connStr);
         await conn.OpenAsync();
 
-        var ruleId = await AuthTestHelpers.SeedAlertRuleAsync(conn, _tenantId);
-        var (excursionId, _) = await AuthTestHelpers.SeedAlertExcursionAsync(conn, _tenantId, ruleId);
+        var ruleId = await AuthTestHelpers.SeedAlertRuleAsync(Fixture, _tenantId);
+        var (excursionId, _) = await AuthTestHelpers.SeedAlertExcursionAsync(Fixture, _tenantId, ruleId);
 
         // Close the excursion so it appears in history
         await using (var cmd = conn.CreateCommand())
@@ -256,50 +289,26 @@ public class AlertLifecycleIntegrationTests : AspireIntegrationTestBase
     public async Task DeliveryLifecycle_PendingToDelivered()
     {
         // Arrange
-        var connStr = await GetPostgresConnectionStringAsync();
-        await using var conn = new NpgsqlConnection(connStr);
-        await conn.OpenAsync();
+        var ruleId = await AuthTestHelpers.SeedAlertRuleAsync(Fixture, _tenantId);
+        var (_, instanceId) = await AuthTestHelpers.SeedAlertExcursionAsync(Fixture, _tenantId, ruleId);
 
-        var ruleId = await AuthTestHelpers.SeedAlertRuleAsync(conn, _tenantId);
-        var (_, instanceId) = await AuthTestHelpers.SeedAlertExcursionAsync(conn, _tenantId, ruleId);
-
-        // Set RLS context
-        await using (var cmd = conn.CreateCommand())
-        {
-            cmd.CommandText = "SELECT set_config('app.current_tenant_id', @tenantId, false);";
-            cmd.Parameters.AddWithValue("tenantId", _tenantId.ToString());
-            await cmd.ExecuteNonQueryAsync();
-        }
-
-        // Get the escalation step ID
-        Guid stepId;
-        await using (var cmd = conn.CreateCommand())
-        {
-            cmd.CommandText = """
-                SELECT id FROM alert_escalation_steps WHERE alert_schedule_id = (
-                    SELECT id FROM alert_schedules WHERE alert_rule_id = @ruleId LIMIT 1
-                ) LIMIT 1;
-                """;
-            cmd.Parameters.AddWithValue("ruleId", ruleId);
-            var result = await cmd.ExecuteScalarAsync()
-                         ?? throw new InvalidOperationException(
-                             $"No escalation step found for rule {ruleId}.");
-            stepId = (Guid)result;
-        }
-
-        // Insert a pending delivery
+        // A pending delivery on the rule's channel
         var deliveryId = Guid.CreateVersion7();
-        await using (var cmd = conn.CreateCommand())
+        await using (var db = Fixture.CreateDbContext(_tenantId))
         {
-            cmd.CommandText = """
-                INSERT INTO alert_deliveries (id, tenant_id, alert_instance_id, escalation_step_id, channel_type, destination, payload, status, created_at, retry_count)
-                VALUES (@id, @tenantId, @instanceId, @stepId, 'WebPush', 'default', '{"alertType":"threshold"}'::jsonb, 'pending', now(), 0);
-                """;
-            cmd.Parameters.AddWithValue("id", deliveryId);
-            cmd.Parameters.AddWithValue("tenantId", _tenantId);
-            cmd.Parameters.AddWithValue("instanceId", instanceId);
-            cmd.Parameters.AddWithValue("stepId", stepId);
-            await cmd.ExecuteNonQueryAsync();
+            var channel = await db.AlertRuleChannels.SingleAsync(c => c.AlertRuleId == ruleId);
+            db.AlertDeliveries.Add(new AlertDeliveryEntity
+            {
+                Id = deliveryId,
+                TenantId = _tenantId,
+                AlertInstanceId = instanceId,
+                AlertRuleChannelId = channel.Id,
+                ChannelType = channel.ChannelType,
+                Destination = channel.Destination,
+                Payload = """{"alertType":"threshold"}""",
+                Status = "pending",
+            });
+            await db.SaveChangesAsync();
         }
 
         using var client = AuthTestHelpers.CreateAuthenticatedSubjectClient(Fixture, _accessToken);
@@ -311,5 +320,85 @@ public class AlertLifecycleIntegrationTests : AspireIntegrationTestBase
 
         // Assert
         response.StatusCode.Should().Be(HttpStatusCode.NoContent);
+    }
+
+    [Fact]
+    public async Task A_history_clamped_bot_marks_the_deliveries_of_an_open_alert_however_old()
+    {
+        var ruleId = await AuthTestHelpers.SeedAlertRuleAsync(Fixture, _tenantId);
+        var (excursionId, openInstanceId) = await AuthTestHelpers.SeedAlertExcursionAsync(Fixture, _tenantId, ruleId);
+
+        var threeDaysAgo = DateTime.UtcNow.AddDays(-3);
+        var delivered = Guid.CreateVersion7();
+        var failed = Guid.CreateVersion7();
+        var ofAnAlertResolvedTwoDaysAgo = Guid.CreateVersion7();
+        await using (var db = Fixture.CreateDbContext(_tenantId))
+        {
+            var resolved = new AlertInstanceEntity
+            {
+                Id = Guid.CreateVersion7(),
+                TenantId = _tenantId,
+                AlertExcursionId = excursionId,
+                TriggeredAt = DateTime.UtcNow.AddDays(-4),
+                ResolvedAt = DateTime.UtcNow.AddDays(-2),
+                Status = "resolved",
+            };
+            db.AlertInstances.Add(resolved);
+            AlertDeliveryEntity Pending(Guid id, Guid instanceId) => new()
+            {
+                Id = id,
+                TenantId = _tenantId,
+                AlertInstanceId = instanceId,
+                ChannelType = ChannelType.DiscordDm,
+                Destination = "discord-user",
+                Status = "pending",
+                CreatedAt = threeDaysAgo,
+            };
+            db.AlertDeliveries.AddRange(
+                Pending(delivered, openInstanceId),
+                Pending(failed, openInstanceId),
+                Pending(ofAnAlertResolvedTwoDaysAgo, resolved.Id));
+            await db.SaveChangesAsync();
+        }
+
+        using var bot = await CreateHistoryClampedClientAsync();
+        (await bot.PostAsJsonAsync($"/api/v4/alerts/deliveries/{delivered}/delivered", new { platformMessageId = "msg-1" }))
+            .StatusCode.Should().Be(HttpStatusCode.NoContent);
+        (await bot.PostAsJsonAsync($"/api/v4/alerts/deliveries/{failed}/failed", new { error = "rate limited" }))
+            .StatusCode.Should().Be(HttpStatusCode.NoContent);
+        (await bot.PostAsJsonAsync($"/api/v4/alerts/deliveries/{ofAnAlertResolvedTwoDaysAgo}/delivered", new { platformMessageId = "msg-2" }))
+            .StatusCode.Should().Be(HttpStatusCode.NoContent);
+
+        await using var check = Fixture.CreateDbContext(_tenantId);
+        var rows = await check.AlertDeliveries.AsNoTracking()
+            .Where(d => d.Id == delivered || d.Id == failed || d.Id == ofAnAlertResolvedTwoDaysAgo)
+            .ToDictionaryAsync(d => d.Id);
+        rows[delivered].Status.Should().Be("delivered");
+        rows[delivered].PlatformMessageId.Should().Be("msg-1");
+        rows[failed].Status.Should().Be("failed");
+        rows[failed].RetryCount.Should().Be(1);
+        rows[ofAnAlertResolvedTwoDaysAgo].Status.Should().Be("pending",
+            "a delivery of an alert resolved before the window is outside what a clamped caller reads");
+    }
+
+    private async Task<HttpClient> CreateHistoryClampedClientAsync()
+    {
+        await using var conn = new NpgsqlConnection(await GetPostgresConnectionStringAsync());
+        await conn.OpenAsync();
+        var (subjectId, token) = await AuthTestHelpers.SeedAuthenticatedSubjectAsync(
+            conn, _tenantId, "Clamped Bot");
+
+        await using (var cmd = conn.CreateCommand())
+        {
+            cmd.CommandText = """
+                SELECT set_config('app.current_tenant_id', @tenant, false);
+                UPDATE oauth_grants SET limit_to_24_hours = true WHERE subject_id = @subject;
+                """;
+            cmd.Parameters.AddWithValue("tenant", _tenantId.ToString());
+            cmd.Parameters.AddWithValue("subject", subjectId);
+            await cmd.ExecuteNonQueryAsync();
+        }
+
+        return AuthTestHelpers.CreateAuthenticatedSubjectClient(Fixture, token);
     }
 }

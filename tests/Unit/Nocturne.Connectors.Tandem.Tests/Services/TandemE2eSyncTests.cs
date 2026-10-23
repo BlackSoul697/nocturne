@@ -210,7 +210,8 @@ public class TandemE2eSyncTests
             .ContainSingle(r => r.Path.Contains("/api/reports/bff/pump-logs/e2e-device-assignment-id")).Subject;
         pumpLogs.Path.Should().Contain("pumperId=pumper-1")
             .And.Contain("startDate=2026-05-14T00%3A00%3A00Z")
-            .And.Contain("endDate=2026-05-18T23%3A59%3A59Z");
+            .And.Contain("endDate=2026-05-18T23%3A59%3A59Z")
+            .And.Contain("eventCodes=");
         pumpLogs.Authorization.Should().Be("Bearer fake-token");
         // The WAF requires same-origin Origin/Referer or it returns 403.
         pumpLogs.Origin.Should().Be("https://source.tandemdiabetes.com");
@@ -535,6 +536,66 @@ public class TandemE2eSyncTests
         pumpLogs.Path.Should().Contain("startDate=2026-05-15T00%3A00%3A00Z");
     }
 
+    /// <summary>
+    /// The pump's settings carry no time of their own, so each sync maps them to a profile stamped
+    /// with the time of that sync. Only settings that differ from the last ones published are
+    /// published again; otherwise every sync would store the same profile as a new document.
+    /// </summary>
+    [Fact]
+    public async Task Unchanged_pump_settings_are_published_once()
+    {
+        var fixture = new Fixture(PumperWithSettings(basalRate: 1000));
+
+        await fixture.RunAsync(ProfilesOnly);
+        var result = await fixture.RunAsync(ProfilesOnly);
+
+        fixture.Publisher.Profiles.Should().ContainSingle();
+        result.ItemsSynced[SyncDataType.Profiles].Should().Be(0);
+    }
+
+    [Fact]
+    public async Task Changed_pump_settings_are_published_including_a_return_to_earlier_ones()
+    {
+        var fixture = new Fixture(PumperWithSettings(basalRate: 1000));
+
+        await fixture.RunAsync(ProfilesOnly);
+        fixture.ServePumper(PumperWithSettings(basalRate: 800));
+        await fixture.RunAsync(ProfilesOnly);
+        fixture.ServePumper(PumperWithSettings(basalRate: 1000));
+        await fixture.RunAsync(ProfilesOnly);
+
+        fixture.Publisher.Profiles.Select(p => p.Store["Weekday"].Basal.Single().Value)
+            .Should().Equal(1.0, 0.8, 1.0);
+    }
+
+    [Fact]
+    public async Task Settings_whose_publish_failed_are_published_by_the_next_sync()
+    {
+        var fixture = new Fixture(PumperWithSettings(basalRate: 1000));
+
+        fixture.Publisher.FailProfiles = true;
+        await fixture.RunAsync(ProfilesOnly);
+        fixture.Publisher.FailProfiles = false;
+        await fixture.RunAsync(ProfilesOnly);
+
+        fixture.Publisher.Profiles.Should().ContainSingle();
+    }
+
+    private static readonly SyncRequest ProfilesOnly = new() { DataTypes = [SyncDataType.Profiles] };
+
+    /// <summary><see cref="PumperJson"/>'s pump carrying one pump profile at <paramref name="basalRate"/> milliunits/hour.</summary>
+    private static string PumperWithSettings(int basalRate)
+    {
+        var pumper = JsonNode.Parse(PumperJson)!;
+        pumper["pumps"]![0]!["settings"] = JsonNode.Parse($$"""
+            {"details": {
+                "profiles": {"activeIdp": 1, "profile": [{"name": "Weekday", "idp": 1, "insulinDuration": 300,
+                    "timeDependentSegments": [{"startTime": 0, "basalRate": {{basalRate}}, "isf": 50, "carbRatio": 10000, "targetBg": 110}]}]},
+                "cgmSettings": {"highGlucoseAlertMgPerDl": 200, "lowGlucoseAlertMgPerDl": 80} } }
+            """);
+        return pumper.ToJsonString();
+    }
+
     private static DateTime Utc(int y, int mo, int d, int h, int mi, int s) =>
         new(y, mo, d, h, mi, s, DateTimeKind.Utc);
 
@@ -646,6 +707,20 @@ public class TandemE2eSyncTests
         }
     }
 
+    private sealed class InMemoryCursorStore : IConnectorSyncCursorStore
+    {
+        private readonly Dictionary<(string, string), ConnectorSyncCursor> _cursors = [];
+
+        public Task<ConnectorSyncCursor?> GetAsync(string connectorName, string resource, CancellationToken cancellationToken = default) =>
+            Task.FromResult(_cursors.GetValueOrDefault((connectorName, resource)));
+
+        public Task SetAsync(string connectorName, string resource, ConnectorSyncCursor cursor, CancellationToken cancellationToken = default)
+        {
+            _cursors[(connectorName, resource)] = cursor;
+            return Task.CompletedTask;
+        }
+    }
+
     /// <summary>Records every published record; the Nocturne analog of upstream's FakeNightscout.</summary>
     private sealed class RecordingPublisher(DateTime? latestEntry, DateTime? latestTreatment)
         : IConnectorPublisher, IGlucosePublisher, ITreatmentPublisher, IDevicePublisher, IMetadataPublisher
@@ -660,6 +735,7 @@ public class TandemE2eSyncTests
         public List<StateSpan> StateSpans { get; } = [];
         public List<SystemEvent> SystemEvents { get; } = [];
         public List<Profile> Profiles { get; } = [];
+        public bool FailProfiles { get; set; }
 
         public bool PublishedAnything =>
             SensorGlucoses.Count + Boluses.Count + CarbIntakes.Count + BolusCalculations.Count +
@@ -673,6 +749,8 @@ public class TandemE2eSyncTests
         public IMetadataPublisher Metadata => this;
         public int SkippedDeleted => 0;
 
+        public int Refused => 0;
+
         private static Task<bool> Record<T>(List<T> sink, IEnumerable<T> records)
         {
             sink.AddRange(records);
@@ -681,6 +759,8 @@ public class TandemE2eSyncTests
 
         public Task<bool> PublishEntriesAsync(IEnumerable<Entry> entries, string source, WriteOrigin origin, CancellationToken ct = default) =>
             Task.FromResult(true);
+        public Task<int?> PublishRecentEntriesAsync(IEnumerable<Entry> entries, string source, WriteOrigin origin, CancellationToken ct = default) =>
+            Task.FromResult<int?>(0);
         public Task<bool> PublishSensorGlucoseAsync(IEnumerable<SensorGlucose> records, string source, WriteOrigin origin, CancellationToken ct = default) =>
             Record(SensorGlucoses, records);
         public Task<DateTime?> GetLatestEntryTimestampAsync(string source, CancellationToken ct = default) =>
@@ -704,16 +784,29 @@ public class TandemE2eSyncTests
             Task.FromResult(true);
         public Task<DateTime?> GetLatestTreatmentTimestampAsync(string source, CancellationToken ct = default) =>
             Task.FromResult(latestTreatment);
+        public Task<DateTime?> GetLatestTreatmentTimestampAsync(SyncDataType type, string source, CancellationToken ct = default) =>
+            Task.FromResult(latestTreatment);
+
+        public Task<IReadOnlyDictionary<string, DateTime>> GetStoredTreatmentIdsAsync(string source, DateTime from, DateTime to, CancellationToken ct = default) =>
+            Task.FromResult<IReadOnlyDictionary<string, DateTime>>(new Dictionary<string, DateTime>());
+
+        public Task<int?> PublishRecentTreatmentsAsync(IEnumerable<Treatment> treatments, string source, WriteOrigin origin, CancellationToken ct = default) =>
+            Task.FromResult<int?>(0);
+
+        public Task<int> DeleteTreatmentsAsync(string source, IReadOnlySet<string> legacyIds, CancellationToken ct = default) =>
+            Task.FromResult(0);
 
         public Task<bool> PublishDeviceStatusAsync(IEnumerable<DeviceStatus> deviceStatuses, string source, WriteOrigin origin, CancellationToken ct = default) =>
             Record(DeviceStatuses, deviceStatuses);
+        public Task<int?> PublishRecentDeviceStatusAsync(IEnumerable<DeviceStatus> deviceStatuses, string source, WriteOrigin origin, CancellationToken ct = default) =>
+            Task.FromResult<int?>(0);
         public Task<bool> PublishDeviceEventsAsync(IEnumerable<DeviceEvent> records, string source, WriteOrigin origin, CancellationToken ct = default) =>
             Record(DeviceEvents, records);
         public Task<DateTime?> GetLatestDeviceStatusTimestampAsync(string source, CancellationToken ct = default) =>
             Task.FromResult<DateTime?>(null);
 
         public Task<bool> PublishProfilesAsync(IEnumerable<Profile> profiles, string source, WriteOrigin origin, CancellationToken ct = default) =>
-            Record(Profiles, profiles);
+            FailProfiles ? Task.FromResult(false) : Record(Profiles, profiles);
         public Task<bool> PublishFoodAsync(IEnumerable<Food> foods, string source, WriteOrigin origin, CancellationToken ct = default) =>
             Task.FromResult(true);
         public Task<IReadOnlyList<ConnectorFoodEntry>?> PublishConnectorFoodEntriesAsync(IEnumerable<ConnectorFoodEntryImport> entries, string source, WriteOrigin origin, CancellationToken ct = default) =>
@@ -722,8 +815,12 @@ public class TandemE2eSyncTests
             Task.FromResult<int?>(0);
         public Task<bool> PublishActivityAsync(IEnumerable<Activity> activities, string source, WriteOrigin origin, CancellationToken ct = default) =>
             Task.FromResult(true);
+        public Task<int?> PublishRecentActivityAsync(IEnumerable<Activity> activities, string source, WriteOrigin origin, CancellationToken ct = default) =>
+            Task.FromResult<int?>(0);
         public Task<bool> PublishStateSpansAsync(IEnumerable<StateSpan> stateSpans, string source, WriteOrigin origin, CancellationToken ct = default) =>
             Record(StateSpans, stateSpans);
+        public Task<bool> PublishProfileActivationsAsync(IEnumerable<ProfileActivation> activations, string source, WriteOrigin origin, CancellationToken ct = default) =>
+            Task.FromResult(true);
         public Task<bool> PublishSystemEventsAsync(IEnumerable<SystemEvent> systemEvents, string source, WriteOrigin origin, CancellationToken ct = default) =>
             Record(SystemEvents, systemEvents);
         public Task<bool> PublishNotesAsync(IEnumerable<Note> records, string source, WriteOrigin origin, CancellationToken ct = default) =>
@@ -738,6 +835,8 @@ public class TandemE2eSyncTests
             Task.FromResult(true);
         public Task<DateTime?> GetLatestActivityTimestampAsync(string source, CancellationToken ct = default) =>
             Task.FromResult<DateTime?>(null);
+        public Task<DateTime?> GetLatestStateSpanTimestampAsync(string source, CancellationToken ct = default) =>
+            Task.FromResult<DateTime?>(null);
         public Task<DateTime?> GetBackfillLowWaterMarkAsync(string source, string collection, CancellationToken ct = default) =>
             Task.FromResult<DateTime?>(null);
         public Task SetBackfillLowWaterMarkAsync(string source, string collection, DateTime? lowWaterMark, CancellationToken ct = default) =>
@@ -750,6 +849,7 @@ public class TandemE2eSyncTests
         public List<CapturedRequest> Requests { get; } = [];
         private readonly TandemConnectorService _service;
         private readonly TandemConnectorConfiguration _config;
+        private readonly Dictionary<string, string> _responses;
 
         public Fixture(
             string pumperJson = PumperJson,
@@ -773,11 +873,12 @@ public class TandemE2eSyncTests
             };
 
             Publisher = new RecordingPublisher(latestEntry, latestTreatment);
-            var handler = new CapturingHandler(new Dictionary<string, string>
+            _responses = new Dictionary<string, string>
             {
                 ["/api/reports/bff/pumper/"] = pumperJson,
                 ["/api/reports/bff/pump-logs/"] = pumpLogsJson,
-            }, Requests, servesEveryWindow);
+            };
+            var handler = new CapturingHandler(_responses, Requests, servesEveryWindow);
 
             _service = new TandemConnectorService(
                 new HttpClient(handler),
@@ -785,8 +886,11 @@ public class TandemE2eSyncTests
                 NullLogger<TandemConnectorService>.Instance,
                 Mock.Of<IRetryDelayStrategy>(),
                 new FakeTandemAuthTokenProvider(),
-                Publisher);
+                Publisher,
+                new InMemoryCursorStore());
         }
+
+        public void ServePumper(string pumperJson) => _responses["/api/reports/bff/pumper/"] = pumperJson;
 
         public Task<SyncResult> RunAsync(SyncRequest? request = null) =>
             _service.SyncDataAsync(request ?? new SyncRequest(), _config, CancellationToken.None);

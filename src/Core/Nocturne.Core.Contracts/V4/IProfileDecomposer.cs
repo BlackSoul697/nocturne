@@ -18,7 +18,6 @@ public interface IProfileDecomposer
     /// Decomposes a legacy Profile into V4 records for each named profile in its Store.
     /// </summary>
     /// <param name="profile">The legacy Profile to decompose</param>
-    /// <param name="ct">Cancellation token</param>
     /// <returns>
     /// A <see cref="DecompositionResult"/> containing all created or updated V4 records.
     /// A single Profile with N named stores produces N sets of 5 records each.
@@ -31,7 +30,6 @@ public interface IProfileDecomposer
     /// profile. Same records, same idempotency, as <see cref="DecomposeAsync"/> per profile.
     /// </summary>
     /// <param name="profiles">The legacy Profiles to decompose</param>
-    /// <param name="ct">Cancellation token</param>
     /// <returns>
     /// A single <see cref="DecompositionResult"/> containing every created or updated V4 record; its
     /// <see cref="DecompositionResult.CorrelationId"/> is the id minted for the first profile that has
@@ -45,7 +43,24 @@ public interface IProfileDecomposer
     /// Uses prefix matching since one legacy Profile fans out to multiple composite LegacyIds.
     /// </summary>
     /// <param name="legacyId">The legacy Profile._id</param>
-    /// <param name="ct">Cancellation token</param>
     /// <returns>Total number of V4 records deleted across all tables</returns>
     Task<int> DeleteByLegacyIdAsync(string legacyId, WriteOrigin origin, CancellationToken ct = default);
+
+    /// <summary>
+    /// Replaces the stored profile document <paramref name="profile"/> names by its <c>_id</c> with
+    /// the stores it carries, inserting it when none is stored, and deletes the stored stores it no
+    /// longer carries.
+    /// </summary>
+    /// <returns>
+    /// <c>false</c>, deleting nothing, when the document carries no store or a store was not written
+    /// because a user deleted that identity.
+    /// </returns>
+    Task<bool> ReplaceDocumentAsync(Profile profile, WriteOrigin origin, CancellationToken ct = default);
+
+    /// <summary>
+    /// Deletes the profile document that answers to <paramref name="documentId"/>, as
+    /// <see cref="TherapySettings.DocumentIdOf"/> resolves it, including one served under a row id.
+    /// </summary>
+    /// <returns>Total number of V4 records deleted across all tables</returns>
+    Task<int> DeleteDocumentAsync(string documentId, WriteOrigin origin, CancellationToken ct = default);
 }

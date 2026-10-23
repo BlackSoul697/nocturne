@@ -1,5 +1,8 @@
+using System.Linq.Expressions;
 using Microsoft.EntityFrameworkCore;
 using Nocturne.Infrastructure.Data.Entities;
+using Nocturne.Core.Models;
+using Nocturne.Infrastructure.Data.Entities.V4;
 
 namespace Nocturne.Infrastructure.Data.Extensions;
 
@@ -33,6 +36,26 @@ public static class SoftDeleteDedupExtensions
     public static IQueryable<TEntity> WhereBlocksRecreation<TEntity>(this IQueryable<TEntity> source)
         where TEntity : class, ISoftDeletable
         => source.Where(e => e.DeletedAt == null || EF.Property<bool>(e, DeletedByUserProperty));
+
+    /// <summary>
+    /// The rows of <typeparamref name="TEntity"/> in the context's tenant whose latest delete was the
+    /// user's: the tombstones <see cref="WhereBlocksRecreation{TEntity}"/> holds against a re-upload.
+    /// </summary>
+    public static IQueryable<TEntity> UserTombstones<TEntity>(this NocturneDbContext ctx)
+        where TEntity : class, ITenantScoped, ISoftDeletable
+        => ctx.Set<TEntity>().UserTombstones(ctx);
+
+    /// <summary>
+    /// The rows of <paramref name="source"/> that are
+    /// <see cref="UserTombstones{TEntity}(NocturneDbContext)"/>: the soft-delete query filter is
+    /// lifted and the tenant predicate re-applied.
+    /// </summary>
+    public static IQueryable<TEntity> UserTombstones<TEntity>(this IQueryable<TEntity> source, NocturneDbContext ctx)
+        where TEntity : class, ITenantScoped, ISoftDeletable
+        => source.IgnoreQueryFilters().AsNoTracking()
+            .Where(e => e.TenantId == ctx.TenantId
+                     && e.DeletedAt != null
+                     && EF.Property<bool>(e, DeletedByUserProperty));
 
     /// <summary>
     /// Of the rows <see cref="WhereBlocksRecreation{TEntity}"/> kept for one external identity, the
@@ -79,7 +102,88 @@ public static class SoftDeleteDedupExtensions
     }
 
     /// <summary>
-    /// Sibling of <see cref="GetBlockingLegacyIdsAsync{TEntity}"/> for entities keyed
+    /// The ids among <paramref name="originalIds"/> a re-upload would find held, per
+    /// <see cref="WhereBlocksRecreation{TEntity}"/>, on a table keyed by <c>OriginalId</c> rather than
+    /// <c>LegacyId</c>.
+    /// </summary>
+    public static Task<IReadOnlySet<string>> GetHeldOriginalIdsAsync<TEntity>(
+        this NocturneDbContext ctx,
+        IReadOnlyCollection<string> originalIds,
+        CancellationToken ct = default)
+        where TEntity : class, ITenantScoped, ISoftDeletable, IOriginalIdentified
+        => ctx.GetHeldOriginalIdsAsync<TEntity>(originalIds, _ => true, ct);
+
+    /// <summary>
+    /// As <see cref="GetHeldOriginalIdsAsync{TEntity}(NocturneDbContext, IReadOnlyCollection{string}, CancellationToken)"/>,
+    /// counting only the rows <paramref name="within"/> keeps: on a table whose dedup key pairs
+    /// <c>OriginalId</c> with another column, the rows sharing the rest of the write's key.
+    /// </summary>
+    public static async Task<IReadOnlySet<string>> GetHeldOriginalIdsAsync<TEntity>(
+        this NocturneDbContext ctx,
+        IReadOnlyCollection<string> originalIds,
+        Expression<Func<TEntity, bool>> within,
+        CancellationToken ct = default)
+        where TEntity : class, ITenantScoped, ISoftDeletable, IOriginalIdentified
+    {
+        if (originalIds.Count == 0)
+            return RecreationBlocks<string>.None.Held;
+
+        var ids = originalIds.ToList();
+        var held = await ctx.Set<TEntity>().IgnoreQueryFilters().AsNoTracking()
+            .Where(e => e.TenantId == ctx.TenantId
+                     && e.OriginalId != null
+                     && ids.Contains(e.OriginalId))
+            .Where(within)
+            .WhereBlocksRecreation()
+            .Select(e => e.OriginalId!)
+            .ToListAsync(ct);
+
+        return held.ToHashSet(StringComparer.Ordinal);
+    }
+
+    /// <summary>
+    /// The legacy ids among <paramref name="incoming"/> that must not be inserted: as the id-set
+    /// overload, except that a user tombstone does not hold a legacy id against a row that
+    /// <see cref="TreatmentClientId.IsDifferentRecord"/> says is another client record. The unique
+    /// legacy-id index counts live rows only, so the new row inserts beside the tombstone.
+    /// </summary>
+    public static async Task<RecreationBlocks<string>> GetBlockingLegacyIdsAsync<TEntity>(
+        this NocturneDbContext ctx,
+        IEnumerable<TEntity> incoming,
+        CancellationToken ct = default)
+        where TEntity : class, IV4Entity
+    {
+        var clientIds = new Dictionary<string, string?>(StringComparer.Ordinal);
+        foreach (var entity in incoming)
+        {
+            if (!string.IsNullOrEmpty(entity.LegacyId))
+                clientIds.TryAdd(entity.LegacyId, TreatmentClientId.Of((entity as V4TimeSeriesEntityBase)?.AdditionalPropertiesJson));
+        }
+
+        if (!typeof(V4TimeSeriesEntityBase).IsAssignableFrom(typeof(TEntity)) || clientIds.Values.All(id => id is null))
+            return await ctx.GetBlockingLegacyIdsAsync<TEntity>(clientIds.Keys.ToHashSet(StringComparer.Ordinal), ct);
+
+        var legacyIds = clientIds.Keys.ToList();
+        var blocking = await ctx.Set<TEntity>().IgnoreQueryFilters().AsNoTracking()
+            .Where(e => e.TenantId == ctx.TenantId
+                     && e.LegacyId != null
+                     && legacyIds.Contains(e.LegacyId))
+            .WhereBlocksRecreation()
+            .Select(e => new
+            {
+                Key = e.LegacyId!,
+                Live = e.DeletedAt == null,
+                Json = EF.Property<string?>(e, nameof(V4TimeSeriesEntityBase.AdditionalPropertiesJson)),
+            })
+            .ToListAsync(ct);
+
+        return RecreationBlocks<string>.From(blocking
+            .Where(b => b.Live || !TreatmentClientId.IsDifferentRecord(b.Key, clientIds[b.Key],TreatmentClientId.Of(b.Json)))
+            .Select(b => (b.Key, b.Live)));
+    }
+
+    /// <summary>
+    /// Sibling of <see cref="GetBlockingLegacyIdsAsync{TEntity}(NocturneDbContext, HashSet{string}, CancellationToken)"/> for entities keyed
     /// by <c>CorrelationId</c> (Guid) instead of <c>LegacyId</c> (string). Currently
     /// used by <c>DeviceStatusExtrasEntity</c> only.
     /// </summary>

@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { Key } from "@nocturne/ui/keys";
   import { remoteErrorMessage } from "$lib/api/remote-error";
   import { goto } from "$app/navigation";
   import { resolve } from "$app/paths";
@@ -6,7 +7,8 @@
   import { page } from "$app/state";
   import { toast } from "svelte-sonner";
   import { useToastSubmission } from "$lib/forms";
-  import { X, Loader2 } from "lucide-svelte";
+  import X from "@lucide/svelte/icons/x";
+  import Loader2 from "@lucide/svelte/icons/loader-circle";
   import { Button } from "$lib/components/ui/button";
   import { StateHistory } from "runed";
   import {
@@ -15,7 +17,11 @@
   } from "$lib/stores/realtime-store.svelte";
   import { getDefinitions } from "$api/generated/trackers.generated.remote";
   import { getByIdForEdit as getClockFaceById } from "$api/clockfaces.remote";
-  import { update as updateClockFace } from "$api/generated/clockFaces.generated.remote";
+  import {
+    getStarter as getStarterClockFace,
+    update as updateClockFace,
+  } from "$api/generated/clockFaces.generated.remote";
+  import { faceUnits } from "$lib/components/clock/element-value";
   import GlucoseChartCard from "$lib/components/dashboard/glucose-chart/GlucoseChartCard.svelte";
   import type { ClockElement, TrackerDefinitionDto } from "$lib/api";
   import { createCopyFeedback } from "$lib/hooks/copy-feedback.svelte";
@@ -45,7 +51,7 @@
   } from "$lib/components/clock-builder";
 
   // State
-  let config = $state<InternalConfig>(initializeInternalConfig());
+  let config = $state<InternalConfig>({ rows: [], settings: {} });
   let clockName = $state("My Clock Face");
   const save = useToastSubmission("Failed to save clock face");
   let loading = $state(true);
@@ -101,12 +107,12 @@
     const isMac = navigator.platform.toUpperCase().indexOf("MAC") >= 0;
     const modifier = isMac ? e.metaKey : e.ctrlKey;
 
-    if (modifier && e.key === "z" && !e.shiftKey) {
+    if (modifier && e.key === Key.Z && !e.shiftKey) {
       e.preventDefault();
       if (history.canUndo) history.undo();
     } else if (
-      (modifier && e.key === "z" && e.shiftKey) ||
-      (modifier && e.key === "y")
+      (modifier && e.key === Key.Z && e.shiftKey) ||
+      (modifier && e.key === Key.Y)
     ) {
       e.preventDefault();
       if (history.canRedo) history.redo();
@@ -116,7 +122,7 @@
   // Computed styles
   const hasBackgroundImage = $derived(!!config.settings?.backgroundImage);
   const previewBgStyle = $derived(
-    clockBackgroundStyle(config.settings, currentBG, "#0a0a0a")
+    clockBackgroundStyle(config.settings, currentBG, "#0a0a0a", glucose.thresholds)
   );
   const overlayOpacity = $derived(
     hasBackgroundImage
@@ -326,8 +332,13 @@
     dragOverRowIndex = null;
   }
 
-  function resetToDefault() {
-    config = initializeInternalConfig();
+  async function resetToDefault() {
+    try {
+      config = initializeInternalConfig(await getStarterClockFace().run());
+    } catch (err) {
+      toast.error(remoteErrorMessage(err, "Failed to reset clock face"));
+      return;
+    }
     clockName = "My Clock Face";
     selectedElementId = null;
     history.clear();
@@ -395,6 +406,7 @@
     heightClass="h-full"
     defaultFocusHours={element.hours || 3}
     showPredictions={element.chartConfig?.showPredictions ?? false}
+    glucoseUnits={faceUnits(config.settings)}
   />
 {/snippet}
 
@@ -447,6 +459,7 @@
       {:else}
         <ClockElementPreview
           {element}
+          settings={config.settings}
           {glucose}
           now={currentTime}
           {trackerDefinitions}

@@ -1,6 +1,7 @@
 using Microsoft.Extensions.Logging;
 using Nocturne.Connectors.Tidepool.Models;
 using Nocturne.Core.Models.V4;
+using Nocturne.Connectors.Core.Utilities;
 
 namespace Nocturne.Connectors.Tidepool.Mappers;
 
@@ -13,32 +14,39 @@ public class TidepoolV4TreatmentMapper(ILogger logger, string connectorSource)
         TidepoolBolus[]? boluses,
         TidepoolFood[]? foods)
     {
-        var mappedBoluses = new Dictionary<DateTime, Bolus>();
+        var mappedBoluses = new List<(TidepoolBolus Source, Bolus Mapped)>();
         var mappedCarbs = new List<CarbIntake>();
         var batches = new List<DecompositionBatch>();
 
-        // Process boluses first
         if (boluses != null)
         {
-            foreach (var bolus in boluses.Where(b => b.Time.HasValue))
+            foreach (var bolus in ConnectorFaults.NonNullRecords(boluses, _logger, _connectorSource, "Tidepool bolus").Where(b => b.Time.HasValue))
             {
                 try
                 {
                     var mapped = MapBolus(bolus);
                     if (mapped != null)
-                        mappedBoluses[bolus.Time!.Value] = mapped;
+                        mappedBoluses.Add((bolus, mapped));
                 }
-                catch (Exception ex)
+                catch (Exception ex) when (ConnectorFaults.IsMalformedRecord(ex))
                 {
-                    _logger.LogWarning(ex, "Error mapping Tidepool bolus: {Id}", bolus.Id);
+                    _logger.LogWarning(ex, "Skipped malformed Tidepool bolus {Id}", bolus.Id);
                 }
             }
         }
 
+        var correlationBolusByTime = mappedBoluses
+            .GroupBy(b => b.Source.Time!.Value)
+            .ToDictionary(
+                g => g.Key,
+                g => g.OrderByDescending(b => b.Mapped.Insulin)
+                    .ThenBy(b => b.Source.Id, StringComparer.Ordinal)
+                    .First().Mapped);
+
         // Process foods: correlate with bolus at same timestamp if present
         if (foods != null)
         {
-            foreach (var food in foods.Where(f => f.Time.HasValue))
+            foreach (var food in ConnectorFaults.NonNullRecords(foods, _logger, _connectorSource, "Tidepool food").Where(f => f.Time.HasValue))
             {
                 try
                 {
@@ -48,7 +56,7 @@ public class TidepoolV4TreatmentMapper(ILogger logger, string connectorSource)
                     var timestamp = food.Time!.Value.ToUniversalTime();
                     var now = DateTime.UtcNow;
 
-                    if (mappedBoluses.TryGetValue(food.Time!.Value, out var existingBolus))
+                    if (correlationBolusByTime.TryGetValue(food.Time!.Value, out var existingBolus))
                     {
                         // Correlate bolus and carb at the same timestamp
                         var batch = new DecompositionBatch
@@ -90,14 +98,14 @@ public class TidepoolV4TreatmentMapper(ILogger logger, string connectorSource)
                         });
                     }
                 }
-                catch (Exception ex)
+                catch (Exception ex) when (ConnectorFaults.IsMalformedRecord(ex))
                 {
-                    _logger.LogWarning(ex, "Error mapping Tidepool food: {Id}", food.Id);
+                    _logger.LogWarning(ex, "Skipped malformed Tidepool food {Id}", food.Id);
                 }
             }
         }
 
-        return (mappedBoluses.Values.ToList(), mappedCarbs, batches);
+        return (mappedBoluses.Select(b => b.Mapped).ToList(), mappedCarbs, batches);
     }
 
     private Bolus? MapBolus(TidepoolBolus bolus)

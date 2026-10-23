@@ -8,6 +8,7 @@ using Nocturne.Core.Contracts.V4.Repositories;
 using Nocturne.Core.Models;
 using Nocturne.Core.Models.Authorization;
 using Nocturne.Core.Models.V4;
+using Nocturne.API.Services.Caching;
 
 namespace Nocturne.API.Controllers.V4.Treatments;
 
@@ -29,6 +30,7 @@ namespace Nocturne.API.Controllers.V4.Treatments;
 [Tags("Treatments")]
 [Route("api/v4/insulin/temp-basals")]
 [Produces("application/json")]
+[ClearsTenantCache(TenantCacheFamily.Treatments, TenantCacheFamily.Statistics)]
 public class TempBasalController(
     ITempBasalRepository repo,
     IPatientDeviceStamper deviceStamper) : ControllerBase
@@ -86,6 +88,12 @@ public class TempBasalController(
     ///
     /// - A regular item carrying both `dataSource` and `syncIdentifier` updates the row already
     ///   matched by that pair; all others insert.
+    /// - A regular item whose pair is held by a span the owner deleted is skipped: it is not
+    ///   re-created and is absent from the response, and the items around it are still written.
+    ///   This holds for a one-item array too, which answers `201 Created` with an empty array
+    ///   rather than `409 Conflict`, matching `POST bulk` on the other v4 record types: an array
+    ///   endpoint reports a refused item by leaving it out, so a resending uploader is never
+    ///   stuck retrying it. Restore the span instead to bring it back.
     /// - A cancel (`isCancel: true`) truncates the temp basal active at its timestamp by setting
     ///   the span end to that instant; with no active temp basal it is a no-op.
     ///
@@ -121,7 +129,14 @@ public class TempBasalController(
             // Attribute like the sensor-glucose native path — otherwise direct API records stay
             // unstamped and only ever surface as pseudo-devices.
             await deviceStamper.StampAsync([model], DeviceAttributionCategories.TempBasal, model.DataSource, ct);
-            results.Add(await repo.CreateAsync(model, WriteOrigin.Live, ct));
+            try
+            {
+                results.Add(await repo.CreateAsync(model, WriteOrigin.Live, ct));
+            }
+            catch (RecreationBlockedException)
+            {
+                // Skipped, per the remarks on this action.
+            }
         }
 
         return StatusCode(201, results.ToArray());
@@ -155,8 +170,12 @@ public class TempBasalController(
         CorrelationId = request.CorrelationId,
         Rate = request.Rate,
         ScheduledRate = request.ScheduledRate,
-        Origin = request.Origin ?? TempBasalOrigin.Manual,
+        Origin = request.Origin ?? TempBasalOriginProvenance.UploaderDefault(request.App, app: null),
+        OriginEvidence = request.Origin is null ? TempBasalOriginEvidence.Uploader : TempBasalOriginEvidence.Reported,
         PumpRecordId = request.PumpRecordId,
         ApsSnapshotId = request.ApsSnapshotId,
+        AdditionalProperties = request.Origin is { } origin
+            ? TempBasalAutomaticFlag.Keep(null, TempBasalAutomaticFlag.Of(origin))
+            : null,
     };
 }

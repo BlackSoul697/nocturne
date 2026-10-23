@@ -101,6 +101,10 @@ public static class ScopeTranslator
             Scope.SleepReadWrite,
         ],
 
+        // Nightscout's alarm ack permission, which silences an alarm and grants nothing else.
+        ["notifications:*:ack"] = [Scope.AlertsAcknowledge],
+        ["*:*:ack"] = [Scope.AlertsAcknowledge],
+
         // Wildcard reads. "*:*:read" is how Nightscout's own seeded "readable" role spells it.
         ["api:*:read"] = ReadEverything,
         ["*:*:read"] = ReadEverything,
@@ -118,6 +122,18 @@ public static class ScopeTranslator
         ["admin"] = [Scope.FullAccess],
         ["readable"] = ReadEverything,
     };
+
+    /// <summary>
+    /// Whether <paramref name="grantedScopes"/> read everything the legacy <c>*:*:read</c> grants.
+    /// </summary>
+    public static bool GrantsReadEverything(IReadOnlySet<string> grantedScopes) =>
+        ReadEverything.All(required => Scope.Satisfies(grantedScopes, required));
+
+    /// <summary>
+    /// Whether <paramref name="grantedScopes"/> write everything the legacy wildcard write verbs grant.
+    /// </summary>
+    public static bool GrantsWriteEverything(IReadOnlySet<string> grantedScopes) =>
+        WriteEverything.All(required => Scope.Satisfies(grantedScopes, required));
 
     /// <summary>
     /// Translate a set of legacy Shiro-style permissions into OAuth scopes.
@@ -234,6 +250,10 @@ public static class ScopeTranslator
                     permissions.Add("api:notifications:read");
                     permissions.Add("api:notifications:create");
                     permissions.Add("api:notifications:update");
+                    break;
+
+                case Scope.AlertsAcknowledge:
+                    permissions.Add("notifications:*:ack");
                     break;
 
                 case Scope.ReportsRead:

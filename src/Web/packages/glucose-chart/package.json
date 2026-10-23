@@ -1,6 +1,6 @@
 {
   "name": "@nightscout/glucose-chart",
-  "version": "0.4.1",
+  "version": "0.5.0",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/nightscout/nocturne.git",
@@ -22,7 +22,7 @@
     "lint:ci": "eslint . --max-warnings 0 --report-unused-disable-directives-severity error"
   },
   "peerDependencies": {
-    "@lucide/svelte": ">=0.400.0",
+    "@lucide/svelte": "^1.14.0",
     "d3": ">=7.0.0",
     "layerchart": ">=2.0.0",
     "svelte": ">=5.0.0",

@@ -19,7 +19,6 @@ public interface ITreatmentDecomposer
     /// based on <see cref="Treatment.EventType"/> and presence of insulin/carb data.
     /// </summary>
     /// <param name="treatment">The legacy Treatment to decompose</param>
-    /// <param name="ct">Cancellation token</param>
     /// <returns>
     /// A <see cref="DecompositionResult"/> containing the created or updated v4 records.
     /// A single Treatment may produce multiple records (e.g., Bolus + CarbIntake for a Meal Bolus).
@@ -34,24 +33,68 @@ public interface ITreatmentDecomposer
     /// Bolus-to-BolusCalculation linking is performed in a post-insert pass.
     /// </summary>
     /// <param name="treatments">The batch of legacy Treatments to decompose.</param>
-    /// <param name="ct">Cancellation token.</param>
     /// <returns>A single <see cref="DecompositionResult"/> containing all created v4 records.</returns>
     Task<DecompositionResult> DecomposeBatchAsync(
         IReadOnlyList<Treatment> treatments, WriteOrigin origin, CancellationToken ct = default);
 
     /// <summary>
-    /// Deletes all v4 records that were decomposed from a legacy Treatment with the given ID.
+    /// Deletes all v4 records that were decomposed from a legacy Treatment with the given ID, and
+    /// every other source's copy deduplication linked them to: a user deleting a treatment deletes
+    /// the event, not one source's report of it.
     /// </summary>
     /// <param name="legacyId">The legacy Treatment ID</param>
-    /// <param name="ct">Cancellation token</param>
     /// <returns>Total number of v4 records deleted across all tables</returns>
     Task<int> DeleteByLegacyIdAsync(string legacyId, WriteOrigin origin, CancellationToken ct = default);
+
+    /// <summary>
+    /// The subset of <paramref name="legacyIds"/> held only by records the user deleted, which a
+    /// re-upload under that id does not bring back.
+    /// </summary>
+    Task<IReadOnlySet<string>> GetDeletedByUserAsync(IReadOnlyCollection<string> legacyIds, CancellationToken ct = default);
+
+    /// <summary>
+    /// Soft-deletes <paramref name="source"/>'s records decomposed from <paramref name="legacyIds"/>,
+    /// including the state spans those treatments served as and the profile rows of a Profile Switch,
+    /// leaving every other source's rows under those ids alone. A deleted row that was a dedup
+    /// group's primary hands the flag to a surviving member, so another source's copy of the
+    /// event stays visible.
+    /// </summary>
+    /// <returns>Total number of v4 records deleted across all tables.</returns>
+    Task<int> DeleteFromSourceAsync(string source, IReadOnlySet<string> legacyIds, CancellationToken ct = default);
+
+    /// <summary>
+    /// Deletes the profile rows of every Profile Switch <paramref name="source"/> wrote. Call it
+    /// before the switches' spans are deleted: the spans are how the rows are found.
+    /// </summary>
+    Task DeleteProfileSwitchSnapshotsFromSourceAsync(string source, WriteOrigin origin, CancellationToken ct = default);
+
+    /// <summary>
+    /// The legacy ids of <paramref name="source"/>'s live records, including the state spans its
+    /// Profile Switches, overrides and temporary targets were stored as, whose event time falls in
+    /// [<paramref name="from"/>, <paramref name="to"/>], each with that event time.
+    /// </summary>
+    Task<IReadOnlyDictionary<string, DateTime>> GetLegacyIdsFromSourceAsync(
+        string source, DateTime from, DateTime to, CancellationToken ct = default);
+
+    /// <summary>
+    /// Moves <paramref name="source"/>'s records stored under a treatment's client id
+    /// (<see cref="TreatmentClientId"/>) onto the treatment's own id, when nothing is stored under that
+    /// id yet. Of treatments sharing a client id, the one at the records' time takes them (the first when
+    /// none is). Records the user deleted stay under the client id and are copied onto every one of
+    /// them, so they keep blocking equivalents delivered in a later call too.
+    /// </summary>
+    /// <returns>Total number of v4 records moved.</returns>
+    Task<int> RekeyClientIdRecordsAsync(
+        string source, IReadOnlyList<Treatment> treatments, CancellationToken ct = default);
+
+    /// <summary>Of treatments <paramref name="source"/> delivered again, the ones to decompose again.</summary>
+    Task<IReadOnlyList<Treatment>> SelectForRepublishAsync(
+        string source, IReadOnlyList<Treatment> treatments, CancellationToken ct = default);
 
     /// <summary>
     /// Bulk-deletes V4 treatment records matching the optional find filter (time range).
     /// </summary>
     /// <param name="find">Optional Nightscout-compatible find query for time range filtering.</param>
-    /// <param name="ct">Cancellation token.</param>
     /// <returns>Total number of V4 records deleted across all treatment tables.</returns>
     Task<long> BulkDeleteAsync(string? find, WriteOrigin origin, CancellationToken ct = default);
 }

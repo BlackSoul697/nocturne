@@ -2,6 +2,7 @@ using Microsoft.Extensions.Logging;
 using Moq;
 using Nocturne.API.Services.Entries;
 using Nocturne.API.Services.Platform;
+using Nocturne.Core.Contracts;
 using Nocturne.Core.Contracts.Entries;
 using Nocturne.Core.Contracts.V4.Repositories;
 using Nocturne.Core.Models;
@@ -39,7 +40,7 @@ public class EntryReadServiceTests
     public async Task QueryAsync_TypeSgv_QueriesOnlySensorGlucoseRepo()
     {
         var sg = MakeSg(Now, 120);
-        _sgRepo.Setup(r => r.GetAsync(
+        _sgRepo.Setup(r => r.GetForEntriesAsync(
                 It.IsAny<DateTime?>(), It.IsAny<DateTime?>(), It.IsAny<string?>(), It.IsAny<string?>(),
                 It.IsAny<int>(), It.IsAny<int>(), It.IsAny<bool>(), It.IsAny<bool>(), It.IsAny<DateTime?>(), It.IsAny<Guid?>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(new[] { sg });
@@ -70,7 +71,7 @@ public class EntryReadServiceTests
 
         Assert.Single(result);
         Assert.Equal("mbg", result[0].Type);
-        _sgRepo.Verify(r => r.GetAsync(
+        _sgRepo.Verify(r => r.GetForEntriesAsync(
             It.IsAny<DateTime?>(), It.IsAny<DateTime?>(), It.IsAny<string?>(), It.IsAny<string?>(),
             It.IsAny<int>(), It.IsAny<int>(), It.IsAny<bool>(), It.IsAny<bool>(), It.IsAny<DateTime?>(), It.IsAny<Guid?>(), It.IsAny<CancellationToken>()), Times.Never);
         _calRepo.Verify(r => r.GetAsync(
@@ -92,7 +93,7 @@ public class EntryReadServiceTests
 
         Assert.Single(result);
         Assert.Equal("cal", result[0].Type);
-        _sgRepo.Verify(r => r.GetAsync(
+        _sgRepo.Verify(r => r.GetForEntriesAsync(
             It.IsAny<DateTime?>(), It.IsAny<DateTime?>(), It.IsAny<string?>(), It.IsAny<string?>(),
             It.IsAny<int>(), It.IsAny<int>(), It.IsAny<bool>(), It.IsAny<bool>(), It.IsAny<DateTime?>(), It.IsAny<Guid?>(), It.IsAny<CancellationToken>()), Times.Never);
         _mgRepo.Verify(r => r.GetAsync(
@@ -108,7 +109,7 @@ public class EntryReadServiceTests
         var mg = MakeMg(Now, 150);
         var cal = MakeCal(Now.AddMinutes(-2));
 
-        _sgRepo.Setup(r => r.GetAsync(
+        _sgRepo.Setup(r => r.GetForEntriesAsync(
                 It.IsAny<DateTime?>(), It.IsAny<DateTime?>(), It.IsAny<string?>(), It.IsAny<string?>(),
                 It.IsAny<int>(), It.IsAny<int>(), true, false, It.IsAny<DateTime?>(), It.IsAny<Guid?>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(new[] { sg });
@@ -144,7 +145,7 @@ public class EntryReadServiceTests
             .Select(i => MakeSg(Now.AddMinutes(-i), 100 + i))
             .ToArray();
 
-        _sgRepo.Setup(r => r.GetAsync(
+        _sgRepo.Setup(r => r.GetForEntriesAsync(
                 It.IsAny<DateTime?>(), It.IsAny<DateTime?>(), It.IsAny<string?>(), It.IsAny<string?>(),
                 9, 0, true, false, It.IsAny<DateTime?>(), It.IsAny<Guid?>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(entries);
@@ -154,7 +155,7 @@ public class EntryReadServiceTests
         Assert.Equal(2, result.Count);
         // Page starts after the skipped newest reading
         Assert.Equal(entries[1].Mgdl, result[0].Sgv);
-        _sgRepo.Verify(r => r.GetAsync(
+        _sgRepo.Verify(r => r.GetForEntriesAsync(
             It.IsAny<DateTime?>(), It.IsAny<DateTime?>(), It.IsAny<string?>(), It.IsAny<string?>(),
             9, 0, true, false, It.IsAny<DateTime?>(), It.IsAny<Guid?>(), It.IsAny<CancellationToken>()), Times.Once);
     }
@@ -169,7 +170,7 @@ public class EntryReadServiceTests
         var mg = MakeMg(Now.AddMinutes(-1), 150);
         var cal = MakeCal(Now.AddMinutes(-2));
 
-        _sgRepo.Setup(r => r.GetAsync(
+        _sgRepo.Setup(r => r.GetForEntriesAsync(
                 It.IsAny<DateTime?>(), It.IsAny<DateTime?>(), It.IsAny<string?>(), It.IsAny<string?>(),
                 9, 0, true, false, It.IsAny<DateTime?>(), It.IsAny<Guid?>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(new[] { sg });
@@ -186,7 +187,7 @@ public class EntryReadServiceTests
 
         // Skip 1, take 2 from the merged 3
         Assert.Equal(2, result.Count);
-        _sgRepo.Verify(r => r.GetAsync(
+        _sgRepo.Verify(r => r.GetForEntriesAsync(
             It.IsAny<DateTime?>(), It.IsAny<DateTime?>(), It.IsAny<string?>(), It.IsAny<string?>(),
             9, 0, true, false, It.IsAny<DateTime?>(), It.IsAny<Guid?>(), It.IsAny<CancellationToken>()), Times.Once);
     }
@@ -200,7 +201,7 @@ public class EntryReadServiceTests
     public async Task GetCurrentAsync_ReturnsMostRecentSgv()
     {
         var sg = MakeSg(Now, 120);
-        _sgRepo.Setup(r => r.GetAsync(
+        _sgRepo.Setup(r => r.GetForEntriesAsync(
                 It.IsAny<DateTime?>(), It.IsAny<DateTime?>(), It.IsAny<string?>(), It.IsAny<string?>(),
                 It.IsAny<int>(), 0, true, false, It.IsAny<DateTime?>(), It.IsAny<Guid?>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(new[] { sg });
@@ -216,7 +217,7 @@ public class EntryReadServiceTests
     [Trait("Category", "Unit")]
     public async Task GetCurrentAsync_NoEntries_ReturnsNull()
     {
-        _sgRepo.Setup(r => r.GetAsync(
+        _sgRepo.Setup(r => r.GetForEntriesAsync(
                 It.IsAny<DateTime?>(), It.IsAny<DateTime?>(), It.IsAny<string?>(), It.IsAny<string?>(),
                 It.IsAny<int>(), 0, true, false, It.IsAny<DateTime?>(), It.IsAny<Guid?>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(Enumerable.Empty<SensorGlucose>());
@@ -314,13 +315,41 @@ public class EntryReadServiceTests
     {
         var sg = MakeSg(Now, 120);
         _sgRepo.Setup(r => r.FindStoredDuplicateAsync(
-                "xdrip", 120, It.IsAny<DateTime>(), It.IsAny<DateTime>(), It.IsAny<CancellationToken>()))
+                "xdrip", It.IsAny<DateTime>(), It.IsAny<DateTime>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(sg);
 
-        var result = await _sut.CheckDuplicateAsync("xdrip", "sgv", 120, sg.Mills, 5);
+        var result = await _sut.CheckDuplicateAsync("xdrip", "sgv", sg.Mills);
 
         Assert.NotNull(result);
         Assert.Equal("sgv", result.Type);
+    }
+
+    [Theory]
+    [Trait("Category", "Unit")]
+    [InlineData("sgv")]
+    [InlineData("mbg")]
+    [InlineData("cal")]
+    public async Task CheckDuplicateAsync_ReadsOnlyTheEntrysOwnMillisecond(string type)
+    {
+        var captured = new List<(DateTime? From, DateTime? To)>();
+        _sgRepo.Setup(r => r.FindStoredDuplicateAsync(
+                It.IsAny<string?>(), It.IsAny<DateTime>(), It.IsAny<DateTime>(), It.IsAny<CancellationToken>()))
+            .Callback<string?, DateTime, DateTime, CancellationToken>((_, from, to, _) => captured.Add((from, to)))
+            .ReturnsAsync((SensorGlucose?)null);
+        _mgRepo.Setup(r => r.FindStoredDuplicateAsync(
+                It.IsAny<string?>(), It.IsAny<DateTime>(), It.IsAny<DateTime>(), It.IsAny<CancellationToken>()))
+            .Callback<string?, DateTime, DateTime, CancellationToken>((_, from, to, _) => captured.Add((from, to)))
+            .ReturnsAsync((MeterGlucose?)null);
+        _calRepo.Setup(r => r.FindStoredDuplicateAsync(
+                It.IsAny<string?>(), It.IsAny<DateTime>(), It.IsAny<DateTime>(), It.IsAny<CancellationToken>()))
+            .Callback<string?, DateTime, DateTime, CancellationToken>((_, from, to, _) => captured.Add((from, to)))
+            .ReturnsAsync((Calibration?)null);
+        var mills = new DateTimeOffset(Now, TimeSpan.Zero).ToUnixTimeMilliseconds();
+
+        await _sut.CheckDuplicateAsync("xdrip", type, mills);
+
+        captured.Should().ContainSingle()
+            .Which.Should().Be(((DateTime?)Now, (DateTime?)Now.AddMilliseconds(1)));
     }
 
     [Fact]
@@ -328,11 +357,11 @@ public class EntryReadServiceTests
     public async Task CheckDuplicateAsync_NoMatch_ReturnsNull()
     {
         _sgRepo.Setup(r => r.FindStoredDuplicateAsync(
-                "xdrip", 120, It.IsAny<DateTime>(), It.IsAny<DateTime>(), It.IsAny<CancellationToken>()))
+                "xdrip", It.IsAny<DateTime>(), It.IsAny<DateTime>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync((SensorGlucose?)null);
 
         var mills = new DateTimeOffset(Now, TimeSpan.Zero).ToUnixTimeMilliseconds();
-        var result = await _sut.CheckDuplicateAsync("xdrip", "sgv", 120, mills, 5);
+        var result = await _sut.CheckDuplicateAsync("xdrip", "sgv", mills);
 
         Assert.Null(result);
     }
@@ -342,12 +371,11 @@ public class EntryReadServiceTests
     public async Task CheckDuplicateAsync_TypeMbg_QueriesMeterGlucoseRepo()
     {
         var mg = MakeMg(Now, 150);
-        _mgRepo.Setup(r => r.GetAsync(
-                It.IsAny<DateTime?>(), It.IsAny<DateTime?>(), "meter", It.IsAny<string?>(),
-                It.IsAny<int>(), It.IsAny<int>(), It.IsAny<bool>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new[] { mg });
+        _mgRepo.Setup(r => r.FindStoredDuplicateAsync(
+                "meter", It.IsAny<DateTime>(), It.IsAny<DateTime>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(mg);
 
-        var result = await _sut.CheckDuplicateAsync("meter", "mbg", 150, mg.Mills, 5);
+        var result = await _sut.CheckDuplicateAsync("meter", "mbg", mg.Mills);
 
         Assert.NotNull(result);
         Assert.Equal("mbg", result.Type);
@@ -372,7 +400,7 @@ public class EntryReadServiceTests
             It.IsAny<IReadOnlyCollection<string>>(), It.IsAny<DateTime>(), It.IsAny<DateTime>(),
             It.IsAny<int>(), It.IsAny<CancellationToken>()), Times.Once);
         _sgRepo.Verify(r => r.FindStoredDuplicateAsync(
-            It.IsAny<string?>(), It.IsAny<double?>(), It.IsAny<DateTime>(), It.IsAny<DateTime>(),
+            It.IsAny<string?>(), It.IsAny<DateTime>(), It.IsAny<DateTime>(),
             It.IsAny<CancellationToken>()), Times.Never);
     }
 
@@ -385,8 +413,8 @@ public class EntryReadServiceTests
         var mills = new DateTimeOffset(Now, TimeSpan.Zero).ToUnixTimeMilliseconds();
         var probes = new[]
         {
-            new EntryDuplicateProbe("xdrip", "sgv", 120, mills),
-            new EntryDuplicateProbe("xdrip", "sgv", 130, mills + (long)TimeSpan.FromDays(7).TotalMilliseconds),
+            new EntryDuplicateProbe("xdrip", "sgv", mills),
+            new EntryDuplicateProbe("xdrip", "sgv", mills + (long)TimeSpan.FromDays(7).TotalMilliseconds),
         };
 
         await _sut.CheckDuplicatesAsync(probes);
@@ -398,7 +426,7 @@ public class EntryReadServiceTests
 
     [Fact]
     [Trait("Category", "Unit")]
-    public async Task CheckDuplicatesAsync_QueryWindowCoversEveryProbesOwnWindow()
+    public async Task CheckDuplicatesAsync_QueryRangeCoversEveryProbesMillisecond()
     {
         var captured = new List<(DateTime From, DateTime To)>();
         _sgRepo.Setup(r => r.FindStoredDuplicateCandidatesAsync(
@@ -410,13 +438,12 @@ public class EntryReadServiceTests
 
         var probes = FiveMinutelyProbes(10, "xdrip");
 
-        await _sut.CheckDuplicatesAsync(probes, windowMinutes: 5);
+        await _sut.CheckDuplicatesAsync(probes);
 
-        var window = TimeSpan.FromMinutes(5);
         Assert.All(probes, probe =>
         {
             var at = DateTimeOffset.FromUnixTimeMilliseconds(probe.Mills).UtcDateTime;
-            Assert.Contains(captured, w => w.From <= at - window && w.To >= at + window);
+            Assert.Contains(captured, w => w.From <= at && w.To > at);
         });
     }
 
@@ -455,8 +482,8 @@ public class EntryReadServiceTests
         var mills = new DateTimeOffset(Now, TimeSpan.Zero).ToUnixTimeMilliseconds();
         await _sut.CheckDuplicatesAsync(new[]
         {
-            new EntryDuplicateProbe("xdrip", "sgv", 120, mills),
-            new EntryDuplicateProbe(null, "sgv", 130, mills + 300_000),
+            new EntryDuplicateProbe("xdrip", "sgv", mills),
+            new EntryDuplicateProbe(null, "sgv", mills + 300_000),
         });
 
         Assert.Null(devices);
@@ -469,7 +496,7 @@ public class EntryReadServiceTests
         var mills = new DateTimeOffset(Now, TimeSpan.Zero).ToUnixTimeMilliseconds();
 
         var results = await _sut.CheckDuplicatesAsync(
-            [new EntryDuplicateProbe("xdrip", "food", null, mills)]);
+            [new EntryDuplicateProbe("xdrip", "food", mills)]);
 
         Assert.Null(Assert.Single(results));
         _sgRepo.VerifyNoOtherCalls();
@@ -492,8 +519,8 @@ public class EntryReadServiceTests
         // by time internally and must not reorder the results.
         var results = await _sut.CheckDuplicatesAsync(new[]
         {
-            new EntryDuplicateProbe("test-device", "sgv", 120, mills),
-            new EntryDuplicateProbe("test-device", "sgv", 99, stored.Mills),
+            new EntryDuplicateProbe("test-device", "sgv", mills),
+            new EntryDuplicateProbe("test-device", "sgv", stored.Mills),
         });
 
         Assert.Null(results[0]);
@@ -513,7 +540,7 @@ public class EntryReadServiceTests
 
         captured.Should().HaveCountGreaterThan(1);
         captured.Max(w => w.To - w.From)
-            .Should().BeLessThanOrEqualTo(TimeSpan.FromDays(7) + TimeSpan.FromMinutes(10));
+            .Should().BeLessThanOrEqualTo(TimeSpan.FromDays(7) + TimeSpan.FromMilliseconds(1));
     }
 
     [Fact]
@@ -527,7 +554,7 @@ public class EntryReadServiceTests
         await _sut.CheckDuplicatesAsync(SpacedProbes(200, TimeSpan.FromHours(1), "xdrip"));
 
         captured.Max(w => w.To - w.From)
-            .Should().BeLessThanOrEqualTo(TimeSpan.FromMinutes(11));
+            .Should().Be(TimeSpan.FromMilliseconds(1));
     }
 
     [Fact]
@@ -558,9 +585,9 @@ public class EntryReadServiceTests
         var mills = new DateTimeOffset(Now, TimeSpan.Zero).ToUnixTimeMilliseconds();
         await _sut.CheckDuplicatesAsync(new[]
         {
-            new EntryDuplicateProbe("xdrip", "sgv", 120, mills),
-            new EntryDuplicateProbe("Dexcom G6", "sgv", 121, mills + 60_000),
-            new EntryDuplicateProbe("xdrip", "sgv", 122, mills + 120_000),
+            new EntryDuplicateProbe("xdrip", "sgv", mills),
+            new EntryDuplicateProbe("Dexcom G6", "sgv", mills + 60_000),
+            new EntryDuplicateProbe("xdrip", "sgv", mills + 120_000),
         });
 
         devices.Should().BeEquivalentTo(new[] { "xdrip", "Dexcom G6" });
@@ -570,46 +597,41 @@ public class EntryReadServiceTests
     [Trait("Category", "Unit")]
     public async Task CheckDuplicatesAsync_NonSgvTypes_KeepThePerEntryProbe()
     {
-        _mgRepo.Setup(r => r.GetAsync(
-                It.IsAny<DateTime?>(), It.IsAny<DateTime?>(), It.IsAny<string?>(), It.IsAny<string?>(),
-                It.IsAny<int>(), It.IsAny<int>(), It.IsAny<bool>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync(Array.Empty<MeterGlucose>());
+        _mgRepo.Setup(r => r.FindStoredDuplicateAsync(
+                It.IsAny<string?>(), It.IsAny<DateTime>(), It.IsAny<DateTime>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync((MeterGlucose?)null);
 
         var mills = new DateTimeOffset(Now, TimeSpan.Zero).ToUnixTimeMilliseconds();
         await _sut.CheckDuplicatesAsync(new[]
         {
-            new EntryDuplicateProbe("meter", "mbg", 150, mills),
-            new EntryDuplicateProbe("meter", "mbg", 151, mills + 60_000),
+            new EntryDuplicateProbe("meter", "mbg", mills),
+            new EntryDuplicateProbe("meter", "mbg", mills + 60_000),
         });
 
-        // The per-entry page is device-filtered and limited; a batch-wide read is a superset that
-        // would drop a reading the per-entry probe stores.
-        _mgRepo.Verify(r => r.GetAsync(
-            It.IsAny<DateTime?>(), It.IsAny<DateTime?>(), "meter", It.IsAny<string?>(),
-            100, It.IsAny<int>(), It.IsAny<bool>(), It.IsAny<CancellationToken>()), Times.Exactly(2));
+        _mgRepo.Verify(r => r.FindStoredDuplicateAsync(
+            "meter", It.IsAny<DateTime>(), It.IsAny<DateTime>(), It.IsAny<CancellationToken>()), Times.Exactly(2));
     }
 
     [Fact]
     [Trait("Category", "Unit")]
-    public async Task CheckDuplicatesAsync_ReadingOutsideAProbesOwnWindow_IsNotItsDuplicate()
+    public async Task CheckDuplicatesAsync_EqualReadingAtAnotherProbesMillisecond_IsNotItsDuplicate()
     {
-        // One chunk covers every probe's window, so the candidate list holds rows that belong to
-        // other probes. Each probe must reject them: matching a reading half an hour outside its
-        // own window drops a genuinely new reading from the write.
+        // One chunk covers every probe, so the candidate list holds rows that belong to other
+        // probes. On a flat trace a minute apart they carry the same value, and matching one drops
+        // a genuinely new reading from the write.
         var mills = new DateTimeOffset(Now, TimeSpan.Zero).ToUnixTimeMilliseconds();
-        var later = Now.AddMinutes(30);
         _sgRepo.Setup(r => r.FindStoredDuplicateCandidatesAsync(
                 It.IsAny<IReadOnlyCollection<string>>(), It.IsAny<DateTime>(), It.IsAny<DateTime>(),
                 It.IsAny<int>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync([MakeSg(later, 120)]);
+            .ReturnsAsync([MakeSg(Now.AddMinutes(1), 120)]);
 
         var results = await _sut.CheckDuplicatesAsync(new[]
         {
-            new EntryDuplicateProbe("test-device", "sgv", 120, mills),
-            new EntryDuplicateProbe("test-device", "sgv", 120, mills + (30 * 60_000L)),
-        }, windowMinutes: 5);
+            new EntryDuplicateProbe("test-device", "sgv", mills),
+            new EntryDuplicateProbe("test-device", "sgv", mills + 60_000L),
+        });
 
-        results[0].Should().BeNull("the stored reading is 30 minutes outside this probe's window");
+        results[0].Should().BeNull("the stored reading is a minute after this probe");
         results[1].Should().NotBeNull();
     }
 
@@ -626,7 +648,7 @@ public class EntryReadServiceTests
         await _sut.CheckDuplicatesAsync(SpacedProbes(400, justUnder, "xdrip"));
 
         captured.Max(w => w.To - w.From)
-            .Should().BeLessThanOrEqualTo(TimeSpan.FromDays(7) + TimeSpan.FromMinutes(10));
+            .Should().BeLessThanOrEqualTo(TimeSpan.FromDays(7) + TimeSpan.FromMilliseconds(1));
     }
 
     [Fact]
@@ -641,7 +663,7 @@ public class EntryReadServiceTests
                 It.IsAny<int>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(flood);
         _sgRepo.Setup(r => r.FindStoredDuplicateAsync(
-                It.IsAny<string?>(), It.IsAny<double?>(), It.IsAny<DateTime>(), It.IsAny<DateTime>(),
+                It.IsAny<string?>(), It.IsAny<DateTime>(), It.IsAny<DateTime>(),
                 It.IsAny<CancellationToken>()))
             .ReturnsAsync((SensorGlucose?)null);
 
@@ -649,7 +671,7 @@ public class EntryReadServiceTests
 
         Assert.All(results, Assert.Null);
         _sgRepo.Verify(r => r.FindStoredDuplicateAsync(
-            It.IsAny<string?>(), It.IsAny<double?>(), It.IsAny<DateTime>(), It.IsAny<DateTime>(),
+            It.IsAny<string?>(), It.IsAny<DateTime>(), It.IsAny<DateTime>(),
             It.IsAny<CancellationToken>()), Times.Exactly(3));
     }
 
@@ -660,13 +682,12 @@ public class EntryReadServiceTests
     [InlineData("sgv ")]
     public async Task CheckDuplicatesAsync_TypeIsNotExactlySgv_NeverReachesTheBatchRead(string type)
     {
-        // Which types reach the batch read is the correctness boundary of this change: the batch
-        // read is a superset of the per-entry probe's paged, device-filtered read, and for mbg
-        // that difference suppresses a real write. Only exactly "sgv" may take it.
+        // Type matching is ordinal, as in the per-entry probe: anything but exactly "sgv" is not a
+        // sensor reading and is never its duplicate.
         var mills = new DateTimeOffset(Now, TimeSpan.Zero).ToUnixTimeMilliseconds();
 
         var results = await _sut.CheckDuplicatesAsync(
-            [new EntryDuplicateProbe("xdrip", type, 120, mills)]);
+            [new EntryDuplicateProbe("xdrip", type, mills)]);
 
         Assert.Null(Assert.Single(results));
         _sgRepo.Verify(r => r.FindStoredDuplicateCandidatesAsync(
@@ -691,8 +712,8 @@ public class EntryReadServiceTests
         var mills = new DateTimeOffset(Now, TimeSpan.Zero).ToUnixTimeMilliseconds();
         await _sut.CheckDuplicatesAsync(new[]
         {
-            new EntryDuplicateProbe("xdrip", "sgv", 120, mills),
-            new EntryDuplicateProbe("XDRIP", "sgv", 121, mills + 60_000),
+            new EntryDuplicateProbe("xdrip", "sgv", mills),
+            new EntryDuplicateProbe("XDRIP", "sgv", mills + 60_000),
         });
 
         devices.Should().BeEquivalentTo(new[] { "xdrip", "XDRIP" });
@@ -707,7 +728,7 @@ public class EntryReadServiceTests
         await cancelled.CancelAsync();
 
         await Assert.ThrowsAnyAsync<OperationCanceledException>(
-            () => _sut.CheckDuplicatesAsync(FiveMinutelyProbes(5, "xdrip"), 5, cancelled.Token));
+            () => _sut.CheckDuplicatesAsync(FiveMinutelyProbes(5, "xdrip"), cancelled.Token));
     }
 
     private List<(DateTime From, DateTime To)> CaptureCandidateWindows()
@@ -727,7 +748,7 @@ public class EntryReadServiceTests
         var start = new DateTimeOffset(Now, TimeSpan.Zero).ToUnixTimeMilliseconds();
         var step = (long)spacing.TotalMilliseconds;
         return Enumerable.Range(0, count)
-            .Select(i => new EntryDuplicateProbe(device, "sgv", 100 + (i % 50), start + (i * step)))
+            .Select(i => new EntryDuplicateProbe(device, "sgv", start + (i * step)))
             .ToArray();
     }
 
@@ -741,7 +762,7 @@ public class EntryReadServiceTests
     {
         var start = new DateTimeOffset(Now, TimeSpan.Zero).ToUnixTimeMilliseconds();
         return Enumerable.Range(0, count)
-            .Select(i => new EntryDuplicateProbe(device, "sgv", 100 + (i % 50), start + (i * 300_000L)))
+            .Select(i => new EntryDuplicateProbe(device, "sgv", start + (i * 300_000L)))
             .ToArray();
     }
 
@@ -757,7 +778,7 @@ public class EntryReadServiceTests
         var realSg = MakeSg(Now, 120, dataSource: "xdrip");
         var demoSg = MakeSg(Now.AddMinutes(-1), 100, dataSource: "demo-service");
 
-        _sgRepo.Setup(r => r.GetAsync(
+        _sgRepo.Setup(r => r.GetForEntriesAsync(
                 It.IsAny<DateTime?>(), It.IsAny<DateTime?>(), It.IsAny<string?>(), It.IsAny<string?>(),
                 It.IsAny<int>(), It.IsAny<int>(), It.IsAny<bool>(), It.IsAny<bool>(), It.IsAny<DateTime?>(), It.IsAny<Guid?>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(new[] { realSg, demoSg });
@@ -780,7 +801,7 @@ public class EntryReadServiceTests
 
         var demoSg = MakeSg(Now, 100, dataSource: "demo-service");
 
-        _sgRepo.Setup(r => r.GetAsync(
+        _sgRepo.Setup(r => r.GetForEntriesAsync(
                 It.IsAny<DateTime?>(), It.IsAny<DateTime?>(), It.IsAny<string?>(), "demo-service",
                 It.IsAny<int>(), It.IsAny<int>(), It.IsAny<bool>(), It.IsAny<bool>(), It.IsAny<DateTime?>(), It.IsAny<Guid?>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(new[] { demoSg });
@@ -789,7 +810,7 @@ public class EntryReadServiceTests
 
         Assert.Single(result);
         // Verify source=demo-service was passed to the repo
-        _sgRepo.Verify(r => r.GetAsync(
+        _sgRepo.Verify(r => r.GetForEntriesAsync(
             It.IsAny<DateTime?>(), It.IsAny<DateTime?>(), It.IsAny<string?>(), "demo-service",
             It.IsAny<int>(), It.IsAny<int>(), It.IsAny<bool>(), It.IsAny<bool>(), It.IsAny<DateTime?>(), It.IsAny<Guid?>(), It.IsAny<CancellationToken>()), Times.Once);
     }
@@ -801,7 +822,7 @@ public class EntryReadServiceTests
         var demoSg = MakeSg(Now, 100, dataSource: "demo-service");
         var realSg = MakeSg(Now.AddMinutes(-1), 120, dataSource: "xdrip");
 
-        _sgRepo.Setup(r => r.GetAsync(
+        _sgRepo.Setup(r => r.GetForEntriesAsync(
                 It.IsAny<DateTime?>(), It.IsAny<DateTime?>(), It.IsAny<string?>(), It.IsAny<string?>(),
                 It.IsAny<int>(), It.IsAny<int>(), true, false, It.IsAny<DateTime?>(), It.IsAny<Guid?>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(new[] { demoSg, realSg });
@@ -821,7 +842,7 @@ public class EntryReadServiceTests
     public async Task QueryAsync_WithDateString_ParsesIntoTimestampFilter()
     {
         var sg = MakeSg(Now, 120);
-        _sgRepo.Setup(r => r.GetAsync(
+        _sgRepo.Setup(r => r.GetForEntriesAsync(
                 It.IsAny<DateTime?>(), It.IsAny<DateTime?>(), It.IsAny<string?>(), It.IsAny<string?>(),
                 It.IsAny<int>(), It.IsAny<int>(), It.IsAny<bool>(), It.IsAny<bool>(), It.IsAny<DateTime?>(), It.IsAny<Guid?>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(new[] { sg });
@@ -844,16 +865,84 @@ public class EntryReadServiceTests
     [Trait("Category", "Unit")]
     public async Task QueryAsync_ReverseResults_PassesDescendingFalse()
     {
-        _sgRepo.Setup(r => r.GetAsync(
+        _sgRepo.Setup(r => r.GetForEntriesAsync(
                 It.IsAny<DateTime?>(), It.IsAny<DateTime?>(), It.IsAny<string?>(), It.IsAny<string?>(),
                 It.IsAny<int>(), It.IsAny<int>(), false, false, It.IsAny<DateTime?>(), It.IsAny<Guid?>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(Enumerable.Empty<SensorGlucose>());
 
         await _sut.QueryAsync(new EntryQuery { Type = "sgv", ReverseResults = true, Count = 10 });
 
-        _sgRepo.Verify(r => r.GetAsync(
+        _sgRepo.Verify(r => r.GetForEntriesAsync(
             It.IsAny<DateTime?>(), It.IsAny<DateTime?>(), It.IsAny<string?>(), It.IsAny<string?>(),
             It.IsAny<int>(), It.IsAny<int>(), false, false, It.IsAny<DateTime?>(), It.IsAny<Guid?>(), It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+    #endregion
+
+    #region QueryAsync sort field
+
+    private void StoreHoldingReadings(params SensorGlucose[] readings)
+    {
+        _sgRepo.Setup(r => r.GetForEntriesByValueAsync(
+                It.IsAny<DateTime?>(), It.IsAny<DateTime?>(), It.IsAny<string?>(),
+                It.IsAny<int>(), It.IsAny<int>(), It.IsAny<bool>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync((DateTime? _, DateTime? _, string? _, int limit, int offset, bool descending, CancellationToken _) =>
+                (descending
+                    ? readings.OrderByDescending(r => r.Mgdl).ThenByDescending(r => r.Timestamp)
+                    : readings.OrderBy(r => r.Mgdl).ThenBy(r => r.Timestamp))
+                .Skip(offset).Take(limit).ToList());
+    }
+
+    [Fact]
+    [Trait("Category", "Unit")]
+    public async Task QueryAsync_SgvSortAscending_ReturnsTheLowestReadingsRatherThanTheOldest()
+    {
+        StoreHoldingReadings(MakeSg(Now.AddMinutes(-4), 200), MakeSg(Now.AddMinutes(-3), 90), MakeSg(Now.AddMinutes(-2), 150), MakeSg(Now.AddMinutes(-1), 60));
+
+        var result = await _sut.QueryAsync(new EntryQuery
+        {
+            Type = "sgv", Count = 2, ReverseResults = true, SortField = ReadSortField.Sgv,
+        });
+
+        Assert.Equal([60d, 90d], result.Select(e => e.Sgv!.Value));
+    }
+
+    [Fact]
+    [Trait("Category", "Unit")]
+    public async Task QueryAsync_SgvSortDescending_ReturnsTheHighestReadingsFirst()
+    {
+        StoreHoldingReadings(MakeSg(Now.AddMinutes(-4), 200), MakeSg(Now.AddMinutes(-3), 90), MakeSg(Now.AddMinutes(-2), 150), MakeSg(Now.AddMinutes(-1), 60));
+
+        var result = await _sut.QueryAsync(new EntryQuery
+        {
+            Type = "sgv", Count = 2, SortField = ReadSortField.Sgv,
+        });
+
+        Assert.Equal([200d, 150d], result.Select(e => e.Sgv!.Value));
+    }
+
+    [Fact]
+    [Trait("Category", "Unit")]
+    public async Task QueryAsync_SgvSortAcrossTypes_PlacesEntriesWithoutAnSgvBelowEveryReading()
+    {
+        StoreHoldingReadings(MakeSg(Now.AddMinutes(-3), 90), MakeSg(Now.AddMinutes(-2), 60));
+        _mgRepo.Setup(r => r.GetAsync(
+                It.IsAny<DateTime?>(), It.IsAny<DateTime?>(), It.IsAny<string?>(), It.IsAny<string?>(),
+                It.IsAny<int>(), It.IsAny<int>(), It.IsAny<bool>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new[] { MakeMg(Now.AddMinutes(-1), 300) });
+        _calRepo.Setup(r => r.GetAsync(
+                It.IsAny<DateTime?>(), It.IsAny<DateTime?>(), It.IsAny<string?>(), It.IsAny<string?>(),
+                It.IsAny<int>(), It.IsAny<int>(), It.IsAny<bool>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(Array.Empty<Calibration>());
+
+        var ascending = await _sut.QueryAsync(new EntryQuery
+        {
+            Count = 3, ReverseResults = true, SortField = ReadSortField.Sgv,
+        });
+        var descending = await _sut.QueryAsync(new EntryQuery { Count = 3, SortField = ReadSortField.Sgv });
+
+        Assert.Equal(["mbg", "sgv", "sgv"], ascending.Select(e => e.Type));
+        Assert.Equal(["sgv", "sgv", "mbg"], descending.Select(e => e.Type));
     }
 
     #endregion

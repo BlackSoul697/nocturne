@@ -15,7 +15,7 @@ namespace Nocturne.Infrastructure.Data.Repositories.V4;
 /// </summary>
 public class PatientDeviceRepository : IPatientDeviceRepository
 {
-    private readonly ITenantDbContextFactory _contextFactory;
+    private readonly INocturneDbContextFactory _contextFactory;
     private readonly ILogger<PatientDeviceRepository> _logger;
 
     /// <summary>
@@ -24,7 +24,7 @@ public class PatientDeviceRepository : IPatientDeviceRepository
     /// <param name="contextFactory">The tenant database context factory.</param>
     /// <param name="logger">The logger instance.</param>
     public PatientDeviceRepository(
-        ITenantDbContextFactory contextFactory,
+        INocturneDbContextFactory contextFactory,
         ILogger<PatientDeviceRepository> logger)
     {
         _contextFactory = contextFactory;
@@ -203,10 +203,10 @@ public class PatientDeviceRepository : IPatientDeviceRepository
     }
 
     /// <inheritdoc />
-    public async Task<IEnumerable<PatientDevice>> BulkRestoreAsync(IEnumerable<Guid> ids, WriteOrigin origin, CancellationToken ct = default)
+    public async Task<BulkRestoreResult<PatientDevice>> BulkRestoreAsync(IEnumerable<Guid> ids, WriteOrigin origin, CancellationToken ct = default)
     {
         await using var ctx = await _contextFactory.CreateAsync(ct);
-        return (await ctx.RestoreDeletedAsync<PatientDeviceEntity>(ids, ct)).Select(PatientDeviceMapper.ToDomainModel);
+        return (await ctx.RestoreDeletedAsync<PatientDeviceEntity>(ids, nameof(PatientDevice), ct)).Map(PatientDeviceMapper.ToDomainModel);
     }
 
     /// <inheritdoc />

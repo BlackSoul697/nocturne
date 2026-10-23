@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { Key } from "@nocturne/ui/keys";
   import { page } from "$app/state";
   import { goto } from "$app/navigation";
   import {
@@ -11,7 +12,10 @@
   import { Button } from "$lib/components/ui/button";
   import { Checkbox } from "$lib/components/ui/checkbox";
   import { Separator } from "$lib/components/ui/separator";
-  import { ListChecks, Plus, ArrowLeft, X } from "lucide-svelte";
+  import ListChecks from "@lucide/svelte/icons/list-checks";
+  import Plus from "@lucide/svelte/icons/plus";
+  import ArrowLeft from "@lucide/svelte/icons/arrow-left";
+  import X from "@lucide/svelte/icons/x";
   import { decodeBase64Utf8, encodeBase64Utf8 } from "$lib/utils";
 
   interface PackingItem {
@@ -181,7 +185,7 @@
                     updateUrl();
                   }
                 }}
-                onkeydown={(e) => { if (e.key === "Enter") e.currentTarget.blur(); }}
+                onkeydown={(e) => { if (e.key === Key.Enter) e.currentTarget.blur(); }}
               />
               <Button
                 variant="ghost-destructive"
@@ -212,7 +216,7 @@
                 placeholder="Item name..."
                 size="sm"
                 class="flex-1"
-                onkeydown={(e: KeyboardEvent) => e.key === "Enter" && addItem()}
+                onkeydown={(e: KeyboardEvent) => e.key === Key.Enter && addItem()}
               />
               <Button size="sm" onclick={addItem} disabled={!newLabel.trim()}>
                 Add
@@ -253,7 +257,7 @@
               placeholder="Item name..."
               size="sm"
               class="flex-1"
-              onkeydown={(e: KeyboardEvent) => e.key === "Enter" && addItem()}
+              onkeydown={(e: KeyboardEvent) => e.key === Key.Enter && addItem()}
             />
             <Button size="sm" onclick={addItem} disabled={!newLabel.trim()}>
               Add

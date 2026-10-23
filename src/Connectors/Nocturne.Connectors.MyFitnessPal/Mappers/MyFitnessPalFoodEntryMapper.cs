@@ -59,7 +59,7 @@ public class MyFitnessPalFoodEntryMapper(ILogger logger)
                 Carbs = nutrition?.Carbs ?? 0,
                 Protein = nutrition?.Protein ?? 0,
                 Fat = nutrition?.Fat ?? 0,
-                Energy = nutrition?.Calories ?? 0,
+                Energy = ToKilojoules(nutrition?.Calories),
                 Servings = entry.Quantity,
                 ServingDescription = FormatServingDescription(entry.ServingSize, entry.Quantity),
                 IsTimeInferred = isTimeInferred,
@@ -72,7 +72,7 @@ public class MyFitnessPalFoodEntryMapper(ILogger logger)
                         Carbs = food.NutrientSet?.Carbs ?? 0,
                         Protein = food.NutrientSet?.Protein ?? 0,
                         Fat = food.NutrientSet?.Fat ?? 0,
-                        Energy = food.NutrientSet?.Calories ?? 0,
+                        Energy = ToKilojoules(food.NutrientSet?.Calories),
                         Portion = entry.ServingSize?.Amount ?? 1,
                         Unit = entry.ServingSize?.Unit,
                     }
@@ -82,6 +82,12 @@ public class MyFitnessPalFoodEntryMapper(ILogger logger)
 
         return imports;
     }
+
+    /// <summary>
+    ///     The graph reports energy in kilocalories whatever unit the account displays.
+    /// </summary>
+    private static decimal ToKilojoules(decimal? kilocalories) =>
+        (kilocalories ?? 0) * (decimal)NutritionConstants.KilojoulesPerKilocalorie;
 
     /// <summary>
     ///     Resolves the consumed-at time for an entry, preferring the time MyFitnessPal reports over
@@ -118,7 +124,7 @@ public class MyFitnessPalFoodEntryMapper(ILogger logger)
 
         // Not the shape production sends, but honour a full instant if it ever does.
         if (entry.ConsumedAt != null
-            && DateTimeOffset.TryParse(entry.ConsumedAt, CultureInfo.InvariantCulture, out var parsed))
+            && UploaderTimestamp.TryParse(entry.ConsumedAt, out var parsed))
             return (parsed.ToUniversalTime(), false);
 
         var mealHour = mealName?.ToLowerInvariant() switch
@@ -154,7 +160,7 @@ public class MyFitnessPalFoodEntryMapper(ILogger logger)
         if (string.IsNullOrEmpty(timestamp))
             return null;
 
-        return DateTimeOffset.TryParse(timestamp, CultureInfo.InvariantCulture, out var result)
+        return UploaderTimestamp.TryParse(timestamp, out var result)
             ? result.ToUniversalTime()
             : null;
     }

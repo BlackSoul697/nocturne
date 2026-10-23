@@ -8,19 +8,18 @@
   import PermissionCategorySelector from "$lib/components/rbac/PermissionCategorySelector.svelte";
   import PermissionSummary from "$lib/components/rbac/PermissionSummary.svelte";
   import { describeSubmitError } from "$lib/forms/submit-error";
-  import {
-    Shield,
-    Ban,
-    Plus,
-    Pencil,
-    Eye,
-    Trash2,
-    Loader2,
-    Users,
-    Lock,
-    AlertTriangle,
-    Check,
-  } from "lucide-svelte";
+  import FormError from "$lib/forms/FormError.svelte";
+  import Shield from "@lucide/svelte/icons/shield";
+  import Ban from "@lucide/svelte/icons/ban";
+  import Plus from "@lucide/svelte/icons/plus";
+  import Pencil from "@lucide/svelte/icons/pencil";
+  import Eye from "@lucide/svelte/icons/eye";
+  import Trash2 from "@lucide/svelte/icons/trash-2";
+  import Loader2 from "@lucide/svelte/icons/loader-circle";
+  import Users from "@lucide/svelte/icons/users";
+  import Lock from "@lucide/svelte/icons/lock";
+  import AlertTriangle from "@lucide/svelte/icons/triangle-alert";
+  import Check from "@lucide/svelte/icons/check";
   import {
     getRoles,
     createRole,
@@ -67,6 +66,7 @@
   let isDeleting = $state(false);
 
   // Messages
+  let dialogError = $state<string | null>(null);
   let errorMessage = $state<string | null>(null);
   let successMessage = $state<string | null>(null);
 
@@ -81,7 +81,13 @@
     createName = "";
     createDescription = "";
     createPermissions = [];
+    dialogError = null;
     isCreateOpen = false;
+  }
+
+  function openCreateDialog() {
+    dialogError = null;
+    isCreateOpen = true;
   }
 
   function openEditDialog(role: TenantRoleDto) {
@@ -93,6 +99,7 @@
     originalEditDescription = editDescription;
     originalEditPermissions = [...editPermissions];
     isEditReadonly = role.isSystem === true;
+    dialogError = null;
     isEditOpen = true;
   }
 
@@ -105,7 +112,7 @@
 
   async function handleCreate() {
     isCreating = true;
-    errorMessage = null;
+    dialogError = null;
     try {
       await createRole({
         name: createName.trim(),
@@ -116,8 +123,7 @@
       resetCreateForm();
       clearMessages();
     } catch (err) {
-      errorMessage = describeSubmitError(err, "Failed to create role. Please try again.");
-      clearMessages();
+      dialogError = describeSubmitError(err, "Failed to create role. Please try again.");
     } finally {
       isCreating = false;
     }
@@ -125,7 +131,7 @@
 
   async function handleEdit() {
     isEditing = true;
-    errorMessage = null;
+    dialogError = null;
     try {
       await updateRole({
         id: editId,
@@ -139,8 +145,7 @@
       isEditOpen = false;
       clearMessages();
     } catch (err) {
-      errorMessage = describeSubmitError(err, "Failed to update role. Please try again.");
-      clearMessages();
+      dialogError = describeSubmitError(err, "Failed to update role. Please try again.");
     } finally {
       isEditing = false;
     }
@@ -169,7 +174,7 @@
       <Shield class="h-5 w-5" />
       Roles &amp; permissions
     </h2>
-    <Button variant="outline" size="sm" onclick={() => (isCreateOpen = true)}>
+    <Button variant="outline" size="sm" onclick={openCreateDialog}>
       <Plus class="mr-1.5 h-4 w-4" />
       Create role
     </Button>
@@ -286,6 +291,7 @@
         </div>
       </div>
     </div>
+    <FormError issues={dialogError} focusOnShow />
     <Dialog.Footer>
       <Button variant="outline" onclick={() => (isCreateOpen = false)}>Cancel</Button>
       <Button onclick={handleCreate} disabled={isCreating || !createName.trim()}>
@@ -329,6 +335,7 @@
         </div>
       </div>
     </div>
+    <FormError issues={dialogError} focusOnShow />
     <Dialog.Footer>
       <Button variant="outline" onclick={() => (isEditOpen = false)}>
         {isEditReadonly ? "Close" : "Cancel"}

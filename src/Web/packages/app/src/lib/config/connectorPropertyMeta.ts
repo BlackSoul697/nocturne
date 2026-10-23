@@ -115,6 +115,26 @@ export const connectorPropertyMeta = {
     description: 'Sync food database entries and meal records',
     category: 'Sync',
   },
+  SyncSteps: {
+    label: 'Sync Steps',
+    description: 'Sync step-count measurements',
+    category: 'Sync',
+  },
+  SyncHeartRate: {
+    label: 'Sync Heart Rate',
+    description: 'Sync heart-rate measurements',
+    category: 'Sync',
+  },
+  SyncBodyWeight: {
+    label: 'Sync Body Weight',
+    description: 'Sync body-weight measurements',
+    category: 'Sync',
+  },
+  SyncSleep: {
+    label: 'Sync Sleep',
+    description: 'Sync sleep sessions',
+    category: 'Sync',
+  },
 
   // Common credentials
   Username: {
@@ -130,6 +150,26 @@ export const connectorPropertyMeta = {
   Email: {
     label: 'Email',
     description: 'Email address for account login',
+    category: 'Credentials',
+  },
+  ClientId: {
+    label: 'Client ID',
+    description: 'OAuth client identifier issued by the provider',
+    category: 'Credentials',
+  },
+  ImportFrom: {
+    label: 'Import From',
+    description: 'Earliest date to retrieve from the provider',
+    category: 'Sync',
+  },
+  PreviewOnly: {
+    label: 'Preview Only',
+    description: 'Inspect available data before enabling imports',
+    category: 'Advanced',
+  },
+  GrantedScopes: {
+    label: 'Granted Scopes',
+    description: 'OAuth permissions granted by the provider',
     category: 'Credentials',
   },
 
@@ -204,6 +244,12 @@ export const connectorPropertyMeta = {
   V3IncludeCgmBackfill: {
     label: 'Include CGM Backfill',
     description: 'Include historical CGM data when using V3 API',
+    category: 'Advanced',
+  },
+  AutoClockCorrection: {
+    label: 'Automatic Clock Correction',
+    description:
+      'Let device-clock evidence from the account correct imported timestamps and keep the timezone timeline current',
     category: 'Advanced',
   },
 

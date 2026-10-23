@@ -40,8 +40,28 @@ public interface IMetadataPublisher
         string source,
         WriteOrigin origin, CancellationToken cancellationToken = default);
 
+    /// <summary>
+    /// Publishes the activities a source may already have delivered that nothing stored holds yet
+    /// under their id. A held activity is left as it is stored, and one the user deleted does not come back.
+    /// </summary>
+    /// <returns>How many were written, or null when the write failed.</returns>
+    Task<int?> PublishRecentActivityAsync(
+        IEnumerable<Activity> activities,
+        string source,
+        WriteOrigin origin,
+        CancellationToken cancellationToken = default);
+
     Task<bool> PublishStateSpansAsync(
         IEnumerable<StateSpan> stateSpans,
+        string source,
+        WriteOrigin origin, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Upserts the active-program readings a connector reports as effective
+    /// <see cref="ProfileActivation"/>s, keyed by their <see cref="ProfileActivation.SyncIdentifier"/>.
+    /// </summary>
+    Task<bool> PublishProfileActivationsAsync(
+        IEnumerable<ProfileActivation> activations,
         string source,
         WriteOrigin origin, CancellationToken cancellationToken = default);
 
@@ -88,8 +108,17 @@ public interface IMetadataPublisher
     /// or <c>null</c> when this source has written none.
     /// </summary>
     /// <param name="source">The connector data source (e.g. <c>nightscout-connector</c>).</param>
-    /// <param name="cancellationToken">Cancellation token.</param>
     Task<DateTime?> GetLatestActivityTimestampAsync(
+        string source,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Returns the start of the most recent state span <paramref name="source"/> published through
+    /// <see cref="PublishStateSpansAsync"/>, or <c>null</c> when it has published none. Activity
+    /// spans share the table but not this watermark; see <see cref="GetLatestActivityTimestampAsync"/>.
+    /// </summary>
+    /// <param name="source">The connector data source (e.g. <c>nocturne-remote-connector</c>).</param>
+    Task<DateTime?> GetLatestStateSpanTimestampAsync(
         string source,
         CancellationToken cancellationToken = default);
 
@@ -101,7 +130,6 @@ public interface IMetadataPublisher
     /// </summary>
     /// <param name="source">The connector data source (e.g. <c>nightscout-connector</c>).</param>
     /// <param name="collection">The data collection key (e.g. <c>Glucose</c>, <c>Treatments</c>).</param>
-    /// <param name="cancellationToken">Cancellation token.</param>
     Task<DateTime?> GetBackfillLowWaterMarkAsync(
         string source,
         string collection,
@@ -117,7 +145,6 @@ public interface IMetadataPublisher
     /// <param name="source">The connector data source (e.g. <c>nightscout-connector</c>).</param>
     /// <param name="collection">The data collection key (e.g. <c>Glucose</c>, <c>Treatments</c>).</param>
     /// <param name="lowWaterMark">The oldest successfully published record time, or <c>null</c> once the crawl reaches the source's beginning.</param>
-    /// <param name="cancellationToken">Cancellation token.</param>
     Task SetBackfillLowWaterMarkAsync(
         string source,
         string collection,

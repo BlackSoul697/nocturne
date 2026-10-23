@@ -1,3 +1,4 @@
+using Nocturne.Tests.Shared.Infrastructure;
 using System.Reflection;
 using FluentAssertions;
 using Microsoft.EntityFrameworkCore;
@@ -28,7 +29,7 @@ public class ConnectorPollingRegistrationTests
 {
     private static readonly string[] Polling =
     [
-        "CareLink", "Dexcom", "Eversense", "Glooko", "Gluroo", "LibreLinkUp", "MyFitnessPal",
+        "CareLink", "Dexcom", "Eversense", "Glooko", "Gluroo", "GoogleHealth", "LibreLinkUp", "MyFitnessPal",
         "MyLife", "Nightscout", "NocturneRemote", "Tandem", "Tidepool", "Twiist",
     ];
 
@@ -84,6 +85,31 @@ public class ConnectorPollingRegistrationTests
     }
 
     /// <summary>
+    /// A connector that declares a sensor cadence is polled just after each reading is due, finding
+    /// its newest reading by its data source. One that declared a cadence without a data source would
+    /// be left on its interval with nothing to say so.
+    /// </summary>
+    [Fact]
+    public void SensorAlignedConnectors_DeclareTheirCadenceAndADataSource()
+    {
+        var aligned = ConnectorInstallers.Types()
+            .Select(t => t.GetCustomAttribute<ConnectorRegistrationAttribute>(inherit: false))
+            .OfType<ConnectorRegistrationAttribute>()
+            .DistinctBy(r => r.ConnectorName)
+            .Where(r => r.SensorReadingIntervalSeconds > 0)
+            .ToList();
+
+        aligned.Select(r => (r.ConnectorName, r.SensorReadingIntervalSeconds)).Should().BeEquivalentTo(new[]
+        {
+            ("CareLink", 300),
+            ("Dexcom", 300),
+            ("Eversense", 300),
+            ("LibreLinkUp", 300),
+        });
+        aligned.Should().OnlyContain(r => !string.IsNullOrEmpty(r.DataSourceId));
+    }
+
+    /// <summary>
     /// A configuration write reaches a poller only through the <see cref="ConnectorPollerNudge"/> its
     /// constructor forwards to the base. A hand-written poller that takes the parameter but does not
     /// forward it, or omits it, is scheduled and syncs, but never hears that a tenant saved or enabled
@@ -122,7 +148,7 @@ public class ConnectorPollingRegistrationTests
         var services = new ServiceCollection();
         services.AddLogging();
         services.AddApiCoreServices(new ConfigurationBuilder().Build());
-        services.AddSingleton(Mock.Of<IDbContextFactory<NocturneDbContext>>());
+        services.AddSingleton(Mock.Of<IDbContextFactory<NocturneDbContext>>().AsNocturneFactory());
         services.AddSingleton(new ConnectorSyncBudget());
         using var provider = services.BuildServiceProvider();
         var registered = provider.GetRequiredService<ActiveTenantSnapshot>();

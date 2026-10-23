@@ -19,7 +19,7 @@ namespace Nocturne.API.Tests.Controllers.V4;
 public class AlertHistoryEndpointTests
 {
     private readonly DbContextOptions<NocturneDbContext> _options;
-    private readonly Mock<ITenantDbContextFactory> _contextFactoryMock = new();
+    private readonly Mock<INocturneDbContextFactory> _contextFactoryMock = new();
     private readonly Mock<IAlertAcknowledgementService> _acknowledgementServiceMock = new();
     private readonly Mock<IAlertDeliveryService> _deliveryServiceMock = new();
     private readonly Mock<ITenantAccessor> _tenantAccessorMock = new();
@@ -55,6 +55,7 @@ public class AlertHistoryEndpointTests
             _contextFactoryMock.Object,
             _acknowledgementServiceMock.Object,
             _deliveryServiceMock.Object,
+            Mock.Of<IAlertSnoozeService>(),
             _tenantAccessorMock.Object,
             _loggerMock.Object);
 

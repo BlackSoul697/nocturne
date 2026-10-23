@@ -7,9 +7,9 @@
   import { remoteErrorMessage } from "$lib/api/remote-error";
   import { getActiveInstances, getDefinitions, getInstanceHistory } from "$api/generated/trackers.generated.remote";
   import type { TrackerInstanceDto, TrackerDefinitionDto } from "$api";
-  import { NotificationUrgency as NotificationUrgencyEnum } from "$api";
+  import { reachedUrgency } from "$lib/components/trackers/schedule";
   import { Button } from "$lib/components/ui/button";
-  import { glucoseUnits } from "$lib/stores/appearance-store.svelte";
+  import { calendarShowTirPercent, glucoseUnits } from "$lib/stores/appearance-store.svelte";
   import { getUnitLabel, formatLocale, formatMediumDateTime, time } from "$lib/utils/formatting";
   import {
     leadingBlankDays,
@@ -20,7 +20,9 @@
   import CalendarHeader from "$lib/components/calendar/CalendarHeader.svelte";
   import CalendarMonthSummary from "$lib/components/calendar/CalendarMonthSummary.svelte";
   import CalendarDayCell from "$lib/components/calendar/CalendarDayCell.svelte";
+  import TimeZoneNote from "$lib/components/reports/TimeZoneNote.svelte";
   import { coachmark } from "@nocturne/coach";
+  import { coachFor } from "$lib/coach-marks/copy.svelte";
   import { groupBy, indexBy } from "$lib/utils/collections";
   import { toDayString } from "$lib/utils/date-range";
 
@@ -212,37 +214,11 @@
     goto(resolve(`/reports/day-in-review?date=${day.date}`));
   }
 
-  const monthSummary = $derived.by(() => {
-    const currentData = punchCardQuery.current;
-    const monthData = currentData?.months?.find(
+  const monthSummary = $derived(
+    punchCardQuery.current?.months?.find(
       (m) => m.year === currentYear && m.month === currentMonth
-    );
-    const summary = monthData?.summary;
-    const days = monthData?.days ?? [];
-
-    // Each per-day average divides by the days that carry that kind of data.
-    // Dividing both by the days with CGM readings overstated TDD and carbs by the
-    // whole sensor-outage share of the month — a month with 10 outage days but
-    // complete pump data read about 50% high.
-    const withCarbs = days.filter((d) => (d.totalCarbs ?? 0) > 0);
-    const withInsulin = days.filter((d) => (d.totalInsulin ?? 0) > 0);
-    const sum = (
-      entries: typeof days,
-      read: (day: (typeof days)[number]) => number | undefined
-    ) => entries.reduce((total, day) => total + (read(day) ?? 0), 0);
-
-    return {
-      totalReadings: summary?.totalReadings ?? 0,
-      inRangePercent: summary?.inRangePercent ?? 0,
-      avgGlucose: summary?.avgGlucose ?? 0,
-      avgDailyCarbs:
-        withCarbs.length > 0 ? sum(withCarbs, (d) => d.totalCarbs) / withCarbs.length : 0,
-      tdd:
-        withInsulin.length > 0
-          ? sum(withInsulin, (d) => d.totalInsulin) / withInsulin.length
-          : 0,
-    };
-  });
+    )?.summary
+  );
 
   function getDefinition(
     instance: TrackerInstanceDto,
@@ -260,25 +236,8 @@
     return h > 0 ? `${days}d ${h}h` : `${days}d`;
   }
 
-  function getTrackerLevel(
-    instance: TrackerInstanceDto,
-    def: TrackerDefinitionDto | undefined
-  ): string {
-    if (!instance.ageHours || !def?.notificationThresholds) return "none";
-    const age = instance.ageHours;
-    const thresholds = def.notificationThresholds.sort(
-      (a, b) => (b.hours ?? 0) - (a.hours ?? 0)
-    );
-    for (const threshold of thresholds) {
-      if (threshold.hours && age >= threshold.hours) {
-        const urgency = threshold.urgency;
-        if (urgency === NotificationUrgencyEnum.Urgent) return "urgent";
-        if (urgency === NotificationUrgencyEnum.Hazard) return "hazard";
-        if (urgency === NotificationUrgencyEnum.Warn) return "warn";
-        if (urgency === NotificationUrgencyEnum.Info) return "info";
-      }
-    }
-    return "none";
+  function getTrackerLevel(instance: TrackerInstanceDto): string {
+    return reachedUrgency(instance, Date.now())?.toLowerCase() ?? "none";
   }
 
   function buildTrackerEvents(
@@ -392,12 +351,9 @@
     </div>
 
     <div
-      class="print:hidden"
+      class="sticky top-(--app-sticky-top,0px) z-10 transition-all duration-300 print:hidden"
       {@attach coachmark({
-        key: "feature-intro.calendar-views",
-        title: "View modes",
-        description:
-          "Switch between Time in Range and Profile views to see different patterns.",
+        ...coachFor("feature-intro.calendar-views"),
         completeOn: { event: "click" },
       })}
     >
@@ -410,6 +366,8 @@
         {nextMonth}
         {goToToday}
         {setViewMode}
+        showTirPercent={calendarShowTirPercent.current}
+        setShowTirPercent={(show) => (calendarShowTirPercent.current = show)}
       />
     </div>
 
@@ -432,6 +390,13 @@
                 Tracker data is unavailable, so site and sensor changes are not shown.
               </p>
             {/if}
+            {#if punchCardQuery.current?.timeZoneUnavailableReason}
+              <p class="text-sm text-muted-foreground">
+                <TimeZoneNote reason={punchCardQuery.current.timeZoneUnavailableReason}>
+                  This report cannot show each day's time in range, glucose and insulin.
+                </TimeZoneNote>
+              </p>
+            {/if}
             <div class="flex-1 overflow-x-auto print:overflow-visible flex flex-col">
               <div class="grid grid-cols-7 gap-1 mb-2 min-w-[28rem] @md:min-w-0">
                 {#each DAY_NAMES as dayName, i (i)}
@@ -446,10 +411,7 @@
               <div
                 class="flex-1 grid grid-rows-6 gap-1 min-w-[28rem] @md:min-w-0"
                 {@attach coachmark({
-                  key: "feature-intro.calendar-trackers",
-                  title: "Tracker events",
-                  description:
-                    "Tracker events appear on your calendar \u2014 colored by urgency.",
+                  ...coachFor("feature-intro.calendar-trackers"),
                 })}
               >
                 {#each calendarGrid as week, idx (idx)}
@@ -458,6 +420,7 @@
                       <CalendarDayCell
                       {day}
                       {viewMode}
+                      showTirPercent={calendarShowTirPercent.current}
                       {currentYear}
                       {currentMonth}
                       {trackerEvents}

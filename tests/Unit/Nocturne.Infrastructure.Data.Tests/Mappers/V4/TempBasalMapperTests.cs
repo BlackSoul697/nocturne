@@ -1,3 +1,4 @@
+using Nocturne.Core.Constants;
 using Nocturne.Core.Models.V4;
 using Nocturne.Infrastructure.Data.Entities.V4;
 using Nocturne.Infrastructure.Data.Mappers.V4;
@@ -34,7 +35,7 @@ public class TempBasalMapperTests
         var entity = TempBasalMapper.ToEntity(model);
 
         entity.Id.Should().Be(id);
-        entity.StartTimestamp.Should().Be(DateTimeOffset.FromUnixTimeMilliseconds(1700000000000).UtcDateTime);
+        entity.Timestamp.Should().Be(DateTimeOffset.FromUnixTimeMilliseconds(1700000000000).UtcDateTime);
         entity.EndTimestamp.Should().Be(DateTimeOffset.FromUnixTimeMilliseconds(1700001800000).UtcDateTime);
         entity.UtcOffset.Should().Be(-300);
         entity.Device.Should().Be("omnipod");
@@ -47,6 +48,26 @@ public class TempBasalMapperTests
         entity.Origin.Should().Be("Algorithm");
         entity.DeviceId.Should().Be(pumpDeviceId);
         entity.PumpRecordId.Should().Be("pump-rec-001");
+    }
+
+    [Fact]
+    [Trait("Category", "Unit")]
+    public void Percent_RoundTripsThroughEntity()
+    {
+        var model = new TempBasal
+        {
+            StartTimestamp = DateTimeOffset.FromUnixTimeMilliseconds(1700000000000).UtcDateTime,
+            Rate = 0.4,
+            ScheduledRate = 0.8,
+            Percent = -50,
+        };
+
+        var entity = TempBasalMapper.ToEntity(model);
+        entity.Percent.Should().Be(-50);
+        TempBasalMapper.ToDomainModel(entity).Percent.Should().Be(-50);
+
+        TempBasalMapper.UpdateEntity(entity, new TempBasal { StartTimestamp = model.StartTimestamp, Rate = 1.0 });
+        entity.Percent.Should().BeNull();
     }
 
     [Fact]
@@ -144,7 +165,7 @@ public class TempBasalMapperTests
         var entity = new TempBasalEntity
         {
             Id = id,
-            StartTimestamp = DateTimeOffset.FromUnixTimeMilliseconds(1700000000000).UtcDateTime,
+            Timestamp = DateTimeOffset.FromUnixTimeMilliseconds(1700000000000).UtcDateTime,
             EndTimestamp = DateTimeOffset.FromUnixTimeMilliseconds(1700001800000).UtcDateTime,
             UtcOffset = -300,
             Device = "omnipod",
@@ -188,7 +209,7 @@ public class TempBasalMapperTests
         var entity = new TempBasalEntity
         {
             Id = Guid.CreateVersion7(),
-            StartTimestamp = DateTimeOffset.FromUnixTimeMilliseconds(1700000000000).UtcDateTime,
+            Timestamp = DateTimeOffset.FromUnixTimeMilliseconds(1700000000000).UtcDateTime,
             Rate = 1.0,
             Origin = "InvalidOrigin"
         };
@@ -205,7 +226,7 @@ public class TempBasalMapperTests
         var entity = new TempBasalEntity
         {
             Id = Guid.CreateVersion7(),
-            StartTimestamp = DateTimeOffset.FromUnixTimeMilliseconds(1700000000000).UtcDateTime,
+            Timestamp = DateTimeOffset.FromUnixTimeMilliseconds(1700000000000).UtcDateTime,
             Rate = 1.0,
             Origin = "Manual",
             EndTimestamp = null
@@ -225,7 +246,7 @@ public class TempBasalMapperTests
             var entity = new TempBasalEntity
             {
                 Id = Guid.CreateVersion7(),
-                StartTimestamp = DateTimeOffset.FromUnixTimeMilliseconds(1700000000000).UtcDateTime,
+                Timestamp = DateTimeOffset.FromUnixTimeMilliseconds(1700000000000).UtcDateTime,
                 Rate = 1.0,
                 Origin = origin.ToString()
             };
@@ -246,9 +267,10 @@ public class TempBasalMapperTests
         {
             Id = originalId,
             SysCreatedAt = originalCreatedAt,
-            StartTimestamp = DateTimeOffset.FromUnixTimeMilliseconds(1000).UtcDateTime,
+            Timestamp = DateTimeOffset.FromUnixTimeMilliseconds(1000).UtcDateTime,
             Rate = 0.5,
-            Origin = "Manual"
+            Origin = "Manual",
+            OriginEvidence = "Uncorroborated"
         };
 
         var newCorrelationId = Guid.NewGuid();
@@ -274,7 +296,7 @@ public class TempBasalMapperTests
 
         entity.Id.Should().Be(originalId);
         entity.SysCreatedAt.Should().Be(originalCreatedAt);
-        entity.StartTimestamp.Should().Be(DateTimeOffset.FromUnixTimeMilliseconds(1700000000000).UtcDateTime);
+        entity.Timestamp.Should().Be(DateTimeOffset.FromUnixTimeMilliseconds(1700000000000).UtcDateTime);
         entity.EndTimestamp.Should().Be(DateTimeOffset.FromUnixTimeMilliseconds(1700001800000).UtcDateTime);
         entity.UtcOffset.Should().Be(60);
         entity.Device.Should().Be("tandem");
@@ -287,6 +309,141 @@ public class TempBasalMapperTests
         entity.Origin.Should().Be("Algorithm");
         entity.DeviceId.Should().Be(newDeviceId);
         entity.PumpRecordId.Should().Be("pump-rec-002");
+    }
+
+    [Theory]
+    [InlineData("Reported")]
+    [InlineData("Snapshot")]
+    [Trait("Category", "Unit")]
+    public void UpdateEntity_ReUploadWithDefaultEvidenceKeepsStoredOriginEvidenceAndSnapshot(string stored)
+    {
+        var snapshotId = Guid.NewGuid();
+        var start = DateTime.UtcNow;
+        var entity = new TempBasalEntity
+        {
+            Timestamp = start, Rate = 1.2, Origin = "Manual", OriginEvidence = stored, ApsSnapshotId = snapshotId,
+        };
+
+        TempBasalMapper.UpdateEntity(entity, new TempBasal
+        {
+            StartTimestamp = start,
+            Rate = 1.2,
+            Origin = TempBasalOrigin.Algorithm,
+            OriginEvidence = TempBasalOriginEvidence.Uploader,
+        });
+
+        entity.Origin.Should().Be("Manual");
+        entity.OriginEvidence.Should().Be(stored);
+        entity.ApsSnapshotId.Should().Be(snapshotId);
+    }
+
+    [Fact]
+    [Trait("Category", "Unit")]
+    public void UpdateEntity_ReUploadWithAChangedRateTakesTheIncomingDefaultOverAJudgement()
+    {
+        var start = DateTime.UtcNow;
+        var entity = new TempBasalEntity
+        {
+            Timestamp = start, Rate = 1.2, Origin = "Manual", OriginEvidence = "Snapshot", ApsSnapshotId = Guid.NewGuid(),
+        };
+
+        TempBasalMapper.UpdateEntity(entity, new TempBasal
+        {
+            StartTimestamp = start,
+            Rate = 0.4,
+            Origin = TempBasalOrigin.Algorithm,
+            OriginEvidence = TempBasalOriginEvidence.Uploader,
+        });
+
+        entity.Origin.Should().Be("Algorithm");
+        entity.OriginEvidence.Should().Be("Uploader");
+        entity.ApsSnapshotId.Should().BeNull();
+    }
+
+    [Fact]
+    [Trait("Category", "Unit")]
+    public void UpdateEntity_ReUploadKeepsAStoredStatementWhenTheRateChanges()
+    {
+        var start = DateTime.UtcNow;
+        var entity = new TempBasalEntity { Timestamp = start, Rate = 1.2, Origin = "Manual", OriginEvidence = "Reported" };
+
+        TempBasalMapper.UpdateEntity(entity, new TempBasal
+        {
+            StartTimestamp = start,
+            Rate = 0.4,
+            Origin = TempBasalOrigin.Algorithm,
+            OriginEvidence = TempBasalOriginEvidence.Uploader,
+        });
+
+        entity.Origin.Should().Be("Manual");
+        entity.OriginEvidence.Should().Be("Reported");
+    }
+
+    [Fact]
+    [Trait("Category", "Unit")]
+    public void UpdateEntity_ReUploadKeepsARowWithoutEvidenceThatInfersAsReported()
+    {
+        var start = DateTime.UtcNow;
+        var entity = new TempBasalEntity
+        {
+            Timestamp = start,
+            Rate = 1.2,
+            Origin = "Manual",
+            DataSource = DataSources.CareLinkConnector,
+        };
+
+        TempBasalMapper.UpdateEntity(entity, new TempBasal
+        {
+            StartTimestamp = start,
+            Rate = 1.2,
+            Origin = TempBasalOrigin.Algorithm,
+            OriginEvidence = TempBasalOriginEvidence.Uploader,
+        });
+
+        entity.Origin.Should().Be("Manual");
+        entity.OriginEvidence.Should().Be("Reported");
+    }
+
+    [Theory]
+    [InlineData("Reported")]
+    [InlineData("Snapshot")]
+    [Trait("Category", "Unit")]
+    public void UpdateEntity_IncomingStatementOverwritesStoredOriginEvidenceAndSnapshot(string stored)
+    {
+        var entity = new TempBasalEntity { Origin = "Algorithm", OriginEvidence = stored, ApsSnapshotId = Guid.NewGuid() };
+
+        TempBasalMapper.UpdateEntity(entity, new TempBasal
+        {
+            StartTimestamp = DateTime.UtcNow,
+            Origin = TempBasalOrigin.Manual,
+            OriginEvidence = TempBasalOriginEvidence.Reported,
+        });
+
+        entity.Origin.Should().Be("Manual");
+        entity.OriginEvidence.Should().Be("Reported");
+        entity.ApsSnapshotId.Should().BeNull();
+    }
+
+    [Theory]
+    [InlineData("Uploader")]
+    [InlineData("Uncorroborated")]
+    [Trait("Category", "Unit")]
+    public void UpdateEntity_ReUploadOfAnUnsettledRowTakesTheIncomingOrigin(string stored)
+    {
+        var incomingLink = Guid.NewGuid();
+        var entity = new TempBasalEntity { Origin = "Manual", OriginEvidence = stored, ApsSnapshotId = Guid.NewGuid() };
+
+        TempBasalMapper.UpdateEntity(entity, new TempBasal
+        {
+            StartTimestamp = DateTime.UtcNow,
+            Origin = TempBasalOrigin.Algorithm,
+            OriginEvidence = TempBasalOriginEvidence.Uploader,
+            ApsSnapshotId = incomingLink,
+        });
+
+        entity.Origin.Should().Be("Algorithm");
+        entity.OriginEvidence.Should().Be("Uploader");
+        entity.ApsSnapshotId.Should().Be(incomingLink);
     }
 
     [Fact]
@@ -438,7 +595,7 @@ public class TempBasalMapperTests
         var entity = new TempBasalEntity
         {
             Id = Guid.CreateVersion7(),
-            StartTimestamp = DateTimeOffset.FromUnixTimeMilliseconds(1700000000000).UtcDateTime,
+            Timestamp = DateTimeOffset.FromUnixTimeMilliseconds(1700000000000).UtcDateTime,
             Rate = 1.0,
             Origin = "Algorithm",
             AdditionalPropertiesJson = """{"unterminated":""",
@@ -457,7 +614,7 @@ public class TempBasalMapperTests
         var entity = new TempBasalEntity
         {
             Id = Guid.CreateVersion7(),
-            StartTimestamp = DateTimeOffset.FromUnixTimeMilliseconds(1700000000000).UtcDateTime,
+            Timestamp = DateTimeOffset.FromUnixTimeMilliseconds(1700000000000).UtcDateTime,
             Rate = 1.0,
             Origin = "Algorithm",
             InsulinContextJson = """{"insulinName":""",

@@ -6,6 +6,7 @@ using Nocturne.API.Attributes;
 using Nocturne.API.Configuration;
 using Nocturne.API.Controllers.V4.Base;
 using Nocturne.API.Extensions;
+using Nocturne.API.Helpers;
 using Nocturne.API.Services.Compatibility;
 using Nocturne.Connectors.Nightscout.Configurations;
 using Nocturne.Core.Models;
@@ -53,14 +54,14 @@ public class CompatibilityController : ControllerBase
     /// Get current proxy configuration
     /// </summary>
     [HttpGet("config")]
-    [RequireAdmin]
+    [RequireSuperuser]
     [ProducesResponseType(typeof(ProxyConfigurationDto), StatusCodes.Status200OK)]
     public ActionResult<ProxyConfigurationDto> GetConfiguration()
     {
         return Ok(
             new ProxyConfigurationDto
             {
-                NightscoutUrl = _nightscoutConfig?.Url ?? string.Empty,
+                NightscoutUrl = _nightscoutConfig?.Url is { Length: > 0 } url ? NightscoutBaseUri.Display(url) : string.Empty,
                 Enabled = _configuration.Enabled,
                 EnableDetailedLogging = _configuration.EnableDetailedLogging,
             }
@@ -71,7 +72,7 @@ public class CompatibilityController : ControllerBase
     /// Get overall compatibility metrics
     /// </summary>
     [HttpGet("metrics")]
-    [RequireAdmin]
+    [RequireSuperuser]
     [ProducesResponseType(typeof(CompatibilityMetrics), StatusCodes.Status200OK)]
     public async Task<ActionResult<CompatibilityMetrics>> GetMetrics(
         [FromQuery] DateTimeOffset? fromDate = null,
@@ -99,7 +100,7 @@ public class CompatibilityController : ControllerBase
     /// Get per-endpoint compatibility metrics
     /// </summary>
     [HttpGet("endpoints")]
-    [RequireAdmin]
+    [RequireSuperuser]
     [ProducesResponseType(typeof(IEnumerable<EndpointMetrics>), StatusCodes.Status200OK)]
     public async Task<ActionResult<IEnumerable<EndpointMetrics>>> GetEndpointMetrics(
         [FromQuery] DateTimeOffset? fromDate = null,
@@ -127,7 +128,7 @@ public class CompatibilityController : ControllerBase
     /// Get list of analyses with filtering and pagination
     /// </summary>
     [HttpGet("analyses")]
-    [RequireAdmin]
+    [RequireSuperuser]
     [ProducesResponseType(typeof(AnalysesListResponse), StatusCodes.Status200OK)]
     public async Task<ActionResult<AnalysesListResponse>> GetAnalyses(
         [FromQuery] string? requestPath = null,
@@ -193,7 +194,7 @@ public class CompatibilityController : ControllerBase
     /// Get detailed analysis by ID
     /// </summary>
     [HttpGet("analyses/{id}")]
-    [RequireAdmin]
+    [RequireSuperuser]
     [ProducesResponseType(typeof(AnalysisDetailDto), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<ActionResult<AnalysisDetailDto>> GetAnalysisDetail(
@@ -266,7 +267,7 @@ public class CompatibilityController : ControllerBase
     /// Test API compatibility by comparing responses from Nightscout and Nocturne
     /// </summary>
     [HttpPost("test")]
-    [RequireAdmin]
+    [RequireSuperuser]
     [ProducesResponseType(typeof(ManualTestResult), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     public async Task<ActionResult<ManualTestResult>> TestApiComparison(
@@ -284,6 +285,17 @@ public class CompatibilityController : ControllerBase
             return Problem(detail: "QueryPath is required", statusCode: 400, title: "Bad Request");
         }
 
+        if (!NightscoutBaseUri.TryFor(request.NightscoutUrl, out _))
+        {
+            return Problem(detail: NightscoutBaseUri.InvalidUrlMessage, statusCode: 400, title: "Bad Request");
+        }
+
+        var queryPath = request.QueryPath.StartsWith("/") ? request.QueryPath : "/" + request.QueryPath;
+        if (!NightscoutBaseUri.TryResolve(request.NightscoutUrl, queryPath, out var nightscoutUrl))
+        {
+            return Problem(detail: NightscoutBaseUri.OutsideBaseMessage, statusCode: 400, title: "Bad Request");
+        }
+
         var result = new ManualTestResult
         {
             QueryPath = request.QueryPath,
@@ -292,11 +304,6 @@ public class CompatibilityController : ControllerBase
         };
 
         using var httpClient = new HttpClient { Timeout = TimeSpan.FromSeconds(30) };
-
-        // Build URLs
-        var nightscoutBaseUrl = request.NightscoutUrl.TrimEnd('/');
-        var queryPath = request.QueryPath.StartsWith("/") ? request.QueryPath : "/" + request.QueryPath;
-        var nightscoutUrl = nightscoutBaseUrl + queryPath;
 
         // Get Nocturne base URL from current request
         var nocturneBaseUrl = $"{Request.PublicScheme()}://{Request.Host}";

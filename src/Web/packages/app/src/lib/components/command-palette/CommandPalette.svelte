@@ -1,7 +1,6 @@
 <script lang="ts">
   import * as Command from "$lib/components/ui/command";
   import { getRealtimeStore } from "$lib/stores/realtime-store.svelte";
-  import { getAuthStore } from "$lib/stores/auth-store.svelte";
   import { goto } from "$app/navigation";
   import { resolve } from "$app/paths";
   import { page } from "$app/state";
@@ -28,7 +27,7 @@
     recordRecent,
   } from "./command-palette-store.svelte";
   import CommandPaletteVitals from "./CommandPaletteVitals.svelte";
-  import { Star } from "lucide-svelte";
+  import Star from "@lucide/svelte/icons/star";
   import { Button } from "$lib/components/ui/button";
 
   interface Props {
@@ -44,15 +43,17 @@
 
   let searchValue = $state("");
 
-  const authStore = getAuthStore();
   const realtimeStore = getRealtimeStore();
 
   const visibleItems = $derived(
-    paletteItemsFor(tenantless).filter(
+    paletteItemsFor(tenantless, {
+      grantedScopes: page.data.effectivePermissions ?? [],
+      anonymous: !page.data.user,
+    }).filter(
       (item) =>
         (!item.scope ||
           satisfiesScope(page.data.effectivePermissions ?? [], item.scope)) &&
-        (!item.role || authStore.hasRole(item.role))
+        (!item.platformAdmin || page.data.isPlatformAdmin)
     )
   );
 

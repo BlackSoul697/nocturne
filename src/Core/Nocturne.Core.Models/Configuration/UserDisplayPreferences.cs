@@ -1,5 +1,6 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using System.Text.Json.Serialization.Metadata;
 
 namespace Nocturne.Core.Models.Configuration;
 
@@ -14,8 +15,27 @@ namespace Nocturne.Core.Models.Configuration;
 /// </summary>
 public class UserDisplayPreferences
 {
-    /// <summary>Shared JSON options for (de)serializing the preferences blob (camelCase / web defaults).</summary>
-    public static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
+    /// <summary>The display language of a subject who has not chosen one; the frontend's default language.</summary>
+    public const string DefaultLanguage = "en";
+
+    /// <summary>
+    /// JSON options for (de)serializing the stored preferences blob (camelCase / web defaults).
+    /// <see cref="EffectiveEnergyUnit"/> is left out: it is resolved on every response, and a stored
+    /// copy would go stale when the region format changes.
+    /// </summary>
+    public static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web)
+    {
+        TypeInfoResolver = new DefaultJsonTypeInfoResolver { Modifiers = { OmitResolvedValues } },
+    };
+
+    private static void OmitResolvedValues(JsonTypeInfo typeInfo)
+    {
+        if (typeInfo.Type != typeof(UserDisplayPreferences))
+            return;
+
+        var resolved = typeInfo.Properties.Single(p => p.Name == "effectiveEnergyUnit");
+        typeInfo.Properties.Remove(resolved);
+    }
 
     /// <summary>
     /// Deserializes a stored preferences blob, returning an empty (all-null) instance when the
@@ -43,15 +63,17 @@ public class UserDisplayPreferences
     public string Serialize() => JsonSerializer.Serialize(this, JsonOptions);
 
     // Allowed values for the constrained string preferences (mirror the frontend literal unions).
-    private static readonly HashSet<string> AllowedGlucoseUnits = new(StringComparer.Ordinal) { "mg/dl", "mmol" };
-    private static readonly HashSet<string> AllowedTimeFormats = new(StringComparer.Ordinal) { "12", "24" };
+    internal static readonly HashSet<string> AllowedGlucoseUnits = new(StringComparer.Ordinal) { "mg/dl", "mmol" };
+    internal static readonly HashSet<string> AllowedTimeFormats = new(StringComparer.Ordinal) { "12", "24" };
+    private static readonly HashSet<string> AllowedA1cNames = new(StringComparer.Ordinal) { "HbA1c", "A1c" };
+    private static readonly HashSet<string> AllowedA1cUnits = new(StringComparer.Ordinal) { "percent", "mmol/mol" };
 
     /// <summary>
     /// Regional formats offered to the user. Empty string means "follow the display language".
     /// Each tag drives date ordering, month/weekday names and the first day of the week through
     /// Intl on the frontend, so adding one here is all that a new region needs.
     /// </summary>
-    private static readonly HashSet<string> AllowedRegionFormats = new(StringComparer.Ordinal)
+    internal static readonly HashSet<string> AllowedRegionFormats = new(StringComparer.Ordinal)
     {
         "",
         "en-US", "en-GB", "en-AU", "en-CA", "en-IE", "en-NZ", "en-ZA",
@@ -60,9 +82,10 @@ public class UserDisplayPreferences
     };
 
     private static readonly HashSet<string> AllowedColorThemes = new(StringComparer.Ordinal) { "nocturne", "trio", "aaps", "classic" };
+    private static readonly HashSet<string> AllowedGlucoseRangePalettes = new(StringComparer.Ordinal) { "theme", "clarity" };
     private static readonly HashSet<string> AllowedPredictionModes = new(StringComparer.Ordinal) { "cone", "lines", "main", "iob", "zt", "uam", "cob" };
     private static readonly HashSet<string> AllowedColorModes = new(StringComparer.Ordinal) { "single", "threshold", "continuous" };
-    private static readonly HashSet<string> AllowedAreaModes = new(StringComparer.Ordinal) { "off", "baseline", "deviation" };
+    private static readonly HashSet<string> AllowedAreaModes = new(StringComparer.Ordinal) { "off", "full", "baseline", "deviation" };
 
     /// <summary>
     /// Validates the constrained string values and numeric ranges. Returns a "field: message"
@@ -73,9 +96,13 @@ public class UserDisplayPreferences
     {
         var stringError =
             Check("glucoseUnits", GlucoseUnits, AllowedGlucoseUnits)
+            ?? Check("a1cName", A1cName, AllowedA1cNames)
+            ?? Check("a1cUnits", A1cUnits, AllowedA1cUnits)
             ?? Check("timeFormat", TimeFormat, AllowedTimeFormats)
             ?? Check("regionFormat", RegionFormat, AllowedRegionFormats)
+            ?? Check("energyUnit", EnergyUnit, EnergyUnits.Allowed)
             ?? Check("colorTheme", ColorTheme, AllowedColorThemes)
+            ?? Check("glucoseRangePalette", GlucoseRangePalette, AllowedGlucoseRangePalettes)
             ?? Check("prediction.displayMode", Prediction?.DisplayMode, AllowedPredictionModes)
             ?? Check("chart.lineColorMode", Chart?.LineColorMode, AllowedColorModes)
             ?? Check("chart.pointColorMode", Chart?.PointColorMode, AllowedColorModes)
@@ -99,12 +126,12 @@ public class UserDisplayPreferences
         }
 
         return YearOverviewColors?.Validate();
-
-        static string? Check(string field, string? value, HashSet<string> allowed) =>
-            value != null && !allowed.Contains(value)
-                ? $"{field}: '{value}' is not allowed. Valid values: {string.Join(", ", allowed)}"
-                : null;
     }
+
+    internal static string? Check(string field, string? value, HashSet<string> allowed) =>
+        value != null && !allowed.Contains(value)
+            ? $"{field}: '{value}' is not allowed. Valid values: {string.Join(", ", allowed)}"
+            : null;
 
     /// <summary>
     /// Merges the non-null fields of <paramref name="incoming"/> into this instance so unset
@@ -114,10 +141,15 @@ public class UserDisplayPreferences
     public void MergeWith(UserDisplayPreferences incoming)
     {
         GlucoseUnits = incoming.GlucoseUnits ?? GlucoseUnits;
+        A1cName = incoming.A1cName ?? A1cName;
+        A1cUnits = incoming.A1cUnits ?? A1cUnits;
         TimeFormat = incoming.TimeFormat ?? TimeFormat;
         RegionFormat = incoming.RegionFormat ?? RegionFormat;
+        EnergyUnit = incoming.EnergyUnit ?? EnergyUnit;
         ColorTheme = incoming.ColorTheme ?? ColorTheme;
+        GlucoseRangePalette = incoming.GlucoseRangePalette ?? GlucoseRangePalette;
         NightModeSchedule = incoming.NightModeSchedule ?? NightModeSchedule;
+        CalendarShowTirPercent = incoming.CalendarShowTirPercent ?? CalendarShowTirPercent;
         DashboardTopWidgets = incoming.DashboardTopWidgets ?? DashboardTopWidgets;
         // Replace the whole color selection: an empty object resets every metric to automatic.
         YearOverviewColors = incoming.YearOverviewColors ?? YearOverviewColors;
@@ -161,9 +193,14 @@ public class UserDisplayPreferences
     public UserDisplayPreferences ToPresentationOnly() => new()
     {
         GlucoseUnits = GlucoseUnits,
+        A1cName = A1cName,
+        A1cUnits = A1cUnits,
         TimeFormat = TimeFormat,
         RegionFormat = RegionFormat,
+        EnergyUnit = EnergyUnit,
         ColorTheme = ColorTheme,
+        GlucoseRangePalette = GlucoseRangePalette,
+        CalendarShowTirPercent = CalendarShowTirPercent,
         Prediction = Prediction,
         Chart = Chart,
         YearOverviewColors = YearOverviewColors,
@@ -172,6 +209,9 @@ public class UserDisplayPreferences
     /// <summary>Glucose units: "mg/dl" or "mmol".</summary>
     [JsonPropertyName("glucoseUnits")]
     public string? GlucoseUnits { get; set; }
+
+    public string? A1cName { get; set; }
+    public string? A1cUnits { get; set; }
 
     /// <summary>Time format: "12" or "24".</summary>
     [JsonPropertyName("timeFormat")]
@@ -185,15 +225,36 @@ public class UserDisplayPreferences
     [JsonPropertyName("regionFormat")]
     public string? RegionFormat { get; set; }
 
+    /// <summary>Food energy display unit: "kJ" or "kcal". Null follows <see cref="EffectiveEnergyUnit"/>.</summary>
+    [JsonPropertyName("energyUnit")]
+    public string? EnergyUnit { get; set; }
+
+    /// <summary>
+    /// The energy unit to display, resolved by <see cref="EnergyUnits.Resolve"/>. Served so the
+    /// frontend never applies the region rule itself; never stored (see <see cref="JsonOptions"/>).
+    /// </summary>
+    [JsonPropertyName("effectiveEnergyUnit")]
+    public string EffectiveEnergyUnit => EnergyUnits.Resolve(EnergyUnit, RegionFormat);
+
     /// <summary>Color theme: "nocturne", "trio", "aaps", or "classic".</summary>
     [JsonPropertyName("colorTheme")]
     public string? ColorTheme { get; set; }
+
+    /// <summary>
+    /// Glucose range palette: "theme" (the colour theme's own range colours) or "clarity"
+    /// (distinct colours for each of the four out-of-range bands). Null means "theme".
+    /// </summary>
+    [JsonPropertyName("glucoseRangePalette")]
+    public string? GlucoseRangePalette { get; set; }
 
     /// <summary>Whether the automatic night-mode schedule is enabled.</summary>
     [JsonPropertyName("nightModeSchedule")]
     public bool? NightModeSchedule { get; set; }
 
-    /// <summary>Prediction display preferences.</summary>
+    /// <summary>Whether each calendar day prints its in-range percentage over its time-in-range bar.</summary>
+    [JsonPropertyName("calendarShowTirPercent")]
+    public bool? CalendarShowTirPercent { get; set; }
+
     [JsonPropertyName("prediction")]
     public PredictionPreferences? Prediction { get; set; }
 
@@ -252,7 +313,7 @@ public class ChartPreferences
     [JsonPropertyName("showPoints")]
     public bool? ShowPoints { get; set; }
 
-    /// <summary>Area fill mode: "off", "baseline", or "deviation".</summary>
+    /// <summary>Area fill mode: "off", "full", "baseline", or "deviation".</summary>
     [JsonPropertyName("areaMode")]
     public string? AreaMode { get; set; }
 

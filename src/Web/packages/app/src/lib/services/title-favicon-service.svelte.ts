@@ -6,13 +6,13 @@
  */
 
 import { browser } from "$app/environment";
-import type { TitleFaviconSettings, ClientThresholds } from "$lib/stores/serverSettings";
+import type { TitleFaviconSettings } from "$lib/stores/serverSettings";
 import type { AlarmVisualSettings } from "$lib/types/alarm-profile";
 import { bg as formatBg, bgDelta as formatBgDelta } from "$lib/utils/formatting";
-import { directionGlyph } from "@nocturne/ui/glucose";
-import { getGlucoseStatus, renderGlucoseIcon, type GlucoseStatus } from "@nocturne/ui/glucose-icon";
-
-export type { GlucoseStatus };
+import { directionGlyph, type GlucoseTileVariant } from "@nocturne/ui/glucose";
+import { renderGlucoseIcon } from "@nocturne/ui/glucose-icon";
+import type { GlucoseStatus } from "$lib/api/generated/nocturne-api-client";
+import { getGlucoseTileVariant } from "$lib/utils/glucose-status";
 
 /** Resolve CSS variable to its computed value */
 function resolveCssVar(name: string): string {
@@ -21,24 +21,26 @@ function resolveCssVar(name: string): string {
 }
 
 /** Color palette for different glucose statuses - resolves from CSS variables */
-const STATUS_COLORS: Record<GlucoseStatus, () => string> = {
+const STATUS_COLORS: Record<GlucoseTileVariant, () => string> = {
   "very-high": () => resolveCssVar("--glucose-very-high"),
   "high": () => resolveCssVar("--glucose-high"),
   "in-range": () => resolveCssVar("--glucose-in-range"),
   "low": () => resolveCssVar("--glucose-low"),
   "very-low": () => resolveCssVar("--glucose-very-low"),
+  "neutral": () => resolveCssVar("--muted-foreground"),
 };
 
 /** Disconnected/stale state color - resolves from CSS variable */
 const DISCONNECTED_COLOR = () => resolveCssVar("--muted-foreground");
 
 /** Status labels for alarm display */
-const STATUS_LABELS: Record<GlucoseStatus, string> = {
+const STATUS_LABELS: Record<GlucoseTileVariant, string> = {
   "very-high": "⚠️ HIGH",
   "high": "HIGH",
   "in-range": "",
   "low": "LOW",
   "very-low": "⚠️ VERY LOW",
+  "neutral": "",
 };
 
 /**
@@ -60,8 +62,11 @@ export class TitleFaviconService {
 
   // Current values for flashing
   private currentBg = 0;
-  private currentStatus: GlucoseStatus = "in-range";
+  private currentStatus: GlucoseTileVariant = "neutral";
   private currentTitle = "";
+
+  private lastFavicon: { bg: number | null; variant: GlucoseTileVariant; muted: boolean } | null = null;
+  private classObserver: MutationObserver | null = null;
 
   /**
    * Initialize the service - call once on app startup
@@ -90,6 +95,9 @@ export class TitleFaviconService {
       document.head.appendChild(this.linkElement);
     }
 
+    this.classObserver = new MutationObserver(() => this.redrawFavicon());
+    this.classObserver.observe(document.documentElement, { attributes: true, attributeFilter: ["class"] });
+
     this.initialized = true;
   }
 
@@ -99,7 +107,7 @@ export class TitleFaviconService {
    * @param direction - Trend direction
    * @param delta - Change since last reading
    * @param settings - Title/favicon settings
-   * @param thresholds - Glucose thresholds for status calculation
+   * @param variant - The server's status for this reading, through `getGlucoseTileVariant`
    * @param isDisconnected - Whether the client is disconnected from server
    * @param isStale - Whether the data is stale (old)
    * @param timeSinceReading - Human-readable time since last reading (e.g., "5 min ago")
@@ -107,23 +115,22 @@ export class TitleFaviconService {
   update(
     bg: number,
     direction: string,
-    delta: number,
+    delta: number | null,
     settings: TitleFaviconSettings,
-    thresholds: ClientThresholds,
+    variant: GlucoseTileVariant,
     isDisconnected: boolean = false,
     isStale: boolean = false,
     timeSinceReading: string = ""
   ): void {
-    if (!browser || !this.initialized || !settings.enabled) {
+    if (!browser || !this.initialized) return;
+    if (!settings.enabled) {
+      this.lastFavicon = null;
       return;
     }
 
-    // Calculate status
-    const status = this.getGlucoseStatus(bg, thresholds);
-
     // Store current values for flashing
     this.currentBg = bg;
-    this.currentStatus = status;
+    this.currentStatus = variant;
 
     // Update title
     if (settings.showBgValue || settings.showDirection || settings.showDelta) {
@@ -135,22 +142,26 @@ export class TitleFaviconService {
     }
 
     // Update favicon - use grey when disconnected or stale
-    if (settings.faviconEnabled && this.canvas && this.ctx && this.linkElement) {
-      let color: string;
-      if (isDisconnected || isStale) {
-        color = DISCONNECTED_COLOR();
-      } else {
-        color = settings.faviconColorCoded ? STATUS_COLORS[status]() : resolveCssVar("--muted-foreground");
-      }
-      const faviconDataUrl = this.generateFaviconDataUrl(
-        settings.faviconShowBg ? bg : null,
-        color
-      );
-      // Only update if not currently flashing
-      if (!this.flashInterval) {
-        this.linkElement.href = faviconDataUrl;
-      }
+    if (!settings.faviconEnabled) {
+      this.lastFavicon = null;
+    } else if (this.canvas && this.ctx && this.linkElement) {
+      this.lastFavicon = {
+        bg: settings.faviconShowBg ? bg : null,
+        variant,
+        muted: isDisconnected || isStale || !settings.faviconColorCoded,
+      };
+      this.redrawFavicon();
     }
+  }
+
+  /**
+   * Repaints the favicon from the last reading, resolving the CSS variables again.
+   */
+  private redrawFavicon(): void {
+    if (!this.lastFavicon || this.flashInterval || !this.linkElement) return;
+    const { bg, variant, muted } = this.lastFavicon;
+    const color = muted ? DISCONNECTED_COLOR() : STATUS_COLORS[variant]();
+    this.linkElement.href = this.generateFaviconDataUrl(bg, color);
   }
 
   /**
@@ -170,6 +181,21 @@ export class TitleFaviconService {
 
     // Apply initial flash state
     this.applyFlashState();
+  }
+
+  /**
+   * Flashes while the server's status for the newest reading is urgent. An undefined status
+   * (the newest reading's status has not loaded yet) leaves the flash as it is, so an urgent
+   * alarm does not blink off for every new reading.
+   */
+  syncAlarmFlash(status: GlucoseStatus | undefined, visualSettings: AlarmVisualSettings): void {
+    if (status === undefined) return;
+    const variant = getGlucoseTileVariant(status);
+    if (variant === "very-low" || variant === "very-high") {
+      this.startFlashing(visualSettings);
+    } else if (this.flashInterval) {
+      this.stopFlashing();
+    }
   }
 
   /**
@@ -230,19 +256,12 @@ export class TitleFaviconService {
   }
 
   /**
-   * Determine glucose status based on value and thresholds
-   */
-  getGlucoseStatus(value: number, thresholds: ClientThresholds): GlucoseStatus {
-    return getGlucoseStatus(value, thresholds);
-  }
-
-  /**
    * Build the browser title string
    */
   private buildTitle(
     bg: number,
     direction: string,
-    delta: number,
+    delta: number | null,
     settings: TitleFaviconSettings,
     isDisconnected: boolean = false,
     isStale: boolean = false,
@@ -271,7 +290,7 @@ export class TitleFaviconService {
       bgParts.push(directionGlyph(direction));
     }
 
-    if (settings.showDelta && delta !== undefined && !isDisconnected) {
+    if (settings.showDelta && delta != null && !isDisconnected) {
       bgParts.push(formatBgDelta(delta));
     }
 
@@ -310,6 +329,7 @@ export class TitleFaviconService {
     if (!browser) return;
 
     this.stopFlashing();
+    this.lastFavicon = null;
 
     if (this.originalTitle) {
       document.title = this.originalTitle;
@@ -326,6 +346,9 @@ export class TitleFaviconService {
   destroy(): void {
     if (!browser) return;
     this.stopFlashing();
+    this.classObserver?.disconnect();
+    this.classObserver = null;
+    this.lastFavicon = null;
     this.canvas = null;
     this.ctx = null;
     this.initialized = false;

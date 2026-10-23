@@ -36,7 +36,6 @@ public class ResponseCachePolicyTests
     [InlineData(typeof(StateSpansController), nameof(StateSpansController.GetConnectivity))]
     [InlineData(typeof(StateSpansController), nameof(StateSpansController.GetOverrides))]
     [InlineData(typeof(StateSpansController), nameof(StateSpansController.GetTemporaryTargets))]
-    [InlineData(typeof(StateSpansController), nameof(StateSpansController.GetProfiles))]
     [InlineData(typeof(StateSpansController), nameof(StateSpansController.GetExercise))]
     [InlineData(typeof(StateSpansController), nameof(StateSpansController.GetIllness))]
     [InlineData(typeof(StateSpansController), nameof(StateSpansController.GetTravel))]
@@ -46,6 +45,7 @@ public class ResponseCachePolicyTests
     [InlineData(typeof(V1EntriesController), nameof(V1EntriesController.GetEntries))]
     [InlineData(typeof(ProfileController), nameof(ProfileController.GetProfileSummary))]
     [InlineData(typeof(PredictionController), nameof(PredictionController.GetProfileSnapshot))]
+    [InlineData(typeof(TreatmentLogController), nameof(TreatmentLogController.GetStats))]
     public void MutableReads_AreNeverStored(Type controller, string action)
     {
         var cache = CacheOn(controller, action);

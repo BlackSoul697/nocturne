@@ -6,18 +6,16 @@
   import { Input } from "$lib/components/ui/input";
   import { Label } from "$lib/components/ui/label";
   import { Separator } from "$lib/components/ui/separator";
-  import {
-    User,
-    ShieldAlert,
-    RefreshCw,
-    Check,
-    AlertTriangle,
-    Loader2,
-    Info,
-    Server,
-    Fingerprint,
-    Smartphone,
-  } from "lucide-svelte";
+  import User from "@lucide/svelte/icons/user";
+  import ShieldAlert from "@lucide/svelte/icons/shield-alert";
+  import RefreshCw from "@lucide/svelte/icons/refresh-cw";
+  import Check from "@lucide/svelte/icons/check";
+  import AlertTriangle from "@lucide/svelte/icons/triangle-alert";
+  import Loader2 from "@lucide/svelte/icons/loader-circle";
+  import Info from "@lucide/svelte/icons/info";
+  import Server from "@lucide/svelte/icons/server";
+  import Fingerprint from "@lucide/svelte/icons/fingerprint-pattern";
+  import Smartphone from "@lucide/svelte/icons/smartphone";
   import QRCode from "qrcode";
   import type { PageData } from "./$types";
   import {
@@ -53,6 +51,7 @@
     describeTotpSetupStartError,
   } from "$lib/components/account/totp-errors";
   import { page } from "$app/state";
+  import { invalidateAll } from "$app/navigation";
 
   const { data }: { data: PageData } = $props();
 
@@ -184,6 +183,7 @@
         label: newPasskeyLabel.trim() || undefined,
       });
       await credentialsQuery.refresh();
+      await invalidateAll();
       showLabelDialog = false;
       pendingPasskey = null;
       newPasskeyLabel = "";
@@ -218,6 +218,7 @@
 
     try {
       await removeCredential(removeTarget.id);
+      await invalidateAll();
       successMessage = "Passkey removed.";
       clearMessages();
     } catch (err) {
@@ -241,6 +242,7 @@
       const result = await regenerateRecoveryCodes();
       newRecoveryCodes = result.codes ?? [];
       showNewCodesDialog = true;
+      await invalidateAll();
     } catch (err) {
       errorMessage = describeSubmitError(
         err,

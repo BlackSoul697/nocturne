@@ -26,6 +26,8 @@ char* nocturne_alerts_evaluate_node(const char* request_json);
 char* nocturne_alerts_leaf_paths(const char* condition_node_json);
 char* nocturne_alerts_classify(const char* request_json);
 char* nocturne_alerts_references_wall_clock(const char* request_json);
+char* nocturne_alerts_rule_reads(const char* request_json);
+char* nocturne_alerts_references_any(const char* request_json);
 char* nocturne_alerts_describe(const char* request_json);
 char* nocturne_alerts_validate(const char* request_json);
 char* nocturne_alerts_tracker_process(const char* request_json);
@@ -291,18 +293,20 @@ as the error envelope.
 
 ## References wall clock (`nocturne_alerts_references_wall_clock`)
 
-Whether a rule must be evaluated on a timer as well as per reading: its root
-kind, or any leaf of its tree, measures elapsed time against an anchor a
-reading does not move (`docs/alerts/engine-semantics.md` §5.1). A host that
-evaluates only when a reading arrives never fires such a rule while readings
-stop, so it schedules these rules on its sweep. The request is the rule body,
-as for `classify`:
+Whether a rule must be evaluated on a timer as well as per reading: one of its
+kinds measures elapsed time against an anchor a reading does not move
+(`docs/alerts/engine-semantics.md` §5.1). A host that evaluates only when a
+reading arrives never fires such a rule while readings stop, so it schedules
+these rules on its sweep. The request is the rule body, as for `classify`, plus
+the rule's auto-resolve configuration, both fields optional:
 
 ```jsonc
 {
   "schema_version": 1,
   "condition_type": "composite",
-  "condition_params": { "operator": "and", "conditions": [ /* … */ ] }
+  "condition_params": { "operator": "and", "conditions": [ /* … */ ] },
+  "auto_resolve_enabled": true,                     // default false
+  "auto_resolve_params": { "type": "staleness", … } // a full node; default null
 }
 ```
 
@@ -312,14 +316,52 @@ Response:
 { "schema_version": 1, "ok": true, "references_wall_clock": true }
 ```
 
-`condition_type` is read as `evaluate` reads it: a kind's wire name, ignoring
-ASCII case. Anything else (a member name such as `SignalLoss`, an ordinal, an
-unknown kind) is `false`, not an error. A wall-clock root kind is `true`
-whatever its body, so a host sweeps it and its `evaluate` rejects the body as
-it would per reading. Any other root is `true` only when its body can be
-evaluated and holds a wall-clock kind at any depth, a nested `type` resolving
-as node dispatch resolves it (semantics §1.2). Only a malformed envelope is
-the error envelope.
+A rule's kinds are read as evaluation reads them:
+
+- `condition_type` is a kind's wire name, ignoring ASCII case. Anything else (a
+  member name such as `SignalLoss`, an ordinal, an unknown kind) gives the rule
+  no kinds, so the answer is `false`, not an error.
+- The root kind counts whatever its body, so a wall-clock root is swept and
+  its `evaluate` rejects the body as it would per reading.
+- The body's kinds count only when it can be evaluated, a nested `type`
+  resolving as node dispatch resolves it (semantics §1.2).
+- The auto-resolve tree's kinds count only while `auto_resolve_enabled`, and
+  only when the tree is present, not `null` and evaluable.
+
+Only a malformed envelope is the error envelope.
+
+## Rule reads (`nocturne_alerts_rule_reads`)
+
+The context facts a rule reads (`docs/alerts/engine-semantics.md` §5.2): the
+facts of every kind of the rule, read as for `references_wall_clock`, which
+takes the same request. Facts are named by their snake_case wire names, once
+each, in declaration order:
+
+```jsonc
+{ "schema_version": 1, "ok": true, "reads": ["glucose", "carbs"] }
+```
+
+The names are `glucose`, `predictions`, `insulin`, `carbs`, `pump`, `aps`,
+`uploader`, `state_spans`, `device_ages`, `trackers`, `sleep`,
+`active_alerts`, `do_not_disturb` and `time_zone`. A rule with no kinds reads
+`[]`.
+
+## References any (`nocturne_alerts_references_any`)
+
+Whether a rule reads any of `facts`. The request is the `rule_reads` request
+plus a required `facts` list of wire names, matched ignoring ASCII case:
+
+```jsonc
+{ "schema_version": 1, "condition_type": "threshold", "condition_params": { … }, "facts": ["carbs"] }
+```
+
+```jsonc
+{ "schema_version": 1, "ok": true, "references_any": false }
+```
+
+A missing `facts` list or a name this library does not know is the error
+envelope: ignoring an unknown name could skip a rule the host meant to
+evaluate.
 
 ## Describe (`nocturne_alerts_describe`)
 
@@ -614,6 +656,8 @@ fun evaluate(requestJson: String): String             // nocturne_alerts_evaluat
 fun evaluateNode(requestJson: String): String         // nocturne_alerts_evaluate_node
 fun classify(requestJson: String): String             // nocturne_alerts_classify
 fun referencesWallClock(requestJson: String): String  // nocturne_alerts_references_wall_clock
+fun ruleReads(requestJson: String): String            // nocturne_alerts_rule_reads
+fun referencesAny(requestJson: String): String        // nocturne_alerts_references_any
 fun leafPaths(requestJson: String): String            // nocturne_alerts_leaf_paths
 fun describe(requestJson: String): String             // nocturne_alerts_describe
 fun validate(requestJson: String): String             // nocturne_alerts_validate
@@ -665,6 +709,31 @@ cargo ndk -t arm64-v8a -t armeabi-v7a -t x86_64 -o jniLibs build --release \
 CI must generate the Kotlin bindings from the **same build** (same crate
 revision, same uniffi version) as the `.so` files it packages — the bindings
 checksum the API at load time and refuse a mismatched library.
+
+## Browser (WebAssembly)
+
+The optional `wasm` cargo feature adds a [wasm-bindgen](https://rustwasm.github.io/docs/wasm-bindgen/)
+surface (`src/wasm_api.rs`) for the docs portal's alert simulator, which runs
+this engine against fixture traces instead of a copy of its semantics. It
+exports `replay`, `validate` and `version`, with the same envelopes and
+handlers as their C counterparts:
+
+```js
+import init, { replay, validate } from "./nocturne_alerts.js";
+await init();
+const outcome = JSON.parse(replay(JSON.stringify(request))); // nocturne_alerts_replay
+```
+
+wasm32 has no unwinding, so a panic traps and reaches the host as a thrown
+`RuntimeError` rather than the error envelope. wasm-bindgen is pinned exactly:
+the CLI that generates the JS glue must be the same version as the crate.
+`src/Web/packages/portal/scripts/build-alerts-engine.mjs` builds it, installing
+the matching CLI into `crates/target/tools/`:
+
+```bash
+# from crates/
+cargo build --release --target wasm32-unknown-unknown -p nocturne-alerts-ffi --features wasm
+```
 
 ## Versioning
 

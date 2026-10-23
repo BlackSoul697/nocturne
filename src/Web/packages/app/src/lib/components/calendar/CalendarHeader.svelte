@@ -1,7 +1,11 @@
 <script lang="ts">
-  import { Calendar, ChevronLeft, ChevronRight } from "lucide-svelte";
+  import Calendar from "@lucide/svelte/icons/calendar";
+  import ChevronLeft from "@lucide/svelte/icons/chevron-left";
+  import ChevronRight from "@lucide/svelte/icons/chevron-right";
   import { Button } from "$lib/components/ui/button";
   import * as ToggleGroup from "$lib/components/ui/toggle-group";
+  import { Switch } from "$lib/components/ui/switch";
+  import { Label } from "$lib/components/ui/label";
 
   type ViewMode = "tir" | "profile";
 
@@ -14,6 +18,8 @@
     nextMonth: () => void;
     goToToday: () => void;
     setViewMode: (mode: ViewMode) => void;
+    showTirPercent: boolean;
+    setShowTirPercent: (show: boolean) => void;
   }
 
   let {
@@ -25,6 +31,8 @@
     nextMonth,
     goToToday,
     setViewMode,
+    showTirPercent,
+    setShowTirPercent,
   }: Props = $props();
 
   const currentMonth = $derived(viewDate.getMonth());
@@ -32,7 +40,7 @@
 </script>
 
 <div
-  class="@container border-b bg-background/95 backdrop-blur supports-backdrop-filter:bg-background/60 sticky top-0 z-10"
+  class="@container border-b bg-background/95 backdrop-blur supports-backdrop-filter:bg-background/60"
 >
   <div class="flex flex-wrap items-center justify-between gap-2 p-4">
     <div class="flex items-center gap-4">
@@ -41,11 +49,11 @@
     </div>
 
     <!-- Navigation Controls -->
-    <div class="flex items-center gap-2">
+    <div class="flex flex-wrap items-center gap-2">
       <Button variant="outline" size="icon" onclick={previousMonth}>
         <ChevronLeft class="h-4 w-4" />
       </Button>
-      <div class="text-lg font-semibold min-w-[180px] text-center">
+      <div class="text-lg font-semibold text-center @md:min-w-[180px]">
         {MONTH_NAMES[currentMonth]}
         {currentYear}
       </div>
@@ -80,8 +88,27 @@
         </ToggleGroup.Item>
       </ToggleGroup.Root>
 
+      {#if viewMode === "tir"}
+        <div class="flex items-center gap-2">
+          <Switch
+            id="calendar-show-tir-percent"
+            checked={showTirPercent}
+            onCheckedChange={setShowTirPercent}
+          />
+          <Label for="calendar-show-tir-percent" variant="option">Show TIR %</Label>
+        </div>
+      {/if}
+
       <!-- Glucose colors -->
-      <div class="flex items-center gap-3">
+      <div class="flex flex-wrap items-center gap-x-3 gap-y-1">
+        <div class="flex items-center gap-1.5">
+          <div class="h-3 w-3 rounded bg-glucose-very-high"></div>
+          <span class="text-sm">Very High</span>
+        </div>
+        <div class="flex items-center gap-1.5">
+          <div class="h-3 w-3 rounded bg-glucose-high"></div>
+          <span class="text-sm">High</span>
+        </div>
         <div class="flex items-center gap-1.5">
           <div class="h-3 w-3 rounded bg-glucose-in-range"></div>
           <span class="text-sm">In Range</span>
@@ -91,8 +118,8 @@
           <span class="text-sm">Low</span>
         </div>
         <div class="flex items-center gap-1.5">
-          <div class="h-3 w-3 rounded bg-glucose-high"></div>
-          <span class="text-sm">High</span>
+          <div class="h-3 w-3 rounded bg-glucose-very-low"></div>
+          <span class="text-sm">Very Low</span>
         </div>
       </div>
 

@@ -1,9 +1,13 @@
-using System.Globalization;
+using System.Collections.Frozen;
 using System.Text.Json;
-using System.Web;
+using Nocturne.API.Helpers;
+using Nocturne.API.Services.Platform;
+using Nocturne.API.Services.V4;
+using Nocturne.Core.Contracts;
 using Nocturne.Core.Contracts.Repositories;
 using Nocturne.Core.Contracts.V4.Repositories;
 using Nocturne.Core.Models;
+using Nocturne.Core.Models.Queries;
 using Nocturne.Core.Models.V4;
 
 namespace Nocturne.API.Services.Devices;
@@ -14,21 +18,15 @@ namespace Nocturne.API.Services.Devices;
 /// to <see cref="V4.DeviceStatusDecomposer"/>, which breaks them apart on write.
 /// </summary>
 /// <remarks>
-/// <para>
-/// <see cref="ApsSnapshot"/> is the primary query anchor because most device status records
-/// include APS data. Orphan <see cref="PumpSnapshot"/> and <see cref="UploaderSnapshot"/>
-/// records (those without a matching APS correlation) cover the xDrip+ case where only
-/// pump/uploader data is submitted.
-/// </para>
-/// <para>
-/// Correlated records are batch-loaded by <see cref="IV4Record.CorrelationId"/> and merged
-/// into a single <see cref="DeviceStatus"/> per correlation group.
-/// </para>
+/// Which rows make up one status, and which of them places it, is
+/// <see cref="IDeviceStatusGroupRepository"/>'s rule; every list, count and history read here goes
+/// through it.
 /// </remarks>
 /// <seealso cref="V4.DeviceStatusDecomposer"/>
 /// <seealso cref="DeviceStatus"/>
 public class DeviceStatusProjectionService
 {
+    private readonly IDeviceStatusGroupRepository _groupRepo;
     private readonly IApsSnapshotRepository _apsRepo;
     private readonly IPumpSnapshotRepository _pumpRepo;
     private readonly IUploaderSnapshotRepository _uploaderRepo;
@@ -42,6 +40,7 @@ public class DeviceStatusProjectionService
     };
 
     public DeviceStatusProjectionService(
+        IDeviceStatusGroupRepository groupRepo,
         IApsSnapshotRepository apsRepo,
         IPumpSnapshotRepository pumpRepo,
         IUploaderSnapshotRepository uploaderRepo,
@@ -49,6 +48,7 @@ public class DeviceStatusProjectionService
         IDeviceStatusExtrasRepository extrasRepo,
         ILogger<DeviceStatusProjectionService> logger)
     {
+        _groupRepo = groupRepo;
         _apsRepo = apsRepo;
         _pumpRepo = pumpRepo;
         _uploaderRepo = uploaderRepo;
@@ -58,94 +58,161 @@ public class DeviceStatusProjectionService
     }
 
     /// <summary>
-    /// Returns paginated <see cref="DeviceStatus"/> documents projected from V4 snapshots.
-    /// APS snapshots are the primary anchor; orphan pump/uploader snapshots are included
-    /// for completeness (xDrip+ case).
+    /// The time fields a projected status carries for its anchor's time, the one the store filters by.
     /// </summary>
-    /// <param name="count">Maximum number of results.</param>
-    /// <param name="skip">Number of results to skip for pagination.</param>
-    /// <param name="find">MongoDB-style query filter supporting <c>device</c> and <c>created_at</c> date range filters.</param>
-    /// <param name="ct">Cancellation token.</param>
-    public async Task<IEnumerable<DeviceStatus>> GetAsync(
-        int count, int skip, string? find, CancellationToken ct)
+    private static readonly IReadOnlySet<string> AnchorTimeFields =
+        new[] { "created_at", "date", "mills" }.ToFrozenSet(StringComparer.Ordinal);
+
+    /// <summary>
+    /// Most statuses projected into memory for one find whose conditions only the projected document
+    /// can answer: the merged-read budget <see cref="LegacyReadLimits.MaxMergedCount"/> documents.
+    /// </summary>
+    internal int MaxFilterFetch { get; set; } = LegacyReadLimits.MaxMergedCount;
+
+    /// <summary>
+    /// Most ids an <c>_id</c> find resolves one by one. Each lookup costs several queries, so a longer
+    /// list reads through the budgeted scan instead.
+    /// </summary>
+    private const int MaxIdLookups = 100;
+
+    private async Task<IReadOnlyList<DeviceStatus>> GetModifiedAfterAsync(
+        FindQuery find, int count, int skip, long after, ReadSortField sort, bool descending, CancellationToken ct)
     {
-        var (device, from, to) = ParseFindQuery(find);
+        var live = await ModifiedSearch.CollectAsync(
+            async (cursor, limit, token) =>
+            {
+                var page = (await GetModifiedSinceAsync(cursor, limit, token)).ToList();
+                return new ModifiedSearch.Page<DeviceStatus>(page, page.Count == 0 ? null : page[^1].SrvModified, page.Count < limit);
+            },
+            status => status.IsValid == false || !find.Matches(status),
+            status => status.Id,
+            after,
+            ModifiedSearch.ArrivesInOrder(sort, descending) ? (long)count + skip : null,
+            ModifiedSearch.MaxRead,
+            ct);
 
-        // 1. Query APS snapshots as primary anchor (newest-first with pagination)
-        var apsSnapshots = (await _apsRepo.GetAsync(
-            from: from, to: to, device: device, source: null,
-            limit: count, offset: skip, descending: true, ct: ct)).ToList();
+        Func<DeviceStatus, long> key = sort == ReadSortField.SrvModified
+            ? status => status.SrvModified ?? status.Mills
+            : status => status.Mills;
 
-        // 2. Collect correlation IDs from APS results
-        var apsCorrelationIds = apsSnapshots
-            .Where(a => a.CorrelationId.HasValue)
-            .Select(a => a.CorrelationId!.Value)
-            .ToHashSet();
+        return (descending ? live.OrderByDescending(key) : live.OrderBy(key)).Skip(skip).Take(count).ToList();
+    }
 
-        // 3. Query orphan pump snapshots (those whose CorrelationId is not in the APS set).
-        //    Only include orphans on the first page (skip == 0) — on subsequent pages they
-        //    would have already appeared, and mixing two offset spaces breaks pagination.
-        var orphanPumps = new List<PumpSnapshot>();
-        if (skip == 0)
+    /// <summary>Parses a find, in either wire form, for <see cref="GetMatchingAsync"/>.</summary>
+    public static FindQuery ParseFind(string? find) =>
+        FindQuery.Parse(find, bareRegexFields: null, AnchorTimeFields);
+
+    /// <summary>
+    /// A page of the statuses <paramref name="find"/> matches, newest first or, when
+    /// <paramref name="descending"/> is <c>false</c>, the oldest first, evaluated as legacy
+    /// Nightscout evaluates it. The device equality and time bounds filter the store; every
+    /// condition is tested against the projected document.
+    /// </summary>
+    /// <param name="sort">
+    /// <see cref="ReadSortField.SrvModified"/> orders by modification stamp when the find is empty or
+    /// only bounds <c>srvModified</c> from below, which is served by the modified-since pages; any
+    /// other field orders by time.
+    /// </param>
+    public async Task<IReadOnlyList<DeviceStatus>> GetMatchingAsync(
+        FindQuery find, int count, int skip, CancellationToken ct,
+        bool descending = true, ReadSortField sort = ReadSortField.Time)
+    {
+        if (ModifiedSearch.CursorFor(find, sort, descending) is { } after)
+            return await GetModifiedAfterAsync(find, count, skip, after, sort, descending, ct);
+
+        if (!TryGetStoreWindow(find, out var from, out var to))
+            return [];
+
+        if (find.GetEqualityValues("_id") is { Count: <= MaxIdLookups } ids)
+            return (await ResolveByIdAsync(find, ids, descending, ct)).Skip(skip).Take(count).ToList();
+
+        var device = StoreDevice(find);
+        if (!HasResidual(find, device))
         {
-            var allPumpSnapshots = (await _pumpRepo.GetAsync(
-                from: from, to: to, device: device, source: null,
-                limit: count, offset: 0, descending: true, ct: ct)).ToList();
-
-            orphanPumps = allPumpSnapshots
-                .Where(p => !p.CorrelationId.HasValue || !apsCorrelationIds.Contains(p.CorrelationId.Value))
-                .ToList();
+            var page = await _groupRepo.GetAsync(from, to, device, count, skip, descending, ct);
+            return (await ProjectAsync(page, ct)).Where(find.Matches).ToList();
         }
 
-        // 4. Batch-load correlated records
-        var allCorrelationIds = apsCorrelationIds.ToList();
+        var (matching, truncated) = await FindFilteredFetch.MatchAsync<DeviceStatus>(
+            async (limit, offset) => await ProjectAsync(await _groupRepo.GetAsync(from, to, device, limit, offset, descending, ct), ct),
+            find.Matches, status => status.Id, (long)count + skip, MaxFilterFetch);
 
-        var correlatedPumps = allCorrelationIds.Count > 0
-            ? (await _pumpRepo.GetByCorrelationIdsAsync(allCorrelationIds, ct)).ToList()
-            : new List<PumpSnapshot>();
+        if (truncated)
+            _logger.LogWarning(
+                "Find-filtered device status query hit the {MaxFetch}-row window; older matches are not returned",
+                MaxFilterFetch);
 
-        var correlatedUploaders = allCorrelationIds.Count > 0
-            ? (await _uploaderRepo.GetByCorrelationIdsAsync(allCorrelationIds, ct)).ToList()
-            : new List<UploaderSnapshot>();
+        if (find.HasAbandonedRegex)
+            _logger.LogWarning("A find $regex ran out of its time budget; device status matches may be incomplete");
 
-        var extras = allCorrelationIds.Count > 0
-            ? (await _extrasRepo.GetByCorrelationIdsAsync(allCorrelationIds, ct)).ToList()
-            : new List<DeviceStatusExtras>();
+        return matching.Skip(skip).Take(count).ToList();
+    }
 
-        // Load override state spans that overlap with the time range of results
-        var overrides = await LoadOverridesForSnapshots(apsSnapshots, ct);
+    /// <summary>The number of statuses <see cref="GetMatchingAsync"/> pages through.</summary>
+    public async Task<long> CountMatchingAsync(FindQuery find, CancellationToken ct)
+    {
+        if (!TryGetStoreWindow(find, out var from, out var to))
+            return 0;
 
-        // Build lookup dictionaries by CorrelationId
-        var pumpByCorrelation = correlatedPumps
-            .Where(p => p.CorrelationId.HasValue)
-            .ToLookup(p => p.CorrelationId!.Value);
-        var uploaderByCorrelation = correlatedUploaders
-            .Where(u => u.CorrelationId.HasValue)
-            .ToLookup(u => u.CorrelationId!.Value);
-        var extrasByCorrelation = extras
-            .ToLookup(e => e.CorrelationId);
+        var device = StoreDevice(find);
+        if (find.GetEqualityValues("_id") is { Count: <= MaxIdLookups } || HasResidual(find, device))
+            return (await GetMatchingAsync(find, MaxFilterFetch, 0, ct)).Count;
 
-        // 5. Project each APS snapshot into a DeviceStatus
-        var results = new List<DeviceStatus>();
+        return await _groupRepo.CountAsync(from, to, device, ct);
+    }
 
-        foreach (var aps in apsSnapshots)
+    /// <summary>
+    /// The statuses an <c>_id</c> find names, each resolved as <see cref="GetByIdAsync"/> resolves an
+    /// id, in time order. A status is named by its stored id as well as by the ObjectId its wire form
+    /// carries, so an uploader's own id finds its status even when it is not an ObjectId.
+    /// </summary>
+    private async Task<List<DeviceStatus>> ResolveByIdAsync(
+        FindQuery find, IReadOnlyList<string> ids, bool descending, CancellationToken ct)
+    {
+        var found = new Dictionary<string, DeviceStatus>(StringComparer.Ordinal);
+        foreach (var id in ids)
         {
-            var correlationId = aps.CorrelationId;
-            var pump = correlationId.HasValue ? pumpByCorrelation[correlationId.Value].FirstOrDefault() : null;
-            var uploader = correlationId.HasValue ? uploaderByCorrelation[correlationId.Value].FirstOrDefault() : null;
-            var extra = correlationId.HasValue ? extrasByCorrelation[correlationId.Value].FirstOrDefault() : null;
-            var overrideSpan = FindOverrideForTimestamp(overrides, aps.Timestamp);
+            if (await GetByIdAsync(id, ct) is not { Id: { } storedId } status || found.ContainsKey(storedId))
+                continue;
 
-            results.Add(ProjectFromSnapshots(aps, pump, uploader, overrideSpan, extra, _logger));
+            if (storedId == id ? find.MatchesAs(status, "_id", id) : find.Matches(status))
+                found[storedId] = status;
         }
 
-        // 6. Project orphan pump snapshots (no APS correlation)
-        foreach (var pump in orphanPumps)
-        {
-            results.Add(ProjectFromSnapshots(null, pump, null, null, null, _logger));
-        }
+        return (descending ? found.Values.OrderByDescending(status => status.Mills) : found.Values.OrderBy(status => status.Mills)).ToList();
+    }
 
-        return results.OrderByDescending(d => d.Mills).Take(count);
+    /// <summary>
+    /// The device equality the store applies. Only a condition named <c>device</c> exactly is one, as
+    /// MongoDB field names are case-sensitive. An empty one is left to the projected document, where a
+    /// status stored without a device reads as an empty one.
+    /// </summary>
+    private static string? StoreDevice(FindQuery find) =>
+        find.GetPushableEquality("device", StringComparison.Ordinal) is { Length: > 0 } device ? device : null;
+
+    private static bool HasResidual(FindQuery find, string? storeDevice) =>
+        find.HasFieldFiltersExcept(storeDevice is null ? null : "device", StringComparison.Ordinal);
+
+    /// <summary>
+    /// The store's inclusive window for the find's bounds, or false when no instant falls in it. A
+    /// bound is a whole millisecond and a stored time can carry more, so the upper end runs to the
+    /// last microsecond, the store's precision, of its millisecond.
+    /// </summary>
+    private static bool TryGetStoreWindow(FindQuery find, out DateTime? from, out DateTime? to)
+    {
+        from = null;
+        to = null;
+        var earliest = DateTimeOffset.MinValue.ToUnixTimeMilliseconds();
+        var latest = DateTimeOffset.MaxValue.ToUnixTimeMilliseconds();
+        if (find.FromMills > latest || find.ToMills < earliest || find.FromMills > find.ToMills)
+            return false;
+
+        if (find.FromMills > earliest)
+            from = DateTimeOffset.FromUnixTimeMilliseconds(find.FromMills.Value).UtcDateTime;
+        if (find.ToMills < latest)
+            to = DateTimeOffset.FromUnixTimeMilliseconds(find.ToMills.Value).UtcDateTime
+                .AddTicks(TimeSpan.TicksPerMillisecond - TimeSpan.TicksPerMicrosecond);
+        return true;
     }
 
     /// <summary>
@@ -159,6 +226,7 @@ public class DeviceStatusProjectionService
         ApsSnapshot? aps = null;
         PumpSnapshot? pump = null;
         UploaderSnapshot? uploader = null;
+        DeviceStatusExtras? extras = null;
 
         if (Guid.TryParse(id, out var uuid))
         {
@@ -167,10 +235,12 @@ public class DeviceStatusProjectionService
                 pump = await _pumpRepo.GetByIdAsync(uuid, ct);
             if (aps == null && pump == null)
                 uploader = await _uploaderRepo.GetByIdAsync(uuid, ct);
+            if (aps == null && pump == null && uploader == null)
+                extras = await _extrasRepo.GetByIdAsync(uuid, ct);
         }
 
         // Fallback to legacy ID
-        if (aps == null && pump == null && uploader == null)
+        if (aps == null && pump == null && uploader == null && extras == null)
         {
             aps = await _apsRepo.GetByLegacyIdAsync(id, ct);
             if (aps == null)
@@ -180,7 +250,7 @@ public class DeviceStatusProjectionService
         }
 
         // Fallback to a 24-hex ObjectId derived from the record's UUID (resolved via prefix range).
-        if (aps == null && pump == null && uploader == null
+        if (aps == null && pump == null && uploader == null && extras == null
             && MongoObjectId.TryGetGuidPrefixRange(id, out var low, out var high))
         {
             aps = await _apsRepo.GetByGuidRangeAsync(low, high, ct);
@@ -188,13 +258,15 @@ public class DeviceStatusProjectionService
                 pump = await _pumpRepo.GetByGuidRangeAsync(low, high, ct);
             if (aps == null && pump == null)
                 uploader = await _uploaderRepo.GetByGuidRangeAsync(low, high, ct);
+            if (aps == null && pump == null && uploader == null)
+                extras = await _extrasRepo.GetByGuidRangeAsync(low, high, ct);
         }
 
-        if (aps == null && pump == null && uploader == null)
+        if (aps == null && pump == null && uploader == null && extras == null)
             return null;
 
         // Load correlated records if we found an anchor
-        var correlationId = aps?.CorrelationId ?? pump?.CorrelationId ?? uploader?.CorrelationId;
+        var correlationId = aps?.CorrelationId ?? pump?.CorrelationId ?? uploader?.CorrelationId ?? extras?.CorrelationId;
 
         if (correlationId.HasValue)
         {
@@ -216,8 +288,8 @@ public class DeviceStatusProjectionService
                 uploader = uploaderRecords.FirstOrDefault();
             }
 
-            var extras = (await _extrasRepo.GetByCorrelationIdsAsync(correlationIds, ct)).FirstOrDefault();
-            var timestamp = aps?.Timestamp ?? pump?.Timestamp ?? uploader?.Timestamp ?? DateTime.UtcNow;
+            extras ??= (await _extrasRepo.GetByCorrelationIdsAsync(correlationIds, ct)).FirstOrDefault();
+            var timestamp = aps?.Timestamp ?? pump?.Timestamp ?? uploader?.Timestamp ?? extras?.Timestamp ?? DateTime.UtcNow;
             var overrides = await _stateSpanRepo.GetByCategory(
                 StateSpanCategory.Override,
                 from: timestamp.AddMinutes(-1),
@@ -232,8 +304,8 @@ public class DeviceStatusProjectionService
     }
 
     /// <summary>
-    /// Returns <see cref="DeviceStatus"/> documents projected from APS snapshots
-    /// modified since the given Unix millisecond threshold. Used for AAPS incremental sync.
+    /// Returns <see cref="DeviceStatus"/> documents modified since the given Unix millisecond
+    /// threshold. Used for AAPS incremental sync. A deleted status projects with <c>isValid: false</c>.
     /// </summary>
     /// <param name="lastModified">Unix millisecond timestamp threshold.</param>
     /// <param name="limit">Maximum number of results.</param>
@@ -241,72 +313,49 @@ public class DeviceStatusProjectionService
     public async Task<IEnumerable<DeviceStatus>> GetModifiedSinceAsync(
         long lastModified, int limit, CancellationToken ct)
     {
-        var apsSnapshots = (await _apsRepo.GetModifiedSinceAsync(lastModified, limit, ct)).ToList();
+        var page = await _groupRepo.GetModifiedSinceAsync(lastModified, limit, ct);
+        var statuses = await ProjectAsync(page.Select(r => r.Record).ToList(), ct);
 
-        if (apsSnapshots.Count == 0)
-            return Enumerable.Empty<DeviceStatus>();
-
-        var correlationIds = apsSnapshots
-            .Where(a => a.CorrelationId.HasValue)
-            .Select(a => a.CorrelationId!.Value)
-            .Distinct()
-            .ToList();
-
-        var pumps = correlationIds.Count > 0
-            ? (await _pumpRepo.GetByCorrelationIdsAsync(correlationIds, ct)).ToList()
-            : new List<PumpSnapshot>();
-        var uploaders = correlationIds.Count > 0
-            ? (await _uploaderRepo.GetByCorrelationIdsAsync(correlationIds, ct)).ToList()
-            : new List<UploaderSnapshot>();
-        var extras = correlationIds.Count > 0
-            ? (await _extrasRepo.GetByCorrelationIdsAsync(correlationIds, ct)).ToList()
-            : new List<DeviceStatusExtras>();
-
-        var pumpByCorrelation = pumps.Where(p => p.CorrelationId.HasValue).ToLookup(p => p.CorrelationId!.Value);
-        var uploaderByCorrelation = uploaders.Where(u => u.CorrelationId.HasValue).ToLookup(u => u.CorrelationId!.Value);
-        var extrasByCorrelation = extras.ToLookup(e => e.CorrelationId);
-
-        // Load override state spans the same way as GetAsync/GetByIdAsync
-        var overrides = await LoadOverridesForSnapshots(apsSnapshots, ct);
-
-        return apsSnapshots.Select(aps =>
+        for (var i = 0; i < page.Count; i++)
         {
-            var cid = aps.CorrelationId;
-            var pump = cid.HasValue ? pumpByCorrelation[cid.Value].FirstOrDefault() : null;
-            var uploader = cid.HasValue ? uploaderByCorrelation[cid.Value].FirstOrDefault() : null;
-            var extra = cid.HasValue ? extrasByCorrelation[cid.Value].FirstOrDefault() : null;
-            var overrideSpan = FindOverrideForTimestamp(overrides, aps.Timestamp);
-            return ProjectFromSnapshots(aps, pump, uploader, overrideSpan, extra, _logger);
-        });
+            if (page[i].Deleted)
+                statuses[i].IsValid = false;
+        }
+
+        return statuses;
     }
 
     /// <summary>
-    /// Returns the total number of projected <see cref="DeviceStatus"/> documents matching the
-    /// optional <paramref name="find"/> filter. Sums APS snapshot count and orphan pump snapshot
-    /// count to approximate the total for V3 pagination.
+    /// Projects each group, giving a status with an APS snapshot the override active at its time.
+    /// <c>srvModified</c> is the group's <see cref="DeviceStatusGroup.ModifiedAt"/>, the stamp the
+    /// history pages on, so a client's cursor never passes a status it has not seen.
     /// </summary>
-    /// <param name="find">MongoDB-style query filter (same format as <see cref="GetAsync"/>).</param>
-    /// <param name="ct">Cancellation token.</param>
-    public async Task<long> CountAsync(string? find, CancellationToken ct)
+    private async Task<List<DeviceStatus>> ProjectAsync(IReadOnlyList<DeviceStatusGroup> groups, CancellationToken ct)
     {
-        var (_, from, to) = ParseFindQuery(find);
+        var overrides = await LoadOverridesForSnapshots(groups.Select(g => g.Aps).OfType<ApsSnapshot>().ToList(), ct);
 
-        var apsCount = await _apsRepo.CountAsync(from, to, ct);
-        var pumpCount = await _pumpRepo.CountAsync(from, to, ct);
-
-        // Orphan pump count is estimated as total pumps minus APS count (each APS correlates
-        // to at most one pump). This is a rough estimate — the real orphan count requires
-        // a correlation join, which is too expensive for a count-only query.
-        var orphanPumpEstimate = Math.Max(0, pumpCount - apsCount);
-
-        return apsCount + orphanPumpEstimate;
+        return groups
+            .Select(g =>
+            {
+                var status = ProjectFromSnapshots(
+                    g.Aps,
+                    g.Pump,
+                    g.Uploader,
+                    g.Aps is { } aps ? FindOverrideForTimestamp(overrides, aps.Timestamp) : null,
+                    g.Extras,
+                    _logger);
+                status.SrvModified = new DateTimeOffset(g.ModifiedAt, TimeSpan.Zero).ToUnixTimeMilliseconds();
+                return status;
+            })
+            .ToList();
     }
 
     #region Projection Logic
 
     /// <summary>
-    /// Projects V4 snapshots into a legacy <see cref="DeviceStatus"/> document.
-    /// At least one of <paramref name="aps"/> or <paramref name="pump"/> must be non-null.
+    /// Projects V4 snapshots into a legacy <see cref="DeviceStatus"/> document, identified by the first
+    /// of <paramref name="aps"/>, <paramref name="pump"/>, <paramref name="uploader"/> and
+    /// <paramref name="extras"/> present. At least one must be.
     /// </summary>
     internal static DeviceStatus ProjectFromSnapshots(
         ApsSnapshot? aps,
@@ -316,18 +365,14 @@ public class DeviceStatusProjectionService
         DeviceStatusExtras? extras,
         ILogger? logger = null)
     {
-        var anchor = (IV4Record?)aps ?? (IV4Record?)pump ?? (IV4Record?)uploader
-            ?? throw new ArgumentException("At least one snapshot must be non-null");
-
-        var ds = new DeviceStatus
-        {
-            Id = anchor.LegacyId ?? anchor.Id.ToString(),
-            Mills = anchor.Mills,
-            Date = anchor.Mills,
-            CreatedAt = anchor.CreatedAt.ToString("yyyy-MM-ddTHH:mm:ss.fffZ"),
-            UtcOffset = anchor.UtcOffset,
-            Device = anchor.Device ?? string.Empty,
-        };
+        var anchor = (IV4Record?)aps ?? (IV4Record?)pump ?? uploader;
+        var ds = anchor is not null
+            ? NewStatus(anchor.LegacyId ?? anchor.Id.ToString(), anchor.Timestamp, anchor.CreatedAt,
+                anchor.ModifiedAt, anchor.UtcOffset, anchor.Device)
+            : extras is not null
+                ? NewStatus(extras.Id.ToString(), extras.Timestamp, extras.CreatedAt, extras.ModifiedAt,
+                    utcOffset: null, device: null)
+                : throw new ArgumentException("At least one snapshot must be non-null");
 
         // Project APS data
         if (aps != null)
@@ -369,11 +414,31 @@ public class DeviceStatusProjectionService
         return ds;
     }
 
+    private static DeviceStatus NewStatus(
+        string id, DateTime timestamp, DateTime createdAt, DateTime modifiedAt, int? utcOffset, string? device)
+    {
+        var mills = new DateTimeOffset(timestamp, TimeSpan.Zero).ToUnixTimeMilliseconds();
+        return new DeviceStatus
+        {
+            Id = id,
+            Mills = mills,
+            Date = mills,
+            SrvModified = new DateTimeOffset(modifiedAt, TimeSpan.Zero).ToUnixTimeMilliseconds(),
+            SrvCreated = new DateTimeOffset(createdAt, TimeSpan.Zero).ToUnixTimeMilliseconds(),
+            // Nightscout clients place a status on the timeline by created_at, so it is the event
+            // time; the server clock is srvCreated.
+            CreatedAt = timestamp.ToString("yyyy-MM-ddTHH:mm:ss.fffZ"),
+            UtcOffset = utcOffset,
+            Device = device ?? string.Empty,
+        };
+    }
+
     private static void ProjectLoopData(DeviceStatus ds, ApsSnapshot aps, ILogger? logger = null)
     {
         if (!string.IsNullOrEmpty(aps.LoopJson))
         {
-            ds.Loop = JsonSerializer.Deserialize<LoopStatus>(aps.LoopJson, JsonOptions);
+            ds.Loop = ApsSnapshotCurves.RestoreLoop(
+                JsonSerializer.Deserialize<LoopStatus>(aps.LoopJson, JsonOptions), aps);
         }
         else
         {
@@ -396,8 +461,8 @@ public class DeviceStatusProjectionService
     {
         ds.OpenAps = new OpenApsStatus
         {
-            Suggested = DeserializeOrNull<OpenApsSuggested>(aps.SuggestedJson, logger),
-            Enacted = DeserializeOrNull<OpenApsEnacted>(aps.EnactedJson, logger),
+            Suggested = DeserializeOrNull<OpenApsSuggested>(ApsSnapshotCurves.RestoreCommand(aps.SuggestedJson, aps), logger),
+            Enacted = DeserializeOrNull<OpenApsEnacted>(ApsSnapshotCurves.RestoreCommand(aps.EnactedJson, aps), logger),
             Version = aps.AidVersion,
         };
 
@@ -459,7 +524,8 @@ public class DeviceStatusProjectionService
     {
         ds.Override = new OverrideStatus
         {
-            Active = overrideSpan.IsActive,
+            // The span contains the status time. IsActive would say whether it has ended since.
+            Active = true,
             Timestamp = overrideSpan.StartTimestamp.ToString("yyyy-MM-ddTHH:mm:ss.fffZ"),
         };
 
@@ -489,7 +555,7 @@ public class DeviceStatusProjectionService
 
         if (overrideSpan.EndTimestamp.HasValue)
         {
-            ds.Override.Duration = (overrideSpan.EndTimestamp.Value - overrideSpan.StartTimestamp).TotalMinutes;
+            ds.Override.Duration = (overrideSpan.EndTimestamp.Value - overrideSpan.StartTimestamp).TotalSeconds;
         }
     }
 
@@ -526,13 +592,10 @@ public class DeviceStatusProjectionService
                 case "mmtune":
                     ds.MmTune = DeserializeValue<OpenApsMmTune>(value, logger);
                     break;
-                // Route to the typed properties: leaving these in ExtensionData would
-                // serialize the key twice (typed Mills fallback + stored extras value).
-                case "srvModified":
-                    ds.SrvModified = CoerceLong(value);
-                    break;
+                // The record reports the server clock (see ProjectFromSnapshots); a client-supplied
+                // value must neither override it nor re-emit as an extra.
                 case "srvCreated":
-                    ds.SrvCreated = CoerceLong(value);
+                case "srvModified":
                     break;
                 // An NS v3 uploader sends its own identifier and it is stored verbatim.
                 // DeviceStatus has no member to absorb it, so re-emitting it would put a
@@ -553,135 +616,6 @@ public class DeviceStatusProjectionService
     #endregion
 
     #region Helpers
-
-    /// <summary>
-    /// Parses a MongoDB-style find query string into typed filter values.
-    /// Supports two formats:
-    /// <list type="bullet">
-    /// <item>URL query string: <c>find[device]=openaps&amp;find[created_at][$gte]=2024-01-01</c></item>
-    /// <item>JSON object: <c>{"device":"openaps","created_at":{"$gte":"2024-01-01"}}</c></item>
-    /// </list>
-    /// Only <c>device</c> (exact match) and <c>created_at</c> with <c>$gte/$gt/$lte/$lt</c> operators are supported.
-    /// </summary>
-    internal static (string? Device, DateTime? From, DateTime? To) ParseFindQuery(string? find)
-    {
-        if (string.IsNullOrWhiteSpace(find))
-            return (null, null, null);
-
-        // Try JSON format first
-        if (find.TrimStart().StartsWith('{'))
-        {
-            return ParseFindQueryFromJson(find);
-        }
-
-        // URL query string format: find[device]=value&find[created_at][$gte]=date
-        return ParseFindQueryFromQueryString(find);
-    }
-
-    private static (string? Device, DateTime? From, DateTime? To) ParseFindQueryFromJson(string json)
-    {
-        string? device = null;
-        DateTime? from = null;
-        DateTime? to = null;
-
-        try
-        {
-            using var doc = JsonDocument.Parse(json);
-            var root = doc.RootElement;
-
-            if (root.TryGetProperty("device", out var deviceEl) && deviceEl.ValueKind == JsonValueKind.String)
-            {
-                device = deviceEl.GetString();
-            }
-
-            if (root.TryGetProperty("created_at", out var createdAtEl))
-            {
-                if (createdAtEl.ValueKind == JsonValueKind.Object)
-                {
-                    foreach (var prop in createdAtEl.EnumerateObject())
-                    {
-                        var dateStr = prop.Value.ValueKind == JsonValueKind.String ? prop.Value.GetString() : null;
-                        if (dateStr == null) continue;
-
-                        if (!TryParseDateTime(dateStr, out var dt)) continue;
-
-                        switch (prop.Name)
-                        {
-                            case "$gte":
-                            case "$gt":
-                                from = dt;
-                                break;
-                            case "$lte":
-                            case "$lt":
-                                to = dt;
-                                break;
-                        }
-                    }
-                }
-            }
-        }
-        catch (JsonException)
-        {
-            // Malformed JSON — return empty filters
-        }
-
-        return (device, from, to);
-    }
-
-    private static (string? Device, DateTime? From, DateTime? To) ParseFindQueryFromQueryString(string queryString)
-    {
-        string? device = null;
-        DateTime? from = null;
-        DateTime? to = null;
-
-        var parsed = HttpUtility.ParseQueryString(queryString);
-
-        foreach (string? key in parsed)
-        {
-            if (key == null) continue;
-            var value = parsed[key];
-            if (string.IsNullOrEmpty(value)) continue;
-
-            if (key.Equals("find[device]", StringComparison.OrdinalIgnoreCase))
-            {
-                device = value;
-            }
-            else if (key.Equals("find[created_at][$gte]", StringComparison.OrdinalIgnoreCase)
-                     || key.Equals("find[created_at][$gt]", StringComparison.OrdinalIgnoreCase))
-            {
-                if (TryParseDateTime(value, out var dt))
-                    from = dt;
-            }
-            else if (key.Equals("find[created_at][$lte]", StringComparison.OrdinalIgnoreCase)
-                     || key.Equals("find[created_at][$lt]", StringComparison.OrdinalIgnoreCase))
-            {
-                if (TryParseDateTime(value, out var dt))
-                    to = dt;
-            }
-        }
-
-        return (device, from, to);
-    }
-
-    private static bool TryParseDateTime(string value, out DateTime result)
-    {
-        // Try ISO 8601 first, then fall back to general DateTime parsing
-        if (DateTime.TryParse(value, CultureInfo.InvariantCulture,
-                DateTimeStyles.AdjustToUniversal | DateTimeStyles.AssumeUniversal, out result))
-        {
-            return true;
-        }
-
-        // Try Unix milliseconds
-        if (long.TryParse(value, out var mills))
-        {
-            result = DateTimeOffset.FromUnixTimeMilliseconds(mills).UtcDateTime;
-            return true;
-        }
-
-        result = default;
-        return false;
-    }
 
     private async Task<List<StateSpan>> LoadOverridesForSnapshots(
         List<ApsSnapshot> snapshots, CancellationToken ct)
@@ -705,7 +639,7 @@ public class DeviceStatusProjectionService
     {
         return overrides.FirstOrDefault(o =>
             o.StartTimestamp <= timestamp &&
-            (!o.EndTimestamp.HasValue || o.EndTimestamp.Value >= timestamp));
+            (!o.EndTimestamp.HasValue || o.EndTimestamp.Value > timestamp));
     }
 
     private static T? DeserializeOrNull<T>(string? json, ILogger? logger = null) where T : class
@@ -723,19 +657,6 @@ public class DeviceStatusProjectionService
             return null;
         }
     }
-
-    private static long? CoerceLong(object value) =>
-        value switch
-        {
-            long l => l,
-            int i => i,
-            double d => (long)d,
-            string s when long.TryParse(s, out var parsed) => parsed,
-            JsonElement { ValueKind: JsonValueKind.Number } e when e.TryGetInt64(out var el) => el,
-            JsonElement { ValueKind: JsonValueKind.String } e
-                when long.TryParse(e.GetString(), out var es) => es,
-            _ => null,
-        };
 
     private static T? DeserializeValue<T>(object value, ILogger? logger = null) where T : class
     {

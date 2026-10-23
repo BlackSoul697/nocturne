@@ -7,6 +7,8 @@ namespace Nocturne.Core.Contracts.Analytics;
 /// </summary>
 public interface IDataOverviewService
 {
+    Task<YearSummaryResponse> GetYearSummaryAsync(int year, string[]? dataSources = null, CancellationToken cancellationToken = default);
+
     /// <summary>
     /// Get the list of years that contain data and available data sources
     /// </summary>
@@ -17,7 +19,6 @@ public interface IDataOverviewService
     /// </summary>
     /// <param name="year">The year to aggregate</param>
     /// <param name="dataSources">Optional data source filters</param>
-    /// <param name="cancellationToken">Cancellation token</param>
     Task<DailySummaryResponse> GetDailySummaryAsync(int year, string[]? dataSources = null, CancellationToken cancellationToken = default);
 
     /// <summary>
@@ -25,7 +26,6 @@ public interface IDataOverviewService
     /// </summary>
     /// <param name="year">The year to compute GRI timeline for</param>
     /// <param name="dataSources">Optional data source filters</param>
-    /// <param name="cancellationToken">Cancellation token</param>
     Task<GriTimelineResponse> GetGriTimelineAsync(int year, string[]? dataSources = null, CancellationToken cancellationToken = default);
 
     /// <summary>
@@ -35,6 +35,5 @@ public interface IDataOverviewService
     /// </summary>
     /// <param name="year">The year to compute the eHbA1c timeline for</param>
     /// <param name="dataSources">Optional data source filters</param>
-    /// <param name="cancellationToken">Cancellation token</param>
     Task<EHbA1cTimelineResponse> GetEHbA1cTimelineAsync(int year, string[]? dataSources = null, CancellationToken cancellationToken = default);
 }

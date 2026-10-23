@@ -1,13 +1,16 @@
 <script lang="ts">
-  import { Button } from "$lib/components/ui/button";
   import {
-    Gauge,
-    AlertTriangle,
-    ArrowRight,
-    BarChart3,
-    Calendar,
-    ChevronRight,
-  } from "lucide-svelte";
+    a1cLabel,
+    a1cUnitLabel,
+    formatA1cValue,
+  } from "$lib/utils/a1c-formatting";
+  import { Button } from "$lib/components/ui/button";
+  import Gauge from "@lucide/svelte/icons/gauge";
+  import AlertTriangle from "@lucide/svelte/icons/triangle-alert";
+  import ArrowRight from "@lucide/svelte/icons/arrow-right";
+  import BarChart3 from "@lucide/svelte/icons/chart-column";
+  import Calendar from "@lucide/svelte/icons/calendar";
+  import ChevronRight from "@lucide/svelte/icons/chevron-right";
   import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "$lib/components/ui/card";
   import { page } from "$app/state";
   import {
@@ -26,6 +29,7 @@
   import { contextResource } from "$lib/hooks/resource-context.svelte";
   import { remoteErrorMessage } from "$lib/api/remote-error";
   import { coachmark } from "@nocturne/coach";
+  import { coachFor } from "$lib/coach-marks/copy.svelte";
 
   // Get shared date params from context (set by reports layout)
   // Default: 14 days is standard for reports overview
@@ -104,6 +108,7 @@
     patterns: "text-report-patterns",
     lifestyle: "text-report-lifestyle",
     treatment: "text-report-treatment",
+    loop: "text-report-treatment",
   } as const;
 </script>
 
@@ -116,7 +121,7 @@
 </svelte:head>
 
 {#if isLoading && !reportsResource.current}
-  <ReportsSkeleton />
+  <div class="mx-auto max-w-6xl px-3 py-6 @md:px-6"><ReportsSkeleton /></div>
 {:else if reportsResource.error}
   <div class="flex min-h-[60vh] items-center justify-center px-4">
     <div class="max-w-md space-y-4 text-center">
@@ -193,9 +198,10 @@
                 </dd>
               </div>
               <div class="flex items-baseline justify-between gap-4 px-6 py-4">
-                <dt class="text-sm text-muted-foreground">Estimated A1C</dt>
+                <dt class="text-sm text-muted-foreground">{a1cLabel(true)}</dt>
                 <dd class="m-0 text-lg font-semibold tabular-nums">
-                  {variability?.estimatedA1c?.toFixed(1) ?? "–"}<span class="text-sm font-normal text-muted-foreground">%</span>
+                  {formatA1cValue(variability?.estimatedA1cDisplay)}<span class="text-sm font-normal text-muted-foreground">
+                    {a1cUnitLabel()}</span>
                 </dd>
               </div>
               <div class="flex items-baseline justify-between gap-4 px-6 py-4">
@@ -248,9 +254,7 @@
       class="grid gap-x-12 gap-y-10 @3xl:grid-cols-2"
       aria-label="All reports"
       {@attach coachmark({
-        key: "setup-reports.categories",
-        title: "Start with Executive Summary",
-        description: "It combines your key metrics into a single page — great for clinic visits or sharing with your endo.",
+        ...coachFor("setup-reports.categories"),
         completeOn: { event: "click" },
       })}
     >

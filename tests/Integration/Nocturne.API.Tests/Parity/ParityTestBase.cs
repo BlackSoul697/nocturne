@@ -1,6 +1,8 @@
 using System.Net.Http.Json;
+using System.Runtime.CompilerServices;
 using System.Text;
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using FluentAssertions;
 using Nocturne.API.Tests.Integration.Infrastructure;
 using Nocturne.Core.Models;
@@ -90,14 +92,18 @@ public abstract class ParityTestBase : IAsyncLifetime
             var nsEntry = new Dictionary<string, object?>
             {
                 ["type"] = entry.Type ?? "sgv",
-                ["sgv"] = entry.Sgv,
-                ["direction"] = entry.Direction,
                 ["device"] = entry.Device,
                 ["date"] = entry.Mills,
                 ["dateString"] = entry.DateString,
             };
 
             // Only include optional fields if they have values
+            if (entry.Sgv.HasValue) nsEntry["sgv"] = entry.Sgv.Value;
+            if (entry.Direction is not null) nsEntry["direction"] = entry.Direction;
+            if (entry.Mbg.HasValue) nsEntry["mbg"] = entry.Mbg.Value;
+            if (entry.Slope.HasValue) nsEntry["slope"] = entry.Slope.Value;
+            if (entry.Intercept.HasValue) nsEntry["intercept"] = entry.Intercept.Value;
+            if (entry.Scale.HasValue) nsEntry["scale"] = entry.Scale.Value;
             if (entry.Noise.HasValue) nsEntry["noise"] = entry.Noise.Value;
             if (entry.Filtered.HasValue) nsEntry["filtered"] = entry.Filtered.Value;
             if (entry.Unfiltered.HasValue) nsEntry["unfiltered"] = entry.Unfiltered.Value;
@@ -147,23 +153,26 @@ public abstract class ParityTestBase : IAsyncLifetime
     }
 
     /// <summary>
-    /// Seeds device status to both systems
+    /// Seeds device status to both systems, the same body to each. A status needs content
+    /// (here an uploader battery): Nocturne stores a devicestatus by what it reports, so a bare
+    /// <c>{device, created_at}</c> is accepted and stores nothing.
     /// </summary>
     protected async Task SeedDeviceStatusAsync(params DeviceStatus[] statuses)
     {
         foreach (var status in statuses)
         {
-            var nsStatus = new
+            var body = new Dictionary<string, object?>
             {
-                device = status.Device,
-                created_at = status.CreatedAt,
-                uploaderBattery = status.Uploader?.Battery
+                ["device"] = status.Device,
+                ["created_at"] = status.CreatedAt,
             };
+            if (status.Uploader?.Battery is { } battery)
+                body["uploader"] = new Dictionary<string, object?> { ["battery"] = battery };
 
-            var nsResponse = await NightscoutClient.PostAsJsonAsync("/api/v1/devicestatus", nsStatus);
+            var nsResponse = await NightscoutClient.PostAsJsonAsync("/api/v1/devicestatus", body);
             nsResponse.EnsureSuccessStatusCode();
 
-            var nocResponse = await NocturneClient.PostAsJsonAsync("/api/v1/devicestatus", status);
+            var nocResponse = await NocturneClient.PostAsJsonAsync("/api/v1/devicestatus", body);
             nocResponse.EnsureSuccessStatusCode();
         }
     }
@@ -177,6 +186,34 @@ public abstract class ParityTestBase : IAsyncLifetime
         await SeedEntriesAsync(entries);
     }
 
+    /// <summary>
+    /// Waits until the summary Nightscout serves at <paramref name="path"/> lists the seeded
+    /// <paramref name="sgvs"/> and <paramref name="treatments"/>. Nightscout serves summary reads
+    /// from memory it reloads about 5 seconds after a write, so a read straight after seeding sees
+    /// the data from before it. Returns on timeout and leaves the assertion to report the difference.
+    /// </summary>
+    protected async Task WaitForNightscoutReloadAsync(
+        string path,
+        int sgvs,
+        int treatments = 0,
+        TimeSpan? timeout = null,
+        CancellationToken cancellationToken = default)
+    {
+        var deadline = DateTime.UtcNow + (timeout ?? TimeSpan.FromSeconds(20));
+
+        while (true)
+        {
+            using var response = await NightscoutClient.GetAsync(path, cancellationToken);
+            var body = JsonNode.Parse(await response.Content.ReadAsStringAsync(cancellationToken));
+            var served = body?["sgvs"]?.AsArray().Count;
+            var servedTreatments = body?["treatments"]?["treatments"]?.AsArray().Count;
+            if ((served == sgvs && servedTreatments == treatments) || DateTime.UtcNow >= deadline)
+                return;
+
+            await Task.Delay(TimeSpan.FromMilliseconds(500), cancellationToken);
+        }
+    }
+
     #endregion
 
     #region Parity Assertion Helpers
@@ -188,7 +225,8 @@ public abstract class ParityTestBase : IAsyncLifetime
     protected async Task AssertGetParityAsync(
         string path,
         ComparisonOptions? options = null,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default,
+        [CallerMemberName] string test = "")
     {
         Output.WriteLine($"Testing GET {path}");
 
@@ -201,7 +239,7 @@ public abstract class ParityTestBase : IAsyncLifetime
         var nsResponse = await nsTask;
         var nocResponse = await nocTask;
 
-        await AssertResponseParityAsync(nsResponse, nocResponse, $"GET {path}", options, cancellationToken);
+        await AssertResponseParityAsync(nsResponse, nocResponse, $"GET {path}", options, test, cancellationToken);
     }
 
     /// <summary>
@@ -212,7 +250,8 @@ public abstract class ParityTestBase : IAsyncLifetime
         string path,
         T body,
         ComparisonOptions? options = null,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default,
+        [CallerMemberName] string test = "")
     {
         Output.WriteLine($"Testing POST {path}");
 
@@ -225,7 +264,7 @@ public abstract class ParityTestBase : IAsyncLifetime
         var nsResponse = await nsTask;
         var nocResponse = await nocTask;
 
-        await AssertResponseParityAsync(nsResponse, nocResponse, $"POST {path}", options, cancellationToken);
+        await AssertResponseParityAsync(nsResponse, nocResponse, $"POST {path}", options, test, cancellationToken);
     }
 
     /// <summary>
@@ -236,7 +275,8 @@ public abstract class ParityTestBase : IAsyncLifetime
         string path,
         T body,
         ComparisonOptions? options = null,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default,
+        [CallerMemberName] string test = "")
     {
         Output.WriteLine($"Testing PUT {path}");
 
@@ -249,7 +289,7 @@ public abstract class ParityTestBase : IAsyncLifetime
         var nsResponse = await nsTask;
         var nocResponse = await nocTask;
 
-        await AssertResponseParityAsync(nsResponse, nocResponse, $"PUT {path}", options, cancellationToken);
+        await AssertResponseParityAsync(nsResponse, nocResponse, $"PUT {path}", options, test, cancellationToken);
     }
 
     /// <summary>
@@ -259,7 +299,8 @@ public abstract class ParityTestBase : IAsyncLifetime
     protected async Task AssertDeleteParityAsync(
         string path,
         ComparisonOptions? options = null,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default,
+        [CallerMemberName] string test = "")
     {
         Output.WriteLine($"Testing DELETE {path}");
 
@@ -272,7 +313,7 @@ public abstract class ParityTestBase : IAsyncLifetime
         var nsResponse = await nsTask;
         var nocResponse = await nocTask;
 
-        await AssertResponseParityAsync(nsResponse, nocResponse, $"DELETE {path}", options, cancellationToken);
+        await AssertResponseParityAsync(nsResponse, nocResponse, $"DELETE {path}", options, test, cancellationToken);
     }
 
     /// <summary>
@@ -285,7 +326,8 @@ public abstract class ParityTestBase : IAsyncLifetime
         HttpContent? content = null,
         Dictionary<string, string>? headers = null,
         ComparisonOptions? options = null,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default,
+        [CallerMemberName] string test = "")
     {
         Output.WriteLine($"Testing {method} {path}");
 
@@ -301,7 +343,7 @@ public abstract class ParityTestBase : IAsyncLifetime
         var nsResponse = await nsTask;
         var nocResponse = await nocTask;
 
-        await AssertResponseParityAsync(nsResponse, nocResponse, $"{method} {path}", options, cancellationToken);
+        await AssertResponseParityAsync(nsResponse, nocResponse, $"{method} {path}", options, test, cancellationToken);
     }
 
     private static HttpRequestMessage CreateRequest(
@@ -328,8 +370,18 @@ public abstract class ParityTestBase : IAsyncLifetime
         HttpResponseMessage nocResponse,
         string context,
         ComparisonOptions? options,
+        string test,
         CancellationToken cancellationToken)
     {
+        var divergence = ParityDivergences.Find(
+            $"{GetType().Namespace![(GetType().Namespace!.LastIndexOf('.') + 1)..]}.{GetType().Name}.{test}",
+            context.Split('?')[0]);
+        if (divergence is not null)
+        {
+            await AssertDivergenceAsync(nocResponse, context, divergence, cancellationToken);
+            return;
+        }
+
         var comparer = options != null ? new ResponseComparer(options) : Comparer;
         var result = await comparer.CompareAsync(nsResponse, nocResponse, context, cancellationToken);
 
@@ -348,6 +400,25 @@ public abstract class ParityTestBase : IAsyncLifetime
         }
 
         result.IsMatch.Should().BeTrue(result.ToString());
+    }
+
+    /// <summary>
+    /// Asserts what Nocturne answers on a request <see cref="ParityDivergences"/> exempts from the
+    /// comparison with Nightscout.
+    /// </summary>
+    private async Task AssertDivergenceAsync(
+        HttpResponseMessage nocResponse,
+        string context,
+        ParityDivergences.Divergence divergence,
+        CancellationToken cancellationToken)
+    {
+        Output.WriteLine($"{context}: not compared with Nightscout. {divergence.Reason}");
+
+        var body = await nocResponse.Content.ReadAsStringAsync(cancellationToken);
+        ((int)nocResponse.StatusCode).Should().Be(divergence.Status, $"{context} answered {body}");
+        nocResponse.Content.Headers.ContentType?.MediaType.Should().EndWith("json", context);
+        using var document = JsonDocument.Parse(body);
+        document.RootElement.ValueKind.Should().Be(divergence.Body, $"{context} answered {body}");
     }
 
     #endregion

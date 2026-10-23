@@ -1,7 +1,7 @@
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.Extensions.Options;
-using Nocturne.API.Controllers.V4.Monitoring;
 using Nocturne.API.Hubs;
+using Nocturne.API.Services.Monitoring;
 using Nocturne.Connectors.Core.Models;
 using Nocturne.Core.Contracts.Multitenancy;
 using Nocturne.Core.Models;
@@ -55,6 +55,12 @@ public interface ISignalRBroadcastService
     /// </summary>
     Task BroadcastClearAlarmAsync(NotificationBase clearAlarm);
 
+    /// <summary>
+    /// Broadcast an alert engine alarm or all-clear to alarm subscribers, as one of the
+    /// <see cref="Alerts.EngineAlarmEvents"/>.
+    /// </summary>
+    Task BroadcastEngineAlarmAsync(string eventName, NotificationBase notify);
+
     // Storage events
     /// <summary>
     /// Broadcast storage create event (replaces socket.io 'create' event in storage namespace)
@@ -81,7 +87,7 @@ public interface ISignalRBroadcastService
     /// only a Public definition is visible tenant-wide, otherwise just to its owner.
     /// </remarks>
     Task BroadcastTrackerUpdateAsync(
-        string action,
+        TrackerRealtimeAction action,
         TrackerInstanceDto trackerInstance,
         string ownerSubjectId,
         TrackerVisibility visibility
@@ -115,8 +121,8 @@ public interface ISignalRBroadcastService
     Task BroadcastNotificationUpdatedAsync(string userId, InAppNotificationDto notification);
 
     /// <summary>
-    /// Broadcast an alert engine event (alert_dispatch, alert_resolved, alert_acknowledged)
-    /// to the tenant's alert subscribers group.
+    /// Broadcast an alert engine event to the tenant's alert subscribers group, and to the tenant's
+    /// Home Assistant instances when it is one of the events they take tenant-wide.
     /// </summary>
     /// <param name="eventName">The event name to broadcast</param>
     /// <param name="payload">The event payload</param>
@@ -129,6 +135,14 @@ public interface ISignalRBroadcastService
     /// </summary>
     /// <param name="intent">The actuation intent to deliver.</param>
     Task BroadcastDeviceActionAsync(DeviceActionIntent intent);
+
+    /// <summary>
+    /// Send a device actuation intent to one subject's DataHub connections only, for a change
+    /// that concerns that member alone, such as muting an excursion for themselves.
+    /// </summary>
+    /// <param name="subjectId">The subject whose registered devices should reconcile.</param>
+    /// <param name="intent">The actuation intent to deliver.</param>
+    Task BroadcastDeviceActionToSubjectAsync(Guid subjectId, DeviceActionIntent intent);
 
     /// <summary>
     /// Mirror a non-alert in-app notification to the tenant's authenticated clients. A device
@@ -374,6 +388,21 @@ public class SignalRBroadcastService : ISignalRBroadcastService
     }
 
     /// <inheritdoc />
+    public async Task BroadcastEngineAlarmAsync(string eventName, NotificationBase notify)
+    {
+        try
+        {
+            await _alarmHubContext
+                .Clients.Group(TenantGroup("alarm-subscribers"))
+                .SendCoreAsync(eventName, new[] { notify });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error broadcasting {EventName}", eventName);
+        }
+    }
+
+    /// <inheritdoc />
     public async Task BroadcastStorageCreateAsync(string collectionName, object data)
     {
         try
@@ -460,7 +489,7 @@ public class SignalRBroadcastService : ISignalRBroadcastService
 
     /// <inheritdoc />
     public async Task BroadcastTrackerUpdateAsync(
-        string action,
+        TrackerRealtimeAction action,
         TrackerInstanceDto trackerInstance,
         string ownerSubjectId,
         TrackerVisibility visibility
@@ -633,6 +662,11 @@ public class SignalRBroadcastService : ISignalRBroadcastService
         }
     }
 
+    // alert_dispatch is absent: an instance receives it once, on its ha:{instance} group, from
+    // HomeAssistantProvider, which also records the delivery.
+    private static readonly HashSet<string> HomeAssistantAlertEvents =
+        ["alert_resolved", "alert_acknowledged"];
+
     /// <inheritdoc />
     public async Task BroadcastAlertEventAsync(string eventName, object payload)
     {
@@ -648,7 +682,9 @@ public class SignalRBroadcastService : ISignalRBroadcastService
             _logger.LogError(ex, "Error broadcasting alert event {EventName}", eventName);
         }
 
-        // Also relay to Home Assistant subscribers
+        if (!HomeAssistantAlertEvents.Contains(eventName))
+            return;
+
         try
         {
             await _homeAssistantHubContext
@@ -677,6 +713,22 @@ public class SignalRBroadcastService : ISignalRBroadcastService
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error broadcasting device_action for excursion {ExcursionId}", intent.ExcursionId);
+        }
+    }
+
+    /// <inheritdoc />
+    public async Task BroadcastDeviceActionToSubjectAsync(Guid subjectId, DeviceActionIntent intent)
+    {
+        try
+        {
+            await _dataHubContext
+                .Clients.Group(TenantGroup(RealtimeGroups.ForSubject(subjectId)))
+                .SendCoreAsync("device_action", new object[] { intent });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error sending device_action for excursion {ExcursionId} to subject {SubjectId}",
+                intent.ExcursionId, subjectId);
         }
     }
 

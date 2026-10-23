@@ -255,16 +255,13 @@ public class DemoTimelineTests
     }
 
     [Fact]
-    public void LifestyleSeeds_ProfileAndTargetSpansCarryDecomposerShapedMetadata()
+    public void LifestyleSeeds_TargetSpansCarryDecomposerShapedMetadata_AndNoProfileSpan()
     {
-        // Resolvers read the profile name and target values from metadata, not
-        // from State — a name-in-State span silently resolves as "Default".
+        // Resolvers read target values from metadata, not from State. The profile is a profile
+        // activation, which the seeder writes beside the spans.
         var spans = DemoLifestyleSeeds.BuildSpans(DateTime.Now.Date, 60);
 
-        var profile = spans.Single(s => s.Category == StateSpanCategory.Profile);
-        profile.State.Should().Be(nameof(ProfileState.Active));
-        profile.Metadata.Should().ContainKey("profileName")
-            .WhoseValue.Should().Be(DemoTherapyProfile.ProfileName);
+        spans.Should().NotContain(s => s.Category == StateSpanCategory.Profile);
 
         var targets = spans.Where(s => s.Category == StateSpanCategory.TemporaryTarget).ToList();
         targets.Should().NotBeEmpty("60 days contain exercise days with temp targets");
@@ -303,6 +300,28 @@ public class DemoTimelineTests
             DemoLifestyleSeeds.MealFoodsFor(day, meal).Should().NotBeEmpty(
                 $"the food library must cover generated {meal} meals");
         }
+    }
+
+    /// <summary>
+    /// The realtime loop sets a temp in range too, as the seeded history does, so the days after the
+    /// seed keep a temp basal record often enough for their delivery to be known.
+    /// </summary>
+    [Fact]
+    public void RealtimeTreatments_SetATempWhileInRange()
+    {
+        var now = DateTime.UtcNow;
+        var entry = new Entry
+        {
+            Type = "sgv",
+            Mills = new DateTimeOffset(now).ToUnixTimeMilliseconds(),
+            Date = now,
+            Sgv = 110,
+            Mgdl = 110,
+        };
+
+        var treatments = CreateGenerator().GenerateCurrentTreatments(entry).ToList();
+
+        treatments.Should().ContainSingle(t => t.EventType == "Temp Basal" && t.Rate > 0);
     }
 
     [Fact]

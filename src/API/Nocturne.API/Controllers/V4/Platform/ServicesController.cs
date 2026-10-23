@@ -316,6 +316,7 @@ public class ServicesController : ControllerBase
     /// WARNING: This is a destructive operation that cannot be undone.
     /// </summary>
     /// <param name="id">Data source ID or device ID</param>
+    /// <param name="allowReimport">Let the source send the deleted records again.</param>
     /// <param name="cancellationToken">Cancellation token</param>
     /// <returns>Result of the delete operation</returns>
     [HttpDelete("data-sources/{id}")]
@@ -327,6 +328,7 @@ public class ServicesController : ControllerBase
     [ProducesResponseType(500)]
     public async Task<ActionResult<DataSourceDeleteResult>> DeleteDataSourceData(
         string id,
+        [FromQuery] bool allowReimport = false,
         CancellationToken cancellationToken = default
     )
     {
@@ -334,7 +336,7 @@ public class ServicesController : ControllerBase
 
         try
         {
-            var result = await _dataSourceService.DeleteDataSourceDataAsync(id, cancellationToken);
+            var result = await _dataSourceService.DeleteDataSourceDataAsync(id, allowReimport, cancellationToken);
             if (!result.Success)
             {
                 if (result.ErrorCode == DataSourceDeleteError.NotFound)
@@ -390,6 +392,10 @@ public class ServicesController : ControllerBase
     /// WARNING: This is a destructive operation that cannot be undone.
     /// </summary>
     /// <param name="id">Connector ID (e.g., "dexcom")</param>
+    /// <param name="allowReimport">
+    /// Let the connector import the deleted records again; an enabled connector stays enabled and its
+    /// next sync re-imports the history.
+    /// </param>
     /// <param name="cancellationToken">Cancellation token</param>
     /// <returns>Result of the delete operation</returns>
     [HttpDelete("connectors/{id}/data")]
@@ -401,6 +407,7 @@ public class ServicesController : ControllerBase
     [ProducesResponseType(500)]
     public async Task<ActionResult<DataSourceDeleteResult>> DeleteConnectorData(
         string id,
+        [FromQuery] bool allowReimport = false,
         CancellationToken cancellationToken = default
     )
     {
@@ -408,7 +415,7 @@ public class ServicesController : ControllerBase
 
         try
         {
-            var result = await _dataSourceService.DeleteConnectorDataAsync(id, cancellationToken);
+            var result = await _dataSourceService.DeleteConnectorDataAsync(id, allowReimport, cancellationToken);
 
             if (!result.Success)
             {
@@ -448,6 +455,7 @@ public class ServicesController : ControllerBase
     )]
     [ProducesResponseType(typeof(Nocturne.Connectors.Core.Models.SyncResult), 200)]
     [ProducesResponseType(400)]
+    [ProducesResponseType(409)]
     public async Task<
         ActionResult<Nocturne.Connectors.Core.Models.SyncResult>
     > TriggerConnectorSync(
@@ -459,8 +467,11 @@ public class ServicesController : ControllerBase
         if (string.IsNullOrWhiteSpace(id))
             return Problem(detail: "Connector ID is required", statusCode: 400, title: "Bad Request");
 
+        if (request.WindowError() is { } windowError)
+            return Problem(detail: windowError, statusCode: 400, title: "Bad Request");
+
         var result = await _connectorSyncService.TriggerSyncAsync(id, request, cancellationToken);
-        return Ok(result);
+        return SyncOrConflict(result);
     }
 
     /// <summary>
@@ -499,6 +510,7 @@ public class ServicesController : ControllerBase
     )]
     [ProducesResponseType(typeof(Nocturne.Connectors.Core.Models.SyncResult), 200)]
     [ProducesResponseType(400)]
+    [ProducesResponseType(409)]
     public async Task<
         ActionResult<Nocturne.Connectors.Core.Models.SyncResult>
     > ResetConnectorCursor(
@@ -520,13 +532,16 @@ public class ServicesController : ControllerBase
             DataTypes = request.DataTypes ?? [],
         };
 
+        if (syncRequest.WindowError() is { } windowError)
+            return Problem(detail: windowError, statusCode: 400, title: "Bad Request");
+
         _logger.LogInformation(
             "Cursor reset requested for connector {ConnectorId} (from {From})",
             id,
             request.From?.ToString("o") ?? "beginning");
 
         var result = await _connectorSyncService.TriggerSyncAsync(id, syncRequest, cancellationToken);
-        return Ok(result);
+        return SyncOrConflict(result);
     }
 
     /// <summary>
@@ -626,6 +641,12 @@ public class ServicesController : ControllerBase
             _ => $"{connectorId.ToLowerInvariant()}-connector",
         };
     }
+
+    private ActionResult<Nocturne.Connectors.Core.Models.SyncResult> SyncOrConflict(
+        Nocturne.Connectors.Core.Models.SyncResult result) =>
+        result.AlreadyRunning
+            ? Problem(detail: result.Message, statusCode: 409, title: "Conflict")
+            : Ok(result);
 
     private string GetBaseUrl()
     {

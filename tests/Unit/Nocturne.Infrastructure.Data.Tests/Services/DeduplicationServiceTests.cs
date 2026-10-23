@@ -49,7 +49,7 @@ public class DeduplicationServiceTests : IDisposable
         context.TenantId = TestTenantId;
         var scopeFactory = _serviceProvider.GetRequiredService<IServiceScopeFactory>();
         var logger = new Mock<ILogger<DeduplicationService>>();
-        var service = new DeduplicationService(context, scopeFactory, logger.Object);
+        var service = new DeduplicationService(context.AsFactory(), scopeFactory, logger.Object);
 
         // Create timestamps that straddle a 30-second bucket boundary
         // Bucket size is 30,000ms, so bucket boundaries are at multiples of 30,000
@@ -117,7 +117,7 @@ public class DeduplicationServiceTests : IDisposable
         context.TenantId = TestTenantId;
         var scopeFactory = _serviceProvider.GetRequiredService<IServiceScopeFactory>();
         var logger = new Mock<ILogger<DeduplicationService>>();
-        var service = new DeduplicationService(context, scopeFactory, logger.Object);
+        var service = new DeduplicationService(context.AsFactory(), scopeFactory, logger.Object);
 
         var timestamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
 
@@ -170,7 +170,7 @@ public class DeduplicationServiceTests : IDisposable
         context.TenantId = TestTenantId;
         var scopeFactory = _serviceProvider.GetRequiredService<IServiceScopeFactory>();
         var logger = new Mock<ILogger<DeduplicationService>>();
-        var service = new DeduplicationService(context, scopeFactory, logger.Object);
+        var service = new DeduplicationService(context.AsFactory(), scopeFactory, logger.Object);
 
         var timestamp = new DateTime(2025, 6, 15, 10, 0, 0, DateTimeKind.Utc);
 
@@ -220,7 +220,7 @@ public class DeduplicationServiceTests : IDisposable
         context.TenantId = TestTenantId;
         var scopeFactory = _serviceProvider.GetRequiredService<IServiceScopeFactory>();
         var logger = new Mock<ILogger<DeduplicationService>>();
-        var service = new DeduplicationService(context, scopeFactory, logger.Object);
+        var service = new DeduplicationService(context.AsFactory(), scopeFactory, logger.Object);
 
         var timestamp = new DateTime(2025, 6, 15, 10, 0, 0, DateTimeKind.Utc);
 
@@ -263,7 +263,7 @@ public class DeduplicationServiceTests : IDisposable
         context.TenantId = TestTenantId;
         var scopeFactory = _serviceProvider.GetRequiredService<IServiceScopeFactory>();
         var logger = new Mock<ILogger<DeduplicationService>>();
-        var service = new DeduplicationService(context, scopeFactory, logger.Object);
+        var service = new DeduplicationService(context.AsFactory(), scopeFactory, logger.Object);
 
         var timestamp = new DateTime(2025, 6, 15, 10, 0, 0, DateTimeKind.Utc);
 
@@ -305,7 +305,7 @@ public class DeduplicationServiceTests : IDisposable
         context.TenantId = TestTenantId;
         var scopeFactory = _serviceProvider.GetRequiredService<IServiceScopeFactory>();
         var logger = new Mock<ILogger<DeduplicationService>>();
-        var service = new DeduplicationService(context, scopeFactory, logger.Object);
+        var service = new DeduplicationService(context.AsFactory(), scopeFactory, logger.Object);
 
         var timestamp = new DateTime(2025, 6, 15, 10, 0, 0, DateTimeKind.Utc);
 
@@ -347,7 +347,7 @@ public class DeduplicationServiceTests : IDisposable
         context.TenantId = TestTenantId;
         var scopeFactory = _serviceProvider.GetRequiredService<IServiceScopeFactory>();
         var logger = new Mock<ILogger<DeduplicationService>>();
-        var service = new DeduplicationService(context, scopeFactory, logger.Object);
+        var service = new DeduplicationService(context.AsFactory(), scopeFactory, logger.Object);
 
         var tempBasal = CreateTestTempBasalEntity(
             startTimestamp: new DateTime(2025, 6, 15, 10, 0, 0, DateTimeKind.Utc),
@@ -384,7 +384,7 @@ public class DeduplicationServiceTests : IDisposable
         context.TenantId = TestTenantId;
         var scopeFactory = _serviceProvider.GetRequiredService<IServiceScopeFactory>();
         var logger = new Mock<ILogger<DeduplicationService>>();
-        var service = new DeduplicationService(context, scopeFactory, logger.Object);
+        var service = new DeduplicationService(context.AsFactory(), scopeFactory, logger.Object);
 
         var baseTime = new DateTime(2025, 6, 15, 10, 0, 0, DateTimeKind.Utc);
 
@@ -423,7 +423,7 @@ public class DeduplicationServiceTests : IDisposable
         context.TenantId = TestTenantId;
         var scopeFactory = _serviceProvider.GetRequiredService<IServiceScopeFactory>();
         var logger = new Mock<ILogger<DeduplicationService>>();
-        var service = new DeduplicationService(context, scopeFactory, logger.Object);
+        var service = new DeduplicationService(context.AsFactory(), scopeFactory, logger.Object);
 
         var baseTime = new DateTime(2025, 6, 15, 10, 0, 0, DateTimeKind.Utc);
 
@@ -464,7 +464,7 @@ public class DeduplicationServiceTests : IDisposable
         context.TenantId = TestTenantId;
         var scopeFactory = _serviceProvider.GetRequiredService<IServiceScopeFactory>();
         var logger = new Mock<ILogger<DeduplicationService>>();
-        var service = new DeduplicationService(context, scopeFactory, logger.Object);
+        var service = new DeduplicationService(context.AsFactory(), scopeFactory, logger.Object);
 
         var baseTime = new DateTime(2025, 6, 15, 10, 0, 0, DateTimeKind.Utc);
 
@@ -486,8 +486,8 @@ public class DeduplicationServiceTests : IDisposable
         // partner sits in the previous chunk.
         var partner = entities[499];
         var boundaryDuplicate = CreateTestTempBasalEntity(
-            startTimestamp: partner.StartTimestamp.AddSeconds(5),
-            rate: partner.Rate,
+            startTimestamp: partner.Timestamp.AddSeconds(5),
+            rate: partner.Rate!.Value,
             origin: "Scheduled",
             dataSource: "mylife-connector");
         entities.Add(boundaryDuplicate);
@@ -525,7 +525,7 @@ public class DeduplicationServiceTests : IDisposable
         context.TenantId = TestTenantId;
         var scopeFactory = _serviceProvider.GetRequiredService<IServiceScopeFactory>();
         var logger = new Mock<ILogger<DeduplicationService>>();
-        var service = new DeduplicationService(context, scopeFactory, logger.Object);
+        var service = new DeduplicationService(context.AsFactory(), scopeFactory, logger.Object);
 
         var baseTime = new DateTime(2025, 6, 15, 10, 0, 0, DateTimeKind.Utc);
         var tb = CreateTestTempBasalEntity(startTimestamp: baseTime, rate: 1.2, origin: "Scheduled", dataSource: "test-connector");
@@ -541,7 +541,7 @@ public class DeduplicationServiceTests : IDisposable
             CanonicalId = Guid.CreateVersion7(),
             RecordType = "tempbasal",
             RecordId = tb.Id,
-            SourceTimestamp = new DateTimeOffset(tb.StartTimestamp, TimeSpan.Zero).ToUnixTimeMilliseconds(),
+            SourceTimestamp = new DateTimeOffset(tb.Timestamp, TimeSpan.Zero).ToUnixTimeMilliseconds(),
             DataSource = tb.DataSource ?? DeduplicationInput.UnknownDataSource,
             IsPrimary = true,
             SysCreatedAt = DateTime.UtcNow
@@ -568,7 +568,7 @@ public class DeduplicationServiceTests : IDisposable
         context.TenantId = TestTenantId;
         var scopeFactory = _serviceProvider.GetRequiredService<IServiceScopeFactory>();
         var logger = new Mock<ILogger<DeduplicationService>>();
-        var service = new DeduplicationService(context, scopeFactory, logger.Object);
+        var service = new DeduplicationService(context.AsFactory(), scopeFactory, logger.Object);
 
         var baseTime = new DateTime(2025, 6, 15, 10, 0, 0, DateTimeKind.Utc);
 
@@ -605,7 +605,7 @@ public class DeduplicationServiceTests : IDisposable
         context.TenantId = TestTenantId;
         var scopeFactory = _serviceProvider.GetRequiredService<IServiceScopeFactory>();
         var logger = new Mock<ILogger<DeduplicationService>>();
-        var service = new DeduplicationService(context, scopeFactory, logger.Object);
+        var service = new DeduplicationService(context.AsFactory(), scopeFactory, logger.Object);
 
         var baseTime = new DateTime(2025, 6, 15, 10, 0, 0, DateTimeKind.Utc);
 
@@ -641,7 +641,7 @@ public class DeduplicationServiceTests : IDisposable
         context.TenantId = TestTenantId;
         var scopeFactory = _serviceProvider.GetRequiredService<IServiceScopeFactory>();
         var logger = new Mock<ILogger<DeduplicationService>>();
-        var service = new DeduplicationService(context, scopeFactory, logger.Object);
+        var service = new DeduplicationService(context.AsFactory(), scopeFactory, logger.Object);
 
         var baseTime = new DateTime(2025, 6, 15, 10, 0, 0, DateTimeKind.Utc);
 
@@ -670,7 +670,7 @@ public class DeduplicationServiceTests : IDisposable
         context.TenantId = TestTenantId;
         var scopeFactory = _serviceProvider.GetRequiredService<IServiceScopeFactory>();
         var logger = new Mock<ILogger<DeduplicationService>>();
-        var service = new DeduplicationService(context, scopeFactory, logger.Object);
+        var service = new DeduplicationService(context.AsFactory(), scopeFactory, logger.Object);
 
         var baseTime = new DateTime(2025, 6, 15, 10, 0, 0, DateTimeKind.Utc);
 
@@ -729,7 +729,7 @@ public class DeduplicationServiceTests : IDisposable
         context.TenantId = TestTenantId;
         var scopeFactory = _serviceProvider.GetRequiredService<IServiceScopeFactory>();
         var logger = new Mock<ILogger<DeduplicationService>>();
-        var service = new DeduplicationService(context, scopeFactory, logger.Object);
+        var service = new DeduplicationService(context.AsFactory(), scopeFactory, logger.Object);
 
         // Act
         var result = await service.DeduplicateBatchAsync(RecordType.TempBasal, new List<DeduplicationInput>());
@@ -760,7 +760,7 @@ public class DeduplicationServiceTests : IDisposable
         await service.DeduplicateBatchAsync(RecordType.Bolus, [ToInput(mylife)]);
         await service.DeduplicateBatchAsync(RecordType.Bolus, [ToInput(glooko)]);
 
-        var links = await context.LinkedRecords.ToListAsync();
+        var links = await context.LinkedRecords.AsNoTracking().ToListAsync();
         links.Should().HaveCount(2);
         links.Select(lr => lr.CanonicalId).Distinct().Should().HaveCount(1,
             "the same dose reported by two connectors is one event even after the clocks drift apart");
@@ -781,7 +781,7 @@ public class DeduplicationServiceTests : IDisposable
         await service.DeduplicateBatchAsync(RecordType.DeviceEvent, [ToInput(mylife)]);
         await service.DeduplicateBatchAsync(RecordType.DeviceEvent, [ToInput(glooko)]);
 
-        var links = await context.LinkedRecords.ToListAsync();
+        var links = await context.LinkedRecords.AsNoTracking().ToListAsync();
         links.Should().HaveCount(2);
         links.Select(lr => lr.CanonicalId).Distinct().Should().HaveCount(1);
         links.Count(lr => lr.IsPrimary).Should().Be(1);
@@ -801,7 +801,7 @@ public class DeduplicationServiceTests : IDisposable
         await service.DeduplicateBatchAsync(RecordType.CarbIntake, [ToInput(mylife)]);
         await service.DeduplicateBatchAsync(RecordType.CarbIntake, [ToInput(glooko)]);
 
-        var links = await context.LinkedRecords.ToListAsync();
+        var links = await context.LinkedRecords.AsNoTracking().ToListAsync();
         links.Should().HaveCount(2);
         links.Select(lr => lr.CanonicalId).Distinct().Should().HaveCount(1);
         links.Count(lr => lr.IsPrimary).Should().Be(1);
@@ -815,23 +815,81 @@ public class DeduplicationServiceTests : IDisposable
     public async Task DeduplicateBatchAsync_PinsTightWindowEdge(long offsetMillis, bool laterFirst, int expectedGroups)
     {
         // Both records carry the same source, so the wide window can never rescue the just-past
-        // case: only the tight window's inclusive bound decides the outcome. Separate batches so
-        // the second record matches through the persisted link rather than intra-batch state.
+        // case: only the tight window's inclusive bound decides the outcome. That pair is Tidepool
+        // carbs because it is the one source and record type whose same-source pairs may
+        // tight-merge at all (DeduplicationService.EmitsDuplicateEvents). Separate batches so the
+        // second record matches through the persisted link rather than intra-batch state.
         // laterFirst flips which end of the window the second record has to reach across.
         await using var context = NewContext();
         var service = CreateService(context);
 
-        var earlier = CreateBolus(WideBase, 2.0, "mylife-connector");
-        var later = CreateBolus(WideBase + offsetMillis, 2.0, "mylife-connector");
-        context.Boluses.AddRange(earlier, later);
+        var earlier = CreateCarbIntake(WideBase, 45, "tidepool-connector");
+        var later = CreateCarbIntake(WideBase + offsetMillis, 45, "tidepool-connector");
+        context.CarbIntakes.AddRange(earlier, later);
         await context.SaveChangesAsync();
 
         var (first, second) = laterFirst ? (later, earlier) : (earlier, later);
-        await service.DeduplicateBatchAsync(RecordType.Bolus, [ToInput(first)]);
-        await service.DeduplicateBatchAsync(RecordType.Bolus, [ToInput(second)]);
+        await service.DeduplicateBatchAsync(RecordType.CarbIntake, [ToInput(first)]);
+        await service.DeduplicateBatchAsync(RecordType.CarbIntake, [ToInput(second)]);
 
-        var links = await context.LinkedRecords.ToListAsync();
+        var links = await context.LinkedRecords.AsNoTracking().ToListAsync();
         links.Select(lr => lr.CanonicalId).Distinct().Should().HaveCount(expectedGroups);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task DeduplicateBatchAsync_TwoTidepoolBolusesOfOneSizeAtOneSecond_StayTwoGroups(bool oneBatch)
+    {
+        await using var context = NewContext();
+        var service = CreateService(context);
+
+        var first = CreateBolus(WideBase, 2.0, "tidepool-connector");
+        var second = CreateBolus(WideBase, 2.0, "tidepool-connector");
+        context.Boluses.AddRange(first, second);
+        await context.SaveChangesAsync();
+
+        if (oneBatch)
+        {
+            await service.DeduplicateBatchAsync(RecordType.Bolus, [ToInput(first), ToInput(second)]);
+        }
+        else
+        {
+            await service.DeduplicateBatchAsync(RecordType.Bolus, [ToInput(first)]);
+            await service.DeduplicateBatchAsync(RecordType.Bolus, [ToInput(second)]);
+        }
+
+        var links = await context.LinkedRecords.AsNoTracking().ToListAsync();
+        links.Should().HaveCount(2);
+        links.Select(lr => lr.CanonicalId).Distinct().Should().HaveCount(2);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task DeduplicateBatchAsync_TidepoolCarbTwinsAtOneSecond_Merge(bool oneBatch)
+    {
+        await using var context = NewContext();
+        var service = CreateService(context);
+
+        var first = CreateCarbIntake(WideBase, 45, "tidepool-connector");
+        var twin = CreateCarbIntake(WideBase, 45, "tidepool-connector");
+        context.CarbIntakes.AddRange(first, twin);
+        await context.SaveChangesAsync();
+
+        if (oneBatch)
+        {
+            await service.DeduplicateBatchAsync(RecordType.CarbIntake, [ToInput(first), ToInput(twin)]);
+        }
+        else
+        {
+            await service.DeduplicateBatchAsync(RecordType.CarbIntake, [ToInput(first)]);
+            await service.DeduplicateBatchAsync(RecordType.CarbIntake, [ToInput(twin)]);
+        }
+
+        var links = await context.LinkedRecords.AsNoTracking().ToListAsync();
+        links.Should().HaveCount(2);
+        links.Select(lr => lr.CanonicalId).Distinct().Should().HaveCount(1);
     }
 
     [Theory]
@@ -853,7 +911,7 @@ public class DeduplicationServiceTests : IDisposable
         await service.DeduplicateBatchAsync(RecordType.Bolus, [ToInput(first)]);
         await service.DeduplicateBatchAsync(RecordType.Bolus, [ToInput(second)]);
 
-        var links = await context.LinkedRecords.ToListAsync();
+        var links = await context.LinkedRecords.AsNoTracking().ToListAsync();
         links.Select(lr => lr.CanonicalId).Distinct().Should().HaveCount(expectedGroups);
     }
 
@@ -874,7 +932,7 @@ public class DeduplicationServiceTests : IDisposable
 
         await service.DeduplicateBatchAsync(RecordType.Bolus, [ToInput(mylife), ToInput(glooko)]);
 
-        var links = await context.LinkedRecords.ToListAsync();
+        var links = await context.LinkedRecords.AsNoTracking().ToListAsync();
         links.Select(lr => lr.CanonicalId).Distinct().Should().HaveCount(expectedGroups);
     }
 
@@ -895,7 +953,7 @@ public class DeduplicationServiceTests : IDisposable
         await service.DeduplicateBatchAsync(RecordType.Bolus, [ToInput(first), ToInput(second)]);
         await service.DeduplicateBatchAsync(RecordType.Bolus, [ToInput(incoming)]);
 
-        var links = await context.LinkedRecords.ToListAsync();
+        var links = await context.LinkedRecords.AsNoTracking().ToListAsync();
         links.Should().HaveCount(3);
         links.Select(lr => lr.CanonicalId).Distinct().Should().HaveCount(3,
             "two candidate groups mean the dose cannot be attributed to one of them, so it stays separate");
@@ -919,7 +977,7 @@ public class DeduplicationServiceTests : IDisposable
         await service.DeduplicateBatchAsync(RecordType.Bolus, [ToInput(first)]);
         await service.DeduplicateBatchAsync(RecordType.Bolus, [ToInput(second)]);
 
-        var links = await context.LinkedRecords.ToListAsync();
+        var links = await context.LinkedRecords.AsNoTracking().ToListAsync();
         links.Select(lr => lr.CanonicalId).Distinct().Should().HaveCount(2);
     }
 
@@ -938,7 +996,7 @@ public class DeduplicationServiceTests : IDisposable
         await service.DeduplicateBatchAsync(RecordType.Bolus, [ToInput(mylife)]);
         await service.DeduplicateBatchAsync(RecordType.Bolus, [ToInput(glooko)]);
 
-        var links = await context.LinkedRecords.ToListAsync();
+        var links = await context.LinkedRecords.AsNoTracking().ToListAsync();
         links.Select(lr => lr.CanonicalId).Distinct().Should().HaveCount(2);
     }
 
@@ -957,7 +1015,7 @@ public class DeduplicationServiceTests : IDisposable
         await service.DeduplicateBatchAsync(RecordType.SensorGlucose, [ToInput(mylife)]);
         await service.DeduplicateBatchAsync(RecordType.SensorGlucose, [ToInput(glooko)]);
 
-        var links = await context.LinkedRecords.ToListAsync();
+        var links = await context.LinkedRecords.AsNoTracking().ToListAsync();
         links.Select(lr => lr.CanonicalId).Distinct().Should().HaveCount(2);
     }
 
@@ -980,7 +1038,7 @@ public class DeduplicationServiceTests : IDisposable
         await service.DeduplicateBatchAsync(RecordType.Bolus, [ToInput(known)]);
         await service.DeduplicateBatchAsync(RecordType.Bolus, [ToInput(sourceless, dataSource: dataSource)]);
 
-        var links = await context.LinkedRecords.ToListAsync();
+        var links = await context.LinkedRecords.AsNoTracking().ToListAsync();
         links.Select(lr => lr.CanonicalId).Distinct().Should().HaveCount(2);
     }
 
@@ -1000,7 +1058,7 @@ public class DeduplicationServiceTests : IDisposable
 
         await service.DeduplicateBatchAsync(RecordType.Bolus, [ToInput(glooko)]);
 
-        var links = await context.LinkedRecords.ToListAsync();
+        var links = await context.LinkedRecords.AsNoTracking().ToListAsync();
         links.Select(lr => lr.CanonicalId).Distinct().Should().HaveCount(2);
     }
 
@@ -1021,7 +1079,7 @@ public class DeduplicationServiceTests : IDisposable
 
         await service.DeduplicateBatchAsync(RecordType.Bolus, [ToInput(glooko)]);
 
-        var links = await context.LinkedRecords.ToListAsync();
+        var links = await context.LinkedRecords.AsNoTracking().ToListAsync();
         links.Select(lr => lr.CanonicalId).Distinct().Should().HaveCount(2);
     }
 
@@ -1058,7 +1116,7 @@ public class DeduplicationServiceTests : IDisposable
             await service.DeduplicateBatchAsync(RecordType.Bolus, [ToInput(glookoIncoming)]);
         }
 
-        var links = await context.LinkedRecords.ToListAsync();
+        var links = await context.LinkedRecords.AsNoTracking().ToListAsync();
         links.Should().HaveCount(4);
 
         var glookoSeedCanonical = links.Single(lr => lr.RecordId == glookoSeed.Id).CanonicalId;
@@ -1089,7 +1147,7 @@ public class DeduplicationServiceTests : IDisposable
 
         await service.DeduplicateBatchAsync(RecordType.Bolus, [ToInput(mylife)]);
 
-        var links = await context.LinkedRecords.ToListAsync();
+        var links = await context.LinkedRecords.AsNoTracking().ToListAsync();
         links.Select(lr => lr.CanonicalId).Distinct().Should().HaveCount(1);
         links.Count(lr => lr.IsPrimary).Should().Be(1, "exactly one record in the group is primary");
         links.Single(lr => lr.IsPrimary).RecordId.Should().Be(mylife.Id,
@@ -1110,7 +1168,7 @@ public class DeduplicationServiceTests : IDisposable
 
         await service.DeduplicateBatchAsync(RecordType.Bolus, [ToInput(mylife)]);
 
-        var links = await context.LinkedRecords.ToListAsync();
+        var links = await context.LinkedRecords.AsNoTracking().ToListAsync();
         links.Select(lr => lr.CanonicalId).Distinct().Should().HaveCount(1);
         links.Count(lr => lr.IsPrimary).Should().Be(1);
         links.Single(lr => lr.IsPrimary).RecordId.Should().Be(glooko.Id);
@@ -1136,7 +1194,7 @@ public class DeduplicationServiceTests : IDisposable
 
         await service.DeduplicateBatchAsync(RecordType.Bolus, [ToInput(joiner)]);
 
-        var links = await context.LinkedRecords.ToListAsync();
+        var links = await context.LinkedRecords.AsNoTracking().ToListAsync();
         links.Should().HaveCount(3);
         links.Select(lr => lr.CanonicalId).Distinct().Should().HaveCount(1);
         links.Count(lr => lr.IsPrimary).Should().Be(1);
@@ -1162,7 +1220,7 @@ public class DeduplicationServiceTests : IDisposable
 
         await service.DeduplicateBatchAsync(RecordType.Bolus, [ToInput(joiner)]);
 
-        var links = await context.LinkedRecords.ToListAsync();
+        var links = await context.LinkedRecords.AsNoTracking().ToListAsync();
         links.Count(lr => lr.IsPrimary).Should().Be(1);
         links.Single(lr => lr.IsPrimary).RecordId.Should().Be(live.Id);
     }
@@ -1182,7 +1240,7 @@ public class DeduplicationServiceTests : IDisposable
 
         await service.DeduplicateBatchAsync(RecordType.Bolus, [ToInput(glooko), ToInput(mylife)]);
 
-        var links = await context.LinkedRecords.ToListAsync();
+        var links = await context.LinkedRecords.AsNoTracking().ToListAsync();
         links.Select(lr => lr.CanonicalId).Distinct().Should().HaveCount(1);
         links.Count(lr => lr.IsPrimary).Should().Be(1);
         links.Single(lr => lr.IsPrimary).RecordId.Should().Be(mylife.Id,
@@ -1208,7 +1266,7 @@ public class DeduplicationServiceTests : IDisposable
         await service.DeduplicateBatchAsync(RecordType.TempBasal, [ToDeduplicationInput(glooko)]);
         await service.DeduplicateBatchAsync(RecordType.TempBasal, [ToDeduplicationInput(mylife)]);
 
-        var links = await context.LinkedRecords.ToListAsync();
+        var links = await context.LinkedRecords.AsNoTracking().ToListAsync();
         links.Select(lr => lr.CanonicalId).Distinct().Should().HaveCount(1);
         links.Count(lr => lr.IsPrimary).Should().Be(1);
     }
@@ -1231,7 +1289,7 @@ public class DeduplicationServiceTests : IDisposable
         await service.DeduplicateBatchAsync(RecordType.TempBasal, [ToDeduplicationInput(glooko)]);
         await service.DeduplicateBatchAsync(RecordType.TempBasal, [ToDeduplicationInput(mylife)]);
 
-        var links = await context.LinkedRecords.ToListAsync();
+        var links = await context.LinkedRecords.AsNoTracking().ToListAsync();
         links.Select(lr => lr.CanonicalId).Distinct().Should().HaveCount(2);
     }
 
@@ -1254,7 +1312,7 @@ public class DeduplicationServiceTests : IDisposable
         await service.DeduplicateBatchAsync(RecordType.TempBasal, [ToDeduplicationInput(glooko)]);
         await service.DeduplicateBatchAsync(RecordType.TempBasal, [ToDeduplicationInput(mylife)]);
 
-        var links = await context.LinkedRecords.ToListAsync();
+        var links = await context.LinkedRecords.AsNoTracking().ToListAsync();
         links.Select(lr => lr.CanonicalId).Distinct().Should().HaveCount(2);
     }
 
@@ -1274,7 +1332,7 @@ public class DeduplicationServiceTests : IDisposable
         await service.DeduplicateBatchAsync(RecordType.BolusCalculation, [ToInput(glooko)]);
         await service.DeduplicateBatchAsync(RecordType.BolusCalculation, [ToInput(mylife)]);
 
-        var links = await context.LinkedRecords.ToListAsync();
+        var links = await context.LinkedRecords.AsNoTracking().ToListAsync();
         links.Select(lr => lr.CanonicalId).Distinct().Should().HaveCount(2);
     }
 
@@ -1292,7 +1350,7 @@ public class DeduplicationServiceTests : IDisposable
         await service.DeduplicateBatchAsync(RecordType.BolusCalculation, [ToInput(glooko)]);
         await service.DeduplicateBatchAsync(RecordType.BolusCalculation, [ToInput(mylife)]);
 
-        var links = await context.LinkedRecords.ToListAsync();
+        var links = await context.LinkedRecords.AsNoTracking().ToListAsync();
         links.Select(lr => lr.CanonicalId).Distinct().Should().HaveCount(1);
     }
 
@@ -1312,8 +1370,7 @@ public class DeduplicationServiceTests : IDisposable
     [Fact]
     public async Task DeduplicateBatchAsync_Note_DoesNotMatchASoftDeletedNote()
     {
-        // Notes match on the time window alone, so nothing about the note's own content can keep a
-        // deleted one out of range — only the deleted check can.
+        // Same text inside the window, so only the deleted check can keep them apart.
         await using var context = NewContext();
         var service = CreateService(context);
 
@@ -1323,7 +1380,7 @@ public class DeduplicationServiceTests : IDisposable
             Id = Guid.CreateVersion7(),
             TenantId = TestTenantId,
             Timestamp = timestamp,
-            Text = "removed",
+            Text = "same note",
             DataSource = "mylife-connector",
             DeletedAt = DateTime.UtcNow
         };
@@ -1332,7 +1389,7 @@ public class DeduplicationServiceTests : IDisposable
             Id = Guid.CreateVersion7(),
             TenantId = TestTenantId,
             Timestamp = timestamp.AddSeconds(10),
-            Text = "kept",
+            Text = "same note",
             DataSource = "glooko-connector"
         };
         context.Notes.AddRange(deleted, fresh);
@@ -1341,7 +1398,7 @@ public class DeduplicationServiceTests : IDisposable
         await service.DeduplicateBatchAsync(RecordType.Note, [ToInput(deleted)]);
         await service.DeduplicateBatchAsync(RecordType.Note, [ToInput(fresh)]);
 
-        var links = await context.LinkedRecords.IgnoreQueryFilters()
+        var links = await context.LinkedRecords.AsNoTracking().IgnoreQueryFilters()
             .Where(lr => lr.RecordType == "note").ToListAsync();
         links.Select(lr => lr.CanonicalId).Distinct().Should().HaveCount(
             2, "a soft-deleted note is not a candidate for a live one to join");
@@ -1477,7 +1534,7 @@ public class DeduplicationServiceTests : IDisposable
         await service.DeduplicateBatchAsync(RecordType.Bolus, [ToInput(glooko)]);
         await service.DeduplicateBatchAsync(RecordType.Bolus, [ToInput(mylifeEarly), ToInput(mylifeLate)]);
 
-        var links = await context.LinkedRecords.ToListAsync();
+        var links = await context.LinkedRecords.AsNoTracking().ToListAsync();
         links.Should().HaveCount(3);
         links.Select(lr => lr.CanonicalId).Distinct().Should().HaveCount(2);
 
@@ -1507,7 +1564,7 @@ public class DeduplicationServiceTests : IDisposable
         var result = await service.DeduplicateAllAsync();
 
         result.Success.Should().BeTrue();
-        var links = await context.LinkedRecords.Where(lr => lr.RecordType == "bolus").ToListAsync();
+        var links = await context.LinkedRecords.AsNoTracking().Where(lr => lr.RecordType == "bolus").ToListAsync();
         links.Should().HaveCount(2, "the full run links nothing new");
         links.Select(lr => lr.CanonicalId).Distinct().Should().HaveCount(1,
             "a full re-dedup run heals groups split by clock drift");
@@ -1566,7 +1623,7 @@ public class DeduplicationServiceTests : IDisposable
     }
 
     private DeduplicationService CreateService(NocturneDbContext context) =>
-        new(context,
+        new(context.AsFactory(),
             _serviceProvider.GetRequiredService<IServiceScopeFactory>(),
             new Mock<ILogger<DeduplicationService>>().Object);
 
@@ -1687,7 +1744,7 @@ public class DeduplicationServiceTests : IDisposable
 
     private static DeduplicationInput ToInput(NoteEntity e, string? dataSource = null) =>
         new(e.Id, ToMills(e.Timestamp), dataSource ?? e.DataSource ?? DeduplicationInput.UnknownDataSource,
-            MatchCriteriaMapper.ForNote());
+            MatchCriteriaMapper.From(e));
 
     private static StateSpan CreateTestStateSpan(
         StateSpanCategory category,
@@ -1717,7 +1774,7 @@ public class DeduplicationServiceTests : IDisposable
     private static DeduplicationInput ToDeduplicationInput(TempBasalEntity entity) =>
         new(
             RecordId: entity.Id,
-            Mills: new DateTimeOffset(entity.StartTimestamp, TimeSpan.Zero).ToUnixTimeMilliseconds(),
+            Mills: new DateTimeOffset(entity.Timestamp, TimeSpan.Zero).ToUnixTimeMilliseconds(),
             DataSource: entity.DataSource ?? DeduplicationInput.UnknownDataSource,
             Criteria: MatchCriteriaMapper.From(entity));
 
@@ -1734,7 +1791,7 @@ public class DeduplicationServiceTests : IDisposable
         {
             Id = Guid.CreateVersion7(),
             TenantId = TestTenantId,
-            StartTimestamp = startTimestamp,
+            Timestamp = startTimestamp,
             EndTimestamp = duration.HasValue ? startTimestamp + duration.Value : null,
             Rate = rate,
             Origin = origin,

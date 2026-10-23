@@ -1,6 +1,12 @@
+using System.Runtime.ExceptionServices;
 using System.Text.Json;
+using Microsoft.EntityFrameworkCore;
+using Nocturne.Infrastructure.Data;
+using Nocturne.Infrastructure.Data.Logging;
+using Nocturne.Core.Clinical.Treatments;
 using Nocturne.Core.Contracts.Events;
 using Nocturne.Core.Contracts.Treatments;
+using Nocturne.Core.Contracts.Uploads;
 using Nocturne.Core.Contracts.V4;
 using Nocturne.Core.Contracts.V4.Repositories;
 using Nocturne.Core.Models;
@@ -27,12 +33,16 @@ namespace Nocturne.API.Services.Treatments;
 /// <seealso cref="CobCalculator"/>
 public class TreatmentService : ITreatmentService
 {
+    private const int DefaultCount = 100;
+    private const int DefaultFindCount = 1000;
+
     private readonly ITreatmentStore _store;
     private readonly ITreatmentDecomposer _decomposer;
     private readonly ITreatmentCache _cache;
     private readonly IDataEventSink<Treatment> _events;
     private readonly IPatientInsulinRepository _insulinRepo;
     private readonly ILogger<TreatmentService> _logger;
+    private readonly IRejectedUploadRecorder? _rejected;
 
     /// <summary>
     /// Bolus event types that should be enriched with the patient's primary bolus insulin context.
@@ -63,14 +73,17 @@ public class TreatmentService : ITreatmentService
     /// <param name="events">The event sink for broadcasting create/update/delete events.</param>
     /// <param name="insulinRepo">The patient insulin repository for enriching treatments with insulin context.</param>
     /// <param name="logger">The logger instance.</param>
+    /// <param name="rejected">Keeps the treatments a create refused; none in tests that do not look.</param>
     public TreatmentService(
         ITreatmentStore store,
         ITreatmentDecomposer decomposer,
         ITreatmentCache cache,
         IDataEventSink<Treatment> events,
         IPatientInsulinRepository insulinRepo,
-        ILogger<TreatmentService> logger)
+        ILogger<TreatmentService> logger,
+        IRejectedUploadRecorder? rejected = null)
     {
+        _rejected = rejected;
         _store = store;
         _decomposer = decomposer;
         _cache = cache;
@@ -87,7 +100,7 @@ public class TreatmentService : ITreatmentService
         var query = new TreatmentQuery
         {
             Find = find,
-            Count = count ?? 10,
+            Count = count ?? (string.IsNullOrEmpty(find) ? DefaultCount : DefaultFindCount),
             Skip = skip ?? 0
         };
 
@@ -114,20 +127,19 @@ public class TreatmentService : ITreatmentService
     }
 
     /// <inheritdoc />
-    public async Task<IEnumerable<Treatment>> GetTreatmentsWithAdvancedFilterAsync(
-        int count, int skip, string? findQuery, bool reverseResults,
-        CancellationToken cancellationToken = default)
-    {
-        var query = new TreatmentQuery
-        {
-            Find = findQuery,
-            Count = count,
-            Skip = skip,
-            ReverseResults = reverseResults
-        };
+    public Task<Treatment?> GetLatestTreatmentOfTypeAsync(
+        string eventType, long fromMills, long toMills, CancellationToken cancellationToken = default) =>
+        _store.GetLatestOfTypeAsync(eventType, fromMills, toMills, cancellationToken);
 
-        return await _store.QueryAsync(query, cancellationToken);
-    }
+    /// <inheritdoc />
+    public Task<bool> IsTreatmentDeletedByUserAsync(
+        string id, CancellationToken cancellationToken = default)
+        => _store.IsDeletedByUserAsync(id, cancellationToken);
+
+    /// <inheritdoc />
+    public async Task<IEnumerable<Treatment>> QueryTreatmentsAsync(
+        TreatmentQuery query, CancellationToken cancellationToken = default) =>
+        await _store.QueryAsync(query, cancellationToken);
 
     /// <inheritdoc />
     public async Task<IReadOnlyList<Treatment>> GetTreatmentsByRangeAsync(
@@ -151,27 +163,127 @@ public class TreatmentService : ITreatmentService
     /// the <see cref="ITreatmentCache"/> is invalidated and events are fired via
     /// <see cref="IDataEventSink{T}.OnCreatedAsync(IReadOnlyList{T}, CancellationToken)"/>.
     /// </remarks>
-    public async Task<BulkWrite<Treatment>> CreateTreatmentsAsync(
-        IEnumerable<Treatment> treatments, CancellationToken cancellationToken = default)
+    public Task<BulkWrite<Treatment>> CreateTreatmentsAsync(
+        IEnumerable<Treatment> treatments, CancellationToken cancellationToken = default) =>
+        CreateAsync(treatments, splitPreBolus: false, cancellationToken);
+
+    /// <inheritdoc />
+    /// <remarks>
+    /// As <see cref="CreateTreatmentsAsync"/>, with each meal split by <see cref="PreBolusSplit"/>
+    /// after its insulin context is set, so the carbs take none.
+    /// </remarks>
+    public Task<BulkWrite<Treatment>> CreateV1TreatmentsAsync(
+        IEnumerable<Treatment> treatments, CancellationToken cancellationToken = default) =>
+        CreateAsync(treatments, splitPreBolus: true, cancellationToken);
+
+    private async Task<BulkWrite<Treatment>> CreateAsync(
+        IEnumerable<Treatment> treatments, bool splitPreBolus, CancellationToken cancellationToken)
     {
         var treatmentList = treatments.ToList();
 
         await PopulateInsulinContextAsync(treatmentList, cancellationToken);
+        if (splitPreBolus)
+            treatmentList = await SplitPreBolusAsync(treatmentList, cancellationToken);
 
-        var created = await _store.CreateAsync(treatmentList, cancellationToken);
+        BulkWrite<Treatment> created;
+        var stored = new List<Treatment>();
+        var completed = false;
+        try
+        {
+            created = await _store.CreateAsync(treatmentList, cancellationToken, stored);
+            completed = true;
+        }
+        catch (TreatmentBatchFailedException failed)
+        {
+            // The treatments before the failing one are stored, so reads and write-back must see them.
+            await _cache.InvalidateAsync(CancellationToken.None);
+            completed = true;
+            await _events.OnCreatedAsync(failed.Written, CancellationToken.None);
+            await RecordRejectedAsync(failed.Written);
+            if (failed.InnerException is OperationCanceledException canceled && cancellationToken.IsCancellationRequested)
+                ExceptionDispatchInfo.Throw(canceled);
+            throw;
+        }
+        finally
+        {
+            // An exception the store does not expect still leaves what it stored before it.
+            if (!completed)
+            {
+                await _cache.InvalidateAsync(CancellationToken.None);
+                if (stored.Count > 0)
+                    await _events.OnCreatedAsync(stored, CancellationToken.None);
+            }
+        }
 
         await _cache.InvalidateAsync(cancellationToken);
         await _events.OnCreatedAsync(created, cancellationToken);
+        await RecordRejectedAsync(created);
 
         return created;
     }
+
+    /// <summary>
+    /// <see cref="PreBolusSplit"/> over a batch. A meal whose id the user deleted keeps its carbs
+    /// deleted too: its bolus is refused under that id, and its carbs would otherwise be written
+    /// fresh under their own.
+    /// </summary>
+    private async Task<List<Treatment>> SplitPreBolusAsync(List<Treatment> treatments, CancellationToken ct)
+    {
+        var meals = treatments.Select(PreBolusSplit.Split).ToList();
+        var split = meals.Where(halves => halves.Count == 2).Select(halves => halves[0].Id!).ToList();
+        if (split.Count == 0)
+            return [.. meals.SelectMany(halves => halves)];
+
+        var deleted = await _decomposer.GetDeletedByUserAsync(split, ct);
+        return [.. meals.SelectMany(halves =>
+            halves.Count == 2 && deleted.Contains(halves[0].Id!) ? halves.Take(1) : halves)];
+    }
+
+    /// <summary>
+    /// Keeps an update the store refused for its data as a rejected upload, as a create's refusal
+    /// is kept, and returns what tells the caller it was refused.
+    /// </summary>
+    private async Task<TreatmentRefusedException> RefuseAsync(Treatment treatment, string reason, Exception ex)
+    {
+        var refusal = $"{reason}; parts of the treatment may be stored";
+        _logger.LogRefused(nameof(Treatment), reason, treatment.DataSource ?? "api", ex);
+        if (_rejected is not null)
+            await _rejected.RecordTreatmentsAsync([new BulkWriteRejection<Treatment>(0, treatment, refusal)], CancellationToken.None);
+        return new TreatmentRefusedException(refusal, ex);
+    }
+
+    private Task RecordRejectedAsync(BulkWrite<Treatment> written) =>
+        _rejected is not null && written.Rejected.Count > 0
+            ? _rejected.RecordTreatmentsAsync(written.Rejected, CancellationToken.None)
+            : Task.CompletedTask;
 
     /// <inheritdoc />
     /// <returns>The updated <see cref="Treatment"/>, or <see langword="null"/> if not found.</returns>
     public async Task<Treatment?> UpdateTreatmentAsync(
         string id, Treatment treatment, CancellationToken cancellationToken = default)
     {
-        var updated = await _store.UpdateAsync(id, treatment, cancellationToken);
+        Treatment? updated;
+        var completed = false;
+        try
+        {
+            updated = await _store.UpdateAsync(id, treatment, cancellationToken);
+            completed = true;
+        }
+        catch (DbUpdateException ex) when (StoreRefusal.ReasonFor(ex) is { } reason)
+        {
+            throw await RefuseAsync(treatment, reason, ex);
+        }
+        catch (TreatmentMappingException ex)
+        {
+            throw await RefuseAsync(treatment, ex.Message, ex);
+        }
+        finally
+        {
+            // A failed update may have committed some of its records, and cached reads would keep serving the old treatment.
+            if (!completed)
+                await _cache.InvalidateAsync(CancellationToken.None);
+        }
+
         if (updated is null) return null;
 
         await _cache.InvalidateAsync(cancellationToken);
@@ -185,12 +297,8 @@ public class TreatmentService : ITreatmentService
     public async Task<Treatment?> PatchTreatmentAsync(
         string id, JsonElement patchData, CancellationToken cancellationToken = default)
     {
-        var existing = await _store.GetByIdAsync(id, cancellationToken);
+        var existing = await _store.GetForUpdateAsync(id, cancellationToken);
         if (existing is null) return null;
-
-        // Re-key to the stored LegacyId so re-decomposition upserts this record in place instead
-        // of creating a duplicate when AAPS patches by a derived ObjectId.
-        existing.Id = await _store.ResolveCanonicalIdAsync(id, cancellationToken) ?? existing.Id;
 
         // Apply patch fields to existing treatment
         ApplyJsonPatch(existing, patchData);
@@ -199,12 +307,24 @@ public class TreatmentService : ITreatmentService
         await _decomposer.DecomposeAsync(existing, WriteOrigin.Live, cancellationToken);
 
         await _cache.InvalidateAsync(cancellationToken);
-        await _events.OnUpdatedAsync(existing, cancellationToken);
 
-        return existing;
+        // The merged record carries the upsert key, which the wire would coerce to a different
+        // identifier than the create returned; AAPS stores the identifier from every response and
+        // every pushed record, so the response and the event carry the record as reads serve it.
+        // The upsert key is a stored legacy id, so it resolves exactly, with no hash scan.
+        var served = await _store.GetByIdAsync(existing.Id ?? id, cancellationToken);
+        if (served is null)
+        {
+            _logger.LogWarning("Patched treatment {Id} did not read back under its upsert key", id);
+            served = existing;
+        }
+
+        await _events.OnUpdatedAsync(served, cancellationToken);
+
+        return served;
     }
 
-    private static void ApplyJsonPatch(Treatment treatment, JsonElement patchData)
+    internal static void ApplyJsonPatch(Treatment treatment, JsonElement patchData)
     {
         // The identity used to upsert (LegacyId matching) must survive the round-trip. Serializing
         // rewrites _id to its 24-hex ObjectId form, so capture the real Id and restore it after the
@@ -247,17 +367,14 @@ public class TreatmentService : ITreatmentService
     public async Task<bool> DeleteTreatmentAsync(
         string id, CancellationToken cancellationToken = default)
     {
-        var existing = await _store.GetByIdAsync(id, cancellationToken);
-        var deleted = await _store.DeleteAsync(id, cancellationToken);
+        if (await _store.DeleteAsync(id, cancellationToken) is not { } deletion)
+            return false;
 
-        if (deleted)
-        {
-            await _cache.InvalidateAsync(cancellationToken);
-            if (existing is not null)
-                await _events.OnDeletedAsync(existing, cancellationToken);
-        }
+        await _cache.InvalidateAsync(cancellationToken);
+        if (deletion.Served is not null)
+            await _events.OnDeletedAsync(deletion.Served, cancellationToken);
 
-        return deleted;
+        return true;
     }
 
     /// <inheritdoc />
@@ -286,7 +403,7 @@ public class TreatmentService : ITreatmentService
         long deleted = 0;
         foreach (var treatment in matching.Where(t => !string.IsNullOrEmpty(t.Id)))
         {
-            if (await _store.DeleteAsync(treatment.Id!, ct))
+            if (await _store.DeleteAsync(treatment.Id!, ct) is not null)
             {
                 deleted++;
                 await _events.OnDeletedAsync(treatment, ct);

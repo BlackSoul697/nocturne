@@ -1,9 +1,10 @@
 <script lang="ts">
+  import { Key } from '@nocturne/ui/keys';
   import { Button } from '@nocturne/ui/ui/button';
   import { Input } from '@nocturne/ui/ui/input';
   import { Label } from '@nocturne/ui/ui/label';
   import { Switch } from '@nocturne/ui/ui/switch';
-  import { X } from '@lucide/svelte';
+  import X from '@lucide/svelte/icons/x';
   import type { Editor } from '@tiptap/core';
   import { parseComponentProps } from './extensions/svelte-component.ts';
 
@@ -106,7 +107,7 @@
           size="xs"
           placeholder="value"
           bind:value={newPropValue}
-          onkeydown={(e) => e.key === 'Enter' && addProp()}
+          onkeydown={(e) => e.key === Key.Enter && addProp()}
         />
         <Button variant="link" size="inline-xs" class="shrink-0" onclick={addProp}>
           Add

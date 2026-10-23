@@ -1,3 +1,4 @@
+using System.Text.Json;
 using FluentAssertions;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
@@ -9,6 +10,7 @@ using Nocturne.Core.Contracts.Legacy;
 using Nocturne.Core.Contracts.V4;
 using Nocturne.Core.Contracts.Alerts;
 using Nocturne.Core.Models;
+using Nocturne.Core.Models.Authorization;
 using Nocturne.Core.Models.Extensions;
 using Xunit;
 using Nocturne.Core.Contracts.Entries;
@@ -22,7 +24,6 @@ public class EntriesControllerTests
 {
     private readonly Mock<IEntryService> _mockEntryService;
     private readonly Mock<IDocumentProcessingService> _mockDocumentProcessingService;
-    private readonly Mock<IProcessingStatusService> _mockProcessingStatusService;
     private readonly Mock<ICanonicalAlertEvaluator> _mockAlertEvaluator;
     private readonly Mock<ILogger<EntriesController>> _mockLogger;
     private readonly EntriesController _controller;
@@ -34,15 +35,14 @@ public class EntriesControllerTests
             .Setup(x => x.CreateEntriesAsync(It.IsAny<IEnumerable<Entry>>(), It.IsAny<WriteOrigin>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync([]);
         _mockDocumentProcessingService = new Mock<IDocumentProcessingService>();
-        _mockProcessingStatusService = new Mock<IProcessingStatusService>();
         _mockAlertEvaluator = new Mock<ICanonicalAlertEvaluator>();
         _mockLogger = new Mock<ILogger<EntriesController>>();
 
         _controller = new EntriesController(
             _mockEntryService.Object,
             _mockDocumentProcessingService.Object,
-            _mockProcessingStatusService.Object,
             _mockAlertEvaluator.Object,
+            TimeProvider.System,
             _mockLogger.Object
         );
 
@@ -93,8 +93,8 @@ public class EntriesControllerTests
 
         // Assert
         result.Should().NotBeNull();
-        var statusCodeResult = result.Result.Should().BeOfType<ObjectResult>().Subject;
-        statusCodeResult.StatusCode.Should().Be(201);
+        var statusCodeResult = result.Result.Should().BeOfType<OkObjectResult>().Subject;
+        statusCodeResult.StatusCode.Should().Be(200);
 
         // Verify ProcessDocuments was called with validEntries (which have IDs set)
         processedInput.Should().NotBeNull();
@@ -258,8 +258,8 @@ public class EntriesControllerTests
         var entry = processedInput![0];
         entry.Id.Should().NotBeNullOrEmpty();
 
-        // The ID should be a valid GUID-like string (hex characters, 32 chars without dashes)
-        entry.Id.Should().MatchRegex("^[a-f0-9]{32}$");
+        // The wire coerces a stored id that is not an ObjectId, so only an ObjectId is served as stored.
+        MongoObjectId.IsObjectId(entry.Id).Should().BeTrue();
     }
 
     [Fact]
@@ -309,41 +309,6 @@ public class EntriesControllerTests
     }
 
     [Fact]
-    public async Task CreateEntriesAsync_DerivesSameUtcMillsAsSyncEndpoint()
-    {
-        // A date-bearing entry must resolve to the same UTC mills on both the sync and async
-        // endpoints — the conversion lives in Entry.Mills (UTC), not in the controller, so the two
-        // endpoints can never diverge by timezone again.
-        var entryWithDate = new Entry
-        {
-            Sgv = 120,
-            Date = DateTimeOffset.Parse("2023-06-12T10:30:00.000Z").DateTime,
-        };
-
-        List<Entry>? processedInput = null;
-        _mockDocumentProcessingService
-            .Setup(x => x.ProcessDocuments(It.IsAny<IEnumerable<Entry>>()))
-            .Callback<IEnumerable<Entry>>(entries => processedInput = entries.ToList())
-            .Returns<IEnumerable<Entry>>(entries => entries);
-
-        StubNothingStored();
-
-        _mockEntryService
-            .Setup(x =>
-                x.CreateEntriesAsync(It.IsAny<IEnumerable<Entry>>(), It.IsAny<WriteOrigin>(), It.IsAny<CancellationToken>())
-            )
-            .ReturnsAsync([new Entry { Id = "created-id", Sgv = 120 }]);
-
-        // Act
-        await _controller.CreateEntriesAsync(entryWithDate);
-
-        // Assert: identical UTC mills to the sync endpoint, regardless of server time zone.
-        processedInput.Should().NotBeNull();
-        processedInput.Should().HaveCount(1);
-        processedInput![0].Mills.Should().Be(1686565800000);
-    }
-
-    [Fact]
     public async Task CreateEntries_AllDuplicates_EchoesStoredEntriesWithSameCount()
     {
         // v1 uploaders (Loop's NightscoutKit) require one response object per submitted
@@ -374,8 +339,8 @@ public class EntriesControllerTests
         var result = await _controller.CreateEntries(submitted);
 
         // Assert
-        var objectResult = result.Result.Should().BeOfType<ObjectResult>().Subject;
-        objectResult.StatusCode.Should().Be(201);
+        var objectResult = result.Result.Should().BeOfType<OkObjectResult>().Subject;
+        objectResult.StatusCode.Should().Be(200);
 
         var body = objectResult
             .Value.Should()
@@ -392,7 +357,7 @@ public class EntriesControllerTests
     }
 
     [Fact]
-    public async Task UpdateEntry_AcceptsIdGeneratedByCreateEndpoint()
+    public async Task UpdateEntry_AcceptsA32HexUuid()
     {
         var generatedId = Guid.CreateVersion7().ToString("N");
         var update = new Entry { Sgv = 123, Mills = 1686565800000 };
@@ -422,7 +387,7 @@ public class EntriesControllerTests
     }
 
     [Fact]
-    public async Task DeleteEntry_AcceptsIdGeneratedByCreateEndpoint()
+    public async Task DeleteEntry_AcceptsA32HexUuid()
     {
         var generatedId = Guid.CreateVersion7().ToString("N");
 
@@ -432,7 +397,159 @@ public class EntriesControllerTests
 
         var result = await _controller.DeleteEntry(generatedId);
 
-        result.Should().BeOfType<OkObjectResult>();
+        AssertDeleteStatus(result, 1);
+    }
+
+    [Fact]
+    public async Task DeleteEntry_UnknownId_AnswersOkWithNoneDeleted()
+    {
+        const string unknownId = "0123456789abcdef01234567";
+
+        _mockEntryService
+            .Setup(x => x.DeleteEntryAsync(unknownId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(false);
+
+        var result = await _controller.DeleteEntry(unknownId);
+
+        AssertDeleteStatus(result, 0);
+    }
+
+    [Theory]
+    [InlineData("foo")]
+    [InlineData("0123456789abcdef0123456")]
+    public async Task DeleteEntry_NonIdSpec_AnswersBadRequestWithoutDeleting(string spec)
+    {
+        var result = await _controller.DeleteEntry(spec);
+
+        result.Should().BeOfType<BadRequestObjectResult>();
+        _mockEntryService.Verify(
+            x => x.DeleteEntryAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()),
+            Times.Never
+        );
+    }
+
+    [Theory]
+    [InlineData("", null)]
+    [InlineData("?find={}", "{}")]
+    [InlineData("?find=%7B%7D", "{}")]
+    [InlineData("?find=", null)]
+    [InlineData("?token=x", null)]
+    [InlineData("?count=5&token=x", null)]
+    [InlineData("?find={}&token=x", "{}")]
+    [InlineData("?find[]=", null)]
+    [InlineData("?find[x]", null)]
+    [InlineData("?find%5Bx%5D", null)]
+    [InlineData("?xfind[a]=1", null)]
+    public async Task BulkDeleteEntries_WithAFindThatHasNoConditions_IsRefusedWithoutDeleting(
+        string queryString, string? boundFind)
+    {
+        _controller.ControllerContext.HttpContext.Request.QueryString = new QueryString(queryString);
+
+        var result = await _controller.BulkDeleteEntries(boundFind);
+
+        result.Should().BeOfType<BadRequestObjectResult>();
+        _mockEntryService.Verify(
+            x => x.DeleteEntriesAsync(It.IsAny<string?>(), It.IsAny<CancellationToken>()),
+            Times.Never
+        );
+    }
+
+    [Theory]
+    [InlineData("?find[type]=sgv", null, "find[type]=sgv")]
+    [InlineData("?find%5Btype%5D=sgv&token=x", null, "find%5Btype%5D=sgv&token=x")]
+    [InlineData("?find={\"date\":{\"$gte\":1704067200000}}", "{\"date\":{\"$gte\":1704067200000}}", "{\"date\":{\"$gte\":1704067200000}}")]
+    public async Task BulkDeleteEntries_WithAFind_DeletesWhatItMatches(
+        string queryString, string? boundFind, string expectedFind)
+    {
+        _controller.ControllerContext.HttpContext.Request.QueryString = new QueryString(queryString);
+        _mockEntryService
+            .Setup(x => x.DeleteEntriesAsync(expectedFind, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(4);
+
+        var result = await _controller.BulkDeleteEntries(boundFind);
+
+        AssertDeleteStatus(result, 4);
+    }
+
+    [Theory]
+    [InlineData("sgv", "?find[date][$gte]=1704067200000", "find[date][$gte]=1704067200000&find[type]=sgv")]
+    [InlineData("mbg", "?find[date][$gte]=1704067200000&token=x", "find[date][$gte]=1704067200000&token=x&find[type]=mbg")]
+    [InlineData("cal", "?find%5Bdate%5D%5B%24lte%5D=1704067200000", "find%5Bdate%5D%5B%24lte%5D=1704067200000&find[type]=cal")]
+    [InlineData("sgv", "?find[type]=mbg&find[date][$gte]=1704067200000", "find[date][$gte]=1704067200000&find[type]=sgv")]
+    [InlineData("*", "?find[date][$lte]=1704067200000", "find[date][$lte]=1704067200000")]
+    [InlineData("*", "?find[type]=mbg&find[date][$lte]=1704067200000", "find[date][$lte]=1704067200000")]
+    public async Task DeleteEntry_TypeSpecWithAFind_DeletesThroughTheBulkDeleteWithThePathType(
+        string spec, string queryString, string expectedFind)
+    {
+        var controller = ControllerWithScope(Scope.FullAccess, queryString);
+        _mockEntryService
+            .Setup(x => x.DeleteEntriesAsync(expectedFind, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(4);
+
+        var result = await controller.DeleteEntry(spec);
+
+        AssertDeleteStatus(result, 4);
+        _mockEntryService.Verify(
+            x => x.DeleteEntryAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()),
+            Times.Never
+        );
+    }
+
+    [Theory]
+    [InlineData("sgv", "")]
+    [InlineData("*", "")]
+    [InlineData("sgv", "?token=x")]
+    [InlineData("sgv", "?find[type]=sgv")]
+    [InlineData("*", "?find[type]=sgv")]
+    [InlineData("mbg", "?find={}")]
+    [InlineData("mbg", "?find[]=")]
+    public async Task DeleteEntry_TypeSpecWithNoConditionBesidesTheType_IsRefusedWithoutDeleting(
+        string spec, string queryString)
+    {
+        var controller = ControllerWithScope(Scope.FullAccess, queryString);
+
+        var result = await controller.DeleteEntry(spec);
+
+        var body = JsonSerializer.SerializeToElement(
+            result.Should().BeOfType<BadRequestObjectResult>().Subject.Value);
+        body.GetProperty("message").GetString().Should().Be("Find query parameter is required for bulk delete");
+        _mockEntryService.Verify(
+            x => x.DeleteEntriesAsync(It.IsAny<string?>(), It.IsAny<CancellationToken>()),
+            Times.Never
+        );
+    }
+
+    [Theory]
+    [InlineData("sgv")]
+    [InlineData("*")]
+    public async Task DeleteEntry_TypeSpec_NeedsTheBulkDeleteScope(string spec)
+    {
+        var controller = ControllerWithScope(Scope.GlucoseReadWrite, "?find[date][$gte]=1704067200000");
+
+        var result = await controller.DeleteEntry(spec);
+
+        result.Should().BeOfType<ForbidResult>();
+        _mockEntryService.Verify(
+            x => x.DeleteEntriesAsync(It.IsAny<string?>(), It.IsAny<CancellationToken>()),
+            Times.Never
+        );
+    }
+
+    private EntriesController ControllerWithScope(string scope, string queryString)
+    {
+        var httpContext = new DefaultHttpContext();
+        httpContext.Request.QueryString = new QueryString(queryString);
+        httpContext.Items["GrantedScopes"] = Scope.Normalize([scope]);
+        _controller.ControllerContext = new ControllerContext { HttpContext = httpContext };
+        return _controller;
+    }
+
+    private static void AssertDeleteStatus(ActionResult result, long count)
+    {
+        var body = JsonSerializer.SerializeToElement(result.Should().BeOfType<OkObjectResult>().Subject.Value);
+        body.GetProperty("acknowledged").GetBoolean().Should().BeTrue();
+        body.GetProperty("deletedCount").GetInt64().Should().Be(count);
+        body.GetProperty("n").GetInt64().Should().Be(count);
     }
 
     [Fact]
@@ -464,8 +581,8 @@ public class EntriesControllerTests
         var result = await _controller.CreateEntries(submitted);
 
         // Assert
-        var objectResult = result.Result.Should().BeOfType<ObjectResult>().Subject;
-        objectResult.StatusCode.Should().Be(201);
+        var objectResult = result.Result.Should().BeOfType<OkObjectResult>().Subject;
+        objectResult.StatusCode.Should().Be(200);
 
         var body = objectResult
             .Value.Should()
@@ -519,8 +636,8 @@ public class EntriesControllerTests
         var result = await _controller.CreateEntries(submitted);
 
         // Assert
-        var objectResult = result.Result.Should().BeOfType<ObjectResult>().Subject;
-        objectResult.StatusCode.Should().Be(201);
+        var objectResult = result.Result.Should().BeOfType<OkObjectResult>().Subject;
+        objectResult.StatusCode.Should().Be(200);
 
         var body = objectResult
             .Value.Should()
@@ -576,7 +693,7 @@ public class EntriesControllerTests
         // Assert
         var body = result
             .Result.Should()
-            .BeOfType<ObjectResult>()
+            .BeOfType<OkObjectResult>()
             .Subject.Value.Should()
             .BeAssignableTo<IEnumerable<object>>()
             .Subject.Cast<EntryV1Response>()
@@ -592,12 +709,12 @@ public class EntriesControllerTests
     }
 
     [Fact]
-    public async Task CreateEntries_EveryEntryRefused_StillReturnsBadRequest()
+    public async Task CreateEntries_EveryEntryRefused_EchoesEveryEntryWithoutWriting()
     {
-        // Echoing refusals does not turn a wholly unusable batch into a success.
         var result = await _controller.CreateEntries(new[] { new Entry(), new Entry() });
 
-        result.Result.Should().BeOfType<BadRequestObjectResult>();
+        var ok = result.Result.Should().BeOfType<OkObjectResult>().Subject;
+        ok.Value.Should().BeAssignableTo<IEnumerable<object>>().Which.Should().HaveCount(2);
         _mockEntryService.Verify(
             x => x.CreateEntriesAsync(It.IsAny<IEnumerable<Entry>>(), It.IsAny<WriteOrigin>(), It.IsAny<CancellationToken>()),
             Times.Never
@@ -640,9 +757,25 @@ public class EntriesControllerTests
         // Derived fields are now filled in before the refusal check, and NormalizeEntry defaults an
         // empty type to "sgv". That must not rescue an entry: HasMeaningfulData accepts a type only
         // when it is neither empty nor "sgv", so both forms have to land the same way.
-        var result = await _controller.CreateEntries(new[] { new Entry { Type = "" } });
+        await _controller.CreateEntries(new[] { new Entry { Type = "" } });
 
-        result.Result.Should().BeOfType<BadRequestObjectResult>();
+        _mockEntryService.Verify(
+            x => x.CreateEntriesAsync(It.IsAny<IEnumerable<Entry>>(), It.IsAny<WriteOrigin>(), It.IsAny<CancellationToken>()),
+            Times.Never
+        );
+    }
+
+    [Fact]
+    public async Task CreateEntries_EmptyArray_AnswersOkWithEmptyArray()
+    {
+        var result = await _controller.CreateEntries(Array.Empty<Entry>());
+
+        var ok = result.Result.Should().BeOfType<OkObjectResult>().Subject;
+        ok.Value.Should().BeAssignableTo<IEnumerable<object>>().Which.Should().BeEmpty();
+        _mockEntryService.Verify(
+            x => x.CreateEntriesAsync(It.IsAny<IEnumerable<Entry>>(), It.IsAny<WriteOrigin>(), It.IsAny<CancellationToken>()),
+            Times.Never
+        );
     }
 
     /// <summary>
@@ -739,6 +872,32 @@ public class EntriesControllerTests
         VerifyInformationLogged("re-sending stored readings", Times.Never());
     }
 
+    [Fact]
+    public async Task CreateEntries_JsonBatchWithStringTrend_ReadsEveryTrendAsANumber()
+    {
+        var body = JsonDocument.Parse("""
+            [
+                {"type": "sgv", "sgv": 120, "trend": "Flat", "direction": "NONE", "date": 1760000000000},
+                {"type": "sgv", "sgv": 125, "trend": 3, "direction": "FortyFiveUp", "date": 1760000300000}
+            ]
+            """).RootElement;
+
+        _mockDocumentProcessingService
+            .Setup(x => x.ProcessDocuments(It.IsAny<IEnumerable<Entry>>()))
+            .Returns<IEnumerable<Entry>>(entries => entries);
+        StubNothingStored();
+        List<Entry>? createInput = null;
+        _mockEntryService
+            .Setup(x => x.CreateEntriesAsync(It.IsAny<IEnumerable<Entry>>(), It.IsAny<WriteOrigin>(), It.IsAny<CancellationToken>()))
+            .Callback<IEnumerable<Entry>, WriteOrigin, CancellationToken>((entries, _, _) => createInput = entries.ToList())
+            .ReturnsAsync([]);
+
+        await _controller.CreateEntries(body);
+
+        createInput.Should().NotBeNull();
+        createInput!.Select(e => e.Trend).Should().Equal(4, 3);
+    }
+
     /// <summary>
     /// A batch of <paramref name="count"/> entries the server already holds, wired through the
     /// processing and duplicate stubs.
@@ -772,6 +931,25 @@ public class EntriesControllerTests
                 It.IsAny<Func<It.IsAnyType, Exception?, string>>()),
             times);
 
+    [Theory]
+    [InlineData("""{"_id":"6ab400000000000000000001","id":"B5E5A1C2-0000-4000-8000-000000000001","sgv":120,"date":1700000000000}""")]
+    [InlineData("""{"id":"B5E5A1C2-0000-4000-8000-000000000001","_id":"6ab400000000000000000001","sgv":120,"date":1700000000000}""")]
+    public async Task CreateEntries_UploaderLowercaseId_DoesNotReplaceObjectId(string body)
+    {
+        List<Entry>? processedInput = null;
+        _mockDocumentProcessingService
+            .Setup(x => x.ProcessDocuments(It.IsAny<IEnumerable<Entry>>()))
+            .Callback<IEnumerable<Entry>>(entries => processedInput = entries.ToList())
+            .Returns<IEnumerable<Entry>>(entries => entries);
+        StubNothingStored();
+
+        await _controller.CreateEntries(JsonDocument.Parse(body).RootElement.Clone());
+
+        var entry = processedInput.Should().ContainSingle().Subject;
+        entry.Id.Should().Be("6ab400000000000000000001");
+        entry.AdditionalProperties!["id"].ToString().Should().Be("B5E5A1C2-0000-4000-8000-000000000001");
+    }
+
     private void StubNothingStored() => StubStoredAt();
 
     /// <summary>
@@ -786,12 +964,11 @@ public class EntriesControllerTests
             .Setup(x =>
                 x.CheckForDuplicateEntriesAsync(
                     It.IsAny<IReadOnlyList<EntryDuplicateProbe>>(),
-                    It.IsAny<int>(),
                     It.IsAny<CancellationToken>()
                 )
             )
             .ReturnsAsync(
-                (IReadOnlyList<EntryDuplicateProbe> probes, int _, CancellationToken _) =>
+                (IReadOnlyList<EntryDuplicateProbe> probes, CancellationToken _) =>
                     probes
                         .Select(probe => byMills.GetValueOrDefault(probe.Mills))
                         .ToArray()

@@ -1,4 +1,5 @@
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using Microsoft.Extensions.Logging;
 using Nocturne.Core.Contracts.Audit;
 using Nocturne.Core.Contracts.Devices;
@@ -18,8 +19,8 @@ namespace Nocturne.API.Services.V4;
 /// Extracts APS (<see cref="V4Models.ApsSnapshot"/> for OpenAPS/AAPS/Trio and Loop), pump
 /// (<see cref="V4Models.PumpSnapshot"/>), and uploader (<see cref="V4Models.UploaderSnapshot"/>)
 /// snapshots, and persists them with idempotent create-or-update via <c>LegacyId</c> matching.
-/// Active device overrides are delegated to <see cref="IStateSpanService"/> as
-/// <see cref="StateSpanCategory.Override"/> spans.
+/// Device override state is folded into one <see cref="StateSpanCategory.Override"/> span per
+/// override period.
 /// </summary>
 /// <seealso cref="IDeviceStatusDecomposer"/>
 /// <seealso cref="IDecomposer{T}"/>
@@ -36,6 +37,7 @@ public class DeviceStatusDecomposer : DecomposerBase, IDeviceStatusDecomposer, I
     private static readonly JsonSerializerOptions JsonOptions = new()
     {
         PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
+        DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
     };
 
     public DeviceStatusDecomposer(
@@ -69,46 +71,100 @@ public class DeviceStatusDecomposer : DecomposerBase, IDeviceStatusDecomposer, I
     /// <inheritdoc />
     public async Task<V4Models.DecompositionResult> DecomposeAsync(DeviceStatus ds, string? source, WriteOrigin origin, CancellationToken ct = default)
     {
-        var result = new V4Models.DecompositionResult
-        {
-            CorrelationId = Guid.CreateVersion7()
-        };
-
         NormalizeMills(ds);
 
+        var correlationId = CorrelationIdFor(ds.Id, await GetStoredCorrelationIdsAsync([ds.Id], SnapshotTables, ct));
+        return await DecomposeCoreAsync(ds, source, correlationId, group: null, origin, ct);
+    }
+
+    /// <inheritdoc />
+    /// <remarks>
+    /// The group is found by its stored id and rewritten row by row, so a status stored without a
+    /// legacy id (connector statuses keyed on their sync key, V4-native snapshots) is updated in place
+    /// instead of being inserted a second time. Such a group takes the ObjectId its anchor already has
+    /// on the wire as its legacy id, which keeps the status's identifier stable even when the update
+    /// adds or drops the anchoring snapshot. The removals are system-attributed so they do not hold
+    /// the legacy id against a later update that brings the section back.
+    /// </remarks>
+    public async Task<V4Models.DecompositionResult?> ReplaceAsync(
+        string storedId, DeviceStatus ds, WriteOrigin origin, CancellationToken ct = default)
+    {
+        if (await LoadStoredGroupAsync(storedId, ct) is not { } group)
+            return null;
+
+        NormalizeMills(ds);
+        ds.Id = group.LegacyId;
+
+        using (SystemAttributedBatchWrites(_auditContext))
+        {
+            if (group.Aps is { } aps && ds.OpenAps == null && ds.Loop == null)
+                await _apsRepo.DeleteAsync(aps.Id, origin, ct);
+            if (group.Pump is { } pump && ds.Pump == null)
+                await _pumpRepo.DeleteAsync(pump.Id, origin, ct);
+            if (group.Uploader is { } uploader && ds.Uploader == null && !ds.UploaderBattery.HasValue)
+                await _uploaderRepo.DeleteAsync(uploader.Id, origin, ct);
+            await _extrasRepo.DeleteByCorrelationIdAsync(group.CorrelationId, ct);
+            await RetractOverrideAsync(group, ct);
+        }
+
+        return await DecomposeCoreAsync(ds, source: null, group.CorrelationId, group, origin, ct);
+    }
+
+    private async Task<V4Models.DecompositionResult> DecomposeCoreAsync(
+        DeviceStatus ds, string? source, Guid correlationId, StoredGroup? group,
+        WriteOrigin origin, CancellationToken ct)
+    {
         var legacyId = ds.Id;
+        var result = new V4Models.DecompositionResult { CorrelationId = correlationId };
+        var statusMills = ResolveStatusMills(ds);
 
         Guid? pumpDeviceId = null;
 
         if (ds.Pump != null)
         {
-            pumpDeviceId = await DecomposePumpAsync(ds, legacyId, source, result, origin, ct);
+            pumpDeviceId = await DecomposePumpAsync(ds, legacyId, source, statusMills, group, result, origin, ct);
         }
 
         if (ds.Cgm != null)
         {
-            await RegisterCgmDeviceAsync(ds, origin, ct);
+            await RegisterCgmDeviceAsync(ds, statusMills, ct);
         }
 
+        var apsAttempted = false;
         if (MapToApsSnapshot(ds, legacyId, source, result.CorrelationId) is { } apsModel)
         {
-            await UpsertApsSnapshotAsync(ds, legacyId, apsModel, pumpDeviceId, result, origin, ct);
+            apsAttempted = true;
+            await UpsertApsSnapshotAsync(legacyId, apsModel, pumpDeviceId, statusMills, group, result, origin, ct);
         }
 
         if (ds.Uploader != null || ds.UploaderBattery.HasValue)
         {
-            await DecomposeUploaderAsync(ds, legacyId, source, result, origin, ct);
+            await DecomposeUploaderAsync(ds, legacyId, source, statusMills, group, result, origin, ct);
         }
 
-        if (ds.Override is { Active: true })
+        if (ds.Override is { Active: not null })
         {
-            await DecomposeOverrideAsync(ds, legacyId, result, origin, ct);
+            var written = result.CreatedRecords.Concat(result.UpdatedRecords).OfType<V4Models.IV4Record>();
+            await DecomposeOverrideAsync(ds, legacyId ?? GroupKey(written), result, ct);
         }
 
-        await DecomposeExtrasAsync(ds, result, origin, ct);
+        var snapshotAttempted = ds.Pump != null || apsAttempted || ds.Uploader != null || ds.UploaderBattery.HasValue;
+        var snapshotWritten = result.CreatedRecords.Concat(result.UpdatedRecords)
+            .Any(r => r is V4Models.ApsSnapshot or V4Models.PumpSnapshot or V4Models.UploaderSnapshot);
+
+        // See the held-snapshot filter in DecomposeBatchAsync.
+        if (!snapshotAttempted || snapshotWritten)
+            await DecomposeExtrasAsync(ds, result, origin, ct);
 
         return result;
     }
+
+    /// <inheritdoc />
+    /// <remarks>Mirrors the pump, <see cref="MapToApsSnapshot"/> and uploader conditions in
+    /// <see cref="DecomposeAsync(DeviceStatus, string?, WriteOrigin, CancellationToken)"/>.</remarks>
+    public bool HasLegacyKeyedSnapshot(DeviceStatus ds)
+        => ds.Pump != null || ds.OpenAps != null || ds.Loop != null
+            || ds.Uploader != null || ds.UploaderBattery.HasValue;
 
     /// <summary>AAPS sends <c>date</c> instead of <c>mills</c>; normalize before decomposition.</summary>
     private static void NormalizeMills(DeviceStatus ds)
@@ -120,19 +176,22 @@ public class DeviceStatusDecomposer : DecomposerBase, IDeviceStatusDecomposer, I
     #region APS Decomposition
 
     private async Task UpsertApsSnapshotAsync(
-        DeviceStatus ds, string? legacyId, V4Models.ApsSnapshot model, Guid? pumpDeviceId,
-        V4Models.DecompositionResult result, WriteOrigin origin, CancellationToken ct)
+        string? legacyId, V4Models.ApsSnapshot model, Guid? pumpDeviceId, long statusMills,
+        StoredGroup? group, V4Models.DecompositionResult result, WriteOrigin origin, CancellationToken ct)
     {
         model.DeviceId = pumpDeviceId;
+        if (group is not null)
+            (model.DataSource, model.SyncIdentifier) = (group.Aps?.DataSource, group.Aps?.SyncIdentifier);
 
         await UpsertByLegacyIdAsync(
             _apsRepo, legacyId, model, result, origin, ct,
             beforeWrite: async existing =>
             {
                 model.PatientDeviceId =
-                    await _deviceService.ResolvePatientDeviceAsync(pumpDeviceId, ds.Mills, ct)
+                    await _deviceService.ResolvePatientDeviceAsync(pumpDeviceId, statusMills, ct)
                     ?? existing?.PatientDeviceId;
-            });
+            },
+            findStored: group is null ? null : () => Task.FromResult(group.Aps));
     }
 
     #endregion
@@ -155,7 +214,7 @@ public class DeviceStatusDecomposer : DecomposerBase, IDeviceStatusDecomposer, I
     /// attribution to fall back to when the re-resolution comes back null.
     /// </summary>
     private async Task<V4Models.PumpSnapshot> BuildPumpSnapshotAsync(
-        DeviceStatus ds, string? legacyId, string? source, Guid? correlationId, CancellationToken ct)
+        DeviceStatus ds, string? legacyId, string? source, long statusMills, Guid? correlationId, CancellationToken ct)
     {
         var model = MapToPumpSnapshot(ds, legacyId, source, correlationId);
 
@@ -163,24 +222,28 @@ public class DeviceStatusDecomposer : DecomposerBase, IDeviceStatusDecomposer, I
             V4Models.DeviceCategory.InsulinPump,
             ds.Pump?.Manufacturer,
             PumpDeviceKey(ds),
-            ds.Mills, ct);
+            statusMills, ct);
 
         return model;
     }
 
     private async Task<Guid?> DecomposePumpAsync(
-        DeviceStatus ds, string? legacyId, string? source, V4Models.DecompositionResult result, WriteOrigin origin, CancellationToken ct)
+        DeviceStatus ds, string? legacyId, string? source, long statusMills, StoredGroup? group,
+        V4Models.DecompositionResult result, WriteOrigin origin, CancellationToken ct)
     {
-        var model = await BuildPumpSnapshotAsync(ds, legacyId, source, result.CorrelationId, ct);
+        var model = await BuildPumpSnapshotAsync(ds, legacyId, source, statusMills, result.CorrelationId, ct);
+        if (group is not null)
+            (model.DataSource, model.SyncIdentifier) = (group.Pump?.DataSource, group.Pump?.SyncIdentifier);
 
         var upserted = await UpsertByLegacyIdAsync(
             _pumpRepo, legacyId, model, result, origin, ct,
             beforeWrite: async existing =>
             {
                 model.PatientDeviceId =
-                    await _deviceService.ResolvePatientDeviceAsync(model.DeviceId, ds.Mills, ct)
+                    await _deviceService.ResolvePatientDeviceAsync(model.DeviceId, statusMills, ct)
                     ?? existing?.PatientDeviceId;
-            });
+            },
+            findStored: group is null ? null : () => Task.FromResult(group.Pump));
 
         // No stored snapshot to transition from when the write was refused.
         if (upserted is ({ } persisted, _))
@@ -418,9 +481,9 @@ public class DeviceStatusDecomposer : DecomposerBase, IDeviceStatusDecomposer, I
     /// that this decomposer tracks. Returns null for absent or out-of-scope states (e.g. Suspended,
     /// which is owned by <see cref="DecomposePumpSuspensionAsync"/>).
     /// </summary>
-    private static PumpModeState? ParsePumpMode(string? value)
+    internal static PumpModeState? ParsePumpMode(string? value)
     {
-        if (Enum.TryParse<PumpModeState>(value, out var mode)
+        if (TryParseDefinedName<PumpModeState>(value, out var mode)
             && mode is PumpModeState.Automatic or PumpModeState.Manual)
             return mode;
         return null;
@@ -436,13 +499,13 @@ public class DeviceStatusDecomposer : DecomposerBase, IDeviceStatusDecomposer, I
     /// sensor shows up as an in-use device. No-op unless the connector populated manufacturer +
     /// model/serial (<see cref="IDeviceService.ResolveAsync"/> returns null when either is missing).
     /// </summary>
-    private async Task RegisterCgmDeviceAsync(DeviceStatus ds, WriteOrigin origin, CancellationToken ct)
+    private async Task RegisterCgmDeviceAsync(DeviceStatus ds, long statusMills, CancellationToken ct)
     {
         await _deviceService.ResolveAsync(
             V4Models.DeviceCategory.CGM,
             ds.Cgm?.Manufacturer,
             ds.Cgm?.Serial ?? ds.Cgm?.Model,
-            ds.Mills, ct);
+            statusMills, ct);
     }
 
     #endregion
@@ -450,7 +513,7 @@ public class DeviceStatusDecomposer : DecomposerBase, IDeviceStatusDecomposer, I
     #region Uploader Decomposition
 
     private async Task<V4Models.UploaderSnapshot> BuildUploaderSnapshotAsync(
-        DeviceStatus ds, string? legacyId, string? source, Guid? correlationId, CancellationToken ct)
+        DeviceStatus ds, string? legacyId, string? source, long statusMills, Guid? correlationId, CancellationToken ct)
     {
         var model = MapToUploaderSnapshot(ds, legacyId, source, correlationId);
 
@@ -458,46 +521,176 @@ public class DeviceStatusDecomposer : DecomposerBase, IDeviceStatusDecomposer, I
             V4Models.DeviceCategory.Uploader,
             ds.Uploader?.Name,
             ds.Uploader?.Type ?? "unknown",
-            ds.Mills, ct);
+            statusMills, ct);
 
         return model;
     }
 
     private async Task DecomposeUploaderAsync(
-        DeviceStatus ds, string? legacyId, string? source, V4Models.DecompositionResult result, WriteOrigin origin, CancellationToken ct)
+        DeviceStatus ds, string? legacyId, string? source, long statusMills, StoredGroup? group,
+        V4Models.DecompositionResult result, WriteOrigin origin, CancellationToken ct)
     {
-        var model = await BuildUploaderSnapshotAsync(ds, legacyId, source, result.CorrelationId, ct);
+        var model = await BuildUploaderSnapshotAsync(ds, legacyId, source, statusMills, result.CorrelationId, ct);
+        if (group is not null)
+            (model.DataSource, model.SyncIdentifier) = (group.Uploader?.DataSource, group.Uploader?.SyncIdentifier);
 
-        await UpsertByLegacyIdAsync(_uploaderRepo, legacyId, model, result, origin, ct);
+        await UpsertByLegacyIdAsync(
+            _uploaderRepo, legacyId, model, result, origin, ct,
+            findStored: group is null ? null : () => Task.FromResult(group.Uploader));
     }
 
     #endregion
 
     #region Override Decomposition
 
+    private const int OverrideQueryLimit = 10;
+
     private static StateSpan BuildOverrideSpan(DeviceStatus ds, string? legacyId)
     {
         var timestamp = ResolveTimestamp(ds);
+        DateTime? end = ds.Override!.Duration is > 0
+            ? (ParseTimestampToDateTime(ds.Override.Timestamp) ?? timestamp)
+                .AddSeconds(ds.Override.Duration.Value)
+            : null;
         return new StateSpan
         {
             Category = StateSpanCategory.Override,
             State = OverrideState.Custom.ToString(),
             StartTimestamp = timestamp,
-            EndTimestamp = ds.Override!.Duration is > 0
-                ? timestamp.AddMinutes(ds.Override.Duration.Value)
-                : null,
+            // The span starts at the status time, so an end already past it cannot be stored as-is.
+            EndTimestamp = end > timestamp ? end : null,
             Source = ds.Device,
             OriginalId = legacyId,
             Metadata = BuildOverrideMetadata(ds.Override),
         };
     }
 
+    /// <summary>
+    /// A span stays open until a contrary observation or its declared end.
+    /// </summary>
     private async Task DecomposeOverrideAsync(
-        DeviceStatus ds, string? legacyId, V4Models.DecompositionResult result, WriteOrigin origin, CancellationToken ct)
+        DeviceStatus ds, string? legacyId, V4Models.DecompositionResult result, CancellationToken ct)
     {
-        var upserted = await _stateSpanService.UpsertStateSpanAsync(BuildOverrideSpan(ds, legacyId), ct);
+        var at = ResolveTimestamp(ds);
+        var observed = ds.Override!.Active == true
+            ? BuildOverrideMetadata(ds.Override)
+            : null;
+
+        bool Unchanged(StateSpan span) =>
+            observed is not null
+            && (!IsUploaderSpan(span, ds.Device)
+                ? span.Metadata.IsSameOverrideAs(observed)
+                : span.Metadata is { } metadata
+                  && metadata.TryReadString("name") == observed.TryReadString("name")
+                  && metadata.OverrideScaleFactor() == observed.OverrideScaleFactor());
+
+        var covered = false;
+        for (var skip = 0; ; skip += OverrideQueryLimit)
+        {
+            // A span closed at `at` still contains `at`, so closing one does not shift later pages.
+            var containing = (await _stateSpanService.GetStateSpansAsync(
+                category: StateSpanCategory.Override,
+                from: at,
+                to: at,
+                count: OverrideQueryLimit,
+                skip: skip,
+                cancellationToken: ct)).ToList();
+
+            foreach (var span in containing)
+            {
+                // Of two conflicting observations at one instant, the first decomposed wins.
+                if (Unchanged(span) || span.StartTimestamp >= at)
+                {
+                    covered |= IsUploaderSpan(span, ds.Device);
+                    continue;
+                }
+
+                if (span.EndTimestamp == at)
+                    continue;
+
+                span.EndTimestamp = at;
+                if (await _stateSpanService.UpdateStateSpanAsync(span.Id!, span, ct) is { } closed)
+                    result.UpdatedRecords.Add(closed);
+                Logger.LogDebug("Closed Override StateSpan {SpanId} at {EndTimestamp}", span.Id, at);
+            }
+
+            if (containing.Count < OverrideQueryLimit)
+                break;
+        }
+
+        if (observed is null || covered)
+            return;
+
+        // Strict bound in memory, as in FirstApsBetweenAsync.
+        var next = (await _stateSpanService.GetStateSpansStartingFromAsync(
+            StateSpanCategory.Override, ds.Device, at, OverrideQueryLimit, ct))
+            .FirstOrDefault(s => s.StartTimestamp > at && IsUploaderSpan(s, ds.Device));
+
+        var contraryAt = (await FirstApsBetweenAsync(ds.Device, at, next?.StartTimestamp, legacyId, ct))?.Timestamp;
+
+        var opened = BuildOverrideSpan(ds, legacyId);
+
+        if (next is not null
+            && contraryAt is null
+            && Unchanged(next)
+            && !(opened.EndTimestamp < next.StartTimestamp))
+        {
+            StartAt(next, at, legacyId);
+            if (await _stateSpanService.UpdateStateSpanAsync(next.Id!, next, ct) is { } extended)
+                result.UpdatedRecords.Add(extended);
+            return;
+        }
+
+        var firstLater = contraryAt ?? next?.StartTimestamp;
+        if (firstLater < (opened.EndTimestamp ?? DateTime.MaxValue))
+            opened.EndTimestamp = firstLater;
+
+        var upserted = await _stateSpanService.UpsertStateSpanAsync(opened, ct);
         result.CreatedRecords.Add(upserted);
-        Logger.LogDebug("Delegated Override from device status {LegacyId} to IStateSpanService", legacyId);
+        Logger.LogDebug("Opened Override StateSpan from device status {LegacyId}", legacyId);
+    }
+
+    private async Task<V4Models.ApsSnapshot?> FirstApsBetweenAsync(
+        string? device, DateTime after, DateTime? before, string? excludedKey, CancellationToken ct)
+    {
+        for (var offset = 0; ; offset += OverrideQueryLimit)
+        {
+            // Strict bounds in memory: Npgsql truncates to microseconds, so `after` + 1 tick matches `after`.
+            var page = (await _apsRepo.GetAsync(
+                from: after,
+                to: before,
+                device: device,
+                source: null,
+                limit: OverrideQueryLimit,
+                offset: offset,
+                descending: false,
+                ct: ct)).ToList();
+            var found = page.FirstOrDefault(a => a.Timestamp > after
+                                                 && a.Timestamp < (before ?? DateTime.MaxValue)
+                                                 && StoredKey(a) != excludedKey);
+            if (found is not null || page.Count < OverrideQueryLimit)
+                return found;
+        }
+    }
+
+    /// <summary>
+    /// Whether the span is the uploader's own devicestatus span rather than a treatment override
+    /// whose source happens to equal the device.
+    /// </summary>
+    private static bool IsUploaderSpan(StateSpan span, string? device) =>
+        span.Source == device
+        && span.Metadata.TryReadString(StateSpanMetadataExtensions.CollectionKey)
+            != StateSpanMetadataExtensions.TreatmentsCollection;
+
+    /// <summary>
+    /// Moves a span's start to a status and keys the span to that status. Upserts match on
+    /// OriginalId, so a span keyed to a status inside it would be overwritten when that status's
+    /// replacement opens a span of its own.
+    /// </summary>
+    private static void StartAt(StateSpan span, DateTime start, string? key)
+    {
+        span.StartTimestamp = start;
+        span.OriginalId = key ?? span.OriginalId;
     }
 
     #endregion
@@ -573,6 +766,127 @@ public class DeviceStatusDecomposer : DecomposerBase, IDeviceStatusDecomposer, I
 
     #endregion
 
+    #region Replacement
+
+    /// <summary>
+    /// The live snapshots of one stored device status, and the legacy id and correlation id a
+    /// replacement writes them under. A replacement keeps each snapshot's stored sync identity, so a
+    /// connector's later re-sync still matches the row rather than inserting beside it.
+    /// </summary>
+    private sealed record StoredGroup(
+        string LegacyId,
+        Guid CorrelationId,
+        DateTime Timestamp,
+        V4Models.ApsSnapshot? Aps,
+        V4Models.PumpSnapshot? Pump,
+        V4Models.UploaderSnapshot? Uploader);
+
+    /// <summary>
+    /// Resolves <paramref name="storedId"/>, the id a projected status carries (its legacy id, else its
+    /// anchor's uuid), to the snapshots stored for it. A sibling is found under the anchor's legacy id
+    /// first, so a group whose correlation ids have forked still converges on one row per table.
+    /// </summary>
+    private async Task<StoredGroup?> LoadStoredGroupAsync(string storedId, CancellationToken ct)
+    {
+        V4Models.IV4Record? anchor = await _apsRepo.GetByLegacyIdAsync(storedId, ct)
+            ?? (V4Models.IV4Record?)await _pumpRepo.GetByLegacyIdAsync(storedId, ct)
+            ?? await _uploaderRepo.GetByLegacyIdAsync(storedId, ct);
+        if (anchor is null && Guid.TryParse(storedId, out var uuid))
+        {
+            anchor = await _apsRepo.GetByIdAsync(uuid, ct)
+                ?? (V4Models.IV4Record?)await _pumpRepo.GetByIdAsync(uuid, ct)
+                ?? await _uploaderRepo.GetByIdAsync(uuid, ct);
+        }
+
+        if (anchor is null)
+            return null;
+
+        var correlationId = anchor.CorrelationId is { } stored && stored != Guid.Empty
+            ? stored
+            : Guid.CreateVersion7();
+
+        return new StoredGroup(
+            StoredKey(anchor),
+            correlationId,
+            anchor.Timestamp,
+            anchor as V4Models.ApsSnapshot
+                ?? await FindSiblingAsync(_apsRepo, _apsRepo.GetByCorrelationIdsAsync, anchor, ct),
+            anchor as V4Models.PumpSnapshot
+                ?? await FindSiblingAsync(_pumpRepo, _pumpRepo.GetByCorrelationIdsAsync, anchor, ct),
+            anchor as V4Models.UploaderSnapshot
+                ?? await FindSiblingAsync(_uploaderRepo, _uploaderRepo.GetByCorrelationIdsAsync, anchor, ct));
+    }
+
+    private static async Task<TRecord?> FindSiblingAsync<TRecord>(
+        ILegacyKeyedRepository<TRecord> repository,
+        Func<IEnumerable<Guid>, CancellationToken, Task<IEnumerable<TRecord>>> byCorrelationIds,
+        V4Models.IV4Record anchor,
+        CancellationToken ct)
+        where TRecord : class, V4Models.IV4Record
+    {
+        if (anchor.LegacyId is { } legacyId && await repository.GetByLegacyIdAsync(legacyId, ct) is { } byLegacyId)
+            return byLegacyId;
+
+        return anchor.CorrelationId is { } correlationId && correlationId != Guid.Empty
+            ? (await byCorrelationIds([correlationId], ct)).FirstOrDefault()
+            : null;
+    }
+
+    /// <summary>
+    /// The id a stored status is addressed by: its anchoring snapshot's legacy id, else the ObjectId
+    /// that snapshot's uuid gives on the wire. The anchor is the one the projection picks.
+    /// </summary>
+    private static string StoredKey(V4Models.IV4Record anchor) => anchor.LegacyId ?? MongoObjectId.FromGuid(anchor.Id);
+
+    /// <summary>
+    /// The <see cref="StoredKey"/> of the status whose snapshots were just written, so an override
+    /// uploaded with a status that has no id is still stored under the key a replace or delete finds.
+    /// <see langword="null"/> when no snapshot was written.
+    /// </summary>
+    private static string? GroupKey(IEnumerable<V4Models.IV4Record> written)
+    {
+        var records = written.ToList();
+        var anchor = records.OfType<V4Models.ApsSnapshot>().FirstOrDefault()
+            ?? (V4Models.IV4Record?)records.OfType<V4Models.PumpSnapshot>().FirstOrDefault()
+            ?? records.OfType<V4Models.UploaderSnapshot>().FirstOrDefault();
+        return anchor is null ? null : StoredKey(anchor);
+    }
+
+    /// <summary>
+    /// Withdraws the group's override observation. A span the status opened starts at its device's
+    /// next status instead, or is deleted when there is none. A span it ended stays ended.
+    /// </summary>
+    private async Task<int> RetractOverrideAsync(StoredGroup group, CancellationToken ct)
+    {
+        var device = group.Aps?.Device ?? group.Pump?.Device ?? group.Uploader?.Device;
+        var opened = (await _stateSpanService.GetStateSpansAsync(
+                category: StateSpanCategory.Override,
+                from: group.Timestamp,
+                to: group.Timestamp,
+                count: int.MaxValue,
+                cancellationToken: ct))
+            .Where(s => IsUploaderSpan(s, device) && s.StartTimestamp == group.Timestamp && s.Id is not null)
+            .ToList();
+
+        var deleted = 0;
+        foreach (var span in opened)
+        {
+            if (await FirstApsBetweenAsync(device, group.Timestamp, span.EndTimestamp, group.LegacyId, ct) is { } next)
+            {
+                StartAt(span, next.Timestamp, StoredKey(next));
+                await _stateSpanService.UpdateStateSpanAsync(span.Id!, span, ct);
+            }
+            else if (await _stateSpanService.DeleteStateSpanAsync(span.Id!, ct))
+            {
+                deleted++;
+            }
+        }
+
+        return deleted;
+    }
+
+    #endregion
+
     #region Batch Decomposition
 
     /// <inheritdoc />
@@ -582,92 +896,110 @@ public class DeviceStatusDecomposer : DecomposerBase, IDeviceStatusDecomposer, I
         if (statuses.Count == 0)
             return new V4Models.DecompositionResult();
 
-        var correlationId = Guid.CreateVersion7();
-        var result = new V4Models.DecompositionResult
-        {
-            CorrelationId = correlationId
-        };
+        var result = new V4Models.DecompositionResult();
 
         var apsList = new List<V4Models.ApsSnapshot>();
         var pumpList = new List<V4Models.PumpSnapshot>();
         var uploaderList = new List<V4Models.UploaderSnapshot>();
         var extrasList = new List<V4Models.DeviceStatusExtras>();
-        var overrideSpans = new List<StateSpan>();
+        var overrideStatuses = new List<(DeviceStatus Status, Guid CorrelationId)>();
+        var correlationIds = await GetStoredCorrelationIdsAsync(statuses.Select(s => s.Id), SnapshotTables, ct);
 
-        foreach (var ds in statuses)
+        await DeferLastSeenAsync(_deviceService, async () =>
         {
-            NormalizeMills(ds);
-
-            var legacyId = ds.Id;
-
-            Guid? pumpDeviceId = null;
-
-            if (ds.Pump != null)
+            foreach (var ds in statuses)
             {
-                var pumpModel = await BuildPumpSnapshotAsync(ds, legacyId, source, correlationId, ct);
-                pumpModel.PatientDeviceId = await _deviceService.ResolvePatientDeviceAsync(pumpModel.DeviceId, ds.Mills, ct);
+                NormalizeMills(ds);
 
-                pumpDeviceId = pumpModel.DeviceId;
-                pumpList.Add(pumpModel);
-            }
+                var legacyId = ds.Id;
+                var correlationId = CorrelationIdFor(legacyId, correlationIds);
+                result.CorrelationId ??= correlationId;
+                var statusMills = ResolveStatusMills(ds);
 
-            if (ds.Cgm != null)
-            {
-                await RegisterCgmDeviceAsync(ds, origin, ct);
-            }
+                Guid? pumpDeviceId = null;
 
-            if (MapToApsSnapshot(ds, legacyId, source, correlationId) is { } apsModel)
-            {
-                apsModel.DeviceId = pumpDeviceId;
-                apsModel.PatientDeviceId = await _deviceService.ResolvePatientDeviceAsync(pumpDeviceId, ds.Mills, ct);
-                apsList.Add(apsModel);
-            }
+                if (ds.Pump != null)
+                {
+                    var pumpModel = await BuildPumpSnapshotAsync(ds, legacyId, source, statusMills, correlationId, ct);
+                    pumpModel.PatientDeviceId = await _deviceService.ResolvePatientDeviceAsync(pumpModel.DeviceId, statusMills, ct);
 
-            if (ds.Uploader != null || ds.UploaderBattery.HasValue)
-            {
-                uploaderList.Add(await BuildUploaderSnapshotAsync(ds, legacyId, source, correlationId, ct));
-            }
+                    pumpDeviceId = pumpModel.DeviceId;
+                    pumpList.Add(pumpModel);
+                }
 
-            if (ds.Override is { Active: true })
-            {
-                overrideSpans.Add(BuildOverrideSpan(ds, legacyId));
-            }
+                if (ds.Cgm != null)
+                {
+                    await RegisterCgmDeviceAsync(ds, statusMills, ct);
+                }
 
-            if (BuildExtras(ds, correlationId) is { } extrasModel)
-            {
-                extrasList.Add(extrasModel);
+                if (MapToApsSnapshot(ds, legacyId, source, correlationId) is { } apsModel)
+                {
+                    apsModel.DeviceId = pumpDeviceId;
+                    apsModel.PatientDeviceId = await _deviceService.ResolvePatientDeviceAsync(pumpDeviceId, statusMills, ct);
+                    apsList.Add(apsModel);
+                }
+
+                if (ds.Uploader != null || ds.UploaderBattery.HasValue)
+                {
+                    uploaderList.Add(await BuildUploaderSnapshotAsync(ds, legacyId, source, statusMills, correlationId, ct));
+                }
+
+                if (ds.Override is { Active: not null })
+                {
+                    overrideStatuses.Add((ds, correlationId));
+                }
+
+                if (BuildExtras(ds, correlationId) is { } extrasModel)
+                {
+                    extrasList.Add(extrasModel);
+                }
             }
-        }
+        }, ct);
 
         using (SystemAttributedBatchWrites(_auditContext))
         {
-            await BulkCreateAsync(_apsRepo, apsList, result, origin, ct);
-            await BulkCreateAsync(_pumpRepo, pumpList, result, origin, ct);
-            await BulkCreateAsync(_uploaderRepo, uploaderList, result, origin, ct);
+            await BulkUpsertAsync(_apsRepo, apsList, result, origin, ct);
+            await BulkUpsertAsync(_pumpRepo, pumpList, result, origin, ct);
+            await BulkUpsertAsync(_uploaderRepo, uploaderList, result, origin, ct);
+
+            // Extras carry no legacy id, so nothing holds them when a re-run's snapshots are all
+            // withheld; written anyway they would join nothing. A stored group's extras row, already
+            // live under the correlation id the group keeps, holds its own re-send off in BulkCreateAsync.
+            var written = result.CreatedRecords.Concat(result.UpdatedRecords).OfType<V4Models.IV4Record>()
+                .Select(r => r.CorrelationId)
+                .ToHashSet();
+            var held = apsList.Select(a => a.CorrelationId)
+                .Concat(pumpList.Select(p => p.CorrelationId))
+                .Concat(uploaderList.Select(u => u.CorrelationId))
+                .Where(id => !written.Contains(id))
+                .ToHashSet();
+            extrasList.RemoveAll(e => held.Contains(e.CorrelationId));
+
             await BulkCreateAsync(_extrasRepo, extrasList, result, origin, ct);
         }
 
-        // Upsert override state spans individually — IStateSpanService only exposes
-        // single-item UpsertStateSpanAsync; BulkUpsertAsync lives on IStateSpanRepository
-        // (returns count, not the upserted entities) and overrides are rare in practice.
-        foreach (var span in overrideSpans)
+        var writtenSnapshots = result.CreatedRecords.Concat(result.UpdatedRecords)
+            .OfType<V4Models.IV4Record>()
+            .ToLookup(r => r.CorrelationId);
+        // Newest first: the batch's APS rows are already stored and would contradict older observations.
+        foreach (var (ds, correlationId) in overrideStatuses.OrderByDescending(o => ResolveTimestamp(o.Status)))
         {
-            var upserted = await _stateSpanService.UpsertStateSpanAsync(span, ct);
-            result.CreatedRecords.Add(upserted);
+            await DecomposeOverrideAsync(ds, ds.Id ?? GroupKey(writtenSnapshots[correlationId]), result, ct);
         }
 
         // Post-insert pump suspension pass: sequential, order-dependent
         if (pumpList.Count > 0)
         {
-            var persistedPumps = result.CreatedRecords.OfType<V4Models.PumpSnapshot>()
+            var persistedPumps = result.CreatedRecords.Concat(result.UpdatedRecords)
+                .OfType<V4Models.PumpSnapshot>()
                 .OrderBy(p => p.Timestamp)
                 .ToList();
 
             for (var i = 0; i < persistedPumps.Count; i++)
             {
                 var pumpSnapshot = persistedPumps[i];
-                // Find the original DeviceStatus that produced this pump snapshot
-                var ds = statuses.FirstOrDefault(s => s.Id == pumpSnapshot.LegacyId);
+                // The last duplicate is the one BulkUpsertAsync kept.
+                var ds = statuses.LastOrDefault(s => s.Id == pumpSnapshot.LegacyId);
                 if (ds != null)
                 {
                     await DecomposePumpSuspensionAsync(ds, pumpSnapshot, result, origin, ct);
@@ -679,6 +1011,19 @@ public class DeviceStatusDecomposer : DecomposerBase, IDeviceStatusDecomposer, I
         return result;
     }
 
+    /// <summary>
+    /// The snapshot tables a status's stored correlation id is read from, in the APS, pump, uploader
+    /// order <see cref="DeleteByLegacyIdAsync"/> prefers. The group's extras row carries no legacy id
+    /// of its own and is found through that id, so a re-send that moved the snapshots onto a new one
+    /// would orphan it beyond <see cref="DeleteByLegacyIdAsync"/>'s reach.
+    /// </summary>
+    private StoredCorrelationLookup[] SnapshotTables =>
+    [
+        _apsRepo.GetCorrelationIdsByLegacyIdAsync,
+        _pumpRepo.GetCorrelationIdsByLegacyIdAsync,
+        _uploaderRepo.GetCorrelationIdsByLegacyIdAsync,
+    ];
+
     #endregion
 
     #region Mapping Helpers
@@ -687,7 +1032,7 @@ public class DeviceStatusDecomposer : DecomposerBase, IDeviceStatusDecomposer, I
     /// An OpenAPS/AAPS/Trio payload wins over a Loop one; <see langword="null"/> when the device
     /// status carries neither.
     /// </summary>
-    private static V4Models.ApsSnapshot? MapToApsSnapshot(
+    internal static V4Models.ApsSnapshot? MapToApsSnapshot(
         DeviceStatus ds, string? legacyId, string? source, Guid? correlationId)
     {
         if (ds.OpenAps != null)
@@ -699,11 +1044,11 @@ public class DeviceStatusDecomposer : DecomposerBase, IDeviceStatusDecomposer, I
     private static V4Models.ApsSnapshot MapToApsSnapshotFromOpenAps(
         DeviceStatus ds, string? legacyId, string? source, Guid? correlationId)
     {
-        var command = ds.OpenAps!.Enacted ?? ds.OpenAps.Suggested;
+        var command = FreshestOpenApsCommand(ds.OpenAps!);
         var predBGs = command?.PredBGs;
         var apsSystem = DetectOpenApsVariant(ds);
 
-        return new V4Models.ApsSnapshot
+        var snapshot = new V4Models.ApsSnapshot
         {
             Timestamp = ResolveTimestamp(ds),
             UtcOffset = ds.UtcOffset,
@@ -728,8 +1073,6 @@ public class DeviceStatusDecomposer : DecomposerBase, IDeviceStatusDecomposer, I
             EnactedBolusVolume = ds.OpenAps.Enacted?.Smb is > 0
                 ? ds.OpenAps.Enacted.Smb
                 : ds.OpenAps.Enacted?.Units,
-            SuggestedJson = SerializeOrNull(ds.OpenAps.Suggested),
-            EnactedJson = SerializeOrNull(ds.OpenAps.Enacted),
             PredictedDefaultJson = apsSystem == V4Models.AidAlgorithm.Trio
                 ? null
                 : SerializeOrNull(predBGs?.IOB),
@@ -740,6 +1083,9 @@ public class DeviceStatusDecomposer : DecomposerBase, IDeviceStatusDecomposer, I
             PredictedStartTimestamp = ParseTimestampToDateTime(command?.Timestamp),
             AidVersion = ds.OpenAps?.Version,
         };
+        snapshot.SuggestedJson = ApsSnapshotCurves.SerializeCommand(ds.OpenAps.Suggested, snapshot, JsonOptions);
+        snapshot.EnactedJson = ApsSnapshotCurves.SerializeCommand(ds.OpenAps.Enacted, snapshot, JsonOptions);
+        return snapshot;
     }
 
     private static V4Models.ApsSnapshot MapToApsSnapshotFromLoop(
@@ -765,11 +1111,9 @@ public class DeviceStatusDecomposer : DecomposerBase, IDeviceStatusDecomposer, I
             EnactedRate = ds.Loop.Enacted?.Rate,
             EnactedDuration = ds.Loop.Enacted?.Duration,
             EnactedBolusVolume = ds.Loop.Enacted?.BolusVolume,
-            SuggestedJson = SerializeOrNull(ds.Loop.Recommended),
-            EnactedJson = SerializeOrNull(ds.Loop.Enacted),
             PredictedDefaultJson = SerializeOrNull(ds.Loop.Predicted?.Values),
             PredictedStartTimestamp = ParseTimestampToDateTime(ds.Loop.Predicted?.StartDate),
-            LoopJson = SerializeOrNull(ds.Loop),
+            LoopJson = ApsSnapshotCurves.SerializeLoop(ds.Loop, JsonOptions),
             AidVersion = null,
         };
     }
@@ -864,47 +1208,65 @@ public class DeviceStatusDecomposer : DecomposerBase, IDeviceStatusDecomposer, I
     /// <summary>
     /// Resolves the best available timestamp for a device status record.
     /// Priority: Mills (already normalized from date) > OpenAPS IOB time >
-    /// OpenAPS enacted/suggested timestamp > Loop predicted start date > Pump clock > CreatedAt > now.
+    /// <see cref="FreshestOpenApsCommand"/> timestamp > Loop timestamp > Pump clock > CreatedAt >
+    /// Loop predicted start date > now.
     /// </summary>
     internal static DateTime ResolveTimestamp(DeviceStatus ds)
     {
         if (ds.Mills > 0)
             return DateTimeOffset.FromUnixTimeMilliseconds(ds.Mills).UtcDateTime;
 
-        // Try OpenAPS IOB time
         if (ParseTimestampToDateTime(ds.OpenAps?.Iob?.Time) is { } iobTime)
             return iobTime;
 
-        // Try OpenAPS enacted/suggested timestamp
-        var command = ds.OpenAps?.Enacted ?? ds.OpenAps?.Suggested;
+        var command = ds.OpenAps is null ? null : FreshestOpenApsCommand(ds.OpenAps);
         if (ParseTimestampToDateTime(command?.Timestamp) is { } commandTime)
             return commandTime;
 
-        // Try Loop predicted start date
-        if (ParseTimestampToDateTime(ds.Loop?.Predicted?.StartDate) is { } loopTime)
+        if (ParseTimestampToDateTime(ds.Loop?.Timestamp) is { } loopTime)
             return loopTime;
 
-        // Try pump clock
         if (ParseTimestampToDateTime(ds.Pump?.Clock) is { } pumpTime)
             return pumpTime;
 
-        // Try CreatedAt
         if (ParseTimestampToDateTime(ds.CreatedAt) is { } createdTime)
             return createdTime;
+
+        // predicted.startDate is the latest reading's time, not the cycle's
+        if (ParseTimestampToDateTime(ds.Loop?.Predicted?.StartDate) is { } predictedTime)
+            return predictedTime;
 
         return DateTime.UtcNow;
     }
 
-    private static DateTime? ParseTimestampToDateTime(string? timestamp)
+    /// <summary>
+    /// Uploaders re-send the last enacted command with every status while the loop holds a temp
+    /// basal, so the later of enacted and suggested is the current one. Enacted wins a tie, and
+    /// wins when neither timestamp parses.
+    /// </summary>
+    private static OpenApsSuggested? FreshestOpenApsCommand(OpenApsStatus openAps)
     {
-        if (string.IsNullOrEmpty(timestamp))
-            return null;
-        return DateTimeOffset.TryParse(timestamp, out var dto) ? dto.UtcDateTime : null;
+        if (openAps.Enacted is null || openAps.Suggested is null)
+            return openAps.Enacted ?? openAps.Suggested;
+
+        var enactedTime = ParseTimestampToDateTime(openAps.Enacted.Timestamp);
+        var suggestedTime = ParseTimestampToDateTime(openAps.Suggested.Timestamp);
+        var suggestedIsLater = enactedTime is null ? suggestedTime is not null : suggestedTime > enactedTime;
+        return suggestedIsLater ? openAps.Suggested : openAps.Enacted;
     }
 
-    private static Dictionary<string, object>? BuildOverrideMetadata(OverrideStatus overrideStatus)
+    private static long ResolveStatusMills(DeviceStatus ds) =>
+        new DateTimeOffset(ResolveTimestamp(ds)).ToUnixTimeMilliseconds();
+
+    private static DateTime? ParseTimestampToDateTime(string? timestamp) =>
+        UploaderTimestamp.ParseUtcDateTime(timestamp);
+
+    private static Dictionary<string, object> BuildOverrideMetadata(OverrideStatus overrideStatus)
     {
-        var metadata = new Dictionary<string, object>();
+        var metadata = new Dictionary<string, object>
+        {
+            [StateSpanMetadataExtensions.CollectionKey] = StateSpanMetadataExtensions.DeviceStatusCollection,
+        };
 
         if (!string.IsNullOrEmpty(overrideStatus.Name))
             metadata["name"] = overrideStatus.Name;
@@ -918,40 +1280,56 @@ public class DeviceStatusDecomposer : DecomposerBase, IDeviceStatusDecomposer, I
         if (overrideStatus.CurrentCorrectionRange?.MaxValue.HasValue == true)
             metadata["currentCorrectionRange.maxValue"] = overrideStatus.CurrentCorrectionRange.MaxValue.Value;
 
-        return metadata.Count > 0 ? metadata : null;
+        return metadata;
     }
 
     #endregion
 
     /// <inheritdoc />
-    public async Task<int> DeleteByLegacyIdAsync(string legacyId, WriteOrigin origin, CancellationToken ct = default)
+    public Task<int> DeleteByLegacyIdAsync(string legacyId, WriteOrigin origin, CancellationToken ct = default)
+        => DeleteStoredAsync(legacyId, origin, ct);
+
+    /// <inheritdoc />
+    /// <remarks>
+    /// Rows carrying the group's legacy id are deleted under it, which reaches every row of a forked
+    /// group; the rest (a status stored without one) by id. Deletes take the caller's attribution, so a
+    /// user's delete leaves tombstones that refuse a re-upload.
+    /// </remarks>
+    public async Task<int> DeleteStoredAsync(string storedId, WriteOrigin origin, CancellationToken ct = default)
     {
+        if (await LoadStoredGroupAsync(storedId, ct) is not { } group)
+            return 0;
+
         var deleted = 0;
-
-        // Look up correlation ID from any snapshot with this legacy ID before deleting
-        var apsSnapshot = await _apsRepo.GetByLegacyIdAsync(legacyId, ct);
-        var correlationId = apsSnapshot?.CorrelationId;
-        if (correlationId == null)
+        if (group.Aps?.LegacyId == group.LegacyId || group.Pump?.LegacyId == group.LegacyId
+            || group.Uploader?.LegacyId == group.LegacyId)
         {
-            var pumpSnapshot = await _pumpRepo.GetByLegacyIdAsync(legacyId, ct);
-            correlationId = pumpSnapshot?.CorrelationId;
-        }
-        if (correlationId == null)
-        {
-            var uploaderSnapshot = await _uploaderRepo.GetByLegacyIdAsync(legacyId, ct);
-            correlationId = uploaderSnapshot?.CorrelationId;
+            deleted += await _apsRepo.DeleteByLegacyIdAsync(group.LegacyId, origin, ct);
+            deleted += await _pumpRepo.DeleteByLegacyIdAsync(group.LegacyId, origin, ct);
+            deleted += await _uploaderRepo.DeleteByLegacyIdAsync(group.LegacyId, origin, ct);
         }
 
-        deleted += await _apsRepo.DeleteByLegacyIdAsync(legacyId, origin, ct);
-        deleted += await _pumpRepo.DeleteByLegacyIdAsync(legacyId, origin, ct);
-        deleted += await _uploaderRepo.DeleteByLegacyIdAsync(legacyId, origin, ct);
-
-        if (correlationId.HasValue)
-            deleted += await _extrasRepo.DeleteByCorrelationIdAsync(correlationId.Value, ct);
+        deleted += await DeleteUnkeyedAsync(_apsRepo, group.Aps, group.LegacyId, origin, ct);
+        deleted += await DeleteUnkeyedAsync(_pumpRepo, group.Pump, group.LegacyId, origin, ct);
+        deleted += await DeleteUnkeyedAsync(_uploaderRepo, group.Uploader, group.LegacyId, origin, ct);
+        deleted += await _extrasRepo.DeleteByCorrelationIdAsync(group.CorrelationId, ct);
+        deleted += await RetractOverrideAsync(group, ct);
 
         if (deleted > 0)
-            Logger.LogDebug("Deleted {Count} v4 snapshot records for legacy device status {LegacyId}", deleted, legacyId);
+            Logger.LogDebug("Deleted {Count} v4 records for device status {StoredId}", deleted, storedId);
 
         return deleted;
+    }
+
+    private static async Task<int> DeleteUnkeyedAsync<TRecord>(
+        ILegacyKeyedRepository<TRecord> repository, TRecord? member, string legacyId,
+        WriteOrigin origin, CancellationToken ct)
+        where TRecord : class, V4Models.IV4Record
+    {
+        if (member is null || member.LegacyId == legacyId)
+            return 0;
+
+        await repository.DeleteAsync(member.Id, origin, ct);
+        return 1;
     }
 }

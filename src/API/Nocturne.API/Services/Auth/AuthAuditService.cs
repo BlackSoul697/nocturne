@@ -2,6 +2,7 @@ using Nocturne.API.Extensions;
 using Nocturne.Core.Contracts.Audit;
 using Nocturne.Infrastructure.Data;
 using Nocturne.Infrastructure.Data.Entities;
+using Nocturne.Infrastructure.Data.Services;
 
 namespace Nocturne.API.Services.Auth;
 
@@ -9,20 +10,14 @@ namespace Nocturne.API.Services.Auth;
 /// Writes authentication and authorization audit events to the <c>auth_audit_log</c> table.
 /// </summary>
 /// <remarks>
-/// <para>
-/// Each call to <see cref="LogAsync"/> opens its own <c>SaveChangesAsync</c> to commit the
-/// single row immediately; it does not participate in any ambient unit-of-work.
-/// </para>
-/// <para>
-/// Audit logging is non-blocking by design: any database exception is swallowed and logged as a
-/// warning so that a transient storage failure never prevents an authentication response from
-/// reaching the caller.
-/// </para>
+/// Each call to <see cref="LogAsync"/> commits its single row on a context of its own. Audit logging
+/// is non-blocking by design: any database exception is swallowed and logged as a warning so that a
+/// transient storage failure never prevents an authentication response from reaching the caller.
 /// </remarks>
 /// <seealso cref="IAuthAuditService"/>
 public class AuthAuditService : IAuthAuditService
 {
-    private readonly NocturneDbContext _dbContext;
+    private readonly INocturneDbContextFactory _contexts;
     private readonly IHttpContextAccessor _httpContextAccessor;
     private readonly IAuditContext _auditContext;
     private readonly ILogger<AuthAuditService> _logger;
@@ -31,12 +26,12 @@ public class AuthAuditService : IAuthAuditService
     /// Creates a new instance of AuthAuditService.
     /// </summary>
     public AuthAuditService(
-        NocturneDbContext dbContext,
+        INocturneDbContextFactory contexts,
         IHttpContextAccessor httpContextAccessor,
         IAuditContext auditContext,
         ILogger<AuthAuditService> logger)
     {
-        _dbContext = dbContext;
+        _contexts = contexts ?? throw new ArgumentNullException(nameof(contexts));
         _httpContextAccessor = httpContextAccessor;
         _auditContext = auditContext;
         _logger = logger;
@@ -52,11 +47,11 @@ public class AuthAuditService : IAuthAuditService
     {
         actor ??= AuthAuditActor.FromCallerOtherThan(
             _httpContextAccessor.HttpContext?.GetAuthContext(), subjectId);
-        tenantId ??= _dbContext.TenantIdOrNull;
 
         try
         {
-            _dbContext.AuthAuditLog.Add(new AuthAuditLogEntity
+            await using var db = await _contexts.CreateAsync();
+            db.AuthAuditLog.Add(new AuthAuditLogEntity
             {
                 Id = Guid.CreateVersion7(),
                 EventType = eventType,
@@ -64,7 +59,7 @@ public class AuthAuditService : IAuthAuditService
                 // No actor to distinguish means the subject acted for themselves.
                 ActorSubjectId = actor is null ? subjectId : actor.SubjectId,
                 ActorCredential = actor?.Credential,
-                TenantId = tenantId,
+                TenantId = tenantId ?? db.TenantIdOrNull,
                 Success = success,
                 IpAddress = ipAddress,
                 UserAgent = userAgent,
@@ -73,7 +68,7 @@ public class AuthAuditService : IAuthAuditService
                 RefreshTokenId = refreshTokenId,
                 TraceId = _auditContext.TraceId,
             });
-            await _dbContext.SaveChangesAsync();
+            await db.SaveChangesAsync();
         }
         catch (Exception ex)
         {

@@ -1,7 +1,11 @@
+using System.Text.Json;
+using System.Globalization;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Nocturne.API.Attributes;
+using Nocturne.API.Configuration;
 using Nocturne.API.Authorization;
+using Nocturne.API.Helpers;
 using Nocturne.Core.Models.Authorization;
 using Nocturne.Core.Contracts.Profiles;
 using Nocturne.Core.Models;
@@ -194,37 +198,23 @@ public class ProfileController : ControllerBase
 
         try
         {
-            Profile[] profiles;
-
-            // Handle both single profile and array of profiles (Nightscout compatibility)
-            if (body.ValueKind == System.Text.Json.JsonValueKind.Array)
-            {
-                profiles = System.Text.Json.JsonSerializer.Deserialize<Profile[]>(
-                    body.GetRawText(),
-                    new System.Text.Json.JsonSerializerOptions { PropertyNameCaseInsensitive = true }
-                ) ?? Array.Empty<Profile>();
-            }
-            else if (body.ValueKind == System.Text.Json.JsonValueKind.Object)
-            {
-                var profile = System.Text.Json.JsonSerializer.Deserialize<Profile>(
-                    body.GetRawText(),
-                    new System.Text.Json.JsonSerializerOptions { PropertyNameCaseInsensitive = true }
-                );
-                profiles = profile != null ? new[] { profile } : Array.Empty<Profile>();
-            }
-            else
+            var profiles = NightscoutJsonBody.ReadObjects<Profile>(body);
+            if (profiles is null)
             {
                 _logger.LogDebug("Invalid profile data format");
                 return BadRequest("Invalid profile data format");
             }
 
-            _logger.LogDebug("Processing {Count} profiles", profiles.Length);
+            _logger.LogDebug("Processing {Count} profiles", profiles.Count);
 
-            if (profiles.Length == 0)
+            if (profiles.Count == 0)
             {
                 _logger.LogDebug("No profiles provided in request body");
                 return Ok(Array.Empty<Profile>());
             }
+
+            foreach (var created in profiles)
+                StampCreatedAt(created);
 
             var createdProfiles = await _writeService.CreateProfilesAsync(
                 profiles,
@@ -235,6 +225,11 @@ public class ProfileController : ControllerBase
             _logger.LogDebug("Created {Count} profiles", result.Length);
             return Ok(result);
         }
+        catch (JsonException ex)
+        {
+            _logger.LogWarning(ex, "Invalid JSON in create profiles request");
+            return BadRequest("Invalid profile data format");
+        }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error occurred while creating profiles");
@@ -243,14 +238,153 @@ public class ProfileController : ControllerBase
     }
 
     /// <summary>
+    /// Replace the profile document named by the body's <c>_id</c>, inserting it when none is stored.
+    /// </summary>
+    /// <param name="profile">The whole profile document, carrying its <c>_id</c></param>
+    /// <param name="cancellationToken">Cancellation token</param>
+    /// <returns>The saved profile</returns>
+    [HttpPut]
+    [Authorize]
+    [RequireScope(Scope.TherapyReadWrite)]
+    [NightscoutEndpoint("/api/v1/profile")]
+    [ProducesResponseType(typeof(Profile), 200)]
+    [ProducesResponseType(400)]
+    [ProducesResponseType(409)]
+    [ProducesResponseType(500)]
+    public async Task<ActionResult<Profile>> UpdateProfile(
+        [FromBody] Profile profile,
+        CancellationToken cancellationToken = default
+    )
+    {
+        if (string.IsNullOrWhiteSpace(profile?.Id))
+        {
+            return BadRequest("Profile _id is required for update");
+        }
+
+        if (profile.Store.Count == 0)
+        {
+            return BadRequest("Profile store must name at least one profile");
+        }
+
+        StampCreatedAt(profile);
+
+        try
+        {
+            var saved = await _writeService.UpdateProfileAsync(
+                profile.Id,
+                profile,
+                cancellationToken
+            );
+            return saved is null
+                ? Conflict("A profile with this _id was deleted and cannot be recreated")
+                : Ok(saved);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error occurred while saving profile {ProfileId}", profile.Id);
+            return StatusCode(500, "Internal server error while saving profile");
+        }
+    }
+
+    /// <summary>
+    /// Gives a document posted without <c>created_at</c> the time it arrived, as Nightscout's create and
+    /// save do, so one with no <c>startDate</c> or <c>mills</c> either starts then rather than at the epoch.
+    /// </summary>
+    private static void StampCreatedAt(Profile profile)
+    {
+        if (string.IsNullOrEmpty(profile.CreatedAt))
+            profile.CreatedAt = DateTime.UtcNow.ToString("yyyy-MM-ddTHH:mm:ss.fffZ");
+    }
+
+    /// <summary>
+    /// Delete every profile document except the newest <c>keep</c> (query), bounded by
+    /// <see cref="TryParseKeep"/>.
+    /// </summary>
+    /// <param name="cancellationToken">Cancellation token</param>
+    /// <returns>The <see cref="LegacyDeleteStatus"/> body</returns>
+    [HttpDelete]
+    [Authorize]
+    [RequireScope(Scope.FullAccess)]
+    [NightscoutEndpoint("/api/v1/profile")]
+    [ProducesResponseType(typeof(object), 200)]
+    [ProducesResponseType(400)]
+    [ProducesResponseType(500)]
+    public async Task<ActionResult> PruneProfiles(CancellationToken cancellationToken = default)
+    {
+        var keep = Request.Query.TryGetValue("keep", out var raw) ? raw.ToString() : null;
+        if (!TryParseKeep(keep, out var keepCount))
+        {
+            return BadRequest("keep must be a whole number between 10 and 10000");
+        }
+
+        try
+        {
+            var deleted = await _writeService.PruneProfilesAsync(keepCount, cancellationToken);
+            return Ok(LegacyDeleteStatus.For(deleted));
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error occurred while pruning profiles to {Keep}", keepCount);
+            return StatusCode(500, "Internal server error while pruning profiles");
+        }
+    }
+
+    /// <summary>
+    /// Delete a profile document by id.
+    /// </summary>
+    /// <param name="id">The profile document's <c>_id</c></param>
+    /// <param name="cancellationToken">Cancellation token</param>
+    /// <returns>The <see cref="LegacyDeleteStatus"/> body, found or not</returns>
+    [HttpDelete("{id}")]
+    [Authorize]
+    [RequireScope(Scope.TherapyReadWrite)]
+    [NightscoutEndpoint("/api/v1/profile/:_id")]
+    [ProducesResponseType(typeof(object), 200)]
+    [ProducesResponseType(500)]
+    public async Task<ActionResult> DeleteProfile(
+        string id,
+        CancellationToken cancellationToken = default
+    )
+    {
+        try
+        {
+            var deleted = await _writeService.DeleteProfileAsync(id, cancellationToken);
+            return Ok(LegacyDeleteStatus.For(deleted ? 1 : 0));
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error occurred while deleting profile {ProfileId}", id);
+            return StatusCode(500, "Internal server error while deleting profile");
+        }
+    }
+
+    /// <summary>
+    /// Nightscout's bounds on a prune: a missing <c>keep</c> keeps 100, and anything that is not a
+    /// whole number from 10 to 10000 is refused, so a typo cannot empty the collection.
+    /// </summary>
+    private static bool TryParseKeep(string? keep, out int keepCount)
+    {
+        keepCount = 100;
+        if (keep is null)
+            return true;
+
+        return int.TryParse(
+                keep,
+                NumberStyles.None,
+                CultureInfo.InvariantCulture,
+                out keepCount
+            )
+            && keepCount is >= 10 and <= 10000;
+    }
+
+    /// <summary>
     /// Get the current active profile
     /// </summary>
     /// <param name="cancellationToken">Cancellation token</param>
-    /// <returns>The current active profile as a single object (Nightscout format), or empty array if no profiles exist</returns>
+    /// <returns>The current active profile as a single object (Nightscout format), or the JSON literal <c>null</c> when no profile exists</returns>
     [HttpGet("current")]
     [NightscoutEndpoint("/api/v1/profile/current")]
     [ProducesResponseType(typeof(Profile), 200)]
-    [ProducesResponseType(typeof(Profile[]), 200)] // Empty array when no profile
     [ProducesResponseType(typeof(Profile[]), 304)] // Not Modified response
     [RequireScope(Scope.TherapyRead)]
     public async Task<ActionResult> GetCurrentProfile(
@@ -268,8 +402,8 @@ public class ProfileController : ControllerBase
 
             if (profile == null)
             {
-                _logger.LogDebug("No current profile found, returning empty array");
-                return Ok(Array.Empty<Profile>());
+                _logger.LogDebug("No current profile found, returning null");
+                return Content("null", "application/json");
             }
 
             // Set Last-Modified header for caching

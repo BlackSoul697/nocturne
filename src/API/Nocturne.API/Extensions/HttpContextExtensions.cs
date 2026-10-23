@@ -1,7 +1,9 @@
+using Nocturne.Core.Contracts.Alerts;
 using Nocturne.Core.Contracts.Multitenancy;
 using Nocturne.API.Middleware;
 using Nocturne.Core.Models;
 using Nocturne.Core.Models.Authorization;
+using Nocturne.Infrastructure.Data.Services;
 using Scope = Nocturne.Core.Models.Authorization.Scope;
 
 namespace Nocturne.API.Extensions;
@@ -128,40 +130,13 @@ public static class HttpContextExtensions
     }
 
     /// <summary>
-    /// Check if the current request has admin permissions
+    /// Check if the current request holds superuser permissions
     /// </summary>
     /// <param name="context">HTTP context</param>
     /// <returns>True if the request holds superuser permissions</returns>
-    public static bool IsAdmin(this HttpContext context)
+    public static bool IsSuperuser(this HttpContext context)
     {
         return context.HasPermission("*");
-    }
-
-    /// <summary>
-    /// Check if the current request has read permissions
-    /// </summary>
-    /// <param name="context">HTTP context</param>
-    /// <returns>True if has read permissions</returns>
-    public static bool CanRead(this HttpContext context)
-    {
-        return context.HasPermission("*")
-            || context.HasPermission("api:*")
-            || context.HasPermission("api:*:read")
-            || context.HasPermission("readable");
-    }
-
-    /// <summary>
-    /// Check if the current request has write permissions
-    /// </summary>
-    /// <param name="context">HTTP context</param>
-    /// <returns>True if has write permissions</returns>
-    public static bool CanWrite(this HttpContext context)
-    {
-        return context.HasPermission("*")
-            || context.HasPermission("api:*")
-            || context.HasPermission("api:*:create")
-            || context.HasPermission("api:*:update")
-            || context.HasPermission("api:*:delete");
     }
 
     /// <summary>
@@ -195,6 +170,13 @@ public static class HttpContextExtensions
     }
 
     /// <summary>
+    /// The authority this request acknowledges an excursion with, for
+    /// <see cref="IAlertAcknowledgementService.AcknowledgeExcursionAsync"/>.
+    /// </summary>
+    public static AlertAcknowledgementAuthority GetAlertAcknowledgementAuthority(this HttpContext context) =>
+        new(context.GetSubjectId(), context.GetGrantedScopes());
+
+    /// <summary>
     /// The refusal a history-clamped caller reads when an action would give someone more history
     /// than the caller can see.
     /// </summary>
@@ -212,11 +194,34 @@ public static class HttpContextExtensions
         context.RequestServices?.GetService<ICategoryReadContext>()?.IsHistoryClamped == true;
 
     /// <summary>
+    /// Clamps every read on the request's services to the last 24 hours, through
+    /// <see cref="ICategoryReadContext"/>, which every context of the request and the PHI caches
+    /// read. There is no way to lift it.
+    /// </summary>
+    public static void ClampMemberHistory(this HttpContext context) =>
+        context.RequestServices.GetService<ICategoryReadContext>()?.ClampMemberHistory();
+
+    /// <summary>
     /// The history limit something this caller mints carries: the requested limit, or the
     /// caller's own ceiling (<see cref="IsCallerHistoryClamped"/>).
     /// </summary>
     public static bool InheritHistoryClamp(this HttpContext context, bool requested) =>
         requested || context.IsCallerHistoryClamped();
+
+    private const string ReaderItemKey = "TenantReader";
+
+    /// <summary>
+    /// Records who the request reads as, once authentication and member scope have narrowed it.
+    /// Kept in <see cref="HttpContext.Items"/> because SignalR serves a long-polling connection from a
+    /// copy of the upgrade request: the copy keeps the items but gets a DI scope of its own that never
+    /// ran the middleware.
+    /// </summary>
+    public static void RecordReader(this HttpContext context) =>
+        context.Items[ReaderItemKey] = TenantReader.Of(context.RequestServices);
+
+    /// <summary>The reader <see cref="RecordReader"/> recorded, or null when the request recorded none.</summary>
+    public static TenantReader? GetRecordedReader(this HttpContext context) =>
+        context.Items.TryGetValue(ReaderItemKey, out var reader) ? reader as TenantReader : null;
 
     /// <summary>
     /// The tenant the request resolved to, or <see langword="null"/> when it resolved to none.

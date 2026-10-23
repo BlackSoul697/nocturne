@@ -1,5 +1,4 @@
 using System.Text.Json;
-using Nocturne.API.Controllers.V4.Monitoring;
 using Nocturne.API.Services.Realtime;
 using Nocturne.Connectors.Core.Constants;
 using Nocturne.Core.Contracts.Events;
@@ -14,6 +13,7 @@ namespace Nocturne.API.Services.Monitoring;
 /// Advances tracker instances when a matching <see cref="DeviceEvent"/> is written: a site change
 /// completes the running infusion-site instance and starts a new one, a sensor change does the same
 /// for the sensor tracker, and so on for whatever a definition lists in its trigger event types.
+/// Deleting the event undoes the advance (<see cref="OnDeletedAsync"/>).
 /// </summary>
 /// <remarks>
 /// Registered as the <see cref="IDeviceEventReactor"/> adapter, so it runs from the device-event write
@@ -23,6 +23,64 @@ namespace Nocturne.API.Services.Monitoring;
 /// <seealso cref="TrackerDefinitionEntity.TriggerEventTypes"/>
 public class TrackerTriggerService : IDeviceEventReactor
 {
+    /// <summary>
+    /// The event types a definition may list in <see cref="TrackerDefinitionEntity.TriggerEventTypes"/>:
+    /// the device events that mean something was changed. Pump suspend and resume are device events
+    /// too, but pausing a pump ends nobody's sensor.
+    /// </summary>
+    public static readonly IReadOnlyList<string> TriggerableEventTypes =
+    [
+        TreatmentTypes.SensorStart,
+        TreatmentTypes.SensorChange,
+        TreatmentTypes.SensorStop,
+        TreatmentTypes.TransmitterSensorInsert,
+        TreatmentTypes.SiteChange,
+        TreatmentTypes.CannulaChange,
+        TreatmentTypes.PodChange,
+        TreatmentTypes.InsulinChange,
+        TreatmentTypes.ReservoirChangeEvent,
+        TreatmentTypes.PumpBatteryChange,
+    ];
+
+    /// <summary>The <see cref="TriggerableEventTypes"/> spelling of <paramref name="name"/>, or null.</summary>
+    public static string? CanonicalTrigger(string name) =>
+        TriggerableEventTypes.FirstOrDefault(t => string.Equals(t, name.Trim(), StringComparison.OrdinalIgnoreCase));
+
+    /// <summary>
+    /// Canonicalises a requested trigger list against <see cref="TriggerableEventTypes"/>. Blank entries
+    /// are dropped, so a form can post one empty value to mean "none"; an unknown name is an error
+    /// rather than a trigger that silently never fires, unless it is in <paramref name="alreadyStored"/>,
+    /// where it predates the list and is dropped so the definition can still be saved. Null passes
+    /// through as "not supplied".
+    /// </summary>
+    public static bool TryNormaliseTriggers(
+        IEnumerable<string>? requested,
+        IReadOnlyCollection<string> alreadyStored,
+        out List<string>? normalised,
+        out string? error)
+    {
+        normalised = null;
+        error = null;
+        if (requested is null)
+            return true;
+
+        normalised = [];
+        foreach (var name in requested.Where(n => !string.IsNullOrWhiteSpace(n)).Select(n => n.Trim()))
+        {
+            var canonical = CanonicalTrigger(name);
+            if (canonical is null)
+            {
+                if (alreadyStored.Contains(name, StringComparer.OrdinalIgnoreCase))
+                    continue;
+                error = $"'{name}' is not an event a tracker can restart on";
+                return false;
+            }
+            if (!normalised.Contains(canonical))
+                normalised.Add(canonical);
+        }
+        return true;
+    }
+
     private readonly ITrackerRepository _trackerRepository;
     private readonly ISignalRBroadcastService _broadcast;
     private readonly ILogger<TrackerTriggerService> _logger;
@@ -39,7 +97,10 @@ public class TrackerTriggerService : IDeviceEventReactor
     }
 
     /// <inheritdoc />
-    public async Task OnCreatedAsync(IReadOnlyList<DeviceEvent> created, CancellationToken ct = default)
+    public Task OnCreatedAsync(IReadOnlyList<DeviceEvent> created, CancellationToken ct = default)
+        => AdvanceAllAsync(created, replay: false, ct);
+
+    private async Task AdvanceAllAsync(IReadOnlyList<DeviceEvent> created, bool replay, CancellationToken ct)
     {
         if (created.Count == 0)
             return;
@@ -72,9 +133,72 @@ public class TrackerTriggerService : IDeviceEventReactor
                 if (!MatchesNotesFilter(definition, deviceEvent))
                     continue;
 
-                await AdvanceAsync(definition, deviceEvent, ct);
+                await AdvanceAsync(definition, deviceEvent, replay, ct);
             }
         }
+    }
+
+    /// <inheritdoc />
+    /// <remarks>
+    /// A deleted change never happened, so the run it started is undone and the run it replaced
+    /// resumes (<see cref="ITrackerRepository.RevertStartAsync"/>). Only a run still going is undone:
+    /// once a later change has replaced it, it is the tracker's history, unless that change is
+    /// deleted too. The run is found by the event's id alone, so it is undone even when its
+    /// definition no longer follows that kind of event.
+    /// </remarks>
+    public async Task OnDeletedAsync(IReadOnlyList<DeviceEvent> deleted, CancellationToken ct = default)
+    {
+        if (deleted.Count == 0)
+            return;
+
+        var deletedIds = deleted.Select(e => e.Id.ToString()).ToHashSet();
+        // Newest first, so of a chain of deleted changes each undo exposes the run the next one started.
+        var pending = new Stack<TrackerInstanceEntity>(
+            (await _trackerRepository.GetRunningStartedByAsync(deletedIds, ct)).OrderBy(i => i.StartedAt));
+
+        while (pending.TryPop(out var run))
+        {
+            var revert = await _trackerRepository.ExecuteUnderDefinitionLockAsync(
+                run.DefinitionId,
+                (tx, token) => tx.RevertStartAsync(run.DefinitionId, run.StartTreatmentId!, token),
+                async (tx, attempt, token) =>
+                    attempt is not null && await tx.GetInstanceByIdAsync(attempt.Removed.Id, token) is null,
+                ct);
+            if (revert is null)
+                continue;
+
+            _logger.LogInformation(
+                "Undid tracker instance {InstanceId} for {DefinitionName}: the change that started it was deleted",
+                revert.Removed.Id,
+                run.Definition.Name);
+
+            await _broadcast.BroadcastTrackerUpdateAsync(
+                TrackerRealtimeAction.Delete, TrackerInstanceDto.FromEntity(revert.Removed), run.Definition.UserId, run.Definition.Visibility);
+            foreach (var reopened in revert.Reopened)
+            {
+                await _broadcast.BroadcastTrackerUpdateAsync(
+                    TrackerRealtimeAction.Reopen, TrackerInstanceDto.FromEntity(reopened), run.Definition.UserId, run.Definition.Visibility);
+                if (reopened.StartTreatmentId is { } startedBy && deletedIds.Contains(startedBy))
+                    pending.Push(reopened);
+            }
+        }
+    }
+
+    /// <inheritdoc />
+    public Task OnReplayedAsync(IReadOnlyList<DeviceEvent> events, CancellationToken ct = default)
+        => AdvanceAllAsync(events, replay: true, ct);
+
+    /// <inheritdoc />
+    public async Task<IReadOnlySet<Guid>> GetFollowedAsync(IReadOnlyCollection<Guid> eventIds, CancellationToken ct = default)
+    {
+        if (eventIds.Count == 0)
+            return new HashSet<Guid>();
+
+        var running = await _trackerRepository.GetRunningStartedByAsync(eventIds.Select(id => id.ToString()).ToList(), ct);
+        return running
+            .Select(i => Guid.TryParse(i.StartTreatmentId, out var id) ? id : (Guid?)null)
+            .OfType<Guid>()
+            .ToHashSet();
     }
 
     /// <summary>
@@ -84,67 +208,46 @@ public class TrackerTriggerService : IDeviceEventReactor
     private async Task AdvanceAsync(
         TrackerDefinitionEntity definition,
         DeviceEvent deviceEvent,
+        bool replay,
         CancellationToken ct
     )
     {
         var startTreatmentId = deviceEvent.Id.ToString();
-        var activeInstances = await _trackerRepository.GetActiveInstancesForDefinitionAsync(definition.Id, ct);
 
         // Connectors re-publish a moving window, so the same change can reach the chokepoint more than
-        // once. An instance already started from this event means it has been handled.
-        if (activeInstances.Any(i => i.StartTreatmentId == startTreatmentId))
-            return;
-
-        // Connectors also backfill older events into that window. One dated at or before the running
-        // instance is history rather than a new change, and acting on it would rewind the tracker to
-        // an earlier consumable.
-        if (activeInstances.Any(i => i.StartedAt >= deviceEvent.Timestamp))
+        // once. An instance already started from this event means it has been handled. Connectors also
+        // backfill older events into that window, and one dated at or before the running instance is
+        // history rather than a new change.
+        var succession = await TrackerSuccession.StartAsync(
+            _trackerRepository,
+            _broadcast,
+            _logger,
+            definition,
+            deviceEvent.Timestamp,
+            completionNotes: $"Auto-completed by {deviceEvent.EventType}",
+            completeTreatmentId: startTreatmentId,
+            (tx, token) => tx.StartInstanceAsync(
+                definition.Id,
+                definition.UserId,
+                startNotes: null,
+                startTreatmentId: startTreatmentId,
+                startedAt: deviceEvent.Timestamp,
+                cancellationToken: token
+            ),
+            ct,
+            alreadyStarted: running => running.Any(i => i.StartTreatmentId == startTreatmentId),
+            replay
+        );
+        if (succession.Started is not { } newInstance)
         {
             _logger.LogDebug(
-                "Skipping tracker {DefinitionName}: device event at {EventTime} is not newer than the active instance",
+                "Skipping tracker {DefinitionName} for device event at {EventTime}: {Outcome}",
                 definition.Name,
-                deviceEvent.Timestamp
+                deviceEvent.Timestamp,
+                succession.Outcome
             );
             return;
         }
-
-        foreach (var activeInstance in activeInstances)
-        {
-            var completed = await _trackerRepository.CompleteInstanceAsync(
-                activeInstance.Id,
-                ReasonFor(definition, activeInstance.StartedAt, deviceEvent.Timestamp),
-                completionNotes: $"Auto-completed by {deviceEvent.EventType}",
-                completeTreatmentId: startTreatmentId,
-                completedAt: deviceEvent.Timestamp,
-                cancellationToken: ct
-            );
-
-            if (completed is null)
-                continue;
-
-            _logger.LogInformation(
-                "Auto-completed tracker instance {InstanceId} for {DefinitionName} on {EventType}",
-                completed.Id,
-                definition.Name,
-                deviceEvent.EventType
-            );
-
-            await _broadcast.BroadcastTrackerUpdateAsync(
-                "complete",
-                TrackerInstanceDto.FromEntity(completed),
-                definition.UserId,
-                definition.Visibility
-            );
-        }
-
-        var newInstance = await _trackerRepository.StartInstanceAsync(
-            definition.Id,
-            definition.UserId,
-            startNotes: null,
-            startTreatmentId: startTreatmentId,
-            startedAt: deviceEvent.Timestamp,
-            cancellationToken: ct
-        );
 
         _logger.LogInformation(
             "Auto-started tracker instance {InstanceId} for {DefinitionName} on {EventType}",
@@ -152,28 +255,6 @@ public class TrackerTriggerService : IDeviceEventReactor
             definition.Name,
             deviceEvent.EventType
         );
-
-        await _broadcast.BroadcastTrackerUpdateAsync(
-            "create",
-            TrackerInstanceDto.FromEntity(newInstance),
-            definition.UserId,
-            definition.Visibility
-        );
-    }
-
-    /// <summary>
-    /// Classifies an auto-completion the way the history surface reads it: a consumable that reached its
-    /// configured lifespan expired, one swapped before that was replaced early. A definition with no
-    /// lifespan has no term to have reached, so it is a plain completion.
-    /// </summary>
-    private static CompletionReason ReasonFor(TrackerDefinitionEntity definition, DateTime startedAt, DateTime completedAt)
-    {
-        if (definition.LifespanHours is not { } lifespanHours || lifespanHours <= 0)
-            return CompletionReason.Completed;
-
-        return completedAt - startedAt >= TimeSpan.FromHours(lifespanHours)
-            ? CompletionReason.Expired
-            : CompletionReason.ReplacedEarly;
     }
 
     /// <summary>

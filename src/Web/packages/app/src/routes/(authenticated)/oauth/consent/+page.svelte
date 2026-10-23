@@ -7,16 +7,15 @@
   import { Separator } from "$lib/components/ui/separator";
   import { Checkbox } from "$lib/components/ui/checkbox";
   import { Label } from "$lib/components/ui/label";
-  import {
-    Shield,
-    ShieldAlert,
-    AlertTriangle,
-    ExternalLink,
-    Check,
-    ShieldPlus,
-    Clock,
-    Loader2,
-  } from "lucide-svelte";
+  import Shield from "@lucide/svelte/icons/shield";
+  import ShieldAlert from "@lucide/svelte/icons/shield-alert";
+  import AlertTriangle from "@lucide/svelte/icons/triangle-alert";
+  import ExternalLink from "@lucide/svelte/icons/external-link";
+  import Check from "@lucide/svelte/icons/check";
+  import ShieldPlus from "@lucide/svelte/icons/shield-plus";
+  import Clock from "@lucide/svelte/icons/clock";
+  import Loader2 from "@lucide/svelte/icons/loader-circle";
+  import Globe from "@lucide/svelte/icons/globe";
   import { consentForm, getClientInfo } from "../oauth.remote";
   import { getOAuthScopeDescription } from "$lib/constants/oauth-scopes";
   import { retainQuery } from "$lib/api/retain-query.svelte";
@@ -162,6 +161,14 @@
             </a>
           </div>
         {/if}
+
+        <div class="flex items-start gap-3 rounded-md bg-muted/50 p-3">
+          <Globe class="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
+          <p class="text-sm text-muted-foreground">
+            Approving sends access to
+            <span class="break-all font-mono text-foreground">{redirectUri}</span>
+          </p>
+        </div>
 
         <Separator />
 

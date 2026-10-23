@@ -7,6 +7,7 @@ using Nocturne.Core.Contracts.Sleep;
 using Nocturne.Core.Contracts.V4.Repositories;
 using Nocturne.Core.Models;
 using Nocturne.Core.Models.V4;
+using Nocturne.Infrastructure.Data.Services;
 
 namespace Nocturne.API.Tests.Services.Analytics;
 
@@ -24,6 +25,8 @@ public class ActogramReportServiceTests
     private readonly Mock<ITherapySettingsResolver> _therapy = new();
     private readonly Mock<ITargetRangeResolver> _targetRange = new();
 
+    private readonly CategoryReadContext _readContext = new();
+
     private ActogramReportService CreateService() =>
         new(
             _glucose.Object,
@@ -32,6 +35,7 @@ public class ActogramReportServiceTests
             _heartRates.Object,
             _therapy.Object,
             _targetRange.Object,
+            new TenantClockResolver(_therapy.Object, _readContext, NullLogger<TenantClockResolver>.Instance),
             NullLogger<ActogramReportService>.Instance
         );
 
@@ -39,6 +43,7 @@ public class ActogramReportServiceTests
     public async Task GetAsync_NoData_ReturnsEmptyResultWithDefaultThresholds()
     {
         SetupEmpty();
+        SetupZone("UTC");
         _therapy.Setup(t => t.HasDataAsync(It.IsAny<CancellationToken>())).ReturnsAsync(false);
 
         var result = await CreateService().GetAsync(StartMills, EndMills);
@@ -115,7 +120,7 @@ public class ActogramReportServiceTests
         };
 
         _glucose
-            .Setup(g => g.GetAsync(It.IsAny<DateTime?>(), It.IsAny<DateTime?>(), null, null,
+            .Setup(g => g.GetForAnalyticsAsync(It.IsAny<DateTime?>(), It.IsAny<DateTime?>(), null, null,
                 It.IsAny<int>(), 0, false, false, It.IsAny<DateTime?>(), It.IsAny<Guid?>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(new[] { glucoseRow });
         _sleep
@@ -129,10 +134,11 @@ public class ActogramReportServiceTests
                 It.IsAny<int?>(), It.IsAny<int>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(new[] { stepRow });
         _heartRates
-            .Setup(h => h.GetHeartRatesByDateRangeAsync(It.IsAny<DateTime>(), It.IsAny<DateTime>(),
-                It.IsAny<int?>(), It.IsAny<int>(), It.IsAny<CancellationToken>()))
+            .Setup(h => h.GetHeartRateMinuteAveragesByDateRangeAsync(
+                It.IsAny<DateTime>(), It.IsAny<DateTime>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(new[] { hrRow });
         _therapy.Setup(t => t.HasDataAsync(It.IsAny<CancellationToken>())).ReturnsAsync(false);
+        SetupZone("UTC");
 
         var result = await CreateService().GetAsync(StartMills, EndMills);
 
@@ -185,9 +191,7 @@ public class ActogramReportServiceTests
             (StartMills + 90 * 60_000, 42),
             (StartMills - 2L * 24 * 60 * 60_000, 999));
         _therapy.Setup(t => t.HasDataAsync(It.IsAny<CancellationToken>())).ReturnsAsync(false);
-        _therapy
-            .Setup(t => t.GetTimezoneAsync(null, It.IsAny<CancellationToken>()))
-            .ReturnsAsync("Europe/Stockholm");
+        SetupZone("Europe/Stockholm");
 
         var result = await CreateService().GetAsync(StartMills, EndMills);
 
@@ -210,24 +214,80 @@ public class ActogramReportServiceTests
         _therapy.Setup(t => t.HasDataAsync(It.IsAny<CancellationToken>())).ReturnsAsync(false);
         // 2023-11-16T00:00:00Z exactly: the window ends as that day opens, so it is not touched.
         const long endAtMidnight = 1700092800000L;
+        SetupZone("UTC");
 
         var result = await CreateService().GetAsync(StartMills, endAtMidnight);
 
         result.StepDayTotals.Keys.Should().BeEquivalentTo("2023-11-14", "2023-11-15");
     }
 
-    [Fact]
-    public async Task GetAsync_WithoutATherapyTimezone_SumsStepsByUtcDay()
+    [Theory]
+    [InlineData(null, TimeZoneUnavailableReason.NotConfigured)]
+    [InlineData("", TimeZoneUnavailableReason.NotConfigured)]
+    [InlineData("Not/AZone", TimeZoneUnavailableReason.Unrecognised)]
+    public async Task GetAsync_WithoutAUsableTimezone_BinsNoDayAndSaysWhy(
+        string? stored,
+        TimeZoneUnavailableReason expected)
     {
         SetupEmpty();
         SetupSteps((StartMills + 30 * 60_000, 300), (StartMills + 60 * 60_000, 500));
         _therapy.Setup(t => t.HasDataAsync(It.IsAny<CancellationToken>())).ReturnsAsync(false);
+        SetupZone(stored);
 
         var result = await CreateService().GetAsync(StartMills, EndMills);
 
+        result.StepDayTotals.Should().BeEmpty();
+        result.TimeZoneUnavailableReason.Should().Be(expected);
+        result.StepCounts.Should().HaveCount(2);
+    }
+
+    [Fact]
+    public async Task GetAsync_WithATimezone_CarriesNoReason()
+    {
+        SetupEmpty();
+        _therapy.Setup(t => t.HasDataAsync(It.IsAny<CancellationToken>())).ReturnsAsync(false);
+        SetupZone("Australia/Brisbane");
+
+        var result = await CreateService().GetAsync(StartMills, EndMills);
+
+        result.TimeZoneUnavailableReason.Should().BeNull();
+        result.StepDayTotals.Should().NotBeEmpty();
+    }
+
+    [Fact]
+    public async Task GetAsync_ForAShare_BinsNoDayAndSaysShare_EvenWhenAZoneIsCached()
+    {
+        SetupEmpty();
+        SetupSteps((StartMills + 30 * 60_000, 300));
+        _therapy.Setup(t => t.HasDataAsync(It.IsAny<CancellationToken>())).ReturnsAsync(false);
+        SetupZone("Australia/Brisbane");
+        _readContext.MarkShare();
+
+        var result = await CreateService().GetAsync(StartMills, EndMills);
+
+        result.StepDayTotals.Should().BeEmpty();
+        result.TimeZoneUnavailableReason.Should().Be(TimeZoneUnavailableReason.Share);
+    }
+
+    [Fact]
+    public async Task GetAsync_PossibleRunningTotals_AreLeftOutOfBubblesAndDayTotals()
+    {
+        SetupEmpty();
+        SetupZone("UTC");
+        SetupSteps(
+            (StartMills + 30 * 60_000, 300, 0),
+            (StartMills + 40 * 60_000, 9_000, StepCount.PossibleRunningTotalFlag),
+            (StartMills + 50 * 60_000, 9_400, StepCount.PossibleRunningTotalFlag | 1),
+            (StartMills + 60 * 60_000, 500, 1));
+        _therapy.Setup(t => t.HasDataAsync(It.IsAny<CancellationToken>())).ReturnsAsync(false);
+
+        var result = await CreateService().GetAsync(StartMills, EndMills);
+
+        result.StepCounts.Select(s => (s.Time, s.Steps)).Should().Equal(
+            (StartMills + 30 * 60_000, 300),
+            (StartMills + 60 * 60_000, 500));
         result.StepDayTotals["2023-11-14"].Should().Be(800);
-        result.StepDayTotals["2023-11-15"].Should().Be(0);
-        result.StepDayTotals.Should().HaveCount(15);
+        result.StepDayTotals.Values.Sum().Should().Be(800);
     }
 
     [Fact]
@@ -237,6 +297,7 @@ public class ActogramReportServiceTests
         // No IBasalRateResolver mock is wired here — a regression that introduces it would
         // surface as a missing dependency at construction time.
         SetupEmpty();
+        SetupZone("UTC");
         _therapy.Setup(t => t.HasDataAsync(It.IsAny<CancellationToken>())).ReturnsAsync(true);
         _targetRange.Setup(t => t.GetLowBGTargetAsync(It.IsAny<long>(), null, It.IsAny<CancellationToken>())).ReturnsAsync(80);
         _targetRange.Setup(t => t.GetHighBGTargetAsync(It.IsAny<long>(), null, It.IsAny<CancellationToken>())).ReturnsAsync(160);
@@ -246,7 +307,15 @@ public class ActogramReportServiceTests
         await act.Should().NotThrowAsync();
     }
 
+    private void SetupZone(string? id) =>
+        _therapy
+            .Setup(t => t.GetTimezoneAsync(null, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(id);
+
     private void SetupSteps(params (long Mills, int Metric)[] samples) =>
+        SetupSteps(samples.Select(s => (s.Mills, s.Metric, 0)).ToArray());
+
+    private void SetupSteps(params (long Mills, int Metric, int Source)[] samples) =>
         _steps
             .Setup(s => s.GetStepCountsByDateRangeAsync(It.IsAny<DateTime>(), It.IsAny<DateTime>(),
                 It.IsAny<int?>(), It.IsAny<int>(), It.IsAny<CancellationToken>()))
@@ -255,13 +324,14 @@ public class ActogramReportServiceTests
                 {
                     Timestamp = DateTimeOffset.FromUnixTimeMilliseconds(s.Mills).UtcDateTime,
                     Metric = s.Metric,
+                    Source = s.Source,
                 })
                 .ToArray());
 
     private void SetupEmpty()
     {
         _glucose
-            .Setup(g => g.GetAsync(It.IsAny<DateTime?>(), It.IsAny<DateTime?>(), null, null,
+            .Setup(g => g.GetForAnalyticsAsync(It.IsAny<DateTime?>(), It.IsAny<DateTime?>(), null, null,
                 It.IsAny<int>(), 0, false, false, It.IsAny<DateTime?>(), It.IsAny<Guid?>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(Array.Empty<SensorGlucose>());
         _sleep
@@ -275,8 +345,8 @@ public class ActogramReportServiceTests
                 It.IsAny<int?>(), It.IsAny<int>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(Array.Empty<StepCount>());
         _heartRates
-            .Setup(h => h.GetHeartRatesByDateRangeAsync(It.IsAny<DateTime>(), It.IsAny<DateTime>(),
-                It.IsAny<int?>(), It.IsAny<int>(), It.IsAny<CancellationToken>()))
+            .Setup(h => h.GetHeartRateMinuteAveragesByDateRangeAsync(
+                It.IsAny<DateTime>(), It.IsAny<DateTime>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(Array.Empty<HeartRate>());
     }
 }

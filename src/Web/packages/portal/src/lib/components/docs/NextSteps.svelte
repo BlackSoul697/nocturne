@@ -1,7 +1,7 @@
 <script lang="ts">
     import { resolve } from "$app/paths";
     import { Button } from "@nocturne/ui/ui/button";
-    import { ArrowRight } from "@lucide/svelte";
+    import ArrowRight from "@lucide/svelte/icons/arrow-right";
 </script>
 
 <div class="mb-8">
@@ -24,7 +24,7 @@
             Invite the people who follow you, or create a
             <a href={resolve("/docs/sharing")} class="text-primary hover:underline">share link</a>.
         </li>
-        <li>Watchtower is included and checks for image updates daily; no action required.</li>
+        <li>Watchtower is included and checks for image updates daily. It does not update Caddy or Postgres; see the update steps on this page.</li>
     </ul>
 
     <div class="flex gap-4 not-prose">

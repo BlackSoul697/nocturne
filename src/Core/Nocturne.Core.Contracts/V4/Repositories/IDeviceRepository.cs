@@ -19,7 +19,6 @@ public interface IDeviceRepository
 {
     /// <summary>Returns a <see cref="Device"/> by its UUID v7, or <c>null</c> if not found.</summary>
     /// <param name="id">UUID v7 record identifier.</param>
-    /// <param name="ct">Cancellation token.</param>
     Task<Device?> GetByIdAsync(Guid id, CancellationToken ct = default);
 
     /// <summary>
@@ -31,19 +30,22 @@ public interface IDeviceRepository
     /// </remarks>
     /// <param name="category">Device category (e.g., Pump, CGM, Meter).</param>
     /// <param name="type">Manufacturer-defined type string (e.g., "t:slim X2").</param>
-    /// <param name="serial">Device serial number.</param>
-    /// <param name="ct">Cancellation token.</param>
     /// <returns>The matching <see cref="Device"/>, or <c>null</c> if not found.</returns>
     Task<Device?> FindByCategoryTypeAndSerialAsync(DeviceCategory category, string type, string serial, CancellationToken ct = default);
 
     /// <summary>Persist a new <see cref="Device"/> record and return the saved entity.</summary>
-    /// <param name="model">Device record to create.</param>
-    /// <param name="ct">Cancellation token.</param>
     Task<Device> CreateAsync(Device model, WriteOrigin origin, CancellationToken ct = default);
 
-    /// <summary>Replace an existing <see cref="Device"/> identified by <paramref name="id"/>.</summary>
-    /// <param name="id">UUID v7 identifier of the record to update.</param>
-    /// <param name="model">Updated device data.</param>
-    /// <param name="ct">Cancellation token.</param>
-    Task<Device> UpdateAsync(Guid id, Device model, WriteOrigin origin, CancellationToken ct = default);
+    /// <summary>
+    /// Widen the stored seen window of the <see cref="Device"/> identified by <paramref name="id"/> to
+    /// include <paramref name="timestamp"/>: last seen only ever moves later and first seen only ever earlier.
+    /// </summary>
+    /// <remarks>
+    /// The comparison runs inside the UPDATE against the stored row rather than against a copy the
+    /// caller read, so a scope holding a stale device cannot move either bound back over a concurrent
+    /// writer's.
+    /// </remarks>
+    /// <param name="id">UUID v7 identifier of the device.</param>
+    /// <param name="timestamp">UTC instant the device was seen at.</param>
+    Task WidenSeenWindowAsync(Guid id, DateTime timestamp, WriteOrigin origin, CancellationToken ct = default);
 }

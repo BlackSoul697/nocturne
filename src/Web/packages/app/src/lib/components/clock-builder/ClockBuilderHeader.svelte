@@ -2,15 +2,13 @@
   import type { Snippet } from "svelte";
   import { Button } from "$lib/components/ui/button";
   import { Input } from "$lib/components/ui/input";
-  import {
-    ArrowLeft,
-    Play,
-    Save,
-    Loader2,
-    Copy,
-    Undo2,
-    Redo2,
-  } from "lucide-svelte";
+  import ArrowLeft from "@lucide/svelte/icons/arrow-left";
+  import Play from "@lucide/svelte/icons/play";
+  import Save from "@lucide/svelte/icons/save";
+  import Loader2 from "@lucide/svelte/icons/loader-circle";
+  import Copy from "@lucide/svelte/icons/copy";
+  import Undo2 from "@lucide/svelte/icons/undo-2";
+  import Redo2 from "@lucide/svelte/icons/redo-2";
 
   interface Props {
     clockName: string;
@@ -42,7 +40,7 @@
 </script>
 
 <header
-  class="sticky top-0 z-30 flex items-center justify-between border-b bg-background/95 px-4 py-3 backdrop-blur"
+  class="sticky top-(--app-sticky-top,0px) z-30 transition-all duration-300 flex items-center justify-between border-b bg-background/95 px-4 py-3 backdrop-blur"
 >
   <Button variant="ghost" href="/clock">
     <ArrowLeft class="size-4" />

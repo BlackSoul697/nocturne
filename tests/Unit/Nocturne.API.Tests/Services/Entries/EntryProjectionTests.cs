@@ -129,6 +129,7 @@ public class EntryProjectionTests
         sg.Filtered = 100_000;
         sg.Unfiltered = 110_000;
         sg.Delta = 3.5;
+        sg.Rssi = 100;
 
         var entry = EntryProjection.FromSensorGlucose(sg);
 
@@ -137,6 +138,7 @@ public class EntryProjectionTests
         entry.Filtered.Should().Be(100_000);
         entry.Unfiltered.Should().Be(110_000);
         entry.Delta.Should().Be(3.5);
+        entry.Rssi.Should().Be(100);
     }
 
     [Fact]
@@ -186,6 +188,29 @@ public class EntryProjectionTests
         var entry = EntryProjection.FromSensorGlucose(sg);
 
         entry.SrvModified.Should().Be(new DateTimeOffset(modifiedAt, TimeSpan.Zero).ToUnixTimeMilliseconds());
+    }
+
+    [Fact]
+    public void AllGlucoseTypes_ReportSrvCreatedAsTheServerCreationTimeNotTheEventTime()
+    {
+        var createdAt = TestTimestamp.AddDays(3);
+        var createdMills = new DateTimeOffset(createdAt, TimeSpan.Zero).ToUnixTimeMilliseconds();
+        var sg = CreateSensorGlucose();
+        var mg = CreateMeterGlucose();
+        var cal = CreateCalibration();
+        sg.CreatedAt = mg.CreatedAt = cal.CreatedAt = createdAt;
+        sg.ModifiedAt = mg.ModifiedAt = cal.ModifiedAt = createdAt;
+
+        foreach (var entry in new[]
+                 {
+                     EntryProjection.FromSensorGlucose(sg),
+                     EntryProjection.FromMeterGlucose(mg),
+                     EntryProjection.FromCalibration(cal),
+                 })
+        {
+            entry.SrvCreated.Should().Be(createdMills, because: entry.Type);
+            entry.Mills.Should().Be(TestMills, because: entry.Type);
+        }
     }
 
     // -------------------------------------------------------------------------

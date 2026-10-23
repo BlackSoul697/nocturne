@@ -6,7 +6,8 @@
     CardHeader,
     CardTitle,
   } from "$lib/components/ui/card";
-  import { Footprints } from "lucide-svelte";
+  import TimeZoneNote from "$lib/components/reports/TimeZoneNote.svelte";
+  import Footprints from "@lucide/svelte/icons/footprints";
   import FigureStrip from "$lib/components/reports/FigureStrip.svelte";
   import {
     Actogram,
@@ -24,6 +25,7 @@
   const { params: reportsParams, resource: actogramResource } = report;
 
   const dayTotals = $derived(actogramResource.current?.stepDayTotals ?? {});
+  const noZoneReason = $derived(actogramResource.current?.timeZoneUnavailableReason);
 
   function formatDate(date: Date): string {
     return formatShortDate(date);
@@ -64,9 +66,8 @@
   />
 </svelte:head>
 
-<div class="@container container mx-auto space-y-6 p-3 @md:p-6 max-w-7xl">
+<div class="@container space-y-6">
   <div class="print:hidden">
-    <h1 class="text-2xl @md:text-3xl font-bold">Step Count</h1>
     <p class="text-muted-foreground">
       Daily step patterns with glucose overlay
     </p>
@@ -79,6 +80,14 @@
       { label: "Period", value: String(dayCount), unit: "days" },
     ]}
   />
+
+  {#if noZoneReason}
+    <p class="text-sm text-muted-foreground">
+      <TimeZoneNote reason={noZoneReason}>
+        This report cannot calculate the total steps for each local day.
+      </TimeZoneNote>
+    </p>
+  {/if}
 
   <Card class="print:break-inside-auto!">
     <CardHeader>
@@ -101,9 +110,11 @@
         {#snippet rowLabel({ day })}
           <div class="text-right pr-2">
             <div class="text-xs text-muted-foreground">{formatDate(day)}</div>
-            <div class="text-xs font-medium tabular-nums">
-              {formatNumber(dayTotals[toDayString(day)])} <span class="text-muted-foreground font-normal">steps</span>
-            </div>
+            {#if !noZoneReason}
+              <div class="text-xs font-medium tabular-nums" data-testid="day-total">
+                {formatNumber(dayTotals[toDayString(day)])} <span class="text-muted-foreground font-normal">steps</span>
+              </div>
+            {/if}
           </div>
         {/snippet}
         {#snippet tooltipValue({ point })}
@@ -117,6 +128,7 @@
             {@const barHeight = (steps / barScale) * ctx.height}
             {@const x = ctx.xScale(new Date(ctx.day.getTime() + hoursFromStart * MS_PER_HOUR))}
             <rect
+              data-testid="step-reading"
               {x}
               y={ctx.height - barHeight}
               width={3}

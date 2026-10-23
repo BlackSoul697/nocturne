@@ -1,5 +1,7 @@
+using System.Text.Json;
 using Microsoft.Extensions.Logging;
 using Moq;
+using Nocturne.API.Configuration;
 using Nocturne.API.Services.Devices;
 using Nocturne.API.Services.Legacy;
 using Nocturne.Core.Contracts.Entries;
@@ -8,6 +10,7 @@ using Nocturne.Core.Contracts.Legacy;
 using Nocturne.Core.Contracts.Treatments;
 using Nocturne.Core.Contracts.V4.Repositories;
 using Nocturne.Core.Models;
+using Nocturne.Core.Models.Queries;
 using Nocturne.Core.Models.V4;
 using Nocturne.Core.Contracts.Profiles;
 using Nocturne.Core.Contracts.Repositories;
@@ -24,6 +27,7 @@ public class DDataServiceTests
     private readonly Mock<IEntryStore> _mockEntryStore;
     private readonly Mock<ITreatmentService> _mockTreatmentService;
     private readonly Mock<IProfileProjectionService> _mockProfileProjectionService;
+    private readonly Mock<IDeviceStatusGroupRepository> _mockGroupRepo;
     private readonly Mock<IFoodRepository> _mockFoodRepository;
     private readonly Mock<IActivityService> _mockActivityService;
     private readonly Mock<ILogger<DDataService>> _mockLogger;
@@ -39,28 +43,19 @@ public class DDataServiceTests
         _mockLogger = new Mock<ILogger<DDataService>>();
 
         // Build a DeviceStatusProjectionService backed by empty mocked repositories
-        var mockApsRepo = new Mock<IApsSnapshotRepository>();
-        mockApsRepo.Setup(x => x.GetAsync(
+        _mockGroupRepo = new Mock<IDeviceStatusGroupRepository>();
+        _mockGroupRepo.Setup(x => x.GetAsync(
                 It.IsAny<DateTime?>(), It.IsAny<DateTime?>(), It.IsAny<string?>(),
-                It.IsAny<string?>(), It.IsAny<int>(), It.IsAny<int>(),
-                It.IsAny<bool>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync(Array.Empty<ApsSnapshot>());
-        var mockPumpRepo = new Mock<IPumpSnapshotRepository>();
-        mockPumpRepo.Setup(x => x.GetAsync(
-                It.IsAny<DateTime?>(), It.IsAny<DateTime?>(), It.IsAny<string?>(),
-                It.IsAny<string?>(), It.IsAny<int>(), It.IsAny<int>(),
-                It.IsAny<bool>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync(Array.Empty<PumpSnapshot>());
-        var mockUploaderRepo = new Mock<IUploaderSnapshotRepository>();
-        var mockStateSpanRepo = new Mock<IStateSpanRepository>();
-        var mockExtrasRepo = new Mock<IDeviceStatusExtrasRepository>();
+                It.IsAny<int>(), It.IsAny<int>(), It.IsAny<bool>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(Array.Empty<DeviceStatusGroup>());
 
         var projectionService = new DeviceStatusProjectionService(
-            mockApsRepo.Object,
-            mockPumpRepo.Object,
-            mockUploaderRepo.Object,
-            mockStateSpanRepo.Object,
-            mockExtrasRepo.Object,
+            _mockGroupRepo.Object,
+            new Mock<IApsSnapshotRepository>().Object,
+            new Mock<IPumpSnapshotRepository>().Object,
+            new Mock<IUploaderSnapshotRepository>().Object,
+            new Mock<IStateSpanRepository>().Object,
+            new Mock<IDeviceStatusExtrasRepository>().Object,
             new Mock<ILogger<DeviceStatusProjectionService>>().Object);
 
         _ddataService = new DDataService(
@@ -96,7 +91,7 @@ public class DDataServiceTests
             .ReturnsAsync(Array.Empty<Treatment>());
         _mockProfileProjectionService
             .Setup(x =>
-                x.GetProfilesAsync(It.IsAny<int>(), It.IsAny<int>(), It.IsAny<CancellationToken>())
+                x.GetProfilesAsync(It.IsAny<int>(), It.IsAny<int>(), It.IsAny<bool>(), It.IsAny<CancellationToken>())
             )
             .ReturnsAsync(Array.Empty<Profile>());
         _mockFoodRepository
@@ -128,6 +123,296 @@ public class DDataServiceTests
         Assert.NotNull(result.Activity);
         Assert.NotNull(result.DbStats);
         Assert.True(result.LastUpdated > 0);
+    }
+
+    [Fact]
+    public async Task GetDDataAsync_DeviceStatusIsReadFromTheDayEndingAtTheTimestamp()
+    {
+        var at = new DateTimeOffset(2026, 3, 10, 12, 0, 0, TimeSpan.Zero);
+
+        await _ddataService.GetDDataAsync(at.ToUnixTimeMilliseconds(), CancellationToken.None);
+
+        _mockGroupRepo.Verify(x => x.GetAsync(
+            at.UtcDateTime.AddDays(-1), at.UtcDateTime.AddTicks(TimeSpan.TicksPerMillisecond - TimeSpan.TicksPerMicrosecond), It.IsAny<string?>(),
+            It.IsAny<int>(), It.IsAny<int>(), true, It.IsAny<CancellationToken>()));
+    }
+
+    [Fact]
+    public async Task GetDDataFrameAsync_ServesSgvsOldestFirstWhereGetDDataAsyncKeepsTheStoreOrder()
+    {
+        _mockEntryStore
+            .Setup(x => x.QueryAsync(It.Is<EntryQuery>(q => q.Type == "sgv"), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new List<Entry>
+            {
+                new() { Type = "sgv", Mills = 3000 },
+                new() { Type = "sgv", Mills = 1000 },
+                new() { Type = "sgv", Mills = 2000 },
+            });
+
+        var frame = await _ddataService.GetDDataFrameAsync(5000, CancellationToken.None);
+        var ddata = await _ddataService.GetDDataAsync(5000, CancellationToken.None);
+
+        Assert.Equal([1000L, 2000L, 3000L], frame.Sgvs.Select(e => e.Mills));
+        Assert.Equal([3000L, 1000L, 2000L], ddata.Sgvs.Select(e => e.Mills));
+    }
+
+    [Fact]
+    public async Task GetDDataFrameAsync_AnOlderTimestampPagesFromIt()
+    {
+        var at = DateTimeOffset.UtcNow.AddMinutes(-10).ToUnixTimeMilliseconds();
+
+        var frame = await _ddataService.GetDDataFrameAsync(at, CancellationToken.None);
+
+        Assert.True(frame.Page!.Frame);
+        Assert.Equal(at, frame.Page.After);
+        Assert.Equal(at, frame.LastUpdated);
+        Assert.Empty(frame.Entries);
+    }
+
+    [Theory]
+    [InlineData(0)]
+    [InlineData(-4)]
+    [InlineData(4)]
+    public async Task GetDDataFrameAsync_ATimestampWithinFiveMinutesOfNowCarriesNoPage(int minutesFromNow)
+    {
+        var at = DateTimeOffset.UtcNow.AddMinutes(minutesFromNow).ToUnixTimeMilliseconds();
+
+        var frame = await _ddataService.GetDDataFrameAsync(at, CancellationToken.None);
+
+        Assert.Null(frame.Page);
+        Assert.DoesNotContain("\"page\"", JsonSerializer.Serialize(frame, NightscoutJsonOptions.Create()));
+    }
+
+    private const long Day = 24L * 60 * 60 * 1000;
+    private const long Minute = 60_000;
+
+    private void SeedStores(string type, IReadOnlyList<long> mills)
+    {
+        _mockEntryStore
+            .Setup(x => x.QueryAsync(It.Is<EntryQuery>(q => q.Type == type), It.IsAny<CancellationToken>()))
+            .ReturnsAsync((EntryQuery q, CancellationToken _) => mills
+                .Where(m => m >= (q.FromMills ?? long.MinValue) && m <= (q.ToMills ?? long.MaxValue))
+                .OrderByDescending(m => m)
+                .Take(q.Count)
+                .Select(m => new Entry { Type = type, Mills = m })
+                .ToList());
+    }
+
+    private void SeedTreatments(params Treatment[] stored)
+    {
+        _mockTreatmentService
+            .Setup(x => x.GetTreatmentsAsync(It.IsAny<string?>(), It.IsAny<int?>(), It.IsAny<int?>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync((string? find, int? count, int? _, CancellationToken _) =>
+            {
+                var bounds = FindQuery.Parse(find);
+                return stored
+                    .Where(t => t.Mills >= (bounds.FromMills ?? long.MinValue) && t.Mills <= (bounds.ToMills ?? long.MaxValue))
+                    .OrderByDescending(t => t.Mills)
+                    .Take(count ?? 10)
+                    .ToList();
+            });
+        _mockTreatmentService
+            .Setup(x => x.GetTreatmentsAsync(It.IsAny<int>(), It.IsAny<int>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync((int count, int _, CancellationToken _) => stored
+                .OrderByDescending(t => t.Mills)
+                .Take(count)
+                .ToList());
+        _mockTreatmentService
+            .Setup(x => x.GetLatestTreatmentOfTypeAsync(It.IsAny<string>(), It.IsAny<long>(), It.IsAny<long>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync((string eventType, long from, long to, CancellationToken _) => stored
+                .Where(t => t.EventType == eventType && t.Mills >= from && t.Mills <= to)
+                .Where(t => eventType != "Profile Switch" || t.Duration == 0)
+                .OrderByDescending(t => t.Mills)
+                .FirstOrDefault());
+    }
+
+    private static Treatment Bolus(long mills) =>
+        new() { Id = $"bolus-{mills}", EventType = "Correction Bolus", Mills = mills };
+
+    [Fact]
+    public async Task GetDDataFrameAsync_APastTimeServesTheReadingsOfItsTwoDayWindow()
+    {
+        var now = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+        var at = now - 5 * Day;
+        long[] readings =
+        [
+            at - 2 * Day - Minute,
+            at - 9 * Day / 4,
+            at - 2 * Day + Minute,
+            at - Day / 2,
+            at + Minute,
+            now - Day,
+        ];
+        SeedStores("sgv", readings);
+        SeedStores("mbg", readings);
+        SeedStores("cal", readings);
+
+        var frame = await _ddataService.GetDDataFrameAsync(at, CancellationToken.None);
+
+        long[] served = [at - 2 * Day + Minute, at - Day / 2];
+        Assert.Equal(served, frame.Sgvs.Select(e => e.Mills));
+        Assert.Equal(served, frame.Mbgs.Select(e => e.Mills).OrderBy(m => m));
+        Assert.Equal(served, frame.Cals.Select(e => e.Mills).OrderBy(m => m));
+    }
+
+    [Fact]
+    public async Task GetDDataFrameAsync_APastTimeServesTheTreatmentsOfItsTwoAndAHalfDayWindow()
+    {
+        var now = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+        var at = now - 5 * Day;
+        long[] inside = [at - 5 * Day / 2 + Minute, at - 9 * Day / 4, at - Minute];
+        SeedTreatments(
+            Bolus(at - 5 * Day / 2 - Minute),
+            Bolus(inside[0]),
+            Bolus(inside[1]),
+            Bolus(inside[2]),
+            Bolus(at + Minute),
+            Bolus(now - Day));
+
+        var frame = await _ddataService.GetDDataFrameAsync(at, CancellationToken.None);
+
+        Assert.Equal(inside.OrderByDescending(m => m), frame.Treatments.Select(t => t.Mills));
+    }
+
+    [Fact]
+    public async Task GetDDataFrameAsync_ALiveTimeServesTheNewestReadingsAndTreatments()
+    {
+        var now = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+        SeedStores("sgv", [now - 2 * Day - Minute, now - 2 * Day + Minute, now - 60_000]);
+        SeedTreatments(Bolus(now - 5 * Day / 2 - Minute), Bolus(now - 5 * Day / 2 + Minute));
+
+        var frame = await _ddataService.GetDDataFrameAsync(now, CancellationToken.None);
+
+        Assert.Equal([now - 2 * Day + Minute, now - 60_000], frame.Sgvs.Select(e => e.Mills));
+        Assert.Equal([now - 5 * Day / 2 + Minute], frame.Treatments.Select(t => t.Mills));
+    }
+
+    [Fact]
+    public async Task GetDDataFrameAsync_CarriesTheLatestProfileSwitchAndEventsOlderThanTheTreatmentWindow()
+    {
+        var now = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+        var at = now - 5 * Day;
+        var profileSwitch = new Treatment
+        {
+            Id = "switch", EventType = "Profile Switch", Mills = at - 90 * Day, Duration = 0, Profile = "Weekday",
+        };
+        var olderSwitch = new Treatment
+        {
+            Id = "older-switch", EventType = "Profile Switch", Mills = at - 100 * Day, Duration = 0, Profile = "Old",
+        };
+        var siteChange = new Treatment { Id = "site", EventType = "Site Change", Mills = at - 20 * Day };
+        var olderSiteChange = new Treatment { Id = "older-site", EventType = "Site Change", Mills = at - 25 * Day };
+        var afterAt = new Treatment { Id = "after", EventType = "Site Change", Mills = at + Minute };
+        SeedTreatments(profileSwitch, olderSwitch, siteChange, olderSiteChange, afterAt, Bolus(at - Day));
+
+        var frame = await _ddataService.GetDDataFrameAsync(at, CancellationToken.None);
+
+        Assert.Equal(["bolus-" + (at - Day), "site", "switch"], frame.Treatments.Select(t => t.Id));
+        Assert.Equal([siteChange.Id], frame.SiteChangeTreatments.Select(t => t.Id));
+        Assert.Equal("Weekday", frame.LastProfileFromSwitch);
+    }
+
+    [Theory]
+    [InlineData("Sensor Start", -1, true)]
+    [InlineData("Sensor Start", 1, false)]
+    [InlineData("Sensor Change", -1, true)]
+    [InlineData("Sensor Change", 1, false)]
+    [InlineData("Sensor Stop", -1, true)]
+    [InlineData("Sensor Stop", 1, false)]
+    [InlineData("Site Change", -1, true)]
+    [InlineData("Site Change", 1, false)]
+    [InlineData("Insulin Change", -1, true)]
+    [InlineData("Insulin Change", 1, false)]
+    [InlineData("Pump Battery Change", -1, true)]
+    [InlineData("Pump Battery Change", 1, false)]
+    public async Task GetDDataFrameAsync_ALatestEventIsServedFromTheLastSixtyTwoDays(
+        string eventType, int minutesPastTheBound, bool served)
+    {
+        var at = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() - 5 * Day;
+        SeedTreatments(new Treatment { Id = "event", EventType = eventType, Mills = at - 62 * Day - minutesPastTheBound * Minute });
+
+        var frame = await _ddataService.GetDDataFrameAsync(at, CancellationToken.None);
+
+        Assert.Equal(served, frame.Treatments.Any(t => t.Id == "event"));
+    }
+
+    [Theory]
+    [InlineData(-1, true)]
+    [InlineData(1, false)]
+    public async Task GetDDataFrameAsync_AProfileSwitchIsServedFromTheLastThreeHundredAndSeventyTwoDays(
+        int minutesPastTheBound, bool served)
+    {
+        var at = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() - 5 * Day;
+        SeedTreatments(new Treatment
+        {
+            Id = "switch",
+            EventType = "Profile Switch",
+            Mills = at - 372 * Day - minutesPastTheBound * Minute,
+            Duration = 0,
+            Profile = "Weekday",
+        });
+
+        var frame = await _ddataService.GetDDataFrameAsync(at, CancellationToken.None);
+
+        Assert.Equal(served, frame.Treatments.Any(t => t.Id == "switch"));
+        Assert.Equal(served ? "Weekday" : null, frame.LastProfileFromSwitch);
+    }
+
+    [Fact]
+    public async Task GetDDataFrameAsync_ATimedProfileSwitchIsNotTheLatestSwitch()
+    {
+        var at = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() - 5 * Day;
+        var timed = new Treatment { Id = "timed", EventType = "Profile Switch", Mills = at - 10 * Day, Duration = 30 };
+        SeedTreatments(timed);
+
+        var frame = await _ddataService.GetDDataFrameAsync(at, CancellationToken.None);
+
+        Assert.Empty(frame.Treatments);
+    }
+
+    [Fact]
+    public async Task GetDDataFrameAsync_AFailingLatestReadLeavesTheWindowedTreatments()
+    {
+        var at = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() - 5 * Day;
+        SeedTreatments(Bolus(at - Day), new Treatment { Id = "site", EventType = "Site Change", Mills = at - 20 * Day });
+        _mockTreatmentService
+            .Setup(x => x.GetLatestTreatmentOfTypeAsync("Sensor Start", It.IsAny<long>(), It.IsAny<long>(), It.IsAny<CancellationToken>()))
+            .ThrowsAsync(new InvalidOperationException());
+
+        var frame = await _ddataService.GetDDataFrameAsync(at, CancellationToken.None);
+
+        Assert.Equal(["bolus-" + (at - Day), "site"], frame.Treatments.Select(t => t.Id));
+    }
+
+    [Fact]
+    public async Task GetDDataAsync_ReadsTheNewestRowsWhateverTheTimestamp()
+    {
+        var now = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+        long[] readings = [now - 6 * Day, now - Day];
+        SeedStores("sgv", readings);
+        SeedTreatments(readings.Select(Bolus).ToArray());
+
+        var ddata = await _ddataService.GetDDataAsync(now - 5 * Day, CancellationToken.None);
+
+        Assert.Equal(readings.OrderByDescending(m => m), ddata.Sgvs.Select(e => e.Mills));
+        Assert.Equal(readings.OrderByDescending(m => m), ddata.Treatments.Select(t => t.Mills));
+    }
+
+    [Fact]
+    public async Task GetDDataFrameAsync_SerialisesTheFrameFieldsNightscoutSends()
+    {
+        var at = DateTimeOffset.UtcNow.AddHours(-1).ToUnixTimeMilliseconds();
+        var frame = await _ddataService.GetDDataFrameAsync(at, CancellationToken.None);
+
+        var json = JsonSerializer.SerializeToElement(frame, NightscoutJsonOptions.Create());
+
+        Assert.Equal(JsonValueKind.Array, json.GetProperty("entries").ValueKind);
+        Assert.Equal(0, json.GetProperty("entries").GetArrayLength());
+        Assert.Equal(JsonValueKind.Null, json.GetProperty("lastProfileFromSwitch").ValueKind);
+        Assert.Equal(0, json.GetProperty("dbstats").GetProperty("dataSize").GetInt64());
+        Assert.Equal(0, json.GetProperty("dbstats").GetProperty("indexSize").GetInt64());
+        Assert.True(json.GetProperty("page").GetProperty("frame").GetBoolean());
+        Assert.Equal(at, json.GetProperty("page").GetProperty("after").GetInt64());
     }
 
     [Fact]
@@ -297,6 +582,49 @@ public class DDataServiceTests
 
         // Assert
         Assert.Null(result.LastProfileFromSwitch);
+    }
+
+    /// <summary>
+    /// The copies <c>preserveOriginalTreatments</c> works on are JSON clones, and the serialized
+    /// form carries a uuid id only as its 24-hex wire prefix. The copies must keep the full stored
+    /// id, or nothing downstream can match them back to their records.
+    /// </summary>
+    [Fact]
+    public void ProcessTreatments_PreservingOriginals_CopiesKeepTheStoredIdAndLeaveOriginalsUntouched()
+    {
+        var profileId = "0198c2a4-1f3b-7c2d-9e55-6a1b2c3d4e5f";
+        var tempBasalId = "0198c2a4-1f3b-7c2d-9e55-6a1b2c3d4e60";
+        var tempTargetId = "0198c2a4-1f3b-7c2d-9e55-6a1b2c3d4e61";
+        var tempTarget = new Treatment
+        {
+            Id = tempTargetId,
+            EventType = "Temporary Target",
+            Mills = 3000,
+            Duration = 30,
+            Units = "mmol",
+            TargetTop = 8,
+            TargetBottom = 6,
+        };
+        var treatments = new List<Treatment>
+        {
+            new() { Id = profileId, EventType = "Profile Switch", Mills = 1000, Duration = 0, Profile = "Day" },
+            new() { Id = tempBasalId, EventType = "Temp Basal", Mills = 2000, Duration = 30, Absolute = 0.4 },
+            tempTarget,
+        };
+
+        var result = _ddataService.ProcessTreatments(treatments, true);
+
+        Assert.Equal(profileId, Assert.Single(result.ProfileTreatments).Id);
+        Assert.Equal(tempBasalId, Assert.Single(result.TempBasalTreatments).Id);
+        var convertedTarget = Assert.Single(result.TempTargetTreatments);
+        Assert.Equal(tempTargetId, convertedTarget.Id);
+        Assert.Equal("mg/dl", convertedTarget.Units);
+
+        Assert.All(
+            result.ProfileTreatments.Concat(result.TempBasalTreatments).Concat(result.TempTargetTreatments),
+            copy => Assert.DoesNotContain(treatments, original => ReferenceEquals(original, copy)));
+        Assert.Equal("mmol", tempTarget.Units);
+        Assert.Equal(8, tempTarget.TargetTop);
     }
 
     [Fact]

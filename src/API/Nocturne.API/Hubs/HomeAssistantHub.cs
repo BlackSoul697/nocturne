@@ -1,20 +1,21 @@
 using Nocturne.Core.Models.Authorization;
-using System.Collections.Concurrent;
+using System.Security.Claims;
 using System.Text.Json;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.EntityFrameworkCore;
+using Nocturne.API.Extensions;
+using Nocturne.API.Services.Realtime;
 using Nocturne.Core.Contracts.Alerts;
 using Nocturne.Core.Models;
 using Nocturne.Core.Models.Alerts;
-using Nocturne.Infrastructure.Data;
+using Nocturne.Infrastructure.Data.Services;
 
 namespace Nocturne.API.Hubs;
 
 /// <summary>
 /// SignalR hub for Home Assistant integration. HA instances subscribe to receive
-/// real-time glucose relays and alert dispatches, and can acknowledge excursions
-/// when the channel is configured to allow it.
+/// real-time glucose relays and alert dispatches, and can acknowledge excursions.
 /// Mounted at /hubs/home-assistant.
 /// </summary>
 // The handshake is anonymous so it does not gate on the HTTP fallback authorization policy; this hub
@@ -22,190 +23,131 @@ namespace Nocturne.API.Hubs;
 // The hub endpoint is internet-reachable (the cloud gateway publishes /hubs/**), so authorization
 // happens per method in HubAuthorizationFilter.
 [AllowAnonymous]
-public class HomeAssistantHub : TenantAwareHub
+public class HomeAssistantHub(HomeAssistantConnections connections) : TenantAwareHub
 {
-    /// <summary>
-    /// Tracks active HA instance connection counts. Key is the tenant-scoped group name for
-    /// "ha:{instanceId}", value is the number of active connections in that group.
-    /// Used by <see cref="Services.Alerts.Providers.HomeAssistantProvider"/> to gate delivery marking.
-    /// </summary>
-    private static readonly ConcurrentDictionary<string, int> _instanceConnectionCounts = new();
+    private const string InstanceItemKey = "ha_instance_id";
 
     /// <summary>
-    /// Subscribe the calling connection to glucose relay and per-instance alert groups.
-    /// Also performs catch-up delivery for any failed HA deliveries targeting this instance.
+    /// Subscribe the calling connection to its instance's alert dispatches, the tenant's resolved
+    /// and acknowledged alert events and, when it may read glucose, the glucose relay. Replays the
+    /// instance's failed deliveries to it.
     /// </summary>
-    /// <param name="instanceId">The Home Assistant instance identifier (matches channel Destination).</param>
-    // ha-glucose and ha-alerts carry the tenant's glucose relay and every alert dispatch, and the
-    // catch-up replays undelivered alert payloads to the caller, so a share-style credential is
-    // refused. The instanceId is caller-chosen, so ha:{instanceId} is tenant-wide too.
+    /// <param name="instanceId">
+    /// The Home Assistant instance, which is the OAuth client the connection's token was issued to
+    /// and the channel destination its alerts are addressed to. Any other value is refused, so a
+    /// connection receives only its own instance's dispatches.
+    /// </param>
+    // The instance group and the catch-up carry alert payloads, and ha-alerts carries alert
+    // resolutions and acknowledgements, so a share-style credential is refused.
     [HubScope(Scope.AlertsRead)]
     [HubTenantGroup]
     public async Task Subscribe(string instanceId)
     {
         var ct = Context.ConnectionAborted;
 
-        if (string.IsNullOrWhiteSpace(instanceId))
-            throw new HubException("instanceId must not be empty.");
-
         var tenantId = TenantContext?.TenantId
             ?? throw new HubException("No tenant context resolved.");
 
-        // Join tenant-scoped glucose relay, per-instance, and alert groups
-        await Groups.AddToGroupAsync(Context.ConnectionId, TenantGroup("ha-glucose"), ct);
+        var authorization = HubAuthorizationState.Resolve(Context)
+            ?? throw new HubException("Subscribe requires an authorized connection.");
+
+        if (string.IsNullOrWhiteSpace(instanceId)
+            || !string.Equals(instanceId, authorization.ClientId, StringComparison.Ordinal))
+        {
+            throw new HubException(
+                "instanceId must be the OAuth client the connection's access token was issued to.");
+        }
+
+        if (authorization.MayReceiveCategory(RealtimeCategories.Entries))
+            await Groups.AddToGroupAsync(Context.ConnectionId, TenantGroup("ha-glucose"), ct);
         await Groups.AddToGroupAsync(Context.ConnectionId, TenantGroup($"ha:{instanceId}"), ct);
         await Groups.AddToGroupAsync(Context.ConnectionId, TenantGroup("ha-alerts"), ct);
 
-        // Track connection count for this instance and store instanceId for cleanup on disconnect
-        var instanceGroupKey = FormatTenantGroup(tenantId.ToString(), $"ha:{instanceId}");
-        _instanceConnectionCounts.AddOrUpdate(instanceGroupKey, 1, (_, count) => count + 1);
-        Context.Items["ha_instance_id"] = instanceId;
+        connections.Add(tenantId, instanceId, Context.ConnectionId);
+        Context.Items[InstanceItemKey] = instanceId;
 
-        // Catch-up: re-dispatch failed deliveries for this instance
         await CatchUpFailedDeliveriesAsync(tenantId, instanceId, ct);
     }
 
-    /// <summary>
-    /// Decrements the connection count for the instance this connection was subscribed to.
-    /// </summary>
+    /// <inheritdoc />
     public override async Task OnDisconnectedAsync(Exception? exception)
     {
-        var instanceId = Context.Items.TryGetValue("ha_instance_id", out var val) ? val as string : null;
-        if (instanceId is not null)
+        if (Context.Items.TryGetValue(InstanceItemKey, out var value)
+            && value is string instanceId
+            && TenantContext?.TenantId is { } tenantId)
         {
-            var tenantId = TenantContext?.TenantId.ToString();
-            if (tenantId is not null)
-            {
-                var groupKey = FormatTenantGroup(tenantId, $"ha:{instanceId}");
-                _instanceConnectionCounts.AddOrUpdate(groupKey, 0, (_, count) => Math.Max(0, count - 1));
-            }
+            connections.Remove(tenantId, instanceId, Context.ConnectionId);
         }
 
         await base.OnDisconnectedAsync(exception);
     }
 
     /// <summary>
-    /// Returns whether a specific HA instance currently has at least one active SignalR connection.
-    /// Used by <see cref="Services.Alerts.Providers.HomeAssistantProvider"/> to decide whether to mark delivery as delivered.
-    /// </summary>
-    public static bool IsInstanceConnected(string tenantId, string instanceId)
-    {
-        var key = FormatTenantGroup(tenantId, $"ha:{instanceId}");
-        return _instanceConnectionCounts.TryGetValue(key, out var count) && count > 0;
-    }
-
-    /// <summary>
-    /// Acknowledge a specific excursion from the Home Assistant side.
-    /// Requires the "alerts.readwrite" OAuth scope and the channel's metadata must have allow_ack enabled.
+    /// Acknowledge a specific excursion from the Home Assistant side, with the connection's own
+    /// resolved credential, exactly as any other client acknowledges.
     /// </summary>
     /// <param name="excursionId">The excursion to acknowledge.</param>
-    /// <param name="acknowledgedBy">Display name or identifier of the person acknowledging.</param>
-    // Gate 1 is the declared scope, enforced by HubAuthorizationFilter against the connection's
-    // resolved credential. The authority is the resolved, membership-intersected GrantedScopes set,
-    // not a "scope" claim on the principal: that claim is minted only by JwtService and so only ever
-    // appeared on the principal the framework's JwtBearer scheme built, and the custom chain owns the
-    // final principal on every path.
-    [HubScope(Scope.AlertsReadWrite)]
-    public async Task Acknowledge(Guid excursionId, string acknowledgedBy)
+    /// <param name="acknowledgedBy">
+    /// Recorded only when the connection's principal names no one; see
+    /// <see cref="AcknowledgerExtensions.ResolveAcknowledger"/>.
+    /// </param>
+    /// <returns>Which outcome applied.</returns>
+    // The authority is the HubAuthorization the filter admitted this call on, so the credential that
+    // passed [HubScope] is the one the decision judges. Its scopes are the resolved,
+    // membership-intersected set, not a "scope" claim on the principal: that claim is minted only by
+    // JwtService and so only ever appeared on the principal the framework's JwtBearer scheme built,
+    // and the custom chain owns the final principal on every path.
+    [HubScope(Scope.AlertsReadWrite, Scope.DeviceNotify)]
+    public async Task<AlertAcknowledgementOutcome> Acknowledge(Guid excursionId, string acknowledgedBy)
     {
-        var ct = Context.ConnectionAborted;
-
         var tenantId = TenantContext?.TenantId
             ?? throw new HubException("No tenant context resolved.");
 
-        // Gate 2: Channel config check — find HA channels for this excursion's rule and verify allow_ack
-        var services = Context.GetHttpContext()!.RequestServices;
-        var contextFactory = services.GetRequiredService<IDbContextFactory<NocturneDbContext>>();
+        var authorization = HubAuthorizationState.Resolve(Context)
+            ?? throw new HubException("Acknowledge requires an authorized connection.");
 
-        await using var db = await contextFactory.CreateDbContextAsync(ct);
-        db.TenantId = tenantId;
-
-        var excursion = await db.AlertExcursions
-            .AsNoTracking()
-            .Where(e => e.Id == excursionId && e.TenantId == tenantId)
-            .Select(e => new { e.AlertRuleId })
-            .FirstOrDefaultAsync(ct);
-
-        if (excursion is null)
-            throw new HubException("Excursion not found.");
-
-        var haChannels = await db.AlertRuleChannels
-            .AsNoTracking()
-            .Where(c => c.AlertRuleId == excursion.AlertRuleId
-                        && c.TenantId == tenantId
-                        && c.ChannelType == ChannelType.HomeAssistant)
-            .Select(c => c.Metadata)
-            .ToListAsync(ct);
-
-        var allowAck = haChannels.Any(metadata =>
-        {
-            if (string.IsNullOrEmpty(metadata))
-                return false;
-
-            try
-            {
-                using var doc = JsonDocument.Parse(metadata);
-                return doc.RootElement.TryGetProperty("allow_ack", out var prop)
-                       && prop.ValueKind == JsonValueKind.True;
-            }
-            catch (JsonException)
-            {
-                return false;
-            }
-        });
-
-        if (!allowAck)
-            throw new HubException("Acknowledgement is not permitted for this alert channel.");
-
-        // Both gates passed — acknowledge
-        var ackService = services.GetRequiredService<IAlertAcknowledgementService>();
-        await ackService.AcknowledgeExcursionAsync(tenantId, excursionId, acknowledgedBy, broadcast: true, ct);
+        var ackService = Context.GetHttpContext()!.RequestServices
+            .GetRequiredService<IAlertAcknowledgementService>();
+        return await ackService.AcknowledgeExcursionAsync(
+            tenantId,
+            excursionId,
+            (Context.User ?? new ClaimsPrincipal()).ResolveAcknowledger(acknowledgedBy),
+            new AlertAcknowledgementAuthority(authorization.OwnSubjectId, authorization.Scopes),
+            broadcast: true,
+            Context.ConnectionAborted);
     }
 
     private async Task CatchUpFailedDeliveriesAsync(Guid tenantId, string instanceId, CancellationToken ct)
     {
         var services = Context.GetHttpContext()!.RequestServices;
-        var contextFactory = services.GetRequiredService<IDbContextFactory<NocturneDbContext>>();
+        var contextFactory = services.GetRequiredService<INocturneDbContextFactory>();
 
-        await using var db = await contextFactory.CreateDbContextAsync(ct);
-        db.TenantId = tenantId;
+        await using var db = await contextFactory.CreateForTenantAsync(tenantId, ct);
+        var now = DateTime.UtcNow;
 
-        // Find failed HA deliveries for this instance that belong to open excursions
+        // Find failed HA deliveries for this instance that belong to open excursions and are
+        // not under an AlertSnooze (the resume dispatch re-sends those once it lapses)
         var failedDeliveries = await db.AlertDeliveries
             .Include(d => d.AlertInstance)
                 .ThenInclude(i => i!.AlertExcursion)
-            .Include(d => d.AlertRuleChannel)
             .Where(d => d.TenantId == tenantId
                         && d.ChannelType == ChannelType.HomeAssistant
                         && d.Destination == instanceId
                         && d.Status == "failed"
                         && d.AlertInstance != null
                         && d.AlertInstance.AlertExcursion != null
-                        && d.AlertInstance.AlertExcursion.EndedAt == null)
+                        && d.AlertInstance.AlertExcursion.EndedAt == null
+                        && (d.AlertInstance.SnoozedUntil == null || d.AlertInstance.SnoozedUntil <= now))
             .ToListAsync(ct);
 
         foreach (var delivery in failedDeliveries)
         {
             try
             {
-                // Re-dispatch the payload to the caller, including allow_ack from channel metadata
                 var payload = JsonSerializer.Deserialize<AlertPayload>(delivery.Payload);
                 if (payload is not null)
                 {
-                    var allowAck = false;
-                    if (!string.IsNullOrEmpty(delivery.AlertRuleChannel?.Metadata))
-                    {
-                        try
-                        {
-                            using var doc = JsonDocument.Parse(delivery.AlertRuleChannel.Metadata);
-                            allowAck = doc.RootElement.TryGetProperty("allow_ack", out var prop)
-                                       && prop.ValueKind == JsonValueKind.True;
-                        }
-                        catch (JsonException) { }
-                    }
-
-                    var channelMeta = new { allowAck };
-                    await Clients.Caller.SendCoreAsync("alert_dispatch", new object[] { payload, channelMeta }, ct);
+                    await Clients.Caller.SendCoreAsync("alert_dispatch", new object[] { payload }, ct);
 
                     // Mark as delivered
                     delivery.Status = "delivered";

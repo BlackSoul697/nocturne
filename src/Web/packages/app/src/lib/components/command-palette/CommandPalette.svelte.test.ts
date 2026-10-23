@@ -7,10 +7,6 @@ const { goto } = vi.hoisted(() => ({ goto: vi.fn(() => Promise.resolve()) }));
 
 vi.mock("$app/navigation", () => ({ goto }));
 
-vi.mock("$lib/stores/auth-store.svelte", () => ({
-  getAuthStore: () => ({ hasRole: () => true }),
-}));
-
 vi.mock("$lib/stores/realtime-store.svelte", () => ({
   getRealtimeStore: () => ({ pillsData: {} }),
 }));
@@ -23,12 +19,16 @@ import { pinnedItemIds, recentItemIds } from "./command-palette-store.svelte";
 
 const item = (name: string) => page.getByRole("option", { name, exact: true });
 
+// A report option's name carries its description after the title.
+const report = (title: string) =>
+  page.getByRole("option", { name: new RegExp(`^${title}`) });
+
 describe("CommandPalette", () => {
   beforeEach(() => {
     goto.mockClear();
     pinnedItemIds.current = [];
     recentItemIds.current = [];
-    pageState.data = { effectivePermissions: [] };
+    pageState.data = { effectivePermissions: [], isPlatformAdmin: false };
   });
 
   it("renders no button inside an option or link", async () => {
@@ -106,5 +106,37 @@ describe("CommandPalette", () => {
 
     await expect.element(item("Dashboard")).toBeVisible();
     await expect.element(item("Grants")).not.toBeInTheDocument();
+  });
+
+  it("offers the platform admin pages to a platform administrator", async () => {
+    pageState.data = { effectivePermissions: [], isPlatformAdmin: true };
+    render(CommandPalette, { open: true });
+
+    await expect.element(item("Tenant Management")).toBeVisible();
+    await expect.element(item("Access Requests")).toBeVisible();
+  });
+
+  it("withholds the platform admin pages from everyone else", async () => {
+    pageState.data = { effectivePermissions: ["*"], isPlatformAdmin: false };
+    render(CommandPalette, { open: true });
+
+    await expect.element(item("Dashboard")).toBeVisible();
+    await expect.element(item("Tenant Management")).not.toBeInTheDocument();
+    await expect.element(item("Access Requests")).not.toBeInTheDocument();
+  });
+
+  it("lists a report under the registry's title to a viewer holding its scopes", async () => {
+    pageState.data = { effectivePermissions: ["glucose.read"] };
+    render(CommandPalette, { open: true });
+
+    await expect.element(report("Day-by-Day View")).toBeVisible();
+  });
+
+  it("withholds a report from a viewer without its scope", async () => {
+    pageState.data = { effectivePermissions: ["glucose.read"] };
+    render(CommandPalette, { open: true });
+
+    await expect.element(report("Day-by-Day View")).toBeVisible();
+    await expect.element(report("Battery")).not.toBeInTheDocument();
   });
 });

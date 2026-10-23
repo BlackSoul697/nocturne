@@ -36,13 +36,19 @@
   } from "$lib/components/ui/card";
   import { Badge } from "$lib/components/ui/badge";
   import SettingsPageSkeleton from "$lib/components/settings/SettingsPageSkeleton.svelte";
-  import { Bell, Plus, AlertTriangle, Check, ChevronRight, Loader2 } from "lucide-svelte";
+  import Bell from "@lucide/svelte/icons/bell";
+  import Plus from "@lucide/svelte/icons/plus";
+  import AlertTriangle from "@lucide/svelte/icons/triangle-alert";
+  import Check from "@lucide/svelte/icons/check";
+  import ChevronRight from "@lucide/svelte/icons/chevron-right";
+  import Loader2 from "@lucide/svelte/icons/loader-circle";
   import AppLogo from "$lib/components/ui/AppLogo.svelte";
   import { resolve } from "$app/paths";
 
   import AlertRuleRow from "$lib/components/alerts/AlertRuleRow.svelte";
   import DndNoticeStrip from "$lib/components/alerts/DndNoticeStrip.svelte";
-  import { isDndActiveNow } from "$lib/components/alerts/dnd";
+  import { isDndInEffect, isDndManualActive } from "$lib/components/alerts/dnd";
+  import { refreshOnReturn } from "$lib/utils/refresh-on-return.svelte";
   import { severity, severityLabel } from "$lib/components/alerts/severity";
 
   // Every write on this page — rule toggle/delete/test-fire, acknowledge, and
@@ -61,6 +67,7 @@
   const activeAlertsQuery = getActiveAlerts();
   const historyQuery = getAlertHistory({ page: 1, pageSize: 50 });
   const dndQuery = getTenantAlertSettings();
+  refreshOnReturn(() => void dndQuery.refresh());
 
   // ---- Mutation state ----
   let togglingRuleId = $state<string | null>(null);
@@ -222,10 +229,28 @@
       firedThisWeek === fetchedHistory.length &&
       (history?.totalCount ?? 0) > fetchedHistory.length}
 
-    <!-- Do Not Disturb notice, shown only while a manual mute is in effect. -->
-    {#if dnd && isDndActiveNow(dnd)}
+    {@const needsReview = rules.filter(
+      (r) => !!r.reviewReason || (r.conditionIssues?.length ?? 0) > 0,
+    ).length}
+    {#if needsReview > 0 && canManageAlerts}
+      <div
+        role="status"
+        class="flex items-center gap-3 rounded-lg border px-4 py-3 {severity('warning', 'strip')}"
+      >
+        <AlertTriangle class="h-4 w-4 shrink-0" aria-hidden="true" />
+        <p class="text-sm font-medium">
+          {needsReview === 1
+            ? "1 alert rule needs review."
+            : `${needsReview} alert rules need review.`}
+          An update changed or turned off rules set up in an older format, or their conditions
+          may not alert as set. They are marked below.
+        </p>
+      </div>
+    {/if}
+
+    {#if dnd && isDndInEffect(dnd)}
       <DndNoticeStrip
-        onDisableDnd={canManageAlerts ? () => handleDisableDnd(dnd) : undefined}
+        onDisableDnd={canManageAlerts && isDndManualActive(dnd) ? () => handleDisableDnd(dnd) : undefined}
         {disablingDnd}
       />
     {/if}
@@ -309,6 +334,10 @@
               </div>
               {#if a.acknowledgedAt}
                 <Badge variant="secondary" class="shrink-0">Acknowledged</Badge>
+              {:else if a.snoozedUntil}
+                <Badge variant="outline" class="shrink-0">
+                  Snoozed until {formatClock(a.snoozedUntil)}
+                </Badge>
               {/if}
             </div>
           {/each}

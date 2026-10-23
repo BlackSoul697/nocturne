@@ -32,6 +32,11 @@
   --glucose-very-low: oklch(0.55 0.25 29);   /* red - CSS named red */
   --glucose-high: oklch(0.9 0.18 105);       /* yellow - same as low (Nightscout uses symmetric warnings) */
   --glucose-very-high: oklch(0.55 0.25 29);  /* red */
+  --glucose-very-low-foreground: oklch(0.985 0.002 247.839);
+  --glucose-low-foreground: oklch(0.21 0.034 264.665);
+  --glucose-in-range-foreground: oklch(0.21 0.034 264.665);
+  --glucose-high-foreground: oklch(0.21 0.034 264.665);
+  --glucose-very-high-foreground: oklch(0.985 0.002 247.839);
 
   /* Insulin Types - Classic blue (#0099ff) */
   --insulin: rgb(0, 153, 255);
@@ -53,6 +58,9 @@
   --pred-acob: rgb(251, 140, 0);
   --pred-zt: rgb(0, 210, 210);              /* #00d2d2 */
   --pred-uam: rgb(201, 189, 96);            /* #c9bd60 */
+  /* Prediction bias: a prediction that ran high or low, as the Loop Analysis heatmap tints it. */
+  --bias-high: #3b7fd1;
+  --bias-low: #d04a3c;
 
   /* Status Colors. Chat cards and e-mail use the default theme's values
      (see @nocturne/ui/tokens); overrides here apply in-browser only. */
@@ -124,6 +132,9 @@
 /* Pure black, neon green, grey pills - medical device aesthetic */
 :root.classic-theme.dark,
 .classic-theme .dark {
+  /* Prediction bias: a prediction that ran high or low, as the Loop Analysis heatmap tints it. */
+  --bias-high: #3d74c2;
+  --bias-low: #c2493d;
   /* shadcn/ui Base Colors - True Nightscout Dark */
   --background: oklch(0 0 0);              /* #000000 - pure black */
   --foreground: oklch(0.78 0.005 250);     /* #bdbdbd - Nightscout text grey */

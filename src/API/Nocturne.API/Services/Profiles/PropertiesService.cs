@@ -234,41 +234,58 @@ public class PropertiesService : IPropertiesService
     }
 
     /// <summary>
-    /// Set BGNow properties from the most recent glucose entry
+    /// Sets <c>bgnow</c> to the newest 5 minute bucket, as <c>bgnow.js</c> does (see
+    /// <see cref="DirectionService.BuildBuckets"/>). A bucket holding only error codes has no
+    /// <c>mean</c>, <c>last</c> or <c>mills</c>, and so no delta or forecast follows it.
     /// </summary>
     private void SetBgNowPropertiesAsync(Dictionary<string, object> properties, DData ddata)
     {
-        var sgvs = ddata.Sgvs?.OrderByDescending(s => s.Mills).ToList();
-        if (sgvs?.Any() != true)
+        var currentSgv = ddata.Sgvs?.OrderByDescending(s => s.Mills).FirstOrDefault();
+        if (currentSgv == null)
             return;
 
-        var currentSgv = sgvs.First();
-        var mgdlValue = currentSgv.Mgdl != 0 ? currentSgv.Mgdl : currentSgv.Sgv ?? 0;
+        var mgdlValue = DirectionService.MgdlOf(currentSgv);
+        var bgnow = BucketProperties(DirectionService.BuildBuckets(ddata.Sgvs!)[0]);
+        bgnow["mgdl"] = mgdlValue;
+        bgnow["scaled"] = currentSgv.Scaled ?? mgdlValue;
+        bgnow["displayLine"] = $"BG Now: {currentSgv.Scaled ?? mgdlValue} mg/dl";
 
-        properties["bgnow"] = new Dictionary<string, object>
+        properties["bgnow"] = bgnow;
+    }
+
+    private static Dictionary<string, object> BucketProperties(BgNowBucket bucket)
+    {
+        var result = new Dictionary<string, object> { ["sgvs"] = bucket.Entries };
+
+        if (bucket.Last != null)
         {
-            ["sgvs"] = new[] { currentSgv },
-            ["mgdl"] = mgdlValue,
-            ["scaled"] = currentSgv.Scaled ?? mgdlValue,
-            ["mills"] = currentSgv.Mills,
-            ["displayLine"] = $"BG Now: {currentSgv.Scaled ?? mgdlValue} mg/dl",
-        };
+            result["mean"] = bucket.Mean!.Value;
+            result["last"] = DirectionService.MgdlOf(bucket.Last);
+            result["mills"] = bucket.Last.Mills;
+        }
+
+        if (bucket.Errors.Count > 0)
+            result["errors"] = bucket.Errors;
+
+        return result;
     }
 
     /// <summary>
-    /// Set delta properties showing glucose change - exact legacy algorithm
+    /// Set delta properties showing glucose change between the two most recent 5 minute buckets
     /// </summary>
     private void SetDeltaProperties(Dictionary<string, object> properties, DData ddata)
     {
-        var entries = ddata.Sgvs?.OrderByDescending(s => s.Mills).Take(10).ToList();
-        if (entries?.Count < 2)
+        if (ddata.Sgvs == null)
             return;
 
-        // Use the DirectionService for exact legacy delta calculation
-        var deltaInfo = DirectionService.CalculateDelta(entries!, "mg/dl");
-        if (deltaInfo == null)
+        var bucketDelta = DirectionService.CalculateBucketDelta(
+            DirectionService.BuildBuckets(ddata.Sgvs),
+            "mg/dl"
+        );
+        if (bucketDelta == null)
             return;
 
+        var deltaInfo = bucketDelta.Info;
         properties["delta"] = new Dictionary<string, object>
         {
             ["display"] = deltaInfo.Display ?? "",
@@ -278,8 +295,7 @@ public class PropertiesService : IPropertiesService
             ["absolute"] = deltaInfo.Absolute,
             ["elapsedMins"] = deltaInfo.ElapsedMins ?? 0,
             ["mean5MinsAgo"] = deltaInfo.Mean5MinsAgo ?? 0,
-            ["previous"] = deltaInfo.Previous ?? (object)null!,
-            ["current"] = deltaInfo.Current ?? (object)null!,
+            ["previous"] = BucketProperties(bucketDelta.Previous),
             ["times"] = deltaInfo.Times,
         };
     }
@@ -312,16 +328,8 @@ public class PropertiesService : IPropertiesService
         try
         {
             var now = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
-            var diaHoursAgo = DateTime.UtcNow.AddHours(-8);
-
-            var boluses = (await _bolusRepository.GetAsync(
-                from: diaHoursAgo, to: null, device: null, source: null,
-                limit: 1000, offset: 0, descending: false
-            )).ToList();
-            var tempBasals = (await _tempBasalRepository.GetAsync(
-                from: diaHoursAgo, to: null, device: null, source: null,
-                limit: 1000, offset: 0, descending: false
-            )).ToList();
+            var (boluses, tempBasals) = await RecentTreatments.LoadInsulinAsync(
+                _bolusRepository, _tempBasalRepository);
 
             // Emit the property even with no insulin on board: legacy clients treat a
             // missing `iob` as "server doesn't support it" rather than "zero".
@@ -362,21 +370,10 @@ public class PropertiesService : IPropertiesService
         {
             _logger.LogDebug("SetCobProperties: Starting");
             var now = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
-            var cobHoursAgo = DateTime.UtcNow.AddHours(-6);
-            var diaHoursAgo = DateTime.UtcNow.AddHours(-8);
 
-            var carbIntakes = (await _carbIntakeRepository.GetAsync(
-                from: cobHoursAgo, to: null, device: null, source: null,
-                limit: 1000, offset: 0, descending: false
-            )).ToList();
-            var boluses = (await _bolusRepository.GetAsync(
-                from: diaHoursAgo, to: null, device: null, source: null,
-                limit: 1000, offset: 0, descending: false
-            )).ToList();
-            var tempBasals = (await _tempBasalRepository.GetAsync(
-                from: diaHoursAgo, to: null, device: null, source: null,
-                limit: 1000, offset: 0, descending: false
-            )).ToList();
+            var carbIntakes = await RecentTreatments.LoadCarbsAsync(_carbIntakeRepository);
+            var (boluses, tempBasals) = await RecentTreatments.LoadInsulinAsync(
+                _bolusRepository, _tempBasalRepository);
 
             // Emit the property even with no carbs on board: legacy clients treat a
             // missing `cob` as "server doesn't support it" rather than "zero".
@@ -747,21 +744,12 @@ public class PropertiesService : IPropertiesService
         {
             result.Treatment = tempBasalTreatment;
 
-            // Calculate temp basal rate - exact legacy logic
-            if (tempBasalTreatment.Percent != null)
-            {
-                // Percentage-based temp basal: percent field contains the target percentage (e.g., 150 for 150%)
-                result.TempBasal = result.Basal * tempBasalTreatment.Percent.Value / 100;
-            }
-            else if (tempBasalTreatment.Absolute != null)
-            {
-                // Absolute temp basal rate
-                result.TempBasal = tempBasalTreatment.Absolute.Value;
-            }
+            if (tempBasalTreatment.Absolute is { } absolute)
+                result.TempBasal = absolute;
+            else if (tempBasalTreatment.Percent is { } percent and not 0)
+                result.TempBasal = Nocturne.Core.Models.V4.TempBasal.RateRelativeTo(result.Basal, percent);
             else
-            {
                 result.TempBasal = result.Basal;
-            }
 
             result.TotalBasal = result.TempBasal;
         }

@@ -1,3 +1,4 @@
+using Nocturne.Core.Constants;
 using Nocturne.Core.Models;
 
 namespace Nocturne.Services.Demo.Services;
@@ -5,8 +6,7 @@ namespace Nocturne.Services.Demo.Services;
 /// <summary>
 /// Deterministic lifestyle sample data: the food library with per-meal
 /// attribution, body-weight trend, state spans (pump mode, profile, overrides,
-/// exercise, illness, travel), the timezone-timeline trip, and the default
-/// clock face. All keyed off <see cref="DayScenarios"/> so every stream tells
+/// exercise, illness, travel) and the timezone-timeline trip. All keyed off <see cref="DayScenarios"/> so every stream tells
 /// the same story as the glucose it sits beside.
 /// </summary>
 public static class DemoLifestyleSeeds
@@ -14,7 +14,10 @@ public static class DemoLifestyleSeeds
     /// <summary>A food library item; carbs/fat/protein per portion in grams.</summary>
     public sealed record FoodSeed(
         string Name, string Category, string Subcategory,
-        double Portion, string Unit, double Carbs, double Protein, double Fat, double Energy);
+        double Portion, string Unit, double Carbs, double Protein, double Fat, double EnergyKcal)
+    {
+        public double EnergyKilojoules => Math.Round(EnergyKcal * NutritionConstants.KilojoulesPerKilocalorie);
+    }
 
     /// <summary>Foods referenced by generated meals, plus a few browsables.</summary>
     public static readonly IReadOnlyList<FoodSeed> FoodLibrary =
@@ -85,18 +88,12 @@ public static class DemoLifestyleSeeds
     /// workout overrides + temporary targets, illness spans on sick days, and
     /// the travel span matching the timezone-timeline trip.
     /// </summary>
-    public static List<SpanSeed> BuildSpans(DateTime localToday, int days)
+    /// <param name="seedEnd">The local end of the seeded range; now when omitted.</param>
+    public static List<SpanSeed> BuildSpans(DateTime localToday, int days, DateTime? seedEnd = null)
     {
         var spans = new List<SpanSeed>();
         var windowStart = localToday.AddDays(-days);
-        var now = DateTime.Now;
-
-        // Profile: the seeded therapy profile is active for the whole window.
-        // Resolvers read the name from metadata, not from State (which is the
-        // ProfileState enum name).
-        spans.Add(new SpanSeed(
-            StateSpanCategory.Profile, nameof(ProfileState.Active), windowStart, null,
-            new Dictionary<string, object> { ["profileName"] = DemoTherapyProfile.ProfileName }));
+        var now = seedEnd ?? DateTime.Now;
 
         // Pump mode: Automatic, interrupted by occasional Manual windows and
         // by Exercise mode during workouts on exercise days.
@@ -118,11 +115,9 @@ public static class DemoLifestyleSeeds
                     workoutStart.AddMinutes(-10), workoutEnd.AddMinutes(10),
                     new Dictionary<string, object> { ["targetTop"] = 150.0, ["targetBottom"] = 140.0 }));
             }
-            else if (DayScenarios.Roll(day, "manual-mode", 100) < 9)
+            else if (DemoLoopInterruptions.ManualModeWindow(day, now) is { } manual)
             {
-                // An occasional afternoon in manual mode (pump maintenance, pool day).
-                var start = day.AddHours(13 + DayScenarios.Roll(day, "manual-start", 4));
-                interruptions.Add((start, start.AddHours(2.5), nameof(PumpModeState.Manual)));
+                interruptions.Add((manual.Start, manual.End, nameof(PumpModeState.Manual)));
             }
         }
 
@@ -163,27 +158,4 @@ public static class DemoLifestyleSeeds
             .Select(s => s.EndLocal is { } end && end > now ? s with { EndLocal = null } : s)
             .ToList();
     }
-
-    /// <summary>
-    /// Default clock-face config matching the web app's starter layout: big
-    /// glucose + trend arrow on top, delta and time-ago beneath.
-    /// </summary>
-    public const string DefaultClockFaceConfigJson = """
-        {
-          "rows": [
-            {
-              "elements": [
-                { "type": "sg", "size": 40, "style": { "color": "dynamic", "font": "system", "fontWeight": "medium", "opacity": 1.0 } },
-                { "type": "arrow", "size": 25, "style": { "color": "dynamic", "font": "system", "fontWeight": "medium", "opacity": 1.0 } }
-              ]
-            },
-            {
-              "elements": [
-                { "type": "delta", "size": 14, "style": { "color": "muted", "font": "system", "fontWeight": "medium", "opacity": 0.9 } },
-                { "type": "age", "size": 14, "style": { "color": "muted", "font": "system", "fontWeight": "medium", "opacity": 0.9 } }
-              ]
-            }
-          ]
-        }
-        """;
 }

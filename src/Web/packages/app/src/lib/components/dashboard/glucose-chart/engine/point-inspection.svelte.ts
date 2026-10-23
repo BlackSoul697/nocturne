@@ -3,8 +3,9 @@ import type {
   SeriesFinders,
   GlucosePoint,
   SeriesPoint,
-} from "./chart-data-engine.svelte";
-import { BasalDeliveryOrigin } from "$lib/api";
+} from "./chart-data-view.svelte";
+import { BasalDeliveryOrigin } from "$api-clients";
+import type { GlucoseUnits } from "$lib/stores/appearance-store.svelte";
 import {
   bg,
   bgLabel,
@@ -84,6 +85,7 @@ export function createPointInspection(
   finders: SeriesFinders,
   glucoseData: () => GlucosePoint[],
   seriesData: InspectionSeriesData,
+  glucoseUnits: () => GlucoseUnits | undefined = () => undefined,
 ): PointInspection {
   let timestamp = $state<Date | null>(null);
   let glucosePoint = $state<{ sgv: number; color: string } | null>(null);
@@ -98,7 +100,7 @@ export function createPointInspection(
     opts.push({
       type: "glucose",
       label: "Glucose",
-      preview: `${bg(glucosePoint.sgv)} ${bgLabel()}`,
+      preview: `${bg(glucosePoint.sgv, glucoseUnits())} ${bgLabel(glucoseUnits())}`,
     });
 
     if (context.basalRate != null) {
@@ -245,4 +247,38 @@ export function createPointInspection(
     navigateTo,
     close,
   };
+}
+
+/**
+ * Opens the dialog `activeDialog` names and closes the others. A dialog that drops its own `open`
+ * while still active (dismissed, or its import failed) closes the inspection, so the next inspect
+ * is a real change and opens it again.
+ *
+ * Call during component initialization: the watcher is an `$effect`.
+ */
+export function syncInspectionDialogs(
+  inspection: () => PointInspection | undefined,
+  dialogs: Record<"glucose" | "delivery" | "treatment", { open: boolean }>,
+): void {
+  let last: InspectionDialog = null;
+
+  $effect(() => {
+    const current = inspection();
+    const active = current?.activeDialog ?? null;
+    // Read on every run, so a dialog dropping its `open` re-runs this.
+    const shown = {
+      picker: true,
+      glucose: dialogs.glucose.open,
+      delivery: dialogs.delivery.open,
+      treatment: dialogs.treatment.open,
+    };
+    if (active !== last) {
+      last = active;
+      dialogs.glucose.open = active === "glucose";
+      dialogs.delivery.open = active === "delivery";
+      dialogs.treatment.open = active === "treatment";
+    } else if (active && !shown[active]) {
+      current?.close();
+    }
+  });
 }

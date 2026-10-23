@@ -9,15 +9,12 @@
   import { Button } from "$lib/components/ui/button";
   import { Separator } from "$lib/components/ui/separator";
   import { formatShortDate } from "$lib/utils/formatting";
-  import {
-    Calendar,
-    Info,
-    ArrowLeft,
-    HelpCircle,
-    Clock,
-    RefreshCw,
-  } from "lucide-svelte";
-  import SiteChangeIcon from "$lib/components/icons/SiteChangeIcon.svelte";
+  import Calendar from "@lucide/svelte/icons/calendar";
+  import Info from "@lucide/svelte/icons/info";
+  import ArrowLeft from "@lucide/svelte/icons/arrow-left";
+  import HelpCircle from "@lucide/svelte/icons/circle-question-mark";
+  import Clock from "@lucide/svelte/icons/clock";
+  import RefreshCw from "@lucide/svelte/icons/refresh-cw";
   import SiteChangeImpactChart from "$lib/components/reports/SiteChangeImpactChart.svelte";
   import { getSiteChangeImpact } from "$api/reports.remote";
   import { requireDateParamsContext } from "$lib/hooks/date-params.svelte";
@@ -55,15 +52,11 @@
 </svelte:head>
 
 {#if siteChangeResource.current}
-<div class="@container container mx-auto max-w-7xl space-y-8 p-3 @md:p-6">
+<div class="@container space-y-8">
   <div class="space-y-4">
     <div class="flex flex-wrap items-center justify-between gap-4 print:hidden">
       <div>
-        <h1 class="flex items-center gap-3 text-2xl font-bold @md:text-3xl">
-          <SiteChangeIcon class="h-6 w-6 text-report-treatment @md:h-8 @md:w-8" />
-          Site Change Impact
-        </h1>
-        <p class="mt-1 text-muted-foreground">
+        <p class="text-muted-foreground">
           Analyze glucose patterns before and after pump site changes
         </p>
       </div>
@@ -182,7 +175,6 @@
 
   {#if analysis?.hasSufficientData && analysis?.summary}
     {@const summary = analysis.summary}
-    {@const percentImprovement = summary.percentImprovement ?? 0}
     {@const tirBefore = summary.timeInRangeBeforeChange ?? 0}
     {@const tirAfter = summary.timeInRangeAfterChange ?? 0}
     <Card>
@@ -193,45 +185,11 @@
         </CardTitle>
       </CardHeader>
       <CardContent class="space-y-4">
-        <div class="divide-y divide-border">
-          <div class="pb-3">
-            {#if percentImprovement > 5}
-              <div>
-                <p class="font-medium">Average glucose after a site change</p>
-                <p class="text-sm text-muted-foreground">
-                  {percentImprovement.toFixed(1)}% lower than in the hours
-                  before.
-                </p>
-              </div>
-            {:else if percentImprovement < -5}
-              <div>
-                <p class="font-medium">Average glucose after a site change</p>
-                <p class="text-sm text-muted-foreground">
-                  {Math.abs(percentImprovement).toFixed(1)}% higher than in the
-                  hours before. This can reflect insertion or site-location
-                  factors.
-                </p>
-              </div>
-            {:else}
-              <div>
-                <p class="font-medium">Average glucose after a site change</p>
-                <p class="text-sm text-muted-foreground">
-                  Differs by {Math.abs(percentImprovement).toFixed(1)}% from the
-                  hours before; differences under 5% are counted as no material
-                  change.
-                </p>
-              </div>
-            {/if}
-          </div>
-
-          <div class="pt-3">
-            <div>
-              <p class="font-medium">Time in range around a site change</p>
-              <p class="text-sm text-muted-foreground">
-                {tirBefore.toFixed(0)}% before, {tirAfter.toFixed(0)}% after.
-              </p>
-            </div>
-          </div>
+        <div>
+          <p class="font-medium">Time in range around a site change</p>
+          <p class="text-sm text-muted-foreground">
+            {tirBefore.toFixed(0)}% before, {tirAfter.toFixed(0)}% after.
+          </p>
         </div>
         <p class="text-xs text-muted-foreground">
           These are averages across {analysis.siteChangeCount ?? 0} site changes

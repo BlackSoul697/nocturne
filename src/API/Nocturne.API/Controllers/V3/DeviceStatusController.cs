@@ -2,6 +2,7 @@ using System.Text.Json;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Nocturne.API.Attributes;
+using Nocturne.API.Configuration;
 using Nocturne.API.Authorization;
 using Nocturne.Core.Models.Authorization;
 using Nocturne.API.Services.Devices;
@@ -77,37 +78,24 @@ public class DeviceStatusController : BaseV3Controller<DeviceStatus>
         {
             var parameters = ParseV3QueryParameters();
 
-            // Convert V3 filter criteria (field$op=value) to MongoDB-style JSON query
-            var findQuery =
-                ConvertFilterCriteriaToFindQuery(parameters.FilterCriteria)
-                ?? ConvertV3FilterToV1Find(parameters.Filter);
+            var find = DeviceStatusProjectionService
+                .ParseFind(
+                    ConvertFilterCriteriaToFindQuery(parameters.FilterCriteria)
+                        ?? ConvertV3FilterToV1Find(parameters.Filter))
+                .WithFieldRenamed("identifier", "_id");
 
-            // Determine sort direction from sort$desc query parameter
-            // Nightscout V3: sort$desc=field means descending (newest first)
-            // reverseResults=false means descending, reverseResults=true means ascending
-            var query = HttpContext!.Request.Query;
-            var hasSortDesc = query.ContainsKey("sort$desc");
-            var reverseResults = !hasSortDesc && ExtractSortDirection(parameters.Sort);
+            var deviceStatusList = (
+                await _projection.GetMatchingAsync(
+                    find,
+                    parameters.Limit,
+                    parameters.Offset,
+                    cancellationToken,
+                    parameters.Sort.Descending,
+                    ReadSortFieldOf(parameters.Sort)
+                )
+            ).ToList();
 
-            // Project device status from V4 snapshot tables
-            var deviceStatusListRaw = await _projection.GetAsync(
-                parameters.Limit,
-                parameters.Offset,
-                findQuery,
-                cancellationToken
-            );
-
-            var deviceStatusList = deviceStatusListRaw.ToList();
-
-            // Reverse results if needed (projection returns newest-first by default)
-            if (reverseResults)
-            {
-                deviceStatusList.Reverse();
-            }
-
-            var totalCount = await _projection.CountAsync(findQuery, cancellationToken);
-
-            var mappedData = deviceStatusList.Select(MapToV3Dto);
+            var mappedData = deviceStatusList.Select(MapToV3Dto).ToList();
 
             // Check for conditional requests (304 Not Modified)
             var lastModified = GetLastModified(deviceStatusList.Cast<object>());
@@ -123,7 +111,6 @@ public class DeviceStatusController : BaseV3Controller<DeviceStatus>
             var response = CreateV3CollectionResponse(
                 mappedData,
                 parameters,
-                totalCount,
                 lastModified
             );
 
@@ -180,12 +167,13 @@ public class DeviceStatusController : BaseV3Controller<DeviceStatus>
     /// </summary>
     /// <param name="deviceStatusData">Device status data to create (single object or array)</param>
     /// <param name="cancellationToken">Cancellation token</param>
-    /// <returns>Created device status records</returns>
+    /// <returns>The <see cref="V3CreateResponse"/> for one document; the created records for an array.</returns>
     [HttpPost]
     [Authorize]
     [RequireScope(Scope.DevicesReadWrite)]
     [NightscoutEndpoint("/api/v3/devicestatus")]
-    [ProducesResponseType(typeof(DeviceStatus[]), 201)]
+    [ProducesResponseType(typeof(V3CreateResponse), 201)]
+    [ProducesResponseType(typeof(V3CreateResponse), 200)]
     [ProducesResponseType(typeof(V3ErrorResponse), 400)]
     [ProducesResponseType(500)]
     [ErrorEnvelope]
@@ -255,15 +243,7 @@ public class DeviceStatusController : BaseV3Controller<DeviceStatus>
                     );
                     if (existing != null)
                     {
-                        return Ok(
-                            new
-                            {
-                                status = 200,
-                                identifier = existing.Id,
-                                isDeduplication = true,
-                                deduplicatedIdentifier = existing.Id,
-                            }
-                        );
+                        return V3Deduplicated(existing.Id, existing.SrvModified);
                     }
                 }
             }
@@ -297,11 +277,17 @@ public class DeviceStatusController : BaseV3Controller<DeviceStatus>
 
             await _events.OnCreatedAsync(projectedResults, cancellationToken);
 
-            return CreatedAtAction(
-                nameof(GetDeviceStatusById),
-                new { id = projectedResults.First().Id },
-                new { status = 200, result = projectedResults.Select(MapToV3Dto) }
-            );
+            if (deviceStatusData.ValueKind == JsonValueKind.Array)
+            {
+                return CreatedAtAction(
+                    nameof(GetDeviceStatusById),
+                    new { id = projectedResults.First().Id },
+                    new V3Envelope<object> { Result = projectedResults.Select(MapToV3Dto).ToList() }
+                );
+            }
+
+            var created = projectedResults.First();
+            return V3Created(nameof(GetDeviceStatusById), created.Id);
         }
         catch (ArgumentException ex)
         {
@@ -311,8 +297,8 @@ public class DeviceStatusController : BaseV3Controller<DeviceStatus>
     }
 
     /// <summary>
-    /// Update a device status record by ID with V3 format.
-    /// Deletes old V4 records, decomposes the updated DeviceStatus, and projects back.
+    /// Replace a device status record by ID with V3 format, rewriting its stored V4 snapshots in
+    /// place and projecting the result back.
     /// </summary>
     /// <param name="id">Device status ID to update</param>
     /// <param name="request">Updated device status data</param>
@@ -343,10 +329,7 @@ public class DeviceStatusController : BaseV3Controller<DeviceStatus>
         DeviceStatus? deviceStatus;
         try
         {
-            deviceStatus = JsonSerializer.Deserialize<DeviceStatus>(
-                request.GetRawText(),
-                new JsonSerializerOptions { PropertyNameCaseInsensitive = true }
-            );
+            deviceStatus = NightscoutJsonBody.ReadObject<DeviceStatus>(request);
         }
         catch (JsonException)
         {
@@ -368,23 +351,21 @@ public class DeviceStatusController : BaseV3Controller<DeviceStatus>
             return CreateV3ErrorResponse(400, "ID mismatch");
         }
 
-        deviceStatus.Id = id;
-        ProcessDeviceStatusForCreation(deviceStatus);
+        if (string.IsNullOrEmpty(deviceStatus.CreatedAt))
+        {
+            deviceStatus.CreatedAt = DateTime.UtcNow.ToString("yyyy-MM-ddTHH:mm:ss.fffZ");
+        }
 
-        // Verify the record exists in V4 before updating
+        // The path's wire form may only resolve to the stored id, which is what the stored
+        // snapshots are found by.
         var existing = await _projection.GetByIdAsync(id, cancellationToken);
-        if (existing == null)
+        if (existing?.Id is not { } storedId
+            || await _decomposer.ReplaceAsync(storedId, deviceStatus, WriteOrigin.Live, cancellationToken) is null)
         {
             return CreateV3ErrorResponse(404, "Device status not found");
         }
 
-        // Delete old V4 records by legacy ID, then decompose the updated DeviceStatus
-        await _decomposer.DeleteByLegacyIdAsync(id, WriteOrigin.Live, cancellationToken);
-        // Direct v3 update has no connector data source; a live update broadcasts.
-        await _decomposer.DecomposeAsync(deviceStatus, source: null, WriteOrigin.Live, cancellationToken);
-
-        // Project the V4 snapshots back to DeviceStatus shape for the response
-        var updated = await _projection.GetByIdAsync(id, cancellationToken) ?? deviceStatus;
+        var updated = await _projection.GetByIdAsync(deviceStatus.Id!, cancellationToken) ?? deviceStatus;
 
         // Broadcast via WriteSideEffectsService (cache invalidation + SignalR)
         await _sideEffects.OnUpdatedAsync(
@@ -410,12 +391,12 @@ public class DeviceStatusController : BaseV3Controller<DeviceStatus>
     /// </summary>
     /// <param name="id">Device status ID to delete</param>
     /// <param name="cancellationToken">Cancellation token</param>
-    /// <returns>No content on success</returns>
+    /// <returns><c>{"status": 200}</c> on success</returns>
     [HttpDelete("{id}")]
     [Authorize]
     [RequireScope(Scope.DevicesReadWrite)]
     [NightscoutEndpoint("/api/v3/devicestatus/{id}")]
-    [ProducesResponseType(204)]
+    [ProducesResponseType(200)]
     [ProducesResponseType(typeof(V3ErrorResponse), 404)]
     [ProducesResponseType(500)]
     [ErrorEnvelope]
@@ -430,13 +411,10 @@ public class DeviceStatusController : BaseV3Controller<DeviceStatus>
             HttpContext?.Connection?.RemoteIpAddress?.ToString() ?? "unknown"
         );
 
-        // Get the projected record before deleting (for broadcast)
+        // The path's wire form may only resolve to the stored id; the projection is also the broadcast.
         var deviceStatusToDelete = await _projection.GetByIdAsync(id, cancellationToken);
-
-        // Delete V4 snapshot records by legacy ID
-        var deleted = await _decomposer.DeleteByLegacyIdAsync(id, WriteOrigin.Live, cancellationToken);
-
-        if (deleted == 0 && deviceStatusToDelete == null)
+        if (deviceStatusToDelete?.Id is not { } storedId
+            || await _decomposer.DeleteStoredAsync(storedId, WriteOrigin.Live, cancellationToken) == 0)
         {
             return CreateV3ErrorResponse(
                 404,
@@ -456,7 +434,7 @@ public class DeviceStatusController : BaseV3Controller<DeviceStatus>
 
         _logger.LogDebug("Successfully deleted device status with ID {Id}", id);
 
-        return NoContent();
+        return CreateV3DeleteResponse();
     }
 
     /// <summary>
@@ -494,7 +472,7 @@ public class DeviceStatusController : BaseV3Controller<DeviceStatus>
 
         if (deviceStatuses.Count > 0)
         {
-            SetHistoryCursorHeaders(deviceStatuses.Max(d => d.Mills));
+            SetHistoryCursorHeaders(deviceStatuses.Max(d => d.SrvModified ?? d.Mills));
         }
 
         var mappedData = deviceStatuses.Select(MapToV3Dto);
@@ -508,10 +486,9 @@ public class DeviceStatusController : BaseV3Controller<DeviceStatus>
     /// <param name="deviceStatus">Device status to process</param>
     private void ProcessDeviceStatusForCreation(DeviceStatus deviceStatus)
     {
-        // Generate identifier if not present (legacy behavior)
         if (string.IsNullOrEmpty(deviceStatus.Id))
         {
-            deviceStatus.Id = GenerateIdentifier(deviceStatus);
+            deviceStatus.Id = MongoObjectId.NewObjectId();
         }
 
         // Ensure DeviceStatus has required properties for V3 compatibility
@@ -519,41 +496,6 @@ public class DeviceStatusController : BaseV3Controller<DeviceStatus>
         {
             deviceStatus.CreatedAt = DateTime.UtcNow.ToString("yyyy-MM-ddTHH:mm:ss.fffZ");
         }
-    }
-
-    /// <summary>
-    /// Generate identifier for device status following legacy API v3 logic
-    /// Uses created_at and device fields for deduplication fallback
-    /// </summary>
-    /// <param name="deviceStatus">Device status record</param>
-    /// <returns>Generated identifier</returns>
-    private string GenerateIdentifier(DeviceStatus deviceStatus)
-    {
-        // Legacy API v3 uses created_at + device for devicestatus deduplication
-        var identifierParts = new List<string>();
-
-        if (!string.IsNullOrEmpty(deviceStatus.CreatedAt))
-        {
-            identifierParts.Add(deviceStatus.CreatedAt);
-        }
-
-        if (!string.IsNullOrEmpty(deviceStatus.Device))
-        {
-            identifierParts.Add(deviceStatus.Device);
-        }
-
-        // Add timestamp for uniqueness
-        identifierParts.Add(DateTime.UtcNow.ToString("yyyy-MM-ddTHH:mm:ss.fffZ"));
-
-        // If we have identifying parts, create a hash-based identifier
-        if (identifierParts.Any())
-        {
-            var combined = string.Join("-", identifierParts);
-            return $"devicestatus-{combined.GetHashCode():X}";
-        }
-
-        // Fallback to GUID for unique identification
-        return Guid.CreateVersion7().ToString();
     }
 
     /// <summary>
@@ -567,110 +509,34 @@ public class DeviceStatusController : BaseV3Controller<DeviceStatus>
         out ActionResult? validationError
     )
     {
-        var deviceStatusRecords = new List<DeviceStatus>();
         validationError = null;
+
+        var elements = jsonElement.ValueKind switch
+        {
+            JsonValueKind.Array => jsonElement.EnumerateArray().ToList(),
+            JsonValueKind.Object => [jsonElement],
+            _ => [],
+        };
+
+        // Nightscout V3 Strict Validation: the 'app' field is required in the JSON payload
+        if (elements.Any(element => element.ValueKind != JsonValueKind.Object || !element.TryGetProperty("app", out _)))
+        {
+            validationError = CreateV3ErrorResponse(400, "Bad or missing app field");
+            return Enumerable.Empty<DeviceStatus>();
+        }
 
         try
         {
-            if (jsonElement.ValueKind == JsonValueKind.Array)
-            {
-                foreach (var element in jsonElement.EnumerateArray())
-                {
-                    // Nightscout V3 Strict Validation: 'app' field is required in the JSON payload
-                    if (!element.TryGetProperty("app", out _))
-                    {
-                        validationError = CreateV3ErrorResponse(400, "Bad or missing app field");
-                        return Enumerable.Empty<DeviceStatus>();
-                    }
-
-                    var deviceStatus = JsonSerializer.Deserialize<DeviceStatus>(
-                        element.GetRawText(),
-                        new JsonSerializerOptions { PropertyNameCaseInsensitive = true }
-                    );
-                    if (deviceStatus != null)
-                    {
-                        deviceStatusRecords.Add(deviceStatus);
-                    }
-                }
-            }
-            else if (jsonElement.ValueKind == JsonValueKind.Object)
-            {
-                // Nightscout V3 Strict Validation: 'app' field is required
-                if (!jsonElement.TryGetProperty("app", out _))
-                {
-                    validationError = CreateV3ErrorResponse(400, "Bad or missing app field");
-                    return Enumerable.Empty<DeviceStatus>();
-                }
-
-                var deviceStatus = JsonSerializer.Deserialize<DeviceStatus>(
-                    jsonElement.GetRawText(),
-                    new JsonSerializerOptions { PropertyNameCaseInsensitive = true }
-                );
-                if (deviceStatus != null)
-                {
-                    deviceStatusRecords.Add(deviceStatus);
-                }
-            }
+            return NightscoutJsonBody.ReadObjects<DeviceStatus>(jsonElement) ?? [];
         }
         catch (JsonException ex)
         {
             _logger.LogWarning(ex, "Failed to parse device status data from JsonElement");
             throw new ArgumentException("Invalid device status data format", ex);
         }
-
-        return deviceStatusRecords;
     }
 
-    /// <summary>
-    /// Convert V3 filter criteria (field$op=value format) to MongoDB-style JSON query
-    /// </summary>
-    /// <param name="filterCriteria">List of parsed filter criteria</param>
-    /// <returns>MongoDB-style JSON query string, or null if no criteria</returns>
-    private string? ConvertFilterCriteriaToFindQuery(List<V3FilterCriteria>? filterCriteria)
-    {
-        if (filterCriteria == null || filterCriteria.Count == 0)
-            return null;
-
-        var conditions = new Dictionary<string, object>();
-
-        foreach (var criteria in filterCriteria)
-        {
-            var mongoOp = criteria.Operator switch
-            {
-                "eq" => null, // Direct equality doesn't need operator
-                "ne" => "$ne",
-                "gt" => "$gt",
-                "gte" => "$gte",
-                "lt" => "$lt",
-                "lte" => "$lte",
-                "in" => "$in",
-                "nin" => "$nin",
-                "re" => "$regex",
-                _ => null,
-            };
-
-            if (mongoOp == null && criteria.Operator == "eq")
-            {
-                // Direct equality: { "field": "value" }
-                conditions[criteria.Field] = criteria.Value ?? "";
-            }
-            else if (mongoOp != null)
-            {
-                // Operator form: { "field": { "$op": "value" } }
-                conditions[criteria.Field] = new Dictionary<string, object?>
-                {
-                    [mongoOp] = criteria.Value,
-                };
-            }
-        }
-
-        if (conditions.Count == 0)
-            return null;
-
-        return JsonSerializer.Serialize(conditions);
-    }
-
-    private object MapToV3Dto(DeviceStatus status)
+    internal static object MapToV3Dto(DeviceStatus status)
     {
         // Build dictionary with only non-null optional fields to match Nightscout behavior
         var dto = new Dictionary<string, object?>
@@ -694,6 +560,8 @@ public class DeviceStatusController : BaseV3Controller<DeviceStatus>
             dto["uploader"] = status.Uploader;
         if (status.Loop != null)
             dto["loop"] = status.Loop;
+        if (status.IsValid != null)
+            dto["isValid"] = status.IsValid;
 
         return dto;
     }

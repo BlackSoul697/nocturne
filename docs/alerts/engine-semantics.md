@@ -88,7 +88,7 @@ Some trees cannot be evaluated: the C# evaluators throw on them, and the orchest
 per-rule catch skips the rule for that tick with its timers and tracker untouched (§7).
 The throw depends on what evaluation reaches, but a rule holding one is broken whether
 or not a given tick reaches it. So both engines reject these shapes **before evaluating
-anything**, anywhere in the tree, including behind a short-circuit, a `sustained` whose
+anything**, anywhere in the tree, including under a `sustained` whose
 `minutes <= 0`, or a leaf whose input is null this tick:
 
 | Reason code | Shape | C# throw site |
@@ -190,14 +190,14 @@ byte-for-byte:
 
 ### 2.4 Evaluation order
 
-`composite` evaluates children **in document order with short-circuit**: `and` stops at
-the first false child, `or` stops at the first true child. Children skipped by
-short-circuit are **not evaluated at all** — observable because a skipped `sustained`
-child neither sets nor clears its timer.
+`composite` evaluates **every child, in document order, with no short-circuit**, then
+combines the results: `and` is true when every child is, `or` when any is. A child is
+evaluated whatever an earlier sibling returned, so every `sustained` descendant sets or
+clears its timer on each evaluation of its parent: where a row sits among its siblings
+never changes when a rule becomes true. **[normative]**
 
-The replay path additionally force-evaluates **every leaf in isolation** (no
-short-circuit) to build the per-leaf transition log; leaves are evaluated with the
-**rule-root context path**, not their tree path (irrelevant for stateless leaves;
+The replay path additionally force-evaluates **every leaf in isolation** to build the per-leaf
+transition log; leaves are evaluated with the **rule-root context path**, not their tree path (irrelevant for stateless leaves;
 containers are never force-evaluated). A leaf evaluation that throws is recorded `false`.
 
 ---
@@ -244,8 +244,8 @@ below are non-strict/strict exactly as written.
 - **`composite`** — `{operator, conditions[]}`. Empty `conditions` ⇒ false (a missing
   list, missing operator or null slot cannot be evaluated, §1.4). Operator lowercased;
   only `and` / `or` are recognised, anything else ⇒ false.
-  Short-circuits (§2.4). A child of unknown kind evaluates false (which makes an `and`
-  false and leaves an `or` undecided).
+  Evaluates every child (§2.4). A child of unknown kind evaluates false (which makes an
+  `and` false and leaves an `or` to its other children).
 - **`not`** — `{child}`. Missing child ⇒ **false** (not true). Otherwise inverts the
   child. Consequence: `not` over an unknown/unregistered child kind ⇒ child false ⇒
   **not ⇒ true**. **[normative]**
@@ -342,13 +342,15 @@ Every other kind is not wall-clock. Two cases are deliberate:
 - **`time_of_day`, `day_of_week`** are calendar gates over reading-driven leaves; the next
   reading bounds how late a gate opening is noticed.
 
-A rule is wall-clock when its root kind, or any node of its condition tree, is a
-wall-clock kind. Every host must evaluate enabled wall-clock rules periodically as well as
-per reading, through the normal driver sequence (§7). Otherwise such a rule stays unfired
-for as long as no reading arrives. The backend does this from `AlertSweepService` every
-30 s; Prelude needs an equivalent periodic evaluation. The crate's
-`wall_clock::references_wall_clock` and the backend's `WallClockConditions` hold the
-classification; the enum manifest's `WallClockConditionTypes` keeps them equal.
+A rule is wall-clock when its root kind, any node of its condition tree, or, while
+auto-resolve is enabled, any node of its auto-resolve tree is a wall-clock kind. Every
+host must evaluate enabled wall-clock rules periodically as well as per reading, through
+the normal driver sequence (§7). Otherwise such a rule stays unfired for as long as no
+reading arrives. The backend does this from `AlertSweepService` every 30 s; Prelude needs
+an equivalent periodic evaluation. The crate's `wall_clock::references_wall_clock` reads
+a rule's kinds as §5.2 does. The backend's `WallClockConditions` holds the same set of
+wall-clock kinds, which the enum manifest's `WallClockConditionTypes` keeps equal, but its
+rule walk does not yet cover the auto-resolve tree (#2139).
 
 A periodic evaluation uses the context the per-reading path builds for the newest
 reading, with only `now` advanced. Its `LastReadingAt` / `LatestTimestamp` are that
@@ -367,6 +369,54 @@ and 0, and the alerts redesign migrated both into `sustained` wrappers, which ar
 cadence-independent. So no stored rule is affected. A host that does carry `confirmation_readings > 1` for a wall-clock rule would
 confirm it N× faster at a shorter periodic cadence. It should express that confirmation as
 `sustained` instead.
+
+### 5.2 Context facts
+
+A **context fact** is a group of `SensorContext` fields (§4) that a host fills from one
+source. The crate's `facts::reads(kind)` gives the facts a kind's own evaluator reads, and
+`facts::rule_reads(rule)` the facts of every kind of a stored rule; `references_any(rule,
+facts)` is whether that set meets `facts`.
+
+A rule's kinds are its root kind, the kinds of its body and, while auto-resolve is enabled,
+the kinds of its auto-resolve tree. The root `condition_type` is a kind's wire name
+ignoring ASCII case, and anything else gives the rule no kinds. The root kind counts
+whatever its body. The body's kinds count only when it can be evaluated (§1.4), nested
+kinds resolving as node dispatch resolves them (§1.2). The auto-resolve tree's kinds count
+whenever auto-resolve is enabled and the tree is present, not `null` and evaluable, even
+when the body is not and evaluation would skip the rule. `references_wall_clock` (§5.1)
+reads a rule's kinds the same way.
+
+| Fact | `SensorContext` fields | Kinds that read it |
+|---|---|---|
+| `glucose` | `LatestValue`, `LatestTimestamp`, `LastReadingAt`, `TrendRate`, `TrendBucket`, `GlucoseBucket` | `threshold`, `rate_of_change`, `signal_loss`, `staleness`, `trend`, `glucose_bucket` |
+| `predictions` | `Predictions` | `predicted` |
+| `insulin` | `IobUnits`, `LastBolusAt`, `ActiveTempBasal` | `iob`, `temp_basal`, `time_since_last_bolus` |
+| `carbs` | `CobGrams`, `LastCarbAt` | `cob`, `time_since_last_carb` |
+| `pump` | `ReservoirUnits`, `ReservoirIsLowerBound`, `PumpBatteryPercent`, `HasEverPumpSnapshot` | `reservoir`, `pump_battery`, `pump_suspended` |
+| `aps` | `LastApsCycleAt`, `LastApsEnactedAt`, `HasEverApsCycled`, `SensitivityRatio`, `HasEverApsSensitivity` | `loop_stale`, `loop_enaction_stale`, `sensitivity_ratio` |
+| `uploader` | `UploaderBatteryPercent`, `HasEverUploaderSnapshot` | `uploader_battery` |
+| `state_spans` | `ActiveOverride`, `ActivePumpSuspension`, `ActivePumpState`, `ActiveStateSpans` | `override_active`, `pump_suspended`, `pump_state`, `state_span_active` |
+| `device_ages` | `LastSiteChangeAt`, `LastSensorStartAt` | `site_age`, `sensor_age` |
+| `trackers` | `ActiveTrackers` | `tracker_age` |
+| `sleep` | `SleepSessionActive` | `sleep_session_active` |
+| `active_alerts` | `ActiveAlerts` | `alert_state` |
+| `do_not_disturb` | `ActiveDoNotDisturb` | `do_not_disturb` |
+| `time_zone` | `TenantTimeZoneId` | `time_of_day`, `day_of_week` |
+
+The containers `composite`, `not` and `sustained` read no fact; a `sustained` timer is
+evaluation state, not context. `pump_suspended` reads two facts: its guard is the pump
+snapshot and its anchor the suspension span. No field carries a therapy profile or
+schedule as such; the target range reaches the context only through `GlucoseBucket`.
+`now` is not a fact: it is an argument to evaluation.
+
+A host uses facts to evaluate rules on writes other than glucose: a write evaluates the
+enabled rules that read a fact it moved. This only adds evaluations. A glucose reading
+still evaluates every enabled rule, and the periodic evaluation of §5.1 every wall-clock
+rule, because some facts move with time and no write (insulin and carbs on board decay,
+spans and windows end, the target range and calendar gates follow the clock), and §5.1's
+bound on a calendar gate holds only if every reading evaluates such a rule. Which writes
+move which facts, derived ones included, is the host's record-to-fact map, not the
+crate's.
 
 ---
 
@@ -455,7 +505,10 @@ the condition holds re-opens on the next evaluation, once.
 
 The host clears `AwaitingRearm` when a rule's condition, auto-resolve configuration or
 enablement changes: the hold was taken against the rule as it was when the auto-resolve
-closed it.
+closed it. For the same reason a host drops a tracker decision made against a rule whose
+condition, auto-resolve configuration or enablement changed after the evaluation read it:
+checked under the rule's transition lock, which the edit also takes, so an evaluation that
+loaded the rule before an edit cannot set a hold the edit cleared.
 
 State persisted before `AwaitingRearm` existed has none and reads as armed.
 
@@ -530,9 +583,9 @@ machine-checkable form is `tests/Parity/AlertEngineCorpus/replay/`.
   1. A rule whose body cannot be evaluated (§1.4), or whose `condition_params` is not a
      payload, is **skipped**: no leaf log, no firing change. Its `alert_state` children
      never see it fire.
-  2. Root truth `met` by the normal evaluators at the rule's root path (short-circuit,
-     shared timer store). The leaf log force-evaluates every leaf alone at the same root
-     path and records each leaf's first observation and every flip
+  2. Root truth `met` by the normal evaluators at the rule's root path (every child
+     evaluated, §2.4; shared timer store). The leaf log force-evaluates every leaf alone
+     at the same root path and records each leaf's first observation and every flip
      (`LeafTransitionPoint(atMs, value)`, unix ms).
   3. A rule awaiting re-arm (step 5) evaluates its enabled, evaluable auto-resolve tree at
      `auto_resolve`; when `met` is false or the tree is, it re-arms on this tick (§6.3).

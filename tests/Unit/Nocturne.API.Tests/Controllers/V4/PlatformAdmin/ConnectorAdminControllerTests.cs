@@ -1,3 +1,4 @@
+using Nocturne.Tests.Shared.Infrastructure;
 using FluentAssertions;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -70,7 +71,7 @@ public class ConnectorAdminControllerTests
             Mock.Of<ILogger<ConnectorAdminController>>());
 
     private static ConnectorCursorResetService Engine(NocturneDbContext db) =>
-        new(db, Mock.Of<IConnectorSyncService>(), Mock.Of<ITenantAccessor>(),
+        new(new TestNocturneDbContextFactory(db), Mock.Of<IConnectorSyncService>(), Mock.Of<ITenantAccessor>(),
             Mock.Of<ILogger<ConnectorCursorResetService>>());
 
     [Fact]
@@ -105,6 +106,23 @@ public class ConnectorAdminControllerTests
         var accepted = result.Result.Should().BeOfType<AcceptedAtActionResult>().Subject;
         accepted.ActionName.Should().Be(nameof(ConnectorAdminController.GetResetJobStatus));
         accepted.Value.Should().BeSameAs(jobInfo);
+    }
+
+    [Fact]
+    public async Task ResetTenantCursors_WhenFromIsInTheFuture_Returns400WithoutStartingAJob()
+    {
+        var jobService = new Mock<IConnectorCursorResetJobService>();
+        var controller = CreateController(Engine(CreateDb()), jobService.Object);
+
+        var result = await controller.ResetTenantCursors(
+            _targetTenantId,
+            new AdminResetCursorsRequest { From = DateTime.UtcNow.AddDays(1) },
+            CancellationToken.None);
+
+        var problem = result.Result.Should().BeOfType<ObjectResult>().Subject;
+        problem.StatusCode.Should().Be(400);
+        problem.Value.Should().BeOfType<ProblemDetails>().Which.Detail.Should().Contain("'from'");
+        jobService.VerifyNoOtherCalls();
     }
 
     [Fact]

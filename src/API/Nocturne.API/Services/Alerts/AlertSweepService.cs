@@ -1,13 +1,14 @@
 using System.Text.Json;
 using Microsoft.Extensions.DependencyInjection;
 using Nocturne.API.Services.Alerts.Evaluators;
-using Nocturne.API.Services.Audit;
+using Nocturne.API.Multitenancy;
 using Nocturne.Core.Contracts.Alerts;
 using Nocturne.Core.Contracts.Glucose;
 using Nocturne.Core.Contracts.Multitenancy;
 using Nocturne.Core.Models;
 using Nocturne.Core.Models.Alerts;
 using Nocturne.Core.Models.V4;
+using Nocturne.Infrastructure.Data.Services;
 
 namespace Nocturne.API.Services.Alerts;
 
@@ -36,10 +37,9 @@ public class AlertSweepService : BackgroundService
     private readonly TimeProvider _timeProvider;
 
     /// <summary>
-    /// Audit endpoint recorded for the sweep's writes, which have no request and no actor.
-    /// <see cref="AlertAcknowledgementService"/>, reached through the orchestrator's Info-severity
-    /// auto-acknowledgement, stamps the scope's ambient context onto its own contexts. Without
-    /// the push those acks would be recorded as user mutations with every actor field null.
+    /// Audit endpoint recorded for the sweep's writes, which have no request and no actor. Without
+    /// it the Info-severity auto-acknowledgements <see cref="AlertAcknowledgementService"/> writes
+    /// would be recorded as user mutations with every actor field null.
     /// </summary>
     private const string AuditEndpoint = "service:alert-sweep";
 
@@ -151,8 +151,8 @@ public class AlertSweepService : BackgroundService
             if (tenantContext is null || !tenantContext.IsActive) continue;
 
             using var tenantScope = BeginTenantScope(tenantContext);
-            var tracker = tenantScope.Services.GetRequiredService<IExcursionTracker>();
-            var resolutionHandler = tenantScope.Services.GetRequiredService<IExcursionResolutionHandler>();
+            var tracker = tenantScope.ServiceProvider.GetRequiredService<IExcursionTracker>();
+            var resolutionHandler = tenantScope.ServiceProvider.GetRequiredService<IExcursionResolutionHandler>();
 
             foreach (var excursion in tenantGroup)
             {
@@ -185,7 +185,8 @@ public class AlertSweepService : BackgroundService
     /// <see cref="SmartSnoozeConfig"/> to enable it with count to spare, and then either its
     /// <see cref="SmartSnoozeConfig.Conditions"/> to hold against a context built from the tenant's
     /// fresh canonical reading, or, when it configures none, <see cref="SmartSnoozeTrendGate"/> to
-    /// pass. Anything else clears the snooze so the alert re-fires.
+    /// pass. Anything else clears the snooze and hands the instance to
+    /// <see cref="IAlertSnoozeService.ResumeAsync"/>, which re-notifies if the alert still stands.
     /// </summary>
     internal async Task CheckSnoozedInstancesAsync(CancellationToken ct)
     {
@@ -238,7 +239,7 @@ public class AlertSweepService : BackgroundService
 
         var readings = tenantContext is null
             ? []
-            : await LoadRecentReadingsAsync(tenantScope.Services, tenantId, now, ct);
+            : await LoadRecentReadingsAsync(tenantScope.ServiceProvider, tenantId, now, ct);
         var points = readings.Select(r => new GlucosePoint(r.Timestamp, r.Mgdl)).ToList();
 
         SensorContext? enrichedContext = null;
@@ -246,7 +247,7 @@ public class AlertSweepService : BackgroundService
             && tenantGroup.Any(i => configsByInstance[i.InstanceId].Conditions is { Count: > 0 }))
         {
             enrichedContext = await BuildSnoozeContextAsync(
-                tenantScope.Services, tenantContext, now, tenantGroup, configsByInstance, ct);
+                tenantScope.ServiceProvider, tenantContext, now, tenantGroup, configsByInstance, ct);
         }
 
         foreach (var instance in tenantGroup)
@@ -269,7 +270,7 @@ public class AlertSweepService : BackgroundService
             {
                 extend = enrichedContext is not null
                          && await EvaluateSnoozeConditionsAsync(
-                             tenantScope.Services, instance, conditions, enrichedContext, ct);
+                             tenantScope.ServiceProvider, instance, conditions, enrichedContext, ct);
                 reason = extend ? "conditions" : "conditions-failed";
             }
             else
@@ -308,6 +309,9 @@ public class AlertSweepService : BackgroundService
                 _logger.LogInformation(
                     "Snooze cleared for instance {InstanceId} (count: {Count}/{Max}, reason: {Reason})",
                     instance.InstanceId, instance.SnoozeCount, cfg.MaxCount, reason);
+
+                if (tenantContext is not null)
+                    await ResumeAsync(tenantScope.ServiceProvider, instance.InstanceId, ct);
             }
 
             modifiedCount++;
@@ -318,39 +322,34 @@ public class AlertSweepService : BackgroundService
 
     /// <summary>
     /// A child DI scope running as <paramref name="tenant"/>, when there is one, with
-    /// <see cref="AuditEndpoint"/> pushed for its writes.
+    /// <see cref="AuditEndpoint"/> attributing its writes.
     /// </summary>
-    private TenantScope BeginTenantScope(TenantAlertContext? tenant)
-    {
-        var scope = _serviceProvider.CreateScope();
-        try
-        {
-            if (tenant is not null)
-            {
-                scope.ServiceProvider.GetRequiredService<ITenantAccessor>().SetTenant(new TenantContext(
+    private AsyncServiceScope BeginTenantScope(TenantAlertContext? tenant) =>
+        TenantJobScope.Open(
+            _serviceProvider,
+            tenant is null
+                ? null
+                : new TenantContext(
                     tenant.TenantId,
                     tenant.Slug ?? string.Empty,
                     tenant.DisplayName ?? string.Empty,
                     true,
-                    IsDemo: false));
-            }
-            return new TenantScope(scope, SystemAuditScope.PushForScope(scope.ServiceProvider, AuditEndpoint));
-        }
-        catch
-        {
-            scope.Dispose();
-            throw;
-        }
-    }
+                    IsDemo: false),
+            AuditEndpoint);
 
-    private sealed class TenantScope(IServiceScope scope, IDisposable audit) : IDisposable
+    /// <summary>
+    /// Re-notifies a cleared snooze through <see cref="IAlertSnoozeService.ResumeAsync"/>. One
+    /// instance's failure is logged, not rethrown, so the rest of the tenant's pass still runs.
+    /// </summary>
+    private async Task ResumeAsync(IServiceProvider tenantServices, Guid instanceId, CancellationToken ct)
     {
-        public IServiceProvider Services => scope.ServiceProvider;
-
-        public void Dispose()
+        try
         {
-            audit.Dispose();
-            scope.Dispose();
+            await tenantServices.GetRequiredService<IAlertSnoozeService>().ResumeAsync(instanceId, ct);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            _logger.LogError(ex, "Failed to resume alert instance {InstanceId} after its snooze lapsed", instanceId);
         }
     }
 
@@ -502,16 +501,16 @@ public class AlertSweepService : BackgroundService
             if (tenantContext is null || !tenantContext.IsActive) continue;
 
             using var tenantScope = BeginTenantScope(tenantContext);
-            var engine = tenantScope.Services.GetRequiredService<IAlertEvaluationEngine>();
-            var enricher = tenantScope.Services.GetRequiredService<ISensorContextEnricher>();
-            var resolutionHandler = tenantScope.Services.GetRequiredService<IExcursionResolutionHandler>();
+            var engine = tenantScope.ServiceProvider.GetRequiredService<IAlertEvaluationEngine>();
+            var enricher = tenantScope.ServiceProvider.GetRequiredService<ISensorContextEnricher>();
+            var resolutionHandler = tenantScope.ServiceProvider.GetRequiredService<IExcursionResolutionHandler>();
 
             var rules = tenantGroup.Select(x => x.Rule).ToList();
             SensorContext enriched;
             try
             {
                 var last = await LastUsableReadingAsync(
-                    tenantScope.Services.GetRequiredService<ICanonicalGlucoseService>(), tenantContext, ct);
+                    tenantScope.ServiceProvider.GetRequiredService<ICanonicalGlucoseService>(), tenantContext, ct);
                 var baseContext = new SensorContext
                 {
                     LatestValue = null,
@@ -592,7 +591,7 @@ public class AlertSweepService : BackgroundService
             try
             {
                 var last = await LastUsableReadingAsync(
-                    tenantScope.Services.GetRequiredService<ICanonicalGlucoseService>(), tenantContext, ct);
+                    tenantScope.ServiceProvider.GetRequiredService<ICanonicalGlucoseService>(), tenantContext, ct);
                 var context = last.Reading is { } usable
                     ? CanonicalAlertEvaluator.ContextFor(usable)
                     : new SensorContext
@@ -603,7 +602,7 @@ public class AlertSweepService : BackgroundService
                         LastReadingAt = last.At,
                     };
 
-                var orchestrator = tenantScope.Services.GetRequiredService<IAlertOrchestrator>();
+                var orchestrator = tenantScope.ServiceProvider.GetRequiredService<IAlertOrchestrator>();
                 await orchestrator.EvaluateRulesAsync(
                     wallClockRules, tenantRules.Select(r => r.Id).ToHashSet(), context, ct);
             }

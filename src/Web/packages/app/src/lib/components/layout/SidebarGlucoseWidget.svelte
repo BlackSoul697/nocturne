@@ -15,16 +15,18 @@
   import ThresholdRules from "$lib/components/dashboard/glucose-chart/tracks/ThresholdRules.svelte";
   import { Tween, prefersReducedMotion } from "svelte/motion";
   import { cubicOut } from "svelte/easing";
-  import ArrowRight from "lucide-svelte/icons/arrow-right";
-  import { createConnectionIndicator } from "$lib/stores/connection-indicator.svelte";
+  import ArrowRight from "@lucide/svelte/icons/arrow-right";
+  import { displayedGlucose } from "$lib/stores/current-glucose-status.svelte";
+  import { getGlucoseTileVariant } from "$lib/utils/glucose-status";
 
   const realtimeStore = tryGetRealtimeStore();
 
-  // Engine for the sidebar chart — no predictions, no inspection
+  // Engine for the sidebar chart — no predictions, no inspection, no request of its own
   const sidebarEngine = createChartDataEngine({
     enablePredictions: false,
     focusHours: 3,
     dataWindow: "display",
+    glucoseSource: "realtime",
   });
 
   // Glucose-only layout — no space reserved for basal/IOB/swim lanes
@@ -47,15 +49,16 @@
   };
 
   // Collapsed state needs basic BG info
-  const rawCurrentBG = $derived(realtimeStore?.currentBG ?? 0);
+  const glucose = displayedGlucose(realtimeStore);
+  const rawCurrentBG = $derived(glucose.currentBG);
   const lastUpdated = $derived(realtimeStore?.lastUpdated ?? 0);
+  const tileVariant = $derived(
+    getGlucoseTileVariant(glucose.status)
+  );
   const now = $derived(realtimeStore?.now ?? Date.now());
   const isStale = $derived(now - lastUpdated > STALE_THRESHOLD_MS);
 
-  const connection = createConnectionIndicator(
-    () => realtimeStore?.connectionStatus ?? "idle"
-  );
-  const isDisconnected = $derived(connection.isDisconnected);
+  const isDisconnected = $derived(realtimeStore?.connectionUnavailable ?? false);
   const isLoading = $derived(
     rawCurrentBG === 0 && (realtimeStore?.entries.length ?? 0) === 0
   );
@@ -63,15 +66,15 @@
   const displayBG = $derived(formatGlucoseValue(rawCurrentBG, units));
 
   // Trend metadata
-  const bgDelta = $derived(realtimeStore?.bgDelta ?? 0);
-  const direction = $derived(realtimeStore?.direction ?? "");
+  const bgDelta = $derived(glucose.bgDelta);
+  const direction = $derived(glucose.direction);
   const timeSinceReading = $derived(realtimeStore?.timeSinceReading ?? "");
   const displayDelta = $derived(formatGlucoseDelta(bgDelta, units));
   const hasData = $derived(!isLoading && rawCurrentBG > 0);
 
 
   // Smoothly animate the trend arrow rotation
-  const arrowAngle = Tween.of(() => trendAngle(bgDelta), {
+  const arrowAngle = Tween.of(() => trendAngle(bgDelta ?? 0), {
     // Reactive, so toggling the OS setting takes effect without a reload.
     duration: prefersReducedMotion.current ? 0 : 600,
     easing: cubicOut,
@@ -84,7 +87,7 @@
     <div class="flex items-center justify-center gap-2">
       <GlucoseValueIndicator
         displayValue={displayBG}
-        rawBgMgdl={rawCurrentBG}
+        variant={tileVariant}
         {isLoading}
         {isStale}
         {isDisconnected}
@@ -93,13 +96,15 @@
       />
       {#if hasData && !isStale}
         <div class="flex flex-col items-center gap-0.5">
-          <div class="flex items-center gap-0.5 {deltaColorClass(direction)}">
-            <ArrowRight
-              class="size-4 rotate-(--arrow-angle)"
-              style="--arrow-angle: {arrowAngle.current}deg"
-            />
-            <span class="text-sm font-medium">{displayDelta}</span>
-          </div>
+          {#if bgDelta !== null}
+            <div class="flex items-center gap-0.5 {deltaColorClass(direction)}">
+              <ArrowRight
+                class="size-4 rotate-(--arrow-angle)"
+                style="--arrow-angle: {arrowAngle.current}deg"
+              />
+              <span class="text-sm font-medium">{displayDelta}</span>
+            </div>
+          {/if}
           <span class="text-2xs text-muted-foreground leading-tight">
             {timeSinceReading}
           </span>
@@ -134,14 +139,14 @@
 <div class="hidden group-data-[collapsible=icon]:flex flex-col items-center gap-0.5">
   <GlucoseValueIndicator
     displayValue={displayBG}
-    rawBgMgdl={rawCurrentBG}
+    variant={tileVariant}
     {isLoading}
     {isStale}
     {isDisconnected}
     size="xs"
     class="text-lg"
   />
-  {#if hasData && !isStale}
+  {#if hasData && !isStale && bgDelta !== null}
     <div class="flex items-center gap-0.5 {deltaColorClass(direction)}">
       <ArrowRight
         class="size-3 rotate-(--arrow-angle)"

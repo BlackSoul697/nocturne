@@ -4,19 +4,18 @@
   import { ConfirmDialog } from "$lib/components/ui/confirm-dialog";
   import { Badge } from "$lib/components/ui/badge";
   import { Separator } from "$lib/components/ui/separator";
-  import {
-    Shield,
-    Trash2,
-    Check,
-    AlertTriangle,
-    Clock,
-    LoaderCircle,
-    Plus,
-    BadgeCheck,
-    ExternalLink,
-  } from "lucide-svelte";
+  import Shield from "@lucide/svelte/icons/shield";
+  import Trash2 from "@lucide/svelte/icons/trash-2";
+  import Check from "@lucide/svelte/icons/check";
+  import AlertTriangle from "@lucide/svelte/icons/triangle-alert";
+  import Clock from "@lucide/svelte/icons/clock";
+  import LoaderCircle from "@lucide/svelte/icons/loader-circle";
+  import Plus from "@lucide/svelte/icons/plus";
+  import BadgeCheck from "@lucide/svelte/icons/badge-check";
+  import ExternalLink from "@lucide/svelte/icons/external-link";
   import { formatMediumDateTime } from "$lib/utils/formatting";
   import { list, revoke } from "$lib/api/generated/connectedApps.generated.remote";
+  import { OAuthClientIdentity } from "$api-clients";
   import { getOAuthScopeDescription } from "$lib/constants/oauth-scopes";
   import { describeSubmitError } from "$lib/forms/submit-error";
 
@@ -117,10 +116,14 @@
                 <span class="truncate">
                   {app.clientName ?? app.clientId}
                 </span>
-                {#if app.isVerified}
+                {#if app.identity === OAuthClientIdentity.Verified}
                   <Badge variant="secondary" class="shrink-0">
                     <BadgeCheck class="mr-1 h-3 w-3" />
                     Verified
+                  </Badge>
+                {:else if app.identity === OAuthClientIdentity.Unverified}
+                  <Badge variant="outline" class="shrink-0">
+                    Unverified
                   </Badge>
                 {:else}
                   <Badge variant="outline" class="shrink-0">

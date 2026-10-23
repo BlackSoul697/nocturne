@@ -5,6 +5,7 @@ using Microsoft.AspNetCore.RateLimiting;
 using Nocturne.API.Attributes;
 using Nocturne.API.Authorization;
 using Nocturne.API.Extensions;
+using Nocturne.API.Services.Connectors;
 using Nocturne.Connectors.Core.Utilities;
 using OpenApi.Remote.Attributes;
 using Nocturne.Connectors.Core.Interfaces;
@@ -34,9 +35,6 @@ namespace Nocturne.API.Controllers.V4.Connectors;
 // the schema — which describes a connector's declared fields and holds no tenant state — requires
 // tenant.settings. Repeated per action rather than declared on the class because the schema route
 // is [AllowAnonymous], and an authorization filter on the class would run for it regardless.
-// [RequireAdmin] would not do: it resolves against the PermissionTrie, which ScopeTranslator never
-// populates with a tenant-administration atom, so it admits only a superuser membership and would
-// lock the Administrator role out of the connector settings it holds tenant.settings for.
 public class ConfigurationController : ControllerBase
 {
     private readonly IConnectorConfigurationService _configService;
@@ -159,6 +157,11 @@ public class ConfigurationController : ControllerBase
         _logger.LogInformation("Saving configuration for connector {ConnectorName} by {ModifiedBy}",
             connectorName, modifiedBy);
 
+        if (IsGrantDrivenConnector(connectorName) && SetsEnabled(configuration))
+        {
+            return RefuseGrantDrivenEnabled();
+        }
+
         // Validate the configuration against the schema
         var validationErrors = await ValidateConfigurationAsync(connectorName, configuration, ct);
         if (validationErrors.Count > 0)
@@ -171,6 +174,20 @@ public class ConfigurationController : ControllerBase
         var result = await _configService.SaveConfigurationAsync(connectorName, configuration, modifiedBy, ct);
         return Ok(result);
     }
+
+    private static bool IsGrantDrivenConnector(string connectorName) =>
+        ConnectorNames.Canonical(connectorName) == ConnectorNames.Canonical(nameof(ConnectSource.GoogleHealth));
+
+    private static bool SetsEnabled(JsonDocument configuration) =>
+        configuration.RootElement.ValueKind == JsonValueKind.Object &&
+        configuration.RootElement.EnumerateObject()
+            .Any(property => property.Name.Equals("enabled", StringComparison.OrdinalIgnoreCase));
+
+    private ObjectResult RefuseGrantDrivenEnabled() =>
+        Problem(
+            detail: "Google Health is enabled while it holds a Google sign-in. Disconnect it to stop syncing.",
+            statusCode: 400,
+            title: "Bad Request");
 
     /// <summary>
     /// Validates the configuration against the connector's schema.
@@ -360,11 +377,20 @@ public class ConfigurationController : ControllerBase
     [RequireScope(Scope.TenantSettings)]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
     public async Task<IActionResult> SaveSecrets(
         string connectorName,
         [FromBody] Dictionary<string, string> secrets,
         CancellationToken ct)
     {
+        // Saving a Nightscout API secret adopts it as a working credential (see
+        // RequireInteractiveSessionAttribute); other connector credentials hand out nothing.
+        if (ConnectorConfigurationService.AdoptedSecret(connectorName, secrets) is not null
+            && RequireInteractiveSessionAttribute.Refuses(HttpContext))
+        {
+            return Forbid();
+        }
+
         var modifiedBy = User.Identity?.Name ?? "api";
         _logger.LogInformation("Saving secrets for connector {ConnectorName} by {ModifiedBy}",
             connectorName, modifiedBy);
@@ -457,11 +483,17 @@ public class ConfigurationController : ControllerBase
     [RemoteCommand(Invalidates = ["GetConfiguration", "GetAllConnectorStatus"])]
     [RequireScope(Scope.TenantSettings)]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
     public async Task<IActionResult> SetActive(
         string connectorName,
         [FromBody] SetActiveRequest request,
         CancellationToken ct)
     {
+        if (IsGrantDrivenConnector(connectorName))
+        {
+            return RefuseGrantDrivenEnabled();
+        }
+
         var modifiedBy = User.Identity?.Name ?? "api";
         _logger.LogInformation("Setting connector {ConnectorName} active={IsActive} by {ModifiedBy}",
             connectorName, request.IsActive, modifiedBy);

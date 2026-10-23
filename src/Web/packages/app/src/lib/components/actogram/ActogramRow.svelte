@@ -4,7 +4,10 @@
   import { scaleTime } from 'd3-scale';
   import { timeScale } from '$lib/components/charts/scale-guards';
   import { curveMonotoneX } from 'd3';
-  import { FALLBACK_GLUCOSE_Y_MAX } from '$lib/constants/glucose-thresholds';
+  import {
+    FALLBACK_GLUCOSE_Y_MAX,
+    type ChartThresholds,
+  } from '$lib/constants/glucose-thresholds';
   import { bg, bgLabel, time } from '$lib/utils/formatting';
   import { dashClass } from '$lib/components/charts/print/chart-print-patterns';
   import {
@@ -16,7 +19,6 @@
     type ActogramRowContext,
     type ActogramTooltipData,
     type GlucosePoint,
-    type GlucoseThresholds,
     type RowDataPoint,
     resolveTargetRange,
   } from './actogram';
@@ -25,7 +27,7 @@
     day: Date;
     data: RowDataPoint<T>[];
     bgData: RowDataPoint<GlucosePoint>[];
-    thresholds: GlucoseThresholds | undefined;
+    thresholds: ChartThresholds | undefined;
     height: number;
     row: Snippet<[ActogramRowContext<T>]>;
     tooltipValue?: Snippet<[{ point: T; day: Date }]>;
@@ -76,8 +78,9 @@
       {#if bgChartData.length > 1 && thresholds}
         {@const target = resolveTargetRange(thresholds)}
         <!-- The dots' range colour is lost in black and white; these limits carry it instead. -->
-        {#each [target.low, target.high] as limit (limit)}
+        {#each [target.low, target.high] as limit, index (index)}
           <line
+            data-testid="actogram-target-limit"
             x1={0}
             x2={context.width}
             y1={context.yScale(limit)}
@@ -103,6 +106,7 @@
              registration re-runs the chart's mark deriveds, so N points cost
              O(N^2). Data mode renders all points from a single mark. -->
         <Circle
+          data-testid="actogram-glucose-reading"
           data={bgChartData}
           key={(d) => d.time}
           cx={(d) => d.time}

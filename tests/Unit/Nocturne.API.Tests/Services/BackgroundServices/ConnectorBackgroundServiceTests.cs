@@ -1,9 +1,11 @@
+using Nocturne.API.Multitenancy;
 using System.Collections.Concurrent;
 using System.Text.Json;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using Moq;
+using Nocturne.API.Services;
 using Nocturne.API.Services.Audit;
 using Nocturne.API.Services.BackgroundServices;
 using Nocturne.API.Tests.TestDoubles;
@@ -15,6 +17,7 @@ using Nocturne.Core.Contracts.Audit;
 using Nocturne.Core.Contracts.Connectors;
 using Nocturne.Core.Contracts.Multitenancy;
 using Nocturne.Infrastructure.Data;
+using Nocturne.Infrastructure.Data.Services;
 using Nocturne.Tests.Shared.Infrastructure;
 using Nocturne.Tests.Shared.Mocks;
 using Xunit;
@@ -44,6 +47,8 @@ public class ConnectorBackgroundServiceTests
         private readonly Action? _onSyncCompleted;
         private readonly TimeSpan? _perTenantTimeout;
         private readonly TimeSpan? _unconfiguredRecheck;
+        private readonly Func<DateTime, DateTime?>? _alignedSync;
+        private readonly TimeSpan? _minAlignedSpacing;
         private readonly int _hangFirstNCalls;
         private int _callCount;
 
@@ -59,8 +64,11 @@ public class ConnectorBackgroundServiceTests
             ConnectorSyncBudget? budget = null,
             ConnectorPollerNudge? nudge = null,
             TimeSpan? unconfiguredRecheck = null,
-            ConnectorSyncMetrics? metrics = null)
-            : base(serviceProvider, budget ?? new ConnectorSyncBudget(), serviceProvider.GetRequiredService<ActiveTenantSnapshot>(), logger, nudge, metrics)
+            ConnectorSyncMetrics? metrics = null,
+            TenantRunGuard? runGuard = null,
+            Func<DateTime, DateTime?>? alignedSync = null,
+            TimeSpan? minAlignedSpacing = null)
+            : base(serviceProvider, budget ?? new ConnectorSyncBudget(), serviceProvider.GetRequiredService<ActiveTenantSnapshot>(), logger, nudge, metrics, runGuard)
         {
             _syncResult = syncResult;
             _onSync = onSync;
@@ -69,11 +77,24 @@ public class ConnectorBackgroundServiceTests
             _hangFirstNCalls = hangFirstNCalls;
             _onSyncCompleted = onSyncCompleted;
             _unconfiguredRecheck = unconfiguredRecheck;
+            _alignedSync = alignedSync;
+            _minAlignedSpacing = minAlignedSpacing;
         }
 
         protected override TimeSpan PerTenantSyncTimeout => _perTenantTimeout ?? base.PerTenantSyncTimeout;
 
         protected override TimeSpan UnconfiguredRecheckInterval => _unconfiguredRecheck ?? base.UnconfiguredRecheckInterval;
+
+        protected override TimeSpan MinimumAlignedSyncSpacing => _minAlignedSpacing ?? base.MinimumAlignedSyncSpacing;
+
+        protected override Task<DateTime?> GetAlignedSyncTimeAsync(
+            IServiceProvider scopeProvider,
+            TestConnectorConfig config,
+            DateTime now,
+            CancellationToken cancellationToken) =>
+            _alignedSync is null
+                ? base.GetAlignedSyncTimeAsync(scopeProvider, config, now, cancellationToken)
+                : Task.FromResult(_alignedSync(now));
 
         /// <summary>Number of times PerformSyncAsync has been entered (across all tenants).</summary>
         public int CallCount => _callCount;
@@ -130,13 +151,9 @@ public class ConnectorBackgroundServiceTests
         db.AddToServices(services);
         services.AddActiveTenantSnapshot();
 
-        // Register scoped services
-        services.AddScoped<ITenantAccessor>(_ =>
-        {
-            var mock = MockTenantAccessor.Create(Guid.NewGuid());
-            mock.Setup(t => t.SetTenant(It.IsAny<TenantContext>()));
-            return mock.Object;
-        });
+        services.AddScoped<ITenantAccessor, HttpContextTenantAccessor>();
+        services.AddScoped(sp => new TenantReadContext(
+            sp.GetRequiredService<ITenantAccessor>(), null, sp.GetRequiredService<IAuditContext>()));
 
         services.AddScoped<IConnectorConfigurationService>(_ => configServiceMock.Object);
 
@@ -687,14 +704,10 @@ public class ConnectorBackgroundServiceTests
     }
 
     [Fact]
-    public async Task SyncForTenant_PinsScopedDbContextToSyncedTenant_ForRlsIsolation()
+    public async Task SyncForTenant_ScopedDbContextReadsTheSyncedTenant_ForRlsIsolation()
     {
-        // Regression test for the connector-wide outage: a NocturneDbContext's TenantId defaults
-        // to Guid.Empty. The background sync must set dbContext.TenantId to the tenant being
-        // synced — otherwise the
-        // TenantConnectionInterceptor applies a stale/empty RLS tenant, tenant-scoped reads
-        // (connector config + secrets) silently return nothing, and every connector authenticates
-        // with empty credentials. Before the fix the scoped context stayed at Guid.Empty here.
+        // Under an empty tenant the connector config and secrets read nothing, and every connector
+        // authenticates with empty credentials.
         var tenantId = Guid.NewGuid();
         using var db = TestDbContextFactory.CreateSqlite().SeedTenant(tenantId, "test-tenant");
 
@@ -727,25 +740,20 @@ public class ConnectorBackgroundServiceTests
             serviceProvider,
             syncResult,
             NullLogger<TestConnectorBackgroundService>.Instance,
-            onSyncScope: sp => capturedTenantId = sp.GetRequiredService<NocturneDbContext>().TenantId);
+            onSyncScope: sp => capturedTenantId = sp.GetRequiredService<TenantReadContext>().TenantId);
 
         // Act
         await sut.ExecuteOnceAsync(CancellationToken.None);
 
-        // Assert — the scoped DbContext the connector services share must be pinned to the synced
-        // tenant so RLS scopes correctly.
         Assert.Equal(tenantId, capturedTenantId);
     }
 
     [Fact]
     public async Task SyncForTenant_SystemAttributesTheScopeToTheConnector()
     {
-        // Regression test for the mutation_audit_log firehose: V4 repositories stamp their
-        // factory-created DbContexts from the scoped IAuditContext (V4RepositoryBase), not from
-        // the scoped NocturneDbContext the sync annotates. A background scope's AuditContext is
-        // a blank user context (IsSystem = false), so every connector upsert was audited with
-        // null attribution — ~1.5M rows/day in production — instead of being skipped as a
-        // system mutation.
+        // A background scope's AuditContext is a blank user context, so without system
+        // attribution every connector upsert is audited with null attribution instead of being
+        // skipped as a system mutation.
         using var db = TestDbContextFactory.CreateSqlite().SeedTenant(Guid.NewGuid(), "test-tenant");
 
         var syncResult = new SyncResult { Success = true, Message = "OK" };
@@ -773,6 +781,7 @@ public class ConnectorBackgroundServiceTests
         var serviceProvider = BuildServiceProvider(db, configServiceMock, config);
 
         bool? capturedIsSystem = null;
+        bool? capturedContextIsSystem = null;
         string? capturedEndpoint = null;
         var sut = new TestConnectorBackgroundService(
             serviceProvider,
@@ -781,14 +790,15 @@ public class ConnectorBackgroundServiceTests
             onSyncScope: sp =>
             {
                 capturedIsSystem = sp.GetRequiredService<IAuditContext>().IsSystem;
-                capturedEndpoint = sp.GetRequiredService<NocturneDbContext>().AuditContext?.Endpoint;
+                capturedEndpoint = sp.GetRequiredService<IAuditContext>().Endpoint;
+                capturedContextIsSystem = sp.GetRequiredService<TenantReadContext>().AuditContext?.IsSystem;
             });
 
         // Act
         await sut.ExecuteOnceAsync(CancellationToken.None);
 
-        // Assert — everything written during the sync must carry system attribution.
         Assert.True(capturedIsSystem);
+        Assert.True(capturedContextIsSystem);
         Assert.Equal("connector:testconnector", capturedEndpoint);
     }
 
@@ -1236,6 +1246,123 @@ public class ConnectorBackgroundServiceTests
         configLoads.Should().Be(1, "the interval is known from the first read; the next reads wait for it to elapse");
     }
 
+    private static TestConnectorBackgroundService AlignedPoller(
+        SqliteTestDatabase db,
+        Func<DateTime, DateTime?> alignedSync,
+        SyncResult? syncResult = null,
+        TimeSpan? minAlignedSpacing = null) =>
+        new(
+            BuildServiceProvider(
+                db, BuildEnabledConfigMock(), new TestConnectorConfig { Enabled = true, SyncIntervalMinutes = 60 }),
+            syncResult ?? new SyncResult { Success = true },
+            NullLogger<TestConnectorBackgroundService>.Instance,
+            alignedSync: alignedSync,
+            minAlignedSpacing: minAlignedSpacing);
+
+    /// <summary>
+    /// A connector that knows when its source next has data brings the sync forward to then: the
+    /// interval is the longest the poller waits, not the shortest. The aligned time is spent by the
+    /// sync it scheduled, so a later tick is back under the interval.
+    /// </summary>
+    [Fact]
+    public async Task AlignedSyncTime_OnceArrived_SyncsInsideTheInterval_AndIsSpentByThatSync()
+    {
+        using var db = TestDbContextFactory.CreateSqlite().SeedTenant(Guid.NewGuid(), "test-tenant");
+        var answers = new Queue<DateTime?>();
+        var sut = AlignedPoller(
+            db,
+            now => answers.Count > 0 ? answers.Dequeue() : now,
+            minAlignedSpacing: TimeSpan.Zero);
+
+        // First sync aligns the next one to "now", which has arrived by the next tick.
+        await sut.ExecuteOnceAsync(CancellationToken.None);
+        sut.CallCount.Should().Be(1);
+
+        answers.Enqueue(null); // the aligned sync reports no further alignment
+        await sut.ExecuteOnceAsync(CancellationToken.None);
+        sut.CallCount.Should().Be(2, "the aligned time had arrived, although the 60-minute interval had not");
+
+        await sut.ExecuteOnceAsync(CancellationToken.None);
+        sut.CallCount.Should().Be(2, "the alignment was spent by the sync it scheduled; the interval stands again");
+    }
+
+    [Fact]
+    public async Task AlignedSyncTime_NotYetArrived_WaitsForIt()
+    {
+        using var db = TestDbContextFactory.CreateSqlite().SeedTenant(Guid.NewGuid(), "test-tenant");
+        var sut = AlignedPoller(db, now => now.AddMinutes(10), minAlignedSpacing: TimeSpan.Zero);
+
+        await sut.ExecuteOnceAsync(CancellationToken.None);
+        await sut.ExecuteOnceAsync(CancellationToken.None);
+
+        sut.CallCount.Should().Be(1);
+    }
+
+    /// <summary>
+    /// A connector that answers "now" after every sync would otherwise be synced on every tick.
+    /// </summary>
+    [Fact]
+    public async Task AlignedSyncTime_IsNeverSooner_ThanTheMinimumSpacing()
+    {
+        using var db = TestDbContextFactory.CreateSqlite().SeedTenant(Guid.NewGuid(), "test-tenant");
+        var sut = AlignedPoller(db, now => now, minAlignedSpacing: TimeSpan.FromMinutes(5));
+
+        await sut.ExecuteOnceAsync(CancellationToken.None);
+        await sut.ExecuteOnceAsync(CancellationToken.None);
+
+        sut.CallCount.Should().Be(1);
+    }
+
+    /// <summary>
+    /// Only a sync that succeeded says anything about the source's cadence; a failing source is left
+    /// on the plain interval rather than retried at the aligned time.
+    /// </summary>
+    [Fact]
+    public async Task AFailedSync_IsNotAligned()
+    {
+        using var db = TestDbContextFactory.CreateSqlite().SeedTenant(Guid.NewGuid(), "test-tenant");
+        var asked = 0;
+        var sut = AlignedPoller(
+            db,
+            now => { asked++; return now; },
+            syncResult: new SyncResult { Success = false, Message = "down" },
+            minAlignedSpacing: TimeSpan.Zero);
+
+        await sut.ExecuteOnceAsync(CancellationToken.None);
+        await sut.ExecuteOnceAsync(CancellationToken.None);
+
+        sut.CallCount.Should().Be(1);
+        asked.Should().Be(0);
+    }
+
+    /// <summary>
+    /// The alignment is an optimisation over a sync that already succeeded: when working it out
+    /// fails, the sync is still reported healthy and the interval still applies.
+    /// </summary>
+    [Fact]
+    public async Task AnAlignmentThatThrows_LeavesTheSyncHealthyAndTheIntervalInCharge()
+    {
+        using var db = TestDbContextFactory.CreateSqlite().SeedTenant(Guid.NewGuid(), "test-tenant");
+        var configServiceMock = BuildEnabledConfigMock();
+        var sut = new TestConnectorBackgroundService(
+            BuildServiceProvider(
+                db, configServiceMock, new TestConnectorConfig { Enabled = true, SyncIntervalMinutes = 60 }),
+            new SyncResult { Success = true },
+            NullLogger<TestConnectorBackgroundService>.Instance,
+            alignedSync: _ => throw new InvalidOperationException("no readings table"),
+            minAlignedSpacing: TimeSpan.Zero);
+
+        await sut.ExecuteOnceAsync(CancellationToken.None);
+        await sut.ExecuteOnceAsync(CancellationToken.None);
+
+        sut.CallCount.Should().Be(1);
+        configServiceMock.Verify(
+            x => x.UpdateHealthStateAsync(
+                "TestConnector", It.IsAny<DateTime?>(), It.IsAny<DateTime?>(),
+                It.IsAny<string?>(), It.IsAny<DateTime?>(), true, It.IsAny<CancellationToken>()),
+            Times.Once);
+    }
+
     /// <summary>
     /// The schedule must never hide a configuration the tenant just saved: the configuration
     /// service's cache-invalidation hook reaches the poller through <see cref="ConnectorPollerNudge"/>
@@ -1423,6 +1550,34 @@ public class ConnectorBackgroundServiceTests
             Events.Enqueue("sync");
             return Task.FromResult(new SyncResult { Success = true });
         }
+    }
+
+    /// <summary>
+    /// A manual sync holds the same (tenant, connector) key the poller uses, so the cycle must
+    /// skip that tenant rather than queue behind it.
+    /// </summary>
+    [Fact]
+    public async Task SyncAllTenants_WhenASyncIsAlreadyRunning_SkipsThatTenantWithoutWaiting()
+    {
+        var tenantId = Guid.NewGuid();
+        using var db = TestDbContextFactory.CreateSqlite().SeedTenant(tenantId, "test-tenant");
+
+        var guard = new TenantRunGuard();
+        using var held = guard.TryAcquire(tenantId, "testconnector");
+        held.Should().NotBeNull();
+
+        var logger = new MessageRecordingLogger();
+        var sut = new TestConnectorBackgroundService(
+            BuildServiceProvider(
+                db, BuildEnabledConfigMock(), new TestConnectorConfig { Enabled = true, SyncIntervalMinutes = 5 }),
+            new SyncResult { Success = true },
+            logger,
+            runGuard: guard);
+
+        await sut.ExecuteOnceAsync(CancellationToken.None);
+
+        sut.CallCount.Should().Be(0, "a held key makes the cycle skip the tenant, not run it");
+        logger.Messages.Should().Contain(m => m.Contains("skipped"));
     }
 
     /// <summary>

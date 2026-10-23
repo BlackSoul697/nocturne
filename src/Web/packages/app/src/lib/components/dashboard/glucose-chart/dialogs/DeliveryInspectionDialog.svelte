@@ -1,15 +1,19 @@
 <script lang="ts">
   import * as Dialog from "$lib/components/ui/dialog";
   import { Badge } from "$lib/components/ui/badge";
-  import { Activity, Syringe, AlertTriangle } from "lucide-svelte";
+  import Activity from "@lucide/svelte/icons/activity";
+  import Syringe from "@lucide/svelte/icons/syringe";
+  import AlertTriangle from "@lucide/svelte/icons/triangle-alert";
   import { BasalDeliveryOrigin } from "$lib/api";
   import { bg, bgLabel, formatLocale, time } from "$lib/utils/formatting";
   import { getDataSourceDisplayName } from "$lib/utils/data-source-display";
   import { useApsPrediction } from "./aps-prediction.svelte";
   import InspectionChart from "./InspectionChart.svelte";
+  import type { GlucoseUnits } from "$lib/stores/appearance-store.svelte";
   import InspectionFooter from "./InspectionFooter.svelte";
 
   interface Props {
+    glucoseUnits?: GlucoseUnits;
     open: boolean;
     timestamp: Date;
     basalRate?: number;
@@ -57,6 +61,7 @@
     onClose,
     onNavigateGlucose,
     onNavigateTreatment,
+    glucoseUnits,
   }: Props = $props();
 
   const sourceDisplayName = $derived(getDataSourceDisplayName(dataSource));
@@ -194,17 +199,17 @@
 
           {#if snapshot.currentBg != null}
             <span class="text-muted-foreground">Current BG</span>
-            <span class="font-medium">{bg(snapshot.currentBg)} {bgLabel()}</span>
+            <span class="font-medium">{bg(snapshot.currentBg, glucoseUnits)} {bgLabel(glucoseUnits)}</span>
           {/if}
 
           {#if snapshot.eventualBg != null}
             <span class="text-muted-foreground">Eventual BG</span>
-            <span class="font-medium">{bg(snapshot.eventualBg)} {bgLabel()}</span>
+            <span class="font-medium">{bg(snapshot.eventualBg, glucoseUnits)} {bgLabel(glucoseUnits)}</span>
           {/if}
 
           {#if snapshot.targetBg != null}
             <span class="text-muted-foreground">Target BG</span>
-            <span class="font-medium">{bg(snapshot.targetBg)} {bgLabel()}</span>
+            <span class="font-medium">{bg(snapshot.targetBg, glucoseUnits)} {bgLabel(glucoseUnits)}</span>
           {/if}
 
           {#if snapshot.iob != null}
@@ -239,6 +244,7 @@
     {/if}
 
     <InspectionChart
+      {glucoseUnits}
       {glucoseData}
       centerTime={timestamp}
       predictionData={aps.predictionData}

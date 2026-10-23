@@ -45,6 +45,8 @@ declare global {
 			issues?: RustValidationIssue[];
 		}
 		type TenantStatus = TenantStatusResponse;
+		/** How this request's status call settled: its body, or the failure the client threw. */
+		type StatusProbe = { ok: true; body: TenantStatusResponse } | { ok: false; error: unknown };
 		interface Locals {
 			apiClient: ApiClient;
 			/** Whether this request arrived on a public share host ({token}.share.{base-domain}). */
@@ -60,6 +62,11 @@ declare global {
 			 */
 			statusPromise?: Promise<TenantStatusResponse | null>;
 			/**
+			 * Set when the API could not be reached (or answered 5xx) while resolving the session,
+			 * so that an unauthenticated request is not known to be signed out.
+			 */
+			sessionUnreadable?: boolean;
+			/**
 			 * Current authenticated user, or null if not authenticated
 			 */
 			user: AuthUser | null;
@@ -68,9 +75,10 @@ declare global {
 			 */
 			isAuthenticated: boolean;
 			/**
-			 * Whether the API readiness probe has already run for this request
+			 * This request's status call, started by the status probe handle. Unset where the
+			 * probe is skipped or a cached ready answer stood in for it.
 			 */
-			statusProbed?: boolean;
+			statusProbe?: Promise<StatusProbe>;
 			/**
 			 * Effective permissions (granted scopes) for the current user on the current tenant
 			 */
@@ -79,6 +87,10 @@ declare global {
 			 * Whether the current user may read only the last 24 hours of time-series data
 			 */
 			limitTo24Hours?: boolean;
+			/**
+			 * Whether the current user is the demo visitor account the demo-subject gate refuses
+			 */
+			refusedAsDemoSubject?: boolean;
 			/**
 			 * Whether the current user is a platform administrator
 			 */
@@ -118,6 +130,8 @@ declare global {
 			effectivePermissions?: string[];
 			/** Whether the viewer may read only the last 24 hours, resolved by the root layout. */
 			limitTo24Hours?: boolean;
+			/** Whether the viewer is the demo visitor account, resolved by the root layout. */
+			refusedAsDemoSubject?: boolean;
 		}
 		// Shallow-routing state. Dialogs key their browser-history entries here
 		// (see useDialogHistory) so the back button can dismiss them.

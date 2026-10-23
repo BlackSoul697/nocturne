@@ -27,6 +27,7 @@ using Nocturne.Core.Contracts.V4;
 using Nocturne.Core.Contracts.V4.Repositories;
 using Nocturne.Core.Models;
 using Nocturne.Core.Models.V4;
+using Nocturne.Infrastructure.Data.Services;
 using Xunit;
 
 namespace Nocturne.API.Tests.Controllers.V4.Base;
@@ -396,6 +397,23 @@ public class V4BulkValidationTests
             Times.Never);
     }
 
+    [Fact]
+    public async Task SleepBulk_LeavesOutASessionTheUserDeleted()
+    {
+        var deleted = new SleepSession { OriginalId = "sleep-deleted" };
+        var fresh = new SleepSession { OriginalId = "sleep-fresh" };
+        var service = new Mock<ISleepService>();
+        service.Setup(s => s.UpsertSessionAsync(deleted, It.IsAny<CancellationToken>()))
+            .ThrowsAsync(new RecreationBlockedException("sleep session", "original id 'sleep-deleted'"));
+        service.Setup(s => s.UpsertSessionAsync(fresh, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(fresh);
+
+        var result = await Sleep(service).CreateSessionsBulk([deleted, fresh]);
+
+        result.Result.Should().BeOfType<ObjectResult>()
+            .Which.Value.Should().BeEquivalentTo(new[] { fresh });
+    }
+
     // ── The per-item validators auto-validation cannot reach ────────
 
     [Fact]
@@ -507,7 +525,7 @@ public class V4BulkValidationTests
             Mock.Of<IBolusRepository>(),
             Mock.Of<ITreatmentFoodService>(),
             Mock.Of<IDemoModeService>(),
-            context: null!));
+            contexts: Mock.Of<INocturneDbContextFactory>()));
 
     private static TempBasalController TempBasals() =>
         WithContext(new TempBasalController(Mock.Of<ITempBasalRepository>(), Mock.Of<IPatientDeviceStamper>()));

@@ -20,7 +20,7 @@ namespace Nocturne.API.Tests.Integration.Analytics;
 /// returns a consistent answer under concurrency.
 /// </summary>
 [Trait("Category", "Integration")]
-public class InsulinDeliveryParallelFetchTests : AspireIntegrationTestBase
+public class InsulinDeliveryParallelFetchTests : ApiIntegrationTestBase
 {
     private static readonly JsonSerializerOptions JsonOptions = new()
     {
@@ -29,7 +29,7 @@ public class InsulinDeliveryParallelFetchTests : AspireIntegrationTestBase
     };
 
     public InsulinDeliveryParallelFetchTests(
-        AspireIntegrationTestFixture fixture,
+        ApiIntegrationTestFixture fixture,
         ITestOutputHelper output
     )
         : base(fixture, output) { }
@@ -98,8 +98,8 @@ public class InsulinDeliveryParallelFetchTests : AspireIntegrationTestBase
                 because: "concurrent fetches must return the same TotalBasal");
             result.TotalInsulin.Should().Be(reference.TotalInsulin,
                 because: "concurrent fetches must return the same TotalInsulin");
-            result.BolusCount.Should().Be(reference.BolusCount,
-                because: "concurrent fetches must return the same BolusCount");
+            result.ManualBolusCount.Should().Be(reference.ManualBolusCount,
+                because: "concurrent fetches must return the same ManualBolusCount");
             result.BasalCount.Should().Be(reference.BasalCount,
                 because: "concurrent fetches must return the same BasalCount");
         }

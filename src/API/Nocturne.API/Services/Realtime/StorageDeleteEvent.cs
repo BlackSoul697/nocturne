@@ -6,8 +6,8 @@ namespace Nocturne.API.Services.Realtime;
 /// <summary>
 /// The storage <c>delete</c> event for a single removed record, as
 /// <see cref="ISignalRBroadcastService.BroadcastStorageDeleteAsync"/> sends it. Five of the six
-/// delete producers use it; <see cref="SignalRV4RecordBroadcaster{TModel}"/> sends its own shape, which the
-/// socket.io bridge skips for want of a <c>colName</c>.
+/// delete producers use it; <see cref="SignalRV4RecordBroadcaster{TModel}"/> sends its own shape, the
+/// record's <c>id</c> under its V4 category, which no NS v3 client subscribes to.
 /// </summary>
 /// <remarks>
 /// NS v3 socket clients route on the top-level <c>colName</c> and look the removed record up by the
@@ -16,11 +16,12 @@ namespace Nocturne.API.Services.Realtime;
 /// contract rather than a naming convention and are spelled out here instead of being left to the
 /// payload serializer's naming policy.
 /// <para>
-/// A client only ever holds the identifier its create event delivered, and the models disagree on
-/// what that is — <see cref="Nocturne.Core.Models.Treatment"/> coerces its id to a Mongo ObjectId on
-/// the wire, <see cref="Nocturne.Core.Models.Entry"/> and <see cref="Nocturne.Core.Models.DeviceStatus"/>
-/// emit the uuid. <see cref="OnWire"/> reads the identifier back out of the serialized document so the
-/// two stay in step for any model rather than restating each model's choice at the call site.
+/// A client only ever holds the identifier its create event delivered, and that is whatever the
+/// model's serializer puts on the wire — <see cref="Nocturne.Core.Models.Treatment"/>,
+/// <see cref="Nocturne.Core.Models.Entry"/> and <see cref="Nocturne.Core.Models.DeviceStatus"/> coerce
+/// their id to a Mongo ObjectId, not the stored uuid or legacy id. <see cref="OnWire"/> reads the
+/// identifier back out of the serialized document so the two stay in step for any model rather than
+/// restating each model's choice at the call site.
 /// </para>
 /// </remarks>
 /// <param name="ColName">The collection the record belonged to.</param>

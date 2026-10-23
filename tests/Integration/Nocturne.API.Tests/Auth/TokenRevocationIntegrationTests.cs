@@ -13,14 +13,14 @@ namespace Nocturne.API.Tests.Integration.Auth;
 /// Token Introspection (RFC 7662) endpoints.
 /// </summary>
 [Trait("Category", "Integration")]
-public class TokenRevocationIntegrationTests : AspireIntegrationTestBase
+public class TokenRevocationIntegrationTests : ApiIntegrationTestBase
 {
     private Guid _tenantId;
     private Guid _subjectId;
     private string _accessToken = null!;
 
     public TokenRevocationIntegrationTests(
-        AspireIntegrationTestFixture fixture,
+        ApiIntegrationTestFixture fixture,
         ITestOutputHelper output)
         : base(fixture, output) { }
 
@@ -40,6 +40,7 @@ public class TokenRevocationIntegrationTests : AspireIntegrationTestBase
 
         _tenantId = await AuthTestHelpers.GetTenantIdAsync(conn);
         (_subjectId, _accessToken) = await AuthTestHelpers.SeedAuthenticatedSubjectAsync(conn, _tenantId, "Revocation Test User");
+        _accessToken = await AuthTestHelpers.IssueSessionTokenAsync(Fixture, _subjectId);
 
         Log($"Seeded tenant {_tenantId}, subject {_subjectId}");
     }
@@ -158,7 +159,8 @@ public class TokenRevocationIntegrationTests : AspireIntegrationTestBase
         body.GetProperty("active").GetBoolean().Should().BeTrue();
         body.TryGetProperty("sub", out _).Should().BeTrue("introspection response should include sub claim");
         body.TryGetProperty("exp", out _).Should().BeTrue("introspection response should include exp claim");
-        body.TryGetProperty("token_type", out _).Should().BeTrue("introspection response should include token_type");
+        body.TryGetProperty("client_id", out _).Should().BeTrue("introspection response should include client_id");
+        body.GetProperty("token_type").GetString().Should().Be("Bearer");
     }
 
     [Fact]

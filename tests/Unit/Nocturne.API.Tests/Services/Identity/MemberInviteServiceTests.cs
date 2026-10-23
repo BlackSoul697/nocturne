@@ -53,13 +53,10 @@ public class MemberInviteServiceTests : IDisposable
         var logger = new Mock<ILogger<MemberInviteService>>();
 
         _service = new MemberInviteService(
-            _dbContext,
+            _dbContext.AsFactory(),
             _jwtService.Object,
             _tenantService.Object,
-            new TenantRoleService(
-                _dbContext,
-                // Only SeedRolesForTenantAsync takes a context of its own, and nothing here seeds.
-                Mock.Of<IDbContextFactory<NocturneDbContext>>()),
+            new TenantRoleService(_dbContext.AsFactory()),
             Options.Create(new BaseDomainOptions { BaseDomain = BaseDomain }),
             logger.Object);
 
@@ -382,13 +379,11 @@ public class MemberInviteServiceTests : IDisposable
             OwnerPermissions,
             [_followerRoleId]);
 
-        // Add an existing active membership
         _dbContext.TenantMembers.Add(new TenantMemberEntity
         {
             Id = Guid.CreateVersion7(),
             TenantId = _tenantId,
             SubjectId = _acceptorSubjectId,
-            RevokedAt = null,
         });
         await _dbContext.SaveChangesAsync();
 

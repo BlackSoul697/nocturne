@@ -24,12 +24,13 @@ public static class AuthorizationConfiguration
     /// The fallback admits the anonymous public subject on public tenants (its trie carries the
     /// tenant's public permissions) and rejects anonymous callers on private tenants (empty trie).
     /// Endpoints opt out with <c>[AllowAnonymous]</c>; privileged endpoints tighten access with
-    /// <c>[RequireAdmin]</c> or another <c>[Require*]</c> attribute, all of which require an
+    /// <c>[RequireSuperuser]</c> or another <c>[Require*]</c> attribute, all of which require an
     /// authenticated caller and therefore do not admit the public subject.
     /// </remarks>
     public static IServiceCollection AddNocturneAuthorization(this IServiceCollection services)
     {
         services.AddTransient<IAuthorizationHandler, HasPermissionsHandler>();
+        services.AddSingleton<IAuthorizationMiddlewareResultHandler, NightscoutV3ChallengeResultHandler>();
 
         var hasPermissionsPolicy = new AuthorizationPolicyBuilder()
             .AddRequirements(new HasPermissionsRequirement())
@@ -62,16 +63,16 @@ public static class AuthorizationConfiguration
 
     /// <summary>
     /// Configures controller discovery so controllers in the <c>.DevOnly</c> namespace are not
-    /// registered outside the development environment.
+    /// registered unless <see cref="DevOnlyEndpoints.AreEnabled"/> says so.
     /// </summary>
     /// <remarks>
     /// Replaces the default <see cref="ControllerFeatureProvider"/> rather than appending a second
     /// provider: feature providers only add to <see cref="ControllerFeature.Controllers"/>, so an
     /// appended filter cannot remove controllers the default provider has already discovered.
     /// </remarks>
-    public static void ConfigureControllerDiscovery(ApplicationPartManager manager, bool isDevelopment)
+    public static void ConfigureControllerDiscovery(ApplicationPartManager manager, bool includeDevOnly)
     {
-        if (isDevelopment)
+        if (includeDevOnly)
         {
             return;
         }

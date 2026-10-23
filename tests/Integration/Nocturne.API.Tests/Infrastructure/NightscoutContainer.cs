@@ -5,6 +5,8 @@ using System.Text.Json;
 using DotNet.Testcontainers.Builders;
 using DotNet.Testcontainers.Containers;
 using DotNet.Testcontainers.Networks;
+using MongoDB.Bson;
+using MongoDB.Driver;
 
 namespace Nocturne.API.Tests.Integration.Infrastructure;
 
@@ -41,6 +43,19 @@ public class NightscoutContainer : IAsyncDisposable
     /// HttpClient configured with the API secret header for authenticated requests (V1/V2)
     /// </summary>
     public HttpClient Client => _httpClient ?? throw new InvalidOperationException("Container not started");
+
+    /// <summary>
+    /// Nightscout's <c>ENABLE</c>. Nightscout mounts <c>/api/v1/alexa</c> only when <c>alexa</c> is
+    /// enabled. It reports this list, followed by the defaults it adds, as <c>settings.enable</c>.
+    /// </summary>
+    public const string Enable = "careportal basal iob cob bwp cage sage iage bage pump openaps loop alexa";
+
+    /// <summary>
+    /// The <c>settings.enable</c> Nightscout reports for <see cref="Enable"/>, given to Nocturne as
+    /// <c>Features:Enable</c> so status compares like for like.
+    /// </summary>
+    public const string ReportedEnable = Enable
+        + " treatmentnotify bgnow delta direction timeago devicestatus upbat errorcodes profile bolus dbsize runtimestate ar2";
 
     public async Task StartAsync(CancellationToken cancellationToken = default)
     {
@@ -82,7 +97,7 @@ public class NightscoutContainer : IAsyncDisposable
             .WithEnvironment("MONGO_CONNECTION", internalMongoUri)
             .WithEnvironment("API_SECRET", ApiSecret)
             .WithEnvironment("DISPLAY_UNITS", "mg/dl")
-            .WithEnvironment("ENABLE", "careportal basal iob cob bwp cage sage iage bage pump openaps loop")
+            .WithEnvironment("ENABLE", Enable)
             .WithEnvironment("AUTH_DEFAULT_ROLES", "readable")
             .WithEnvironment("INSECURE_USE_HTTP", "true")
             .WithEnvironment("SECURE_HSTS_HEADER", "false")
@@ -108,6 +123,8 @@ public class NightscoutContainer : IAsyncDisposable
         // Nightscout returns tab-separated text by default; we need JSON for parity tests
         _httpClient.DefaultRequestHeaders.Add("Accept", "application/json");
 
+        await WaitUntilLoadedAsync(cancellationToken);
+
         // Fetch JWT token for V3 API authentication
         await FetchJwtTokenAsync(cancellationToken);
     }
@@ -119,6 +136,32 @@ public class NightscoutContainer : IAsyncDisposable
     /// 2. Get the access token from the created subject
     /// 3. Request a JWT using the access token
     /// </summary>
+    /// <summary>
+    /// Waits for Nightscout's <c>runtimeState</c> to reach <c>loaded</c>. It answers status as
+    /// soon as it listens, while still <c>booted</c>, and until its first data load it serves
+    /// empty in-memory data (summary, properties) and reports the earlier state in every status.
+    /// </summary>
+    private async Task WaitUntilLoadedAsync(CancellationToken cancellationToken)
+    {
+        var deadline = DateTime.UtcNow.AddMinutes(2);
+        string? state = null;
+        while (DateTime.UtcNow < deadline)
+        {
+            using var response = await _httpClient!.GetAsync("/api/v1/status.json", cancellationToken);
+            if (response.IsSuccessStatusCode)
+            {
+                using var status = JsonDocument.Parse(await response.Content.ReadAsStringAsync(cancellationToken));
+                state = status.RootElement.TryGetProperty("runtimeState", out var s) ? s.GetString() : null;
+                if (state == "loaded")
+                    return;
+            }
+
+            await Task.Delay(250, cancellationToken);
+        }
+
+        throw new TimeoutException($"Nightscout did not reach runtimeState 'loaded' (last seen: {state ?? "none"}).");
+    }
+
     private async Task FetchJwtTokenAsync(CancellationToken cancellationToken)
     {
         try
@@ -257,6 +300,12 @@ public class NightscoutContainer : IAsyncDisposable
                 // Ignore cleanup errors
             }
         }
+
+        // Activity has no v3 API, and v1 reads it straight from MongoDB with no cache in between,
+        // so it is emptied there.
+        var database = new MongoClient(MongoConnectionString).GetDatabase("nightscout");
+        await database.GetCollection<BsonDocument>("activity")
+            .DeleteManyAsync(FilterDefinition<BsonDocument>.Empty, cancellationToken);
 
         // Small delay to ensure deletions are fully processed
         await Task.Delay(50, cancellationToken);

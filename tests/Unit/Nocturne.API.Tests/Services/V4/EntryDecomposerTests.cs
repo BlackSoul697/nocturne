@@ -6,8 +6,10 @@ using Nocturne.API.Services.V4;
 using Nocturne.Core.Contracts.Audit;
 using Nocturne.Core.Contracts.Devices;
 using Nocturne.Core.Models;
+using Nocturne.Core.Models.Projections;
 using Nocturne.Core.Models.V4;
 using Nocturne.Infrastructure.Data;
+using Nocturne.Infrastructure.Data.Mappers.V4;
 using Nocturne.Infrastructure.Data.Repositories.V4;
 using Nocturne.Tests.Shared.Infrastructure;
 using Xunit;
@@ -25,7 +27,7 @@ public class EntryDecomposerTests : IDisposable
         _context = TestDbContextFactory.CreateInMemoryContext();
         _context.TenantId = Guid.Parse("00000000-0000-0000-0000-000000000001");
         var mockDedup = new Mock<IDeduplicationService>();
-        var ctxFactory = new TestTenantDbContextFactory(_context);
+        var ctxFactory = new TestNocturneDbContextFactory(_context);
         var sgRepo = new SensorGlucoseRepository(ctxFactory, mockDedup.Object, new Mock<IAuditContext>().Object, NullLogger<SensorGlucoseRepository>.Instance);
         var mgRepo = new MeterGlucoseRepository(ctxFactory, new Mock<IAuditContext>().Object, NullLogger<MeterGlucoseRepository>.Instance);
         var calRepo = new CalibrationRepository(ctxFactory, new Mock<IAuditContext>().Object, NullLogger<CalibrationRepository>.Instance);
@@ -37,13 +39,21 @@ public class EntryDecomposerTests : IDisposable
             .ReturnsAsync((GlucoseProcessing?)null);
         var glucoseResolver = new GlucoseProcessingResolver(mockConfigProvider.Object);
 
-        _decomposer = new EntryDecomposer(_context, sgRepo, mgRepo, calRepo, glucoseResolver, Mock.Of<IPatientDeviceStamper>(), Mock.Of<IAuditContext>(), NullLogger<EntryDecomposer>.Instance);
+        _decomposer = new EntryDecomposer(sgRepo, mgRepo, calRepo, glucoseResolver, Mock.Of<IPatientDeviceStamper>(), Mock.Of<IAuditContext>(), NullLogger<EntryDecomposer>.Instance);
     }
 
     public void Dispose()
     {
         _context.Dispose();
         GC.SuppressFinalize(this);
+    }
+
+    [Fact]
+    public async Task DeleteStoredAsync_ARecordThatIsNotAnEntry_Throws()
+    {
+        var act = () => _decomposer.DeleteStoredAsync(new Note { Id = Guid.CreateVersion7() }, WriteOrigin.Live);
+
+        await act.Should().ThrowAsync<ArgumentException>().WithParameterName("stored");
     }
 
     #region SGV Decomposition
@@ -113,6 +123,71 @@ public class EntryDecomposerTests : IDisposable
     }
 
     [Fact]
+    public async Task DecomposeAsync_SgvEntryWithRawFields_ReadsBackAsTheLegacyEntryWithThem()
+    {
+        var entry = new Entry
+        {
+            Id = "sgv-raw-fields",
+            Type = "sgv",
+            Mills = 1700000000000,
+            Sgv = 120.0,
+            Delta = 0,
+            Rssi = 100,
+            Filtered = 125_000,
+            Unfiltered = 131_500.5,
+        };
+
+        await _decomposer.DecomposeAsync(entry, WriteOrigin.Live);
+
+        _context.ChangeTracker.Clear();
+        var stored = SensorGlucoseMapper.ToDomainModel(_context.SensorGlucose.Single(e => e.LegacyId == "sgv-raw-fields"));
+        var projected = EntryProjection.FromSensorGlucose(stored);
+        projected.Delta.Should().Be(0);
+        projected.Rssi.Should().Be(100);
+        projected.Filtered.Should().Be(125_000);
+        projected.Unfiltered.Should().Be(131_500.5);
+    }
+
+    [Fact]
+    public async Task DecomposeAsync_ReSentSgvEntry_ReplacesTheRawFields()
+    {
+        var entry = new Entry
+        {
+            Id = "sgv-raw-update", Type = "sgv", Mills = 1700000000000, Sgv = 120.0,
+            Delta = 2, Rssi = 90, Filtered = 1, Unfiltered = 2,
+        };
+        await _decomposer.DecomposeAsync(entry, WriteOrigin.Live);
+
+        entry.Delta = -3.5;
+        entry.Rssi = null;
+        entry.Filtered = 3;
+        entry.Unfiltered = null;
+        await _decomposer.DecomposeAsync(entry, WriteOrigin.Live);
+
+        _context.ChangeTracker.Clear();
+        var stored = _context.SensorGlucose.Single(e => e.LegacyId == "sgv-raw-update");
+        stored.Delta.Should().Be(-3.5);
+        stored.Rssi.Should().BeNull();
+        stored.Filtered.Should().Be(3);
+        stored.Unfiltered.Should().BeNull();
+    }
+
+    [Fact]
+    public async Task DecomposeAsync_SgvEntryWithoutRawFields_ReadsBackWithoutThem()
+    {
+        await _decomposer.DecomposeAsync(
+            new Entry { Id = "sgv-no-raw", Type = "sgv", Mills = 1700000000000, Sgv = 120.0 }, WriteOrigin.Live);
+
+        _context.ChangeTracker.Clear();
+        var projected = EntryProjection.FromSensorGlucose(
+            SensorGlucoseMapper.ToDomainModel(_context.SensorGlucose.Single(e => e.LegacyId == "sgv-no-raw")));
+        projected.Delta.Should().BeNull();
+        projected.Rssi.Should().BeNull();
+        projected.Filtered.Should().BeNull();
+        projected.Unfiltered.Should().BeNull();
+    }
+
+    [Fact]
     public async Task DecomposeAsync_SgvEntry_UsesSgvOverMgdlWhenBothPresent()
     {
         // Arrange - Sgv and Mgdl may differ; Sgv takes priority for SGV entries
@@ -152,6 +227,40 @@ public class EntryDecomposerTests : IDisposable
         // Assert
         var sg = result.CreatedRecords[0].Should().BeOfType<SensorGlucose>().Subject;
         sg.Mgdl.Should().Be(110.0, "should fall back to Mgdl when Sgv is null");
+    }
+
+    [Theory]
+    [InlineData("NONE", 4, GlucoseDirection.None)]
+    [InlineData(null, 4, null)]
+    [InlineData("Sideways", 4, null)]
+    [InlineData("TripleUp", 1, null)]
+    [InlineData("TripleDown", 7, null)]
+    [InlineData("CGM ERROR", 4, null)]
+    [InlineData("SingleUp", 4, GlucoseDirection.SingleUp)]
+    [InlineData("NONE", 0, GlucoseDirection.None)]
+    [InlineData("NONE", 8, GlucoseDirection.None)]
+    [InlineData("NONE", 9, GlucoseDirection.None)]
+    public async Task DecomposeAsync_SgvEntryWithTrend_StoresDirectionAsUploaded(
+        string? direction, int trend, GlucoseDirection? expected)
+    {
+        var entry = new Entry
+        {
+            Id = "sgv-direction-as-uploaded",
+            Type = "sgv",
+            Mills = 1790000000000,
+            Sgv = 115.0,
+            Direction = direction,
+            Trend = trend
+        };
+
+        var result = await _decomposer.DecomposeAsync(entry, WriteOrigin.Live);
+
+        result.UpdatedRecords.Should().BeEmpty();
+        var sg = result.CreatedRecords.Should().ContainSingle().Which
+            .Should().BeOfType<SensorGlucose>().Subject;
+        sg.LegacyId.Should().Be("sgv-direction-as-uploaded");
+        sg.Mgdl.Should().Be(115.0);
+        sg.Direction.Should().Be(expected);
     }
 
     #endregion

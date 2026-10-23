@@ -12,11 +12,20 @@ Nocturne is a .NET 10 rewrite of the Nightscout diabetes management API with 1:1
 # Start the full stack (API + PostgreSQL + Web + services)
 aspire start
 
+# .NET outside the default location: the AppHost's native host needs DOTNET_ROOT
+# (the directory holding the real dotnet binary; for Homebrew, libexec)
+export DOTNET_ROOT="$(brew --prefix dotnet)/libexec"
+
+# Inspect the running stack (the Aspire dashboard is off by default)
+aspire describe
+aspire logs nocturne-api
+aspire resource nocturne-api restart
+
 # Build solution
 dotnet build
 
-# Run unit tests (excludes integration/performance/E2E)
-dotnet test --filter "Category!=Integration&Category!=Performance&Category!=E2E"
+# Run unit tests (excludes integration/performance)
+dotnet test --filter "Category!=Integration&Category!=Performance"
 
 # Run a single test class
 dotnet test --filter "FullyQualifiedName~EntryServiceTests"
@@ -24,8 +33,10 @@ dotnet test --filter "FullyQualifiedName~EntryServiceTests"
 # Run integration tests (requires Docker; Testcontainers starts what each suite needs)
 dotnet test --filter "Category=Integration"
 
-# Run the end-to-end suite (opt-in; stands up the whole Aspire stack)
-dotnet test tests/E2E/Nocturne.E2E.Tests -p:RunE2E=true
+# End-to-end suite: production images in docker compose, vitest API + Playwright web specs
+cd e2e && pnpm install && pnpm e2e     # build changed images, up, run all, down
+cd e2e && pnpm e2e:up                  # leave the stack up; prints URL, token, connection string
+cd e2e && pnpm e2e:upgrade             # latest release -> this checkout on one database
 
 # Frontend type checking
 cd src/Web/packages/app && pnpm run check
@@ -42,20 +53,25 @@ curl -X POST http://localhost:1610/api/v4/dev-only/admin/seed-tenant \
 # End-to-end smoke of the local stack (seed -> data -> login link -> tenant UI)
 dotnet run scripts/dev-smoke.cs
 
-# Auto-login: start with NOCTURNE_DEV_AUTO_LOGIN=true and the web login page
-# signs in as the tenant's first owner instead of showing the passkey UI
-# (leave off when testing auth itself). See the dev-tenant-api skill.
-NOCTURNE_DEV_AUTO_LOGIN=true aspire start
+# Auto-login is on by default: the web login page signs in as the tenant's
+# first owner instead of showing the passkey UI. Turn it off when testing auth
+# itself. See the dev-tenant-api skill.
+NOCTURNE_DEV_AUTO_LOGIN=false aspire start
 
-# Regenerate just the NSwag TypeScript client (force, e.g. during `aspire start` hot loop)
+# Aspire dashboard (off by default; or set it in AppHost appsettings/user-secrets)
+Aspire__OptionalServices__AspireDashboard__Enabled=true aspire start
+
+# Force the NSwag TypeScript client regen (e.g. during the `aspire start` hot loop)
 dotnet build src/API/Nocturne.API/Nocturne.API.csproj -p:GenerateNSwagClient=true
 
 # EF Core migrations (must disable NSwag first)
 dotnet build -p:GenerateNSwagClient=false
-dotnet ef migrations add <Name> -p src/Infrastructure/Nocturne.Infrastructure.Data -s src/API/Nocturne.API
+dotnet ef migrations add <Name> -p src/Infrastructure/Nocturne.Infrastructure.Data.Migrations -s src/API/Nocturne.API
 ```
 
-Aspire orchestrates everything: PostgreSQL, the API, the SvelteKit frontend, and background services. A YARP gateway is the single external HTTPS endpoint; API and Web run as plain HTTP behind it. You only need to restart Aspire if its `Program.cs` changes. The NSwag client is regenerated automatically on the initial Aspire startup build; subsequent `dotnet watch` rebuilds during the hot loop **skip** the codegen pipeline (NSwag + Zod + remote functions) for performance. If you change a controller/DTO and need the TS client to catch up, force a regen with `dotnet build src/API/Nocturne.API/Nocturne.API.csproj -p:GenerateNSwagClient=true`. If you come across a roadblock from the `.dll`s being in use, just kill the dotnet processes.
+Aspire orchestrates everything: PostgreSQL, the API, the SvelteKit frontend, and background services. A YARP gateway is the single external HTTPS endpoint; API and Web run as plain HTTP behind it. The AppHost itself does not run under `dotnet watch` (`features.defaultWatchEnabled` is false); in run mode the `nocturne-api` resource is a `dotnet watch` process (`DotnetWatchExtensions`). Method-body edits hot-reload in place; a rude edit restarts only the API process, and Postgres, Web, the gateway and their ports stay up. Changes under `src/Aspire/` need an Aspire restart. Watch builds skip analyzers, the build server, MSBuild node reuse and the OpenAPI XML comment generator (`dev/msbuild/dev-fast.targets`); CI, the IDE and plain `dotnet build` keep them. The API runs with Workstation GC in dev. Publish mode uses the plain project resource.
+
+The codegen pipeline (NSwag + Zod + remote functions) runs in the API build only when the generated client is missing or older than the API's reference assembly, i.e. when the public surface (controllers, DTOs, attributes) changed, so `aspire start` with an up-to-date client skips it. `dotnet watch` rebuilds during the hot loop always **skip** it. If you change a controller/DTO and need the TS client to catch up, force a regen with `dotnet build src/API/Nocturne.API/Nocturne.API.csproj -p:GenerateNSwagClient=true`. If you come across a roadblock from the `.dll`s being in use, just kill the dotnet processes.
 
 ### Generated Files
 
@@ -102,6 +118,7 @@ src/
 ├── Aspire/                      # .NET Aspire orchestration (AppHost, ServiceDefaults, SourceGenerators)
 ├── Connectors/                  # Data source integrations (Dexcom, Glooko, Libre, etc.)
 ├── Core/
+│   ├── Nocturne.Core.Clinical   # Clinical calculators (statistics, IOB/COB, sleep)
 │   ├── Nocturne.Core.Contracts  # Service interfaces
 │   ├── Nocturne.Core.Models     # Domain models
 │   └── Nocturne.Core.Constants  # Shared constants
@@ -134,6 +151,7 @@ Domain models use **mills-first** timestamps. `Entry.Mills` (Unix milliseconds) 
 
 - **PostgreSQL** via Entity Framework Core with 70+ migrations
 - Domain models → Database entities via mappers in `Infrastructure.Data/Mappers/`
+- EF migrations live in `Nocturne.Infrastructure.Data.Migrations`, which no project references at compile time; the API loads it at runtime from its output directory (so `dotnet watch` never loads the ~1.7M lines of migration Designer files). `dotnet watch` does not see that directory, so after adding a migration restart the API: `aspire resource nocturne-api restart`
 - Tables use snake_case (`entries`, `treatments`)
 - UUID v7 for new records; `OriginalId` preserved for MongoDB migration compatibility
 - Row Level Security for multitenancy
@@ -178,6 +196,10 @@ Know what it actually checks before trusting it:
   green. That migration's exact spacing is load-bearing for a regex nothing tests.
   `AddUniqueConstraint`/`AddPrimaryKey` and `ALTER TABLE … ADD CONSTRAINT … UNIQUE`
   have no live example at all. Treat all three as unexercised.
+- **A concurrent unique index goes through `ConcurrentIndexBuilder.BuildUnique`**
+  (`ConcurrentIndexBuildGuardTests` forbids writing `CREATE UNIQUE INDEX CONCURRENTLY` in a
+  migration). The guard reads its table off the `ON <table>` in the definition, and
+  `TheGuardSeesAConcurrentUniqueBuild` keeps that pattern from silently stopping to match.
 
 An index whose table it cannot read off the call — an interpolated `{table}` hole,
 or a loop variable — is reported rather than skipped, so the multi-table loop the
@@ -225,6 +247,76 @@ container-init directory — it refuses to run with placeholder passwords
 and would abort container startup if Postgres picked it up. Never GRANT
 BYPASSRLS to either role.
 
+#### Tenant read context
+
+A context reaches the database as one reader. `TenantReadContext` (internal, one per DI
+scope) reads the scope's `ITenantAccessor`, `ICategoryReadContext` and `IAuditContext`
+**live**; every `NocturneDbContext` of the scope holds it, and its carrier properties
+(`TenantId`, `SubjectId`, `IsShareContext`, `VisibleCategories`, `ShareFullHistory`,
+`HistoryClamped`, `AuditContext`) are getters over it. The EF tenant query filter, ownership
+stamping on save, the mutation audit interceptor and the `TenantConnectionInterceptor` all
+read those properties, so a context created before authentication sees the share CSV and
+the clamp once they are resolved. Nothing outside Infrastructure can set them.
+
+Every context comes from `INocturneDbContextFactory`:
+
+- `CreateAsync` — the scope's reader, including its resolved tenant.
+- `CreateForTenantAsync(tenantId)` — pins the tenant in place of the scope's.
+- `CreateForSubjectAsync(subjectId)` — no tenant; sets `app.current_subject_id`. No policy
+  reads that GUC today: its callers (tenant switcher, caregiver overview, membership
+  enumeration) work because the identity tables carry no RLS.
+- `CreatePlatformAsync` — no tenant, no subject, for platform tables.
+
+A pin replaces only the tenant or subject: share, clamp and audit state always come from the
+scope, so a pin can narrow what a reader sees but never widen it. The one exception is
+`CreateSystemPinnedAsync(tenantId)`, a tenant pin that reads as no reader, for an allowlist of
+instance-level reads (members of `TenantSetupMiddleware`, `PasskeyController` and
+`InstanceSetupState`; pinned per member by `SystemPinnedAllowlistTests`). Its remarks give the
+reason. A singleton needs no system pin: its root-resolved factory already reads as no reader.
+
+The factory is transient. Resolved from the root (singletons, hosted services, middleware
+constructors) it has no scope, and its contexts read fail-closed defaults: empty tenant,
+not a share, null CSV, no clamp, no audit actor. A root-resolved factory never reads a
+request's state, and nothing reads `HttpContext` for it. A write that outlives its request
+(fire-and-forget) uses a root-resolved factory and pins the tenant from a captured value,
+never the request's factory: that one reads the request's scope after it is disposed. The raw
+`IDbContextFactory<NocturneDbContext>` stays registered for Infrastructure's own use only.
+
+No `NocturneDbContext` is registered in DI. Each method opens its own
+(`await using var db = await _contexts.CreateAsync(ct)`), and nothing tracked and no
+`IQueryable` leaves it. Writes that must commit together, or share an advisory lock or a
+transaction, share a caller-owned `DbUnitOfWork`: the owner opens it and hands it to each
+writer taking part (`AlertTrackerRepository`/`TrackerRepository` take one in their
+constructor; `AlertRuleRearm.SaveAndClearAsync` takes one). `PerOperationContextGuardTests`
+keeps contexts and the raw factory out of constructors and scope lookups outside
+Infrastructure, and `ServiceProviderValidationTests` builds the real API registrations with
+`ValidateOnBuild` and `ValidateScopes`, which `Program.cs` enables only in Development.
+
+A scope opened in code reads as no one: not a share and not clamped, and the clamp fails
+open. `TenantJobScope` (Infrastructure.Data) opens a job's scope with the audit actor
+system-attributed:
+
+- `OpenFor(provider, reader, actor)` for work done for a caller. `TenantReader.Of(scope)`
+  captures the caller's tenant, share, CSV, full history and clamp as values, so it also
+  survives a fire-and-forget job; `ClampedToDay` only narrows it, and `ForTenant` swaps only the
+  tenant, for a caller that has checked the reader may see it. Compression-low detection, the dedup
+  job and `TenantOverviewService` go through it. `CarryInto` sets a reader only on a scope that
+  still reads as no one. On `/hubs` requests `ReaderRecordingMiddleware` records the reader in
+  `HttpContext.Items`, which survive the copy SignalR makes of a long-polling request;
+  `TenantHubFilter` sets that reader (`HubConnectionReader`, narrowed by an in-band clamp) and the
+  connection's audit actor (`HubConnectionActor`, the in-band credential once one is granted) on
+  every invocation scope and on the long-polling copy's scope.
+- `Open(provider, tenant, actor)` reads as no one, for hosted loops, startup and
+  request-started work that returns nothing it read. `ChildScopeGuardTests` pins every member
+  that calls it, opens a raw `CreateScope`/`CreateAsyncScope`, or calls a helper returning such a
+  scope, grouped by reason.
+
+A request that works for other tenants does it in such a scope per tenant rather than moving
+its own accessor, since every context of the request would follow.
+
+The GUCs are written when a connection opens, so a connection held open keeps the state it
+opened with; `PinTenantAsync` is for that case (see the `TenantReadContext` remarks).
+
 #### Per-category public-share RLS
 
 Public share links (`{token}.share.{domain}`) serve an anonymous viewer who may
@@ -243,40 +335,54 @@ and by history window:
 (The recency conjunct appears only on tables with a recency column in
 `ShareDataCategories.RecencyColumns`; catalog tables with no per-row time, e.g.
 `foods`, carry just the category gate, and a table with no governing scope carries
-only the `is_share` test, so it is hidden from shares and never clamped for members.
+only the `is_share` test, so it is hidden from shares and never clamped for members,
+unless `ShareDataCategories.HiddenRecencyColumns` gives it a recency column
+(`notes`, `lab_hba1c_results`, ...; `compression_low_suggestions`, `body_weights` and
+`system_events` by Unix-millisecond columns listed in `UnixMillisRecencyTables`): then it is
+hidden from shares and clamped for members. A hidden table of
+spans in `ShareDataCategories.HiddenSpanEndColumns` (`state_spans`, `sleep_sessions`,
+`alert_instances`, `tracker_instances`, `in_app_notifications`, ...) is clamped by
+overlap instead, `("end_timestamp" IS NULL OR "end_timestamp" >= now() - interval
+'24 hours')`, so a profile switch or pump mode still running stays visible to a
+clamped member however long ago it started; clamping it by start would leave the
+therapy resolvers on the default profile. A hidden table whose rows are parts of a parent row,
+in `ShareDataCategories.HiddenParentRecency` (`treatment_foods`, `sleep_stages`,
+`sleep_biometric_samples`, `alert_excursion_mutes`, `alert_deliveries`), is shown exactly
+while the clamp shows its parent, by an `EXISTS` on the parent.
+`ShareDataCategoriesGuardTests` fails on a tenant-scoped table that is neither
+shareable, clamped, nor listed as deliberately unclamped.
 `IS [NOT] DISTINCT FROM` keeps the clamp test non-null when a GUC is unset.)
 
-Four extra GUCs carry the request state to the connection (set by
-`TenantConnectionInterceptor` from `NocturneDbContext` properties):
+The clamp limits reads, not writes, but PostgreSQL checks the rows an `INSERT … RETURNING` or
+an `UPDATE … WHERE` writes against SELECT policies, so a clamped member recording a row dated
+before the window would be refused (42501). `NocturneDbContext.SaveChangesAsync` lifts the
+clamp, local to the save's transaction, for a save that only inserts; any other lifted write goes
+through `HistoryClampLiftExtensions`, whose callers `HistoryClampLiftAllowlistTests` pins.
 
-- **`app.is_share`** — `'true'` for a public share, else `'false'`. Known
-  **pre-auth** (at tenant resolution), so it is set wherever `TenantId` is set
-  (factory, scoped-context registration, `PinTenantOnScopedDbContext`) — set
-  **unconditionally** so a pooled context never inherits a prior lessee's flag.
+Four extra GUCs carry the reader's state to the connection (written by
+`TenantConnectionInterceptor` on every open, unconditionally, from the tenant read context):
+
+- **`app.is_share`** — `'true'` for a public share, else `'false'`. Marked **pre-auth**
+  at tenant resolution (`ICategoryReadContext.MarkShare`).
 - **`app.visible_categories`** — CSV of the share's governing read scopes
-  (`glucose.read,treatments.read,…`). Known only **post-auth**, so it is carried
-  **only on the `ITenantDbContextFactory` path** (`TenantDbContextFactory.CreateAsync`).
-  Share-reachable PHI reads must go through the factory; a share that reads PHI on
-  a directly-injected scoped context carries no CSV and is **denied** (fail-closed).
+  (`glucose.read,treatments.read,…`), resolved **post-auth** by `AuthenticationMiddleware`.
+  A share connection that opens before it is resolved carries no CSV and is **denied** all
+  categorized data (fail-closed).
 - **`app.share_full_history`** — `'true'` when the share's Public membership has
-  `limit_to_24_hours = false`. Same post-auth, factory-only carriage as the CSV; a
-  share connection that never sets it is **clamped to the last 24 hours** of every
-  time-series category (fail-closed).
+  `limit_to_24_hours = false`, resolved post-auth with the CSV; a share connection without it
+  is **clamped to the last 24 hours** of every time-series category (fail-closed).
 - **`app.history_clamped`**: `'true'` when `ICategoryReadContext.IsHistoryClamped`:
   a share without full history, or an authenticated member or credential whose
   `AuthContext.LimitTo24Hours` resolved true (membership flag OR credential flag,
-  combined in `MemberScopeMiddleware`). Known **post-auth**, so it is carried on
-  **both** paths: `TenantDbContextFactory` stamps it from `ICategoryReadContext`, and
-  `MemberScopeMiddleware` stamps the already-pinned scoped context. Every reset site
-  (`CarrierResettingDbContextFactory`, scoped registration, `PinTenantOnScopedDbContext`)
-  clears it, and the interceptor sets it unconditionally. Unlike the share clamp it is
-  **fail-open**: a connection that never sets it is not clamped, so owners, members
-  without the flag and background jobs read full history. A member who is an owner or
-  holds `tenant.settings` (`MemberScopeResolver.IsExemptFromHistoryClamp`) cannot be
-  given the flag, and a membership row that holds it anyway is ignored. A clamped
-  caller cannot mint anything wider than itself: invites, direct grants, guest links
-  and OAuth consents inherit its clamp, and it may not lift another member's clamp or
-  give a share full history (`HttpContext.IsCallerHistoryClamped`).
+  combined in `MemberScopeMiddleware`, which calls `ICategoryReadContext.ClampMemberHistory`).
+  Unlike the share clamp it is **fail-open**: a connection that never sets it is not
+  clamped, so owners, members without the flag and background jobs read full history. A
+  member who is an owner or holds `tenant.settings`
+  (`MemberScopeResolver.IsExemptFromHistoryClamp`) cannot be given the flag, and a
+  membership row that holds it anyway is ignored. A clamped caller cannot mint anything
+  wider than itself: invites, direct grants, guest links and OAuth consents inherit its
+  clamp, and it may not lift another member's clamp or give a share full history
+  (`HttpContext.IsCallerHistoryClamped`).
 
 Design notes:
 
@@ -308,22 +414,28 @@ Design notes:
   cache; headers a controller writes by hand are outside what it checks. Hand-set
   `Cache-Control` headers follow the same rule: a tenant data read is never `public`
   (V3 reads send `private, max-age=60`, pinned by `V3CacheControlTests`).
-- **PHI cache invariant.** The same holds for the tenant-keyed application caches of
-  time-series data (`EntryCacheAdapter`, `TreatmentCacheAdapter`, the multi-period
-  statistics, the eHbA1c timeline): their keys carry the tenant, not the history
-  window, so a history-clamped request (`ICategoryReadContext.IsHistoryClamped`)
-  neither reads nor writes them. Do not key them by clamp instead. A read that fans out
-  in a fresh DI scope (`TenantOverviewService`) carries the caller's clamp into that
-  scope's `ICategoryReadContext`.
+- **PHI cache invariant.** The same holds for application caches. Every cross-request
+  cache of data read under RLS goes through `ITenantCache`, which keys it
+  `tenant:partition:demo:key`. The partition (`IReaderCachePartition`) names the readers
+  who see exactly the same rows: owners and unclamped members share `full`, each
+  full-history share's category set is its own partition, and a history-clamped reader
+  has none, so it neither reads nor writes. No cache reads the clamp or builds a tenant
+  key itself, and invalidation clears a key family across every partition. What a value
+  in `full` may contain is stated on `ITenantCache`. The one exception is
+  `StatusService`'s `status:system` key, which varies by whether the caller is
+  authenticated rather than by the rows it can read. A read that fans out in a fresh DI
+  scope (`TenantOverviewService`) opens it with `TenantJobScope.OpenFor`, so the scope's
+  partition is the caller's.
 
 ## Testing
 
 - **xUnit** + **FluentAssertions** + **Moq**
 - Tests mirror source structure: `tests/Unit/Nocturne.{Project}.Tests/`
 - `[Trait("Category", "Integration")]` for integration tests
-- Integration tests use `WebApplicationFactory<Program>` and Testcontainers
-- `tests/E2E/Nocturne.E2E.Tests` boots the whole Aspire stack and is opt-in via
-  `-p:RunE2E=true`; see the "End-to-end tests" section of `AGENTS.md`
+- Integration tests use `WebApplicationFactory` (see `ApiFactory`) and one shared Testcontainers
+  Postgres per test process (`tests/Shared/.../SharedPostgres.cs`, migrated once, cloned per fixture)
+- `e2e/` runs the production images in docker compose with vitest and Playwright specs; see
+  `tests/README.md`. No test starts Aspire.
 
 ## Web Frontend
 

@@ -12,10 +12,8 @@ namespace Nocturne.API.Services.Analytics;
 /// <inheritdoc cref="IActogramReportService"/>
 /// <remarks>
 /// Issues the required queries (glucose, sleep state spans, step counts,
-/// heart rates) sequentially: every dependency resolves through the same
-/// per-request scoped <c>NocturneDbContext</c>, and EF Core's
-/// <c>ConcurrencyDetector</c> rejects parallel operations on a single
-/// context with <c>InvalidOperationException</c>. Threshold resolution
+/// heart rates) sequentially (<see cref="Nocturne.Infrastructure.Data.Services.INocturneDbContextFactory"/>).
+/// Threshold resolution
 /// mirrors <c>ProfileLoadStage</c>: the clinical low/high band is fixed, and the
 /// active profile's personal target is carried separately in
 /// <see cref="ChartThresholdsDto.TargetLow"/>/<see cref="ChartThresholdsDto.TargetHigh"/>
@@ -38,6 +36,7 @@ public sealed class ActogramReportService : IActogramReportService
     private readonly IHeartRateService _heartRateService;
     private readonly ITherapySettingsResolver _therapySettingsResolver;
     private readonly ITargetRangeResolver _targetRangeResolver;
+    private readonly TenantClockResolver _tenantClock;
     private readonly ILogger<ActogramReportService> _logger;
 
     public ActogramReportService(
@@ -47,6 +46,7 @@ public sealed class ActogramReportService : IActogramReportService
         IHeartRateService heartRateService,
         ITherapySettingsResolver therapySettingsResolver,
         ITargetRangeResolver targetRangeResolver,
+        TenantClockResolver tenantClock,
         ILogger<ActogramReportService> logger
     )
     {
@@ -56,6 +56,7 @@ public sealed class ActogramReportService : IActogramReportService
         _heartRateService = heartRateService;
         _therapySettingsResolver = therapySettingsResolver;
         _targetRangeResolver = targetRangeResolver;
+        _tenantClock = tenantClock;
         _logger = logger;
     }
 
@@ -68,12 +69,7 @@ public sealed class ActogramReportService : IActogramReportService
         var fromDt = DateTimeOffset.FromUnixTimeMilliseconds(startTime).UtcDateTime;
         var toDt = DateTimeOffset.FromUnixTimeMilliseconds(endTime).UtcDateTime;
 
-        // Sequential awaits: every query below resolves through the same
-        // per-request scoped NocturneDbContext, and EF Core's ConcurrencyDetector
-        // rejects overlapping operations on a single context. Npgsql also
-        // serializes commands per connection, so Task.WhenAll buys no real
-        // throughput here even when it doesn't crash.
-        var glucoseRecords = await _sensorGlucoseRepository.GetAsync(
+        var glucoseRecords = await _sensorGlucoseRepository.GetForAnalyticsAsync(
             from: fromDt,
             to: toDt,
             device: null,
@@ -92,23 +88,21 @@ public sealed class ActogramReportService : IActogramReportService
             includeStages: true,
             cancellationToken: cancellationToken);
 
-        var stepRecords = await _stepCountService.GetStepCountsByDateRangeAsync(
+        var stepRecords = (await _stepCountService.GetStepCountsByDateRangeAsync(
             fromDt,
             toDt,
             cancellationToken: cancellationToken
-        );
+        )).Where(s => !s.IsPossibleRunningTotal()).ToList();
 
-        var heartRateRecords = await _heartRateService.GetHeartRatesByDateRangeAsync(
+        var heartRateRecords = await _heartRateService.GetHeartRateMinuteAveragesByDateRangeAsync(
             fromDt,
             toDt,
-            cancellationToken: cancellationToken
+            cancellationToken
         );
 
         var thresholdsRaw = await BuildThresholdsAsync(endTime, cancellationToken);
 
-        var tz = TimeZoneHelper.GetTimeZoneInfoFromId(
-            await _therapySettingsResolver.GetTimezoneAsync(ct: cancellationToken)
-        );
+        var clock = await _tenantClock.ResolveAsync(cancellationToken);
 
         var (glucoseData, glucoseYMax) = ChartDataService.BuildGlucoseData(
             glucoseRecords.ToList()
@@ -173,7 +167,10 @@ public sealed class ActogramReportService : IActogramReportService
             Thresholds = thresholds,
             HeartRates = heartRates,
             StepCounts = stepCounts,
-            StepDayTotals = SumStepsByLocalDay(stepRecords, startTime, endTime, tz),
+            StepDayTotals = clock.Zone is { } tz
+                ? SumStepsByLocalDay(stepRecords, startTime, endTime, tz)
+                : new Dictionary<string, int>(),
+            TimeZoneUnavailableReason = clock.Reason,
             SleepSpans = sleepSpans,
         };
     }

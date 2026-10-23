@@ -86,6 +86,7 @@ public class AlertReplayServicePagingTests
             _alertRepository.Object,
             new Mock<ITargetRangeScheduleRepository>().Object,
             new Mock<Nocturne.Core.Contracts.Profiles.Resolvers.IActiveProfileResolver>().Object,
+            new Mock<Nocturne.Core.Contracts.Profiles.Resolvers.IProfileActivationResolver>().Object,
             new Mock<Nocturne.Core.Contracts.Profiles.Resolvers.ITherapySettingsResolver>().Object,
             new Mock<Nocturne.Core.Contracts.Sleep.ISleepService>().Object,
             new Mock<Nocturne.Infrastructure.Data.Abstractions.ITrackerRepository>().Object,
@@ -502,6 +503,8 @@ public class AlertReplayServicePagingTests
         var response = await controller.Replay(
             new AlertReplayRequest(null, null, _dayStart, _dayStart.AddDays(90)), CancellationToken.None);
 
-        response.Result.Should().BeOfType<BadRequestObjectResult>();
+        var problem = response.Result.Should().BeOfType<ObjectResult>().Which;
+        problem.StatusCode.Should().Be(400);
+        problem.Value.Should().BeOfType<ProblemDetails>().Which.Detail.Should().NotBeNullOrWhiteSpace();
     }
 }

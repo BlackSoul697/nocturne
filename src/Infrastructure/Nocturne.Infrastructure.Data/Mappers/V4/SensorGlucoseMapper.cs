@@ -26,6 +26,7 @@ public static class SensorGlucoseMapper
             Filtered = model.Filtered,
             Unfiltered = model.Unfiltered,
             Delta = model.Delta,
+            Rssi = model.Rssi,
             GlucoseProcessing = model.GlucoseProcessing?.ToString(),
             SmoothedMgdl = model.SmoothedMgdl,
             UnsmoothedMgdl = model.UnsmoothedMgdl,
@@ -44,17 +45,21 @@ public static class SensorGlucoseMapper
             PatientDeviceId = entity.PatientDeviceId,
             SyncIdentifier = entity.SyncIdentifier,
             Mgdl = entity.Mgdl,
-            Direction = Enum.TryParse<GlucoseDirection>(entity.Direction, out var dir) ? dir : null,
+            Direction = ParseDirection(entity.Direction),
             TrendRate = entity.TrendRate,
             Noise = entity.Noise,
             Filtered = entity.Filtered,
             Unfiltered = entity.Unfiltered,
             Delta = entity.Delta,
+            Rssi = entity.Rssi,
             GlucoseProcessing = Enum.TryParse<GlucoseProcessing>(entity.GlucoseProcessing, out var gp) ? gp : null,
             SmoothedMgdl = entity.SmoothedMgdl,
             UnsmoothedMgdl = entity.UnsmoothedMgdl,
         }.WithHeaderFrom(entity);
     }
+
+    internal static GlucoseDirection? ParseDirection(string? direction) =>
+        Enum.TryParse<GlucoseDirection>(direction, out var parsed) ? parsed : null;
 
     /// <summary>
     /// Update existing entity with data from domain model
@@ -73,6 +78,7 @@ public static class SensorGlucoseMapper
         entity.Filtered = model.Filtered;
         entity.Unfiltered = model.Unfiltered;
         entity.Delta = model.Delta;
+        entity.Rssi = model.Rssi;
         entity.GlucoseProcessing = model.GlucoseProcessing?.ToString();
         entity.SmoothedMgdl = model.SmoothedMgdl;
         entity.UnsmoothedMgdl = model.UnsmoothedMgdl;

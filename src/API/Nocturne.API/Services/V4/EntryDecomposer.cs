@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
+using Nocturne.API.Helpers;
 using Nocturne.Core.Contracts.Audit;
 using System.Linq;
 using Nocturne.Core.Contracts.Devices;
@@ -24,7 +25,6 @@ namespace Nocturne.API.Services.V4;
 /// <seealso cref="IDecomposer{T}"/>
 public class EntryDecomposer : DecomposerBase, IEntryDecomposer, IDecomposer<Entry>
 {
-    private readonly NocturneDbContext _dbContext;
     private readonly ISensorGlucoseRepository _sensorGlucoseRepository;
     private readonly IMeterGlucoseRepository _meterGlucoseRepository;
     private readonly ICalibrationRepository _calibrationRepository;
@@ -33,7 +33,6 @@ public class EntryDecomposer : DecomposerBase, IEntryDecomposer, IDecomposer<Ent
     private readonly IAuditContext _auditContext;
 
     public EntryDecomposer(
-        NocturneDbContext dbContext,
         ISensorGlucoseRepository sensorGlucoseRepository,
         IMeterGlucoseRepository meterGlucoseRepository,
         ICalibrationRepository calibrationRepository,
@@ -43,7 +42,6 @@ public class EntryDecomposer : DecomposerBase, IEntryDecomposer, IDecomposer<Ent
         ILogger<EntryDecomposer> logger)
         : base(logger)
     {
-        _dbContext = dbContext;
         _sensorGlucoseRepository = sensorGlucoseRepository;
         _meterGlucoseRepository = meterGlucoseRepository;
         _calibrationRepository = calibrationRepository;
@@ -52,12 +50,20 @@ public class EntryDecomposer : DecomposerBase, IEntryDecomposer, IDecomposer<Ent
         _auditContext = auditContext;
     }
 
+    /// <summary>The tables an entry decomposes into, all keyed by its legacy id.</summary>
+    private StoredCorrelationLookup[] EntryTables =>
+    [
+        _sensorGlucoseRepository.GetCorrelationIdsByLegacyIdAsync,
+        _meterGlucoseRepository.GetCorrelationIdsByLegacyIdAsync,
+        _calibrationRepository.GetCorrelationIdsByLegacyIdAsync,
+    ];
+
     /// <inheritdoc />
     public async Task<DecompositionResult> DecomposeAsync(Entry entry, WriteOrigin origin, CancellationToken ct = default)
     {
         var result = new DecompositionResult
         {
-            CorrelationId = Guid.CreateVersion7()
+            CorrelationId = CorrelationIdFor(entry.Id, await GetStoredCorrelationIdsAsync([entry.Id], EntryTables, ct))
         };
 
         var entryType = entry.Type?.ToLowerInvariant();
@@ -152,32 +158,41 @@ public class EntryDecomposer : DecomposerBase, IEntryDecomposer, IDecomposer<Ent
         if (entries.Count == 0)
             return new DecompositionResult();
 
-        var correlationId = Guid.CreateVersion7();
-        var result = new DecompositionResult { CorrelationId = correlationId };
+        var result = new DecompositionResult();
 
         var sgvList = new List<SensorGlucose>();
         var mbgList = new List<MeterGlucose>();
         var calList = new List<Calibration>();
         var unsupportedTypes = new HashSet<string>(StringComparer.Ordinal);
+        var correlationIds = await GetStoredCorrelationIdsAsync(entries.Select(e => e.Id), EntryTables, ct);
 
         foreach (var entry in entries)
         {
+            var correlationId = CorrelationIdFor(entry.Id, correlationIds);
             switch (entry.Type?.ToLowerInvariant())
             {
                 case "sgv":
+                    if (await EchoesUnkeyedRecordAsync(_sensorGlucoseRepository, entry.Id, ct))
+                        continue;
                     sgvList.Add(await BuildSensorGlucoseAsync(entry, correlationId, ct));
                     break;
                 case "mbg":
+                    if (await EchoesUnkeyedRecordAsync(_meterGlucoseRepository, entry.Id, ct))
+                        continue;
                     mbgList.Add(MapToMeterGlucose(entry, correlationId));
                     break;
                 case "cal":
+                    if (await EchoesUnkeyedRecordAsync(_calibrationRepository, entry.Id, ct))
+                        continue;
                     calList.Add(MapToCalibration(entry, correlationId));
                     break;
                 default:
                     result.SkippedUnsupported++;
                     unsupportedTypes.Add(SanitizeForLog(entry.Type));
-                    break;
+                    continue;
             }
+
+            result.CorrelationId ??= correlationId;
         }
 
         if (result.SkippedUnsupported > 0)
@@ -194,13 +209,27 @@ public class EntryDecomposer : DecomposerBase, IEntryDecomposer, IDecomposer<Ent
 
         using (SystemAttributedBatchWrites(_auditContext))
         {
-            await BulkCreateAsync(_sensorGlucoseRepository, sgvList, result, origin, ct);
-            await BulkCreateAsync(_meterGlucoseRepository, mbgList, result, origin, ct);
-            await BulkCreateAsync(_calibrationRepository, calList, result, origin, ct);
+            await BulkUpsertAsync(_sensorGlucoseRepository, sgvList, result, origin, ct);
+            await BulkUpsertAsync(_meterGlucoseRepository, mbgList, result, origin, ct);
+            await BulkUpsertAsync(_calibrationRepository, calList, result, origin, ct);
         }
 
         return result;
     }
+
+    /// <summary>
+    /// Whether <paramref name="id"/> is the 24-hex form <see cref="MongoObjectId.FromGuid"/> gave a
+    /// stored record that has no legacy id: the id Nightscout write-back sent it under, now pulled
+    /// back by the connector. Keyed on <c>LegacyId</c>, the bulk upsert cannot see that record and
+    /// would store the reading a second time. A record with a legacy id was written back under that
+    /// id, which the bulk upsert already matches.
+    /// </summary>
+    private static async Task<bool> EchoesUnkeyedRecordAsync<TRecord>(
+        IV4Repository<TRecord> repository, string? id, CancellationToken ct)
+        where TRecord : class, IV4Record
+        => MongoObjectId.IsGuidPrefixShaped(id)
+           && MongoObjectId.TryGetGuidPrefixRange(id, out var low, out var high)
+           && await repository.GetByGuidRangeAsync(low, high, ct) is { LegacyId: null };
 
     /// <inheritdoc />
     public async Task<int> DeleteByLegacyIdAsync(string legacyId, WriteOrigin origin, CancellationToken ct = default)
@@ -217,35 +246,66 @@ public class EntryDecomposer : DecomposerBase, IEntryDecomposer, IDecomposer<Ent
     }
 
     /// <inheritdoc />
+    public Task<int> DeleteStoredAsync(IV4Record stored, WriteOrigin origin, CancellationToken ct = default)
+        => stored.LegacyId is { } legacyId
+            ? DeleteByLegacyIdAsync(legacyId, origin, ct)
+            : stored switch
+            {
+                SensorGlucose => DeleteUnkeyedAsync(_sensorGlucoseRepository, stored.Id, origin, ct),
+                MeterGlucose => DeleteUnkeyedAsync(_meterGlucoseRepository, stored.Id, origin, ct),
+                Calibration => DeleteUnkeyedAsync(_calibrationRepository, stored.Id, origin, ct),
+                _ => throw new ArgumentException($"{stored.GetType().Name} is not an entry record", nameof(stored)),
+            };
+
+    private static async Task<int> DeleteUnkeyedAsync<TRecord>(
+        IV4Repository<TRecord> repository, Guid id, WriteOrigin origin, CancellationToken ct)
+        where TRecord : class, IV4Record
+    {
+        try
+        {
+            await repository.DeleteAsync(id, origin, ct);
+            return 1;
+        }
+        catch (KeyNotFoundException)
+        {
+            return 0;
+        }
+    }
+
+    /// <inheritdoc />
     public async Task<long> BulkDeleteAsync(string? find, WriteOrigin origin, CancellationToken ct = default)
     {
-        // origin is accepted for interface uniformity; bulk clear-by-time-range stays a coarse op that
-        // does NOT route through the per-record chokepoint (it fires EntryService's OnBulkDeletedAsync).
         var findQuery = Core.Models.Queries.FindQuery.Parse(find);
         var (fromMills, toMills) = (findQuery.FromMills, findQuery.ToMills);
 
-        // find is client-controlled; strip line breaks so it can't forge log entries
-        var findForLog = find?.ReplaceLineEndings(" ");
+        if (findQuery.IsEmpty)
+        {
+            Logger.LogWarning("BulkDelete refused: the find has no conditions");
+            return 0;
+        }
 
-        // A find[type]=x equality narrows the sweep to that record type; any other field filter
-        // cannot be honored by a by-time sweep, so refuse rather than wipe non-matching records.
+        // A find[type]=x equality narrows the sweep to that record type.
         var typeFilter = findQuery.GetEqualityValue("type");
+        if (typeFilter is not null && !LegacyEntryTypes.All.Contains(typeFilter))
+        {
+            Logger.LogWarning("BulkDelete refused: the find names a record type the sweep does not cover");
+            return 0;
+        }
+
+        // Any other field filter cannot be honored by a by-time sweep, so refuse rather than wipe
+        // non-matching records.
         if (findQuery.HasFieldFiltersExcept("type"))
         {
-            Logger.LogWarning("BulkDelete refused: find query carries field filters the by-time sweep cannot honor. find={Find}", findForLog);
+            Logger.LogWarning("BulkDelete refused: the find carries field filters the by-time sweep cannot honor");
             return 0;
         }
 
         // NIGHTSCOUT-COMPAT: Legacy Nightscout allowed arbitrary MongoDB find queries for
-        // bulk delete. If the caller passed a non-empty find query but we couldn't extract
-        // any time bounds or a type filter, refuse to delete — otherwise we'd wipe all records.
-        // Null/empty find intentionally deletes everything (matches "delete all" semantics).
-        var hasFind = !string.IsNullOrEmpty(find) && find != "{}";
-        var hasTimeBounds = fromMills.HasValue || toMills.HasValue;
-
-        if (hasFind && !hasTimeBounds && typeFilter is null)
+        // bulk delete. If the caller passed a find but we couldn't extract any time bounds or
+        // a type filter, refuse to delete, otherwise we'd wipe all records.
+        if (!fromMills.HasValue && !toMills.HasValue && typeFilter is null)
         {
-            Logger.LogWarning("BulkDelete refused: find query has no parseable time range, would delete all records. find={Find}", findForLog);
+            Logger.LogWarning("BulkDelete refused: the find has no parseable time range or type");
             return 0;
         }
 
@@ -257,15 +317,15 @@ public class EntryDecomposer : DecomposerBase, IEntryDecomposer, IDecomposer<Ent
             : null;
 
         var sgDeleted = typeFilter is null or "sgv"
-            ? await _sensorGlucoseRepository.DeleteByTimeRangeAsync(from, to, ct) : 0;
+            ? await _sensorGlucoseRepository.DeleteByTimeRangeAsync(from, to, origin, ct) : 0;
         var mgDeleted = typeFilter is null or "mbg"
-            ? await _meterGlucoseRepository.DeleteByTimeRangeAsync(from, to, ct) : 0;
+            ? await _meterGlucoseRepository.DeleteByTimeRangeAsync(from, to, origin, ct) : 0;
         var calDeleted = typeFilter is null or "cal"
-            ? await _calibrationRepository.DeleteByTimeRangeAsync(from, to, ct) : 0;
+            ? await _calibrationRepository.DeleteByTimeRangeAsync(from, to, origin, ct) : 0;
 
         var total = (long)sgDeleted + mgDeleted + calDeleted;
-        Logger.LogInformation("BulkDelete: removed {Total} v4 records (sg={Sg}, mg={Mg}, cal={Cal}) for find={Find}",
-            total, sgDeleted, mgDeleted, calDeleted, findForLog);
+        Logger.LogInformation("BulkDelete: removed {Total} v4 records (sg={Sg}, mg={Mg}, cal={Cal}) from={From} to={To} type={Type}",
+            total, sgDeleted, mgDeleted, calDeleted, from, to, typeFilter);
 
         return total;
     }
@@ -284,6 +344,10 @@ public class EntryDecomposer : DecomposerBase, IEntryDecomposer, IDecomposer<Ent
             Direction = MapDirection(entry.Direction),
             TrendRate = entry.TrendRate,
             Noise = entry.Noise,
+            Filtered = entry.Filtered,
+            Unfiltered = entry.Unfiltered,
+            Delta = entry.Delta,
+            Rssi = entry.Rssi,
             Device = entry.Device,
             App = entry.App,
             DataSource = entry.DataSource,
@@ -330,19 +394,6 @@ public class EntryDecomposer : DecomposerBase, IEntryDecomposer, IDecomposer<Ent
             UtcOffset = entry.UtcOffset,
             CorrelationId = correlationId
         };
-    }
-
-    private static bool TryGetString(Dictionary<string, object> props, string key, out string value)
-    {
-        value = default!;
-        if (!props.TryGetValue(key, out var obj))
-            return false;
-
-        if (obj is string s) { value = s; return true; }
-        if (obj is System.Text.Json.JsonElement el && el.ValueKind == System.Text.Json.JsonValueKind.String)
-        { value = el.GetString()!; return true; }
-
-        return false;
     }
 
     private static bool TryGetDouble(Dictionary<string, object> props, string key, out double value)

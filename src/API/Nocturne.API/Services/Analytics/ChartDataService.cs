@@ -1,6 +1,7 @@
 using System.Text.Json;
 using Nocturne.API.Helpers;
 using Nocturne.API.Services.ChartData;
+using Nocturne.Core.Clinical.Statistics;
 using Nocturne.Core.Contracts.Analytics;
 using Nocturne.Core.Contracts.Profiles.Resolvers;
 using Nocturne.Core.Contracts.V4.Repositories;
@@ -26,7 +27,8 @@ namespace Nocturne.API.Services.Analytics;
 /// <seealso cref="ChartDataContext"/>
 public class ChartDataService : IChartDataService
 {
-    private const int TempBasalQueryLimit = 131072;
+    internal const int TempBasalQueryLimit = 131072;
+    internal const long BufferMs = 8L * 60 * 60 * 1000;
 
     private readonly IEnumerable<IChartDataStage> _pipeline;
     private readonly IChartDataAssembler _assembler;
@@ -34,7 +36,7 @@ public class ChartDataService : IChartDataService
     private readonly ITempBasalRepository _tempBasalRepository;
     private readonly ITherapySettingsResolver _therapySettingsResolver;
     private readonly IBasalRateResolver _basalRateResolver;
-    private readonly ITherapyTimelineResolver _therapyTimelineResolver;
+    private readonly TimeProvider _timeProvider;
     private readonly ILogger<ChartDataService> _logger;
 
     /// <summary>
@@ -46,7 +48,7 @@ public class ChartDataService : IChartDataService
     /// <param name="tempBasalRepository">Repository for fetching temp basal records.</param>
     /// <param name="therapySettingsResolver">Resolves whether therapy settings (profile) data exists.</param>
     /// <param name="basalRateResolver">Resolves the active basal rate at a point in time.</param>
-    /// <param name="therapyTimelineResolver">Builds the therapy timeline that <see cref="IBasalSeriesBuilder"/> consumes.</param>
+    /// <param name="timeProvider">The clock a temp basal still running stops at.</param>
     /// <param name="logger">The logger instance.</param>
     public ChartDataService(
         IEnumerable<IChartDataStage> pipeline,
@@ -55,7 +57,7 @@ public class ChartDataService : IChartDataService
         ITempBasalRepository tempBasalRepository,
         ITherapySettingsResolver therapySettingsResolver,
         IBasalRateResolver basalRateResolver,
-        ITherapyTimelineResolver therapyTimelineResolver,
+        TimeProvider timeProvider,
         ILogger<ChartDataService> logger
     )
     {
@@ -65,7 +67,7 @@ public class ChartDataService : IChartDataService
         _tempBasalRepository = tempBasalRepository;
         _therapySettingsResolver = therapySettingsResolver;
         _basalRateResolver = basalRateResolver;
-        _therapyTimelineResolver = therapyTimelineResolver;
+        _timeProvider = timeProvider;
         _logger = logger;
     }
 
@@ -74,16 +76,17 @@ public class ChartDataService : IChartDataService
         long startTime,
         long endTime,
         int intervalMinutes,
+        bool includeHealthSeries,
         CancellationToken cancellationToken = default
     )
     {
-        const long bufferMs = 8L * 60 * 60 * 1000;
         var context = new ChartDataContext
         {
             StartTime = startTime,
             EndTime = endTime,
             IntervalMinutes = intervalMinutes,
-            BufferStartTime = startTime - bufferMs,
+            BufferStartTime = startTime - BufferMs,
+            IncludeHealthSeries = includeHealthSeries,
         };
 
         foreach (var stage in _pipeline)
@@ -107,7 +110,7 @@ public class ChartDataService : IChartDataService
             defaultBasalRate = await _basalRateResolver.GetBasalRateAsync(endTime, ct: cancellationToken);
 
         var tempBasals = (await _tempBasalRepository.GetAsync(
-            from: DateTimeOffset.FromUnixTimeMilliseconds(startTime).UtcDateTime,
+            from: DateTimeOffset.FromUnixTimeMilliseconds(startTime - BufferMs).UtcDateTime,
             to: DateTimeOffset.FromUnixTimeMilliseconds(endTime).UtcDateTime,
             device: null,
             source: null,
@@ -116,24 +119,33 @@ public class ChartDataService : IChartDataService
             descending: false,
             ct: cancellationToken
         )).ToList();
-
-        var timeline = await _therapyTimelineResolver.BuildAsync(
-            startTime,
-            endTime + 1,
-            ct: cancellationToken
-        );
-
         return await _basalSeriesBuilder.BuildAsync(
-            tempBasals,
+            SelectDisplayTempBasals(tempBasals, startTime, endTime, _timeProvider.GetUtcNow().ToUnixTimeMilliseconds()),
             startTime,
             endTime,
             defaultBasalRate,
-            timeline,
             cancellationToken
         );
     }
 
     #region Internal Helpers
+
+    /// <summary>
+    /// The delivered pieces (<see cref="StatisticsService.ClipOverlappingTempBasals"/>) that overlap
+    /// the window. <paramref name="tempBasals"/> must reach back before the window, so a record
+    /// cancelled before it is cut by the record that cancelled it. A temp still running counts to
+    /// <paramref name="nowMills"/>, or to <paramref name="endTime"/> when that comes first: the
+    /// live chart asks for a window that ends ahead of now.
+    /// </summary>
+    internal static List<TempBasal> SelectDisplayTempBasals(
+        IEnumerable<TempBasal> tempBasals,
+        long startTime,
+        long endTime,
+        long nowMills
+    ) =>
+        StatisticsService.ClipOverlappingTempBasals(tempBasals, Math.Min(endTime, nowMills))
+            .Where(tb => tb.StartMills <= endTime && tb.EndMills > startTime)
+            .ToList();
 
     internal static (List<GlucosePointDto> data, double yMax) BuildGlucoseData(
         List<SensorGlucose> readings
@@ -152,7 +164,7 @@ public class ChartDataService : IChartDataService
             .ToList(); // Already sorted
 
         var maxSgv = glucoseData.Any() ? glucoseData.Max(g => g.Sgv) : 280;
-        var glucoseYMax = Math.Min(400, Math.Max(280, maxSgv) + 20);
+        var glucoseYMax = Math.Min(ChartThresholdsBuilder.GlucoseYMaxCap, Math.Max(280, maxSgv) + 20);
 
         return (glucoseData, glucoseYMax);
     }
@@ -208,6 +220,7 @@ public class ChartDataService : IChartDataService
                 Notes = e.Notes,
                 TreatmentId = e.LegacyId ?? e.Id.ToString(),
                 Color = ChartColorMapper.FromDeviceEvent(e.EventType),
+                IsInferred = e.IsInferred,
             })
             .ToList();
     }
@@ -252,16 +265,17 @@ public class ChartDataService : IChartDataService
         List<TempBasal> tempBasals
     )
     {
-        return tempBasals
-            .Select(tb =>
+        return WithPieceIds(tempBasals.Where(tb => tb.Origin == TempBasalOrigin.Suspended || tb.Rate is not null))
+            .Select(piece =>
             {
+                var (tb, id) = piece;
                 var origin = BasalSeriesBuilder.MapTempBasalOrigin(tb.Origin);
                 return new BasalDeliverySpanDto
                 {
-                    Id = tb.LegacyId ?? tb.Id.ToString(),
+                    Id = id,
                     StartMills = tb.StartMills,
                     EndMills = tb.EndMills,
-                    Rate = origin == BasalDeliveryOrigin.Suspended ? 0 : tb.Rate,
+                    Rate = origin == BasalDeliveryOrigin.Suspended ? 0 : tb.Rate!.Value,
                     Origin = origin,
                     Source = tb.DataSource,
                     FillColor = ChartColorMapper.FillFromBasalOrigin(origin),
@@ -271,23 +285,66 @@ public class ChartDataService : IChartDataService
             .ToList();
     }
 
+    /// <summary>
+    /// The later of the newest pump status's pump clock (its upload time when it reports none) and
+    /// the end of the newest temp basal, or the start of an open one. A pump running its scheduled
+    /// basal has no temp basal to show for it, which AAPS leaves for long stretches while its
+    /// devicestatus keeps reporting the pump every loop, so the temp basals alone date the pump's
+    /// last contact to whenever the last one ended.
+    /// </summary>
+    internal static long? LastPumpSyncMills(IEnumerable<TempBasal> tempBasals, PumpSnapshot? latestPump)
+    {
+        long? latest = null;
+        foreach (var tb in tempBasals)
+        {
+            var end = tb.EndMills ?? tb.StartMills;
+            if (latest is null || end > latest)
+                latest = end;
+        }
+
+        if (latestPump is not null)
+        {
+            var contact = UploaderTimestamp.ParseUtcDateTime(latestPump.Clock) is { } clock
+                ? new DateTimeOffset(DateTime.SpecifyKind(clock, DateTimeKind.Utc)).ToUnixTimeMilliseconds()
+                : latestPump.Mills;
+            if (latest is null || contact > latest)
+                latest = contact;
+        }
+
+        return latest;
+    }
+
     internal static List<ChartStateSpanDto> MapTempBasalSpans(
         List<TempBasal> tempBasals
     )
     {
-        return tempBasals
-            .Where(tb => tb.Origin == TempBasalOrigin.Manual)
-            .Select(tb => new ChartStateSpanDto
+        return WithPieceIds(tempBasals.Where(tb => tb.Origin == TempBasalOrigin.Manual))
+            .Select(piece => new ChartStateSpanDto
             {
-                Id = tb.LegacyId ?? tb.Id.ToString(),
+                Id = piece.Id,
                 Category = StateSpanCategory.PumpMode, // Rendered in dedicated tempBasalSpans list; category is informational
                 State = "TempBasal",
-                StartMills = tb.StartMills,
-                EndMills = tb.EndMills,
+                StartMills = piece.Tb.StartMills,
+                EndMills = piece.Tb.EndMills,
                 Color = ChartColor.InsulinTempBasal,
                 Metadata = null,
             })
             .ToList();
+    }
+
+    /// <summary>
+    /// Each delivered piece with its span id: the piece that starts its record gets the record's id,
+    /// and any later piece of a record that a winning stream interrupts gets that id with the piece's
+    /// start. The id depends only on the piece, not on the window it is served in, since the chart
+    /// joins responses by id.
+    /// </summary>
+    private static IEnumerable<(TempBasal Tb, string Id)> WithPieceIds(IEnumerable<TempBasal> pieces)
+    {
+        foreach (var tb in pieces)
+        {
+            var id = tb.LegacyId ?? tb.Id.ToString();
+            yield return (tb, tb.StartMills == tb.RecordStartMills ? id : $"{id}:{tb.StartMills}");
+        }
     }
 
     internal static List<SystemEventMarkerDto> MapSystemEvents(

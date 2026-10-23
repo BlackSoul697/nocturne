@@ -3,10 +3,18 @@ using FluentAssertions;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection;
+using Moq;
 using Nocturne.API.Controllers.V4.Identity;
+using Nocturne.API.Extensions;
+using Nocturne.Core.Models;
 using Nocturne.Core.Contracts.Multitenancy;
 using Nocturne.Infrastructure.Data.Services;
 using Nocturne.Core.Models.Authorization;
+using Nocturne.Infrastructure.Data;
+using Nocturne.Infrastructure.Data.Entities;
+using Nocturne.Tests.Shared.Infrastructure;
 using Xunit;
 
 namespace Nocturne.API.Tests.Controllers.V4.Identity;
@@ -36,7 +44,7 @@ public class MyPermissionsControllerTests
 
     private static MyPermissionsResponse Answer(MyPermissionsController controller)
     {
-        var result = controller.GetMyPermissions().Result as OkObjectResult;
+        var result = controller.GetMyPermissions().GetAwaiter().GetResult().Result as OkObjectResult;
         result.Should().NotBeNull();
         return result!.Value.Should().BeOfType<MyPermissionsResponse>().Subject;
     }
@@ -108,5 +116,95 @@ public class MyPermissionsControllerTests
 
         Answer(Controller(member, Scope.GlucoseRead)).LimitTo24Hours.Should().BeFalse();
         Answer(Controller(fullHistoryShare, Scope.GlucoseRead)).LimitTo24Hours.Should().BeFalse();
+    }
+
+    [Theory]
+    [InlineData(true, true)]
+    [InlineData(false, false)]
+    public void GetMyPermissions_ReportsWhetherTheDemoGateRefusesTheCaller(
+        bool isDemoSubject, bool refused)
+    {
+        // The demo visitor holds tenant.settings, so its scopes alone would have the web offer
+        // connector controls that [DenyDemoSubject] refuses.
+        using var db = TestDbContextFactory.CreateSqlite();
+        var subjectId = Guid.CreateVersion7();
+        using (var seed = db.CreateContext())
+        {
+            seed.Subjects.Add(new SubjectEntity
+            {
+                Id = subjectId,
+                Name = "Subject",
+                IsActive = true,
+                IsDemoSubject = isDemoSubject,
+            });
+            seed.SaveChanges();
+        }
+
+        var controller = ControllerWithScopes(Scope.TenantSettings);
+        var factory = new Mock<IDbContextFactory<NocturneDbContext>>();
+        factory.Setup(f => f.CreateDbContextAsync(It.IsAny<CancellationToken>()))
+            .ReturnsAsync(() => db.CreateContext());
+        var httpContext = controller.ControllerContext.HttpContext;
+        httpContext.RequestServices = new ServiceCollection()
+            .AddSingleton(factory.Object.AsNocturneFactory())
+            .BuildServiceProvider();
+        httpContext.Items["AuthContext"] = new AuthContext
+        {
+            IsAuthenticated = true,
+            SubjectId = subjectId,
+        };
+
+        var answer = Answer(controller);
+
+        answer.RefusedAsDemoSubject.Should().Be(refused);
+        answer.Scopes.Should().Contain(Scope.TenantSettings);
+    }
+
+    [Fact]
+    public void GetMyPermissions_DoesNotReportASubjectlessCallerAsDemo()
+    {
+        // A public share has no subject; the demo gate defers to the endpoint for it.
+        Answer(ControllerWithScopes(Scope.GlucoseRead)).RefusedAsDemoSubject.Should().BeFalse();
+    }
+
+    private static HttpContext SessionContext(PermissionTrie? trie, params string[] grantedScopes)
+    {
+        var httpContext = new DefaultHttpContext
+        {
+            RequestServices = new ServiceCollection()
+                .AddSingleton<ICategoryReadContext>(new CategoryReadContext())
+                .BuildServiceProvider(),
+        };
+        httpContext.Items["GrantedScopes"] =
+            (IReadOnlySet<string>)new HashSet<string>(grantedScopes);
+        if (trie is not null) httpContext.SetPermissionTrie(trie);
+        return httpContext;
+    }
+
+    private static PermissionTrie Trie(params string[] permissions)
+    {
+        var trie = new PermissionTrie();
+        trie.Add(permissions);
+        return trie;
+    }
+
+    [Fact]
+    public async Task TryBuildAsync_AnswersAsTheEndpointDoes_ForACallerTheFallbackAdmits()
+    {
+        var grant = await MyPermissionsController.TryBuildAsync(
+            SessionContext(Trie(Scope.GlucoseRead), Scope.GlucoseRead));
+
+        grant.Should().NotBeNull();
+        grant!.Scopes.Should().BeEquivalentTo(new[] { Scope.GlucoseRead });
+        grant.LimitTo24Hours.Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task TryBuildAsync_IsNull_WhereTheFallbackWouldRefuseTheEndpoint()
+    {
+        // The session carries the grant in place of a separate permissions call, so it must be
+        // absent exactly where that call would have been refused, not an empty grant.
+        (await MyPermissionsController.TryBuildAsync(SessionContext(null))).Should().BeNull();
+        (await MyPermissionsController.TryBuildAsync(SessionContext(Trie()))).Should().BeNull();
     }
 }

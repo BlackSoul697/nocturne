@@ -1,9 +1,11 @@
+using Nocturne.API.Multitenancy;
 using Microsoft.AspNetCore.SignalR.Client;
 using Nocturne.Connectors.Core.Interfaces;
 using Nocturne.Connectors.NocturneRemote.Configurations;
 using Nocturne.Connectors.NocturneRemote.Services;
 using Nocturne.Core.Contracts.Multitenancy;
 using System.Collections.Concurrent;
+using Nocturne.Infrastructure.Data.Services;
 
 namespace Nocturne.API.Services.BackgroundServices;
 
@@ -24,15 +26,17 @@ public class NocturneRemoteConnectorBackgroundService
     /// <param name="logger">Logger instance for this background service.</param>
     /// <param name="nudge">Delivers configuration writes for this connector.</param>
     /// <param name="metrics">Connector sync instruments.</param>
+    /// <param name="runGuard">Refuses a sync for a key another run already holds.</param>
     public NocturneRemoteConnectorBackgroundService(
         IServiceProvider serviceProvider,
         ConnectorSyncBudget budget,
         ActiveTenantSnapshot activeTenants,
         ILogger<NocturneRemoteConnectorBackgroundService> logger,
         ConnectorPollerNudge? nudge = null,
-        ConnectorSyncMetrics? metrics = null
+        ConnectorSyncMetrics? metrics = null,
+        TenantRunGuard? runGuard = null
     )
-        : base(serviceProvider, budget, activeTenants, logger, nudge, metrics) { }
+        : base(serviceProvider, budget, activeTenants, logger, nudge, metrics, runGuard) { }
 
     /// <inheritdoc />
     protected override async Task StartRealtimeListenersAsync(CancellationToken cancellationToken)
@@ -49,10 +53,10 @@ public class NocturneRemoteConnectorBackgroundService
                         c => c.State != HubConnectionState.Disconnected, StopAndDisposeAsync))
                     continue;
 
-                using var tenantScope = ServiceProvider.CreateScope();
-
-                var tenantAccessor = tenantScope.ServiceProvider.GetRequiredService<ITenantAccessor>();
-                tenantAccessor.SetTenant(new TenantContext(tenant.Id, tenant.Slug, tenant.DisplayName, true, IsDemo: false));
+                await using var tenantScope = TenantJobScope.Open(
+                    ServiceProvider,
+                    new TenantContext(tenant.Id, tenant.Slug, tenant.DisplayName, true, IsDemo: false),
+                    AuditEndpoint);
 
                 var loader = tenantScope.ServiceProvider
                     .GetRequiredService<IConnectorConfigurationLoader<NocturneRemoteConnectorConfiguration>>();

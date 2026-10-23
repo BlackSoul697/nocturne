@@ -1,5 +1,12 @@
 <script lang="ts">
   import {
+    a1cDisplayValue,
+    a1cLabel,
+    a1cUnitLabel,
+    formatA1cValue,
+    formatA1c,
+  } from "$lib/utils/a1c-formatting";
+  import {
     Card,
     CardContent,
     CardDescription,
@@ -9,21 +16,21 @@
   import { Button } from "$lib/components/ui/button";
   import FigureStrip from "$lib/components/reports/FigureStrip.svelte";
   import { Progress } from "$lib/components/ui/progress";
-  import {
-    Gauge,
-    Target,
-    TrendingUp,
-    Shield,
-    AlertTriangle,
-    Activity,
-    BarChart3,
-    Calendar,
-    BookOpen,
-  } from "lucide-svelte";
+  import Gauge from "@lucide/svelte/icons/gauge";
+  import Target from "@lucide/svelte/icons/target";
+  import TrendingUp from "@lucide/svelte/icons/trending-up";
+  import Shield from "@lucide/svelte/icons/shield";
+  import AlertTriangle from "@lucide/svelte/icons/triangle-alert";
+  import CircleCheck from "@lucide/svelte/icons/circle-check";
+  import Activity from "@lucide/svelte/icons/activity";
+  import BarChart3 from "@lucide/svelte/icons/chart-column";
+  import Calendar from "@lucide/svelte/icons/calendar";
+  import BookOpen from "@lucide/svelte/icons/book-open";
   import TIRStackedChart from "$lib/components/reports/TIRStackedChart.svelte";
   import ClinicalInsights from "$lib/components/reports/ClinicalInsights.svelte";
   import ReliabilityBadge from "$lib/components/reports/ReliabilityBadge.svelte";
   import TextureSwatch from "$lib/components/charts/print/TextureSwatch.svelte";
+  import { TargetStatus } from "$api/generated/nocturne-api-client";
   import { getReportsData } from "$api/reports.remote";
   import { requireDateParamsContext } from "$lib/hooks/date-params.svelte";
   import { contextResource } from "$lib/hooks/resource-context.svelte";
@@ -49,6 +56,12 @@
   const analysis = $derived(reportsResource.current?.analysis);
   const lastUpdated = $derived(reportsResource.current?.dateRange?.lastUpdated);
   const dayCount = $derived(reportsResource.date.dayCount);
+  const cvStatus = $derived(analysis?.clinicalAssessment?.cvAssessment?.status);
+  const cvMeetsTarget = $derived(
+    cvStatus == null || cvStatus === TargetStatus.NotAssessed
+      ? undefined
+      : cvStatus === TargetStatus.Met
+  );
 </script>
 
 <svelte:head>
@@ -59,24 +72,39 @@
   />
 </svelte:head>
 
+{#snippet targetState(target: string, met: boolean | undefined)}
+  <div class="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm">
+    <span class="text-muted-foreground">{target}</span>
+    {#if met != null}
+      <span class="flex items-center gap-1 font-medium {met ? 'text-success' : 'text-warning'}">
+        {#if met}
+          <CircleCheck class="w-4 h-4" />
+          Target met
+        {:else}
+          <AlertTriangle class="w-4 h-4" />
+          Target not met
+        {/if}
+      </span>
+    {/if}
+  </div>
+{/snippet}
+
 {#if reportsResource.current}
-  <div class="@container container mx-auto space-y-8 p-3 @md:p-6 max-w-6xl">
+  <div class="@container space-y-8">
     {#if analysis}
       {@const tir = analysis?.timeInRange?.percentages}
-      {@const durations = analysis?.timeInRange?.durations}
+      {@const dailyMinutes = analysis?.timeInRange?.averageDailyMinutes}
       {@const variability = analysis?.glycemicVariability}
       {@const stats = analysis?.basicStats}
       {@const quality = analysis?.dataQuality}
-      {@const totalLows = (tir?.low ?? 0) + (tir?.veryLow ?? 0)}
-      {@const totalHighs = (tir?.high ?? 0) + (tir?.veryHigh ?? 0)}
 
       <FigureStrip
         figures={[
           { label: "Time in range", value: tir?.target?.toFixed(0) ?? "–", unit: "%", note: "Target: ≥70%" },
-          { label: "Below range", value: totalLows.toFixed(1), unit: "%", note: "Target: <4%" },
-          { label: "Above range", value: totalHighs.toFixed(1), unit: "%", note: "Target: <25%" },
-          { label: "Est. A1C", value: variability?.estimatedA1c?.toFixed(1) ?? "–", unit: "%", note: "Target: <7%" },
-          { label: "CV", value: variability?.coefficientOfVariation?.toFixed(0) ?? "–", unit: "%", note: "Target: ≤33%" },
+          { label: "Below range", value: (tir?.belowRange ?? 0).toFixed(1), unit: "%", note: "Target: <4%" },
+          { label: "Above range", value: (tir?.aboveRange ?? 0).toFixed(1), unit: "%", note: "Target: <25%" },
+          { label: a1cLabel(true), value: formatA1cValue(variability?.estimatedA1cDisplay), unit: a1cUnitLabel(), note: variability?.a1cTarget ? `Target: <${formatA1c(variability.a1cTarget)}` : undefined, },
+          { label: "CV", value: variability?.coefficientOfVariation?.toFixed(0) ?? "–", unit: "%", note: variability?.coefficientOfVariationTarget != null ? `Target: ≤${variability.coefficientOfVariationTarget}%` : undefined },
           { label: "Average", value: String(bgOr(stats?.mean)), unit: bgLabel(), note: `Over ${dayCount} days` },
         ]}
       />
@@ -107,27 +135,19 @@
                 <div class="flex flex-col">
                   <span class="text-glucose-in-range font-medium print:text-foreground">In Range</span>
                   <span>
-                    {formatMinutesDuration(
-                      (durations?.target ?? 0) / dayCount
-                    )}
+                    {formatMinutesDuration(dailyMinutes?.target ?? 0)}
                   </span>
                 </div>
                 <div class="flex flex-col">
                   <span class="text-glucose-very-low font-medium print:text-foreground">Low</span>
                   <span>
-                    {formatMinutesDuration(
-                      ((durations?.low ?? 0) + (durations?.veryLow ?? 0)) /
-                        dayCount
-                    )}
+                    {formatMinutesDuration(dailyMinutes?.low ?? 0)}
                   </span>
                 </div>
                 <div class="flex flex-col">
                   <span class="text-glucose-high font-medium print:text-foreground">High</span>
                   <span>
-                    {formatMinutesDuration(
-                      ((durations?.high ?? 0) + (durations?.veryHigh ?? 0)) /
-                        dayCount
-                    )}
+                    {formatMinutesDuration(dailyMinutes?.high ?? 0)}
                   </span>
                 </div>
               </div>
@@ -140,14 +160,21 @@
           <CardHeader class="pb-2">
             <CardTitle class="flex items-center gap-2 text-base">
               <Gauge class="w-5 h-5" />
-              Estimated A1C
+              {a1cLabel(true)}
             </CardTitle>
           </CardHeader>
           <CardContent class="space-y-4">
             <div>
               {#if variability?.estimatedA1c != null}
-                <p class="text-sm text-muted-foreground">
-                  Target: below 7%. Your care team sets your individual target.
+                <div class="text-4xl font-semibold tabular-nums">
+                  {formatA1c(variability.estimatedA1cDisplay)}
+                </div>
+                {@render targetState(
+                  `Target: below ${formatA1c(variability.a1cTarget)}`,
+                  a1cDisplayValue(variability.estimatedA1cMeetsTarget)
+                )}
+                <p class="text-sm text-muted-foreground mt-1">
+                  Your care team sets your individual target.
                 </p>
               {:else}
                 <div class="text-lg font-medium text-muted-foreground">
@@ -162,15 +189,15 @@
 
             <div class="text-sm space-y-2 border-t pt-3">
               <p>
-                <strong>What is eA1C?</strong>
-                This estimates what your lab A1C would be based on your average glucose.
+                <strong>What is {a1cLabel(true)}?</strong>
+                This estimates what your lab {a1cLabel()} would be based on your average glucose.
               </p>
               <details class="text-xs">
                 <summary class="cursor-pointer text-primary hover:underline">
                   Clinical details
                 </summary>
                 <p class="mt-2 text-muted-foreground">
-                  Calculated using the ADAG formula: eA1C = (mean glucose in
+                  Calculated using the ADAG formula (NGSP %): {a1cLabel(true)} = (mean glucose in
                   mmol/L + 2.59) / 1.59. Based on mean glucose of {bgOr(stats?.mean)} {bgLabel()} over
                   {dayCount}
                   days.
@@ -193,11 +220,19 @@
               <div class="text-lg font-medium text-muted-foreground">
                 No data for this window
               </div>
+            {:else}
+              <div class="text-xs text-muted-foreground">Coefficient of variation</div>
+              <div class="text-4xl font-semibold tabular-nums">
+                {variability.coefficientOfVariation.toFixed(0)}%
+              </div>
+              {@render targetState(
+                `Target: ≤${variability.coefficientOfVariationTarget}%`,
+                cvMeetsTarget
+              )}
             {/if}
 
             <p class="text-sm text-muted-foreground">
-              Target: ≤33%. Lower means steadier glucose with fewer ups and
-              downs.
+              Lower means steadier glucose with fewer ups and downs.
             </p>
 
             <!-- Additional variability metrics -->

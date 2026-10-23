@@ -39,7 +39,7 @@ public class DeviceAttributionBackstampTests : IDisposable
         _db = TestDbContextFactory.CreateSqliteWithTenant(TestTenantId);
 
         _context = _db.CreateContext();
-        var factory = new TestTenantDbContextFactory(_context);
+        var factory = new TestNocturneDbContextFactory(_context);
         var dedup = new Mock<IDeduplicationService>().Object;
         var audit = new Mock<IAuditContext>().Object;
 
@@ -95,7 +95,7 @@ public class DeviceAttributionBackstampTests : IDisposable
         {
             Id = id,
             TenantId = TestTenantId,
-            StartTimestamp = startTimestamp,
+            Timestamp = startTimestamp,
             Rate = 0.8,
             Origin = nameof(TempBasalOrigin.Algorithm),
             PatientDeviceId = patientDeviceId,

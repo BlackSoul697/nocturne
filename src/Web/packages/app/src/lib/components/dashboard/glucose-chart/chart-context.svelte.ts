@@ -1,7 +1,8 @@
-import { Context } from "runed";
-import type { ChartDataEngine } from "./engine/chart-data-engine.svelte";
+import { getContext, setContext } from "svelte";
+import type { ChartDataEngine } from "./engine/chart-data-view.svelte";
 import type { TrackLayout } from "./engine/track-layout";
 import type { PointInspection } from "./engine/point-inspection.svelte";
+import type { GlucoseUnits } from "$lib/stores/appearance-store.svelte";
 
 export interface LegendState {
 	readonly iob: boolean;
@@ -31,16 +32,20 @@ export interface GlucoseChartContext {
 	 * for gutter labels, larger text and ink. Unset for hosts that never print.
 	 */
 	readonly printing?: boolean;
+	/** Units the chart's glucose values are written in. Unset means the viewer's preference. */
+	readonly glucoseUnits?: GlucoseUnits;
 }
 
-const ctx = new Context<GlucoseChartContext>("GlucoseChartContext");
+const GLUCOSE_CHART_KEY = "nocturne:app:glucose-chart";
 
 export function setGlucoseChartContext(value: GlucoseChartContext) {
-	return ctx.set(value);
+	return setContext(GLUCOSE_CHART_KEY, value);
 }
 
 export function getGlucoseChartContext(): GlucoseChartContext {
-	return ctx.get();
+	const chart = getContext<GlucoseChartContext | undefined>(GLUCOSE_CHART_KEY);
+	if (!chart) throw new Error("Glucose chart context not found");
+	return chart;
 }
 
 /**

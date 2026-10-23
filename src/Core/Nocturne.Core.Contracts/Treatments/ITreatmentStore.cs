@@ -17,26 +17,32 @@ public interface ITreatmentStore
     /// projecting V4 records into the legacy Treatment shape.
     /// </summary>
     /// <param name="query">The <see cref="TreatmentQuery"/> filter and pagination parameters.</param>
-    /// <param name="ct">Cancellation token.</param>
     /// <returns>A read-only list of <see cref="Treatment"/> records matching the query.</returns>
     Task<IReadOnlyList<Treatment>> QueryAsync(TreatmentQuery query, CancellationToken ct = default);
 
+    /// <inheritdoc cref="Nocturne.Core.Contracts.V4.IV4ToLegacyProjectionService.GetLatestProjectedTreatmentAsync"/>
+    Task<Treatment?> GetLatestOfTypeAsync(string eventType, long fromMills, long toMills, CancellationToken ct = default);
+
     /// <summary>
-    /// Returns a single treatment by its identifier.
+    /// Whether <paramref name="id"/> names a treatment record the user deleted, under any key
+    /// <see cref="GetByIdAsync"/> resolves.
     /// </summary>
+    /// <param name="id">The identifier as received from the client.</param>
+    Task<bool> IsDeletedByUserAsync(string id, CancellationToken ct = default);
+
     /// <param name="id">The treatment identifier (GUID or legacy MongoDB ObjectId).</param>
-    /// <param name="ct">Cancellation token.</param>
     /// <returns>The <see cref="Treatment"/> if found, or <c>null</c>.</returns>
     Task<Treatment?> GetByIdAsync(string id, CancellationToken ct = default);
 
     /// <summary>
-    /// Maps a wire identifier (a 24-hex ObjectId derived from a record's UUID) to the stored
-    /// <c>LegacyId</c> the decomposer upserts on. Returns null when the id is a raw UUID or already
-    /// the stored key. Used by update paths to re-decompose the existing record in place.
+    /// The treatment stored under <paramref name="id"/>, re-keyed to the <c>LegacyId</c> the
+    /// decomposer upserts it on, so decomposing it again updates the stored record in place. A
+    /// record stored without a legacy id is first given the id the wire shows for it. A state span
+    /// decomposed from a treatment is keyed to the treatment id it was written under.
     /// </summary>
     /// <param name="id">The identifier as received from the client.</param>
-    /// <param name="ct">Cancellation token.</param>
-    Task<string?> ResolveCanonicalIdAsync(string id, CancellationToken ct = default);
+    /// <returns>The re-keyed <see cref="Treatment"/>, or <c>null</c> when nothing is stored under the id.</returns>
+    Task<Treatment?> GetForUpdateAsync(string id, CancellationToken ct = default);
 
     /// <summary>
     /// Returns treatments whose <see cref="Treatment.Mills"/> falls within
@@ -45,7 +51,6 @@ public interface ITreatmentStore
     /// </summary>
     /// <param name="fromMills">Inclusive lower bound of the time window (Unix ms).</param>
     /// <param name="toMills">Inclusive upper bound of the time window (Unix ms).</param>
-    /// <param name="ct">Cancellation token.</param>
     Task<IReadOnlyList<Treatment>> GetByRangeAsync(long fromMills, long toMills, CancellationToken ct = default);
 
     /// <summary>
@@ -53,7 +58,6 @@ public interface ITreatmentStore
     /// </summary>
     /// <param name="lastModifiedMills">The Unix-millisecond cutoff; only treatments modified after this are returned.</param>
     /// <param name="limit">Maximum number of records to return.</param>
-    /// <param name="ct">Cancellation token.</param>
     /// <returns>A read-only list of recently modified <see cref="Treatment"/> records.</returns>
     Task<IReadOnlyList<Treatment>> GetModifiedSinceAsync(long lastModifiedMills, int limit, CancellationToken ct = default);
 
@@ -61,35 +65,42 @@ public interface ITreatmentStore
     /// Creates one or more treatments, routing writes to both the legacy table and V4
     /// granular tables via the decomposition pipeline.
     /// </summary>
-    /// <param name="treatments">The treatments to create.</param>
-    /// <param name="ct">Cancellation token.</param>
     /// <returns>
-    /// The created <see cref="Treatment"/> records, carrying how many of their records were not
-    /// written because the user had deleted them.
+    /// The created <see cref="Treatment"/> records, each under the id reads serve for it, carrying
+    /// how many of their records were not written because the user had deleted them.
     /// </returns>
-    Task<BulkWrite<Treatment>> CreateAsync(IReadOnlyList<Treatment> treatments, CancellationToken ct = default);
+    /// <exception cref="TreatmentBatchFailedException">A treatment could not be stored.</exception>
+    /// <param name="treatments">The treatments to write, in order.</param>
+    /// <param name="ct">The cancellation token.</param>
+    /// <param name="stored">
+    /// Receives each treatment as it is stored, so a caller still knows what landed when the batch
+    /// ends in an exception it does not expect.
+    /// </param>
+    Task<BulkWrite<Treatment>> CreateAsync(
+        IReadOnlyList<Treatment> treatments, CancellationToken ct = default, ICollection<Treatment>? stored = null);
 
     /// <summary>
     /// Updates an existing treatment by ID, propagating changes to V4 tables.
     /// </summary>
-    /// <param name="id">The treatment identifier.</param>
     /// <param name="treatment">The updated <see cref="Treatment"/> data.</param>
-    /// <param name="ct">Cancellation token.</param>
     /// <returns>The updated <see cref="Treatment"/>, or <c>null</c> if not found.</returns>
     Task<Treatment?> UpdateAsync(string id, Treatment treatment, CancellationToken ct = default);
 
     /// <summary>
     /// Deletes a treatment by ID, removing corresponding V4 decomposed records.
     /// </summary>
-    /// <param name="id">The treatment identifier.</param>
-    /// <param name="ct">Cancellation token.</param>
-    /// <returns><c>true</c> if the treatment was deleted; <c>false</c> if not found.</returns>
-    Task<bool> DeleteAsync(string id, CancellationToken ct = default);
+    /// <returns>What was deleted, or <c>null</c> when nothing is stored under the id.</returns>
+    Task<TreatmentDeletion?> DeleteAsync(string id, CancellationToken ct = default);
 
     /// <summary>
     /// Counts treatments matching the optional find filter, summing across all V4 treatment repositories.
     /// </summary>
     /// <param name="find">Optional Nightscout-compatible find query for time range filtering.</param>
-    /// <param name="ct">Cancellation token.</param>
     Task<long> CountAsync(string? find = null, CancellationToken ct = default);
 }
+
+/// <param name="Served">
+/// The treatment as reads served it before the delete, or <c>null</c> for a record reads do not
+/// serve.
+/// </param>
+public sealed record TreatmentDeletion(Treatment? Served);

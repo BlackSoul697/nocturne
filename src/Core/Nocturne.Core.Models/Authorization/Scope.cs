@@ -31,19 +31,15 @@ public static class Scope
     public const string GlucoseReadWrite = "glucose.readwrite";
     /// <summary>Read-only access to treatments (boluses, carbs, temp basals, etc.).</summary>
     public const string TreatmentsRead = "treatments.read";
-    /// <summary>Read and write access to treatments.</summary>
     public const string TreatmentsReadWrite = "treatments.readwrite";
     /// <summary>Read-only access to device status records.</summary>
     public const string DevicesRead = "devices.read";
-    /// <summary>Read and write access to device status records.</summary>
     public const string DevicesReadWrite = "devices.readwrite";
     /// <summary>Read-only access to heart rate data.</summary>
     public const string HeartRateRead = "heartrate.read";
-    /// <summary>Read and write access to heart rate data.</summary>
     public const string HeartRateReadWrite = "heartrate.readwrite";
     /// <summary>Read-only access to step count data.</summary>
     public const string StepCountRead = "stepcount.read";
-    /// <summary>Read and write access to step count data.</summary>
     public const string StepCountReadWrite = "stepcount.readwrite";
     /// <summary>Read-only access to sleep sessions.</summary>
     public const string SleepRead = "sleep.read";
@@ -51,7 +47,6 @@ public static class Scope
     public const string SleepReadWrite = "sleep.readwrite";
     /// <summary>Read-only access to food records.</summary>
     public const string FoodRead = "food.read";
-    /// <summary>Read and write access to food records.</summary>
     public const string FoodReadWrite = "food.readwrite";
     /// <summary>Read-only access to generated reports.</summary>
     public const string ReportsRead = "reports.read";
@@ -60,12 +55,15 @@ public static class Scope
 
     /// <summary>Read-only access to therapy settings (profiles).</summary>
     public const string TherapyRead = "therapy.read";
-    /// <summary>Read and write access to therapy settings.</summary>
     public const string TherapyReadWrite = "therapy.readwrite";
     /// <summary>Read-only access to alert settings and history.</summary>
     public const string AlertsRead = "alerts.read";
-    /// <summary>Read and write access to alert settings.</summary>
     public const string AlertsReadWrite = "alerts.readwrite";
+    /// <summary>
+    /// Silences an alarm for everyone for a while (a snooze), and nothing else: the Nightscout
+    /// <c>notifications:*:ack</c> permission. <see cref="AlertsReadWrite"/> satisfies it.
+    /// </summary>
+    public const string AlertsAcknowledge = "alerts.acknowledge";
 
     // Account
 
@@ -111,7 +109,11 @@ public static class Scope
     // registered client devices (Prelude, the desktop Companion), whose rows are RLS-scoped to the
     // member's subject. They have no read/write tiers and do not imply one another.
 
-    /// <summary>Allows the alert engine to push notifications to a registered client device.</summary>
+    /// <summary>
+    /// Allows the alert engine to push notifications to a registered client device, and lets the
+    /// member mute an excursion for themselves. Acknowledging for everyone needs
+    /// <see cref="AlertsReadWrite"/>.
+    /// </summary>
     public const string DeviceNotify = "device.notify";
     /// <summary>Allows the alert engine to actuate hardware on a registered client device (torch, vibration, sound, full-screen).</summary>
     public const string DeviceActuate = "device.actuate";
@@ -145,6 +147,7 @@ public static class Scope
         TherapyReadWrite,
         AlertsRead,
         AlertsReadWrite,
+        AlertsAcknowledge,
         ReportsRead,
         IdentityRead,
         HeartRateRead,
@@ -185,7 +188,7 @@ public static class Scope
         FoodRead, FoodReadWrite,
         ReportsRead,
         TherapyRead, TherapyReadWrite,
-        AlertsRead, AlertsReadWrite,
+        AlertsRead, AlertsReadWrite, AlertsAcknowledge,
         IdentityRead,
         RolesManage,
         MembersInvite,
@@ -217,6 +220,7 @@ public static class Scope
     /// anyone — including the data owner whose subject id the grant records.
     /// </summary>
     /// <seealso cref="ValidateGrantScopes"/>
+    /// <seealso cref="NormalizeGuest"/>
     public static readonly IReadOnlySet<string> AllowedGuestScopes =
         new HashSet<string>(StringComparer.Ordinal)
         {
@@ -246,8 +250,10 @@ public static class Scope
     /// Member-personal capability scopes. These authorize the alert engine to drive the member's
     /// OWN registered client devices (rows are RLS-scoped to the member's subject), not access to
     /// the patient record, so <c>MemberScopeMiddleware</c> exempts them from the role-permission
-    /// intersection for any member holding at least one permission. See the note on
-    /// <see cref="RoleSeeds.Permissions"/> for why enforcement cannot rely on role rows.
+    /// intersection for any member holding at least one permission. What one member does with them
+    /// reaches only that member: <see cref="DeviceNotify"/> mutes an alert for its holder and never
+    /// changes anyone else's escalation. See the note on <see cref="RoleSeeds.Permissions"/> for why
+    /// enforcement cannot rely on role rows.
     /// </summary>
     public static readonly IReadOnlySet<string> MemberPersonalScopes =
         new HashSet<string>(StringComparer.Ordinal) { DeviceNotify, DeviceActuate };
@@ -305,9 +311,9 @@ public static class Scope
     // Implication
 
     /// <summary>
-    /// Maps each readwrite scope to the read scope it narrows to. Used to downgrade a readwrite
-    /// grant when a narrower credential bounds it, which is a different question from whether a
-    /// granted set satisfies a requirement — see <see cref="SatisfiedBy"/>.
+    /// Maps each readwrite scope to the read scope it narrows to. Part of <see cref="Narrowings"/>,
+    /// which downgrades a grant when a narrower credential bounds it, a different question from
+    /// whether a granted set satisfies a requirement: see <see cref="SatisfiedBy"/>.
     /// </summary>
     private static readonly Dictionary<string, string> ReadWriteImpliesRead = new(StringComparer.Ordinal)
     {
@@ -321,6 +327,15 @@ public static class Scope
         [SleepReadWrite] = SleepRead,
         [FoodReadWrite] = FoodRead,
     };
+
+    /// <summary>
+    /// Every atom a granted atom narrows to when a narrower credential bounds it: its read tier, and
+    /// <see cref="AlertsAcknowledge"/> for <see cref="AlertsReadWrite"/>, which silences alarms as
+    /// part of managing them.
+    /// </summary>
+    private static readonly ILookup<string, string> Narrowings = ReadWriteImpliesRead
+        .Append(new KeyValuePair<string, string>(AlertsReadWrite, AlertsAcknowledge))
+        .ToLookup(kvp => kvp.Key, kvp => kvp.Value, StringComparer.Ordinal);
 
     /// <summary>
     /// The read tier of the vocabulary: every atom that confers sight of a data category and no
@@ -340,11 +355,11 @@ public static class Scope
         };
 
     /// <summary>
-    /// For each atom, the other atoms that satisfy it without matching it. Every readwrite tier
-    /// satisfies its read tier, and <see cref="AuditManage"/> satisfies <see cref="AuditRead"/> —
-    /// a member who may change what is audited may read the log.
+    /// For each atom, the other atoms that satisfy it without matching it. Every atom satisfies
+    /// what it narrows to (<see cref="Narrowings"/>), and <see cref="AuditManage"/> satisfies
+    /// <see cref="AuditRead"/>: a member who may change what is audited may read the log.
     ///
-    /// Kept separate from <see cref="ReadWriteImpliesRead"/> because the two answer different
+    /// Kept separate from <see cref="Narrowings"/> because the two answer different
     /// questions: this one widens a check, that one narrows a grant. Narrowing
     /// <see cref="AuditManage"/> to <see cref="AuditRead"/> would silently strip a member's manage
     /// rights when an OAuth credential bounds their membership, so it is deliberately absent there.
@@ -354,7 +369,7 @@ public static class Scope
     private static Dictionary<string, string[]> BuildSatisfiedBy()
     {
         var implications = new List<KeyValuePair<string, string>>(
-            ReadWriteImpliesRead.Select(kvp => new KeyValuePair<string, string>(kvp.Key, kvp.Value)))
+            Narrowings.SelectMany(g => g.Select(narrower => new KeyValuePair<string, string>(g.Key, narrower))))
         {
             new(AuditManage, AuditRead),
         };
@@ -411,18 +426,11 @@ public static class Scope
     }
 
     /// <summary>
-    /// Look up the read scope a readwrite scope narrows to. Lets a caller reduce a readwrite grant
-    /// to its read counterpart, which <see cref="Satisfies(IEnumerable{string}, string)"/> cannot
-    /// express: that answers whether a granted set covers a requirement, not what the closest
-    /// covered scope is.
+    /// The atoms <paramref name="scope"/> narrows to (<see cref="Narrowings"/>), empty when it
+    /// narrows to nothing.
     /// </summary>
-    /// <param name="readWriteScope">The readwrite scope to narrow.</param>
-    /// <param name="readScope">The implied read scope, when one exists.</param>
-    /// <returns><c>true</c> when <paramref name="readWriteScope"/> has a read counterpart.</returns>
-    public static bool TryGetImpliedReadScope(string readWriteScope, out string readScope)
-    {
-        return ReadWriteImpliesRead.TryGetValue(readWriteScope, out readScope!);
-    }
+    /// <param name="scope">The granted atom to narrow.</param>
+    public static IEnumerable<string> NarrowerScopes(string scope) => Narrowings[scope];
 
     /// <summary>
     /// Whether <paramref name="scope"/> is in the read tier. Asks the vocabulary rather than the
@@ -436,8 +444,8 @@ public static class Scope
     /// Whether <paramref name="permissions"/> let a member see the record while changing no
     /// records, no treatment settings and nobody's access. This is narrower than "changes
     /// nothing": <see cref="MemberPersonalScopes"/> are allowed, and <see cref="DeviceNotify"/>
-    /// acknowledges an alert, which halts its escalation for everyone. Counting it as a change
-    /// instead would make no member view-only, since every member with a permission holds it.
+    /// mutes an alert for the member themselves. Counting it as a change instead would make no
+    /// member view-only, since every member with a permission holds it.
     /// False when nothing is readable.
     /// </summary>
     /// <param name="permissions">A member's effective permissions.</param>
@@ -478,6 +486,19 @@ public static class Scope
     public static IReadOnlySet<string> NormalizeMemberPermissions(IEnumerable<string> permissions)
     {
         return Normalize(permissions, MemberGrantableScopes);
+    }
+
+    /// <summary>
+    /// Resolve a guest grant's stored scopes into the session's granted scopes: normalized, then cut
+    /// to <see cref="AllowedGuestScopes"/>. The cut is on read because alias expansion can reach
+    /// atoms the allow-list excludes (<see cref="HealthReadExpansion"/> includes
+    /// <see cref="FoodRead"/>), and it holds for grants stored before any change to the list.
+    /// </summary>
+    public static IReadOnlySet<string> NormalizeGuest(IEnumerable<string> grantScopes)
+    {
+        return Normalize(grantScopes)
+            .Where(AllowedGuestScopes.Contains)
+            .ToHashSet(StringComparer.Ordinal);
     }
 
     /// <summary>
@@ -649,6 +670,16 @@ public static class Scope
 
         return null;
     }
+
+    /// <summary>
+    /// The part of a client's request an approver can delegate. Unlike
+    /// <see cref="ValidateDelegation"/> this narrows instead of refusing: the scope list on a consent
+    /// is the client's ask, not the approver's, and approving it grants what the approver holds.
+    /// </summary>
+    /// <param name="requested">The normalized scopes the client asked for.</param>
+    /// <param name="approverScopes">The approving caller's resolved scopes.</param>
+    public static HashSet<string> CapAt(IEnumerable<string> requested, IReadOnlySet<string> approverScopes) =>
+        requested.Where(scope => Satisfies(approverScopes, scope)).ToHashSet(StringComparer.Ordinal);
 }
 
 /// <summary>

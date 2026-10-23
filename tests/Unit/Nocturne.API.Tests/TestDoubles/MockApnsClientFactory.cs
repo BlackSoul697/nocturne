@@ -1,4 +1,5 @@
 using System.Collections.Concurrent;
+using System.Reflection;
 using System.Text.Json;
 using dotAPNS;
 using Nocturne.API.Services.Notifications;
@@ -81,6 +82,7 @@ internal class MockApnsClient : IApnsClient
         string deviceToken = "unknown";
         string alert = "";
         var customProperties = new Dictionary<string, string?>();
+        var apsProperties = new Dictionary<string, string?>();
 
         try
         {
@@ -99,6 +101,11 @@ internal class MockApnsClient : IApnsClient
         // Extract alert from aps section
         if (root.TryGetProperty("aps", out var aps))
         {
+            foreach (var property in aps.EnumerateObject())
+                apsProperties[property.Name] = property.Value.ValueKind == JsonValueKind.String
+                    ? property.Value.GetString()
+                    : property.Value.GetRawText();
+
             if (aps.TryGetProperty("alert", out var alertElement))
             {
                 alert = alertElement.ValueKind == JsonValueKind.String
@@ -129,12 +136,28 @@ internal class MockApnsClient : IApnsClient
             BundleId = _bundleId,
             DeviceToken = deviceToken,
             Alert = alert,
+            SentToDevelopmentServer = IsSentToDevelopmentServer(push),
             CustomProperties = customProperties,
+            ApsProperties = apsProperties,
         };
 
         _factory.CapturePush(captured);
 
         return Task.FromResult(_factory.NextResponse);
+    }
+
+    private static bool IsSentToDevelopmentServer(ApplePush push)
+    {
+        const BindingFlags flags = BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic;
+        var member = (MemberInfo?)typeof(ApplePush).GetProperty("IsSendToDevelopmentServer", flags)
+            ?? typeof(ApplePush).GetField("IsSendToDevelopmentServer", flags)
+            ?? throw new InvalidOperationException("dotAPNS no longer exposes IsSendToDevelopmentServer");
+        return member switch
+        {
+            PropertyInfo property => (bool)property.GetValue(push)!,
+            FieldInfo field => (bool)field.GetValue(push)!,
+            _ => false,
+        };
     }
 }
 
@@ -146,7 +169,9 @@ public class CapturedApnsPush
     public string BundleId { get; init; } = "";
     public string DeviceToken { get; init; } = "";
     public string Alert { get; init; } = "";
+    public bool SentToDevelopmentServer { get; init; }
     public Dictionary<string, string?> CustomProperties { get; init; } = [];
+    public Dictionary<string, string?> ApsProperties { get; init; } = [];
 
     /// <summary>
     /// Gets a custom property value
@@ -154,5 +179,10 @@ public class CapturedApnsPush
     public string? GetProperty(string name)
     {
         return CustomProperties.TryGetValue(name, out var value) ? value : null;
+    }
+
+    public string? GetApsProperty(string name)
+    {
+        return ApsProperties.TryGetValue(name, out var value) ? value : null;
     }
 }

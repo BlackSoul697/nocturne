@@ -9,20 +9,18 @@
   } from "$lib/components/ui/card";
   import { Button } from "$lib/components/ui/button";
   import { Separator } from "$lib/components/ui/separator";
-  import {
-    Layers,
-    Calendar,
-    Info,
-    ArrowRight,
-    ArrowLeft,
-    HelpCircle,
-    Clock,
-    Gauge,
-  } from "lucide-svelte";
+  import Calendar from "@lucide/svelte/icons/calendar";
+  import Info from "@lucide/svelte/icons/info";
+  import ArrowRight from "@lucide/svelte/icons/arrow-right";
+  import ArrowLeft from "@lucide/svelte/icons/arrow-left";
+  import HelpCircle from "@lucide/svelte/icons/circle-question-mark";
+  import Clock from "@lucide/svelte/icons/clock";
+  import Gauge from "@lucide/svelte/icons/gauge";
   import BasalRatePercentileChart from "$lib/components/reports/BasalRatePercentileChart.svelte";
   import InsulinDeliveryChart from "$lib/components/reports/InsulinDeliveryChart.svelte";
   import ReportsSkeleton from "$lib/components/reports/ReportsSkeleton.svelte";
   import FigureStrip from "$lib/components/reports/FigureStrip.svelte";
+  import TimeZoneNote from "$lib/components/reports/TimeZoneNote.svelte";
   import {
     getBasalAnalysis,
     getHourlyInsulinDelivery,
@@ -42,7 +40,7 @@
   const hourlyDeliveryQuery = getHourlyInsulinDelivery(analysisDates);
   const analysisQuery = getBasalAnalysis(analysisDates);
 
-  const hourlyDelivery = $derived(hourlyDeliveryQuery.current?.hours ?? []);
+  const hourlyDelivery = $derived(hourlyDeliveryQuery.current);
 
   const basalStats = $derived.by(() => {
     const s = analysisQuery.current?.stats;
@@ -67,10 +65,14 @@
   });
 
   const hourlyPercentiles = $derived(analysisQuery.current?.hourlyPercentiles ?? []);
+
+  const timeZoneReason = $derived(
+    analysisQuery.current?.timeZoneUnavailableReason ?? hourlyDelivery?.timeZoneUnavailableReason
+  );
 </script>
 
 {#if hourlyDeliveryQuery.error || analysisQuery.error}
-  <div class="@container container mx-auto max-w-7xl p-3 @md:p-6">
+  <div class="@container">
     <Card variant="destructive">
       <CardHeader>
         <CardTitle variant="destructive" class="flex items-center gap-2 text-base">
@@ -86,15 +88,11 @@
 {:else if !hourlyDeliveryQuery.current}
   <ReportsSkeleton />
 {:else}
-  <div class="@container container mx-auto max-w-7xl space-y-8 p-3 @md:p-6">
+  <div class="@container space-y-8">
     <div class="space-y-4">
       <div class="flex flex-wrap items-center justify-between gap-4 print:hidden">
         <div>
-          <h1 class="flex items-center gap-3 text-2xl font-bold @md:text-3xl">
-            <Layers class="h-6 w-6 text-report-treatment @md:h-8 @md:w-8" />
-            Basal Rate Analysis
-          </h1>
-          <p class="mt-1 text-muted-foreground">
+          <p class="text-muted-foreground">
             Understand your background insulin delivery patterns over time
           </p>
         </div>
@@ -161,6 +159,14 @@
       ]}
     />
 
+    {#if timeZoneReason}
+      <p class="text-sm text-muted-foreground">
+        <TimeZoneNote reason={timeZoneReason}>
+          This report cannot show basal rates or insulin delivery by hour of day.
+        </TimeZoneNote>
+      </p>
+    {/if}
+
     <Card>
       <CardHeader>
         <CardTitle class="flex items-center gap-2">
@@ -191,7 +197,7 @@
         </CardDescription>
       </CardHeader>
       <CardContent>
-        <InsulinDeliveryChart data={hourlyDelivery} showStacked={false} />
+        <InsulinDeliveryChart delivery={hourlyDelivery} showStacked={false} />
       </CardContent>
     </Card>
 

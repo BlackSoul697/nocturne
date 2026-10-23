@@ -38,6 +38,7 @@ internal sealed class AlertOrchestrator(
     IAlertAcknowledgementService acknowledgementService,
     IExcursionResolutionHandler resolutionHandler,
     ConditionVersionLog conditionLog,
+    IAlertRuleConditionValidator conditionValidator,
     TimeProvider timeProvider,
     ILogger<AlertOrchestrator> logger)
     : IAlertOrchestrator
@@ -70,6 +71,7 @@ internal sealed class AlertOrchestrator(
 
         foreach (var rule in evaluable)
         {
+            ReportConditionIssues(rule, tenantId);
             try
             {
                 await EvaluateRuleAsync(rule, enriched, tenantId, ct);
@@ -90,6 +92,44 @@ internal sealed class AlertOrchestrator(
                     rule.Id, tenantId);
             }
         }
+    }
+
+    /// <summary>
+    /// Logs, once per version of a rule's condition, what a save of it would reject. A stored
+    /// rule keeps evaluating such a tree, where an unknown kind reads false and a missing operand
+    /// reads as its default, so the rule can go on never firing with nothing else to say so. A
+    /// tree that fails evaluation is left to the per-rule catch, which reports it. A failure of
+    /// the check itself is logged and never keeps the rule from evaluating.
+    /// </summary>
+    private void ReportConditionIssues(AlertRuleSnapshot rule, Guid tenantId)
+    {
+        IReadOnlyList<RustValidationIssue> issues;
+        try
+        {
+            if (!conditionLog.FirstIssueCheckFor(rule.Id, rule.ConditionType, rule.ConditionParams)
+                || ConditionTreeFaults.InRule(rule.ConditionType, rule.ConditionParams) is not null)
+            {
+                return;
+            }
+
+            issues = conditionValidator.Validate(
+                rule.ConditionType, rule.ConditionParams, rule.AutoResolveEnabled,
+                rule.AutoResolveParams, rule.ClientConfiguration);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            logger.LogError(ex, "Checking the conditions of alert rule {AlertRuleId} for tenant {TenantId} failed",
+                rule.Id, tenantId);
+            return;
+        }
+        if (issues.Count == 0)
+            return;
+
+        logger.LogWarning(
+            "Alert rule {AlertRuleId} for tenant {TenantId} evaluates conditions a save would reject, so it may not fire as written: {Issues}",
+            rule.Id,
+            tenantId,
+            string.Join("; ", issues.Select(i => $"{i.Scope} {i.Path}: {i.Reason}{(i.Field is null ? "" : $" ({i.Field})")}")));
     }
 
     private async Task EvaluateRuleAsync(
@@ -116,7 +156,8 @@ internal sealed class AlertOrchestrator(
 
             case ExcursionTransitionType.ExcursionContinues:
                 // Nothing to do per-reading. The dispatch happened at open; subsequent
-                // notifications-while-firing are a separate-rule concern (alert_state).
+                // notifications-while-firing are a separate-rule concern (alert_state), and
+                // re-notifying after a snooze is AlertSnoozeService.ResumeAsync's.
                 break;
         }
 
@@ -157,21 +198,8 @@ internal sealed class AlertOrchestrator(
         var activeExcursionCount = await repository.CountActiveExcursionsAsync(tenantId, ct);
         var tenant = await repository.GetTenantAlertContextAsync(tenantId, ct);
 
-        var payload = new AlertPayload
-        {
-            AlertType = rule.ConditionType,
-            RuleName = rule.Name,
-            GlucoseValue = context.LatestValue,
-            Trend = null,
-            TrendRate = context.TrendRate,
-            ReadingTimestamp = context.LatestTimestamp ?? now,
-            ExcursionId = excursionId,
-            InstanceId = instance.Id,
-            TenantId = tenantId,
-            SubjectName = tenant?.SubjectName ?? tenant?.DisplayName ?? "Unknown",
-            ActiveExcursionCount = activeExcursionCount,
-            Severity = rule.Severity,
-        };
+        var payload = AlertPayloads.Build(
+            rule, context, tenantId, excursionId, instance.Id, tenant, activeExcursionCount, now);
 
         // Scoped DND suppression (ADR 0004): when an active DND scope covers this rule's class,
         // a non-Critical rule without an explicit "allow through DND" opt-in still gets a history
@@ -208,7 +236,8 @@ internal sealed class AlertOrchestrator(
         if (rule.Severity == AlertRuleSeverity.Info && suppressingScope is null)
         {
             await acknowledgementService.AcknowledgeExcursionAsync(
-                tenantId, excursionId, "system:auto-ack-on-trigger", broadcast: false, ct);
+                tenantId, excursionId, "system:auto-ack-on-trigger", AlertAcknowledgementAuthority.System,
+                broadcast: false, ct);
         }
     }
 

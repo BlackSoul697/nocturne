@@ -3,8 +3,9 @@
   import { curveMonotoneX } from "d3";
   import BolusMarker from "../markers/BolusMarker.svelte";
   import CarbMarker from "../markers/CarbMarker.svelte";
+  import { carbMarkerKey, markerKey } from "$lib/utils/chart-data-merge";
   import { getGlucoseChartContext } from "../chart-context.svelte";
-  import type { SeriesPoint } from "../engine/chart-data-engine.svelte";
+  import type { SeriesPoint } from "../engine/chart-data-view.svelte";
   import {
     placeCenteredLabels,
     placeTrailingLabels,
@@ -178,7 +179,7 @@
   <ChartClipPath>
     <!-- Bolus markers -->
     {#if showBolus}
-      {#each bolusMarkers as marker (marker.treatmentId)}
+      {#each bolusMarkers as marker, i (markerKey(marker.treatmentId, marker.time, i))}
         {@const xPos = chartCtx.xScale(marker.time)}
         {@const yPos = markerBaselineY}
         <BolusMarker
@@ -197,7 +198,7 @@
 
     <!-- Carb markers -->
     {#if showCarbs}
-      {#each carbMarkers as marker (marker.treatmentId)}
+      {#each carbMarkers as marker, i (markerKey(carbMarkerKey(marker), marker.time, i))}
         {@const xPos = chartCtx.xScale(marker.time)}
         {@const yPos = markerBaselineY}
         <CarbMarker

@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Mvc;
 using OpenApi.Remote.Attributes;
 using Nocturne.API.Attributes;
 using Nocturne.API.Controllers.V4.Base;
+using Nocturne.API.Services.V4;
 using Nocturne.Core.Contracts.Profiles;
 using Nocturne.Core.Models.Authorization;
 using Nocturne.Core.Contracts.V4.Repositories;
@@ -43,6 +44,7 @@ public class ProfileController : ControllerBase, IWriteScopedController
     private readonly ISensitivityScheduleRepository _sensitivityRepo;
     private readonly ITargetRangeScheduleRepository _targetRangeRepo;
     private readonly IProfileProjectionService _projectionService;
+    private readonly ITempBasalRateReresolver _tempBasalRates;
 
     /// <summary>
     /// Initializes a new instance of <see cref="ProfileController"/>.
@@ -53,13 +55,15 @@ public class ProfileController : ControllerBase, IWriteScopedController
     /// <param name="sensitivityRepo">Repository for insulin sensitivity schedule records.</param>
     /// <param name="targetRangeRepo">Repository for target glucose range schedule records.</param>
     /// <param name="projectionService">Service for reading legacy profile projections from V4 data.</param>
+    /// <param name="tempBasalRates">Re-resolves the percent temp basals a written basal schedule covers.</param>
     public ProfileController(
         ITherapySettingsRepository therapyRepo,
         IBasalScheduleRepository basalRepo,
         ICarbRatioScheduleRepository carbRatioRepo,
         ISensitivityScheduleRepository sensitivityRepo,
         ITargetRangeScheduleRepository targetRangeRepo,
-        IProfileProjectionService projectionService
+        IProfileProjectionService projectionService,
+        ITempBasalRateReresolver tempBasalRates
     )
     {
         _therapyRepo = therapyRepo;
@@ -68,6 +72,7 @@ public class ProfileController : ControllerBase, IWriteScopedController
         _sensitivityRepo = sensitivityRepo;
         _targetRangeRepo = targetRangeRepo;
         _projectionService = projectionService;
+        _tempBasalRates = tempBasalRates;
     }
 
     #region Summary
@@ -163,7 +168,7 @@ public class ProfileController : ControllerBase, IWriteScopedController
     }
 
     /// <summary>
-    /// Set a profile as the active (default) profile. Clears IsDefault on all other profiles.
+    /// Make the newest settings row of <paramref name="profileName"/> (exact name) the tenant's only default profile.
     /// </summary>
     [HttpPost("set-default/{profileName}")]
     [RequireDeclaredWriteScope]
@@ -175,22 +180,13 @@ public class ProfileController : ControllerBase, IWriteScopedController
         var all = await _therapyRepo.GetAsync(null, null, null, null, 1000, 0, true, ct);
 
         var target = all.FirstOrDefault(ts =>
-            string.Equals(ts.ProfileName, profileName, StringComparison.OrdinalIgnoreCase));
+            string.Equals(ts.ProfileName, profileName, StringComparison.Ordinal));
 
         if (target is null)
             return NotFound();
 
-        foreach (var ts in all.Where(ts => ts.IsDefault && ts.Id != target.Id))
-        {
-            ts.IsDefault = false;
-            await _therapyRepo.UpdateAsync(ts.Id, ts, WriteOrigin.Live, ct);
-        }
-
-        if (!target.IsDefault)
-        {
-            target.IsDefault = true;
-            await _therapyRepo.UpdateAsync(target.Id, target, WriteOrigin.Live, ct);
-        }
+        await _therapyRepo.SetDefaultAsync(target.Id, ct);
+        await _tempBasalRates.AfterProfilesChangedAsync([profileName], ct);
 
         return NoContent();
     }
@@ -312,6 +308,10 @@ public class ProfileController : ControllerBase, IWriteScopedController
     /// <summary>
     /// Create a new therapy settings record
     /// </summary>
+    /// <remarks>
+    /// <see cref="TherapySettings.IsDefault"/> <c>true</c> makes the new row the tenant's only default,
+    /// as <see cref="SetDefaultProfile"/> does; <c>false</c> leaves the current default alone.
+    /// </remarks>
     [HttpPost("settings")]
     [RequireDeclaredWriteScope]
     [RemoteForm(Invalidates = ["GetProfileSummary", "GetTherapySettings"])]
@@ -324,13 +324,26 @@ public class ProfileController : ControllerBase, IWriteScopedController
     {
         if (model.Timestamp == default)
             return Problem(detail: "Timestamp must be set", statusCode: 400, title: "Bad Request");
+        var makeDefault = model.IsDefault;
+        model.IsDefault = false;
         var created = await _therapyRepo.CreateAsync(model, WriteOrigin.Live, ct);
+        if (makeDefault)
+        {
+            await _therapyRepo.SetDefaultAsync(created.Id, ct);
+            created.IsDefault = true;
+        }
+        await _tempBasalRates.AfterProfilesChangedAsync([created.ProfileName], ct);
         return CreatedAtAction(nameof(GetTherapySettingsById), new { id = created.Id }, created);
     }
 
     /// <summary>
     /// Update an existing therapy settings record
     /// </summary>
+    /// <remarks>
+    /// <see cref="TherapySettings.IsDefault"/> <c>true</c> makes the row the tenant's only default, as
+    /// <see cref="SetDefaultProfile"/> does. <c>false</c> keeps the row's stored flag, so an update never
+    /// demotes the default; the default moves only by promoting another row.
+    /// </remarks>
     [HttpPut("settings/{id:guid}")]
     [RequireDeclaredWriteScope]
     [RemoteForm(
@@ -347,15 +360,23 @@ public class ProfileController : ControllerBase, IWriteScopedController
     {
         if (model.Timestamp == default)
             return Problem(detail: "Timestamp must be set", statusCode: 400, title: "Bad Request");
+        model.DocumentDefaultProfile = (await _therapyRepo.GetByIdAsync(id, ct))?.DocumentDefaultProfile;
+        TherapySettings updated;
         try
         {
-            var updated = await _therapyRepo.UpdateAsync(id, model, WriteOrigin.Live, ct);
-            return Ok(updated);
+            updated = await _therapyRepo.UpdateAsync(id, model, WriteOrigin.Live, ct);
         }
         catch (KeyNotFoundException)
         {
             return NotFound();
         }
+        if (model.IsDefault)
+        {
+            await _therapyRepo.SetDefaultAsync(id, ct);
+            updated.IsDefault = true;
+        }
+        await _tempBasalRates.AfterProfilesChangedAsync([updated.ProfileName], ct);
+        return Ok(updated);
     }
 
     /// <summary>
@@ -368,15 +389,18 @@ public class ProfileController : ControllerBase, IWriteScopedController
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<ActionResult> DeleteTherapySettings(Guid id, CancellationToken ct = default)
     {
+        var stored = await _therapyRepo.GetByIdAsync(id, ct);
         try
         {
             await _therapyRepo.DeleteAsync(id, WriteOrigin.Live, ct);
-            return NoContent();
         }
         catch (KeyNotFoundException)
         {
             return NotFound();
         }
+
+        await _tempBasalRates.AfterProfilesChangedAsync(stored is null ? [] : [stored.ProfileName], ct);
+        return NoContent();
     }
 
     #endregion
@@ -430,6 +454,7 @@ public class ProfileController : ControllerBase, IWriteScopedController
         if (model.Timestamp == default)
             return Problem(detail: "Timestamp must be set", statusCode: 400, title: "Bad Request");
         var created = await _basalRepo.CreateAsync(model, WriteOrigin.Live, ct);
+        await _tempBasalRates.AfterSchedulesWrittenAsync([(created.ProfileName, created.Timestamp)], ct);
         return CreatedAtAction(nameof(GetBasalScheduleById), new { id = created.Id }, created);
     }
 
@@ -452,15 +477,23 @@ public class ProfileController : ControllerBase, IWriteScopedController
     {
         if (model.Timestamp == default)
             return Problem(detail: "Timestamp must be set", statusCode: 400, title: "Bad Request");
+        var stored = await _basalRepo.GetByIdAsync(id, ct);
+        BasalSchedule updated;
         try
         {
-            var updated = await _basalRepo.UpdateAsync(id, model, WriteOrigin.Live, ct);
-            return Ok(updated);
+            updated = await _basalRepo.UpdateAsync(id, model, WriteOrigin.Live, ct);
         }
         catch (KeyNotFoundException)
         {
             return NotFound();
         }
+
+        await _tempBasalRates.AfterSchedulesWrittenAsync(
+            stored is null
+                ? [(updated.ProfileName, updated.Timestamp)]
+                : [(stored.ProfileName, stored.Timestamp), (updated.ProfileName, updated.Timestamp)],
+            ct);
+        return Ok(updated);
     }
 
     /// <summary>
@@ -473,15 +506,19 @@ public class ProfileController : ControllerBase, IWriteScopedController
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<ActionResult> DeleteBasalSchedule(Guid id, CancellationToken ct = default)
     {
+        var stored = await _basalRepo.GetByIdAsync(id, ct);
         try
         {
             await _basalRepo.DeleteAsync(id, WriteOrigin.Live, ct);
-            return NoContent();
         }
         catch (KeyNotFoundException)
         {
             return NotFound();
         }
+
+        if (stored is not null)
+            await _tempBasalRates.AfterSchedulesWrittenAsync([(stored.ProfileName, stored.Timestamp)], ct);
+        return NoContent();
     }
 
     #endregion

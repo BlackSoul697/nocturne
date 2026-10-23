@@ -1,9 +1,14 @@
 using Microsoft.EntityFrameworkCore;
 using Nocturne.Core.Contracts.Alerts;
-using Nocturne.Core.Contracts.Audit;
 using Nocturne.Core.Contracts.Multitenancy;
+using Nocturne.Core.Models;
+using Nocturne.Core.Models.Alerts;
+using Nocturne.Core.Models.Authorization;
+using Nocturne.Core.Models.ClientDevices;
 using Nocturne.Infrastructure.Data;
 using Nocturne.Infrastructure.Data.Entities;
+using Nocturne.Infrastructure.Data.Extensions;
+using Nocturne.Infrastructure.Data.Services;
 using Nocturne.API.Services.Realtime;
 
 namespace Nocturne.API.Services.Alerts;
@@ -11,37 +16,27 @@ namespace Nocturne.API.Services.Alerts;
 /// <summary>
 /// Acknowledges active alert excursions either in bulk for a whole tenant
 /// (<see cref="AcknowledgeAllAsync"/>) or one excursion at a time
-/// (<see cref="AcknowledgeExcursionAsync"/>). Acknowledgement halts escalation
-/// but does not close the excursion — hysteresis still runs.
+/// (<see cref="AcknowledgeExcursionAsync"/>), which decides between acknowledging for everyone
+/// and muting for the caller. Acknowledgement halts escalation but does not close the
+/// excursion; hysteresis still runs.
 /// </summary>
 /// <seealso cref="IAlertAcknowledgementService"/>
 /// <seealso cref="ISignalRBroadcastService"/>
 internal sealed class AlertAcknowledgementService(
-    IDbContextFactory<NocturneDbContext> contextFactory,
-    ITenantAccessor tenantAccessor,
+    INocturneDbContextFactory contextFactory,
     ISignalRBroadcastService broadcastService,
-    ILogger<AlertAcknowledgementService> logger,
-    IAuditContext? auditContext = null)
+    ITenantMemberService memberService,
+    IEngineAlarmRelay alarmRelay,
+    ILogger<AlertAcknowledgementService> logger)
     : IAlertAcknowledgementService
 {
     /// <summary>
-    /// Creates a fresh pooled <see cref="NocturneDbContext"/> with <see cref="NocturneDbContext.TenantId"/>
-    /// set from the supplied tenant or the ambient <see cref="ITenantAccessor"/>. Necessary because
-    /// <see cref="IDbContextFactory{TContext}.CreateDbContextAsync"/> hands back a raw context
-    /// (TenantId == Guid.Empty) which the global tenant query filter then uses to exclude every row.
-    /// The scope's audit context is carried too, as <c>ITenantDbContextFactory</c> does: the pooled
-    /// context is leased with the property cleared, and an auto-acknowledgement made during a
-    /// connector sync would otherwise fall back to the enclosing HTTP request's actor.
+    /// A context for <paramref name="tenantId"/>, or for the scope's tenant when it is empty.
     /// </summary>
-    private async Task<NocturneDbContext> CreateContextForAsync(Guid tenantId, CancellationToken ct)
-    {
-        var db = await contextFactory.CreateDbContextAsync(ct);
-        db.TenantId = tenantId == Guid.Empty
-            ? (tenantAccessor.IsResolved ? tenantAccessor.TenantId : Guid.Empty)
-            : tenantId;
-        db.AuditContext = auditContext;
-        return db;
-    }
+    private async Task<NocturneDbContext> CreateContextForAsync(Guid tenantId, CancellationToken ct) =>
+        tenantId == Guid.Empty
+            ? await contextFactory.CreateAsync(ct)
+            : await contextFactory.CreateForTenantAsync(tenantId, ct);
 
     /// <inheritdoc/>
     /// <remarks>
@@ -102,14 +97,21 @@ internal sealed class AlertAcknowledgementService(
             logger.LogWarning(ex, "Failed to broadcast alert_acknowledged for tenant {TenantId}", tenantId);
         }
 
+        await alarmRelay.ClearIfQuietAsync(excursionIds, ct);
+
         logger.LogInformation(
             "Acknowledged {ExcursionCount} excursions and {InstanceCount} instances for tenant {TenantId} by {AcknowledgedBy}",
             excursions.Count, instances.Count, tenantId, acknowledgedBy);
     }
 
     /// <inheritdoc/>
-    public async Task AcknowledgeExcursionAsync(
-        Guid tenantId, Guid excursionId, string acknowledgedBy, bool broadcast, CancellationToken ct)
+    public async Task<AlertAcknowledgementOutcome> AcknowledgeExcursionAsync(
+        Guid tenantId,
+        Guid excursionId,
+        string acknowledgedBy,
+        AlertAcknowledgementAuthority caller,
+        bool broadcast,
+        CancellationToken ct)
     {
         await using var db = await CreateContextForAsync(tenantId, ct);
         var now = DateTime.UtcNow;
@@ -126,12 +128,18 @@ internal sealed class AlertAcknowledgementService(
         if (excursion is null)
         {
             logger.LogDebug("Excursion {ExcursionId} not found or already closed; nothing to acknowledge", excursionId);
-            return;
+            return AlertAcknowledgementOutcome.Closed;
         }
 
         if (excursion.AcknowledgedAt is not null)
         {
-            return;
+            return AlertAcknowledgementOutcome.Acknowledged;
+        }
+
+        if (!await AcknowledgesForEveryoneAsync(db.TenantId, caller, ct))
+        {
+            await MuteAsync(db, excursion, caller.SubjectId!.Value, now, ct);
+            return AlertAcknowledgementOutcome.Muted;
         }
 
         var instances = await db.AlertInstances
@@ -141,6 +149,8 @@ internal sealed class AlertAcknowledgementService(
         ApplyAcknowledgement(excursion, instances, acknowledgedBy, now);
 
         await db.SaveChangesAsync(ct);
+
+        await alarmRelay.ClearIfQuietAsync([excursionId], ct);
 
         if (broadcast)
         {
@@ -163,6 +173,74 @@ internal sealed class AlertAcknowledgementService(
         logger.LogInformation(
             "Acknowledged excursion {ExcursionId} ({InstanceCount} instances) by {AcknowledgedBy}",
             excursionId, instances.Count, acknowledgedBy);
+
+        return AlertAcknowledgementOutcome.Acknowledged;
+    }
+
+    /// <inheritdoc/>
+    /// <remarks>
+    /// True when <paramref name="caller"/> holds <see cref="Scope.AlertsReadWrite"/>, on the
+    /// credential or, failing that, on the membership behind it. The membership is resolved as an
+    /// interactive login would be, because a device grant is deliberately narrower than its
+    /// member and must not demote an owner's acknowledgement to a mute.
+    /// </remarks>
+    public async Task<bool> AcknowledgesForEveryoneAsync(
+        Guid tenantId, AlertAcknowledgementAuthority caller, CancellationToken ct)
+    {
+        if (Scope.Satisfies(caller.GrantedScopes, Scope.AlertsReadWrite))
+            return true;
+
+        if (caller.SubjectId is not { } subjectId)
+            throw new InvalidOperationException(
+                "An acknowledgement without alerts.readwrite needs a subject to mute for.");
+
+        var membership = await memberService.GetMemberAccessAsync(subjectId, tenantId, ct);
+        if (membership is null)
+            return false;
+
+        var membershipScopes = MemberScopeResolver.Resolve(
+            membership.EffectivePermissions, AuthType.SessionCookie, new HashSet<string>());
+        return Scope.Satisfies(membershipScopes, Scope.AlertsReadWrite);
+    }
+
+    private async Task MuteAsync(
+        NocturneDbContext db, AlertExcursionEntity excursion, Guid subjectId, DateTime now, CancellationToken ct)
+    {
+        var alreadyMuted = await db.AlertExcursionMutes
+            .AnyAsync(m => m.AlertExcursionId == excursion.Id && m.SubjectId == subjectId, ct);
+
+        if (!alreadyMuted)
+        {
+            db.AlertExcursionMutes.Add(new AlertExcursionMuteEntity
+            {
+                Id = Guid.CreateVersion7(),
+                TenantId = excursion.TenantId,
+                SubjectId = subjectId,
+                AlertExcursionId = excursion.Id,
+                CreatedAt = now,
+            });
+            try
+            {
+                await db.SaveChangesAsync(ct);
+            }
+            catch (DbUpdateException ex) when (ex.IsUniqueViolation())
+            {
+                // A concurrent mute by the same member won the insert; the mute stands either way.
+            }
+        }
+
+        // Companion devices drop the payload and reconcile against the active-intents snapshot,
+        // which now reports this excursion to the subject as acknowledged.
+        await broadcastService.BroadcastDeviceActionToSubjectAsync(subjectId, new DeviceActionIntent
+        {
+            Intent = "acknowledged",
+            ExcursionId = excursion.Id,
+            Acknowledged = true,
+            StartedAt = excursion.StartedAt,
+        });
+
+        logger.LogInformation(
+            "Subject {SubjectId} muted excursion {ExcursionId} for themselves", subjectId, excursion.Id);
     }
 
     private static void ApplyAcknowledgement(

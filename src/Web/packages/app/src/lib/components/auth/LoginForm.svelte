@@ -1,18 +1,16 @@
 <script lang="ts">
-  import type { ComponentProps } from "svelte";
+  import { untrack, type ComponentProps } from "svelte";
   import { Badge } from "$lib/components/ui/badge";
   import { Button } from "$lib/components/ui/button";
   import * as InputGroup from "$lib/components/ui/input-group";
   import { Label } from "$lib/components/ui/label";
-  import {
-    Loader2,
-    ExternalLink,
-    Fingerprint,
-    User,
-    KeyRound,
-    Smartphone,
-    ShieldAlert,
-  } from "lucide-svelte";
+  import Loader2 from "@lucide/svelte/icons/loader-circle";
+  import ExternalLink from "@lucide/svelte/icons/external-link";
+  import Fingerprint from "@lucide/svelte/icons/fingerprint-pattern";
+  import User from "@lucide/svelte/icons/user";
+  import KeyRound from "@lucide/svelte/icons/key-round";
+  import Smartphone from "@lucide/svelte/icons/smartphone";
+  import ShieldAlert from "@lucide/svelte/icons/shield-alert";
   import * as InputOTP from "$lib/components/ui/input-otp";
   import { FormError, FormField, useSubmission } from "$lib/forms";
   import { WebAuthnAbortService } from "@simplewebauthn/browser";
@@ -43,15 +41,21 @@
     returnUrl?: string;
     onSuccess?: () => void;
     /**
-     * Whether this page is served on a host that resolves no tenant. Passkeys, authenticator
-     * codes, and recovery codes are all checked against a resolved tenant's members, so on such
-     * a host only the identity-provider path can complete a sign-in and it is the only one
-     * offered.
+     * Whether this page is served on a host that resolves no tenant. Passkeys and recovery codes
+     * are checked against a resolved tenant's members, so on such a host only the
+     * identity-provider path can start a sign-in and it is the only one offered.
      */
     tenantless?: boolean;
+    /** A step-up token from an identity-provider sign-in that still needs the authenticator code. */
+    pendingStepUpToken?: string;
   }
 
-  let { returnUrl = "/", onSuccess, tenantless = false }: Props = $props();
+  let {
+    returnUrl = "/",
+    onSuccess,
+    tenantless = false,
+    pendingStepUpToken,
+  }: Props = $props();
 
   const oidcQuery = getOidcProviders();
 
@@ -75,7 +79,9 @@
 
   // UI mode
   type LoginMode = "default" | "username" | "recovery" | "totp";
-  let mode = $state<LoginMode>("default");
+  let mode = $state<LoginMode>(
+    untrack(() => (pendingStepUpToken ? "totp" : "default"))
+  );
   let isLoading = $state(false);
   let isRedirecting = $state(false);
   let selectedProvider = $state<string | null>(null);
@@ -104,10 +110,10 @@
   /** Submitted from the code field's onComplete, so a full code submits itself. */
   let totpFormEl = $state<HTMLFormElement | null>(null);
   /**
-   * Proof from the API that the passkey step succeeded. The authenticator code is
-   * a second factor, so it is only accepted alongside this token.
+   * Proof from the API that the passkey or identity-provider step succeeded. The
+   * authenticator code is a second factor, so it is only accepted alongside this token.
    */
-  let stepUpToken = $state("");
+  let stepUpToken = $state(untrack(() => pendingStepUpToken ?? ""));
 
   async function handleAuthResult(result: {
     success?: boolean;
@@ -365,7 +371,7 @@
   </div>
 {:else}
   <div class="space-y-4">
-    {#if tenantless}
+    {#if tenantless && mode !== "totp"}
       <p class="text-sm text-muted-foreground">
         Passkeys, authenticator codes, and recovery codes are checked against one
         tenant, so they are used at that tenant's own web address.
@@ -542,10 +548,11 @@
       </div>
 
     {:else if mode === "totp"}
-      <!-- Second step after the passkey: the authenticator code, verified on the server. -->
+      <!-- Second step after a passkey or identity provider: the authenticator code, verified on the server. -->
       <form
         bind:this={totpFormEl}
         class="space-y-3"
+        data-testid="authenticator-step"
         {...signInWithAuthenticator.enhance(async ({ submit }) => {
           await authenticator.run(submit, onSuccess);
         })}
@@ -556,8 +563,7 @@
         <FormError issues={authenticator.error} focusOnShow />
 
         <p class="text-sm text-muted-foreground">
-          Your passkey was accepted. Enter the current code from your authenticator
-          app to finish signing in.
+          Enter the current code from your authenticator app to finish signing in.
         </p>
 
         <div class="space-y-2">

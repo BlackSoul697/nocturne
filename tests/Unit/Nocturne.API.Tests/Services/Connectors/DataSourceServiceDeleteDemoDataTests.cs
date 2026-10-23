@@ -52,12 +52,14 @@ public class DataSourceServiceDeleteDemoDataTests : IDisposable
     private NocturneDbContext NewContext() => _db.CreateContext(TenantId);
 
     private DataSourceService CreateService(NocturneDbContext context) => new(
-        context,
+        context.AsFactory(),
         _sensorGlucose.Object,
         _meterGlucose.Object,
         _calibrations.Object,
         Mock.Of<IAuditContext>(),
         _connectorConfig.Object,
+        Mock.Of<Nocturne.Core.Contracts.V4.ITreatmentDecomposer>(),
+        Nocturne.API.Tests.Infrastructure.ProfileActivationTestDeps.Writer(context),
         NullLogger<DataSourceService>.Instance);
 
     /// <summary>One already-soft-deleted demo record of every type the purge covers.</summary>
@@ -100,7 +102,7 @@ public class DataSourceServiceDeleteDemoDataTests : IDisposable
         db.TempBasals.Add(new TempBasalEntity
         {
             Id = Guid.CreateVersion7(), TenantId = TenantId, DataSource = DataSources.DemoService,
-            StartTimestamp = timestamp, Rate = 0.5, Origin = "pump", DeletedAt = deletedAt,
+            Timestamp = timestamp, Rate = 0.5, Origin = "pump", DeletedAt = deletedAt,
         });
         // Both demo writers stamp DataSource = demo-service and leave Device as the Trio rig name:
         // the seeder through DeviceStatusDecomposer, the realtime tick through the V4 endpoints.

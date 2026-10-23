@@ -1,10 +1,19 @@
+using System.Globalization;
+using System.Text.Json;
+using System.Text.Json.Serialization;
 using Microsoft.AspNetCore.Mvc;
 using Nocturne.API.Attributes;
-using Nocturne.API.Services.Devices;
+using Nocturne.API.Extensions;
+using Nocturne.API.Services.Auth;
+using Nocturne.API.Services.Glucose;
+using Nocturne.API.Services.Treatments;
+using Nocturne.Core.Constants;
 using Nocturne.Core.Contracts.Glucose;
-using Nocturne.Core.Contracts.Treatments;
+using Nocturne.Core.Contracts.Multitenancy;
+using Nocturne.Core.Contracts.V4.Repositories;
 using Nocturne.Core.Models.Authorization;
 using Nocturne.Core.Models;
+using Nocturne.Core.Models.Queries;
 
 namespace Nocturne.API.Controllers.V1;
 
@@ -14,40 +23,55 @@ namespace Nocturne.API.Controllers.V1;
 /// Based on the legacy pebble.js implementation.
 /// </summary>
 /// <remarks>
-/// The action requires only <c>glucose.read</c> while the response also carries IOB and COB from
-/// treatments and pump/uploader battery from device status. This is the accepted narrowing described
-/// on <see cref="V2.PropertiesController"/>, which names the per-category follow-up.
+/// The action requires only <c>glucose.read</c> while the response also carries IOB and COB, from the
+/// AID system or treatments (<see cref="ICurrentIobCobReader"/>), and the uploader battery. This is
+/// the accepted narrowing described on <see cref="V2.PropertiesController"/>, which names the
+/// per-category follow-up.
 /// </remarks>
 /// <seealso cref="IEntryService"/>
-/// <seealso cref="DeviceStatusProjectionService"/>
-/// <seealso cref="ITreatmentService"/>
+/// <seealso cref="ICurrentIobCobReader"/>
 [ApiController]
 [Tags("V1")]
 [Route("")]
 public class PebbleController : ControllerBase
 {
     private readonly IEntryService _entryService;
-    private readonly DeviceStatusProjectionService _projectionService;
-    private readonly ITreatmentService _treatmentService;
+    private readonly ICurrentIobCobReader _iobCobReader;
+    private readonly IUploaderSnapshotRepository _uploaderSnapshots;
+    private readonly ITenantAppearanceReader _appearanceReader;
+    private readonly ITenantAccessor _tenantAccessor;
     private readonly ILogger<PebbleController> _logger;
+
+    /// <summary>
+    /// Largest <c>count</c> honoured: 24 hours of readings at 5 minute intervals.
+    /// </summary>
+    public const int MaxCount = 288;
+
+    private const int UploaderLookback = 20;
 
     /// <summary>
     /// Initializes a new instance of <see cref="PebbleController"/>.
     /// </summary>
     /// <param name="entryService">Service for glucose entry retrieval.</param>
-    /// <param name="projectionService">Service for projecting device status from V4 snapshots.</param>
-    /// <param name="treatmentService">Service for treatment data retrieval.</param>
+    /// <param name="iobCobReader">Reader of the IOB and COB now.</param>
+    /// <param name="uploaderSnapshots">Repository of uploader snapshots, for the battery.</param>
+    /// <param name="appearanceReader">Reader of the owner's display preferences, for the default units.</param>
+    /// <param name="tenantAccessor">Accessor for the current tenant.</param>
     /// <param name="logger">Logger instance.</param>
     public PebbleController(
         IEntryService entryService,
-        DeviceStatusProjectionService projectionService,
-        ITreatmentService treatmentService,
+        ICurrentIobCobReader iobCobReader,
+        IUploaderSnapshotRepository uploaderSnapshots,
+        ITenantAppearanceReader appearanceReader,
+        ITenantAccessor tenantAccessor,
         ILogger<PebbleController> logger
     )
     {
         _entryService = entryService;
-        _projectionService = projectionService;
-        _treatmentService = treatmentService;
+        _iobCobReader = iobCobReader;
+        _uploaderSnapshots = uploaderSnapshots;
+        _appearanceReader = appearanceReader;
+        _tenantAccessor = tenantAccessor;
         _logger = logger;
     }
 
@@ -55,8 +79,8 @@ public class PebbleController : ControllerBase
     /// Get pebble-formatted data for smartwatch apps and CGM monitors
     /// Returns current glucose, trend, delta, battery, IOB, and COB information
     /// </summary>
-    /// <param name="units">Units for glucose display (mg/dl or mmol)</param>
-    /// <param name="count">Number of glucose readings to return (default: 1)</param>
+    /// <param name="units">Units for glucose display (mg/dl or mmol); the tenant's display units when omitted</param>
+    /// <param name="count">Number of glucose readings to return (default: 1, at most <see cref="MaxCount"/>)</param>
     /// <param name="cancellationToken">Cancellation token</param>
     /// <returns>Pebble-formatted response with bgs, cals, and status</returns>
     [HttpGet("pebble")]
@@ -79,18 +103,20 @@ public class PebbleController : ControllerBase
 
         try
         {
-            var useMmol = string.Equals(units, "mmol", StringComparison.OrdinalIgnoreCase);
-            count = Math.Max(1, Math.Min(count, 10)); // Limit to reasonable range
+            var useMmol = await ResolveUseMmolAsync(units, cancellationToken);
+            count = Math.Clamp(count, 1, MaxCount);
 
             // Fetch required data in parallel
             var entriesTask = _entryService.GetEntriesAsync(type: "sgv", count: count + 1, skip: 0, cancellationToken);
-            var deviceStatusTask = _projectionService.GetAsync(count: 1, skip: 0, find: null, ct: cancellationToken);
             var calsTask = _entryService.GetEntriesAsync(type: "cal", count: count, skip: 0, cancellationToken);
+            var iobCobTask = ReadIobCobAsync(cancellationToken);
+            var batteryTask = ReadBatteryAsync(cancellationToken);
 
-            await Task.WhenAll(entriesTask, deviceStatusTask, calsTask);
+            await Task.WhenAll(entriesTask, calsTask, iobCobTask, batteryTask);
 
             var entries = (await entriesTask).ToArray();
-            var deviceStatuses = (await deviceStatusTask).ToArray();
+            var iobCob = await iobCobTask;
+            var battery = await batteryTask;
             var cals = (await calsTask).ToArray();
 
             // Build bgs array
@@ -109,39 +135,15 @@ public class PebbleController : ControllerBase
                 // Add extra data to first entry (legacy compatibility)
                 if (i == 0)
                 {
-                    // Calculate delta from previous entry
-                    if (entries.Length > 1)
-                    {
-                        var currentBg = entry.Sgv ?? entry.Mgdl;
-                        var previousBg = entries[1].Sgv ?? entries[1].Mgdl;
-                        var delta = currentBg - previousBg;
-                        bg.Bgdelta = useMmol
-                            ? (delta / 18.0).ToString("F1")
-                            : delta.ToString("F0");
-                    }
-                    else
-                    {
-                        bg.Bgdelta = "0";
-                    }
+                    var delta = DirectionService.CalculateDelta(entries, useMmol ? "mmol" : "mg/dl");
+                    bg.Bgdelta = new PebbleBgdelta(
+                        (useMmol ? delta?.Scaled : delta?.Mgdl) ?? 0,
+                        useMmol
+                    );
 
-                    // Get battery from device status
-                    var uploaderStatus = deviceStatuses.FirstOrDefault();
-                    if (uploaderStatus?.Uploader?.Battery != null)
-                    {
-                        bg.Battery = uploaderStatus.Uploader.Battery.ToString();
-                    }
-
-                    // Get IOB from device status (Loop stores it there)
-                    if (uploaderStatus?.Loop?.Iob != null)
-                    {
-                        bg.Iob = uploaderStatus.Loop.Iob.Iob?.ToString("F2") ?? "0";
-                    }
-
-                    // Get COB from device status
-                    if (uploaderStatus?.Loop?.Cob != null)
-                    {
-                        bg.Cob = uploaderStatus.Loop.Cob.Cob ?? 0;
-                    }
+                    bg.Battery = battery;
+                    bg.Iob = iobCob?.IobDisplay;
+                    bg.Cob = iobCob?.Cob;
                 }
 
                 bgs.Add(bg);
@@ -182,11 +184,49 @@ public class PebbleController : ControllerBase
         }
     }
 
+    private async Task<CurrentIobCob?> ReadIobCobAsync(CancellationToken cancellationToken)
+    {
+        try
+        {
+            return await _iobCobReader.GetAsync(cancellationToken);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            _logger.LogWarning(ex, "Pebble IOB and COB unavailable");
+            return null;
+        }
+    }
+
+    private async Task<string?> ReadBatteryAsync(CancellationToken cancellationToken)
+    {
+        try
+        {
+            var newest = await _uploaderSnapshots.GetAsync(
+                from: null, to: null, device: null, source: null,
+                limit: UploaderLookback, offset: 0, descending: true, ct: cancellationToken
+            );
+            return newest.FirstOrDefault(u => u.Battery >= 0)?.Battery?.ToString(CultureInfo.InvariantCulture);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            _logger.LogWarning(ex, "Pebble battery unavailable");
+            return null;
+        }
+    }
+
+    private async Task<bool> ResolveUseMmolAsync(string? units, CancellationToken cancellationToken)
+    {
+        if (!string.IsNullOrEmpty(units))
+            return GlucoseUnits.IsMmol(units);
+
+        return await GlucoseUnits.UsesMmolAsync(_appearanceReader, _tenantAccessor, cancellationToken);
+    }
+
     private static string FormatGlucose(double mgdl, bool useMmol)
     {
         if (useMmol)
         {
-            return (mgdl / 18.0).ToString("F1");
+            return (mgdl / GlucoseConstants.MgdlPerMmol).ToString("F1");
         }
         return mgdl.ToString("F0");
     }
@@ -250,9 +290,10 @@ public class PebbleBg
     public long Datetime { get; set; }
 
     /// <summary>
-    /// Delta from previous reading (formatted string)
+    /// Delta from <see cref="DirectionService.CalculateDelta"/>; a JSON number in mg/dL and a
+    /// one decimal string in mmol
     /// </summary>
-    public string? Bgdelta { get; set; }
+    public PebbleBgdelta? Bgdelta { get; set; }
 
     /// <summary>
     /// Battery percentage (formatted string)
@@ -299,4 +340,38 @@ public class PebbleCal
     /// Calibration scale
     /// </summary>
     public double? Scale { get; set; }
+}
+
+/// <summary>
+/// Glucose delta in the units the response was requested in.
+/// </summary>
+/// <param name="Value">The delta in <paramref name="Mmol"/> units.</param>
+/// <param name="Mmol">Whether <paramref name="Value"/> is mmol/L rather than mg/dL.</param>
+[JsonConverter(typeof(PebbleBgdeltaConverter))]
+public sealed record PebbleBgdelta(double Value, bool Mmol);
+
+/// <summary>
+/// Writes mg/dL as a JSON number and mmol as a one decimal string, as Nightscout's pebble does.
+/// </summary>
+public sealed class PebbleBgdeltaConverter : JsonConverter<PebbleBgdelta>
+{
+    /// <inheritdoc />
+    public override PebbleBgdelta Read(
+        ref Utf8JsonReader reader,
+        Type typeToConvert,
+        JsonSerializerOptions options
+    ) => throw new NotSupportedException();
+
+    /// <inheritdoc />
+    public override void Write(
+        Utf8JsonWriter writer,
+        PebbleBgdelta value,
+        JsonSerializerOptions options
+    )
+    {
+        if (value.Mmol)
+            writer.WriteStringValue((value.Value + 0.0).ToString("F1", CultureInfo.InvariantCulture));
+        else
+            writer.WriteNumberValue(value.Value);
+    }
 }

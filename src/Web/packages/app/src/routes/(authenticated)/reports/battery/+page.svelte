@@ -10,19 +10,17 @@
   import { Badge } from "$lib/components/ui/badge";
   import { Button } from "$lib/components/ui/button";
   import { Separator } from "$lib/components/ui/separator";
-  import {
-    Battery,
-    BatteryCharging,
-    BatteryFull,
-    BatteryLow,
-    BatteryMedium,
-    BatteryWarning,
-    Calendar,
-    Clock,
-    Zap,
-    AlertTriangle,
-    RefreshCw,
-  } from "lucide-svelte";
+  import Battery from "@lucide/svelte/icons/battery";
+  import BatteryCharging from "@lucide/svelte/icons/battery-charging";
+  import BatteryFull from "@lucide/svelte/icons/battery-full";
+  import BatteryLow from "@lucide/svelte/icons/battery-low";
+  import BatteryMedium from "@lucide/svelte/icons/battery-medium";
+  import BatteryWarning from "@lucide/svelte/icons/battery-warning";
+  import Calendar from "@lucide/svelte/icons/calendar";
+  import Clock from "@lucide/svelte/icons/clock";
+  import Zap from "@lucide/svelte/icons/zap";
+  import AlertTriangle from "@lucide/svelte/icons/triangle-alert";
+  import RefreshCw from "@lucide/svelte/icons/refresh-cw";
   import type { BatteryStatistics, ChargeCycle, BatteryReading } from "$lib/api";
   import { getBatteryReportData } from "$api/battery.remote";
   import { requireDateParamsContext } from "$lib/hooks/date-params.svelte";
@@ -107,10 +105,9 @@
 </svelte:head>
 
 {#if batteryResource.current}
-<div class="@container container mx-auto space-y-6 p-3 @md:p-6">
+<div class="@container space-y-6">
   <div class="flex flex-col gap-3 @lg:flex-row @lg:items-center @lg:justify-between print:hidden">
     <div>
-      <h1 class="text-3xl font-bold">Battery Report</h1>
       <p class="text-muted-foreground">
         Device battery statistics and charge cycle history
       </p>

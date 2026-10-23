@@ -1,5 +1,6 @@
 using System.Net.Http.Headers;
 using Microsoft.Extensions.Logging;
+using Nocturne.Connectors.Core.Extensions;
 using Nocturne.Connectors.Core.Interfaces;
 using Nocturne.Connectors.Core.Models;
 using Nocturne.Connectors.Core.Services;
@@ -57,6 +58,12 @@ public class TwiistConnectorService : BaseConnectorService<TwiistConnectorConfig
         var result = new SyncResult { Success = true };
         var activeTypes = ResolveActiveTypes(request, config);
 
+        if (string.IsNullOrEmpty(await _tokenProvider.GetValidTokenAsync(config, cancellationToken)))
+        {
+            TrackFailedAuthentication(_tokenProvider.SignInFailureReason);
+            return AuthenticationFailedResult();
+        }
+
         try
         {
             var (pwdId, resolveError) = await ResolvePatientIdAsync(config, cancellationToken);
@@ -110,9 +117,7 @@ public class TwiistConnectorService : BaseConnectorService<TwiistConnectorConfig
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error during Twiist sync");
-            result.Success = false;
-            result.Errors.Add($"Sync error: {ex.Message}");
+            RecordSyncError(result, ex);
         }
 
         return result;
@@ -220,7 +225,7 @@ public class TwiistConnectorService : BaseConnectorService<TwiistConnectorConfig
         if (string.IsNullOrEmpty(accessToken))
         {
             _logger.LogWarning("[{Source}] Failed to get valid token for overviews fetch", ConnectorSource);
-            TrackFailedRequest("Failed to get valid token");
+            TrackFailedAuthentication(_tokenProvider.SignInFailureReason);
             return null;
         }
 
@@ -229,14 +234,7 @@ public class TwiistConnectorService : BaseConnectorService<TwiistConnectorConfig
         return await ExecuteWithRetryAsync(
             async () => await FetchOverviewsCoreAsync(accessToken, cancellationToken),
             _retryDelayStrategy,
-            async () =>
-            {
-                _tokenProvider.InvalidateToken();
-                var newToken = await _tokenProvider.GetValidTokenAsync(config, cancellationToken);
-                if (string.IsNullOrEmpty(newToken)) return false;
-                accessToken = newToken;
-                return true;
-            },
+            ReauthenticateWith(_tokenProvider, config, t => accessToken = t, cancellationToken),
             maxRetries: config.MaxRetryAttempts,
             operationName: "FetchTwiistOverviews");
     }
@@ -253,14 +251,7 @@ public class TwiistConnectorService : BaseConnectorService<TwiistConnectorConfig
 
         var response = await _httpClient.SendAsync(request, cancellationToken);
 
-        if (!response.IsSuccessStatusCode)
-        {
-            var errorContent = await response.Content.ReadAsStringAsync(cancellationToken);
-            throw new HttpRequestException(
-                $"HTTP {(int)response.StatusCode} {response.StatusCode}: {errorContent}",
-                null,
-                response.StatusCode);
-        }
+        await response.EnsureSuccessWithBodyAsync(cancellationToken);
 
         return await DeserializeResponseAsync<List<TwiistOverview>>(response) ?? [];
     }
@@ -272,7 +263,7 @@ public class TwiistConnectorService : BaseConnectorService<TwiistConnectorConfig
         if (string.IsNullOrEmpty(accessToken))
         {
             _logger.LogWarning("[{Source}] Failed to get valid token for package fetch", ConnectorSource);
-            TrackFailedRequest("Failed to get valid token");
+            TrackFailedAuthentication(_tokenProvider.SignInFailureReason);
             return null;
         }
 
@@ -281,14 +272,7 @@ public class TwiistConnectorService : BaseConnectorService<TwiistConnectorConfig
         var result = await ExecuteWithRetryAsync(
             async () => await FetchPackageCoreAsync(accessToken, pwdId, cancellationToken),
             _retryDelayStrategy,
-            async () =>
-            {
-                _tokenProvider.InvalidateToken();
-                var newToken = await _tokenProvider.GetValidTokenAsync(config, cancellationToken);
-                if (string.IsNullOrEmpty(newToken)) return false;
-                accessToken = newToken;
-                return true;
-            },
+            ReauthenticateWith(_tokenProvider, config, t => accessToken = t, cancellationToken),
             maxRetries: config.MaxRetryAttempts,
             operationName: "FetchTwiistPackage");
 
@@ -307,14 +291,7 @@ public class TwiistConnectorService : BaseConnectorService<TwiistConnectorConfig
 
         var response = await _httpClient.SendAsync(request, cancellationToken);
 
-        if (!response.IsSuccessStatusCode)
-        {
-            var errorContent = await response.Content.ReadAsStringAsync(cancellationToken);
-            throw new HttpRequestException(
-                $"HTTP {(int)response.StatusCode} {response.StatusCode}: {errorContent}",
-                null,
-                response.StatusCode);
-        }
+        await response.EnsureSuccessWithBodyAsync(cancellationToken);
 
         return await DeserializeResponseAsync<TwiistPackage>(response);
     }

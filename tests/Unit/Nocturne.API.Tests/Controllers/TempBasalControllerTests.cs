@@ -8,6 +8,7 @@ using Nocturne.API.Models.Requests.V4;
 using Nocturne.Core.Contracts.Devices;
 using Nocturne.Core.Contracts.V4;
 using Nocturne.Core.Contracts.V4.Repositories;
+using Nocturne.Core.Models;
 using Nocturne.Core.Models.V4;
 using Xunit;
 
@@ -63,6 +64,41 @@ public class TempBasalControllerTests
         created[0].StartTimestamp.Should().Be(T0.UtcDateTime);
         created[0].EndTimestamp.Should().Be(T0.UtcDateTime.AddMinutes(30));
         created[0].Origin.Should().Be(TempBasalOrigin.Algorithm);
+    }
+
+    [Theory]
+    [InlineData(TempBasalOrigin.Algorithm, true)]
+    [InlineData(TempBasalOrigin.Manual, false)]
+    [InlineData(TempBasalOrigin.Scheduled, null)]
+    public async Task CreateTempBasals_StampsAutomaticFromAnExplicitOrigin(TempBasalOrigin origin, bool? expected)
+    {
+        var request = Request();
+        request.Origin = origin;
+
+        var result = await _controller.CreateTempBasals([request], CancellationToken.None);
+
+        var created = ((ObjectResult)result.Result!).Value.Should().BeOfType<TempBasal[]>().Subject;
+        TempBasalAutomaticFlag.Of(created[0].AdditionalProperties).Should().Be(expected);
+    }
+
+    [Theory]
+    [InlineData("Trio", TempBasalOrigin.Algorithm)]
+    [InlineData("openaps://AndroidAPS", TempBasalOrigin.Algorithm)]
+    [InlineData("xdrip", TempBasalOrigin.Manual)]
+    [InlineData(null, TempBasalOrigin.Manual)]
+    public async Task CreateTempBasals_DefaultsAnOmittedOriginByUploaderAndLeavesAutomaticUnstamped(
+        string? app, TempBasalOrigin expected)
+    {
+        var request = Request();
+        request.Origin = null;
+        request.App = app;
+
+        var result = await _controller.CreateTempBasals([request], CancellationToken.None);
+
+        var created = ((ObjectResult)result.Result!).Value.Should().BeOfType<TempBasal[]>().Subject;
+        created[0].Origin.Should().Be(expected);
+        created[0].OriginEvidence.Should().Be(TempBasalOriginEvidence.Uploader);
+        TempBasalAutomaticFlag.Of(created[0].AdditionalProperties).Should().BeNull();
     }
 
     [Fact]
@@ -121,6 +157,37 @@ public class TempBasalControllerTests
         await _controller.CreateTempBasals([cancelLater, startFirst], CancellationToken.None);
 
         processed.Should().Equal("create", "cancel");
+    }
+
+    [Fact]
+    public async Task CreateTempBasals_SkipsDeletedSpanAndWritesTheRest()
+    {
+        var before = Request(rate: 1.0, timestamp: T0);
+        var deleted = Request(rate: 2.0, timestamp: T0.AddMinutes(10));
+        var after = Request(rate: 3.0, timestamp: T0.AddMinutes(20));
+        _repo.Setup(r => r.CreateAsync(It.Is<TempBasal>(m => m.SyncIdentifier == deleted.SyncIdentifier), It.IsAny<WriteOrigin>(), It.IsAny<CancellationToken>()))
+            .ThrowsAsync(RecreationBlockedException.ForSyncKey(nameof(TempBasal), deleted.DataSource!, deleted.SyncIdentifier!));
+
+        var result = await _controller.CreateTempBasals([after, deleted, before], CancellationToken.None);
+
+        var objectResult = (ObjectResult)result.Result!;
+        objectResult.StatusCode.Should().Be(StatusCodes.Status201Created);
+        var written = objectResult.Value.Should().BeOfType<TempBasal[]>().Subject;
+        written.Select(t => t.SyncIdentifier).Should().Equal(before.SyncIdentifier, after.SyncIdentifier);
+        _repo.Verify(r => r.CreateAsync(It.IsAny<TempBasal>(), It.IsAny<WriteOrigin>(), It.IsAny<CancellationToken>()), Times.Exactly(3));
+    }
+
+    [Fact]
+    public async Task CreateTempBasals_SingleDeletedSpan_AnswersCreatedWithEmptyArray()
+    {
+        _repo.Setup(r => r.CreateAsync(It.IsAny<TempBasal>(), It.IsAny<WriteOrigin>(), It.IsAny<CancellationToken>()))
+            .ThrowsAsync(RecreationBlockedException.ForSyncKey(nameof(TempBasal), "trio", "tb-1"));
+
+        var result = await _controller.CreateTempBasals([Request()], CancellationToken.None);
+
+        var objectResult = (ObjectResult)result.Result!;
+        objectResult.StatusCode.Should().Be(StatusCodes.Status201Created);
+        objectResult.Value.Should().BeOfType<TempBasal[]>().Which.Should().BeEmpty();
     }
 
     [Fact]

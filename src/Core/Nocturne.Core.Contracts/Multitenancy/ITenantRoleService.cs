@@ -8,8 +8,14 @@ namespace Nocturne.Core.Contracts.Multitenancy;
 /// <seealso cref="IMemberInviteService"/>
 public interface ITenantRoleService
 {
-    /// <summary>Returns all roles defined for the specified tenant.</summary>
     Task<List<TenantRoleDto>> GetRolesAsync(Guid tenantId, CancellationToken ct = default);
+
+    /// <summary>
+    /// The roles of <paramref name="tenantId"/> that <paramref name="granterScopes"/> could confer:
+    /// exactly those for which <see cref="ValidateRoleGrantAsync"/> succeeds.
+    /// </summary>
+    Task<List<TenantRoleDto>> GetAssignableRolesAsync(
+        Guid tenantId, IReadOnlyCollection<string> granterScopes, CancellationToken ct = default);
 
     /// <summary>
     /// Returns a role by its ID within <paramref name="tenantId"/>, or null if the tenant has
@@ -68,7 +74,6 @@ public interface ITenantRoleService
     /// to name the authority it is acting on. <see cref="Scope"/> atoms are a subset of
     /// the member-grantable scope vocabulary, so a resolved scope set is a valid granter set.
     /// </param>
-    /// <param name="ct">A cancellation token.</param>
     Task<RoleGrantValidation> ValidateRoleGrantAsync(
         Guid tenantId,
         IReadOnlyCollection<Guid> roleIds,

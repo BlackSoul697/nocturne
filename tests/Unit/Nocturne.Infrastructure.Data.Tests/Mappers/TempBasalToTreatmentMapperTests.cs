@@ -1,3 +1,4 @@
+using Nocturne.Core.Models;
 using Nocturne.Core.Models.V4;
 using Nocturne.Infrastructure.Data.Mappers;
 
@@ -45,6 +46,20 @@ public class TempBasalToTreatmentMapperTests
         result.EnteredBy.Should().Be("openaps");
         result.DataSource.Should().Be("openaps-connector");
         result.UtcOffset.Should().Be(-300);
+    }
+
+    [Fact]
+    [Trait("Category", "Unit")]
+    public void ToTreatment_ReportsServerClockNotEventTime()
+    {
+        var tempBasal = CreateTempBasal(TempBasalOrigin.Algorithm, 1.2);
+        tempBasal.CreatedAt = tempBasal.StartTimestamp.AddDays(2);
+        tempBasal.ModifiedAt = tempBasal.StartTimestamp.AddDays(3);
+
+        var result = TempBasalToTreatmentMapper.ToTreatment(tempBasal);
+
+        result.SrvCreated.Should().Be(new DateTimeOffset(tempBasal.CreatedAt, TimeSpan.Zero).ToUnixTimeMilliseconds());
+        result.SrvModified.Should().Be(new DateTimeOffset(tempBasal.ModifiedAt, TimeSpan.Zero).ToUnixTimeMilliseconds());
     }
 
     [Fact]
@@ -110,6 +125,38 @@ public class TempBasalToTreatmentMapperTests
         // Assert
         result.AdditionalProperties.Should().NotBeNull();
         result.AdditionalProperties!["basalOrigin"].Should().Be("Algorithm");
+    }
+
+    [Theory]
+    [Trait("Category", "Unit")]
+    [InlineData(TempBasalOrigin.Algorithm)]
+    [InlineData(TempBasalOrigin.Manual)]
+    [InlineData(TempBasalOrigin.Scheduled)]
+    [InlineData(TempBasalOrigin.Suspended)]
+    [InlineData(TempBasalOrigin.Inferred)]
+    public void ToTreatment_WithoutAnUploadedFlag_LeavesAutomaticUnset(TempBasalOrigin origin)
+    {
+        var result = TempBasalToTreatmentMapper.ToTreatment(CreateTempBasal(origin, 1.0));
+
+        result.Automatic.Should().BeNull();
+    }
+
+    [Theory]
+    [Trait("Category", "Unit")]
+    [InlineData(TempBasalOrigin.Manual, true)]
+    [InlineData(TempBasalOrigin.Algorithm, false)]
+    [InlineData(TempBasalOrigin.Suspended, true)]
+    public void ToTreatment_ReturnsTheUploadedFlagAfterStorage(TempBasalOrigin origin, bool uploaded)
+    {
+        var tempBasal = CreateTempBasal(origin, 1.0);
+        var stored = TempBasalAutomaticFlag.Keep(new Dictionary<string, object?> { ["id"] = "client-1" }, uploaded);
+        tempBasal.AdditionalProperties = System.Text.Json.JsonSerializer
+            .Deserialize<Dictionary<string, object?>>(System.Text.Json.JsonSerializer.Serialize(stored));
+
+        var result = TempBasalToTreatmentMapper.ToTreatment(tempBasal);
+
+        result.Automatic.Should().Be(uploaded);
+        result.AdditionalProperties.Should().NotContainKey(TempBasalAutomaticFlag.Field);
     }
 
     [Fact]
@@ -241,6 +288,92 @@ public class TempBasalToTreatmentMapperTests
     }
 
     #endregion
+
+    [Fact]
+    [Trait("Category", "Unit")]
+    public void ToTreatment_CarriesClientIdAlongsideDisplayFields()
+    {
+        var tempBasal = CreateTempBasal(TempBasalOrigin.Algorithm, 1.2);
+        tempBasal.AdditionalProperties = new() { ["id"] = "A1B2C3D4-0000-4000-8000-000000000001", ["other"] = "dropped" };
+
+        var result = TempBasalToTreatmentMapper.ToTreatment(tempBasal);
+
+        result.AdditionalProperties.Should().ContainKey("id").WhoseValue.Should().Be("A1B2C3D4-0000-4000-8000-000000000001");
+        result.AdditionalProperties.Should().ContainKey("basalOrigin");
+        result.AdditionalProperties.Should().NotContainKey("other");
+    }
+
+    [Fact]
+    [Trait("Category", "Unit")]
+    public void ToTreatment_RelativeTemp_ServesPercentAndRateButNoAbsolute()
+    {
+        var tempBasal = CreateTempBasal(TempBasalOrigin.Manual, 0.4);
+        tempBasal.ScheduledRate = 0.8;
+        tempBasal.Percent = -50;
+
+        var result = TempBasalToTreatmentMapper.ToTreatment(tempBasal);
+
+        result.Percent.Should().Be(-50);
+        result.Absolute.Should().BeNull("a Nightscout client takes absolute over percent");
+        result.Rate.Should().Be(0.4);
+        result.Temp.Should().BeNull();
+        result.Duration.Should().BeApproximately(30.0, 0.001);
+    }
+
+    [Fact]
+    [Trait("Category", "Unit")]
+    public void ToTreatment_RelativeTempWithRateFromSchedule_ServesOnlyPercent()
+    {
+        var tempBasal = CreateTempBasal(TempBasalOrigin.Manual, 0.4);
+        tempBasal.ScheduledRate = 0.8;
+        tempBasal.Percent = -50;
+        tempBasal.RateFromSchedule = true;
+
+        var result = TempBasalToTreatmentMapper.ToTreatment(tempBasal);
+
+        result.Percent.Should().Be(-50);
+        result.Rate.Should().BeNull("the upload carried no rate");
+        result.Absolute.Should().BeNull();
+        result.DeliveredRate.Should().Be(0.4);
+    }
+
+    [Fact]
+    [Trait("Category", "Unit")]
+    public void ToTreatment_RelativeTempOfUnknownRate_ServesOnlyPercent()
+    {
+        var tempBasal = CreateTempBasal(TempBasalOrigin.Manual, 0);
+        tempBasal.Rate = null;
+        tempBasal.Percent = -50;
+
+        var result = TempBasalToTreatmentMapper.ToTreatment(tempBasal);
+
+        result.Percent.Should().Be(-50);
+        result.Absolute.Should().BeNull();
+        result.Rate.Should().BeNull();
+    }
+
+    [Fact]
+    [Trait("Category", "Unit")]
+    public void ToTreatment_AbsoluteTemp_ServesNoPercent()
+    {
+        var result = TempBasalToTreatmentMapper.ToTreatment(CreateTempBasal(TempBasalOrigin.Manual, 1.4));
+
+        result.Percent.Should().BeNull();
+        result.Absolute.Should().Be(1.4);
+    }
+
+    [Fact]
+    [Trait("Category", "Unit")]
+    public void ToTreatment_SuspendedRelativeTemp_ServesAbsoluteZero()
+    {
+        var tempBasal = CreateTempBasal(TempBasalOrigin.Suspended, 0.4);
+        tempBasal.Percent = -50;
+
+        var result = TempBasalToTreatmentMapper.ToTreatment(tempBasal);
+
+        result.Absolute.Should().Be(0);
+        result.Rate.Should().Be(0);
+    }
 
     #region Helper Methods
 

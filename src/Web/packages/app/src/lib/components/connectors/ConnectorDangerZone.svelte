@@ -12,11 +12,15 @@
     CardTitle,
   } from "$lib/components/ui/card";
   import { Button } from "$lib/components/ui/button";
+  import { Checkbox } from "$lib/components/ui/checkbox";
   import { Separator } from "$lib/components/ui/separator";
   import { DangerZoneDialog } from "$lib/components/ui/danger-zone-dialog";
-  import { satisfiesScope } from "$lib/authorization/scopes";
+  import { canManageConnectors } from "$lib/authorization/connector-management";
   import { page } from "$app/state";
-  import { AlertCircle, CheckCircle, Database, Trash2 } from "lucide-svelte";
+  import AlertCircle from "@lucide/svelte/icons/circle-alert";
+  import CheckCircle from "@lucide/svelte/icons/circle-check-big";
+  import Database from "@lucide/svelte/icons/database";
+  import Trash2 from "@lucide/svelte/icons/trash-2";
 
   interface Props {
     connectorId: string;
@@ -39,7 +43,10 @@
   }: Props = $props();
 
   const canManage = $derived(
-    satisfiesScope(page.data.effectivePermissions ?? [], "tenant.settings")
+    canManageConnectors(
+      page.data.effectivePermissions,
+      page.data.refusedAsDemoSubject
+    )
   );
 
   const recordCountLabels: Record<string, string> = {
@@ -67,6 +74,7 @@
   } | null>(null);
 
   let showDeleteDataDialog = $state(false);
+  let allowReimport = $state(false);
   let deleteDataResult = $state<{
     success?: boolean;
     deletedCounts?: { [key: string]: number };
@@ -97,7 +105,7 @@
 
   async function handleDeleteData() {
     try {
-      const result = await deleteConnectorData(connectorId);
+      const result = await deleteConnectorData({ id: connectorId, allowReimport });
       deleteDataResult = result;
 
       if (result.success && onDataDeleted) {
@@ -181,6 +189,7 @@
             disabled={!hasData}
             onclick={() => {
               deleteDataResult = null;
+              allowReimport = false;
               showDeleteDataDialog = true;
             }}
           >
@@ -242,10 +251,30 @@
     title="Delete {displayName} Data"
     description="You are about to permanently delete all data synchronized by this connector."
     confirmationPhrase="DELETE DATA"
-    confirmButtonText="Delete All Data"
+    confirmButtonText={allowReimport ? "Delete and Allow Re-import" : "Delete All Data"}
     onConfirm={handleDeleteData}
   >
     {#snippet content()}
+      <label class="mt-4 flex items-start gap-3 rounded-lg border p-4 cursor-pointer">
+        <Checkbox
+          id="connector-allow-reimport"
+          class="mt-0.5"
+          bind:checked={allowReimport}
+          disabled={deleteDataResult !== null}
+        />
+        <span class="space-y-1">
+          <span class="block text-sm font-medium">Allow re-import</span>
+          <span class="block text-sm text-muted-foreground">
+            {#if allowReimport}
+              The connector stays enabled and imports this data again on its next sync, along with
+              any of its records deleted earlier.
+            {:else}
+              The connector is disabled, and deleted records are never imported again, even if
+              {displayName} still has them.
+            {/if}
+          </span>
+        </span>
+      </label>
       {#if dataSummary && (dataSummary.total ?? 0) > 0}
         <div class="mt-4 rounded-lg border bg-muted/50 p-4">
           <p class="text-sm font-medium mb-2">Data to be deleted:</p>

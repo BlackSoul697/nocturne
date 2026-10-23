@@ -8,11 +8,9 @@ import {
   FALLBACK_GLUCOSE_THRESHOLDS,
   FALLBACK_GLUCOSE_Y_MAX,
   resolveChartThresholds,
-  toStatusThresholds,
 } from "./glucose-thresholds";
 import { getGlucoseColor } from "$lib/utils/chart-colors";
 import { transformChartData } from "$lib/utils/chart-data-transform";
-import { getGlucoseStatus } from "@nocturne/ui/glucose-icon";
 
 describe("FALLBACK_GLUCOSE_THRESHOLDS", () => {
   it("matches the boundaries the time-in-range reports use", () => {
@@ -43,6 +41,13 @@ const FALLBACK_CHART_THRESHOLDS = {
   targetLow: null,
   targetHigh: null,
 };
+
+describe("FALLBACK_GLUCOSE_Y_MAX", () => {
+  it("is the server's axis ceiling cap, so nothing clips without thresholds", () => {
+    // ChartThresholdsBuilder.GlucoseYMaxCap
+    expect(FALLBACK_GLUCOSE_Y_MAX).toBe(400);
+  });
+});
 
 describe("resolveChartThresholds", () => {
   it("prefers the supplied values", () => {
@@ -81,10 +86,17 @@ describe("resolveChartThresholds", () => {
     ).toEqual(FALLBACK_CHART_THRESHOLDS);
   });
 
-  it("keeps a supplied 0 axis ceiling and targets", () => {
+  it("treats a supplied 0 axis ceiling as absent", () => {
+    // A caller without glucose.read gets an empty thresholds DTO, ceiling 0.
+    expect(resolveChartThresholds({ glucoseYMax: 0 }).glucoseYMax).toBe(
+      FALLBACK_GLUCOSE_Y_MAX
+    );
+  });
+
+  it("keeps supplied 0 targets", () => {
     expect(
-      resolveChartThresholds({ glucoseYMax: 0, targetLow: 0, targetHigh: 0 })
-    ).toMatchObject({ glucoseYMax: 0, targetLow: 0, targetHigh: 0 });
+      resolveChartThresholds({ targetLow: 0, targetHigh: 0 })
+    ).toMatchObject({ targetLow: 0, targetHigh: 0 });
   });
 
   it("falls back entirely for null or undefined", () => {
@@ -99,33 +111,5 @@ describe("resolveChartThresholds", () => {
     expect(transformChartData({ thresholds: supplied }).thresholds).toEqual(
       resolveChartThresholds(supplied)
     );
-  });
-});
-
-describe("toStatusThresholds", () => {
-  it("remaps onto the status-bucket field names", () => {
-    expect(toStatusThresholds(FALLBACK_GLUCOSE_THRESHOLDS)).toEqual({
-      low: 54,
-      targetBottom: 70,
-      targetTop: 180,
-      high: 250,
-    });
-  });
-
-  it("buckets the same way getGlucoseColor does", () => {
-    const status = toStatusThresholds(FALLBACK_GLUCOSE_THRESHOLDS);
-    const cases: [number, string][] = [
-      [40, "very-low"],
-      [60, "low"],
-      [120, "in-range"],
-      [200, "high"],
-      [300, "very-high"],
-    ];
-    for (const [mgdl, expected] of cases) {
-      expect(getGlucoseStatus(mgdl, status)).toBe(expected);
-      expect(getGlucoseColor(mgdl, FALLBACK_GLUCOSE_THRESHOLDS)).toBe(
-        `var(--glucose-${expected})`
-      );
-    }
   });
 });

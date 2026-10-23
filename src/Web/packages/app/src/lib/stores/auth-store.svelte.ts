@@ -21,8 +21,9 @@ import {
   logoutSession as logoutSessionRemote,
 } from "../../routes/(unauthenticated)/auth/auth.remote";
 import { remoteErrorMessage } from "$lib/api/remote-error";
+import { whenIdle } from "$lib/utils/when-idle";
 
-const AUTH_STORE_KEY = Symbol("auth-store");
+const AUTH_STORE_KEY = "nocturne:app:auth-store";
 
 const EXPIRY_CHECK_INTERVAL_MS = 30_000;
 
@@ -89,6 +90,7 @@ export class AuthStore {
   private _expiresAt = $state<Date | null>(null);
   private expiryCheckInterval: ReturnType<typeof setInterval> | null = null;
   private refreshInFlight: Promise<boolean> | null = null;
+  private cancelSessionLoad: (() => void) | null = null;
 
   expiresAt = $derived(this._expiresAt);
 
@@ -112,12 +114,14 @@ export class AuthStore {
     const authCookie = cookies.find((c) => c.trim().startsWith("IsAuthenticated="));
 
     if (authCookie) {
-      // We have an auth cookie, try to load the full session.
-      // Defer out of render context — the store is constructed inside the
-      // root layout's render, but `getSessionInfo().run()` rejects calls
-      // made during render.
+      // Nothing on first paint reads the session (the layout's server data carries the user and
+      // permissions), so it loads once the page is idle. That is also out of the render that
+      // constructs the store, where `getSessionInfo().run()` would reject.
       this._state = "loading";
-      queueMicrotask(() => this.loadSession());
+      this.cancelSessionLoad = whenIdle(() => {
+        this.cancelSessionLoad = null;
+        void this.loadSession();
+      });
     } else {
       this._state = "unauthenticated";
     }
@@ -261,24 +265,6 @@ export class AuthStore {
   }
 
   /**
-   * Check if the user has a specific role
-   * @param role - Role name (e.g., "admin", "readable")
-   */
-  hasRole(role: string): boolean {
-    if (!this._user) return false;
-    return this._user.roles.includes(role);
-  }
-
-  /**
-   * Check if the user has any of the specified roles
-   * @param roles - Array of role names
-   */
-  hasAnyRole(roles: string[]): boolean {
-    if (!this._user) return false;
-    return roles.some((role) => this._user!.roles.includes(role));
-  }
-
-  /**
    * Request login from the user via the login dialog
    * Returns a promise that resolves when login completes (true) or is cancelled (false)
    */
@@ -341,6 +327,8 @@ export class AuthStore {
    * Cleanup when the store is destroyed
    */
   destroy(): void {
+    this.cancelSessionLoad?.();
+    this.cancelSessionLoad = null;
     this.stopExpiryCheck();
     this.closeLoginDialog();
   }

@@ -1,5 +1,7 @@
 import logger from './logger.js';
 import SocketIOServer from './socketio-server.js';
+import { AlarmLevel } from '../constants.js';
+import type { AlarmEvent } from '../types.js';
 import { fieldsOf, type Payload } from './payload.js';
 
 class MessageTranslator {
@@ -29,20 +31,36 @@ class MessageTranslator {
     }
   }
 
-  handleAlarm(alarm: unknown): void {
+  handleAlarm(event: AlarmEvent, alarm: unknown): void {
     try {
-      const translatedAlarm = this.translateAlarm(alarm);
-      this.socketIOServer.broadcastAlarm(translatedAlarm, this.tenantSlug);
+      const translatedAlarm = this.translateAlarm(event, alarm);
+      this.socketIOServer.broadcastAlarm(event, translatedAlarm, this.tenantSlug);
     } catch (error) {
       logger.error('Error translating alarm:', error);
     }
   }
 
-  handleClearAlarm(): void {
+  handleClearAlarm(clear: unknown): void {
     try {
-      this.socketIOServer.broadcastClearAlarm(this.tenantSlug);
+      this.socketIOServer.broadcastClearAlarm(clear, this.tenantSlug);
     } catch (error) {
       logger.error('Error handling clear alarm:', error);
+    }
+  }
+
+  handleEngineAlarm(event: AlarmEvent, alarm: unknown): void {
+    try {
+      this.socketIOServer.broadcastToAlarmNamespace(event, this.translateAlarm(event, alarm), this.tenantSlug);
+    } catch (error) {
+      logger.error('Error translating engine alarm:', error);
+    }
+  }
+
+  handleEngineClearAlarm(clear: unknown): void {
+    try {
+      this.socketIOServer.broadcastToAlarmNamespace('clear_alarm', clear, this.tenantSlug);
+    } catch (error) {
+      logger.error('Error handling engine clear alarm:', error);
     }
   }
 
@@ -182,11 +200,10 @@ class MessageTranslator {
     };
   }
 
-  private translateAlarm(data: unknown): Payload {
+  translateAlarm(event: AlarmEvent, data: unknown): Payload {
     const alarm = fieldsOf(data);
-    // Ensure alarm format matches legacy expectations
     return {
-      level: alarm.level || 'warn', // 'urgent', 'warn', 'info'
+      level: event === 'urgent_alarm' ? AlarmLevel.Urgent : AlarmLevel.Warn,
       title: alarm.title || 'Alarm',
       message: alarm.message,
       plugin: alarm.plugin || alarm.source,

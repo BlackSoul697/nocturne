@@ -12,13 +12,13 @@ namespace Nocturne.Infrastructure.Data.Repositories.V4;
 /// </summary>
 public class DeviceRepository : IDeviceRepository
 {
-    private readonly ITenantDbContextFactory _contextFactory;
+    private readonly INocturneDbContextFactory _contextFactory;
 
     /// <summary>
     /// Initializes a new instance of the <see cref="DeviceRepository"/> class.
     /// </summary>
     /// <param name="contextFactory">The tenant database context factory.</param>
-    public DeviceRepository(ITenantDbContextFactory contextFactory)
+    public DeviceRepository(INocturneDbContextFactory contextFactory)
     {
         _contextFactory = contextFactory;
     }
@@ -66,18 +66,20 @@ public class DeviceRepository : IDeviceRepository
         return DeviceMapper.ToDomainModel(entity);
     }
 
-    /// <summary>
-    /// Updates an existing device record.
-    /// </summary>
-    /// <returns>The updated device.</returns>
-    public async Task<Device> UpdateAsync(Guid id, Device model, WriteOrigin origin, CancellationToken ct = default)
+    /// <inheritdoc />
+    public async Task WidenSeenWindowAsync(Guid id, DateTime timestamp, WriteOrigin origin, CancellationToken ct = default)
     {
         await using var ctx = await _contextFactory.CreateAsync(ct);
-        var entity =
-            await ctx.Devices.FindAsync([id], ct)
-            ?? throw new KeyNotFoundException($"Device {id} not found");
-        DeviceMapper.UpdateEntity(entity, model);
-        await ctx.SaveChangesAsync(ct);
-        return DeviceMapper.ToDomainModel(entity);
+        await ctx.Devices
+            .Where(e => e.Id == id
+                && (e.LastSeenTimestamp < timestamp || e.FirstSeenTimestamp > timestamp))
+            .ExecuteUpdateAsync(s => s
+                .SetProperty(
+                    e => e.LastSeenTimestamp,
+                    e => e.LastSeenTimestamp < timestamp ? timestamp : e.LastSeenTimestamp)
+                .SetProperty(
+                    e => e.FirstSeenTimestamp,
+                    e => e.FirstSeenTimestamp > timestamp ? timestamp : e.FirstSeenTimestamp),
+                ct);
     }
 }

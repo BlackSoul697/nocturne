@@ -34,13 +34,16 @@ export const getDayInReviewData = query(
 		const dayStart = start.toISOString();
 		const dayEnd = end.toISOString();
 
-		// Fetch v4 data + APS snapshots for historical predictions
-		const [entriesResponse, bolusResponse, carbResponse, apsResponse] = await Promise.all([
-			apiClient.sensorGlucose.getAll(dayStart, dayEnd, 10000),
-			apiClient.bolus.getAll(dayStart, dayEnd, 1000),
-			apiClient.nutrition.getCarbIntakes(dayStart, dayEnd, 1000),
-			getApsSnapshots({ from: dayStart, to: dayEnd, limit: 1000, sort: 'timestamp_asc' }),
-		]);
+		// Fetch v4 data, APS snapshots for historical predictions, and insulin delivery stats
+		// (scheduled vs additional basal breakdown), none of which depends on another
+		const [entriesResponse, bolusResponse, carbResponse, apsResponse, insulinDelivery] =
+			await Promise.all([
+				apiClient.sensorGlucose.getAll(dayStart, dayEnd, 10000),
+				apiClient.bolus.getAll(dayStart, dayEnd, 1000),
+				apiClient.nutrition.getCarbIntakes(dayStart, dayEnd, 1000),
+				getApsSnapshots({ from: dayStart, to: dayEnd, limit: 1000, sort: 'timestamp_asc' }),
+				getInsulinDeliveryStatistics({ startDate: dayStart, endDate: dayEnd, includeBoluses: true }),
+			]);
 
 		const entries = entriesResponse.data ?? [];
 		const boluses = bolusResponse.data ?? [];
@@ -54,6 +57,8 @@ export const getDayInReviewData = query(
 					boluses,
 					carbIntakes,
 					population: 0 as const, // Type1Adult
+					startDate: dayStart,
+					endDate: dayEnd,
 				})
 			: null;
 
@@ -65,12 +70,6 @@ export const getDayInReviewData = query(
 				? await apiClient.statistics.calculateTreatmentSummary({ boluses, carbIntakes })
 				: null);
 
-		// Fetch insulin delivery stats (includes scheduled vs additional basal breakdown)
-		const insulinDelivery = await getInsulinDeliveryStatistics({
-			startDate: dayStart,
-			endDate: dayEnd,
-		});
-
 		return {
 			date: dateParam,
 			entries,
@@ -80,6 +79,8 @@ export const getDayInReviewData = query(
 			treatmentSummary,
 			insulinDelivery,
 			apsSnapshots,
+			/** The zone the day's boundaries were taken in; UTC when the patient has none, as they were. */
+			timeZone: timezone ?? 'UTC',
 			dateRange: {
 				from: dayStart,
 				to: dayEnd,

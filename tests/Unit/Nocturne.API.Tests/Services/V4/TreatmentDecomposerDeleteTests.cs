@@ -1,10 +1,13 @@
+using Nocturne.API.Tests.Infrastructure;
 using FluentAssertions;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging.Abstractions;
 using Moq;
 using Nocturne.API.Services.Audit;
+using Nocturne.API.Services.Treatments;
 using Nocturne.API.Services.V4;
 using Nocturne.Core.Contracts.Audit;
+using Nocturne.Core.Contracts.Infrastructure;
 using Nocturne.Core.Contracts.Devices;
 using Nocturne.Core.Contracts.Glucose;
 using Nocturne.Core.Contracts.Profiles.Resolvers;
@@ -16,6 +19,7 @@ using Nocturne.Infrastructure.Data;
 using Nocturne.Infrastructure.Data.Entities;
 using Nocturne.Infrastructure.Data.Entities.V4;
 using Nocturne.Infrastructure.Data.Extensions;
+using Nocturne.Infrastructure.Data.Repositories.V4;
 using Nocturne.Tests.Shared.Infrastructure;
 using Xunit;
 
@@ -56,11 +60,7 @@ public class TreatmentDecomposerDeleteTests : IDisposable
 
     public TreatmentDecomposerDeleteTests()
     {
-        _db = TestDbContextFactory.CreateSqlite();
-
-        using var db = NewContext();
-        db.Tenants.Add(new TenantEntity { Id = TenantId, Slug = "test" });
-        db.SaveChanges();
+        _db = TestDbContextFactory.CreateSqliteWithTenant(TenantId, SqliteNpgsqlJson.Translate);
     }
 
     public void Dispose()
@@ -71,8 +71,12 @@ public class TreatmentDecomposerDeleteTests : IDisposable
 
     private NocturneDbContext NewContext() => _db.CreateContext(TenantId);
 
-    private TreatmentDecomposer CreateDecomposer(NocturneDbContext context, IAuditContext auditContext) => new(
-        context,
+    private TreatmentDecomposer CreateDecomposer(
+        NocturneDbContext context,
+        IAuditContext auditContext,
+        IProfileDecomposer? profileDecomposer = null,
+        Microsoft.Extensions.Logging.ILogger<TreatmentDecomposer>? logger = null) => new(
+        context.AsFactory(),
         Mock.Of<IBolusRepository>(),
         Mock.Of<ITempBasalRepository>(),
         Mock.Of<ICarbIntakeRepository>(),
@@ -81,14 +85,17 @@ public class TreatmentDecomposerDeleteTests : IDisposable
         Mock.Of<IDeviceEventRepository>(),
         Mock.Of<IBolusCalculationRepository>(),
         Mock.Of<IStateSpanService>(),
+        ProfileActivationTestDeps.Repository(context),
+        ProfileActivationTestDeps.Writer(context),
         Mock.Of<ITreatmentFoodService>(),
         Mock.Of<IDeviceService>(),
         Mock.Of<IPatientDeviceStamper>(),
-        Mock.Of<IProfileDecomposer>(),
+        profileDecomposer ?? Mock.Of<IProfileDecomposer>(),
         Mock.Of<IActiveProfileResolver>(),
         Mock.Of<IPatientInsulinRepository>(),
+        TempBasalTestDeps.Unscheduled(),
         auditContext,
-        NullLogger<TreatmentDecomposer>.Instance);
+        logger ?? NullLogger<TreatmentDecomposer>.Instance);
 
     /// <summary>One record of every type the sweep covers, plus a bolus outside the window.</summary>
     /// <param name="legacyIdFor">
@@ -161,7 +168,7 @@ public class TreatmentDecomposerDeleteTests : IDisposable
             Id = Guid.CreateVersion7(),
             TenantId = TenantId,
             LegacyId = legacyIdFor("tempbasal"),
-            StartTimestamp = Inside,
+            Timestamp = Inside,
             Rate = 0.8,
             Origin = "Algorithm"
         });
@@ -191,6 +198,63 @@ public class TreatmentDecomposerDeleteTests : IDisposable
         (await assertCtx.GetBlockingLegacyIdsAsync<DeviceEventEntity>(["devevent-1"])).Held.Should().Contain("devevent-1");
         (await assertCtx.GetBlockingLegacyIdsAsync<BolusCalculationEntity>(["boluscalc-1"])).Held.Should().Contain("boluscalc-1");
         (await assertCtx.GetBlockingLegacyIdsAsync<TempBasalEntity>(["tempbasal-1"])).Held.Should().Contain("tempbasal-1");
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    [InlineData("{}")]
+    [InlineData("token=x")]
+    [InlineData("count=5&token=x")]
+    [InlineData("{\"created_at\":")]
+    public async Task BulkDelete_WithAFindThatHasNoConditions_DeletesNothing(string? find)
+    {
+        SeedOneOfEachType();
+
+        await using (var ctx = NewContext())
+            (await CreateDecomposer(ctx, _userAuditContext).BulkDeleteAsync(find, WriteOrigin.Live)).Should().Be(0);
+
+        await using var assertCtx = NewContext();
+        (await assertCtx.Boluses.IgnoreQueryFilters().Where(b => b.DeletedAt != null).CountAsync()).Should().Be(0);
+        (await assertCtx.Notes.IgnoreQueryFilters().Where(n => n.DeletedAt != null).CountAsync()).Should().Be(0);
+        (await assertCtx.CarbIntakes.IgnoreQueryFilters().Where(c => c.DeletedAt != null).CountAsync()).Should().Be(0);
+    }
+
+    [Theory]
+    [InlineData("find[]=")]
+    [InlineData("{\"$and\":[]}")]
+    [InlineData("{\"created_at\":{}}")]
+    [InlineData("{}")]
+    public async Task BulkDelete_WhenTheFindHasNoConditions_RefusesAtTheEmptyGuard(string find)
+    {
+        var logger = new Mock<Microsoft.Extensions.Logging.ILogger<TreatmentDecomposer>>();
+
+        await using var ctx = NewContext();
+        (await CreateDecomposer(ctx, _userAuditContext, logger: logger.Object).BulkDeleteAsync(find, WriteOrigin.Live)).Should().Be(0);
+
+        logger.Invocations
+            .Where(i => i.Method.Name == nameof(Microsoft.Extensions.Logging.ILogger.Log))
+            .Select(i => i.Arguments[2].ToString())
+            .Should().Contain(m => m!.Contains("has no conditions"));
+    }
+
+    [Fact]
+    public async Task BulkDelete_NeverLogsTheRawFind()
+    {
+        var logger = new Mock<Microsoft.Extensions.Logging.ILogger<TreatmentDecomposer>>();
+        SeedOneOfEachType();
+
+        foreach (var find in new[] { Find + "&token=secret-value", "token=secret-value", "find[eventType]=Note&token=secret-value" })
+        {
+            await using var ctx = NewContext();
+            await CreateDecomposer(ctx, _userAuditContext, logger: logger.Object).BulkDeleteAsync(find, WriteOrigin.Live);
+        }
+
+        logger.Invocations
+            .Where(i => i.Method.Name == nameof(Microsoft.Extensions.Logging.ILogger.Log))
+            .Select(i => i.Arguments[2].ToString())
+            .Should().NotBeEmpty()
+            .And.NotContain(m => m!.Contains("secret-value"));
     }
 
     [Fact]
@@ -239,12 +303,315 @@ public class TreatmentDecomposerDeleteTests : IDisposable
         (await assertCtx.MutationAuditLog.AnyAsync()).Should().BeFalse();
     }
 
+    private void SeedStateSpan(string originalId, string category, string source, string? metadataJson, DateTime start)
+    {
+        using var db = NewContext();
+        db.StateSpans.Add(new StateSpanEntity
+        {
+            Id = Guid.CreateVersion7(),
+            TenantId = TenantId,
+            OriginalId = originalId,
+            Category = category,
+            State = "Active",
+            StartTimestamp = start,
+            Source = source,
+            MetadataJson = metadataJson,
+        });
+        db.SaveChanges();
+    }
+
+    private void SeedActivation(
+        string? legacyId, string? dataSource, DateTime start, string? syncIdentifier = null,
+        string phase = nameof(Nocturne.Core.Models.V4.ProfileActivationPhase.Requested))
+    {
+        using var db = NewContext();
+        db.ProfileActivations.Add(new ProfileActivationEntity
+        {
+            Id = Guid.CreateVersion7(),
+            TenantId = TenantId,
+            LegacyId = legacyId,
+            SyncIdentifier = syncIdentifier,
+            DataSource = dataSource,
+            Timestamp = start,
+            Phase = phase,
+            Origin = nameof(Nocturne.Core.Models.V4.ProfileActivationOrigin.Uploader),
+            BaseProfileName = "Weekend",
+        });
+        db.SaveChanges();
+    }
+
+    private static Treatment ProfileSwitch(string id, DateTime at, string profile, double? minutes = null) => new()
+    {
+        Id = id,
+        EventType = "Profile Switch",
+        Mills = new DateTimeOffset(at).ToUnixTimeMilliseconds(),
+        EnteredBy = "careportal",
+        Profile = profile,
+        Duration = minutes,
+    };
+
+    private async Task<ProfileActivationEntity> ActivationAsync(string legacyId)
+    {
+        await using var db = NewContext();
+        return await db.ProfileActivations.AsNoTracking().IgnoreQueryFilters().SingleAsync(a => a.LegacyId == legacyId);
+    }
+
+    [Fact]
+    public async Task DeletingTheNewestPermanentSwitchResumesThePreviousOne()
+    {
+        await using (var ctx = NewContext())
+        {
+            var decomposer = CreateDecomposer(ctx, _userAuditContext);
+            await decomposer.DecomposeAsync(ProfileSwitch("weekday", Inside, "Weekday"), WriteOrigin.Live);
+            await decomposer.DecomposeAsync(ProfileSwitch("weekend", Inside.AddHours(1), "Weekend"), WriteOrigin.Live);
+        }
+        (await ActivationAsync("weekday")).EndTimestamp.Should().Be(Inside.AddHours(1));
+
+        await using (var ctx = NewContext())
+            await CreateDecomposer(ctx, _userAuditContext).DeleteByLegacyIdAsync("weekend", WriteOrigin.Live);
+
+        (await ActivationAsync("weekday")).EndTimestamp.Should().BeNull("nothing supersedes it any more");
+    }
+
+    [Fact]
+    public async Task DeletingASwitchThatCutATemporaryOneShortRestoresItsLength()
+    {
+        await using (var ctx = NewContext())
+        {
+            var decomposer = CreateDecomposer(ctx, _userAuditContext);
+            await decomposer.DecomposeAsync(ProfileSwitch("sick", Inside, "Sick", minutes: 120), WriteOrigin.Live);
+            await decomposer.DecomposeAsync(ProfileSwitch("exercise", Inside.AddHours(1), "Exercise", minutes: 30), WriteOrigin.Live);
+        }
+        (await ActivationAsync("sick")).EndTimestamp.Should().Be(Inside.AddHours(1));
+
+        await using (var ctx = NewContext())
+            await CreateDecomposer(ctx, _userAuditContext).DeleteByLegacyIdAsync("exercise", WriteOrigin.Live);
+
+        (await ActivationAsync("sick")).EndTimestamp.Should().Be(Inside.AddHours(2));
+    }
+
+    [Fact]
+    public async Task BulkDeletingTheNewestSwitchResumesThePreviousOne()
+    {
+        await using (var ctx = NewContext())
+        {
+            var decomposer = CreateDecomposer(ctx, _userAuditContext);
+            await decomposer.DecomposeAsync(ProfileSwitch("weekday", Inside.AddDays(-1), "Weekday"), WriteOrigin.Live);
+            await decomposer.DecomposeAsync(ProfileSwitch("weekend", Inside, "Weekend"), WriteOrigin.Live);
+        }
+
+        await BulkDeleteAsync(_userAuditContext);
+
+        (await ActivationAsync("weekday")).EndTimestamp.Should().BeNull();
+    }
+
+    [Fact]
+    public async Task BulkDelete_UserContext_TombstonesTheServedStateSpansInTheWindowOnly()
+    {
+        SeedOneOfEachType();
+        SeedStateSpan("override-1", "Override", "loop", """{"collection":"treatments","utcOffset":0}""", Inside);
+        SeedStateSpan("tt-1", "TemporaryTarget", "aaps", """{"utcOffset":0}""", Inside);
+        SeedStateSpan("old-profile-span", "Profile", "aaps", """{"profileName":"Weekend","utcOffset":0}""", Inside);
+        SeedStateSpan("devicestatus-override", "Override", "loop", """{"collection":"devicestatus"}""", Inside);
+        SeedActivation("ps-1", null, Inside);
+        SeedActivation("ps-outside", null, Outside);
+        SeedActivation(null, "glooko-connector", Inside, syncIdentifier: "glooko_profile_1",
+            phase: nameof(Nocturne.Core.Models.V4.ProfileActivationPhase.Effective));
+
+        var count = await BulkDeleteAsync(_userAuditContext);
+
+        await using var assertCtx = NewContext();
+        var deleted = await assertCtx.StateSpans.IgnoreQueryFilters()
+            .Where(s => s.DeletedAt != null)
+            .Select(s => new { s.OriginalId, ByUser = EF.Property<bool>(s, "DeletedByUser") })
+            .ToListAsync();
+        deleted.Select(s => s.OriginalId).Should().BeEquivalentTo(new[] { "override-1", "tt-1" });
+        deleted.Should().OnlyContain(s => s.ByUser);
+        var deletedActivations = await assertCtx.ProfileActivations.IgnoreQueryFilters()
+            .Where(a => a.DeletedAt != null)
+            .Select(a => new { a.LegacyId, ByUser = EF.Property<bool>(a, "DeletedByUser") })
+            .ToListAsync();
+        deletedActivations.Should().ContainSingle().Which.Should().Be(new { LegacyId = (string?)"ps-1", ByUser = true });
+        count.Should().Be(10);
+        (await assertCtx.MutationAuditLog.Where(a => a.Action == "bulk_delete" && a.EntityType == "StateSpan")
+                .Select(a => a.ChangesJson).SingleAsync())
+            .Should().Contain("\"count\":2");
+    }
+
+    [Fact]
+    public async Task BulkDelete_ProfileSwitchesInTheWindow_DeleteTheProfileRowsTheyDecomposed()
+    {
+        SeedActivation("ps-1", null, Inside);
+        SeedActivation("ps-outside", null, Outside);
+        SeedStateSpan("override-1", "Override", "loop", """{"collection":"treatments","utcOffset":0}""", Inside);
+        var profiles = new Mock<IProfileDecomposer>();
+
+        await using var ctx = NewContext();
+        await CreateDecomposer(ctx, _userAuditContext, profiles.Object).BulkDeleteAsync(Find, WriteOrigin.Live);
+
+        profiles.Verify(p => p.DeleteByLegacyIdAsync("ps-1", WriteOrigin.Live, It.IsAny<CancellationToken>()), Times.Once);
+        profiles.VerifyNoOtherCalls();
+    }
+
     private async Task<int> DeleteByLegacyIdAsync(IAuditContext auditContext)
     {
         await using var ctx = NewContext();
         return await CreateDecomposer(ctx, auditContext)
             .DeleteByLegacyIdAsync(LegacyTreatmentId, WriteOrigin.Live);
     }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task DeleteByLegacyId_ProfileSwitch_DeletesTheProfileRowsItDecomposed(bool spanAlreadyDeleted)
+    {
+        SeedActivation(LegacyTreatmentId, null, Inside);
+        if (spanAlreadyDeleted)
+        {
+            await using var db = NewContext();
+            (await db.ProfileActivations.SingleAsync()).DeletedAt = DateTime.UtcNow;
+            await db.SaveChangesAsync();
+        }
+        var profiles = new Mock<IProfileDecomposer>();
+
+        await using var ctx = NewContext();
+        await CreateDecomposer(ctx, _userAuditContext, profiles.Object)
+            .DeleteByLegacyIdAsync(LegacyTreatmentId, WriteOrigin.Live);
+
+        profiles.Verify(p => p.DeleteByLegacyIdAsync(LegacyTreatmentId, WriteOrigin.Live, It.IsAny<CancellationToken>()), Times.Once);
+        profiles.VerifyNoOtherCalls();
+    }
+
+    [Fact]
+    public async Task DeleteByLegacyId_TreatmentWithoutAProfileSpan_LeavesProfileRowsAlone()
+    {
+        SeedStateSpan(LegacyTreatmentId, "Override", "loop", """{"collection":"treatments"}""", Inside);
+        SeedStateSpan("other-profile-switch", "Profile", "aaps", """{"profileName":"Weekend"}""", Inside);
+        var profiles = new Mock<IProfileDecomposer>();
+
+        await using var ctx = NewContext();
+        await CreateDecomposer(ctx, _userAuditContext, profiles.Object)
+            .DeleteByLegacyIdAsync(LegacyTreatmentId, WriteOrigin.Live);
+
+        profiles.VerifyNoOtherCalls();
+    }
+
+    [Fact]
+    public async Task DeleteFromSource_RemovesTheSourcesTreatmentSpansAndProfileRowsOnly()
+    {
+        const string storeName = "Weekend@@@@@1672567200000";
+        SeedActivation("ps-1", "aaps", Inside);
+        SeedStateSpan("override-1", "Override", "aaps", """{"collection":"treatments","utcOffset":0}""", Inside);
+        SeedStateSpan("tt-1", "TemporaryTarget", "aaps", """{"utcOffset":0}""", Inside);
+        SeedActivation("ps-2", "loop", Inside);
+        SeedActivation("ps-unlisted", "aaps", Inside);
+        SeedStateSpan("ds-override", "Override", "aaps", """{"reason":"devicestatus"}""", Inside);
+
+        await using var ctx = NewContext();
+        var factory = new TestNocturneDbContextFactory(ctx);
+        var profiles = new ProfileDecomposer(
+            new TherapySettingsRepository(factory, _userAuditContext, NullLogger<TherapySettingsRepository>.Instance),
+            new BasalScheduleRepository(factory, _userAuditContext, NullLogger<BasalScheduleRepository>.Instance),
+            new CarbRatioScheduleRepository(factory, _userAuditContext, NullLogger<CarbRatioScheduleRepository>.Instance),
+            new SensitivityScheduleRepository(factory, _userAuditContext, NullLogger<SensitivityScheduleRepository>.Instance),
+            new TargetRangeScheduleRepository(factory, _userAuditContext, NullLogger<TargetRangeScheduleRepository>.Instance),
+            TempBasalTestDeps.NoReresolution(),
+            NullLogger<ProfileDecomposer>.Instance);
+        await profiles.DecomposeAsync(ProfileDocument("ps-1", storeName), WriteOrigin.Live);
+        await profiles.DecomposeAsync(ProfileDocument("ps-2", storeName), WriteOrigin.Live);
+
+        var deleted = await CreateDecomposer(ctx, SystemAuditContext.ForService("connector:aaps"), profiles)
+            .DeleteFromSourceAsync("aaps", new HashSet<string> { "ps-1", "override-1", "tt-1", "ds-override" });
+
+        deleted.Should().Be(3);
+        await using var db = NewContext();
+        var spans = await db.StateSpans.IgnoreQueryFilters().ToListAsync();
+        spans.Where(s => s.DeletedAt != null).Select(s => s.OriginalId)
+            .Should().BeEquivalentTo("override-1", "tt-1");
+        (await db.ProfileActivations.IgnoreQueryFilters().Where(a => a.DeletedAt != null).Select(a => a.LegacyId).ToListAsync())
+            .Should().Equal("ps-1");
+        var snapshots = (await db.TherapySettings.IgnoreQueryFilters().ToListAsync()).Select(r => (r.LegacyId, r.DeletedAt))
+            .Concat((await db.BasalSchedules.IgnoreQueryFilters().ToListAsync()).Select(r => (r.LegacyId, r.DeletedAt)))
+            .Concat((await db.CarbRatioSchedules.IgnoreQueryFilters().ToListAsync()).Select(r => (r.LegacyId, r.DeletedAt)))
+            .Concat((await db.SensitivitySchedules.IgnoreQueryFilters().ToListAsync()).Select(r => (r.LegacyId, r.DeletedAt)))
+            .Concat((await db.TargetRangeSchedules.IgnoreQueryFilters().ToListAsync()).Select(r => (r.LegacyId, r.DeletedAt)))
+            .ToList();
+        snapshots.Where(r => r.LegacyId == $"ps-1:{storeName}").Should().HaveCount(5)
+            .And.AllSatisfy(r => r.DeletedAt.Should().NotBeNull());
+        snapshots.Where(r => r.LegacyId == $"ps-2:{storeName}").Should().HaveCount(5)
+            .And.AllSatisfy(r => r.DeletedAt.Should().BeNull());
+    }
+
+    [Fact]
+    public async Task ReadServiceDelete_ProfileSwitchWithProfileJson_TombstonesItsSnapshotRowsAndLeavesAnOrdinaryProfile()
+    {
+        const string switchId = "switch-1";
+        const string storeName = "Weekend@@@@@1672567200000";
+        SeedActivation(switchId, null, Inside);
+
+        await using var ctx = NewContext();
+        var factory = new TestNocturneDbContextFactory(ctx);
+        var profiles = new ProfileDecomposer(
+            new TherapySettingsRepository(factory, _userAuditContext, NullLogger<TherapySettingsRepository>.Instance),
+            new BasalScheduleRepository(factory, _userAuditContext, NullLogger<BasalScheduleRepository>.Instance),
+            new CarbRatioScheduleRepository(factory, _userAuditContext, NullLogger<CarbRatioScheduleRepository>.Instance),
+            new SensitivityScheduleRepository(factory, _userAuditContext, NullLogger<SensitivityScheduleRepository>.Instance),
+            new TargetRangeScheduleRepository(factory, _userAuditContext, NullLogger<TargetRangeScheduleRepository>.Instance),
+            TempBasalTestDeps.NoReresolution(),
+            NullLogger<ProfileDecomposer>.Instance);
+        await profiles.DecomposeAsync(ProfileDocument(switchId, storeName), WriteOrigin.Live);
+        await profiles.DecomposeAsync(ProfileDocument("document-1", "Default"), WriteOrigin.Live);
+        var decomposer = CreateDecomposer(ctx, _userAuditContext, profiles);
+
+        var activationId = (await ctx.ProfileActivations.SingleAsync()).Id.ToString();
+        var projection = new Mock<IV4ToLegacyProjectionService>();
+        projection.Setup(p => p.GetProjectedTreatmentsAsync(
+                It.IsAny<long?>(), It.IsAny<long?>(), It.IsAny<int>(), false, It.IsAny<bool>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync([new Treatment { Id = activationId, EventType = "Profile Switch" }]);
+        var pipeline = new Mock<IDecompositionPipeline>();
+        pipeline.Setup(p => p.DeleteByLegacyIdAsync<Treatment>(switchId, WriteOrigin.Live, It.IsAny<CancellationToken>()))
+            .Returns((string id, WriteOrigin origin, CancellationToken token) => decomposer.DeleteByLegacyIdAsync(id, origin, token));
+        var service = new TreatmentReadService(
+            projection.Object, decomposer, pipeline.Object,
+            Mock.Of<ITempBasalRepository>(), Mock.Of<IBolusRepository>(), Mock.Of<ICarbIntakeRepository>(),
+            Mock.Of<IBGCheckRepository>(), Mock.Of<INoteRepository>(), Mock.Of<IDeviceEventRepository>(),
+            Mock.Of<IBolusCalculationRepository>(), ProfileActivationTestDeps.Repository(ctx), Mock.Of<IStateSpanService>(),
+            NullLogger<TreatmentReadService>.Instance);
+
+        (await service.DeleteAsync(switchId)).Should().NotBeNull();
+
+        await using var db = NewContext();
+        var rows = (await db.TherapySettings.IgnoreQueryFilters().ToListAsync()).Select(r => (r.LegacyId, r.DeletedAt))
+            .Concat((await db.BasalSchedules.IgnoreQueryFilters().ToListAsync()).Select(r => (r.LegacyId, r.DeletedAt)))
+            .Concat((await db.CarbRatioSchedules.IgnoreQueryFilters().ToListAsync()).Select(r => (r.LegacyId, r.DeletedAt)))
+            .Concat((await db.SensitivitySchedules.IgnoreQueryFilters().ToListAsync()).Select(r => (r.LegacyId, r.DeletedAt)))
+            .Concat((await db.TargetRangeSchedules.IgnoreQueryFilters().ToListAsync()).Select(r => (r.LegacyId, r.DeletedAt)))
+            .ToList();
+        rows.Where(r => r.LegacyId == $"{switchId}:{storeName}").Should().HaveCount(5)
+            .And.AllSatisfy(r => r.DeletedAt.Should().NotBeNull());
+        rows.Where(r => r.LegacyId == "document-1:Default").Should().HaveCount(5)
+            .And.AllSatisfy(r => r.DeletedAt.Should().BeNull());
+    }
+
+    private static Profile ProfileDocument(string id, string storeName) => new()
+    {
+        Id = id,
+        Mills = 1672567200000,
+        DefaultProfile = storeName,
+        Store =
+        {
+            [storeName] = new ProfileData
+            {
+                Dia = 3.0,
+                Timezone = "UTC",
+                Basal = [new TimeValue { Time = "00:00", Value = 1.0 }],
+                CarbRatio = [new TimeValue { Time = "00:00", Value = 10.0 }],
+                Sens = [new TimeValue { Time = "00:00", Value = 50.0 }],
+                TargetLow = [new TimeValue { Time = "00:00", Value = 80.0 }],
+                TargetHigh = [new TimeValue { Time = "00:00", Value = 120.0 }],
+            },
+        },
+    };
 
     [Fact]
     public async Task DeleteByLegacyId_UserContext_BlocksConnectorResyncFromRecreatingEveryType()

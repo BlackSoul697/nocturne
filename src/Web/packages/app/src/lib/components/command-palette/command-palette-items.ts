@@ -1,54 +1,42 @@
-import type { ComponentType } from "svelte";
+import { a1cLabel } from "$lib/utils/a1c-formatting";
 import {
-	Activity,
-	Apple,
-	BarChart3,
-	Battery,
-	Bell,
-	Building,
-	Calendar,
-	CalendarDays,
-	ChartArea,
-	ChartCandlestick,
-	ChartColumnIncreasing,
-	ChartLine,
-	CirclePlus,
-	ClipboardList,
-	Clock,
-	Cpu,
-	Database,
-	Droplet,
-	FileSearch,
-	FileText,
-	Footprints,
-	Heart,
-	House,
-	LifeBuoy,
-	Link,
-	MapPin,
-	Moon,
-	Palette,
-	Pill,
-	Plug,
-	Plus,
-	RefreshCw,
-	Ruler,
-	Shield,
-	Stethoscope,
-	Sun,
-	SunMoon,
-	Syringe,
-	Target,
-	Timer,
-	TrendingUp,
-	TriangleAlert,
-	User,
-	UserPlus,
-	Users,
-	UtensilsCrossed,
-	Wrench,
-	ZoomIn,
-} from "lucide-svelte";
+	estimatedA1cTitle,
+	reportTitle,
+	visibleReportCategories,
+	type ReportViewer,
+} from "$lib/navigation/report-navigation.svelte";
+import type { Component } from "svelte";
+import Activity from "@lucide/svelte/icons/activity";
+import Apple from "@lucide/svelte/icons/apple";
+import Bell from "@lucide/svelte/icons/bell";
+import Building from "@lucide/svelte/icons/building";
+import CalendarDays from "@lucide/svelte/icons/calendar-days";
+import CirclePlus from "@lucide/svelte/icons/circle-plus";
+import Clock from "@lucide/svelte/icons/clock";
+import Cpu from "@lucide/svelte/icons/cpu";
+import Droplet from "@lucide/svelte/icons/droplet";
+import FileSearch from "@lucide/svelte/icons/file-search";
+import House from "@lucide/svelte/icons/house";
+import LifeBuoy from "@lucide/svelte/icons/life-buoy";
+import Link from "@lucide/svelte/icons/link";
+import Palette from "@lucide/svelte/icons/palette";
+import Pill from "@lucide/svelte/icons/pill";
+import Plug from "@lucide/svelte/icons/plug";
+import Plus from "@lucide/svelte/icons/plus";
+import RefreshCw from "@lucide/svelte/icons/refresh-cw";
+import Ruler from "@lucide/svelte/icons/ruler";
+import Shield from "@lucide/svelte/icons/shield";
+import Stethoscope from "@lucide/svelte/icons/stethoscope";
+import Sun from "@lucide/svelte/icons/sun";
+import Target from "@lucide/svelte/icons/target";
+import Timer from "@lucide/svelte/icons/timer";
+import TriangleAlert from "@lucide/svelte/icons/triangle-alert";
+import User from "@lucide/svelte/icons/user";
+import UserPlus from "@lucide/svelte/icons/user-plus";
+import Users from "@lucide/svelte/icons/users";
+import UtensilsCrossed from "@lucide/svelte/icons/utensils-crossed";
+import Wrench from "@lucide/svelte/icons/wrench";
+import ZoomIn from "@lucide/svelte/icons/zoom-in";
 import { filterTenantlessNav } from "$lib/navigation/tenantless-navigation";
 
 export type CommandPaletteGroup =
@@ -65,12 +53,12 @@ export interface CommandPaletteItem {
 	group: CommandPaletteGroup;
 	description?: string;
 	keywords?: string[];
-	icon?: ComponentType;
+	icon?: Component;
 	shortcut?: string;
 	/** Scope required to see this item (e.g. "audit.read"). */
 	scope?: string;
-	/** Role required to see this item (e.g. "platform_admin"). */
-	role?: string;
+	/** Shown only to a platform administrator. */
+	platformAdmin?: boolean;
 	href?: string;
 	linkedHref?: string;
 }
@@ -124,9 +112,9 @@ export const items: CommandPaletteItem[] = [
 	},
 	{
 		id: "stat-a1c",
-		label: "eHbA1c",
+		get label() { return a1cLabel(true); },
 		group: "stats",
-		description: "Estimated HbA1c",
+		get description() { return estimatedA1cTitle(); },
 		keywords: ["estimated a1c", "hba1c", "glycated hemoglobin"],
 		icon: Activity,
 		linkedHref: "/reports/executive-summary",
@@ -139,170 +127,6 @@ export const items: CommandPaletteItem[] = [
 		keywords: ["time in range", "in range", "percentage"],
 		icon: Target,
 		linkedHref: "/reports/agp",
-	},
-
-	// ─── Reports ─────────────────────────────────────────────────────────
-	{
-		id: "report-agp",
-		label: "AGP",
-		group: "reports",
-		description: "Ambulatory Glucose Profile",
-		keywords: ["ambulatory glucose profile", "glucose profile", "percentiles", "target range"],
-		icon: ChartArea,
-		href: "/reports/agp",
-	},
-	{
-		id: "report-glucose-distribution",
-		label: "Glucose Distribution",
-		group: "reports",
-		description: "Box plot analysis of glucose values",
-		keywords: ["box chart", "box plot", "whisker", "percentiles", "quartiles", "spread"],
-		icon: ChartCandlestick,
-		href: "/reports/glucose-distribution",
-	},
-	{
-		id: "report-executive-summary",
-		label: "Executive Summary",
-		group: "reports",
-		description: "High-level overview of glucose management",
-		keywords: ["overview", "summary", "report card", "snapshot"],
-		icon: ClipboardList,
-		href: "/reports/executive-summary",
-	},
-	{
-		id: "report-day-in-review",
-		label: "Day in Review",
-		group: "reports",
-		description: "Detailed daily glucose review",
-		keywords: ["daily", "today", "yesterday"],
-		icon: Calendar,
-		href: "/reports/day-in-review",
-	},
-	{
-		id: "report-week-to-week",
-		label: "Week to Week",
-		group: "reports",
-		description: "Weekly comparison of glucose data",
-		keywords: ["comparison", "trend", "weekly"],
-		icon: TrendingUp,
-		href: "/reports/week-to-week",
-	},
-	{
-		id: "report-hourly-patterns",
-		label: "Hourly Patterns",
-		group: "reports",
-		description: "Hours of the day with the most and least time in range",
-		keywords: ["hourly", "time of day", "best hours", "worst hours"],
-		icon: SunMoon,
-		href: "/reports/hourly-stats",
-	},
-	{
-		id: "report-year-overview",
-		label: "Year Overview",
-		group: "reports",
-		description: "Annual glucose summary",
-		keywords: ["annual", "yearly", "12 month"],
-		icon: BarChart3,
-		href: "/reports/year-overview",
-	},
-	{
-		id: "report-treatments",
-		label: "Treatments",
-		group: "reports",
-		description: "Treatment event log and analysis",
-		keywords: ["bolus", "carbs", "corrections", "insulin"],
-		icon: Syringe,
-		href: "/reports/treatments",
-	},
-	{
-		id: "report-insulin-delivery",
-		label: "Insulin Delivery",
-		group: "reports",
-		description: "Total daily dose and basal/bolus breakdown",
-		keywords: ["tdd", "total daily dose", "basal bolus ratio"],
-		icon: ChartColumnIncreasing,
-		href: "/reports/insulin-delivery",
-	},
-	{
-		id: "report-idp",
-		label: "IDP",
-		group: "reports",
-		description: "Insulin Dose Per analysis",
-		keywords: ["insulin dose per", "daily insulin", "dose adjustment"],
-		icon: ChartLine,
-		href: "/reports/idp",
-	},
-	{
-		id: "report-basal-analysis",
-		label: "Basal Analysis",
-		group: "reports",
-		description: "Basal rate patterns and adjustments",
-		keywords: ["basal rate", "background insulin", "temp basal"],
-		icon: Activity,
-		href: "/reports/basal-analysis",
-	},
-	{
-		id: "report-readings",
-		label: "Readings",
-		group: "reports",
-		description: "Glucose readings log",
-		keywords: ["glucose readings", "blood sugar", "log", "history"],
-		icon: FileText,
-		href: "/reports/readings",
-	},
-	{
-		id: "report-sleep",
-		label: "Sleep",
-		group: "reports",
-		description: "Overnight glucose analysis",
-		keywords: ["overnight", "night time", "sleeping"],
-		icon: Moon,
-		href: "/reports/sleep",
-	},
-	{
-		id: "report-steps",
-		label: "Steps",
-		group: "reports",
-		description: "Step count and activity tracking",
-		keywords: ["activity", "walking", "exercise", "movement"],
-		icon: Footprints,
-		href: "/reports/steps",
-	},
-	{
-		id: "report-heart-rate",
-		label: "Heart Rate",
-		group: "reports",
-		description: "Heart rate trends and zones",
-		keywords: ["pulse", "bpm", "cardio"],
-		icon: Heart,
-		href: "/reports/heart-rate",
-	},
-	{
-		id: "report-battery",
-		label: "Battery",
-		group: "reports",
-		description: "Device battery level history",
-		keywords: ["pump battery", "phone battery", "charge"],
-		icon: Battery,
-		href: "/reports/battery",
-	},
-	{
-		id: "report-site-change-impact",
-		label: "Site Change Impact",
-		group: "reports",
-		description: "Glucose impact around infusion site changes",
-		keywords: ["infusion site", "cannula", "rotation", "set change"],
-		icon: MapPin,
-		href: "/reports/site-change-impact",
-	},
-	{
-		id: "report-data-quality",
-		label: "Data Quality",
-		group: "reports",
-		description: "Data coverage and gap analysis",
-		keywords: ["gaps", "missing", "coverage", "reliability"],
-		icon: Database,
-		href: "/reports/data-quality",
 	},
 
 	// ─── Pages ───────────────────────────────────────────────────────────
@@ -369,7 +193,7 @@ export const items: CommandPaletteItem[] = [
 		keywords: ["tenants", "organizations", "accounts", "platform admin"],
 		icon: Building,
 		href: "/settings/admin/tenants",
-		role: "platform_admin",
+		platformAdmin: true,
 	},
 	{
 		id: "page-access-requests",
@@ -378,7 +202,7 @@ export const items: CommandPaletteItem[] = [
 		keywords: ["access requests", "join", "approve", "pending users"],
 		icon: UserPlus,
 		href: "/settings/access-requests",
-		role: "platform_admin",
+		platformAdmin: true,
 	},
 
 	// ─── Settings ────────────────────────────────────────────────────────
@@ -557,10 +381,26 @@ export const items: CommandPaletteItem[] = [
 	},
 ];
 
+function reportItems(viewer: ReportViewer): CommandPaletteItem[] {
+	return visibleReportCategories(viewer)
+		.flatMap((category) => category.reports.map((report) => ({ category, report })))
+		.filter(({ report }) => report.status === "available")
+		.map(({ category, report }) => ({
+			id: `report-${report.href.split("/").pop()}`,
+			label: reportTitle(category, report),
+			group: "reports",
+			description: report.description,
+			keywords: report.keywords,
+			icon: report.icon,
+			href: report.href,
+		}));
+}
+
 /**
  * The entries a host can actually use. Narrowed on a tenantless host from the same list of hrefs
  * the sidebar narrows from, rather than a second one. See tenantless-navigation.
  */
-export function paletteItemsFor(tenantless: boolean): CommandPaletteItem[] {
-	return tenantless ? filterTenantlessNav(items) : items;
+export function paletteItemsFor(tenantless: boolean, viewer: ReportViewer): CommandPaletteItem[] {
+	const all = [...items, ...reportItems(viewer)];
+	return tenantless ? filterTenantlessNav(all) : all;
 }

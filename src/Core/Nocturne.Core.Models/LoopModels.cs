@@ -1,4 +1,5 @@
 using System.Text.Json.Serialization;
+using Nocturne.Core.Constants;
 using Nocturne.Core.Models.Serializers;
 
 namespace Nocturne.Core.Models;
@@ -7,7 +8,6 @@ namespace Nocturne.Core.Models;
 /// Loop notification data model matching the legacy loop.js data structure.
 /// Maintains 1:1 compatibility with the original Nightscout Loop implementation.
 /// </summary>
-/// <seealso cref="LoopSettings"/>
 /// <seealso cref="LoopConfiguration"/>
 /// <seealso cref="LoopProfileSettings"/>
 public class LoopNotificationData
@@ -17,11 +17,8 @@ public class LoopNotificationData
     /// Valid values: "Temporary Override Cancel", "Temporary Override", "Remote Carbs Entry", "Remote Bolus Entry"
     /// </summary>
     [JsonPropertyName("eventType")]
-    public string EventType { get; set; } = string.Empty;
+    public string? EventType { get; set; }
 
-    /// <summary>
-    /// Notes/comments associated with the notification
-    /// </summary>
     [JsonPropertyName("notes")]
     public string? Notes { get; set; }
 
@@ -47,30 +44,35 @@ public class LoopNotificationData
     /// Duration in minutes for temporary override
     /// </summary>
     [JsonPropertyName("duration")]
+    [JsonConverter(typeof(FlexibleStringConverter))]
     public string? Duration { get; set; }
 
     /// <summary>
     /// Remote carbs amount in grams (used when eventType is "Remote Carbs Entry")
     /// </summary>
     [JsonPropertyName("remoteCarbs")]
+    [JsonConverter(typeof(FlexibleStringConverter))]
     public string? RemoteCarbs { get; set; }
 
     /// <summary>
     /// Carb absorption time in hours (used when eventType is "Remote Carbs Entry")
     /// </summary>
     [JsonPropertyName("remoteAbsorption")]
+    [JsonConverter(typeof(FlexibleStringConverter))]
     public string? RemoteAbsorption { get; set; }
 
     /// <summary>
     /// Remote bolus amount in units (used when eventType is "Remote Bolus Entry")
     /// </summary>
     [JsonPropertyName("remoteBolus")]
+    [JsonConverter(typeof(FlexibleStringConverter))]
     public string? RemoteBolus { get; set; }
 
     /// <summary>
     /// One-time password for secure operations
     /// </summary>
     [JsonPropertyName("otp")]
+    [JsonConverter(typeof(FlexibleStringConverter))]
     public string? Otp { get; set; }
 
     /// <summary>
@@ -81,26 +83,8 @@ public class LoopNotificationData
 }
 
 /// <summary>
-/// Loop settings from user profile, matching the legacy loopSettings structure
-/// </summary>
-public class LoopSettings
-{
-    /// <summary>
-    /// Apple Push Notification device token for the Loop app
-    /// </summary>
-    [JsonPropertyName("deviceToken")]
-    public string? DeviceToken { get; set; }
-
-    /// <summary>
-    /// iOS bundle identifier for the Loop app
-    /// </summary>
-    [JsonPropertyName("bundleIdentifier")]
-    public string? BundleIdentifier { get; set; }
-}
-
-/// <summary>
 /// Loop configuration settings for Apple Push Notification Service integration.
-/// Bound from appsettings.json section "Loop".
+/// Bound from the "Loop" section, with the legacy <c>LOOP_*</c> variables filling empty values.
 /// </summary>
 public class LoopConfiguration
 {
@@ -120,20 +104,12 @@ public class LoopConfiguration
     public string? DeveloperTeamId { get; set; }
 
     /// <summary>
-    /// APNS environment - "production" or "development"
+    /// APNs server for Loop pushes. Only an explicit <c>"development"</c> selects the sandbox:
+    /// TestFlight and App Store Loop builds hold production tokens, which the sandbox rejects.
     /// </summary>
-    public string PushServerEnvironment { get; set; } = "development";
-
-    /// <summary>
-    /// Optional override URL for APNS server (used for testing)
-    /// When set, requests are sent to this URL instead of Apple's servers
-    /// </summary>
-    public string? ApnsServerOverrideUrl { get; set; }
+    public string PushServerEnvironment { get; set; } = ConnectorDefaults.LoopPushServerEnvironment;
 }
 
-/// <summary>
-/// Loop notification response model
-/// </summary>
 public class LoopNotificationResponse
 {
     /// <summary>
@@ -148,15 +124,9 @@ public class LoopNotificationResponse
     [JsonPropertyName("message")]
     public string Message { get; set; } = string.Empty;
 
-    /// <summary>
-    /// Timestamp when the response was generated
-    /// </summary>
     [JsonPropertyName("timestamp")]
     public long Timestamp { get; set; }
 
-    /// <summary>
-    /// Additional response data
-    /// </summary>
     [JsonPropertyName("data")]
     public object? Data { get; set; }
 }
@@ -167,20 +137,17 @@ public class LoopNotificationResponse
 /// </summary>
 public class LoopOverridePreset
 {
-    /// <summary>
-    /// Gets or sets the preset name
-    /// </summary>
     [JsonPropertyName("name")]
     public string? Name { get; set; }
 
     /// <summary>
-    /// Gets or sets the emoji symbol for the preset
+    /// Emoji symbol for the preset
     /// </summary>
     [JsonPropertyName("symbol")]
     public string? Symbol { get; set; }
 
     /// <summary>
-    /// Gets or sets the duration in seconds (Loop's external format)
+    /// Duration in seconds (Loop's external format)
     /// </summary>
     [JsonPropertyName("duration")]
     public double? Duration { get; set; }
@@ -193,34 +160,22 @@ public class LoopOverridePreset
     [JsonIgnore]
     public double? DurationMinutes => Duration.HasValue ? Duration.Value / 60.0 : null;
 
-    /// <summary>
-    /// Gets or sets the target glucose range
-    /// </summary>
     [JsonPropertyName("targetRange")]
     [JsonConverter(typeof(LoopTargetRangeConverter))]
     public LoopTargetRange? TargetRange { get; set; }
 
     /// <summary>
-    /// Gets or sets the insulin needs scale factor (e.g., 0.9 for 90%)
+    /// Insulin needs scale factor (e.g., 0.9 for 90%)
     /// </summary>
     [JsonPropertyName("insulinNeedsScaleFactor")]
     public double? InsulinNeedsScaleFactor { get; set; }
 }
 
-/// <summary>
-/// Loop target glucose range
-/// </summary>
 public class LoopTargetRange
 {
-    /// <summary>
-    /// Gets or sets the minimum target value
-    /// </summary>
     [JsonPropertyName("minValue")]
     public double? MinValue { get; set; }
 
-    /// <summary>
-    /// Gets or sets the maximum target value
-    /// </summary>
     [JsonPropertyName("maxValue")]
     public double? MaxValue { get; set; }
 }
@@ -232,69 +187,54 @@ public class LoopTargetRange
 public class LoopProfileSettings
 {
     /// <summary>
-    /// Gets or sets the Apple Push Notification device token
+    /// Apple Push Notification device token
     /// </summary>
     [JsonPropertyName("deviceToken")]
     public string? DeviceToken { get; set; }
 
     /// <summary>
-    /// Gets or sets the iOS bundle identifier for the Loop app
+    /// iOS bundle identifier for the Loop app
     /// </summary>
     [JsonPropertyName("bundleIdentifier")]
     public string? BundleIdentifier { get; set; }
 
-    /// <summary>
-    /// Gets or sets the list of override presets
-    /// </summary>
     [JsonPropertyName("overridePresets")]
     public List<LoopOverridePreset>? OverridePresets { get; set; }
 
-    /// <summary>
-    /// Gets or sets whether closed loop dosing is enabled
-    /// </summary>
     [JsonPropertyName("dosingEnabled")]
     public bool? DosingEnabled { get; set; }
 
-    /// <summary>
-    /// Gets or sets the minimum BG guard value
-    /// </summary>
     [JsonPropertyName("minimumBGGuard")]
     public double? MinimumBGGuard { get; set; }
 
-    /// <summary>
-    /// Gets or sets the pre-meal target range
-    /// </summary>
     [JsonPropertyName("preMealTargetRange")]
     [JsonConverter(typeof(LoopTargetRangeConverter))]
     public LoopTargetRange? PreMealTargetRange { get; set; }
 
-    /// <summary>
-    /// Gets or sets the workout target range
-    /// </summary>
     [JsonPropertyName("workoutTargetRange")]
     [JsonConverter(typeof(LoopTargetRangeConverter))]
     public LoopTargetRange? WorkoutTargetRange { get; set; }
 
     /// <summary>
-    /// Gets or sets the maximum bolus amount in units
+    /// Maximum bolus amount in units
     /// </summary>
     [JsonPropertyName("maximumBolus")]
     public double? MaximumBolus { get; set; }
 
     /// <summary>
-    /// Gets or sets the maximum basal rate in units per hour
+    /// Maximum basal rate in units per hour
     /// </summary>
     [JsonPropertyName("maximumBasalRatePerHour")]
     public double? MaximumBasalRatePerHour { get; set; }
 
     /// <summary>
-    /// Gets or sets the dosing strategy (e.g., "automaticBolus", "tempBasalOnly")
+    /// Dosing strategy (e.g., "automaticBolus", "tempBasalOnly")
     /// </summary>
     [JsonPropertyName("dosingStrategy")]
     public string? DosingStrategy { get; set; }
 
     /// <summary>
-    /// Gets or sets the currently active schedule override
+    /// Currently active schedule override
     /// </summary>
     [JsonPropertyName("scheduleOverride")]
     public LoopOverridePreset? ScheduleOverride { get; set; }

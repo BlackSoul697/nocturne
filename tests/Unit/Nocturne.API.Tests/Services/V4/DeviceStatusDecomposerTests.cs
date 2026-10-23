@@ -2,16 +2,21 @@ using System.Text.Json;
 using FluentAssertions;
 using Microsoft.Extensions.Logging.Abstractions;
 using Moq;
+using Nocturne.API.Services.Devices;
 using Nocturne.API.Services.V4;
+using Nocturne.API.Tests.TestDoubles;
+using Nocturne.Core.Clinical.LoopAnalysis;
 using Nocturne.Core.Contracts.Audit;
 using Nocturne.Core.Contracts.Devices;
 using Nocturne.Core.Contracts.Glucose;
 using Nocturne.Core.Contracts.V4.Repositories;
 using Nocturne.Core.Models;
+using Nocturne.Core.Models.LoopAnalysis;
 using Nocturne.Infrastructure.Data;
 using Nocturne.Infrastructure.Data.Repositories.V4;
 using Nocturne.Infrastructure.Data.Services;
 using Nocturne.Tests.Shared.Infrastructure;
+using Nocturne.Tests.Shared.Mocks;
 using Xunit;
 
 using V4Models = Nocturne.Core.Models.V4;
@@ -31,7 +36,7 @@ public class DeviceStatusDecomposerTests : IDisposable
     {
         _context = TestDbContextFactory.CreateInMemoryContext();
         _context.TenantId = Guid.Parse("00000000-0000-0000-0000-000000000001");
-        var ctxFactory = new TestTenantDbContextFactory(_context);
+        var ctxFactory = new TestNocturneDbContextFactory(_context);
         var apsRepo = new ApsSnapshotRepository(ctxFactory, new SystemAuditContext(), NullLogger<ApsSnapshotRepository>.Instance);
         var pumpRepo = new PumpSnapshotRepository(ctxFactory, new SystemAuditContext(), NullLogger<PumpSnapshotRepository>.Instance);
         var uploaderRepo = new UploaderSnapshotRepository(ctxFactory, new SystemAuditContext(), NullLogger<UploaderSnapshotRepository>.Instance);
@@ -374,7 +379,7 @@ public class DeviceStatusDecomposerTests : IDisposable
             {
                 Active = true,
                 Name = "Exercise",
-                Duration = 60.0,
+                Duration = 3600,
                 Multiplier = 1.5,
                 CurrentCorrectionRange = new CorrectionRange { MinValue = 140, MaxValue = 160 }
             }
@@ -409,7 +414,9 @@ public class DeviceStatusDecomposerTests : IDisposable
                     && ss.Metadata.ContainsKey("name")
                     && ss.Metadata.ContainsKey("multiplier")
                     && ss.Metadata.ContainsKey("currentCorrectionRange.minValue")
-                    && ss.Metadata.ContainsKey("currentCorrectionRange.maxValue")),
+                    && ss.Metadata.ContainsKey("currentCorrectionRange.maxValue")
+                    && ss.Metadata.TryReadString(StateSpanMetadataExtensions.CollectionKey)
+                        == StateSpanMetadataExtensions.DeviceStatusCollection),
                 It.IsAny<CancellationToken>()),
             Times.Once);
     }
@@ -601,7 +608,6 @@ public class DeviceStatusDecomposerTests : IDisposable
         // Assert - Enacted object exists but Received is false
         var aps = result.CreatedRecords[0].Should().BeOfType<V4Models.ApsSnapshot>().Subject;
         aps.Enacted.Should().BeFalse();
-        // Fields from Enacted are still used since it's the command source (Enacted ?? Suggested)
         aps.EnactedRate.Should().Be(1.0);
         aps.EnactedDuration.Should().Be(30);
     }
@@ -778,6 +784,191 @@ public class DeviceStatusDecomposerTests : IDisposable
 
         var aps = result.CreatedRecords[0].Should().BeOfType<V4Models.ApsSnapshot>().Subject;
         aps.PredictedStartMills.Should().BeNull();
+    }
+
+    #endregion
+
+    #region OpenAPS Freshest Command
+
+    private static DeviceStatus HeldTempBasalStatus(string? enactedTimestamp, string? suggestedTimestamp) => new()
+    {
+        Id = "held-temp-basal",
+        Mills = 1700000000000,
+        Device = "openaps://Trio",
+        OpenAps = new OpenApsStatus
+        {
+            Suggested = new OpenApsSuggested
+            {
+                Bg = 259.0, EventualBG = 210.0, TargetBG = 110.0, COB = 12.0,
+                InsulinReq = 1.2, SensitivityRatio = 1.3,
+                Timestamp = suggestedTimestamp,
+                PredBGs = new OpenApsPredBGs
+                {
+                    IOB = new List<double?> { 259, 255 },
+                    ZT = new List<double?> { 259, 250 },
+                    COB = new List<double?> { 259, 262 },
+                    UAM = new List<double?> { 259, 265 },
+                },
+            },
+            Enacted = new OpenApsEnacted
+            {
+                Received = true,
+                Rate = 2.4, Duration = 30, Smb = 0.4,
+                Bg = 227.0, EventualBG = 180.0, TargetBG = 100.0, COB = 20.0,
+                InsulinReq = 0.6, SensitivityRatio = 1.1,
+                Timestamp = enactedTimestamp,
+                PredBGs = new OpenApsPredBGs
+                {
+                    IOB = new List<double?> { 227, 220 },
+                    ZT = new List<double?> { 227, 215 },
+                    COB = new List<double?> { 227, 230 },
+                    UAM = new List<double?> { 227, 235 },
+                },
+            },
+        },
+    };
+
+    private static void ShouldCarrySuggested(V4Models.ApsSnapshot aps)
+    {
+        aps.CurrentBg.Should().Be(259.0);
+        aps.EventualBg.Should().Be(210.0);
+        aps.TargetBg.Should().Be(110.0);
+        aps.Cob.Should().Be(12.0);
+        aps.RecommendedBolus.Should().Be(1.2);
+        aps.SensitivityRatio.Should().Be(1.3);
+        aps.PredictedIobJson.Should().Be("[259,255]");
+        aps.PredictedZtJson.Should().Be("[259,250]");
+        aps.PredictedCobJson.Should().Be("[259,262]");
+        aps.PredictedUamJson.Should().Be("[259,265]");
+    }
+
+    private static void ShouldCarryEnacted(V4Models.ApsSnapshot aps)
+    {
+        aps.CurrentBg.Should().Be(227.0);
+        aps.EventualBg.Should().Be(180.0);
+        aps.TargetBg.Should().Be(100.0);
+        aps.Cob.Should().Be(20.0);
+        aps.RecommendedBolus.Should().Be(0.6);
+        aps.SensitivityRatio.Should().Be(1.1);
+        aps.PredictedIobJson.Should().Be("[227,220]");
+        aps.PredictedZtJson.Should().Be("[227,215]");
+        aps.PredictedCobJson.Should().Be("[227,230]");
+        aps.PredictedUamJson.Should().Be("[227,235]");
+    }
+
+    private static void ShouldKeepEnactedDelivery(V4Models.ApsSnapshot aps)
+    {
+        aps.Enacted.Should().BeTrue();
+        aps.EnactedRate.Should().Be(2.4);
+        aps.EnactedDuration.Should().Be(30);
+        aps.EnactedBolusVolume.Should().Be(0.4);
+    }
+
+    private async Task<V4Models.ApsSnapshot> DecomposeApsAsync(DeviceStatus ds)
+    {
+        var result = await _decomposer.DecomposeAsync(ds, WriteOrigin.Live);
+        return result.CreatedRecords.OfType<V4Models.ApsSnapshot>().Single();
+    }
+
+    [Fact]
+    public async Task DecomposeAsync_SuggestedNewerThanEnacted_TakesCommandFieldsFromSuggested()
+    {
+        var aps = await DecomposeApsAsync(HeldTempBasalStatus("2026-10-04T22:48:52Z", "2026-10-04T23:18:55Z"));
+
+        ShouldCarrySuggested(aps);
+        aps.PredictedStartTimestamp.Should().Be(new DateTime(2026, 10, 4, 23, 18, 55, DateTimeKind.Utc));
+        ShouldKeepEnactedDelivery(aps);
+    }
+
+    [Fact]
+    public async Task DecomposeAsync_SuggestedNewerAcrossOffsets_ComparesInUtc()
+    {
+        var aps = await DecomposeApsAsync(HeldTempBasalStatus("2026-10-04T22:48:52Z", "2026-10-05T09:18:55+10:00"));
+
+        ShouldCarrySuggested(aps);
+        aps.PredictedStartTimestamp.Should().Be(new DateTime(2026, 10, 4, 23, 18, 55, DateTimeKind.Utc));
+    }
+
+    [Fact]
+    public async Task DecomposeAsync_EnactedNewerThanSuggested_TakesCommandFieldsFromEnacted()
+    {
+        var aps = await DecomposeApsAsync(HeldTempBasalStatus("2026-10-04T23:18:56Z", "2026-10-04T23:18:55Z"));
+
+        ShouldCarryEnacted(aps);
+        aps.PredictedStartTimestamp.Should().Be(new DateTime(2026, 10, 4, 23, 18, 56, DateTimeKind.Utc));
+        ShouldKeepEnactedDelivery(aps);
+    }
+
+    [Fact]
+    public async Task DecomposeAsync_EqualCommandTimestamps_PrefersEnacted()
+    {
+        var aps = await DecomposeApsAsync(HeldTempBasalStatus("2026-10-04T23:18:55Z", "2026-10-04T23:18:55Z"));
+
+        ShouldCarryEnacted(aps);
+        ShouldKeepEnactedDelivery(aps);
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("not-a-timestamp")]
+    public async Task DecomposeAsync_OnlySuggestedTimestampParses_TakesSuggested(string? enactedTimestamp)
+    {
+        var aps = await DecomposeApsAsync(HeldTempBasalStatus(enactedTimestamp, "2026-10-04T23:18:55Z"));
+
+        ShouldCarrySuggested(aps);
+        ShouldKeepEnactedDelivery(aps);
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("not-a-timestamp")]
+    public async Task DecomposeAsync_OnlyEnactedTimestampParses_TakesEnacted(string? suggestedTimestamp)
+    {
+        var aps = await DecomposeApsAsync(HeldTempBasalStatus("2026-10-04T22:48:52Z", suggestedTimestamp));
+
+        ShouldCarryEnacted(aps);
+        ShouldKeepEnactedDelivery(aps);
+    }
+
+    [Theory]
+    [InlineData(null, null)]
+    [InlineData("not-a-timestamp", "also-not-a-timestamp")]
+    public async Task DecomposeAsync_NeitherCommandTimestampParses_PrefersEnacted(
+        string? enactedTimestamp, string? suggestedTimestamp)
+    {
+        var aps = await DecomposeApsAsync(HeldTempBasalStatus(enactedTimestamp, suggestedTimestamp));
+
+        ShouldCarryEnacted(aps);
+        aps.PredictedStartTimestamp.Should().BeNull();
+        ShouldKeepEnactedDelivery(aps);
+    }
+
+    [Theory]
+    [InlineData("2026-10-04T22:48:52Z", "2026-10-04T23:18:55Z", "2026-10-04T23:18:55Z")]
+    [InlineData("2026-10-04T23:18:56Z", "2026-10-04T23:18:55Z", "2026-10-04T23:18:56Z")]
+    [InlineData("not-a-timestamp", "2026-10-04T23:18:55Z", "2026-10-04T23:18:55Z")]
+    public void ResolveTimestamp_WithoutMillsOrIobTime_UsesFreshestCommand(
+        string enactedTimestamp, string suggestedTimestamp, string expected)
+    {
+        var ds = HeldTempBasalStatus(enactedTimestamp, suggestedTimestamp);
+        ds.Mills = 0;
+
+        DeviceStatusDecomposer.ResolveTimestamp(ds)
+            .Should().Be(DateTimeOffset.Parse(expected).UtcDateTime);
+    }
+
+    [Fact]
+    public void ResolveTimestamp_MillsAndIobTime_TakePrecedenceOverTheCommand()
+    {
+        var withMills = HeldTempBasalStatus("2026-10-04T22:48:52Z", "2026-10-04T23:18:55Z");
+        var withIobTime = HeldTempBasalStatus("2026-10-04T22:48:52Z", "2026-10-04T23:18:55Z");
+        withIobTime.Mills = 0;
+        withIobTime.OpenAps!.Iob = new OpenApsIobData { Time = "2026-10-04T23:19:00Z" };
+
+        DeviceStatusDecomposer.ResolveTimestamp(withMills)
+            .Should().Be(DateTimeOffset.FromUnixTimeMilliseconds(1700000000000).UtcDateTime);
+        DeviceStatusDecomposer.ResolveTimestamp(withIobTime)
+            .Should().Be(new DateTime(2026, 10, 4, 23, 19, 0, DateTimeKind.Utc));
     }
 
     #endregion
@@ -1008,18 +1199,18 @@ public class DeviceStatusDecomposerTests : IDisposable
     }
 
     [Fact]
-    public async Task DecomposeAsync_OverrideWithDuration_CalculatesEndMills()
+    public async Task DecomposeAsync_OverrideWithDuration_ReadsDurationAsSeconds()
     {
         var ds = new DeviceStatus
         {
             Id = "override-with-duration",
-            Mills = 1700000000000,
+            Mills = 1780000000000,
             Device = "Loop/3.0",
             Override = new OverrideStatus
             {
                 Active = true,
                 Name = "Pre-Meal",
-                Duration = 60.0 // 60 minutes
+                Duration = 3600
             }
         };
 
@@ -1033,7 +1224,93 @@ public class DeviceStatusDecomposerTests : IDisposable
         _stateSpanServiceMock.Verify(
             s => s.UpsertStateSpanAsync(
                 It.Is<StateSpan>(ss =>
-                    ss.EndMills == 1700000000000 + (long)(60.0 * 60000)),
+                    ss.EndTimestamp - ss.StartTimestamp == TimeSpan.FromHours(1)),
+                It.IsAny<CancellationToken>()),
+            Times.Once);
+    }
+
+    [Fact]
+    public async Task DecomposeAsync_OverrideWithDuration_CountsFromTheOverrideTimestamp()
+    {
+        var overrideAt = new DateTime(2026, 5, 28, 21, 5, 0, DateTimeKind.Utc);
+        var ds = new DeviceStatus
+        {
+            Id = "override-with-own-timestamp",
+            Mills = new DateTimeOffset(overrideAt.AddMinutes(-5)).ToUnixTimeMilliseconds(),
+            Device = "Loop/3.0",
+            Override = new OverrideStatus
+            {
+                Active = true,
+                Name = "Pre-Meal",
+                Timestamp = "2026-05-28T21:05:00Z",
+                Duration = 3600
+            }
+        };
+
+        _stateSpanServiceMock
+            .Setup(s => s.UpsertStateSpanAsync(It.IsAny<StateSpan>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new StateSpan { Id = "ss-1", Category = StateSpanCategory.Override });
+
+        await _decomposer.DecomposeAsync(ds, WriteOrigin.Live);
+
+        _stateSpanServiceMock.Verify(
+            s => s.UpsertStateSpanAsync(
+                It.Is<StateSpan>(ss => ss.EndTimestamp == overrideAt.AddHours(1)),
+                It.IsAny<CancellationToken>()),
+            Times.Once);
+    }
+
+    [Fact]
+    public async Task DecomposeAsync_OverrideEndingBeforeTheStatus_LeavesTheSpanOpen()
+    {
+        var statusAt = new DateTime(2026, 5, 28, 21, 5, 0, DateTimeKind.Utc);
+        var ds = new DeviceStatus
+        {
+            Id = "override-stale-timestamp",
+            Mills = new DateTimeOffset(statusAt).ToUnixTimeMilliseconds(),
+            Device = "Loop/3.0",
+            Override = new OverrideStatus
+            {
+                Active = true,
+                Name = "Pre-Meal",
+                Timestamp = "2026-05-28T19:05:00Z",
+                Duration = 3600
+            }
+        };
+
+        _stateSpanServiceMock
+            .Setup(s => s.UpsertStateSpanAsync(It.IsAny<StateSpan>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new StateSpan { Id = "ss-1", Category = StateSpanCategory.Override });
+
+        await _decomposer.DecomposeAsync(ds, WriteOrigin.Live);
+
+        _stateSpanServiceMock.Verify(
+            s => s.UpsertStateSpanAsync(
+                It.Is<StateSpan>(ss => ss.StartTimestamp == statusAt && ss.EndTimestamp == null),
+                It.IsAny<CancellationToken>()),
+            Times.Once);
+    }
+
+    [Fact]
+    public async Task DecomposeAsync_OverrideWithoutDuration_IsIndefinite()
+    {
+        var ds = new DeviceStatus
+        {
+            Id = "override-no-duration",
+            Mills = 1700000000000,
+            Device = "Loop/3.0",
+            Override = new OverrideStatus { Active = true, Name = "Indefinite", Duration = null }
+        };
+
+        _stateSpanServiceMock
+            .Setup(s => s.UpsertStateSpanAsync(It.IsAny<StateSpan>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new StateSpan { Id = "ss-1", Category = StateSpanCategory.Override });
+
+        await _decomposer.DecomposeAsync(ds, WriteOrigin.Live);
+
+        _stateSpanServiceMock.Verify(
+            s => s.UpsertStateSpanAsync(
+                It.Is<StateSpan>(ss => ss.EndTimestamp == null),
                 It.IsAny<CancellationToken>()),
             Times.Once);
     }
@@ -1735,6 +2012,154 @@ public class DeviceStatusDecomposerTests : IDisposable
 
     #endregion
 
+    #region Device Resolution Time
+
+    private static readonly DateTime LoopStatusAt = new(2026, 3, 10, 14, 30, 0, DateTimeKind.Utc);
+
+    private static DeviceStatus MakeCreatedAtOnlyLoopStatus(string id, DateTime createdAt) => new()
+    {
+        Id = id,
+        CreatedAt = createdAt.ToString("yyyy-MM-ddTHH:mm:ss.fffZ"),
+        Device = "loop://iPhone",
+        Pump = new PumpStatus { Manufacturer = "Insulet", Model = "Omnipod DASH", Reservoir = 80 },
+        Uploader = new UploaderStatus { Name = "iPhone", Type = "phone", Battery = 60 },
+        Cgm = new CgmStatus { Manufacturer = "Dexcom", Serial = "8G1234" },
+        Loop = new LoopStatus { Iob = new LoopIob { Iob = 1.2 } },
+    };
+
+    /// <summary>
+    /// A decomposer over a real <see cref="DeviceService"/>, so first/last seen and patient-device
+    /// attribution come from the service's own date handling rather than a mock.
+    /// </summary>
+    private DeviceStatusDecomposer CreateDecomposerWithDeviceService(
+        List<V4Models.Device> devices, V4Models.PatientDevice patientDevice)
+    {
+        var deviceRepo = new Mock<IDeviceRepository>();
+        deviceRepo
+            .Setup(r => r.FindByCategoryTypeAndSerialAsync(
+                It.IsAny<V4Models.DeviceCategory>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync((V4Models.DeviceCategory category, string type, string serial, CancellationToken _) =>
+                devices.SingleOrDefault(d => d.Category == category && d.Type == type && d.Serial == serial));
+        deviceRepo
+            .Setup(r => r.CreateAsync(It.IsAny<V4Models.Device>(), It.IsAny<WriteOrigin>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync((V4Models.Device device, WriteOrigin _, CancellationToken _) =>
+            {
+                devices.Add(device);
+                return device;
+            });
+        deviceRepo
+            .Setup(r => r.WidenSeenWindowAsync(It.IsAny<Guid>(), It.IsAny<DateTime>(), It.IsAny<WriteOrigin>(), It.IsAny<CancellationToken>()))
+            .Returns(Task.CompletedTask);
+
+        var patientDeviceRepo = new Mock<IPatientDeviceRepository>();
+        patientDeviceRepo
+            .Setup(r => r.GetByDeviceIdAsync(It.IsAny<Guid>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new[] { patientDevice });
+
+        var ctxFactory = new TestNocturneDbContextFactory(_context);
+        return new DeviceStatusDecomposer(
+            new ApsSnapshotRepository(ctxFactory, new SystemAuditContext(), NullLogger<ApsSnapshotRepository>.Instance),
+            new PumpSnapshotRepository(ctxFactory, new SystemAuditContext(), NullLogger<PumpSnapshotRepository>.Instance),
+            new UploaderSnapshotRepository(ctxFactory, new SystemAuditContext(), NullLogger<UploaderSnapshotRepository>.Instance),
+            _extrasRepo,
+            _stateSpanServiceMock.Object,
+            new DeviceService(deviceRepo.Object, patientDeviceRepo.Object, MockTenantAccessor.Create().Object, DeviceDateClockDoubles.Utc()),
+            Mock.Of<IAuditContext>(),
+            NullLogger<DeviceStatusDecomposer>.Instance);
+    }
+
+    private static V4Models.PatientDevice MakeDatedPatientDevice() => new()
+    {
+        Id = Guid.CreateVersion7(),
+        DeviceCategory = V4Models.DeviceCategory.InsulinPump,
+        Manufacturer = "Insulet",
+        Model = "Omnipod DASH",
+        StartDate = new DateOnly(2026, 3, 1),
+    };
+
+    [Fact]
+    public async Task DecomposeAsync_CreatedAtOnlyStatus_AttributesPumpAndApsAtTheStatusTime()
+    {
+        var patientDevice = MakeDatedPatientDevice();
+        var decomposer = CreateDecomposerWithDeviceService([], patientDevice);
+
+        await decomposer.DecomposeAsync(MakeCreatedAtOnlyLoopStatus("loop-created-at", LoopStatusAt), WriteOrigin.Live);
+
+        _context.PumpSnapshots.Single(p => p.LegacyId == "loop-created-at").PatientDeviceId.Should().Be(patientDevice.Id);
+        _context.ApsSnapshots.Single(a => a.LegacyId == "loop-created-at").PatientDeviceId.Should().Be(patientDevice.Id);
+    }
+
+    [Fact]
+    public async Task DecomposeBatchAsync_CreatedAtOnlyStatus_AttributesPumpAndApsAtTheStatusTime()
+    {
+        var patientDevice = MakeDatedPatientDevice();
+        var decomposer = CreateDecomposerWithDeviceService([], patientDevice);
+
+        await decomposer.DecomposeBatchAsync(
+            [MakeCreatedAtOnlyLoopStatus("loop-created-at-batch", LoopStatusAt)], source: null, WriteOrigin.Live);
+
+        _context.PumpSnapshots.Single(p => p.LegacyId == "loop-created-at-batch").PatientDeviceId.Should().Be(patientDevice.Id);
+        _context.ApsSnapshots.Single(a => a.LegacyId == "loop-created-at-batch").PatientDeviceId.Should().Be(patientDevice.Id);
+    }
+
+    [Fact]
+    public async Task DecomposeAsync_CreatedAtOnlyStatus_StampsDevicesWithTheStatusTime()
+    {
+        var devices = new List<V4Models.Device>();
+        var decomposer = CreateDecomposerWithDeviceService(devices, MakeDatedPatientDevice());
+
+        await decomposer.DecomposeAsync(MakeCreatedAtOnlyLoopStatus("loop-first-seen", LoopStatusAt), WriteOrigin.Live);
+
+        devices.Select(d => d.Category).Should().BeEquivalentTo(
+            [V4Models.DeviceCategory.InsulinPump, V4Models.DeviceCategory.Uploader, V4Models.DeviceCategory.CGM]);
+        devices.Should().AllSatisfy(d =>
+        {
+            d.FirstSeenTimestamp.Should().Be(LoopStatusAt);
+            d.LastSeenTimestamp.Should().Be(LoopStatusAt);
+        });
+    }
+
+    [Fact]
+    public async Task DecomposeBatchAsync_CreatedAtOnlyStatus_StampsDevicesWithTheStatusTime()
+    {
+        var devices = new List<V4Models.Device>();
+        var decomposer = CreateDecomposerWithDeviceService(devices, MakeDatedPatientDevice());
+
+        await decomposer.DecomposeBatchAsync(
+            [MakeCreatedAtOnlyLoopStatus("loop-first-seen-batch", LoopStatusAt)], source: null, WriteOrigin.Live);
+
+        devices.Select(d => d.Category).Should().BeEquivalentTo(
+            [V4Models.DeviceCategory.InsulinPump, V4Models.DeviceCategory.Uploader, V4Models.DeviceCategory.CGM]);
+        devices.Should().AllSatisfy(d =>
+        {
+            d.FirstSeenTimestamp.Should().Be(LoopStatusAt);
+            d.LastSeenTimestamp.Should().Be(LoopStatusAt);
+        });
+    }
+
+    [Fact]
+    public async Task DecomposeAsync_LaterCreatedAtOnlyStatus_AdvancesDeviceLastSeen()
+    {
+        var devices = new List<V4Models.Device>();
+        var patientDevice = MakeDatedPatientDevice();
+        var later = LoopStatusAt.AddMinutes(5);
+
+        // A fresh service per status, as each ingest request gets its own scoped DeviceService.
+        await CreateDecomposerWithDeviceService(devices, patientDevice)
+            .DecomposeAsync(MakeCreatedAtOnlyLoopStatus("loop-seen-1", LoopStatusAt), WriteOrigin.Live);
+        await CreateDecomposerWithDeviceService(devices, patientDevice)
+            .DecomposeAsync(MakeCreatedAtOnlyLoopStatus("loop-seen-2", later), WriteOrigin.Live);
+
+        devices.Should().HaveCount(3);
+        devices.Should().AllSatisfy(d =>
+        {
+            d.FirstSeenTimestamp.Should().Be(LoopStatusAt);
+            d.LastSeenTimestamp.Should().Be(later);
+        });
+    }
+
+    #endregion
+
     #region AAPS Date Normalization
 
     [Fact]
@@ -1863,6 +2288,41 @@ public class DeviceStatusDecomposerTests : IDisposable
         aps.Timestamp.Year.Should().Be(2026);
         aps.Timestamp.Month.Should().Be(4);
         aps.Timestamp.Day.Should().Be(12);
+    }
+
+    [Theory]
+    [InlineData("2026-04-12T09:35:00Z", "2026-04-12T09:33:00Z", "2026-04-12T09:36:00.000Z", 35)]
+    [InlineData(null, "2026-04-12T09:33:00Z", "2026-04-12T09:36:00.000Z", 33)]
+    [InlineData(null, null, "2026-04-12T09:36:00.000Z", 36)]
+    [InlineData(null, null, null, 30)]
+    public async Task DecomposeAsync_LoopWithMillsZero_PrefersTheLoopCycleTimeToThePredictionStart(
+        string? loopTimestamp, string? pumpClock, string? createdAt, int expectedMinute)
+    {
+        var ds = new DeviceStatus
+        {
+            Id = "loop-cycle-time",
+            Mills = 0,
+            CreatedAt = createdAt,
+            Device = "loop://iPhone",
+            Loop = new LoopStatus
+            {
+                Timestamp = loopTimestamp,
+                Predicted = new LoopPredicted { StartDate = "2026-04-12T09:30:00Z" },
+            },
+            Pump = new PumpStatus { Clock = pumpClock },
+            Override = new OverrideStatus { Active = true, Duration = 30.0 },
+        };
+        _stateSpanServiceMock
+            .Setup(s => s.UpsertStateSpanAsync(It.IsAny<StateSpan>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync((StateSpan span, CancellationToken _) => span);
+        var expected = new DateTime(2026, 4, 12, 9, expectedMinute, 0, DateTimeKind.Utc);
+
+        var result = await _decomposer.DecomposeAsync(ds, WriteOrigin.Live);
+
+        result.CreatedRecords.OfType<V4Models.ApsSnapshot>().Single().Timestamp.Should().Be(expected);
+        result.CreatedRecords.OfType<V4Models.PumpSnapshot>().Single().Timestamp.Should().Be(expected);
+        result.CreatedRecords.OfType<StateSpan>().Single(s => s.Category == StateSpanCategory.Override)
+            .StartTimestamp.Should().Be(expected);
     }
 
     #endregion
@@ -2034,6 +2494,34 @@ public class DeviceStatusDecomposerTests : IDisposable
         var extrasEntities = _context.DeviceStatusExtras.ToList();
         extrasEntities.Should().HaveCount(1);
         extrasEntities[0].ExtrasJson.Should().Contain("configuration");
+    }
+
+    [Fact]
+    public async Task DecomposeAsync_ClientIsValidAndServerStamps_AreNotStored()
+    {
+        var json = """
+        {
+            "_id": "aaps-stamps-1",
+            "mills": 1700000000000,
+            "device": "openaps://samsung",
+            "isValid": false,
+            "srvModified": 1,
+            "srvCreated": 1,
+            "configuration": { "sensitivityType": "oref1" },
+            "openaps": {
+                "iob": { "iob": 1.0 },
+                "suggested": { "bg": 120, "eventualBG": 100, "timestamp": "2023-11-14T12:00:00Z" }
+            }
+        }
+        """;
+        var ds = JsonSerializer.Deserialize<DeviceStatus>(json)!;
+
+        await _decomposer.DecomposeAsync(ds, WriteOrigin.Live);
+
+        var extras = _context.DeviceStatusExtras.Single().ExtrasJson;
+        extras.Should().Contain("configuration");
+        extras.Should().NotContain("isValid").And.NotContain("srvModified").And.NotContain("srvCreated");
+        _context.ApsSnapshots.Single().DeletedAt.Should().BeNull();
     }
 
     [Fact]
@@ -2561,6 +3049,324 @@ public class DeviceStatusDecomposerTests : IDisposable
         spans.Where(s => s.Category == StateSpanCategory.PumpMode
                 && (s.State == PumpModeState.Automatic.ToString() || s.State == PumpModeState.Manual.ToString()))
             .Should().BeEmpty();
+    }
+
+    #endregion
+
+    #region Prediction curves stored once
+
+    private static readonly JsonSerializerOptions CanonicalJson = new()
+    {
+        DefaultIgnoreCondition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull,
+    };
+
+    private static string Canonical(object? value) =>
+        value is null ? "null" : JsonSerializer.Serialize(value, value.GetType(), CanonicalJson);
+
+    private static OpenApsPredBGs Curves(double start) => new()
+    {
+        IOB = [start, start - 5, start - 10],
+        ZT = [start, start - 2],
+        COB = [start, start + 5, start + 10, start + 5],
+        UAM = [start, start + 10],
+    };
+
+    private async Task<(V4Models.ApsSnapshot Stored, DeviceStatus Projected)> DecomposeAndProject(DeviceStatus ds)
+    {
+        var result = await _decomposer.DecomposeAsync(ds, WriteOrigin.Live);
+        var stored = result.CreatedRecords.OfType<V4Models.ApsSnapshot>().Single();
+        return (stored, DeviceStatusProjectionService.ProjectFromSnapshots(stored, null, null, null, null));
+    }
+
+    [Fact]
+    public async Task DecomposeAsync_OpenApsSameCycle_StoresCurvesOnceAndProjectsThemBack()
+    {
+        var suggested = new OpenApsSuggested
+        {
+            Bg = 120, EventualBG = 95, Reason = "COB: 0, Dev: -3", Timestamp = "2023-11-14T12:00:00Z", PredBGs = Curves(120),
+        };
+        var enacted = new OpenApsEnacted
+        {
+            Bg = 120, EventualBG = 95, Reason = "COB: 0, Dev: -3", Timestamp = "2023-11-14T12:00:00Z", PredBGs = Curves(120),
+            Rate = 0.8, Duration = 30, Received = true,
+        };
+        var ds = new DeviceStatus
+        {
+            Id = "curves-same-cycle",
+            Mills = 1700000000000,
+            Device = "openaps://Samsung",
+            OpenAps = new OpenApsStatus { Suggested = suggested, Enacted = enacted },
+        };
+        var originalSuggested = Canonical(suggested);
+        var originalEnacted = Canonical(enacted);
+
+        var (stored, projected) = await DecomposeAndProject(ds);
+
+        stored.SuggestedJson.Should().NotContain("predBGs");
+        stored.EnactedJson.Should().NotContain("predBGs");
+        stored.PredictedIobJson.Should().Be("[120,115,110]");
+        Canonical(projected.OpenAps!.Suggested).Should().Be(originalSuggested);
+        Canonical(projected.OpenAps.Enacted).Should().Be(originalEnacted);
+    }
+
+    [Fact]
+    public async Task DecomposeAsync_OpenApsResentEnacted_KeepsTheOlderCommandsOwnCurves()
+    {
+        // The re-sent enacted command is the previous cycle's, so its curves differ from the
+        // fresher suggestion the columns are taken from.
+        var suggested = new OpenApsSuggested { Bg = 118, Timestamp = "2023-11-14T12:05:00Z", PredBGs = Curves(118) };
+        var enacted = new OpenApsEnacted
+        {
+            Bg = 120, Timestamp = "2023-11-14T12:00:00Z", PredBGs = Curves(120), Rate = 0.8, Duration = 30, Received = true,
+        };
+        var ds = new DeviceStatus
+        {
+            Id = "curves-resent-enacted",
+            Mills = 1700000300000,
+            Device = "openaps://Samsung",
+            OpenAps = new OpenApsStatus { Suggested = suggested, Enacted = enacted },
+        };
+        var originalSuggested = Canonical(suggested);
+        var originalEnacted = Canonical(enacted);
+
+        var (stored, projected) = await DecomposeAndProject(ds);
+
+        stored.SuggestedJson.Should().NotContain("predBGs");
+        stored.EnactedJson.Should().Contain("predBGs");
+        Canonical(projected.OpenAps!.Suggested).Should().Be(originalSuggested);
+        Canonical(projected.OpenAps.Enacted).Should().Be(originalEnacted);
+    }
+
+    [Fact]
+    public async Task DecomposeAsync_OpenApsCommandWithoutCurvesBesideOneWith_ReadsBackWithout()
+    {
+        // Trio uploads a suggestion without predBGs beside an enacted command that has them.
+        var suggested = new OpenApsSuggested { Bg = 91, Timestamp = "2023-11-14T12:00:00Z" };
+        var enacted = new OpenApsEnacted
+        {
+            Bg = 91, Timestamp = "2023-11-14T12:00:00Z", PredBGs = Curves(91), Rate = 0.6, Duration = 30, Received = true,
+        };
+        var ds = new DeviceStatus
+        {
+            Id = "curves-one-sided",
+            Mills = 1700000000000,
+            Device = "Trio",
+            OpenAps = new OpenApsStatus { Suggested = suggested, Enacted = enacted },
+        };
+        var originalSuggested = Canonical(suggested);
+        var originalEnacted = Canonical(enacted);
+
+        var (stored, projected) = await DecomposeAndProject(ds);
+
+        stored.SuggestedJson.Should().Contain("\"predBGs\":null");
+        stored.EnactedJson.Should().NotContain("predBGs");
+        Canonical(projected.OpenAps!.Suggested).Should().Be(originalSuggested);
+        Canonical(projected.OpenAps.Enacted).Should().Be(originalEnacted);
+    }
+
+    [Fact]
+    public async Task DecomposeAsync_OpenApsCommandWithEmptyPredBGs_KeepsIt()
+    {
+        var suggested = new OpenApsSuggested { Bg = 118, Timestamp = "2023-11-14T12:05:00Z", PredBGs = new OpenApsPredBGs() };
+        var ds = new DeviceStatus
+        {
+            Id = "curves-empty",
+            Mills = 1700000300000,
+            Device = "openaps://Samsung",
+            OpenAps = new OpenApsStatus { Suggested = suggested },
+        };
+        var originalSuggested = Canonical(suggested);
+
+        var (stored, projected) = await DecomposeAndProject(ds);
+
+        stored.SuggestedJson.Should().Contain("predBGs");
+        Canonical(projected.OpenAps!.Suggested).Should().Be(originalSuggested);
+    }
+
+    [Fact]
+    public async Task DecomposeAsync_OpenAps_StoresNoNullValuedKeys()
+    {
+        var ds = new DeviceStatus
+        {
+            Id = "no-null-keys",
+            Mills = 1700000000000,
+            Device = "openaps://Samsung",
+            OpenAps = new OpenApsStatus
+            {
+                Suggested = new OpenApsSuggested { Bg = 118, Timestamp = "2023-11-14T12:05:00Z" },
+            },
+        };
+
+        var (stored, _) = await DecomposeAndProject(ds);
+
+        stored.SuggestedJson.Should().NotContain("null");
+        stored.SuggestedJson.Should().NotContain("predBGs");
+    }
+
+    [Fact]
+    public async Task DecomposeAsync_Loop_StoresPredictionOnceAndProjectsItBack()
+    {
+        var loop = new LoopStatus
+        {
+            Iob = new LoopIob { Iob = 1.8, BasalIob = 0.5 },
+            Cob = new LoopCob { Cob = 25.0 },
+            RecommendedBolus = 0.7,
+            Predicted = new LoopPredicted { Values = [130, 125, 120, 115, 110], StartDate = "2023-11-14T12:00:00Z" },
+            Enacted = new LoopEnacted { Received = true, Rate = 2.0, Duration = 30, BolusVolume = 0.4 },
+        };
+        var ds = new DeviceStatus { Id = "loop-curves", Mills = 1700000000000, Device = "Loop/3.0", Loop = loop };
+        var originalLoop = Canonical(loop);
+
+        var (stored, projected) = await DecomposeAndProject(ds);
+
+        stored.SuggestedJson.Should().BeNull();
+        stored.EnactedJson.Should().BeNull();
+        stored.LoopJson.Should().NotContain("values");
+        stored.PredictedDefaultJson.Should().Be("[130,125,120,115,110]");
+        Canonical(projected.Loop).Should().Be(originalLoop);
+    }
+
+    [Fact]
+    public void ProjectFromSnapshots_RowStoredWithCurvesInItsBlobs_ProjectsThemUnchanged()
+    {
+        var suggested = new OpenApsSuggested { Bg = 118, Timestamp = "2023-11-14T12:05:00Z", PredBGs = Curves(118) };
+        var enacted = new OpenApsEnacted { Bg = 120, Timestamp = "2023-11-14T12:00:00Z", PredBGs = Curves(120) };
+        var aps = new V4Models.ApsSnapshot
+        {
+            Id = Guid.CreateVersion7(),
+            Timestamp = DateTime.UtcNow,
+            AidAlgorithm = V4Models.AidAlgorithm.OpenAps,
+            SuggestedJson = JsonSerializer.Serialize(suggested),
+            EnactedJson = JsonSerializer.Serialize(enacted),
+            PredictedIobJson = "[1,2,3]",
+        };
+
+        var projected = DeviceStatusProjectionService.ProjectFromSnapshots(aps, null, null, null, null);
+
+        Canonical(projected.OpenAps!.Suggested).Should().Be(Canonical(suggested));
+        Canonical(projected.OpenAps.Enacted).Should().Be(Canonical(enacted));
+    }
+
+    #endregion
+
+    #region Prediction accuracy reads the stored curves
+
+    // Shapes follow nightscout/cgm-remote-monitor tests/fixtures/captured/{loop,trio}/devicestatus.json
+    // at c6a0d8ed65637bc90d3090e6e7a0f752041c57fd: Loop's predicted.values runs about 80 values from a
+    // startDate off the five-minute grid, and oref's predBGs run 48 values unless a curve's tail was
+    // cut. The values here are synthesised.
+
+    private static PredictionSnapshot? ParseStored(V4Models.ApsSnapshot aps) =>
+        PredictionAccuracyCalculator.Parse(new V4Models.ApsPredictionPoint(
+            aps.PredictedStartTimestamp!.Value, aps.Device, aps.Enacted, aps.AidAlgorithm,
+            aps.PredictedDefaultJson, aps.PredictedIobJson, aps.PredictedZtJson, aps.PredictedCobJson, aps.PredictedUamJson));
+
+    private static double?[]? CurveOf(PredictionSnapshot snapshot, PredictionCurve curve) =>
+        snapshot.Curves[(int)curve];
+
+    /// <summary>A curve from <paramref name="first"/> moving by <paramref name="step"/> and levelling at <paramref name="floor"/>.</summary>
+    private static List<double?> Synthesised(int count, double first, double step, double floor = 39) =>
+        [.. Enumerable.Range(0, count).Select(i => (double?)Math.Max(floor, Math.Round(first + step * i)))];
+
+    [Fact]
+    public async Task PredictionAccuracy_ReadsLoopsStoredCurveAsTheDefault()
+    {
+        var values = Synthesised(83, 141, -0.8, floor: 70).Select(v => v!.Value).ToArray();
+        var ds = new DeviceStatus
+        {
+            Id = "loop-prediction-shape",
+            Mills = new DateTimeOffset(2026, 5, 9, 0, 1, 57, 372, TimeSpan.Zero).ToUnixTimeMilliseconds(),
+            Device = "loop://test-device",
+            Loop = new LoopStatus
+            {
+                Timestamp = "2026-05-09T00:01:57.372Z",
+                Predicted = new LoopPredicted { Values = values, StartDate = "2026-05-08T23:59:59.372Z" },
+            },
+        };
+
+        var snapshot = ParseStored(await DecomposeApsAsync(ds))!;
+
+        snapshot.StartMills.Should().Be(new DateTimeOffset(2026, 5, 8, 23, 59, 59, 372, TimeSpan.Zero).ToUnixTimeMilliseconds());
+        CurveOf(snapshot, PredictionCurve.Default).Should().Equal(values.Take(25).Select(v => (double?)v), "values past the last horizon are not read");
+        snapshot.Curves.Count(c => c is not null).Should().Be(1);
+        PredictionAccuracyCalculator.TargetMills(snapshot, PredictionCurve.Default, 6)
+            .Should().Be(new DateTimeOffset(2026, 5, 9, 0, 25, 0, TimeSpan.Zero).ToUnixTimeMilliseconds(),
+                "Loop's later values sit on the grid point after its off-grid start");
+    }
+
+    [Fact]
+    public async Task PredictionAccuracy_ReadsAapsStoredCurves_WithoutTheDefaultCopyOfIob()
+    {
+        var iob = Synthesised(31, 156, -4);
+        var zeroTemp = Synthesised(7, 104, 3);
+        var ds = new DeviceStatus
+        {
+            Id = "aaps-prediction-shape",
+            Mills = 1778284798029,
+            Device = "openaps://samsung",
+            OpenAps = new OpenApsStatus
+            {
+                Suggested = new OpenApsSuggested
+                {
+                    Bg = 156.0,
+                    Timestamp = "2026-05-08T23:59:58.029Z",
+                    PredBGs = new OpenApsPredBGs
+                    {
+                        IOB = iob,
+                        ZT = zeroTemp,
+                        COB = Synthesised(48, 156, 5, floor: 0),
+                        UAM = Synthesised(48, 156, 2, floor: 0),
+                    },
+                },
+            },
+            Uploader = new UploaderStatus { Name = "AndroidAPS" },
+        };
+
+        var aps = await DecomposeApsAsync(ds);
+        var snapshot = ParseStored(aps)!;
+
+        aps.PredictedDefaultJson.Should().Be(aps.PredictedIobJson, "the decomposer copies oref's IOB curve into the default column");
+        CurveOf(snapshot, PredictionCurve.Default).Should().BeNull();
+        CurveOf(snapshot, PredictionCurve.Iob).Should().Equal(iob.Take(25), "a curve of 31 reaches every horizon itself");
+        CurveOf(snapshot, PredictionCurve.ZeroTemp).Should().Equal(zeroTemp, "oref cut the zero-temp curve where it turned up; nothing is held");
+        CurveOf(snapshot, PredictionCurve.Cob).Should().HaveCount(25);
+        CurveOf(snapshot, PredictionCurve.Uam).Should().HaveCount(25);
+    }
+
+    [Fact]
+    public async Task PredictionAccuracy_ReadsTriosStoredCurves_HoldingALevelledTail()
+    {
+        var iob = Synthesised(18, 152, -7);
+        var ds = new DeviceStatus
+        {
+            Id = "trio-prediction-shape",
+            Mills = 1778284489623,
+            Device = "Trio",
+            OpenAps = new OpenApsStatus
+            {
+                Version = "0.2.1",
+                Suggested = new OpenApsSuggested
+                {
+                    Bg = 152.0,
+                    Timestamp = "2026-05-08T23:54:49.623Z",
+                    PredBGs = new OpenApsPredBGs
+                    {
+                        IOB = iob,
+                        ZT = Synthesised(48, 152, -3),
+                        COB = Synthesised(48, 152, 6, floor: 0),
+                        UAM = Synthesised(22, 152, -5.5),
+                    },
+                },
+            },
+        };
+
+        var snapshot = ParseStored(await DecomposeApsAsync(ds))!;
+
+        snapshot.Algorithm.Should().Be(V4Models.AidAlgorithm.Trio);
+        CurveOf(snapshot, PredictionCurve.Default).Should().BeNull();
+        CurveOf(snapshot, PredictionCurve.Iob).Should().StartWith(iob)
+            .And.HaveCount(25, "oref dropped the level tail after 39").And.EndWith(39);
+        CurveOf(snapshot, PredictionCurve.Uam).Should().HaveCount(25).And.EndWith(39);
     }
 
     #endregion

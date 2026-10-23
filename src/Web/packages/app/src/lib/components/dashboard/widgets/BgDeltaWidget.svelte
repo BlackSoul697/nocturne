@@ -5,16 +5,13 @@
   import { formatGlucoseDelta, getUnitLabel, time } from "$lib/utils/formatting";
   import { timeAgo } from "$lib/utils";
   import { Now } from "$lib/hooks/now.svelte";
-  import {
-    BatteryCharging,
-    BatteryFull,
-    BatteryLow,
-    BatteryMedium,
-    BatteryWarning,
-    Zap,
-    Wifi,
-    WifiOff,
-  } from "lucide-svelte";
+  import BatteryCharging from "@lucide/svelte/icons/battery-charging";
+  import BatteryFull from "@lucide/svelte/icons/battery-full";
+  import BatteryLow from "@lucide/svelte/icons/battery-low";
+  import BatteryMedium from "@lucide/svelte/icons/battery-medium";
+  import BatteryWarning from "@lucide/svelte/icons/battery-warning";
+  import Wifi from "@lucide/svelte/icons/wifi";
+  import WifiOff from "@lucide/svelte/icons/wifi-off";
   import { getCurrentBatteryStatus } from "$api/generated/batteries.generated.remote";
 
   interface Props {
@@ -40,9 +37,8 @@
   const displayBgDelta = $derived(formatGlucoseDelta(rawBgDelta, units));
   const unitLabel = $derived(getUnitLabel(units));
 
-  // Connection status
-  const isConnected = $derived(realtimeStore.isConnected);
-  const connectionStatus = $derived(realtimeStore.connectionStatus);
+  const connection = $derived(realtimeStore.connectionPresentation);
+  const isLive = $derived(connection === "live" || connection === "pending");
 
   // Battery data
   const batteryStatusPromise = getCurrentBatteryStatus({ recentMinutes: 30 });
@@ -55,19 +51,15 @@
     return BatteryWarning;
   }
 
-  // Connection status indicator color
   const connectionColor = $derived.by(() => {
-    switch (connectionStatus) {
-      case "connected":
+    switch (connection) {
+      case "live":
         return "bg-success";
-      case "connecting":
-      case "reconnecting":
+      case "pending":
         return "bg-warning";
-      case "disconnected":
-        return "bg-gray-500";
-      case "error":
+      case "unavailable":
         return "bg-destructive";
-      default:
+      case "denied":
         return "bg-gray-500";
     }
   });
@@ -85,7 +77,7 @@
     <!-- Connection indicator -->
     <div class="flex items-center gap-1.5">
       <div class="w-2 h-2 rounded-full {connectionColor}"></div>
-      {#if isConnected}
+      {#if isLive}
         <Wifi class="h-3.5 w-3.5 text-muted-foreground" />
       {:else}
         <WifiOff class="h-3.5 w-3.5 text-muted-foreground" />
@@ -94,7 +86,7 @@
   </div>
 
   <!-- Last updated info with battery -->
-  {#if !batteryStatusPromise}
+  {#await batteryStatusPromise}
     <div
       class="flex items-center justify-between mt-2 pt-2 border-t border-border/50"
     >
@@ -105,66 +97,52 @@
         {time(displayLastUpdated)}
       </span>
     </div>
-  {:else}
-    {#await batteryStatusPromise}
-      <div
-        class="flex items-center justify-between mt-2 pt-2 border-t border-border/50"
-      >
-        <span class="text-xs text-muted-foreground">
-          {age}
+  {:then currentStatus}
+    {@const hasDevices =
+      currentStatus && Object.keys(currentStatus.devices ?? {}).length > 0}
+    <div
+      class="flex items-center justify-between mt-2 pt-2 border-t border-border/50"
+    >
+      <span class="text-xs text-muted-foreground">
+        {age}
+      </span>
+      {#if hasDevices && currentStatus?.min}
+        <span
+          class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-xs font-medium {currentStatus.status ===
+          'urgent'
+            ? 'bg-destructive/20 text-destructive'
+            : currentStatus.status === 'warn'
+              ? 'bg-warning/20 text-warning'
+              : 'bg-success/20 text-success'}"
+        >
+          {#if currentStatus.min.isCharging}
+            <BatteryCharging class="h-3 w-3" />
+          {:else}
+            {@const IconComponent = getBatteryIconComponent(
+              currentStatus.level
+            )}
+            <IconComponent class="h-3 w-3" />
+          {/if}
+          {currentStatus.min.battery != null
+            ? `${currentStatus.min.battery}%`
+            : currentStatus.display}
         </span>
-        <span class="text-xs text-muted-foreground">
-          {time(displayLastUpdated)}
-        </span>
-      </div>
-    {:then currentStatus}
-      {@const hasDevices =
-        currentStatus && Object.keys(currentStatus.devices ?? {}).length > 0}
-      <div
-        class="flex items-center justify-between mt-2 pt-2 border-t border-border/50"
-      >
-        <span class="text-xs text-muted-foreground">
-          {age}
-        </span>
-        {#if hasDevices && currentStatus?.min}
-          <span
-            class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-xs font-medium {currentStatus.status ===
-            'urgent'
-              ? 'bg-destructive/20 text-destructive'
-              : currentStatus.status === 'warn'
-                ? 'bg-warning/20 text-warning'
-                : 'bg-success/20 text-success'}"
-          >
-            {#if currentStatus.min.isCharging}
-              <BatteryCharging class="h-3 w-3" />
-            {:else}
-              {@const IconComponent = getBatteryIconComponent(
-                currentStatus.level
-              )}
-              <IconComponent class="h-3 w-3" />
-            {/if}
-            {currentStatus.display}
-            {#if currentStatus.min.isCharging}
-              <Zap class="h-3 w-3" />
-            {/if}
-          </span>
-        {:else}
-          <span class="text-xs text-muted-foreground">
-            {time(displayLastUpdated)}
-          </span>
-        {/if}
-      </div>
-    {:catch}
-      <div
-        class="flex items-center justify-between mt-2 pt-2 border-t border-border/50"
-      >
-        <span class="text-xs text-muted-foreground">
-          {age}
-        </span>
+      {:else}
         <span class="text-xs text-muted-foreground">
           {time(displayLastUpdated)}
         </span>
-      </div>
-    {/await}
-  {/if}
+      {/if}
+    </div>
+  {:catch}
+    <div
+      class="flex items-center justify-between mt-2 pt-2 border-t border-border/50"
+    >
+      <span class="text-xs text-muted-foreground">
+        {age}
+      </span>
+      <span class="text-xs text-muted-foreground">
+        {time(displayLastUpdated)}
+      </span>
+    </div>
+  {/await}
 </WidgetCard>

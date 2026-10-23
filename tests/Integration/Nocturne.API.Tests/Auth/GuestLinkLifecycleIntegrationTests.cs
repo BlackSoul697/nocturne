@@ -14,14 +14,14 @@ namespace Nocturne.API.Tests.Integration.Auth;
 /// session-based access, revocation, and listing.
 /// </summary>
 [Trait("Category", "Integration")]
-public class GuestLinkLifecycleIntegrationTests : AspireIntegrationTestBase
+public class GuestLinkLifecycleIntegrationTests : ApiIntegrationTestBase
 {
     private Guid _tenantId;
     private Guid _subjectId;
     private string _accessToken = null!;
 
     public GuestLinkLifecycleIntegrationTests(
-        AspireIntegrationTestFixture fixture,
+        ApiIntegrationTestFixture fixture,
         ITestOutputHelper output)
         : base(fixture, output) { }
 
@@ -41,6 +41,7 @@ public class GuestLinkLifecycleIntegrationTests : AspireIntegrationTestBase
 
         _tenantId = await AuthTestHelpers.GetTenantIdAsync(conn);
         (_subjectId, _accessToken) = await AuthTestHelpers.SeedAuthenticatedSubjectAsync(conn, _tenantId, "Guest Link Test User");
+        _accessToken = await AuthTestHelpers.IssueSessionTokenAsync(Fixture, _subjectId);
 
         Log($"Seeded tenant {_tenantId}, subject {_subjectId}");
     }
@@ -139,7 +140,7 @@ public class GuestLinkLifecycleIntegrationTests : AspireIntegrationTestBase
         // the recognised-scope guard. Asserted so the case cannot silently start passing for the
         // wrong reason if the scope name changes again.
         var body = await response.Content.ReadFromJsonAsync<JsonElement>();
-        body.GetProperty("error").GetString().Should().Contain("not allowed for guest links");
+        body.GetProperty("detail").GetString().Should().Contain("not allowed for guest links");
     }
 
     #endregion
@@ -262,16 +263,39 @@ public class GuestLinkLifecycleIntegrationTests : AspireIntegrationTestBase
     #region Guest Session Access
 
     [Fact]
+    public async Task GuestSession_RedeemedOnASingleTenantApex_SurvivesTheSessionCheck()
+    {
+        // #2072: the redemption resolved the sole tenant but the session check on the next page
+        // did not, so the guest landed on the login page and the cookie was cleared.
+        var code = await CreateGuestLinkCodeAsync();
+        using var apex = Fixture.CreateHttpClient(new HttpClientHandler { UseCookies = false });
+        apex.DefaultRequestHeaders.Host = AuthTestHelpers.GetBaseDomain(ApiClient);
+
+        var activateResponse = await apex.PostAsJsonAsync("/api/v4/guest-links/activate", new { code });
+        activateResponse.StatusCode.Should().Be(HttpStatusCode.OK);
+        var guestCookie = activateResponse.Headers.GetValues("Set-Cookie")
+            .Single(c => c.StartsWith("nocturne-guest-session=", StringComparison.Ordinal))
+            .Split(';')[0];
+
+        using var request = new HttpRequestMessage(HttpMethod.Get, "/api/auth/oidc/session");
+        request.Headers.Add("Cookie", guestCookie);
+        var response = await apex.SendAsync(request);
+
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+        var body = JsonSerializer.Deserialize<JsonElement>(await response.Content.ReadAsStringAsync());
+        body.GetProperty("isAuthenticated").GetBoolean().Should().BeTrue();
+        response.Headers.TryGetValues("Set-Cookie", out var cleared);
+        (cleared ?? []).Should().NotContain(c => c.StartsWith("nocturne-guest-session=", StringComparison.Ordinal));
+    }
+
+    [Fact]
     public async Task GuestSession_CanReadEntries()
     {
         // Arrange - create and activate a guest link with cookie-enabled client
         var code = await CreateGuestLinkCodeAsync();
 
         var handler = new HttpClientHandler { UseCookies = true };
-        using var cookieClient = new HttpClient(handler)
-        {
-            BaseAddress = ApiClient.BaseAddress
-        };
+        using var cookieClient = Fixture.CreateHttpClient(handler);
 
         // Activate to receive the session cookie
         var activateResponse = await cookieClient.PostAsJsonAsync("/api/v4/guest-links/activate", new
@@ -296,10 +320,7 @@ public class GuestLinkLifecycleIntegrationTests : AspireIntegrationTestBase
         var code = await CreateGuestLinkCodeAsync();
 
         var handler = new HttpClientHandler { UseCookies = true };
-        using var cookieClient = new HttpClient(handler)
-        {
-            BaseAddress = ApiClient.BaseAddress
-        };
+        using var cookieClient = Fixture.CreateHttpClient(handler);
 
         var activateResponse = await cookieClient.PostAsJsonAsync("/api/v4/guest-links/activate", new
         {
@@ -336,10 +357,7 @@ public class GuestLinkLifecycleIntegrationTests : AspireIntegrationTestBase
         var code = await CreateGuestLinkCodeAsync();
 
         var handler = new HttpClientHandler { UseCookies = true };
-        using var cookieClient = new HttpClient(handler)
-        {
-            BaseAddress = ApiClient.BaseAddress
-        };
+        using var cookieClient = Fixture.CreateHttpClient(handler);
 
         var activateResponse = await cookieClient.PostAsJsonAsync("/api/v4/guest-links/activate", new
         {
@@ -367,10 +385,7 @@ public class GuestLinkLifecycleIntegrationTests : AspireIntegrationTestBase
         var code = await CreateGuestLinkCodeAsync();
 
         var handler = new HttpClientHandler { UseCookies = true };
-        using var cookieClient = new HttpClient(handler)
-        {
-            BaseAddress = ApiClient.BaseAddress
-        };
+        using var cookieClient = Fixture.CreateHttpClient(handler);
 
         var activateResponse = await cookieClient.PostAsJsonAsync("/api/v4/guest-links/activate", new
         {
@@ -398,10 +413,7 @@ public class GuestLinkLifecycleIntegrationTests : AspireIntegrationTestBase
         var code = await CreateGuestLinkCodeAsync();
 
         var handler = new HttpClientHandler { UseCookies = true };
-        using var cookieClient = new HttpClient(handler)
-        {
-            BaseAddress = ApiClient.BaseAddress
-        };
+        using var cookieClient = Fixture.CreateHttpClient(handler);
 
         var activateResponse = await cookieClient.PostAsJsonAsync("/api/v4/guest-links/activate", new
         {
@@ -427,10 +439,7 @@ public class GuestLinkLifecycleIntegrationTests : AspireIntegrationTestBase
         var code = await CreateGuestLinkCodeAsync();
 
         var handler = new HttpClientHandler { UseCookies = true };
-        using var cookieClient = new HttpClient(handler)
-        {
-            BaseAddress = ApiClient.BaseAddress
-        };
+        using var cookieClient = Fixture.CreateHttpClient(handler);
 
         var activateResponse = await cookieClient.PostAsJsonAsync("/api/v4/guest-links/activate", new
         {
@@ -455,15 +464,14 @@ public class GuestLinkLifecycleIntegrationTests : AspireIntegrationTestBase
         await conn.OpenAsync();
 
         var victimSlug = $"victim-{Guid.NewGuid():N}"[..20];
-        await AuthTestHelpers.SeedTenantAsync(conn, victimSlug, "Victim Tenant");
+        var victimId = await AuthTestHelpers.SeedTenantAsync(Fixture, victimSlug, "Victim Tenant");
+        // An owner with a passkey, or the victim host answers setup_required before any auth runs.
+        await AuthTestHelpers.SeedAuthenticatedSubjectAsync(conn, victimId, "Victim Owner");
 
         var code = await CreateGuestLinkCodeAsync();
 
         var handler = new HttpClientHandler { UseCookies = true };
-        using var cookieClient = new HttpClient(handler)
-        {
-            BaseAddress = ApiClient.BaseAddress
-        };
+        using var cookieClient = Fixture.CreateHttpClient(handler);
 
         var activateResponse = await cookieClient.PostAsJsonAsync("/api/v4/guest-links/activate", new
         {
@@ -476,7 +484,7 @@ public class GuestLinkLifecycleIntegrationTests : AspireIntegrationTestBase
         ownTenantResponse.StatusCode.Should().NotBe(HttpStatusCode.Unauthorized);
 
         var guestCookie = handler.CookieContainer
-            .GetCookies(ApiClient.BaseAddress!)
+            .GetCookies(Fixture.CookieOrigin)
             .Cast<System.Net.Cookie>()
             .Single(c => c.Name == "nocturne-guest-session");
 

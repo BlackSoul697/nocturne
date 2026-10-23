@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Mvc;
 using OpenApi.Remote.Attributes;
 using Nocturne.API.Attributes;
+using Nocturne.API.Controllers.V4.Base;
 using Nocturne.API.Authorization;
 using Nocturne.API.Extensions;
 using Nocturne.Core.Contracts.Analytics;
@@ -52,6 +53,8 @@ public class ChartDataController : ControllerBase
     /// <param name="endTime">End of the requested window as a Unix timestamp in milliseconds.
     /// Must be greater than <paramref name="startTime"/>.</param>
     /// <param name="intervalMinutes">Granularity of the returned series in minutes (1–60, default 5).</param>
+    /// <param name="includeHealthSeries">Whether to return the raw heart-rate and step series (default true).
+    /// Pass false when they are not drawn; both series are then empty.</param>
     /// <param name="cancellationToken">Cancellation token.</param>
     /// <returns>A fully populated <see cref="DashboardChartData"/> object.</returns>
     /// <exception cref="Exception">Returns HTTP 500 if chart data calculation fails.</exception>
@@ -74,11 +77,15 @@ public class ChartDataController : ControllerBase
         [FromQuery] long startTime,
         [FromQuery] long endTime,
         [FromQuery] int intervalMinutes = 5,
+        [FromQuery] bool includeHealthSeries = true,
         CancellationToken cancellationToken = default
     )
     {
         if (endTime <= startTime)
             return Problem(detail: "endTime must be greater than startTime", statusCode: 400, title: "Bad Request");
+
+        if (this.RejectDateSpan(startTime, endTime) is { } overlong)
+            return overlong;
 
         if (intervalMinutes < 1 || intervalMinutes > 60)
             return Problem(detail: "intervalMinutes must be between 1 and 60", statusCode: 400, title: "Bad Request");
@@ -87,6 +94,7 @@ public class ChartDataController : ControllerBase
             startTime,
             endTime,
             intervalMinutes,
+            includeHealthSeries,
             cancellationToken
         );
 
@@ -119,6 +127,9 @@ public class ChartDataController : ControllerBase
     {
         if (endTime <= startTime)
             return Problem(detail: "endTime must be greater than startTime", statusCode: 400, title: "Bad Request");
+
+        if (this.RejectDateSpan(startTime, endTime) is { } overlong)
+            return overlong;
 
         var basalSeries = await _chartDataService.GetBasalSeriesAsync(startTime, endTime, cancellationToken);
 

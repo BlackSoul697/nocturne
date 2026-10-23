@@ -16,21 +16,19 @@
   import { Progress } from "$lib/components/ui/progress";
   import * as Alert from "$lib/components/ui/alert";
   import { SkippedRecordsNote } from "$lib/components/shared";
-  import {
-    Import,
-    Loader2,
-    AlertTriangle,
-    CheckCircle2,
-    XCircle,
-    Play,
-    Square,
-    Clock,
-    Database,
-    Globe,
-    Server,
-    RefreshCw,
-    Info,
-  } from "lucide-svelte";
+  import Import from "@lucide/svelte/icons/import";
+  import Loader2 from "@lucide/svelte/icons/loader-circle";
+  import AlertTriangle from "@lucide/svelte/icons/triangle-alert";
+  import CheckCircle2 from "@lucide/svelte/icons/circle-check";
+  import XCircle from "@lucide/svelte/icons/circle-x";
+  import Play from "@lucide/svelte/icons/play";
+  import Square from "@lucide/svelte/icons/square";
+  import Clock from "@lucide/svelte/icons/clock";
+  import Database from "@lucide/svelte/icons/database";
+  import Globe from "@lucide/svelte/icons/globe";
+  import Server from "@lucide/svelte/icons/server";
+  import RefreshCw from "@lucide/svelte/icons/refresh-cw";
+  import Info from "@lucide/svelte/icons/info";
   import * as migrationRemote from "$api/generated/migrations.generated.remote";
   import { describeSubmitError } from "$lib/forms/submit-error";
   import { remoteErrorMessage } from "$lib/api/remote-error";
@@ -55,7 +53,8 @@
 
   // Active migration state
   let activeMigration = $state<MigrationJobStatus | null>(null);
-  let pollingActive = $state(false);
+  let activePoll: { jobId: string } | null = null;
+  let destroyed = false;
 
   // Form state
   let mode = $state<"Api" | "MongoDb">("Api");
@@ -91,6 +90,7 @@
         migrationRemote.getSources().run(),
         migrationRemote.getHistory().run(),
       ]);
+      if (destroyed) return;
 
       pendingConfig = configResult;
       sources = sourcesResult || [];
@@ -114,11 +114,10 @@
       const runningJob = historyResult?.find(
         (j) =>
           j.state === MigrationJobState.Running ||
-          j.state === MigrationJobState.Pending ||
-          j.state === MigrationJobState.Validating
+          j.state === MigrationJobState.Pending
       );
       if (runningJob?.id) {
-        await pollMigrationStatus(runningJob.id);
+        void pollMigrationStatus(runningJob.id);
       }
     } catch (err) {
       console.error("Failed to load migration data:", err);
@@ -131,6 +130,10 @@
   // Initial load. `.run()` rejects during the render/effect flush, so defer it.
   $effect(() => {
     queueMicrotask(loadData);
+    return () => {
+      destroyed = true;
+      activePoll = null;
+    };
   });
 
   // Derived: mode as integer for form submission
@@ -138,10 +141,13 @@
 
   // Poll migration status
   async function pollMigrationStatus(jobId: string) {
-    pollingActive = true;
+    if (destroyed || activePoll?.jobId === jobId) return;
+    const poll = { jobId };
+    activePoll = poll;
     try {
-      while (pollingActive) {
+      while (activePoll === poll) {
         const status = await migrationRemote.getStatus(jobId).run();
+        if (activePoll !== poll) return;
         activeMigration = status;
 
         // Check if completed
@@ -151,9 +157,9 @@
           status.state === MigrationJobState.Cancelled ||
           status.state === MigrationJobState.Interrupted
         ) {
-          pollingActive = false;
+          activePoll = null;
           await loadData(); // Refresh history
-          break;
+          return;
         }
 
         // Wait before next poll
@@ -161,7 +167,10 @@
       }
     } catch (err) {
       console.error("Failed to poll migration status:", err);
-      pollingActive = false;
+      if (activePoll === poll) {
+        activePoll = null;
+        error = remoteErrorMessage(err, "Failed to read migration status");
+      }
     }
   }
 
@@ -171,7 +180,7 @@
     cancellingMigration = true;
     try {
       await migrationRemote.cancelMigration(activeMigration.jobId);
-      pollingActive = false;
+      activePoll = null;
       await loadData();
     } catch (err) {
       error = describeSubmitError(err, "Failed to cancel migration");
@@ -187,8 +196,6 @@
     switch (state) {
       case MigrationJobState.Pending:
         return { variant: "secondary", label: "Pending" };
-      case MigrationJobState.Validating:
-        return { variant: "secondary", label: "Validating" };
       case MigrationJobState.Running:
         return { variant: "default", label: "Running" };
       case MigrationJobState.Completed:
@@ -208,7 +215,6 @@
   const hasActiveMigration = $derived(
     activeMigration &&
       (activeMigration.state === MigrationJobState.Pending ||
-        activeMigration.state === MigrationJobState.Validating ||
         activeMigration.state === MigrationJobState.Running)
   );
 
@@ -463,8 +469,8 @@
                   await submit();
                   const jobInfo = startMigrationForm.result;
                   if (jobInfo?.id) {
-                    await pollMigrationStatus(jobInfo.id);
                     activeTab = "progress";
+                    void pollMigrationStatus(jobInfo.id);
                   } else {
                     error = "Failed to start migration";
                   }

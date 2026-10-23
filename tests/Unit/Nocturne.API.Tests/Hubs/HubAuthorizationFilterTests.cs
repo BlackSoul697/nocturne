@@ -4,6 +4,8 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Http.Connections.Features;
 using Microsoft.AspNetCore.Http.Features;
 using Microsoft.AspNetCore.SignalR;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging.Abstractions;
 using Nocturne.API.Hubs;
 using Nocturne.Core.Contracts.Multitenancy;
 using Nocturne.Core.Models.Authorization;
@@ -71,7 +73,7 @@ public class HubAuthorizationFilterTests
 
     /// <summary>A member credential on the connection's own tenant carrying <paramref name="scopes"/>.</summary>
     private static HubAuthorization Member(params string[] scopes) => new(
-        Tenant, Scope.Normalize(scopes), HubCredentialKind.Subject, Guid.NewGuid());
+        Tenant, Scope.Normalize(scopes), HubCredentialKind.Subject, Guid.NewGuid(), HistoryClamped: false);
 
     /// <summary>
     /// A share-style credential — a guest link — carrying <paramref name="scopes"/>.
@@ -82,11 +84,12 @@ public class HubAuthorizationFilterTests
     /// the refusal must hold on the kind alone, not on the subject id happening to be absent.
     /// </remarks>
     private static HubAuthorization Guest(params string[] scopes) => new(
-        Tenant, Scope.Normalize(scopes), HubCredentialKind.Restricted, Guid.NewGuid());
+        Tenant, Scope.Normalize(scopes), HubCredentialKind.Restricted, Guid.NewGuid(), HistoryClamped: false);
 
     private static async Task<bool> InvokeAsync(HubInvocationContext invocation)
     {
-        var filter = new HubAuthorizationFilter();
+        var filter = new HubAuthorizationFilter(new HubConnectionRevalidator(
+            Mock.Of<IServiceScopeFactory>(), TimeProvider.System, NullLogger<HubConnectionRevalidator>.Instance));
         var reached = false;
         await filter.InvokeMethodAsync(invocation, _ =>
         {
@@ -107,6 +110,7 @@ public class HubAuthorizationFilterTests
         { typeof(AlertHub), nameof(AlertHub.Subscribe) },
         { typeof(AlertHub), nameof(AlertHub.Acknowledge) },
         { typeof(AlarmHub), nameof(AlarmHub.Ack) },
+        { typeof(AlarmHub), nameof(AlarmHub.CurrentAlarm) },
         { typeof(HomeAssistantHub), nameof(HomeAssistantHub.Subscribe) },
         { typeof(HomeAssistantHub), nameof(HomeAssistantHub.Acknowledge) },
         { typeof(ConfigHub), nameof(ConfigHub.Subscribe) },
@@ -158,7 +162,26 @@ public class HubAuthorizationFilterTests
         var attempt = Attempt(typeof(AlarmHub), nameof(AlarmHub.Ack), readOnly);
 
         await attempt.Should().ThrowAsync<HubException>()
-            .Where(e => e.Message.Contains(Scope.AlertsReadWrite));
+            .Where(e => e.Message.Contains(Scope.AlertsAcknowledge));
+    }
+
+    [Fact]
+    public async Task An_alarm_ack_refuses_a_credential_that_can_only_mute_for_itself()
+    {
+        var attempt = Attempt(
+            typeof(AlarmHub), nameof(AlarmHub.Ack), Member(Scope.GlucoseRead, Scope.DeviceNotify));
+
+        await attempt.Should().ThrowAsync<HubException>();
+    }
+
+    [Theory]
+    [InlineData(Scope.AlertsAcknowledge)]
+    [InlineData(Scope.AlertsReadWrite)]
+    public async Task An_alarm_ack_admits_a_credential_that_may_silence_alarms(string scope)
+    {
+        var reached = await InvokeAsync(CreateInvocation(typeof(AlarmHub), nameof(AlarmHub.Ack), Member(scope)));
+
+        reached.Should().BeTrue();
     }
 
     [Fact]
@@ -173,7 +196,7 @@ public class HubAuthorizationFilterTests
     }
 
     [Fact]
-    public async Task Home_assistant_acknowledge_requires_alerts_readwrite()
+    public async Task Home_assistant_acknowledge_refuses_a_credential_that_can_neither_acknowledge_nor_mute()
     {
         var readOnly = Member(Scope.AlertsRead);
 
@@ -181,7 +204,16 @@ public class HubAuthorizationFilterTests
             typeof(HomeAssistantHub), nameof(HomeAssistantHub.Acknowledge), readOnly);
 
         await attempt.Should().ThrowAsync<HubException>()
-            .Where(e => e.Message.Contains(Scope.AlertsReadWrite));
+            .Where(e => e.Message.Contains(Scope.AlertsReadWrite) && e.Message.Contains(Scope.DeviceNotify));
+    }
+
+    [Fact]
+    public async Task Home_assistant_acknowledge_admits_the_same_credentials_as_the_http_endpoint()
+    {
+        var reached = await InvokeAsync(CreateInvocation(
+            typeof(HomeAssistantHub), nameof(HomeAssistantHub.Acknowledge), Member(Scope.DeviceNotify)));
+
+        reached.Should().BeTrue("a member who can only mute reaches the one acknowledgement decision");
     }
 
     [Fact]
@@ -258,7 +290,8 @@ public class HubAuthorizationFilterTests
                          Tenant,
                          Scope.Normalize([Scope.FullAccess]),
                          HubCredentialKind.Infrastructure,
-                         SubjectId: null),
+                         SubjectId: null,
+                         HistoryClamped: false),
                  })
         {
             var reached = await InvokeAsync(CreateInvocation(hubType, methodName, authorization));

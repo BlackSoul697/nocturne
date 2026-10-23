@@ -3,7 +3,9 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
+using Microsoft.Extensions.Time.Testing;
 using Moq;
+using Nocturne.API.Services;
 using Nocturne.API.Services.Audit;
 using Nocturne.API.Services.Connectors;
 using Nocturne.Connectors.Core.Interfaces;
@@ -11,6 +13,8 @@ using Nocturne.Connectors.Core.Models;
 using Nocturne.Core.Contracts.Audit;
 using Nocturne.Core.Contracts.Multitenancy;
 using Nocturne.Infrastructure.Data;
+using Nocturne.Infrastructure.Data.Services;
+using Nocturne.Tests.Shared.Infrastructure;
 using Xunit;
 
 namespace Nocturne.API.Tests.Services.Connectors;
@@ -19,12 +23,13 @@ public class ConnectorSyncServiceTests
 {
     private static ConnectorSyncService CreateService(
         IServiceProvider serviceProvider,
-        ITenantAccessor? tenantAccessor = null)
+        ITenantAccessor? tenantAccessor = null,
+        TimeProvider? timeProvider = null)
     {
         var ta = tenantAccessor ?? CreateTenantAccessor();
         var logger = NullLogger<ConnectorSyncService>.Instance;
         var progressReporter = Mock.Of<ISyncProgressReporter>();
-        return new ConnectorSyncService(serviceProvider, ta, logger, progressReporter);
+        return new ConnectorSyncService(serviceProvider, ta, logger, progressReporter, new TenantRunGuard(), timeProvider ?? TimeProvider.System);
     }
 
     private static ITenantAccessor CreateTenantAccessor(TenantContext? context = null)
@@ -50,14 +55,9 @@ public class ConnectorSyncServiceTests
         // the mutable scoped AuditContext to mark it system for the sync's duration.
         services.AddScoped<IAuditContext, AuditContext>();
 
-        // A real NocturneDbContext: the sync scope stamps its AuditContext property, which the
-        // mutation interceptor prefers over the ambient context. Sqlite rather than InMemory so
-        // the relational model builds; no connection is ever opened because nothing queries.
-        services.AddScoped(_ => new NocturneDbContext(
-            new DbContextOptionsBuilder<NocturneDbContext>()
-                .UseSqlite("DataSource=:memory:")
-                .ConfigureWarnings(w => w.Ignore(RelationalEventId.PendingModelChangesWarning))
-                .Options));
+        // The scope's read context, which every context created in it reads, over the scope's audit
+        // context as production's is.
+        services.AddScoped(sp => new TenantReadContext(null, null, sp.GetRequiredService<IAuditContext>()));
 
         foreach (var executor in executors)
         {
@@ -113,6 +113,76 @@ public class ConnectorSyncServiceTests
                 CancellationToken.None,
                 It.IsAny<ISyncProgressReporter?>()),
             Times.Once);
+    }
+
+    [Fact]
+    public async Task TriggerSyncAsync_ReturnsTheTimeTheExecutorTookOnTheServiceClock()
+    {
+        var clock = new FakeTimeProvider();
+        var executor = CreateMockExecutor("test", onSyncScope: _ => clock.Advance(TimeSpan.FromMilliseconds(1250)));
+        var sut = CreateService(BuildProvider(executor), timeProvider: clock);
+
+        var result = await sut.TriggerSyncAsync("test", new SyncRequest(), CancellationToken.None);
+
+        result.DurationMs.Should().Be(1250);
+    }
+
+    [Fact]
+    public async Task TriggerSyncAsync_WhenTheExecutorThrows_StillReturnsTheTimeSpent()
+    {
+        var clock = new FakeTimeProvider();
+        var executor = new Mock<IConnectorSyncExecutor>();
+        executor.Setup(x => x.ConnectorId).Returns("test");
+        executor.Setup(x => x.ExecuteSyncAsync(
+                It.IsAny<IServiceProvider>(),
+                It.IsAny<SyncRequest>(),
+                It.IsAny<CancellationToken>(),
+                It.IsAny<ISyncProgressReporter?>()))
+            .Returns(() =>
+            {
+                clock.Advance(TimeSpan.FromSeconds(3));
+                throw new InvalidOperationException("executor exploded");
+            });
+        var sut = CreateService(BuildProvider(executor.Object), timeProvider: clock);
+
+        var result = await sut.TriggerSyncAsync("test", new SyncRequest(), CancellationToken.None);
+
+        result.Success.Should().BeFalse();
+        result.DurationMs.Should().Be(3000);
+    }
+
+    [Fact]
+    public async Task TriggerSyncAsync_WhenNoConnectorRuns_ReturnsNoDuration()
+    {
+        var result = await CreateService(BuildProvider())
+            .TriggerSyncAsync("nonexistent", new SyncRequest(), CancellationToken.None);
+
+        result.DurationMs.Should().BeNull();
+    }
+
+    /// <summary>
+    /// The cursor-reset fan-outs and the timezone re-sync build their own requests, so the service
+    /// refuses a window covering no time too rather than letting a connector report it a success.
+    /// </summary>
+    [Fact]
+    public async Task TriggerSyncAsync_WhenFromIsNotBeforeTo_FailsWithoutRunningTheExecutor()
+    {
+        var executor = CreateMockExecutor("test");
+        var sut = CreateService(BuildProvider(executor));
+        var to = new DateTime(2026, 3, 1, 0, 0, 0, DateTimeKind.Utc);
+
+        var result = await sut.TriggerSyncAsync(
+            "test", new SyncRequest { From = to.AddDays(1), To = to }, CancellationToken.None);
+
+        result.Success.Should().BeFalse();
+        result.Message.Should().Contain("'from'");
+        Mock.Get(executor).Verify(
+            x => x.ExecuteSyncAsync(
+                It.IsAny<IServiceProvider>(),
+                It.IsAny<SyncRequest>(),
+                It.IsAny<CancellationToken>(),
+                It.IsAny<ISyncProgressReporter?>()),
+            Times.Never);
     }
 
     [Fact]
@@ -200,12 +270,12 @@ public class ConnectorSyncServiceTests
     [Fact]
     public async Task TriggerSyncAsync_SystemAttributesTheScopeInjectedDbContext()
     {
-        // Writes on the scope's directly-injected context are attributed by that context's own
-        // AuditContext, not the ambient one, so it needs stamping too.
+        // Writes on a context the scope creates are attributed by the scope's read context's
+        // AuditContext.
         IAuditContext? captured = null;
         var executor = CreateMockExecutor(
             "test",
-            onSyncScope: sp => captured = sp.GetRequiredService<NocturneDbContext>().AuditContext);
+            onSyncScope: sp => captured = sp.GetRequiredService<TenantReadContext>().AuditContext);
         var sut = CreateService(BuildProvider(executor));
 
         // Act
@@ -241,5 +311,121 @@ public class ConnectorSyncServiceTests
                 CancellationToken.None,
                 It.IsAny<ISyncProgressReporter?>()),
             Times.Once);
+    }
+
+    [Fact]
+    public async Task TriggerSyncAsync_WhenTheSameConnectorIsAlreadyRunning_RefusesTheSecondRunAndRunsTheExecutorOnce()
+    {
+        var tenant = new TenantContext(Guid.NewGuid(), "test-tenant", "Test", true, false);
+        var entered = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var release = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        var executor = new Mock<IConnectorSyncExecutor>();
+        executor.Setup(x => x.ConnectorId).Returns("test");
+        executor.Setup(x => x.ExecuteSyncAsync(
+                It.IsAny<IServiceProvider>(),
+                It.IsAny<SyncRequest>(),
+                It.IsAny<CancellationToken>(),
+                It.IsAny<ISyncProgressReporter?>()))
+            .Returns(async (IServiceProvider _, SyncRequest _, CancellationToken _, ISyncProgressReporter? _) =>
+            {
+                entered.TrySetResult();
+                await release.Task;
+                return new SyncResult { Success = true, Message = "OK" };
+            });
+
+        var sut = CreateService(BuildProvider(executor.Object), CreateTenantAccessor(tenant));
+
+        var first = sut.TriggerSyncAsync("test", new SyncRequest(), CancellationToken.None);
+        await entered.Task;
+
+        var second = await sut.TriggerSyncAsync("test", new SyncRequest(), CancellationToken.None);
+
+        second.Success.Should().BeFalse("the run was refused, not attempted");
+        second.AlreadyRunning.Should().BeTrue();
+        second.Message.Should().Contain("already running");
+
+        release.SetResult();
+        (await first).Success.Should().BeTrue();
+
+        executor.Verify(
+            x => x.ExecuteSyncAsync(
+                It.IsAny<IServiceProvider>(),
+                It.IsAny<SyncRequest>(),
+                It.IsAny<CancellationToken>(),
+                It.IsAny<ISyncProgressReporter?>()),
+            Times.Once,
+            "the refused run must not reach the executor");
+    }
+
+    [Fact]
+    public async Task TriggerSyncAsync_DifferentConnectors_RunConcurrently()
+    {
+        var tenant = new TenantContext(Guid.NewGuid(), "test-tenant", "Test", true, false);
+        var enteredA = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var enteredB = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var release = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        static IConnectorSyncExecutor Blocking(string id, TaskCompletionSource entered, TaskCompletionSource release)
+        {
+            var mock = new Mock<IConnectorSyncExecutor>();
+            mock.Setup(x => x.ConnectorId).Returns(id);
+            mock.Setup(x => x.ExecuteSyncAsync(
+                    It.IsAny<IServiceProvider>(),
+                    It.IsAny<SyncRequest>(),
+                    It.IsAny<CancellationToken>(),
+                    It.IsAny<ISyncProgressReporter?>()))
+                .Returns(async (IServiceProvider _, SyncRequest _, CancellationToken _, ISyncProgressReporter? _) =>
+                {
+                    entered.TrySetResult();
+                    await release.Task;
+                    return new SyncResult { Success = true };
+                });
+            return mock.Object;
+        }
+
+        var sut = CreateService(
+            BuildProvider(
+                Blocking("dexcom", enteredA, release),
+                Blocking("libre", enteredB, release)),
+            CreateTenantAccessor(tenant));
+
+        var first = sut.TriggerSyncAsync("dexcom", new SyncRequest(), CancellationToken.None);
+        var second = sut.TriggerSyncAsync("libre", new SyncRequest(), CancellationToken.None);
+
+        var bothEntered = Task.WhenAll(enteredA.Task, enteredB.Task);
+        (await Task.WhenAny(bothEntered, Task.Delay(TimeSpan.FromSeconds(5))))
+            .Should().Be(bothEntered, "unrelated connectors must not block each other");
+
+        release.SetResult();
+        await Task.WhenAll(first, second);
+    }
+
+    [Fact]
+    public async Task TriggerSyncAsync_WhenTheExecutorThrows_ReleasesTheKeyForALaterRun()
+    {
+        var tenant = new TenantContext(Guid.NewGuid(), "test-tenant", "Test", true, false);
+        var calls = 0;
+
+        var executor = new Mock<IConnectorSyncExecutor>();
+        executor.Setup(x => x.ConnectorId).Returns("test");
+        executor.Setup(x => x.ExecuteSyncAsync(
+                It.IsAny<IServiceProvider>(),
+                It.IsAny<SyncRequest>(),
+                It.IsAny<CancellationToken>(),
+                It.IsAny<ISyncProgressReporter?>()))
+            .ReturnsAsync(() => Interlocked.Increment(ref calls) == 1
+                ? throw new InvalidOperationException("executor exploded")
+                : new SyncResult { Success = true, Message = "OK" });
+
+        var sut = CreateService(BuildProvider(executor.Object), CreateTenantAccessor(tenant));
+
+        var failed = await sut.TriggerSyncAsync("test", new SyncRequest(), CancellationToken.None);
+        failed.Success.Should().BeFalse();
+
+        var succeeded = await sut.TriggerSyncAsync("test", new SyncRequest(), CancellationToken.None);
+
+        succeeded.Success.Should().BeTrue("the key the failed run held must have been released");
+        calls.Should().Be(2);
     }
 }

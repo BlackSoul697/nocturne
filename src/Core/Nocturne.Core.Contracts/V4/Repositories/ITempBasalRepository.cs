@@ -10,25 +10,19 @@ namespace Nocturne.Core.Contracts.V4.Repositories;
 /// </summary>
 /// <remarks>
 /// <see cref="TempBasal"/> records are also used as the underlying store for the legacy V1/V3
-/// temp basal treatment projection. Unlike most V4 repositories, this interface does not extend
-/// <see cref="IV4Repository{T}"/> directly because it needs a source-window reconcile operation
-/// used during connector re-sync.
+/// temp basal treatment projection. Creates upsert on the sync key like the other
+/// <see cref="ISyncKeyedRepository{T}"/> types; on top of that surface it carries the
+/// source-window reconcile used during connector re-sync and the active-at lookup.
 /// </remarks>
 /// <seealso cref="TempBasal"/>
 /// <seealso cref="Treatments.IIobCalculator"/>
 /// <seealso cref="IStateSpanService"/>
-public interface ITempBasalRepository : IDeviceAttributedRepository<TempBasal>, IBulkCreateRepository<TempBasal>
+public interface ITempBasalRepository
+    : ILegacyKeyedRepository<TempBasal>, IDeviceAttributedRepository<TempBasal>, ISyncKeyedRepository<TempBasal>
 {
-    /// <summary>Retrieve a page of <see cref="TempBasal"/> records filtered by time range, device, and source.</summary>
-    /// <param name="from">Inclusive start of the time window, or <c>null</c> for no lower bound.</param>
-    /// <param name="to">Exclusive end of the time window, or <c>null</c> for no upper bound.</param>
-    /// <param name="device">Optional device identifier filter.</param>
-    /// <param name="source">Optional data source filter (e.g., connector name).</param>
-    /// <param name="limit">Maximum number of records to return (default 100).</param>
-    /// <param name="offset">Number of records to skip for pagination (default 0).</param>
-    /// <param name="descending">When <c>true</c>, results are ordered newest-first (default).</param>
-    /// <param name="ct">Cancellation token.</param>
-    Task<IEnumerable<TempBasal>> GetAsync(
+    /// <inheritdoc cref="IV4Repository{T}.GetAsync"/>
+    /// <remarks>Filters and orders on the span start.</remarks>
+    new Task<IEnumerable<TempBasal>> GetAsync(
         DateTime? from,
         DateTime? to,
         string? device,
@@ -39,62 +33,38 @@ public interface ITempBasalRepository : IDeviceAttributedRepository<TempBasal>, 
         CancellationToken ct = default
     );
 
-    /// <summary>Returns a single <see cref="TempBasal"/> by its UUID v7, or <c>null</c> if not found.</summary>
-    /// <param name="id">UUID v7 record identifier.</param>
-    /// <param name="ct">Cancellation token.</param>
-    Task<TempBasal?> GetByIdAsync(Guid id, CancellationToken ct = default);
-
-    /// <summary>Retrieve a <see cref="TempBasal"/> by its original MongoDB ObjectId.</summary>
-    /// <param name="legacyId">Original MongoDB ObjectId string.</param>
-    /// <param name="ct">Cancellation token.</param>
-    /// <returns>The matching record, or <c>null</c> if not found.</returns>
-    Task<TempBasal?> GetByLegacyIdAsync(string legacyId, CancellationToken ct = default);
-
-    /// <summary>
-    /// Retrieve the first <see cref="TempBasal"/> whose UUID falls within <c>[low, high]</c>,
-    /// resolving a 24-hex ObjectId (the first 24 hex of a UUID) back to its record via a uuid
-    /// prefix range.
-    /// </summary>
-    /// <param name="low">Inclusive lower bound.</param>
-    /// <param name="high">Inclusive upper bound.</param>
-    /// <param name="ct">Cancellation token.</param>
-    Task<TempBasal?> GetByGuidRangeAsync(Guid low, Guid high, CancellationToken ct = default);
-
-    /// <summary>Persist a new <see cref="TempBasal"/> and return the saved entity.</summary>
-    /// <param name="model">Record to create.</param>
-    /// <param name="ct">Cancellation token.</param>
-    Task<TempBasal> CreateAsync(TempBasal model, WriteOrigin origin, CancellationToken ct = default);
-
-    /// <summary>Replace an existing <see cref="TempBasal"/> identified by <paramref name="id"/>.</summary>
-    /// <param name="id">UUID v7 identifier of the record to update.</param>
-    /// <param name="model">Updated record data.</param>
-    /// <param name="ct">Cancellation token.</param>
-    Task<TempBasal> UpdateAsync(Guid id, TempBasal model, WriteOrigin origin, CancellationToken ct = default);
-
-    /// <summary>Delete a <see cref="TempBasal"/> by its UUID v7.</summary>
-    /// <param name="id">UUID v7 identifier of the record to delete.</param>
-    /// <param name="ct">Cancellation token.</param>
-    Task DeleteAsync(Guid id, WriteOrigin origin, CancellationToken ct = default);
-
-    /// <summary>Delete the <see cref="TempBasal"/> with the given legacy MongoDB ObjectId.</summary>
-    /// <param name="legacyId">Original MongoDB ObjectId string.</param>
-    /// <param name="ct">Cancellation token.</param>
-    /// <returns>Number of records deleted (0 or 1).</returns>
-    Task<int> DeleteByLegacyIdAsync(string legacyId, WriteOrigin origin, CancellationToken ct = default);
-
-    /// <summary>Count <see cref="TempBasal"/> records within an optional time range.</summary>
-    /// <param name="from">Inclusive start, or <c>null</c> for no lower bound.</param>
-    /// <param name="to">Exclusive end, or <c>null</c> for no upper bound.</param>
-    /// <param name="ct">Cancellation token.</param>
-    Task<int> CountAsync(DateTime? from, DateTime? to, CancellationToken ct = default);
-
     /// <summary>
     /// Retrieve the start timestamp of the most recently stored <see cref="TempBasal"/>, optionally scoped to a data source.
     /// </summary>
     /// <remarks>Used by connectors to resume per-source sync without re-fetching already-stored data.</remarks>
     /// <param name="source">Optional data source filter. Pass <c>null</c> to search across all sources.</param>
-    /// <param name="ct">Cancellation token.</param>
     Task<DateTime?> GetLatestTimestampAsync(string? source = null, CancellationToken ct = default);
+
+    /// <summary>
+    /// Temp basals set by <see cref="TempBasal.Percent"/> whose rate follows the schedule (resolved
+    /// from it, or still unknown), starting in [<paramref name="from"/>, <paramref name="to"/>) with a
+    /// null bound open, oldest
+    /// first and after <paramref name="after"/> (start, id) when given. Uploaded rates are not read.
+    /// </summary>
+    Task<IReadOnlyList<TempBasal>> GetScheduleDerivedAsync(
+        DateTime? from, DateTime? to, (DateTime Start, Guid Id)? after, int limit, CancellationToken ct = default);
+
+    /// <summary>Whether any live temp basal has a schedule-derived or unknown rate.</summary>
+    Task<bool> HasScheduleDerivedAsync(CancellationToken ct = default);
+
+    /// <summary>
+    /// Sets the schedule-derived rate of one temp basal, only while it is live, still has
+    /// <paramref name="percent"/>, still has the <paramref name="readRate"/> it was read with and
+    /// still has a schedule-derived or unknown rate, so a concurrent edit, upload, delete or
+    /// re-resolution is never overwritten. A null <paramref name="rate"/> leaves it unknown.
+    /// </summary>
+    /// <returns>Whether the row was updated.</returns>
+    Task<bool> SetScheduleDerivedRateAsync(
+        Guid id, double percent, double? readRate, double? rate, double? scheduledRate, CancellationToken ct = default);
+
+    /// <summary>The live temp basals under these legacy ids.</summary>
+    Task<IReadOnlyList<TempBasal>> GetByLegacyIdsAsync(
+        IReadOnlyCollection<string> legacyIds, CancellationToken ct = default);
 
     /// <summary>
     /// Idempotently reconciles a source's temp basals within a date range: soft-deletes only the
@@ -102,7 +72,7 @@ public interface ITempBasalRepository : IDeviceAttributedRepository<TempBasal>, 
     /// <paramref name="keepLegacyIds"/>), leaving still-reported rows untouched.
     /// </summary>
     /// <remarks>
-    /// Used by connector re-sync. Pair with <see cref="BulkCreateAsync"/> — which skips legacy ids
+    /// Used by connector re-sync. Pair with <see cref="IBulkCreateRepository{TRecord}.BulkCreateAsync"/> — which skips legacy ids
     /// that are already active — so re-importing an unchanged window is a no-op rather than a
     /// delete-the-whole-window-then-reinsert sweep. The old sweep re-created every record as a new
     /// row each cycle (system-scope deletes don't block re-insertion), accumulating millions of
@@ -113,7 +83,6 @@ public interface ITempBasalRepository : IDeviceAttributedRepository<TempBasal>, 
     /// <param name="to">Inclusive end of the reconcile range.</param>
     /// <param name="keepLegacyIds">Legacy ids still reported by the source in this window; rows with
     /// these ids are kept, all other active rows of this source in range are soft-deleted.</param>
-    /// <param name="ct">Cancellation token.</param>
     /// <returns>Number of records soft-deleted.</returns>
     Task<int> SoftDeleteAbsentBySourceAndDateRangeAsync(
         string source,
@@ -135,6 +104,5 @@ public interface ITempBasalRepository : IDeviceAttributedRepository<TempBasal>, 
     /// at or after its start.
     /// </remarks>
     /// <param name="at">The instant to evaluate.</param>
-    /// <param name="ct">Cancellation token.</param>
     Task<TempBasal?> GetActiveAtAsync(DateTime at, CancellationToken ct = default);
 }

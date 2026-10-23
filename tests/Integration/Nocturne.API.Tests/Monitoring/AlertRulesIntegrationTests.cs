@@ -2,6 +2,7 @@ using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
 using FluentAssertions;
+using Microsoft.EntityFrameworkCore;
 using Nocturne.API.Tests.Integration.Infrastructure;
 using Npgsql;
 using Xunit;
@@ -14,13 +15,14 @@ namespace Nocturne.API.Tests.Integration.Monitoring;
 /// <c>/api/v4/alert-rules</c>.
 /// </summary>
 [Trait("Category", "Integration")]
-public class AlertRulesIntegrationTests : AspireIntegrationTestBase
+public class AlertRulesIntegrationTests : ApiIntegrationTestBase
 {
     private Guid _tenantId;
+    private Guid _subjectId;
     private string _accessToken = null!;
 
     public AlertRulesIntegrationTests(
-        AspireIntegrationTestFixture fixture,
+        ApiIntegrationTestFixture fixture,
         ITestOutputHelper output)
         : base(fixture, output) { }
 
@@ -39,7 +41,7 @@ public class AlertRulesIntegrationTests : AspireIntegrationTestBase
         await conn.OpenAsync();
 
         _tenantId = await AuthTestHelpers.GetTenantIdAsync(conn);
-        (_, _accessToken) = await AuthTestHelpers.SeedAuthenticatedSubjectAsync(conn, _tenantId, "AlertRules Test User");
+        (_subjectId, _accessToken) = await AuthTestHelpers.SeedAuthenticatedSubjectAsync(conn, _tenantId, "AlertRules Test User");
 
         Log($"Seeded tenant {_tenantId}");
     }
@@ -47,37 +49,14 @@ public class AlertRulesIntegrationTests : AspireIntegrationTestBase
     private static object CreateValidAlertRulePayload(string name = "Test High Alert") => new
     {
         name,
-        conditionType = "Threshold",
+        conditionType = "threshold",
         conditionParams = new { direction = "above", value = 180 },
-        hysteresisMinutes = 15,
-        confirmationReadings = 2,
-        severity = "Normal",
+        severity = "warning",
         isEnabled = true,
         sortOrder = 0,
-        schedules = new[]
+        channels = new[]
         {
-            new
-            {
-                name = "Default",
-                isDefault = true,
-                timezone = "UTC",
-                escalationSteps = new[]
-                {
-                    new
-                    {
-                        stepOrder = 0,
-                        delaySeconds = 0,
-                        channels = new[]
-                        {
-                            new
-                            {
-                                channelType = "WebPush",
-                                destination = "default"
-                            }
-                        }
-                    }
-                }
-            }
+            new { channelType = "in_app", destination = "" }
         }
     };
 
@@ -123,10 +102,10 @@ public class AlertRulesIntegrationTests : AspireIntegrationTestBase
         {
             name = "Bad Rule",
             conditionType = "InvalidType",
-            severity = "Normal",
+            severity = "warning",
             isEnabled = true,
             sortOrder = 0,
-            schedules = Array.Empty<object>()
+            channels = Array.Empty<object>()
         };
 
         // Act
@@ -185,17 +164,11 @@ public class AlertRulesIntegrationTests : AspireIntegrationTestBase
         var content = await response.Content.ReadAsStringAsync();
         var body = JsonSerializer.Deserialize<JsonElement>(content);
 
-        body.GetProperty("schedules").GetArrayLength().Should().BeGreaterThan(0);
+        body.GetProperty("channels").GetArrayLength().Should().BeGreaterThan(0);
 
-        var schedule = body.GetProperty("schedules")[0];
-        schedule.GetProperty("escalationSteps").GetArrayLength().Should().BeGreaterThan(0);
-
-        var step = schedule.GetProperty("escalationSteps")[0];
-        step.GetProperty("channels").GetArrayLength().Should().BeGreaterThan(0);
-
-        var channel = step.GetProperty("channels")[0];
-        channel.GetProperty("channelType").GetString().Should().Be("WebPush");
-        channel.GetProperty("destination").GetString().Should().Be("default");
+        var channel = body.GetProperty("channels")[0];
+        channel.GetProperty("channelType").GetString().Should().Be("in_app");
+        channel.GetProperty("destination").GetString().Should().Be(_subjectId.ToString(), "an in-app channel saved blank goes to the member who saved it");
     }
 
     [Fact]
@@ -295,11 +268,12 @@ public class AlertRulesIntegrationTests : AspireIntegrationTestBase
         await using var conn = new NpgsqlConnection(connStr);
         await conn.OpenAsync();
 
-        var tenantBId = await AuthTestHelpers.SeedTenantAsync(conn, "tenant-b", "Tenant B");
+        var tenantBSlug = $"tenant-b-{Guid.NewGuid():N}"[..20];
+        var tenantBId = await AuthTestHelpers.SeedTenantAsync(Fixture, tenantBSlug, "Tenant B");
         var (_, tenantBToken) = await AuthTestHelpers.SeedAuthenticatedSubjectAsync(conn, tenantBId, "Tenant B User");
 
         var baseDomain = AuthTestHelpers.GetBaseDomain(ApiClient);
-        using var clientB = AuthTestHelpers.CreateAuthenticatedTenantClient(Fixture, "tenant-b", baseDomain, tenantBToken);
+        using var clientB = AuthTestHelpers.CreateAuthenticatedTenantClient(Fixture, tenantBSlug, baseDomain, tenantBToken);
 
         // Act - list rules from tenant B
         var response = await clientB.GetAsync("/api/v4/alert-rules");
@@ -316,58 +290,23 @@ public class AlertRulesIntegrationTests : AspireIntegrationTestBase
     }
 
     [Fact]
-    public async Task CreateAlertRule_WithEscalationSteps_PersistsChannels()
+    public async Task CreateAlertRule_WithSeveralChannels_PersistsThemInOrder()
     {
         // Arrange
         using var client = AuthTestHelpers.CreateAuthenticatedSubjectClient(Fixture, _accessToken);
 
         var payload = new
         {
-            name = "Multi-Step Alert",
-            conditionType = "Threshold",
+            name = "Multi-Channel Alert",
+            conditionType = "threshold",
             conditionParams = new { direction = "above", value = 250 },
-            hysteresisMinutes = 10,
-            confirmationReadings = 1,
-            severity = "Normal",
+            severity = "warning",
             isEnabled = true,
             sortOrder = 0,
-            schedules = new[]
+            channels = new[]
             {
-                new
-                {
-                    name = "Default",
-                    isDefault = true,
-                    timezone = "UTC",
-                    escalationSteps = new object[]
-                    {
-                        new
-                        {
-                            stepOrder = 0,
-                            delaySeconds = 0,
-                            channels = new[]
-                            {
-                                new
-                                {
-                                    channelType = "WebPush",
-                                    destination = "default"
-                                }
-                            }
-                        },
-                        new
-                        {
-                            stepOrder = 1,
-                            delaySeconds = 300,
-                            channels = new[]
-                            {
-                                new
-                                {
-                                    channelType = "Webhook",
-                                    destination = "https://example.com/webhook"
-                                }
-                            }
-                        }
-                    }
-                }
+                new { channelType = "in_app", destination = "" },
+                new { channelType = "webhook", destination = "https://example.com/webhook" }
             }
         };
 
@@ -386,16 +325,127 @@ public class AlertRulesIntegrationTests : AspireIntegrationTestBase
         var content = await getResponse.Content.ReadAsStringAsync();
         var body = JsonSerializer.Deserialize<JsonElement>(content);
 
-        var steps = body.GetProperty("schedules")[0].GetProperty("escalationSteps");
-        steps.GetArrayLength().Should().Be(2);
+        var channels = body.GetProperty("channels").EnumerateArray()
+            .OrderBy(c => c.GetProperty("sortOrder").GetInt32())
+            .ToList();
+        channels.Should().HaveCount(2);
 
-        var step0 = steps.EnumerateArray().First(s => s.GetProperty("stepOrder").GetInt32() == 0);
-        var step1 = steps.EnumerateArray().First(s => s.GetProperty("stepOrder").GetInt32() == 1);
+        channels[0].GetProperty("channelType").GetString().Should().Be("in_app");
+        channels[0].GetProperty("destination").GetString().Should().Be(_subjectId.ToString(), "an in-app channel saved blank goes to the member who saved it");
 
-        step0.GetProperty("channels")[0].GetProperty("channelType").GetString().Should().Be("WebPush");
-        step0.GetProperty("channels")[0].GetProperty("destination").GetString().Should().Be("default");
+        channels[1].GetProperty("channelType").GetString().Should().Be("webhook");
+        channels[1].GetProperty("destination").GetString().Should().Be("https://example.com/webhook");
+    }
 
-        step1.GetProperty("channels")[0].GetProperty("channelType").GetString().Should().Be("Webhook");
-        step1.GetProperty("channels")[0].GetProperty("destination").GetString().Should().Be("https://example.com/webhook");
+    [Fact]
+    public async Task TestFire_InAppChannelSavedBlank_ReachesTheSaversNotificationCentre()
+    {
+        // Arrange
+        using var client = AuthTestHelpers.CreateAuthenticatedSubjectClient(Fixture, _accessToken);
+        var createResponse = await client.PostAsJsonAsync(
+            "/api/v4/alert-rules", CreateValidAlertRulePayload("Reaches the saver"));
+        createResponse.StatusCode.Should().Be(HttpStatusCode.Created);
+        var created = await createResponse.Content.ReadFromJsonAsync<JsonElement>();
+        var ruleId = created.GetProperty("id").GetGuid();
+
+        // Act
+        var fire = await client.PostAsync($"/api/v4/alert-rules/{ruleId}/test-fire", null);
+
+        // Assert
+        fire.StatusCode.Should().Be(HttpStatusCode.Accepted);
+
+        var notifications = await client.GetFromJsonAsync<JsonElement>("/api/v4/notifications");
+        notifications.EnumerateArray()
+            .Select(n => n.GetProperty("title").GetString())
+            .Should().Contain("[Test] Reaches the saver");
+
+        await using var db = Fixture.CreateDbContext(_tenantId);
+        var deliveries = await db.AlertDeliveries
+            .Where(d => db.AlertRuleChannels.Any(c => c.Id == d.AlertRuleChannelId && c.AlertRuleId == ruleId))
+            .Select(d => new { d.Status, d.Destination })
+            .ToListAsync();
+        deliveries.Should().ContainSingle()
+            .Which.Should().BeEquivalentTo(new { Status = "delivered", Destination = _subjectId.ToString() });
+    }
+
+    [Fact]
+    public async Task GetInAppRecipients_ClinicianWithAlertsRead_IsForbidden()
+    {
+        // Arrange - a member whose only role is clinician, which grants alerts.read
+        var connStr = await GetPostgresConnectionStringAsync();
+        await using var conn = new NpgsqlConnection(connStr);
+        await conn.OpenAsync();
+        var (clinicianId, token) = await AuthTestHelpers.SeedAuthenticatedSubjectAsync(conn, _tenantId, "Clinician");
+        var clinicianRole = await AuthTestHelpers.GetTenantRoleIdAsync(conn, _tenantId, "clinician");
+        await using (var cmd = conn.CreateCommand())
+        {
+            cmd.CommandText = """
+                DELETE FROM subject_roles WHERE subject_id = @subjectId;
+                UPDATE tenant_members SET direct_permissions = '[]'::jsonb
+                 WHERE tenant_id = @tenantId AND subject_id = @subjectId;
+                INSERT INTO tenant_member_roles (id, tenant_member_id, tenant_role_id)
+                SELECT gen_random_uuid(), id, @roleId FROM tenant_members
+                 WHERE tenant_id = @tenantId AND subject_id = @subjectId;
+                """;
+            cmd.Parameters.AddWithValue("subjectId", clinicianId);
+            cmd.Parameters.AddWithValue("tenantId", _tenantId);
+            cmd.Parameters.AddWithValue("roleId", clinicianRole);
+            await cmd.ExecuteNonQueryAsync();
+        }
+        using var client = AuthTestHelpers.CreateBearerClient(Fixture, token);
+
+        // Act
+        var rules = await client.GetAsync("/api/v4/alert-rules");
+        var recipients = await client.GetAsync("/api/v4/alert-rules/in-app-recipients");
+
+        // Assert
+        rules.StatusCode.Should().Be(HttpStatusCode.OK, "the clinician reads alert rules");
+        recipients.StatusCode.Should().Be(HttpStatusCode.Forbidden);
+    }
+
+    [Fact]
+    public async Task GetInAppRecipients_GuestLinkWithAlertsRead_IsForbidden()
+    {
+        // Arrange - a guest link granted alerts.read, activated into a session cookie
+        var session = await AuthTestHelpers.IssueSessionTokenAsync(Fixture, _subjectId);
+        using var owner = AuthTestHelpers.CreateBearerClient(Fixture, session);
+        var link = await owner.PostAsJsonAsync("/api/v4/guest-links", new
+        {
+            label = "Alerts guest",
+            scopes = new[] { "glucose.read", "alerts.read" },
+        });
+        link.StatusCode.Should().Be(HttpStatusCode.OK);
+        var code = (await link.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("code").GetString();
+
+        using var guest = Fixture.CreateHttpClient(new HttpClientHandler { UseCookies = true });
+        (await guest.PostAsJsonAsync("/api/v4/guest-links/activate", new { code }))
+            .StatusCode.Should().Be(HttpStatusCode.OK);
+
+        // Act
+        var rules = await guest.GetAsync("/api/v4/alert-rules");
+        var recipients = await guest.GetAsync("/api/v4/alert-rules/in-app-recipients");
+
+        // Assert
+        rules.StatusCode.Should().Be(HttpStatusCode.OK, "the guest session reads alert rules");
+        recipients.StatusCode.Should().Be(HttpStatusCode.Forbidden);
+    }
+
+    [Fact]
+    public async Task CreateAlertRule_WebPushChannel_IsRejectedWithItsReplacement()
+    {
+        using var client = AuthTestHelpers.CreateAuthenticatedSubjectClient(Fixture, _accessToken);
+        var payload = new
+        {
+            name = "Browser push",
+            conditionType = "threshold",
+            conditionParams = new { direction = "above", value = 180 },
+            severity = "warning",
+            channels = new[] { new { channelType = "web_push", destination = "" } },
+        };
+
+        var response = await client.PostAsJsonAsync("/api/v4/alert-rules", payload);
+
+        response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+        (await response.Content.ReadAsStringAsync()).Should().Contain("in_app");
     }
 }

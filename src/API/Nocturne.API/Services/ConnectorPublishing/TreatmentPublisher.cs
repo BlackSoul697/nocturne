@@ -7,9 +7,11 @@ using Nocturne.Core.Contracts.Treatments;
 using Nocturne.Core.Contracts.V4.Repositories;
 using Nocturne.Core.Models;
 using Nocturne.Core.Models.V4;
+using Nocturne.Infrastructure.Data.Entities;
 using Nocturne.Infrastructure.Data.Entities.V4;
 using Nocturne.Infrastructure.Data.Services;
 using Nocturne.Core.Contracts.V4;
+using Nocturne.API.Services.V4;
 
 namespace Nocturne.API.Services.ConnectorPublishing;
 
@@ -21,8 +23,10 @@ namespace Nocturne.API.Services.ConnectorPublishing;
 /// <seealso cref="ITreatmentPublisher"/>
 internal sealed class TreatmentPublisher : ConnectorPublisherBase, ITreatmentPublisher
 {
-    private readonly ITenantDbContextFactory _contextFactory;
+    private readonly INocturneDbContextFactory _contextFactory;
     private readonly ITreatmentService _treatmentService;
+    private readonly ITreatmentDecomposer _treatmentDecomposer;
+    private readonly ITreatmentCache _treatmentCache;
     private readonly IBolusRepository _bolusRepository;
     private readonly ICarbIntakeRepository _carbIntakeRepository;
     private readonly IBGCheckRepository _bgCheckRepository;
@@ -37,8 +41,10 @@ internal sealed class TreatmentPublisher : ConnectorPublisherBase, ITreatmentPub
     private readonly IPatientDeviceStamper _patientDeviceStamper;
 
     public TreatmentPublisher(
-        ITenantDbContextFactory contextFactory,
+        INocturneDbContextFactory contextFactory,
         ITreatmentService treatmentService,
+        ITreatmentDecomposer treatmentDecomposer,
+        ITreatmentCache treatmentCache,
         IBolusRepository bolusRepository,
         ICarbIntakeRepository carbIntakeRepository,
         IBGCheckRepository bgCheckRepository,
@@ -58,6 +64,8 @@ internal sealed class TreatmentPublisher : ConnectorPublisherBase, ITreatmentPub
     {
         _contextFactory = contextFactory ?? throw new ArgumentNullException(nameof(contextFactory));
         _treatmentService = treatmentService ?? throw new ArgumentNullException(nameof(treatmentService));
+        _treatmentDecomposer = treatmentDecomposer ?? throw new ArgumentNullException(nameof(treatmentDecomposer));
+        _treatmentCache = treatmentCache ?? throw new ArgumentNullException(nameof(treatmentCache));
         _bolusRepository = bolusRepository ?? throw new ArgumentNullException(nameof(bolusRepository));
         _carbIntakeRepository = carbIntakeRepository ?? throw new ArgumentNullException(nameof(carbIntakeRepository));
         _bgCheckRepository = bgCheckRepository ?? throw new ArgumentNullException(nameof(bgCheckRepository));
@@ -72,6 +80,12 @@ internal sealed class TreatmentPublisher : ConnectorPublisherBase, ITreatmentPub
         _patientDeviceStamper = patientDeviceStamper ?? throw new ArgumentNullException(nameof(patientDeviceStamper));
     }
 
+    /// <remarks>
+    /// Every row written carries the fingerprint of the treatment it came from
+    /// (<see cref="UpstreamFingerprintScope"/>), which <see cref="PublishRecentTreatmentsAsync"/>
+    /// compares against. Rows stored under a treatment's client id are moved onto its id first
+    /// (<see cref="ITreatmentDecomposer.RekeyClientIdRecordsAsync"/>), so the write lands on them.
+    /// </remarks>
     public async Task<bool> PublishTreatmentsAsync(
         IEnumerable<Treatment> treatments,
         string source,
@@ -79,9 +93,29 @@ internal sealed class TreatmentPublisher : ConnectorPublisherBase, ITreatmentPub
     {
         try
         {
-            var written = await _treatmentService.CreateTreatmentsAsync(treatments, cancellationToken);
+            var list = treatments.ToList();
+            var fingerprints = new Dictionary<(string? Source, string LegacyId), string?>();
+            foreach (var treatment in list)
+            {
+                if (treatment.Id is { Length: > 0 } id)
+                    fingerprints[(treatment.DataSource ?? source, id)] = TreatmentDecomposer.UpstreamFingerprint(treatment);
+            }
+
+            using (PushSystemAudit())
+                await _treatmentDecomposer.RekeyClientIdRecordsAsync(source, list, cancellationToken);
+
+            using var scope = UpstreamFingerprintScope.Open(fingerprints);
+            var written = await _treatmentService.CreateTreatmentsAsync(list, cancellationToken);
             RecordSkippedDeleted(written.SkippedDeleted);
+            RecordRefused(written.Rejected.Count);
             return true;
+        }
+        catch (TreatmentBatchFailedException failed) when (!cancellationToken.IsCancellationRequested)
+        {
+            RecordSkippedDeleted(failed.Written.SkippedDeleted);
+            RecordRefused(failed.Written.Rejected.Count);
+            Logger.LogError(failed, "Failed to publish treatments for {Source}", source);
+            return false;
         }
         catch (OperationCanceledException) { throw; }
         catch (Exception ex)
@@ -161,6 +195,13 @@ internal sealed class TreatmentPublisher : ConnectorPublisherBase, ITreatmentPub
                 "Reclassified {Count}/{Total} TempBasal records from Scheduled to Algorithm "
                 + "(rate differs from programmed basal schedule) for {Source}",
                 reclassifiedCount, recordList.Count, source);
+
+        foreach (var record in recordList)
+        {
+            record.AdditionalProperties = TempBasalAutomaticFlag.Keep(
+                record.AdditionalProperties, TempBasalAutomaticFlag.Of(record.Origin));
+            record.OriginEvidence = TempBasalOriginEvidence.Reported;
+        }
     }
 
     /// <summary>
@@ -194,7 +235,8 @@ internal sealed class TreatmentPublisher : ConnectorPublisherBase, ITreatmentPub
         var minMills = scheduledRecords.Min(r => r.StartMills);
         var maxMills = scheduledRecords.Max(r => r.StartMills);
 
-        var resolve = await _basalRateResolver.BuildResolverAsync(minMills, maxMills, cancellationToken);
+        // The range is half-open, and the last record's own start has to fall inside it.
+        var resolve = await _basalRateResolver.BuildResolverAsync(minMills, maxMills + 1, cancellationToken);
 
         var reclassified = 0;
         foreach (var record in scheduledRecords)
@@ -202,7 +244,7 @@ internal sealed class TreatmentPublisher : ConnectorPublisherBase, ITreatmentPub
             var programmedRate = resolve(record.StartMills);
             record.ScheduledRate = programmedRate;
 
-            if (Math.Abs(record.Rate - programmedRate) > rateTolerance)
+            if (record.Rate is { } rate && Math.Abs(rate - programmedRate) > rateTolerance)
             {
                 record.Origin = TempBasalOrigin.Algorithm;
                 reclassified++;
@@ -239,6 +281,71 @@ internal sealed class TreatmentPublisher : ConnectorPublisherBase, ITreatmentPub
             () => _basalInjectionRepository.GetLatestTimestampAsync(source, cancellationToken),
             () => _noteRepository.GetLatestTimestampAsync(source, cancellationToken),
             () => _deviceEventRepository.GetLatestTimestampAsync(source, cancellationToken));
+
+    /// <inheritdoc />
+    public Task<DateTime?> GetLatestTreatmentTimestampAsync(
+        SyncDataType type,
+        string source,
+        CancellationToken cancellationToken = default)
+        => type switch
+        {
+            SyncDataType.Boluses => _bolusRepository.GetLatestTimestampAsync(source, cancellationToken),
+            SyncDataType.CarbIntake => _carbIntakeRepository.GetLatestTimestampAsync(source, cancellationToken),
+            SyncDataType.ManualBG or SyncDataType.BGChecks =>
+                _bgCheckRepository.GetLatestTimestampAsync(source, cancellationToken),
+            SyncDataType.BolusCalculations =>
+                _bolusCalculationRepository.GetLatestTimestampAsync(source, cancellationToken),
+            SyncDataType.TempBasals => _tempBasalRepository.GetLatestTimestampAsync(source, cancellationToken),
+            SyncDataType.BasalInjections =>
+                _basalInjectionRepository.GetLatestTimestampAsync(source, cancellationToken),
+            SyncDataType.Notes => _noteRepository.GetLatestTimestampAsync(source, cancellationToken),
+            SyncDataType.DeviceEvents => _deviceEventRepository.GetLatestTimestampAsync(source, cancellationToken),
+            _ => throw new ArgumentOutOfRangeException(nameof(type), type, "Not a treatment type."),
+        };
+
+    /// <inheritdoc />
+    /// <remarks>The conflict rule is <see cref="TreatmentDecomposer.SelectForRepublishAsync"/>'s.</remarks>
+    public async Task<int?> PublishRecentTreatmentsAsync(
+        IEnumerable<Treatment> treatments,
+        string source,
+        WriteOrigin origin, CancellationToken cancellationToken = default)
+    {
+        IReadOnlyList<Treatment> selected;
+        try
+        {
+            using (PushSystemAudit())
+                selected = await _treatmentDecomposer.SelectForRepublishAsync(source, treatments.ToList(), cancellationToken);
+        }
+        catch (OperationCanceledException) { throw; }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Failed to compare recent treatments with what is stored for {Source}", source);
+            return null;
+        }
+
+        if (selected.Count == 0)
+            return 0;
+
+        return await PublishTreatmentsAsync(selected, source, origin, cancellationToken) ? selected.Count : null;
+    }
+
+    /// <inheritdoc />
+    public Task<IReadOnlyDictionary<string, DateTime>> GetStoredTreatmentIdsAsync(
+        string source, DateTime from, DateTime to, CancellationToken cancellationToken = default)
+        => _treatmentDecomposer.GetLegacyIdsFromSourceAsync(source, from, to, cancellationToken);
+
+    /// <inheritdoc />
+    public async Task<int> DeleteTreatmentsAsync(
+        string source, IReadOnlySet<string> legacyIds, CancellationToken cancellationToken = default)
+    {
+        int deleted;
+        using (PushSystemAudit())
+            deleted = await _treatmentDecomposer.DeleteFromSourceAsync(source, legacyIds, cancellationToken);
+
+        if (deleted > 0)
+            await _treatmentCache.InvalidateAsync(cancellationToken);
+        return deleted;
+    }
 
     // ── Patient Insulin resolution helpers ──────────────────────────────
 

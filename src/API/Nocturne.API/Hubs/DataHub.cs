@@ -7,6 +7,7 @@ using Nocturne.API.Services.Realtime;
 using Nocturne.Core.Contracts.Glucose;
 using Nocturne.Core.Contracts.Treatments;
 using Nocturne.Core.Models.Authorization;
+using Nocturne.Core.Models.Queries;
 
 namespace Nocturne.API.Hubs;
 
@@ -114,9 +115,8 @@ public class DataHub : TenantAwareHub
                         Context.ConnectionId, TenantGroup(RealtimeGroups.Relay));
                 }
 
-                // If user is admin, also add to admin group for admin-specific notifications
                 var httpContext = Context.GetHttpContext();
-                if (httpContext?.IsAdmin() == true)
+                if (httpContext?.IsSuperuser() == true)
                 {
                     await Groups.AddToGroupAsync(
                         Context.ConnectionId, TenantGroup(RealtimeGroups.Admin));
@@ -219,10 +219,10 @@ public class DataHub : TenantAwareHub
             IEnumerable<Core.Models.DeviceStatus> deviceStatuses = [];
             if (authorization.Satisfies(Scope.DevicesRead))
             {
-                deviceStatuses = await projectionService.GetAsync(
+                deviceStatuses = await projectionService.GetMatchingAsync(
+                    FindQuery.Empty,
                     count: 1000,
                     skip: 0,
-                    find: null,
                     ct: default
                 );
             }
@@ -268,8 +268,8 @@ public class DataHub : TenantAwareHub
 
     /// <summary>
     /// Subscribe to storage collections (replaces socket.io '/storage' namespace 'subscribe' event).
-    /// Each collection is joined only when the connection's credential satisfies the read scope
-    /// governing it, so the returned list may be narrower than the one requested.
+    /// Each collection is joined only when <see cref="HubAuthorization.MayReceiveCategory"/> allows
+    /// it, so the returned list may be narrower than the one requested.
     /// </summary>
     /// <param name="request">Storage subscription request</param>
     /// <returns>Subscription result</returns>
@@ -277,25 +277,17 @@ public class DataHub : TenantAwareHub
     {
         try
         {
-            var governingScopes = RealtimeCategories.GoverningScopes;
             var collections = request.Collections ?? RealtimeCategories.All;
             var authorization = HubAuthorizationState.Resolve(Context)!;
             var subscribed = new List<string>();
 
             foreach (var collection in collections)
             {
-                // An unclassified collection has no governing scope and cannot be subscribed to.
-                if (!governingScopes.TryGetValue(collection, out var requiredScope))
-                {
-                    continue;
-                }
-
-                if (!authorization.Satisfies(requiredScope))
+                if (!authorization.MayReceiveCategory(collection))
                 {
                     _logger.LogDebug(
-                        "Client {ConnectionId} lacks {RequiredScope} for collection {Collection}",
+                        "Client {ConnectionId} may not receive collection {Collection}",
                         Context.ConnectionId,
-                        requiredScope,
                         collection
                     );
                     continue;

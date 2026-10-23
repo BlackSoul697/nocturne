@@ -9,7 +9,8 @@
     CardTitle,
   } from "$lib/components/ui/card";
   import * as Select from "$lib/components/ui/select";
-  import { Moon, CalendarRange } from "lucide-svelte";
+  import Moon from "@lucide/svelte/icons/moon";
+  import CalendarRange from "@lucide/svelte/icons/calendar-range";
   import {
     Actogram,
     buildDayRange,
@@ -264,9 +265,8 @@
   />
 </svelte:head>
 
-<div class="@container container mx-auto space-y-6 p-3 @md:p-6 max-w-7xl">
+<div class="@container space-y-6">
   <div class="print:hidden">
-    <h1 class="text-2xl @md:text-3xl font-bold">Sleep & Overnight</h1>
     <p class="text-muted-foreground">
       Sleep patterns with overnight glucose overlay
     </p>

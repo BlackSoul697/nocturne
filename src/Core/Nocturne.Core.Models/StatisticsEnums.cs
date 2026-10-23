@@ -31,7 +31,6 @@ public enum GlycomicRiskInterpretation
     [JsonPropertyName("poor")]
     Poor,
 
-    /// <summary>Unknown risk interpretation</summary>
     [JsonPropertyName("unknown")]
     Unknown,
 }
@@ -57,6 +56,10 @@ public enum ClinicalAssessmentLevel
     /// <summary>NeedsSignificantImprovement - most targets not met</summary>
     [JsonPropertyName("needsSignificantImprovement")]
     NeedsSignificantImprovement,
+
+    /// <summary>InsufficientData - at least one target could not be assessed, so no overall grade is given</summary>
+    [JsonPropertyName("insufficientData")]
+    InsufficientData,
 }
 
 /// <summary>
@@ -65,23 +68,18 @@ public enum ClinicalAssessmentLevel
 [JsonConverter(typeof(JsonStringEnumConverter))]
 public enum GlucoseManagementIndicatorLevel
 {
-    /// <summary>Non-diabetic range</summary>
     [JsonPropertyName("nonDiabetic")]
     NonDiabetic,
 
-    /// <summary>Prediabetes range</summary>
     [JsonPropertyName("prediabetes")]
     Prediabetes,
 
-    /// <summary>Well-controlled diabetes</summary>
     [JsonPropertyName("wellControlled")]
     WellControlled,
 
-    /// <summary>Moderate control</summary>
     [JsonPropertyName("moderateControl")]
     ModerateControl,
 
-    /// <summary>Suboptimal control</summary>
     [JsonPropertyName("suboptimalControl")]
     SuboptimalControl,
 
@@ -90,9 +88,6 @@ public enum GlucoseManagementIndicatorLevel
     PoorControl,
 }
 
-/// <summary>
-/// Data sufficiency status
-/// </summary>
 [JsonConverter(typeof(JsonStringEnumConverter))]
 public enum DataSufficiencyStatus
 {

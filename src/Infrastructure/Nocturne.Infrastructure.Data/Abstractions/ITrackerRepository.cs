@@ -140,7 +140,9 @@ public interface ITrackerRepository
         CancellationToken cancellationToken = default);
 
     /// <summary>
-    /// Completes an active tracker instance with a specified reason
+    /// Completes a running tracker instance with a specified reason, in one conditional write.
+    /// Returns null, changing nothing, when the instance is not found or is already completed, so
+    /// of two writers completing one instance exactly one gets it back.
     /// </summary>
     Task<TrackerInstanceEntity?> CompleteInstanceAsync(
         Guid instanceId,
@@ -148,6 +150,48 @@ public interface ITrackerRepository
         string? completionNotes = null,
         string? completeTreatmentId = null,
         DateTime? completedAt = null,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// The running instances, of any definition, whose <see cref="TrackerInstanceEntity.StartTreatmentId"/>
+    /// is one of <paramref name="startTreatmentIds"/>.
+    /// </summary>
+    Task<List<TrackerInstanceEntity>> GetRunningStartedByAsync(
+        IReadOnlyCollection<string> startTreatmentIds,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>Whether a run of <paramref name="definitionId"/> was completed after <paramref name="at"/>.</summary>
+    Task<bool> HasRunEndedAfterAsync(
+        Guid definitionId,
+        DateTime at,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Undoes the run of <paramref name="definitionId"/> that <paramref name="startTreatmentId"/>
+    /// started, while that run is still going: deletes it and reopens the runs it replaced, which
+    /// carry the same id as <see cref="TrackerInstanceEntity.CompleteTreatmentId"/>. A run that has
+    /// since been replaced is history and is left as it is. Call it under the definition's lock
+    /// (<see cref="ExecuteUnderDefinitionLockAsync{T}"/>).
+    /// </summary>
+    /// <returns>What was undone, or null when no running instance was started by the id.</returns>
+    Task<TrackerStartRevert?> RevertStartAsync(
+        Guid definitionId,
+        string startTreatmentId,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Runs <paramref name="work"/> in one transaction holding the definition's lock, so that
+    /// writers succeeding one tracker's run take turns.
+    /// </summary>
+    /// <remarks>
+    /// <paramref name="work"/> can run more than once when the store retries a transient failure.
+    /// <paramref name="verifySucceeded"/> judges, after a commit that reported failure, whether the
+    /// result the attempt returned landed anyway.
+    /// </remarks>
+    Task<T> ExecuteUnderDefinitionLockAsync<T>(
+        Guid definitionId,
+        Func<ITrackerRepository, CancellationToken, Task<T>> work,
+        Func<ITrackerRepository, T, CancellationToken, Task<bool>>? verifySucceeded = null,
         CancellationToken cancellationToken = default);
 
     /// <summary>
@@ -189,18 +233,14 @@ public interface ITrackerRepository
         CancellationToken cancellationToken = default);
 
     /// <summary>
-    /// Applies a tracker preset, creating a new instance for a user
-    /// </summary>
-    Task<TrackerInstanceEntity?> ApplyPresetAsync(
-        Guid presetId,
-        string userId,
-        string? overrideNotes = null,
-        CancellationToken cancellationToken = default);
-
-    /// <summary>
     /// Deletes a tracker preset
     /// </summary>
     Task<bool> DeletePresetAsync(
         Guid id,
         CancellationToken cancellationToken = default);
 }
+
+/// <summary>A run undone by <see cref="ITrackerRepository.RevertStartAsync"/>.</summary>
+/// <param name="Removed">The deleted run.</param>
+/// <param name="Reopened">The runs it had replaced, running again.</param>
+public sealed record TrackerStartRevert(TrackerInstanceEntity Removed, IReadOnlyList<TrackerInstanceEntity> Reopened);

@@ -6,15 +6,13 @@
   import { Checkbox } from "$lib/components/ui/checkbox";
   import { Label } from "$lib/components/ui/label";
   import PermissionCategorySelector from "$lib/components/rbac/PermissionCategorySelector.svelte";
-  import {
-    Loader2,
-    CheckCircle2,
-    XCircle,
-    Clock,
-    UserPlus,
-    ChevronDown,
-    ChevronUp,
-  } from "lucide-svelte";
+  import Loader2 from "@lucide/svelte/icons/loader-circle";
+  import CheckCircle2 from "@lucide/svelte/icons/circle-check";
+  import XCircle from "@lucide/svelte/icons/circle-x";
+  import Clock from "@lucide/svelte/icons/clock";
+  import UserPlus from "@lucide/svelte/icons/user-plus";
+  import ChevronDown from "@lucide/svelte/icons/chevron-down";
+  import ChevronUp from "@lucide/svelte/icons/chevron-up";
   import {
     getPendingRequests,
     approve,
@@ -22,6 +20,7 @@
   } from "$lib/api/generated/accessRequests.generated.remote";
   import { getRoles } from "$lib/api/generated/roles.generated.remote";
   import { describeSubmitError } from "$lib/forms/submit-error";
+  import FormError from "$lib/forms/FormError.svelte";
 
   // Queries
   const requestsQuery = getPendingRequests();
@@ -61,6 +60,7 @@
   let denyingId = $state<string | null>(null);
   let successMessage = $state<string | null>(null);
   let errorMessage = $state<string | null>(null);
+  let approveFailure = $state<{ subjectId: string; message: string } | null>(null);
 
   function formatRelativeTime(dateInput: string | Date): string {
     const date = typeof dateInput === "string" ? new Date(dateInput) : dateInput;
@@ -84,7 +84,7 @@
 
   async function handleApprove(subjectId: string) {
     approvingId = subjectId;
-    errorMessage = null;
+    approveFailure = null;
     try {
       const roleIds = getRoleIds(subjectId);
       const directPerms = getPermissions(subjectId);
@@ -99,8 +99,10 @@
       successMessage = "Access request approved.";
       clearMessages();
     } catch (err) {
-      errorMessage = describeSubmitError(err, "Failed to approve request. Please try again.");
-      clearMessages();
+      approveFailure = {
+        subjectId,
+        message: describeSubmitError(err, "Failed to approve request. Please try again."),
+      };
     } finally {
       approvingId = null;
     }
@@ -284,6 +286,10 @@
             </div>
 
             <!-- Actions -->
+            <FormError
+              issues={approveFailure?.subjectId === subjectId ? approveFailure.message : null}
+              focusOnShow
+            />
             <div class="flex items-center gap-3">
               <Button
                 size="sm"

@@ -93,4 +93,18 @@ public enum ConnectorPropertyKey
     PumpSerialNumber,
     FetchAllEventTypes,
     IgnoreZeroUnitBasal,
+
+    // Glooko-specific
+    AutoClockCorrection,
+
+    // Google Health-specific
+    ClientId,
+    ImportFrom,
+    PreviewOnly,
+    GrantedScopes,
+    SyncSteps,
+    SyncHeartRate,
+    SyncBodyWeight,
+    SyncSleep,
+
 }

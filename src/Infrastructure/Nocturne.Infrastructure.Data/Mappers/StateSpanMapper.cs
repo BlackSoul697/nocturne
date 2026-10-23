@@ -29,9 +29,14 @@ public static class StateSpanMapper
             SupersededById = !string.IsNullOrEmpty(stateSpan.SupersededById)
                 ? MapperHelpers.ParseIdToGuid(stateSpan.SupersededById)
                 : null,
-            UpdatedAt = DateTime.UtcNow,
         };
     }
+
+    /// <summary>
+    /// The category a stored value names, or <see cref="StateSpanCategory.PumpMode"/> when it names none.
+    /// </summary>
+    public static StateSpanCategory ParseCategory(string category) =>
+        Enum.TryParse<StateSpanCategory>(category, out var parsed) ? parsed : StateSpanCategory.PumpMode;
 
     /// <summary>
     /// Convert database entity to domain model
@@ -41,9 +46,7 @@ public static class StateSpanMapper
         return new StateSpan
         {
             Id = entity.OriginalId ?? entity.Id.ToString(),
-            Category = Enum.TryParse<StateSpanCategory>(entity.Category, out var category)
-                ? category
-                : StateSpanCategory.PumpMode,
+            Category = ParseCategory(entity.Category),
             State = entity.State,
             StartTimestamp = entity.StartTimestamp,
             EndTimestamp = entity.EndTimestamp,
@@ -57,14 +60,19 @@ public static class StateSpanMapper
     }
 
     /// <summary>
-    /// Update existing entity with data from domain model
+    /// Update existing entity with data from domain model. A new end from the upload replaces the one
+    /// supersession set, so it clears <see cref="StateSpanEntity.SupersededById"/>. An upload with no
+    /// end leaves a superseded row closed, since supersession runs only on insert.
     /// </summary>
     public static void UpdateEntity(StateSpanEntity entity, StateSpan stateSpan)
     {
         entity.Category = stateSpan.Category.ToString();
         entity.State = stateSpan.State ?? string.Empty;
         entity.StartTimestamp = stateSpan.StartTimestamp;
-        entity.EndTimestamp = stateSpan.EndTimestamp;
+        if (stateSpan.EndTimestamp is { } end && end != entity.EndTimestamp)
+            entity.SupersededById = null;
+        if (entity.SupersededById == null)
+            entity.EndTimestamp = stateSpan.EndTimestamp;
         entity.Source = stateSpan.Source;
         entity.MetadataJson = stateSpan.Metadata != null
             ? JsonSerializer.Serialize(stateSpan.Metadata)

@@ -67,6 +67,23 @@ public static class MemberScopeResolver
         Scope.Satisfies(Scope.NormalizeMemberPermissions(effectivePermissions), Scope.TenantSettings);
 
     /// <summary>
+    /// Whether a credential presented on a membership may read only the last 24 hours. The narrower
+    /// of the two limits wins: a credential may carry its own (a direct grant issued for a
+    /// follower's phone), and the membership must not widen a token that was deliberately
+    /// restricted. The membership's own flag is ignored for a member
+    /// <see cref="IsExemptFromHistoryClamp"/> exempts.
+    /// </summary>
+    /// <param name="credentialLimitTo24Hours">The credential's own limit.</param>
+    /// <param name="membershipLimitTo24Hours">The membership's <c>limit_to_24_hours</c> flag.</param>
+    /// <param name="effectivePermissions">Role permissions unioned with direct permissions.</param>
+    public static bool IsHistoryClamped(
+        bool credentialLimitTo24Hours,
+        bool membershipLimitTo24Hours,
+        IEnumerable<string> effectivePermissions) =>
+        credentialLimitTo24Hours
+        || (membershipLimitTo24Hours && !IsExemptFromHistoryClamp(effectivePermissions));
+
+    /// <summary>
     /// The refusal a member editor reads when asked to clamp a member
     /// <see cref="IsExemptFromHistoryClamp"/> exempts.
     /// </summary>
@@ -142,17 +159,13 @@ public static class MemberScopeResolver
                 continue;
             }
 
-            // A readwrite membership on a read-only credential downgrades to read instead of
-            // dropping. SatisfiesScope answers false for a readwrite requirement met only by read,
-            // and NormalizeMemberPermissions does not add the read counterpart, so a member holding
-            // glucose.readwrite against a glucose.read token previously resolved to neither scope.
-            // Both sides permit the read counterpart: the membership because readwrite includes
-            // read, the credential because it granted read outright.
-            if (Scope.TryGetImpliedReadScope(memberScope, out var readScope)
-                && Scope.Satisfies(boundedCredentialScopes, readScope))
-            {
-                resolved.Add(readScope);
-            }
+            // A membership atom on a narrower credential downgrades to what both permit instead of
+            // dropping: glucose.readwrite on a glucose.read token resolves to glucose.read, and
+            // alerts.readwrite on an alerts.acknowledge token to alerts.acknowledge.
+            // NormalizeMemberPermissions does not add the narrower atoms, so without this the
+            // member resolved to neither.
+            resolved.UnionWith(Scope.NarrowerScopes(memberScope)
+                .Where(narrower => Scope.Satisfies(boundedCredentialScopes, narrower)));
         }
 
         return resolved;

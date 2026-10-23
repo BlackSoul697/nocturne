@@ -1,7 +1,11 @@
 using FluentAssertions;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging.Abstractions;
 using Moq;
+using Npgsql;
 using Nocturne.API.Services.Treatments;
+using Nocturne.Core.Contracts;
+using Nocturne.Core.Contracts.Glucose;
 using Nocturne.Core.Contracts.Treatments;
 using Nocturne.Core.Contracts.V4;
 using Nocturne.Core.Contracts.V4.Repositories;
@@ -38,6 +42,8 @@ public class TreatmentReadServiceTests
             _noteRepo.Object,
             _deviceEventRepo.Object,
             _bolusCalcRepo.Object,
+            Mock.Of<IProfileActivationRepository>(),
+            Mock.Of<IStateSpanService>(),
             NullLogger<TreatmentReadService>.Instance);
     }
 
@@ -51,14 +57,14 @@ public class TreatmentReadServiceTests
         };
 
         _projection
-            .Setup(p => p.GetProjectedTreatmentsAsync(null, null, 10, false, It.IsAny<CancellationToken>()))
+            .Setup(p => p.GetProjectedTreatmentsAsync(null, null, 10, false, It.IsAny<bool>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(treatments);
 
         var result = await _service.QueryAsync(new TreatmentQuery { Count = 10 });
 
         result.Should().HaveCount(2);
         _projection.Verify(
-            p => p.GetProjectedTreatmentsAsync(null, null, 10, false, It.IsAny<CancellationToken>()),
+            p => p.GetProjectedTreatmentsAsync(null, null, 10, false, It.IsAny<bool>(), It.IsAny<CancellationToken>()),
             Times.Once);
     }
 
@@ -73,7 +79,7 @@ public class TreatmentReadServiceTests
         };
 
         _projection
-            .Setup(p => p.GetProjectedTreatmentsAsync(null, null, It.IsAny<int>(), false, It.IsAny<CancellationToken>()))
+            .Setup(p => p.GetProjectedTreatmentsAsync(null, null, It.IsAny<int>(), false, It.IsAny<bool>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(treatments);
 
         var result = await _service.QueryAsync(new TreatmentQuery { Count = 1, Skip = 1 });
@@ -82,24 +88,139 @@ public class TreatmentReadServiceTests
         result[0].Id.Should().Be("2");
     }
 
-    [Fact]
-    public async Task QueryAsync_ReverseResults_ReturnsAscendingOrder()
+    private void StoreHoldingTreatmentsAt(params long[] mills)
     {
-        var treatments = new List<Treatment>
-        {
-            new() { Id = "1", Mills = 3000 },
-            new() { Id = "2", Mills = 2000 },
-            new() { Id = "3", Mills = 1000 },
-        };
+        var all = mills.Select(m => new Treatment { Id = m.ToString(), Mills = m }).ToList();
 
         _projection
-            .Setup(p => p.GetProjectedTreatmentsAsync(null, null, It.IsAny<int>(), false, It.IsAny<CancellationToken>()))
-            .ReturnsAsync(treatments);
+            .Setup(p => p.GetProjectedTreatmentsAsync(null, null, It.IsAny<int>(), false, It.IsAny<bool>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync((long? _, long? _, int limit, bool _, bool descending, CancellationToken _) =>
+                (descending ? all.OrderByDescending(t => t.Mills) : all.OrderBy(t => t.Mills)).Take(limit).ToList());
+    }
 
-        var result = await _service.QueryAsync(new TreatmentQuery { Count = 10, ReverseResults = true });
+    private List<long> ServeModifiedSince(IReadOnlyList<Treatment> all)
+    {
+        var cursors = new List<long>();
+        _projection
+            .Setup(p => p.GetProjectedTreatmentsModifiedSinceAsync(It.IsAny<long>(), It.IsAny<int>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync((long cursor, int limit, CancellationToken _) =>
+            {
+                cursors.Add(cursor);
+                return all.Where(t => t.SrvModified > cursor).OrderBy(t => t.SrvModified).Take(limit).ToList();
+            });
+        return cursors;
+    }
 
-        result[0].Mills.Should().Be(1000);
-        result[2].Mills.Should().Be(3000);
+    [Fact]
+    public async Task QueryAsync_SrvModifiedAfterACursor_ReadsOnlyTheModifiedSincePages_AndNeverTheTimeWindow()
+    {
+        var all = Enumerable.Range(1, 1200)
+            .Select(i => new Treatment { Id = i.ToString(), Mills = 5000 - i, SrvModified = 10_000 + i })
+            .ToList();
+        var cursors = ServeModifiedSince(all);
+
+        var result = await _service.QueryAsync(new TreatmentQuery
+        {
+            Find = "find[srvModified][$gt]=10100",
+            Count = 3,
+            Skip = 1,
+            ReverseResults = true,
+            SortField = ReadSortField.SrvModified,
+        });
+
+        result.Select(t => t.SrvModified).Should().Equal(10_102L, 10_103L, 10_104L);
+        cursors.Should().Equal(10_100L);
+        _projection.Verify(
+            p => p.GetProjectedTreatmentsAsync(It.IsAny<long?>(), It.IsAny<long?>(), It.IsAny<int>(), It.IsAny<bool>(), It.IsAny<bool>(), It.IsAny<CancellationToken>()),
+            Times.Never);
+    }
+
+    [Fact]
+    public async Task QueryAsync_SrvModifiedOrderedPage_ResumesAcrossPagesWithoutLosingARecord()
+    {
+        var all = Enumerable.Range(1, 1200)
+            .Select(i => new Treatment { Id = i.ToString(), Mills = 5000 - i, SrvModified = 10_000 + i })
+            .ToList();
+        ServeModifiedSince(all);
+
+        var result = await _service.QueryAsync(new TreatmentQuery
+        {
+            Count = 1000,
+            Skip = 100,
+            ReverseResults = true,
+            SortField = ReadSortField.SrvModified,
+        });
+
+        result.Select(t => t.SrvModified).Should().Equal(Enumerable.Range(101, 1000).Select(i => (long?)(10_000 + i)));
+    }
+
+    [Fact]
+    public async Task QueryAsync_SrvModifiedAfterACursor_LeavesOutDeletedAndOrdersByTimeWhenAsked()
+    {
+        var all = new List<Treatment>
+        {
+            new() { Id = "a", Mills = 3000, SrvModified = 10_001 },
+            new() { Id = "b", Mills = 1000, SrvModified = 10_002 },
+            new() { Id = "gone", Mills = 2000, SrvModified = 10_003, IsValid = false },
+        };
+        ServeModifiedSince(all);
+
+        var result = await _service.QueryAsync(new TreatmentQuery
+        {
+            Find = "find[srvModified][$gte]=10001",
+            Count = 10,
+            ReverseResults = true,
+        });
+
+        result.Select(t => t.Id).Should().Equal("b", "a");
+    }
+
+    [Fact]
+    public async Task QueryAsync_SrvModifiedBesideAnotherFilter_KeepsTheTimeOrderedRead()
+    {
+        StoreHoldingTreatmentsAt(1000, 2000);
+
+        await _service.QueryAsync(new TreatmentQuery
+        {
+            Find = "find[srvModified][$gt]=10100&find[eventType]=Note",
+            Count = 2,
+            ReverseResults = true,
+            SortField = ReadSortField.SrvModified,
+        });
+
+        _projection.Verify(
+            p => p.GetProjectedTreatmentsModifiedSinceAsync(It.IsAny<long>(), It.IsAny<int>(), It.IsAny<CancellationToken>()),
+            Times.Never);
+    }
+
+    [Fact]
+    public async Task QueryAsync_ReverseResultsWithASmallLimit_ReturnsTheOldestTreatments()
+    {
+        StoreHoldingTreatmentsAt(1000, 2000, 3000, 4000, 5000);
+
+        var result = await _service.QueryAsync(new TreatmentQuery { Count = 2, ReverseResults = true });
+
+        result.Select(t => t.Mills).Should().Equal(1000, 2000);
+    }
+
+    [Fact]
+    public async Task QueryAsync_ReverseResultsWithSkip_PagesFromTheOldestEnd()
+    {
+        StoreHoldingTreatmentsAt(1000, 2000, 3000, 4000, 5000);
+
+        var result = await _service.QueryAsync(new TreatmentQuery { Count = 2, Skip = 2, ReverseResults = true });
+
+        result.Select(t => t.Mills).Should().Equal(3000, 4000);
+    }
+
+    [Fact]
+    public async Task QueryAsync_DescendingWithASmallLimit_ReturnsTheNewestTreatmentsNewestFirst()
+    {
+        StoreHoldingTreatmentsAt(1000, 2000, 3000, 4000, 5000);
+
+        var result = await _service.QueryAsync(new TreatmentQuery { Count = 2 });
+
+        result.Select(t => t.Mills).Should().Equal(5000, 4000);
     }
 
     [Fact]
@@ -112,7 +233,7 @@ public class TreatmentReadServiceTests
 
         _bolusRepo.Setup(r => r.GetByIdAsync(id, It.IsAny<CancellationToken>())).ReturnsAsync(bolus);
         _projection
-            .Setup(p => p.GetProjectedTreatmentsAsync(1000, 1000, 100, false, It.IsAny<CancellationToken>()))
+            .Setup(p => p.GetProjectedTreatmentsAsync(1000, 1000, 100, false, It.IsAny<bool>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(projected);
 
         var result = await _service.GetByIdAsync(id.ToString());
@@ -131,7 +252,7 @@ public class TreatmentReadServiceTests
 
         _bolusRepo.Setup(r => r.GetByLegacyIdAsync(legacyId, It.IsAny<CancellationToken>())).ReturnsAsync(bolus);
         _projection
-            .Setup(p => p.GetProjectedTreatmentsAsync(1000, 1000, 100, false, It.IsAny<CancellationToken>()))
+            .Setup(p => p.GetProjectedTreatmentsAsync(1000, 1000, 100, false, It.IsAny<bool>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(projected);
 
         var result = await _service.GetByIdAsync(legacyId);
@@ -177,58 +298,334 @@ public class TreatmentReadServiceTests
     }
 
     [Fact]
-    public async Task CreateAsync_WhenDecompositionCanceled_PropagatesWithoutTouchingRemaining()
+    public async Task CreateAsync_WhenDecompositionCanceled_StopsTheBatchCarryingWhatWasStored()
     {
-        var canceled = new Treatment { Id = "t1", Mills = 1000, EventType = "Note" };
-        var next = new Treatment { Id = "t2", Mills = 2000, EventType = "Note" };
+        var first = new Treatment { Id = "t1", Mills = 1000, EventType = "Note" };
+        var canceled = new Treatment { Id = "t2", Mills = 2000, EventType = "Note" };
+        var next = new Treatment { Id = "t3", Mills = 3000, EventType = "Note" };
+        DecomposeAll();
+        FailOn(canceled, new OperationCanceledException());
 
+        var act = () => _service.CreateAsync([first, canceled, next]);
+
+        var failed = (await act.Should().ThrowAsync<TreatmentBatchFailedException>()).Which;
+        failed.InnerException.Should().BeOfType<OperationCanceledException>();
+        failed.Written.Select(t => t.Id).Should().Equal("t1");
+        NeverDecomposed(next);
+    }
+
+    [Theory]
+    [MemberData(nameof(TransientFailures))]
+    public async Task CreateAsync_WhenATreatmentFailsTransiently_StopsTheBatchAndCarriesWhatWasStored(Exception failure)
+    {
+        var first = new Treatment { Id = "t1", Mills = 1000, EventType = "Note" };
+        var bad = new Treatment { Id = "t2", Mills = 2000, EventType = "Note" };
+        var last = new Treatment { Id = "t3", Mills = 3000, EventType = "Note" };
+        DecomposeAll(skippedDeleted: 1);
+        FailOn(bad, failure);
+
+        var act = () => _service.CreateAsync([first, bad, last]);
+
+        var failed = (await act.Should().ThrowAsync<TreatmentBatchFailedException>()).Which;
+        failed.FailedIndex.Should().Be(1);
+        failed.InnerException.Should().BeSameAs(failure);
+        failed.Written.Select(t => t.Id).Should().Equal("t1");
+        failed.Written.SkippedDeleted.Should().Be(1);
+        failed.Message.Should().Contain("stored 1 treatment(s) before it");
+        NeverDecomposed(last);
+    }
+
+    public static TheoryData<Exception> TransientFailures() => new()
+    {
+        new InvalidOperationException("connection broken"),
+        new TimeoutException(),
+        new DbUpdateException("unique", new PostgresException("duplicate key", "ERROR", "ERROR", "23505")),
+        new DbUpdateException("network", new InvalidOperationException("connection reset")),
+        new DbUpdateException("our bug", new PostgresException("null value", "ERROR", "ERROR", "23502")),
+        new DbUpdateException("our bug", new PostgresException("invalid input syntax", "ERROR", "ERROR", "22P02")),
+    };
+
+    [Theory]
+    [MemberData(nameof(DeterministicFailures))]
+    public async Task CreateAsync_WhenATreatmentCanNeverBeStored_RefusesItAndStoresTheRest(Exception failure, string reason)
+    {
+        var first = new Treatment { Id = "t1", Mills = 1000, EventType = "Note" };
+        var bad = new Treatment { Id = "t2", Mills = 2000, EventType = "Note" };
+        var last = new Treatment { Id = "t3", Mills = 3000, EventType = "Note" };
+        DecomposeAll();
+        FailOn(bad, failure);
+
+        var written = await _service.CreateAsync([first, bad, last]);
+
+        written.Select(t => t.Id).Should().Equal("t1", "t3");
+        written.Rejected.Should().ContainSingle().Which.Should().BeEquivalentTo(
+            new BulkWriteRejection<Treatment>(1, bad, reason));
+    }
+
+    public static TheoryData<Exception, string> DeterministicFailures() => new()
+    {
+        {
+            new DbUpdateException("too long", new PostgresException("value too long for type character varying(255)", "ERROR", "ERROR", "22001")),
+            "A text value is longer than Nocturne can store; parts of the treatment may be stored"
+        },
+        {
+            new DbUpdateException("out of range", new PostgresException("date/time field value out of range", "ERROR", "ERROR", "22008")),
+            "A date or time is invalid or outside the range Nocturne can store; parts of the treatment may be stored"
+        },
+        {
+            new TreatmentMappingException(new FormatException("bad date")),
+            "A field of the treatment has a value Nocturne cannot read; parts of the treatment may be stored"
+        },
+    };
+
+    [Fact]
+    public async Task CreateAsync_WhenAnArgumentErrorComesFromOutsideTheMappingStep_DoesNotRefuseTheTreatment()
+    {
+        var bad = new Treatment { Id = "t1", Mills = 1000, EventType = "Note" };
+        DecomposeAll();
+        FailOn(bad, new ArgumentException("resolver bug"));
+
+        var act = () => _service.CreateAsync([bad]);
+
+        await act.Should().ThrowAsync<ArgumentException>();
+    }
+
+    [Fact]
+    public async Task CreateAsync_ReportsEachStoredTreatmentAsItLands()
+    {
+        var first = new Treatment { Id = "t1", Mills = 1000, EventType = "Note" };
+        var bad = new Treatment { Id = "t2", Mills = 2000, EventType = "Note" };
+        DecomposeAll();
+        FailOn(bad, new NotSupportedException());
+        var stored = new List<Treatment>();
+
+        var act = () => _service.CreateAsync([first, bad], CancellationToken.None, stored);
+
+        await act.Should().ThrowAsync<NotSupportedException>();
+        stored.Select(t => t.Id).Should().Equal("t1");
+    }
+
+    [Fact]
+    public async Task CreateAsync_WhenAStoredTreatmentCannotBeReadBack_CarriesItAsStored()
+    {
+        var first = new Treatment { Id = "t1", Mills = 1000, EventType = "Note" };
+        var span = new Treatment { Id = "t2", Mills = 2000, EventType = "Temporary Target" };
+        var last = new Treatment { Id = "t3", Mills = 3000, EventType = "Note" };
+        DecomposeAll();
+        var spanResult = new DecompositionResult { CorrelationId = Guid.NewGuid() };
+        spanResult.CreatedRecords.Add(new StateSpan { OriginalId = "t2", Category = StateSpanCategory.TemporaryTarget });
         _decomposer
-            .Setup(d => d.DecomposeAsync(canceled, It.IsAny<WriteOrigin>(), It.IsAny<CancellationToken>()))
-            .ThrowsAsync(new OperationCanceledException());
+            .Setup(d => d.DecomposeAsync(span, It.IsAny<WriteOrigin>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(spanResult);
+        _projection
+            .Setup(p => p.GetProjectedStateSpanTreatmentAsync("t2", It.IsAny<CancellationToken>()))
+            .ThrowsAsync(new TimeoutException());
 
-        var act = () => _service.CreateAsync([canceled, next]);
+        var act = () => _service.CreateAsync([first, span, last]);
 
-        // Cancellation must abort the batch, not be swallowed as a per-record failure.
-        await act.Should().ThrowAsync<OperationCanceledException>();
+        var failed = (await act.Should().ThrowAsync<TreatmentBatchFailedException>()).Which;
+        failed.Written.Select(t => t.Id).Should().Equal("t1", "t2");
+        failed.Message.Should().Contain("was stored but could not be read back");
+        NeverDecomposed(last);
+    }
+
+    private void DecomposeAll(int skippedDeleted = 0) =>
+        _decomposer
+            .Setup(d => d.DecomposeAsync(It.IsAny<Treatment>(), It.IsAny<WriteOrigin>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(() => new DecompositionResult { CorrelationId = Guid.NewGuid(), SkippedDeleted = skippedDeleted });
+
+    private void FailOn(Treatment treatment, Exception failure) =>
+        _decomposer
+            .Setup(d => d.DecomposeAsync(treatment, It.IsAny<WriteOrigin>(), It.IsAny<CancellationToken>()))
+            .ThrowsAsync(failure);
+
+    private void NeverDecomposed(Treatment treatment) =>
         _decomposer.Verify(
-            d => d.DecomposeAsync(next, It.IsAny<WriteOrigin>(), It.IsAny<CancellationToken>()),
+            d => d.DecomposeAsync(treatment, It.IsAny<WriteOrigin>(), It.IsAny<CancellationToken>()),
+            Times.Never);
+
+    [Fact]
+    public async Task DeleteAsync_ByStoredLegacyId_DeletesEverySiblingThroughThePipeline()
+    {
+        _bolusRepo
+            .Setup(r => r.GetByLegacyIdAsync("t1", It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new Bolus { Id = Guid.CreateVersion7(), LegacyId = "t1" });
+        _pipeline
+            .Setup(p => p.DeleteByLegacyIdAsync<Treatment>("t1", It.IsAny<WriteOrigin>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(3);
+
+        var result = await _service.DeleteAsync("t1");
+
+        result.Should().NotBeNull();
+        _pipeline.Verify(p => p.DeleteByLegacyIdAsync<Treatment>("t1", It.IsAny<WriteOrigin>(), It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+    [Fact]
+    public async Task DeleteAsync_NothingStoredUnderTheId_DeletesNothing()
+    {
+        var result = await _service.DeleteAsync("t1");
+
+        result.Should().BeNull();
+        _pipeline.Verify(
+            p => p.DeleteByLegacyIdAsync<Treatment>(It.IsAny<string>(), It.IsAny<WriteOrigin>(), It.IsAny<CancellationToken>()),
             Times.Never);
     }
 
     [Fact]
-    public async Task CreateAsync_WhenDecompositionFailsForOneRecord_SkipsItAndContinues()
+    public async Task CreateAsync_ReturnsTheIdReadsServeForTheStoredRecord()
     {
-        var bad = new Treatment { Id = "t1", Mills = 1000, EventType = "Note" };
-        var good = new Treatment { Id = "t2", Mills = 2000, EventType = "Note" };
-
+        var syncIdentifier = Guid.NewGuid().ToString().ToUpperInvariant();
+        var treatment = new Treatment { Id = syncIdentifier, Mills = 1000, EventType = "Carb Correction", Carbs = 20 };
+        var carb = new CarbIntake { Id = Guid.CreateVersion7(), LegacyId = syncIdentifier };
+        var result = new DecompositionResult { CorrelationId = Guid.NewGuid() };
+        result.CreatedRecords.Add(carb);
         _decomposer
-            .Setup(d => d.DecomposeAsync(bad, It.IsAny<WriteOrigin>(), It.IsAny<CancellationToken>()))
-            .ThrowsAsync(new InvalidOperationException("boom"));
-        _decomposer
-            .Setup(d => d.DecomposeAsync(good, It.IsAny<WriteOrigin>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new DecompositionResult { CorrelationId = Guid.NewGuid() });
+            .Setup(d => d.DecomposeAsync(treatment, It.IsAny<WriteOrigin>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(result);
 
-        var result = await _service.CreateAsync([bad, good]);
+        var created = await _service.CreateAsync([treatment]);
 
-        // A genuine per-record failure is still isolated: the bad record is dropped,
-        // the good one is kept.
-        result.Should().ContainSingle().Which.Id.Should().Be("t2");
+        created.Should().ContainSingle().Which.Id.Should().Be(carb.Id.ToString());
+        System.Text.Json.JsonSerializer.SerializeToElement(created[0]).GetProperty("_id").GetString()
+            .Should().Be(MongoObjectId.FromGuid(carb.Id));
     }
 
     [Fact]
-    public async Task DeleteAsync_CallsPipelineAndChecksTemp()
+    public async Task CreateAsync_MealBolus_ReturnsTheBolusIdTheMealIsReadBackUnder()
     {
+        var treatment = new Treatment { Id = "meal-1", Mills = 1000, EventType = "Meal Bolus", Insulin = 2, Carbs = 30, Notes = "lunch" };
+        var bolus = new Bolus { Id = Guid.CreateVersion7(), LegacyId = "meal-1" };
+        var result = new DecompositionResult { CorrelationId = Guid.NewGuid() };
+        result.CreatedRecords.Add(new Note { Id = Guid.CreateVersion7(), LegacyId = "meal-1" });
+        result.CreatedRecords.Add(new CarbIntake { Id = Guid.CreateVersion7(), LegacyId = "meal-1" });
+        result.UpdatedRecords.Add(bolus);
+        _decomposer
+            .Setup(d => d.DecomposeAsync(treatment, It.IsAny<WriteOrigin>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(result);
+
+        var created = await _service.CreateAsync([treatment]);
+
+        created.Should().ContainSingle().Which.Id.Should().Be(bolus.Id.ToString());
+    }
+
+    [Fact]
+    public async Task CreateAsync_NothingProjectedWritten_KeepsTheClientId()
+    {
+        var treatment = new Treatment { Id = "override-1", Mills = 1000, EventType = "Temporary Override" };
+        var result = new DecompositionResult { CorrelationId = Guid.NewGuid() };
+        result.CreatedRecords.Add(new StateSpan { Id = Guid.CreateVersion7().ToString(), OriginalId = "override-1" });
+        _decomposer
+            .Setup(d => d.DecomposeAsync(treatment, It.IsAny<WriteOrigin>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(result);
+
+        var created = await _service.CreateAsync([treatment]);
+
+        created.Should().ContainSingle().Which.Id.Should().Be("override-1");
+    }
+
+    [Fact]
+    public async Task GetByIdAsync_GuidStoredOnlyAsALegacyId_ResolvesIt()
+    {
+        var clientId = Guid.NewGuid().ToString();
+        var carb = new CarbIntake
+        {
+            Id = Guid.CreateVersion7(),
+            LegacyId = clientId,
+            Timestamp = DateTimeOffset.FromUnixTimeMilliseconds(1000).UtcDateTime,
+        };
+        _carbIntakeRepo.Setup(r => r.GetByLegacyIdAsync(clientId, It.IsAny<CancellationToken>())).ReturnsAsync(carb);
+        _projection
+            .Setup(p => p.GetProjectedTreatmentsAsync(1000, 1000, 100, false, It.IsAny<bool>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync([new Treatment { Id = carb.Id.ToString(), Mills = 1000 }]);
+
+        var result = await _service.GetByIdAsync(clientId);
+
+        result.Should().NotBeNull();
+        result!.Id.Should().Be(carb.Id.ToString());
+    }
+
+    [Fact]
+    public async Task GetByIdAsync_LegacyIdOfATreatmentWithNotes_ResolvesTheRecordTheCreateReturned()
+    {
+        var treatment = new Treatment { Id = "site-1", Mills = 1000, EventType = "Site Change", Notes = "left arm" };
+        var timestamp = DateTimeOffset.FromUnixTimeMilliseconds(1000).UtcDateTime;
+        var deviceEvent = new DeviceEvent { Id = Guid.CreateVersion7(), LegacyId = "site-1", Timestamp = timestamp };
+        var note = new Note { Id = Guid.CreateVersion7(), LegacyId = "site-1", Timestamp = timestamp };
+        var result = new DecompositionResult { CorrelationId = Guid.NewGuid() };
+        result.CreatedRecords.Add(note);
+        result.CreatedRecords.Add(deviceEvent);
+        _decomposer
+            .Setup(d => d.DecomposeAsync(treatment, It.IsAny<WriteOrigin>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(result);
+        _deviceEventRepo.Setup(r => r.GetByLegacyIdAsync("site-1", It.IsAny<CancellationToken>())).ReturnsAsync(deviceEvent);
+        _noteRepo.Setup(r => r.GetByLegacyIdAsync("site-1", It.IsAny<CancellationToken>())).ReturnsAsync(note);
+        _projection
+            .Setup(p => p.GetProjectedTreatmentsAsync(1000, 1000, 100, false, It.IsAny<bool>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync([
+                new Treatment { Id = note.Id.ToString(), Mills = 1000 },
+                new Treatment { Id = deviceEvent.Id.ToString(), Mills = 1000 },
+            ]);
+
+        var created = await _service.CreateAsync([treatment]);
+        var read = await _service.GetByIdAsync("site-1");
+
+        created.Should().ContainSingle().Which.Id.Should().Be(deviceEvent.Id.ToString());
+        read!.Id.Should().Be(deviceEvent.Id.ToString());
+    }
+
+    [Fact]
+    public async Task DeleteAsync_IdAnOlderCreateEchoed_DeletesTheRecordStoredUnderTheClientId()
+    {
+        var syncIdentifier = Guid.NewGuid().ToString().ToUpperInvariant();
+        var echoed = MongoObjectId.Coerce(syncIdentifier)!;
+        _carbIntakeRepo
+            .Setup(r => r.GetByLegacyIdUuidPrefixAsync(echoed, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new CarbIntake { Id = Guid.CreateVersion7(), LegacyId = syncIdentifier });
         _pipeline
-            .Setup(p => p.DeleteByLegacyIdAsync<Treatment>("t1", It.IsAny<WriteOrigin>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync(3);
-        _tempBasalRepo
-            .Setup(r => r.GetByLegacyIdAsync("t1", It.IsAny<CancellationToken>()))
-            .ReturnsAsync((TempBasal?)null);
+            .Setup(p => p.DeleteByLegacyIdAsync<Treatment>(syncIdentifier, It.IsAny<WriteOrigin>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(1);
 
-        var result = await _service.DeleteAsync("t1");
+        var result = await _service.DeleteAsync(echoed);
 
-        result.Should().BeTrue();
-        _pipeline.Verify(p => p.DeleteByLegacyIdAsync<Treatment>("t1", It.IsAny<WriteOrigin>(), It.IsAny<CancellationToken>()), Times.Once);
+        result.Should().NotBeNull();
+    }
+
+    [Fact]
+    public async Task GetForUpdateAsync_IdAnOlderCreateEchoed_KeysTheTreatmentToTheStoredClientId()
+    {
+        const string syncIdentifier = "a1b2c3d4e5f60718293a4b5c6d7e8f90aa";
+        var echoed = MongoObjectId.Coerce(syncIdentifier)!;
+        var bolus = new Bolus { Id = Guid.CreateVersion7(), LegacyId = syncIdentifier };
+        _bolusRepo
+            .Setup(r => r.GetByLegacyIdHashAsync(echoed, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(bolus);
+        ProjectAs(bolus.Id);
+
+        var existing = await _service.GetForUpdateAsync(echoed);
+
+        existing!.Id.Should().Be(syncIdentifier);
+    }
+
+    [Fact]
+    public async Task DeleteAsync_ExactLegacyIdInOneTable_WinsOverAPrefixMatchInAnother()
+    {
+        var prefixed = new Bolus { Id = Guid.CreateVersion7(), LegacyId = "bolus-legacy" };
+        var wireId = MongoObjectId.FromGuid(prefixed.Id);
+        _bolusRepo
+            .Setup(r => r.GetByGuidRangeAsync(It.IsAny<Guid>(), It.IsAny<Guid>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(prefixed);
+        _noteRepo
+            .Setup(r => r.GetByLegacyIdAsync(wireId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new Note { Id = Guid.CreateVersion7(), LegacyId = wireId });
+        _pipeline
+            .Setup(p => p.DeleteByLegacyIdAsync<Treatment>(wireId, It.IsAny<WriteOrigin>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(1);
+
+        await _service.DeleteAsync(wireId);
+
+        _pipeline.Verify(
+            p => p.DeleteByLegacyIdAsync<Treatment>("bolus-legacy", It.IsAny<WriteOrigin>(), It.IsAny<CancellationToken>()),
+            Times.Never);
     }
 
     [Fact]
@@ -253,14 +650,14 @@ public class TreatmentReadServiceTests
 
         var result = await _service.DeleteAsync(wireId);
 
-        result.Should().BeTrue();
+        result.Should().NotBeNull();
         _pipeline.Verify(
             p => p.DeleteByLegacyIdAsync<Treatment>("syn-meal-1", It.IsAny<WriteOrigin>(), It.IsAny<CancellationToken>()),
             Times.Once);
     }
 
     [Fact]
-    public async Task ResolveCanonicalIdAsync_BackfillsNullLegacyId_SoUpdateUpsertsInPlace()
+    public async Task GetForUpdateAsync_BackfillsNullLegacyId_SoUpdateUpsertsInPlace()
     {
         // A native V4 row (LegacyId == null) resolved by a derived ObjectId must be backfilled with
         // that ObjectId so the decomposer upserts it in place instead of inserting a duplicate.
@@ -271,14 +668,136 @@ public class TreatmentReadServiceTests
         _noteRepo
             .Setup(r => r.GetByGuidRangeAsync(It.IsAny<Guid>(), It.IsAny<Guid>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(note);
+        ProjectAs(uuid);
 
-        var canonical = await _service.ResolveCanonicalIdAsync(wireId);
+        var existing = await _service.GetForUpdateAsync(wireId);
 
-        canonical.Should().Be(wireId);
+        existing!.Id.Should().Be(wireId);
         // The backfill goes through IV4Repository<Note>.UpdateAsync (the base slot the generic
-        // helper is typed against), which INoteRepository new-shadows — verify the base slot.
+        // helper is typed against), which INoteRepository new-shadows: verify the base slot.
         _noteRepo.As<IV4Repository<Note>>().Verify(
             r => r.UpdateAsync(uuid, It.Is<Note>(n => n.LegacyId == wireId), It.IsAny<WriteOrigin>(), It.IsAny<CancellationToken>()),
             Times.Once);
+    }
+
+    private void ProjectAs(Guid recordId) =>
+        _projection
+            .Setup(p => p.GetProjectedTreatmentsAsync(It.IsAny<long?>(), It.IsAny<long?>(), It.IsAny<int>(), false, It.IsAny<bool>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync([new Treatment { Id = recordId.ToString() }]);
+
+    private void VerifyOneHashScanPerTable()
+    {
+        _bolusRepo.Verify(r => r.GetByLegacyIdHashAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()), Times.Once);
+        _carbIntakeRepo.Verify(r => r.GetByLegacyIdHashAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()), Times.Once);
+        _bgCheckRepo.Verify(r => r.GetByLegacyIdHashAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()), Times.Once);
+        _noteRepo.Verify(r => r.GetByLegacyIdHashAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()), Times.Once);
+        _deviceEventRepo.Verify(r => r.GetByLegacyIdHashAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()), Times.Once);
+        _bolusCalcRepo.Verify(r => r.GetByLegacyIdHashAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()), Times.Once);
+        _tempBasalRepo.Verify(r => r.GetByLegacyIdHashAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+    [Fact]
+    public async Task DeleteAsync_UnknownObjectId_ScansEachTableOnce()
+    {
+        (await _service.DeleteAsync("0123456789abcdef01234567")).Should().BeNull();
+
+        VerifyOneHashScanPerTable();
+    }
+
+    [Fact]
+    public async Task UpdateAsync_UnknownObjectId_ScansEachTableOnce()
+    {
+        (await _service.UpdateAsync("0123456789abcdef01234567", new Treatment { EventType = "Note" })).Should().BeNull();
+
+        VerifyOneHashScanPerTable();
+        _decomposer.Verify(d => d.DecomposeAsync(
+            It.IsAny<Treatment>(), It.IsAny<WriteOrigin>(), It.IsAny<CancellationToken>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task GetForUpdateAsync_UnknownObjectId_ScansEachTableOnce()
+    {
+        (await _service.GetForUpdateAsync("0123456789abcdef01234567")).Should().BeNull();
+
+        VerifyOneHashScanPerTable();
+    }
+
+    [Fact]
+    public async Task UpdateAsync_ByAnEchoedId_ReadsTheResultBackByTheUpsertKey()
+    {
+        var syncIdentifier = Guid.NewGuid().ToString().ToUpperInvariant();
+        var echoed = MongoObjectId.Coerce(syncIdentifier)!;
+        var carb = new CarbIntake { Id = Guid.CreateVersion7(), LegacyId = syncIdentifier };
+        _carbIntakeRepo.Setup(r => r.GetByLegacyIdUuidPrefixAsync(echoed, It.IsAny<CancellationToken>())).ReturnsAsync(carb);
+        _carbIntakeRepo.Setup(r => r.GetByLegacyIdAsync(syncIdentifier, It.IsAny<CancellationToken>())).ReturnsAsync(carb);
+        ProjectAs(carb.Id);
+        _decomposer
+            .Setup(d => d.DecomposeAsync(It.IsAny<Treatment>(), It.IsAny<WriteOrigin>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new DecompositionResult());
+
+        var updated = await _service.UpdateAsync(echoed, new Treatment { EventType = "Carb Correction", Carbs = 25 });
+
+        updated!.Id.Should().Be(carb.Id.ToString());
+        _decomposer.Verify(d => d.DecomposeAsync(
+            It.Is<Treatment>(t => t.Id == syncIdentifier && t.Carbs == 25),
+            It.IsAny<WriteOrigin>(), It.IsAny<CancellationToken>()), Times.Once);
+        _carbIntakeRepo.Verify(r => r.GetByLegacyIdUuidPrefixAsync(echoed, It.IsAny<CancellationToken>()), Times.Once);
+        _carbIntakeRepo.Verify(r => r.GetByLegacyIdHashAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()), Times.Never);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task UpdateAsync_WhenTheStoredTreatmentFailsToDecompose_Propagates(bool stateSpan)
+    {
+        const string id = "69F15FD2-8075-4DEB-AEA3-4352F455840D";
+        if (stateSpan)
+        {
+            _projection
+                .Setup(p => p.GetProjectedStateSpanTreatmentAsync(id, It.IsAny<CancellationToken>()))
+                .ReturnsAsync(new Treatment { Id = "span-1" });
+            _projection
+                .Setup(p => p.GetStateSpanTreatmentIdAsync(id, It.IsAny<CancellationToken>()))
+                .ReturnsAsync(id);
+        }
+        else
+        {
+            var carb = new CarbIntake { Id = Guid.CreateVersion7(), LegacyId = id };
+            _carbIntakeRepo.Setup(r => r.GetByLegacyIdAsync(id, It.IsAny<CancellationToken>())).ReturnsAsync(carb);
+            ProjectAs(carb.Id);
+        }
+
+        _decomposer
+            .Setup(d => d.DecomposeAsync(It.IsAny<Treatment>(), It.IsAny<WriteOrigin>(), It.IsAny<CancellationToken>()))
+            .ThrowsAsync(new DbUpdateException("store down"));
+
+        var update = () => _service.UpdateAsync(id, new Treatment { EventType = "Carb Correction", Carbs = 25 });
+
+        await update.Should().ThrowAsync<DbUpdateException>();
+    }
+
+    [Fact]
+    public async Task UpdateAsync_WhenTheCallerCancels_Propagates()
+    {
+        const string id = "69F15FD2-8075-4DEB-AEA3-4352F455840D";
+        var carb = new CarbIntake { Id = Guid.CreateVersion7(), LegacyId = id };
+        _carbIntakeRepo.Setup(r => r.GetByLegacyIdAsync(id, It.IsAny<CancellationToken>())).ReturnsAsync(carb);
+        ProjectAs(carb.Id);
+        _decomposer
+            .Setup(d => d.DecomposeAsync(It.IsAny<Treatment>(), It.IsAny<WriteOrigin>(), It.IsAny<CancellationToken>()))
+            .ThrowsAsync(new OperationCanceledException());
+
+        var update = () => _service.UpdateAsync(id, new Treatment { EventType = "Carb Correction" });
+
+        await update.Should().ThrowAsync<OperationCanceledException>();
+    }
+
+    [Fact]
+    public async Task IsDeletedByUserAsync_AnyTreatmentTableHoldingATombstone_IsTrue()
+    {
+        _noteRepo.Setup(r => r.IsDeletedByUserAsync("t1", It.IsAny<CancellationToken>())).ReturnsAsync(true);
+
+        (await _service.IsDeletedByUserAsync("t1")).Should().BeTrue();
+        (await _service.IsDeletedByUserAsync("t2")).Should().BeFalse();
     }
 }

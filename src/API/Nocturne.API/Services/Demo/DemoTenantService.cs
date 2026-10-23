@@ -1,11 +1,12 @@
 using Microsoft.EntityFrameworkCore;
 using Nocturne.API.Services.Auth;
-using Nocturne.Infrastructure.Cache.Abstractions;
-using Nocturne.Infrastructure.Cache.Keys;
+using Nocturne.API.Services.Caching;
 using Nocturne.Core.Contracts.Multitenancy;
 using Nocturne.Core.Models.Authorization;
 using Nocturne.Infrastructure.Data;
+using Nocturne.Infrastructure.Data.Services;
 using Nocturne.Infrastructure.Data.Entities;
+using Nocturne.Infrastructure.Data.Extensions;
 
 namespace Nocturne.API.Services.Demo;
 
@@ -48,17 +49,17 @@ public sealed class DemoTenantService
     /// </summary>
     public const string DemoRoleSlug = "demo-visitor";
 
-    private readonly IDbContextFactory<NocturneDbContext> _factory;
+    private readonly INocturneDbContextFactory _factory;
     private readonly ITenantService _tenantService;
     private readonly PublicAccessCacheService _publicAccessCache;
-    private readonly ICacheService _cache;
+    private readonly ITenantCache _cache;
     private readonly ILogger<DemoTenantService> _logger;
 
     public DemoTenantService(
-        IDbContextFactory<NocturneDbContext> factory,
+        INocturneDbContextFactory factory,
         ITenantService tenantService,
         PublicAccessCacheService publicAccessCache,
-        ICacheService cache,
+        ITenantCache cache,
         ILogger<DemoTenantService> logger)
     {
         _factory = factory;
@@ -73,7 +74,7 @@ public sealed class DemoTenantService
     /// </summary>
     public async Task<TenantEntity?> FindDemoTenantAsync(CancellationToken ct = default)
     {
-        await using var db = await _factory.CreateDbContextAsync(ct);
+        await using var db = await _factory.CreatePlatformAsync(ct);
         return await db.Set<TenantEntity>()
             .AsNoTracking()
             .Include(t => t.DemoConfig)
@@ -95,14 +96,12 @@ public sealed class DemoTenantService
     /// </remarks>
     public async Task<Guid?> FindDemoMemberSubjectIdAsync(Guid tenantId, CancellationToken ct = default)
     {
-        await using var db = await _factory.CreateDbContextAsync(ct);
-        db.TenantId = tenantId;
+        await using var db = await _factory.CreateForTenantAsync(tenantId, ct);
 
         return await db.TenantMembers
             .AsNoTracking()
             .Where(m => m.TenantId == tenantId
                 && m.Username == DemoMemberUsername
-                && m.RevokedAt == null
                 && m.Subject!.IsDemoSubject)
             .Select(m => (Guid?)m.SubjectId)
             .FirstOrDefaultAsync(ct);
@@ -118,8 +117,7 @@ public sealed class DemoTenantService
     /// </summary>
     public async Task ConfigureAccessAsync(Guid tenantId, CancellationToken ct = default)
     {
-        await using var db = await _factory.CreateDbContextAsync(ct);
-        db.TenantId = tenantId;
+        await using var db = await _factory.CreateForTenantAsync(tenantId, ct);
 
         var tenant = await db.Set<TenantEntity>().FirstOrDefaultAsync(t => t.Id == tenantId, ct);
         if (tenant is null)
@@ -172,20 +170,13 @@ public sealed class DemoTenantService
         // membership, so afterwards there is nothing left to resolve its subject from.
         var outgoingMemberSubjectId = await FindDemoMemberSubjectIdAsync(tenantId.Value, ct);
 
-        await using (var db = await _factory.CreateDbContextAsync(ct))
+        await using (var db = await _factory.CreatePlatformAsync(ct))
         {
-            var strategy = db.Database.CreateExecutionStrategy();
-
-            // Each attempt re-reads the tenant on its own context: a retry must not
-            // reuse entities the previous attempt already detached or began tracking.
-            await strategy.ExecuteAsync(async () =>
+            await db.ExecuteInTransactionAsync(async token =>
             {
-                await using var attempt = await _factory.CreateDbContextAsync(ct);
-                await using var transaction = await attempt.Database.BeginTransactionAsync(ct);
-
-                var tenant = await attempt.Set<TenantEntity>()
+                var tenant = await db.Set<TenantEntity>()
                     .Include(t => t.DemoConfig)
-                    .FirstOrDefaultAsync(t => t.Id == tenantId.Value, ct);
+                    .FirstOrDefaultAsync(t => t.Id == tenantId.Value, token);
 
                 if (tenant is null)
                     return;
@@ -193,27 +184,24 @@ public sealed class DemoTenantService
                 var preserved = SnapshotTenant(tenant);
                 var preservedConfig = SnapshotDemoConfig(tenant);
 
-                attempt.Set<TenantEntity>().Remove(tenant);
-                await attempt.SaveChangesAsync(ct);
+                db.Set<TenantEntity>().Remove(tenant);
+                await db.SaveChangesAsync(token);
 
-                attempt.Set<TenantEntity>().Add(preserved);
-                attempt.Set<TenantDemoConfigEntity>().Add(preservedConfig);
-                await attempt.SaveChangesAsync(ct);
-
-                await transaction.CommitAsync(ct);
-            });
+                db.Set<TenantEntity>().Add(preserved);
+                db.Set<TenantDemoConfigEntity>().Add(preservedConfig);
+                await db.SaveChangesAsync(token);
+            }, ct);
         }
 
         // Subjects and refresh tokens are subject-scoped, so the cascade does not reach
         // them; the outgoing demo member has to be retired explicitly.
         await RetireDemoMemberAsync(outgoingMemberSubjectId, ct);
 
-        // Read paths cache recent entries and treatments in process, keyed by tenant id.
-        // The wipe empties the tables but not those caches, so without this the demo keeps
+        // The wipe empties the tables but not the tenant cache, so without this the demo keeps
         // serving the data it just deleted until each entry's TTL expires.
-        await InvalidateReadCachesAsync(tenantId.Value, ct);
+        await _cache.RemoveTenantAsync(tenantId.Value, ct);
 
-        // Re-seed roles, the Public membership and the bundled OAuth clients, then
+        // Re-seed roles and the Public membership, then
         // re-apply the demo tenant's own grants on top.
         await _tenantService.SeedAfterResetAsync(tenantId.Value, ct);
         await ConfigureAccessAsync(tenantId.Value, ct);
@@ -222,20 +210,9 @@ public sealed class DemoTenantService
         return tenantId;
     }
 
-    /// <summary>
-    /// Drops the cached recent-entry and recent-treatment reads for the tenant. The cache is
-    /// keyed by tenant id, so this touches nothing belonging to another tenant.
-    /// </summary>
-    private async Task InvalidateReadCachesAsync(Guid tenantId, CancellationToken ct)
-    {
-        var id = tenantId.ToString();
-        await _cache.RemoveByPatternAsync(CacheKeyBuilder.BuildRecentEntriesPattern(id), ct);
-        await _cache.RemoveByPatternAsync(CacheKeyBuilder.BuildRecentTreatmentsPattern(id), ct);
-    }
-
     private async Task<Guid?> FindDemoTenantIdAsync(CancellationToken ct)
     {
-        await using var db = await _factory.CreateDbContextAsync(ct);
+        await using var db = await _factory.CreatePlatformAsync(ct);
         return await db.Set<TenantEntity>()
             .AsNoTracking()
             .Where(t => t.IsDemo)
@@ -256,7 +233,6 @@ public sealed class DemoTenantService
             ShareToken = tenant.ShareToken,
             ShareTokenEncrypted = tenant.ShareTokenEncrypted,
             ShareTokenSetAt = tenant.ShareTokenSetAt,
-            SysUpdatedAt = DateTime.UtcNow,
         };
 
         ApplyTenantDefaults(preserved);
@@ -335,7 +311,7 @@ public sealed class DemoTenantService
         if (subjectId is null)
             return;
 
-        await using var db = await _factory.CreateDbContextAsync(ct);
+        await using var db = await _factory.CreatePlatformAsync(ct);
 
         var isDemoSubject = await db.Subjects
             .AsNoTracking()
@@ -389,7 +365,6 @@ public sealed class DemoTenantService
                 Slug = DemoRoleSlug,
                 Permissions = new List<string>(Scope.DemoVisitorPermissions),
                 IsSystem = true,
-                SysUpdatedAt = DateTime.UtcNow,
             };
             db.TenantRoles.Add(role);
             await db.SaveChangesAsync(ct);
@@ -488,14 +463,12 @@ public sealed class DemoTenantService
                 Username = DemoMemberUsername,
                 LimitTo24Hours = false,
                 Label = DemoMemberName,
-                SysUpdatedAt = DateTime.UtcNow,
             };
             db.TenantMembers.Add(member);
             await db.SaveChangesAsync(ct);
         }
         else
         {
-            member.RevokedAt = null;
             member.LimitTo24Hours = false;
         }
 

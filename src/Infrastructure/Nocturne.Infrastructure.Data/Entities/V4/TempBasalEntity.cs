@@ -10,8 +10,13 @@ namespace Nocturne.Infrastructure.Data.Entities.V4;
 /// Maps to Nocturne.Core.Models.V4.TempBasal
 /// </summary>
 [Table("temp_basals")]
-public class TempBasalEntity : ITenantScoped, IAuditable, ISoftDeletable, IV4Entity, ISourcedEntity, IDeviceAttributedEntity, ISystemTimestamped
+public class TempBasalEntity : ITenantScoped, IAuditable, ISoftDeletable, IV4TimeSeriesEntity, ISyncDedupable, IDeviceAttributedEntity, ISystemTimestamped, IUpstreamFingerprinted
 {
+    /// <inheritdoc />
+    [AuditIgnored]
+    [Column("upstream_fingerprint")]
+    public string? UpstreamFingerprint { get; set; }
+
     /// <summary>
     /// The unique identifier of the tenant this record belongs to.
     /// </summary>
@@ -25,10 +30,11 @@ public class TempBasalEntity : ITenantScoped, IAuditable, ISoftDeletable, IV4Ent
     public Guid Id { get; set; }
 
     /// <summary>
-    /// Start timestamp as UTC DateTime (timestamptz)
+    /// Span start as UTC DateTime (timestamptz) — the instant the shared V4 repository base
+    /// filters, orders and watermarks on, hence its <see cref="IObservationTimestamped"/> name.
     /// </summary>
     [Column("start_timestamp")]
-    public DateTime StartTimestamp { get; set; }
+    public DateTime Timestamp { get; set; }
 
     /// <summary>
     /// End timestamp as UTC DateTime (timestamptz, null if still active)
@@ -92,10 +98,10 @@ public class TempBasalEntity : ITenantScoped, IAuditable, ISoftDeletable, IV4Ent
     public DateTime SysUpdatedAt { get; set; } = DateTime.UtcNow;
 
     /// <summary>
-    /// Temporary basal rate in units per hour
+    /// Temporary basal rate in units per hour; see <see cref="Core.Models.V4.TempBasal.Rate"/>.
     /// </summary>
     [Column("rate")]
-    public double Rate { get; set; }
+    public double? Rate { get; set; }
 
     /// <summary>
     /// Scheduled basal rate that this temp basal overrides
@@ -104,11 +110,27 @@ public class TempBasalEntity : ITenantScoped, IAuditable, ISoftDeletable, IV4Ent
     public double? ScheduledRate { get; set; }
 
     /// <summary>
+    /// Change from the scheduled rate in percent for a temp basal set relative to the schedule;
+    /// null for an absolute temp. See <see cref="Core.Models.V4.TempBasal.Percent"/>.
+    /// </summary>
+    [Column("percent")]
+    public double? Percent { get; set; }
+
+    /// <summary>See <see cref="Core.Models.V4.TempBasal.RateFromSchedule"/>.</summary>
+    [Column("rate_from_schedule")]
+    public bool RateFromSchedule { get; set; }
+
+    /// <summary>
     /// Origin of this temp basal (stored as string: Algorithm, Scheduled, Manual, Suspended, Inferred)
     /// </summary>
     [Column("origin")]
     [MaxLength(32)]
     public string Origin { get; set; } = null!;
+
+    /// <summary>See <see cref="Core.Models.V4.TempBasal.OriginEvidence"/>, stored as its name.</summary>
+    [Column("origin_evidence")]
+    [MaxLength(16)]
+    public string? OriginEvidence { get; set; }
 
     /// <summary>
     /// Foreign key to the Device table

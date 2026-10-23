@@ -6,16 +6,14 @@
   import { flip } from "svelte/animate";
   import * as Card from "$lib/components/ui/card";
   import { Button } from "$lib/components/ui/button";
-  import {
-    Users,
-    Check,
-    AlertTriangle,
-    Link,
-    ShieldAlert,
-    Globe,
-    Lock,
-    ScrollText,
-  } from "lucide-svelte";
+  import Users from "@lucide/svelte/icons/users";
+  import Check from "@lucide/svelte/icons/check";
+  import AlertTriangle from "@lucide/svelte/icons/triangle-alert";
+  import Link from "@lucide/svelte/icons/link";
+  import ShieldAlert from "@lucide/svelte/icons/shield-alert";
+  import Globe from "@lucide/svelte/icons/globe";
+  import Lock from "@lucide/svelte/icons/lock";
+  import ScrollText from "@lucide/svelte/icons/scroll-text";
   import { getRoles } from "$lib/api/generated/roles.generated.remote";
   import { getShareLink } from "$api/generated/shareLinks.generated.remote";
   import {
@@ -28,6 +26,7 @@
     setMemberLimitTo24Hours,
   } from "$lib/api/generated/memberInvites.generated.remote";
   import { coachmark } from "@nocturne/coach";
+  import { coachFor } from "$lib/coach-marks/copy.svelte";
   import {
     getPendingRequests,
     approveRequest,
@@ -36,7 +35,7 @@
   import CreateInviteCard from "$lib/components/members/CreateInviteCard.svelte";
   import PendingInvitesList from "$lib/components/members/PendingInvitesList.svelte";
   import PendingRequestsList from "$lib/components/members/PendingRequestsList.svelte";
-  import MemberCard from "$lib/components/members/MemberCard.svelte";
+  import MemberCard, { type MemberChanges } from "$lib/components/members/MemberCard.svelte";
   import GuestLinksSection from "$lib/components/members/GuestLinksSection.svelte";
   import PublicAccessCard from "$lib/components/members/PublicAccessCard.svelte";
   import MembershipRequestsCard from "$lib/components/members/MembershipRequestsCard.svelte";
@@ -50,6 +49,12 @@
     satisfiesScope(granted, "members.manage") ||
       satisfiesScope(granted, "sharing.manage"),
   );
+  const canListRoles = $derived(
+    canInvite ||
+      satisfiesScope(granted, "members.manage") ||
+      satisfiesScope(granted, "roles.manage"),
+  );
+  const canReviewRequests = $derived(satisfiesScope(granted, "members.manage"));
   const canEditMemberRoles = $derived(
     satisfiesScope(granted, "members.manage"),
   );
@@ -65,20 +70,23 @@
   );
 
   // Queries
-  const membersQuery = getMembers();
+  const canListMembers = $derived(canInvite || canManageMembers);
+  const membersQuery = $derived(canListMembers ? getMembers() : null);
   const invitesQuery = $derived(canInvite ? listInvites() : null);
-  const rolesQuery = getRoles();
-  const pendingRequestsQuery = $derived(canManageMembers ? getPendingRequests() : null);
+  const rolesQuery = $derived(canListRoles ? getRoles() : null);
+  const pendingRequestsQuery = $derived(canReviewRequests ? getPendingRequests() : null);
   const shareQuery = $derived(canManageSharing ? getShareLink() : null);
+  retainQuery(() => membersQuery);
   retainQuery(() => invitesQuery);
+  retainQuery(() => rolesQuery);
   retainQuery(() => pendingRequestsQuery);
   retainQuery(() => shareQuery);
 
   // Data
-  const allMembers = $derived(membersQuery.current ?? []);
+  const allMembers = $derived(membersQuery?.current ?? []);
   const invites = $derived(invitesQuery?.current ?? []);
   const activeInvites = $derived(invites.filter((i) => i.isValid));
-  const allRoles = $derived(rolesQuery.current ?? []);
+  const allRoles = $derived(rolesQuery?.current ?? []);
   const pendingRequests = $derived(pendingRequestsQuery?.current ?? []);
   const share = $derived(shareQuery?.current ?? null);
 
@@ -106,6 +114,7 @@
   // --- Member edit state ---
   let expandedMember = $state<string | null>(null);
   let isSavingMember = $state(false);
+  let memberSaveError = $state<string | null>(null);
   let isRevokingInvite = $state<string | null>(null);
 
   // Visible members — system subjects (e.g. Public) are managed via the
@@ -122,6 +131,7 @@
   }
 
   function toggleExpandMember(memberId: string) {
+    memberSaveError = null;
     if (expandedMember === memberId) {
       expandedMember = null;
     } else {
@@ -129,23 +139,30 @@
     }
   }
 
-  async function saveMemberChanges(memberId: string, roleIds: string[], permissions: string[]) {
+  async function saveMemberChanges(memberId: string, changes: MemberChanges) {
     isSavingMember = true;
-    errorMessage = null;
+    memberSaveError = null;
+    const { access, limitTo24Hours } = changes;
     try {
       await Promise.all([
-        setMemberRoles({ id: memberId, request: { roleIds } }),
-        setMemberPermissions({
-          id: memberId,
-          request: { directPermissions: permissions },
-        }),
+        ...(access
+          ? [
+              setMemberRoles({ id: memberId, request: { roleIds: access.roleIds } }),
+              setMemberPermissions({
+                id: memberId,
+                request: { directPermissions: access.permissions },
+              }),
+            ]
+          : []),
+        ...(limitTo24Hours !== undefined
+          ? [setMemberLimitTo24Hours({ id: memberId, request: { limitTo24Hours } })]
+          : []),
       ]);
       successMessage = "Member updated successfully.";
       expandedMember = null;
       clearMessages();
     } catch (e) {
-      errorMessage = describeSubmitError(e, "Failed to update member. Please try again.");
-      clearMessages();
+      memberSaveError = describeSubmitError(e, "Failed to update member. Please try again.");
     } finally {
       isSavingMember = false;
     }
@@ -157,7 +174,7 @@
       await approveRequest({ id: requestId, request: { roleIds } });
       // The approved requester becomes a member; GetMembers is on another
       // controller so ApproveRequest's Invalidates cannot name it.
-      await membersQuery.refresh();
+      await membersQuery?.refresh();
       successMessage = "Membership request approved.";
       clearMessages();
     } catch (err) {
@@ -185,7 +202,7 @@
 
 <div
   class="@container container mx-auto max-w-4xl p-3 @md:p-6 space-y-6"
-  {@attach coachmark({ key: "onboarding.sharing", title: "Share with a caretaker", description: "Share your glucose data with a parent, partner, or clinician.", completedWhen: () => sharingConfigured })}
+  {@attach coachmark({ ...coachFor("onboarding.sharing"), completedWhen: () => sharingConfigured })}
 >
   <!-- Page header -->
   <div class="flex flex-col gap-4 @md:flex-row @md:items-start @md:justify-between">
@@ -211,10 +228,12 @@
           {publicStatus}
         </span>
       {/if}
-      <span class="inline-flex h-8 items-center gap-2 rounded-full bg-secondary px-3 text-xs font-medium">
-        <Users class="h-3.5 w-3.5 text-muted-foreground" />
-        {memberCount} member{memberCount !== 1 ? "s" : ""}
-      </span>
+      {#if canListMembers}
+        <span class="inline-flex h-8 items-center gap-2 rounded-full bg-secondary px-3 text-xs font-medium">
+          <Users class="h-3.5 w-3.5 text-muted-foreground" />
+          {memberCount} member{memberCount !== 1 ? "s" : ""}
+        </span>
+      {/if}
     </div>
   </div>
 
@@ -279,20 +298,9 @@
               currentSubjectId={page.data.user?.subjectId}
               isExpanded={expandedMember === member.subjectId}
               isSaving={isSavingMember}
+              saveError={expandedMember === member.subjectId ? memberSaveError : null}
               onToggleExpand={() => toggleExpandMember(member.subjectId!)}
-              onSaveRoles={(roleIds, permissions) =>
-                saveMemberChanges(member.id!, roleIds, permissions)}
-              onSaveLimitTo24Hours={async (limitTo24Hours) => {
-                try {
-                  await setMemberLimitTo24Hours({
-                    id: member.id!,
-                    request: { limitTo24Hours },
-                  });
-                } catch (e) {
-                  errorMessage = describeSubmitError(e, "Failed to update member. Please try again.");
-                  clearMessages();
-                }
-              }}
+              onSave={(changes) => saveMemberChanges(member.id!, changes)}
               onRemove={async () => {
                 if (!member.subjectId) return;
                 errorMessage = null;
@@ -329,9 +337,7 @@
             class="w-full"
             onclick={() => (showCreateInvite = true)}
             {@attach coachmark({
-              key: "setup-invite.create-link",
-              title: "Start here",
-              description: "Create a shareable link to invite a caretaker, partner, or clinician.",
+              ...coachFor("setup-invite.create-link"),
             })}
           >
             <Link class="h-4 w-4" />

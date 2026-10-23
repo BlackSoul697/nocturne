@@ -25,16 +25,16 @@ public class AlertRuleChannelEntity : ITenantScoped
     public Guid AlertRuleId { get; set; }
 
     /// <summary>
-    /// Channel kind. Mirrors <see cref="ChannelType"/> (e.g. <c>web_push</c>, <c>in_app</c>,
-    /// <c>webhook</c>, chat-bot variants).
+    /// Channel kind. Mirrors <see cref="ChannelType"/> (e.g. <c>in_app</c>, <c>webhook</c>,
+    /// chat-bot variants).
     /// </summary>
     [Column("channel_type")]
     [MaxLength(32)]
     public ChannelType ChannelType { get; set; }
 
     /// <summary>
-    /// Destination address. Empty for channels that don't need one (e.g. <c>in_app</c>,
-    /// <c>web_push</c> when keyed by subject); URL/handle/key otherwise.
+    /// Destination address: the recipient member's subject id for <c>in_app</c>, the device kind
+    /// for <c>device_action</c>, a URL/handle/key otherwise. See <see cref="ChannelDestinations"/>.
     /// </summary>
     [Column("destination")]
     [MaxLength(512)]
@@ -72,7 +72,7 @@ public class AlertRuleChannelEntity : ITenantScoped
 
     /// <summary>
     /// Channel-specific configuration stored as JSONB. Schema varies by channel type.
-    /// For home_assistant: { "allow_ack": bool, "delivery_methods": string[], "critical_push": bool }
+    /// For home_assistant: { "delivery_methods": string[], "critical_push": bool }
     /// </summary>
     [Column("metadata", TypeName = "jsonb")]
     public string? Metadata { get; set; }

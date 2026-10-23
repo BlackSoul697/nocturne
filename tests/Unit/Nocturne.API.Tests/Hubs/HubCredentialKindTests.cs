@@ -138,7 +138,8 @@ public class HubCredentialKindTests
             Tenant,
             Scope.Normalize([Scope.FullAccess]),
             HubCredentialKind.Infrastructure,
-            SubjectId: null));
+            SubjectId: null,
+            HistoryClamped: false));
 
         await hub.Authorize(new AuthorizeRequest { Secret = "instance-key" });
 
@@ -247,7 +248,7 @@ public class HubCredentialKindTests
     }
 
     private static HubAuthorization Authorization(HubCredentialKind kind) => new(
-        Tenant, Scope.Normalize([Scope.GlucoseRead]), kind, Subject);
+        Tenant, Scope.Normalize([Scope.GlucoseRead]), kind, Subject, HistoryClamped: false);
 
     private static string Group(string name) => TenantAwareHub.FormatTenantGroup(Tenant.ToString(), name);
 
@@ -328,6 +329,22 @@ public class HubCredentialKindTests
     private sealed class StubHttpContextFeature : IHttpContextFeature
     {
         public HttpContext? HttpContext { get; set; }
+    }
+
+    [Fact]
+    public void A_session_logins_hub_credential_names_the_session_it_belongs_to()
+    {
+        var httpContext = new DefaultHttpContext();
+        httpContext.Items[AuthContextKeys.AuthContext] = new AuthContext
+        {
+            IsAuthenticated = true,
+            AuthType = AuthType.SessionCookie,
+            SubjectId = Subject,
+            SessionId = "laptop",
+        };
+        httpContext.SetTenantContext(new TenantContext(Tenant, "default", "Default", IsActive: true, IsDemo: false));
+
+        HubAuthorizationState.FromRequest(httpContext)!.Source!.SessionId.Should().Be("laptop");
     }
 
     /// <summary>A broadcast service recording the group name of every send.</summary>

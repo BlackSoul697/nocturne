@@ -1,11 +1,16 @@
-import type { BotApiClient, DirectoryCandidate } from "@nocturne/bot";
+import type {
+  AcknowledgementOutcome,
+  AcknowledgementResult,
+  BotApiClient,
+  DirectoryCandidate,
+} from "@nocturne/bot";
 import type { ApiClient } from "$lib/api";
 import {
   createServerApiClient,
   getApiBaseUrl,
 } from "$lib/server/api-client-factory";
 import { getHashedInstanceKey } from "$lib/server/instance-key";
-import { ChannelType } from "$api-clients";
+import { AlertAcknowledgementOutcome, ChannelType } from "$api-clients";
 import { errorStatus } from "$lib/forms/submit-error";
 
 const CHANNEL_TYPES: readonly ChannelType[] = Object.values(ChannelType);
@@ -15,6 +20,20 @@ const CHANNEL_TYPES: readonly ChannelType[] = Object.values(ChannelType);
 function toChannelType(value: string): ChannelType[] {
   const known = CHANNEL_TYPES.find((type) => type === value);
   return known ? [known] : [];
+}
+
+/** A response with no outcome cannot be reported as any of them, so it fails the acknowledge. */
+function toOutcome(outcome: AlertAcknowledgementOutcome | undefined): AcknowledgementOutcome {
+  switch (outcome) {
+    case AlertAcknowledgementOutcome.Acknowledged:
+      return "acknowledged";
+    case AlertAcknowledgementOutcome.Muted:
+      return "muted";
+    case AlertAcknowledgementOutcome.Closed:
+      return "closed";
+    default:
+      throw new Error("Acknowledge response carried no outcome");
+  }
 }
 
 /**
@@ -44,9 +63,21 @@ export function buildBotApiClient(api: ApiClient): BotApiClient {
     },
     alerts: {
       getActiveAlerts: (signal) => api.alerts.getActiveAlerts(signal),
-      acknowledge: (request, signal) => api.alerts.acknowledge(request, signal),
-      acknowledgeExcursion: (excursionId, request, signal) =>
-        api.alerts.acknowledgeExcursion(excursionId, request, signal),
+      acknowledgeAsLinkedMember: async (linkId, request, signal) => {
+        const res = await api.chatIdentityDirectory.acknowledgeAsLinkedMember(
+          linkId,
+          { ...request, excursionId: request.excursionId ?? undefined },
+          signal,
+        );
+        const outcome = toOutcome(res.outcome);
+        return outcome === "acknowledged"
+          ? {
+              outcome,
+              acknowledgedBy: res.acknowledgedBy ?? null,
+              alreadyAcknowledged: res.alreadyAcknowledged ?? false,
+            }
+          : ({ outcome } satisfies AcknowledgementResult);
+      },
       markDelivered: (deliveryId, request, signal) =>
         api.alerts.markDelivered(deliveryId, request, signal),
       markFailed: (deliveryId, request, signal) =>
@@ -85,7 +116,7 @@ export function buildBotApiClient(api: ApiClient): BotApiClient {
       },
     },
     pendingLinks: {
-      create: async (platform, platformUserId, tenantSlug, source, signal) => {
+      create: async (platform, platformUserId, platformUserName, tenantSlug, source, signal) => {
         // NSwag generates tenantSlug as `string | undefined`; the bot
         // interface uses `string | null` to be explicit about "no slug
         // provided". Convert at the boundary.
@@ -93,6 +124,7 @@ export function buildBotApiClient(api: ApiClient): BotApiClient {
           {
             platform,
             platformUserId,
+            platformUserName: platformUserName ?? undefined,
             tenantSlug: tenantSlug ?? undefined,
             source,
           },

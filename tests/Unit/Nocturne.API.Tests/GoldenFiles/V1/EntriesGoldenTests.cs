@@ -1,9 +1,13 @@
+using System.Net;
+using System.Text;
+using System.Text.Json;
+using FluentAssertions;
 using Nocturne.API.Tests.GoldenFiles.Infrastructure;
 using Nocturne.Infrastructure.Data.Entities.V4;
 
 namespace Nocturne.API.Tests.GoldenFiles.V1;
 
-public class EntriesGoldenTests : GoldenFileTestBase
+public class EntriesGoldenTests : GoldenFileTestBase, IClassFixture<FixedClockGoldenFileWebAppFactory>
 {
     private static readonly Guid TestTenantId = Guid.Parse("00000000-0000-0000-0000-000000000001");
 
@@ -11,7 +15,7 @@ public class EntriesGoldenTests : GoldenFileTestBase
     // 2024-03-26T12:00:00Z = 1711454400000
     private const long BaseMillis = 1711454400000;
 
-    public EntriesGoldenTests(GoldenFileWebAppFactory factory) : base(factory) { }
+    public EntriesGoldenTests(FixedClockGoldenFileWebAppFactory factory) : base(factory) { }
 
     #region Helper Methods
 
@@ -166,6 +170,27 @@ public class EntriesGoldenTests : GoldenFileTestBase
         await Verify(captured);
     }
 
+    private const int InsideWindowIndex = 1000;
+    private const int OutsideWindowIndex = 1440;
+
+    [Theory]
+    [InlineData("/api/v1/entries.json?count=10", 2)]
+    [InlineData("/api/v1/entries/sgv.json?count=10", 2)]
+    [InlineData("/api/v1/entries.json?count=10&find[date][$gte]=0", 3)]
+    [InlineData("/api/v1/entries/sgv.json?count=10&find[date][$gte]=0", 3)]
+    [InlineData("/api/v1/entries.json?count=10&find[dateString][$gte]=2000-01-01", 3)]
+    public async Task GetEntries_DefaultWindowDropsReadingsOlderThanFourDays(string url, int expected)
+    {
+        await SeedSensorGlucose(
+            CreateSgvEntry(0), CreateSgvEntry(InsideWindowIndex), CreateSgvEntry(OutsideWindowIndex));
+
+        var response = await Client.GetAsync(url);
+
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+        using var body = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        body.RootElement.GetArrayLength().Should().Be(expected);
+    }
+
     [Fact]
     public async Task GetEntries_WithEmptyDb_ReturnsEmptyArray()
     {
@@ -221,6 +246,226 @@ public class EntriesGoldenTests : GoldenFileTestBase
         await Verify(captured);
     }
 
+    [Fact]
+    public async Task GetEntriesByType_WithCount_ReturnsThatManyNewestFirst()
+    {
+        await SeedSensorGlucose(Enumerable.Range(0, 300).Select(i => CreateSgvEntry(i)).ToArray());
+
+        var entries = await GetEntryArrayAsync("/api/v1/entries/sgv.json?count=288");
+
+        entries.Should().HaveCount(288);
+        entries.Select(DateOf).Should().BeInDescendingOrder();
+        DateOf(entries[0]).Should().Be(BaseMillis);
+    }
+
+    [Fact]
+    public async Task GetEntriesByType_WithoutCount_ReturnsTenNewest()
+    {
+        await SeedSensorGlucose(Enumerable.Range(0, 15).Select(i => CreateSgvEntry(i)).ToArray());
+
+        var entries = await GetEntryArrayAsync("/api/v1/entries/sgv.json");
+
+        entries.Should().HaveCount(10);
+        DateOf(entries[0]).Should().Be(BaseMillis);
+    }
+
+    [Fact]
+    public async Task GetEntriesByType_WithFindDateRange_NarrowsToTheRangeAndTheType()
+    {
+        await SeedSensorGlucose(Enumerable.Range(0, 20).Select(i => CreateSgvEntry(i)).ToArray());
+        await SeedMeterGlucose(Enumerable.Range(0, 3).Select(CreateMbgEntry).ToArray());
+        var from = BaseMillis - 4 * 300_000;
+
+        var entries = await GetEntryArrayAsync(
+            $"/api/v1/entries/sgv.json?count=100&find[date][$gte]={from}");
+
+        entries.Should().HaveCount(5);
+        entries.Select(DateOf).Should().OnlyContain(date => date >= from);
+        entries.Select(e => e.GetProperty("type").GetString()).Should().OnlyContain(t => t == "sgv");
+    }
+
+    [Fact]
+    public async Task GetEntriesByType_PathTypeConstrainsACountedRead()
+    {
+        await SeedSensorGlucose(Enumerable.Range(0, 20).Select(i => CreateSgvEntry(i)).ToArray());
+        await SeedMeterGlucose(Enumerable.Range(0, 12).Select(CreateMbgEntry).ToArray());
+
+        var entries = await GetEntryArrayAsync("/api/v1/entries/mbg.json?count=50");
+
+        entries.Should().HaveCount(12);
+        entries.Select(e => e.GetProperty("type").GetString()).Should().OnlyContain(t => t == "mbg");
+    }
+
+    [Fact]
+    public async Task GetEntriesById_WithCount_StillReturnsTheOneEntry()
+    {
+        await SeedSensorGlucose(Enumerable.Range(0, 5).Select(i => CreateSgvEntry(i)).ToArray());
+
+        var entries = await GetEntryArrayAsync("/api/v1/entries/aaaaaaaaaaaaaaaaaaaaa003.json?count=50");
+
+        entries.Should().ContainSingle();
+        entries[0].GetProperty("_id").GetString().Should().Be("aaaaaaaaaaaaaaaaaaaaa003");
+    }
+
+    [Fact]
+    public async Task GetEntriesById_IfModifiedSinceAtTheEntry_AnswersNotModified()
+    {
+        await SeedSensorGlucose(Enumerable.Range(0, 5).Select(i => CreateSgvEntry(i)).ToArray());
+        var entryMills = BaseMillis - 2 * 300_000;
+
+        using var request = new HttpRequestMessage(HttpMethod.Get, "/api/v1/entries/aaaaaaaaaaaaaaaaaaaaa003.json");
+        request.Headers.IfModifiedSince = DateTimeOffset.FromUnixTimeMilliseconds(entryMills);
+        var response = await Client.SendAsync(request);
+
+        response.StatusCode.Should().Be(HttpStatusCode.NotModified);
+        response.Content.Headers.LastModified.Should()
+            .Be(DateTimeOffset.FromUnixTimeMilliseconds(entryMills));
+    }
+
+    [Fact]
+    public async Task GetEntriesById_IfModifiedSinceBeforeTheEntry_ReturnsTheEntry()
+    {
+        await SeedSensorGlucose(Enumerable.Range(0, 5).Select(i => CreateSgvEntry(i)).ToArray());
+        var entryMills = BaseMillis - 2 * 300_000;
+
+        using var request = new HttpRequestMessage(HttpMethod.Get, "/api/v1/entries/aaaaaaaaaaaaaaaaaaaaa003.json");
+        request.Headers.IfModifiedSince = DateTimeOffset.FromUnixTimeMilliseconds(entryMills - 60_000);
+        var response = await Client.SendAsync(request);
+
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+        using var document = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        document.RootElement.GetArrayLength().Should().Be(1);
+    }
+
+    [Fact]
+    public async Task Current_IfModifiedSinceAtTheNewestEntry_AnswersNotModified()
+    {
+        await SeedSensorGlucose(Enumerable.Range(0, 3).Select(i => CreateSgvEntry(i)).ToArray());
+
+        using var request = new HttpRequestMessage(HttpMethod.Get, "/api/v1/entries/current");
+        request.Headers.IfModifiedSince = DateTimeOffset.FromUnixTimeMilliseconds(BaseMillis);
+        var response = await Client.SendAsync(request);
+
+        response.StatusCode.Should().Be(HttpStatusCode.NotModified);
+        response.Content.Headers.LastModified.Should()
+            .Be(DateTimeOffset.FromUnixTimeMilliseconds(BaseMillis));
+    }
+
+    [Fact]
+    public async Task Current_IfModifiedSinceBeforeTheNewestEntry_ReturnsTheEntry()
+    {
+        await SeedSensorGlucose(Enumerable.Range(0, 3).Select(i => CreateSgvEntry(i)).ToArray());
+
+        using var request = new HttpRequestMessage(HttpMethod.Get, "/api/v1/entries/current");
+        request.Headers.IfModifiedSince = DateTimeOffset.FromUnixTimeMilliseconds(BaseMillis - 60_000);
+        var response = await Client.SendAsync(request);
+
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+        using var document = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        document.RootElement.GetArrayLength().Should().Be(1);
+    }
+
+    [Theory]
+    [InlineData("/api/v1/entries/current")]
+    [InlineData("/api/v1/entries/bbbbbbbbbbbbbbbbbbbbbbbb.json")]
+    public async Task EmptyResult_IfModifiedSinceInTheFuture_NeverAnswersNotModified(string url)
+    {
+        using var request = new HttpRequestMessage(HttpMethod.Get, url);
+        request.Headers.IfModifiedSince = DateTimeOffset.UtcNow.AddHours(1);
+        var response = await Client.SendAsync(request);
+
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+        (await response.Content.ReadAsStringAsync()).Should().Be("[]");
+    }
+
+    [Fact]
+    public async Task GetEntriesByType_PathTypeReplacesFindTypeAlongsideAFieldFilter()
+    {
+        await SeedSensorGlucose(Enumerable.Range(0, 6).Select(i => CreateSgvEntry(i, sgv: 100 + i * 10)).ToArray());
+        await SeedMeterGlucose(Enumerable.Range(0, 3).Select(CreateMbgEntry).ToArray());
+
+        var entries = await GetEntryArrayAsync(
+            "/api/v1/entries/sgv.json?find[type]=mbg&find[sgv][$gte]=130");
+
+        entries.Select(e => e.GetProperty("sgv").GetInt32()).Should().Equal(130, 140, 150);
+        entries.Select(e => e.GetProperty("type").GetString()).Should().OnlyContain(t => t == "sgv");
+    }
+
+    [Fact]
+    public async Task GetEntriesByType_PathTypeReplacesAnEncodedFindTypeOperator()
+    {
+        await SeedSensorGlucose(Enumerable.Range(0, 4).Select(i => CreateSgvEntry(i)).ToArray());
+        await SeedMeterGlucose(Enumerable.Range(0, 2).Select(CreateMbgEntry).ToArray());
+
+        var entries = await GetEntryArrayAsync(
+            "/api/v1/entries/sgv.json?find%5Btype%5D%5B%24ne%5D=sgv&find[sgv][$gte]=1");
+
+        entries.Should().HaveCount(4);
+        entries.Select(e => e.GetProperty("type").GetString()).Should().OnlyContain(t => t == "sgv");
+    }
+
+    [Fact]
+    public async Task GetEntriesByType_WithCountZero_ReturnsEmptyArray()
+    {
+        await SeedSensorGlucose(Enumerable.Range(0, 3).Select(i => CreateSgvEntry(i)).ToArray());
+
+        var entries = await GetEntryArrayAsync("/api/v1/entries/sgv.json?count=0");
+
+        entries.Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task GetEntriesByType_IfModifiedSinceAtTheNewestEntry_AnswersNotModified()
+    {
+        await SeedSensorGlucose(Enumerable.Range(0, 3).Select(i => CreateSgvEntry(i)).ToArray());
+
+        using var request = new HttpRequestMessage(HttpMethod.Get, "/api/v1/entries/sgv.json?count=2");
+        request.Headers.IfModifiedSince = DateTimeOffset.FromUnixTimeMilliseconds(BaseMillis);
+        var response = await Client.SendAsync(request);
+
+        response.StatusCode.Should().Be(HttpStatusCode.NotModified);
+        response.Content.Headers.LastModified.Should()
+            .Be(DateTimeOffset.FromUnixTimeMilliseconds(BaseMillis));
+    }
+
+    [Fact]
+    public async Task GetEntriesByType_IfModifiedSinceBeforeTheNewestEntry_ReturnsTheEntries()
+    {
+        await SeedSensorGlucose(Enumerable.Range(0, 3).Select(i => CreateSgvEntry(i)).ToArray());
+
+        using var request = new HttpRequestMessage(HttpMethod.Get, "/api/v1/entries/sgv.json?count=2");
+        request.Headers.IfModifiedSince = DateTimeOffset.FromUnixTimeMilliseconds(BaseMillis - 60_000);
+        var response = await Client.SendAsync(request);
+
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+        response.Content.Headers.LastModified.Should()
+            .Be(DateTimeOffset.FromUnixTimeMilliseconds(BaseMillis));
+        using var document = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        document.RootElement.GetArrayLength().Should().Be(2);
+    }
+
+    [Fact]
+    public async Task GetEntriesByType_EmptyResult_SendsNoLastModifiedAndNeverNotModified()
+    {
+        using var request = new HttpRequestMessage(HttpMethod.Get, "/api/v1/entries/sgv.json");
+        request.Headers.IfModifiedSince = DateTimeOffset.UtcNow.AddYears(1);
+        var response = await Client.SendAsync(request);
+
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+        response.Content.Headers.LastModified.Should().BeNull();
+        (await response.Content.ReadAsStringAsync()).Should().Be("[]");
+    }
+
+    private async Task<JsonElement[]> GetEntryArrayAsync(string url)
+    {
+        var response = await Client.GetAsync(url);
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+        using var document = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        return document.RootElement.EnumerateArray().Select(e => e.Clone()).ToArray();
+    }
+
+    private static long DateOf(JsonElement entry) => entry.GetProperty("date").GetInt64();
+
     #endregion
 
     #region POST /api/v1/entries
@@ -275,6 +520,39 @@ public class EntriesGoldenTests : GoldenFileTestBase
 
         await Verify(captured)
             .ScrubMembers("_id", "mills", "date", "sysTime", "created_at");
+    }
+
+    // NightscoutKit fails any upload that does not answer exactly 200 and requeues the batch.
+    [Fact]
+    public async Task PostEntries_EmptyArray_AnswersOkWithEmptyArray()
+    {
+        var response = await PostJsonAsync("/api/v1/entries", Array.Empty<object>());
+
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+        var body = JsonDocument.Parse(await response.Content.ReadAsStringAsync()).RootElement;
+        body.ValueKind.Should().Be(JsonValueKind.Array);
+        body.GetArrayLength().Should().Be(0);
+    }
+
+    [Fact]
+    public async Task PostEntries_EveryEntryRefused_AnswersOkWithOneEchoPerEntry()
+    {
+        var response = await PostJsonAsync("/api/v1/entries", new[] { new { type = "sgv" }, new { type = "sgv" } });
+
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+        var body = JsonDocument.Parse(await response.Content.ReadAsStringAsync()).RootElement;
+        body.ValueKind.Should().Be(JsonValueKind.Array);
+        body.GetArrayLength().Should().Be(2);
+    }
+
+    [Fact]
+    public async Task PostEntries_UnparseableBody_AnswersBadRequest()
+    {
+        var content = new StringContent("{not json", Encoding.UTF8, "application/json");
+
+        var response = await Client.PostAsync("/api/v1/entries", content);
+
+        response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
     }
 
     #endregion

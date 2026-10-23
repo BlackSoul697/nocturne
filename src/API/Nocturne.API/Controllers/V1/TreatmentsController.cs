@@ -2,12 +2,15 @@ using System.Text.Json;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Nocturne.API.Attributes;
+using Nocturne.API.Configuration;
 using Nocturne.API.Authorization;
+using Nocturne.API.Extensions;
 using Nocturne.API.Helpers;
 using Nocturne.Core.Models.Authorization;
 using Nocturne.Core.Contracts.Legacy;
 using Nocturne.Core.Contracts.Treatments;
 using Nocturne.Core.Models;
+using Nocturne.Infrastructure.Data;
 
 namespace Nocturne.API.Controllers.V1;
 
@@ -25,6 +28,7 @@ public class TreatmentsController : ControllerBase
 {
     private readonly ITreatmentService _treatmentService;
     private readonly IDocumentProcessingService _documentProcessingService;
+    private readonly TimeProvider _timeProvider;
     private readonly ILogger<TreatmentsController> _logger;
 
     /// <summary>
@@ -32,15 +36,18 @@ public class TreatmentsController : ControllerBase
     /// </summary>
     /// <param name="treatmentService">Service handling treatment CRUD operations.</param>
     /// <param name="treatmentProcessingService">Service for async document ingestion and processing.</param>
+    /// <param name="timeProvider">Clock for the legacy default find window.</param>
     /// <param name="logger">Logger instance.</param>
     public TreatmentsController(
         ITreatmentService treatmentService,
         IDocumentProcessingService treatmentProcessingService,
+        TimeProvider timeProvider,
         ILogger<TreatmentsController> logger
     )
     {
         _treatmentService = treatmentService;
         _documentProcessingService = treatmentProcessingService;
+        _timeProvider = timeProvider;
         _logger = logger;
     }
 
@@ -48,7 +55,7 @@ public class TreatmentsController : ControllerBase
     /// Get treatments with optional filtering and pagination
     /// </summary>
     /// <param name="find">MongoDB-style query filter for date range filtering</param>
-    /// <param name="count">Maximum number of treatments to return (default: 10)</param>
+    /// <param name="count">Maximum number of treatments to return (default: 100, or 1000 when a find is given)</param>
     /// <param name="skip">Number of treatments to skip for pagination (default: 0)</param>
     /// <param name="format">Output format (json, csv, tsv, txt)</param>
     /// <param name="cancellationToken">Cancellation token</param>
@@ -61,34 +68,13 @@ public class TreatmentsController : ControllerBase
     [RequireScope(Scope.TreatmentsRead)]
     public async Task<ActionResult> GetTreatments(
         [FromQuery] string? find = null,
-        [FromQuery] int count = 10,
+        [FromQuery] int? count = null,
         [FromQuery] int skip = 0,
         [FromQuery] string? format = null,
         CancellationToken cancellationToken = default
     )
     {
-        // Get the full query string to handle multiple find parameters correctly
-        var queryString = HttpContext?.Request?.QueryString.ToString() ?? string.Empty;
-
-        // Strip the leading '?' if present
-        if (queryString.StartsWith("?"))
-        {
-            queryString = queryString.Substring(1);
-        }
-
-        // Extract find query from the query string (handles multiple find parameters)
-        string? findQuery = null;
-        if (
-            !string.IsNullOrEmpty(queryString)
-            && (queryString.Contains("find[") || queryString.Contains("find%5B"))
-        )
-        {
-            findQuery = queryString;
-        }
-        else if (!string.IsNullOrEmpty(find))
-        {
-            findQuery = find;
-        }
+        var findQuery = LegacyFindQueryString.Resolve(HttpContext?.Request, find);
 
         _logger.LogDebug(
             "Treatments endpoint requested with count: {Count}, skip: {Skip}, findQuery: {FindQuery} from {RemoteIpAddress}",
@@ -115,8 +101,8 @@ public class TreatmentsController : ControllerBase
             }
 
             var treatments = await _treatmentService.GetTreatmentsAsync(
-                find: findQuery,
-                count: LegacyReadLimits.ClampCount(count),
+                find: LegacyFindDateWindow.Apply(findQuery, _timeProvider.GetUtcNow()),
+                count: count is { } requested ? LegacyReadLimits.ClampCount(requested) : null,
                 skip: skip,
                 cancellationToken: cancellationToken
             );
@@ -215,28 +201,20 @@ public class TreatmentsController : ControllerBase
             HttpContext?.Connection?.RemoteIpAddress?.ToString() ?? "unknown"
         );
 
+        List<Treatment>? treatmentsToCreate;
         try
         {
-            List<Treatment> treatmentsToCreate;
+            treatmentsToCreate = ReadTreatments(treatments);
+        }
+        catch (JsonException ex)
+        {
+            _logger.LogWarning(ex, "Invalid JSON in create treatments request");
+            return BadRequest("Invalid JSON format");
+        }
 
-            // Handle both single treatment and array of treatments
-            if (treatments.ValueKind == JsonValueKind.Array)
-            {
-                treatmentsToCreate =
-                    JsonSerializer.Deserialize<List<Treatment>>(treatments.GetRawText())
-                    ?? new List<Treatment>();
-            }
-            else if (treatments.ValueKind == JsonValueKind.Object)
-            {
-                var singleTreatment = JsonSerializer.Deserialize<Treatment>(
-                    treatments.GetRawText()
-                );
-                treatmentsToCreate =
-                    singleTreatment != null
-                        ? new List<Treatment> { singleTreatment }
-                        : new List<Treatment>();
-            }
-            else
+        try
+        {
+            if (treatmentsToCreate is null)
             {
                 _logger.LogWarning("Invalid JSON format for treatments");
                 return BadRequest("Invalid JSON format. Expected object or array of treatments.");
@@ -247,50 +225,21 @@ public class TreatmentsController : ControllerBase
                 return BadRequest("No treatments provided");
             }
 
-            // Process treatments: sanitize HTML, convert timestamps, set defaults, and deduplicate
-            var processedTreatments = _documentProcessingService.ProcessDocuments(
-                treatmentsToCreate
-            );
-
-            // Set default event types for treatments that don't have them
-            foreach (var treatment in processedTreatments)
-            {
-                if (string.IsNullOrWhiteSpace(treatment.EventType))
-                {
-                    if (treatment.Insulin.HasValue && treatment.Carbs.HasValue)
-                    {
-                        treatment.EventType = "Meal Bolus";
-                    }
-                    else if (treatment.Insulin.HasValue)
-                    {
-                        treatment.EventType = "Correction Bolus";
-                    }
-                    else if (treatment.Carbs.HasValue)
-                    {
-                        treatment.EventType = "Carb Correction";
-                    }
-                    else
-                    {
-                        treatment.EventType = "Note";
-                    }
-                }
-            }
-
-            var createdTreatments = await _treatmentService.CreateTreatmentsAsync(
-                processedTreatments,
+            var createdTreatments = await _treatmentService.CreateV1TreatmentsAsync(
+                PrepareTreatments(treatmentsToCreate),
                 cancellationToken
             );
-            var resultArray = createdTreatments.ToArray();
+            var resultArray = TreatmentEcho.InSubmittedOrder(createdTreatments);
 
-            _logger.LogDebug("Successfully created {Count} treatments", resultArray.Length);
+            _logger.LogDebug("Successfully created {Count} treatments", createdTreatments.Count);
 
             // Return 200 OK to match Nightscout behavior (not 201 Created)
             return Ok(resultArray);
         }
-        catch (JsonException ex)
+        catch (TreatmentBatchFailedException ex)
         {
-            _logger.LogWarning(ex, "Invalid JSON in create treatments request");
-            return BadRequest("Invalid JSON format");
+            // cgm-remote-monitor answers a failed insert with sendJSONStatus(res, 500, 'Mongo Error', err).
+            return StatusCode(500, new { status = 500, message = "Mongo Error", description = ex.Message });
         }
         catch (Exception ex)
         {
@@ -300,18 +249,60 @@ public class TreatmentsController : ControllerBase
     }
 
     /// <summary>
-    /// Update an existing treatment by ID
+    /// Save the treatment identified by the <c>identifier</c> or <c>_id</c> in the body, inserting it
+    /// when that id is not already stored
     /// </summary>
-    /// <param name="id">Treatment ID to update</param>
-    /// <param name="treatment">Updated treatment data</param>
+    /// <remarks>
+    /// Nightscout's save takes one document and matches on <c>identifier</c> before <c>_id</c>; see
+    /// <see cref="SaveAsync"/> for the full match order.
+    /// </remarks>
+    /// <param name="treatment">Treatment to save, as a single object</param>
     /// <param name="cancellationToken">Cancellation token</param>
-    /// <returns>Updated treatment</returns>
+    /// <returns>The saved treatment</returns>
+    [HttpPut]
+    [Authorize]
+    [RequireScope(Scope.TreatmentsReadWrite)]
+    [NightscoutEndpoint("/api/v1/treatments")]
+    [ProducesResponseType(typeof(Treatment), 200)]
+    [ProducesResponseType(400)]
+    [ProducesResponseType(500)]
+    public async Task<ActionResult<Treatment>> SaveTreatments(
+        [FromBody] JsonElement treatment,
+        CancellationToken cancellationToken = default
+    )
+    {
+        if (treatment.ValueKind != JsonValueKind.Object)
+            return BadRequest("Invalid treatment payload. Expected an object.");
+
+        try
+        {
+            var toSave = NightscoutJsonBody.ReadObject<Treatment>(treatment)!;
+            if (treatment.TryGetProperty("identifier", out var identifier)
+                && identifier.ValueKind == JsonValueKind.String
+                && !string.IsNullOrWhiteSpace(identifier.GetString()))
+                toSave.Id = identifier.GetString();
+
+            return await SaveAsync(toSave, cancellationToken);
+        }
+        catch (JsonException ex)
+        {
+            _logger.LogWarning(ex, "Invalid JSON in save treatment request");
+            return BadRequest("Invalid JSON format");
+        }
+    }
+
+    /// <summary>
+    /// Save a treatment by ID, inserting it when the ID is not already stored
+    /// </summary>
+    /// <param name="id">Treatment ID to save</param>
+    /// <param name="treatment">Treatment data</param>
+    /// <param name="cancellationToken">Cancellation token</param>
+    /// <returns>Saved treatment</returns>
     [HttpPut("{id}")]
     [Authorize]
     [RequireScope(Scope.TreatmentsReadWrite)]
     [NightscoutEndpoint("/api/v1/treatments/:id")]
     [ProducesResponseType(typeof(Treatment), 200)]
-    [ProducesResponseType(404)]
     [ProducesResponseType(400)]
     [ProducesResponseType(500)]
     public async Task<ActionResult<Treatment>> UpdateTreatment(
@@ -340,35 +331,8 @@ public class TreatmentsController : ControllerBase
                 return BadRequest("Treatment data cannot be null");
             }
 
-            // Ensure the treatment has the correct ID
             treatment.Id = id;
-
-            // Update timestamp if mills is provided but created_at is not
-            if (treatment.Mills > 0 && string.IsNullOrWhiteSpace(treatment.CreatedAt))
-            {
-                var dateTime = DateTimeOffset.FromUnixTimeMilliseconds(treatment.Mills);
-                treatment.CreatedAt = dateTime.ToString("yyyy-MM-ddTHH:mm:ss.fffZ");
-            }
-            else if (treatment.Mills <= 0 && !string.IsNullOrWhiteSpace(treatment.CreatedAt))
-            {
-                treatment.Mills = treatment.CalculatedMills;
-            }
-
-            var updatedTreatment = await _treatmentService.UpdateTreatmentAsync(
-                id,
-                treatment,
-                cancellationToken
-            );
-
-            if (updatedTreatment == null)
-            {
-                _logger.LogDebug("Treatment not found for update with ID: {Id}", id);
-                return NotFound($"Treatment with ID '{id}' not found");
-            }
-
-            _logger.LogDebug("Successfully updated treatment with ID: {Id}", id);
-
-            return Ok(updatedTreatment);
+            return await SaveAsync(treatment, cancellationToken);
         }
         catch (Exception ex)
         {
@@ -387,9 +351,9 @@ public class TreatmentsController : ControllerBase
     [Authorize]
     [RequireScope(Scope.TreatmentsReadWrite)]
     [NightscoutEndpoint("/api/v1/treatments/:id")]
-    [ProducesResponseType(204)]
-    [ProducesResponseType(404)]
+    [ProducesResponseType(typeof(object), 200)]
     [ProducesResponseType(400)]
+    [ProducesResponseType(403)]
     [ProducesResponseType(500)]
     public async Task<ActionResult> DeleteTreatment(
         string id,
@@ -410,17 +374,18 @@ public class TreatmentsController : ControllerBase
                 return BadRequest("Treatment ID cannot be null or empty");
             }
 
-            var deleted = await _treatmentService.DeleteTreatmentAsync(id, cancellationToken);
-
-            if (!deleted)
+            if (id == LegacyDeleteStatus.AnyId)
             {
-                _logger.LogDebug("Treatment not found for deletion with ID: {Id}", id);
-                return NotFound($"Treatment with ID '{id}' not found");
+                return HttpContext?.HasScope(Scope.FullAccess) == true
+                    ? await BulkDeleteTreatments(cancellationToken)
+                    : Forbid();
             }
 
-            _logger.LogDebug("Successfully deleted treatment with ID: {Id}", id);
+            var deleted = await _treatmentService.DeleteTreatmentAsync(id, cancellationToken);
 
-            return NoContent();
+            _logger.LogDebug("Deleted treatment with ID {Id}: {Deleted}", id, deleted);
+
+            return Ok(LegacyDeleteStatus.For(deleted ? 1 : 0));
         }
         catch (Exception ex)
         {
@@ -445,25 +410,16 @@ public class TreatmentsController : ControllerBase
         CancellationToken cancellationToken = default
     )
     {
-        // Parse the full query string to reconstruct the find query
-        var queryString = HttpContext?.Request?.QueryString.ToString() ?? string.Empty;
-
-        // Strip the leading '?' if present
-        if (queryString.StartsWith("?"))
-        {
-            queryString = queryString.Substring(1);
-        }
-
         _logger.LogDebug(
-            "Bulk delete treatments endpoint requested with query: {QueryString} from {RemoteIpAddress}",
-            queryString,
+            "Bulk delete treatments endpoint requested from {RemoteIpAddress}",
             HttpContext?.Connection?.RemoteIpAddress?.ToString() ?? "unknown"
         );
 
         try
         {
-            // Check if there are any find parameters in the query string
-            if (string.IsNullOrWhiteSpace(queryString) || !queryString.Contains("find["))
+            var find = LegacyFindQueryString.Resolve(HttpContext?.Request, boundFind: null);
+
+            if (!LegacyFindQueryString.HasConditions(find))
             {
                 _logger.LogWarning("Bulk delete requested without find query - this is dangerous");
                 return BadRequest(
@@ -472,31 +428,145 @@ public class TreatmentsController : ControllerBase
             }
 
             var deletedCount = await _treatmentService.DeleteTreatmentsAsync(
-                queryString,
+                LegacyFindDateWindow.Apply(find, _timeProvider.GetUtcNow()),
                 cancellationToken
             );
 
             _logger.LogDebug("Successfully deleted {Count} treatments", deletedCount);
 
-            // Return result in the same format as Nightscout legacy API
-            // Nightscout returns MongoDB driver result which includes result object, n, and ok
-            // Use Dictionary to ensure 'n' is always serialized even when 0 (WhenWritingDefault would omit it)
-            var response = new Dictionary<string, object>
-            {
-                ["result"] = new Dictionary<string, object> { ["n"] = deletedCount, ["ok"] = 1 },
-                ["n"] = deletedCount,
-                ["ok"] = 1
-            };
-            return Ok(response);
+            return Ok(LegacyDeleteStatus.For(deletedCount));
         }
         catch (Exception ex)
         {
-            _logger.LogError(
-                ex,
-                "Error bulk deleting treatments with query: {QueryString}",
-                queryString
-            );
+            _logger.LogError(ex, "Error bulk deleting treatments");
             return StatusCode(500, "Internal server error while bulk deleting treatments");
         }
+    }
+
+    /// <summary>
+    /// Nightscout's save is an upsert. The treatment replaces the stored one its id names, else the
+    /// one its <c>syncIdentifier</c> names, else, when it carries no id, the one stored at the same
+    /// <c>created_at</c> with the same <c>eventType</c>. Anything else goes through the create path,
+    /// which keeps the client's id.
+    /// </summary>
+    /// <remarks>
+    /// A treatment the user deleted is not brought back: the save answers 200 with an empty array, as
+    /// it saved nothing. Loop counts any other status as a failed upload and retries the whole carb
+    /// batch, so a refusal would stall its later uploads.
+    /// </remarks>
+    private async Task<ActionResult<Treatment>> SaveAsync(
+        Treatment treatment,
+        CancellationToken cancellationToken
+    )
+    {
+        var prepared = PrepareTreatments([treatment]).Single();
+        try
+        {
+            return await SavePreparedAsync(prepared, cancellationToken);
+        }
+        catch (TreatmentRefusedException ex)
+        {
+            // NIGHTSCOUT-COMPAT: as for a refused create, see TreatmentEcho.
+            return Ok(TreatmentEcho.Refused(prepared, ex.Message));
+        }
+    }
+
+    private async Task<ActionResult<Treatment>> SavePreparedAsync(
+        Treatment prepared,
+        CancellationToken cancellationToken
+    )
+    {
+        var keys = new[] { prepared.Id, prepared.SyncIdentifier }
+            .OfType<string>()
+            .Where(key => !string.IsNullOrWhiteSpace(key))
+            .Distinct(StringComparer.Ordinal)
+            .ToList();
+
+        foreach (var key in keys)
+        {
+            if (await _treatmentService.UpdateTreatmentAsync(key, prepared, cancellationToken) is { } updated)
+                return Ok(updated);
+        }
+
+        if (string.IsNullOrWhiteSpace(prepared.Id)
+            && await FindSameEventAsync(prepared, cancellationToken) is { } sameEventId
+            && await _treatmentService.UpdateTreatmentAsync(sameEventId, prepared, cancellationToken) is { } replaced)
+            return Ok(replaced);
+
+        foreach (var key in keys)
+        {
+            if (await _treatmentService.IsTreatmentDeletedByUserAsync(key, cancellationToken))
+                return NothingSaved(key);
+        }
+
+        var created = await _treatmentService.CreateTreatmentsAsync([prepared], cancellationToken);
+        if (created.SkippedDeleted > 0)
+            return NothingSaved(prepared.Id);
+
+        // NIGHTSCOUT-COMPAT: Nightscout stores any document, so v1 clients take any 2xx as stored
+        // and a 4xx or 5xx as a reason to resend forever. A treatment Nocturne cannot store is
+        // answered 200 with the treatment echoed under TreatmentEcho's marker and kept in the
+        // rejected uploads for the owner to see.
+        return Ok(TreatmentEcho.InSubmittedOrder(created)[0]);
+    }
+
+    /// <summary>
+    /// The id of the treatment stored at <paramref name="treatment"/>'s <c>created_at</c> with its
+    /// <c>eventType</c>: Nightscout 15.0.8's last upsert key, for a document with neither
+    /// <c>identifier</c> nor <c>_id</c>.
+    /// </summary>
+    private async Task<string?> FindSameEventAsync(Treatment treatment, CancellationToken cancellationToken)
+    {
+        if (treatment.Mills <= 0)
+            return null;
+
+        var atSameTime = await _treatmentService.GetTreatmentsByRangeAsync(
+            treatment.Mills, treatment.Mills, cancellationToken);
+        return atSameTime?
+            .FirstOrDefault(stored => !string.IsNullOrEmpty(stored.Id)
+                && string.Equals(stored.EventType, treatment.EventType, StringComparison.Ordinal))
+            ?.Id;
+    }
+
+    private OkObjectResult NothingSaved(string? id)
+    {
+        _logger.LogDebug("Refused save of treatment {Id}: the user deleted it", id);
+        return Ok(Array.Empty<Treatment>());
+    }
+
+    /// <summary>
+    /// The submitted treatments. A string escaping an unpaired surrogate, which Nightscout's JSON.parse
+    /// accepts and System.Text.Json cannot read, is read with the escape replaced by U+FFFD rather
+    /// than answered as invalid JSON, which an uploader would resend forever.
+    /// </summary>
+    private static List<Treatment>? ReadTreatments(JsonElement body)
+    {
+        try
+        {
+            return NightscoutJsonBody.ReadObjects<Treatment>(body);
+        }
+        catch (JsonException ex) when (ex.InnerException is InvalidOperationException)
+        {
+            using var repaired = JsonDocument.Parse(StorableText.RepairJsonEscapes(body.GetRawText()));
+            return NightscoutJsonBody.ReadObjects<Treatment>(repaired.RootElement.Clone());
+        }
+    }
+
+    private List<Treatment> PrepareTreatments(List<Treatment> treatments)
+    {
+        var processed = _documentProcessingService.ProcessDocuments(treatments).ToList();
+
+        foreach (var treatment in processed.Where(t => string.IsNullOrWhiteSpace(t.EventType)))
+        {
+            treatment.EventType = (treatment.Insulin.HasValue, treatment.Carbs.HasValue) switch
+            {
+                (true, true) => "Meal Bolus",
+                (true, false) => "Correction Bolus",
+                (false, true) => "Carb Correction",
+                _ => "Note",
+            };
+        }
+
+        return processed;
     }
 }

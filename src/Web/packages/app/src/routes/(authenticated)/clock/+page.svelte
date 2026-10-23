@@ -6,12 +6,10 @@
   import * as Card from "$lib/components/ui/card";
   import { ConfirmDialog } from "$lib/components/ui/confirm-dialog";
   import { Button } from "$lib/components/ui/button";
-  import {
-    Clock as ClockIcon,
-    Plus,
-    Trash2,
-    Loader2,
-  } from "lucide-svelte";
+  import ClockIcon from "@lucide/svelte/icons/clock";
+  import Plus from "@lucide/svelte/icons/plus";
+  import Trash2 from "@lucide/svelte/icons/trash-2";
+  import Loader2 from "@lucide/svelte/icons/loader-circle";
   import { toast } from "svelte-sonner";
   import { useToastSubmission } from "$lib/forms";
   import { remoteErrorMessage } from "$lib/api/remote-error";
@@ -21,7 +19,6 @@
     remove as removeClockFace,
   } from "$api/generated/clockFaces.generated.remote";
   import ClockFacePreview from "$lib/components/clock/ClockFacePreview.svelte";
-  import { createDefaultConfig } from "$lib/clock-builder";
 
   const clockFacesQuery = listClockFaces();
 
@@ -33,10 +30,7 @@
   async function handleCreate() {
     creating = true;
     try {
-      const result = await createClockFace({
-        name: "New Clock Face",
-        config: createDefaultConfig(),
-      });
+      const result = await createClockFace({ name: "New Clock Face" });
       if (result.id) {
         goto(resolve("/(authenticated)/clock/config/[id]", { id: result.id }));
       } else {

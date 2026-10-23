@@ -36,14 +36,19 @@ export const FALLBACK_GLUCOSE_THRESHOLDS: GlucoseThresholds = {
   veryHigh: 250,
 };
 
-/** Glucose axis ceiling in mg/dL when the payload carries none. */
-export const FALLBACK_GLUCOSE_Y_MAX = 300;
+/**
+ * Glucose axis ceiling in mg/dL when the payload carries none: the server's cap
+ * on the ceiling it derives (`ChartThresholdsBuilder.GlucoseYMaxCap`), so no
+ * reading the server would plot is clipped.
+ */
+export const FALLBACK_GLUCOSE_Y_MAX = 400;
 
 /**
  * Overlay backend-supplied chart thresholds on the fallbacks. A supplied 0
- * cut-point is treated as absent: the API sends 0 for a tenant with no profile
- * yet, and 0 would collapse the buckets onto each other. The axis ceiling and
- * targets are the backend's call, so any value it sends is kept.
+ * cut-point or axis ceiling is treated as absent: the API sends 0 for a tenant
+ * with no profile yet and an all-zero DTO to a caller without glucose read,
+ * and 0 would collapse the buckets onto each other or the axis onto its floor.
+ * The targets are the backend's call, so any value it sends is kept.
  */
 export function resolveChartThresholds(
   supplied?: ChartThresholdsDto | Partial<ChartThresholds> | null
@@ -53,28 +58,8 @@ export function resolveChartThresholds(
     low: supplied?.low || FALLBACK_GLUCOSE_THRESHOLDS.low,
     high: supplied?.high || FALLBACK_GLUCOSE_THRESHOLDS.high,
     veryHigh: supplied?.veryHigh || FALLBACK_GLUCOSE_THRESHOLDS.veryHigh,
-    glucoseYMax: supplied?.glucoseYMax ?? FALLBACK_GLUCOSE_Y_MAX,
+    glucoseYMax: supplied?.glucoseYMax || FALLBACK_GLUCOSE_Y_MAX,
     targetLow: supplied?.targetLow ?? null,
     targetHigh: supplied?.targetHigh ?? null,
-  };
-}
-
-/**
- * The cut-points in the shape `getGlucoseStatus` (@nocturne/ui/glucose-icon)
- * and `ClientSettings.thresholds` expect. Field names do not line up: there,
- * `low` and `high` are the urgent cut-points and `targetBottom`/`targetTop` are
- * the in-range band.
- */
-export function toStatusThresholds(t: GlucoseThresholds): {
-  low: number;
-  targetBottom: number;
-  targetTop: number;
-  high: number;
-} {
-  return {
-    low: t.veryLow,
-    targetBottom: t.low,
-    targetTop: t.high,
-    high: t.veryHigh,
   };
 }

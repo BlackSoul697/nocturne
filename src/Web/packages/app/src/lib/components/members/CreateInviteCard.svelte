@@ -6,16 +6,15 @@
   import { Input } from "$lib/components/ui/input";
   import { Label } from "$lib/components/ui/label";
   import { Select, SelectContent, SelectItem, SelectTrigger } from "$lib/components/ui/select";
-  import {
-    Check,
-    ChevronDown,
-    ChevronUp,
-    Copy,
-    Loader2,
-  } from "lucide-svelte";
+  import Check from "@lucide/svelte/icons/check";
+  import ChevronDown from "@lucide/svelte/icons/chevron-down";
+  import ChevronUp from "@lucide/svelte/icons/chevron-up";
+  import Copy from "@lucide/svelte/icons/copy";
+  import Loader2 from "@lucide/svelte/icons/loader-circle";
   import PermissionCategorySelector from "$lib/components/rbac/PermissionCategorySelector.svelte";
   import CopyInvitationMessageButton from "$lib/components/members/CopyInvitationMessageButton.svelte";
   import { coachmark } from "@nocturne/coach";
+  import { coachFor, inviteLinkCopy } from "$lib/coach-marks/copy.svelte";
   import { createInvite } from "$api/generated/memberInvites.generated.remote";
   import type { TenantRoleDto } from "$lib/api/generated/nocturne-api-client";
   import { createCopyFeedback } from "$lib/hooks/copy-feedback.svelte";
@@ -68,11 +67,7 @@
   }
 
   async function copyInviteUrl() {
-    if (createdInviteUrl) {
-      if (await copy.copy(createdInviteUrl)) {
-        errorMessage = null;
-      }
-    }
+    if (createdInviteUrl) await copy.copy(createdInviteUrl);
   }
 
   async function handleCreateInvite() {
@@ -152,8 +147,7 @@
 
         <div class="flex gap-2" {@attach coachmark({
           key: "setup-invite.copy-link",
-          title: "Send the link",
-          description: `The link expires in ${expiryLabel}. They'll need to sign in or create an account to accept.`,
+          ...inviteLinkCopy(expiryLabel),
         })}>
           <Input
             type="text"
@@ -173,14 +167,7 @@
         <CopyInvitationMessageButton
           url={createdInviteUrl}
           inviterName={createdByName}
-          onCopied={() => (errorMessage = null)}
-          onCopyFailed={() =>
-            (errorMessage = "Couldn't copy the message to the clipboard. Copy the link manually instead.")}
         />
-
-        {#if errorMessage}
-          <p class="text-sm text-destructive">{errorMessage}</p>
-        {/if}
 
         <Button variant="outline" class="w-full" onclick={handleDone}>
           Done
@@ -200,9 +187,7 @@
 
         <!-- Role multi-select -->
         <div class="space-y-2" {@attach coachmark({
-          key: "setup-invite.roles",
-          title: "Choose their access",
-          description: "Roles control what they can see and do. Viewer for a quick glance, Caretaker if they help manage your diabetes.",
+          ...coachFor("setup-invite.roles"),
         })}>
           <Label>Roles</Label>
           <div class="grid gap-2 @sm:grid-cols-2">

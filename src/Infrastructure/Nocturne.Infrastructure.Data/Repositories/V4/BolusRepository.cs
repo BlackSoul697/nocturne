@@ -29,7 +29,7 @@ public class BolusRepository : SyncUpsertRepositoryBase<Bolus, BolusEntity>, IBo
     /// Initializes a new instance of the <see cref="BolusRepository"/> class.
     /// </summary>
     public BolusRepository(
-        ITenantDbContextFactory contextFactory,
+        INocturneDbContextFactory contextFactory,
         IDeduplicationService deduplicationService,
         IAuditContext auditContext,
         ILogger<BolusRepository> logger,
@@ -156,9 +156,10 @@ public class BolusRepository : SyncUpsertRepositoryBase<Bolus, BolusEntity>, IBo
 
     /// <summary>
     /// Insert-time deduplication runs AFTER commit: the ingested rows are durably persisted first, and
-    /// dedup linking is best-effort (a failure is logged and healed by the reconcile service, not allowed
-    /// to roll back the insert). Only runs on newly inserted entities — updated-in-place rows were already
-    /// linked when first inserted.
+    /// dedup linking is best-effort (a failure is logged, not allowed to roll back the insert). A row
+    /// missed here is never reconciled, which reads only links, but once older than
+    /// <see cref="DeduplicationService.SingletonLinkRetention"/> later records match it as a group of
+    /// its own. Only runs on newly inserted entities — updated-in-place rows were already linked when first inserted.
     /// </summary>
     protected override async Task PostCommitDedupAsync(
         NocturneDbContext ctx, IReadOnlyList<BolusEntity> inserted, WriteOrigin origin, CancellationToken ct)

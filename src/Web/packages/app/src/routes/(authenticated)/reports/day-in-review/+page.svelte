@@ -4,7 +4,7 @@
   import { goto } from "$app/navigation";
   import { resolve } from "$app/paths";
   import { page } from "$app/state";
-  import { BolusKind, type Bolus, type CarbIntake } from "$lib/api";
+  import type { Bolus, CarbIntake } from "$lib/api";
   import type { EntryRecord } from "$lib/constants/entry-categories";
   import { cn } from "$lib/utils";
   import * as Card from "$lib/components/ui/card";
@@ -12,19 +12,17 @@
   import * as Select from "$lib/components/ui/select";
   import { Button } from "$lib/components/ui/button";
   import { Badge } from "$lib/components/ui/badge";
-  import {
-    ChevronLeft,
-    ChevronRight,
-    Calendar,
-    ArrowLeft,
-    Apple,
-    ArrowUpDown,
-    ArrowUp,
-    ArrowDown,
-    Edit,
-    Filter,
-    X,
-  } from "lucide-svelte";
+  import ChevronLeft from "@lucide/svelte/icons/chevron-left";
+  import ChevronRight from "@lucide/svelte/icons/chevron-right";
+  import Calendar from "@lucide/svelte/icons/calendar";
+  import ArrowLeft from "@lucide/svelte/icons/arrow-left";
+  import Apple from "@lucide/svelte/icons/apple";
+  import ArrowUpDown from "@lucide/svelte/icons/arrow-up-down";
+  import ArrowUp from "@lucide/svelte/icons/arrow-up";
+  import ArrowDown from "@lucide/svelte/icons/arrow-down";
+  import Edit from "@lucide/svelte/icons/square-pen";
+  import Filter from "@lucide/svelte/icons/funnel";
+  import X from "@lucide/svelte/icons/x";
   import { getDayInReviewData } from "./data.remote";
   import { glucoseUnits } from "$lib/stores/appearance-store.svelte";
   import { formatGlucoseValue, formatLongDate, getUnitLabel, time } from "$lib/utils/formatting";
@@ -42,7 +40,7 @@
   import { GlucoseChartCard } from "$lib/components/dashboard/glucose-chart";
   import { contextResource } from "$lib/hooks/resource-context.svelte";
   import { apsSnapshotToPrediction } from "$lib/utils/aps-snapshot-to-prediction";
-  import { isDayString, startOfDay, toDayString } from "$lib/utils/date-range";
+  import { endOfDay, isDayString, startOfDay, timeOnDay, toDayString } from "$lib/utils/date-range";
   import { setReportPrintMeta } from "$lib/components/reports/print/report-print.svelte";
 
   // Get date from URL search params. The default is the local calendar day —
@@ -154,16 +152,6 @@
     return result;
   });
 
-  // Insulin delivery values for the donut chart. All come from the delivery stats, which
-  // already folds algorithm micro-boluses into additional basal, so the donut draws only
-  // manual boluses to keep its arcs equal to the total it prints.
-  const scheduledBasal = $derived(delivery?.scheduledBasal ?? 0);
-  const additionalBasal = $derived(delivery?.additionalBasal ?? 0);
-  const totalInsulin = $derived(delivery?.totalInsulin ?? 0);
-  const manualBoluses = $derived(
-    (dayData?.boluses ?? []).filter((b) => b.kind !== BolusKind.Algorithm)
-  );
-
   // === Treatment Edit Dialog ===
   let editDialogOpen = $state(false);
   let editDialogRecord = $state<EntryRecord | null>(null);
@@ -222,6 +210,23 @@
   // Scrubber time state
   let scrubberTime = $state(new Date());
 
+  // Each day that loads starts the scrubber afresh: at `time` (HH:mm) when a link gave one, read
+  // in the zone the day was loaded in, else now.
+  // Primitives, so a refetch of the same day leaves a scrubbed position alone.
+  const timeParam = $derived(page.url.searchParams.get("time"));
+  const loadedDay = $derived(dayData?.date === dateParam ? dayData.date : null);
+  const loadedZone = $derived(dayData?.timeZone);
+
+  // The day's boundaries in the zone its data was loaded in; `currentDate` stays the viewer's
+  // midnight, which only names the day.
+  const dayZone = $derived(loadedDay ? loadedZone : undefined);
+  const dayStart = $derived(startOfDay(dateParam, dayZone));
+  const dayEnd = $derived(endOfDay(dateParam, dayZone));
+  $effect(() => {
+    if (!loadedDay) return;
+    scrubberTime = timeOnDay(loadedDay, timeParam, loadedZone) ?? new Date();
+  });
+
   // Find the nearest APS snapshot to the scrubber time
   const selectedSnapshot = $derived.by(() => {
     if (apsSnapshots.length === 0) return null;
@@ -272,7 +277,7 @@
 {/snippet}
 
 {#if dayDataResource.current}
-<div class="@container space-y-6 p-3 @md:p-6">
+<div class="@container space-y-6">
   <div
     class="flex flex-col gap-3 print:hidden @2xl:flex-row @2xl:flex-wrap @2xl:items-center @2xl:justify-between"
   >
@@ -322,6 +327,7 @@
         <TIRStackedChart
           percentages={analysis?.timeInRange?.percentages}
           orientation="horizontal"
+          keyOnScreen
           compact
         />
         <div class="grid grid-cols-2 @lg:grid-cols-4 gap-x-6 gap-y-3 text-sm">
@@ -375,14 +381,20 @@
 
       <Card.Root>
       <Card.Content class="p-4 flex flex-col items-center gap-4">
-        <InsulinDonutChart
-          boluses={manualBoluses}
-          {scheduledBasal}
-          {additionalBasal}
-          {totalInsulin}
-          carbIntakes={dayData?.carbIntakes ?? []}
-          onBolusClick={openBolusDialog}
-        />
+        {#key dateParam}
+          <InsulinDonutChart
+            boluses={delivery?.manualBoluses ?? []}
+            totalBasal={delivery?.totalBasal ?? 0}
+            totalBolus={delivery?.totalBolus ?? 0}
+            manualBolus={delivery?.manualBolus ?? 0}
+            automaticBolus={delivery?.automaticBolus ?? 0}
+            scheduledBasal={delivery?.scheduledBasal ?? 0}
+            additionalBasal={delivery?.additionalBasal ?? 0}
+            totalInsulin={delivery?.totalInsulin ?? 0}
+            carbIntakes={dayData?.carbIntakes ?? []}
+            onBolusClick={openBolusDialog}
+          />
+        {/key}
         <div class="grid grid-cols-2 gap-x-6 gap-y-2 text-sm w-full">
           <div>
             <div class="text-muted-foreground">Total Carbs</div>
@@ -393,13 +405,13 @@
           <div>
             <div class="text-muted-foreground">Manual boluses</div>
             <div class="font-medium tabular-nums">
-              {delivery?.bolusCount ?? 0}
+              {delivery?.manualBolusCount ?? 0}
             </div>
           </div>
           <div>
             <div class="text-muted-foreground">Automatic boluses</div>
             <div class="font-medium tabular-nums">
-              {delivery?.microBolusCount ?? 0}
+              {delivery?.automaticBolusCount ?? 0}
             </div>
           </div>
         </div>
@@ -409,22 +421,8 @@
 
   <GlucoseChartCard
     dateRange={{
-      from:
-        dayData?.dateRange?.from ??
-        new Date(
-          currentDate.getFullYear(),
-          currentDate.getMonth(),
-          currentDate.getDate(),
-          0, 0, 0
-        ),
-      to:
-        dayData?.dateRange?.to ??
-        new Date(
-          currentDate.getFullYear(),
-          currentDate.getMonth(),
-          currentDate.getDate(),
-          23, 59, 59
-        ),
+      from: dayData?.dateRange?.from ?? dayStart,
+      to: dayData?.dateRange?.to ?? dayEnd,
     }}
     showPredictions={hasApsSnapshots && selectedPredictionData != null}
     externalPredictionData={selectedPredictionData}
@@ -434,7 +432,8 @@
   {#if hasApsSnapshots}
     <div class="space-y-6 print:hidden">
       <RetrospectiveTimeScrubber
-        date={currentDate}
+        date={dayStart}
+        timeZone={dayZone}
         bind:currentTime={scrubberTime}
         onTimeChange={handleScrubberTimeChange}
         stepMinutes={5}

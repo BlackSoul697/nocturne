@@ -1,4 +1,6 @@
 <script lang="ts">
+  import { Key } from "@nocturne/ui/keys";
+  import { lazyComponent } from "$lib/utils/lazy-component.svelte";
   import type { EntryRecord } from "$lib/constants/entry-categories";
   import { ENTRY_CATEGORIES } from "$lib/constants/entry-categories";
   import {
@@ -11,7 +13,6 @@
   import { time } from "$lib/utils/formatting";
   import { entryDetails, entryLabel } from "$lib/utils/entry-summary";
   import { getRealtimeStore } from "$lib/stores/realtime-store.svelte";
-  import { EntryEditDialog } from "$lib/components/entries";
 
   interface ComponentProps {
     entries?: EntryRecord[];
@@ -35,14 +36,15 @@
 
   let selectedEntry = $state<EntryRecord | null>(null);
   let correlatedRecords = $state<EntryRecord[]>([]);
-  let isDialogOpen = $state(false);
+  const entryEditDialog = lazyComponent(
+    () => import("$lib/components/entries/EntryEditDialog.svelte"),
+  );
 
   function handleEntryClick(entry: EntryRecord) {
     selectedEntry = entry;
     correlatedRecords = realtimeStore.findCorrelatedEntries(entry);
-    isDialogOpen = true;
+    entryEditDialog.open = true;
   }
-
 </script>
 
 <Card class="@container">
@@ -73,7 +75,7 @@
               role="button"
               tabindex="0"
               onkeydown={(e) => {
-                if (e.key === "Enter" || e.key === " ") {
+                if (e.key === Key.Enter || e.key === Key.Space) {
                   e.preventDefault();
                   handleEntryClick(entry);
                 }
@@ -111,13 +113,15 @@
   </svelte:boundary>
 </Card>
 
-<EntryEditDialog
-  bind:open={isDialogOpen}
-  entry={selectedEntry}
-  {correlatedRecords}
-  onClose={() => {
-    isDialogOpen = false;
-    selectedEntry = null;
-    correlatedRecords = [];
-  }}
-/>
+{#if entryEditDialog.component}
+  <entryEditDialog.component
+    bind:open={entryEditDialog.open}
+    entry={selectedEntry}
+    {correlatedRecords}
+    onClose={() => {
+      entryEditDialog.open = false;
+      selectedEntry = null;
+      correlatedRecords = [];
+    }}
+  />
+{/if}

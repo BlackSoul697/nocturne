@@ -6,6 +6,9 @@ import {
 import { createHash } from "crypto";
 import logger from "./logger.js";
 import MessageTranslator from "./message-translator.js";
+import { AlarmLevel, EngineAlarmEvents } from "../constants.js";
+import { fieldsOf, type Payload } from "./payload.js";
+import type { AlarmEvent } from "../types.js";
 
 interface SignalRConfig {
   hubUrl: string;
@@ -18,6 +21,10 @@ interface SignalRConfig {
   /** Extra headers sent on every SignalR HTTP request (negotiate + WebSocket
    *  upgrade). Used to pass X-Forwarded-Host for tenant resolution. */
   connectionHeaders?: Record<string, string>;
+  /** Asked before each reconnect; the client reconnects only on true and asks again on its next
+   *  attempt otherwise. A tenant's hubs are reached by slug, so a slug that came to name another
+   *  tenant would otherwise reconnect this client to that tenant's data. */
+  confirmReconnect?: () => Promise<boolean>;
 }
 
 function isSetupRequiredError(error: unknown): boolean {
@@ -30,7 +37,6 @@ class SignalRClient {
   private alarmConnection: HubConnection | null = null;
   private configConnection: HubConnection | null = null;
   private reconnectAttempts: number = 0;
-  private maxReconnectAttempts: number;
   private reconnectDelay: number;
   private maxReconnectDelay: number;
   private hubUrl: string;
@@ -38,21 +44,49 @@ class SignalRClient {
   private configHubUrl?: string;
   private instanceKey: string;
   private connectionHeaders: Record<string, string>;
+  private confirmReconnect?: () => Promise<boolean>;
   private isConnecting: boolean = false;
+  private connectPromise: Promise<void> | null = null;
+  private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
+  private disconnectRequested: boolean = false;
+  private isCleaningUpConnections: boolean = false;
+  private connectionLossPromise: Promise<void> | null = null;
+  private readonly connectionStartPromises = new Map<
+    HubConnection,
+    Promise<void>
+  >();
 
   constructor(messageHandler: MessageTranslator, config: SignalRConfig) {
     this.messageHandler = messageHandler;
     this.hubUrl = config.hubUrl;
     this.alarmHubUrl = config.alarmHubUrl;
     this.configHubUrl = config.configHubUrl;
-    this.maxReconnectAttempts = config.reconnectAttempts;
     this.reconnectDelay = config.reconnectDelay;
     this.maxReconnectDelay = config.maxReconnectDelay;
     this.instanceKey = config.instanceKey;
     this.connectionHeaders = config.connectionHeaders ?? {};
+    this.confirmReconnect = config.confirmReconnect;
   }
 
   async connect(): Promise<void> {
+    if (this.disconnectRequested) return;
+    if (this.connectionLossPromise) await this.connectionLossPromise;
+    if (this.disconnectRequested || this.isConnected()) return;
+
+    if (this.connectPromise) {
+      await this.connectPromise;
+      return;
+    }
+
+    this.connectPromise = this.connectInternal();
+    try {
+      await this.connectPromise;
+    } finally {
+      this.connectPromise = null;
+    }
+  }
+
+  private async connectInternal(): Promise<void> {
     if (this.isConnecting) {
       logger.warn("SignalR connection attempt already in progress");
       return;
@@ -64,7 +98,7 @@ class SignalRClient {
       this.dataConnection = this.buildConnection(this.hubUrl);
       this.setupDataEventHandlers();
 
-      await this.dataConnection.start();
+      await this.startConnection(this.dataConnection);
       logger.info("SignalR DataHub connection established");
 
       await this.authenticateWithDataHub();
@@ -74,7 +108,7 @@ class SignalRClient {
         this.alarmConnection = this.buildConnection(this.alarmHubUrl);
         this.setupAlarmEventHandlers();
 
-        await this.alarmConnection.start();
+        await this.startConnection(this.alarmConnection);
         logger.info("SignalR AlarmHub connection established");
 
         await this.subscribeToAlarmHub();
@@ -94,7 +128,7 @@ class SignalRClient {
         });
         this.setupConfigEventHandlers();
 
-        await this.configConnection.start();
+        await this.startConnection(this.configConnection);
         logger.info("SignalR ConfigHub connection established");
 
         await this.subscribeToConfigHub();
@@ -103,6 +137,7 @@ class SignalRClient {
       this.reconnectAttempts = 0;
     } catch (error) {
       logger.error("Failed to connect to SignalR hub:", error);
+      await this.cleanupFailedConnections();
       await this.handleReconnect(isSetupRequiredError(error));
     } finally {
       this.isConnecting = false;
@@ -116,22 +151,52 @@ class SignalRClient {
     const headers = { ...this.connectionHeaders, ...options?.headers };
     return new HubConnectionBuilder()
       .withUrl(hubUrl, Object.keys(headers).length > 0 ? { headers } : {})
-      .withAutomaticReconnect({
-        nextRetryDelayInMilliseconds: (retryContext) => {
-          const delay = Math.min(
-            this.reconnectDelay * Math.pow(2, retryContext.previousRetryCount),
-            this.maxReconnectDelay,
-          );
-          logger.info(
-            `SignalR reconnect attempt ${
-              retryContext.previousRetryCount + 1
-            } in ${delay}ms`,
-          );
-          return delay;
-        },
-      })
       .configureLogging(LogLevel.Information)
       .build();
+  }
+
+  private async startConnection(connection: HubConnection): Promise<void> {
+    const startPromise = connection.start();
+    this.connectionStartPromises.set(connection, startPromise);
+    try {
+      await startPromise;
+    } finally {
+      this.connectionStartPromises.delete(connection);
+    }
+  }
+
+  private async cleanupFailedConnections(): Promise<void> {
+    this.isCleaningUpConnections = true;
+    try {
+      await Promise.allSettled([...this.connectionStartPromises.values()]);
+      await this.stopConnection(this.dataConnection, "DataHub");
+      await this.stopConnection(this.alarmConnection, "AlarmHub");
+      await this.stopConnection(this.configConnection, "ConfigHub");
+    } finally {
+      this.dataConnection = null;
+      this.alarmConnection = null;
+      this.configConnection = null;
+      this.isCleaningUpConnections = false;
+    }
+  }
+
+  private handleHubClosed(): Promise<void> {
+    if (this.disconnectRequested || this.isCleaningUpConnections) {
+      return Promise.resolve();
+    }
+    if (this.connectionLossPromise) return this.connectionLossPromise;
+
+    void this.handleReconnect();
+    this.connectionLossPromise = (async () => {
+      if (this.connectPromise) await this.connectPromise;
+      if (this.disconnectRequested || this.isCleaningUpConnections) return;
+
+      await this.cleanupFailedConnections();
+    })().finally(() => {
+      this.connectionLossPromise = null;
+    });
+
+    return this.connectionLossPromise;
   }
 
   private setupDataEventHandlers(): void {
@@ -139,7 +204,7 @@ class SignalRClient {
 
     this.dataConnection.onclose(() => {
       logger.warn("SignalR DataHub connection closed");
-      this.handleReconnect();
+      void this.handleHubClosed();
     });
 
     this.dataConnection.onreconnecting(() => {
@@ -157,16 +222,6 @@ class SignalRClient {
     this.dataConnection.on("dataUpdate", (data: unknown) => {
       logger.debug("Received dataUpdate from SignalR:", data);
       this.messageHandler.handleDataUpdate(data);
-    });
-
-    this.dataConnection.on("announcement", (message: unknown) => {
-      logger.debug("Received announcement from SignalR:", message);
-      this.messageHandler.handleAnnouncement(message);
-    });
-
-    this.dataConnection.on("notification", (notification: unknown) => {
-      logger.debug("Received notification from SignalR:", notification);
-      this.messageHandler.handleNotification(notification);
     });
 
     this.dataConnection.on("statusUpdate", (status: unknown) => {
@@ -226,7 +281,7 @@ class SignalRClient {
 
     this.alarmConnection.onclose(() => {
       logger.warn("SignalR AlarmHub connection closed");
-      this.handleReconnect();
+      void this.handleHubClosed();
     });
 
     this.alarmConnection.onreconnecting(() => {
@@ -240,19 +295,41 @@ class SignalRClient {
       await this.subscribeToAlarmHub();
     });
 
+    this.alarmConnection.on("announcement", (message: unknown) => {
+      logger.debug("Received announcement from SignalR:", message);
+      this.messageHandler.handleAnnouncement(message);
+    });
+
+    this.alarmConnection.on("notification", (notification: unknown) => {
+      logger.debug("Received notification from SignalR:", notification);
+      this.messageHandler.handleNotification(notification);
+    });
+
     this.alarmConnection.on("alarm", (alarm: unknown) => {
       logger.debug("Received alarm from SignalR:", alarm);
-      this.messageHandler.handleAlarm(alarm);
+      this.messageHandler.handleAlarm("alarm", alarm);
     });
 
     this.alarmConnection.on("urgent_alarm", (alarm: unknown) => {
       logger.debug("Received urgent_alarm from SignalR:", alarm);
-      this.messageHandler.handleAlarm(alarm);
+      this.messageHandler.handleAlarm("urgent_alarm", alarm);
     });
 
-    this.alarmConnection.on("clear_alarm", () => {
-      logger.debug("Received clear_alarm from SignalR");
-      this.messageHandler.handleClearAlarm();
+    this.alarmConnection.on("clear_alarm", (clear: unknown) => {
+      logger.debug("Received clear_alarm from SignalR:", clear);
+      this.messageHandler.handleClearAlarm(clear);
+    });
+
+    this.alarmConnection.on(EngineAlarmEvents.Alarm, (alarm: unknown) => {
+      this.messageHandler.handleEngineAlarm("alarm", alarm);
+    });
+
+    this.alarmConnection.on(EngineAlarmEvents.UrgentAlarm, (alarm: unknown) => {
+      this.messageHandler.handleEngineAlarm("urgent_alarm", alarm);
+    });
+
+    this.alarmConnection.on(EngineAlarmEvents.ClearAlarm, (clear: unknown) => {
+      this.messageHandler.handleEngineClearAlarm(clear);
     });
   }
 
@@ -261,7 +338,7 @@ class SignalRClient {
 
     this.configConnection.onclose(() => {
       logger.warn("SignalR ConfigHub connection closed");
-      this.handleReconnect();
+      void this.handleHubClosed();
     });
 
     this.configConnection.onreconnecting(() => {
@@ -294,6 +371,7 @@ class SignalRClient {
       logger.info("Successfully subscribed to ConfigHub");
     } catch (error) {
       logger.error("Error subscribing to ConfigHub:", error);
+      SignalRClient.rethrowIfClosed(this.configConnection, error);
     }
   }
 
@@ -326,6 +404,7 @@ class SignalRClient {
       }
     } catch (error) {
       logger.error("Error authenticating with SignalR DataHub:", error);
+      SignalRClient.rethrowIfClosed(this.dataConnection, error);
     }
   }
 
@@ -333,12 +412,9 @@ class SignalRClient {
     if (!this.dataConnection) return;
 
     try {
-      const collections = ["entries", "treatments", "devicestatus", "profiles"];
-
-      logger.info("Subscribing to storage collections:", collections);
-      const subscribeResult = await this.dataConnection.invoke("Subscribe", {
-        collections: collections,
-      });
+      // No list asks the hub for every category it lets this connection read.
+      logger.info("Subscribing to storage collections");
+      const subscribeResult = await this.dataConnection.invoke("Subscribe", {});
 
       if (subscribeResult?.success) {
         logger.info(
@@ -353,6 +429,7 @@ class SignalRClient {
       }
     } catch (error) {
       logger.error("Error subscribing to storage collections:", error);
+      SignalRClient.rethrowIfClosed(this.dataConnection, error);
     }
   }
 
@@ -382,16 +459,19 @@ class SignalRClient {
       }
     } catch (error) {
       logger.error("Error subscribing to SignalR AlarmHub:", error);
+      SignalRClient.rethrowIfClosed(this.alarmConnection, error);
     }
   }
 
+  /** A hub that closes the connection under a call made while connecting refused the connection,
+   *  as the API does for a tenant other than the one the client expects; that fails the connect. */
+  private static rethrowIfClosed(connection: HubConnection | null, error: unknown): void {
+    if (connection?.state !== "Connected") throw error;
+  }
+
   private async handleReconnect(isSetupRequired = false): Promise<void> {
-    if (!isSetupRequired && this.reconnectAttempts >= this.maxReconnectAttempts) {
-      logger.error(
-        `Maximum reconnection attempts (${this.maxReconnectAttempts}) exceeded`,
-      );
-      return;
-    }
+    if (this.disconnectRequested || this.isCleaningUpConnections) return;
+    if (this.reconnectTimer) return;
 
     this.reconnectAttempts++;
     const delay = Math.min(
@@ -401,42 +481,63 @@ class SignalRClient {
 
     const attemptLabel = isSetupRequired
       ? `setup pending, attempt ${this.reconnectAttempts}`
-      : `attempt ${this.reconnectAttempts}/${this.maxReconnectAttempts}`;
+      : `attempt ${this.reconnectAttempts}`;
     logger.info(
       `Attempting to reconnect to SignalR hub in ${delay}ms (${attemptLabel})`,
     );
 
-    setTimeout(() => {
-      this.connect();
+    this.reconnectTimer = setTimeout(() => {
+      this.reconnectTimer = null;
+      void (async () => {
+        if (this.connectPromise) await this.connectPromise;
+        if (this.connectionLossPromise) await this.connectionLossPromise;
+        if (
+          this.disconnectRequested ||
+          this.reconnectTimer ||
+          this.isConnected()
+        ) {
+          return;
+        }
+        if (this.confirmReconnect && !(await this.confirmReconnect().catch(() => false))) {
+          void this.handleReconnect();
+          return;
+        }
+        await this.connect();
+      })();
     }, delay);
   }
 
   async disconnect(): Promise<void> {
-    if (this.dataConnection) {
-      try {
-        await this.dataConnection.stop();
-        logger.info("SignalR DataHub connection stopped");
-      } catch (error) {
-        logger.error("Error stopping SignalR DataHub connection:", error);
-      }
+    this.disconnectRequested = true;
+
+    if (this.reconnectTimer) {
+      clearTimeout(this.reconnectTimer);
+      this.reconnectTimer = null;
     }
 
-    if (this.alarmConnection) {
-      try {
-        await this.alarmConnection.stop();
-        logger.info("SignalR AlarmHub connection stopped");
-      } catch (error) {
-        logger.error("Error stopping SignalR AlarmHub connection:", error);
-      }
+    await this.connectPromise;
+    await this.connectionLossPromise;
+    await this.cleanupFailedConnections();
+  }
+
+  private async stopConnection(
+    connection: HubConnection | null,
+    name: string,
+  ): Promise<void> {
+    if (!connection || connection.state === "Disconnected") return;
+
+    if (connection.state === "Connecting") {
+      logger.warn(
+        `Skipping stop for SignalR ${name}: connection is still starting`,
+      );
+      return;
     }
 
-    if (this.configConnection) {
-      try {
-        await this.configConnection.stop();
-        logger.info("SignalR ConfigHub connection stopped");
-      } catch (error) {
-        logger.error("Error stopping SignalR ConfigHub connection:", error);
-      }
+    try {
+      await connection.stop();
+      logger.info(`SignalR ${name} connection stopped`);
+    } catch (error) {
+      logger.error(`Error stopping SignalR ${name} connection:`, error);
     }
   }
 
@@ -453,6 +554,20 @@ class SignalRClient {
         this.configConnection.state === "Connected");
 
     return dataConnected && alarmConnected && configConnected;
+  }
+
+  /** The tenant's alarm still sounding, from the API's AlarmHub, as an `/alarm`
+   *  subscriber hears it. Null when nothing sounds or the AlarmHub connection
+   *  isn't open. */
+  async currentAlarm(): Promise<{ event: AlarmEvent; alarm: Payload } | null> {
+    if (!this.alarmConnection || this.alarmConnection.state !== "Connected") {
+      logger.warn("Cannot replay the sounding alarm: AlarmHub connection not open");
+      return null;
+    }
+    const notify = await this.alarmConnection.invoke<unknown>("CurrentAlarm");
+    if (!notify) return null;
+    const event: AlarmEvent = fieldsOf(notify).level === AlarmLevel.Urgent ? "urgent_alarm" : "alarm";
+    return { event, alarm: this.messageHandler.translateAlarm(event, notify) };
   }
 
   /** Forward an alarm ack to the API's AlarmHub. The v3 `/alarm` namespace

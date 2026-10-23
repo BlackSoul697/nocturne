@@ -80,6 +80,11 @@ public class UpsertSensorGlucoseRequest : IBulkUpsertRequest
     public double? Delta { get; set; }
 
     /// <summary>
+    /// Received signal strength the uploader reported for the reading
+    /// </summary>
+    public int? Rssi { get; set; }
+
+    /// <summary>
     /// Whether this glucose value is smoothed or unsmoothed.
     /// Accepted values: "Smoothed", "Unsmoothed". Case-insensitive. Null for unknown.
     /// </summary>
@@ -95,7 +100,10 @@ public class UpsertSensorGlucoseRequest : IBulkUpsertRequest
     /// </summary>
     public double? UnsmoothedMgdl { get; set; }
 
-    // Explicit, so it stays off the serialized shape: a V4 sensor-glucose upload carries no
-    // upstream record id, so the pairing check the shared bulk validation applies cannot fire here.
-    string? IBulkUpsertRequest.SyncIdentifier => null;
+    /// <summary>
+    /// Upstream record identifier within <see cref="DataSource"/>. A create whose pair matches a
+    /// stored reading updates it in place, so a re-upload does not duplicate it. Ignored on update:
+    /// the stored value is kept.
+    /// </summary>
+    public string? SyncIdentifier { get; set; }
 }

@@ -23,6 +23,7 @@ export function transformChartData(data: DashboardChartData) {
       endTime: s.endMills != null ? new Date(s.endMills) : null,
       color: resolveChartColor(s.color ?? "muted-foreground"),
       metadata: s.metadata,
+      profileActivation: s.profileActivation,
     }));
 
   const thresholds = resolveChartThresholds(data.thresholds);
@@ -98,6 +99,7 @@ export function transformChartData(data: DashboardChartData) {
       fillColor: resolveChartColor(s.fillColor ?? "insulin-basal"),
       strokeColor: resolveChartColor(s.strokeColor ?? "insulin-basal"),
     })),
+    lastPumpSyncMills: data.lastPumpSyncMills ?? null,
 
     systemEventMarkers: (data.systemEventMarkers ?? []).map((e) => ({
       ...e,
@@ -109,15 +111,6 @@ export function transformChartData(data: DashboardChartData) {
       ...t,
       time: new Date(t.time ?? 0),
       color: resolveChartColor(t.color ?? "muted-foreground"),
-    })),
-
-    heartRateSeries: (data.heartRateSeries ?? []).map((p) => ({
-      time: new Date(p.time ?? 0),
-      bpm: p.bpm ?? 0,
-    })),
-    stepSeries: (data.stepSeries ?? []).map((p) => ({
-      time: new Date(p.time ?? 0),
-      steps: p.steps ?? 0,
     })),
   };
 }

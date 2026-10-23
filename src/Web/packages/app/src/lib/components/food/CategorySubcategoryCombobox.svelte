@@ -2,7 +2,10 @@
   import * as Command from "$lib/components/ui/command";
   import * as Popover from "$lib/components/ui/popover";
   import { Button } from "$lib/components/ui/button";
-  import { Check, ChevronsUpDown, Plus, SquarePlus } from "lucide-svelte";
+  import Check from "@lucide/svelte/icons/check";
+  import ChevronsUpDown from "@lucide/svelte/icons/chevrons-up-down";
+  import Plus from "@lucide/svelte/icons/plus";
+  import SquarePlus from "@lucide/svelte/icons/square-plus";
   import { cn } from "$lib/utils";
   import { tick } from "svelte";
 
@@ -23,6 +26,8 @@
     onSubcategoryCreate?: (category: string, subcategory: string) => void;
     /** Whether the combobox is disabled */
     disabled?: boolean;
+    /** Id of the trigger, for a label to point at */
+    id?: string;
     /** CSS class for the trigger button */
     class?: string;
   }
@@ -36,6 +41,7 @@
     onCategoryCreate,
     onSubcategoryCreate,
     disabled = false,
+    id,
     class: className,
   }: Props = $props();
 
@@ -145,7 +151,7 @@
 
 <div class={className}>
   <Popover.Root bind:open={comboboxOpen}>
-    <Popover.Trigger bind:ref={comboboxTriggerRef}>
+    <Popover.Trigger bind:ref={comboboxTriggerRef} {id}>
       {#snippet child({ props }: { props: Record<string, unknown> })}
         <Button
           variant="combobox"

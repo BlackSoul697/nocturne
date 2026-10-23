@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { Info } from "lucide-svelte";
+  import Info from "@lucide/svelte/icons/info";
   import { Badge } from "$lib/components/ui/badge";
   import { cn } from "$lib/utils";
   import type { StatisticReliability } from "$lib/api";
@@ -10,6 +10,8 @@
   }
 
   let { reliability, class: className }: Props = $props();
+
+  const daysOfData = $derived(reliability?.daysOfData ?? 0);
 </script>
 
 {#if reliability && reliability.meetsReliabilityCriteria === false}
@@ -22,7 +24,7 @@
   >
     <Info class="mt-px size-3 shrink-0" />
     <span class="min-w-0">
-      Based on {reliability.daysOfData ?? 0} days of data ({reliability.recommendedMinimumDays ??
+      Based on {daysOfData} {daysOfData === 1 ? "day" : "days"} of data ({reliability.recommendedMinimumDays ??
         14} recommended)
     </span>
   </Badge>

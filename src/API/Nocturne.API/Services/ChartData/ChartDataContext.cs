@@ -1,3 +1,4 @@
+using Nocturne.Core.Contracts.Profiles.Resolvers;
 using Nocturne.Core.Models;
 using Nocturne.Core.Models.V4;
 using Nocturne.Infrastructure.Data.Entities;
@@ -35,6 +36,12 @@ public sealed record ChartDataContext
     /// <summary>StartTime minus 8 hours, used for buffered IOB/COB fetches.</summary>
     public long BufferStartTime { get; init; }
 
+    /// <summary>
+    /// Whether to fetch and map <see cref="HeartRateSeries"/> and <see cref="StepSeries"/>, both raw
+    /// high-density readings.
+    /// </summary>
+    public bool IncludeHealthSeries { get; init; } = true;
+
     // === Profile-derived config (set by ProfileLoadStage) ===
 
     /// <summary>IANA timezone string from the active profile, or null if no profile is loaded.</summary>
@@ -64,11 +71,24 @@ public sealed record ChartDataContext
     public IReadOnlyList<TempBasal> TempBasalList { get; init; } = [];
 
     /// <summary>
+    /// Temp basals as delivered that overlap the display window (StartTime..EndTime), which every
+    /// reader of the window's basal delivery reads.
+    /// </summary>
+    public IReadOnlyList<TempBasal> DisplayTempBasals { get; init; } = [];
+
+    /// <summary>When the data was fetched: a temp basal still running delivers up to here, or to <see cref="EndTime"/> when that comes first.</summary>
+    public long NowMills { get; init; } = long.MaxValue;
+
+    /// <summary>
     /// APS snapshot IOB/COB points covering the buffer window, ascending by timestamp. Carries the
     /// IOB/COB the AID system reported, which the IOB/COB series prefers over its own recomputation.
     /// </summary>
     public IReadOnlyList<ApsIobCobPoint> ApsSnapshotList { get; init; } = [];
     public IReadOnlyList<BasalInjection> BasalInjectionList { get; init; } = [];
+
+    /// <summary>The newest pump status at or before <see cref="EndTime"/>.</summary>
+    public PumpSnapshot? LatestPumpSnapshot { get; init; }
+
     /// <summary>State spans keyed by category, populated from a batched repository query.</summary>
     public IReadOnlyDictionary<StateSpanCategory, IEnumerable<StateSpan>> StateSpans { get; init; }
         = new Dictionary<StateSpanCategory, IEnumerable<StateSpan>>();
@@ -105,10 +125,16 @@ public sealed record ChartDataContext
 
     public List<ChartStateSpanDto> PumpModeSpans { get; init; } = [];
     public List<ChartStateSpanDto> ProfileSpans { get; init; } = [];
+
+    /// <summary>The stretches of the window each profile activation applies over.</summary>
+    public IReadOnlyList<ResolvedProfileSegment> ProfileSegments { get; init; } = [];
     public List<ChartStateSpanDto> OverrideSpans { get; init; } = [];
     public List<ChartStateSpanDto> ActivitySpans { get; init; } = [];
     public List<ChartStateSpanDto> TempBasalSpans { get; init; } = [];
     public List<BasalDeliverySpanDto> BasalDeliverySpans { get; init; } = [];
+
+    /// <inheritdoc cref="DashboardChartData.LastPumpSyncMills"/>
+    public long? LastPumpSyncMills { get; init; }
 
     // === Health series (set by DtoMappingStage) ===
 

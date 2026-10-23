@@ -1,5 +1,10 @@
 <script lang="ts">
   import {
+    a1cLabel,
+    a1cUnitLabel,
+    formatA1cValue,
+  } from "$lib/utils/a1c-formatting";
+  import {
     Card,
     CardContent,
     CardDescription,
@@ -7,13 +12,11 @@
     CardTitle,
   } from "$lib/components/ui/card";
   import { Separator } from "$lib/components/ui/separator";
-  import {
-    Syringe,
-    Calendar,
-    Target,
-    Activity,
-    Droplets,
-  } from "lucide-svelte";
+  import Syringe from "@lucide/svelte/icons/syringe";
+  import Calendar from "@lucide/svelte/icons/calendar";
+  import Target from "@lucide/svelte/icons/target";
+  import Activity from "@lucide/svelte/icons/activity";
+  import Droplets from "@lucide/svelte/icons/droplets";
   import { AmbulatoryGlucoseProfile } from "$lib/components/ambulatory-glucose-profile";
   import TIRStackedChart from "$lib/components/reports/TIRStackedChart.svelte";
   import ReliabilityBadge from "$lib/components/reports/ReliabilityBadge.svelte";
@@ -22,6 +25,7 @@
   import ScheduledBasalRateChart from "$lib/components/reports/ScheduledBasalRateChart.svelte";
   import HourlyBolusChart from "$lib/components/reports/HourlyBolusChart.svelte";
   import ScheduleFooter from "$lib/components/reports/ScheduleFooter.svelte";
+  import AidSystemUseCard from "$lib/components/reports/AidSystemUseCard.svelte";
   import TextureSwatch from "$lib/components/charts/print/TextureSwatch.svelte";
   import { bgPatternClass } from "$lib/components/charts/print/chart-print-patterns";
   import { getIdpData } from "$api/idp.remote";
@@ -73,14 +77,10 @@
 </svelte:head>
 
 {#if reportsResource.current}
-<div class="@container container mx-auto space-y-8 p-3 @md:p-6 max-w-7xl">
+<div class="@container space-y-8">
   <div class="space-y-4">
     <div class="print:hidden">
-      <h1 class="text-2xl @md:text-3xl font-bold flex items-center gap-3">
-        <Syringe class="w-6 h-6 @md:w-8 @md:h-8 text-primary" />
-        Insulin Dosing Profile
-      </h1>
-      <p class="text-muted-foreground mt-1">
+      <p class="text-muted-foreground">
         Comprehensive insulin delivery analysis with glucose context
       </p>
     </div>
@@ -101,8 +101,8 @@
     figures={[
       { label: "Avg Total Daily Dose", value: insulinStats?.tdd?.toFixed(1) ?? "--", unit: "U/day" },
       { label: "Average", value: stats.mean ? String(bg(stats.mean)) : "--", unit: bgLabel() },
-      { label: "Est. A1C", value: variability.estimatedA1c?.toFixed(1) ?? "--", unit: "%", note: "From mean glucose" },
-      { label: "CV", value: variability.coefficientOfVariation?.toFixed(0) ?? "--", unit: "%", note: "Target: ≤33%" },
+      { label: a1cLabel(true), value: formatA1cValue(variability.estimatedA1cDisplay), unit: a1cUnitLabel(), note: "From mean glucose", },
+      { label: "CV", value: variability.coefficientOfVariation?.toFixed(0) ?? "--", unit: "%", note: variability.coefficientOfVariationTarget != null ? `Target: ≤${variability.coefficientOfVariationTarget}%` : undefined },
     ]}
   />
 
@@ -149,6 +149,9 @@
               style:--share="{bolusPct}%"
             ></div>
           </div>
+          <p class="text-xs text-muted-foreground tabular-nums">
+            Bolus total: manual {(insulinStats?.manualBolus ?? 0).toFixed(1)} U / automatic {(insulinStats?.automaticBolus ?? 0).toFixed(1)} U
+          </p>
         </div>
 
         <Separator />
@@ -220,45 +223,7 @@
   </div>
 
   <div class="grid grid-cols-1 @3xl:grid-cols-2 gap-6">
-    <Card>
-      <CardHeader>
-        <CardTitle class="flex items-center gap-2">
-          <Activity class="w-5 h-5" />
-          AID System Use
-        </CardTitle>
-        <CardDescription>
-          Automated insulin delivery system metrics
-        </CardDescription>
-      </CardHeader>
-      <CardContent>
-        <div class="grid grid-cols-1 @xs:grid-cols-2 print:grid-cols-3 gap-4 text-sm">
-          <div>
-            <div class="text-muted-foreground">CGM</div>
-            <div class="font-semibold text-lg">{aidMetrics?.cgmDeviceNames ?? '--'}</div>
-          </div>
-          <div>
-            <div class="text-muted-foreground">Pump</div>
-            <div class="font-semibold text-lg">{aidMetrics?.pumpDeviceNames ?? '--'}</div>
-          </div>
-          <div>
-            <div class="text-muted-foreground">CGM Active</div>
-            <div class="font-semibold text-lg">{aidMetrics?.cgmActivePercent != null ? `${Math.round(aidMetrics.cgmActivePercent)}%` : '--'}</div>
-          </div>
-          <div>
-            <div class="text-muted-foreground">AID Active</div>
-            <div class="font-semibold text-lg">{aidMetrics?.aidActivePercent != null ? `${Math.round(aidMetrics.aidActivePercent)}%` : '--'}</div>
-          </div>
-          <div>
-            <div class="text-muted-foreground">Target</div>
-            <div class="font-semibold text-lg">{aidMetrics?.targetLow != null && aidMetrics?.targetHigh != null ? `${bg(aidMetrics.targetLow)}-${bg(aidMetrics.targetHigh)} ${bgLabel()}` : '--'}</div>
-          </div>
-          <div>
-            <div class="text-muted-foreground">Site Changes</div>
-            <div class="font-semibold text-lg">{aidMetrics?.siteChangeCount != null ? aidMetrics.siteChangeCount : '--'}</div>
-          </div>
-        </div>
-      </CardContent>
-    </Card>
+    <AidSystemUseCard metrics={aidMetrics} />
 
     <Card>
       <CardHeader>

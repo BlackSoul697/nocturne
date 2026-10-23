@@ -1,8 +1,10 @@
+using Nocturne.API.Tests.Infrastructure;
 using FluentAssertions;
 using Microsoft.Extensions.Logging.Abstractions;
 using Moq;
 using Nocturne.API.Services.V4;
 using Nocturne.Core.Contracts.Audit;
+using Nocturne.Core.Contracts.Infrastructure;
 using Nocturne.Core.Contracts.Devices;
 using Nocturne.Core.Contracts.Profiles.Resolvers;
 using Nocturne.Core.Contracts.Treatments;
@@ -30,7 +32,7 @@ public class TreatmentDecomposerNotesTests : IDisposable
         _context.TenantId = Guid.Parse("00000000-0000-0000-0000-000000000001");
         var mockDedup = new Mock<IDeduplicationService>();
         var mockAudit = new Mock<IAuditContext>().Object;
-        var ctxFactory = new TestTenantDbContextFactory(_context);
+        var ctxFactory = new TestNocturneDbContextFactory(_context);
         var bolusRepo = new BolusRepository(ctxFactory, mockDedup.Object, mockAudit, NullLogger<BolusRepository>.Instance);
         var carbIntakeRepo = new CarbIntakeRepository(ctxFactory, mockDedup.Object, mockAudit, NullLogger<CarbIntakeRepository>.Instance);
         var bgCheckRepo = new BGCheckRepository(ctxFactory, mockDedup.Object, mockAudit, NullLogger<BGCheckRepository>.Instance);
@@ -51,16 +53,19 @@ public class TreatmentDecomposerNotesTests : IDisposable
         var insulinRepoMock = new Mock<IPatientInsulinRepository>();
 
         _decomposer = new TreatmentDecomposer(
-            _context,
+            _context.AsFactory(),
             bolusRepo, tempBasalRepoMock.Object,
             carbIntakeRepo, bgCheckRepo, noteRepo, deviceEventRepo, bolusCalcRepo,
             stateSpanServiceMock.Object,
+            ProfileActivationTestDeps.Repository(_context),
+            ProfileActivationTestDeps.Writer(_context),
             treatmentFoodServiceMock.Object,
             deviceServiceMock.Object,
             Mock.Of<IPatientDeviceStamper>(),
             profileDecomposerMock.Object,
             activeProfileResolverMock.Object,
             insulinRepoMock.Object,
+            TempBasalTestDeps.Unscheduled(),
             Mock.Of<IAuditContext>(),
             NullLogger<TreatmentDecomposer>.Instance);
     }

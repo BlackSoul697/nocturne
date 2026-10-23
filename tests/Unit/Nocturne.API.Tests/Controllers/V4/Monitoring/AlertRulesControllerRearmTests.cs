@@ -64,14 +64,18 @@ public class AlertRulesControllerRearmTests
                 It.IsAny<string?>(), It.IsAny<StoredConditionTrees>()))
             .Returns((AlertConditionType _, string body, bool _, string? autoResolve, string? client, StoredConditionTrees _) =>
                 new ConditionUpdateCheck([], body, autoResolve, client, []));
+        validator
+            .Setup(v => v.Validate(
+                It.IsAny<AlertConditionType>(), It.IsAny<string>(), It.IsAny<bool>(), It.IsAny<string?>(), It.IsAny<string?>()))
+            .Returns([]);
         var controller = new AlertRulesController(
-            new TestTenantDbContextFactory(db),
+            new TestNocturneDbContextFactory(db),
             Mock.Of<IAlertReferenceService>(),
             Mock.Of<IAlertDeliveryService>(),
             Mock.Of<IRuleScopeClassifier>(),
             validator.Object,
             Mock.Of<ISecretEncryptionService>(),
-            new AlertRuleRearm(gate ?? new AlertRuleEvaluationGate(), new AlertTrackerRepository(db)),
+            new AlertRuleRearm(gate ?? new AlertRuleEvaluationGate(), new AlertTrackerRepository(db.AsFactory())),
             new AlertRuleRetirement(Mock.Of<IExcursionTracker>(), Mock.Of<IExcursionResolutionHandler>()),
             Mock.Of<ILogger<AlertRulesController>>());
         return (controller, db);
@@ -191,7 +195,7 @@ public class AlertRulesControllerRearmTests
     }
 
     [Fact]
-    public async Task A_request_aborted_after_its_save_still_clears_the_hold()
+    public async Task A_request_aborted_before_its_save_neither_saves_nor_clears()
     {
         var gate = new AlertRuleEvaluationGate();
         var (controller, db) = await CreateAsync(gate);
@@ -202,9 +206,11 @@ public class AlertRulesControllerRearmTests
         await Task.Delay(100);
         await request.CancelAsync();
         evaluation.Dispose();
-        await toggle.WaitAsync(TimeSpan.FromSeconds(5));
 
-        (await AwaitingRearm(db)).Should().BeFalse();
+        await toggle.Invoking(t => t.WaitAsync(TimeSpan.FromSeconds(5)))
+            .Should().ThrowAsync<OperationCanceledException>();
+        (await db.AlertRules.AsNoTracking().SingleAsync(r => r.Id == RuleId)).IsEnabled.Should().BeTrue();
+        (await AwaitingRearm(db)).Should().BeTrue();
     }
 
     private static async Task SetHold(NocturneDbContext db, bool held)

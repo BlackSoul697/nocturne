@@ -17,6 +17,7 @@ public class ExcursionResolutionHandlerTests
 {
     private readonly Mock<IAlertRepository> _repository = new();
     private readonly Mock<ISignalRBroadcastService> _broadcast = new();
+    private readonly Mock<IEngineAlarmRelay> _alarmRelay = new();
     private readonly Mock<IInAppNotificationService> _notification = new();
     private readonly FakeTimeProvider _timeProvider = new(new DateTimeOffset(2026, 4, 30, 14, 0, 0, TimeSpan.Zero));
     private readonly ExcursionResolutionHandler _sut;
@@ -33,6 +34,7 @@ public class ExcursionResolutionHandlerTests
             _repository.Object,
             _broadcast.Object,
             _notification.Object,
+            _alarmRelay.Object,
             _timeProvider,
             NullLogger<ExcursionResolutionHandler>.Instance);
     }
@@ -58,6 +60,25 @@ public class ExcursionResolutionHandlerTests
             It.Is<IReadOnlyList<Guid>>(ids => ids.Contains(instanceId)),
             It.IsAny<CancellationToken>()), Times.Once);
         _broadcast.Verify(b => b.BroadcastAlertEventAsync("alert_resolved", It.IsAny<object>()), Times.Once);
+        _alarmRelay.Verify(
+            r => r.ClearIfQuietAsync(
+                It.Is<IReadOnlyCollection<Guid>>(ids => ids.SequenceEqual(new[] { _excursionId })),
+                It.IsAny<CancellationToken>()),
+            Times.Once);
+    }
+
+    [Fact]
+    public async Task HandleClosed_DeletesEveryMembersMuteOfTheExcursion()
+    {
+        _repository.Setup(r => r.GetInstancesForExcursionAsync(_tenantId, _excursionId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(Array.Empty<AlertInstanceSnapshot>());
+
+        await _sut.HandleClosedAsync(
+            new ExcursionTransition(ExcursionTransitionType.ExcursionClosed, _excursionId, ExcursionCloseReason.AutoResolve),
+            _tenantId,
+            CancellationToken.None);
+
+        _repository.Verify(r => r.DeleteExcursionMutesAsync(_tenantId, _excursionId, It.IsAny<CancellationToken>()), Times.Once);
     }
 
     [Fact]

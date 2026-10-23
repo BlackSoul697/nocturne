@@ -64,20 +64,28 @@ public static class MatchCriteriaMapper
             Rate = entity.Rate,
             RateTolerance = RateTolerance,
             Duration = entity.EndTimestamp.HasValue
-                ? entity.EndTimestamp.Value - entity.StartTimestamp
+                ? entity.EndTimestamp.Value - entity.Timestamp
                 : null
         };
 
     /// <summary>
     /// Criteria for a state span. An unrecognised category yields a null
-    /// <see cref="MatchCriteria.Category"/> rather than throwing.
+    /// <see cref="MatchCriteria.Category"/> rather than throwing. The state of an override or temporary
+    /// target span does not name its preset, so those carry their metadata for
+    /// <see cref="StateSpanMetadataExtensions.IsSamePresetAs"/>; a switch between two presets is two spans.
     /// </summary>
-    public static MatchCriteria From(StateSpanEntity entity) =>
-        new()
+    public static MatchCriteria From(StateSpanEntity entity)
+    {
+        StateSpanCategory? category = CategoriesByName.TryGetValue(entity.Category, out var parsed) ? parsed : null;
+        return new()
         {
-            Category = CategoriesByName.TryGetValue(entity.Category, out var category) ? category : null,
-            State = entity.State
+            Category = category,
+            State = entity.State,
+            Metadata = category is StateSpanCategory.Override or StateSpanCategory.TemporaryTarget
+                ? MapperHelpers.DeserializeJson<Dictionary<string, object>>(entity.MetadataJson)
+                : null
         };
+    }
 
     /// <summary>
     /// Categories keyed by name. A name lookup rather than <see cref="Enum.TryParse{TEnum}(string, bool, out TEnum)"/>,
@@ -86,6 +94,10 @@ public static class MatchCriteriaMapper
     private static readonly Dictionary<string, StateSpanCategory> CategoriesByName =
         Enum.GetValues<StateSpanCategory>().ToDictionary(c => c.ToString(), StringComparer.OrdinalIgnoreCase);
 
-    /// <summary>Criteria for a note, which matches on its time window alone.</summary>
-    public static MatchCriteria ForNote() => new();
+    /// <summary>
+    /// Criteria for a note. Whitespace runs collapse so a copy re-wrapped by another source still
+    /// matches; any other difference in the text is a different note.
+    /// </summary>
+    public static MatchCriteria From(NoteEntity entity) =>
+        new() { Text = string.Join(' ', entity.Text.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries)) };
 }

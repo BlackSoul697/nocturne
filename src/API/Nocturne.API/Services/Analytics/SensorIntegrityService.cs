@@ -1,5 +1,7 @@
+using Nocturne.Core.Clinical.Statistics;
 using Nocturne.Core.Contracts.Analytics;
 using Nocturne.Core.Contracts.V4.Repositories;
+using Nocturne.Core.Models;
 using Nocturne.Core.Models.Analytics;
 using Nocturne.Core.Models.V4;
 
@@ -16,10 +18,6 @@ namespace Nocturne.API.Services.Analytics;
 /// </remarks>
 public class SensorIntegrityService : ISensorIntegrityService
 {
-    // Plausible glucose bounds (mg/dL), matching StatisticsService glucose extraction.
-    private const double MinPlausibleMgdl = 0.0;
-    private const double MaxPlausibleMgdl = 600.0;
-
     // Nocturnal window (local hours): a nadir at or after 22:00 or before 07:00 is nocturnal.
     private const int NocturnalStartHour = 22;
     private const int NocturnalEndHour = 7;
@@ -44,10 +42,10 @@ public class SensorIntegrityService : ISensorIntegrityService
         DetectorConfig? config = null,
         CancellationToken ct = default)
     {
-        var fromUtc = AsUtc(from);
-        var toUtc = AsUtc(to);
+        var fromUtc = from.AsUtc();
+        var toUtc = to.AsUtc();
 
-        var glucoseTask = _sensorGlucoseRepository.GetAsync(
+        var glucoseTask = _sensorGlucoseRepository.GetForAnalyticsAsync(
             fromUtc, toUtc, device: null, source: source, limit: int.MaxValue, descending: false, ct: ct);
         // All bolus kinds (manual + APS micro-boluses) count toward insulin-during-cluster.
         var bolusTask = _bolusRepository.GetAsync(
@@ -56,7 +54,7 @@ public class SensorIntegrityService : ISensorIntegrityService
         await Task.WhenAll(glucoseTask, bolusTask);
 
         var readings = (await glucoseTask)
-            .Where(r => r.Mgdl > MinPlausibleMgdl && r.Mgdl < MaxPlausibleMgdl)
+            .Where(r => GlucoseStatistics.IsPlausibleReading(r.Mgdl))
             .OrderBy(r => r.Timestamp)
             .ToList();
 
@@ -152,15 +150,6 @@ public class SensorIntegrityService : ISensorIntegrityService
             Events = events.Count,
             NocturnalEvents = events.Count(e => e.IsNocturnal),
         };
-
-    // Treat the bound as a UTC instant: relabel an unspecified kind (the common bound-from-query
-    // case), but genuinely convert a local kind rather than reinterpreting its wall-clock.
-    private static DateTime AsUtc(DateTime dt) => dt.Kind switch
-    {
-        DateTimeKind.Utc => dt,
-        DateTimeKind.Local => dt.ToUniversalTime(),
-        _ => DateTime.SpecifyKind(dt, DateTimeKind.Utc),
-    };
 
     private static bool IsNocturnal(DateTime nadirUtc, int? utcOffsetMinutes)
     {

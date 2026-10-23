@@ -1,4 +1,4 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi } from "vitest";
 import {
   dayCount,
   endOfDay,
@@ -6,6 +6,7 @@ import {
   isTimeZone,
   resolveDayRange,
   startOfDay,
+  timeOnDay,
   toDayString,
 } from "./date-range";
 
@@ -122,18 +123,15 @@ describe("resolveDayRange", () => {
   });
 
   it("ends a relative window on today in the given timezone", () => {
-    // Both zones' "today" must be the calendar date each zone is actually on.
-    const sydney = resolveDayRange({ days: 1 }, 14, SYDNEY);
-    const denver = resolveDayRange({ days: 1 }, 14, DENVER);
-    const todayIn = (timeZone: string) =>
-      new Intl.DateTimeFormat("en-CA", {
-        timeZone,
-        year: "numeric",
-        month: "2-digit",
-        day: "2-digit",
-      }).format(new Date());
-    expect(sydney.to).toBe(todayIn(SYDNEY));
-    expect(denver.to).toBe(todayIn(DENVER));
+    // 20:00 UTC: already the next morning in Sydney, still the afternoon in Denver.
+    vi.useFakeTimers({ toFake: ["Date"] });
+    try {
+      vi.setSystemTime(new Date("2026-07-25T20:00:00Z"));
+      expect(resolveDayRange({ days: 1 }, 14, SYDNEY).to).toBe("2026-07-26");
+      expect(resolveDayRange({ days: 1 }, 14, DENVER).to).toBe("2026-07-25");
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("ignores a half-specified explicit range", () => {
@@ -198,5 +196,18 @@ describe("toDayString", () => {
 
   it("zero-pads month and day", () => {
     expect(toDayString(new Date(2026, 0, 5))).toBe("2026-01-05");
+  });
+});
+
+describe("timeOnDay", () => {
+  it("reads the wall-clock time in the given zone, not the viewer's", () => {
+    expect(timeOnDay("2026-10-13", "08:00", "Australia/Sydney")?.toISOString()).toBe("2026-10-12T21:00:00.000Z");
+    expect(timeOnDay("2026-10-13", "08:00", "America/Los_Angeles")?.toISOString()).toBe("2026-10-13T15:00:00.000Z");
+  });
+
+  it("refuses a malformed day or time", () => {
+    expect(timeOnDay("2026-10-13", "8am", "UTC")).toBeNull();
+    expect(timeOnDay("2026-10-13", "24:00", "UTC")).toBeNull();
+    expect(timeOnDay(null, "08:00", "UTC")).toBeNull();
   });
 });

@@ -1,13 +1,19 @@
 <script lang="ts">
+  import { a1cLabel } from "$lib/utils/a1c-formatting";
   import { time } from "$lib/utils/formatting";
-  import { getSettingsStore } from "$lib/stores/settings-store.svelte";
   import {
     getColorTheme,
     setColorTheme,
+    glucoseRangePalette,
+    setGlucoseRangePalette,
     type ColorTheme,
   } from "$lib/stores/appearance-store.svelte";
   import {
     glucoseUnits,
+    energyUnit,
+    getEnergyUnit,
+    a1cName,
+    a1cUnits,
     timeFormat,
     nightModeSchedule,
     setColorScheme,
@@ -24,12 +30,15 @@
     regionFormat,
     regionFormatLabel,
     REGION_FORMATS,
+    type AreaMode,
     type ColorScheme,
     type RegionFormat,
   } from "$lib/stores/appearance-store.svelte";
+  import { ENERGY_UNITS } from "@nocturne/ui/energy";
   import { getRealtimeStore } from "$lib/stores/realtime-store.svelte";
   import TitleFaviconSettings from "$lib/components/settings/TitleFaviconSettings.svelte";
   import DashboardWidgetConfigurator from "$lib/components/settings/DashboardWidgetConfigurator.svelte";
+  import TextureSwatch from "$lib/components/charts/print/TextureSwatch.svelte";
   import LanguageSelector from "$lib/components/LanguageSelector.svelte";
   import { updateLanguagePreference } from "$api/user-preferences.remote";
   import {
@@ -41,6 +50,8 @@
   import GlucoseSourceDefaultsDialog from "$lib/components/settings/GlucoseSourceDefaultsDialog.svelte";
   import type { FeatureSettings } from "$lib/api/generated/nocturne-api-client";
   import { getUiSettings, saveFeatureSettings } from "$api/ui-settings.remote";
+  import { remoteErrorMessage } from "$lib/api/remote-error";
+  import { SETTINGS_LOAD_FAILED } from "$lib/api/ui-settings-messages";
   import { toast } from "svelte-sonner";
   import {
     Card,
@@ -63,28 +74,26 @@
     SelectTrigger,
   } from "$lib/components/ui/select";
   import { Label as FormLabel } from "$lib/components/ui/label";
-  import {
-    Activity,
-    Palette,
-    Sun,
-    Moon,
-    Monitor,
-    Clock,
-    Globe,
-    Languages,
-    AlertCircle,
-    Timer,
-    Eye,
-  } from "lucide-svelte";
+  import Activity from "@lucide/svelte/icons/activity";
+  import Palette from "@lucide/svelte/icons/palette";
+  import Sun from "@lucide/svelte/icons/sun";
+  import Moon from "@lucide/svelte/icons/moon";
+  import Monitor from "@lucide/svelte/icons/monitor";
+  import Clock from "@lucide/svelte/icons/clock";
+  import Globe from "@lucide/svelte/icons/globe";
+  import Languages from "@lucide/svelte/icons/languages";
+  import AlertCircle from "@lucide/svelte/icons/circle-alert";
+  import Timer from "@lucide/svelte/icons/timer";
+  import Eye from "@lucide/svelte/icons/eye";
   import SettingsPageSkeleton from "$lib/components/settings/SettingsPageSkeleton.svelte";
   import { browser } from "$app/environment";
   import { resolve } from "$app/paths";
   import { WidgetId } from "$lib/api/generated/nocturne-api-client";
   import { page } from "$app/state";
   import { coachmark } from "@nocturne/coach";
+  import { coachFor } from "$lib/coach-marks/copy.svelte";
   import { describeSubmitError } from "$lib/forms/submit-error";
 
-  const store = getSettingsStore();
   const realtimeStore = getRealtimeStore();
 
   // Dashboard widgets - use persisted state for immediate localStorage persistence
@@ -169,9 +178,6 @@
         display: { ...current.display, ...patch.display },
         trackerPills: { ...current.trackerPills, ...patch.trackerPills },
       });
-      // The dashboard still reads these through the shared settings store; reload
-      // it so the change it renders matches what was persisted.
-      await store.reload();
     } catch (err) {
       toast.error(
         describeSubmitError(err, "Could not save. Check your connection and try again.")
@@ -197,13 +203,13 @@
     </div>
   </div>
 
-  {#if store.isLoading}
+  {#if uiSettingsQuery?.loading}
     <SettingsPageSkeleton cardCount={4} />
-  {:else if store.hasError}
+  {:else if uiSettingsQuery?.error}
     <Card variant="destructive">
       <CardContent class="flex items-center gap-3 py-6">
         <AlertCircle class="h-5 w-5 text-destructive" />
-        <p class="font-medium">{store.error}</p>
+        <p class="font-medium">{remoteErrorMessage(uiSettingsQuery.error, SETTINGS_LOAD_FAILED)}</p>
       </CardContent>
     </Card>
   {:else}
@@ -391,6 +397,55 @@
 
         <Separator />
 
+        <div class="space-y-2">
+          <Label>Glucose range colors</Label>
+          <RadioGroup.Root
+            class="grid @xl:grid-cols-2"
+            aria-label="Glucose range colors"
+            value={glucoseRangePalette.current}
+            onValueChange={(palette) => {
+              if (palette === "theme" || palette === "clarity") setGlucoseRangePalette(palette);
+            }}
+          >
+            <RadioGroup.Card value="theme">
+              <div class="font-semibold">Theme</div>
+              <p class="text-sm text-muted-foreground">
+                The range colors of the selected color theme
+              </p>
+            </RadioGroup.Card>
+            <RadioGroup.Card value="clarity">
+              <div class="font-semibold">Distinct</div>
+              <p class="text-sm text-muted-foreground">
+                Maroon, red, yellow and orange for the four out-of-range bands on every theme
+              </p>
+            </RadioGroup.Card>
+          </RadioGroup.Root>
+          <ul class="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm" aria-label="Range color preview">
+            <li class="flex items-center gap-1.5">
+              <TextureSwatch texture="very-high" />
+              Very high
+            </li>
+            <li class="flex items-center gap-1.5">
+              <TextureSwatch texture="high" />
+              High
+            </li>
+            <li class="flex items-center gap-1.5">
+              <TextureSwatch texture="in-range" />
+              In range
+            </li>
+            <li class="flex items-center gap-1.5">
+              <TextureSwatch texture="low" />
+              Low
+            </li>
+            <li class="flex items-center gap-1.5">
+              <TextureSwatch texture="very-low" />
+              Very low
+            </li>
+          </ul>
+        </div>
+
+        <Separator />
+
         <div class="grid gap-4 @sm:grid-cols-2">
           <div class="space-y-2">
             <Label>Color scheme</Label>
@@ -528,6 +583,28 @@
           </div>
 
           <div class="space-y-2">
+            <Label for="energy-unit">Food energy units</Label>
+            <Select
+              type="single"
+              value={getEnergyUnit()}
+              onValueChange={(value) => {
+                const unit = ENERGY_UNITS.find((u) => u === value);
+                if (unit) energyUnit.current = unit;
+              }}
+            >
+              <SelectTrigger id="energy-unit">
+                <span>
+                  {getEnergyUnit() === "kJ" ? "Kilojoules (kJ)" : "Calories (kcal)"}
+                </span>
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="kJ">Kilojoules (kJ)</SelectItem>
+                <SelectItem value="kcal">Calories (kcal)</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div class="space-y-2">
             <Label>Time format</Label>
             <Select
               type="single"
@@ -575,6 +652,36 @@
             begin, so pick whichever matches how you read a calendar. Your
             interface stays in the language above.
           </p>
+        </div>
+        <div class="grid gap-4 @sm:grid-cols-2">
+          <div class="space-y-2">
+            <Label for="a1c-name">{a1cLabel()} display name</Label>
+            <!-- @wc-ignore -->
+            <Select type="single" value={a1cName.current} onValueChange={(value) => {
+              if (value === "HbA1c" || value === "A1c") a1cName.current = value;
+            }}>
+              <SelectTrigger id="a1c-name">{a1cName.current}</SelectTrigger>
+              <SelectContent>
+                <SelectItem value="HbA1c">HbA1c</SelectItem>
+                <SelectItem value="A1c">A1c</SelectItem>
+              </SelectContent>
+            </Select>
+            <p class="text-xs text-muted-foreground">Estimated values retain the e prefix: eHbA1c or eA1c.</p>
+          </div>
+          <div class="space-y-2">
+            <Label for="a1c-units">{a1cLabel()} display unit</Label>
+            <!-- @wc-ignore -->
+            <Select type="single" value={a1cUnits.current} onValueChange={(value) => {
+              if (value === "percent" || value === "mmol/mol") a1cUnits.current = value;
+            }}>
+              <SelectTrigger id="a1c-units">{a1cUnits.current === "percent" ? "% (NGSP)" : "mmol/mol (IFCC)"}</SelectTrigger>
+              <SelectContent>
+                <SelectItem value="percent">% (NGSP)</SelectItem>
+                <SelectItem value="mmol/mol">mmol/mol (IFCC)</SelectItem>
+              </SelectContent>
+            </Select>
+            <p class="text-xs text-muted-foreground">Use % (NGSP) or mmol/mol (IFCC) for measured and estimated {a1cLabel()}. Blood glucose units are set separately.</p>
+          </div>
         </div>
       </CardContent>
     </Card>
@@ -674,8 +781,8 @@
                   </span>
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="threshold">Threshold bands</SelectItem>
                   <SelectItem value="continuous">Continuous gradient</SelectItem>
+                  <SelectItem value="threshold">Threshold bands</SelectItem>
                   <SelectItem value="single">Single color</SelectItem>
                 </SelectContent>
               </Select>
@@ -727,8 +834,8 @@
                     </span>
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="threshold">Threshold bands</SelectItem>
                     <SelectItem value="continuous">Continuous gradient</SelectItem>
+                    <SelectItem value="threshold">Threshold bands</SelectItem>
                     <SelectItem value="single">Single color</SelectItem>
                   </SelectContent>
                 </Select>
@@ -755,24 +862,36 @@
               value={chartAreaMode.current}
               onValueChange={(value: string) => {
                 // eslint-disable-next-line @typescript-eslint/consistent-type-assertions -- value is constrained to the area fill options by the sibling SelectItems
-                chartAreaMode.current = value as "off" | "baseline" | "deviation";
+                chartAreaMode.current = value as AreaMode;
               }}
             >
               <SelectTrigger>
                 <span>
                   {chartAreaMode.current === "off"
                     ? "Off"
-                    : chartAreaMode.current === "baseline"
-                      ? "Baseline"
-                      : "Deviation"}
+                    : chartAreaMode.current === "full"
+                      ? "Full"
+                      : chartAreaMode.current === "baseline"
+                        ? "Fade (Trio style)"
+                        : "Outside target only"}
                 </span>
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="off">Off</SelectItem>
-                <SelectItem value="baseline">Baseline</SelectItem>
-                <SelectItem value="deviation">Deviation</SelectItem>
+                <SelectItem value="full">Full</SelectItem>
+                <SelectItem value="baseline">Fade (Trio style)</SelectItem>
+                <SelectItem value="deviation">Outside target only</SelectItem>
               </SelectContent>
             </Select>
+            <p class="text-sm text-muted-foreground">
+              {chartAreaMode.current === "off"
+                ? "No fill under the glucose line."
+                : chartAreaMode.current === "full"
+                  ? "Fills from the glucose line to the bottom of the chart at one opacity."
+                  : chartAreaMode.current === "baseline"
+                    ? "Fills from the glucose line to the bottom of the chart, fading out toward the bottom."
+                    : "Fills only between the glucose line and the target range when it is out of range."}
+            </p>
           </div>
         </div>
 
@@ -816,9 +935,7 @@
 
     <!-- Dashboard Widgets -->
     <div {@attach coachmark({
-      key: "feature-intro.appearance-widgets",
-      title: "Widget order",
-      description: "Drag to reorder your dashboard widgets.",
+      ...coachFor("feature-intro.appearance-widgets"),
       completeOn: { event: "dragend" },
     })}>
       <DashboardWidgetConfigurator

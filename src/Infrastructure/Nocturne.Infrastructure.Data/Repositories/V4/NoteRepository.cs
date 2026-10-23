@@ -16,11 +16,11 @@ namespace Nocturne.Infrastructure.Data.Repositories.V4;
 
 /// <summary>
 /// Repository for managing note records in the database. A DeduplicationService participant on top of
-/// the keyed delete of <see cref="SyncKeyedRepositoryBase{TModel,TEntity}"/>, so it keeps only the
+/// the sync-key upsert of <see cref="SyncUpsertRepositoryBase{TModel,TEntity}"/>, so it keeps only the
 /// extended <c>GetAsync</c> (non-primary LinkedRecords filter), the read-visibility filter behind
 /// <c>CountAsync</c>, and the post-commit dedup linking.
 /// </summary>
-public class NoteRepository : SyncKeyedRepositoryBase<Note, NoteEntity>, INoteRepository
+public class NoteRepository : SyncUpsertRepositoryBase<Note, NoteEntity>, INoteRepository
 {
     private readonly IDeduplicationService _deduplicationService;
 
@@ -28,7 +28,7 @@ public class NoteRepository : SyncKeyedRepositoryBase<Note, NoteEntity>, INoteRe
     /// Initializes a new instance of the <see cref="NoteRepository"/> class.
     /// </summary>
     public NoteRepository(
-        ITenantDbContextFactory contextFactory,
+        INocturneDbContextFactory contextFactory,
         IDeduplicationService deduplicationService,
         IAuditContext auditContext,
         ILogger<NoteRepository> logger,
@@ -140,7 +140,7 @@ public class NoteRepository : SyncKeyedRepositoryBase<Note, NoteEntity>, INoteRe
                 RecordId: e.Id,
                 Mills: new DateTimeOffset(e.Timestamp, TimeSpan.Zero).ToUnixTimeMilliseconds(),
                 DataSource: e.DataSource ?? DeduplicationInput.UnknownDataSource,
-                Criteria: MatchCriteriaMapper.ForNote()
+                Criteria: MatchCriteriaMapper.From(e)
             )).ToList();
 
             await _deduplicationService.DeduplicateBatchAsync(RecordType.Note, dedupInputs, ct);

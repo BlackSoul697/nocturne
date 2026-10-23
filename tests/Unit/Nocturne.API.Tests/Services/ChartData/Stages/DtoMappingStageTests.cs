@@ -134,7 +134,7 @@ public class DtoMappingStageTests
             DisplayCarbIntakes = [carbIntake],
             BgCheckList = [bgCheck],
             DeviceEventList = [deviceEvent],
-            TempBasalList = [tempBasal],
+            DisplayTempBasals = [tempBasal],
             SystemEvents = [systemEvent],
             TrackerDefinitions = [trackerDef],
             TrackerInstances = [trackerInstance],
@@ -211,6 +211,48 @@ public class DtoMappingStageTests
     }
 
     [Fact]
+    public async Task ExecuteAsync_ProfileStretches_CarryTheirActivationAndAKeyPerStretch()
+    {
+        var permanent = new ProfileActivation
+        {
+            Id = Guid.CreateVersion7(),
+            StartTimestamp = DateTimeOffset.FromUnixTimeMilliseconds(StartTime).UtcDateTime,
+            BaseProfileName = "Rhys",
+            Percentage = 110,
+            TimeshiftMs = 3_600_000,
+            Phase = ProfileActivationPhase.Effective,
+            Origin = ProfileActivationOrigin.Uploader,
+        };
+        var resolved = new Nocturne.Core.Contracts.Profiles.Resolvers.ResolvedProfileActivation(
+            permanent, "Rhys", Nocturne.Core.Contracts.Profiles.Resolvers.ProfileScheduleSource.ProfileStore, null, null);
+        _mockTreatmentFoodService
+            .Setup(s => s.GetByCarbIntakeIdsAsync(It.IsAny<IEnumerable<Guid>>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync([]);
+
+        var result = await _stage.ExecuteAsync(new ChartDataContext
+        {
+            StartTime = StartTime,
+            EndTime = EndTime,
+            StateSpans = new Dictionary<StateSpanCategory, IEnumerable<StateSpan>>(),
+            ProfileSegments =
+            [
+                new(StartTime, StartTime + 3_600_000, resolved),
+                new(StartTime + 7_200_000, EndTime, resolved),
+            ],
+        }, CancellationToken.None);
+
+        result.ProfileSpans.Should().HaveCount(2);
+        result.ProfileSpans.Select(s => s.Id).Should().OnlyHaveUniqueItems();
+        result.ProfileSpans.Should().OnlyContain(s =>
+            s.Category == StateSpanCategory.Profile && s.Color == ChartColor.Profile && s.Metadata == null);
+        var activation = result.ProfileSpans[0].ProfileActivation!;
+        activation.BaseProfileName.Should().Be("Rhys");
+        activation.Percentage.Should().Be(110);
+        activation.TimeshiftHours.Should().Be(1);
+        activation.Phase.Should().Be(ProfileActivationPhase.Effective);
+    }
+
+    [Fact]
     public async Task ExecuteAsync_ActivityStateSpans_MapToStateSpanKindWithCategory()
     {
         // Arrange
@@ -249,6 +291,41 @@ public class DtoMappingStageTests
         span.Kind.Should().Be(ChartSpanKind.StateSpan);
         span.Category.Should().Be(StateSpanCategory.Exercise);
         span.State.Should().Be("Running");
+    }
+
+    [Fact]
+    public async Task ExecuteAsync_StepSeries_LeavesOutEmptyCountsAndPossibleRunningTotals()
+    {
+        StepCount Step(long offsetMs, int metric, int source) => new()
+        {
+            Timestamp = DateTimeOffset.FromUnixTimeMilliseconds(StartTime + offsetMs).UtcDateTime,
+            Metric = metric,
+            Source = source,
+        };
+
+        _mockTreatmentFoodService
+            .Setup(s => s.GetByCarbIntakeIdsAsync(It.IsAny<IEnumerable<Guid>>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync([]);
+
+        var context = new ChartDataContext
+        {
+            StartTime = StartTime,
+            EndTime = EndTime,
+            StateSpans = new Dictionary<StateSpanCategory, IEnumerable<StateSpan>>(),
+            StepCountList =
+            [
+                Step(4_000, 500, 1),
+                Step(1_000, 300, 0),
+                Step(2_000, 9_000, StepCount.PossibleRunningTotalFlag),
+                Step(3_000, 0, 0),
+            ],
+        };
+
+        var result = await _stage.ExecuteAsync(context, CancellationToken.None);
+
+        result.StepSeries.Select(p => (p.Time, p.Steps)).Should().Equal(
+            (StartTime + 1_000, 300),
+            (StartTime + 4_000, 500));
     }
 
     [Fact]

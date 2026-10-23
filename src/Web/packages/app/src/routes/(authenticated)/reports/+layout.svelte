@@ -1,9 +1,12 @@
 <script lang="ts">
+    import { Key } from "@nocturne/ui/keys";
     import {page} from "$app/state";
     import {formatMediumDateRange} from "$lib/utils/formatting";
     import { Button } from "$lib/components/ui/button";
     import {ReportsFilterSidebar} from "$lib/components/layout";
     import ResourceGuard from "$lib/components/reports/ResourceGuard.svelte";
+    import ReportPageSwitcher from "$lib/components/reports/ReportPageSwitcher.svelte";
+    import { loopAnalysisHeaderMark } from "$lib/components/reports/loop-analysis/loop-analysis-tour.svelte";
     import HistoryLimitNotice from "$lib/components/layout/HistoryLimitNotice.svelte";
     import ReportPrintHeader from "$lib/components/reports/print/ReportPrintHeader.svelte";
     import {
@@ -11,10 +14,16 @@
         installPrintFitFallback,
         printReport,
     } from "$lib/components/reports/print/report-print.svelte";
-    import {reportCategories} from "$lib/navigation/report-navigation.svelte";
-    import {Filter, Calendar, ChevronDown, Printer} from "lucide-svelte";
+    import {reportCategories, reportTitle} from "$lib/navigation/report-navigation.svelte";
+    import Filter from "@lucide/svelte/icons/funnel";
+    import Calendar from "@lucide/svelte/icons/calendar";
+    import ChevronDown from "@lucide/svelte/icons/chevron-down";
+    import Printer from "@lucide/svelte/icons/printer";
+    import { toast } from "svelte-sonner";
+    import { onMount } from "svelte";
     import {useDateParams, setDateParamsContext, createSharedRangeUse} from "$lib/hooks/date-params.svelte";
     import {createResourceContext} from "$lib/hooks/resource-context.svelte";
+    import {createReportSlots} from "$lib/hooks/report-slots.svelte";
 
     let {children} = $props();
 
@@ -40,16 +49,48 @@
     // Create resource context for layout-level loading/error handling
     const resourceCtx = createResourceContext();
 
+    // Filters a report adds to the Filters panel, below the date range.
+    createReportSlots();
+
     // Whether to use the ResourceGuard (skip for main reports page which has custom design)
     const useResourceGuard = $derived(page.url.pathname !== "/reports");
 
     const printCtx = createReportPrintContext();
 
+    async function handlePrint() {
+        if (printCtx.printing) return;
+        printCtx.printing = true;
+        const url = page.url.href;
+        const preparationVersion = printCtx.preparationVersion;
+        try {
+            await printReport(
+                () => printCtx.prepare(),
+                () => page.url.href === url && printCtx.preparationVersion === preparationVersion,
+            );
+        } catch (error) {
+            console.error("Failed to prepare report for printing:", error);
+            toast.error("Unable to load the complete report. Please try again before printing.");
+        } finally {
+            printCtx.printing = false;
+        }
+    }
+
+    onMount(() => {
+        const keydown = (event: KeyboardEvent) => {
+            if ((event.ctrlKey || event.metaKey) && !event.altKey && !event.shiftKey && event.key.toLowerCase() === Key.P) {
+                event.preventDefault();
+                void handlePrint();
+            }
+        };
+        window.addEventListener("keydown", keydown);
+        return () => window.removeEventListener("keydown", keydown);
+    });
+
     let reportRoot = $state<HTMLElement | null>(null);
     $effect(() => installPrintFitFallback(() => reportRoot));
 
     const registryTitles = $derived(
-        new Map(reportCategories().flatMap((c) => c.reports).map((r) => [r.href, r.title]))
+        new Map(reportCategories().flatMap((c) => c.reports.map((r) => [r.href, reportTitle(c, r)])))
     );
 
     // Extract report name from the URL
@@ -102,15 +143,14 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
 </svelte:head>
 
-<div class="relative min-h-full bg-background" bind:this={reportRoot} data-report-root>
+<!-- --headroom-top sits a Headroom panel flush under the sticky report header (h-14 plus its border). -->
+<div class="@container relative min-h-full bg-background [--headroom-top:calc(var(--app-sticky-top,0px)+3.5rem+1px)]" bind:this={reportRoot} data-report-root>
     {#if page.url.pathname !== "/reports"}
         <ReportPrintHeader title={reportName} period={printPeriod} />
 
-        <!-- top-0 at every width: <main> (overflow-auto) is the sticky container and already
-             starts below the fixed MobileHeader, so an extra top-14 pushed this bar onto the
-             page heading on phones. -->
         <div
-                class="sticky top-0 z-20 border-b border-border bg-card/95 backdrop-blur supports-backdrop-filter:bg-card/60 print:hidden"
+                class="sticky top-(--app-sticky-top,0px) z-20 transition-all duration-300 border-b border-border bg-card/95 backdrop-blur supports-backdrop-filter:bg-card/60 print:hidden"
+                {@attach loopAnalysisHeaderMark()}
         >
             <div class="flex h-14 items-center justify-between gap-2 px-3 @md:px-6">
                 <div class="flex items-center gap-2">
@@ -137,7 +177,8 @@
                     <Button
                             variant="outline"
                             size="sm"
-                            onclick={printReport}
+                            onclick={handlePrint}
+                            disabled={printCtx.printing}
                             aria-label="Print report"
                     >
                         <Printer class="w-4 h-4"/>
@@ -156,13 +197,14 @@
                     {/if}
                 </div>
             </div>
+            <ReportPageSwitcher />
         </div>
     {/if}
 
     <HistoryLimitNotice class="mx-3 mt-3 w-auto @md:mx-6 print:hidden" />
 
     <!-- Main Content -->
-    <div class="relative">
+    <div class={useResourceGuard ? "relative mx-auto w-full max-w-7xl p-3 @md:p-6 print:max-w-none print:p-3" : "relative"}>
         {#if useResourceGuard}
             <ResourceGuard
                 loading={resourceCtx.loading}

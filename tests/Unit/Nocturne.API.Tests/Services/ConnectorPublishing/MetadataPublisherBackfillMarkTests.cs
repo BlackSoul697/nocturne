@@ -1,9 +1,14 @@
+using Nocturne.API.Tests.Infrastructure;
+using Nocturne.Tests.Shared.Infrastructure;
+using Nocturne.API.Services.ProfileActivations;
+using Nocturne.API.Services.Caching;
 using Nocturne.Connectors.Core.Models;
 using FluentAssertions;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging.Abstractions;
 using Moq;
 using Nocturne.API.Services.ConnectorPublishing;
+using Nocturne.Core.Contracts.Audit;
 using Nocturne.Core.Contracts.Connectors;
 using Nocturne.Core.Contracts.Glucose;
 using Nocturne.Core.Contracts.Health;
@@ -63,7 +68,10 @@ public class MetadataPublisherBackfillMarkTests
             Mock.Of<IHeartRateService>(),
             Mock.Of<ITenantOwnerResolver>(),
             Mock.Of<ITenantAccessor>(),
-            _db,
+            _db.AsFactory(),
+            Mock.Of<IProfileActivationRepository>(),
+            new ProfileActivationWriter(Mock.Of<IProfileActivationRepository>(), Mock.Of<ITenantCache>(), TempBasalTestDeps.NoReresolution()),
+            Mock.Of<IAuditContext>(),
             new PublishSkipTally(),
             NullLogger<MetadataPublisher>.Instance);
     }

@@ -9,14 +9,11 @@ namespace Nocturne.Core.Contracts.Notifications;
 public interface INotificationV2Service
 {
     /// <summary>
-    /// Sends a Loop notification for iOS Loop app integration
+    /// Pushes a Loop remote command to the phone named by the current profile's
+    /// <c>loopSettings</c>, as Nightscout's <c>loop.sendNotification</c> does.
     /// </summary>
-    /// <param name="request">Loop notification request data</param>
-    /// <param name="remoteAddress">IP address of the requesting client</param>
-    /// <param name="cancellationToken">Cancellation token</param>
-    /// <returns>Notification response indicating success or failure</returns>
-    Task<NotificationV2Response> SendLoopNotificationAsync(
-        LoopNotificationRequest request,
+    Task<LoopNotificationResponse> SendLoopNotificationAsync(
+        LoopNotificationData data,
         string remoteAddress,
         CancellationToken cancellationToken = default
     );
@@ -24,18 +21,12 @@ public interface INotificationV2Service
     /// <summary>
     /// Processes a generic V2 notification
     /// </summary>
-    /// <param name="notification">Base notification data</param>
-    /// <param name="cancellationToken">Cancellation token</param>
     /// <returns>Notification response indicating success or failure</returns>
     Task<NotificationV2Response> ProcessNotificationAsync(
         NotificationBase notification,
         CancellationToken cancellationToken = default
     );
 
-    /// <summary>
-    /// Gets the current notification status and configuration
-    /// </summary>
-    /// <param name="cancellationToken">Cancellation token</param>
     /// <returns>Current notification system status</returns>
     Task<object> GetNotificationStatusAsync(CancellationToken cancellationToken = default);
 }

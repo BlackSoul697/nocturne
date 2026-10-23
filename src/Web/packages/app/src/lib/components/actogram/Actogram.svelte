@@ -1,12 +1,13 @@
 <script lang="ts" generics="T extends ActogramPoint">
+  import { Key } from "@nocturne/ui/keys";
   import { formatShortDate } from "$lib/utils/formatting";
   import type { Snippet } from 'svelte';
   import type {
     ActogramPoint,
     ActogramRowContext,
     GlucosePoint,
-    GlucoseThresholds,
   } from './actogram';
+  import type { ChartThresholds } from '$lib/constants/glucose-thresholds';
   import {
     sliceIntoRows,
     sliceBgIntoRows,
@@ -18,7 +19,8 @@
   import { fly } from 'svelte/transition';
   import { flip } from 'svelte/animate';
   import { cubicOut } from 'svelte/easing';
-  import { ChevronUp, ChevronDown } from 'lucide-svelte';
+  import ChevronUp from '@lucide/svelte/icons/chevron-up';
+  import ChevronDown from '@lucide/svelte/icons/chevron-down';
   import { Button } from '$lib/components/ui/button';
   import { bgRange } from '$lib/utils/formatting';
   import { PrintMode } from '$lib/components/charts/print/print-mode.svelte';
@@ -28,7 +30,7 @@
     data: T[];
     bgData?: GlucosePoint[];
     days: Date[];
-    thresholds?: GlucoseThresholds;
+    thresholds?: ChartThresholds;
     rowHeight?: number;
     visibleCount?: number;
     /** Leading rows a print carries: the report's range, without scroll-back padding. */
@@ -98,8 +100,8 @@
     if (visibleCount === undefined) return;
 
     let delta = 0;
-    if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
-      const sign = e.key === 'ArrowDown' ? 1 : -1;
+    if (e.key === Key.ArrowDown || e.key === Key.ArrowUp) {
+      const sign = e.key === Key.ArrowDown ? 1 : -1;
       if (e.altKey) delta = 30 * sign;
       else if (e.shiftKey) delta = 7 * sign;
       else delta = 1 * sign;

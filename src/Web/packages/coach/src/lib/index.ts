@@ -1,9 +1,12 @@
-// @nocturne/coach — Progressive disclosure system
+// @nocturne/coach: progressive disclosure system
 export type {
+  CoachLabels,
   CoachMarkAdapter,
   CoachMarkOptions,
   CoachMarkProviderOptions,
   CoachMarkStep,
+  CoachNavigation,
+  CoachRouter,
   DismissOptions,
   MarkRegistration,
   MarkState,
@@ -19,5 +22,7 @@ export {
   getCoachMarkContext,
   createCoachMarkContext,
 } from "./context.svelte.js";
+export { HistorySentinel } from "./history-sentinel.js";
+export type { SentinelWindow } from "./history-sentinel.js";
 export { selectActiveMark, isSequenceDone, sequenceProgress } from "./sequencing.js";
 export type { SelectionResult } from "./sequencing.js";

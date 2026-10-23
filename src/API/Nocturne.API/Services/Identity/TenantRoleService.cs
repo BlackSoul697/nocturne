@@ -3,8 +3,8 @@ using Microsoft.EntityFrameworkCore;
 using Nocturne.Core.Contracts.Multitenancy;
 using Nocturne.Core.Models.Authorization;
 using Nocturne.Infrastructure.Data;
+using Nocturne.Infrastructure.Data.Services;
 using Nocturne.Infrastructure.Data.Entities;
-using Nocturne.Infrastructure.Data.Extensions;
 
 namespace Nocturne.API.Services.Identity;
 
@@ -19,13 +19,12 @@ namespace Nocturne.API.Services.Identity;
 /// alone is not an authorization decision.
 /// </remarks>
 /// <seealso cref="ITenantRoleService"/>
-public partial class TenantRoleService(
-    NocturneDbContext context,
-    IDbContextFactory<NocturneDbContext> contextFactory) : ITenantRoleService
+public partial class TenantRoleService(INocturneDbContextFactory contexts) : ITenantRoleService
 {
     public async Task<List<TenantRoleDto>> GetRolesAsync(Guid tenantId, CancellationToken ct = default)
     {
-        return await context.TenantRoles
+        await using var db = await contexts.CreateAsync(ct);
+        return await db.TenantRoles
             .Where(r => r.TenantId == tenantId)
             .Select(r => new TenantRoleDto(
                 r.Id,
@@ -40,9 +39,18 @@ public partial class TenantRoleService(
             .ToListAsync(ct);
     }
 
+    /// <inheritdoc />
+    public async Task<List<TenantRoleDto>> GetAssignableRolesAsync(
+        Guid tenantId, IReadOnlyCollection<string> granterScopes, CancellationToken ct = default)
+    {
+        var roles = await GetRolesAsync(tenantId, ct);
+        return roles.Where(r => Scope.ValidateGrant(r.Permissions, granterScopes) is null).ToList();
+    }
+
     public async Task<TenantRoleDto?> GetRoleByIdAsync(Guid tenantId, Guid roleId, CancellationToken ct = default)
     {
-        return await context.TenantRoles
+        await using var db = await contexts.CreateAsync(ct);
+        return await db.TenantRoles
             .Where(r => r.Id == roleId && r.TenantId == tenantId)
             .Select(r => new TenantRoleDto(
                 r.Id,
@@ -64,7 +72,7 @@ public partial class TenantRoleService(
         List<string> permissions,
         CancellationToken ct = default)
     {
-        var now = DateTime.UtcNow;
+        await using var db = await contexts.CreateAsync(ct);
         var entity = new TenantRoleEntity
         {
             Id = Guid.CreateVersion7(),
@@ -74,11 +82,10 @@ public partial class TenantRoleService(
             Description = description,
             Permissions = permissions,
             IsSystem = false,
-            SysUpdatedAt = now,
         };
 
-        context.TenantRoles.Add(entity);
-        await context.SaveChangesAsync(ct);
+        db.TenantRoles.Add(entity);
+        await db.SaveChangesAsync(ct);
 
         return new TenantRoleDto(
             entity.Id,
@@ -100,7 +107,8 @@ public partial class TenantRoleService(
         List<string> permissions,
         CancellationToken ct = default)
     {
-        var entity = await context.TenantRoles
+        await using var db = await contexts.CreateAsync(ct);
+        var entity = await db.TenantRoles
             .Include(r => r.MemberRoles)
             .FirstOrDefaultAsync(r => r.Id == roleId && r.TenantId == tenantId, ct);
 
@@ -116,7 +124,7 @@ public partial class TenantRoleService(
         entity.Permissions = permissions;
         entity.SysUpdatedAt = DateTime.UtcNow;
 
-        await context.SaveChangesAsync(ct);
+        await db.SaveChangesAsync(ct);
 
         return new TenantRoleDto(
             entity.Id,
@@ -132,7 +140,8 @@ public partial class TenantRoleService(
 
     public async Task<DeleteRoleResult> DeleteRoleAsync(Guid tenantId, Guid roleId, CancellationToken ct = default)
     {
-        var role = await context.TenantRoles
+        await using var db = await contexts.CreateAsync(ct);
+        var role = await db.TenantRoles
             .Include(r => r.MemberRoles)
             .FirstOrDefaultAsync(r => r.Id == roleId && r.TenantId == tenantId, ct);
 
@@ -146,7 +155,7 @@ public partial class TenantRoleService(
         var affectedMemberIds = role.MemberRoles.Select(mr => mr.TenantMemberId).ToList();
         if (affectedMemberIds.Count > 0)
         {
-            var affectedMembers = await context.TenantMembers
+            var affectedMembers = await db.TenantMembers
                 .Include(m => m.MemberRoles)
                     .ThenInclude(mr => mr.TenantRole)
                 .Where(m => affectedMemberIds.Contains(m.Id))
@@ -154,14 +163,7 @@ public partial class TenantRoleService(
 
             foreach (var member in affectedMembers)
             {
-                // Compute remaining permissions without this role
-                var remainingPermissions = member.MemberRoles
-                    .Where(mr => mr.TenantRoleId != roleId)
-                    .SelectMany(mr => mr.TenantRole.Permissions)
-                    .Union(member.DirectPermissions ?? [])
-                    .ToList();
-
-                if (remainingPermissions.Count == 0)
+                if (!member.EffectivePermissions(excludingRoleId: roleId).Any())
                 {
                     return new DeleteRoleResult(
                         false,
@@ -172,9 +174,9 @@ public partial class TenantRoleService(
         }
 
         // Remove member-role associations then the role itself
-        context.TenantMemberRoles.RemoveRange(role.MemberRoles);
-        context.TenantRoles.Remove(role);
-        await context.SaveChangesAsync(ct);
+        db.TenantMemberRoles.RemoveRange(role.MemberRoles);
+        db.TenantRoles.Remove(role);
+        await db.SaveChangesAsync(ct);
 
         return new DeleteRoleResult(true, null, null);
     }
@@ -183,23 +185,21 @@ public partial class TenantRoleService(
     /// Seeds the tenant's default roles, skipping slugs that already exist.
     /// </summary>
     /// <remarks>
-    /// Runs on its own context pinned to <paramref name="tenantId"/>, not the injected
-    /// request-scoped one. Every caller is a tenant-creation flow reached without a resolved
-    /// tenant (first-run setup, platform admin, demo and dev provisioning), so the scoped context
-    /// is pinned to no tenant and would seed outside the RLS reach the rows belong to.
+    /// Runs on a context pinned to <paramref name="tenantId"/>, not one reading as the request.
+    /// Every caller is a tenant-creation flow reached without a resolved tenant (first-run setup,
+    /// platform admin, demo and dev provisioning), so the request's reader has no tenant and would
+    /// seed outside the RLS reach the rows belong to.
     /// </remarks>
     /// <param name="tenantId">The tenant to seed roles for.</param>
     /// <param name="ct">The cancellation token.</param>
     public async Task SeedRolesForTenantAsync(Guid tenantId, CancellationToken ct = default)
     {
-        await using var seedContext = await contextFactory.CreateTenantPinnedContextAsync(tenantId, ct);
+        await using var seedContext = await contexts.CreateForTenantAsync(tenantId, ct);
 
         var existingSlugs = await seedContext.TenantRoles
             .Where(r => r.TenantId == tenantId)
             .Select(r => r.Slug)
             .ToListAsync(ct);
-
-        var now = DateTime.UtcNow;
 
         foreach (var (slug, permissions) in RoleSeeds.Permissions)
         {
@@ -216,7 +216,6 @@ public partial class TenantRoleService(
                 Description = null,
                 Permissions = new List<string>(permissions),
                 IsSystem = true,
-                SysUpdatedAt = now,
             });
         }
 
@@ -230,10 +229,11 @@ public partial class TenantRoleService(
         IReadOnlyCollection<string> granterScopes,
         CancellationToken ct = default)
     {
+        await using var db = await contexts.CreateAsync(ct);
         if (roleIds.Count == 0)
             return RoleGrantValidation.Valid;
 
-        var permissionSets = await context.TenantRoles
+        var permissionSets = await db.TenantRoles
             .Where(r => r.TenantId == tenantId && roleIds.Contains(r.Id))
             .Select(r => r.Permissions)
             .ToListAsync(ct);
@@ -246,8 +246,7 @@ public partial class TenantRoleService(
                 false, RoleGrantValidation.ForeignRole, "One or more role IDs do not belong to this tenant.");
         }
 
-        var exceeded = Scope.ValidateGrant(
-            permissionSets.SelectMany(permissions => permissions), granterScopes);
+        var exceeded = Scope.ValidateGrant(permissionSets.SelectMany(permissions => permissions), granterScopes);
 
         return exceeded is null
             ? RoleGrantValidation.Valid
@@ -262,7 +261,8 @@ public partial class TenantRoleService(
     /// </remarks>
     public async Task<List<string>> GetEffectivePermissionsAsync(Guid memberId, CancellationToken ct = default)
     {
-        var member = await context.TenantMembers
+        await using var db = await contexts.CreateAsync(ct);
+        var member = await db.TenantMembers
             .Include(m => m.MemberRoles)
                 .ThenInclude(mr => mr.TenantRole)
             .FirstOrDefaultAsync(m => m.Id == memberId, ct);
@@ -270,24 +270,18 @@ public partial class TenantRoleService(
         if (member is null)
             return [];
 
-        var rolePermissions = member.MemberRoles
-            .SelectMany(mr => mr.TenantRole.Permissions);
-
-        var directPermissions = member.DirectPermissions ?? [];
-
-        return rolePermissions
-            .Union(directPermissions)
-            .ToList();
+        return member.EffectivePermissions().ToList();
     }
 
     /// <inheritdoc />
     public async Task<List<string>> GetRolePermissionsAsync(
         Guid tenantId, IReadOnlyCollection<Guid> roleIds, CancellationToken ct = default)
     {
+        await using var db = await contexts.CreateAsync(ct);
         if (roleIds.Count == 0)
             return [];
 
-        var permissionSets = await context.TenantRoles
+        var permissionSets = await db.TenantRoles
             .Where(r => r.TenantId == tenantId && roleIds.Contains(r.Id))
             .Select(r => r.Permissions)
             .ToListAsync(ct);

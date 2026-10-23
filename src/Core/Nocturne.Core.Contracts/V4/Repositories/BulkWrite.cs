@@ -11,7 +11,6 @@ namespace Nocturne.Core.Contracts.V4.Repositories;
 /// <remarks>
 /// A collection expression builds one with nothing skipped.
 /// </remarks>
-/// <typeparam name="TRecord">The record type written.</typeparam>
 [CollectionBuilder(typeof(BulkWrite), nameof(BulkWrite.Create))]
 public sealed class BulkWrite<TRecord>(IReadOnlyList<TRecord> written, int skippedDeleted) : IReadOnlyList<TRecord>
 {
@@ -22,6 +21,18 @@ public sealed class BulkWrite<TRecord>(IReadOnlyList<TRecord> written, int skipp
     /// </summary>
     public int SkippedDeleted { get; } = skippedDeleted;
 
+    /// <summary>
+    /// The written records that updated a stored row in place rather than inserting one; every other
+    /// written record was inserted. The same instances the collection enumerates.
+    /// </summary>
+    public IReadOnlyList<TRecord> Updated { get; init; } = [];
+
+    /// <summary>
+    /// Submitted records not written because writing them fails the same way every time, in
+    /// submission order. The rest of the batch was still written.
+    /// </summary>
+    public IReadOnlyList<BulkWriteRejection<TRecord>> Rejected { get; init; } = [];
+
     public int Count => written.Count;
 
     public TRecord this[int index] => written[index];
@@ -30,6 +41,12 @@ public sealed class BulkWrite<TRecord>(IReadOnlyList<TRecord> written, int skipp
 
     IEnumerator IEnumerable.GetEnumerator() => GetEnumerator();
 }
+
+/// <summary>A submitted record a bulk write refused, and why.</summary>
+/// <param name="Index">Its zero-based position in the submitted batch.</param>
+/// <param name="Record">The record as submitted.</param>
+/// <param name="Reason">Why it cannot be stored, fit to show the client.</param>
+public sealed record BulkWriteRejection<TRecord>(int Index, TRecord Record, string Reason);
 
 /// <summary>Builds a <see cref="BulkWrite{TRecord}"/> from a collection expression.</summary>
 public static class BulkWrite

@@ -1,9 +1,14 @@
+using System.Data.Common;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using Nocturne.Core.Contracts.Infrastructure;
+using Nocturne.Core.Models;
 using Nocturne.Infrastructure.Data.Entities;
 using Nocturne.Infrastructure.Data.Entities.V4;
+using Nocturne.Infrastructure.Data.Mappers;
 using Nocturne.Infrastructure.Data.Services;
 using Nocturne.Tests.Shared.Infrastructure;
 
@@ -21,6 +26,11 @@ namespace Nocturne.Infrastructure.Data.Tests.Services;
 public class DeduplicationReconcileTests : IDisposable
 {
     private static readonly Guid TestTenantId = Guid.Parse("00000000-0000-0000-0000-000000000001");
+    // Shared because EF builds an internal service provider per distinct interceptor set, and one per
+    // test trips its many-providers guard. Tests within a class run one at a time.
+    private static readonly LinkLoadRecorder LoadedLinks = new();
+    private static readonly FailingReads FailingReadsInterceptor = new();
+    private static readonly ReadCounter Reads = new();
     private readonly SqliteTestDatabase _db;
     private readonly NocturneDbContext _context;
     private readonly DeduplicationService _service;
@@ -28,15 +38,27 @@ public class DeduplicationReconcileTests : IDisposable
     public DeduplicationReconcileTests()
     {
         // In-memory SQLite database for testing — mirrors CarbIntakeRepositoryTests.
-        _db = TestDbContextFactory.CreateSqliteWithTenant(TestTenantId);
+        _db = TestDbContextFactory.CreateSqliteWithTenant(TestTenantId, "test", LoadedLinks, FailingReadsInterceptor, Reads);
 
         _context = _db.CreateContext();
         _context.TenantId = TestTenantId;
 
         _service = new DeduplicationService(
-            _context,
+            _context.AsFactory(),
             new Mock<IServiceScopeFactory>().Object,
             NullLogger<DeduplicationService>.Instance);
+    }
+
+    private async Task<ReconcileCursor?> CursorAsync()
+    {
+        await using var db = await _context.AsFactory().CreateAsync();
+        return await DeduplicationService.GetCursorAsync(db, CancellationToken.None);
+    }
+
+    private async Task SetCursorAsync(ReconcileCursor cursor)
+    {
+        await using var db = await _context.AsFactory().CreateAsync();
+        await DeduplicationService.SetCursorAsync(db, cursor, CancellationToken.None);
     }
 
     public void Dispose()
@@ -55,7 +77,7 @@ public class DeduplicationReconcileTests : IDisposable
         _context.CarbIntakes.Add(new CarbIntakeEntity { Id = gone, TenantId = TestTenantId, Carbs = 42, Timestamp = DateTime.UtcNow, DeletedAt = DateTime.UtcNow });
         await _context.SaveChangesAsync();
 
-        var info = await _service.LoadRecordInfoForTestAsync(RecordType.CarbIntake, new HashSet<Guid> { live, gone });
+        var info = await DeduplicationService.LoadRecordInfoForTestAsync(_context, RecordType.CarbIntake, new HashSet<Guid> { live, gone });
 
         info[live].Criteria.Carbs.Should().Be(42);
         info[live].IsDeleted.Should().BeFalse();
@@ -80,7 +102,7 @@ public class DeduplicationReconcileTests : IDisposable
         });
         await _context.SaveChangesAsync();
 
-        var info = await _service.LoadRecordInfoForTestAsync(RecordType.StateSpan, new HashSet<Guid> { live, gone });
+        var info = await DeduplicationService.LoadRecordInfoForTestAsync(_context, RecordType.StateSpan, new HashSet<Guid> { live, gone });
 
         info[live].Criteria.Category.Should().Be(StateSpanCategory.Exercise);
         info[live].Criteria.State.Should().Be("Running");
@@ -99,7 +121,7 @@ public class DeduplicationReconcileTests : IDisposable
         await _context.SaveChangesAsync();
         _context.ChangeTracker.Clear();
 
-        await _service.LoadRecordInfoForTestAsync(RecordType.CarbIntake, new HashSet<Guid> { id });
+        await DeduplicationService.LoadRecordInfoForTestAsync(_context, RecordType.CarbIntake, new HashSet<Guid> { id });
 
         _context.ChangeTracker.Entries<CarbIntakeEntity>().Should().BeEmpty(
             "dedup reads are read-only and must not change-track loaded entities");
@@ -128,7 +150,7 @@ public class DeduplicationReconcileTests : IDisposable
         _context.CarbIntakes.Add(new CarbIntakeEntity { Id = theirs, TenantId = otherTenant, Carbs = 99, Timestamp = DateTime.UtcNow });
         await _context.SaveChangesAsync();
 
-        var info = await _service.LoadRecordInfoForTestAsync(RecordType.CarbIntake, new HashSet<Guid> { mine, theirs });
+        var info = await DeduplicationService.LoadRecordInfoForTestAsync(_context, RecordType.CarbIntake, new HashSet<Guid> { mine, theirs });
 
         info.Should().ContainKey(mine);
         info.Should().NotContainKey(theirs);
@@ -147,10 +169,95 @@ public class DeduplicationReconcileTests : IDisposable
         var merged = await _service.MergeDuplicateGroupsAsync(RecordType.CarbIntake, null, CancellationToken.None);
 
         merged.Should().Be(1);
-        var links = await _context.LinkedRecords.IgnoreQueryFilters().Where(l => l.RecordType == "carbintake").ToListAsync();
+        var links = await _context.LinkedRecords.AsNoTracking().IgnoreQueryFilters().Where(l => l.RecordType == "carbintake").ToListAsync();
         links.Select(l => l.CanonicalId).Distinct().Should().HaveCount(1);
         links.Count(l => l.IsPrimary).Should().Be(1);
         links.Single(l => l.IsPrimary).RecordId.Should().Be(mylife); // earliest, non-deleted
+    }
+
+    [Theory]
+    [InlineData("unknown")]
+    [InlineData("manual")]
+    [InlineData("nightscout-connector")]
+    public async Task MergeDuplicateGroupsAsync_OneSourceSecondsApart_StaysTwoGroups(string source)
+    {
+        var t = DateTime.UtcNow;
+        var first = await AddCarb(t, source, 20);
+        var second = await AddCarb(t.AddSeconds(20), source, 20);
+        AddPrimaryLink(RecordType.CarbIntake, first, ToMills(t), source);
+        AddPrimaryLink(RecordType.CarbIntake, second, ToMills(t.AddSeconds(20)), source);
+        await _context.SaveChangesAsync();
+
+        var merged = await _service.MergeDuplicateGroupsAsync(RecordType.CarbIntake, null, CancellationToken.None);
+
+        merged.Should().Be(0);
+    }
+
+    [Fact]
+    public async Task StateSpansFromOneUploader_SecondsApart_StillGroup()
+    {
+        var t = DateTime.UtcNow;
+        var inputs = new[] { t, t.AddSeconds(5) }.Select(start =>
+        {
+            var span = new StateSpanEntity
+            {
+                Id = Guid.CreateVersion7(),
+                TenantId = TestTenantId,
+                Category = nameof(StateSpanCategory.PumpMode),
+                State = "Suspended",
+                StartTimestamp = start,
+                Source = "openaps://phone",
+            };
+            _context.StateSpans.Add(span);
+            return span;
+        }).ToList();
+        await _context.SaveChangesAsync();
+
+        foreach (var span in inputs)
+        {
+            await _service.DeduplicateBatchAsync(RecordType.StateSpan,
+                [new DeduplicationInput(span.Id, ToMills(span.StartTimestamp), span.Source!, MatchCriteriaMapper.From(span))]);
+        }
+        var merged = await _service.MergeDuplicateGroupsAsync(RecordType.StateSpan, null, CancellationToken.None);
+
+        merged.Should().Be(0);
+        var links = await _context.LinkedRecords.AsNoTracking().IgnoreQueryFilters().Where(l => l.RecordType == "statespan").ToListAsync();
+        links.Should().HaveCount(2);
+        links.Select(l => l.CanonicalId).Distinct().Should().ContainSingle();
+    }
+
+    [Fact]
+    public async Task MergeDuplicateGroupsAsync_TidepoolTwins_Merge()
+    {
+        var t = DateTime.UtcNow;
+        var first = await AddCarb(t, "tidepool-connector", 20);
+        var twin = await AddCarb(t, "tidepool-connector", 20);
+        AddPrimaryLink(RecordType.CarbIntake, first, ToMills(t), "tidepool-connector");
+        AddPrimaryLink(RecordType.CarbIntake, twin, ToMills(t), "tidepool-connector");
+        await _context.SaveChangesAsync();
+
+        var merged = await _service.MergeDuplicateGroupsAsync(RecordType.CarbIntake, null, CancellationToken.None);
+
+        merged.Should().Be(1);
+    }
+
+    [Fact]
+    public async Task MergeDuplicateGroupsAsync_ChainThroughAConnectorCopy_KeepsTwoUnknownRecordsApart()
+    {
+        var t = DateTime.UtcNow;
+        var first = await AddCarb(t, "unknown", 20);
+        var copy = await AddCarb(t.AddSeconds(10), "tidepool-connector", 20);
+        var second = await AddCarb(t.AddSeconds(20), "unknown", 20);
+        AddPrimaryLink(RecordType.CarbIntake, first, ToMills(t), "unknown");
+        AddPrimaryLink(RecordType.CarbIntake, copy, ToMills(t.AddSeconds(10)), "tidepool-connector");
+        AddPrimaryLink(RecordType.CarbIntake, second, ToMills(t.AddSeconds(20)), "unknown");
+        await _context.SaveChangesAsync();
+
+        var merged = await _service.MergeDuplicateGroupsAsync(RecordType.CarbIntake, null, CancellationToken.None);
+
+        merged.Should().Be(1);
+        var links = await _context.LinkedRecords.AsNoTracking().IgnoreQueryFilters().Where(l => l.RecordType == "carbintake").ToListAsync();
+        links.Single(l => l.RecordId == first).CanonicalId.Should().NotBe(links.Single(l => l.RecordId == second).CanonicalId);
     }
 
     [Fact]
@@ -166,7 +273,7 @@ public class DeduplicationReconcileTests : IDisposable
         var merged = await _service.MergeDuplicateGroupsAsync(RecordType.CarbIntake, null, CancellationToken.None);
 
         merged.Should().Be(0);
-        var links = await _context.LinkedRecords.IgnoreQueryFilters().Where(l => l.RecordType == "carbintake").ToListAsync();
+        var links = await _context.LinkedRecords.AsNoTracking().IgnoreQueryFilters().Where(l => l.RecordType == "carbintake").ToListAsync();
         links.Select(l => l.CanonicalId).Distinct().Should().HaveCount(2);
     }
 
@@ -191,7 +298,7 @@ public class DeduplicationReconcileTests : IDisposable
         var merged = await _service.MergeDuplicateGroupsAsync(RecordType.SensorGlucose, null, CancellationToken.None);
 
         merged.Should().Be(expectedMerges);
-        var links = await _context.LinkedRecords.IgnoreQueryFilters()
+        var links = await _context.LinkedRecords.AsNoTracking().IgnoreQueryFilters()
             .Where(l => l.RecordType == "sensorglucose").ToListAsync();
         links.Select(l => l.CanonicalId).Distinct().Should().HaveCount(expectedMerges == 1 ? 1 : 2);
     }
@@ -210,7 +317,7 @@ public class DeduplicationReconcileTests : IDisposable
         var merged = await _service.MergeDuplicateGroupsAsync(RecordType.CarbIntake, null, CancellationToken.None);
 
         merged.Should().Be(0);
-        var links = await _context.LinkedRecords.IgnoreQueryFilters().Where(l => l.RecordType == "carbintake").ToListAsync();
+        var links = await _context.LinkedRecords.AsNoTracking().IgnoreQueryFilters().Where(l => l.RecordType == "carbintake").ToListAsync();
         links.Select(l => l.CanonicalId).Distinct().Should().HaveCount(2);
     }
 
@@ -228,7 +335,7 @@ public class DeduplicationReconcileTests : IDisposable
         var merged = await _service.MergeDuplicateGroupsAsync(RecordType.CarbIntake, null, CancellationToken.None);
 
         merged.Should().Be(1);
-        var links = await _context.LinkedRecords.IgnoreQueryFilters().Where(l => l.RecordType == "carbintake").ToListAsync();
+        var links = await _context.LinkedRecords.AsNoTracking().IgnoreQueryFilters().Where(l => l.RecordType == "carbintake").ToListAsync();
         links.Select(l => l.CanonicalId).Distinct().Should().HaveCount(1);
         links.Count(l => l.IsPrimary).Should().Be(1);
         links.Single(l => l.IsPrimary).RecordId.Should().Be(live); // earliest non-deleted
@@ -277,6 +384,86 @@ public class DeduplicationReconcileTests : IDisposable
             .RecordId.Should().Be(LowerRecordId);
     }
 
+    [Fact]
+    public void PickSurvivor_PassesOverASpanAMateSuperseded_ButNotOneAnOutsiderDid()
+    {
+        var outsider = Guid.Parse("00000000-0000-0000-0000-00000000000c");
+        LinkedRecordEntity[] rows =
+        [
+            new() { RecordId = LowerRecordId, SourceTimestamp = 1_700_000_000_000, IsPrimary = true },
+            new() { RecordId = HigherRecordId, SourceTimestamp = 1_700_000_010_000 }
+        ];
+        var info = new Dictionary<Guid, DeduplicationService.RecordInfo>
+        {
+            [LowerRecordId] = new(new MatchCriteria(), IsDeleted: false, new(HigherRecordId, Closed)),
+            [HigherRecordId] = new(new MatchCriteria(), IsDeleted: false, new(outsider, Closed.AddHours(1)))
+        };
+
+        DeduplicationService.PickSurvivor(rows, info).RecordId.Should().Be(HigherRecordId);
+    }
+
+    [Fact]
+    public void PickSurvivor_PrefersTheMemberStillRunning_AndOtherwiseTheEarliest()
+    {
+        LinkedRecordEntity[] rows =
+        [
+            new() { RecordId = LowerRecordId, SourceTimestamp = 1_700_000_000_000, IsPrimary = true },
+            new() { RecordId = HigherRecordId, SourceTimestamp = 1_700_000_010_000 }
+        ];
+        var endedFirst = new Dictionary<Guid, DeduplicationService.RecordInfo>
+        {
+            [LowerRecordId] = new(new MatchCriteria(), IsDeleted: false, new(null, Closed)),
+            [HigherRecordId] = new(new MatchCriteria(), IsDeleted: false, new(null, Closed.AddHours(1)))
+        };
+        var stillRunning = new Dictionary<Guid, DeduplicationService.RecordInfo>(endedFirst)
+        {
+            [HigherRecordId] = new(new MatchCriteria(), IsDeleted: false, new(null, null))
+        };
+
+        DeduplicationService.PickSurvivor(rows, endedFirst).RecordId.Should().Be(
+            LowerRecordId, "a later planned end must not displace an earlier observed one");
+        DeduplicationService.PickSurvivor(rows, stillRunning).RecordId.Should().Be(HigherRecordId);
+    }
+
+    [Fact]
+    public void PickSurvivor_DoesNotPassOverASpanWhoseSupersederWasDeleted()
+    {
+        var middle = Guid.Parse("00000000-0000-0000-0000-00000000000c");
+        LinkedRecordEntity[] rows =
+        [
+            new() { RecordId = LowerRecordId, SourceTimestamp = 1_700_000_000_000, IsPrimary = true },
+            new() { RecordId = middle, SourceTimestamp = 1_700_000_005_000 },
+            new() { RecordId = HigherRecordId, SourceTimestamp = 1_700_000_010_000 }
+        ];
+        var info = new Dictionary<Guid, DeduplicationService.RecordInfo>
+        {
+            [LowerRecordId] = new(new MatchCriteria(), IsDeleted: false, new(HigherRecordId, Closed)),
+            [middle] = new(new MatchCriteria(), IsDeleted: false, new(null, Closed.AddHours(1))),
+            [HigherRecordId] = new(new MatchCriteria(), IsDeleted: true)
+        };
+
+        DeduplicationService.PickSurvivor(rows, info).RecordId.Should().Be(LowerRecordId);
+    }
+
+    private static readonly DateTime Closed = new(2023, 11, 14, 23, 0, 0, DateTimeKind.Utc);
+
+    [Fact]
+    public void PickSurvivor_PromotesASpanAMateSuperseded_WhenNoOtherMemberIsLive()
+    {
+        LinkedRecordEntity[] rows =
+        [
+            new() { RecordId = LowerRecordId, SourceTimestamp = 1_700_000_000_000 },
+            new() { RecordId = HigherRecordId, SourceTimestamp = 1_700_000_010_000, IsPrimary = true }
+        ];
+        var info = new Dictionary<Guid, DeduplicationService.RecordInfo>
+        {
+            [LowerRecordId] = new(new MatchCriteria(), IsDeleted: false, new(HigherRecordId, Closed)),
+            [HigherRecordId] = new(new MatchCriteria(), IsDeleted: true)
+        };
+
+        DeduplicationService.PickSurvivor(rows, info).RecordId.Should().Be(LowerRecordId);
+    }
+
     /// <summary>
     /// Two links sharing one source timestamp, in the given order.
     /// </summary>
@@ -309,7 +496,7 @@ public class DeduplicationReconcileTests : IDisposable
         var merged = await _service.MergeDuplicateGroupsAsync(RecordType.CarbIntake, null, CancellationToken.None);
 
         merged.Should().Be(2);
-        var links = await _context.LinkedRecords.IgnoreQueryFilters().Where(l => l.RecordType == "carbintake").ToListAsync();
+        var links = await _context.LinkedRecords.AsNoTracking().IgnoreQueryFilters().Where(l => l.RecordType == "carbintake").ToListAsync();
         links.Select(l => l.CanonicalId).Distinct().Should().HaveCount(1);
         links.Count(l => l.IsPrimary).Should().Be(1);
     }
@@ -330,7 +517,7 @@ public class DeduplicationReconcileTests : IDisposable
             CancellationToken.None);
 
         merged.Should().Be(1);
-        var links = await _context.LinkedRecords.IgnoreQueryFilters().Where(l => l.RecordType == "carbintake").ToListAsync();
+        var links = await _context.LinkedRecords.AsNoTracking().IgnoreQueryFilters().Where(l => l.RecordType == "carbintake").ToListAsync();
         links.Select(l => l.CanonicalId).Distinct().Should().HaveCount(1);
     }
 
@@ -359,7 +546,7 @@ public class DeduplicationReconcileTests : IDisposable
 
         // Only the candidate region was reconciled: 1 merge, and the far pair is untouched.
         merged.Should().Be(1);
-        var links = await _context.LinkedRecords.IgnoreQueryFilters().Where(l => l.RecordType == "carbintake").ToListAsync();
+        var links = await _context.LinkedRecords.AsNoTracking().IgnoreQueryFilters().Where(l => l.RecordType == "carbintake").ToListAsync();
         // candidate pair collapsed to 1 canonical; far pair still 2 distinct canonicals => 3 total.
         links.Select(l => l.CanonicalId).Distinct().Should().HaveCount(3);
         // The far pair still has its two separate primaries.
@@ -381,7 +568,7 @@ public class DeduplicationReconcileTests : IDisposable
         var merged = await _service.MergeDuplicateGroupsAsync(RecordType.CarbIntake, null, CancellationToken.None);
 
         merged.Should().Be(1);
-        var links = await _context.LinkedRecords.IgnoreQueryFilters().Where(l => l.RecordType == "carbintake").ToListAsync();
+        var links = await _context.LinkedRecords.AsNoTracking().IgnoreQueryFilters().Where(l => l.RecordType == "carbintake").ToListAsync();
         links.Select(l => l.CanonicalId).Distinct().Should().HaveCount(1);
         links.Count(l => l.IsPrimary).Should().Be(1);
     }
@@ -403,7 +590,7 @@ public class DeduplicationReconcileTests : IDisposable
         var merged = await _service.MergeDuplicateGroupsAsync(RecordType.CarbIntake, null, CancellationToken.None);
 
         merged.Should().Be(0);
-        var links = await _context.LinkedRecords.IgnoreQueryFilters().Where(l => l.RecordType == "carbintake").ToListAsync();
+        var links = await _context.LinkedRecords.AsNoTracking().IgnoreQueryFilters().Where(l => l.RecordType == "carbintake").ToListAsync();
         links.Select(l => l.CanonicalId).Distinct().Should().HaveCount(3);
     }
 
@@ -421,7 +608,7 @@ public class DeduplicationReconcileTests : IDisposable
         var merged = await _service.MergeDuplicateGroupsAsync(RecordType.CarbIntake, null, CancellationToken.None);
 
         merged.Should().Be(0);
-        var links = await _context.LinkedRecords.IgnoreQueryFilters().Where(l => l.RecordType == "carbintake").ToListAsync();
+        var links = await _context.LinkedRecords.AsNoTracking().IgnoreQueryFilters().Where(l => l.RecordType == "carbintake").ToListAsync();
         links.Select(l => l.CanonicalId).Distinct().Should().HaveCount(2);
     }
 
@@ -451,13 +638,13 @@ public class DeduplicationReconcileTests : IDisposable
             CancellationToken.None);
 
         deferred.Should().Be(0, "the spanning group runs up against the end of the neighbour load");
-        var afterDeferral = await _context.LinkedRecords.IgnoreQueryFilters().Where(l => l.RecordType == "carbintake").ToListAsync();
+        var afterDeferral = await _context.LinkedRecords.AsNoTracking().IgnoreQueryFilters().Where(l => l.RecordType == "carbintake").ToListAsync();
         afterDeferral.Select(l => l.CanonicalId).Distinct().Should().HaveCount(2);
 
         var merged = await _service.MergeDuplicateGroupsAsync(RecordType.CarbIntake, null, CancellationToken.None);
 
         merged.Should().Be(1, "the full job sees the whole picture and the pair is genuinely one event");
-        var afterMerge = await _context.LinkedRecords.IgnoreQueryFilters().Where(l => l.RecordType == "carbintake").ToListAsync();
+        var afterMerge = await _context.LinkedRecords.AsNoTracking().IgnoreQueryFilters().Where(l => l.RecordType == "carbintake").ToListAsync();
         afterMerge.Select(l => l.CanonicalId).Distinct().Should().HaveCount(1);
     }
 
@@ -492,7 +679,7 @@ public class DeduplicationReconcileTests : IDisposable
         var merged = await _service.MergeDuplicateGroupsAsync(RecordType.CarbIntake, null, CancellationToken.None);
 
         merged.Should().Be(0, "the spanning group pairs with both of the others, so nothing is unambiguous");
-        var links = await _context.LinkedRecords.IgnoreQueryFilters().Where(l => l.RecordType == "carbintake").ToListAsync();
+        var links = await _context.LinkedRecords.AsNoTracking().IgnoreQueryFilters().Where(l => l.RecordType == "carbintake").ToListAsync();
         links.Select(l => l.CanonicalId).Distinct().Should().HaveCount(3);
     }
 
@@ -515,7 +702,7 @@ public class DeduplicationReconcileTests : IDisposable
 
         await _service.MergeDuplicateGroupsAsync(RecordType.CarbIntake, null, CancellationToken.None);
 
-        var links = await _context.LinkedRecords.IgnoreQueryFilters().Where(l => l.RecordType == "carbintake").ToListAsync();
+        var links = await _context.LinkedRecords.AsNoTracking().IgnoreQueryFilters().Where(l => l.RecordType == "carbintake").ToListAsync();
         links.Select(l => l.CanonicalId).Distinct().Should().HaveCount(3,
             "the tight pair collapses to one group; the other two stay apart because that group's second value makes them ambiguous");
     }
@@ -538,7 +725,7 @@ public class DeduplicationReconcileTests : IDisposable
         var merged = await _service.MergeDuplicateGroupsAsync(RecordType.CarbIntake, null, CancellationToken.None);
 
         merged.Should().Be(2, "the tight pair collapses, then the wide pass folds the partner in");
-        var links = await _context.LinkedRecords.IgnoreQueryFilters().Where(l => l.RecordType == "carbintake").ToListAsync();
+        var links = await _context.LinkedRecords.AsNoTracking().IgnoreQueryFilters().Where(l => l.RecordType == "carbintake").ToListAsync();
         links.Select(l => l.CanonicalId).Distinct().Should().HaveCount(1);
         links.Count(l => l.IsPrimary).Should().Be(1);
     }
@@ -562,7 +749,7 @@ public class DeduplicationReconcileTests : IDisposable
         var merged = await _service.MergeDuplicateGroupsAsync(RecordType.CarbIntake, null, CancellationToken.None);
 
         merged.Should().Be(1);
-        var links = await _context.LinkedRecords.IgnoreQueryFilters().Where(l => l.RecordType == "carbintake").ToListAsync();
+        var links = await _context.LinkedRecords.AsNoTracking().IgnoreQueryFilters().Where(l => l.RecordType == "carbintake").ToListAsync();
         links.Select(l => l.CanonicalId).Distinct().Should().HaveCount(1);
         links.Count(l => l.IsPrimary).Should().Be(1);
         links.Single(l => l.IsPrimary).RecordId.Should().Be(live,
@@ -593,7 +780,7 @@ public class DeduplicationReconcileTests : IDisposable
         var merged = await _service.MergeDuplicateGroupsAsync(RecordType.CarbIntake, null, CancellationToken.None);
 
         merged.Should().Be(0);
-        var links = await _context.LinkedRecords.IgnoreQueryFilters().Where(l => l.RecordType == "carbintake").ToListAsync();
+        var links = await _context.LinkedRecords.AsNoTracking().IgnoreQueryFilters().Where(l => l.RecordType == "carbintake").ToListAsync();
         links.Select(l => l.CanonicalId).Distinct().Should().HaveCount(3);
     }
 
@@ -610,7 +797,7 @@ public class DeduplicationReconcileTests : IDisposable
 
         await _service.MergeDuplicateGroupsAsync(RecordType.CarbIntake, null, CancellationToken.None);
 
-        var links = await _context.LinkedRecords.IgnoreQueryFilters().Where(l => l.RecordType == "carbintake").ToListAsync();
+        var links = await _context.LinkedRecords.AsNoTracking().IgnoreQueryFilters().Where(l => l.RecordType == "carbintake").ToListAsync();
         links.Select(l => l.CanonicalId).Distinct().Should().HaveCount(expectedGroups);
     }
 
@@ -641,7 +828,7 @@ public class DeduplicationReconcileTests : IDisposable
             CancellationToken.None);
 
         merged.Should().Be(0);
-        var links = await _context.LinkedRecords.IgnoreQueryFilters().Where(l => l.RecordType == "carbintake").ToListAsync();
+        var links = await _context.LinkedRecords.AsNoTracking().IgnoreQueryFilters().Where(l => l.RecordType == "carbintake").ToListAsync();
         links.Select(l => l.CanonicalId).Distinct().Should().HaveCount(3);
     }
 
@@ -665,7 +852,7 @@ public class DeduplicationReconcileTests : IDisposable
             CancellationToken.None);
 
         deferred.Should().Be(0, "the pair belongs to a later pass, not this one");
-        var afterDeferral = await _context.LinkedRecords.IgnoreQueryFilters().Where(l => l.RecordType == "carbintake").ToListAsync();
+        var afterDeferral = await _context.LinkedRecords.AsNoTracking().IgnoreQueryFilters().Where(l => l.RecordType == "carbintake").ToListAsync();
         afterDeferral.Select(l => l.CanonicalId).Distinct().Should().HaveCount(3);
 
         var merged = await _service.MergeDuplicateGroupsAsync(
@@ -674,15 +861,164 @@ public class DeduplicationReconcileTests : IDisposable
             CancellationToken.None);
 
         merged.Should().Be(1, "the pass that owns the pair merges it");
-        var afterMerge = await _context.LinkedRecords.IgnoreQueryFilters().Where(l => l.RecordType == "carbintake").ToListAsync();
+        var afterMerge = await _context.LinkedRecords.AsNoTracking().IgnoreQueryFilters().Where(l => l.RecordType == "carbintake").ToListAsync();
         afterMerge.Select(l => l.CanonicalId).Distinct().Should().HaveCount(2);
+    }
+
+    [Theory]
+    [InlineData(RecordType.CarbIntake)]
+    [InlineData(RecordType.SensorGlucose)]
+    public async Task MergeDuplicateGroupsAsync_CandidatesYearsApart_LoadOnlyThePrimariesNearEachCandidate(RecordType recordType)
+    {
+        // Links are paged in creation order, so one batch can carry candidates years apart in event
+        // time. The primary between them is nobody's neighbour and must never be read.
+        var early = WideBase;
+        var between = WideBase.AddYears(1);
+        var late = WideBase.AddYears(3);
+        var earlyA = await AddReading(recordType, early, "mylife-connector");
+        var earlyB = await AddReading(recordType, early.AddSeconds(20), "glooko-connector");
+        var betweenId = await AddReading(recordType, between, "mylife-connector");
+        var lateA = await AddReading(recordType, late, "mylife-connector");
+        var lateB = await AddReading(recordType, late.AddSeconds(20), "glooko-connector");
+        var earlyCanonical = AddPrimaryLink(recordType, earlyA, ToMills(early), "mylife-connector");
+        AddPrimaryLink(recordType, earlyB, ToMills(early.AddSeconds(20)), "glooko-connector");
+        AddPrimaryLink(recordType, betweenId, ToMills(between), "mylife-connector");
+        var lateCanonical = AddPrimaryLink(recordType, lateA, ToMills(late), "mylife-connector");
+        AddPrimaryLink(recordType, lateB, ToMills(late.AddSeconds(20)), "glooko-connector");
+        await _context.SaveChangesAsync();
+        LoadedLinks.Clear();
+
+        var merged = await _service.MergeDuplicateGroupsAsync(
+            recordType,
+            new HashSet<Guid> { earlyCanonical, lateCanonical },
+            CancellationToken.None);
+
+        merged.Should().Be(2, "each candidate still merges with the neighbour beside it");
+        LoadedLinks.RecordIds.Should().Contain([earlyB, lateB]);
+        LoadedLinks.RecordIds.Should().NotContain(betweenId,
+            "the neighbour load is bounded around each candidate, not across the span between them");
+    }
+
+    [Fact]
+    public async Task MergeDuplicateGroupsAsync_CandidatePath_FiveMinuteGlucose_LinksEachCopyToItsReading()
+    {
+        var readings = await AddGlucoseWithCopies(WideBase, TimeSpan.FromMinutes(5), 72);
+
+        var merged = await _service.MergeDuplicateGroupsAsync(
+            RecordType.SensorGlucose, await AllCanonicals(RecordType.SensorGlucose), CancellationToken.None);
+
+        merged.Should().Be(readings.Count(r => r.Copy is not null));
+        await AssertEachCopyJoinsOnlyItsReading(readings);
+    }
+
+    [Fact]
+    public async Task MergeDuplicateGroupsAsync_CandidatePath_ADayOfFiveMinuteGlucose_LoadsNeighboursPerHourNotPerReading()
+    {
+        await AddGlucoseWithCopies(WideBase, TimeSpan.FromMinutes(5), 288, copyEvery: 0, lateCopyEvery: 0);
+        var candidates = await AllCanonicals(RecordType.SensorGlucose);
+        Reads.Clear();
+
+        var merged = await _service.MergeDuplicateGroupsAsync(RecordType.SensorGlucose, candidates, CancellationToken.None);
+
+        merged.Should().Be(0);
+        Reads.Count.Should().Be(47,
+            "one query learns the candidates' timestamps and each hour of runs, 13 readings, shares one "
+            + "neighbour load of two reads: the stored primaries and the records whose singleton link was pruned");
+    }
+
+    [Fact]
+    public async Task MergeDuplicateGroupsAsync_CandidatePath_ANonCandidatePairInTheSliceButOutsideEveryRun_IsLeftAlone()
+    {
+        // The second candidate stretches the slice's load over the pair, which sits outside both
+        // candidates' own ranges and so belongs to neither run.
+        var t = WideBase;
+        var early = await AddSensorGlucose(t, "dexcom-connector", 100);
+        var pairA = await AddSensorGlucose(t.AddMinutes(20), "dexcom-connector", 150);
+        var pairB = await AddSensorGlucose(t.AddMinutes(20).AddSeconds(10), "glooko-connector", 150);
+        var late = await AddSensorGlucose(t.AddMinutes(40), "dexcom-connector", 200);
+        var earlyCanonical = AddPrimaryLink(RecordType.SensorGlucose, early, ToMills(t), "dexcom-connector");
+        var pairACanonical = AddPrimaryLink(RecordType.SensorGlucose, pairA, ToMills(t.AddMinutes(20)), "dexcom-connector");
+        var pairBCanonical = AddPrimaryLink(
+            RecordType.SensorGlucose, pairB, ToMills(t.AddMinutes(20).AddSeconds(10)), "glooko-connector");
+        var lateCanonical = AddPrimaryLink(RecordType.SensorGlucose, late, ToMills(t.AddMinutes(40)), "dexcom-connector");
+        await _context.SaveChangesAsync();
+
+        var merged = await _service.MergeDuplicateGroupsAsync(
+            RecordType.SensorGlucose,
+            new HashSet<Guid> { earlyCanonical, lateCanonical },
+            CancellationToken.None);
+
+        merged.Should().Be(0);
+        _context.ChangeTracker.Clear();
+        var links = await _context.LinkedRecords.AsNoTracking().IgnoreQueryFilters()
+            .Where(l => l.RecordType == "sensorglucose").ToListAsync();
+        links.Single(l => l.RecordId == pairA).CanonicalId.Should().Be(pairACanonical);
+        links.Single(l => l.RecordId == pairB).CanonicalId.Should().Be(pairBCanonical,
+            "a pair no candidate reaches is left to the pass that owns it");
+    }
+
+    [Fact]
+    public async Task MergeDuplicateGroupsAsync_CandidatePath_ARunLongerThanTheSlice_StillSeesItsWholeRange()
+    {
+        // 50 seconds apart keeps every reading in one run, since runs only split past twice the
+        // 30 second window, and outside each other's window, so only the copies can pair.
+        var readings = await AddGlucoseWithCopies(WideBase, TimeSpan.FromSeconds(50), 216, copyEvery: 53, lateCopyEvery: 71);
+
+        var merged = await _service.MergeDuplicateGroupsAsync(
+            RecordType.SensorGlucose, await AllCanonicals(RecordType.SensorGlucose), CancellationToken.None);
+
+        merged.Should().Be(readings.Count(r => r.Copy is not null));
+        readings[^1].Copy.Should().NotBeNull("the last copy sits past the slice width from the run's start");
+        await AssertEachCopyJoinsOnlyItsReading(readings);
+    }
+
+    [Fact]
+    public async Task ReconcileNewLinksAsync_AFailedMerge_LogsTheStuckCursorAndLeavesItInPlace()
+    {
+        var now = DateTime.UtcNow;
+        var cursor = new ReconcileCursor(now.AddHours(-1), Guid.CreateVersion7());
+        await SetCursorAsync(cursor);
+
+        var t = now.AddMinutes(-5);
+        var mylife = await AddCarb(t, "mylife-connector", 50);
+        var glooko = await AddCarb(t.AddSeconds(20), "glooko-connector", 50);
+        AddPrimaryLink(RecordType.CarbIntake, mylife, ToMills(t), "mylife-connector");
+        AddPrimaryLink(RecordType.CarbIntake, glooko, ToMills(t.AddSeconds(20)), "glooko-connector");
+        await _context.SaveChangesAsync();
+        await SetAllLinkSysCreatedAt(now.AddMinutes(-5));
+
+        var logger = new Mock<ILogger<DeduplicationService>>();
+        var service = new DeduplicationService(_context.AsFactory(), new Mock<IServiceScopeFactory>().Object, logger.Object);
+        FailingReadsInterceptor.FailWhen = sql => sql.Contains("carb_intakes");
+        try
+        {
+            var act = () => service.ReconcileNewLinksAsync(5000, 10, CancellationToken.None);
+
+            await act.Should().ThrowAsync<InvalidOperationException>();
+        }
+        finally
+        {
+            FailingReadsInterceptor.FailWhen = null;
+        }
+
+        (await CursorAsync())!.Value.Id.Should().Be(cursor.Id);
+        logger.Verify(l => l.Log(
+                LogLevel.Error,
+                It.IsAny<EventId>(),
+                It.Is<It.IsAnyType>((v, _) =>
+                    v.ToString()!.Contains(TestTenantId.ToString())
+                    && v.ToString()!.Contains(nameof(RecordType.CarbIntake))
+                    && v.ToString()!.Contains(cursor.Id.ToString())),
+                It.IsAny<InvalidOperationException>(),
+                It.IsAny<Func<It.IsAnyType, Exception?, string>>()),
+            Times.Once);
     }
 
     [Fact]
     public async Task ReconcileNewLinksAsync_MergesGroupsWithRecentLinks()
     {
         var now = DateTime.UtcNow;
-        await _service.SetCursorAsync(new ReconcileCursor(now.AddHours(-1), Guid.Empty), CancellationToken.None);
+        await SetCursorAsync(new ReconcileCursor(now.AddHours(-1), Guid.Empty));
 
         var t = now.AddMinutes(-5);
         var mylife = await AddCarb(t, "mylife-connector", 50);
@@ -697,19 +1033,65 @@ public class DeduplicationReconcileTests : IDisposable
 
         result.GroupsMerged.Should().Be(1);
         result.CaughtUp.Should().BeTrue();
-        var links = await _context.LinkedRecords.IgnoreQueryFilters().Where(l => l.RecordType == "carbintake").ToListAsync();
+        var links = await _context.LinkedRecords.AsNoTracking().IgnoreQueryFilters().Where(l => l.RecordType == "carbintake").ToListAsync();
         links.Select(l => l.CanonicalId).Distinct().Should().HaveCount(1);
 
-        var cursor = await _service.GetCursorAsync(CancellationToken.None);
+        var cursor = await CursorAsync();
         cursor.Should().NotBeNull();
         cursor!.Value.CreatedAt.Should().BeCloseTo(created, TimeSpan.FromSeconds(1));
+    }
+
+    [Fact]
+    public async Task ReconcileNewLinksAsync_ASplitTidepoolDoseRestampedPastTheCursor_JoinsTheOtherSourcesCopy()
+    {
+        // G1 = {NS1, TP1}, G2 = {NS2}, TP2 alone and past the cursor.
+        var now = DateTime.UtcNow;
+        var t = now.AddHours(-2);
+        var ns1 = await AddBolus(t, "nightscout", 2);
+        var ns2 = await AddBolus(t.AddSeconds(20), "nightscout", 2);
+        var tp1 = await AddBolus(t, "tidepool-connector", 2);
+        var tp2 = await AddBolus(t.AddSeconds(20), "tidepool-connector", 2);
+        var first = AddPrimaryLink(RecordType.Bolus, ns1, ToMills(t), "nightscout");
+        AddPrimaryLink(RecordType.Bolus, ns2, ToMills(t.AddSeconds(20)), "nightscout");
+        AddLink(RecordType.Bolus, tp1, ToMills(t), "tidepool-connector", first, isPrimary: false);
+        AddPrimaryLink(RecordType.Bolus, tp2, ToMills(t.AddSeconds(20)), "tidepool-connector");
+        await _context.SaveChangesAsync();
+        await RestampOnePastTheCursor(tp2, now);
+
+        var result = await _service.ReconcileNewLinksAsync(5000, 10, CancellationToken.None);
+
+        result.GroupsMerged.Should().Be(1);
+        var links = await _context.LinkedRecords.AsNoTracking().Where(l => l.RecordType == "bolus").ToListAsync();
+        Guid GroupOf(Guid recordId) => links.Single(l => l.RecordId == recordId).CanonicalId;
+        GroupOf(tp2).Should().Be(GroupOf(ns2), "a group already holding Tidepool refuses a second Tidepool dose");
+        GroupOf(tp1).Should().Be(GroupOf(ns1));
+        links.Count(l => l.IsPrimary).Should().Be(2, "two doses were given, each recorded by both sources");
+    }
+
+    [Fact]
+    public async Task ReconcileNewLinksAsync_ASplitTidepoolDoseRestampedPastTheCursor_StaysApartFromItsTwin()
+    {
+        var now = DateTime.UtcNow;
+        var t = now.AddHours(-2);
+        var tp1 = await AddBolus(t, "tidepool-connector", 2);
+        var tp2 = await AddBolus(t, "tidepool-connector", 2);
+        AddPrimaryLink(RecordType.Bolus, tp1, ToMills(t), "tidepool-connector");
+        AddPrimaryLink(RecordType.Bolus, tp2, ToMills(t), "tidepool-connector");
+        await _context.SaveChangesAsync();
+        await RestampOnePastTheCursor(tp2, now);
+
+        var result = await _service.ReconcileNewLinksAsync(5000, 10, CancellationToken.None);
+
+        result.GroupsMerged.Should().Be(0);
+        (await _context.LinkedRecords.CountAsync(l => l.RecordType == "bolus" && l.IsPrimary)).Should().Be(2,
+            "two Tidepool boluses of one size at one second are two doses");
     }
 
     [Fact]
     public async Task ReconcileNewLinksAsync_IgnoresLinksBeforeCursor()
     {
         var now = DateTime.UtcNow;
-        await _service.SetCursorAsync(new ReconcileCursor(now, Guid.Empty), CancellationToken.None);
+        await SetCursorAsync(new ReconcileCursor(now, Guid.Empty));
 
         // Links created an hour ago — before the cursor, so already reconciled.
         var t = now.AddHours(-1);
@@ -723,7 +1105,7 @@ public class DeduplicationReconcileTests : IDisposable
         var result = await _service.ReconcileNewLinksAsync(5000, 10, CancellationToken.None);
 
         result.GroupsMerged.Should().Be(0);
-        var links = await _context.LinkedRecords.IgnoreQueryFilters().Where(l => l.RecordType == "carbintake").ToListAsync();
+        var links = await _context.LinkedRecords.AsNoTracking().IgnoreQueryFilters().Where(l => l.RecordType == "carbintake").ToListAsync();
         links.Select(l => l.CanonicalId).Distinct().Should().HaveCount(2);
     }
 
@@ -731,7 +1113,7 @@ public class DeduplicationReconcileTests : IDisposable
     public async Task ReconcileNewLinksAsync_SkipsUnknownRecordType()
     {
         var now = DateTime.UtcNow;
-        await _service.SetCursorAsync(new ReconcileCursor(now.AddHours(-1), Guid.Empty), CancellationToken.None);
+        await SetCursorAsync(new ReconcileCursor(now.AddHours(-1), Guid.Empty));
 
         // A valid mergeable pair that should still collapse despite a bogus row in the batch.
         var t = now.AddMinutes(-5);
@@ -762,14 +1144,14 @@ public class DeduplicationReconcileTests : IDisposable
         var result = await act.Should().NotThrowAsync();
         // The valid pair still merges, and the call returns normally.
         result.Subject.GroupsMerged.Should().Be(1);
-        var links = await _context.LinkedRecords.IgnoreQueryFilters().Where(l => l.RecordType == "carbintake").ToListAsync();
+        var links = await _context.LinkedRecords.AsNoTracking().IgnoreQueryFilters().Where(l => l.RecordType == "carbintake").ToListAsync();
         links.Select(l => l.CanonicalId).Distinct().Should().HaveCount(1);
     }
 
     [Fact]
     public async Task ReconcileNewLinksAsync_FreshTenant_NoCursor_ReconcilesFromTheStart()
     {
-        (await _service.GetCursorAsync(CancellationToken.None)).Should().BeNull();
+        (await CursorAsync()).Should().BeNull();
 
         var now = DateTime.UtcNow;
         var t = now.AddMinutes(-5);
@@ -784,10 +1166,10 @@ public class DeduplicationReconcileTests : IDisposable
         var result = await _service.ReconcileNewLinksAsync(5000, 10, CancellationToken.None);
 
         result.GroupsMerged.Should().Be(1);
-        var links = await _context.LinkedRecords.IgnoreQueryFilters().Where(l => l.RecordType == "carbintake").ToListAsync();
+        var links = await _context.LinkedRecords.AsNoTracking().IgnoreQueryFilters().Where(l => l.RecordType == "carbintake").ToListAsync();
         links.Select(l => l.CanonicalId).Distinct().Should().HaveCount(1);
 
-        var cursor = await _service.GetCursorAsync(CancellationToken.None);
+        var cursor = await CursorAsync();
         cursor.Should().NotBeNull();
         cursor!.Value.CreatedAt.Should().BeCloseTo(created, TimeSpan.FromSeconds(1));
     }
@@ -807,10 +1189,10 @@ public class DeduplicationReconcileTests : IDisposable
 
         result.GroupsMerged.Should().Be(3);
         result.CaughtUp.Should().BeTrue();
-        var links = await _context.LinkedRecords.IgnoreQueryFilters().Where(l => l.RecordType == "carbintake").ToListAsync();
+        var links = await _context.LinkedRecords.AsNoTracking().IgnoreQueryFilters().Where(l => l.RecordType == "carbintake").ToListAsync();
         links.Select(l => l.CanonicalId).Distinct().Should().HaveCount(3);
 
-        var cursor = await _service.GetCursorAsync(CancellationToken.None);
+        var cursor = await CursorAsync();
         cursor.Should().NotBeNull();
         cursor!.Value.CreatedAt.Should().BeCloseTo(created, TimeSpan.FromSeconds(1));
         cursor.Value.Id.Should().Be(links.Select(l => l.Id).Max(), "the cursor rests on the last link in (sys_created_at, id) order");
@@ -838,7 +1220,7 @@ public class DeduplicationReconcileTests : IDisposable
         result.CaughtUp.Should().BeTrue("six links in batches of two need three full passes and one empty one");
         passes.Should().Be(4);
         merged.Should().Be(3);
-        var links = await _context.LinkedRecords.IgnoreQueryFilters().Where(l => l.RecordType == "carbintake").ToListAsync();
+        var links = await _context.LinkedRecords.AsNoTracking().IgnoreQueryFilters().Where(l => l.RecordType == "carbintake").ToListAsync();
         links.Select(l => l.CanonicalId).Distinct().Should().HaveCount(3);
     }
 
@@ -860,7 +1242,7 @@ public class DeduplicationReconcileTests : IDisposable
 
         young.GroupsMerged.Should().Be(0);
         young.CaughtUp.Should().BeTrue();
-        (await _service.GetCursorAsync(CancellationToken.None)).Should().BeNull();
+        (await CursorAsync()).Should().BeNull();
 
         await SetAllLinkSysCreatedAt(now.AddMinutes(-3));
 
@@ -876,11 +1258,9 @@ public class DeduplicationReconcileTests : IDisposable
         // so a run of links sharing one instant is paged rather than re-read. The SQL is checked
         // against the Npgsql provider because the SQLite tests above cannot see the shape.
         using var context = OfflineDbContext.Create();
-        var service = new DeduplicationService(
-            context, new Mock<IServiceScopeFactory>().Object, NullLogger<DeduplicationService>.Instance);
         var cursor = new ReconcileCursor(new DateTime(2026, 9, 1, 0, 0, 0, DateTimeKind.Utc), Guid.CreateVersion7());
 
-        var sql = service.LinksAfter(cursor, cursor.CreatedAt.AddHours(1)).Take(5000).ToQueryString();
+        var sql = DeduplicationService.LinksAfter(context, cursor, cursor.CreatedAt.AddHours(1)).Take(5000).ToQueryString();
 
         sql.Should().MatchRegex(@"l\.sys_created_at >= @\w+ AND \(l\.sys_created_at > @\w+ OR l\.id > @\w+\)",
             "the lower bound ranges the creation index and the keyset continues inside an instant");
@@ -892,11 +1272,9 @@ public class DeduplicationReconcileTests : IDisposable
     public void PrimariesOf_OnPostgres_BindsTheCandidateSetAsOneArray()
     {
         using var context = OfflineDbContext.Create();
-        var service = new DeduplicationService(
-            context, new Mock<IServiceScopeFactory>().Object, NullLogger<DeduplicationService>.Instance);
         IReadOnlySet<Guid> candidates = new HashSet<Guid> { Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid() };
 
-        var sql = service.PrimariesOf("carbintake", candidates).ToQueryString();
+        var sql = DeduplicationService.PrimariesOf(context, "carbintake", candidates).ToQueryString();
 
         sql.Should().MatchRegex(@"l\.canonical_id = ANY \(@\w+\)",
             "one uuid[] parameter keeps one statement for every candidate count");
@@ -906,12 +1284,12 @@ public class DeduplicationReconcileTests : IDisposable
     [Fact]
     public async Task Cursor_RoundTrips_DefaultsToNull()
     {
-        (await _service.GetCursorAsync(CancellationToken.None)).Should().BeNull();
+        (await CursorAsync()).Should().BeNull();
 
         var cursor = new ReconcileCursor(new DateTime(2026, 5, 30, 12, 0, 0, DateTimeKind.Utc), Guid.CreateVersion7());
-        await _service.SetCursorAsync(cursor, CancellationToken.None);
+        await SetCursorAsync(cursor);
 
-        (await _service.GetCursorAsync(CancellationToken.None)).Should().Be(cursor);
+        (await CursorAsync()).Should().Be(cursor);
     }
 
     [Fact]
@@ -926,7 +1304,7 @@ public class DeduplicationReconcileTests : IDisposable
         });
         await _context.SaveChangesAsync();
 
-        (await _service.GetCursorAsync(CancellationToken.None)).Should().Be(new ReconcileCursor(t, Guid.Empty));
+        (await CursorAsync()).Should().Be(new ReconcileCursor(t, Guid.Empty));
     }
 
     [Fact]
@@ -935,13 +1313,13 @@ public class DeduplicationReconcileTests : IDisposable
         var first = new ReconcileCursor(new DateTime(2026, 5, 30, 12, 0, 0, DateTimeKind.Utc), Guid.CreateVersion7());
         var second = new ReconcileCursor(new DateTime(2026, 5, 31, 9, 30, 0, DateTimeKind.Utc), Guid.CreateVersion7());
 
-        await _service.SetCursorAsync(first, CancellationToken.None);
-        await _service.SetCursorAsync(second, CancellationToken.None);
+        await SetCursorAsync(first);
+        await SetCursorAsync(second);
 
-        (await _service.GetCursorAsync(CancellationToken.None)).Should().Be(second);
+        (await CursorAsync()).Should().Be(second);
 
         // Upsert must update the single row, not create a duplicate.
-        var rows = await _context.DedupReconcileState.IgnoreQueryFilters()
+        var rows = await _context.DedupReconcileState.AsNoTracking().IgnoreQueryFilters()
             .Where(s => s.TenantId == TestTenantId).CountAsync();
         rows.Should().Be(1);
     }
@@ -997,7 +1375,7 @@ public class DeduplicationReconcileTests : IDisposable
 
         result.Success.Should().BeTrue();
         result.SensorGlucoseProcessed.Should().Be(readings.Count);
-        var links = await _context.LinkedRecords.IgnoreQueryFilters().ToListAsync();
+        var links = await _context.LinkedRecords.AsNoTracking().IgnoreQueryFilters().ToListAsync();
         links.Should().HaveCount(readings.Count);
         links.Select(l => l.CanonicalId).Distinct().Should().HaveCount(groupsBeforeBoundary + 2);
         links.Count(l => l.IsPrimary).Should().Be(groupsBeforeBoundary + 2);
@@ -1014,8 +1392,23 @@ public class DeduplicationReconcileTests : IDisposable
         var deleted = await DeduplicationService.DeleteOrphanedLinksAsync(_context);
 
         deleted.Should().Be(1);
-        var links = await _context.LinkedRecords.IgnoreQueryFilters().ToListAsync();
+        var links = await _context.LinkedRecords.AsNoTracking().IgnoreQueryFilters().ToListAsync();
         links.Should().BeEmpty();
+    }
+
+    [Theory]
+    [MemberData(nameof(DeduplicatedRecordTypes))]
+    public void OrphanedLinksOf_OnPostgres_AntiJoinsTheRecordTable(RecordType recordType)
+    {
+        using var context = OfflineDbContext.Create();
+
+        var sql = DeduplicationService.OrphanedLinksOf(context, recordType).ToQueryString();
+
+        sql.Should().MatchRegex(
+            @"NOT EXISTS \(\s*SELECT 1\s*FROM \w+ AS (\w+)\s*WHERE \1\.tenant_id = @ef_filter__TenantId AND \1\.id = l\.record_id\)",
+            "the record table is anti-joined per link and still scoped to the tenant");
+        sql.Should().NotContain("IN (");
+        sql.Should().NotContain("deleted_at", "a soft-deleted record still vouches for its link");
     }
 
     /// <summary>
@@ -1038,7 +1431,7 @@ public class DeduplicationReconcileTests : IDisposable
 
         await DeduplicationService.DeleteOrphanedLinksAsync(_context);
 
-        var links = await _context.LinkedRecords.IgnoreQueryFilters().ToListAsync();
+        var links = await _context.LinkedRecords.AsNoTracking().IgnoreQueryFilters().ToListAsync();
         links.Should().ContainSingle().Which.RecordId.Should().Be(recordId);
     }
 
@@ -1059,7 +1452,7 @@ public class DeduplicationReconcileTests : IDisposable
             RecordType.BolusCalculation => new BolusCalculationEntity { Id = id, CarbInput = 30, Timestamp = WideBase },
             RecordType.TempBasal => new TempBasalEntity
             {
-                Id = id, Rate = 0.5, StartTimestamp = WideBase, Origin = "Manual"
+                Id = id, Rate = 0.5, Timestamp = WideBase, Origin = "Manual"
             },
             RecordType.StateSpan => new StateSpanEntity
             {
@@ -1088,7 +1481,7 @@ public class DeduplicationReconcileTests : IDisposable
         var deleted = await DeduplicationService.DeleteOrphanedLinksAsync(_context);
 
         deleted.Should().Be(1);
-        var links = await _context.LinkedRecords.IgnoreQueryFilters().ToListAsync();
+        var links = await _context.LinkedRecords.AsNoTracking().IgnoreQueryFilters().ToListAsync();
         links.Should().BeEmpty();
     }
 
@@ -1127,7 +1520,7 @@ public class DeduplicationReconcileTests : IDisposable
 
         await DeduplicationService.DeleteOrphanedLinksAsync(_context);
 
-        var links = await _context.LinkedRecords.IgnoreQueryFilters().ToListAsync();
+        var links = await _context.LinkedRecords.AsNoTracking().IgnoreQueryFilters().ToListAsync();
         links.Should().ContainSingle().Which.RecordId.Should().Be(recordId);
     }
 
@@ -1155,7 +1548,7 @@ public class DeduplicationReconcileTests : IDisposable
 
         await DeduplicationService.DeleteOrphanedLinksAsync(_context);
 
-        var links = await _context.LinkedRecords.IgnoreQueryFilters().ToListAsync();
+        var links = await _context.LinkedRecords.AsNoTracking().IgnoreQueryFilters().ToListAsync();
         links.Should().ContainSingle().Which.TenantId.Should().Be(otherTenant);
     }
 
@@ -1197,7 +1590,7 @@ public class DeduplicationReconcileTests : IDisposable
 
         await DeduplicationService.DeleteOrphanedLinksAsync(_context);
 
-        var links = await _context.LinkedRecords.IgnoreQueryFilters().ToListAsync();
+        var links = await _context.LinkedRecords.AsNoTracking().IgnoreQueryFilters().ToListAsync();
         links.Should().ContainSingle().Which.Id.Should().Be(theirLinkId);
     }
 
@@ -1206,6 +1599,77 @@ public class DeduplicationReconcileTests : IDisposable
     /// are exact.
     /// </summary>
     private static readonly DateTime WideBase = new(2026, 6, 15, 12, 0, 0, DateTimeKind.Utc);
+
+    private sealed record GlucoseWithCopies(Guid Reading, Guid? Copy, Guid? LateCopy);
+
+    /// <summary>
+    /// Adds <paramref name="count"/> single-source readings <paramref name="step"/> apart, each 5 mg/dL
+    /// above the one before and wrapping back to 60 every 60 readings, so neighbours never match. Every <paramref name="copyEvery"/>th reading
+    /// (and the last) gets a second source's copy 10 seconds later, inside the matching window;
+    /// every <paramref name="lateCopyEvery"/>th gets a third source's copy 45 seconds later, outside
+    /// it. Zero adds none.
+    /// </summary>
+    private async Task<List<GlucoseWithCopies>> AddGlucoseWithCopies(
+        DateTime first, TimeSpan step, int count, int copyEvery = 4, int lateCopyEvery = 7)
+    {
+        var readings = new List<GlucoseWithCopies>();
+        for (var i = 0; i < count; i++)
+        {
+            var at = first + step * i;
+            var mgdl = 60 + 5 * i % 300;
+            var reading = await AddSensorGlucose(at, "dexcom-connector", mgdl);
+            AddPrimaryLink(RecordType.SensorGlucose, reading, ToMills(at), "dexcom-connector");
+
+            Guid? copy = null;
+            if (copyEvery > 0 && (i % copyEvery == 0 || i == count - 1))
+            {
+                copy = await AddSensorGlucose(at.AddSeconds(10), "glooko-connector", mgdl);
+                AddPrimaryLink(RecordType.SensorGlucose, copy.Value, ToMills(at.AddSeconds(10)), "glooko-connector");
+            }
+
+            Guid? lateCopy = null;
+            if (lateCopyEvery > 0 && i % lateCopyEvery == 0)
+            {
+                lateCopy = await AddSensorGlucose(at.AddSeconds(45), "libre-connector", mgdl);
+                AddPrimaryLink(RecordType.SensorGlucose, lateCopy.Value, ToMills(at.AddSeconds(45)), "libre-connector");
+            }
+
+            readings.Add(new GlucoseWithCopies(reading, copy, lateCopy));
+        }
+
+        await _context.SaveChangesAsync();
+        return readings;
+    }
+
+    private async Task<HashSet<Guid>> AllCanonicals(RecordType recordType)
+    {
+        var key = recordType.ToString().ToLowerInvariant();
+        return (await _context.LinkedRecords.IgnoreQueryFilters()
+                .Where(l => l.RecordType == key).Select(l => l.CanonicalId).ToListAsync())
+            .ToHashSet();
+    }
+
+    private async Task AssertEachCopyJoinsOnlyItsReading(IReadOnlyList<GlucoseWithCopies> readings)
+    {
+        _context.ChangeTracker.Clear();
+        var links = await _context.LinkedRecords.AsNoTracking().IgnoreQueryFilters()
+            .Where(l => l.RecordType == "sensorglucose").ToListAsync();
+        var groupOf = links.ToDictionary(l => l.RecordId, l => l.CanonicalId);
+
+        foreach (var r in readings)
+        {
+            if (r.Copy is { } copy)
+                groupOf[copy].Should().Be(groupOf[r.Reading], "a copy inside the window is the same reading");
+            if (r.LateCopy is { } late)
+                groupOf[late].Should().NotBe(groupOf[r.Reading], "a copy outside the window stays apart");
+        }
+
+        readings.Select(r => groupOf[r.Reading]).Distinct().Should().HaveCount(readings.Count,
+            "readings minutes apart are never one another's duplicates");
+        links.GroupBy(l => l.CanonicalId).Should().OnlyContain(g => g.Count(l => l.IsPrimary) == 1);
+        links.Where(l => l.IsPrimary).Select(l => l.RecordId).Should().NotIntersectWith(
+            readings.Select(r => r.Copy).OfType<Guid>(), "the earlier reading survives as primary");
+    }
 
     /// <summary>
     /// Inserts a <see cref="SensorGlucoseEntity"/> for the test tenant and returns its id.
@@ -1218,6 +1682,32 @@ public class DeduplicationReconcileTests : IDisposable
             Id = id,
             TenantId = TestTenantId,
             Mgdl = mgdl,
+            Timestamp = timestamp,
+            DataSource = dataSource
+        });
+        await _context.SaveChangesAsync();
+        return id;
+    }
+
+    private Task<Guid> AddReading(RecordType recordType, DateTime timestamp, string dataSource) =>
+        recordType switch
+        {
+            RecordType.CarbIntake => AddCarb(timestamp, dataSource, 50),
+            RecordType.SensorGlucose => AddSensorGlucose(timestamp, dataSource, 120),
+            _ => throw new ArgumentOutOfRangeException(nameof(recordType), recordType, null)
+        };
+
+    /// <summary>
+    /// Inserts a <see cref="BolusEntity"/> for the test tenant and returns its id.
+    /// </summary>
+    private async Task<Guid> AddBolus(DateTime timestamp, string dataSource, double insulin)
+    {
+        var id = Guid.CreateVersion7();
+        _context.Boluses.Add(new BolusEntity
+        {
+            Id = id,
+            TenantId = TestTenantId,
+            Insulin = insulin,
             Timestamp = timestamp,
             DataSource = dataSource
         });
@@ -1275,6 +1765,21 @@ public class DeduplicationReconcileTests : IDisposable
         });
 
     /// <summary>
+    /// Puts every link behind the reconcile cursor except <paramref name="recordId"/>'s, which is
+    /// stamped past it and old enough for the commit lag.
+    /// </summary>
+    private async Task RestampOnePastTheCursor(Guid recordId, DateTime now)
+    {
+        await SetAllLinkSysCreatedAt(now.AddHours(-1));
+        await SetCursorAsync(new ReconcileCursor(now.AddMinutes(-30), Guid.Empty));
+
+        var restamped = await _context.LinkedRecords.SingleAsync(l => l.RecordId == recordId);
+        restamped.SysCreatedAt = now.AddMinutes(-3);
+        await _context.SaveChangesAsync();
+        _context.ChangeTracker.Clear();
+    }
+
+    /// <summary>
     /// Overrides <see cref="LinkedRecordEntity.SysCreatedAt"/> on all of the tenant's links.
     /// The SaveChanges interceptor stamps SysCreatedAt = now only on <c>Added</c> rows, so the
     /// initializer value is ignored on insert; updating already-persisted rows lets tests pin a
@@ -1296,4 +1801,68 @@ public class DeduplicationReconcileTests : IDisposable
     /// </summary>
     private static long ToMills(DateTime d) =>
         new DateTimeOffset(d, TimeSpan.Zero).ToUnixTimeMilliseconds();
+
+    private sealed class LinkLoadRecorder : IMaterializationInterceptor
+    {
+        private readonly List<Guid> _recordIds = [];
+
+        public IReadOnlyList<Guid> RecordIds => _recordIds;
+
+        public void Clear() => _recordIds.Clear();
+
+        public object InitializedInstance(MaterializationInterceptionData materializationData, object entity)
+        {
+            if (entity is LinkedRecordEntity link)
+                _recordIds.Add(link.RecordId);
+            return entity;
+        }
+    }
+
+    private sealed class FailingReads : DbCommandInterceptor
+    {
+        public Func<string, bool>? FailWhen { get; set; }
+
+        public override InterceptionResult<DbDataReader> ReaderExecuting(
+            DbCommand command, CommandEventData eventData, InterceptionResult<DbDataReader> result)
+        {
+            ThrowIfArmed(command);
+            return result;
+        }
+
+        public override ValueTask<InterceptionResult<DbDataReader>> ReaderExecutingAsync(
+            DbCommand command, CommandEventData eventData, InterceptionResult<DbDataReader> result,
+            CancellationToken cancellationToken = default)
+        {
+            ThrowIfArmed(command);
+            return ValueTask.FromResult(result);
+        }
+
+        private void ThrowIfArmed(DbCommand command)
+        {
+            if (FailWhen?.Invoke(command.CommandText) == true)
+                throw new InvalidOperationException("Simulated read failure");
+        }
+    }
+
+    private sealed class ReadCounter : DbCommandInterceptor
+    {
+        public int Count { get; private set; }
+
+        public void Clear() => Count = 0;
+
+        public override InterceptionResult<DbDataReader> ReaderExecuting(
+            DbCommand command, CommandEventData eventData, InterceptionResult<DbDataReader> result)
+        {
+            Count++;
+            return result;
+        }
+
+        public override ValueTask<InterceptionResult<DbDataReader>> ReaderExecutingAsync(
+            DbCommand command, CommandEventData eventData, InterceptionResult<DbDataReader> result,
+            CancellationToken cancellationToken = default)
+        {
+            Count++;
+            return ValueTask.FromResult(result);
+        }
+    }
 }

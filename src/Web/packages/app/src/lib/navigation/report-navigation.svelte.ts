@@ -1,26 +1,29 @@
+import { a1cLabel } from "$lib/utils/a1c-formatting";
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type IconComponent = any;
-import {
-  Activity,
-  BarChart3,
-  BatteryFull,
-  ArrowLeftRight,
-  Calendar,
-  CalendarDays,
-  Clock,
-  Dumbbell,
-  FileText,
-  Footprints,
-  Gauge,
-  HeartPulse,
-  Layers,
-  Moon,
-  PieChart,
-  Sunrise,
-  SunMoon,
-  Syringe,
-  Utensils,
-} from "lucide-svelte";
+import Activity from "@lucide/svelte/icons/activity";
+import BarChart3 from "@lucide/svelte/icons/chart-column";
+import BatteryFull from "@lucide/svelte/icons/battery-full";
+import ArrowLeftRight from "@lucide/svelte/icons/arrow-left-right";
+import Calendar from "@lucide/svelte/icons/calendar";
+import ChartLine from "@lucide/svelte/icons/chart-line";
+import CalendarDays from "@lucide/svelte/icons/calendar-days";
+import Clock from "@lucide/svelte/icons/clock";
+import Dumbbell from "@lucide/svelte/icons/dumbbell";
+import FileText from "@lucide/svelte/icons/file-text";
+import Footprints from "@lucide/svelte/icons/footprints";
+import Gauge from "@lucide/svelte/icons/gauge";
+import HeartPulse from "@lucide/svelte/icons/heart-pulse";
+import Layers from "@lucide/svelte/icons/layers";
+import Moon from "@lucide/svelte/icons/moon";
+import PieChart from "@lucide/svelte/icons/chart-pie";
+import Repeat from "@lucide/svelte/icons/repeat";
+import Sunrise from "@lucide/svelte/icons/sunrise";
+import SunMoon from "@lucide/svelte/icons/sun-moon";
+import Syringe from "@lucide/svelte/icons/syringe";
+import Utensils from "@lucide/svelte/icons/utensils";
+import SlidersHorizontal from "@lucide/svelte/icons/sliders-horizontal";
+import Target from "@lucide/svelte/icons/target";
 import SiteChangeIcon from "$lib/components/icons/SiteChangeIcon.svelte";
 import { satisfiesAllScopes } from "$lib/authorization/scopes";
 
@@ -32,6 +35,8 @@ export interface ReportItem {
   /** Description shown on reports overview page */
   description: string;
   href: string;
+  /** Extra terms the command palette matches a search against. */
+  keywords?: string[];
   icon: IconComponent;
   status: "available" | "coming-soon";
   /**
@@ -49,11 +54,17 @@ export interface ReportItem {
 }
 
 export interface ReportCategory {
-  id: "overview" | "patterns" | "lifestyle" | "treatment";
+  id: "overview" | "patterns" | "lifestyle" | "treatment" | "loop";
   title: string;
   subtitle: string;
   icon: IconComponent;
   reports: ReportItem[];
+  /**
+   * The reports are the pages of one report, opened at this address, and share its filters. The
+   * report header links between them (`ReportPageSwitcher`), the sidebar offers the report as one
+   * entry, and each page is titled with the report's name ({@link reportTitle}).
+   */
+  pages?: { href: string };
 }
 
 /** Read scopes, spelled as the API's `OAuthScopes` spells them. */
@@ -61,6 +72,7 @@ const READ = {
   glucose: "glucose.read",
   treatments: "treatments.read",
   devices: "devices.read",
+  therapy: "therapy.read",
   heartRate: "heartrate.read",
   stepCount: "stepcount.read",
   sleep: "sleep.read",
@@ -74,6 +86,10 @@ const READ = {
  * without them.
  */
 export const reportsOverviewScopes: string[] = [READ.glucose, READ.reports];
+
+export function estimatedA1cTitle(): string {
+  return `Estimated ${a1cLabel()}`;
+}
 
 /**
  * Built per call so the titles are read in the current locale: wuchale
@@ -92,6 +108,7 @@ export function reportCategories(): ReportCategory[] {
           title: "Executive Summary",
           description: "All your important numbers in one place",
           href: "/reports/executive-summary",
+          keywords: ["overview", "summary", "report card", "snapshot"],
           scopes: [READ.glucose, READ.reports],
           icon: Gauge,
           status: "available",
@@ -101,6 +118,7 @@ export function reportCategories(): ReportCategory[] {
           sidebarTitle: "AGP",
           description: "Your typical day's glucose pattern",
           href: "/reports/agp",
+          keywords: ["ambulatory glucose profile", "percentiles", "target range"],
           scopes: [READ.glucose, READ.reports],
           icon: BarChart3,
           status: "available",
@@ -109,6 +127,7 @@ export function reportCategories(): ReportCategory[] {
           title: "Glucose Distribution",
           description: "Time spent in each glucose zone",
           href: "/reports/glucose-distribution",
+          keywords: ["box chart", "box plot", "whisker", "percentiles", "quartiles", "spread"],
           scopes: [READ.reports],
           icon: PieChart,
           status: "available",
@@ -117,15 +136,17 @@ export function reportCategories(): ReportCategory[] {
           title: "Data Quality",
           description: "Assess the reliability of your data",
           href: "/reports/data-quality",
+          keywords: ["gaps", "missing", "coverage", "reliability"],
           scopes: [READ.glucose, READ.reports],
           icon: Layers,
           status: "available",
         },
         {
-          title: "Estimated HbA1c",
-          sidebarTitle: "eHbA1c",
-          description: "How your estimated HbA1c has trended over the years",
+          title: estimatedA1cTitle(),
+          sidebarTitle: a1cLabel(true),
+          description: `How your ${a1cLabel(true)} has trended over the years`,
           href: "/reports/ehba1c",
+          keywords: ["a1c", "hba1c", "glycated hemoglobin"],
           scopes: [READ.glucose, READ.reports],
           icon: Activity,
           status: "available",
@@ -142,6 +163,7 @@ export function reportCategories(): ReportCategory[] {
           title: "Year Overview",
           description: "Multi-year heatmap of all your data",
           href: "/reports/year-overview",
+          keywords: ["annual", "yearly", "12 month", "heatmap"],
           scopes: [READ.glucose],
           icon: CalendarDays,
           status: "available",
@@ -151,6 +173,7 @@ export function reportCategories(): ReportCategory[] {
           sidebarTitle: "Readings",
           description: "Review each day individually",
           href: "/reports/readings",
+          keywords: ["glucose readings", "blood sugar", "log", "history"],
           scopes: [READ.glucose],
           icon: Calendar,
           status: "available",
@@ -159,6 +182,7 @@ export function reportCategories(): ReportCategory[] {
           title: "Day in Review",
           description: "Detailed breakdown of a single day",
           href: "/reports/day-in-review",
+          keywords: ["daily", "today", "yesterday"],
           scopes: [READ.glucose, READ.treatments, READ.reports],
           icon: Clock,
           status: "available",
@@ -167,6 +191,7 @@ export function reportCategories(): ReportCategory[] {
           title: "Week to Week",
           description: "Compare patterns across days",
           href: "/reports/week-to-week",
+          keywords: ["comparison", "trend", "weekly"],
           scopes: [READ.glucose, READ.reports],
           icon: Sunrise,
           status: "available",
@@ -175,6 +200,7 @@ export function reportCategories(): ReportCategory[] {
           title: "Comparison",
           description: "Diff two date ranges side-by-side",
           href: "/reports/comparison",
+          keywords: ["compare", "date ranges", "diff"],
           scopes: [READ.reports],
           icon: ArrowLeftRight,
           status: "available",
@@ -183,6 +209,7 @@ export function reportCategories(): ReportCategory[] {
           title: "Hourly Patterns",
           description: "Find your best and worst hours",
           href: "/reports/hourly-stats",
+          keywords: ["hourly", "time of day", "best hours", "worst hours"],
           scopes: [READ.reports],
           icon: SunMoon,
           status: "available",
@@ -200,6 +227,7 @@ export function reportCategories(): ReportCategory[] {
           sidebarTitle: "Steps",
           description: "Daily step patterns and activity levels",
           href: "/reports/steps",
+          keywords: ["activity", "walking", "exercise", "movement"],
           scopes: [READ.glucose, READ.stepCount],
           icon: Footprints,
           status: "available",
@@ -208,6 +236,7 @@ export function reportCategories(): ReportCategory[] {
           title: "Heart Rate",
           description: "Heart rate patterns and resting estimates",
           href: "/reports/heart-rate",
+          keywords: ["pulse", "bpm", "cardio"],
           scopes: [READ.glucose, READ.heartRate],
           icon: HeartPulse,
           status: "available",
@@ -217,6 +246,7 @@ export function reportCategories(): ReportCategory[] {
           sidebarTitle: "Sleep",
           description: "Understand your overnight patterns",
           href: "/reports/sleep",
+          keywords: ["overnight", "night time", "sleeping"],
           scopes: [READ.glucose, READ.sleep],
           icon: Moon,
           status: "available",
@@ -250,6 +280,7 @@ export function reportCategories(): ReportCategory[] {
           sidebarTitle: "Treatments",
           description: "Your insulin and carb history",
           href: "/reports/treatments",
+          keywords: ["bolus", "carbs", "corrections", "insulin"],
           scopes: [READ.glucose, READ.treatments, READ.devices, READ.reports],
           icon: FileText,
           status: "available",
@@ -259,6 +290,7 @@ export function reportCategories(): ReportCategory[] {
           sidebarTitle: "Basal Analysis",
           description: "How your basal rates vary",
           href: "/reports/basal-analysis",
+          keywords: ["basal rate", "background insulin", "temp basal"],
           scopes: [READ.reports],
           icon: Layers,
           status: "available",
@@ -267,6 +299,7 @@ export function reportCategories(): ReportCategory[] {
           title: "Insulin Delivery",
           description: "Basal vs bolus breakdown",
           href: "/reports/insulin-delivery",
+          keywords: ["tdd", "total daily dose", "basal bolus ratio"],
           scopes: [READ.reports],
           icon: PieChart,
           status: "available",
@@ -275,6 +308,7 @@ export function reportCategories(): ReportCategory[] {
           title: "Site Change Impact",
           description: "How site changes affect control",
           href: "/reports/site-change-impact",
+          keywords: ["infusion site", "cannula", "rotation", "set change"],
           scopes: [READ.devices, READ.reports],
           icon: SiteChangeIcon,
           status: "available",
@@ -284,6 +318,7 @@ export function reportCategories(): ReportCategory[] {
           sidebarTitle: "IDP",
           description: "Standardised insulin and glucose summary",
           href: "/reports/idp",
+          keywords: ["insulin dosing profile", "daily insulin", "dose adjustment"],
           scopes: [READ.treatments, READ.reports],
           icon: Syringe,
           status: "available",
@@ -293,13 +328,78 @@ export function reportCategories(): ReportCategory[] {
           title: "Battery",
           description: "Pump battery trends and longevity",
           href: "/reports/battery",
+          keywords: ["pump battery", "phone battery", "charge"],
           scopes: [READ.devices],
           icon: BatteryFull,
           status: "available",
         },
       ],
     },
+    {
+      id: "loop",
+      title: "Loop Analysis",
+      subtitle: "What your automated insulin delivery does",
+      icon: Repeat,
+      pages: { href: "/reports/loop-analysis" },
+      reports: [
+        {
+          title: "Daily profile",
+          description: "Glucose, insulin and carbs at each time of day",
+          href: "/reports/loop-analysis/daily-profile",
+          keywords: ["loop analysis", "loopalyzer", "closed loop", "aid", "smb", "temp basal", "iob", "cob"],
+          scopes: [READ.glucose, READ.treatments, READ.reports],
+          icon: ChartLine,
+          status: "available",
+          memberOnly: true,
+        },
+        {
+          title: "Meals and events",
+          description: "Glucose and insulin before and after each event",
+          href: "/reports/loop-analysis/meals-and-events",
+          keywords: ["loop analysis", "meal response", "corrections", "unannounced meals"],
+          scopes: [READ.glucose, READ.treatments, READ.reports],
+          icon: Utensils,
+          status: "available",
+          memberOnly: true,
+        },
+        {
+          title: "Prediction accuracy",
+          description: "The loop's predictions compared with the readings that followed",
+          href: "/reports/loop-analysis/prediction-accuracy",
+          keywords: ["loop analysis", "predictions", "forecast", "uam", "zt"],
+          scopes: [READ.glucose, READ.treatments, READ.devices, READ.reports],
+          icon: Target,
+          status: "available",
+          memberOnly: true,
+        },
+        {
+          title: "Loop health",
+          description: "How much of the time the loop was closed",
+          href: "/reports/loop-analysis/loop-health",
+          keywords: ["loop analysis", "closed loop", "open loop", "limits", "sensitivity ratio"],
+          scopes: [READ.glucose, READ.treatments, READ.reports],
+          icon: Repeat,
+          status: "available",
+          memberOnly: true,
+        },
+        {
+          title: "Settings evidence",
+          description: "Your profile settings compared with your data",
+          href: "/reports/loop-analysis/settings-evidence",
+          keywords: ["loop analysis", "basal", "isf", "carb ratio", "profile settings"],
+          scopes: [READ.glucose, READ.treatments, READ.therapy, READ.reports],
+          icon: SlidersHorizontal,
+          status: "available",
+          memberOnly: true,
+        },
+      ],
+    },
   ];
+}
+
+/** A report's full title: a page of a report made of several is named with that report. */
+export function reportTitle(category: ReportCategory, report: ReportItem): string {
+  return category.pages ? `${category.title}: ${report.title}` : report.title;
 }
 
 /** The viewer a report list is built for. */
@@ -334,18 +434,23 @@ export function visibleReportCategories(
     .filter((c) => c.reports.length > 0);
 }
 
-/** Flat list of available report items for sidebar navigation, per viewer. */
+/**
+ * Flat list of available report items for sidebar navigation, per viewer. A report made of several
+ * pages is one entry, at the report's own address.
+ */
 export function getSidebarReportItems(viewer: ReportViewer): {
   title: string;
   href: string;
   icon: IconComponent;
 }[] {
-  return visibleReportCategories(viewer)
-    .flatMap((c) => c.reports)
-    .filter((r) => r.status === "available")
-    .map((r) => ({
+  return visibleReportCategories(viewer).flatMap((c) => {
+    const available = c.reports.filter((r) => r.status === "available");
+    if (c.pages)
+      return available.length > 0 ? [{ title: c.title, href: c.pages.href, icon: c.icon }] : [];
+    return available.map((r) => ({
       title: r.sidebarTitle ?? r.title,
       href: r.href,
       icon: r.icon,
     }));
+  });
 }

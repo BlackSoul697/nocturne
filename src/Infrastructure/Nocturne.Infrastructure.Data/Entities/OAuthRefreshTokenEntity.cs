@@ -39,7 +39,10 @@ public class OAuthRefreshTokenEntity : ITenantScoped
     public string TokenHash { get; set; } = string.Empty;
 
     /// <summary>
-    /// When this token was issued
+    /// When this token was issued.
+    /// NocturneDbContext stamps this on insert, unconditionally: a value assigned before the insert
+    /// does not survive it, so an imported token's original issue time can only be applied by a
+    /// second save against the inserted row.
     /// </summary>
     [Column("issued_at")]
     public DateTime IssuedAt { get; set; }
@@ -62,6 +65,12 @@ public class OAuthRefreshTokenEntity : ITenantScoped
     /// </summary>
     [Column("replaced_by_id")]
     public Guid? ReplacedById { get; set; }
+
+    /// <summary>
+    /// How many times this token was redeemed after its rotation, inside the reuse grace window.
+    /// </summary>
+    [Column("grace_redemptions")]
+    public int GraceRedemptions { get; set; }
 
     /// <summary>
     /// Whether this token has been revoked

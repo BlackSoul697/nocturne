@@ -1,10 +1,12 @@
 using Microsoft.AspNetCore.Http;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.Extensions.Logging;
 using Moq;
 using Nocturne.API.Middleware;
 using Nocturne.API.Services.Audit;
 using Nocturne.API.Services.Auth;
+using Nocturne.API.Tests.TestDoubles;
 using Nocturne.Core.Contracts.Auth;
 using Nocturne.Core.Models.Authorization;
 using Nocturne.Infrastructure.Data;
@@ -256,6 +258,73 @@ public class AuthAuditServiceTests : IDisposable
         Assert.Null(row.TraceId);
     }
 
+    [Fact]
+    public async Task Log_ThatFailsToWriteLeavesTheCallersNextSaveUntouched()
+    {
+        await using var dbContext = CreateContextThatRejectsAuditRows();
+        await CreateService(dbContext).LogAsync(AuthAuditEventType.Login, _subjectId, success: true);
+
+        var laterSubjectId = Guid.CreateVersion7();
+        dbContext.Subjects.Add(new SubjectEntity { Id = laterSubjectId, Name = "Later", IsActive = true });
+        await dbContext.SaveChangesAsync();
+
+        await using var reader = _db.CreateContext();
+        Assert.Empty(await reader.AuthAuditLog.ToListAsync());
+        Assert.True(await reader.Subjects.AnyAsync(s => s.Id == laterSubjectId));
+    }
+
+    [Fact]
+    public async Task Log_ThatFailsToWriteKeepsTheChangesTheCallerHadPending()
+    {
+        await using var dbContext = CreateContextThatRejectsAuditRows();
+        var pendingSubjectId = Guid.CreateVersion7();
+        dbContext.Subjects.Add(new SubjectEntity { Id = pendingSubjectId, Name = "Pending", IsActive = true });
+
+        await CreateService(dbContext).LogAsync(AuthAuditEventType.Login, _subjectId, success: true);
+        await dbContext.SaveChangesAsync();
+
+        await using var reader = _db.CreateContext();
+        Assert.Empty(await reader.AuthAuditLog.ToListAsync());
+        Assert.True(await reader.Subjects.AnyAsync(s => s.Id == pendingSubjectId));
+    }
+
+    /// <summary>
+    /// A context pinned to the test tenant on which any save carrying a new audit row throws
+    /// before it reaches the database. Failing the write here rather than through a constraint
+    /// keeps these tests independent of the audit table's foreign keys.
+    /// </summary>
+    private NocturneDbContext CreateContextThatRejectsAuditRows() =>
+        new(new DbContextOptionsBuilder<NocturneDbContext>(_db.Options)
+            .AddInterceptors(new AuditRowRejector())
+            .Options)
+        {
+            TenantId = _tenantId,
+        };
+
+    private static AuthAuditService CreateService(NocturneDbContext dbContext) =>
+        new(
+            dbContext.AsFactory(),
+            new HttpContextAccessor { HttpContext = new DefaultHttpContext() },
+            new AuditContext(),
+            new Mock<ILogger<AuthAuditService>>().Object);
+
+    private sealed class AuditRowRejector : SaveChangesInterceptor
+    {
+        public override ValueTask<InterceptionResult<int>> SavingChangesAsync(
+            DbContextEventData eventData,
+            InterceptionResult<int> result,
+            CancellationToken cancellationToken = default)
+        {
+            if (eventData.Context!.ChangeTracker.Entries<AuthAuditLogEntity>()
+                .Any(e => e.State == EntityState.Added))
+            {
+                throw new DbUpdateException("Audit storage is unavailable.");
+            }
+
+            return base.SavingChangesAsync(eventData, result, cancellationToken);
+        }
+    }
+
     /// <summary>
     /// Writes one event through the real service on a context pinned to
     /// <paramref name="pinnedTenantId"/>, with <paramref name="caller"/> on the ambient request,
@@ -283,13 +352,13 @@ public class AuthAuditServiceTests : IDisposable
         {
             httpContext.TraceIdentifier = requestTrace;
             await new AuditContextMiddleware(_ => Task.CompletedTask)
-                .InvokeAsync(httpContext, auditContext);
+                .InvokeAsync(httpContext, auditContext, CredentialRouteRedactor.Create());
         }
 
         await using var dbContext = _db.CreateContext(pinnedTenantId ?? Guid.Empty);
 
         var service = new AuthAuditService(
-            dbContext,
+            dbContext.AsFactory(),
             new HttpContextAccessor { HttpContext = httpContext },
             auditContext,
             new Mock<ILogger<AuthAuditService>>().Object);

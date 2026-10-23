@@ -68,12 +68,20 @@ export function AlertCard(props: {
  * none of the card's content, so an edit would have to replace the reading,
  * trend, subject and timestamp with this summary.
  */
-export function AcknowledgedCard(props: { detail: string }) {
+export function AcknowledgedCard(props: { title?: string; detail: string }) {
   return (
-    <Card title="Alert acknowledged">
+    <Card title={props.title ?? "Alert acknowledged"}>
       <CardText>{props.detail}</CardText>
     </Card>
   );
+}
+
+function status(excursion: ActiveExcursion): string {
+  if (excursion.acknowledgedAt) return "Acknowledged";
+  if (excursion.snoozedUntil) {
+    return `Snoozed until ${new Date(excursion.snoozedUntil).toLocaleTimeString()}`;
+  }
+  return "Firing";
 }
 
 export function ActiveAlertsCard(props: { excursions: ActiveExcursion[] }) {
@@ -84,7 +92,7 @@ export function ActiveAlertsCard(props: { excursions: ActiveExcursion[] }) {
           <Field
             key={excursion.id}
             label={excursion.ruleName ?? "Alert"}
-            value={`${excursion.acknowledgedAt ? "Acknowledged" : "Firing"}, started ${
+            value={`${status(excursion)}, started ${
               excursion.startedAt
                 ? timeAgo(new Date(excursion.startedAt).getTime())
                 : "at an unknown time"

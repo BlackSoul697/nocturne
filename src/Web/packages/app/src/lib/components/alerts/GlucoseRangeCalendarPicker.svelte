@@ -22,9 +22,11 @@
     startOfWeek,
     today,
   } from "@internationalized/date";
-  import { ChevronLeft, ChevronRight } from "lucide-svelte";
+  import ChevronLeft from "@lucide/svelte/icons/chevron-left";
+  import ChevronRight from "@lucide/svelte/icons/chevron-right";
   import { Button } from "$lib/components/ui/button";
   import GlucosePickerCell from "$lib/components/alerts/GlucosePickerCell.svelte";
+  import TimeZoneNote from "$lib/components/reports/TimeZoneNote.svelte";
   import { getPunchCardData } from "$api/generated/statistics.generated.remote";
   import { formatLocale } from "$lib/utils/formatting";
 
@@ -269,6 +271,14 @@
       </div>
     {/each}
   </div>
+
+  {#if punchCardQuery.current?.timeZoneUnavailableReason}
+    <p class="mb-2 text-sm text-muted-foreground">
+      <TimeZoneNote reason={punchCardQuery.current.timeZoneUnavailableReason}>
+        This calendar cannot show each day's glucose trace.
+      </TimeZoneNote>
+    </p>
+  {/if}
 
   <!-- svelte-ignore a11y_no_static_element_interactions -->
   <div class="grid grid-cols-7 gap-1" onmouseleave={onMouseLeave}>

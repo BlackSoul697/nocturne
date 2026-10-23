@@ -1,4 +1,5 @@
 <script lang="ts">
+    import { resolve } from "$app/paths";
     import NextSteps from "$lib/components/docs/NextSteps.svelte";
     import SupportNocturne from "$lib/components/docs/SupportNocturne.svelte";
     import PasswordGenerator from "$lib/components/docs/PasswordGenerator.svelte";
@@ -62,7 +63,7 @@
         <li>
             Fill in the configuration form. Set a strong password for each PostgreSQL role and a
             unique <code class="text-xs bg-muted/50 px-1.5 py-0.5 rounded">INSTANCE_KEY</code>
-            (minimum 12 characters). Use the generator below for each secret field.
+            (minimum 32 characters). Use the generator below for each secret field.
         </li>
         <li class="list-none -ml-5">
             <PasswordGenerator label="password" />
@@ -76,6 +77,18 @@
         <p>
             Leave Discord, Telegram, Slack, and WhatsApp fields blank if you don't need them.
             They can be configured later by updating the stack.
+        </p>
+    </Callout>
+
+    <Callout type="warning" title="PostgreSQL host-directory storage">
+        <p>
+            Portainer's stack editor and app template use the default named Docker volume;
+            Portainer does not apply Compose override files. To put PostgreSQL data in a host
+            directory, deploy the Docker Compose bundle from the command line with both
+            <code class="text-xs bg-muted/50 px-1 py-0.5 rounded">docker-compose.yaml</code>
+            and <code class="text-xs bg-muted/50 px-1 py-0.5 rounded">docker-compose.bind-data.yaml</code>.
+            See the <a href={resolve("/docs/installation/docker-compose")} class="text-primary hover:underline">Docker Compose guide</a>
+            for setup and existing-database migration precautions.
         </p>
     </Callout>
 
@@ -125,7 +138,7 @@
 
     <h2 class="text-2xl font-bold mt-8 mb-4">Updating</h2>
     <p class="text-muted-foreground mb-4">
-        Watchtower is included and checks for image updates daily. To update manually in Portainer:
+        Watchtower is included and checks for image updates daily, except for Caddy and Postgres. To update everything, including Caddy and Postgres, in Portainer:
     </p>
     <ol class="list-decimal list-inside space-y-2 text-muted-foreground mb-8">
         <li>Navigate to your <strong class="text-foreground">nocturne</strong> stack</li>
@@ -134,6 +147,15 @@
         <li>Check <strong class="text-foreground">Re-pull image and redeploy</strong></li>
         <li>Click <strong class="text-foreground">Update</strong></li>
     </ol>
+
+    <h2 class="text-2xl font-bold mt-8 mb-4">Restarts and logs</h2>
+    <p class="text-muted-foreground mb-8">
+        The stack uses the same restart policy and log rotation as the
+        <a href={resolve("/docs/installation/docker-compose")} class="text-primary hover:underline">Docker Compose bundle</a>.
+        Portainer stacks do not read override files, so to keep your own logging driver,
+        edit the <code class="text-xs bg-muted/50 px-1.5 py-0.5 rounded">logging</code>
+        section of each service in the stack editor instead.
+    </p>
 
     <h2 class="text-2xl font-bold mt-8 mb-4">Connectors</h2>
     <p class="text-muted-foreground mb-8">

@@ -1,9 +1,7 @@
-import {
-  Bell,
-  BellRing,
-  MonitorSmartphone,
-  Webhook as WebhookIcon,
-} from "lucide-svelte";
+import Bell from "@lucide/svelte/icons/bell";
+import BellRing from "@lucide/svelte/icons/bell-ring";
+import MonitorSmartphone from "@lucide/svelte/icons/monitor-smartphone";
+import WebhookIcon from "@lucide/svelte/icons/webhook";
 import { ChannelType } from "$api-clients";
 
 /**
@@ -43,17 +41,10 @@ export interface ChannelMetaEntry {
 /** All known channel kinds. Kept in display order for the picker. */
 export const CHANNEL_META: ChannelMetaEntry[] = [
   {
-    type: ChannelType.WebPush,
-    label: "Browser Push",
-    description: "Receive alerts directly in your browser",
-    icon: Bell,
-  },
-  {
     type: ChannelType.InApp,
     label: "In-App",
     description: "Show alerts in the Nocturne notification centre",
     icon: BellRing,
-    destinationHelper: "Routed to your account automatically.",
   },
   {
     type: ChannelType.Webhook,

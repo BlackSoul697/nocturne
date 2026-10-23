@@ -6,7 +6,11 @@
     getCustomSounds,
     previewAlarmSound,
     stopPreview,
+    CustomSoundRejectedError,
+    CUSTOM_SOUND_ACCEPT,
+    MAX_CUSTOM_SOUND_SIZE_MB,
     type CustomAlarmSound,
+    type CustomSoundRejection,
   } from "$lib/audio/alarm-sounds";
   import { Button } from "$lib/components/ui/button";
   import { Input } from "$lib/components/ui/input";
@@ -20,17 +24,15 @@
     DialogTitle,
     DialogTrigger,
   } from "$lib/components/ui/dialog";
-  import {
-    Upload,
-    Trash2,
-    Play,
-    Square,
-    Music,
-    FileAudio,
-    AlertCircle,
-    Check,
-    Loader2,
-  } from "lucide-svelte";
+  import Upload from "@lucide/svelte/icons/upload";
+  import Trash2 from "@lucide/svelte/icons/trash-2";
+  import Play from "@lucide/svelte/icons/play";
+  import Square from "@lucide/svelte/icons/square";
+  import Music from "@lucide/svelte/icons/music";
+  import FileAudio from "@lucide/svelte/icons/file-headphone";
+  import AlertCircle from "@lucide/svelte/icons/circle-alert";
+  import Check from "@lucide/svelte/icons/check";
+  import Loader2 from "@lucide/svelte/icons/loader-circle";
 
   interface Props {
     onSoundSelected?: (soundId: string) => void;
@@ -79,6 +81,22 @@
     }
   }
 
+  // @wc-ignore
+  const FORMATS = "MP3, WAV, OGG, FLAC, WebM, M4A, AAC";
+
+  function describeRejection(reason: CustomSoundRejection): string {
+    switch (reason) {
+      case "unsupported-type":
+        return `Choose one of these formats: ${FORMATS}`;
+      case "too-large":
+        return `The file is larger than ${MAX_CUSTOM_SOUND_SIZE_MB} MB`;
+      case "undecodable":
+        return "This file could not be played. Check that it is a valid audio file.";
+      case "timed-out":
+        return "The audio file took too long to load";
+    }
+  }
+
   async function handleUpload() {
     if (!selectedFile) return;
 
@@ -101,7 +119,12 @@
       // Select the newly uploaded sound
       onSoundSelected?.(sound.id);
     } catch (err) {
-      error = err instanceof Error ? err.message : "Failed to upload sound";
+      error =
+        err instanceof CustomSoundRejectedError
+          ? describeRejection(err.reason)
+          : err instanceof Error
+            ? err.message
+            : "Failed to upload sound";
     } finally {
       isUploading = false;
     }
@@ -152,7 +175,7 @@
     <div>
       <Label size="lg">Custom Sounds</Label>
       <p class="text-sm text-muted-foreground">
-        Upload your own alarm sounds (MP3, WAV, OGG, up to 5MB)
+        Upload your own alarm sounds ({FORMATS}, up to {MAX_CUSTOM_SOUND_SIZE_MB} MB)
       </p>
     </div>
 
@@ -189,7 +212,7 @@
               <Input
                 id="audio-file"
                 type="file"
-                accept="audio/mpeg,audio/wav,audio/ogg,audio/webm,audio/mp4,audio/aac,.mp3,.wav,.ogg,.webm,.m4a,.aac"
+                accept={CUSTOM_SOUND_ACCEPT}
                 onchange={handleFileSelect}
                 bind:ref={fileInput}
                 class="flex-1"

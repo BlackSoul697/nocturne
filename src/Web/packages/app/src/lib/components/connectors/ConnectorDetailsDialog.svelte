@@ -8,20 +8,18 @@
   import { getDataTypeLabel } from "$lib/utils/data-type-labels";
   import { triggerConnectorSync } from "$api/generated/services.generated.remote";
   import { describeSubmitError } from "$lib/forms/submit-error";
-  import { satisfiesScope } from "$lib/authorization/scopes";
+  import { canManageConnectors } from "$lib/authorization/connector-management";
   import { page } from "$app/state";
-  import {
-    Cloud,
-    Loader2,
-    Clock,
-    CheckCircle,
-    WifiOff,
-    AlertCircle,
-    Download,
-    RefreshCw,
-    Database,
-    Wrench,
-  } from "lucide-svelte";
+  import Cloud from "@lucide/svelte/icons/cloud";
+  import Loader2 from "@lucide/svelte/icons/loader-circle";
+  import Clock from "@lucide/svelte/icons/clock";
+  import CheckCircle from "@lucide/svelte/icons/circle-check-big";
+  import WifiOff from "@lucide/svelte/icons/wifi-off";
+  import AlertCircle from "@lucide/svelte/icons/circle-alert";
+  import Download from "@lucide/svelte/icons/download";
+  import RefreshCw from "@lucide/svelte/icons/refresh-cw";
+  import Database from "@lucide/svelte/icons/database";
+  import Wrench from "@lucide/svelte/icons/wrench";
   import {
     SyncDataType,
     type ConnectorCapabilities,
@@ -29,7 +27,10 @@
   } from "$lib/api/generated/nocturne-api-client";
   import type { SyncRequestInput } from "$lib/api/generated/schemas";
   import type { ConnectorStatusWithDescription } from "./ServerConnectorsCard.svelte";
-  import { formatNumber, lastSeen } from "$lib/utils/formatting";
+  import {
+    formatNumber,
+    lastSeen,
+  } from "$lib/utils/formatting";
   import { SkippedRecordsNote } from "$lib/components/shared";
 
   interface Props {
@@ -47,7 +48,10 @@
   }: Props = $props();
 
   const canManage = $derived(
-    satisfiesScope(page.data.effectivePermissions ?? [], "tenant.settings")
+    canManageConnectors(
+      page.data.effectivePermissions,
+      page.data.refusedAsDemoSubject
+    )
   );
 
   let granularSyncFrom = $state("");
@@ -271,7 +275,13 @@
 
           <div class="space-y-3">
             <div class="flex items-center justify-between">
-              <span class="text-sm text-muted-foreground">Total records</span>
+              <span class="text-sm text-muted-foreground">
+                {#if selectedConnector.totalEntriesWindowDays == null}
+                  Records in total
+                {:else}
+                  Records in the last {selectedConnector.totalEntriesWindowDays} days
+                {/if}
+              </span>
               <Tooltip.Root>
                 <Tooltip.Trigger variant="term">
                   <span class="font-mono font-medium">
@@ -443,6 +453,7 @@
                 {/if}
                 <SkippedRecordsNote
                   deleted={granularSyncResult.itemsSkipped}
+                  refused={granularSyncResult.itemsRefused}
                   class="mt-1 text-muted-foreground"
                 />
               </div>
@@ -497,6 +508,7 @@
                   {/if}
                   <SkippedRecordsNote
                     deleted={foodOnlySyncResult.itemsSkipped}
+                    refused={foodOnlySyncResult.itemsRefused}
                     class="mt-1 text-muted-foreground"
                   />
                 </div>

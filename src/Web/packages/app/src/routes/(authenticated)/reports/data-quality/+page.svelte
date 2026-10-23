@@ -13,11 +13,12 @@
 		getSuggestions as getCompressionLowSuggestions,
 		triggerDetection as triggerCompressionLowDetection
 	} from '$api/generated/compressionLows.generated.remote';
+	import { getRejectedUploads } from '$api/generated/rejectedUploads.generated.remote';
 	import { contextResource } from '$lib/hooks/resource-context.svelte';
-	import ShieldCheck from 'lucide-svelte/icons/shield-check';
-	import Clock from 'lucide-svelte/icons/clock';
-	import ChevronRight from 'lucide-svelte/icons/chevron-right';
-	import RefreshCw from 'lucide-svelte/icons/refresh-cw';
+	import ShieldCheck from '@lucide/svelte/icons/shield-check';
+	import Clock from '@lucide/svelte/icons/clock';
+	import ChevronRight from '@lucide/svelte/icons/chevron-right';
+	import RefreshCw from '@lucide/svelte/icons/refresh-cw';
 	import type { CompressionLowSuggestion } from '$lib/api';
 	import FigureStrip from '$lib/components/reports/FigureStrip.svelte';
 	import { setReportPrintMeta } from '$lib/components/reports/print/report-print.svelte';
@@ -30,6 +31,9 @@
 	);
 
 	const suggestions = $derived(suggestionsResource.current ?? []);
+
+	const rejectedUploads = getRejectedUploads({ limit: 1 });
+	const rejectedCount = $derived(rejectedUploads.current?.pagination?.total ?? 0);
 
 	const pendingCount = $derived(
 		suggestions.filter((s: CompressionLowSuggestion) => s.status?.toLowerCase() === 'pending')
@@ -77,13 +81,12 @@
 </svelte:head>
 
 {#if suggestionsResource.current}
-	<div class="@container container mx-auto max-w-4xl space-y-6 p-3 @md:p-6">
+	<div class="@container space-y-6">
 		<div class="flex items-center gap-3">
 			<div class="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10 print:hidden">
 				<ShieldCheck class="h-5 w-5 text-primary" />
 			</div>
 			<div>
-				<h1 class="text-2xl font-bold tracking-tight print:hidden">Data Quality</h1>
 				<p class="text-muted-foreground print:hidden">Spot readings that may come from the sensor rather than your glucose</p>
 				<h2 class="hidden text-lg font-semibold print:block">Compression lows by review status</h2>
 			</div>
@@ -145,6 +148,25 @@
 						<ChevronRight class="size-4 shrink-0 text-muted-foreground transition-transform group-hover/link:translate-x-0.5" aria-hidden="true" />
 					</a>
 				</li>
+				{#if rejectedUploads.current}
+				<li>
+					<a
+						href={resolve("/reports/data-quality/rejected-uploads")}
+						class="group/link -mx-2 flex items-center gap-3 rounded-md px-2 py-3 transition-colors hover:bg-accent/50"
+					>
+						<div class="min-w-0 flex-1">
+							<div class="font-medium text-foreground">Rejected Uploads</div>
+							<div class="text-sm text-muted-foreground">
+								Records an uploader sent that Nocturne could not store
+							</div>
+							<div class="mt-1 text-sm text-muted-foreground tabular-nums">
+								{rejectedCount} records
+							</div>
+						</div>
+						<ChevronRight class="size-4 shrink-0 text-muted-foreground transition-transform group-hover/link:translate-x-0.5" aria-hidden="true" />
+					</a>
+				</li>
+				{/if}
 			</ul>
 		</section>
 

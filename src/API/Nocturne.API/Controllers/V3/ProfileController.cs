@@ -2,6 +2,7 @@ using System.Text.Json;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Nocturne.API.Attributes;
+using Nocturne.API.Configuration;
 using Nocturne.API.Authorization;
 using Nocturne.Core.Models.Authorization;
 using Nocturne.Core.Contracts.Legacy;
@@ -66,15 +67,12 @@ public class ProfileController : BaseV3Controller<Profile>
             var profiles = await _projectionService.GetProfilesAsync(
                 count: parameters.Limit,
                 skip: parameters.Offset,
+                descending: parameters.Sort.Descending,
                 ct: cancellationToken
             );
 
             var profilesList = profiles.ToList();
 
-            // Get total count for pagination
-            var totalCount = await _projectionService.CountProfilesAsync(
-                ct: cancellationToken
-            ); // Check for conditional requests (304 Not Modified)
             var lastModified = GetLastModified(profilesList.Cast<object>());
 
             if (lastModified.HasValue && ShouldReturn304(lastModified.Value, parameters))
@@ -89,7 +87,11 @@ public class ProfileController : BaseV3Controller<Profile>
 
             // CreateV3CollectionResponse returns the {status, result} envelope IActionResult;
             // wrapping it in Ok(...) again would serialize the ActionResult object itself.
-            return (ActionResult)CreateV3CollectionResponse(profilesList, parameters, totalCount);
+            return (ActionResult)CreateV3CollectionResponse(
+                profilesList.Select(p => ToV3Document(p, p.Id)).ToList(),
+                parameters,
+                lastModified
+            );
         }
         catch (ArgumentException ex)
         {
@@ -101,15 +103,15 @@ public class ProfileController : BaseV3Controller<Profile>
     /// <summary>
     /// Get profiles modified since a given timestamp (for AAPS incremental sync).
     /// </summary>
-    /// <param name="lastModified">Unix timestamp in milliseconds. Only profiles newer than this time are returned.</param>
+    /// <param name="lastModified">Unix timestamp in milliseconds. Only profiles modified after this time are returned.</param>
     /// <param name="limit">Maximum number of profiles to return (1-100, default 10).</param>
     /// <param name="cancellationToken">Cancellation token.</param>
-    /// <returns>V3 collection of <see cref="Profile"/> records newer than the given timestamp.</returns>
+    /// <returns>V3 collection of <see cref="Profile"/> records modified since the given timestamp.</returns>
     /// <remarks>
     /// AAPS calls this on every incremental profile sync after the first load; without this
     /// route its profile cursor never advances and it re-requests (and errors) every cycle.
     /// </remarks>
-    /// <response code="200">Profiles newer than the given timestamp.</response>
+    /// <response code="200">Profiles modified since the given timestamp.</response>
     /// <response code="500">Internal server error.</response>
     [HttpGet("history/{lastModified:long}")]
     [NightscoutEndpoint("/api/v3/profile/history/{lastModified}")]
@@ -131,28 +133,18 @@ public class ProfileController : BaseV3Controller<Profile>
 
         limit = Math.Min(Math.Max(limit, 1), 100);
 
-        // The projection returns the newest `limit` profiles. A record newer than the
-        // cursor but older than this window is a superseded profile version; AAPS only
-        // activates the newest store in the page, so skipping it loses nothing.
-        var profiles = await _projectionService.GetProfilesAsync(
-            count: limit,
-            skip: 0,
-            ct: cancellationToken
-        );
-
         // Ascending order: AAPS activates the LAST element of the page.
-        var newerProfiles = profiles
-            .Where(p => p.Mills > lastModified)
-            .OrderBy(p => p.Mills)
-            .ToList();
+        var page = await _projectionService.GetProfilesModifiedSinceAsync(
+            lastModified,
+            limit,
+            cancellationToken
+        );
 
         // Echo the request cursor on an empty page so conditional clients always see
         // a parseable cursor ETag.
-        SetHistoryCursorHeaders(
-            newerProfiles.Count > 0 ? newerProfiles.Max(p => p.Mills) : lastModified
-        );
+        SetHistoryCursorHeaders(page.CursorMills ?? lastModified);
 
-        return CreateV3SuccessResponse(newerProfiles);
+        return CreateV3SuccessResponse(page.Records.Select(p => ToV3Document(p, p.Id)).ToList());
     }
 
     /// <summary>
@@ -190,8 +182,9 @@ public class ProfileController : BaseV3Controller<Profile>
             );
         }
 
-        var parameters = ParseV3QueryParameters(); // Apply field selection if specified
-        var result = ApplyFieldSelection(new[] { profile }, parameters.Fields).FirstOrDefault();
+        var parameters = ParseV3QueryParameters(readSort: false); // Apply field selection if specified
+        var result = ApplyFieldSelection(new[] { ToV3Document(profile, profile.Id) }, parameters.Fields)
+            .FirstOrDefault();
 
         _logger.LogDebug("Successfully returned profile with ID {Id}", id);
 
@@ -203,12 +196,12 @@ public class ProfileController : BaseV3Controller<Profile>
     /// </summary>
     /// <param name="profileData">Profile data to create (single object or array)</param>
     /// <param name="cancellationToken">Cancellation token</param>
-    /// <returns>Created profiles</returns>
+    /// <returns>The <see cref="V3CreateResponse"/> for one document; the created profiles for an array.</returns>
     [HttpPost]
     [Authorize]
     [RequireScope(Scope.TherapyReadWrite)]
     [NightscoutEndpoint("/api/v3/profile")]
-    [ProducesResponseType(typeof(Profile[]), 201)]
+    [ProducesResponseType(typeof(V3CreateResponse), 201)]
     [ProducesResponseType(typeof(V3ErrorResponse), 400)]
     [ProducesResponseType(500)]
     [ErrorEnvelope]
@@ -248,7 +241,13 @@ public class ProfileController : BaseV3Controller<Profile>
 
             _logger.LogDebug("Successfully created {Count} profiles", createdProfiles.Count());
 
-            return StatusCode(201, createdProfiles.ToArray());
+            if (profileData.ValueKind == JsonValueKind.Array)
+            {
+                return StatusCode(201, createdProfiles.ToArray());
+            }
+
+            var created = createdProfiles.First();
+            return V3Created(nameof(GetProfileById), created.Id);
         }
         catch (ArgumentException ex)
         {
@@ -329,12 +328,12 @@ public class ProfileController : BaseV3Controller<Profile>
     /// </summary>
     /// <param name="id">Profile ID to delete</param>
     /// <param name="cancellationToken">Cancellation token</param>
-    /// <returns>No content on success</returns>
+    /// <returns><c>{"status": 200}</c> on success</returns>
     [HttpDelete("{id}")]
     [Authorize]
     [RequireScope(Scope.TherapyReadWrite)]
     [NightscoutEndpoint("/api/v3/profile/{id}")]
-    [ProducesResponseType(204)]
+    [ProducesResponseType(200)]
     [ProducesResponseType(typeof(V3ErrorResponse), 404)]
     [ProducesResponseType(500)]
     [ErrorEnvelope]
@@ -362,7 +361,7 @@ public class ProfileController : BaseV3Controller<Profile>
 
         _logger.LogDebug("Successfully deleted profile with ID {Id}", id);
 
-        return NoContent();
+        return CreateV3DeleteResponse();
     }
 
     /// <summary>
@@ -403,11 +402,10 @@ public class ProfileController : BaseV3Controller<Profile>
         var identifierParts = new List<string>();
 
         if (
-            !string.IsNullOrEmpty(profile.CreatedAt)
-            && DateTime.TryParse(profile.CreatedAt, out var parsedDate)
+            UploaderTimestamp.TryParse(profile.CreatedAt, out var parsedDate)
         )
         {
-            identifierParts.Add(parsedDate.ToString("yyyy-MM-ddTHH:mm:ss.fffZ"));
+            identifierParts.Add(parsedDate.UtcDateTime.ToString("yyyy-MM-ddTHH:mm:ss.fffZ"));
         }
 
         // Add profile name if available for better identification
@@ -434,43 +432,15 @@ public class ProfileController : BaseV3Controller<Profile>
     /// <returns>Collection of Profile objects</returns>
     private IEnumerable<Profile> ParseCreateRequestFromJsonElement(JsonElement jsonElement)
     {
-        var profileRecords = new List<Profile>();
-
         try
         {
-            if (jsonElement.ValueKind == JsonValueKind.Array)
-            {
-                foreach (var element in jsonElement.EnumerateArray())
-                {
-                    var profile = JsonSerializer.Deserialize<Profile>(
-                        element.GetRawText(),
-                        new JsonSerializerOptions { PropertyNameCaseInsensitive = true }
-                    );
-                    if (profile != null)
-                    {
-                        profileRecords.Add(profile);
-                    }
-                }
-            }
-            else if (jsonElement.ValueKind == JsonValueKind.Object)
-            {
-                var profile = JsonSerializer.Deserialize<Profile>(
-                    jsonElement.GetRawText(),
-                    new JsonSerializerOptions { PropertyNameCaseInsensitive = true }
-                );
-                if (profile != null)
-                {
-                    profileRecords.Add(profile);
-                }
-            }
+            return NightscoutJsonBody.ReadObjects<Profile>(jsonElement) ?? [];
         }
         catch (JsonException ex)
         {
             _logger.LogWarning(ex, "Failed to parse profile data from JsonElement");
             throw new ArgumentException("Invalid profile data format", ex);
         }
-
-        return profileRecords;
     }
 
 }

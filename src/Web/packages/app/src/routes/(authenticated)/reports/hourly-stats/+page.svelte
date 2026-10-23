@@ -3,7 +3,9 @@
   import * as Table from "$lib/components/ui/table";
   import { Badge } from "$lib/components/ui/badge";
   import { Button } from "$lib/components/ui/button";
-  import { ArrowRight, CircleDashed, Info } from "lucide-svelte";
+  import ArrowRight from "@lucide/svelte/icons/arrow-right";
+  import CircleDashed from "@lucide/svelte/icons/circle-dashed";
+  import Info from "@lucide/svelte/icons/info";
   import { getHourlyPatterns } from "$api/reports.remote";
   import {
     HourlyClockBasis,
@@ -15,6 +17,7 @@
   import { contextResource } from "$lib/hooks/resource-context.svelte";
   import { bg, bgLabel, bgRange, formatNumber, formatShortDate } from "$lib/utils/formatting";
   import HourlyRangeBars from "$lib/components/reports/hourly-patterns/HourlyRangeBars.svelte";
+  import TimeZoneNote from "$lib/components/reports/TimeZoneNote.svelte";
   import HourlyGlance from "$lib/components/reports/hourly-patterns/HourlyGlance.svelte";
   import { hourSpan } from "$lib/components/reports/hourly-patterns/hour-labels";
 
@@ -63,7 +66,7 @@
 </svelte:head>
 
 {#if report}
-  <div class="@container space-y-6 p-3 @md:p-6">
+  <div class="@container space-y-6">
     <header class="max-w-3xl space-y-2">
       <p class="text-sm text-muted-foreground print:hidden">
         {dateRangeDisplay} • {patternsResource.date.dayCount} days
@@ -189,26 +192,10 @@
                 {#if onTenantClock}
                   Hours follow the time zone set in the profile settings ({report.timeZone}).
                 {:else}
-                  {#if fallbackReason === TimeZoneUnavailableReason.Share}
-                    A shared link cannot see the time zone this data belongs to,
-                  {:else if fallbackReason === TimeZoneUnavailableReason.LookupFailed}
-                    The time zone for this data could not be loaded just now,
-                  {:else if fallbackReason === TimeZoneUnavailableReason.Unrecognised}
-                    The time zone in the profile settings for this data isn't one this server
-                    recognises,
-                  {:else}
-                    No time zone is set in the profile settings for this data,
-                  {/if}
-                  so each reading is placed at the local time the device that recorded it
-                  reported. If readings came from devices set to different time zones, some
-                  hours may be off.
-                  {#if fallbackReason === TimeZoneUnavailableReason.NotConfigured}
-                    Setting a time zone in the profile settings fixes this.
-                  {:else if fallbackReason === TimeZoneUnavailableReason.Unrecognised}
-                    Correcting the time zone in the profile settings fixes this.
-                  {:else if fallbackReason === TimeZoneUnavailableReason.LookupFailed}
-                    Reloading the report later may fix this.
-                  {/if}
+                  <TimeZoneNote reason={fallbackReason ?? TimeZoneUnavailableReason.NotConfigured}>
+                    This report places each reading at the local time that the device
+                    reported. If the devices use different time zones, some hours can be incorrect.
+                  </TimeZoneNote>
                 {/if}
               </p>
             </div>

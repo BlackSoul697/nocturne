@@ -2,6 +2,19 @@ using System.Text.Json.Serialization;
 
 namespace Nocturne.Core.Models.Services;
 
+public class YearSummaryResponse
+{
+    [JsonPropertyName("dailySummary")]
+    public DailySummaryResponse? DailySummary { get; set; }
+
+    [JsonPropertyName("griTimeline")]
+    public GriTimelineResponse? GriTimeline { get; set; }
+
+    /// <summary>Why neither report is present; null when the tenant's timezone resolved.</summary>
+    [JsonPropertyName("timeZoneUnavailableReason")]
+    public TimeZoneUnavailableReason? TimeZoneUnavailableReason { get; set; }
+}
+
 /// <summary>
 /// Response for GET /api/v4/year-overview/gri-timeline
 /// </summary>
@@ -12,6 +25,10 @@ public class GriTimelineResponse
 
     [JsonPropertyName("periods")]
     public GriTimelinePeriod[] Periods { get; set; } = [];
+
+    /// <summary>Why <see cref="Periods"/> is empty; null when the tenant's timezone resolved.</summary>
+    [JsonPropertyName("timeZoneUnavailableReason")]
+    public TimeZoneUnavailableReason? TimeZoneUnavailableReason { get; set; }
 }
 
 /// <summary>
@@ -51,6 +68,10 @@ public class DataOverviewYearsResponse
 
     [JsonPropertyName("availableDataSources")]
     public string[] AvailableDataSources { get; set; } = [];
+
+    /// <summary>Why <see cref="Years"/> is empty; null when the tenant's timezone resolved.</summary>
+    [JsonPropertyName("timeZoneUnavailableReason")]
+    public TimeZoneUnavailableReason? TimeZoneUnavailableReason { get; set; }
 }
 
 /// <summary>
@@ -66,6 +87,10 @@ public class DailySummaryResponse
 
     [JsonPropertyName("days")]
     public DailySummaryDay[] Days { get; set; } = [];
+
+    /// <summary>Why <see cref="Days"/> is empty; null when the tenant's timezone resolved.</summary>
+    [JsonPropertyName("timeZoneUnavailableReason")]
+    public TimeZoneUnavailableReason? TimeZoneUnavailableReason { get; set; }
 }
 
 /// <summary>
@@ -73,11 +98,16 @@ public class DailySummaryResponse
 /// </summary>
 public class EHbA1cTimelineResponse
 {
+    public A1cDisplayReferences A1cReferences => new();
     [JsonPropertyName("year")]
     public int Year { get; set; }
 
     [JsonPropertyName("points")]
     public EHbA1cPoint[] Points { get; set; } = [];
+
+    /// <summary>Why <see cref="Points"/> is empty; null when the tenant's timezone resolved.</summary>
+    [JsonPropertyName("timeZoneUnavailableReason")]
+    public TimeZoneUnavailableReason? TimeZoneUnavailableReason { get; set; }
 }
 
 /// <summary>
@@ -92,6 +122,8 @@ public class EHbA1cPoint
 
     [JsonPropertyName("estimatedA1cPercent")]
     public double EstimatedA1cPercent { get; set; }
+
+    public A1cDisplayValue A1cDisplay => A1cDisplayValue.FromPercent(EstimatedA1cPercent);
 
     [JsonPropertyName("weightedAverageGlucoseMgdl")]
     public double WeightedAverageGlucoseMgdl { get; set; }

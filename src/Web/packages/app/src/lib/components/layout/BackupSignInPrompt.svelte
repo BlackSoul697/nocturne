@@ -1,39 +1,34 @@
 <script lang="ts">
-  import { KeyRound, X } from "lucide-svelte";
+  import KeyRound from "@lucide/svelte/icons/key-round";
+  import X from "@lucide/svelte/icons/x";
   import { Banner } from "$lib/components/ui/banner";
   import { Button } from "$lib/components/ui/button";
-  import { listCredentials } from "$lib/api/generated/passkeys.generated.remote";
-  import {
-    getAll,
-    updateStatus,
-  } from "$lib/api/generated/coachMarks.generated.remote";
+  import { updateStatus } from "$lib/api/generated/coachMarks.generated.remote";
 
   // Persisted with the coach marks, so the dismissal is stored per subject per
   // tenant rather than per browser.
   const MARK_KEY = "account.backup-sign-in";
 
-  const credentialsQuery = listCredentials();
-  const marksQuery = getAll();
+  interface Props {
+    show: boolean;
+  }
 
-  const hasSingleSignInMethod = $derived(
-    credentialsQuery.current?.hasSingleSignInMethod === true
-  );
-  const dismissed = $derived(
-    marksQuery.current?.some(
-      (mark) => mark.markKey === MARK_KEY && mark.status === "dismissed"
-    ) === true
-  );
+  let { show }: Props = $props();
+
+  let dismissedHere = $state(false);
 
   async function dismiss() {
+    dismissedHere = true;
     try {
       await updateStatus({ key: MARK_KEY, request: { status: "dismissed" } });
     } catch (err) {
+      dismissedHere = false;
       console.error("Failed to dismiss the backup sign-in prompt:", err);
     }
   }
 </script>
 
-{#if hasSingleSignInMethod && !dismissed}
+{#if show && !dismissedHere}
   <Banner variant="warning" class="items-start">
     <div class="flex items-start gap-2">
       <KeyRound class="mt-0.5 h-4 w-4 shrink-0" />
@@ -41,7 +36,7 @@
         <p class="font-medium">Add a backup way to sign in</p>
         <p>
           There is one way into this account. Add a second passkey, link a
-          sign-in method, or save recovery codes &mdash; one-time codes you can
+          sign-in method, or save recovery codes, which are one-time codes you can
           type in if you lose your device.
         </p>
       </div>

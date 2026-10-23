@@ -2,13 +2,16 @@
   import { LineChart } from "layerchart";
   import { parseDate } from "@internationalized/date";
   import { Button } from "$lib/components/ui/button";
-  import { ChevronLeft, ChevronRight, Calendar } from "lucide-svelte";
+  import ChevronLeft from "@lucide/svelte/icons/chevron-left";
+  import ChevronRight from "@lucide/svelte/icons/chevron-right";
+  import Calendar from "@lucide/svelte/icons/calendar";
   import { getWeekdayAverages } from "$api/reports.remote";
   import type { DayOfWeek } from "$lib/api";
   import { requireDateParamsContext } from "$lib/hooks/date-params.svelte";
   import { contextResource } from "$lib/hooks/resource-context.svelte";
   import { bg, bgLabel, formatShortDate, hourLabel } from "$lib/utils/formatting";
   import ChartKey from "$lib/components/charts/print/ChartKey.svelte";
+  import TimeZoneNote from "$lib/components/reports/TimeZoneNote.svelte";
   import { dashClass, type TextureKey } from "$lib/components/charts/print/chart-print-patterns";
 
   type Weekday = keyof typeof DayOfWeek;
@@ -65,7 +68,7 @@
   // x-axis reads as a time of day; each weekday's mean is shown in the display unit.
   const chartData = $derived.by(() => {
     const today = new Date();
-    return (weekdayResource.current ?? []).map((slot) => {
+    return (weekdayResource.current?.slots ?? []).map((slot) => {
       const row: { time: Date } & Partial<Record<Weekday, number>> = {
         time: new Date(
           today.getFullYear(),
@@ -101,7 +104,7 @@
 </script>
 
 {#if weekdayResource.current}
-<div class="@container space-y-6 p-3 @md:p-6">
+<div class="@container space-y-6">
   <!-- The compared date range stays visible in the layout's print header. -->
   <div class="flex flex-wrap items-center justify-center gap-2 @md:justify-start print:hidden">
     <Button variant="outline" size="icon" onclick={previousWeek}>
@@ -143,6 +146,12 @@
           shape: "line",
         }))}
       />
+    {:else if weekdayResource.current?.timeZoneUnavailableReason}
+      <p class="text-sm text-muted-foreground">
+        <TimeZoneNote reason={weekdayResource.current.timeZoneUnavailableReason}>
+          This report cannot average glucose by weekday and time of day.
+        </TimeZoneNote>
+      </p>
     {:else}
       <div
         class="flex h-[280px] items-center justify-center text-muted-foreground @md:h-[360px]"

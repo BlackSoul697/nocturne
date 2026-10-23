@@ -1,9 +1,11 @@
+using Nocturne.API.Multitenancy;
 using Nocturne.Connectors.Core.Interfaces;
 using Nocturne.Connectors.Nightscout.Configurations;
 using Nocturne.Connectors.Nightscout.Services;
 using Nocturne.Core.Contracts.Multitenancy;
 using System.Collections.Concurrent;
 using SocketIOClient;
+using Nocturne.Infrastructure.Data.Services;
 
 namespace Nocturne.API.Services.BackgroundServices;
 
@@ -44,15 +46,17 @@ public class NightscoutConnectorBackgroundService
     /// <param name="logger">Logger instance for this background service.</param>
     /// <param name="nudge">Delivers configuration writes for this connector.</param>
     /// <param name="metrics">Connector sync instruments.</param>
+    /// <param name="runGuard">Refuses a sync for a key another run already holds.</param>
     public NightscoutConnectorBackgroundService(
         IServiceProvider serviceProvider,
         ConnectorSyncBudget budget,
         ActiveTenantSnapshot activeTenants,
         ILogger<NightscoutConnectorBackgroundService> logger,
         ConnectorPollerNudge? nudge = null,
-        ConnectorSyncMetrics? metrics = null
+        ConnectorSyncMetrics? metrics = null,
+        TenantRunGuard? runGuard = null
     )
-        : base(serviceProvider, budget, activeTenants, logger, nudge, metrics) { }
+        : base(serviceProvider, budget, activeTenants, logger, nudge, metrics, runGuard) { }
 
     /// <inheritdoc />
     protected override async Task StartRealtimeListenersAsync(CancellationToken cancellationToken)
@@ -95,10 +99,10 @@ public class NightscoutConnectorBackgroundService
                 _socketClients, tenantId, tenantSlug, c => c.Connected, DisconnectAndDisposeAsync))
             return;
 
-        using var tenantScope = ServiceProvider.CreateScope();
-
-        var tenantAccessor = tenantScope.ServiceProvider.GetRequiredService<ITenantAccessor>();
-        tenantAccessor.SetTenant(new TenantContext(tenantId, tenantSlug, displayName, true, IsDemo: false));
+        await using var tenantScope = TenantJobScope.Open(
+            ServiceProvider,
+            new TenantContext(tenantId, tenantSlug, displayName, true, IsDemo: false),
+            AuditEndpoint);
 
         var loader = tenantScope.ServiceProvider
             .GetRequiredService<IConnectorConfigurationLoader<NightscoutConnectorConfiguration>>();

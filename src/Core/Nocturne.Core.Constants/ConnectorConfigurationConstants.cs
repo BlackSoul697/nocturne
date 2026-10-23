@@ -451,7 +451,7 @@ public static class ConnectorDefaults
     /// Default APNs environment for Loop push notifications.
     /// </summary>
     /// <seealso cref="ConnectorEnvironmentVariables.LoopPushServerEnvironment"/>
-    public const string LoopPushServerEnvironment = "development";
+    public const string LoopPushServerEnvironment = "production";
 }
 
 /// <summary>
@@ -581,7 +581,6 @@ public static class ConnectorTimeouts
     /// <summary>
     /// WebSocket reconnection and shutdown timing constants.
     /// </summary>
-    /// <seealso cref="WebSocketEvents"/>
     public static class WebSocket
     {
         /// <summary>
