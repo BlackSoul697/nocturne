@@ -247,7 +247,7 @@
       </div>
     {:else}
       {#each sections as section (section.key)}
-        <section class="space-y-3 rounded-lg border bg-card p-3 @md:p-4" aria-labelledby="settings-evidence-{section.key}">
+        <section class="space-y-3 rounded-lg border bg-card p-3 @md:p-4" aria-labelledby="settings-evidence-{section.key}" data-testid="loop-analysis-settings-evidence-{section.key}">
           <div class="space-y-1 px-1">
             <h3 id="settings-evidence-{section.key}" class="font-medium">{section.title}</h3>
             <p class="text-sm text-muted-foreground">{section.caption}</p>

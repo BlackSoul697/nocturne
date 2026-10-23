@@ -126,7 +126,7 @@
   const tooltipSlot = $derived(cursor.panel === id ? cursor.slot : null);
 </script>
 
-<div class="space-y-1">
+<div class="space-y-1" data-testid="loop-analysis-panel-{id}">
   <div class="flex items-baseline justify-between gap-2 px-1">
     <h3 class="text-sm font-medium">{title}</h3>
     <span id={unitId} class="text-xs text-muted-foreground">{unit}</span>

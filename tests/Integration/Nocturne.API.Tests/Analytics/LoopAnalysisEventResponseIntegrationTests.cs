@@ -148,6 +148,44 @@ public class LoopAnalysisEventResponseIntegrationTests(ApiIntegrationTestFixture
     }
 
     [Fact]
+    public async Task A_meal_before_the_range_announces_a_rise_at_its_start()
+    {
+        await SeedProfileAsync("Australia/Sydney");
+        var announced = WeekStart;
+        var unannounced = WeekStart.AddDays(1);
+
+        using (var scope = TenantScope())
+        {
+            await using var context = await scope.ServiceProvider.GetRequiredService<INocturneDbContextFactory>().CreateAsync();
+            // A climb of 3 mg/dL a minute from 110 to 200, held for an hour, then back to 110 at 1 a minute.
+            static double Rise(DateTime t, DateTime from)
+            {
+                var minutes = (t - from).TotalMinutes;
+                return minutes <= 0 ? 110 : minutes <= 90 ? Math.Min(200, 110 + minutes * 3) : Math.Max(110, 200 - (minutes - 90));
+            }
+            for (var t = WeekStart.AddHours(-4); t < WeekStart.AddDays(2); t = t.AddMinutes(5))
+                context.SensorGlucose.Add(new SensorGlucoseEntity
+                {
+                    Id = Guid.NewGuid(), Timestamp = t, DataSource = "test",
+                    Mgdl = t < unannounced.AddHours(-2) ? Rise(t, announced) : Rise(t, unannounced),
+                });
+            // Absorbed before the rise, so the entry announces it and carbs on board do not.
+            context.CarbIntakes.Add(new CarbIntakeEntity
+            {
+                Id = Guid.NewGuid(), Timestamp = announced.AddMinutes(-150), Carbs = 10, DataSource = "test",
+            });
+            await context.SaveChangesAsync();
+        }
+
+        var body = await GetOkAsync(AuthenticatedClient, Query($"{Week}&anchor1=UnannouncedRise"));
+
+        var cohort = body.GetProperty("primary").GetProperty("cohorts")[0];
+        cohort.GetProperty("events").GetInt32().Should().Be(1, "carbs 2.5 hours before a rise announce it, even before the range");
+        var at = body.GetProperty("primary").GetProperty("events")[0].GetProperty("at").GetDateTime().ToUniversalTime();
+        at.Should().BeCloseTo(unannounced, TimeSpan.FromMinutes(5));
+    }
+
+    [Fact]
     public async Task Returns_no_cohorts_without_a_tenant_timezone()
     {
         await SeedWeekAsync(WeekStart);

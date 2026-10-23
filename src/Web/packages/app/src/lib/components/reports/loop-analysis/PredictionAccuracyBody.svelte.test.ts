@@ -30,7 +30,7 @@ describe("PredictionAccuracyBody", () => {
     await expect.element(page.getByText(/Only the bias at \+30 min and \+60 min gives information/)).toBeVisible();
     await expect.element(page.getByText(/the average size of the\s+error, in either direction/)).toBeVisible();
     await expect.element(page.getByText(/oref gives its unannounced meal \(UAM\) curve only when/)).toBeVisible();
-    await expect.element(page.getByText(/oref stops its zero-temp curve/)).toBeVisible();
+    await expect.element(page.getByText(/oref removes the end of its zero-temp curve/)).toBeVisible();
     await expect.element(page.getByText(/Interrupted predictions are not included in any bias/)).toBeVisible();
     expect(page.getByText(/Faded horizons/).elements()).toHaveLength(0);
   });

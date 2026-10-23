@@ -196,7 +196,8 @@ public static class UnannouncedRises
     /// </summary>
     public const double MinimumCorroborationUnits = 0.2;
 
-    private const long DayMs = 24 * LocalSlotBinning.HourMs;
+    /// <summary>How far before the anchor the mean scheduled rate of <see cref="CorroborationBasalHours"/> is read.</summary>
+    public const long CorroborationScheduleMs = 24 * LocalSlotBinning.HourMs;
 
     /// <param name="glucose">Readings in time order.</param>
     /// <param name="exclusions">Time whose readings never qualify.</param>
@@ -377,7 +378,7 @@ public static class UnannouncedRises
     /// </summary>
     internal static bool Corroborated(NetInsulinAboveSchedule insulin, long anchor) =>
         insulin.Over(anchor, anchor + CorroborationMs).NetLoopCorrection
-            >= Math.Max(CorroborationBasalHours * MeanScheduledRate(insulin, anchor - DayMs, anchor), MinimumCorroborationUnits);
+            >= Math.Max(CorroborationBasalHours * MeanScheduledRate(insulin, anchor - CorroborationScheduleMs, anchor), MinimumCorroborationUnits);
 
     /// <summary>The mean scheduled rate over the time in <c>[from, to)</c> a schedule is known for, U/h; 0 where none is.</summary>
     private static double MeanScheduledRate(NetInsulinAboveSchedule insulin, long from, long to)

@@ -9,11 +9,23 @@ internal sealed partial class LoopAnalysisService
     private static readonly DeviceEventType[] SensorStartTypes = [DeviceEventType.SensorStart, DeviceEventType.SensorChange];
 
     /// <summary>
-    /// How far past the window either side each load reads, so an anchor at the edge of a range has
-    /// the carbs either side of it that decide a correction bolus or a rise, and the stable stretch
-    /// before a rise.
+    /// How far past the window's end each load reads, so an anchor at the end of a range has the
+    /// carbs after it that decide a correction bolus or a rise, and the climb that shows a rise.
     /// </summary>
     private const long EventMarginMs = LocalSlotBinning.HourMs;
+
+    /// <summary>
+    /// How far before the range each load reads. A climb at the start of an anchor's window decides
+    /// whether the anchor is isolated: it is told from a meal by carbs up to
+    /// <see cref="UnannouncedRises.CarbsBeforeMs"/> before it, and from the continuation of an earlier
+    /// climb by one up to <see cref="UnannouncedRises.MergeMs"/> before it, found only after a
+    /// <see cref="UnannouncedRises.StableMs"/> stretch. Corroboration reads the schedule
+    /// <see cref="UnannouncedRises.CorroborationScheduleMs"/> before a rise.
+    /// </summary>
+    private static long EventLookbackMs(EventWindow window) =>
+        Math.Max(
+            window.BeforeMs + Math.Max(UnannouncedRises.CarbsBeforeMs, UnannouncedRises.MergeMs + UnannouncedRises.StableMs),
+            UnannouncedRises.CorroborationScheduleMs);
 
     public async Task<EventResponseReport> GetEventResponseAsync(
         LoopAnalysisFilter filter, EventResponseDefinition definition, TimeZoneInfo zone, CancellationToken ct = default)
@@ -35,8 +47,9 @@ internal sealed partial class LoopAnalysisService
     }
 
     /// <summary>
-    /// The Daily profile's reads over <paramref name="range"/> widened by the window and
-    /// <see cref="EventMarginMs"/>, since an anchor near either end reads past it, and the sensor
+    /// The Daily profile's reads over <paramref name="range"/> widened by
+    /// <see cref="EventLookbackMs"/> before it and the window and <see cref="EventMarginMs"/> after
+    /// it, since an anchor near either end reads past it, and the sensor
     /// starts in the range when a cohort asks for them, from
     /// <see cref="EventAnchors.SensorSessionMergeMs"/> before it so a start just inside the range is
     /// merged with the change recorded just before it.
@@ -45,7 +58,7 @@ internal sealed partial class LoopAnalysisService
         Window range, EventWindow window, TimeZoneInfo zone, bool sensorStarts, DateTime? visibleFrom, long now,
         CancellationToken ct)
     {
-        var padded = new Window(range.From - window.BeforeMs - EventMarginMs, range.To + window.AfterMs + EventMarginMs);
+        var padded = new Window(range.From - EventLookbackMs(window), range.To + window.AfterMs + EventMarginMs);
         var sensorTask = sensorStarts
             ? deviceEventRepository.GetAsync(
                 ToUtc(range.From - EventAnchors.SensorSessionMergeMs), ToUtc(range.To), null, null, int.MaxValue, descending: false, ct: ct)

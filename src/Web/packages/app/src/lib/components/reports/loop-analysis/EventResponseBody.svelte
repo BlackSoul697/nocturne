@@ -349,7 +349,7 @@
           />
         {/if}
 
-        <section class="space-y-2" aria-labelledby="event-metrics-heading">
+        <section class="space-y-2" aria-labelledby="event-metrics-heading" data-testid="loop-analysis-event-metrics">
           <h3 id="event-metrics-heading" class="text-sm font-medium">What happened after each event</h3>
           <EventMetricsTable {cohorts} {primary} {comparison} backToStartMgdl={response.backToStartMgdl} />
         </section>
