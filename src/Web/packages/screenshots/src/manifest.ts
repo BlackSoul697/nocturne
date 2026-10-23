@@ -550,15 +550,20 @@ export const definitions: ScreenshotDefinition[] = [
 			]),
 		clip: '[data-testid="loop-analysis-daily-curves"]',
 		// Seeded data: the figures move every capture.
-		alt: 'The glucose chart of the Daily profile page, with the carbs chart under it. The carbs chart is the last chart on the page, and its axis shows the time of day for all the charts. On the glucose chart, a line shows the median glucose at each time of day. Two shaded bands around the line show the middle half and most of the readings. The target range is behind them. A key under the glucose chart gives the name of each band.',
+		alt: 'The glucose chart of the Daily profile page, with the carbs chart under it. The carbs chart is the last chart on the page. Its axis shows the time of day for all the charts. On the glucose chart, a line shows the median glucose at each time of day. Two shaded bands around the line show the middle half and most of the readings. The target range is behind them. A key under the glucose chart gives the name of each band.',
 	},
 	{
 		id: 'loop-analysis-net-correction',
 		route: '/reports/loop-analysis/daily-profile?days=7',
 		scenario: 'patient',
-		clip: '[data-testid="loop-analysis-net-correction"]',
+		prepare: (page) =>
+			showOnly(page, '[data-testid="loop-analysis-daily-curves"]', [
+				'[data-testid="loop-analysis-net-correction"]',
+				'[data-testid="loop-analysis-panel-carbs"]',
+			]),
+		clip: '[data-testid="loop-analysis-daily-curves"]',
 		// Seeded data: the figures move every capture.
-		alt: 'The net loop correction chart of the Daily profile page. A line shows the mean insulin that the loop added or removed at each time of day, above or below zero. A band shows the middle half of the temp basal change. Under the chart, switches add manual temps, suspends and inferred delivery as separate lines.',
+		alt: 'The net loop correction chart of the Daily profile page, with the carbs chart under it. The carbs chart is the last chart on the page. Its axis shows the time of day for all the charts. A line shows the mean insulin that the loop added or removed at each time of day, above or below zero. A band shows the middle half of the temp basal change. Under the net loop correction chart, switches add manual temps, suspends and inferred delivery as separate lines.',
 	},
 	{
 		id: 'loop-analysis-meals-events',
@@ -585,7 +590,7 @@ export const definitions: ScreenshotDefinition[] = [
 		},
 		clip: '[data-testid="loop-analysis-event-response"]',
 		// Seeded data: the figures move every capture.
-		alt: 'The change in glucose chart of the Meals and events page, with the carbs on board chart under it. The carbs on board chart is the last chart on the page, and its axis shows the hours before and after the event for all the charts. Above the charts, a key gives the colour of the meals and the number of meals. All meals are aligned at zero, the time of the meal. A line shows the median change in glucose from the start, with shaded bands for the spread, from one hour before to five hours after. A note under the charts tells what the bands show.',
+		alt: 'The change in glucose chart of the Meals and events page, with the carbs on board chart under it. The carbs on board chart is the last chart on the page. Its axis shows the hours before and after the event for all the charts. Above the charts, a key gives the colour of the meals and the number of meals. All meals are aligned at zero, the time of the meal. A line shows the median change in glucose from the start, with shaded bands for the spread, from one hour before to five hours after. A note under the charts gives the meaning of the bands.',
 	},
 	{
 		id: 'loop-analysis-event-metrics',
