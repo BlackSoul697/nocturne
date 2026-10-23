@@ -1,5 +1,4 @@
 using FluentAssertions;
-using Microsoft.Extensions.Logging.Abstractions;
 using Moq;
 using Nocturne.API.Services.Analytics;
 using Nocturne.API.Services.Profiles.Resolvers;
@@ -12,7 +11,6 @@ using Nocturne.Core.Contracts.V4.Repositories;
 using Nocturne.Core.Models;
 using Nocturne.Core.Models.LoopAnalysis;
 using Nocturne.Core.Models.V4;
-using Nocturne.Infrastructure.Data.Services;
 using Xunit;
 
 namespace Nocturne.API.Tests.Services.Analytics;
@@ -22,7 +20,7 @@ public class LoopAnalysisLoopHealthZoneTests
     private static readonly TimeZoneInfo Adelaide = TimeZoneInfo.FindSystemTimeZoneById("Australia/Adelaide");
 
     [Fact]
-    public async Task LoopHealth_ReadsADeviceWindowInTheZoneItWasGiven()
+    public async Task LoopHealth_ReadsADeviceWindowInTheDeviceDateZone()
     {
         var day = new DateOnly(2026, 6, 10);
         var cgm = new PatientDevice
@@ -87,6 +85,7 @@ public class LoopAnalysisLoopHealthZoneTests
             .Returns(new AidSystemMetrics());
 
         var canonical = CanonicalGlucosePassThrough.Create();
+        var deviceDates = DeviceDateClockDoubles.Resolver(profileZone: Adelaide.Id);
         var reader = new AidSystemMetricsReader(
             devices.Object,
             Mock.Of<IApsSnapshotRepository>(),
@@ -98,10 +97,7 @@ public class LoopAnalysisLoopHealthZoneTests
             Mock.Of<IActiveProfileResolver>(),
             statistics.Object,
             aid.Object,
-            new TenantClockResolver(
-                Mock.Of<ITherapySettingsResolver>(),
-                new CategoryReadContext(),
-                NullLogger<TenantClockResolver>.Instance),
+            deviceDates,
             TimeProvider.System);
 
         var service = new LoopAnalysisService(
@@ -123,6 +119,7 @@ public class LoopAnalysisLoopHealthZoneTests
             cobCalculator: Mock.Of<ICobCalculator>(),
             therapySettingsRepository: Mock.Of<ITherapySettingsRepository>(),
             aidSystemMetrics: reader,
+            deviceDates: deviceDates,
             deviceEventRepository: Mock.Of<IDeviceEventRepository>());
 
         await service.GetLoopHealthAsync(

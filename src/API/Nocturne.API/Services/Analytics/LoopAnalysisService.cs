@@ -1,4 +1,6 @@
+using Nocturne.API.Services.Devices;
 using Nocturne.API.Services.Profiles.Resolvers;
+using Nocturne.Core.Clinical.Devices;
 using Nocturne.Core.Clinical.LoopAnalysis;
 using Nocturne.Core.Clinical.Treatments;
 using Nocturne.Core.Contracts.Analytics;
@@ -39,6 +41,7 @@ internal sealed partial class LoopAnalysisService(
     ICobCalculator cobCalculator,
     ITherapySettingsRepository therapySettingsRepository,
     AidSystemMetricsReader aidSystemMetrics,
+    DeviceDateClockResolver deviceDates,
     IDeviceEventRepository deviceEventRepository
 ) : ILoopAnalysisService
 {
@@ -131,6 +134,7 @@ internal sealed partial class LoopAnalysisService(
         List<TempBasal> TempBasals,
         Dictionary<StateSpanCategory, List<StateSpan>> Spans,
         IReadOnlyList<PatientDevice> Devices,
+        DeviceDateClock DeviceDates,
         IReadOnlyList<ProfileSpan> Profiles,
         List<ProfileInterval> ProfileIntervals);
 
@@ -151,12 +155,14 @@ internal sealed partial class LoopAnalysisService(
         await Task.WhenAll(glucoseTask, bolusTask, tempBasalTask, spanTask, deviceTask);
 
         var profiles = await activeProfileResolver.GetProfileSpansForRangeAsync(from, to, ct);
+        var clock = await deviceDates.ResolveAsync(ct);
         return new Common(
             await canonicalGlucose.SelectAsync([.. await glucoseTask], ct),
             [.. await bolusTask],
             [.. await tempBasalTask],
             await spanTask,
             [.. await deviceTask],
+            clock,
             profiles,
             ProfileIntervals(profiles, to));
     }
@@ -243,16 +249,16 @@ internal sealed partial class LoopAnalysisService(
 
     /// <summary><see cref="MaskSources"/> over <paramref name="common"/>'s spans, devices and profiles.</summary>
     private static LoopAnalysisMaskSources Sources(
-        Common common, IReadOnlyList<long> snapshotMills, TimeZoneInfo zone, long openEnd) =>
-        MaskSources(common.Spans, common.Devices, snapshotMills, common.ProfileIntervals, zone, openEnd);
+        Common common, IReadOnlyList<long> snapshotMills, long openEnd) =>
+        MaskSources(common.Spans, common.Devices, common.DeviceDates, snapshotMills, common.ProfileIntervals, openEnd);
 
     /// <param name="openEnd">Where a span still open ends: the end of the time its readers look at.</param>
     private static LoopAnalysisMaskSources MaskSources(
         Dictionary<StateSpanCategory, List<StateSpan>> spans,
         IEnumerable<PatientDevice> devices,
+        DeviceDateClock deviceDates,
         IReadOnlyList<long> snapshotMills,
         IReadOnlyList<ProfileInterval> profiles,
-        TimeZoneInfo zone,
         long openEnd) => new()
     {
         Overrides = [.. SpansOf(spans, StateSpanCategory.Override, openEnd).Select(s => s.Interval)],
@@ -260,7 +266,7 @@ internal sealed partial class LoopAnalysisService(
         Exercise = [.. SpansOf(spans, StateSpanCategory.Exercise, openEnd).Select(s => s.Interval)],
         Illness = [.. SpansOf(spans, StateSpanCategory.Illness, openEnd).Select(s => s.Interval)],
         DataExclusions = [.. SpansOf(spans, StateSpanCategory.DataExclusion, openEnd).Select(s => s.Interval)],
-        OpenLoop = OpenLoop(spans, devices, snapshotMills, zone, openEnd).Intervals,
+        OpenLoop = OpenLoop(spans, devices, deviceDates, snapshotMills, openEnd).Intervals,
         Profiles = profiles,
     };
 
@@ -277,14 +283,14 @@ internal sealed partial class LoopAnalysisService(
     private static IntervalSet OpenLoop(
         Dictionary<StateSpanCategory, List<StateSpan>> spans,
         IEnumerable<PatientDevice> devices,
+        DeviceDateClock deviceDates,
         IReadOnlyList<long> snapshotMills,
-        TimeZoneInfo zone,
         long to)
     {
         var pumps = devices
             .Where(d => d.DeviceCategory == DeviceCategory.InsulinPump && d.AidAlgorithm is { } algorithm && algorithm != AidAlgorithm.Unknown)
             .ToList();
-        MillsInterval Window(PatientDevice pump) => LoopAnalysisMask.DeviceWindow(pump.StartDate, pump.EndDate, zone, to);
+        MillsInterval Window(PatientDevice pump) => deviceDates.Window(pump.StartDate, pump.EndDate, to);
 
         return LoopAnalysisMask.OpenLoop(
             SpansOf(spans, StateSpanCategory.PumpMode, to)

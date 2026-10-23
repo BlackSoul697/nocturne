@@ -70,17 +70,6 @@ public class LoopAnalysisMaskTests
     }
 
     [Fact]
-    public void DeviceWindow_SpansItsLocalCalendarDates()
-    {
-        var window = LoopAnalysisMask.DeviceWindow(new DateOnly(2024, 6, 3), new DateOnly(2024, 6, 4), Sydney, openEnd: 0);
-
-        window.Should().Be(new MillsInterval(
-            new DateTimeOffset(2024, 6, 2, 14, 0, 0, TimeSpan.Zero).ToUnixTimeMilliseconds(),
-            new DateTimeOffset(2024, 6, 4, 14, 0, 0, TimeSpan.Zero).ToUnixTimeMilliseconds()));
-        LoopAnalysisMask.DeviceWindow(null, null, Sydney, openEnd: 42).Should().Be(new MillsInterval(long.MinValue, 42));
-    }
-
-    [Fact]
     public void StepTimeline_LatestStartedWins()
     {
         var timeline = StepTimeline<int>.LatestStartedWins([new(0, 100, 1), new(20, 40, 2), new(30, 120, 3)]);

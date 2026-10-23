@@ -12,6 +12,7 @@ using Nocturne.API.Services.Analytics;
 using Nocturne.Core.Models.Authorization;
 using Nocturne.Core.Clinical.Statistics;
 using Nocturne.API.Services.Caching;
+using Nocturne.API.Services.Devices;
 using Nocturne.API.Tests.Services.Profiles.Resolvers;
 using Nocturne.Core.Contracts.Analytics;
 using Nocturne.Core.Contracts.Glucose;
@@ -88,10 +89,12 @@ public class StatisticsControllerTests
                 _activeProfileResolverMock.Object,
                 statisticsService ?? _statsServiceMock.Object,
                 _aidMetricsServiceMock.Object,
-                new TenantClockResolver(
-                    _therapySettingsResolverMock.Object,
-                    categoryReadContext ?? new CategoryReadContext(),
-                    _clockLoggerMock.Object),
+                new DeviceDateClockResolver(
+                    TestDoubles.DeviceDateClockDoubles.Timelines([]),
+                    new TenantClockResolver(
+                        _therapySettingsResolverMock.Object,
+                        categoryReadContext ?? new CategoryReadContext(),
+                        _clockLoggerMock.Object)),
                 TimeProvider.System),
             _patientDeviceRepoMock.Object,
             _deviceEventRepoMock.Object,

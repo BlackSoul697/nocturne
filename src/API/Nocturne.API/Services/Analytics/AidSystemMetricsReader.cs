@@ -1,5 +1,5 @@
+using Nocturne.API.Services.Devices;
 using Nocturne.Core.Clinical.Devices;
-using Nocturne.Core.Clinical.LoopAnalysis;
 using Nocturne.Core.Contracts.Analytics;
 using Nocturne.Core.Contracts.Glucose;
 using Nocturne.Core.Contracts.Profiles.Resolvers;
@@ -29,9 +29,9 @@ public sealed record AidSystemMetricsRecords(
 /// has not (<see cref="ReadAsync"/>).
 /// </summary>
 /// <remarks>
-/// A registered device's dates are local calendar dates (<see cref="LoopAnalysisMask.DeviceWindow"/>):
-/// it starts at local midnight of its first day and ends, exclusive, at local midnight after its
-/// last. With no tenant zone they are read as UTC days and the report says so in
+/// A registered device's dates are placed by <see cref="DeviceDateClock"/>: it starts at local
+/// midnight of its first day and ends, exclusive, at local midnight after its last. With no zone
+/// they are read as UTC days and the report says so in
 /// <see cref="AidSystemMetrics.TimeZoneUnavailableReason"/>.
 /// </remarks>
 public sealed class AidSystemMetricsReader(
@@ -45,7 +45,7 @@ public sealed class AidSystemMetricsReader(
     IActiveProfileResolver activeProfileResolver,
     IStatisticsService statisticsService,
     IAidMetricsService aidMetricsService,
-    TenantClockResolver tenantClock,
+    DeviceDateClockResolver deviceDates,
     TimeProvider timeProvider)
 {
     /// <summary>
@@ -55,7 +55,7 @@ public sealed class AidSystemMetricsReader(
     /// </summary>
     public async Task<AidSystemMetrics> ReadAsync(DateTime start, DateTime end, CancellationToken ct)
     {
-        var clock = await tenantClock.ResolveAsync(ct);
+        var clock = await deviceDates.ResolveAsync(ct);
         var devices = await patientDeviceRepository.GetByDateRangeAsync(start, end, ct: ct);
 
         var apsTask = apsSnapshotRepository.GetLoopCyclesAsync(start, end, ct);
@@ -93,19 +93,19 @@ public sealed class AidSystemMetricsReader(
                 targetHigh),
             start,
             end,
-            clock.Zone ?? TimeZoneInfo.Utc);
+            clock);
         metrics.TimeZoneUnavailableReason = clock.Reason;
         return metrics;
     }
 
     public AidSystemMetrics Calculate(
-        AidSystemMetricsRecords records, DateTime start, DateTime end, TimeZoneInfo zone)
+        AidSystemMetricsRecords records, DateTime start, DateTime end, DeviceDateClock deviceDates)
     {
         var deviceSegments = records.Devices
             .Where(d => d.DeviceCategory == DeviceCategory.InsulinPump && d.AidAlgorithm.HasValue)
             .Select(d =>
             {
-                var (from, to) = DeviceBounds(d, zone);
+                var (from, to) = DeviceBounds(d, deviceDates);
                 return new DeviceSegmentInput
                 {
                     Algorithm = d.AidAlgorithm!.Value,
@@ -144,7 +144,7 @@ public sealed class AidSystemMetricsReader(
             cgmDevices
                 .Select(d =>
                 {
-                    var (from, to) = DeviceBounds(d, zone);
+                    var (from, to) = DeviceBounds(d, deviceDates);
                     return new CgmDeviceWindow(
                         d.Id,
                         from,
@@ -167,9 +167,9 @@ public sealed class AidSystemMetricsReader(
             end);
     }
 
-    private static (DateTime? From, DateTime? To) DeviceBounds(PatientDevice device, TimeZoneInfo zone)
+    private static (DateTime? From, DateTime? To) DeviceBounds(PatientDevice device, DeviceDateClock deviceDates)
     {
-        var window = LoopAnalysisMask.DeviceWindow(device.StartDate, device.EndDate, zone, openEnd: 0);
+        var window = deviceDates.Window(device.StartDate, device.EndDate, openEnd: 0);
         return (
             device.StartDate.HasValue ? Utc(window.Start) : null,
             device.EndDate.HasValue ? Utc(window.End) : null);

@@ -95,6 +95,7 @@ public class LoopAnalysisServiceReadTests
             cobCalculator: Mock.Of<ICobCalculator>(),
             therapySettingsRepository: Mock.Of<ITherapySettingsRepository>(),
             aidSystemMetrics: null!,
+            deviceDates: DeviceDateClockDoubles.Utc(),
             deviceEventRepository: Mock.Of<IDeviceEventRepository>());
     }
 

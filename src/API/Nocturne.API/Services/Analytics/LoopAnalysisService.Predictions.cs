@@ -60,7 +60,13 @@ internal sealed partial class LoopAnalysisService
         var profiles = needsProfiles
             ? ProfileIntervals(await activeProfileResolver.GetProfileSpansForRangeAsync(from, to, ct), to)
             : [];
-        var sources = MaskSources(spans, await deviceTask, SnapshotMills((await evidenceTask).Select(p => p.Timestamp)), profiles, zone, readingsEnd);
+        var sources = MaskSources(
+            spans,
+            await deviceTask,
+            await deviceDates.ResolveAsync(ct),
+            SnapshotMills((await evidenceTask).Select(p => p.Timestamp)),
+            profiles,
+            readingsEnd);
 
         var inputs = new PredictionAccuracyInputs
         {

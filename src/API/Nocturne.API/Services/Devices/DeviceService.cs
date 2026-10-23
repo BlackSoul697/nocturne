@@ -1,9 +1,8 @@
 using System.Collections.Concurrent;
+using Nocturne.Core.Clinical.Devices;
 using Nocturne.Core.Contracts.Devices;
 using Nocturne.Core.Contracts.Multitenancy;
-using Nocturne.Core.Contracts.Timezones;
 using Nocturne.Core.Contracts.V4.Repositories;
-using Nocturne.Core.Models.Timezones;
 using Nocturne.Core.Models.V4;
 using Nocturne.Core.Contracts.V4;
 
@@ -20,8 +19,8 @@ public class DeviceService : IDeviceService
     private readonly IDeviceRepository _repository;
     private readonly IPatientDeviceRepository _patientDeviceRepository;
     private readonly ITenantAccessor _tenantAccessor;
-    private readonly ITimezoneTimelineService _timezoneTimelineService;
-    private (string TenantId, TimezoneTimeline Timeline)? _timeline;
+    private readonly DeviceDateClockResolver _deviceDates;
+    private (string TenantId, DeviceDateClock Clock)? _deviceDateClock;
     private readonly ConcurrentDictionary<(string, string, string, string), Device> _cache = new();
     private readonly ConcurrentDictionary<(string, Guid), IReadOnlyList<PatientDevice>> _patientDeviceCache = new();
     private readonly Dictionary<Guid, (Device Device, DateTime FirstPersisted, DateTime LastPersisted)> _deferredSeen = [];
@@ -32,12 +31,12 @@ public class DeviceService : IDeviceService
 
     public DeviceService(IDeviceRepository repository, IPatientDeviceRepository patientDeviceRepository,
         ITenantAccessor tenantAccessor,
-        ITimezoneTimelineService timezoneTimelineService)
+        DeviceDateClockResolver deviceDates)
     {
         _repository = repository;
         _patientDeviceRepository = patientDeviceRepository;
         _tenantAccessor = tenantAccessor;
-        _timezoneTimelineService = timezoneTimelineService;
+        _deviceDates = deviceDates;
     }
 
     public async Task<Guid?> ResolveAsync(DeviceCategory category, string? type, string? serial, long mills, CancellationToken ct = default)
@@ -203,20 +202,20 @@ public class DeviceService : IDeviceService
         if (!patientDevices.Any(pd => pd.StartDate is not null || pd.EndDate is not null))
             return patientDevices.FirstOrDefault()?.Id;
 
-        var timeline = await TimelineAsync(tenantId, ct);
+        var clock = await DeviceDateClockAsync(tenantId, ct);
         var date = PatientDeviceUsage.LocalDate(
-            DateTimeOffset.FromUnixTimeMilliseconds(mills).UtcDateTime, utcOffsetMinutes: null, timeline);
+            DateTimeOffset.FromUnixTimeMilliseconds(mills).UtcDateTime, utcOffsetMinutes: null, clock);
 
         return patientDevices.FirstOrDefault(pd => PatientDeviceUsage.Covers(pd, date))?.Id;
     }
 
-    private async Task<TimezoneTimeline> TimelineAsync(string tenantId, CancellationToken ct)
+    private async Task<DeviceDateClock> DeviceDateClockAsync(string tenantId, CancellationToken ct)
     {
-        if (_timeline is { } cached && cached.TenantId == tenantId)
-            return cached.Timeline;
+        if (_deviceDateClock is { } cached && cached.TenantId == tenantId)
+            return cached.Clock;
 
-        var timeline = await _timezoneTimelineService.GetResolverAsync(fallbackOffsetHours: null, ct);
-        _timeline = (tenantId, timeline);
-        return timeline;
+        var clock = await _deviceDates.ResolveAsync(ct);
+        _deviceDateClock = (tenantId, clock);
+        return clock;
     }
 }

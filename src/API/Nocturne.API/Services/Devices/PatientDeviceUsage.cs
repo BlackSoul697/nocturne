@@ -1,4 +1,4 @@
-using Nocturne.Core.Models.Timezones;
+using Nocturne.Core.Clinical.Devices;
 using Nocturne.Core.Models.V4;
 
 namespace Nocturne.API.Services.Devices;
@@ -11,15 +11,12 @@ internal static class PatientDeviceUsage
 {
     /// <summary>
     /// The local date of <paramref name="utc"/>: shifted by the record's own offset when it has one,
-    /// else by <paramref name="timeline"/> (UTC unchanged when there is neither).
+    /// else placed by <paramref name="clock"/>.
     /// </summary>
-    public static DateOnly LocalDate(DateTime utc, int? utcOffsetMinutes, TimezoneTimeline? timeline)
-    {
-        var local = utcOffsetMinutes is { } offset
-            ? utc.AddMinutes(offset)
-            : timeline?.ToLocal(utc) ?? utc;
-        return DateOnly.FromDateTime(local);
-    }
+    public static DateOnly LocalDate(DateTime utc, int? utcOffsetMinutes, DeviceDateClock? clock) =>
+        utcOffsetMinutes is { } offset
+            ? DateOnly.FromDateTime(utc.AddMinutes(offset))
+            : clock?.LocalDate(utc) ?? DateOnly.FromDateTime(utc);
 
     public static bool Covers(PatientDevice device, DateOnly localDate) =>
         (device.StartDate is null || device.StartDate <= localDate) &&

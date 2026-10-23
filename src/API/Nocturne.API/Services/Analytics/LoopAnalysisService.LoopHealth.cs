@@ -1,4 +1,5 @@
 using Nocturne.API.Services.Profiles.Resolvers;
+using Nocturne.Core.Clinical.Devices;
 using Nocturne.Core.Clinical.LoopAnalysis;
 using Nocturne.Core.Contracts.Profiles.Resolvers;
 using Nocturne.Core.Models;
@@ -23,6 +24,7 @@ internal sealed partial class LoopAnalysisService
         LoopHealthInputs Inputs,
         LoopAnalysisMaskSources Sources,
         IReadOnlyList<PatientDevice> Devices,
+        DeviceDateClock DeviceDates,
         IReadOnlyList<TempBasal> TempBasals) : ILoaded;
 
     /// <remarks>
@@ -58,8 +60,9 @@ internal sealed partial class LoopAnalysisService
 
         return new LoopHealthLoaded(
             inputs,
-            Sources(common, SnapshotMills(cycles.Select(c => c.Timestamp)), zone, to),
+            Sources(common, SnapshotMills(cycles.Select(c => c.Timestamp)), to),
             common.Devices,
+            common.DeviceDates,
             common.TempBasals);
     }
 
@@ -87,7 +90,7 @@ internal sealed partial class LoopAnalysisService
                 null),
             start,
             end,
-            zone);
+            loaded.DeviceDates);
         range.Activity.AidActivePercent = overall.AidActivePercent;
         range.Activity.PumpUsePercent = overall.PumpUsePercent;
         range.Activity.CgmActivePercent = overall.CgmActivePercent;
