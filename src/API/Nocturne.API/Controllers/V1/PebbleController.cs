@@ -38,7 +38,7 @@ public class PebbleController : ControllerBase
     private readonly IEntryService _entryService;
     private readonly DeviceStatusProjectionService _projectionService;
     private readonly ITreatmentService _treatmentService;
-    private readonly IShareAppearanceReader _appearanceReader;
+    private readonly ITenantAppearanceReader _appearanceReader;
     private readonly ITenantAccessor _tenantAccessor;
     private readonly ILogger<PebbleController> _logger;
 
@@ -60,7 +60,7 @@ public class PebbleController : ControllerBase
         IEntryService entryService,
         DeviceStatusProjectionService projectionService,
         ITreatmentService treatmentService,
-        IShareAppearanceReader appearanceReader,
+        ITenantAppearanceReader appearanceReader,
         ITenantAccessor tenantAccessor,
         ILogger<PebbleController> logger
     )

@@ -25,7 +25,7 @@ public class PebbleControllerTests
 
     private readonly Mock<IEntryService> _entryService = new();
     private static readonly Guid TenantId = Guid.NewGuid();
-    private readonly Mock<IShareAppearanceReader> _appearance = new();
+    private readonly Mock<ITenantAppearanceReader> _appearance = new();
     private int _requestedSgvCount;
     private int _requestedCalCount;
 
@@ -41,7 +41,7 @@ public class PebbleControllerTests
             .ReturnsAsync(Array.Empty<Entry>());
 
         _appearance
-            .Setup(a => a.GetSharedAppearanceAsync(TenantId, It.IsAny<CancellationToken>()))
+            .Setup(a => a.GetTenantAppearanceAsync(TenantId, It.IsAny<CancellationToken>()))
             .ReturnsAsync(new UserDisplayPreferences { GlucoseUnits = tenantUnits });
         var tenantAccessor = new Mock<ITenantAccessor>();
         tenantAccessor.SetupGet(t => t.TenantId).Returns(TenantId);
