@@ -33,7 +33,7 @@
   );
 </script>
 
-<div class="overflow-x-auto rounded-lg border bg-card">
+<div class="overflow-x-auto rounded-lg border bg-card" data-testid="loop-analysis-event-metrics-table">
   <table class="w-full text-sm tabular-nums">
     <caption class="sr-only">Each figure's median and middle half across each cohort's events</caption>
     <thead>
