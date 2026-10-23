@@ -320,7 +320,8 @@ public class DemoDataGenerator : IDemoDataGenerator
                     stepTreatments.Add(pending[0].Treatment);
                     pending.RemoveAt(0);
                 }
-                var smbEnabled = lastCarbsAt is { } carbsAt && currentTime - carbsAt < SmbAfterCarbsTime;
+                var smbEnabled = loop == DemoLoopState.Closed
+                    && lastCarbsAt is { } carbsAt && currentTime - carbsAt < SmbAfterCarbsTime;
 
                 var basalAdj = basalAdjustments.FirstOrDefault(b =>
                     Math.Abs((b.Time - currentTime).TotalMinutes) < 2.5
@@ -1455,7 +1456,8 @@ public class DemoDataGenerator : IDemoDataGenerator
 
     /// <summary>
     /// How long after carbs the loop may give automatic boluses, as Trio's enableSMB_after_carbs:
-    /// outside it the loop corrects a high with temp basals alone.
+    /// outside it, and whenever the loop is not closed, the loop corrects a high with temp basals
+    /// alone.
     /// </summary>
     private static readonly TimeSpan SmbAfterCarbsTime = TimeSpan.FromHours(6);
 
