@@ -288,6 +288,11 @@ export class CoachMarkContext {
     return true;
   }
 
+  inSameSequence(a: string, b: string): boolean {
+    const seqName = this._keyToSequence.get(a);
+    return seqName !== undefined && seqName === this._keyToSequence.get(b);
+  }
+
   getSequenceProgress(seqName: string): { completed: number; total: number } {
     return sequenceProgress(seqName, this.sequences, this._states);
   }

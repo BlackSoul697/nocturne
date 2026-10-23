@@ -1,6 +1,6 @@
 import { render } from "vitest-browser-svelte";
 import { page } from "vitest/browser";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, onTestFinished, vi } from "vitest";
 import type { Component } from "svelte";
 import type { CoachMarkContext, MarkState } from "@nocturne/coach";
 import { page as pageState } from "$app/state";
@@ -101,6 +101,24 @@ async function walk(ctx: CoachMarkContext): Promise<string[]> {
   return shown;
 }
 
+/** Reads each step the tour raises and closes it with Done, without scrolling the page. */
+async function walkInPlace(ctx: CoachMarkContext): Promise<string[]> {
+  await vi.waitFor(() => expect(ctx.activeKey).not.toBeNull(), { timeout: 3_000 });
+  const shown: string[] = [];
+  for (let key = ctx.activeKey; key && shown.length < 10; key = ctx.activeKey) {
+    const dialog = page.getByRole("dialog", { name: title(key) });
+    try {
+      await expect.element(dialog, { timeout: 1_500 }).toBeVisible();
+    } catch {
+      break;
+    }
+    shown.push(key);
+    await page.getByRole("button", { name: "Done", exact: true }).click();
+    await vi.waitFor(() => expect(ctx.activeKey).not.toBe(key));
+  }
+  return shown;
+}
+
 describe("Loop Analysis tours", () => {
   // An overlay holds a history entry until it closes; let the previous test's go first.
   beforeEach(async () => {
@@ -112,6 +130,15 @@ describe("Loop Analysis tours", () => {
     const { ctx } = await open(name);
 
     expect(await walk(ctx)).toEqual([...SHARED, ...steps(name)]);
+  });
+
+  it("tours the daily profile on a desktop screen without the reader scrolling", async () => {
+    const [width, height] = [window.innerWidth, window.innerHeight];
+    onTestFinished(() => page.viewport(width, height));
+    await page.viewport(1280, 800);
+    const { ctx } = await open("daily-profile");
+
+    expect(await walkInPlace(ctx)).toEqual([...SHARED, ...steps("daily-profile")]);
   });
 
   it("explains the pages and filters on the first page seen only", async () => {

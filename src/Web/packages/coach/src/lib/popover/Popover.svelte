@@ -48,9 +48,10 @@
   const localStep = $derived(Math.min(currentLocalStep, Math.max(totalLocalSteps - 1, 0)));
   const currentRegistration = $derived(mountedSteps[localStep] ?? null);
 
-  // The overlay waits for its target to come on screen instead of scrolling the page to it, and
-  // once raised stays up while the reader scrolls. The synchronous rect check lets consecutive
-  // marks that are both on screen hand over without the overlay unmounting between them.
+  // A tip raised on its own waits for its target to come on screen instead of scrolling the page to
+  // it, and once raised stays up while the reader scrolls. Only a step the reader asks for is
+  // scrolled to (`bringOnScreen`). The synchronous rect check lets consecutive marks that are both
+  // on screen hand over without the overlay unmounting between them.
   const target = $derived(currentRegistration?.element ?? null);
   let revealedTarget: HTMLElement | null = $state(null);
   const revealed = $derived(target !== null && (revealedTarget === target || isOnScreen(target)));
@@ -197,14 +198,33 @@
   function handleDismiss() {
     if (activeKey) ctx.dismiss(activeKey);
   }
+  // Marking the target revealed keeps the overlay up through the scroll, rather than dropping it
+  // until the target arrives.
+  function bringOnScreen(el: HTMLElement | undefined) {
+    if (!el || isOnScreen(el)) return;
+    const reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    el.scrollIntoView({ block: "center", behavior: reduced ? "instant" : "smooth" });
+    revealedTarget = el;
+  }
+
   function handleComplete() {
-    if (activeKey) ctx.complete(activeKey);
+    const done = activeKey;
+    if (!done) return;
+    ctx.complete(done);
+    const next = ctx.activeKey;
+    if (next && ctx.inSameSequence(done, next)) bringOnScreen(ctx.getMountedSteps(next)[0]?.element);
   }
   function handleBack() {
-    if (localStep > 0) currentLocalStep = localStep - 1;
+    if (localStep === 0) return;
+    const step = localStep - 1;
+    currentLocalStep = step;
+    bringOnScreen(mountedSteps[step]?.element);
   }
   function handleNext() {
-    if (localStep < totalLocalSteps - 1) currentLocalStep = localStep + 1;
+    if (localStep >= totalLocalSteps - 1) return;
+    const step = localStep + 1;
+    currentLocalStep = step;
+    bringOnScreen(mountedSteps[step]?.element);
   }
 
   function handleKeydown(e: KeyboardEvent) {
