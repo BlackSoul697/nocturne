@@ -90,6 +90,35 @@ async function openThresholdTrackerEditor(page: Page): Promise<void> {
 }
 
 /**
+ * Centres one section of the tracker editor in the editor's own scroll area, once the editor's
+ * height has stopped changing. The editor fills in after it opens, so a section scrolled into view
+ * before then could end with its foot under the editor's lower edge, and the capture showed the
+ * backdrop below it.
+ */
+async function centreInTrackerEditor(page: Page, testId: string): Promise<void> {
+	await openThresholdTrackerEditor(page);
+	await page.waitForFunction(
+		() => {
+			const editor = document.querySelector<HTMLElement>('[data-testid="tracker-editor"]');
+			if (!editor) return false;
+			const height = String(editor.scrollHeight);
+			const steady = height === editor.dataset.captureHeight ? Number(editor.dataset.captureSteady ?? 0) + 1 : 0;
+			editor.dataset.captureHeight = height;
+			editor.dataset.captureSteady = String(steady);
+			return steady >= 5;
+		},
+		undefined,
+		{ polling: 200 },
+	);
+	await page.getByTestId(testId).evaluate((el) => {
+		const scroller = el.closest('[data-testid="tracker-editor"]')!;
+		const section = el.getBoundingClientRect();
+		const view = scroller.getBoundingClientRect();
+		scroller.scrollTop += section.top - view.top - (view.height - section.height) / 2;
+	});
+}
+
+/**
  * Hides every child of `container` that matches none of `keep`. A Loop Analysis page draws its
  * charts as one stack, and only the last chart in it labels the time axis they share: this shows one
  * chart over that last chart, where a clip of the whole stack would be taller than the docs column
@@ -893,10 +922,7 @@ export const definitions: ScreenshotDefinition[] = [
 		route: '/settings/trackers',
 		scenario: 'patient',
 		arrange: sensorTrackerWithThresholds,
-		prepare: async (page) => {
-			await openThresholdTrackerEditor(page);
-			await page.getByTestId('tracker-triggers').scrollIntoViewIfNeeded();
-		},
+		prepare: (page) => centreInTrackerEditor(page, 'tracker-triggers'),
 		clip: '[data-testid="tracker-triggers"]',
 		alt: 'The Restart automatically on section of the tracker editor. It lists the device events a tracker can restart on, from Sensor Start to Pump Battery Change, each with a tick box; Sensor Start is ticked. Under the list is an optional box for words the event notes must contain.',
 	},
@@ -905,10 +931,7 @@ export const definitions: ScreenshotDefinition[] = [
 		route: '/settings/trackers',
 		scenario: 'patient',
 		arrange: sensorTrackerWithThresholds,
-		prepare: async (page) => {
-			await openThresholdTrackerEditor(page);
-			await page.getByTestId('tracker-thresholds').scrollIntoViewIfNeeded();
-		},
+		prepare: (page) => centreInTrackerEditor(page, 'tracker-thresholds'),
 		clip: '[data-testid="tracker-thresholds"]',
 		alt: 'The Notification Thresholds list inside the tracker editor, with three steps: an Info notice a day before the sensor ends, a Warning two hours before, and an Urgent alert once it has run its full ten days. Each step has a level, a number of hours, a Channels button for choosing where it is delivered, and a message on the line below.',
 	},
