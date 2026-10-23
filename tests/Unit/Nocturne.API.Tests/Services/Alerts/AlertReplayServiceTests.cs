@@ -87,7 +87,7 @@ public class AlertReplayServiceTests
             TimeProvider.System,
             NullLogger<SensorContextEnricher>.Instance);
 
-        _sut = Service(new ManagedAlertReplayEngine(NullLogger<ManagedAlertReplayEngine>.Instance));
+        _sut = Service(new RustAlertReplayEngine(new AlertEngineErrors(new Nocturne.API.Tests.Services.BackgroundServices.TestMeterFactory(), TimeProvider.System)));
     }
 
     private AlertReplayService Service(IAlertReplayEngine engine) => new(
@@ -112,7 +112,7 @@ public class AlertReplayServiceTests
         Mgdl = mgdl,
     };
 
-    [Fact]
+    [NativeFact]
     public async Task EmptyTenantId_ReturnsEmpty()
     {
         _tenantAccessor.Setup(t => t.TenantId).Returns(Guid.Empty);
@@ -122,7 +122,7 @@ public class AlertReplayServiceTests
         result.Events.Should().BeEmpty();
     }
 
-    [Fact]
+    [NativeFact]
     public async Task NoRules_ReturnsEmptyEventsButValidWindow()
     {
         _alertRepository.Setup(r => r.GetEnabledRulesAsync(_tenantId, It.IsAny<CancellationToken>()))
@@ -136,7 +136,7 @@ public class AlertReplayServiceTests
         result.WindowEnd.Should().Be(new DateTime(2026, 4, 29, 0, 0, 0, DateTimeKind.Utc));
     }
 
-    [Fact]
+    [NativeFact]
     public async Task ThresholdBelow_LowReading_FiresOneEventAtLeadingEdge()
     {
         var ruleId = Guid.NewGuid();
@@ -167,7 +167,7 @@ public class AlertReplayServiceTests
         result.Events[1].At.Should().Be(dayStart.AddHours(5));
     }
 
-    [Fact]
+    [NativeFact]
     public async Task ContinuouslyMet_ProducesSingleLeadingEdgeEvent()
     {
         var rule = ThresholdRule(Guid.NewGuid(), "below", 70m);
@@ -192,7 +192,7 @@ public class AlertReplayServiceTests
         result.Events[0].At.Should().Be(dayStart.AddHours(2));
     }
 
-    [Fact]
+    [NativeFact]
     public async Task ScopedDnd_LowsWindow_SuppressesALowRuleInReplay()
     {
         var rule = new AlertRuleSnapshot(Guid.NewGuid(), _tenantId, "low", AlertConditionType.Threshold,
@@ -226,7 +226,7 @@ public class AlertReplayServiceTests
         result.Events[0].Kind.Should().Be(AlertReplayEventKind.SuppressedByDnd);
     }
 
-    [Fact]
+    [NativeFact]
     public async Task ScopedDnd_WindowReceivedAfterTheFire_DoesNotSuppress_ReceiptGating()
     {
         var rule = new AlertRuleSnapshot(Guid.NewGuid(), _tenantId, "low", AlertConditionType.Threshold,
@@ -262,7 +262,7 @@ public class AlertReplayServiceTests
         result.Events[0].Kind.Should().Be(AlertReplayEventKind.Fired);
     }
 
-    [Fact]
+    [NativeFact]
     public async Task DoNotDisturbLeaf_EvaluatesTrueAtTicksWhereAnAllWindowWasActive()
     {
         // A do_not_disturb(is_active=true) rule with AllowThroughDnd so the fire is not
@@ -301,7 +301,7 @@ public class AlertReplayServiceTests
         result.Events[0].At.Should().Be(dayStart.AddHours(2));
     }
 
-    [Fact]
+    [NativeFact]
     public async Task MultipleRules_OrderedByTopologicalDependency()
     {
         // Rule A: threshold < 70
@@ -335,7 +335,7 @@ public class AlertReplayServiceTests
         result.Events[1].RuleId.Should().Be(ruleBId);
     }
 
-    [Fact]
+    [NativeFact]
     public async Task SameTickOpenAndAutoResolve_EmitsFiredThenAutoResolved()
     {
         // Mirror of AlertOrchestrator.EvaluateRuleAsync: HandleExcursionOpened runs first,
@@ -382,7 +382,7 @@ public class AlertReplayServiceTests
         result.Events[0].At.Should().Be(result.Events[1].At, "fire and auto-resolve happen on the same tick");
     }
 
-    [Fact]
+    [NativeFact]
     public async Task RollingWindow_When_Date_IsNull()
     {
         _alertRepository.Setup(r => r.GetEnabledRulesAsync(_tenantId, It.IsAny<CancellationToken>()))
@@ -393,7 +393,7 @@ public class AlertReplayServiceTests
         (result.WindowEnd - result.WindowStart).Should().BeCloseTo(TimeSpan.FromHours(24), TimeSpan.FromSeconds(5));
     }
 
-    [Fact]
+    [NativeFact]
     public async Task LoopStale_fires_at_correct_replay_tick()
     {
         // ApsSnapshot at dayStart+02:00; thereafter loop is silent. A loop_stale > 5 rule
@@ -431,7 +431,7 @@ public class AlertReplayServiceTests
         result.Events[0].At.Should().Be(dayStart.AddHours(2).AddMinutes(10));
     }
 
-    [Fact]
+    [NativeFact]
     public async Task PumpSuspended_fires_at_correct_replay_tick()
     {
         // A pump-suspended StateSpan opens at 03:00 with no end. Rule: pump_suspended is_active=true.
@@ -485,7 +485,7 @@ public class AlertReplayServiceTests
     /// glucose value flows through change-detection (rounded to integer mg/dL) and the
     /// emitted points match the readings.
     /// </summary>
-    [Fact]
+    [NativeFact]
     public async Task FactTimelines_LatestGlucose_EmitsOnReadingChange()
     {
         var rule = ThresholdRule(Guid.NewGuid(), "below", 70m);
@@ -520,7 +520,7 @@ public class AlertReplayServiceTests
     /// A capped reading ("50+") must surface in the <c>reservoir_is_lower_bound</c> timeline
     /// so the FE can distinguish it from an exact 50.0.
     /// </summary>
-    [Fact]
+    [NativeFact]
     public async Task FactTimelines_ReservoirIsLowerBound_EmitsBoolAsOne()
     {
         var rule = new AlertRuleSnapshot(

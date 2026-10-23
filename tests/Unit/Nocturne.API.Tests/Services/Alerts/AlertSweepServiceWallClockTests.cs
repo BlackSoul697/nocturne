@@ -44,10 +44,10 @@ public class AlertSweepServiceWallClockTests
     public Task Rust_backed_engine_opens_dispatches_once_and_closes_on_resume() =>
         RunOutageAsync(useRustEngine: true);
 
-    [Fact]
+    [NativeFact]
     public async Task Tenant_with_no_reading_history_does_not_fire()
     {
-        var fixture = new Fixture(useRustEngine: false, AlertConditionType.SignalLoss, SignalLoss15)
+        var fixture = new Fixture(useRustEngine: true, AlertConditionType.SignalLoss, SignalLoss15)
         {
             LastReadingAt = null,
         };
@@ -66,7 +66,7 @@ public class AlertSweepServiceWallClockTests
     public Task Rust_backed_engine_fires_signal_loss_nested_in_a_night_window() =>
         RunNightOutageAsync(useRustEngine: true);
 
-    [Fact]
+    [NativeFact]
     public async Task Reading_driven_leaves_keep_the_verdict_of_the_last_reading()
     {
         // Opened by a low reading. The sweep re-judges that same reading, so it must not feed
@@ -77,7 +77,7 @@ public class AlertSweepServiceWallClockTests
               {"type": "signal_loss", "signal_loss": {"timeout_minutes": 15}}
             ]}
             """;
-        var fixture = new Fixture(useRustEngine: false, AlertConditionType.Composite, lowOrLoss)
+        var fixture = new Fixture(useRustEngine: true, AlertConditionType.Composite, lowOrLoss)
         {
             LastReadingAt = T0,
             LatestMgdl = 60,
@@ -92,7 +92,7 @@ public class AlertSweepServiceWallClockTests
         fixture.Closed.Should().BeEmpty();
     }
 
-    [Fact]
+    [NativeFact]
     public async Task Rule_without_a_wall_clock_leaf_is_not_evaluated()
     {
         const string nightLow = """
@@ -101,7 +101,7 @@ public class AlertSweepServiceWallClockTests
               {"type": "time_of_day", "time_of_day": {"from": "22:00", "to": "06:00", "timezone": null}}
             ]}
             """;
-        var fixture = new Fixture(useRustEngine: false, AlertConditionType.Composite, nightLow)
+        var fixture = new Fixture(useRustEngine: true, AlertConditionType.Composite, nightLow)
         {
             LastReadingAt = T0,
             LatestMgdl = 60,
@@ -144,10 +144,10 @@ public class AlertSweepServiceWallClockTests
         fixture.InstancesCreated.Should().Be(1, "error readings are not signal: the last usable one is 20 minutes old");
     }
 
-    [Fact]
+    [NativeFact]
     public async Task The_lookback_for_a_usable_reading_runs_once_per_newest_reading()
     {
-        var fixture = new Fixture(useRustEngine: false, AlertConditionType.SignalLoss, SignalLoss15);
+        var fixture = new Fixture(useRustEngine: true, AlertConditionType.SignalLoss, SignalLoss15);
         fixture.Readings.Add(new SensorGlucose { Timestamp = T0, Mgdl = 110 });
         fixture.Readings.Add(new SensorGlucose { Timestamp = T0.AddMinutes(5), Mgdl = 0 });
         fixture.LastReadingAt = T0.AddMinutes(5);
@@ -165,10 +165,10 @@ public class AlertSweepServiceWallClockTests
         fixture.InstancesCreated.Should().Be(1, "the last usable reading is still the one at T0");
     }
 
-    [Fact]
+    [NativeFact]
     public async Task An_outage_with_no_usable_reading_in_the_lookback_still_fires()
     {
-        var fixture = new Fixture(useRustEngine: false, AlertConditionType.SignalLoss, SignalLoss15);
+        var fixture = new Fixture(useRustEngine: true, AlertConditionType.SignalLoss, SignalLoss15);
         for (var minutes = 0; minutes <= 60; minutes += 5)
             fixture.Readings.Add(new SensorGlucose { Timestamp = T0.AddMinutes(minutes), Mgdl = 0 });
         fixture.LastReadingAt = T0.AddMinutes(60);
@@ -207,7 +207,7 @@ public class AlertSweepServiceWallClockTests
             .Which.Message.Should().Contain("cannot be evaluated");
     }
 
-    [Fact]
+    [NativeFact]
     public async Task An_unwalkable_tree_is_reported_once_per_version()
     {
         var unwalkable = new AlertRule
@@ -217,7 +217,7 @@ public class AlertSweepServiceWallClockTests
             ConditionType = AlertConditionType.Composite,
             ConditionParams = null!,
         };
-        var fixture = new Fixture(useRustEngine: false, AlertConditionType.SignalLoss, SignalLoss15, unwalkable)
+        var fixture = new Fixture(useRustEngine: true, AlertConditionType.SignalLoss, SignalLoss15, unwalkable)
         {
             LastReadingAt = T0,
         };

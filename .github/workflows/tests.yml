@@ -257,11 +257,10 @@ jobs:
           name: unit-trx
           path: "**/*.trx"
 
-  # The alert-engine golden corpus (tests/Parity/AlertEngineCorpus) is the normative
-  # spec for the Rust port of the leaf/node evaluation engine. While the C# engine is
-  # authoritative, any behavioural change to the evaluators/tracker must regenerate the
-  # corpus deliberately — this job fails if the committed corpus no longer matches what
-  # the engine produces.
+  # The alert-engine golden corpus (tests/Parity/AlertEngineCorpus) is the normative spec of
+  # the Rust engine. The C# evaluators no longer serve alerts; they remain only as the oracle
+  # that generates the corpus, until the corpus is frozen (#1581). This job fails if the
+  # committed corpus no longer matches what that oracle produces.
   alert-corpus-check:
     needs: [changes, build]
     if: needs.changes.outputs.dotnet == 'true'
@@ -276,20 +275,16 @@ jobs:
           dotnet run --no-build \
             --project tests/Parity/Nocturne.Alerts.ParityCorpus.Generator -- --check
 
-  # Rust alert engine FFI: lints + tests the crates workspace, builds the
-  # nocturne_alerts cdylib, then runs the three-way parity suite (C# engine vs
-  # committed corpus vs Rust engine over the C ABI) on the build job's assemblies, which find
-  # the cdylib through NOCTURNE_ALERTS_NATIVE_DIR. NOCTURNE_ALERTS_REQUIRE_NATIVE
-  # turns silent skips (native lib not found) into a hard failure so the parity
-  # theories can never quietly stop running here.
+  # Rust alert engine: tests, lints and formats the crates workspace. The three-way parity suite
+  # (Nocturne.Alerts.Native.Tests: C# oracle vs committed corpus vs Rust over the C ABI) runs in
+  # the unit job, on the cdylib the build job packed.
   alerts-ffi-parity:
-    needs: [changes, build]
+    needs: changes
     if: needs.changes.outputs.crates == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 25
     steps:
       - uses: actions/checkout@v5
-      - uses: ./.github/actions/setup-dotnet
       - uses: dtolnay/rust-toolchain@6bed0761d98439e5a578e2877258200ad565ba87 # stable
         with:
           toolchain: stable
@@ -314,23 +309,6 @@ jobs:
           cargo clippy --workspace --all-targets -- -D warnings
           cargo clippy --workspace --all-targets --all-features -- -D warnings
           cargo fmt --check
-      - name: Build nocturne_alerts cdylib
-        working-directory: crates
-        run: cargo build --release -p nocturne-alerts-ffi
-      - uses: ./.github/actions/dotnet-build-output
-      - name: Three-way parity tests (C# engine vs corpus vs Rust FFI)
-        env:
-          NOCTURNE_ALERTS_NATIVE_DIR: ${{ github.workspace }}/crates/target/release
-          NOCTURNE_ALERTS_REQUIRE_NATIVE: "1"
-        run: |
-          dotnet test tests/Unit/Nocturne.Alerts.Native.Tests/Nocturne.Alerts.Native.Tests.csproj \
-            --no-build \
-            --logger "trx;LogFileName=alerts-ffi-parity.trx"
-      - uses: actions/upload-artifact@v6
-        if: failure()
-        with:
-          name: alerts-ffi-parity-trx
-          path: "**/*.trx"
 
   # The desktop Companion's Tauri crate. Windows only: tauri-winrt-notification's `windows`
   # dependency does not compile elsewhere (see desktop-release.yml). generate_context! embeds

@@ -138,8 +138,8 @@ internal static class EngineTestHarness
                 .OrderBy(kv => kv.Key)
                 .Select(kv => new ExpectedLeaf(kv.Key, kv.Value))
                 .ToList(),
-            Transition = RustEnvelopeMapper.TransitionToWire(evaluation.Transition.Type),
-            CloseReason = RustEnvelopeMapper.CloseReasonToWire(evaluation.Transition.CloseReason),
+            Transition = ScenarioRunner.TransitionWire(evaluation.Transition.Type),
+            CloseReason = evaluation.Transition.CloseReason is { } reason ? ScenarioRunner.CloseReasonWire(reason) : null,
             Tracker = state is null
                 ? null
                 : new ExpectedTrackerState

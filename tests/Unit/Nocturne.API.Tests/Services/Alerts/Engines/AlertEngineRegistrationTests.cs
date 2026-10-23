@@ -14,8 +14,7 @@ namespace Nocturne.API.Tests.Services.Alerts.Engines;
 
 /// <summary>
 /// <see cref="ServiceRegistrationExtensions.AddAlertEvaluationEngine"/>: every seam resolves to the
-/// Rust engine, and a native library that fails its probe stops startup. A leftover
-/// <c>Alerts:Engine</c> setting is never read.
+/// Rust engine, and a native library that fails its probe stops startup.
 /// </summary>
 public class AlertEngineRegistrationTests
 {

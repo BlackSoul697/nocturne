@@ -134,8 +134,8 @@ internal static class RustEnvelopeMapper
 
     /// <summary>
     /// Per-instance memo for <see cref="BuildContext"/>: the orchestrator passes the same
-    /// enriched immutable <see cref="SensorContext"/> to every rule of a tick, so the wire element is built and serialised once per context
-    /// instance. Keyed by reference; <see cref="ConditionalWeakTable{TKey,TValue}.GetValue"/>
+    /// enriched immutable <see cref="SensorContext"/> to every rule of a tick, so the wire element
+    /// is built and serialised once per context instance. Keyed by reference; <see cref="ConditionalWeakTable{TKey,TValue}.GetValue"/>
     /// is thread-safe and entries are collected with their context.
     /// </summary>
     private static readonly ConditionalWeakTable<SensorContext, object> ContextElementCache = new();
@@ -296,29 +296,6 @@ internal static class RustEnvelopeMapper
                 tracker.UpdatedAt!.Value,
                 tracker.HysteresisStartedAt,
                 tracker.AwaitingRearm);
-
-    /// <summary>Wire form of a transition type, as the corpus records it.</summary>
-    public static string TransitionToWire(ExcursionTransitionType type) => type switch
-    {
-        ExcursionTransitionType.None => "none",
-        ExcursionTransitionType.ExcursionOpened => "opened",
-        ExcursionTransitionType.ExcursionContinues => "continues",
-        ExcursionTransitionType.HysteresisStarted => "hysteresis_started",
-        ExcursionTransitionType.HysteresisResumed => "hysteresis_resumed",
-        ExcursionTransitionType.ExcursionClosed => "closed",
-        _ => type.ToString().ToLowerInvariant(),
-    };
-
-    /// <summary>Wire form of a close reason, as the corpus records it.</summary>
-    public static string? CloseReasonToWire(ExcursionCloseReason? reason) => reason switch
-    {
-        null => null,
-        ExcursionCloseReason.Hysteresis => "hysteresis",
-        ExcursionCloseReason.AutoResolve => "auto",
-        ExcursionCloseReason.Manual => "manual",
-        ExcursionCloseReason.RuleDisabled => "rule-disabled",
-        _ => reason.ToString()!.ToLowerInvariant(),
-    };
 
     private static DateTime? Utc(DateTime? value) =>
         value is { } v ? DateTime.SpecifyKind(v, DateTimeKind.Utc) : null;

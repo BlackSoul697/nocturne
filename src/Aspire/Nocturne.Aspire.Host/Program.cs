@@ -376,19 +376,17 @@ class Program
                 .WithEnvironment("ASPNETCORE_ENVIRONMENT", "Development");
 
             // Alerts evaluate only in the nocturne_alerts native library, which the API refuses to
-            // start without. A cargo build here keeps it current with crates/, and the API loads it
-            // from the cargo output rather than a copy packed by its own (possibly older) build.
-            var cratesRoot = Path.Combine(solutionRoot, "crates");
+            // start without. The API's build packs it from crates/target/release, so the cargo build
+            // finishes first. The API loads that packed copy, never the cargo output: on Windows a
+            // loaded library cannot be replaced, and a later cargo build would fail on it.
             var alertsNative = builder
                 .AddExecutable(
                     "nocturne-alerts-native",
                     "cargo",
-                    cratesRoot,
+                    Path.Combine(solutionRoot, "crates"),
                     "build", "--release", "-p", "nocturne-alerts-ffi")
                 .WithParentRelationship(watchedApi);
-            watchedApi
-                .WaitForCompletion(alertsNative)
-                .WithEnvironment("NOCTURNE_ALERTS_NATIVE_DIR", Path.Combine(cratesRoot, "target", "release"));
+            watchedApi.WaitForCompletion(alertsNative);
             // Without a dashboard there is no collector, and the exporter would retry every second.
             if (includeDashboard)
             {

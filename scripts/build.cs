@@ -20,7 +20,6 @@
 
 #:project Shared/Shared.csproj
 
-using System.Diagnostics;
 using static ProcessHelpers;
 
 var repoRoot = Directory.GetCurrentDirectory();

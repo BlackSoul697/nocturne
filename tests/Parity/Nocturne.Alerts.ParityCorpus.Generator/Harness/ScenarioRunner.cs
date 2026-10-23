@@ -231,7 +231,8 @@ public sealed class ScenarioRunner
             ?? throw new InvalidOperationException($"Failed to parse condition node for type '{wire}'");
     }
 
-    private static string TransitionWire(ExcursionTransitionType type) => type switch
+    /// <summary>A transition type as the corpus records it.</summary>
+    public static string TransitionWire(ExcursionTransitionType type) => type switch
     {
         ExcursionTransitionType.None => "none",
         ExcursionTransitionType.ExcursionOpened => "opened",
@@ -242,7 +243,8 @@ public sealed class ScenarioRunner
         _ => throw new InvalidOperationException($"Unknown transition type {type}"),
     };
 
-    private static string CloseReasonWire(ExcursionCloseReason reason) => reason switch
+    /// <summary>A close reason as the corpus records it.</summary>
+    public static string CloseReasonWire(ExcursionCloseReason reason) => reason switch
     {
         ExcursionCloseReason.Hysteresis => "hysteresis",
         ExcursionCloseReason.AutoResolve => "auto",

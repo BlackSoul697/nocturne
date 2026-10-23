@@ -90,7 +90,8 @@ export function imageExists(ref: string): boolean {
 }
 
 const API_INPUTS = [
-  "src", ":!src/Web", ":!src/Portal", ":!src/Desktop", "crates", "scripts/Shared", "Directory.Packages.props", "global.json",
+  "src", ":!src/Web", ":!src/Portal", ":!src/Desktop", "crates", "scripts/Shared",
+  "scripts/alerts-native-build.cs", "Directory.Packages.props", "global.json",
 ];
 const WEB_INPUTS = ["src/Web", "Dockerfile.web"];
 const GENERATED_CLIENT = join(REPO_ROOT, "src/Web/packages/app/src/lib/api");
