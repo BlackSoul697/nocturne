@@ -30,7 +30,7 @@ public static class DemoLoopInterruptions
     /// <summary>The Dexcom G7 warm-up.</summary>
     private static readonly TimeSpan SensorWarmUpLength = TimeSpan.FromMinutes(30);
 
-    private static readonly TimeSpan ManualModeLength = TimeSpan.FromHours(2.5);
+    private static readonly TimeSpan ManualModeLength = TimeSpan.FromHours(2);
 
     public sealed record Interruption(DemoLoopState State, DateTime Start, DateTime End);
 

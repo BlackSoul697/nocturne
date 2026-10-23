@@ -451,6 +451,10 @@ public class DemoDataGenerator : IDemoDataGenerator
                         : 0.4;
                     loopTemp = (NormalizeBasalRate(_config.BasalRate * reductionFactor), null);
                 }
+                else
+                {
+                    loopTemp = (InRangeTempRate(currentTime, glucose - targetGlucose), null);
+                }
 
                 if (loop == DemoLoopState.Manual)
                 {

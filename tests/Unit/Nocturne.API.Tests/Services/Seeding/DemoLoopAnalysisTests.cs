@@ -159,4 +159,26 @@ public class DemoLoopAnalysisTests(ITestOutputHelper output)
             output.WriteLine($"{block.Block}: n={block.N} observed={block.Observed} profile={block.Profile}");
         report.Isf.Should().Contain(b => b.N >= SettingsEvidenceCalculator.MinimumEpisodes && b.Observed != null);
     }
+
+    /// <summary>
+    /// The insulin totals add up only days whose delivery is known for
+    /// <see cref="DailyProfileCalculator.InsulinSummaryMinimumCoverage"/> of the day. The sample's
+    /// loop interruptions are short enough that every whole day counts, except a sick day, which
+    /// the default illness mask takes out.
+    /// </summary>
+    [Fact]
+    public void SampleWeek_EveryWholeDayCountsInTheInsulinTotals()
+    {
+        var (inputs, from, to) = Week.Value;
+        var firstWholeDay = DateTimeOffset.FromUnixTimeMilliseconds(from).LocalDateTime.Date.AddDays(1);
+        var lastWholeDay = DateTimeOffset.FromUnixTimeMilliseconds(to).LocalDateTime.Date;
+        var (start, end) = (Mills(firstWholeDay), Mills(lastWholeDay));
+
+        var profile = DailyProfileCalculator.Calculate(inputs.Series, Mask(start, end), start, end);
+
+        var sickDays = Enumerable.Range(0, (lastWholeDay - firstWholeDay).Days)
+            .Count(d => DayScenarios.For(firstWholeDay.AddDays(d)) == DayScenario.SickDay);
+        profile.Summary.Insulin.Should().NotBeNull();
+        profile.Summary.Insulin!.Total!.N.Should().Be((lastWholeDay - firstWholeDay).Days - sickDays);
+    }
 }
