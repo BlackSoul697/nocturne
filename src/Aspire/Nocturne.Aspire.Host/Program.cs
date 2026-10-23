@@ -392,6 +392,12 @@ class Program
                     .WithParentRelationship(watchedApi);
                 watchedApi.WaitForCompletion(alertsNative);
             }
+            else
+            {
+                Console.WriteLine(
+                    "[Nocturne.Aspire] cargo is not on PATH, so the alert engine is not built here: the API build "
+                    + "packs the library main published for this crates/ tree, and fails if there is none.");
+            }
             // Without a dashboard there is no collector, and the exporter would retry every second.
             if (includeDashboard)
             {
@@ -1006,8 +1012,12 @@ class Program
             });
             if (process is null)
                 return false;
-            process.WaitForExit(10_000);
-            return process.HasExited && process.ExitCode == 0;
+            if (!process.WaitForExit(10_000))
+            {
+                process.Kill(entireProcessTree: true);
+                return false;
+            }
+            return process.ExitCode == 0;
         }
         catch (System.ComponentModel.Win32Exception)
         {

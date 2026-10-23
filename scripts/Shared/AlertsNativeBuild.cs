@@ -42,8 +42,8 @@ public static class AlertsNativeBuild
         }
 
         return containerRid == "linux-x64"
-            ? [$"-p:NocturneAlertsNativeDir={nativeDir}{Path.DirectorySeparatorChar}"]
-            : [$"-p:NocturneAlertsCargoTargetRoot={cargoTargetRoot}{Path.DirectorySeparatorChar}"];
+            ? [$"-p:NocturneAlertsNativeDir={nativeDir}{Path.DirectorySeparatorChar}", "-p:NocturneAlertsFromSource=true"]
+            : [$"-p:NocturneAlertsCargoTargetRoot={cargoTargetRoot}{Path.DirectorySeparatorChar}", "-p:NocturneAlertsFromSource=true"];
     }
 
     // Builds libnocturne_alerts.so for the image's architecture and returns the cargo target
