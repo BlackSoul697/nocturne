@@ -1,5 +1,6 @@
 using System.Collections.Frozen;
 using System.Text.Json;
+using Nocturne.API.Configuration;
 using Nocturne.API.Helpers;
 using Nocturne.API.Services.Platform;
 using Nocturne.API.Services.V4;
@@ -38,6 +39,13 @@ public class DeviceStatusProjectionService
     {
         PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
     };
+
+    private static readonly FrozenSet<string> TypedPropertyNames = NightscoutJsonOptions
+        .Create()
+        .GetTypeInfo(typeof(DeviceStatus))
+        .Properties
+        .Select(property => property.Name)
+        .ToFrozenSet(StringComparer.OrdinalIgnoreCase);
 
     public DeviceStatusProjectionService(
         IDeviceStatusGroupRepository groupRepo,
@@ -592,16 +600,14 @@ public class DeviceStatusProjectionService
                 case "mmtune":
                     ds.MmTune = DeserializeValue<OpenApsMmTune>(value, logger);
                     break;
-                // The record reports the server clock (see ProjectFromSnapshots); a client-supplied
-                // value must neither override it nor re-emit as an extra.
-                case "srvCreated":
-                case "srvModified":
-                    break;
                 // An NS v3 uploader sends its own identifier and it is stored verbatim.
                 // DeviceStatus has no member to absorb it, so re-emitting it would put a
                 // client-supplied value where every reader takes the record's identity from —
                 // including the id of its delete event (see StorageDeleteEvent).
                 case "identifier":
+                    break;
+                // The typed value always wins, and a second key of the same name would serialize twice.
+                case var typed when TypedPropertyNames.Contains(typed):
                     break;
                 default:
                     // Unknown keys go into ExtensionData
