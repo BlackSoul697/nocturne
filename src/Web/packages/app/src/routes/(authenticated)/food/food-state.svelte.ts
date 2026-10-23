@@ -3,7 +3,8 @@ import { SvelteSet } from 'svelte/reactivity';
 import { distinct } from '$lib/utils/collections';
 import type { Food } from '$api';
 import type { SortMode } from './types.js';
-import { foodCategoryMap, giFromInt, type GiLevel } from '$lib/components/food';
+import { foodCategoryMap } from '$lib/components/food/food-constants';
+import { giFromInt, type GiLevel } from '$lib/components/food/gi';
 import {
   getFoods,
   createFood as createFoodRemote,
